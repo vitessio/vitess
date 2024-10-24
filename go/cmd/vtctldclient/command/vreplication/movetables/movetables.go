@@ -28,6 +28,10 @@ import (
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
+// The default batch size to use when deleting tenant data
+// if a multi-tenant migration is canceled or deleted.
+const DefaultDeleteBatchSize = 1000
+
 var (
 	// base is the base command for all actions related to MoveTables.
 	base = &cobra.Command{
@@ -108,6 +112,7 @@ func registerCommands(root *cobra.Command) {
 	cancel := common.GetCancelCommand(opts)
 	cancel.Flags().BoolVar(&common.CancelOptions.KeepData, "keep-data", false, "Keep the partially copied table data from the MoveTables workflow in the target keyspace.")
 	cancel.Flags().BoolVar(&common.CancelOptions.KeepRoutingRules, "keep-routing-rules", false, "Keep the routing rules created for the MoveTables workflow.")
+	cancel.Flags().Int64Var(&common.CancelOptions.DeleteBatchSize, "delete-batch-size", DefaultDeleteBatchSize, "When cleaning up the migrated data in tables moved as part of a multi-tenant workflow, delete the records in batches of this size.")
 	common.AddShardSubsetFlag(cancel, &common.CancelOptions.Shards)
 	base.AddCommand(cancel)
 }

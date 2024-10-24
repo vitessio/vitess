@@ -42,6 +42,7 @@ import (
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
@@ -94,6 +95,19 @@ func TestOpenAndReload(t *testing.T) {
 	mustMatch(t, want, se.GetSchema())
 	assert.Equal(t, int64(0), se.tableFileSizeGauge.Counts()["msg"])
 	assert.Equal(t, int64(0), se.tableAllocatedSizeGauge.Counts()["msg"])
+
+	t.Run("EnsureConnectionAndDB", func(t *testing.T) {
+		// Verify that none of the following configurations run any schema change detection queries -
+		// 1. REPLICA serving
+		// 2. REPLICA non-serving
+		// 3. PRIMARY serving
+		err := se.EnsureConnectionAndDB(topodatapb.TabletType_REPLICA, true)
+		require.NoError(t, err)
+		err = se.EnsureConnectionAndDB(topodatapb.TabletType_PRIMARY, false)
+		require.NoError(t, err)
+		err = se.EnsureConnectionAndDB(topodatapb.TabletType_REPLICA, false)
+		require.NoError(t, err)
+	})
 
 	// Advance time some more.
 	db.AddQuery("select unix_timestamp()", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
@@ -626,8 +640,10 @@ func newEngine(reloadTime time.Duration, idleTimeout time.Duration, schemaMaxAge
 	cfg.OlapReadPool.IdleTimeout = idleTimeout
 	cfg.TxPool.IdleTimeout = idleTimeout
 	cfg.SchemaVersionMaxAgeSeconds = schemaMaxAgeSeconds
+	dbConfigs := newDBConfigs(db)
+	cfg.DB = dbConfigs
 	se := NewEngine(tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "SchemaTest"))
-	se.InitDBConfig(newDBConfigs(db).DbaWithDB())
+	se.InitDBConfig(dbConfigs.DbaWithDB())
 	return se
 }
 
@@ -737,6 +753,7 @@ func initialSchema() map[string]*Table {
 				BatchSize:          1,
 				CacheSize:          10,
 				PollInterval:       30 * time.Second,
+				IDType:             sqltypes.Int64,
 			},
 		},
 	}

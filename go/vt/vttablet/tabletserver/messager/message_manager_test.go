@@ -74,6 +74,7 @@ func newMMTable() *schema.Table {
 			BatchSize:          1,
 			CacheSize:          10,
 			PollInterval:       1 * time.Second,
+			IDType:             sqltypes.VarBinary,
 		},
 	}
 }
@@ -91,6 +92,7 @@ func newMMTableWithBackoff() *schema.Table {
 			BatchSize:          1,
 			CacheSize:          10,
 			PollInterval:       1 * time.Second,
+			IDType:             sqltypes.VarBinary,
 		},
 	}
 }

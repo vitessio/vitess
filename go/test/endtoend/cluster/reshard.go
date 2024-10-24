@@ -95,7 +95,7 @@ func (rw *ReshardWorkflow) WaitForVreplCatchup(timeToWait time.Duration) {
 			if !slices.Contains(targetShards, shard.Name) {
 				continue
 			}
-			vttablet := shard.PrimaryTablet().VttabletProcess
+			vttablet := shard.FindPrimaryTablet().VttabletProcess
 			vttablet.WaitForVReplicationToCatchup(rw.t, rw.workflowName, fmt.Sprintf("vt_%s", vttablet.Keyspace), "", timeToWait)
 		}
 	}

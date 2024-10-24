@@ -24,16 +24,19 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/test/endtoend/utils"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/transaction/twopc/utils"
+	twopcutil "vitess.io/vitess/go/test/endtoend/transaction/twopc/utils"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -42,6 +45,7 @@ import (
 
 var (
 	clusterInstance   *cluster.LocalProcessCluster
+	mysqlParams       mysql.ConnParams
 	vtParams          mysql.ConnParams
 	vtgateGrpcAddress string
 	keyspaceName      = "ks"
@@ -81,6 +85,8 @@ func TestMain(m *testing.M) {
 			"--twopc_enable",
 			"--twopc_abandon_age", "1",
 			"--queryserver-config-transaction-cap", "3",
+			"--queryserver-config-transaction-timeout", "400s",
+			"--queryserver-config-query-timeout", "9000s",
 		)
 
 		// Start keyspace
@@ -102,6 +108,15 @@ func TestMain(m *testing.M) {
 		vtParams = clusterInstance.GetVTParams(keyspaceName)
 		vtgateGrpcAddress = fmt.Sprintf("%s:%d", clusterInstance.Hostname, clusterInstance.VtgateGrpcPort)
 
+		// create mysql instance and connection parameters
+		conn, closer, err := utils.NewMySQL(clusterInstance, keyspaceName, SchemaSQL)
+		if err != nil {
+			fmt.Println(err)
+			return 1
+		}
+		defer closer()
+		mysqlParams = conn
+
 		return m.Run()
 	}()
 	os.Exit(exitcode)
@@ -121,8 +136,29 @@ func start(t *testing.T) (*mysql.Conn, func()) {
 
 func cleanup(t *testing.T) {
 	cluster.PanicHandler(t)
-	utils.ClearOutTable(t, vtParams, "twopc_user")
-	utils.ClearOutTable(t, vtParams, "twopc_t1")
+	twopcutil.ClearOutTable(t, vtParams, "twopc_user")
+	twopcutil.ClearOutTable(t, vtParams, "twopc_t1")
+	sm.reset()
+}
+
+func startWithMySQL(t *testing.T) (utils.MySQLCompare, func()) {
+	mcmp, err := utils.NewMySQLCompare(t, vtParams, mysqlParams)
+	require.NoError(t, err)
+
+	deleteAll := func() {
+		tables := []string{"twopc_user"}
+		for _, table := range tables {
+			_, _ = mcmp.ExecAndIgnore("delete from " + table)
+		}
+	}
+
+	deleteAll()
+
+	return mcmp, func() {
+		deleteAll()
+		mcmp.Close()
+		cluster.PanicHandler(t)
+	}
 }
 
 type extractInterestingValues func(dtidMap map[string]string, vals []sqltypes.Value) []sqltypes.Value
@@ -147,7 +183,8 @@ var tables = map[string]extractInterestingValues{
 	},
 	"ks.redo_statement": func(dtidMap map[string]string, vals []sqltypes.Value) (out []sqltypes.Value) {
 		dtid := getDTID(dtidMap, vals[0].ToString())
-		out = append([]sqltypes.Value{sqltypes.NewVarChar(dtid)}, vals[1:]...)
+		stmt := getStatement(vals[2].ToString())
+		out = append([]sqltypes.Value{sqltypes.NewVarChar(dtid)}, vals[1], sqltypes.TestValue(sqltypes.Blob, stmt))
 		return
 	},
 	"ks.twopc_user": func(_ map[string]string, vals []sqltypes.Value) []sqltypes.Value { return vals },
@@ -165,6 +202,28 @@ func getDTID(dtidMap map[string]string, dtKey string) string {
 		dtidMap[dtKey] = dtid
 	}
 	return dtid
+}
+
+func getStatement(stmt string) string {
+	var sKey string
+	var prefix string
+	switch {
+	case strings.HasPrefix(stmt, "savepoint"):
+		prefix = "savepoint-"
+		sKey = stmt[9:]
+	case strings.HasPrefix(stmt, "rollback to"):
+		prefix = "rollback-"
+		sKey = stmt[11:]
+	default:
+		return stmt
+	}
+
+	sid, exists := sm.stmt[sKey]
+	if !exists {
+		sid = fmt.Sprintf("%d", len(sm.stmt)+1)
+		sm.stmt[sKey] = sid
+	}
+	return prefix + sid
 }
 
 func runVStream(t *testing.T, ctx context.Context, ch chan *binlogdatapb.VEvent, vtgateConn *vtgateconn.VTGateConn) {
@@ -271,4 +330,14 @@ func prettyPrint(v interface{}) string {
 		return fmt.Sprintf("got error marshalling: %v", err)
 	}
 	return string(b)
+}
+
+type stmtMapper struct {
+	stmt map[string]string
+}
+
+var sm = &stmtMapper{stmt: make(map[string]string)}
+
+func (sm *stmtMapper) reset() {
+	sm.stmt = make(map[string]string)
 }

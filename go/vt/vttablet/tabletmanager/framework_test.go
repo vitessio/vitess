@@ -27,8 +27,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	vttablet "vitess.io/vitess/go/vt/vttablet/common"
-
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
@@ -39,6 +37,8 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/vtenv"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 	"vitess.io/vitess/go/vt/vttablet/tabletconntest"
@@ -48,12 +48,14 @@ import (
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 const (
 	gtidFlavor   = "MySQL56"
+	serverUUID   = "16b1039f-22b6-11ed-b765-0a43f95f28a3"
 	gtidPosition = "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-220"
 )
 
@@ -79,6 +81,7 @@ type testEnv struct {
 	ctx       context.Context
 	ts        *topo.Server
 	cells     []string
+	db        *fakesqldb.DB
 	mysqld    *mysqlctl.FakeMysqlDaemon
 	tmc       *fakeTMClient
 	dbName    string
@@ -115,9 +118,13 @@ func newTestEnv(t *testing.T, ctx context.Context, sourceKeyspace string, source
 	})
 	tmclienttest.SetProtocol(fmt.Sprintf("go.vt.vttablet.tabletmanager.framework_test_%s", t.Name()), tenv.protoName)
 
-	tenv.mysqld = mysqlctl.NewFakeMysqlDaemon(fakesqldb.New(t))
-	var err error
-	tenv.mysqld.CurrentPrimaryPosition, err = replication.ParsePosition(gtidFlavor, gtidPosition)
+	tenv.db = fakesqldb.New(t)
+	tenv.mysqld = mysqlctl.NewFakeMysqlDaemon(tenv.db)
+	curPosition, err := replication.ParsePosition(gtidFlavor, gtidPosition)
+	require.NoError(t, err)
+	tenv.mysqld.SetPrimaryPositionLocked(curPosition)
+
+	err = tenv.ts.RebuildSrvVSchema(ctx, nil)
 	require.NoError(t, err)
 
 	return tenv
@@ -182,8 +189,11 @@ func (tenv *testEnv) addTablet(t *testing.T, id int, keyspace, shard string) *fa
 		DBConfigs: &dbconfigs.DBConfigs{
 			DBName: tenv.dbName,
 		},
+		Env:                    vtenv.NewTestEnv(),
+		_waitForGrantsComplete: make(chan struct{}),
+		MysqlDaemon:            tenv.mysqld,
 	}
-
+	close(tenv.tmc.tablets[id].tm._waitForGrantsComplete) // So that we don't wait for the grants
 	return tenv.tmc.tablets[id]
 }
 
@@ -420,8 +430,6 @@ func (tmc *fakeTMClient) ApplySchema(ctx context.Context, tablet *topodatapb.Tab
 }
 
 func (tmc *fakeTMClient) schemaRequested(uid int) {
-	tmc.mu.Lock()
-	defer tmc.mu.Unlock()
 	key := strconv.Itoa(int(uid))
 	n, ok := tmc.getSchemaCounts[key]
 	if !ok {
@@ -439,6 +447,8 @@ func (tmc *fakeTMClient) getSchemaRequestCount(uid int) int {
 }
 
 func (tmc *fakeTMClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
 	tmc.schemaRequested(int(tablet.Alias.Uid))
 	// Return the schema for the tablet if it exists.
 	if schema, ok := tmc.tabletSchemas[int(tablet.Alias.Uid)]; ok {
@@ -466,6 +476,8 @@ func (tmc *fakeTMClient) ExecuteFetchAsDba(ctx context.Context, tablet *topodata
 // and their results. You can specify exact strings or strings prefixed with
 // a '/', in which case they will be treated as a valid regexp.
 func (tmc *fakeTMClient) setVReplicationExecResults(tablet *topodatapb.Tablet, query string, result *sqltypes.Result) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
 	queries, ok := tmc.vreQueries[int(tablet.Alias.Uid)]
 	if !ok {
 		queries = make(map[string]*querypb.QueryResult)
@@ -475,13 +487,15 @@ func (tmc *fakeTMClient) setVReplicationExecResults(tablet *topodatapb.Tablet, q
 }
 
 func (tmc *fakeTMClient) VReplicationExec(ctx context.Context, tablet *topodatapb.Tablet, query string) (*querypb.QueryResult, error) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
 	if result, ok := tmc.vreQueries[int(tablet.Alias.Uid)][query]; ok {
 		return result, nil
 	}
 	for qry, res := range tmc.vreQueries[int(tablet.Alias.Uid)] {
 		if strings.HasPrefix(qry, "/") {
-			re := regexp.MustCompile(qry)
-			if re.MatchString(qry) {
+			re := regexp.MustCompile(qry[1:])
+			if re.MatchString(query) {
 				return res, nil
 			}
 		}
@@ -493,14 +507,23 @@ func (tmc *fakeTMClient) PrimaryPosition(ctx context.Context, tablet *topodatapb
 	return fmt.Sprintf("%s/%s", gtidFlavor, gtidPosition), nil
 }
 
+func (tmc *fakeTMClient) PrimaryStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+	pos, _ := tmc.PrimaryPosition(ctx, tablet)
+	return &replicationdatapb.PrimaryStatus{
+		Position:     pos,
+		FilePosition: pos,
+		ServerUuid:   serverUUID,
+	}, nil
+}
+
 func (tmc *fakeTMClient) VReplicationWaitForPos(ctx context.Context, tablet *topodatapb.Tablet, id int32, pos string) error {
 	return nil
 }
 
 func (tmc *fakeTMClient) ExecuteFetchAsAllPrivs(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest) (*querypb.QueryResult, error) {
-	return &querypb.QueryResult{
-		RowsAffected: 1,
-	}, nil
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+	return tmc.tablets[int(tablet.Alias.Uid)].tm.ExecuteFetchAsAllPrivs(ctx, req)
 }
 
 func (tmc *fakeTMClient) VDiff(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.VDiffRequest) (*tabletmanagerdatapb.VDiffResponse, error) {
@@ -514,7 +537,15 @@ func (tmc *fakeTMClient) VDiff(ctx context.Context, tablet *topodatapb.Tablet, r
 }
 
 func (tmc *fakeTMClient) CreateVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.CreateVReplicationWorkflowRequest) (*tabletmanagerdatapb.CreateVReplicationWorkflowResponse, error) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
 	return tmc.tablets[int(tablet.Alias.Uid)].tm.CreateVReplicationWorkflow(ctx, req)
+}
+
+func (tmc *fakeTMClient) DeleteTableData(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.DeleteTableDataRequest) (*tabletmanagerdatapb.DeleteTableDataResponse, error) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+	return tmc.tablets[int(tablet.Alias.Uid)].tm.DeleteTableData(ctx, req)
 }
 
 func (tmc *fakeTMClient) DeleteVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.DeleteVReplicationWorkflowRequest) (response *tabletmanagerdatapb.DeleteVReplicationWorkflowResponse, err error) {
@@ -529,17 +560,25 @@ func (tmc *fakeTMClient) DeleteVReplicationWorkflow(ctx context.Context, tablet 
 }
 
 func (tmc *fakeTMClient) HasVReplicationWorkflows(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.HasVReplicationWorkflowsRequest) (*tabletmanagerdatapb.HasVReplicationWorkflowsResponse, error) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
 	return tmc.tablets[int(tablet.Alias.Uid)].tm.HasVReplicationWorkflows(ctx, req)
 }
 
 func (tmc *fakeTMClient) ReadVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ReadVReplicationWorkflowRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowResponse, error) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
 	return tmc.tablets[int(tablet.Alias.Uid)].tm.ReadVReplicationWorkflow(ctx, req)
 }
 
 func (tmc *fakeTMClient) ReadVReplicationWorkflows(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ReadVReplicationWorkflowsRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse, error) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
 	return tmc.tablets[int(tablet.Alias.Uid)].tm.ReadVReplicationWorkflows(ctx, req)
 }
 
 func (tmc *fakeTMClient) UpdateVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.UpdateVReplicationWorkflowRequest) (*tabletmanagerdatapb.UpdateVReplicationWorkflowResponse, error) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
 	return tmc.tablets[int(tablet.Alias.Uid)].tm.UpdateVReplicationWorkflow(ctx, req)
 }

@@ -18,11 +18,11 @@
     - **[Dynamic VReplication Configuration](#dynamic-vreplication-configuration)**
     - **[Reference Table Materialization](#reference-table-materialization)**
     - **[New VEXPLAIN Modes: TRACE and KEYS](#new-vexplain-modes)**
-    - **[Errant GTID Detection on VTTablets](#errant-gtid-vttablet)**
     - **[Automatically Replace MySQL auto_increment Clauses with Vitess Sequences](#auto-replace-mysql-autoinc-with-seq)**
     - **[Experimental MySQL 8.4 support](#experimental-mysql-84)**
     - **[Current Errant GTIDs Count Metric](#errant-gtid-metric)**
     - **[vtctldclient ChangeTabletTags](#vtctldclient-changetablettags)**
+    - **[Support for specifying expected primary in reparents](#reparents-expectedprimary)**
 
 
 ## <a id="major-changes"/>Major Changes</a>
@@ -207,14 +207,6 @@ filter columns (potential candidates for indexes, primary keys, or sharding keys
 These new `VEXPLAIN` modes enhance Vitess's query analysis capabilities, allowing for more informed decisions about sharding 
 strategies and query optimization.
 
-### <a id="errant-gtid-vttablet"/>Errant GTID Detection on VTTablets</a>
-
-VTTablets now run an errant GTID detection logic before they join the replication stream. So, if a replica has an errant GTID, it will
-not start replicating from the primary. This protects us from running into situations which are very difficult to recover from.
-
-For users running with the vitess-operator on Kubernetes, this change means that replica tablets with errant GTIDs will have broken 
-replication and will report as unready. Users will need to manually replace and clean up these errant replica tablets.
-
 ### <a id="auto-replace-mysql-autoinc-with-seq"/>Automatically Replace MySQL auto_increment Clauses with Vitess Sequences</a>
 
 In https://github.com/vitessio/vitess/pull/16860 we added support for replacing MySQL `auto_increment` clauses with [Vitess Sequences](https://vitess.io/docs/reference/features/vitess-sequences/), performing all of the setup and initialization
@@ -234,3 +226,7 @@ This metric shows the current count of the errant GTIDs in the tablets.
 ### <a id="vtctldclient-changetablettags"/>`vtctldclient ChangeTabletTags` command
 
 The `vtctldclient` command `ChangeTabletTags` was added to allow the tags of a tablet to be changed dynamically.
+
+### <a id="reparents-expectedprimary"/>Support specifying expected primary in reparents
+
+The `EmergencyReparentShard` and `PlannedReparentShard` commands and RPCs now support specifying a primary we expect to still be the current primary in order for a reparent operation to be processed. This allows reparents to be conditional on a specific state being true.

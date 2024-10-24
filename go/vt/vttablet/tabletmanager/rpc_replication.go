@@ -786,15 +786,19 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 		// We will then compare our own position against it to verify that we don't
 		// have an errant GTID. If we find any GTID that we have, but the primary doesn't,
 		// we will not enter the replication graph and instead fail replication.
-		primaryPositionStr, err := tm.tmc.PrimaryPosition(ctx, parent.Tablet)
+		primaryStatus, err := tm.tmc.PrimaryStatus(ctx, parent.Tablet)
 		if err != nil {
 			return err
 		}
-		primaryPosition, err := replication.DecodePosition(primaryPositionStr)
+		primaryPosition, err := replication.DecodePosition(primaryStatus.Position)
 		if err != nil {
 			return err
 		}
-		errantGtid, err := replication.ErrantGTIDsOnReplica(replicaPosition, primaryPosition)
+		primarySid, err := replication.ParseSID(primaryStatus.ServerUuid)
+		if err != nil {
+			return err
+		}
+		errantGtid, err := replication.ErrantGTIDsOnReplica(replicaPosition, primaryPosition, primarySid)
 		if err != nil {
 			return err
 		}
