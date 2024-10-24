@@ -996,6 +996,11 @@ func (itmc *internalTabletManagerClient) PopulateReparentJournal(context.Context
 	return fmt.Errorf("not implemented in vtcombo")
 }
 
+// ReadReparentJournalInfo is part of the tmclient.TabletManagerClient interface.
+func (itmc *internalTabletManagerClient) ReadReparentJournalInfo(ctx context.Context, tablet *topodatapb.Tablet) (int, error) {
+	return 0, fmt.Errorf("not implemented in vtcombo")
+}
+
 func (itmc *internalTabletManagerClient) DemotePrimary(context.Context, *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }

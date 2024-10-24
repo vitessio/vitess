@@ -236,6 +236,9 @@ type TabletManagerClient interface {
 	// its reparent_journal table.
 	PopulateReparentJournal(ctx context.Context, tablet *topodatapb.Tablet, timeCreatedNS int64, actionName string, tabletAlias *topodatapb.TabletAlias, pos string) error
 
+	// ReadReparentJournalInfo reads the information from reparent journal
+	ReadReparentJournalInfo(ctx context.Context, tablet *topodatapb.Tablet) (int, error)
+
 	// InitReplica tells a tablet to start replicating from the
 	// passed in primary tablet alias, and wait for the row in the
 	// reparent_journal table.
