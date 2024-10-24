@@ -136,6 +136,7 @@ func TestCallProcedureLeakTx(t *testing.T) {
 
 func TestCallProcedureChangedTx(t *testing.T) {
 	client := framework.NewClient()
+	defer client.Release()
 
 	_, err := client.Execute(`call proc_tx_begin()`, nil)
 	require.EqualError(t, err, "Transaction not concluded inside the stored procedure, leaking transaction from stored procedure is not allowed (CallerID: dev)")

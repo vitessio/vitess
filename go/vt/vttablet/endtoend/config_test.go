@@ -99,6 +99,7 @@ func TestTxPoolSize(t *testing.T) {
 	verifyIntValue(t, vend, "TransactionPoolCapacity", 1)
 	verifyIntValue(t, vend, "FoundRowsPoolAvailable", 0)
 	verifyIntValue(t, vend, "FoundRowsPoolCapacity", 1)
+	assert.Equal(t, 1, framework.Server.TxPoolSize())
 
 	client3 := framework.NewClient()
 
