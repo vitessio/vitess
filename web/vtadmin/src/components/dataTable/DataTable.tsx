@@ -31,6 +31,10 @@ interface Props<T> {
     pageSize?: number;
     renderRows: (rows: T[]) => JSX.Element[];
     title?: string;
+    // Pass a unique `pageKey` for each DataTable, in case multiple
+    // DataTables access the same URL. This will be used to
+    // access page number from the URL.
+    pageKey?: string;
 }
 
 // Generally, page sizes of ~100 rows are fine in terms of performance,
@@ -43,12 +47,15 @@ export const DataTable = <T extends object>({
     pageSize = DEFAULT_PAGE_SIZE,
     renderRows,
     title,
+    pageKey = '',
 }: Props<T>) => {
     const { pathname } = useLocation();
     const urlQuery = useURLQuery();
 
+    const pageQueryKey = `${pageKey}page`;
+
     const totalPages = Math.ceil(data.length / pageSize);
-    const { page } = useURLPagination({ totalPages });
+    const { page } = useURLPagination({ totalPages, pageQueryKey });
 
     const startIndex = (page - 1) * pageSize;
     const endIndex = startIndex + pageSize;
@@ -59,7 +66,7 @@ export const DataTable = <T extends object>({
 
     const formatPageLink = (p: number) => ({
         pathname,
-        search: stringify({ ...urlQuery.query, page: p === 1 ? undefined : p }),
+        search: stringify({ ...urlQuery.query, [pageQueryKey]: p === 1 ? undefined : p }),
     });
 
     return (

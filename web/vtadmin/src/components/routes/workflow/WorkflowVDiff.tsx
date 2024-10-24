@@ -83,7 +83,7 @@ export const WorkflowVDiff = ({ clusterID, keyspace, name }: Props) => {
 
     const isStatusEmpty =
         !lastVDiffStatus ||
-        (Object.keys(lastVDiffStatus.shard_report).length === 1 &&
+        (Object.keys(lastVDiffStatus.shard_report).length > 0 &&
             !lastVDiffStatus.shard_report[Object.keys(lastVDiffStatus.shard_report)[0]].state);
 
     const renderRows = (rows: typeof shardReports) => {
