@@ -4598,6 +4598,7 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 		tabletMap                map[string]*topo.TabletInfo
 		wantedCandidates         []string
 		wantMostAdvancedPossible []string
+		wantErr                  string
 	}{
 		{
 			name: "Case 1a: No Errant GTIDs. This is the first reparent. A replica is the most advanced.",
@@ -5411,6 +5412,64 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 			wantedCandidates:         []string{"zone1-0000000103"},
 			wantMostAdvancedPossible: []string{"zone1-0000000103"},
 		},
+		{
+			name: "Reading reparent journal fails",
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000102": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "zone1-0000000102",
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"zone1-0000000103": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "zone1-0000000103",
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  103,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000104": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "zone1-0000000104",
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  104,
+						},
+						Type: topodatapb.TabletType_RDONLY,
+					},
+				},
+			},
+			tmc: &testutil.TabletManagerClient{
+				ReadReparentJournalInfoResults: map[string]int{},
+			},
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"zone1-0000000103": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-100", "1-30", "1-51"),
+						SourceUuid:       u1,
+					},
+				},
+				"zone1-0000000104": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("", "1-31", "1-50"),
+						SourceUuid:       u2,
+					},
+				},
+			},
+			primaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{
+				"zone1-0000000102": {
+					Position: getRelayLogPosition("", "1-31", "1-50"),
+				},
+			},
+			wantErr: "could not read reparent journal information",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -5421,6 +5480,10 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 			require.NoError(t, err)
 			require.True(t, isGtid)
 			candidates, err := erp.findErrantGTIDs(context.Background(), validCandidates, tt.statusMap, tt.tabletMap, 10*time.Second)
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
 			require.NoError(t, err)
 			keys := make([]string, 0, len(candidates))
 			for key := range candidates {
