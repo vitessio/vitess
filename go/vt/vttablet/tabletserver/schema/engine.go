@@ -180,14 +180,15 @@ func (se *Engine) syncSidecarDB(ctx context.Context, conn *dbconnpool.DBConnecti
 // EnsureConnectionAndDB ensures that we can connect to mysql.
 // If tablet type is primary and there is no db, then the database is created.
 // This function can be called before opening the Engine.
-func (se *Engine) EnsureConnectionAndDB(tabletType topodatapb.TabletType) error {
+func (se *Engine) EnsureConnectionAndDB(tabletType topodatapb.TabletType, serving bool) error {
 	ctx := tabletenv.LocalContext()
 	// We use AllPrivs since syncSidecarDB() might need to upgrade the schema
 	conn, err := dbconnpool.NewDBConnection(ctx, se.env.Config().DB.AllPrivsWithDB())
 	if err == nil {
 		se.dbCreationFailed = false
 		// upgrade sidecar db if required, for a tablet with an existing database
-		if tabletType == topodatapb.TabletType_PRIMARY {
+		// only run DDL updates when a PRIMARY is transitioning to serving state.
+		if tabletType == topodatapb.TabletType_PRIMARY && serving {
 			if err := se.syncSidecarDB(ctx, conn); err != nil {
 				conn.Close()
 				return err
@@ -196,7 +197,7 @@ func (se *Engine) EnsureConnectionAndDB(tabletType topodatapb.TabletType) error 
 		conn.Close()
 		return nil
 	}
-	if tabletType != topodatapb.TabletType_PRIMARY {
+	if tabletType != topodatapb.TabletType_PRIMARY || !serving {
 		return err
 	}
 	if merr, isSQLErr := err.(*sqlerror.SQLError); !isSQLErr || merr.Num != sqlerror.ERBadDb {
