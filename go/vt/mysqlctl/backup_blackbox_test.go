@@ -428,7 +428,6 @@ func TestExecuteBackupWithFailureOnLastFile(t *testing.T) {
 	filebackupstorage.FileBackupStorageRoot = backupRoot
 	require.NoError(t, createBackupDir(backupRoot, "innodb", "log", "datadir"))
 	dataDir := path.Join(backupRoot, "datadir")
-	fmt.Println(dataDir)
 	// Add some files under data directory to force backup to execute semaphore acquire inside
 	// backupFiles() method (https://github.com/vitessio/vitess/blob/main/go/vt/mysqlctl/builtinbackupengine.go#L483).
 	require.NoError(t, createBackupDir(dataDir, "test1"))
