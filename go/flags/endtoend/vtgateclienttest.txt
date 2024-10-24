@@ -32,6 +32,8 @@ Flags:
       --grpc_key string                                                  server private key to use for gRPC connections, requires grpc_cert, enables TLS
       --grpc_max_connection_age duration                                 Maximum age of a client connection before GoAway is sent. (default 2562047h47m16.854775807s)
       --grpc_max_connection_age_grace duration                           Additional grace period after grpc_max_connection_age, after which connections are forcibly closed. (default 2562047h47m16.854775807s)
+      --grpc_max_message_recv_size int                                   Maximum allowed RPC message size when receiving. If 0, defaults to grpc_max_message_size.
+      --grpc_max_message_send_size int                                   Maximum allowed RPC message size when sending. If 0, defaults to grpc_max_message_size.
       --grpc_max_message_size int                                        Maximum allowed RPC message size. Larger messages will be rejected by gRPC with the error 'exceeding the max size'. (default 16777216)
       --grpc_port int                                                    Port to listen on for gRPC calls. If zero, do not listen.
       --grpc_prometheus                                                  Enable gRPC monitoring with Prometheus.

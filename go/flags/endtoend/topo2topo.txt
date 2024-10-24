@@ -22,6 +22,8 @@ Flags:
       --from_root string                                            topology server root to copy data from
       --from_server string                                          topology server address to copy data from
       --grpc_enable_tracing                                         Enable gRPC tracing.
+      --grpc_max_message_recv_size int                              Maximum allowed RPC message size when receiving. If 0, defaults to grpc_max_message_size.
+      --grpc_max_message_send_size int                              Maximum allowed RPC message size when sending. If 0, defaults to grpc_max_message_size.
       --grpc_max_message_size int                                   Maximum allowed RPC message size. Larger messages will be rejected by gRPC with the error 'exceeding the max size'. (default 16777216)
       --grpc_prometheus                                             Enable gRPC monitoring with Prometheus.
   -h, --help                                                        help for topo2topo

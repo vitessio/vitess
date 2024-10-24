@@ -28,6 +28,10 @@ var (
 	// accept. Larger messages will be rejected.
 	// Note: We're using 16 MiB as default value because that's the default in MySQL
 	maxMessageSize = 16 * 1024 * 1024
+	// These options override maxMessageSize if > 0, allowing us to control the max
+	// size sending independently from receiving.
+	maxMsgRecvSize = 0
+	maxMsgSendSize = 0
 	// enablePrometheus sets a flag to enable grpc client/server grpc monitoring.
 	enablePrometheus bool
 )
@@ -39,6 +43,8 @@ var (
 // command-line arguments.
 func RegisterFlags(fs *pflag.FlagSet) {
 	fs.IntVar(&maxMessageSize, "grpc_max_message_size", maxMessageSize, "Maximum allowed RPC message size. Larger messages will be rejected by gRPC with the error 'exceeding the max size'.")
+	fs.IntVar(&maxMsgSendSize, "grpc_max_message_send_size", maxMsgSendSize, "Maximum allowed RPC message size when sending. If 0, defaults to grpc_max_message_size.")
+	fs.IntVar(&maxMsgRecvSize, "grpc_max_message_recv_size", maxMsgRecvSize, "Maximum allowed RPC message size when receiving. If 0, defaults to grpc_max_message_size.")
 	fs.BoolVar(&grpc.EnableTracing, "grpc_enable_tracing", grpc.EnableTracing, "Enable gRPC tracing.")
 	fs.BoolVar(&enablePrometheus, "grpc_prometheus", enablePrometheus, "Enable gRPC monitoring with Prometheus.")
 }
@@ -51,6 +57,20 @@ func EnableGRPCPrometheus() bool {
 // MaxMessageSize returns the value of the --grpc_max_message_size flag.
 func MaxMessageSize() int {
 	return maxMessageSize
+}
+
+func MaxMessageRecvSize() int {
+	if maxMsgRecvSize > 0 {
+		return maxMsgRecvSize
+	}
+	return MaxMessageSize()
+}
+
+func MaxMessageSendSize() int {
+	if maxMsgSendSize > 0 {
+		return maxMsgSendSize
+	}
+	return MaxMessageSize()
 }
 
 func init() {
