@@ -84,13 +84,13 @@ func TestTxPoolSize(t *testing.T) {
 	err := client1.Begin( /* found rows pool*/ false)
 	require.NoError(t, err)
 	defer client1.Rollback()
-	verifyIntValue(t, framework.DebugVars(), "TransactionPoolAvailable", tabletenv.NewCurrentConfig().TxPool.Size-1)
+	verifyIntValue(t, framework.DebugVars(), "TransactionPoolAvailable", framework.FetchInt(vstart, "TransactionPoolAvailable")-1)
 
 	client2 := framework.NewClient()
 	err = client2.Begin( /* found rows pool*/ true)
 	require.NoError(t, err)
 	defer client2.Rollback()
-	verifyIntValue(t, framework.DebugVars(), "FoundRowsPoolAvailable", tabletenv.NewCurrentConfig().TxPool.Size-1)
+	verifyIntValue(t, framework.DebugVars(), "FoundRowsPoolAvailable", framework.FetchInt(vstart, "FoundRowsPoolAvailable")-1)
 
 	revert := changeVar(t, "TxPoolSize", "1")
 	defer revert()
