@@ -33,7 +33,7 @@ const (
 	mysql80 mysqlVersion = "mysql80"
 	mysql84 mysqlVersion = "mysql84"
 
-	defaultMySQLVersion = mysql80
+	defaultMySQLVersion = mysql84
 )
 
 type mysqlVersions []mysqlVersion
@@ -107,7 +107,7 @@ var (
 		"vtgate_foreignkey_stress",
 		"vtorc",
 		"xb_recovery",
-		"mysql80",
+		"mysql84",
 		"vreplication_across_db_versions",
 		"vreplication_mariadb_to_mysql",
 		"vreplication_basic",
@@ -172,6 +172,7 @@ type clusterTest struct {
 	EnableBinlogTransactionCompression bool
 	PartialKeyspace                    bool
 	Cores16                            bool
+	AllowFKNonStandardKey              bool
 }
 
 type vitessTesterTest struct {
@@ -289,6 +290,9 @@ func generateClusterWorkflows(list []string, tpl string) {
 			}
 			if strings.HasPrefix(cluster, "vreplication") || strings.HasSuffix(cluster, "heavy") {
 				test.LimitResourceUsage = true
+			}
+			if strings.Contains(cluster, "foreignkey") {
+				test.AllowFKNonStandardKey = true
 			}
 			if strings.Contains(cluster, "vrepl") {
 				test.EnableBinlogTransactionCompression = true
