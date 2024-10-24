@@ -94,7 +94,7 @@ var (
 	ptOSCBinaryPath         = "/usr/bin/pt-online-schema-change"
 	migrationCheckInterval  = 1 * time.Minute
 	retainOnlineDDLTables   = 24 * time.Hour
-	defaultCutOverThreshold = 10 * time.Second
+	DefaultCutOverThreshold = 10 * time.Second
 	maxConcurrentOnlineDDLs = 256
 
 	migrationNextCheckIntervals = []time.Duration{1 * time.Second, 5 * time.Second, 10 * time.Second, 20 * time.Second}
@@ -205,7 +205,7 @@ func getMigrationCutOverThreshold(onlineDDL *schema.OnlineDDL) time.Duration {
 	if threshold, _ := onlineDDL.StrategySetting().CutOverThreshold(); threshold != 0 {
 		return threshold
 	}
-	return defaultCutOverThreshold
+	return DefaultCutOverThreshold
 }
 
 // NewExecutor creates a new gh-ost executor.

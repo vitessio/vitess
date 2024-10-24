@@ -408,6 +408,9 @@ message ApplySchemaRequest {
   vtrpc.CallerID caller_id = 9;
   // BatchSize indicates how many queries to apply together
   int64 batch_size = 10;
+  // CutOverThreshold is a limit on how long we attempt cutover work before
+  // giving up and returning an error, to retry the cutover again later.
+  vttime.Duration cut_over_threshold = 11;
 }
 
 message ApplySchemaResponse {

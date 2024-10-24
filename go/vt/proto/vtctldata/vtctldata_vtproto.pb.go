@@ -682,6 +682,7 @@ func (m *ApplySchemaRequest) CloneVT() *ApplySchemaRequest {
 	r.WaitReplicasTimeout = m.WaitReplicasTimeout.CloneVT()
 	r.CallerId = m.CallerId.CloneVT()
 	r.BatchSize = m.BatchSize
+	r.CutOverThreshold = m.CutOverThreshold.CloneVT()
 	if rhs := m.Sql; rhs != nil {
 		tmpContainer := make([]string, len(rhs))
 		copy(tmpContainer, rhs)
@@ -7904,6 +7905,16 @@ func (m *ApplySchemaRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.CutOverThreshold != nil {
+		size, err := m.CutOverThreshold.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		i--
+		dAtA[i] = 0x5a
 	}
 	if m.BatchSize != 0 {
 		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.BatchSize))
@@ -22237,6 +22248,10 @@ func (m *ApplySchemaRequest) SizeVT() (n int) {
 	if m.BatchSize != 0 {
 		n += 1 + protohelpers.SizeOfVarint(uint64(m.BatchSize))
 	}
+	if m.CutOverThreshold != nil {
+		l = m.CutOverThreshold.SizeVT()
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -33416,6 +33431,42 @@ func (m *ApplySchemaRequest) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
+		case 11:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field CutOverThreshold", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.CutOverThreshold == nil {
+				m.CutOverThreshold = &vttime.Duration{}
+			}
+			if err := m.CutOverThreshold.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])

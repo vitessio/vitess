@@ -276,6 +276,9 @@ func (s *VtctldServer) ApplySchema(ctx context.Context, req *vtctldatapb.ApplySc
 
 	executor := schemamanager.NewTabletExecutor(migrationContext, s.ts, s.tmc, logger, waitReplicasTimeout, req.BatchSize, s.ws.SQLParser())
 
+	if cutOverThreshold, set, err := protoutil.DurationFromProto(req.CutOverThreshold); set && err == nil {
+		req.DdlStrategy += fmt.Sprintf(" --cut-over-threshold=%v", cutOverThreshold)
+	}
 	if err = executor.SetDDLStrategy(req.DdlStrategy); err != nil {
 		err = vterrors.Wrapf(err, "invalid DdlStrategy: %s", req.DdlStrategy)
 		return resp, err

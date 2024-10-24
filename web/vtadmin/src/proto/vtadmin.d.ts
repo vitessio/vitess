@@ -53122,6 +53122,9 @@ export namespace vtctldata {
 
         /** ApplySchemaRequest batch_size */
         batch_size?: (number|Long|null);
+
+        /** ApplySchemaRequest cut_over_threshold */
+        cut_over_threshold?: (vttime.IDuration|null);
     }
 
     /** Represents an ApplySchemaRequest. */
@@ -53156,6 +53159,9 @@ export namespace vtctldata {
 
         /** ApplySchemaRequest batch_size. */
         public batch_size: (number|Long);
+
+        /** ApplySchemaRequest cut_over_threshold. */
+        public cut_over_threshold?: (vttime.IDuration|null);
 
         /**
          * Creates a new ApplySchemaRequest instance using the specified properties.

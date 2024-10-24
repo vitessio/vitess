@@ -31,15 +31,16 @@ import (
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
+	"vitess.io/vitess/go/vt/vttablet/onlineddl"
 
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 var (
 	// ApplySchema makes an ApplySchema gRPC call to a vtctld.
 	ApplySchema = &cobra.Command{
-		Use:   "ApplySchema [--ddl-strategy <strategy>] [--uuid <uuid> ...] [--migration-context <context>] [--wait-replicas-timeout <duration>] [--caller-id <caller_id>] {--sql-file <file> | --sql <sql>} <keyspace>",
+		Use:   "ApplySchema [--ddl-strategy <strategy>] [--cut-over-threshold <duration>] [--uuid <uuid> ...] [--migration-context <context>] [--wait-replicas-timeout <duration>] [--caller-id <caller_id>] {--sql-file <file> | --sql <sql>} <keyspace>",
 		Short: "Applies the schema change to the specified keyspace on every primary, running in parallel on all shards. The changes are then propagated to replicas via replication.",
 		Long: `Applies the schema change to the specified keyspace on every primary, running in parallel on all shards. The changes are then propagated to replicas via replication.
 
@@ -103,6 +104,7 @@ var applySchemaOptions = struct {
 	SkipPreflight           bool
 	CallerID                string
 	BatchSize               int64
+	CutOverThreshold        time.Duration
 }{}
 
 func commandApplySchema(cmd *cobra.Command, args []string) error {
@@ -129,9 +131,9 @@ func commandApplySchema(cmd *cobra.Command, args []string) error {
 
 	cli.FinishedParsing(cmd)
 
-	var cid *vtrpc.CallerID
+	var cid *vtrpcpb.CallerID
 	if applySchemaOptions.CallerID != "" {
-		cid = &vtrpc.CallerID{Principal: applySchemaOptions.CallerID}
+		cid = &vtrpcpb.CallerID{Principal: applySchemaOptions.CallerID}
 	}
 
 	ks := cmd.Flags().Arg(0)
@@ -143,6 +145,7 @@ func commandApplySchema(cmd *cobra.Command, args []string) error {
 		UuidList:            applySchemaOptions.UUIDList,
 		MigrationContext:    applySchemaOptions.MigrationContext,
 		WaitReplicasTimeout: protoutil.DurationToProto(applySchemaOptions.WaitReplicasTimeout),
+		CutOverThreshold:    protoutil.DurationToProto(applySchemaOptions.CutOverThreshold),
 		CallerId:            cid,
 		BatchSize:           applySchemaOptions.BatchSize,
 	})
@@ -293,6 +296,7 @@ func init() {
 	ApplySchema.Flags().StringArrayVar(&applySchemaOptions.SQL, "sql", nil, "Semicolon-delimited, repeatable SQL commands to apply. Exactly one of --sql|--sql-file is required.")
 	ApplySchema.Flags().StringVar(&applySchemaOptions.SQLFile, "sql-file", "", "Path to a file containing semicolon-delimited SQL commands to apply. Exactly one of --sql|--sql-file is required.")
 	ApplySchema.Flags().Int64Var(&applySchemaOptions.BatchSize, "batch-size", 0, "How many queries to batch together. Only applicable when all queries are CREATE TABLE|VIEW")
+	ApplySchema.Flags().DurationVar(&applySchemaOptions.CutOverThreshold, "cut-over-threshold", onlineddl.DefaultCutOverThreshold, "The maximum time to wait for an OnlineDDL migration cut-over to complete before failing the operation, to retry again later.")
 
 	Root.AddCommand(ApplySchema)
 
