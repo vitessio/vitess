@@ -4856,66 +4856,6 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 			wantMostAdvancedPossible: []string{"zone1-0000000102"},
 		},
 		{
-			name: "Case 2 Legacy: Only 1 tablet is recent and all others are severely lagged - ReadReparentJournalInfo not implemented",
-			tabletMap: map[string]*topo.TabletInfo{
-				"zone1-0000000102": {
-					Tablet: &topodatapb.Tablet{
-						Hostname: "zone1-0000000102",
-						Alias: &topodatapb.TabletAlias{
-							Cell: "zone1",
-							Uid:  102,
-						},
-						Type: topodatapb.TabletType_REPLICA,
-					},
-				},
-				"zone1-0000000103": {
-					Tablet: &topodatapb.Tablet{
-						Hostname: "zone1-0000000103",
-						Alias: &topodatapb.TabletAlias{
-							Cell: "zone1",
-							Uid:  103,
-						},
-						Type: topodatapb.TabletType_REPLICA,
-					},
-				},
-				"zone1-0000000104": {
-					Tablet: &topodatapb.Tablet{
-						Hostname: "zone1-0000000104",
-						Alias: &topodatapb.TabletAlias{
-							Cell: "zone1",
-							Uid:  104,
-						},
-						Type: topodatapb.TabletType_RDONLY,
-					},
-				},
-			},
-			tmc: &testutil.TabletManagerClient{
-				ReadReparentJournalInfoResults: map[string]int{},
-			},
-			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
-				"zone1-0000000102": {
-					After: &replicationdatapb.Status{
-						RelayLogPosition: getRelayLogPosition("1-100", "1-30", "1-100"),
-						SourceUuid:       u1,
-					},
-				},
-				"zone1-0000000103": {
-					After: &replicationdatapb.Status{
-						RelayLogPosition: getRelayLogPosition("", "1-30", "1-50"),
-						SourceUuid:       u1,
-					},
-				},
-				"zone1-0000000104": {
-					After: &replicationdatapb.Status{
-						RelayLogPosition: getRelayLogPosition("", "1-30"),
-						SourceUuid:       u1,
-					},
-				},
-			},
-			wantedCandidates:         []string{"zone1-0000000103", "zone1-0000000104"},
-			wantMostAdvancedPossible: []string{"zone1-0000000103"},
-		},
-		{
 			name: "Case 3: All replicas severely lagged (Primary tablet dies with t1: u1-100, u2:1-30, u3:1-100)",
 			tabletMap: map[string]*topo.TabletInfo{
 				"zone1-0000000102": {
@@ -5343,50 +5283,6 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 			},
 			wantedCandidates:         []string{"zone1-0000000103"},
 			wantMostAdvancedPossible: []string{"zone1-0000000103"},
-		},
-		{
-			name: "Case 6c Legacy: Errant GTID introduced on a replica server by a write that shouldn't happen. Only 2 tablets exist. - ReadReparentJournalInfo not implemented",
-			tabletMap: map[string]*topo.TabletInfo{
-				"zone1-0000000102": {
-					Tablet: &topodatapb.Tablet{
-						Hostname: "zone1-0000000102",
-						Alias: &topodatapb.TabletAlias{
-							Cell: "zone1",
-							Uid:  102,
-						},
-						Type: topodatapb.TabletType_REPLICA,
-					},
-				},
-				"zone1-0000000103": {
-					Tablet: &topodatapb.Tablet{
-						Hostname: "zone1-0000000103",
-						Alias: &topodatapb.TabletAlias{
-							Cell: "zone1",
-							Uid:  103,
-						},
-						Type: topodatapb.TabletType_REPLICA,
-					},
-				},
-			},
-			tmc: &testutil.TabletManagerClient{
-				ReadReparentJournalInfoResults: map[string]int{},
-			},
-			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
-				"zone1-0000000102": {
-					After: &replicationdatapb.Status{
-						RelayLogPosition: getRelayLogPosition("1-100", "1-31", "1-50"),
-						SourceUuid:       u1,
-					},
-				},
-				"zone1-0000000103": {
-					After: &replicationdatapb.Status{
-						RelayLogPosition: getRelayLogPosition("1-100", "1-30", "1-50"),
-						SourceUuid:       u1,
-					},
-				},
-			},
-			wantedCandidates:         []string{"zone1-0000000102", "zone1-0000000103"},
-			wantMostAdvancedPossible: []string{"zone1-0000000102"},
 		},
 		{
 			name: "Case 7: Both replicas with errant GTIDs",
