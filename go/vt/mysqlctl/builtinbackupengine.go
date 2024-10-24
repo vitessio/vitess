@@ -645,7 +645,7 @@ func (be *BuiltinBackupEngine) backupFiles(
 			name := fmt.Sprintf("%v", i)
 			err := be.backupFile(ctxCancel, params, bh, fe, name)
 			if err != nil {
-				bh.RecordError(acqErr)
+				bh.RecordError(err)
 				cancel()
 			}
 		}(i)
