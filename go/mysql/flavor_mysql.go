@@ -430,7 +430,7 @@ const TablesWithSize80 = `SELECT t.table_name,
 		SUM(i.allocated_size)
 	FROM information_schema.tables t
 		LEFT JOIN information_schema.innodb_tablespaces i
-	ON i.name LIKE CONCAT(t.table_schema, '/', t.table_name, IF(t.create_options <=> 'partitioned', '#p#%', '')) COLLATE utf8mb3_general_ci
+	ON LEFT(i.name, char_length(t.table_schema)+1+char_length(table_name)) = CONCAT(t.table_schema, '/', t.table_name) COLLATE utf8mb3_general_ci
 	WHERE
 		t.table_schema = database()
 	GROUP BY
