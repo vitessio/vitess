@@ -18,6 +18,7 @@ package vreplication
 
 import (
 	"context"
+	"errors"
 	"io"
 	"strings"
 	"time"
@@ -175,37 +176,13 @@ func (vc *vdbClient) IsRetryable(err error) bool {
 	return false
 }
 
-func (vc *vdbClient) ExecuteWithRetryAndBackoff(ctx context.Context, query string) (*sqltypes.Result, error) {
-	timeout := 1 * time.Minute
-	shortCtx, cancel := context.WithDeadline(ctx, time.Now().Add(timeout))
-	defer cancel()
-	attempts := 0
-	backoffSeconds := 1
-	for {
-		qr, err := vc.ExecuteWithRetry(ctx, query)
-		if err == nil {
-			return qr, nil
-		}
-		if !vc.IsRetryable(err) {
-			return nil, err
-		}
-		attempts++
-		log.Infof("Backing off for %v seconds before retrying query: %v, got err %v", backoffSeconds, query, err)
-		select {
-		case <-shortCtx.Done():
-			return nil, vterrors.Errorf(vtrpc.Code_DEADLINE_EXCEEDED, "backoff timeout exceeded while retrying query: %v", query)
-		case <-time.After(time.Duration(backoffSeconds) * time.Second):
-		}
-		backoffSeconds = (1 << attempts) >> 1
-	}
-}
-
 func (vc *vdbClient) ExecuteWithRetry(ctx context.Context, query string) (*sqltypes.Result, error) {
 	ctx2, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	qr, err := vc.Execute(query)
 	for err != nil {
-		if sqlErr, ok := err.(*sqlerror.SQLError); ok &&
+		var sqlErr *sqlerror.SQLError
+		if errors.As(err, &sqlErr) &&
 			sqlErr.Number() == sqlerror.ERLockDeadlock || sqlErr.Number() == sqlerror.ERLockWaitTimeout || sqlErr.Number() == sqlerror.ERDupEntry {
 			log.Infof("retryable error: %v, waiting for %v and retrying", sqlErr, dbLockRetryDelay)
 			if err := vc.Rollback(); err != nil {
