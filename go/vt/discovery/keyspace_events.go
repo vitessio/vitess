@@ -388,16 +388,18 @@ func (kss *keyspaceState) onHealthCheck(th *TabletHealth) {
 			sstate.serving = true
 		case !th.Serving:
 			sstate.serving = false
-			// Once we have seen a non-serving primary healthcheck, there is no need for us to explicitly wait
-			// for a reparent to happen. We use waitForReparent to ensure that we don't prematurely stop
-			// buffering when we receive a serving healthcheck from the primary that is being demoted.
-			// However, if we receive a non-serving check, then we know that we won't receive any more serving
-			// healthchecks anymore until reparent finishes. Specifically, this helps us when PRS fails, but
-			// stops gracefully because the new candidate couldn't get caught up in time. In this case, we promote
-			// the previous primary back. Without turning off waitForReparent here, we wouldn't be able to stop
-			// buffering for that case.
-			sstate.waitForReparent = false
 		}
+	}
+	if !th.Serving {
+		// Once we have seen a non-serving primary healthcheck, there is no need for us to explicitly wait
+		// for a reparent to happen. We use waitForReparent to ensure that we don't prematurely stop
+		// buffering when we receive a serving healthcheck from the primary that is being demoted.
+		// However, if we receive a non-serving check, then we know that we won't receive any more serving
+		// healthchecks anymore until reparent finishes. Specifically, this helps us when PRS fails, but
+		// stops gracefully because the new candidate couldn't get caught up in time. In this case, we promote
+		// the previous primary back. Without turning off waitForReparent here, we wouldn't be able to stop
+		// buffering for that case.
+		sstate.waitForReparent = false
 	}
 
 	// if the primary for this shard has been externally reparented, we're undergoing a failover,
