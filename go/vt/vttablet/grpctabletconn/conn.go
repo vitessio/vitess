@@ -24,6 +24,7 @@ import (
 	"github.com/spf13/pflag"
 	"google.golang.org/grpc"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
@@ -117,6 +118,7 @@ func (conn *gRPCQueryClient) Execute(ctx context.Context, target *querypb.Target
 	if conn.cc == nil {
 		return nil, tabletconn.ConnClosed
 	}
+	options.RawMysqlPackets = true
 
 	req := &querypb.ExecuteRequest{
 		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
@@ -134,7 +136,7 @@ func (conn *gRPCQueryClient) Execute(ctx context.Context, target *querypb.Target
 	if err != nil {
 		return nil, tabletconn.ErrorFromGRPC(err)
 	}
-	return sqltypes.Proto3ToResult(er.Result), nil
+	return mysql.ParseResult(er.Result, true)
 }
 
 // StreamExecute executes the query and streams results back through callback.
@@ -489,7 +491,8 @@ func (conn *gRPCQueryClient) BeginExecute(ctx context.Context, target *querypb.T
 	if reply.Error != nil {
 		return state, nil, tabletconn.ErrorFromVTRPC(reply.Error)
 	}
-	return state, sqltypes.Proto3ToResult(reply.Result), nil
+	result, err = mysql.ParseResult(reply.Result, true)
+	return state, result, err
 }
 
 // BeginStreamExecute starts a transaction and runs an Execute.
@@ -888,8 +891,8 @@ func (conn *gRPCQueryClient) ReserveBeginExecute(ctx context.Context, target *qu
 	if reply.Error != nil {
 		return state, nil, tabletconn.ErrorFromVTRPC(reply.Error)
 	}
-
-	return state, sqltypes.Proto3ToResult(reply.Result), nil
+	result, err = mysql.ParseResult(reply.Result, true)
+	return state, result, err
 }
 
 // ReserveBeginStreamExecute implements the queryservice interface
@@ -1002,8 +1005,8 @@ func (conn *gRPCQueryClient) ReserveExecute(ctx context.Context, target *querypb
 	if reply.Error != nil {
 		return state, nil, tabletconn.ErrorFromVTRPC(reply.Error)
 	}
-
-	return state, sqltypes.Proto3ToResult(reply.Result), nil
+	result, err = mysql.ParseResult(reply.Result, true)
+	return state, result, err
 }
 
 // ReserveStreamExecute implements the queryservice interface

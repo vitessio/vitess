@@ -25,6 +25,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
@@ -33,6 +34,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/acl"
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/pools/smartconnpool"
 	"vitess.io/vitess/go/sqltypes"
@@ -908,6 +910,7 @@ func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sq
 				targetTabletType: targetType,
 				setting:          connSetting,
 			}
+			// HERE
 			result, err = qre.Execute()
 			if err != nil {
 				return err
@@ -930,6 +933,9 @@ func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sq
 			return nil
 		},
 	)
+	if options.RawMysqlPackets {
+		log.Errorf("DEBUG: tsv.execute result: %+v, err: %v", result, err)
+	}
 	return result, err
 }
 
@@ -964,6 +970,10 @@ func (tsv *TabletServer) streamExecute(ctx context.Context, target *querypb.Targ
 		// Use the transaction timeout. StreamExecute calls happen for OLAP only,
 		// so we can directly fetch the OLAP TX timeout.
 		timeout = tsv.config.TxTimeoutForWorkload(querypb.ExecuteOptions_OLAP)
+	}
+
+	if options.RawMysqlPackets {
+		log.Errorf("DEBUG: tsv.streamExecute with raw packets sql: %s", sql)
 	}
 
 	return tsv.execRequest(
@@ -1249,7 +1259,10 @@ func (tsv *TabletServer) VStreamRows(ctx context.Context, request *binlogdatapb.
 	}
 	var row []sqltypes.Value
 	if request.Lastpk != nil {
-		r := sqltypes.Proto3ToResult(request.Lastpk)
+		r, err := mysql.ParseResult(request.Lastpk, true)
+		if err != nil {
+			return err
+		}
 		if len(r.Rows) != 1 {
 			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected lastpk input: %v", request.Lastpk)
 		}
@@ -1515,6 +1528,7 @@ func (tsv *TabletServer) execRequest(
 	if options != nil {
 		span.Annotate("isolation-level", options.TransactionIsolation)
 		span.Annotate("workload_name", options.WorkloadName)
+		span.Annotate("raw_mysql_packets", options.RawMysqlPackets)
 	}
 	trace.AnnotateSQL(span, sqlparser.Preview(sql))
 	// With a tabletenv.LocalContext() the target will be nil.
@@ -1790,6 +1804,7 @@ func (tsv *TabletServer) SetTwoPCAllowed(reason int, allowed bool) {
 func (tsv *TabletServer) HandlePanic(err *error) {
 	if x := recover(); x != nil {
 		*err = fmt.Errorf("uncaught panic: %v\n. Stack-trace:\n%s", x, tb.Stack(4))
+		debug.PrintStack()
 	}
 }
 

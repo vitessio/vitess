@@ -23,6 +23,7 @@ import (
 	"github.com/spf13/pflag"
 	"google.golang.org/grpc"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/grpcclient"
@@ -123,7 +124,11 @@ func (conn *vtgateConn) Execute(ctx context.Context, session *vtgatepb.Session, 
 	if response.Error != nil {
 		return response.Session, nil, vterrors.FromVTRPC(response.Error)
 	}
-	return response.Session, sqltypes.Proto3ToResult(response.Result), nil
+	pr, err := mysql.ParseResult(response.Result, true)
+	if err != nil {
+		return response.Session, nil, err
+	}
+	return response.Session, pr, nil
 }
 
 func (conn *vtgateConn) ExecuteBatch(ctx context.Context, session *vtgatepb.Session, queryList []string, bindVarsList []map[string]*querypb.BindVariable) (*vtgatepb.Session, []sqltypes.QueryResponse, error) {

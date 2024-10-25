@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/pools/smartconnpool"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/log"
 )
 
 type PooledDBConnection = smartconnpool.Pooled[*DBConnection]
@@ -76,7 +77,17 @@ func (dbc *DBConnection) Reconnect(ctx context.Context) error {
 
 // ExecuteFetch overwrites mysql.Conn.ExecuteFetch.
 func (dbc *DBConnection) ExecuteFetch(query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
-	mqr, err := dbc.Conn.ExecuteFetch(query, maxrows, wantfields)
+	return dbc.Conn.ExecuteFetchOpt(query, mysql.ExecuteOptions{
+		MaxRows:    maxrows,
+		WantFields: wantfields,
+	})
+}
+
+func (dbc *DBConnection) ExecuteFetchOpt(query string, opt mysql.ExecuteOptions) (*sqltypes.Result, error) {
+	if opt.RawPackets {
+		log.Errorf("DEBUG: DBConnection ExecuteFetchOpt: options: %v, query: %s", opt, query)
+	}
+	mqr, err := dbc.Conn.ExecuteFetchOpt(query, opt)
 	if err != nil {
 		dbc.handleError(err)
 		return nil, err
@@ -86,7 +97,7 @@ func (dbc *DBConnection) ExecuteFetch(query string, maxrows int, wantfields bool
 
 // ExecuteStreamFetch overwrites mysql.Conn.ExecuteStreamFetch.
 func (dbc *DBConnection) ExecuteStreamFetch(query string, callback func(*sqltypes.Result) error, alloc func() *sqltypes.Result, streamBufferSize int) error {
-
+	// TODO (mlord): handle raw packets here.
 	err := dbc.Conn.ExecuteStreamFetch(query)
 	if err != nil {
 		dbc.handleError(err)
