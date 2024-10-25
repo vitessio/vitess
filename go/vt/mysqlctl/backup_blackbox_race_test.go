@@ -26,7 +26,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -42,7 +41,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 )
 
-// This test triggers a certain code path that only happens a backup file fails to be backed up,
+// This test triggers a certain code path that only happens when a backup file fails to be backed up,
 // only and only if, all the other backup files have either started or finished. When we reach
 // this scenario, files no longer try to acquire the semaphore and thus the backup cannot fail
 // because of context deadline when acquiring it. At this point, the only place where the backup
@@ -57,7 +56,7 @@ import (
 //  6. The restore must fail due to an error on file number 3 ("cannot add file: 3")
 //
 // This test is extracted into its own file that won't be run if we do 'go test -race' as this test
-// exposes an old race condition that will be fixed soon after https://github.com/vitessio/vitess/pull/17062
+// exposes an old race condition that will be fixed after https://github.com/vitessio/vitess/pull/17062
 // Link to the race condition issue: https://github.com/vitessio/vitess/issues/17065
 func TestExecuteBackupWithFailureOnLastFile(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
@@ -86,7 +85,7 @@ func TestExecuteBackupWithFailureOnLastFile(t *testing.T) {
 	}
 
 	// Set up topo
-	keyspace, shard := "mykeyspace", "-80"
+	keyspace, shard := "mykeyspace", "-"
 	ts := memorytopo.NewServer(ctx, "cell1")
 	defer ts.Close()
 
@@ -126,7 +125,8 @@ func TestExecuteBackupWithFailureOnLastFile(t *testing.T) {
 	lastBackupFile := path.Join(backupRoot, "3")
 	f, err := os.Create(lastBackupFile)
 	require.NoError(t, err)
-	f.Write(make([]byte, 1024))
+	_, err = f.Write(make([]byte, 1024))
+	require.NoError(t, err)
 	require.NoError(t, f.Chmod(0444))
 	require.NoError(t, f.Close())
 
@@ -148,5 +148,5 @@ func TestExecuteBackupWithFailureOnLastFile(t *testing.T) {
 	}, bh)
 
 	require.ErrorContains(t, err, "cannot add file: 3")
-	assert.Equal(t, mysqlctl.BackupUnusable, backupResult)
+	require.Equal(t, mysqlctl.BackupUnusable, backupResult)
 }
