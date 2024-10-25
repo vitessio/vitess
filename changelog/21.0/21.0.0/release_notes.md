@@ -4,7 +4,7 @@
 ### Table of Contents
 
 - **[Known Issue](#known-issues)**
-  - **[Backup reports itself as successful despite failures](#backup-reports-as-successful)**
+    - **[Backup reports itself as successful despite failures](#backup-reports-as-successful)**
 - **[Major Changes](#major-changes)**
     - **[Deprecations and Deletions](#deprecations-and-deletions)**
         - [Deprecated VTTablet Flags](#vttablet-flags)
@@ -21,7 +21,6 @@
     - **[Dynamic VReplication Configuration](#dynamic-vreplication-configuration)**
     - **[Reference Table Materialization](#reference-table-materialization)**
     - **[New VEXPLAIN Modes: TRACE and KEYS](#new-vexplain-modes)**
-    - **[Errant GTID Detection on VTTablets](#errant-gtid-vttablet)**
     - **[Automatically Replace MySQL auto_increment Clauses with Vitess Sequences](#auto-replace-mysql-autoinc-with-seq)**
     - **[Experimental MySQL 8.4 support](#experimental-mysql-84)**
     - **[Current Errant GTIDs Count Metric](#errant-gtid-metric)**
@@ -219,14 +218,6 @@ filter columns (potential candidates for indexes, primary keys, or sharding keys
 These new `VEXPLAIN` modes enhance Vitess's query analysis capabilities, allowing for more informed decisions about sharding 
 strategies and query optimization.
 
-### <a id="errant-gtid-vttablet"/>Errant GTID Detection on VTTablets</a>
-
-VTTablets now run an errant GTID detection logic before they join the replication stream. So, if a replica has an errant GTID, it will
-not start replicating from the primary. This protects us from running into situations which are very difficult to recover from.
-
-For users running with the vitess-operator on Kubernetes, this change means that replica tablets with errant GTIDs will have broken 
-replication and will report as unready. Users will need to manually replace and clean up these errant replica tablets.
-
 ### <a id="auto-replace-mysql-autoinc-with-seq"/>Automatically Replace MySQL auto_increment Clauses with Vitess Sequences</a>
 
 In https://github.com/vitessio/vitess/pull/16860 we added support for replacing MySQL `auto_increment` clauses with [Vitess Sequences](https://vitess.io/docs/reference/features/vitess-sequences/), performing all of the setup and initialization
@@ -254,7 +245,7 @@ The `EmergencyReparentShard` and `PlannedReparentShard` commands and RPCs now su
 ------------
 The entire changelog for this release can be found [here](https://github.com/vitessio/vitess/blob/main/changelog/21.0/21.0.0/changelog.md).
 
-The release includes 354 merged Pull Requests.
+The release includes 362 merged Pull Requests.
 
 Thanks to all our contributors: @GrahamCampbell, @GuptaManan100, @Utkar5hM, @anshikavashistha, @app/dependabot, @app/vitess-bot, @arthurschreiber, @beingnoble03, @brendar, @cameronmccord2, @chrism1001, @cuishuang, @dbussink, @deepthi, @demmer, @frouioui, @harshit-gangal, @harshitasao, @icyflame, @kirtanchandak, @mattlord, @mattrobenolt, @maxenglander, @mcrauwel, @notfelineit, @perminov, @rafer, @rohit-nayak-ps, @runewake2, @rvrangel, @shanth96, @shlomi-noach, @systay, @timvaillancourt, @vitess-bot
 
