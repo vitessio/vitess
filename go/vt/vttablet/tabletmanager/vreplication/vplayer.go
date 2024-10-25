@@ -99,6 +99,8 @@ type vplayer struct {
 	// foreignKeyChecksStateInitialized is set to true once we have initialized the foreignKeyChecksEnabled.
 	// The initialization is done on the first row event that this vplayer sees.
 	foreignKeyChecksStateInitialized bool
+
+	hasSkippedCommit bool
 }
 
 // NoForeignKeyCheckFlagBitmask is the bitmask for the 2nd bit (least significant) of the flags in a binlog row event.
@@ -166,7 +168,7 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 		vr.dbClient.maxBatchSize = maxAllowedPacket
 	}
 
-	return &vplayer{
+	vp := &vplayer{
 		vr:               vr,
 		startPos:         settings.StartPos,
 		pos:              settings.StartPos,
@@ -181,6 +183,13 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 		commit:           commitFunc,
 		batchMode:        batchMode,
 	}
+
+	wrappedCommitFunc := func() error {
+		vp.hasSkippedCommit = false
+		return commitFunc()
+	}
+	vp.commit = wrappedCommitFunc
+	return vp
 }
 
 // play is the entry point for playing binlogs.
@@ -548,6 +557,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 					// mustSave flag.
 					if !vp.stopPos.IsZero() && vp.pos.AtLeast(vp.stopPos) {
 						mustSave = true
+						vp.hasSkippedCommit = false
 						break
 					}
 					// In order to group multiple commits into a single one, we look ahead for
@@ -556,6 +566,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 					// also handles the case where the last transaction is partial. In that case,
 					// we only group the transactions with commits we've seen so far.
 					if hasAnotherCommit(items, i, j+1) {
+						vp.hasSkippedCommit = true
 						continue
 					}
 				}

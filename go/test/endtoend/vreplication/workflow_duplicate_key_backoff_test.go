@@ -23,6 +23,7 @@ func TestWorkflowDuplicateKeyBackoff(t *testing.T) {
 	}()
 	defaultRdonly = 0
 	defaultReplicas = 0
+	//setAllVTTabletExperimentalFlags()
 
 	setupMinimalCluster(t)
 	vttablet.InitVReplicationConfigDefaults()
