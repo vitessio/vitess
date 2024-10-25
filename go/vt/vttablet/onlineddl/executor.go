@@ -954,7 +954,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 		// impacts query serving so we wait for a multiple of the cutover threshold here, with
 		// that variable primarily serving to limit the max time we later spend waiting for
 		// a position again AFTER we've taken the locks and table access is blocked.
-		if err := waitForPos(s, postSentryPos, migrationCutOverThreshold*5); err != nil {
+		if err := waitForPos(s, postSentryPos, migrationCutOverThreshold*3); err != nil {
 			return err
 		}
 		e.updateMigrationStage(ctx, onlineDDL.UUID, "post-sentry pos reached")
