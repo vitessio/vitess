@@ -43,6 +43,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 type (
@@ -73,13 +74,28 @@ func PlanQuery(ctx *plancontext.PlanningContext, stmt sqlparser.Statement) (resu
 	checkValid(op)
 	op = planQuery(ctx, op)
 
-	_, isRoute := op.(*Route)
-	if !isRoute && ctx.SemTable.NotSingleRouteErr != nil {
-		// If we got here, we don't have a single shard plan
-		return nil, ctx.SemTable.NotSingleRouteErr
+	err = shouldErrorOnComplexPlan(ctx, op)
+	return op, err
+}
+
+func shouldErrorOnComplexPlan(ctx *plancontext.PlanningContext, op Operator) error {
+	complexPlan := false
+	visitF := func(op Operator, _ semantics.TableSet, _ bool) (Operator, *ApplyResult) {
+		switch op.(type) {
+		case *Limit, *Route:
+		default:
+			complexPlan = true
+		}
+		return op, NoRewrite
 	}
 
-	return op, err
+	TopDown(op, TableID, visitF, stopAtRoute)
+
+	if complexPlan && ctx.SemTable.NotSingleRouteErr != nil {
+		// If we got here, we don't have a single shard plan
+		return ctx.SemTable.NotSingleRouteErr
+	}
+	return nil
 }
 
 func PanicHandler(err *error) {
