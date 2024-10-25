@@ -72,6 +72,32 @@ var (
 	}
 )
 
+func TestIsErrorDueToReparenting(t *testing.T) {
+	testcases := []struct {
+		err  error
+		want bool
+	}{
+		{
+			err:  vterrors.Errorf(vtrpcpb.Code_CLUSTER_EVENT, ClusterEventReshardingInProgress),
+			want: false,
+		},
+		{
+			err:  vterrors.Errorf(vtrpcpb.Code_CLUSTER_EVENT, ClusterEventReparentInProgress),
+			want: true,
+		},
+		{
+			err:  vterrors.Errorf(vtrpcpb.Code_CLUSTER_EVENT, "The MySQL server is running with the --super-read-only option"),
+			want: true,
+		},
+	}
+	for _, tt := range testcases {
+		t.Run(tt.err.Error(), func(t *testing.T) {
+			got := IsErrorDueToReparenting(tt.err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
 func TestBuffering(t *testing.T) {
 	testAllImplementations(t, func(t *testing.T, fail failover) {
 		testBuffering1WithOptions(t, fail, 1)
