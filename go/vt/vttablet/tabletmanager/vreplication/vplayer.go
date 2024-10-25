@@ -134,7 +134,7 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 	}
 	batchMode := false
 	if vr.workflowConfig.ExperimentalFlags&vttablet.VReplicationExperimentalFlagVPlayerBatching != 0 {
-		batchMode = true
+		batchMode = false //true  // FIXME
 	}
 	if batchMode {
 		// relayLogMaxSize is effectively the limit used when not batching.
