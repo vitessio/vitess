@@ -363,6 +363,10 @@ message ExecuteOptions {
   oneof timeout {
     int64 authoritative_timeout = 17;
   }
+
+  // Bytes containing actual MySQL protocol packets that do not need to be serialized and deserialzed
+  // between the protobuf and MySQL the wire formats.
+  bool raw_mysql_packets = 18;
 }
 
 // Field describes a single column returned by a query
@@ -427,6 +431,10 @@ message QueryResult {
   repeated Row rows = 4;
   string info = 6;
   string session_state_changes = 7;
+  // If the raw MySQL wire protocol packets are included in the
+  // response, they are stored here and the rest of the message
+  // will be empty/unused aside from the protobuf msg metadata.
+  repeated bytes raw_packets = 8;
 }
 
 // QueryWarning is used to convey out of band query execution warnings
