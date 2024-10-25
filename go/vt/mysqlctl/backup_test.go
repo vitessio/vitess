@@ -17,13 +17,19 @@ limitations under the License.
 package mysqlctl
 
 import (
+	"fmt"
+	"io"
 	"os"
 	"path"
 	"reflect"
 	"sort"
+	"sync"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/vt/logutil"
 )
 
 func TestFindFilesToBackupWithoutRedoLog(t *testing.T) {
@@ -214,3 +220,26 @@ type forTest []FileEntry
 func (f forTest) Len() int           { return len(f) }
 func (f forTest) Swap(i, j int)      { f[i], f[j] = f[j], f[i] }
 func (f forTest) Less(i, j int) bool { return f[i].Base+f[i].Name < f[j].Base+f[j].Name }
+
+func TestScanLinesToLogger(t *testing.T) {
+	reader, writer := io.Pipe()
+	logger := logutil.NewMemoryLogger()
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+	go scanLinesToLogger("test", reader, logger, wg.Done)
+
+	for i := range [100]int{} {
+		_, err := writer.Write([]byte(fmt.Sprintf("foobar %d\n", i)))
+		require.NoError(t, err)
+	}
+
+	writer.Close()
+	wg.Wait()
+
+	require.Equal(t, 100, len(logger.Events))
+
+	for i, event := range logger.Events {
+		require.Equal(t, fmt.Sprintf("test: foobar %d", i), event.Value)
+	}
+}

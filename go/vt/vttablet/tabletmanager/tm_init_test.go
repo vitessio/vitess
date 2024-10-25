@@ -33,7 +33,7 @@ import (
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/logutil"
-	"vitess.io/vitess/go/vt/mysqlctl/fakemysqldaemon"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -379,7 +379,7 @@ func TestCheckPrimaryShip(t *testing.T) {
 	tablet.Type = topodatapb.TabletType_REPLICA
 	tablet.PrimaryTermStartTime = nil
 	// Get the fakeMySQL and set it up to expect a set replication source command
-	fakeMysql := tm.MysqlDaemon.(*fakemysqldaemon.FakeMysqlDaemon)
+	fakeMysql := tm.MysqlDaemon.(*mysqlctl.FakeMysqlDaemon)
 	fakeMysql.SetReplicationSourceInputs = append(fakeMysql.SetReplicationSourceInputs, fmt.Sprintf("%v:%v", otherTablet.MysqlHostname, otherTablet.MysqlPort))
 	fakeMysql.ExpectedExecuteSuperQueryList = []string{
 		"STOP SLAVE",
@@ -638,7 +638,7 @@ func TestGetBuildTags(t *testing.T) {
 	}
 }
 
-func newTestMysqlDaemon(t *testing.T, port int32) *fakemysqldaemon.FakeMysqlDaemon {
+func newTestMysqlDaemon(t *testing.T, port int32) *mysqlctl.FakeMysqlDaemon {
 	t.Helper()
 
 	db := fakesqldb.New(t)
@@ -659,7 +659,7 @@ func newTestMysqlDaemon(t *testing.T, port int32) *fakemysqldaemon.FakeMysqlDaem
 	db.AddQueryPattern("UPDATE _vt\\.(local|shard)_metadata SET db_name='.+' WHERE db_name=''", &sqltypes.Result{})
 	db.AddQueryPattern("INSERT INTO _vt\\.local_metadata \\(.+\\) VALUES \\(.+\\) ON DUPLICATE KEY UPDATE value ?= ?'.+'.*", &sqltypes.Result{})
 
-	mysqld := fakemysqldaemon.NewFakeMysqlDaemon(db)
+	mysqld := mysqlctl.NewFakeMysqlDaemon(db)
 	mysqld.MysqlPort = sync2.NewAtomicInt32(port)
 
 	return mysqld

@@ -23,12 +23,12 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"vitess.io/vitess/go/vt/mysqlctl/fakemysqldaemon"
+	"vitess.io/vitess/go/vt/mysqlctl"
 )
 
 func TestPoller(t *testing.T) {
 	poller := &poller{}
-	mysqld := fakemysqldaemon.NewFakeMysqlDaemon(nil)
+	mysqld := mysqlctl.NewFakeMysqlDaemon(nil)
 	poller.InitDBConfig(mysqld)
 
 	mysqld.ReplicationStatusError = errors.New("err")

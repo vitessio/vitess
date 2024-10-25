@@ -70,8 +70,9 @@ type MysqlDaemon interface {
 	ResetReplication(ctx context.Context) error
 	PrimaryPosition() (mysql.Position, error)
 	IsReadOnly() (bool, error)
+	IsSuperReadOnly(ctx context.Context) (bool, error)
 	SetReadOnly(on bool) error
-	SetSuperReadOnly(on bool) error
+	SetSuperReadOnly(ctx context.Context, on bool) (ResetSuperReadOnlyFunc, error)
 	SetReplicationPosition(ctx context.Context, pos mysql.Position) error
 	SetReplicationSource(ctx context.Context, host string, port int, stopReplicationBefore bool, startReplicationAfter bool) error
 	WaitForReparentJournal(ctx context.Context, timeCreatedNS int64) error
@@ -103,6 +104,9 @@ type MysqlDaemon interface {
 	// GetVersionComment returns the version comment
 	GetVersionComment(ctx context.Context) string
 
+	// ExecuteSuperQuery executes a single query, no result
+	ExecuteSuperQuery(ctx context.Context, query string) error
+
 	// ExecuteSuperQueryList executes a list of queries, no result
 	ExecuteSuperQueryList(ctx context.Context, queryList []string) error
 
@@ -114,6 +118,13 @@ type MysqlDaemon interface {
 
 	// DisableBinlogPlayback disable playback of binlog events
 	DisableBinlogPlayback() error
+
+	// AcquireGlobalReadLock acquires a global read lock and keeps the connection so
+	// as to release it with the function below.
+	AcquireGlobalReadLock(ctx context.Context) error
+
+	// ReleaseGlobalReadLock release a lock acquired with the connection from the above function.
+	ReleaseGlobalReadLock(ctx context.Context) error
 
 	// Close will close this instance of Mysqld. It will wait for all dba
 	// queries to be finished.

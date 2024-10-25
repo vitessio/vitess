@@ -17,16 +17,18 @@ limitations under the License.
 package mysqlctl
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
 
 	"context"
@@ -338,31 +340,18 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 		return nil, err
 	}
 
-	// mysqld needs to be running in order for mysql_upgrade to work.
-	// If we've just restored from a backup from previous MySQL version then mysqld
-	// may fail to start due to a different structure of mysql.* tables. The flag
-	// --skip-grant-tables ensures that these tables are not read until mysql_upgrade
-	// is executed. And since with --skip-grant-tables anyone can connect to MySQL
-	// without password, we are passing --skip-networking to greatly reduce the set
-	// of those who can connect.
-	params.Logger.Infof("Restore: starting mysqld for mysql_upgrade")
-	// Note Start will use dba user for waiting, this is fine, it will be allowed.
-	err = params.Mysqld.Start(context.Background(), params.Cnf, "--skip-grant-tables", "--skip-networking")
-	if err != nil {
-		return nil, err
-	}
-
-	// We disable super_read_only, in case it is in the default MySQL startup
-	// parameters and will be blocking the writes we need to do in
-	// PopulateMetadataTables().  We do it blindly, since
-	// this will fail on MariaDB, which doesn't have super_read_only
-	// This is safe, since we're restarting MySQL after the restore anyway
-	params.Logger.Infof("Restore: disabling super_read_only")
-	if err := params.Mysqld.SetSuperReadOnly(false); err != nil {
-		if strings.Contains(err.Error(), strconv.Itoa(mysql.ERUnknownSystemVariable)) {
-			params.Logger.Warningf("Restore: server does not know about super_read_only, continuing anyway...")
-		} else {
-			params.Logger.Errorf("Restore: unexpected error while trying to set super_read_only: %v", err)
+	if re.ShouldStartMySQLAfterRestore() {
+		// mysqld needs to be running in order for mysql_upgrade to work.
+		// If we've just restored from a backup from previous MySQL version then mysqld
+		// may fail to start due to a different structure of mysql.* tables. The flag
+		// --skip-grant-tables ensures that these tables are not read until mysql_upgrade
+		// is executed. And since with --skip-grant-tables anyone can connect to MySQL
+		// without password, we are passing --skip-networking to greatly reduce the set
+		// of those who can connect.
+		params.Logger.Infof("Restore: starting mysqld for mysql_upgrade")
+		// Note Start will use dba user for waiting, this is fine, it will be allowed.
+		err = params.Mysqld.Start(context.Background(), params.Cnf, "--skip-grant-tables", "--skip-networking")
+		if err != nil {
 			return nil, err
 		}
 	}
@@ -402,4 +391,25 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 
 	restoreDuration.Set(int64(time.Since(startTs).Seconds()))
 	return manifest, nil
+}
+
+// scanLinesToLogger scans full lines from the given Reader and sends them to
+// the given Logger until EOF.
+func scanLinesToLogger(prefix string, reader io.Reader, logger logutil.Logger, doneFunc func()) {
+	defer doneFunc()
+
+	scanner := bufio.NewScanner(reader)
+	for scanner.Scan() {
+		line := scanner.Text()
+		logger.Infof("%s: %s", prefix, line)
+	}
+	if err := scanner.Err(); err != nil {
+		// This is usually run in a background goroutine, so there's no point
+		// returning an error. Just log it.
+		logger.Warningf("error scanning lines from %s: %v", prefix, err)
+	}
+}
+
+func FormatRFC3339(t time.Time) string {
+	return t.Format(time.RFC3339)
 }

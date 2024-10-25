@@ -43,7 +43,7 @@ test the workflow state machine. There is no actual data being vreplicated.
 
 #### The fake MySQLDaemon
 
-`go/vt/mysqlctl/fakemysqldaemon/fakemysqldaemon.go`
+`go/vt/mysqlctl/fakemysqldaemon.go`
 
 Used to set primary positions to provide/validate gtids.
 

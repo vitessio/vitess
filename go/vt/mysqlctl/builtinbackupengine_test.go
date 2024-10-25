@@ -19,7 +19,6 @@ import (
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
-	"vitess.io/vitess/go/vt/mysqlctl/fakemysqldaemon"
 	"vitess.io/vitess/go/vt/mysqlctl/filebackupstorage"
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vttime"
@@ -104,7 +103,7 @@ func TestExecuteBackup(t *testing.T) {
 
 	// Spin up a fake daemon to be used in backups. It needs to be allowed to receive:
 	//  "STOP SLAVE", "START SLAVE", in that order.
-	mysqld := fakemysqldaemon.NewFakeMysqlDaemon(fakesqldb.New(t))
+	mysqld := mysqlctl.NewFakeMysqlDaemon(fakesqldb.New(t))
 	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP SLAVE", "START SLAVE"}
 	// mysqld.ShutdownTime = time.Minute
 

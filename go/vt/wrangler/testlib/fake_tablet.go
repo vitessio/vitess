@@ -34,7 +34,7 @@ import (
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/dbconfigs"
-	"vitess.io/vitess/go/vt/mysqlctl/fakemysqldaemon"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vttablet/grpctmserver"
@@ -69,7 +69,7 @@ type FakeTablet struct {
 	// We also create the RPCServer, so users can register more services
 	// before calling StartActionLoop().
 	Tablet          *topodatapb.Tablet
-	FakeMysqlDaemon *fakemysqldaemon.FakeMysqlDaemon
+	FakeMysqlDaemon *mysqlctl.FakeMysqlDaemon
 	RPCServer       *grpc.Server
 
 	// The following fields are created when we start the event loop for
@@ -159,7 +159,7 @@ func NewFakeTablet(t *testing.T, wr *wrangler.Wrangler, cell string, uid uint32,
 	}
 
 	// create a FakeMysqlDaemon with the right information by default
-	fakeMysqlDaemon := fakemysqldaemon.NewFakeMysqlDaemon(db)
+	fakeMysqlDaemon := mysqlctl.NewFakeMysqlDaemon(db)
 	fakeMysqlDaemon.MysqlPort.Set(mysqlPort)
 
 	return &FakeTablet{

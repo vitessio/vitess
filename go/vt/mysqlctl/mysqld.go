@@ -87,9 +87,10 @@ const maxLogFileSampleSize = 4096
 
 // Mysqld is the object that represents a mysqld daemon running on this server.
 type Mysqld struct {
-	dbcfgs  *dbconfigs.DBConfigs
-	dbaPool *dbconnpool.ConnectionPool
-	appPool *dbconnpool.ConnectionPool
+	dbcfgs   *dbconfigs.DBConfigs
+	dbaPool  *dbconnpool.ConnectionPool
+	appPool  *dbconnpool.ConnectionPool
+	lockConn *dbconnpool.PooledDBConnection
 
 	capabilities capabilitySet
 

@@ -194,6 +194,12 @@ Usage of vttablet:
       --mycnf_slow_log_path string                                                mysql slow query log path
       --mycnf_socket_file string                                                  mysql socket file
       --mycnf_tmp_dir string                                                      mysql tmp directory
+      --mysql-shell-backup-location string                                        location where the backup will be stored
+      --mysql-shell-dump-flags string                                             flags to pass to mysql shell dump utility. This should be a JSON string and will be saved in the MANIFEST (default "{\"threads\": 4}")
+      --mysql-shell-flags string                                                  execution flags to pass to mysqlsh binary to be used during dump/load (default "--defaults-file=/dev/null --js -h localhost")
+      --mysql-shell-load-flags string                                             flags to pass to mysql shell load utility. This should be a JSON string (default "{\"threads\": 4, \"loadUsers\": true, \"updateGtidSet\": \"replace\", \"skipBinlog\": true, \"progressFile\": \"\"}")
+      --mysql-shell-should-drain                                                  decide if we should drain while taking a backup or continue to serving traffic
+      --mysql-shell-speedup-restore                                               speed up restore by disabling redo logging and double write buffer during the restore process
       --mysql_server_version string                                               MySQL server version to advertise.
       --mysqlctl_mycnf_template string                                            template file to use for generating the my.cnf file during server init
       --mysqlctl_socket string                                                    socket file to use for remote mysqlctl actions (empty for local actions)
