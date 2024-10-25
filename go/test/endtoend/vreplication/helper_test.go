@@ -288,6 +288,7 @@ func waitForRowCountInTablet(t *testing.T, vttablet *cluster.VttabletProcess, da
 	}
 }
 
+// Wait for the data fetched by the query from the specified tablet and database to match the expected result.
 func waitForResult(t *testing.T, vttablet *cluster.VttabletProcess, database string, query string, want string, timeout time.Duration) {
 	timer := time.NewTimer(timeout)
 	defer timer.Stop()

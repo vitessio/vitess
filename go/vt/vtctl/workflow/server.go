@@ -369,15 +369,6 @@ func (s *Server) GetCellsWithTableReadsSwitched(
 	return cellsSwitched, cellsNotSwitched, nil
 }
 
-type workflowUtil struct {
-	targetKeyspace string
-	workflowName   string
-}
-
-func (wu *workflowUtil) String() string {
-	return fmt.Sprintf("%s/%s", wu.targetKeyspace, wu.workflowName)
-}
-
 func (s *Server) GetWorkflow(ctx context.Context, keyspace, workflow string, includeLogs bool, shards []string) (*vtctldatapb.Workflow, error) {
 	res, err := s.GetWorkflows(ctx, &vtctldatapb.GetWorkflowsRequest{
 		Keyspace:    keyspace,
