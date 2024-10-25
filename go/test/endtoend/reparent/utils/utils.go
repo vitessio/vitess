@@ -83,6 +83,8 @@ func SetupShardedReparentCluster(t *testing.T, durability string) *cluster.Local
 
 	clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
 		"--lock_tables_timeout", "5s",
+		// Fast health checks help find corner cases.
+		"--health_check_interval", "1s",
 		"--track_schema_versions=true",
 		"--queryserver_enable_online_ddl=false")
 	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,

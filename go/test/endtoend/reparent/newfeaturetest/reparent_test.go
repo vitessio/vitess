@@ -231,9 +231,11 @@ func TestBufferingWithMultipleDisruptions(t *testing.T) {
 	require.NoError(t, err)
 	// We wait a second just to make sure the PRS changes are processed by the buffering logic in vtgate.
 	time.Sleep(1 * time.Second)
-	// Finally, we'll now simulate the 2 shards being healthy again by setting them back to read-write.
-	utils.RunSQL(context.Background(), t, "set global read_only=0", shards[0].Vttablets[0])
-	utils.RunSQL(context.Background(), t, "set global read_only=0", shards[1].Vttablets[0])
+	// Finally, we'll now make the 2 shards healthy again by running PRS.
+	err = clusterInstance.VtctldClientProcess.PlannedReparentShard(keyspace.Name, shards[0].Name, shards[0].Vttablets[1].Alias)
+	require.NoError(t, err)
+	err = clusterInstance.VtctldClientProcess.PlannedReparentShard(keyspace.Name, shards[1].Name, shards[1].Vttablets[1].Alias)
+	require.NoError(t, err)
 	// Wait for all the writes to have succeeded.
 	wg.Wait()
 }
