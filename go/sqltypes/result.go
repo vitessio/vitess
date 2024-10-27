@@ -23,9 +23,8 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/proto/topodata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // Result represents a query result.
@@ -330,11 +329,6 @@ func (result *Result) StripMetadata(incl querypb.ExecuteOptions_IncludedFields) 
 // to another result.Note currently it doesn't handle cases like
 // if two results have different fields.We will enhance this function.
 func (result *Result) AppendResult(src *Result) {
-	if src == nil {
-		msg := "AppendResult called with nil src"
-		log.Error(msg)
-		return
-	}
 	if src.RowsAffected == 0 && len(src.Rows) == 0 && (src.Fields != nil && len(src.Fields) == 0) {
 		return
 	}
@@ -370,7 +364,7 @@ func (result *Result) ToExecuteResponse() *querypb.ExecuteResponse {
 	return &querypb.ExecuteResponse{Result: ResultToProto3(result)}
 }
 
-func (result *Result) ToBeginExecuteResponse(transactionID int64, tabletAlias *topodata.TabletAlias, sessionStateChanges string) *querypb.BeginExecuteResponse {
+func (result *Result) ToBeginExecuteResponse(transactionID int64, tabletAlias *topodatapb.TabletAlias, sessionStateChanges string) *querypb.BeginExecuteResponse {
 	if result.CachedProto != nil {
 		res := querypb.CachedBeginExecuteResponse(result.CachedProto)
 		res.TransactionId = transactionID
@@ -386,7 +380,7 @@ func (result *Result) ToBeginExecuteResponse(transactionID int64, tabletAlias *t
 	}
 }
 
-func (result *Result) ToReserveExecuteResponse(reservedID int64, tabletAlias *topodata.TabletAlias) *querypb.ReserveExecuteResponse {
+func (result *Result) ToReserveExecuteResponse(reservedID int64, tabletAlias *topodatapb.TabletAlias) *querypb.ReserveExecuteResponse {
 	if result.CachedProto != nil {
 		res := querypb.CachedReserveExecuteResponse(result.CachedProto)
 		res.ReservedId = reservedID
@@ -400,7 +394,7 @@ func (result *Result) ToReserveExecuteResponse(reservedID int64, tabletAlias *to
 	}
 }
 
-func (result *Result) ToReserveBeginExecuteResponse(transactionID, reservedID int64, tabletAlias *topodata.TabletAlias, sessionStateChanges string) *querypb.ReserveBeginExecuteResponse {
+func (result *Result) ToReserveBeginExecuteResponse(transactionID, reservedID int64, tabletAlias *topodatapb.TabletAlias, sessionStateChanges string) *querypb.ReserveBeginExecuteResponse {
 	if result.CachedProto != nil {
 		res := querypb.CachedReserveBeginExecuteResponse(result.CachedProto)
 		res.TransactionId = transactionID

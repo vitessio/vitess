@@ -96,7 +96,6 @@ func (dbc *DBConnection) ExecuteFetchOpt(query string, opt mysql.ExecuteOptions)
 
 // ExecuteStreamFetch overwrites mysql.Conn.ExecuteStreamFetch.
 func (dbc *DBConnection) ExecuteStreamFetch(query string, callback func(*sqltypes.Result) error, alloc func() *sqltypes.Result, streamBufferSize int) error {
-	// TODO (mlord): handle raw packets here.
 	err := dbc.Conn.ExecuteStreamFetch(query)
 	if err != nil {
 		dbc.handleError(err)
