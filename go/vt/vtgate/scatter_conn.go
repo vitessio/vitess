@@ -180,7 +180,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 			var (
 				innerqr *sqltypes.Result
 				err     error
-				opts    *querypb.ExecuteOptions
+				opts    = &querypb.ExecuteOptions{}
 				alias   *topodatapb.TabletAlias
 				qs      queryservice.QueryService
 			)
@@ -190,6 +190,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 			if session != nil && session.Session != nil {
 				opts = session.Session.Options
 			}
+			opts.RawMysqlPackets = true
 
 			if autocommit {
 				// As this is auto-commit, the transactionID is supposed to be zero.
@@ -732,7 +733,7 @@ func (stc *ScatterConn) ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedSha
 	var (
 		qr    *sqltypes.Result
 		err   error
-		opts  *querypb.ExecuteOptions
+		opts  = &querypb.ExecuteOptions{}
 		alias *topodatapb.TabletAlias
 	)
 	allErrors := new(concurrency.AllErrorRecorder)
@@ -744,6 +745,7 @@ func (stc *ScatterConn) ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedSha
 	}
 
 	opts = session.Session.Options
+	opts.RawMysqlPackets = true
 	info, err := lockInfo(rs.Target, session, lockFuncType)
 	// Lock session is created on alphabetic sorted keyspace.
 	// This error will occur if the existing session target does not match the current target.

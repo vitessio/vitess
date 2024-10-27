@@ -48,9 +48,6 @@ func (q *query) Execute(ctx context.Context, request *querypb.ExecuteRequest) (r
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	request.Options.RawMysqlPackets = true
-	// FUCK
-	// For some reason this is returning no error but a nil result...
 	result, err := q.server.Execute(ctx, request.Target, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.ReservedId, request.Options)
 	if err != nil {
 		return nil, vterrors.ToGRPC(err)
@@ -65,7 +62,6 @@ func (q *query) StreamExecute(request *querypb.StreamExecuteRequest, stream quer
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	request.Options.RawMysqlPackets = true
 	err = q.server.StreamExecute(ctx, request.Target, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.ReservedId, request.Options, func(reply *sqltypes.Result) error {
 		return stream.Send(reply.ToStreamExecuteResponse())
 	})
@@ -255,7 +251,6 @@ func (q *query) BeginExecute(ctx context.Context, request *querypb.BeginExecuteR
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	request.Options.RawMysqlPackets = true
 	state, result, err := q.server.BeginExecute(ctx, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.ReservedId, request.Options)
 	if err != nil {
 		// if we have a valid transactionID, return the error in-band
@@ -278,7 +273,6 @@ func (q *query) BeginStreamExecute(request *querypb.BeginStreamExecuteRequest, s
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	request.Options.RawMysqlPackets = true
 	state, err := q.server.BeginStreamExecute(ctx, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.ReservedId, request.Options, func(reply *sqltypes.Result) error {
 		return stream.Send(reply.ToBeginStreamExecuteResponse())
 	})
@@ -388,7 +382,6 @@ func (q *query) ReserveExecute(ctx context.Context, request *querypb.ReserveExec
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	request.Options.RawMysqlPackets = true
 	state, result, err := q.server.ReserveExecute(ctx, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.Options)
 	if err != nil {
 		// if we have a valid reservedID, return the error in-band
@@ -411,7 +404,6 @@ func (q *query) ReserveStreamExecute(request *querypb.ReserveStreamExecuteReques
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	request.Options.RawMysqlPackets = true
 	state, err := q.server.ReserveStreamExecute(ctx, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.Options, func(reply *sqltypes.Result) error {
 		return stream.Send(reply.ToReserveStreamExecuteResponse())
 	})
@@ -434,7 +426,6 @@ func (q *query) ReserveBeginExecute(ctx context.Context, request *querypb.Reserv
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	request.Options.RawMysqlPackets = true
 	state, result, err := q.server.ReserveBeginExecute(ctx, request.Target, request.PreQueries, request.PostBeginQueries, request.Query.Sql, request.Query.BindVariables, request.Options)
 	if err != nil {
 		// if we have a valid reservedID or transactionID, return the error in-band
@@ -459,7 +450,6 @@ func (q *query) ReserveBeginStreamExecute(request *querypb.ReserveBeginStreamExe
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	request.Options.RawMysqlPackets = true
 	state, err := q.server.ReserveBeginStreamExecute(ctx, request.Target, request.PreQueries, request.PostBeginQueries, request.Query.Sql, request.Query.BindVariables, request.Options, func(reply *sqltypes.Result) error {
 		return stream.Send(reply.ToReserveBeginStreamExecuteResponse())
 	})

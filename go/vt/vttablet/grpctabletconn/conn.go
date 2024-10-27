@@ -118,7 +118,6 @@ func (conn *gRPCQueryClient) Execute(ctx context.Context, target *querypb.Target
 	if conn.cc == nil {
 		return nil, tabletconn.ConnClosed
 	}
-	options.RawMysqlPackets = true
 
 	req := &querypb.ExecuteRequest{
 		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
