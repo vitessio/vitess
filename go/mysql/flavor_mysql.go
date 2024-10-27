@@ -423,7 +423,7 @@ const TablesWithSize80 = `SELECT t.table_name,
 	LEFT JOIN information_schema.innodb_tablespaces i
 	ON i.name = CONCAT(t.table_schema, '/', t.table_name) COLLATE utf8mb3_general_ci
 	WHERE
-		t.table_schema = database() AND t.create_options NOT LIKE '%partitioned%'
+		t.table_schema = database() AND IFNULL(t.create_options, '') NOT LIKE '%partitioned%'
 	GROUP BY
 		t.table_schema, t.table_name, t.table_type, t.create_time, t.table_comment
 UNION ALL
