@@ -25,6 +25,7 @@ import (
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/pools/smartconnpool"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -95,13 +96,16 @@ func (sc *StatefulConnection) Exec(ctx context.Context, query string, maxrows in
 
 // Exec executes the statement in the dedicated connection
 func (sc *StatefulConnection) ExecOpt(ctx context.Context, query string, opt mysql.ExecuteOptions) (*sqltypes.Result, error) {
+	span, ctx := trace.NewSpan(ctx, "StatefulConnection.ExecOpt")
+	defer span.Finish()
+
 	if sc.IsClosed() {
 		if sc.IsInTransaction() {
 			return nil, vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction was aborted: %v", sc.txProps.Conclusion)
 		}
 		return nil, vterrors.New(vtrpcpb.Code_ABORTED, "connection was aborted")
 	}
-	r, err := sc.dbConn.Conn.ExecOnceOpt(ctx, query, opt, false)
+	r, err := sc.dbConn.Conn.ExecOnceOpt(ctx, query, opt, sc.IsInTransaction())
 	if err != nil {
 		if sqlerror.IsConnErr(err) {
 			select {
