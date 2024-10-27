@@ -415,10 +415,6 @@ const BaseShowTables = `SELECT t.table_name,
 // TablesWithSize80 is a query to select table along with size for mysql 8.0
 //
 // Note the following:
-//   - We use a single query to fetch both partitioned and non-partitioned tables. This is because
-//     accessing `information_schema.innodb_tablespaces` is expensive on servers with many tablespaces,
-//     and every query that loads the table needs to perform full table scans on it. Doing a single
-//     table scan is more efficient than doing more than one.
 //   - We utilize `INFORMATION_SCHEMA`.`TABLES`.`CREATE_OPTIONS` column to do early pruning before the JOIN.
 //   - `TABLES`.`TABLE_NAME` has `utf8mb4_0900_ai_ci` collation.  `INNODB_TABLESPACES`.`NAME` has `utf8mb3_general_ci`.
 //     We normalize the collation to get better query performance (we force the casting at the time of our choosing)
@@ -429,10 +425,24 @@ const TablesWithSize80 = `SELECT t.table_name,
 		SUM(i.file_size),
 		SUM(i.allocated_size)
 	FROM information_schema.tables t
-		LEFT JOIN information_schema.innodb_tablespaces i
-	ON SUBSTRING_INDEX(i.name, '#p#p', 1) = CONCAT(t.table_schema, '/', t.table_name) COLLATE utf8mb3_general_ci
+	LEFT JOIN information_schema.innodb_tablespaces i
+	ON i.name = CONCAT(t.table_schema, '/', t.table_name) COLLATE utf8mb3_general_ci
 	WHERE
-		t.table_schema = database()
+		t.table_schema = database() AND t.create_options NOT LIKE '%partitioned%'
+	GROUP BY
+		t.table_schema, t.table_name, t.table_type, t.create_time, t.table_comment
+UNION ALL
+SELECT t.table_name,
+		t.table_type,
+		UNIX_TIMESTAMP(t.create_time),
+		t.table_comment,
+		SUM(i.file_size),
+		SUM(i.allocated_size)
+	FROM information_schema.tables t
+	LEFT JOIN information_schema.innodb_tablespaces i
+		ON i.name LIKE (CONCAT(t.table_schema, '/', t.table_name, '#p#%') COLLATE utf8mb3_general_ci)
+	WHERE
+		t.table_schema = database() AND t.create_options LIKE '%partitioned%'
 	GROUP BY
 		t.table_schema, t.table_name, t.table_type, t.create_time, t.table_comment
 `
