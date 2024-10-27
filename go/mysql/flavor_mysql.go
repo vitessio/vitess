@@ -413,11 +413,6 @@ const BaseShowTables = `SELECT t.table_name,
 `
 
 // TablesWithSize80 is a query to select table along with size for mysql 8.0
-//
-// Note the following:
-//   - We utilize `INFORMATION_SCHEMA`.`TABLES`.`CREATE_OPTIONS` column to do early pruning before the JOIN.
-//   - `TABLES`.`TABLE_NAME` has `utf8mb4_0900_ai_ci` collation.  `INNODB_TABLESPACES`.`NAME` has `utf8mb3_general_ci`.
-//     We normalize the collation to get better query performance (we force the casting at the time of our choosing)
 const TablesWithSize80 = `SELECT t.table_name,
 		t.table_type,
 		UNIX_TIMESTAMP(t.create_time),
