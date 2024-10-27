@@ -434,7 +434,7 @@ func (result *Result) ToReserveBeginStreamExecuteResponse() *querypb.ReserveBegi
 
 func (result *Result) ToStreamExecuteResponse() *querypb.StreamExecuteResponse {
 	if result.CachedProto != nil {
-		log.Errorf("DEBUG: stream execute cached response: %v", result.CachedProto)
+		//log.Errorf("DEBUG: stream execute cached response: %v", result.CachedProto)
 		return querypb.CachedStreamExecuteResponse(result.CachedProto)
 	}
 	return &querypb.StreamExecuteResponse{Result: ResultToProto3(result)}

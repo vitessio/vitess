@@ -26,7 +26,6 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -424,7 +423,7 @@ func (c *Conn) ExecuteFetchWithWarningCount(query string, maxrows int, wantfield
 }
 
 func (c *Conn) ReadQueryResultAsProto(maxrows int, sizehint uint64) (*sqltypes.Result, bool, uint16, error) {
-	log.Errorf("DEBUG: ReadQueryResultAsProto called with maxrows %v and sizehint %v", maxrows, sizehint)
+	//log.Errorf("DEBUG: ReadQueryResultAsProto called with maxrows %v and sizehint %v", maxrows, sizehint)
 	var packetOk PacketOK
 
 	// Get the result.
@@ -511,7 +510,7 @@ func (c *Conn) ReadQueryResultAsProto(maxrows int, sizehint uint64) (*sqltypes.R
 				builder.Info(packetEof.info)
 			}
 
-			log.Errorf("DEBUG: setting result cached proto to %v", builder.Finish())
+			//log.Errorf("DEBUG: setting result cached proto to %v", builder.Finish())
 			result.CachedProto = builder.Finish()
 			return result, more, warnings, nil
 

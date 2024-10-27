@@ -933,9 +933,9 @@ func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sq
 			return nil
 		},
 	)
-	if options.RawMysqlPackets {
-		log.Errorf("DEBUG: tsv.execute result: %+v, err: %v", result, err)
-	}
+	//if options.RawMysqlPackets {
+	//	log.Errorf("DEBUG: tsv.execute result: %+v, err: %v", result, err)
+	//}
 	return result, err
 }
 
@@ -972,9 +972,9 @@ func (tsv *TabletServer) streamExecute(ctx context.Context, target *querypb.Targ
 		timeout = tsv.config.TxTimeoutForWorkload(querypb.ExecuteOptions_OLAP)
 	}
 
-	if options.RawMysqlPackets {
-		log.Errorf("DEBUG: tsv.streamExecute with raw packets sql: %s", sql)
-	}
+	//if options.RawMysqlPackets {
+	//	log.Errorf("DEBUG: tsv.streamExecute with raw packets sql: %s", sql)
+	//}
 
 	return tsv.execRequest(
 		ctx, timeout,

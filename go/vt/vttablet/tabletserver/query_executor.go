@@ -150,7 +150,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		qre.tsv.qe.AddStats(qre.plan, tableName, qre.options.GetWorkloadName(), qre.targetTabletType, 1, duration, mysqlTime, int64(reply.RowsAffected), int64(len(reply.Rows)), 0, errCode)
 		qre.plan.AddStats(1, duration, mysqlTime, reply.RowsAffected, uint64(len(reply.Rows)), 0)
 		if reply.CachedProto != nil {
-			log.Errorf("DEBUG: using cached proto: %v", reply.CachedProto)
+			//log.Errorf("DEBUG: using cached proto: %v", reply.CachedProto)
 			qre.plan.PacketSize.Add(uint64(len(reply.CachedProto)))
 		}
 		qre.logStats.RowsAffected = int(reply.RowsAffected)
@@ -1136,9 +1136,9 @@ func (qre *QueryExecutor) execDBConn(conn *connpool.Conn, sql string, wantfields
 		RawPackets: qre.options.RawMysqlPackets,
 		SizeHint:   sizeHint,
 	}
-	if opt.RawPackets {
-		log.Errorf("DEBUG: execDBConn: opt: %v, sql: %s", opt, sql)
-	}
+	//if opt.RawPackets {
+	//log.Errorf("DEBUG: execDBConn: opt: %v, sql: %s", opt, sql)
+	//}
 	return conn.ExecOpt(ctx, sql, opt)
 }
 
