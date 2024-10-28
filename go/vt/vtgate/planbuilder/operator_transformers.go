@@ -79,9 +79,8 @@ func transformFkCascade(ctx *plancontext.PlanningContext, fkc *operators.FkCasca
 		return nil, nil
 	}
 
-	// Once we have the parent logical plan, we can create the selection logical plan and the primitives for the children operators.
-	// For all of these, we don't need the semTable anymore. We set it to nil, to avoid using an incorrect one.
-	ctx.SemTable = nil
+	// Using the correct semantics.SemTable for the selection query created during planning.
+	ctx.SemTable = fkc.SSemTable
 	selLP, err := transformToLogicalPlan(ctx, fkc.Selection)
 	if err != nil {
 		return nil, err
@@ -90,6 +89,8 @@ func transformFkCascade(ctx *plancontext.PlanningContext, fkc *operators.FkCasca
 	// Go over the children and convert them to Primitives too.
 	var children []*engine.FkChild
 	for _, child := range fkc.Children {
+		// Using the correct semantics.SemTable for the child table cascade query created during planning.
+		ctx.SemTable = child.ST
 		childLP, err := transformToLogicalPlan(ctx, child.Op)
 		if err != nil {
 			return nil, err
@@ -107,6 +108,31 @@ func transformFkCascade(ctx *plancontext.PlanningContext, fkc *operators.FkCasca
 	}
 
 	return newFkCascade(parentLP, selLP, children), nil
+}
+
+// transformFkVerify transforms a FkVerify operator into a logical plan.
+func transformFkVerify(ctx *plancontext.PlanningContext, fkv *operators.FkVerify) (logicalPlan, error) {
+	inputLP, err := transformToLogicalPlan(ctx, fkv.Input)
+	if err != nil {
+		return nil, err
+	}
+
+	// Go over the children and convert them to Primitives too.
+	var verify []*verifyLP
+	for _, v := range fkv.Verify {
+		// Using the correct semantics.SemTable for the parent table verify query created during planning.
+		ctx.SemTable = v.ST
+		lp, err := transformToLogicalPlan(ctx, v.Op)
+		if err != nil {
+			return nil, err
+		}
+		verify = append(verify, &verifyLP{
+			verify: lp,
+			typ:    v.Typ,
+		})
+	}
+
+	return newFkVerify(inputLP, verify), nil
 }
 
 func transformSubQuery(ctx *plancontext.PlanningContext, op *operators.SubQuery) (logicalPlan, error) {
@@ -134,33 +160,6 @@ func transformSubQuery(ctx *plancontext.PlanningContext, op *operators.SubQuery)
 		return nil, err
 	}
 	return newSemiJoin(outer, inner, op.Vars, lhsCols), nil
-}
-
-// transformFkVerify transforms a FkVerify operator into a logical plan.
-func transformFkVerify(ctx *plancontext.PlanningContext, fkv *operators.FkVerify) (logicalPlan, error) {
-	inputLP, err := transformToLogicalPlan(ctx, fkv.Input)
-	if err != nil {
-		return nil, err
-	}
-
-	// Once we have the input logical plan, we can create the primitives for the verification operators.
-	// For all of these, we don't need the semTable anymore. We set it to nil, to avoid using an incorrect one.
-	ctx.SemTable = nil
-
-	// Go over the children and convert them to Primitives too.
-	var verify []*verifyLP
-	for _, v := range fkv.Verify {
-		lp, err := transformToLogicalPlan(ctx, v.Op)
-		if err != nil {
-			return nil, err
-		}
-		verify = append(verify, &verifyLP{
-			verify: lp,
-			typ:    v.Typ,
-		})
-	}
-
-	return newFkVerify(inputLP, verify), nil
 }
 
 func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggregator) (logicalPlan, error) {

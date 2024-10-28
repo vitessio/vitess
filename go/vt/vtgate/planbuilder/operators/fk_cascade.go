@@ -20,6 +20,7 @@ import (
 	"slices"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 // FkChild is used to represent a foreign key child table operation
@@ -27,6 +28,7 @@ type FkChild struct {
 	BVName string
 	Cols   []int // indexes
 	Op     ops.Operator
+	ST     *semantics.SemTable
 
 	noColumns
 	noPredicates
@@ -37,6 +39,7 @@ type FkChild struct {
 // cascades (for example, ON DELETE CASCADE).
 type FkCascade struct {
 	Selection ops.Operator
+	SSemTable *semantics.SemTable
 	Children  []*FkChild
 	Parent    ops.Operator
 
@@ -80,6 +83,7 @@ func (fkc *FkCascade) Clone(inputs []ops.Operator) ops.Operator {
 	newFkc := &FkCascade{
 		Parent:    inputs[0],
 		Selection: inputs[1],
+		SSemTable: fkc.SSemTable,
 	}
 	for idx, operator := range inputs {
 		if idx < 2 {
@@ -90,6 +94,7 @@ func (fkc *FkCascade) Clone(inputs []ops.Operator) ops.Operator {
 			BVName: fkc.Children[idx-2].BVName,
 			Cols:   slices.Clone(fkc.Children[idx-2].Cols),
 			Op:     operator,
+			ST:     fkc.Children[idx-2].ST,
 		})
 	}
 	return newFkc

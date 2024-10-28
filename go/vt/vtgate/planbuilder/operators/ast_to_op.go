@@ -204,16 +204,23 @@ func createOperatorFromUnion(ctx *plancontext.PlanningContext, node *sqlparser.U
 // createOpFromStmt creates an operator from the given statement. It takes in two additional arguments—
 // 1. verifyAllFKs: For this given statement, do we need to verify validity of all the foreign keys on the vtgate level.
 // 2. fkToIgnore: The foreign key constraint to specifically ignore while planning the statement.
-func createOpFromStmt(ctx *plancontext.PlanningContext, stmt sqlparser.Statement, verifyAllFKs bool, fkToIgnore string) (ops.Operator, error) {
+func createOpFromStmt(ctx *plancontext.PlanningContext, stmt sqlparser.Statement, verifyAllFKs bool, fkToIgnore string) (*semantics.SemTable, ops.Operator, error) {
 	newCtx, err := plancontext.CreatePlanningContext(stmt, ctx.ReservedVars, ctx.VSchema, ctx.PlannerVersion)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	newCtx.VerifyAllFKs = verifyAllFKs
 	newCtx.ParentFKToIgnore = fkToIgnore
 
-	return PlanQuery(newCtx, stmt)
+	query, err := PlanQuery(newCtx, stmt)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	ctx.KeepPredicateInfo(newCtx)
+
+	return newCtx.SemTable, query, err
 }
 
 func getOperatorFromTableExpr(ctx *plancontext.PlanningContext, tableExpr sqlparser.TableExpr, onlyTable bool) (ops.Operator, error) {
@@ -377,7 +384,7 @@ func createSelectionOp(
 	where *sqlparser.Where,
 	limit *sqlparser.Limit,
 	lock sqlparser.Lock,
-) (ops.Operator, error) {
+) (*semantics.SemTable, ops.Operator, error) {
 	selectionStmt := &sqlparser.Select{
 		SelectExprs: selectExprs,
 		From:        tableExprs,

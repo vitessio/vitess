@@ -344,13 +344,14 @@ func createFKCascadeOp(ctx *plancontext.PlanningContext, parentOp ops.Operator, 
 		fkChildren = append(fkChildren, fkChild)
 	}
 
-	selectionOp, err := createSelectionOp(ctx, selectExprs, updStmt.TableExprs, updStmt.Where, nil, sqlparser.ForUpdateLock)
+	st, selectionOp, err := createSelectionOp(ctx, selectExprs, updStmt.TableExprs, updStmt.Where, nil, sqlparser.ForUpdateLock)
 	if err != nil {
 		return nil, err
 	}
 
 	return &FkCascade{
 		Selection: selectionOp,
+		SSemTable: st,
 		Children:  fkChildren,
 		Parent:    parentOp,
 	}, nil
@@ -370,13 +371,14 @@ func createFkChildForUpdate(ctx *plancontext.PlanningContext, fk vindexes.ChildF
 	compExpr := sqlparser.NewComparisonExpr(sqlparser.InOp, valTuple, sqlparser.NewListArg(bvName), nil)
 	var childWhereExpr sqlparser.Expr = compExpr
 
+	var st *semantics.SemTable
 	var childOp ops.Operator
 	var err error
 	switch fk.OnUpdate {
 	case sqlparser.Cascade:
-		childOp, err = buildChildUpdOpForCascade(ctx, fk, updStmt, childWhereExpr, updatedTable)
+		st, childOp, err = buildChildUpdOpForCascade(ctx, fk, updStmt, childWhereExpr, updatedTable)
 	case sqlparser.SetNull:
-		childOp, err = buildChildUpdOpForSetNull(ctx, fk, updStmt, childWhereExpr)
+		st, childOp, err = buildChildUpdOpForSetNull(ctx, fk, updStmt, childWhereExpr)
 	case sqlparser.SetDefault:
 		return nil, vterrors.VT09016()
 	}
@@ -388,6 +390,7 @@ func createFkChildForUpdate(ctx *plancontext.PlanningContext, fk vindexes.ChildF
 		BVName: bvName,
 		Cols:   cols,
 		Op:     childOp,
+		ST:     st,
 	}, nil
 }
 
@@ -395,7 +398,7 @@ func createFkChildForUpdate(ctx *plancontext.PlanningContext, fk vindexes.ChildF
 // The query looks like this -
 //
 //	`UPDATE <child_table> SET <child_column_updated_using_update_exprs_from_parent_update_query> WHERE <child_columns_in_fk> IN (<bind variable for the output from SELECT>)`
-func buildChildUpdOpForCascade(ctx *plancontext.PlanningContext, fk vindexes.ChildFKInfo, updStmt *sqlparser.Update, childWhereExpr sqlparser.Expr, updatedTable *vindexes.Table) (ops.Operator, error) {
+func buildChildUpdOpForCascade(ctx *plancontext.PlanningContext, fk vindexes.ChildFKInfo, updStmt *sqlparser.Update, childWhereExpr sqlparser.Expr, updatedTable *vindexes.Table) (*semantics.SemTable, ops.Operator, error) {
 	// The update expressions are the same as the update expressions in the parent update query
 	// with the column names replaced with the child column names.
 	var childUpdateExprs sqlparser.UpdateExprs
@@ -436,7 +439,7 @@ func buildChildUpdOpForCascade(ctx *plancontext.PlanningContext, fk vindexes.Chi
 //	`UPDATE <child_table> SET <child_column_updated_using_update_exprs_from_parent_update_query>
 //	WHERE <child_columns_in_fk> IN (<bind variable for the output from SELECT>)
 //	[AND ({<bind variables in the SET clause of the original update> IS NULL OR}... <child_columns_in_fk> NOT IN (<bind variables in the SET clause of the original update>))]`
-func buildChildUpdOpForSetNull(ctx *plancontext.PlanningContext, fk vindexes.ChildFKInfo, updStmt *sqlparser.Update, childWhereExpr sqlparser.Expr) (ops.Operator, error) {
+func buildChildUpdOpForSetNull(ctx *plancontext.PlanningContext, fk vindexes.ChildFKInfo, updStmt *sqlparser.Update, childWhereExpr sqlparser.Expr) (*semantics.SemTable, ops.Operator, error) {
 	// For the SET NULL type constraint, we need to set all the child columns to NULL.
 	var childUpdateExprs sqlparser.UpdateExprs
 	for _, column := range fk.ChildColumns {
@@ -479,23 +482,25 @@ func createFKVerifyOp(ctx *plancontext.PlanningContext, childOp ops.Operator, up
 	var Verify []*VerifyOp
 	// This validates that new values exists on the parent table.
 	for _, fk := range parentFks {
-		op, err := createFkVerifyOpForParentFKForUpdate(ctx, updStmt, fk)
+		st, op, err := createFkVerifyOpForParentFKForUpdate(ctx, updStmt, fk)
 		if err != nil {
 			return nil, err
 		}
 		Verify = append(Verify, &VerifyOp{
 			Op:  op,
+			ST:  st,
 			Typ: engine.ParentVerify,
 		})
 	}
 	// This validates that the old values don't exist on the child table.
 	for _, fk := range restrictChildFks {
-		op, err := createFkVerifyOpForChildFKForUpdate(ctx, updStmt, fk)
+		st, op, err := createFkVerifyOpForChildFKForUpdate(ctx, updStmt, fk)
 		if err != nil {
 			return nil, err
 		}
 		Verify = append(Verify, &VerifyOp{
 			Op:  op,
+			ST:  st,
 			Typ: engine.ChildVerify,
 		})
 	}
@@ -517,11 +522,11 @@ func createFKVerifyOp(ctx *plancontext.PlanningContext, childOp ops.Operator, up
 // where Parent.p1 is null and Parent.p2 is null and Child.id = 1
 // and Child.c2 is not null
 // limit 1
-func createFkVerifyOpForParentFKForUpdate(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update, pFK vindexes.ParentFKInfo) (ops.Operator, error) {
+func createFkVerifyOpForParentFKForUpdate(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update, pFK vindexes.ParentFKInfo) (*semantics.SemTable, ops.Operator, error) {
 	childTblExpr := updStmt.TableExprs[0].(*sqlparser.AliasedTableExpr)
 	childTbl, err := childTblExpr.TableName()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	parentTbl := pFK.Table.GetTableName()
 	var whereCond sqlparser.Expr
@@ -594,16 +599,16 @@ func createFkVerifyOpForParentFKForUpdate(ctx *plancontext.PlanningContext, updS
 // verify query:
 // select 1 from Child join Parent on Parent.p1 = Child.c1 and Parent.p2 = Child.c2
 // where Parent.id = 1 and (1 IS NULL OR (child.c1) NOT IN ((1))) limit 1
-func createFkVerifyOpForChildFKForUpdate(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update, cFk vindexes.ChildFKInfo) (ops.Operator, error) {
+func createFkVerifyOpForChildFKForUpdate(ctx *plancontext.PlanningContext, updStmt *sqlparser.Update, cFk vindexes.ChildFKInfo) (*semantics.SemTable, ops.Operator, error) {
 	// ON UPDATE RESTRICT foreign keys that require validation, should only be allowed in the case where we
 	// are verifying all the FKs on vtgate level.
 	if !ctx.VerifyAllFKs {
-		return nil, vterrors.VT12002()
+		return nil, nil, vterrors.VT12002()
 	}
 	parentTblExpr := updStmt.TableExprs[0].(*sqlparser.AliasedTableExpr)
 	parentTbl, err := parentTblExpr.TableName()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	childTbl := cFk.Table.GetTableName()
 	var joinCond sqlparser.Expr

@@ -52,10 +52,7 @@ func BreakExpressionInLHSandRHS(
 		cursor.Replace(arg)
 	}, nil).(sqlparser.Expr)
 
-	if err != nil {
-		return JoinColumn{}, err
-	}
-	ctx.JoinPredicates[expr] = append(ctx.JoinPredicates[expr], rewrittenExpr)
+	ctx.AddJoinPredicates(expr, rewrittenExpr)
 	col.RHSExpr = rewrittenExpr
 	return
 }
