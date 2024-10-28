@@ -74,28 +74,35 @@ func PlanQuery(ctx *plancontext.PlanningContext, stmt sqlparser.Statement) (resu
 	checkValid(op)
 	op = planQuery(ctx, op)
 
-	err = shouldErrorOnComplexPlan(ctx, op)
-	return op, err
+	if err := checkSingleRouteError(ctx, op); err != nil {
+		return nil, err
+	}
+
+	return op, nil
 }
 
-func shouldErrorOnComplexPlan(ctx *plancontext.PlanningContext, op Operator) error {
-	complexPlan := false
+// checkSingleRouteError checks if the query has a NotSingleRouteErr and more than one route, and returns an error if it does
+func checkSingleRouteError(ctx *plancontext.PlanningContext, op Operator) error {
+	if ctx.SemTable.NotSingleRouteErr == nil {
+		return nil
+	}
+	routes := 0
 	visitF := func(op Operator, _ semantics.TableSet, _ bool) (Operator, *ApplyResult) {
 		switch op.(type) {
-		case *Limit, *Route:
-		default:
-			complexPlan = true
+		case *Route:
+			routes++
 		}
 		return op, NoRewrite
 	}
 
+	// we'll walk the tree and count the number of routes
 	TopDown(op, TableID, visitF, stopAtRoute)
 
-	if complexPlan && ctx.SemTable.NotSingleRouteErr != nil {
-		// If we got here, we don't have a single shard plan
-		return ctx.SemTable.NotSingleRouteErr
+	if routes <= 1 {
+		return nil
 	}
-	return nil
+
+	return ctx.SemTable.NotSingleRouteErr
 }
 
 func PanicHandler(err *error) {
