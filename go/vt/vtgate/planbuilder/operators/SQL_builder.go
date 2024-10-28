@@ -564,14 +564,20 @@ func buildProjection(op *Projection, qb *queryBuilder) error {
 }
 
 func buildApplyJoin(op *ApplyJoin, qb *queryBuilder) error {
-	predicates := slice.Map(op.JoinPredicates, func(jc JoinColumn) sqlparser.Expr {
+	predicates, err := slice.MapWithError(op.JoinPredicates, func(jc JoinColumn) (sqlparser.Expr, error) {
 		// since we are adding these join predicates, we need to mark to broken up version (RHSExpr) of it as done
-		_ = qb.ctx.SkipJoinPredicates(jc.Original.Expr)
-		return jc.Original.Expr
+		err := qb.ctx.SkipJoinPredicates(jc.Original.Expr)
+		if err != nil {
+			return nil, err
+		}
+		return jc.Original.Expr, nil
 	})
+	if err != nil {
+		return err
+	}
 
 	pred := sqlparser.AndExpressions(predicates...)
-	err := buildQuery(op.LHS, qb)
+	err = buildQuery(op.LHS, qb)
 	if err != nil {
 		return err
 	}
