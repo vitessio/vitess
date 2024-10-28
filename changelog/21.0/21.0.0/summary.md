@@ -2,6 +2,8 @@
 
 ### Table of Contents
 
+- **[Known Issue](#known-issues)**
+    - **[Backup reports itself as successful despite failures](#backup-reports-as-successful)**
 - **[Major Changes](#major-changes)**
     - **[Deprecations and Deletions](#deprecations-and-deletions)**
         - [Deprecated VTTablet Flags](#vttablet-flags)
@@ -25,6 +27,14 @@
     - **[vtctldclient ChangeTabletTags](#vtctldclient-changetablettags)**
     - **[Support for specifying expected primary in reparents](#reparents-expectedprimary)**
 
+## <a id="known-issue"/>Known Issue</a>
+
+### <a id="backup-reports-as-successful"/>Backup reports itself as successful despite failures</a>
+
+In this release, we identified an issue where a backup may succeed even if a file fails to be backed up.
+Leading to a successful backup, even if some errors occurred.
+This only happen with the Builtin Backup Engine, and when all files have already been initiated in the backup process.
+For more details, please refer to the related GitHub Issue https://github.com/vitessio/vitess/issues/17063.
 
 ## <a id="major-changes"/>Major Changes</a>
 
