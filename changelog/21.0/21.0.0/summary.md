@@ -87,7 +87,7 @@ Users can now run multi-shard transactions with stronger guarantees.
 Vitess now provides two modes of transactional guarantees for multi-shard transactions: Best Effort and Atomic. 
 These can be selected based on the user’s requirements and the trade-offs they are willing to make.
 
-Follow the documentation to enable [Atomic Distributed Transaction](https://vitess.io/docs/21.0/reference/features/two-phase-commit/)
+Follow the documentation to enable [Atomic Distributed Transaction](https://vitess.io/docs/21.0/reference/features/distributed-transaction/)
 
 For more details on the implementation and trade-offs, please refer to the [RFC](https://github.com/vitessio/vitess/issues/16245)
 
