@@ -172,6 +172,8 @@
  * [release-21.0] Add missing changelog for PR #16852 (#17002) [#17006](https://github.com/vitessio/vitess/pull/17006) 
 #### General
  * release notes: update dml related release notes [#16241](https://github.com/vitessio/vitess/pull/16241) 
+#### Query Serving
+ * [Direct PR][release note]: Atomic Distributed Transaction [#17079](https://github.com/vitessio/vitess/pull/17079) 
 #### VReplication
  * Release docs: Add vreplication related entries to the v20 summary [#16259](https://github.com/vitessio/vitess/pull/16259) 
 #### VTTablet
@@ -378,7 +380,7 @@
  * Support passing filters to `discovery.NewHealthCheck(...)` [#16170](https://github.com/vitessio/vitess/pull/16170) 
 #### VTTablet
  * `txthrottler`: move `ThrottlerInterface` to `go/vt/throttler`, use `slices` pkg, add stats [#16248](https://github.com/vitessio/vitess/pull/16248)
- * Deprecate vttablet metrics `QueryCacheXX` and rename to `TabletQueryPlanCacheXX` [#16289](https://github.com/vitessio/vitess/pull/16289) 
+ * Deprecate vttablet metrics `QueryCacheXX` and rename to `QueryPlanCacheXX` [#16289](https://github.com/vitessio/vitess/pull/16289) 
 #### schema management
  * `schemadiff`/Online DDL internal refactor [#16767](https://github.com/vitessio/vitess/pull/16767) 
 #### vtctldclient

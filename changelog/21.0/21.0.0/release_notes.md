@@ -11,6 +11,7 @@
         - [Deletion of deprecated metrics](#metric-deletion)
         - [Deprecated Metrics](#deprecations-metrics)
     - **[Traffic Mirroring](#traffic-mirroring)**
+    - **[Atomic Distributed Transaction Support](#atomic-transaction)**
     - **[New VTGate Shutdown Behavior](#new-vtgate-shutdown-behavior)**
     - **[Tablet Throttler: Multi-Metric support](#tablet-throttler)**
     - **[Allow Cross Cell Promotion in PRS](#allow-cross-cell)**
@@ -89,6 +90,17 @@ $ vtctldclient --server :15999 MoveTables --target-keyspace customer --workflow 
 ```
 
 Mirror rules can be inspected with `GetMirrorRules`.
+
+### <a id="atomic-transaction"/>Atomic Distributed Transaction Support</a>
+
+We have introduced atomic distributed transactions as an experimental feature.
+Users can now run multi-shard transactions with stronger guarantees. 
+Vitess now provides two modes of transactional guarantees for multi-shard transactions: Best Effort and Atomic. 
+These can be selected based on the user’s requirements and the trade-offs they are willing to make.
+
+Follow the documentation to enable [Atomic Distributed Transaction](https://vitess.io/docs/21.0/reference/features/distributed-transaction/)
+
+For more details on the implementation and trade-offs, please refer to the [RFC](https://github.com/vitessio/vitess/issues/16245)
 
 ### <a id="new-vtgate-shutdown-behavior"/>New VTGate Shutdown Behavior</a>
 
@@ -245,7 +257,7 @@ The `EmergencyReparentShard` and `PlannedReparentShard` commands and RPCs now su
 ------------
 The entire changelog for this release can be found [here](https://github.com/vitessio/vitess/blob/main/changelog/21.0/21.0.0/changelog.md).
 
-The release includes 362 merged Pull Requests.
+The release includes 363 merged Pull Requests.
 
 Thanks to all our contributors: @GrahamCampbell, @GuptaManan100, @Utkar5hM, @anshikavashistha, @app/dependabot, @app/vitess-bot, @arthurschreiber, @beingnoble03, @brendar, @cameronmccord2, @chrism1001, @cuishuang, @dbussink, @deepthi, @demmer, @frouioui, @harshit-gangal, @harshitasao, @icyflame, @kirtanchandak, @mattlord, @mattrobenolt, @maxenglander, @mcrauwel, @notfelineit, @perminov, @rafer, @rohit-nayak-ps, @runewake2, @rvrangel, @shanth96, @shlomi-noach, @systay, @timvaillancourt, @vitess-bot
 
