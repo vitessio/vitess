@@ -88,7 +88,7 @@ func (qb *queryBuilder) addTableExpr(
 }
 
 func (qb *queryBuilder) addPredicate(expr sqlparser.Expr) {
-	if _, toBeSkipped := qb.ctx.SkipPredicates[expr]; toBeSkipped {
+	if qb.ctx.ShouldSkip(expr) {
 		// This is a predicate that was added to the RHS of an ApplyJoin.
 		// The original predicate will be added, so we don't have to add this here
 		return
@@ -566,21 +566,16 @@ func buildProjection(op *Projection, qb *queryBuilder) error {
 func buildApplyJoin(op *ApplyJoin, qb *queryBuilder) error {
 	predicates := slice.Map(op.JoinPredicates, func(jc JoinColumn) sqlparser.Expr {
 		// since we are adding these join predicates, we need to mark to broken up version (RHSExpr) of it as done
-		qb.ctx.SkipPredicates[jc.RHSExpr] = nil
-
+		_ = qb.ctx.SkipJoinPredicates(jc.Original.Expr)
 		return jc.Original.Expr
 	})
+
 	pred := sqlparser.AndExpressions(predicates...)
 	err := buildQuery(op.LHS, qb)
 	if err != nil {
 		return err
 	}
-	// If we are going to add the predicate used in join here
-	// We should not add the predicate's copy of when it was split into
-	// two parts. To avoid this, we use the SkipPredicates map.
-	for _, pred := range op.JoinPredicates {
-		qb.ctx.SkipPredicates[pred.RHSExpr] = nil
-	}
+
 	qbR := &queryBuilder{ctx: qb.ctx}
 	err = buildQuery(op.RHS, qbR)
 	if err != nil {

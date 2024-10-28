@@ -13,7 +13,7 @@
           "Sharded": true
         },
         "FieldQuery": "select c_discount, c_last, c_credit, w_tax from customer1 as c, warehouse1 as w where 1 != 1",
-        "Query": "select c_discount, c_last, c_credit, w_tax from customer1 as c, warehouse1 as w where c_w_id = :w_id and c_d_id = 15 and c_id = 10 and w_id = 1 and c_w_id = w_id",
+        "Query": "select c_discount, c_last, c_credit, w_tax from customer1 as c, warehouse1 as w where c_d_id = 15 and c_id = 10 and w_id = 1 and c_w_id = w_id",
         "Table": "customer1, warehouse1",
         "Values": [
           "INT64(1)"
@@ -947,7 +947,7 @@
           "Sharded": true
         },
         "FieldQuery": "select o.o_id, o.o_d_id from (select o_c_id, o_w_id, o_d_id, count(distinct o_w_id), o_id from orders1 where 1 != 1 group by o_c_id, o_d_id, o_w_id) as t, orders1 as o where 1 != 1",
-        "Query": "select o.o_id, o.o_d_id from (select o_c_id, o_w_id, o_d_id, count(distinct o_w_id), o_id from orders1 where o_w_id = 1 and o_id > 2100 and o_id < 11153 and o_w_id = :o_o_w_id and o_d_id = :o_o_d_id and o_c_id = :o_o_c_id group by o_c_id, o_d_id, o_w_id having count(distinct o_id) > 1 limit 1) as t, orders1 as o where t.o_w_id = o.o_w_id and t.o_d_id = o.o_d_id and t.o_c_id = o.o_c_id limit 1",
+        "Query": "select o.o_id, o.o_d_id from (select o_c_id, o_w_id, o_d_id, count(distinct o_w_id), o_id from orders1 where o_w_id = 1 and o_id > 2100 and o_id < 11153 group by o_c_id, o_d_id, o_w_id having count(distinct o_id) > 1 limit 1) as t, orders1 as o where t.o_w_id = o.o_w_id and t.o_d_id = o.o_d_id and t.o_c_id = o.o_c_id limit 1",
         "Table": "orders1",
         "Values": [
           "INT64(1)"

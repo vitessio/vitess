@@ -18,12 +18,15 @@ package operators
 
 import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 // VerifyOp keeps the information about the foreign key verification operation.
 // It is a Parent verification or a Child verification.
 type VerifyOp struct {
-	Op  ops.Operator
+	Op ops.Operator
+	ST *semantics.SemTable
+
 	Typ string
 }
 
