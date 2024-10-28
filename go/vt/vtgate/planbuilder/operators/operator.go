@@ -44,6 +44,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 type (
@@ -81,10 +82,8 @@ func PlanQuery(ctx *plancontext.PlanningContext, stmt sqlparser.Statement) (ops.
 		return nil, err
 	}
 
-	_, isRoute := op.(*Route)
-	if !isRoute && ctx.SemTable.NotSingleRouteErr != nil {
-		// If we got here, we don't have a single shard plan
-		return nil, ctx.SemTable.NotSingleRouteErr
+	if err := checkSingleRouteError(ctx, op); err != nil {
+		return nil, err
 	}
 
 	return op, err
@@ -160,4 +159,28 @@ func transformColumnsToSelectExprs(ctx *plancontext.PlanningContext, op ops.Oper
 		return from
 	})
 	return selExprs, nil
+}
+
+// checkSingleRouteError checks if the query has a NotSingleRouteErr and more than one route, and returns an error if it does
+func checkSingleRouteError(ctx *plancontext.PlanningContext, op ops.Operator) error {
+	if ctx.SemTable.NotSingleRouteErr == nil {
+		return nil
+	}
+	routes := 0
+	visitF := func(op ops.Operator, _ semantics.TableSet, _ bool) (ops.Operator, *rewrite.ApplyResult, error) {
+		switch op.(type) {
+		case *Route:
+			routes++
+		}
+		return op, rewrite.SameTree, nil
+	}
+
+	// we'll walk the tree and count the number of routes
+	_, _ = rewrite.TopDown(op, TableID, visitF, stopAtRoute)
+
+	if routes <= 1 {
+		return nil
+	}
+
+	return ctx.SemTable.NotSingleRouteErr
 }
