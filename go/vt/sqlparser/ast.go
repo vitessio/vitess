@@ -4303,7 +4303,7 @@ func (node *AliasedExpr) Format(buf *TrackedBuffer) {
 			buf.Myprintf("%v %v", node.Expr, node.As)
 		} else {
 			//buf.Myprintf("%s", node.InputExpression)
-			node.Expr.Format(buf)
+			buf.Myprintf("%v", node.Expr)
 		}
 	} else if !node.As.IsEmpty() {
 		buf.Myprintf("%v as %v", node.Expr, node.As)
