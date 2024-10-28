@@ -425,6 +425,7 @@
  * [release-21.0] Bump to `v21.0.0-SNAPSHOT` after the `v21.0.0-RC1` release [#16955](https://github.com/vitessio/vitess/pull/16955)
  * [release-21.0] Release of `v21.0.0-RC2` [#17022](https://github.com/vitessio/vitess/pull/17022)
  * [release-21.0] Bump to `v21.0.0-SNAPSHOT` after the `v21.0.0-RC2` release [#17049](https://github.com/vitessio/vitess/pull/17049)
+ * [release-21.0] Add release notes for known issue in v21.0.0 [#17067](https://github.com/vitessio/vitess/pull/17067)
 ### Testing 
 #### Build/CI
  * Online DDL flow CI: Update golang version to 1.22.4 [#16066](https://github.com/vitessio/vitess/pull/16066)

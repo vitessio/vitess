@@ -257,7 +257,7 @@ The `EmergencyReparentShard` and `PlannedReparentShard` commands and RPCs now su
 ------------
 The entire changelog for this release can be found [here](https://github.com/vitessio/vitess/blob/main/changelog/21.0/21.0.0/changelog.md).
 
-The release includes 363 merged Pull Requests.
+The release includes 364 merged Pull Requests.
 
 Thanks to all our contributors: @GrahamCampbell, @GuptaManan100, @Utkar5hM, @anshikavashistha, @app/dependabot, @app/vitess-bot, @arthurschreiber, @beingnoble03, @brendar, @cameronmccord2, @chrism1001, @cuishuang, @dbussink, @deepthi, @demmer, @frouioui, @harshit-gangal, @harshitasao, @icyflame, @kirtanchandak, @mattlord, @mattrobenolt, @maxenglander, @mcrauwel, @notfelineit, @perminov, @rafer, @rohit-nayak-ps, @runewake2, @rvrangel, @shanth96, @shlomi-noach, @systay, @timvaillancourt, @vitess-bot
 
