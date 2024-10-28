@@ -164,6 +164,9 @@ service TabletManager {
   // reparent journal
   rpc PopulateReparentJournal(tabletmanagerdata.PopulateReparentJournalRequest) returns (tabletmanagerdata.PopulateReparentJournalResponse) {};
 
+  // ReadReparentJournalInfo reads the information from reparent journal
+  rpc ReadReparentJournalInfo(tabletmanagerdata.ReadReparentJournalInfoRequest) returns (tabletmanagerdata.ReadReparentJournalInfoResponse) {};
+
   // InitReplica tells the tablet to reparent to the primary unconditionally
   rpc InitReplica(tabletmanagerdata.InitReplicaRequest) returns (tabletmanagerdata.InitReplicaResponse) {};
 
