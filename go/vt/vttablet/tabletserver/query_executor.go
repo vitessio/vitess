@@ -150,7 +150,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		qre.tsv.qe.AddStats(qre.plan, tableName, qre.options.GetWorkloadName(), qre.targetTabletType, 1, duration, mysqlTime, int64(reply.RowsAffected), int64(len(reply.Rows)), 0, errCode)
 		qre.plan.AddStats(1, duration, mysqlTime, reply.RowsAffected, uint64(len(reply.Rows)), 0)
 		if reply.CachedProto != nil {
-			//log.Errorf("DEBUG: using cached proto: %v", reply.CachedProto)
+			// log.Errorf("DEBUG: using cached proto: %v", reply.CachedProto)
 			qre.plan.PacketSize.Add(uint64(len(reply.CachedProto)))
 		}
 		qre.logStats.RowsAffected = int(reply.RowsAffected)
@@ -1127,18 +1127,15 @@ func (qre *QueryExecutor) execDBConn(conn *connpool.Conn, sql string, wantfields
 	}
 	defer qre.tsv.statelessql.Remove(qd)
 
-	sizeHint := uint64(0)
-	sizeHint = uint64(qre.plan.PacketSize.Value())
-
 	opt := mysql.ExecuteOptions{
 		MaxRows:    int(qre.tsv.qe.maxResultSize.Load()),
 		WantFields: wantfields,
 		RawPackets: qre.options.RawMysqlPackets,
-		SizeHint:   sizeHint,
+		SizeHint:   qre.plan.PacketSize.Value(),
 	}
-	//if opt.RawPackets {
-	//log.Errorf("DEBUG: execDBConn: opt: %v, sql: %s", opt, sql)
-	//}
+	// if opt.RawPackets {
+	// log.Errorf("DEBUG: execDBConn: opt: %v, sql: %s", opt, sql)
+	// }
 	return conn.ExecOpt(ctx, sql, opt)
 }
 
@@ -1159,7 +1156,7 @@ func (qre *QueryExecutor) execStatefulConn(conn *StatefulConnection, sql string,
 		MaxRows:    int(qre.tsv.qe.maxResultSize.Load()),
 		WantFields: wantfields,
 		RawPackets: qre.options.RawMysqlPackets,
-		SizeHint:   uint64(qre.plan.PacketSize.Value()),
+		SizeHint:   qre.plan.PacketSize.Value(),
 	}
 	return conn.ExecOpt(ctx, sql, opt)
 }

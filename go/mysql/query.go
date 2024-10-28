@@ -94,7 +94,7 @@ func (c *Conn) writeComSetOption(operation uint16) error {
 	return nil
 }
 
-// parseColumnDefinition reads the next Column Definition packet.
+// parseColumnDefinition parses the next Column Definition packet.
 // Returns a SQLError.
 func parseColumnDefinition(colDef []byte, field *querypb.Field, index int) error {
 	// Catalog is ignored, always set to "def"
@@ -423,7 +423,7 @@ func (c *Conn) ExecuteFetchWithWarningCount(query string, maxrows int, wantfield
 }
 
 func (c *Conn) ReadQueryResultAsProto(maxrows int, sizehint uint64) (*sqltypes.Result, bool, uint16, error) {
-	//log.Errorf("DEBUG: ReadQueryResultAsProto called with maxrows %v and sizehint %v", maxrows, sizehint)
+	// log.Errorf("DEBUG: ReadQueryResultAsProto called with maxrows %v and sizehint %v", maxrows, sizehint)
 	var packetOk PacketOK
 
 	// Get the result.
@@ -510,7 +510,7 @@ func (c *Conn) ReadQueryResultAsProto(maxrows int, sizehint uint64) (*sqltypes.R
 				builder.Info(packetEof.info)
 			}
 
-			//log.Errorf("DEBUG: setting result cached proto to %v", builder.Finish())
+			// log.Errorf("DEBUG: setting result cached proto to %v", builder.Finish())
 			result.CachedProto = builder.Finish()
 			return result, more, warnings, nil
 

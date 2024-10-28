@@ -180,14 +180,14 @@ func (stc *ScatterConn) ExecuteMultiShard(
 			var (
 				innerqr *sqltypes.Result
 				err     error
-				opts    = &querypb.ExecuteOptions{}
+				opts    *querypb.ExecuteOptions
 				alias   *topodatapb.TabletAlias
 				qs      queryservice.QueryService
 			)
 			transactionID := info.transactionID
 			reservedID := info.reservedID
 
-			if session != nil && session.Session != nil {
+			if session != nil && session.Session != nil && session.Session.Options != nil {
 				opts = session.Session.Options
 			}
 			opts.RawMysqlPackets = true
@@ -729,13 +729,15 @@ func (stc *ScatterConn) multiGoTransaction(
 // i.e. if rss[2] had an error, then the error recorder will store that error
 // in the second position.
 func (stc *ScatterConn) ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, session *SafeSession, lockFuncType sqlparser.LockingFuncType) (*sqltypes.Result, error) {
-
 	var (
+		info  *shardActionInfo
+		qs    queryservice.QueryService
 		qr    *sqltypes.Result
 		err   error
-		opts  = &querypb.ExecuteOptions{}
+		opts  *querypb.ExecuteOptions
 		alias *topodatapb.TabletAlias
 	)
+
 	allErrors := new(concurrency.AllErrorRecorder)
 	startTime, statsKey := stc.startAction("ExecuteLock", rs.Target)
 	defer stc.endLockAction(startTime, allErrors, statsKey, &err)
@@ -743,19 +745,19 @@ func (stc *ScatterConn) ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedSha
 	if session == nil || session.Session == nil {
 		return nil, vterrors.VT13001("session cannot be nil")
 	}
-
 	opts = session.Session.Options
-	opts.RawMysqlPackets = true
-	info, err := lockInfo(rs.Target, session, lockFuncType)
-	// Lock session is created on alphabetic sorted keyspace.
-	// This error will occur if the existing session target does not match the current target.
-	// This will happen either due to re-sharding or a new keyspace which comes before the existing order.
-	// In which case, we will try to release old locks and return error.
+
+	info, err = lockInfo(rs.Target, session, lockFuncType)
 	if err != nil {
+		// Lock session is created on alphabetic sorted keyspace.
+		// This error will occur if the existing session target does not match the current target.
+		// This will happen either due to re-sharding or a new keyspace which comes before the existing order.
+		// In which case, we will try to release old locks and return error.
 		_ = stc.txConn.ReleaseLock(ctx, session)
-		return nil, vterrors.Wrap(err, "Any previous held locks are released")
+		err = vterrors.Wrap(err, "Any previous held locks are released")
+		return nil, err
 	}
-	qs, err := getQueryService(ctx, rs, info, nil, true)
+	qs, err = getQueryService(ctx, rs, info, nil, true)
 	if err != nil {
 		return nil, err
 	}

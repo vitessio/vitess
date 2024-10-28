@@ -329,7 +329,7 @@ func (result *Result) StripMetadata(incl querypb.ExecuteOptions_IncludedFields) 
 // to another result.Note currently it doesn't handle cases like
 // if two results have different fields.We will enhance this function.
 func (result *Result) AppendResult(src *Result) {
-	if src.RowsAffected == 0 && len(src.Rows) == 0 && (src.Fields != nil && len(src.Fields) == 0) {
+	if src.RowsAffected == 0 && len(src.Rows) == 0 && len(src.Fields) == 0 {
 		return
 	}
 	if result.Fields == nil {
@@ -428,7 +428,7 @@ func (result *Result) ToReserveBeginStreamExecuteResponse() *querypb.ReserveBegi
 
 func (result *Result) ToStreamExecuteResponse() *querypb.StreamExecuteResponse {
 	if result.CachedProto != nil {
-		//log.Errorf("DEBUG: stream execute cached response: %v", result.CachedProto)
+		// log.Errorf("DEBUG: stream execute cached response: %v", result.CachedProto)
 		return querypb.CachedStreamExecuteResponse(result.CachedProto)
 	}
 	return &querypb.StreamExecuteResponse{Result: ResultToProto3(result)}
