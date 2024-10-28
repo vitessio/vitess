@@ -43,6 +43,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 type (
@@ -71,13 +72,35 @@ func PlanQuery(ctx *plancontext.PlanningContext, stmt sqlparser.Statement) (resu
 	checkValid(op)
 	op = planQuery(ctx, op)
 
-	_, isRoute := op.(*Route)
-	if !isRoute && ctx.SemTable.NotSingleRouteErr != nil {
-		// If we got here, we don't have a single shard plan
-		return nil, ctx.SemTable.NotSingleRouteErr
+	if err := checkSingleRouteError(ctx, op); err != nil {
+		return nil, err
 	}
 
-	return op, err
+	return op, nil
+}
+
+// checkSingleRouteError checks if the query has a NotSingleRouteErr and more than one route, and returns an error if it does
+func checkSingleRouteError(ctx *plancontext.PlanningContext, op Operator) error {
+	if ctx.SemTable.NotSingleRouteErr == nil {
+		return nil
+	}
+	routes := 0
+	visitF := func(op Operator, _ semantics.TableSet, _ bool) (Operator, *ApplyResult) {
+		switch op.(type) {
+		case *Route:
+			routes++
+		}
+		return op, NoRewrite
+	}
+
+	// we'll walk the tree and count the number of routes
+	TopDown(op, TableID, visitF, stopAtRoute)
+
+	if routes <= 1 {
+		return nil
+	}
+
+	return ctx.SemTable.NotSingleRouteErr
 }
 
 func PanicHandler(err *error) {
