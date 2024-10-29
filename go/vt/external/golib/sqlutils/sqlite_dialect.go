@@ -78,8 +78,13 @@ var sqlite3GeneralConversions = []regexpMap{
 	rmap(`(?i)\bconcat[(][\s]*([^,)]+)[\s]*,[\s]*([^,)]+)[\s]*,[\s]*([^,)]+)[\s]*[)]`, `($1 || $2 || $3)`),
 
 	rmap(`(?i) rlike `, ` like `),
+}
 
+var sqlite3CreateIndexConversions = []regexpMap{
 	rmap(`(?i)create index([\s\S]+)[(][\s]*[0-9]+[\s]*[)]([\s\S]+)`, `create index ${1}${2}`),
+}
+
+var sqlite3DropIndexConversions = []regexpMap{
 	rmap(`(?i)drop index ([\S]+) on ([\S]+)`, `drop index if exists $1`),
 }
 
@@ -115,20 +120,42 @@ func ToSqlite3CreateTable(statement string) string {
 	return applyConversions(statement, sqlite3CreateTableConversions)
 }
 
+func ToSqlite3CreateIndex(statement string) string {
+	return applyConversions(statement, sqlite3CreateIndexConversions)
+}
+
+func ToSqlite3DropIndex(statement string) string {
+	return applyConversions(statement, sqlite3DropIndexConversions)
+}
+
 func ToSqlite3Insert(statement string) string {
 	statement = applyConversions(statement, sqlite3GeneralConversions)
 	return applyConversions(statement, sqlite3InsertConversions)
 }
 
-func ToSqlite3Dialect(statement string) (translated string) {
-	if IsInsert(statement) {
-		return ToSqlite3Insert(statement)
-	}
-	if IsCreateTable(statement) {
-		return ToSqlite3CreateTable(statement)
-	}
-	if IsAlterTable(statement) {
-		return ToSqlite3CreateTable(statement)
+// ToSqlite3Dialect converts a statement to sqlite3 dialect. The statement
+// is checked in this order:
+//  1. If a query, return the statement with sqlite3GeneralConversions applied.
+//  2. If an insert/replace, convert with ToSqlite3Insert.
+//  3. If a create index, convert with IsCreateIndex.
+//  4. If an drop table, convert with IsDropIndex.
+//  5. If a create table, convert with IsCreateTable.
+//  6. If an alter table, convert with IsAlterTable.
+//  7. As fallback, return the statement with sqlite3GeneralConversions applied.
+func ToSqlite3Dialect(statement string, potentiallyDMLOrDDL bool) (translated string) {
+	if potentiallyDMLOrDDL {
+		switch {
+		case IsInsert(statement):
+			return ToSqlite3Insert(statement)
+		case IsCreateIndex(statement):
+			return ToSqlite3CreateIndex(statement)
+		case IsDropIndex(statement):
+			return ToSqlite3DropIndex(statement)
+		case IsCreateTable(statement):
+			return ToSqlite3CreateTable(statement)
+		case IsAlterTable(statement):
+			return ToSqlite3CreateTable(statement)
+		}
 	}
 	return applyConversions(statement, sqlite3GeneralConversions)
 }

@@ -69,7 +69,11 @@ func OpenVTOrc() (db *sql.DB, err error) {
 }
 
 func translateStatement(statement string) string {
-	return sqlutils.ToSqlite3Dialect(statement)
+	return sqlutils.ToSqlite3Dialect(statement, true /* potentiallyDMLOrDDL */)
+}
+
+func translateQueryStatement(statement string) string {
+	return sqlutils.ToSqlite3Dialect(statement, false /* potentiallyDMLOrDDL */)
 }
 
 // registerVTOrcDeployment updates the vtorc_db_deployments table upon successful deployment
@@ -162,7 +166,7 @@ func ExecVTOrc(query string, args ...any) (sql.Result, error) {
 
 // QueryVTOrcRowsMap
 func QueryVTOrcRowsMap(query string, onRow func(sqlutils.RowMap) error) error {
-	query = translateStatement(query)
+	query = translateQueryStatement(query)
 	db, err := OpenVTOrc()
 	if err != nil {
 		return err
@@ -173,7 +177,7 @@ func QueryVTOrcRowsMap(query string, onRow func(sqlutils.RowMap) error) error {
 
 // QueryVTOrc
 func QueryVTOrc(query string, argsArray []any, onRow func(sqlutils.RowMap) error) error {
-	query = translateStatement(query)
+	query = translateQueryStatement(query)
 	db, err := OpenVTOrc()
 	if err != nil {
 		return err
