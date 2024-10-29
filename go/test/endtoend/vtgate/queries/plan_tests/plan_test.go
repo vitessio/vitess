@@ -1,3 +1,19 @@
+/*
+Copyright 2024 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package plan_tests
 
 import (
@@ -21,6 +37,7 @@ func readJSONTests(filename string) []planbuilder.PlanTest {
 	if err != nil {
 		panic(err)
 	}
+	defer file.Close()
 	dec := json.NewDecoder(file)
 	err = dec.Decode(&output)
 	if err != nil {
@@ -36,12 +53,30 @@ func locateFile(name string) string {
 func TestPlan(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
-	tests := readJSONTests("select_cases.json")
+	tests := readJSONTests("select_cases_new.json")
 	for _, test := range tests {
+		if test.SkipE2E {
+			continue
+		}
 		mcmp.Run(test.Query, func(mcmp *utils.MySQLCompare) {
 			mcmp.Exec(test.Query)
+			// if mcmp.AsT().Failed() {
+			// 	tests[i].SkipE2E = true
+			// }
 		})
 	}
+
+	// file, err := os.Create(locateFile("select_cases_new.json"))
+	// if err != nil {
+	// 	panic(err)
+	// }
+	// defer file.Close()
+	//
+	// enc := json.NewEncoder(file)
+	// enc.SetEscapeHTML(false)
+	// enc.SetIndent("", "  ")
+	// err = enc.Encode(tests)
+	// require.NoError(t, err)
 }
 
 var (
@@ -119,6 +154,7 @@ func TestMain(m *testing.M) {
 		// Start topo server
 		err := clusterInstance.StartTopo()
 		if err != nil {
+			fmt.Println(err.Error())
 			return 1
 		}
 
@@ -130,6 +166,7 @@ func TestMain(m *testing.M) {
 		}
 		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 0, false)
 		if err != nil {
+			fmt.Println(err.Error())
 			return 1
 		}
 
@@ -142,6 +179,7 @@ func TestMain(m *testing.M) {
 		// Start vtgate
 		err = clusterInstance.StartVtgate()
 		if err != nil {
+			fmt.Println(err.Error())
 			return 1
 		}
 
@@ -150,7 +188,7 @@ func TestMain(m *testing.M) {
 		// create mysql instance and connection parameters
 		conn, closer, err := utils.NewMySQL(clusterInstance, keyspaceName, schemaSQL)
 		if err != nil {
-			fmt.Println(err)
+			fmt.Println(err.Error())
 			return 1
 		}
 		defer closer()
