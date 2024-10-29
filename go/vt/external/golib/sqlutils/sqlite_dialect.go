@@ -116,19 +116,19 @@ func ToSqlite3CreateTable(statement string) string {
 }
 
 func ToSqlite3Insert(statement string) string {
+	statement = applyConversions(statement, sqlite3GeneralConversions)
 	return applyConversions(statement, sqlite3InsertConversions)
 }
 
 func ToSqlite3Dialect(statement string) (translated string) {
+	if IsInsert(statement) {
+		return ToSqlite3Insert(statement)
+	}
 	if IsCreateTable(statement) {
 		return ToSqlite3CreateTable(statement)
 	}
 	if IsAlterTable(statement) {
 		return ToSqlite3CreateTable(statement)
 	}
-	statement = applyConversions(statement, sqlite3GeneralConversions)
-	if IsInsert(statement) {
-		return ToSqlite3Insert(statement)
-	}
-	return statement
+	return applyConversions(statement, sqlite3GeneralConversions)
 }
