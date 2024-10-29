@@ -456,9 +456,33 @@ SELECT t.table_name,
 		t.table_schema, t.table_name, t.table_type, t.create_time, t.table_comment
 `
 
+const FtsTablesWithSize80 = `
+SELECT
+	it.name,
+	SUM(i.file_size),
+	SUM(i.allocated_size)
+FROM
+	information_schema.innodb_tables it
+	JOIN information_schema.innodb_tablespaces i
+	ON (
+		i.name LIKE CONCAT(database(), '/fts_', CONVERT(LPAD(HEX(table_id), 16, '0') USING utf8mb3) COLLATE utf8mb3_general_ci, '_%')
+	)
+	WHERE
+		it.name LIKE CONCAT(database(), '/%')
+		AND (
+			i.name LIKE CONCAT(database(), '/fts_%')
+		)
+	GROUP BY it.name
+`
+
 // baseShowTablesWithSizes is part of the Flavor interface.
 func (mysqlFlavor57) baseShowTablesWithSizes() string {
 	return TablesWithSize57
+}
+
+// baseShowFtsTablesWithSizes is part of the Flavor interface.
+func (mysqlFlavor57) baseShowFtsTablesWithSizes() string {
+	return ""
 }
 
 // supportsCapability is part of the Flavor interface.
@@ -469,6 +493,11 @@ func (f mysqlFlavor) supportsCapability(capability capabilities.FlavorCapability
 // baseShowTablesWithSizes is part of the Flavor interface.
 func (mysqlFlavor) baseShowTablesWithSizes() string {
 	return TablesWithSize80
+}
+
+// baseShowFtsTablesWithSizes is part of the Flavor interface.
+func (mysqlFlavor) baseShowFtsTablesWithSizes() string {
+	return FtsTablesWithSize80
 }
 
 func (mysqlFlavor) setReplicationSourceCommand(params *ConnParams, host string, port int32, heartbeatInterval float64, connectRetry int) string {

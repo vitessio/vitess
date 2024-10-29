@@ -22,6 +22,10 @@ func (mariadbFlavor) baseShowTables() string {
 	return mysqlFlavor{}.baseShowTables()
 }
 
+func (mariadbFlavor) baseShowFtsTablesWithSizes() string {
+	return ""
+}
+
 // baseShowTablesWithSizes is part of the Flavor interface.
 func (mariadbFlavor101) baseShowTablesWithSizes() string {
 	return TablesWithSize56

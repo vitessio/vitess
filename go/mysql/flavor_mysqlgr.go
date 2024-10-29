@@ -257,6 +257,11 @@ func (mysqlGRFlavor) baseShowTablesWithSizes() string {
 	return TablesWithSize80
 }
 
+// baseShowFtsTablesWithSizes is part of the Flavor interface.
+func (mysqlGRFlavor) baseShowFtsTablesWithSizes() string {
+	return FtsTablesWithSize80
+}
+
 // supportsCapability is part of the Flavor interface.
 func (f mysqlGRFlavor) supportsCapability(capability capabilities.FlavorCapability) (bool, error) {
 	return capabilities.MySQLVersionHasCapability(f.serverVersion, capability)

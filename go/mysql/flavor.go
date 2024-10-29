@@ -151,6 +151,7 @@ type flavor interface {
 
 	baseShowTables() string
 	baseShowTablesWithSizes() string
+	baseShowFtsTablesWithSizes() string
 
 	supportsCapability(capability capabilities.FlavorCapability) (bool, error)
 }
