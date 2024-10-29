@@ -103,7 +103,7 @@ public class VTSession {
   /**
    * Sets this session's transaction isolation level.
    *
-   * @param Transaction Isolation Level of the Session
+   * @param isolation Isolation Level of the Session
    */
   public void setTransactionIsolation(Query.ExecuteOptions.TransactionIsolation isolation) {
     this.session = this.session.toBuilder()

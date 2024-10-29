@@ -111,9 +111,6 @@ public final class VTGateBlockingConnection implements Closeable {
     return vtGateConnection.streamExecute(ctx, query, bindVars, vtSession);
   }
 
-  /**
-   * @inheritDoc
-   */
   @Override
   public void close() throws IOException {
     vtGateConnection.close();
