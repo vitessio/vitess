@@ -40,47 +40,46 @@ if ((wc >= 0x00C0 && wc <= 0x05FF && (code = uni_0C00_05FF[wc - 0x00C0])) ||
 // will be encoded as `test/tbl@002dfts`
 //
 // Original encoding function:
-//   https://github.com/mysql/mysql-server/blob/89e1c722476deebc3ddc8675e779869f6da654c0/strings/ctype-utf8.cc#L6961-L6984
 //
-// 			static int my_wc_mb_filename(const CHARSET_INFO *cs [[maybe_unused]],
-// 																	my_wc_t wc, uchar *s, uchar *e) {
-// 				int code;
-// 				char hex[] = "0123456789abcdef";
+//	  https://github.com/mysql/mysql-server/blob/89e1c722476deebc3ddc8675e779869f6da654c0/strings/ctype-utf8.cc#L6961-L6984
 //
-// 				if (s >= e) return MY_CS_TOOSMALL;
+//				static int my_wc_mb_filename(const CHARSET_INFO *cs [[maybe_unused]],
+//																		my_wc_t wc, uchar *s, uchar *e) {
+//					int code;
+//					char hex[] = "0123456789abcdef";
 //
-// 				if (wc < 128 && filename_safe_char[wc]) {
-// 					*s = (uchar)wc;
-// 					return 1;
-// 				}
+//					if (s >= e) return MY_CS_TOOSMALL;
 //
-// 				if (s + 3 > e) return MY_CS_TOOSMALL3;
+//					if (wc < 128 && filename_safe_char[wc]) {
+//						*s = (uchar)wc;
+//						return 1;
+//					}
 //
-// 				*s++ = MY_FILENAME_ESCAPE;
-// 				if ((wc >= 0x00C0 && wc <= 0x05FF && (code = uni_0C00_05FF[wc - 0x00C0])) ||
-// 						(wc >= 0x1E00 && wc <= 0x1FFF && (code = uni_1E00_1FFF[wc - 0x1E00])) ||
-// 						(wc >= 0x2160 && wc <= 0x217F && (code = uni_2160_217F[wc - 0x2160])) ||
-// 						(wc >= 0x24B0 && wc <= 0x24EF && (code = uni_24B0_24EF[wc - 0x24B0])) ||
-// 						(wc >= 0xFF20 && wc <= 0xFF5F && (code = uni_FF20_FF5F[wc - 0xFF20]))) {
-// 					*s++ = (code / 80) + 0x30;
-// 					*s++ = (code % 80) + 0x30;
-// 					return 3;
-// 				}
+//					if (s + 3 > e) return MY_CS_TOOSMALL3;
 //
-// 				/* Non letter */
-// 				if (s + 5 > e) return MY_CS_TOOSMALL5;
+//					*s++ = MY_FILENAME_ESCAPE;
+//					if ((wc >= 0x00C0 && wc <= 0x05FF && (code = uni_0C00_05FF[wc - 0x00C0])) ||
+//							(wc >= 0x1E00 && wc <= 0x1FFF && (code = uni_1E00_1FFF[wc - 0x1E00])) ||
+//							(wc >= 0x2160 && wc <= 0x217F && (code = uni_2160_217F[wc - 0x2160])) ||
+//							(wc >= 0x24B0 && wc <= 0x24EF && (code = uni_24B0_24EF[wc - 0x24B0])) ||
+//							(wc >= 0xFF20 && wc <= 0xFF5F && (code = uni_FF20_FF5F[wc - 0xFF20]))) {
+//						*s++ = (code / 80) + 0x30;
+//						*s++ = (code % 80) + 0x30;
+//						return 3;
+//					}
 //
-// 				*s++ = hex[(wc >> 12) & 15];
-// 				*s++ = hex[(wc >> 8) & 15];
-// 				*s++ = hex[(wc >> 4) & 15];
-// 				*s++ = hex[(wc)&15];
-// 				return 5;
-// 			}
-// 			}  // extern "C"
-
+//					/* Non letter */
+//					if (s + 5 > e) return MY_CS_TOOSMALL5;
+//
+//					*s++ = hex[(wc >> 12) & 15];
+//					*s++ = hex[(wc >> 8) & 15];
+//					*s++ = hex[(wc >> 4) & 15];
+//					*s++ = hex[(wc)&15];
+//					return 5;
+//				}
+//
+// See also MySQL docs: https://dev.mysql.com/doc/refman/8.0/en/identifier-mapping.html
 func TablenameToFilename(name string) (string, error) {
-	hex := "0123456789abcdef"
-
 	var b strings.Builder
 	for _, wc := range name {
 		if wc < 128 && filename_safe_char[wc] == 1 {
@@ -106,17 +105,20 @@ func TablenameToFilename(name string) (string, error) {
 		if code != 0 {
 			b.WriteRune(unicode.ToLower(rune(code/80) + 0x30))
 			b.WriteRune(unicode.ToLower(rune(code%80) + 0x30))
-		} else {
-			b.WriteByte(hex[(wc>>12)&15])
-			b.WriteByte(hex[(wc>>8)&15])
-			b.WriteByte(hex[(wc>>4)&15])
-			b.WriteByte(hex[(wc)&15])
+			continue
 		}
+		// Non-letter
+		b.WriteByte(hexSequence[(wc>>12)&15])
+		b.WriteByte(hexSequence[(wc>>8)&15])
+		b.WriteByte(hexSequence[(wc>>4)&15])
+		b.WriteByte(hexSequence[(wc)&15])
 	}
 	return b.String(), nil
 }
 
 var (
+	hexSequence = "0123456789abcdef"
+
 	filename_safe_char = []byte{
 		1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, /* ................ */
 		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, /* ................ */
