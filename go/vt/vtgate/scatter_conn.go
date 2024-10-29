@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"google.golang.org/protobuf/proto"
@@ -158,6 +159,9 @@ func (stc *ScatterConn) ExecuteMultiShard(
 	resultsObserver resultsObserver,
 ) (qr *sqltypes.Result, errs []error) {
 
+	span, ctx := trace.NewSpan(ctx, "ScatterConn.ExecuteMultiShard")
+	defer span.Finish()
+
 	if len(rss) != len(queries) {
 		return nil, []error{vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] got mismatched number of queries and shards")}
 	}
@@ -190,7 +194,6 @@ func (stc *ScatterConn) ExecuteMultiShard(
 			if session != nil && session.Session != nil && session.Session.Options != nil {
 				opts = session.Session.Options
 			}
-			opts.RawMysqlPackets = true
 
 			if autocommit {
 				// As this is auto-commit, the transactionID is supposed to be zero.
@@ -263,6 +266,10 @@ func (stc *ScatterConn) ExecuteMultiShard(
 			}
 			session.logging.log(primitive, rs.Target, rs.Gateway, queries[i].Sql, info.actionNeeded == begin || info.actionNeeded == reserveBegin, queries[i].BindVariables)
 
+			if opts.RawMysqlPackets {
+				log.Errorf("DEBUG: stc.ExecuteMultiShard: query: %s, innerqr: %v, err: %v", queries[i].Sql, innerqr, err)
+			}
+
 			// We need to new shard info irrespective of the error.
 			newInfo := info.updateTransactionAndReservedID(transactionID, reservedID, alias)
 			if err != nil {
@@ -282,6 +289,10 @@ func (stc *ScatterConn) ExecuteMultiShard(
 			return newInfo, nil
 		},
 	)
+
+	if session != nil && session.Session != nil && session.Session.Options != nil && session.Session.Options.RawMysqlPackets {
+		log.Errorf("DEBUG: stc.ExecuteMultiShard: queries: %v, outerqr: %v", queries, qr)
+	}
 
 	if !ignoreMaxMemoryRows && len(qr.Rows) > maxMemoryRows {
 		return nil, []error{vterrors.NewErrorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.NetPacketTooLarge, "in-memory row count exceeded allowed limit of %d", maxMemoryRows)}

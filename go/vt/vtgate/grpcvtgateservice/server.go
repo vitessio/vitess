@@ -143,7 +143,12 @@ func (vtg *VTGate) Execute(ctx context.Context, request *vtgatepb.ExecuteRequest
 	// Handle backward compatibility.
 	session := request.Session
 	if session == nil {
-		session = &vtgatepb.Session{Autocommit: true}
+		session = &vtgatepb.Session{
+			Options: &querypb.ExecuteOptions{
+				RawMysqlPackets: true,
+			},
+			Autocommit: true,
+		}
 	}
 	session, result, err := vtg.server.Execute(ctx, nil, session, request.Query.Sql, request.Query.BindVariables)
 	return &vtgatepb.ExecuteResponse{

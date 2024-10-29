@@ -25,7 +25,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
@@ -910,7 +909,6 @@ func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sq
 				targetTabletType: targetType,
 				setting:          connSetting,
 			}
-			// HERE
 			result, err = qre.Execute()
 			if err != nil {
 				return err
@@ -933,9 +931,9 @@ func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sq
 			return nil
 		},
 	)
-	//if options.RawMysqlPackets {
-	//	log.Errorf("DEBUG: tsv.execute result: %+v, err: %v", result, err)
-	//}
+	if options.RawMysqlPackets {
+		log.Errorf("DEBUG: tsv.execute result: %+v, err: %v", result, err)
+	}
 	return result, err
 }
 
@@ -972,9 +970,9 @@ func (tsv *TabletServer) streamExecute(ctx context.Context, target *querypb.Targ
 		timeout = tsv.config.TxTimeoutForWorkload(querypb.ExecuteOptions_OLAP)
 	}
 
-	//if options.RawMysqlPackets {
-	//	log.Errorf("DEBUG: tsv.streamExecute with raw packets sql: %s", sql)
-	//}
+	if options.RawMysqlPackets {
+		log.Errorf("DEBUG: tsv.streamExecute with raw packets sql: %s", sql)
+	}
 
 	return tsv.execRequest(
 		ctx, timeout,
@@ -1027,7 +1025,6 @@ func (tsv *TabletServer) streamExecute(ctx context.Context, target *querypb.Targ
 
 // BeginExecute combines Begin and Execute.
 func (tsv *TabletServer) BeginExecute(ctx context.Context, target *querypb.Target, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (queryservice.TransactionState, *sqltypes.Result, error) {
-
 	// Disable hot row protection in case of reserve connection.
 	if tsv.enableHotRowProtection && reservedID == 0 {
 		txDone, err := tsv.beginWaitForSameRangeTransactions(ctx, target, options, sql, bindVariables)
@@ -1045,6 +1042,9 @@ func (tsv *TabletServer) BeginExecute(ctx context.Context, target *querypb.Targe
 	}
 
 	result, err := tsv.Execute(ctx, target, sql, bindVariables, state.TransactionID, reservedID, options)
+	if options.RawMysqlPackets {
+		log.Errorf("DEBUG: tsv.BeginExecute result: %+v, err: %v", result, err)
+	}
 	return state, result, err
 }
 
@@ -1804,7 +1804,6 @@ func (tsv *TabletServer) SetTwoPCAllowed(reason int, allowed bool) {
 func (tsv *TabletServer) HandlePanic(err *error) {
 	if x := recover(); x != nil {
 		*err = fmt.Errorf("uncaught panic: %v\n. Stack-trace:\n%s", x, tb.Stack(4))
-		debug.PrintStack()
 	}
 }
 

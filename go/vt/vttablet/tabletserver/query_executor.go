@@ -103,8 +103,8 @@ func allocStreamResult() *sqltypes.Result {
 }
 
 func (qre *QueryExecutor) shouldConsolidate() bool {
-	// TODO
-	if !qre.options.RawMysqlPackets {
+	// TODO: This is a temporary solution to disable consolidation for raw mysql packets.
+	if qre.options.RawMysqlPackets {
 		return false
 	}
 	co := qre.options.GetConsolidator()
@@ -125,6 +125,7 @@ func (qre *QueryExecutor) shouldConsolidate() bool {
 func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 	planName := qre.plan.PlanID.String()
 	qre.logStats.PlanType = planName
+	log.Errorf("DEBUG: qre.Execute: query: %s", qre.query)
 	defer func(start time.Time) {
 		duration := time.Since(start)
 		qre.tsv.stats.QueryTimings.Add(planName, duration)
@@ -196,6 +197,9 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 			qre.bindVars[sqltypes.BvSchemaName] = sqltypes.StringBindVariable(qre.tsv.config.DB.DBName)
 		}
 		qr, err := qre.execSelect()
+		if qre.options.RawMysqlPackets {
+			log.Errorf("DEBUG: qre.Execute: qr: %+v, err: %v", qr, err)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -324,8 +328,16 @@ func (qre *QueryExecutor) txConnExec(conn *StatefulConnection) (*sqltypes.Result
 		if err != nil {
 			return nil, err
 		}
-		if err := qre.verifyRowCount(int64(len(qr.Rows)), maxrows); err != nil {
-			return nil, err
+		if qr.CachedProto == nil { // If we're not passing on the raw MySQL packets
+			// Do we still need to figure out a way to do this?
+			// I don't think so, since when using raw packets we enforce this when
+			// parsing it in ReadQueryResultAsProto.
+			if err := qre.verifyRowCount(int64(len(qr.Rows)), maxrows); err != nil {
+				return nil, err
+			}
+		}
+		if qre.options.RawMysqlPackets {
+			log.Errorf("DEBUG: qre.txConnExec: qr: %+v, err: %v", qr, err)
 		}
 		return qr, nil
 	case p.PlanDDL:
@@ -758,10 +770,15 @@ func (qre *QueryExecutor) execDMLLimit(conn *StatefulConnection) (*sqltypes.Resu
 	if err != nil {
 		return nil, err
 	}
-	if err := qre.verifyRowCount(int64(result.RowsAffected), maxrows); err != nil {
-		defer qre.logStats.AddRewrittenSQL("rollback", time.Now())
-		_ = qre.tsv.te.txPool.Rollback(qre.ctx, conn)
-		return nil, err
+	if result.CachedProto == nil { // If we're not passing on the raw MySQL packets
+		// Do we still need to figure out a way to do this?
+		// I don't think so, since when using raw packets we enforce this when
+		// parsing it in ReadQueryResultAsProto.
+		if err := qre.verifyRowCount(int64(result.RowsAffected), maxrows); err != nil {
+			defer qre.logStats.AddRewrittenSQL("rollback", time.Now())
+			_ = qre.tsv.te.txPool.Rollback(qre.ctx, conn)
+			return nil, err
+		}
 	}
 	return result, nil
 }

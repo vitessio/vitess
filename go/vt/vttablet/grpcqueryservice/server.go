@@ -24,6 +24,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/callinfo"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 
@@ -263,7 +264,11 @@ func (q *query) BeginExecute(ctx context.Context, request *querypb.BeginExecuteR
 		}
 		return nil, vterrors.ToGRPC(err)
 	}
-	return result.ToBeginExecuteResponse(state.TransactionID, state.TabletAlias, state.SessionStateChanges), nil
+	res, err := result.ToBeginExecuteResponse(state.TransactionID, state.TabletAlias, state.SessionStateChanges), nil
+	if request.Options.RawMysqlPackets {
+		log.Errorf("DEBUG: q.BeginExecute: result: %+v, final result: %+v, err: %v", result, res, err)
+	}
+	return res, err
 }
 
 // BeginStreamExecute is part of the queryservice.QueryServer interface

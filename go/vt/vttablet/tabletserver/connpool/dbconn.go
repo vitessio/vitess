@@ -165,6 +165,8 @@ func (dbc *Conn) ExecOpt(ctx context.Context, query string, opt mysql.ExecuteOpt
 }
 
 func (dbc *Conn) ExecOnceOpt(ctx context.Context, query string, opt mysql.ExecuteOptions, insideTxn bool) (*sqltypes.Result, error) {
+	span, ctx := trace.NewSpan(ctx, "DBConn.ExecOnceOpt")
+	defer span.Finish()
 	dbc.current.Store(&query)
 	defer dbc.current.Store(nil)
 

@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/grpcclient"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
@@ -185,17 +186,12 @@ func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, target *querypb.
 		if err != nil {
 			return tabletconn.ErrorFromGRPC(err)
 		}
-		var result *sqltypes.Result
-		if options.RawMysqlPackets {
-			result, err = mysql.ParseResult(ser.Result, true)
-			if err != nil {
-				return err
-			}
-		} else {
-			if fields == nil {
-				fields = ser.Result.Fields
-			}
-			result = sqltypes.CustomProto3ToResult(fields, ser.Result)
+		result, err := mysql.ParseResult(ser.Result, true)
+		if err != nil {
+			return err
+		}
+		if fields == nil {
+			fields = result.Fields
 		}
 		if err := callback(result); err != nil {
 			if err == io.EOF {
@@ -490,6 +486,9 @@ func (conn *gRPCQueryClient) BeginExecute(ctx context.Context, target *querypb.T
 		Options:    options,
 	}
 	reply, err := conn.c.BeginExecute(ctx, req)
+	if options.RawMysqlPackets {
+		log.Errorf("DEBUG: gRPCQueryClient.BeginExecute: query: %s, reply: %+v, err: %v", query, reply, err)
+	}
 	if err != nil {
 		return state, nil, tabletconn.ErrorFromGRPC(err)
 	}
@@ -497,9 +496,13 @@ func (conn *gRPCQueryClient) BeginExecute(ctx context.Context, target *querypb.T
 	state.TabletAlias = conn.tablet.Alias
 	state.SessionStateChanges = reply.SessionStateChanges
 	if reply.Error != nil {
+		log.Errorf("DEBUG: gRPCQueryClient.BeginExecute: query: %s, replyError: %v", query, reply.Error)
 		return state, nil, tabletconn.ErrorFromVTRPC(reply.Error)
 	}
 	result, err = mysql.ParseResult(reply.Result, true)
+	if options.RawMysqlPackets {
+		log.Errorf("DEBUG: gRPCQueryClient.BeginExecute: query: %s, result: %+v, err: %v", query, result, err)
+	}
 	return state, result, err
 }
 
@@ -569,17 +572,12 @@ func (conn *gRPCQueryClient) BeginStreamExecute(ctx context.Context, target *que
 			return state, nil
 		}
 
-		var result *sqltypes.Result
-		if options.RawMysqlPackets {
-			result, err = mysql.ParseResult(ser.Result, true)
-			if err != nil {
-				return state, err
-			}
-		} else {
-			if fields == nil {
-				fields = ser.Result.Fields
-			}
-			result = sqltypes.CustomProto3ToResult(fields, ser.Result)
+		result, err := mysql.ParseResult(ser.Result, true)
+		if err != nil {
+			return state, err
+		}
+		if fields == nil {
+			fields = result.Fields
 		}
 		if err := callback(result); err != nil {
 			if err == io.EOF {
@@ -981,17 +979,12 @@ func (conn *gRPCQueryClient) ReserveBeginStreamExecute(ctx context.Context, targ
 			return state, nil
 		}
 
-		var result *sqltypes.Result
-		if options.RawMysqlPackets {
-			result, err = mysql.ParseResult(ser.Result, true)
-			if err != nil {
-				return state, err
-			}
-		} else {
-			if fields == nil {
-				fields = ser.Result.Fields
-			}
-			result = sqltypes.CustomProto3ToResult(fields, ser.Result)
+		result, err := mysql.ParseResult(ser.Result, true)
+		if err != nil {
+			return state, err
+		}
+		if fields == nil {
+			fields = result.Fields
 		}
 		if err := callback(result); err != nil {
 			if err == io.EOF {
@@ -1098,17 +1091,12 @@ func (conn *gRPCQueryClient) ReserveStreamExecute(ctx context.Context, target *q
 			return state, nil
 		}
 
-		var result *sqltypes.Result
-		if options.RawMysqlPackets {
-			result, err = mysql.ParseResult(ser.Result, true)
-			if err != nil {
-				return state, err
-			}
-		} else {
-			if fields == nil {
-				fields = ser.Result.Fields
-			}
-			result = sqltypes.CustomProto3ToResult(fields, ser.Result)
+		result, err := mysql.ParseResult(ser.Result, true)
+		if err != nil {
+			return state, err
+		}
+		if fields == nil {
+			fields = result.Fields
 		}
 		if err := callback(result); err != nil {
 			if err == io.EOF {

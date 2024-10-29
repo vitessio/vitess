@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/pools/smartconnpool"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/log"
 )
 
 type PooledDBConnection = smartconnpool.Pooled[*DBConnection]
@@ -83,13 +84,13 @@ func (dbc *DBConnection) ExecuteFetch(query string, maxrows int, wantfields bool
 }
 
 func (dbc *DBConnection) ExecuteFetchOpt(query string, opt mysql.ExecuteOptions) (*sqltypes.Result, error) {
-	//if opt.RawPackets {
-	//log.Errorf("DEBUG: DBConnection ExecuteFetchOpt: options: %v, query: %s", opt, query)
-	//}
 	mqr, err := dbc.Conn.ExecuteFetchOpt(query, opt)
 	if err != nil {
 		dbc.handleError(err)
 		return nil, err
+	}
+	if opt.RawPackets {
+		log.Errorf("DEBUG: dbc.ExecuteFetchOpt: query: %s, results: %+v", query, mqr)
 	}
 	return mqr, nil
 }
