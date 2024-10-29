@@ -360,7 +360,14 @@ func (se *Engine) EnableHistorian(enabled bool) error {
 // The includeStats argument controls whether table size statistics should be
 // emitted, as they can be expensive to calculate for a large number of tables
 func (se *Engine) Reload(ctx context.Context) error {
-	return se.ReloadAt(ctx, replication.Position{})
+	pos := replication.Position{}
+	ctxWithoutCancel := context.WithoutCancel(ctx)
+	time.AfterFunc(time.Minute, func() {
+		ctx, cancel := context.WithTimeout(ctxWithoutCancel, time.Minute)
+		defer cancel()
+		se.ReloadAtEx(ctx, pos, true)
+	})
+	return se.ReloadAtEx(ctx, pos, false)
 }
 
 // ReloadAt reloads the schema info from the db.
