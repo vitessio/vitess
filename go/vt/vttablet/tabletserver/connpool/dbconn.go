@@ -563,6 +563,11 @@ func (dbc *Conn) BaseShowTablesWithSizes() string {
 	return dbc.conn.BaseShowTablesWithSizes()
 }
 
+// BaseShowFtsTablesWithSizes returns a query that shows innodb-internal FULLTEXT index tables and their sizes
+func (dbc *Conn) BaseShowFtsTablesWithSizes() string {
+	return dbc.conn.BaseShowFtsTablesWithSizes()
+}
+
 func (dbc *Conn) ConnCheck(ctx context.Context) error {
 	if err := dbc.conn.ConnCheck(); err != nil {
 		return dbc.Reconnect(ctx)
