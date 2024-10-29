@@ -201,6 +201,8 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		}
 		if qr.CachedProto == nil { // If we're not passing on the raw MySQL packets
 			// Do we still need to figure out a way to do this?
+			// I don't think so, since when using raw packets we enforce this when
+			// parsing it in ReadQueryResultAsProto.
 			if err := qre.verifyRowCount(int64(len(qr.Rows)), maxrows); err != nil {
 				return nil, err
 			}
