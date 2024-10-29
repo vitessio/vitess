@@ -596,7 +596,7 @@ func (m *ReloadSchemaRequest) CloneVT() *ReloadSchemaRequest {
 	}
 	r := new(ReloadSchemaRequest)
 	r.WaitPosition = m.WaitPosition
-	r.IncludeStats = m.IncludeStats
+	r.SkipIncludeStats = m.SkipIncludeStats
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -4290,9 +4290,9 @@ func (m *ReloadSchemaRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if m.IncludeStats {
+	if m.SkipIncludeStats {
 		i--
-		if m.IncludeStats {
+		if m.SkipIncludeStats {
 			dAtA[i] = 1
 		} else {
 			dAtA[i] = 0
@@ -10876,7 +10876,7 @@ func (m *ReloadSchemaRequest) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
-	if m.IncludeStats {
+	if m.SkipIncludeStats {
 		n += 2
 	}
 	n += len(m.unknownFields)
@@ -16172,7 +16172,7 @@ func (m *ReloadSchemaRequest) UnmarshalVT(dAtA []byte) error {
 			iNdEx = postIndex
 		case 2:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field IncludeStats", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field SkipIncludeStats", wireType)
 			}
 			var v int
 			for shift := uint(0); ; shift += 7 {
@@ -16189,7 +16189,7 @@ func (m *ReloadSchemaRequest) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
-			m.IncludeStats = bool(v != 0)
+			m.SkipIncludeStats = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])

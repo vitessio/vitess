@@ -1466,7 +1466,7 @@ message RefreshStateByShardResponse {
 message ReloadSchemaRequest {
   topodata.TabletAlias tablet_alias = 1;
 
-  bool include_stats = 2;
+  bool skip_include_stats = 2;
 }
 
 message ReloadSchemaResponse {

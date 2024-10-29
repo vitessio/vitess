@@ -23322,8 +23322,8 @@ export namespace tabletmanagerdata {
         /** ReloadSchemaRequest wait_position */
         wait_position?: (string|null);
 
-        /** ReloadSchemaRequest include_stats */
-        include_stats?: (boolean|null);
+        /** ReloadSchemaRequest skip_include_stats */
+        skip_include_stats?: (boolean|null);
     }
 
     /** Represents a ReloadSchemaRequest. */
@@ -23338,8 +23338,8 @@ export namespace tabletmanagerdata {
         /** ReloadSchemaRequest wait_position. */
         public wait_position: string;
 
-        /** ReloadSchemaRequest include_stats. */
-        public include_stats: boolean;
+        /** ReloadSchemaRequest skip_include_stats. */
+        public skip_include_stats: boolean;
 
         /**
          * Creates a new ReloadSchemaRequest instance using the specified properties.
@@ -68840,8 +68840,8 @@ export namespace vtctldata {
         /** ReloadSchemaRequest tablet_alias */
         tablet_alias?: (topodata.ITabletAlias|null);
 
-        /** ReloadSchemaRequest include_stats */
-        include_stats?: (boolean|null);
+        /** ReloadSchemaRequest skip_include_stats */
+        skip_include_stats?: (boolean|null);
     }
 
     /** Represents a ReloadSchemaRequest. */
@@ -68856,8 +68856,8 @@ export namespace vtctldata {
         /** ReloadSchemaRequest tablet_alias. */
         public tablet_alias?: (topodata.ITabletAlias|null);
 
-        /** ReloadSchemaRequest include_stats. */
-        public include_stats: boolean;
+        /** ReloadSchemaRequest skip_include_stats. */
+        public skip_include_stats: boolean;
 
         /**
          * Creates a new ReloadSchemaRequest instance using the specified properties.
