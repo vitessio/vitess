@@ -541,6 +541,7 @@ public class CharsetMapping {
   /**
    * MySQL charset could map to several Java encodings. So here we choose the one according to next
    * rules:
+   * <ul>
    * <li>if there is no static mapping for this charset then return javaEncoding value as is
    * because this could be a custom charset for example
    * <li>if static mapping exists and javaEncoding equals to one of Java encoding canonical names
@@ -550,6 +551,7 @@ public class CharsetMapping {
    * <li>if static mapping exists and javaEncoding doesn't match any Java encoding canonical
    * names or aliases available for this mapping then return default Java encoding (the first in
    * mapping list)
+   * </ul>
    */
   public static String getJavaEncodingForCollationIndex(Integer collationIndex,
       String javaEncoding) {
