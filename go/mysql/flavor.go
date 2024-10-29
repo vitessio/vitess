@@ -455,6 +455,11 @@ func (c *Conn) BaseShowTablesWithSizes() string {
 	return c.flavor.baseShowTablesWithSizes()
 }
 
+// BaseShowFtsTablesWithSizes returns a query that shows innodb-internal FULLTEXT index tables and their sizes
+func (c *Conn) BaseShowFtsTablesWithSizes() string {
+	return c.flavor.baseShowFtsTablesWithSizes()
+}
+
 // SupportsCapability checks if the database server supports the given capability
 func (c *Conn) SupportsCapability(capability capabilities.FlavorCapability) (bool, error) {
 	return c.flavor.supportsCapability(capability)
