@@ -360,7 +360,7 @@ func (tpb *tablePlanBuilder) generate() *TablePlan {
 	fieldsToSkip := make(map[string]bool)
 	for _, colInfo := range tpb.colInfos {
 		if colInfo.IsGenerated {
-			fieldsToSkip[colInfo.Name] = true
+			fieldsToSkip[strings.ToLower(colInfo.Name)] = true
 		}
 	}
 	return &TablePlan{
