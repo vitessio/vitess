@@ -206,6 +206,8 @@ message ReloadSchemaRequest {
   // given DDL has replicated to this server, by specifying a replication
   // position to wait for. Leave empty to trigger the reload immediately.
   string wait_position = 1;
+
+  bool include_stats = 2;
 }
 
 message ReloadSchemaResponse {

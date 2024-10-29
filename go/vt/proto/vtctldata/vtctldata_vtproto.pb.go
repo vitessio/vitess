@@ -3724,6 +3724,7 @@ func (m *ReloadSchemaRequest) CloneVT() *ReloadSchemaRequest {
 	}
 	r := new(ReloadSchemaRequest)
 	r.TabletAlias = m.TabletAlias.CloneVT()
+	r.IncludeStats = m.IncludeStats
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -15975,6 +15976,16 @@ func (m *ReloadSchemaRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.IncludeStats {
+		i--
+		if m.IncludeStats {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x10
+	}
 	if m.TabletAlias != nil {
 		size, err := m.TabletAlias.MarshalToSizedBufferVT(dAtA[:i])
 		if err != nil {
@@ -25169,6 +25180,9 @@ func (m *ReloadSchemaRequest) SizeVT() (n int) {
 	if m.TabletAlias != nil {
 		l = m.TabletAlias.SizeVT()
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	if m.IncludeStats {
+		n += 2
 	}
 	n += len(m.unknownFields)
 	return n
@@ -52433,6 +52447,26 @@ func (m *ReloadSchemaRequest) UnmarshalVT(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field IncludeStats", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.IncludeStats = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
