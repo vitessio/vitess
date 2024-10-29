@@ -153,15 +153,21 @@ func (aj *ApplyJoin) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sql
 	if expr == nil {
 		return nil
 	}
-	col, err := BreakExpressionInLHSandRHS(ctx, expr, TableID(aj.LHS))
-	if err != nil {
-		return err
+	rhs := aj.RHS
+	predicates := sqlparser.SplitAndExpression(nil, expr)
+	for _, pred := range predicates {
+		col, err := BreakExpressionInLHSandRHS(ctx, pred, TableID(aj.LHS))
+		if err != nil {
+			return err
+		}
+		aj.JoinPredicates = append(aj.JoinPredicates, col)
+		ctx.AddJoinPredicates(pred, col.RHSExpr)
+		rhs, err = rhs.AddPredicate(ctx, col.RHSExpr)
+		if err != nil {
+			return err
+		}
 	}
-	aj.JoinPredicates = append(aj.JoinPredicates, col)
-	rhs, err := aj.RHS.AddPredicate(ctx, col.RHSExpr)
-	if err != nil {
-		return err
-	}
+
 	aj.RHS = rhs
 
 	return nil

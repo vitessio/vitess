@@ -511,7 +511,7 @@
           "Sharded": true
         },
         "FieldQuery": "select 42 from `user` as u, user_extra as ue, music as m where 1 != 1",
-        "Query": "select 42 from `user` as u, user_extra as ue, music as m where u.id = ue.user_id and u.id = :m_user_id and (u.foo or :m_foo or ue.foo) and m.user_id = u.id and (u.foo or m.foo or ue.foo)",
+        "Query": "select 42 from `user` as u, user_extra as ue, music as m where u.id = ue.user_id and m.user_id = u.id and (u.foo or m.foo or ue.foo)",
         "Table": "`user`, music, user_extra"
       },
       "TablesUsed": [
@@ -4191,6 +4191,28 @@
       "TablesUsed": [
         "user.user",
         "zlookup_unique.t1"
+      ]
+    }
+  },
+  {
+    "comment": "lots of joins that can be merged should not confuse the planner",
+    "query": "SELECT `music`.id FROM `music` INNER JOIN music `music2` ON `music2`.`id` = `music`.`id` INNER JOIN music `music3` ON `music3`.`id` = `music2`.`id` INNER JOIN music `music4` ON `music4`.`id` = `music3`.`id` WHERE music.user_index = music4.user_index",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "SELECT `music`.id FROM `music` INNER JOIN music `music2` ON `music2`.`id` = `music`.`id` INNER JOIN music `music3` ON `music3`.`id` = `music2`.`id` INNER JOIN music `music4` ON `music4`.`id` = `music3`.`id` WHERE music.user_index = music4.user_index",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id from music, music as music2, music as music3, music as music4 where 1 != 1",
+        "Query": "select music.id from music, music as music2, music as music3, music as music4 where music2.id = music.id and music4.id = music3.id and music3.id = music2.id and music.user_index = music4.user_index",
+        "Table": "music"
+      },
+      "TablesUsed": [
+        "user.music"
       ]
     }
   }
