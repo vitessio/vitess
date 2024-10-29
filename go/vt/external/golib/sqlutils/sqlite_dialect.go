@@ -144,19 +144,16 @@ func ToSqlite3Insert(statement string) string {
 //  7. As fallback, return the statement with sqlite3GeneralConversions applied.
 func ToSqlite3Dialect(statement string, potentiallyDMLOrDDL bool) (translated string) {
 	if potentiallyDMLOrDDL {
-		if IsInsert(statement) {
+		switch {
+		case IsInsert(statement):
 			return ToSqlite3Insert(statement)
-		}
-		if IsCreateIndex(statement) {
+		case IsCreateIndex(statement):
 			return ToSqlite3CreateIndex(statement)
-		}
-		if IsDropIndex(statement) {
+		case IsDropIndex(statement):
 			return ToSqlite3DropIndex(statement)
-		}
-		if IsCreateTable(statement) {
+		case IsCreateTable(statement):
 			return ToSqlite3CreateTable(statement)
-		}
-		if IsAlterTable(statement) {
+		case IsAlterTable(statement):
 			return ToSqlite3CreateTable(statement)
 		}
 	}
