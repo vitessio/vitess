@@ -652,9 +652,8 @@ func (be *BuiltinBackupEngine) backupFiles(
 
 			// Backup the individual file.
 			name := fmt.Sprintf("%v", i)
-			err := be.backupFile(ctxCancel, params, bh, fe, name)
-			if err != nil {
-				bh.RecordError(acqErr)
+			if err := be.backupFile(ctxCancel, params, bh, fe, name); err != nil {
+				bh.RecordError(err)
 				cancel()
 			}
 		}(i)
