@@ -897,12 +897,14 @@ func TestShowTablesWithSizes(t *testing.T) {
 		`create table show_tables_with_sizes_t1 (id int primary key)`,
 		`create view show_tables_with_sizes_v1 as select * from show_tables_with_sizes_t1`,
 		`CREATE TABLE show_tables_with_sizes_employees (id INT NOT NULL, store_id INT) PARTITION BY HASH(store_id) PARTITIONS 4`,
+		`create table show_tables_with_sizes_fts (id int primary key, name text, fulltext key name_fts (name))`,
 	}
 
 	defer func() {
 		_, _ = conn.ExecuteFetch(`drop view if exists show_tables_with_sizes_v1`, 1, false)
 		_, _ = conn.ExecuteFetch(`drop table if exists show_tables_with_sizes_t1`, 1, false)
 		_, _ = conn.ExecuteFetch(`drop table if exists show_tables_with_sizes_employees`, 1, false)
+		_, _ = conn.ExecuteFetch(`drop table if exists show_tables_with_sizes_fts`, 1, false)
 	}()
 	for _, query := range setupQueries {
 		_, err := conn.ExecuteFetch(query, 1, false)
@@ -913,6 +915,7 @@ func TestShowTablesWithSizes(t *testing.T) {
 		"show_tables_with_sizes_t1",
 		"show_tables_with_sizes_v1",
 		"show_tables_with_sizes_employees",
+		"show_tables_with_sizes_fts",
 	}
 	actualTables := []string{}
 
