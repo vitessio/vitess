@@ -991,6 +991,29 @@ func TestShowTablesWithSizes(t *testing.T) {
 			assert.Greater(t, allocatedSize, int64(0))
 
 			actualTables = append(actualTables, tableName)
+		} else if tableName == "show_tables_with_sizes_fts" {
+			// TABLE_TYPE
+			assert.Equal(t, "BASE TABLE", row[1].ToString())
+
+			assert.True(t, row[2].IsIntegral())
+			createTime, err := row[2].ToCastInt64()
+			assert.NoError(t, err)
+			assert.Greater(t, createTime, int64(0))
+
+			// TABLE_COMMENT
+			assert.Equal(t, "", row[3].ToString())
+
+			assert.True(t, row[4].IsDecimal())
+			fileSize, err := row[4].ToCastInt64()
+			assert.NoError(t, err)
+			assert.Greater(t, fileSize, int64(0))
+
+			assert.True(t, row[5].IsDecimal())
+			allocatedSize, err := row[5].ToCastInt64()
+			assert.NoError(t, err)
+			assert.Greater(t, allocatedSize, int64(0))
+
+			actualTables = append(actualTables, tableName)
 		}
 	}
 
