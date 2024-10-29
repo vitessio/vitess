@@ -116,19 +116,25 @@ func ToSqlite3CreateTable(statement string) string {
 }
 
 func ToSqlite3Insert(statement string) string {
+	statement = applyConversions(statement, sqlite3GeneralConversions)
 	return applyConversions(statement, sqlite3InsertConversions)
 }
 
+// ToSqlite3Dialect converts a statement to sqlite3 dialect. The statement
+// is checked in this order:
+//    1. If an insert/replace, convert with ToSqlite3Insert.
+//    2. If a create table, convert with IsCreateTable.
+//    3. If an alter table, convert with IsAlterTable.
+//    4. As fallback, return the statement with sqlite3GeneralConversions applied.
 func ToSqlite3Dialect(statement string) (translated string) {
+	if IsInsert(statement) {
+		return ToSqlite3Insert(statement)
+	}
 	if IsCreateTable(statement) {
 		return ToSqlite3CreateTable(statement)
 	}
 	if IsAlterTable(statement) {
 		return ToSqlite3CreateTable(statement)
 	}
-	statement = applyConversions(statement, sqlite3GeneralConversions)
-	if IsInsert(statement) {
-		return ToSqlite3Insert(statement)
-	}
-	return statement
+	return applyConversions(statement, sqlite3GeneralConversions)
 }
