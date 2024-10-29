@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -50,8 +51,9 @@ type reloadSchemaCall struct {
 	Position string
 }
 
-func (tmc *reloadSchemaTMC) ReloadSchema(ctx context.Context, tablet *topodatapb.Tablet, position string) (err error) {
+func (tmc *reloadSchemaTMC) ReloadSchema(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ReloadSchemaRequest) (err error) {
 	rpcErr := err
+	position := req.WaitPosition
 	defer func() {
 		tmc.m.Lock()
 		defer tmc.m.Unlock()

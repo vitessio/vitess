@@ -3290,7 +3290,10 @@ func (s *VtctldServer) ReloadSchema(ctx context.Context, req *vtctldatapb.Reload
 		return nil, err
 	}
 
-	err = s.tmc.ReloadSchema(ctx, ti.Tablet, "")
+	tmreq := &tabletmanagerdatapb.ReloadSchemaRequest{
+		SkipIncludeStats: req.SkipIncludeStats,
+	}
+	err = s.tmc.ReloadSchema(ctx, ti.Tablet, tmreq)
 	if err != nil {
 		return nil, err
 	}

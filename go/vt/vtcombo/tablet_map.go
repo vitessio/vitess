@@ -864,12 +864,12 @@ func (itmc *internalTabletManagerClient) RunHealthCheck(ctx context.Context, tab
 	return nil
 }
 
-func (itmc *internalTabletManagerClient) ReloadSchema(ctx context.Context, tablet *topodatapb.Tablet, waitPosition string) error {
+func (itmc *internalTabletManagerClient) ReloadSchema(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ReloadSchemaRequest) error {
 	t, ok := tabletMap[tablet.Alias.Uid]
 	if !ok {
 		return fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
 	}
-	return t.tm.ReloadSchema(ctx, waitPosition)
+	return t.tm.ReloadSchema(ctx, req)
 }
 
 func (itmc *internalTabletManagerClient) PreflightSchema(ctx context.Context, tablet *topodatapb.Tablet, changes []string) ([]*tabletmanagerdatapb.SchemaChangeResult, error) {

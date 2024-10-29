@@ -67,7 +67,7 @@ type Controller interface {
 	ClearQueryPlanCache()
 
 	// ReloadSchema makes the query service reload its schema cache
-	ReloadSchema(ctx context.Context) error
+	ReloadSchema(ctx context.Context, includeStats bool) error
 
 	// RegisterQueryRuleSource adds a query rule source
 	RegisterQueryRuleSource(ruleSource string)

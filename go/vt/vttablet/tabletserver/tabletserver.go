@@ -33,6 +33,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/acl"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/pools/smartconnpool"
 	"vitess.io/vitess/go/sqltypes"
@@ -447,8 +448,8 @@ func (tsv *TabletServer) IsHealthy() error {
 }
 
 // ReloadSchema reloads the schema.
-func (tsv *TabletServer) ReloadSchema(ctx context.Context) error {
-	return tsv.se.Reload(ctx)
+func (tsv *TabletServer) ReloadSchema(ctx context.Context, includeStats bool) error {
+	return tsv.se.ReloadAtEx(ctx, replication.Position{}, includeStats)
 }
 
 // WaitForSchemaReset blocks the TabletServer until there's been at least `timeout` duration without

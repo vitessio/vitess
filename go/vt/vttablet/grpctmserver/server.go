@@ -162,7 +162,7 @@ func (s *server) ReloadSchema(ctx context.Context, request *tabletmanagerdatapb.
 	defer s.tm.HandleRPCPanic(ctx, "ReloadSchema", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.ReloadSchemaResponse{}
-	return response, s.tm.ReloadSchema(ctx, request.WaitPosition)
+	return response, s.tm.ReloadSchema(ctx, request)
 }
 
 func (s *server) PreflightSchema(ctx context.Context, request *tabletmanagerdatapb.PreflightSchemaRequest) (response *tabletmanagerdatapb.PreflightSchemaResponse, err error) {

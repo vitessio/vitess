@@ -1022,12 +1022,12 @@ func (fake *TabletManagerClient) RefreshState(ctx context.Context, tablet *topod
 }
 
 // ReloadSchema is part of the tmclient.TabletManagerClient interface.
-func (fake *TabletManagerClient) ReloadSchema(ctx context.Context, tablet *topodatapb.Tablet, waitPosition string) error {
+func (fake *TabletManagerClient) ReloadSchema(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ReloadSchemaRequest) error {
 	if fake.ReloadSchemaResults == nil {
 		return fmt.Errorf("%w: no ReloadSchema results on fake TabletManagerClient", assert.AnError)
 	}
 
-	key := path.Join(topoproto.TabletAliasString(tablet.Alias), waitPosition)
+	key := path.Join(topoproto.TabletAliasString(tablet.Alias), req.WaitPosition)
 
 	if fake.ReloadSchemaDelays != nil {
 		if delay, ok := fake.ReloadSchemaDelays[key]; ok {

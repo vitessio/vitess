@@ -51,6 +51,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/schema"
@@ -3958,7 +3959,7 @@ func (e *Executor) reloadSchema(ctx context.Context) error {
 	grpcCtx, cancel := context.WithTimeout(ctx, grpcTimeout)
 	defer cancel()
 
-	return tmClient.ReloadSchema(grpcCtx, tablet.Tablet, "")
+	return tmClient.ReloadSchema(grpcCtx, tablet.Tablet, &tabletmanagerdatapb.ReloadSchemaRequest{SkipIncludeStats: true})
 }
 
 // deleteVReplicationEntry cleans up a _vt.vreplication entry; this function is called as part of

@@ -37,25 +37,25 @@ func (tm *TabletManager) GetSchema(ctx context.Context, request *tabletmanagerda
 // ReloadSchema will reload the schema
 // This doesn't need the action mutex because periodic schema reloads happen
 // in the background anyway.
-func (tm *TabletManager) ReloadSchema(ctx context.Context, waitPosition string) error {
+func (tm *TabletManager) ReloadSchema(ctx context.Context, req *tabletmanagerdatapb.ReloadSchemaRequest) error {
 	if tm.DBConfigs.IsZero() {
 		// we skip this for test instances that can't connect to the DB anyway
 		return nil
 	}
 
-	if waitPosition != "" {
-		pos, err := replication.DecodePosition(waitPosition)
+	if req.WaitPosition != "" {
+		pos, err := replication.DecodePosition(req.WaitPosition)
 		if err != nil {
-			return vterrors.Wrapf(err, "ReloadSchema: can't parse wait position (%q)", waitPosition)
+			return vterrors.Wrapf(err, "ReloadSchema: can't parse wait position (%q)", req.WaitPosition)
 		}
-		log.Infof("ReloadSchema: waiting for replication position: %v", waitPosition)
+		log.Infof("ReloadSchema: waiting for replication position: %v", req.WaitPosition)
 		if err := tm.MysqlDaemon.WaitSourcePos(ctx, pos); err != nil {
 			return err
 		}
 	}
 
 	log.Infof("ReloadSchema requested via RPC")
-	return tm.QueryServiceControl.ReloadSchema(ctx)
+	return tm.QueryServiceControl.ReloadSchema(ctx, !req.SkipIncludeStats)
 }
 
 // ResetSequences will reset the auto-inc counters on the specified tables.
@@ -94,6 +94,6 @@ func (tm *TabletManager) ApplySchema(ctx context.Context, change *tmutils.Schema
 	}
 
 	// and if it worked, reload the schema
-	tm.ReloadSchema(ctx, "") // nolint:errcheck
+	tm.ReloadSchema(ctx, &tabletmanagerdatapb.ReloadSchemaRequest{}) // nolint:errcheck
 	return scr, nil
 }

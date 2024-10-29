@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -85,7 +86,7 @@ func ReloadShard(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManage
 				pos = ""
 			}
 
-			if err := tmc.ReloadSchema(ctx, tablet, pos); err != nil {
+			if err := tmc.ReloadSchema(ctx, tablet, &tabletmanagerdatapb.ReloadSchemaRequest{WaitPosition: pos}); err != nil {
 				logger.Warningf(
 					"Failed to reload schema on replica tablet %v in %v/%v (use vtctl ReloadSchema to try again): %v",
 					topoproto.TabletAliasString(tablet.Alias), keyspace, shard, err,

@@ -170,7 +170,7 @@ func (tqsc *Controller) IsHealthy() error {
 }
 
 // ReloadSchema is part of the tabletserver.Controller interface
-func (tqsc *Controller) ReloadSchema(ctx context.Context) error {
+func (tqsc *Controller) ReloadSchema(ctx context.Context, includeStats bool) error {
 	return nil
 }
 

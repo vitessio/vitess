@@ -219,7 +219,7 @@ func TestSchemaReload(t *testing.T) {
 	}
 	defer conn.ExecuteFetch("drop table vitess_temp", 10, false)
 
-	framework.Server.ReloadSchema(context.Background())
+	framework.Server.ReloadSchema(context.Background(), true)
 	client := framework.NewClient()
 	waitTime := 50 * time.Millisecond
 	for i := 0; i < 10; i++ {

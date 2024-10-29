@@ -623,7 +623,7 @@ func tmRPCTestRunHealthCheckPanic(ctx context.Context, t *testing.T, client tmcl
 
 var testReloadSchemaCalled = false
 
-func (fra *fakeRPCTM) ReloadSchema(ctx context.Context, waitPosition string) error {
+func (fra *fakeRPCTM) ReloadSchema(ctx context.Context, request *tabletmanagerdatapb.ReloadSchemaRequest) error {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -635,7 +635,7 @@ func (fra *fakeRPCTM) ReloadSchema(ctx context.Context, waitPosition string) err
 }
 
 func tmRPCTestReloadSchema(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	err := client.ReloadSchema(ctx, tablet, "")
+	err := client.ReloadSchema(ctx, tablet, &tabletmanagerdatapb.ReloadSchemaRequest{})
 	if err != nil {
 		t.Errorf("ReloadSchema failed: %v", err)
 	}
@@ -645,7 +645,7 @@ func tmRPCTestReloadSchema(ctx context.Context, t *testing.T, client tmclient.Ta
 }
 
 func tmRPCTestReloadSchemaPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	err := client.ReloadSchema(ctx, tablet, "")
+	err := client.ReloadSchema(ctx, tablet, &tabletmanagerdatapb.ReloadSchemaRequest{})
 	expectHandleRPCPanic(t, "ReloadSchema", false /*verbose*/, err)
 }
 

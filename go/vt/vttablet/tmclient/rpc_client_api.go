@@ -110,7 +110,7 @@ type TabletManagerClient interface {
 	RunHealthCheck(ctx context.Context, tablet *topodatapb.Tablet) error
 
 	// ReloadSchema asks the remote tablet to reload its schema
-	ReloadSchema(ctx context.Context, tablet *topodatapb.Tablet, waitPosition string) error
+	ReloadSchema(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ReloadSchemaRequest) error
 
 	// PreflightSchema will test a list of schema changes.
 	PreflightSchema(ctx context.Context, tablet *topodatapb.Tablet, changes []string) ([]*tabletmanagerdatapb.SchemaChangeResult, error)
