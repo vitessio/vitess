@@ -78,8 +78,13 @@ var sqlite3GeneralConversions = []regexpMap{
 	rmap(`(?i)\bconcat[(][\s]*([^,)]+)[\s]*,[\s]*([^,)]+)[\s]*,[\s]*([^,)]+)[\s]*[)]`, `($1 || $2 || $3)`),
 
 	rmap(`(?i) rlike `, ` like `),
+}
 
+var sqlite3CreateIndexConversions = []regexpMap{
 	rmap(`(?i)create index([\s\S]+)[(][\s]*[0-9]+[\s]*[)]([\s\S]+)`, `create index ${1}${2}`),
+}
+
+var sqlite3DropIndexConversions = []regexpMap{
 	rmap(`(?i)drop index ([\S]+) on ([\S]+)`, `drop index if exists $1`),
 }
 
@@ -115,6 +120,14 @@ func ToSqlite3CreateTable(statement string) string {
 	return applyConversions(statement, sqlite3CreateTableConversions)
 }
 
+func ToSqlite3CreateIndex(statement string) string {
+	return applyConversions(statement, sqlite3CreateIndexConversions)
+}
+
+func ToSqlite3DropIndex(statement string) string {
+	return applyConversions(statement, sqlite3DropIndexConversions)
+}
+
 func ToSqlite3Insert(statement string) string {
 	statement = applyConversions(statement, sqlite3GeneralConversions)
 	return applyConversions(statement, sqlite3InsertConversions)
@@ -129,6 +142,12 @@ func ToSqlite3Insert(statement string) string {
 func ToSqlite3Dialect(statement string) (translated string) {
 	if IsInsert(statement) {
 		return ToSqlite3Insert(statement)
+	}
+	if IsCreateIndex(statement) {
+		return ToSqlite3CreateIndex(statement)
+	}
+	if IsDropIndex(statement) {
+		return ToSqlite3DropIndex(statement)
 	}
 	if IsCreateTable(statement) {
 		return ToSqlite3CreateTable(statement)
