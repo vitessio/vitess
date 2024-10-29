@@ -107,36 +107,26 @@ func (wf *workflowFetcher) fetchWorkflowsByShard(
 
 	results := make(map[*topo.TabletInfo]*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse, len(shards))
 
-	readWorkflowsEg, readWorkflowsCtx := errgroup.WithContext(ctx)
-	for _, shard := range shards {
-		readWorkflowsEg.Go(func() error {
-			si, err := wf.ts.GetShard(readWorkflowsCtx, req.Keyspace, shard)
-			if err != nil {
-				return err
-			}
-			if si.PrimaryAlias == nil {
-				return fmt.Errorf("%w %s/%s", vexec.ErrNoShardPrimary, req.Keyspace, shard)
-			}
-			primary, err := wf.ts.GetTablet(readWorkflowsCtx, si.PrimaryAlias)
-			if err != nil {
-				return err
-			}
-			if primary == nil {
-				return fmt.Errorf("%w %s/%s: tablet %v not found", vexec.ErrNoShardPrimary, req.Keyspace, shard, topoproto.TabletAliasString(si.PrimaryAlias))
-			}
-			// Clone the request so that we can set the correct DB name for tablet.
-			req := readReq.CloneVT()
-			wres, err := wf.tmc.ReadVReplicationWorkflows(readWorkflowsCtx, primary.Tablet, req)
-			if err != nil {
-				return err
-			}
-			m.Lock()
-			defer m.Unlock()
-			results[primary] = wres
-			return nil
-		})
-	}
-	if readWorkflowsEg.Wait() != nil {
+	err = wf.forAllShards(ctx, req.Keyspace, shards, func(ctx context.Context, si *topo.ShardInfo) error {
+		primary, err := wf.ts.GetTablet(ctx, si.PrimaryAlias)
+		if err != nil {
+			return err
+		}
+		if primary == nil {
+			return fmt.Errorf("%w %s/%s: tablet %v not found", vexec.ErrNoShardPrimary, req.Keyspace, si.ShardName(), topoproto.TabletAliasString(si.PrimaryAlias))
+		}
+		// Clone the request so that we can set the correct DB name for tablet.
+		req := readReq.CloneVT()
+		wres, err := wf.tmc.ReadVReplicationWorkflows(ctx, primary.Tablet, req)
+		if err != nil {
+			return err
+		}
+		m.Lock()
+		defer m.Unlock()
+		results[primary] = wres
+		return nil
+	})
+	if err != nil {
 		return nil, err
 	}
 
@@ -336,6 +326,26 @@ func (wf *workflowFetcher) scanWorkflow(
 	copyStatesByShardStreamId map[string][]*vtctldatapb.Workflow_Stream_CopyState,
 	keyspace string,
 ) error {
+	shardStreamKey := fmt.Sprintf("%s/%s", tablet.Shard, tablet.AliasString())
+	shardStream, ok := workflow.ShardStreams[shardStreamKey]
+	if !ok {
+		ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+		defer cancel()
+
+		si, err := wf.ts.GetShard(ctx, keyspace, tablet.Shard)
+		if err != nil {
+			return err
+		}
+
+		shardStream = &vtctldatapb.Workflow_ShardStream{
+			Streams:          nil,
+			TabletControls:   si.TabletControls,
+			IsPrimaryServing: si.IsPrimaryServing,
+		}
+
+		workflow.ShardStreams[shardStreamKey] = shardStream
+	}
+
 	for _, rstream := range res.Streams {
 		// The value in the pos column can be compressed and thus not
 		// have a valid GTID consisting of valid UTF-8 characters so we
@@ -394,34 +404,7 @@ func (wf *workflowFetcher) scanWorkflow(
 			rstream.TimeUpdated = &vttimepb.Time{}
 		}
 
-		switch {
-		case strings.Contains(strings.ToLower(stream.Message), "error"):
-			stream.State = binlogdatapb.VReplicationWorkflowState_Error.String()
-		case stream.State == binlogdatapb.VReplicationWorkflowState_Running.String() && len(stream.CopyStates) > 0:
-			stream.State = binlogdatapb.VReplicationWorkflowState_Copying.String()
-		case stream.State == binlogdatapb.VReplicationWorkflowState_Running.String() && int64(time.Now().Second())-rstream.TimeUpdated.Seconds > 10:
-			stream.State = binlogdatapb.VReplicationWorkflowState_Lagging.String()
-		}
-
-		shardStreamKey := fmt.Sprintf("%s/%s", tablet.Shard, tablet.AliasString())
-		shardStream, ok := workflow.ShardStreams[shardStreamKey]
-		if !ok {
-			ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
-			defer cancel()
-
-			si, err := wf.ts.GetShard(ctx, keyspace, tablet.Shard)
-			if err != nil {
-				return err
-			}
-
-			shardStream = &vtctldatapb.Workflow_ShardStream{
-				Streams:          nil,
-				TabletControls:   si.TabletControls,
-				IsPrimaryServing: si.IsPrimaryServing,
-			}
-
-			workflow.ShardStreams[shardStreamKey] = shardStream
-		}
+		stream.State = getStreamState(stream, rstream)
 
 		shardStream.Streams = append(shardStream.Streams, stream)
 
@@ -639,4 +622,45 @@ func (wf *workflowFetcher) fetchStreamLogs(ctx context.Context, keyspace string,
 			}
 		}
 	}
+}
+
+func (wf *workflowFetcher) forAllShards(
+	ctx context.Context,
+	keyspace string,
+	shards []string,
+	f func(ctx context.Context, shard *topo.ShardInfo) error,
+) error {
+	eg, egCtx := errgroup.WithContext(ctx)
+	for _, shard := range shards {
+		eg.Go(func() error {
+			si, err := wf.ts.GetShard(ctx, keyspace, shard)
+			if err != nil {
+				return err
+			}
+			if si.PrimaryAlias == nil {
+				return fmt.Errorf("%w %s/%s", vexec.ErrNoShardPrimary, keyspace, shard)
+			}
+
+			if err := f(egCtx, si); err != nil {
+				return err
+			}
+			return nil
+		})
+	}
+	if err := eg.Wait(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func getStreamState(stream *vtctldatapb.Workflow_Stream, rstream *tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream) string {
+	switch {
+	case strings.Contains(strings.ToLower(stream.Message), "error"):
+		return binlogdatapb.VReplicationWorkflowState_Error.String()
+	case stream.State == binlogdatapb.VReplicationWorkflowState_Running.String() && len(stream.CopyStates) > 0:
+		return binlogdatapb.VReplicationWorkflowState_Copying.String()
+	case stream.State == binlogdatapb.VReplicationWorkflowState_Running.String() && int64(time.Now().Second())-rstream.TimeUpdated.Seconds > 10:
+		return binlogdatapb.VReplicationWorkflowState_Lagging.String()
+	}
+	return rstream.State.String()
 }
