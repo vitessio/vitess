@@ -739,6 +739,33 @@ func TestOrderByColumnName(t *testing.T) {
 	}
 }
 
+func TestOrderByNotAllColumnsAuthoritative(t *testing.T) {
+	schemaInfo := fakeSchemaInfo()
+	cDB := "db"
+	tcases := []struct {
+		sql    string
+		expSQL string
+		deps   TableSet
+	}{{
+		sql:    "select foo from t3 join t order by foo",
+		expSQL: "select foo from t3 join t order by foo asc",
+		deps:   None,
+	}}
+	for _, tcase := range tcases {
+		t.Run(tcase.sql, func(t *testing.T) {
+			ast, err := sqlparser.NewTestParser().Parse(tcase.sql)
+			require.NoError(t, err)
+			selectStatement := ast.(sqlparser.SelectStatement)
+			semTable, err := Analyze(selectStatement, cDB, schemaInfo)
+
+			require.NoError(t, err)
+			assert.Equal(t, tcase.expSQL, sqlparser.String(selectStatement))
+			orderByExpr := selectStatement.GetOrderBy()[0].Expr
+			assert.Equal(t, tcase.deps, semTable.RecursiveDeps(orderByExpr))
+		})
+	}
+}
+
 func TestSemTableDependenciesAfterExpandStar(t *testing.T) {
 	schemaInfo := &FakeSI{Tables: map[string]*vindexes.Table{
 		"t1": {

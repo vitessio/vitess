@@ -668,7 +668,15 @@ func (r *earlyRewriter) fillInQualifiers(cursor *sqlparser.CopyOnWriteCursor) {
 	if !found {
 		panic("uh oh")
 	}
-	tbl := r.tables.Tables[ts.TableOffset()]
+	offset := ts.TableOffset()
+	if offset < 0 {
+		// this is a column that is not coming from a table - it's an alias introduced in a SELECT expression
+		// Example: select (1+1) as foo from bar order by foo
+		// we don't want to add a qualifier to foo here
+		cursor.Replace(sqlparser.NewColName(col.Name.String()))
+		return
+	}
+	tbl := r.tables.Tables[offset]
 	tblName, err := tbl.Name()
 	if err != nil {
 		panic(err)
