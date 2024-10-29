@@ -591,8 +591,10 @@ func testVStreamCellFlag(t *testing.T) {
 // We also reuse the setup of this test to validate that the "vstream * from" vtgate query functionality is functional
 func TestCellAliasVreplicationWorkflow(t *testing.T) {
 	cells := []string{"zone1", "zone2"}
-	defer mainClusterConfig.enableGTIDCompression()
-	defer setAllVTTabletExperimentalFlags()
+	resetCompression := mainClusterConfig.enableGTIDCompression()
+	defer resetCompression()
+	resetExperimentalFlags := setAllVTTabletExperimentalFlags()
+	defer resetExperimentalFlags()
 	vc = NewVitessCluster(t, &clusterOptions{cells: cells})
 	defer vc.TearDown()
 
