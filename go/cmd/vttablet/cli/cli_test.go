@@ -32,7 +32,6 @@ import (
 // When starting, the TabletManager checks if it needs to restore, in tm.handleRestore but this step will
 // fail if we do not provide a cnf file and if the flag --restore_from_backup is provided.
 func TestRunFailsToStartTabletManager(t *testing.T) {
-	tabletPath = "cell-1"
 	ts, factory := memorytopo.NewServerAndFactory(context.Background(), "cell")
 	topo.RegisterFactory("test", factory)
 
