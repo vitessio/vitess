@@ -1477,25 +1477,30 @@ func TestGetTableForPos(t *testing.T) {
 		db.AddQuery(fmt.Sprintf(readTableCreateTimes, sidecar.GetIdentifier()),
 			sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name|create_time", "varchar|int64")))
 		db.AddQuery(fmt.Sprintf(detectUdfChange, sidecar.GetIdentifier()), &sqltypes.Result{})
-		db.AddQueryPattern(baseShowTablesWithSizesPattern,
-			&sqltypes.Result{
-				Fields:       mysql.BaseShowTablesWithSizesFields,
-				RowsAffected: 0,
-				InsertID:     0,
-				Rows: [][]sqltypes.Value{
-					{
-						sqltypes.MakeTrusted(sqltypes.VarChar, []byte(table.String())),                          // table_name
-						sqltypes.MakeTrusted(sqltypes.VarChar, []byte("BASE TABLE")),                            // table_type
-						sqltypes.MakeTrusted(sqltypes.Int64, []byte(fmt.Sprintf("%d", time.Now().Unix()-1000))), // unix_timestamp(t.create_time)
-						sqltypes.MakeTrusted(sqltypes.VarChar, []byte("")),                                      // table_comment
-						sqltypes.MakeTrusted(sqltypes.Int64, []byte("128")),                                     // file_size
-						sqltypes.MakeTrusted(sqltypes.Int64, []byte("256")),                                     // allocated_size
-					},
+		db.AddQueryPattern(baseInnoDBTableSizesPattern, &sqltypes.Result{
+			Fields: mysql.BaseInnoDBTableSizesFields,
+			Rows: [][]sqltypes.Value{
+				{
+					sqltypes.MakeTrusted(sqltypes.VarChar, []byte("fakesqldb/"+table.String())), // table_name
+					sqltypes.MakeTrusted(sqltypes.Int64, []byte("128")),                         // file_size
+					sqltypes.MakeTrusted(sqltypes.Int64, []byte("256")),                         // allocated_size
 				},
-				SessionStateChanges: "",
-				StatusFlags:         0,
 			},
-		)
+		})
+		db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{
+			Fields: mysql.BaseShowTablesFields,
+			Rows: [][]sqltypes.Value{
+				{
+					sqltypes.MakeTrusted(sqltypes.VarChar, []byte(table.String())),                          // table_name
+					sqltypes.MakeTrusted(sqltypes.VarChar, []byte("BASE TABLE")),                            // table_type
+					sqltypes.MakeTrusted(sqltypes.Int64, []byte(fmt.Sprintf("%d", time.Now().Unix()-1000))), // unix_timestamp(t.create_time)
+					sqltypes.MakeTrusted(sqltypes.VarChar, []byte("")),                                      // table_comment
+				},
+			},
+			SessionStateChanges: "",
+			StatusFlags:         0,
+		})
+		db.RejectQueryPattern(baseShowTablesWithSizesPattern, "we should expect to get sizes by InnoDBTableSizes")
 		db.AddQuery(mysql.BaseShowPrimary, &sqltypes.Result{
 			Fields: mysql.ShowPrimaryFields,
 			Rows: [][]sqltypes.Value{
