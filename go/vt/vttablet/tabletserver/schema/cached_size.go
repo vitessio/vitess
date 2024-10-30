@@ -25,7 +25,7 @@ func (cached *MessageInfo) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(80)
+		size += int64(96)
 	}
 	// field Fields []*vitess.io/vitess/go/vt/proto/query.Field
 	{

@@ -140,7 +140,7 @@ type stateManager struct {
 
 type (
 	schemaEngine interface {
-		EnsureConnectionAndDB(topodatapb.TabletType) error
+		EnsureConnectionAndDB(topodatapb.TabletType, bool) error
 		Open() error
 		MakeNonPrimary()
 		MakePrimary(bool)
@@ -447,7 +447,7 @@ func (sm *stateManager) verifyTargetLocked(ctx context.Context, target *querypb.
 func (sm *stateManager) servePrimary() error {
 	sm.watcher.Close()
 
-	if err := sm.connect(topodatapb.TabletType_PRIMARY); err != nil {
+	if err := sm.connect(topodatapb.TabletType_PRIMARY, true); err != nil {
 		return err
 	}
 
@@ -476,7 +476,7 @@ func (sm *stateManager) unservePrimary() error {
 
 	sm.watcher.Close()
 
-	if err := sm.connect(topodatapb.TabletType_PRIMARY); err != nil {
+	if err := sm.connect(topodatapb.TabletType_PRIMARY, false); err != nil {
 		return err
 	}
 
@@ -500,7 +500,7 @@ func (sm *stateManager) serveNonPrimary(wantTabletType topodatapb.TabletType) er
 	sm.se.MakeNonPrimary()
 	sm.hs.MakeNonPrimary()
 
-	if err := sm.connect(wantTabletType); err != nil {
+	if err := sm.connect(wantTabletType, true); err != nil {
 		return err
 	}
 
@@ -518,7 +518,7 @@ func (sm *stateManager) unserveNonPrimary(wantTabletType topodatapb.TabletType) 
 	sm.se.MakeNonPrimary()
 	sm.hs.MakeNonPrimary()
 
-	if err := sm.connect(wantTabletType); err != nil {
+	if err := sm.connect(wantTabletType, false); err != nil {
 		return err
 	}
 
@@ -528,8 +528,8 @@ func (sm *stateManager) unserveNonPrimary(wantTabletType topodatapb.TabletType) 
 	return nil
 }
 
-func (sm *stateManager) connect(tabletType topodatapb.TabletType) error {
-	if err := sm.se.EnsureConnectionAndDB(tabletType); err != nil {
+func (sm *stateManager) connect(tabletType topodatapb.TabletType, serving bool) error {
+	if err := sm.se.EnsureConnectionAndDB(tabletType, serving); err != nil {
 		return err
 	}
 	if err := sm.se.Open(); err != nil {

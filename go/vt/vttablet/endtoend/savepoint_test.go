@@ -103,7 +103,7 @@ func TestSavepointInTransactionWithRelease(t *testing.T) {
 		diff int
 	}{{
 		tag:  "Queries/Histograms/Savepoint/Count",
-		diff: 1,
+		diff: 2, // savepoint a (post-begin) and savepoint b
 	}, {
 		tag:  "Queries/Histograms/Release/Count",
 		diff: 1,

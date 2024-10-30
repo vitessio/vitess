@@ -46,7 +46,7 @@ import (
 )
 
 var (
-	tabletTypesDefault = []topodatapb.TabletType{
+	TabletTypesDefault = []topodatapb.TabletType{
 		topodatapb.TabletType_RDONLY,
 		topodatapb.TabletType_REPLICA,
 		topodatapb.TabletType_PRIMARY,
@@ -102,7 +102,7 @@ var (
 			createOptions.UUID = uuid.New()
 		}
 		if !cmd.Flags().Lookup("tablet-types").Changed {
-			createOptions.TabletTypes = tabletTypesDefault
+			createOptions.TabletTypes = TabletTypesDefault
 		}
 		if cmd.Flags().Lookup("source-cells").Changed {
 			for i, cell := range createOptions.SourceCells {
@@ -417,12 +417,14 @@ type summary struct {
 	RowsCompared       int64
 	HasMismatch        bool
 	Shards             string
-	StartedAt          string                                 `json:"StartedAt,omitempty"`
-	CompletedAt        string                                 `json:"CompletedAt,omitempty"`
-	TableSummaryMap    map[string]tableSummary                `json:"TableSummary,omitempty"`
-	Reports            map[string]map[string]vdiff.DiffReport `json:"Reports,omitempty"`
-	Errors             map[string]string                      `json:"Errors,omitempty"`
-	Progress           *vdiff.ProgressReport                  `json:"Progress,omitempty"`
+	StartedAt          string                  `json:"StartedAt,omitempty"`
+	CompletedAt        string                  `json:"CompletedAt,omitempty"`
+	TableSummaryMap    map[string]tableSummary `json:"TableSummary,omitempty"`
+	// This is keyed by table name and then by shard name.
+	Reports map[string]map[string]vdiff.DiffReport `json:"Reports,omitempty"`
+	// This is keyed by shard name.
+	Errors   map[string]string     `json:"Errors,omitempty"`
+	Progress *vdiff.ProgressReport `json:"Progress,omitempty"`
 }
 
 const summaryTextTemplate = `
@@ -790,7 +792,7 @@ func buildSingleSummary(keyspace, workflow, uuid string, resp *vtctldatapb.VDiff
 
 	// If the vdiff has been started then we can calculate the progress.
 	if summary.State == vdiff.StartedState {
-		buildProgressReport(summary, totalRowsToCompare)
+		summary.Progress = BuildProgressReport(summary.RowsCompared, totalRowsToCompare, summary.StartedAt)
 	}
 
 	sort.Strings(shards) // Sort for predictable output
@@ -809,17 +811,17 @@ func buildSingleSummary(keyspace, workflow, uuid string, resp *vtctldatapb.VDiff
 	return summary, nil
 }
 
-func buildProgressReport(summary *summary, rowsToCompare int64) {
+func BuildProgressReport(rowsCompared int64, rowsToCompare int64, startedAt string) *vdiff.ProgressReport {
 	report := &vdiff.ProgressReport{}
-	if summary.RowsCompared >= 1 {
+	if rowsCompared >= 1 {
 		// Round to 2 decimal points.
-		report.Percentage = math.Round(math.Min((float64(summary.RowsCompared)/float64(rowsToCompare))*100, 100.00)*100) / 100
+		report.Percentage = math.Round(math.Min((float64(rowsCompared)/float64(rowsToCompare))*100, 100.00)*100) / 100
 	}
 	if math.IsNaN(report.Percentage) {
 		report.Percentage = 0
 	}
 	pctToGo := math.Abs(report.Percentage - 100.00)
-	startTime, _ := time.Parse(vdiff.TimestampFormat, summary.StartedAt)
+	startTime, _ := time.Parse(vdiff.TimestampFormat, startedAt)
 	curTime := time.Now().UTC()
 	runTime := curTime.Unix() - startTime.Unix()
 	if report.Percentage >= 1 {
@@ -830,7 +832,7 @@ func buildProgressReport(summary *summary, rowsToCompare int64) {
 			report.ETA = eta.Format(vdiff.TimestampFormat)
 		}
 	}
-	summary.Progress = report
+	return report
 }
 
 func commandShow(cmd *cobra.Command, args []string) error {
@@ -892,7 +894,7 @@ func registerCommands(root *cobra.Command) {
 	create.Flags().Int64Var(&createOptions.Limit, "limit", math.MaxInt64, "Max rows to stop comparing after.")
 	create.Flags().BoolVar(&createOptions.DebugQuery, "debug-query", false, "Adds a mysql query to the report that can be used for further debugging.")
 	create.Flags().Int64Var(&createOptions.MaxReportSampleRows, "max-report-sample-rows", 10, "Maximum number of row differences to report (0 for all differences). NOTE: when increasing this value it is highly recommended to also specify --only-pks")
-	create.Flags().BoolVar(&createOptions.OnlyPKs, "only-pks", false, "When reporting missing rows, only show primary keys in the report.")
+	create.Flags().BoolVar(&createOptions.OnlyPKs, "only-pks", false, "When reporting row differences, only show primary keys in the report.")
 	create.Flags().StringSliceVar(&createOptions.Tables, "tables", nil, "Only run vdiff for these tables in the workflow.")
 	create.Flags().Int64Var(&createOptions.MaxExtraRowsToCompare, "max-extra-rows-to-compare", 1000, "If there are collation differences between the source and target, you can have rows that are identical but simply returned in a different order from MySQL. We will do a second pass to compare the rows for any actual differences in this case and this flag allows you to control the resources used for this operation.")
 	create.Flags().BoolVar(&createOptions.Wait, "wait", false, "When creating or resuming a vdiff, wait for it to finish before exiting.")

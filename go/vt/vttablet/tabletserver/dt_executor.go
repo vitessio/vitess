@@ -33,19 +33,21 @@ import (
 
 // DTExecutor is used for executing a distributed transactional request.
 type DTExecutor struct {
-	ctx      context.Context
-	logStats *tabletenv.LogStats
-	te       *TxEngine
-	qe       *QueryEngine
+	ctx       context.Context
+	logStats  *tabletenv.LogStats
+	te        *TxEngine
+	qe        *QueryEngine
+	shardFunc func() string
 }
 
 // NewDTExecutor creates a new distributed transaction executor.
-func NewDTExecutor(ctx context.Context, te *TxEngine, qe *QueryEngine, logStats *tabletenv.LogStats) *DTExecutor {
+func NewDTExecutor(ctx context.Context, logStats *tabletenv.LogStats, te *TxEngine, qe *QueryEngine, shardFunc func() string) *DTExecutor {
 	return &DTExecutor{
-		ctx:      ctx,
-		te:       te,
-		qe:       qe,
-		logStats: logStats,
+		ctx:       ctx,
+		logStats:  logStats,
+		te:        te,
+		qe:        qe,
+		shardFunc: shardFunc,
 	}
 }
 
@@ -69,7 +71,8 @@ func (dte *DTExecutor) Prepare(transactionID int64, dtid string) error {
 	}
 
 	// If no queries were executed, we just rollback.
-	if len(conn.TxProperties().Queries) == 0 {
+	queries := conn.TxProperties().GetQueries()
+	if len(queries) == 0 {
 		dte.te.txPool.RollbackAndRelease(dte.ctx, conn)
 		return nil
 	}
@@ -90,7 +93,7 @@ func (dte *DTExecutor) Prepare(transactionID int64, dtid string) error {
 	// Fail Prepare if any query rule disallows it.
 	// This could be due to ongoing cutover happening in vreplication workflow
 	// regarding OnlineDDL or MoveTables.
-	for _, query := range conn.TxProperties().Queries {
+	for _, query := range queries {
 		qr := dte.qe.queryRuleSources.FilterByPlan(query.Sql, 0, query.Tables...)
 		if qr != nil {
 			act, _, _, _ := qr.GetAction("", "", nil, sqlparser.MarginComments{})
@@ -110,7 +113,7 @@ func (dte *DTExecutor) Prepare(transactionID int64, dtid string) error {
 	// Recheck the rules. As some prepare transaction could have passed the first check.
 	// If they are put in the prepared pool, then vreplication workflow waits.
 	// This check helps reject the prepare that came later.
-	for _, query := range conn.TxProperties().Queries {
+	for _, query := range queries {
 		qr := dte.qe.queryRuleSources.FilterByPlan(query.Sql, 0, query.Tables...)
 		if qr != nil {
 			act, _, _, _ := qr.GetAction("", "", nil, sqlparser.MarginComments{})
@@ -130,7 +133,7 @@ func (dte *DTExecutor) Prepare(transactionID int64, dtid string) error {
 	}
 
 	return dte.inTransaction(func(localConn *StatefulConnection) error {
-		return dte.te.twoPC.SaveRedo(dte.ctx, localConn, dtid, conn.TxProperties().Queries)
+		return dte.te.twoPC.SaveRedo(dte.ctx, localConn, dtid, queries)
 	})
 
 }
@@ -158,10 +161,21 @@ func (dte *DTExecutor) CommitPrepared(dtid string) (err error) {
 	defer func() {
 		if err != nil {
 			log.Warningf("failed to commit the prepared transaction '%s' with error: %v", dtid, err)
-			dte.te.checkErrorAndMarkFailed(ctx, dtid, err, "TwopcCommit")
+			fail := dte.te.checkErrorAndMarkFailed(ctx, dtid, err, "TwopcCommit")
+			if fail {
+				dte.te.env.Stats().CommitPreparedFail.Add("NonRetryable", 1)
+			} else {
+				dte.te.env.Stats().CommitPreparedFail.Add("Retryable", 1)
+			}
 		}
 		dte.te.txPool.RollbackAndRelease(ctx, conn)
 	}()
+	if DebugTwoPc {
+		if err := checkTestFailure(dte.ctx, dte.shardFunc()); err != nil {
+			log.Errorf("failing test on commit prepared: %v", err)
+			return err
+		}
+	}
 	if err = dte.te.twoPC.DeleteRedo(ctx, conn, dtid); err != nil {
 		return err
 	}
@@ -312,7 +326,7 @@ func (dte *DTExecutor) ReadTwopcInflight() (distributed []*tx.DistributedTx, pre
 }
 
 func (dte *DTExecutor) inTransaction(f func(*StatefulConnection) error) error {
-	conn, _, _, err := dte.te.txPool.Begin(dte.ctx, &querypb.ExecuteOptions{}, false, 0, nil, nil)
+	conn, _, _, err := dte.te.txPool.Begin(dte.ctx, &querypb.ExecuteOptions{}, false, 0, nil)
 	if err != nil {
 		return err
 	}

@@ -772,7 +772,7 @@ func TestBuildProgressReport(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			buildProgressReport(tt.args.summary, tt.args.rowsToCompare)
+			tt.args.summary.Progress = BuildProgressReport(tt.args.summary.RowsCompared, tt.args.rowsToCompare, tt.args.summary.StartedAt)
 			// We always check the percentage
 			require.Equal(t, int(tt.want.Percentage), int(tt.args.summary.Progress.Percentage))
 

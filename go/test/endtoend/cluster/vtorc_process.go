@@ -51,10 +51,6 @@ type VTOrcProcess struct {
 type VTOrcConfiguration struct {
 	Debug                                 bool
 	ListenAddress                         string
-	MySQLTopologyUser                     string
-	MySQLTopologyPassword                 string
-	MySQLReplicaUser                      string
-	MySQLReplicaPassword                  string
 	RecoveryPeriodBlockSeconds            int
 	TopologyRefreshSeconds                int    `json:",omitempty"`
 	PreventCrossDataCenterPrimaryFailover bool   `json:",omitempty"`
@@ -71,10 +67,6 @@ func (config *VTOrcConfiguration) ToJSONString() string {
 
 func (config *VTOrcConfiguration) AddDefaults(webPort int) {
 	config.Debug = true
-	config.MySQLTopologyUser = "orc_client_user"
-	config.MySQLTopologyPassword = "orc_client_user_password"
-	config.MySQLReplicaUser = "vt_repl"
-	config.MySQLReplicaPassword = ""
 	if config.RecoveryPeriodBlockSeconds == 0 {
 		config.RecoveryPeriodBlockSeconds = 1
 	}

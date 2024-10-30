@@ -30,6 +30,8 @@ type PrimaryStatus struct {
 	Position Position
 	// FilePosition represents the server's file based position.
 	FilePosition Position
+	// ServerUUID is the UUID of the server.
+	ServerUUID string
 }
 
 // PrimaryStatusToProto translates a PrimaryStatus to proto3.
@@ -37,6 +39,7 @@ func PrimaryStatusToProto(s PrimaryStatus) *replicationdatapb.PrimaryStatus {
 	return &replicationdatapb.PrimaryStatus{
 		Position:     EncodePosition(s.Position),
 		FilePosition: EncodePosition(s.FilePosition),
+		ServerUuid:   s.ServerUUID,
 	}
 }
 
