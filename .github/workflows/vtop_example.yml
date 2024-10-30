@@ -73,7 +73,7 @@ jobs:
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
         run: |
           # Install everything we need, and configure
-          sudo apt-get install -y make unzip g++ etcd curl git wget eatmydata
+          sudo apt-get install -y eatmydata
           go mod download
 
       - name: Run make minimaltools
