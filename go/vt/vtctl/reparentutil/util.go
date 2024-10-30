@@ -164,13 +164,14 @@ func ElectNewPrimary(
 	if err != nil {
 		return nil, err
 	}
-	err = sortTabletsForReparent(preferNotTablets, preferNotTabletPositions, innodbBufferPool, opts.durability)
-	if err != nil {
-		return nil, err
-	}
 
 	if len(validTablets) > 0 {
 		return validTablets[0].Alias, nil
+	}
+
+	err = sortTabletsForReparent(preferNotTablets, preferNotTabletPositions, innodbBufferPool, opts.durability)
+	if err != nil {
+		return nil, err
 	}
 
 	return preferNotTablets[0].Alias, nil
