@@ -36,7 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
-	"vitess.io/vitess/go/vt/vttablet"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -53,11 +53,11 @@ func TestPlayerGeneratedInvisiblePrimaryKey(t *testing.T) {
 
 	execStatements(t, []string{
 		"SET @@session.sql_generate_invisible_primary_key=ON;",
-		"create table t1(val varbinary(128))",
-		fmt.Sprintf("create table %s.t1(val varbinary(128))", vrepldb),
-		"create table t2(val varbinary(128))",
+		"create table t1(val varchar(128))",
+		fmt.Sprintf("create table %s.t1(val varchar(128))", vrepldb),
+		"create table t2(val varchar(128))",
 		"SET @@session.sql_generate_invisible_primary_key=OFF;",
-		fmt.Sprintf("create table %s.t2(my_row_id int, val varbinary(128), primary key(my_row_id))", vrepldb),
+		fmt.Sprintf("create table %s.t2(my_row_id int, val varchar(128), primary key(my_row_id))", vrepldb),
 	})
 	defer execStatements(t, []string{
 		"drop table t1",
@@ -193,14 +193,18 @@ func TestPlayerInvisibleColumns(t *testing.T) {
 }
 
 func TestHeartbeatFrequencyFlag(t *testing.T) {
-	origVReplicationHeartbeatUpdateInterval := vreplicationHeartbeatUpdateInterval
+	origVReplicationHeartbeatUpdateInterval := vttablet.DefaultVReplicationConfig.HeartbeatUpdateInterval
 	defer func() {
-		vreplicationHeartbeatUpdateInterval = origVReplicationHeartbeatUpdateInterval
+		vttablet.DefaultVReplicationConfig.HeartbeatUpdateInterval = origVReplicationHeartbeatUpdateInterval
 	}()
 
 	stats := binlogplayer.NewStats()
 	defer stats.Stop()
-	vp := &vplayer{vr: &vreplicator{dbClient: newVDBClient(realDBClientFactory(), stats), stats: stats}}
+	vp := &vplayer{vr: &vreplicator{
+		dbClient:       newVDBClient(realDBClientFactory(), stats, vttablet.DefaultVReplicationConfig.RelayLogMaxItems),
+		stats:          stats,
+		workflowConfig: vttablet.DefaultVReplicationConfig,
+	}}
 
 	type testcount struct {
 		count      int
@@ -218,7 +222,7 @@ func TestHeartbeatFrequencyFlag(t *testing.T) {
 	}
 	for _, tcase := range testcases {
 		t.Run(tcase.name, func(t *testing.T) {
-			vreplicationHeartbeatUpdateInterval = tcase.interval
+			vttablet.DefaultVReplicationConfig.HeartbeatUpdateInterval = tcase.interval
 			for _, tcount := range tcase.counts {
 				vp.numAccumulatedHeartbeats = tcount.count
 				require.Equal(t, tcount.mustUpdate, vp.mustUpdateHeartbeat())
@@ -231,8 +235,8 @@ func TestVReplicationTimeUpdated(t *testing.T) {
 	ctx := context.Background()
 	defer deleteTablet(addTablet(100))
 	execStatements(t, []string{
-		"create table t1(id int, val varbinary(128), primary key(id))",
-		fmt.Sprintf("create table %s.t1(id int, val varbinary(128), primary key(id))", vrepldb),
+		"create table t1(id int, val varchar(128), primary key(id))",
+		fmt.Sprintf("create table %s.t1(id int, val varchar(128), primary key(id))", vrepldb),
 	})
 	defer execStatements(t, []string{
 		"drop table t1",
@@ -334,21 +338,21 @@ func TestCharPK(t *testing.T) {
 		output string
 		table  string
 		data   [][]string
-	}{{ //binary(2)
+	}{{ // binary(2)
 		input:  "insert into t1 values(1, 'a')",
-		output: "insert into t1(id,val) values (1,'a\\0')",
+		output: "insert into t1(id,val) values (1,_binary'a\\0')",
 		table:  "t1",
 		data: [][]string{
 			{"1", "a\000"},
 		},
 	}, {
 		input:  "update t1 set id = 2 where val = 'a\000'",
-		output: "update t1 set id=2 where val='a\\0'",
+		output: "update t1 set id=2 where val=_binary'a\\0'",
 		table:  "t1",
 		data: [][]string{
 			{"2", "a\000"},
 		},
-	}, { //char(2)
+	}, { // char(2)
 		input:  "insert into t2 values(1, 'a')",
 		output: "insert into t2(id,val) values (1,'a')",
 		table:  "t2",
@@ -362,21 +366,21 @@ func TestCharPK(t *testing.T) {
 		data: [][]string{
 			{"2", "a"},
 		},
-	}, { //varbinary(2)
+	}, { // varbinary(2)
 		input:  "insert into t3 values(1, 'a')",
-		output: "insert into t3(id,val) values (1,'a')",
+		output: "insert into t3(id,val) values (1,_binary'a')",
 		table:  "t3",
 		data: [][]string{
 			{"1", "a"},
 		},
 	}, {
 		input:  "update t3 set id = 2 where val = 'a'",
-		output: "update t3 set id=2 where val='a'",
+		output: "update t3 set id=2 where val=_binary'a'",
 		table:  "t3",
 		data: [][]string{
 			{"2", "a"},
 		},
-	}, { //varchar(2)
+	}, { // varchar(2)
 		input:  "insert into t4 values(1, 'a')",
 		output: "insert into t4(id,val) values (1,'a')",
 		table:  "t4",
@@ -575,8 +579,19 @@ func TestPlayerForeignKeyCheck(t *testing.T) {
 	cancel()
 }
 
-func TestPlayerStatementModeWithFilter(t *testing.T) {
+// TestPlayerStatementModeWithFilterAndErrorHandling confirms that we get the
+// expected error when using a filter with statement mode. It also tests the
+// general vplayer applyEvent error and log message handling.
+func TestPlayerStatementModeWithFilterAndErrorHandling(t *testing.T) {
 	defer deleteTablet(addTablet(100))
+
+	// We want to check for the expected log message.
+	ole := log.Errorf
+	logger := logutil.NewMemoryLogger()
+	log.Errorf = logger.Errorf
+	defer func() {
+		log.Errorf = ole
+	}()
 
 	execStatements(t, []string{
 		"create table src1(id int, val varbinary(128), primary key(id))",
@@ -600,21 +615,29 @@ func TestPlayerStatementModeWithFilter(t *testing.T) {
 	cancel, _ := startVReplication(t, bls, "")
 	defer cancel()
 
+	const gtid = "37f16b4c-5a74-11ef-87de-56bfd605e62e:100"
 	input := []string{
 		"set @@session.binlog_format='STATEMENT'",
+		fmt.Sprintf("set @@session.gtid_next='%s'", gtid),
 		"insert into src1 values(1, 'aaa')",
+		"set @@session.gtid_next='AUTOMATIC'",
 		"set @@session.binlog_format='ROW'",
 	}
+
+	expectedMsg := fmt.Sprintf("[Ee]rror applying event while processing position .*%s.* filter rules are not supported for SBR.*", gtid)
 
 	// It does not work when filter is enabled
 	output := qh.Expect(
 		"begin",
 		"rollback",
-		"/update _vt.vreplication set message='filter rules are not supported for SBR",
+		fmt.Sprintf("/update _vt.vreplication set message='%s", expectedMsg),
 	)
 
 	execStatements(t, input)
 	expectDBClientQueries(t, output)
+
+	logs := logger.String()
+	require.Regexp(t, expectedMsg, logs)
 }
 
 func TestPlayerStatementMode(t *testing.T) {
@@ -725,7 +748,7 @@ func TestPlayerFilters(t *testing.T) {
 			Filter: "select id1, val from src5 where val = 'abc'",
 		}, {
 			Match:  "dst_charset",
-			Filter: "select id1, concat(substr(_utf8mb4 val collate utf8mb4_bin,1,1),'abcxyz') val, concat(substr(_utf8mb4 val collate utf8mb4_bin,1,1),'abcxyz') val2 from src_charset",
+			Filter: "select id1, concat(substr(CONVERT(val USING utf8mb4) COLLATE utf8mb4_bin,1,1),'abcxyz') val, concat(substr(CONVERT(val USING utf8mb4) COLLATE utf8mb4_bin,1,1),'abcxyz') val2 from src_charset",
 		}},
 	}
 	bls := &binlogdatapb.BinlogSource{
@@ -749,7 +772,7 @@ func TestPlayerFilters(t *testing.T) {
 		input: "insert into src1 values(1, 'aaa')",
 		output: qh.Expect(
 			"begin",
-			"insert into dst1(id,val) values (1,'aaa')",
+			"insert into dst1(id,val) values (1,_binary'aaa')",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		),
@@ -759,7 +782,7 @@ func TestPlayerFilters(t *testing.T) {
 		},
 		logs: []LogExpectation{
 			{"FIELD", "/src1.*id.*INT32.*val.*VARBINARY.*"},
-			{"ROWCHANGE", "insert into dst1(id,val) values (1,'aaa')"},
+			{"ROWCHANGE", "insert into dst1(id,val) values (1,_binary'aaa')"},
 			{"ROW", "/src1.*3.*1aaa.*"},
 		},
 	}, {
@@ -767,7 +790,7 @@ func TestPlayerFilters(t *testing.T) {
 		input: "update src1 set val='bbb'",
 		output: qh.Expect(
 			"begin",
-			"update dst1 set val='bbb' where id=1",
+			"update dst1 set val=_binary'bbb' where id=1",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		),
@@ -776,7 +799,7 @@ func TestPlayerFilters(t *testing.T) {
 			{"1", "bbb"},
 		},
 		logs: []LogExpectation{
-			{"ROWCHANGE", "update dst1 set val='bbb' where id=1"},
+			{"ROWCHANGE", "update dst1 set val=_binary'bbb' where id=1"},
 			{"ROW", "/src1.*3.*1aaa.*"},
 		},
 	}, {
@@ -846,7 +869,7 @@ func TestPlayerFilters(t *testing.T) {
 		input: "insert into src3 values(1, 'aaa')",
 		output: qh.Expect(
 			"begin",
-			"insert ignore into dst3(id,val) values (1,'aaa')",
+			"insert ignore into dst3(id,val) values (1,_binary'aaa')",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		),
@@ -859,7 +882,7 @@ func TestPlayerFilters(t *testing.T) {
 		input: "update src3 set val='bbb'",
 		output: qh.Expect(
 			"begin",
-			"insert ignore into dst3(id,val) values (1,'bbb')",
+			"insert ignore into dst3(id,val) values (1,_binary'bbb')",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		),
@@ -884,7 +907,7 @@ func TestPlayerFilters(t *testing.T) {
 		input: "insert into yes values(1, 'aaa')",
 		output: qh.Expect(
 			"begin",
-			"insert into yes(id,val) values (1,'aaa')",
+			"insert into yes(id,val) values (1,_binary'aaa')",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		),
@@ -897,7 +920,7 @@ func TestPlayerFilters(t *testing.T) {
 		input: "update yes set val='bbb'",
 		output: qh.Expect(
 			"begin",
-			"update yes set val='bbb' where id=1",
+			"update yes set val=_binary'bbb' where id=1",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		),
@@ -914,7 +937,7 @@ func TestPlayerFilters(t *testing.T) {
 		input: "insert into nopk values(1, 'aaa')",
 		output: qh.Expect(
 			"begin",
-			"insert into nopk(id,val) values (1,'aaa')",
+			"insert into nopk(id,val) values (1,_binary'aaa')",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		),
@@ -927,8 +950,8 @@ func TestPlayerFilters(t *testing.T) {
 		input: "update nopk set val='bbb' where id=1",
 		output: qh.Expect(
 			"begin",
-			"delete from nopk where id=1 and val='aaa'",
-			"insert into nopk(id,val) values (1,'bbb')",
+			"delete from nopk where id=1 and val=_binary'aaa'",
+			"insert into nopk(id,val) values (1,_binary'bbb')",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		),
@@ -941,7 +964,7 @@ func TestPlayerFilters(t *testing.T) {
 		input: "delete from nopk where id=1",
 		output: qh.Expect(
 			"begin",
-			"delete from nopk where id=1 and val='bbb'",
+			"delete from nopk where id=1 and val=_binary'bbb'",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		),
@@ -952,8 +975,8 @@ func TestPlayerFilters(t *testing.T) {
 		input: "insert into src4 values (1,100,'aaa'),(2,200,'bbb'),(3,100,'ccc')",
 		output: qh.Expect(
 			"begin",
-			"insert into dst4(id1,val) values (1,'aaa')",
-			"insert into dst4(id1,val) values (3,'ccc')",
+			"insert into dst4(id1,val) values (1,_binary'aaa')",
+			"insert into dst4(id1,val) values (3,_binary'ccc')",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		),
@@ -964,8 +987,8 @@ func TestPlayerFilters(t *testing.T) {
 		input: "insert into src5 values (1,100,'abc'),(2,200,'xyz'),(3,100,'xyz'),(4,300,'abc'),(5,200,'xyz')",
 		output: qh.Expect(
 			"begin",
-			"insert into dst5(id1,val) values (1,'abc')",
-			"insert into dst5(id1,val) values (4,'abc')",
+			"insert into dst5(id1,val) values (1,_binary'abc')",
+			"insert into dst5(id1,val) values (4,_binary'abc')",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		),
@@ -976,7 +999,7 @@ func TestPlayerFilters(t *testing.T) {
 		input: "insert into src_charset values (1,'木元')",
 		output: qh.Expect(
 			"begin",
-			"insert into dst_charset(id1,val,val2) values (1,concat(substr(_utf8mb4 '木元' collate utf8mb4_bin, 1, 1), 'abcxyz'),concat(substr(_utf8mb4 '木元' collate utf8mb4_bin, 1, 1), 'abcxyz'))",
+			"insert into dst_charset(id1,val,val2) values (1,concat(substr(convert(_binary'木元' using utf8mb4) collate utf8mb4_bin, 1, 1), 'abcxyz'),concat(substr(convert(_binary'木元' using utf8mb4) collate utf8mb4_bin, 1, 1), 'abcxyz'))",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		),
@@ -1003,12 +1026,12 @@ func TestPlayerKeywordNames(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
 	execStatements(t, []string{
-		"create table `begin`(`primary` int, `column` varbinary(128), primary key(`primary`))",
-		fmt.Sprintf("create table %s.`begin`(`primary` int, `column` varbinary(128), primary key(`primary`))", vrepldb),
-		"create table `rollback`(`primary` int, `column` varbinary(128), primary key(`primary`))",
-		fmt.Sprintf("create table %s.`rollback`(`primary` int, `column` varbinary(128), primary key(`primary`))", vrepldb),
-		"create table `commit`(`primary` int, `column` varbinary(128), primary key(`primary`))",
-		fmt.Sprintf("create table %s.`commit`(`primary` int, `column` varbinary(128), primary key(`primary`))", vrepldb),
+		"create table `begin`(`primary` int, `column` varchar(128), primary key(`primary`))",
+		fmt.Sprintf("create table %s.`begin`(`primary` int, `column` varchar(128), primary key(`primary`))", vrepldb),
+		"create table `rollback`(`primary` int, `column` varchar(128), primary key(`primary`))",
+		fmt.Sprintf("create table %s.`rollback`(`primary` int, `column` varchar(128), primary key(`primary`))", vrepldb),
+		"create table `commit`(`primary` int, `column` varchar(128), primary key(`primary`))",
+		fmt.Sprintf("create table %s.`commit`(`primary` int, `column` varchar(128), primary key(`primary`))", vrepldb),
 	})
 	defer execStatements(t, []string{
 		"drop table `begin`",
@@ -1234,7 +1257,7 @@ func TestPlayerKeyspaceID(t *testing.T) {
 		input: "insert into src1 values(1, 'aaa')",
 		output: qh.Expect(
 			"begin",
-			"insert into dst1(id,val) values (1,'\x16k@\xb4J\xbaK\xd6')",
+			"insert into dst1(id,val) values (1,_binary'\x16k@\xb4J\xbaK\xd6')",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		),
@@ -1579,7 +1602,7 @@ func TestPlayerTypes(t *testing.T) {
 		},
 	}, {
 		input:  "insert into vitess_strings values('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'a', 'a,b,f,l,q,s,v,z')",
-		output: "insert into vitess_strings(vb,c,vc,b,tb,bl,ttx,tx,en,s) values ('a','b','c','d\\0\\0\\0\\0','e','f','g','h','a','a,b,f,l,q,s,v,z')",
+		output: "insert into vitess_strings(vb,c,vc,b,tb,bl,ttx,tx,en,s) values (_binary'a','b','c',_binary'd\\0\\0\\0\\0',_binary'e',_binary'f','g','h','a','a,b,f,l,q,s,v,z')",
 		table:  "vitess_strings",
 		data: [][]string{
 			{"a", "b", "c", "d\000\000\000\000", "e", "f", "g", "h", "a", "a,b,f,l,q,s,v,z"},
@@ -1600,7 +1623,7 @@ func TestPlayerTypes(t *testing.T) {
 		},
 	}, {
 		input:  "insert into binary_pk values('a', 'aaa')",
-		output: "insert into binary_pk(b,val) values ('a\\0\\0\\0','aaa')",
+		output: "insert into binary_pk(b,val) values (_binary'a\\0\\0\\0',_binary'aaa')",
 		table:  "binary_pk",
 		data: [][]string{
 			{"a\000\000\000", "aaa"},
@@ -1615,7 +1638,7 @@ func TestPlayerTypes(t *testing.T) {
 	}, {
 		// Binary pk is a special case: https://github.com/vitessio/vitess/issues/3984
 		input:  "update binary_pk set val='bbb' where b='a\\0\\0\\0'",
-		output: "update binary_pk set val='bbb' where b='a\\0\\0\\0'",
+		output: "update binary_pk set val=_binary'bbb' where b=_binary'a\\0\\0\\0'",
 		table:  "binary_pk",
 		data: [][]string{
 			{"a\000\000\000", "bbb"},
@@ -1709,7 +1732,7 @@ func TestPlayerDDL(t *testing.T) {
 		OnDdl:    binlogdatapb.OnDDLAction_STOP,
 	}
 	cancel, id := startVReplication(t, bls, "")
-	pos0 := primaryPosition(t) //For debugging only
+	pos0 := primaryPosition(t) // For debugging only
 	execStatements(t, []string{"alter table t1 add column val varchar(128)"})
 	pos1 := primaryPosition(t)
 	// The stop position must be the GTID of the first DDL
@@ -1723,7 +1746,7 @@ func TestPlayerDDL(t *testing.T) {
 	execStatements(t, []string{"alter table t1 drop column val"})
 	pos2 := primaryPosition(t)
 	log.Errorf("Expected log:: TestPlayerDDL Positions are: before first alter %v, after first alter %v, before second alter %v, after second alter %v",
-		pos0, pos1, pos2b, pos2) //For debugging only: to check what are the positions when test works and if/when it fails
+		pos0, pos1, pos2b, pos2) // For debugging only: to check what are the positions when test works and if/when it fails
 	// Restart vreplication
 	if _, err := playerEngine.Exec(fmt.Sprintf(`update _vt.vreplication set state = 'Running', message='' where id=%d`, id)); err != nil {
 		t.Fatal(err)
@@ -1758,8 +1781,8 @@ func TestPlayerDDL(t *testing.T) {
 	execStatements(t, []string{"alter table t1 add column val2 varchar(128)"})
 	expectDBClientQueries(t, qh.Expect(
 		"alter table t1 add column val2 varchar(128)",
-		"/update _vt.vreplication set message='Duplicate",
-		"/update _vt.vreplication set state='Error', message='Duplicate",
+		"/update _vt.vreplication set message='error applying event: Duplicate",
+		"/update _vt.vreplication set state='Error', message='terminal error: error applying event: Duplicate",
 	))
 	cancel()
 
@@ -1846,14 +1869,14 @@ func TestGTIDCompress(t *testing.T) {
 
 func TestPlayerStopPos(t *testing.T) {
 	defer deleteTablet(addTablet(100))
-	vreplicationStoreCompressedGTID = true
+	vttablet.DefaultVReplicationConfig.StoreCompressedGTID = true
 	defer func() {
-		vreplicationStoreCompressedGTID = false
+		vttablet.DefaultVReplicationConfig.StoreCompressedGTID = false
 	}()
 	execStatements(t, []string{
-		"create table yes(id int, val varbinary(128), primary key(id))",
-		fmt.Sprintf("create table %s.yes(id int, val varbinary(128), primary key(id))", vrepldb),
-		"create table no(id int, val varbinary(128), primary key(id))",
+		"create table yes(id int, val varchar(128), primary key(id))",
+		fmt.Sprintf("create table %s.yes(id int, val varchar(128), primary key(id))", vrepldb),
+		"create table no(id int, val varchar(128), primary key(id))",
 	})
 	defer execStatements(t, []string{
 		"drop table yes",
@@ -2061,8 +2084,8 @@ func TestPlayerIdleUpdate(t *testing.T) {
 	idleTimeout = 100 * time.Millisecond
 
 	execStatements(t, []string{
-		"create table t1(id int, val varbinary(128), primary key(id))",
-		fmt.Sprintf("create table %s.t1(id int, val varbinary(128), primary key(id))", vrepldb),
+		"create table t1(id int, val varchar(128), primary key(id))",
+		fmt.Sprintf("create table %s.t1(id int, val varchar(128), primary key(id))", vrepldb),
 	})
 	defer execStatements(t, []string{
 		"drop table t1",
@@ -2114,8 +2137,8 @@ func TestPlayerSplitTransaction(t *testing.T) {
 	defer setFlag("vstream_packet_size", "10000")
 
 	execStatements(t, []string{
-		"create table t1(id int, val varbinary(128), primary key(id))",
-		fmt.Sprintf("create table %s.t1(id int, val varbinary(128), primary key(id))", vrepldb),
+		"create table t1(id int, val varchar(128), primary key(id))",
+		fmt.Sprintf("create table %s.t1(id int, val varchar(128), primary key(id))", vrepldb),
 	})
 	defer execStatements(t, []string{
 		"drop table t1",
@@ -2157,8 +2180,8 @@ func TestPlayerLockErrors(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
 	execStatements(t, []string{
-		"create table t1(id int, val varbinary(128), primary key(id))",
-		fmt.Sprintf("create table %s.t1(id int, val varbinary(128), primary key(id))", vrepldb),
+		"create table t1(id int, val varchar(128), primary key(id))",
+		fmt.Sprintf("create table %s.t1(id int, val varchar(128), primary key(id))", vrepldb),
 	})
 	defer execStatements(t, []string{
 		"drop table t1",
@@ -2236,8 +2259,8 @@ func TestPlayerCancelOnLock(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
 	execStatements(t, []string{
-		"create table t1(id int, val varbinary(128), primary key(id))",
-		fmt.Sprintf("create table %s.t1(id int, val varbinary(128), primary key(id))", vrepldb),
+		"create table t1(id int, val varchar(128), primary key(id))",
+		fmt.Sprintf("create table %s.t1(id int, val varchar(128), primary key(id))", vrepldb),
 	})
 	defer execStatements(t, []string{
 		"drop table t1",
@@ -2313,8 +2336,8 @@ func TestPlayerTransactions(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
 	execStatements(t, []string{
-		"create table t1(id int, val varbinary(128), primary key(id))",
-		fmt.Sprintf("create table %s.t1(id int, val varbinary(128), primary key(id))", vrepldb),
+		"create table t1(id int, val varchar(128), primary key(id))",
+		fmt.Sprintf("create table %s.t1(id int, val varchar(128), primary key(id))", vrepldb),
 	})
 	defer execStatements(t, []string{
 		"drop table t1",
@@ -2408,18 +2431,18 @@ func TestPlayerRelayLogMaxSize(t *testing.T) {
 		func() {
 			switch i {
 			case 0:
-				savedSize := relayLogMaxSize
-				defer func() { relayLogMaxSize = savedSize }()
-				relayLogMaxSize = 10
+				savedSize := vttablet.DefaultVReplicationConfig.RelayLogMaxSize
+				defer func() { vttablet.DefaultVReplicationConfig.RelayLogMaxSize = savedSize }()
+				vttablet.DefaultVReplicationConfig.RelayLogMaxSize = 10
 			case 1:
-				savedLen := relayLogMaxItems
-				defer func() { relayLogMaxItems = savedLen }()
-				relayLogMaxItems = 2
+				savedLen := vttablet.DefaultVReplicationConfig.RelayLogMaxItems
+				defer func() { vttablet.DefaultVReplicationConfig.RelayLogMaxItems = savedLen }()
+				vttablet.DefaultVReplicationConfig.RelayLogMaxItems = 2
 			}
 
 			execStatements(t, []string{
-				"create table t1(id int, val varbinary(128), primary key(id))",
-				fmt.Sprintf("create table %s.t1(id int, val varbinary(128), primary key(id))", vrepldb),
+				"create table t1(id int, val varchar(128), primary key(id))",
+				fmt.Sprintf("create table %s.t1(id int, val varchar(128), primary key(id))", vrepldb),
 			})
 			defer execStatements(t, []string{
 				"drop table t1",
@@ -2507,13 +2530,13 @@ func TestPlayerRelayLogMaxSize(t *testing.T) {
 func TestRestartOnVStreamEnd(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
-	savedDelay := retryDelay
-	defer func() { retryDelay = savedDelay }()
-	retryDelay = 1 * time.Millisecond
+	savedDelay := vttablet.DefaultVReplicationConfig.RetryDelay
+	defer func() { vttablet.DefaultVReplicationConfig.RetryDelay = savedDelay }()
+	vttablet.DefaultVReplicationConfig.RetryDelay = 1 * time.Millisecond
 
 	execStatements(t, []string{
-		"create table t1(id int, val varbinary(128), primary key(id))",
-		fmt.Sprintf("create table %s.t1(id int, val varbinary(128), primary key(id))", vrepldb),
+		"create table t1(id int, val varchar(128), primary key(id))",
+		fmt.Sprintf("create table %s.t1(id int, val varchar(128), primary key(id))", vrepldb),
 	})
 	defer execStatements(t, []string{
 		"drop table t1",
@@ -2755,7 +2778,7 @@ func TestVReplicationLogs(t *testing.T) {
 	err := dbClient.Connect()
 	require.NoError(t, err)
 	defer dbClient.Close()
-	vdbc := newVDBClient(dbClient, binlogplayer.NewStats())
+	vdbc := newVDBClient(dbClient, binlogplayer.NewStats(), vttablet.DefaultVReplicationConfig.RelayLogMaxItems)
 	query := "select vrepl_id, state, message, count from _vt.vreplication_log order by id desc limit 1"
 
 	expected := []string{
@@ -2778,10 +2801,10 @@ func TestGeneratedColumns(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
 	execStatements(t, []string{
-		"create table t1(id int, val varbinary(6), val2 varbinary(6) as (concat(id, val)), val3 varbinary(6) as (concat(val, id)), id2 int, primary key(id))",
-		fmt.Sprintf("create table %s.t1(id int, val varbinary(6), val2 varbinary(6) as (concat(id, val)), val3 varbinary(6), id2 int, primary key(id))", vrepldb),
-		"create table t2(id int, val varbinary(128), val2 varbinary(128) as (concat(id, val)) stored, val3 varbinary(128) as (concat(val, id)), id2 int, primary key(id))",
-		fmt.Sprintf("create table %s.t2(id int, val3 varbinary(128), val varbinary(128), id2 int, primary key(id))", vrepldb),
+		"create table t1(id int, val varchar(6), val2 varchar(6) as (concat(id, val)), val3 varchar(6) as (concat(val, id)), id2 int, primary key(id))",
+		fmt.Sprintf("create table %s.t1(id int, val varchar(6), val2 varchar(6) as (concat(id, val)), val3 varchar(6), id2 int, primary key(id))", vrepldb),
+		"create table t2(id int, val varchar(128), val2 varchar(128) as (concat(id, val)) stored, val3 varchar(128) as (concat(val, id)), id2 int, primary key(id))",
+		fmt.Sprintf("create table %s.t2(id int, val3 varchar(128), val varchar(128), id2 int, primary key(id))", vrepldb),
 	})
 	defer execStatements(t, []string{
 		"drop table t1",
@@ -2931,18 +2954,18 @@ func TestPlayerNoBlob(t *testing.T) {
 	if !runNoBlobTest {
 		t.Skip()
 	}
-	oldVreplicationExperimentalFlags := vttablet.VReplicationExperimentalFlags
-	vttablet.VReplicationExperimentalFlags = vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage
+	oldVreplicationExperimentalFlags := vttablet.DefaultVReplicationConfig.ExperimentalFlags
+	vttablet.DefaultVReplicationConfig.ExperimentalFlags = vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage
 	defer func() {
-		vttablet.VReplicationExperimentalFlags = oldVreplicationExperimentalFlags
+		vttablet.DefaultVReplicationConfig.ExperimentalFlags = oldVreplicationExperimentalFlags
 	}()
 
 	defer deleteTablet(addTablet(100))
 	execStatements(t, []string{
-		"create table t1(id int, val1 varchar(20), blb1 blob, id2 int, blb2 longblob, val2 varbinary(10), primary key(id))",
-		fmt.Sprintf("create table %s.t1(id int, val1 varchar(20), blb1 blob, id2 int, blb2 longblob, val2 varbinary(10), primary key(id))", vrepldb),
-		"create table t2(id int, val1 varchar(20), txt1 text, id2 int, val2 varbinary(10), unique key(id, val1))",
-		fmt.Sprintf("create table %s.t2(id int, val1 varchar(20), txt1 text, id2 int, val2 varbinary(10), primary key(id, val1))", vrepldb),
+		"create table t1(id int, val1 varchar(20), blb1 text, id2 int, blb2 longtext, val2 varchar(10), primary key(id))",
+		fmt.Sprintf("create table %s.t1(id int, val1 varchar(20), blb1 text, id2 int, blb2 longtext, val2 varchar(10), primary key(id))", vrepldb),
+		"create table t2(id int, val1 varchar(20), txt1 text, id2 int, val2 varchar(10), unique key(id, val1))",
+		fmt.Sprintf("create table %s.t2(id int, val1 varchar(20), txt1 text, id2 int, val2 varchar(10), primary key(id, val1))", vrepldb),
 	})
 	defer execStatements(t, []string{
 		"drop table t1",
@@ -3071,10 +3094,10 @@ func TestPlayerNoBlob(t *testing.T) {
 func TestPlayerBatchMode(t *testing.T) {
 	// To test trx batch splitting at 1024-64 bytes.
 	maxAllowedPacket := 1024
-	oldVreplicationExperimentalFlags := vttablet.VReplicationExperimentalFlags
-	vttablet.VReplicationExperimentalFlags = vttablet.VReplicationExperimentalFlagVPlayerBatching
+	oldVreplicationExperimentalFlags := vttablet.DefaultVReplicationConfig.ExperimentalFlags
+	vttablet.DefaultVReplicationConfig.ExperimentalFlags = vttablet.VReplicationExperimentalFlagVPlayerBatching
 	defer func() {
-		vttablet.VReplicationExperimentalFlags = oldVreplicationExperimentalFlags
+		vttablet.DefaultVReplicationConfig.ExperimentalFlags = oldVreplicationExperimentalFlags
 	}()
 
 	defer deleteTablet(addTablet(100))
@@ -3329,16 +3352,16 @@ func TestPlayerStalls(t *testing.T) {
 	logger := logutil.NewMemoryLogger()
 	log.Errorf = logger.Errorf
 
-	ovmhu := vreplicationMinimumHeartbeatUpdateInterval
-	ogvpt := vplayerProgressDeadline
-	orlmi := relayLogMaxItems
-	ord := retryDelay
+	oldMinimumHeartbeatUpdateInterval := vreplicationMinimumHeartbeatUpdateInterval
+	oldProgressDeadline := vplayerProgressDeadline
+	oldRelayLogMaxItems := vttablet.DefaultVReplicationConfig.RelayLogMaxItems
+	oldRetryDelay := vttablet.DefaultVReplicationConfig.RetryDelay
 	defer func() {
 		log.Errorf = ole
-		vreplicationMinimumHeartbeatUpdateInterval = ovmhu
-		vplayerProgressDeadline = ogvpt
-		relayLogMaxItems = orlmi
-		retryDelay = ord
+		vreplicationMinimumHeartbeatUpdateInterval = oldMinimumHeartbeatUpdateInterval
+		vplayerProgressDeadline = oldProgressDeadline
+		vttablet.DefaultVReplicationConfig.RelayLogMaxItems = oldRelayLogMaxItems
+		vttablet.DefaultVReplicationConfig.RetryDelay = oldRetryDelay
 	}()
 
 	// Shorten the deadline for the test.
@@ -3346,11 +3369,11 @@ func TestPlayerStalls(t *testing.T) {
 	// Shorten the time for a required heartbeat recording for the test.
 	vreplicationMinimumHeartbeatUpdateInterval = 5
 	// So each relay log batch will be a single statement transaction.
-	relayLogMaxItems = 1
+	vttablet.DefaultVReplicationConfig.RelayLogMaxItems = 1
 
 	// Don't retry the workflow if it goes into the error state.
-	retryDelay = 10 * time.Minute
-	maxTimeToRetryError = 1 * time.Second
+	vttablet.DefaultVReplicationConfig.RetryDelay = 10 * time.Minute
+	vttablet.DefaultVReplicationConfig.MaxTimeToRetryError = 1 * time.Second
 
 	// A channel to communicate across goroutines.
 	done := make(chan struct{})

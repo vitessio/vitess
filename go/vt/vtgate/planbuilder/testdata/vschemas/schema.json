@@ -282,6 +282,12 @@
               "column": "id",
               "name": "music_user_map"
             }
+          ],
+          "columns": [
+            {
+              "name": "intcol",
+              "type": "INT16"
+            }
           ]
         },
         "authoritative": {

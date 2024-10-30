@@ -24,6 +24,8 @@ import (
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
+const fakeBackupEngineName = "fake"
+
 type FakeBackupEngine struct {
 	ExecuteBackupCalls         []FakeBackupEngineExecuteBackupCall
 	ExecuteBackupDuration      time.Duration
@@ -90,4 +92,10 @@ func (be *FakeBackupEngine) ExecuteRestore(
 func (be *FakeBackupEngine) ShouldDrainForBackup(req *tabletmanagerdatapb.BackupRequest) bool {
 	be.ShouldDrainForBackupCalls = be.ShouldDrainForBackupCalls + 1
 	return be.ShouldDrainForBackupReturn
+}
+
+func (be *FakeBackupEngine) Name() string { return fakeBackupEngineName }
+
+func (be *FakeBackupEngine) ShouldStartMySQLAfterRestore() bool {
+	return true
 }

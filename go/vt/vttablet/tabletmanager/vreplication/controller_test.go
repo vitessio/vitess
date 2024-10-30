@@ -23,6 +23,8 @@ import (
 	"testing"
 	"time"
 
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/discovery"
@@ -70,20 +72,29 @@ var (
 	defaultTabletPickerOptions = discovery.TabletPickerOptions{}
 )
 
+func setTabletTypesStr(tabletTypesStr string) func() {
+	oldTabletTypesStr := vttablet.DefaultVReplicationConfig.TabletTypesStr
+	vttablet.DefaultVReplicationConfig.TabletTypesStr = tabletTypesStr
+	return func() {
+		vttablet.DefaultVReplicationConfig.TabletTypesStr = oldTabletTypesStr
+	}
+}
+
 func TestControllerKeyRange(t *testing.T) {
 	resetBinlogClient()
 	wantTablet := addTablet(100)
 	defer deleteTablet(wantTablet)
 	params := map[string]string{
-		"id":     "1",
-		"state":  binlogdatapb.VReplicationWorkflowState_Running.String(),
-		"source": fmt.Sprintf(`keyspace:"%s" shard:"0" key_range:{end:"\x80"}`, env.KeyspaceName),
+		"id":      "1",
+		"state":   binlogdatapb.VReplicationWorkflowState_Running.String(),
+		"source":  fmt.Sprintf(`keyspace:"%s" shard:"0" key_range:{end:"\x80"}`, env.KeyspaceName),
+		"options": "{}",
 	}
 
 	dbClient := binlogplayer.NewMockDBClient(t)
 	dbClient.ExpectRequestRE("update _vt.vreplication set message='Picked source tablet.*", testDMLResponse, nil)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
-	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow, workflow_sub_type, defer_secondary_keys from _vt.vreplication where id=1", testSettingsResponse, nil)
+	dbClient.ExpectRequest(binlogplayer.TestGetWorkflowQueryId1, testSettingsResponse, nil)
 	dbClient.ExpectRequest("begin", nil, nil)
 	dbClient.ExpectRequest("insert into t values(1)", testDMLResponse, nil)
 	dbClient.ExpectRequestRE("update _vt.vreplication set pos='MariaDB/0-1-1235', time_updated=.*", testDMLResponse, nil)
@@ -94,7 +105,8 @@ func TestControllerKeyRange(t *testing.T) {
 	mysqld.MysqlPort.Store(3306)
 	vre := NewTestEngine(nil, wantTablet.GetAlias().Cell, mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
 
-	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], "replica", nil, vre, defaultTabletPickerOptions)
+	defer setTabletTypesStr("replica")()
+	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], nil, vre, defaultTabletPickerOptions)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,15 +125,16 @@ func TestControllerTables(t *testing.T) {
 	resetBinlogClient()
 
 	params := map[string]string{
-		"id":     "1",
-		"state":  binlogdatapb.VReplicationWorkflowState_Running.String(),
-		"source": fmt.Sprintf(`keyspace:"%s" shard:"0" tables:"table1" tables:"/funtables_/" `, env.KeyspaceName),
+		"id":      "1",
+		"state":   binlogdatapb.VReplicationWorkflowState_Running.String(),
+		"source":  fmt.Sprintf(`keyspace:"%s" shard:"0" tables:"table1" tables:"/funtables_/" `, env.KeyspaceName),
+		"options": "{}",
 	}
 
 	dbClient := binlogplayer.NewMockDBClient(t)
 	dbClient.ExpectRequestRE("update _vt.vreplication set message='Picked source tablet.*", testDMLResponse, nil)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
-	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow, workflow_sub_type, defer_secondary_keys from _vt.vreplication where id=1", testSettingsResponse, nil)
+	dbClient.ExpectRequest(binlogplayer.TestGetWorkflowQueryId1, testSettingsResponse, nil)
 	dbClient.ExpectRequest("begin", nil, nil)
 	dbClient.ExpectRequest("insert into t values(1)", testDMLResponse, nil)
 	dbClient.ExpectRequestRE("update _vt.vreplication set pos='MariaDB/0-1-1235', time_updated=.*", testDMLResponse, nil)
@@ -155,8 +168,8 @@ func TestControllerTables(t *testing.T) {
 	}
 	mysqld.MysqlPort.Store(3306)
 	vre := NewTestEngine(nil, wantTablet.GetAlias().Cell, mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
-
-	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], "replica", nil, vre, defaultTabletPickerOptions)
+	defer setTabletTypesStr("replica")()
+	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], nil, vre, defaultTabletPickerOptions)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -171,9 +184,10 @@ func TestControllerTables(t *testing.T) {
 
 func TestControllerBadID(t *testing.T) {
 	params := map[string]string{
-		"id": "bad",
+		"id":      "bad",
+		"options": "{}",
 	}
-	_, err := newController(context.Background(), params, nil, nil, nil, "", "", nil, nil, defaultTabletPickerOptions)
+	_, err := newController(context.Background(), params, nil, nil, nil, "", nil, nil, defaultTabletPickerOptions)
 	want := `strconv.ParseInt: parsing "bad": invalid syntax`
 	if err == nil || err.Error() != want {
 		t.Errorf("newController err: %v, want %v", err, want)
@@ -182,11 +196,12 @@ func TestControllerBadID(t *testing.T) {
 
 func TestControllerStopped(t *testing.T) {
 	params := map[string]string{
-		"id":    "1",
-		"state": binlogdatapb.VReplicationWorkflowState_Stopped.String(),
+		"id":      "1",
+		"state":   binlogdatapb.VReplicationWorkflowState_Stopped.String(),
+		"options": "{}",
 	}
 
-	ct, err := newController(context.Background(), params, nil, nil, nil, "", "", nil, nil, defaultTabletPickerOptions)
+	ct, err := newController(context.Background(), params, nil, nil, nil, "", nil, nil, defaultTabletPickerOptions)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -210,12 +225,13 @@ func TestControllerOverrides(t *testing.T) {
 		"source":       fmt.Sprintf(`keyspace:"%s" shard:"0" key_range:{end:"\x80"}`, env.KeyspaceName),
 		"cell":         env.Cells[0],
 		"tablet_types": "replica",
+		"options":      "{}",
 	}
 
 	dbClient := binlogplayer.NewMockDBClient(t)
 	dbClient.ExpectRequestRE("update _vt.vreplication set message='Picked source tablet.*", testDMLResponse, nil)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
-	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow, workflow_sub_type, defer_secondary_keys from _vt.vreplication where id=1", testSettingsResponse, nil)
+	dbClient.ExpectRequest(binlogplayer.TestGetWorkflowQueryId1, testSettingsResponse, nil)
 	dbClient.ExpectRequest("begin", nil, nil)
 	dbClient.ExpectRequest("insert into t values(1)", testDMLResponse, nil)
 	dbClient.ExpectRequestRE("update _vt.vreplication set pos='MariaDB/0-1-1235', time_updated=.*", testDMLResponse, nil)
@@ -226,7 +242,8 @@ func TestControllerOverrides(t *testing.T) {
 	mysqld.MysqlPort.Store(3306)
 	vre := NewTestEngine(nil, wantTablet.GetAlias().Cell, mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
 
-	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], "rdonly", nil, vre, defaultTabletPickerOptions)
+	defer setTabletTypesStr("rdonly")()
+	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], nil, vre, defaultTabletPickerOptions)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -244,16 +261,17 @@ func TestControllerCanceledContext(t *testing.T) {
 	defer deleteTablet(wantTablet)
 
 	params := map[string]string{
-		"id":     "1",
-		"state":  binlogdatapb.VReplicationWorkflowState_Running.String(),
-		"source": fmt.Sprintf(`keyspace:"%s" shard:"0" key_range:{end:"\x80"}`, env.KeyspaceName),
+		"id":      "1",
+		"state":   binlogdatapb.VReplicationWorkflowState_Running.String(),
+		"source":  fmt.Sprintf(`keyspace:"%s" shard:"0" key_range:{end:"\x80"}`, env.KeyspaceName),
+		"options": "{}",
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	vre := NewTestEngine(nil, wantTablet.GetAlias().Cell, nil, nil, nil, "", nil)
 
-	ct, err := newController(ctx, params, nil, nil, env.TopoServ, env.Cells[0], "rdonly", nil, vre, defaultTabletPickerOptions)
+	ct, err := newController(ctx, params, nil, nil, env.TopoServ, env.Cells[0], nil, vre, defaultTabletPickerOptions)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -267,9 +285,9 @@ func TestControllerCanceledContext(t *testing.T) {
 }
 
 func TestControllerRetry(t *testing.T) {
-	savedDelay := retryDelay
-	defer func() { retryDelay = savedDelay }()
-	retryDelay = 10 * time.Millisecond
+	savedDelay := vttablet.DefaultVReplicationConfig.RetryDelay
+	defer func() { vttablet.DefaultVReplicationConfig.RetryDelay = savedDelay }()
+	vttablet.DefaultVReplicationConfig.RetryDelay = 10 * time.Millisecond
 
 	resetBinlogClient()
 	defer deleteTablet(addTablet(100))
@@ -280,16 +298,17 @@ func TestControllerRetry(t *testing.T) {
 		"source":       fmt.Sprintf(`keyspace:"%s" shard:"0" key_range:{end:"\x80"}`, env.KeyspaceName),
 		"cell":         env.Cells[0],
 		"tablet_types": "replica",
+		"options":      "{}",
 	}
 
 	dbClient := binlogplayer.NewMockDBClient(t)
 	dbClient.ExpectRequestRE("update _vt.vreplication set message='Picked source tablet.*", testDMLResponse, nil)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
-	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow, workflow_sub_type, defer_secondary_keys from _vt.vreplication where id=1", nil, errors.New("(expected error)"))
-	dbClient.ExpectRequest("update _vt.vreplication set state='Error', message='error (expected error) in selecting vreplication settings select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow, workflow_sub_type, defer_secondary_keys from _vt.vreplication where id=1' where id=1", testDMLResponse, nil)
+	dbClient.ExpectRequest(binlogplayer.TestGetWorkflowQueryId1, nil, errors.New("(expected error)"))
+	dbClient.ExpectRequest("update _vt.vreplication set state='Error', message='error (expected error) in selecting vreplication settings select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow, workflow_sub_type, defer_secondary_keys, options from _vt.vreplication where id=1' where id=1", testDMLResponse, nil)
 	dbClient.ExpectRequestRE("update _vt.vreplication set message='Picked source tablet.*", testDMLResponse, nil)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
-	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow, workflow_sub_type, defer_secondary_keys from _vt.vreplication where id=1", testSettingsResponse, nil)
+	dbClient.ExpectRequest(binlogplayer.TestGetWorkflowQueryId1, testSettingsResponse, nil)
 	dbClient.ExpectRequest("begin", nil, nil)
 	dbClient.ExpectRequest("insert into t values(1)", testDMLResponse, nil)
 	dbClient.ExpectRequestRE("update _vt.vreplication set pos='MariaDB/0-1-1235', time_updated=.*", testDMLResponse, nil)
@@ -299,7 +318,8 @@ func TestControllerRetry(t *testing.T) {
 	mysqld.MysqlPort.Store(3306)
 	vre := NewTestEngine(nil, env.Cells[0], mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
 
-	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], "rdonly", nil, vre, defaultTabletPickerOptions)
+	defer setTabletTypesStr("rdonly")()
+	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], nil, vre, defaultTabletPickerOptions)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -314,9 +334,10 @@ func TestControllerStopPosition(t *testing.T) {
 	defer deleteTablet(wantTablet)
 
 	params := map[string]string{
-		"id":     "1",
-		"state":  binlogdatapb.VReplicationWorkflowState_Running.String(),
-		"source": fmt.Sprintf(`keyspace:"%s" shard:"0" key_range:{end:"\x80"}`, env.KeyspaceName),
+		"id":      "1",
+		"state":   binlogdatapb.VReplicationWorkflowState_Running.String(),
+		"source":  fmt.Sprintf(`keyspace:"%s" shard:"0" key_range:{end:"\x80"}`, env.KeyspaceName),
+		"options": "{}",
 	}
 
 	dbClient := binlogplayer.NewMockDBClient(t)
@@ -349,7 +370,7 @@ func TestControllerStopPosition(t *testing.T) {
 			},
 		},
 	}
-	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow, workflow_sub_type, defer_secondary_keys from _vt.vreplication where id=1", withStop, nil)
+	dbClient.ExpectRequest(binlogplayer.TestGetWorkflowQueryId1, withStop, nil)
 	dbClient.ExpectRequest("begin", nil, nil)
 	dbClient.ExpectRequest("insert into t values(1)", testDMLResponse, nil)
 	dbClient.ExpectRequestRE("update _vt.vreplication set pos='MariaDB/0-1-1235', time_updated=.*", testDMLResponse, nil)
@@ -361,7 +382,7 @@ func TestControllerStopPosition(t *testing.T) {
 	mysqld.MysqlPort.Store(3306)
 	vre := NewTestEngine(nil, wantTablet.GetAlias().Cell, mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
 
-	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], "replica", nil, vre, defaultTabletPickerOptions)
+	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], nil, vre, defaultTabletPickerOptions)
 	if err != nil {
 		t.Fatal(err)
 	}

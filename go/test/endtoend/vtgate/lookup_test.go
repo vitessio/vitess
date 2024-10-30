@@ -131,7 +131,7 @@ func TestConsistentLookup(t *testing.T) {
 	mysqlErr := err.(*sqlerror.SQLError)
 	assert.Equal(t, sqlerror.ERDupEntry, mysqlErr.Num)
 	assert.Equal(t, "23000", mysqlErr.State)
-	assert.Contains(t, mysqlErr.Message, "reverted partial DML execution")
+	assert.ErrorContains(t, mysqlErr, "reverted partial DML execution")
 
 	// Simple delete.
 	utils.Exec(t, conn, "begin")
@@ -550,6 +550,22 @@ func TestConsistentLookupUpdate(t *testing.T) {
 	require.Empty(t, qr.Rows)
 	qr = utils.Exec(t, conn, "select * from t4_id2_idx")
 	require.Empty(t, qr.Rows)
+}
+
+func TestSelectMultiEqualLookup(t *testing.T) {
+	conn, closer := start(t)
+	defer closer()
+
+	utils.Exec(t, conn, "insert into t10 (id, sharding_key, col1) values (1, 1, 'bar'), (2, 1, 'bar'), (3, 1, 'bar'), (4, 2, 'bar'), (5, 2, 'bar')")
+
+	for _, workload := range []string{"oltp", "olap"} {
+		t.Run(workload, func(t *testing.T) {
+			utils.Exec(t, conn, "set workload = "+workload)
+
+			utils.AssertMatches(t, conn, "select id from t10 WHERE (col1, id) IN (('bar', 1), ('baz', 2), ('qux', 3), ('barbar', 4))", "[[INT64(1)]]")
+			utils.AssertMatches(t, conn, "select id from t10 WHERE (col1 = 'bar' AND id = 1) OR (col1 = 'baz' AND id = 2) OR (col1 = 'qux' AND id = 3) OR (col1 = 'barbar' AND id = 4)", "[[INT64(1)]]")
+		})
+	}
 }
 
 func TestSelectNullLookup(t *testing.T) {

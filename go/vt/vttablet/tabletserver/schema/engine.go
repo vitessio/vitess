@@ -40,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/servenv"
@@ -85,9 +86,10 @@ type Engine struct {
 
 	historian *historian
 
-	conns         *connpool.Pool
-	ticks         *timer.Timer
-	reloadTimeout time.Duration
+	conns           *connpool.Pool
+	ticks           *timer.Timer
+	reloadTimeout   time.Duration
+	throttledLogger *logutil.ThrottledLogger
 
 	// dbCreationFailed is for preventing log spam.
 	dbCreationFailed bool
@@ -109,7 +111,8 @@ func NewEngine(env tabletenv.Env) *Engine {
 			Size:        3,
 			IdleTimeout: env.Config().OltpReadPool.IdleTimeout,
 		}),
-		ticks: timer.NewTimer(reloadTime),
+		ticks:           timer.NewTimer(reloadTime),
+		throttledLogger: logutil.NewThrottledLogger("schema-tracker", 1*time.Minute),
 	}
 	se.schemaCopy = env.Config().SignalWhenSchemaChange
 	_ = env.Exporter().NewGaugeDurationFunc("SchemaReloadTime", "vttablet keeps table schemas in its own memory and periodically refreshes it from MySQL. This config controls the reload time.", se.ticks.Interval)
@@ -177,14 +180,15 @@ func (se *Engine) syncSidecarDB(ctx context.Context, conn *dbconnpool.DBConnecti
 // EnsureConnectionAndDB ensures that we can connect to mysql.
 // If tablet type is primary and there is no db, then the database is created.
 // This function can be called before opening the Engine.
-func (se *Engine) EnsureConnectionAndDB(tabletType topodatapb.TabletType) error {
+func (se *Engine) EnsureConnectionAndDB(tabletType topodatapb.TabletType, serving bool) error {
 	ctx := tabletenv.LocalContext()
 	// We use AllPrivs since syncSidecarDB() might need to upgrade the schema
 	conn, err := dbconnpool.NewDBConnection(ctx, se.env.Config().DB.AllPrivsWithDB())
 	if err == nil {
 		se.dbCreationFailed = false
 		// upgrade sidecar db if required, for a tablet with an existing database
-		if tabletType == topodatapb.TabletType_PRIMARY {
+		// only run DDL updates when a PRIMARY is transitioning to serving state.
+		if tabletType == topodatapb.TabletType_PRIMARY && serving {
 			if err := se.syncSidecarDB(ctx, conn); err != nil {
 				conn.Close()
 				return err
@@ -193,7 +197,7 @@ func (se *Engine) EnsureConnectionAndDB(tabletType topodatapb.TabletType) error 
 		conn.Close()
 		return nil
 	}
-	if tabletType != topodatapb.TabletType_PRIMARY {
+	if tabletType != topodatapb.TabletType_PRIMARY || !serving {
 		return err
 	}
 	if merr, isSQLErr := err.(*sqlerror.SQLError); !isSQLErr || merr.Num != sqlerror.ERBadDb {
@@ -448,7 +452,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 
 	udfsChanged, err := getChangedUserDefinedFunctions(ctx, conn.Conn, shouldUseDatabase)
 	if err != nil {
-		return err
+		se.throttledLogger.Errorf("error in getting changed UDFs: %v", err)
 	}
 
 	rec := concurrency.AllErrorRecorder{}

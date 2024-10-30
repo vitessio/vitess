@@ -98,6 +98,9 @@ message MaterializeSettings {
   tabletmanagerdata.TabletSelectionPreference tablet_selection_preference = 15;
   bool atomic_copy = 16;
   WorkflowOptions workflow_options = 17;
+
+  // ReferenceTables is set to a csv list of tables, if the materialization is for reference tables.
+  repeated string reference_tables = 18;
 }
 
 /* Data types for VtctldServer */
@@ -206,14 +209,25 @@ message Shard {
   topodata.Shard shard = 3;
 }
 
+enum ShardedAutoIncrementHandling {
+  LEAVE = 0;
+  REMOVE = 1;
+  REPLACE = 2;
+}
+
 message WorkflowOptions {
   string tenant_id = 1;
   // Remove auto_increment clauses on tables when moving them to a sharded
-  // keyspace.
-  bool strip_sharded_auto_increment = 2;
+  // keyspace and optionally replace them with vschema AutoIncrement
+  // definitions.
+  ShardedAutoIncrementHandling sharded_auto_increment_handling = 2;
   // Shards on which vreplication streams in the target keyspace are created for this workflow and to which the data
   // from the source will be vreplicated.
   repeated string shards = 3;
+  map<string, string> config = 4;
+  // Where to create any related schema and vschema objects such as
+  // sequence tables.
+  string global_keyspace = 5;
 }
 
 // TODO: comment the hell out of this.
@@ -445,6 +459,8 @@ message BackupRequest {
   // UpgradeSafe indicates if the backup should be taken with innodb_fast_shutdown=0
   // so that it's a backup that can be used for an upgrade.
   bool upgrade_safe = 5;
+  // BackupEngine specifies if we want to use a particular backup engine for this backup request
+  optional string backup_engine = 6;
 }
 
 message BackupResponse {
@@ -479,6 +495,17 @@ message CancelSchemaMigrationRequest {
 
 message CancelSchemaMigrationResponse {
   map<string, uint64> rows_affected_by_shard = 1;
+}
+
+message ChangeTabletTagsRequest {
+  topodata.TabletAlias tablet_alias = 1;
+  map<string, string> tags = 2;
+  bool replace = 3;
+}
+
+message ChangeTabletTagsResponse {
+  map<string, string> before_tags = 1;
+  map<string, string> after_tags = 2;
 }
 
 message ChangeTabletTypeRequest {
@@ -680,6 +707,9 @@ message EmergencyReparentShardRequest {
   // WaitForAllTablets makes ERS wait for a response from all the tablets before proceeding.
   // Useful when all the tablets are up and reachable.
   bool wait_for_all_tablets = 7;
+  // ExpectedPrimary is the optional alias we expect to be the current primary in order for
+  // the reparent operation to succeed.
+  topodata.TabletAlias expected_primary = 8;
 }
 
 message EmergencyReparentShardResponse {
@@ -1101,6 +1131,23 @@ message TopologyCell {
   int64 version = 5;
 }
 
+message GetUnresolvedTransactionsRequest {
+  string keyspace = 1;
+  int64 abandon_age = 2; // in seconds
+}
+
+message GetUnresolvedTransactionsResponse {
+  repeated query.TransactionMetadata transactions = 1;
+}
+
+message ConcludeTransactionRequest {
+  string dtid = 1;
+  repeated query.Target participants = 2;
+}
+
+message ConcludeTransactionResponse {
+}
+
 message GetVSchemaRequest {
   string keyspace = 1;
 }
@@ -1357,6 +1404,11 @@ message PlannedReparentShardRequest {
   // acceptable for a tablet to be eligible for promotion when Vitess makes the choice of a new primary.
   // A value of 0 indicates that Vitess shouldn't consider the replication lag at all.
   vttime.Duration tolerable_replication_lag = 6;
+  // AllowCrossCellPromotion allows cross cell promotion,
+  bool allow_cross_cell_promotion = 7;
+  // ExpectedPrimary is the optional alias we expect to be the current primary in order for
+  // the reparent operation to succeed.
+  topodata.TabletAlias expected_primary = 8;
 }
 
 message PlannedReparentShardResponse {
@@ -1523,6 +1575,8 @@ message ReshardCreateRequest {
   bool defer_secondary_keys = 11;
   // Start the workflow after creating it.
   bool auto_start = 12;
+  WorkflowOptions workflow_options = 13;
+
 }
 
 message RestoreFromBackupRequest {
@@ -1539,6 +1593,8 @@ message RestoreFromBackupRequest {
   // RestoreToTimestamp, if given, requested an inremental restore up to (and excluding) the given timestamp.
   // RestoreToTimestamp and RestoreToPos are mutually exclusive.
   vttime.Time restore_to_timestamp = 5;
+  // AllowedBackupEngines, if present will filter out any backups taken with engines not included in the list
+  repeated string allowed_backup_engines = 6;
 }
 
 message RestoreFromBackupResponse {
@@ -1840,26 +1896,86 @@ message ValidateVSchemaResponse {
 }
 
 message VDiffCreateRequest {
+  // The name of the workflow that we're diffing tables for.
   string workflow = 1;
+  // The keyspace where the vreplication workflow is running.
   string target_keyspace = 2;
+  // A unique identifier for the vdiff.
+  // If empty, a new UUID will be generated.
   string uuid = 3;
+  // The cells to look for source tablets in.
+  // If empty, all cells are used.
   repeated string source_cells = 4;
+  // The cells to look for target tablets in.
+  // If empty, all cells are used.
   repeated string target_cells = 5;
+  // The tablet types to use when searching for tablets to use when streaming
+  // results.
+  // A default value of "replica,rdonly,primary" is used by the tablet picker.
   repeated topodata.TabletType tablet_types = 6;
+  // When performing source tablet selection, look for candidates in the type
+  // order as they are listed in the tablet_types value (or the default of
+  // "replica,rdonly,primary" that the tablet picker uses).
+  // The default is ANY (0) and you can use INORDER (1) to e.g. ensure that a
+  // primary tablet is only used if there are no available replica or rdonly
+  // tablets.
   tabletmanagerdata.TabletSelectionPreference tablet_selection_preference = 7;
+  // The tables to compare. If empty, all tables in the workflow are compared.
   repeated string tables = 8;
+  // The maximum number of rows to compare for each table on each shard.
+  // The default is a max int64 value: 2^63 - 1 or 9,223,372,036,854,775,807.
   int64 limit = 9;
+  // How long to wait for the relevant vreplication stream(s) to catch up when
+  // attempting to setup the table snapshots on the source and target to use for
+  // the diff on each shard.
+  // The default is 30s.
   vttime.Duration filtered_replication_wait_time = 10;
+  // Include the MySQL query used for the diff in the report that is stored on
+  // each shard primary tablet in the _vt.vdiff_table records.
   bool debug_query = 11;
+  // Only show the Primary Key columns in any row diff output. You would
+  // typically want to use this if you set the max_sample_rows very high.
   bool only_p_ks = 12;
+  // Update the table statistics, using ANALYZE TABLE, on each table involved
+  // in the vdiff during initialization on each target shard. This will ensure
+  // that progress estimates are as accurate as possible -- but it does involve
+  // locks and can potentially impact query processing on the target keyspace.
   bool update_table_stats = 13;
+  // If there are collation differences between the source and target, you can
+  // have rows that are identical but simply returned in a different order from
+  // MySQL. We will do a second pass to compare the rows for any actual
+  // differences in this case and this flag allows you to control the resources
+  // used for this operation.
+  // The default is 0, comparing no extra rows.
   int64 max_extra_rows_to_compare = 14;
+  // Wait for the vdiff to complete before returning (making the call synchronous
+  // vs asynchronous by default).
   bool wait = 15;
+  // When wait is true, this is how frequently the vdiff progress will be shown.
   vttime.Duration wait_update_interval = 16;
+  // Automatically retry the vdiff if we encounter an error. This should almost
+  // always be set to true (default is false).
   bool auto_retry = 17;
+  // Include additional information in the vdiff report that is produced and
+  // stored on each target shard primary's _vt sidecar database.
   bool verbose = 18;
+  // The maximum number of rows to include in the row diff report (when
+  // differences are found) for each table on each shard.
+  // The default is 0, which will include no sample rows that differed.
   int64 max_report_sample_rows = 19;
+  // The maximum time that a diff of a single table can run on each target shard
+  // before it is stopped and then later resumed from where we left off. This
+  // can be helpful in limiting the impact of holding open that large transaction
+  // where we scan up to every row in the table.
+  // The default is 0 or no limit.
   vttime.Duration max_diff_duration = 20;
+  // At what length should we truncate the column values in the row diff report
+  // generated for each table on each shard when differences are detected.
+  // The default is 0, meaning do not truncate.
+  int64 row_diff_column_truncate_at = 21;
+  // Auto start the vdiff after creating it.
+  // The default is true if no value is specified.
+  optional bool auto_start = 22;
 }
 
 message VDiffCreateResponse {
@@ -1882,6 +1998,7 @@ message VDiffResumeRequest {
   string workflow = 1;
   string target_keyspace = 2;
   string uuid = 3;
+  repeated string target_shards = 4;
 }
 
 message VDiffResumeResponse {
@@ -1903,6 +2020,7 @@ message VDiffStopRequest {
   string workflow = 1;
   string target_keyspace = 2;
   string uuid = 3;
+  repeated string target_shards = 4;
 }
 
 message VDiffStopResponse {
@@ -1914,6 +2032,10 @@ message WorkflowDeleteRequest {
   bool keep_data = 3;
   bool keep_routing_rules = 4;
   repeated string shards = 5;
+  // The max records to delete from the moved tables when cleaning
+  // up the migrated data. This is only used with multi-tenant
+  // MoveTables migrations.
+  int64 delete_batch_size = 6;
 }
 
 message WorkflowDeleteResponse {
@@ -1970,6 +2092,7 @@ message WorkflowSwitchTrafficRequest {
   bool dry_run = 9;
   bool initialize_target_sequences = 10;
   repeated string shards = 11;
+  bool force = 12;
 }
 
 message WorkflowSwitchTrafficResponse {

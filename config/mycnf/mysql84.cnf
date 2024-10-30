@@ -14,7 +14,7 @@ mysqlx = 0
 # 8.4 changes the default auth-plugin to caching_sha2_password and
 # disables mysql_native_password by default.
 mysql_native_password = ON
-default_authentication_plugin = mysql_native_password
+authentication_policy = 'mysql_native_password'
 
 # Semi-sync replication is required for automated unplanned failover
 # (when the primary goes away). Here we just load the plugin so it's

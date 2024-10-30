@@ -439,7 +439,7 @@ func (conn *gRPCQueryClient) ReadTransaction(ctx context.Context, target *queryp
 }
 
 // UnresolvedTransactions returns all unresolved distributed transactions.
-func (conn *gRPCQueryClient) UnresolvedTransactions(ctx context.Context, target *querypb.Target) ([]*querypb.TransactionMetadata, error) {
+func (conn *gRPCQueryClient) UnresolvedTransactions(ctx context.Context, target *querypb.Target, abandonAgeSeconds int64) ([]*querypb.TransactionMetadata, error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {
@@ -450,6 +450,7 @@ func (conn *gRPCQueryClient) UnresolvedTransactions(ctx context.Context, target 
 		Target:            target,
 		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
 		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+		AbandonAge:        abandonAgeSeconds,
 	}
 	response, err := conn.c.UnresolvedTransactions(ctx, req)
 	if err != nil {
@@ -691,6 +692,7 @@ func (conn *gRPCQueryClient) VStream(ctx context.Context, request *binlogdatapb.
 			Position:          request.Position,
 			Filter:            request.Filter,
 			TableLastPKs:      request.TableLastPKs,
+			Options:           request.Options,
 		}
 		stream, err := conn.c.VStream(ctx, req)
 		if err != nil {

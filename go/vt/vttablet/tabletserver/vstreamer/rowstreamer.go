@@ -33,7 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vttablet"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
@@ -79,14 +79,20 @@ type rowStreamer struct {
 	vse           *Engine
 	pktsize       PacketSizer
 
-	mode RowStreamerMode
-	conn *snapshotConn
+	mode    RowStreamerMode
+	conn    *snapshotConn
+	options *binlogdatapb.VStreamOptions
+	config  *vttablet.VReplicationConfig
 }
 
 func newRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, query string,
 	lastpk []sqltypes.Value, vschema *localVSchema, send func(*binlogdatapb.VStreamRowsResponse) error, vse *Engine,
-	mode RowStreamerMode, conn *snapshotConn) *rowStreamer {
+	mode RowStreamerMode, conn *snapshotConn, options *binlogdatapb.VStreamOptions) *rowStreamer {
 
+	config, err := GetVReplicationConfig(options)
+	if err != nil {
+		return nil
+	}
 	ctx, cancel := context.WithCancel(ctx)
 	return &rowStreamer{
 		ctx:     ctx,
@@ -98,9 +104,11 @@ func newRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engi
 		send:    send,
 		vschema: vschema,
 		vse:     vse,
-		pktsize: DefaultPacketSizer(),
+		pktsize: DefaultPacketSizer(config.VStreamDynamicPacketSize, config.VStreamPacketSize),
 		mode:    mode,
 		conn:    conn,
+		options: options,
+		config:  config,
 	}
 }
 
@@ -128,10 +136,10 @@ func (rs *rowStreamer) Stream() error {
 		if _, err := rs.conn.ExecuteFetch("set names 'binary'", 1, false); err != nil {
 			return err
 		}
-		if _, err := conn.ExecuteFetch(fmt.Sprintf("set @@session.net_read_timeout = %v", vttablet.VReplicationNetReadTimeout), 1, false); err != nil {
+		if _, err := conn.ExecuteFetch(fmt.Sprintf("set @@session.net_read_timeout = %v", rs.config.NetReadTimeout), 1, false); err != nil {
 			return err
 		}
-		if _, err := conn.ExecuteFetch(fmt.Sprintf("set @@session.net_write_timeout = %v", vttablet.VReplicationNetWriteTimeout), 1, false); err != nil {
+		if _, err := conn.ExecuteFetch(fmt.Sprintf("set @@session.net_write_timeout = %v", rs.config.NetReadTimeout), 1, false); err != nil {
 			return err
 		}
 	}
@@ -240,7 +248,7 @@ func (rs *rowStreamer) buildPKColumns(st *binlogdatapb.MinimalTable) ([]int, err
 func (rs *rowStreamer) buildSelect(st *binlogdatapb.MinimalTable) (string, error) {
 	buf := sqlparser.NewTrackedBuffer(nil)
 	// We could have used select *, but being explicit is more predictable.
-	buf.Myprintf("select %s", GetVReplicationMaxExecutionTimeQueryHint())
+	buf.Myprintf("select %s", GetVReplicationMaxExecutionTimeQueryHint(rs.config.CopyPhaseDuration))
 	prefix := ""
 	for _, col := range rs.plan.Table.Fields {
 		if rs.plan.isConvertColumnUsingUTF8(col.Name) {
@@ -388,9 +396,9 @@ func (rs *rowStreamer) streamQuery(send func(*binlogdatapb.VStreamRowsResponse) 
 		}
 
 		// check throttler.
-		if !rs.vse.throttlerClient.ThrottleCheckOKOrWaitAppName(rs.ctx, throttlerapp.RowStreamerName) {
+		if checkResult, ok := rs.vse.throttlerClient.ThrottleCheckOKOrWaitAppName(rs.ctx, throttlerapp.RowStreamerName); !ok {
 			throttleResponseRateLimiter.Do(func() error {
-				return safeSend(&binlogdatapb.VStreamRowsResponse{Throttled: true})
+				return safeSend(&binlogdatapb.VStreamRowsResponse{Throttled: true, ThrottledReason: checkResult.Summary()})
 			})
 			logger.Infof("throttled.")
 			continue
@@ -455,6 +463,6 @@ func (rs *rowStreamer) streamQuery(send func(*binlogdatapb.VStreamRowsResponse) 
 	return nil
 }
 
-func GetVReplicationMaxExecutionTimeQueryHint() string {
-	return fmt.Sprintf("/*+ MAX_EXECUTION_TIME(%v) */ ", vttablet.CopyPhaseDuration.Milliseconds())
+func GetVReplicationMaxExecutionTimeQueryHint(copyPhaseDuration time.Duration) string {
+	return fmt.Sprintf("/*+ MAX_EXECUTION_TIME(%v) */ ", copyPhaseDuration.Milliseconds())
 }

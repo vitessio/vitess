@@ -51,10 +51,6 @@ type VTOrcProcess struct {
 type VTOrcConfiguration struct {
 	Debug                                 bool
 	ListenAddress                         string
-	MySQLTopologyUser                     string
-	MySQLTopologyPassword                 string
-	MySQLReplicaUser                      string
-	MySQLReplicaPassword                  string
 	RecoveryPeriodBlockSeconds            int
 	TopologyRefreshSeconds                int    `json:",omitempty"`
 	PreventCrossDataCenterPrimaryFailover bool   `json:",omitempty"`
@@ -71,10 +67,6 @@ func (config *VTOrcConfiguration) ToJSONString() string {
 
 func (config *VTOrcConfiguration) AddDefaults(webPort int) {
 	config.Debug = true
-	config.MySQLTopologyUser = "orc_client_user"
-	config.MySQLTopologyPassword = "orc_client_user_password"
-	config.MySQLReplicaUser = "vt_repl"
-	config.MySQLReplicaPassword = ""
 	if config.RecoveryPeriodBlockSeconds == 0 {
 		config.RecoveryPeriodBlockSeconds = 1
 	}
@@ -126,13 +118,8 @@ func (orc *VTOrcProcess) Setup() (err error) {
 		"--instance-poll-time", "1s",
 		// Faster topo information refresh speeds up the tests. This doesn't add any significant load either
 		"--topo-information-refresh-duration", "3s",
+		"--bind-address", "127.0.0.1",
 	)
-
-	if v, err := GetMajorVersion("vtorc"); err != nil {
-		return err
-	} else if v >= 18 {
-		orc.proc.Args = append(orc.proc.Args, "--bind-address", "127.0.0.1")
-	}
 
 	if *isCoverage {
 		orc.proc.Args = append(orc.proc.Args, "--test.coverprofile="+getCoveragePath("orc.out"))

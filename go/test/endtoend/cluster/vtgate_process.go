@@ -85,12 +85,8 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 		"--tablet_types_to_wait", vtgate.TabletTypesToWait,
 		"--service_map", vtgate.ServiceMap,
 		"--mysql_auth_server_impl", vtgate.MySQLAuthServerImpl,
-	}
-	if v, err := GetMajorVersion("vtgate"); err != nil {
-		return err
-	} else if v >= 18 {
-		args = append(args, "--bind-address", "127.0.0.1")
-		args = append(args, "--grpc_bind_address", "127.0.0.1")
+		"--bind-address", "127.0.0.1",
+		"--grpc_bind_address", "127.0.0.1",
 	}
 	// If no explicit mysql_server_version has been specified then we autodetect
 	// the MySQL version that will be used for the test and base the vtgate's
@@ -313,11 +309,11 @@ func VtgateProcessInstance(
 }
 
 // GetVars returns map of vars
-func (vtgate *VtgateProcess) GetVars() (map[string]any, error) {
+func (vtgate *VtgateProcess) GetVars() map[string]any {
 	resultMap := make(map[string]any)
 	resp, err := http.Get(vtgate.VerifyURL)
 	if err != nil {
-		return nil, fmt.Errorf("error getting response from %s", vtgate.VerifyURL)
+		return nil
 	}
 	defer resp.Body.Close()
 
@@ -325,11 +321,11 @@ func (vtgate *VtgateProcess) GetVars() (map[string]any, error) {
 		respByte, _ := io.ReadAll(resp.Body)
 		err := json.Unmarshal(respByte, &resultMap)
 		if err != nil {
-			return nil, fmt.Errorf("not able to parse response body")
+			return nil
 		}
-		return resultMap, nil
+		return resultMap
 	}
-	return nil, fmt.Errorf("unsuccessful response")
+	return nil
 }
 
 // ReadVSchema reads the vschema from the vtgate endpoint for it and returns

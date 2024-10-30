@@ -48,7 +48,7 @@ func TestTxPoolExecuteCommit(t *testing.T) {
 
 	sql := "select 'this is a query'"
 	// begin a transaction and then return the connection
-	conn, _, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil, nil)
+	conn, _, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
 	require.NoError(t, err)
 
 	id := conn.ReservedID()
@@ -83,7 +83,7 @@ func TestTxPoolExecuteRollback(t *testing.T) {
 	db, txPool, _, closer := setup(t)
 	defer closer()
 
-	conn, _, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil, nil)
+	conn, _, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
 	require.NoError(t, err)
 	defer conn.Release(tx.TxRollback)
 
@@ -104,7 +104,7 @@ func TestTxPoolExecuteRollbackOnClosedConn(t *testing.T) {
 	db, txPool, _, closer := setup(t)
 	defer closer()
 
-	conn, _, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil, nil)
+	conn, _, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
 	require.NoError(t, err)
 	defer conn.Release(tx.TxRollback)
 
@@ -125,9 +125,9 @@ func TestTxPoolRollbackNonBusy(t *testing.T) {
 	defer closer()
 
 	// start two transactions, and mark one of them as unused
-	conn1, _, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil, nil)
+	conn1, _, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
 	require.NoError(t, err)
-	conn2, _, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil, nil)
+	conn2, _, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
 	require.NoError(t, err)
 	conn2.Unlock() // this marks conn2 as NonBusy
 
@@ -154,7 +154,7 @@ func TestTxPoolTransactionIsolation(t *testing.T) {
 	db, txPool, _, closer := setup(t)
 	defer closer()
 
-	c2, _, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{TransactionIsolation: querypb.ExecuteOptions_READ_COMMITTED}, false, 0, nil, nil)
+	c2, _, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{TransactionIsolation: querypb.ExecuteOptions_READ_COMMITTED}, false, 0, nil)
 	require.NoError(t, err)
 	c2.Release(tx.TxClose)
 
@@ -172,7 +172,7 @@ func TestTxPoolAutocommit(t *testing.T) {
 	// to mysql.
 	// This test is meaningful because if txPool.Begin were to send a BEGIN statement to the connection, it will fatal
 	// because is not in the list of expected queries (i.e db.AddQuery hasn't been called).
-	conn1, _, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{TransactionIsolation: querypb.ExecuteOptions_AUTOCOMMIT}, false, 0, nil, nil)
+	conn1, _, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{TransactionIsolation: querypb.ExecuteOptions_AUTOCOMMIT}, false, 0, nil)
 	require.NoError(t, err)
 
 	// run a query to see it in the query log
@@ -204,7 +204,7 @@ func TestTxPoolBeginWithPoolConnectionError_Errno2006_Transient(t *testing.T) {
 	err := db.WaitForClose(2 * time.Second)
 	require.NoError(t, err)
 
-	txConn, _, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil, nil)
+	txConn, _, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
 	require.NoError(t, err, "Begin should have succeeded after the retry in DBConn.Exec()")
 	txConn.Release(tx.TxCommit)
 }
@@ -225,7 +225,7 @@ func primeTxPoolWithConnection(t *testing.T, ctx context.Context) (*fakesqldb.DB
 	// reused by subsequent transactions.
 	db.AddQuery("begin", &sqltypes.Result{})
 	db.AddQuery("rollback", &sqltypes.Result{})
-	txConn, _, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil, nil)
+	txConn, _, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
 	require.NoError(t, err)
 	txConn.Release(tx.TxCommit)
 
@@ -248,7 +248,7 @@ func TestTxPoolBeginWithError(t *testing.T) {
 	}
 
 	ctxWithCallerID := callerid.NewContext(ctx, ef, im)
-	_, _, _, err := txPool.Begin(ctxWithCallerID, &querypb.ExecuteOptions{}, false, 0, nil, nil)
+	_, _, _, err := txPool.Begin(ctxWithCallerID, &querypb.ExecuteOptions{}, false, 0, nil)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "error: rejected")
 	require.Equal(t, vtrpcpb.Code_UNKNOWN, vterrors.Code(err), "wrong error code for Begin error")
@@ -270,19 +270,6 @@ func TestTxPoolBeginWithError(t *testing.T) {
 		}, limiter.Actions())
 }
 
-func TestTxPoolBeginWithPreQueryError(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	db, txPool, _, closer := setup(t)
-	defer closer()
-	db.AddRejectedQuery("pre_query", errRejected)
-	_, _, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, []string{"pre_query"}, nil)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "error: rejected")
-	require.Equal(t, vtrpcpb.Code_UNKNOWN, vterrors.Code(err), "wrong error code for Begin error")
-}
-
 func TestTxPoolCancelledContextError(t *testing.T) {
 	// given
 	db, txPool, _, closer := setup(t)
@@ -291,7 +278,7 @@ func TestTxPoolCancelledContextError(t *testing.T) {
 	cancel()
 
 	// when
-	_, _, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil, nil)
+	_, _, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
 
 	// then
 	require.Error(t, err)
@@ -312,12 +299,12 @@ func TestTxPoolWaitTimeoutError(t *testing.T) {
 	defer closer()
 
 	// lock the only connection in the pool.
-	conn, _, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil, nil)
+	conn, _, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
 	require.NoError(t, err)
 	defer conn.Unlock()
 
 	// try locking one more connection.
-	_, _, _, err = txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil, nil)
+	_, _, _, err = txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
 
 	// then
 	require.Error(t, err)
@@ -337,7 +324,7 @@ func TestTxPoolRollbackFailIsPassedThrough(t *testing.T) {
 	defer closer()
 	db.AddRejectedQuery("rollback", errRejected)
 
-	conn1, _, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil, nil)
+	conn1, _, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
 	require.NoError(t, err)
 
 	_, err = conn1.Exec(ctx, sql, 1, true)
@@ -357,7 +344,7 @@ func TestTxPoolGetConnRecentlyRemovedTransaction(t *testing.T) {
 
 	db, txPool, _, _ := setup(t)
 	defer db.Close()
-	conn1, _, _, _ := txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil, nil)
+	conn1, _, _, _ := txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
 	id := conn1.ReservedID()
 	conn1.Unlock()
 	txPool.Close()
@@ -365,7 +352,7 @@ func TestTxPoolGetConnRecentlyRemovedTransaction(t *testing.T) {
 	assertErrorMatch := func(id int64, reason string) {
 		conn, err := txPool.GetAndLock(id, "for query")
 		if err == nil { //
-			conn.Releasef("fail")
+			conn.ReleaseString("fail")
 			t.Errorf("expected to get an error")
 			return
 		}
@@ -380,12 +367,12 @@ func TestTxPoolGetConnRecentlyRemovedTransaction(t *testing.T) {
 	params := dbconfigs.New(db.ConnParams())
 	txPool.Open(params, params, params)
 
-	conn1, _, _, _ = txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil, nil)
+	conn1, _, _, _ = txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
 	id = conn1.ReservedID()
 	_, err := txPool.Commit(ctx, conn1)
 	require.NoError(t, err)
 
-	conn1.Releasef("transaction committed")
+	conn1.ReleaseString("transaction committed")
 
 	assertErrorMatch(id, "transaction committed")
 
@@ -396,7 +383,7 @@ func TestTxPoolGetConnRecentlyRemovedTransaction(t *testing.T) {
 	txPool.Open(params, params, params)
 	defer txPool.Close()
 
-	conn1, _, _, err = txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil, nil)
+	conn1, _, _, err = txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
 	require.NoError(t, err, "unable to start transaction: %v", err)
 	conn1.Unlock()
 	id = conn1.ReservedID()
@@ -412,7 +399,7 @@ func TestTxPoolCloseKillsStrayTransactions(t *testing.T) {
 	startingStray := txPool.env.Stats().InternalErrors.Counts()["StrayTransactions"]
 
 	// Start stray transaction.
-	conn, _, _, err := txPool.Begin(context.Background(), &querypb.ExecuteOptions{}, false, 0, nil, nil)
+	conn, _, _, err := txPool.Begin(context.Background(), &querypb.ExecuteOptions{}, false, 0, nil)
 	require.NoError(t, err)
 	conn.Unlock()
 
@@ -443,7 +430,7 @@ func TestTxTimeoutKillsTransactions(t *testing.T) {
 	ctxWithCallerID := callerid.NewContext(ctx, ef, im)
 
 	// Start transaction.
-	conn, _, _, err := txPool.Begin(ctxWithCallerID, &querypb.ExecuteOptions{}, false, 0, nil, nil)
+	conn, _, _, err := txPool.Begin(ctxWithCallerID, &querypb.ExecuteOptions{}, false, 0, nil)
 	require.NoError(t, err)
 	conn.Unlock()
 
@@ -491,7 +478,7 @@ func TestTxTimeoutDoesNotKillShortLivedTransactions(t *testing.T) {
 	ctxWithCallerID := callerid.NewContext(ctx, ef, im)
 
 	// Start transaction.
-	conn, _, _, err := txPool.Begin(ctxWithCallerID, &querypb.ExecuteOptions{}, false, 0, nil, nil)
+	conn, _, _, err := txPool.Begin(ctxWithCallerID, &querypb.ExecuteOptions{}, false, 0, nil)
 	require.NoError(t, err)
 	conn.Unlock()
 
@@ -526,7 +513,7 @@ func TestTxTimeoutKillsOlapTransactions(t *testing.T) {
 	// Start transaction.
 	conn, _, _, err := txPool.Begin(ctxWithCallerID, &querypb.ExecuteOptions{
 		Workload: querypb.ExecuteOptions_OLAP,
-	}, false, 0, nil, nil)
+	}, false, 0, nil)
 	require.NoError(t, err)
 	conn.Unlock()
 
@@ -561,11 +548,11 @@ func TestTxTimeoutNotEnforcedForZeroLengthTimeouts(t *testing.T) {
 	ctxWithCallerID := callerid.NewContext(ctx, ef, im)
 
 	// Start transactions.
-	conn0, _, _, err := txPool.Begin(ctxWithCallerID, &querypb.ExecuteOptions{}, false, 0, nil, nil)
+	conn0, _, _, err := txPool.Begin(ctxWithCallerID, &querypb.ExecuteOptions{}, false, 0, nil)
 	require.NoError(t, err)
 	conn1, _, _, err := txPool.Begin(ctxWithCallerID, &querypb.ExecuteOptions{
 		Workload: querypb.ExecuteOptions_OLAP,
-	}, false, 0, nil, nil)
+	}, false, 0, nil)
 	require.NoError(t, err)
 	conn0.Unlock()
 	conn1.Unlock()
@@ -606,7 +593,7 @@ func TestTxTimeoutReservedConn(t *testing.T) {
 	// Start OLAP transaction and return it to pool right away.
 	conn0, _, _, err := txPool.Begin(ctxWithCallerID, &querypb.ExecuteOptions{
 		Workload: querypb.ExecuteOptions_OLAP,
-	}, false, 0, nil, nil)
+	}, false, 0, nil)
 	require.NoError(t, err)
 	// Taint the connection.
 	conn0.Taint(ctxWithCallerID, nil)
@@ -648,14 +635,14 @@ func TestTxTimeoutReusedReservedConn(t *testing.T) {
 	// Start OLAP transaction and return it to pool right away.
 	conn0, _, _, err := txPool.Begin(ctxWithCallerID, &querypb.ExecuteOptions{
 		Workload: querypb.ExecuteOptions_OLAP,
-	}, false, 0, nil, nil)
+	}, false, 0, nil)
 	require.NoError(t, err)
 	// Taint the connection.
 	conn0.Taint(ctxWithCallerID, nil)
 	conn0.Unlock()
 
 	// Reuse underlying connection in an OLTP transaction.
-	conn1, _, _, err := txPool.Begin(ctxWithCallerID, &querypb.ExecuteOptions{}, false, conn0.ReservedID(), nil, nil)
+	conn1, _, _, err := txPool.Begin(ctxWithCallerID, &querypb.ExecuteOptions{}, false, conn0.ReservedID(), nil)
 	require.NoError(t, err)
 	require.Equal(t, conn1.ReservedID(), conn0.ReservedID())
 	conn1.Unlock()
@@ -786,7 +773,7 @@ func TestTxPoolBeginStatements(t *testing.T) {
 				TransactionIsolation:  tc.txIsolationLevel,
 				TransactionAccessMode: tc.txAccessModes,
 			}
-			conn, beginSQL, _, err := txPool.Begin(ctx, options, tc.readOnly, 0, nil, nil)
+			conn, beginSQL, _, err := txPool.Begin(ctx, options, tc.readOnly, 0, nil)
 			if tc.expErr != "" {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tc.expErr)

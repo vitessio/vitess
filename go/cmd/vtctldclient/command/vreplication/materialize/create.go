@@ -91,6 +91,14 @@ func commandCreate(cmd *cobra.Command, args []string) error {
 	tsp := common.GetTabletSelectionPreference(cmd)
 	cli.FinishedParsing(cmd)
 
+	configOverrides, err := common.ParseConfigOverrides(common.CreateOptions.ConfigOverrides)
+	if err != nil {
+		return err
+	}
+	workflowOptions := &vtctldatapb.WorkflowOptions{
+		Config: configOverrides,
+	}
+
 	ms := &vtctldatapb.MaterializeSettings{
 		Workflow:                  common.BaseOptions.Workflow,
 		MaterializationIntent:     vtctldatapb.MaterializationIntent_CUSTOM,
@@ -101,6 +109,8 @@ func commandCreate(cmd *cobra.Command, args []string) error {
 		Cell:                      strings.Join(common.CreateOptions.Cells, ","),
 		TabletTypes:               topoproto.MakeStringTypeCSV(common.CreateOptions.TabletTypes),
 		TabletSelectionPreference: tsp,
+		ReferenceTables:           common.CreateOptions.ReferenceTables,
+		WorkflowOptions:           workflowOptions,
 	}
 
 	createOptions.TableSettings.parser, err = sqlparser.New(sqlparser.Options{
@@ -152,47 +162,9 @@ func (ts *tableSettings) String() string {
 }
 
 func (ts *tableSettings) Set(v string) error {
-	ts.val = make([]*vtctldatapb.TableMaterializeSettings, 0)
-	err := json.Unmarshal([]byte(v), &ts.val)
-	if err != nil {
-		return fmt.Errorf("table-settings is not valid JSON")
-	}
-	if len(ts.val) == 0 {
-		return fmt.Errorf("empty table-settings")
-	}
-
-	// Validate the provided queries.
-	seenSourceTables := make(map[string]bool)
-	for _, tms := range ts.val {
-		if tms.TargetTable == "" || tms.SourceExpression == "" {
-			return fmt.Errorf("missing target_table or source_expression")
-		}
-		// Validate that the query is valid.
-		stmt, err := ts.parser.Parse(tms.SourceExpression)
-		if err != nil {
-			return fmt.Errorf("invalid source_expression: %q", tms.SourceExpression)
-		}
-		// Validate that each source-expression uses a different table.
-		// If any of them query the same table the materialize workflow
-		// will fail.
-		err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-			switch node := node.(type) {
-			case sqlparser.TableName:
-				if node.Name.NotEmpty() {
-					if seenSourceTables[node.Name.String()] {
-						return false, fmt.Errorf("multiple source_expression queries use the same table: %q", node.Name.String())
-					}
-					seenSourceTables[node.Name.String()] = true
-				}
-			}
-			return true, nil
-		}, stmt)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
+	var err error
+	ts.val, err = common.ParseTableMaterializeSettings(v, ts.parser)
+	return err
 }
 
 func (ts *tableSettings) Type() string {

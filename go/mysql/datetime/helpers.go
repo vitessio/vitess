@@ -76,7 +76,7 @@ func appendInt(b []byte, x int, width int) []byte {
 // match reports whether s1 and s2 match ignoring case.
 // It is assumed s1 and s2 are the same length.
 func match(s1, s2 string) bool {
-	for i := 0; i < len(s1); i++ {
+	for i := range len(s1) {
 		c1 := s1[i]
 		c2 := s2[i]
 		if c1 != c2 {
@@ -153,7 +153,7 @@ func isDigit[bytes []byte | string](s bytes, i int) bool {
 func isNumber[bytes []byte | string](s bytes) (int, bool) {
 	var dot bool
 	pos := -1
-	for i := 0; i < len(s); i++ {
+	for i := range len(s) {
 		if !isDigit(s, i) {
 			if dot {
 				return i, true
@@ -189,7 +189,7 @@ func getnum(s string, fixed bool) (int, string, bool) {
 
 func getnuml(s string, l int) (int, string, bool) {
 	var res int
-	for i := 0; i < l; i++ {
+	for i := range l {
 		if !isDigit(s, i) {
 			return 0, s, false
 		}
@@ -273,7 +273,7 @@ func parseNanoseconds[bytes []byte | string](value bytes, nbytes int) (ns int, l
 	// We need nanoseconds, which means scaling by the number
 	// of missing digits in the format, maximum length 10.
 	scaleDigits := 10 - nbytes
-	for i := 0; i < scaleDigits; i++ {
+	for range scaleDigits {
 		ns *= 10
 	}
 

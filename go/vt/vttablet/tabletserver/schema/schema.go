@@ -20,6 +20,7 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -125,6 +126,9 @@ type MessageInfo struct {
 	// MaxBackoff specifies the longest duration message manager
 	// should wait before rescheduling a message
 	MaxBackoff time.Duration
+
+	// IDType specifies the type of the ID column
+	IDType sqltypes.Type
 }
 
 // NewTable creates a new Table.

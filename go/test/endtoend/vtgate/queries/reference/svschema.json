@@ -1,0 +1,22 @@
+{
+  "sharded": true,
+  "vindexes": {
+    "hash": {
+      "type": "hash"
+    }
+  },
+  "tables": {
+    "delivery_failure": {
+      "columnVindexes": [
+        {
+          "column": "id",
+          "name": "hash"
+        }
+      ]
+    },
+    "zip_detail": {
+      "type": "reference",
+      "source": "uks.zip_detail"
+    }
+  }
+}

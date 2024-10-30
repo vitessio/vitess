@@ -65,6 +65,7 @@ const (
 	testFilterEnvVar = "ONLINEDDL_SUITE_TEST_FILTER"
 )
 
+// Use $VREPL_SUITE_TEST_FILTER environment variable to filter tests by name.
 func TestMain(m *testing.M) {
 	defer cluster.PanicHandler(nil)
 	flag.Parse()
@@ -131,7 +132,7 @@ func TestMain(m *testing.M) {
 
 }
 
-func TestSchemaChange(t *testing.T) {
+func TestVreplSuiteSchemaChanges(t *testing.T) {
 	defer cluster.PanicHandler(t)
 
 	shards := clusterInstance.Keyspaces[0].Shards

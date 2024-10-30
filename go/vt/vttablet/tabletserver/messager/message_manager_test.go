@@ -74,6 +74,7 @@ func newMMTable() *schema.Table {
 			BatchSize:          1,
 			CacheSize:          10,
 			PollInterval:       1 * time.Second,
+			IDType:             sqltypes.VarBinary,
 		},
 	}
 }
@@ -91,6 +92,7 @@ func newMMTableWithBackoff() *schema.Table {
 			BatchSize:          1,
 			CacheSize:          10,
 			PollInterval:       1 * time.Second,
+			IDType:             sqltypes.VarBinary,
 		},
 	}
 }
@@ -889,7 +891,8 @@ func (fv *fakeVStreamer) setPollerResponse(pr []*binlogdatapb.VStreamResultsResp
 	fv.pollerResponse = pr
 }
 
-func (fv *fakeVStreamer) Stream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, throttlerApp throttlerapp.Name, send func([]*binlogdatapb.VEvent) error) error {
+func (fv *fakeVStreamer) Stream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK,
+	filter *binlogdatapb.Filter, throttlerApp throttlerapp.Name, send func([]*binlogdatapb.VEvent) error, options *binlogdatapb.VStreamOptions) error {
 	fv.streamInvocations.Add(1)
 	for {
 		fv.mu.Lock()

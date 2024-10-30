@@ -394,6 +394,8 @@ func valueToEval(value sqltypes.Value, collation collations.TypedCollation, valu
 		return newEvalEnum(value.Raw(), values), nil
 	case tt == sqltypes.Set:
 		return newEvalSet(value.Raw(), values), nil
+	case tt == sqltypes.Vector:
+		return newEvalVector(value.Raw()), nil
 	case sqltypes.IsText(tt):
 		if tt == sqltypes.HexNum {
 			raw, err := parseHexNumber(value.Raw())

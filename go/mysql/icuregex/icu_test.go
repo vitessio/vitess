@@ -267,7 +267,7 @@ func (tp *TestPattern) Test(t testing.TB) bool {
 		findCount = 1
 	}
 
-	for i := 0; i < findCount; i++ {
+	for range findCount {
 		isMatch, err = func() (bool, error) {
 			defer func() {
 				if r := recover(); r != nil {
@@ -299,7 +299,7 @@ func (tp *TestPattern) Test(t testing.TB) bool {
 		return true
 	}
 
-	for i := 0; i < matcher.GroupCount(); i++ {
+	for i := range matcher.GroupCount() {
 		expectedStart := -1
 		expectedEnd := -1
 

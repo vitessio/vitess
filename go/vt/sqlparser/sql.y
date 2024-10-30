@@ -242,6 +242,12 @@ func markBindVariable(yylex yyLexer, bvar string) {
 // predicates as column modifiers, shifting on a '(' conflicts with reducing the keywords to a non_reserved_keyword. Since we want shifting to
 // take precedence, we add this precedence to the reduction rules.
 %nonassoc <str> ANY_SOME
+// SELECT_OPTIONS is used to resolve shift-reduce conflicts occurring due to select options that are non-reserved keywords.
+// When parsing select_options_opt if we encounter a select option like `SQL_BUFFER_RESULT`, we can either reduce select_options_opt and use it as a table name
+// or we can shift and use it as a select option. Since we want the latter option, we want to prioritize shifting over reducing.
+// Adding no precedence also works, since shifting is the default, but it reports some conflicts
+// We need to add a lower precedence to reducing the select_options_opt rule than shifting.
+%nonassoc <str> SELECT_OPTIONS
 
 %token LEX_ERROR
 %left <str> UNION
@@ -253,12 +259,12 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> DUMPFILE CSV HEADER MANIFEST OVERWRITE STARTING OPTIONALLY
 %token <str> VALUES LAST_INSERT_ID
 %token <str> NEXT VALUE SHARE MODE
-%token <str> SQL_NO_CACHE SQL_CACHE SQL_CALC_FOUND_ROWS
+%token <str> SQL_NO_CACHE SQL_CACHE SQL_CALC_FOUND_ROWS SQL_SMALL_RESULT SQL_BIG_RESULT HIGH_PRIORITY
 %left <str> JOIN STRAIGHT_JOIN LEFT RIGHT INNER OUTER CROSS NATURAL USE FORCE
 %left <str> ON USING INPLACE COPY INSTANT ALGORITHM NONE SHARED EXCLUSIVE
 %left <str> SUBQUERY_AS_EXPR
 %left <str> '(' ',' ')'
-%nonassoc <str> STRING
+%nonassoc <str> STRING SQL_BUFFER_RESULT
 %token <str> ID AT_ID AT_AT_ID HEX NCHAR_STRING INTEGRAL FLOAT DECIMAL HEXNUM COMMENT COMMENT_KEYWORD BITNUM BIT_LITERAL COMPRESSION
 %token <str> VALUE_ARG LIST_ARG OFFSET_ARG
 %token <str> JSON_PRETTY JSON_STORAGE_SIZE JSON_STORAGE_FREE JSON_CONTAINS JSON_CONTAINS_PATH JSON_EXTRACT JSON_KEYS JSON_OVERLAPS JSON_SEARCH JSON_VALUE
@@ -268,7 +274,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> DISCARD IMPORT ENABLE DISABLE TABLESPACE
 %token <str> VIRTUAL STORED
 %token <str> BOTH LEADING TRAILING
-%token <str> KILL
+%token <str> KILL TRACE
 
 %left EMPTY_FROM_CLAUSE
 %right INTO
@@ -330,6 +336,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 // Transaction Tokens
 %token <str> BEGIN START TRANSACTION COMMIT ROLLBACK SAVEPOINT RELEASE WORK
 %token <str> CONSISTENT SNAPSHOT
+%token <str> UNRESOLVED TRANSACTIONS
 
 // Type Tokens
 %token <str> BIT TINYINT SMALLINT MEDIUMINT INT INTEGER BIGINT INTNUM
@@ -340,6 +347,8 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> BLOB TINYBLOB MEDIUMBLOB LONGBLOB JSON JSON_SCHEMA_VALID JSON_SCHEMA_VALIDATION_REPORT ENUM
 %token <str> GEOMETRY POINT LINESTRING POLYGON GEOMCOLLECTION GEOMETRYCOLLECTION MULTIPOINT MULTILINESTRING MULTIPOLYGON
 %token <str> ASCII UNICODE // used in CONVERT/CAST types
+
+%nonassoc <str> VECTOR
 
 // Type Modifiers
 %token <str> NULLX AUTO_INCREMENT APPROXNUM SIGNED UNSIGNED ZEROFILL
@@ -545,7 +554,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <str> columns_or_fields extended_opt storage_opt
 %type <showFilter> like_or_where_opt like_opt
 %type <boolean> exists_opt not_exists_opt enforced enforced_opt temp_opt full_opt
-%type <empty> to_opt
+%type <empty> to_opt for_opt
 %type <str> reserved_keyword non_reserved_keyword
 %type <identifierCI> sql_id sql_id_opt reserved_sql_id col_alias as_ci_opt
 %type <expr> charset_value
@@ -746,7 +755,7 @@ with_list:
 common_table_expr:
   table_id column_list_opt AS subquery
   {
-    $$ = &CommonTableExpr{ID: $1, Columns: $2, Subquery: $4}
+    $$ = &CommonTableExpr{ID: $1, Columns: $2, Subquery: $4.Select}
   }
 
 query_expression_parens:
@@ -1262,36 +1271,36 @@ alter_table_prefix:
 create_index_prefix:
   CREATE comment_opt INDEX sql_id using_opt ON table_name
   {
-    $$ = &AlterTable{Table: $7, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$4}, Options:$5}}}}
+    $$ = &AlterTable{Comments: Comments($2).Parsed(), Table: $7, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$4}, Options:$5}}}}
     setDDL(yylex, $$)
   }
 | CREATE comment_opt FULLTEXT INDEX sql_id using_opt ON table_name
   {
-    $$ = &AlterTable{Table: $8, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$5, Type: IndexTypeFullText}, Options:$6}}}}
+    $$ = &AlterTable{Comments: Comments($2).Parsed(), Table: $8, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$5, Type: IndexTypeFullText}, Options:$6}}}}
     setDDL(yylex, $$)
   }
 | CREATE comment_opt SPATIAL INDEX sql_id using_opt ON table_name
   {
-    $$ = &AlterTable{Table: $8, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$5, Type: IndexTypeSpatial}, Options:$6}}}}
+    $$ = &AlterTable{Comments: Comments($2).Parsed(), Table: $8, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$5, Type: IndexTypeSpatial}, Options:$6}}}}
     setDDL(yylex, $$)
   }
 | CREATE comment_opt UNIQUE INDEX sql_id using_opt ON table_name
   {
-    $$ = &AlterTable{Table: $8, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$5, Type: IndexTypeUnique}, Options:$6}}}}
+    $$ = &AlterTable{Comments: Comments($2).Parsed(), Table: $8, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$5, Type: IndexTypeUnique}, Options:$6}}}}
     setDDL(yylex, $$)
   }
 
 create_database_prefix:
-  CREATE comment_opt database_or_schema comment_opt not_exists_opt table_id
+  CREATE comment_opt database_or_schema not_exists_opt table_id
   {
-    $$ = &CreateDatabase{Comments: Comments($4).Parsed(), DBName: $6, IfNotExists: $5}
+    $$ = &CreateDatabase{Comments: Comments($2).Parsed(), DBName: $5, IfNotExists: $4}
     setDDL(yylex,$$)
   }
 
 alter_database_prefix:
   ALTER comment_opt database_or_schema
   {
-    $$ = &AlterDatabase{}
+    $$ = &AlterDatabase{Comments: Comments($2).Parsed()}
     setDDL(yylex,$$)
   }
 
@@ -1720,10 +1729,6 @@ text_literal %prec MULTIPLE_TEXT_LITERAL
 | underscore_charsets HEX %prec UNARY
   {
     $$ = &IntroducerExpr{CharacterSet: $1, Expr: NewHexLiteral($2)}
-  }
-| underscore_charsets column_name_or_offset %prec UNARY
-  {
-    $$ = &IntroducerExpr{CharacterSet: $1, Expr: $2}
   }
 | underscore_charsets VALUE_ARG %prec UNARY
   {
@@ -2171,6 +2176,10 @@ char_type:
 | ENUM '(' enum_values ')' charset_opt
   {
     $$ = &ColumnType{Type: string($1), EnumValues: $3, Charset: $5}
+  }
+| VECTOR length_opt
+  {
+    $$ = &ColumnType{Type: string($1), Length: $2}
   }
 // need set_values / SetValues ?
 | SET '(' enum_values ')' charset_opt
@@ -3302,6 +3311,12 @@ alter_statement:
       UUID: string($4),
     }
   }
+| ALTER comment_opt VITESS_MIGRATION CLEANUP ALL
+  {
+    $$ = &AlterMigration{
+      Type: CleanupAllMigrationType,
+    }
+  }
 | ALTER comment_opt VITESS_MIGRATION STRING LAUNCH
   {
     $$ = &AlterMigration{
@@ -3962,9 +3977,9 @@ drop_statement:
   {
     // Change this to an alter statement
     if $4.Lowered() == "primary" {
-    $$ = &AlterTable{FullyParsed:true, Table: $6,AlterOptions: append([]AlterOption{&DropKey{Type:PrimaryKeyType}},$7...)}
+    $$ = &AlterTable{Comments: Comments($2).Parsed(), FullyParsed:true, Table: $6,AlterOptions: append([]AlterOption{&DropKey{Type:PrimaryKeyType}},$7...)}
     } else {
-    $$ = &AlterTable{FullyParsed: true, Table: $6,AlterOptions: append([]AlterOption{&DropKey{Type:NormalKeyType, Name:$4}},$7...)}
+    $$ = &AlterTable{Comments: Comments($2).Parsed(), FullyParsed: true, Table: $6,AlterOptions: append([]AlterOption{&DropKey{Type:NormalKeyType, Name:$4}},$7...)}
     }
   }
 | DROP comment_opt VIEW exists_opt view_name_list restrict_or_cascade_opt
@@ -4218,6 +4233,23 @@ show_statement:
   {
     $$ = &Show{&ShowOther{Command: string($2)}}
   }
+| SHOW TRANSACTION STATUS for_opt STRING
+  {
+    $$ = &Show{&ShowTransactionStatus{TransactionID: string($5)}}
+  }
+| SHOW UNRESOLVED TRANSACTIONS
+  {
+    $$ = &Show{&ShowTransactionStatus{}}
+  }
+| SHOW UNRESOLVED TRANSACTIONS FOR table_id
+  {
+    $$ = &Show{&ShowTransactionStatus{Keyspace: $5.String()}}
+  }
+
+for_opt:
+  {}
+| FOR
+  {}
 
 extended_opt:
   /* empty */
@@ -4463,6 +4495,14 @@ vexplain_type_opt:
 | QUERIES
   {
     $$ = QueriesVExplainType
+  }
+| TRACE
+  {
+    $$ = TraceVExplainType
+  }
+| KEYS
+  {
+    $$ = KeysVExplainType
   }
 
 explain_synonyms:
@@ -4795,10 +4835,10 @@ deallocate_statement:
   }
 
 select_options_opt:
-  {
+  %prec SELECT_OPTIONS {
     $$ = nil
   }
-| select_options
+| select_options %prec SELECT_OPTIONS
   {
     $$ = $1
   }
@@ -4830,9 +4870,25 @@ select_option:
   {
     $$ = DistinctStr
   }
+| HIGH_PRIORITY
+  {
+    $$ = HighPriorityStr
+  }
 | STRAIGHT_JOIN
   {
     $$ = StraightJoinHint
+  }
+| SQL_BUFFER_RESULT
+  {
+    $$ = SQLBufferResultStr
+  }
+| SQL_SMALL_RESULT
+  {
+    $$ = SQLSmallResultStr
+  }
+| SQL_BIG_RESULT
+  {
+    $$ = SQLBigResultStr
   }
 | SQL_CALC_FOUND_ROWS
   {
@@ -5531,11 +5587,11 @@ function_call_keyword
   }
 | column_name_or_offset JSON_EXTRACT_OP text_literal_or_arg
   {
-    $$ = &BinaryExpr{Left: $1, Operator: JSONExtractOp, Right: $3}
+    $$ = &JSONExtractExpr{JSONDoc: $1, PathList: []Expr{$3}}
   }
 | column_name_or_offset JSON_UNQUOTE_EXTRACT_OP text_literal_or_arg
   {
-    $$ = &BinaryExpr{Left: $1, Operator: JSONUnquoteExtractOp, Right: $3}
+    $$ = &JSONUnquoteExpr{JSONValue: &JSONExtractExpr{JSONDoc: $1, PathList: []Expr{$3}}}
   }
 
 column_names_opt_paren:
@@ -8083,6 +8139,7 @@ reserved_keyword:
 | GROUPING
 | GROUPS
 | HAVING
+| HIGH_PRIORITY
 | IF
 | IGNORE
 | IN
@@ -8151,6 +8208,8 @@ reserved_keyword:
 | SET
 | SHOW
 | SPATIAL
+| SQL_BIG_RESULT
+| SQL_SMALL_RESULT
 | STORED
 | STRAIGHT_JOIN
 | SYSDATE
@@ -8497,6 +8556,7 @@ non_reserved_keyword:
 | SNAPSHOT
 | SOME %prec ANY_SOME
 | SQL
+| SQL_BUFFER_RESULT
 | SQL_TSI_DAY
 | SQL_TSI_HOUR
 | SQL_TSI_MINUTE
@@ -8585,8 +8645,10 @@ non_reserved_keyword:
 | TINYBLOB
 | TINYINT
 | TINYTEXT
+| TRACE
 | TRADITIONAL
 | TRANSACTION
+| TRANSACTIONS
 | TREE
 | TRIGGER
 | TRIGGERS
@@ -8597,6 +8659,7 @@ non_reserved_keyword:
 | UNDEFINED
 | UNICODE
 | UNKNOWN
+| UNRESOLVED
 | UNSIGNED
 | UNTHROTTLE
 | UNUSED
@@ -8612,6 +8675,7 @@ non_reserved_keyword:
 | VARIABLES
 | VARIANCE %prec FUNCTION_CALL_NON_KEYWORD
 | VCPU
+| VECTOR
 | VEXPLAIN
 | VGTID_EXECUTED
 | VIEW

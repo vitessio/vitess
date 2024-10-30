@@ -35,6 +35,8 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/exp/maps"
+
 	"github.com/buger/jsonparser"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -329,8 +331,11 @@ func executeOnTablet(t *testing.T, conn *mysql.Conn, tablet *cluster.VttabletPro
 
 func assertQueryExecutesOnTablet(t *testing.T, conn *mysql.Conn, tablet *cluster.VttabletProcess, ksName string, query string, matchQuery string) {
 	t.Helper()
+	rr, err := vc.VtctldClient.ExecuteCommandWithOutput("GetRoutingRules")
+	require.NoError(t, err)
 	count0, body0, count1, body1 := executeOnTablet(t, conn, tablet, ksName, query, matchQuery)
-	assert.Equalf(t, count0+1, count1, "query %q did not execute in target;\ntried to match %q\nbefore:\n%s\n\nafter:\n%s\n\n", query, matchQuery, body0, body1)
+	require.Equalf(t, count0+1, count1, "query %q did not execute on destination %s (%s-%d);\ntried to match %q\nbefore:\n%s\n\nafter:\n%s\n\nrouting rules:\n%s\n\n",
+		query, ksName, tablet.Cell, tablet.TabletUID, matchQuery, body0, body1, rr)
 }
 
 func assertQueryDoesNotExecutesOnTablet(t *testing.T, conn *mysql.Conn, tablet *cluster.VttabletProcess, ksName string, query string, matchQuery string) {
@@ -1020,5 +1025,49 @@ func confirmKeyspacesRoutedTo(t *testing.T, keyspace string, routedKeyspace, tab
 		database := fmt.Sprintf("%s@%s", keyspace, tt)
 		plan := vexplain(t, database, fmt.Sprintf("select * from %s.%s", keyspace, table))
 		require.Equalf(t, routedKeyspace, plan.Keyspace.Name, "for database %s, keyspace %v, tabletType %s", database, keyspace, tt)
+	}
+}
+
+// getVReplicationConfig returns the vreplication config for one random workflow for a given tablet. Currently, this is
+// used when there is only one workflow, so we are using this simple method to get the config.
+func getVReplicationConfig(t *testing.T, tab *cluster.VttabletProcess) map[string]string {
+	configJson, err := getDebugVar(t, tab.Port, []string{"VReplicationConfig"})
+	require.NoError(t, err)
+
+	var config map[string]string
+	err = json2.Unmarshal([]byte(configJson), &config)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(config))
+
+	configJson = config[maps.Keys(config)[0]]
+	config = nil
+	err = json2.Unmarshal([]byte(configJson), &config)
+	require.NoError(t, err)
+
+	return config
+}
+
+// mapToCSV converts a golang map to a CSV string for use in defining the config overrides in vrep CLI commands.
+func mapToCSV(m map[string]string) string {
+	csv := ""
+	if len(m) == 0 {
+		return csv
+	}
+	for k, v := range m {
+		csv += fmt.Sprintf("%s=%s,", k, v)
+	}
+	if len(csv) == 0 {
+		return csv
+	}
+	return csv[:len(csv)-1]
+}
+
+// validateOverrides validates that the given vttablets have the expected config overrides.
+func validateOverrides(t *testing.T, tabs map[string]*cluster.VttabletProcess, want map[string]string) {
+	for _, tab := range tabs {
+		config := getVReplicationConfig(t, tab)
+		for k, v := range want {
+			require.EqualValues(t, v, config[k])
+		}
 	}
 }

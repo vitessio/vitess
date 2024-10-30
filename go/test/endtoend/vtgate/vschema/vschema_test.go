@@ -110,16 +110,7 @@ func TestVSchema(t *testing.T) {
 		`[[INT64(1) VARCHAR("test1")] [INT64(2) VARCHAR("test2")] [INT64(3) VARCHAR("test3")] [INT64(4) VARCHAR("test4")]]`)
 
 	utils.AssertMatches(t, conn, "delete from vt_user", `[]`)
-
-	vtgateVersion, err := cluster.GetMajorVersion("vtgate")
-	require.NoError(t, err)
-
-	// Test empty vschema
-	if vtgateVersion >= 17 {
-		utils.AssertMatches(t, conn, "SHOW VSCHEMA TABLES", `[]`)
-	} else {
-		utils.AssertMatches(t, conn, "SHOW VSCHEMA TABLES", `[[VARCHAR("dual")]]`)
-	}
+	utils.AssertMatches(t, conn, "SHOW VSCHEMA TABLES", `[]`)
 
 	// Use the DDL to create an unsharded vschema and test again
 
@@ -135,11 +126,7 @@ func TestVSchema(t *testing.T) {
 	utils.Exec(t, conn, "commit")
 
 	// Test Showing Tables
-	if vtgateVersion >= 17 {
-		utils.AssertMatches(t, conn, "SHOW VSCHEMA TABLES", `[[VARCHAR("main")] [VARCHAR("vt_user")]]`)
-	} else {
-		utils.AssertMatches(t, conn, "SHOW VSCHEMA TABLES", `[[VARCHAR("dual")] [VARCHAR("main")] [VARCHAR("vt_user")]]`)
-	}
+	utils.AssertMatches(t, conn, "SHOW VSCHEMA TABLES", `[[VARCHAR("main")] [VARCHAR("vt_user")]]`)
 
 	// Test Showing Vindexes
 	utils.AssertMatches(t, conn, "SHOW VSCHEMA VINDEXES", `[]`)

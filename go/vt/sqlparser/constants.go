@@ -23,7 +23,11 @@ const (
 	// Select.Distinct
 	AllStr              = "all "
 	DistinctStr         = "distinct "
+	HighPriorityStr     = "high_priority "
 	StraightJoinHint    = "straight_join "
+	SQLSmallResultStr   = "sql_small_result "
+	SQLBigResultStr     = "sql_big_result "
+	SQLBufferResultStr  = "sql_buffer_result "
 	SQLCalcFoundRowsStr = "sql_calc_found_rows "
 
 	// Select.Lock
@@ -165,19 +169,17 @@ const (
 	IsNotFalseStr = "is not false"
 
 	// BinaryExpr.Operator
-	BitAndStr               = "&"
-	BitOrStr                = "|"
-	BitXorStr               = "^"
-	PlusStr                 = "+"
-	MinusStr                = "-"
-	MultStr                 = "*"
-	DivStr                  = "/"
-	IntDivStr               = "div"
-	ModStr                  = "%"
-	ShiftLeftStr            = "<<"
-	ShiftRightStr           = ">>"
-	JSONExtractOpStr        = "->"
-	JSONUnquoteExtractOpStr = "->>"
+	BitAndStr     = "&"
+	BitOrStr      = "|"
+	BitXorStr     = "^"
+	PlusStr       = "+"
+	MinusStr      = "-"
+	MultStr       = "*"
+	DivStr        = "/"
+	IntDivStr     = "div"
+	ModStr        = "%"
+	ShiftLeftStr  = "<<"
+	ShiftRightStr = ">>"
 
 	// UnaryExpr.Operator
 	UPlusStr    = "+"
@@ -272,6 +274,8 @@ const (
 	QueriesStr     = "queries"
 	AllVExplainStr = "all"
 	PlanStr        = "plan"
+	TraceStr       = "trace"
+	KeysStr        = "keys"
 
 	// Lock Types
 	ReadStr             = "read"
@@ -686,47 +690,6 @@ const (
 	All
 )
 
-func (op ComparisonExprOperator) Inverse() ComparisonExprOperator {
-	switch op {
-	case EqualOp:
-		return NotEqualOp
-	case LessThanOp:
-		return GreaterEqualOp
-	case GreaterThanOp:
-		return LessEqualOp
-	case LessEqualOp:
-		return GreaterThanOp
-	case GreaterEqualOp:
-		return LessThanOp
-	case NotEqualOp:
-		return EqualOp
-	case NullSafeEqualOp:
-		return NotEqualOp
-	case InOp:
-		return NotInOp
-	case NotInOp:
-		return InOp
-	case LikeOp:
-		return NotLikeOp
-	case NotLikeOp:
-		return LikeOp
-	case RegexpOp:
-		return NotRegexpOp
-	case NotRegexpOp:
-		return RegexpOp
-	}
-	panic("unreachable")
-}
-
-func (op ComparisonExprOperator) IsCommutative() bool {
-	switch op {
-	case EqualOp, NotEqualOp, NullSafeEqualOp:
-		return true
-	default:
-		return false
-	}
-}
-
 // Constant for Enum Type - IsExprOperator
 const (
 	IsNullOp IsExprOperator = iota
@@ -750,8 +713,6 @@ const (
 	ModOp
 	ShiftLeftOp
 	ShiftRightOp
-	JSONExtractOp
-	JSONUnquoteExtractOp
 )
 
 // Constant for Enum Type - UnaryExprOperator
@@ -842,6 +803,8 @@ const (
 	QueriesVExplainType VExplainType = iota
 	PlanVExplainType
 	AllVExplainType
+	TraceVExplainType
+	KeysVExplainType
 )
 
 // Constant for Enum Type - SelectIntoType
@@ -945,6 +908,7 @@ const (
 	CancelMigrationType
 	CancelAllMigrationType
 	CleanupMigrationType
+	CleanupAllMigrationType
 	ThrottleMigrationType
 	ThrottleAllMigrationType
 	UnthrottleMigrationType

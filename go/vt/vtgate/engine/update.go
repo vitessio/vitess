@@ -53,9 +53,6 @@ type Update struct {
 
 // TryExecute performs a non-streaming exec.
 func (upd *Update) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	ctx, cancelFunc := addQueryTimeout(ctx, vcursor, upd.QueryTimeout)
-	defer cancelFunc()
-
 	rss, bvs, err := upd.findRoute(ctx, vcursor, bindVars)
 	if err != nil {
 		return nil, err

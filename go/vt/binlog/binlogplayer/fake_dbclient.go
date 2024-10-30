@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strings"
 
+	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/sqltypes"
 )
 
@@ -83,4 +84,8 @@ func (dc *fakeDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Re
 
 func (dc *fakeDBClient) ExecuteFetchMulti(query string, maxrows int) ([]*sqltypes.Result, error) {
 	return make([]*sqltypes.Result, 0), nil
+}
+
+func (dc *fakeDBClient) SupportsCapability(capability capabilities.FlavorCapability) (bool, error) {
+	return false, nil
 }

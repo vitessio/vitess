@@ -25,6 +25,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/test/utils"
 )
 
 // getEntries is a test-only method for AuthServerStatic.
@@ -35,6 +37,7 @@ func (a *AuthServerStatic) getEntries() map[string][]*AuthServerStaticEntry {
 }
 
 func TestJsonConfigParser(t *testing.T) {
+	_ = utils.LeakCheckContext(t)
 	// works with legacy format
 	config := make(map[string][]*AuthServerStaticEntry)
 	jsonConfig := "{\"mysql_user\":{\"Password\":\"123\", \"UserData\":\"dummy\"}, \"mysql_user_2\": {\"Password\": \"123\", \"UserData\": \"mysql_user_2\"}}"
@@ -67,6 +70,7 @@ func TestJsonConfigParser(t *testing.T) {
 }
 
 func TestValidateHashGetter(t *testing.T) {
+	_ = utils.LeakCheckContext(t)
 	jsonConfig := `{"mysql_user": [{"Password": "password", "UserData": "user.name", "Groups": ["user_group"]}]}`
 
 	auth := NewAuthServerStatic("", jsonConfig, 0)
@@ -90,6 +94,7 @@ func TestValidateHashGetter(t *testing.T) {
 }
 
 func TestHostMatcher(t *testing.T) {
+	_ = utils.LeakCheckContext(t)
 	ip := net.ParseIP("192.168.0.1")
 	addr := &net.TCPAddr{IP: ip, Port: 9999}
 	match := MatchSourceHost(net.Addr(addr), "")
@@ -105,9 +110,9 @@ func TestHostMatcher(t *testing.T) {
 }
 
 func TestStaticConfigHUP(t *testing.T) {
+	_ = utils.LeakCheckContext(t)
 	tmpFile, err := os.CreateTemp("", "mysql_auth_server_static_file.json")
 	require.NoError(t, err, "couldn't create temp file: %v", err)
-
 	defer os.Remove(tmpFile.Name())
 
 	oldStr := "str5"
@@ -125,14 +130,19 @@ func TestStaticConfigHUP(t *testing.T) {
 
 	mu.Lock()
 	defer mu.Unlock()
-	// delete registered Auth server
-	clear(authServers)
+	// Delete registered Auth servers.
+	for k, v := range authServers {
+		if s, ok := v.(*AuthServerStatic); ok {
+			s.close()
+		}
+		delete(authServers, k)
+	}
 }
 
 func TestStaticConfigHUPWithRotation(t *testing.T) {
+	_ = utils.LeakCheckContext(t)
 	tmpFile, err := os.CreateTemp("", "mysql_auth_server_static_file.json")
 	require.NoError(t, err, "couldn't create temp file: %v", err)
-
 	defer os.Remove(tmpFile.Name())
 
 	oldStr := "str1"
@@ -147,6 +157,16 @@ func TestStaticConfigHUPWithRotation(t *testing.T) {
 
 	hupTestWithRotation(t, aStatic, tmpFile, oldStr, "str4")
 	hupTestWithRotation(t, aStatic, tmpFile, "str4", "str5")
+
+	mu.Lock()
+	defer mu.Unlock()
+	// Delete registered Auth servers.
+	for k, v := range authServers {
+		if s, ok := v.(*AuthServerStatic); ok {
+			s.close()
+		}
+		delete(authServers, k)
+	}
 }
 
 func hupTest(t *testing.T, aStatic *AuthServerStatic, tmpFile *os.File, oldStr, newStr string) {
@@ -178,6 +198,7 @@ func hupTestWithRotation(t *testing.T, aStatic *AuthServerStatic, tmpFile *os.Fi
 }
 
 func TestStaticPasswords(t *testing.T) {
+	_ = utils.LeakCheckContext(t)
 	jsonConfig := `
 {
 	"user01": [{ "Password": "user01" }],

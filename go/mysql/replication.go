@@ -48,7 +48,7 @@ func (c *Conn) WriteComBinlogDump(serverID uint32, binlogFilename string, binlog
 	pos = writeUint32(data, pos, serverID)
 	_ = writeEOFString(data, pos, binlogFilename)
 	if err := c.writeEphemeralPacket(); err != nil {
-		return sqlerror.NewSQLError(sqlerror.CRServerGone, sqlerror.SSUnknownSQLState, "%v", err)
+		return sqlerror.NewSQLErrorf(sqlerror.CRServerGone, sqlerror.SSUnknownSQLState, "%v", err)
 	}
 	return nil
 }
@@ -86,16 +86,16 @@ func (c *Conn) WriteComBinlogDumpGTID(serverID uint32, binlogFilename string, bi
 		4 + // data-size
 		len(gtidSet) // data
 	data, pos := c.startEphemeralPacketWithHeader(length)
-	pos = writeByte(data, pos, ComBinlogDumpGTID)             //nolint
-	pos = writeUint16(data, pos, flags)                       //nolint
-	pos = writeUint32(data, pos, serverID)                    //nolint
-	pos = writeUint32(data, pos, uint32(len(binlogFilename))) //nolint
-	pos = writeEOFString(data, pos, binlogFilename)           //nolint
-	pos = writeUint64(data, pos, binlogPos)                   //nolint
-	pos = writeUint32(data, pos, uint32(len(gtidSet)))        //nolint
-	pos += copy(data[pos:], gtidSet)                          //nolint
+	pos = writeByte(data, pos, ComBinlogDumpGTID)             // nolint
+	pos = writeUint16(data, pos, flags)                       // nolint
+	pos = writeUint32(data, pos, serverID)                    // nolint
+	pos = writeUint32(data, pos, uint32(len(binlogFilename))) // nolint
+	pos = writeEOFString(data, pos, binlogFilename)           // nolint
+	pos = writeUint64(data, pos, binlogPos)                   // nolint
+	pos = writeUint32(data, pos, uint32(len(gtidSet)))        // nolint
+	pos += copy(data[pos:], gtidSet)                          // nolint
 	if err := c.writeEphemeralPacket(); err != nil {
-		return sqlerror.NewSQLError(sqlerror.CRServerGone, sqlerror.SSUnknownSQLState, "%v", err)
+		return sqlerror.NewSQLErrorf(sqlerror.CRServerGone, sqlerror.SSUnknownSQLState, "%v", err)
 	}
 	return nil
 }
@@ -113,7 +113,7 @@ func (c *Conn) SendSemiSyncAck(binlogFilename string, binlogPos uint64) error {
 	pos = writeUint64(data, pos, binlogPos)
 	_ = writeEOFString(data, pos, binlogFilename)
 	if err := c.writeEphemeralPacket(); err != nil {
-		return sqlerror.NewSQLError(sqlerror.CRServerGone, sqlerror.SSUnknownSQLState, "%v", err)
+		return sqlerror.NewSQLErrorf(sqlerror.CRServerGone, sqlerror.SSUnknownSQLState, "%v", err)
 	}
 	return nil
 
@@ -135,7 +135,7 @@ func (c *Conn) WriteBinlogEvent(ev BinlogEvent, semiSyncEnabled bool) error {
 	}
 	_ = writeEOFString(data, pos, string(ev.Bytes()))
 	if err := c.writeEphemeralPacket(); err != nil {
-		return sqlerror.NewSQLError(sqlerror.CRServerGone, sqlerror.SSUnknownSQLState, "%v", err)
+		return sqlerror.NewSQLErrorf(sqlerror.CRServerGone, sqlerror.SSUnknownSQLState, "%v", err)
 	}
 	return nil
 }

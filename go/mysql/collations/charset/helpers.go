@@ -22,7 +22,7 @@ func Slice(charset Charset, input []byte, from, to int) []byte {
 	}
 	iter := input
 	start := 0
-	for i := 0; i < to; i++ {
+	for i := range to {
 		r, size := charset.DecodeRune(iter)
 		if r == RuneError && size < 2 {
 			break

@@ -174,6 +174,10 @@ func init() {
 // with mock delays and response values, for use in unit tests.
 type TabletManagerClient struct {
 	tmclient.TabletManagerClient
+
+	// If true, the call will return an error.
+	CallError bool
+
 	// TopoServer is used for certain TabletManagerClient rpcs that update topo
 	// information, e.g. ChangeType. To force an error result for those rpcs in
 	// a test, set tmc.TopoServer = nil.
@@ -185,6 +189,11 @@ type TabletManagerClient struct {
 		ErrorAfter    time.Duration
 	}
 	// keyed by tablet alias.
+	ChangeTagsResult map[string]struct {
+		Response *tabletmanagerdatapb.ChangeTagsResponse
+		Error    error
+	}
+	ChangeTagsDelays       map[string]time.Duration
 	ChangeTabletTypeResult map[string]error
 	ChangeTabletTypeDelays map[string]time.Duration
 	// keyed by tablet alias.
@@ -250,10 +259,13 @@ type TabletManagerClient struct {
 		Schema *tabletmanagerdatapb.SchemaDefinition
 		Error  error
 	}
+	GetGlobalStatusVarsDelays  map[string]time.Duration
 	GetGlobalStatusVarsResults map[string]struct {
 		Statuses map[string]string
 		Error    error
 	}
+	GetUnresolvedTransactionsResults map[string][]*querypb.TransactionMetadata
+	ReadTransactionResult            map[string]*querypb.TransactionMetadata
 	// keyed by tablet alias.
 	InitPrimaryDelays map[string]time.Duration
 	// keyed by tablet alias. injects a sleep to the end of the function
@@ -279,6 +291,8 @@ type TabletManagerClient struct {
 	PopulateReparentJournalDelays map[string]time.Duration
 	// keyed by tablet alias
 	PopulateReparentJournalResults map[string]error
+	// keyed by tablet alias
+	ReadReparentJournalInfoResults map[string]int
 	// keyed by tablet alias.
 	PromoteReplicaDelays map[string]time.Duration
 	// keyed by tablet alias. injects a sleep to the end of the function
@@ -471,6 +485,39 @@ func (fake *TabletManagerClient) Backup(ctx context.Context, tablet *topodatapb.
 	return stream, nil
 }
 
+// ChangeTags is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) ChangeTags(ctx context.Context, tablet *topodatapb.Tablet, tabletTags map[string]string, replace bool) (*tabletmanagerdatapb.ChangeTagsResponse, error) {
+	key := topoproto.TabletAliasString(tablet.Alias)
+
+	if fake.ChangeTagsDelays != nil {
+		if delay, ok := fake.ChangeTagsDelays[key]; ok {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(delay):
+				// proceed to results
+			}
+		}
+	}
+
+	if result, ok := fake.ChangeTagsResult[key]; ok {
+		return result.Response, result.Error
+	}
+
+	if fake.TopoServer == nil {
+		return nil, assert.AnError
+	}
+
+	tablet, err := topotools.ChangeTags(ctx, fake.TopoServer, tablet.Alias, tabletTags, replace)
+	if err != nil {
+		return nil, err
+	}
+
+	return &tabletmanagerdatapb.ChangeTagsResponse{
+		Tags: tablet.Tags,
+	}, nil
+}
+
 // ChangeType is part of the tmclient.TabletManagerClient interface.
 func (fake *TabletManagerClient) ChangeType(ctx context.Context, tablet *topodatapb.Tablet, newType topodatapb.TabletType, semiSync bool) error {
 	key := topoproto.TabletAliasString(tablet.Alias)
@@ -648,6 +695,35 @@ func (fake *TabletManagerClient) ExecuteQuery(ctx context.Context, tablet *topod
 	return nil, fmt.Errorf("%w: no ExecuteQuery result set for tablet %s", assert.AnError, key)
 }
 
+// GetUnresolvedTransactions is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) GetUnresolvedTransactions(ctx context.Context, tablet *topodatapb.Tablet) ([]*querypb.TransactionMetadata, error) {
+	if len(fake.GetUnresolvedTransactionsResults) == 0 {
+		return nil, fmt.Errorf("%w: no GetUnresolvedTransactions results on fake TabletManagerClient", assert.AnError)
+	}
+
+	return fake.GetUnresolvedTransactionsResults[tablet.Shard], nil
+}
+
+// ReadTransaction is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) ReadTransaction(ctx context.Context, tablet *topodatapb.Tablet, dtid string) (*querypb.TransactionMetadata, error) {
+	if fake.CallError {
+		return nil, fmt.Errorf("%w: blocked call for ReadTransaction on fake TabletManagerClient", assert.AnError)
+	}
+	if fake.ReadTransactionResult == nil {
+		return nil, fmt.Errorf("%w: no ReadTransaction result on fake TabletManagerClient", assert.AnError)
+	}
+
+	return fake.ReadTransactionResult[tablet.Shard], nil
+}
+
+// ConcludeTransaction is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) ConcludeTransaction(ctx context.Context, tablet *topodatapb.Tablet, dtid string, mm bool) error {
+	if fake.CallError {
+		return fmt.Errorf("%w: blocked call for ConcludeTransaction on fake TabletManagerClient", assert.AnError)
+	}
+	return nil
+}
+
 // FullStatus is part of the tmclient.TabletManagerClient interface.
 func (fake *TabletManagerClient) FullStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.FullStatus, error) {
 	if fake.FullStatusResult != nil {
@@ -742,6 +818,17 @@ func (fake *TabletManagerClient) GetGlobalStatusVars(ctx context.Context, tablet
 	}
 
 	key := topoproto.TabletAliasString(tablet.Alias)
+	if fake.GetGlobalStatusVarsDelays != nil {
+		if delay, ok := fake.GetGlobalStatusVarsDelays[key]; ok {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(delay):
+				// proceed to results
+			}
+		}
+	}
+
 	if result, ok := fake.GetGlobalStatusVarsResults[key]; ok {
 		return result.Statuses, result.Error
 	}
@@ -869,6 +956,19 @@ func (fake *TabletManagerClient) PopulateReparentJournal(ctx context.Context, ta
 	}
 
 	return assert.AnError
+}
+
+// ReadReparentJournalInfo is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) ReadReparentJournalInfo(ctx context.Context, tablet *topodatapb.Tablet) (int, error) {
+	if fake.ReadReparentJournalInfoResults == nil {
+		return 1, nil
+	}
+	key := topoproto.TabletAliasString(tablet.Alias)
+	if result, ok := fake.ReadReparentJournalInfoResults[key]; ok {
+		return result, nil
+	}
+
+	return 0, assert.AnError
 }
 
 // PromoteReplica is part of the tmclient.TabletManagerClient interface.

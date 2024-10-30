@@ -157,7 +157,7 @@ type Plan struct {
 	PlanID PlanType
 	// When the query indicates a single table
 	Table *schema.Table
-	// SELECT, UPDATE, DELETE statements may list multiple tables
+	// This indicates all the tables that are accessed in the query.
 	AllTables []*schema.Table
 
 	// Permissions stores the permissions for the tables accessed in the query.
@@ -205,10 +205,7 @@ func (plan *Plan) TableNames() (names []string) {
 func Build(env *vtenv.Environment, statement sqlparser.Statement, tables map[string]*schema.Table, dbName string, viewsEnabled bool) (plan *Plan, err error) {
 	switch stmt := statement.(type) {
 	case *sqlparser.Union:
-		plan, err = &Plan{
-			PlanID:    PlanSelect,
-			FullQuery: GenerateLimitQuery(stmt),
-		}, nil
+		plan = &Plan{PlanID: PlanSelect, FullQuery: GenerateLimitQuery(stmt)}
 	case *sqlparser.Select:
 		plan, err = analyzeSelect(env, stmt, tables)
 	case *sqlparser.Insert:
@@ -218,45 +215,51 @@ func Build(env *vtenv.Environment, statement sqlparser.Statement, tables map[str
 	case *sqlparser.Delete:
 		plan, err = analyzeDelete(stmt, tables)
 	case *sqlparser.Set:
-		plan, err = analyzeSet(stmt), nil
+		plan = analyzeSet(stmt)
 	case sqlparser.DDLStatement:
 		plan, err = analyzeDDL(stmt)
 	case *sqlparser.AlterMigration:
-		plan, err = &Plan{PlanID: PlanAlterMigration, FullStmt: stmt}, nil
+		plan = &Plan{PlanID: PlanAlterMigration, FullStmt: stmt}
 	case *sqlparser.RevertMigration:
-		plan, err = &Plan{PlanID: PlanRevertMigration, FullStmt: stmt}, nil
+		plan = &Plan{PlanID: PlanRevertMigration, FullStmt: stmt}
 	case *sqlparser.ShowMigrationLogs:
-		plan, err = &Plan{PlanID: PlanShowMigrationLogs, FullStmt: stmt}, nil
+		plan = &Plan{PlanID: PlanShowMigrationLogs, FullStmt: stmt}
 	case *sqlparser.ShowThrottledApps:
-		plan, err = &Plan{PlanID: PlanShowThrottledApps, FullStmt: stmt}, nil
+		plan = &Plan{PlanID: PlanShowThrottledApps, FullStmt: stmt}
 	case *sqlparser.ShowThrottlerStatus:
-		plan, err = &Plan{PlanID: PlanShowThrottlerStatus, FullStmt: stmt}, nil
+		plan = &Plan{PlanID: PlanShowThrottlerStatus, FullStmt: stmt}
 	case *sqlparser.Show:
 		plan, err = analyzeShow(stmt, dbName)
 	case *sqlparser.Analyze, sqlparser.Explain:
-		plan, err = &Plan{PlanID: PlanOtherRead}, nil
+		// Analyze and Explain are treated as read-only queries.
+		// We send down a string, and get a table result back.
+		plan = &Plan{
+			PlanID:    PlanSelect,
+			FullQuery: GenerateFullQuery(stmt),
+		}
 	case *sqlparser.OtherAdmin:
-		plan, err = &Plan{PlanID: PlanOtherAdmin}, nil
+		plan = &Plan{PlanID: PlanOtherAdmin}
 	case *sqlparser.Savepoint:
-		plan, err = &Plan{PlanID: PlanSavepoint}, nil
+		plan = &Plan{PlanID: PlanSavepoint, FullStmt: stmt}
 	case *sqlparser.Release:
-		plan, err = &Plan{PlanID: PlanRelease}, nil
+		plan = &Plan{PlanID: PlanRelease}
 	case *sqlparser.SRollback:
-		plan, err = &Plan{PlanID: PlanSRollback}, nil
+		plan = &Plan{PlanID: PlanSRollback, FullStmt: stmt}
 	case *sqlparser.Load:
-		plan, err = &Plan{PlanID: PlanLoad}, nil
+		plan = &Plan{PlanID: PlanLoad}
 	case *sqlparser.Flush:
 		plan, err = analyzeFlush(stmt, tables)
 	case *sqlparser.UnlockTables:
-		plan, err = &Plan{PlanID: PlanUnlockTables}, nil
+		plan = &Plan{PlanID: PlanUnlockTables}
 	case *sqlparser.CallProc:
-		plan, err = &Plan{PlanID: PlanCallProc, FullQuery: GenerateFullQuery(stmt)}, nil
+		plan = &Plan{PlanID: PlanCallProc, FullQuery: GenerateFullQuery(stmt)}
 	default:
 		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "invalid SQL")
 	}
 	if err != nil {
 		return nil, err
 	}
+	plan.AllTables = lookupAllTables(statement, tables)
 	plan.Permissions = BuildPermissions(statement)
 	return plan, nil
 }
@@ -274,14 +277,14 @@ func BuildStreaming(statement sqlparser.Statement, tables map[string]*schema.Tab
 		if hasLockFunc(stmt) {
 			plan.NeedsReservedConn = true
 		}
-		plan.Table, plan.AllTables = lookupTables(stmt.From, tables)
+		plan.Table = lookupTables(stmt.From, tables)
 	case *sqlparser.Show, *sqlparser.Union, *sqlparser.CallProc, sqlparser.Explain:
 	case *sqlparser.Analyze:
 		plan.PlanID = PlanOtherRead
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s not allowed for streaming", sqlparser.ASTToStatementType(statement))
 	}
-
+	plan.AllTables = lookupAllTables(statement, tables)
 	return plan, nil
 }
 

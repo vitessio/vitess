@@ -65,3 +65,57 @@ func TestDayNumberFields(t *testing.T) {
 		assert.Equal(t, wantDate, got)
 	}
 }
+
+func TestValidatePeriod(t *testing.T) {
+	testCases := []struct {
+		period int64
+		want   bool
+	}{
+		{110112, true},
+		{101122, false},
+		{-1112212, false},
+		{7110, true},
+	}
+
+	for _, tc := range testCases {
+		got := ValidatePeriod(tc.period)
+		assert.Equal(t, tc.want, got)
+	}
+}
+
+func TestPeriodToMonths(t *testing.T) {
+	testCases := []struct {
+		period int64
+		want   int64
+	}{
+		{0, 0},
+		{110112, 13223},
+		{100112, 12023},
+		{7112, 23663},
+		{200112, 24023},
+		{112, 24023},
+	}
+
+	for _, tc := range testCases {
+		got := PeriodToMonths(tc.period)
+		assert.Equal(t, tc.want, got)
+	}
+}
+
+func TestMonthsToPeriod(t *testing.T) {
+	testCases := []struct {
+		months int64
+		want   int64
+	}{
+		{0, 0},
+		{13223, 110112},
+		{12023, 100112},
+		{23663, 197112},
+		{24023, 200112},
+	}
+
+	for _, tc := range testCases {
+		got := MonthsToPeriod(tc.months)
+		assert.Equal(t, tc.want, got)
+	}
+}

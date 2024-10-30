@@ -92,8 +92,7 @@ var (
 // it implements the BackupEngine interface and contains all the logic
 // required to implement a backup/restore by copying files from and to
 // the correct location / storage bucket
-type BuiltinBackupEngine struct {
-}
+type BuiltinBackupEngine struct{}
 
 // builtinBackupManifest represents the backup. It lists all the files, the
 // Position that the backup was taken at, the compression engine used, etc.
@@ -186,7 +185,7 @@ func (fe *FileEntry) fullPath(cnf *Mycnf) (string, error) {
 	return path.Join(fe.ParentPath, root, fe.Name), nil
 }
 
-// open attempts t oopen the file
+// open attempts to open the file
 func (fe *FileEntry) open(cnf *Mycnf, readOnly bool) (*os.File, error) {
 	name, err := fe.fullPath(cnf)
 	if err != nil {
@@ -194,7 +193,7 @@ func (fe *FileEntry) open(cnf *Mycnf, readOnly bool) (*os.File, error) {
 	}
 	var fd *os.File
 	if readOnly {
-		if fd, err = os.Open(name); err != nil {
+		if fd, err = openForSequential(name); err != nil {
 			return nil, vterrors.Wrapf(err, "cannot open source file %v", name)
 		}
 	} else {
@@ -393,7 +392,6 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 // executeFullBackup returns a BackupResult that indicates the usability of the backup,
 // and an overall error.
 func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (BackupResult, error) {
-
 	if params.IncrementalFromPos != "" {
 		return be.executeIncrementalBackup(ctx, params, bh)
 	}
@@ -401,8 +399,8 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 	// Save initial state so we can restore.
 	replicaStartRequired := false
 	sourceIsPrimary := false
-	superReadOnly := true //nolint
-	readOnly := true      //nolint
+	superReadOnly := true // nolint
+	readOnly := true      // nolint
 	var replicationPosition replication.Position
 	semiSyncSource, semiSyncReplica := params.Mysqld.SemiSyncEnabled(ctx)
 
@@ -604,39 +602,51 @@ func (be *BuiltinBackupEngine) backupFiles(
 	// Backup with the provided concurrency.
 	sema := semaphore.NewWeighted(int64(params.Concurrency))
 	wg := sync.WaitGroup{}
+
+	ctxCancel, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	for i := range fes {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
 			fe := &fes[i]
 			// Wait until we are ready to go, return if we encounter an error
-			acqErr := sema.Acquire(ctx, 1)
+			acqErr := sema.Acquire(ctxCancel, 1)
 			if acqErr != nil {
 				log.Errorf("Unable to acquire semaphore needed to backup file: %s, err: %s", fe.Name, acqErr.Error())
 				bh.RecordError(acqErr)
+				cancel()
 				return
 			}
 			defer sema.Release(1)
+
+			// First check if we have any error, if we have, there is no point trying backing up this file.
+			// We check for errors before checking if the context is canceled on purpose, if there was an
+			// error, the context would have been canceled already.
+			if bh.HasErrors() {
+				params.Logger.Errorf("Failed to restore files due to error: %v", bh.Error())
+				return
+			}
+
 			// Check for context cancellation explicitly because, the way semaphore code is written, theoretically we might
 			// end up not throwing an error even after cancellation. Please see https://cs.opensource.google/go/x/sync/+/refs/tags/v0.1.0:semaphore/semaphore.go;l=66,
 			// which suggests that if the context is already done, `Acquire()` may still succeed without blocking. This introduces
 			// unpredictability in my test cases, so in order to avoid that, I am adding this cancellation check.
 			select {
-			case <-ctx.Done():
+			case <-ctxCancel.Done():
 				log.Errorf("Context canceled or timed out during %q backup", fe.Name)
 				bh.RecordError(vterrors.Errorf(vtrpc.Code_CANCELED, "context canceled"))
 				return
 			default:
 			}
 
-			if bh.HasErrors() {
-				params.Logger.Infof("failed to backup files due to error.")
-				return
-			}
-
 			// Backup the individual file.
 			name := fmt.Sprintf("%v", i)
-			bh.RecordError(be.backupFile(ctx, params, bh, fe, name))
+			if err := be.backupFile(ctxCancel, params, bh, fe, name); err != nil {
+				bh.RecordError(err)
+				cancel()
+			}
 		}(i)
 	}
 
@@ -768,21 +778,28 @@ func (bp *backupPipe) HashString() string {
 	return hex.EncodeToString(bp.crc32.Sum(nil))
 }
 
-func (bp *backupPipe) ReportProgress(period time.Duration, logger logutil.Logger) {
+func (bp *backupPipe) ReportProgress(ctx context.Context, period time.Duration, logger logutil.Logger, restore bool) {
+	messageStr := "restoring "
+	if !restore {
+		messageStr = "backing up "
+	}
 	tick := time.NewTicker(period)
 	defer tick.Stop()
 	for {
 		select {
+		case <-ctx.Done():
+			logger.Infof("Canceled %s of %q file", messageStr, bp.filename)
+			return
 		case <-bp.done:
-			logger.Infof("Done taking Backup %q", bp.filename)
+			logger.Infof("Completed %s %q", messageStr, bp.filename)
 			return
 		case <-tick.C:
 			written := float64(atomic.LoadInt64(&bp.nn))
 			if bp.maxSize == 0 {
-				logger.Infof("Backup %q: %.02fkb", bp.filename, written/1024.0)
+				logger.Infof("%s %q: %.02fkb", messageStr, bp.filename, written/1024.0)
 			} else {
 				maxSize := float64(bp.maxSize)
-				logger.Infof("Backup %q: %.02f%% (%.02f/%.02fkb)", bp.filename, 100.0*written/maxSize, written/1024.0, maxSize/1024.0)
+				logger.Infof("%s %q: %.02f%% (%.02f/%.02fkb)", messageStr, bp.filename, 100.0*written/maxSize, written/1024.0, maxSize/1024.0)
 			}
 		}
 	}
@@ -791,7 +808,11 @@ func (bp *backupPipe) ReportProgress(period time.Duration, logger logutil.Logger
 // backupFile backs up an individual file.
 func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle, fe *FileEntry, name string) (finalErr error) {
 	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
+	defer func() {
+		if finalErr != nil {
+			cancel()
+		}
+	}()
 	// Open the source file for reading.
 	openSourceAt := time.Now()
 	source, err := fe.open(params.Cnf, true)
@@ -815,7 +836,7 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 	}
 
 	br := newBackupReader(fe.Name, fi.Size(), timedSource)
-	go br.ReportProgress(builtinBackupProgress, params.Logger)
+	go br.ReportProgress(ctx, builtinBackupProgress, params.Logger, false /*restore*/)
 
 	// Open the destination file for writing, and a buffer.
 	params.Logger.Infof("Backing up file: %v", fe.Name)
@@ -968,7 +989,6 @@ func (be *BuiltinBackupEngine) executeRestoreIncrementalBackup(ctx context.Conte
 // we return the position from which replication should start
 // otherwise an error is returned
 func (be *BuiltinBackupEngine) ExecuteRestore(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle) (*BackupManifest, error) {
-
 	var bm builtinBackupManifest
 	if err := getBackupManifestInto(ctx, bh, &bm); err != nil {
 		return nil, err
@@ -1015,43 +1035,53 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 	sema := semaphore.NewWeighted(int64(params.Concurrency))
 	rec := concurrency.AllErrorRecorder{}
 	wg := sync.WaitGroup{}
+
+	ctxCancel, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	for i := range fes {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
 			fe := &fes[i]
 			// Wait until we are ready to go, return if we encounter an error
-			acqErr := sema.Acquire(ctx, 1)
+			acqErr := sema.Acquire(ctxCancel, 1)
 			if acqErr != nil {
 				log.Errorf("Unable to acquire semaphore needed to restore file: %s, err: %s", fe.Name, acqErr.Error())
 				rec.RecordError(acqErr)
+				cancel()
 				return
 			}
 			defer sema.Release(1)
+
+			// First check if we have any error, if we have, there is no point trying to restore this file.
+			// We check for errors before checking if the context is canceled on purpose, if there was an
+			// error, the context would have been canceled already.
+			if rec.HasErrors() {
+				params.Logger.Errorf("Failed to restore files due to error: %v", bh.Error())
+				return
+			}
+
 			// Check for context cancellation explicitly because, the way semaphore code is written, theoretically we might
 			// end up not throwing an error even after cancellation. Please see https://cs.opensource.google/go/x/sync/+/refs/tags/v0.1.0:semaphore/semaphore.go;l=66,
 			// which suggests that if the context is already done, `Acquire()` may still succeed without blocking. This introduces
 			// unpredictability in my test cases, so in order to avoid that, I am adding this cancellation check.
 			select {
-			case <-ctx.Done():
+			case <-ctxCancel.Done():
 				log.Errorf("Context canceled or timed out during %q restore", fe.Name)
 				rec.RecordError(vterrors.Errorf(vtrpc.Code_CANCELED, "context canceled"))
 				return
 			default:
 			}
 
-			if rec.HasErrors() {
-				params.Logger.Infof("Failed to restore files due to error.")
-				return
-			}
-
 			fe.ParentPath = createdDir
 			// And restore the file.
 			name := fmt.Sprintf("%v", i)
 			params.Logger.Infof("Copying file %v: %v", name, fe.Name)
-			err := be.restoreFile(ctx, params, bh, fe, bm, name)
+			err := be.restoreFile(ctxCancel, params, bh, fe, bm, name)
 			if err != nil {
 				rec.RecordError(vterrors.Wrapf(err, "can't restore file %v to %v", name, fe.Name))
+				cancel()
 			}
 		}(i)
 	}
@@ -1081,7 +1111,7 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 	}()
 
 	br := newBackupReader(name, 0, timedSource)
-	go br.ReportProgress(builtinBackupProgress, params.Logger)
+	go br.ReportProgress(ctx, builtinBackupProgress, params.Logger, true)
 	var reader io.Reader = br
 
 	// Open the destination file for writing.
@@ -1108,7 +1138,7 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 	// Create the uncompresser if needed.
 	if !bm.SkipCompress {
 		var decompressor io.ReadCloser
-		var deCompressionEngine = bm.CompressionEngine
+		deCompressionEngine := bm.CompressionEngine
 
 		if deCompressionEngine == "" {
 			// for backward compatibility
@@ -1183,6 +1213,13 @@ func (be *BuiltinBackupEngine) ShouldDrainForBackup(req *tabletmanagerdatapb.Bac
 	}
 	return true
 }
+
+// ShouldStartMySQLAfterRestore signifies if this backup engine needs to restart MySQL once the restore is completed.
+func (be *BuiltinBackupEngine) ShouldStartMySQLAfterRestore() bool {
+	return true
+}
+
+func (be *BuiltinBackupEngine) Name() string { return builtinBackupEngineName }
 
 func getPrimaryPosition(ctx context.Context, tmc tmclient.TabletManagerClient, ts *topo.Server, keyspace, shard string) (replication.Position, error) {
 	si, err := ts.GetShard(ctx, keyspace, shard)

@@ -87,11 +87,6 @@ func (conn *VTGateConn) SessionFromPb(sn *vtgatepb.Session) *VTGateSession {
 	}
 }
 
-// ResolveTransaction resolves the 2pc transaction.
-func (conn *VTGateConn) ResolveTransaction(ctx context.Context, dtid string) error {
-	return conn.impl.ResolveTransaction(ctx, dtid)
-}
-
 // Close must be called for releasing resources.
 func (conn *VTGateConn) Close() {
 	conn.impl.Close()
@@ -177,9 +172,6 @@ type Impl interface {
 
 	// CloseSession closes the session provided by rolling back any active transaction.
 	CloseSession(ctx context.Context, session *vtgatepb.Session) error
-
-	// ResolveTransaction resolves the specified 2pc transaction.
-	ResolveTransaction(ctx context.Context, dtid string) error
 
 	// VStream streams binlogevents
 	VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags) (VStreamReader, error)

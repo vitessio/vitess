@@ -365,4 +365,9 @@ func (v *vschema) GetAggregateUDFs() []string {
 	panic("implement me")
 }
 
+// FindMirrorRule implements VSchema.
+func (v *vschema) FindMirrorRule(tablename sqlparser.TableName) (*vindexes.MirrorRule, error) {
+	panic("unimplemented")
+}
+
 var _ VSchema = (*vschema)(nil)

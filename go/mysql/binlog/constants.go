@@ -79,6 +79,9 @@ const (
 	// TypeTime2 is MYSQL_TYPE_TIME2
 	TypeTime2 = 19
 
+	// TypeVector is MYSQL_TYPE_VECTOR
+	TypeVector = 242
+
 	// TypeJSON is MYSQL_TYPE_JSON
 	TypeJSON = 245
 

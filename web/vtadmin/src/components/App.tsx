@@ -40,6 +40,10 @@ import { isReadOnlyMode } from '../util/env';
 import { CreateKeyspace } from './routes/createKeyspace/CreateKeyspace';
 import { Topology } from './routes/topology/Topology';
 import { ClusterTopology } from './routes/topology/ClusterTopology';
+import { CreateMoveTables } from './routes/createWorkflow/CreateMoveTables';
+import { Transactions } from './routes/Transactions';
+import { CreateReshard } from './routes/createWorkflow/CreateReshard';
+import { CreateMaterialize } from './routes/createWorkflow/CreateMaterialize';
 
 export const App = () => {
     return (
@@ -105,9 +109,27 @@ export const App = () => {
                             <VTExplain />
                         </Route>
 
-                        <Route path="/workflows">
+                        <Route exact path="/workflows">
                             <Workflows />
                         </Route>
+
+                        {!isReadOnlyMode() && (
+                            <Route exact path="/workflows/movetables/create">
+                                <CreateMoveTables />
+                            </Route>
+                        )}
+
+                        {!isReadOnlyMode() && (
+                            <Route exact path="/workflows/reshard/create">
+                                <CreateReshard />
+                            </Route>
+                        )}
+
+                        {!isReadOnlyMode() && (
+                            <Route exact path="/workflows/materialize/create">
+                                <CreateMaterialize />
+                            </Route>
+                        )}
 
                         <Route path="/workflow/:clusterID/:keyspace/:workflowName/stream/:tabletCell/:tabletUID/:streamID">
                             <Stream />
@@ -115,6 +137,10 @@ export const App = () => {
 
                         <Route path="/workflow/:clusterID/:keyspace/:name">
                             <Workflow />
+                        </Route>
+
+                        <Route path="/transactions">
+                            <Transactions />
                         </Route>
 
                         <Route path="/topology/:clusterID">

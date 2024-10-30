@@ -140,7 +140,7 @@ type stateManager struct {
 
 type (
 	schemaEngine interface {
-		EnsureConnectionAndDB(topodatapb.TabletType) error
+		EnsureConnectionAndDB(topodatapb.TabletType, bool) error
 		Open() error
 		MakeNonPrimary()
 		MakePrimary(bool)
@@ -164,6 +164,7 @@ type (
 		AcceptReadWrite()
 		AcceptReadOnly()
 		Close()
+		RollbackPrepared()
 	}
 
 	subComponent interface {
@@ -446,7 +447,7 @@ func (sm *stateManager) verifyTargetLocked(ctx context.Context, target *querypb.
 func (sm *stateManager) servePrimary() error {
 	sm.watcher.Close()
 
-	if err := sm.connect(topodatapb.TabletType_PRIMARY); err != nil {
+	if err := sm.connect(topodatapb.TabletType_PRIMARY, true); err != nil {
 		return err
 	}
 
@@ -475,7 +476,7 @@ func (sm *stateManager) unservePrimary() error {
 
 	sm.watcher.Close()
 
-	if err := sm.connect(topodatapb.TabletType_PRIMARY); err != nil {
+	if err := sm.connect(topodatapb.TabletType_PRIMARY, false); err != nil {
 		return err
 	}
 
@@ -499,7 +500,7 @@ func (sm *stateManager) serveNonPrimary(wantTabletType topodatapb.TabletType) er
 	sm.se.MakeNonPrimary()
 	sm.hs.MakeNonPrimary()
 
-	if err := sm.connect(wantTabletType); err != nil {
+	if err := sm.connect(wantTabletType, true); err != nil {
 		return err
 	}
 
@@ -517,7 +518,7 @@ func (sm *stateManager) unserveNonPrimary(wantTabletType topodatapb.TabletType) 
 	sm.se.MakeNonPrimary()
 	sm.hs.MakeNonPrimary()
 
-	if err := sm.connect(wantTabletType); err != nil {
+	if err := sm.connect(wantTabletType, false); err != nil {
 		return err
 	}
 
@@ -527,8 +528,8 @@ func (sm *stateManager) unserveNonPrimary(wantTabletType topodatapb.TabletType) 
 	return nil
 }
 
-func (sm *stateManager) connect(tabletType topodatapb.TabletType) error {
-	if err := sm.se.EnsureConnectionAndDB(tabletType); err != nil {
+func (sm *stateManager) connect(tabletType topodatapb.TabletType, serving bool) error {
+	if err := sm.se.EnsureConnectionAndDB(tabletType, serving); err != nil {
 		return err
 	}
 	if err := sm.se.Open(); err != nil {
@@ -610,6 +611,12 @@ func (sm *stateManager) terminateAllQueries(wg *sync.WaitGroup) (cancel func()) 
 		log.Infof("Killed all stateless OLTP queries.")
 		sm.statefulql.TerminateAll()
 		log.Infof("Killed all OLTP queries.")
+		// We can rollback prepared transactions only after we have killed all the write queries in progress.
+		// This is essential because when we rollback a prepared transaction, it lets go of the locks it was holding.
+		// If there were some other conflicting write in progress that hadn't been killed, then it could potentially go through
+		// and cause data corruption since we won't be able to prepare the transaction again.
+		sm.te.RollbackPrepared()
+		log.Infof("Rollbacked all prepared transactions")
 	}()
 	return cancel
 }

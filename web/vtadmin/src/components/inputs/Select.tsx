@@ -28,6 +28,7 @@ interface Props<T> {
     items: T[];
     itemToString?: (item: T | null) => string;
     label: string;
+    helpText?: string | JSX.Element;
     onChange: (selectedItem: T | null | undefined) => void;
     placeholder: string;
     emptyPlaceholder?: string | (() => JSX.Element | string);
@@ -36,6 +37,7 @@ interface Props<T> {
     size?: 'large';
     description?: string;
     required?: boolean;
+    disableClearSelection?: boolean;
 }
 
 /**
@@ -50,6 +52,7 @@ export const Select = <T,>({
     itemToString,
     items,
     label,
+    helpText,
     onChange,
     placeholder,
     emptyPlaceholder,
@@ -58,6 +61,7 @@ export const Select = <T,>({
     size,
     description,
     required,
+    disableClearSelection,
 }: Props<T>) => {
     const _itemToString = React.useCallback(
         (item: T | null): string => {
@@ -131,7 +135,7 @@ export const Select = <T,>({
 
     return (
         <div className={containerClass}>
-            <Label {...getLabelProps()} label={label} required={required} />
+            <Label {...getLabelProps()} label={label} required={required} helpText={helpText} />
             {description && <div className="mt-[-4px] mb-4">{description}</div>}
             <button
                 type="button"
@@ -144,7 +148,7 @@ export const Select = <T,>({
             </button>
             <div className={style.dropdown} hidden={!isOpen}>
                 {content}
-                {selectedItem && (
+                {selectedItem && !disableClearSelection && (
                     <button className={style.clear} onClick={() => selectItem(null as any)} type="button">
                         Clear selection
                     </button>

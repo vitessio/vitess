@@ -256,7 +256,7 @@ func TestPrepareRollback(t *testing.T) {
 	err = client.Prepare("aa")
 	if err != nil {
 		client.RollbackPrepared("aa", 0)
-		t.Fatalf(err.Error())
+		t.Fatal(err.Error())
 	}
 	err = client.RollbackPrepared("aa", 0)
 	require.NoError(t, err)
@@ -773,7 +773,7 @@ func TestUnresolvedTransactions(t *testing.T) {
 	client := framework.NewClient()
 
 	participants := []*querypb.Target{
-		{Keyspace: "ks1", Shard: "80-c0"},
+		{Keyspace: "ks1", Shard: "80-c0", TabletType: topodatapb.TabletType_PRIMARY},
 	}
 	err := client.CreateTransaction("dtid01", participants)
 	require.NoError(t, err)
@@ -794,7 +794,14 @@ func TestUnresolvedTransactions(t *testing.T) {
 		State:        querypb.TransactionState_PREPARE,
 		Participants: participants,
 	}}
-	utils.MustMatch(t, want, transactions)
+
+	require.Len(t, want, len(transactions))
+	for i, transaction := range transactions {
+		// Skipping check for TimeCreated
+		assert.Equal(t, want[i].Dtid, transaction.Dtid)
+		assert.Equal(t, want[i].State, transaction.State)
+		assert.Equal(t, want[i].Participants, transaction.Participants)
+	}
 }
 
 // TestUnresolvedTransactions tests the UnresolvedTransactions API.
@@ -802,16 +809,16 @@ func TestUnresolvedTransactionsOrdering(t *testing.T) {
 	client := framework.NewClient()
 
 	participants1 := []*querypb.Target{
-		{Keyspace: "ks1", Shard: "c0-"},
-		{Keyspace: "ks1", Shard: "80-c0"},
+		{Keyspace: "ks1", Shard: "c0-", TabletType: topodatapb.TabletType_PRIMARY},
+		{Keyspace: "ks1", Shard: "80-c0", TabletType: topodatapb.TabletType_PRIMARY},
 	}
 	participants2 := []*querypb.Target{
-		{Keyspace: "ks1", Shard: "-40"},
-		{Keyspace: "ks1", Shard: "80-c0"},
+		{Keyspace: "ks1", Shard: "-40", TabletType: topodatapb.TabletType_PRIMARY},
+		{Keyspace: "ks1", Shard: "80-c0", TabletType: topodatapb.TabletType_PRIMARY},
 	}
 	participants3 := []*querypb.Target{
-		{Keyspace: "ks1", Shard: "c0-"},
-		{Keyspace: "ks1", Shard: "-40"},
+		{Keyspace: "ks1", Shard: "c0-", TabletType: topodatapb.TabletType_PRIMARY},
+		{Keyspace: "ks1", Shard: "-40", TabletType: topodatapb.TabletType_PRIMARY},
 	}
 	// prepare state
 	err := client.CreateTransaction("dtid01", participants1)
@@ -857,5 +864,12 @@ func TestUnresolvedTransactionsOrdering(t *testing.T) {
 		State:        querypb.TransactionState_PREPARE,
 		Participants: participants1,
 	}}
-	utils.MustMatch(t, want, transactions)
+
+	require.Len(t, want, len(transactions))
+	for i, transaction := range transactions {
+		// Skipping check for TimeCreated
+		assert.Equal(t, want[i].Dtid, transaction.Dtid)
+		assert.Equal(t, want[i].State, transaction.State)
+		assert.Equal(t, want[i].Participants, transaction.Participants)
+	}
 }

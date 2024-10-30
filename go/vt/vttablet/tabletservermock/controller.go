@@ -91,6 +91,8 @@ type Controller struct {
 
 	// queryRulesMap has the latest query rules.
 	queryRulesMap map[string]*rules.Rules
+
+	MethodCalled map[string]bool
 }
 
 // NewController returns a mock of tabletserver.Controller
@@ -101,6 +103,7 @@ func NewController() *Controller {
 		BroadcastData:       make(chan *BroadcastData, 10),
 		StateChanges:        make(chan *StateChange, 10),
 		queryRulesMap:       make(map[string]*rules.Rules),
+		MethodCalled:        make(map[string]bool),
 	}
 }
 
@@ -223,6 +226,44 @@ func (tqsc *Controller) CheckThrottler(ctx context.Context, appName string, flag
 
 // GetThrottlerStatus is part of the tabletserver.Controller interface
 func (tqsc *Controller) GetThrottlerStatus(ctx context.Context) *throttle.ThrottlerStatus {
+	return nil
+}
+
+// RedoPreparedTransactions is part of the tabletserver.Controller interface
+func (tqsc *Controller) RedoPreparedTransactions() {}
+
+// SetTwoPCAllowed sets whether TwoPC is allowed or not. It also takes the reason of why it is being set.
+// The reason should be an enum value defined in the tabletserver.
+func (tqsc *Controller) SetTwoPCAllowed(int, bool) {
+}
+
+// UnresolvedTransactions is part of the tabletserver.Controller interface
+func (tqsc *Controller) UnresolvedTransactions(context.Context, *querypb.Target, int64) ([]*querypb.TransactionMetadata, error) {
+	tqsc.MethodCalled["UnresolvedTransactions"] = true
+	return nil, nil
+}
+
+// ReadTransaction is part of the tabletserver.Controller interface
+func (tqsc *Controller) ReadTransaction(ctx context.Context, target *querypb.Target, dtid string) (*querypb.TransactionMetadata, error) {
+	tqsc.MethodCalled["ReadTransaction"] = true
+	return nil, nil
+}
+
+// ConcludeTransaction is part of the tabletserver.Controller interface
+func (tqsc *Controller) ConcludeTransaction(context.Context, *querypb.Target, string) error {
+	tqsc.MethodCalled["ConcludeTransaction"] = true
+	return nil
+}
+
+// RollbackPrepared is part of the tabletserver.Controller interface
+func (tqsc *Controller) RollbackPrepared(context.Context, *querypb.Target, string, int64) error {
+	tqsc.MethodCalled["RollbackPrepared"] = true
+	return nil
+}
+
+// WaitForPreparedTwoPCTransactions is part of the tabletserver.Controller interface
+func (tqsc *Controller) WaitForPreparedTwoPCTransactions(context.Context) error {
+	tqsc.MethodCalled["WaitForPreparedTwoPCTransactions"] = true
 	return nil
 }
 

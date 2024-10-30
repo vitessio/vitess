@@ -42,6 +42,11 @@ import (
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/discovery"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtgate/buffer"
@@ -50,12 +55,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vtgate/vschemaacl"
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
-	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 func TestExecutorResultsExceeded(t *testing.T) {
@@ -1105,6 +1104,15 @@ func TestExecutorShowTargeted(t *testing.T) {
 	}
 }
 
+func TestExecutorShowFromSystemSchema(t *testing.T) {
+	executor, _, _, _, ctx := createExecutorEnv(t)
+
+	session := NewSafeSession(&vtgatepb.Session{TargetString: "mysql"})
+
+	_, err := executor.Execute(ctx, nil, "TestExecutorShowFromSystemSchema", session, "show tables", nil)
+	require.NoError(t, err)
+}
+
 func TestExecutorUse(t *testing.T) {
 	executor, _, _, _, ctx := createExecutorEnv(t)
 
@@ -1511,6 +1519,20 @@ func TestExecutorUnrecognized(t *testing.T) {
 	require.Error(t, err, "unrecognized statement: invalid statement'")
 }
 
+func TestExecutorDeniedErrorNoBuffer(t *testing.T) {
+	executor, sbc1, _, _, ctx := createExecutorEnv(t)
+	sbc1.EphemeralShardErr = errors.New("enforce denied tables")
+
+	vschemaWaitTimeout = 500 * time.Millisecond
+
+	session := NewAutocommitSession(&vtgatepb.Session{TargetString: "@primary"})
+	startExec := time.Now()
+	_, err := executor.Execute(ctx, nil, "TestExecutorDeniedErrorNoBuffer", session, "select * from user", nil)
+	require.NoError(t, err, "enforce denied tables not buffered")
+	endExec := time.Now()
+	require.GreaterOrEqual(t, endExec.Sub(startExec).Milliseconds(), int64(500))
+}
+
 // TestVSchemaStats makes sure the building and displaying of the
 // VSchemaStats works.
 func TestVSchemaStats(t *testing.T) {
@@ -1778,14 +1800,15 @@ func TestGetPlanPriority(t *testing.T) {
 
 			stmt, err := sqlparser.NewTestParser().Parse(testCase.sql)
 			assert.NoError(t, err)
-			crticalityFromStatement, _ := sqlparser.GetPriorityFromStatement(stmt)
+			qh, _ := sqlparser.BuildQueryHints(stmt)
+			priorityFromStatement := qh.Priority
 
 			_, err = r.getPlan(context.Background(), vCursor, testCase.sql, stmt, makeComments("/* some comment */"), map[string]*querypb.BindVariable{}, nil, true, logStats)
 			if testCase.expectedError != nil {
 				assert.ErrorIs(t, err, testCase.expectedError)
 			} else {
 				assert.NoError(t, err)
-				assert.Equal(t, testCase.expectedPriority, crticalityFromStatement)
+				assert.Equal(t, testCase.expectedPriority, priorityFromStatement)
 				assert.Equal(t, testCase.expectedPriority, vCursor.safeSession.Options.Priority)
 			}
 		})
@@ -2280,7 +2303,7 @@ func TestExecutorVExplain(t *testing.T) {
 
 	result, err = executorExec(ctx, executor, session, "vexplain plan select 42", bindVars)
 	require.NoError(t, err)
-	expected := `[[VARCHAR("{\n\t\"OperatorType\": \"Projection\",\n\t\"Expressions\": [\n\t\t\"42 as 42\"\n\t],\n\t\"Inputs\": [\n\t\t{\n\t\t\t\"OperatorType\": \"SingleRow\"\n\t\t}\n\t]\n}")]]`
+	expected := `[[VARCHAR("{\n\t\"OperatorType\": \"Projection\",\n\t\"Expressions\": [\n\t\t\":vtg1 as :vtg1 /* INT64 */\"\n\t],\n\t\"Inputs\": [\n\t\t{\n\t\t\t\"OperatorType\": \"SingleRow\"\n\t\t}\n\t]\n}")]]`
 	require.Equal(t, expected, fmt.Sprintf("%v", result.Rows))
 }
 
@@ -2768,6 +2791,128 @@ func TestExecutorPrepareExecute(t *testing.T) {
 	// empty prepared query
 	_, err = executor.Execute(context.Background(), nil, "TestExecutorPrepareExecute", session, "prepare prep_user from ''", nil)
 	require.Error(t, err)
+}
+
+// TestExecutorSettingsInTwoPC tests that settings are supported for multi-shard atomic commit.
+func TestExecutorSettingsInTwoPC(t *testing.T) {
+	executor, sbc1, sbc2, _, ctx := createExecutorEnv(t)
+	tcases := []struct {
+		sqls            []string
+		testRes         []*sqltypes.Result
+		expectedQueries [][]string
+	}{
+		{
+			sqls: []string{
+				`set time_zone = "+08:00"`,
+				`insert into user_extra(user_id) values (1)`,
+				`insert into user_extra(user_id) values (2)`,
+				`insert into user_extra(user_id) values (3)`,
+			},
+			testRes: []*sqltypes.Result{
+				sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "varchar"),
+					"+08:00"),
+			},
+			expectedQueries: [][]string{
+				{
+					"select '+08:00' from dual where @@time_zone != '+08:00'",
+					"set @@time_zone = '+08:00'",
+					"set @@time_zone = '+08:00'",
+					"insert into user_extra(user_id) values (1)",
+					"insert into user_extra(user_id) values (2)",
+				},
+				{
+					"set @@time_zone = '+08:00'",
+					"insert into user_extra(user_id) values (3)",
+				},
+			},
+		},
+	}
+
+	for _, tcase := range tcases {
+		t.Run(fmt.Sprintf("%v", tcase.sqls), func(t *testing.T) {
+			sbc1.SetResults(tcase.testRes)
+			sbc2.SetResults(tcase.testRes)
+
+			// create a new session
+			session := NewSafeSession(&vtgatepb.Session{
+				TargetString:         KsTestSharded,
+				TransactionMode:      vtgatepb.TransactionMode_TWOPC,
+				EnableSystemSettings: true,
+			})
+
+			// start transaction
+			_, err := executor.Execute(ctx, nil, "TestExecutorSettingsInTwoPC", session, "begin", nil)
+			require.NoError(t, err)
+
+			// execute queries
+			for _, sql := range tcase.sqls {
+				_, err = executor.Execute(ctx, nil, "TestExecutorSettingsInTwoPC", session, sql, nil)
+				require.NoError(t, err)
+			}
+
+			// commit 2pc
+			_, err = executor.Execute(ctx, nil, "TestExecutorSettingsInTwoPC", session, "commit", nil)
+			require.NoError(t, err)
+
+			queriesRecvd, err := sbc1.GetFinalQueries()
+			require.NoError(t, err)
+			assert.EqualValues(t, tcase.expectedQueries[0], queriesRecvd)
+			queriesRecvd, err = sbc2.GetFinalQueries()
+			require.NoError(t, err)
+			assert.EqualValues(t, tcase.expectedQueries[1], queriesRecvd)
+		})
+	}
+}
+
+// TestExecutorRejectTwoPC test all the unsupported cases for multi-shard atomic commit.
+func TestExecutorRejectTwoPC(t *testing.T) {
+	executor, sbc1, sbc2, _, ctx := createExecutorEnv(t)
+	tcases := []struct {
+		sqls    []string
+		testRes []*sqltypes.Result
+
+		expErr string
+	}{
+		{
+			sqls: []string{
+				`update t1 set unq_col = 1 where id = 1`,
+				`update t1 set unq_col = 1 where id = 3`,
+			},
+			testRes: []*sqltypes.Result{
+				sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|unq_col|unchanged", "int64|int64|int64"),
+					"1|2|0"),
+			},
+			expErr: "VT12001: unsupported: atomic distributed transaction commit with consistent lookup vindex",
+		},
+	}
+
+	for _, tcase := range tcases {
+		t.Run(fmt.Sprintf("%v", tcase.sqls), func(t *testing.T) {
+			sbc1.SetResults(tcase.testRes)
+			sbc2.SetResults(tcase.testRes)
+
+			// create a new session
+			session := NewSafeSession(&vtgatepb.Session{
+				TargetString:         KsTestSharded,
+				TransactionMode:      vtgatepb.TransactionMode_TWOPC,
+				EnableSystemSettings: true,
+			})
+
+			// start transaction
+			_, err := executor.Execute(ctx, nil, "TestExecutorRejectTwoPC", session, "begin", nil)
+			require.NoError(t, err)
+
+			// execute queries
+			for _, sql := range tcase.sqls {
+				_, err = executor.Execute(ctx, nil, "TestExecutorRejectTwoPC", session, sql, nil)
+				require.NoError(t, err)
+			}
+
+			// commit 2pc
+			_, err = executor.Execute(ctx, nil, "TestExecutorRejectTwoPC", session, "commit", nil)
+			require.ErrorContains(t, err, tcase.expErr)
+		})
+	}
 }
 
 func TestExecutorTruncateErrors(t *testing.T) {

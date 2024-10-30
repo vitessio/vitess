@@ -294,6 +294,11 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 			return nil
 		}
 
+		// We don't want to run any fixes on any non-replica type tablet.
+		if tablet.Type != topodatapb.TabletType_PRIMARY && !topo.IsReplicaType(tablet.Type) {
+			return nil
+		}
+
 		primaryTablet := &topodatapb.Tablet{}
 		if str := m.GetString("primary_tablet_info"); str != "" {
 			if err := opts.Unmarshal([]byte(str), primaryTablet); err != nil {

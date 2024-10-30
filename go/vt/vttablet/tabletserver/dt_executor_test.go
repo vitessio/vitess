@@ -21,9 +21,17 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"regexp"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/event/syslogger"
+	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 
 	"github.com/stretchr/testify/require"
@@ -40,22 +48,50 @@ import (
 func TestTxExecutorEmptyPrepare(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	txe, tsv, db := newTestTxExecutor(t, ctx)
-	defer db.Close()
-	defer tsv.StopService()
+	txe, tsv, _, closer := newTestTxExecutor(t, ctx)
+	defer closer()
+
+	// start a transaction.
 	txid := newTransaction(tsv, nil)
-	err := txe.Prepare(txid, "aa")
+
+	// taint the connection.
+	sc, err := tsv.te.txPool.GetAndLock(txid, "taint")
+	require.NoError(t, err)
+	sc.Taint(ctx, nil)
+	sc.Unlock()
+
+	err = txe.Prepare(txid, "aa")
 	require.NoError(t, err)
 	// Nothing should be prepared.
 	require.Empty(t, txe.te.preparedPool.conns, "txe.te.preparedPool.conns")
+	require.False(t, sc.IsInTransaction(), "transaction should be roll back before returning the connection to the pool")
+}
+
+func TestExecutorPrepareFailure(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	txe, tsv, _, closer := newTestTxExecutor(t, ctx)
+	defer closer()
+
+	// start a transaction
+	txid := newTxForPrep(ctx, tsv)
+
+	// taint the connection.
+	sc, err := tsv.te.txPool.GetAndLock(txid, "taint")
+	require.NoError(t, err)
+	sc.Taint(ctx, nil)
+	sc.Unlock()
+
+	// try 2pc commit of Metadata Manager.
+	err = txe.Prepare(txid, "aa")
+	require.EqualError(t, err, "VT10002: atomic distributed transaction not allowed: cannot prepare the transaction on a reserved connection")
 }
 
 func TestTxExecutorPrepare(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	txe, tsv, db := newTestTxExecutor(t, ctx)
-	defer db.Close()
-	defer tsv.StopService()
+	txe, tsv, _, closer := newTestTxExecutor(t, ctx)
+	defer closer()
 	txid := newTxForPrep(ctx, tsv)
 	err := txe.Prepare(txid, "aa")
 	require.NoError(t, err)
@@ -73,24 +109,22 @@ func TestTxExecutorPrepare(t *testing.T) {
 func TestDTExecutorPrepareResevedConn(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	txe, tsv, db := newTestTxExecutor(t, ctx)
-	defer db.Close()
-	defer tsv.StopService()
+	txe, tsv, _, closer := newTestTxExecutor(t, ctx)
+	defer closer()
 	txid := newTxForPrep(ctx, tsv)
 
 	// Reserve a connection
 	txe.te.Reserve(ctx, nil, txid, nil)
 
 	err := txe.Prepare(txid, "aa")
-	require.ErrorContains(t, err, "VT12001: unsupported: cannot prepare the transaction on a reserved connection")
+	require.ErrorContains(t, err, "VT10002: atomic distributed transaction not allowed: cannot prepare the transaction on a reserved connection")
 }
 
 func TestTxExecutorPrepareNotInTx(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	txe, tsv, db := newTestTxExecutor(t, ctx)
-	defer db.Close()
-	defer tsv.StopService()
+	txe, _, _, closer := newTestTxExecutor(t, ctx)
+	defer closer()
 	err := txe.Prepare(0, "aa")
 	require.EqualError(t, err, "transaction 0: not found (potential transaction timeout)")
 }
@@ -98,9 +132,8 @@ func TestTxExecutorPrepareNotInTx(t *testing.T) {
 func TestTxExecutorPreparePoolFail(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	txe, tsv, db := newTestTxExecutor(t, ctx)
-	defer db.Close()
-	defer tsv.StopService()
+	txe, tsv, _, closer := newTestTxExecutor(t, ctx)
+	defer closer()
 	txid1 := newTxForPrep(ctx, tsv)
 	txid2 := newTxForPrep(ctx, tsv)
 	err := txe.Prepare(txid1, "aa")
@@ -114,9 +147,8 @@ func TestTxExecutorPreparePoolFail(t *testing.T) {
 func TestTxExecutorPrepareRedoBeginFail(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	txe, tsv, db := newTestTxExecutor(t, ctx)
-	defer db.Close()
-	defer tsv.StopService()
+	txe, tsv, db, closer := newTestTxExecutor(t, ctx)
+	defer closer()
 	txid := newTxForPrep(ctx, tsv)
 	db.AddRejectedQuery("begin", errors.New("begin fail"))
 	err := txe.Prepare(txid, "aa")
@@ -128,9 +160,8 @@ func TestTxExecutorPrepareRedoBeginFail(t *testing.T) {
 func TestTxExecutorPrepareRedoFail(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	txe, tsv, db := newTestTxExecutor(t, ctx)
-	defer db.Close()
-	defer tsv.StopService()
+	txe, tsv, _, closer := newTestTxExecutor(t, ctx)
+	defer closer()
 	txid := newTxForPrep(ctx, tsv)
 	err := txe.Prepare(txid, "bb")
 	defer txe.RollbackPrepared("bb", 0)
@@ -141,9 +172,8 @@ func TestTxExecutorPrepareRedoFail(t *testing.T) {
 func TestTxExecutorPrepareRedoCommitFail(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	txe, tsv, db := newTestTxExecutor(t, ctx)
-	defer db.Close()
-	defer tsv.StopService()
+	txe, tsv, db, closer := newTestTxExecutor(t, ctx)
+	defer closer()
 	txid := newTxForPrep(ctx, tsv)
 	db.AddRejectedQuery("commit", errors.New("commit fail"))
 	err := txe.Prepare(txid, "aa")
@@ -152,12 +182,63 @@ func TestTxExecutorPrepareRedoCommitFail(t *testing.T) {
 	require.Contains(t, err.Error(), "commit fail")
 }
 
+func TestExecutorPrepareRuleFailure(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	txe, tsv, _, closer := newTestTxExecutor(t, ctx)
+	defer closer()
+
+	alterRule := rules.NewQueryRule("disable update", "disable update", rules.QRBuffer)
+	alterRule.AddTableCond("test_table")
+
+	r := rules.New()
+	r.Add(alterRule)
+	txe.qe.queryRuleSources.RegisterSource("bufferQuery")
+	err := txe.qe.queryRuleSources.SetRules("bufferQuery", r)
+	require.NoError(t, err)
+
+	// start a transaction
+	txid := newTxForPrep(ctx, tsv)
+
+	// taint the connection.
+	sc, err := tsv.te.txPool.GetAndLock(txid, "adding query property")
+	require.NoError(t, err)
+	sc.txProps.Queries = append(sc.txProps.Queries, tx.Query{
+		Sql:    "update test_table set col = 5",
+		Tables: []string{"test_table"},
+	})
+	sc.Unlock()
+
+	// try 2pc commit of Metadata Manager.
+	err = txe.Prepare(txid, "aa")
+	require.EqualError(t, err, "VT10002: atomic distributed transaction not allowed: cannot prepare the transaction due to query rule")
+}
+
+func TestExecutorPrepareConnFailure(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	txe, tsv, _, closer := newTestTxExecutor(t, ctx)
+	defer closer()
+
+	// start a transaction
+	txid := newTxForPrep(ctx, tsv)
+
+	// taint the connection.
+	sc, err := tsv.te.txPool.GetAndLock(txid, "adding query property")
+	require.NoError(t, err)
+	sc.Unlock()
+	sc.dbConn.Close()
+
+	// try 2pc commit of Metadata Manager.
+	err = txe.Prepare(txid, "aa")
+	require.EqualError(t, err, "VT10002: atomic distributed transaction not allowed: cannot prepare the transaction on a closed connection")
+}
+
 func TestTxExecutorCommit(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	txe, tsv, db := newTestTxExecutor(t, ctx)
-	defer db.Close()
-	defer tsv.StopService()
+	txe, tsv, _, closer := newTestTxExecutor(t, ctx)
+	defer closer()
 	txid := newTxForPrep(ctx, tsv)
 	err := txe.Prepare(txid, "aa")
 	require.NoError(t, err)
@@ -171,31 +252,40 @@ func TestTxExecutorCommit(t *testing.T) {
 func TestTxExecutorCommitRedoFail(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	txe, tsv, db := newTestTxExecutor(t, ctx)
-	defer db.Close()
-	defer tsv.StopService()
+	txe, tsv, db, closer := newTestTxExecutor(t, ctx)
+	defer closer()
+
+	tl := syslogger.NewTestLogger()
+	defer tl.Close()
+
+	// start a transaction.
 	txid := newTxForPrep(ctx, tsv)
-	// Allow all additions to redo logs to succeed
+
+	// prepare the transaction
 	db.AddQueryPattern("insert into _vt\\.redo_state.*", &sqltypes.Result{})
 	err := txe.Prepare(txid, "bb")
 	require.NoError(t, err)
-	defer txe.RollbackPrepared("bb", 0)
-	db.AddQuery("update _vt.redo_state set state = 'Failed' where dtid = 'bb'", &sqltypes.Result{})
+
+	// fail commit prepare as the delete redo query is in rejected query.
+	db.AddRejectedQuery("delete from _vt.redo_state where dtid = _binary'bb'", errors.New("delete redo log fail"))
+	db.AddQuery("update _vt.redo_state set state = 0 where dtid = _binary'bb'", sqltypes.MakeTestResult(nil))
+	err = txe.CommitPrepared("bb")
+	require.ErrorContains(t, err, "delete redo log fail")
+
+	// A retry should fail differently as the prepared transaction is marked as failed.
 	err = txe.CommitPrepared("bb")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "is not supported")
-	// A retry should fail differently.
-	err = txe.CommitPrepared("bb")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "cannot commit dtid bb, state: failed")
+	require.Contains(t, err.Error(), "cannot commit dtid bb, err: VT09025: atomic transaction error: failed to commit")
+
+	require.Contains(t, strings.Join(tl.GetAllLogs(), "|"),
+		"failed to commit the prepared transaction 'bb' with error: unknown error: delete redo log fail")
 }
 
 func TestTxExecutorCommitRedoCommitFail(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	txe, tsv, db := newTestTxExecutor(t, ctx)
-	defer db.Close()
-	defer tsv.StopService()
+	txe, tsv, db, closer := newTestTxExecutor(t, ctx)
+	defer closer()
 	txid := newTxForPrep(ctx, tsv)
 	err := txe.Prepare(txid, "aa")
 	require.NoError(t, err)
@@ -209,9 +299,8 @@ func TestTxExecutorCommitRedoCommitFail(t *testing.T) {
 func TestTxExecutorRollbackBeginFail(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	txe, tsv, db := newTestTxExecutor(t, ctx)
-	defer db.Close()
-	defer tsv.StopService()
+	txe, tsv, db, closer := newTestTxExecutor(t, ctx)
+	defer closer()
 	txid := newTxForPrep(ctx, tsv)
 	err := txe.Prepare(txid, "aa")
 	require.NoError(t, err)
@@ -224,9 +313,8 @@ func TestTxExecutorRollbackBeginFail(t *testing.T) {
 func TestTxExecutorRollbackRedoFail(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	txe, tsv, db := newTestTxExecutor(t, ctx)
-	defer db.Close()
-	defer tsv.StopService()
+	txe, tsv, db, closer := newTestTxExecutor(t, ctx)
+	defer closer()
 	txid := newTxForPrep(ctx, tsv)
 	// Allow all additions to redo logs to succeed
 	db.AddQueryPattern("insert into _vt\\.redo_state.*", &sqltypes.Result{})
@@ -240,12 +328,11 @@ func TestTxExecutorRollbackRedoFail(t *testing.T) {
 func TestExecutorCreateTransaction(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	txe, tsv, db := newTestTxExecutor(t, ctx)
-	defer db.Close()
-	defer tsv.StopService()
+	txe, _, db, closer := newTestTxExecutor(t, ctx)
+	defer closer()
 
-	db.AddQueryPattern(fmt.Sprintf("insert into _vt\\.dt_state\\(dtid, state, time_created\\) values \\('aa', %d,.*", int(querypb.TransactionState_PREPARE)), &sqltypes.Result{})
-	db.AddQueryPattern("insert into _vt\\.dt_participant\\(dtid, id, keyspace, shard\\) values \\('aa', 1,.*", &sqltypes.Result{})
+	db.AddQueryPattern(fmt.Sprintf("insert into _vt\\.dt_state\\(dtid, state, time_created\\) values \\(_binary'aa', %d,.*", int(querypb.TransactionState_PREPARE)), &sqltypes.Result{})
+	db.AddQueryPattern("insert into _vt\\.dt_participant\\(dtid, id, keyspace, shard\\) values \\(_binary'aa', 1,.*", &sqltypes.Result{})
 	err := txe.CreateTransaction("aa", []*querypb.Target{{
 		Keyspace: "t1",
 		Shard:    "0",
@@ -256,11 +343,10 @@ func TestExecutorCreateTransaction(t *testing.T) {
 func TestExecutorStartCommit(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	txe, tsv, db := newTestTxExecutor(t, ctx)
-	defer db.Close()
-	defer tsv.StopService()
+	txe, tsv, db, closer := newTestTxExecutor(t, ctx)
+	defer closer()
 
-	commitTransition := fmt.Sprintf("update _vt.dt_state set state = %d where dtid = 'aa' and state = %d", int(querypb.TransactionState_COMMIT), int(querypb.TransactionState_PREPARE))
+	commitTransition := fmt.Sprintf("update _vt.dt_state set state = %d where dtid = _binary'aa' and state = %d", int(querypb.TransactionState_COMMIT), int(querypb.TransactionState_PREPARE))
 	db.AddQuery(commitTransition, &sqltypes.Result{RowsAffected: 1})
 	txid := newTxForPrep(ctx, tsv)
 	err := txe.StartCommit(txid, "aa")
@@ -273,14 +359,37 @@ func TestExecutorStartCommit(t *testing.T) {
 	require.Contains(t, err.Error(), "could not transition to COMMIT: aa")
 }
 
+func TestExecutorStartCommitFailure(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	txe, tsv, db, closer := newTestTxExecutor(t, ctx)
+	defer closer()
+
+	// start a transaction
+	txid := newTxForPrep(ctx, tsv)
+
+	// taint the connection.
+	sc, err := tsv.te.txPool.GetAndLock(txid, "taint")
+	require.NoError(t, err)
+	sc.Taint(ctx, nil)
+	sc.Unlock()
+
+	// add rollback state update expectation
+	rollbackTransition := fmt.Sprintf("update _vt.dt_state set state = %d where dtid = _binary'aa' and state = %d", int(querypb.TransactionState_ROLLBACK), int(querypb.TransactionState_PREPARE))
+	db.AddQuery(rollbackTransition, sqltypes.MakeTestResult(nil))
+
+	// try 2pc commit of Metadata Manager.
+	err = txe.StartCommit(txid, "aa")
+	require.EqualError(t, err, "VT10002: atomic distributed transaction not allowed: cannot commit the transaction on a reserved connection")
+}
+
 func TestExecutorSetRollback(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	txe, tsv, db := newTestTxExecutor(t, ctx)
-	defer db.Close()
-	defer tsv.StopService()
+	txe, tsv, db, closer := newTestTxExecutor(t, ctx)
+	defer closer()
 
-	rollbackTransition := fmt.Sprintf("update _vt.dt_state set state = %d where dtid = 'aa' and state = %d", int(querypb.TransactionState_ROLLBACK), int(querypb.TransactionState_PREPARE))
+	rollbackTransition := fmt.Sprintf("update _vt.dt_state set state = %d where dtid = _binary'aa' and state = %d", int(querypb.TransactionState_ROLLBACK), int(querypb.TransactionState_PREPARE))
 	db.AddQuery(rollbackTransition, &sqltypes.Result{RowsAffected: 1})
 	txid := newTxForPrep(ctx, tsv)
 	err := txe.SetRollback("aa", txid)
@@ -293,15 +402,70 @@ func TestExecutorSetRollback(t *testing.T) {
 	require.Contains(t, err.Error(), "could not transition to ROLLBACK: aa")
 }
 
+// TestExecutorUnresolvedTransactions tests with what timestamp value the query is executed to fetch unresolved transactions.
+func TestExecutorUnresolvedTransactions(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	txe, _, db, closer := newTestTxExecutor(t, ctx)
+	defer closer()
+
+	pattern := `(?i)select\s+t\.dtid,\s+t\.state,\s+t\.time_created,\s+p\.keyspace,\s+p\.shard\s+from\s+_vt\.dt_state\s+t\s+join\s+_vt\.dt_participant\s+p\s+on\s+t\.dtid\s+=\s+p\.dtid\s+where\s+time_created\s+<\s+(\d+)\s+order\s+by\s+t\.state\s+desc,\s+t\.dtid`
+	re := regexp.MustCompile(pattern)
+
+	var executedQuery string
+	db.AddQueryPatternWithCallback(pattern, &sqltypes.Result{}, func(query string) {
+		executedQuery = query
+	})
+
+	tcases := []struct {
+		abandonAge time.Duration
+		expected   time.Time
+	}{
+		{abandonAge: 0, expected: time.Now().Add(-txe.te.abandonAge)},
+		{abandonAge: 100 * time.Second, expected: time.Now().Add(-100 * time.Second)},
+	}
+
+	for _, tcase := range tcases {
+		t.Run(fmt.Sprintf("abandonAge=%v", tcase.abandonAge), func(t *testing.T) {
+			_, err := txe.UnresolvedTransactions(tcase.abandonAge)
+			require.NoError(t, err)
+			require.NotEmpty(t, executedQuery)
+
+			// extract the time value
+			matches := re.FindStringSubmatch(executedQuery)
+			require.Len(t, matches, 2)
+			timeCreated := convertNanoStringToTime(t, matches[1])
+
+			// diff should be in microseconds, so we allow 10ms difference
+			require.WithinDuration(t, timeCreated, tcase.expected, 10*time.Millisecond)
+		})
+	}
+
+}
+
+func convertNanoStringToTime(t *testing.T, unixNanoStr string) time.Time {
+	t.Helper()
+
+	// Convert the string to an integer (int64)
+	unixNano, err := strconv.ParseInt(unixNanoStr, 10, 64)
+	require.NoError(t, err)
+
+	// Convert nanoseconds to seconds and nanoseconds
+	seconds := unixNano / int64(time.Second)
+	nanos := unixNano % int64(time.Second)
+
+	// Create a time.Time object
+	return time.Unix(seconds, nanos)
+}
+
 func TestExecutorConcludeTransaction(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	txe, tsv, db := newTestTxExecutor(t, ctx)
-	defer db.Close()
-	defer tsv.StopService()
+	txe, _, db, closer := newTestTxExecutor(t, ctx)
+	defer closer()
 
-	db.AddQuery("delete from _vt.dt_state where dtid = 'aa'", &sqltypes.Result{})
-	db.AddQuery("delete from _vt.dt_participant where dtid = 'aa'", &sqltypes.Result{})
+	db.AddQuery("delete from _vt.dt_state where dtid = _binary'aa'", &sqltypes.Result{})
+	db.AddQuery("delete from _vt.dt_participant where dtid = _binary'aa'", &sqltypes.Result{})
 	err := txe.ConcludeTransaction("aa")
 	require.NoError(t, err)
 }
@@ -309,11 +473,10 @@ func TestExecutorConcludeTransaction(t *testing.T) {
 func TestExecutorReadTransaction(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	txe, tsv, db := newTestTxExecutor(t, ctx)
-	defer db.Close()
-	defer tsv.StopService()
+	txe, _, db, closer := newTestTxExecutor(t, ctx)
+	defer closer()
 
-	db.AddQuery("select dtid, state, time_created from _vt.dt_state where dtid = 'aa'", &sqltypes.Result{})
+	db.AddQuery("select dtid, state, time_created from _vt.dt_state where dtid = _binary'aa'", &sqltypes.Result{})
 	got, err := txe.ReadTransaction("aa")
 	require.NoError(t, err)
 	want := &querypb.TransactionMetadata{}
@@ -333,8 +496,8 @@ func TestExecutorReadTransaction(t *testing.T) {
 			sqltypes.NewVarBinary("1"),
 		}},
 	}
-	db.AddQuery("select dtid, state, time_created from _vt.dt_state where dtid = 'aa'", txResult)
-	db.AddQuery("select keyspace, shard from _vt.dt_participant where dtid = 'aa'", &sqltypes.Result{
+	db.AddQuery("select dtid, state, time_created from _vt.dt_state where dtid = _binary'aa'", txResult)
+	db.AddQuery("select keyspace, shard from _vt.dt_participant where dtid = _binary'aa'", &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{Type: sqltypes.VarChar},
 			{Type: sqltypes.VarChar},
@@ -379,7 +542,7 @@ func TestExecutorReadTransaction(t *testing.T) {
 			sqltypes.NewVarBinary("1"),
 		}},
 	}
-	db.AddQuery("select dtid, state, time_created from _vt.dt_state where dtid = 'aa'", txResult)
+	db.AddQuery("select dtid, state, time_created from _vt.dt_state where dtid = _binary'aa'", txResult)
 	want.State = querypb.TransactionState_COMMIT
 	got, err = txe.ReadTransaction("aa")
 	require.NoError(t, err)
@@ -399,7 +562,7 @@ func TestExecutorReadTransaction(t *testing.T) {
 			sqltypes.NewVarBinary("1"),
 		}},
 	}
-	db.AddQuery("select dtid, state, time_created from _vt.dt_state where dtid = 'aa'", txResult)
+	db.AddQuery("select dtid, state, time_created from _vt.dt_state where dtid = _binary'aa'", txResult)
 	want.State = querypb.TransactionState_ROLLBACK
 	got, err = txe.ReadTransaction("aa")
 	require.NoError(t, err)
@@ -411,9 +574,8 @@ func TestExecutorReadTransaction(t *testing.T) {
 func TestExecutorReadAllTransactions(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	txe, tsv, db := newTestTxExecutor(t, ctx)
-	defer db.Close()
-	defer tsv.StopService()
+	txe, _, db, closer := newTestTxExecutor(t, ctx)
+	defer closer()
 
 	db.AddQuery(txe.te.twoPC.readAllTransactions, &sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -528,6 +690,12 @@ func TestNoTwopc(t *testing.T) {
 			_, _, _, err := txe.ReadTwopcInflight()
 			return err
 		},
+	}, {
+		desc: "UnresolvedTransactions",
+		fun: func() error {
+			_, err := txe.UnresolvedTransactions(0 /* requestedAge */)
+			return err
+		},
 	}}
 
 	want := "2pc is not enabled"
@@ -537,20 +705,30 @@ func TestNoTwopc(t *testing.T) {
 	}
 }
 
-func newTestTxExecutor(t *testing.T, ctx context.Context) (txe *DTExecutor, tsv *TabletServer, db *fakesqldb.DB) {
+func newTestTxExecutor(t *testing.T, ctx context.Context) (txe *DTExecutor, tsv *TabletServer, db *fakesqldb.DB, closer func()) {
 	db = setUpQueryExecutorTest(t)
 	logStats := tabletenv.NewLogStats(ctx, "TestTxExecutor")
 	tsv = newTestTabletServer(ctx, smallTxPool, db)
-	db.AddQueryPattern("insert into _vt\\.redo_state\\(dtid, state, time_created\\) values \\('aa', 1,.*", &sqltypes.Result{})
+	cfg := tabletenv.NewDefaultConfig()
+	cfg.DB = newDBConfigs(db)
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TabletServerTest")
+	se := schema.NewEngine(env)
+	qe := NewQueryEngine(env, se)
+	db.AddQueryPattern("insert into _vt\\.redo_state\\(dtid, state, time_created\\) values \\(_binary'aa', 1,.*", &sqltypes.Result{})
 	db.AddQueryPattern("insert into _vt\\.redo_statement.*", &sqltypes.Result{})
-	db.AddQuery("delete from _vt.redo_state where dtid = 'aa'", &sqltypes.Result{})
-	db.AddQuery("delete from _vt.redo_statement where dtid = 'aa'", &sqltypes.Result{})
+	db.AddQuery("delete from _vt.redo_state where dtid = _binary'aa'", &sqltypes.Result{})
+	db.AddQuery("delete from _vt.redo_statement where dtid = _binary'aa'", &sqltypes.Result{})
 	db.AddQuery("update test_table set `name` = 2 where pk = 1 limit 10001", &sqltypes.Result{})
+	db.AddRejectedQuery("bogus", sqlerror.NewSQLError(sqlerror.ERUnknownError, sqlerror.SSUnknownSQLState, "bogus query"))
 	return &DTExecutor{
-		ctx:      ctx,
-		logStats: logStats,
-		te:       tsv.te,
-	}, tsv, db
+			ctx:      ctx,
+			logStats: logStats,
+			te:       tsv.te,
+			qe:       qe,
+		}, tsv, db, func() {
+			db.Close()
+			tsv.StopService()
+		}
 }
 
 // newShortAgeExecutor is same as newTestTxExecutor, but shorter transaction abandon age.
@@ -558,10 +736,10 @@ func newShortAgeExecutor(t *testing.T, ctx context.Context) (txe *DTExecutor, ts
 	db = setUpQueryExecutorTest(t)
 	logStats := tabletenv.NewLogStats(ctx, "TestTxExecutor")
 	tsv = newTestTabletServer(ctx, smallTxPool|shortTwopcAge, db)
-	db.AddQueryPattern("insert into _vt\\.redo_state\\(dtid, state, time_created\\) values \\('aa', 1,.*", &sqltypes.Result{})
+	db.AddQueryPattern("insert into _vt\\.redo_state\\(dtid, state, time_created\\) values \\(_binary'aa', 1,.*", &sqltypes.Result{})
 	db.AddQueryPattern("insert into _vt\\.redo_statement.*", &sqltypes.Result{})
-	db.AddQuery("delete from _vt.redo_state where dtid = 'aa'", &sqltypes.Result{})
-	db.AddQuery("delete from _vt.redo_statement where dtid = 'aa'", &sqltypes.Result{})
+	db.AddQuery("delete from _vt.redo_state where dtid = _binary'aa'", &sqltypes.Result{})
+	db.AddQuery("delete from _vt.redo_statement where dtid = _binary'aa'", &sqltypes.Result{})
 	db.AddQuery("update test_table set `name` = 2 where pk = 1 limit 10001", &sqltypes.Result{})
 	return &DTExecutor{
 		ctx:      ctx,

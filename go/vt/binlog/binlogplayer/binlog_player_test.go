@@ -22,6 +22,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -69,7 +71,7 @@ var (
 func TestNewBinlogPlayerKeyRange(t *testing.T) {
 	dbClient := NewMockDBClient(t)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
-	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow, workflow_sub_type, defer_secondary_keys from _vt.vreplication where id=1", testSettingsResponse, nil)
+	dbClient.ExpectRequest(TestGetWorkflowQueryId1, testSettingsResponse, nil)
 	dbClient.ExpectRequest("begin", nil, nil)
 	dbClient.ExpectRequest("insert into t values(1)", testDMLResponse, nil)
 	dbClient.ExpectRequestRE("update _vt.vreplication set pos='MariaDB/0-1-1235', time_updated=.*", testDMLResponse, nil)
@@ -102,7 +104,7 @@ func TestNewBinlogPlayerKeyRange(t *testing.T) {
 func TestNewBinlogPlayerTables(t *testing.T) {
 	dbClient := NewMockDBClient(t)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
-	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow, workflow_sub_type, defer_secondary_keys from _vt.vreplication where id=1", testSettingsResponse, nil)
+	dbClient.ExpectRequest(TestGetWorkflowQueryId1, testSettingsResponse, nil)
 	dbClient.ExpectRequest("begin", nil, nil)
 	dbClient.ExpectRequest("insert into t values(1)", testDMLResponse, nil)
 	dbClient.ExpectRequestRE("update _vt.vreplication set pos='MariaDB/0-1-1235', time_updated=.*", testDMLResponse, nil)
@@ -136,7 +138,7 @@ func TestNewBinlogPlayerTables(t *testing.T) {
 func TestApplyEventsFail(t *testing.T) {
 	dbClient := NewMockDBClient(t)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
-	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow, workflow_sub_type, defer_secondary_keys from _vt.vreplication where id=1", testSettingsResponse, nil)
+	dbClient.ExpectRequest(TestGetWorkflowQueryId1, testSettingsResponse, nil)
 	dbClient.ExpectRequest("begin", nil, errors.New("err"))
 	dbClient.ExpectRequest("update _vt.vreplication set state='Error', message='error in processing binlog event failed query BEGIN, err: err' where id=1", testDMLResponse, nil)
 
@@ -189,7 +191,7 @@ func TestStopPosEqual(t *testing.T) {
 			},
 		},
 	}
-	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow, workflow_sub_type, defer_secondary_keys from _vt.vreplication where id=1", posEqual, nil)
+	dbClient.ExpectRequest(TestGetWorkflowQueryId1, posEqual, nil)
 	dbClient.ExpectRequest(`update _vt.vreplication set state='Stopped', message='not starting BinlogPlayer, we\'re already at the desired position 0-1-1083' where id=1`, testDMLResponse, nil)
 
 	_ = newFakeBinlogClient()
@@ -228,7 +230,7 @@ func TestStopPosLess(t *testing.T) {
 			},
 		},
 	}
-	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow, workflow_sub_type, defer_secondary_keys from _vt.vreplication where id=1", posEqual, nil)
+	dbClient.ExpectRequest(TestGetWorkflowQueryId1, posEqual, nil)
 	dbClient.ExpectRequest(`update _vt.vreplication set state='Stopped', message='starting point 0-1-1083 greater than stopping point 0-1-1082' where id=1`, testDMLResponse, nil)
 
 	_ = newFakeBinlogClient()
@@ -267,7 +269,7 @@ func TestStopPosGreater(t *testing.T) {
 			},
 		},
 	}
-	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow, workflow_sub_type, defer_secondary_keys from _vt.vreplication where id=1", posEqual, nil)
+	dbClient.ExpectRequest(TestGetWorkflowQueryId1, posEqual, nil)
 	dbClient.ExpectRequest("begin", nil, nil)
 	dbClient.ExpectRequest("insert into t values(1)", testDMLResponse, nil)
 	dbClient.ExpectRequestRE("update _vt.vreplication set pos='MariaDB/0-1-1235', time_updated=.*", testDMLResponse, nil)
@@ -310,7 +312,7 @@ func TestContextCancel(t *testing.T) {
 			},
 		},
 	}
-	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow, workflow_sub_type, defer_secondary_keys from _vt.vreplication where id=1", posEqual, nil)
+	dbClient.ExpectRequest(TestGetWorkflowQueryId1, posEqual, nil)
 	dbClient.ExpectRequest("begin", nil, nil)
 	dbClient.ExpectRequest("insert into t values(1)", testDMLResponse, nil)
 	dbClient.ExpectRequestRE("update _vt.vreplication set pos='MariaDB/0-1-1235', time_updated=.*", testDMLResponse, nil)
@@ -339,7 +341,7 @@ func TestContextCancel(t *testing.T) {
 func TestRetryOnDeadlock(t *testing.T) {
 	dbClient := NewMockDBClient(t)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
-	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow, workflow_sub_type, defer_secondary_keys from _vt.vreplication where id=1", testSettingsResponse, nil)
+	dbClient.ExpectRequest(TestGetWorkflowQueryId1, testSettingsResponse, nil)
 	deadlocked := &sqlerror.SQLError{Num: 1213, Message: "deadlocked"}
 	dbClient.ExpectRequest("begin", nil, nil)
 	dbClient.ExpectRequest("insert into t values(1)", nil, deadlocked)
@@ -452,5 +454,38 @@ func TestReadVReplicationStatus(t *testing.T) {
 	got := ReadVReplicationStatus(482821)
 	if got != want {
 		t.Errorf("ReadVReplicationStatus(482821) = %#v, want %#v", got, want)
+	}
+}
+
+func TestEncodeString(t *testing.T) {
+	tcases := []struct {
+		in, out string
+	}{
+		{
+			in:  "",
+			out: "''",
+		},
+		{
+			in:  "a",
+			out: "'a'",
+		},
+		{
+			in:  "here's",
+			out: "'here\\'s'",
+		},
+		{
+			in:  "online-ddl is denied access due to lag metric value 94.821447 exceeding threshold 5",
+			out: "'online-ddl is denied access due to lag metric value 94.821447 exceeding threshold 5'",
+		},
+		{
+			in:  "'a','b','c'",
+			out: "'\\'a\\',\\'b\\',\\'c\\''",
+		},
+	}
+	for _, tcase := range tcases {
+		t.Run(tcase.in, func(t *testing.T) {
+			out := encodeString(tcase.in)
+			assert.Equal(t, tcase.out, out)
+		})
 	}
 }

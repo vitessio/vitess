@@ -84,7 +84,7 @@ func TestMain(m *testing.M) {
 		if err := clusterInstance.StartTopo(); err != nil {
 			return 1, err
 		}
-		if err := clusterInstance.VtctlProcess.CreateKeyspace(keyspaceName, sidecar.DefaultName); err != nil {
+		if err := clusterInstance.VtctlProcess.CreateKeyspace(keyspaceName, sidecar.DefaultName, ""); err != nil {
 			return 1, err
 		}
 

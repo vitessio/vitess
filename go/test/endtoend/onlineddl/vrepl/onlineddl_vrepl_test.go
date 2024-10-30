@@ -80,6 +80,9 @@ var (
 		ALTER TABLE %s
 			DROP PRIMARY KEY,
 			DROP COLUMN vrepl_col`
+	alterTableFailedVreplicationStatement = `
+			ALTER TABLE %s
+				ADD UNIQUE KEY test_val_uidx (test_val)`
 	// We will run this query while throttling vreplication
 	alterTableThrottlingStatement = `
 		ALTER TABLE %s
@@ -220,7 +223,7 @@ func TestMain(m *testing.M) {
 
 }
 
-func TestSchemaChange(t *testing.T) {
+func TestVreplSchemaChanges(t *testing.T) {
 	defer cluster.PanicHandler(t)
 
 	shards = clusterInstance.Keyspaces[0].Shards
@@ -397,6 +400,8 @@ func TestSchemaChange(t *testing.T) {
 		assert.GreaterOrEqual(t, lastThrottledTimestamp, startedTimestamp)
 		component := row.AsString("component_throttled", "")
 		assert.Contains(t, []string{throttlerapp.VCopierName.String(), throttlerapp.VPlayerName.String()}, component)
+		reason := row.AsString("reason_throttled", "")
+		assert.Contains(t, reason, "is explicitly denied access")
 
 		// unthrottle
 		onlineddl.UnthrottleAllMigrations(t, &vtParams)
@@ -453,6 +458,19 @@ func TestSchemaChange(t *testing.T) {
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, true)
 		onlineddl.CheckMigrationArtifacts(t, &vtParams, shards, uuid, true)
 		// migration will fail again
+	})
+	t.Run("failed migration due to vreplication", func(t *testing.T) {
+		insertRows(t, 2)
+		uuid := testOnlineDDLStatement(t, alterTableFailedVreplicationStatement, "online", providedUUID, providedMigrationContext, "vtgate", "vrepl_col", "", false)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalMigrationWait, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
+
+		rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+		require.NotNil(t, rs)
+		for _, row := range rs.Named().Rows {
+			message := row["message"].ToString()
+			assert.Contains(t, message, "vreplication: terminal error:", "migration row: %v", row)
+		}
 	})
 	t.Run("cancel all migrations: nothing to cancel", func(t *testing.T) {
 		// no migrations pending at this time

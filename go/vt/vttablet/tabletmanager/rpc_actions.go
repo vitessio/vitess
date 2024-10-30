@@ -78,8 +78,45 @@ func (tm *TabletManager) SetReadOnly(ctx context.Context, rdonly bool) error {
 		return err
 	}
 	defer tm.unlock()
+	superRo, err := tm.MysqlDaemon.IsSuperReadOnly(ctx)
+	if err != nil {
+		return err
+	}
 
+	if !rdonly && superRo {
+		// If super read only is set, then we need to prepare the transactions before setting read_only OFF.
+		// We need to redo the prepared transactions in read only mode using the dba user to ensure we don't lose them.
+		// setting read_only OFF will also set super_read_only OFF if it was set.
+		// If super read only is already off, then we probably called this function from PRS or some other place
+		// because it is idempotent. We only need to redo prepared transactions the first time we transition from super read only
+		// to read write.
+		return tm.redoPreparedTransactionsAndSetReadWrite(ctx)
+	}
 	return tm.MysqlDaemon.SetReadOnly(ctx, rdonly)
+}
+
+// ChangeTags changes the tablet tags
+func (tm *TabletManager) ChangeTags(ctx context.Context, tabletTags map[string]string, replace bool) (map[string]string, error) {
+	if err := tm.lock(ctx); err != nil {
+		return nil, err
+	}
+	defer tm.unlock()
+
+	tags := tm.tmState.Tablet().Tags
+	if replace || len(tags) == 0 {
+		tags = tabletTags
+	} else {
+		for key, val := range tabletTags {
+			if val == "" {
+				delete(tags, key)
+				continue
+			}
+			tags[key] = val
+		}
+	}
+
+	tm.tmState.ChangeTabletTags(ctx, tags)
+	return tags, nil
 }
 
 // ChangeType changes the tablet type
@@ -97,7 +134,7 @@ func (tm *TabletManager) ChangeType(ctx context.Context, tabletType topodatapb.T
 	return tm.changeTypeLocked(ctx, tabletType, DBActionNone, semiSyncAction)
 }
 
-// ChangeType changes the tablet type
+// changeTypeLocked changes the tablet type under a lock
 func (tm *TabletManager) changeTypeLocked(ctx context.Context, tabletType topodatapb.TabletType, action DBAction, semiSync SemiSyncAction) error {
 	// We don't want to allow multiple callers to claim a tablet as drained.
 	if tabletType == topodatapb.TabletType_DRAINED && tm.Tablet().Type == topodatapb.TabletType_DRAINED {

@@ -41,32 +41,15 @@ limitations under the License.
 
 package config
 
-import (
-	"sync/atomic"
-
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
-)
-
 //
 // MySQL-specific configuration
 //
 
-type MySQLMetricConfigurationSettings struct {
-	Name        base.MetricName
-	CustomQuery string
-	Threshold   atomic.Uint64
-}
-
 // MySQLConfigurationSettings has the general configuration for all MySQL clusters
 type MySQLConfigurationSettings struct {
-	CacheMillis          int      // optional, if defined then probe result will be cached, and future probes may use cached value
-	Port                 int      // Specify if different than 3306; applies to all clusters
-	IgnoreDialTCPErrors  bool     // Skip hosts where a metric cannot be retrieved due to TCP dial errors
-	IgnoreHostsCount     int      // Number of hosts that can be skipped/ignored even on error or on exceeding thresholds
-	IgnoreHostsThreshold float64  // Threshold beyond which IgnoreHostsCount applies (default: 0)
-	HTTPCheckPort        int      // port for HTTP check. -1 to disable.
-	HTTPCheckPath        string   // If non-empty, requires HTTPCheckPort
-	IgnoreHosts          []string // If non empty, substrings to indicate hosts to be ignored/skipped
-
-	Metrics map[base.MetricName]*MySQLMetricConfigurationSettings
+	CacheMillis         int      // optional, if defined then probe result will be cached, and future probes may use cached value
+	Port                int      // Specify if different than 3306; applies to all clusters
+	IgnoreDialTCPErrors bool     // Skip hosts where a metric cannot be retrieved due to TCP dial errors
+	IgnoreHostsCount    int      // Number of hosts that can be skipped/ignored even on error or on exceeding thresholds
+	IgnoreHosts         []string // If non empty, substrings to indicate hosts to be ignored/skipped
 }

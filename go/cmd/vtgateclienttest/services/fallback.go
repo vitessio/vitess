@@ -60,10 +60,6 @@ func (c fallbackClient) CloseSession(ctx context.Context, session *vtgatepb.Sess
 	return c.fallback.CloseSession(ctx, session)
 }
 
-func (c fallbackClient) ResolveTransaction(ctx context.Context, dtid string) error {
-	return c.fallback.ResolveTransaction(ctx, dtid)
-}
-
 func (c fallbackClient) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags, send func([]*binlogdatapb.VEvent) error) error {
 	return c.fallback.VStream(ctx, tabletType, vgtid, filter, flags, send)
 }

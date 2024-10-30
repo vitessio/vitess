@@ -140,7 +140,7 @@
   "Permissions": [
     {
       "TableName": "seq",
-      "Role": 0
+      "Role": 1
     }
   ],
   "NextCount": "1"
@@ -154,7 +154,7 @@
   "Permissions": [
     {
       "TableName": "seq",
-      "Role": 0
+      "Role": 1
     }
   ],
   "NextCount": "10"
@@ -169,7 +169,7 @@
   "Permissions": [
     {
       "TableName": "seq",
-      "Role": 0
+      "Role": 1
     }
   ],
   "NextCount": ":a"
@@ -183,7 +183,7 @@
   "Permissions": [
     {
       "TableName": "seq",
-      "Role": 0
+      "Role": 1
     }
   ],
   "NextCount": "12345667852342342342323423423"
@@ -763,14 +763,15 @@ options:PassthroughDMLs
 # analyze
 "analyze table a"
 {
-  "PlanID": "OtherRead",
+  "PlanID": "Select",
   "TableName": "",
   "Permissions": [
-      {
-        "TableName": "a",
-        "Role": 1
-      }
-  ]
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
+  "FullQuery": "analyze table a"
 }
 
 # show
@@ -783,15 +784,17 @@ options:PassthroughDMLs
 # describe
 "describe a"
 {
-  "PlanID": "OtherRead",
-  "TableName": ""
+  "PlanID": "Select",
+  "TableName": "",
+  "FullQuery": "explain a"
 }
 
 # explain
 "explain a"
 {
-  "PlanID": "OtherRead",
-  "TableName": ""
+  "PlanID": "Select",
+  "TableName": "",
+  "FullQuery": "explain a"
 }
 
 # repair

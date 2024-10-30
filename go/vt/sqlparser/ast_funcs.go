@@ -293,6 +293,8 @@ func SQLTypeToQueryType(typeName string, unsigned bool) querypb.Type {
 		return sqltypes.Set
 	case JSON:
 		return sqltypes.TypeJSON
+	case VECTOR:
+		return sqltypes.Vector
 	case GEOMETRY:
 		return sqltypes.Geometry
 	case POINT:
@@ -426,6 +428,20 @@ func (node *AliasedTableExpr) TableName() (TableName, error) {
 	return tableName, nil
 }
 
+// TableNameString returns a TableNameString pointing to this table expr
+func (node *AliasedTableExpr) TableNameString() string {
+	if node.As.NotEmpty() {
+		return node.As.String()
+	}
+
+	tableName, ok := node.Expr.(TableName)
+	if !ok {
+		panic(vterrors.VT13001("Derived table should have an alias. This should not be possible"))
+	}
+
+	return tableName.Name.String()
+}
+
 // IsEmpty returns true if TableName is nil or empty.
 func (node TableName) IsEmpty() bool {
 	// If Name is empty, Qualifier is also empty.
@@ -499,6 +515,70 @@ func (node *ComparisonExpr) IsImpossible() bool {
 		return true
 	}
 	return false
+}
+
+func (op ComparisonExprOperator) Inverse() ComparisonExprOperator {
+	switch op {
+	case EqualOp:
+		return NotEqualOp
+	case LessThanOp:
+		return GreaterEqualOp
+	case GreaterThanOp:
+		return LessEqualOp
+	case LessEqualOp:
+		return GreaterThanOp
+	case GreaterEqualOp:
+		return LessThanOp
+	case NotEqualOp:
+		return EqualOp
+	case NullSafeEqualOp:
+		return NotEqualOp
+	case InOp:
+		return NotInOp
+	case NotInOp:
+		return InOp
+	case LikeOp:
+		return NotLikeOp
+	case NotLikeOp:
+		return LikeOp
+	case RegexpOp:
+		return NotRegexpOp
+	case NotRegexpOp:
+		return RegexpOp
+	}
+	panic("unreachable")
+}
+
+// SwitchSides returns the reversed comparison operator if applicable, along with a boolean indicating success.
+// For symmetric operators like '=', '!=', and '<=>', it returns the same operator and true.
+// For directional comparison operators ('<', '>', '<=', '>='), it returns the opposite operator and true.
+// For operators that imply directionality or cannot be logically reversed (such as 'IN', 'LIKE', 'REGEXP'),
+// it returns the original operator and false, indicating that switching sides is not valid.
+func (op ComparisonExprOperator) SwitchSides() (ComparisonExprOperator, bool) {
+	switch op {
+	case EqualOp, NotEqualOp, NullSafeEqualOp:
+		// These operators are symmetric, so switching sides has no effect
+		return op, true
+	case LessThanOp:
+		return GreaterThanOp, true
+	case GreaterThanOp:
+		return LessThanOp, true
+	case LessEqualOp:
+		return GreaterEqualOp, true
+	case GreaterEqualOp:
+		return LessEqualOp, true
+	default:
+		return op, false
+	}
+}
+
+func (op ComparisonExprOperator) IsCommutative() bool {
+	switch op {
+	case EqualOp, NotEqualOp, NullSafeEqualOp:
+		return true
+	default:
+		return false
+	}
 }
 
 // NewStrLiteral builds a new StrVal.
@@ -800,7 +880,7 @@ func NewSelect(
 	windows NamedWindows,
 ) *Select {
 	var cache *bool
-	var distinct, straightJoinHint, sqlFoundRows bool
+	var distinct, highPriority, straightJoinHint, sqlSmallResult, sqlBigResult, SQLBufferResult, sqlFoundRows bool
 	for _, option := range selectOptions {
 		switch strings.ToLower(option) {
 		case DistinctStr:
@@ -811,8 +891,16 @@ func NewSelect(
 		case SQLNoCacheStr:
 			truth := false
 			cache = &truth
+		case HighPriorityStr:
+			highPriority = true
 		case StraightJoinHint:
 			straightJoinHint = true
+		case SQLSmallResultStr:
+			sqlSmallResult = true
+		case SQLBigResultStr:
+			sqlBigResult = true
+		case SQLBufferResultStr:
+			SQLBufferResult = true
 		case SQLCalcFoundRowsStr:
 			sqlFoundRows = true
 		}
@@ -821,7 +909,11 @@ func NewSelect(
 		Cache:            cache,
 		Comments:         comments.Parsed(),
 		Distinct:         distinct,
+		HighPriority:     highPriority,
 		StraightJoinHint: straightJoinHint,
+		SQLSmallResult:   sqlSmallResult,
+		SQLBigResult:     sqlBigResult,
+		SQLBufferResult:  SQLBufferResult,
 		SQLCalcFoundRows: sqlFoundRows,
 		SelectExprs:      exprs,
 		Into:             into,
@@ -1470,6 +1562,65 @@ func (op ComparisonExprOperator) ToString() string {
 	}
 }
 
+func ComparisonExprOperatorFromJson(s string) (ComparisonExprOperator, error) {
+	switch s {
+	case EqualStr:
+		return EqualOp, nil
+	case JsonLessThanStr:
+		return LessThanOp, nil
+	case JsonGreaterThanStr:
+		return GreaterThanOp, nil
+	case JsonLessThanOrEqualStr:
+		return LessEqualOp, nil
+	case JsonGreaterThanOrEqualStr:
+		return GreaterEqualOp, nil
+	case NotEqualStr:
+		return NotEqualOp, nil
+	case NullSafeEqualStr:
+		return NullSafeEqualOp, nil
+	case InStr:
+		return InOp, nil
+	case NotInStr:
+		return NotInOp, nil
+	case LikeStr:
+		return LikeOp, nil
+	case NotLikeStr:
+		return NotLikeOp, nil
+	case RegexpStr:
+		return RegexpOp, nil
+	case NotRegexpStr:
+		return NotRegexpOp, nil
+	default:
+		return 0, fmt.Errorf("unknown ComparisonExpOperator: %s", s)
+	}
+}
+
+const (
+	JsonGreaterThanStr        = "gt"
+	JsonLessThanStr           = "lt"
+	JsonGreaterThanOrEqualStr = "ge"
+	JsonLessThanOrEqualStr    = "le"
+)
+
+// JSONString returns a string representation for this operator that does not need escaping in JSON
+func (op ComparisonExprOperator) JSONString() string {
+	switch op {
+	case EqualOp, NotEqualOp, NullSafeEqualOp, InOp, NotInOp, LikeOp, NotLikeOp, RegexpOp, NotRegexpOp:
+		// These operators are safe for JSON output, so we delegate to ToString
+		return op.ToString()
+	case LessThanOp:
+		return JsonLessThanStr
+	case GreaterThanOp:
+		return JsonGreaterThanStr
+	case LessEqualOp:
+		return JsonLessThanOrEqualStr
+	case GreaterEqualOp:
+		return JsonGreaterThanOrEqualStr
+	default:
+		panic("unreachable")
+	}
+}
+
 // ToString returns the operator as a string
 func (op IsExprOperator) ToString() string {
 	switch op {
@@ -1515,10 +1666,6 @@ func (op BinaryExprOperator) ToString() string {
 		return ShiftLeftStr
 	case ShiftRightOp:
 		return ShiftRightStr
-	case JSONExtractOp:
-		return JSONExtractOpStr
-	case JSONUnquoteExtractOp:
-		return JSONUnquoteExtractOpStr
 	default:
 		return "Unknown BinaryExprOperator"
 	}
@@ -1895,6 +2042,10 @@ func (ty VExplainType) ToString() string {
 		return QueriesStr
 	case AllVExplainType:
 		return AllVExplainStr
+	case TraceVExplainType:
+		return TraceStr
+	case KeysVExplainType:
+		return KeysStr
 	default:
 		return "Unknown VExplainType"
 	}
@@ -2789,4 +2940,25 @@ func (lock Lock) GetHighestOrderLock(newLock Lock) Lock {
 // Clone returns a deep copy of the SQLNode, typed as the original type
 func Clone[K SQLNode](x K) K {
 	return CloneSQLNode(x).(K)
+}
+
+// ExtractAllTables returns all the table names in the SQLNode as slice of string
+func ExtractAllTables(stmt Statement) []string {
+	var tables []string
+	tableMap := make(map[string]any)
+	_ = Walk(func(node SQLNode) (kontinue bool, err error) {
+		switch node := node.(type) {
+		case *AliasedTableExpr:
+			if tblName, ok := node.Expr.(TableName); ok {
+				name := String(tblName)
+				if _, exists := tableMap[name]; !exists {
+					tableMap[name] = nil
+					tables = append(tables, name)
+				}
+				return false, nil
+			}
+		}
+		return true, nil
+	}, stmt)
+	return tables
 }

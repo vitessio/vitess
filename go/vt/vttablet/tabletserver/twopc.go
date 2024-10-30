@@ -47,7 +47,7 @@ const (
 	// DTStateRollback represents the ROLLBACK state for dt_state.
 	DTStateRollback = querypb.TransactionState_ROLLBACK
 
-	readAllRedo = `select t.dtid, t.state, t.time_created, s.statement
+	readAllRedo = `select t.dtid, t.state, t.time_created, s.statement, t.message
 	from %s.redo_state t
     join %s.redo_statement s on t.dtid = s.dtid
 	order by t.dtid, s.id`
@@ -61,7 +61,7 @@ const (
 	// Resolving COMMIT first is crucial because we need to address transactions where a commit decision has already been made but remains unresolved.
 	// For transactions with a commit decision, applications are already aware of the outcome and are waiting for the resolution.
 	// By addressing these first, we ensure atomic commits and improve user experience. For other transactions, the decision is typically to rollback.
-	readUnresolvedTransactions = `select t.dtid, t.state, p.keyspace, p.shard
+	readUnresolvedTransactions = `select t.dtid, t.state, t.time_created, p.keyspace, p.shard
 	from %s.dt_state t
     join %s.dt_participant p on t.dtid = p.dtid
     where time_created < %a
@@ -109,8 +109,8 @@ func (tpc *TwoPC) initializeQueries() {
 		"insert into %s.redo_statement(dtid, id, statement) values %a",
 		dbname, ":vals")
 	tpc.updateRedoTx = sqlparser.BuildParsedQuery(
-		"update %s.redo_state set state = %a where dtid = %a",
-		dbname, ":state", ":dtid")
+		"update %s.redo_state set state = %a, message = %a where dtid = %a",
+		dbname, ":state", ":message", ":dtid")
 	tpc.deleteRedoTx = sqlparser.BuildParsedQuery(
 		"delete from %s.redo_state where dtid = %a",
 		dbname, ":dtid")
@@ -169,9 +169,9 @@ func (tpc *TwoPC) Close() {
 }
 
 // SaveRedo saves the statements in the redo log using the supplied connection.
-func (tpc *TwoPC) SaveRedo(ctx context.Context, conn *StatefulConnection, dtid string, queries []string) error {
+func (tpc *TwoPC) SaveRedo(ctx context.Context, conn *StatefulConnection, dtid string, queries []tx.Query) error {
 	bindVars := map[string]*querypb.BindVariable{
-		"dtid":         sqltypes.StringBindVariable(dtid),
+		"dtid":         sqltypes.BytesBindVariable([]byte(dtid)),
 		"state":        sqltypes.Int64BindVariable(RedoStatePrepared),
 		"time_created": sqltypes.Int64BindVariable(time.Now().UnixNano()),
 	}
@@ -185,7 +185,7 @@ func (tpc *TwoPC) SaveRedo(ctx context.Context, conn *StatefulConnection, dtid s
 		rows[i] = []sqltypes.Value{
 			sqltypes.NewVarBinary(dtid),
 			sqltypes.NewInt64(int64(i + 1)),
-			sqltypes.NewVarBinary(query),
+			sqltypes.NewVarBinary(query.Sql),
 		}
 	}
 	extras := map[string]sqlparser.Encodable{
@@ -200,10 +200,11 @@ func (tpc *TwoPC) SaveRedo(ctx context.Context, conn *StatefulConnection, dtid s
 }
 
 // UpdateRedo changes the state of the redo log for the dtid.
-func (tpc *TwoPC) UpdateRedo(ctx context.Context, conn *StatefulConnection, dtid string, state int) error {
+func (tpc *TwoPC) UpdateRedo(ctx context.Context, conn *StatefulConnection, dtid string, state int, message string) error {
 	bindVars := map[string]*querypb.BindVariable{
-		"dtid":  sqltypes.StringBindVariable(dtid),
-		"state": sqltypes.Int64BindVariable(int64(state)),
+		"dtid":    sqltypes.BytesBindVariable([]byte(dtid)),
+		"state":   sqltypes.Int64BindVariable(int64(state)),
+		"message": sqltypes.StringBindVariable(message),
 	}
 	_, err := tpc.exec(ctx, conn, tpc.updateRedoTx, bindVars)
 	return err
@@ -212,7 +213,7 @@ func (tpc *TwoPC) UpdateRedo(ctx context.Context, conn *StatefulConnection, dtid
 // DeleteRedo deletes the redo log for the dtid.
 func (tpc *TwoPC) DeleteRedo(ctx context.Context, conn *StatefulConnection, dtid string) error {
 	bindVars := map[string]*querypb.BindVariable{
-		"dtid": sqltypes.StringBindVariable(dtid),
+		"dtid": sqltypes.BytesBindVariable([]byte(dtid)),
 	}
 	_, err := tpc.exec(ctx, conn, tpc.deleteRedoTx, bindVars)
 	if err != nil {
@@ -244,8 +245,9 @@ func (tpc *TwoPC) ReadAllRedo(ctx context.Context) (prepared, failed []*tx.Prepa
 			// which is harmless.
 			tm, _ := row[2].ToCastInt64()
 			curTx = &tx.PreparedTx{
-				Dtid: dtid,
-				Time: time.Unix(0, tm),
+				Dtid:    dtid,
+				Time:    time.Unix(0, tm),
+				Message: row[4].ToString(),
 			}
 			st, err := row[1].ToCastInt64()
 			if err != nil {
@@ -289,7 +291,7 @@ func (tpc *TwoPC) CountUnresolvedRedo(ctx context.Context, unresolvedTime time.T
 // CreateTransaction saves the metadata of a 2pc transaction as Prepared.
 func (tpc *TwoPC) CreateTransaction(ctx context.Context, conn *StatefulConnection, dtid string, participants []*querypb.Target) error {
 	bindVars := map[string]*querypb.BindVariable{
-		"dtid":     sqltypes.StringBindVariable(dtid),
+		"dtid":     sqltypes.BytesBindVariable([]byte(dtid)),
 		"state":    sqltypes.Int64BindVariable(int64(DTStatePrepare)),
 		"cur_time": sqltypes.Int64BindVariable(time.Now().UnixNano()),
 	}
@@ -322,7 +324,7 @@ func (tpc *TwoPC) CreateTransaction(ctx context.Context, conn *StatefulConnectio
 // If the transaction is not a in the Prepare state, an error is returned.
 func (tpc *TwoPC) Transition(ctx context.Context, conn *StatefulConnection, dtid string, state querypb.TransactionState) error {
 	bindVars := map[string]*querypb.BindVariable{
-		"dtid":    sqltypes.StringBindVariable(dtid),
+		"dtid":    sqltypes.BytesBindVariable([]byte(dtid)),
 		"state":   sqltypes.Int64BindVariable(int64(state)),
 		"prepare": sqltypes.Int64BindVariable(int64(querypb.TransactionState_PREPARE)),
 	}
@@ -339,7 +341,7 @@ func (tpc *TwoPC) Transition(ctx context.Context, conn *StatefulConnection, dtid
 // DeleteTransaction deletes the metadata for the specified transaction.
 func (tpc *TwoPC) DeleteTransaction(ctx context.Context, conn *StatefulConnection, dtid string) error {
 	bindVars := map[string]*querypb.BindVariable{
-		"dtid": sqltypes.StringBindVariable(dtid),
+		"dtid": sqltypes.BytesBindVariable([]byte(dtid)),
 	}
 	_, err := tpc.exec(ctx, conn, tpc.deleteTransaction, bindVars)
 	if err != nil {
@@ -359,7 +361,7 @@ func (tpc *TwoPC) ReadTransaction(ctx context.Context, dtid string) (*querypb.Tr
 
 	result := &querypb.TransactionMetadata{}
 	bindVars := map[string]*querypb.BindVariable{
-		"dtid": sqltypes.StringBindVariable(dtid),
+		"dtid": sqltypes.BytesBindVariable([]byte(dtid)),
 	}
 	qr, err := tpc.read(ctx, conn.Conn, tpc.readTransaction, bindVars)
 	if err != nil {
@@ -374,7 +376,7 @@ func (tpc *TwoPC) ReadTransaction(ctx context.Context, dtid string) (*querypb.Tr
 		return nil, vterrors.Wrapf(err, "error parsing state for dtid %s", dtid)
 	}
 	result.State = querypb.TransactionState(st)
-	if result.State < querypb.TransactionState_PREPARE || result.State > querypb.TransactionState_COMMIT {
+	if result.State < DTStatePrepare || result.State > DTStateCommit {
 		return nil, fmt.Errorf("unexpected state for dtid %s: %v", dtid, result.State)
 	}
 	// A failure in time parsing will show up as a very old time,
@@ -427,7 +429,7 @@ func (tpc *TwoPC) ReadAllTransactions(ctx context.Context) ([]*tx.DistributedTx,
 				log.Errorf("Error parsing state for dtid %s: %v.", dtid, err)
 			}
 			protostate := querypb.TransactionState(st)
-			if protostate < querypb.TransactionState_PREPARE || protostate > querypb.TransactionState_COMMIT {
+			if protostate < DTStatePrepare || protostate > DTStateCommit {
 				log.Errorf("Unexpected state for dtid %s: %v.", dtid, protostate)
 			}
 			curTx = &tx.DistributedTx{
@@ -464,10 +466,10 @@ func (tpc *TwoPC) read(ctx context.Context, conn *connpool.Conn, pq *sqlparser.P
 
 // UnresolvedTransactions returns the list of unresolved transactions
 // the list from database is retrieved as
-// dtid | state   | keyspace | shard
-// 1    | PREPARE | ks       | 40-80
-// 1    | PREPARE | ks       | 80-c0
-// 2    | COMMIT  | ks       | -40
+// dtid | state   | time_created | keyspace | shard
+// 1    | PREPARE | 1726748387   | ks       | 40-80
+// 1    | PREPARE | 1726748387   | ks       | 80-c0
+// 2    | COMMIT  | 1726748387   | ks       | -40
 // Here there are 2 dtids with 2 participants for dtid:1 and 1 participant for dtid:2.
 func (tpc *TwoPC) UnresolvedTransactions(ctx context.Context, abandonTime time.Time) ([]*querypb.TransactionMetadata, error) {
 	conn, err := tpc.readPool.Get(ctx, nil)
@@ -506,17 +508,20 @@ func (tpc *TwoPC) UnresolvedTransactions(ctx context.Context, abandonTime time.T
 
 			// Extract the transaction state and initialize a new TransactionMetadata
 			stateID, _ := row[1].ToInt()
+			timeCreated, _ := row[2].ToCastInt64()
 			currentTx = &querypb.TransactionMetadata{
 				Dtid:         dtid,
 				State:        querypb.TransactionState(stateID),
+				TimeCreated:  timeCreated,
 				Participants: []*querypb.Target{},
 			}
 		}
 
 		// Add the current participant (keyspace and shard) to the transaction
 		currentTx.Participants = append(currentTx.Participants, &querypb.Target{
-			Keyspace: row[2].ToString(),
-			Shard:    row[3].ToString(),
+			Keyspace:   row[3].ToString(),
+			Shard:      row[4].ToString(),
+			TabletType: topodatapb.TabletType_PRIMARY,
 		})
 	}
 

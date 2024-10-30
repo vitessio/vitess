@@ -1,22 +1,22 @@
 package s3backupstorage
 
 import (
+	"context"
 	"crypto/md5"
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
 	"os"
 	"testing"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/client"
-	"github.com/aws/aws-sdk-go/aws/request"
-	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/aws/aws-sdk-go/service/s3/s3iface"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/aws/smithy-go/middleware"
+	smithyhttp "github.com/aws/smithy-go/transport/http"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -26,29 +26,46 @@ import (
 )
 
 type s3FakeClient struct {
-	s3iface.S3API
+	*s3.Client
 	err   error
 	delay time.Duration
 }
 
-func (sfc *s3FakeClient) PutObjectRequest(in *s3.PutObjectInput) (*request.Request, *s3.PutObjectOutput) {
-	u, _ := url.Parse("http://localhost:1234")
-	req := request.Request{
-		HTTPRequest: &http.Request{ // without this we segfault \_(ツ)_/¯ (see https://github.com/aws/aws-sdk-go/blob/v1.28.8/aws/request/request_context.go#L13)
-			Header: make(http.Header),
-			URL:    u,
-		},
-		Retryer: client.DefaultRetryer{},
+type fakeClientDo struct {
+	delay time.Duration
+}
+
+func (fcd fakeClientDo) Do(request *http.Request) (*http.Response, error) {
+	if fcd.delay > 0 {
+		time.Sleep(fcd.delay)
+	}
+	return nil, nil
+}
+
+func (sfc *s3FakeClient) PutObject(ctx context.Context, in *s3.PutObjectInput, optFns ...func(*s3.Options)) (*s3.PutObjectOutput, error) {
+	var o s3.Options
+	for _, fn := range optFns {
+		fn(&o)
 	}
 
-	req.Handlers.Send.PushBack(func(r *request.Request) {
-		r.Error = sfc.err
-		if sfc.delay > 0 {
-			time.Sleep(sfc.delay)
-		}
-	})
+	stack := middleware.NewStack("PutObject", smithyhttp.NewStackRequest)
+	for _, apiOption := range o.APIOptions {
+		_ = apiOption(stack)
+	}
 
-	return &req, &s3.PutObjectOutput{}
+	handler := middleware.DecorateHandler(smithyhttp.NewClientHandler(&fakeClientDo{delay: sfc.delay}), stack)
+	_, _, err := handler.Handle(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+
+	if sfc.err != nil {
+		return nil, sfc.err
+	}
+
+	return &s3.PutObjectOutput{
+		ETag: aws.String("fake-etag"),
+	}, nil
 }
 
 func TestAddFileError(t *testing.T) {
@@ -56,11 +73,16 @@ func TestAddFileError(t *testing.T) {
 		client: &s3FakeClient{err: errors.New("some error")},
 		bs: &S3BackupStorage{
 			params: backupstorage.NoParams(),
+			s3SSE: S3ServerSideEncryption{
+				customerAlg: new(string),
+				customerKey: new(string),
+				customerMd5: new(string),
+			},
 		},
 		readOnly: false,
 	}
 
-	wc, err := bh.AddFile(aws.BackgroundContext(), "somefile", 100000)
+	wc, err := bh.AddFile(context.Background(), "somefile", 100000)
 	require.NoErrorf(t, err, "AddFile() expected no error, got %s", err)
 	assert.NotNil(t, wc, "AddFile() expected non-nil WriteCloser")
 
@@ -87,12 +109,17 @@ func TestAddFileStats(t *testing.T) {
 				Logger: logutil.NewMemoryLogger(),
 				Stats:  fakeStats,
 			},
+			s3SSE: S3ServerSideEncryption{
+				customerAlg: new(string),
+				customerKey: new(string),
+				customerMd5: new(string),
+			},
 		},
 		readOnly: false,
 	}
 
 	for i := 0; i < 4; i++ {
-		wc, err := bh.AddFile(aws.BackgroundContext(), fmt.Sprintf("somefile-%d", i), 100000)
+		wc, err := bh.AddFile(context.Background(), fmt.Sprintf("somefile-%d", i), 100000)
 		require.NoErrorf(t, err, "AddFile() expected no error, got %s", err)
 		assert.NotNil(t, wc, "AddFile() expected non-nil WriteCloser")
 
@@ -131,11 +158,16 @@ func TestAddFileErrorStats(t *testing.T) {
 				Logger: logutil.NewMemoryLogger(),
 				Stats:  fakeStats,
 			},
+			s3SSE: S3ServerSideEncryption{
+				customerAlg: new(string),
+				customerKey: new(string),
+				customerMd5: new(string),
+			},
 		},
 		readOnly: false,
 	}
 
-	wc, err := bh.AddFile(aws.BackgroundContext(), "somefile", 100000)
+	wc, err := bh.AddFile(context.Background(), "somefile", 100000)
 	require.NoErrorf(t, err, "AddFile() expected no error, got %s", err)
 	assert.NotNil(t, wc, "AddFile() expected non-nil WriteCloser")
 
@@ -163,7 +195,7 @@ func TestNoSSE(t *testing.T) {
 	err := sseData.init()
 	require.NoErrorf(t, err, "init() expected to succeed")
 
-	assert.Nil(t, sseData.awsAlg, "awsAlg expected to be nil")
+	assert.Empty(t, sseData.awsAlg, "awsAlg expected to be empty")
 	assert.Nil(t, sseData.customerAlg, "customerAlg expected to be nil")
 	assert.Nil(t, sseData.customerKey, "customerKey expected to be nil")
 	assert.Nil(t, sseData.customerMd5, "customerMd5 expected to be nil")
@@ -178,7 +210,7 @@ func TestSSEAws(t *testing.T) {
 	err := sseData.init()
 	require.NoErrorf(t, err, "init() expected to succeed")
 
-	assert.Equal(t, aws.String("aws:kms"), sseData.awsAlg, "awsAlg expected to be aws:kms")
+	assert.Equal(t, types.ServerSideEncryption("aws:kms"), sseData.awsAlg, "awsAlg expected to be aws:kms")
 	assert.Nil(t, sseData.customerAlg, "customerAlg expected to be nil")
 	assert.Nil(t, sseData.customerKey, "customerKey expected to be nil")
 	assert.Nil(t, sseData.customerMd5, "customerMd5 expected to be nil")
@@ -186,7 +218,7 @@ func TestSSEAws(t *testing.T) {
 	sseData.reset()
 	require.NoErrorf(t, err, "reset() expected to succeed")
 
-	assert.Nil(t, sseData.awsAlg, "awsAlg expected to be nil")
+	assert.Empty(t, sseData.awsAlg, "awsAlg expected to be empty")
 	assert.Nil(t, sseData.customerAlg, "customerAlg expected to be nil")
 	assert.Nil(t, sseData.customerKey, "customerKey expected to be nil")
 	assert.Nil(t, sseData.customerMd5, "customerMd5 expected to be nil")
@@ -227,7 +259,7 @@ func TestSSECustomerFileBinaryKey(t *testing.T) {
 	err = sseData.init()
 	require.NoErrorf(t, err, "init() expected to succeed")
 
-	assert.Nil(t, sseData.awsAlg, "awsAlg expected to be nil")
+	assert.Empty(t, sseData.awsAlg, "awsAlg expected to be empty")
 	assert.Equal(t, aws.String("AES256"), sseData.customerAlg, "customerAlg expected to be AES256")
 	assert.Equal(t, aws.String(string(randomKey)), sseData.customerKey, "customerKey expected to be equal to the generated randomKey")
 	md5Hash := md5.Sum(randomKey)
@@ -236,7 +268,7 @@ func TestSSECustomerFileBinaryKey(t *testing.T) {
 	sseData.reset()
 	require.NoErrorf(t, err, "reset() expected to succeed")
 
-	assert.Nil(t, sseData.awsAlg, "awsAlg expected to be nil")
+	assert.Empty(t, sseData.awsAlg, "awsAlg expected to be empty")
 	assert.Nil(t, sseData.customerAlg, "customerAlg expected to be nil")
 	assert.Nil(t, sseData.customerKey, "customerKey expected to be nil")
 	assert.Nil(t, sseData.customerMd5, "customerMd5 expected to be nil")
@@ -262,7 +294,7 @@ func TestSSECustomerFileBase64Key(t *testing.T) {
 	err = sseData.init()
 	require.NoErrorf(t, err, "init() expected to succeed")
 
-	assert.Nil(t, sseData.awsAlg, "awsAlg expected to be nil")
+	assert.Empty(t, sseData.awsAlg, "awsAlg expected to be empty")
 	assert.Equal(t, aws.String("AES256"), sseData.customerAlg, "customerAlg expected to be AES256")
 	assert.Equal(t, aws.String(string(randomKey)), sseData.customerKey, "customerKey expected to be equal to the generated randomKey")
 	md5Hash := md5.Sum(randomKey)
@@ -271,7 +303,7 @@ func TestSSECustomerFileBase64Key(t *testing.T) {
 	sseData.reset()
 	require.NoErrorf(t, err, "reset() expected to succeed")
 
-	assert.Nil(t, sseData.awsAlg, "awsAlg expected to be nil")
+	assert.Empty(t, sseData.awsAlg, "awsAlg expected to be empty")
 	assert.Nil(t, sseData.customerAlg, "customerAlg expected to be nil")
 	assert.Nil(t, sseData.customerKey, "customerKey expected to be nil")
 	assert.Nil(t, sseData.customerMd5, "customerMd5 expected to be nil")

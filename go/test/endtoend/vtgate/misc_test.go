@@ -95,10 +95,13 @@ func TestShowTables(t *testing.T) {
 	conn, closer := start(t)
 	defer closer()
 
-	query := "show tables;"
-	qr := utils.Exec(t, conn, query)
-
+	qr := utils.Exec(t, conn, "show tables")
 	assert.Equal(t, "Tables_in_ks", qr.Fields[0].Name)
+
+	// no error on executing `show tables` on system schema
+	utils.Exec(t, conn, `use mysql`)
+	utils.Exec(t, conn, "show tables")
+	utils.Exec(t, conn, "show tables from information_schema")
 }
 
 func TestCastConvert(t *testing.T) {
@@ -753,7 +756,7 @@ func TestDescribeVindex(t *testing.T) {
 	mysqlErr := err.(*sqlerror.SQLError)
 	assert.Equal(t, sqlerror.ERNoSuchTable, mysqlErr.Num)
 	assert.Equal(t, "42S02", mysqlErr.State)
-	assert.Contains(t, mysqlErr.Message, "NotFound desc")
+	assert.ErrorContains(t, mysqlErr, "NotFound desc")
 }
 
 func TestEmptyQuery(t *testing.T) {
@@ -795,6 +798,24 @@ func TestRowCountExceed(t *testing.T) {
 	utils.AssertContainsError(t, conn, "select id1 from t1 where id1 < 1000", `Row count exceeded 100`)
 }
 
+func TestDDLTargeted(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	utils.Exec(t, conn, "use `ks/-80`")
+	utils.Exec(t, conn, `begin`)
+	utils.Exec(t, conn, `create table ddl_targeted (id bigint primary key)`)
+	// implicit commit on ddl would have closed the open transaction
+	// so this execution should happen as autocommit.
+	utils.Exec(t, conn, `insert into ddl_targeted (id) values (1)`)
+	// this will have not impact and the row would have inserted.
+	utils.Exec(t, conn, `rollback`)
+	// validating the row
+	utils.AssertMatches(t, conn, `select id from ddl_targeted`, `[[INT64(1)]]`)
+}
+
 func TestLookupErrorMetric(t *testing.T) {
 	conn, closer := start(t)
 	defer closer()
@@ -823,8 +844,8 @@ func getVtgateApiErrorCounts(t *testing.T) float64 {
 }
 
 func getVar(t *testing.T, key string) interface{} {
-	vars, err := clusterInstance.VtgateProcess.GetVars()
-	require.NoError(t, err)
+	vars := clusterInstance.VtgateProcess.GetVars()
+	require.NotNil(t, vars)
 
 	val, exists := vars[key]
 	if !exists {

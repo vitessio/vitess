@@ -26,23 +26,23 @@ import (
 
 // LockAndComment contains any comments or locking directives we want on all queries down from this operator
 type LockAndComment struct {
-	Source   Operator
+	unaryOperator
 	Comments *sqlparser.ParsedComments
 	Lock     sqlparser.Lock
+}
+
+func newLockAndComment(op Operator, comments *sqlparser.ParsedComments, lock sqlparser.Lock) Operator {
+	return &LockAndComment{
+		unaryOperator: newUnaryOp(op),
+		Comments:      comments,
+		Lock:          lock,
+	}
 }
 
 func (l *LockAndComment) Clone(inputs []Operator) Operator {
 	klon := *l
 	klon.Source = inputs[0]
 	return &klon
-}
-
-func (l *LockAndComment) Inputs() []Operator {
-	return []Operator{l.Source}
-}
-
-func (l *LockAndComment) SetInputs(operators []Operator) {
-	l.Source = operators[0]
 }
 
 func (l *LockAndComment) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {

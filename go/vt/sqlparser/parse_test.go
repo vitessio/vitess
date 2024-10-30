@@ -1005,9 +1005,11 @@ var (
 	}, {
 		input: "select /* u~ */ 1 from t where a = ~b",
 	}, {
-		input: "select /* -> */ a.b -> 'ab' from t",
+		input:  "select /* -> */ a.b -> 'ab' from t",
+		output: "select /* -> */ json_extract(a.b, 'ab') from t",
 	}, {
-		input: "select /* -> */ a.b ->> 'ab' from t",
+		input:  "select /* -> */ a.b ->> 'ab' from t",
+		output: "select /* -> */ json_unquote(json_extract(a.b, 'ab')) from t",
 	}, {
 		input: "select /* empty function */ 1 from t where a = b()",
 	}, {
@@ -1228,6 +1230,9 @@ var (
 		input: "select /* bool in order by */ * from t order by a is null or b asc",
 	}, {
 		input: "select /* string in case statement */ if(max(case a when 'foo' then 1 else 0 end) = 1, 'foo', 'bar') as foobar from t",
+	}, {
+		input:  "select 1 as vector",
+		output: "select 1 as `vector` from dual",
 	}, {
 		input:  "/*!show databases*/",
 		output: "show databases",
@@ -1782,6 +1787,12 @@ var (
 	}, {
 		input:  `create index Indexes on b (col1)`,
 		output: "alter table b add key `Indexes` (col1)",
+	}, {
+		input:  `create /*vt+ foo=1 */ index Indexes on b (col1)`,
+		output: "alter /*vt+ foo=1 */ table b add key `Indexes` (col1)",
+	}, {
+		input:  `alter /*vt+ foo=1 */ table b add key Indexes (col1)`,
+		output: "alter /*vt+ foo=1 */ table b add key `Indexes` (col1)",
 	}, {
 		input:  `create fulltext index Indexes on b (col1)`,
 		output: "alter table b add fulltext key `Indexes` (col1)",
@@ -2429,6 +2440,21 @@ var (
 	}, {
 		input: "show vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' logs",
 	}, {
+		input: "show transaction status for 'ks:-80:232323238342'",
+	}, {
+		input:  "show transaction status for \"ks:-80:232323238342\"",
+		output: "show transaction status for 'ks:-80:232323238342'",
+	}, {
+		input:  "show transaction status 'ks:-80:232323238342'",
+		output: "show transaction status for 'ks:-80:232323238342'",
+	}, {
+		input:  "show transaction status \"ks:-80:232323238342\"",
+		output: "show transaction status for 'ks:-80:232323238342'",
+	}, {
+		input: "show unresolved transactions",
+	}, {
+		input: "show unresolved transactions for ks",
+	}, {
 		input: "revert vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90'",
 	}, {
 		input: "revert /*vt+ uuid=123 */ vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90'",
@@ -2436,6 +2462,8 @@ var (
 		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' retry",
 	}, {
 		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' cleanup",
+	}, {
+		input: "alter vitess_migration cleanup all",
 	}, {
 		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' launch",
 	}, {
@@ -2548,6 +2576,10 @@ var (
 		input:  "vexplain select * from t",
 		output: "vexplain plan select * from t",
 	}, {
+		input: "vexplain trace select * from t",
+	}, {
+		input: "vexplain keys select * from t",
+	}, {
 		input: "explain analyze select * from t",
 	}, {
 		input: "explain format = tree select * from t",
@@ -2647,8 +2679,23 @@ var (
 		input:  "select sql_no_cache straight_join distinct 'foo' from t",
 		output: "select distinct sql_no_cache straight_join 'foo' from t",
 	}, {
+		input:  "select sql_buffer_result 'foo' from t",
+		output: "select sql_buffer_result 'foo' from t",
+	}, {
+		input:  "select high_priority 'foo' from t",
+		output: "select high_priority 'foo' from t",
+	}, {
 		input:  "select straight_join distinct sql_no_cache 'foo' from t",
 		output: "select distinct sql_no_cache straight_join 'foo' from t",
+	}, {
+		input:  "select sql_small_result 'foo' from t",
+		output: "select sql_small_result 'foo' from t",
+	}, {
+		input:  "select distinct sql_small_result 'foo' from t",
+		output: "select distinct sql_small_result 'foo' from t",
+	}, {
+		input:  "select sql_big_result 'foo' from t",
+		output: "select sql_big_result 'foo' from t",
 	}, {
 		input:  "select sql_calc_found_rows 'foo' from t",
 		output: "select sql_calc_found_rows 'foo' from t",
@@ -2762,12 +2809,12 @@ var (
 	}, {
 		input: "rollback",
 	}, {
-		input: "create database /* simple */ test_db",
+		input: "create /* simple */ database test_db",
 	}, {
 		input:  "create schema test_db",
 		output: "create database test_db",
 	}, {
-		input: "create database /* simple */ if not exists test_db",
+		input: "create /* simple */ database if not exists test_db",
 	}, {
 		input:  "create schema if not exists test_db",
 		output: "create database if not exists test_db",
@@ -4069,6 +4116,9 @@ func TestInvalid(t *testing.T) {
 	}, {
 		input: "select * from foo where b <=> any (select id from t1)",
 		err:   "syntax error at position 42",
+	}, {
+		input: "select _binary foo",
+		err:   "syntax error at position 19 near 'foo'",
 	},
 	}
 
@@ -5892,11 +5942,15 @@ partition by range (YEAR(purchased)) subpartition by hash (TO_DAYS(purchased))
 		},
 		{
 			input:  "create table t (id int, info JSON, INDEX zips((CAST(info->'$.field' AS unsigned ARRAY))))",
-			output: "create table t (\n\tid int,\n\tinfo JSON,\n\tkey zips ((cast(info -> '$.field' as unsigned array)))\n)",
+			output: "create table t (\n\tid int,\n\tinfo JSON,\n\tkey zips ((cast(json_extract(info, '$.field') as unsigned array)))\n)",
 		},
 		{
 			input:  "create table t (id int, s varchar(255) default 'foo\"bar')",
 			output: "create table t (\n\tid int,\n\ts varchar(255) default 'foo\"bar'\n)",
+		},
+		{
+			input:  "create table t (id int, vec VECTOR(4))",
+			output: "create table t (\n\tid int,\n\tvec VECTOR(4)\n)",
 		},
 	}
 	parser := NewTestParser()
@@ -6426,8 +6480,11 @@ func testFile(t *testing.T, filename, tempDir string) {
 					errPresent := ""
 					if err != nil {
 						errPresent = err.Error()
+						expected.WriteString(fmt.Sprintf("ERROR\n%s\nEND\n", escapeNewLines(errPresent)))
+					} else {
+						out := String(tree)
+						expected.WriteString(fmt.Sprintf("OUTPUT\n%s\nEND\n", escapeNewLines(out)))
 					}
-					expected.WriteString(fmt.Sprintf("ERROR\n%s\nEND\n", escapeNewLines(errPresent)))
 					if err == nil || tcase.errStr != err.Error() {
 						fail = true
 						t.Errorf("File: %s, Line: %d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.errStr, errPresent), tcase.errStr, errPresent)

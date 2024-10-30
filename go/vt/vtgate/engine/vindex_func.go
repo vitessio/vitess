@@ -153,6 +153,9 @@ func (vf *VindexFunc) mapVindex(ctx context.Context, vcursor VCursor, bindVars m
 		case key.DestinationKeyspaceID:
 			if len(d) > 0 {
 				if vcursor != nil {
+					if vcursor.GetKeyspace() == "" {
+						return nil, vterrors.VT09005()
+					}
 					resolvedShards, _, err := vcursor.ResolveDestinations(ctx, vcursor.GetKeyspace(), nil, []key.Destination{d})
 					if err != nil {
 						return nil, err

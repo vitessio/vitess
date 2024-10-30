@@ -50,9 +50,6 @@ func (d *DMLWithInput) Inputs() []Operator {
 }
 
 func (d *DMLWithInput) SetInputs(inputs []Operator) {
-	if len(inputs) < 2 {
-		panic("unexpected number of inputs for DMLWithInput operator")
-	}
 	d.Source = inputs[0]
 	d.DML = inputs[1:]
 }
@@ -114,7 +111,7 @@ func (d *DMLWithInput) planOffsets(ctx *plancontext.PlanningContext) Operator {
 		}
 	}
 	d.BvList = bvList
-	return d
+	return nil
 }
 
 var _ Operator = (*DMLWithInput)(nil)

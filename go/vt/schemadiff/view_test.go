@@ -150,19 +150,16 @@ func TestCreateViewDiff(t *testing.T) {
 	for _, ts := range tt {
 		t.Run(ts.name, func(t *testing.T) {
 			fromStmt, err := env.Parser().ParseStrictDDL(ts.from)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			fromCreateView, ok := fromStmt.(*sqlparser.CreateView)
-			assert.True(t, ok)
-
-			toStmt, err := env.Parser().ParseStrictDDL(ts.to)
-			assert.NoError(t, err)
-			toCreateView, ok := toStmt.(*sqlparser.CreateView)
 			assert.True(t, ok)
 
 			c, err := NewCreateViewEntity(env, fromCreateView)
 			require.NoError(t, err)
-			other, err := NewCreateViewEntity(env, toCreateView)
+			// Test from SQL:
+			other, err := NewCreateViewEntityFromSQL(env, ts.to)
 			require.NoError(t, err)
+
 			alter, err := c.Diff(other, hints)
 			switch {
 			case ts.isError:
