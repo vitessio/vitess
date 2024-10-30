@@ -31,7 +31,7 @@ import (
 // InsertRecoveryDetection inserts the recovery analysis that has been detected.
 func InsertRecoveryDetection(analysisEntry *inst.ReplicationAnalysis) error {
 	sqlResult, err := db.ExecVTOrc(`
-			insert ignore
+			insert or ignore
 				into recovery_detection (
 					alias,
 					analysis,
@@ -43,7 +43,7 @@ func InsertRecoveryDetection(analysisEntry *inst.ReplicationAnalysis) error {
 					?,
 					?,
 					?,
-					now()
+					datetime('now')
 				)`,
 		analysisEntry.AnalyzedInstanceAlias,
 		string(analysisEntry.Analysis),
@@ -66,7 +66,7 @@ func InsertRecoveryDetection(analysisEntry *inst.ReplicationAnalysis) error {
 func writeTopologyRecovery(topologyRecovery *TopologyRecovery) (*TopologyRecovery, error) {
 	analysisEntry := topologyRecovery.AnalysisEntry
 	sqlResult, err := db.ExecVTOrc(`
-			insert ignore
+			insert or ignore
 				into topology_recovery (
 					recovery_id,
 					alias,
@@ -78,7 +78,7 @@ func writeTopologyRecovery(topologyRecovery *TopologyRecovery) (*TopologyRecover
 				) values (
 					?,
 					?,
-					NOW(),
+					datetime('now'),
 					?,
 					?,
 					?,
@@ -143,7 +143,7 @@ func writeResolveRecovery(topologyRecovery *TopologyRecovery) error {
 				is_successful = ?,
 				successor_alias = ?,
 				all_errors = ?,
-				end_recovery = NOW()
+				end_recovery = datetime('now')
 			where
 				recovery_id = ?
 			`, topologyRecovery.IsSuccessful,
@@ -237,10 +237,10 @@ func ReadRecentRecoveries(page int) ([]*TopologyRecovery, error) {
 // writeTopologyRecoveryStep writes down a single step in a recovery process
 func writeTopologyRecoveryStep(topologyRecoveryStep *TopologyRecoveryStep) error {
 	sqlResult, err := db.ExecVTOrc(`
-			insert ignore
+			insert or ignore
 				into topology_recovery_steps (
 					recovery_step_id, recovery_id, audit_at, message
-				) values (?, ?, now(), ?)
+				) values (?, ?, datetime('now'), ?)
 			`, sqlutils.NilIfZero(topologyRecoveryStep.ID), topologyRecoveryStep.RecoveryID, topologyRecoveryStep.Message,
 	)
 	if err != nil {
