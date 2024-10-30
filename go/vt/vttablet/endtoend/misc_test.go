@@ -936,7 +936,7 @@ func TestShowTablesWithSizes(t *testing.T) {
 			assert.True(t, row[2].IsIntegral())
 			createTime, err := row[2].ToCastInt64()
 			assert.NoError(t, err)
-			assert.Greater(t, createTime, int64(0))
+			assert.Positive(t, createTime)
 
 			// TABLE_COMMENT
 			assert.Equal(t, "", row[3].ToString())
@@ -944,12 +944,12 @@ func TestShowTablesWithSizes(t *testing.T) {
 			assert.True(t, row[4].IsDecimal())
 			fileSize, err := row[4].ToCastInt64()
 			assert.NoError(t, err)
-			assert.Greater(t, fileSize, int64(0))
+			assert.Positive(t, fileSize)
 
 			assert.True(t, row[4].IsDecimal())
 			allocatedSize, err := row[5].ToCastInt64()
 			assert.NoError(t, err)
-			assert.Greater(t, allocatedSize, int64(0))
+			assert.Positive(t, allocatedSize)
 
 			actualTables = append(actualTables, tableName)
 		} else if tableName == "show_tables_with_sizes_v1" {
@@ -959,7 +959,7 @@ func TestShowTablesWithSizes(t *testing.T) {
 			assert.True(t, row[2].IsIntegral())
 			createTime, err := row[2].ToCastInt64()
 			assert.NoError(t, err)
-			assert.Greater(t, createTime, int64(0))
+			assert.Positive(t, createTime)
 
 			// TABLE_COMMENT
 			assert.Equal(t, "VIEW", row[3].ToString())
@@ -975,7 +975,7 @@ func TestShowTablesWithSizes(t *testing.T) {
 			assert.True(t, row[2].IsIntegral())
 			createTime, err := row[2].ToCastInt64()
 			assert.NoError(t, err)
-			assert.Greater(t, createTime, int64(0))
+			assert.Positive(t, createTime)
 
 			// TABLE_COMMENT
 			assert.Equal(t, "", row[3].ToString())
@@ -983,12 +983,12 @@ func TestShowTablesWithSizes(t *testing.T) {
 			assert.True(t, row[4].IsDecimal())
 			fileSize, err := row[4].ToCastInt64()
 			assert.NoError(t, err)
-			assert.Greater(t, fileSize, int64(0))
+			assert.Positive(t, fileSize)
 
 			assert.True(t, row[5].IsDecimal())
 			allocatedSize, err := row[5].ToCastInt64()
 			assert.NoError(t, err)
-			assert.Greater(t, allocatedSize, int64(0))
+			assert.Positive(t, allocatedSize)
 
 			actualTables = append(actualTables, tableName)
 		} else if tableName == "show_tables_with_sizes_fts" {
@@ -998,7 +998,7 @@ func TestShowTablesWithSizes(t *testing.T) {
 			assert.True(t, row[2].IsIntegral())
 			createTime, err := row[2].ToCastInt64()
 			assert.NoError(t, err)
-			assert.Greater(t, createTime, int64(0))
+			assert.Positive(t, createTime)
 
 			// TABLE_COMMENT
 			assert.Equal(t, "", row[3].ToString())
@@ -1006,12 +1006,12 @@ func TestShowTablesWithSizes(t *testing.T) {
 			assert.True(t, row[4].IsDecimal())
 			fileSize, err := row[4].ToCastInt64()
 			assert.NoError(t, err)
-			assert.Greater(t, fileSize, int64(0))
+			assert.Positive(t, fileSize)
 
 			assert.True(t, row[5].IsDecimal())
 			allocatedSize, err := row[5].ToCastInt64()
 			assert.NoError(t, err)
-			assert.Greater(t, allocatedSize, int64(0))
+			assert.Positive(t, allocatedSize)
 
 			actualTables = append(actualTables, tableName)
 		}
