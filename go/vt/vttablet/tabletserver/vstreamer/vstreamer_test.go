@@ -41,6 +41,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 type testcase struct {
@@ -87,6 +88,9 @@ func TestNoBlob(t *testing.T) {
 			"create table t2(id int, txt text, val varchar(4), unique key(id, val))",
 			// t3 has a text column and a primary key. The text column will not be in update row events.
 			"create table t3(id int, txt text, val varchar(4), primary key(id))",
+			// t4 has a blob column and a primary key, along with a generated virtual column. The blob
+			// column will not be in update row events.
+			"create table t4(id int, cOl varbinary(8) generated always as (concat(val, 'tsty')) virtual, blb blob, val varbinary(4), primary key(id))",
 		},
 		options: &TestSpecOptions{
 			noblob: true,
@@ -94,6 +98,18 @@ func TestNoBlob(t *testing.T) {
 	}
 	defer ts.Close()
 	ts.Init()
+
+	insertGeneratedFE := &TestFieldEvent{
+		table: "t4",
+		db:    testenv.DBName,
+		cols: []*TestColumn{
+			{name: "id", dataType: "INT32", colType: "int(11)", len: 11, collationID: 63},
+			{name: "cOl", dataType: "VARBINARY", colType: "varbinary(8)", len: 8, collationID: 63},
+			{name: "blb", dataType: "BLOB", colType: "blob", len: 65535, collationID: 63},
+			{name: "val", dataType: "VARBINARY", colType: "varbinary(4)", len: 4, collationID: 63},
+		},
+	}
+
 	ts.tests = [][]*TestQuery{{
 		{"begin", nil},
 		{"insert into t1 values (1, 'blob1', 'aaa')", nil},
@@ -106,6 +122,29 @@ func TestNoBlob(t *testing.T) {
 	}, {{"begin", nil},
 		{"insert into t3 values (1, 'text1', 'aaa')", nil},
 		{"update t3 set val = 'bbb'", nil},
+		{"commit", nil},
+	}, {{"begin", nil},
+		{"insert into t4 (id, blb, val) values (1, 'text1', 'aaa')", []TestRowEvent{
+			{event: insertGeneratedFE.String()},
+			{spec: &TestRowEventSpec{table: "t4", changes: []TestRowChange{{after: []string{"1", "aaatsty", "text1", "aaa"}}}}},
+		}},
+		{"update t4 set val = 'bbb'", []TestRowEvent{
+			// The blob column is not in the update row event's before or after image.
+			{spec: &TestRowEventSpec{table: "t4", changes: []TestRowChange{{
+				beforeRaw: &querypb.Row{
+					Lengths: []int64{1, 7, -1, 3}, // -1 for the 3rd column / blob field, as it's not present
+					Values:  []byte("1aaatstyaaa"),
+				},
+				afterRaw: &querypb.Row{
+					Lengths: []int64{1, 7, -1, 3}, // -1 for the 3rd column / blob field, as it's not present
+					Values:  []byte("1bbbtstybbb"),
+				},
+				dataColumnsRaw: &binlogdatapb.RowChange_Bitmap{
+					Count: 4,
+					Cols:  []byte{0x0b}, // Columns bitmap of 00001011 as the third column/bit position representing the blob column has no data
+				},
+			}}}},
+		}},
 		{"commit", nil},
 	}}
 	ts.Run()
