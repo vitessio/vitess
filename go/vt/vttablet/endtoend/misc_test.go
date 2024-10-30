@@ -35,10 +35,15 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/callerid"
+	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
 func TestSimpleRead(t *testing.T) {
@@ -1019,6 +1024,84 @@ func TestShowTablesWithSizes(t *testing.T) {
 
 	assert.Equal(t, len(expectedTables), len(actualTables))
 	assert.ElementsMatch(t, expectedTables, actualTables)
+}
+
+func newTestSchemaEngine(connParams *mysql.ConnParams) *schema.Engine {
+	cfg := tabletenv.NewDefaultConfig()
+	cfg.DB = dbconfigs.NewTestDBConfigs(*connParams, *connParams, connParams.DbName)
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "EngineTest")
+	se := schema.NewEngine(env)
+	se.InitDBConfig(dbconfigs.New(connParams))
+	return se
+}
+
+func TestEngineReload(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &connParams)
+	require.NoError(t, err)
+	defer conn.Close()
+	t.Run("validate innodb size query", func(t *testing.T) {
+		q := conn.BaseShowInnodbTableSizes()
+		require.NotEmpty(t, q)
+	})
+	t.Run("validate conn schema", func(t *testing.T) {
+		rs, err := conn.ExecuteFetch(`select database() as d`, 1, true)
+		require.NoError(t, err)
+		row := rs.Named().Row()
+		require.NotNil(t, row)
+		database := row.AsString("d", "")
+		require.Equal(t, connParams.DbName, database)
+	})
+	setupQueries := []string{
+		`drop view if exists view_simple`,
+		`drop table if exists tbl_simple`,
+		`drop table if exists tbl_part`,
+		`drop table if exists tbl_fts`,
+		`create table tbl_simple (id int primary key)`,
+		`create view view_simple as select * from tbl_simple`,
+		`create table tbl_part (id INT NOT NULL, store_id INT) PARTITION BY HASH(store_id) PARTITIONS 4`,
+		`create table tbl_fts (id int primary key, name text, fulltext key name_fts (name))`,
+	}
+
+	defer func() {
+		_, _ = conn.ExecuteFetch(`drop view if exists view_simple`, 1, false)
+		_, _ = conn.ExecuteFetch(`drop table if exists tbl_simple`, 1, false)
+		_, _ = conn.ExecuteFetch(`drop table if exists tbl_part`, 1, false)
+		_, _ = conn.ExecuteFetch(`drop table if exists tbl_fts`, 1, false)
+	}()
+	for _, query := range setupQueries {
+		_, err := conn.ExecuteFetch(query, 1, false)
+		require.NoError(t, err)
+	}
+
+	expectedTables := []string{
+		"tbl_simple",
+		"tbl_part",
+		"tbl_fts",
+		"view_simple",
+	}
+	engine := newTestSchemaEngine(&connParams)
+	require.NotNil(t, engine)
+	err = engine.Open()
+	require.NoError(t, err)
+	err = engine.Reload(ctx)
+	require.NoError(t, err)
+
+	schema := engine.GetSchema()
+	require.NotEmpty(t, schema)
+	for _, expectTable := range expectedTables {
+		t.Run(expectTable, func(t *testing.T) {
+			tbl := engine.GetTable(sqlparser.NewIdentifierCS(expectTable))
+			require.NotNil(t, tbl)
+			if expectTable == "view_simple" {
+				assert.Zero(t, tbl.FileSize)
+				assert.Zero(t, tbl.AllocatedSize)
+			} else {
+				assert.NotZero(t, tbl.FileSize)
+				assert.NotZero(t, tbl.AllocatedSize)
+			}
+		})
+	}
 }
 
 // TestTuple tests that bind variables having tuple values work with vttablet.

@@ -466,6 +466,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 					}
 				}
 			}
+			// See testing in TestEngineReload
 		}
 	}
 	tableData, err := getTableData(ctx, conn.Conn, includeStats)
