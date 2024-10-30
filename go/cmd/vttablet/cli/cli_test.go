@@ -49,6 +49,10 @@ func TestRunFailsToStartTabletManager(t *testing.T) {
 		"--restore_from_backup",
 	}
 
-	err := Main.Execute()
+	// Creating and canceling the context so that pending tasks in tm_init gets canceled before we close the topo server
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	err := Main.ExecuteContext(ctx)
 	require.ErrorContains(t, err, "you cannot enable --restore_from_backup without a my.cnf file")
 }
