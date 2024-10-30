@@ -76,6 +76,12 @@ jobs:
           sudo apt-get install -y eatmydata make
           go mod download
 
+      # needed for vtctldclient
+      - name: Build vitess
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+        run: |
+          make build
+
       - name: Install kubectl & kind
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
         run: |
