@@ -3,7 +3,7 @@
 ### Table of Contents
 
 - **[Known Issues](#known-issues)**
-  - **[SideCarDB runs an ineffectual DDL](#sidecardb-issue)**
+  - **[VTTablet runs an unnecessary DDL](#sidecardb-issue)**
 - **[Major Changes](#major-changes)**
   - **[Breaking Changes](#breaking-changes)**
     - [Local examples now use etcd v3 storage and API](#local-examples-etcd-v3)
@@ -40,9 +40,9 @@
 
 ## <a id="known-issues"/>Known Issues
 
-### <a id="sidecardb-issue"/>SideCarDB runs an ineffectual DDL
-In this release, with MySQL 8.0 whenever SideCarDB runs, it finds
-a diff in the schemacopy table and tries to apply a DDL to fix it. The DDL
+### <a id="sidecardb-issue"/>VTTablet runs an unnecessary DDL
+In this release, with MySQL 8.0 whenever VTTablet's tabletserver goes through initialization, it finds
+a diff in its internal `schemacopy` table and tries to apply a DDL to fix it. The DDL
 is a no-op and this loop of applying the DDL continues to run.
 
 If this problem is encountered, the following PR should be reverted to resolve it - https://github.com/vitessio/vitess/pull/15859.
