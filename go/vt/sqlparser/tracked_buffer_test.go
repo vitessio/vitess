@@ -270,7 +270,7 @@ func TestCanonicalOutput(t *testing.T) {
 		},
 		{
 			"create table t (id int, info JSON, INDEX zips((CAST(info->'$.field' AS unsigned array))))",
-			"CREATE TABLE `t` (\n\t`id` int,\n\t`info` JSON,\n\tKEY `zips` ((CAST(`info` -> '$.field' AS unsigned array)))\n)",
+			"CREATE TABLE `t` (\n\t`id` int,\n\t`info` JSON,\n\tKEY `zips` ((CAST(JSON_EXTRACT(`info`, '$.field') AS unsigned array)))\n)",
 		},
 		{
 			"select 1 from t1 into outfile 'test/t1.txt'",

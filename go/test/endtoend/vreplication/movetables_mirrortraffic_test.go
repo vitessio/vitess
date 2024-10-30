@@ -25,6 +25,14 @@ import (
 
 func testMoveTablesMirrorTraffic(t *testing.T, flavor workflowFlavor) {
 	setSidecarDBName("_vt")
+	ogReplicas := defaultReplicas
+	ogRdOnly := defaultRdonly
+	defer func() {
+		defaultReplicas = ogReplicas
+		defaultRdonly = ogRdOnly
+	}()
+	defaultRdonly = 0
+	defaultReplicas = 0
 	vc = setupMinimalCluster(t)
 	defer vc.TearDown()
 

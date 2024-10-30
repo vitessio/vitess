@@ -468,7 +468,7 @@ func (set Mysql56GTIDSet) SIDBlock() []byte {
 }
 
 // ErrantGTIDsOnReplica gets the errant GTIDs on the replica by comparing against the primary position and UUID.
-func ErrantGTIDsOnReplica(replicaPosition Position, primaryPosition Position) (string, error) {
+func ErrantGTIDsOnReplica(replicaPosition Position, primaryPosition Position, primarySid SID) (string, error) {
 	replicaGTIDSet, replicaOk := replicaPosition.GTIDSet.(Mysql56GTIDSet)
 	primaryGTIDSet, primaryOk := primaryPosition.GTIDSet.(Mysql56GTIDSet)
 
@@ -478,7 +478,13 @@ func ErrantGTIDsOnReplica(replicaPosition Position, primaryPosition Position) (s
 	}
 
 	// Calculate the difference between the replica and primary GTID sets.
-	diffSet := replicaGTIDSet.Difference(primaryGTIDSet)
+	// We discount the writes from the primary server first. This is required because sometimes
+	// the replica might advertise itself as more advanced than the primary, and we don't want to
+	// incorrectly mark GTIDs errant.
+	// For example, it is perfectly valid to see the replica GTID set be `ff8ecd9a-8f92-11ef-b369-733dd679dde6:1-33`
+	// while that of the primary be `ff8ecd9a-8f92-11ef-b369-733dd679dde6:1-29` when `ff8ecd9a-8f92-11ef-b369-733dd679dde6`
+	// is the primary server UUID. In this case, the replica is not errant.
+	diffSet := replicaGTIDSet.RemoveUUID(primarySid).Difference(primaryGTIDSet)
 	return diffSet.String(), nil
 }
 

@@ -66,6 +66,10 @@ func (client *FakeTabletManagerClient) CreateVReplicationWorkflow(ctx context.Co
 	return nil, nil
 }
 
+func (client *FakeTabletManagerClient) DeleteTableData(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.DeleteTableDataRequest) (*tabletmanagerdatapb.DeleteTableDataResponse, error) {
+	return nil, nil
+}
+
 func (client *FakeTabletManagerClient) DeleteVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.DeleteVReplicationWorkflowRequest) (*tabletmanagerdatapb.DeleteVReplicationWorkflowResponse, error) {
 	return nil, nil
 }
@@ -159,6 +163,11 @@ func (client *FakeTabletManagerClient) SetReadOnly(ctx context.Context, tablet *
 // SetReadWrite is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) SetReadWrite(ctx context.Context, tablet *topodatapb.Tablet) error {
 	return nil
+}
+
+// ChangeTags is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) ChangeTags(ctx context.Context, tablet *topodatapb.Tablet, tabletTags map[string]string, replace bool) (*tabletmanagerdatapb.ChangeTagsResponse, error) {
+	return &tabletmanagerdatapb.ChangeTagsResponse{}, nil
 }
 
 // ChangeType is part of the tmclient.TabletManagerClient interface.
@@ -342,6 +351,11 @@ func (client *FakeTabletManagerClient) InitPrimary(ctx context.Context, tablet *
 // PopulateReparentJournal is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) PopulateReparentJournal(ctx context.Context, tablet *topodatapb.Tablet, timeCreatedNS int64, actionName string, masterAlias *topodatapb.TabletAlias, position string) error {
 	return nil
+}
+
+// ReadReparentJournalInfo is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) ReadReparentJournalInfo(ctx context.Context, tablet *topodatapb.Tablet) (int, error) {
+	return 10, nil
 }
 
 // DemotePrimary is part of the tmclient.TabletManagerClient interface.

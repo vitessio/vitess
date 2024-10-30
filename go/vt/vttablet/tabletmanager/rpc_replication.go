@@ -411,6 +411,24 @@ func (tm *TabletManager) PopulateReparentJournal(ctx context.Context, timeCreate
 	return tm.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds)
 }
 
+// ReadReparentJournalInfo reads the information from reparent journal.
+func (tm *TabletManager) ReadReparentJournalInfo(ctx context.Context) (int, error) {
+	log.Infof("ReadReparentJournalInfo")
+	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
+		return 0, err
+	}
+
+	query := mysqlctl.ReadReparentJournalInfoQuery()
+	res, err := tm.MysqlDaemon.FetchSuperQuery(ctx, query)
+	if err != nil {
+		return 0, err
+	}
+	if len(res.Rows) != 1 {
+		return 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected rows when reading reparent journal, got %v", len(res.Rows))
+	}
+	return res.Rows[0][0].ToInt()
+}
+
 // InitReplica sets replication primary and position, and waits for the
 // reparent_journal table entry up to context timeout
 func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.TabletAlias, position string, timeCreatedNS int64, semiSync bool) error {
@@ -768,15 +786,19 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 		// We will then compare our own position against it to verify that we don't
 		// have an errant GTID. If we find any GTID that we have, but the primary doesn't,
 		// we will not enter the replication graph and instead fail replication.
-		primaryPositionStr, err := tm.tmc.PrimaryPosition(ctx, parent.Tablet)
+		primaryStatus, err := tm.tmc.PrimaryStatus(ctx, parent.Tablet)
 		if err != nil {
 			return err
 		}
-		primaryPosition, err := replication.DecodePosition(primaryPositionStr)
+		primaryPosition, err := replication.DecodePosition(primaryStatus.Position)
 		if err != nil {
 			return err
 		}
-		errantGtid, err := replication.ErrantGTIDsOnReplica(replicaPosition, primaryPosition)
+		primarySid, err := replication.ParseSID(primaryStatus.ServerUuid)
+		if err != nil {
+			return err
+		}
+		errantGtid, err := replication.ErrantGTIDsOnReplica(replicaPosition, primaryPosition, primarySid)
 		if err != nil {
 			return err
 		}

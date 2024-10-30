@@ -77,14 +77,37 @@ func (cu *ColumnUse) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &s); err != nil {
 		return err
 	}
-	parts := strings.Fields(s)
-	if len(parts) != 2 {
+	spaceIdx := strings.LastIndex(s, " ")
+	if spaceIdx == -1 {
 		return fmt.Errorf("invalid ColumnUse format: %s", s)
 	}
-	if err := cu.Column.UnmarshalJSON([]byte(`"` + parts[0] + `"`)); err != nil {
-		return err
+
+	for i := spaceIdx - 1; i >= 0; i-- {
+		// table.column not like
+		// table.`tricky not` like
+		if s[i] == '`' || s[i] == '.' {
+			break
+		}
+		if s[i] == ' ' {
+			spaceIdx = i
+			break
+		}
+		if i == 0 {
+			return fmt.Errorf("invalid ColumnUse format: %s", s)
+		}
 	}
-	cu.Uses = sqlparser.ComparisonExprOperatorFromJson(strings.ToLower(parts[1]))
+
+	colStr, opStr := s[:spaceIdx], s[spaceIdx+1:]
+
+	err := cu.Column.UnmarshalJSON([]byte(`"` + colStr + `"`))
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal column: %w", err)
+	}
+
+	cu.Uses, err = sqlparser.ComparisonExprOperatorFromJson(strings.ToLower(opStr))
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal operator: %w", err)
+	}
 	return nil
 }
 
@@ -209,5 +232,9 @@ func createColumn(ctx *plancontext.PlanningContext, col *sqlparser.ColName) *Col
 	if table == nil {
 		return nil
 	}
-	return &Column{Table: table.Name.String(), Name: col.Name.String()}
+	return &Column{
+		// we want the escaped versions of the names
+		Table: sqlparser.String(table.Name),
+		Name:  sqlparser.String(col.Name),
+	}
 }

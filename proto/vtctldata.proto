@@ -497,6 +497,17 @@ message CancelSchemaMigrationResponse {
   map<string, uint64> rows_affected_by_shard = 1;
 }
 
+message ChangeTabletTagsRequest {
+  topodata.TabletAlias tablet_alias = 1;
+  map<string, string> tags = 2;
+  bool replace = 3;
+}
+
+message ChangeTabletTagsResponse {
+  map<string, string> before_tags = 1;
+  map<string, string> after_tags = 2;
+}
+
 message ChangeTabletTypeRequest {
   topodata.TabletAlias tablet_alias = 1;
   topodata.TabletType db_type = 2;
@@ -1885,27 +1896,85 @@ message ValidateVSchemaResponse {
 }
 
 message VDiffCreateRequest {
+  // The name of the workflow that we're diffing tables for.
   string workflow = 1;
+  // The keyspace where the vreplication workflow is running.
   string target_keyspace = 2;
+  // A unique identifier for the vdiff.
+  // If empty, a new UUID will be generated.
   string uuid = 3;
+  // The cells to look for source tablets in.
+  // If empty, all cells are used.
   repeated string source_cells = 4;
+  // The cells to look for target tablets in.
+  // If empty, all cells are used.
   repeated string target_cells = 5;
+  // The tablet types to use when searching for tablets to use when streaming
+  // results.
+  // A default value of "replica,rdonly,primary" is used by the tablet picker.
   repeated topodata.TabletType tablet_types = 6;
+  // When performing source tablet selection, look for candidates in the type
+  // order as they are listed in the tablet_types value (or the default of
+  // "replica,rdonly,primary" that the tablet picker uses).
+  // The default is ANY (0) and you can use INORDER (1) to e.g. ensure that a
+  // primary tablet is only used if there are no available replica or rdonly
+  // tablets.
   tabletmanagerdata.TabletSelectionPreference tablet_selection_preference = 7;
+  // The tables to compare. If empty, all tables in the workflow are compared.
   repeated string tables = 8;
+  // The maximum number of rows to compare for each table on each shard.
+  // The default is a max int64 value: 2^63 - 1 or 9,223,372,036,854,775,807.
   int64 limit = 9;
+  // How long to wait for the relevant vreplication stream(s) to catch up when
+  // attempting to setup the table snapshots on the source and target to use for
+  // the diff on each shard.
+  // The default is 30s.
   vttime.Duration filtered_replication_wait_time = 10;
+  // Include the MySQL query used for the diff in the report that is stored on
+  // each shard primary tablet in the _vt.vdiff_table records.
   bool debug_query = 11;
+  // Only show the Primary Key columns in any row diff output. You would
+  // typically want to use this if you set the max_sample_rows very high.
   bool only_p_ks = 12;
+  // Update the table statistics, using ANALYZE TABLE, on each table involved
+  // in the vdiff during initialization on each target shard. This will ensure
+  // that progress estimates are as accurate as possible -- but it does involve
+  // locks and can potentially impact query processing on the target keyspace.
   bool update_table_stats = 13;
+  // If there are collation differences between the source and target, you can
+  // have rows that are identical but simply returned in a different order from
+  // MySQL. We will do a second pass to compare the rows for any actual
+  // differences in this case and this flag allows you to control the resources
+  // used for this operation.
+  // The default is 0, comparing no extra rows.
   int64 max_extra_rows_to_compare = 14;
+  // Wait for the vdiff to complete before returning (making the call synchronous
+  // vs asynchronous by default).
   bool wait = 15;
+  // When wait is true, this is how frequently the vdiff progress will be shown.
   vttime.Duration wait_update_interval = 16;
+  // Automatically retry the vdiff if we encounter an error. This should almost
+  // always be set to true (default is false).
   bool auto_retry = 17;
+  // Include additional information in the vdiff report that is produced and
+  // stored on each target shard primary's _vt sidecar database.
   bool verbose = 18;
+  // The maximum number of rows to include in the row diff report (when
+  // differences are found) for each table on each shard.
+  // The default is 0, which will include no sample rows that differed.
   int64 max_report_sample_rows = 19;
+  // The maximum time that a diff of a single table can run on each target shard
+  // before it is stopped and then later resumed from where we left off. This
+  // can be helpful in limiting the impact of holding open that large transaction
+  // where we scan up to every row in the table.
+  // The default is 0 or no limit.
   vttime.Duration max_diff_duration = 20;
+  // At what length should we truncate the column values in the row diff report
+  // generated for each table on each shard when differences are detected.
+  // The default is 0, meaning do not truncate.
   int64 row_diff_column_truncate_at = 21;
+  // Auto start the vdiff after creating it.
+  // The default is true if no value is specified.
   optional bool auto_start = 22;
 }
 
@@ -1963,6 +2032,10 @@ message WorkflowDeleteRequest {
   bool keep_data = 3;
   bool keep_routing_rules = 4;
   repeated string shards = 5;
+  // The max records to delete from the moved tables when cleaning
+  // up the migrated data. This is only used with multi-tenant
+  // MoveTables migrations.
+  int64 delete_batch_size = 6;
 }
 
 message WorkflowDeleteResponse {

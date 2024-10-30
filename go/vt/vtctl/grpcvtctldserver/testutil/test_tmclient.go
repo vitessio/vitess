@@ -189,6 +189,11 @@ type TabletManagerClient struct {
 		ErrorAfter    time.Duration
 	}
 	// keyed by tablet alias.
+	ChangeTagsResult map[string]struct {
+		Response *tabletmanagerdatapb.ChangeTagsResponse
+		Error    error
+	}
+	ChangeTagsDelays       map[string]time.Duration
 	ChangeTabletTypeResult map[string]error
 	ChangeTabletTypeDelays map[string]time.Duration
 	// keyed by tablet alias.
@@ -286,6 +291,8 @@ type TabletManagerClient struct {
 	PopulateReparentJournalDelays map[string]time.Duration
 	// keyed by tablet alias
 	PopulateReparentJournalResults map[string]error
+	// keyed by tablet alias
+	ReadReparentJournalInfoResults map[string]int
 	// keyed by tablet alias.
 	PromoteReplicaDelays map[string]time.Duration
 	// keyed by tablet alias. injects a sleep to the end of the function
@@ -476,6 +483,39 @@ func (fake *TabletManagerClient) Backup(ctx context.Context, tablet *topodatapb.
 	}()
 
 	return stream, nil
+}
+
+// ChangeTags is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) ChangeTags(ctx context.Context, tablet *topodatapb.Tablet, tabletTags map[string]string, replace bool) (*tabletmanagerdatapb.ChangeTagsResponse, error) {
+	key := topoproto.TabletAliasString(tablet.Alias)
+
+	if fake.ChangeTagsDelays != nil {
+		if delay, ok := fake.ChangeTagsDelays[key]; ok {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(delay):
+				// proceed to results
+			}
+		}
+	}
+
+	if result, ok := fake.ChangeTagsResult[key]; ok {
+		return result.Response, result.Error
+	}
+
+	if fake.TopoServer == nil {
+		return nil, assert.AnError
+	}
+
+	tablet, err := topotools.ChangeTags(ctx, fake.TopoServer, tablet.Alias, tabletTags, replace)
+	if err != nil {
+		return nil, err
+	}
+
+	return &tabletmanagerdatapb.ChangeTagsResponse{
+		Tags: tablet.Tags,
+	}, nil
 }
 
 // ChangeType is part of the tmclient.TabletManagerClient interface.
@@ -916,6 +956,19 @@ func (fake *TabletManagerClient) PopulateReparentJournal(ctx context.Context, ta
 	}
 
 	return assert.AnError
+}
+
+// ReadReparentJournalInfo is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) ReadReparentJournalInfo(ctx context.Context, tablet *topodatapb.Tablet) (int, error) {
+	if fake.ReadReparentJournalInfoResults == nil {
+		return 1, nil
+	}
+	key := topoproto.TabletAliasString(tablet.Alias)
+	if result, ok := fake.ReadReparentJournalInfoResults[key]; ok {
+		return result, nil
+	}
+
+	return 0, assert.AnError
 }
 
 // PromoteReplica is part of the tmclient.TabletManagerClient interface.

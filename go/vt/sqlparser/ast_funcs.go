@@ -1562,36 +1562,36 @@ func (op ComparisonExprOperator) ToString() string {
 	}
 }
 
-func ComparisonExprOperatorFromJson(s string) ComparisonExprOperator {
+func ComparisonExprOperatorFromJson(s string) (ComparisonExprOperator, error) {
 	switch s {
 	case EqualStr:
-		return EqualOp
+		return EqualOp, nil
 	case JsonLessThanStr:
-		return LessThanOp
+		return LessThanOp, nil
 	case JsonGreaterThanStr:
-		return GreaterThanOp
+		return GreaterThanOp, nil
 	case JsonLessThanOrEqualStr:
-		return LessEqualOp
+		return LessEqualOp, nil
 	case JsonGreaterThanOrEqualStr:
-		return GreaterEqualOp
+		return GreaterEqualOp, nil
 	case NotEqualStr:
-		return NotEqualOp
+		return NotEqualOp, nil
 	case NullSafeEqualStr:
-		return NullSafeEqualOp
+		return NullSafeEqualOp, nil
 	case InStr:
-		return InOp
+		return InOp, nil
 	case NotInStr:
-		return NotInOp
+		return NotInOp, nil
 	case LikeStr:
-		return LikeOp
+		return LikeOp, nil
 	case NotLikeStr:
-		return NotLikeOp
+		return NotLikeOp, nil
 	case RegexpStr:
-		return RegexpOp
+		return RegexpOp, nil
 	case NotRegexpStr:
-		return NotRegexpOp
+		return NotRegexpOp, nil
 	default:
-		return 0
+		return 0, fmt.Errorf("unknown ComparisonExpOperator: %s", s)
 	}
 }
 
@@ -1666,10 +1666,6 @@ func (op BinaryExprOperator) ToString() string {
 		return ShiftLeftStr
 	case ShiftRightOp:
 		return ShiftRightStr
-	case JSONExtractOp:
-		return JSONExtractOpStr
-	case JSONUnquoteExtractOp:
-		return JSONUnquoteExtractOpStr
 	default:
 		return "Unknown BinaryExprOperator"
 	}
