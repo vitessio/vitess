@@ -79,7 +79,7 @@ if ((wc >= 0x00C0 && wc <= 0x05FF && (code = uni_0C00_05FF[wc - 0x00C0])) ||
 //				}
 //
 // See also MySQL docs: https://dev.mysql.com/doc/refman/8.0/en/identifier-mapping.html
-func TablenameToFilename(name string) (string, error) {
+func TablenameToFilename(name string) string {
 	var b strings.Builder
 	for _, wc := range name {
 		if wc < 128 && filename_safe_char[wc] == 1 {
@@ -103,17 +103,18 @@ func TablenameToFilename(name string) (string, error) {
 			code = uni_FF20_FF5F[wc-0xFF20]
 		}
 		if code != 0 {
+			// One of specifically addressed character sets
 			b.WriteRune(unicode.ToLower(rune(code/80) + 0x30))
 			b.WriteRune(unicode.ToLower(rune(code%80) + 0x30))
 			continue
 		}
-		// Non-letter
+		// Other characters
 		b.WriteByte(hexSequence[(wc>>12)&15])
 		b.WriteByte(hexSequence[(wc>>8)&15])
 		b.WriteByte(hexSequence[(wc>>4)&15])
 		b.WriteByte(hexSequence[(wc)&15])
 	}
-	return b.String(), nil
+	return b.String()
 }
 
 var (

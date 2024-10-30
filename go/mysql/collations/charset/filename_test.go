@@ -20,7 +20,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestTablenameToFilename(t *testing.T) {
@@ -56,8 +55,7 @@ func TestTablenameToFilename(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.tablename, func(t *testing.T) {
-			filename, err := TablenameToFilename(tc.tablename)
-			require.NoError(t, err)
+			filename := TablenameToFilename(tc.tablename)
 			assert.Equal(t, tc.filename, filename, "original bytes: %x", []byte(tc.tablename))
 		})
 	}
