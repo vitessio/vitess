@@ -37,6 +37,7 @@ import (
 // This file tests the handshake scenarios between our client and our server.
 
 func TestClearTextClientAuth(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
 	th := &testHandler{}
 
 	authServer := NewAuthServerStaticWithAuthMethodDescription("", "", 0, MysqlClearPassword)
@@ -51,10 +52,6 @@ func TestClearTextClientAuth(t *testing.T) {
 	defer l.Close()
 	host := l.Addr().(*net.TCPAddr).IP.String()
 	port := l.Addr().(*net.TCPAddr).Port
-	go func() {
-		l.Accept()
-	}()
-
 	// Setup the right parameters.
 	params := &ConnParams{
 		Host:    host,
@@ -63,9 +60,10 @@ func TestClearTextClientAuth(t *testing.T) {
 		Pass:    "password1",
 		SslMode: vttls.Disabled,
 	}
+	go l.Accept()
+	defer cleanupListener(ctx, l, params)
 
 	// Connection should fail, as server requires SSL for clear text auth.
-	ctx := context.Background()
 	_, err = Connect(ctx, params)
 	if err == nil || !strings.Contains(err.Error(), "Cannot use clear text authentication over non-SSL connections") {
 		t.Fatalf("unexpected connection error: %v", err)
@@ -92,6 +90,7 @@ func TestClearTextClientAuth(t *testing.T) {
 // TestSSLConnection creates a server with TLS support, a client that
 // also has SSL support, and connects them.
 func TestSSLConnection(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
 	th := &testHandler{}
 
 	authServer := NewAuthServerStaticWithAuthMethodDescription("", "", 0, MysqlClearPassword)
@@ -103,7 +102,6 @@ func TestSSLConnection(t *testing.T) {
 	// Create the listener, so we can get its host.
 	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0)
 	require.NoError(t, err, "NewListener failed: %v", err)
-	defer l.Close()
 	host := l.Addr().(*net.TCPAddr).IP.String()
 	port := l.Addr().(*net.TCPAddr).Port
 
@@ -122,12 +120,6 @@ func TestSSLConnection(t *testing.T) {
 		"",
 		tls.VersionTLS12)
 	require.NoError(t, err, "TLSServerConfig failed: %v", err)
-
-	l.TLSConfig.Store(serverConfig)
-	go func() {
-		l.Accept()
-	}()
-
 	// Setup the right parameters.
 	params := &ConnParams{
 		Host:  host,
@@ -141,20 +133,22 @@ func TestSSLConnection(t *testing.T) {
 		SslKey:     path.Join(root, "client-key.pem"),
 		ServerName: "server.example.com",
 	}
+	l.TLSConfig.Store(serverConfig)
+	go l.Accept()
+	defer cleanupListener(ctx, l, params)
 
 	t.Run("Basics", func(t *testing.T) {
-		testSSLConnectionBasics(t, params)
+		testSSLConnectionBasics(t, ctx, params)
 	})
 
 	// Make sure clear text auth works over SSL.
 	t.Run("ClearText", func(t *testing.T) {
-		testSSLConnectionClearText(t, params)
+		testSSLConnectionClearText(t, ctx, params)
 	})
 }
 
-func testSSLConnectionClearText(t *testing.T, params *ConnParams) {
+func testSSLConnectionClearText(t *testing.T, ctx context.Context, params *ConnParams) {
 	// Create a client connection, connect.
-	ctx := context.Background()
 	conn, err := Connect(ctx, params)
 	require.NoError(t, err, "Connect failed: %v", err)
 
@@ -170,9 +164,8 @@ func testSSLConnectionClearText(t *testing.T, params *ConnParams) {
 	conn.writeComQuit()
 }
 
-func testSSLConnectionBasics(t *testing.T, params *ConnParams) {
+func testSSLConnectionBasics(t *testing.T, ctx context.Context, params *ConnParams) {
 	// Create a client connection, connect.
-	ctx := context.Background()
 	conn, err := Connect(ctx, params)
 	require.NoError(t, err, "Connect failed: %v", err)
 

@@ -910,6 +910,19 @@ func (client *Client) CreateVReplicationWorkflow(ctx context.Context, tablet *to
 	return response, nil
 }
 
+func (client *Client) DeleteTableData(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.DeleteTableDataRequest) (*tabletmanagerdatapb.DeleteTableDataResponse, error) {
+	c, closer, err := client.dialer.dial(ctx, tablet)
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+	response, err := c.DeleteTableData(ctx, request)
+	if err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
 func (client *Client) DeleteVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.DeleteVReplicationWorkflowRequest) (*tabletmanagerdatapb.DeleteVReplicationWorkflowResponse, error) {
 	c, closer, err := client.dialer.dial(ctx, tablet)
 	if err != nil {
@@ -1089,6 +1102,20 @@ func (client *Client) PopulateReparentJournal(ctx context.Context, tablet *topod
 		ReplicationPosition: pos,
 	})
 	return err
+}
+
+// ReadReparentJournalInfo is part of the tmclient.TabletManagerClient interface.
+func (client *Client) ReadReparentJournalInfo(ctx context.Context, tablet *topodatapb.Tablet) (int, error) {
+	c, closer, err := client.dialer.dial(ctx, tablet)
+	if err != nil {
+		return 0, err
+	}
+	defer closer.Close()
+	resp, err := c.ReadReparentJournalInfo(ctx, &tabletmanagerdatapb.ReadReparentJournalInfoRequest{})
+	if err != nil {
+		return 0, err
+	}
+	return int(resp.Length), nil
 }
 
 // InitReplica is part of the tmclient.TabletManagerClient interface.

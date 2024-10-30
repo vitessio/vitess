@@ -39,8 +39,8 @@ import javax.annotation.Nullable;
 
 /**
  * RetryingInterceptor is used for retrying certain classes of failed requests in the underlying
- * gRPC connection. At this time it handles {@link MethodDescriptor.MethodType.UNARY} requests with
- * status {@link Status.Code.UNAVAILABLE}, which is according to the spec meant to be a transient
+ * gRPC connection. At this time it handles unary requests with
+ * status Unavailable, which is according to the spec meant to be a transient
  * error. This class can be configured with {@link RetryingInterceptorConfig} to determine what
  * level of exponential backoff to apply to the handled types of failing requests.
  *

@@ -809,7 +809,7 @@ type testSchemaEngine struct {
 	failMySQL bool
 }
 
-func (te *testSchemaEngine) EnsureConnectionAndDB(tabletType topodatapb.TabletType) error {
+func (te *testSchemaEngine) EnsureConnectionAndDB(topodatapb.TabletType, bool) error {
 	if te.failMySQL {
 		te.failMySQL = false
 		return errors.New("intentional error")
