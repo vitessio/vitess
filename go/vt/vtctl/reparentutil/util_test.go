@@ -140,7 +140,7 @@ func TestElectNewPrimary(t *testing.T) {
 			errContains: nil,
 		},
 		{
-			name: "Two good replicas, but one of them backing up",
+			name: "Two good replicas, but one of them backing up so we pick the other one",
 			tmc: &chooseNewPrimaryTestTMClient{
 				// both zone1-101 and zone1-102 are equivalent from a replicaiton PoV, but zone1-102 is taking a backup
 				replicationStatuses: map[string]*replicationdatapb.Status{
@@ -197,6 +197,54 @@ func TestElectNewPrimary(t *testing.T) {
 			expected: &topodatapb.TabletAlias{
 				Cell: "zone1",
 				Uid:  102,
+			},
+			errContains: nil,
+		},
+		{
+			name: "Only one replica, but it's backing up. We still use it.",
+			tmc: &chooseNewPrimaryTestTMClient{
+				// both zone1-101 and zone1-102 are equivalent from a replicaiton PoV, but zone1-102 is taking a backup
+				replicationStatuses: map[string]*replicationdatapb.Status{
+					"zone1-0000000101": {
+						Position:  "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						BackingUp: true,
+					},
+				},
+			},
+			tolerableReplLag: 50 * time.Second,
+			shardInfo: topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+				PrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			}, nil),
+			tabletMap: map[string]*topo.TabletInfo{
+				"primary": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"replica1": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			avoidPrimaryAlias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  0,
+			},
+			expected: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  101,
 			},
 			errContains: nil,
 		},
@@ -472,6 +520,67 @@ func TestElectNewPrimary(t *testing.T) {
 			expected: &topodatapb.TabletAlias{
 				Cell: "zone1",
 				Uid:  101,
+			},
+			errContains: nil,
+		},
+		{
+			name: "Two replicas, first one with too much lag, another one backing up - elect the one taking backup",
+			tmc: &chooseNewPrimaryTestTMClient{
+				// zone1-101 is behind zone1-102
+				replicationStatuses: map[string]*replicationdatapb.Status{
+					"zone1-0000000101": {
+						Position:              "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1",
+						ReplicationLagSeconds: 55,
+					},
+					"zone1-0000000102": {
+						Position:  "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						BackingUp: true,
+					},
+				},
+			},
+			tolerableReplLag: 50 * time.Second,
+			shardInfo: topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+				PrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			}, nil),
+			tabletMap: map[string]*topo.TabletInfo{
+				"primary": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"replica1": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"replica2": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			avoidPrimaryAlias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  0,
+			},
+			expected: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  102,
 			},
 			errContains: nil,
 		},

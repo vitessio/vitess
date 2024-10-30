@@ -731,6 +731,7 @@ func (erp *EmergencyReparenter) identifyPrimaryCandidate(
 // filterValidCandidates filters valid tablets, keeping only the ones which can successfully be promoted without any constraint failures and can make forward progress on being promoted
 func (erp *EmergencyReparenter) filterValidCandidates(validTablets []*topodatapb.Tablet, tabletsReachable []*topodatapb.Tablet, tabletsBackingUp map[string]bool, prevPrimary *topodatapb.Tablet, opts EmergencyReparentOptions) ([]*topodatapb.Tablet, error) {
 	var restrictedValidTablets []*topodatapb.Tablet
+	var notPreferredValidTablets []*topodatapb.Tablet
 	for _, tablet := range validTablets {
 		tabletAliasStr := topoproto.TabletAliasString(tablet.Alias)
 		// Remove tablets which have MustNot promote rule since they must never be promoted
@@ -757,16 +758,14 @@ func (erp *EmergencyReparenter) filterValidCandidates(validTablets []*topodatapb
 			}
 			continue
 		}
-		// Remove candidates that are running a backup.
+		// Put candidates that are running a backup in a separate list
 		backingUp, ok := tabletsBackingUp[tabletAliasStr]
 		if ok && backingUp {
-			erp.logger.Infof("Removing %s from list of valid candidates for promotion because it is running a backup", tabletAliasStr)
-			if opts.NewPrimaryAlias != nil && topoproto.TabletAliasEqual(opts.NewPrimaryAlias, tablet.Alias) {
-				return nil, vterrors.Errorf(vtrpc.Code_ABORTED, "proposed primary %s is taking backup, refusing to promote it", topoproto.TabletAliasString(opts.NewPrimaryAlias))
-			}
-			continue
+			erp.logger.Infof("Setting %s in list of valid candidates taking a backup", tabletAliasStr)
+			notPreferredValidTablets = append(notPreferredValidTablets, tablet)
+		} else {
+			restrictedValidTablets = append(restrictedValidTablets, tablet)
 		}
-		restrictedValidTablets = append(restrictedValidTablets, tablet)
 	}
-	return restrictedValidTablets, nil
+	return append(restrictedValidTablets, notPreferredValidTablets...), nil
 }

@@ -83,10 +83,13 @@ func ElectNewPrimary(
 		// mutex to secure the next two fields from concurrent access
 		mu sync.Mutex
 		// tablets that are possible candidates to be the new primary and their positions
-		validTablets         []*topodatapb.Tablet
-		tabletPositions      []replication.Position
-		innodbBufferPool     []int
-		errorGroup, groupCtx = errgroup.WithContext(ctx)
+		validTablets              []*topodatapb.Tablet
+		tabletPositions           []replication.Position
+		innodbBufferPool          []int
+		preferNotTablets          []*topodatapb.Tablet
+		preferNotTabletPositions  []replication.Position
+		preferNotInnodbBufferPool []int
+		errorGroup, groupCtx      = errgroup.WithContext(ctx)
 	)
 
 	// candidates are the list of tablets that can be potentially promoted after filtering out based on preliminary checks.
@@ -135,7 +138,9 @@ func ElectNewPrimary(
 					tabletPositions = append(tabletPositions, pos)
 					innodbBufferPool = append(innodbBufferPool, innodbBufferPoolData[topoproto.TabletAliasString(tb.Alias)])
 				} else {
-					reasonsToInvalidate.WriteString(fmt.Sprintf("\n%v is running a backup, so not using it as promotion candidate", topoproto.TabletAliasString(tablet.Alias)))
+					preferNotTablets = append(preferNotTablets, tb)
+					preferNotTabletPositions = append(preferNotTabletPositions, pos)
+					preferNotInnodbBufferPool = append(preferNotInnodbBufferPool, innodbBufferPoolData[topoproto.TabletAliasString(tb.Alias)])
 				}
 			} else {
 				reasonsToInvalidate.WriteString(fmt.Sprintf("\n%v has %v replication lag which is more than the tolerable amount", topoproto.TabletAliasString(tablet.Alias), replLag))
@@ -150,7 +155,7 @@ func ElectNewPrimary(
 	}
 
 	// return an error if there are no valid tablets available
-	if len(validTablets) == 0 {
+	if len(validTablets) == 0 && len(preferNotTablets) == 0 {
 		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "cannot find a tablet to reparent to%v", reasonsToInvalidate.String())
 	}
 
@@ -159,8 +164,16 @@ func ElectNewPrimary(
 	if err != nil {
 		return nil, err
 	}
+	err = sortTabletsForReparent(preferNotTablets, preferNotTabletPositions, innodbBufferPool, opts.durability)
+	if err != nil {
+		return nil, err
+	}
 
-	return validTablets[0].Alias, nil
+	if len(validTablets) > 0 {
+		return validTablets[0].Alias, nil
+	}
+
+	return preferNotTablets[0].Alias, nil
 }
 
 // findPositionLagBackingUpForTablet processes the replication position and lag for a single tablet and

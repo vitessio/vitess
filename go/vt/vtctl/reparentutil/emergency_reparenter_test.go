@@ -4489,12 +4489,12 @@ func TestEmergencyReparenter_filterValidCandidates(t *testing.T) {
 			tabletsBackingUp: noTabletsBackingUp,
 			filteredTablets:  []*topodatapb.Tablet{primaryTablet, replicaTablet, replicaCrossCellTablet},
 		}, {
-			name:             "filter backing up",
+			name:             "host backing up must be last in the list",
 			durability:       "none",
 			validTablets:     allTablets,
 			tabletsReachable: allTablets,
 			tabletsBackingUp: replicaBackingUp,
-			filteredTablets:  []*topodatapb.Tablet{primaryTablet, replicaCrossCellTablet},
+			filteredTablets:  []*topodatapb.Tablet{primaryTablet, replicaCrossCellTablet, replicaTablet},
 		}, {
 			name:             "filter cross cell",
 			durability:       "none",
