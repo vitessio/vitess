@@ -257,9 +257,9 @@ func (mysqlGRFlavor) baseShowTablesWithSizes() string {
 	return TablesWithSize80
 }
 
-// baseShowFtsTablesWithSizes is part of the Flavor interface.
-func (mysqlGRFlavor) baseShowFtsTablesWithSizes() string {
-	return FtsTablesWithSize80
+// baseShowInnodbTableSizes is part of the Flavor interface.
+func (mysqlGRFlavor) baseShowInnodbTableSizes() string {
+	return InnoDBTableSizes
 }
 
 // supportsCapability is part of the Flavor interface.

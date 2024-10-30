@@ -22,7 +22,7 @@ func (mariadbFlavor) baseShowTables() string {
 	return mysqlFlavor{}.baseShowTables()
 }
 
-func (mariadbFlavor) baseShowFtsTablesWithSizes() string {
+func (mariadbFlavor) baseShowInnodbTableSizes() string {
 	return ""
 }
 

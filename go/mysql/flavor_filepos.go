@@ -366,7 +366,7 @@ func (*filePosFlavor) baseShowTablesWithSizes() string {
 	return TablesWithSize56
 }
 
-func (filePosFlavor) baseShowFtsTablesWithSizes() string {
+func (filePosFlavor) baseShowInnodbTableSizes() string {
 	return ""
 }
 

@@ -456,23 +456,67 @@ SELECT t.table_name,
 		t.table_schema, t.table_name, t.table_type, t.create_time, t.table_comment
 `
 
-const FtsTablesWithSize80 = `
-SELECT
-	it.name,
-	SUM(i.file_size),
-	SUM(i.allocated_size)
-FROM
-	information_schema.innodb_tables it
-	JOIN information_schema.innodb_tablespaces i
-	ON (
-		i.name LIKE CONCAT(database(), '/fts_', CONVERT(LPAD(HEX(table_id), 16, '0') USING utf8mb3) COLLATE utf8mb3_general_ci, '_%')
-	)
-	WHERE
-		it.name LIKE CONCAT(database(), '/%')
-		AND (
-			i.name LIKE CONCAT(database(), '/fts_%')
+// InnoDBTableSizes: a query to return file/allocated sizes for InnoDB tables.
+// File sizes and allocated sizes are found in information_schema.innodb_tablespaces
+// Table names in information_schema.innodb_tablespaces match those in information_schema.tables, even for table names
+// with special characters. This, a innodb_tablespaces.name could be `my-db/my-table`.
+// These tablespaces will have one entry for every InnoDB table, hidden or internal. This means:
+// - One entry for every partition in a partitioned table.
+// - Several entries for any FULLTEXT index (FULLTEXT indexes are not BTREEs and are implemented using multiple hidden tables)
+// So a single table wih a FULLTEXT index will have one entry for the "normal" table, plus multiple more entries for
+// every FTS index hidden tables.
+// Thankfully FULLTEXT does not work with Partitioning so this does not explode too much.
+// Next thing is that FULLTEXT hidden table names do not resemble the original table name, and could look like:
+// `a-b/fts_000000000000075e_00000000000005f9_index_2`.
+// To unlock the identify of this table we turn to information_schema.innodb_tables. These table similarly has one entry for
+// every InnoDB table, normal or hidden. It also has a `TABLE_ID` value. Given some table with FULLTEXT keys, its TABLE_ID
+// is encoded in the names of the hidden tables in information_schema.innodb_tablespaces: `000000000000075e` in the
+// example above.
+//
+// The query below is a two part:
+//  1. Finding the "normal" tables only, those that the user created. We note their file size and allocated size.
+//  2. Finding the hidden tables only, those that implement FTS keys. We aggregate their file size and allocated size grouping
+//     by the original table name with which they're associated.
+//
+// A table that has a FULLTEXT index will have two entries in the result set:
+// - one for the "normal" table size (actual rows, texts, etc.)
+// - and one for the aggregated hidden table size
+// The code that reads the results of this query will need to add the two.
+// Similarly, the code will need to know how to aggregate the sizes of partitioned tables, which could appear as:
+// - `mydb/tbl_part#p#p0`
+// - `mydb/tbl_part#p#p1`
+// - `mydb/tbl_part#p#p2`
+// - `mydb/tbl_part#p#p3`
+//
+// Lastly, we note that table name in information_schema.innodb_tables are encoded. A table that shows as
+// `my-db/my-table` in information_schema.innodb_tablespaces will show as `my@002ddb/my@002dtable` in information_schema.innodb_tables.
+// So this query returns InnoDB-encoded table names. The golang code reading those will have to decode the names.
+const InnoDBTableSizes = `
+	SELECT
+		it.name,
+		its.file_size as normal_tables_sum_file_size,
+		its.allocated_size as normal_tables_sum_allocated_size
+	FROM
+		information_schema.innodb_tables it
+		JOIN information_schema.innodb_tablespaces its
+		ON (its.space = it.space)
+		WHERE
+					its.name LIKE CONCAT(database(), '/%')
+			AND	its.name NOT LIKE CONCAT(database(), '/fts_%')
+	UNION ALL
+	SELECT
+		it.name,
+		SUM(its.file_size) as hidden_tables_sum_file_size,
+		SUM(its.allocated_size) as hidden_tables_sum_allocated_size
+	FROM
+		information_schema.innodb_tables it
+		JOIN information_schema.innodb_tablespaces its
+		ON (
+				 its.name LIKE CONCAT(database(), '/fts_', CONVERT(LPAD(HEX(table_id), 16, '0') USING utf8mb3) COLLATE utf8mb3_general_ci, '_%')
 		)
-	GROUP BY it.name
+		WHERE
+				 its.name LIKE CONCAT(database(), '/fts_%')
+		GROUP BY it.name
 `
 
 // baseShowTablesWithSizes is part of the Flavor interface.
@@ -480,8 +524,8 @@ func (mysqlFlavor57) baseShowTablesWithSizes() string {
 	return TablesWithSize57
 }
 
-// baseShowFtsTablesWithSizes is part of the Flavor interface.
-func (mysqlFlavor57) baseShowFtsTablesWithSizes() string {
+// baseShowInnodbTableSizes is part of the Flavor interface.
+func (mysqlFlavor57) baseShowInnodbTableSizes() string {
 	return ""
 }
 
@@ -495,9 +539,9 @@ func (mysqlFlavor) baseShowTablesWithSizes() string {
 	return TablesWithSize80
 }
 
-// baseShowFtsTablesWithSizes is part of the Flavor interface.
-func (mysqlFlavor) baseShowFtsTablesWithSizes() string {
-	return FtsTablesWithSize80
+// baseShowInnodbTableSizes is part of the Flavor interface.
+func (mysqlFlavor) baseShowInnodbTableSizes() string {
+	return InnoDBTableSizes
 }
 
 func (mysqlFlavor) setReplicationSourceCommand(params *ConnParams, host string, port int32, heartbeatInterval float64, connectRetry int) string {
