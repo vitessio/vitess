@@ -259,7 +259,7 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) (err err
 	}
 
 	txPhase = Commit2pcStartCommit
-	err = txc.tabletGateway.StartCommit(ctx, mmShard.Target, mmShard.TransactionId, dtid)
+	_, err = txc.tabletGateway.StartCommit(ctx, mmShard.Target, mmShard.TransactionId, dtid)
 	if err != nil {
 		return err
 	}

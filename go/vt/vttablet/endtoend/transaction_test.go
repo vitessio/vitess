@@ -529,8 +529,9 @@ func TestMMCommitFlow(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Duplicate entry")
 
-	err = client.StartCommit("aa")
+	state, err := client.StartCommit("aa")
 	require.NoError(t, err)
+	assert.Equal(t, querypb.StartCommitState_Success, state)
 
 	err = client.SetRollback("aa", 0)
 	require.EqualError(t, err, "could not transition to ROLLBACK: aa (CallerID: dev)")

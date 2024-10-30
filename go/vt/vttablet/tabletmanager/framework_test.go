@@ -254,8 +254,8 @@ func (ftc *fakeTabletConn) CreateTransaction(ctx context.Context, target *queryp
 }
 
 // fakeTabletConn implements the QueryService interface.
-func (ftc *fakeTabletConn) StartCommit(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (err error) {
-	return nil
+func (ftc *fakeTabletConn) StartCommit(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (state querypb.StartCommitState, err error) {
+	return querypb.StartCommitState_Unknown, nil
 }
 
 // fakeTabletConn implements the QueryService interface.

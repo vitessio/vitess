@@ -404,14 +404,18 @@ func (sbc *SandboxConn) CreateTransaction(ctx context.Context, target *querypb.T
 
 // StartCommit atomically commits the transaction along with the
 // decision to commit the associated 2pc transaction.
-func (sbc *SandboxConn) StartCommit(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (err error) {
+func (sbc *SandboxConn) StartCommit(context.Context, *querypb.Target, int64, string) (state querypb.StartCommitState, err error) {
 	sbc.panicIfNeeded()
 	sbc.StartCommitCount.Add(1)
 	if sbc.MustFailStartCommit > 0 {
 		sbc.MustFailStartCommit--
-		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "error: err")
+		return querypb.StartCommitState_Fail, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "error: err")
 	}
-	return sbc.getError()
+	err = sbc.getError()
+	if err != nil {
+		return querypb.StartCommitState_Unknown, err
+	}
+	return querypb.StartCommitState_Success, nil
 }
 
 // SetRollback transitions the 2pc transaction to the Rollback state.
