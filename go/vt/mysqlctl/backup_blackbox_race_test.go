@@ -117,7 +117,7 @@ func TestExecuteBackupWithFailureOnLastFile(t *testing.T) {
 	defer fakedb.Close()
 	mysqld := mysqlctl.NewFakeMysqlDaemon(fakedb)
 	defer mysqld.Close()
-	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "START REPLICA"}
+	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP SLAVE", "START SLAVE"}
 
 	// With this setup, 4 backup files will be created (0, 1, 2, 3). For the last file (3), we create
 	// it in advance and remove all permission on the file so that the backup be.ExecuteBackup will not
