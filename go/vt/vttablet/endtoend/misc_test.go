@@ -1052,56 +1052,109 @@ func TestEngineReload(t *testing.T) {
 		database := row.AsString("d", "")
 		require.Equal(t, connParams.DbName, database)
 	})
-	setupQueries := []string{
-		`drop view if exists view_simple`,
-		`drop table if exists tbl_simple`,
-		`drop table if exists tbl_part`,
-		`drop table if exists tbl_fts`,
-		`create table tbl_simple (id int primary key)`,
-		`create view view_simple as select * from tbl_simple`,
-		`create table tbl_part (id INT NOT NULL, store_id INT) PARTITION BY HASH(store_id) PARTITIONS 4`,
-		`create table tbl_fts (id int primary key, name text, fulltext key name_fts (name))`,
-	}
 
 	defer func() {
 		_, _ = conn.ExecuteFetch(`drop view if exists view_simple`, 1, false)
+		_, _ = conn.ExecuteFetch(`drop view if exists view_simple2`, 1, false)
+		_, _ = conn.ExecuteFetch(`drop view if exists view_simple3`, 1, false)
 		_, _ = conn.ExecuteFetch(`drop table if exists tbl_simple`, 1, false)
 		_, _ = conn.ExecuteFetch(`drop table if exists tbl_part`, 1, false)
 		_, _ = conn.ExecuteFetch(`drop table if exists tbl_fts`, 1, false)
 	}()
-	for _, query := range setupQueries {
-		_, err := conn.ExecuteFetch(query, 1, false)
-		require.NoError(t, err)
-	}
 
-	expectedTables := []string{
-		"tbl_simple",
-		"tbl_part",
-		"tbl_fts",
-		"view_simple",
-	}
 	engine := newTestSchemaEngine(&connParams)
 	require.NotNil(t, engine)
 	err = engine.Open()
 	require.NoError(t, err)
-	err = engine.Reload(ctx)
-	require.NoError(t, err)
+	defer engine.Close()
 
-	schema := engine.GetSchema()
-	require.NotEmpty(t, schema)
-	for _, expectTable := range expectedTables {
-		t.Run(expectTable, func(t *testing.T) {
-			tbl := engine.GetTable(sqlparser.NewIdentifierCS(expectTable))
-			require.NotNil(t, tbl)
-			if expectTable == "view_simple" {
-				assert.Zero(t, tbl.FileSize)
-				assert.Zero(t, tbl.AllocatedSize)
-			} else {
-				assert.NotZero(t, tbl.FileSize)
-				assert.NotZero(t, tbl.AllocatedSize)
-			}
-		})
-	}
+	t.Run("schema", func(t *testing.T) {
+		setupQueries := []string{
+			`drop view if exists view_simple`,
+			`drop view if exists view_simple2`,
+			`drop table if exists tbl_simple`,
+			`drop table if exists tbl_part`,
+			`drop table if exists tbl_fts`,
+			`create table tbl_simple (id int primary key)`,
+			`create view view_simple as select * from tbl_simple`,
+			`create view view_simple2 as select * from tbl_simple`,
+			`create table tbl_part (id INT NOT NULL, store_id INT) PARTITION BY HASH(store_id) PARTITIONS 4`,
+			`create table tbl_fts (id int primary key, name text, fulltext key name_fts (name))`,
+		}
+
+		for _, query := range setupQueries {
+			_, err := conn.ExecuteFetch(query, 1, false)
+			require.NoError(t, err)
+		}
+
+		expectedTables := []string{
+			"tbl_simple",
+			"tbl_part",
+			"tbl_fts",
+			"view_simple",
+			"view_simple2",
+		}
+		err := engine.Reload(ctx)
+		require.NoError(t, err)
+
+		schema := engine.GetSchema()
+		require.NotEmpty(t, schema)
+		for _, expectTable := range expectedTables {
+			t.Run(expectTable, func(t *testing.T) {
+				tbl := engine.GetTable(sqlparser.NewIdentifierCS(expectTable))
+				require.NotNil(t, tbl)
+
+				switch expectTable {
+				case "view_simple", "view_simple2":
+					assert.Zero(t, tbl.FileSize)
+					assert.Zero(t, tbl.AllocatedSize)
+				default:
+					assert.NotZero(t, tbl.FileSize)
+					assert.NotZero(t, tbl.AllocatedSize)
+				}
+			})
+		}
+	})
+	t.Run("schema changes", func(t *testing.T) {
+		setupQueries := []string{
+			`alter view view_simple as select *, 2 from tbl_simple`,
+			`drop view view_simple2`,
+			`create view view_simple3 as select * from tbl_simple`,
+		}
+
+		for _, query := range setupQueries {
+			_, err := conn.ExecuteFetch(query, 1, false)
+			require.NoError(t, err)
+		}
+
+		expectedTables := []string{
+			"tbl_simple",
+			"tbl_part",
+			"tbl_fts",
+			"view_simple",
+			"view_simple3",
+		}
+		err := engine.Reload(ctx)
+		require.NoError(t, err)
+
+		schema := engine.GetSchema()
+		require.NotEmpty(t, schema)
+		for _, expectTable := range expectedTables {
+			t.Run(expectTable, func(t *testing.T) {
+				tbl := engine.GetTable(sqlparser.NewIdentifierCS(expectTable))
+				require.NotNil(t, tbl)
+
+				switch expectTable {
+				case "view_simple", "view_simple2", "view_simple3":
+					assert.Zero(t, tbl.FileSize)
+					assert.Zero(t, tbl.AllocatedSize)
+				default:
+					assert.NotZero(t, tbl.FileSize)
+					assert.NotZero(t, tbl.AllocatedSize)
+				}
+			})
+		}
+	})
 }
 
 // TestTuple tests that bind variables having tuple values work with vttablet.
