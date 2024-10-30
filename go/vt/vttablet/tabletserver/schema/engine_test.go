@@ -54,6 +54,7 @@ import (
 )
 
 const baseShowTablesWithSizesPattern = `SELECT t\.table_name.*SUM\(i\.file_size\).*`
+const baseInnoDBTableSizesPattern = `(?s).*SELECT.*its\.space = it\.space.*SUM\(its\.file_size\).*`
 
 var mustMatch = utils.MustMatchFn(".Mutex")
 
@@ -63,6 +64,7 @@ func TestOpenAndReload(t *testing.T) {
 	schematest.AddDefaultQueries(db)
 
 	db.RejectQueryPattern(baseShowTablesWithSizesPattern, "Opening schema engine should query tables without size information")
+	db.RejectQueryPattern(baseInnoDBTableSizesPattern, "Opening schema engine should query tables without size information")
 
 	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{
 		Fields:       mysql.BaseShowTablesFields,
@@ -120,11 +122,13 @@ func TestOpenAndReload(t *testing.T) {
 	// Modify test_table_03
 	// Add test_table_04
 	// Drop msg
-	db.AddQueryPattern(baseShowTablesWithSizesPattern, &sqltypes.Result{
-		Fields: mysql.BaseShowTablesWithSizesFields,
+	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{
+		Fields:       mysql.BaseShowTablesFields,
+		RowsAffected: 0,
+		InsertID:     0,
 		Rows: [][]sqltypes.Value{
-			mysql.BaseShowTablesWithSizesRow("test_table_01", false, ""),
-			mysql.BaseShowTablesWithSizesRow("test_table_02", false, ""),
+			mysql.BaseShowTablesRow("test_table_01", false, ""),
+			mysql.BaseShowTablesRow("test_table_02", false, ""),
 			{
 				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("test_table_03")), // table_name
 				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("BASE TABLE")),    // table_type
@@ -133,13 +137,30 @@ func TestOpenAndReload(t *testing.T) {
 				sqltypes.MakeTrusted(sqltypes.Int64, []byte("128")),             // file_size
 				sqltypes.MakeTrusted(sqltypes.Int64, []byte("256")),             // allocated_size
 			},
-			// test_table_04 will in spite of older timestamp because it doesn't exist yet.
-			mysql.BaseShowTablesWithSizesRow("test_table_04", false, ""),
-			mysql.BaseShowTablesWithSizesRow("seq", false, "vitess_sequence"),
+			mysql.BaseShowTablesRow("test_table_04", false, ""),
+			mysql.BaseShowTablesRow("seq", false, "vitess_sequence"),
+		},
+		SessionStateChanges: "",
+		StatusFlags:         0,
+	})
+	// Modify test_table_03
+	// Add test_table_04
+	// Drop msg
+	db.AddQueryPattern(baseInnoDBTableSizesPattern, &sqltypes.Result{
+		Fields: mysql.BaseInnoDBTableSizesFields,
+		Rows: [][]sqltypes.Value{
+			mysql.BaseInnoDBTableSizesRow("fakesqldb", "test_table_01"),
+			mysql.BaseInnoDBTableSizesRow("fakesqldb", "test_table_02"),
+			{
+				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("fakesqldb/test_table_03")), // table_name
+				sqltypes.MakeTrusted(sqltypes.Int64, []byte("128")),                       // file_size
+				sqltypes.MakeTrusted(sqltypes.Int64, []byte("256")),                       // allocated_size
+			},
+			mysql.BaseInnoDBTableSizesRow("fakesqldb", "test_table_04"),
+			mysql.BaseInnoDBTableSizesRow("fakesqldb", "seq"),
 		},
 	})
-
-	db.AddRejectedQuery(mysql.BaseShowTables, fmt.Errorf("Reloading schema engine should query tables with size information"))
+	db.RejectQueryPattern(baseShowTablesWithSizesPattern, "Opening schema engine should query tables without size information")
 
 	db.MockQueriesForTable("test_table_03", &sqltypes.Result{
 		Fields: []*querypb.Field{{
