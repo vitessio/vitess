@@ -1259,9 +1259,16 @@ var ks3 = &vindexes.Keyspace{
 func fakeSchemaInfo() *FakeSI {
 	si := &FakeSI{
 		Tables: map[string]*vindexes.Table{
+<<<<<<< HEAD
 			"t":  tableT(),
 			"t1": tableT1(),
 			"t2": tableT2(),
+=======
+			"t":  {Name: sqlparser.NewIdentifierCS("t"), Keyspace: unsharded},
+			"t3": {Name: sqlparser.NewIdentifierCS("t3"), Keyspace: unsharded},
+			"t1": {Name: sqlparser.NewIdentifierCS("t1"), Columns: cols1, ColumnListAuthoritative: true, Keyspace: ks2},
+			"t2": {Name: sqlparser.NewIdentifierCS("t2"), Columns: cols2, ColumnListAuthoritative: true, Keyspace: ks3},
+>>>>>>> 5c08da6a5d (Bugfix for Panic on Joined Queries with Non-Authoritative Tables in Vitess 19.0 (#17103))
 		},
 	}
 	return si
