@@ -39,6 +39,8 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
+const baseInnoDBTableSizesPattern = `(?s).*SELECT.*its\.space = it\.space.*SUM\(its\.file_size\).*`
+
 func TestHealthStreamerClosed(t *testing.T) {
 	cfg := newConfig(nil)
 	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "ReplTrackerTest")
@@ -276,6 +278,13 @@ func TestReloadSchema(t *testing.T) {
 
 			// Update the query pattern for the query that schema.Engine uses to get the tables so that it runs a reload again.
 			// If we don't change the t.create_time to a value greater than before, then the schema engine doesn't reload the database.
+			db.AddQueryPattern(baseInnoDBTableSizesPattern,
+				sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields(
+						"it.name | normal_tables_sum_file_size | normal_tables_sum_allocated_size",
+						"varchar|int64|int64",
+					),
+				))
 			db.AddQueryPattern("SELECT .* information_schema.innodb_tablespaces .*",
 				sqltypes.MakeTestResult(
 					sqltypes.MakeTestFields(
@@ -285,7 +294,6 @@ func TestReloadSchema(t *testing.T) {
 					"product|BASE TABLE|1684735967||114688|114688",
 					"users|BASE TABLE|1684735967||114688|114688",
 				))
-
 			db.AddQuery(mysql.BaseShowTables,
 				sqltypes.MakeTestResult(
 					sqltypes.MakeTestFields(
@@ -351,6 +359,14 @@ func TestReloadView(t *testing.T) {
 	db.AddQuery("commit", &sqltypes.Result{})
 	db.AddQuery("rollback", &sqltypes.Result{})
 	// Add the query pattern for the query that schema.Engine uses to get the tables.
+	// InnoDBTableSizes query
+	db.AddQueryPattern(baseInnoDBTableSizesPattern,
+		sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"it.name | normal_tables_sum_file_size | normal_tables_sum_allocated_size",
+				"varchar|int64|int64",
+			),
+		))
 	db.AddQueryPattern("SELECT .* information_schema.innodb_tablespaces .*",
 		sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
