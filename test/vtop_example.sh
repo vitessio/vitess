@@ -486,6 +486,7 @@ EOF
   waitForKeyspaceToBeServing customer 80- 1
 }
 
+kind delete cluster --name kind || true
 
 # Build the docker image for vitess/lite using the local code
 docker build -f docker/lite/Dockerfile -t vitess/lite:pr .

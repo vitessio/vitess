@@ -534,16 +534,12 @@ func (mysqld *Mysqld) WaitForDBAGrants(ctx context.Context, waitTime time.Durati
 	defer cancel()
 	for {
 		conn, connErr := mysql.Connect(ctx, params)
-		if connErr != nil {
-			log.Errorf("Error connecting to mysql - %v", connErr)
-		}
 		if connErr == nil {
 			res, fetchErr := conn.ExecuteFetch("SHOW GRANTS", 1000, false)
 			conn.Close()
 			if fetchErr != nil {
 				log.Errorf("Error running SHOW GRANTS - %v", fetchErr)
 			}
-			log.Errorf("SHOW GRANTS output - %v", res.Rows)
 			if fetchErr == nil && res != nil && len(res.Rows) > 0 && len(res.Rows[0]) > 0 {
 				privileges := res.Rows[0][0].ToString()
 				// In MySQL 8.0, all the privileges are listed out explicitly, so we can search for SUPER in the output.
