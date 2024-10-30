@@ -4001,6 +4001,13 @@ func (m *BackupRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.BackupEngine != nil {
+		i -= len(*m.BackupEngine)
+		copy(dAtA[i:], *m.BackupEngine)
+		i = encodeVarint(dAtA, i, uint64(len(*m.BackupEngine)))
+		i--
+		dAtA[i] = 0x2a
+	}
 	if m.AllowPrimary {
 		i--
 		if m.AllowPrimary {
@@ -4091,6 +4098,15 @@ func (m *RestoreFromBackupRequest) MarshalToSizedBufferVT(dAtA []byte) (int, err
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if len(m.AllowedBackupEngines) > 0 {
+		for iNdEx := len(m.AllowedBackupEngines) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.AllowedBackupEngines[iNdEx])
+			copy(dAtA[i:], m.AllowedBackupEngines[iNdEx])
+			i = encodeVarint(dAtA, i, uint64(len(m.AllowedBackupEngines[iNdEx])))
+			i--
+			dAtA[i] = 0x2a
+		}
 	}
 	if m.BackupTime != nil {
 		size, err := m.BackupTime.MarshalToSizedBufferVT(dAtA[:i])
@@ -6198,6 +6214,10 @@ func (m *BackupRequest) SizeVT() (n int) {
 	if m.AllowPrimary {
 		n += 2
 	}
+	if m.BackupEngine != nil {
+		l = len(*m.BackupEngine)
+		n += 1 + l + sov(uint64(l))
+	}
 	if m.unknownFields != nil {
 		n += len(m.unknownFields)
 	}
@@ -6229,6 +6249,12 @@ func (m *RestoreFromBackupRequest) SizeVT() (n int) {
 	if m.BackupTime != nil {
 		l = m.BackupTime.SizeVT()
 		n += 1 + l + sov(uint64(l))
+	}
+	if len(m.AllowedBackupEngines) > 0 {
+		for _, s := range m.AllowedBackupEngines {
+			l = len(s)
+			n += 1 + l + sov(uint64(l))
+		}
 	}
 	if m.unknownFields != nil {
 		n += len(m.unknownFields)
@@ -14671,6 +14697,39 @@ func (m *BackupRequest) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.AllowPrimary = bool(v != 0)
+		case 5:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field BackupEngine", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			s := string(dAtA[iNdEx:postIndex])
+			m.BackupEngine = &s
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
@@ -14844,6 +14903,38 @@ func (m *RestoreFromBackupRequest) UnmarshalVT(dAtA []byte) error {
 			if err := m.BackupTime.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
+			iNdEx = postIndex
+		case 5:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field AllowedBackupEngines", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.AllowedBackupEngines = append(m.AllowedBackupEngines, string(dAtA[iNdEx:postIndex]))
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex

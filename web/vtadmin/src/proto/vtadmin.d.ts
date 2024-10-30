@@ -23083,6 +23083,9 @@ export namespace tabletmanagerdata {
 
         /** BackupRequest allow_primary */
         allow_primary?: (boolean|null);
+
+        /** BackupRequest backup_engine */
+        backup_engine?: (string|null);
     }
 
     /** Represents a BackupRequest. */
@@ -23099,6 +23102,12 @@ export namespace tabletmanagerdata {
 
         /** BackupRequest allow_primary. */
         public allow_primary: boolean;
+
+        /** BackupRequest backup_engine. */
+        public backup_engine?: (string|null);
+
+        /** BackupRequest _backup_engine. */
+        public _backup_engine?: "backup_engine";
 
         /**
          * Creates a new BackupRequest instance using the specified properties.
@@ -23266,6 +23275,9 @@ export namespace tabletmanagerdata {
 
         /** RestoreFromBackupRequest backup_time */
         backup_time?: (vttime.ITime|null);
+
+        /** RestoreFromBackupRequest allowed_backup_engines */
+        allowed_backup_engines?: (string[]|null);
     }
 
     /** Represents a RestoreFromBackupRequest. */
@@ -23279,6 +23291,9 @@ export namespace tabletmanagerdata {
 
         /** RestoreFromBackupRequest backup_time. */
         public backup_time?: (vttime.ITime|null);
+
+        /** RestoreFromBackupRequest allowed_backup_engines. */
+        public allowed_backup_engines: string[];
 
         /**
          * Creates a new RestoreFromBackupRequest instance using the specified properties.
@@ -35655,6 +35670,9 @@ export namespace vtctldata {
 
         /** BackupRequest concurrency */
         concurrency?: (number|Long|null);
+
+        /** BackupRequest backup_engine */
+        backup_engine?: (string|null);
     }
 
     /** Represents a BackupRequest. */
@@ -35674,6 +35692,12 @@ export namespace vtctldata {
 
         /** BackupRequest concurrency. */
         public concurrency: (number|Long);
+
+        /** BackupRequest backup_engine. */
+        public backup_engine?: (string|null);
+
+        /** BackupRequest _backup_engine. */
+        public _backup_engine?: "backup_engine";
 
         /**
          * Creates a new BackupRequest instance using the specified properties.
@@ -45615,6 +45639,9 @@ export namespace vtctldata {
 
         /** RestoreFromBackupRequest backup_time */
         backup_time?: (vttime.ITime|null);
+
+        /** RestoreFromBackupRequest allowed_backup_engines */
+        allowed_backup_engines?: (string[]|null);
     }
 
     /** Represents a RestoreFromBackupRequest. */
@@ -45631,6 +45658,9 @@ export namespace vtctldata {
 
         /** RestoreFromBackupRequest backup_time. */
         public backup_time?: (vttime.ITime|null);
+
+        /** RestoreFromBackupRequest allowed_backup_engines. */
+        public allowed_backup_engines: string[];
 
         /**
          * Creates a new RestoreFromBackupRequest instance using the specified properties.

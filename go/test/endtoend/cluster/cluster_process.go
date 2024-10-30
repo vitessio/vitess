@@ -248,6 +248,7 @@ func (cluster *LocalProcessCluster) StartTopo() (err error) {
 	}
 
 	cluster.VtctlclientProcess = *VtctlClientProcessInstance("localhost", cluster.VtctldProcess.GrpcPort, cluster.TmpDirectory)
+	cluster.VtctldClientProcess = *VtctldClientProcessInstance("localhost", cluster.VtctldProcess.GrpcPort, cluster.TmpDirectory)
 	return
 }
 

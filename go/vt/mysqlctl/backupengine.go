@@ -46,6 +46,7 @@ var (
 type BackupEngine interface {
 	ExecuteBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (bool, error)
 	ShouldDrainForBackup() bool
+	Name() string
 }
 
 // BackupParams is the struct that holds all params passed to ExecuteBackup
@@ -67,6 +68,24 @@ type BackupParams struct {
 	TabletAlias string
 	// BackupTime is the time at which the backup is being started
 	BackupTime time.Time
+	// BackupEngine allows us to override which backup engine should be used for a request
+	BackupEngine string
+}
+
+func (b *BackupParams) Copy() BackupParams {
+	return BackupParams{
+		Cnf:          b.Cnf,
+		Mysqld:       b.Mysqld,
+		Logger:       b.Logger,
+		Concurrency:  b.Concurrency,
+		HookExtraEnv: b.HookExtraEnv,
+		TopoServer:   b.TopoServer,
+		Keyspace:     b.Keyspace,
+		Shard:        b.Shard,
+		TabletAlias:  b.TabletAlias,
+		BackupTime:   b.BackupTime,
+		BackupEngine: b.BackupEngine,
+	}
 }
 
 // RestoreParams is the struct that holds all params passed to ExecuteRestore
@@ -93,6 +112,24 @@ type RestoreParams struct {
 	// StartTime: if non-zero, look for a backup that was taken at or before this time
 	// Otherwise, find the most recent backup
 	StartTime time.Time
+	// AllowedBackupEngines if present will filter out any backups taken with engines not included in the list
+	AllowedBackupEngines []string
+}
+
+func (p *RestoreParams) Copy() RestoreParams {
+	return RestoreParams{
+		Cnf:                  p.Cnf,
+		Mysqld:               p.Mysqld,
+		Logger:               p.Logger,
+		Concurrency:          p.Concurrency,
+		HookExtraEnv:         p.HookExtraEnv,
+		DeleteBeforeRestore:  p.DeleteBeforeRestore,
+		DbName:               p.DbName,
+		Keyspace:             p.Keyspace,
+		Shard:                p.Shard,
+		StartTime:            p.StartTime,
+		AllowedBackupEngines: p.AllowedBackupEngines,
+	}
 }
 
 // RestoreEngine is the interface to restore a backup with a given engine.
@@ -129,8 +166,12 @@ func registerBackupEngineFlags(fs *pflag.FlagSet) {
 // a particular backup by calling GetRestoreEngine().
 //
 // This must only be called after flags have been parsed.
-func GetBackupEngine() (BackupEngine, error) {
+func GetBackupEngine(backupEngine string) (BackupEngine, error) {
 	name := backupEngineImplementation
+	if backupEngine != "" {
+		name = backupEngine
+	}
+
 	be, ok := BackupRestoreEngineMap[name]
 	if !ok {
 		return nil, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "unknown BackupEngine implementation %q", name)
@@ -218,6 +259,12 @@ func FindBackupToRestore(ctx context.Context, params RestoreParams, bhs []backup
 		bm, err := GetBackupManifest(ctx, bh)
 		if err != nil {
 			params.Logger.Warningf("Possibly incomplete backup %v in directory %v on BackupStorage: can't read MANIFEST: %v)", bh.Name(), backupDir, err)
+			continue
+		}
+
+		// if allowed backup engine is not empty, we only try to restore from backups taken with the specified backup engines
+		if len(params.AllowedBackupEngines) > 0 && !sliceContains(params.AllowedBackupEngines, bm.BackupMethod) {
+			params.Logger.Warningf("Ignoring backup %v because it is using %q backup engine", bh.Name(), bm.BackupMethod)
 			continue
 		}
 

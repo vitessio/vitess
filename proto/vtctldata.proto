@@ -268,6 +268,9 @@ message BackupRequest {
   // Concurrency specifies the number of compression/checksum jobs to run
   // simultaneously.
   uint64 concurrency = 3;
+
+  // BackupEngine specifies if we want to use a particular backup engine for this backup request
+  optional string backup_engine = 6;
 }
 
 message BackupResponse {
@@ -965,6 +968,9 @@ message RestoreFromBackupRequest {
   // BackupTime, if set, will use the backup taken most closely at or before
   // this time. If nil, the latest backup will be restored on the tablet.
   vttime.Time backup_time = 2;
+
+  // AllowedBackupEngines, if present will filter out any backups taken with engines not included in the list
+  repeated string allowed_backup_engines = 6;
 }
 
 message RestoreFromBackupResponse {

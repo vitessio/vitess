@@ -35,7 +35,7 @@ import (
 var (
 	// Backup makes a Backup gRPC call to a vtctld.
 	Backup = &cobra.Command{
-		Use:                   "Backup [--concurrency <concurrency>] [--allow-primary] <tablet_alias>",
+		Use:                   "Backup [--concurrency <concurrency>] [--allow-primary] [--backup-engine=enginename] <tablet_alias>",
 		Short:                 "Uses the BackupStorage service on the given tablet to create and store a new backup.",
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(1),
@@ -70,7 +70,7 @@ If no replica-type tablet can be found, the backup can be taken on the primary i
 	}
 	// RestoreFromBackup makes a RestoreFromBackup gRPC call to a vtctld.
 	RestoreFromBackup = &cobra.Command{
-		Use:                   "RestoreFromBackup [--backup-timestamp|-t <YYYY-mm-DD.HHMMSS>] <tablet_alias>",
+		Use:                   "RestoreFromBackup [--backup-timestamp|-t <YYYY-mm-DD.HHMMSS>] [--allowed-backup-engines=enginename,] <tablet_alias>",
 		Short:                 "Stops mysqld on the specified tablet and restores the data from either the latest backup or closest before `backup-timestamp`.",
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(1),
@@ -81,6 +81,7 @@ If no replica-type tablet can be found, the backup can be taken on the primary i
 var backupOptions = struct {
 	AllowPrimary bool
 	Concurrency  uint64
+	BackupEngine string
 }{}
 
 func commandBackup(cmd *cobra.Command, args []string) error {
@@ -91,11 +92,17 @@ func commandBackup(cmd *cobra.Command, args []string) error {
 
 	cli.FinishedParsing(cmd)
 
-	stream, err := client.Backup(commandCtx, &vtctldatapb.BackupRequest{
+	req := &vtctldatapb.BackupRequest{
 		TabletAlias:  tabletAlias,
 		AllowPrimary: backupOptions.AllowPrimary,
 		Concurrency:  backupOptions.Concurrency,
-	})
+	}
+
+	if backupOptions.BackupEngine != "" {
+		req.BackupEngine = &backupOptions.BackupEngine
+	}
+
+	stream, err := client.Backup(commandCtx, req)
 	if err != nil {
 		return err
 	}
@@ -210,7 +217,8 @@ func commandRemoveBackup(cmd *cobra.Command, args []string) error {
 }
 
 var restoreFromBackupOptions = struct {
-	BackupTimestamp string
+	BackupTimestamp      string
+	AllowedBackupEngines []string
 }{}
 
 func commandRestoreFromBackup(cmd *cobra.Command, args []string) error {
@@ -220,7 +228,8 @@ func commandRestoreFromBackup(cmd *cobra.Command, args []string) error {
 	}
 
 	req := &vtctldatapb.RestoreFromBackupRequest{
-		TabletAlias: alias,
+		TabletAlias:          alias,
+		AllowedBackupEngines: restoreFromBackupOptions.AllowedBackupEngines,
 	}
 
 	if restoreFromBackupOptions.BackupTimestamp != "" {
@@ -255,6 +264,7 @@ func commandRestoreFromBackup(cmd *cobra.Command, args []string) error {
 func init() {
 	Backup.Flags().BoolVar(&backupOptions.AllowPrimary, "allow-primary", false, "Allow the primary of a shard to be used for the backup. WARNING: If using the builtin backup engine, this will shutdown mysqld on the primary and stop writes for the duration of the backup.")
 	Backup.Flags().Uint64Var(&backupOptions.Concurrency, "concurrency", 4, "Specifies the number of compression/checksum jobs to run simultaneously.")
+	Backup.Flags().StringVar(&backupOptions.BackupEngine, "backup-engine", "", "Request a specific backup engine for this backup request. Defaults to the preferred backup engine of the target vttablet")
 	Root.AddCommand(Backup)
 
 	BackupShard.Flags().BoolVar(&backupShardOptions.AllowPrimary, "allow-primary", false, "Allow the primary of a shard to be used for the backup. WARNING: If using the builtin backup engine, this will shutdown mysqld on the primary and stop writes for the duration of the backup.")
@@ -268,5 +278,6 @@ func init() {
 	Root.AddCommand(RemoveBackup)
 
 	RestoreFromBackup.Flags().StringVarP(&restoreFromBackupOptions.BackupTimestamp, "backup-timestamp", "t", "", "Use the backup taken at, or closest before, this timestamp. Omit to use the latest backup. Timestamp format is \"YYYY-mm-DD.HHMMSS\".")
+	RestoreFromBackup.Flags().StringSliceVar(&restoreFromBackupOptions.AllowedBackupEngines, "allowed-backup-engines", restoreFromBackupOptions.AllowedBackupEngines, "if set, only backups taken with the specified engines are eligible to be restored")
 	Root.AddCommand(RestoreFromBackup)
 }

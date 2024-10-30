@@ -23,6 +23,8 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 )
 
+const fakeBackupEngineName = "fake"
+
 type FakeBackupEngine struct {
 	ExecuteBackupCalls         []FakeBackupEngineExecuteBackupCall
 	ExecuteBackupDuration      time.Duration
@@ -89,4 +91,10 @@ func (be *FakeBackupEngine) ExecuteRestore(
 func (be *FakeBackupEngine) ShouldDrainForBackup() bool {
 	be.ShouldDrainForBackupCalls = be.ShouldDrainForBackupCalls + 1
 	return be.ShouldDrainForBackupReturn
+}
+
+func (be *FakeBackupEngine) Name() string { return fakeBackupEngineName }
+
+func (be *FakeBackupEngine) ShouldStartMySQLAfterRestore() bool {
+	return true
 }
