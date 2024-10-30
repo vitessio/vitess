@@ -912,6 +912,31 @@
     }
   },
   {
+    "comment": "Ambiguous column is not a problem when we can merge and push down",
+    "query": "select foobar from user join music on user.id = music.user_id order by foobar",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select foobar from user join music on user.id = music.user_id order by foobar",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select foobar, weight_string(foobar) from `user`, music where 1 != 1",
+        "OrderBy": "(0|1) ASC",
+        "Query": "select foobar, weight_string(foobar) from `user`, music where `user`.id = music.user_id order by foobar asc",
+        "ResultColumns": 1,
+        "Table": "`user`, music"
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user"
+      ]
+    }
+  },
+  {
     "comment": "index hints, make sure they are not stripped.",
     "query": "select user.col from user use index(a)",
     "plan": {
