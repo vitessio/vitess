@@ -70,6 +70,14 @@ const (
 	Commit2pcConclude
 )
 
+var phaseMessage = map[commitPhase]string{
+	Commit2pcCreateTransaction: "Create Transaction",
+	Commit2pcPrepare:           "Prepare",
+	Commit2pcStartCommit:       "Start Commit",
+	Commit2pcPrepareCommit:     "Prepare Commit",
+	Commit2pcConclude:          "Conclude",
+}
+
 // Begin begins a new transaction. If one is already in progress, it commits it
 // and starts a new one.
 func (txc *TxConn) Begin(ctx context.Context, session *SafeSession, txAccessModes []sqlparser.TxAccessMode) error {
@@ -221,11 +229,12 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) (err err
 	}
 
 	var txPhase commitPhase
+	var startCommitState querypb.StartCommitState
 	defer func() {
 		if err == nil {
 			return
 		}
-		txc.errActionAndLogWarn(ctx, session, txPhase, dtid, mmShard, rmShards)
+		txc.errActionAndLogWarn(ctx, session, txPhase, startCommitState, dtid, mmShard, rmShards)
 	}()
 
 	txPhase = Commit2pcCreateTransaction
@@ -259,7 +268,7 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) (err err
 	}
 
 	txPhase = Commit2pcStartCommit
-	_, err = txc.tabletGateway.StartCommit(ctx, mmShard.Target, mmShard.TransactionId, dtid)
+	startCommitState, err = txc.tabletGateway.StartCommit(ctx, mmShard.Target, mmShard.TransactionId, dtid)
 	if err != nil {
 		return err
 	}
@@ -298,21 +307,38 @@ func (txc *TxConn) checkValidCondition(session *SafeSession) error {
 	return nil
 }
 
-func (txc *TxConn) errActionAndLogWarn(ctx context.Context, session *SafeSession, txPhase commitPhase, dtid string, mmShard *vtgatepb.Session_ShardSession, rmShards []*vtgatepb.Session_ShardSession) {
+func (txc *TxConn) errActionAndLogWarn(
+	ctx context.Context,
+	session *SafeSession,
+	txPhase commitPhase,
+	startCommitState querypb.StartCommitState,
+	dtid string,
+	mmShard *vtgatepb.Session_ShardSession,
+	rmShards []*vtgatepb.Session_ShardSession,
+) {
+	var rollbackErr error
 	switch txPhase {
 	case Commit2pcCreateTransaction:
 		// Normal rollback is safe because nothing was prepared yet.
-		if rollbackErr := txc.Rollback(ctx, session); rollbackErr != nil {
-			log.Warningf("Rollback failed after Create Transaction failure: %v", rollbackErr)
-		}
+		rollbackErr = txc.Rollback(ctx, session)
 	case Commit2pcPrepare:
 		// Rollback the prepared and unprepared transactions.
-		if resumeErr := txc.rollbackTx(ctx, dtid, mmShard, rmShards, session.logging); resumeErr != nil {
-			log.Warningf("Rollback failed after Prepare failure: %v", resumeErr)
+		rollbackErr = txc.rollbackTx(ctx, dtid, mmShard, rmShards, session.logging)
+	case Commit2pcStartCommit:
+		// Failed to store the commit decision on MM.
+		// If the failure state is certain, then the only option is to rollback the prepared transactions on the RMs.
+		if startCommitState == querypb.StartCommitState_Fail {
+			rollbackErr = txc.rollbackTx(ctx, dtid, mmShard, rmShards, session.logging)
 		}
-	case Commit2pcStartCommit, Commit2pcPrepareCommit:
+		fallthrough
+	case Commit2pcPrepareCommit:
 		commitUnresolved.Add(1)
 	}
+	if rollbackErr != nil {
+		log.Warningf("Rollback failed after %s failure: %v", phaseMessage[txPhase], rollbackErr)
+		commitUnresolved.Add(1)
+	}
+
 	session.RecordWarning(&querypb.QueryWarning{
 		Code:    uint32(sqlerror.ERInAtomicRecovery),
 		Message: createWarningMessage(dtid, txPhase)})
