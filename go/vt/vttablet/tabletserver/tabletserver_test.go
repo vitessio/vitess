@@ -331,7 +331,7 @@ func TestTabletServerStartCommit(t *testing.T) {
 	txid = newTxForPrep(ctx, tsv)
 	state, err = tsv.StartCommit(ctx, &target, txid, "aa")
 	assert.EqualError(t, err, "could not transition to COMMIT: aa", "Prepare err")
-	assert.Equal(t, querypb.StartCommitState_Unknown, state, "StartCommit state")
+	assert.Equal(t, querypb.StartCommitState_Fail, state, "StartCommit state")
 }
 
 func TestTabletserverSetRollback(t *testing.T) {
