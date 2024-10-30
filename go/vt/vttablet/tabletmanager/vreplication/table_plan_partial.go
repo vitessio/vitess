@@ -50,12 +50,15 @@ func (tpb *tablePlanBuilder) generatePartialValuesPart(buf *sqlparser.TrackedBuf
 	bvf.mode = bvAfter
 	separator := "("
 	for ind, cexpr := range tpb.colExprs {
-		if tpb.isColumnGenerated(cexpr.colName) {
+		if cexpr.isGenerated {
+			log.Errorf("DEBUG: Column %s is generated, skipping...", cexpr.colName)
 			continue
 		}
 		if !isBitSet(dataColumns.Cols, ind) {
+			log.Errorf("DEBUG: Column %s does not have data, skipping...", cexpr.colName)
 			continue
 		}
+		log.Errorf("DEBUG: Column %s is not generated and hase data, using...", cexpr.colName)
 		buf.Myprintf("%s", separator)
 		separator = ","
 		switch cexpr.operation {
@@ -84,7 +87,7 @@ func (tpb *tablePlanBuilder) generatePartialInsertPart(buf *sqlparser.TrackedBuf
 	buf.Myprintf("insert into %v(", tpb.name)
 	separator := ""
 	for ind, cexpr := range tpb.colExprs {
-		if tpb.isColumnGenerated(cexpr.colName) {
+		if cexpr.isGenerated {
 			continue
 		}
 		if !isBitSet(dataColumns.Cols, ind) {
@@ -102,7 +105,7 @@ func (tpb *tablePlanBuilder) generatePartialSelectPart(buf *sqlparser.TrackedBuf
 	buf.WriteString(" select ")
 	separator := ""
 	for ind, cexpr := range tpb.colExprs {
-		if tpb.isColumnGenerated(cexpr.colName) {
+		if cexpr.isGenerated {
 			continue
 		}
 		if !isBitSet(dataColumns.Cols, ind) {
@@ -140,20 +143,26 @@ func (tpb *tablePlanBuilder) createPartialUpdateQuery(dataColumns *binlogdatapb.
 	buf := sqlparser.NewTrackedBuffer(bvf.formatter)
 	buf.Myprintf("update %v set ", tpb.name)
 	separator := ""
+	log.Errorf("DEBUG: dataColumns count: %+v", dataColumns)
+	log.Errorf("DEBUG: dataColumns bits: %s", fmt.Sprintf("%08b", dataColumns.Cols))
 	for i, cexpr := range tpb.colExprs {
-		if cexpr.isPK {
-			continue
-		}
-		if tpb.isColumnGenerated(cexpr.colName) {
-			continue
-		}
 		if int64(i) >= dataColumns.Count {
 			log.Errorf("Ran out of columns trying to generate query for %s", tpb.name.CompliantName())
 			return nil
 		}
-		if !isBitSet(dataColumns.Cols, i) {
+		if cexpr.isPK {
+			log.Errorf("DEBUG: Column %s at index %d is a PK column, skipping...", cexpr.colName, i)
 			continue
 		}
+		if cexpr.isGenerated {
+			log.Errorf("DEBUG: Column %s at index %d is generated, skipping...", cexpr.colName, i)
+			continue
+		}
+		if !isBitSet(dataColumns.Cols, i) {
+			log.Errorf("DEBUG: Column %s at index %d is not present, skipping...", cexpr.colName, i)
+			continue
+		}
+		log.Errorf("DEBUG: Column %s at index %d is not generated and has data, using...", cexpr.colName, i)
 		buf.Myprintf("%s%v=", separator, cexpr.colName)
 		separator = ", "
 		switch cexpr.operation {
@@ -176,6 +185,8 @@ func (tpb *tablePlanBuilder) createPartialUpdateQuery(dataColumns *binlogdatapb.
 		}
 	}
 	tpb.generateWhere(buf, bvf)
+	query := buf.ParsedQuery()
+	log.Infof("DEBUG: Generated partial update query: %s", query.Query)
 	return buf.ParsedQuery()
 }
 func (tp *TablePlan) getPartialInsertQuery(dataColumns *binlogdatapb.RowChange_Bitmap) (*sqlparser.ParsedQuery, error) {
