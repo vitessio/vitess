@@ -319,17 +319,18 @@ func TestReloadWithSwappedTables(t *testing.T) {
 	schematest.AddDefaultQueries(db)
 
 	db.RejectQueryPattern(baseShowTablesWithSizesPattern, "Opening schema engine should query tables without size information")
+	db.RejectQueryPattern(baseInnoDBTableSizesPattern, "Opening schema engine should query tables without size information")
 
 	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{
 		Fields:       mysql.BaseShowTablesFields,
 		RowsAffected: 0,
 		InsertID:     0,
 		Rows: [][]sqltypes.Value{
-			mysql.BaseShowTablesWithSizesRow("test_table_01", false, ""),
-			mysql.BaseShowTablesWithSizesRow("test_table_02", false, ""),
-			mysql.BaseShowTablesWithSizesRow("test_table_03", false, ""),
-			mysql.BaseShowTablesWithSizesRow("seq", false, "vitess_sequence"),
-			mysql.BaseShowTablesWithSizesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
+			mysql.BaseShowTablesRow("test_table_01", false, ""),
+			mysql.BaseShowTablesRow("test_table_02", false, ""),
+			mysql.BaseShowTablesRow("test_table_03", false, ""),
+			mysql.BaseShowTablesRow("seq", false, "vitess_sequence"),
+			mysql.BaseShowTablesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
 		},
 		SessionStateChanges: "",
 		StatusFlags:         0,
@@ -350,23 +351,42 @@ func TestReloadWithSwappedTables(t *testing.T) {
 		"int64"),
 		"1427325876",
 	))
-	db.AddQueryPattern(baseShowTablesWithSizesPattern, &sqltypes.Result{
-		Fields: mysql.BaseShowTablesWithSizesFields,
+	db.AddQueryPattern(baseInnoDBTableSizesPattern, &sqltypes.Result{
+		Fields: mysql.BaseInnoDBTableSizesFields,
 		Rows: [][]sqltypes.Value{
-			mysql.BaseShowTablesWithSizesRow("test_table_01", false, ""),
-			mysql.BaseShowTablesWithSizesRow("test_table_02", false, ""),
-			mysql.BaseShowTablesWithSizesRow("test_table_03", false, ""),
+			mysql.BaseInnoDBTableSizesRow("fakesqldb", "test_table_01"),
+			mysql.BaseInnoDBTableSizesRow("fakesqldb", "test_table_02"),
+			mysql.BaseInnoDBTableSizesRow("fakesqldb", "test_table_03"),
 			{
-				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("test_table_04")),
-				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("BASE TABLE")),
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1427325877")), // unix_timestamp(create_time)
-				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("")),
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("128")), // file_size
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("256")), // allocated_size
+				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("fakesqldb/test_table_04")), // table_name
+				sqltypes.MakeTrusted(sqltypes.Int64, []byte("128")),                       // file_size
+				sqltypes.MakeTrusted(sqltypes.Int64, []byte("256")),                       // allocated_size
 			},
-			mysql.BaseShowTablesWithSizesRow("seq", false, "vitess_sequence"),
-			mysql.BaseShowTablesWithSizesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
+			mysql.BaseInnoDBTableSizesRow("fakesqldb", "seq"),
+			mysql.BaseInnoDBTableSizesRow("fakesqldb", "msg"),
 		},
+	})
+	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{
+		Fields:       mysql.BaseShowTablesFields,
+		RowsAffected: 0,
+		InsertID:     0,
+		Rows: [][]sqltypes.Value{
+			mysql.BaseShowTablesRow("test_table_01", false, ""),
+			mysql.BaseShowTablesRow("test_table_02", false, ""),
+			mysql.BaseShowTablesRow("test_table_03", false, ""),
+			{
+				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("test_table_04")), // table_name
+				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("BASE TABLE")),    // table_type
+				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1427325877")),      // unix_timestamp(t.create_time)
+				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("")),              // table_comment
+				sqltypes.MakeTrusted(sqltypes.Int64, []byte("128")),             // file_size
+				sqltypes.MakeTrusted(sqltypes.Int64, []byte("256")),             // allocated_size
+			},
+			mysql.BaseShowTablesRow("seq", false, "vitess_sequence"),
+			mysql.BaseShowTablesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
+		},
+		SessionStateChanges: "",
+		StatusFlags:         0,
 	})
 	db.MockQueriesForTable("test_table_04", &sqltypes.Result{
 		Fields: []*querypb.Field{{
@@ -424,11 +444,28 @@ func TestReloadWithSwappedTables(t *testing.T) {
 		"int64"),
 		"1427325877",
 	))
-	db.AddQueryPattern(baseShowTablesWithSizesPattern, &sqltypes.Result{
-		Fields: mysql.BaseShowTablesWithSizesFields,
+	db.AddQueryPattern(baseInnoDBTableSizesPattern, &sqltypes.Result{
+		Fields: mysql.BaseInnoDBTableSizesFields,
 		Rows: [][]sqltypes.Value{
-			mysql.BaseShowTablesWithSizesRow("test_table_01", false, ""),
-			mysql.BaseShowTablesWithSizesRow("test_table_02", false, ""),
+			mysql.BaseInnoDBTableSizesRow("fakesqldb", "test_table_01"),
+			mysql.BaseInnoDBTableSizesRow("fakesqldb", "test_table_02"),
+			{
+				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("fakesqldb/test_table_03")), // table_name
+				sqltypes.MakeTrusted(sqltypes.Int64, []byte("128")),                       // file_size
+				sqltypes.MakeTrusted(sqltypes.Int64, []byte("256")),                       // allocated_size
+			},
+			mysql.BaseInnoDBTableSizesRow("fakesqldb", "test_table_04"),
+			mysql.BaseInnoDBTableSizesRow("fakesqldb", "seq"),
+			mysql.BaseInnoDBTableSizesRow("fakesqldb", "msg"),
+		},
+	})
+	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{
+		Fields:       mysql.BaseShowTablesFields,
+		RowsAffected: 0,
+		InsertID:     0,
+		Rows: [][]sqltypes.Value{
+			mysql.BaseShowTablesRow("test_table_01", false, ""),
+			mysql.BaseShowTablesRow("test_table_02", false, ""),
 			{
 				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("test_table_03")),
 				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("BASE TABLE")),
@@ -437,10 +474,12 @@ func TestReloadWithSwappedTables(t *testing.T) {
 				sqltypes.MakeTrusted(sqltypes.Int64, []byte("128")), // file_size
 				sqltypes.MakeTrusted(sqltypes.Int64, []byte("256")), // allocated_size
 			},
-			mysql.BaseShowTablesWithSizesRow("test_table_04", false, ""),
-			mysql.BaseShowTablesWithSizesRow("seq", false, "vitess_sequence"),
-			mysql.BaseShowTablesWithSizesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
+			mysql.BaseShowTablesRow("test_table_04", false, ""),
+			mysql.BaseShowTablesRow("seq", false, "vitess_sequence"),
+			mysql.BaseShowTablesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
 		},
+		SessionStateChanges: "",
+		StatusFlags:         0,
 	})
 	db.MockQueriesForTable("test_table_03", &sqltypes.Result{
 		Fields: []*querypb.Field{{
