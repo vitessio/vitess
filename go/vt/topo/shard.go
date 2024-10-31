@@ -28,20 +28,20 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/constants/sidecar"
-	"vitess.io/vitess/go/protoutil"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
+	"golang.org/x/sync/errgroup"
 
+	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/event"
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo/events"
 	"vitess.io/vitess/go/vt/topo/topoproto"
-
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 const (
@@ -614,6 +614,71 @@ func (ts *Server) FindAllTabletAliasesInShardByCell(ctx context.Context, keyspac
 	}
 	sort.Sort(topoproto.TabletAliasList(result))
 	return result, err
+}
+
+// GetTabletsByShard returns the tablets in the given shard using all cells.
+// It can return ErrPartialResult if it couldn't read all the cells, or all
+// the individual tablets, in which case the result is valid, but partial.
+func (ts *Server) GetTabletsByShard(ctx context.Context, keyspace, shard string) ([]*TabletInfo, error) {
+	return ts.GetTabletsByShardCell(ctx, keyspace, shard, nil)
+}
+
+// GetTabletsByShardCell returns the tablets in the given shard. It can return
+// ErrPartialResult if it couldn't read all the cells, or all the individual
+// tablets, in which case the result is valid, but partial.
+func (ts *Server) GetTabletsByShardCell(ctx context.Context, keyspace, shard string, cells []string) ([]*TabletInfo, error) {
+	span, ctx := trace.NewSpan(ctx, "topo.GetTabletsByShardCell")
+	span.Annotate("keyspace", keyspace)
+	span.Annotate("shard", shard)
+	span.Annotate("num_cells", len(cells))
+	defer span.Finish()
+	ctx = trace.NewContext(ctx, span)
+	var err error
+
+	if len(cells) == 0 {
+		cells, err = ts.GetCellInfoNames(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if len(cells) == 0 { // Nothing to do
+			return nil, nil
+		}
+	}
+
+	// divide the concurrency limit by the number of cells. if there are more
+	// cells than the limit, default to concurrency of 1.
+	cellConcurrency := 1
+	if len(cells) < DefaultConcurrency {
+		cellConcurrency = DefaultConcurrency / len(cells)
+	}
+
+	mu := sync.Mutex{}
+	eg, ctx := errgroup.WithContext(ctx)
+	eg.SetLimit(DefaultConcurrency)
+
+	tablets := make([]*TabletInfo, 0, len(cells)*3)
+	for _, cell := range cells {
+		eg.Go(func() error {
+			t, err := ts.GetTabletsByCell(ctx, cell, &GetTabletsByCellOptions{
+				Concurrency: cellConcurrency,
+				Keyspace:    keyspace,
+				Shard:       shard,
+			})
+			if err != nil {
+				return vterrors.Wrap(err, fmt.Sprintf("GetTabletsByCell for %v failed.", cell))
+			}
+			mu.Lock()
+			tablets = append(tablets, t...)
+			mu.Unlock()
+			return nil
+		})
+	}
+	if err := eg.Wait(); err != nil {
+		log.Warningf("GetTabletsByShardCell(%v,%v): got partial result: %v", keyspace, shard, err)
+		return tablets, NewError(PartialResult, shard)
+	}
+
+	return tablets, nil
 }
 
 // GetTabletMapForShard returns the tablets for a shard. It can return

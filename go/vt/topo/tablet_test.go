@@ -34,42 +34,62 @@ import (
 // GetTabletsByCell first tries to get all the tablets using List.
 // If the response is too large, we will get an error, and fall back to one tablet at a time.
 func TestServerGetTabletsByCell(t *testing.T) {
+	const cell = "zone1"
+	const keyspace = "keyspace"
+	const shard = "shard"
+
 	tests := []struct {
-		name      string
-		tablets   int
-		opt       *topo.GetTabletsByCellOptions
-		listError error
+		name               string
+		createShardTablets int
+		opt                *topo.GetTabletsByCellOptions
+		listError          error
+		keyspaceShards     map[string]string
 	}{
 		{
-			name:    "negative concurrency",
-			tablets: 1,
+			name:               "negative concurrency",
+			keyspaceShards:     map[string]string{keyspace: shard},
+			createShardTablets: 1,
 			// Ensure this doesn't panic.
 			opt: &topo.GetTabletsByCellOptions{Concurrency: -1},
 		},
 		{
-			name:    "single",
-			tablets: 1,
+			name:               "single",
+			keyspaceShards:     map[string]string{keyspace: shard},
+			createShardTablets: 1,
 			// Make sure the defaults apply as expected.
 			opt: nil,
 		},
 		{
-			name: "multiple",
+			name:           "multiple",
+			keyspaceShards: map[string]string{keyspace: shard},
 			// should work with more than 1 tablet
-			tablets: 32,
-			opt:     &topo.GetTabletsByCellOptions{Concurrency: 8},
+			createShardTablets: 32,
+			opt:                &topo.GetTabletsByCellOptions{Concurrency: 8},
 		},
 		{
-			name: "multiple with list error",
+			name:           "multiple with list error",
+			keyspaceShards: map[string]string{keyspace: shard},
 			// should work with more than 1 tablet when List returns an error
-			tablets:   32,
-			opt:       &topo.GetTabletsByCellOptions{Concurrency: 8},
-			listError: topo.NewError(topo.ResourceExhausted, ""),
+			createShardTablets: 32,
+			opt:                &topo.GetTabletsByCellOptions{Concurrency: 8},
+			listError:          topo.NewError(topo.ResourceExhausted, ""),
+		},
+		{
+			name: "filtered by keyspace and shard",
+			keyspaceShards: map[string]string{
+				keyspace:   shard,
+				"filtered": "-",
+			},
+			// should create 2 tablets in 2 different shards (4 total)
+			// but only a single shard is returned
+			createShardTablets: 2,
+			opt: &topo.GetTabletsByCellOptions{
+				Concurrency: 1,
+				Keyspace:    keyspace,
+				Shard:       shard,
+			},
 		},
 	}
-
-	const cell = "zone1"
-	const keyspace = "keyspace"
-	const shard = "shard"
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -84,37 +104,48 @@ func TestServerGetTabletsByCell(t *testing.T) {
 
 			// Create an ephemeral keyspace and generate shard records within
 			// the keyspace to fetch later.
-			require.NoError(t, ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}))
-			require.NoError(t, ts.CreateShard(ctx, keyspace, shard))
+			for k, s := range tt.keyspaceShards {
+				require.NoError(t, ts.CreateKeyspace(ctx, k, &topodatapb.Keyspace{}))
+				require.NoError(t, ts.CreateShard(ctx, k, s))
+			}
 
-			tablets := make([]*topo.TabletInfo, tt.tablets)
+			tablets := make([]*topo.TabletInfo, tt.createShardTablets)
 
-			for i := 0; i < tt.tablets; i++ {
-				tablet := &topodatapb.Tablet{
-					Alias: &topodatapb.TabletAlias{
-						Cell: cell,
-						Uid:  uint32(i),
-					},
-					Hostname: "host1",
-					PortMap: map[string]int32{
-						"vt": int32(i),
-					},
-					Keyspace: keyspace,
-					Shard:    shard,
+			var uid uint32 = 1
+			for k, s := range tt.keyspaceShards {
+				for i := 0; i < tt.createShardTablets; i++ {
+					tablet := &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: cell,
+							Uid:  uid,
+						},
+						Hostname: "host1",
+						PortMap: map[string]int32{
+							"vt": int32(uid),
+						},
+						Keyspace: k,
+						Shard:    s,
+					}
+					tInfo := &topo.TabletInfo{Tablet: tablet}
+					tablets[i] = tInfo
+					require.NoError(t, ts.CreateTablet(ctx, tablet))
+					uid++
 				}
-				tInfo := &topo.TabletInfo{Tablet: tablet}
-				tablets[i] = tInfo
-				require.NoError(t, ts.CreateTablet(ctx, tablet))
 			}
 
 			// Verify that we return a complete list of tablets and that each
 			// tablet matches what we expect.
 			out, err := ts.GetTabletsByCell(ctx, cell, tt.opt)
 			require.NoError(t, err)
-			require.Len(t, out, tt.tablets)
+			require.Len(t, out, tt.createShardTablets)
 
 			for i, tab := range tablets {
 				require.Equal(t, tab.Tablet, tablets[i].Tablet)
+			}
+
+			for _, tablet := range out {
+				require.Equal(t, keyspace, tablet.Keyspace)
+				require.Equal(t, shard, tablet.Shard)
 			}
 		})
 	}
