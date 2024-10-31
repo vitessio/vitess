@@ -2178,22 +2178,21 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 				ts.workflowType)
 		}
 		// We need to delete the rows that the target tables would have for the tenant.
-		// We don't cleanup other related artifacts since they are not tied to the tenant.
 		if !req.GetKeepData() {
 			if err := s.deleteTenantData(ctx, ts, req.DeleteBatchSize); err != nil {
 				return nil, vterrors.Wrapf(err, "failed to fully delete all migrated data for tenant %s, please retry the operation",
 					ts.options.TenantId)
 			}
 		}
-	} else {
-		// Cleanup related data and artifacts. There are none for a LookupVindex workflow.
-		if ts.workflowType != binlogdatapb.VReplicationWorkflowType_CreateLookupIndex {
-			if _, err := s.dropTargets(ctx, ts, req.GetKeepData(), req.GetKeepRoutingRules(), false); err != nil {
-				if topo.IsErrType(err, topo.NoNode) {
-					return nil, vterrors.Wrapf(err, "%s keyspace does not exist", req.GetKeyspace())
-				}
-				return nil, err
+	}
+
+	// Cleanup related data and artifacts. There are none for a LookupVindex workflow.
+	if ts.workflowType != binlogdatapb.VReplicationWorkflowType_CreateLookupIndex {
+		if _, err := s.dropTargets(ctx, ts, req.GetKeepData(), req.GetKeepRoutingRules(), false); err != nil {
+			if topo.IsErrType(err, topo.NoNode) {
+				return nil, vterrors.Wrapf(err, "%s keyspace does not exist", req.GetKeyspace())
 			}
+			return nil, err
 		}
 	}
 
@@ -3302,6 +3301,15 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid action for Migrate workflow: SwitchTraffic")
 	}
 
+	if ts.IsMultiTenantMigration() {
+		// Multi-tenant migrations use keyspace routing rules, so we need to update the state
+		// using them.
+		err = updateKeyspaceRoutingState(ctx, ts.TopoServer(), ts.sourceKeyspace, ts.targetKeyspace, startState)
+		if err != nil {
+			return nil, vterrors.Wrap(err, "failed to update multi-tenant workflow state using keyspace routing rules")
+		}
+	}
+
 	// We need this to know when there isn't a (non-FROZEN) reverse workflow to use.
 	onlySwitchingReads := !startState.WritesSwitched && !switchPrimary
 
@@ -3398,6 +3406,15 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 		resp.StartState = startState.String()
 		s.Logger().Infof("Before reloading workflow state after switching traffic: %+v\n", resp.StartState)
 		_, currentState, err := s.getWorkflowState(ctx, ts.targetKeyspace, ts.workflow)
+		if ts.IsMultiTenantMigration() {
+			// Multi-tenant migrations use keyspace routing rules, so we need to update the state
+			// using them.
+			sourceKs, targetKs := ts.sourceKeyspace, ts.targetKeyspace
+			if TrafficSwitchDirection(req.Direction) == DirectionBackward {
+				sourceKs, targetKs = targetKs, sourceKs
+			}
+			err = updateKeyspaceRoutingState(ctx, ts.TopoServer(), sourceKs, targetKs, currentState)
+		}
 		if err != nil {
 			resp.CurrentState = fmt.Sprintf("Error reloading workflow state after switching traffic: %v", err)
 		} else {
@@ -3449,11 +3466,7 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 		// shard level traffic switching is all or nothing
 		trafficSwitchingIsAllOrNothing = true
 	case ts.MigrationType() == binlogdatapb.MigrationType_TABLES && ts.IsMultiTenantMigration():
-		if direction == DirectionBackward {
-			return defaultErrorHandler(ts.Logger(), "invalid request", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
-				"requesting reversal of read traffic for multi-tenant migrations is not supported"))
-		}
-		// For multi-tenant migrations, we only support switching traffic to all cells at once
+		// For multi-tenant migrations, we only support switching traffic to all cells at once.
 		allCells, err := ts.TopoServer().GetCellInfoNames(ctx)
 		if err != nil {
 			return nil, err
@@ -3477,7 +3490,7 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 		}
 		if direction == DirectionBackward && switchRdonly && len(state.RdonlyCellsSwitched) == 0 {
 			return defaultErrorHandler(ts.Logger(), "invalid request", vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
-				"requesting reversal of SwitchReads for RDONLYs but RDONLY reads have not been switched"))
+				"requesting reversal of read traffic for RDONLYs but RDONLY reads have not been switched"))
 		}
 	}
 
