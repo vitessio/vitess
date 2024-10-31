@@ -49,6 +49,9 @@ func TestMarshalUnmarshal(t *testing.T) {
 			{Table: "users", Name: "email"},
 			{Table: "orders", Name: "amount"},
 		},
+		JoinPredicates: []JoinPredicate{
+			{LHS: Column{Table: "users", Name: "id"}, RHS: Column{Table: "orders", Name: "user_id"}, Uses: sqlparser.EqualOp},
+		},
 	}
 
 	jsonData, err := json.Marshal(original)

@@ -116,12 +116,45 @@ func (cu *ColumnUse) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+func (jp *JoinPredicate) MarshalJSON() ([]byte, error) {
+	return json.Marshal(jp.String())
+}
+
+func (jp *JoinPredicate) UnmarshalJSON(data []byte) error {
+	var s string
+	if err := json.Unmarshal(data, &s); err != nil {
+		return err
+	}
+	subStrings := strings.Split(s, " ")
+	if len(subStrings) != 3 {
+		return fmt.Errorf("invalid JoinPredicate format: %s", s)
+	}
+
+	op, err := sqlparser.ComparisonExprOperatorFromJson(subStrings[1])
+	if err != nil {
+		return fmt.Errorf("invalid comparison operator: %w", err)
+	}
+	jp.Uses = op
+
+	if err = jp.LHS.UnmarshalJSON([]byte(`"` + subStrings[0] + `"`)); err != nil {
+		return err
+	}
+	if err = jp.RHS.UnmarshalJSON([]byte(`"` + subStrings[2] + `"`)); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (c Column) String() string {
 	return fmt.Sprintf("%s.%s", c.Table, c.Name)
 }
 
 func (cu ColumnUse) String() string {
 	return fmt.Sprintf("%s %s", cu.Column, cu.Uses.JSONString())
+}
+
+func (jp JoinPredicate) String() string {
+	return fmt.Sprintf("%s %s %s", jp.LHS.String(), jp.Uses.JSONString(), jp.RHS.String())
 }
 
 type columnUse struct {
