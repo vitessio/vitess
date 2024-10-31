@@ -187,7 +187,7 @@ func waitForTabletThrottlingStatus(t *testing.T, tablet *cluster.VttabletProcess
 		require.NoError(t, err)
 
 		gotCode, err = jsonparser.GetInt([]byte(output), "StatusCode")
-		require.NoError(t, err)
+		require.NoError(t, err, "waitForTabletThrottlingStatus output: %v", output)
 		if wantCode == gotCode {
 			// Wait for any cached check values to be cleared and the new
 			// status value to be in effect everywhere before returning.
