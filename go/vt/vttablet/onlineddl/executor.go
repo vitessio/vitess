@@ -4724,20 +4724,25 @@ func (e *Executor) ForceCutOverPendingMigrations(ctx context.Context) (result *s
 	return result, nil
 }
 
-func (e *Executor) SetMigrationCutOverThreshold(ctx context.Context, uuid string, cutOverThreshold time.Duration) (result *sqltypes.Result, err error) {
+func (e *Executor) SetMigrationCutOverThreshold(ctx context.Context, uuid string, thresholdString string) (result *sqltypes.Result, err error) {
 	if atomic.LoadInt64(&e.isOpen) == 0 {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, schema.ErrOnlineDDLDisabled.Error())
 	}
 	if !schema.IsOnlineDDLUUID(uuid) {
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "Not a valid migration ID in FORCE_CUTOVER: %s", uuid)
 	}
-	log.Infof("SetMigrationCutOverThreshold: request to set cut-over threshold to %v on migration %s", cutOverThreshold, uuid)
+	threshold, err := time.ParseDuration(thresholdString)
+	if err != nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid cut-over threshold value: %s. Try '5s' to '30s'", thresholdString)
+	}
+
+	log.Infof("SetMigrationCutOverThreshold: request to set cut-over threshold to %v on migration %s", threshold, uuid)
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
-	cutOverThreshold = safeMigrationCutOverThreshold(cutOverThreshold)
-	query, err := sqlparser.ParseAndBind(sqlUpdateForceCutOver,
-		sqltypes.Int64BindVariable(int64(cutOverThreshold.Seconds())),
+	threshold = safeMigrationCutOverThreshold(threshold)
+	query, err := sqlparser.ParseAndBind(sqlUpdateCutOverThresholdSeconds,
+		sqltypes.Int64BindVariable(int64(threshold.Seconds())),
 		sqltypes.StringBindVariable(uuid),
 	)
 	if err != nil {
@@ -4748,7 +4753,7 @@ func (e *Executor) SetMigrationCutOverThreshold(ctx context.Context, uuid string
 		return nil, err
 	}
 	e.triggerNextCheckInterval()
-	log.Infof("SetMigrationCutOverThreshold: migration %s cut-over threshold was set to", uuid, cutOverThreshold)
+	log.Infof("SetMigrationCutOverThreshold: migration %s cut-over threshold was set to", uuid, threshold)
 	return rs, nil
 }
 
