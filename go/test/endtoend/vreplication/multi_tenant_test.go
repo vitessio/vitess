@@ -196,12 +196,26 @@ func TestMultiTenantSimple(t *testing.T) {
 
 	require.Zero(t, len(getKeyspaceRoutingRules(t, vc).Rules))
 
-	mt.Create()
-	confirmKeyspacesRoutedTo(t, sourceKeyspace, "s1", "t1", nil)
-	validateKeyspaceRoutingRules(t, vc, initialRules)
+	createFunc := func() {
+		mt.Create()
+		confirmKeyspacesRoutedTo(t, sourceKeyspace, "s1", "t1", nil)
+		validateKeyspaceRoutingRules(t, vc, initialRules)
 
-	lastIndex = insertRows(lastIndex, sourceKeyspace)
-	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKeyspace, mt.workflowName), binlogdatapb.VReplicationWorkflowState_Running.String())
+		lastIndex = insertRows(lastIndex, sourceKeyspace)
+		waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKeyspace, mt.workflowName), binlogdatapb.VReplicationWorkflowState_Running.String())
+	}
+
+	t.Run("cancel", func(t *testing.T) {
+		// First let's test canceling the workflow to ensure that it properly
+		// cleans up all of the data.
+		createFunc()
+		mt.Cancel()
+		rowCount := getRowCount(t, vtgateConn, fmt.Sprintf("%s.%s", targetKeyspace, "t1"))
+		require.Zero(t, rowCount)
+	})
+
+	// Create again and run it to completion.
+	createFunc()
 
 	vdiff(t, targetKeyspace, workflowName, defaultCellName, false, true, nil)
 	mt.SwitchReads()

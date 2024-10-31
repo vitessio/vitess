@@ -27,10 +27,6 @@ if [ $external = 1 ] ; then
     # This can be overridden by passing VTORC_CONFIG env variable
     echo "Updating $config..."
     cp /vt/vtorc/default.json /vt/vtorc/tmp.json
-    sed  -i '/MySQLTopologyUser/c\  \"MySQLTopologyUser\" : \"'"$DB_USER"'\",' /vt/vtorc/tmp.json
-    sed  -i '/MySQLTopologyPassword/c\  \"MySQLTopologyPassword\" : \"'"$DB_PASS"'\",' /vt/vtorc/tmp.json
-    sed  -i '/MySQLReplicaUser/c\  \"MySQLReplicaUser\" : \"'"$DB_USER"'\",' /vt/vtorc/tmp.json
-    sed  -i '/MySQLReplicaPassword/c\  \"MySQLReplicaPassword\" : \"'"$DB_PASS"'\",' /vt/vtorc/tmp.json
     cat /vt/vtorc/tmp.json
     cp /vt/vtorc/tmp.json /vt/vtorc/config.json
 else

@@ -268,6 +268,11 @@ func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions, re
 		conn.Release(tx.ConnInitFail)
 		return nil, "", "", err
 	}
+	// If we have applied any settings on the connection, then we need to record the query
+	// in case we need to redo the transaction because of a failure.
+	if setting != nil {
+		conn.TxProperties().RecordQueryDetail(setting.ApplyQuery(), nil)
+	}
 	return conn, sql, sessionStateChanges, nil
 }
 

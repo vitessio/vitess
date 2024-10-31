@@ -167,8 +167,14 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		}
 		defer conn.Unlock()
 		if qre.setting != nil {
-			if err = conn.ApplySetting(qre.ctx, qre.setting); err != nil {
+			applied, err := conn.ApplySetting(qre.ctx, qre.setting)
+			if err != nil {
 				return nil, vterrors.Wrap(err, "failed to execute system setting on the connection")
+			}
+			// If we have applied the settings on the connection, then we should record the query detail.
+			// This is required for redoing the transaction in case of a failure.
+			if applied {
+				conn.TxProperties().RecordQueryDetail(qre.setting.ApplyQuery(), nil)
 			}
 		}
 		return qre.txConnExec(conn)
@@ -278,8 +284,10 @@ func (qre *QueryExecutor) execAsTransaction(f func(conn *StatefulConnection) (*s
 
 func (qre *QueryExecutor) txConnExec(conn *StatefulConnection) (*sqltypes.Result, error) {
 	switch qre.plan.PlanID {
-	case p.PlanInsert, p.PlanUpdate, p.PlanDelete, p.PlanSet:
+	case p.PlanInsert, p.PlanUpdate, p.PlanDelete:
 		return qre.txFetch(conn, true)
+	case p.PlanSet:
+		return qre.txFetch(conn, false)
 	case p.PlanInsertMessage:
 		qre.bindVars["#time_now"] = sqltypes.Int64BindVariable(time.Now().UnixNano())
 		return qre.txFetch(conn, true)
@@ -382,7 +390,7 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 		}
 		defer txConn.Unlock()
 		if qre.setting != nil {
-			if err = txConn.ApplySetting(qre.ctx, qre.setting); err != nil {
+			if _, err = txConn.ApplySetting(qre.ctx, qre.setting); err != nil {
 				return vterrors.Wrap(err, "failed to execute system setting on the connection")
 			}
 		}

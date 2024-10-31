@@ -88,6 +88,8 @@ func ClearOutTable(t *testing.T, vtParams mysql.ConnParams, tableName string) {
 // WriteTestCommunicationFile writes the content to the file with the given name.
 // We use these files to coordinate with the vttablets running in the debug mode.
 func WriteTestCommunicationFile(t *testing.T, fileName string, content string) {
+	// Delete the file just to make sure it doesn't exist before we write to it.
+	DeleteFile(fileName)
 	err := os.WriteFile(path.Join(os.Getenv("VTDATAROOT"), fileName), []byte(content), 0644)
 	require.NoError(t, err)
 }
@@ -219,5 +221,20 @@ func AddShards(t *testing.T, clusterInstance *cluster.LocalProcessCluster, keysp
 		shard, err := clusterInstance.AddShard(keyspaceName, shardName, 3, false, nil)
 		require.NoError(t, err)
 		clusterInstance.Keyspaces[0].Shards = append(clusterInstance.Keyspaces[0].Shards, *shard)
+	}
+}
+
+type Warn struct {
+	Level string
+	Code  uint16
+	Msg   string
+}
+
+func ToWarn(row sqltypes.Row) Warn {
+	code, _ := row[1].ToUint16()
+	return Warn{
+		Level: row[0].ToString(),
+		Code:  code,
+		Msg:   row[2].ToString(),
 	}
 }

@@ -763,14 +763,15 @@ options:PassthroughDMLs
 # analyze
 "analyze table a"
 {
-  "PlanID": "OtherRead",
+  "PlanID": "Select",
   "TableName": "",
   "Permissions": [
-      {
-        "TableName": "a",
-        "Role": 1
-      }
-  ]
+    {
+      "TableName": "a",
+      "Role": 1
+    }
+  ],
+  "FullQuery": "analyze table a"
 }
 
 # show
@@ -783,15 +784,17 @@ options:PassthroughDMLs
 # describe
 "describe a"
 {
-  "PlanID": "OtherRead",
-  "TableName": ""
+  "PlanID": "Select",
+  "TableName": "",
+  "FullQuery": "explain a"
 }
 
 # explain
 "explain a"
 {
-  "PlanID": "OtherRead",
-  "TableName": ""
+  "PlanID": "Select",
+  "TableName": "",
+  "FullQuery": "explain a"
 }
 
 # repair
