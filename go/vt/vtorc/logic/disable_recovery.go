@@ -41,12 +41,12 @@ import (
 // IsRecoveryDisabled returns true if Recoveries are disabled globally
 func IsRecoveryDisabled() (disabled bool, err error) {
 	query := `
-		SELECT
-			COUNT(*) as mycount
-		FROM
+		select	
+			count(*) as mycount
+		from
 			global_recovery_disable
-		WHERE
-			disable_recovery=?
+		where
+			disable_recovery = ?
 		`
 	err = db.QueryVTOrc(query, sqlutils.Args(1), func(m sqlutils.RowMap) error {
 		mycount := m.GetInt("mycount")
@@ -64,11 +64,10 @@ func IsRecoveryDisabled() (disabled bool, err error) {
 // DisableRecovery ensures recoveries are disabled globally
 func DisableRecovery() error {
 	_, err := db.ExecVTOrc(`
-		INSERT IGNORE INTO global_recovery_disable
+		insert or ignore into global_recovery_disable
 			(disable_recovery)
-		VALUES  (1)
-	`,
-	)
+		values(1)
+	`)
 	return err
 }
 
@@ -76,8 +75,7 @@ func DisableRecovery() error {
 func EnableRecovery() error {
 	// The "WHERE" clause is just to avoid full-scan reports by monitoring tools
 	_, err := db.ExecVTOrc(`
-		DELETE FROM global_recovery_disable WHERE disable_recovery >= 0
-	`,
-	)
+		delete from global_recovery_disable where disable_recovery >= 0
+	`)
 	return err
 }

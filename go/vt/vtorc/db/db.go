@@ -57,19 +57,13 @@ func OpenVTOrc() (db *sql.DB, err error) {
 	return db, err
 }
 
-func translateStatement(statement string) string {
-	return sqlutils.ToSqlite3Dialect(statement)
-}
-
 // registerVTOrcDeployment updates the vtorc_db_deployments table upon successful deployment
 func registerVTOrcDeployment(db *sql.DB) error {
-	query := `
-    	replace into vtorc_db_deployments (
-				deployed_version, deployed_timestamp
-			) values (
-				?, NOW()
-			)
-				`
+	query := `replace into vtorc_db_deployments (
+		deployed_version, deployed_timestamp
+	) values (
+		?, datetime('now')
+	)`
 	if _, err := execInternal(db, query, ""); err != nil {
 		log.Fatalf("Unable to write to vtorc_db_deployments: %+v", err)
 	}
@@ -84,7 +78,6 @@ func deployStatements(db *sql.DB, queries []string) error {
 		log.Fatal(err.Error())
 	}
 	for _, query := range queries {
-		query = translateStatement(query)
 		if _, err := tx.Exec(query); err != nil {
 			if strings.Contains(err.Error(), "syntax error") {
 				log.Fatalf("Cannot initiate vtorc: %+v; query=%+v", err, query)
@@ -134,10 +127,7 @@ func initVTOrcDB(db *sql.DB) error {
 
 // execInternal
 func execInternal(db *sql.DB, query string, args ...any) (sql.Result, error) {
-	var err error
-	query = translateStatement(query)
-	res, err := sqlutils.ExecNoPrepare(db, query, args...)
-	return res, err
+	return sqlutils.ExecNoPrepare(db, query, args...)
 }
 
 // ExecVTOrc will execute given query on the vtorc backend database.
@@ -151,7 +141,6 @@ func ExecVTOrc(query string, args ...any) (sql.Result, error) {
 
 // QueryVTOrcRowsMap
 func QueryVTOrcRowsMap(query string, onRow func(sqlutils.RowMap) error) error {
-	query = translateStatement(query)
 	db, err := OpenVTOrc()
 	if err != nil {
 		return err
@@ -162,7 +151,6 @@ func QueryVTOrcRowsMap(query string, onRow func(sqlutils.RowMap) error) error {
 
 // QueryVTOrc
 func QueryVTOrc(query string, argsArray []any, onRow func(sqlutils.RowMap) error) error {
-	query = translateStatement(query)
 	db, err := OpenVTOrc()
 	if err != nil {
 		return err

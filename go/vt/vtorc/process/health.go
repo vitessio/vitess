@@ -40,7 +40,7 @@ func writeHealthToDatabase() bool {
 		log.Error(err)
 		return false
 	}
-	sqlResult, err := db.ExecVTOrc(`insert into node_health (last_seen_active) values (now())`)
+	sqlResult, err := db.ExecVTOrc(`insert into node_health (last_seen_active) values (datetime('now'))`)
 	if err != nil {
 		log.Error(err)
 		return false

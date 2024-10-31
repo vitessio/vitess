@@ -31,20 +31,19 @@ import (
 // InsertRecoveryDetection inserts the recovery analysis that has been detected.
 func InsertRecoveryDetection(analysisEntry *inst.ReplicationAnalysis) error {
 	sqlResult, err := db.ExecVTOrc(`
-			insert ignore
-				into recovery_detection (
-					alias,
-					analysis,
-					keyspace,
-					shard,
-					detection_timestamp
-				) values (
-					?,
-					?,
-					?,
-					?,
-					now()
-				)`,
+		insert or ignore into recovery_detection (
+			alias,
+			analysis,
+			keyspace,
+			shard,
+			detection_timestamp
+		) values (
+			?,
+			?,
+			?,
+			?,
+			datetime('now')
+		)`,
 		analysisEntry.AnalyzedInstanceAlias,
 		string(analysisEntry.Analysis),
 		analysisEntry.ClusterDetails.Keyspace,
@@ -66,25 +65,23 @@ func InsertRecoveryDetection(analysisEntry *inst.ReplicationAnalysis) error {
 func writeTopologyRecovery(topologyRecovery *TopologyRecovery) (*TopologyRecovery, error) {
 	analysisEntry := topologyRecovery.AnalysisEntry
 	sqlResult, err := db.ExecVTOrc(`
-			insert ignore
-				into topology_recovery (
-					recovery_id,
-					alias,
-					start_recovery,
-					analysis,
-					keyspace,
-					shard,
-					detection_id
-				) values (
-					?,
-					?,
-					NOW(),
-					?,
-					?,
-					?,
-					?
-				)
-			`,
+		insert or ignore into topology_recovery (
+			recovery_id,
+			alias,
+			start_recovery,
+			analysis,
+			keyspace,
+			shard,
+			detection_id
+		) values (
+			?,
+			?,
+			datetime('now'),
+			?,
+			?,
+			?,
+			?
+		)`,
 		sqlutils.NilIfZero(topologyRecovery.ID),
 		analysisEntry.AnalyzedInstanceAlias,
 		string(analysisEntry.Analysis),
@@ -139,14 +136,15 @@ func AttemptRecoveryRegistration(analysisEntry *inst.ReplicationAnalysis) (*Topo
 // It does not clear the "active period" as this still takes place in order to avoid flapping.
 func writeResolveRecovery(topologyRecovery *TopologyRecovery) error {
 	_, err := db.ExecVTOrc(`
-			update topology_recovery set
-				is_successful = ?,
-				successor_alias = ?,
-				all_errors = ?,
-				end_recovery = NOW()
-			where
-				recovery_id = ?
-			`, topologyRecovery.IsSuccessful,
+		update topology_recovery set
+			is_successful = ?,
+			successor_alias = ?,
+			all_errors = ?,
+			end_recovery = datetime('now')
+		where
+			recovery_id = ?
+		`,
+		topologyRecovery.IsSuccessful,
 		topologyRecovery.SuccessorAlias,
 		strings.Join(topologyRecovery.AllErrors, "\n"),
 		topologyRecovery.ID,
@@ -237,11 +235,14 @@ func ReadRecentRecoveries(page int) ([]*TopologyRecovery, error) {
 // writeTopologyRecoveryStep writes down a single step in a recovery process
 func writeTopologyRecoveryStep(topologyRecoveryStep *TopologyRecoveryStep) error {
 	sqlResult, err := db.ExecVTOrc(`
-			insert ignore
-				into topology_recovery_steps (
-					recovery_step_id, recovery_id, audit_at, message
-				) values (?, ?, now(), ?)
-			`, sqlutils.NilIfZero(topologyRecoveryStep.ID), topologyRecoveryStep.RecoveryID, topologyRecoveryStep.Message,
+		insert or ignore into topology_recovery_steps (
+			recovery_step_id, recovery_id, audit_at, message
+		) values (
+			?, ?, datetime('now'), ?,
+		)`,
+		sqlutils.NilIfZero(topologyRecoveryStep.ID),
+		topologyRecoveryStep.RecoveryID,
+		topologyRecoveryStep.Message,
 	)
 	if err != nil {
 		log.Error(err)

@@ -70,215 +70,215 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 	// TODO(sougou); deprecate ReduceReplicationAnalysisCount
 	args := sqlutils.Args(config.Config.ReasonableReplicationLagSeconds, ValidSecondsFromSeenToLastAttemptedCheck(), config.Config.ReasonableReplicationLagSeconds, keyspace, shard)
 	query := `
-	SELECT
-		vitess_tablet.info AS tablet_info,
+	select
+		vitess_tablet.info as tablet_info,
 		vitess_tablet.tablet_type,
 		vitess_tablet.primary_timestamp,
-		vitess_tablet.shard AS shard,
-		vitess_keyspace.keyspace AS keyspace,
-		vitess_keyspace.keyspace_type AS keyspace_type,
-		vitess_keyspace.durability_policy AS durability_policy,
-		vitess_shard.primary_timestamp AS shard_primary_term_timestamp,
-		primary_instance.read_only AS read_only,
-		MIN(primary_instance.gtid_errant) AS gtid_errant, 
-		MIN(primary_instance.alias) IS NULL AS is_invalid,
-		MIN(primary_instance.binary_log_file) AS binary_log_file,
-		MIN(primary_instance.binary_log_pos) AS binary_log_pos,
-		MIN(primary_instance.replica_net_timeout) AS replica_net_timeout,
-		MIN(primary_instance.heartbeat_interval) AS heartbeat_interval,
-		MIN(primary_tablet.info) AS primary_tablet_info,
-		MIN(
-			IFNULL(
+		vitess_tablet.shard as shard,
+		vitess_keyspace.keyspace as keyspace,
+		vitess_keyspace.keyspace_type as keyspace_type,
+		vitess_keyspace.durability_policy as durability_policy,
+		vitess_shard.primary_timestamp as shard_primary_term_timestamp,
+		primary_instance.read_only as read_only,
+		min(primary_instance.gtid_errant) as gtid_errant,
+		min(primary_instance.alias) IS NULL as is_invalid,
+		min(primary_instance.binary_log_file) as binary_log_file,
+		min(primary_instance.binary_log_pos) as binary_log_pos,
+		min(primary_instance.replica_net_timeout) as replica_net_timeout,
+		min(primary_instance.heartbeat_interval) as heartbeat_interval,
+		min(primary_tablet.info) as primary_tablet_info,
+		min(
+			ifnull(
 				primary_instance.binary_log_file = database_instance_stale_binlog_coordinates.binary_log_file
-				AND primary_instance.binary_log_pos = database_instance_stale_binlog_coordinates.binary_log_pos
-				AND database_instance_stale_binlog_coordinates.first_seen < NOW() - interval ? second,
+				and primary_instance.binary_log_pos = database_instance_stale_binlog_coordinates.binary_log_pos
+				and database_instance_stale_binlog_coordinates.first_seen < datetime('now', printf('-%d second', ?)),
 				0
 			)
-		) AS is_stale_binlog_coordinates,
-		MIN(
+		) as is_stale_binlog_coordinates,
+		min(
 			primary_instance.last_checked <= primary_instance.last_seen
-			and primary_instance.last_attempted_check <= primary_instance.last_seen + interval ? second
-		) = 1 AS is_last_check_valid,
-		/* To be considered a primary, traditional async replication must not be present/valid AND the host should either */
+			and primary_instance.last_attempted_check <= datetime(primary_instance.last_seen, printf('+%d second', ?))
+		) = 1 as is_last_check_valid,
+		/* To be considered a primary, traditional async replication must not be present/valid and the host should either */
 		/* not be a replication group member OR be the primary of the replication group */
-		MIN(primary_instance.last_check_partial_success) as last_check_partial_success,
-		MIN(
+		min(primary_instance.last_check_partial_success) as last_check_partial_success,
+		min(
 			(
-				primary_instance.source_host IN ('', '_')
+				primary_instance.source_host in ('', '_')
 				OR primary_instance.source_port = 0
 				OR substr(primary_instance.source_host, 1, 2) = '//'
 			)
-		) AS is_primary,
-		MIN(primary_instance.gtid_mode) AS gtid_mode,
-		COUNT(replica_instance.server_id) AS count_replicas,
-		IFNULL(
-			SUM(
+		) as is_primary,
+		min(primary_instance.gtid_mode) as gtid_mode,
+		count(replica_instance.server_id) as count_replicas,
+		ifnull(
+			sum(
 				replica_instance.last_checked <= replica_instance.last_seen
 			),
 			0
-		) AS count_valid_replicas,
-		IFNULL(
-			SUM(
+		) as count_valid_replicas,
+		ifnull(
+			sum(
 				replica_instance.last_checked <= replica_instance.last_seen
-				AND replica_instance.replica_io_running != 0
-				AND replica_instance.replica_sql_running != 0
+				and replica_instance.replica_io_running != 0
+				and replica_instance.replica_sql_running != 0
 			),
 			0
-		) AS count_valid_replicating_replicas,
-		IFNULL(
-			SUM(
+		) as count_valid_replicating_replicas,
+		ifnull(
+			sum(
 				replica_instance.last_checked <= replica_instance.last_seen
-				AND replica_instance.replica_io_running = 0
-				AND replica_instance.last_io_error like '%%error %%connecting to master%%'
-				AND replica_instance.replica_sql_running = 1
+				and replica_instance.replica_io_running = 0
+				and replica_instance.last_io_error like '%%error %%connecting to master%%'
+				and replica_instance.replica_sql_running = 1
 			),
 			0
-		) AS count_replicas_failing_to_connect_to_primary,
-		MIN(
+		) as count_replicas_failing_to_connect_to_primary,
+		min(
 			primary_instance.replica_sql_running = 0
 			OR primary_instance.replica_io_running = 0
-		) AS replication_stopped,
-		MIN(
+		) as replication_stopped,
+		min(
 			primary_instance.supports_oracle_gtid
-		) AS supports_oracle_gtid,
-		MIN(
+		) as supports_oracle_gtid,
+		min(
 			primary_instance.semi_sync_primary_enabled
-		) AS semi_sync_primary_enabled,
-		MIN(
+		) as semi_sync_primary_enabled,
+		min(
 			primary_instance.semi_sync_primary_wait_for_replica_count
-		) AS semi_sync_primary_wait_for_replica_count,
-		MIN(
+		) as semi_sync_primary_wait_for_replica_count,
+		min(
 			primary_instance.semi_sync_primary_clients
-		) AS semi_sync_primary_clients,
-		MIN(
+		) as semi_sync_primary_clients,
+		min(
 			primary_instance.semi_sync_primary_status
-		) AS semi_sync_primary_status,
-		MIN(
+		) as semi_sync_primary_status,
+		min(
 			primary_instance.semi_sync_replica_enabled
-		) AS semi_sync_replica_enabled,
-		SUM(replica_instance.oracle_gtid) AS count_oracle_gtid_replicas,
-		IFNULL(
-			SUM(
+		) as semi_sync_replica_enabled,
+		sum(replica_instance.oracle_gtid) as count_oracle_gtid_replicas,
+		ifnull(
+			sum(
 				replica_instance.last_checked <= replica_instance.last_seen
-				AND replica_instance.oracle_gtid != 0
+				and replica_instance.oracle_gtid != 0
 			),
 			0
-		) AS count_valid_oracle_gtid_replicas,
-		SUM(
+		) as count_valid_oracle_gtid_replicas,
+		sum(
 			replica_instance.binlog_server
-		) AS count_binlog_server_replicas,
-		IFNULL(
-			SUM(
+		) as count_binlog_server_replicas,
+		ifnull(
+			sum(
 				replica_instance.last_checked <= replica_instance.last_seen
-				AND replica_instance.binlog_server != 0
+				and replica_instance.binlog_server != 0
 			),
 			0
-		) AS count_valid_binlog_server_replicas,
-		SUM(
+		) as count_valid_binlog_server_replicas,
+		sum(
 			replica_instance.semi_sync_replica_enabled
-		) AS count_semi_sync_replicas,
-		IFNULL(
-			SUM(
+		) as count_semi_sync_replicas,
+		ifnull(
+			sum(
 				replica_instance.last_checked <= replica_instance.last_seen
-				AND replica_instance.semi_sync_replica_enabled != 0
+				and replica_instance.semi_sync_replica_enabled != 0
 			),
 			0
-		) AS count_valid_semi_sync_replicas,
-		MIN(
+		) as count_valid_semi_sync_replicas,
+		min(
 			primary_instance.mariadb_gtid
-		) AS is_mariadb_gtid,
-		SUM(replica_instance.mariadb_gtid) AS count_mariadb_gtid_replicas,
-		IFNULL(
-			SUM(
+		) as is_mariadb_gtid,
+		sum(replica_instance.mariadb_gtid) as count_mariadb_gtid_replicas,
+		ifnull(
+			sum(
 				replica_instance.last_checked <= replica_instance.last_seen
-				AND replica_instance.mariadb_gtid != 0
+				and replica_instance.mariadb_gtid != 0
 			),
 			0
-		) AS count_valid_mariadb_gtid_replicas,
-		IFNULL(
-			SUM(
+		) as count_valid_mariadb_gtid_replicas,
+		ifnull(
+			sum(
 				replica_instance.log_bin
-				AND replica_instance.log_replica_updates
+				and replica_instance.log_replica_updates
 			),
 			0
-		) AS count_logging_replicas,
-		IFNULL(
-			SUM(
+		) as count_logging_replicas,
+		ifnull(
+			sum(
 				replica_instance.log_bin
-				AND replica_instance.log_replica_updates
-				AND replica_instance.binlog_format = 'STATEMENT'
+				and replica_instance.log_replica_updates
+				and replica_instance.binlog_format = 'STATEMENT'
 			),
 			0
-		) AS count_statement_based_logging_replicas,
-		IFNULL(
-			SUM(
+		) as count_statement_based_logging_replicas,
+		ifnull(
+			sum(
 				replica_instance.log_bin
-				AND replica_instance.log_replica_updates
-				AND replica_instance.binlog_format = 'MIXED'
+				and replica_instance.log_replica_updates
+				and replica_instance.binlog_format = 'MIXED'
 			),
 			0
-		) AS count_mixed_based_logging_replicas,
-		IFNULL(
-			SUM(
+		) as count_mixed_based_logging_replicas,
+		ifnull(
+			sum(
 				replica_instance.log_bin
-				AND replica_instance.log_replica_updates
-				AND replica_instance.binlog_format = 'ROW'
+				and replica_instance.log_replica_updates
+				and replica_instance.binlog_format = 'ROW'
 			),
 			0
-		) AS count_row_based_logging_replicas,
-		IFNULL(
-			SUM(replica_instance.sql_delay > 0),
+		) as count_row_based_logging_replicas,
+		ifnull(
+			sum(replica_instance.sql_delay > 0),
 			0
-		) AS count_delayed_replicas,
-		IFNULL(
-			SUM(replica_instance.replica_lag_seconds > ?),
+		) as count_delayed_replicas,
+		ifnull(
+			sum(replica_instance.replica_lag_seconds > ?),
 			0
-		) AS count_lagging_replicas,
-		IFNULL(MIN(replica_instance.gtid_mode), '') AS min_replica_gtid_mode,
-		IFNULL(MAX(replica_instance.gtid_mode), '') AS max_replica_gtid_mode,
-		IFNULL(
-			MAX(
+		) as count_lagging_replicas,
+		ifnull(min(replica_instance.gtid_mode), '') as min_replica_gtid_mode,
+		ifnull(max(replica_instance.gtid_mode), '') as max_replica_gtid_mode,
+		ifnull(
+			max(
 				replica_instance.gtid_errant
 			),
 			''
-		) AS max_replica_gtid_errant,
-		COUNT(
-			DISTINCT case when replica_instance.log_bin
-			AND replica_instance.log_replica_updates then replica_instance.major_version else NULL end
-		) AS count_distinct_logging_major_versions
+		) as max_replica_gtid_errant,
+		count(
+			distinct case when replica_instance.log_bin
+			and replica_instance.log_replica_updates then replica_instance.major_version else NULL end
+		) as count_distinct_logging_major_versions
 	FROM
 		vitess_tablet
-		JOIN vitess_keyspace ON (
+		join vitess_keyspace on (
 			vitess_tablet.keyspace = vitess_keyspace.keyspace
 		)
-		JOIN vitess_shard ON (
+		join vitess_shard on (
 			vitess_tablet.keyspace = vitess_shard.keyspace
-			AND vitess_tablet.shard = vitess_shard.shard
+			and vitess_tablet.shard = vitess_shard.shard
 		)
-		LEFT JOIN database_instance primary_instance ON (
+		left join database_instance primary_instance on (
 			vitess_tablet.alias = primary_instance.alias
-			AND vitess_tablet.hostname = primary_instance.hostname
-			AND vitess_tablet.port = primary_instance.port
+			and vitess_tablet.hostname = primary_instance.hostname
+			and vitess_tablet.port = primary_instance.port
 		)
-		LEFT JOIN vitess_tablet primary_tablet ON (
+		left join vitess_tablet primary_tablet on (
 			primary_tablet.hostname = primary_instance.source_host
-			AND primary_tablet.port = primary_instance.source_port
+			and primary_tablet.port = primary_instance.source_port
 		)
-		LEFT JOIN database_instance replica_instance ON (
+		left join database_instance replica_instance on (
 			primary_instance.hostname = replica_instance.source_host
-			AND primary_instance.port = replica_instance.source_port
+			and primary_instance.port = replica_instance.source_port
 		)
-		LEFT JOIN database_instance_stale_binlog_coordinates ON (
+		left join database_instance_stale_binlog_coordinates on (
 			vitess_tablet.alias = database_instance_stale_binlog_coordinates.alias
 		)
-	WHERE
-		? IN ('', vitess_keyspace.keyspace)
-		AND ? IN ('', vitess_tablet.shard)
-	GROUP BY
+	where
+		? in ('', vitess_keyspace.keyspace)
+		and ? in ('', vitess_tablet.shard)
+	group by
 		vitess_tablet.alias
-	ORDER BY
-		vitess_tablet.tablet_type ASC,
-		vitess_tablet.primary_timestamp DESC
+	order by
+		vitess_tablet.tablet_type asC,
+		vitess_tablet.primary_timestamp desc
 	`
 
 	clusters := make(map[string]*clusterAnalysis)
@@ -658,7 +658,7 @@ func auditInstanceAnalysisInChangelog(tabletAlias string, analysisCode AnalysisC
 		sqlResult, err := db.ExecVTOrc(`
 			update database_instance_last_analysis set
 				analysis = ?,
-				analysis_timestamp = now()
+				analysis_timestamp = datetime('now')
 			where
 				alias = ?
 				and analysis != ?
@@ -683,12 +683,11 @@ func auditInstanceAnalysisInChangelog(tabletAlias string, analysisCode AnalysisC
 	if !lastAnalysisChanged {
 		// The insert only returns more than 1 row changed if this is the first insertion.
 		sqlResult, err := db.ExecVTOrc(`
-			insert ignore into database_instance_last_analysis (
-					alias, analysis_timestamp, analysis
-				) values (
-					?, now(), ?
-				)
-			`,
+			insert or ignore into database_instance_last_analysis (
+				alias, analysis_timestamp, analysis
+			) values (
+				?, datetime('now'), ?
+			)`,
 			tabletAlias, string(analysisCode),
 		)
 		if err != nil {
@@ -709,12 +708,11 @@ func auditInstanceAnalysisInChangelog(tabletAlias string, analysisCode AnalysisC
 	}
 
 	_, err := db.ExecVTOrc(`
-			insert into database_instance_analysis_changelog (
-					alias, analysis_timestamp, analysis
-				) values (
-					?, now(), ?
-				)
-			`,
+		insert into database_instance_analysis_changelog (
+			alias, analysis_timestamp, analysis
+		) values (
+			?, datetime('now'), ?
+		)`,
 		tabletAlias, string(analysisCode),
 	)
 	if err == nil {
@@ -728,11 +726,11 @@ func auditInstanceAnalysisInChangelog(tabletAlias string, analysisCode AnalysisC
 // ExpireInstanceAnalysisChangelog removes old-enough analysis entries from the changelog
 func ExpireInstanceAnalysisChangelog() error {
 	_, err := db.ExecVTOrc(`
-			delete
-				from database_instance_analysis_changelog
-			where
-				analysis_timestamp < now() - interval ? hour
-			`,
+		delete
+			from database_instance_analysis_changelog
+		where
+			analysis_timestamp < datetime('now', printf('-%d hour', ?))
+		`,
 		config.UnseenInstanceForgetHours,
 	)
 	if err != nil {

@@ -85,13 +85,11 @@ func SaveTablet(tablet *topodatapb.Tablet) error {
 		return err
 	}
 	_, err = db.ExecVTOrc(`
-		replace
-			into vitess_tablet (
-				alias, hostname, port, cell, keyspace, shard, tablet_type, primary_timestamp, info
-			) values (
-				?, ?, ?, ?, ?, ?, ?, ?, ?
-			)
-		`,
+		replace	into vitess_tablet (
+			alias, hostname, port, cell, keyspace, shard, tablet_type, primary_timestamp, info
+		) values (
+			?, ?, ?, ?, ?, ?, ?, ?, ?
+		)`,
 		topoproto.TabletAliasString(tablet.Alias),
 		tablet.MysqlHostname,
 		int(tablet.MysqlPort),

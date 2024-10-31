@@ -114,10 +114,9 @@ func ExecDBWriteFunc(f func() error) error {
 
 func ExpireTableData(tableName string, timestampColumn string) error {
 	writeFunc := func() error {
-		_, err := db.ExecVTOrc(
-			fmt.Sprintf("delete from %s where %s < NOW() - INTERVAL ? DAY", tableName, timestampColumn),
-			config.Config.AuditPurgeDays,
-		)
+		query := fmt.Sprintf("delete from %s where %s < datetime('now', printf('-%%d day', ?))",
+			tableName, timestampColumn)
+		_, err := db.ExecVTOrc(query, config.Config.AuditPurgeDays)
 		return err
 	}
 	return ExecDBWriteFunc(writeFunc)
@@ -581,20 +580,22 @@ func readInstancesByCondition(condition string, args []any, sort string) ([](*In
 			sort = `alias`
 		}
 		query := fmt.Sprintf(`
-		select
-			*,
-			unix_timestamp() - unix_timestamp(last_checked) as seconds_since_last_checked,
-			ifnull(last_checked <= last_seen, 0) as is_last_check_valid,
-			unix_timestamp() - unix_timestamp(last_seen) as seconds_since_last_seen
-		from
-			vitess_tablet
-			left join database_instance using (alias, hostname, port)
-		where
-			%s
-		order by
-			%s
-			`, condition, sort)
-
+			select
+				*,
+				strftime('%%s', 'now') - strftime('%%s', last_checked) as seconds_since_last_checked,
+				ifnull(last_checked <= last_seen, 0) as is_last_check_valid,
+				strftime('%%s', 'now') - strftime('%%s', last_seen) as seconds_since_last_seen
+			from
+				vitess_tablet
+				left join database_instance using (alias, hostname, port)
+			where
+				%s
+			order by
+				%s
+			`,
+			condition,
+			sort,
+		)
 		err := db.QueryVTOrc(query, args, func(m sqlutils.RowMap) error {
 			instance := readInstanceRow(m)
 			instances = append(instances, instance)
@@ -637,7 +638,7 @@ func ReadProblemInstances(keyspace string, shard string) ([](*Instance), error) 
 			and shard LIKE (CASE WHEN ? = '' THEN '%' ELSE ? END)
 			and (
 				(last_seen < last_checked)
-				or (unix_timestamp() - unix_timestamp(last_checked) > ?)
+				or (strftime('%s', 'now') - strftime('%s', last_checked) > ?)
 				or (replication_sql_thread_state not in (-1 ,1))
 				or (replication_io_thread_state not in (-1 ,1))
 				or (abs(cast(replication_lag_seconds as signed) - cast(sql_delay as signed)) > ?)
@@ -696,26 +697,25 @@ func GetKeyspaceShardName(tabletAlias string) (keyspace string, shard string, er
 func ReadOutdatedInstanceKeys() ([]string, error) {
 	var res []string
 	query := `
-		SELECT
+		select
 			alias
-		FROM
+		from
 			database_instance
-		WHERE
-			CASE
-				WHEN last_attempted_check <= last_checked
-				THEN last_checked < now() - interval ? second
-				ELSE last_checked < now() - interval ? second
-			END
-		UNION
-		SELECT
+		where
+			case
+				when last_attempted_check <= last_checked
+				then last_checked < datetime('now', printf('-%d second', ?))
+				else last_checked < datetime('now', printf('-%d second', ?))
+			end
+		union
+		select
 			vitess_tablet.alias
-		FROM
-			vitess_tablet LEFT JOIN database_instance ON (
+		from
+			vitess_tablet left join database_instance on (
 			vitess_tablet.alias = database_instance.alias
 		)
-		WHERE
-			database_instance.alias IS NULL
-			`
+		where
+			database_instance.alias is null`
 	args := sqlutils.Args(config.Config.InstancePollSeconds, 2*config.Config.InstancePollSeconds)
 
 	err := db.QueryVTOrc(query, args, func(m sqlutils.RowMap) error {
@@ -745,34 +745,34 @@ func mkInsertOdku(table string, columns []string, values []string, nrRows int, i
 	}
 
 	var q strings.Builder
-	var ignore string
+	prefix := "replace"
 	if insertIgnore {
-		ignore = "ignore"
+		prefix = "insert or ignore"
 	}
 	valRow := fmt.Sprintf("(%s)", strings.Join(values, ", "))
 	var val strings.Builder
 	val.WriteString(valRow)
 	for i := 1; i < nrRows; i++ {
-		val.WriteString(",\n                ") // indent VALUES, see below
+		val.WriteString(",\n                ") // indent values(), see below
 		val.WriteString(valRow)
 	}
 
 	col := strings.Join(columns, ", ")
 	var odku strings.Builder
-	odku.WriteString(fmt.Sprintf("%s=VALUES(%s)", columns[0], columns[0]))
+	odku.WriteString(fmt.Sprintf("%s=values(%s)", columns[0], columns[0]))
 	for _, c := range columns[1:] {
 		odku.WriteString(", ")
-		odku.WriteString(fmt.Sprintf("%s=VALUES(%s)", c, c))
+		odku.WriteString(fmt.Sprintf("%s=values(%s)", c, c))
 	}
 
-	q.WriteString(fmt.Sprintf(`INSERT %s INTO %s
+	q.WriteString(fmt.Sprintf(`%s into %s
                 (%s)
-        VALUES
+        values
                 %s
-        ON DUPLICATE KEY UPDATE
+	on duplicate key update
                 %s
         `,
-		ignore, table, col, val.String(), odku.String()))
+		prefix, table, col, val.String(), odku.String()))
 
 	return q.String(), nil
 }
@@ -858,19 +858,19 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 	for i := range columns {
 		values[i] = "?"
 	}
-	values[3] = "NOW()" // last_checked
-	values[4] = "NOW()" // last_attempted_check
-	values[5] = "1"     // last_check_partial_success
+	values[3] = "datetime('now')" // last_checked
+	values[4] = "datetime('now')" // last_attempted_check
+	values[5] = "1"               // last_check_partial_success
 
 	if updateLastSeen {
 		columns = append(columns, "last_seen")
-		values = append(values, "NOW()")
+		values = append(values, "datetime('now')")
 	}
 
 	var args []any
 	for _, instance := range instances {
 		// number of columns minus 2 as last_checked and last_attempted_check
-		// updated with NOW()
+		// updated with datetime('now')
 		args = append(args, instance.InstanceAlias)
 		args = append(args, instance.Hostname)
 		args = append(args, instance.Port)
@@ -981,13 +981,14 @@ func WriteInstance(instance *Instance, instanceWasActuallyFound bool, lastError 
 func UpdateInstanceLastChecked(tabletAlias string, partialSuccess bool) error {
 	writeFunc := func() error {
 		_, err := db.ExecVTOrc(`
-        	update
-        		database_instance
-        	set
-						last_checked = NOW(),
-						last_check_partial_success = ?
+        		update
+        			database_instance
+	        	set
+				last_checked = datetime('now'),
+				last_check_partial_success = ?
 			where
-				alias = ?`,
+				alias = ?
+			`,
 			partialSuccess,
 			tabletAlias,
 		)
@@ -1010,12 +1011,11 @@ func UpdateInstanceLastChecked(tabletAlias string, partialSuccess bool) error {
 func UpdateInstanceLastAttemptedCheck(tabletAlias string) error {
 	writeFunc := func() error {
 		_, err := db.ExecVTOrc(`
-    	update
-    		database_instance
-    	set
-    		last_attempted_check = NOW()
+			update database_instance set
+				last_attempted_check = datetime('now')
 			where
-				alias = ?`,
+				alias = ?
+			`,
 			tabletAlias,
 		)
 		if err != nil {
@@ -1046,26 +1046,14 @@ func ForgetInstance(tabletAlias string) error {
 	currentErrantGTIDCount.Reset(tabletAlias)
 
 	// Delete from the 'vitess_tablet' table.
-	_, err := db.ExecVTOrc(`
-					delete
-						from vitess_tablet
-					where
-						alias = ?`,
-		tabletAlias,
-	)
+	_, err := db.ExecVTOrc(`delete from vitess_tablet where alias = ?`, tabletAlias)
 	if err != nil {
 		log.Error(err)
 		return err
 	}
 
 	// Also delete from the 'database_instance' table.
-	sqlResult, err := db.ExecVTOrc(`
-			delete
-				from database_instance
-			where
-				alias = ?`,
-		tabletAlias,
-	)
+	sqlResult, err := db.ExecVTOrc(`delete from database_instance where alias = ?`, tabletAlias)
 	if err != nil {
 		log.Error(err)
 		return err
@@ -1088,10 +1076,9 @@ func ForgetInstance(tabletAlias string) error {
 // ForgetLongUnseenInstances will remove entries of all instances that have long since been last seen.
 func ForgetLongUnseenInstances() error {
 	sqlResult, err := db.ExecVTOrc(`
-			delete
-				from database_instance
-			where
-				last_seen < NOW() - interval ? hour`,
+		delete from database_instance where
+			last_seen < datetime('now', printf('-%d hour', ?))
+		`,
 		config.UnseenInstanceForgetHours,
 	)
 	if err != nil {
@@ -1113,17 +1100,17 @@ func ForgetLongUnseenInstances() error {
 func SnapshotTopologies() error {
 	writeFunc := func() error {
 		_, err := db.ExecVTOrc(`
-        	insert ignore into
-        		database_instance_topology_history (snapshot_unix_timestamp,
-        			alias, hostname, port, source_host, source_port, keyspace, shard, version)
-        	select
-        		UNIX_TIMESTAMP(NOW()),
+	        	insert or ignore into database_instance_topology_history (
+				snapshot_unix_timestamp, alias, hostname, port, source_host, source_port, keyspace, shard, version
+			)
+	        	select
+        			strftime('%s', 'now'),
 				vitess_tablet.alias, vitess_tablet.hostname, vitess_tablet.port, 
 				database_instance.source_host, database_instance.source_port, 
 				vitess_tablet.keyspace, vitess_tablet.shard, database_instance.version
 			from
 				vitess_tablet left join database_instance using (alias, hostname, port)
-				`,
+			`,
 		)
 		if err != nil {
 			log.Error(err)
@@ -1142,9 +1129,11 @@ func ExpireStaleInstanceBinlogCoordinates() error {
 	}
 	writeFunc := func() error {
 		_, err := db.ExecVTOrc(`
-					delete from database_instance_stale_binlog_coordinates
-					where first_seen < NOW() - INTERVAL ? SECOND
-					`, expireSeconds,
+			delete from database_instance_stale_binlog_coordinates
+			where
+				first_seen < datetime('now', printf('-%d second', ?))
+			`,
+			expireSeconds,
 		)
 		if err != nil {
 			log.Error(err)

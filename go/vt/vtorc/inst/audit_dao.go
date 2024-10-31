@@ -56,13 +56,11 @@ func AuditOperation(auditType string, tabletAlias string, message string) error 
 	}
 	if config.Config.AuditToBackendDB {
 		_, err := db.ExecVTOrc(`
-			insert
-				into audit (
-					audit_timestamp, audit_type, alias, keyspace, shard, message
-				) VALUES (
-					NOW(), ?, ?, ?, ?, ?
-				)
-			`,
+			insert into audit (
+				audit_timestamp, audit_type, alias, keyspace, shard, message
+			) values (
+				datetime('now'), ?, ?, ?, ?, ?
+			)`,
 			auditType,
 			tabletAlias,
 			keyspace,

@@ -65,13 +65,11 @@ func ReadShardPrimaryInformation(keyspaceName, shardName string) (primaryAlias s
 // SaveShard saves the shard record against the shard name.
 func SaveShard(shard *topo.ShardInfo) error {
 	_, err := db.ExecVTOrc(`
-		replace
-			into vitess_shard (
-				keyspace, shard, primary_alias, primary_timestamp
-			) values (
-				?, ?, ?, ?
-			)
-		`,
+		replace	into vitess_shard (
+			keyspace, shard, primary_alias, primary_timestamp
+		) values (
+			?, ?, ?, ?
+		)`,
 		shard.Keyspace(),
 		shard.ShardName(),
 		getShardPrimaryAliasString(shard),

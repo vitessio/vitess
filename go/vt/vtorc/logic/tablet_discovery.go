@@ -317,17 +317,16 @@ func setReplicationSource(ctx context.Context, replica *topodatapb.Tablet, prima
 
 // shardPrimary finds the primary of the given keyspace-shard by reading the vtorc backend
 func shardPrimary(keyspace string, shard string) (primary *topodatapb.Tablet, err error) {
-	query := `SELECT
+	query := `select
 		info
-	FROM 
+	from
 		vitess_tablet
-	WHERE
-		keyspace = ? AND shard = ?
-		AND tablet_type = ?
-	ORDER BY
-		primary_timestamp DESC
-	LIMIT 1
-`
+	where
+		keyspace = ? and shard = ?
+		and tablet_type = ?
+	order by
+		primary_timestamp desc
+	limit 1`
 	err = db.Db.QueryVTOrc(query, sqlutils.Args(keyspace, shard, topodatapb.TabletType_PRIMARY), func(m sqlutils.RowMap) error {
 		if primary == nil {
 			primary = &topodatapb.Tablet{}

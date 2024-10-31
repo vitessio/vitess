@@ -37,10 +37,10 @@ var TableNames = []string{
 // vtorcBackend is a list of SQL statements required to build the vtorc backend
 var vtorcBackend = []string{
 	`
-DROP TABLE IF EXISTS database_instance
+drop table if exists database_instance
 `,
 	`
-CREATE TABLE database_instance (
+create table database_instance (
 	alias varchar(256) NOT NULL,
 	hostname varchar(128) NOT NULL,
 	port smallint NOT NULL,
@@ -110,16 +110,16 @@ CREATE TABLE database_instance (
 	PRIMARY KEY (alias)
 )`,
 	`
-CREATE INDEX last_checked_idx_database_instance ON database_instance(last_checked)
+create index last_checked_idx_database_instance ON database_instance(last_checked)
 	`,
 	`
-CREATE INDEX last_seen_idx_database_instance ON database_instance(last_seen)
+create index last_seen_idx_database_instance ON database_instance(last_seen)
 	`,
 	`
-DROP TABLE IF EXISTS audit
+drop table if exists audit
 `,
 	`
-CREATE TABLE audit (
+create table audit (
 	audit_id integer,
 	audit_timestamp timestamp not null default (''),
 	audit_type varchar(128) NOT NULL,
@@ -130,23 +130,23 @@ CREATE TABLE audit (
 	PRIMARY KEY (audit_id)
 )`,
 	`
-CREATE INDEX audit_timestamp_idx_audit ON audit (audit_timestamp)
+create index audit_timestamp_idx_audit ON audit (audit_timestamp)
 	`,
 	`
-CREATE INDEX alias_idx_audit ON audit (alias, audit_timestamp)
+create index alias_idx_audit ON audit (alias, audit_timestamp)
 	`,
 	`
-DROP TABLE IF EXISTS node_health
+drop table if exists node_health
 `,
 	`
-CREATE TABLE node_health (
+create table node_health (
 	last_seen_active timestamp not null default ('')
 )`,
 	`
-DROP TABLE IF EXISTS topology_recovery
+drop table if exists topology_recovery
 `,
 	`
-CREATE TABLE topology_recovery (
+create table topology_recovery (
 	recovery_id integer,
 	alias varchar(256) NOT NULL,
 	start_recovery timestamp NOT NULL DEFAULT (''),
@@ -161,13 +161,13 @@ CREATE TABLE topology_recovery (
 	PRIMARY KEY (recovery_id)
 )`,
 	`
-CREATE INDEX start_recovery_idx_topology_recovery ON topology_recovery (start_recovery)
+create index start_recovery_idx_topology_recovery ON topology_recovery (start_recovery)
 	`,
 	`
-DROP TABLE IF EXISTS database_instance_topology_history
+drop table if exists database_instance_topology_history
 `,
 	`
-CREATE TABLE database_instance_topology_history (
+create table database_instance_topology_history (
 	snapshot_unix_timestamp int NOT NULL,
 	alias varchar(256) NOT NULL,
 	hostname varchar(128) NOT NULL,
@@ -180,13 +180,13 @@ CREATE TABLE database_instance_topology_history (
 	PRIMARY KEY (snapshot_unix_timestamp, alias)
 )`,
 	`
-CREATE INDEX keyspace_shard_idx_database_instance_topology_history ON database_instance_topology_history (snapshot_unix_timestamp, keyspace, shard)
+create index keyspace_shard_idx_database_instance_topology_history ON database_instance_topology_history (snapshot_unix_timestamp, keyspace, shard)
 	`,
 	`
-DROP TABLE IF EXISTS recovery_detection
+drop table if exists recovery_detection
 `,
 	`
-CREATE TABLE recovery_detection (
+create table recovery_detection (
 	detection_id integer,
 	alias varchar(256) NOT NULL,
 	analysis varchar(128) NOT NULL,
@@ -196,23 +196,23 @@ CREATE TABLE recovery_detection (
 	PRIMARY KEY (detection_id)
 )`,
 	`
-DROP TABLE IF EXISTS database_instance_last_analysis
+drop table if exists database_instance_last_analysis
 `,
 	`
-CREATE TABLE database_instance_last_analysis (
+create table database_instance_last_analysis (
 	alias varchar(256) NOT NULL,
 	analysis_timestamp timestamp not null default (''),
 	analysis varchar(128) NOT NULL,
 	PRIMARY KEY (alias)
 )`,
 	`
-CREATE INDEX analysis_timestamp_idx_database_instance_last_analysis ON database_instance_last_analysis (analysis_timestamp)
+create index analysis_timestamp_idx_database_instance_last_analysis ON database_instance_last_analysis (analysis_timestamp)
 	`,
 	`
-DROP TABLE IF EXISTS database_instance_analysis_changelog
+drop table if exists database_instance_analysis_changelog
 `,
 	`
-CREATE TABLE database_instance_analysis_changelog (
+create table database_instance_analysis_changelog (
 	changelog_id integer,
 	alias varchar(256) NOT NULL,
 	analysis_timestamp timestamp not null default (''),
@@ -220,30 +220,30 @@ CREATE TABLE database_instance_analysis_changelog (
 	PRIMARY KEY (changelog_id)
 )`,
 	`
-CREATE INDEX analysis_timestamp_idx_database_instance_analysis_changelog ON database_instance_analysis_changelog (analysis_timestamp)
+create index analysis_timestamp_idx_database_instance_analysis_changelog ON database_instance_analysis_changelog (analysis_timestamp)
 	`,
 	`
-DROP TABLE IF EXISTS vtorc_db_deployments
+drop table if exists vtorc_db_deployments
 `,
 	`
-CREATE TABLE vtorc_db_deployments (
+create table vtorc_db_deployments (
 	deployed_version varchar(128) NOT NULL,
 	deployed_timestamp timestamp NOT NULL,
 	PRIMARY KEY (deployed_version)
 )`,
 	`
-DROP TABLE IF EXISTS global_recovery_disable
+drop table if exists global_recovery_disable
 `,
 	`
-CREATE TABLE global_recovery_disable (
+create table global_recovery_disable (
 	disable_recovery tinyint NOT NULL ,
 	PRIMARY KEY (disable_recovery)
 )`,
 	`
-DROP TABLE IF EXISTS topology_recovery_steps
+drop table if exists topology_recovery_steps
 `,
 	`
-CREATE TABLE topology_recovery_steps (
+create table topology_recovery_steps (
 	recovery_step_id integer,
 	recovery_id integer NOT NULL,
 	audit_at timestamp not null default (''),
@@ -251,10 +251,10 @@ CREATE TABLE topology_recovery_steps (
 	PRIMARY KEY (recovery_step_id)
 )`,
 	`
-DROP TABLE IF EXISTS database_instance_stale_binlog_coordinates
+drop table if exists database_instance_stale_binlog_coordinates
 `,
 	`
-CREATE TABLE database_instance_stale_binlog_coordinates (
+create table database_instance_stale_binlog_coordinates (
 	alias varchar(256) NOT NULL,
 	binary_log_file varchar(128) NOT NULL,
 	binary_log_pos bigint NOT NULL,
@@ -262,13 +262,13 @@ CREATE TABLE database_instance_stale_binlog_coordinates (
 	PRIMARY KEY (alias)
 )`,
 	`
-CREATE INDEX first_seen_idx_database_instance_stale_binlog_coordinates ON database_instance_stale_binlog_coordinates (first_seen)
+create index first_seen_idx_database_instance_stale_binlog_coordinates ON database_instance_stale_binlog_coordinates (first_seen)
 	`,
 	`
-DROP TABLE IF EXISTS vitess_tablet
+drop table if exists vitess_tablet
 `,
 	`
-CREATE TABLE vitess_tablet (
+create table vitess_tablet (
 	alias varchar(256) NOT NULL,
 	hostname varchar(128) NOT NULL,
 	port smallint NOT NULL,
@@ -281,26 +281,26 @@ CREATE TABLE vitess_tablet (
 	PRIMARY KEY (alias)
 )`,
 	`
-CREATE INDEX cell_idx_vitess_tablet ON vitess_tablet (cell)
+create index cell_idx_vitess_tablet ON vitess_tablet (cell)
 	`,
 	`
-CREATE INDEX ks_idx_vitess_tablet ON vitess_tablet (keyspace, shard)
+create index ks_idx_vitess_tablet ON vitess_tablet (keyspace, shard)
 	`,
 	`
-DROP TABLE IF EXISTS vitess_keyspace
+drop table if exists vitess_keyspace
 `,
 	`
-CREATE TABLE vitess_keyspace (
+create table vitess_keyspace (
 	keyspace varchar(128) NOT NULL,
 	keyspace_type smallint(5) NOT NULL,
 	durability_policy varchar(512) NOT NULL,
 	PRIMARY KEY (keyspace)
 )`,
 	`
-DROP TABLE IF EXISTS vitess_shard
+drop table if exists vitess_shard
 `,
 	`
-CREATE TABLE vitess_shard (
+create table vitess_shard (
 	keyspace varchar(128) NOT NULL,
 	shard varchar(128) NOT NULL,
 	primary_alias varchar(512) NOT NULL,
@@ -308,21 +308,21 @@ CREATE TABLE vitess_shard (
 	PRIMARY KEY (keyspace, shard)
 )`,
 	`
-CREATE INDEX source_host_port_idx_database_instance_database_instance on database_instance (source_host, source_port)
+create index source_host_port_idx_database_instance_database_instance on database_instance (source_host, source_port)
 	`,
 	`
-CREATE INDEX keyspace_shard_idx_topology_recovery on topology_recovery (keyspace, shard)
+create index keyspace_shard_idx_topology_recovery on topology_recovery (keyspace, shard)
 	`,
 	`
-CREATE INDEX end_recovery_idx_topology_recovery on topology_recovery (end_recovery)
+create index end_recovery_idx_topology_recovery on topology_recovery (end_recovery)
 	`,
 	`
-CREATE INDEX instance_timestamp_idx_database_instance_analysis_changelog on database_instance_analysis_changelog (alias, analysis_timestamp)
+create index instance_timestamp_idx_database_instance_analysis_changelog on database_instance_analysis_changelog (alias, analysis_timestamp)
 	`,
 	`
-CREATE INDEX detection_idx_topology_recovery on topology_recovery (detection_id)
+create index detection_idx_topology_recovery on topology_recovery (detection_id)
 	`,
 	`
-CREATE INDEX recovery_id_idx_topology_recovery_steps ON topology_recovery_steps(recovery_id)
+create index recovery_id_idx_topology_recovery_steps ON topology_recovery_steps(recovery_id)
 	`,
 }
