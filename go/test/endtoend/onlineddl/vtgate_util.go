@@ -255,6 +255,16 @@ func CheckForceMigrationCutOver(t *testing.T, vtParams *mysql.ConnParams, shards
 	}
 }
 
+// CheckSetMigrationCutOverThreshold sets the cut-over threshold for a given migration.
+func CheckSetMigrationCutOverThreshold(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, threshold time.Duration) {
+	query, err := sqlparser.ParseAndBind("alter vitess_migration %a cutover_threshold %a",
+		sqltypes.StringBindVariable(uuid),
+		sqltypes.StringBindVariable(threshold.String()),
+	)
+	require.NoError(t, err)
+	_ = VtgateExecQuery(t, vtParams, query, "")
+}
+
 // CheckMigrationStatus verifies that the migration indicated by given UUID has the given expected status
 func CheckMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, expectStatuses ...schema.OnlineDDLStatus) bool {
 	ksName := shards[0].PrimaryTablet().VttabletProcess.Keyspace
