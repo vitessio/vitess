@@ -46,6 +46,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
@@ -740,16 +741,17 @@ func TestWorkflowDelete(t *testing.T) {
 	}
 
 	testcases := []struct {
-		name                           string
-		sourceKeyspace, targetKeyspace *testKeyspace
-		preFunc                        func(t *testing.T, env *testEnv)
-		req                            *vtctldatapb.WorkflowDeleteRequest
-		expectedSourceQueries          []*queryResult
-		expectedTargetQueries          []*queryResult
-		want                           *vtctldatapb.WorkflowDeleteResponse
-		wantErr                        string
-		postFunc                       func(t *testing.T, env *testEnv)
-		expectedLogs                   []string
+		name                            string
+		sourceKeyspace, targetKeyspace  *testKeyspace
+		preFunc                         func(t *testing.T, env *testEnv)
+		req                             *vtctldatapb.WorkflowDeleteRequest
+		expectedSourceQueries           []*queryResult
+		expectedTargetQueries           []*queryResult
+		readVReplicationWorkflowRequest *readVReplicationWorkflowRequestResponse
+		want                            *vtctldatapb.WorkflowDeleteResponse
+		wantErr                         string
+		postFunc                        func(t *testing.T, env *testEnv)
+		expectedLogs                    []string
 	}{
 		{
 			name: "missing table",
@@ -809,6 +811,286 @@ func TestWorkflowDelete(t *testing.T) {
 					},
 				},
 			},
+		},
+		{
+			name: "multi-tenant workflow",
+			sourceKeyspace: &testKeyspace{
+				KeyspaceName: sourceKeyspaceName,
+				ShardNames:   []string{"0"},
+			},
+			targetKeyspace: &testKeyspace{
+				KeyspaceName: targetKeyspaceName,
+				ShardNames:   []string{"-80", "80-"},
+			},
+			req: &vtctldatapb.WorkflowDeleteRequest{
+				Keyspace: targetKeyspaceName,
+				Workflow: workflowName,
+			},
+			expectedSourceQueries: []*queryResult{
+				{
+					query: fmt.Sprintf("delete from _vt.vreplication where db_name = 'vt_%s' and workflow = '%s'",
+						sourceKeyspaceName, ReverseWorkflowName(workflowName)),
+					result: &querypb.QueryResult{},
+				},
+			},
+			readVReplicationWorkflowRequest: &readVReplicationWorkflowRequestResponse{
+				req: &tabletmanagerdatapb.ReadVReplicationWorkflowRequest{
+					Workflow: workflowName,
+				},
+				res: &tabletmanagerdatapb.ReadVReplicationWorkflowResponse{
+					Workflow:     workflowName,
+					WorkflowType: binlogdatapb.VReplicationWorkflowType_MoveTables,
+					Options:      `{"tenant_id": "1"}`,
+					Streams: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{
+						{
+							Id: 1,
+							Bls: &binlogdatapb.BinlogSource{
+								Keyspace: sourceKeyspaceName,
+								Shard:    "0",
+								Filter: &binlogdatapb.Filter{
+									Rules: []*binlogdatapb.Rule{
+										{
+											Match:  "t1",
+											Filter: "select * from t1 where tenant_id = 1",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			preFunc: func(t *testing.T, env *testEnv) {
+				err := env.ts.SaveVSchema(ctx, targetKeyspaceName, &vschemapb.Keyspace{
+					Sharded: true,
+					MultiTenantSpec: &vschemapb.MultiTenantSpec{
+						TenantIdColumnName: "tenant_id",
+						TenantIdColumnType: sqltypes.Int64,
+					},
+				})
+				require.NoError(t, err)
+			},
+			want: &vtctldatapb.WorkflowDeleteResponse{
+				Summary: fmt.Sprintf("Successfully cancelled the %s workflow in the %s keyspace",
+					workflowName, targetKeyspaceName),
+				Details: []*vtctldatapb.WorkflowDeleteResponse_TabletInfo{
+					{
+						Tablet:  &topodatapb.TabletAlias{Cell: defaultCellName, Uid: startingTargetTabletUID},
+						Deleted: true,
+					},
+					{
+						Tablet:  &topodatapb.TabletAlias{Cell: defaultCellName, Uid: startingTargetTabletUID + tabletUIDStep},
+						Deleted: true,
+					},
+				},
+			},
+		},
+		{
+			name: "multi-tenant workflow with keep-data",
+			sourceKeyspace: &testKeyspace{
+				KeyspaceName: sourceKeyspaceName,
+				ShardNames:   []string{"0"},
+			},
+			targetKeyspace: &testKeyspace{
+				KeyspaceName: targetKeyspaceName,
+				ShardNames:   []string{"-80", "80-"},
+			},
+			req: &vtctldatapb.WorkflowDeleteRequest{
+				Keyspace: targetKeyspaceName,
+				Workflow: workflowName,
+				KeepData: true,
+			},
+			expectedSourceQueries: []*queryResult{
+				{
+					query: fmt.Sprintf("delete from _vt.vreplication where db_name = 'vt_%s' and workflow = '%s'",
+						sourceKeyspaceName, ReverseWorkflowName(workflowName)),
+					result: &querypb.QueryResult{},
+				},
+			},
+			want: &vtctldatapb.WorkflowDeleteResponse{
+				Summary: fmt.Sprintf("Successfully cancelled the %s workflow in the %s keyspace",
+					workflowName, targetKeyspaceName),
+				Details: []*vtctldatapb.WorkflowDeleteResponse_TabletInfo{
+					{
+						Tablet:  &topodatapb.TabletAlias{Cell: defaultCellName, Uid: startingTargetTabletUID},
+						Deleted: true,
+					},
+					{
+						Tablet:  &topodatapb.TabletAlias{Cell: defaultCellName, Uid: startingTargetTabletUID + tabletUIDStep},
+						Deleted: true,
+					},
+				},
+			},
+		},
+		{
+			name: "multi-tenant reshard",
+			sourceKeyspace: &testKeyspace{
+				KeyspaceName: sourceKeyspaceName,
+				ShardNames:   []string{"0"},
+			},
+			targetKeyspace: &testKeyspace{
+				KeyspaceName: targetKeyspaceName,
+				ShardNames:   []string{"-80", "80-"},
+			},
+			req: &vtctldatapb.WorkflowDeleteRequest{
+				Keyspace: targetKeyspaceName,
+				Workflow: workflowName,
+			},
+			expectedSourceQueries: []*queryResult{
+				{
+					query: fmt.Sprintf("delete from _vt.vreplication where db_name = 'vt_%s' and workflow = '%s'",
+						sourceKeyspaceName, ReverseWorkflowName(workflowName)),
+					result: &querypb.QueryResult{},
+				},
+			},
+			readVReplicationWorkflowRequest: &readVReplicationWorkflowRequestResponse{
+				req: &tabletmanagerdatapb.ReadVReplicationWorkflowRequest{
+					Workflow: workflowName,
+				},
+				res: &tabletmanagerdatapb.ReadVReplicationWorkflowResponse{
+					Workflow:     workflowName,
+					WorkflowType: binlogdatapb.VReplicationWorkflowType_Reshard,
+					Options:      `{"tenant_id": "1"}`,
+					Streams: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{
+						{
+							Id: 1,
+							Bls: &binlogdatapb.BinlogSource{
+								Keyspace: sourceKeyspaceName,
+								Shard:    "0",
+								Filter: &binlogdatapb.Filter{
+									Rules: []*binlogdatapb.Rule{
+										{
+											Match:  "t1",
+											Filter: "select * from t1 where tenant_id = 1",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			preFunc: func(t *testing.T, env *testEnv) {
+				err := env.ts.SaveVSchema(ctx, targetKeyspaceName, &vschemapb.Keyspace{
+					Sharded: true,
+					MultiTenantSpec: &vschemapb.MultiTenantSpec{
+						TenantIdColumnName: "tenant_id",
+						TenantIdColumnType: sqltypes.Int64,
+					},
+				})
+				require.NoError(t, err)
+			},
+			wantErr: "unsupported workflow type \"Reshard\" for multi-tenant migration",
+		},
+		{
+			name: "multi-tenant workflow without predicate ",
+			sourceKeyspace: &testKeyspace{
+				KeyspaceName: sourceKeyspaceName,
+				ShardNames:   []string{"0"},
+			},
+			targetKeyspace: &testKeyspace{
+				KeyspaceName: targetKeyspaceName,
+				ShardNames:   []string{"-80", "80-"},
+			},
+			req: &vtctldatapb.WorkflowDeleteRequest{
+				Keyspace: targetKeyspaceName,
+				Workflow: workflowName,
+			},
+			expectedSourceQueries: []*queryResult{
+				{
+					query: fmt.Sprintf("delete from _vt.vreplication where db_name = 'vt_%s' and workflow = '%s'",
+						sourceKeyspaceName, ReverseWorkflowName(workflowName)),
+					result: &querypb.QueryResult{},
+				},
+			},
+			readVReplicationWorkflowRequest: &readVReplicationWorkflowRequestResponse{
+				req: &tabletmanagerdatapb.ReadVReplicationWorkflowRequest{
+					Workflow: workflowName,
+				},
+				res: &tabletmanagerdatapb.ReadVReplicationWorkflowResponse{
+					Workflow:     workflowName,
+					WorkflowType: binlogdatapb.VReplicationWorkflowType_Reshard,
+					Options:      `{"tenant_id": "1"}`,
+					Streams: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{
+						{
+							Id: 1,
+							Bls: &binlogdatapb.BinlogSource{
+								Keyspace: sourceKeyspaceName,
+								Shard:    "0",
+								Filter: &binlogdatapb.Filter{
+									Rules: []*binlogdatapb.Rule{
+										{
+											Match:  "t1",
+											Filter: "select * from t1 where tenant_id = 1",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			preFunc: func(t *testing.T, env *testEnv) {
+				err := env.ts.SaveVSchema(ctx, targetKeyspaceName, &vschemapb.Keyspace{
+					Sharded: true,
+					MultiTenantSpec: &vschemapb.MultiTenantSpec{
+						TenantIdColumnName: "tenant_id",
+						TenantIdColumnType: sqltypes.Int64,
+					},
+				})
+				require.NoError(t, err)
+			},
+			wantErr: "unsupported workflow type \"Reshard\" for multi-tenant migration",
+		},
+		{
+			name: "multi-tenant workflow without multi-tenant-spec in vschema",
+			sourceKeyspace: &testKeyspace{
+				KeyspaceName: sourceKeyspaceName,
+				ShardNames:   []string{"0"},
+			},
+			targetKeyspace: &testKeyspace{
+				KeyspaceName: targetKeyspaceName,
+				ShardNames:   []string{"-80", "80-"},
+			},
+			req: &vtctldatapb.WorkflowDeleteRequest{
+				Keyspace: targetKeyspaceName,
+				Workflow: workflowName,
+			},
+			expectedSourceQueries: []*queryResult{
+				{
+					query: fmt.Sprintf("delete from _vt.vreplication where db_name = 'vt_%s' and workflow = '%s'",
+						sourceKeyspaceName, ReverseWorkflowName(workflowName)),
+					result: &querypb.QueryResult{},
+				},
+			},
+			readVReplicationWorkflowRequest: &readVReplicationWorkflowRequestResponse{
+				req: &tabletmanagerdatapb.ReadVReplicationWorkflowRequest{
+					Workflow: workflowName,
+				},
+				res: &tabletmanagerdatapb.ReadVReplicationWorkflowResponse{
+					Workflow:     workflowName,
+					WorkflowType: binlogdatapb.VReplicationWorkflowType_MoveTables,
+					Options:      `{"tenant_id": "1"}`,
+					Streams: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{
+						{
+							Id: 1,
+							Bls: &binlogdatapb.BinlogSource{
+								Keyspace: sourceKeyspaceName,
+								Shard:    "0",
+								Filter: &binlogdatapb.Filter{
+									Rules: []*binlogdatapb.Rule{
+										{
+											Match:  "t1",
+											Filter: "select * from t1 where tenant_id = 1",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: "failed to fully delete all migrated data for tenant 1, please retry the operation: failed to build delete filter: target keyspace not defined, or it does not have multi-tenant spec",
 		},
 		{
 			name: "missing denied table entries",
@@ -934,6 +1216,13 @@ func TestWorkflowDelete(t *testing.T) {
 					env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.targetKeyspace.KeyspaceName, eq)
 				}
 			}
+			if tc.readVReplicationWorkflowRequest != nil {
+				targetTablets := env.tablets[tc.targetKeyspace.KeyspaceName]
+				require.NotNil(t, targetTablets)
+				for _, tablet := range targetTablets {
+					env.tmc.expectReadVReplicationWorkflowRequest(tablet.Alias.Uid, tc.readVReplicationWorkflowRequest)
+				}
+			}
 			if tc.preFunc != nil {
 				tc.preFunc(t, env)
 			}
@@ -961,12 +1250,7 @@ func TestWorkflowDelete(t *testing.T) {
 				}
 			}
 			logs := memlogger.String()
-			// Confirm that the custom logger was passed on to the trafficSwitcher
-			// if we didn't expect/want an error as otherwise we may not have made
-			// it into the trafficSwitcher.
-			if tc.wantErr == "" {
-				require.Contains(t, logs, "traffic_switcher.go")
-			}
+			// Confirm that the custom logger was passed on to the trafficSwitcher.
 			for _, expectedLog := range tc.expectedLogs {
 				require.Contains(t, logs, expectedLog)
 			}

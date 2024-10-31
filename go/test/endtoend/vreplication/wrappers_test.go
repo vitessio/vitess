@@ -298,7 +298,8 @@ func (v VtctldMoveTables) ReverseWrites() {
 }
 
 func (v VtctldMoveTables) Cancel() {
-	v.exec("Cancel")
+	args := []string{"Cancel", "--delete-batch-size=500"}
+	v.exec(args...)
 }
 
 func (v VtctldMoveTables) Complete() {

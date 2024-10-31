@@ -231,7 +231,12 @@ func Build(env *vtenv.Environment, statement sqlparser.Statement, tables map[str
 	case *sqlparser.Show:
 		plan, err = analyzeShow(stmt, dbName)
 	case *sqlparser.Analyze, sqlparser.Explain:
-		plan = &Plan{PlanID: PlanOtherRead}
+		// Analyze and Explain are treated as read-only queries.
+		// We send down a string, and get a table result back.
+		plan = &Plan{
+			PlanID:    PlanSelect,
+			FullQuery: GenerateFullQuery(stmt),
+		}
 	case *sqlparser.OtherAdmin:
 		plan = &Plan{PlanID: PlanOtherAdmin}
 	case *sqlparser.Savepoint:

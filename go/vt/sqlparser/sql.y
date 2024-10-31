@@ -1730,10 +1730,6 @@ text_literal %prec MULTIPLE_TEXT_LITERAL
   {
     $$ = &IntroducerExpr{CharacterSet: $1, Expr: NewHexLiteral($2)}
   }
-| underscore_charsets column_name_or_offset %prec UNARY
-  {
-    $$ = &IntroducerExpr{CharacterSet: $1, Expr: $2}
-  }
 | underscore_charsets VALUE_ARG %prec UNARY
   {
     arg := parseBindVariable(yylex, $2[1:])
