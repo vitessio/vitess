@@ -182,6 +182,11 @@ const (
 		WHERE
 			migration_uuid=%a
 	`
+	sqlUpdateCutOverThresholdSeconds = `UPDATE _vt.schema_migrations
+			SET cutover_threshold_seconds=%a
+		WHERE
+			migration_uuid=%a
+	`
 	sqlUpdateLaunchMigration = `UPDATE _vt.schema_migrations
 			SET postpone_launch=0
 		WHERE
