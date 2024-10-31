@@ -148,9 +148,9 @@ var (
 	// ErrMultipleTargetKeyspaces occurs when a workflow somehow has multiple
 	// target keyspaces across different shard primaries. This should be
 	// impossible.
-	ErrMultipleTargetKeyspaces   = errors.New("multiple target keyspaces for a single workflow")
-	ErrWorkflowNotFullySwitched  = errors.New("cannot complete workflow because you have not yet switched all read and write traffic")
-	ErrWorkflowPartiallySwitched = errors.New("cannot cancel workflow because you have already switched some or all read and write traffic")
+	ErrMultipleTargetKeyspaces          = errors.New("multiple target keyspaces for a single workflow")
+	ErrWorkflowCompleteNotFullySwitched = errors.New("cannot complete workflow because you have not yet switched all read and write traffic")
+	ErrWorkflowDeleteWritesSwitched     = errors.New("cannot delete workflow because you have already switched write traffic")
 )
 
 // Server provides an API to work with Vitess workflows, like vreplication
@@ -1754,7 +1754,7 @@ func (s *Server) MoveTablesComplete(ctx context.Context, req *vtctldatapb.MoveTa
 	}
 
 	if !state.WritesSwitched || len(state.ReplicaCellsNotSwitched) > 0 || len(state.RdonlyCellsNotSwitched) > 0 {
-		return nil, ErrWorkflowNotFullySwitched
+		return nil, ErrWorkflowCompleteNotFullySwitched
 	}
 	var renameTable TableRemovalType
 	if req.RenameTables {
@@ -2129,10 +2129,12 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 	}
 
 	if ts.workflowType != binlogdatapb.VReplicationWorkflowType_CreateLookupIndex {
-		// Return an error if the workflow traffic is partially switched.
-		if state.WritesSwitched || len(state.ReplicaCellsSwitched) > 0 || len(state.RdonlyCellsSwitched) > 0 {
-			return nil, ErrWorkflowPartiallySwitched
+		// Return an error if the write workflow traffic is switched.
+		if state.WritesSwitched {
+			return nil, ErrWorkflowDeleteWritesSwitched
 		}
+		// If only reads have been switched, then we can delete the
+		// workflow and its routing rules.
 	}
 
 	// Lock the workflow for deletion.
@@ -3300,14 +3302,6 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid action for Migrate workflow: SwitchTraffic")
 	}
 
-	if direction == DirectionBackward && ts.IsMultiTenantMigration() {
-		// In a multi-tenant migration, multiple migrations would be writing to the same
-		// table, so we can't stop writes like we do with MoveTables, using denied tables,
-		// since it would block all other migrations as well as traffic for tenants which
-		// have already been migrated.
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot reverse traffic for multi-tenant migrations")
-	}
-
 	// We need this to know when there isn't a (non-FROZEN) reverse workflow to use.
 	onlySwitchingReads := !startState.WritesSwitched && !switchPrimary
 
@@ -3316,6 +3310,13 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 		(direction == DirectionBackward && !startState.WritesSwitched)
 
 	if direction == DirectionBackward && !onlySwitchingReads {
+		if ts.IsMultiTenantMigration() {
+			// In a multi-tenant migration, multiple migrations would be writing to the same
+			// table, so we can't stop writes like we do with MoveTables, using denied tables,
+			// since it would block all other migrations as well as traffic for tenants which
+			// have already been migrated.
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot reverse write traffic for multi-tenant migrations")
+		}
 		// This means that the main workflow is FROZEN and the reverse workflow
 		// exists. So we update the starting state so that we're using the reverse
 		// workflow and we can move forward with a normal traffic switch forward
