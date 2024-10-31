@@ -78,12 +78,12 @@ func (orc *VTOrcProcess) Setup() (err error) {
 	timeNow := time.Now().UnixNano()
 	err = os.MkdirAll(orc.LogDir, 0755)
 	if err != nil {
-		log.Errorf("cannot create log directory for vtorc: %v", err)
+		log.Errorf("cannot create log directory for vtorc: %v", err.Error())
 		return err
 	}
 	configFile, err := os.Create(path.Join(orc.LogDir, fmt.Sprintf("orc-config-%d.json", timeNow)))
 	if err != nil {
-		log.Errorf("cannot create config file for vtorc: %v", err)
+		log.Errorf("cannot create config file for vtorc: %v", err.Error())
 		return err
 	}
 	orc.ConfigPath = configFile.Name()

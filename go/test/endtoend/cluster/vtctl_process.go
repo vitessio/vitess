@@ -70,7 +70,7 @@ func (vtctl *VtctlProcess) CreateKeyspace(keyspace, sidecarDBName, durabilityPol
 	}
 	output, err := vtctl.ExecuteCommandWithOutput(args...)
 	if err != nil {
-		log.Errorf("CreateKeyspace returned err: %s, output: %s", err, output)
+		log.Errorf("CreateKeyspace returned err: %s, output: %s", err.Error(), output)
 	}
 	return err
 }

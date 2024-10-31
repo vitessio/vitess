@@ -239,7 +239,7 @@ func (vtctldclient *VtctldClientProcess) CreateKeyspace(keyspaceName string, sid
 		output, err = vtctldclient.ExecuteCommandWithOutput("CreateKeyspace", keyspaceName, "--sidecar-db-name", sidecarDBName)
 	}
 	if err != nil {
-		log.Errorf("CreateKeyspace returned err: %s, output: %s", err, output)
+		log.Errorf("CreateKeyspace returned err: %s, output: %s", err.Error(), output)
 	}
 	return err
 }

@@ -307,7 +307,7 @@ func (vttablet *VttabletProcess) WaitForTabletStatusesForTimeout(expectedStatuse
 			if ferr == nil {
 				log.Errorf("vttablet error log contents:\n%s", string(errBytes))
 			} else {
-				log.Errorf("Failed to read the vttablet error log file %q: %v", vttablet.ErrorLog, ferr)
+				log.Errorf("Failed to read the vttablet error log file %q: %v", vttablet.ErrorLog, ferr.Error())
 			}
 			return fmt.Errorf("process '%s' exited prematurely (err: %s)", vttablet.Name, err)
 		default:

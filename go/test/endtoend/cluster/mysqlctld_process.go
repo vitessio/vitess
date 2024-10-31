@@ -93,7 +93,7 @@ func (mysqlctld *MysqlctldProcess) Start() error {
 
 	err := os.MkdirAll(mysqlctld.LogDirectory, 0755)
 	if err != nil {
-		log.Errorf("Failed to create directory for mysqlctld logs: %v", err)
+		log.Errorf("Failed to create directory for mysqlctld logs: %v", err.Error())
 		return err
 	}
 

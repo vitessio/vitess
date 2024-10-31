@@ -137,15 +137,15 @@ func (topo *TopoProcess) SetupEtcd() (err error) {
 			if ferr == nil {
 				log.Errorf("%s error log contents:\n%s", topo.Binary, string(errBytes))
 			} else {
-				log.Errorf("Failed to read the %s error log file %q: %v", topo.Binary, topo.ErrorLog, ferr)
+				log.Errorf("Failed to read the %s error log file %q: %v", topo.Binary, topo.ErrorLog, ferr.Error())
 			}
-			return fmt.Errorf("process '%s' exited prematurely (err: %s)", topo.Binary, err)
+			return fmt.Errorf("process '%s' exited prematurely (err: %w)", topo.Binary, err)
 		default:
 			time.Sleep(300 * time.Millisecond)
 		}
 	}
 
-	return fmt.Errorf("process '%s' timed out after 60s (err: %s)", topo.Binary, <-topo.exit)
+	return fmt.Errorf("process '%s' timed out after 60s (err: %w)", topo.Binary, <-topo.exit)
 }
 
 // SetupZookeeper spawns a new zookeeper topo service and initializes it with the defaults.
@@ -199,12 +199,12 @@ func (topo *TopoProcess) SetupConsul(cluster *LocalProcessCluster) (err error) {
 
 	err = os.MkdirAll(topo.LogDirectory, os.ModePerm)
 	if err != nil {
-		log.Errorf("Failed to create directory for consul logs: %v", err)
+		log.Errorf("Failed to create directory for consul logs: %v", err.Error())
 		return
 	}
 	err = os.MkdirAll(topo.DataDirectory, os.ModePerm)
 	if err != nil {
-		log.Errorf("Failed to create directory for consul data: %v", err)
+		log.Errorf("Failed to create directory for consul data: %v", err.Error())
 		return
 	}
 
@@ -213,7 +213,7 @@ func (topo *TopoProcess) SetupConsul(cluster *LocalProcessCluster) (err error) {
 	logFile := path.Join(topo.LogDirectory, "/consul.log")
 	_, err = os.Create(logFile)
 	if err != nil {
-		log.Errorf("Failed to create file for consul logs: %v", err)
+		log.Errorf("Failed to create file for consul logs: %v", err.Error())
 		return
 	}
 
@@ -357,10 +357,10 @@ func (topo *TopoProcess) IsHealthy() bool {
 
 func (topo *TopoProcess) removeTopoDirectories(Cell string) {
 	if err := topo.ManageTopoDir("rmdir", "/vitess/global"); err != nil {
-		log.Errorf("Failed to remove global topo directory: %v", err)
+		log.Errorf("Failed to remove global topo directory: %v", err.Error())
 	}
 	if err := topo.ManageTopoDir("rmdir", "/vitess/"+Cell); err != nil {
-		log.Errorf("Failed to remove local topo directory: %v", err)
+		log.Errorf("Failed to remove local topo directory: %v", err.Error())
 	}
 }
 

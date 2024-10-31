@@ -132,7 +132,7 @@ func (mysqlctl *MysqlctlProcess) startProcess(init bool) (*processInfo, error) {
 			extraMyCNF := path.Join(sslPath, "ssl.cnf")
 			fout, err := os.Create(extraMyCNF)
 			if err != nil {
-				log.Error(err)
+				log.Error(err.Error())
 				return nil, err
 			}
 

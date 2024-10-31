@@ -75,7 +75,7 @@ func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error)
 
 	err = os.MkdirAll(vtctld.LogDir, 0755)
 	if err != nil {
-		log.Errorf("cannot create log directory for vtctld: %v", err)
+		log.Errorf("cannot create log directory for vtctld: %v", err.Error())
 		return err
 	}
 
@@ -106,7 +106,7 @@ func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error)
 			if ferr == nil {
 				log.Errorf("vtctld error log contents:\n%s", string(errBytes))
 			} else {
-				log.Errorf("Failed to read the vtctld error log file %q: %v", vtctld.ErrorLog, ferr)
+				log.Errorf("Failed to read the vtctld error log file %q: %v", vtctld.ErrorLog, ferr.Error())
 			}
 			return fmt.Errorf("process '%s' exited prematurely (err: %s)", vtctld.Name, err)
 		default:

@@ -152,7 +152,7 @@ func (vtgate *VtgateProcess) Setup() error {
 			if ferr == nil {
 				log.Errorf("vtgate error log contents:\n%s", string(errBytes))
 			} else {
-				log.Errorf("Failed to read the vtgate error log file %q: %v", vtgate.ErrorLog, ferr)
+				log.Errorf("Failed to read the vtgate error log file %q: %v", vtgate.ErrorLog, ferr.Error())
 			}
 			return fmt.Errorf("process '%s' exited prematurely (err: %s)", vtgate.Name, err)
 		default:
