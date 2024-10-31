@@ -1108,7 +1108,7 @@ func SnapshotTopologies() error {
         		database_instance_topology_history (snapshot_unix_timestamp,
         			alias, hostname, port, source_host, source_port, keyspace, shard, version)
         	select
-        		strftime('%%s', 'now'),
+        		strftime('%s', 'now'),
 				vitess_tablet.alias, vitess_tablet.hostname, vitess_tablet.port, 
 				database_instance.source_host, database_instance.source_port, 
 				vitess_tablet.keyspace, vitess_tablet.shard, database_instance.version
