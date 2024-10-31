@@ -850,17 +850,12 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 			return err
 		}
 		e.updateMigrationStage(ctx, onlineDDL.UUID, "waiting for post-sentry pos: %v", replication.EncodePosition(postSentryPos))
-<<<<<<< HEAD
-		if err := waitForPos(s, postSentryPos); err != nil {
-			return err
-=======
 		// We have not yet locked anything, stopped anything, or done anything that otherwise
 		// impacts query serving so we wait for a multiple of the cutover threshold here, with
 		// that variable primarily serving to limit the max time we later spend waiting for
 		// a position again AFTER we've taken the locks and table access is blocked.
 		if err := waitForPos(s, postSentryPos, migrationCutOverThreshold*3); err != nil {
 			return vterrors.Wrapf(err, "failed waiting for pos after sentry creation")
->>>>>>> 4550640e08 (Improve Schema Engine's TablesWithSize80 query (#17066))
 		}
 		e.updateMigrationStage(ctx, onlineDDL.UUID, "post-sentry pos reached")
 	}
