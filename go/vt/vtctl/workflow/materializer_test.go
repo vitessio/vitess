@@ -25,6 +25,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/maps"
 	"google.golang.org/protobuf/proto"
@@ -32,6 +33,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -51,6 +53,7 @@ const (
 	mzGetCopyState       = "select distinct table_name from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = 1"
 	mzGetLatestCopyState = "select vrepl_id, table_name, lastpk from _vt.copy_state where vrepl_id in (1) and id in (select max(id) from _vt.copy_state where vrepl_id in (1) group by vrepl_id, table_name)"
 	insertPrefix         = `/insert into _vt.vreplication\(workflow, source, pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys, options\) values `
+	getNonEmptyTable     = "select 1 from `t1` limit 1"
 )
 
 var (
@@ -520,6 +523,7 @@ func TestMigrateVSchema(t *testing.T) {
 	defer env.close()
 
 	env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
+	env.tmc.expectFetchAsAllPrivsQuery(200, getNonEmptyTable, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, mzGetCopyState, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, mzGetLatestCopyState, &sqltypes.Result{})
 
@@ -578,6 +582,7 @@ func TestMoveTablesDDLFlag(t *testing.T) {
 			// a circular dependency.
 			// The TabletManager portion is tested in rpc_vreplication_test.go.
 			env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
+			env.tmc.expectFetchAsAllPrivsQuery(200, getNonEmptyTable, &sqltypes.Result{})
 			env.tmc.expectVRQuery(200, mzGetCopyState, &sqltypes.Result{})
 			env.tmc.expectVRQuery(200, mzGetLatestCopyState, &sqltypes.Result{})
 
@@ -610,6 +615,7 @@ func TestMoveTablesDDLFlag(t *testing.T) {
 func TestShardedAutoIncHandling(t *testing.T) {
 	tableName := "t1"
 	tableDDL := fmt.Sprintf("create table %s (id int not null auto_increment primary key, c1 varchar(10))", tableName)
+	validateEmptyTableQuery := fmt.Sprintf("select 1 from `%s` limit 1", tableName)
 	ms := &vtctldatapb.MaterializeSettings{
 		Workflow:       "workflow",
 		SourceKeyspace: "sourceks",
@@ -623,14 +629,15 @@ func TestShardedAutoIncHandling(t *testing.T) {
 	}
 
 	type testcase struct {
-		name              string
-		value             vtctldatapb.ShardedAutoIncrementHandling
-		globalKeyspace    string
-		targetShards      []string
-		targetVSchema     *vschemapb.Keyspace
-		wantTargetVSchema *vschemapb.Keyspace
-		expectQueries     []string
-		expectErr         string
+		name                  string
+		value                 vtctldatapb.ShardedAutoIncrementHandling
+		globalKeyspace        string
+		targetShards          []string
+		targetVSchema         *vschemapb.Keyspace
+		wantTargetVSchema     *vschemapb.Keyspace
+		expectQueries         []string
+		expectAllPrivsQueries []string
+		expectErr             string
 	}
 	testcases := []testcase{
 		{
@@ -707,6 +714,9 @@ func TestShardedAutoIncHandling(t *testing.T) {
 			expectQueries: []string{
 				tableDDL, // Unchanged
 			},
+			expectAllPrivsQueries: []string{
+				validateEmptyTableQuery,
+			},
 		},
 		{
 			name:           "remove",
@@ -754,6 +764,9 @@ func TestShardedAutoIncHandling(t *testing.T) {
 	id int not null primary key,
 	c1 varchar(10)
 )`, tableName),
+			},
+			expectAllPrivsQueries: []string{
+				validateEmptyTableQuery,
 			},
 		},
 		{
@@ -811,6 +824,9 @@ func TestShardedAutoIncHandling(t *testing.T) {
 	c1 varchar(10)
 )`, tableName),
 			},
+			expectAllPrivsQueries: []string{
+				validateEmptyTableQuery,
+			},
 		},
 		{
 			name:           "replace",
@@ -863,6 +879,9 @@ func TestShardedAutoIncHandling(t *testing.T) {
 	c1 varchar(10)
 )`, tableName),
 			},
+			expectAllPrivsQueries: []string{
+				validateEmptyTableQuery,
+			},
 		},
 	}
 
@@ -881,6 +900,9 @@ func TestShardedAutoIncHandling(t *testing.T) {
 				uid := startingTargetTabletUID + (i * tabletUIDStep)
 				for _, query := range tc.expectQueries {
 					env.tmc.expectVRQuery(uid, query, &sqltypes.Result{})
+				}
+				for _, query := range tc.expectAllPrivsQueries {
+					env.tmc.expectFetchAsAllPrivsQuery(uid, query, &sqltypes.Result{})
 				}
 				env.tmc.expectVRQuery(uid, mzGetCopyState, &sqltypes.Result{})
 				env.tmc.expectVRQuery(uid, mzGetLatestCopyState, &sqltypes.Result{})
@@ -943,6 +965,7 @@ func TestMoveTablesNoRoutingRules(t *testing.T) {
 	// a circular dependency.
 	// The TabletManager portion is tested in rpc_vreplication_test.go.
 	env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
+	env.tmc.expectFetchAsAllPrivsQuery(200, getNonEmptyTable, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, mzGetCopyState, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, mzGetLatestCopyState, &sqltypes.Result{})
 
@@ -1061,6 +1084,7 @@ func TestCreateLookupVindexFull(t *testing.T) {
 	}
 
 	env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
+	env.tmc.expectFetchAsAllPrivsQuery(200, "select 1 from `lookup` limit 1", &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, "/CREATE TABLE `lookup`", &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, mzGetCopyState, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, mzGetLatestCopyState, &sqltypes.Result{})
@@ -2500,12 +2524,13 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 	require.NoError(t, err)
 
 	testcases := []struct {
-		description     string
-		input           *vschemapb.Keyspace
-		createRequest   *createVReplicationWorkflowRequestResponse
-		vrepExecQueries []string
-		schemaAdditions []*tabletmanagerdatapb.TableDefinition
-		err             string
+		description            string
+		input                  *vschemapb.Keyspace
+		createRequest          *createVReplicationWorkflowRequestResponse
+		vrepExecQueries        []string
+		fetchAsAllPrivsQueries []string
+		schemaAdditions        []*tabletmanagerdatapb.TableDefinition
+		err                    string
 	}{
 		{
 			description: "dup vindex",
@@ -2777,7 +2802,12 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 					},
 				},
 			},
-			vrepExecQueries: []string{"CREATE TABLE `t1_lkp` (\n`c1` INT,\n  `keyspace_id` varbinary(128),\n  PRIMARY KEY (`c1`)\n)"},
+			vrepExecQueries: []string{
+				"CREATE TABLE `t1_lkp` (\n`c1` INT,\n  `keyspace_id` varbinary(128),\n  PRIMARY KEY (`c1`)\n)",
+			},
+			fetchAsAllPrivsQueries: []string{
+				"select 1 from `t1_lkp` limit 1",
+			},
 			createRequest: &createVReplicationWorkflowRequestResponse{
 				req: nil, // We don't care about defining it in this case
 				res: &tabletmanagerdatapb.CreateVReplicationWorkflowResponse{},
@@ -2809,6 +2839,9 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 				if tablet.Keyspace == ms.TargetKeyspace {
 					for _, vrq := range tcase.vrepExecQueries {
 						env.tmc.expectVRQuery(int(tablet.Alias.Uid), vrq, &sqltypes.Result{})
+					}
+					for _, q := range tcase.fetchAsAllPrivsQueries {
+						env.tmc.expectFetchAsAllPrivsQuery(int(tablet.Alias.Uid), q, &sqltypes.Result{})
 					}
 					if tcase.createRequest != nil {
 						env.tmc.expectCreateVReplicationWorkflowRequest(tablet.Alias.Uid, tcase.createRequest)
@@ -3096,6 +3129,7 @@ func TestKeyRangesEqualOptimization(t *testing.T) {
 				if tablet.Keyspace != targetKs || tablet.Type != topodatapb.TabletType_PRIMARY {
 					continue
 				}
+				env.tmc.expectFetchAsAllPrivsQuery(int(tablet.Alias.Uid), getNonEmptyTable, &sqltypes.Result{})
 				// If we are doing a partial MoveTables, we will only perform the workflow
 				// stream creation / INSERT statment on the shard(s) we're migrating.
 				if len(tc.moveTablesReq.SourceShards) > 0 && !slices.Contains(tc.moveTablesReq.SourceShards, tablet.Shard) {
@@ -3130,4 +3164,122 @@ func TestKeyRangesEqualOptimization(t *testing.T) {
 			require.NoError(t, err, "createWorkflowStreams failed: %v", err)
 		})
 	}
+}
+
+func TestValidateEmptyTables(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "zone1")
+	defer ts.Close()
+
+	ks := "test_keyspace"
+	shard1 := "-40"
+	shard2 := "40-80"
+	shard3 := "80-"
+	err := ts.CreateKeyspace(ctx, ks, &topodatapb.Keyspace{})
+	require.NoError(t, err)
+
+	err = ts.CreateShard(ctx, ks, shard1)
+	require.NoError(t, err)
+	err = ts.CreateShard(ctx, ks, shard2)
+	require.NoError(t, err)
+	err = ts.CreateShard(ctx, ks, shard3)
+	require.NoError(t, err)
+
+	tablet1 := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "zone1",
+			Uid:  100,
+		},
+		Keyspace: ks,
+		Shard:    shard1,
+	}
+	tablet2 := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "zone1",
+			Uid:  200,
+		},
+		Keyspace: ks,
+		Shard:    shard2,
+	}
+	tablet3 := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "zone1",
+			Uid:  300,
+		},
+		Keyspace: ks,
+		Shard:    shard3,
+	}
+	err = ts.CreateTablet(ctx, tablet1)
+	require.NoError(t, err)
+	err = ts.CreateTablet(ctx, tablet2)
+	require.NoError(t, err)
+	err = ts.CreateTablet(ctx, tablet3)
+	require.NoError(t, err)
+
+	s1, err := ts.UpdateShardFields(ctx, ks, shard1, func(si *topo.ShardInfo) error {
+		si.Shard.PrimaryAlias = tablet1.Alias
+		return nil
+	})
+	require.NoError(t, err)
+	s2, err := ts.UpdateShardFields(ctx, ks, shard2, func(si *topo.ShardInfo) error {
+		si.Shard.PrimaryAlias = tablet2.Alias
+		return nil
+	})
+	require.NoError(t, err)
+	s3, err := ts.UpdateShardFields(ctx, ks, shard3, func(si *topo.ShardInfo) error {
+		si.Shard.PrimaryAlias = tablet3.Alias
+		return nil
+	})
+	require.NoError(t, err)
+
+	tableSettings := []*vtctldatapb.TableMaterializeSettings{
+		{
+			TargetTable: "table1",
+		},
+		{
+			TargetTable: "table2",
+		},
+		{
+			TargetTable: "table3",
+		},
+	}
+
+	tmc := newTestMaterializerTMClient(ks, []string{shard1, shard2, shard3}, tableSettings)
+
+	table1Query := "select 1 from `table1` limit 1"
+	table2Query := "select 1 from `table2` limit 1"
+	table3Query := "select 1 from `table3` limit 1"
+	nonEmptyTableResult := &sqltypes.Result{Rows: []sqltypes.Row{{sqltypes.NewInt64(1)}}}
+
+	tmc.expectFetchAsAllPrivsQuery(int(tablet1.Alias.Uid), table1Query, &sqltypes.Result{})
+	tmc.expectFetchAsAllPrivsQuery(int(tablet2.Alias.Uid), table1Query, &sqltypes.Result{})
+	tmc.expectFetchAsAllPrivsQuery(int(tablet3.Alias.Uid), table1Query, nonEmptyTableResult)
+	tmc.expectFetchAsAllPrivsQuery(int(tablet1.Alias.Uid), table2Query, &sqltypes.Result{})
+	tmc.expectFetchAsAllPrivsQuery(int(tablet2.Alias.Uid), table2Query, &sqltypes.Result{})
+	tmc.expectFetchAsAllPrivsQuery(int(tablet3.Alias.Uid), table2Query, &sqltypes.Result{})
+	tmc.expectFetchAsAllPrivsQuery(int(tablet1.Alias.Uid), table3Query, nonEmptyTableResult)
+	tmc.expectFetchAsAllPrivsQuery(int(tablet2.Alias.Uid), table3Query, nonEmptyTableResult)
+	tmc.expectFetchAsAllPrivsQuery(int(tablet3.Alias.Uid), table3Query, nonEmptyTableResult)
+
+	ms := &vtctldatapb.MaterializeSettings{
+		TargetKeyspace: ks,
+		TableSettings:  tableSettings,
+	}
+
+	mz := &materializer{
+		ctx:          ctx,
+		ts:           ts,
+		sourceTs:     ts,
+		tmc:          tmc,
+		ms:           ms,
+		targetShards: []*topo.ShardInfo{s1, s2, s3},
+	}
+
+	err = mz.validateEmptyTables()
+
+	assert.ErrorContains(t, err, "table1")
+	assert.NotContains(t, err.Error(), "table2")
+	// Check if the error message doesn't include duplicate tables
+	assert.Equal(t, strings.Count(err.Error(), "table3"), 1)
 }

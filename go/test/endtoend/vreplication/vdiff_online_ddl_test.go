@@ -23,13 +23,12 @@ func TestOnlineDDLVDiff(t *testing.T) {
 	setSidecarDBName("_vt")
 	originalRdonly := defaultRdonly
 	originalReplicas := defaultReplicas
-	defaultRdonly = 0
-	defaultReplicas = 0
 	defer func() {
 		defaultRdonly = originalRdonly
 		defaultReplicas = originalReplicas
 	}()
-
+	defaultRdonly = 0
+	defaultReplicas = 0
 	vc = setupMinimalCluster(t)
 	defer vc.TearDown()
 	keyspace := "product"

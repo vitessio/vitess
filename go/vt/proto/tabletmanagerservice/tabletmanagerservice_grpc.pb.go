@@ -81,6 +81,7 @@ type TabletManagerClient interface {
 	GetReplicas(ctx context.Context, in *tabletmanagerdata.GetReplicasRequest, opts ...grpc.CallOption) (*tabletmanagerdata.GetReplicasResponse, error)
 	// VReplication API
 	CreateVReplicationWorkflow(ctx context.Context, in *tabletmanagerdata.CreateVReplicationWorkflowRequest, opts ...grpc.CallOption) (*tabletmanagerdata.CreateVReplicationWorkflowResponse, error)
+	DeleteTableData(ctx context.Context, in *tabletmanagerdata.DeleteTableDataRequest, opts ...grpc.CallOption) (*tabletmanagerdata.DeleteTableDataResponse, error)
 	DeleteVReplicationWorkflow(ctx context.Context, in *tabletmanagerdata.DeleteVReplicationWorkflowRequest, opts ...grpc.CallOption) (*tabletmanagerdata.DeleteVReplicationWorkflowResponse, error)
 	HasVReplicationWorkflows(ctx context.Context, in *tabletmanagerdata.HasVReplicationWorkflowsRequest, opts ...grpc.CallOption) (*tabletmanagerdata.HasVReplicationWorkflowsResponse, error)
 	ReadVReplicationWorkflow(ctx context.Context, in *tabletmanagerdata.ReadVReplicationWorkflowRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ReadVReplicationWorkflowResponse, error)
@@ -99,6 +100,8 @@ type TabletManagerClient interface {
 	// PopulateReparentJournal tells the tablet to add an entry to its
 	// reparent journal
 	PopulateReparentJournal(ctx context.Context, in *tabletmanagerdata.PopulateReparentJournalRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PopulateReparentJournalResponse, error)
+	// ReadReparentJournalInfo reads the information from reparent journal
+	ReadReparentJournalInfo(ctx context.Context, in *tabletmanagerdata.ReadReparentJournalInfoRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ReadReparentJournalInfoResponse, error)
 	// InitReplica tells the tablet to reparent to the primary unconditionally
 	InitReplica(ctx context.Context, in *tabletmanagerdata.InitReplicaRequest, opts ...grpc.CallOption) (*tabletmanagerdata.InitReplicaResponse, error)
 	// DemotePrimary tells the soon-to-be-former primary it's gonna change
@@ -470,6 +473,15 @@ func (c *tabletManagerClient) CreateVReplicationWorkflow(ctx context.Context, in
 	return out, nil
 }
 
+func (c *tabletManagerClient) DeleteTableData(ctx context.Context, in *tabletmanagerdata.DeleteTableDataRequest, opts ...grpc.CallOption) (*tabletmanagerdata.DeleteTableDataResponse, error) {
+	out := new(tabletmanagerdata.DeleteTableDataResponse)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/DeleteTableData", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *tabletManagerClient) DeleteVReplicationWorkflow(ctx context.Context, in *tabletmanagerdata.DeleteVReplicationWorkflowRequest, opts ...grpc.CallOption) (*tabletmanagerdata.DeleteVReplicationWorkflowResponse, error) {
 	out := new(tabletmanagerdata.DeleteVReplicationWorkflowResponse)
 	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/DeleteVReplicationWorkflow", in, out, opts...)
@@ -581,6 +593,15 @@ func (c *tabletManagerClient) InitPrimary(ctx context.Context, in *tabletmanager
 func (c *tabletManagerClient) PopulateReparentJournal(ctx context.Context, in *tabletmanagerdata.PopulateReparentJournalRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PopulateReparentJournalResponse, error) {
 	out := new(tabletmanagerdata.PopulateReparentJournalResponse)
 	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/PopulateReparentJournal", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) ReadReparentJournalInfo(ctx context.Context, in *tabletmanagerdata.ReadReparentJournalInfoRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ReadReparentJournalInfoResponse, error) {
+	out := new(tabletmanagerdata.ReadReparentJournalInfoResponse)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/ReadReparentJournalInfo", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -821,6 +842,7 @@ type TabletManagerServer interface {
 	GetReplicas(context.Context, *tabletmanagerdata.GetReplicasRequest) (*tabletmanagerdata.GetReplicasResponse, error)
 	// VReplication API
 	CreateVReplicationWorkflow(context.Context, *tabletmanagerdata.CreateVReplicationWorkflowRequest) (*tabletmanagerdata.CreateVReplicationWorkflowResponse, error)
+	DeleteTableData(context.Context, *tabletmanagerdata.DeleteTableDataRequest) (*tabletmanagerdata.DeleteTableDataResponse, error)
 	DeleteVReplicationWorkflow(context.Context, *tabletmanagerdata.DeleteVReplicationWorkflowRequest) (*tabletmanagerdata.DeleteVReplicationWorkflowResponse, error)
 	HasVReplicationWorkflows(context.Context, *tabletmanagerdata.HasVReplicationWorkflowsRequest) (*tabletmanagerdata.HasVReplicationWorkflowsResponse, error)
 	ReadVReplicationWorkflow(context.Context, *tabletmanagerdata.ReadVReplicationWorkflowRequest) (*tabletmanagerdata.ReadVReplicationWorkflowResponse, error)
@@ -839,6 +861,8 @@ type TabletManagerServer interface {
 	// PopulateReparentJournal tells the tablet to add an entry to its
 	// reparent journal
 	PopulateReparentJournal(context.Context, *tabletmanagerdata.PopulateReparentJournalRequest) (*tabletmanagerdata.PopulateReparentJournalResponse, error)
+	// ReadReparentJournalInfo reads the information from reparent journal
+	ReadReparentJournalInfo(context.Context, *tabletmanagerdata.ReadReparentJournalInfoRequest) (*tabletmanagerdata.ReadReparentJournalInfoResponse, error)
 	// InitReplica tells the tablet to reparent to the primary unconditionally
 	InitReplica(context.Context, *tabletmanagerdata.InitReplicaRequest) (*tabletmanagerdata.InitReplicaResponse, error)
 	// DemotePrimary tells the soon-to-be-former primary it's gonna change
@@ -985,6 +1009,9 @@ func (UnimplementedTabletManagerServer) GetReplicas(context.Context, *tabletmana
 func (UnimplementedTabletManagerServer) CreateVReplicationWorkflow(context.Context, *tabletmanagerdata.CreateVReplicationWorkflowRequest) (*tabletmanagerdata.CreateVReplicationWorkflowResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateVReplicationWorkflow not implemented")
 }
+func (UnimplementedTabletManagerServer) DeleteTableData(context.Context, *tabletmanagerdata.DeleteTableDataRequest) (*tabletmanagerdata.DeleteTableDataResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeleteTableData not implemented")
+}
 func (UnimplementedTabletManagerServer) DeleteVReplicationWorkflow(context.Context, *tabletmanagerdata.DeleteVReplicationWorkflowRequest) (*tabletmanagerdata.DeleteVReplicationWorkflowResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteVReplicationWorkflow not implemented")
 }
@@ -1023,6 +1050,9 @@ func (UnimplementedTabletManagerServer) InitPrimary(context.Context, *tabletmana
 }
 func (UnimplementedTabletManagerServer) PopulateReparentJournal(context.Context, *tabletmanagerdata.PopulateReparentJournalRequest) (*tabletmanagerdata.PopulateReparentJournalResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PopulateReparentJournal not implemented")
+}
+func (UnimplementedTabletManagerServer) ReadReparentJournalInfo(context.Context, *tabletmanagerdata.ReadReparentJournalInfoRequest) (*tabletmanagerdata.ReadReparentJournalInfoResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReadReparentJournalInfo not implemented")
 }
 func (UnimplementedTabletManagerServer) InitReplica(context.Context, *tabletmanagerdata.InitReplicaRequest) (*tabletmanagerdata.InitReplicaResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method InitReplica not implemented")
@@ -1745,6 +1775,24 @@ func _TabletManager_CreateVReplicationWorkflow_Handler(srv interface{}, ctx cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TabletManager_DeleteTableData_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.DeleteTableDataRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TabletManagerServer).DeleteTableData(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/DeleteTableData",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).DeleteTableData(ctx, req.(*tabletmanagerdata.DeleteTableDataRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _TabletManager_DeleteVReplicationWorkflow_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(tabletmanagerdata.DeleteVReplicationWorkflowRequest)
 	if err := dec(in); err != nil {
@@ -1975,6 +2023,24 @@ func _TabletManager_PopulateReparentJournal_Handler(srv interface{}, ctx context
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(TabletManagerServer).PopulateReparentJournal(ctx, req.(*tabletmanagerdata.PopulateReparentJournalRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TabletManager_ReadReparentJournalInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.ReadReparentJournalInfoRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TabletManagerServer).ReadReparentJournalInfo(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/ReadReparentJournalInfo",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).ReadReparentJournalInfo(ctx, req.(*tabletmanagerdata.ReadReparentJournalInfoRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2393,6 +2459,10 @@ var TabletManager_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _TabletManager_CreateVReplicationWorkflow_Handler,
 		},
 		{
+			MethodName: "DeleteTableData",
+			Handler:    _TabletManager_DeleteTableData_Handler,
+		},
+		{
 			MethodName: "DeleteVReplicationWorkflow",
 			Handler:    _TabletManager_DeleteVReplicationWorkflow_Handler,
 		},
@@ -2443,6 +2513,10 @@ var TabletManager_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "PopulateReparentJournal",
 			Handler:    _TabletManager_PopulateReparentJournal_Handler,
+		},
+		{
+			MethodName: "ReadReparentJournalInfo",
+			Handler:    _TabletManager_ReadReparentJournalInfo_Handler,
 		},
 		{
 			MethodName: "InitReplica",

@@ -208,6 +208,7 @@ func TestSetReplicationSource(t *testing.T) {
 	pos, err := replication.DecodePosition("MySQL56/8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8")
 	require.NoError(t, err)
 	primary.FakeMysqlDaemon.SetPrimaryPositionLocked(pos)
+	primary.FakeMysqlDaemon.ServerUUID = "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9"
 
 	// primary action loop (to initialize host and port)
 	primary.StartActionLoop(t, wr)

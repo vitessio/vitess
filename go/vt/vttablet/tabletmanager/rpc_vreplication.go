@@ -21,20 +21,25 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"golang.org/x/exp/maps"
 	"google.golang.org/protobuf/encoding/prototext"
 
+	"vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/movetables"
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -137,6 +142,99 @@ func (tm *TabletManager) CreateVReplicationWorkflow(ctx context.Context, req *ta
 		res.RowsAffected += streamres.RowsAffected
 	}
 	return &tabletmanagerdatapb.CreateVReplicationWorkflowResponse{Result: sqltypes.ResultToProto3(res)}, nil
+}
+
+// DeleteTableData will delete data from the given tables (keys in the
+// req.Tabletfilters map) using the given filter or WHERE clauses (values
+// in the map). It will perform this work in batches of req.BatchSize
+// until all matching rows have been deleted in all tables, or the context
+// expires.
+func (tm *TabletManager) DeleteTableData(ctx context.Context, req *tabletmanagerdatapb.DeleteTableDataRequest) (*tabletmanagerdatapb.DeleteTableDataResponse, error) {
+	if req == nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid nil request")
+	}
+
+	if len(req.TableFilters) == 0 { // Nothing to do
+		return &tabletmanagerdatapb.DeleteTableDataResponse{}, nil
+	}
+
+	// So that we do them in a predictable and uniform order.
+	tables := maps.Keys(req.TableFilters)
+	sort.Strings(tables)
+
+	batchSize := req.BatchSize
+	if batchSize < 1 {
+		batchSize = movetables.DefaultDeleteBatchSize
+	}
+	limit := &sqlparser.Limit{Rowcount: sqlparser.NewIntLiteral(fmt.Sprintf("%d", batchSize))}
+	// We will log some progress info every 100 delete batches.
+	progressRows := uint64(batchSize * 100)
+
+	throttledLogger := logutil.NewThrottledLogger("DeleteTableData", 1*time.Minute)
+	checkIfCanceled := func() error {
+		select {
+		case <-ctx.Done():
+			return vterrors.Wrap(ctx.Err(), "context expired while deleting data")
+		default:
+			return nil
+		}
+	}
+
+	for _, table := range tables {
+		stmt, err := tm.Env.Parser().Parse(fmt.Sprintf("delete from %s %s", table, req.TableFilters[table]))
+		if err != nil {
+			return nil, vterrors.Wrapf(err, "unable to build delete query for table %s", table)
+		}
+		del, ok := stmt.(*sqlparser.Delete)
+		if !ok {
+			return nil, vterrors.Wrapf(err, "unable to build delete query for table %s", table)
+		}
+		del.Limit = limit
+		query := sqlparser.String(del)
+		rowsDeleted := uint64(0)
+		// Delete all of the matching rows from the table, in batches, until we've
+		// deleted them all.
+		log.Infof("Starting deletion of data from table %s using query %q", table, query)
+		for {
+			// Back off if we're causing too much load on the database with these
+			// batch deletes.
+			if _, ok := tm.VREngine.ThrottlerClient().ThrottleCheckOKOrWaitAppName(ctx, throttlerapp.VReplicationName); !ok {
+				throttledLogger.Infof("throttling bulk data delete for table %s using query %q",
+					table, query)
+				if err := checkIfCanceled(); err != nil {
+					return nil, err
+				}
+				continue
+			}
+			res, err := tm.ExecuteFetchAsAllPrivs(ctx,
+				&tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest{
+					Query:  []byte(query),
+					DbName: tm.DBConfigs.DBName,
+				})
+			if err != nil {
+				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "error deleting data using query %q: %v",
+					query, err)
+			}
+			rowsDeleted += res.RowsAffected
+			// Log some progress info periodically to give the operator some idea of
+			// how much work we've done, how much is left, and how long it may take
+			// (considering throttling, system performance, etc).
+			if rowsDeleted%progressRows == 0 {
+				log.Infof("Successfully deleted %d rows of data from table %s so far, using query %q",
+					rowsDeleted, table, query)
+			}
+			if res.RowsAffected == 0 { // We're done with this table
+				break
+			}
+			if err := checkIfCanceled(); err != nil {
+				return nil, err
+			}
+		}
+		log.Infof("Completed deletion of data (%d rows) from table %s using query %q",
+			rowsDeleted, table, query)
+	}
+
+	return &tabletmanagerdatapb.DeleteTableDataResponse{}, nil
 }
 
 func (tm *TabletManager) DeleteVReplicationWorkflow(ctx context.Context, req *tabletmanagerdatapb.DeleteVReplicationWorkflowRequest) (*tabletmanagerdatapb.DeleteVReplicationWorkflowResponse, error) {

@@ -61,6 +61,11 @@ func (fra *fakeRPCTM) CreateVReplicationWorkflow(ctx context.Context, req *table
 	panic("implement me")
 }
 
+func (fra *fakeRPCTM) DeleteTableData(ctx context.Context, req *tabletmanagerdatapb.DeleteTableDataRequest) (*tabletmanagerdatapb.DeleteTableDataResponse, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
 func (fra *fakeRPCTM) DeleteVReplicationWorkflow(ctx context.Context, req *tabletmanagerdatapb.DeleteVReplicationWorkflowRequest) (*tabletmanagerdatapb.DeleteVReplicationWorkflowResponse, error) {
 	// TODO implement me
 	panic("implement me")
@@ -1157,6 +1162,15 @@ func (fra *fakeRPCTM) PopulateReparentJournal(ctx context.Context, timeCreatedNS
 	return nil
 }
 
+var testReparentJournalLen = 10
+
+func (fra *fakeRPCTM) ReadReparentJournalInfo(context.Context) (int, error) {
+	if fra.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	return testReparentJournalLen, nil
+}
+
 func tmRPCTestPopulateReparentJournal(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.PopulateReparentJournal(ctx, tablet, testTimeCreatedNS, testActionName, testPrimaryAlias, testReplicationPosition)
 	compareError(t, "PopulateReparentJournal", err, true, testPopulateReparentJournalCalled)
@@ -1165,6 +1179,16 @@ func tmRPCTestPopulateReparentJournal(ctx context.Context, t *testing.T, client 
 func tmRPCTestPopulateReparentJournalPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.PopulateReparentJournal(ctx, tablet, testTimeCreatedNS, testActionName, testPrimaryAlias, testReplicationPosition)
 	expectHandleRPCPanic(t, "PopulateReparentJournal", true /*verbose*/, err)
+}
+
+func tmRPCTestReadReparentJournalInfo(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	length, err := client.ReadReparentJournalInfo(ctx, tablet)
+	compareError(t, "ReadReparentJournalInfo", err, length, testReparentJournalLen)
+}
+
+func tmRPCTestReadReparentJournalInfoPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	_, err := client.ReadReparentJournalInfo(ctx, tablet)
+	expectHandleRPCPanic(t, "ReadReparentJournalInfo", true /*verbose*/, err)
 }
 
 func tmRPCTestWaitForPositionPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
@@ -1539,6 +1563,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	tmRPCTestResetReplication(ctx, t, client, tablet)
 	tmRPCTestInitPrimary(ctx, t, client, tablet)
 	tmRPCTestPopulateReparentJournal(ctx, t, client, tablet)
+	tmRPCTestReadReparentJournalInfo(ctx, t, client, tablet)
 	tmRPCTestDemotePrimary(ctx, t, client, tablet)
 	tmRPCTestUndoDemotePrimary(ctx, t, client, tablet)
 	tmRPCTestSetReplicationSource(ctx, t, client, tablet)
@@ -1598,6 +1623,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	tmRPCTestResetReplicationPanic(ctx, t, client, tablet)
 	tmRPCTestInitPrimaryPanic(ctx, t, client, tablet)
 	tmRPCTestPopulateReparentJournalPanic(ctx, t, client, tablet)
+	tmRPCTestReadReparentJournalInfoPanic(ctx, t, client, tablet)
 	tmRPCTestWaitForPositionPanic(ctx, t, client, tablet)
 	tmRPCTestDemotePrimaryPanic(ctx, t, client, tablet)
 	tmRPCTestUndoDemotePrimaryPanic(ctx, t, client, tablet)

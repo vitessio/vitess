@@ -444,6 +444,13 @@ func (s *server) CreateVReplicationWorkflow(ctx context.Context, request *tablet
 	return s.tm.CreateVReplicationWorkflow(ctx, request)
 }
 
+func (s *server) DeleteTableData(ctx context.Context, request *tabletmanagerdatapb.DeleteTableDataRequest) (response *tabletmanagerdatapb.DeleteTableDataResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "DeleteTableData", request, response, true /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response = &tabletmanagerdatapb.DeleteTableDataResponse{}
+	return s.tm.DeleteTableData(ctx, request)
+}
+
 func (s *server) DeleteVReplicationWorkflow(ctx context.Context, request *tabletmanagerdatapb.DeleteVReplicationWorkflowRequest) (response *tabletmanagerdatapb.DeleteVReplicationWorkflowResponse, err error) {
 	defer s.tm.HandleRPCPanic(ctx, "DeleteVReplicationWorkflow", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
@@ -543,6 +550,17 @@ func (s *server) PopulateReparentJournal(ctx context.Context, request *tabletman
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.PopulateReparentJournalResponse{}
 	return response, s.tm.PopulateReparentJournal(ctx, request.TimeCreatedNs, request.ActionName, request.PrimaryAlias, request.ReplicationPosition)
+}
+
+func (s *server) ReadReparentJournalInfo(ctx context.Context, request *tabletmanagerdatapb.ReadReparentJournalInfoRequest) (response *tabletmanagerdatapb.ReadReparentJournalInfoResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "ReadReparentJournalInfo", request, response, true /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response = &tabletmanagerdatapb.ReadReparentJournalInfoResponse{}
+	length, err := s.tm.ReadReparentJournalInfo(ctx)
+	if err == nil {
+		response.Length = int32(length)
+	}
+	return response, err
 }
 
 func (s *server) InitReplica(ctx context.Context, request *tabletmanagerdatapb.InitReplicaRequest) (response *tabletmanagerdatapb.InitReplicaResponse, err error) {
