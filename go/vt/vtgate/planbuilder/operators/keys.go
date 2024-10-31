@@ -37,8 +37,8 @@ type (
 		Uses   sqlparser.ComparisonExprOperator
 	}
 	JoinPredicate struct {
-		Cols []Column
-		Uses sqlparser.ComparisonExprOperator
+		LHS, RHS Column
+		Uses     sqlparser.ComparisonExprOperator
 	}
 	VExplainKeys struct {
 		StatementType   string          `json:"statementType"`
@@ -129,10 +129,16 @@ type columnUse struct {
 	use sqlparser.ComparisonExprOperator
 }
 
+type joinPredicate struct {
+	lhs *sqlparser.ColName
+	rhs *sqlparser.ColName
+	use sqlparser.ComparisonExprOperator
+}
+
 func GetVExplainKeys(ctx *plancontext.PlanningContext, stmt sqlparser.Statement) (result VExplainKeys) {
 	var groupingColumns, selectColumns []*sqlparser.ColName
 	var filterColumns, joinColumns []columnUse
-	var joinPredicates []JoinPredicate
+	var jps []joinPredicate
 
 	addPredicate := func(predicate sqlparser.Expr) {
 		predicates := sqlparser.SplitAndExpression(nil, predicate)
@@ -146,10 +152,7 @@ func GetVExplainKeys(ctx *plancontext.PlanningContext, stmt sqlparser.Statement)
 				if lhsOK && rhsOK && ctx.SemTable.RecursiveDeps(lhs) != ctx.SemTable.RecursiveDeps(rhs) {
 					// If the columns are from different tables, they are considered join columns
 					output = &joinColumns
-					joinPredicates = append(joinPredicates, JoinPredicate{
-						Cols: []Column{*createColumn(ctx, lhs), *createColumn(ctx, rhs)},
-						Uses: cmp.Operator,
-					})
+					jps = append(jps, joinPredicate{lhs: lhs, rhs: rhs, use: cmp.Operator})
 				}
 
 				if lhsOK {
@@ -202,8 +205,47 @@ func GetVExplainKeys(ctx *plancontext.PlanningContext, stmt sqlparser.Statement)
 		JoinColumns:     getUniqueColUsages(ctx, joinColumns),
 		FilterColumns:   getUniqueColUsages(ctx, filterColumns),
 		StatementType:   sqlparser.ASTToStatementType(stmt).String(),
-		JoinPredicates:  joinPredicates,
+		JoinPredicates:  getUniqueJoinPredicates(ctx, jps),
 	}
+}
+
+func getUniqueJoinPredicates(ctx *plancontext.PlanningContext, joinPredicates []joinPredicate) []JoinPredicate {
+	isEqual := func(a, b joinPredicate) bool {
+		if a.use != b.use {
+			return false
+		}
+		// if (A.LHS = B.LHS and A.RHS = B.RHS) or (A.LHS = B.RHS and A.RHS = B.LHS) then equal
+		if a.lhs.Equal(b.lhs) && a.rhs.Equal(b.rhs) || a.lhs.Equal(b.rhs) && !a.rhs.Equal(b.lhs) {
+			return true
+		}
+		return false
+	}
+
+	var result []JoinPredicate
+	var seenJoinPredicates []joinPredicate
+outer:
+	for _, predicate := range joinPredicates {
+		// check if this join predicate already exists
+		for _, newJoinPredicate := range seenJoinPredicates {
+			if isEqual(predicate, newJoinPredicate) {
+				continue outer
+			}
+		}
+
+		seenJoinPredicates = append(seenJoinPredicates, predicate)
+		lhs := createColumn(ctx, predicate.lhs)
+		rhs := createColumn(ctx, predicate.rhs)
+		if lhs == nil || rhs == nil {
+			continue
+		}
+		result = append(result, JoinPredicate{
+			LHS:  *lhs,
+			RHS:  *rhs,
+			Uses: predicate.use,
+		})
+	}
+
+	return result
 }
 
 func getUniqueColNames(ctx *plancontext.PlanningContext, inCols []*sqlparser.ColName) (columns []Column) {
