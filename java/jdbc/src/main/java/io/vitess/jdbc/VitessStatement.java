@@ -241,7 +241,6 @@ public class VitessStatement implements Statement {
 
   /**
    * Return Warnings
-   * <p/>
    * Not implementing as Error is Thrown when occurred
    *
    * @return SQLWarning or null
