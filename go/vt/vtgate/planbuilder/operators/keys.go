@@ -163,9 +163,9 @@ type columnUse struct {
 }
 
 type joinPredicate struct {
-	lhs *sqlparser.ColName
-	rhs *sqlparser.ColName
-	use sqlparser.ComparisonExprOperator
+	lhs  *sqlparser.ColName
+	rhs  *sqlparser.ColName
+	uses sqlparser.ComparisonExprOperator
 }
 
 func GetVExplainKeys(ctx *plancontext.PlanningContext, stmt sqlparser.Statement) (result VExplainKeys) {
@@ -185,7 +185,7 @@ func GetVExplainKeys(ctx *plancontext.PlanningContext, stmt sqlparser.Statement)
 				if lhsOK && rhsOK && ctx.SemTable.RecursiveDeps(lhs) != ctx.SemTable.RecursiveDeps(rhs) {
 					// If the columns are from different tables, they are considered join columns
 					output = &joinColumns
-					jps = append(jps, joinPredicate{lhs: lhs, rhs: rhs, use: cmp.Operator})
+					jps = append(jps, joinPredicate{lhs: lhs, rhs: rhs, uses: cmp.Operator})
 				}
 
 				if lhsOK {
@@ -243,39 +243,39 @@ func GetVExplainKeys(ctx *plancontext.PlanningContext, stmt sqlparser.Statement)
 }
 
 func getUniqueJoinPredicates(ctx *plancontext.PlanningContext, joinPredicates []joinPredicate) []JoinPredicate {
-	isEqual := func(a, b joinPredicate) bool {
-		if a.use != b.use {
+	isEqual := func(a, b JoinPredicate) bool {
+		if a.Uses != b.Uses {
 			return false
 		}
 		// if (A.LHS = B.LHS and A.RHS = B.RHS) or (A.LHS = B.RHS and A.RHS = B.LHS) then equal
-		if a.lhs.Equal(b.lhs) && a.rhs.Equal(b.rhs) || a.lhs.Equal(b.rhs) && !a.rhs.Equal(b.lhs) {
+		if a == b || a.LHS.String() == b.RHS.String() && a.RHS.String() == b.LHS.String() {
 			return true
 		}
 		return false
 	}
 
 	var result []JoinPredicate
-	var seenJoinPredicates []joinPredicate
 outer:
 	for _, predicate := range joinPredicates {
-		// check if this join predicate already exists
-		for _, newJoinPredicate := range seenJoinPredicates {
-			if isEqual(predicate, newJoinPredicate) {
-				continue outer
-			}
-		}
-
-		seenJoinPredicates = append(seenJoinPredicates, predicate)
 		lhs := createColumn(ctx, predicate.lhs)
 		rhs := createColumn(ctx, predicate.rhs)
 		if lhs == nil || rhs == nil {
 			continue
 		}
-		result = append(result, JoinPredicate{
+		newJp := JoinPredicate{
 			LHS:  *lhs,
 			RHS:  *rhs,
-			Uses: predicate.use,
-		})
+			Uses: predicate.uses,
+		}
+
+		// check if this join predicate already exists
+		for _, oldJp := range result {
+			if isEqual(newJp, oldJp) {
+				continue outer
+			}
+		}
+
+		result = append(result, newJp)
 	}
 
 	return result
