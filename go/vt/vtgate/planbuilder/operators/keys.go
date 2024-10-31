@@ -145,6 +145,17 @@ func (jp *JoinPredicate) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+func (jp JoinPredicate) Equal(other JoinPredicate) bool {
+	if jp.Uses != other.Uses {
+		return false
+	}
+	// if (A.LHS = B.LHS and A.RHS = B.RHS) or (A.LHS = B.RHS and A.RHS = B.LHS) then equal
+	if jp == other || jp.LHS.String() == other.RHS.String() && jp.RHS.String() == other.LHS.String() {
+		return true
+	}
+	return false
+}
+
 func (c Column) String() string {
 	return fmt.Sprintf("%s.%s", c.Table, c.Name)
 }
@@ -243,17 +254,6 @@ func GetVExplainKeys(ctx *plancontext.PlanningContext, stmt sqlparser.Statement)
 }
 
 func getUniqueJoinPredicates(ctx *plancontext.PlanningContext, joinPredicates []joinPredicate) []JoinPredicate {
-	isEqual := func(a, b JoinPredicate) bool {
-		if a.Uses != b.Uses {
-			return false
-		}
-		// if (A.LHS = B.LHS and A.RHS = B.RHS) or (A.LHS = B.RHS and A.RHS = B.LHS) then equal
-		if a == b || a.LHS.String() == b.RHS.String() && a.RHS.String() == b.LHS.String() {
-			return true
-		}
-		return false
-	}
-
 	var result []JoinPredicate
 outer:
 	for _, predicate := range joinPredicates {
@@ -270,7 +270,7 @@ outer:
 
 		// check if this join predicate already exists
 		for _, oldJp := range result {
-			if isEqual(newJp, oldJp) {
+			if newJp.Equal(oldJp) {
 				continue outer
 			}
 		}
