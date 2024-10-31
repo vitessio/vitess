@@ -22,7 +22,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"path"
 	"reflect"
 	"strconv"
@@ -62,14 +61,14 @@ type VtgateProcess struct {
 	// Extra Args to be set before starting the vtgate process
 	ExtraArgs []string
 
-	proc *exec.Cmd
+	proc *processInfo
 	exit chan error
 }
 
 const defaultVtGatePlannerVersion = planbuilder.Gen4
 
 // Setup starts Vtgate process with required arguements
-func (vtgate *VtgateProcess) Setup() (err error) {
+func (vtgate *VtgateProcess) Setup() error {
 	args := []string{
 		"--topo_implementation", vtgate.CommonArg.TopoImplementation,
 		"--topo_global_server_address", vtgate.CommonArg.TopoGlobalAddress,
@@ -116,36 +115,28 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 	if vtgate.SysVarSetEnabled {
 		args = append(args, "--enable_system_settings")
 	}
-	vtgate.proc = exec.Command(
+	vtgate.proc = newCommand(
 		vtgate.Binary,
 		args...,
 	)
 	if *isCoverage {
-		vtgate.proc.Args = append(vtgate.proc.Args, "--test.coverprofile="+getCoveragePath("vtgate.out"))
+		vtgate.proc.addArgs("--test.coverprofile=" + getCoveragePath("vtgate.out"))
 	}
 
-	vtgate.proc.Args = append(vtgate.proc.Args, vtgate.ExtraArgs...)
+	vtgate.proc.addArgs(vtgate.ExtraArgs...)
+	vtgate.proc.addEnv(os.Environ()...)
+	vtgate.proc.addEnv(DefaultVttestEnv)
 
-	errFile, err := os.Create(path.Join(vtgate.LogDir, "vtgate-stderr.txt"))
+	log.Infof("Running vtgate with command: %v", strings.Join(vtgate.proc.getArgs(), " "))
+
+	err := vtgate.proc.start()
 	if err != nil {
-		log.Errorf("cannot create error log file for vtgate: %v", err)
 		return err
-	}
-	vtgate.proc.Stderr = errFile
-
-	vtgate.proc.Env = append(vtgate.proc.Env, os.Environ()...)
-	vtgate.proc.Env = append(vtgate.proc.Env, DefaultVttestEnv)
-
-	log.Infof("Running vtgate with command: %v", strings.Join(vtgate.proc.Args, " "))
-
-	err = vtgate.proc.Start()
-	if err != nil {
-		return
 	}
 	vtgate.exit = make(chan error)
 	go func() {
 		if vtgate.proc != nil {
-			vtgate.exit <- vtgate.proc.Wait()
+			vtgate.exit <- vtgate.proc.wait()
 			close(vtgate.exit)
 		}
 	}()
@@ -243,7 +234,7 @@ func (vtgate *VtgateProcess) Terminate() error {
 	if vtgate.proc == nil {
 		return nil
 	}
-	return vtgate.proc.Process.Signal(syscall.SIGTERM)
+	return vtgate.proc.process().Signal(syscall.SIGTERM)
 }
 
 // TearDown shuts down the running vtgate service
@@ -253,7 +244,7 @@ func (vtgate *VtgateProcess) TearDown() error {
 	}
 	// graceful shutdown is not currently working with vtgate, attempting a force-kill to make tests less flaky
 	// Attempt graceful shutdown with SIGTERM first
-	vtgate.proc.Process.Signal(syscall.SIGTERM)
+	vtgate.proc.process().Signal(syscall.SIGTERM)
 
 	// We are not checking vtgate's exit code because it sometimes
 	// returns exit code 2, even though vtgate terminates cleanly.
@@ -263,7 +254,7 @@ func (vtgate *VtgateProcess) TearDown() error {
 		return nil
 
 	case <-time.After(30 * time.Second):
-		vtgate.proc.Process.Kill()
+		vtgate.proc.process().Kill()
 		err := <-vtgate.exit
 		vtgate.proc = nil
 		return err

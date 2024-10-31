@@ -54,6 +54,7 @@ func TestMain(m *testing.M) {
 		// Start topo server
 		err := clusterInstance.StartTopo()
 		if err != nil {
+			fmt.Printf("Error starting topo server: %v\n", err.Error())
 			return 1
 		}
 
@@ -65,6 +66,7 @@ func TestMain(m *testing.M) {
 		}
 		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 0, false)
 		if err != nil {
+			fmt.Printf("Error starting keyspace: %v\n", err.Error())
 			return 1
 		}
 
@@ -72,6 +74,7 @@ func TestMain(m *testing.M) {
 		// Start vtgate
 		err = clusterInstance.StartVtgate()
 		if err != nil {
+			fmt.Printf("Error starting vtgate server: %v\n", err.Error())
 			return 1
 		}
 
@@ -83,7 +86,7 @@ func TestMain(m *testing.M) {
 		// create mysql instance and connection parameters
 		conn, closer, err := utils.NewMySQL(clusterInstance, keyspaceName, schemaSQL)
 		if err != nil {
-			fmt.Println(err)
+			fmt.Printf("Error starting mysql server: %v\n", err.Error())
 			return 1
 		}
 		defer closer()

@@ -19,7 +19,6 @@ package cluster
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path"
 	"strings"
 	"syscall"
@@ -48,13 +47,13 @@ type VtbackupProcess struct {
 	initialBackup bool
 	initDBfile    string
 
-	proc *exec.Cmd
+	proc *processInfo
 	exit chan error
 }
 
 // Setup starts vtbackup process with required arguements
 func (vtbackup *VtbackupProcess) Setup() (err error) {
-	vtbackup.proc = exec.Command(
+	vtbackup.proc = newCommand(
 		vtbackup.Binary,
 		"--topo_implementation", vtbackup.CommonArg.TopoImplementation,
 		"--topo_global_server_address", vtbackup.CommonArg.TopoGlobalAddress,
@@ -73,20 +72,17 @@ func (vtbackup *VtbackupProcess) Setup() (err error) {
 	)
 
 	if vtbackup.initialBackup {
-		vtbackup.proc.Args = append(vtbackup.proc.Args, "--initial_backup")
+		vtbackup.proc.addArgs("--initial_backup")
 	}
 	if vtbackup.ExtraArgs != nil {
-		vtbackup.proc.Args = append(vtbackup.proc.Args, vtbackup.ExtraArgs...)
+		vtbackup.proc.addArgs(vtbackup.ExtraArgs...)
 	}
 
-	vtbackup.proc.Stderr = os.Stderr
-	vtbackup.proc.Stdout = os.Stdout
+	vtbackup.proc.addEnv(os.Environ()...)
+	vtbackup.proc.addEnv(DefaultVttestEnv)
+	log.Infof("Running vtbackup with args: %v", strings.Join(vtbackup.proc.getArgs(), " "))
 
-	vtbackup.proc.Env = append(vtbackup.proc.Env, os.Environ()...)
-	vtbackup.proc.Env = append(vtbackup.proc.Env, DefaultVttestEnv)
-	log.Infof("Running vtbackup with args: %v", strings.Join(vtbackup.proc.Args, " "))
-
-	err = vtbackup.proc.Run()
+	err = vtbackup.proc.run()
 	if err != nil {
 		return
 	}
@@ -94,7 +90,7 @@ func (vtbackup *VtbackupProcess) Setup() (err error) {
 	vtbackup.exit = make(chan error)
 	go func() {
 		if vtbackup.proc != nil {
-			vtbackup.exit <- vtbackup.proc.Wait()
+			vtbackup.exit <- vtbackup.proc.wait()
 			close(vtbackup.exit)
 		}
 	}()
@@ -109,7 +105,7 @@ func (vtbackup *VtbackupProcess) TearDown() error {
 	}
 
 	// Attempt graceful shutdown with SIGTERM first
-	vtbackup.proc.Process.Signal(syscall.SIGTERM)
+	vtbackup.proc.process().Signal(syscall.SIGTERM)
 
 	select {
 	case err := <-vtbackup.exit:
@@ -117,7 +113,7 @@ func (vtbackup *VtbackupProcess) TearDown() error {
 		return err
 
 	case <-time.After(10 * time.Second):
-		vtbackup.proc.Process.Kill()
+		vtbackup.proc.process().Kill()
 		err := <-vtbackup.exit
 		vtbackup.proc = nil
 		return err

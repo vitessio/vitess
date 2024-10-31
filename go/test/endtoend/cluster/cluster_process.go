@@ -439,7 +439,7 @@ func (cluster *LocalProcessCluster) AddShard(keyspaceName string, shardName stri
 		Name: shardName,
 	}
 	log.Infof("Starting shard: %v", shardName)
-	var mysqlctlProcessList []*exec.Cmd
+	var mysqlctlProcessList []*processInfo
 	for i := 0; i < totalTabletsRequired; i++ {
 		// instantiate vttablet object with reserved ports
 		tabletUID := cluster.GetAndReserveTabletUID()
@@ -514,7 +514,7 @@ func (cluster *LocalProcessCluster) AddShard(keyspaceName string, shardName stri
 
 	// wait till all mysqlctl is instantiated
 	for _, proc := range mysqlctlProcessList {
-		if err := proc.Wait(); err != nil {
+		if err := proc.wait(); err != nil {
 			log.Errorf("unable to start mysql process %v: %v", proc, err)
 			return nil, err
 		}
@@ -560,13 +560,13 @@ func (cluster *LocalProcessCluster) StartKeyspaceLegacy(keyspace Keyspace, shard
 	}
 	// Create the keyspace if it doesn't already exist.
 	_ = cluster.VtctlProcess.CreateKeyspace(keyspace.Name, keyspace.SidecarDBName, keyspace.DurabilityPolicy)
-	var mysqlctlProcessList []*exec.Cmd
+	var mysqlctlProcessList []*processInfo
 	for _, shardName := range shardNames {
 		shard := &Shard{
 			Name: shardName,
 		}
 		log.Infof("Starting shard: %v", shardName)
-		mysqlctlProcessList = []*exec.Cmd{}
+		mysqlctlProcessList = []*processInfo{}
 		for i := 0; i < totalTabletsRequired; i++ {
 			// instantiate vttablet object with reserved ports
 			tabletUID := cluster.GetAndReserveTabletUID()
@@ -629,7 +629,7 @@ func (cluster *LocalProcessCluster) StartKeyspaceLegacy(keyspace Keyspace, shard
 
 		// wait till all mysqlctl is instantiated
 		for _, proc := range mysqlctlProcessList {
-			if err = proc.Wait(); err != nil {
+			if err = proc.wait(); err != nil {
 				log.Errorf("unable to start mysql process %v: %v", proc, err)
 				return err
 			}
@@ -1061,7 +1061,7 @@ func (cluster *LocalProcessCluster) Teardown() {
 		}
 	}
 
-	var mysqlctlProcessList []*exec.Cmd
+	var mysqlctlProcessList []*processInfo
 	var mysqlctlTabletUIDs []int
 	for _, keyspace := range cluster.Keyspaces {
 		for _, shard := range keyspace.Shards {
@@ -1107,17 +1107,17 @@ func (cluster *LocalProcessCluster) Teardown() {
 	cluster.teardownCompleted = true
 }
 
-func (cluster *LocalProcessCluster) waitForMySQLProcessToExit(mysqlctlProcessList []*exec.Cmd, mysqlctlTabletUIDs []int) {
+func (cluster *LocalProcessCluster) waitForMySQLProcessToExit(mysqlctlProcessList []*processInfo, mysqlctlTabletUIDs []int) {
 	wg := sync.WaitGroup{}
 	for i, cmd := range mysqlctlProcessList {
 		wg.Add(1)
-		go func(cmd *exec.Cmd, tabletUID int) {
+		go func(cmd *processInfo, tabletUID int) {
 			defer func() {
 				wg.Done()
 			}()
 			exit := make(chan error)
 			go func() {
-				exit <- cmd.Wait()
+				exit <- cmd.wait()
 			}()
 			select {
 			case <-time.After(30 * time.Second):

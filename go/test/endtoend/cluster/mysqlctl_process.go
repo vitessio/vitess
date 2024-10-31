@@ -78,7 +78,7 @@ func (mysqlctl *MysqlctlProcess) Start() (err error) {
 	if err != nil {
 		return err
 	}
-	return tmpProcess.Wait()
+	return tmpProcess.wait()
 }
 
 // StartProvideInit executes mysqlctl command to start mysql instance
@@ -87,27 +87,27 @@ func (mysqlctl *MysqlctlProcess) StartProvideInit(init bool) (err error) {
 	if err != nil {
 		return err
 	}
-	return tmpProcess.Wait()
+	return tmpProcess.wait()
 }
 
 // StartProcess starts the mysqlctl and returns the process reference
-func (mysqlctl *MysqlctlProcess) StartProcess() (*exec.Cmd, error) {
+func (mysqlctl *MysqlctlProcess) StartProcess() (*processInfo, error) {
 	return mysqlctl.startProcess(true)
 }
 
-func (mysqlctl *MysqlctlProcess) startProcess(init bool) (*exec.Cmd, error) {
-	tmpProcess := exec.Command(
+func (mysqlctl *MysqlctlProcess) startProcess(init bool) (*processInfo, error) {
+	tmpProcess := newCommand(
 		mysqlctl.Binary,
 		"--log_dir", mysqlctl.LogDirectory,
 		"--tablet_uid", fmt.Sprintf("%d", mysqlctl.TabletUID),
 		"--mysql_port", fmt.Sprintf("%d", mysqlctl.MySQLPort),
 	)
 	if *isCoverage {
-		tmpProcess.Args = append(tmpProcess.Args, []string{"--test.coverprofile=" + getCoveragePath("mysql-start.out")}...)
+		tmpProcess.addArgs("--test.coverprofile=" + getCoveragePath("mysql-start.out"))
 	}
 
 	if len(mysqlctl.ExtraArgs) > 0 {
-		tmpProcess.Args = append(tmpProcess.Args, mysqlctl.ExtraArgs...)
+		tmpProcess.addArgs(mysqlctl.ExtraArgs...)
 	}
 	if mysqlctl.InitMysql {
 		if mysqlctl.SecureTransport {
@@ -145,27 +145,27 @@ ssl_key={{.ServerKey}}
 				return nil, err
 			}
 
-			tmpProcess.Env = append(tmpProcess.Env, "EXTRA_MY_CNF="+extraMyCNF)
-			tmpProcess.Env = append(tmpProcess.Env, "VTDATAROOT="+os.Getenv("VTDATAROOT"))
+			tmpProcess.addEnv("EXTRA_MY_CNF=" + extraMyCNF)
+			tmpProcess.addEnv("VTDATAROOT=" + os.Getenv("VTDATAROOT"))
 		}
 
 		if init {
-			tmpProcess.Args = append(tmpProcess.Args, "init")
+			tmpProcess.addArgs("init")
 			if mysqlctl.MajorVersion < 18 {
-				tmpProcess.Args = append(tmpProcess.Args, "--")
+				tmpProcess.addArgs("--")
 			}
 
-			tmpProcess.Args = append(tmpProcess.Args, "--init_db_sql_file", mysqlctl.InitDBFile)
+			tmpProcess.addArgs("--init_db_sql_file", mysqlctl.InitDBFile)
 		} else {
-			tmpProcess.Args = append(tmpProcess.Args, "start")
+			tmpProcess.addArgs("start")
 		}
 	} else {
-		tmpProcess.Args = append(tmpProcess.Args, "start")
+		tmpProcess.addArgs("start")
 	}
-	tmpProcess.Env = append(tmpProcess.Env, os.Environ()...)
-	tmpProcess.Env = append(tmpProcess.Env, DefaultVttestEnv)
-	log.Infof("Starting mysqlctl with command: %v", tmpProcess.Args)
-	return tmpProcess, tmpProcess.Start()
+	tmpProcess.addEnv(os.Environ()...)
+	tmpProcess.addEnv(DefaultVttestEnv)
+	log.Infof("Starting mysqlctl with command: %v", tmpProcess.getArgs())
+	return tmpProcess, tmpProcess.start()
 }
 
 // Stop executes mysqlctl command to stop mysql instance and kills the mysql instance
@@ -183,7 +183,7 @@ func (mysqlctl *MysqlctlProcess) Stop() (err error) {
 	// To prevent this process for hanging for 5 minutes, we will add a 30-second timeout.
 	exit := make(chan error)
 	go func() {
-		exit <- tmpProcess.Wait()
+		exit <- tmpProcess.wait()
 	}()
 	select {
 	case <-time.After(30 * time.Second):
@@ -224,20 +224,20 @@ func (mysqlctl *MysqlctlProcess) Stop() (err error) {
 }
 
 // StopProcess executes mysqlctl command to stop mysql instance and returns process reference
-func (mysqlctl *MysqlctlProcess) StopProcess() (*exec.Cmd, error) {
-	tmpProcess := exec.Command(
+func (mysqlctl *MysqlctlProcess) StopProcess() (*processInfo, error) {
+	tmpProcess := newCommand(
 		mysqlctl.Binary,
 		"--log_dir", mysqlctl.LogDirectory,
 		"--tablet_uid", fmt.Sprintf("%d", mysqlctl.TabletUID),
 	)
 	if *isCoverage {
-		tmpProcess.Args = append(tmpProcess.Args, []string{"--test.coverprofile=" + getCoveragePath("mysql-stop.out")}...)
+		tmpProcess.addArgs([]string{"--test.coverprofile=" + getCoveragePath("mysql-stop.out")}...)
 	}
 	if len(mysqlctl.ExtraArgs) > 0 {
-		tmpProcess.Args = append(tmpProcess.Args, mysqlctl.ExtraArgs...)
+		tmpProcess.addArgs(mysqlctl.ExtraArgs...)
 	}
-	tmpProcess.Args = append(tmpProcess.Args, "shutdown")
-	return tmpProcess, tmpProcess.Start()
+	tmpProcess.addArgs("shutdown")
+	return tmpProcess, tmpProcess.start()
 }
 
 func (mysqlctl *MysqlctlProcess) BasePath() string {

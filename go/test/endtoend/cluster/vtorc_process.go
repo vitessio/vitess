@@ -23,7 +23,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"path"
 	"strings"
 	"syscall"
@@ -37,15 +36,14 @@ import (
 // vtorc as a separate process for testing
 type VTOrcProcess struct {
 	VtctlProcess
-	Port        int
-	LogDir      string
-	LogFileName string
-	ExtraArgs   []string
-	ConfigPath  string
-	Config      VTOrcConfiguration
-	WebPort     int
-	proc        *exec.Cmd
-	exit        chan error
+	Port       int
+	LogDir     string
+	ExtraArgs  []string
+	ConfigPath string
+	Config     VTOrcConfiguration
+	WebPort    int
+	proc       *processInfo
+	exit       chan error
 }
 
 type VTOrcConfiguration struct {
@@ -106,7 +104,7 @@ func (orc *VTOrcProcess) Setup() (err error) {
 	$ vtorc --topo_implementation etcd2 --topo_global_server_address localhost:2379 --topo_global_root /vitess/global
 	--config config/vtorc/default.json --alsologtostderr
 	*/
-	orc.proc = exec.Command(
+	orc.proc = newCommand(
 		orc.Binary,
 		"--topo_implementation", orc.TopoImplementation,
 		"--topo_global_server_address", orc.TopoGlobalAddress,
@@ -122,28 +120,18 @@ func (orc *VTOrcProcess) Setup() (err error) {
 	)
 
 	if *isCoverage {
-		orc.proc.Args = append(orc.proc.Args, "--test.coverprofile="+getCoveragePath("orc.out"))
+		orc.proc.addArgs("--test.coverprofile=" + getCoveragePath("orc.out"))
 	}
 
-	orc.proc.Args = append(orc.proc.Args, orc.ExtraArgs...)
-	orc.proc.Args = append(orc.proc.Args, "--alsologtostderr")
+	orc.proc.addArgs(orc.ExtraArgs...)
+	orc.proc.addArgs("--alsologtostderr")
 
-	if orc.LogFileName == "" {
-		orc.LogFileName = fmt.Sprintf("orc-stderr-%d.txt", timeNow)
-	}
-	errFile, err := os.Create(path.Join(orc.LogDir, orc.LogFileName))
-	if err != nil {
-		log.Errorf("cannot create error log file for vtorc: %v", err)
-		return err
-	}
-	orc.proc.Stderr = errFile
+	orc.proc.addEnv(os.Environ()...)
+	orc.proc.addEnv(DefaultVttestEnv)
 
-	orc.proc.Env = append(orc.proc.Env, os.Environ()...)
-	orc.proc.Env = append(orc.proc.Env, DefaultVttestEnv)
+	log.Infof("Running vtorc with command: %v", strings.Join(orc.proc.getArgs(), " "))
 
-	log.Infof("Running vtorc with command: %v", strings.Join(orc.proc.Args, " "))
-
-	err = orc.proc.Start()
+	err = orc.proc.start()
 	if err != nil {
 		return
 	}
@@ -151,7 +139,7 @@ func (orc *VTOrcProcess) Setup() (err error) {
 	orc.exit = make(chan error)
 	go func() {
 		if orc.proc != nil {
-			orc.exit <- orc.proc.Wait()
+			orc.exit <- orc.proc.wait()
 			close(orc.exit)
 		}
 	}()
@@ -165,7 +153,7 @@ func (orc *VTOrcProcess) TearDown() error {
 		return nil
 	}
 	// Attempt graceful shutdown with SIGTERM first
-	_ = orc.proc.Process.Signal(syscall.SIGTERM)
+	_ = orc.proc.process().Signal(syscall.SIGTERM)
 
 	select {
 	case <-orc.exit:
@@ -173,7 +161,7 @@ func (orc *VTOrcProcess) TearDown() error {
 		return nil
 
 	case <-time.After(30 * time.Second):
-		_ = orc.proc.Process.Kill()
+		_ = orc.proc.process().Kill()
 		err := <-orc.exit
 		orc.proc = nil
 		return err

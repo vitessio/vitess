@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"os/exec"
 	"path"
 	"strings"
 	"syscall"
@@ -45,7 +44,7 @@ type VtctldProcess struct {
 	VerifyURL                   string
 	Directory                   string
 
-	proc *exec.Cmd
+	proc *processInfo
 	exit chan error
 }
 
@@ -53,7 +52,7 @@ type VtctldProcess struct {
 func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error) {
 	_ = createDirectory(vtctld.LogDir, 0700)
 	_ = createDirectory(path.Join(vtctld.Directory, "backups"), 0700)
-	vtctld.proc = exec.Command(
+	vtctld.proc = newCommand(
 		vtctld.Binary,
 		"--topo_implementation", vtctld.CommonArg.TopoImplementation,
 		"--topo_global_server_address", vtctld.CommonArg.TopoGlobalAddress,
@@ -70,36 +69,29 @@ func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error)
 	)
 
 	if *isCoverage {
-		vtctld.proc.Args = append(vtctld.proc.Args, "--test.coverprofile="+getCoveragePath("vtctld.out"))
+		vtctld.proc.addArgs("--test.coverprofile=" + getCoveragePath("vtctld.out"))
 	}
-	vtctld.proc.Args = append(vtctld.proc.Args, extraArgs...)
+	vtctld.proc.addArgs(extraArgs...)
 
 	err = os.MkdirAll(vtctld.LogDir, 0755)
 	if err != nil {
 		log.Errorf("cannot create log directory for vtctld: %v", err)
 		return err
 	}
-	errFile, err := os.Create(path.Join(vtctld.LogDir, "vtctld-stderr.txt"))
-	if err != nil {
-		log.Errorf("cannot create error log file for vtctld: %v", err)
-		return err
-	}
-	vtctld.proc.Stderr = errFile
-	vtctld.ErrorLog = errFile.Name()
 
-	vtctld.proc.Env = append(vtctld.proc.Env, os.Environ()...)
-	vtctld.proc.Env = append(vtctld.proc.Env, DefaultVttestEnv)
+	vtctld.proc.addEnv(os.Environ()...)
+	vtctld.proc.addEnv(DefaultVttestEnv)
 
-	log.Infof("Starting vtctld with command: %v", strings.Join(vtctld.proc.Args, " "))
+	log.Infof("Starting vtctld with command: %v", strings.Join(vtctld.proc.getArgs(), " "))
 
-	err = vtctld.proc.Start()
+	err = vtctld.proc.start()
 	if err != nil {
 		return
 	}
 
 	vtctld.exit = make(chan error)
 	go func() {
-		vtctld.exit <- vtctld.proc.Wait()
+		vtctld.exit <- vtctld.proc.wait()
 		close(vtctld.exit)
 	}()
 
@@ -149,7 +141,7 @@ func (vtctld *VtctldProcess) TearDown() error {
 	}
 
 	// Attempt graceful shutdown with SIGTERM first
-	vtctld.proc.Process.Signal(syscall.SIGTERM)
+	vtctld.proc.process().Signal(syscall.SIGTERM)
 
 	select {
 	case err := <-vtctld.exit:
@@ -157,7 +149,7 @@ func (vtctld *VtctldProcess) TearDown() error {
 		return err
 
 	case <-time.After(10 * time.Second):
-		vtctld.proc.Process.Kill()
+		vtctld.proc.process().Kill()
 		err := <-vtctld.exit
 		vtctld.proc = nil
 		return err

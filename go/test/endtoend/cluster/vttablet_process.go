@@ -26,7 +26,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"path"
 	"reflect"
 	"strconv"
@@ -85,13 +84,13 @@ type VttabletProcess struct {
 	// Extra Args to be set before starting the vttablet process
 	ExtraArgs []string
 
-	proc *exec.Cmd
+	proc *processInfo
 	exit chan error
 }
 
 // Setup starts vttablet process with required arguements
 func (vttablet *VttabletProcess) Setup() (err error) {
-	vttablet.proc = exec.Command(
+	vttablet.proc = newCommand(
 		vttablet.Binary,
 		"--topo_implementation", vttablet.CommonArg.TopoImplementation,
 		"--topo_global_server_address", vttablet.CommonArg.TopoGlobalAddress,
@@ -116,31 +115,27 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 	)
 
 	if *isCoverage {
-		vttablet.proc.Args = append(vttablet.proc.Args, "--test.coverprofile="+getCoveragePath("vttablet.out"))
+		vttablet.proc.addArgs("--test.coverprofile=" + getCoveragePath("vttablet.out"))
 	}
 	if *PerfTest {
-		vttablet.proc.Args = append(vttablet.proc.Args, "--pprof", fmt.Sprintf("cpu,waitSig,path=vttablet_pprof_%s", vttablet.Name))
+		vttablet.proc.addArgs("--pprof", fmt.Sprintf("cpu,waitSig,path=vttablet_pprof_%s", vttablet.Name))
 	}
 
 	if vttablet.SupportsBackup {
-		vttablet.proc.Args = append(vttablet.proc.Args, "--restore_from_backup")
+		vttablet.proc.addArgs("--restore_from_backup")
 	}
 	if vttablet.DbFlavor != "" {
-		vttablet.proc.Args = append(vttablet.proc.Args, fmt.Sprintf("--db_flavor=%s", vttablet.DbFlavor))
+		vttablet.proc.addArgs(fmt.Sprintf("--db_flavor=%s", vttablet.DbFlavor))
 	}
 
-	vttablet.proc.Args = append(vttablet.proc.Args, vttablet.ExtraArgs...)
-	fname := path.Join(vttablet.LogDir, vttablet.TabletPath+"-vttablet-stderr.txt")
-	errFile, _ := os.Create(fname)
-	vttablet.proc.Stderr = errFile
-	vttablet.ErrorLog = errFile.Name()
+	vttablet.proc.addArgs(vttablet.ExtraArgs...)
 
-	vttablet.proc.Env = append(vttablet.proc.Env, os.Environ()...)
-	vttablet.proc.Env = append(vttablet.proc.Env, DefaultVttestEnv)
+	vttablet.proc.addEnv(os.Environ()...)
+	vttablet.proc.addEnv(DefaultVttestEnv)
 
-	log.Infof("Running vttablet with command: %v", strings.Join(vttablet.proc.Args, " "))
+	log.Infof("Running vttablet with command: %v", strings.Join(vttablet.proc.getArgs(), " "))
 
-	err = vttablet.proc.Start()
+	err = vttablet.proc.start()
 	if err != nil {
 		return
 	}
@@ -150,7 +145,7 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 	vttablet.exit = make(chan error)
 	go func() {
 		if vttablet.proc != nil {
-			vttablet.exit <- vttablet.proc.Wait()
+			vttablet.exit <- vttablet.proc.wait()
 			close(vttablet.exit)
 		}
 	}()
@@ -165,10 +160,6 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 			servingStatus = append(servingStatus, "SERVING", "NOT_SERVING")
 		}
 		if err = vttablet.WaitForTabletStatuses(servingStatus); err != nil {
-			errFileContent, _ := os.ReadFile(fname)
-			if errFileContent != nil {
-				log.Infof("vttablet error:\n%s\n", string(errFileContent))
-			}
 			return fmt.Errorf("process '%s' timed out after 10s (err: %s)", vttablet.Name, err)
 		}
 	}
@@ -414,7 +405,7 @@ func (vttablet *VttabletProcess) Kill() error {
 	if vttablet.proc == nil || vttablet.exit == nil {
 		return nil
 	}
-	vttablet.proc.Process.Kill()
+	vttablet.proc.process().Kill()
 	err := <-vttablet.exit
 	vttablet.proc = nil
 	return err
@@ -427,7 +418,7 @@ func (vttablet *VttabletProcess) TearDownWithTimeout(timeout time.Duration) erro
 		return nil
 	}
 	// Attempt graceful shutdown with SIGTERM first
-	vttablet.proc.Process.Signal(syscall.SIGTERM)
+	vttablet.proc.process().Signal(syscall.SIGTERM)
 
 	select {
 	case <-vttablet.exit:
