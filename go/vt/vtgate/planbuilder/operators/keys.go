@@ -36,13 +36,18 @@ type (
 		Column Column
 		Uses   sqlparser.ComparisonExprOperator
 	}
+	JoinPredicate struct {
+		Cols []Column
+		Uses sqlparser.ComparisonExprOperator
+	}
 	VExplainKeys struct {
-		StatementType   string      `json:"statementType"`
-		TableName       []string    `json:"tableName,omitempty"`
-		GroupingColumns []Column    `json:"groupingColumns,omitempty"`
-		JoinColumns     []ColumnUse `json:"joinColumns,omitempty"`
-		FilterColumns   []ColumnUse `json:"filterColumns,omitempty"`
-		SelectColumns   []Column    `json:"selectColumns,omitempty"`
+		StatementType   string          `json:"statementType"`
+		TableName       []string        `json:"tableName,omitempty"`
+		GroupingColumns []Column        `json:"groupingColumns,omitempty"`
+		JoinColumns     []ColumnUse     `json:"joinColumns,omitempty"`
+		FilterColumns   []ColumnUse     `json:"filterColumns,omitempty"`
+		SelectColumns   []Column        `json:"selectColumns,omitempty"`
+		JoinPredicates  []JoinPredicate `json:"joinPredicates,omitempty"`
 	}
 )
 
@@ -127,6 +132,7 @@ type columnUse struct {
 func GetVExplainKeys(ctx *plancontext.PlanningContext, stmt sqlparser.Statement) (result VExplainKeys) {
 	var groupingColumns, selectColumns []*sqlparser.ColName
 	var filterColumns, joinColumns []columnUse
+	var joinPredicates []JoinPredicate
 
 	addPredicate := func(predicate sqlparser.Expr) {
 		predicates := sqlparser.SplitAndExpression(nil, predicate)
@@ -140,6 +146,10 @@ func GetVExplainKeys(ctx *plancontext.PlanningContext, stmt sqlparser.Statement)
 				if lhsOK && rhsOK && ctx.SemTable.RecursiveDeps(lhs) != ctx.SemTable.RecursiveDeps(rhs) {
 					// If the columns are from different tables, they are considered join columns
 					output = &joinColumns
+					joinPredicates = append(joinPredicates, JoinPredicate{
+						Cols: []Column{*createColumn(ctx, lhs), *createColumn(ctx, rhs)},
+						Uses: cmp.Operator,
+					})
 				}
 
 				if lhsOK {
@@ -192,6 +202,7 @@ func GetVExplainKeys(ctx *plancontext.PlanningContext, stmt sqlparser.Statement)
 		JoinColumns:     getUniqueColUsages(ctx, joinColumns),
 		FilterColumns:   getUniqueColUsages(ctx, filterColumns),
 		StatementType:   sqlparser.ASTToStatementType(stmt).String(),
+		JoinPredicates:  joinPredicates,
 	}
 }
 
