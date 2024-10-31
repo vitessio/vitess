@@ -24,6 +24,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -116,6 +117,7 @@ type OnlineDDL struct {
 	Retries            int64           `json:"retries,omitempty"`
 	ReadyToComplete    int64           `json:"ready_to_complete,omitempty"`
 	WasReadyToComplete int64           `json:"was_ready_to_complete,omitempty"`
+	CutOverThreshold   time.Duration   `json:"cutover_threshold,omitempty"`
 }
 
 // ParseOnlineDDLStatement parses the given SQL into a statement and returns the action type of the DDL statement, or error
