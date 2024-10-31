@@ -183,7 +183,7 @@ func (vc *vdbClient) ExecuteWithRetry(ctx context.Context, query string) (*sqlty
 	for err != nil {
 		var sqlErr *sqlerror.SQLError
 		if errors.As(err, &sqlErr) &&
-			sqlErr.Number() == sqlerror.ERLockDeadlock || sqlErr.Number() == sqlerror.ERLockWaitTimeout || sqlErr.Number() == sqlerror.ERDupEntry {
+			sqlErr.Number() == sqlerror.ERLockDeadlock || sqlErr.Number() == sqlerror.ERLockWaitTimeout {
 			log.Infof("retryable error: %v, waiting for %v and retrying", sqlErr, dbLockRetryDelay)
 			if err := vc.Rollback(); err != nil {
 				return nil, err

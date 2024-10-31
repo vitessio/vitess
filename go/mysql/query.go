@@ -23,6 +23,8 @@ import (
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
@@ -348,6 +350,12 @@ func (c *Conn) drainMoreResults(more bool, err error) error {
 // It returns an additional 'more' flag. If it is set, you must fetch the additional
 // results using ReadQueryResult.
 func (c *Conn) ExecuteFetchMulti(query string, maxrows int, wantfields bool) (result *sqltypes.Result, more bool, err error) {
+	if strings.Contains(query, "rollback") || strings.Contains(query, "commit") ||
+		strings.Contains(query, "begin") ||
+		strings.Contains(query, "admins") && strings.Contains(query, "update") {
+
+		log.Infof("$$$$$$$$$$$$$$ ExecuteFetch: %s", query)
+	}
 	defer func() {
 		if err != nil {
 			if sqlerr, ok := err.(*sqlerror.SQLError); ok {

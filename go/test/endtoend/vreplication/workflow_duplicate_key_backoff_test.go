@@ -23,7 +23,7 @@ func TestWorkflowDuplicateKeyBackoff(t *testing.T) {
 	}()
 	defaultRdonly = 0
 	defaultReplicas = 0
-	//setAllVTTabletExperimentalFlags()
+	setAllVTTabletExperimentalFlags()
 
 	setupMinimalCluster(t)
 	vttablet.InitVReplicationConfigDefaults()
@@ -64,10 +64,11 @@ func TestWorkflowDuplicateKeyBackoff(t *testing.T) {
 	// Since -80 is stopped the "update admins set email = 'b@example.com' where team_id = 1" will fail with duplicate key
 	// since it is already set for team_id = 2
 	// The vplayer stream for -80 should backoff with the new logic and retry should be successful once the -80 stream is restarted
-	time.Sleep(5 * time.Second)
+	time.Sleep(2 * time.Second) // fixme: add check that the table has the expected data after the inserts
 	vc.VtctlClient.ExecuteCommandWithOutput("VReplicationExec", "zone1-100", "update _vt.vreplication set state = 'Running' where id = 1")
+	//time.Sleep(5 * time.Second)
 	productTab := vc.Cells["zone1"].Keyspaces[sourceKeyspaceName].Shards["0"].Tablets["zone1-100"].Vttablet
 	waitForResult(t, productTab, "product", "select * from admins order by team_id",
-		"[[INT32(1) VARCHAR(\"b@example.com\") VARCHAR(\"ibis-4\")] [INT32(2) VARCHAR(\"a@example.com\") VARCHAR(\"ibis-5\")]]", 20*time.Second)
+		"[[INT32(1) VARCHAR(\"b@example.com\") VARCHAR(\"ibis-4\")] [INT32(2) VARCHAR(\"a@example.com\") VARCHAR(\"ibis-5\")]]", 30*time.Second)
 	log.Infof("TestWorkflowDuplicateKeyBackoff passed")
 }

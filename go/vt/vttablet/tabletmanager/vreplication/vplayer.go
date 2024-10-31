@@ -26,6 +26,9 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -101,6 +104,8 @@ type vplayer struct {
 	foreignKeyChecksStateInitialized bool
 
 	hasSkippedCommit bool
+	isMergeWorkflow  bool
+	dontSkipCommits  bool
 }
 
 // NoForeignKeyCheckFlagBitmask is the bitmask for the 2nd bit (least significant) of the flags in a binlog row event.
@@ -132,6 +137,7 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 		return vr.dbClient.ExecuteWithRetry(ctx, sql)
 	}
 	commitFunc := func() error {
+		log.Infof("Commit func: %v", vr.dbClient.InTransaction)
 		return vr.dbClient.Commit()
 	}
 	batchMode := false
@@ -163,6 +169,7 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 			return nil, vr.dbClient.AddQueryToTrxBatch(sql) // Should become part of the trx batch
 		}
 		commitFunc = func() error {
+			log.Infof("Batch Commit func: %v", vr.dbClient.InTransaction)
 			return vr.dbClient.CommitTrxQueryBatch() // Commit the current trx batch
 		}
 		vr.dbClient.maxBatchSize = maxAllowedPacket
@@ -179,9 +186,8 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 		tablePlans:       make(map[string]*TablePlan),
 		phase:            phase,
 		throttlerAppName: throttlerapp.VPlayerName.ConcatenateString(vr.throttlerAppName()),
-		query:            queryFunc,
-		commit:           commitFunc,
 		batchMode:        batchMode,
+		isMergeWorkflow:  true,
 	}
 
 	wrappedCommitFunc := func() error {
@@ -189,7 +195,80 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 		return commitFunc()
 	}
 	vp.commit = wrappedCommitFunc
+
+	wrappedQueryFunc := func(ctx context.Context, sql string) (*sqltypes.Result, error) {
+		result, err := queryFunc(ctx, sql)
+		var sqlErr *sqlerror.SQLError
+		if err != nil && errors.As(err, &sqlErr) &&
+			sqlErr.Number() == sqlerror.ERDupEntry && vp.isMergeWorkflow {
+			return vp.backoffAndRetry(ctx, sql, err)
+		}
+		return result, err
+	}
+	vp.query = wrappedQueryFunc
+
 	return vp
+}
+
+func (vp *vplayer) isRetryable(err error) bool {
+	if sqlErr, ok := err.(*sqlerror.SQLError); ok {
+		return sqlErr.Number() == sqlerror.ERDupEntry
+	}
+	return false
+}
+
+func (vp *vplayer) executeWithRetryAndBackoff(ctx context.Context, query string) (*sqltypes.Result, error) {
+	// We will retry the query if it fails with a duplicate entry error. Since this will be a non-recoverable error
+	// we should wait for a longer time than we would usually do. The backoff is intended to let the other streams catch up
+	// especially if global query ordering is important. It is possible there is a replica lag skew between shards because
+	// of one shard being slower or has more write traffic than the others.
+	origQuery := query
+	i := 0
+	timeout := 1 * time.Minute
+	shortCtx, cancel := context.WithDeadline(ctx, time.Now().Add(timeout))
+	defer cancel()
+	attempts := 0
+	backoffSeconds := 10
+	for {
+		i++
+		query = fmt.Sprintf("%s /* backoff:: %d */", origQuery, i)
+		qr, err := vp.vr.dbClient.ExecuteWithRetry(ctx, query)
+		log.Flush()
+		if err == nil {
+			vp.vr.dbClient.Commit()
+			return qr, nil
+		}
+		if err := vp.vr.dbClient.Rollback(); err != nil {
+			return nil, err
+		}
+		if !vp.isRetryable(err) {
+			return nil, err
+		}
+		attempts++
+		log.Infof("Backing off for %v seconds before retrying query: %v, got err %v", backoffSeconds, query, err)
+		select {
+		case <-shortCtx.Done():
+			return nil, vterrors.Errorf(vtrpc.Code_DEADLINE_EXCEEDED, "backoff timeout exceeded while retrying query: %v", query)
+		case <-time.After(time.Duration(backoffSeconds) * time.Second):
+		}
+		// Exponential backoff with a maximum of "timeout" seconds.
+		backoffSeconds = (1 << attempts) >> 1
+	}
+}
+
+// backoffAndRetry retries the query after a backoff period.
+func (vp *vplayer) backoffAndRetry(ctx context.Context, sql string, err error) (*sqltypes.Result, error) {
+	vp.dontSkipCommits = true
+	//FIXME : set dontSkipCommits to false after some time?
+	if vp.hasSkippedCommit {
+		log.Infof(">>>>>>>> found skipped Commit, issuing a commit before retrying the query: %v", sql)
+		vp.commit() // vp.hasSkippedCommit is reset in the wrapped commit function vp.commit()
+		if err := vp.vr.dbClient.Begin(); err != nil {
+			return nil, err
+		}
+	}
+	return vp.executeWithRetryAndBackoff(ctx, sql)
+
 }
 
 // play is the entry point for playing binlogs.
@@ -506,11 +585,11 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 			return ctx.Err()
 		}
 		// Check throttler.
-		if checkResult, ok := vp.vr.vre.throttlerClient.ThrottleCheckOKOrWaitAppName(ctx, throttlerapp.Name(vp.throttlerAppName)); !ok {
-			_ = vp.vr.updateTimeThrottled(throttlerapp.VPlayerName, checkResult.Summary())
-			estimateLag()
-			continue
-		}
+		//if checkResult, ok := vp.vr.vre.throttlerClient.ThrottleCheckOKOrWaitAppName(ctx, throttlerapp.Name(vp.throttlerAppName)); !ok {
+		//	_ = vp.vr.updateTimeThrottled(throttlerapp.VPlayerName, checkResult.Summary())
+		//	estimateLag()
+		//	continue
+		//}
 
 		items, err := relay.Fetch()
 		if err != nil {
@@ -565,7 +644,8 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 					// applying the next set of events as part of the current transaction. This approach
 					// also handles the case where the last transaction is partial. In that case,
 					// we only group the transactions with commits we've seen so far.
-					if hasAnotherCommit(items, i, j+1) {
+					if /*vp.dontSkipCommits && */ hasAnotherCommit(items, i, j+1) {
+						log.Infof(">>>>>>>> skipping commit")
 						vp.hasSkippedCommit = true
 						continue
 					}
