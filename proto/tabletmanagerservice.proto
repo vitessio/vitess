@@ -97,6 +97,8 @@ service TabletManager {
 
   rpc ReadTransaction(tabletmanagerdata.ReadTransactionRequest) returns (tabletmanagerdata.ReadTransactionResponse) {};
 
+  rpc ReadTransactionState(tabletmanagerdata.ReadTransactionStateRequest) returns (tabletmanagerdata.ReadTransactionStateResponse) {};
+
   rpc ConcludeTransaction(tabletmanagerdata.ConcludeTransactionRequest) returns (tabletmanagerdata.ConcludeTransactionResponse) {};
 
   rpc MysqlHostMetrics(tabletmanagerdata.MysqlHostMetricsRequest) returns (tabletmanagerdata.MysqlHostMetricsResponse) {};

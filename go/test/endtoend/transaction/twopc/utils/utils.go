@@ -23,6 +23,7 @@ import (
 	"path"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -92,6 +93,27 @@ func WriteTestCommunicationFile(t *testing.T, fileName string, content string) {
 	DeleteFile(fileName)
 	err := os.WriteFile(path.Join(os.Getenv("VTDATAROOT"), fileName), []byte(content), 0644)
 	require.NoError(t, err)
+}
+
+// RunMultiShardCommitWithDelay runs a multi shard commit and configures it to wait for a certain amount of time in the commit phase.
+func RunMultiShardCommitWithDelay(t *testing.T, conn *mysql.Conn, commitDelayTime string, wg *sync.WaitGroup, queries []string) {
+	// Run all the queries to start the transaction.
+	for _, query := range queries {
+		utils.Exec(t, conn, query)
+	}
+	// We want to delay the commit on one of the shards to simulate slow commits on a shard.
+	WriteTestCommunicationFile(t, DebugDelayCommitShard, "80-")
+	WriteTestCommunicationFile(t, DebugDelayCommitTime, commitDelayTime)
+	// We will execute a commit in a go routine, because we know it will take some time to complete.
+	// While the commit is ongoing, we would like to run the disruption.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_, err := utils.ExecAllowError(t, conn, "commit")
+		if err != nil {
+			log.Errorf("Error in commit - %v", err)
+		}
+	}()
 }
 
 // DeleteFile deletes the file specified.

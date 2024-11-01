@@ -326,6 +326,18 @@ message ReadTransactionResponse {
   query.TransactionMetadata transaction = 1;
 }
 
+message ReadTransactionStateRequest {
+  string dtid = 1;
+}
+
+message ReadTransactionStateResponse {
+  string state = 1;
+  string message = 2;
+  int64 time_created = 3;
+  repeated string statements = 4;
+}
+
+
 message ConcludeTransactionRequest {
   string dtid = 1;
   bool mm = 2;

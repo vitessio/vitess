@@ -25764,6 +25764,218 @@ export namespace tabletmanagerdata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** Properties of a ReadTransactionStateRequest. */
+    interface IReadTransactionStateRequest {
+
+        /** ReadTransactionStateRequest dtid */
+        dtid?: (string|null);
+    }
+
+    /** Represents a ReadTransactionStateRequest. */
+    class ReadTransactionStateRequest implements IReadTransactionStateRequest {
+
+        /**
+         * Constructs a new ReadTransactionStateRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IReadTransactionStateRequest);
+
+        /** ReadTransactionStateRequest dtid. */
+        public dtid: string;
+
+        /**
+         * Creates a new ReadTransactionStateRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ReadTransactionStateRequest instance
+         */
+        public static create(properties?: tabletmanagerdata.IReadTransactionStateRequest): tabletmanagerdata.ReadTransactionStateRequest;
+
+        /**
+         * Encodes the specified ReadTransactionStateRequest message. Does not implicitly {@link tabletmanagerdata.ReadTransactionStateRequest.verify|verify} messages.
+         * @param message ReadTransactionStateRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IReadTransactionStateRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ReadTransactionStateRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.ReadTransactionStateRequest.verify|verify} messages.
+         * @param message ReadTransactionStateRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IReadTransactionStateRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ReadTransactionStateRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ReadTransactionStateRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.ReadTransactionStateRequest;
+
+        /**
+         * Decodes a ReadTransactionStateRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ReadTransactionStateRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.ReadTransactionStateRequest;
+
+        /**
+         * Verifies a ReadTransactionStateRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ReadTransactionStateRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ReadTransactionStateRequest
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.ReadTransactionStateRequest;
+
+        /**
+         * Creates a plain object from a ReadTransactionStateRequest message. Also converts values to other types if specified.
+         * @param message ReadTransactionStateRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.ReadTransactionStateRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ReadTransactionStateRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReadTransactionStateRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a ReadTransactionStateResponse. */
+    interface IReadTransactionStateResponse {
+
+        /** ReadTransactionStateResponse state */
+        state?: (string|null);
+
+        /** ReadTransactionStateResponse message */
+        message?: (string|null);
+
+        /** ReadTransactionStateResponse time_created */
+        time_created?: (number|Long|null);
+
+        /** ReadTransactionStateResponse statements */
+        statements?: (string[]|null);
+    }
+
+    /** Represents a ReadTransactionStateResponse. */
+    class ReadTransactionStateResponse implements IReadTransactionStateResponse {
+
+        /**
+         * Constructs a new ReadTransactionStateResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IReadTransactionStateResponse);
+
+        /** ReadTransactionStateResponse state. */
+        public state: string;
+
+        /** ReadTransactionStateResponse message. */
+        public message: string;
+
+        /** ReadTransactionStateResponse time_created. */
+        public time_created: (number|Long);
+
+        /** ReadTransactionStateResponse statements. */
+        public statements: string[];
+
+        /**
+         * Creates a new ReadTransactionStateResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ReadTransactionStateResponse instance
+         */
+        public static create(properties?: tabletmanagerdata.IReadTransactionStateResponse): tabletmanagerdata.ReadTransactionStateResponse;
+
+        /**
+         * Encodes the specified ReadTransactionStateResponse message. Does not implicitly {@link tabletmanagerdata.ReadTransactionStateResponse.verify|verify} messages.
+         * @param message ReadTransactionStateResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IReadTransactionStateResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ReadTransactionStateResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.ReadTransactionStateResponse.verify|verify} messages.
+         * @param message ReadTransactionStateResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IReadTransactionStateResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ReadTransactionStateResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ReadTransactionStateResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.ReadTransactionStateResponse;
+
+        /**
+         * Decodes a ReadTransactionStateResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ReadTransactionStateResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.ReadTransactionStateResponse;
+
+        /**
+         * Verifies a ReadTransactionStateResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ReadTransactionStateResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ReadTransactionStateResponse
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.ReadTransactionStateResponse;
+
+        /**
+         * Creates a plain object from a ReadTransactionStateResponse message. Also converts values to other types if specified.
+         * @param message ReadTransactionStateResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.ReadTransactionStateResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ReadTransactionStateResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReadTransactionStateResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
     /** Properties of a ConcludeTransactionRequest. */
     interface IConcludeTransactionRequest {
 

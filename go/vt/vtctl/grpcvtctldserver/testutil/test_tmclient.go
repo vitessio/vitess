@@ -266,6 +266,7 @@ type TabletManagerClient struct {
 	}
 	GetUnresolvedTransactionsResults map[string][]*querypb.TransactionMetadata
 	ReadTransactionResult            map[string]*querypb.TransactionMetadata
+	ReadTransactionStateResult       map[string]*tabletmanagerdatapb.ReadTransactionStateResponse
 	// keyed by tablet alias.
 	InitPrimaryDelays map[string]time.Duration
 	// keyed by tablet alias. injects a sleep to the end of the function
@@ -696,7 +697,7 @@ func (fake *TabletManagerClient) ExecuteQuery(ctx context.Context, tablet *topod
 }
 
 // GetUnresolvedTransactions is part of the tmclient.TabletManagerClient interface.
-func (fake *TabletManagerClient) GetUnresolvedTransactions(ctx context.Context, tablet *topodatapb.Tablet) ([]*querypb.TransactionMetadata, error) {
+func (fake *TabletManagerClient) GetUnresolvedTransactions(ctx context.Context, tablet *topodatapb.Tablet, abandonAge int64) ([]*querypb.TransactionMetadata, error) {
 	if len(fake.GetUnresolvedTransactionsResults) == 0 {
 		return nil, fmt.Errorf("%w: no GetUnresolvedTransactions results on fake TabletManagerClient", assert.AnError)
 	}
@@ -714,6 +715,18 @@ func (fake *TabletManagerClient) ReadTransaction(ctx context.Context, tablet *to
 	}
 
 	return fake.ReadTransactionResult[tablet.Shard], nil
+}
+
+// ReadTransactionState is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) ReadTransactionState(ctx context.Context, tablet *topodatapb.Tablet, dtid string) (*tabletmanagerdatapb.ReadTransactionStateResponse, error) {
+	if fake.CallError {
+		return nil, fmt.Errorf("%w: blocked call for ReadTransactionState on fake TabletManagerClient", assert.AnError)
+	}
+	if fake.ReadTransactionStateResult == nil {
+		return nil, fmt.Errorf("%w: no ReadTransactionState result on fake TabletManagerClient", assert.AnError)
+	}
+
+	return fake.ReadTransactionStateResult[tablet.Shard], nil
 }
 
 // ConcludeTransaction is part of the tmclient.TabletManagerClient interface.

@@ -908,7 +908,7 @@ func (itmc *internalTabletManagerClient) ExecuteFetchAsApp(context.Context, *top
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 
-func (itmc *internalTabletManagerClient) GetUnresolvedTransactions(ctx context.Context, tablet *topodatapb.Tablet) ([]*querypb.TransactionMetadata, error) {
+func (itmc *internalTabletManagerClient) GetUnresolvedTransactions(ctx context.Context, tablet *topodatapb.Tablet, abandonAge int64) ([]*querypb.TransactionMetadata, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 
@@ -921,6 +921,10 @@ func (itmc *internalTabletManagerClient) MysqlHostMetrics(context.Context, *topo
 }
 
 func (itmc *internalTabletManagerClient) ReadTransaction(ctx context.Context, tablet *topodatapb.Tablet, dtid string) (*querypb.TransactionMetadata, error) {
+	return nil, fmt.Errorf("not implemented in vtcombo")
+}
+
+func (itmc *internalTabletManagerClient) ReadTransactionState(ctx context.Context, tablet *topodatapb.Tablet, dtid string) (*tabletmanagerdatapb.ReadTransactionStateResponse, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 

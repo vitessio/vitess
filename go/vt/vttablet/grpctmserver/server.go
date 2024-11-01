@@ -312,6 +312,18 @@ func (s *server) ReadTransaction(ctx context.Context, request *tabletmanagerdata
 	return &tabletmanagerdatapb.ReadTransactionResponse{Transaction: transaction}, nil
 }
 
+func (s *server) ReadTransactionState(ctx context.Context, request *tabletmanagerdatapb.ReadTransactionStateRequest) (response *tabletmanagerdatapb.ReadTransactionStateResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "ReadTransactionState", request, response, false /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+
+	response, err = s.tm.ReadTransactionState(ctx, request)
+	if err != nil {
+		return nil, vterrors.ToGRPC(err)
+	}
+
+	return response, nil
+}
+
 func (s *server) ConcludeTransaction(ctx context.Context, request *tabletmanagerdatapb.ConcludeTransactionRequest) (response *tabletmanagerdatapb.ConcludeTransactionResponse, err error) {
 	defer s.tm.HandleRPCPanic(ctx, "ConcludeTransaction", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)

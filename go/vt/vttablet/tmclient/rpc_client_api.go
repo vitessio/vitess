@@ -154,10 +154,12 @@ type TabletManagerClient interface {
 	//
 
 	// GetUnresolvedTransactions returns the list of unresolved transactions for the tablet.
-	GetUnresolvedTransactions(ctx context.Context, tablet *topodatapb.Tablet) ([]*querypb.TransactionMetadata, error)
+	GetUnresolvedTransactions(ctx context.Context, tablet *topodatapb.Tablet, abandonAge int64) ([]*querypb.TransactionMetadata, error)
 
 	// ReadTransaction returns the metadata for the specified distributed transaction ID.
 	ReadTransaction(ctx context.Context, tablet *topodatapb.Tablet, dtid string) (*querypb.TransactionMetadata, error)
+
+	ReadTransactionState(ctx context.Context, tablet *topodatapb.Tablet, dtid string) (*tabletmanagerdatapb.ReadTransactionStateResponse, error)
 
 	// ConcludeTransaction conclude the transaction on the tablet.
 	ConcludeTransaction(ctx context.Context, tablet *topodatapb.Tablet, dtid string, mm bool) error

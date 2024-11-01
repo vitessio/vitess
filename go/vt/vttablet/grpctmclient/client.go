@@ -672,14 +672,16 @@ func (client *Client) ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.
 }
 
 // GetUnresolvedTransactions is part of the tmclient.TabletManagerClient interface.
-func (client *Client) GetUnresolvedTransactions(ctx context.Context, tablet *topodatapb.Tablet) ([]*querypb.TransactionMetadata, error) {
+func (client *Client) GetUnresolvedTransactions(ctx context.Context, tablet *topodatapb.Tablet, abandonAge int64) ([]*querypb.TransactionMetadata, error) {
 	c, closer, err := client.dialer.dial(ctx, tablet)
 	if err != nil {
 		return nil, err
 	}
 	defer closer.Close()
 
-	response, err := c.GetUnresolvedTransactions(ctx, &tabletmanagerdatapb.GetUnresolvedTransactionsRequest{})
+	response, err := c.GetUnresolvedTransactions(ctx, &tabletmanagerdatapb.GetUnresolvedTransactionsRequest{
+		AbandonAge: abandonAge,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -730,6 +732,23 @@ func (client *Client) ReadTransaction(ctx context.Context, tablet *topodatapb.Ta
 		return nil, err
 	}
 	return resp.Transaction, nil
+}
+
+// ReadTransactionState is part of the tmclient.TabletManagerClient interface.
+func (client *Client) ReadTransactionState(ctx context.Context, tablet *topodatapb.Tablet, dtid string) (*tabletmanagerdatapb.ReadTransactionStateResponse, error) {
+	c, closer, err := client.dialer.dial(ctx, tablet)
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+
+	resp, err := c.ReadTransactionState(ctx, &tabletmanagerdatapb.ReadTransactionStateRequest{
+		Dtid: dtid,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
 }
 
 //

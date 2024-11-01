@@ -57,6 +57,7 @@ type TabletManagerClient interface {
 	ExecuteFetchAsApp(ctx context.Context, in *tabletmanagerdata.ExecuteFetchAsAppRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ExecuteFetchAsAppResponse, error)
 	GetUnresolvedTransactions(ctx context.Context, in *tabletmanagerdata.GetUnresolvedTransactionsRequest, opts ...grpc.CallOption) (*tabletmanagerdata.GetUnresolvedTransactionsResponse, error)
 	ReadTransaction(ctx context.Context, in *tabletmanagerdata.ReadTransactionRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ReadTransactionResponse, error)
+	ReadTransactionState(ctx context.Context, in *tabletmanagerdata.ReadTransactionStateRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ReadTransactionStateResponse, error)
 	ConcludeTransaction(ctx context.Context, in *tabletmanagerdata.ConcludeTransactionRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ConcludeTransactionResponse, error)
 	MysqlHostMetrics(ctx context.Context, in *tabletmanagerdata.MysqlHostMetricsRequest, opts ...grpc.CallOption) (*tabletmanagerdata.MysqlHostMetricsResponse, error)
 	// ReplicationStatus returns the current replication status.
@@ -359,6 +360,15 @@ func (c *tabletManagerClient) GetUnresolvedTransactions(ctx context.Context, in 
 func (c *tabletManagerClient) ReadTransaction(ctx context.Context, in *tabletmanagerdata.ReadTransactionRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ReadTransactionResponse, error) {
 	out := new(tabletmanagerdata.ReadTransactionResponse)
 	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/ReadTransaction", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) ReadTransactionState(ctx context.Context, in *tabletmanagerdata.ReadTransactionStateRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ReadTransactionStateResponse, error) {
+	out := new(tabletmanagerdata.ReadTransactionStateResponse)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/ReadTransactionState", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -818,6 +828,7 @@ type TabletManagerServer interface {
 	ExecuteFetchAsApp(context.Context, *tabletmanagerdata.ExecuteFetchAsAppRequest) (*tabletmanagerdata.ExecuteFetchAsAppResponse, error)
 	GetUnresolvedTransactions(context.Context, *tabletmanagerdata.GetUnresolvedTransactionsRequest) (*tabletmanagerdata.GetUnresolvedTransactionsResponse, error)
 	ReadTransaction(context.Context, *tabletmanagerdata.ReadTransactionRequest) (*tabletmanagerdata.ReadTransactionResponse, error)
+	ReadTransactionState(context.Context, *tabletmanagerdata.ReadTransactionStateRequest) (*tabletmanagerdata.ReadTransactionStateResponse, error)
 	ConcludeTransaction(context.Context, *tabletmanagerdata.ConcludeTransactionRequest) (*tabletmanagerdata.ConcludeTransactionResponse, error)
 	MysqlHostMetrics(context.Context, *tabletmanagerdata.MysqlHostMetricsRequest) (*tabletmanagerdata.MysqlHostMetricsResponse, error)
 	// ReplicationStatus returns the current replication status.
@@ -972,6 +983,9 @@ func (UnimplementedTabletManagerServer) GetUnresolvedTransactions(context.Contex
 }
 func (UnimplementedTabletManagerServer) ReadTransaction(context.Context, *tabletmanagerdata.ReadTransactionRequest) (*tabletmanagerdata.ReadTransactionResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReadTransaction not implemented")
+}
+func (UnimplementedTabletManagerServer) ReadTransactionState(context.Context, *tabletmanagerdata.ReadTransactionStateRequest) (*tabletmanagerdata.ReadTransactionStateResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReadTransactionState not implemented")
 }
 func (UnimplementedTabletManagerServer) ConcludeTransaction(context.Context, *tabletmanagerdata.ConcludeTransactionRequest) (*tabletmanagerdata.ConcludeTransactionResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ConcludeTransaction not implemented")
@@ -1555,6 +1569,24 @@ func _TabletManager_ReadTransaction_Handler(srv interface{}, ctx context.Context
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(TabletManagerServer).ReadTransaction(ctx, req.(*tabletmanagerdata.ReadTransactionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TabletManager_ReadTransactionState_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.ReadTransactionStateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TabletManagerServer).ReadTransactionState(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/ReadTransactionState",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).ReadTransactionState(ctx, req.(*tabletmanagerdata.ReadTransactionStateRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2409,6 +2441,10 @@ var TabletManager_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ReadTransaction",
 			Handler:    _TabletManager_ReadTransaction_Handler,
+		},
+		{
+			MethodName: "ReadTransactionState",
+			Handler:    _TabletManager_ReadTransactionState_Handler,
 		},
 		{
 			MethodName: "ConcludeTransaction",

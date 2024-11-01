@@ -2457,7 +2457,7 @@ func (s *VtctldServer) GetUnresolvedTransactions(ctx context.Context, req *vtctl
 			if err != nil {
 				return err
 			}
-			shardTrnxs, err := s.tmc.GetUnresolvedTransactions(newCtx, primary.Tablet)
+			shardTrnxs, err := s.tmc.GetUnresolvedTransactions(newCtx, primary.Tablet, req.AbandonAge)
 			if err != nil {
 				return err
 			}
