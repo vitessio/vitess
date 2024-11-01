@@ -80,10 +80,11 @@ type colExpr struct {
 	// references contains all the column names referenced in the expression.
 	references map[string]bool
 
-	isGrouped  bool
-	isPK       bool
-	dataType   string
-	columnType string
+	isGrouped   bool
+	isPK        bool
+	isGenerated bool
+	dataType    string
+	columnType  string
 }
 
 // operation is the opcode for the colExpr.
@@ -360,7 +361,7 @@ func (tpb *tablePlanBuilder) generate() *TablePlan {
 	fieldsToSkip := make(map[string]bool)
 	for _, colInfo := range tpb.colInfos {
 		if colInfo.IsGenerated {
-			fieldsToSkip[colInfo.Name] = true
+			fieldsToSkip[strings.ToLower(colInfo.Name)] = true
 		}
 	}
 	return &TablePlan{
@@ -694,7 +695,7 @@ func (tpb *tablePlanBuilder) generateInsertPart(buf *sqlparser.TrackedBuffer) *s
 	}
 	separator := ""
 	for _, cexpr := range tpb.colExprs {
-		if tpb.isColumnGenerated(cexpr.colName) {
+		if cexpr.isGenerated {
 			continue
 		}
 		buf.Myprintf("%s%v", separator, cexpr.colName)
@@ -708,7 +709,7 @@ func (tpb *tablePlanBuilder) generateValuesPart(buf *sqlparser.TrackedBuffer, bv
 	bvf.mode = bvAfter
 	separator := "("
 	for _, cexpr := range tpb.colExprs {
-		if tpb.isColumnGenerated(cexpr.colName) {
+		if cexpr.isGenerated {
 			continue
 		}
 		buf.Myprintf("%s", separator)
@@ -745,7 +746,7 @@ func (tpb *tablePlanBuilder) generateSelectPart(buf *sqlparser.TrackedBuffer, bv
 	buf.WriteString(" select ")
 	separator := ""
 	for _, cexpr := range tpb.colExprs {
-		if tpb.isColumnGenerated(cexpr.colName) {
+		if cexpr.isGenerated {
 			continue
 		}
 		buf.Myprintf("%s", separator)
@@ -781,7 +782,7 @@ func (tpb *tablePlanBuilder) generateOnDupPart(buf *sqlparser.TrackedBuffer) *sq
 		if cexpr.isGrouped || cexpr.isPK {
 			continue
 		}
-		if tpb.isColumnGenerated(cexpr.colName) {
+		if cexpr.isGenerated {
 			continue
 		}
 		buf.Myprintf("%s%v=", separator, cexpr.colName)
@@ -812,10 +813,7 @@ func (tpb *tablePlanBuilder) generateUpdateStatement() *sqlparser.ParsedQuery {
 		if cexpr.isPK {
 			tpb.pkIndices[i] = true
 		}
-		if cexpr.isGrouped || cexpr.isPK {
-			continue
-		}
-		if tpb.isColumnGenerated(cexpr.colName) {
+		if cexpr.isGrouped || cexpr.isPK || cexpr.isGenerated {
 			continue
 		}
 		buf.Myprintf("%s%v=", separator, cexpr.colName)
@@ -959,15 +957,6 @@ func (tpb *tablePlanBuilder) generatePKConstraint(buf *sqlparser.TrackedBuffer, 
 		buf.WriteString(charSetCollations[i].collation)
 	}
 	buf.WriteString(")")
-}
-
-func (tpb *tablePlanBuilder) isColumnGenerated(col sqlparser.IdentifierCI) bool {
-	for _, colInfo := range tpb.colInfos {
-		if col.EqualString(colInfo.Name) && colInfo.IsGenerated {
-			return true
-		}
-	}
-	return false
 }
 
 // bindvarFormatter is a dual mode formatter. Its behavior
