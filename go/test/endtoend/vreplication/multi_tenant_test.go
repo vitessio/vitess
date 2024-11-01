@@ -214,6 +214,18 @@ func TestMultiTenantSimple(t *testing.T) {
 		require.Zero(t, rowCount)
 	})
 
+	t.Run("cancel after switching reads", func(t *testing.T) {
+		// First let's test canceling the workflow after only switching reads
+		// to ensure that it properly cleans up all of the state.
+		createFunc()
+		mt.SwitchReads()
+		confirmOnlyReadsSwitched(t)
+		mt.Cancel()
+		confirmNoRoutingRules(t)
+		rowCount := getRowCount(t, vtgateConn, fmt.Sprintf("%s.%s", targetKeyspace, "t1"))
+		require.Zero(t, rowCount)
+	})
+
 	// Create again and run it to completion.
 	createFunc()
 

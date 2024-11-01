@@ -313,6 +313,11 @@ func testMoveTablesFlags3(t *testing.T, sourceKeyspace, targetKeyspace string, t
 		catchup(t, tab, workflowName, "MoveTables")
 	}
 	mt.SwitchReads()
+	wf := mt.(iWorkflow)
+	validateReadsRouteToTarget(t, "replica")
+	validateTableRoutingRule(t, "customer", "replica", sourceKs, targetKs)
+	validateTableRoutingRule(t, "customer", "", targetKs, sourceKs)
+	confirmStates(t, &wf, wrangler.WorkflowStateNotSwitched, wrangler.WorkflowStateReadsSwitched)
 	mt.Cancel()
 	confirmNoRoutingRules(t)
 }
@@ -462,35 +467,19 @@ func splitShard(t *testing.T, keyspace, workflowName, sourceShards, targetShards
 		"--config-overrides", mapToCSV(overrides),
 	}
 
-	var rs iReshard
-	var wf iWorkflow
-	createWorkflow := func() {
-		rs = newReshard(vc, &reshardWorkflow{
-			workflowInfo: &workflowInfo{
-				vc:             vc,
-				workflowName:   workflowName,
-				targetKeyspace: keyspace,
-			},
-			sourceShards: sourceShards,
-			targetShards: targetShards,
-			createFlags:  createFlags,
-		}, workflowFlavorVtctld)
-		wf = rs.(iWorkflow)
-		rs.Create()
-	}
-
-	// First test that we can create a workflow, switch ONLY reads, and then cancel it.
-	createWorkflow()
-	rs.SwitchReads()
-	validateReadsRouteToTarget(t, "replica")
-	validateTableRoutingRule(t, "customer", "replica", sourceKs, targetKs)
-	validateTableRoutingRule(t, "customer", "", targetKs, sourceKs)
-	confirmStates(t, &wf, wrangler.WorkflowStateNotSwitched, wrangler.WorkflowStateReadsSwitched)
-	rs.Cancel()
-	confirmNoRoutingRules(t)
-
-	createWorkflow()
+	rs := newReshard(vc, &reshardWorkflow{
+		workflowInfo: &workflowInfo{
+			vc:             vc,
+			workflowName:   workflowName,
+			targetKeyspace: keyspace,
+		},
+		sourceShards: sourceShards,
+		targetShards: targetShards,
+		createFlags:  createFlags,
+	}, workflowFlavorVtctld)
 	ksWorkflow := fmt.Sprintf("%s.%s", keyspace, workflowName)
+	wf := rs.(iWorkflow)
+	rs.Create()
 	validateReshardResponse(rs)
 	validateOverrides(t, targetTabs, overrides)
 	workflowResponse := getWorkflow(keyspace, workflowName)
