@@ -6001,14 +6001,16 @@ alter_user_statement:
     if $3.(int) != 0 {
       ifExists = true
     }
+    accountName := $4.(AccountName)
     $$ = &DDL{
       Action: AlterStr,
-      User: $4.(AccountName),
+      User: accountName,
       Authentication: $5.(*Authentication),
       IfExists: ifExists,
       Auth: AuthInformation{
           AuthType: AuthType_ALTER_USER,
           TargetType: AuthTargetType_Ignore,
+          TargetNames: []string{accountName.Name, accountName.Host},
       },
     }
   }
@@ -6692,8 +6694,8 @@ show_statement:
     $$ = &Show{
       Type: string($2) + " " + string($3),
       Auth: AuthInformation{
-        AuthType: AuthType_SHOW,
-        TargetType: AuthTargetType_TODO,
+        AuthType: AuthType_REPLICATION_CLIENT,
+        TargetType: AuthTargetType_Global,
       },
     }
   }
@@ -6759,12 +6761,14 @@ show_statement:
   }
 | SHOW CREATE PROCEDURE table_name
   {
+    tableName := $4.(TableName)
     $$ = &Show{
       Type: CreateProcedureStr,
       Table: $4.(TableName),
       Auth: AuthInformation{
-        AuthType: AuthType_SHOW,
-        TargetType: AuthTargetType_TODO,
+        AuthType: AuthType_SHOW_CREATE_PROCEDURE,
+        TargetType: AuthTargetType_Ignore,
+        TargetNames: []string{tableName.DbQualifier.String()},
       },
     }
   }
@@ -6871,8 +6875,8 @@ show_statement:
     $$ = &Show{
       Type: string($2) + " " + string($3),
       Auth: AuthInformation{
-        AuthType: AuthType_SHOW,
-        TargetType: AuthTargetType_TODO,
+        AuthType: AuthType_REPLICATION_CLIENT,
+        TargetType: AuthTargetType_Global,
       },
     }
   }
@@ -6944,8 +6948,8 @@ show_statement:
       Type: string($3),
       Full: $2.(bool),
       Auth: AuthInformation{
-        AuthType: AuthType_SHOW,
-        TargetType: AuthTargetType_TODO,
+        AuthType: AuthType_PROCESS,
+        TargetType: AuthTargetType_Global,
       },
     }
   }
@@ -7013,8 +7017,9 @@ show_statement:
   {
     $$ = &ShowGrants{
       Auth: AuthInformation{
-        AuthType: AuthType_SHOW,
-        TargetType: AuthTargetType_TODO,
+        AuthType: AuthType_SELECT,
+        TargetType: AuthTargetType_DatabaseIdentifiers,
+        TargetNames: []string{"mysql"},
       },
     }
   }
@@ -7024,8 +7029,9 @@ show_statement:
     $$ = &ShowGrants{
       For: &an,
       Auth: AuthInformation{
-        AuthType: AuthType_SHOW,
-        TargetType: AuthTargetType_TODO,
+        AuthType: AuthType_SELECT,
+        TargetType: AuthTargetType_DatabaseIdentifiers,
+        TargetNames: []string{"mysql"},
       },
     }
   }
@@ -7034,8 +7040,9 @@ show_statement:
     $$ = &ShowGrants{
       CurrentUser: true,
       Auth: AuthInformation{
-        AuthType: AuthType_SHOW,
-        TargetType: AuthTargetType_TODO,
+        AuthType: AuthType_SELECT,
+        TargetType: AuthTargetType_DatabaseIdentifiers,
+        TargetNames: []string{"mysql"},
       },
     }
   }
@@ -7046,8 +7053,9 @@ show_statement:
       For: &an,
       Using: $6.([]AccountName),
       Auth: AuthInformation{
-        AuthType: AuthType_SHOW,
-        TargetType: AuthTargetType_TODO,
+        AuthType: AuthType_SELECT,
+        TargetType: AuthTargetType_DatabaseIdentifiers,
+        TargetNames: []string{"mysql"},
       },
     }
   }
@@ -7112,6 +7120,10 @@ show_statement:
         DbName: $3.(string),
         Filter: $4.(*ShowFilter),
       },
+      Auth: AuthInformation{
+        AuthType: AuthType_SHOW,
+        TargetType: AuthTargetType_TODO,
+      },
     }
   }
 | SHOW REPLICAS
@@ -7129,8 +7141,8 @@ show_statement:
     $$ = &Show{
       Type: string($2) + " " + string($3) + " " + string($4),
       Auth: AuthInformation{
-        AuthType: AuthType_SHOW,
-        TargetType: AuthTargetType_TODO,
+        AuthType: AuthType_REPLICATION_CLIENT,
+        TargetType: AuthTargetType_Global,
       },
     }
   }
@@ -7149,8 +7161,8 @@ show_statement:
     $$ = &Show{
       Type: string($2) + " " + string($3),
       Auth: AuthInformation{
-        AuthType: AuthType_SHOW,
-        TargetType: AuthTargetType_TODO,
+        AuthType: AuthType_REPLICATION_CLIENT,
+        TargetType: AuthTargetType_Global,
       },
     }
   }
