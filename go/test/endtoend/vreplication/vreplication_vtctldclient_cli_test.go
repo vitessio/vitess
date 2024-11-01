@@ -304,6 +304,17 @@ func testMoveTablesFlags3(t *testing.T, sourceKeyspace, targetKeyspace string, t
 	// Confirm that the source tables were renamed.
 	require.True(t, checkTablesExist(t, "zone1-100", []string{"_customer2_old"}))
 	require.False(t, checkTablesExist(t, "zone1-100", []string{"customer2"}))
+
+	// Confirm that we can cancel a workflow after ONLY switching read traffic.
+	mt = createMoveTables(t, sourceKeyspace, targetKeyspace, workflowName, "customer", createFlags, nil, nil)
+	mt.Start() // Need to start because we set stop-after-copy to true.
+	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
+	for _, tab := range targetTabs {
+		catchup(t, tab, workflowName, "MoveTables")
+	}
+	mt.SwitchReads()
+	mt.Cancel()
+	confirmNoRoutingRules(t)
 }
 
 // Create two workflows in order to confirm that listing all workflows works.
@@ -450,20 +461,36 @@ func splitShard(t *testing.T, keyspace, workflowName, sourceShards, targetShards
 		"--all-cells", "--format=json",
 		"--config-overrides", mapToCSV(overrides),
 	}
-	rs := newReshard(vc, &reshardWorkflow{
-		workflowInfo: &workflowInfo{
-			vc:             vc,
-			workflowName:   workflowName,
-			targetKeyspace: keyspace,
-		},
-		sourceShards: sourceShards,
-		targetShards: targetShards,
-		createFlags:  createFlags,
-	}, workflowFlavorVtctld)
 
+	var rs iReshard
+	var wf iWorkflow
+	createWorkflow := func() {
+		rs = newReshard(vc, &reshardWorkflow{
+			workflowInfo: &workflowInfo{
+				vc:             vc,
+				workflowName:   workflowName,
+				targetKeyspace: keyspace,
+			},
+			sourceShards: sourceShards,
+			targetShards: targetShards,
+			createFlags:  createFlags,
+		}, workflowFlavorVtctld)
+		wf = rs.(iWorkflow)
+		rs.Create()
+	}
+
+	// First test that we can create a workflow, switch ONLY reads, and then cancel it.
+	createWorkflow()
+	rs.SwitchReads()
+	validateReadsRouteToTarget(t, "replica")
+	validateTableRoutingRule(t, "customer", "replica", sourceKs, targetKs)
+	validateTableRoutingRule(t, "customer", "", targetKs, sourceKs)
+	confirmStates(t, &wf, wrangler.WorkflowStateNotSwitched, wrangler.WorkflowStateReadsSwitched)
+	rs.Cancel()
+	confirmNoRoutingRules(t)
+
+	createWorkflow()
 	ksWorkflow := fmt.Sprintf("%s.%s", keyspace, workflowName)
-	wf := rs.(iWorkflow)
-	rs.Create()
 	validateReshardResponse(rs)
 	validateOverrides(t, targetTabs, overrides)
 	workflowResponse := getWorkflow(keyspace, workflowName)
@@ -769,8 +796,10 @@ func getRoutingRules(t *testing.T) *vschemapb.RoutingRules {
 }
 
 func confirmNoRoutingRules(t *testing.T) {
-	routingRulesResponse := getRoutingRules(t)
-	require.Zero(t, len(routingRulesResponse.Rules))
+	rrRes := getRoutingRules(t)
+	require.Zero(t, len(rrRes.Rules))
+	krrRes := getKeyspaceRoutingRules(t, vc)
+	require.Zero(t, len(krrRes.Rules))
 }
 
 func confirmRoutingRulesExist(t *testing.T) {

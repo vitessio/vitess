@@ -2759,8 +2759,10 @@ func (s *Server) dropTargets(ctx context.Context, ts *trafficSwitcher, keepData,
 	if !keepData {
 		switch ts.MigrationType() {
 		case binlogdatapb.MigrationType_TABLES:
-			if err := sw.removeTargetTables(ctx); err != nil {
-				return nil, err
+			if !ts.IsMultiTenantMigration() {
+				if err := sw.removeTargetTables(ctx); err != nil {
+					return nil, err
+				}
 			}
 			if err := sw.dropSourceDeniedTables(ctx); err != nil {
 				return nil, err
