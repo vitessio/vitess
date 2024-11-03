@@ -83,7 +83,7 @@ describe('api/http', () => {
                 http.get(`${import.meta.env.VITE_VTADMIN_API_ADDRESS}${endpoint}`, (info) =>
                     HttpResponse.text('<html><head><title>504 Gateway Time-out</title></head></html>', {
                         status: 50,
-                      })
+                    })
                 )
             );
 
