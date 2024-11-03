@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { rest } from 'msw';
+import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -45,17 +45,17 @@ describe('CreateKeyspace integration test', () => {
         const cluster = { id: 'local', name: 'local' };
         const apiAddr = import.meta.env.VITE_VTADMIN_API_ADDRESS;
         server.use(
-            rest.get(`${apiAddr}/api/clusters`, (req, res, ctx) => {
-                return res(ctx.json({ result: { clusters: [cluster] }, ok: true }));
+            http.get(`${apiAddr}/api/clusters`, (info) => {
+                return HttpResponse.json({ result: { clusters: [cluster] }, ok: true });
             }),
-            rest.post(`${apiAddr}/api/keyspace/:clusterID`, (req, res, ctx) => {
+            http.post(`${apiAddr}/api/keyspace/:clusterID`, (info) => {
                 const data: vtadmin.ICreateKeyspaceResponse = {
                     keyspace: {
                         cluster: { id: cluster.id, name: cluster.name },
                         keyspace: { name: 'some-keyspace' },
                     },
                 };
-                return res(ctx.json({ result: data, ok: true }));
+                return HttpResponse.json({ result: data, ok: true });
             })
         );
         server.listen();

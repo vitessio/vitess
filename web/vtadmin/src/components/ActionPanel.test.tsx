@@ -16,7 +16,7 @@
 
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { rest } from 'msw';
+import { http, HttpResponse } from 'msw';
 import { QueryClient, QueryClientProvider, useMutation } from 'react-query';
 import { describe, it, expect, vi } from 'vitest';
 
@@ -46,8 +46,8 @@ describe('ActionPanel', () => {
 
         const url = `${import.meta.env.VITE_VTADMIN_API_ADDRESS}/api/test`;
         global.server.use(
-            rest.post(url, (req, res, ctx) => {
-                return res(ctx.json({ ok: true }));
+            http.post(url, (info) => {
+                return HttpResponse.json({ ok: true });
             })
         );
 

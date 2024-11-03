@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { rest } from 'msw';
+import { http, HttpResponse } from 'msw';
 
 import * as api from './http';
 import {
@@ -32,7 +32,7 @@ vi.mock('../errors/errorHandler');
 // for all requests made against the given `endpoint`.
 const mockServerJson = (endpoint: string, json: object, status: number = 200) => {
     const apiAddr = import.meta.env.VITE_VTADMIN_API_ADDRESS;
-    global.server.use(rest.get(`${apiAddr}${endpoint}`, (req, res, ctx) => res(ctx.status(status), ctx.json(json))));
+    global.server.use(http.get(`${apiAddr}${endpoint}`, (info) => HttpResponse.json(json)));
 };
 
 describe('api/http', () => {
@@ -80,8 +80,10 @@ describe('api/http', () => {
             errorHandler.notify.mockReset();
             const endpoint = `/api/tablets`;
             global.server.use(
-                rest.get(`${import.meta.env.VITE_VTADMIN_API_ADDRESS}${endpoint}`, (req, res, ctx) =>
-                    res(ctx.status(504), ctx.body('<html><head><title>504 Gateway Time-out</title></head></html>'))
+                http.get(`${import.meta.env.VITE_VTADMIN_API_ADDRESS}${endpoint}`, (info) =>
+                    HttpResponse.text('<html><head><title>504 Gateway Time-out</title></head></html>', {
+                        status: 50,
+                      })
                 )
             );
 
