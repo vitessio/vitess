@@ -668,8 +668,8 @@ func (ts *Server) GetTabletsByShardCell(ctx context.Context, keyspace, shard str
 				return vterrors.Wrapf(err, "GetTabletsByCell for %v failed.", cell)
 			}
 			mu.Lock()
+			defer mu.Unlock()
 			tablets = append(tablets, t...)
-			mu.Unlock()
 			return nil
 		})
 	}
