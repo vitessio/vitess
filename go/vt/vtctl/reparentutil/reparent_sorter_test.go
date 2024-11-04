@@ -19,11 +19,10 @@ package reparentutil
 import (
 	"testing"
 
-	"vitess.io/vitess/go/vt/topo/topoproto"
-
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
