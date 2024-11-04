@@ -2813,6 +2813,7 @@ func TestEmergencyReparenter_findMostAdvanced(t *testing.T) {
 		name                 string
 		validCandidates      map[string]replication.Position
 		tabletMap            map[string]*topo.TabletInfo
+		backingUpTablets     map[string]bool
 		emergencyReparentOps EmergencyReparentOptions
 		result               *topodatapb.Tablet
 		err                  string
@@ -2859,6 +2860,7 @@ func TestEmergencyReparenter_findMostAdvanced(t *testing.T) {
 					},
 				},
 			},
+			backingUpTablets: map[string]bool{"zone1-0000000100": false, "zone1-0000000101": false, "zone1-0000000102": false},
 			result: &topodatapb.Tablet{
 				Alias: &topodatapb.TabletAlias{
 					Cell: "zone1",
@@ -2909,6 +2911,7 @@ func TestEmergencyReparenter_findMostAdvanced(t *testing.T) {
 					},
 				},
 			},
+			backingUpTablets: map[string]bool{"zone1-0000000100": false, "zone1-0000000101": false, "zone1-0000000102": false},
 			result: &topodatapb.Tablet{
 				Alias: &topodatapb.TabletAlias{
 					Cell: "zone1",
@@ -2963,6 +2966,7 @@ func TestEmergencyReparenter_findMostAdvanced(t *testing.T) {
 					},
 				},
 			},
+			backingUpTablets: map[string]bool{"zone1-0000000100": false, "zone1-0000000101": false, "zone1-0000000102": false},
 			result: &topodatapb.Tablet{
 				Alias: &topodatapb.TabletAlias{
 					Cell: "zone1",
@@ -3017,7 +3021,8 @@ func TestEmergencyReparenter_findMostAdvanced(t *testing.T) {
 					},
 				},
 			},
-			err: "split brain detected between servers",
+			backingUpTablets: map[string]bool{"zone1-0000000100": false, "zone1-0000000101": false, "zone1-0000000102": false},
+			err:              "split brain detected between servers",
 		},
 	}
 
@@ -3028,7 +3033,7 @@ func TestEmergencyReparenter_findMostAdvanced(t *testing.T) {
 			erp := NewEmergencyReparenter(nil, nil, logutil.NewMemoryLogger())
 
 			test.emergencyReparentOps.durability = durability
-			winningTablet, _, err := erp.findMostAdvanced(test.validCandidates, test.tabletMap, test.emergencyReparentOps)
+			winningTablet, _, err := erp.findMostAdvanced(test.validCandidates, test.tabletMap, test.backingUpTablets, test.emergencyReparentOps)
 			if test.err != "" {
 				assert.Error(t, err)
 				assert.Contains(t, err.Error(), test.err)
@@ -4468,11 +4473,6 @@ func TestEmergencyReparenter_filterValidCandidates(t *testing.T) {
 		topoproto.TabletAliasString(rdonlyTablet.Alias): false, topoproto.TabletAliasString(replicaCrossCellTablet.Alias): false,
 		topoproto.TabletAliasString(rdonlyCrossCellTablet.Alias): false,
 	}
-	replicaBackingUp := map[string]bool{
-		topoproto.TabletAliasString(primaryTablet.Alias): false, topoproto.TabletAliasString(replicaTablet.Alias): true,
-		topoproto.TabletAliasString(rdonlyTablet.Alias): false, topoproto.TabletAliasString(replicaCrossCellTablet.Alias): false,
-		topoproto.TabletAliasString(rdonlyCrossCellTablet.Alias): false,
-	}
 	tests := []struct {
 		name             string
 		durability       string
@@ -4491,13 +4491,6 @@ func TestEmergencyReparenter_filterValidCandidates(t *testing.T) {
 			tabletsReachable: allTablets,
 			tabletsBackingUp: noTabletsBackingUp,
 			filteredTablets:  []*topodatapb.Tablet{primaryTablet, replicaTablet, replicaCrossCellTablet},
-		}, {
-			name:             "host backing up must be last in the list",
-			durability:       "none",
-			validTablets:     allTablets,
-			tabletsReachable: allTablets,
-			tabletsBackingUp: replicaBackingUp,
-			filteredTablets:  []*topodatapb.Tablet{primaryTablet, replicaCrossCellTablet, replicaTablet},
 		}, {
 			name:             "filter cross cell",
 			durability:       "none",
@@ -4575,7 +4568,7 @@ func TestEmergencyReparenter_filterValidCandidates(t *testing.T) {
 			tt.opts.durability = durability
 			logger := logutil.NewMemoryLogger()
 			erp := NewEmergencyReparenter(nil, nil, logger)
-			tabletList, err := erp.filterValidCandidates(tt.validTablets, tt.tabletsReachable, tt.tabletsBackingUp, tt.prevPrimary, tt.opts)
+			tabletList, err := erp.filterValidCandidates(tt.validTablets, tt.tabletsReachable, tt.prevPrimary, tt.opts)
 			if tt.errShouldContain != "" {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tt.errShouldContain)
@@ -4620,6 +4613,7 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 		statusMap                map[string]*replicationdatapb.StopReplicationStatus
 		primaryStatusMap         map[string]*replicationdatapb.PrimaryStatus
 		tabletMap                map[string]*topo.TabletInfo
+		backingUpTablets         map[string]bool
 		wantedCandidates         []string
 		wantMostAdvancedPossible []string
 		wantErr                  string
@@ -4685,6 +4679,7 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 					},
 				},
 			},
+			backingUpTablets:         map[string]bool{"zone1-0000000100": false, "zone1-0000000101": false, "zone1-0000000102": false},
 			wantedCandidates:         []string{"zone1-0000000102", "zone1-0000000103", "zone1-0000000104"},
 			wantMostAdvancedPossible: []string{"zone1-0000000102"},
 		},
@@ -4749,6 +4744,7 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 					},
 				},
 			},
+			backingUpTablets:         map[string]bool{"zone1-0000000100": false, "zone1-0000000101": false, "zone1-0000000102": false},
 			wantedCandidates:         []string{"zone1-0000000102", "zone1-0000000103", "zone1-0000000104"},
 			wantMostAdvancedPossible: []string{"zone1-0000000102"},
 		},
@@ -4813,6 +4809,7 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 					},
 				},
 			},
+			backingUpTablets:         map[string]bool{"zone1-0000000100": false, "zone1-0000000101": false, "zone1-0000000102": false},
 			wantedCandidates:         []string{"zone1-0000000102", "zone1-0000000103", "zone1-0000000104"},
 			wantMostAdvancedPossible: []string{"zone1-0000000104"},
 		},
@@ -4877,6 +4874,7 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 					},
 				},
 			},
+			backingUpTablets:         map[string]bool{"zone1-0000000100": false, "zone1-0000000101": false, "zone1-0000000102": false},
 			wantedCandidates:         []string{"zone1-0000000102", "zone1-0000000103", "zone1-0000000104"},
 			wantMostAdvancedPossible: []string{"zone1-0000000102"},
 		},
@@ -4941,6 +4939,7 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 					},
 				},
 			},
+			backingUpTablets:         map[string]bool{"zone1-0000000100": false, "zone1-0000000101": false, "zone1-0000000102": false},
 			wantedCandidates:         []string{"zone1-0000000102", "zone1-0000000103", "zone1-0000000104"},
 			wantMostAdvancedPossible: []string{"zone1-0000000102", "zone1-0000000103"},
 		},
@@ -5004,6 +5003,7 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 					Position: getRelayLogPosition("", "1-31", "1-50"),
 				},
 			},
+			backingUpTablets:         map[string]bool{"zone1-0000000100": false, "zone1-0000000101": false, "zone1-0000000102": false},
 			wantedCandidates:         []string{"zone1-0000000103", "zone1-0000000104"},
 			wantMostAdvancedPossible: []string{"zone1-0000000103"},
 		},
@@ -5068,6 +5068,7 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 					},
 				},
 			},
+			backingUpTablets:         map[string]bool{"zone1-0000000100": false, "zone1-0000000101": false, "zone1-0000000102": false},
 			wantedCandidates:         []string{"zone1-0000000102", "zone1-0000000103"},
 			wantMostAdvancedPossible: []string{"zone1-0000000103"},
 		},
@@ -5131,6 +5132,7 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 					Position: getRelayLogPosition("", "1-31", "1-50"),
 				},
 			},
+			backingUpTablets:         map[string]bool{"zone1-0000000100": false, "zone1-0000000101": false, "zone1-0000000102": false},
 			wantedCandidates:         []string{"zone1-0000000103"},
 			wantMostAdvancedPossible: []string{"zone1-0000000103"},
 		},
@@ -5195,6 +5197,7 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 					},
 				},
 			},
+			backingUpTablets:         map[string]bool{"zone1-0000000100": false, "zone1-0000000101": false, "zone1-0000000102": false},
 			wantedCandidates:         []string{"zone1-0000000103", "zone1-0000000104"},
 			wantMostAdvancedPossible: []string{"zone1-0000000103", "zone1-0000000104"},
 		},
@@ -5259,6 +5262,7 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 					},
 				},
 			},
+			backingUpTablets:         map[string]bool{"zone1-0000000100": false, "zone1-0000000101": false, "zone1-0000000102": false},
 			wantedCandidates:         []string{"zone1-0000000103", "zone1-0000000104"},
 			wantMostAdvancedPossible: []string{"zone1-0000000103"},
 		},
@@ -5306,6 +5310,7 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 					},
 				},
 			},
+			backingUpTablets:         map[string]bool{"zone1-0000000100": false, "zone1-0000000101": false, "zone1-0000000102": false},
 			wantedCandidates:         []string{"zone1-0000000103"},
 			wantMostAdvancedPossible: []string{"zone1-0000000103"},
 		},
@@ -5370,6 +5375,7 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 					},
 				},
 			},
+			backingUpTablets:         map[string]bool{"zone1-0000000100": false, "zone1-0000000101": false, "zone1-0000000102": false},
 			wantedCandidates:         []string{"zone1-0000000104"},
 			wantMostAdvancedPossible: []string{"zone1-0000000104"},
 		},
@@ -5433,6 +5439,7 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 					Position: getRelayLogPosition("", "1-31", "1-50"),
 				},
 			},
+			backingUpTablets:         map[string]bool{"zone1-0000000100": false, "zone1-0000000101": false, "zone1-0000000102": false},
 			wantedCandidates:         []string{"zone1-0000000103"},
 			wantMostAdvancedPossible: []string{"zone1-0000000103"},
 		},
@@ -5492,7 +5499,8 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 					Position: getRelayLogPosition("", "1-31", "1-50"),
 				},
 			},
-			wantErr: "could not read reparent journal information",
+			backingUpTablets: map[string]bool{"zone1-0000000100": false, "zone1-0000000101": false, "zone1-0000000102": false},
+			wantErr:          "could not read reparent journal information",
 		},
 	}
 	for _, tt := range tests {
@@ -5519,7 +5527,7 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 			dp, err := GetDurabilityPolicy("semi_sync")
 			require.NoError(t, err)
 			ers := EmergencyReparenter{logger: logutil.NewCallbackLogger(func(*logutilpb.Event) {})}
-			winningPrimary, _, err := ers.findMostAdvanced(candidates, tt.tabletMap, EmergencyReparentOptions{durability: dp})
+			winningPrimary, _, err := ers.findMostAdvanced(candidates, tt.tabletMap, tt.backingUpTablets, EmergencyReparentOptions{durability: dp})
 			require.NoError(t, err)
 			require.True(t, slices.Contains(tt.wantMostAdvancedPossible, winningPrimary.Hostname), winningPrimary.Hostname)
 		})

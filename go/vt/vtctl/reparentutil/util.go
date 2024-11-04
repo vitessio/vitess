@@ -83,13 +83,10 @@ func ElectNewPrimary(
 		// mutex to secure the next two fields from concurrent access
 		mu sync.Mutex
 		// tablets that are possible candidates to be the new primary and their positions
-		validTablets              []*topodatapb.Tablet
-		tabletPositions           []replication.Position
-		innodbBufferPool          []int
-		preferNotTablets          []*topodatapb.Tablet
-		preferNotTabletPositions  []replication.Position
-		preferNotInnodbBufferPool []int
-		errorGroup, groupCtx      = errgroup.WithContext(ctx)
+		validTablets         []*topodatapb.Tablet
+		tabletPositions      []replication.Position
+		innodbBufferPool     []int
+		errorGroup, groupCtx = errgroup.WithContext(ctx)
 	)
 
 	// candidates are the list of tablets that can be potentially promoted after filtering out based on preliminary checks.
@@ -124,6 +121,7 @@ func ElectNewPrimary(
 	if len(candidates) == 1 && opts.TolerableReplLag == 0 {
 		return candidates[0].Alias, nil
 	}
+	backingUpTablets := map[string]bool{}
 
 	for _, tablet := range candidates {
 		tb := tablet
@@ -133,15 +131,10 @@ func ElectNewPrimary(
 			mu.Lock()
 			defer mu.Unlock()
 			if err == nil && (opts.TolerableReplLag == 0 || opts.TolerableReplLag >= replLag) {
-				if !backingUp {
-					validTablets = append(validTablets, tb)
-					tabletPositions = append(tabletPositions, pos)
-					innodbBufferPool = append(innodbBufferPool, innodbBufferPoolData[topoproto.TabletAliasString(tb.Alias)])
-				} else {
-					preferNotTablets = append(preferNotTablets, tb)
-					preferNotTabletPositions = append(preferNotTabletPositions, pos)
-					preferNotInnodbBufferPool = append(preferNotInnodbBufferPool, innodbBufferPoolData[topoproto.TabletAliasString(tb.Alias)])
-				}
+				validTablets = append(validTablets, tb)
+				tabletPositions = append(tabletPositions, pos)
+				innodbBufferPool = append(innodbBufferPool, innodbBufferPoolData[topoproto.TabletAliasString(tb.Alias)])
+				backingUpTablets[topoproto.TabletAliasString(tablet.Alias)] = backingUp
 			} else {
 				reasonsToInvalidate.WriteString(fmt.Sprintf("\n%v has %v replication lag which is more than the tolerable amount", topoproto.TabletAliasString(tablet.Alias), replLag))
 			}
@@ -155,26 +148,17 @@ func ElectNewPrimary(
 	}
 
 	// return an error if there are no valid tablets available
-	if len(validTablets) == 0 && len(preferNotTablets) == 0 {
+	if len(validTablets) == 0 {
 		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "cannot find a tablet to reparent to%v", reasonsToInvalidate.String())
 	}
 
 	// sort the tablets for finding the best primary
-	err = sortTabletsForReparent(validTablets, tabletPositions, innodbBufferPool, opts.durability)
+	err = sortTabletsForReparent(validTablets, tabletPositions, innodbBufferPool, backingUpTablets, opts.durability)
 	if err != nil {
 		return nil, err
 	}
 
-	if len(validTablets) > 0 {
-		return validTablets[0].Alias, nil
-	}
-
-	err = sortTabletsForReparent(preferNotTablets, preferNotTabletPositions, innodbBufferPool, opts.durability)
-	if err != nil {
-		return nil, err
-	}
-
-	return preferNotTablets[0].Alias, nil
+	return validTablets[0].Alias, nil
 }
 
 // findPositionLagBackingUpForTablet processes the replication position and lag for a single tablet and

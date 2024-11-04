@@ -18,6 +18,7 @@ package reparentutil
 
 import (
 	"testing"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	"github.com/stretchr/testify/require"
 
@@ -93,46 +94,59 @@ func TestReparentSorter(t *testing.T) {
 		tablets          []*topodatapb.Tablet
 		innodbBufferPool []int
 		positions        []replication.Position
+		backingUpTablets map[string]bool
 		containsErr      string
 		sortedTablets    []*topodatapb.Tablet
 	}{
 		{
-			name:          "all advanced, sort via promotion rules",
-			tablets:       []*topodatapb.Tablet{nil, tabletReplica1_100, tabletRdonly1_102},
-			positions:     []replication.Position{positionMostAdvanced, positionMostAdvanced, positionMostAdvanced},
-			sortedTablets: []*topodatapb.Tablet{tabletReplica1_100, tabletRdonly1_102, nil},
+			name:             "all advanced, sort via promotion rules",
+			tablets:          []*topodatapb.Tablet{nil, tabletReplica1_100, tabletRdonly1_102},
+			backingUpTablets: map[string]bool{topoproto.TabletAliasString(tabletReplica1_100.Alias): false, topoproto.TabletAliasString(tabletRdonly1_102.Alias): false},
+			positions:        []replication.Position{positionMostAdvanced, positionMostAdvanced, positionMostAdvanced},
+			sortedTablets:    []*topodatapb.Tablet{tabletReplica1_100, tabletRdonly1_102, nil},
 		}, {
 			name:             "all advanced, sort via innodb buffer pool",
 			tablets:          []*topodatapb.Tablet{tabletReplica1_101, tabletReplica2_100, tabletReplica1_100},
+			backingUpTablets: map[string]bool{topoproto.TabletAliasString(tabletReplica1_101.Alias): false, topoproto.TabletAliasString(tabletReplica2_100.Alias): false, topoproto.TabletAliasString(tabletReplica1_100.Alias): false},
 			positions:        []replication.Position{positionMostAdvanced, positionMostAdvanced, positionMostAdvanced},
 			innodbBufferPool: []int{10, 40, 25},
 			sortedTablets:    []*topodatapb.Tablet{tabletReplica2_100, tabletReplica1_100, tabletReplica1_101},
 		}, {
-			name:          "ordering by position",
-			tablets:       []*topodatapb.Tablet{tabletReplica1_101, tabletReplica2_100, tabletReplica1_100, tabletRdonly1_102},
-			positions:     []replication.Position{positionEmpty, positionIntermediate1, positionIntermediate2, positionMostAdvanced},
-			sortedTablets: []*topodatapb.Tablet{tabletRdonly1_102, tabletReplica1_100, tabletReplica2_100, tabletReplica1_101},
+			name:             "ordering by position",
+			tablets:          []*topodatapb.Tablet{tabletReplica1_101, tabletReplica2_100, tabletReplica1_100, tabletRdonly1_102},
+			backingUpTablets: map[string]bool{topoproto.TabletAliasString(tabletReplica1_101.Alias): false, topoproto.TabletAliasString(tabletReplica2_100.Alias): false, topoproto.TabletAliasString(tabletReplica1_100.Alias): false, topoproto.TabletAliasString(tabletRdonly1_102.Alias): false},
+			positions:        []replication.Position{positionEmpty, positionIntermediate1, positionIntermediate2, positionMostAdvanced},
+			sortedTablets:    []*topodatapb.Tablet{tabletRdonly1_102, tabletReplica1_100, tabletReplica2_100, tabletReplica1_101},
 		}, {
 			name:        "tablets and positions count error",
 			tablets:     []*topodatapb.Tablet{tabletReplica1_101, tabletReplica2_100},
 			positions:   []replication.Position{positionEmpty, positionIntermediate1, positionMostAdvanced},
 			containsErr: "unequal number of tablets and positions",
 		}, {
-			name:          "promotion rule check",
-			tablets:       []*topodatapb.Tablet{tabletReplica1_101, tabletRdonly1_102},
-			positions:     []replication.Position{positionMostAdvanced, positionMostAdvanced},
-			sortedTablets: []*topodatapb.Tablet{tabletReplica1_101, tabletRdonly1_102},
+			name:             "promotion rule check",
+			tablets:          []*topodatapb.Tablet{tabletReplica1_101, tabletRdonly1_102},
+			backingUpTablets: map[string]bool{topoproto.TabletAliasString(tabletReplica1_101.Alias): false, topoproto.TabletAliasString(tabletRdonly1_102.Alias): false},
+			positions:        []replication.Position{positionMostAdvanced, positionMostAdvanced},
+			sortedTablets:    []*topodatapb.Tablet{tabletReplica1_101, tabletRdonly1_102},
 		}, {
-			name:          "mixed",
-			tablets:       []*topodatapb.Tablet{tabletReplica1_101, tabletReplica2_100, tabletReplica1_100, tabletRdonly1_102},
-			positions:     []replication.Position{positionEmpty, positionIntermediate1, positionMostAdvanced, positionIntermediate1},
-			sortedTablets: []*topodatapb.Tablet{tabletReplica1_100, tabletReplica2_100, tabletRdonly1_102, tabletReplica1_101},
+			name:             "mixed",
+			tablets:          []*topodatapb.Tablet{tabletReplica1_101, tabletReplica2_100, tabletReplica1_100, tabletRdonly1_102},
+			backingUpTablets: map[string]bool{topoproto.TabletAliasString(tabletReplica1_101.Alias): false, topoproto.TabletAliasString(tabletReplica2_100.Alias): false, topoproto.TabletAliasString(tabletReplica1_100.Alias): false, topoproto.TabletAliasString(tabletRdonly1_102.Alias): false},
+			positions:        []replication.Position{positionEmpty, positionIntermediate1, positionMostAdvanced, positionIntermediate1},
+			sortedTablets:    []*topodatapb.Tablet{tabletReplica1_100, tabletReplica2_100, tabletRdonly1_102, tabletReplica1_101},
 		}, {
 			name:             "mixed - another",
 			tablets:          []*topodatapb.Tablet{tabletReplica1_101, tabletReplica2_100, tabletReplica1_100, tabletRdonly1_102},
+			backingUpTablets: map[string]bool{topoproto.TabletAliasString(tabletReplica1_101.Alias): false, topoproto.TabletAliasString(tabletReplica2_100.Alias): false, topoproto.TabletAliasString(tabletReplica1_100.Alias): false, topoproto.TabletAliasString(tabletRdonly1_102.Alias): false},
 			positions:        []replication.Position{positionIntermediate1, positionIntermediate1, positionMostAdvanced, positionIntermediate1},
 			innodbBufferPool: []int{100, 200, 0, 200},
 			sortedTablets:    []*topodatapb.Tablet{tabletReplica1_100, tabletReplica2_100, tabletReplica1_101, tabletRdonly1_102},
+		}, {
+			name:             "all advanced, sort via backup flag",
+			tablets:          []*topodatapb.Tablet{nil, tabletReplica1_100, tabletRdonly1_102},
+			backingUpTablets: map[string]bool{topoproto.TabletAliasString(tabletReplica1_100.Alias): true, topoproto.TabletAliasString(tabletRdonly1_102.Alias): false},
+			positions:        []replication.Position{positionMostAdvanced, positionMostAdvanced, positionMostAdvanced},
+			sortedTablets:    []*topodatapb.Tablet{tabletRdonly1_102, tabletReplica1_100, nil},
 		},
 	}
 
@@ -140,7 +154,7 @@ func TestReparentSorter(t *testing.T) {
 	require.NoError(t, err)
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
-			err := sortTabletsForReparent(testcase.tablets, testcase.positions, testcase.innodbBufferPool, durability)
+			err := sortTabletsForReparent(testcase.tablets, testcase.positions, testcase.innodbBufferPool, testcase.backingUpTablets, durability)
 			if testcase.containsErr != "" {
 				require.EqualError(t, err, testcase.containsErr)
 			} else {

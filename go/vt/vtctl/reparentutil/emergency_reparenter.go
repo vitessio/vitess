@@ -247,7 +247,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	// Here we also check for split brain scenarios and check that the selected replica must be more advanced than all the other valid candidates.
 	// We fail in case there is a split brain detected.
 	// The validCandidateTablets list is sorted by the replication positions with ties broken by promotion rules.
-	intermediateSource, validCandidateTablets, err = erp.findMostAdvanced(validCandidates, tabletMap, opts)
+	intermediateSource, validCandidateTablets, err = erp.findMostAdvanced(validCandidates, tabletMap, stoppedReplicationSnapshot.backingUpTablets, opts)
 	if err != nil {
 		return err
 	}
@@ -258,7 +258,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	// 2. Remove the tablets with the Must_not promote rule
 	// 3. Remove cross-cell tablets if PreventCrossCellPromotion is specified
 	// Our final primary candidate MUST belong to this list of valid candidates
-	validCandidateTablets, err = erp.filterValidCandidates(validCandidateTablets, stoppedReplicationSnapshot.reachableTablets, stoppedReplicationSnapshot.backingUpTablets, prevPrimary, opts)
+	validCandidateTablets, err = erp.filterValidCandidates(validCandidateTablets, stoppedReplicationSnapshot.reachableTablets, prevPrimary, opts)
 	if err != nil {
 		return err
 	}
@@ -397,6 +397,7 @@ func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(
 func (erp *EmergencyReparenter) findMostAdvanced(
 	validCandidates map[string]replication.Position,
 	tabletMap map[string]*topo.TabletInfo,
+	backingUpTablets map[string]bool,
 	opts EmergencyReparentOptions,
 ) (*topodatapb.Tablet, []*topodatapb.Tablet, error) {
 	erp.logger.Infof("started finding the intermediate source")
@@ -407,7 +408,7 @@ func (erp *EmergencyReparenter) findMostAdvanced(
 	}
 
 	// sort the tablets for finding the best intermediate source in ERS
-	err = sortTabletsForReparent(validTablets, tabletPositions, nil, opts.durability)
+	err = sortTabletsForReparent(validTablets, tabletPositions, nil, backingUpTablets, opts.durability)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -738,9 +739,8 @@ func (erp *EmergencyReparenter) identifyPrimaryCandidate(
 }
 
 // filterValidCandidates filters valid tablets, keeping only the ones which can successfully be promoted without any constraint failures and can make forward progress on being promoted
-func (erp *EmergencyReparenter) filterValidCandidates(validTablets []*topodatapb.Tablet, tabletsReachable []*topodatapb.Tablet, tabletsBackingUp map[string]bool, prevPrimary *topodatapb.Tablet, opts EmergencyReparentOptions) ([]*topodatapb.Tablet, error) {
+func (erp *EmergencyReparenter) filterValidCandidates(validTablets []*topodatapb.Tablet, tabletsReachable []*topodatapb.Tablet, prevPrimary *topodatapb.Tablet, opts EmergencyReparentOptions) ([]*topodatapb.Tablet, error) {
 	var restrictedValidTablets []*topodatapb.Tablet
-	var notPreferredValidTablets []*topodatapb.Tablet
 	for _, tablet := range validTablets {
 		tabletAliasStr := topoproto.TabletAliasString(tablet.Alias)
 		// Remove tablets which have MustNot promote rule since they must never be promoted
@@ -767,16 +767,9 @@ func (erp *EmergencyReparenter) filterValidCandidates(validTablets []*topodatapb
 			}
 			continue
 		}
-		// Put candidates that are running a backup in a separate list
-		backingUp, ok := tabletsBackingUp[tabletAliasStr]
-		if ok && backingUp {
-			erp.logger.Infof("Setting %s in list of valid candidates taking a backup", tabletAliasStr)
-			notPreferredValidTablets = append(notPreferredValidTablets, tablet)
-		} else {
-			restrictedValidTablets = append(restrictedValidTablets, tablet)
-		}
+		restrictedValidTablets = append(restrictedValidTablets, tablet)
 	}
-	return append(restrictedValidTablets, notPreferredValidTablets...), nil
+	return restrictedValidTablets, nil
 }
 
 // findErrantGTIDs tries to find errant GTIDs for the valid candidates and returns the updated list of valid candidates.

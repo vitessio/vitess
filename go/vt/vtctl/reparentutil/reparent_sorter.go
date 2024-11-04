@@ -18,6 +18,7 @@ package reparentutil
 
 import (
 	"sort"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -32,16 +33,18 @@ type reparentSorter struct {
 	tablets          []*topodatapb.Tablet
 	positions        []replication.Position
 	innodbBufferPool []int
+	backingUp        map[string]bool
 	durability       Durabler
 }
 
 // newReparentSorter creates a new reparentSorter
-func newReparentSorter(tablets []*topodatapb.Tablet, positions []replication.Position, innodbBufferPool []int, durability Durabler) *reparentSorter {
+func newReparentSorter(tablets []*topodatapb.Tablet, positions []replication.Position, innodbBufferPool []int, backingUp map[string]bool, durability Durabler) *reparentSorter {
 	return &reparentSorter{
 		tablets:          tablets,
 		positions:        positions,
 		durability:       durability,
 		innodbBufferPool: innodbBufferPool,
+		backingUp:        backingUp,
 	}
 }
 
@@ -69,6 +72,14 @@ func (rs *reparentSorter) Less(i, j int) bool {
 	}
 	if rs.tablets[j] == nil {
 		return true
+	}
+
+	// We want tablets backing up always at the end of the list, so that's the first thing we check
+	if !rs.backingUp[topoproto.TabletAliasString(rs.tablets[i].Alias)] && rs.backingUp[topoproto.TabletAliasString(rs.tablets[j].Alias)] {
+		return true
+	}
+	if rs.backingUp[topoproto.TabletAliasString(rs.tablets[i].Alias)] && !rs.backingUp[topoproto.TabletAliasString(rs.tablets[j].Alias)] {
+		return false
 	}
 
 	if !rs.positions[i].AtLeast(rs.positions[j]) {
@@ -100,13 +111,13 @@ func (rs *reparentSorter) Less(i, j int) bool {
 
 // sortTabletsForReparent sorts the tablets, given their positions for emergency reparent shard and planned reparent shard.
 // Tablets are sorted first by their replication positions, with ties broken by the promotion rules.
-func sortTabletsForReparent(tablets []*topodatapb.Tablet, positions []replication.Position, innodbBufferPool []int, durability Durabler) error {
+func sortTabletsForReparent(tablets []*topodatapb.Tablet, positions []replication.Position, innodbBufferPool []int, backingUp map[string]bool, durability Durabler) error {
 	// throw an error internal error in case of unequal number of tablets and positions
 	// fail-safe code prevents panic in sorting in case the lengths are unequal
 	if len(tablets) != len(positions) {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unequal number of tablets and positions")
 	}
 
-	sort.Sort(newReparentSorter(tablets, positions, innodbBufferPool, durability))
+	sort.Sort(newReparentSorter(tablets, positions, innodbBufferPool, backingUp, durability))
 	return nil
 }
