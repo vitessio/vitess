@@ -20,6 +20,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/vtenv"
 )
 
 func TestParseAlterTableOptions(t *testing.T) {
@@ -48,108 +51,50 @@ func TestParseAlterTableOptions(t *testing.T) {
 	}
 }
 
-func TestParseEnumValues(t *testing.T) {
-	{
-		inputs := []string{
-			`enum('x-small','small','medium','large','x-large')`,
-			`ENUM('x-small','small','medium','large','x-large')`,
-			`'x-small','small','medium','large','x-large'`,
-		}
-		for _, input := range inputs {
-			enumValues := ParseEnumValues(input)
-			assert.Equal(t, `'x-small','small','medium','large','x-large'`, enumValues)
-		}
-	}
-	{
-		inputs := []string{
-			``,
-			`abc`,
-			`func('x-small','small','medium','large','x-large')`,
-			`set('x-small','small','medium','large','x-large')`,
-		}
-		for _, input := range inputs {
-			enumValues := ParseEnumValues(input)
-			assert.Equal(t, input, enumValues)
-		}
-	}
-
-	{
-		inputs := []string{
-			``,
-			`abc`,
-			`func('x small','small','medium','large','x large')`,
-			`set('x small','small','medium','large','x large')`,
-		}
-		for _, input := range inputs {
-			enumValues := ParseEnumValues(input)
-			assert.Equal(t, input, enumValues)
-		}
-	}
-}
-
-func TestParseSetValues(t *testing.T) {
-	{
-		inputs := []string{
-			`set('x-small','small','medium','large','x-large')`,
-			`SET('x-small','small','medium','large','x-large')`,
-			`'x-small','small','medium','large','x-large'`,
-		}
-		for _, input := range inputs {
-			setValues := ParseSetValues(input)
-			assert.Equal(t, `'x-small','small','medium','large','x-large'`, setValues)
-		}
-	}
-	{
-		inputs := []string{
-			``,
-			`abc`,
-			`func('x-small','small','medium','large','x-large')`,
-			`enum('x-small','small','medium','large','x-large')`,
-			`ENUM('x-small','small','medium','large','x-large')`,
-		}
-		for _, input := range inputs {
-			setValues := ParseSetValues(input)
-			assert.Equal(t, input, setValues)
-		}
-	}
-}
-
 func TestParseEnumTokens(t *testing.T) {
+	env := vtenv.NewTestEnv()
 	{
 		input := `'x-small','small','medium','large','x-large'`
-		enumTokens := parseEnumOrSetTokens(input)
+		enumTokens, err := parseEnumOrSetTokens(env, input)
+		require.NoError(t, err)
 		expect := []string{"x-small", "small", "medium", "large", "x-large"}
 		assert.Equal(t, expect, enumTokens)
 	}
 	{
 		input := `'x small','small','medium','large','x large'`
-		enumTokens := parseEnumOrSetTokens(input)
+		enumTokens, err := parseEnumOrSetTokens(env, input)
+		require.NoError(t, err)
 		expect := []string{"x small", "small", "medium", "large", "x large"}
 		assert.Equal(t, expect, enumTokens)
 	}
 	{
 		input := `'with '' quote','and \n newline'`
-		enumTokens := parseEnumOrSetTokens(input)
+		enumTokens, err := parseEnumOrSetTokens(env, input)
+		require.NoError(t, err)
 		expect := []string{"with ' quote", "and \n newline"}
 		assert.Equal(t, expect, enumTokens)
 	}
 	{
 		input := `enum('x-small','small','medium','large','x-large')`
-		enumTokens := parseEnumOrSetTokens(input)
+		enumTokens, err := parseEnumOrSetTokens(env, input)
+		assert.Error(t, err)
 		assert.Nil(t, enumTokens)
 	}
 	{
 		input := `set('x-small','small','medium','large','x-large')`
-		enumTokens := parseEnumOrSetTokens(input)
+		enumTokens, err := parseEnumOrSetTokens(env, input)
+		assert.Error(t, err)
 		assert.Nil(t, enumTokens)
 	}
 }
 
 func TestParseEnumTokensMap(t *testing.T) {
+	env := vtenv.NewTestEnv()
 	{
 		input := `'x-small','small','medium','large','x-large'`
 
-		enumTokensMap := ParseEnumOrSetTokensMap(input)
+		enumTokensMap, err := ParseEnumOrSetTokensMap(env, input)
+		require.NoError(t, err)
 		expect := map[int]string{
 			1: "x-small",
 			2: "small",
@@ -165,9 +110,23 @@ func TestParseEnumTokensMap(t *testing.T) {
 			`set('x-small','small','medium','large','x-large')`,
 		}
 		for _, input := range inputs {
-			enumTokensMap := ParseEnumOrSetTokensMap(input)
-			expect := map[int]string{}
-			assert.Equal(t, expect, enumTokensMap)
+			enumTokensMap, err := ParseEnumOrSetTokensMap(env, input)
+			assert.Error(t, err)
+			assert.Nil(t, enumTokensMap)
 		}
+	}
+	{
+		input := `'x-small','small','med''ium','large','x-large'`
+
+		enumTokensMap, err := ParseEnumOrSetTokensMap(env, input)
+		require.NoError(t, err)
+		expect := map[int]string{
+			1: "x-small",
+			2: "small",
+			3: "med\\'ium",
+			4: "large",
+			5: "x-large",
+		}
+		assert.Equal(t, expect, enumTokensMap)
 	}
 }
