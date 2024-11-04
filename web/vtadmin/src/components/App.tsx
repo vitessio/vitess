@@ -44,6 +44,8 @@ import { CreateMoveTables } from './routes/createWorkflow/CreateMoveTables';
 import { Transactions } from './routes/Transactions';
 import { CreateReshard } from './routes/createWorkflow/CreateReshard';
 import { CreateMaterialize } from './routes/createWorkflow/CreateMaterialize';
+import { SchemaMigrations } from './routes/SchemaMigrations';
+import { CreateSchemaMigration } from './routes/createSchemaMigration/CreateSchemaMigration';
 
 export const App = () => {
     return (
@@ -138,6 +140,16 @@ export const App = () => {
                         <Route path="/workflow/:clusterID/:keyspace/:name">
                             <Workflow />
                         </Route>
+
+                        <Route exact path="/migrations">
+                            <SchemaMigrations />
+                        </Route>
+
+                        {!isReadOnlyMode() && (
+                            <Route exact path="/migrations/create">
+                                <CreateSchemaMigration />
+                            </Route>
+                        )}
 
                         <Route path="/transactions">
                             <Transactions />
