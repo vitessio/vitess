@@ -44,7 +44,6 @@ type (
 		StatementType   string          `json:"statementType"`
 		TableName       []string        `json:"tableName,omitempty"`
 		GroupingColumns []Column        `json:"groupingColumns,omitempty"`
-		JoinColumns     []ColumnUse     `json:"joinColumns,omitempty"`
 		FilterColumns   []ColumnUse     `json:"filterColumns,omitempty"`
 		SelectColumns   []Column        `json:"selectColumns,omitempty"`
 		JoinPredicates  []JoinPredicate `json:"joinPredicates,omitempty"`
@@ -246,7 +245,6 @@ func GetVExplainKeys(ctx *plancontext.PlanningContext, stmt sqlparser.Statement)
 	return VExplainKeys{
 		SelectColumns:   getUniqueColNames(ctx, selectColumns),
 		GroupingColumns: getUniqueColNames(ctx, groupingColumns),
-		JoinColumns:     getUniqueColUsages(ctx, joinColumns),
 		FilterColumns:   getUniqueColUsages(ctx, filterColumns),
 		StatementType:   sqlparser.ASTToStatementType(stmt).String(),
 		JoinPredicates:  getUniqueJoinPredicates(ctx, jps),

@@ -35,10 +35,6 @@ func TestMarshalUnmarshal(t *testing.T) {
 			{Table: "orders", Name: "category"},
 			{Table: "users", Name: "department"},
 		},
-		JoinColumns: []ColumnUse{
-			{Column: Column{Table: "users", Name: "id"}, Uses: sqlparser.EqualOp},
-			{Column: Column{Table: "orders", Name: "user_id"}, Uses: sqlparser.EqualOp},
-		},
 		FilterColumns: []ColumnUse{
 			{Column: Column{Table: "users", Name: "age"}, Uses: sqlparser.GreaterThanOp},
 			{Column: Column{Table: "orders", Name: "total"}, Uses: sqlparser.LessThanOp},
