@@ -686,6 +686,15 @@ func (client *gRPCVtctldClient) PlannedReparentShard(ctx context.Context, in *vt
 	return client.c.PlannedReparentShard(ctx, in, opts...)
 }
 
+// ReadTransactionState is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) ReadTransactionState(ctx context.Context, in *vtctldatapb.ReadTransactionStateRequest, opts ...grpc.CallOption) (*vtctldatapb.ReadTransactionStateResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.ReadTransactionState(ctx, in, opts...)
+}
+
 // RebuildKeyspaceGraph is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) RebuildKeyspaceGraph(ctx context.Context, in *vtctldatapb.RebuildKeyspaceGraphRequest, opts ...grpc.CallOption) (*vtctldatapb.RebuildKeyspaceGraphResponse, error) {
 	if client.c == nil {

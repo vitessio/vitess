@@ -1140,6 +1140,24 @@ message GetUnresolvedTransactionsResponse {
   repeated query.TransactionMetadata transactions = 1;
 }
 
+message ReadTransactionStateRequest {
+  string dtid = 1;
+}
+
+message ShardTransactionState {
+  string shard = 1;
+  string state = 2;
+  string message = 3;
+  int64 time_created = 4;
+  repeated string statements = 5;
+}
+
+message ReadTransactionStateResponse {
+  query.TransactionMetadata metadata = 1;
+  repeated ShardTransactionState shard_states = 2;
+}
+
+
 message ConcludeTransactionRequest {
   string dtid = 1;
   repeated query.Target participants = 2;

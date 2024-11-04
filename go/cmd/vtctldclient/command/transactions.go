@@ -64,9 +64,30 @@ var (
 
 		DisableFlagsInUseLine: true,
 	}
+
+	readTransactionStateOptions = struct {
+		Dtid string
+	}{}
+
+	// ReadTransactionState makes a ReadTransactionState gRPC call to a vtctld.
+	ReadTransactionState = &cobra.Command{
+		Use:     "read-transaction-state --dtid <dtid>",
+		Short:   "Reads the state of the unresolved transaction by querying each participating shard.",
+		Aliases: []string{"Read"},
+		Args:    cobra.NoArgs,
+		RunE:    commandReadTransactionState,
+
+		DisableFlagsInUseLine: true,
+	}
 )
 
 type ConcludeTransactionOutput struct {
+	Dtid    string `json:"dtid"`
+	Message string `json:"message"`
+	Error   string `json:"error,omitempty"`
+}
+
+type ReadTransactionStateOutput struct {
 	Dtid    string `json:"dtid"`
 	Message string `json:"message"`
 	Error   string `json:"error,omitempty"`
@@ -120,6 +141,22 @@ func commandConcludeTransaction(cmd *cobra.Command, args []string) (err error) {
 	return err
 }
 
+func commandReadTransactionState(cmd *cobra.Command, args []string) error {
+	cli.FinishedParsing(cmd)
+
+	rts, err := client.ReadTransactionState(commandCtx,
+		&vtctldatapb.ReadTransactionStateRequest{
+			Dtid: readTransactionStateOptions.Dtid,
+		})
+
+	if err != nil || rts == nil {
+		return err
+	}
+
+	fmt.Println(string(rts.String()))
+	return nil
+}
+
 func init() {
 	GetUnresolvedTransactions.Flags().StringVarP(&unresolvedTransactionsOptions.Keyspace, "keyspace", "k", "", "unresolved transactions list for the given keyspace.")
 	GetUnresolvedTransactions.Flags().Int64VarP(&unresolvedTransactionsOptions.AbandonAge, "abandon-age", "a", 0, "unresolved transactions list which are older than the specified age(in seconds).")
@@ -127,6 +164,9 @@ func init() {
 
 	ConcludeTransaction.Flags().StringVarP(&concludeTransactionOptions.Dtid, "dtid", "d", "", "conclude transaction for the given distributed transaction ID.")
 	DistributedTransaction.AddCommand(ConcludeTransaction)
+
+	ReadTransactionState.Flags().StringVarP(&readTransactionStateOptions.Dtid, "dtid", "d", "", "read transaction state for the given distributed transaction ID.")
+	DistributedTransaction.AddCommand(ReadTransactionState)
 
 	Root.AddCommand(DistributedTransaction)
 }

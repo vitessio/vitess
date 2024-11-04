@@ -2536,6 +2536,80 @@ func (s *VtctldServer) ConcludeTransaction(ctx context.Context, req *vtctldatapb
 	return &vtctldatapb.ConcludeTransactionResponse{}, nil
 }
 
+// ReadTransactionState is part of the vtctlservicepb.VtctldServer interface.
+// It reads the information about a distributed transaction.
+func (s *VtctldServer) ReadTransactionState(ctx context.Context, req *vtctldatapb.ReadTransactionStateRequest) (resp *vtctldatapb.ReadTransactionStateResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ReadTransactionState")
+	defer span.Finish()
+
+	span.Annotate("dtid", req.Dtid)
+
+	// Read the shard where the transaction metadata is stored.
+	ss, err := dtids.ShardSession(req.Dtid)
+	if err != nil {
+		return nil, err
+	}
+	primary, err := s.getPrimaryTablet(ctx, ss.Target)
+	if err != nil {
+		return nil, err
+	}
+
+	// Read the transaction metadata to get the participating resource manager list.
+	transaction, err := s.tmc.ReadTransaction(ctx, primary.Tablet, req.Dtid)
+	if transaction == nil || err != nil {
+		// no transaction record for the given ID. It is already concluded or does not exist.
+		return nil, err
+	}
+	// Store the metadata in the resonse.
+	resp = &vtctldatapb.ReadTransactionStateResponse{
+		Metadata: transaction,
+	}
+	// Create a mutex we use to synchronize the following go routines to read the transaction state from all the shards.
+	mu := sync.Mutex{}
+
+	eg, newCtx := errgroup.WithContext(ctx)
+	eg.SetLimit(10)
+	for _, rm := range transaction.Participants {
+		eg.Go(func() error {
+			primary, err := s.getPrimaryTablet(newCtx, rm)
+			if err != nil {
+				return err
+			}
+			rts, err := s.tmc.ReadTransactionState(newCtx, primary.Tablet, req.Dtid)
+			if err != nil {
+				return err
+			}
+			mu.Lock()
+			defer mu.Unlock()
+			resp.ShardStates = append(resp.ShardStates, &vtctldatapb.ShardTransactionState{
+				Shard:       rm.Shard,
+				State:       rts.State,
+				Message:     rts.Message,
+				TimeCreated: rts.TimeCreated,
+				Statements:  rts.Statements,
+			})
+			return nil
+		})
+	}
+	if err = eg.Wait(); err != nil {
+		return nil, err
+	}
+
+	rts, err := s.tmc.ReadTransactionState(ctx, primary.Tablet, req.Dtid)
+	if err != nil {
+		return nil, err
+	}
+	resp.ShardStates = append(resp.ShardStates, &vtctldatapb.ShardTransactionState{
+		Shard:       ss.Target.Shard,
+		State:       rts.State,
+		Message:     rts.Message,
+		TimeCreated: rts.TimeCreated,
+		Statements:  rts.Statements,
+	})
+
+	return resp, nil
+}
+
 func (s *VtctldServer) getPrimaryTablet(newCtx context.Context, rm *querypb.Target) (*topo.TabletInfo, error) {
 	si, err := s.ts.GetShard(newCtx, rm.Keyspace, rm.Shard)
 	if err != nil {

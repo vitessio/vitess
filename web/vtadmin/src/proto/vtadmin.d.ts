@@ -64095,6 +64095,327 @@ export namespace vtctldata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** Properties of a ReadTransactionStateRequest. */
+    interface IReadTransactionStateRequest {
+
+        /** ReadTransactionStateRequest dtid */
+        dtid?: (string|null);
+    }
+
+    /** Represents a ReadTransactionStateRequest. */
+    class ReadTransactionStateRequest implements IReadTransactionStateRequest {
+
+        /**
+         * Constructs a new ReadTransactionStateRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IReadTransactionStateRequest);
+
+        /** ReadTransactionStateRequest dtid. */
+        public dtid: string;
+
+        /**
+         * Creates a new ReadTransactionStateRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ReadTransactionStateRequest instance
+         */
+        public static create(properties?: vtctldata.IReadTransactionStateRequest): vtctldata.ReadTransactionStateRequest;
+
+        /**
+         * Encodes the specified ReadTransactionStateRequest message. Does not implicitly {@link vtctldata.ReadTransactionStateRequest.verify|verify} messages.
+         * @param message ReadTransactionStateRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IReadTransactionStateRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ReadTransactionStateRequest message, length delimited. Does not implicitly {@link vtctldata.ReadTransactionStateRequest.verify|verify} messages.
+         * @param message ReadTransactionStateRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IReadTransactionStateRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ReadTransactionStateRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ReadTransactionStateRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ReadTransactionStateRequest;
+
+        /**
+         * Decodes a ReadTransactionStateRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ReadTransactionStateRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ReadTransactionStateRequest;
+
+        /**
+         * Verifies a ReadTransactionStateRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ReadTransactionStateRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ReadTransactionStateRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.ReadTransactionStateRequest;
+
+        /**
+         * Creates a plain object from a ReadTransactionStateRequest message. Also converts values to other types if specified.
+         * @param message ReadTransactionStateRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.ReadTransactionStateRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ReadTransactionStateRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReadTransactionStateRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a ShardTransactionState. */
+    interface IShardTransactionState {
+
+        /** ShardTransactionState shard */
+        shard?: (string|null);
+
+        /** ShardTransactionState state */
+        state?: (string|null);
+
+        /** ShardTransactionState message */
+        message?: (string|null);
+
+        /** ShardTransactionState time_created */
+        time_created?: (number|Long|null);
+
+        /** ShardTransactionState statements */
+        statements?: (string[]|null);
+    }
+
+    /** Represents a ShardTransactionState. */
+    class ShardTransactionState implements IShardTransactionState {
+
+        /**
+         * Constructs a new ShardTransactionState.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IShardTransactionState);
+
+        /** ShardTransactionState shard. */
+        public shard: string;
+
+        /** ShardTransactionState state. */
+        public state: string;
+
+        /** ShardTransactionState message. */
+        public message: string;
+
+        /** ShardTransactionState time_created. */
+        public time_created: (number|Long);
+
+        /** ShardTransactionState statements. */
+        public statements: string[];
+
+        /**
+         * Creates a new ShardTransactionState instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ShardTransactionState instance
+         */
+        public static create(properties?: vtctldata.IShardTransactionState): vtctldata.ShardTransactionState;
+
+        /**
+         * Encodes the specified ShardTransactionState message. Does not implicitly {@link vtctldata.ShardTransactionState.verify|verify} messages.
+         * @param message ShardTransactionState message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IShardTransactionState, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ShardTransactionState message, length delimited. Does not implicitly {@link vtctldata.ShardTransactionState.verify|verify} messages.
+         * @param message ShardTransactionState message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IShardTransactionState, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ShardTransactionState message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ShardTransactionState
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ShardTransactionState;
+
+        /**
+         * Decodes a ShardTransactionState message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ShardTransactionState
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ShardTransactionState;
+
+        /**
+         * Verifies a ShardTransactionState message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ShardTransactionState message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ShardTransactionState
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.ShardTransactionState;
+
+        /**
+         * Creates a plain object from a ShardTransactionState message. Also converts values to other types if specified.
+         * @param message ShardTransactionState
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.ShardTransactionState, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ShardTransactionState to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ShardTransactionState
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a ReadTransactionStateResponse. */
+    interface IReadTransactionStateResponse {
+
+        /** ReadTransactionStateResponse metadata */
+        metadata?: (query.ITransactionMetadata|null);
+
+        /** ReadTransactionStateResponse shard_states */
+        shard_states?: (vtctldata.IShardTransactionState[]|null);
+    }
+
+    /** Represents a ReadTransactionStateResponse. */
+    class ReadTransactionStateResponse implements IReadTransactionStateResponse {
+
+        /**
+         * Constructs a new ReadTransactionStateResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IReadTransactionStateResponse);
+
+        /** ReadTransactionStateResponse metadata. */
+        public metadata?: (query.ITransactionMetadata|null);
+
+        /** ReadTransactionStateResponse shard_states. */
+        public shard_states: vtctldata.IShardTransactionState[];
+
+        /**
+         * Creates a new ReadTransactionStateResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ReadTransactionStateResponse instance
+         */
+        public static create(properties?: vtctldata.IReadTransactionStateResponse): vtctldata.ReadTransactionStateResponse;
+
+        /**
+         * Encodes the specified ReadTransactionStateResponse message. Does not implicitly {@link vtctldata.ReadTransactionStateResponse.verify|verify} messages.
+         * @param message ReadTransactionStateResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IReadTransactionStateResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ReadTransactionStateResponse message, length delimited. Does not implicitly {@link vtctldata.ReadTransactionStateResponse.verify|verify} messages.
+         * @param message ReadTransactionStateResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IReadTransactionStateResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ReadTransactionStateResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ReadTransactionStateResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ReadTransactionStateResponse;
+
+        /**
+         * Decodes a ReadTransactionStateResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ReadTransactionStateResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ReadTransactionStateResponse;
+
+        /**
+         * Verifies a ReadTransactionStateResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ReadTransactionStateResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ReadTransactionStateResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.ReadTransactionStateResponse;
+
+        /**
+         * Creates a plain object from a ReadTransactionStateResponse message. Also converts values to other types if specified.
+         * @param message ReadTransactionStateResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.ReadTransactionStateResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ReadTransactionStateResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReadTransactionStateResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
     /** Properties of a ConcludeTransactionRequest. */
     interface IConcludeTransactionRequest {
 

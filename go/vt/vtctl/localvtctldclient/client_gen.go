@@ -486,6 +486,11 @@ func (client *localVtctldClient) PlannedReparentShard(ctx context.Context, in *v
 	return client.s.PlannedReparentShard(ctx, in)
 }
 
+// ReadTransactionState is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) ReadTransactionState(ctx context.Context, in *vtctldatapb.ReadTransactionStateRequest, opts ...grpc.CallOption) (*vtctldatapb.ReadTransactionStateResponse, error) {
+	return client.s.ReadTransactionState(ctx, in)
+}
+
 // RebuildKeyspaceGraph is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) RebuildKeyspaceGraph(ctx context.Context, in *vtctldatapb.RebuildKeyspaceGraphRequest, opts ...grpc.CallOption) (*vtctldatapb.RebuildKeyspaceGraphResponse, error) {
 	return client.s.RebuildKeyspaceGraph(ctx, in)

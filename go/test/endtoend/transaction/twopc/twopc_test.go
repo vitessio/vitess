@@ -1414,6 +1414,15 @@ func TestReadTransactionStatus(t *testing.T) {
 	assert.Equal(t, "", res.Message)
 	assert.Equal(t, []string{"insert into twopc_t1(id, col) values (9, 4)"}, res.Statements)
 
+	// Also try running the RPC from vtctld and verify we see the same values.
+	out, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("DistributedTransaction",
+		"Read",
+		fmt.Sprintf(`--dtid=%s`, unresTransaction.Dtid),
+	)
+	require.NoError(t, err)
+	require.Contains(t, out, "insert into twopc_t1(id, col) values (9, 4)")
+	require.Contains(t, out, unresTransaction.Dtid)
+
 	// Wait for the commit to have returned.
 	wg.Wait()
 }
