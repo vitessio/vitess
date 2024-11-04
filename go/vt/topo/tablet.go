@@ -237,7 +237,7 @@ type GetTabletsByCellOptions struct {
 	// Concurrency controls the maximum number of concurrent calls to GetTablet.
 	Concurrency int
 	// KeyspaceShard is the optional keyspace/shard that tablets must match.
-	// An empty shard value will watch all shards.
+	// An empty shard value will match all shards in the keyspace.
 	KeyspaceShard *KeyspaceShard
 }
 
