@@ -278,7 +278,7 @@ func (ts *Server) GetTabletsByCell(ctx context.Context, cellAlias string, opt *G
 			return nil, err
 		}
 		if opt != nil && opt.KeyspaceShard != nil {
-			if opt.KeyspaceShard.Keyspace != tablet.Keyspace {
+			if opt.KeyspaceShard.Keyspace != "" && opt.KeyspaceShard.Keyspace != tablet.Keyspace {
 				continue
 			}
 			if opt.KeyspaceShard.Shard != "" && opt.KeyspaceShard.Shard != tablet.Shard {
