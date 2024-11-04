@@ -30,6 +30,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"google.golang.org/grpc/mem"
+	"google.golang.org/protobuf/encoding/protowire"
+
 	"vitess.io/vitess/go/bucketpool"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/sqlerror"
@@ -407,6 +410,76 @@ func (c *Conn) readHeaderFrom(r io.Reader) (int, error) {
 	c.sequence++
 
 	return int(uint32(c.header[0]) | uint32(c.header[1])<<8 | uint32(c.header[2])<<16), nil
+}
+
+func (c *Conn) readPacketAsMemBuffer() (mem.Buffer, error) {
+	r := c.getReader()
+
+	length, err := c.readHeaderFrom(r)
+	if err != nil {
+		return nil, err
+	}
+
+	c.currentEphemeralPolicy = ephemeralRead
+	if length == 0 {
+		// This can be caused by the packet after a packet of
+		// exactly size MaxPacketSize.
+		return nil, nil
+	}
+
+	// 5 bytes for protobuf header
+	length = length + 5
+
+	// Use the bufPool.
+	if length < MaxPacketSize {
+		c.currentEphemeralBuffer = bufPool.Get(length)
+		def := *c.currentEphemeralBuffer
+		if _, err := io.ReadFull(r, def[5:]); err != nil {
+			return nil, vterrors.Wrapf(err, "io.ReadFull(packet body of length %v) failed", length)
+		}
+		updateProtoHeader(def, length-5)
+		return mem.NewBuffer(c.currentEphemeralBuffer, bufPool), nil
+	}
+
+	// Much slower path, revert to allocating everything from scratch.
+	// We're going to concatenate a lot of data anyway, can't really
+	// optimize this code path easily.
+	data := make([]byte, length)
+	if _, err := io.ReadFull(r, data[5:]); err != nil {
+		return nil, vterrors.Wrapf(err, "io.ReadFull(packet body of length %v) failed", length)
+	}
+	for {
+		next, err := c.readOnePacket()
+		if err != nil {
+			return nil, err
+		}
+
+		if len(next) == 0 {
+			// Again, the packet after a packet of exactly size MaxPacketSize.
+			break
+		}
+
+		data = append(data, next...)
+		if len(next) < MaxPacketSize {
+			break
+		}
+	}
+
+	updateProtoHeader(data, length-5)
+	return mem.SliceBuffer(data), nil
+}
+
+func updateProtoHeader(b []byte, v int) {
+	b[0] = byte(protowire.EncodeTag(1, protowire.BytesType))
+	switch {
+	case v < 1<<28:
+		b[1] = byte((v>>0)&0x7f | 0x80)
+		b[2] = byte((v>>7)&0x7f | 0x80)
+		b[3] = byte((v>>14)&0x7f | 0x80)
+		b[4] = byte(v >> 21)
+	default:
+		panic("QueryResult protobuf is too large for the wire")
+	}
 }
 
 // readEphemeralPacket attempts to read a packet into buffer from sync.Pool.  Do

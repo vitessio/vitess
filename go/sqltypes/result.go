@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"slices"
 
+	"google.golang.org/grpc/mem"
 	"google.golang.org/protobuf/proto"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -35,6 +36,9 @@ type Result struct {
 	SessionStateChanges string           `json:"session_state_changes"`
 	StatusFlags         uint16           `json:"status_flags"`
 	Info                string           `json:"info"`
+
+	// RawPackets contains the fields and rows raw mysql packets.
+	RawPackets []mem.Buffer `json:"raw_packets"`
 }
 
 //goland:noinspection GoUnusedConst

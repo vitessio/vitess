@@ -23,14 +23,15 @@ import (
 	"strconv"
 	"strings"
 
+	"google.golang.org/grpc/mem"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 // This file contains the methods related to queries.
@@ -103,6 +104,12 @@ func (c *Conn) readColumnDefinition(field *querypb.Field, index int) error {
 	}
 	defer c.recycleReadPacket()
 
+	return parseColumnDefinition(colDef, field, index)
+}
+
+// parseColumnDefinition parses the next Column Definition packet.
+// Returns a SQLError.
+func parseColumnDefinition(colDef []byte, field *querypb.Field, index int) error {
 	// Catalog is ignored, always set to "def"
 	pos, ok := skipLenEncString(colDef, 0)
 	if !ok {
@@ -160,6 +167,7 @@ func (c *Conn) readColumnDefinition(field *querypb.Field, index int) error {
 	}
 
 	// Convert MySQL type to Vitess type.
+	var err error
 	field.Type, err = sqltypes.MySQLToType(t, int64(flags))
 	if err != nil {
 		return sqlerror.NewSQLErrorf(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "MySQLToType(%v,%v) failed for column %v: %v", t, flags, index, err)
@@ -191,8 +199,7 @@ func (c *Conn) readColumnDefinition(field *querypb.Field, index int) error {
 	return nil
 }
 
-// readColumnDefinitionType is a faster version of
-// readColumnDefinition that only fills in the Type.
+// readColumnDefinitionType is a faster version of readColumnDefinition that only fills in the Type.
 // Returns a SQLError.
 func (c *Conn) readColumnDefinitionType(field *querypb.Field, index int) error {
 	colDef, err := c.readEphemeralPacket()
@@ -201,6 +208,12 @@ func (c *Conn) readColumnDefinitionType(field *querypb.Field, index int) error {
 	}
 	defer c.recycleReadPacket()
 
+	return parseColumnDefinitionType(colDef, field, index)
+}
+
+// parseColumnDefinitionType is a faster version of parseColumnDefinition that only fills in the Type.
+// Returns a SQLError.
+func parseColumnDefinitionType(colDef []byte, field *querypb.Field, index int) error {
 	// catalog, schema, table, orgTable, name and orgName are
 	// strings, all skipped.
 	pos, ok := skipLenEncString(colDef, 0)
@@ -256,6 +269,7 @@ func (c *Conn) readColumnDefinitionType(field *querypb.Field, index int) error {
 	}
 
 	// Convert MySQL type to Vitess type.
+	var err error
 	field.Type, err = sqltypes.MySQLToType(t, int64(flags))
 	if err != nil {
 		return sqlerror.NewSQLErrorf(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "MySQLToType(%v,%v) failed for column %v: %v", t, flags, index, err)
@@ -268,7 +282,7 @@ func (c *Conn) readColumnDefinitionType(field *querypb.Field, index int) error {
 
 // parseRow parses an individual row.
 // Returns a SQLError.
-func (c *Conn) parseRow(data []byte, fields []*querypb.Field, reader func([]byte, int) ([]byte, int, bool), result []sqltypes.Value) ([]sqltypes.Value, error) {
+func parseRow(data []byte, fields []*querypb.Field, reader func([]byte, int) ([]byte, int, bool), result []sqltypes.Value) ([]sqltypes.Value, error) {
 	colNumber := len(fields)
 	if result == nil {
 		result = make([]sqltypes.Value, 0, colNumber)
@@ -289,6 +303,12 @@ func (c *Conn) parseRow(data []byte, fields []*querypb.Field, reader func([]byte
 		result = append(result, sqltypes.MakeTrusted(fields[i].Type, s))
 	}
 	return result, nil
+}
+
+type ExecuteOptions struct {
+	MaxRows    int
+	WantFields bool
+	RawPackets bool
 }
 
 // ExecuteFetch executes a query and returns the result.
@@ -325,6 +345,17 @@ func (c *Conn) ExecuteFetch(query string, maxrows int, wantfields bool) (result 
 	return result, err
 }
 
+func (c *Conn) ExecuteFetchOpt(query string, opt ExecuteOptions) (*sqltypes.Result, error) {
+	result, more, err := c.ExecuteFetchMultiOpt(query, opt)
+	if more {
+		// Multiple results are unexpected. Prioritize this "unexpected" error over whatever error we got from the first result.
+		err = errors.Join(ErrExecuteFetchMultipleResults, err)
+	}
+	// draining to make the connection clean.
+	err = c.drainMoreResults(more, err)
+	return result, err
+}
+
 // ExecuteFetchMultiDrain is for executing multiple statements in one call, but without
 // caring for any results. The function returns an error if any of the statements fail.
 // The function drains the query results of all statements, even if there's an error.
@@ -348,6 +379,10 @@ func (c *Conn) drainMoreResults(more bool, err error) error {
 // It returns an additional 'more' flag. If it is set, you must fetch the additional
 // results using ReadQueryResult.
 func (c *Conn) ExecuteFetchMulti(query string, maxrows int, wantfields bool) (result *sqltypes.Result, more bool, err error) {
+	return c.ExecuteFetchMultiOpt(query, ExecuteOptions{MaxRows: maxrows, WantFields: wantfields})
+}
+
+func (c *Conn) ExecuteFetchMultiOpt(query string, opt ExecuteOptions) (result *sqltypes.Result, more bool, err error) {
 	defer func() {
 		if err != nil {
 			if sqlerr, ok := err.(*sqlerror.SQLError); ok {
@@ -361,11 +396,15 @@ func (c *Conn) ExecuteFetchMulti(query string, maxrows int, wantfields bool) (re
 		return nil, false, err
 	}
 
-	res, more, _, err := c.ReadQueryResult(maxrows, wantfields)
+	if opt.RawPackets {
+		result, more, _, err = c.ReadQueryResultAsSliceBuffer(opt.MaxRows)
+	} else {
+		result, more, _, err = c.ReadQueryResult(opt.MaxRows, opt.WantFields)
+	}
 	if err != nil {
 		return nil, false, err
 	}
-	return res, more, err
+	return result, more, err
 }
 
 // ExecuteFetchWithWarningCount is for fetching results and a warning count
@@ -387,6 +426,135 @@ func (c *Conn) ExecuteFetchWithWarningCount(query string, maxrows int, wantfield
 
 	res, _, warnings, err := c.ReadQueryResult(maxrows, wantfields)
 	return res, warnings, err
+}
+
+func (c *Conn) ReadQueryResultAsSliceBuffer(maxrows int) (*sqltypes.Result, bool, uint16, error) {
+	var packetOk PacketOK
+
+	// Get the result.
+	colNumber, err := c.readComQueryResponse(&packetOk)
+	if err != nil {
+		return nil, false, 0, err
+	}
+	more := packetOk.statusFlags&ServerMoreResultsExists != 0
+	warnings := packetOk.warnings
+	if colNumber == 0 {
+		// OK packet, means no results. Just use the numbers.
+		return &sqltypes.Result{
+			RowsAffected:        packetOk.affectedRows,
+			InsertID:            packetOk.lastInsertID,
+			SessionStateChanges: packetOk.sessionStateData,
+			StatusFlags:         packetOk.statusFlags,
+			Info:                packetOk.info,
+		}, more, warnings, nil
+	}
+
+	var rawPackets []mem.Buffer
+	var data mem.Buffer
+
+	defer func() {
+		if err != nil {
+			for _, rawPacket := range rawPackets {
+				rawPacket.Free()
+			}
+		}
+	}()
+
+	// Read column headers. One packet per column.
+	// Build the fields.
+	for i := 0; i < colNumber; i++ {
+		data, err = c.readPacketAsMemBuffer()
+		if err != nil {
+			err = sqlerror.NewSQLError(sqlerror.CRMalformedPacket, "", "")
+			return nil, false, 0, err
+		}
+		rawPackets = append(rawPackets, data)
+	}
+
+	if c.Capabilities&CapabilityClientDeprecateEOF == 0 {
+		// EOF is only present here if it's not deprecated.
+		data, err = c.readPacketAsMemBuffer()
+		if err != nil {
+			err = sqlerror.NewSQLError(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, err.Error())
+			return nil, false, 0, err
+		}
+		rawPackets = append(rawPackets, data)
+		if c.isEOFPacket(data.ReadOnlyData()) {
+			rawPackets = rawPackets[:len(rawPackets)-1]
+		} else if isErrorPacket(data.ReadOnlyData()) {
+			err = ParseErrorPacket(data.ReadOnlyData())
+			return nil, false, 0, err
+		} else {
+			err = vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected packet after fields: %v", data)
+			return nil, false, 0, err
+		}
+	}
+
+	var rowcount int
+
+	// Read each row until EOF or OK packet.
+	for {
+		data, err = c.readPacketAsMemBuffer()
+		if err != nil {
+			err = sqlerror.NewSQLError(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, err.Error())
+			return nil, false, 0, err
+		}
+		rawPackets = append(rawPackets, data)
+
+		if c.isEOFPacket(data.ReadOnlyData()) {
+			result := &sqltypes.Result{}
+
+			// The deprecated EOF packets change means that this is either an
+			// EOF packet or an OK packet with the EOF type code.
+			if c.Capabilities&CapabilityClientDeprecateEOF == 0 {
+				var statusFlags uint16
+				warnings, statusFlags, err = parseEOFPacket(data.ReadOnlyData())
+				if err != nil {
+					return nil, false, 0, err
+				}
+				more = (statusFlags & ServerMoreResultsExists) != 0
+				result.StatusFlags = statusFlags
+
+				rawPackets = rawPackets[:len(rawPackets)-1]
+			} else {
+				var packetEof PacketOK
+				if err = c.parseOKPacket(&packetEof, data.ReadOnlyData()); err != nil {
+					return nil, false, 0, err
+				}
+				warnings = packetEof.warnings
+				more = (packetEof.statusFlags & ServerMoreResultsExists) != 0
+				result.StatusFlags = packetEof.statusFlags
+
+				rawPackets = rawPackets[:len(rawPackets)-1]
+				result.SessionStateChanges = packetEof.sessionStateData
+				result.Info = packetEof.info
+			}
+
+			// log.Errorf("DEBUG: setting result cached proto to %v", rawPackets)
+			result.RawPackets = rawPackets
+			return result, more, warnings, nil
+
+		} else if isErrorPacket(data.ReadOnlyData()) {
+			// Error packet.
+			err = ParseErrorPacket(data.ReadOnlyData())
+			return nil, false, 0, err
+		}
+
+		if maxrows == FETCH_NO_ROWS {
+			continue
+		}
+
+		// Check we're not over the limit before we add more.
+		if rowcount == maxrows {
+			if err = c.drainResults(); err != nil {
+				return nil, false, 0, err
+			}
+			err = vterrors.Errorf(vtrpc.Code_ABORTED, "Row count exceeded %d", maxrows)
+			return nil, false, 0, err
+		}
+
+		rowcount++
+	}
 }
 
 // ReadQueryResult gets the result from the last written query.
@@ -512,7 +680,7 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, 
 		}
 
 		// Regular row.
-		row, err := c.parseRow(data, result.Fields, readLenEncStringAsBytesCopy, nil)
+		row, err := parseRow(data, result.Fields, readLenEncStringAsBytesCopy, nil)
 		if err != nil {
 			c.recycleReadPacket()
 			return nil, false, 0, err
