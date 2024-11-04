@@ -176,6 +176,7 @@ func (m *ExecuteOptions) CloneVT() *ExecuteOptions {
 	r.Consolidator = m.Consolidator
 	r.WorkloadName = m.WorkloadName
 	r.Priority = m.Priority
+	r.RawMysqlPackets = m.RawMysqlPackets
 	if rhs := m.TransactionAccessMode; rhs != nil {
 		tmpContainer := make([]ExecuteOptions_TransactionAccessMode, len(rhs))
 		copy(tmpContainer, rhs)
@@ -281,6 +282,15 @@ func (m *QueryResult) CloneVT() *QueryResult {
 			tmpContainer[k] = v.CloneVT()
 		}
 		r.Rows = tmpContainer
+	}
+	if rhs := m.RawPackets; rhs != nil {
+		tmpContainer := make([][]byte, len(rhs))
+		for k, v := range rhs {
+			tmpBytes := make([]byte, len(v))
+			copy(tmpBytes, v)
+			tmpContainer[k] = tmpBytes
+		}
+		r.RawPackets = tmpContainer
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -1892,6 +1902,18 @@ func (m *ExecuteOptions) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		}
 		i -= size
 	}
+	if m.RawMysqlPackets {
+		i--
+		if m.RawMysqlPackets {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0x90
+	}
 	if len(m.Priority) > 0 {
 		i -= len(m.Priority)
 		copy(dAtA[i:], m.Priority)
@@ -2196,6 +2218,15 @@ func (m *QueryResult) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if len(m.RawPackets) > 0 {
+		for iNdEx := len(m.RawPackets) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.RawPackets[iNdEx])
+			copy(dAtA[i:], m.RawPackets[iNdEx])
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.RawPackets[iNdEx])))
+			i--
+			dAtA[i] = 0x42
+		}
 	}
 	if len(m.SessionStateChanges) > 0 {
 		i -= len(m.SessionStateChanges)
@@ -6163,6 +6194,9 @@ func (m *ExecuteOptions) SizeVT() (n int) {
 	if vtmsg, ok := m.Timeout.(interface{ SizeVT() int }); ok {
 		n += vtmsg.SizeVT()
 	}
+	if m.RawMysqlPackets {
+		n += 3
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -6277,6 +6311,12 @@ func (m *QueryResult) SizeVT() (n int) {
 	l = len(m.SessionStateChanges)
 	if l > 0 {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	if len(m.RawPackets) > 0 {
+		for _, b := range m.RawPackets {
+			l = len(b)
+			n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+		}
 	}
 	n += len(m.unknownFields)
 	return n
@@ -8905,6 +8945,26 @@ func (m *ExecuteOptions) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.Timeout = &ExecuteOptions_AuthoritativeTimeout{AuthoritativeTimeout: v}
+		case 18:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field RawMysqlPackets", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.RawMysqlPackets = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
@@ -9626,6 +9686,38 @@ func (m *QueryResult) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.SessionStateChanges = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 8:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field RawPackets", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.RawPackets = append(m.RawPackets, make([]byte, postIndex-iNdEx))
+			copy(m.RawPackets[len(m.RawPackets)-1], dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex

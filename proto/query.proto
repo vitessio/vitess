@@ -363,6 +363,9 @@ message ExecuteOptions {
   oneof timeout {
     int64 authoritative_timeout = 17;
   }
+
+  // raw_mysql_packets when true will receive raw MySQL packets in the QueryResult.
+  bool raw_mysql_packets = 18;
 }
 
 // Field describes a single column returned by a query
@@ -427,6 +430,9 @@ message QueryResult {
   repeated Row rows = 4;
   string info = 6;
   string session_state_changes = 7;
+
+  // raw_packets contains raw MySQL packets if raw_mysql_packets was set in ExecuteOptions.
+  repeated bytes raw_packets = 8;
 }
 
 // QueryWarning is used to convey out of band query execution warnings
