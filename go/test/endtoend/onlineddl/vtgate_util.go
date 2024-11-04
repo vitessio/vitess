@@ -256,13 +256,13 @@ func CheckForceMigrationCutOver(t *testing.T, vtParams *mysql.ConnParams, shards
 }
 
 // CheckSetMigrationCutOverThreshold sets the cut-over threshold for a given migration.
-func CheckSetMigrationCutOverThreshold(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, threshold time.Duration) {
+func CheckSetMigrationCutOverThreshold(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, threshold time.Duration, expectError string) {
 	query, err := sqlparser.ParseAndBind("alter vitess_migration %a cutover_threshold %a",
 		sqltypes.StringBindVariable(uuid),
 		sqltypes.StringBindVariable(threshold.String()),
 	)
 	require.NoError(t, err)
-	_ = VtgateExecQuery(t, vtParams, query, "")
+	_ = VtgateExecQuery(t, vtParams, query, expectError)
 }
 
 // CheckMigrationStatus verifies that the migration indicated by given UUID has the given expected status

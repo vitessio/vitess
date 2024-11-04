@@ -174,6 +174,7 @@ func TestSafeMigrationCutOverThreshold(t *testing.T) {
 	tcases := []struct {
 		threshold time.Duration
 		expect    time.Duration
+		isErr     bool
 	}{
 		{
 			threshold: 0,
@@ -181,11 +182,13 @@ func TestSafeMigrationCutOverThreshold(t *testing.T) {
 		},
 		{
 			threshold: 2 * time.Second,
-			expect:    minCutOverThreshold,
+			expect:    defaultCutOverThreshold,
+			isErr:     true,
 		},
 		{
 			threshold: 75 * time.Second,
-			expect:    maxCutOverThreshold,
+			expect:    defaultCutOverThreshold,
+			isErr:     true,
 		},
 		{
 			threshold: defaultCutOverThreshold,
@@ -206,7 +209,15 @@ func TestSafeMigrationCutOverThreshold(t *testing.T) {
 	}
 	for _, tcase := range tcases {
 		t.Run(tcase.threshold.String(), func(t *testing.T) {
-			assert.Equal(t, tcase.expect, safeMigrationCutOverThreshold(tcase.threshold))
+			threshold, err := safeMigrationCutOverThreshold(tcase.threshold)
+			if tcase.isErr {
+				assert.Error(t, err)
+				require.Equal(t, tcase.expect, defaultCutOverThreshold)
+				// And keep testing, because we then also expect the threshold to be the default
+			} else {
+				assert.NoError(t, err)
+			}
+			assert.Equal(t, tcase.expect, threshold)
 		})
 	}
 }

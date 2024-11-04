@@ -206,16 +206,16 @@ func newGCTableRetainTime() time.Time {
 
 // safeMigrationCutOverThreshold receives a desired threshold, and returns a cut-over threshold that
 // is reasonable to use
-func safeMigrationCutOverThreshold(threshold time.Duration) time.Duration {
+func safeMigrationCutOverThreshold(threshold time.Duration) (time.Duration, error) {
 	switch {
 	case threshold == 0:
-		return defaultCutOverThreshold
+		return defaultCutOverThreshold, nil
 	case threshold < minCutOverThreshold:
-		return minCutOverThreshold
+		return defaultCutOverThreshold, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cut-over min value is %v", minCutOverThreshold)
 	case threshold > maxCutOverThreshold:
-		return maxCutOverThreshold
+		return defaultCutOverThreshold, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cut-over max value is %v", maxCutOverThreshold)
 	default:
-		return threshold
+		return threshold, nil
 	}
 }
 
@@ -2013,7 +2013,7 @@ func (e *Executor) readMigration(ctx context.Context, uuid string) (onlineDDL *s
 		MigrationContext:   row["migration_context"].ToString(),
 		CutOverThreshold:   time.Second * time.Duration(row.AsInt64("cutover_threshold_seconds", 0)),
 	}
-	onlineDDL.CutOverThreshold = safeMigrationCutOverThreshold(onlineDDL.CutOverThreshold)
+	onlineDDL.CutOverThreshold, _ = safeMigrationCutOverThreshold(onlineDDL.CutOverThreshold)
 	return onlineDDL, row, nil
 }
 
@@ -4740,7 +4740,10 @@ func (e *Executor) SetMigrationCutOverThreshold(ctx context.Context, uuid string
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
-	threshold = safeMigrationCutOverThreshold(threshold)
+	threshold, err = safeMigrationCutOverThreshold(threshold)
+	if err != nil {
+		return nil, err
+	}
 	query, err := sqlparser.ParseAndBind(sqlUpdateCutOverThresholdSeconds,
 		sqltypes.Int64BindVariable(int64(threshold.Seconds())),
 		sqltypes.StringBindVariable(uuid),
@@ -5033,8 +5036,14 @@ func (e *Executor) SubmitMigration(
 		// Explicit retention indicated by `--retain-artifact` DDL strategy flag for this migration. Override!
 		retainArtifactsSeconds = int64((retainArtifacts).Seconds())
 	}
-	cutoverThreshold, _ := onlineDDL.StrategySetting().CutOverThreshold()
-	cutoverThreshold = safeMigrationCutOverThreshold(cutoverThreshold)
+	cutoverThreshold, err := onlineDDL.StrategySetting().CutOverThreshold()
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "parsing cut-over threshold in migration %v", onlineDDL.UUID)
+	}
+	cutoverThreshold, err = safeMigrationCutOverThreshold(cutoverThreshold)
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "validating cut-over threshold in migration %v", onlineDDL.UUID)
+	}
 	_, allowConcurrentMigration := e.allowConcurrentMigration(onlineDDL)
 	submitQuery, err := sqlparser.ParseAndBind(sqlInsertMigration,
 		sqltypes.StringBindVariable(onlineDDL.UUID),

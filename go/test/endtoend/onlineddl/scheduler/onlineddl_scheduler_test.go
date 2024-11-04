@@ -575,7 +575,7 @@ func testScheduler(t *testing.T) {
 			}
 		})
 		t.Run("set cut-over threshold", func(t *testing.T) {
-			onlineddl.CheckSetMigrationCutOverThreshold(t, &vtParams, shards, t1uuid, 17800*time.Millisecond)
+			onlineddl.CheckSetMigrationCutOverThreshold(t, &vtParams, shards, t1uuid, 17700*time.Millisecond, "")
 		})
 		t.Run("complete", func(t *testing.T) {
 			onlineddl.CheckCompleteMigration(t, &vtParams, shards, t1uuid, true)
@@ -1093,7 +1093,10 @@ func testScheduler(t *testing.T) {
 			require.Equal(t, uuid, executedUUID)
 
 			t.Run("set low cut-over threshold", func(t *testing.T) {
-				onlineddl.CheckSetMigrationCutOverThreshold(t, &vtParams, shards, uuid, 2*time.Second)
+				onlineddl.CheckSetMigrationCutOverThreshold(t, &vtParams, shards, uuid, 2*time.Second, "cut-over min value")
+			})
+			t.Run("set high cut-over threshold", func(t *testing.T) {
+				onlineddl.CheckSetMigrationCutOverThreshold(t, &vtParams, shards, uuid, 2000*time.Second, "cut-over max value")
 			})
 
 			// expect it to complete
@@ -1108,8 +1111,8 @@ func testScheduler(t *testing.T) {
 				assert.Greater(t, retries, int64(0))
 
 				cutOverThresholdSeconds := row.AsInt64("cutover_threshold_seconds", 0)
-				// 2s is lower than the minimum 5s. Expect 5s
-				assert.EqualValues(t, 5, cutOverThresholdSeconds)
+				// Teh default remains unchanged.
+				assert.EqualValues(t, 10, cutOverThresholdSeconds)
 			}
 		})
 	})
