@@ -18,6 +18,7 @@ package reparentutil
 
 import (
 	"testing"
+
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	"github.com/stretchr/testify/require"

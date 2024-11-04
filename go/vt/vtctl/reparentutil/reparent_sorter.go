@@ -18,6 +18,7 @@ package reparentutil
 
 import (
 	"sort"
+
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	"vitess.io/vitess/go/mysql/replication"

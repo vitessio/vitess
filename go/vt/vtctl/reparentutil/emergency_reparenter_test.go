@@ -2868,6 +2868,55 @@ func TestEmergencyReparenter_findMostAdvanced(t *testing.T) {
 				},
 			},
 		}, {
+			name: "choose most advanced not backing up",
+			validCandidates: map[string]replication.Position{
+				"zone1-0000000100": positionMostAdvanced,
+				"zone1-0000000101": positionIntermediate1,
+				"zone1-0000000102": positionIntermediate2,
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+				"zone1-0000000102": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
+					},
+				},
+				"zone1-0000000404": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  404,
+						},
+						Hostname: "ignored tablet",
+					},
+				},
+			},
+			backingUpTablets: map[string]bool{"zone1-0000000100": true, "zone1-0000000101": false, "zone1-0000000102": false},
+			result: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  102,
+				},
+			},
+		}, {
 			name: "choose most advanced with the best promotion rule",
 			validCandidates: map[string]replication.Position{
 				"zone1-0000000100": positionMostAdvanced,
@@ -4468,17 +4517,11 @@ func TestEmergencyReparenter_filterValidCandidates(t *testing.T) {
 		}
 	)
 	allTablets := []*topodatapb.Tablet{primaryTablet, replicaTablet, rdonlyTablet, replicaCrossCellTablet, rdonlyCrossCellTablet}
-	noTabletsBackingUp := map[string]bool{
-		topoproto.TabletAliasString(primaryTablet.Alias): false, topoproto.TabletAliasString(replicaTablet.Alias): false,
-		topoproto.TabletAliasString(rdonlyTablet.Alias): false, topoproto.TabletAliasString(replicaCrossCellTablet.Alias): false,
-		topoproto.TabletAliasString(rdonlyCrossCellTablet.Alias): false,
-	}
 	tests := []struct {
 		name             string
 		durability       string
 		validTablets     []*topodatapb.Tablet
 		tabletsReachable []*topodatapb.Tablet
-		tabletsBackingUp map[string]bool
 		prevPrimary      *topodatapb.Tablet
 		opts             EmergencyReparentOptions
 		filteredTablets  []*topodatapb.Tablet
@@ -4489,14 +4532,12 @@ func TestEmergencyReparenter_filterValidCandidates(t *testing.T) {
 			durability:       "none",
 			validTablets:     allTablets,
 			tabletsReachable: allTablets,
-			tabletsBackingUp: noTabletsBackingUp,
 			filteredTablets:  []*topodatapb.Tablet{primaryTablet, replicaTablet, replicaCrossCellTablet},
 		}, {
 			name:             "filter cross cell",
 			durability:       "none",
 			validTablets:     allTablets,
 			tabletsReachable: allTablets,
-			tabletsBackingUp: noTabletsBackingUp,
 			prevPrimary: &topodatapb.Tablet{
 				Alias: &topodatapb.TabletAlias{
 					Cell: "zone-1",
@@ -4511,7 +4552,6 @@ func TestEmergencyReparenter_filterValidCandidates(t *testing.T) {
 			durability:       "cross_cell",
 			validTablets:     []*topodatapb.Tablet{primaryTablet, replicaTablet},
 			tabletsReachable: []*topodatapb.Tablet{primaryTablet, replicaTablet, rdonlyTablet, rdonlyCrossCellTablet},
-			tabletsBackingUp: noTabletsBackingUp,
 			filteredTablets:  nil,
 		}, {
 			name:       "filter mixed",
@@ -4526,14 +4566,12 @@ func TestEmergencyReparenter_filterValidCandidates(t *testing.T) {
 			},
 			validTablets:     allTablets,
 			tabletsReachable: allTablets,
-			tabletsBackingUp: noTabletsBackingUp,
 			filteredTablets:  []*topodatapb.Tablet{replicaCrossCellTablet},
 		}, {
 			name:             "error - requested primary must not",
 			durability:       "none",
 			validTablets:     allTablets,
 			tabletsReachable: allTablets,
-			tabletsBackingUp: noTabletsBackingUp,
 			opts: EmergencyReparentOptions{
 				NewPrimaryAlias: rdonlyTablet.Alias,
 			},
@@ -4554,7 +4592,6 @@ func TestEmergencyReparenter_filterValidCandidates(t *testing.T) {
 			durability:       "cross_cell",
 			validTablets:     allTablets,
 			tabletsReachable: []*topodatapb.Tablet{primaryTablet, replicaTablet, rdonlyTablet, rdonlyCrossCellTablet},
-			tabletsBackingUp: noTabletsBackingUp,
 			opts: EmergencyReparentOptions{
 				NewPrimaryAlias: primaryTablet.Alias,
 			},
