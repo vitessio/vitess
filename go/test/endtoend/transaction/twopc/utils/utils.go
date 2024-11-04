@@ -243,6 +243,10 @@ func AddShards(t *testing.T, clusterInstance *cluster.LocalProcessCluster, keysp
 		shard, err := clusterInstance.AddShard(keyspaceName, shardName, 3, false, nil)
 		require.NoError(t, err)
 		clusterInstance.Keyspaces[0].Shards = append(clusterInstance.Keyspaces[0].Shards, *shard)
+		for _, vttablet := range shard.Vttablets {
+			err = vttablet.VttabletProcess.WaitForTabletStatuses([]string{"SERVING"})
+			require.NoError(t, err)
+		}
 	}
 }
 
