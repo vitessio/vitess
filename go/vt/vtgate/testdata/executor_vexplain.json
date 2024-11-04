@@ -15,13 +15,12 @@
 		"query": "select * from user u join user_extra ue on u.id = ue.user_id where u.col1 \u003e 100 and ue.noLimit = 'foo'",
 		"expected": {
 			"statementType": "SELECT",
-			"joinColumns": [
-				"`user`.id =",
-				"user_extra.user_id ="
-			],
 			"filterColumns": [
 				"`user`.col1 gt",
 				"user_extra.noLimit ="
+			],
+			"joinPredicates": [
+				"`user`.id = user_extra.user_id"
 			]
 		}
 	},
@@ -29,13 +28,12 @@
 		"query": "select * from user_extra ue, user u where ue.noLimit = 'foo' and u.col1 \u003e 100 and ue.user_id = u.id",
 		"expected": {
 			"statementType": "SELECT",
-			"joinColumns": [
-				"`user`.id =",
-				"user_extra.user_id ="
-			],
 			"filterColumns": [
 				"`user`.col1 gt",
 				"user_extra.noLimit ="
+			],
+			"joinPredicates": [
+				"user_extra.user_id = `user`.id"
 			]
 		}
 	},
@@ -47,16 +45,15 @@
 				"`user`.foo",
 				"user_extra.bar"
 			],
-			"joinColumns": [
-				"`user`.id =",
-				"user_extra.user_id ="
-			],
 			"filterColumns": [
 				"`user`.`name` ="
 			],
 			"selectColumns": [
 				"`user`.foo",
 				"user_extra.bar"
+			],
+			"joinPredicates": [
+				"`user`.id = user_extra.user_id"
 			]
 		}
 	},
