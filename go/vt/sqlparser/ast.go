@@ -879,7 +879,10 @@ type Load struct {
 	Columns
 	SetExprs        AssignmentExprs
 	IgnoreOrReplace string
+	Auth            AuthInformation
 }
+
+var _ AuthNode = (*Load)(nil)
 
 func (*Load) iLoadStatement() {}
 
@@ -918,6 +921,31 @@ func (node *Load) Format(buf *TrackedBuffer) {
 	if node.SetExprs != nil {
 		buf.Myprintf(" set %v", node.SetExprs)
 	}
+}
+
+// GetAuthInformation implements the AuthNode interface.
+func (node *Load) GetAuthInformation() AuthInformation {
+	return node.Auth
+}
+
+// SetAuthType implements the AuthNode interface.
+func (node *Load) SetAuthType(authType string) {
+	node.Auth.AuthType = authType
+}
+
+// SetAuthTargetType implements the AuthNode interface.
+func (node *Load) SetAuthTargetType(targetType string) {
+	node.Auth.TargetType = targetType
+}
+
+// SetAuthTargetNames implements the AuthNode interface.
+func (node *Load) SetAuthTargetNames(targetNames []string) {
+	node.Auth.TargetNames = targetNames
+}
+
+// SetExtra implements the AuthNode interface.
+func (node *Load) SetExtra(extra any) {
+	node.Auth.Extra = extra
 }
 
 func (node *Load) walkSubtree(visit Visit) error {
@@ -1563,7 +1591,10 @@ type Call struct {
 	ProcName ProcedureName
 	Params   []Expr
 	AsOf     Expr
+	Auth     AuthInformation
 }
+
+var _ AuthNode = (*Call)(nil)
 
 func (c *Call) Format(buf *TrackedBuffer) {
 	buf.Myprintf("call %s", c.ProcName.String())
@@ -1580,6 +1611,31 @@ func (c *Call) Format(buf *TrackedBuffer) {
 	if c.AsOf != nil {
 		buf.Myprintf(" as of %v", c.AsOf)
 	}
+}
+
+// GetAuthInformation implements the AuthNode interface.
+func (c *Call) GetAuthInformation() AuthInformation {
+	return c.Auth
+}
+
+// SetAuthType implements the AuthNode interface.
+func (c *Call) SetAuthType(authType string) {
+	c.Auth.AuthType = authType
+}
+
+// SetAuthTargetType implements the AuthNode interface.
+func (c *Call) SetAuthTargetType(targetType string) {
+	c.Auth.TargetType = targetType
+}
+
+// SetAuthTargetNames implements the AuthNode interface.
+func (c *Call) SetAuthTargetNames(targetNames []string) {
+	c.Auth.TargetNames = targetNames
+}
+
+// SetExtra implements the AuthNode interface.
+func (c *Call) SetExtra(extra any) {
+	c.Auth.Extra = extra
 }
 
 func (c *Call) walkSubtree(visit Visit) error {
@@ -1634,7 +1690,10 @@ type Insert struct {
 	Columns    Columns
 	Rows       InsertRows
 	OnDup      OnDup
+	Auth       AuthInformation
 }
+
+var _ AuthNode = (*Insert)(nil)
 
 const (
 	ReplaceStr = "replace"
@@ -1651,6 +1710,31 @@ func (node *Insert) Format(buf *TrackedBuffer) {
 		buf.Myprintf(" partition (%v)", node.Partitions)
 	}
 	buf.Myprintf("%v %v%v", node.Columns, node.Rows, node.OnDup)
+}
+
+// GetAuthInformation implements the AuthNode interface.
+func (node *Insert) GetAuthInformation() AuthInformation {
+	return node.Auth
+}
+
+// SetAuthType implements the AuthNode interface.
+func (node *Insert) SetAuthType(authType string) {
+	node.Auth.AuthType = authType
+}
+
+// SetAuthTargetType implements the AuthNode interface.
+func (node *Insert) SetAuthTargetType(targetType string) {
+	node.Auth.TargetType = targetType
+}
+
+// SetAuthTargetNames implements the AuthNode interface.
+func (node *Insert) SetAuthTargetNames(targetNames []string) {
+	node.Auth.TargetNames = targetNames
+}
+
+// SetExtra implements the AuthNode interface.
+func (node *Insert) SetExtra(extra any) {
+	node.Auth.Extra = extra
 }
 
 func (node *Insert) walkSubtree(visit Visit) error {
@@ -1818,7 +1902,10 @@ type DBDDL struct {
 	IfNotExists      bool
 	IfExists         bool
 	CharsetCollate   []*CharsetAndCollate
+	Auth             AuthInformation
 }
+
+var _ AuthNode = (*DBDDL)(nil)
 
 // Format formats the node.
 func (node *DBDDL) Format(buf *TrackedBuffer) {
@@ -1850,6 +1937,31 @@ func (node *DBDDL) Format(buf *TrackedBuffer) {
 		}
 		buf.WriteString(fmt.Sprintf("%s %s%s %v", node.Action, node.SchemaOrDatabase, exists, node.DBName))
 	}
+}
+
+// GetAuthInformation implements the AuthNode interface.
+func (node *DBDDL) GetAuthInformation() AuthInformation {
+	return node.Auth
+}
+
+// SetAuthType implements the AuthNode interface.
+func (node *DBDDL) SetAuthType(authType string) {
+	node.Auth.AuthType = authType
+}
+
+// SetAuthTargetType implements the AuthNode interface.
+func (node *DBDDL) SetAuthTargetType(targetType string) {
+	node.Auth.TargetType = targetType
+}
+
+// SetAuthTargetNames implements the AuthNode interface.
+func (node *DBDDL) SetAuthTargetNames(targetNames []string) {
+	node.Auth.TargetNames = targetNames
+}
+
+// SetExtra implements the AuthNode interface.
+func (node *DBDDL) SetExtra(extra any) {
+	node.Auth.Extra = extra
 }
 
 type ViewCheckOption string
@@ -2013,9 +2125,11 @@ type AlterTable struct {
 	Table          TableName
 	Statements     []*DDL
 	PartitionSpecs []*PartitionSpec
+	Auth           AuthInformation
 }
 
 var _ SQLNode = (*AlterTable)(nil)
+var _ AuthNode = (*AlterTable)(nil)
 
 // Format implements SQLNode.
 func (m *AlterTable) Format(buf *TrackedBuffer) {
@@ -2034,11 +2148,35 @@ func (m *AlterTable) Format(buf *TrackedBuffer) {
 	}
 }
 
+// GetAuthInformation implements the AuthNode interface.
+func (m *AlterTable) GetAuthInformation() AuthInformation {
+	return m.Auth
+}
+
+// SetAuthType implements the AuthNode interface.
+func (m *AlterTable) SetAuthType(authType string) {
+	m.Auth.AuthType = authType
+}
+
+// SetAuthTargetType implements the AuthNode interface.
+func (m *AlterTable) SetAuthTargetType(targetType string) {
+	m.Auth.TargetType = targetType
+}
+
+// SetAuthTargetNames implements the AuthNode interface.
+func (m *AlterTable) SetAuthTargetNames(targetNames []string) {
+	m.Auth.TargetNames = targetNames
+}
+
+// SetExtra implements the AuthNode interface.
+func (m *AlterTable) SetExtra(extra any) {
+	m.Auth.Extra = extra
+}
+
 // walkSubtree implements SQLNode.
 func (m *AlterTable) walkSubtree(visit Visit) error {
 	for _, ddl := range m.Statements {
-		err := ddl.walkSubtree(visit)
-		if err != nil {
+		if err := Walk(visit, ddl); err != nil {
 			return err
 		}
 	}
@@ -2138,7 +2276,12 @@ type DDL struct {
 
 	// Authentication is set for ALTER USER operations.
 	Authentication *Authentication
+
+	// Auth handles authentication for the node itself.
+	Auth AuthInformation
 }
+
+var _ AuthNode = (*DDL)(nil)
 
 // ColumnOrder is used in some DDL statements to specify or change the order of a column in a schema.
 type ColumnOrder struct {
@@ -2392,6 +2535,31 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 	default:
 		buf.Myprintf("%s table %v", node.Action, node.Table)
 	}
+}
+
+// GetAuthInformation implements the AuthNode interface.
+func (node *DDL) GetAuthInformation() AuthInformation {
+	return node.Auth
+}
+
+// SetAuthType implements the AuthNode interface.
+func (node *DDL) SetAuthType(authType string) {
+	node.Auth.AuthType = authType
+}
+
+// SetAuthTargetType implements the AuthNode interface.
+func (node *DDL) SetAuthTargetType(targetType string) {
+	node.Auth.TargetType = targetType
+}
+
+// SetAuthTargetNames implements the AuthNode interface.
+func (node *DDL) SetAuthTargetNames(targetNames []string) {
+	node.Auth.TargetNames = targetNames
+}
+
+// SetExtra implements the AuthNode interface.
+func (node *DDL) SetExtra(extra any) {
+	node.Auth.Extra = extra
 }
 
 func (node *DDL) walkSubtree(visit Visit) error {
@@ -3809,7 +3977,10 @@ type Show struct {
 	Limit                  *Limit
 	CountStar              bool
 	Full                   bool
+	Auth                   AuthInformation
 }
+
+var _ AuthNode = (*Show)(nil)
 
 // Format formats the node.
 func (node *Show) Format(buf *TrackedBuffer) {
@@ -3906,6 +4077,31 @@ func (node *Show) Format(buf *TrackedBuffer) {
 	}
 }
 
+// GetAuthInformation implements the AuthNode interface.
+func (node *Show) GetAuthInformation() AuthInformation {
+	return node.Auth
+}
+
+// SetAuthType implements the AuthNode interface.
+func (node *Show) SetAuthType(authType string) {
+	node.Auth.AuthType = authType
+}
+
+// SetAuthTargetType implements the AuthNode interface.
+func (node *Show) SetAuthTargetType(targetType string) {
+	node.Auth.TargetType = targetType
+}
+
+// SetAuthTargetNames implements the AuthNode interface.
+func (node *Show) SetAuthTargetNames(targetNames []string) {
+	node.Auth.TargetNames = targetNames
+}
+
+// SetExtra implements the AuthNode interface.
+func (node *Show) SetExtra(extra any) {
+	node.Auth.Extra = extra
+}
+
 // HasTable returns true if the show statement has a parsed table name.
 // Not all show statements parse table names.
 func (node *Show) HasTable() bool {
@@ -3993,7 +4189,10 @@ func (node *ShowFilter) walkSubtree(visit Visit) error {
 // Use represents a use statement.
 type Use struct {
 	DBName TableIdent
+	Auth   AuthInformation
 }
+
+var _ AuthNode = (*Use)(nil)
 
 // Format formats the node.
 func (node *Use) Format(buf *TrackedBuffer) {
@@ -4002,6 +4201,31 @@ func (node *Use) Format(buf *TrackedBuffer) {
 	} else {
 		buf.Myprintf("use")
 	}
+}
+
+// GetAuthInformation implements the AuthNode interface.
+func (node *Use) GetAuthInformation() AuthInformation {
+	return node.Auth
+}
+
+// SetAuthType implements the AuthNode interface.
+func (node *Use) SetAuthType(authType string) {
+	node.Auth.AuthType = authType
+}
+
+// SetAuthTargetType implements the AuthNode interface.
+func (node *Use) SetAuthTargetType(targetType string) {
+	node.Auth.TargetType = targetType
+}
+
+// SetAuthTargetNames implements the AuthNode interface.
+func (node *Use) SetAuthTargetNames(targetNames []string) {
+	node.Auth.TargetNames = targetNames
+}
+
+// SetExtra implements the AuthNode interface.
+func (node *Use) SetExtra(extra any) {
+	node.Auth.Extra = extra
 }
 
 func (node *Use) walkSubtree(visit Visit) error {
@@ -4067,7 +4291,10 @@ func (node *PurgeBinaryLogs) Format(buf *TrackedBuffer) {
 type Flush struct {
 	Type   string
 	Option *FlushOption
+	Auth   AuthInformation
 }
+
+var _ AuthNode = (*Flush)(nil)
 
 // Format formats the node.
 func (node *Flush) Format(buf *TrackedBuffer) {
@@ -4097,13 +4324,40 @@ func (node *Flush) Format(buf *TrackedBuffer) {
 	}
 }
 
+// GetAuthInformation implements the AuthNode interface.
+func (node *Flush) GetAuthInformation() AuthInformation {
+	return node.Auth
+}
+
+// SetAuthType implements the AuthNode interface.
+func (node *Flush) SetAuthType(authType string) {
+	node.Auth.AuthType = authType
+}
+
+// SetAuthTargetType implements the AuthNode interface.
+func (node *Flush) SetAuthTargetType(targetType string) {
+	node.Auth.TargetType = targetType
+}
+
+// SetAuthTargetNames implements the AuthNode interface.
+func (node *Flush) SetAuthTargetNames(targetNames []string) {
+	node.Auth.TargetNames = targetNames
+}
+
+// SetExtra implements the AuthNode interface.
+func (node *Flush) SetExtra(extra any) {
+	node.Auth.Extra = extra
+}
+
 // ChangeReplicationSource represents a "CHANGE REPLICATION SOURCE TO" statement.
 // https://dev.mysql.com/doc/refman/8.0/en/change-replication-source-to.html
 type ChangeReplicationSource struct {
 	Options []*ReplicationOption
+	Auth    AuthInformation
 }
 
 var _ Statement = (*ChangeReplicationSource)(nil)
+var _ AuthNode = (*ChangeReplicationSource)(nil)
 
 func (*ChangeReplicationSource) iStatement() {}
 
@@ -4119,13 +4373,40 @@ func (s *ChangeReplicationSource) Format(buf *TrackedBuffer) {
 	}
 }
 
+// GetAuthInformation implements the AuthNode interface.
+func (s *ChangeReplicationSource) GetAuthInformation() AuthInformation {
+	return s.Auth
+}
+
+// SetAuthType implements the AuthNode interface.
+func (s *ChangeReplicationSource) SetAuthType(authType string) {
+	s.Auth.AuthType = authType
+}
+
+// SetAuthTargetType implements the AuthNode interface.
+func (s *ChangeReplicationSource) SetAuthTargetType(targetType string) {
+	s.Auth.TargetType = targetType
+}
+
+// SetAuthTargetNames implements the AuthNode interface.
+func (s *ChangeReplicationSource) SetAuthTargetNames(targetNames []string) {
+	s.Auth.TargetNames = targetNames
+}
+
+// SetExtra implements the AuthNode interface.
+func (s *ChangeReplicationSource) SetExtra(extra any) {
+	s.Auth.Extra = extra
+}
+
 // ChangeReplicationFilter represents a "CHANGE REPLICATION FILTER" statement.
 // https://dev.mysql.com/doc/refman/8.0/en/change-replication-filter.html
 type ChangeReplicationFilter struct {
 	Options []*ReplicationOption
+	Auth    AuthInformation
 }
 
 var _ Statement = (*ChangeReplicationFilter)(nil)
+var _ AuthNode = (*ChangeReplicationFilter)(nil)
 
 func (*ChangeReplicationFilter) iStatement() {}
 
@@ -4152,6 +4433,31 @@ func (c *ChangeReplicationFilter) Format(buf *TrackedBuffer) {
 	}
 }
 
+// GetAuthInformation implements the AuthNode interface.
+func (c *ChangeReplicationFilter) GetAuthInformation() AuthInformation {
+	return c.Auth
+}
+
+// SetAuthType implements the AuthNode interface.
+func (c *ChangeReplicationFilter) SetAuthType(authType string) {
+	c.Auth.AuthType = authType
+}
+
+// SetAuthTargetType implements the AuthNode interface.
+func (c *ChangeReplicationFilter) SetAuthTargetType(targetType string) {
+	c.Auth.TargetType = targetType
+}
+
+// SetAuthTargetNames implements the AuthNode interface.
+func (c *ChangeReplicationFilter) SetAuthTargetNames(targetNames []string) {
+	c.Auth.TargetNames = targetNames
+}
+
+// SetExtra implements the AuthNode interface.
+func (c *ChangeReplicationFilter) SetExtra(extra any) {
+	c.Auth.Extra = extra
+}
+
 // ReplicationOption represents a single replication option name and value.
 // See https://dev.mysql.com/doc/refman/8.0/en/change-replication-source-to.html for available options.
 type ReplicationOption struct {
@@ -4161,9 +4467,12 @@ type ReplicationOption struct {
 
 // StartReplica represents a "START REPLICA" statement.
 // https://dev.mysql.com/doc/refman/8.0/en/start-replica.html
-type StartReplica struct{}
+type StartReplica struct{
+	Auth AuthInformation
+}
 
 var _ Statement = (*StartReplica)(nil)
+var _ AuthNode = (*StartReplica)(nil)
 
 func (*StartReplica) iStatement() {}
 
@@ -4171,11 +4480,39 @@ func (r *StartReplica) Format(buf *TrackedBuffer) {
 	buf.WriteString("start replica")
 }
 
+// GetAuthInformation implements the AuthNode interface.
+func (r *StartReplica) GetAuthInformation() AuthInformation {
+	return r.Auth
+}
+
+// SetAuthType implements the AuthNode interface.
+func (r *StartReplica) SetAuthType(authType string) {
+	r.Auth.AuthType = authType
+}
+
+// SetAuthTargetType implements the AuthNode interface.
+func (r *StartReplica) SetAuthTargetType(targetType string) {
+	r.Auth.TargetType = targetType
+}
+
+// SetAuthTargetNames implements the AuthNode interface.
+func (r *StartReplica) SetAuthTargetNames(targetNames []string) {
+	r.Auth.TargetNames = targetNames
+}
+
+// SetExtra implements the AuthNode interface.
+func (r *StartReplica) SetExtra(extra any) {
+	r.Auth.Extra = extra
+}
+
 // StopReplica represents a "STOP REPLICA" statement.
 // https://dev.mysql.com/doc/refman/8.0/en/stop-replica.html
-type StopReplica struct{}
+type StopReplica struct{
+	Auth AuthInformation
+}
 
 var _ Statement = (*StopReplica)(nil)
+var _ AuthNode = (*StopReplica)(nil)
 
 func (*StopReplica) iStatement() {}
 
@@ -4183,13 +4520,40 @@ func (r *StopReplica) Format(buf *TrackedBuffer) {
 	buf.WriteString("stop replica")
 }
 
+// GetAuthInformation implements the AuthNode interface.
+func (r *StopReplica) GetAuthInformation() AuthInformation {
+	return r.Auth
+}
+
+// SetAuthType implements the AuthNode interface.
+func (r *StopReplica) SetAuthType(authType string) {
+	r.Auth.AuthType = authType
+}
+
+// SetAuthTargetType implements the AuthNode interface.
+func (r *StopReplica) SetAuthTargetType(targetType string) {
+	r.Auth.TargetType = targetType
+}
+
+// SetAuthTargetNames implements the AuthNode interface.
+func (r *StopReplica) SetAuthTargetNames(targetNames []string) {
+	r.Auth.TargetNames = targetNames
+}
+
+// SetExtra implements the AuthNode interface.
+func (r *StopReplica) SetExtra(extra any) {
+	r.Auth.Extra = extra
+}
+
 // ResetReplica represents a "RESET REPLICA" statement.
 // https://dev.mysql.com/doc/refman/8.0/en/reset-replica.html
 type ResetReplica struct {
-	All bool
+	All  bool
+	Auth AuthInformation
 }
 
 var _ Statement = (*ResetReplica)(nil)
+var _ AuthNode = (*ResetReplica)(nil)
 
 func (*ResetReplica) iStatement() {}
 
@@ -4198,6 +4562,31 @@ func (r *ResetReplica) Format(buf *TrackedBuffer) {
 	if r.All {
 		buf.WriteString(" all")
 	}
+}
+
+// GetAuthInformation implements the AuthNode interface.
+func (r *ResetReplica) GetAuthInformation() AuthInformation {
+	return r.Auth
+}
+
+// SetAuthType implements the AuthNode interface.
+func (r *ResetReplica) SetAuthType(authType string) {
+	r.Auth.AuthType = authType
+}
+
+// SetAuthTargetType implements the AuthNode interface.
+func (r *ResetReplica) SetAuthTargetType(targetType string) {
+	r.Auth.TargetType = targetType
+}
+
+// SetAuthTargetNames implements the AuthNode interface.
+func (r *ResetReplica) SetAuthTargetNames(targetNames []string) {
+	r.Auth.TargetNames = targetNames
+}
+
+// SetExtra implements the AuthNode interface.
+func (r *ResetReplica) SetExtra(extra any) {
+	r.Auth.Extra = extra
 }
 
 // OtherRead represents a DESCRIBE, or EXPLAIN statement.
@@ -4497,7 +4886,10 @@ type AliasedTableExpr struct {
 	Hints      *IndexHints
 	AsOf       *AsOf
 	Lateral    bool
+	Auth       AuthInformation
 }
+
+var _ AuthNode = (*AliasedTableExpr)(nil)
 
 type AsOf struct {
 	Time           Expr
@@ -4569,6 +4961,31 @@ func (node *AliasedTableExpr) Format(buf *TrackedBuffer) {
 		// Hint node provides the space padding.
 		buf.Myprintf("%v", node.Hints)
 	}
+}
+
+// GetAuthInformation implements the AuthNode interface.
+func (node *AliasedTableExpr) GetAuthInformation() AuthInformation {
+	return node.Auth
+}
+
+// SetAuthType implements the AuthNode interface.
+func (node *AliasedTableExpr) SetAuthType(authType string) {
+	node.Auth.AuthType = authType
+}
+
+// SetAuthTargetType implements the AuthNode interface.
+func (node *AliasedTableExpr) SetAuthTargetType(targetType string) {
+	node.Auth.TargetType = targetType
+}
+
+// SetAuthTargetNames implements the AuthNode interface.
+func (node *AliasedTableExpr) SetAuthTargetNames(targetNames []string) {
+	node.Auth.TargetNames = targetNames
+}
+
+// SetExtra implements the AuthNode interface.
+func (node *AliasedTableExpr) SetExtra(extra any) {
+	node.Auth.Extra = extra
 }
 
 func (node *AliasedTableExpr) walkSubtree(visit Visit) error {
@@ -4720,6 +5137,24 @@ func (node TableNames) Format(buf *TrackedBuffer) {
 	}
 }
 
+// DbQualifiers returns the DbQualifier of each name.
+func (node TableNames) DbQualifiers() []string {
+	dbQualifiers := make([]string, len(node))
+	for i := range node {
+		dbQualifiers[i] = node[i].DbQualifier.String()
+	}
+	return dbQualifiers
+}
+
+// AuthMultipleTableIdentifiers returns a string slice in the format expected of AuthTargetType_MultipleTableIdentifiers.
+func (node TableNames) AuthMultipleTableIdentifiers() []string {
+	ret := make([]string, 0, len(node)*2)
+	for _, tableName := range node {
+		ret = append(ret, tableName.DbQualifier.String(), tableName.Name.String())
+	}
+	return ret
+}
+
 func (node TableNames) walkSubtree(visit Visit) error {
 	for _, n := range node {
 		if err := Walk(visit, n); err != nil {
@@ -4868,7 +5303,7 @@ func (node TableName) IsEmpty() bool {
 }
 
 // ToViewName returns a TableName acceptable for use as a VIEW. VIEW names are
-// always lowercase, so ToViewName lowercasese the name. Databases are case-sensitive
+// always lowercase, so ToViewName lowercases the name. Databases are case-sensitive
 // so DbQualifier is left untouched.
 func (node TableName) ToViewName() TableName {
 	return TableName{
@@ -7453,7 +7888,10 @@ func (node *UnlockTables) walkSubtree(visit Visit) error {
 type Kill struct {
 	Connection bool
 	ConnID     Expr
+	Auth       AuthInformation
 }
+
+var _ AuthNode = (*Kill)(nil)
 
 func (k *Kill) Format(buf *TrackedBuffer) {
 	buf.WriteString("kill ")
@@ -7463,6 +7901,31 @@ func (k *Kill) Format(buf *TrackedBuffer) {
 		buf.WriteString("query ")
 	}
 	buf.Myprintf("%v", k.ConnID)
+}
+
+// GetAuthInformation implements the AuthNode interface.
+func (k *Kill) GetAuthInformation() AuthInformation {
+	return k.Auth
+}
+
+// SetAuthType implements the AuthNode interface.
+func (k *Kill) SetAuthType(authType string) {
+	k.Auth.AuthType = authType
+}
+
+// SetAuthTargetType implements the AuthNode interface.
+func (k *Kill) SetAuthTargetType(targetType string) {
+	k.Auth.TargetType = targetType
+}
+
+// SetAuthTargetNames implements the AuthNode interface.
+func (k *Kill) SetAuthTargetNames(targetNames []string) {
+	k.Auth.TargetNames = targetNames
+}
+
+// SetExtra implements the AuthNode interface.
+func (k *Kill) SetExtra(extra any) {
+	k.Auth.Extra = extra
 }
 
 func (*Kill) iStatement() {}
@@ -7575,7 +8038,10 @@ type CreateSpatialRefSys struct {
 	OrReplace   bool
 	IfNotExists bool
 	SrsAttr     *SrsAttribute
+	Auth        AuthInformation
 }
+
+var _ AuthNode = (*CreateSpatialRefSys)(nil)
 
 func (*CreateSpatialRefSys) iStatement() {}
 
@@ -7594,6 +8060,31 @@ func (node *CreateSpatialRefSys) Format(buf *TrackedBuffer) {
 	}
 	buf.Myprintf("%v\n", node.SRID)
 	buf.Myprintf("%v", node.SrsAttr)
+}
+
+// GetAuthInformation implements the AuthNode interface.
+func (node *CreateSpatialRefSys) GetAuthInformation() AuthInformation {
+	return node.Auth
+}
+
+// SetAuthType implements the AuthNode interface.
+func (node *CreateSpatialRefSys) SetAuthType(authType string) {
+	node.Auth.AuthType = authType
+}
+
+// SetAuthTargetType implements the AuthNode interface.
+func (node *CreateSpatialRefSys) SetAuthTargetType(targetType string) {
+	node.Auth.TargetType = targetType
+}
+
+// SetAuthTargetNames implements the AuthNode interface.
+func (node *CreateSpatialRefSys) SetAuthTargetNames(targetNames []string) {
+	node.Auth.TargetNames = targetNames
+}
+
+// SetExtra implements the AuthNode interface.
+func (node *CreateSpatialRefSys) SetExtra(extra any) {
+	node.Auth.Extra = extra
 }
 
 type SrsAttribute struct {
@@ -7627,9 +8118,11 @@ type Injectable interface {
 type InjectedExpr struct {
 	Expression Injectable
 	Children   Exprs
+	Auth       AuthInformation
 }
 
 var _ Expr = InjectedExpr{}
+var _ AuthNode = InjectedExpr{}
 
 // iExpr implements the Expr interface.
 func (d InjectedExpr) iExpr() {}
@@ -7648,14 +8141,41 @@ func (d InjectedExpr) Format(buf *TrackedBuffer) {
 	}
 }
 
+// GetAuthInformation implements the AuthNode interface.
+func (d InjectedExpr) GetAuthInformation() AuthInformation {
+	return d.Auth
+}
+
+// SetAuthType implements the AuthNode interface.
+func (d InjectedExpr) SetAuthType(authType string) {
+	d.Auth.AuthType = authType
+}
+
+// SetAuthTargetType implements the AuthNode interface.
+func (d InjectedExpr) SetAuthTargetType(targetType string) {
+	d.Auth.TargetType = targetType
+}
+
+// SetAuthTargetNames implements the AuthNode interface.
+func (d InjectedExpr) SetAuthTargetNames(targetNames []string) {
+	d.Auth.TargetNames = targetNames
+}
+
+// SetExtra implements the AuthNode interface.
+func (d InjectedExpr) SetExtra(extra any) {
+	d.Auth.Extra = extra
+}
+
 // InjectedStatement allows bypassing AST analysis. This is used by projects that rely on Vitess, but may not implement
 // MySQL's dialect.
 type InjectedStatement struct {
 	Statement Injectable
 	Children  Exprs
+	Auth      AuthInformation
 }
 
 var _ Statement = InjectedStatement{}
+var _ AuthNode = InjectedStatement{}
 
 // iStatement implements the Statement interface.
 func (d InjectedStatement) iStatement() {}
@@ -7667,4 +8187,29 @@ func (d InjectedStatement) Format(buf *TrackedBuffer) {
 	} else {
 		buf.WriteString("InjectedStatement")
 	}
+}
+
+// GetAuthInformation implements the AuthNode interface.
+func (d InjectedStatement) GetAuthInformation() AuthInformation {
+	return d.Auth
+}
+
+// SetAuthType implements the AuthNode interface.
+func (d InjectedStatement) SetAuthType(authType string) {
+	d.Auth.AuthType = authType
+}
+
+// SetAuthTargetType implements the AuthNode interface.
+func (d InjectedStatement) SetAuthTargetType(targetType string) {
+	d.Auth.TargetType = targetType
+}
+
+// SetAuthTargetNames implements the AuthNode interface.
+func (d InjectedStatement) SetAuthTargetNames(targetNames []string) {
+	d.Auth.TargetNames = targetNames
+}
+
+// SetExtra implements the AuthNode interface.
+func (d InjectedStatement) SetExtra(extra any) {
+	d.Auth.Extra = extra
 }

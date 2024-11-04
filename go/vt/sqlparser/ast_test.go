@@ -284,6 +284,9 @@ func TestDDL(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		OverwriteAuthType(got, "", true)
+		OverwriteAuthTargetType(got, "", true)
+		OverwriteAuthTargetNames(got, nil, true)
 		if !reflect.DeepEqual(got, tcase.output) {
 			t.Errorf("%s: %v, want %v", tcase.query, got, tcase.output)
 		}

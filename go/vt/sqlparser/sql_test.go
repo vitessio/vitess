@@ -410,6 +410,7 @@ func TestShowIndex(t *testing.T) {
 			require.NoError(t, err)
 			showRes, ok := res.(*Show)
 			require.True(t, ok)
+			showRes.Auth = AuthInformation{}
 			assert.Equal(t, test.res, showRes)
 		})
 	}

@@ -604,7 +604,23 @@ set_opt:
 load_statement:
   LOAD DATA local_opt infile_opt ignore_or_replace_opt load_into_table_name opt_partition_clause charset_opt fields_opt lines_opt ignore_number_opt column_list_opt set_opt
   {
-    $$ = &Load{Local: $3.(BoolVal), Infile: $4.(string), IgnoreOrReplace: $5.(string), Table: $6.(TableName), Partition: $7.(Partitions), Charset: $8.(string), Fields: $9.(*Fields), Lines: $10.(*Lines), IgnoreNum: $11.(*SQLVal), Columns: $12.(Columns), SetExprs: $13.(AssignmentExprs)}
+    $$ = &Load{
+      Local: $3.(BoolVal),
+      Infile: $4.(string),
+      IgnoreOrReplace: $5.(string),
+      Table: $6.(TableName),
+      Partition: $7.(Partitions),
+      Charset: $8.(string),
+      Fields: $9.(*Fields),
+      Lines: $10.(*Lines),
+      IgnoreNum: $11.(*SQLVal),
+      Columns: $12.(Columns),
+      SetExprs: $13.(AssignmentExprs),
+      Auth: AuthInformation{
+        AuthType: AuthType_FILE,
+        TargetType: AuthTargetType_Global,
+      },
+    }
   }
 
 select_statement:
@@ -622,11 +638,19 @@ select_statement:
   }
 | SELECT comment_opt query_opts NEXT num_val for_from table_name
   {
+    tableName := $7.(TableName)
     $$ = &Select{
     	Comments: Comments($2.(Comments)),
     	QueryOpts: $3.(QueryOpts),
     	SelectExprs: SelectExprs{Nextval{Expr: tryCastExpr($5)}},
-    	From: TableExprs{&AliasedTableExpr{Expr: $7.(TableName)}},
+    	From: TableExprs{&AliasedTableExpr{
+    	  Expr: tableName,
+    	  Auth: AuthInformation{
+            AuthType: AuthType_SELECT,
+            TargetType: AuthTargetType_SingleTableIdentifier,
+            TargetNames: []string{tableName.DbQualifier.String(), tableName.Name.String()},
+          },
+        }},
     }
   }
 
@@ -635,7 +659,10 @@ values_select_statement:
   {
     $$ = &Select{
     	SelectExprs: SelectExprs{&StarExpr{}},
-    	From: TableExprs{&AliasedTableExpr{Expr: $1.(SimpleTableExpr)}},
+    	From: TableExprs{&AliasedTableExpr{
+    	  Expr: $1.(SimpleTableExpr),
+    	  Auth: AuthInformation{AuthType: AuthType_IGNORE},
+    	}},
     	OrderBy: $2.(OrderBy),
     	Limit: $3.(*Limit),
     }
@@ -768,7 +795,7 @@ base_select_no_cte:
     	QueryOpts: $3.(QueryOpts),
 	SelectExprs: $4.(SelectExprs),
 	Into: $5.(*Into),
-	From: $6.(TableExprs),
+	From: SetAuthType($6.(TableExprs), AuthType_SELECT, true).(TableExprs),
 	Where: NewWhere(WhereStr, tryCastExpr($7)),
 	GroupBy: GroupBy($8.(Exprs)),
 	Having: NewWhere(HavingStr, tryCastExpr($9)),
@@ -777,7 +804,10 @@ base_select_no_cte:
   }
 | TABLE table_reference
   {
-    $$ = &Select{SelectExprs: SelectExprs{&StarExpr{}}, From: TableExprs{$2.(TableExpr)}}
+    $$ = &Select{
+	SelectExprs: SelectExprs{&StarExpr{}},
+	From: TableExprs{SetAuthType($2.(TableExpr), AuthType_SELECT, true).(TableExpr)},
+    }
   }
 
 from_opt:
@@ -846,7 +876,13 @@ cte_list:
 common_table_expression:
   table_alias ins_column_list_opt AS subquery_or_values
   {
-    $$ = &CommonTableExpr{&AliasedTableExpr{Expr:$4.(SimpleTableExpr), As: $1.(TableIdent)}, $2.(Columns)}
+    $$ = &CommonTableExpr{
+      &AliasedTableExpr{
+        Expr: $4.(SimpleTableExpr),
+        As: $1.(TableIdent),
+        Auth: AuthInformation{AuthType: AuthType_IGNORE},
+      },
+    $2.(Columns)}
   }
 
 insert_statement:
@@ -857,7 +893,17 @@ insert_statement:
     ins.Action = $2.(string)
     ins.Comments = $3.(Comments)
     ins.Ignore = $4.(string)
-    ins.Table = $5.(TableName)
+    tableName := $5.(TableName)
+    ins.Table = tableName
+    authType := AuthType_INSERT
+    if ins.Action == ReplaceStr {
+      authType = AuthType_REPLACE
+    }
+    ins.Auth = AuthInformation{
+      AuthType: authType,
+      TargetType: AuthTargetType_SingleTableIdentifier,
+      TargetNames: []string{tableName.DbQualifier.String(), tableName.Name.String()},
+    }
     ins.Partitions = $6.(Partitions)
     ins.OnDup = OnDup($8.(AssignmentExprs))
     ins.With = $1.(*With)
@@ -870,7 +916,17 @@ insert_statement:
     ins.Action = $2.(string)
     ins.Comments = $3.(Comments)
     ins.Ignore = $4.(string)
-    ins.Table = $5.(TableName)
+    tableName := $5.(TableName)
+    ins.Table = tableName
+    authType := AuthType_INSERT
+    if ins.Action == ReplaceStr {
+      authType = AuthType_REPLACE
+    }
+    ins.Auth = AuthInformation{
+      AuthType: authType,
+      TargetType: AuthTargetType_SingleTableIdentifier,
+      TargetNames: []string{tableName.DbQualifier.String(), tableName.Name.String()},
+    }
     ins.Partitions = $6.(Partitions)
     ins.OnDup = OnDup($8.(AssignmentExprs))
     ins.With = $1.(*With)
@@ -884,7 +940,27 @@ insert_statement:
       cols = append(cols, updateList.Name.Name)
       vals = append(vals, updateList.Expr)
     }
-    $$ = &Insert{Action: $2.(string), Comments: Comments($3.(Comments)), Ignore: $4.(string), Table: $5.(TableName), Partitions: $6.(Partitions), Columns: cols, Rows: &AliasedValues{Values: Values{vals}}, OnDup: OnDup($9.(AssignmentExprs)), With: $1.(*With)}
+    tableName := $5.(TableName)
+    authType := AuthType_INSERT
+    if $2.(string) == ReplaceStr {
+      authType = AuthType_REPLACE
+    }
+    $$ = &Insert{
+	Action: $2.(string),
+	Comments: Comments($3.(Comments)),
+	Ignore: $4.(string),
+	Table: tableName,
+	Partitions: $6.(Partitions),
+	Columns: cols,
+	Rows: &AliasedValues{Values: Values{vals}},
+	OnDup: OnDup($9.(AssignmentExprs)),
+	With: $1.(*With),
+	Auth: AuthInformation{
+	  AuthType: authType,
+	  TargetType: AuthTargetType_SingleTableIdentifier,
+	  TargetNames: []string{tableName.DbQualifier.String(), tableName.Name.String()},
+	},
+    }
   }
 
 insert_or_replace:
@@ -900,25 +976,74 @@ insert_or_replace:
 update_statement:
   with_clause_opt UPDATE comment_opt ignore_opt table_references SET assignment_list where_expression_opt order_by_opt limit_opt
   {
-    $$ = &Update{Comments: Comments($3.(Comments)), Ignore: $4.(string), TableExprs: $5.(TableExprs), Exprs: $7.(AssignmentExprs), Where: NewWhere(WhereStr, tryCastExpr($8)), OrderBy: $9.(OrderBy), Limit: $10.(*Limit), With: $1.(*With)}
+    $$ = &Update{
+	Comments: Comments($3.(Comments)),
+	Ignore: $4.(string),
+	TableExprs: SetAuthType($5.(TableExprs), AuthType_UPDATE, true).(TableExprs),
+	Exprs: $7.(AssignmentExprs),
+	Where: NewWhere(WhereStr, tryCastExpr($8)),
+	OrderBy: $9.(OrderBy),
+	Limit: $10.(*Limit),
+	With: $1.(*With),
+    }
   }
 
 delete_statement:
   with_clause_opt DELETE comment_opt FROM table_name opt_partition_clause where_expression_opt order_by_opt limit_opt
   {
-    $$ = &Delete{Comments: Comments($3.(Comments)), TableExprs: TableExprs{&AliasedTableExpr{Expr:$5.(TableName)}}, Partitions: $6.(Partitions), Where: NewWhere(WhereStr, tryCastExpr($7)), OrderBy: $8.(OrderBy), Limit: $9.(*Limit), With: $1.(*With)}
+    tableName := $5.(TableName)
+    $$ = &Delete{
+	Comments: Comments($3.(Comments)),
+	TableExprs: TableExprs{&AliasedTableExpr{
+	  Expr: tableName,
+	  Auth: AuthInformation{
+            AuthType: AuthType_DELETE,
+            TargetType: AuthTargetType_SingleTableIdentifier,
+            TargetNames: []string{tableName.DbQualifier.String(), tableName.Name.String()},
+          },
+	}},
+	Partitions: $6.(Partitions),
+	Where: NewWhere(WhereStr, tryCastExpr($7)),
+	OrderBy: $8.(OrderBy),
+	Limit: $9.(*Limit),
+	With: $1.(*With),
+    }
   }
 | with_clause_opt DELETE comment_opt FROM table_name_list USING table_references where_expression_opt
   {
-    $$ = &Delete{Comments: Comments($3.(Comments)), Targets: $5.(TableNames), TableExprs: $7.(TableExprs), Where: NewWhere(WhereStr, tryCastExpr($8)), With: $1.(*With)}
+    $$ = &Delete{
+	Comments: Comments($3.(Comments)),
+	Targets: $5.(TableNames),
+	TableExprs: SetAuthType($7.(TableExprs), AuthType_DELETE, true).(TableExprs),
+	Where: NewWhere(WhereStr, tryCastExpr($8)),
+	With: $1.(*With),
+    }
   }
 | with_clause_opt DELETE comment_opt table_name_list from_or_using table_references where_expression_opt
   {
-    $$ = &Delete{Comments: Comments($3.(Comments)), Targets: $4.(TableNames), TableExprs: $6.(TableExprs), Where: NewWhere(WhereStr, tryCastExpr($7)), With: $1.(*With)}
+    $$ = &Delete{
+	Comments: Comments($3.(Comments)),
+	Targets: $4.(TableNames),
+	TableExprs: SetAuthType($6.(TableExprs), AuthType_DELETE, true).(TableExprs),
+	Where: NewWhere(WhereStr, tryCastExpr($7)),
+	With: $1.(*With),
+    }
   }
 | with_clause_opt DELETE comment_opt delete_table_list from_or_using table_references where_expression_opt
   {
-    $$ = &Delete{Comments: Comments($3.(Comments)), Targets: $4.(TableNames), TableExprs: $6.(TableExprs), Where: NewWhere(WhereStr, tryCastExpr($7)), With: $1.(*With)}
+    tableNames := $4.(TableNames)
+    authTargetNames := make([]string, len(tableNames)*2)
+    for i, tableName := range tableNames {
+    	authTargetNames[2*i] = tableName.DbQualifier.String()
+    	authTargetNames[2*i+1] = tableName.Name.String()
+    }
+    $$ = &Delete{
+	Comments: Comments($3.(Comments)),
+	Targets: tableNames,
+	TableExprs: SetAuthType($6.(TableExprs), AuthType_DELETE, true).(TableExprs),
+	Where: NewWhere(WhereStr, tryCastExpr($7)),
+	With: $1.(*With),
+    }
   }
 
 from_or_using:
@@ -1073,24 +1198,70 @@ create_statement:
 | CREATE key_type_opt INDEX sql_id using_opt ON table_name '(' index_column_list ')' index_option_list_opt
   {
     // For consistency, we always return AlterTable for any ALTER TABLE-equivalent statements
-    ddl := &DDL{Action: AlterStr, Table: $7.(TableName), IndexSpec: &IndexSpec{Action: CreateStr, ToName: $4.(ColIdent), Using: $5.(ColIdent), Type: $2.(string), Columns: $9.([]*IndexColumn), Options: $11.([]*IndexOption)}}
-    $$ = &AlterTable{Table: $7.(TableName), Statements: []*DDL{ddl}}
+    tableName := $7.(TableName)
+    ddl := &DDL{
+      Action: AlterStr,
+      Table: tableName,
+      IndexSpec: &IndexSpec{
+        Action: CreateStr,
+        ToName: $4.(ColIdent),
+        Using: $5.(ColIdent),
+        Type: $2.(string),
+        Columns: $9.([]*IndexColumn),
+        Options: $11.([]*IndexOption),
+      },
+      Auth: AuthInformation{
+        AuthType: AuthType_INDEX,
+        TargetType: AuthTargetType_SingleTableIdentifier,
+        TargetNames: []string{tableName.DbQualifier.String(), tableName.Name.String()},
+      },
+    }
+    $$ = &AlterTable{
+      Table: $7.(TableName),
+      Statements: []*DDL{ddl},
+      Auth: AuthInformation{AuthType: AuthType_IGNORE},
+    }
   }
 | CREATE view_opts VIEW table_name ins_column_list_opt AS lexer_position special_comment_mode select_statement_with_no_trailing_into lexer_position opt_with_check_option
   {
-    $2.(*ViewSpec).ViewName = $4.(TableName).ToViewName()
+    viewName := $4.(TableName)
+    $2.(*ViewSpec).ViewName = viewName.ToViewName()
     $2.(*ViewSpec).ViewExpr = $9.(SelectStatement)
     $2.(*ViewSpec).Columns = $5.(Columns)
     $2.(*ViewSpec).CheckOption = $11.(ViewCheckOption)
-    $$ = &DDL{Action: CreateStr, ViewSpec: $2.(*ViewSpec), SpecialCommentMode: $8.(bool), SubStatementPositionStart: $7.(int), SubStatementPositionEnd: $10.(int) - 1}
+    $$ = &DDL{
+      Action: CreateStr,
+      ViewSpec: $2.(*ViewSpec),
+      SpecialCommentMode: $8.(bool),
+      SubStatementPositionStart: $7.(int),
+      SubStatementPositionEnd: $10.(int) - 1,
+      Auth: AuthInformation{
+        AuthType: AuthType_CREATE_VIEW,
+        TargetType: AuthTargetType_DatabaseIdentifiers,
+        TargetNames: []string{viewName.DbQualifier.String()},
+      },
+    }
   }
 | CREATE OR REPLACE view_opts VIEW table_name ins_column_list_opt AS lexer_position special_comment_mode select_statement_with_no_trailing_into lexer_position opt_with_check_option
   {
-    $4.(*ViewSpec).ViewName = $6.(TableName).ToViewName()
+    viewName := $6.(TableName)
+    $4.(*ViewSpec).ViewName = viewName.ToViewName()
     $4.(*ViewSpec).ViewExpr = $11.(SelectStatement)
     $4.(*ViewSpec).Columns = $7.(Columns)
     $4.(*ViewSpec).CheckOption = $13.(ViewCheckOption)
-    $$ = &DDL{Action: CreateStr, ViewSpec: $4.(*ViewSpec),  SpecialCommentMode: $10.(bool), SubStatementPositionStart: $9.(int), SubStatementPositionEnd: $12.(int) - 1, OrReplace: true}
+    $$ = &DDL{
+      Action: CreateStr,
+      ViewSpec: $4.(*ViewSpec),
+      SpecialCommentMode: $10.(bool),
+      SubStatementPositionStart: $9.(int),
+      SubStatementPositionEnd: $12.(int) - 1,
+      OrReplace: true,
+      Auth: AuthInformation{
+        AuthType: AuthType_CREATE_VIEW,
+        TargetType: AuthTargetType_DatabaseIdentifiers,
+        TargetNames: []string{viewName.DbQualifier.String()},
+      },
+    }
   }
 | CREATE DATABASE not_exists_opt ID creation_option_opt
   {
@@ -1098,7 +1269,17 @@ create_statement:
     if $3.(int) != 0 {
       ne = true
     }
-    $$ = &DBDDL{Action: CreateStr, SchemaOrDatabase: "database", DBName: string($4), IfNotExists: ne, CharsetCollate: $5.([]*CharsetAndCollate)}
+    $$ = &DBDDL{
+      Action: CreateStr,
+      SchemaOrDatabase: "database",
+      DBName: string($4),
+      IfNotExists: ne,
+      CharsetCollate: $5.([]*CharsetAndCollate),
+      Auth: AuthInformation{
+        AuthType: AuthType_CREATE,
+        TargetType: AuthTargetType_Global,
+      },
+    }
   }
 | CREATE SCHEMA not_exists_opt ID creation_option_opt
   {
@@ -1106,15 +1287,63 @@ create_statement:
     if $3.(int) != 0 {
       ne = true
     }
-    $$ = &DBDDL{Action: CreateStr, SchemaOrDatabase: "schema", DBName: string($4), IfNotExists: ne, CharsetCollate: $5.([]*CharsetAndCollate)}
+    $$ = &DBDDL{
+      Action: CreateStr,
+      SchemaOrDatabase: "schema",
+      DBName: string($4),
+      IfNotExists: ne,
+      CharsetCollate: $5.([]*CharsetAndCollate),
+      Auth: AuthInformation{
+        AuthType: AuthType_CREATE,
+        TargetType: AuthTargetType_Global,
+      },
+    }
   }
 | CREATE definer_opt TRIGGER trigger_name trigger_time trigger_event ON table_name FOR EACH ROW trigger_order_opt lexer_position special_comment_mode trigger_body lexer_position
   {
-    $$ = &DDL{Action: CreateStr, Table: $8.(TableName), TriggerSpec: &TriggerSpec{TrigName: $4.(TriggerName), Definer: $2.(string), Time: $5.(string), Event: $6.(string), Order: $12.(*TriggerOrder), Body: tryCastStatement($15)}, SpecialCommentMode: $14.(bool), SubStatementPositionStart: $13.(int), SubStatementPositionEnd: $16.(int) - 1}
+    tableName := $8.(TableName)
+    $$ = &DDL{
+      Action: CreateStr,
+      Table: tableName,
+      TriggerSpec: &TriggerSpec{
+        TrigName: $4.(TriggerName),
+        Definer: $2.(string),
+        Time: $5.(string),
+        Event: $6.(string),
+        Order: $12.(*TriggerOrder),
+        Body: tryCastStatement($15),
+      },
+      SpecialCommentMode: $14.(bool),
+      SubStatementPositionStart: $13.(int),
+      SubStatementPositionEnd: $16.(int) - 1,
+      Auth: AuthInformation{
+        AuthType: AuthType_TRIGGER,
+        TargetType: AuthTargetType_SingleTableIdentifier,
+        TargetNames: []string{tableName.DbQualifier.String(), tableName.Name.String()},
+      },
+    }
   }
 | CREATE definer_opt PROCEDURE procedure_name '(' proc_param_list_opt ')' characteristic_list_opt lexer_old_position special_comment_mode statement_list_statement lexer_position
   {
-    $$ = &DDL{Action: CreateStr, ProcedureSpec: &ProcedureSpec{ProcName: $4.(ProcedureName), Definer: $2.(string), Params: $6.([]ProcedureParam), Characteristics: $8.([]Characteristic), Body: tryCastStatement($11)}, SpecialCommentMode: $10.(bool), SubStatementPositionStart: $9.(int), SubStatementPositionEnd: $12.(int) - 1}
+    procName := $4.(ProcedureName)
+    $$ = &DDL{
+      Action: CreateStr,
+      ProcedureSpec: &ProcedureSpec{
+        ProcName: procName,
+        Definer: $2.(string),
+        Params: $6.([]ProcedureParam),
+        Characteristics: $8.([]Characteristic),
+        Body: tryCastStatement($11),
+      },
+      SpecialCommentMode: $10.(bool),
+      SubStatementPositionStart: $9.(int),
+      SubStatementPositionEnd: $12.(int) - 1,
+      Auth: AuthInformation{
+        AuthType: AuthType_CREATE_ROUTINE,
+        TargetType: AuthTargetType_DatabaseIdentifiers,
+        TargetNames: []string{procName.Qualifier.String()},
+      },
+    }
   }
 | CREATE USER not_exists_opt account_with_auth_list default_role_opt tls_options account_limits pass_lock_options user_comment_attribute
   {
@@ -1133,7 +1362,20 @@ create_statement:
       return 1
     }
     passwordOptions, locked := NewPasswordOptionsWithLock($8.([]PassLockItem))
-    $$ = &CreateUser{IfNotExists: notExists, Users: $4.([]AccountWithAuth), DefaultRoles: $5.([]AccountName), TLSOptions: tlsOptions, AccountLimits: accountLimits, PasswordOptions: passwordOptions, Locked: locked, Attribute: $9.(string)}
+    $$ = &CreateUser{
+      IfNotExists: notExists,
+      Users: $4.([]AccountWithAuth),
+      DefaultRoles: $5.([]AccountName),
+      TLSOptions: tlsOptions,
+      AccountLimits: accountLimits,
+      PasswordOptions: passwordOptions,
+      Locked: locked,
+      Attribute: $9.(string),
+      Auth: AuthInformation{
+        AuthType: AuthType_CREATE_USER,
+        TargetType: AuthTargetType_Global,
+      },
+    }
   }
 | CREATE ROLE not_exists_opt role_name_list
   {
@@ -1141,15 +1383,42 @@ create_statement:
     if $3.(int) != 0 {
       notExists = true
     }
-    $$ = &CreateRole{IfNotExists: notExists, Roles: $4.([]AccountName)}
+    $$ = &CreateRole{
+      IfNotExists: notExists,
+      Roles: $4.([]AccountName),
+      Auth: AuthInformation{
+        AuthType: AuthType_CREATE_ROLE,
+        TargetType: AuthTargetType_Ignore,
+      },
+    }
   }
 | CREATE definer_opt EVENT not_exists_opt event_name ON SCHEDULE event_schedule event_on_completion_preserve_opt event_status_opt comment_keyword_opt DO lexer_position statement_list_statement lexer_position
   {
+    eventName := $5.(EventName)
     var notExists bool
     if $4.(int) != 0 {
       notExists = true
     }
-    $$ = &DDL{Action: CreateStr, EventSpec: &EventSpec{EventName: $5.(EventName), Definer: $2.(string), IfNotExists: notExists, OnSchedule: $8.(*EventScheduleSpec), OnCompletionPreserve: $9.(EventOnCompletion), Status: $10.(EventStatus), Comment: $11.(*SQLVal), Body: tryCastStatement($14)}, SubStatementPositionStart: $13.(int), SubStatementPositionEnd: $15.(int) - 1}
+    $$ = &DDL{
+      Action: CreateStr,
+      EventSpec: &EventSpec{
+        EventName: eventName,
+        Definer: $2.(string),
+        IfNotExists: notExists,
+        OnSchedule: $8.(*EventScheduleSpec),
+        OnCompletionPreserve: $9.(EventOnCompletion),
+        Status: $10.(EventStatus),
+        Comment: $11.(*SQLVal),
+        Body: tryCastStatement($14),
+      },
+      SubStatementPositionStart: $13.(int),
+      SubStatementPositionEnd: $15.(int) - 1,
+      Auth: AuthInformation{
+        AuthType: AuthType_EVENT,
+        TargetType: AuthTargetType_DatabaseIdentifiers,
+        TargetNames: []string{eventName.Qualifier.String()},
+      },
+    }
   }
 | create_spatial_ref_sys
   {
@@ -1159,15 +1428,41 @@ create_statement:
 create_spatial_ref_sys:
   CREATE SPATIAL REFERENCE SYSTEM INTEGRAL srs_attribute
   {
-    $$ = &CreateSpatialRefSys{SRID: NewIntVal($5), SrsAttr: $6.(*SrsAttribute)}
+    $$ = &CreateSpatialRefSys{
+      SRID: NewIntVal($5),
+      SrsAttr: $6.(*SrsAttribute),
+      Auth: AuthInformation{
+        AuthType: AuthType_INSERT,
+        TargetType: AuthTargetType_SingleTableIdentifier,
+        TargetNames: []string{"mysql", "st_spatial_references_systems"},
+      },
+    }
   }
 | CREATE SPATIAL REFERENCE SYSTEM IF NOT EXISTS INTEGRAL srs_attribute
   {
-    $$ = &CreateSpatialRefSys{SRID: NewIntVal($8), IfNotExists: true, SrsAttr: $9.(*SrsAttribute)}
+    $$ = &CreateSpatialRefSys{
+      SRID: NewIntVal($8),
+      IfNotExists: true,
+      SrsAttr: $9.(*SrsAttribute),
+      Auth: AuthInformation{
+        AuthType: AuthType_INSERT,
+        TargetType: AuthTargetType_SingleTableIdentifier,
+        TargetNames: []string{"mysql", "st_spatial_references_systems"},
+      },
+    }
   }
 | CREATE OR REPLACE SPATIAL REFERENCE SYSTEM INTEGRAL srs_attribute
   {
-    $$ = &CreateSpatialRefSys{SRID: NewIntVal($7), OrReplace: true, SrsAttr: $8.(*SrsAttribute)}
+    $$ = &CreateSpatialRefSys{
+      SRID: NewIntVal($7),
+      OrReplace: true,
+      SrsAttr: $8.(*SrsAttribute),
+      Auth: AuthInformation{
+        AuthType: AuthType_INSERT,
+        TargetType: AuthTargetType_SingleTableIdentifier,
+        TargetNames: []string{"mysql", "st_spatial_references_systems"},
+      },
+    }
   }
 
 srs_attribute:
@@ -1416,51 +1711,144 @@ grant_statement:
   GRANT ALL ON grant_object_type grant_privilege_level TO account_name_list with_grant_opt grant_assumption
   {
     allPriv := []Privilege{Privilege{Type: PrivilegeType_All, Columns: nil}}
-    $$ = &GrantPrivilege{Privileges: allPriv, ObjectType: $4.(GrantObjectType), PrivilegeLevel: $5.(PrivilegeLevel), To: $7.([]AccountName), WithGrantOption: $8.(bool), As: $9.(*GrantUserAssumption)}
+    $$ = &GrantPrivilege{
+      Privileges: allPriv,
+      ObjectType: $4.(GrantObjectType),
+      PrivilegeLevel: $5.(PrivilegeLevel),
+      To: $7.([]AccountName),
+      WithGrantOption: $8.(bool),
+      As: $9.(*GrantUserAssumption),
+      Auth: AuthInformation{
+        AuthType: AuthType_GRANT_PRIVILEGE,
+        TargetType: AuthTargetType_Ignore,
+      },
+    }
   }
 | GRANT ALL PRIVILEGES ON grant_object_type grant_privilege_level TO account_name_list with_grant_opt grant_assumption
     {
       allPriv := []Privilege{Privilege{Type: PrivilegeType_All, Columns: nil}}
-      $$ = &GrantPrivilege{Privileges: allPriv, ObjectType: $5.(GrantObjectType), PrivilegeLevel: $6.(PrivilegeLevel), To: $8.([]AccountName), WithGrantOption: $9.(bool), As: $10.(*GrantUserAssumption)}
+      $$ = &GrantPrivilege{
+        Privileges: allPriv,
+        ObjectType: $5.(GrantObjectType),
+        PrivilegeLevel: $6.(PrivilegeLevel),
+        To: $8.([]AccountName),
+        WithGrantOption: $9.(bool),
+        As: $10.(*GrantUserAssumption),
+        Auth: AuthInformation{
+          AuthType: AuthType_GRANT_PRIVILEGE,
+          TargetType: AuthTargetType_Ignore,
+        },
+      }
     }
 | GRANT grant_privilege_list ON grant_object_type grant_privilege_level TO account_name_list with_grant_opt grant_assumption
   {
-    $$ = &GrantPrivilege{Privileges: $2.([]Privilege), ObjectType: $4.(GrantObjectType), PrivilegeLevel: $5.(PrivilegeLevel), To: $7.([]AccountName), WithGrantOption: $8.(bool), As: $9.(*GrantUserAssumption)}
+    $$ = &GrantPrivilege{
+      Privileges: $2.([]Privilege),
+      ObjectType: $4.(GrantObjectType),
+      PrivilegeLevel: $5.(PrivilegeLevel),
+      To: $7.([]AccountName),
+      WithGrantOption: $8.(bool),
+      As: $9.(*GrantUserAssumption),
+      Auth: AuthInformation{
+        AuthType: AuthType_GRANT_PRIVILEGE,
+        TargetType: AuthTargetType_Ignore,
+      },
+    }
   }
 | GRANT role_name_list TO account_name_list with_admin_opt
   {
-    $$ = &GrantRole{Roles: $2.([]AccountName), To: $4.([]AccountName), WithAdminOption: $5.(bool)}
+    $$ = &GrantRole{
+      Roles: $2.([]AccountName),
+      To: $4.([]AccountName),
+      WithAdminOption: $5.(bool),
+      Auth: AuthInformation{
+        AuthType: AuthType_GRANT_ROLE,
+        TargetType: AuthTargetType_Ignore,
+      },
+    }
   }
 | GRANT PROXY ON account_name TO account_name_list with_grant_opt
   {
-    $$ = &GrantProxy{On: $4.(AccountName), To: $6.([]AccountName), WithGrantOption: $7.(bool)}
+    $$ = &GrantProxy{
+      On: $4.(AccountName),
+      To: $6.([]AccountName),
+      WithGrantOption: $7.(bool),
+      Auth: AuthInformation{
+        AuthType: AuthType_GRANT_PROXY,
+        TargetType: AuthTargetType_Ignore,
+      },
+    }
   }
 
 revoke_statement:
   REVOKE ALL ON grant_object_type grant_privilege_level FROM account_name_list
   {
     allPriv := []Privilege{Privilege{Type: PrivilegeType_All, Columns: nil}}
-    $$ = &RevokePrivilege{Privileges: allPriv, ObjectType: $4.(GrantObjectType), PrivilegeLevel: $5.(PrivilegeLevel), From: $7.([]AccountName)}
+    $$ = &RevokePrivilege{
+      Privileges: allPriv,
+      ObjectType: $4.(GrantObjectType),
+      PrivilegeLevel: $5.(PrivilegeLevel),
+      From: $7.([]AccountName),
+      Auth: AuthInformation{
+        AuthType: AuthType_REVOKE_PRIVILEGE,
+        TargetType: AuthTargetType_Ignore,
+      },
+    }
   }
 | REVOKE grant_privilege_list ON grant_object_type grant_privilege_level FROM account_name_list
   {
-    $$ = &RevokePrivilege{Privileges: $2.([]Privilege), ObjectType: $4.(GrantObjectType), PrivilegeLevel: $5.(PrivilegeLevel), From: $7.([]AccountName)}
+    $$ = &RevokePrivilege{
+      Privileges: $2.([]Privilege),
+      ObjectType: $4.(GrantObjectType),
+      PrivilegeLevel: $5.(PrivilegeLevel),
+      From: $7.([]AccountName),
+      Auth: AuthInformation{
+        AuthType: AuthType_REVOKE_PRIVILEGE,
+        TargetType: AuthTargetType_Ignore,
+      },
+    }
   }
 | REVOKE ALL ',' GRANT OPTION FROM account_name_list
   {
-    $$ = &RevokeAllPrivileges{From: $7.([]AccountName)}
+    $$ = &RevokeAllPrivileges{
+      From: $7.([]AccountName),
+      Auth: AuthInformation{
+        AuthType: AuthType_REVOKE_ALL,
+        TargetType: AuthTargetType_Ignore,
+      },
+    }
   }
 | REVOKE ALL PRIVILEGES ',' GRANT OPTION FROM account_name_list
   {
-    $$ = &RevokeAllPrivileges{From: $8.([]AccountName)}
+    $$ = &RevokeAllPrivileges{
+      From: $8.([]AccountName),
+      Auth: AuthInformation{
+        AuthType: AuthType_REVOKE_ALL,
+        TargetType: AuthTargetType_Ignore,
+      },
+    }
   }
 | REVOKE role_name_list FROM account_name_list
   {
-    $$ = &RevokeRole{Roles: $2.([]AccountName), From: $4.([]AccountName)}
+    $$ = &RevokeRole{
+      Roles: $2.([]AccountName),
+      From: $4.([]AccountName),
+      Auth: AuthInformation{
+        AuthType: AuthType_REVOKE_ROLE,
+        TargetType: AuthTargetType_Ignore,
+      },
+    }
   }
 | REVOKE PROXY ON account_name FROM account_name_list
   {
-    $$ = &RevokeProxy{On: $4.(AccountName), From: $6.([]AccountName)}
+    $$ = &RevokeProxy{
+      On: $4.(AccountName),
+      From: $6.([]AccountName),
+      Auth: AuthInformation{
+        AuthType: AuthType_REVOKE_PROXY,
+        TargetType: AuthTargetType_Ignore,
+      },
+    }
   }
 
 grant_privilege:
@@ -2661,7 +3049,18 @@ resignal_statement:
 call_statement:
   CALL procedure_name call_param_list_opt as_of_opt
   {
-    $$ = &Call{ProcName: $2.(ProcedureName), Params: $3.(Exprs), AsOf: tryCastExpr($4)}
+    procName := $2.(ProcedureName)
+    exprs := $3.(Exprs)
+    $$ = &Call{
+      ProcName: procName,
+      Params: exprs,
+      AsOf: tryCastExpr($4),
+      Auth: AuthInformation{
+        AuthType: AuthType_CALL,
+        TargetType: AuthTargetType_Ignore,
+        TargetNames: []string{procName.Qualifier.String(), procName.Name.String(), fmt.Sprintf("%d", len(exprs))},
+      },
+    }
   }
 
 call_param_list_opt:
@@ -2743,12 +3142,25 @@ create_table_prefix:
       ne = true
     }
 
+    authType := AuthType_CREATE
     var neTemp bool
     if $2.(int) != 0 {
       neTemp = true
+      authType = AuthType_CREATE_TEMP
     }
 
-    $$ = &DDL{Action: CreateStr, Table: $5.(TableName), IfNotExists: ne, Temporary: neTemp}
+    tableName := $5.(TableName)
+    $$ = &DDL{
+      Action: CreateStr,
+      Table: tableName,
+      IfNotExists: ne,
+      Temporary: neTemp,
+      Auth: AuthInformation{
+        AuthType: authType,
+        TargetType: AuthTargetType_DatabaseIdentifiers,
+        TargetNames: []string{tableName.DbQualifier.String()},
+      },
+    }
   }
 | CREATE temp_opt TABLE not_exists_opt FORMAT
   {
@@ -2757,12 +3169,26 @@ create_table_prefix:
       ne = true
     }
 
+    authType := AuthType_CREATE
     var neTemp bool
     if $2.(int) != 0 {
       neTemp = true
+      authType = AuthType_CREATE_TEMP
     }
 
-    $$ = &DDL{Action: CreateStr, Table: TableName{Name: NewTableIdent(string($5))}, IfNotExists: ne, Temporary: neTemp}
+    $$ = &DDL{
+      Action: CreateStr,
+      Table: TableName{
+        Name: NewTableIdent(string($5)),
+      },
+      IfNotExists: ne,
+      Temporary: neTemp,
+      Auth: AuthInformation{
+        AuthType: authType,
+        TargetType: AuthTargetType_DatabaseIdentifiers,
+        TargetNames: []string{""},
+      },
+    }
   }
 
 table_spec:
@@ -3712,7 +4138,15 @@ purge_binary_logs_statement:
 flush_statement:
   FLUSH flush_type_opt flush_option
   {
-    $$ = &Flush{Type: $2.(string), Option: $3.(*FlushOption)}
+    $$ = &Flush{
+      Type: $2.(string),
+      Option: $3.(*FlushOption),
+      Auth: AuthInformation{
+        AuthType: AuthType_RELOAD,
+        TargetType: AuthTargetType_DatabaseIdentifiers,
+        TargetNames: []string{"mysql"},
+      },
+    }
   }
 
 flush_option:
@@ -3797,23 +4231,51 @@ flush_type_opt:
 replication_statement:
   CHANGE REPLICATION SOURCE TO replication_option_list
   {
-    $$ = &ChangeReplicationSource{Options: $5.([]*ReplicationOption)}
+    $$ = &ChangeReplicationSource{
+      Options: $5.([]*ReplicationOption),
+      Auth: AuthInformation{
+        AuthType: AuthType_REPLICATION,
+        TargetType: AuthTargetType_Ignore,
+      },
+    }
   }
 | CHANGE REPLICATION FILTER replication_filter_option_list
   {
-    $$ = &ChangeReplicationFilter{Options: $4.([]*ReplicationOption)}
+    $$ = &ChangeReplicationFilter{
+      Options: $4.([]*ReplicationOption),
+      Auth: AuthInformation{
+        AuthType: AuthType_REPLICATION,
+        TargetType: AuthTargetType_Ignore,
+      },
+    }
   }
 | START REPLICA
   {
-    $$ = &StartReplica{}
+    $$ = &StartReplica{
+      Auth: AuthInformation{
+        AuthType: AuthType_REPLICATION,
+        TargetType: AuthTargetType_Ignore,
+      },
+    }
   }
 | STOP REPLICA
   {
-    $$ = &StopReplica{}
+    $$ = &StopReplica{
+      Auth: AuthInformation{
+        AuthType: AuthType_REPLICATION,
+        TargetType: AuthTargetType_Ignore,
+      },
+    }
   }
 | RESET REPLICA all_opt
   {
-    $$ = &ResetReplica{All: $3.(bool)}
+    $$ = &ResetReplica{
+      All: $3.(bool),
+      Auth: AuthInformation{
+        AuthType: AuthType_RELOAD,
+        TargetType: AuthTargetType_Global,
+      },
+    }
   }
 
 all_opt:
@@ -4634,28 +5096,65 @@ alter_statement:
 alter_database_statement:
   ALTER DATABASE ID creation_option_opt
   {
-    $$ = &DBDDL{Action: AlterStr, SchemaOrDatabase: "database", DBName: string($3), CharsetCollate: $4.([]*CharsetAndCollate)}
+    $$ = &DBDDL{
+      Action: AlterStr,
+      SchemaOrDatabase: "database",
+      DBName: string($3),
+      CharsetCollate: $4.([]*CharsetAndCollate),
+      Auth: AuthInformation{
+        AuthType: AuthType_ALTER,
+        TargetType: AuthTargetType_DatabaseIdentifiers,
+        TargetNames: []string{string($3)},
+      },
+    }
   }
 | ALTER DATABASE creation_option_opt
   {
-    $$ = &DBDDL{Action: AlterStr, SchemaOrDatabase: "database", CharsetCollate: $3.([]*CharsetAndCollate)}
+    $$ = &DBDDL{
+      Action: AlterStr,
+      SchemaOrDatabase: "database",
+      CharsetCollate: $3.([]*CharsetAndCollate),
+      Auth: AuthInformation{
+        AuthType: AuthType_ALTER,
+        TargetType: AuthTargetType_DatabaseIdentifiers,
+        TargetNames: []string{""},
+      },
+    }
   }
 
 alter_table_statement:
   ALTER ignore_opt TABLE table_name alter_table_statement_list partition_operation_list_opt
   {
-    for i := 0; i < len($5.([]*DDL)); i++ {
-    	if $5.([]*DDL)[i].Action == RenameStr {
-    		$5.([]*DDL)[i].FromTables = append(TableNames{$4.(TableName)}, $5.([]*DDL)[i].FromTables...)
+    tableName := $4.(TableName)
+    ddls := $5.([]*DDL)
+    for i := 0; i < len(ddls); i++ {
+    	ddl := ddls[i]
+    	if ddl.Action == RenameStr {
+    		ddl.FromTables = append(TableNames{tableName}, ddl.FromTables...)
 	} else {
-		$5.([]*DDL)[i].Table = $4.(TableName)
+		ddl.Table = tableName
 	}
+	PrependAuthTargetNames(ddl, []string{tableName.DbQualifier.String(), tableName.Name.String()})
     }
-    $$ = &AlterTable{Table: $4.(TableName), Statements: $5.([]*DDL), PartitionSpecs: $6.([]*PartitionSpec)}
+    $$ = &AlterTable{
+      Table: tableName,
+      Statements: ddls,
+      PartitionSpecs: $6.([]*PartitionSpec),
+      Auth: AuthInformation{AuthType: AuthType_IGNORE},
+    }
   }
 | ALTER ignore_opt TABLE table_name partition_operation_list
   {
-    $$ = &AlterTable{Table: $4.(TableName), PartitionSpecs: $5.([]*PartitionSpec)}
+    tableName := $4.(TableName)
+    $$ = &AlterTable{
+      Table: tableName,
+      PartitionSpecs: $5.([]*PartitionSpec),
+      Auth: AuthInformation{
+        AuthType: AuthType_ALTER,
+        TargetType: AuthTargetType_SingleTableIdentifier,
+        TargetNames: []string{tableName.DbQualifier.String(), tableName.Name.String()},
+      },
+    }
   }
 
 alter_table_statement_list:
@@ -4675,6 +5174,10 @@ alter_table_statement_part:
     	Action: AlterStr,
     	ColumnAction: AddStr,
     	TableSpec: &TableSpec{},
+    	Auth: AuthInformation{
+            AuthType: AuthType_ALTER,
+            TargetType: AuthTargetType_SingleTableIdentifier,
+        },
     }
     ddl.TableSpec.AddColumn($4.(*ColumnDefinition))
     ddl.Column = $4.(*ColumnDefinition).Name
@@ -4687,6 +5190,10 @@ alter_table_statement_part:
 	ColumnAction: AddStr,
 	TableSpec: &TableSpec{},
 	ColumnOrder: $4.(*ColumnOrder),
+	Auth: AuthInformation{
+            AuthType: AuthType_ALTER,
+            TargetType: AuthTargetType_SingleTableIdentifier,
+        },
     }
     ddl.TableSpec.AddColumn($3.(*ColumnDefinition))
     ddl.Column = $3.(*ColumnDefinition).Name
@@ -4703,6 +5210,10 @@ alter_table_statement_part:
     		Columns: $6.([]*IndexColumn),
     		Options: $8.([]*IndexOption),
 	},
+	Auth: AuthInformation{
+        	AuthType: AuthType_INDEX,
+        	TargetType: AuthTargetType_SingleTableIdentifier,
+        },
     }
   }
 | ADD constraint_symbol_opt key_type index_or_key_opt name_opt using_opt '(' index_column_list ')' index_option_list_opt
@@ -4721,6 +5232,10 @@ alter_table_statement_part:
     		Columns: $8.([]*IndexColumn),
     		Options: $10.([]*IndexOption),
 	},
+	Auth: AuthInformation{
+        	AuthType: AuthType_INDEX,
+        	TargetType: AuthTargetType_SingleTableIdentifier,
+        },
     }
   }
 // A name may be specified for a primary key, but it is ignored since the primary
@@ -4732,6 +5247,10 @@ alter_table_statement_part:
     	IndexSpec: &IndexSpec{
     		Action: CreateStr,
 	},
+	Auth: AuthInformation{
+            AuthType: AuthType_INDEX,
+            TargetType: AuthTargetType_SingleTableIdentifier,
+        },
     }
     ddl.IndexSpec = &IndexSpec{
     	Action: CreateStr,
@@ -4749,6 +5268,10 @@ alter_table_statement_part:
     	Action: AlterStr,
     	ConstraintAction: AddStr,
     	TableSpec: &TableSpec{},
+    	Auth: AuthInformation{
+            AuthType: AuthType_FOREIGN_KEY,
+            TargetType: AuthTargetType_SingleTableIdentifier,
+        },
     }
     ddl.TableSpec.AddConstraint($2.(*ConstraintDefinition))
     $$ = ddl
@@ -4759,6 +5282,10 @@ alter_table_statement_part:
 	Action: AlterStr,
 	ConstraintAction: AddStr,
 	TableSpec: &TableSpec{},
+	Auth: AuthInformation{
+            AuthType: AuthType_ALTER,
+            TargetType: AuthTargetType_SingleTableIdentifier,
+        },
     }
     ddl.TableSpec.AddConstraint($2.(*ConstraintDefinition))
     $$ = ddl
@@ -4775,6 +5302,10 @@ alter_table_statement_part:
 			},
 		},
 	},
+	Auth: AuthInformation{
+            AuthType: AuthType_ALTER,
+            TargetType: AuthTargetType_SingleTableIdentifier,
+        },
     }
   }
 | DROP CHECK id_or_non_reserved
@@ -4790,39 +5321,91 @@ alter_table_statement_part:
 			},
 		},
 	},
+	Auth: AuthInformation{
+            AuthType: AuthType_ALTER,
+            TargetType: AuthTargetType_SingleTableIdentifier,
+        },
     }
   }
 | ALTER CONSTRAINT id_or_non_reserved ENFORCED
   {
-    $$ = &DDL{Action: AlterStr}
+    $$ = &DDL{
+      Action: AlterStr,
+      Auth: AuthInformation{
+          AuthType: AuthType_ALTER,
+          TargetType: AuthTargetType_SingleTableIdentifier,
+      },
+    }
   }
 | ALTER CHECK id_or_non_reserved ENFORCED
   {
-    $$ = &DDL{Action: AlterStr}
+    $$ = &DDL{
+      Action: AlterStr,
+      Auth: AuthInformation{
+          AuthType: AuthType_ALTER,
+          TargetType: AuthTargetType_SingleTableIdentifier,
+      },
+    }
   }
 | ALTER CONSTRAINT id_or_non_reserved NOT_ENFORCED
   {
-    $$ = &DDL{Action: AlterStr}
+    $$ = &DDL{
+      Action: AlterStr,
+      Auth: AuthInformation{
+          AuthType: AuthType_ALTER,
+          TargetType: AuthTargetType_SingleTableIdentifier,
+      },
+    }
   }
 | ALTER CHECK id_or_non_reserved NOT_ENFORCED
   {
-    $$ = &DDL{Action: AlterStr}
+    $$ = &DDL{
+      Action: AlterStr,
+      Auth: AuthInformation{
+          AuthType: AuthType_ALTER,
+          TargetType: AuthTargetType_SingleTableIdentifier,
+      },
+    }
   }
 | ALGORITHM equal_opt DEFAULT
   {
-    $$ = &DDL{Action: AlterStr}
+    $$ = &DDL{
+      Action: AlterStr,
+      Auth: AuthInformation{
+          AuthType: AuthType_ALTER,
+          TargetType: AuthTargetType_SingleTableIdentifier,
+      },
+    }
   }
 | ALGORITHM equal_opt INSTANT
   {
-    $$ = &DDL{Action: AlterStr}
+    $$ = &DDL{
+      Action: AlterStr,
+      Auth: AuthInformation{
+          AuthType: AuthType_ALTER,
+          TargetType: AuthTargetType_SingleTableIdentifier,
+      },
+    }
   }
 | ALGORITHM equal_opt INPLACE
   {
-    $$ = &DDL{Action: AlterStr}
+    $$ = &DDL{
+      Action: AlterStr,
+      Auth: AuthInformation{
+          AuthType: AuthType_ALTER,
+          TargetType: AuthTargetType_SingleTableIdentifier,
+      },
+    }
   }
 | ALGORITHM equal_opt COPY
   {
-    $$ = &DDL{Action: AlterStr}
+    $$ = &DDL{
+      Action: AlterStr,
+      Auth: AuthInformation{
+          AuthType: AuthType_ALTER,
+          TargetType: AuthTargetType_SingleTableIdentifier,
+      },
+    }
   }
 | ALTER column_opt sql_id SET DEFAULT value_expression
   {
@@ -4833,25 +5416,47 @@ alter_table_statement_part:
 		Column: $3.(ColIdent),
 		Value: tryCastExpr($6),
 	},
+	Auth: AuthInformation{
+            AuthType: AuthType_ALTER,
+            TargetType: AuthTargetType_SingleTableIdentifier,
+        },
     }
   }
 | ALTER column_opt sql_id DROP DEFAULT
   {
+    colName := $3.(ColIdent)
     $$ = &DDL{
     	Action: AlterStr,
     	DefaultSpec: &DefaultSpec{
     		Action: DropStr,
-    		Column: $3.(ColIdent),
+    		Column: colName,
 	},
+	Auth: AuthInformation{
+            AuthType: AuthType_ALTER,
+            TargetType: AuthTargetType_TableColumn,
+            TargetNames: []string{colName.String()},
+        },
     }
   }
 | ALTER INDEX id_or_non_reserved VISIBLE
   {
-    $$ = &DDL{Action: AlterStr}
+    $$ = &DDL{
+      Action: AlterStr,
+      Auth: AuthInformation{
+          AuthType: AuthType_INDEX,
+          TargetType: AuthTargetType_SingleTableIdentifier,
+      },
+    }
   }
 | ALTER INDEX id_or_non_reserved INVISIBLE
   {
-    $$ = &DDL{Action: AlterStr}
+    $$ = &DDL{
+      Action: AlterStr,
+      Auth: AuthInformation{
+          AuthType: AuthType_INDEX,
+          TargetType: AuthTargetType_SingleTableIdentifier,
+      },
+    }
   }
 | CHANGE column_opt ID column_definition column_order_opt
   {
@@ -4861,6 +5466,10 @@ alter_table_statement_part:
     	TableSpec: &TableSpec{},
     	Column: NewColIdent(string($3)),
     	ColumnOrder: $5.(*ColumnOrder),
+    	Auth: AuthInformation{
+            AuthType: AuthType_ALTER,
+            TargetType: AuthTargetType_SingleTableIdentifier,
+        },
     }
     ddl.TableSpec.AddColumn($4.(*ColumnDefinition))
     $$ = ddl
@@ -4873,6 +5482,10 @@ alter_table_statement_part:
     		CharacterSet: $5.(string),
     		Collation: "",
 	},
+	Auth: AuthInformation{
+            AuthType: AuthType_ALTER,
+            TargetType: AuthTargetType_SingleTableIdentifier,
+        },
     }
   }
 | default_keyword_opt CHARACTER SET equal_opt charset COLLATE equal_opt charset
@@ -4883,6 +5496,10 @@ alter_table_statement_part:
     		CharacterSet: $5.(string),
     		Collation: $8.(string),
 	},
+	Auth: AuthInformation{
+            AuthType: AuthType_ALTER,
+            TargetType: AuthTargetType_SingleTableIdentifier,
+        },
     }
   }
 | default_keyword_opt COLLATE equal_opt charset
@@ -4893,6 +5510,10 @@ alter_table_statement_part:
     		CharacterSet: "",
     		Collation: $4.(string),
 	},
+	Auth: AuthInformation{
+            AuthType: AuthType_ALTER,
+            TargetType: AuthTargetType_SingleTableIdentifier,
+        },
     }
   }
 | CONVERT TO CHARACTER SET charset
@@ -4903,6 +5524,10 @@ alter_table_statement_part:
     		CharacterSet: $5.(string),
     		Collation: "",
 	},
+	Auth: AuthInformation{
+            AuthType: AuthType_ALTER,
+            TargetType: AuthTargetType_SingleTableIdentifier,
+        },
     }
   }
 | CONVERT TO CHARACTER SET charset COLLATE charset
@@ -4913,6 +5538,10 @@ alter_table_statement_part:
     		CharacterSet: $5.(string),
     		Collation: $7.(string),
 	},
+	Auth: AuthInformation{
+            AuthType: AuthType_ALTER,
+            TargetType: AuthTargetType_SingleTableIdentifier,
+        },
     }
   }
 | DISABLE KEYS
@@ -4922,6 +5551,10 @@ alter_table_statement_part:
     	IndexSpec: &IndexSpec{
     		Action: string($1),
 	},
+	Auth: AuthInformation{
+            AuthType: AuthType_ALTER,
+            TargetType: AuthTargetType_SingleTableIdentifier,
+        },
     }
   }
 | ENABLE KEYS
@@ -4931,15 +5564,31 @@ alter_table_statement_part:
     	IndexSpec: &IndexSpec{
     		Action: string($1),
 	},
+	Auth: AuthInformation{
+            AuthType: AuthType_ALTER,
+            TargetType: AuthTargetType_SingleTableIdentifier,
+        },
     }
   }
 | DISCARD TABLESPACE
   {
-    $$ = &DDL{Action: AlterStr}
+    $$ = &DDL{
+      Action: AlterStr,
+      Auth: AuthInformation{
+          AuthType: AuthType_ALTER,
+          TargetType: AuthTargetType_SingleTableIdentifier,
+      },
+    }
   }
 | IMPORT TABLESPACE
   {
-    $$ = &DDL{Action: AlterStr}
+    $$ = &DDL{
+      Action: AlterStr,
+      Auth: AuthInformation{
+          AuthType: AuthType_ALTER,
+          TargetType: AuthTargetType_SingleTableIdentifier,
+      },
+    }
   }
 | DROP column_opt id_or_non_reserved
   {
@@ -4947,6 +5596,10 @@ alter_table_statement_part:
     	Action: AlterStr,
     	ColumnAction: DropStr,
     	Column: NewColIdent(string($3)),
+    	Auth: AuthInformation{
+            AuthType: AuthType_ALTER,
+            TargetType: AuthTargetType_SingleTableIdentifier,
+        },
     }
   }
 | DROP index_or_key sql_id
@@ -4957,6 +5610,10 @@ alter_table_statement_part:
     		Action: DropStr,
     		ToName: $3.(ColIdent),
 	},
+	Auth: AuthInformation{
+            AuthType: AuthType_INDEX,
+            TargetType: AuthTargetType_SingleTableIdentifier,
+        },
     }
   }
 | DROP PRIMARY KEY
@@ -4967,6 +5624,10 @@ alter_table_statement_part:
 		Action: DropStr,
 		Type: PrimaryStr,
 	},
+	Auth: AuthInformation{
+            AuthType: AuthType_INDEX,
+            TargetType: AuthTargetType_SingleTableIdentifier,
+        },
     }
   }
 | DROP FOREIGN KEY id_or_non_reserved
@@ -4975,6 +5636,10 @@ alter_table_statement_part:
     	Action: AlterStr,
 	ConstraintAction: DropStr,
 	TableSpec: &TableSpec{},
+	Auth: AuthInformation{
+            AuthType: AuthType_ALTER,
+            TargetType: AuthTargetType_SingleTableIdentifier,
+        },
     }
     ddl.TableSpec.AddConstraint(&ConstraintDefinition{
     	Name: string($4),
@@ -4984,23 +5649,53 @@ alter_table_statement_part:
   }
 | FORCE
   {
-    $$ = &DDL{Action: AlterStr}
+    $$ = &DDL{
+      Action: AlterStr,
+      Auth: AuthInformation{
+          AuthType: AuthType_ALTER,
+          TargetType: AuthTargetType_SingleTableIdentifier,
+      },
+    }
   }
 | LOCK equal_opt DEFAULT
   {
-    $$ = &DDL{Action: AlterStr}
+    $$ = &DDL{
+      Action: AlterStr,
+      Auth: AuthInformation{
+          AuthType: AuthType_LOCK,
+          TargetType: AuthTargetType_SingleTableIdentifier,
+      },
+    }
   }
 | LOCK equal_opt NONE
   {
-    $$ = &DDL{Action: AlterStr}
+    $$ = &DDL{
+      Action: AlterStr,
+      Auth: AuthInformation{
+          AuthType: AuthType_LOCK,
+          TargetType: AuthTargetType_SingleTableIdentifier,
+      },
+    }
   }
 | LOCK equal_opt SHARED
   {
-    $$ = &DDL{Action: AlterStr}
+    $$ = &DDL{
+      Action: AlterStr,
+      Auth: AuthInformation{
+          AuthType: AuthType_LOCK,
+          TargetType: AuthTargetType_SingleTableIdentifier,
+      },
+    }
   }
 | LOCK equal_opt EXCLUSIVE
   {
-    $$ = &DDL{Action: AlterStr}
+    $$ = &DDL{
+      Action: AlterStr,
+      Auth: AuthInformation{
+          AuthType: AuthType_LOCK,
+          TargetType: AuthTargetType_SingleTableIdentifier,
+      },
+    }
   }
 | MODIFY column_opt column_definition column_order_opt
   {
@@ -5009,6 +5704,10 @@ alter_table_statement_part:
     	ColumnAction: ModifyStr,
     	TableSpec: &TableSpec{},
     	ColumnOrder: $4.(*ColumnOrder),
+    	Auth: AuthInformation{
+            AuthType: AuthType_ALTER,
+            TargetType: AuthTargetType_SingleTableIdentifier,
+        },
     }
     ddl.TableSpec.AddColumn($3.(*ColumnDefinition))
     ddl.Column = $3.(*ColumnDefinition).Name
@@ -5022,6 +5721,10 @@ alter_table_statement_part:
     	ColumnAction: RenameStr,
     	Column: NewColIdent(string($3)),
     	ToColumn: NewColIdent(string($5)),
+    	Auth: AuthInformation{
+            AuthType: AuthType_ALTER,
+            TargetType: AuthTargetType_SingleTableIdentifier,
+        },
     }
   }
 | RENAME index_or_key sql_id TO sql_id
@@ -5033,14 +5736,24 @@ alter_table_statement_part:
     		FromName: $3.(ColIdent),
     		ToName: $5.(ColIdent),
 	},
+	Auth: AuthInformation{
+            AuthType: AuthType_INDEX,
+            TargetType: AuthTargetType_SingleTableIdentifier,
+        },
     }
   }
 | RENAME to_or_as_opt table_name
   {
     // Change this to a rename statement
+    tableName := $3.(TableName)
     $$ = &DDL{
     	Action: RenameStr,
-    	ToTables: TableNames{$3.(TableName)},
+    	ToTables: TableNames{tableName},
+    	Auth: AuthInformation{
+            AuthType: AuthType_RENAME,
+            TargetType: AuthTargetType_Ignore,
+            TargetNames: []string{tableName.DbQualifier.String(), tableName.Name.String()},
+        },
     }
   }
 | RENAME CONSTRAINT FOREIGN KEY id_or_non_reserved TO id_or_non_reserved
@@ -5049,6 +5762,10 @@ alter_table_statement_part:
     	Action: AlterStr,
     	ConstraintAction: RenameStr,
     	TableSpec: &TableSpec{},
+    	Auth: AuthInformation{
+            AuthType: AuthType_ALTER,
+            TargetType: AuthTargetType_SingleTableIdentifier,
+        },
     }
     ddl.TableSpec.AddConstraint(&ConstraintDefinition{
     	Name: string($5),
@@ -5066,6 +5783,10 @@ alter_table_statement_part:
     	Action: AlterStr,
     	ConstraintAction: RenameStr,
     	TableSpec: &TableSpec{},
+    	Auth: AuthInformation{
+            AuthType: AuthType_ALTER,
+            TargetType: AuthTargetType_SingleTableIdentifier,
+        },
     }
     ddl.TableSpec.AddConstraint(&ConstraintDefinition{
     	Name: string($4),
@@ -5083,6 +5804,10 @@ alter_table_statement_part:
     	Action: AlterStr,
 	ConstraintAction: RenameStr,
 	TableSpec: &TableSpec{},
+	Auth: AuthInformation{
+            AuthType: AuthType_ALTER,
+            TargetType: AuthTargetType_SingleTableIdentifier,
+        },
     }
     ddl.TableSpec.AddConstraint(&ConstraintDefinition{
     	Name: string($3),
@@ -5096,11 +5821,20 @@ alter_table_statement_part:
   {
     $$ = &DDL{
     	Action: AlterStr,
+    	Auth: AuthInformation{
+            AuthType: AuthType_ALTER,
+            TargetType: AuthTargetType_SingleTableIdentifier,
+        },
     }
   }
 | alter_table_options
   {
-    $$ = $1.(*DDL)
+    ddl := $1.(*DDL)
+    ddl.Auth = AuthInformation{
+        AuthType: AuthType_ALTER,
+        TargetType: AuthTargetType_SingleTableIdentifier,
+    }
+    $$ = ddl
   }
 
 // TODO: these are the same as table_option_list, but we need to have the return type be different
@@ -5267,7 +6001,18 @@ alter_user_statement:
     if $3.(int) != 0 {
       ifExists = true
     }
-    $$ = &DDL{Action: AlterStr, User: $4.(AccountName), Authentication: $5.(*Authentication), IfExists: ifExists}
+    accountName := $4.(AccountName)
+    $$ = &DDL{
+      Action: AlterStr,
+      User: accountName,
+      Authentication: $5.(*Authentication),
+      IfExists: ifExists,
+      Auth: AuthInformation{
+          AuthType: AuthType_ALTER_USER,
+          TargetType: AuthTargetType_Ignore,
+          TargetNames: []string{accountName.Name, accountName.Host},
+      },
+    }
   }
 
 column_order_opt:
@@ -5434,24 +6179,116 @@ partition_definition:
 alter_event_statement:
   ALTER definer_opt EVENT event_name event_on_completion_preserve_opt rename_event_name_opt event_status_opt comment_keyword_opt
   {
-    es := &EventSpec{EventName: $4.(EventName), Definer: $2.(string), OnCompletionPreserve: $5.(EventOnCompletion), RenameName: $6.(EventName), Status: $7.(EventStatus), Comment: $8.(*SQLVal)}
+    eventName := $4.(EventName)
+    renameName := $6.(EventName)
+    targetNames := []string{eventName.Qualifier.String()}
+    if len(renameName.Qualifier.String()) > 0 {
+      targetNames = append(targetNames, renameName.Qualifier.String())
+    }
+    es := &EventSpec{
+      EventName: eventName,
+      Definer: $2.(string),
+      OnCompletionPreserve: $5.(EventOnCompletion),
+      RenameName: renameName,
+      Status: $7.(EventStatus),
+      Comment: $8.(*SQLVal),
+    }
     if err := es.ValidateAlterEvent(); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = &DDL{Action: AlterStr, EventSpec: es}
+    $$ = &DDL{
+      Action: AlterStr,
+      EventSpec: es,
+      Auth: AuthInformation{
+        AuthType: AuthType_EVENT,
+        TargetType: AuthTargetType_DatabaseIdentifiers,
+        TargetNames: targetNames,
+      },
+    }
   }
 | ALTER definer_opt EVENT event_name ON SCHEDULE event_schedule event_on_completion_preserve_opt rename_event_name_opt event_status_opt comment_keyword_opt
   {
-    $$ = &DDL{Action: AlterStr, EventSpec: &EventSpec{EventName: $4.(EventName), Definer: $2.(string), OnSchedule: $7.(*EventScheduleSpec), OnCompletionPreserve: $8.(EventOnCompletion), RenameName: $9.(EventName), Status: $10.(EventStatus), Comment: $11.(*SQLVal)}}
+    eventName := $4.(EventName)
+    renameName := $9.(EventName)
+    targetNames := []string{eventName.Qualifier.String()}
+    if len(renameName.Qualifier.String()) > 0 {
+      targetNames = append(targetNames, renameName.Qualifier.String())
+    }
+    $$ = &DDL{
+      Action: AlterStr,
+      EventSpec: &EventSpec{
+        EventName: eventName,
+        Definer: $2.(string),
+        OnSchedule: $7.(*EventScheduleSpec),
+        OnCompletionPreserve: $8.(EventOnCompletion),
+        RenameName: renameName,
+        Status: $10.(EventStatus),
+        Comment: $11.(*SQLVal),
+      },
+      Auth: AuthInformation{
+        AuthType: AuthType_EVENT,
+        TargetType: AuthTargetType_DatabaseIdentifiers,
+        TargetNames: targetNames,
+      },
+    }
   }
 | ALTER definer_opt EVENT event_name event_on_completion_preserve_opt rename_event_name_opt event_status_opt comment_keyword_opt DO lexer_position statement_list_statement lexer_position
   {
-    $$ = &DDL{Action: AlterStr, EventSpec: &EventSpec{EventName: $4.(EventName), Definer: $2.(string), OnCompletionPreserve: $5.(EventOnCompletion), RenameName: $6.(EventName), Status: $7.(EventStatus), Comment: $8.(*SQLVal), Body: tryCastStatement($11)}, SubStatementPositionStart: $10.(int), SubStatementPositionEnd: $12.(int) - 1}
+    eventName := $4.(EventName)
+    renameName := $6.(EventName)
+    targetNames := []string{eventName.Qualifier.String()}
+    if len(renameName.Qualifier.String()) > 0 {
+      targetNames = append(targetNames, renameName.Qualifier.String())
+    }
+    $$ = &DDL{
+      Action: AlterStr,
+      EventSpec: &EventSpec{
+        EventName: eventName,
+        Definer: $2.(string),
+        OnCompletionPreserve: $5.(EventOnCompletion),
+        RenameName: renameName,
+        Status: $7.(EventStatus),
+        Comment: $8.(*SQLVal),
+        Body: tryCastStatement($11),
+      },
+      SubStatementPositionStart: $10.(int),
+      SubStatementPositionEnd: $12.(int) - 1,
+      Auth: AuthInformation{
+        AuthType: AuthType_EVENT,
+        TargetType: AuthTargetType_DatabaseIdentifiers,
+        TargetNames: targetNames,
+      },
+    }
   }
 | ALTER definer_opt EVENT event_name ON SCHEDULE event_schedule event_on_completion_preserve_opt rename_event_name_opt event_status_opt comment_keyword_opt DO lexer_position statement_list_statement lexer_position
   {
-    $$ = &DDL{Action: AlterStr, EventSpec: &EventSpec{EventName: $4.(EventName), Definer: $2.(string), OnSchedule: $7.(*EventScheduleSpec), OnCompletionPreserve: $8.(EventOnCompletion), RenameName: $9.(EventName), Status: $10.(EventStatus), Comment: $11.(*SQLVal), Body: tryCastStatement($14)}, SubStatementPositionStart: $13.(int), SubStatementPositionEnd: $15.(int) - 1}
+    eventName := $4.(EventName)
+    renameName := $9.(EventName)
+    targetNames := []string{eventName.Qualifier.String()}
+    if len(renameName.Qualifier.String()) > 0 {
+      targetNames = append(targetNames, renameName.Qualifier.String())
+    }
+    $$ = &DDL{
+      Action: AlterStr,
+      EventSpec: &EventSpec{
+        EventName: eventName,
+        Definer: $2.(string),
+        OnSchedule: $7.(*EventScheduleSpec),
+        OnCompletionPreserve: $8.(EventOnCompletion),
+        RenameName: renameName,
+        Status: $10.(EventStatus),
+        Comment: $11.(*SQLVal),
+        Body: tryCastStatement($14),
+      },
+      SubStatementPositionStart: $13.(int),
+      SubStatementPositionEnd: $15.(int) - 1,
+      Auth: AuthInformation{
+        AuthType: AuthType_EVENT,
+        TargetType: AuthTargetType_DatabaseIdentifiers,
+        TargetNames: targetNames,
+      },
+    }
   }
 
 rename_event_name_opt:
@@ -5470,19 +6307,53 @@ rename_statement:
   }
 | RENAME USER rename_user_list
   {
-    $$ = &RenameUser{Accounts: $3.([]AccountRename)}
+    $$ = &RenameUser{
+      Accounts: $3.([]AccountRename),
+      Auth: AuthInformation{
+        AuthType: AuthType_CREATE_USER,
+        TargetType: AuthTargetType_Global,
+      },
+    }
   }
 
 rename_list:
   table_name TO table_name
   {
-    $$ = &DDL{Action: RenameStr, FromTables: TableNames{$1.(TableName)}, ToTables: TableNames{$3.(TableName)}}
+    fromTableName := $1.(TableName)
+    toTableName := $3.(TableName)
+    $$ = &DDL{
+      Action: RenameStr,
+      FromTables: TableNames{
+        fromTableName,
+      },
+      ToTables: TableNames{
+        toTableName,
+      },
+      Auth: AuthInformation{
+        AuthType: AuthType_RENAME,
+        TargetType: AuthTargetType_Ignore,
+        TargetNames: []string{
+          fromTableName.DbQualifier.String(),
+          fromTableName.Name.String(),
+          toTableName.DbQualifier.String(),
+          toTableName.Name.String(),
+        },
+      },
+    }
   }
 | rename_list ',' table_name TO table_name
   {
     $$ = $1.(*DDL)
-    $$.(*DDL).FromTables = append($$.(*DDL).FromTables, $3.(TableName))
-    $$.(*DDL).ToTables = append($$.(*DDL).ToTables, $5.(TableName))
+    fromTableName := $3.(TableName)
+    toTableName := $5.(TableName)
+    $$.(*DDL).FromTables = append($$.(*DDL).FromTables, fromTableName)
+    $$.(*DDL).ToTables = append($$.(*DDL).ToTables, toTableName)
+    $$.(*DDL).Auth.TargetNames = append($$.(*DDL).Auth.TargetNames,
+      fromTableName.DbQualifier.String(),
+      fromTableName.Name.String(),
+      toTableName.DbQualifier.String(),
+      toTableName.Name.String(),
+    )
   }
 
 rename_user_list:
@@ -5502,13 +6373,37 @@ drop_statement:
     if $3.(int) != 0 {
       exists = true
     }
-    $$ = &DDL{Action: DropStr, FromTables: $4.(TableNames), IfExists: exists}
+    tableNames := $4.(TableNames)
+    $$ = &DDL{
+      Action: DropStr,
+      FromTables: tableNames,
+      IfExists: exists,
+      Auth: AuthInformation{
+        AuthType: AuthType_DROP,
+        TargetType: AuthTargetType_MultipleTableIdentifiers,
+        TargetNames: tableNames.AuthMultipleTableIdentifiers(),
+      },
+    }
   }
 | DROP INDEX sql_id ON table_name
   {
     // For consistency, we always use a AlterTable for ALTER TABLE equivalent statements
-    ddl := &DDL{Action: AlterStr, Table: $5.(TableName), IndexSpec: &IndexSpec{Action: DropStr, ToName: $3.(ColIdent)}}
-    $$ = &AlterTable{Table: $5.(TableName), Statements: []*DDL{ddl}}
+    tableName := $5.(TableName)
+    ddl := &DDL{
+      Action: AlterStr,
+      Table: tableName,
+      IndexSpec: &IndexSpec{Action: DropStr, ToName: $3.(ColIdent)},
+      Auth: AuthInformation{
+        AuthType: AuthType_INDEX,
+        TargetType: AuthTargetType_SingleTableIdentifier,
+        TargetNames: []string{tableName.DbQualifier.String(), tableName.Name.String()},
+      },
+    }
+    $$ = &AlterTable{
+      Table: tableName,
+      Statements: []*DDL{ddl},
+      Auth: AuthInformation{AuthType: AuthType_IGNORE},
+    }
   }
 | DROP VIEW exists_opt view_name_list
   {
@@ -5516,7 +6411,17 @@ drop_statement:
     if $3.(int) != 0 {
       exists = true
     }
-    $$ = &DDL{Action: DropStr, FromViews: $4.(TableNames), IfExists: exists}
+    tableNames := $4.(TableNames)
+    $$ = &DDL{
+      Action: DropStr,
+      FromViews: tableNames,
+      IfExists: exists,
+      Auth: AuthInformation{
+        AuthType: AuthType_DROP,
+        TargetType: AuthTargetType_DatabaseIdentifiers,
+        TargetNames: tableNames.DbQualifiers(),
+      },
+    }
   }
 | DROP DATABASE exists_opt ID
   {
@@ -5524,7 +6429,16 @@ drop_statement:
     if $3.(int) != 0 {
       exists = true
     }
-    $$ = &DBDDL{Action: DropStr, SchemaOrDatabase: "database", DBName: string($4), IfExists: exists}
+    $$ = &DBDDL{
+      Action: DropStr,
+      SchemaOrDatabase: "database",
+      DBName: string($4),
+      IfExists: exists,
+      Auth: AuthInformation{
+        AuthType: AuthType_DROP,
+        TargetType: AuthTargetType_Global,
+      },
+    }
   }
 | DROP SCHEMA exists_opt ID
   {
@@ -5532,7 +6446,16 @@ drop_statement:
     if $3.(int) != 0 {
       exists = true
     }
-    $$ = &DBDDL{Action: DropStr, SchemaOrDatabase: "schema", DBName: string($4), IfExists: exists}
+    $$ = &DBDDL{
+      Action: DropStr,
+      SchemaOrDatabase: "schema",
+      DBName: string($4),
+      IfExists: exists,
+      Auth: AuthInformation{
+        AuthType: AuthType_DROP,
+        TargetType: AuthTargetType_Global,
+      },
+    }
   }
 | DROP TRIGGER exists_opt trigger_name
   {
@@ -5540,7 +6463,19 @@ drop_statement:
     if $3.(int) != 0 {
       exists = true
     }
-    $$ = &DDL{Action: DropStr, TriggerSpec: &TriggerSpec{TrigName: $4.(TriggerName)}, IfExists: exists}
+    triggerName := $4.(TriggerName)
+    $$ = &DDL{
+      Action: DropStr,
+      TriggerSpec: &TriggerSpec{
+        TrigName: triggerName,
+      },
+      IfExists: exists,
+      Auth: AuthInformation{
+        AuthType: AuthType_TRIGGER,
+        TargetType: AuthTargetType_SingleTableIdentifier,
+        TargetNames: []string{triggerName.Qualifier.String(), triggerName.Name.String()},
+      },
+    }
   }
 | DROP PROCEDURE exists_opt procedure_name
   {
@@ -5548,7 +6483,19 @@ drop_statement:
     if $3.(int) != 0 {
       exists = true
     }
-    $$ = &DDL{Action: DropStr, ProcedureSpec: &ProcedureSpec{ProcName: $4.(ProcedureName)}, IfExists: exists}
+    procName := $4.(ProcedureName)
+    $$ = &DDL{
+      Action: DropStr,
+      ProcedureSpec: &ProcedureSpec{
+        ProcName: procName,
+      },
+      IfExists: exists,
+      Auth: AuthInformation{
+        AuthType: AuthType_ALTER_ROUTINE,
+        TargetType: AuthTargetType_DatabaseIdentifiers,
+        TargetNames: []string{procName.Qualifier.String()},
+      },
+    }
   }
 | DROP USER exists_opt account_name_list
   {
@@ -5556,7 +6503,14 @@ drop_statement:
     if $3.(int) != 0 {
       exists = true
     }
-    $$ = &DropUser{IfExists: exists, AccountNames: $4.([]AccountName)}
+    $$ = &DropUser{
+      IfExists: exists,
+      AccountNames: $4.([]AccountName),
+      Auth: AuthInformation{
+        AuthType: AuthType_CREATE_USER,
+        TargetType: AuthTargetType_Global,
+      },
+    }
   }
 | DROP ROLE exists_opt role_name_list
   {
@@ -5564,7 +6518,14 @@ drop_statement:
     if $3.(int) != 0 {
       exists = true
     }
-    $$ = &DropRole{IfExists: exists, Roles: $4.([]AccountName)}
+    $$ = &DropRole{
+      IfExists: exists,
+      Roles: $4.([]AccountName),
+      Auth: AuthInformation{
+        AuthType: AuthType_DROP_ROLE,
+        TargetType: AuthTargetType_Ignore,
+      },
+    }
   }
 | DROP EVENT exists_opt event_name
   {
@@ -5572,7 +6533,17 @@ drop_statement:
     if $3.(int) != 0 {
       exists = true
     }
-    $$ = &DDL{Action: DropStr, EventSpec: &EventSpec{EventName: $4.(EventName)}, IfExists: exists}
+    eventName := $4.(EventName)
+    $$ = &DDL{
+      Action: DropStr,
+      EventSpec: &EventSpec{EventName: eventName},
+      IfExists: exists,
+      Auth: AuthInformation{
+        AuthType: AuthType_EVENT,
+        TargetType: AuthTargetType_DatabaseIdentifiers,
+        TargetNames: []string{eventName.Qualifier.String()},
+      },
+    }
   }
 
 drop_statement_action:
@@ -5591,11 +6562,29 @@ drop_statement_action:
 truncate_statement:
   TRUNCATE TABLE table_name
   {
-    $$ = &DDL{Action: TruncateStr, Table: $3.(TableName)}
+    tableName := $3.(TableName)
+    $$ = &DDL{
+      Action: TruncateStr,
+      Table: tableName,
+      Auth: AuthInformation{
+        AuthType: AuthType_DROP,
+        TargetType: AuthTargetType_SingleTableIdentifier,
+        TargetNames: []string{tableName.DbQualifier.String(), tableName.Name.String()},
+      },
+    }
   }
 | TRUNCATE table_name
   {
-    $$ = &DDL{Action: TruncateStr, Table: $2.(TableName)}
+    tableName := $2.(TableName)
+    $$ = &DDL{
+      Action: TruncateStr,
+      Table: tableName,
+      Auth: AuthInformation{
+        AuthType: AuthType_DROP,
+        TargetType: AuthTargetType_SingleTableIdentifier,
+        TargetNames: []string{tableName.DbQualifier.String(), tableName.Name.String()},
+      },
+    }
   }
 
 analyze_statement:
@@ -5702,179 +6691,480 @@ deallocate_statement:
 show_statement:
   SHOW BINARY ID /* SHOW BINARY LOGS */
   {
-    $$ = &Show{Type: string($2) + " " + string($3)}
+    $$ = &Show{
+      Type: string($2) + " " + string($3),
+      Auth: AuthInformation{
+        AuthType: AuthType_REPLICATION_CLIENT,
+        TargetType: AuthTargetType_Global,
+      },
+    }
   }
 /* SHOW CHARACTER SET and SHOW CHARSET are equivalent */
 | SHOW CHARACTER SET like_or_where_opt
   {
-    $$ = &Show{Type: CharsetStr, Filter: $4.(*ShowFilter)}
+    $$ = &Show{
+      Type: CharsetStr,
+      Filter: $4.(*ShowFilter),
+      Auth: AuthInformation{
+        AuthType: AuthType_SHOW,
+        TargetType: AuthTargetType_TODO,
+      },
+    }
   }
 | SHOW CHARSET like_or_where_opt
   {
-    $$ = &Show{Type: string($2), Filter: $3.(*ShowFilter)}
+    $$ = &Show{
+      Type: string($2),
+      Filter: $3.(*ShowFilter),
+      Auth: AuthInformation{
+        AuthType: AuthType_SHOW,
+        TargetType: AuthTargetType_TODO,
+      },
+    }
   }
 | SHOW CREATE DATABASE not_exists_opt ID
   {
-    $$ = &Show{Type: string($2) + " " + string($3), IfNotExists: $4.(int) == 1, Database: string($5)}
+    $$ = &Show{
+      Type: string($2) + " " + string($3),
+      IfNotExists: $4.(int) == 1,
+      Database: string($5),
+      Auth: AuthInformation{
+        AuthType: AuthType_SHOW,
+        TargetType: AuthTargetType_TODO,
+      },
+    }
   }
 | SHOW CREATE SCHEMA not_exists_opt ID
   {
-    $$ = &Show{Type: string($2) + " " + string($3), IfNotExists: $4.(int) == 1, Database: string($5)}
+    $$ = &Show{
+      Type: string($2) + " " + string($3),
+      IfNotExists: $4.(int) == 1,
+      Database: string($5),
+      Auth: AuthInformation{
+        AuthType: AuthType_SHOW,
+        TargetType: AuthTargetType_TODO,
+      },
+    }
   }
 | SHOW CREATE TABLE table_name as_of_opt
   {
     showTablesOpt := &ShowTablesOpt{AsOf:tryCastExpr($5)}
-    $$ = &Show{Type: CreateTableStr, Table: $4.(TableName), ShowTablesOpt: showTablesOpt}
+    $$ = &Show{
+      Type: CreateTableStr,
+      Table: $4.(TableName),
+      ShowTablesOpt: showTablesOpt,
+      Auth: AuthInformation{
+        AuthType: AuthType_SHOW,
+        TargetType: AuthTargetType_TODO,
+      },
+    }
   }
 | SHOW CREATE PROCEDURE table_name
   {
-    $$ = &Show{Type: CreateProcedureStr, Table: $4.(TableName)}
+    tableName := $4.(TableName)
+    $$ = &Show{
+      Type: CreateProcedureStr,
+      Table: $4.(TableName),
+      Auth: AuthInformation{
+        AuthType: AuthType_SHOW_CREATE_PROCEDURE,
+        TargetType: AuthTargetType_Ignore,
+        TargetNames: []string{tableName.DbQualifier.String()},
+      },
+    }
   }
 | SHOW CREATE TRIGGER table_name
   {
-    $$ = &Show{Type: CreateTriggerStr, Table: $4.(TableName)}
+    $$ = &Show{
+      Type: CreateTriggerStr,
+      Table: $4.(TableName),
+      Auth: AuthInformation{
+        AuthType: AuthType_SHOW,
+        TargetType: AuthTargetType_TODO,
+      },
+    }
   }
 | SHOW CREATE VIEW table_name
   {
-    $$ = &Show{Type: string($2) + " " + string($3), Table: $4.(TableName)}
+    $$ = &Show{
+      Type: string($2) + " " + string($3),
+      Table: $4.(TableName),
+      Auth: AuthInformation{
+        AuthType: AuthType_SHOW,
+        TargetType: AuthTargetType_TODO,
+      },
+    }
   }
 | SHOW CREATE EVENT table_name
   {
-    $$ = &Show{Type: CreateEventStr, Table: $4.(TableName)}
+    $$ = &Show{
+      Type: CreateEventStr,
+      Table: $4.(TableName),
+      Auth: AuthInformation{
+        AuthType: AuthType_SHOW,
+        TargetType: AuthTargetType_TODO,
+      },
+    }
   }
 | SHOW DATABASES like_or_where_opt
   {
-    $$ = &Show{Type: string($2), Filter: $3.(*ShowFilter)}
+    $$ = &Show{
+      Type: string($2),
+      Filter: $3.(*ShowFilter),
+      Auth: AuthInformation{
+        AuthType: AuthType_SHOW,
+        TargetType: AuthTargetType_TODO,
+      },
+    }
   }
 | SHOW SCHEMAS
   {
-    $$ = &Show{Type: string($2)}
+    $$ = &Show{
+      Type: string($2),
+      Auth: AuthInformation{
+        AuthType: AuthType_SHOW,
+        TargetType: AuthTargetType_TODO,
+      },
+    }
   }
 | SHOW ENGINES
   {
-    $$ = &Show{Type: string($2)}
+    $$ = &Show{
+      Type: string($2),
+      Auth: AuthInformation{
+        AuthType: AuthType_SHOW,
+        TargetType: AuthTargetType_TODO,
+      },
+    }
   }
 | SHOW indexes_or_keys from_or_in table_name show_database_opt where_expression_opt
   {
-    $$ = &Show{Type: IndexStr, Table: $4.(TableName), Database: $5.(string), ShowIndexFilterOpt: tryCastExpr($6)}
+    $$ = &Show{
+      Type: IndexStr,
+      Table: $4.(TableName),
+      Database: $5.(string),
+      ShowIndexFilterOpt: tryCastExpr($6),
+      Auth: AuthInformation{
+        AuthType: AuthType_SHOW,
+        TargetType: AuthTargetType_TODO,
+      },
+    }
   }
 | SHOW PLUGINS
   {
-    $$ = &Show{Type: string($2)}
+    $$ = &Show{
+      Type: string($2),
+      Auth: AuthInformation{
+        AuthType: AuthType_SHOW,
+        TargetType: AuthTargetType_TODO,
+      },
+    }
   }
 | SHOW PROCEDURE STATUS like_or_where_opt
   {
-    $$ = &Show{Type: string($2) + " " + string($3), Filter: $4.(*ShowFilter)}
+    $$ = &Show{
+      Type: string($2) + " " + string($3),
+      Filter: $4.(*ShowFilter),
+      Auth: AuthInformation{
+        AuthType: AuthType_SHOW,
+        TargetType: AuthTargetType_TODO,
+      },
+    }
   }
 | SHOW REPLICA STATUS
   {
-    $$ = &Show{Type: string($2) + " " + string($3)}
+    $$ = &Show{
+      Type: string($2) + " " + string($3),
+      Auth: AuthInformation{
+        AuthType: AuthType_REPLICATION_CLIENT,
+        TargetType: AuthTargetType_Global,
+      },
+    }
   }
 | SHOW FUNCTION STATUS like_or_where_opt
   {
-    $$ = &Show{Type: string($2) + " " + string($3), Filter: $4.(*ShowFilter)}
+    $$ = &Show{
+      Type: string($2) + " " + string($3),
+      Filter: $4.(*ShowFilter),
+      Auth: AuthInformation{
+        AuthType: AuthType_SHOW,
+        TargetType: AuthTargetType_TODO,
+      },
+    }
   }
 | SHOW show_session_or_global STATUS like_or_where_opt
   {
-    $$ = &Show{Scope: $2.(string), Type: string($3), Filter: $4.(*ShowFilter)}
+    $$ = &Show{
+      Scope: $2.(string),
+      Type: string($3),
+      Filter: $4.(*ShowFilter),
+      Auth: AuthInformation{
+        AuthType: AuthType_SHOW,
+        TargetType: AuthTargetType_TODO,
+      },
+    }
   }
 | SHOW TABLE STATUS from_database_opt like_or_where_opt
   {
-    $$ = &Show{Type: string($2) + " " + string($3), Database: $4.(string), Filter:$5.(*ShowFilter)}
+    $$ = &Show{
+      Type: string($2) + " " + string($3),
+      Database: $4.(string),
+      Filter:$5.(*ShowFilter),
+      Auth: AuthInformation{
+        AuthType: AuthType_SHOW,
+        TargetType: AuthTargetType_TODO,
+      },
+    }
   }
 | SHOW full_opt columns_or_fields FROM table_name from_database_opt as_of_opt like_or_where_opt
   {
     showTablesOpt := &ShowTablesOpt{DbName:$6.(string), AsOf:tryCastExpr($7), Filter:$8.(*ShowFilter)}
-    $$ = &Show{Type: string($3.(string)), ShowTablesOpt: showTablesOpt, Table: $5.(TableName), Full: $2.(bool)}
+    $$ = &Show{
+      Type: string($3.(string)),
+      ShowTablesOpt: showTablesOpt,
+      Table: $5.(TableName),
+      Full: $2.(bool),
+      Auth: AuthInformation{
+        AuthType: AuthType_SHOW,
+        TargetType: AuthTargetType_TODO,
+      },
+    }
   }
 | SHOW full_opt TABLES from_database_opt as_of_opt like_or_where_opt
   {
     showTablesOpt := &ShowTablesOpt{DbName: $4.(string), Filter: $6.(*ShowFilter), AsOf: tryCastExpr($5)}
-    $$ = &Show{Type: string($3), ShowTablesOpt: showTablesOpt, Full: $2.(bool)}
+    $$ = &Show{
+      Type: string($3),
+      ShowTablesOpt: showTablesOpt,
+      Full: $2.(bool),
+      Auth: AuthInformation{
+        AuthType: AuthType_SHOW,
+        TargetType: AuthTargetType_TODO,
+      },
+    }
   }
 | SHOW full_opt PROCESSLIST
   {
-    $$ = &Show{Type: string($3), Full: $2.(bool)}
+    $$ = &Show{
+      Type: string($3),
+      Full: $2.(bool),
+      Auth: AuthInformation{
+        AuthType: AuthType_PROCESS,
+        TargetType: AuthTargetType_Global,
+      },
+    }
   }
 | SHOW TRIGGERS from_database_opt like_or_where_opt
   {
-    $$ = &Show{Type: string($2), ShowTablesOpt: &ShowTablesOpt{DbName: $3.(string), Filter: $4.(*ShowFilter)}}
+    $$ = &Show{
+      Type: string($2),
+      ShowTablesOpt: &ShowTablesOpt{
+        DbName: $3.(string),
+        Filter: $4.(*ShowFilter),
+      },
+      Auth: AuthInformation{
+        AuthType: AuthType_SHOW,
+        TargetType: AuthTargetType_TODO,
+      },
+    }
   }
 | SHOW show_session_or_global VARIABLES like_or_where_opt
   {
-    $$ = &Show{Scope: $2.(string), Type: string($3), Filter: $4.(*ShowFilter)}
+    $$ = &Show{
+      Scope: $2.(string),
+      Type: string($3),
+      Filter: $4.(*ShowFilter),
+      Auth: AuthInformation{
+        AuthType: AuthType_SHOW,
+        TargetType: AuthTargetType_TODO,
+      },
+    }
   }
 | SHOW COLLATION
   {
-    $$ = &Show{Type: string($2)}
+    $$ = &Show{
+      Type: string($2),
+      Auth: AuthInformation{
+        AuthType: AuthType_SHOW,
+        TargetType: AuthTargetType_TODO,
+      },
+    }
   }
 | SHOW COLLATION WHERE expression
   {
-    $$ = &Show{Type: string($2), ShowCollationFilterOpt: tryCastExpr($4)}
+    $$ = &Show{
+      Type: string($2),
+      ShowCollationFilterOpt: tryCastExpr($4),
+      Auth: AuthInformation{
+        AuthType: AuthType_SHOW,
+        TargetType: AuthTargetType_TODO,
+      },
+    }
   }
 | SHOW COLLATION naked_like
   {
     cmp := tryCastExpr($3).(*ComparisonExpr)
     cmp.Left = &ColName{Name: NewColIdent("collation")}
-    $$ = &Show{Type: string($2), ShowCollationFilterOpt: cmp}
+    $$ = &Show{
+      Type: string($2),
+      ShowCollationFilterOpt: cmp,
+      Auth: AuthInformation{
+        AuthType: AuthType_SHOW,
+        TargetType: AuthTargetType_TODO,
+      },
+    }
   }
 | SHOW GRANTS
   {
-    $$ = &ShowGrants{}
+    $$ = &ShowGrants{
+      Auth: AuthInformation{
+        AuthType: AuthType_SELECT,
+        TargetType: AuthTargetType_DatabaseIdentifiers,
+        TargetNames: []string{"mysql"},
+      },
+    }
   }
 | SHOW GRANTS FOR account_name
   {
     an := $4.(AccountName)
-    $$ = &ShowGrants{For: &an}
+    $$ = &ShowGrants{
+      For: &an,
+      Auth: AuthInformation{
+        AuthType: AuthType_SELECT,
+        TargetType: AuthTargetType_DatabaseIdentifiers,
+        TargetNames: []string{"mysql"},
+      },
+    }
   }
 | SHOW GRANTS FOR CURRENT_USER func_parens_opt
   {
-    $$ = &ShowGrants{CurrentUser: true}
+    $$ = &ShowGrants{
+      CurrentUser: true,
+      Auth: AuthInformation{
+        AuthType: AuthType_SELECT,
+        TargetType: AuthTargetType_DatabaseIdentifiers,
+        TargetNames: []string{"mysql"},
+      },
+    }
   }
 | SHOW GRANTS FOR account_name USING role_name_list
   {
     an := $4.(AccountName)
-    $$ = &ShowGrants{For: &an, Using: $6.([]AccountName)}
+    $$ = &ShowGrants{
+      For: &an,
+      Using: $6.([]AccountName),
+      Auth: AuthInformation{
+        AuthType: AuthType_SELECT,
+        TargetType: AuthTargetType_DatabaseIdentifiers,
+        TargetNames: []string{"mysql"},
+      },
+    }
   }
 | SHOW PRIVILEGES
   {
-    $$ = &ShowPrivileges{}
+    $$ = &ShowPrivileges{
+      Auth: AuthInformation{
+        AuthType: AuthType_SHOW,
+        TargetType: AuthTargetType_TODO,
+      },
+    }
   }
 | SHOW COUNT openb '*' closeb WARNINGS
   {
-    $$ = &Show{Type: string($6), CountStar: true}
+    $$ = &Show{
+      Type: string($6),
+      CountStar: true,
+      Auth: AuthInformation{
+        AuthType: AuthType_SHOW,
+        TargetType: AuthTargetType_TODO,
+      },
+    }
   }
 | SHOW COUNT openb '*' closeb ERRORS
   {
-    $$ = &Show{Type: string($6), CountStar: true}
+    $$ = &Show{
+      Type: string($6),
+      CountStar: true,
+      Auth: AuthInformation{
+        AuthType: AuthType_SHOW,
+        TargetType: AuthTargetType_TODO,
+      },
+    }
   }
 | SHOW WARNINGS limit_opt
   {
-    $$ = &Show{Type: string($2), Limit: $3.(*Limit)}
+    $$ = &Show{
+      Type: string($2),
+      Limit: $3.(*Limit),
+      Auth: AuthInformation{
+        AuthType: AuthType_SHOW,
+        TargetType: AuthTargetType_TODO,
+      },
+    }
   }
 | SHOW ERRORS limit_opt
   {
-    $$ = &Show{Type: string($2), Limit: $3.(*Limit)}
+    $$ = &Show{
+      Type: string($2),
+      Limit: $3.(*Limit),
+      Auth: AuthInformation{
+        AuthType: AuthType_SHOW,
+        TargetType: AuthTargetType_TODO,
+      },
+    }
   }
 | SHOW EVENTS from_database_opt like_or_where_opt
   {
-    $$ = &Show{Type: string($2), ShowTablesOpt: &ShowTablesOpt{DbName: $3.(string), Filter: $4.(*ShowFilter)}}
+    $$ = &Show{
+      Type: string($2),
+      ShowTablesOpt: &ShowTablesOpt{
+        DbName: $3.(string),
+        Filter: $4.(*ShowFilter),
+      },
+      Auth: AuthInformation{
+        AuthType: AuthType_SHOW,
+        TargetType: AuthTargetType_TODO,
+      },
+    }
   }
 | SHOW REPLICAS
   {
-    $$ = &Show{Type: string($2)}
+    $$ = &Show{
+      Type: string($2),
+      Auth: AuthInformation{
+        AuthType: AuthType_SHOW,
+        TargetType: AuthTargetType_TODO,
+      },
+    }
   }
 | SHOW BINARY LOG STATUS
   {
-    $$ = &Show{Type: string($2) + " " + string($3) + " " + string($4)}
+    $$ = &Show{
+      Type: string($2) + " " + string($3) + " " + string($4),
+      Auth: AuthInformation{
+        AuthType: AuthType_REPLICATION_CLIENT,
+        TargetType: AuthTargetType_Global,
+      },
+    }
   }
 | SHOW MASTER STATUS
   {
-    $$ = &Show{Type: "BINARY LOG STATUS"}
+    $$ = &Show{
+      Type: "BINARY LOG STATUS",
+      Auth: AuthInformation{
+        AuthType: AuthType_SHOW,
+        TargetType: AuthTargetType_TODO,
+      },
+    }
   }
 | SHOW BINARY LOGS
   {
-    $$ = &Show{Type: string($2) + " " + string($3)}
+    $$ = &Show{
+      Type: string($2) + " " + string($3),
+      Auth: AuthInformation{
+        AuthType: AuthType_REPLICATION_CLIENT,
+        TargetType: AuthTargetType_Global,
+      },
+    }
   }
 
 naked_like:
@@ -5952,15 +7242,38 @@ show_session_or_global:
 use_statement:
   USE table_id
   {
-    $$ = &Use{DBName: $2.(TableIdent)}
+    tableIdent := $2.(TableIdent)
+    $$ = &Use{
+      DBName: tableIdent,
+      Auth: AuthInformation{
+        AuthType: AuthType_VISIBLE,
+        TargetType: AuthTargetType_DatabaseIdentifiers,
+        TargetNames: []string{tableIdent.String()},
+      },
+    }
   }
 | USE table_id '/' table_id
   {
-    $$ = &Use{DBName:TableIdent{v:$2.(TableIdent).v+"/"+$4.(TableIdent).v}}
+    tableIdent := TableIdent{v: $2.(TableIdent).v+"/"+$4.(TableIdent).v}
+    $$ = &Use{
+      DBName: tableIdent,
+      Auth: AuthInformation{
+        AuthType: AuthType_VISIBLE,
+        TargetType: AuthTargetType_TODO,
+        TargetNames: []string{tableIdent.String()},
+      },
+    }
   }
 | USE
   {
-    $$ = &Use{DBName:TableIdent{v:""}}
+    $$ = &Use{
+      DBName: TableIdent{v:""},
+      Auth: AuthInformation{
+        AuthType: AuthType_VISIBLE,
+        TargetType: AuthTargetType_DatabaseIdentifiers,
+        TargetNames: []string{""},
+      },
+    }
   }
 
 work_opt:
@@ -6107,7 +7420,15 @@ describe_statement:
   // rewrite describe table as show columns from table
   {
     showTablesOpt := &ShowTablesOpt{AsOf:tryCastExpr($3)}
-    $$ = &Show{Type: "columns", Table: $2.(TableName), ShowTablesOpt: showTablesOpt}
+    $$ = &Show{
+      Type: "columns",
+      Table: $2.(TableName),
+      ShowTablesOpt: showTablesOpt,
+      Auth: AuthInformation{
+        AuthType: AuthType_SHOW,
+        TargetType: AuthTargetType_TODO,
+      },
+    }
   }
 
 // XXXX: the skipped '|' delimiter in comment_opt and
@@ -6565,7 +7886,12 @@ table_factor:
     case *ValuesStatement:
         n.Columns = $4.(Columns)
     }
-    $$ = &AliasedTableExpr{Lateral: false, Expr:$1.(SimpleTableExpr), As: $3.(TableIdent)}
+    $$ = &AliasedTableExpr{
+      Lateral: false,
+      Expr:$1.(SimpleTableExpr),
+      As: $3.(TableIdent),
+      Auth: AuthInformation{AuthType: AuthType_IGNORE},
+    }
   }
 | LATERAL subquery_or_values as_opt table_alias column_list_opt
   {
@@ -6575,7 +7901,12 @@ table_factor:
     case *ValuesStatement:
         n.Columns = $5.(Columns)
     }
-    $$ = &AliasedTableExpr{Lateral: true, Expr:$2.(SimpleTableExpr), As: $4.(TableIdent)}
+    $$ = &AliasedTableExpr{
+      Lateral: true,
+      Expr:$2.(SimpleTableExpr),
+      As: $4.(TableIdent),
+      Auth: AuthInformation{AuthType: AuthType_IGNORE},
+    }
   }
 | subquery_or_values
   {
@@ -6621,13 +7952,23 @@ aliased_table_name:
   table_name aliased_table_options
   {
     $$ = $2.(*AliasedTableExpr)
-    $$.(*AliasedTableExpr).Expr = $1.(TableName)
+    tableName := $1.(TableName)
+    $$.(*AliasedTableExpr).Expr = tableName
+    $$.(*AliasedTableExpr).Auth = AuthInformation{
+      TargetType: AuthTargetType_SingleTableIdentifier,
+      TargetNames: []string{tableName.DbQualifier.String(), tableName.Name.String()},
+    }
   }
 | table_name PARTITION openb partition_list closeb aliased_table_options
   {
     $$ = $6.(*AliasedTableExpr)
-    $$.(*AliasedTableExpr).Expr = $1.(TableName)
+    tableName := $1.(TableName)
+    $$.(*AliasedTableExpr).Expr = tableName
     $$.(*AliasedTableExpr).Partitions = $4.(Partitions)
+    $$.(*AliasedTableExpr).Auth = AuthInformation{
+      TargetType: AuthTargetType_SingleTableIdentifier,
+      TargetNames: []string{tableName.DbQualifier.String(), tableName.Name.String()},
+    }
   }
 
 // All possible combinations of qualifiers for a table alias expression, declared in a single rule to avoid
@@ -8507,7 +9848,7 @@ insert_data_select:
 insert_data_values:
   value_or_values tuple_list
   {
-    $$ = &Insert{Rows: &AliasedValues{Values: $2.(Values)}}
+    $$ = &Insert{Rows: &AliasedValues{Values: $2.(Values)}, Auth: AuthInformation{AuthType: AuthType_IGNORE}}
   }
 | openb insert_data_values closeb
   {
@@ -8979,11 +10320,34 @@ lock_table_list:
 lock_table:
   table_name lock_type
   {
-    $$ = &TableAndLockType{Table:&AliasedTableExpr{Expr: $1.(TableName)}, Lock:$2.(LockType)}
+    tableName := $1.(TableName)
+    $$ = &TableAndLockType{
+      Table: &AliasedTableExpr{
+        Expr: tableName,
+        Auth: AuthInformation{
+          AuthType: AuthType_LOCK,
+          TargetType: AuthTargetType_SingleTableIdentifier,
+          TargetNames: []string{tableName.DbQualifier.String(), tableName.Name.String()},
+        },
+      },
+      Lock: $2.(LockType),
+    }
   }
 |  table_name AS table_alias lock_type
   {
-    $$ = &TableAndLockType{Table:&AliasedTableExpr{Expr: $1.(TableName), As: $3.(TableIdent)}, Lock:$4.(LockType)}
+    tableName := $1.(TableName)
+    $$ = &TableAndLockType{
+      Table: &AliasedTableExpr{
+        Expr: tableName,
+        As: $3.(TableIdent),
+        Auth: AuthInformation{
+          AuthType: AuthType_LOCK,
+          TargetType: AuthTargetType_SingleTableIdentifier,
+          TargetNames: []string{tableName.DbQualifier.String(), tableName.Name.String()},
+        },
+      },
+      Lock: $4.(LockType),
+    }
   }
 
 lock_type:
@@ -9013,15 +10377,35 @@ unlock_statement:
 kill_statement:
   KILL INTEGRAL
   {
-    $$ = &Kill{Connection: true, ConnID: NewIntVal($2)}
+    $$ = &Kill{
+      Connection: true,
+      ConnID: NewIntVal($2),
+      Auth: AuthInformation{
+        AuthType: AuthType_SUPER,
+        TargetType: AuthTargetType_Global,
+      },
+    }
   }
 |  KILL QUERY INTEGRAL
   {
-    $$ = &Kill{ConnID: NewIntVal($3)}
+    $$ = &Kill{
+      ConnID: NewIntVal($3),
+      Auth: AuthInformation{
+        AuthType: AuthType_SUPER,
+        TargetType: AuthTargetType_Global,
+      },
+    }
   }
 | KILL CONNECTION INTEGRAL
   {
-    $$ = &Kill{Connection: true, ConnID: NewIntVal($3)}
+    $$ = &Kill{
+      Connection: true,
+      ConnID: NewIntVal($3),
+      Auth: AuthInformation{
+        AuthType: AuthType_SUPER,
+        TargetType: AuthTargetType_Global,
+      },
+    }
   }
 
 /*
