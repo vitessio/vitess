@@ -1351,7 +1351,12 @@ func TestSemiSyncRequiredWithTwoPC(t *testing.T) {
 
 	out, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=none")
 	require.NoError(t, err, out)
-	defer clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=semi_sync")
+	defer func() {
+		clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=semi_sync")
+		for _, shard := range clusterInstance.Keyspaces[0].Shards {
+			clusterInstance.VtctldClientProcess.PlannedReparentShard(keyspaceName, shard.Name, shard.Vttablets[0].Alias)
+		}
+	}()
 
 	// After changing the durability policy for the given keyspace to none, we run PRS.
 	shard := clusterInstance.Keyspaces[0].Shards[2]
