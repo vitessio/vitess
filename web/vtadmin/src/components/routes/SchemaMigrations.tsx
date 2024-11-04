@@ -29,8 +29,10 @@ import { formatDateTime } from '../../util/time';
 import { ReadOnlyGate } from '../ReadOnlyGate';
 import { formatSchemaMigrationStatus } from '../../util/schemaMigrations';
 import { Link } from 'react-router-dom';
+import { TabletLink } from '../links/TabletLink';
+import { formatAlias } from '../../util/tablets';
 
-const COLUMNS = ['UUID', 'Status', 'Shard', 'Started At', 'Added At'];
+const COLUMNS = ['UUID', 'Status', 'DDL Action', 'Timestamps', 'Stage', 'Progress'];
 
 export const SchemaMigrations = () => {
     useDocumentTitle('Schema Migrations');
@@ -64,39 +66,59 @@ export const SchemaMigrations = () => {
 
             if (!migrationInfo) return <></>;
 
-            const shard = selectedKeyspace ? `${selectedKeyspace.keyspace?.name}/${migrationInfo.shard}` : '-';
-
             return (
                 <tr key={migrationInfo.uuid}>
                     <DataCell>
                         <div>{migrationInfo.uuid}</div>
+                        <div className="text-sm text-secondary">
+                            Tablet{' '}
+                            <TabletLink alias={formatAlias(migrationInfo.tablet)} clusterID={row.cluster?.id}>
+                                {formatAlias(migrationInfo.tablet)}
+                            </TabletLink>
+                        </div>
+                        <div className="text-sm text-secondary">
+                            Shard{' '}
+                            <ShardLink
+                                clusterID={row.cluster?.id}
+                                keyspace={migrationInfo.keyspace}
+                                shard={migrationInfo.shard}
+                            >
+                                {`${migrationInfo.keyspace}/${migrationInfo.shard}`}
+                            </ShardLink>
+                        </div>
                     </DataCell>
                     <DataCell>
                         <div>{formatSchemaMigrationStatus(migrationInfo)}</div>
                     </DataCell>
+                    <DataCell>{migrationInfo.ddl_action ? migrationInfo.ddl_action : '-'}</DataCell>
                     <DataCell>
-                        {selectedKeyspace ? (
-                            <ShardLink
-                                clusterID={selectedKeyspace.cluster?.id}
-                                keyspace={selectedKeyspace.keyspace?.name}
-                                shard={migrationInfo.shard}
-                            >
-                                {shard}
-                            </ShardLink>
-                        ) : (
-                            '-'
+                        {migrationInfo.added_at && (
+                            <div className="text-sm font-sans whitespace-nowrap">
+                                <span className="text-secondary">Added </span>
+                                {formatDateTime(migrationInfo.added_at?.seconds)}
+                            </div>
+                        )}
+                        {migrationInfo.requested_at && (
+                            <div className="text-sm font-sans whitespace-nowrap">
+                                <span className="text-secondary">Requested </span>
+                                {formatDateTime(migrationInfo.requested_at?.seconds)}
+                            </div>
+                        )}
+                        {migrationInfo.started_at && (
+                            <div className="text-sm font-sans whitespace-nowrap">
+                                <span className="text-secondary">Started </span>
+                                {formatDateTime(migrationInfo.started_at?.seconds)}
+                            </div>
+                        )}
+                        {migrationInfo.completed_at && (
+                            <div className="text-sm font-sans whitespace-nowrap">
+                                <span className="text-secondary">Completed </span>
+                                {formatDateTime(migrationInfo.completed_at?.seconds)}
+                            </div>
                         )}
                     </DataCell>
-                    <DataCell>
-                        <div className="font-sans whitespace-nowrap">
-                            {formatDateTime(migrationInfo.started_at?.seconds)}
-                        </div>
-                    </DataCell>
-                    <DataCell>
-                        <div className="font-sans whitespace-nowrap">
-                            {formatDateTime(migrationInfo.added_at?.seconds)}
-                        </div>
-                    </DataCell>
+                    <DataCell>{migrationInfo.stage ? migrationInfo.stage : '-'}</DataCell>
+                    <DataCell>{migrationInfo.progress ? `${migrationInfo.progress}%` : '-'}</DataCell>
                 </tr>
             );
         });

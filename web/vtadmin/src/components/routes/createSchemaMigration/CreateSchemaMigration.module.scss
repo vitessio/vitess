@@ -1,5 +1,5 @@
 /**
- * Copyright 2021 The Vitess Authors.
+ * Copyright 2024 The Vitess Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,11 +14,17 @@
  * limitations under the License.
  */
 .sqlInput {
-    border: solid 1px var(--colorScaffoldingHighlight);
+    border: solid 2px var(--colorDisabled);
+    border-radius: 6px;
     display: block;
     font-family: var(--fontFamilyMonospace);
     line-height: var(--lineHeightBody);
     padding: 0.8rem;
     resize: vertical;
     width: 100%;
+}
+
+.sqlInput:focus {
+    border-color: var(--colorPrimary);
+    outline: none;
 }

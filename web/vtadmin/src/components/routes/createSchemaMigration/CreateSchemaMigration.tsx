@@ -29,7 +29,7 @@ import { TextInput } from '../../TextInput';
 import { success } from '../../Snackbar';
 import { FormError } from '../../forms/FormError';
 import { vtadmin } from '../../../proto/vtadmin';
-import ErrorDialog from '../createWorkflow/ErrorDialog';
+import ErrorDialog from '../../dialog/ErrorDialog';
 
 interface FormData {
     clusterID: string;
@@ -142,9 +142,9 @@ export const CreateSchemaMigration = () => {
                 <WorkspaceTitle>Create Schema Migration Request</WorkspaceTitle>
             </WorkspaceHeader>
 
-            <ContentContainer className="max-w-screen-sm">
+            <ContentContainer>
                 <form onSubmit={onSubmit}>
-                    <div className="flex flex-row gap-4 flex-wrap">
+                    <div className="flex flex-row gap-4 flex-wrap mb-2">
                         <Select
                             className="block grow min-w-[300px]"
                             disabled={keyspacesQuery.isLoading || !selectedCluster}
@@ -253,7 +253,7 @@ export const CreateSchemaMigration = () => {
                 {mutation.isError && !mutation.isLoading && (
                     <ErrorDialog
                         errorDescription={mutation.error.message}
-                        errorTitle="Error Creating Workflow"
+                        errorTitle="Error Creating Schema Migration Request"
                         isOpen={errorDialogOpen}
                         onClose={() => {
                             setErrorDialogOpen(false);
