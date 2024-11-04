@@ -236,10 +236,9 @@ func (ts *Server) GetTabletAliasesByCell(ctx context.Context, cell string) ([]*t
 type GetTabletsByCellOptions struct {
 	// Concurrency controls the maximum number of concurrent calls to GetTablet.
 	Concurrency int
-	// Keyspace is the optional keyspace tablets must match.
-	Keyspace string
-	// Shard is the optional shard tablets must match.
-	Shard string
+	// KeyspaceShard is the optional keyspace/shard that tablets must match.
+	// An empty shard value will watch all shards.
+	KeyspaceShard *KeyspaceShard
 }
 
 // GetTabletsByCell returns all the tablets in the cell.
@@ -267,17 +266,22 @@ func (ts *Server) GetTabletsByCell(ctx context.Context, cellAlias string, opt *G
 		return nil, err
 	}
 
-	tablets := make([]*TabletInfo, 0)
+	var capHint int
+	if opt != nil && opt.KeyspaceShard == nil {
+		capHint = len(listResults)
+	}
+
+	tablets := make([]*TabletInfo, 0, capHint)
 	for n := range listResults {
 		tablet := &topodatapb.Tablet{}
 		if err := tablet.UnmarshalVT(listResults[n].Value); err != nil {
 			return nil, err
 		}
-		if opt != nil && opt.Keyspace != "" {
-			if opt.Keyspace != tablet.Keyspace {
+		if opt != nil && opt.KeyspaceShard != nil {
+			if opt.KeyspaceShard.Keyspace != tablet.Keyspace {
 				continue
 			}
-			if opt.Shard != "" && opt.Shard != tablet.Shard {
+			if opt.KeyspaceShard.Shard != "" && opt.KeyspaceShard.Shard != tablet.Shard {
 				continue
 			}
 		}

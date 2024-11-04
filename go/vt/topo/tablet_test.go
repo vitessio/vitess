@@ -85,8 +85,10 @@ func TestServerGetTabletsByCell(t *testing.T) {
 			createShardTablets: 2,
 			opt: &topo.GetTabletsByCellOptions{
 				Concurrency: 1,
-				Keyspace:    keyspace,
-				Shard:       shard,
+				KeyspaceShard: &topo.KeyspaceShard{
+					Keyspace: keyspace,
+					Shard:    shard,
+				},
 			},
 		},
 	}

@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"path"
 	"slices"
 	"sort"
@@ -553,7 +552,6 @@ func (ts *Server) FindAllTabletAliasesInShardByCell(ctx context.Context, keyspac
 	span.Annotate("shard", shard)
 	span.Annotate("num_cells", len(cells))
 	defer span.Finish()
-	ctx = trace.NewContext(ctx, span)
 	var err error
 
 	// The caller intents to all cells
@@ -597,7 +595,7 @@ func (ts *Server) FindAllTabletAliasesInShardByCell(ctx context.Context, keyspac
 			case IsErrType(err, NoNode):
 				// There is no shard replication for this shard in this cell. NOOP
 			default:
-				rec.RecordError(vterrors.Wrap(err, fmt.Sprintf("GetShardReplication(%v, %v, %v) failed.", cell, keyspace, shard)))
+				rec.RecordError(vterrors.Wrapf(err, "GetShardReplication(%v, %v, %v) failed.", cell, keyspace, shard))
 				return
 			}
 		}(cell)
@@ -632,7 +630,6 @@ func (ts *Server) GetTabletsByShardCell(ctx context.Context, keyspace, shard str
 	span.Annotate("shard", shard)
 	span.Annotate("num_cells", len(cells))
 	defer span.Finish()
-	ctx = trace.NewContext(ctx, span)
 	var err error
 
 	if len(cells) == 0 {
@@ -645,7 +642,7 @@ func (ts *Server) GetTabletsByShardCell(ctx context.Context, keyspace, shard str
 		}
 	}
 
-	// divide the concurrency limit by the number of cells. if there are more
+	// Divide the concurrency limit by the number of cells. If there are more
 	// cells than the limit, default to concurrency of 1.
 	cellConcurrency := 1
 	if len(cells) < DefaultConcurrency {
@@ -656,16 +653,19 @@ func (ts *Server) GetTabletsByShardCell(ctx context.Context, keyspace, shard str
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.SetLimit(DefaultConcurrency)
 
-	tablets := make([]*TabletInfo, 0, len(cells)*3)
+	tablets := make([]*TabletInfo, 0, len(cells))
+	options := &GetTabletsByCellOptions{
+		Concurrency: cellConcurrency,
+		KeyspaceShard: &KeyspaceShard{
+			Keyspace: keyspace,
+			Shard:    shard,
+		},
+	}
 	for _, cell := range cells {
 		eg.Go(func() error {
-			t, err := ts.GetTabletsByCell(ctx, cell, &GetTabletsByCellOptions{
-				Concurrency: cellConcurrency,
-				Keyspace:    keyspace,
-				Shard:       shard,
-			})
+			t, err := ts.GetTabletsByCell(ctx, cell, options)
 			if err != nil {
-				return vterrors.Wrap(err, fmt.Sprintf("GetTabletsByCell for %v failed.", cell))
+				return vterrors.Wrapf(err, "GetTabletsByCell for %v failed.", cell)
 			}
 			mu.Lock()
 			tablets = append(tablets, t...)
