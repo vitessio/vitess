@@ -7254,13 +7254,14 @@ use_statement:
   }
 | USE table_id '/' table_id
   {
-    tableIdent := TableIdent{v: $2.(TableIdent).v+"/"+$4.(TableIdent).v}
+    firstTableIdent := $2.(TableIdent)
+    tableIdent := TableIdent{v: firstTableIdent.v+"/"+$4.(TableIdent).v}
     $$ = &Use{
       DBName: tableIdent,
       Auth: AuthInformation{
         AuthType: AuthType_VISIBLE,
-        TargetType: AuthTargetType_TODO,
-        TargetNames: []string{tableIdent.String()},
+        TargetType: AuthTargetType_DatabaseIdentifiers,
+        TargetNames: []string{firstTableIdent.String()},
       },
     }
   }
