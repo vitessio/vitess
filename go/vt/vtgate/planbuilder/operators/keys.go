@@ -144,17 +144,6 @@ func (jp *JoinPredicate) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (jp JoinPredicate) Equal(other JoinPredicate) bool {
-	if jp.Uses != other.Uses {
-		return false
-	}
-	// if (A.LHS = B.LHS and A.RHS = B.RHS) or (A.LHS = B.RHS and A.RHS = B.LHS) then equal
-	if jp == other || jp.LHS.String() == other.RHS.String() && jp.RHS.String() == other.LHS.String() {
-		return true
-	}
-	return false
-}
-
 func (c Column) String() string {
 	return fmt.Sprintf("%s.%s", c.Table, c.Name)
 }
@@ -253,30 +242,28 @@ func GetVExplainKeys(ctx *plancontext.PlanningContext, stmt sqlparser.Statement)
 
 func getUniqueJoinPredicates(ctx *plancontext.PlanningContext, joinPredicates []joinPredicate) []JoinPredicate {
 	var result []JoinPredicate
-outer:
 	for _, predicate := range joinPredicates {
 		lhs := createColumn(ctx, predicate.lhs)
 		rhs := createColumn(ctx, predicate.rhs)
 		if lhs == nil || rhs == nil {
 			continue
 		}
-		newJp := JoinPredicate{
+
+		result = append(result, JoinPredicate{
 			LHS:  *lhs,
 			RHS:  *rhs,
 			Uses: predicate.uses,
-		}
-
-		// check if this join predicate already exists
-		for _, oldJp := range result {
-			if newJp.Equal(oldJp) {
-				continue outer
-			}
-		}
-
-		result = append(result, newJp)
+		})
 	}
 
-	return result
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].LHS.Name == result[j].LHS.Name {
+			return result[i].RHS.Name < result[j].RHS.Name
+		}
+		return result[i].LHS.Name < result[j].LHS.Name
+	})
+
+	return slices.Compact(result)
 }
 
 func getUniqueColNames(ctx *plancontext.PlanningContext, inCols []*sqlparser.ColName) (columns []Column) {
