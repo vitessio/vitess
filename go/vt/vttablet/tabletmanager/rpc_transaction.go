@@ -45,15 +45,15 @@ func (tm *TabletManager) ReadTransaction(ctx context.Context, req *tabletmanager
 	return tm.QueryServiceControl.ReadTransaction(ctx, target, req.Dtid)
 }
 
-// ReadTransactionState returns the transaction data for the given distributed transaction ID.
-func (tm *TabletManager) ReadTransactionState(ctx context.Context, req *tabletmanagerdatapb.ReadTransactionStateRequest) (*tabletmanagerdatapb.ReadTransactionStateResponse, error) {
+// GetTransactionInfo returns the transaction data for the given distributed transaction ID.
+func (tm *TabletManager) GetTransactionInfo(ctx context.Context, req *tabletmanagerdatapb.GetTransactionInfoRequest) (*tabletmanagerdatapb.GetTransactionInfoResponse, error) {
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return nil, err
 	}
 
 	tablet := tm.Tablet()
 	target := &querypb.Target{Keyspace: tablet.Keyspace, Shard: tablet.Shard, TabletType: tablet.Type}
-	return tm.QueryServiceControl.ReadTransactionState(ctx, target, req.Dtid)
+	return tm.QueryServiceControl.GetTransactionInfo(ctx, target, req.Dtid)
 }
 
 // ConcludeTransaction concludes the given distributed transaction.

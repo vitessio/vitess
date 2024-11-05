@@ -924,7 +924,7 @@ func (itmc *internalTabletManagerClient) ReadTransaction(ctx context.Context, ta
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 
-func (itmc *internalTabletManagerClient) ReadTransactionState(ctx context.Context, tablet *topodatapb.Tablet, dtid string) (*tabletmanagerdatapb.ReadTransactionStateResponse, error) {
+func (itmc *internalTabletManagerClient) GetTransactionInfo(ctx context.Context, tablet *topodatapb.Tablet, dtid string) (*tabletmanagerdatapb.GetTransactionInfoResponse, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 

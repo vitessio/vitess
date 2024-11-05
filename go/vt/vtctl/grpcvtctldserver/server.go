@@ -2536,10 +2536,10 @@ func (s *VtctldServer) ConcludeTransaction(ctx context.Context, req *vtctldatapb
 	return &vtctldatapb.ConcludeTransactionResponse{}, nil
 }
 
-// ReadTransactionState is part of the vtctlservicepb.VtctldServer interface.
+// GetTransactionInfo is part of the vtctlservicepb.VtctldServer interface.
 // It reads the information about a distributed transaction.
-func (s *VtctldServer) ReadTransactionState(ctx context.Context, req *vtctldatapb.ReadTransactionStateRequest) (resp *vtctldatapb.ReadTransactionStateResponse, err error) {
-	span, ctx := trace.NewSpan(ctx, "VtctldServer.ReadTransactionState")
+func (s *VtctldServer) GetTransactionInfo(ctx context.Context, req *vtctldatapb.GetTransactionInfoRequest) (resp *vtctldatapb.GetTransactionInfoResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetTransactionInfo")
 	defer span.Finish()
 
 	span.Annotate("dtid", req.Dtid)
@@ -2561,7 +2561,7 @@ func (s *VtctldServer) ReadTransactionState(ctx context.Context, req *vtctldatap
 		return nil, err
 	}
 	// Store the metadata in the resonse.
-	resp = &vtctldatapb.ReadTransactionStateResponse{
+	resp = &vtctldatapb.GetTransactionInfoResponse{
 		Metadata: transaction,
 	}
 	// Create a mutex we use to synchronize the following go routines to read the transaction state from all the shards.
@@ -2575,7 +2575,7 @@ func (s *VtctldServer) ReadTransactionState(ctx context.Context, req *vtctldatap
 			if err != nil {
 				return err
 			}
-			rts, err := s.tmc.ReadTransactionState(newCtx, primary.Tablet, req.Dtid)
+			rts, err := s.tmc.GetTransactionInfo(newCtx, primary.Tablet, req.Dtid)
 			if err != nil {
 				return err
 			}
@@ -2595,7 +2595,7 @@ func (s *VtctldServer) ReadTransactionState(ctx context.Context, req *vtctldatap
 		return nil, err
 	}
 
-	rts, err := s.tmc.ReadTransactionState(ctx, primary.Tablet, req.Dtid)
+	rts, err := s.tmc.GetTransactionInfo(ctx, primary.Tablet, req.Dtid)
 	if err != nil {
 		return nil, err
 	}

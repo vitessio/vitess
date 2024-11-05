@@ -250,9 +250,9 @@ func (tqsc *Controller) ReadTransaction(ctx context.Context, target *querypb.Tar
 	return nil, nil
 }
 
-// ReadTransactionState is part of the tabletserver.Controller interface
-func (tqsc *Controller) ReadTransactionState(ctx context.Context, target *querypb.Target, dtid string) (*tabletmanagerdata.ReadTransactionStateResponse, error) {
-	tqsc.MethodCalled["ReadTransactionState"] = true
+// GetTransactionInfo is part of the tabletserver.Controller interface
+func (tqsc *Controller) GetTransactionInfo(ctx context.Context, target *querypb.Target, dtid string) (*tabletmanagerdata.GetTransactionInfoResponse, error) {
+	tqsc.MethodCalled["GetTransactionInfo"] = true
 	return nil, nil
 }
 

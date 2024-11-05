@@ -173,6 +173,8 @@ service Vtctld {
   rpc GetThrottlerStatus(vtctldata.GetThrottlerStatusRequest) returns (vtctldata.GetThrottlerStatusResponse) {};
   // GetTopologyPath returns the topology cell at a given path.
   rpc GetTopologyPath(vtctldata.GetTopologyPathRequest) returns (vtctldata.GetTopologyPathResponse) {};
+  // GetTransactionInfo reads a given transactions information.
+  rpc GetTransactionInfo(vtctldata.GetTransactionInfoRequest) returns (vtctldata.GetTransactionInfoResponse) {};
   // GetTransactions returns the unresolved transactions for the request.
   rpc GetUnresolvedTransactions(vtctldata.GetUnresolvedTransactionsRequest) returns (vtctldata.GetUnresolvedTransactionsResponse) {};
   // GetVersion returns the version of a tablet from its debug vars.
@@ -228,8 +230,6 @@ service Vtctld {
   // current shard primary is in for promotion unless NewPrimary is explicitly
   // provided in the request.
   rpc PlannedReparentShard(vtctldata.PlannedReparentShardRequest) returns (vtctldata.PlannedReparentShardResponse) {};
-  // ReadTransactionState reads a given transactions state.
-  rpc ReadTransactionState(vtctldata.ReadTransactionStateRequest) returns (vtctldata.ReadTransactionStateResponse) {};
   // RebuildKeyspaceGraph rebuilds the serving data for a keyspace.
   //
   // This may trigger an update to all connected clients.

@@ -1413,7 +1413,7 @@ func TestReadTransactionStatus(t *testing.T) {
 		}
 	}
 	require.NotNil(t, unresTransaction)
-	res, err := tmc.ReadTransactionState(ctx, primaryTablet, unresTransaction.Dtid)
+	res, err := tmc.GetTransactionInfo(ctx, primaryTablet, unresTransaction.Dtid)
 	require.NoError(t, err)
 	assert.Equal(t, "PREPARED", res.State)
 	assert.Equal(t, "", res.Message)

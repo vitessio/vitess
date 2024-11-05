@@ -524,6 +524,15 @@ func (client *gRPCVtctldClient) GetTopologyPath(ctx context.Context, in *vtctlda
 	return client.c.GetTopologyPath(ctx, in, opts...)
 }
 
+// GetTransactionInfo is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) GetTransactionInfo(ctx context.Context, in *vtctldatapb.GetTransactionInfoRequest, opts ...grpc.CallOption) (*vtctldatapb.GetTransactionInfoResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.GetTransactionInfo(ctx, in, opts...)
+}
+
 // GetUnresolvedTransactions is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) GetUnresolvedTransactions(ctx context.Context, in *vtctldatapb.GetUnresolvedTransactionsRequest, opts ...grpc.CallOption) (*vtctldatapb.GetUnresolvedTransactionsResponse, error) {
 	if client.c == nil {
@@ -684,15 +693,6 @@ func (client *gRPCVtctldClient) PlannedReparentShard(ctx context.Context, in *vt
 	}
 
 	return client.c.PlannedReparentShard(ctx, in, opts...)
-}
-
-// ReadTransactionState is part of the vtctlservicepb.VtctldClient interface.
-func (client *gRPCVtctldClient) ReadTransactionState(ctx context.Context, in *vtctldatapb.ReadTransactionStateRequest, opts ...grpc.CallOption) (*vtctldatapb.ReadTransactionStateResponse, error) {
-	if client.c == nil {
-		return nil, status.Error(codes.Unavailable, connClosedMsg)
-	}
-
-	return client.c.ReadTransactionState(ctx, in, opts...)
 }
 
 // RebuildKeyspaceGraph is part of the vtctlservicepb.VtctldClient interface.

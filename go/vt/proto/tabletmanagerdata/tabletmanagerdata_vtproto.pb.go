@@ -1060,11 +1060,11 @@ func (m *ReadTransactionResponse) CloneMessageVT() proto.Message {
 	return m.CloneVT()
 }
 
-func (m *ReadTransactionStateRequest) CloneVT() *ReadTransactionStateRequest {
+func (m *GetTransactionInfoRequest) CloneVT() *GetTransactionInfoRequest {
 	if m == nil {
-		return (*ReadTransactionStateRequest)(nil)
+		return (*GetTransactionInfoRequest)(nil)
 	}
-	r := new(ReadTransactionStateRequest)
+	r := new(GetTransactionInfoRequest)
 	r.Dtid = m.Dtid
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -1073,15 +1073,15 @@ func (m *ReadTransactionStateRequest) CloneVT() *ReadTransactionStateRequest {
 	return r
 }
 
-func (m *ReadTransactionStateRequest) CloneMessageVT() proto.Message {
+func (m *GetTransactionInfoRequest) CloneMessageVT() proto.Message {
 	return m.CloneVT()
 }
 
-func (m *ReadTransactionStateResponse) CloneVT() *ReadTransactionStateResponse {
+func (m *GetTransactionInfoResponse) CloneVT() *GetTransactionInfoResponse {
 	if m == nil {
-		return (*ReadTransactionStateResponse)(nil)
+		return (*GetTransactionInfoResponse)(nil)
 	}
-	r := new(ReadTransactionStateResponse)
+	r := new(GetTransactionInfoResponse)
 	r.State = m.State
 	r.Message = m.Message
 	r.TimeCreated = m.TimeCreated
@@ -1097,7 +1097,7 @@ func (m *ReadTransactionStateResponse) CloneVT() *ReadTransactionStateResponse {
 	return r
 }
 
-func (m *ReadTransactionStateResponse) CloneMessageVT() proto.Message {
+func (m *GetTransactionInfoResponse) CloneMessageVT() proto.Message {
 	return m.CloneVT()
 }
 
@@ -5463,7 +5463,7 @@ func (m *ReadTransactionResponse) MarshalToSizedBufferVT(dAtA []byte) (int, erro
 	return len(dAtA) - i, nil
 }
 
-func (m *ReadTransactionStateRequest) MarshalVT() (dAtA []byte, err error) {
+func (m *GetTransactionInfoRequest) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -5476,12 +5476,12 @@ func (m *ReadTransactionStateRequest) MarshalVT() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *ReadTransactionStateRequest) MarshalToVT(dAtA []byte) (int, error) {
+func (m *GetTransactionInfoRequest) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *ReadTransactionStateRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *GetTransactionInfoRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -5503,7 +5503,7 @@ func (m *ReadTransactionStateRequest) MarshalToSizedBufferVT(dAtA []byte) (int, 
 	return len(dAtA) - i, nil
 }
 
-func (m *ReadTransactionStateResponse) MarshalVT() (dAtA []byte, err error) {
+func (m *GetTransactionInfoResponse) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -5516,12 +5516,12 @@ func (m *ReadTransactionStateResponse) MarshalVT() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *ReadTransactionStateResponse) MarshalToVT(dAtA []byte) (int, error) {
+func (m *GetTransactionInfoResponse) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *ReadTransactionStateResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *GetTransactionInfoResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -11404,7 +11404,7 @@ func (m *ReadTransactionResponse) SizeVT() (n int) {
 	return n
 }
 
-func (m *ReadTransactionStateRequest) SizeVT() (n int) {
+func (m *GetTransactionInfoRequest) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -11418,7 +11418,7 @@ func (m *ReadTransactionStateRequest) SizeVT() (n int) {
 	return n
 }
 
-func (m *ReadTransactionStateResponse) SizeVT() (n int) {
+func (m *GetTransactionInfoResponse) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -18755,7 +18755,7 @@ func (m *ReadTransactionResponse) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *ReadTransactionStateRequest) UnmarshalVT(dAtA []byte) error {
+func (m *GetTransactionInfoRequest) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -18778,10 +18778,10 @@ func (m *ReadTransactionStateRequest) UnmarshalVT(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: ReadTransactionStateRequest: wiretype end group for non-group")
+			return fmt.Errorf("proto: GetTransactionInfoRequest: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: ReadTransactionStateRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: GetTransactionInfoRequest: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -18838,7 +18838,7 @@ func (m *ReadTransactionStateRequest) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *ReadTransactionStateResponse) UnmarshalVT(dAtA []byte) error {
+func (m *GetTransactionInfoResponse) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -18861,10 +18861,10 @@ func (m *ReadTransactionStateResponse) UnmarshalVT(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: ReadTransactionStateResponse: wiretype end group for non-group")
+			return fmt.Errorf("proto: GetTransactionInfoResponse: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: ReadTransactionStateResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: GetTransactionInfoResponse: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:

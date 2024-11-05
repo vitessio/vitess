@@ -734,15 +734,15 @@ func (client *Client) ReadTransaction(ctx context.Context, tablet *topodatapb.Ta
 	return resp.Transaction, nil
 }
 
-// ReadTransactionState is part of the tmclient.TabletManagerClient interface.
-func (client *Client) ReadTransactionState(ctx context.Context, tablet *topodatapb.Tablet, dtid string) (*tabletmanagerdatapb.ReadTransactionStateResponse, error) {
+// GetTransactionInfo is part of the tmclient.TabletManagerClient interface.
+func (client *Client) GetTransactionInfo(ctx context.Context, tablet *topodatapb.Tablet, dtid string) (*tabletmanagerdatapb.GetTransactionInfoResponse, error) {
 	c, closer, err := client.dialer.dial(ctx, tablet)
 	if err != nil {
 		return nil, err
 	}
 	defer closer.Close()
 
-	resp, err := c.ReadTransactionState(ctx, &tabletmanagerdatapb.ReadTransactionStateRequest{
+	resp, err := c.GetTransactionInfo(ctx, &tabletmanagerdatapb.GetTransactionInfoRequest{
 		Dtid: dtid,
 	})
 	if err != nil {

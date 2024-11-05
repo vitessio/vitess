@@ -245,7 +245,7 @@ func (client *FakeTabletManagerClient) ReadTransaction(ctx context.Context, tabl
 	return nil, nil
 }
 
-func (client *FakeTabletManagerClient) ReadTransactionState(ctx context.Context, tablet *topodatapb.Tablet, dtid string) (*tabletmanagerdatapb.ReadTransactionStateResponse, error) {
+func (client *FakeTabletManagerClient) GetTransactionInfo(ctx context.Context, tablet *topodatapb.Tablet, dtid string) (*tabletmanagerdatapb.GetTransactionInfoResponse, error) {
 	return nil, nil
 }
 

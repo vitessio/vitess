@@ -5544,14 +5544,14 @@ func TestConcludeTransaction(t *testing.T) {
 	}
 }
 
-func TestReadTransactionState(t *testing.T) {
+func TestGetTransactionInfo(t *testing.T) {
 	ks := "testkeyspace"
 	tests := []struct {
 		name       string
 		tmc        *testutil.TabletManagerClient
 		dtid       string
 		expErr     string
-		respWanted *vtctldatapb.ReadTransactionStateResponse
+		respWanted *vtctldatapb.GetTransactionInfoResponse
 	}{
 		{
 			name:   "invalid dtid",
@@ -5574,7 +5574,7 @@ func TestReadTransactionState(t *testing.T) {
 						},
 					},
 				},
-				ReadTransactionStateResult: map[string]*tabletmanagerdatapb.ReadTransactionStateResponse{
+				GetTransactionInfoResult: map[string]*tabletmanagerdatapb.GetTransactionInfoResponse{
 					"-80": {
 						State:      "FAILED",
 						Statements: []string{"stmt1", "stmt2"},
@@ -5583,7 +5583,7 @@ func TestReadTransactionState(t *testing.T) {
 				},
 			},
 			dtid: "testkeyspace:80-:1234",
-			respWanted: &vtctldatapb.ReadTransactionStateResponse{
+			respWanted: &vtctldatapb.GetTransactionInfoResponse{
 				Metadata: &querypb.TransactionMetadata{
 					Dtid: "bb",
 					Participants: []*querypb.Target{
@@ -5633,8 +5633,8 @@ func TestReadTransactionState(t *testing.T) {
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 				return NewVtctldServer(vtenv.NewTestEnv(), ts)
 			})
-			req := &vtctldatapb.ReadTransactionStateRequest{Dtid: tt.dtid}
-			resp, err := vtctld.ReadTransactionState(ctx, req)
+			req := &vtctldatapb.GetTransactionInfoRequest{Dtid: tt.dtid}
+			resp, err := vtctld.GetTransactionInfo(ctx, req)
 			if tt.expErr != "" {
 				require.ErrorContains(t, err, tt.expErr)
 				return

@@ -326,11 +326,11 @@ message ReadTransactionResponse {
   query.TransactionMetadata transaction = 1;
 }
 
-message ReadTransactionStateRequest {
+message GetTransactionInfoRequest {
   string dtid = 1;
 }
 
-message ReadTransactionStateResponse {
+message GetTransactionInfoResponse {
   string state = 1;
   string message = 2;
   int64 time_created = 3;

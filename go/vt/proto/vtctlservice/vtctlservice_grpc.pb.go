@@ -278,6 +278,8 @@ type VtctldClient interface {
 	GetThrottlerStatus(ctx context.Context, in *vtctldata.GetThrottlerStatusRequest, opts ...grpc.CallOption) (*vtctldata.GetThrottlerStatusResponse, error)
 	// GetTopologyPath returns the topology cell at a given path.
 	GetTopologyPath(ctx context.Context, in *vtctldata.GetTopologyPathRequest, opts ...grpc.CallOption) (*vtctldata.GetTopologyPathResponse, error)
+	// GetTransactionInfo reads a given transactions information.
+	GetTransactionInfo(ctx context.Context, in *vtctldata.GetTransactionInfoRequest, opts ...grpc.CallOption) (*vtctldata.GetTransactionInfoResponse, error)
 	// GetTransactions returns the unresolved transactions for the request.
 	GetUnresolvedTransactions(ctx context.Context, in *vtctldata.GetUnresolvedTransactionsRequest, opts ...grpc.CallOption) (*vtctldata.GetUnresolvedTransactionsResponse, error)
 	// GetVersion returns the version of a tablet from its debug vars.
@@ -328,8 +330,6 @@ type VtctldClient interface {
 	// current shard primary is in for promotion unless NewPrimary is explicitly
 	// provided in the request.
 	PlannedReparentShard(ctx context.Context, in *vtctldata.PlannedReparentShardRequest, opts ...grpc.CallOption) (*vtctldata.PlannedReparentShardResponse, error)
-	// ReadTransactionState reads a given transactions state.
-	ReadTransactionState(ctx context.Context, in *vtctldata.ReadTransactionStateRequest, opts ...grpc.CallOption) (*vtctldata.ReadTransactionStateResponse, error)
 	// RebuildKeyspaceGraph rebuilds the serving data for a keyspace.
 	//
 	// This may trigger an update to all connected clients.
@@ -1026,6 +1026,15 @@ func (c *vtctldClient) GetTopologyPath(ctx context.Context, in *vtctldata.GetTop
 	return out, nil
 }
 
+func (c *vtctldClient) GetTransactionInfo(ctx context.Context, in *vtctldata.GetTransactionInfoRequest, opts ...grpc.CallOption) (*vtctldata.GetTransactionInfoResponse, error) {
+	out := new(vtctldata.GetTransactionInfoResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/GetTransactionInfo", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vtctldClient) GetUnresolvedTransactions(ctx context.Context, in *vtctldata.GetUnresolvedTransactionsRequest, opts ...grpc.CallOption) (*vtctldata.GetUnresolvedTransactionsResponse, error) {
 	out := new(vtctldata.GetUnresolvedTransactionsResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/GetUnresolvedTransactions", in, out, opts...)
@@ -1182,15 +1191,6 @@ func (c *vtctldClient) PingTablet(ctx context.Context, in *vtctldata.PingTabletR
 func (c *vtctldClient) PlannedReparentShard(ctx context.Context, in *vtctldata.PlannedReparentShardRequest, opts ...grpc.CallOption) (*vtctldata.PlannedReparentShardResponse, error) {
 	out := new(vtctldata.PlannedReparentShardResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/PlannedReparentShard", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *vtctldClient) ReadTransactionState(ctx context.Context, in *vtctldata.ReadTransactionStateRequest, opts ...grpc.CallOption) (*vtctldata.ReadTransactionStateResponse, error) {
-	out := new(vtctldata.ReadTransactionStateResponse)
-	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/ReadTransactionState", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1807,6 +1807,8 @@ type VtctldServer interface {
 	GetThrottlerStatus(context.Context, *vtctldata.GetThrottlerStatusRequest) (*vtctldata.GetThrottlerStatusResponse, error)
 	// GetTopologyPath returns the topology cell at a given path.
 	GetTopologyPath(context.Context, *vtctldata.GetTopologyPathRequest) (*vtctldata.GetTopologyPathResponse, error)
+	// GetTransactionInfo reads a given transactions information.
+	GetTransactionInfo(context.Context, *vtctldata.GetTransactionInfoRequest) (*vtctldata.GetTransactionInfoResponse, error)
 	// GetTransactions returns the unresolved transactions for the request.
 	GetUnresolvedTransactions(context.Context, *vtctldata.GetUnresolvedTransactionsRequest) (*vtctldata.GetUnresolvedTransactionsResponse, error)
 	// GetVersion returns the version of a tablet from its debug vars.
@@ -1857,8 +1859,6 @@ type VtctldServer interface {
 	// current shard primary is in for promotion unless NewPrimary is explicitly
 	// provided in the request.
 	PlannedReparentShard(context.Context, *vtctldata.PlannedReparentShardRequest) (*vtctldata.PlannedReparentShardResponse, error)
-	// ReadTransactionState reads a given transactions state.
-	ReadTransactionState(context.Context, *vtctldata.ReadTransactionStateRequest) (*vtctldata.ReadTransactionStateResponse, error)
 	// RebuildKeyspaceGraph rebuilds the serving data for a keyspace.
 	//
 	// This may trigger an update to all connected clients.
@@ -2176,6 +2176,9 @@ func (UnimplementedVtctldServer) GetThrottlerStatus(context.Context, *vtctldata.
 func (UnimplementedVtctldServer) GetTopologyPath(context.Context, *vtctldata.GetTopologyPathRequest) (*vtctldata.GetTopologyPathResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetTopologyPath not implemented")
 }
+func (UnimplementedVtctldServer) GetTransactionInfo(context.Context, *vtctldata.GetTransactionInfoRequest) (*vtctldata.GetTransactionInfoResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetTransactionInfo not implemented")
+}
 func (UnimplementedVtctldServer) GetUnresolvedTransactions(context.Context, *vtctldata.GetUnresolvedTransactionsRequest) (*vtctldata.GetUnresolvedTransactionsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetUnresolvedTransactions not implemented")
 }
@@ -2229,9 +2232,6 @@ func (UnimplementedVtctldServer) PingTablet(context.Context, *vtctldata.PingTabl
 }
 func (UnimplementedVtctldServer) PlannedReparentShard(context.Context, *vtctldata.PlannedReparentShardRequest) (*vtctldata.PlannedReparentShardResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PlannedReparentShard not implemented")
-}
-func (UnimplementedVtctldServer) ReadTransactionState(context.Context, *vtctldata.ReadTransactionStateRequest) (*vtctldata.ReadTransactionStateResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ReadTransactionState not implemented")
 }
 func (UnimplementedVtctldServer) RebuildKeyspaceGraph(context.Context, *vtctldata.RebuildKeyspaceGraphRequest) (*vtctldata.RebuildKeyspaceGraphResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RebuildKeyspaceGraph not implemented")
@@ -3389,6 +3389,24 @@ func _Vtctld_GetTopologyPath_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vtctld_GetTransactionInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.GetTransactionInfoRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).GetTransactionInfo(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/GetTransactionInfo",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).GetTransactionInfo(ctx, req.(*vtctldata.GetTransactionInfoRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Vtctld_GetUnresolvedTransactions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtctldata.GetUnresolvedTransactionsRequest)
 	if err := dec(in); err != nil {
@@ -3709,24 +3727,6 @@ func _Vtctld_PlannedReparentShard_Handler(srv interface{}, ctx context.Context, 
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VtctldServer).PlannedReparentShard(ctx, req.(*vtctldata.PlannedReparentShardRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _Vtctld_ReadTransactionState_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(vtctldata.ReadTransactionStateRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(VtctldServer).ReadTransactionState(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/vtctlservice.Vtctld/ReadTransactionState",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VtctldServer).ReadTransactionState(ctx, req.(*vtctldata.ReadTransactionStateRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -4836,6 +4836,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Vtctld_GetTopologyPath_Handler,
 		},
 		{
+			MethodName: "GetTransactionInfo",
+			Handler:    _Vtctld_GetTransactionInfo_Handler,
+		},
+		{
 			MethodName: "GetUnresolvedTransactions",
 			Handler:    _Vtctld_GetUnresolvedTransactions_Handler,
 		},
@@ -4906,10 +4910,6 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "PlannedReparentShard",
 			Handler:    _Vtctld_PlannedReparentShard_Handler,
-		},
-		{
-			MethodName: "ReadTransactionState",
-			Handler:    _Vtctld_ReadTransactionState_Handler,
 		},
 		{
 			MethodName: "RebuildKeyspaceGraph",

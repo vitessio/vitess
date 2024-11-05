@@ -1140,7 +1140,7 @@ message GetUnresolvedTransactionsResponse {
   repeated query.TransactionMetadata transactions = 1;
 }
 
-message ReadTransactionStateRequest {
+message GetTransactionInfoRequest {
   string dtid = 1;
 }
 
@@ -1152,7 +1152,7 @@ message ShardTransactionState {
   repeated string statements = 5;
 }
 
-message ReadTransactionStateResponse {
+message GetTransactionInfoResponse {
   query.TransactionMetadata metadata = 1;
   repeated ShardTransactionState shard_states = 2;
 }

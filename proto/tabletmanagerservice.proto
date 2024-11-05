@@ -97,7 +97,7 @@ service TabletManager {
 
   rpc ReadTransaction(tabletmanagerdata.ReadTransactionRequest) returns (tabletmanagerdata.ReadTransactionResponse) {};
 
-  rpc ReadTransactionState(tabletmanagerdata.ReadTransactionStateRequest) returns (tabletmanagerdata.ReadTransactionStateResponse) {};
+  rpc GetTransactionInfo(tabletmanagerdata.GetTransactionInfoRequest) returns (tabletmanagerdata.GetTransactionInfoResponse) {};
 
   rpc ConcludeTransaction(tabletmanagerdata.ConcludeTransactionRequest) returns (tabletmanagerdata.ConcludeTransactionResponse) {};
 

@@ -421,15 +421,15 @@ func (tpc *TwoPC) ReadTransaction(ctx context.Context, dtid string) (*querypb.Tr
 	return result, nil
 }
 
-// ReadTransactionState returns the data for the transaction.
-func (tpc *TwoPC) ReadTransactionState(ctx context.Context, dtid string) (*tabletmanagerdatapb.ReadTransactionStateResponse, error) {
+// GetTransactionInfo returns the data for the transaction.
+func (tpc *TwoPC) GetTransactionInfo(ctx context.Context, dtid string) (*tabletmanagerdatapb.GetTransactionInfoResponse, error) {
 	conn, err := tpc.readPool.Get(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Recycle()
 
-	result := &tabletmanagerdatapb.ReadTransactionStateResponse{}
+	result := &tabletmanagerdatapb.GetTransactionInfoResponse{}
 	bindVars := map[string]*querypb.BindVariable{
 		"dtid": sqltypes.BytesBindVariable([]byte(dtid)),
 	}

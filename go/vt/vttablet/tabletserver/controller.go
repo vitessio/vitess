@@ -108,8 +108,8 @@ type Controller interface {
 	// ReadTransaction returns all unresolved transactions list
 	ReadTransaction(ctx context.Context, target *querypb.Target, dtid string) (*querypb.TransactionMetadata, error)
 
-	// ReadTransactionState returns data about a single transaction
-	ReadTransactionState(ctx context.Context, target *querypb.Target, dtid string) (*tabletmanagerdata.ReadTransactionStateResponse, error)
+	// GetTransactionInfo returns data about a single transaction
+	GetTransactionInfo(ctx context.Context, target *querypb.Target, dtid string) (*tabletmanagerdata.GetTransactionInfoResponse, error)
 
 	// ConcludeTransaction deletes the distributed transaction metadata
 	ConcludeTransaction(ctx context.Context, target *querypb.Target, dtid string) error

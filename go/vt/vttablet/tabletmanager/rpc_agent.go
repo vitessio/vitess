@@ -89,7 +89,7 @@ type RPCTM interface {
 
 	ReadTransaction(ctx context.Context, req *tabletmanagerdatapb.ReadTransactionRequest) (*querypb.TransactionMetadata, error)
 
-	ReadTransactionState(ctx context.Context, req *tabletmanagerdatapb.ReadTransactionStateRequest) (*tabletmanagerdatapb.ReadTransactionStateResponse, error)
+	GetTransactionInfo(ctx context.Context, req *tabletmanagerdatapb.GetTransactionInfoRequest) (*tabletmanagerdatapb.GetTransactionInfoResponse, error)
 
 	ConcludeTransaction(ctx context.Context, req *tabletmanagerdatapb.ConcludeTransactionRequest) error
 

@@ -310,12 +310,12 @@ func (dte *DTExecutor) ReadTransaction(dtid string) (*querypb.TransactionMetadat
 	return dte.te.twoPC.ReadTransaction(dte.ctx, dtid)
 }
 
-// ReadTransactionState returns the data of the specified dtid.
-func (dte *DTExecutor) ReadTransactionState(dtid string) (*tabletmanagerdatapb.ReadTransactionStateResponse, error) {
+// GetTransactionInfo returns the data of the specified dtid.
+func (dte *DTExecutor) GetTransactionInfo(dtid string) (*tabletmanagerdatapb.GetTransactionInfoResponse, error) {
 	if !dte.te.twopcEnabled {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "2pc is not enabled")
 	}
-	return dte.te.twoPC.ReadTransactionState(dte.ctx, dtid)
+	return dte.te.twoPC.GetTransactionInfo(dte.ctx, dtid)
 }
 
 // ReadTwopcInflight returns info about all in-flight 2pc transactions.
