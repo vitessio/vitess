@@ -46,12 +46,12 @@ func TestServerGetTabletsByCell(t *testing.T) {
 		expectedTablets    []*topodatapb.Tablet
 		opt                *topo.GetTabletsByCellOptions
 		listError          error
-		keyspaceShards     map[string][]string
+		keyspaceShards     []*topo.KeyspaceShard
 	}{
 		{
 			name: "negative concurrency",
-			keyspaceShards: map[string][]string{
-				keyspace: {shard},
+			keyspaceShards: []*topo.KeyspaceShard{
+				{Keyspace: keyspace, Shard: shard},
 			},
 			createShardTablets: 1,
 			expectedTablets: []*topodatapb.Tablet{
@@ -73,8 +73,8 @@ func TestServerGetTabletsByCell(t *testing.T) {
 		},
 		{
 			name: "single",
-			keyspaceShards: map[string][]string{
-				keyspace: {shard},
+			keyspaceShards: []*topo.KeyspaceShard{
+				{Keyspace: keyspace, Shard: shard},
 			},
 			createShardTablets: 1,
 			expectedTablets: []*topodatapb.Tablet{
@@ -96,8 +96,8 @@ func TestServerGetTabletsByCell(t *testing.T) {
 		},
 		{
 			name: "multiple",
-			keyspaceShards: map[string][]string{
-				keyspace: {shard},
+			keyspaceShards: []*topo.KeyspaceShard{
+				{Keyspace: keyspace, Shard: shard},
 			},
 			// Should work with more than 1 tablet
 			createShardTablets: 4,
@@ -155,8 +155,8 @@ func TestServerGetTabletsByCell(t *testing.T) {
 		},
 		{
 			name: "multiple with list error",
-			keyspaceShards: map[string][]string{
-				keyspace: {shard},
+			keyspaceShards: []*topo.KeyspaceShard{
+				{Keyspace: keyspace, Shard: shard},
 			},
 			// Should work with more than 1 tablet when List returns an error
 			createShardTablets: 4,
@@ -215,9 +215,9 @@ func TestServerGetTabletsByCell(t *testing.T) {
 		},
 		{
 			name: "filtered by keyspace and shard",
-			keyspaceShards: map[string][]string{
-				keyspace:   {shard},
-				"filtered": {"-"},
+			keyspaceShards: []*topo.KeyspaceShard{
+				{Keyspace: keyspace, Shard: shard},
+				{Keyspace: "filtered", Shard: "-"},
 			},
 			// Should create 2 tablets in 2 different shards (4 total)
 			// but only a single shard is returned
@@ -258,11 +258,9 @@ func TestServerGetTabletsByCell(t *testing.T) {
 		},
 		{
 			name: "filtered by keyspace and no shard",
-			keyspaceShards: map[string][]string{
-				keyspace: {
-					shard,
-					shard + "2",
-				},
+			keyspaceShards: []*topo.KeyspaceShard{
+				{Keyspace: keyspace, Shard: shard},
+				{Keyspace: keyspace, Shard: shard + "2"},
 			},
 			// Should create 2 tablets in 2 different shards (4 total)
 			// in the same keyspace and both shards are returned due to
@@ -341,32 +339,32 @@ func TestServerGetTabletsByCell(t *testing.T) {
 
 			// Create an ephemeral keyspace and generate shard records within
 			// the keyspace to fetch later.
-			for k, shards := range tt.keyspaceShards {
-				require.NoError(t, ts.CreateKeyspace(ctx, k, &topodatapb.Keyspace{}))
-				for _, s := range shards {
-					require.NoError(t, ts.CreateShard(ctx, k, s))
+			createdKeyspaces := make(map[string]bool, len(tt.keyspaceShards))
+			for _, kss := range tt.keyspaceShards {
+				if !createdKeyspaces[kss.Keyspace] {
+					require.NoError(t, ts.CreateKeyspace(ctx, kss.Keyspace, &topodatapb.Keyspace{}))
+					createdKeyspaces[kss.Keyspace] = true
 				}
+				require.NoError(t, ts.CreateShard(ctx, kss.Keyspace, kss.Shard))
 			}
 
 			var uid uint32 = 1
-			for k, shards := range tt.keyspaceShards {
-				for _, s := range shards {
-					for i := 0; i < tt.createShardTablets; i++ {
-						tablet := &topodatapb.Tablet{
-							Alias: &topodatapb.TabletAlias{
-								Cell: cell,
-								Uid:  uid,
-							},
-							Hostname: "host1",
-							PortMap: map[string]int32{
-								"vt": int32(uid),
-							},
-							Keyspace: k,
-							Shard:    s,
-						}
-						require.NoError(t, ts.CreateTablet(ctx, tablet))
-						uid++
+			for _, kss := range tt.keyspaceShards {
+				for i := 0; i < tt.createShardTablets; i++ {
+					tablet := &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: cell,
+							Uid:  uid,
+						},
+						Hostname: "host1",
+						PortMap: map[string]int32{
+							"vt": int32(uid),
+						},
+						Keyspace: kss.Keyspace,
+						Shard:    kss.Shard,
 					}
+					require.NoError(t, ts.CreateTablet(ctx, tablet))
+					uid++
 				}
 			}
 
