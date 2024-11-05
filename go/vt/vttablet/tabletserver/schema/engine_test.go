@@ -1100,11 +1100,6 @@ func TestEngineGetTableData(t *testing.T) {
 				conn.BaseShowTables(): {},
 			},
 		}, {
-			name: "Success with include stats",
-			expectedQueries: map[string]*sqltypes.Result{
-				conn.BaseShowTables(): {},
-			},
-		}, {
 			name: "Error in query",
 			queriesToReject: map[string]error{
 				conn.BaseShowTables(): errors.New("some error in MySQL"),
