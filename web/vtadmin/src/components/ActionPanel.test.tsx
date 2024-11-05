@@ -16,7 +16,7 @@
 
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { rest } from 'msw';
+import { delay, http, HttpResponse } from 'msw';
 import { QueryClient, QueryClientProvider, useMutation } from 'react-query';
 import { describe, it, expect, vi } from 'vitest';
 
@@ -33,11 +33,7 @@ describe('ActionPanel', () => {
      * provides such a function and should be `render`ed in the context QueryClientProvider.
      */
     const Wrapper: React.FC<ActionPanelProps & { url: string }> = (props) => {
-        const mutation = useMutation(() => fetch(new URL(props['url']), { method: 'post' }), {
-            onError: (error) => {
-                console.log('ERROR: ', error);
-            },
-        });
+        const mutation = useMutation(() => fetch(new URL(props['url']), { method: 'post' }));
         return <ActionPanel {...props} mutation={mutation as any} />;
     };
 
@@ -46,8 +42,9 @@ describe('ActionPanel', () => {
 
         const url = `${import.meta.env.VITE_VTADMIN_API_ADDRESS}/api/test`;
         global.server.use(
-            rest.post(url, (req, res, ctx) => {
-                return res(ctx.json({ ok: true }));
+            http.post(url, async (info) => {
+                await delay();
+                return HttpResponse.json({ ok: true });
             })
         );
 
