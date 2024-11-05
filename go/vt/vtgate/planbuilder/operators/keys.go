@@ -50,6 +50,18 @@ type (
 	}
 )
 
+func newJoinPredicate(lhs, rhs Column, op sqlparser.ComparisonExprOperator) JoinPredicate {
+	// we want to try to keep the columns in the same order, no matter how the query was written
+	if lhs.String() > rhs.String() {
+		var success bool
+		op, success = op.SwitchSides()
+		if success {
+			lhs, rhs = rhs, lhs
+		}
+	}
+	return JoinPredicate{LHS: lhs, RHS: rhs, Uses: op}
+}
+
 func (c Column) MarshalJSON() ([]byte, error) {
 	if c.Table != "" {
 		return json.Marshal(fmt.Sprintf("%s.%s", c.Table, c.Name))
@@ -249,11 +261,7 @@ func getUniqueJoinPredicates(ctx *plancontext.PlanningContext, joinPredicates []
 			continue
 		}
 
-		result = append(result, JoinPredicate{
-			LHS:  *lhs,
-			RHS:  *rhs,
-			Uses: predicate.uses,
-		})
+		result = append(result, newJoinPredicate(*lhs, *rhs, predicate.uses))
 	}
 
 	sort.Slice(result, func(i, j int) bool {

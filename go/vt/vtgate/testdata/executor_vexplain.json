@@ -33,7 +33,7 @@
 				"user_extra.noLimit ="
 			],
 			"joinPredicates": [
-				"user_extra.user_id = `user`.id"
+				"`user`.id = user_extra.user_id"
 			]
 		}
 	},
