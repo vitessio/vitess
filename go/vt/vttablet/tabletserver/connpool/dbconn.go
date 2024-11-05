@@ -25,6 +25,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/pools/smartconnpool"
 	"vitess.io/vitess/go/sqltypes"
@@ -121,11 +122,15 @@ func (dbc *Conn) Err() error {
 // Exec executes the specified query. If there is a connection error, it will reconnect
 // and retry. A failed reconnect will trigger a CheckMySQL.
 func (dbc *Conn) Exec(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
+	return dbc.ExecOpt(ctx, query, mysql.ExecuteOptions{MaxRows: maxrows, WantFields: wantfields})
+}
+
+func (dbc *Conn) ExecOpt(ctx context.Context, query string, opt mysql.ExecuteOptions) (*sqltypes.Result, error) {
 	span, ctx := trace.NewSpan(ctx, "DBConn.Exec")
 	defer span.Finish()
 
 	for attempt := 1; attempt <= 2; attempt++ {
-		r, err := dbc.execOnce(ctx, query, maxrows, wantfields, false)
+		r, err := dbc.execOnceOpt(ctx, query, opt, false)
 		switch {
 		case err == nil:
 			// Success.
@@ -159,7 +164,12 @@ func (dbc *Conn) Exec(ctx context.Context, query string, maxrows int, wantfields
 	panic("unreachable")
 }
 
-func (dbc *Conn) execOnce(ctx context.Context, query string, maxrows int, wantfields bool, insideTxn bool) (*sqltypes.Result, error) {
+// ExecOnce executes the specified query, but does not retry on connection errors.
+func (dbc *Conn) ExecOnceOpt(ctx context.Context, query string, opt mysql.ExecuteOptions) (*sqltypes.Result, error) {
+	return dbc.execOnceOpt(ctx, query, opt, true /* Once means we are in a txn*/)
+}
+
+func (dbc *Conn) execOnceOpt(ctx context.Context, query string, opt mysql.ExecuteOptions, insideTxn bool) (*sqltypes.Result, error) {
 	dbc.current.Store(&query)
 	defer dbc.current.Store(nil)
 
@@ -179,7 +189,7 @@ func (dbc *Conn) execOnce(ctx context.Context, query string, maxrows int, wantfi
 
 	ch := make(chan execResult)
 	go func() {
-		result, err := dbc.conn.ExecuteFetch(query, maxrows, wantfields)
+		result, err := dbc.conn.ExecuteFetchOpt(query, opt)
 		ch <- execResult{result, err}
 		close(ch)
 	}()
@@ -223,11 +233,6 @@ func (dbc *Conn) terminate(ctx context.Context, insideTxn bool, now time.Time) {
 	} else {
 		_ = dbc.KillQuery(errMsg, time.Since(now))
 	}
-}
-
-// ExecOnce executes the specified query, but does not retry on connection errors.
-func (dbc *Conn) ExecOnce(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
-	return dbc.execOnce(ctx, query, maxrows, wantfields, true /* Once means we are in a txn*/)
 }
 
 // FetchNext returns the next result set.
@@ -412,7 +417,7 @@ func (dbc *Conn) Close() {
 
 // ApplySetting implements the pools.Resource interface.
 func (dbc *Conn) ApplySetting(ctx context.Context, setting *smartconnpool.Setting) error {
-	if _, err := dbc.execOnce(ctx, setting.ApplyQuery(), 1, false, false); err != nil {
+	if _, err := dbc.execOnceOpt(ctx, setting.ApplyQuery(), mysql.ExecuteOptions{MaxRows: 1}, false); err != nil {
 		return err
 	}
 	dbc.setting = setting
@@ -421,7 +426,7 @@ func (dbc *Conn) ApplySetting(ctx context.Context, setting *smartconnpool.Settin
 
 // ResetSetting implements the pools.Resource interface.
 func (dbc *Conn) ResetSetting(ctx context.Context) error {
-	if _, err := dbc.execOnce(ctx, dbc.setting.ResetQuery(), 1, false, false); err != nil {
+	if _, err := dbc.execOnceOpt(ctx, dbc.setting.ResetQuery(), mysql.ExecuteOptions{MaxRows: 1}, false); err != nil {
 		return err
 	}
 	dbc.setting = nil
@@ -601,7 +606,7 @@ func (dbc *Conn) CurrentForLogging() string {
 }
 
 func (dbc *Conn) applySameSetting(ctx context.Context) error {
-	_, err := dbc.execOnce(ctx, dbc.setting.ApplyQuery(), 1, false, false)
+	_, err := dbc.execOnceOpt(ctx, dbc.setting.ApplyQuery(), mysql.ExecuteOptions{MaxRows: 1}, false)
 	return err
 }
 

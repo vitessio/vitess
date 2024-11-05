@@ -103,6 +103,11 @@ func allocStreamResult() *sqltypes.Result {
 }
 
 func (qre *QueryExecutor) shouldConsolidate() bool {
+	// TODO (harshit): This is a temporary implementation to test the feature.
+	// This should ideally work with consolidator.
+	if !qre.options.RawMysqlPackets {
+		return false
+	}
 	co := qre.options.GetConsolidator()
 	switch co {
 	case querypb.ExecuteOptions_CONSOLIDATOR_DISABLED:
@@ -1119,7 +1124,12 @@ func (qre *QueryExecutor) execDBConn(conn *connpool.Conn, sql string, wantfields
 	}
 	defer qre.tsv.statelessql.Remove(qd)
 
-	return conn.Exec(ctx, sql, int(qre.tsv.qe.maxResultSize.Load()), wantfields)
+	opt := mysql.ExecuteOptions{
+		MaxRows:    int(qre.tsv.qe.maxResultSize.Load()),
+		WantFields: wantfields,
+		RawPackets: qre.options.RawMysqlPackets,
+	}
+	return conn.ExecOpt(ctx, sql, opt)
 }
 
 func (qre *QueryExecutor) execStatefulConn(conn *StatefulConnection, sql string, wantfields bool) (*sqltypes.Result, error) {
@@ -1135,7 +1145,12 @@ func (qre *QueryExecutor) execStatefulConn(conn *StatefulConnection, sql string,
 	}
 	defer qre.tsv.statefulql.Remove(qd)
 
-	return conn.Exec(ctx, sql, int(qre.tsv.qe.maxResultSize.Load()), wantfields)
+	opt := mysql.ExecuteOptions{
+		MaxRows:    int(qre.tsv.qe.maxResultSize.Load()),
+		WantFields: wantfields,
+		RawPackets: qre.options.RawMysqlPackets,
+	}
+	return conn.ExecOpt(ctx, sql, opt)
 }
 
 func (qre *QueryExecutor) execStreamSQL(conn *connpool.PooledConn, isTransaction bool, sql string, callback func(*sqltypes.Result) error) error {

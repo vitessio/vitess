@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/pools/smartconnpool"
@@ -306,7 +307,7 @@ func TestDBConnCtxError(t *testing.T) {
 	}
 
 	execOnce := func(ctx context.Context, query string, dbconn *Conn) error {
-		_, err := dbconn.ExecOnce(ctx, query, 1, false)
+		_, err := dbconn.ExecOnceOpt(ctx, query, mysql.ExecuteOptions{MaxRows: 1})
 		return err
 	}
 
@@ -649,7 +650,7 @@ func TestDBConnReApplySetting(t *testing.T) {
 
 func TestDBExecOnceKillTimeout(t *testing.T) {
 	executeWithTimeout(t, `kill \d+`, 150*time.Millisecond, func(ctx context.Context, dbConn *Conn) (*sqltypes.Result, error) {
-		return dbConn.ExecOnce(ctx, "select 1", 1, false)
+		return dbConn.ExecOnceOpt(ctx, "select 1", mysql.ExecuteOptions{MaxRows: 1})
 	})
 }
 

@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/pools/smartconnpool"
 	"vitess.io/vitess/go/timer"
@@ -733,7 +734,7 @@ func (te *TxEngine) beginNewDbaConnection(ctx context.Context, settingsQuery str
 
 	// If we have a settings query that we need to apply, we do that before starting the transaction.
 	if settingsQuery != "" {
-		if _, err = dbConn.ExecOnce(ctx, settingsQuery, 1, false); err != nil {
+		if _, err = dbConn.ExecOnceOpt(ctx, settingsQuery, mysql.ExecuteOptions{MaxRows: 1}); err != nil {
 			return nil, err
 		}
 	}
