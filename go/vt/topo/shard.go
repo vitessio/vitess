@@ -654,12 +654,16 @@ func (ts *Server) GetTabletsByShardCell(ctx context.Context, keyspace, shard str
 	eg.SetLimit(DefaultConcurrency)
 
 	tablets := make([]*TabletInfo, 0, len(cells))
-	options := &GetTabletsByCellOptions{
-		Concurrency: cellConcurrency,
-		KeyspaceShard: &KeyspaceShard{
+	var kss *KeyspaceShard
+	if keyspace != "" {
+		kss = &KeyspaceShard{
 			Keyspace: keyspace,
 			Shard:    shard,
-		},
+		}
+	}
+	options := &GetTabletsByCellOptions{
+		Concurrency:   cellConcurrency,
+		KeyspaceShard: kss,
 	}
 	for _, cell := range cells {
 		eg.Go(func() error {
@@ -677,7 +681,6 @@ func (ts *Server) GetTabletsByShardCell(ctx context.Context, keyspace, shard str
 		log.Warningf("GetTabletsByShardCell(%v,%v): got partial result: %v", keyspace, shard, err)
 		return tablets, NewError(PartialResult, shard)
 	}
-
 	return tablets, nil
 }
 

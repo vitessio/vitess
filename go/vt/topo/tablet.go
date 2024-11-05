@@ -17,9 +17,11 @@ limitations under the License.
 package topo
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"path"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -277,8 +279,8 @@ func (ts *Server) GetTabletsByCell(ctx context.Context, cellAlias string, opt *G
 		if err := tablet.UnmarshalVT(listResults[n].Value); err != nil {
 			return nil, err
 		}
-		if opt != nil && opt.KeyspaceShard != nil {
-			if opt.KeyspaceShard.Keyspace != "" && opt.KeyspaceShard.Keyspace != tablet.Keyspace {
+		if opt != nil && opt.KeyspaceShard != nil && opt.KeyspaceShard.Keyspace != "" {
+			if opt.KeyspaceShard.Keyspace != tablet.Keyspace {
 				continue
 			}
 			if opt.KeyspaceShard.Shard != "" && opt.KeyspaceShard.Shard != tablet.Shard {
@@ -287,7 +289,9 @@ func (ts *Server) GetTabletsByCell(ctx context.Context, cellAlias string, opt *G
 		}
 		tablets = append(tablets, &TabletInfo{Tablet: tablet, version: listResults[n].Version})
 	}
-
+	slices.SortFunc(tablets, func(i, j *TabletInfo) int {
+		return cmp.Compare(i.Alias.Uid, j.Alias.Uid)
+	})
 	return tablets, nil
 }
 
