@@ -786,9 +786,9 @@ func getRoutingRules(t *testing.T) *vschemapb.RoutingRules {
 
 func confirmNoRoutingRules(t *testing.T) {
 	rrRes := getRoutingRules(t)
-	require.Zero(t, len(rrRes.Rules))
+	require.Zero(t, rrRes.Rules)
 	krrRes := getKeyspaceRoutingRules(t, vc)
-	require.Zero(t, len(krrRes.Rules))
+	require.Zero(t, krrRes.Rules)
 }
 
 func confirmRoutingRulesExist(t *testing.T) {

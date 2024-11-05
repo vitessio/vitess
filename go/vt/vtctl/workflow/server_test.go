@@ -879,12 +879,12 @@ func TestWorkflowDelete(t *testing.T) {
 				env.updateTableRoutingRules(t, ctx, allTabletTypes, []string{table1Name, table2Name, table3Name},
 					sourceKeyspaceName, targetKeyspaceName, targetKeyspaceName)
 			},
+			wantErr: ErrWorkflowDeleteWritesSwitched.Error(),
 			postFunc: func(t *testing.T, env *testEnv) {
 				// Clear out the routing rules we put in place.
 				err := env.ts.SaveRoutingRules(ctx, &vschemapb.RoutingRules{})
 				require.NoError(t, err)
 			},
-			wantErr: ErrWorkflowDeleteWritesSwitched.Error(),
 		},
 		{
 			name: "missing table",
