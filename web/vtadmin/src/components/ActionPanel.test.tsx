@@ -16,7 +16,7 @@
 
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { http, HttpResponse } from 'msw';
+import { delay, http, HttpResponse } from 'msw';
 import { QueryClient, QueryClientProvider, useMutation } from 'react-query';
 import { describe, it, expect, vi } from 'vitest';
 
@@ -33,11 +33,7 @@ describe('ActionPanel', () => {
      * provides such a function and should be `render`ed in the context QueryClientProvider.
      */
     const Wrapper: React.FC<ActionPanelProps & { url: string }> = (props) => {
-        const mutation = useMutation(() => fetch(new URL(props['url']), { method: 'post' }), {
-            onError: (error) => {
-                console.log('ERROR: ', error);
-            },
-        });
+        const mutation = useMutation(() => fetch(new URL(props['url']), { method: 'post' }));
         return <ActionPanel {...props} mutation={mutation as any} />;
     };
 
@@ -46,7 +42,8 @@ describe('ActionPanel', () => {
 
         const url = `${import.meta.env.VITE_VTADMIN_API_ADDRESS}/api/test`;
         global.server.use(
-            http.post(url, (info) => {
+            http.post(url, async (info) => {
+                await delay()
                 return HttpResponse.json({ ok: true });
             })
         );
@@ -73,8 +70,8 @@ describe('ActionPanel', () => {
         // Enter the confirmation text
         await user.type(input, 'zone1-101');
         expect(button).not.toHaveAttribute('disabled');
-
-        await user.click(button);
+        
+        await user.click(button)
 
         // Validate form while API request is in flight
         expect(button).toHaveTextContent('Doing Action...');
