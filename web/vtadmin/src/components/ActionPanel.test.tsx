@@ -43,7 +43,7 @@ describe('ActionPanel', () => {
         const url = `${import.meta.env.VITE_VTADMIN_API_ADDRESS}/api/test`;
         global.server.use(
             http.post(url, async (info) => {
-                await delay()
+                await delay();
                 return HttpResponse.json({ ok: true });
             })
         );
@@ -70,8 +70,8 @@ describe('ActionPanel', () => {
         // Enter the confirmation text
         await user.type(input, 'zone1-101');
         expect(button).not.toHaveAttribute('disabled');
-        
-        await user.click(button)
+
+        await user.click(button);
 
         // Validate form while API request is in flight
         expect(button).toHaveTextContent('Doing Action...');

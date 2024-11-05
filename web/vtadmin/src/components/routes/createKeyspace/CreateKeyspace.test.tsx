@@ -42,7 +42,7 @@ describe('CreateKeyspace integration test', () => {
                 return HttpResponse.json({ result: { clusters: [cluster] }, ok: true });
             }),
             http.post(`${apiAddr}/api/keyspace/:clusterID`, async (info) => {
-                await delay()
+                await delay();
                 const data: vtadmin.ICreateKeyspaceResponse = {
                     keyspace: {
                         cluster: { id: cluster.id, name: cluster.name },
