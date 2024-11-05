@@ -208,8 +208,8 @@ func TestServerGetTabletsByCell(t *testing.T) {
 					Shard:    shard,
 				},
 			},
-			opt:                &topo.GetTabletsByCellOptions{Concurrency: 8},
-			listError:          topo.NewError(topo.ResourceExhausted, ""),
+			opt:       &topo.GetTabletsByCellOptions{Concurrency: 8},
+			listError: topo.NewError(topo.ResourceExhausted, ""),
 		},
 		{
 			name: "filtered by keyspace and shard",
