@@ -65,7 +65,7 @@ func TestMkInsertSingle(t *testing.T) {
 				replica_sql_running, replica_io_running, replication_sql_thread_state, replication_io_thread_state, has_replication_filters, supports_oracle_gtid, oracle_gtid, source_uuid, ancestry_uuid, executed_gtid_set, gtid_mode, gtid_purged, gtid_errant, mariadb_gtid, pseudo_gtid,
 				source_log_file, read_source_log_pos, relay_source_log_file, exec_source_log_pos, relay_log_file, relay_log_pos, last_sql_error, last_io_error, replication_lag_seconds, replica_lag_seconds, sql_delay, data_center, region, physical_environment, replication_depth, is_co_primary, has_replication_credentials, allow_tls, semi_sync_enforced, semi_sync_primary_enabled, semi_sync_primary_timeout, semi_sync_primary_wait_for_replica_count, semi_sync_replica_enabled, semi_sync_primary_status, semi_sync_primary_clients, semi_sync_replica_status, last_discovery_latency, last_seen)
 		VALUES
-				(?, ?, ?, datetime('now'), datetime('now'), 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+				(?, ?, ?, DATETIME('now'), DATETIME('now'), 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, DATETIME('now'))
        `
 	a1 := `zone1-i710, i710, 3306, 710, , 5.6.7, 5.6, MySQL, false, false, STATEMENT,
 	FULL, false, false, , 0, , 0, 0, 0,
@@ -88,9 +88,9 @@ func TestMkInsertThree(t *testing.T) {
 				replica_sql_running, replica_io_running, replication_sql_thread_state, replication_io_thread_state, has_replication_filters, supports_oracle_gtid, oracle_gtid, source_uuid, ancestry_uuid, executed_gtid_set, gtid_mode, gtid_purged, gtid_errant, mariadb_gtid, pseudo_gtid,
 				source_log_file, read_source_log_pos, relay_source_log_file, exec_source_log_pos, relay_log_file, relay_log_pos, last_sql_error, last_io_error, replication_lag_seconds, replica_lag_seconds, sql_delay, data_center, region, physical_environment, replication_depth, is_co_primary, has_replication_credentials, allow_tls, semi_sync_enforced, semi_sync_primary_enabled, semi_sync_primary_timeout, semi_sync_primary_wait_for_replica_count, semi_sync_replica_enabled, semi_sync_primary_status, semi_sync_primary_clients, semi_sync_replica_status, last_discovery_latency, last_seen)
 		VALUES
-				(?, ?, ?, datetime('now'), datetime('now'), 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now')),
-				(?, ?, ?, datetime('now'), datetime('now'), 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now')),
-				(?, ?, ?, datetime('now'), datetime('now'), 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+				(?, ?, ?, DATETIME('now'), DATETIME('now'), 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, DATETIME('now')),
+				(?, ?, ?, DATETIME('now'), DATETIME('now'), 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, DATETIME('now')),
+				(?, ?, ?, DATETIME('now'), DATETIME('now'), 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, DATETIME('now'))
        `
 	a3 := `
 		zone1-i710, i710, 3306, 710, , 5.6.7, 5.6, MySQL, false, false, STATEMENT, FULL, false, false, , 0, , 0, 0, 0, false, false, 0, 0, false, false, false, , , , , , , false, false, , 0, mysql.000007, 10, , 0, , , {0 false}, {0 false}, 0, , , , 0, false, false, false, false, false, 0, 0, false, false, 0, false, 0,
@@ -428,27 +428,27 @@ func TestReadOutdatedInstanceKeys(t *testing.T) {
 	}{
 		{
 			name:              "No problems",
-			sql:               []string{"update database_instance set last_checked = datetime('now')"},
+			sql:               []string{"update database_instance set last_checked = DATETIME('now')"},
 			instancesRequired: nil,
 		}, {
 			name: "One instance is outdated",
 			sql: []string{
-				"update database_instance set last_checked = datetime('now')",
-				"update database_instance set last_checked = datetime('now', '-1 hour') where alias = 'zone1-0000000100'",
+				"update database_instance set last_checked = DATETIME('now')",
+				"update database_instance set last_checked = DATETIME('now', '-1 hour') where alias = 'zone1-0000000100'",
 			},
 			instancesRequired: []string{"zone1-0000000100"},
 		}, {
 			name: "One instance doesn't have myql data",
 			sql: []string{
-				"update database_instance set last_checked = datetime('now')",
+				"update database_instance set last_checked = DATETIME('now')",
 				`INSERT INTO vitess_tablet VALUES('zone1-0000000103','localhost',7706,'ks','0','zone1',2,'0001-01-01 00:00:00+00:00','');`,
 			},
 			instancesRequired: []string{"zone1-0000000103"},
 		}, {
 			name: "One instance doesn't have myql data and one is outdated",
 			sql: []string{
-				"update database_instance set last_checked = datetime('now')",
-				"update database_instance set last_checked = datetime('now', '-1 hour') where alias = 'zone1-0000000100'",
+				"update database_instance set last_checked = DATETIME('now')",
+				"update database_instance set last_checked = DATETIME('now', '-1 hour') where alias = 'zone1-0000000100'",
 				`INSERT INTO vitess_tablet VALUES('zone1-0000000103','localhost',7706,'ks','0','zone1',2,'0001-01-01 00:00:00+00:00','');`,
 			},
 			instancesRequired: []string{"zone1-0000000103", "zone1-0000000100"},
@@ -485,10 +485,10 @@ func TestReadOutdatedInstanceKeys(t *testing.T) {
 			errInDataCollection := db.QueryVTOrcRowsMap(`select alias, 
 last_checked, 
 last_attempted_check, 
-ROUND((JULIANDAY(datetime('now')) - JULIANDAY(last_checked)) * 86400) AS difference,
+ROUND((JULIANDAY(DATETIME('now')) - JULIANDAY(last_checked)) * 86400) AS difference,
 last_attempted_check <= last_checked as use1,
-last_checked < datetime('now', '-1500 second') as is_outdated1,
-last_checked < datetime('now', '-3000 second') as is_outdated2
+last_checked < DATETIME('now', '-1500 second') as is_outdated1,
+last_checked < DATETIME('now', '-3000 second') as is_outdated2
 from database_instance`, func(rowMap sqlutils.RowMap) error {
 				log.Errorf("Row in database_instance - %+v", rowMap)
 				return nil
@@ -512,12 +512,12 @@ func TestUpdateInstanceLastChecked(t *testing.T) {
 			name:             "Verify updated last checked",
 			tabletAlias:      "zone1-0000000100",
 			partialSuccess:   false,
-			conditionToCheck: "last_checked >= datetime('now', '-30 second') and last_check_partial_success = false",
+			conditionToCheck: "last_checked >= DATETIME('now', '-30 second') and last_check_partial_success = false",
 		}, {
 			name:             "Verify partial success",
 			tabletAlias:      "zone1-0000000100",
 			partialSuccess:   true,
-			conditionToCheck: "last_checked >= datetime('now', '-30 second') and last_check_partial_success = true",
+			conditionToCheck: "last_checked >= DATETIME('now', '-30 second') and last_check_partial_success = true",
 		}, {
 			name:           "Verify no error on unknown tablet",
 			tabletAlias:    "unknown tablet",
@@ -563,7 +563,7 @@ func TestUpdateInstanceLastAttemptedCheck(t *testing.T) {
 		{
 			name:             "Verify updated last checked",
 			tabletAlias:      "zone1-0000000100",
-			conditionToCheck: "last_attempted_check >= datetime('now', '-30 second')",
+			conditionToCheck: "last_attempted_check >= DATETIME('now', '-30 second')",
 		}, {
 			name:        "Verify no error on unknown tablet",
 			tabletAlias: "unknown tablet",
@@ -736,19 +736,19 @@ func TestExpireTableData(t *testing.T) {
 			tableName:        "audit",
 			timestampColumn:  "audit_timestamp",
 			expectedRowCount: 1,
-			insertQuery: `insert into audit (audit_id, audit_timestamp, audit_type, alias, message, keyspace, shard) values
-(1, datetime('now', '-50 DAY'), 'a','a','a','a','a'),
-(2, datetime('now', '-5 DAY'), 'a','a','a','a','a')`,
+			insertQuery: `INSERT INTO audit (audit_id, audit_timestamp, audit_type, alias, message, keyspace, shard) VALUES
+(1, DATETIME('now', '-50 DAY'), 'a','a','a','a','a'),
+(2, DATETIME('now', '-5 DAY'), 'a','a','a','a','a')`,
 		},
 		{
 			name:             "ExpireRecoveryDetectionHistory",
 			tableName:        "recovery_detection",
 			timestampColumn:  "detection_timestamp",
 			expectedRowCount: 2,
-			insertQuery: `insert into recovery_detection (detection_id, detection_timestamp, alias, analysis, keyspace, shard) values
-(1, datetime('now', '-3 DAY'),'a','a','a','a'),
-(2, datetime('now', '-5 DAY'),'a','a','a','a'),
-(3, datetime('now', '-15 DAY'),'a','a','a','a')`,
+			insertQuery: `INSERT INTO recovery_detection (detection_id, detection_timestamp, alias, analysis, keyspace, shard) VALUES
+(1, DATETIME('now', '-3 DAY'),'a','a','a','a'),
+(2, DATETIME('now', '-5 DAY'),'a','a','a','a'),
+(3, DATETIME('now', '-15 DAY'),'a','a','a','a')`,
 		},
 	}
 	for _, tt := range tests {
