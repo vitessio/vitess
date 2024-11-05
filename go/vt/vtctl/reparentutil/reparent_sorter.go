@@ -74,14 +74,6 @@ func (rs *reparentSorter) Less(i, j int) bool {
 		return true
 	}
 
-	// We want tablets which are currently running a backup to always be at the end of the list, so that's the first thing we check
-	if !rs.backupRunning[topoproto.TabletAliasString(rs.tablets[i].Alias)] && rs.backupRunning[topoproto.TabletAliasString(rs.tablets[j].Alias)] {
-		return true
-	}
-	if rs.backupRunning[topoproto.TabletAliasString(rs.tablets[i].Alias)] && !rs.backupRunning[topoproto.TabletAliasString(rs.tablets[j].Alias)] {
-		return false
-	}
-
 	if !rs.positions[i].AtLeast(rs.positions[j]) {
 		// [i] does not have all GTIDs that [j] does
 		return false
@@ -95,6 +87,14 @@ func (rs *reparentSorter) Less(i, j int) bool {
 	// so we check their promotion rules
 	jPromotionRule := PromotionRule(rs.durability, rs.tablets[j])
 	iPromotionRule := PromotionRule(rs.durability, rs.tablets[i])
+
+	// We want tablets which are currently running a backup to always be at the end of the list, so that's the first thing we check
+	if !rs.backupRunning[topoproto.TabletAliasString(rs.tablets[i].Alias)] && rs.backupRunning[topoproto.TabletAliasString(rs.tablets[j].Alias)] {
+		return true
+	}
+	if rs.backupRunning[topoproto.TabletAliasString(rs.tablets[i].Alias)] && !rs.backupRunning[topoproto.TabletAliasString(rs.tablets[j].Alias)] {
+		return false
+	}
 
 	// If the promotion rules are different then we want to sort by the promotion rules.
 	if len(rs.innodbBufferPool) != 0 && jPromotionRule == iPromotionRule {

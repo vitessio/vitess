@@ -2872,7 +2872,7 @@ func TestEmergencyReparenter_findMostAdvanced(t *testing.T) {
 			validCandidates: map[string]replication.Position{
 				"zone1-0000000100": positionMostAdvanced,
 				"zone1-0000000101": positionIntermediate1,
-				"zone1-0000000102": positionIntermediate2,
+				"zone1-0000000102": positionMostAdvanced,
 			},
 			tabletMap: map[string]*topo.TabletInfo{
 				"zone1-0000000100": {
