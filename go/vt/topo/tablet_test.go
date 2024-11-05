@@ -346,8 +346,6 @@ func TestServerGetTabletsByCell(t *testing.T) {
 				}
 			}
 
-			tablets := make([]*topo.TabletInfo, 0)
-
 			var uid uint32 = 1
 			for k, shards := range tt.keyspaceShards {
 				for _, s := range shards {
@@ -364,8 +362,6 @@ func TestServerGetTabletsByCell(t *testing.T) {
 							Keyspace: k,
 							Shard:    s,
 						}
-						tInfo := &topo.TabletInfo{Tablet: tablet}
-						tablets = append(tablets, tInfo)
 						require.NoError(t, ts.CreateTablet(ctx, tablet))
 						uid++
 					}
@@ -377,6 +373,7 @@ func TestServerGetTabletsByCell(t *testing.T) {
 			out, err := ts.GetTabletsByCell(ctx, cell, tt.opt)
 			require.NoError(t, err)
 			require.Len(t, out, len(tt.expectedTablets))
+
 			for i, tablet := range out {
 				expected := tt.expectedTablets[i]
 				require.Equal(t, expected.Alias.String(), tablet.Alias.String())
