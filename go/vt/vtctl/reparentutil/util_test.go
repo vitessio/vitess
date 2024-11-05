@@ -145,12 +145,12 @@ func TestElectNewPrimary(t *testing.T) {
 				// both zone1-101 and zone1-102 are equivalent from a replicaiton PoV, but zone1-102 is taking a backup
 				replicationStatuses: map[string]*replicationdatapb.Status{
 					"zone1-0000000101": {
-						Position:  "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
-						BackingUp: true,
+						Position:      "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						BackupRunning: true,
 					},
 					"zone1-0000000102": {
-						Position:  "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
-						BackingUp: false,
+						Position:      "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						BackupRunning: false,
 					},
 				},
 			},
@@ -206,8 +206,8 @@ func TestElectNewPrimary(t *testing.T) {
 				// both zone1-101 and zone1-102 are equivalent from a replicaiton PoV, but zone1-102 is taking a backup
 				replicationStatuses: map[string]*replicationdatapb.Status{
 					"zone1-0000000101": {
-						Position:  "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
-						BackingUp: true,
+						Position:      "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						BackupRunning: true,
 					},
 				},
 			},
@@ -533,8 +533,8 @@ func TestElectNewPrimary(t *testing.T) {
 						ReplicationLagSeconds: 55,
 					},
 					"zone1-0000000102": {
-						Position:  "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
-						BackingUp: true,
+						Position:      "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						BackupRunning: true,
 					},
 				},
 			},

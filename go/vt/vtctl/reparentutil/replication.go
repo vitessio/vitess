@@ -217,7 +217,7 @@ func stopReplicationAndBuildStatusMaps(
 
 		stopReplicationStatus, err := tmc.StopReplicationAndGetStatus(groupCtx, tabletInfo.Tablet, replicationdatapb.StopReplicationMode_IOTHREADONLY)
 		m.Lock()
-		res.backingUpTablets[alias] = stopReplicationStatus.GetBackingUp()
+		res.backingUpTablets[alias] = stopReplicationStatus.GetBackupRunning()
 		m.Unlock()
 		if err != nil {
 			sqlErr, isSQLErr := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError)

@@ -188,10 +188,10 @@ func findTabletPositionLagBackupStatus(ctx context.Context, tablet *topodatapb.T
 	pos, err := replication.DecodePosition(positionString)
 	if err != nil {
 		logger.Warningf("cannot decode replica position %v for tablet %v, ignoring tablet: %v", positionString, topoproto.TabletAliasString(tablet.Alias), err)
-		return replication.Position{}, 0, status.BackingUp, err
+		return replication.Position{}, 0, status.BackupRunning, err
 	}
 
-	return pos, time.Second * time.Duration(status.ReplicationLagSeconds), status.BackingUp, nil
+	return pos, time.Second * time.Duration(status.ReplicationLagSeconds), status.BackupRunning, nil
 }
 
 // FindCurrentPrimary returns the current primary tablet of a shard, if any. The

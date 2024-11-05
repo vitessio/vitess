@@ -1070,7 +1070,7 @@ func (fake *TabletManagerClient) ReplicationStatus(ctx context.Context, tablet *
 
 	if result, ok := fake.ReplicationStatusResults[key]; ok {
 		if _, ok = fake.BackingUp[key]; ok {
-			result.Position.BackingUp = fake.BackingUp[key]
+			result.Position.BackupRunning = fake.BackingUp[key]
 		}
 		return result.Position, result.Error
 	}
