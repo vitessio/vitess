@@ -1411,7 +1411,7 @@ func (fra *fakeRPCTM) Backup(ctx context.Context, logger logutil.Logger, request
 	return nil
 }
 
-func (fra *fakeRPCTM) IsBackingUp() bool {
+func (fra *fakeRPCTM) IsBackupRunning() bool {
 	return false
 }
 

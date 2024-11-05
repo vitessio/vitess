@@ -33,7 +33,7 @@ type reparentSorter struct {
 	tablets          []*topodatapb.Tablet
 	positions        []replication.Position
 	innodbBufferPool []int
-	backingUp        map[string]bool
+	backupRunning    map[string]bool
 	durability       Durabler
 }
 
@@ -44,7 +44,7 @@ func newReparentSorter(tablets []*topodatapb.Tablet, positions []replication.Pos
 		positions:        positions,
 		durability:       durability,
 		innodbBufferPool: innodbBufferPool,
-		backingUp:        backingUp,
+		backupRunning:    backingUp,
 	}
 }
 
@@ -74,11 +74,11 @@ func (rs *reparentSorter) Less(i, j int) bool {
 		return true
 	}
 
-	// We want tablets backing up always at the end of the list, so that's the first thing we check
-	if !rs.backingUp[topoproto.TabletAliasString(rs.tablets[i].Alias)] && rs.backingUp[topoproto.TabletAliasString(rs.tablets[j].Alias)] {
+	// We want tablets which are currently running a backup to always be at the end of the list, so that's the first thing we check
+	if !rs.backupRunning[topoproto.TabletAliasString(rs.tablets[i].Alias)] && rs.backupRunning[topoproto.TabletAliasString(rs.tablets[j].Alias)] {
 		return true
 	}
-	if rs.backingUp[topoproto.TabletAliasString(rs.tablets[i].Alias)] && !rs.backingUp[topoproto.TabletAliasString(rs.tablets[j].Alias)] {
+	if rs.backupRunning[topoproto.TabletAliasString(rs.tablets[i].Alias)] && !rs.backupRunning[topoproto.TabletAliasString(rs.tablets[j].Alias)] {
 		return false
 	}
 

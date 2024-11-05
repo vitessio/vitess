@@ -2868,7 +2868,7 @@ func TestEmergencyReparenter_findMostAdvanced(t *testing.T) {
 				},
 			},
 		}, {
-			name: "choose most advanced not backing up",
+			name: "choose most advanced not running backup",
 			validCandidates: map[string]replication.Position{
 				"zone1-0000000100": positionMostAdvanced,
 				"zone1-0000000101": positionIntermediate1,

@@ -140,7 +140,7 @@ func TestElectNewPrimary(t *testing.T) {
 			errContains: nil,
 		},
 		{
-			name: "Two good replicas, but one of them backing up so we pick the other one",
+			name: "Two good replicas, but one of them is taking a backup so we pick the other one",
 			tmc: &chooseNewPrimaryTestTMClient{
 				// both zone1-101 and zone1-102 are equivalent from a replicaiton PoV, but zone1-102 is taking a backup
 				replicationStatuses: map[string]*replicationdatapb.Status{
@@ -201,7 +201,7 @@ func TestElectNewPrimary(t *testing.T) {
 			errContains: nil,
 		},
 		{
-			name: "Only one replica, but it's backing up. We still use it.",
+			name: "Only one replica, but it's taking a backup. We still use it.",
 			tmc: &chooseNewPrimaryTestTMClient{
 				// both zone1-101 and zone1-102 are equivalent from a replicaiton PoV, but zone1-102 is taking a backup
 				replicationStatuses: map[string]*replicationdatapb.Status{
@@ -524,7 +524,7 @@ func TestElectNewPrimary(t *testing.T) {
 			errContains: nil,
 		},
 		{
-			name: "Two replicas, first one with too much lag, another one backing up - elect the one taking backup",
+			name: "Two replicas, first one with too much lag, another one taking a backup - elect the one taking backup",
 			tmc: &chooseNewPrimaryTestTMClient{
 				// zone1-101 is behind zone1-102
 				replicationStatuses: map[string]*replicationdatapb.Status{
@@ -1083,7 +1083,7 @@ func TestFindPositionForTablet(t *testing.T) {
 			expectedLag:      201 * time.Second,
 			expectedPosition: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
 		}, {
-			name: "Host is backing up",
+			name: "Host is taking a backup",
 			tmc: &testutil.TabletManagerClient{
 				ReplicationStatusResults: map[string]struct {
 					Position *replicationdatapb.Status
@@ -1177,7 +1177,7 @@ func TestFindPositionForTablet(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			pos, lag, backingUp, err := findPositionLagBackingUpForTablet(ctx, test.tablet, logger, test.tmc, 10*time.Second)
+			pos, lag, backingUp, err := findTabletPositionLagBackupStatus(ctx, test.tablet, logger, test.tmc, 10*time.Second)
 			if test.expectedErr != "" {
 				require.EqualError(t, err, test.expectedErr)
 				return

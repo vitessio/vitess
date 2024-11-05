@@ -422,10 +422,11 @@ func (erp *EmergencyReparenter) findMostAdvanced(
 
 	// We have already removed the tablets with errant GTIDs before calling this function. At this point our winning position must be a
 	// superset of all the other valid positions - unless the tablet with that position is taking a backup, in which case it might
-	// have a larger GTID set but we are still not choosing it. If that is not the case, then we have a split brain scenario, and
+	// have a larger GTID set but we are still not choosing it. This can lead to split brain, so
 	// we should cancel the ERS
 	for i, position := range tabletPositions {
-		if !winningPosition.AtLeast(position) && !backingUpTablets[topoproto.TabletAliasString(validTablets[i].Alias)] {
+		runningBackUp, ok := backingUpTablets[topoproto.TabletAliasString(validTablets[i].Alias)]
+		if !winningPosition.AtLeast(position) && ok && !runningBackUp {
 			return nil, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "split brain detected between servers - %v and %v", winningPrimaryTablet.Alias, validTablets[i].Alias)
 		}
 	}

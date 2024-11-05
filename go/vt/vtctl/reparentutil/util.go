@@ -127,7 +127,7 @@ func ElectNewPrimary(
 		tb := tablet
 		errorGroup.Go(func() error {
 			// find and store the positions for the tablet
-			pos, replLag, backingUp, err := findPositionLagBackingUpForTablet(groupCtx, tb, logger, tmc, opts.WaitReplicasTimeout)
+			pos, replLag, backingUp, err := findTabletPositionLagBackupStatus(groupCtx, tb, logger, tmc, opts.WaitReplicasTimeout)
 			mu.Lock()
 			defer mu.Unlock()
 			if err == nil && (opts.TolerableReplLag == 0 || opts.TolerableReplLag >= replLag) {
@@ -161,9 +161,9 @@ func ElectNewPrimary(
 	return validTablets[0].Alias, nil
 }
 
-// findPositionLagBackingUpForTablet processes the replication position and lag for a single tablet and
+// findTabletPositionLagBackupStatus processes the replication position and lag for a single tablet and
 // returns it. It is safe to call from multiple goroutines.
-func findPositionLagBackingUpForTablet(ctx context.Context, tablet *topodatapb.Tablet, logger logutil.Logger, tmc tmclient.TabletManagerClient, waitTimeout time.Duration) (replication.Position, time.Duration, bool, error) {
+func findTabletPositionLagBackupStatus(ctx context.Context, tablet *topodatapb.Tablet, logger logutil.Logger, tmc tmclient.TabletManagerClient, waitTimeout time.Duration) (replication.Position, time.Duration, bool, error) {
 	logger.Infof("getting replication position from %v", topoproto.TabletAliasString(tablet.Alias))
 
 	ctx, cancel := context.WithTimeout(ctx, waitTimeout)

@@ -205,7 +205,7 @@ func (tm *TabletManager) RestoreFromBackup(ctx context.Context, logger logutil.L
 	return err
 }
 
-func (tm *TabletManager) IsBackingUp() bool {
+func (tm *TabletManager) IsBackupRunning() bool {
 	return tm._isBackupRunning
 }
 
