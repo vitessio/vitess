@@ -654,7 +654,7 @@ func auditInstanceAnalysisInChangelog(tabletAlias string, analysisCode AnalysisC
 	// Find if the lastAnalysisHasChanged or not while updating the row if it has.
 	lastAnalysisChanged := false
 	{
-		sqlResult, err := db.ExecVTOrc(`UPDATE update database_instance_last_analysis
+		sqlResult, err := db.ExecVTOrc(`UPDATE database_instance_last_analysis
 			SET
 				analysis = ?,
 				analysis_timestamp = DATETIME('now')
