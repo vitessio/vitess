@@ -2134,7 +2134,7 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 			return nil, ErrWorkflowDeleteWritesSwitched
 		}
 		// If only reads have been switched, then we can delete the
-		// workflow and its routing rules.
+		// workflow and its related artifacts.
 	}
 
 	// Lock the workflow for deletion.

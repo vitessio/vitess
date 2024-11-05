@@ -873,27 +873,6 @@ func TestWorkflowDelete(t *testing.T) {
 				Keyspace: targetKeyspaceName,
 				Workflow: workflowName,
 			},
-			expectedSourceQueries: []*queryResult{
-				{
-					query: fmt.Sprintf("delete from _vt.vreplication where db_name = 'vt_%s' and workflow = '%s'",
-						sourceKeyspaceName, ReverseWorkflowName(workflowName)),
-					result: &querypb.QueryResult{},
-				},
-			},
-			expectedTargetQueries: []*queryResult{
-				{
-					query:  fmt.Sprintf("drop table `vt_%s`.`%s`", targetKeyspaceName, table1Name),
-					result: &querypb.QueryResult{},
-				},
-				{
-					query:  fmt.Sprintf("drop table `vt_%s`.`%s`", targetKeyspaceName, table2Name),
-					result: &querypb.QueryResult{},
-				},
-				{
-					query:  fmt.Sprintf("drop table `vt_%s`.`%s`", targetKeyspaceName, table3Name),
-					result: &querypb.QueryResult{},
-				},
-			},
 			preFunc: func(t *testing.T, env *testEnv) {
 				// Setup the routing rules as they would be after having previously
 				// done SwitchTraffic with for all tablet types.
