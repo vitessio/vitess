@@ -412,50 +412,6 @@ const BaseShowTables = `SELECT t.table_name,
 		t.table_schema = database()
 `
 
-// TablesWithSize80 is a query to select table along with size for mysql 8.0
-// Note the following:
-//   - `TABLES`.`TABLE_NAME` has `utf8mb4_0900_ai_ci` collation.  `INNODB_TABLESPACES`.`NAME` has `utf8mb3_general_ci`.
-//     We normalize the collation to get better query performance (we force the casting at the time of our choosing)
-//   - InnoDB has different table names than MySQL does, in particular for partitioned tables. As far as InnoDB
-//     is concerned, each partition is its own table.
-//   - We use a `UNION ALL` approach to handle two distinct scenarios: tables that are partitioned and those that are not.
-//     Since we `LEFT JOIN` from `TABLES` to `INNODB_TABLESPACES`, we know we already do full table scan on `TABLES`. We therefore
-//     don't mind spending some extra computation time (as in `CONCAT(t.table_schema, '/', t.table_name, '#p#%') COLLATE utf8mb3_general_ci`)
-//     to make things easier for the JOIN.
-//   - We utilize `INFORMATION_SCHEMA`.`TABLES`.`CREATE_OPTIONS` column to tell if the table is partitioned or not. The column
-//     may be `NULL` or may have multiple attributes, one of which is "partitioned", which we are looking for.
-//   - In a partitioned table, InnoDB will return multiple rows for the same table name, one for each partition, which we successively SUM.
-//     We also `SUM` the sizes in the non-partitioned case. This is not because we need to, but because it makes the query
-//     symmetric and less prone to future edit errors.
-const TablesWithSize80 = `SELECT t.table_name,
-		t.table_type,
-		UNIX_TIMESTAMP(t.create_time),
-		t.table_comment,
-		SUM(i.file_size),
-		SUM(i.allocated_size)
-	FROM information_schema.tables t
-	LEFT JOIN (SELECT name, file_size, allocated_size FROM information_schema.innodb_tablespaces WHERE name LIKE CONCAT(database(), '/%')) i
-	ON i.name = CONCAT(t.table_schema, '/', t.table_name) COLLATE utf8mb3_general_ci
-	WHERE
-		t.table_schema = database() AND IFNULL(t.create_options, '') NOT LIKE '%partitioned%'
-	GROUP BY
-		t.table_schema, t.table_name, t.table_type, t.create_time, t.table_comment
-UNION ALL
-SELECT t.table_name,
-		t.table_type,
-		UNIX_TIMESTAMP(t.create_time),
-		t.table_comment,
-		SUM(i.file_size),
-		SUM(i.allocated_size)
-	FROM information_schema.tables t
-	LEFT JOIN (SELECT name, file_size, allocated_size FROM information_schema.innodb_tablespaces WHERE name LIKE CONCAT(database(), '/%')) i
-		ON i.name LIKE (CONCAT(t.table_schema, '/', t.table_name, '#p#%') COLLATE utf8mb3_general_ci)
-	WHERE
-		t.table_schema = database() AND t.create_options LIKE '%partitioned%'
-	GROUP BY
-		t.table_schema, t.table_name, t.table_type, t.create_time, t.table_comment
-`
-
 // InnoDBTableSizes: a query to return file/allocated sizes for InnoDB tables.
 // File sizes and allocated sizes are found in information_schema.innodb_tablespaces
 // Table names in information_schema.innodb_tablespaces match those in information_schema.tables, even for table names
@@ -536,7 +492,7 @@ func (f mysqlFlavor) supportsCapability(capability capabilities.FlavorCapability
 
 // baseShowTablesWithSizes is part of the Flavor interface.
 func (mysqlFlavor) baseShowTablesWithSizes() string {
-	return TablesWithSize80
+	return "" // Won't be used, as InnoDBTableSizes is defined, and schema.Engine will use that, instead.
 }
 
 // baseShowInnodbTableSizes is part of the Flavor interface.

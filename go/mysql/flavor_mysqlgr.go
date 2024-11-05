@@ -254,7 +254,7 @@ func (mysqlGRFlavor) baseShowTables() string {
 }
 
 func (mysqlGRFlavor) baseShowTablesWithSizes() string {
-	return TablesWithSize80
+	return "" // Won't be used, as InnoDBTableSizes is defined, and schema.Engine will use that, instead.
 }
 
 // baseShowInnodbTableSizes is part of the Flavor interface.
