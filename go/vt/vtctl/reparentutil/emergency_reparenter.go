@@ -247,7 +247,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	// Here we also check for split brain scenarios and check that the selected replica must be more advanced than all the other valid candidates.
 	// We fail in case there is a split brain detected.
 	// The validCandidateTablets list is sorted by the replication positions with ties broken by promotion rules.
-	intermediateSource, validCandidateTablets, err = erp.findMostAdvanced(validCandidates, tabletMap, stoppedReplicationSnapshot.backingUpTablets, opts)
+	intermediateSource, validCandidateTablets, err = erp.findMostAdvanced(validCandidates, tabletMap, stoppedReplicationSnapshot.tabletsBackupState, opts)
 	if err != nil {
 		return err
 	}
@@ -397,7 +397,7 @@ func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(
 func (erp *EmergencyReparenter) findMostAdvanced(
 	validCandidates map[string]replication.Position,
 	tabletMap map[string]*topo.TabletInfo,
-	backingUpTablets map[string]bool,
+	tabletsBackupState map[string]bool,
 	opts EmergencyReparentOptions,
 ) (*topodatapb.Tablet, []*topodatapb.Tablet, error) {
 	erp.logger.Infof("started finding the intermediate source")
@@ -408,7 +408,7 @@ func (erp *EmergencyReparenter) findMostAdvanced(
 	}
 
 	// sort the tablets for finding the best intermediate source in ERS
-	err = sortTabletsForReparent(validTablets, tabletPositions, nil, backingUpTablets, opts.durability)
+	err = sortTabletsForReparent(validTablets, tabletPositions, nil, tabletsBackupState, opts.durability)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -425,7 +425,7 @@ func (erp *EmergencyReparenter) findMostAdvanced(
 	// have a larger GTID set but we are still not choosing it. This can lead to split brain, so
 	// we should cancel the ERS
 	for i, position := range tabletPositions {
-		runningBackUp, ok := backingUpTablets[topoproto.TabletAliasString(validTablets[i].Alias)]
+		runningBackUp, ok := tabletsBackupState[topoproto.TabletAliasString(validTablets[i].Alias)]
 		if !winningPosition.AtLeast(position) && ok && !runningBackUp {
 			return nil, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "split brain detected between servers - %v and %v", winningPrimaryTablet.Alias, validTablets[i].Alias)
 		}

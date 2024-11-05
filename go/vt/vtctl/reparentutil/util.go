@@ -121,20 +121,20 @@ func ElectNewPrimary(
 	if len(candidates) == 1 && opts.TolerableReplLag == 0 {
 		return candidates[0].Alias, nil
 	}
-	backingUpTablets := map[string]bool{}
+	tabletsBackupState := map[string]bool{}
 
 	for _, tablet := range candidates {
 		tb := tablet
 		errorGroup.Go(func() error {
 			// find and store the positions for the tablet
-			pos, replLag, backingUp, err := findTabletPositionLagBackupStatus(groupCtx, tb, logger, tmc, opts.WaitReplicasTimeout)
+			pos, replLag, takingBackup, err := findTabletPositionLagBackupStatus(groupCtx, tb, logger, tmc, opts.WaitReplicasTimeout)
 			mu.Lock()
 			defer mu.Unlock()
 			if err == nil && (opts.TolerableReplLag == 0 || opts.TolerableReplLag >= replLag) {
 				validTablets = append(validTablets, tb)
 				tabletPositions = append(tabletPositions, pos)
 				innodbBufferPool = append(innodbBufferPool, innodbBufferPoolData[topoproto.TabletAliasString(tb.Alias)])
-				backingUpTablets[topoproto.TabletAliasString(tablet.Alias)] = backingUp
+				tabletsBackupState[topoproto.TabletAliasString(tablet.Alias)] = takingBackup
 			} else {
 				reasonsToInvalidate.WriteString(fmt.Sprintf("\n%v has %v replication lag which is more than the tolerable amount", topoproto.TabletAliasString(tablet.Alias), replLag))
 			}
@@ -153,7 +153,7 @@ func ElectNewPrimary(
 	}
 
 	// sort the tablets for finding the best primary
-	err = sortTabletsForReparent(validTablets, tabletPositions, innodbBufferPool, backingUpTablets, opts.durability)
+	err = sortTabletsForReparent(validTablets, tabletPositions, innodbBufferPool, tabletsBackupState, opts.durability)
 	if err != nil {
 		return nil, err
 	}

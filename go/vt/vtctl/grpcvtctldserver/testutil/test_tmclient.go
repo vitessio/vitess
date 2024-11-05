@@ -189,7 +189,7 @@ type TabletManagerClient struct {
 		ErrorAfter    time.Duration
 	}
 	// Backing Up - keyed by tablet alias.
-	BackingUp map[string]bool
+	TabletsBackupState map[string]bool
 	// keyed by tablet alias.
 	ChangeTagsResult map[string]struct {
 		Response *tabletmanagerdatapb.ChangeTagsResponse
@@ -1069,8 +1069,8 @@ func (fake *TabletManagerClient) ReplicationStatus(ctx context.Context, tablet *
 	}
 
 	if result, ok := fake.ReplicationStatusResults[key]; ok {
-		if _, ok = fake.BackingUp[key]; ok {
-			result.Position.BackupRunning = fake.BackingUp[key]
+		if _, ok = fake.TabletsBackupState[key]; ok {
+			result.Position.BackupRunning = fake.TabletsBackupState[key]
 		}
 		return result.Position, result.Error
 	}

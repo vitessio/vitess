@@ -165,10 +165,10 @@ func SetReplicationSource(ctx context.Context, ts *topo.Server, tmc tmclient.Tab
 // replicationSnapshot stores the status maps and the tablets that were reachable
 // when trying to stopReplicationAndBuildStatusMaps.
 type replicationSnapshot struct {
-	statusMap        map[string]*replicationdatapb.StopReplicationStatus
-	primaryStatusMap map[string]*replicationdatapb.PrimaryStatus
-	reachableTablets []*topodatapb.Tablet
-	backingUpTablets map[string]bool
+	statusMap          map[string]*replicationdatapb.StopReplicationStatus
+	primaryStatusMap   map[string]*replicationdatapb.PrimaryStatus
+	reachableTablets   []*topodatapb.Tablet
+	tabletsBackupState map[string]bool
 }
 
 // stopReplicationAndBuildStatusMaps stops replication on all replicas, then
@@ -194,10 +194,10 @@ func stopReplicationAndBuildStatusMaps(
 		errChan    = make(chan concurrency.Error)
 		allTablets []*topodatapb.Tablet
 		res        = &replicationSnapshot{
-			statusMap:        map[string]*replicationdatapb.StopReplicationStatus{},
-			primaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{},
-			reachableTablets: []*topodatapb.Tablet{},
-			backingUpTablets: map[string]bool{},
+			statusMap:          map[string]*replicationdatapb.StopReplicationStatus{},
+			primaryStatusMap:   map[string]*replicationdatapb.PrimaryStatus{},
+			reachableTablets:   []*topodatapb.Tablet{},
+			tabletsBackupState: map[string]bool{},
 		}
 	)
 
@@ -217,7 +217,7 @@ func stopReplicationAndBuildStatusMaps(
 
 		stopReplicationStatus, err := tmc.StopReplicationAndGetStatus(groupCtx, tabletInfo.Tablet, replicationdatapb.StopReplicationMode_IOTHREADONLY)
 		m.Lock()
-		res.backingUpTablets[alias] = stopReplicationStatus.GetBackupRunning()
+		res.tabletsBackupState[alias] = stopReplicationStatus.GetBackupRunning()
 		m.Unlock()
 		if err != nil {
 			sqlErr, isSQLErr := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError)

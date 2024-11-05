@@ -1051,13 +1051,13 @@ func TestFindPositionForTablet(t *testing.T) {
 	ctx := context.Background()
 	logger := logutil.NewMemoryLogger()
 	tests := []struct {
-		name              string
-		tmc               *testutil.TabletManagerClient
-		tablet            *topodatapb.Tablet
-		expectedPosition  string
-		expectedLag       time.Duration
-		expectedErr       string
-		expectedBackingUp bool
+		name                 string
+		tmc                  *testutil.TabletManagerClient
+		tablet               *topodatapb.Tablet
+		expectedPosition     string
+		expectedLag          time.Duration
+		expectedErr          string
+		expectedTakingBackup bool
 	}{
 		{
 			name: "executed gtid set",
@@ -1096,7 +1096,7 @@ func TestFindPositionForTablet(t *testing.T) {
 						},
 					},
 				},
-				BackingUp: map[string]bool{"zone1-0000000100": true},
+				TabletsBackupState: map[string]bool{"zone1-0000000100": true},
 			},
 			tablet: &topodatapb.Tablet{
 				Alias: &topodatapb.TabletAlias{
@@ -1104,9 +1104,9 @@ func TestFindPositionForTablet(t *testing.T) {
 					Uid:  100,
 				},
 			},
-			expectedLag:       201 * time.Second,
-			expectedBackingUp: true,
-			expectedPosition:  "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
+			expectedLag:          201 * time.Second,
+			expectedTakingBackup: true,
+			expectedPosition:     "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
 		}, {
 			name: "no replication status",
 			tmc: &testutil.TabletManagerClient{
@@ -1177,7 +1177,7 @@ func TestFindPositionForTablet(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			pos, lag, backingUp, err := findTabletPositionLagBackupStatus(ctx, test.tablet, logger, test.tmc, 10*time.Second)
+			pos, lag, takingBackup, err := findTabletPositionLagBackupStatus(ctx, test.tablet, logger, test.tmc, 10*time.Second)
 			if test.expectedErr != "" {
 				require.EqualError(t, err, test.expectedErr)
 				return
@@ -1186,7 +1186,7 @@ func TestFindPositionForTablet(t *testing.T) {
 			posString := replication.EncodePosition(pos)
 			require.Equal(t, test.expectedPosition, posString)
 			require.Equal(t, test.expectedLag, lag)
-			require.Equal(t, test.expectedBackingUp, backingUp)
+			require.Equal(t, test.expectedTakingBackup, takingBackup)
 		})
 	}
 }
