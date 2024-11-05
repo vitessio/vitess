@@ -17,7 +17,7 @@ Two Phase Commit (2PC) is the de facto protocol for atomically committing distri
 
 This document intends to address the above concerns with some practical trade-offs.
 
-Although MySQL supports the XA protocol, it’s been unusable due to bugs. There have been multi fixes made on 8.0, but still there are many open bugs. Also, it's usage in production is hardly known.
+Although MySQL supports the XA protocol, it’s been unusable due to bugs. There have been multiple fixes made on 8.0, but still there are many open bugs. Also, it's usage in production is hardly known.
 
 The most critical component of the 2PC protocol is the `Prepare` functionality. There is actually a way to implement Prepare on top of a transactional system. This is explained in a [Vitess Blog](https://vitess.io/blog/2016-06-07-distributed-transactions-in-vitess/), which will be used as foundation for this design.
 
