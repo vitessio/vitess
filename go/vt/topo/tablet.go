@@ -17,11 +17,9 @@ limitations under the License.
 package topo
 
 import (
-	"cmp"
 	"context"
 	"fmt"
 	"path"
-	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -289,9 +287,6 @@ func (ts *Server) GetTabletsByCell(ctx context.Context, cellAlias string, opt *G
 		}
 		tablets = append(tablets, &TabletInfo{Tablet: tablet, version: listResults[n].Version})
 	}
-	slices.SortFunc(tablets, func(i, j *TabletInfo) int {
-		return cmp.Compare(i.Alias.Uid, j.Alias.Uid)
-	})
 	return tablets, nil
 }
 

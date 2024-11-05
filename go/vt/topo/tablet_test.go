@@ -17,8 +17,10 @@ limitations under the License.
 package topo_test
 
 import (
+	"cmp"
 	"context"
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -373,6 +375,10 @@ func TestServerGetTabletsByCell(t *testing.T) {
 			out, err := ts.GetTabletsByCell(ctx, cell, tt.opt)
 			require.NoError(t, err)
 			require.Len(t, out, len(tt.expectedTablets))
+
+			slices.SortFunc(out, func(i, j *topo.TabletInfo) int {
+				return cmp.Compare(i.Alias.Uid, j.Alias.Uid)
+			})
 
 			for i, tablet := range out {
 				expected := tt.expectedTablets[i]
