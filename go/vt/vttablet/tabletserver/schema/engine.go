@@ -453,10 +453,9 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 				table.FileSize += fileSize
 				table.AllocatedSize += allocatedSize
 
-				if strings.Contains(innodbTableName, "#p#") {
+				if originalTableName, _, found := strings.Cut(innodbTableName, "#p#"); found {
 					// innodbTableName is encoded any special characters are turned into some @0-f0-f0-f value.
 					// Therefore this "#p#" here is a clear indication that we are looking at a partitioned table.
-					originalTableName := strings.Split(innodbTableName, "#p#")[0]
 					// We turn `my@002ddb/tbl_part#p#p0` into `my@002ddb/tbl_part`
 					// and aggregate the total partition sizes.
 					if _, ok := innodbTablesStats[originalTableName]; !ok {
