@@ -1092,7 +1092,6 @@ func TestEngineGetTableData(t *testing.T) {
 		name            string
 		expectedQueries map[string]*sqltypes.Result
 		queriesToReject map[string]error
-		includeStats    bool
 		expectedError   string
 	}{
 		{
@@ -1100,13 +1099,11 @@ func TestEngineGetTableData(t *testing.T) {
 			expectedQueries: map[string]*sqltypes.Result{
 				conn.BaseShowTables(): {},
 			},
-			includeStats: false,
 		}, {
 			name: "Success with include stats",
 			expectedQueries: map[string]*sqltypes.Result{
-				conn.BaseShowTablesWithSizes(): {},
+				conn.BaseShowTables(): {},
 			},
-			includeStats: true,
 		}, {
 			name: "Error in query",
 			queriesToReject: map[string]error{
@@ -1128,7 +1125,7 @@ func TestEngineGetTableData(t *testing.T) {
 				defer db.DeleteRejectedQuery(query)
 			}
 
-			_, err = getTableData(context.Background(), conn, tt.includeStats)
+			_, err = getTableData(context.Background(), conn, false)
 			if tt.expectedError != "" {
 				require.ErrorContains(t, err, tt.expectedError)
 				return
@@ -1434,7 +1431,7 @@ func TestEngineReload(t *testing.T) {
 	require.Less(t, time.Since(se.throttledLogger.GetLastLogTime()), 1*time.Second)
 }
 
-// TestEngineReload tests the vreplication specific GetTableForPos function to ensure
+// TestGetTableForPos tests the vreplication specific GetTableForPos function to ensure
 // that it conforms to the intended/expected behavior in various scenarios.
 // This more specifically tests the behavior of the function when the historian is
 // disabled or otherwise unable to get a table schema for the given position. When it
