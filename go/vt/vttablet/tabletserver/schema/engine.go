@@ -425,7 +425,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 		return err
 	}
 
-	innodbTablesStats := make(map[string]*Table)
+	var innodbTablesStats map[string]*Table
 	if includeStats {
 		if innodbTableSizesQuery := conn.Conn.BaseShowInnodbTableSizes(); innodbTableSizesQuery != "" {
 			// Since the InnoDB table size query is available to us on this MySQL version, we should use it.
@@ -436,6 +436,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 			if err != nil {
 				return vterrors.Wrapf(err, "in Engine.reload(), reading innodb tables")
 			}
+			innodbTablesStats = make(map[string]*Table, len(innodbResults.Rows))
 			for _, row := range innodbResults.Rows {
 				innodbTableName := row[0].ToString() // In the form of encoded `schema/table`
 				fileSize, _ := row[1].ToCastUint64()
@@ -511,8 +512,11 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 	databaseName := se.cp.DBName()
 	for _, row := range tableData.Rows {
 		tableName := row[0].ToString()
-		innodbTableName := fmt.Sprintf("%s/%s", charset.TablenameToFilename(databaseName), charset.TablenameToFilename(tableName))
-		innodbTable := innodbTablesStats[innodbTableName]
+		var innodbTable *Table
+		if innodbTablesStats != nil {
+			innodbTableName := fmt.Sprintf("%s/%s", charset.TablenameToFilename(databaseName), charset.TablenameToFilename(tableName))
+			innodbTable = innodbTablesStats[innodbTableName]
+		}
 		curTables[tableName] = true
 		createTime, _ := row[2].ToCastInt64()
 		var fileSize, allocatedSize uint64
