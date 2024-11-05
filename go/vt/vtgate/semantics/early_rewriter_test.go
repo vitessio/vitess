@@ -749,7 +749,7 @@ func TestOrderByNotAllColumnsAuthoritative(t *testing.T) {
 	}}
 	for _, tcase := range tcases {
 		t.Run(tcase.sql, func(t *testing.T) {
-			ast, err := sqlparser.NewTestParser().Parse(tcase.sql)
+			ast, err := sqlparser.Parse(tcase.sql)
 			require.NoError(t, err)
 			selectStatement := ast.(sqlparser.SelectStatement)
 			semTable, err := Analyze(selectStatement, cDB, schemaInfo)
