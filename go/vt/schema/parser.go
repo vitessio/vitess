@@ -21,6 +21,7 @@ import (
 	"regexp"
 	"strings"
 
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtenv"
@@ -107,7 +108,11 @@ func parseEnumOrSetTokens(env *vtenv.Environment, enumOrSetValues string) ([]str
 	}
 	enumValues := addColumn.Columns[0].Type.EnumValues
 	for i := range enumValues {
-		enumValues[i] = strings.Trim(enumValues[i], "'")
+		val, err := sqltypes.DecodeStringSQL(enumValues[i])
+		if err != nil {
+			return nil, err
+		}
+		enumValues[i] = val
 	}
 	return enumValues, nil
 }

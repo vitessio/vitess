@@ -71,7 +71,7 @@ func TestParseEnumTokens(t *testing.T) {
 		input := `'with '' quote','and \n newline'`
 		enumTokens, err := parseEnumOrSetTokens(env, input)
 		require.NoError(t, err)
-		expect := []string{"with \\' quote", "and \\n newline"}
+		expect := []string{"with ' quote", "and \n newline"}
 		assert.Equal(t, expect, enumTokens)
 	}
 	{
@@ -123,7 +123,7 @@ func TestParseEnumTokensMap(t *testing.T) {
 		expect := map[int]string{
 			1: "x-small",
 			2: "small",
-			3: "med\\'ium",
+			3: "med'ium",
 			4: "large",
 			5: "x-large",
 		}
