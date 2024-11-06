@@ -96,9 +96,7 @@ func TestVtadminAPIs(t *testing.T) {
 
 	// Test the vtadmin APIs
 	t.Run("keyspaces api", func(t *testing.T) {
-		status, resp, err := clusterInstance.VtadminProcess.MakeAPICall("api/keyspaces")
-		require.NoError(t, err)
-		require.EqualValues(t, 200, status)
+		resp := clusterInstance.VtadminProcess.MakeAPICallRetry(t, "api/keyspaces")
 		require.Contains(t, resp, uks)
 	})
 }

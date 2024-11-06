@@ -29,6 +29,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -214,20 +216,20 @@ func (vp *VtAdminProcess) MakeAPICall(endpoint string) (status int, response str
 }
 
 // MakeAPICallRetry is used to make an API call and retries until success
-func (vp *VtAdminProcess) MakeAPICallRetry(t *testing.T, url string) {
+func (vp *VtAdminProcess) MakeAPICallRetry(t *testing.T, url string) string {
 	t.Helper()
 	timeout := time.After(10 * time.Second)
 	for {
 		select {
 		case <-timeout:
-			t.Fatal("timed out waiting for api to work")
-			return
+			require.FailNow(t, "timed out waiting for api to work")
+			return ""
 		default:
-			status, _, err := vp.MakeAPICall(url)
+			status, resp, err := vp.MakeAPICall(url)
 			if err == nil && status == 200 {
-				return
+				return resp
 			}
-			time.Sleep(1 * time.Second)
+			time.Sleep(100 * time.Millisecond)
 		}
 	}
 }
