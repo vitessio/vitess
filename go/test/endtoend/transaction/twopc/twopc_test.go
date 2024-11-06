@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -1427,6 +1428,12 @@ func TestReadTransactionStatus(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, out, "insert into twopc_t1(id, col) values (9, 4)")
 	require.Contains(t, out, unresTransaction.Dtid)
+
+	// Read the data from vtadmin API, and verify that too has the same information.
+	apiRes := clusterInstance.VtadminProcess.MakeAPICallRetry(t, fmt.Sprintf("/api/transaction/local/%v/info", unresTransaction.Dtid))
+	require.Contains(t, apiRes, "insert into twopc_t1(id, col) values (9, 4)")
+	require.Contains(t, apiRes, unresTransaction.Dtid)
+	require.Contains(t, apiRes, strconv.FormatInt(res.TimeCreated, 10))
 
 	// Wait for the commit to have returned.
 	wg.Wait()

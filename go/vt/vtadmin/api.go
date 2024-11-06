@@ -425,6 +425,7 @@ func (api *API) Handler() http.Handler {
 	router.HandleFunc("/tablet/{tablet}/externally_promoted", httpAPI.Adapt(vtadminhttp.TabletExternallyPromoted)).Name("API.TabletExternallyPromoted").Methods("POST")
 	router.HandleFunc("/transactions/{cluster_id}/{keyspace}", httpAPI.Adapt(vtadminhttp.GetUnresolvedTransactions)).Name("API.GetUnresolvedTransactions").Methods("GET")
 	router.HandleFunc("/transaction/{cluster_id}/{dtid}/conclude", httpAPI.Adapt(vtadminhttp.ConcludeTransaction)).Name("API.ConcludeTransaction")
+	router.HandleFunc("/transaction/{cluster_id}/{dtid}/info", httpAPI.Adapt(vtadminhttp.GetTransactionInfo)).Name("API.GetTransactionInfo")
 	router.HandleFunc("/vschema/{cluster_id}/{keyspace}", httpAPI.Adapt(vtadminhttp.GetVSchema)).Name("API.GetVSchema")
 	router.HandleFunc("/vschemas", httpAPI.Adapt(vtadminhttp.GetVSchemas)).Name("API.GetVSchemas")
 	router.HandleFunc("/vdiff/{cluster_id}/", httpAPI.Adapt(vtadminhttp.VDiffCreate)).Name("API.VDiffCreate").Methods("POST")
@@ -1519,6 +1520,25 @@ func (api *API) GetTopologyPath(ctx context.Context, req *vtadminpb.GetTopologyP
 	}
 
 	return c.Vtctld.GetTopologyPath(ctx, &vtctldatapb.GetTopologyPathRequest{Path: req.Path})
+}
+
+// GetTransactionInfo is part of the vtadminpb.VTAdminServer interface.
+func (api *API) GetTransactionInfo(ctx context.Context, req *vtadminpb.GetTransactionInfoRequest) (*vtctldatapb.GetTransactionInfoResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.GetTransactionInfo")
+	defer span.Finish()
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	cluster.AnnotateSpan(c, span)
+
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.KeyspaceResource, rbac.GetAction) {
+		return nil, nil
+	}
+
+	return c.Vtctld.GetTransactionInfo(ctx, req.Request)
 }
 
 // GetUnresolvedTransactions is part of the vtadminpb.VTAdminServer interface.
