@@ -132,7 +132,13 @@ func (vp *VtAdminProcess) Setup() (err error) {
 	vp.exit = make(chan error)
 	go func() {
 		if vp.proc != nil {
-			vp.exit <- vp.proc.Wait()
+			exitErr := vp.proc.Wait()
+			if exitErr != nil {
+				log.Errorf("vtadmin process exited with error: %v", exitErr)
+				data, _ := os.ReadFile(logFile)
+				log.Errorf("vtadmin stderr - %s", string(data))
+			}
+			vp.exit <- exitErr
 			close(vp.exit)
 		}
 	}()
