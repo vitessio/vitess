@@ -377,6 +377,9 @@ func TestServerGetTabletsByCell(t *testing.T) {
 			slices.SortFunc(out, func(i, j *topo.TabletInfo) int {
 				return cmp.Compare(i.Alias.Uid, j.Alias.Uid)
 			})
+			slices.SortFunc(tt.expectedTablets, func(i, j *topo.TabletInfo) int {
+				return cmp.Compare(i.Alias.Uid, j.Alias.Uid)
+			})
 
 			for i, tablet := range out {
 				expected := tt.expectedTablets[i]
