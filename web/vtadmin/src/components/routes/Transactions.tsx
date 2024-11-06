@@ -32,9 +32,11 @@ import { orderBy } from 'lodash-es';
 import { ReadOnlyGate } from '../ReadOnlyGate';
 import TransactionActions from './transactions/TransactionActions';
 import { isReadOnlyMode } from '../../util/env';
+import {TransactionLink} from "../links/TransactionLink";
+import * as React from "react";
 
-const COLUMNS = ['ID', 'State', 'Participants', 'Time Created', 'Actions'];
-const READ_ONLY_COLUMNS = ['ID', 'State', 'Participants', 'Time Created'];
+export const COLUMNS = ['ID', 'State', 'Participants', 'Time Created', 'Actions'];
+export const READ_ONLY_COLUMNS = ['ID', 'State', 'Participants', 'Time Created'];
 
 const ABANDON_AGE_OPTIONS = [
     {
@@ -90,7 +92,9 @@ export const Transactions = () => {
             return (
                 <tr key={row.dtid}>
                     <DataCell>
-                        <div>{row.dtid}</div>
+                        <TransactionLink clusterID={params.clusterID} dtid={row.dtid}>
+                            <div className="font-bold">{row.dtid}</div>
+                        </TransactionLink>
                     </DataCell>
                     <DataCell>
                         <div>{formatTransactionState(row)}</div>
