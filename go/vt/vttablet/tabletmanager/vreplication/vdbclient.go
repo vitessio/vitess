@@ -147,6 +147,17 @@ func (vc *vdbClient) AddQueryToTrxBatch(query string) error {
 	return nil
 }
 
+func (vc *vdbClient) PopLastQueryFromBatch() error {
+	if !vc.InTransaction {
+		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "cannot pop query outside of a transaction")
+	}
+	if vc.batchSize > 0 {
+		vc.batchSize -= 1
+		vc.queries = vc.queries[:len(vc.queries)-1]
+	}
+	return nil
+}
+
 // ExecuteQueryBatch sends the transaction's current batch of queries
 // down the wire to the database.
 func (vc *vdbClient) ExecuteTrxQueryBatch() ([]*sqltypes.Result, error) {

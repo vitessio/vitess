@@ -106,6 +106,7 @@ type vplayer struct {
 	hasSkippedCommit bool
 	isMergeWorkflow  bool
 	dontSkipCommits  bool
+	inBackoff        bool
 }
 
 // NoForeignKeyCheckFlagBitmask is the bitmask for the 2nd bit (least significant) of the flags in a binlog row event.
@@ -132,6 +133,25 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 		settings.StopPos = pausePos
 		saveStop = false
 	}
+	batchMode := false
+	if vr.workflowConfig.ExperimentalFlags&vttablet.VReplicationExperimentalFlagVPlayerBatching != 0 {
+		batchMode = true
+	}
+
+	vp := &vplayer{
+		vr:               vr,
+		startPos:         settings.StartPos,
+		pos:              settings.StartPos,
+		stopPos:          settings.StopPos,
+		saveStop:         saveStop,
+		copyState:        copyState,
+		timeLastSaved:    time.Now(),
+		tablePlans:       make(map[string]*TablePlan),
+		phase:            phase,
+		throttlerAppName: throttlerapp.VPlayerName.ConcatenateString(vr.throttlerAppName()),
+		batchMode:        batchMode,
+		isMergeWorkflow:  true,
+	}
 
 	queryFunc := func(ctx context.Context, sql string) (*sqltypes.Result, error) {
 		return vr.dbClient.ExecuteWithRetry(ctx, sql)
@@ -139,10 +159,6 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 	commitFunc := func() error {
 		log.Infof("Commit func: %v", vr.dbClient.InTransaction)
 		return vr.dbClient.Commit()
-	}
-	batchMode := false
-	if vr.workflowConfig.ExperimentalFlags&vttablet.VReplicationExperimentalFlagVPlayerBatching != 0 {
-		batchMode = true
 	}
 	if batchMode {
 		// relayLogMaxSize is effectively the limit used when not batching.
@@ -169,29 +185,19 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 			return nil, vr.dbClient.AddQueryToTrxBatch(sql) // Should become part of the trx batch
 		}
 		commitFunc = func() error {
-			log.Infof("Batch Commit func: %v", vr.dbClient.InTransaction)
+			log.Infof("Batch Commit func: In Transaction? %v", vr.dbClient.InTransaction)
+			if vp.inBackoff {
+				// We get into backoff when there is a ERDupQuery error.
+				vr.dbClient.PopLastQueryFromBatch()
+			}
 			return vr.dbClient.CommitTrxQueryBatch() // Commit the current trx batch
 		}
 		vr.dbClient.maxBatchSize = maxAllowedPacket
 	}
 
-	vp := &vplayer{
-		vr:               vr,
-		startPos:         settings.StartPos,
-		pos:              settings.StartPos,
-		stopPos:          settings.StopPos,
-		saveStop:         saveStop,
-		copyState:        copyState,
-		timeLastSaved:    time.Now(),
-		tablePlans:       make(map[string]*TablePlan),
-		phase:            phase,
-		throttlerAppName: throttlerapp.VPlayerName.ConcatenateString(vr.throttlerAppName()),
-		batchMode:        batchMode,
-		isMergeWorkflow:  true,
-	}
-
 	wrappedCommitFunc := func() error {
 		vp.hasSkippedCommit = false
+
 		return commitFunc()
 	}
 	vp.commit = wrappedCommitFunc
@@ -199,7 +205,11 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 	wrappedQueryFunc := func(ctx context.Context, sql string) (*sqltypes.Result, error) {
 		result, err := queryFunc(ctx, sql)
 		var sqlErr *sqlerror.SQLError
-		if err != nil && errors.As(err, &sqlErr) &&
+		isSqlErr := errors.As(err, &sqlErr)
+		if err != nil {
+			log.Errorf(">>>>>>>>>>>> Error executing query: %v, isSqlErr %t ,err: %v", sql, isSqlErr, err)
+		}
+		if err != nil && isSqlErr &&
 			sqlErr.Number() == sqlerror.ERDupEntry && vp.isMergeWorkflow {
 			return vp.backoffAndRetry(ctx, sql, err)
 		}
@@ -259,10 +269,18 @@ func (vp *vplayer) executeWithRetryAndBackoff(ctx context.Context, query string)
 // backoffAndRetry retries the query after a backoff period.
 func (vp *vplayer) backoffAndRetry(ctx context.Context, sql string, err error) (*sqltypes.Result, error) {
 	vp.dontSkipCommits = true
+	log.Infof("Setting inBackoff to true for query: %v", sql)
+	vp.inBackoff = true
+	defer func() {
+		log.Infof("Setting inBackoff to false after query: %v", sql)
+		vp.inBackoff = false
+	}()
 	//FIXME : set dontSkipCommits to false after some time?
 	if vp.hasSkippedCommit {
 		log.Infof(">>>>>>>> found skipped Commit, issuing a commit before retrying the query: %v", sql)
-		vp.commit() // vp.hasSkippedCommit is reset in the wrapped commit function vp.commit()
+		if err := vp.commit(); err != nil {
+			return nil, err
+		} // vp.hasSkippedCommit is reset in the wrapped commit function vp.commit()
 		if err := vp.vr.dbClient.Begin(); err != nil {
 			return nil, err
 		}
