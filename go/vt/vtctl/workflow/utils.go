@@ -910,7 +910,7 @@ func validateTenantId(dataType querypb.Type, value string) error {
 }
 
 func updateKeyspaceRoutingState(ctx context.Context, ts *topo.Server, sourceKeyspace, targetKeyspace string, state *State) error {
-	// For multi-tenant migrations, we only support switching traffic to all cells at once
+	// For multi-tenant migrations, we only support switching traffic to all cells at once.
 	cells, err := ts.GetCellInfoNames(ctx)
 	if err != nil {
 		return err
