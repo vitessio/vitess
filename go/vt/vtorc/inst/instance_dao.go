@@ -114,15 +114,15 @@ func ExecDBWriteFunc(f func() error) error {
 
 func ExpireTableData(tableName string, timestampColumn string) error {
 	writeFunc := func() error {
-		_, err := db.ExecVTOrc(
-			fmt.Sprintf(`DELETE
-				FROM %s
-				WHERE %s < DATETIME('now', PRINTF('-%%d DAY', ?))`,
-				tableName,
-				timestampColumn,
-			),
-			config.Config.AuditPurgeDays,
+		query := fmt.Sprintf(`DELETE
+			FROM %s
+			WHERE
+				%s < DATETIME('now', PRINTF('-%%d DAY', ?))
+			`,
+			tableName,
+			timestampColumn,
 		)
+		_, err := db.ExecVTOrc(query, config.Config.AuditPurgeDays)
 		return err
 	}
 	return ExecDBWriteFunc(writeFunc)
@@ -759,12 +759,17 @@ func mkInsert(table string, columns []string, values []string, nrRows int, inser
 	}
 
 	col := strings.Join(columns, ", ")
-	q.WriteString(fmt.Sprintf(`%s %s
+	query := fmt.Sprintf(`%s %s
 			(%s)
 		VALUES
 			%s
 		`,
-		insertStr, table, col, val.String()))
+		insertStr,
+		table,
+		col,
+		val.String(),
+	)
+	q.WriteString(query)
 
 	return q.String(), nil
 }
