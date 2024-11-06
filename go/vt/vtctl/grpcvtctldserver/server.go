@@ -2607,6 +2607,10 @@ func (s *VtctldServer) GetTransactionInfo(ctx context.Context, req *vtctldatapb.
 		Statements:  rts.Statements,
 	})
 
+	// The metadata manager is itself not part of the list of participants.
+	// We should it to the list before showing it to the users.
+	transaction.Participants = append(transaction.Participants, ss.Target)
+
 	return resp, nil
 }
 

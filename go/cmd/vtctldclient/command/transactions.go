@@ -107,11 +107,13 @@ func commandGetUnresolvedTransactions(cmd *cobra.Command, args []string) error {
 			AbandonAge: unresolvedTransactionsOptions.AbandonAge,
 		})
 	if err != nil {
+		prettyPrintError(err)
 		return err
 	}
 
 	data, err := cli.MarshalJSON(resp.Transactions)
 	if err != nil {
+		prettyPrintError(err)
 		return err
 	}
 	fmt.Println(string(data))
@@ -150,11 +152,25 @@ func commandGetTransactionInfo(cmd *cobra.Command, args []string) error {
 		})
 
 	if err != nil || rts == nil {
+		prettyPrintError(err)
 		return err
 	}
 
 	fmt.Println(string(rts.String()))
 	return nil
+}
+
+func prettyPrintError(err error) {
+	if err == nil {
+		return
+	}
+	st := struct {
+		Error string `json:"error"`
+	}{
+		Error: err.Error(),
+	}
+	data, _ := cli.MarshalJSON(st)
+	fmt.Println(string(data))
 }
 
 func init() {
