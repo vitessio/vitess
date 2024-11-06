@@ -21,21 +21,21 @@ import { WorkspaceHeader } from '../../layout/WorkspaceHeader';
 import { WorkspaceTitle } from '../../layout/WorkspaceTitle';
 import { QueryLoadingPlaceholder } from '../../placeholders/QueryLoadingPlaceholder';
 import { useDocumentTitle } from '../../../hooks/useDocumentTitle';
-import { query, vtctldata} from '../../../proto/vtadmin';
+import { query, vtctldata } from '../../../proto/vtadmin';
 import { formatTransactionState } from '../../../util/transactions';
 import { ShardLink } from '../../links/ShardLink';
 import { formatDateTime, formatRelativeTimeInSeconds } from '../../../util/time';
 import { ReadOnlyGate } from '../../ReadOnlyGate';
 import TransactionActions from '../transactions/TransactionActions';
 import { isReadOnlyMode } from '../../../util/env';
-import {useParams} from "react-router";
-import style from "../keyspace/Keyspace.module.scss";
-import {Link} from "react-router-dom";
-import {NavCrumbs} from "../../layout/NavCrumbs";
-import {READ_ONLY_COLUMNS} from "../Transactions"
-import {COLUMNS} from "../Transactions"
-import * as React from "react";
-import {TransactionLink} from "../../links/TransactionLink";
+import { useParams } from 'react-router';
+import style from '../keyspace/Keyspace.module.scss';
+import { Link } from 'react-router-dom';
+import { NavCrumbs } from '../../layout/NavCrumbs';
+import { READ_ONLY_COLUMNS } from '../Transactions';
+import { COLUMNS } from '../Transactions';
+import * as React from 'react';
+import { TransactionLink } from '../../links/TransactionLink';
 
 interface RouteParams {
     clusterID: string;
@@ -58,7 +58,9 @@ export const Transaction = () => {
             <div className={style.placeholder}>
                 <span className={style.errorEmoji}>😰</span>
                 <h1>An error occurred</h1>
-                <code>{(transactionQuery.error as any).response?.error?.message || transactionQuery.error?.message}</code>
+                <code>
+                    {(transactionQuery.error as any).response?.error?.message || transactionQuery.error?.message}
+                </code>
                 <p>
                     <Link to="/transactions">← All Unresolved Transactions</Link>
                 </p>
@@ -143,9 +145,7 @@ export const Transaction = () => {
                             {formatRelativeTimeInSeconds(row.time_created)}
                         </div>
                     </DataCell>
-                    <DataCell>
-                        {row.statements}
-                    </DataCell>
+                    <DataCell>{row.statements}</DataCell>
                 </tr>
             );
         });
@@ -170,12 +170,12 @@ export const Transaction = () => {
             <ContentContainer>
                 <DataTable
                     columns={isReadOnlyMode() ? READ_ONLY_COLUMNS : COLUMNS}
-                    data={transaction && transaction.metadata? [transaction.metadata]:[]}
+                    data={transaction && transaction.metadata ? [transaction.metadata] : []}
                     renderRows={renderMetadataRow}
                 />
                 <DataTable
                     columns={SHARD_STATE_COLUMNS}
-                    data={transaction && transaction.shard_states? transaction.shard_states:[]}
+                    data={transaction && transaction.shard_states ? transaction.shard_states : []}
                     renderRows={renderShardStateRow}
                 />
                 <QueryLoadingPlaceholder query={transactionQuery} />

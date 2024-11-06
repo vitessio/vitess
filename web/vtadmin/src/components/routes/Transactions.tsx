@@ -32,8 +32,8 @@ import { orderBy } from 'lodash-es';
 import { ReadOnlyGate } from '../ReadOnlyGate';
 import TransactionActions from './transactions/TransactionActions';
 import { isReadOnlyMode } from '../../util/env';
-import {TransactionLink} from "../links/TransactionLink";
-import * as React from "react";
+import { TransactionLink } from '../links/TransactionLink';
+import * as React from 'react';
 
 export const COLUMNS = ['ID', 'State', 'Participants', 'Time Created', 'Actions'];
 export const READ_ONLY_COLUMNS = ['ID', 'State', 'Participants', 'Time Created'];

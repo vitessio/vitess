@@ -23,13 +23,7 @@ interface Props {
     dtid: string | null | undefined;
 }
 
-export const TransactionLink: React.FunctionComponent<Props> = ({
-    children,
-    className,
-    clusterID,
-    dtid,
-    ...props
-}) => {
+export const TransactionLink: React.FunctionComponent<Props> = ({ children, className, clusterID, dtid, ...props }) => {
     if (!clusterID || !dtid) {
         return <span className={className}>{children}</span>;
     }
