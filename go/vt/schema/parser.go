@@ -107,14 +107,15 @@ func parseEnumOrSetTokens(env *vtenv.Environment, enumOrSetValues string) ([]str
 		return nil, unexpectedError()
 	}
 	enumValues := addColumn.Columns[0].Type.EnumValues
+	decodedEnumValues := make([]string, len(enumValues))
 	for i := range enumValues {
 		val, err := sqltypes.DecodeStringSQL(enumValues[i])
 		if err != nil {
 			return nil, err
 		}
-		enumValues[i] = val
+		decodedEnumValues[i] = val
 	}
-	return enumValues, nil
+	return decodedEnumValues, nil
 }
 
 // ParseEnumOrSetTokensMap parses the comma delimited part of an enum column definition
