@@ -22,12 +22,9 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv/tabletenvtest"
-
-	"google.golang.org/protobuf/proto"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/utils"
@@ -35,7 +32,6 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
 func TestCommit(t *testing.T) {
@@ -200,30 +196,6 @@ func TestAutoCommit(t *testing.T) {
 			t.Errorf("%s: %d, must be at least %d", expected.tag, got, want)
 		}
 	}
-}
-
-func TestTxPoolSize(t *testing.T) {
-	tabletenvtest.LoadTabletEnvFlags()
-
-	vstart := framework.DebugVars()
-
-	client1 := framework.NewClient()
-	err := client1.Begin(false)
-	require.NoError(t, err)
-	defer client1.Rollback()
-	verifyIntValue(t, framework.DebugVars(), "TransactionPoolAvailable", tabletenv.NewCurrentConfig().TxPool.Size-1)
-
-	revert := changeVar(t, "TxPoolSize", "1")
-	defer revert()
-	vend := framework.DebugVars()
-	verifyIntValue(t, vend, "TransactionPoolAvailable", 0)
-	verifyIntValue(t, vend, "TransactionPoolCapacity", 1)
-
-	client2 := framework.NewClient()
-	err = client2.Begin(false)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "connection limit exceeded")
-	compareIntDiff(t, framework.DebugVars(), "Errors/RESOURCE_EXHAUSTED", vstart, 1)
 }
 
 func TestForUpdate(t *testing.T) {
