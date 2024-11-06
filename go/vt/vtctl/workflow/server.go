@@ -402,24 +402,24 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 	span.Annotate("include_logs", req.IncludeLogs)
 	span.Annotate("shards", req.Shards)
 
-	wf := &workflowFetcher{
+	w := &workflow{
 		ts:     s.ts,
 		tmc:    s.tmc,
 		parser: s.SQLParser(),
 		logger: s.Logger(),
 	}
 
-	workflowsByShard, err := wf.fetchWorkflowsByShard(ctx, req)
+	workflowsByShard, err := w.fetchWorkflowsByShard(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 
-	copyStatesByShardStreamId, err := wf.fetchCopyStatesByShardStream(ctx, workflowsByShard)
+	copyStatesByShardStreamId, err := w.fetchCopyStatesByShardStream(ctx, workflowsByShard)
 	if err != nil {
 		return nil, err
 	}
 
-	workflows, err := wf.buildWorkflows(ctx, workflowsByShard, copyStatesByShardStreamId, req)
+	workflows, err := w.buildWorkflows(ctx, workflowsByShard, copyStatesByShardStreamId, req)
 	if err != nil {
 		return nil, err
 	}

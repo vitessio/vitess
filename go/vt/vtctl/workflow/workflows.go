@@ -49,9 +49,9 @@ import (
 	vttimepb "vitess.io/vitess/go/vt/proto/vttime"
 )
 
-// workflowFetcher is responsible for fetching and retrieving information
+// workflow is responsible for fetching and retrieving information
 // about VReplication workflows.
-type workflowFetcher struct {
+type workflow struct {
 	ts  *topo.Server
 	tmc tmclient.TabletManagerClient
 
@@ -86,7 +86,7 @@ ORDER BY
 	id ASC
 `)
 
-func (wf *workflowFetcher) fetchWorkflowsByShard(
+func (w *workflow) fetchWorkflowsByShard(
 	ctx context.Context,
 	req *vtctldatapb.GetWorkflowsRequest,
 ) (map[*topo.TabletInfo]*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse, error) {
@@ -100,15 +100,15 @@ func (wf *workflowFetcher) fetchWorkflowsByShard(
 
 	m := sync.Mutex{}
 
-	shards, err := common.GetShards(ctx, wf.ts, req.Keyspace, req.Shards)
+	shards, err := common.GetShards(ctx, w.ts, req.Keyspace, req.Shards)
 	if err != nil {
 		return nil, err
 	}
 
 	results := make(map[*topo.TabletInfo]*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse, len(shards))
 
-	err = wf.forAllShards(ctx, req.Keyspace, shards, func(ctx context.Context, si *topo.ShardInfo) error {
-		primary, err := wf.ts.GetTablet(ctx, si.PrimaryAlias)
+	err = w.forAllShards(ctx, req.Keyspace, shards, func(ctx context.Context, si *topo.ShardInfo) error {
+		primary, err := w.ts.GetTablet(ctx, si.PrimaryAlias)
 		if err != nil {
 			return err
 		}
@@ -117,7 +117,7 @@ func (wf *workflowFetcher) fetchWorkflowsByShard(
 		}
 		// Clone the request so that we can set the correct DB name for tablet.
 		req := readReq.CloneVT()
-		wres, err := wf.tmc.ReadVReplicationWorkflows(ctx, primary.Tablet, req)
+		wres, err := w.tmc.ReadVReplicationWorkflows(ctx, primary.Tablet, req)
 		if err != nil {
 			return err
 		}
@@ -133,7 +133,7 @@ func (wf *workflowFetcher) fetchWorkflowsByShard(
 	return results, nil
 }
 
-func (wf *workflowFetcher) fetchCopyStatesByShardStream(
+func (w *workflow) fetchCopyStatesByShardStream(
 	ctx context.Context,
 	workflowsByShard map[*topo.TabletInfo]*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse,
 ) (map[string][]*vtctldatapb.Workflow_Stream_CopyState, error) {
@@ -148,7 +148,7 @@ func (wf *workflowFetcher) fetchCopyStatesByShardStream(
 		span.Annotate("shard", tablet.Shard)
 		span.Annotate("tablet_alias", tablet.AliasString())
 
-		copyStates, err := wf.getWorkflowCopyStates(ctx, tablet, streamIds)
+		copyStates, err := w.getWorkflowCopyStates(ctx, tablet, streamIds)
 		if err != nil {
 			return err
 		}
@@ -169,8 +169,6 @@ func (wf *workflowFetcher) fetchCopyStatesByShardStream(
 
 	fetchCopyStatesEg, fetchCopyStatesCtx := errgroup.WithContext(ctx)
 	for tablet, result := range workflowsByShard {
-		tablet := tablet // loop closure
-
 		streamIds := make([]int32, 0, len(result.Workflows))
 		for _, wf := range result.Workflows {
 			for _, stream := range wf.Streams {
@@ -193,7 +191,7 @@ func (wf *workflowFetcher) fetchCopyStatesByShardStream(
 	return copyStatesByShardStreamId, nil
 }
 
-func (wf *workflowFetcher) getWorkflowCopyStates(ctx context.Context, tablet *topo.TabletInfo, streamIds []int32) ([]*vtctldatapb.Workflow_Stream_CopyState, error) {
+func (w *workflow) getWorkflowCopyStates(ctx context.Context, tablet *topo.TabletInfo, streamIds []int32) ([]*vtctldatapb.Workflow_Stream_CopyState, error) {
 	span, ctx := trace.NewSpan(ctx, "workflow.workflowFetcher.getWorkflowCopyStates")
 	defer span.Finish()
 
@@ -211,7 +209,7 @@ func (wf *workflowFetcher) getWorkflowCopyStates(ctx context.Context, tablet *to
 	if err != nil {
 		return nil, err
 	}
-	qr, err := wf.tmc.VReplicationExec(ctx, tablet.Tablet, query)
+	qr, err := w.tmc.VReplicationExec(ctx, tablet.Tablet, query)
 	if err != nil {
 		return nil, err
 	}
@@ -238,7 +236,7 @@ func (wf *workflowFetcher) getWorkflowCopyStates(ctx context.Context, tablet *to
 	return copyStates, nil
 }
 
-func (wf *workflowFetcher) buildWorkflows(
+func (w *workflow) buildWorkflows(
 	ctx context.Context,
 	results map[*topo.TabletInfo]*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse,
 	copyStatesByShardStreamId map[string][]*vtctldatapb.Workflow_Stream_CopyState,
@@ -275,7 +273,8 @@ func (wf *workflowFetcher) buildWorkflows(
 				}
 			}
 
-			err := wf.scanWorkflow(ctx, workflow, wfres, tablet, workflowMetadataMap, copyStatesByShardStreamId, req.Keyspace)
+			metadata := workflowMetadataMap[workflowName]
+			err := w.scanWorkflow(ctx, workflow, wfres, tablet, metadata, copyStatesByShardStreamId, req.Keyspace)
 			if err != nil {
 				return nil, err
 			}
@@ -283,10 +282,7 @@ func (wf *workflowFetcher) buildWorkflows(
 	}
 
 	for name, workflow := range workflowsMap {
-		meta, ok := workflowMetadataMap[name]
-		if !ok {
-			return nil, vterrors.Wrapf(ErrInvalidWorkflow, "%s has no workflow metadata", name)
-		}
+		meta := workflowMetadataMap[name]
 		updateWorkflowWithMetadata(workflow, meta)
 
 		// Sort shard streams by stream_id ASC, to support an optimization
@@ -306,7 +302,7 @@ func (wf *workflowFetcher) buildWorkflows(
 			fetchLogsWG.Add(1)
 			go func(ctx context.Context, workflow *vtctldatapb.Workflow) {
 				defer fetchLogsWG.Done()
-				wf.fetchStreamLogs(ctx, req.Keyspace, workflow)
+				w.fetchStreamLogs(ctx, req.Keyspace, workflow)
 			}(ctx, workflow)
 		}
 
@@ -317,12 +313,12 @@ func (wf *workflowFetcher) buildWorkflows(
 	return maps.Values(workflowsMap), nil
 }
 
-func (wf *workflowFetcher) scanWorkflow(
+func (w *workflow) scanWorkflow(
 	ctx context.Context,
 	workflow *vtctldatapb.Workflow,
 	res *tabletmanagerdatapb.ReadVReplicationWorkflowResponse,
 	tablet *topo.TabletInfo,
-	workflowMetadataMap map[string]*workflowMetadata,
+	meta *workflowMetadata,
 	copyStatesByShardStreamId map[string][]*vtctldatapb.Workflow_Stream_CopyState,
 	keyspace string,
 ) error {
@@ -332,7 +328,7 @@ func (wf *workflowFetcher) scanWorkflow(
 		ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 		defer cancel()
 
-		si, err := wf.ts.GetShard(ctx, keyspace, tablet.Shard)
+		si, err := w.ts.GetShard(ctx, keyspace, tablet.Shard)
 		if err != nil {
 			return err
 		}
@@ -396,8 +392,8 @@ func (wf *workflowFetcher) scanWorkflow(
 
 		// Merge in copy states, which we've already fetched.
 		shardStreamId := fmt.Sprintf("%s/%d", tablet.Shard, stream.Id)
-		if copyState, ok := copyStatesByShardStreamId[shardStreamId]; ok {
-			stream.CopyStates = copyState
+		if copyStates, ok := copyStatesByShardStreamId[shardStreamId]; ok {
+			stream.CopyStates = copyStates
 		}
 
 		if rstream.TimeUpdated == nil {
@@ -408,7 +404,6 @@ func (wf *workflowFetcher) scanWorkflow(
 
 		shardStream.Streams = append(shardStream.Streams, stream)
 
-		meta := workflowMetadataMap[workflow.Name]
 		meta.sourceShards.Insert(stream.BinlogSource.Shard)
 		meta.targetShards.Insert(tablet.Shard)
 
@@ -490,7 +485,7 @@ func updateWorkflowWithMetadata(workflow *vtctldatapb.Workflow, meta *workflowMe
 	workflow.MaxVReplicationTransactionLag = int64(meta.maxVReplicationTransactionLag)
 }
 
-func (wf *workflowFetcher) fetchStreamLogs(ctx context.Context, keyspace string, workflow *vtctldatapb.Workflow) {
+func (w *workflow) fetchStreamLogs(ctx context.Context, keyspace string, workflow *vtctldatapb.Workflow) {
 	span, ctx := trace.NewSpan(ctx, "workflow.workflowFetcher.fetchStreamLogs")
 	defer span.Finish()
 
@@ -513,7 +508,7 @@ func (wf *workflowFetcher) fetchStreamLogs(ctx context.Context, keyspace string,
 		return
 	}
 
-	vx := vexec.NewVExec(keyspace, workflow.Name, wf.ts, wf.tmc, wf.parser)
+	vx := vexec.NewVExec(keyspace, workflow.Name, w.ts, w.tmc, w.parser)
 	results, err := vx.QueryContext(ctx, query)
 	if err != nil {
 		// Note that we do not return here. If there are any query results
@@ -611,7 +606,7 @@ func (wf *workflowFetcher) fetchStreamLogs(ctx context.Context, keyspace string,
 				}
 
 				if stream.Id > streamLog.StreamId {
-					wf.logger.Warningf("Found stream log for nonexistent stream: %+v", streamLog)
+					w.logger.Warningf("Found stream log for nonexistent stream: %+v", streamLog)
 					// This can happen on manual/failed workflow cleanup so move to the next log.
 					break
 				}
@@ -624,7 +619,7 @@ func (wf *workflowFetcher) fetchStreamLogs(ctx context.Context, keyspace string,
 	}
 }
 
-func (wf *workflowFetcher) forAllShards(
+func (w *workflow) forAllShards(
 	ctx context.Context,
 	keyspace string,
 	shards []string,
@@ -633,7 +628,7 @@ func (wf *workflowFetcher) forAllShards(
 	eg, egCtx := errgroup.WithContext(ctx)
 	for _, shard := range shards {
 		eg.Go(func() error {
-			si, err := wf.ts.GetShard(ctx, keyspace, shard)
+			si, err := w.ts.GetShard(ctx, keyspace, shard)
 			if err != nil {
 				return err
 			}
