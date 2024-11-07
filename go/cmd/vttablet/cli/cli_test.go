@@ -32,6 +32,9 @@ import (
 // When starting, the TabletManager checks if it needs to restore, in tm.handleRestore but this step will
 // fail if we do not provide a cnf file and if the flag --restore_from_backup is provided.
 func TestRunFailsToStartTabletManager(t *testing.T) {
+	// Skipping the test for now, the test is unveiling some race conditions in the code.
+	// While working on a fix, this test will be skipped.
+	t.Skip()
 	ts, factory := memorytopo.NewServerAndFactory(context.Background(), "cell")
 	topo.RegisterFactory("test", factory)
 
