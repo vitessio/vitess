@@ -863,7 +863,7 @@ func TestShardedAutoIncHandling(t *testing.T) {
 						},
 						AutoIncrement: &vschemapb.AutoIncrement{ // AutoIncrement definition added
 							Column:   "id",
-							Sequence: fmt.Sprintf(autoSequenceTableFormat, tableName),
+							Sequence: fmt.Sprintf("`%s`.`%s`", ms.SourceKeyspace, fmt.Sprintf(autoSequenceTableFormat, tableName)),
 						},
 					},
 				},
@@ -931,7 +931,7 @@ func TestShardedAutoIncHandling(t *testing.T) {
 				if tc.wantTargetVSchema != nil {
 					targetVSchema, err := env.ws.ts.GetVSchema(ctx, ms.TargetKeyspace)
 					require.NoError(t, err)
-					require.True(t, proto.Equal(targetVSchema, tc.wantTargetVSchema))
+					require.True(t, proto.Equal(targetVSchema, tc.wantTargetVSchema), "got: %v, want: %v", targetVSchema, tc.wantTargetVSchema)
 				}
 			}
 		})
