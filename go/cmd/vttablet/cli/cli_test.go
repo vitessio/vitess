@@ -33,7 +33,7 @@ import (
 // fail if we do not provide a cnf file and if the flag --restore_from_backup is provided.
 func TestRunFailsToStartTabletManager(t *testing.T) {
 	// Skipping the test for now, the test is unveiling some race conditions in the code.
-	// While working on a fix, this test will be skipped.
+	// While working on a fix, this test will be skipped: https://github.com/vitessio/vitess/pull/17165
 	t.Skip()
 	ts, factory := memorytopo.NewServerAndFactory(context.Background(), "cell")
 	topo.RegisterFactory("test", factory)
