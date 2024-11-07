@@ -608,11 +608,15 @@ func TestMoveTablesDDLFlag(t *testing.T) {
 // 2. REMOVE the tables' MySQL auto_increment clauses
 // 3. REPLACE the table's MySQL auto_increment clauses with Vitess sequences
 func TestShardedAutoIncHandling(t *testing.T) {
-	tableName := "t1"
+	tableName := "`t-1`"
 	tableDDL := fmt.Sprintf("create table %s (id int not null auto_increment primary key, c1 varchar(10))", tableName)
+<<<<<<< HEAD
+=======
+	validateEmptyTableQuery := fmt.Sprintf("select 1 from %s limit 1", tableName)
+>>>>>>> 31b956b637 (VReplication: Qualify and SQL escape tables in created AutoIncrement VSchema definitions (#17174))
 	ms := &vtctldatapb.MaterializeSettings{
 		Workflow:       "workflow",
-		SourceKeyspace: "sourceks",
+		SourceKeyspace: "source-ks",
 		TargetKeyspace: "targetks",
 		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
 			TargetTable:      tableName,
@@ -847,7 +851,7 @@ func TestShardedAutoIncHandling(t *testing.T) {
 						},
 						AutoIncrement: &vschemapb.AutoIncrement{ // AutoIncrement definition added
 							Column:   "id",
-							Sequence: fmt.Sprintf(autoSequenceTableFormat, tableName),
+							Sequence: fmt.Sprintf("`%s`.`%s`", ms.SourceKeyspace, fmt.Sprintf(autoSequenceTableFormat, strings.ReplaceAll(tableName, "`", ""))),
 						},
 					},
 				},
@@ -909,7 +913,7 @@ func TestShardedAutoIncHandling(t *testing.T) {
 				if tc.wantTargetVSchema != nil {
 					targetVSchema, err := env.ws.ts.GetVSchema(ctx, ms.TargetKeyspace)
 					require.NoError(t, err)
-					require.True(t, proto.Equal(targetVSchema, tc.wantTargetVSchema))
+					require.True(t, proto.Equal(targetVSchema, tc.wantTargetVSchema), "got: %v, want: %v", targetVSchema, tc.wantTargetVSchema)
 				}
 			}
 		})
