@@ -47,6 +47,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	transport "github.com/aws/smithy-go/endpoints"
 	"github.com/aws/smithy-go/middleware"
+	"github.com/dustin/go-humanize"
 	"github.com/spf13/pflag"
 
 	errorsbackup "vitess.io/vitess/go/vt/mysqlctl/errors"
@@ -86,6 +87,11 @@ var (
 
 	// path component delimiter
 	delimiter = "/"
+
+	// minimum part size
+	minimumPartSize int64
+
+	ErrPartSize = errors.New("minimum S3 part size must be between 5MiB and 5GiB")
 )
 
 func registerFlags(fs *pflag.FlagSet) {
@@ -98,6 +104,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&tlsSkipVerifyCert, "s3_backup_tls_skip_verify_cert", false, "skip the 'certificate is valid' check for SSL connections.")
 	fs.StringVar(&requiredLogLevel, "s3_backup_log_level", "LogOff", "determine the S3 loglevel to use from LogOff, LogDebug, LogDebugWithSigning, LogDebugWithHTTPBody, LogDebugWithRequestRetries, LogDebugWithRequestErrors.")
 	fs.StringVar(&sse, "s3_backup_server_side_encryption", "", "server-side encryption algorithm (e.g., AES256, aws:kms, sse_c:/path/to/key/file).")
+	fs.Int64Var(&minimumPartSize, "s3_backup_aws_minimum_partsize", 1024*1024*5, "Minimum part size to use")
 }
 
 func init() {
@@ -166,7 +173,12 @@ func (bh *S3BackupHandle) AddFile(ctx context.Context, filename string, filesize
 		return nil, fmt.Errorf("AddFile cannot be called on read-only backup")
 	}
 
-	partSizeBytes := calculateUploadPartSize(filesize)
+	partSizeBytes, err := calculateUploadPartSize(filesize)
+	if err != nil {
+		return nil, err
+	}
+
+	bh.bs.params.Logger.Infof("Using S3 upload part size: %s", humanize.IBytes(uint64(partSizeBytes)))
 
 	reader, writer := io.Pipe()
 	bh.handleAddFile(ctx, filename, partSizeBytes, reader, func(err error) {
@@ -213,9 +225,11 @@ func (bh *S3BackupHandle) handleAddFile(ctx context.Context, filename string, pa
 	}()
 }
 
-func calculateUploadPartSize(filesize int64) int64 {
+// this is a helper to calculate the part size, taking into consideration the minimum part size
+// passed in by an operator.
+func calculateUploadPartSize(filesize int64) (partSizeBytes int64, err error) {
 	// Calculate s3 upload part size using the source filesize
-	partSizeBytes := manager.DefaultUploadPartSize
+	partSizeBytes = manager.DefaultUploadPartSize
 	if filesize > 0 {
 		minimumPartSize := float64(filesize) / float64(manager.MaxUploadParts)
 		// Round up to ensure large enough partsize
@@ -224,7 +238,17 @@ func calculateUploadPartSize(filesize int64) int64 {
 			partSizeBytes = calculatedPartSizeBytes
 		}
 	}
-	return partSizeBytes
+
+	if minimumPartSize != 0 && partSizeBytes < minimumPartSize {
+		if minimumPartSize > 1024*1024*1024*5 || minimumPartSize < 1024*1024*5 { // 5GiB and 5MiB respectively
+			return 0, fmt.Errorf("%w, currently set to %s",
+				ErrPartSize, humanize.IBytes(uint64(minimumPartSize)),
+			)
+		}
+		partSizeBytes = int64(minimumPartSize)
+	}
+
+	return
 }
 
 // EndBackup is part of the backupstorage.BackupHandle interface.
