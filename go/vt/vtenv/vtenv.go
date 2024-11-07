@@ -67,6 +67,12 @@ func NewTestEnv() *Environment {
 	}
 }
 
+func NewLegacyTestEnv() *Environment {
+	env := NewTestEnv()
+	env.mysqlVersion = config.LegacyMySQLVersion
+	return env
+}
+
 func (e *Environment) CollationEnv() *collations.Environment {
 	return e.collationEnv
 }
