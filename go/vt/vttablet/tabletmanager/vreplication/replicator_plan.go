@@ -64,6 +64,13 @@ type ReplicatorPlan struct {
 	workflowConfig *vttablet.VReplicationConfig
 }
 
+type colInfo struct {
+	typ    querypb.Type
+	length int64
+	offset int64
+	field  *querypb.Field
+}
+
 // buildExecution plan uses the field info as input and the partially built
 // TablePlan for that table to build a full plan.
 func (rp *ReplicatorPlan) buildExecutionPlan(fieldEvent *binlogdatapb.FieldEvent) (*TablePlan, error) {
@@ -224,6 +231,12 @@ type TablePlan struct {
 
 	CollationEnv   *collations.Environment
 	WorkflowConfig *vttablet.VReplicationConfig
+
+	// rowInfo is used as a lazily initiated cache of column information associated
+	// with querypb.Row values for bulk inserts. The base information is calculated
+	// once based on the table plan and only the row specific values are updated for
+	// each row as the row is processed.
+	rowInfo []*colInfo
 }
 
 // MarshalJSON performs a custom JSON Marshalling.
@@ -622,34 +635,38 @@ func (tp *TablePlan) appendFromRow(buf *bytes2.Buffer, row *querypb.Row) error {
 			len(tp.Fields), len(bindLocations))
 	}
 
-	type colInfo struct {
-		typ    querypb.Type
-		length int64
-		offset int64
-		field  *querypb.Field
-	}
-	rowInfo := make([]*colInfo, 0)
-
 	offset := int64(0)
-	for i, field := range tp.Fields { // collect info required for fields to be bound
-		length := row.Lengths[i]
-		if !tp.FieldsToSkip[strings.ToLower(field.Name)] {
-			rowInfo = append(rowInfo, &colInfo{
-				typ:    field.Type,
-				length: length,
-				offset: offset,
-				field:  field,
-			})
+	if tp.rowInfo == nil {
+		tp.rowInfo = make([]*colInfo, 0, len(tp.Fields))
+		for i, field := range tp.Fields { // collect info required for fields to be bound
+			length := row.Lengths[i]
+			if !tp.FieldsToSkip[strings.ToLower(field.Name)] {
+				tp.rowInfo = append(tp.rowInfo, &colInfo{
+					typ:    field.Type,
+					length: length,
+					offset: offset,
+					field:  field,
+				})
+			}
+			if length > 0 {
+				offset += row.Lengths[i]
+			}
 		}
-		if length > 0 {
-			offset += row.Lengths[i]
+	} else {
+		for i, ri := range tp.rowInfo {
+			length := row.Lengths[i]
+			ri.length = length
+			ri.offset = offset
+			if length > 0 {
+				offset += row.Lengths[i]
+			}
 		}
 	}
 
 	// bind field values to locations
 	var offsetQuery int
 	for i, loc := range bindLocations {
-		col := rowInfo[i]
+		col := tp.rowInfo[i]
 		buf.WriteString(tp.BulkInsertValues.Query[offsetQuery:loc.Offset])
 		typ := col.typ
 
