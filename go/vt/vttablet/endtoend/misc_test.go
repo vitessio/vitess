@@ -896,6 +896,7 @@ func TestShowTablesWithSizes(t *testing.T) {
 	defer conn.Close()
 
 	if query := conn.BaseShowTablesWithSizes(); query == "" {
+		// Happens in MySQL 8.0 where we use BaseShowInnodbTableSizes, instead.
 		t.Skip("BaseShowTablesWithSizes is empty in this version of MySQL")
 	}
 
