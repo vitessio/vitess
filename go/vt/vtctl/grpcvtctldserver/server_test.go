@@ -5570,7 +5570,7 @@ func TestGetTransactionInfo(t *testing.T) {
 					"80-": {
 						Dtid: "bb",
 						Participants: []*querypb.Target{
-							{Keyspace: ks, Shard: "-80"},
+							{Keyspace: ks, Shard: "-80", TabletType: topodatapb.TabletType_PRIMARY},
 						},
 					},
 				},
@@ -5587,7 +5587,8 @@ func TestGetTransactionInfo(t *testing.T) {
 				Metadata: &querypb.TransactionMetadata{
 					Dtid: "bb",
 					Participants: []*querypb.Target{
-						{Keyspace: ks, Shard: "-80"},
+						{Keyspace: ks, Shard: "-80", TabletType: topodatapb.TabletType_PRIMARY},
+						{Keyspace: ks, Shard: "80-", TabletType: topodatapb.TabletType_PRIMARY},
 					},
 				},
 				ShardStates: []*vtctldatapb.ShardTransactionState{
