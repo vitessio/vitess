@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/proto/binlogdata"
@@ -150,4 +151,110 @@ func TestGetWorkflowCopyStates(t *testing.T) {
 	}
 	assert.Contains(t, copyStates, state1)
 	assert.Contains(t, copyStates, state2)
+}
+
+func TestFetchCopyStatesByShardStream(t *testing.T) {
+	ctx := context.Background()
+
+	sourceShards := []string{"-"}
+	targetShards := []string{"-"}
+
+	te := newTestMaterializerEnv(t, ctx, &vtctldatapb.MaterializeSettings{
+		SourceKeyspace: "source_keyspace",
+		TargetKeyspace: "target_keyspace",
+		Workflow:       "test_workflow",
+		TableSettings: []*vtctldatapb.TableMaterializeSettings{
+			{
+				TargetTable:      "table1",
+				SourceExpression: fmt.Sprintf("select * from %s", "table1"),
+			},
+			{
+				TargetTable:      "table2",
+				SourceExpression: fmt.Sprintf("select * from %s", "table2"),
+			},
+		},
+	}, sourceShards, targetShards)
+
+	w := workflow{
+		ts:  te.ws.ts,
+		tmc: te.tmc,
+	}
+
+	tablet := &topodatapb.Tablet{
+		Shard: "-80",
+		Alias: &topodatapb.TabletAlias{
+			Cell: "zone1",
+			Uid:  100,
+		},
+	}
+	tablet2 := &topodatapb.Tablet{
+		Shard: "80-",
+		Alias: &topodatapb.TabletAlias{
+			Cell: "zone1",
+			Uid:  101,
+		},
+	}
+
+	query := "select vrepl_id, table_name, lastpk from _vt.copy_state where vrepl_id in (1, 2) and id in (select max(id) from _vt.copy_state where vrepl_id in (1, 2) group by vrepl_id, table_name)"
+	te.tmc.expectVRQuery(100, query, sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("vrepl_id|table_name|lastpk", "int64|varchar|varchar"),
+		"1|table1|2", "2|table2|1", "2|table1|1",
+	))
+
+	te.tmc.expectVRQuery(101, query, sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("vrepl_id|table_name|lastpk", "int64|varchar|varchar"),
+		"1|table1|2", "1|table2|1",
+	))
+
+	ti := &topo.TabletInfo{
+		Tablet: tablet,
+	}
+	ti2 := &topo.TabletInfo{
+		Tablet: tablet2,
+	}
+
+	readVReplicationResponse := map[*topo.TabletInfo]*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse{
+		ti: {
+			Workflows: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse{
+				{
+					Streams: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{
+						{
+							Id: 1,
+						}, {
+							Id: 2,
+						},
+					},
+				},
+			},
+		},
+		ti2: {
+			Workflows: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse{
+				{
+					Streams: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{
+						{
+							Id: 1,
+						}, {
+							Id: 2,
+						},
+					},
+				},
+			},
+		},
+	}
+	copyStatesByStreamId, err := w.fetchCopyStatesByShardStream(ctx, readVReplicationResponse)
+	assert.NoError(t, err)
+
+	copyStates1 := copyStatesByStreamId["-80/1"]
+	copyStates2 := copyStatesByStreamId["-80/2"]
+	copyStates3 := copyStatesByStreamId["80-/1"]
+
+	require.NotNil(t, copyStates1)
+	require.NotNil(t, copyStates2)
+	require.NotNil(t, copyStates3)
+
+	assert.Len(t, copyStates1, 1)
+	assert.Len(t, copyStates2, 2)
+	assert.Len(t, copyStates3, 2)
+
+	assert.Nil(t, copyStatesByStreamId["80-/2"])
 }

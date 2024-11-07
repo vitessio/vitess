@@ -2227,7 +2227,7 @@ func TestGetWorkflowsStreamLogs(t *testing.T) {
 	}, sourceShards, targetShards)
 
 	logResult := sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields("id|vrepl_id|type|state|message|created_at|updated_at|`count`", "int64|int64|varchar|varchar|varchar|varchar|varchar|int64"),
+		sqltypes.MakeTestFields("id|vrepl_id|type|state|message|created_at|updated_at|count", "int64|int64|varchar|varchar|varchar|varchar|varchar|int64"),
 		"1|0|State Change|Running|test message for non-existent 1|2006-01-02 15:04:05|2006-01-02 15:04:05|1",
 		"2|0|State Change|Stopped|test message for non-existent 2|2006-01-02 15:04:06|2006-01-02 15:04:06|1",
 		"3|1|State Change|Running|log message|2006-01-02 15:04:07|2006-01-02 15:04:07|1",
