@@ -653,10 +653,17 @@ func (tp *TablePlan) appendFromRow(buf *bytes2.Buffer, row *querypb.Row) error {
 			}
 		}
 	} else {
-		for i, ri := range tp.rowInfo {
+		// i is the index of the field in the plan and row while n is the index of the
+		// field in the column info list, which is a subset of the others when there
+		// are fields we need to skip such as generated columns.
+		n := 0
+		for i := range tp.Fields {
 			length := row.Lengths[i]
-			ri.length = length
-			ri.offset = offset
+			if !tp.FieldsToSkip[strings.ToLower(tp.Fields[i].Name)] {
+				tp.rowInfo[n].length = length
+				tp.rowInfo[n].offset = offset
+				n++
+			}
 			if length > 0 {
 				offset += row.Lengths[i]
 			}
