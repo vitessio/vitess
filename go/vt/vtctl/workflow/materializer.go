@@ -396,7 +396,11 @@ func (mz *materializer) deploySchema() error {
 							table := targetVSchema.Tables[ts.TargetTable]
 							// Don't override or redo anything that already exists.
 							if table != nil && table.AutoIncrement == nil {
-								seqTableName := fmt.Sprintf(autoSequenceTableFormat, ts.TargetTable)
+								seqTableName, _ := sqlescape.EnsureEscaped(fmt.Sprintf(autoSequenceTableFormat, ts.TargetTable))
+								if mz.ms.WorkflowOptions.GlobalKeyspace != "" {
+									seqTableKeyspace, _ := sqlescape.EnsureEscaped(mz.ms.WorkflowOptions.GlobalKeyspace)
+									seqTableName = fmt.Sprintf("%s.%s", seqTableKeyspace, seqTableName)
+								}
 								// Create a Vitess AutoIncrement definition -- which uses a sequence -- to
 								// replace the MySQL auto_increment definition that we removed.
 								table.AutoIncrement = &vschemapb.AutoIncrement{
