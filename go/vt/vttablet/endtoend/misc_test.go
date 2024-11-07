@@ -895,6 +895,10 @@ func TestShowTablesWithSizes(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
+	if query := conn.BaseShowTablesWithSizes(); query == "" {
+		t.Skip("BaseShowTablesWithSizes is empty in this version of MySQL")
+	}
+
 	setupQueries := []string{
 		`drop view if exists show_tables_with_sizes_v1`,
 		`drop table if exists show_tables_with_sizes_t1`,
