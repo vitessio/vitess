@@ -222,24 +222,30 @@ func stripTableForeignKeys(ddl string, parser *sqlparser.Parser) (string, error)
 // table definition. If an optional replace function is specified then that
 // callback will be used to e.g. replace the MySQL clause with a Vitess
 // VSchema AutoIncrement definition.
-func stripAutoIncrement(ddl string, parser *sqlparser.Parser, replace func(columnName string)) (string, error) {
+func stripAutoIncrement(ddl string, parser *sqlparser.Parser, replace func(columnName string) error) (string, error) {
 	newDDL, err := parser.ParseStrictDDL(ddl)
 	if err != nil {
 		return "", err
 	}
 
-	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+	err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
 		case *sqlparser.ColumnDefinition:
 			if node.Type.Options.Autoincrement {
 				node.Type.Options.Autoincrement = false
 				if replace != nil {
-					replace(sqlparser.String(node.Name))
+					if err := replace(sqlparser.String(node.Name)); err != nil {
+						return false, vterrors.Wrapf(err, "failed to replace auto_increment column %s in %q", sqlparser.String(node.Name), ddl)
+					}
+
 				}
 			}
 		}
 		return true, nil
 	}, newDDL)
+	if err != nil {
+		return "", err
+	}
 
 	return sqlparser.String(newDDL), nil
 }

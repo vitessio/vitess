@@ -613,12 +613,12 @@ func TestMoveTablesDDLFlag(t *testing.T) {
 // 2. REMOVE the tables' MySQL auto_increment clauses
 // 3. REPLACE the table's MySQL auto_increment clauses with Vitess sequences
 func TestShardedAutoIncHandling(t *testing.T) {
-	tableName := "t1"
+	tableName := "`t-1`"
 	tableDDL := fmt.Sprintf("create table %s (id int not null auto_increment primary key, c1 varchar(10))", tableName)
-	validateEmptyTableQuery := fmt.Sprintf("select 1 from `%s` limit 1", tableName)
+	validateEmptyTableQuery := fmt.Sprintf("select 1 from %s limit 1", tableName)
 	ms := &vtctldatapb.MaterializeSettings{
 		Workflow:       "workflow",
-		SourceKeyspace: "sourceks",
+		SourceKeyspace: "source-ks",
 		TargetKeyspace: "targetks",
 		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
 			TargetTable:      tableName,
@@ -863,7 +863,7 @@ func TestShardedAutoIncHandling(t *testing.T) {
 						},
 						AutoIncrement: &vschemapb.AutoIncrement{ // AutoIncrement definition added
 							Column:   "id",
-							Sequence: fmt.Sprintf("`%s`.`%s`", ms.SourceKeyspace, fmt.Sprintf(autoSequenceTableFormat, tableName)),
+							Sequence: fmt.Sprintf("`%s`.`%s`", ms.SourceKeyspace, fmt.Sprintf(autoSequenceTableFormat, strings.ReplaceAll(tableName, "`", ""))),
 						},
 					},
 				},
