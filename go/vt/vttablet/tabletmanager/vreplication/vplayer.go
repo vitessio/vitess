@@ -63,6 +63,8 @@ type vplayer struct {
 	replicatorPlan *ReplicatorPlan
 	tablePlans     map[string]*TablePlan
 
+	ctx context.Context
+
 	// These are set when creating the VPlayer based on whether the VPlayer
 	// is in batch (stmt and trx) execution mode or not.
 	query  func(ctx context.Context, sql string) (*sqltypes.Result, error)
@@ -184,11 +186,45 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 			}
 			return nil, vr.dbClient.AddQueryToTrxBatch(sql) // Should become part of the trx batch
 		}
+		unrollBatch := func() error {
+			batchedQueries := vr.dbClient.GetQueries()
+			if len(batchedQueries) == 0 {
+				return nil
+			}
+			for _, query := range batchedQueries {
+				log.Infof("Unrolling batch: exec %v", query)
+
+				_, err := vr.dbClient.Execute(query)
+				if err != nil {
+					log.Infof("Unrolling batch: failed to exec %v: %v", query, err)
+					if vp.mustBackoff(err) {
+						log.Infof("Unrolling batch: backoff needed for query: %v", query)
+						if vp.hasSkippedCommit {
+							log.Infof("Unrolling batch: found skipped Commit, issuing a commit before retrying the query: %v", query)
+							if err := vr.dbClient.Commit(); err != nil {
+								return err
+							}
+							if err := vr.dbClient.Begin(); err != nil {
+								return err
+							}
+						}
+						_, err2 := vp.backoffAndRetry(vp.ctx, query)
+						if err2 != nil {
+							return err2
+						}
+					}
+				} else {
+					log.Infof("Unrolling batch: exec %v succeeded", query)
+				}
+			}
+			return vr.dbClient.Commit()
+		}
 		commitFunc = func() error {
-			log.Infof("Batch Commit func: In Transaction? %v", vr.dbClient.InTransaction)
+			log.Infof("Batch Commit func: In Transaction %v", vr.dbClient.InTransaction)
 			if vp.inBackoff {
-				// We get into backoff when there is a ERDupQuery error.
-				vr.dbClient.PopLastQueryFromBatch()
+				// We get into backoff when there is a ERDupQuery error. So one of the queries in the batch is
+				// causing the issue. We need to run all queries until that one first and then backoff/retry that one
+				return unrollBatch()
 			}
 			return vr.dbClient.CommitTrxQueryBatch() // Commit the current trx batch
 		}
@@ -197,21 +233,24 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 
 	wrappedCommitFunc := func() error {
 		vp.hasSkippedCommit = false
-
+		err := commitFunc()
+		if !vp.batchMode {
+			return err
+		}
+		vp.inBackoff = true
+		defer func() {
+			vp.inBackoff = false
+		}()
+		log.Infof("In backoff in wrapped commit func for batch mode, batched queries: %v", vp.vr.dbClient.GetQueries())
 		return commitFunc()
 	}
 	vp.commit = wrappedCommitFunc
 
 	wrappedQueryFunc := func(ctx context.Context, sql string) (*sqltypes.Result, error) {
 		result, err := queryFunc(ctx, sql)
-		var sqlErr *sqlerror.SQLError
-		isSqlErr := errors.As(err, &sqlErr)
-		if err != nil {
-			log.Errorf(">>>>>>>>>>>> Error executing query: %v, isSqlErr %t ,err: %v", sql, isSqlErr, err)
-		}
-		if err != nil && isSqlErr &&
-			sqlErr.Number() == sqlerror.ERDupEntry && vp.isMergeWorkflow {
-			return vp.backoffAndRetry(ctx, sql, err)
+		log.Infof("wrapped query func: %v, err: %v", sql, err)
+		if err != nil && vp.mustBackoff(err) {
+			return vp.backoffAndRetry(ctx, sql)
 		}
 		return result, err
 	}
@@ -223,6 +262,17 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 func (vp *vplayer) isRetryable(err error) bool {
 	if sqlErr, ok := err.(*sqlerror.SQLError); ok {
 		return sqlErr.Number() == sqlerror.ERDupEntry
+	}
+	return false
+}
+
+func (vp *vplayer) mustBackoff(err error) bool {
+	var sqlErr *sqlerror.SQLError
+	isSqlErr := errors.As(err, &sqlErr)
+	if err != nil && isSqlErr &&
+		sqlErr.Number() == sqlerror.ERDupEntry && vp.isMergeWorkflow {
+		log.Infof("mustBackoff for  err: %v", err)
+		return true
 	}
 	return false
 }
@@ -267,7 +317,8 @@ func (vp *vplayer) executeWithRetryAndBackoff(ctx context.Context, query string)
 }
 
 // backoffAndRetry retries the query after a backoff period.
-func (vp *vplayer) backoffAndRetry(ctx context.Context, sql string, err error) (*sqltypes.Result, error) {
+func (vp *vplayer) backoffAndRetry(ctx context.Context, sql string) (*sqltypes.Result, error) {
+	vp.ctx = ctx
 	vp.dontSkipCommits = true
 	log.Infof("Setting inBackoff to true for query: %v", sql)
 	vp.inBackoff = true
@@ -276,17 +327,19 @@ func (vp *vplayer) backoffAndRetry(ctx context.Context, sql string, err error) (
 		vp.inBackoff = false
 	}()
 	//FIXME : set dontSkipCommits to false after some time?
-	if vp.hasSkippedCommit {
-		log.Infof(">>>>>>>> found skipped Commit, issuing a commit before retrying the query: %v", sql)
-		if err := vp.commit(); err != nil {
-			return nil, err
-		} // vp.hasSkippedCommit is reset in the wrapped commit function vp.commit()
-		if err := vp.vr.dbClient.Begin(); err != nil {
-			return nil, err
+	if !vp.batchMode {
+		if vp.hasSkippedCommit {
+			log.Infof(">>>>>>>> found skipped Commit, issuing a commit before retrying the query: %v", sql)
+			if err := vp.commit(); err != nil {
+				return nil, err
+			} // vp.hasSkippedCommit is reset in the wrapped commit function vp.commit()
+			if err := vp.vr.dbClient.Begin(); err != nil {
+				return nil, err
+			}
 		}
+		return vp.executeWithRetryAndBackoff(ctx, sql)
 	}
-	return vp.executeWithRetryAndBackoff(ctx, sql)
-
+	return nil, vp.commit() // is batch mode
 }
 
 // play is the entry point for playing binlogs.
@@ -662,7 +715,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 					// applying the next set of events as part of the current transaction. This approach
 					// also handles the case where the last transaction is partial. In that case,
 					// we only group the transactions with commits we've seen so far.
-					if /*vp.dontSkipCommits && */ hasAnotherCommit(items, i, j+1) {
+					if vp.dontSkipCommits && hasAnotherCommit(items, i, j+1) {
 						log.Infof(">>>>>>>> skipping commit")
 						vp.hasSkippedCommit = true
 						continue

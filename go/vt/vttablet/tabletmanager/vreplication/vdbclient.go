@@ -103,6 +103,10 @@ func (vc *vdbClient) CommitTrxQueryBatch() error {
 	return nil
 }
 
+func (vc *vdbClient) GetQueries() []string {
+	return vc.queries
+}
+
 func (vc *vdbClient) Rollback() error {
 	if !vc.InTransaction {
 		return nil

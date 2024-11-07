@@ -14,6 +14,16 @@ import (
 )
 
 func TestWorkflowDuplicateKeyBackoff(t *testing.T) {
+	t.Run("TestWorkflowDuplicateKeyBackoff with batching off", func(t *testing.T) {
+		testWorkflowDuplicateKeyBackoff(t, false)
+	})
+	t.Run("TestWorkflowDuplicateKeyBackoff with batching on", func(t *testing.T) {
+		testWorkflowDuplicateKeyBackoff(t, true)
+	})
+}
+
+func testWorkflowDuplicateKeyBackoff(t *testing.T, setExperimentalFlags bool) {
+	debugMode = false
 	setSidecarDBName("_vt")
 	origDefaultRdonly := defaultRdonly
 	origDefailtReplica := defaultReplicas
@@ -23,7 +33,9 @@ func TestWorkflowDuplicateKeyBackoff(t *testing.T) {
 	}()
 	defaultRdonly = 0
 	defaultReplicas = 0
-	setAllVTTabletExperimentalFlags()
+	if setExperimentalFlags {
+		setAllVTTabletExperimentalFlags()
+	}
 
 	setupMinimalCluster(t)
 	vttablet.InitVReplicationConfigDefaults()
