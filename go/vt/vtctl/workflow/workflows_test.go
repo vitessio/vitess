@@ -17,15 +17,21 @@ limitations under the License.
 package workflow
 
 import (
+	"context"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/proto/binlogdata"
-	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
-	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	"vitess.io/vitess/go/vt/proto/vttime"
+	"vitess.io/vitess/go/vt/topo"
+
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 func TestGetStreamState(t *testing.T) {
@@ -84,4 +90,64 @@ func TestGetStreamState(t *testing.T) {
 			assert.Equal(t, tt.want, state)
 		})
 	}
+}
+
+func TestGetWorkflowCopyStates(t *testing.T) {
+	ctx := context.Background()
+
+	sourceShards := []string{"-"}
+	targetShards := []string{"-"}
+
+	te := newTestMaterializerEnv(t, ctx, &vtctldatapb.MaterializeSettings{
+		SourceKeyspace: "source_keyspace",
+		TargetKeyspace: "target_keyspace",
+		Workflow:       "test_workflow",
+		TableSettings: []*vtctldatapb.TableMaterializeSettings{
+			{
+				TargetTable:      "table1",
+				SourceExpression: fmt.Sprintf("select * from %s", "table1"),
+			},
+			{
+				TargetTable:      "table2",
+				SourceExpression: fmt.Sprintf("select * from %s", "table2"),
+			},
+		},
+	}, sourceShards, targetShards)
+
+	w := workflow{
+		ts:  te.ws.ts,
+		tmc: te.tmc,
+	}
+
+	tablet := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "zone1",
+			Uid:  100,
+		},
+	}
+
+	query := "select vrepl_id, table_name, lastpk from _vt.copy_state where vrepl_id in (1) and id in (select max(id) from _vt.copy_state where vrepl_id in (1) group by vrepl_id, table_name)"
+	te.tmc.expectVRQuery(100, query, sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("vrepl_id|table_name|lastpk", "int64|varchar|varchar"),
+		"1|table1|2", "1|table2|1",
+	))
+
+	copyStates, err := w.getWorkflowCopyStates(ctx, &topo.TabletInfo{
+		Tablet: tablet,
+	}, []int32{1})
+	assert.NoError(t, err)
+	assert.Len(t, copyStates, 2)
+
+	state1 := &vtctldatapb.Workflow_Stream_CopyState{
+		Table:    "table1",
+		LastPk:   "2",
+		StreamId: 1,
+	}
+	state2 := &vtctldatapb.Workflow_Stream_CopyState{
+		Table:    "table2",
+		LastPk:   "1",
+		StreamId: 1,
+	}
+	assert.Contains(t, copyStates, state1)
+	assert.Contains(t, copyStates, state2)
 }

@@ -142,7 +142,7 @@ func (w *workflow) fetchCopyStatesByShardStream(
 	copyStatesByShardStreamId := make(map[string][]*vtctldatapb.Workflow_Stream_CopyState, len(workflowsByShard))
 
 	fetchCopyStates := func(ctx context.Context, tablet *topo.TabletInfo, streamIds []int32) error {
-		span, ctx := trace.NewSpan(ctx, "workflow.workflowFetcher.fetchCopyStates")
+		span, ctx := trace.NewSpan(ctx, "workflow.workflow.fetchCopyStates")
 		defer span.Finish()
 
 		span.Annotate("shard", tablet.Shard)
@@ -192,7 +192,7 @@ func (w *workflow) fetchCopyStatesByShardStream(
 }
 
 func (w *workflow) getWorkflowCopyStates(ctx context.Context, tablet *topo.TabletInfo, streamIds []int32) ([]*vtctldatapb.Workflow_Stream_CopyState, error) {
-	span, ctx := trace.NewSpan(ctx, "workflow.workflowFetcher.getWorkflowCopyStates")
+	span, ctx := trace.NewSpan(ctx, "workflow.workflow.getWorkflowCopyStates")
 	defer span.Finish()
 
 	span.Annotate("keyspace", tablet.Keyspace)
@@ -220,16 +220,16 @@ func (w *workflow) getWorkflowCopyStates(ctx context.Context, tablet *topo.Table
 	}
 
 	copyStates := make([]*vtctldatapb.Workflow_Stream_CopyState, len(result.Rows))
-	for i, row := range result.Rows {
-		streamId, err := row[0].ToInt64()
+	for i, row := range result.Named().Rows {
+		streamId, err := row["vrepl_id"].ToInt64()
 		if err != nil {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to cast vrepl_id to int64: %v", err)
 		}
 		// These string fields are technically varbinary, but this is close enough.
 		copyStates[i] = &vtctldatapb.Workflow_Stream_CopyState{
 			StreamId: streamId,
-			Table:    row[1].ToString(),
-			LastPk:   row[2].ToString(),
+			Table:    row["table_name"].ToString(),
+			LastPk:   row["lastpk"].ToString(),
 		}
 	}
 
@@ -486,7 +486,7 @@ func updateWorkflowWithMetadata(workflow *vtctldatapb.Workflow, meta *workflowMe
 }
 
 func (w *workflow) fetchStreamLogs(ctx context.Context, keyspace string, workflow *vtctldatapb.Workflow) {
-	span, ctx := trace.NewSpan(ctx, "workflow.workflowFetcher.fetchStreamLogs")
+	span, ctx := trace.NewSpan(ctx, "workflow.workflow.fetchStreamLogs")
 	defer span.Finish()
 
 	span.Annotate("keyspace", keyspace)
@@ -543,36 +543,36 @@ func (w *workflow) fetchStreamLogs(ctx context.Context, keyspace string, workflo
 			streams[streamIdx].LogFetchError = err.Error()
 		}
 
-		for _, row := range qr.Rows {
-			id, err := row[0].ToCastInt64()
+		for _, row := range qr.Named().Rows {
+			id, err := row["id"].ToCastInt64()
 			if err != nil {
 				markErrors(err)
 				continue
 			}
 
-			streamID, err := row[1].ToCastInt64()
+			streamID, err := row["vrepl_id"].ToCastInt64()
 			if err != nil {
 				markErrors(err)
 				continue
 			}
 
-			typ := row[2].ToString()
-			state := row[3].ToString()
-			message := row[4].ToString()
+			typ := row["type"].ToString()
+			state := row["state"].ToString()
+			message := row["message"].ToString()
 
-			createdAt, err := time.Parse("2006-01-02 15:04:05", row[5].ToString())
+			createdAt, err := time.Parse("2006-01-02 15:04:05", row["created_at"].ToString())
 			if err != nil {
 				markErrors(err)
 				continue
 			}
 
-			updatedAt, err := time.Parse("2006-01-02 15:04:05", row[6].ToString())
+			updatedAt, err := time.Parse("2006-01-02 15:04:05", row["updated_at"].ToString())
 			if err != nil {
 				markErrors(err)
 				continue
 			}
 
-			count, err := row[7].ToCastInt64()
+			count, err := row["count"].ToCastInt64()
 			if err != nil {
 				markErrors(err)
 				continue
