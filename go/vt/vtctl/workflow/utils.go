@@ -235,7 +235,7 @@ func stripAutoIncrement(ddl string, parser *sqlparser.Parser, replace func(colum
 				node.Type.Options.Autoincrement = false
 				if replace != nil {
 					if err := replace(sqlparser.String(node.Name)); err != nil {
-						return false, vterrors.Wrapf(err, "failed to replace auto_increment column %s in %q", sqlparser.String(node.Name), ddl)
+						return false, vterrors.Wrapf(err, "failed to replace auto_increment column %q in %q", sqlparser.String(node.Name), ddl)
 					}
 
 				}

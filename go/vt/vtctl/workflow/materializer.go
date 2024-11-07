@@ -400,8 +400,7 @@ func (mz *materializer) deploySchema() error {
 								if err != nil {
 									return err
 								}
-								seqTableName := fmt.Sprintf(autoSequenceTableFormat, tableName)
-								seqTableName, err = sqlescape.EnsureEscaped(seqTableName)
+								seqTableName, err := sqlescape.EnsureEscaped(fmt.Sprintf(autoSequenceTableFormat, tableName))
 								if err != nil {
 									return err
 								}
