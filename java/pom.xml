@@ -11,7 +11,7 @@
 
   <groupId>io.vitess</groupId>
   <artifactId>vitess-parent</artifactId>
-  <version>19.0.5</version>
+  <version>19.0.7</version>
   <packaging>pom</packaging>
 
   <name>Vitess Java Client libraries [Parent]</name>
@@ -72,7 +72,7 @@
     <netty.handler.version>4.1.94.Final</netty.handler.version>
     <tcnative.boring.ssl.version>2.0.61.Final</tcnative.boring.ssl.version>
 
-    <protobuf.java.version>3.24.3</protobuf.java.version>
+    <protobuf.java.version>3.25.5</protobuf.java.version>
     <protobuf.protoc.version>3.24.3</protobuf.protoc.version>
     <checkstyle.plugin.version>3.0.0</checkstyle.plugin.version>
     <log4j2.version>2.17.1</log4j2.version>
@@ -109,7 +109,7 @@
       <dependency>
         <groupId>commons-io</groupId>
         <artifactId>commons-io</artifactId>
-        <version>2.7</version>
+        <version>2.14.0</version>
       </dependency>
 
       <dependency>

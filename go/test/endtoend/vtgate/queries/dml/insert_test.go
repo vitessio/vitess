@@ -483,3 +483,29 @@ func TestMixedCases(t *testing.T) {
 	// final check count on the lookup vindex table.
 	utils.AssertMatches(t, mcmp.VtConn, "select count(*) from lkp_mixed_idx", "[[INT64(12)]]")
 }
+
+// TestInsertJson tests that selected json values are encoded correctly.
+func TestInsertJson(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 21, "vtgate")
+	utils.SkipIfBinaryIsBelowVersion(t, 21, "vttablet")
+
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec(`insert into j_tbl(id, jdoc) values (1, '{}'), (2, '{"a": 1, "b": 2}')`)
+	mcmp.Exec(`select * from j_tbl order by id`)
+
+	mcmp.Exec(`insert into j_tbl(id, jdoc) select 3, json_object("k", "a")`)
+	mcmp.Exec(`select * from j_tbl order by id`)
+
+	mcmp.Exec(`insert into j_tbl(id, jdoc) select 4,JSON_OBJECT(
+        'date', CAST(1629849600 AS UNSIGNED),
+        'keywordSourceId', CAST(930701976723823 AS UNSIGNED),
+        'keywordSourceVersionId', CAST(210825230433 AS UNSIGNED)
+    )`)
+	mcmp.Exec(`select * from j_tbl order by id`)
+
+	utils.Exec(t, mcmp.VtConn, `insert into uks.j_utbl(id, jdoc) select * from sks.j_tbl`)
+	utils.AssertMatches(t, mcmp.VtConn, `select * from uks.j_utbl order by id`,
+		`[[INT64(1) JSON("{}")] [INT64(2) JSON("{\"a\": 1, \"b\": 2}")] [INT64(3) JSON("{\"k\": \"a\"}")] [INT64(4) JSON("{\"date\": 1629849600, \"keywordSourceId\": 930701976723823, \"keywordSourceVersionId\": 210825230433}")]]`)
+}

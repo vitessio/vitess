@@ -368,7 +368,7 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 		healthy:            make(map[KeyspaceShardTabletType][]*TabletHealth),
 		subscribers:        make(map[chan *TabletHealth]struct{}),
 		cellAliases:        make(map[string]string),
-		loadTabletsTrigger: make(chan struct{}),
+		loadTabletsTrigger: make(chan struct{}, 1),
 	}
 	var topoWatchers []*TopologyWatcher
 	cells := strings.Split(cellsToWatch, ",")
@@ -483,7 +483,20 @@ func (hc *HealthCheckImpl) deleteTablet(tablet *topodata.Tablet) {
 			// delete from healthy list
 			healthy, ok := hc.healthy[key]
 			if ok && len(healthy) > 0 {
-				hc.recomputeHealthy(key)
+				if tabletType == topodata.TabletType_PRIMARY {
+					// If the deleted tablet was a primary,
+					// and it matches what we think is the current active primary,
+					// clear the healthy list for the primary.
+					//
+					// See the logic in `updateHealth` for more details.
+					alias := tabletAliasString(topoproto.TabletAliasString(healthy[0].Tablet.Alias))
+					if alias == tabletAlias {
+						hc.healthy[key] = []*TabletHealth{}
+					}
+				} else {
+					// Simply recompute the list of healthy tablets for all other tablet types.
+					hc.recomputeHealthy(key)
+				}
 			}
 		}
 	}()
@@ -535,7 +548,13 @@ func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, prevTarget *query.Targ
 		if prevTarget.TabletType == topodata.TabletType_PRIMARY {
 			if primaries := hc.healthData[oldTargetKey]; len(primaries) == 0 {
 				log.Infof("We will have no health data for the next new primary tablet after demoting the tablet: %v, so start loading tablets now", topotools.TabletIdent(th.Tablet))
-				hc.loadTabletsTrigger <- struct{}{}
+				// We want to trigger a loadTablets call, but if the channel is not empty
+				// then a trigger is already scheduled, we don't need to trigger another one.
+				// This also prevents the code from deadlocking as described in https://github.com/vitessio/vitess/issues/16994.
+				select {
+				case hc.loadTabletsTrigger <- struct{}{}:
+				default:
+				}
 			}
 		}
 	}
@@ -599,6 +618,13 @@ func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, prevTarget *query.Targ
 	hc.broadcast(th)
 }
 
+// recomputeHealthy recomputes the healthy tablets for the given key.
+//
+// This filters out tablets that might be healthy, but are not part of the current
+// cell or cell alias. It also performs filtering of tablets based on replication lag,
+// if configured to do so.
+//
+// This should not be called for primary tablets.
 func (hc *HealthCheckImpl) recomputeHealthy(key KeyspaceShardTabletType) {
 	all := hc.healthData[key]
 	allArray := make([]*TabletHealth, 0, len(all))

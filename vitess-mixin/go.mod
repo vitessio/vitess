@@ -1,6 +1,6 @@
 module vitess-mixin
 
-go 1.13
+go 1.22.7
 
 require (
 	github.com/Azure/go-autorest/autorest v0.11.1 // indirect

@@ -300,20 +300,9 @@ func (hj *HashJoin) addColumn(ctx *plancontext.PlanningContext, in sqlparser.Exp
 				inOffset = op.AddColumn(ctx, false, false, aeWrap(expr))
 			}
 
-			// we turn the
+			// we have to turn the incoming offset to an outgoing offset of the columns this operator is exposing
 			internalOffset := offsetter(inOffset)
-
-			// ok, we have an offset from the input operator. Let's check if we already have it
-			// in our list of incoming columns
-
-			for idx, offset := range hj.ColumnOffsets {
-				if internalOffset == offset {
-					return idx
-				}
-			}
-
 			hj.ColumnOffsets = append(hj.ColumnOffsets, internalOffset)
-
 			return len(hj.ColumnOffsets) - 1
 		}
 
@@ -408,17 +397,7 @@ func (hj *HashJoin) addSingleSidedColumn(
 
 			// we have to turn the incoming offset to an outgoing offset of the columns this operator is exposing
 			internalOffset := offsetter(inOffset)
-
-			// ok, we have an offset from the input operator. Let's check if we already have it
-			// in our list of incoming columns
-			for idx, offset := range hj.ColumnOffsets {
-				if internalOffset == offset {
-					return idx
-				}
-			}
-
 			hj.ColumnOffsets = append(hj.ColumnOffsets, internalOffset)
-
 			return len(hj.ColumnOffsets) - 1
 		}
 

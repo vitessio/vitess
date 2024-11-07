@@ -277,6 +277,10 @@ func (aj *ApplyJoin) ShortDescription() string {
 	}
 
 	firstPart := fmt.Sprintf("on %s columns: %s", fn(aj.JoinPredicates), fn(aj.JoinColumns))
+	if aj.LeftJoin {
+		firstPart = "LEFT JOIN " + firstPart
+	}
+
 	if len(aj.ExtraLHSVars) == 0 {
 		return firstPart
 	}

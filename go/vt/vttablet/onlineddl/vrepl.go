@@ -571,6 +571,9 @@ func (v *VRepl) generateFilterQuery(ctx context.Context) error {
 			sb.WriteString(fmt.Sprintf("CONCAT(%s)", escapeName(name)))
 		case sourceCol.Type == vrepl.JSONColumnType:
 			sb.WriteString(fmt.Sprintf("convert(%s using utf8mb4)", escapeName(name)))
+		case targetCol.Type == vrepl.JSONColumnType:
+			// Convert any type to JSON: encode the type as utf8mb4 text
+			sb.WriteString(fmt.Sprintf("convert(%s using utf8mb4)", escapeName(name)))
 		case sourceCol.Type == vrepl.StringColumnType:
 			// Check source and target charset/encoding. If needed, create
 			// a binlogdatapb.CharsetConversion entry (later written to vreplication)
@@ -583,19 +586,19 @@ func (v *VRepl) generateFilterQuery(ctx context.Context) error {
 			if targetCol.Type == vrepl.StringColumnType && toCollation == collations.Unknown {
 				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", targetCol.Charset, targetCol.Name)
 			}
-
-			if trivialCharset(fromCollation) && trivialCharset(toCollation) && targetCol.Type != vrepl.JSONColumnType {
+			if trivialCharset(fromCollation) && trivialCharset(toCollation) {
+				sb.WriteString(escapeName(name))
+			} else if fromCollation == toCollation {
+				// No need for charset conversions as both have the same collation.
 				sb.WriteString(escapeName(name))
 			} else {
+				// Charset conversion required:
 				v.convertCharset[targetName] = &binlogdatapb.CharsetConversion{
 					FromCharset: sourceCol.Charset,
 					ToCharset:   targetCol.Charset,
 				}
-				sb.WriteString(fmt.Sprintf("convert(%s using utf8mb4)", escapeName(name)))
+				sb.WriteString(escapeName(name))
 			}
-		case targetCol.Type == vrepl.JSONColumnType && sourceCol.Type != vrepl.JSONColumnType:
-			// Convert any type to JSON: encode the type as utf8mb4 text
-			sb.WriteString(fmt.Sprintf("convert(%s using utf8mb4)", escapeName(name)))
 		default:
 			sb.WriteString(escapeName(name))
 		}

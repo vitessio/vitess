@@ -24,6 +24,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/olekukonko/tablewriter"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -93,7 +95,18 @@ func (s *Tracker) String() string {
 	return s.buf.String()
 }
 
+func TestOneCase(t *testing.T) {
+	query := ``
+	if query == "" {
+		t.Skip("no query to test")
+	}
+	venv := vtenv.NewTestEnv()
+	env := evalengine.EmptyExpressionEnv(venv)
+	testCompilerCase(t, query, venv, nil, env)
+}
+
 func TestCompilerReference(t *testing.T) {
+	// This test runs a lot of queries and compares the results of the evalengine in eval mode to the results of the compiler.
 	now := time.Now()
 	evalengine.SystemTime = func() time.Time { return now }
 	defer func() { evalengine.SystemTime = time.Now }()
@@ -107,52 +120,11 @@ func TestCompilerReference(t *testing.T) {
 
 			tc.Run(func(query string, row []sqltypes.Value) {
 				env.Row = row
-
-				stmt, err := venv.Parser().ParseExpr(query)
-				if err != nil {
-					// no need to test un-parseable queries
-					return
-				}
-
-				fields := evalengine.FieldResolver(tc.Schema)
-				cfg := &evalengine.Config{
-					ResolveColumn:     fields.Column,
-					ResolveType:       fields.Type,
-					Collation:         collations.CollationUtf8mb4ID,
-					Environment:       venv,
-					NoConstantFolding: true,
-				}
-
-				converted, err := evalengine.Translate(stmt, cfg)
-				if err != nil {
-					return
-				}
-
-				expected, evalErr := env.EvaluateAST(converted)
 				total++
-
-				res, vmErr := env.Evaluate(converted)
-				if vmErr != nil {
-					switch {
-					case evalErr == nil:
-						t.Errorf("failed evaluation from compiler:\nSQL:  %s\nError: %s", query, vmErr)
-					case evalErr.Error() != vmErr.Error():
-						t.Errorf("error mismatch:\nSQL:  %s\nError eval: %s\nError comp: %s", query, evalErr, vmErr)
-					default:
-						supported++
-					}
-					return
+				testCompilerCase(t, query, venv, tc.Schema, env)
+				if !t.Failed() {
+					supported++
 				}
-
-				eval := expected.String()
-				comp := res.String()
-
-				if eval != comp {
-					t.Errorf("bad evaluation from compiler:\nSQL:  %s\nEval: %s\nComp: %s", query, eval, comp)
-					return
-				}
-
-				supported++
 			})
 
 			track.Add(tc.Name(), supported, total)
@@ -160,6 +132,51 @@ func TestCompilerReference(t *testing.T) {
 	}
 
 	t.Logf("\n%s", track.String())
+}
+
+func testCompilerCase(t *testing.T, query string, venv *vtenv.Environment, schema []*querypb.Field, env *evalengine.ExpressionEnv) {
+	stmt, err := venv.Parser().ParseExpr(query)
+	if err != nil {
+		// no need to test un-parseable queries
+		return
+	}
+
+	fields := evalengine.FieldResolver(schema)
+	cfg := &evalengine.Config{
+		ResolveColumn:     fields.Column,
+		ResolveType:       fields.Type,
+		Collation:         collations.CollationUtf8mb4ID,
+		Environment:       venv,
+		NoConstantFolding: true,
+	}
+
+	converted, err := evalengine.Translate(stmt, cfg)
+	if err != nil {
+		return
+	}
+
+	var expected evalengine.EvalResult
+	var evalErr error
+	assert.NotPanics(t, func() {
+		expected, evalErr = env.EvaluateAST(converted)
+	})
+	var res evalengine.EvalResult
+	var vmErr error
+	assert.NotPanics(t, func() {
+		res, vmErr = env.Evaluate(converted)
+	})
+	switch {
+	case vmErr == nil && evalErr == nil:
+		eval := expected.String()
+		comp := res.String()
+		assert.Equalf(t, eval, comp, "bad evaluation from compiler:\nSQL:  %s\nEval: %s\nComp: %s", query, eval, comp)
+	case vmErr == nil:
+		t.Errorf("failed evaluation from evalengine:\nSQL:  %s\nError: %s", query, evalErr)
+	case evalErr == nil:
+		t.Errorf("failed evaluation from compiler:\nSQL:  %s\nError: %s", query, vmErr)
+	case evalErr.Error() != vmErr.Error():
+		t.Errorf("error mismatch:\nSQL:  %s\nError eval: %s\nError comp: %s", query, evalErr, vmErr)
+	}
 }
 
 func TestCompilerSingle(t *testing.T) {

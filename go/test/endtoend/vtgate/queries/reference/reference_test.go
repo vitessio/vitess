@@ -85,19 +85,20 @@ func TestReferenceRouting(t *testing.T) {
 
 	t.Run("Complex reference query", func(t *testing.T) {
 		utils.SkipIfBinaryIsBelowVersion(t, 19, "vtgate")
+
 		// Verify a complex query using reference tables with a left join having a derived table with an order by clause works as intended.
 		utils.AssertMatches(
 			t,
 			conn,
 			`SELECT t.id FROM (
-                        SELECT zd.id, zd.zip_id
-                        FROM `+shardedKeyspaceName+`.zip_detail AS zd
-                        WHERE zd.id IN (2)
-                        ORDER BY zd.discontinued_at
-                        LIMIT 1
-                ) AS t
-                LEFT JOIN `+shardedKeyspaceName+`.zip_detail AS t0 ON t.zip_id = t0.zip_id
-                ORDER BY t.id`,
+						SELECT zd.id, zd.zip_id
+						FROM `+shardedKeyspaceName+`.zip_detail AS zd
+						WHERE zd.id IN (2)
+						ORDER BY zd.discontinued_at
+						LIMIT 1
+				) AS t
+				LEFT JOIN `+shardedKeyspaceName+`.zip_detail AS t0 ON t.zip_id = t0.zip_id
+				ORDER BY t.id`,
 			`[[INT64(2)]]`,
 		)
 	})
@@ -155,4 +156,20 @@ func TestReferenceRouting(t *testing.T) {
 		"SELECT COUNT(id) FROM "+shardedKeyspaceName+".zip_detail",
 		`[[INT64(2)]]`,
 	)
+}
+
+// TestMultiReferenceQuery tests that a query with multiple references with unsharded keyspace and sharded keyspace works with join.
+func TestMultiReferenceQuery(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 21, "vtgate")
+	conn, closer := start(t)
+	defer closer()
+
+	query :=
+		`select 1
+		 from delivery_failure df1
+		 	join delivery_failure df2 on df1.id = df2.id
+		 	join uks.zip_detail zd1 on df1.zip_detail_id = zd1.zip_id
+		 	join uks.zip_detail zd2 on zd1.zip_id = zd2.zip_id`
+
+	utils.Exec(t, conn, query)
 }

@@ -2942,6 +2942,67 @@ func TestSubQueryAndQueryWithLimit(t *testing.T) {
 	assert.Equal(t, `type:INT64 value:"100"`, sbc2.Queries[1].BindVariables["__upper_limit"].String())
 }
 
+func TestSelectUsingMultiEqualOnLookupColumn(t *testing.T) {
+	executor, sbc1, sbc2, sbclookup, _ := createExecutorEnv(t)
+
+	// No results on shard `-20` (`sbc1`), but some lookup results on shard `40-60` (`sbc2`)
+	sbclookup.SetResults([]*sqltypes.Result{{
+		Fields: []*querypb.Field{
+			{Name: "lu_col", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
+			{Name: "keyspace_id", Type: sqltypes.VarBinary, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_BINARY_FLAG)},
+		},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt32(2),
+			sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("\x45")),
+		}},
+	}})
+
+	sbc1.SetResults([]*sqltypes.Result{{
+		Fields: []*querypb.Field{
+			{Name: "nv_lu_col", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
+			{Name: "other", Type: sqltypes.VarChar, Charset: collations.CollationUtf8mb4ID},
+		},
+		Rows: [][]sqltypes.Value{},
+	}})
+
+	sbc2.SetResults([]*sqltypes.Result{{
+		Fields: []*querypb.Field{
+			{Name: "nv_lu_col", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
+			{Name: "other", Type: sqltypes.VarChar, Charset: collations.CollationUtf8mb4ID},
+		},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt32(2),
+			sqltypes.NewVarChar("baz"),
+		}},
+	}})
+
+	result, err := exec(executor, NewSafeSession(&vtgatepb.Session{
+		TargetString: KsTestSharded,
+	}), "select nv_lu_col, other from t2_lookup WHERE (nv_lu_col = 1 AND other = 'bar') OR (nv_lu_col = 2 AND other = 'baz') OR (nv_lu_col = 3 AND other = 'qux') OR (nv_lu_col = 4 AND other = 'brz') OR (nv_lu_col = 5 AND other = 'brz')")
+
+	require.NoError(t, err)
+
+	require.Len(t, sbc1.Queries, 0)
+	require.Len(t, sbc2.Queries, 1)
+
+	require.Equal(t, []*querypb.BoundQuery{{
+		Sql:           "select nv_lu_col, other from t2_lookup where nv_lu_col = 1 and other = 'bar' or nv_lu_col = 2 and other = 'baz' or nv_lu_col = 3 and other = 'qux' or nv_lu_col = 4 and other = 'brz' or nv_lu_col = 5 and other = 'brz'",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}}, sbc2.Queries)
+
+	wantResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Name: "nv_lu_col", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
+			{Name: "other", Type: sqltypes.VarChar, Charset: collations.CollationUtf8mb4ID},
+		},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt32(2),
+			sqltypes.NewVarChar("baz"),
+		}},
+	}
+	require.Equal(t, wantResult, result)
+}
+
 func TestCrossShardSubqueryStream(t *testing.T) {
 	executor, sbc1, sbc2, _, ctx := createExecutorEnv(t)
 	result1 := []*sqltypes.Result{{

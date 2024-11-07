@@ -60,7 +60,7 @@ jobs:
           end_to_end:
             - 'go/**/*.go'
             - 'go/vt/sidecardb/**/*.sql'
-            - 'go/test/endtoend/onlineddl/vrepl_suite/**'
+            - 'go/test/endtoend/vtgate/vitess_tester/**'
             - 'test.go'
             - 'Makefile'
             - 'build.env'
@@ -76,7 +76,7 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-go@v5
       with:
-        go-version: 1.22.5
+        go-version: 1.22.8
 
     - name: Setup github.com/slackhq/vitess-additions access token
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -119,7 +119,7 @@ jobs:
         go install github.com/vitessio/go-junit-report@HEAD
         
         # install vitess tester
-        go install github.com/vitessio/vitess-tester@eb953122baba163ed8ccaa6642458ee984f5d7e4
+        go install github.com/vitessio/vitess-tester@89dd933a9ea0e15f69ca58b9c8ea09a358762cca
 
     - name: Setup launchable dependencies
       if: steps.skip-workflow.outputs.is_draft == 'false' && steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true' && github.base_ref == 'main'
@@ -150,9 +150,9 @@ jobs:
           # We go over all the directories in the given path.
           # If there is a vschema file there, we use it, otherwise we let vitess-tester autogenerate it.
           if [ -f $dir/vschema.json ]; then
-            vitess-tester --sharded --xunit --test-dir $dir --vschema "$dir"vschema.json
+            vitess-tester --xunit --vschema "$dir"vschema.json $dir/*.test
           else 
-            vitess-tester --sharded --xunit --test-dir $dir
+            vitess-tester --sharded --xunit $dir/*.test
           fi
           # Number the reports by changing their file names.
           mv report.xml report"$i".xml

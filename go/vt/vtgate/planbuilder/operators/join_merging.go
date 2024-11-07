@@ -22,12 +22,13 @@ import (
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 // mergeJoinInputs checks whether two operators can be merged into a single one.
 // If they can be merged, a new operator with the merged routing is returned
 // If they cannot be merged, nil is returned.
-func mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPredicates []sqlparser.Expr, m merger) *Route {
+func mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPredicates []sqlparser.Expr, m *joinMerger) *Route {
 	lhsRoute, rhsRoute, routingA, routingB, a, b, sameKeyspace := prepareInputRoutes(lhs, rhs)
 	if lhsRoute == nil {
 		return nil
@@ -39,6 +40,11 @@ func mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPr
 		return m.merge(ctx, lhsRoute, rhsRoute, routingB)
 	case b == dual:
 		return m.merge(ctx, lhsRoute, rhsRoute, routingA)
+
+	// As both are reference route. We need to merge the alternates as well.
+	case a == anyShard && b == anyShard && sameKeyspace:
+		newrouting := mergeAnyShardRoutings(ctx, routingA.(*AnyShardRouting), routingB.(*AnyShardRouting), joinPredicates, m.innerJoin)
+		return m.merge(ctx, lhsRoute, rhsRoute, newrouting)
 
 	// an unsharded/reference route can be merged with anything going to that keyspace
 	case a == anyShard && sameKeyspace:
@@ -58,10 +64,30 @@ func mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPr
 
 	// sharded routing is complex, so we handle it in a separate method
 	case a == sharded && b == sharded:
-		return tryMergeJoinShardedRouting(ctx, lhsRoute, rhsRoute, m, joinPredicates)
+		return tryMergeShardedRouting(ctx, lhsRoute, rhsRoute, m, joinPredicates)
 
 	default:
 		return nil
+	}
+}
+
+func mergeAnyShardRoutings(ctx *plancontext.PlanningContext, a, b *AnyShardRouting, joinPredicates []sqlparser.Expr, innerJoin bool) *AnyShardRouting {
+	alternates := make(map[*vindexes.Keyspace]*Route)
+	for ak, av := range a.Alternates {
+		for bk, bv := range b.Alternates {
+			// only same keyspace alternates can be merged.
+			if ak != bk {
+				continue
+			}
+			op, _ := mergeOrJoin(ctx, av, bv, joinPredicates, innerJoin)
+			if r, ok := op.(*Route); ok {
+				alternates[ak] = r
+			}
+		}
+	}
+	return &AnyShardRouting{
+		keyspace:   a.keyspace,
+		Alternates: alternates,
 	}
 }
 
@@ -176,7 +202,7 @@ func getRoutingType(r Routing) routingType {
 	panic(fmt.Sprintf("switch should be exhaustive, got %T", r))
 }
 
-func newJoinMerge(predicates []sqlparser.Expr, innerJoin bool) merger {
+func newJoinMerge(predicates []sqlparser.Expr, innerJoin bool) *joinMerger {
 	return &joinMerger{
 		predicates: predicates,
 		innerJoin:  innerJoin,

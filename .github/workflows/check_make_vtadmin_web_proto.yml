@@ -6,7 +6,7 @@ permissions: read-all
 jobs:
   build:
     name: Check Make VTAdmin Web Proto
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     steps:
     - name: Skip CI
       run: |
@@ -49,7 +49,7 @@ jobs:
       uses: actions/setup-go@v5
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.proto_changes == 'true'
       with:
-        go-version: 1.22.5
+        go-version: 1.22.8
 
     - name: Setup github.com/slackhq/vitess-addons access token
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.proto_changes == 'true'

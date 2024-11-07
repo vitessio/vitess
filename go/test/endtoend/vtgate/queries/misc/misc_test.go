@@ -37,7 +37,7 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 	require.NoError(t, err)
 
 	deleteAll := func() {
-		tables := []string{"t1", "uks.unsharded"}
+		tables := []string{"t1", "uks.unsharded", "tbl"}
 		for _, table := range tables {
 			_, _ = mcmp.ExecAndIgnore("delete from " + table)
 		}
@@ -334,6 +334,17 @@ func TestTransactionModeVar(t *testing.T) {
 	}
 }
 
+// TestAliasesInOuterJoinQueries tests that aliases work in queries that have outer join clauses.
+func TestAliasesInOuterJoinQueries(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	// Insert data into the 2 tables
+	mcmp.Exec("insert into t1(id1, id2) values (1,2), (42,5), (5, 42)")
+	mcmp.Exec("insert into tbl(id, unq_col, nonunq_col) values (1,2,3), (2,5,3), (3, 42, 2)")
+	mcmp.ExecWithColumnCompare("select * from t1 t left join tbl on t.id1 = 666 and t.id2 = tbl.id")
+}
+
 func TestAlterTableWithView(t *testing.T) {
 	utils.SkipIfBinaryIsBelowVersion(t, 19, "vtgate")
 	mcmp, closer := start(t)
@@ -389,6 +400,7 @@ func TestAlterTableWithView(t *testing.T) {
 
 func TestHandleNullableColumn(t *testing.T) {
 	utils.SkipIfBinaryIsBelowVersion(t, 21, "vtgate")
+
 	require.NoError(t,
 		utils.WaitForAuthoritative(t, keyspaceName, "tbl", clusterInstance.VtgateProcess.ReadVSchema))
 	mcmp, closer := start(t)

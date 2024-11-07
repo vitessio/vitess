@@ -76,7 +76,7 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-go@v5
       with:
-        go-version: 1.22.5
+        go-version: 1.22.8
 
     - name: Setup github.com/slackhq/vitess-additions access token
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -120,13 +120,6 @@ jobs:
 
         # install JUnit report formatter
         go install github.com/vitessio/go-junit-report@HEAD
-
-        wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
-        sudo apt-get install -y gnupg2
-        sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
-        sudo percona-release enable-only pxb-24
-        sudo apt-get update
-        sudo apt-get install -y percona-xtrabackup-24
 
     # Checkout to the last release of Vitess
     - name: Check out other version's code (${{ steps.output-previous-release-ref.outputs.previous_release_ref }})
@@ -178,6 +171,7 @@ jobs:
 
         source build.env
         eatmydata -- go run test.go -skip-build -keep-data=false -docker=false -print-log -follow -tag upgrade_downgrade_query_serving_queries
+>>>>>>> parent of 25a80acbfd ([release-19.0] Improve the queries upgrade/downgrade CI workflow by using same test code version as binary (#16494) (#16501))
 
     # Swap the binaries in the bin. Use vtgate version n-1 and keep vttablet at version n
     - name: Use last release's VTGate

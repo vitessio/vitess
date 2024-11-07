@@ -33979,7 +33979,8 @@ export namespace query {
         EXPRESSION = 31,
         HEXNUM = 4128,
         HEXVAL = 4129,
-        BITNUM = 4130
+        BITNUM = 4130,
+        RAW = 2084
     }
 
     /** Properties of a Value. */

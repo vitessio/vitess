@@ -2962,8 +2962,8 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select a -> '$[4]', a ->> '$[3]' from `user` where 1 != 1",
-        "Query": "select a -> '$[4]', a ->> '$[3]' from `user`",
+        "FieldQuery": "select json_extract(a, '$[4]'), json_unquote(json_extract(a, '$[3]')) from `user` where 1 != 1",
+        "Query": "select json_extract(a, '$[4]'), json_unquote(json_extract(a, '$[3]')) from `user`",
         "Table": "`user`"
       },
       "TablesUsed": [

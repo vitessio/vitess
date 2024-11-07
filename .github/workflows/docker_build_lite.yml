@@ -22,7 +22,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        branch: [ latest, mysql57, mysql80, percona57, percona80 ]
+        branch: [ latest, mysql80, percona80 ]
 
     steps:
       - name: Check out code

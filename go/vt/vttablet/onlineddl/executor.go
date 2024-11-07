@@ -895,8 +895,8 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 
 	migrationCutOverThreshold := getMigrationCutOverThreshold(onlineDDL)
 
-	waitForPos := func(s *VReplStream, pos replication.Position) error {
-		ctx, cancel := context.WithTimeout(ctx, migrationCutOverThreshold)
+	waitForPos := func(s *VReplStream, pos replication.Position, timeout time.Duration) error {
+		ctx, cancel := context.WithTimeout(ctx, timeout)
 		defer cancel()
 		// Wait for target to reach the up-to-date pos
 		if err := tmClient.VReplicationWaitForPos(ctx, tablet.Tablet, s.id, replication.EncodePosition(pos)); err != nil {
@@ -954,8 +954,12 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 			return err
 		}
 		e.updateMigrationStage(ctx, onlineDDL.UUID, "waiting for post-sentry pos: %v", replication.EncodePosition(postSentryPos))
-		if err := waitForPos(s, postSentryPos); err != nil {
-			return err
+		// We have not yet locked anything, stopped anything, or done anything that otherwise
+		// impacts query serving so we wait for a multiple of the cutover threshold here, with
+		// that variable primarily serving to limit the max time we later spend waiting for
+		// a position again AFTER we've taken the locks and table access is blocked.
+		if err := waitForPos(s, postSentryPos, migrationCutOverThreshold*3); err != nil {
+			return vterrors.Wrapf(err, "failed waiting for pos after sentry creation")
 		}
 		e.updateMigrationStage(ctx, onlineDDL.UUID, "post-sentry pos reached")
 	}
@@ -1129,7 +1133,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 	}
 
 	e.updateMigrationStage(ctx, onlineDDL.UUID, "waiting for post-lock pos: %v", replication.EncodePosition(postWritesPos))
-	if err := waitForPos(s, postWritesPos); err != nil {
+	if err := waitForPos(s, postWritesPos, migrationCutOverThreshold); err != nil {
 		e.updateMigrationStage(ctx, onlineDDL.UUID, "timeout while waiting for post-lock pos: %v", err)
 		return err
 	}

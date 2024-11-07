@@ -854,6 +854,9 @@ func TestRewriteNot(t *testing.T) {
 	}, {
 		sql:      "select a from t1 where not a > 12",
 		expected: "select a from t1 where a <= 12",
+	}, {
+		sql:      "select (not (1 like ('a' is null)))",
+		expected: "select 1 not like ('a' is null) from dual",
 	}}
 	for _, tcase := range tcases {
 		t.Run(tcase.sql, func(t *testing.T) {

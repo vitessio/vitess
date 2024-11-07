@@ -280,9 +280,9 @@ $(PROTO_GO_OUTS): minimaltools install_protoc-gen-go proto/*.proto
 # Please read docker/README.md to understand the different available images.
 
 # This rule builds the bootstrap images for all flavors.
-DOCKER_IMAGES_FOR_TEST = mysql57 mysql80 percona57 percona80
+DOCKER_IMAGES_FOR_TEST = mysql80 percona80
 DOCKER_IMAGES = common $(DOCKER_IMAGES_FOR_TEST)
-BOOTSTRAP_VERSION=27.5
+BOOTSTRAP_VERSION=27.8
 ensure_bootstrap_version:
 	find docker/ -type f -exec sed -i "s/^\(ARG bootstrap_version\)=.*/\1=${BOOTSTRAP_VERSION}/" {} \;
 	sed -i 's/\(^.*flag.String(\"bootstrap-version\",\) *\"[^\"]\+\"/\1 \"${BOOTSTRAP_VERSION}\"/' test.go
@@ -321,7 +321,7 @@ endef
 docker_base:
 	${call build_docker_image,docker/base/Dockerfile,vitess/base}
 
-DOCKER_BASE_SUFFIX = mysql80 percona57 percona80
+DOCKER_BASE_SUFFIX = mysql80 percona80
 DOCKER_BASE_TARGETS = $(addprefix docker_base_, $(DOCKER_BASE_SUFFIX))
 $(DOCKER_BASE_TARGETS): docker_base_%:
 	${call build_docker_image,docker/base/Dockerfile.$*,vitess/base:$*}
@@ -350,7 +350,7 @@ docker_run_local:
 docker_mini:
 	${call build_docker_image,docker/mini/Dockerfile,vitess/mini}
 
-DOCKER_VTTESTSERVER_SUFFIX = mysql57 mysql80
+DOCKER_VTTESTSERVER_SUFFIX = mysql80
 DOCKER_VTTESTSERVER_TARGETS = $(addprefix docker_vttestserver_,$(DOCKER_VTTESTSERVER_SUFFIX))
 $(DOCKER_VTTESTSERVER_TARGETS): docker_vttestserver_%:
 	${call build_docker_image,docker/vttestserver/Dockerfile.$*,vitess/vttestserver:$*}

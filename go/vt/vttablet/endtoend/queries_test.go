@@ -122,6 +122,20 @@ var TestQueryCases = []framework.Testable{
 		RowsReturned: 1,
 	},
 	&framework.TestCase{
+		Name:  "explain with bindvars",
+		Query: "explain select :__vtudvp as `@p` from dual",
+		BindVars: map[string]*querypb.BindVariable{
+			"__vtudvp": sqltypes.Int64BindVariable(1),
+		},
+		Result: [][]string{
+			{"1", "SIMPLE", "", "", "", "", "", "", "", "", "", "No tables used"},
+		},
+		Rewritten: []string{
+			"explain select 1 as `@p` from dual",
+		},
+		RowsReturned: 1,
+	},
+	&framework.TestCase{
 		Name:  "limit",
 		Query: "select /* limit */ eid, id from vitess_a limit :a",
 		BindVars: map[string]*querypb.BindVariable{

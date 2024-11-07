@@ -202,7 +202,7 @@ func NewExecutor(
 			return e.plans.Metrics.Hits()
 		})
 		stats.NewCounterFunc("QueryPlanCacheMisses", "Query plan cache misses", func() int64 {
-			return e.plans.Metrics.Hits()
+			return e.plans.Metrics.Misses()
 		})
 		servenv.HTTPHandle(pathQueryPlans, e)
 		servenv.HTTPHandle(pathScatterStats, e)

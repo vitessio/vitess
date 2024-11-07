@@ -330,6 +330,11 @@
     "plan": "VT12001: unsupported: nesting of UNIONs on the right-hand side"
   },
   {
+    "comment": "Cross keyspace query with subquery",
+    "query": "select 1 from user where id = (select id from t1 where user.foo = t1.bar)",
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
+  },
+  {
     "comment": "multi-shard union",
     "query": "select 1 from music union (select id from user union select name from unsharded)",
     "plan": "VT12001: unsupported: nesting of UNIONs on the right-hand side"

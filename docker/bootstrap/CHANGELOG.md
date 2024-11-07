@@ -129,3 +129,16 @@ List of changes between bootstrap image versions.
 ## [27.5] - 2024-07-02
 ### Changes
 - Update build to golang 1.22.5
+
+## [27.6] - 2024-08-07
+### Changes
+- Update build to golang 1.22.6
+- MySQL57 and Percona57 tags will be removed thereafter
+
+## [27.7] - 2024-09-05
+### Changes
+- Update build to golang 1.22.7
+
+## [27.8] - 2024-10-04
+### Changes
+- Update build to golang 1.22.8

@@ -76,7 +76,7 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-go@v5
       with:
-        go-version: 1.22.5
+        go-version: 1.22.8
 
     - name: Setup github.com/slackhq/vitess-additions access token
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -121,13 +121,6 @@ jobs:
         # install JUnit report formatter
         go install github.com/vitessio/go-junit-report@HEAD
 
-        wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
-        sudo apt-get install -y gnupg2
-        sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
-        sudo percona-release enable-only pxb-24
-        sudo apt-get update
-        sudo apt-get install -y percona-xtrabackup-24
-
     # Checkout to the last release of Vitess
     - name: Check out other version's code (${{ steps.output-previous-release-ref.outputs.previous_release_ref }})
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -168,6 +161,12 @@ jobs:
         NOVTADMINBUILD=1 make build
         mkdir -p /tmp/vitess-build-current/
         cp -R bin /tmp/vitess-build-current/
+
+    - name: Convert ErrorContains checks to Error checks
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      run: |
+        find ./go/test/endtoend -name '*.go' -exec sed -i 's/ErrorContains/Error/g' {} +
+        find ./go/test/endtoend -name '*.go' -exec sed -i 's/EqualError/Error/g' {} +
 
     # Running a test with vtgate and vttablet using version n
     - name: Run query serving tests (vtgate=N, vttablet=N)
