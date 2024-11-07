@@ -345,7 +345,7 @@ func getClusterConfig(idx int, dataRootDir string) *ClusterConfig {
 func init() {
 	// for local debugging set this variable so that each run uses VTDATAROOT instead of a random dir
 	// and also does not teardown the cluster for inspecting logs and the databases
-	if os.Getenv("VREPLICATION_E2E_DEBUG") != "on" {
+	if os.Getenv("VREPLICATION_E2E_DEBUG") != "" {
 		debugMode = true
 	}
 	originalVtdataroot = os.Getenv("VTDATAROOT")
@@ -440,10 +440,8 @@ func (vc *VitessCluster) CleanupDataroot(t *testing.T, recreate bool) {
 	// This is always set to "true" on GitHub Actions runners:
 	// https://docs.github.com/en/actions/learn-github-actions/variables#default-environment-variables
 	ci, ok := os.LookupEnv("CI")
-	fmt.Printf(">>>>>>>>>>>>>>. os.LookupEnv(\"CI\") returns ci, ok: %s, %t\n", ci, ok)
 	if !ok || strings.ToLower(ci) != "true" {
 		fmt.Println("Not running in CI, skipping cleanup")
-		//panic("leaving directory")
 		// Leave the directory in place to support local debugging.
 		return
 	}
@@ -462,7 +460,6 @@ func (vc *VitessCluster) CleanupDataroot(t *testing.T, recreate bool) {
 		time.Sleep(1 * time.Second)
 	}
 	require.NoError(t, err)
-	log.Infof("Recreating vtdataroot %q: %t", dir, recreate)
 	if recreate {
 		err = os.Mkdir(dir, 0700)
 		require.NoError(t, err)
