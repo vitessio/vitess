@@ -30,6 +30,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/throttler"
@@ -40,8 +42,6 @@ import (
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
-
-	"github.com/stretchr/testify/require"
 )
 
 var (

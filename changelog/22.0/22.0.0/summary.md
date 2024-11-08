@@ -2,13 +2,18 @@
 
 ### Table of Contents
 
-- **[Known Issues](#known-issues)**
 - **[Major Changes](#major-changes)**
-    - **[Prefer not promoting a replica that is currently taking a backup](#reparents-prefer-not-backing-up)**
+  - **[RPC Changes](#rpc-changes)**
+  - **[Prefer not promoting a replica that is currently taking a backup](#reparents-prefer-not-backing-up)**
 
-## <a id="known-issues"/>Known Issues</a>
 
 ## <a id="major-changes"/>Major Changes</a>
+
+### <a id="rpc-changes"/>RPC Changes</a>
+
+These are the RPC changes made in this release - 
+
+1. `GetTransactionInfo` RPC has been added to both `VtctldServer`, and `TabletManagerClient` interface. These RPCs are used to fecilitate the users in reading the state of an unresolved distributed transaction. This can be useful in debugging what went wrong and how to fix the problem.
 
 ### <a id="reparents-prefer-not-backing-up"/>Prefer not promoting a replica that is currently taking a backup
 

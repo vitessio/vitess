@@ -111,18 +111,17 @@ func (rp *ReplicatorPlan) buildFromFields(tableName string, lastpk *sqltypes.Res
 	}
 	for _, field := range fields {
 		colName := sqlparser.NewIdentifierCI(field.Name)
-		isGenerated := false
+		generated := false
+		// We have to loop over the columns in the plan as the columns between the
+		// source and target are not always 1 to 1.
 		for _, colInfo := range tpb.colInfos {
 			if !strings.EqualFold(colInfo.Name, field.Name) {
 				continue
 			}
 			if colInfo.IsGenerated {
-				isGenerated = true
+				generated = true
 			}
 			break
-		}
-		if isGenerated {
-			continue
 		}
 		cexpr := &colExpr{
 			colName: colName,
@@ -133,6 +132,7 @@ func (rp *ReplicatorPlan) buildFromFields(tableName string, lastpk *sqltypes.Res
 			references: map[string]bool{
 				field.Name: true,
 			},
+			isGenerated: generated,
 		}
 		tpb.colExprs = append(tpb.colExprs, cexpr)
 	}
@@ -608,12 +608,13 @@ func valsEqual(v1, v2 sqltypes.Value) bool {
 	return v1.ToString() == v2.ToString()
 }
 
-// AppendFromRow behaves like Append but takes a querypb.Row directly, assuming that
-// the fields in the row are in the same order as the placeholders in this query. The fields might include generated
-// columns which are dropped, by checking against skipFields, before binding the variables
-// note: there can be more fields than bind locations since extra columns might be requested from the source if not all
-// primary keys columns are present in the target table, for example. Also some values in the row may not correspond for
-// values from the database on the source: sum/count for aggregation queries, for example
+// AppendFromRow behaves like Append but takes a querypb.Row directly, assuming that the
+// fields in the row are in the same order as the placeholders in this query. The fields
+// might include generated columns which are dropped before binding the variables note:
+// there can be more fields than bind locations since extra columns might be requested
+// from the source if not all primary keys columns are present in the target table, for
+// example. Also some values in the row may not correspond for values from the database
+// on the source: sum/count for aggregation queries, for example.
 func (tp *TablePlan) appendFromRow(buf *bytes2.Buffer, row *querypb.Row) error {
 	bindLocations := tp.BulkInsertValues.BindLocations()
 	if len(tp.Fields) < len(bindLocations) {

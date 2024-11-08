@@ -343,8 +343,10 @@ func GetAliasByCell(ctx context.Context, ts *Server, cell string) string {
 // Close will close all connections to underlying topo Server.
 // It will nil all member variables, so any further access will panic.
 func (ts *Server) Close() {
-	ts.globalCell.Close()
-	if ts.globalReadOnlyCell != ts.globalCell {
+	if ts.globalCell != nil {
+		ts.globalCell.Close()
+	}
+	if ts.globalReadOnlyCell != nil && ts.globalReadOnlyCell != ts.globalCell {
 		ts.globalReadOnlyCell.Close()
 	}
 	ts.globalCell = nil

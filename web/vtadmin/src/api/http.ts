@@ -421,6 +421,20 @@ export const fetchVSchema = async ({ clusterID, keyspace }: FetchVSchemaParams) 
     return pb.VSchema.create(result);
 };
 
+export interface FetchTransactionParams {
+    clusterID: string;
+    dtid: string;
+}
+
+export const fetchTransaction = async ({ clusterID, dtid }: FetchTransactionParams) => {
+    const { result } = await vtfetch(`/api/transaction/${clusterID}/${dtid}/info`);
+
+    const err = vtctldata.GetTransactionInfoResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.GetTransactionInfoResponse.create(result);
+};
+
 export interface FetchTransactionsParams {
     clusterID: string;
     keyspace: string;
