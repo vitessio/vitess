@@ -281,10 +281,12 @@ func (kss *keyspaceState) ensureConsistentLocked() {
 			Serving: sstate.serving,
 		})
 
-		log.Infof("keyspace event resolved: %s/%s is now consistent (serving: %v)",
-			sstate.target.Keyspace, sstate.target.Keyspace,
-			sstate.serving,
-		)
+		// Disable it due to log storm in production
+		// thread https://slack-pde.slack.com/archives/C06CPL4HMED/p1729896804879749
+		// log.Infof("keyspace event resolved: %s/%s is now consistent (serving: %v)",
+		//	sstate.target.Keyspace, sstate.target.Keyspace,
+		//	sstate.serving,
+		// )
 
 		if !sstate.serving {
 			delete(kss.shards, shard)

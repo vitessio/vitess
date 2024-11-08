@@ -480,7 +480,9 @@ func (sb *shardBuffer) recordKeyspaceEvent(alias *topodatapb.TabletAlias, stillS
 	sb.mu.Lock()
 	defer sb.mu.Unlock()
 
-	log.Infof("disruption in shard %s/%s resolved (serving: %v)", sb.keyspace, sb.shard, stillServing)
+	// Disable it due to log storm in production
+	// thread https://slack-pde.slack.com/archives/C06CPL4HMED/p1729896804879749
+	// log.Infof("disruption in shard %s/%s resolved (serving: %v)", sb.keyspace, sb.shard, stillServing)
 
 	if !topoproto.TabletAliasEqual(alias, sb.currentPrimary) {
 		if sb.currentPrimary != nil {
