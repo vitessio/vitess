@@ -162,12 +162,12 @@ create table nopk (name varchar(128), age int unsigned);
     },
 	"admins": {
       "column_vindexes": [
-			{
-			  "column": "team_id",
-			  "name": "reverse_bits"
-			}
-		  ]
-    },    
+		{
+		  "column": "team_id",
+		  "name": "reverse_bits"
+		}
+	  ]
+	},    
 	"enterprise_customer": {
 	  "column_vindexes": [
         {

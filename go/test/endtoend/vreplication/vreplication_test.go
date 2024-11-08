@@ -1259,12 +1259,18 @@ func materializeProduct(t *testing.T, useVtctldClient bool) {
 			// Now, throttle vreplication on the target side (vplayer), and insert some
 			// more rows.
 			for _, tab := range customerTablets {
+				{
+					body, err := unthrottleApp(tab, sourceThrottlerAppName)
+					assert.NoError(t, err)
+					assert.Contains(t, body, sourceThrottlerAppName)
+					waitForTabletThrottlingStatus(t, tab, sourceThrottlerAppName, throttlerStatusNotThrottled)
+				}
 				body, err := throttleApp(tab, targetThrottlerAppName)
 				assert.NoError(t, err)
 				assert.Contains(t, body, targetThrottlerAppName)
 				// Wait for throttling to take effect (caching will expire by this time):
-				waitForTabletThrottlingStatus(t, tab, targetThrottlerAppName, throttlerStatusThrottled)
 				waitForTabletThrottlingStatus(t, tab, sourceThrottlerAppName, throttlerStatusNotThrottled)
+				waitForTabletThrottlingStatus(t, tab, targetThrottlerAppName, throttlerStatusThrottled)
 			}
 			insertMoreProductsForTargetThrottler(t)
 			// To be fair to the test, we give the target time to apply the new changes.

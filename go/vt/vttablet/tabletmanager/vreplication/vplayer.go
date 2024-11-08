@@ -292,8 +292,9 @@ func (vp *vplayer) executeWithRetryAndBackoff(ctx context.Context, query string)
 	for {
 		i++
 		query = fmt.Sprintf("%s /* backoff:: %d */", origQuery, i)
-		qr, err := vp.vr.dbClient.ExecuteWithRetry(ctx, query)
-		log.Flush()
+		shorterCtx, cancel2 := context.WithTimeout(shortCtx, time.Duration(backoffSeconds)*time.Second)
+		defer cancel2()
+		qr, err := vp.vr.dbClient.ExecuteWithRetry(shorterCtx, query)
 		if err == nil {
 			vp.vr.dbClient.Commit()
 			return qr, nil

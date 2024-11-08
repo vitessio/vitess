@@ -441,7 +441,6 @@ func (vc *VitessCluster) CleanupDataroot(t *testing.T, recreate bool) {
 	// https://docs.github.com/en/actions/learn-github-actions/variables#default-environment-variables
 	ci, ok := os.LookupEnv("CI")
 	if !ok || strings.ToLower(ci) != "true" {
-		fmt.Println("Not running in CI, skipping cleanup")
 		// Leave the directory in place to support local debugging.
 		return
 	}

@@ -151,18 +151,7 @@ func (vc *vdbClient) AddQueryToTrxBatch(query string) error {
 	return nil
 }
 
-func (vc *vdbClient) PopLastQueryFromBatch() error {
-	if !vc.InTransaction {
-		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "cannot pop query outside of a transaction")
-	}
-	if vc.batchSize > 0 {
-		vc.batchSize -= 1
-		vc.queries = vc.queries[:len(vc.queries)-1]
-	}
-	return nil
-}
-
-// ExecuteQueryBatch sends the transaction's current batch of queries
+// ExecuteTrxQueryBatch sends the transaction's current batch of queries
 // down the wire to the database.
 func (vc *vdbClient) ExecuteTrxQueryBatch() ([]*sqltypes.Result, error) {
 	defer vc.stats.Timings.Record(binlogplayer.BlplMultiQuery, time.Now())
@@ -184,16 +173,7 @@ func (vc *vdbClient) Execute(query string) (*sqltypes.Result, error) {
 	return vc.ExecuteFetch(query, vc.relayLogMaxItems)
 }
 
-func (vc *vdbClient) IsRetryable(err error) bool {
-	if sqlErr, ok := err.(*sqlerror.SQLError); ok {
-		return sqlErr.Number() == sqlerror.ERDupEntry
-	}
-	return false
-}
-
 func (vc *vdbClient) ExecuteWithRetry(ctx context.Context, query string) (*sqltypes.Result, error) {
-	ctx2, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
 	qr, err := vc.Execute(query)
 	for err != nil {
 		var sqlErr *sqlerror.SQLError
@@ -206,7 +186,7 @@ func (vc *vdbClient) ExecuteWithRetry(ctx context.Context, query string) (*sqlty
 			time.Sleep(dbLockRetryDelay)
 			// Check context here. Otherwise this can become an infinite loop.
 			select {
-			case <-ctx2.Done():
+			case <-ctx.Done():
 				return nil, io.EOF
 			default:
 			}
