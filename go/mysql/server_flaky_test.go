@@ -1429,7 +1429,13 @@ func TestListenerShutdown(t *testing.T) {
 
 	l.Shutdown()
 
+<<<<<<< HEAD:go/mysql/server_flaky_test.go
 	waitForConnRefuse(t, 1)
+=======
+	require.Eventually(t, func() bool {
+		return connRefuse.Get() == 1
+	}, 1*time.Minute, 100*time.Millisecond, "could not reach the desired connRefuse value")
+>>>>>>> 2d1e96ac46 (Fix flakiness in `TestListenerShutdown` (#17024)):go/mysql/server_test.go
 
 	err = conn.Ping()
 	require.EqualError(t, err, "Server shutdown in progress (errno 1053) (sqlstate 08S01)")
@@ -1441,6 +1447,7 @@ func TestListenerShutdown(t *testing.T) {
 	require.Equal(t, "Server shutdown in progress", sqlErr.Message)
 }
 
+<<<<<<< HEAD:go/mysql/server_flaky_test.go
 func waitForConnRefuse(t *testing.T, valWanted int64) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -1459,6 +1466,8 @@ func waitForConnRefuse(t *testing.T, valWanted int64) {
 	}
 }
 
+=======
+>>>>>>> 2d1e96ac46 (Fix flakiness in `TestListenerShutdown` (#17024)):go/mysql/server_test.go
 func TestParseConnAttrs(t *testing.T) {
 	expected := map[string]string{
 		"_client_version": "8.0.11",
