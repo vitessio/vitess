@@ -232,7 +232,7 @@ func (t *explainTablet) CreateTransaction(ctx context.Context, target *querypb.T
 }
 
 // StartCommit is part of the QueryService interface.
-func (t *explainTablet) StartCommit(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (err error) {
+func (t *explainTablet) StartCommit(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (state querypb.StartCommitState, err error) {
 	t.mu.Lock()
 	t.currentTime = t.vte.batchTime.Wait()
 	t.mu.Unlock()

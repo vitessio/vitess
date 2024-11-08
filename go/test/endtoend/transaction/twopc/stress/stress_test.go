@@ -128,7 +128,7 @@ func TestSettings(t *testing.T) {
 			defer twopcutil.DeleteFile(twopcutil.DebugDelayCommitShard)
 			defer twopcutil.DeleteFile(twopcutil.DebugDelayCommitTime)
 			var wg sync.WaitGroup
-			runMultiShardCommitWithDelay(t, conn, tt.commitDelayTime, &wg, tt.queries)
+			twopcutil.RunMultiShardCommitWithDelay(t, conn, tt.commitDelayTime, &wg, tt.queries)
 			// Allow enough time for the commit to have started.
 			time.Sleep(1 * time.Second)
 			// Run the vttablet restart to ensure that the transaction needs to be redone.
@@ -218,7 +218,7 @@ func TestDisruptions(t *testing.T) {
 			defer twopcutil.DeleteFile(twopcutil.DebugDelayCommitShard)
 			defer twopcutil.DeleteFile(twopcutil.DebugDelayCommitTime)
 			var wg sync.WaitGroup
-			runMultiShardCommitWithDelay(t, conn, tt.commitDelayTime, &wg, append([]string{"begin"}, getMultiShardInsertQueries()...))
+			twopcutil.RunMultiShardCommitWithDelay(t, conn, tt.commitDelayTime, &wg, append([]string{"begin"}, getMultiShardInsertQueries()...))
 			// Allow enough time for the commit to have started.
 			time.Sleep(1 * time.Second)
 			writeCtx, writeCancel := context.WithCancel(context.Background())
@@ -259,27 +259,6 @@ func getMultiShardInsertQueries() []string {
 		queries = append(queries, fmt.Sprintf("insert into twopc_t1(id, col) values(%d, 4)", val))
 	}
 	return queries
-}
-
-// runMultiShardCommitWithDelay runs a multi shard commit and configures it to wait for a certain amount of time in the commit phase.
-func runMultiShardCommitWithDelay(t *testing.T, conn *mysql.Conn, commitDelayTime string, wg *sync.WaitGroup, queries []string) {
-	// Run all the queries to start the transaction.
-	for _, query := range queries {
-		utils.Exec(t, conn, query)
-	}
-	// We want to delay the commit on one of the shards to simulate slow commits on a shard.
-	twopcutil.WriteTestCommunicationFile(t, twopcutil.DebugDelayCommitShard, "80-")
-	twopcutil.WriteTestCommunicationFile(t, twopcutil.DebugDelayCommitTime, commitDelayTime)
-	// We will execute a commit in a go routine, because we know it will take some time to complete.
-	// While the commit is ongoing, we would like to run the disruption.
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		_, err := utils.ExecAllowError(t, conn, "commit")
-		if err != nil {
-			log.Errorf("Error in commit - %v", err)
-		}
-	}()
 }
 
 func mergeShards(t *testing.T) error {
