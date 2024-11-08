@@ -146,7 +146,7 @@ export const CreateSchemaMigration = () => {
                 <form onSubmit={onSubmit}>
                     <div className="flex flex-row gap-4 flex-wrap mb-2">
                         <Select
-                            className="block grow min-w-[300px]"
+                            className="block min-w-[300px]"
                             disabled={keyspacesQuery.isLoading || !selectedCluster}
                             inputClassName="block w-full"
                             itemToString={(ks) => ks?.keyspace?.name || ''}
