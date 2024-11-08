@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/ptr"
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/concurrency"
@@ -372,9 +373,9 @@ func (mz *materializer) deploySchema() error {
 				}
 
 				if removeAutoInc {
-					var replaceFunc func(columnName string)
+					var replaceFunc func(columnName string) error
 					if mz.ms.GetWorkflowOptions().ShardedAutoIncrementHandling == vtctldatapb.ShardedAutoIncrementHandling_REPLACE {
-						replaceFunc = func(columnName string) {
+						replaceFunc = func(columnName string) error {
 							mu.Lock()
 							defer mu.Unlock()
 							// At this point we've already confirmed that the table exists in the target
@@ -382,7 +383,21 @@ func (mz *materializer) deploySchema() error {
 							table := targetVSchema.Tables[ts.TargetTable]
 							// Don't override or redo anything that already exists.
 							if table != nil && table.AutoIncrement == nil {
-								seqTableName := fmt.Sprintf(autoSequenceTableFormat, ts.TargetTable)
+								tableName, err := sqlescape.UnescapeID(ts.TargetTable)
+								if err != nil {
+									return err
+								}
+								seqTableName, err := sqlescape.EnsureEscaped(fmt.Sprintf(autoSequenceTableFormat, tableName))
+								if err != nil {
+									return err
+								}
+								if mz.ms.GetWorkflowOptions().GlobalKeyspace != "" {
+									seqKeyspace, err := sqlescape.EnsureEscaped(mz.ms.WorkflowOptions.GlobalKeyspace)
+									if err != nil {
+										return err
+									}
+									seqTableName = fmt.Sprintf("%s.%s", seqKeyspace, seqTableName)
+								}
 								// Create a Vitess AutoIncrement definition -- which uses a sequence -- to
 								// replace the MySQL auto_increment definition that we removed.
 								table.AutoIncrement = &vschemapb.AutoIncrement{
@@ -391,6 +406,7 @@ func (mz *materializer) deploySchema() error {
 								}
 								updatedVSchema = true
 							}
+							return nil
 						}
 					}
 					ddl, err = stripAutoIncrement(ddl, mz.env.Parser(), replaceFunc)
