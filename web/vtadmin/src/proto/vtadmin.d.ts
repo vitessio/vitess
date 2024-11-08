@@ -458,6 +458,20 @@ export namespace vtadmin {
         public getTopologyPath(request: vtadmin.IGetTopologyPathRequest): Promise<vtctldata.GetTopologyPathResponse>;
 
         /**
+         * Calls GetTransactionInfo.
+         * @param request GetTransactionInfoRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and GetTransactionInfoResponse
+         */
+        public getTransactionInfo(request: vtadmin.IGetTransactionInfoRequest, callback: vtadmin.VTAdmin.GetTransactionInfoCallback): void;
+
+        /**
+         * Calls GetTransactionInfo.
+         * @param request GetTransactionInfoRequest message or plain object
+         * @returns Promise
+         */
+        public getTransactionInfo(request: vtadmin.IGetTransactionInfoRequest): Promise<vtctldata.GetTransactionInfoResponse>;
+
+        /**
          * Calls GetUnresolvedTransactions.
          * @param request GetUnresolvedTransactionsRequest message or plain object
          * @param callback Node-style callback called with the error, if any, and GetUnresolvedTransactionsResponse
@@ -1236,6 +1250,13 @@ export namespace vtadmin {
          * @param [response] GetTopologyPathResponse
          */
         type GetTopologyPathCallback = (error: (Error|null), response?: vtctldata.GetTopologyPathResponse) => void;
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#getTransactionInfo}.
+         * @param error Error, if any
+         * @param [response] GetTransactionInfoResponse
+         */
+        type GetTransactionInfoCallback = (error: (Error|null), response?: vtctldata.GetTransactionInfoResponse) => void;
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#getUnresolvedTransactions}.
@@ -8586,6 +8607,109 @@ export namespace vtadmin {
 
         /**
          * Gets the default type url for GetTopologyPathRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a GetTransactionInfoRequest. */
+    interface IGetTransactionInfoRequest {
+
+        /** GetTransactionInfoRequest cluster_id */
+        cluster_id?: (string|null);
+
+        /** GetTransactionInfoRequest request */
+        request?: (vtctldata.IGetTransactionInfoRequest|null);
+    }
+
+    /** Represents a GetTransactionInfoRequest. */
+    class GetTransactionInfoRequest implements IGetTransactionInfoRequest {
+
+        /**
+         * Constructs a new GetTransactionInfoRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IGetTransactionInfoRequest);
+
+        /** GetTransactionInfoRequest cluster_id. */
+        public cluster_id: string;
+
+        /** GetTransactionInfoRequest request. */
+        public request?: (vtctldata.IGetTransactionInfoRequest|null);
+
+        /**
+         * Creates a new GetTransactionInfoRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetTransactionInfoRequest instance
+         */
+        public static create(properties?: vtadmin.IGetTransactionInfoRequest): vtadmin.GetTransactionInfoRequest;
+
+        /**
+         * Encodes the specified GetTransactionInfoRequest message. Does not implicitly {@link vtadmin.GetTransactionInfoRequest.verify|verify} messages.
+         * @param message GetTransactionInfoRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IGetTransactionInfoRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetTransactionInfoRequest message, length delimited. Does not implicitly {@link vtadmin.GetTransactionInfoRequest.verify|verify} messages.
+         * @param message GetTransactionInfoRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IGetTransactionInfoRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetTransactionInfoRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetTransactionInfoRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.GetTransactionInfoRequest;
+
+        /**
+         * Decodes a GetTransactionInfoRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetTransactionInfoRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.GetTransactionInfoRequest;
+
+        /**
+         * Verifies a GetTransactionInfoRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetTransactionInfoRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetTransactionInfoRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.GetTransactionInfoRequest;
+
+        /**
+         * Creates a plain object from a GetTransactionInfoRequest message. Also converts values to other types if specified.
+         * @param message GetTransactionInfoRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.GetTransactionInfoRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetTransactionInfoRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetTransactionInfoRequest
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */
