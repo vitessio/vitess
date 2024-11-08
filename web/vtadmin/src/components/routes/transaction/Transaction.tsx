@@ -134,15 +134,15 @@ export const Transaction = () => {
                         <div className="font-bold">{row.shard}</div>
                     </DataCell>
                     <DataCell>
-                        <div>{row.state}</div>
+                        <div>{row.state ? row.state : "COMMITTED"}</div>
                     </DataCell>
                     <DataCell>
-                        <div>{row.message}</div>
+                        <div>{row.message ? row.message : "-"}</div>
                     </DataCell>
                     <DataCell>
-                        <div className="font-sans whitespace-nowrap">{formatDateTime(row.time_created)}</div>
+                        <div className="font-sans whitespace-nowrap">{row.time_created ? formatDateTime(row.time_created) : "-"}</div>
                         <div className="font-sans text-sm text-secondary">
-                            {formatRelativeTimeInSeconds(row.time_created)}
+                            {row.time_created ? formatRelativeTimeInSeconds(row.time_created) : ""}
                         </div>
                     </DataCell>
                     <DataCell>{row.statements}</DataCell>
