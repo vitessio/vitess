@@ -201,7 +201,7 @@ func TestElectNewPrimary(t *testing.T) {
 			errContains: nil,
 		},
 		{
-			name: "Only one replica, but it's taking a backup. We still use it.",
+			name: "Only one replica, but it's taking a backup. We don't elect it.",
 			tmc: &chooseNewPrimaryTestTMClient{
 				// both zone1-101 and zone1-102 are equivalent from a replicaiton PoV, but zone1-102 is taking a backup
 				replicationStatuses: map[string]*replicationdatapb.Status{
@@ -242,11 +242,8 @@ func TestElectNewPrimary(t *testing.T) {
 				Cell: "zone1",
 				Uid:  0,
 			},
-			expected: &topodatapb.TabletAlias{
-				Cell: "zone1",
-				Uid:  101,
-			},
-			errContains: nil,
+			expected:    nil,
+			errContains: []string{"zone1-0000000101 is taking a backup"},
 		},
 		{
 			name:             "new primary alias provided - no tolerable replication lag",
@@ -524,7 +521,7 @@ func TestElectNewPrimary(t *testing.T) {
 			errContains: nil,
 		},
 		{
-			name: "Two replicas, first one with too much lag, another one taking a backup - elect the one taking backup",
+			name: "Two replicas, first one with too much lag, another one taking a backup - none is a good candidate",
 			tmc: &chooseNewPrimaryTestTMClient{
 				// zone1-101 is behind zone1-102
 				replicationStatuses: map[string]*replicationdatapb.Status{
@@ -578,11 +575,11 @@ func TestElectNewPrimary(t *testing.T) {
 				Cell: "zone1",
 				Uid:  0,
 			},
-			expected: &topodatapb.TabletAlias{
-				Cell: "zone1",
-				Uid:  102,
+			expected: nil,
+			errContains: []string{
+				"zone1-0000000101 has 55s replication lag which is more than the tolerable amount",
+				"zone1-0000000102 is taking a backup",
 			},
-			errContains: nil,
 		},
 		{
 			name: "found a replica - more advanced relay log position",

@@ -17,7 +17,12 @@ These are the RPC changes made in this release -
 
 ### <a id="reparents-prefer-not-backing-up"/>Prefer not promoting a replica that is currently taking a backup
 
-Both planned and emergency failovers now prefer promoting replicas that are not
-currently taking backups. Note that if there's only one suitable replica to promote, and it is taking a backup, it
-will still be promoted. This does not apply to `builtin` backups. A replica that is currently taking a `builtin` backup
-will never be promoted.
+Emergency reparents now prefer not promoting replicas that are currently taking backups with a backup engine other than
+`builtin`. Note that if there's only one suitable replica to promote, and it is taking a backup, it will still be
+promoted.
+
+For planned reparents, hosts taking backups with a backup engine other than `builtin` are filtered out of the list of
+valid candidates. This means they will never get promoted - not even if there's no other candidates.
+
+Note that behavior for `builtin` backups remains unchanged: a replica that is currently taking a `builtin` backup will
+never be promoted, neither by planned nor by emergency reparents.

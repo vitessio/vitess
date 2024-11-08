@@ -20,7 +20,6 @@ import (
 	"sort"
 
 	"vitess.io/vitess/go/mysql/replication"
-	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -33,18 +32,16 @@ type reparentSorter struct {
 	tablets          []*topodatapb.Tablet
 	positions        []replication.Position
 	innodbBufferPool []int
-	backupRunning    map[string]bool
 	durability       Durabler
 }
 
 // newReparentSorter creates a new reparentSorter
-func newReparentSorter(tablets []*topodatapb.Tablet, positions []replication.Position, innodbBufferPool []int, tabletsBackupState map[string]bool, durability Durabler) *reparentSorter {
+func newReparentSorter(tablets []*topodatapb.Tablet, positions []replication.Position, innodbBufferPool []int, durability Durabler) *reparentSorter {
 	return &reparentSorter{
 		tablets:          tablets,
 		positions:        positions,
 		durability:       durability,
 		innodbBufferPool: innodbBufferPool,
-		backupRunning:    tabletsBackupState,
 	}
 }
 
@@ -88,14 +85,6 @@ func (rs *reparentSorter) Less(i, j int) bool {
 	jPromotionRule := PromotionRule(rs.durability, rs.tablets[j])
 	iPromotionRule := PromotionRule(rs.durability, rs.tablets[i])
 
-	// We want tablets which are currently running a backup to always be at the end of the list, so that's the first thing we check
-	if !rs.backupRunning[topoproto.TabletAliasString(rs.tablets[i].Alias)] && rs.backupRunning[topoproto.TabletAliasString(rs.tablets[j].Alias)] {
-		return true
-	}
-	if rs.backupRunning[topoproto.TabletAliasString(rs.tablets[i].Alias)] && !rs.backupRunning[topoproto.TabletAliasString(rs.tablets[j].Alias)] {
-		return false
-	}
-
 	// If the promotion rules are different then we want to sort by the promotion rules.
 	if len(rs.innodbBufferPool) != 0 && jPromotionRule == iPromotionRule {
 		if rs.innodbBufferPool[i] > rs.innodbBufferPool[j] {
@@ -111,13 +100,13 @@ func (rs *reparentSorter) Less(i, j int) bool {
 
 // sortTabletsForReparent sorts the tablets, given their positions for emergency reparent shard and planned reparent shard.
 // Tablets are sorted first by their replication positions, with ties broken by the promotion rules.
-func sortTabletsForReparent(tablets []*topodatapb.Tablet, positions []replication.Position, innodbBufferPool []int, tabletsBackupState map[string]bool, durability Durabler) error {
+func sortTabletsForReparent(tablets []*topodatapb.Tablet, positions []replication.Position, innodbBufferPool []int, durability Durabler) error {
 	// throw an error internal error in case of unequal number of tablets and positions
 	// fail-safe code prevents panic in sorting in case the lengths are unequal
 	if len(tablets) != len(positions) {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unequal number of tablets and positions")
 	}
 
-	sort.Sort(newReparentSorter(tablets, positions, innodbBufferPool, tabletsBackupState, durability))
+	sort.Sort(newReparentSorter(tablets, positions, innodbBufferPool, durability))
 	return nil
 }

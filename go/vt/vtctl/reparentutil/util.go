@@ -58,7 +58,8 @@ const (
 // cell as the current primary, and to be different from avoidPrimaryAlias. The
 // tablet with the most advanced replication position is chosen to minimize the
 // amount of time spent catching up with the current primary. Further ties are
-// broken by the durability rules.
+// broken by the durability rules. Tablets taking backups are excluded from
+// consideration.
 // Note that the search for the most advanced replication position will race
 // with transactions being executed on the current primary, so when all tablets
 // are at roughly the same position, then the choice of new primary-elect will
@@ -121,7 +122,6 @@ func ElectNewPrimary(
 	if len(candidates) == 1 && opts.TolerableReplLag == 0 {
 		return candidates[0].Alias, nil
 	}
-	tabletsBackupState := map[string]bool{}
 
 	for _, tablet := range candidates {
 		tb := tablet
@@ -131,10 +131,13 @@ func ElectNewPrimary(
 			mu.Lock()
 			defer mu.Unlock()
 			if err == nil && (opts.TolerableReplLag == 0 || opts.TolerableReplLag >= replLag) {
-				validTablets = append(validTablets, tb)
-				tabletPositions = append(tabletPositions, pos)
-				innodbBufferPool = append(innodbBufferPool, innodbBufferPoolData[topoproto.TabletAliasString(tb.Alias)])
-				tabletsBackupState[topoproto.TabletAliasString(tablet.Alias)] = takingBackup
+				if takingBackup {
+					reasonsToInvalidate.WriteString(fmt.Sprintf("\n%v is taking a backup", topoproto.TabletAliasString(tablet.Alias)))
+				} else {
+					validTablets = append(validTablets, tb)
+					tabletPositions = append(tabletPositions, pos)
+					innodbBufferPool = append(innodbBufferPool, innodbBufferPoolData[topoproto.TabletAliasString(tb.Alias)])
+				}
 			} else {
 				reasonsToInvalidate.WriteString(fmt.Sprintf("\n%v has %v replication lag which is more than the tolerable amount", topoproto.TabletAliasString(tablet.Alias), replLag))
 			}
@@ -152,8 +155,8 @@ func ElectNewPrimary(
 		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "cannot find a tablet to reparent to%v", reasonsToInvalidate.String())
 	}
 
-	// sort the tablets for finding the best primary
-	err = sortTabletsForReparent(validTablets, tabletPositions, innodbBufferPool, tabletsBackupState, opts.durability)
+	// sort preferred tablets for finding the best primary
+	err = sortTabletsForReparent(validTablets, tabletPositions, innodbBufferPool, opts.durability)
 	if err != nil {
 		return nil, err
 	}
