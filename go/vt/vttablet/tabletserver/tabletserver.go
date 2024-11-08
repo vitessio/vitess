@@ -2039,7 +2039,11 @@ func (tsv *TabletServer) StreamPoolSize() int {
 
 // SetTxPoolSize changes the tx pool size to the specified value.
 func (tsv *TabletServer) SetTxPoolSize(ctx context.Context, val int) error {
-	return tsv.te.txPool.scp.conns.SetCapacity(ctx, int64(val))
+	// TxPool manages two pools, one for normal connections and one for CLIENT_FOUND_ROWS capability enabled on the connections.
+	if err := tsv.te.txPool.scp.conns.SetCapacity(ctx, int64(val)); err != nil {
+		return err
+	}
+	return tsv.te.txPool.scp.foundRowsPool.SetCapacity(ctx, int64(val))
 }
 
 // TxPoolSize returns the tx pool size.
