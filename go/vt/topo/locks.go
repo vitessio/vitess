@@ -158,6 +158,9 @@ type iTopoLock interface {
 
 // perform the topo lock operation
 func (l *Lock) lock(ctx context.Context, ts *Server, lt iTopoLock, opts ...LockOption) (LockDescriptor, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	for _, o := range opts {
 		o.apply(&l.Options)
 	}
