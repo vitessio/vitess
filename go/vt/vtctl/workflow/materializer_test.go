@@ -610,10 +610,6 @@ func TestMoveTablesDDLFlag(t *testing.T) {
 func TestShardedAutoIncHandling(t *testing.T) {
 	tableName := "`t-1`"
 	tableDDL := fmt.Sprintf("create table %s (id int not null auto_increment primary key, c1 varchar(10))", tableName)
-<<<<<<< HEAD
-=======
-	validateEmptyTableQuery := fmt.Sprintf("select 1 from %s limit 1", tableName)
->>>>>>> 31b956b637 (VReplication: Qualify and SQL escape tables in created AutoIncrement VSchema definitions (#17174))
 	ms := &vtctldatapb.MaterializeSettings{
 		Workflow:       "workflow",
 		SourceKeyspace: "source-ks",
