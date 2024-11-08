@@ -828,6 +828,21 @@ func (tsv *TabletServer) ReadTransaction(ctx context.Context, target *querypb.Ta
 	return metadata, err
 }
 
+// GetTransactionInfo returns the data for the specified dtid.
+func (tsv *TabletServer) GetTransactionInfo(ctx context.Context, target *querypb.Target, dtid string) (resp *tabletmanagerdatapb.GetTransactionInfoResponse, err error) {
+	err = tsv.execRequest(
+		ctx, tsv.loadQueryTimeout(),
+		"GetTransactionInfo", "get_transaction_info", nil,
+		target, nil, true, /* allowOnShutdown */
+		func(ctx context.Context, logStats *tabletenv.LogStats) error {
+			txe := NewDTExecutor(ctx, logStats, tsv.te, tsv.qe, tsv.getShard)
+			resp, err = txe.GetTransactionInfo(dtid)
+			return err
+		},
+	)
+	return resp, err
+}
+
 // UnresolvedTransactions returns the unresolved distributed transaction record.
 func (tsv *TabletServer) UnresolvedTransactions(ctx context.Context, target *querypb.Target, abandonAgeSeconds int64) (transactions []*querypb.TransactionMetadata, err error) {
 	err = tsv.execRequest(

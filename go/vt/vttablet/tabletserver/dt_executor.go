@@ -23,6 +23,7 @@ import (
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -307,6 +308,14 @@ func (dte *DTExecutor) ReadTransaction(dtid string) (*querypb.TransactionMetadat
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "2pc is not enabled")
 	}
 	return dte.te.twoPC.ReadTransaction(dte.ctx, dtid)
+}
+
+// GetTransactionInfo returns the data of the specified dtid.
+func (dte *DTExecutor) GetTransactionInfo(dtid string) (*tabletmanagerdatapb.GetTransactionInfoResponse, error) {
+	if !dte.te.twopcEnabled {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "2pc is not enabled")
+	}
+	return dte.te.twoPC.GetTransactionInfo(dte.ctx, dtid)
 }
 
 // ReadTwopcInflight returns info about all in-flight 2pc transactions.
