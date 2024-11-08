@@ -34,6 +34,11 @@ type vtprotoMessage interface {
 	SizeVT() int
 }
 
+type vtprotoMemBuffer interface {
+	vtprotoMessage
+	MarshalToMemBufferVT() (mem.BufferSlice, bool)
+}
+
 type Codec struct {
 	fallback encoding.CodecV2
 }
@@ -42,25 +47,35 @@ func (Codec) Name() string { return Name }
 
 var defaultBufferPool = mem.DefaultBufferPool()
 
-func (c *Codec) Marshal(v any) (mem.BufferSlice, error) {
-	if m, ok := v.(vtprotoMessage); ok {
-		size := m.SizeVT()
-		if mem.IsBelowBufferPoolingThreshold(size) {
-			buf := make([]byte, size)
-			if _, err := m.MarshalToSizedBufferVT(buf[:size]); err != nil {
-				return nil, err
-			}
-			return mem.BufferSlice{mem.SliceBuffer(buf)}, nil
-		}
-		buf := defaultBufferPool.Get(size)
-		if _, err := m.MarshalToSizedBufferVT((*buf)[:size]); err != nil {
-			defaultBufferPool.Put(buf)
+func marshalPooled(m vtprotoMessage) (mem.BufferSlice, error) {
+	size := m.SizeVT()
+	if mem.IsBelowBufferPoolingThreshold(size) {
+		buf := make([]byte, size)
+		if _, err := m.MarshalToSizedBufferVT(buf[:size]); err != nil {
 			return nil, err
 		}
-		return mem.BufferSlice{mem.NewBuffer(buf, defaultBufferPool)}, nil
+		return mem.BufferSlice{mem.SliceBuffer(buf)}, nil
 	}
+	buf := defaultBufferPool.Get(size)
+	if _, err := m.MarshalToSizedBufferVT((*buf)[:size]); err != nil {
+		defaultBufferPool.Put(buf)
+		return nil, err
+	}
+	return mem.BufferSlice{mem.NewBuffer(buf, defaultBufferPool)}, nil
+}
 
-	return c.fallback.Marshal(v)
+func (c *Codec) Marshal(v any) (mem.BufferSlice, error) {
+	switch m := v.(type) {
+	case vtprotoMemBuffer:
+		if s, ok := m.MarshalToMemBufferVT(); ok {
+			return s, nil
+		}
+		return marshalPooled(m)
+	case vtprotoMessage:
+		return marshalPooled(m)
+	default:
+		return c.fallback.Marshal(v)
+	}
 }
 
 func (c *Codec) Unmarshal(data mem.BufferSlice, v any) error {

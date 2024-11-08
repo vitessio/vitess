@@ -17,36 +17,36 @@ limitations under the License.
 package mysql
 
 import (
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-// ParseResult converts the raw packets in a QueryResult to a sqltypes.Result.
-func ParseResult(qr *querypb.QueryResult, wantfields bool) (*sqltypes.Result, error) {
-	if qr.RawPackets == nil {
-		return sqltypes.Proto3ToResult(qr), nil
+func ParseResultFoo(qr *querypb.ExecuteResponse, wantfields bool) (*sqltypes.Result, error) {
+	if len(qr.RawPackets) == 0 {
+		return sqltypes.Proto3ToResult(qr.Result), nil
 	}
 
-	var colcount int
-	for i, p := range qr.RawPackets {
-		if len(p) == 0 {
-			colcount = i
-			break
-		}
+	colcount, _, ok := readLenEncInt(qr.RawPackets[0], 0)
+	if !ok {
+		return nil, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "cannot get column number")
 	}
+
+	// 0  1  2  3  4  5  6
+	// 2 c1 c2 r1 r2 r3 ok
 
 	var err error
 	fieldArray := make([]querypb.Field, colcount)
-	fieldPackets := qr.RawPackets[:colcount]
-	rowPackets := qr.RawPackets[colcount+1:]
+	fieldPackets := qr.RawPackets[1:colcount]
+	var rowPackets [][]byte
+	if len(qr.RawPackets) > int(colcount)+2 {
+		rowPackets = qr.RawPackets[colcount+1 : len(qr.RawPackets)-2]
+	}
+	okPacket := qr.RawPackets[len(qr.RawPackets)-1]
 
 	result := &sqltypes.Result{
-		RowsAffected:        qr.RowsAffected,
-		InsertID:            qr.InsertId,
-		SessionStateChanges: qr.SessionStateChanges,
-		Info:                qr.Info,
-		Fields:              make([]*querypb.Field, len(fieldPackets)),
-		Rows:                make([]sqltypes.Row, 0, len(rowPackets)),
+		Fields: make([]*querypb.Field, len(fieldPackets)),
+		Rows:   make([]sqltypes.Row, 0, len(rowPackets)),
 	}
 
 	for i, fieldpkt := range fieldPackets {
@@ -68,6 +68,16 @@ func ParseResult(qr *querypb.QueryResult, wantfields bool) (*sqltypes.Result, er
 		}
 		result.Rows = append(result.Rows, r)
 	}
+
+	var packetOK PacketOK
+	if err = parseOKPacket(&packetOK, okPacket, true, false); err != nil {
+		return nil, err
+	}
+	result.RowsAffected = packetOK.affectedRows
+	result.InsertID = packetOK.lastInsertID
+	result.SessionStateChanges = packetOK.sessionStateData
+	result.StatusFlags = packetOK.statusFlags
+	result.Info = packetOK.info
 
 	return result, nil
 }

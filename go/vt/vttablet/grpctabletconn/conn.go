@@ -137,7 +137,7 @@ func (conn *gRPCQueryClient) Execute(ctx context.Context, target *querypb.Target
 	if err != nil {
 		return nil, tabletconn.ErrorFromGRPC(err)
 	}
-	return mysql.ParseResult(er.Result, true)
+	return mysql.ParseResultFoo(er, true)
 }
 
 // StreamExecute executes the query and streams results back through callback.
@@ -492,8 +492,7 @@ func (conn *gRPCQueryClient) BeginExecute(ctx context.Context, target *querypb.T
 	if reply.Error != nil {
 		return state, nil, tabletconn.ErrorFromVTRPC(reply.Error)
 	}
-	result, err = mysql.ParseResult(reply.Result, true)
-	return state, result, err
+	return state, sqltypes.Proto3ToResult(reply.Result), err
 }
 
 // BeginStreamExecute starts a transaction and runs an Execute.
@@ -893,8 +892,7 @@ func (conn *gRPCQueryClient) ReserveBeginExecute(ctx context.Context, target *qu
 		return state, nil, tabletconn.ErrorFromVTRPC(reply.Error)
 	}
 
-	result, err = mysql.ParseResult(reply.Result, true)
-	return state, result, err
+	return state, sqltypes.Proto3ToResult(reply.Result), err
 }
 
 // ReserveBeginStreamExecute implements the queryservice interface
@@ -1008,8 +1006,7 @@ func (conn *gRPCQueryClient) ReserveExecute(ctx context.Context, target *querypb
 		return state, nil, tabletconn.ErrorFromVTRPC(reply.Error)
 	}
 
-	result, err = mysql.ParseResult(reply.Result, true)
-	return state, result, err
+	return state, sqltypes.Proto3ToResult(reply.Result), err
 }
 
 // ReserveStreamExecute implements the queryservice interface

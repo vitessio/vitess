@@ -469,10 +469,13 @@ func (c *Conn) readPacketAsMemBuffer() (mem.Buffer, error) {
 	return mem.SliceBuffer(data), nil
 }
 
+const RawPacketsPos = 20
+
 func updateProtoHeader(b []byte, v int) {
-	b[0] = byte(protowire.EncodeTag(1, protowire.BytesType))
+	b[0] = byte(protowire.EncodeTag(RawPacketsPos, protowire.BytesType))
 	switch {
 	case v < 1<<28:
+		// Proto packet data size is 4 bytes.
 		b[1] = byte((v>>0)&0x7f | 0x80)
 		b[2] = byte((v>>7)&0x7f | 0x80)
 		b[3] = byte((v>>14)&0x7f | 0x80)
@@ -1564,50 +1567,47 @@ type PacketOK struct {
 	sessionStateData string
 }
 
-func (c *Conn) parseOKPacket(packetOK *PacketOK, in []byte) error {
+func parseOKPacket(packetOK *PacketOK, in []byte, queryInfoEnabled, sessionTrackingEnabled bool) error {
 	data := &coder{
 		data: in,
 		pos:  1, // We already read the type.
 	}
+	var ok bool
 
 	// Affected rows.
-	affectedRows, ok := data.readLenEncInt()
+	packetOK.affectedRows, ok = data.readLenEncInt()
 	if !ok {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid OK packet affectedRows: %v", data.data)
 	}
-	packetOK.affectedRows = affectedRows
 
 	// Last Insert ID.
-	lastInsertID, ok := data.readLenEncInt()
+	packetOK.lastInsertID, ok = data.readLenEncInt()
 	if !ok {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid OK packet lastInsertID: %v", data.data)
 	}
-	packetOK.lastInsertID = lastInsertID
 
 	// Status flags.
-	statusFlags, ok := data.readUint16()
+	packetOK.statusFlags, ok = data.readUint16()
 	if !ok {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid OK packet statusFlags: %v", data.data)
 	}
-	packetOK.statusFlags = statusFlags
 
 	// assuming CapabilityClientProtocol41
 	// Warnings.
-	warnings, ok := data.readUint16()
+	packetOK.warnings, ok = data.readUint16()
 	if !ok {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid OK packet warnings: %v", data.data)
 	}
-	packetOK.warnings = warnings
 
 	// info
 	info, _ := data.readLenEncInfo()
-	if c.enableQueryInfo {
+	if queryInfoEnabled {
 		packetOK.info = info
 	}
 
-	if c.Capabilities&uint32(CapabilityClientSessionTrack) == CapabilityClientSessionTrack {
+	if sessionTrackingEnabled {
 		// session tracking
-		if statusFlags&ServerSessionStateChanged == ServerSessionStateChanged {
+		if packetOK.statusFlags&ServerSessionStateChanged == ServerSessionStateChanged {
 			length, ok := data.readLenEncInt()
 			if !ok || length == 0 {
 				// In case we have no more data or a zero length string, there's no additional information so
@@ -1746,4 +1746,8 @@ func (c *Conn) IsMarkedForClose() bool {
 
 func (c *Conn) IsShuttingDown() bool {
 	return c.listener.shutdown.Load()
+}
+
+func (c *Conn) isSessionTrack() bool {
+	return c.Capabilities&CapabilityClientSessionTrack == CapabilityClientSessionTrack
 }

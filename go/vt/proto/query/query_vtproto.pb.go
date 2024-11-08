@@ -283,15 +283,6 @@ func (m *QueryResult) CloneVT() *QueryResult {
 		}
 		r.Rows = tmpContainer
 	}
-	if rhs := m.RawPackets; rhs != nil {
-		tmpContainer := make([][]byte, len(rhs))
-		for k, v := range rhs {
-			tmpBytes := make([]byte, len(v))
-			copy(tmpBytes, v)
-			tmpContainer[k] = tmpBytes
-		}
-		r.RawPackets = tmpContainer
-	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -411,6 +402,15 @@ func (m *ExecuteResponse) CloneVT() *ExecuteResponse {
 	}
 	r := new(ExecuteResponse)
 	r.Result = m.Result.CloneVT()
+	if rhs := m.RawPackets; rhs != nil {
+		tmpContainer := make([][]byte, len(rhs))
+		for k, v := range rhs {
+			tmpBytes := make([]byte, len(v))
+			copy(tmpBytes, v)
+			tmpContainer[k] = tmpBytes
+		}
+		r.RawPackets = tmpContainer
+	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -973,6 +973,15 @@ func (m *BeginExecuteResponse) CloneVT() *BeginExecuteResponse {
 	r.TransactionId = m.TransactionId
 	r.TabletAlias = m.TabletAlias.CloneVT()
 	r.SessionStateChanges = m.SessionStateChanges
+	if rhs := m.RawPackets; rhs != nil {
+		tmpContainer := make([][]byte, len(rhs))
+		for k, v := range rhs {
+			tmpBytes := make([]byte, len(v))
+			copy(tmpBytes, v)
+			tmpContainer[k] = tmpBytes
+		}
+		r.RawPackets = tmpContainer
+	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -2219,15 +2228,6 @@ func (m *QueryResult) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if len(m.RawPackets) > 0 {
-		for iNdEx := len(m.RawPackets) - 1; iNdEx >= 0; iNdEx-- {
-			i -= len(m.RawPackets[iNdEx])
-			copy(dAtA[i:], m.RawPackets[iNdEx])
-			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.RawPackets[iNdEx])))
-			i--
-			dAtA[i] = 0x42
-		}
-	}
 	if len(m.SessionStateChanges) > 0 {
 		i -= len(m.SessionStateChanges)
 		copy(dAtA[i:], m.SessionStateChanges)
@@ -2577,6 +2577,17 @@ func (m *ExecuteResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if len(m.RawPackets) > 0 {
+		for iNdEx := len(m.RawPackets) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.RawPackets[iNdEx])
+			copy(dAtA[i:], m.RawPackets[iNdEx])
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.RawPackets[iNdEx])))
+			i--
+			dAtA[i] = 0x1
+			i--
+			dAtA[i] = 0xa2
+		}
 	}
 	if m.Result != nil {
 		size, err := m.Result.MarshalToSizedBufferVT(dAtA[:i])
@@ -4225,6 +4236,17 @@ func (m *BeginExecuteResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) 
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if len(m.RawPackets) > 0 {
+		for iNdEx := len(m.RawPackets) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.RawPackets[iNdEx])
+			copy(dAtA[i:], m.RawPackets[iNdEx])
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.RawPackets[iNdEx])))
+			i--
+			dAtA[i] = 0x1
+			i--
+			dAtA[i] = 0xa2
+		}
 	}
 	if len(m.SessionStateChanges) > 0 {
 		i -= len(m.SessionStateChanges)
@@ -6312,12 +6334,6 @@ func (m *QueryResult) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
-	if len(m.RawPackets) > 0 {
-		for _, b := range m.RawPackets {
-			l = len(b)
-			n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
-		}
-	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -6437,6 +6453,12 @@ func (m *ExecuteResponse) SizeVT() (n int) {
 	if m.Result != nil {
 		l = m.Result.SizeVT()
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	if len(m.RawPackets) > 0 {
+		for _, b := range m.RawPackets {
+			l = len(b)
+			n += 2 + l + protohelpers.SizeOfVarint(uint64(l))
+		}
 	}
 	n += len(m.unknownFields)
 	return n
@@ -7047,6 +7069,12 @@ func (m *BeginExecuteResponse) SizeVT() (n int) {
 	l = len(m.SessionStateChanges)
 	if l > 0 {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	if len(m.RawPackets) > 0 {
+		for _, b := range m.RawPackets {
+			l = len(b)
+			n += 2 + l + protohelpers.SizeOfVarint(uint64(l))
+		}
 	}
 	n += len(m.unknownFields)
 	return n
@@ -9687,38 +9715,6 @@ func (m *QueryResult) UnmarshalVT(dAtA []byte) error {
 			}
 			m.SessionStateChanges = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
-		case 8:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field RawPackets", wireType)
-			}
-			var byteLen int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return protohelpers.ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				byteLen |= int(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			if byteLen < 0 {
-				return protohelpers.ErrInvalidLength
-			}
-			postIndex := iNdEx + byteLen
-			if postIndex < 0 {
-				return protohelpers.ErrInvalidLength
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.RawPackets = append(m.RawPackets, make([]byte, postIndex-iNdEx))
-			copy(m.RawPackets[len(m.RawPackets)-1], dAtA[iNdEx:postIndex])
-			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
@@ -10501,6 +10497,38 @@ func (m *ExecuteResponse) UnmarshalVT(dAtA []byte) error {
 			if err := m.Result.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
+			iNdEx = postIndex
+		case 20:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field RawPackets", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.RawPackets = append(m.RawPackets, make([]byte, postIndex-iNdEx))
+			copy(m.RawPackets[len(m.RawPackets)-1], dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
@@ -14646,6 +14674,38 @@ func (m *BeginExecuteResponse) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.SessionStateChanges = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 20:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field RawPackets", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.RawPackets = append(m.RawPackets, make([]byte, postIndex-iNdEx))
+			copy(m.RawPackets[len(m.RawPackets)-1], dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex

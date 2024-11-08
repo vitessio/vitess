@@ -430,9 +430,6 @@ message QueryResult {
   repeated Row rows = 4;
   string info = 6;
   string session_state_changes = 7;
-
-  // raw_packets contains raw MySQL packets if raw_mysql_packets was set in ExecuteOptions.
-  repeated bytes raw_packets = 8;
 }
 
 // QueryWarning is used to convey out of band query execution warnings
@@ -487,6 +484,9 @@ message ExecuteRequest {
 // ExecuteResponse is the returned value from Execute
 message ExecuteResponse {
   QueryResult result = 1;
+
+  // raw_packets contains raw MySQL packets if raw_mysql_packets was set in ExecuteOptions.
+  repeated bytes raw_packets = 20;
 }
 
 // ResultWithError represents a query response
@@ -693,6 +693,8 @@ message BeginExecuteResponse {
   // The session_state_changes might be set if the transaction is a snapshot transaction
   // and the MySQL implementation supports getting a start gtid on snapshot
   string session_state_changes = 5;
+
+  repeated bytes raw_packets = 20;
 }
 
 // BeginStreamExecuteRequest is the payload to BeginStreamExecute

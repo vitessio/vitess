@@ -248,7 +248,7 @@ func TestBasicPackets(t *testing.T) {
 	assert.EqualValues(data[0], OKPacket, "OKPacket")
 
 	var packetOk PacketOK
-	err = cConn.parseOKPacket(&packetOk, data)
+	err = parseOKPacket(&packetOk, data, cConn.enableQueryInfo, cConn.isSessionTrack())
 	require.NoError(err)
 	assert.EqualValues(12, packetOk.affectedRows)
 	assert.EqualValues(34, packetOk.lastInsertID)
@@ -274,7 +274,7 @@ func TestBasicPackets(t *testing.T) {
 	require.NotEmpty(data)
 	assert.EqualValues(data[0], OKPacket, "OKPacket")
 
-	err = cConn.parseOKPacket(&packetOk, data)
+	err = parseOKPacket(&packetOk, data, cConn.enableQueryInfo, cConn.isSessionTrack())
 	require.NoError(err)
 	assert.EqualValues(23, packetOk.affectedRows)
 	assert.EqualValues(45, packetOk.lastInsertID)
@@ -297,7 +297,7 @@ func TestBasicPackets(t *testing.T) {
 	require.NotEmpty(data)
 	assert.True(cConn.isEOFPacket(data), "expected EOF")
 
-	err = cConn.parseOKPacket(&packetOk, data)
+	err = parseOKPacket(&packetOk, data, cConn.enableQueryInfo, cConn.isSessionTrack())
 	require.NoError(err)
 	assert.EqualValues(12, packetOk.affectedRows)
 	assert.EqualValues(34, packetOk.lastInsertID)
@@ -693,7 +693,7 @@ func TestOkPackets(t *testing.T) {
 			sConn.Capabilities = testCase.cc
 			// parse the packet
 			var packetOk PacketOK
-			err := cConn.parseOKPacket(&packetOk, data)
+			err := parseOKPacket(&packetOk, data, cConn.enableQueryInfo, cConn.isSessionTrack())
 			if testCase.expectedErr != "" {
 				require.Error(t, err)
 				require.Equal(t, testCase.expectedErr, err.Error())

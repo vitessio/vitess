@@ -428,18 +428,19 @@ func (c *Conn) ExecuteFetchWithWarningCount(query string, maxrows int, wantfield
 	return res, warnings, err
 }
 
-func (c *Conn) ReadQueryResultAsSliceBuffer(maxrows int) (*sqltypes.Result, bool, uint16, error) {
+func (c *Conn) ReadQueryResultAsSliceBuffer(maxrows int) (result *sqltypes.Result, more bool, warnings uint16, err error) {
 	var packetOk PacketOK
 
 	// Get the result.
-	colNumber, err := c.readComQueryResponse(&packetOk)
+	first, colNumber, err := c.readComQueryResponseAsMemBuf(&packetOk)
 	if err != nil {
 		return nil, false, 0, err
 	}
-	more := packetOk.statusFlags&ServerMoreResultsExists != 0
-	warnings := packetOk.warnings
+	more = packetOk.statusFlags&ServerMoreResultsExists != 0
+	warnings = packetOk.warnings
 	if colNumber == 0 {
 		// OK packet, means no results. Just use the numbers.
+		first.Free()
 		return &sqltypes.Result{
 			RowsAffected:        packetOk.affectedRows,
 			InsertID:            packetOk.lastInsertID,
@@ -449,8 +450,7 @@ func (c *Conn) ReadQueryResultAsSliceBuffer(maxrows int) (*sqltypes.Result, bool
 		}, more, warnings, nil
 	}
 
-	var rawPackets []mem.Buffer
-	var data mem.Buffer
+	rawPackets := []mem.Buffer{first}
 
 	defer func() {
 		if err != nil {
@@ -463,30 +463,27 @@ func (c *Conn) ReadQueryResultAsSliceBuffer(maxrows int) (*sqltypes.Result, bool
 	// Read column headers. One packet per column.
 	// Build the fields.
 	for i := 0; i < colNumber; i++ {
-		data, err = c.readPacketAsMemBuffer()
+		data, err := c.readPacketAsMemBuffer()
 		if err != nil {
-			err = sqlerror.NewSQLError(sqlerror.CRMalformedPacket, "", "")
-			return nil, false, 0, err
+			return nil, false, 0, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, "", "")
 		}
 		rawPackets = append(rawPackets, data)
 	}
 
 	if c.Capabilities&CapabilityClientDeprecateEOF == 0 {
 		// EOF is only present here if it's not deprecated.
-		data, err = c.readPacketAsMemBuffer()
+		data, err := c.readPacketAsMemBuffer()
 		if err != nil {
-			err = sqlerror.NewSQLError(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, err.Error())
-			return nil, false, 0, err
+			return nil, false, 0, sqlerror.NewSQLError(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, err.Error())
 		}
-		rawPackets = append(rawPackets, data)
+		defer data.Free()
+
 		if c.isEOFPacket(data.ReadOnlyData()) {
-			rawPackets = rawPackets[:len(rawPackets)-1]
+			// empty by design
 		} else if isErrorPacket(data.ReadOnlyData()) {
-			err = ParseErrorPacket(data.ReadOnlyData())
-			return nil, false, 0, err
+			return nil, false, 0, ParseErrorPacket(data.ReadOnlyData())
 		} else {
-			err = vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected packet after fields: %v", data)
-			return nil, false, 0, err
+			return nil, false, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected packet after fields: %v", data)
 		}
 	}
 
@@ -494,10 +491,9 @@ func (c *Conn) ReadQueryResultAsSliceBuffer(maxrows int) (*sqltypes.Result, bool
 
 	// Read each row until EOF or OK packet.
 	for {
-		data, err = c.readPacketAsMemBuffer()
+		data, err := c.readPacketAsMemBuffer()
 		if err != nil {
-			err = sqlerror.NewSQLError(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, err.Error())
-			return nil, false, 0, err
+			return nil, false, 0, sqlerror.NewSQLError(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, err.Error())
 		}
 		rawPackets = append(rawPackets, data)
 
@@ -514,20 +510,19 @@ func (c *Conn) ReadQueryResultAsSliceBuffer(maxrows int) (*sqltypes.Result, bool
 				}
 				more = (statusFlags & ServerMoreResultsExists) != 0
 				result.StatusFlags = statusFlags
-
-				rawPackets = rawPackets[:len(rawPackets)-1]
+				// rawPackets = rawPackets[:len(rawPackets)-1]
 			} else {
-				var packetEof PacketOK
-				if err = c.parseOKPacket(&packetEof, data.ReadOnlyData()); err != nil {
+				var packetOK PacketOK
+				if err = parseOKPacket(&packetOK, data.ReadOnlyData(), c.enableQueryInfo, c.isSessionTrack()); err != nil {
 					return nil, false, 0, err
 				}
-				warnings = packetEof.warnings
-				more = (packetEof.statusFlags & ServerMoreResultsExists) != 0
-				result.StatusFlags = packetEof.statusFlags
+				warnings = packetOK.warnings
+				more = (packetOK.statusFlags & ServerMoreResultsExists) != 0
+				result.StatusFlags = packetOK.statusFlags
 
-				rawPackets = rawPackets[:len(rawPackets)-1]
-				result.SessionStateChanges = packetEof.sessionStateData
-				result.Info = packetEof.info
+				// rawPackets = rawPackets[:len(rawPackets)-1]
+				result.SessionStateChanges = packetOK.sessionStateData
+				result.Info = packetOK.info
 			}
 
 			// log.Errorf("DEBUG: setting result cached proto to %v", rawPackets)
@@ -536,8 +531,7 @@ func (c *Conn) ReadQueryResultAsSliceBuffer(maxrows int) (*sqltypes.Result, bool
 
 		} else if isErrorPacket(data.ReadOnlyData()) {
 			// Error packet.
-			err = ParseErrorPacket(data.ReadOnlyData())
-			return nil, false, 0, err
+			return nil, false, 0, ParseErrorPacket(data.ReadOnlyData())
 		}
 
 		if maxrows == FETCH_NO_ROWS {
@@ -549,8 +543,7 @@ func (c *Conn) ReadQueryResultAsSliceBuffer(maxrows int) (*sqltypes.Result, bool
 			if err = c.drainResults(); err != nil {
 				return nil, false, 0, err
 			}
-			err = vterrors.Errorf(vtrpc.Code_ABORTED, "Row count exceeded %d", maxrows)
-			return nil, false, 0, err
+			return nil, false, 0, vterrors.Errorf(vtrpc.Code_ABORTED, "Row count exceeded %d", maxrows)
 		}
 
 		rowcount++
@@ -647,15 +640,15 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, 
 				more = (statusFlags & ServerMoreResultsExists) != 0
 				result.StatusFlags = statusFlags
 			} else {
-				var packetEof PacketOK
-				if err := c.parseOKPacket(&packetEof, data); err != nil {
+				var packetOK PacketOK
+				if err = parseOKPacket(&packetOK, data, c.enableQueryInfo, c.isSessionTrack()); err != nil {
 					return nil, false, 0, err
 				}
-				warnings = packetEof.warnings
-				more = (packetEof.statusFlags & ServerMoreResultsExists) != 0
-				result.SessionStateChanges = packetEof.sessionStateData
-				result.StatusFlags = packetEof.statusFlags
-				result.Info = packetEof.info
+				warnings = packetOK.warnings
+				more = (packetOK.statusFlags & ServerMoreResultsExists) != 0
+				result.SessionStateChanges = packetOK.sessionStateData
+				result.StatusFlags = packetOK.statusFlags
+				result.Info = packetOK.info
 			}
 			return result, more, warnings, nil
 
@@ -720,7 +713,7 @@ func (c *Conn) readComQueryResponse(packetOk *PacketOK) (int, error) {
 
 	switch data[0] {
 	case OKPacket:
-		return 0, c.parseOKPacket(packetOk, data)
+		return 0, parseOKPacket(packetOk, data, c.enableQueryInfo, c.isSessionTrack())
 	case ErrPacket:
 		// Error
 		return 0, ParseErrorPacket(data)
@@ -736,6 +729,43 @@ func (c *Conn) readComQueryResponse(packetOk *PacketOK) (int, error) {
 		return 0, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "extra data in COM_QUERY response")
 	}
 	return int(n), nil
+}
+
+func (c *Conn) readComQueryResponseAsMemBuf(packetOk *PacketOK) (buf mem.Buffer, res int, err error) {
+	defer func() {
+		if buf != nil && err != nil {
+			buf.Free()
+			buf = nil
+		}
+	}()
+	buf, err = c.readPacketAsMemBuffer()
+	if err != nil {
+		return buf, 0, sqlerror.NewSQLErrorf(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "%v", err)
+	}
+	defer c.recycleReadPacket()
+	data := buf.ReadOnlyData()[5:]
+	if len(data) == 0 {
+		return buf, 0, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "invalid empty COM_QUERY response packet")
+	}
+
+	switch data[0] {
+	case OKPacket:
+		return buf, 0, parseOKPacket(packetOk, data, c.enableQueryInfo, c.isSessionTrack())
+	case ErrPacket:
+		// Error
+		return buf, 0, ParseErrorPacket(data)
+	case 0xfb:
+		// Local infile
+		return buf, 0, vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "not implemented")
+	}
+	n, pos, ok := readLenEncInt(data, 0)
+	if !ok {
+		return buf, 0, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "cannot get column number")
+	}
+	if pos != len(data) {
+		return buf, 0, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "extra data in COM_QUERY response")
+	}
+	return buf, int(n), nil
 }
 
 //

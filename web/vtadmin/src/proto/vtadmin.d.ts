@@ -40858,9 +40858,6 @@ export namespace query {
 
         /** QueryResult session_state_changes */
         session_state_changes?: (string|null);
-
-        /** QueryResult raw_packets */
-        raw_packets?: (Uint8Array[]|null);
     }
 
     /** Represents a QueryResult. */
@@ -40889,9 +40886,6 @@ export namespace query {
 
         /** QueryResult session_state_changes. */
         public session_state_changes: string;
-
-        /** QueryResult raw_packets. */
-        public raw_packets: Uint8Array[];
 
         /**
          * Creates a new QueryResult instance using the specified properties.
@@ -41449,6 +41443,9 @@ export namespace query {
 
         /** ExecuteResponse result */
         result?: (query.IQueryResult|null);
+
+        /** ExecuteResponse raw_packets */
+        raw_packets?: (Uint8Array[]|null);
     }
 
     /** Represents an ExecuteResponse. */
@@ -41462,6 +41459,9 @@ export namespace query {
 
         /** ExecuteResponse result. */
         public result?: (query.IQueryResult|null);
+
+        /** ExecuteResponse raw_packets. */
+        public raw_packets: Uint8Array[];
 
         /**
          * Creates a new ExecuteResponse instance using the specified properties.
@@ -44568,6 +44568,9 @@ export namespace query {
 
         /** BeginExecuteResponse session_state_changes */
         session_state_changes?: (string|null);
+
+        /** BeginExecuteResponse raw_packets */
+        raw_packets?: (Uint8Array[]|null);
     }
 
     /** Represents a BeginExecuteResponse. */
@@ -44593,6 +44596,9 @@ export namespace query {
 
         /** BeginExecuteResponse session_state_changes. */
         public session_state_changes: string;
+
+        /** BeginExecuteResponse raw_packets. */
+        public raw_packets: Uint8Array[];
 
         /**
          * Creates a new BeginExecuteResponse instance using the specified properties.

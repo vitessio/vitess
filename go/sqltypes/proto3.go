@@ -115,9 +115,6 @@ func Proto3ToResult(qr *querypb.QueryResult) *Result {
 	if qr == nil {
 		return nil
 	}
-	if qr.RawPackets != nil {
-		panic("Proto3ToResult with raw mysql packets")
-	}
 	return &Result{
 		Fields:              qr.Fields,
 		RowsAffected:        qr.RowsAffected,

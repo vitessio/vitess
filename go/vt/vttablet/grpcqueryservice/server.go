@@ -52,6 +52,13 @@ func (q *query) Execute(ctx context.Context, request *querypb.ExecuteRequest) (r
 	if err != nil {
 		return nil, vterrors.ToGRPC(err)
 	}
+
+	if len(result.RawPackets) > 0 {
+		return &querypb.ExecuteResponse{
+			RawPackets_: result.RawPackets,
+		}, nil
+	}
+
 	return &querypb.ExecuteResponse{
 		Result: sqltypes.ResultToProto3(result),
 	}, nil
