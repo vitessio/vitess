@@ -1534,7 +1534,7 @@ func (api *API) GetTransactionInfo(ctx context.Context, req *vtadminpb.GetTransa
 
 	cluster.AnnotateSpan(c, span)
 
-	if !api.authz.IsAuthorized(ctx, c.ID, rbac.KeyspaceResource, rbac.GetAction) {
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.ClusterResource, rbac.GetAction) {
 		return nil, nil
 	}
 
