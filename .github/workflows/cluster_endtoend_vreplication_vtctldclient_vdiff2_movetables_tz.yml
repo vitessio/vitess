@@ -1,9 +1,9 @@
 # DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
 
-name: Cluster (vreplication_migrate_vdiff2_convert_tz)
+name: Cluster (vreplication_vtctldclient_vdiff2_movetables_tz)
 on: [push, pull_request]
 concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (vreplication_migrate_vdiff2_convert_tz)')
+  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (vreplication_vtctldclient_vdiff2_movetables_tz)')
   cancel-in-progress: true
 
 permissions: read-all
@@ -15,8 +15,8 @@ env:
 
 jobs:
   build:
-    name: Run endtoend tests on Cluster (vreplication_migrate_vdiff2_convert_tz)
-    runs-on: gh-hosted-runners-16cores-1
+    name: Run endtoend tests on Cluster (vreplication_vtctldclient_vdiff2_movetables_tz)
+    runs-on: ubuntu-latest
 
     steps:
     - name: Skip CI
@@ -67,7 +67,7 @@ jobs:
             - 'tools/**'
             - 'config/**'
             - 'bootstrap.sh'
-            - '.github/workflows/cluster_endtoend_vreplication_migrate_vdiff2_convert_tz.yml'
+            - '.github/workflows/cluster_endtoend_vreplication_vtctldclient_vdiff2_movetables_tz.yml'
 
     - name: Set up Go
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -158,7 +158,7 @@ jobs:
         EOF
         
         # run the tests however you normally do, then produce a JUnit XML file
-        eatmydata -- go run test.go -docker=false -follow -shard vreplication_migrate_vdiff2_convert_tz | tee -a output.txt | go-junit-report -set-exit-code > report.xml
+        eatmydata -- go run test.go -docker=false -follow -shard vreplication_vtctldclient_vdiff2_movetables_tz | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 
     - name: Print test output and Record test result in launchable if PR is not a draft
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true' && always()
