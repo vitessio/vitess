@@ -325,6 +325,7 @@ func (vp *vplayer) backoffAndRetry(ctx context.Context, sql string) (*sqltypes.R
 	defer func() {
 		log.Infof("Setting inBackoff to false after query: %v", sql)
 		vp.inBackoff = false
+		vp.dontSkipCommits = false
 	}()
 	//FIXME : set dontSkipCommits to false after some time?
 	if !vp.batchMode {
@@ -715,7 +716,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 					// applying the next set of events as part of the current transaction. This approach
 					// also handles the case where the last transaction is partial. In that case,
 					// we only group the transactions with commits we've seen so far.
-					if vp.dontSkipCommits && hasAnotherCommit(items, i, j+1) {
+					if !vp.dontSkipCommits && hasAnotherCommit(items, i, j+1) {
 						log.Infof(">>>>>>>> skipping commit")
 						vp.hasSkippedCommit = true
 						continue
