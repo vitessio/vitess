@@ -994,9 +994,7 @@ func TestTxConnCommit2PCCreateTransactionFail(t *testing.T) {
 	sbc0.MustFailCreateTransaction = 1
 	session.TransactionMode = vtgatepb.TransactionMode_TWOPC
 	err := sc.txConn.Commit(ctx, session)
-	want := "error: err"
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), want, "Commit")
+	require.ErrorContains(t, err, "target: TestTxConnCommit2PCCreateTransactionFail.0.primary: error: err")
 	assert.EqualValues(t, 1, sbc0.CreateTransactionCount.Load(), "sbc0.CreateTransactionCount")
 	assert.EqualValues(t, 1, sbc0.RollbackCount.Load(), "sbc0.RollbackCount")
 	assert.EqualValues(t, 1, sbc1.RollbackCount.Load(), "sbc1.RollbackCount")
@@ -1018,9 +1016,7 @@ func TestTxConnCommit2PCPrepareFail(t *testing.T) {
 	sbc1.MustFailPrepare = 1
 	session.TransactionMode = vtgatepb.TransactionMode_TWOPC
 	err := sc.txConn.Commit(ctx, session)
-	want := "error: err"
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), want, "Commit")
+	require.ErrorContains(t, err, "target: TestTxConnCommit2PCPrepareFail.1.primary: error: err")
 	assert.EqualValues(t, 1, sbc0.CreateTransactionCount.Load(), "sbc0.CreateTransactionCount")
 	assert.EqualValues(t, 1, sbc1.PrepareCount.Load(), "sbc1.PrepareCount")
 	// Prepared failed on RM, so no commit on MM or RMs.
@@ -1046,13 +1042,33 @@ func TestTxConnCommit2PCStartCommitFail(t *testing.T) {
 	sbc0.MustFailStartCommit = 1
 	session.TransactionMode = vtgatepb.TransactionMode_TWOPC
 	err := sc.txConn.Commit(ctx, session)
-	want := "error: err"
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), want, "Commit")
+	require.ErrorContains(t, err, "target: TestTxConnCommit2PCStartCommitFail.0.primary: error: err")
 	assert.EqualValues(t, 1, sbc0.CreateTransactionCount.Load(), "sbc0.CreateTransactionCount")
 	assert.EqualValues(t, 1, sbc1.PrepareCount.Load(), "sbc1.PrepareCount")
 	assert.EqualValues(t, 1, sbc0.StartCommitCount.Load(), "sbc0.StartCommitCount")
 	assert.EqualValues(t, 0, sbc1.CommitPreparedCount.Load(), "sbc1.CommitPreparedCount")
+	assert.EqualValues(t, 1, sbc0.SetRollbackCount.Load(), "MM")
+	assert.EqualValues(t, 1, sbc1.RollbackPreparedCount.Load(), "RM")
+	assert.EqualValues(t, 1, sbc0.ConcludeTransactionCount.Load(), "sbc0.ConcludeTransactionCount")
+
+	sbc0.ResetCounter()
+	sbc1.ResetCounter()
+
+	session = NewSafeSession(&vtgatepb.Session{InTransaction: true})
+	sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false, nullResultsObserver{})
+	sc.ExecuteMultiShard(ctx, nil, rss01, twoQueries, session, false, false, nullResultsObserver{})
+
+	// Here the StartCommit failure is in uncertain state so rollback is not called and neither conclude.
+	sbc0.MustFailStartCommitUncertain = 1
+	session.TransactionMode = vtgatepb.TransactionMode_TWOPC
+	err = sc.txConn.Commit(ctx, session)
+	require.ErrorContains(t, err, "target: TestTxConnCommit2PCStartCommitFail.0.primary: uncertain error")
+	assert.EqualValues(t, 1, sbc0.CreateTransactionCount.Load(), "sbc0.CreateTransactionCount")
+	assert.EqualValues(t, 1, sbc1.PrepareCount.Load(), "sbc1.PrepareCount")
+	assert.EqualValues(t, 1, sbc0.StartCommitCount.Load(), "sbc0.StartCommitCount")
+	assert.EqualValues(t, 0, sbc1.CommitPreparedCount.Load(), "sbc1.CommitPreparedCount")
+	assert.EqualValues(t, 0, sbc0.SetRollbackCount.Load(), "MM")
+	assert.EqualValues(t, 0, sbc1.RollbackPreparedCount.Load(), "RM")
 	assert.EqualValues(t, 0, sbc0.ConcludeTransactionCount.Load(), "sbc0.ConcludeTransactionCount")
 }
 
@@ -1068,9 +1084,7 @@ func TestTxConnCommit2PCCommitPreparedFail(t *testing.T) {
 	sbc1.MustFailCommitPrepared = 1
 	session.TransactionMode = vtgatepb.TransactionMode_TWOPC
 	err := sc.txConn.Commit(ctx, session)
-	want := "error: err"
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), want, "Commit")
+	require.ErrorContains(t, err, "target: TestTxConnCommit2PCCommitPreparedFail.1.primary: error: err")
 	assert.EqualValues(t, 1, sbc0.CreateTransactionCount.Load(), "sbc0.CreateTransactionCount")
 	assert.EqualValues(t, 1, sbc1.PrepareCount.Load(), "sbc1.PrepareCount")
 	assert.EqualValues(t, 1, sbc0.StartCommitCount.Load(), "sbc0.StartCommitCount")
