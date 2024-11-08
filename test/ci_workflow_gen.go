@@ -154,7 +154,8 @@ var (
 		"onlineddl_vrepl_stress_suite",
 		"onlineddl_vrepl_suite",
 		"vreplication_basic",
-		"vreplication_migrate_vdiff2_convert_tz",
+		"vreplication_migrate",
+		"vreplication_vtctldclient_vdiff2_movetables_tz",
 	}
 )
 
