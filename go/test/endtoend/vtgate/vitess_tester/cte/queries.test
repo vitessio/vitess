@@ -30,6 +30,15 @@ WITH RECURSIVE numbers AS (SELECT 1 AS n
 SELECT *
 FROM numbers;
 
+# Simple recursive CTE using literal values, column named in the CTE def
+WITH RECURSIVE numbers(n) AS (SELECT 1
+                              UNION ALL
+                              SELECT n + 1
+                              FROM numbers
+                              WHERE n < 5)
+SELECT *
+FROM numbers;
+
 # Recursive CTE joined with a normal table
 WITH RECURSIVE emp_cte AS (SELECT id, name, manager_id
                            FROM employees
