@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -38,7 +39,9 @@ import (
 	"vitess.io/vitess/go/vt/callerid"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	tabletpb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
+	"vitess.io/vitess/go/vt/vttablet/grpctmclient"
 )
 
 // TestDTCommit tests distributed transaction commit for insert, update and delete operations
@@ -1349,7 +1352,12 @@ func TestSemiSyncRequiredWithTwoPC(t *testing.T) {
 
 	out, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=none")
 	require.NoError(t, err, out)
-	defer clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=semi_sync")
+	defer func() {
+		clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=semi_sync")
+		for _, shard := range clusterInstance.Keyspaces[0].Shards {
+			clusterInstance.VtctldClientProcess.PlannedReparentShard(keyspaceName, shard.Name, shard.Vttablets[0].Alias)
+		}
+	}()
 
 	// After changing the durability policy for the given keyspace to none, we run PRS.
 	shard := clusterInstance.Keyspaces[0].Shards[2]
@@ -1368,4 +1376,71 @@ func TestSemiSyncRequiredWithTwoPC(t *testing.T) {
 	_, err = utils.ExecAllowError(t, conn, "commit")
 	require.Error(t, err)
 	require.ErrorContains(t, err, "two-pc is enabled, but semi-sync is not")
+}
+
+// TestReadTransactionStatus tests that read transaction state rpc works as expected.
+func TestReadTransactionStatus(t *testing.T) {
+	conn, closer := start(t)
+	defer closer()
+	defer conn.Close()
+	defer twopcutil.DeleteFile(twopcutil.DebugDelayCommitShard)
+	defer twopcutil.DeleteFile(twopcutil.DebugDelayCommitTime)
+
+	// We create a multi shard commit and delay its commit on one of the shards.
+	// This allows us to query to transaction status and actually get some data back.
+	var wg sync.WaitGroup
+	twopcutil.RunMultiShardCommitWithDelay(t, conn, "10", &wg, []string{
+		"begin",
+		"insert into twopc_t1(id, col) values(4, 4)",
+		"insert into twopc_t1(id, col) values(6, 4)",
+		"insert into twopc_t1(id, col) values(9, 4)",
+	})
+	// Allow enough time for the commit to have started.
+	time.Sleep(1 * time.Second)
+
+	// Create a tablet manager client and use it to read the transaction state.
+	tmc := grpctmclient.NewClient()
+	defer tmc.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	primaryTablet := getTablet(clusterInstance.Keyspaces[0].Shards[2].FindPrimaryTablet().GrpcPort)
+	var unresTransaction *querypb.TransactionMetadata
+	for _, shard := range clusterInstance.Keyspaces[0].Shards {
+		urtRes, err := tmc.GetUnresolvedTransactions(ctx, getTablet(shard.FindPrimaryTablet().GrpcPort), 1)
+		require.NoError(t, err)
+		if len(urtRes) > 0 {
+			unresTransaction = urtRes[0]
+		}
+	}
+	require.NotNil(t, unresTransaction)
+	res, err := tmc.GetTransactionInfo(ctx, primaryTablet, unresTransaction.Dtid)
+	require.NoError(t, err)
+	assert.Equal(t, "PREPARED", res.State)
+	assert.Equal(t, "", res.Message)
+	assert.Equal(t, []string{"insert into twopc_t1(id, col) values (9, 4)"}, res.Statements)
+
+	// Also try running the RPC from vtctld and verify we see the same values.
+	out, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("DistributedTransaction",
+		"Read",
+		fmt.Sprintf(`--dtid=%s`, unresTransaction.Dtid),
+	)
+	require.NoError(t, err)
+	require.Contains(t, out, "insert into twopc_t1(id, col) values (9, 4)")
+	require.Contains(t, out, unresTransaction.Dtid)
+
+	// Read the data from vtadmin API, and verify that too has the same information.
+	apiRes := clusterInstance.VtadminProcess.MakeAPICallRetry(t, fmt.Sprintf("/api/transaction/local/%v/info", unresTransaction.Dtid))
+	require.Contains(t, apiRes, "insert into twopc_t1(id, col) values (9, 4)")
+	require.Contains(t, apiRes, unresTransaction.Dtid)
+	require.Contains(t, apiRes, strconv.FormatInt(res.TimeCreated, 10))
+
+	// Wait for the commit to have returned.
+	wg.Wait()
+}
+
+func getTablet(tabletGrpcPort int) *tabletpb.Tablet {
+	portMap := make(map[string]int32)
+	portMap["grpc"] = int32(tabletGrpcPort)
+	return &tabletpb.Tablet{Hostname: hostname, PortMap: portMap}
 }

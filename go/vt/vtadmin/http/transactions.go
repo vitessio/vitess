@@ -20,6 +20,7 @@ import (
 	"context"
 
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 // GetUnresolvedTransactions implements the http wrapper for the
@@ -36,6 +37,21 @@ func GetUnresolvedTransactions(ctx context.Context, r Request, api *API) *JSONRe
 		ClusterId:  vars["cluster_id"],
 		Keyspace:   vars["keyspace"],
 		AbandonAge: abandonAge,
+	})
+
+	return NewJSONResponse(res, err)
+}
+
+// GetTransactionInfo implements the http wrapper for the
+// /transaction/{cluster_id}/{dtid}/info route.
+func GetTransactionInfo(ctx context.Context, r Request, api *API) *JSONResponse {
+	vars := r.Vars()
+
+	res, err := api.server.GetTransactionInfo(ctx, &vtadminpb.GetTransactionInfoRequest{
+		ClusterId: vars["cluster_id"],
+		Request: &vtctldatapb.GetTransactionInfoRequest{
+			Dtid: vars["dtid"],
+		},
 	})
 
 	return NewJSONResponse(res, err)

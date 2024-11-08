@@ -2260,8 +2260,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "with recursive cte as (select 1 from dual where 1 != 1 union all select n + 1 from cte where 1 != 1) select n from cte where 1 != 1",
-        "Query": "with recursive cte as (select 1 from dual union all select n + 1 from cte where n < 5) select n from cte",
+        "FieldQuery": "with recursive cte(n) as (select 1 from dual where 1 != 1 union all select n + 1 from cte where 1 != 1) select n from cte where 1 != 1",
+        "Query": "with recursive cte(n) as (select 1 from dual union all select n + 1 from cte where n < 5) select n from cte",
         "Table": "dual"
       },
       "TablesUsed": [

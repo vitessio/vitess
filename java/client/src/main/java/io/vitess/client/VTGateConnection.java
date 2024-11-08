@@ -205,9 +205,6 @@ public class VTGateConnection implements Closeable {
     return client.getVStream(ctx, request);
   }
 
-  /**
-   * @inheritDoc
-   */
   @Override
   public void close() throws IOException {
     client.close();

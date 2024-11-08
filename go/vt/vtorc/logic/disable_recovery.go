@@ -64,7 +64,7 @@ func IsRecoveryDisabled() (disabled bool, err error) {
 // DisableRecovery ensures recoveries are disabled globally
 func DisableRecovery() error {
 	_, err := db.ExecVTOrc(`
-		INSERT IGNORE INTO global_recovery_disable
+		INSERT OR IGNORE INTO global_recovery_disable
 			(disable_recovery)
 		VALUES  (1)
 	`,

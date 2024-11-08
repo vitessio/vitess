@@ -17,8 +17,10 @@ limitations under the License.
 package topo_test
 
 import (
+	"cmp"
 	"context"
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -34,42 +36,295 @@ import (
 // GetTabletsByCell first tries to get all the tablets using List.
 // If the response is too large, we will get an error, and fall back to one tablet at a time.
 func TestServerGetTabletsByCell(t *testing.T) {
+	const cell = "zone1"
+	const keyspace = "keyspace"
+	const shard = "shard"
+
 	tests := []struct {
-		name      string
-		tablets   int
-		opt       *topo.GetTabletsByCellOptions
-		listError error
+		name               string
+		createShardTablets int
+		expectedTablets    []*topodatapb.Tablet
+		opt                *topo.GetTabletsByCellOptions
+		listError          error
+		keyspaceShards     []*topo.KeyspaceShard
 	}{
 		{
-			name:    "negative concurrency",
-			tablets: 1,
+			name: "negative concurrency",
+			keyspaceShards: []*topo.KeyspaceShard{
+				{Keyspace: keyspace, Shard: shard},
+			},
+			createShardTablets: 1,
+			expectedTablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: cell,
+						Uid:  uint32(1),
+					},
+					Hostname: "host1",
+					PortMap: map[string]int32{
+						"vt": int32(1),
+					},
+					Keyspace: keyspace,
+					Shard:    shard,
+				},
+			},
 			// Ensure this doesn't panic.
 			opt: &topo.GetTabletsByCellOptions{Concurrency: -1},
 		},
 		{
-			name:    "single",
-			tablets: 1,
+			name: "single",
+			keyspaceShards: []*topo.KeyspaceShard{
+				{Keyspace: keyspace, Shard: shard},
+			},
+			createShardTablets: 1,
+			expectedTablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: cell,
+						Uid:  uint32(1),
+					},
+					Hostname: "host1",
+					PortMap: map[string]int32{
+						"vt": int32(1),
+					},
+					Keyspace: keyspace,
+					Shard:    shard,
+				},
+			},
 			// Make sure the defaults apply as expected.
 			opt: nil,
 		},
 		{
 			name: "multiple",
-			// should work with more than 1 tablet
-			tablets: 32,
-			opt:     &topo.GetTabletsByCellOptions{Concurrency: 8},
+			keyspaceShards: []*topo.KeyspaceShard{
+				{Keyspace: keyspace, Shard: shard},
+			},
+			// Should work with more than 1 tablet
+			createShardTablets: 4,
+			expectedTablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: cell,
+						Uid:  uint32(1),
+					},
+					Hostname: "host1",
+					PortMap: map[string]int32{
+						"vt": int32(1),
+					},
+					Keyspace: keyspace,
+					Shard:    shard,
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: cell,
+						Uid:  uint32(2),
+					},
+					Hostname: "host1",
+					PortMap: map[string]int32{
+						"vt": int32(2),
+					},
+					Keyspace: keyspace,
+					Shard:    shard,
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: cell,
+						Uid:  uint32(3),
+					},
+					Hostname: "host1",
+					PortMap: map[string]int32{
+						"vt": int32(3),
+					},
+					Keyspace: keyspace,
+					Shard:    shard,
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: cell,
+						Uid:  uint32(4),
+					},
+					Hostname: "host1",
+					PortMap: map[string]int32{
+						"vt": int32(4),
+					},
+					Keyspace: keyspace,
+					Shard:    shard,
+				},
+			},
+			opt: &topo.GetTabletsByCellOptions{Concurrency: 8},
 		},
 		{
 			name: "multiple with list error",
-			// should work with more than 1 tablet when List returns an error
-			tablets:   32,
+			keyspaceShards: []*topo.KeyspaceShard{
+				{Keyspace: keyspace, Shard: shard},
+			},
+			// Should work with more than 1 tablet when List returns an error
+			createShardTablets: 4,
+			expectedTablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: cell,
+						Uid:  uint32(1),
+					},
+					Hostname: "host1",
+					PortMap: map[string]int32{
+						"vt": int32(1),
+					},
+					Keyspace: keyspace,
+					Shard:    shard,
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: cell,
+						Uid:  uint32(2),
+					},
+					Hostname: "host1",
+					PortMap: map[string]int32{
+						"vt": int32(2),
+					},
+					Keyspace: keyspace,
+					Shard:    shard,
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: cell,
+						Uid:  uint32(3),
+					},
+					Hostname: "host1",
+					PortMap: map[string]int32{
+						"vt": int32(3),
+					},
+					Keyspace: keyspace,
+					Shard:    shard,
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: cell,
+						Uid:  uint32(4),
+					},
+					Hostname: "host1",
+					PortMap: map[string]int32{
+						"vt": int32(4),
+					},
+					Keyspace: keyspace,
+					Shard:    shard,
+				},
+			},
 			opt:       &topo.GetTabletsByCellOptions{Concurrency: 8},
 			listError: topo.NewError(topo.ResourceExhausted, ""),
 		},
+		{
+			name: "filtered by keyspace and shard",
+			keyspaceShards: []*topo.KeyspaceShard{
+				{Keyspace: keyspace, Shard: shard},
+				{Keyspace: "filtered", Shard: "-"},
+			},
+			// Should create 2 tablets in 2 different shards (4 total)
+			// but only a single shard is returned
+			createShardTablets: 2,
+			expectedTablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: cell,
+						Uid:  uint32(1),
+					},
+					Hostname: "host1",
+					PortMap: map[string]int32{
+						"vt": int32(1),
+					},
+					Keyspace: keyspace,
+					Shard:    shard,
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: cell,
+						Uid:  uint32(2),
+					},
+					Hostname: "host1",
+					PortMap: map[string]int32{
+						"vt": int32(2),
+					},
+					Keyspace: keyspace,
+					Shard:    shard,
+				},
+			},
+			opt: &topo.GetTabletsByCellOptions{
+				Concurrency: 1,
+				KeyspaceShard: &topo.KeyspaceShard{
+					Keyspace: keyspace,
+					Shard:    shard,
+				},
+			},
+		},
+		{
+			name: "filtered by keyspace and no shard",
+			keyspaceShards: []*topo.KeyspaceShard{
+				{Keyspace: keyspace, Shard: shard},
+				{Keyspace: keyspace, Shard: shard + "2"},
+			},
+			// Should create 2 tablets in 2 different shards (4 total)
+			// in the same keyspace and both shards are returned due to
+			// empty shard
+			createShardTablets: 2,
+			expectedTablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: cell,
+						Uid:  uint32(1),
+					},
+					Hostname: "host1",
+					PortMap: map[string]int32{
+						"vt": int32(1),
+					},
+					Keyspace: keyspace,
+					Shard:    shard,
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: cell,
+						Uid:  uint32(2),
+					},
+					Hostname: "host1",
+					PortMap: map[string]int32{
+						"vt": int32(2),
+					},
+					Keyspace: keyspace,
+					Shard:    shard,
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: cell,
+						Uid:  uint32(3),
+					},
+					Hostname: "host1",
+					PortMap: map[string]int32{
+						"vt": int32(3),
+					},
+					Keyspace: keyspace,
+					Shard:    shard + "2",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: cell,
+						Uid:  uint32(4),
+					},
+					Hostname: "host1",
+					PortMap: map[string]int32{
+						"vt": int32(4),
+					},
+					Keyspace: keyspace,
+					Shard:    shard + "2",
+				},
+			},
+			opt: &topo.GetTabletsByCellOptions{
+				Concurrency: 1,
+				KeyspaceShard: &topo.KeyspaceShard{
+					Keyspace: keyspace,
+					Shard:    "",
+				},
+			},
+		},
 	}
-
-	const cell = "zone1"
-	const keyspace = "keyspace"
-	const shard = "shard"
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -84,37 +339,53 @@ func TestServerGetTabletsByCell(t *testing.T) {
 
 			// Create an ephemeral keyspace and generate shard records within
 			// the keyspace to fetch later.
-			require.NoError(t, ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}))
-			require.NoError(t, ts.CreateShard(ctx, keyspace, shard))
-
-			tablets := make([]*topo.TabletInfo, tt.tablets)
-
-			for i := 0; i < tt.tablets; i++ {
-				tablet := &topodatapb.Tablet{
-					Alias: &topodatapb.TabletAlias{
-						Cell: cell,
-						Uid:  uint32(i),
-					},
-					Hostname: "host1",
-					PortMap: map[string]int32{
-						"vt": int32(i),
-					},
-					Keyspace: keyspace,
-					Shard:    shard,
+			createdKeyspaces := make(map[string]bool, len(tt.keyspaceShards))
+			for _, kss := range tt.keyspaceShards {
+				if !createdKeyspaces[kss.Keyspace] {
+					require.NoError(t, ts.CreateKeyspace(ctx, kss.Keyspace, &topodatapb.Keyspace{}))
+					createdKeyspaces[kss.Keyspace] = true
 				}
-				tInfo := &topo.TabletInfo{Tablet: tablet}
-				tablets[i] = tInfo
-				require.NoError(t, ts.CreateTablet(ctx, tablet))
+				require.NoError(t, ts.CreateShard(ctx, kss.Keyspace, kss.Shard))
+			}
+
+			var uid uint32 = 1
+			for _, kss := range tt.keyspaceShards {
+				for i := 0; i < tt.createShardTablets; i++ {
+					tablet := &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: cell,
+							Uid:  uid,
+						},
+						Hostname: "host1",
+						PortMap: map[string]int32{
+							"vt": int32(uid),
+						},
+						Keyspace: kss.Keyspace,
+						Shard:    kss.Shard,
+					}
+					require.NoError(t, ts.CreateTablet(ctx, tablet))
+					uid++
+				}
 			}
 
 			// Verify that we return a complete list of tablets and that each
 			// tablet matches what we expect.
 			out, err := ts.GetTabletsByCell(ctx, cell, tt.opt)
 			require.NoError(t, err)
-			require.Len(t, out, tt.tablets)
+			require.Len(t, out, len(tt.expectedTablets))
 
-			for i, tab := range tablets {
-				require.Equal(t, tab.Tablet, tablets[i].Tablet)
+			slices.SortFunc(out, func(i, j *topo.TabletInfo) int {
+				return cmp.Compare(i.Alias.Uid, j.Alias.Uid)
+			})
+			slices.SortFunc(tt.expectedTablets, func(i, j *topodatapb.Tablet) int {
+				return cmp.Compare(i.Alias.Uid, j.Alias.Uid)
+			})
+
+			for i, tablet := range out {
+				expected := tt.expectedTablets[i]
+				require.Equal(t, expected.Alias.String(), tablet.Alias.String())
+				require.Equal(t, expected.Keyspace, tablet.Keyspace)
+				require.Equal(t, expected.Shard, tablet.Shard)
 			}
 		})
 	}
