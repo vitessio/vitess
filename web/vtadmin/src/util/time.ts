@@ -32,7 +32,7 @@ export const parse = (timestamp: number | Long | null | undefined): dayjs.Dayjs 
     // keep dividing by 10 until it has 10 digits
     while (timestampStr.length > 10) {
         timestampStr = Math.floor(timestamp / 10).toString();
-        timestamp = timestamp/10
+        timestamp = timestamp / 10;
     }
 
     // Now, we assume the timestamp is in seconds resolution and use dayjs.unix()
