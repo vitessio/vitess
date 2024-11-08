@@ -477,7 +477,7 @@ func (c *Conn) ReadQueryResultAsSliceBuffer(maxrows int) (result *sqltypes.Resul
 			return nil, false, 0, sqlerror.NewSQLError(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, err.Error())
 		}
 		defer buffData.Free()
-		data := buffData.ReadOnlyData()[5:]
+		data := buffData.ReadOnlyData()[baseLength:]
 		if c.isEOFPacket(data) {
 			// empty by design
 		} else if isErrorPacket(data) {
@@ -496,7 +496,7 @@ func (c *Conn) ReadQueryResultAsSliceBuffer(maxrows int) (result *sqltypes.Resul
 			return nil, false, 0, sqlerror.NewSQLError(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, err.Error())
 		}
 		rawPackets = append(rawPackets, buffData)
-		data := buffData.ReadOnlyData()[5:]
+		data := buffData.ReadOnlyData()[baseLength:]
 
 		if c.isEOFPacket(data) {
 			result := &sqltypes.Result{}
@@ -744,7 +744,7 @@ func (c *Conn) readComQueryResponseAsMemBuf(packetOk *PacketOK) (buf mem.Buffer,
 		return buf, 0, sqlerror.NewSQLErrorf(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "%v", err)
 	}
 	// defer c.recycleReadPacket()
-	data := buf.ReadOnlyData()[5:]
+	data := buf.ReadOnlyData()[baseLength:]
 	if len(data) == 0 {
 		return buf, 0, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "invalid empty COM_QUERY response packet")
 	}

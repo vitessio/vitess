@@ -428,16 +428,16 @@ func (c *Conn) readPacketAsMemBuffer() (mem.Buffer, error) {
 	}
 
 	// 5 bytes for protobuf header
-	length = length + 5
+	length = length + baseLength
 
 	// Use the bufPool.
 	if length < MaxPacketSize {
 		c.currentEphemeralBuffer = bufPool.Get(length)
 		def := *c.currentEphemeralBuffer
-		if _, err := io.ReadFull(r, def[5:]); err != nil {
+		if _, err := io.ReadFull(r, def[baseLength:]); err != nil {
 			return nil, vterrors.Wrapf(err, "io.ReadFull(packet body of length %v) failed", length)
 		}
-		updateProtoHeader(def, length-5)
+		updateProtoHeader(def, length-baseLength)
 		return mem.NewBuffer(c.currentEphemeralBuffer, bufPool), nil
 	}
 
@@ -445,7 +445,7 @@ func (c *Conn) readPacketAsMemBuffer() (mem.Buffer, error) {
 	// We're going to concatenate a lot of data anyway, can't really
 	// optimize this code path easily.
 	data := make([]byte, length)
-	if _, err := io.ReadFull(r, data[5:]); err != nil {
+	if _, err := io.ReadFull(r, data[baseLength:]); err != nil {
 		return nil, vterrors.Wrapf(err, "io.ReadFull(packet body of length %v) failed", length)
 	}
 	for {
@@ -465,21 +465,27 @@ func (c *Conn) readPacketAsMemBuffer() (mem.Buffer, error) {
 		}
 	}
 
-	updateProtoHeader(data, length-5)
+	updateProtoHeader(data, length-baseLength)
 	return mem.SliceBuffer(data), nil
 }
 
 const RawPacketsPos = 20
 
+var (
+	basePacket = protowire.AppendTag(nil, RawPacketsPos, protowire.BytesType)
+	baseLength = len(basePacket) + 4
+)
+
 func updateProtoHeader(b []byte, v int) {
-	b[0] = byte(protowire.EncodeTag(RawPacketsPos, protowire.BytesType))
+	copy(b, basePacket)
+	l := len(basePacket)
 	switch {
 	case v < 1<<28:
 		// Proto packet data size is 4 bytes.
-		b[1] = byte((v>>0)&0x7f | 0x80)
-		b[2] = byte((v>>7)&0x7f | 0x80)
-		b[3] = byte((v>>14)&0x7f | 0x80)
-		b[4] = byte(v >> 21)
+		b[l+0] = byte((v>>0)&0x7f | 0x80)
+		b[l+1] = byte((v>>7)&0x7f | 0x80)
+		b[l+2] = byte((v>>14)&0x7f | 0x80)
+		b[l+3] = byte(v >> 21)
 	default:
 		panic("QueryResult protobuf is too large for the wire")
 	}
