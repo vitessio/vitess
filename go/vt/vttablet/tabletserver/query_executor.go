@@ -105,7 +105,7 @@ func allocStreamResult() *sqltypes.Result {
 func (qre *QueryExecutor) shouldConsolidate() bool {
 	// TODO (harshit): This is a temporary implementation to test the feature.
 	// This should ideally work with consolidator.
-	if !qre.options.RawMysqlPackets {
+	if qre.options.RawMysqlPackets {
 		return false
 	}
 	co := qre.options.GetConsolidator()

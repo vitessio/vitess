@@ -420,7 +420,7 @@ func (c *Conn) readPacketAsMemBuffer() (mem.Buffer, error) {
 		return nil, err
 	}
 
-	c.currentEphemeralPolicy = ephemeralRead
+	// c.currentEphemeralPolicy = ephemeralRead
 	if length == 0 {
 		// This can be caused by the packet after a packet of
 		// exactly size MaxPacketSize.

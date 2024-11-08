@@ -432,7 +432,7 @@ func (c *Conn) ReadQueryResultAsSliceBuffer(maxrows int) (result *sqltypes.Resul
 	var packetOk PacketOK
 
 	// Get the result.
-	first, colNumber, err := c.readComQueryResponseAsMemBuf(&packetOk)
+	buffData, colNumber, err := c.readComQueryResponseAsMemBuf(&packetOk)
 	if err != nil {
 		return nil, false, 0, err
 	}
@@ -440,7 +440,7 @@ func (c *Conn) ReadQueryResultAsSliceBuffer(maxrows int) (result *sqltypes.Resul
 	warnings = packetOk.warnings
 	if colNumber == 0 {
 		// OK packet, means no results. Just use the numbers.
-		first.Free()
+		buffData.Free()
 		return &sqltypes.Result{
 			RowsAffected:        packetOk.affectedRows,
 			InsertID:            packetOk.lastInsertID,
@@ -450,7 +450,7 @@ func (c *Conn) ReadQueryResultAsSliceBuffer(maxrows int) (result *sqltypes.Resul
 		}, more, warnings, nil
 	}
 
-	rawPackets := []mem.Buffer{first}
+	rawPackets := []mem.Buffer{buffData}
 
 	defer func() {
 		if err != nil {
@@ -472,16 +472,16 @@ func (c *Conn) ReadQueryResultAsSliceBuffer(maxrows int) (result *sqltypes.Resul
 
 	if c.Capabilities&CapabilityClientDeprecateEOF == 0 {
 		// EOF is only present here if it's not deprecated.
-		data, err := c.readPacketAsMemBuffer()
+		buffData, err := c.readPacketAsMemBuffer()
 		if err != nil {
 			return nil, false, 0, sqlerror.NewSQLError(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, err.Error())
 		}
-		defer data.Free()
-
-		if c.isEOFPacket(data.ReadOnlyData()) {
+		defer buffData.Free()
+		data := buffData.ReadOnlyData()[5:]
+		if c.isEOFPacket(data) {
 			// empty by design
-		} else if isErrorPacket(data.ReadOnlyData()) {
-			return nil, false, 0, ParseErrorPacket(data.ReadOnlyData())
+		} else if isErrorPacket(data) {
+			return nil, false, 0, ParseErrorPacket(data)
 		} else {
 			return nil, false, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected packet after fields: %v", data)
 		}
@@ -491,20 +491,21 @@ func (c *Conn) ReadQueryResultAsSliceBuffer(maxrows int) (result *sqltypes.Resul
 
 	// Read each row until EOF or OK packet.
 	for {
-		data, err := c.readPacketAsMemBuffer()
+		buffData, err := c.readPacketAsMemBuffer()
 		if err != nil {
 			return nil, false, 0, sqlerror.NewSQLError(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, err.Error())
 		}
-		rawPackets = append(rawPackets, data)
+		rawPackets = append(rawPackets, buffData)
+		data := buffData.ReadOnlyData()[5:]
 
-		if c.isEOFPacket(data.ReadOnlyData()) {
+		if c.isEOFPacket(data) {
 			result := &sqltypes.Result{}
 
 			// The deprecated EOF packets change means that this is either an
 			// EOF packet or an OK packet with the EOF type code.
 			if c.Capabilities&CapabilityClientDeprecateEOF == 0 {
 				var statusFlags uint16
-				warnings, statusFlags, err = parseEOFPacket(data.ReadOnlyData())
+				warnings, statusFlags, err = parseEOFPacket(data)
 				if err != nil {
 					return nil, false, 0, err
 				}
@@ -513,7 +514,7 @@ func (c *Conn) ReadQueryResultAsSliceBuffer(maxrows int) (result *sqltypes.Resul
 				// rawPackets = rawPackets[:len(rawPackets)-1]
 			} else {
 				var packetOK PacketOK
-				if err = parseOKPacket(&packetOK, data.ReadOnlyData(), c.enableQueryInfo, c.isSessionTrack()); err != nil {
+				if err = parseOKPacket(&packetOK, data, c.enableQueryInfo, c.isSessionTrack()); err != nil {
 					return nil, false, 0, err
 				}
 				warnings = packetOK.warnings
@@ -529,9 +530,9 @@ func (c *Conn) ReadQueryResultAsSliceBuffer(maxrows int) (result *sqltypes.Resul
 			result.RawPackets = rawPackets
 			return result, more, warnings, nil
 
-		} else if isErrorPacket(data.ReadOnlyData()) {
+		} else if isErrorPacket(data) {
 			// Error packet.
-			return nil, false, 0, ParseErrorPacket(data.ReadOnlyData())
+			return nil, false, 0, ParseErrorPacket(data)
 		}
 
 		if maxrows == FETCH_NO_ROWS {
@@ -742,7 +743,7 @@ func (c *Conn) readComQueryResponseAsMemBuf(packetOk *PacketOK) (buf mem.Buffer,
 	if err != nil {
 		return buf, 0, sqlerror.NewSQLErrorf(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "%v", err)
 	}
-	defer c.recycleReadPacket()
+	// defer c.recycleReadPacket()
 	data := buf.ReadOnlyData()[5:]
 	if len(data) == 0 {
 		return buf, 0, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "invalid empty COM_QUERY response packet")
