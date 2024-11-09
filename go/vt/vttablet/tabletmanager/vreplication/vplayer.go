@@ -260,6 +260,14 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 }
 
 func (vp *vplayer) isRetryable(err error) bool {
+	workflowType := binlogdatapb.VReplicationWorkflowType(vp.vr.WorkflowType)
+	// Only retry on duplicate entry errors for merge workflows and if it is a movetables/reshard workflow.
+	if !vp.isMergeWorkflow ||
+		!(workflowType == binlogdatapb.VReplicationWorkflowType_MoveTables ||
+			workflowType == binlogdatapb.VReplicationWorkflowType_Reshard) {
+
+		return false
+	}
 	if sqlErr, ok := err.(*sqlerror.SQLError); ok {
 		return sqlErr.Number() == sqlerror.ERDupEntry
 	}
