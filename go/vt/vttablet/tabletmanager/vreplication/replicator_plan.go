@@ -100,6 +100,8 @@ func (rp *ReplicatorPlan) buildExecutionPlan(fieldEvent *binlogdatapb.FieldEvent
 		return nil, vterrors.Wrapf(err, "failed to build replication plan for %s table", fieldEvent.TableName)
 	}
 	tplan.Fields = fieldEvent.Fields
+	// Reset the rowInfo cache now that the plan's fields have changed.
+	tplan.rowInfo = nil
 	return tplan, nil
 }
 
@@ -232,10 +234,11 @@ type TablePlan struct {
 	CollationEnv   *collations.Environment
 	WorkflowConfig *vttablet.VReplicationConfig
 
-	// rowInfo is used as a lazily initiated cache of column information associated
+	// rowInfo is used as a lazily initialized cache of column information associated
 	// with querypb.Row values for bulk inserts. The base information is calculated
-	// once based on the table plan and only the row specific values are updated for
+	// using the TablePlan's Fields and only the row specific values are updated for
 	// each row as the row is processed.
+	// NOTE: this needs to be set to nil anytime the TablePlan's Fields are changed.
 	rowInfo []*colInfo
 }
 
