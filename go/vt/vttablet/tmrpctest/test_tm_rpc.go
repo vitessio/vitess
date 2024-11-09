@@ -421,12 +421,12 @@ func tmRPCTestGetGlobalStatusVarsPanic(ctx context.Context, t *testing.T, client
 }
 
 func tmRPCTestGetUnresolvedTransactions(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	_, err := client.GetUnresolvedTransactions(ctx, tablet)
+	_, err := client.GetUnresolvedTransactions(ctx, tablet, 0)
 	require.NoError(t, err)
 }
 
 func tmRPCTestGetUnresolvedTransactionsPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	_, err := client.GetUnresolvedTransactions(ctx, tablet)
+	_, err := client.GetUnresolvedTransactions(ctx, tablet, 0)
 	expectHandleRPCPanic(t, "GetUnresolvedTransactions", false /*verbose*/, err)
 }
 
@@ -438,6 +438,16 @@ func tmRPCTestReadTransaction(ctx context.Context, t *testing.T, client tmclient
 func tmRPCTestReadTransactionPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	_, err := client.ReadTransaction(ctx, tablet, "aa")
 	expectHandleRPCPanic(t, "ReadTransaction", false /*verbose*/, err)
+}
+
+func tmRPCTestGetTransactionInfo(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	_, err := client.GetTransactionInfo(ctx, tablet, "aa")
+	require.NoError(t, err)
+}
+
+func tmRPCTestGetTransactionInfoPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	_, err := client.GetTransactionInfo(ctx, tablet, "aa")
+	expectHandleRPCPanic(t, "GetTransactionInfo", false /*verbose*/, err)
 }
 
 //
@@ -794,6 +804,13 @@ func (fra *fakeRPCTM) GetUnresolvedTransactions(ctx context.Context, abandonAgeS
 }
 
 func (fra *fakeRPCTM) ReadTransaction(ctx context.Context, req *tabletmanagerdatapb.ReadTransactionRequest) (*querypb.TransactionMetadata, error) {
+	if fra.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	return nil, nil
+}
+
+func (fra *fakeRPCTM) GetTransactionInfo(ctx context.Context, req *tabletmanagerdatapb.GetTransactionInfoRequest) (*tabletmanagerdatapb.GetTransactionInfoResponse, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -1526,6 +1543,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	tmRPCTestGetGlobalStatusVars(ctx, t, client, tablet)
 	tmRPCTestGetUnresolvedTransactions(ctx, t, client, tablet)
 	tmRPCTestReadTransaction(ctx, t, client, tablet)
+	tmRPCTestGetTransactionInfo(ctx, t, client, tablet)
 
 	// Various read-write methods
 	tmRPCTestSetReadOnly(ctx, t, client, tablet)
@@ -1590,6 +1608,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	tmRPCTestGetGlobalStatusVarsPanic(ctx, t, client, tablet)
 	tmRPCTestGetUnresolvedTransactionsPanic(ctx, t, client, tablet)
 	tmRPCTestReadTransactionPanic(ctx, t, client, tablet)
+	tmRPCTestGetTransactionInfoPanic(ctx, t, client, tablet)
 
 	// Various read-write methods
 	tmRPCTestSetReadOnlyPanic(ctx, t, client, tablet)

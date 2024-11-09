@@ -82,6 +82,8 @@ import {
     createMoveTables,
     startWorkflow,
     stopWorkflow,
+    FetchTransactionParams,
+    fetchTransaction,
     FetchTransactionsParams,
     fetchTransactions,
     completeMoveTables,
@@ -425,6 +427,16 @@ export const useTransactions = (
     options?: UseQueryOptions<vtctldata.GetUnresolvedTransactionsResponse, Error> | undefined
 ) => {
     return useQuery(['transactions', params], () => fetchTransactions(params), { ...options });
+};
+
+/**
+ * useTransaction is a query hook that fetches the details of a transaction for the given dtid.
+ */
+export const useTransaction = (
+    params: FetchTransactionParams,
+    options?: UseQueryOptions<vtctldata.GetTransactionInfoResponse, Error> | undefined
+) => {
+    return useQuery(['transaction', params], () => fetchTransaction(params), { ...options });
 };
 
 /**
