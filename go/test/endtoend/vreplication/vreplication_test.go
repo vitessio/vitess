@@ -29,6 +29,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/common/version"
+
 	"github.com/buger/jsonparser"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -294,14 +296,18 @@ func TestVreplicationCopyThrottling(t *testing.T) {
 
 func TestBasicVreplicationWorkflow(t *testing.T) {
 	defer setAllVTTabletExperimentalFlags()
-	sourceKsOpts["DBTypeVersion"] = "mysql-8.0"
-	targetKsOpts["DBTypeVersion"] = "mysql-8.0"
+	if version.GoOS != "darwin" { // allow running locally on Mac
+		sourceKsOpts["DBTypeVersion"] = "mysql-8.0"
+		targetKsOpts["DBTypeVersion"] = "mysql-8.0"
+	}
 	testBasicVreplicationWorkflow(t, "noblob")
 }
 
 func TestVreplicationCopyParallel(t *testing.T) {
-	sourceKsOpts["DBTypeVersion"] = "mysql-5.7"
-	targetKsOpts["DBTypeVersion"] = "mysql-5.7"
+	if version.GoOS != "darwin" { // allow running locally on Mac
+		sourceKsOpts["DBTypeVersion"] = "mysql-5.7"
+		targetKsOpts["DBTypeVersion"] = "mysql-5.7"
+	}
 	extraVTTabletArgs = []string{
 		parallelInsertWorkers,
 	}

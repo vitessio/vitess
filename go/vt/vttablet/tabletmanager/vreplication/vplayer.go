@@ -658,11 +658,11 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 			return ctx.Err()
 		}
 		// Check throttler.
-		//if checkResult, ok := vp.vr.vre.throttlerClient.ThrottleCheckOKOrWaitAppName(ctx, throttlerapp.Name(vp.throttlerAppName)); !ok {
-		//	_ = vp.vr.updateTimeThrottled(throttlerapp.VPlayerName, checkResult.Summary())
-		//	estimateLag()
-		//	continue
-		//}
+		if checkResult, ok := vp.vr.vre.throttlerClient.ThrottleCheckOKOrWaitAppName(ctx, throttlerapp.Name(vp.throttlerAppName)); !ok {
+			_ = vp.vr.updateTimeThrottled(throttlerapp.VPlayerName, checkResult.Summary())
+			estimateLag()
+			continue
+		}
 
 		items, err := relay.Fetch()
 		if err != nil {
