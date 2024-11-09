@@ -277,6 +277,8 @@ func (c *ZkConn) withRetry(ctx context.Context, action func(conn *zk.Conn) error
 			c.conn = nil
 		}
 		c.mu.Unlock()
+		log.Infof("zk conn: got ErrConnectionClosed for addr %v: closing", c.addr)
+		conn.Close()
 	}
 	return
 }
@@ -327,13 +329,9 @@ func (c *ZkConn) maybeAddAuth(ctx context.Context) {
 // clears out the connection record.
 func (c *ZkConn) handleSessionEvents(conn *zk.Conn, session <-chan zk.Event) {
 	for event := range session {
-		closeRequired := false
 
 		switch event.State {
-		case zk.StateExpired, zk.StateConnecting:
-			closeRequired = true
-			fallthrough
-		case zk.StateDisconnected:
+		case zk.StateDisconnected, zk.StateExpired, zk.StateConnecting:
 			c.mu.Lock()
 			if c.conn == conn {
 				// The ZkConn still references this
@@ -341,9 +339,7 @@ func (c *ZkConn) handleSessionEvents(conn *zk.Conn, session <-chan zk.Event) {
 				c.conn = nil
 			}
 			c.mu.Unlock()
-			if closeRequired {
-				conn.Close()
-			}
+			conn.Close()
 			log.Infof("zk conn: session for addr %v ended: %v", c.addr, event)
 			return
 		}
