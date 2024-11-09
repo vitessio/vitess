@@ -19,6 +19,7 @@ package zk2topo
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"github.com/z-division/go-zookeeper/zk"
@@ -42,12 +43,16 @@ func TestZkConnClosedOnDisconnect(t *testing.T) {
 	oldConn := conn.conn
 
 	// force a disconnect
-	zkd.Shutdown()
-	zkd.Start()
+	err = zkd.Shutdown()
+	require.NoError(t, err)
+	err = zkd.Start()
+	require.NoError(t, err)
 
 	// do another get to trigger a new connection
-	_, _, err = conn.Get(context.Background(), "/")
-	require.NoError(t, err, "Get() failed")
+	require.Eventually(t, func() bool {
+		_, _, err = conn.Get(context.Background(), "/")
+		return err == nil
+	}, 10*time.Second, 100*time.Millisecond)
 
 	// Check that old connection is closed
 	_, _, err = oldConn.Get("/")
