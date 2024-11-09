@@ -259,9 +259,9 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 	return vp
 }
 
-func (vp *vplayer) isRetryable(err error) bool {
+// Only use backoff/retry logic for duplicate entry errors for merge workflows and if it is a movetables/reshard workflow.
+func (vp *vplayer) mustBackoff(err error) bool {
 	workflowType := binlogdatapb.VReplicationWorkflowType(vp.vr.WorkflowType)
-	// Only retry on duplicate entry errors for merge workflows and if it is a movetables/reshard workflow.
 	if !vp.isMergeWorkflow ||
 		!(workflowType == binlogdatapb.VReplicationWorkflowType_MoveTables ||
 			workflowType == binlogdatapb.VReplicationWorkflowType_Reshard) {
@@ -270,17 +270,6 @@ func (vp *vplayer) isRetryable(err error) bool {
 	}
 	if sqlErr, ok := err.(*sqlerror.SQLError); ok {
 		return sqlErr.Number() == sqlerror.ERDupEntry
-	}
-	return false
-}
-
-func (vp *vplayer) mustBackoff(err error) bool {
-	var sqlErr *sqlerror.SQLError
-	isSqlErr := errors.As(err, &sqlErr)
-	if err != nil && isSqlErr &&
-		sqlErr.Number() == sqlerror.ERDupEntry && vp.isMergeWorkflow {
-		log.Infof("mustBackoff for  err: %v", err)
-		return true
 	}
 	return false
 }
@@ -310,7 +299,7 @@ func (vp *vplayer) executeWithRetryAndBackoff(ctx context.Context, query string)
 		if err := vp.vr.dbClient.Rollback(); err != nil {
 			return nil, err
 		}
-		if !vp.isRetryable(err) {
+		if !vp.mustBackoff(err) {
 			return nil, err
 		}
 		attempts++
