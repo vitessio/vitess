@@ -64,13 +64,6 @@ type ReplicatorPlan struct {
 	workflowConfig *vttablet.VReplicationConfig
 }
 
-type colInfo struct {
-	typ    querypb.Type
-	length int64
-	offset int64
-	field  *querypb.Field
-}
-
 // buildExecution plan uses the field info as input and the partially built
 // TablePlan for that table to build a full plan.
 func (rp *ReplicatorPlan) buildExecutionPlan(fieldEvent *binlogdatapb.FieldEvent) (*TablePlan, error) {
