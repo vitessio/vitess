@@ -942,12 +942,39 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 			// still have a record of the sentry table, and gcArtifacts() will still be able to take
 			// care of it in the future.
 		}()
-		parsed := sqlparser.BuildParsedQuery(sqlCreateSentryTable, sentryTableName)
-		if _, err := e.execQuery(ctx, parsed.Query); err != nil {
-			return vterrors.Wrapf(err, "failed creating sentry table")
-		}
-		e.updateMigrationStage(ctx, onlineDDL.UUID, "sentry table created: %s", sentryTableName)
 
+		preparation := func() error {
+			preparationsConn, err := e.pool.Get(ctx, nil)
+			if err != nil {
+				return vterrors.Wrapf(err, "failed getting preparation connection")
+			}
+			defer preparationsConn.Recycle()
+			// Set large enough `@@lock_wait_timeout` so that it does not interfere with the cut-over operation.
+			// The code will ensure everything that needs to be terminated by `migrationCutOverThreshold` will be terminated.
+			preparationConnRestoreLockWaitTimeout, err := e.initConnectionLockWaitTimeout(ctx, preparationsConn.Conn, 3*migrationCutOverThreshold)
+			if err != nil {
+				return vterrors.Wrapf(err, "failed setting lock_wait_timeout on locking connection")
+			}
+			defer preparationConnRestoreLockWaitTimeout()
+
+			// Run `ANALYZE TABLE` on the vreplication table so that it has up-to-date statistics at cut-over
+			parsed := sqlparser.BuildParsedQuery(sqlAnalyzeTable, vreplTable)
+			if _, err := preparationsConn.Conn.Exec(ctx, parsed.Query, -1, false); err != nil {
+				return vterrors.Wrapf(err, "failed ANALYZE shadow table")
+			}
+			// This command will have blocked the table for writes, presumably only for a brief time. But this can cause
+			// vreplication to now lag. Thankfully we're gonna create the sentry table and waitForPos.
+
+			parsed = sqlparser.BuildParsedQuery(sqlCreateSentryTable, sentryTableName)
+			if _, err := preparationsConn.Conn.Exec(ctx, parsed.Query, 1, false); err != nil {
+				return vterrors.Wrapf(err, "failed creating sentry table")
+			}
+			e.updateMigrationStage(ctx, onlineDDL.UUID, "sentry table created: %s", sentryTableName)
+			return nil
+		}
+		if err := preparation(); err != nil {
+			return vterrors.Wrapf(err, "failed preparation")
+		}
 		postSentryPos, err := e.primaryPosition(ctx)
 		if err != nil {
 			return vterrors.Wrapf(err, "failed getting primary pos after sentry creation")
@@ -967,13 +994,13 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 	if err != nil {
 		return vterrors.Wrapf(err, "failed getting locking connection")
 	}
+	defer lockConn.Recycle()
 	// Set large enough `@@lock_wait_timeout` so that it does not interfere with the cut-over operation.
 	// The code will ensure everything that needs to be terminated by `migrationCutOverThreshold` will be terminated.
 	lockConnRestoreLockWaitTimeout, err := e.initConnectionLockWaitTimeout(ctx, lockConn.Conn, 5*migrationCutOverThreshold)
 	if err != nil {
 		return vterrors.Wrapf(err, "failed setting lock_wait_timeout on locking connection")
 	}
-	defer lockConn.Recycle()
 	defer lockConnRestoreLockWaitTimeout()
 	defer lockConn.Conn.Exec(ctx, sqlUnlockTables, 1, false)
 
