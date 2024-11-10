@@ -1272,7 +1272,7 @@ func TestSchemaDiff(t *testing.T) {
 			}
 			assert.Equalf(t, tc.expectDiffs, len(allDiffs), "found diffs: %v", allDiffsStatements)
 
-			deps := schemaDiff.AllDependenciess()
+			deps := schemaDiff.AllDependencies()
 			depsKeys := []string{}
 			for _, dep := range deps {
 				depsKeys = append(depsKeys, dep.hashKey())

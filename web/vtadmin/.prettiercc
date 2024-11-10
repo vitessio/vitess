@@ -7,7 +7,6 @@
     "bracketSpacing": true,
     "endOfLine": "auto",
     "jsxSingleQuote": false,
-    "jsxBracketSameLine": false,
     "quoteProps": "as-needed",
     "htmlWhitespaceSensitivity": "css",
     "printWidth": 120

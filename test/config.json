@@ -1373,6 +1373,15 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
+		"vtadmin": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtadmin"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "15",
+			"RetryMax": 1,
+			"Tags": []
+		},
 		"topo_connection_cache": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/topoconncache", "-run", "TestVtctldListAllTablets"],

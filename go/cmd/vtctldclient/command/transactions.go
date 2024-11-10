@@ -64,9 +64,30 @@ var (
 
 		DisableFlagsInUseLine: true,
 	}
+
+	getTransactionInfoOptions = struct {
+		Dtid string
+	}{}
+
+	// GetTransactionInfo makes a GetTransactionInfo gRPC call to a vtctld.
+	GetTransactionInfo = &cobra.Command{
+		Use:     "get-info --dtid <dtid>",
+		Short:   "Reads the state of the unresolved transaction by querying each participating shard.",
+		Aliases: []string{"Read"},
+		Args:    cobra.NoArgs,
+		RunE:    commandGetTransactionInfo,
+
+		DisableFlagsInUseLine: true,
+	}
 )
 
 type ConcludeTransactionOutput struct {
+	Dtid    string `json:"dtid"`
+	Message string `json:"message"`
+	Error   string `json:"error,omitempty"`
+}
+
+type GetTransactionInfoOutput struct {
 	Dtid    string `json:"dtid"`
 	Message string `json:"message"`
 	Error   string `json:"error,omitempty"`
@@ -86,11 +107,13 @@ func commandGetUnresolvedTransactions(cmd *cobra.Command, args []string) error {
 			AbandonAge: unresolvedTransactionsOptions.AbandonAge,
 		})
 	if err != nil {
+		prettyPrintError(err)
 		return err
 	}
 
 	data, err := cli.MarshalJSON(resp.Transactions)
 	if err != nil {
+		prettyPrintError(err)
 		return err
 	}
 	fmt.Println(string(data))
@@ -120,6 +143,36 @@ func commandConcludeTransaction(cmd *cobra.Command, args []string) (err error) {
 	return err
 }
 
+func commandGetTransactionInfo(cmd *cobra.Command, args []string) error {
+	cli.FinishedParsing(cmd)
+
+	rts, err := client.GetTransactionInfo(commandCtx,
+		&vtctldatapb.GetTransactionInfoRequest{
+			Dtid: getTransactionInfoOptions.Dtid,
+		})
+
+	if err != nil || rts == nil {
+		prettyPrintError(err)
+		return err
+	}
+
+	fmt.Println(string(rts.String()))
+	return nil
+}
+
+func prettyPrintError(err error) {
+	if err == nil {
+		return
+	}
+	st := struct {
+		Error string `json:"error"`
+	}{
+		Error: err.Error(),
+	}
+	data, _ := cli.MarshalJSON(st)
+	fmt.Println(string(data))
+}
+
 func init() {
 	GetUnresolvedTransactions.Flags().StringVarP(&unresolvedTransactionsOptions.Keyspace, "keyspace", "k", "", "unresolved transactions list for the given keyspace.")
 	GetUnresolvedTransactions.Flags().Int64VarP(&unresolvedTransactionsOptions.AbandonAge, "abandon-age", "a", 0, "unresolved transactions list which are older than the specified age(in seconds).")
@@ -127,6 +180,9 @@ func init() {
 
 	ConcludeTransaction.Flags().StringVarP(&concludeTransactionOptions.Dtid, "dtid", "d", "", "conclude transaction for the given distributed transaction ID.")
 	DistributedTransaction.AddCommand(ConcludeTransaction)
+
+	GetTransactionInfo.Flags().StringVarP(&getTransactionInfoOptions.Dtid, "dtid", "d", "", "read transaction state for the given distributed transaction ID.")
+	DistributedTransaction.AddCommand(GetTransactionInfo)
 
 	Root.AddCommand(DistributedTransaction)
 }

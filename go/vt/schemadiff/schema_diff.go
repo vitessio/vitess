@@ -280,8 +280,8 @@ func (d *SchemaDiff) UnorderedDiffs() []EntityDiff {
 	return d.diffs
 }
 
-// AllDependenciess returns all known dependencies
-func (d *SchemaDiff) AllDependenciess() (deps []*DiffDependency) {
+// AllDependencies returns all known dependencies
+func (d *SchemaDiff) AllDependencies() (deps []*DiffDependency) {
 	for _, dep := range d.dependencies {
 		deps = append(deps, dep)
 	}
