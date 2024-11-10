@@ -100,8 +100,6 @@ func (rp *ReplicatorPlan) buildExecutionPlan(fieldEvent *binlogdatapb.FieldEvent
 		return nil, vterrors.Wrapf(err, "failed to build replication plan for %s table", fieldEvent.TableName)
 	}
 	tplan.Fields = fieldEvent.Fields
-	// Reset the rowInfo cache now that the plan's fields have changed.
-	tplan.rowInfo = nil
 	return tplan, nil
 }
 
@@ -233,13 +231,6 @@ type TablePlan struct {
 
 	CollationEnv   *collations.Environment
 	WorkflowConfig *vttablet.VReplicationConfig
-
-	// rowInfo is used as a lazily initialized cache of column information associated
-	// with querypb.Row values for bulk inserts. The base information is calculated
-	// using the TablePlan's Fields and only the row specific values are updated for
-	// each row as the row is processed.
-	// NOTE: this needs to be set to nil anytime the TablePlan's Fields are changed.
-	rowInfo []*colInfo
 }
 
 // MarshalJSON performs a custom JSON Marshalling.
@@ -638,56 +629,36 @@ func (tp *TablePlan) appendFromRow(buf *bytes2.Buffer, row *querypb.Row) error {
 			len(tp.Fields), len(bindLocations))
 	}
 
-	offset := int64(0)
-	if tp.rowInfo == nil {
-		tp.rowInfo = make([]*colInfo, 0, len(tp.Fields))
-		for i, field := range tp.Fields { // collect info required for fields to be bound
-			length := row.Lengths[i]
-			if !tp.FieldsToSkip[strings.ToLower(field.Name)] {
-				tp.rowInfo = append(tp.rowInfo, &colInfo{
-					typ:    field.Type,
-					length: length,
-					offset: offset,
-					field:  field,
-				})
-			}
-			if length > 0 {
-				offset += row.Lengths[i]
-			}
-		}
-	} else {
-		// i is the index of the field in the plan and row while n is the index of the
-		// field in the column info list, which is a subset of the others when there
-		// are fields we need to skip such as generated columns.
-		n := 0
-		for i := range tp.Fields {
-			length := row.Lengths[i]
-			if !tp.FieldsToSkip[strings.ToLower(tp.Fields[i].Name)] {
-				tp.rowInfo[n].length = length
-				tp.rowInfo[n].offset = offset
-				n++
-			}
-			if length > 0 {
-				offset += row.Lengths[i]
-			}
-		}
-	}
-
-	// bind field values to locations
-	var offsetQuery int
+	// Bind field values to locations.
+	var (
+		offset      int64
+		offsetQuery int
+		fieldsIndex int
+		field       *querypb.Field
+	)
 	for i, loc := range bindLocations {
-		col := tp.rowInfo[i]
+		field = tp.Fields[fieldsIndex]
+		length := row.Lengths[fieldsIndex]
+		for tp.FieldsToSkip[strings.ToLower(field.Name)] {
+			if length > 0 {
+				offset += length
+			}
+			fieldsIndex++
+			field = tp.Fields[fieldsIndex]
+			length = row.Lengths[fieldsIndex]
+		}
+
 		buf.WriteString(tp.BulkInsertValues.Query[offsetQuery:loc.Offset])
-		typ := col.typ
+		typ := field.Type
 
 		switch typ {
 		case querypb.Type_TUPLE:
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected Type_TUPLE for value %d", i)
 		case querypb.Type_JSON:
-			if col.length < 0 { // An SQL NULL and not an actual JSON value
+			if length < 0 { // An SQL NULL and not an actual JSON value
 				buf.WriteString(sqltypes.NullStr)
 			} else { // A JSON value (which may be a JSON null literal value)
-				buf2 := row.Values[col.offset : col.offset+col.length]
+				buf2 := row.Values[offset : offset+length]
 				vv, err := vjson.MarshalSQLValue(buf2)
 				if err != nil {
 					return err
@@ -695,16 +666,16 @@ func (tp *TablePlan) appendFromRow(buf *bytes2.Buffer, row *querypb.Row) error {
 				buf.WriteString(vv.RawStr())
 			}
 		default:
-			if col.length < 0 {
+			if length < 0 {
 				// -1 means a null variable; serialize it directly
 				buf.WriteString(sqltypes.NullStr)
 			} else {
-				raw := row.Values[col.offset : col.offset+col.length]
+				raw := row.Values[offset : offset+length]
 				var vv sqltypes.Value
 
-				if conversion, ok := tp.ConvertCharset[col.field.Name]; ok && col.length > 0 {
+				if conversion, ok := tp.ConvertCharset[field.Name]; ok && length > 0 {
 					// Non-null string value, for which we have a charset conversion instruction
-					out, err := tp.convertStringCharset(raw, conversion, col.field.Name)
+					out, err := tp.convertStringCharset(raw, conversion, field.Name)
 					if err != nil {
 						return err
 					}
@@ -717,6 +688,10 @@ func (tp *TablePlan) appendFromRow(buf *bytes2.Buffer, row *querypb.Row) error {
 			}
 		}
 		offsetQuery = loc.Offset + loc.Length
+		if length > 0 {
+			offset += length
+		}
+		fieldsIndex++
 	}
 	buf.WriteString(tp.BulkInsertValues.Query[offsetQuery:])
 	return nil
