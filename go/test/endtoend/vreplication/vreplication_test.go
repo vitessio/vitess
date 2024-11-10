@@ -293,7 +293,6 @@ func TestVreplicationCopyThrottling(t *testing.T) {
 }
 
 func TestBasicVreplicationWorkflow(t *testing.T) {
-	defer setAllVTTabletExperimentalFlags()
 	sourceKsOpts["DBTypeVersion"] = "mysql-8.0"
 	targetKsOpts["DBTypeVersion"] = "mysql-8.0"
 	testBasicVreplicationWorkflow(t, "noblob")
@@ -595,8 +594,6 @@ func TestCellAliasVreplicationWorkflow(t *testing.T) {
 	cells := []string{"zone1", "zone2"}
 	resetCompression := mainClusterConfig.enableGTIDCompression()
 	defer resetCompression()
-	resetExperimentalFlags := setAllVTTabletExperimentalFlags()
-	defer resetExperimentalFlags()
 	vc = NewVitessCluster(t, &clusterOptions{cells: cells})
 	defer vc.TearDown()
 
