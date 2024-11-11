@@ -874,25 +874,6 @@ func TestAppendFromRow(t *testing.T) {
 			wantErr: "wrong number of fields: got 2 fields for 3 bind locations",
 		},
 		{
-			name: "too few non-skipped fields",
-			tp: &TablePlan{
-				BulkInsertValues: sqlparser.BuildParsedQuery("values (%a, %a, %a)",
-					":c1", ":c2", ":c3",
-				),
-				Fields: []*querypb.Field{
-					{Name: "c1", Type: querypb.Type_INT32},
-					{Name: "c2", Type: querypb.Type_INT32},
-					{Name: "c3", Type: querypb.Type_INT32},
-					{Name: "c4", Type: querypb.Type_INT32},
-				},
-				FieldsToSkip: map[string]bool{
-					"c3": true,
-					"c4": true,
-				},
-			},
-			wantErr: "wrong number of fields: got 2 fields for 3 bind locations",
-		},
-		{
 			name: "lots o skippin",
 			tp: &TablePlan{
 				BulkInsertValues: sqlparser.BuildParsedQuery("values (%a, %a, %a)",
