@@ -238,4 +238,5 @@ func TestKnownMetricNames(t *testing.T) {
 	assert.Contains(t, KnownMetricNames, LoadAvgMetricName)
 	assert.Contains(t, KnownMetricNames, CustomMetricName)
 	assert.Contains(t, KnownMetricNames, DefaultMetricName)
+	assert.Contains(t, KnownMetricNames, HistoryListLengthMetricName)
 }
