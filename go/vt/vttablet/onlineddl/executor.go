@@ -947,14 +947,14 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 		preparation := func() error {
 			preparationsConn, err := e.pool.Get(ctx, nil)
 			if err != nil {
-				return vterrors.Wrapf(err, "failed getting preparation connection")
+				return vterrors.Wrap(err, "failed getting preparation connection")
 			}
 			defer preparationsConn.Recycle()
 			// Set large enough `@@lock_wait_timeout` so that it does not interfere with the cut-over operation.
 			// The code will ensure everything that needs to be terminated by `migrationCutOverThreshold` will be terminated.
 			preparationConnRestoreLockWaitTimeout, err := e.initConnectionLockWaitTimeout(ctx, preparationsConn.Conn, 3*migrationCutOverThreshold)
 			if err != nil {
-				return vterrors.Wrapf(err, "failed setting lock_wait_timeout on locking connection")
+				return vterrors.Wrap(err, "failed setting lock_wait_timeout on locking connection")
 			}
 			defer preparationConnRestoreLockWaitTimeout()
 
