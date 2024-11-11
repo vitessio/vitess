@@ -219,6 +219,7 @@ func TestGatewayBufferingWhileReparenting(t *testing.T) {
 	hc.SetTabletType(primaryTablet, topodatapb.TabletType_REPLICA)
 	hc.Broadcast(primaryTablet)
 	hc.SetTabletType(replicaTablet, topodatapb.TabletType_PRIMARY)
+	hc.SetPrimaryTimestamp(replicaTablet, 100) // We set a higher timestamp than before to simulate a PRS.
 	hc.SetServing(replicaTablet, true)
 	hc.Broadcast(replicaTablet)
 
@@ -230,7 +231,7 @@ outer:
 			require.Fail(t, "timed out - could not verify the new primary")
 		case <-time.After(10 * time.Millisecond):
 			newPrimary, notServing := tg.kev.PrimaryIsNotServing(ctx, target)
-			if newPrimary != nil && newPrimary.Uid == 1 && !notServing {
+			if newPrimary != nil && newPrimary.Uid == replicaTablet.Alias.Uid && !notServing {
 				break outer
 			}
 		}

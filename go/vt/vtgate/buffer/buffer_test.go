@@ -23,6 +23,8 @@ import (
 	"testing"
 	"time"
 
+	"gotest.tools/assert"
+
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -68,6 +70,32 @@ var (
 	}
 )
 
+func TestIsErrorDueToReparenting(t *testing.T) {
+	testcases := []struct {
+		err  error
+		want bool
+	}{
+		{
+			err:  vterrors.Errorf(vtrpcpb.Code_CLUSTER_EVENT, ClusterEventReshardingInProgress),
+			want: false,
+		},
+		{
+			err:  vterrors.Errorf(vtrpcpb.Code_CLUSTER_EVENT, ClusterEventReparentInProgress),
+			want: true,
+		},
+		{
+			err:  vterrors.Errorf(vtrpcpb.Code_CLUSTER_EVENT, "The MySQL server is running with the --super-read-only option"),
+			want: true,
+		},
+	}
+	for _, tt := range testcases {
+		t.Run(tt.err.Error(), func(t *testing.T) {
+			got := isErrorDueToReparenting(tt.err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
 func TestBuffering(t *testing.T) {
 	testAllImplementations(t, testBuffering1)
 }
@@ -107,7 +135,7 @@ func testBuffering1(t *testing.T, fail failover) {
 	}
 
 	// Subsequent requests with errors not related to the failover are not buffered.
-	if retryDone, err := b.WaitForFailoverEnd(context.Background(), keyspace, shard, nonFailoverErr); err != nil || retryDone != nil {
+	if retryDone, err := b.WaitForFailoverEnd(context.Background(), keyspace, shard, nil, nonFailoverErr); err != nil || retryDone != nil {
 		t.Fatalf("requests with non-failover errors must never be buffered. err: %v retryDone: %v", err, retryDone)
 	}
 
@@ -155,7 +183,7 @@ func testBuffering1(t *testing.T, fail failover) {
 	}
 
 	// Second failover: Buffering is skipped because last failover is too recent.
-	if retryDone, err := b.WaitForFailoverEnd(context.Background(), keyspace, shard, failoverErr); err != nil || retryDone != nil {
+	if retryDone, err := b.WaitForFailoverEnd(context.Background(), keyspace, shard, nil, failoverErr); err != nil || retryDone != nil {
 		t.Fatalf("subsequent failovers must be skipped due to -buffer_min_time_between_failovers setting. err: %v retryDone: %v", err, retryDone)
 	}
 	if got, want := requestsSkipped.Counts()[statsKeyJoinedLastFailoverTooRecent], int64(1); got != want {
@@ -213,7 +241,7 @@ func testDryRun1(t *testing.T, fail failover) {
 	b := New(cfg)
 
 	// Request does not get buffered.
-	if retryDone, err := b.WaitForFailoverEnd(context.Background(), keyspace, shard, failoverErr); err != nil || retryDone != nil {
+	if retryDone, err := b.WaitForFailoverEnd(context.Background(), keyspace, shard, nil, failoverErr); err != nil || retryDone != nil {
 		t.Fatalf("requests must not be buffered during dry-run. err: %v retryDone: %v", err, retryDone)
 	}
 	// But the internal state changes though.
@@ -259,10 +287,10 @@ func testPassthrough1(t *testing.T, fail failover) {
 
 	b := New(cfg)
 
-	if retryDone, err := b.WaitForFailoverEnd(context.Background(), keyspace, shard, nil); err != nil || retryDone != nil {
+	if retryDone, err := b.WaitForFailoverEnd(context.Background(), keyspace, shard, nil, nil); err != nil || retryDone != nil {
 		t.Fatalf("requests with no error must never be buffered. err: %v retryDone: %v", err, retryDone)
 	}
-	if retryDone, err := b.WaitForFailoverEnd(context.Background(), keyspace, shard, nonFailoverErr); err != nil || retryDone != nil {
+	if retryDone, err := b.WaitForFailoverEnd(context.Background(), keyspace, shard, nil, nonFailoverErr); err != nil || retryDone != nil {
 		t.Fatalf("requests with non-failover errors must never be buffered. err: %v retryDone: %v", err, retryDone)
 	}
 
@@ -298,7 +326,7 @@ func testLastReparentTooRecentBufferingSkipped1(t *testing.T, fail failover) {
 	now = now.Add(1 * time.Second)
 	fail(b, newPrimary, keyspace, shard, now)
 
-	if retryDone, err := b.WaitForFailoverEnd(context.Background(), keyspace, shard, failoverErr); err != nil || retryDone != nil {
+	if retryDone, err := b.WaitForFailoverEnd(context.Background(), keyspace, shard, nil, failoverErr); err != nil || retryDone != nil {
 		t.Fatalf("requests where the failover end was recently detected before the start must not be buffered. err: %v retryDone: %v", err, retryDone)
 	}
 	if err := waitForPoolSlots(b, cfg.Size); err != nil {
@@ -395,10 +423,10 @@ func testPassthroughDuringDrain1(t *testing.T, fail failover) {
 	}
 
 	// Requests during the drain will be passed through and not buffered.
-	if retryDone, err := b.WaitForFailoverEnd(context.Background(), keyspace, shard, nil); err != nil || retryDone != nil {
+	if retryDone, err := b.WaitForFailoverEnd(context.Background(), keyspace, shard, nil, nil); err != nil || retryDone != nil {
 		t.Fatalf("requests with no error must not be buffered during a drain. err: %v retryDone: %v", err, retryDone)
 	}
-	if retryDone, err := b.WaitForFailoverEnd(context.Background(), keyspace, shard, failoverErr); err != nil || retryDone != nil {
+	if retryDone, err := b.WaitForFailoverEnd(context.Background(), keyspace, shard, nil, failoverErr); err != nil || retryDone != nil {
 		t.Fatalf("requests with failover errors must not be buffered during a drain. err: %v retryDone: %v", err, retryDone)
 	}
 
@@ -430,7 +458,7 @@ func testPassthroughIgnoredKeyspaceOrShard1(t *testing.T, fail failover) {
 	b := New(cfg)
 
 	ignoredKeyspace := "ignored_ks"
-	if retryDone, err := b.WaitForFailoverEnd(context.Background(), ignoredKeyspace, shard, failoverErr); err != nil || retryDone != nil {
+	if retryDone, err := b.WaitForFailoverEnd(context.Background(), ignoredKeyspace, shard, nil, failoverErr); err != nil || retryDone != nil {
 		t.Fatalf("requests for ignored keyspaces must not be buffered. err: %v retryDone: %v", err, retryDone)
 	}
 	statsKeyJoined := strings.Join([]string{ignoredKeyspace, shard, skippedDisabled}, ".")
@@ -439,7 +467,7 @@ func testPassthroughIgnoredKeyspaceOrShard1(t *testing.T, fail failover) {
 	}
 
 	ignoredShard := "ff-"
-	if retryDone, err := b.WaitForFailoverEnd(context.Background(), keyspace, ignoredShard, failoverErr); err != nil || retryDone != nil {
+	if retryDone, err := b.WaitForFailoverEnd(context.Background(), keyspace, ignoredShard, nil, failoverErr); err != nil || retryDone != nil {
 		t.Fatalf("requests for ignored shards must not be buffered. err: %v retryDone: %v", err, retryDone)
 	}
 	if err := waitForPoolSlots(b, cfg.Size); err != nil {
@@ -621,7 +649,7 @@ func testEvictionNotPossible1(t *testing.T, fail failover) {
 
 	// Newer requests of the second failover cannot evict anything because
 	// they have no entries buffered.
-	retryDone, bufferErr := b.WaitForFailoverEnd(context.Background(), keyspace, shard2, failoverErr)
+	retryDone, bufferErr := b.WaitForFailoverEnd(context.Background(), keyspace, shard2, nil, failoverErr)
 	if bufferErr == nil || retryDone != nil {
 		t.Fatalf("buffer should have returned an error because it's full: err: %v retryDone: %v", bufferErr, retryDone)
 	}
