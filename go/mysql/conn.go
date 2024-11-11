@@ -434,6 +434,8 @@ func (c *Conn) readPacketAsMemBuffer() (mem.Buffer, error) {
 	if length < MaxPacketSize {
 		c.currentEphemeralBuffer = bufPool.Get(length)
 		def := *c.currentEphemeralBuffer
+		basePacket := initPacket()
+		copy(def, basePacket)
 		if _, err := io.ReadFull(r, def[baseLength:]); err != nil {
 			return nil, vterrors.Wrapf(err, "io.ReadFull(packet body of length %v) failed", length)
 		}
@@ -445,6 +447,9 @@ func (c *Conn) readPacketAsMemBuffer() (mem.Buffer, error) {
 	// We're going to concatenate a lot of data anyway, can't really
 	// optimize this code path easily.
 	data := make([]byte, length)
+	basePacket := initPacket()
+	copy(data, basePacket)
+
 	if _, err := io.ReadFull(r, data[baseLength:]); err != nil {
 		return nil, vterrors.Wrapf(err, "io.ReadFull(packet body of length %v) failed", length)
 	}
@@ -471,21 +476,25 @@ func (c *Conn) readPacketAsMemBuffer() (mem.Buffer, error) {
 
 const RawPacketsPos = 20
 
+func initPacket() []byte {
+	basePacket := make([]byte, 0, 6)
+	basePacket = protowire.AppendTag(basePacket, RawPacketsPos, protowire.BytesType)
+	basePacket = append(basePacket, 0, 0, 0, 0)
+	return basePacket
+}
+
 var (
-	basePacket = protowire.AppendTag(nil, RawPacketsPos, protowire.BytesType)
-	baseLength = len(basePacket) + 4
+	baseLength = 6
 )
 
 func updateProtoHeader(b []byte, v int) {
-	copy(b, basePacket)
-	l := len(basePacket)
 	switch {
 	case v < 1<<28:
 		// Proto packet data size is 4 bytes.
-		b[l+0] = byte((v>>0)&0x7f | 0x80)
-		b[l+1] = byte((v>>7)&0x7f | 0x80)
-		b[l+2] = byte((v>>14)&0x7f | 0x80)
-		b[l+3] = byte(v >> 21)
+		b[2] = byte((v>>0)&0x7f | 0x80)
+		b[3] = byte((v>>7)&0x7f | 0x80)
+		b[4] = byte((v>>14)&0x7f | 0x80)
+		b[5] = byte(v >> 21)
 	default:
 		panic("QueryResult protobuf is too large for the wire")
 	}

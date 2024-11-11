@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -1794,4 +1795,12 @@ func BenchmarkTabletQueries(b *testing.B) {
 			b.Error(err)
 		}
 	}
+}
+
+func TestExecute(t *testing.T) {
+	client := framework.NewClient()
+	framework.Server.QueryTimeout.Store(5 * time.Minute.Nanoseconds())
+	rs, err := client.ExecuteWithOptions("show tables", nil, &querypb.ExecuteOptions{RawMysqlPackets: true})
+	require.NoError(t, err)
+	fmt.Printf("RawPackets: %v\n", rs.RawPackets)
 }
