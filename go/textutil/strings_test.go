@@ -122,7 +122,7 @@ func TestSingleWordCamel(t *testing.T) {
 	}
 }
 
-func TestMultiWordCamel(t *testing.T) {
+func TestPascalCase(t *testing.T) {
 	tt := []struct {
 		word   string
 		expect string
@@ -174,8 +174,8 @@ func TestMultiWordCamel(t *testing.T) {
 	}
 	for _, tc := range tt {
 		t.Run(tc.word, func(t *testing.T) {
-			camel := MultiWordCamel(tc.word)
-			assert.Equal(t, tc.expect, camel)
+			pascal := PascalCase(tc.word)
+			assert.Equal(t, tc.expect, pascal)
 		})
 	}
 }

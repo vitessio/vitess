@@ -259,7 +259,7 @@ func TestSingleWordCamelKnownMetricNames(t *testing.T) {
 		t.Run(metricName.String(), func(t *testing.T) {
 			expect, ok := expectCases[metricName]
 			require.True(t, ok)
-			assert.Equal(t, expect, textutil.MultiWordCamel(metricName.String()))
+			assert.Equal(t, expect, textutil.PascalCase(metricName.String()))
 		})
 	}
 }

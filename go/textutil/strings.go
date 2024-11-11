@@ -92,9 +92,9 @@ func SingleWordCamel(w string) string {
 
 var multiWordSplitterRegexp = regexp.MustCompile(`[-_.\s]+`)
 
-// SingleWordCamel takes a single word and returns is in Camel case; basically
-// just capitalizing the first letter and making sure the rest are lower case.
-func MultiWordCamel(w string) string {
+// PascalCase turns a string into PascalCase by splitting it into words and
+// capitalizing the first letter of each word.
+func PascalCase(w string) string {
 	var b strings.Builder
 	words := multiWordSplitterRegexp.Split(w, -1)
 	for _, word := range words {
