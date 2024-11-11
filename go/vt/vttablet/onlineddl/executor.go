@@ -884,7 +884,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 	if err != nil {
 		return vterrors.Wrapf(err, "cutover: failed reading migration")
 	}
-	needsVreplTableAnalysis := row["vrepl_analyzed_timestamp"].IsNull()
+	needsShadowTableAnalysis := row["shadow_analyzed_timestamp"].IsNull()
 	isVreplicationTestSuite := onlineDDL.StrategySetting().IsVreplicationTestSuite()
 	e.updateMigrationStage(ctx, onlineDDL.UUID, "starting cut-over")
 
@@ -947,25 +947,25 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 		preparation := func() error {
 			preparationsConn, err := e.pool.Get(ctx, nil)
 			if err != nil {
-				return vterrors.Wrapf(err, "failed getting preparation connection")
+				return vterrors.Wrap(err, "failed getting preparation connection")
 			}
 			defer preparationsConn.Recycle()
 			// Set large enough `@@lock_wait_timeout` so that it does not interfere with the cut-over operation.
 			// The code will ensure everything that needs to be terminated by `migrationCutOverThreshold` will be terminated.
 			preparationConnRestoreLockWaitTimeout, err := e.initConnectionLockWaitTimeout(ctx, preparationsConn.Conn, 3*migrationCutOverThreshold)
 			if err != nil {
-				return vterrors.Wrapf(err, "failed setting lock_wait_timeout on locking connection")
+				return vterrors.Wrap(err, "failed setting lock_wait_timeout on locking connection")
 			}
 			defer preparationConnRestoreLockWaitTimeout()
 
-			if needsVreplTableAnalysis {
+			if needsShadowTableAnalysis {
 				// Run `ANALYZE TABLE` on the vreplication table so that it has up-to-date statistics at cut-over
 				parsed := sqlparser.BuildParsedQuery(sqlAnalyzeTable, vreplTable)
 				if _, err := preparationsConn.Conn.Exec(ctx, parsed.Query, -1, false); err != nil {
 					// Best effort only. Do not fail the mgiration if this fails.
 					_ = e.updateMigrationMessage(ctx, "failed ANALYZE shadow table", s.workflow)
 				} else {
-					_ = e.updateMigrationTimestamp(ctx, "vrepl_analyzed_timestamp", s.workflow)
+					_ = e.updateMigrationTimestamp(ctx, "shadow_analyzed_timestamp", s.workflow)
 				}
 				// This command will have blocked the table for writes, presumably only for a brief time. But this can cause
 				// vreplication to now lag. Thankfully we're gonna create the sentry table and waitForPos.
