@@ -617,10 +617,9 @@ func valsEqual(v1, v2 sqltypes.Value) bool {
 // on the source: sum/count for aggregation queries, for example.
 func (tp *TablePlan) appendFromRow(buf *bytes2.Buffer, row *querypb.Row) error {
 	bindLocations := tp.BulkInsertValues.BindLocations()
-	usedFieldCnt := len(tp.Fields) - len(tp.FieldsToSkip)
-	if usedFieldCnt != len(bindLocations) {
+	if len(tp.Fields) < len(bindLocations) {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "wrong number of fields: got %d fields for %d bind locations",
-			usedFieldCnt, len(bindLocations))
+			len(tp.Fields), len(bindLocations))
 	}
 
 	// Bind field values to locations.
