@@ -138,7 +138,7 @@ func (sb *shardBuffer) disabled() bool {
 	return sb.mode == bufferModeDisabled
 }
 
-func (sb *shardBuffer) waitForFailoverEnd(ctx context.Context, keyspace, shard string, err error) (RetryDoneFunc, error) {
+func (sb *shardBuffer) waitForFailoverEnd(ctx context.Context, keyspace, shard string, kev *discovery.KeyspaceEventWatcher, err error) (RetryDoneFunc, error) {
 	// We assume if err != nil then it's always caused by a failover.
 	// Other errors must be filtered at higher layers.
 	failoverDetected := err != nil
@@ -212,7 +212,11 @@ func (sb *shardBuffer) waitForFailoverEnd(ctx context.Context, keyspace, shard s
 			return nil, nil
 		}
 
-		sb.startBufferingLocked(err)
+		// Try to start buffering. If we're unsuccessful, then we exit early.
+		if !sb.startBufferingLocked(ctx, kev, err) {
+			sb.mu.Unlock()
+			return nil, nil
+		}
 	}
 
 	if sb.mode == bufferModeDryRun {
@@ -256,7 +260,16 @@ func (sb *shardBuffer) shouldBufferLocked(failoverDetected bool) bool {
 	panic("BUG: All possible states must be covered by the switch expression above.")
 }
 
-func (sb *shardBuffer) startBufferingLocked(err error) {
+func (sb *shardBuffer) startBufferingLocked(ctx context.Context, kev *discovery.KeyspaceEventWatcher, err error) bool {
+	if kev != nil {
+		if !kev.MarkShardNotServing(ctx, sb.keyspace, sb.shard, isErrorDueToReparenting(err)) {
+			// We failed to mark the shard as not serving. Do not buffer the request.
+			// This can happen if the keyspace has been deleted or if the keyspace even watcher
+			// hasn't yet seen the shard. Keyspace event watcher might not stop buffering for this
+			// request at all until it times out. It's better to not buffer this request.
+			return false
+		}
+	}
 	// Reset monitoring data from previous failover.
 	lastRequestsInFlightMax.Set(sb.statsKey, 0)
 	lastRequestsDryRunMax.Set(sb.statsKey, 0)
@@ -282,6 +295,7 @@ func (sb *shardBuffer) startBufferingLocked(err error) {
 		sb.buf.config.MaxFailoverDuration,
 		errorsanitizer.NormalizeError(err.Error()),
 	)
+	return true
 }
 
 // logErrorIfStateNotLocked logs an error if the current state is not "state".

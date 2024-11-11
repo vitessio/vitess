@@ -19,6 +19,7 @@ package discovery
 import (
 	"context"
 	"encoding/hex"
+	"sync"
 	"testing"
 	"time"
 
@@ -266,6 +267,234 @@ func TestKeyspaceEventTypes(t *testing.T) {
 
 			_, primaryDown := kew.PrimaryIsNotServing(ctx, tc.kss.shards[tc.shardToCheck].target)
 			require.Equal(t, primaryDown, tc.expectPrimaryNotServing, "PrimaryIsNotServing should return %t", tc.expectPrimaryNotServing)
+		})
+	}
+}
+
+func TestOnHealthCheck(t *testing.T) {
+	testcases := []struct {
+		name                     string
+		ss                       *shardState
+		th                       *TabletHealth
+		wantServing              bool
+		wantWaitForReparent      bool
+		wantExternallyReparented int64
+		wantUID                  uint32
+	}{
+		{
+			name: "Non primary tablet health ignored",
+			ss: &shardState{
+				serving:              false,
+				waitForReparent:      false,
+				externallyReparented: 10,
+				currentPrimary: &topodatapb.TabletAlias{
+					Cell: testCell,
+					Uid:  1,
+				},
+			},
+			th: &TabletHealth{
+				Target: &querypb.Target{
+					TabletType: topodatapb.TabletType_REPLICA,
+				},
+				Serving: true,
+			},
+			wantServing:              false,
+			wantWaitForReparent:      false,
+			wantExternallyReparented: 10,
+			wantUID:                  1,
+		}, {
+			name: "Serving primary seen in non-serving shard",
+			ss: &shardState{
+				serving:              false,
+				waitForReparent:      false,
+				externallyReparented: 10,
+				currentPrimary: &topodatapb.TabletAlias{
+					Cell: testCell,
+					Uid:  1,
+				},
+			},
+			th: &TabletHealth{
+				Target: &querypb.Target{
+					TabletType: topodatapb.TabletType_PRIMARY,
+				},
+				Serving:              true,
+				PrimaryTermStartTime: 20,
+				Tablet: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: testCell,
+						Uid:  2,
+					},
+				},
+			},
+			wantServing:              true,
+			wantWaitForReparent:      false,
+			wantExternallyReparented: 20,
+			wantUID:                  2,
+		}, {
+			name: "New serving primary seen while waiting for reparent",
+			ss: &shardState{
+				serving:              false,
+				waitForReparent:      true,
+				externallyReparented: 10,
+				currentPrimary: &topodatapb.TabletAlias{
+					Cell: testCell,
+					Uid:  1,
+				},
+			},
+			th: &TabletHealth{
+				Target: &querypb.Target{
+					TabletType: topodatapb.TabletType_PRIMARY,
+				},
+				Serving:              true,
+				PrimaryTermStartTime: 20,
+				Tablet: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: testCell,
+						Uid:  2,
+					},
+				},
+			},
+			wantServing:              true,
+			wantWaitForReparent:      false,
+			wantExternallyReparented: 20,
+			wantUID:                  2,
+		}, {
+			name: "Old serving primary seen while waiting for reparent",
+			ss: &shardState{
+				serving:              false,
+				waitForReparent:      true,
+				externallyReparented: 10,
+				currentPrimary: &topodatapb.TabletAlias{
+					Cell: testCell,
+					Uid:  1,
+				},
+			},
+			th: &TabletHealth{
+				Target: &querypb.Target{
+					TabletType: topodatapb.TabletType_PRIMARY,
+				},
+				Serving:              true,
+				PrimaryTermStartTime: 10,
+				Tablet: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: testCell,
+						Uid:  1,
+					},
+				},
+			},
+			wantServing:              false,
+			wantWaitForReparent:      true,
+			wantExternallyReparented: 10,
+			wantUID:                  1,
+		}, {
+			name: "Old non-serving primary seen while waiting for reparent",
+			ss: &shardState{
+				serving:              false,
+				waitForReparent:      true,
+				externallyReparented: 10,
+				currentPrimary: &topodatapb.TabletAlias{
+					Cell: testCell,
+					Uid:  1,
+				},
+			},
+			th: &TabletHealth{
+				Target: &querypb.Target{
+					TabletType: topodatapb.TabletType_PRIMARY,
+				},
+				Serving:              false,
+				PrimaryTermStartTime: 10,
+				Tablet: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: testCell,
+						Uid:  1,
+					},
+				},
+			},
+			wantServing:              false,
+			wantWaitForReparent:      false,
+			wantExternallyReparented: 10,
+			wantUID:                  1,
+		}, {
+			name: "New serving primary while already serving",
+			ss: &shardState{
+				serving:              true,
+				waitForReparent:      false,
+				externallyReparented: 10,
+				currentPrimary: &topodatapb.TabletAlias{
+					Cell: testCell,
+					Uid:  1,
+				},
+			},
+			th: &TabletHealth{
+				Target: &querypb.Target{
+					TabletType: topodatapb.TabletType_PRIMARY,
+				},
+				Serving:              true,
+				PrimaryTermStartTime: 20,
+				Tablet: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: testCell,
+						Uid:  2,
+					},
+				},
+			},
+			wantServing:              true,
+			wantWaitForReparent:      false,
+			wantExternallyReparented: 20,
+			wantUID:                  2,
+		}, {
+			name: "Primary goes non serving",
+			ss: &shardState{
+				serving:              true,
+				waitForReparent:      false,
+				externallyReparented: 10,
+				currentPrimary: &topodatapb.TabletAlias{
+					Cell: testCell,
+					Uid:  1,
+				},
+			},
+			th: &TabletHealth{
+				Target: &querypb.Target{
+					TabletType: topodatapb.TabletType_PRIMARY,
+				},
+				Serving:              false,
+				PrimaryTermStartTime: 10,
+				Tablet: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: testCell,
+						Uid:  1,
+					},
+				},
+			},
+			wantServing:              false,
+			wantWaitForReparent:      false,
+			wantExternallyReparented: 10,
+			wantUID:                  1,
+		},
+	}
+
+	ksName := "ks"
+	shard := "-80"
+	kss := &keyspaceState{
+		mu:       sync.Mutex{},
+		keyspace: ksName,
+		shards:   make(map[string]*shardState),
+	}
+	// Adding this so that we don't run any topo calls from ensureConsistentLocked.
+	kss.moveTablesState = &MoveTablesState{
+		Typ:   MoveTablesRegular,
+		State: MoveTablesSwitching,
+	}
+	for _, tt := range testcases {
+		t.Run(tt.name, func(t *testing.T) {
+			kss.shards[shard] = tt.ss
+			tt.th.Target.Keyspace = ksName
+			tt.th.Target.Shard = shard
+			kss.onHealthCheck(tt.th)
+			require.Equal(t, tt.wantServing, tt.ss.serving)
+			require.Equal(t, tt.wantWaitForReparent, tt.ss.waitForReparent)
+			require.Equal(t, tt.wantExternallyReparented, tt.ss.externallyReparented)
+			require.Equal(t, tt.wantUID, tt.ss.currentPrimary.Uid)
 		})
 	}
 }
