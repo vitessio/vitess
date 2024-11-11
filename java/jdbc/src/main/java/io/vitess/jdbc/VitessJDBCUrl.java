@@ -93,7 +93,6 @@ public class VitessJDBCUrl {
    * <li><code>trustAlias</code>=alias_under_which_certificate_chain_is_stored (if not set,
    * then the first valid <code>X509Certificate</code> found in the trustStore will be used)</li>
    * </ul>
-   * </p>
    * <p>
    * <p>If <code>useSSL=true</code>, and any of these additional properties are not set on the JDBC
    * URL, then the driver will look to see if these corresponding property was set at JVM startup
@@ -109,7 +108,6 @@ public class VitessJDBCUrl {
    * <li><code>-Djavax.net.ssl.trustStorePassword</code></li>
    * <li><code>-Djavax.net.ssl.trustStoreAlias</code></li>
    * </ul>
-   * </p>
    * <p>
    * <p>See:</p>
    * <p>https://mariadb.com/kb/en/mariadb/about-mariadb-connector-j/#tls-ssl</p>

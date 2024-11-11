@@ -713,7 +713,11 @@ func (c *Conn) parseStmtArgs(data []byte, typ querypb.Type, pos int) (sqltypes.V
 		}
 		switch size {
 		case 0x00:
-			return sqltypes.NewVarChar(" "), pos, ok
+			out := []byte("0000-00-00")
+			if typ != sqltypes.Date {
+				out = append(out, []byte(" 00:00:00")...)
+			}
+			return sqltypes.MakeTrusted(typ, out), pos, ok
 		case 0x0b:
 			year, pos, ok := readUint16(data, pos)
 			if !ok {
@@ -743,15 +747,22 @@ func (c *Conn) parseStmtArgs(data []byte, typ querypb.Type, pos int) (sqltypes.V
 			if !ok {
 				return sqltypes.NULL, 0, false
 			}
-			val := strconv.Itoa(int(year)) + "-" +
-				strconv.Itoa(int(month)) + "-" +
-				strconv.Itoa(int(day)) + " " +
-				strconv.Itoa(int(hour)) + ":" +
-				strconv.Itoa(int(minute)) + ":" +
-				strconv.Itoa(int(second)) + "." +
-				fmt.Sprintf("%06d", microSecond)
-
-			return sqltypes.NewVarChar(val), pos, ok
+			val := strconv.AppendInt(nil, int64(year), 10)
+			val = append(val, '-')
+			val = strconv.AppendInt(val, int64(month), 10)
+			val = append(val, '-')
+			val = strconv.AppendInt(val, int64(day), 10)
+			if typ != sqltypes.Date {
+				val = append(val, ' ')
+				val = strconv.AppendInt(val, int64(hour), 10)
+				val = append(val, ':')
+				val = strconv.AppendInt(val, int64(minute), 10)
+				val = append(val, ':')
+				val = strconv.AppendInt(val, int64(second), 10)
+				val = append(val, '.')
+				val = append(val, fmt.Sprintf("%06d", microSecond)...)
+			}
+			return sqltypes.MakeTrusted(typ, val), pos, ok
 		case 0x07:
 			year, pos, ok := readUint16(data, pos)
 			if !ok {
@@ -777,14 +788,21 @@ func (c *Conn) parseStmtArgs(data []byte, typ querypb.Type, pos int) (sqltypes.V
 			if !ok {
 				return sqltypes.NULL, 0, false
 			}
-			val := strconv.Itoa(int(year)) + "-" +
-				strconv.Itoa(int(month)) + "-" +
-				strconv.Itoa(int(day)) + " " +
-				strconv.Itoa(int(hour)) + ":" +
-				strconv.Itoa(int(minute)) + ":" +
-				strconv.Itoa(int(second))
+			val := strconv.AppendInt(nil, int64(year), 10)
+			val = append(val, '-')
+			val = strconv.AppendInt(val, int64(month), 10)
+			val = append(val, '-')
+			val = strconv.AppendInt(val, int64(day), 10)
+			if typ != sqltypes.Date {
+				val = append(val, ' ')
+				val = strconv.AppendInt(val, int64(hour), 10)
+				val = append(val, ':')
+				val = strconv.AppendInt(val, int64(minute), 10)
+				val = append(val, ':')
+				val = strconv.AppendInt(val, int64(second), 10)
+			}
 
-			return sqltypes.NewVarChar(val), pos, ok
+			return sqltypes.MakeTrusted(typ, val), pos, ok
 		case 0x04:
 			year, pos, ok := readUint16(data, pos)
 			if !ok {
@@ -798,11 +816,16 @@ func (c *Conn) parseStmtArgs(data []byte, typ querypb.Type, pos int) (sqltypes.V
 			if !ok {
 				return sqltypes.NULL, 0, false
 			}
-			val := strconv.Itoa(int(year)) + "-" +
-				strconv.Itoa(int(month)) + "-" +
-				strconv.Itoa(int(day))
+			val := strconv.AppendInt(nil, int64(year), 10)
+			val = append(val, '-')
+			val = strconv.AppendInt(val, int64(month), 10)
+			val = append(val, '-')
+			val = strconv.AppendInt(val, int64(day), 10)
+			if typ != sqltypes.Date {
+				val = append(val, []byte(" 00:00:00")...)
+			}
 
-			return sqltypes.NewVarChar(val), pos, ok
+			return sqltypes.MakeTrusted(typ, val), pos, ok
 		default:
 			return sqltypes.NULL, 0, false
 		}
@@ -813,7 +836,7 @@ func (c *Conn) parseStmtArgs(data []byte, typ querypb.Type, pos int) (sqltypes.V
 		}
 		switch size {
 		case 0x00:
-			return sqltypes.NewVarChar("00:00:00"), pos, ok
+			return sqltypes.NewTime("00:00:00"), pos, ok
 		case 0x0c:
 			isNegative, pos, ok := readByte(data, pos)
 			if !ok {
@@ -852,7 +875,7 @@ func (c *Conn) parseStmtArgs(data []byte, typ querypb.Type, pos int) (sqltypes.V
 				strconv.Itoa(int(second)) + "." +
 				fmt.Sprintf("%06d", microSecond)
 
-			return sqltypes.NewVarChar(val), pos, ok
+			return sqltypes.NewTime(val), pos, ok
 		case 0x08:
 			isNegative, pos, ok := readByte(data, pos)
 			if !ok {
@@ -886,14 +909,14 @@ func (c *Conn) parseStmtArgs(data []byte, typ querypb.Type, pos int) (sqltypes.V
 				strconv.Itoa(int(minute)) + ":" +
 				strconv.Itoa(int(second))
 
-			return sqltypes.NewVarChar(val), pos, ok
+			return sqltypes.NewTime(val), pos, ok
 		default:
 			return sqltypes.NULL, 0, false
 		}
 	case sqltypes.Decimal, sqltypes.Text, sqltypes.Blob, sqltypes.VarChar, sqltypes.VarBinary, sqltypes.Year, sqltypes.Char,
 		sqltypes.Bit, sqltypes.Enum, sqltypes.Set, sqltypes.Geometry, sqltypes.Binary, sqltypes.TypeJSON, sqltypes.Vector:
 		val, pos, ok := readLenEncStringAsBytesCopy(data, pos)
-		return sqltypes.MakeTrusted(sqltypes.VarBinary, val), pos, ok
+		return sqltypes.MakeTrusted(typ, val), pos, ok
 	default:
 		return sqltypes.NULL, pos, false
 	}

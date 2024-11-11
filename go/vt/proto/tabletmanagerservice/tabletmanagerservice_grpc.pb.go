@@ -57,6 +57,7 @@ type TabletManagerClient interface {
 	ExecuteFetchAsApp(ctx context.Context, in *tabletmanagerdata.ExecuteFetchAsAppRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ExecuteFetchAsAppResponse, error)
 	GetUnresolvedTransactions(ctx context.Context, in *tabletmanagerdata.GetUnresolvedTransactionsRequest, opts ...grpc.CallOption) (*tabletmanagerdata.GetUnresolvedTransactionsResponse, error)
 	ReadTransaction(ctx context.Context, in *tabletmanagerdata.ReadTransactionRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ReadTransactionResponse, error)
+	GetTransactionInfo(ctx context.Context, in *tabletmanagerdata.GetTransactionInfoRequest, opts ...grpc.CallOption) (*tabletmanagerdata.GetTransactionInfoResponse, error)
 	ConcludeTransaction(ctx context.Context, in *tabletmanagerdata.ConcludeTransactionRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ConcludeTransactionResponse, error)
 	MysqlHostMetrics(ctx context.Context, in *tabletmanagerdata.MysqlHostMetricsRequest, opts ...grpc.CallOption) (*tabletmanagerdata.MysqlHostMetricsResponse, error)
 	// ReplicationStatus returns the current replication status.
@@ -100,6 +101,8 @@ type TabletManagerClient interface {
 	// PopulateReparentJournal tells the tablet to add an entry to its
 	// reparent journal
 	PopulateReparentJournal(ctx context.Context, in *tabletmanagerdata.PopulateReparentJournalRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PopulateReparentJournalResponse, error)
+	// ReadReparentJournalInfo reads the information from reparent journal
+	ReadReparentJournalInfo(ctx context.Context, in *tabletmanagerdata.ReadReparentJournalInfoRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ReadReparentJournalInfoResponse, error)
 	// InitReplica tells the tablet to reparent to the primary unconditionally
 	InitReplica(ctx context.Context, in *tabletmanagerdata.InitReplicaRequest, opts ...grpc.CallOption) (*tabletmanagerdata.InitReplicaResponse, error)
 	// DemotePrimary tells the soon-to-be-former primary it's gonna change
@@ -363,6 +366,15 @@ func (c *tabletManagerClient) ReadTransaction(ctx context.Context, in *tabletman
 	return out, nil
 }
 
+func (c *tabletManagerClient) GetTransactionInfo(ctx context.Context, in *tabletmanagerdata.GetTransactionInfoRequest, opts ...grpc.CallOption) (*tabletmanagerdata.GetTransactionInfoResponse, error) {
+	out := new(tabletmanagerdata.GetTransactionInfoResponse)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/GetTransactionInfo", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *tabletManagerClient) ConcludeTransaction(ctx context.Context, in *tabletmanagerdata.ConcludeTransactionRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ConcludeTransactionResponse, error) {
 	out := new(tabletmanagerdata.ConcludeTransactionResponse)
 	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/ConcludeTransaction", in, out, opts...)
@@ -597,6 +609,15 @@ func (c *tabletManagerClient) PopulateReparentJournal(ctx context.Context, in *t
 	return out, nil
 }
 
+func (c *tabletManagerClient) ReadReparentJournalInfo(ctx context.Context, in *tabletmanagerdata.ReadReparentJournalInfoRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ReadReparentJournalInfoResponse, error) {
+	out := new(tabletmanagerdata.ReadReparentJournalInfoResponse)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/ReadReparentJournalInfo", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *tabletManagerClient) InitReplica(ctx context.Context, in *tabletmanagerdata.InitReplicaRequest, opts ...grpc.CallOption) (*tabletmanagerdata.InitReplicaResponse, error) {
 	out := new(tabletmanagerdata.InitReplicaResponse)
 	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/InitReplica", in, out, opts...)
@@ -807,6 +828,7 @@ type TabletManagerServer interface {
 	ExecuteFetchAsApp(context.Context, *tabletmanagerdata.ExecuteFetchAsAppRequest) (*tabletmanagerdata.ExecuteFetchAsAppResponse, error)
 	GetUnresolvedTransactions(context.Context, *tabletmanagerdata.GetUnresolvedTransactionsRequest) (*tabletmanagerdata.GetUnresolvedTransactionsResponse, error)
 	ReadTransaction(context.Context, *tabletmanagerdata.ReadTransactionRequest) (*tabletmanagerdata.ReadTransactionResponse, error)
+	GetTransactionInfo(context.Context, *tabletmanagerdata.GetTransactionInfoRequest) (*tabletmanagerdata.GetTransactionInfoResponse, error)
 	ConcludeTransaction(context.Context, *tabletmanagerdata.ConcludeTransactionRequest) (*tabletmanagerdata.ConcludeTransactionResponse, error)
 	MysqlHostMetrics(context.Context, *tabletmanagerdata.MysqlHostMetricsRequest) (*tabletmanagerdata.MysqlHostMetricsResponse, error)
 	// ReplicationStatus returns the current replication status.
@@ -850,6 +872,8 @@ type TabletManagerServer interface {
 	// PopulateReparentJournal tells the tablet to add an entry to its
 	// reparent journal
 	PopulateReparentJournal(context.Context, *tabletmanagerdata.PopulateReparentJournalRequest) (*tabletmanagerdata.PopulateReparentJournalResponse, error)
+	// ReadReparentJournalInfo reads the information from reparent journal
+	ReadReparentJournalInfo(context.Context, *tabletmanagerdata.ReadReparentJournalInfoRequest) (*tabletmanagerdata.ReadReparentJournalInfoResponse, error)
 	// InitReplica tells the tablet to reparent to the primary unconditionally
 	InitReplica(context.Context, *tabletmanagerdata.InitReplicaRequest) (*tabletmanagerdata.InitReplicaResponse, error)
 	// DemotePrimary tells the soon-to-be-former primary it's gonna change
@@ -960,6 +984,9 @@ func (UnimplementedTabletManagerServer) GetUnresolvedTransactions(context.Contex
 func (UnimplementedTabletManagerServer) ReadTransaction(context.Context, *tabletmanagerdata.ReadTransactionRequest) (*tabletmanagerdata.ReadTransactionResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReadTransaction not implemented")
 }
+func (UnimplementedTabletManagerServer) GetTransactionInfo(context.Context, *tabletmanagerdata.GetTransactionInfoRequest) (*tabletmanagerdata.GetTransactionInfoResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetTransactionInfo not implemented")
+}
 func (UnimplementedTabletManagerServer) ConcludeTransaction(context.Context, *tabletmanagerdata.ConcludeTransactionRequest) (*tabletmanagerdata.ConcludeTransactionResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ConcludeTransaction not implemented")
 }
@@ -1037,6 +1064,9 @@ func (UnimplementedTabletManagerServer) InitPrimary(context.Context, *tabletmana
 }
 func (UnimplementedTabletManagerServer) PopulateReparentJournal(context.Context, *tabletmanagerdata.PopulateReparentJournalRequest) (*tabletmanagerdata.PopulateReparentJournalResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PopulateReparentJournal not implemented")
+}
+func (UnimplementedTabletManagerServer) ReadReparentJournalInfo(context.Context, *tabletmanagerdata.ReadReparentJournalInfoRequest) (*tabletmanagerdata.ReadReparentJournalInfoResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReadReparentJournalInfo not implemented")
 }
 func (UnimplementedTabletManagerServer) InitReplica(context.Context, *tabletmanagerdata.InitReplicaRequest) (*tabletmanagerdata.InitReplicaResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method InitReplica not implemented")
@@ -1543,6 +1573,24 @@ func _TabletManager_ReadTransaction_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TabletManager_GetTransactionInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.GetTransactionInfoRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TabletManagerServer).GetTransactionInfo(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/GetTransactionInfo",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).GetTransactionInfo(ctx, req.(*tabletmanagerdata.GetTransactionInfoRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _TabletManager_ConcludeTransaction_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(tabletmanagerdata.ConcludeTransactionRequest)
 	if err := dec(in); err != nil {
@@ -2011,6 +2059,24 @@ func _TabletManager_PopulateReparentJournal_Handler(srv interface{}, ctx context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TabletManager_ReadReparentJournalInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.ReadReparentJournalInfoRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TabletManagerServer).ReadReparentJournalInfo(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/ReadReparentJournalInfo",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).ReadReparentJournalInfo(ctx, req.(*tabletmanagerdata.ReadReparentJournalInfoRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _TabletManager_InitReplica_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(tabletmanagerdata.InitReplicaRequest)
 	if err := dec(in); err != nil {
@@ -2377,6 +2443,10 @@ var TabletManager_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _TabletManager_ReadTransaction_Handler,
 		},
 		{
+			MethodName: "GetTransactionInfo",
+			Handler:    _TabletManager_GetTransactionInfo_Handler,
+		},
+		{
 			MethodName: "ConcludeTransaction",
 			Handler:    _TabletManager_ConcludeTransaction_Handler,
 		},
@@ -2479,6 +2549,10 @@ var TabletManager_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "PopulateReparentJournal",
 			Handler:    _TabletManager_PopulateReparentJournal_Handler,
+		},
+		{
+			MethodName: "ReadReparentJournalInfo",
+			Handler:    _TabletManager_ReadReparentJournalInfo_Handler,
 		},
 		{
 			MethodName: "InitReplica",

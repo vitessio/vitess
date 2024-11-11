@@ -57,6 +57,7 @@ func init() {
 	servenv.OnParseFor("vtcombo", registerFlags)
 	servenv.OnParseFor("vtctld", registerFlags)
 	servenv.OnParseFor("vtgate", registerFlags)
+	servenv.OnParseFor("vtorc", registerFlags)
 }
 
 // KeyspaceInfo is a meta struct that contains metadata to give the

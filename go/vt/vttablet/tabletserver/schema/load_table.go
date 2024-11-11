@@ -157,6 +157,14 @@ func loadMessageInfo(ta *Table, comment string, collationEnv *collations.Environ
 		ta.MessageInfo.Fields = getDefaultMessageFields(ta.Fields, hiddenCols)
 	}
 
+	ta.MessageInfo.IDType = sqltypes.VarBinary
+	for _, field := range ta.MessageInfo.Fields {
+		if field.Name == "id" {
+			ta.MessageInfo.IDType = field.Type
+			break
+		}
+	}
+
 	return nil
 }
 

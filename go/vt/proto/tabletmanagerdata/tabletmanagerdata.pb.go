@@ -2877,6 +2877,124 @@ func (x *ReadTransactionResponse) GetTransaction() *query.TransactionMetadata {
 	return nil
 }
 
+type GetTransactionInfoRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Dtid string `protobuf:"bytes,1,opt,name=dtid,proto3" json:"dtid,omitempty"`
+}
+
+func (x *GetTransactionInfoRequest) Reset() {
+	*x = GetTransactionInfoRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_tabletmanagerdata_proto_msgTypes[52]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *GetTransactionInfoRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetTransactionInfoRequest) ProtoMessage() {}
+
+func (x *GetTransactionInfoRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_tabletmanagerdata_proto_msgTypes[52]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetTransactionInfoRequest.ProtoReflect.Descriptor instead.
+func (*GetTransactionInfoRequest) Descriptor() ([]byte, []int) {
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{52}
+}
+
+func (x *GetTransactionInfoRequest) GetDtid() string {
+	if x != nil {
+		return x.Dtid
+	}
+	return ""
+}
+
+type GetTransactionInfoResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	State       string   `protobuf:"bytes,1,opt,name=state,proto3" json:"state,omitempty"`
+	Message     string   `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	TimeCreated int64    `protobuf:"varint,3,opt,name=time_created,json=timeCreated,proto3" json:"time_created,omitempty"`
+	Statements  []string `protobuf:"bytes,4,rep,name=statements,proto3" json:"statements,omitempty"`
+}
+
+func (x *GetTransactionInfoResponse) Reset() {
+	*x = GetTransactionInfoResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_tabletmanagerdata_proto_msgTypes[53]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *GetTransactionInfoResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetTransactionInfoResponse) ProtoMessage() {}
+
+func (x *GetTransactionInfoResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_tabletmanagerdata_proto_msgTypes[53]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetTransactionInfoResponse.ProtoReflect.Descriptor instead.
+func (*GetTransactionInfoResponse) Descriptor() ([]byte, []int) {
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{53}
+}
+
+func (x *GetTransactionInfoResponse) GetState() string {
+	if x != nil {
+		return x.State
+	}
+	return ""
+}
+
+func (x *GetTransactionInfoResponse) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+func (x *GetTransactionInfoResponse) GetTimeCreated() int64 {
+	if x != nil {
+		return x.TimeCreated
+	}
+	return 0
+}
+
+func (x *GetTransactionInfoResponse) GetStatements() []string {
+	if x != nil {
+		return x.Statements
+	}
+	return nil
+}
+
 type ConcludeTransactionRequest struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -2889,7 +3007,7 @@ type ConcludeTransactionRequest struct {
 func (x *ConcludeTransactionRequest) Reset() {
 	*x = ConcludeTransactionRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[52]
+		mi := &file_tabletmanagerdata_proto_msgTypes[54]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2902,7 +3020,7 @@ func (x *ConcludeTransactionRequest) String() string {
 func (*ConcludeTransactionRequest) ProtoMessage() {}
 
 func (x *ConcludeTransactionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[52]
+	mi := &file_tabletmanagerdata_proto_msgTypes[54]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2915,7 +3033,7 @@ func (x *ConcludeTransactionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConcludeTransactionRequest.ProtoReflect.Descriptor instead.
 func (*ConcludeTransactionRequest) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{52}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{54}
 }
 
 func (x *ConcludeTransactionRequest) GetDtid() string {
@@ -2941,7 +3059,7 @@ type ConcludeTransactionResponse struct {
 func (x *ConcludeTransactionResponse) Reset() {
 	*x = ConcludeTransactionResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[53]
+		mi := &file_tabletmanagerdata_proto_msgTypes[55]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2954,7 +3072,7 @@ func (x *ConcludeTransactionResponse) String() string {
 func (*ConcludeTransactionResponse) ProtoMessage() {}
 
 func (x *ConcludeTransactionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[53]
+	mi := &file_tabletmanagerdata_proto_msgTypes[55]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2967,7 +3085,7 @@ func (x *ConcludeTransactionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConcludeTransactionResponse.ProtoReflect.Descriptor instead.
 func (*ConcludeTransactionResponse) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{53}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{55}
 }
 
 type MysqlHostMetricsRequest struct {
@@ -2979,7 +3097,7 @@ type MysqlHostMetricsRequest struct {
 func (x *MysqlHostMetricsRequest) Reset() {
 	*x = MysqlHostMetricsRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[54]
+		mi := &file_tabletmanagerdata_proto_msgTypes[56]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2992,7 +3110,7 @@ func (x *MysqlHostMetricsRequest) String() string {
 func (*MysqlHostMetricsRequest) ProtoMessage() {}
 
 func (x *MysqlHostMetricsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[54]
+	mi := &file_tabletmanagerdata_proto_msgTypes[56]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3005,7 +3123,7 @@ func (x *MysqlHostMetricsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MysqlHostMetricsRequest.ProtoReflect.Descriptor instead.
 func (*MysqlHostMetricsRequest) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{54}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{56}
 }
 
 type MysqlHostMetricsResponse struct {
@@ -3019,7 +3137,7 @@ type MysqlHostMetricsResponse struct {
 func (x *MysqlHostMetricsResponse) Reset() {
 	*x = MysqlHostMetricsResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[55]
+		mi := &file_tabletmanagerdata_proto_msgTypes[57]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3032,7 +3150,7 @@ func (x *MysqlHostMetricsResponse) String() string {
 func (*MysqlHostMetricsResponse) ProtoMessage() {}
 
 func (x *MysqlHostMetricsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[55]
+	mi := &file_tabletmanagerdata_proto_msgTypes[57]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3045,7 +3163,7 @@ func (x *MysqlHostMetricsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MysqlHostMetricsResponse.ProtoReflect.Descriptor instead.
 func (*MysqlHostMetricsResponse) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{55}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{57}
 }
 
 func (x *MysqlHostMetricsResponse) GetHostMetrics() *mysqlctl.HostMetricsResponse {
@@ -3064,7 +3182,7 @@ type ReplicationStatusRequest struct {
 func (x *ReplicationStatusRequest) Reset() {
 	*x = ReplicationStatusRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[56]
+		mi := &file_tabletmanagerdata_proto_msgTypes[58]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3077,7 +3195,7 @@ func (x *ReplicationStatusRequest) String() string {
 func (*ReplicationStatusRequest) ProtoMessage() {}
 
 func (x *ReplicationStatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[56]
+	mi := &file_tabletmanagerdata_proto_msgTypes[58]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3090,7 +3208,7 @@ func (x *ReplicationStatusRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReplicationStatusRequest.ProtoReflect.Descriptor instead.
 func (*ReplicationStatusRequest) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{56}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{58}
 }
 
 type ReplicationStatusResponse struct {
@@ -3104,7 +3222,7 @@ type ReplicationStatusResponse struct {
 func (x *ReplicationStatusResponse) Reset() {
 	*x = ReplicationStatusResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[57]
+		mi := &file_tabletmanagerdata_proto_msgTypes[59]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3117,7 +3235,7 @@ func (x *ReplicationStatusResponse) String() string {
 func (*ReplicationStatusResponse) ProtoMessage() {}
 
 func (x *ReplicationStatusResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[57]
+	mi := &file_tabletmanagerdata_proto_msgTypes[59]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3130,7 +3248,7 @@ func (x *ReplicationStatusResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReplicationStatusResponse.ProtoReflect.Descriptor instead.
 func (*ReplicationStatusResponse) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{57}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{59}
 }
 
 func (x *ReplicationStatusResponse) GetStatus() *replicationdata.Status {
@@ -3149,7 +3267,7 @@ type PrimaryStatusRequest struct {
 func (x *PrimaryStatusRequest) Reset() {
 	*x = PrimaryStatusRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[58]
+		mi := &file_tabletmanagerdata_proto_msgTypes[60]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3162,7 +3280,7 @@ func (x *PrimaryStatusRequest) String() string {
 func (*PrimaryStatusRequest) ProtoMessage() {}
 
 func (x *PrimaryStatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[58]
+	mi := &file_tabletmanagerdata_proto_msgTypes[60]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3175,7 +3293,7 @@ func (x *PrimaryStatusRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PrimaryStatusRequest.ProtoReflect.Descriptor instead.
 func (*PrimaryStatusRequest) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{58}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{60}
 }
 
 type PrimaryStatusResponse struct {
@@ -3189,7 +3307,7 @@ type PrimaryStatusResponse struct {
 func (x *PrimaryStatusResponse) Reset() {
 	*x = PrimaryStatusResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[59]
+		mi := &file_tabletmanagerdata_proto_msgTypes[61]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3202,7 +3320,7 @@ func (x *PrimaryStatusResponse) String() string {
 func (*PrimaryStatusResponse) ProtoMessage() {}
 
 func (x *PrimaryStatusResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[59]
+	mi := &file_tabletmanagerdata_proto_msgTypes[61]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3215,7 +3333,7 @@ func (x *PrimaryStatusResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PrimaryStatusResponse.ProtoReflect.Descriptor instead.
 func (*PrimaryStatusResponse) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{59}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{61}
 }
 
 func (x *PrimaryStatusResponse) GetStatus() *replicationdata.PrimaryStatus {
@@ -3234,7 +3352,7 @@ type PrimaryPositionRequest struct {
 func (x *PrimaryPositionRequest) Reset() {
 	*x = PrimaryPositionRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[60]
+		mi := &file_tabletmanagerdata_proto_msgTypes[62]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3247,7 +3365,7 @@ func (x *PrimaryPositionRequest) String() string {
 func (*PrimaryPositionRequest) ProtoMessage() {}
 
 func (x *PrimaryPositionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[60]
+	mi := &file_tabletmanagerdata_proto_msgTypes[62]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3260,7 +3378,7 @@ func (x *PrimaryPositionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PrimaryPositionRequest.ProtoReflect.Descriptor instead.
 func (*PrimaryPositionRequest) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{60}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{62}
 }
 
 type PrimaryPositionResponse struct {
@@ -3274,7 +3392,7 @@ type PrimaryPositionResponse struct {
 func (x *PrimaryPositionResponse) Reset() {
 	*x = PrimaryPositionResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[61]
+		mi := &file_tabletmanagerdata_proto_msgTypes[63]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3287,7 +3405,7 @@ func (x *PrimaryPositionResponse) String() string {
 func (*PrimaryPositionResponse) ProtoMessage() {}
 
 func (x *PrimaryPositionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[61]
+	mi := &file_tabletmanagerdata_proto_msgTypes[63]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3300,7 +3418,7 @@ func (x *PrimaryPositionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PrimaryPositionResponse.ProtoReflect.Descriptor instead.
 func (*PrimaryPositionResponse) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{61}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{63}
 }
 
 func (x *PrimaryPositionResponse) GetPosition() string {
@@ -3321,7 +3439,7 @@ type WaitForPositionRequest struct {
 func (x *WaitForPositionRequest) Reset() {
 	*x = WaitForPositionRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[62]
+		mi := &file_tabletmanagerdata_proto_msgTypes[64]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3334,7 +3452,7 @@ func (x *WaitForPositionRequest) String() string {
 func (*WaitForPositionRequest) ProtoMessage() {}
 
 func (x *WaitForPositionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[62]
+	mi := &file_tabletmanagerdata_proto_msgTypes[64]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3347,7 +3465,7 @@ func (x *WaitForPositionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WaitForPositionRequest.ProtoReflect.Descriptor instead.
 func (*WaitForPositionRequest) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{62}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{64}
 }
 
 func (x *WaitForPositionRequest) GetPosition() string {
@@ -3366,7 +3484,7 @@ type WaitForPositionResponse struct {
 func (x *WaitForPositionResponse) Reset() {
 	*x = WaitForPositionResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[63]
+		mi := &file_tabletmanagerdata_proto_msgTypes[65]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3379,7 +3497,7 @@ func (x *WaitForPositionResponse) String() string {
 func (*WaitForPositionResponse) ProtoMessage() {}
 
 func (x *WaitForPositionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[63]
+	mi := &file_tabletmanagerdata_proto_msgTypes[65]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3392,7 +3510,7 @@ func (x *WaitForPositionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WaitForPositionResponse.ProtoReflect.Descriptor instead.
 func (*WaitForPositionResponse) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{63}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{65}
 }
 
 type StopReplicationRequest struct {
@@ -3404,7 +3522,7 @@ type StopReplicationRequest struct {
 func (x *StopReplicationRequest) Reset() {
 	*x = StopReplicationRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[64]
+		mi := &file_tabletmanagerdata_proto_msgTypes[66]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3417,7 +3535,7 @@ func (x *StopReplicationRequest) String() string {
 func (*StopReplicationRequest) ProtoMessage() {}
 
 func (x *StopReplicationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[64]
+	mi := &file_tabletmanagerdata_proto_msgTypes[66]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3430,7 +3548,7 @@ func (x *StopReplicationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StopReplicationRequest.ProtoReflect.Descriptor instead.
 func (*StopReplicationRequest) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{64}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{66}
 }
 
 type StopReplicationResponse struct {
@@ -3442,7 +3560,7 @@ type StopReplicationResponse struct {
 func (x *StopReplicationResponse) Reset() {
 	*x = StopReplicationResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[65]
+		mi := &file_tabletmanagerdata_proto_msgTypes[67]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3455,7 +3573,7 @@ func (x *StopReplicationResponse) String() string {
 func (*StopReplicationResponse) ProtoMessage() {}
 
 func (x *StopReplicationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[65]
+	mi := &file_tabletmanagerdata_proto_msgTypes[67]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3468,7 +3586,7 @@ func (x *StopReplicationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StopReplicationResponse.ProtoReflect.Descriptor instead.
 func (*StopReplicationResponse) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{65}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{67}
 }
 
 type StopReplicationMinimumRequest struct {
@@ -3483,7 +3601,7 @@ type StopReplicationMinimumRequest struct {
 func (x *StopReplicationMinimumRequest) Reset() {
 	*x = StopReplicationMinimumRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[66]
+		mi := &file_tabletmanagerdata_proto_msgTypes[68]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3496,7 +3614,7 @@ func (x *StopReplicationMinimumRequest) String() string {
 func (*StopReplicationMinimumRequest) ProtoMessage() {}
 
 func (x *StopReplicationMinimumRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[66]
+	mi := &file_tabletmanagerdata_proto_msgTypes[68]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3509,7 +3627,7 @@ func (x *StopReplicationMinimumRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StopReplicationMinimumRequest.ProtoReflect.Descriptor instead.
 func (*StopReplicationMinimumRequest) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{66}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{68}
 }
 
 func (x *StopReplicationMinimumRequest) GetPosition() string {
@@ -3537,7 +3655,7 @@ type StopReplicationMinimumResponse struct {
 func (x *StopReplicationMinimumResponse) Reset() {
 	*x = StopReplicationMinimumResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[67]
+		mi := &file_tabletmanagerdata_proto_msgTypes[69]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3550,7 +3668,7 @@ func (x *StopReplicationMinimumResponse) String() string {
 func (*StopReplicationMinimumResponse) ProtoMessage() {}
 
 func (x *StopReplicationMinimumResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[67]
+	mi := &file_tabletmanagerdata_proto_msgTypes[69]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3563,7 +3681,7 @@ func (x *StopReplicationMinimumResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StopReplicationMinimumResponse.ProtoReflect.Descriptor instead.
 func (*StopReplicationMinimumResponse) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{67}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{69}
 }
 
 func (x *StopReplicationMinimumResponse) GetPosition() string {
@@ -3584,7 +3702,7 @@ type StartReplicationRequest struct {
 func (x *StartReplicationRequest) Reset() {
 	*x = StartReplicationRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[68]
+		mi := &file_tabletmanagerdata_proto_msgTypes[70]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3597,7 +3715,7 @@ func (x *StartReplicationRequest) String() string {
 func (*StartReplicationRequest) ProtoMessage() {}
 
 func (x *StartReplicationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[68]
+	mi := &file_tabletmanagerdata_proto_msgTypes[70]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3610,7 +3728,7 @@ func (x *StartReplicationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StartReplicationRequest.ProtoReflect.Descriptor instead.
 func (*StartReplicationRequest) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{68}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{70}
 }
 
 func (x *StartReplicationRequest) GetSemiSync() bool {
@@ -3629,7 +3747,7 @@ type StartReplicationResponse struct {
 func (x *StartReplicationResponse) Reset() {
 	*x = StartReplicationResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[69]
+		mi := &file_tabletmanagerdata_proto_msgTypes[71]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3642,7 +3760,7 @@ func (x *StartReplicationResponse) String() string {
 func (*StartReplicationResponse) ProtoMessage() {}
 
 func (x *StartReplicationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[69]
+	mi := &file_tabletmanagerdata_proto_msgTypes[71]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3655,7 +3773,7 @@ func (x *StartReplicationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StartReplicationResponse.ProtoReflect.Descriptor instead.
 func (*StartReplicationResponse) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{69}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{71}
 }
 
 type StartReplicationUntilAfterRequest struct {
@@ -3670,7 +3788,7 @@ type StartReplicationUntilAfterRequest struct {
 func (x *StartReplicationUntilAfterRequest) Reset() {
 	*x = StartReplicationUntilAfterRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[70]
+		mi := &file_tabletmanagerdata_proto_msgTypes[72]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3683,7 +3801,7 @@ func (x *StartReplicationUntilAfterRequest) String() string {
 func (*StartReplicationUntilAfterRequest) ProtoMessage() {}
 
 func (x *StartReplicationUntilAfterRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[70]
+	mi := &file_tabletmanagerdata_proto_msgTypes[72]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3696,7 +3814,7 @@ func (x *StartReplicationUntilAfterRequest) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use StartReplicationUntilAfterRequest.ProtoReflect.Descriptor instead.
 func (*StartReplicationUntilAfterRequest) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{70}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{72}
 }
 
 func (x *StartReplicationUntilAfterRequest) GetPosition() string {
@@ -3722,7 +3840,7 @@ type StartReplicationUntilAfterResponse struct {
 func (x *StartReplicationUntilAfterResponse) Reset() {
 	*x = StartReplicationUntilAfterResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[71]
+		mi := &file_tabletmanagerdata_proto_msgTypes[73]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3735,7 +3853,7 @@ func (x *StartReplicationUntilAfterResponse) String() string {
 func (*StartReplicationUntilAfterResponse) ProtoMessage() {}
 
 func (x *StartReplicationUntilAfterResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[71]
+	mi := &file_tabletmanagerdata_proto_msgTypes[73]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3748,7 +3866,7 @@ func (x *StartReplicationUntilAfterResponse) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use StartReplicationUntilAfterResponse.ProtoReflect.Descriptor instead.
 func (*StartReplicationUntilAfterResponse) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{71}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{73}
 }
 
 type GetReplicasRequest struct {
@@ -3760,7 +3878,7 @@ type GetReplicasRequest struct {
 func (x *GetReplicasRequest) Reset() {
 	*x = GetReplicasRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[72]
+		mi := &file_tabletmanagerdata_proto_msgTypes[74]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3773,7 +3891,7 @@ func (x *GetReplicasRequest) String() string {
 func (*GetReplicasRequest) ProtoMessage() {}
 
 func (x *GetReplicasRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[72]
+	mi := &file_tabletmanagerdata_proto_msgTypes[74]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3786,7 +3904,7 @@ func (x *GetReplicasRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetReplicasRequest.ProtoReflect.Descriptor instead.
 func (*GetReplicasRequest) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{72}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{74}
 }
 
 type GetReplicasResponse struct {
@@ -3800,7 +3918,7 @@ type GetReplicasResponse struct {
 func (x *GetReplicasResponse) Reset() {
 	*x = GetReplicasResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[73]
+		mi := &file_tabletmanagerdata_proto_msgTypes[75]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3813,7 +3931,7 @@ func (x *GetReplicasResponse) String() string {
 func (*GetReplicasResponse) ProtoMessage() {}
 
 func (x *GetReplicasResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[73]
+	mi := &file_tabletmanagerdata_proto_msgTypes[75]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3826,7 +3944,7 @@ func (x *GetReplicasResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetReplicasResponse.ProtoReflect.Descriptor instead.
 func (*GetReplicasResponse) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{73}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{75}
 }
 
 func (x *GetReplicasResponse) GetAddrs() []string {
@@ -3845,7 +3963,7 @@ type ResetReplicationRequest struct {
 func (x *ResetReplicationRequest) Reset() {
 	*x = ResetReplicationRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[74]
+		mi := &file_tabletmanagerdata_proto_msgTypes[76]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3858,7 +3976,7 @@ func (x *ResetReplicationRequest) String() string {
 func (*ResetReplicationRequest) ProtoMessage() {}
 
 func (x *ResetReplicationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[74]
+	mi := &file_tabletmanagerdata_proto_msgTypes[76]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3871,7 +3989,7 @@ func (x *ResetReplicationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResetReplicationRequest.ProtoReflect.Descriptor instead.
 func (*ResetReplicationRequest) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{74}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{76}
 }
 
 type ResetReplicationResponse struct {
@@ -3883,7 +4001,7 @@ type ResetReplicationResponse struct {
 func (x *ResetReplicationResponse) Reset() {
 	*x = ResetReplicationResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[75]
+		mi := &file_tabletmanagerdata_proto_msgTypes[77]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3896,7 +4014,7 @@ func (x *ResetReplicationResponse) String() string {
 func (*ResetReplicationResponse) ProtoMessage() {}
 
 func (x *ResetReplicationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[75]
+	mi := &file_tabletmanagerdata_proto_msgTypes[77]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3909,7 +4027,7 @@ func (x *ResetReplicationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResetReplicationResponse.ProtoReflect.Descriptor instead.
 func (*ResetReplicationResponse) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{75}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{77}
 }
 
 type VReplicationExecRequest struct {
@@ -3923,7 +4041,7 @@ type VReplicationExecRequest struct {
 func (x *VReplicationExecRequest) Reset() {
 	*x = VReplicationExecRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[76]
+		mi := &file_tabletmanagerdata_proto_msgTypes[78]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3936,7 +4054,7 @@ func (x *VReplicationExecRequest) String() string {
 func (*VReplicationExecRequest) ProtoMessage() {}
 
 func (x *VReplicationExecRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[76]
+	mi := &file_tabletmanagerdata_proto_msgTypes[78]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3949,7 +4067,7 @@ func (x *VReplicationExecRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VReplicationExecRequest.ProtoReflect.Descriptor instead.
 func (*VReplicationExecRequest) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{76}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{78}
 }
 
 func (x *VReplicationExecRequest) GetQuery() string {
@@ -3970,7 +4088,7 @@ type VReplicationExecResponse struct {
 func (x *VReplicationExecResponse) Reset() {
 	*x = VReplicationExecResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[77]
+		mi := &file_tabletmanagerdata_proto_msgTypes[79]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3983,7 +4101,7 @@ func (x *VReplicationExecResponse) String() string {
 func (*VReplicationExecResponse) ProtoMessage() {}
 
 func (x *VReplicationExecResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[77]
+	mi := &file_tabletmanagerdata_proto_msgTypes[79]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3996,7 +4114,7 @@ func (x *VReplicationExecResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VReplicationExecResponse.ProtoReflect.Descriptor instead.
 func (*VReplicationExecResponse) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{77}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{79}
 }
 
 func (x *VReplicationExecResponse) GetResult() *query.QueryResult {
@@ -4018,7 +4136,7 @@ type VReplicationWaitForPosRequest struct {
 func (x *VReplicationWaitForPosRequest) Reset() {
 	*x = VReplicationWaitForPosRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[78]
+		mi := &file_tabletmanagerdata_proto_msgTypes[80]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4031,7 +4149,7 @@ func (x *VReplicationWaitForPosRequest) String() string {
 func (*VReplicationWaitForPosRequest) ProtoMessage() {}
 
 func (x *VReplicationWaitForPosRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[78]
+	mi := &file_tabletmanagerdata_proto_msgTypes[80]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4044,7 +4162,7 @@ func (x *VReplicationWaitForPosRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VReplicationWaitForPosRequest.ProtoReflect.Descriptor instead.
 func (*VReplicationWaitForPosRequest) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{78}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{80}
 }
 
 func (x *VReplicationWaitForPosRequest) GetId() int32 {
@@ -4070,7 +4188,7 @@ type VReplicationWaitForPosResponse struct {
 func (x *VReplicationWaitForPosResponse) Reset() {
 	*x = VReplicationWaitForPosResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[79]
+		mi := &file_tabletmanagerdata_proto_msgTypes[81]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4083,7 +4201,7 @@ func (x *VReplicationWaitForPosResponse) String() string {
 func (*VReplicationWaitForPosResponse) ProtoMessage() {}
 
 func (x *VReplicationWaitForPosResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[79]
+	mi := &file_tabletmanagerdata_proto_msgTypes[81]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4096,7 +4214,7 @@ func (x *VReplicationWaitForPosResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VReplicationWaitForPosResponse.ProtoReflect.Descriptor instead.
 func (*VReplicationWaitForPosResponse) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{79}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{81}
 }
 
 type InitPrimaryRequest struct {
@@ -4110,7 +4228,7 @@ type InitPrimaryRequest struct {
 func (x *InitPrimaryRequest) Reset() {
 	*x = InitPrimaryRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[80]
+		mi := &file_tabletmanagerdata_proto_msgTypes[82]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4123,7 +4241,7 @@ func (x *InitPrimaryRequest) String() string {
 func (*InitPrimaryRequest) ProtoMessage() {}
 
 func (x *InitPrimaryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[80]
+	mi := &file_tabletmanagerdata_proto_msgTypes[82]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4136,7 +4254,7 @@ func (x *InitPrimaryRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InitPrimaryRequest.ProtoReflect.Descriptor instead.
 func (*InitPrimaryRequest) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{80}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{82}
 }
 
 func (x *InitPrimaryRequest) GetSemiSync() bool {
@@ -4157,7 +4275,7 @@ type InitPrimaryResponse struct {
 func (x *InitPrimaryResponse) Reset() {
 	*x = InitPrimaryResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[81]
+		mi := &file_tabletmanagerdata_proto_msgTypes[83]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4170,7 +4288,7 @@ func (x *InitPrimaryResponse) String() string {
 func (*InitPrimaryResponse) ProtoMessage() {}
 
 func (x *InitPrimaryResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[81]
+	mi := &file_tabletmanagerdata_proto_msgTypes[83]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4183,7 +4301,7 @@ func (x *InitPrimaryResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InitPrimaryResponse.ProtoReflect.Descriptor instead.
 func (*InitPrimaryResponse) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{81}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{83}
 }
 
 func (x *InitPrimaryResponse) GetPosition() string {
@@ -4207,7 +4325,7 @@ type PopulateReparentJournalRequest struct {
 func (x *PopulateReparentJournalRequest) Reset() {
 	*x = PopulateReparentJournalRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[82]
+		mi := &file_tabletmanagerdata_proto_msgTypes[84]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4220,7 +4338,7 @@ func (x *PopulateReparentJournalRequest) String() string {
 func (*PopulateReparentJournalRequest) ProtoMessage() {}
 
 func (x *PopulateReparentJournalRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[82]
+	mi := &file_tabletmanagerdata_proto_msgTypes[84]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4233,7 +4351,7 @@ func (x *PopulateReparentJournalRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PopulateReparentJournalRequest.ProtoReflect.Descriptor instead.
 func (*PopulateReparentJournalRequest) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{82}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{84}
 }
 
 func (x *PopulateReparentJournalRequest) GetTimeCreatedNs() int64 {
@@ -4273,7 +4391,7 @@ type PopulateReparentJournalResponse struct {
 func (x *PopulateReparentJournalResponse) Reset() {
 	*x = PopulateReparentJournalResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[83]
+		mi := &file_tabletmanagerdata_proto_msgTypes[85]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4286,7 +4404,7 @@ func (x *PopulateReparentJournalResponse) String() string {
 func (*PopulateReparentJournalResponse) ProtoMessage() {}
 
 func (x *PopulateReparentJournalResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[83]
+	mi := &file_tabletmanagerdata_proto_msgTypes[85]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4299,7 +4417,92 @@ func (x *PopulateReparentJournalResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PopulateReparentJournalResponse.ProtoReflect.Descriptor instead.
 func (*PopulateReparentJournalResponse) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{83}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{85}
+}
+
+type ReadReparentJournalInfoRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+}
+
+func (x *ReadReparentJournalInfoRequest) Reset() {
+	*x = ReadReparentJournalInfoRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_tabletmanagerdata_proto_msgTypes[86]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *ReadReparentJournalInfoRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReadReparentJournalInfoRequest) ProtoMessage() {}
+
+func (x *ReadReparentJournalInfoRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_tabletmanagerdata_proto_msgTypes[86]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReadReparentJournalInfoRequest.ProtoReflect.Descriptor instead.
+func (*ReadReparentJournalInfoRequest) Descriptor() ([]byte, []int) {
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{86}
+}
+
+type ReadReparentJournalInfoResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Length int32 `protobuf:"varint,1,opt,name=length,proto3" json:"length,omitempty"`
+}
+
+func (x *ReadReparentJournalInfoResponse) Reset() {
+	*x = ReadReparentJournalInfoResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_tabletmanagerdata_proto_msgTypes[87]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *ReadReparentJournalInfoResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReadReparentJournalInfoResponse) ProtoMessage() {}
+
+func (x *ReadReparentJournalInfoResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_tabletmanagerdata_proto_msgTypes[87]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReadReparentJournalInfoResponse.ProtoReflect.Descriptor instead.
+func (*ReadReparentJournalInfoResponse) Descriptor() ([]byte, []int) {
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{87}
+}
+
+func (x *ReadReparentJournalInfoResponse) GetLength() int32 {
+	if x != nil {
+		return x.Length
+	}
+	return 0
 }
 
 type InitReplicaRequest struct {
@@ -4316,7 +4519,7 @@ type InitReplicaRequest struct {
 func (x *InitReplicaRequest) Reset() {
 	*x = InitReplicaRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[84]
+		mi := &file_tabletmanagerdata_proto_msgTypes[88]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4329,7 +4532,7 @@ func (x *InitReplicaRequest) String() string {
 func (*InitReplicaRequest) ProtoMessage() {}
 
 func (x *InitReplicaRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[84]
+	mi := &file_tabletmanagerdata_proto_msgTypes[88]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4342,7 +4545,7 @@ func (x *InitReplicaRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InitReplicaRequest.ProtoReflect.Descriptor instead.
 func (*InitReplicaRequest) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{84}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{88}
 }
 
 func (x *InitReplicaRequest) GetParent() *topodata.TabletAlias {
@@ -4382,7 +4585,7 @@ type InitReplicaResponse struct {
 func (x *InitReplicaResponse) Reset() {
 	*x = InitReplicaResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[85]
+		mi := &file_tabletmanagerdata_proto_msgTypes[89]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4395,7 +4598,7 @@ func (x *InitReplicaResponse) String() string {
 func (*InitReplicaResponse) ProtoMessage() {}
 
 func (x *InitReplicaResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[85]
+	mi := &file_tabletmanagerdata_proto_msgTypes[89]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4408,7 +4611,7 @@ func (x *InitReplicaResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InitReplicaResponse.ProtoReflect.Descriptor instead.
 func (*InitReplicaResponse) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{85}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{89}
 }
 
 type DemotePrimaryRequest struct {
@@ -4420,7 +4623,7 @@ type DemotePrimaryRequest struct {
 func (x *DemotePrimaryRequest) Reset() {
 	*x = DemotePrimaryRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[86]
+		mi := &file_tabletmanagerdata_proto_msgTypes[90]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4433,7 +4636,7 @@ func (x *DemotePrimaryRequest) String() string {
 func (*DemotePrimaryRequest) ProtoMessage() {}
 
 func (x *DemotePrimaryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[86]
+	mi := &file_tabletmanagerdata_proto_msgTypes[90]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4446,7 +4649,7 @@ func (x *DemotePrimaryRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DemotePrimaryRequest.ProtoReflect.Descriptor instead.
 func (*DemotePrimaryRequest) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{86}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{90}
 }
 
 type DemotePrimaryResponse struct {
@@ -4461,7 +4664,7 @@ type DemotePrimaryResponse struct {
 func (x *DemotePrimaryResponse) Reset() {
 	*x = DemotePrimaryResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[87]
+		mi := &file_tabletmanagerdata_proto_msgTypes[91]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4474,7 +4677,7 @@ func (x *DemotePrimaryResponse) String() string {
 func (*DemotePrimaryResponse) ProtoMessage() {}
 
 func (x *DemotePrimaryResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[87]
+	mi := &file_tabletmanagerdata_proto_msgTypes[91]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4487,7 +4690,7 @@ func (x *DemotePrimaryResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DemotePrimaryResponse.ProtoReflect.Descriptor instead.
 func (*DemotePrimaryResponse) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{87}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{91}
 }
 
 func (x *DemotePrimaryResponse) GetPrimaryStatus() *replicationdata.PrimaryStatus {
@@ -4508,7 +4711,7 @@ type UndoDemotePrimaryRequest struct {
 func (x *UndoDemotePrimaryRequest) Reset() {
 	*x = UndoDemotePrimaryRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[88]
+		mi := &file_tabletmanagerdata_proto_msgTypes[92]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4521,7 +4724,7 @@ func (x *UndoDemotePrimaryRequest) String() string {
 func (*UndoDemotePrimaryRequest) ProtoMessage() {}
 
 func (x *UndoDemotePrimaryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[88]
+	mi := &file_tabletmanagerdata_proto_msgTypes[92]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4534,7 +4737,7 @@ func (x *UndoDemotePrimaryRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UndoDemotePrimaryRequest.ProtoReflect.Descriptor instead.
 func (*UndoDemotePrimaryRequest) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{88}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{92}
 }
 
 func (x *UndoDemotePrimaryRequest) GetSemiSync() bool {
@@ -4553,7 +4756,7 @@ type UndoDemotePrimaryResponse struct {
 func (x *UndoDemotePrimaryResponse) Reset() {
 	*x = UndoDemotePrimaryResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[89]
+		mi := &file_tabletmanagerdata_proto_msgTypes[93]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4566,7 +4769,7 @@ func (x *UndoDemotePrimaryResponse) String() string {
 func (*UndoDemotePrimaryResponse) ProtoMessage() {}
 
 func (x *UndoDemotePrimaryResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[89]
+	mi := &file_tabletmanagerdata_proto_msgTypes[93]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4579,7 +4782,7 @@ func (x *UndoDemotePrimaryResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UndoDemotePrimaryResponse.ProtoReflect.Descriptor instead.
 func (*UndoDemotePrimaryResponse) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{89}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{93}
 }
 
 type ReplicaWasPromotedRequest struct {
@@ -4591,7 +4794,7 @@ type ReplicaWasPromotedRequest struct {
 func (x *ReplicaWasPromotedRequest) Reset() {
 	*x = ReplicaWasPromotedRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[90]
+		mi := &file_tabletmanagerdata_proto_msgTypes[94]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4604,7 +4807,7 @@ func (x *ReplicaWasPromotedRequest) String() string {
 func (*ReplicaWasPromotedRequest) ProtoMessage() {}
 
 func (x *ReplicaWasPromotedRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[90]
+	mi := &file_tabletmanagerdata_proto_msgTypes[94]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4617,7 +4820,7 @@ func (x *ReplicaWasPromotedRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReplicaWasPromotedRequest.ProtoReflect.Descriptor instead.
 func (*ReplicaWasPromotedRequest) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{90}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{94}
 }
 
 type ReplicaWasPromotedResponse struct {
@@ -4629,7 +4832,7 @@ type ReplicaWasPromotedResponse struct {
 func (x *ReplicaWasPromotedResponse) Reset() {
 	*x = ReplicaWasPromotedResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[91]
+		mi := &file_tabletmanagerdata_proto_msgTypes[95]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4642,7 +4845,7 @@ func (x *ReplicaWasPromotedResponse) String() string {
 func (*ReplicaWasPromotedResponse) ProtoMessage() {}
 
 func (x *ReplicaWasPromotedResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[91]
+	mi := &file_tabletmanagerdata_proto_msgTypes[95]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4655,7 +4858,7 @@ func (x *ReplicaWasPromotedResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReplicaWasPromotedResponse.ProtoReflect.Descriptor instead.
 func (*ReplicaWasPromotedResponse) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{91}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{95}
 }
 
 type ResetReplicationParametersRequest struct {
@@ -4667,7 +4870,7 @@ type ResetReplicationParametersRequest struct {
 func (x *ResetReplicationParametersRequest) Reset() {
 	*x = ResetReplicationParametersRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[92]
+		mi := &file_tabletmanagerdata_proto_msgTypes[96]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4680,7 +4883,7 @@ func (x *ResetReplicationParametersRequest) String() string {
 func (*ResetReplicationParametersRequest) ProtoMessage() {}
 
 func (x *ResetReplicationParametersRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[92]
+	mi := &file_tabletmanagerdata_proto_msgTypes[96]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4693,7 +4896,7 @@ func (x *ResetReplicationParametersRequest) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use ResetReplicationParametersRequest.ProtoReflect.Descriptor instead.
 func (*ResetReplicationParametersRequest) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{92}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{96}
 }
 
 type ResetReplicationParametersResponse struct {
@@ -4705,7 +4908,7 @@ type ResetReplicationParametersResponse struct {
 func (x *ResetReplicationParametersResponse) Reset() {
 	*x = ResetReplicationParametersResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[93]
+		mi := &file_tabletmanagerdata_proto_msgTypes[97]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4718,7 +4921,7 @@ func (x *ResetReplicationParametersResponse) String() string {
 func (*ResetReplicationParametersResponse) ProtoMessage() {}
 
 func (x *ResetReplicationParametersResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[93]
+	mi := &file_tabletmanagerdata_proto_msgTypes[97]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4731,7 +4934,7 @@ func (x *ResetReplicationParametersResponse) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use ResetReplicationParametersResponse.ProtoReflect.Descriptor instead.
 func (*ResetReplicationParametersResponse) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{93}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{97}
 }
 
 type FullStatusRequest struct {
@@ -4743,7 +4946,7 @@ type FullStatusRequest struct {
 func (x *FullStatusRequest) Reset() {
 	*x = FullStatusRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[94]
+		mi := &file_tabletmanagerdata_proto_msgTypes[98]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4756,7 +4959,7 @@ func (x *FullStatusRequest) String() string {
 func (*FullStatusRequest) ProtoMessage() {}
 
 func (x *FullStatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[94]
+	mi := &file_tabletmanagerdata_proto_msgTypes[98]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4769,7 +4972,7 @@ func (x *FullStatusRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FullStatusRequest.ProtoReflect.Descriptor instead.
 func (*FullStatusRequest) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{94}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{98}
 }
 
 type FullStatusResponse struct {
@@ -4783,7 +4986,7 @@ type FullStatusResponse struct {
 func (x *FullStatusResponse) Reset() {
 	*x = FullStatusResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[95]
+		mi := &file_tabletmanagerdata_proto_msgTypes[99]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4796,7 +4999,7 @@ func (x *FullStatusResponse) String() string {
 func (*FullStatusResponse) ProtoMessage() {}
 
 func (x *FullStatusResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[95]
+	mi := &file_tabletmanagerdata_proto_msgTypes[99]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4809,7 +5012,7 @@ func (x *FullStatusResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FullStatusResponse.ProtoReflect.Descriptor instead.
 func (*FullStatusResponse) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{95}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{99}
 }
 
 func (x *FullStatusResponse) GetStatus() *replicationdata.FullStatus {
@@ -4835,7 +5038,7 @@ type SetReplicationSourceRequest struct {
 func (x *SetReplicationSourceRequest) Reset() {
 	*x = SetReplicationSourceRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[96]
+		mi := &file_tabletmanagerdata_proto_msgTypes[100]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4848,7 +5051,7 @@ func (x *SetReplicationSourceRequest) String() string {
 func (*SetReplicationSourceRequest) ProtoMessage() {}
 
 func (x *SetReplicationSourceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[96]
+	mi := &file_tabletmanagerdata_proto_msgTypes[100]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4861,7 +5064,7 @@ func (x *SetReplicationSourceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetReplicationSourceRequest.ProtoReflect.Descriptor instead.
 func (*SetReplicationSourceRequest) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{96}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{100}
 }
 
 func (x *SetReplicationSourceRequest) GetParent() *topodata.TabletAlias {
@@ -4915,7 +5118,7 @@ type SetReplicationSourceResponse struct {
 func (x *SetReplicationSourceResponse) Reset() {
 	*x = SetReplicationSourceResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[97]
+		mi := &file_tabletmanagerdata_proto_msgTypes[101]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4928,7 +5131,7 @@ func (x *SetReplicationSourceResponse) String() string {
 func (*SetReplicationSourceResponse) ProtoMessage() {}
 
 func (x *SetReplicationSourceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[97]
+	mi := &file_tabletmanagerdata_proto_msgTypes[101]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4941,7 +5144,7 @@ func (x *SetReplicationSourceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetReplicationSourceResponse.ProtoReflect.Descriptor instead.
 func (*SetReplicationSourceResponse) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{97}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{101}
 }
 
 type ReplicaWasRestartedRequest struct {
@@ -4956,7 +5159,7 @@ type ReplicaWasRestartedRequest struct {
 func (x *ReplicaWasRestartedRequest) Reset() {
 	*x = ReplicaWasRestartedRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[98]
+		mi := &file_tabletmanagerdata_proto_msgTypes[102]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4969,7 +5172,7 @@ func (x *ReplicaWasRestartedRequest) String() string {
 func (*ReplicaWasRestartedRequest) ProtoMessage() {}
 
 func (x *ReplicaWasRestartedRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[98]
+	mi := &file_tabletmanagerdata_proto_msgTypes[102]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4982,7 +5185,7 @@ func (x *ReplicaWasRestartedRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReplicaWasRestartedRequest.ProtoReflect.Descriptor instead.
 func (*ReplicaWasRestartedRequest) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{98}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{102}
 }
 
 func (x *ReplicaWasRestartedRequest) GetParent() *topodata.TabletAlias {
@@ -5001,7 +5204,7 @@ type ReplicaWasRestartedResponse struct {
 func (x *ReplicaWasRestartedResponse) Reset() {
 	*x = ReplicaWasRestartedResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[99]
+		mi := &file_tabletmanagerdata_proto_msgTypes[103]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -5014,7 +5217,7 @@ func (x *ReplicaWasRestartedResponse) String() string {
 func (*ReplicaWasRestartedResponse) ProtoMessage() {}
 
 func (x *ReplicaWasRestartedResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[99]
+	mi := &file_tabletmanagerdata_proto_msgTypes[103]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5027,7 +5230,7 @@ func (x *ReplicaWasRestartedResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReplicaWasRestartedResponse.ProtoReflect.Descriptor instead.
 func (*ReplicaWasRestartedResponse) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{99}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{103}
 }
 
 type StopReplicationAndGetStatusRequest struct {
@@ -5041,7 +5244,7 @@ type StopReplicationAndGetStatusRequest struct {
 func (x *StopReplicationAndGetStatusRequest) Reset() {
 	*x = StopReplicationAndGetStatusRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[100]
+		mi := &file_tabletmanagerdata_proto_msgTypes[104]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -5054,7 +5257,7 @@ func (x *StopReplicationAndGetStatusRequest) String() string {
 func (*StopReplicationAndGetStatusRequest) ProtoMessage() {}
 
 func (x *StopReplicationAndGetStatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[100]
+	mi := &file_tabletmanagerdata_proto_msgTypes[104]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5067,7 +5270,7 @@ func (x *StopReplicationAndGetStatusRequest) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use StopReplicationAndGetStatusRequest.ProtoReflect.Descriptor instead.
 func (*StopReplicationAndGetStatusRequest) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{100}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{104}
 }
 
 func (x *StopReplicationAndGetStatusRequest) GetStopReplicationMode() replicationdata.StopReplicationMode {
@@ -5089,7 +5292,7 @@ type StopReplicationAndGetStatusResponse struct {
 func (x *StopReplicationAndGetStatusResponse) Reset() {
 	*x = StopReplicationAndGetStatusResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[101]
+		mi := &file_tabletmanagerdata_proto_msgTypes[105]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -5102,7 +5305,7 @@ func (x *StopReplicationAndGetStatusResponse) String() string {
 func (*StopReplicationAndGetStatusResponse) ProtoMessage() {}
 
 func (x *StopReplicationAndGetStatusResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[101]
+	mi := &file_tabletmanagerdata_proto_msgTypes[105]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5115,7 +5318,7 @@ func (x *StopReplicationAndGetStatusResponse) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use StopReplicationAndGetStatusResponse.ProtoReflect.Descriptor instead.
 func (*StopReplicationAndGetStatusResponse) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{101}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{105}
 }
 
 func (x *StopReplicationAndGetStatusResponse) GetStatus() *replicationdata.StopReplicationStatus {
@@ -5136,7 +5339,7 @@ type PromoteReplicaRequest struct {
 func (x *PromoteReplicaRequest) Reset() {
 	*x = PromoteReplicaRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[102]
+		mi := &file_tabletmanagerdata_proto_msgTypes[106]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -5149,7 +5352,7 @@ func (x *PromoteReplicaRequest) String() string {
 func (*PromoteReplicaRequest) ProtoMessage() {}
 
 func (x *PromoteReplicaRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[102]
+	mi := &file_tabletmanagerdata_proto_msgTypes[106]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5162,7 +5365,7 @@ func (x *PromoteReplicaRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PromoteReplicaRequest.ProtoReflect.Descriptor instead.
 func (*PromoteReplicaRequest) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{102}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{106}
 }
 
 func (x *PromoteReplicaRequest) GetSemiSync() bool {
@@ -5183,7 +5386,7 @@ type PromoteReplicaResponse struct {
 func (x *PromoteReplicaResponse) Reset() {
 	*x = PromoteReplicaResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[103]
+		mi := &file_tabletmanagerdata_proto_msgTypes[107]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -5196,7 +5399,7 @@ func (x *PromoteReplicaResponse) String() string {
 func (*PromoteReplicaResponse) ProtoMessage() {}
 
 func (x *PromoteReplicaResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[103]
+	mi := &file_tabletmanagerdata_proto_msgTypes[107]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5209,7 +5412,7 @@ func (x *PromoteReplicaResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PromoteReplicaResponse.ProtoReflect.Descriptor instead.
 func (*PromoteReplicaResponse) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{103}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{107}
 }
 
 func (x *PromoteReplicaResponse) GetPosition() string {
@@ -5239,7 +5442,7 @@ type BackupRequest struct {
 func (x *BackupRequest) Reset() {
 	*x = BackupRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[104]
+		mi := &file_tabletmanagerdata_proto_msgTypes[108]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -5252,7 +5455,7 @@ func (x *BackupRequest) String() string {
 func (*BackupRequest) ProtoMessage() {}
 
 func (x *BackupRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[104]
+	mi := &file_tabletmanagerdata_proto_msgTypes[108]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5265,7 +5468,7 @@ func (x *BackupRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BackupRequest.ProtoReflect.Descriptor instead.
 func (*BackupRequest) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{104}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{108}
 }
 
 func (x *BackupRequest) GetConcurrency() int32 {
@@ -5314,7 +5517,7 @@ type BackupResponse struct {
 func (x *BackupResponse) Reset() {
 	*x = BackupResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[105]
+		mi := &file_tabletmanagerdata_proto_msgTypes[109]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -5327,7 +5530,7 @@ func (x *BackupResponse) String() string {
 func (*BackupResponse) ProtoMessage() {}
 
 func (x *BackupResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[105]
+	mi := &file_tabletmanagerdata_proto_msgTypes[109]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5340,7 +5543,7 @@ func (x *BackupResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BackupResponse.ProtoReflect.Descriptor instead.
 func (*BackupResponse) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{105}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{109}
 }
 
 func (x *BackupResponse) GetEvent() *logutil.Event {
@@ -5372,7 +5575,7 @@ type RestoreFromBackupRequest struct {
 func (x *RestoreFromBackupRequest) Reset() {
 	*x = RestoreFromBackupRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[106]
+		mi := &file_tabletmanagerdata_proto_msgTypes[110]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -5385,7 +5588,7 @@ func (x *RestoreFromBackupRequest) String() string {
 func (*RestoreFromBackupRequest) ProtoMessage() {}
 
 func (x *RestoreFromBackupRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[106]
+	mi := &file_tabletmanagerdata_proto_msgTypes[110]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5398,7 +5601,7 @@ func (x *RestoreFromBackupRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RestoreFromBackupRequest.ProtoReflect.Descriptor instead.
 func (*RestoreFromBackupRequest) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{106}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{110}
 }
 
 func (x *RestoreFromBackupRequest) GetBackupTime() *vttime.Time {
@@ -5447,7 +5650,7 @@ type RestoreFromBackupResponse struct {
 func (x *RestoreFromBackupResponse) Reset() {
 	*x = RestoreFromBackupResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[107]
+		mi := &file_tabletmanagerdata_proto_msgTypes[111]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -5460,7 +5663,7 @@ func (x *RestoreFromBackupResponse) String() string {
 func (*RestoreFromBackupResponse) ProtoMessage() {}
 
 func (x *RestoreFromBackupResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[107]
+	mi := &file_tabletmanagerdata_proto_msgTypes[111]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5473,7 +5676,7 @@ func (x *RestoreFromBackupResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RestoreFromBackupResponse.ProtoReflect.Descriptor instead.
 func (*RestoreFromBackupResponse) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{107}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{111}
 }
 
 func (x *RestoreFromBackupResponse) GetEvent() *logutil.Event {
@@ -5510,7 +5713,7 @@ type CreateVReplicationWorkflowRequest struct {
 func (x *CreateVReplicationWorkflowRequest) Reset() {
 	*x = CreateVReplicationWorkflowRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[108]
+		mi := &file_tabletmanagerdata_proto_msgTypes[112]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -5523,7 +5726,7 @@ func (x *CreateVReplicationWorkflowRequest) String() string {
 func (*CreateVReplicationWorkflowRequest) ProtoMessage() {}
 
 func (x *CreateVReplicationWorkflowRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[108]
+	mi := &file_tabletmanagerdata_proto_msgTypes[112]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5536,7 +5739,7 @@ func (x *CreateVReplicationWorkflowRequest) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use CreateVReplicationWorkflowRequest.ProtoReflect.Descriptor instead.
 func (*CreateVReplicationWorkflowRequest) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{108}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{112}
 }
 
 func (x *CreateVReplicationWorkflowRequest) GetWorkflow() string {
@@ -5627,7 +5830,7 @@ type CreateVReplicationWorkflowResponse struct {
 func (x *CreateVReplicationWorkflowResponse) Reset() {
 	*x = CreateVReplicationWorkflowResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[109]
+		mi := &file_tabletmanagerdata_proto_msgTypes[113]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -5640,7 +5843,7 @@ func (x *CreateVReplicationWorkflowResponse) String() string {
 func (*CreateVReplicationWorkflowResponse) ProtoMessage() {}
 
 func (x *CreateVReplicationWorkflowResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[109]
+	mi := &file_tabletmanagerdata_proto_msgTypes[113]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5653,7 +5856,7 @@ func (x *CreateVReplicationWorkflowResponse) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use CreateVReplicationWorkflowResponse.ProtoReflect.Descriptor instead.
 func (*CreateVReplicationWorkflowResponse) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{109}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{113}
 }
 
 func (x *CreateVReplicationWorkflowResponse) GetResult() *query.QueryResult {
@@ -5679,7 +5882,7 @@ type DeleteTableDataRequest struct {
 func (x *DeleteTableDataRequest) Reset() {
 	*x = DeleteTableDataRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[110]
+		mi := &file_tabletmanagerdata_proto_msgTypes[114]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -5692,7 +5895,7 @@ func (x *DeleteTableDataRequest) String() string {
 func (*DeleteTableDataRequest) ProtoMessage() {}
 
 func (x *DeleteTableDataRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[110]
+	mi := &file_tabletmanagerdata_proto_msgTypes[114]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5705,7 +5908,7 @@ func (x *DeleteTableDataRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteTableDataRequest.ProtoReflect.Descriptor instead.
 func (*DeleteTableDataRequest) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{110}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{114}
 }
 
 func (x *DeleteTableDataRequest) GetTableFilters() map[string]string {
@@ -5731,7 +5934,7 @@ type DeleteTableDataResponse struct {
 func (x *DeleteTableDataResponse) Reset() {
 	*x = DeleteTableDataResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[111]
+		mi := &file_tabletmanagerdata_proto_msgTypes[115]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -5744,7 +5947,7 @@ func (x *DeleteTableDataResponse) String() string {
 func (*DeleteTableDataResponse) ProtoMessage() {}
 
 func (x *DeleteTableDataResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[111]
+	mi := &file_tabletmanagerdata_proto_msgTypes[115]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5757,7 +5960,7 @@ func (x *DeleteTableDataResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteTableDataResponse.ProtoReflect.Descriptor instead.
 func (*DeleteTableDataResponse) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{111}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{115}
 }
 
 type DeleteVReplicationWorkflowRequest struct {
@@ -5771,7 +5974,7 @@ type DeleteVReplicationWorkflowRequest struct {
 func (x *DeleteVReplicationWorkflowRequest) Reset() {
 	*x = DeleteVReplicationWorkflowRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[112]
+		mi := &file_tabletmanagerdata_proto_msgTypes[116]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -5784,7 +5987,7 @@ func (x *DeleteVReplicationWorkflowRequest) String() string {
 func (*DeleteVReplicationWorkflowRequest) ProtoMessage() {}
 
 func (x *DeleteVReplicationWorkflowRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[112]
+	mi := &file_tabletmanagerdata_proto_msgTypes[116]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5797,7 +6000,7 @@ func (x *DeleteVReplicationWorkflowRequest) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use DeleteVReplicationWorkflowRequest.ProtoReflect.Descriptor instead.
 func (*DeleteVReplicationWorkflowRequest) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{112}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{116}
 }
 
 func (x *DeleteVReplicationWorkflowRequest) GetWorkflow() string {
@@ -5818,7 +6021,7 @@ type DeleteVReplicationWorkflowResponse struct {
 func (x *DeleteVReplicationWorkflowResponse) Reset() {
 	*x = DeleteVReplicationWorkflowResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[113]
+		mi := &file_tabletmanagerdata_proto_msgTypes[117]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -5831,7 +6034,7 @@ func (x *DeleteVReplicationWorkflowResponse) String() string {
 func (*DeleteVReplicationWorkflowResponse) ProtoMessage() {}
 
 func (x *DeleteVReplicationWorkflowResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[113]
+	mi := &file_tabletmanagerdata_proto_msgTypes[117]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5844,7 +6047,7 @@ func (x *DeleteVReplicationWorkflowResponse) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use DeleteVReplicationWorkflowResponse.ProtoReflect.Descriptor instead.
 func (*DeleteVReplicationWorkflowResponse) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{113}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{117}
 }
 
 func (x *DeleteVReplicationWorkflowResponse) GetResult() *query.QueryResult {
@@ -5863,7 +6066,7 @@ type HasVReplicationWorkflowsRequest struct {
 func (x *HasVReplicationWorkflowsRequest) Reset() {
 	*x = HasVReplicationWorkflowsRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[114]
+		mi := &file_tabletmanagerdata_proto_msgTypes[118]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -5876,7 +6079,7 @@ func (x *HasVReplicationWorkflowsRequest) String() string {
 func (*HasVReplicationWorkflowsRequest) ProtoMessage() {}
 
 func (x *HasVReplicationWorkflowsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[114]
+	mi := &file_tabletmanagerdata_proto_msgTypes[118]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5889,7 +6092,7 @@ func (x *HasVReplicationWorkflowsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HasVReplicationWorkflowsRequest.ProtoReflect.Descriptor instead.
 func (*HasVReplicationWorkflowsRequest) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{114}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{118}
 }
 
 type HasVReplicationWorkflowsResponse struct {
@@ -5903,7 +6106,7 @@ type HasVReplicationWorkflowsResponse struct {
 func (x *HasVReplicationWorkflowsResponse) Reset() {
 	*x = HasVReplicationWorkflowsResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[115]
+		mi := &file_tabletmanagerdata_proto_msgTypes[119]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -5916,7 +6119,7 @@ func (x *HasVReplicationWorkflowsResponse) String() string {
 func (*HasVReplicationWorkflowsResponse) ProtoMessage() {}
 
 func (x *HasVReplicationWorkflowsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[115]
+	mi := &file_tabletmanagerdata_proto_msgTypes[119]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5929,7 +6132,7 @@ func (x *HasVReplicationWorkflowsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HasVReplicationWorkflowsResponse.ProtoReflect.Descriptor instead.
 func (*HasVReplicationWorkflowsResponse) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{115}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{119}
 }
 
 func (x *HasVReplicationWorkflowsResponse) GetHas() bool {
@@ -5955,7 +6158,7 @@ type ReadVReplicationWorkflowsRequest struct {
 func (x *ReadVReplicationWorkflowsRequest) Reset() {
 	*x = ReadVReplicationWorkflowsRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[116]
+		mi := &file_tabletmanagerdata_proto_msgTypes[120]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -5968,7 +6171,7 @@ func (x *ReadVReplicationWorkflowsRequest) String() string {
 func (*ReadVReplicationWorkflowsRequest) ProtoMessage() {}
 
 func (x *ReadVReplicationWorkflowsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[116]
+	mi := &file_tabletmanagerdata_proto_msgTypes[120]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5981,7 +6184,7 @@ func (x *ReadVReplicationWorkflowsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReadVReplicationWorkflowsRequest.ProtoReflect.Descriptor instead.
 func (*ReadVReplicationWorkflowsRequest) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{116}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{120}
 }
 
 func (x *ReadVReplicationWorkflowsRequest) GetIncludeIds() []int32 {
@@ -6037,7 +6240,7 @@ type ReadVReplicationWorkflowsResponse struct {
 func (x *ReadVReplicationWorkflowsResponse) Reset() {
 	*x = ReadVReplicationWorkflowsResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[117]
+		mi := &file_tabletmanagerdata_proto_msgTypes[121]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -6050,7 +6253,7 @@ func (x *ReadVReplicationWorkflowsResponse) String() string {
 func (*ReadVReplicationWorkflowsResponse) ProtoMessage() {}
 
 func (x *ReadVReplicationWorkflowsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[117]
+	mi := &file_tabletmanagerdata_proto_msgTypes[121]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6063,7 +6266,7 @@ func (x *ReadVReplicationWorkflowsResponse) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use ReadVReplicationWorkflowsResponse.ProtoReflect.Descriptor instead.
 func (*ReadVReplicationWorkflowsResponse) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{117}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{121}
 }
 
 func (x *ReadVReplicationWorkflowsResponse) GetWorkflows() []*ReadVReplicationWorkflowResponse {
@@ -6084,7 +6287,7 @@ type ReadVReplicationWorkflowRequest struct {
 func (x *ReadVReplicationWorkflowRequest) Reset() {
 	*x = ReadVReplicationWorkflowRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[118]
+		mi := &file_tabletmanagerdata_proto_msgTypes[122]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -6097,7 +6300,7 @@ func (x *ReadVReplicationWorkflowRequest) String() string {
 func (*ReadVReplicationWorkflowRequest) ProtoMessage() {}
 
 func (x *ReadVReplicationWorkflowRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[118]
+	mi := &file_tabletmanagerdata_proto_msgTypes[122]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6110,7 +6313,7 @@ func (x *ReadVReplicationWorkflowRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReadVReplicationWorkflowRequest.ProtoReflect.Descriptor instead.
 func (*ReadVReplicationWorkflowRequest) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{118}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{122}
 }
 
 func (x *ReadVReplicationWorkflowRequest) GetWorkflow() string {
@@ -6142,7 +6345,7 @@ type ReadVReplicationWorkflowResponse struct {
 func (x *ReadVReplicationWorkflowResponse) Reset() {
 	*x = ReadVReplicationWorkflowResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[119]
+		mi := &file_tabletmanagerdata_proto_msgTypes[123]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -6155,7 +6358,7 @@ func (x *ReadVReplicationWorkflowResponse) String() string {
 func (*ReadVReplicationWorkflowResponse) ProtoMessage() {}
 
 func (x *ReadVReplicationWorkflowResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[119]
+	mi := &file_tabletmanagerdata_proto_msgTypes[123]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6168,7 +6371,7 @@ func (x *ReadVReplicationWorkflowResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReadVReplicationWorkflowResponse.ProtoReflect.Descriptor instead.
 func (*ReadVReplicationWorkflowResponse) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{119}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{123}
 }
 
 func (x *ReadVReplicationWorkflowResponse) GetWorkflow() string {
@@ -6264,7 +6467,7 @@ type ValidateVReplicationPermissionsRequest struct {
 func (x *ValidateVReplicationPermissionsRequest) Reset() {
 	*x = ValidateVReplicationPermissionsRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[120]
+		mi := &file_tabletmanagerdata_proto_msgTypes[124]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -6277,7 +6480,7 @@ func (x *ValidateVReplicationPermissionsRequest) String() string {
 func (*ValidateVReplicationPermissionsRequest) ProtoMessage() {}
 
 func (x *ValidateVReplicationPermissionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[120]
+	mi := &file_tabletmanagerdata_proto_msgTypes[124]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6290,7 +6493,7 @@ func (x *ValidateVReplicationPermissionsRequest) ProtoReflect() protoreflect.Mes
 
 // Deprecated: Use ValidateVReplicationPermissionsRequest.ProtoReflect.Descriptor instead.
 func (*ValidateVReplicationPermissionsRequest) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{120}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{124}
 }
 
 type ValidateVReplicationPermissionsResponse struct {
@@ -6308,7 +6511,7 @@ type ValidateVReplicationPermissionsResponse struct {
 func (x *ValidateVReplicationPermissionsResponse) Reset() {
 	*x = ValidateVReplicationPermissionsResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[121]
+		mi := &file_tabletmanagerdata_proto_msgTypes[125]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -6321,7 +6524,7 @@ func (x *ValidateVReplicationPermissionsResponse) String() string {
 func (*ValidateVReplicationPermissionsResponse) ProtoMessage() {}
 
 func (x *ValidateVReplicationPermissionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[121]
+	mi := &file_tabletmanagerdata_proto_msgTypes[125]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6334,7 +6537,7 @@ func (x *ValidateVReplicationPermissionsResponse) ProtoReflect() protoreflect.Me
 
 // Deprecated: Use ValidateVReplicationPermissionsResponse.ProtoReflect.Descriptor instead.
 func (*ValidateVReplicationPermissionsResponse) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{121}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{125}
 }
 
 func (x *ValidateVReplicationPermissionsResponse) GetUser() string {
@@ -6367,7 +6570,7 @@ type VDiffRequest struct {
 func (x *VDiffRequest) Reset() {
 	*x = VDiffRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[122]
+		mi := &file_tabletmanagerdata_proto_msgTypes[126]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -6380,7 +6583,7 @@ func (x *VDiffRequest) String() string {
 func (*VDiffRequest) ProtoMessage() {}
 
 func (x *VDiffRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[122]
+	mi := &file_tabletmanagerdata_proto_msgTypes[126]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6393,7 +6596,7 @@ func (x *VDiffRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VDiffRequest.ProtoReflect.Descriptor instead.
 func (*VDiffRequest) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{122}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{126}
 }
 
 func (x *VDiffRequest) GetKeyspace() string {
@@ -6451,7 +6654,7 @@ type VDiffResponse struct {
 func (x *VDiffResponse) Reset() {
 	*x = VDiffResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[123]
+		mi := &file_tabletmanagerdata_proto_msgTypes[127]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -6464,7 +6667,7 @@ func (x *VDiffResponse) String() string {
 func (*VDiffResponse) ProtoMessage() {}
 
 func (x *VDiffResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[123]
+	mi := &file_tabletmanagerdata_proto_msgTypes[127]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6477,7 +6680,7 @@ func (x *VDiffResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VDiffResponse.ProtoReflect.Descriptor instead.
 func (*VDiffResponse) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{123}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{127}
 }
 
 func (x *VDiffResponse) GetId() int64 {
@@ -6515,7 +6718,7 @@ type VDiffPickerOptions struct {
 func (x *VDiffPickerOptions) Reset() {
 	*x = VDiffPickerOptions{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[124]
+		mi := &file_tabletmanagerdata_proto_msgTypes[128]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -6528,7 +6731,7 @@ func (x *VDiffPickerOptions) String() string {
 func (*VDiffPickerOptions) ProtoMessage() {}
 
 func (x *VDiffPickerOptions) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[124]
+	mi := &file_tabletmanagerdata_proto_msgTypes[128]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6541,7 +6744,7 @@ func (x *VDiffPickerOptions) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VDiffPickerOptions.ProtoReflect.Descriptor instead.
 func (*VDiffPickerOptions) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{124}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{128}
 }
 
 func (x *VDiffPickerOptions) GetTabletTypes() string {
@@ -6581,7 +6784,7 @@ type VDiffReportOptions struct {
 func (x *VDiffReportOptions) Reset() {
 	*x = VDiffReportOptions{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[125]
+		mi := &file_tabletmanagerdata_proto_msgTypes[129]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -6594,7 +6797,7 @@ func (x *VDiffReportOptions) String() string {
 func (*VDiffReportOptions) ProtoMessage() {}
 
 func (x *VDiffReportOptions) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[125]
+	mi := &file_tabletmanagerdata_proto_msgTypes[129]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6607,7 +6810,7 @@ func (x *VDiffReportOptions) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VDiffReportOptions.ProtoReflect.Descriptor instead.
 func (*VDiffReportOptions) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{125}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{129}
 }
 
 func (x *VDiffReportOptions) GetOnlyPks() bool {
@@ -6665,7 +6868,7 @@ type VDiffCoreOptions struct {
 func (x *VDiffCoreOptions) Reset() {
 	*x = VDiffCoreOptions{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[126]
+		mi := &file_tabletmanagerdata_proto_msgTypes[130]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -6678,7 +6881,7 @@ func (x *VDiffCoreOptions) String() string {
 func (*VDiffCoreOptions) ProtoMessage() {}
 
 func (x *VDiffCoreOptions) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[126]
+	mi := &file_tabletmanagerdata_proto_msgTypes[130]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6691,7 +6894,7 @@ func (x *VDiffCoreOptions) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VDiffCoreOptions.ProtoReflect.Descriptor instead.
 func (*VDiffCoreOptions) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{126}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{130}
 }
 
 func (x *VDiffCoreOptions) GetTables() string {
@@ -6777,7 +6980,7 @@ type VDiffOptions struct {
 func (x *VDiffOptions) Reset() {
 	*x = VDiffOptions{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[127]
+		mi := &file_tabletmanagerdata_proto_msgTypes[131]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -6790,7 +6993,7 @@ func (x *VDiffOptions) String() string {
 func (*VDiffOptions) ProtoMessage() {}
 
 func (x *VDiffOptions) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[127]
+	mi := &file_tabletmanagerdata_proto_msgTypes[131]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6803,7 +7006,7 @@ func (x *VDiffOptions) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VDiffOptions.ProtoReflect.Descriptor instead.
 func (*VDiffOptions) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{127}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{131}
 }
 
 func (x *VDiffOptions) GetPickerOptions() *VDiffPickerOptions {
@@ -6850,7 +7053,7 @@ type UpdateVReplicationWorkflowRequest struct {
 func (x *UpdateVReplicationWorkflowRequest) Reset() {
 	*x = UpdateVReplicationWorkflowRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[128]
+		mi := &file_tabletmanagerdata_proto_msgTypes[132]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -6863,7 +7066,7 @@ func (x *UpdateVReplicationWorkflowRequest) String() string {
 func (*UpdateVReplicationWorkflowRequest) ProtoMessage() {}
 
 func (x *UpdateVReplicationWorkflowRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[128]
+	mi := &file_tabletmanagerdata_proto_msgTypes[132]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6876,7 +7079,7 @@ func (x *UpdateVReplicationWorkflowRequest) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use UpdateVReplicationWorkflowRequest.ProtoReflect.Descriptor instead.
 func (*UpdateVReplicationWorkflowRequest) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{128}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{132}
 }
 
 func (x *UpdateVReplicationWorkflowRequest) GetWorkflow() string {
@@ -6939,7 +7142,7 @@ type UpdateVReplicationWorkflowResponse struct {
 func (x *UpdateVReplicationWorkflowResponse) Reset() {
 	*x = UpdateVReplicationWorkflowResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[129]
+		mi := &file_tabletmanagerdata_proto_msgTypes[133]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -6952,7 +7155,7 @@ func (x *UpdateVReplicationWorkflowResponse) String() string {
 func (*UpdateVReplicationWorkflowResponse) ProtoMessage() {}
 
 func (x *UpdateVReplicationWorkflowResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[129]
+	mi := &file_tabletmanagerdata_proto_msgTypes[133]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6965,7 +7168,7 @@ func (x *UpdateVReplicationWorkflowResponse) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use UpdateVReplicationWorkflowResponse.ProtoReflect.Descriptor instead.
 func (*UpdateVReplicationWorkflowResponse) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{129}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{133}
 }
 
 func (x *UpdateVReplicationWorkflowResponse) GetResult() *query.QueryResult {
@@ -6997,7 +7200,7 @@ type UpdateVReplicationWorkflowsRequest struct {
 func (x *UpdateVReplicationWorkflowsRequest) Reset() {
 	*x = UpdateVReplicationWorkflowsRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[130]
+		mi := &file_tabletmanagerdata_proto_msgTypes[134]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -7010,7 +7213,7 @@ func (x *UpdateVReplicationWorkflowsRequest) String() string {
 func (*UpdateVReplicationWorkflowsRequest) ProtoMessage() {}
 
 func (x *UpdateVReplicationWorkflowsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[130]
+	mi := &file_tabletmanagerdata_proto_msgTypes[134]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7023,7 +7226,7 @@ func (x *UpdateVReplicationWorkflowsRequest) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use UpdateVReplicationWorkflowsRequest.ProtoReflect.Descriptor instead.
 func (*UpdateVReplicationWorkflowsRequest) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{130}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{134}
 }
 
 func (x *UpdateVReplicationWorkflowsRequest) GetAllWorkflows() bool {
@@ -7079,7 +7282,7 @@ type UpdateVReplicationWorkflowsResponse struct {
 func (x *UpdateVReplicationWorkflowsResponse) Reset() {
 	*x = UpdateVReplicationWorkflowsResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[131]
+		mi := &file_tabletmanagerdata_proto_msgTypes[135]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -7092,7 +7295,7 @@ func (x *UpdateVReplicationWorkflowsResponse) String() string {
 func (*UpdateVReplicationWorkflowsResponse) ProtoMessage() {}
 
 func (x *UpdateVReplicationWorkflowsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[131]
+	mi := &file_tabletmanagerdata_proto_msgTypes[135]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7105,7 +7308,7 @@ func (x *UpdateVReplicationWorkflowsResponse) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use UpdateVReplicationWorkflowsResponse.ProtoReflect.Descriptor instead.
 func (*UpdateVReplicationWorkflowsResponse) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{131}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{135}
 }
 
 func (x *UpdateVReplicationWorkflowsResponse) GetResult() *query.QueryResult {
@@ -7126,7 +7329,7 @@ type ResetSequencesRequest struct {
 func (x *ResetSequencesRequest) Reset() {
 	*x = ResetSequencesRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[132]
+		mi := &file_tabletmanagerdata_proto_msgTypes[136]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -7139,7 +7342,7 @@ func (x *ResetSequencesRequest) String() string {
 func (*ResetSequencesRequest) ProtoMessage() {}
 
 func (x *ResetSequencesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[132]
+	mi := &file_tabletmanagerdata_proto_msgTypes[136]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7152,7 +7355,7 @@ func (x *ResetSequencesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResetSequencesRequest.ProtoReflect.Descriptor instead.
 func (*ResetSequencesRequest) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{132}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{136}
 }
 
 func (x *ResetSequencesRequest) GetTables() []string {
@@ -7171,7 +7374,7 @@ type ResetSequencesResponse struct {
 func (x *ResetSequencesResponse) Reset() {
 	*x = ResetSequencesResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[133]
+		mi := &file_tabletmanagerdata_proto_msgTypes[137]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -7184,7 +7387,7 @@ func (x *ResetSequencesResponse) String() string {
 func (*ResetSequencesResponse) ProtoMessage() {}
 
 func (x *ResetSequencesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[133]
+	mi := &file_tabletmanagerdata_proto_msgTypes[137]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7197,7 +7400,7 @@ func (x *ResetSequencesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResetSequencesResponse.ProtoReflect.Descriptor instead.
 func (*ResetSequencesResponse) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{133}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{137}
 }
 
 type CheckThrottlerRequest struct {
@@ -7219,7 +7422,7 @@ type CheckThrottlerRequest struct {
 func (x *CheckThrottlerRequest) Reset() {
 	*x = CheckThrottlerRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[134]
+		mi := &file_tabletmanagerdata_proto_msgTypes[138]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -7232,7 +7435,7 @@ func (x *CheckThrottlerRequest) String() string {
 func (*CheckThrottlerRequest) ProtoMessage() {}
 
 func (x *CheckThrottlerRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[134]
+	mi := &file_tabletmanagerdata_proto_msgTypes[138]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7245,7 +7448,7 @@ func (x *CheckThrottlerRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckThrottlerRequest.ProtoReflect.Descriptor instead.
 func (*CheckThrottlerRequest) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{134}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{138}
 }
 
 func (x *CheckThrottlerRequest) GetAppName() string {
@@ -7315,7 +7518,7 @@ type CheckThrottlerResponse struct {
 func (x *CheckThrottlerResponse) Reset() {
 	*x = CheckThrottlerResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[135]
+		mi := &file_tabletmanagerdata_proto_msgTypes[139]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -7328,7 +7531,7 @@ func (x *CheckThrottlerResponse) String() string {
 func (*CheckThrottlerResponse) ProtoMessage() {}
 
 func (x *CheckThrottlerResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[135]
+	mi := &file_tabletmanagerdata_proto_msgTypes[139]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7341,7 +7544,7 @@ func (x *CheckThrottlerResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckThrottlerResponse.ProtoReflect.Descriptor instead.
 func (*CheckThrottlerResponse) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{135}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{139}
 }
 
 func (x *CheckThrottlerResponse) GetStatusCode() int32 {
@@ -7423,7 +7626,7 @@ type GetThrottlerStatusRequest struct {
 func (x *GetThrottlerStatusRequest) Reset() {
 	*x = GetThrottlerStatusRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[136]
+		mi := &file_tabletmanagerdata_proto_msgTypes[140]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -7436,7 +7639,7 @@ func (x *GetThrottlerStatusRequest) String() string {
 func (*GetThrottlerStatusRequest) ProtoMessage() {}
 
 func (x *GetThrottlerStatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[136]
+	mi := &file_tabletmanagerdata_proto_msgTypes[140]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7449,7 +7652,7 @@ func (x *GetThrottlerStatusRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetThrottlerStatusRequest.ProtoReflect.Descriptor instead.
 func (*GetThrottlerStatusRequest) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{136}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{140}
 }
 
 type GetThrottlerStatusResponse struct {
@@ -7498,7 +7701,7 @@ type GetThrottlerStatusResponse struct {
 func (x *GetThrottlerStatusResponse) Reset() {
 	*x = GetThrottlerStatusResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[137]
+		mi := &file_tabletmanagerdata_proto_msgTypes[141]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -7511,7 +7714,7 @@ func (x *GetThrottlerStatusResponse) String() string {
 func (*GetThrottlerStatusResponse) ProtoMessage() {}
 
 func (x *GetThrottlerStatusResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[137]
+	mi := &file_tabletmanagerdata_proto_msgTypes[141]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7524,7 +7727,7 @@ func (x *GetThrottlerStatusResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetThrottlerStatusResponse.ProtoReflect.Descriptor instead.
 func (*GetThrottlerStatusResponse) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{137}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{141}
 }
 
 func (x *GetThrottlerStatusResponse) GetTabletAlias() string {
@@ -7665,7 +7868,7 @@ type ChangeTagsRequest struct {
 func (x *ChangeTagsRequest) Reset() {
 	*x = ChangeTagsRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[138]
+		mi := &file_tabletmanagerdata_proto_msgTypes[142]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -7678,7 +7881,7 @@ func (x *ChangeTagsRequest) String() string {
 func (*ChangeTagsRequest) ProtoMessage() {}
 
 func (x *ChangeTagsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[138]
+	mi := &file_tabletmanagerdata_proto_msgTypes[142]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7691,7 +7894,7 @@ func (x *ChangeTagsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChangeTagsRequest.ProtoReflect.Descriptor instead.
 func (*ChangeTagsRequest) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{138}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{142}
 }
 
 func (x *ChangeTagsRequest) GetTags() map[string]string {
@@ -7719,7 +7922,7 @@ type ChangeTagsResponse struct {
 func (x *ChangeTagsResponse) Reset() {
 	*x = ChangeTagsResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[139]
+		mi := &file_tabletmanagerdata_proto_msgTypes[143]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -7732,7 +7935,7 @@ func (x *ChangeTagsResponse) String() string {
 func (*ChangeTagsResponse) ProtoMessage() {}
 
 func (x *ChangeTagsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[139]
+	mi := &file_tabletmanagerdata_proto_msgTypes[143]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7745,7 +7948,7 @@ func (x *ChangeTagsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChangeTagsResponse.ProtoReflect.Descriptor instead.
 func (*ChangeTagsResponse) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{139}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{143}
 }
 
 func (x *ChangeTagsResponse) GetTags() map[string]string {
@@ -7779,7 +7982,7 @@ type ReadVReplicationWorkflowResponse_Stream struct {
 func (x *ReadVReplicationWorkflowResponse_Stream) Reset() {
 	*x = ReadVReplicationWorkflowResponse_Stream{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[145]
+		mi := &file_tabletmanagerdata_proto_msgTypes[149]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -7792,7 +7995,7 @@ func (x *ReadVReplicationWorkflowResponse_Stream) String() string {
 func (*ReadVReplicationWorkflowResponse_Stream) ProtoMessage() {}
 
 func (x *ReadVReplicationWorkflowResponse_Stream) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[145]
+	mi := &file_tabletmanagerdata_proto_msgTypes[149]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7805,7 +8008,7 @@ func (x *ReadVReplicationWorkflowResponse_Stream) ProtoReflect() protoreflect.Me
 
 // Deprecated: Use ReadVReplicationWorkflowResponse_Stream.ProtoReflect.Descriptor instead.
 func (*ReadVReplicationWorkflowResponse_Stream) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{119, 0}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{123, 0}
 }
 
 func (x *ReadVReplicationWorkflowResponse_Stream) GetId() int32 {
@@ -7932,7 +8135,7 @@ type CheckThrottlerResponse_Metric struct {
 func (x *CheckThrottlerResponse_Metric) Reset() {
 	*x = CheckThrottlerResponse_Metric{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[148]
+		mi := &file_tabletmanagerdata_proto_msgTypes[152]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -7945,7 +8148,7 @@ func (x *CheckThrottlerResponse_Metric) String() string {
 func (*CheckThrottlerResponse_Metric) ProtoMessage() {}
 
 func (x *CheckThrottlerResponse_Metric) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[148]
+	mi := &file_tabletmanagerdata_proto_msgTypes[152]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7958,7 +8161,7 @@ func (x *CheckThrottlerResponse_Metric) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckThrottlerResponse_Metric.ProtoReflect.Descriptor instead.
 func (*CheckThrottlerResponse_Metric) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{135, 0}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{139, 0}
 }
 
 func (x *CheckThrottlerResponse_Metric) GetName() string {
@@ -8029,7 +8232,7 @@ type GetThrottlerStatusResponse_MetricResult struct {
 func (x *GetThrottlerStatusResponse_MetricResult) Reset() {
 	*x = GetThrottlerStatusResponse_MetricResult{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[150]
+		mi := &file_tabletmanagerdata_proto_msgTypes[154]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -8042,7 +8245,7 @@ func (x *GetThrottlerStatusResponse_MetricResult) String() string {
 func (*GetThrottlerStatusResponse_MetricResult) ProtoMessage() {}
 
 func (x *GetThrottlerStatusResponse_MetricResult) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[150]
+	mi := &file_tabletmanagerdata_proto_msgTypes[154]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8055,7 +8258,7 @@ func (x *GetThrottlerStatusResponse_MetricResult) ProtoReflect() protoreflect.Me
 
 // Deprecated: Use GetThrottlerStatusResponse_MetricResult.ProtoReflect.Descriptor instead.
 func (*GetThrottlerStatusResponse_MetricResult) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{137, 0}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{141, 0}
 }
 
 func (x *GetThrottlerStatusResponse_MetricResult) GetValue() float64 {
@@ -8084,7 +8287,7 @@ type GetThrottlerStatusResponse_MetricHealth struct {
 func (x *GetThrottlerStatusResponse_MetricHealth) Reset() {
 	*x = GetThrottlerStatusResponse_MetricHealth{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[153]
+		mi := &file_tabletmanagerdata_proto_msgTypes[157]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -8097,7 +8300,7 @@ func (x *GetThrottlerStatusResponse_MetricHealth) String() string {
 func (*GetThrottlerStatusResponse_MetricHealth) ProtoMessage() {}
 
 func (x *GetThrottlerStatusResponse_MetricHealth) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[153]
+	mi := &file_tabletmanagerdata_proto_msgTypes[157]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8110,7 +8313,7 @@ func (x *GetThrottlerStatusResponse_MetricHealth) ProtoReflect() protoreflect.Me
 
 // Deprecated: Use GetThrottlerStatusResponse_MetricHealth.ProtoReflect.Descriptor instead.
 func (*GetThrottlerStatusResponse_MetricHealth) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{137, 3}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{141, 3}
 }
 
 func (x *GetThrottlerStatusResponse_MetricHealth) GetLastHealthyAt() *vttime.Time {
@@ -8141,7 +8344,7 @@ type GetThrottlerStatusResponse_RecentApp struct {
 func (x *GetThrottlerStatusResponse_RecentApp) Reset() {
 	*x = GetThrottlerStatusResponse_RecentApp{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_tabletmanagerdata_proto_msgTypes[157]
+		mi := &file_tabletmanagerdata_proto_msgTypes[161]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -8154,7 +8357,7 @@ func (x *GetThrottlerStatusResponse_RecentApp) String() string {
 func (*GetThrottlerStatusResponse_RecentApp) ProtoMessage() {}
 
 func (x *GetThrottlerStatusResponse_RecentApp) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[157]
+	mi := &file_tabletmanagerdata_proto_msgTypes[161]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8167,7 +8370,7 @@ func (x *GetThrottlerStatusResponse_RecentApp) ProtoReflect() protoreflect.Messa
 
 // Deprecated: Use GetThrottlerStatusResponse_RecentApp.ProtoReflect.Descriptor instead.
 func (*GetThrottlerStatusResponse_RecentApp) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{137, 7}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{141, 7}
 }
 
 func (x *GetThrottlerStatusResponse_RecentApp) GetCheckedAt() *vttime.Time {
@@ -8519,115 +8722,133 @@ var file_tabletmanagerdata_proto_rawDesc = []byte{
 	0x74, 0x72, 0x61, 0x6e, 0x73, 0x61, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x18, 0x01, 0x20, 0x01, 0x28,
 	0x0b, 0x32, 0x1a, 0x2e, 0x71, 0x75, 0x65, 0x72, 0x79, 0x2e, 0x54, 0x72, 0x61, 0x6e, 0x73, 0x61,
 	0x63, 0x74, 0x69, 0x6f, 0x6e, 0x4d, 0x65, 0x74, 0x61, 0x64, 0x61, 0x74, 0x61, 0x52, 0x0b, 0x74,
-	0x72, 0x61, 0x6e, 0x73, 0x61, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x22, 0x40, 0x0a, 0x1a, 0x43, 0x6f,
-	0x6e, 0x63, 0x6c, 0x75, 0x64, 0x65, 0x54, 0x72, 0x61, 0x6e, 0x73, 0x61, 0x63, 0x74, 0x69, 0x6f,
-	0x6e, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x12, 0x0a, 0x04, 0x64, 0x74, 0x69, 0x64,
-	0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x64, 0x74, 0x69, 0x64, 0x12, 0x0e, 0x0a, 0x02,
-	0x6d, 0x6d, 0x18, 0x02, 0x20, 0x01, 0x28, 0x08, 0x52, 0x02, 0x6d, 0x6d, 0x22, 0x1d, 0x0a, 0x1b,
-	0x43, 0x6f, 0x6e, 0x63, 0x6c, 0x75, 0x64, 0x65, 0x54, 0x72, 0x61, 0x6e, 0x73, 0x61, 0x63, 0x74,
-	0x69, 0x6f, 0x6e, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x19, 0x0a, 0x17, 0x4d,
-	0x79, 0x73, 0x71, 0x6c, 0x48, 0x6f, 0x73, 0x74, 0x4d, 0x65, 0x74, 0x72, 0x69, 0x63, 0x73, 0x52,
-	0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x22, 0x5b, 0x0a, 0x18, 0x4d, 0x79, 0x73, 0x71, 0x6c, 0x48,
-	0x6f, 0x73, 0x74, 0x4d, 0x65, 0x74, 0x72, 0x69, 0x63, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e,
-	0x73, 0x65, 0x12, 0x3f, 0x0a, 0x0b, 0x48, 0x6f, 0x73, 0x74, 0x4d, 0x65, 0x74, 0x72, 0x69, 0x63,
-	0x73, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x1d, 0x2e, 0x6d, 0x79, 0x73, 0x71, 0x6c, 0x63,
-	0x74, 0x6c, 0x2e, 0x48, 0x6f, 0x73, 0x74, 0x4d, 0x65, 0x74, 0x72, 0x69, 0x63, 0x73, 0x52, 0x65,
-	0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x52, 0x0b, 0x48, 0x6f, 0x73, 0x74, 0x4d, 0x65, 0x74, 0x72,
-	0x69, 0x63, 0x73, 0x22, 0x1a, 0x0a, 0x18, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69,
-	0x6f, 0x6e, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x22,
-	0x4c, 0x0a, 0x19, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x53, 0x74,
-	0x61, 0x74, 0x75, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x2f, 0x0a, 0x06,
-	0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x17, 0x2e, 0x72,
-	0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x53,
-	0x74, 0x61, 0x74, 0x75, 0x73, 0x52, 0x06, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x22, 0x16, 0x0a,
-	0x14, 0x50, 0x72, 0x69, 0x6d, 0x61, 0x72, 0x79, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x52, 0x65,
-	0x71, 0x75, 0x65, 0x73, 0x74, 0x22, 0x4f, 0x0a, 0x15, 0x50, 0x72, 0x69, 0x6d, 0x61, 0x72, 0x79,
-	0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x36,
-	0x0a, 0x06, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x1e,
-	0x2e, 0x72, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x64, 0x61, 0x74, 0x61,
-	0x2e, 0x50, 0x72, 0x69, 0x6d, 0x61, 0x72, 0x79, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x52, 0x06,
-	0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x22, 0x18, 0x0a, 0x16, 0x50, 0x72, 0x69, 0x6d, 0x61, 0x72,
-	0x79, 0x50, 0x6f, 0x73, 0x69, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74,
-	0x22, 0x35, 0x0a, 0x17, 0x50, 0x72, 0x69, 0x6d, 0x61, 0x72, 0x79, 0x50, 0x6f, 0x73, 0x69, 0x74,
-	0x69, 0x6f, 0x6e, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x1a, 0x0a, 0x08, 0x70,
-	0x6f, 0x73, 0x69, 0x74, 0x69, 0x6f, 0x6e, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x70,
-	0x6f, 0x73, 0x69, 0x74, 0x69, 0x6f, 0x6e, 0x22, 0x34, 0x0a, 0x16, 0x57, 0x61, 0x69, 0x74, 0x46,
-	0x6f, 0x72, 0x50, 0x6f, 0x73, 0x69, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73,
-	0x74, 0x12, 0x1a, 0x0a, 0x08, 0x70, 0x6f, 0x73, 0x69, 0x74, 0x69, 0x6f, 0x6e, 0x18, 0x01, 0x20,
-	0x01, 0x28, 0x09, 0x52, 0x08, 0x70, 0x6f, 0x73, 0x69, 0x74, 0x69, 0x6f, 0x6e, 0x22, 0x19, 0x0a,
-	0x17, 0x57, 0x61, 0x69, 0x74, 0x46, 0x6f, 0x72, 0x50, 0x6f, 0x73, 0x69, 0x74, 0x69, 0x6f, 0x6e,
-	0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x18, 0x0a, 0x16, 0x53, 0x74, 0x6f, 0x70,
-	0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x65, 0x71, 0x75, 0x65,
-	0x73, 0x74, 0x22, 0x19, 0x0a, 0x17, 0x53, 0x74, 0x6f, 0x70, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63,
-	0x61, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x5e, 0x0a,
-	0x1d, 0x53, 0x74, 0x6f, 0x70, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e,
-	0x4d, 0x69, 0x6e, 0x69, 0x6d, 0x75, 0x6d, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1a,
+	0x72, 0x61, 0x6e, 0x73, 0x61, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x22, 0x2f, 0x0a, 0x19, 0x47, 0x65,
+	0x74, 0x54, 0x72, 0x61, 0x6e, 0x73, 0x61, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x49, 0x6e, 0x66, 0x6f,
+	0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x12, 0x0a, 0x04, 0x64, 0x74, 0x69, 0x64, 0x18,
+	0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x64, 0x74, 0x69, 0x64, 0x22, 0x8f, 0x01, 0x0a, 0x1a,
+	0x47, 0x65, 0x74, 0x54, 0x72, 0x61, 0x6e, 0x73, 0x61, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x49, 0x6e,
+	0x66, 0x6f, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x14, 0x0a, 0x05, 0x73, 0x74,
+	0x61, 0x74, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x73, 0x74, 0x61, 0x74, 0x65,
+	0x12, 0x18, 0x0a, 0x07, 0x6d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28,
+	0x09, 0x52, 0x07, 0x6d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x12, 0x21, 0x0a, 0x0c, 0x74, 0x69,
+	0x6d, 0x65, 0x5f, 0x63, 0x72, 0x65, 0x61, 0x74, 0x65, 0x64, 0x18, 0x03, 0x20, 0x01, 0x28, 0x03,
+	0x52, 0x0b, 0x74, 0x69, 0x6d, 0x65, 0x43, 0x72, 0x65, 0x61, 0x74, 0x65, 0x64, 0x12, 0x1e, 0x0a,
+	0x0a, 0x73, 0x74, 0x61, 0x74, 0x65, 0x6d, 0x65, 0x6e, 0x74, 0x73, 0x18, 0x04, 0x20, 0x03, 0x28,
+	0x09, 0x52, 0x0a, 0x73, 0x74, 0x61, 0x74, 0x65, 0x6d, 0x65, 0x6e, 0x74, 0x73, 0x22, 0x40, 0x0a,
+	0x1a, 0x43, 0x6f, 0x6e, 0x63, 0x6c, 0x75, 0x64, 0x65, 0x54, 0x72, 0x61, 0x6e, 0x73, 0x61, 0x63,
+	0x74, 0x69, 0x6f, 0x6e, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x12, 0x0a, 0x04, 0x64,
+	0x74, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x64, 0x74, 0x69, 0x64, 0x12,
+	0x0e, 0x0a, 0x02, 0x6d, 0x6d, 0x18, 0x02, 0x20, 0x01, 0x28, 0x08, 0x52, 0x02, 0x6d, 0x6d, 0x22,
+	0x1d, 0x0a, 0x1b, 0x43, 0x6f, 0x6e, 0x63, 0x6c, 0x75, 0x64, 0x65, 0x54, 0x72, 0x61, 0x6e, 0x73,
+	0x61, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x19,
+	0x0a, 0x17, 0x4d, 0x79, 0x73, 0x71, 0x6c, 0x48, 0x6f, 0x73, 0x74, 0x4d, 0x65, 0x74, 0x72, 0x69,
+	0x63, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x22, 0x5b, 0x0a, 0x18, 0x4d, 0x79, 0x73,
+	0x71, 0x6c, 0x48, 0x6f, 0x73, 0x74, 0x4d, 0x65, 0x74, 0x72, 0x69, 0x63, 0x73, 0x52, 0x65, 0x73,
+	0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x3f, 0x0a, 0x0b, 0x48, 0x6f, 0x73, 0x74, 0x4d, 0x65, 0x74,
+	0x72, 0x69, 0x63, 0x73, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x1d, 0x2e, 0x6d, 0x79, 0x73,
+	0x71, 0x6c, 0x63, 0x74, 0x6c, 0x2e, 0x48, 0x6f, 0x73, 0x74, 0x4d, 0x65, 0x74, 0x72, 0x69, 0x63,
+	0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x52, 0x0b, 0x48, 0x6f, 0x73, 0x74, 0x4d,
+	0x65, 0x74, 0x72, 0x69, 0x63, 0x73, 0x22, 0x1a, 0x0a, 0x18, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63,
+	0x61, 0x74, 0x69, 0x6f, 0x6e, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65,
+	0x73, 0x74, 0x22, 0x4c, 0x0a, 0x19, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f,
+	0x6e, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12,
+	0x2f, 0x0a, 0x06, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32,
+	0x17, 0x2e, 0x72, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x64, 0x61, 0x74,
+	0x61, 0x2e, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x52, 0x06, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73,
+	0x22, 0x16, 0x0a, 0x14, 0x50, 0x72, 0x69, 0x6d, 0x61, 0x72, 0x79, 0x53, 0x74, 0x61, 0x74, 0x75,
+	0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x22, 0x4f, 0x0a, 0x15, 0x50, 0x72, 0x69, 0x6d,
+	0x61, 0x72, 0x79, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73,
+	0x65, 0x12, 0x36, 0x0a, 0x06, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x18, 0x01, 0x20, 0x01, 0x28,
+	0x0b, 0x32, 0x1e, 0x2e, 0x72, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x64,
+	0x61, 0x74, 0x61, 0x2e, 0x50, 0x72, 0x69, 0x6d, 0x61, 0x72, 0x79, 0x53, 0x74, 0x61, 0x74, 0x75,
+	0x73, 0x52, 0x06, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x22, 0x18, 0x0a, 0x16, 0x50, 0x72, 0x69,
+	0x6d, 0x61, 0x72, 0x79, 0x50, 0x6f, 0x73, 0x69, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x65, 0x71, 0x75,
+	0x65, 0x73, 0x74, 0x22, 0x35, 0x0a, 0x17, 0x50, 0x72, 0x69, 0x6d, 0x61, 0x72, 0x79, 0x50, 0x6f,
+	0x73, 0x69, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x1a,
 	0x0a, 0x08, 0x70, 0x6f, 0x73, 0x69, 0x74, 0x69, 0x6f, 0x6e, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09,
-	0x52, 0x08, 0x70, 0x6f, 0x73, 0x69, 0x74, 0x69, 0x6f, 0x6e, 0x12, 0x21, 0x0a, 0x0c, 0x77, 0x61,
-	0x69, 0x74, 0x5f, 0x74, 0x69, 0x6d, 0x65, 0x6f, 0x75, 0x74, 0x18, 0x02, 0x20, 0x01, 0x28, 0x03,
-	0x52, 0x0b, 0x77, 0x61, 0x69, 0x74, 0x54, 0x69, 0x6d, 0x65, 0x6f, 0x75, 0x74, 0x22, 0x3c, 0x0a,
-	0x1e, 0x53, 0x74, 0x6f, 0x70, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e,
-	0x4d, 0x69, 0x6e, 0x69, 0x6d, 0x75, 0x6d, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12,
-	0x1a, 0x0a, 0x08, 0x70, 0x6f, 0x73, 0x69, 0x74, 0x69, 0x6f, 0x6e, 0x18, 0x01, 0x20, 0x01, 0x28,
-	0x09, 0x52, 0x08, 0x70, 0x6f, 0x73, 0x69, 0x74, 0x69, 0x6f, 0x6e, 0x22, 0x35, 0x0a, 0x17, 0x53,
-	0x74, 0x61, 0x72, 0x74, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x52,
-	0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08, 0x73, 0x65, 0x6d, 0x69, 0x53, 0x79,
-	0x6e, 0x63, 0x18, 0x01, 0x20, 0x01, 0x28, 0x08, 0x52, 0x08, 0x73, 0x65, 0x6d, 0x69, 0x53, 0x79,
-	0x6e, 0x63, 0x22, 0x1a, 0x0a, 0x18, 0x53, 0x74, 0x61, 0x72, 0x74, 0x52, 0x65, 0x70, 0x6c, 0x69,
-	0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x62,
-	0x0a, 0x21, 0x53, 0x74, 0x61, 0x72, 0x74, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69,
-	0x6f, 0x6e, 0x55, 0x6e, 0x74, 0x69, 0x6c, 0x41, 0x66, 0x74, 0x65, 0x72, 0x52, 0x65, 0x71, 0x75,
-	0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08, 0x70, 0x6f, 0x73, 0x69, 0x74, 0x69, 0x6f, 0x6e, 0x18,
-	0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x70, 0x6f, 0x73, 0x69, 0x74, 0x69, 0x6f, 0x6e, 0x12,
-	0x21, 0x0a, 0x0c, 0x77, 0x61, 0x69, 0x74, 0x5f, 0x74, 0x69, 0x6d, 0x65, 0x6f, 0x75, 0x74, 0x18,
-	0x02, 0x20, 0x01, 0x28, 0x03, 0x52, 0x0b, 0x77, 0x61, 0x69, 0x74, 0x54, 0x69, 0x6d, 0x65, 0x6f,
-	0x75, 0x74, 0x22, 0x24, 0x0a, 0x22, 0x53, 0x74, 0x61, 0x72, 0x74, 0x52, 0x65, 0x70, 0x6c, 0x69,
-	0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x55, 0x6e, 0x74, 0x69, 0x6c, 0x41, 0x66, 0x74, 0x65, 0x72,
-	0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x14, 0x0a, 0x12, 0x47, 0x65, 0x74, 0x52,
-	0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x22, 0x2b,
-	0x0a, 0x13, 0x47, 0x65, 0x74, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x73, 0x52, 0x65, 0x73,
-	0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x14, 0x0a, 0x05, 0x61, 0x64, 0x64, 0x72, 0x73, 0x18, 0x01,
-	0x20, 0x03, 0x28, 0x09, 0x52, 0x05, 0x61, 0x64, 0x64, 0x72, 0x73, 0x22, 0x19, 0x0a, 0x17, 0x52,
-	0x65, 0x73, 0x65, 0x74, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x52,
-	0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x22, 0x1a, 0x0a, 0x18, 0x52, 0x65, 0x73, 0x65, 0x74, 0x52,
-	0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e,
-	0x73, 0x65, 0x22, 0x2f, 0x0a, 0x17, 0x56, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69,
-	0x6f, 0x6e, 0x45, 0x78, 0x65, 0x63, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x14, 0x0a,
-	0x05, 0x71, 0x75, 0x65, 0x72, 0x79, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x71, 0x75,
-	0x65, 0x72, 0x79, 0x22, 0x46, 0x0a, 0x18, 0x56, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74,
-	0x69, 0x6f, 0x6e, 0x45, 0x78, 0x65, 0x63, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12,
-	0x2a, 0x0a, 0x06, 0x72, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32,
-	0x12, 0x2e, 0x71, 0x75, 0x65, 0x72, 0x79, 0x2e, 0x51, 0x75, 0x65, 0x72, 0x79, 0x52, 0x65, 0x73,
-	0x75, 0x6c, 0x74, 0x52, 0x06, 0x72, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x22, 0x4b, 0x0a, 0x1d, 0x56,
+	0x52, 0x08, 0x70, 0x6f, 0x73, 0x69, 0x74, 0x69, 0x6f, 0x6e, 0x22, 0x34, 0x0a, 0x16, 0x57, 0x61,
+	0x69, 0x74, 0x46, 0x6f, 0x72, 0x50, 0x6f, 0x73, 0x69, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x65, 0x71,
+	0x75, 0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08, 0x70, 0x6f, 0x73, 0x69, 0x74, 0x69, 0x6f, 0x6e,
+	0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x70, 0x6f, 0x73, 0x69, 0x74, 0x69, 0x6f, 0x6e,
+	0x22, 0x19, 0x0a, 0x17, 0x57, 0x61, 0x69, 0x74, 0x46, 0x6f, 0x72, 0x50, 0x6f, 0x73, 0x69, 0x74,
+	0x69, 0x6f, 0x6e, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x18, 0x0a, 0x16, 0x53,
+	0x74, 0x6f, 0x70, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x65,
+	0x71, 0x75, 0x65, 0x73, 0x74, 0x22, 0x19, 0x0a, 0x17, 0x53, 0x74, 0x6f, 0x70, 0x52, 0x65, 0x70,
+	0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65,
+	0x22, 0x5e, 0x0a, 0x1d, 0x53, 0x74, 0x6f, 0x70, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74,
+	0x69, 0x6f, 0x6e, 0x4d, 0x69, 0x6e, 0x69, 0x6d, 0x75, 0x6d, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73,
+	0x74, 0x12, 0x1a, 0x0a, 0x08, 0x70, 0x6f, 0x73, 0x69, 0x74, 0x69, 0x6f, 0x6e, 0x18, 0x01, 0x20,
+	0x01, 0x28, 0x09, 0x52, 0x08, 0x70, 0x6f, 0x73, 0x69, 0x74, 0x69, 0x6f, 0x6e, 0x12, 0x21, 0x0a,
+	0x0c, 0x77, 0x61, 0x69, 0x74, 0x5f, 0x74, 0x69, 0x6d, 0x65, 0x6f, 0x75, 0x74, 0x18, 0x02, 0x20,
+	0x01, 0x28, 0x03, 0x52, 0x0b, 0x77, 0x61, 0x69, 0x74, 0x54, 0x69, 0x6d, 0x65, 0x6f, 0x75, 0x74,
+	0x22, 0x3c, 0x0a, 0x1e, 0x53, 0x74, 0x6f, 0x70, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74,
+	0x69, 0x6f, 0x6e, 0x4d, 0x69, 0x6e, 0x69, 0x6d, 0x75, 0x6d, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e,
+	0x73, 0x65, 0x12, 0x1a, 0x0a, 0x08, 0x70, 0x6f, 0x73, 0x69, 0x74, 0x69, 0x6f, 0x6e, 0x18, 0x01,
+	0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x70, 0x6f, 0x73, 0x69, 0x74, 0x69, 0x6f, 0x6e, 0x22, 0x35,
+	0x0a, 0x17, 0x53, 0x74, 0x61, 0x72, 0x74, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69,
+	0x6f, 0x6e, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08, 0x73, 0x65, 0x6d,
+	0x69, 0x53, 0x79, 0x6e, 0x63, 0x18, 0x01, 0x20, 0x01, 0x28, 0x08, 0x52, 0x08, 0x73, 0x65, 0x6d,
+	0x69, 0x53, 0x79, 0x6e, 0x63, 0x22, 0x1a, 0x0a, 0x18, 0x53, 0x74, 0x61, 0x72, 0x74, 0x52, 0x65,
+	0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73,
+	0x65, 0x22, 0x62, 0x0a, 0x21, 0x53, 0x74, 0x61, 0x72, 0x74, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63,
+	0x61, 0x74, 0x69, 0x6f, 0x6e, 0x55, 0x6e, 0x74, 0x69, 0x6c, 0x41, 0x66, 0x74, 0x65, 0x72, 0x52,
+	0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08, 0x70, 0x6f, 0x73, 0x69, 0x74, 0x69,
+	0x6f, 0x6e, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x70, 0x6f, 0x73, 0x69, 0x74, 0x69,
+	0x6f, 0x6e, 0x12, 0x21, 0x0a, 0x0c, 0x77, 0x61, 0x69, 0x74, 0x5f, 0x74, 0x69, 0x6d, 0x65, 0x6f,
+	0x75, 0x74, 0x18, 0x02, 0x20, 0x01, 0x28, 0x03, 0x52, 0x0b, 0x77, 0x61, 0x69, 0x74, 0x54, 0x69,
+	0x6d, 0x65, 0x6f, 0x75, 0x74, 0x22, 0x24, 0x0a, 0x22, 0x53, 0x74, 0x61, 0x72, 0x74, 0x52, 0x65,
+	0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x55, 0x6e, 0x74, 0x69, 0x6c, 0x41, 0x66,
+	0x74, 0x65, 0x72, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x14, 0x0a, 0x12, 0x47,
+	0x65, 0x74, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73,
+	0x74, 0x22, 0x2b, 0x0a, 0x13, 0x47, 0x65, 0x74, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x73,
+	0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x14, 0x0a, 0x05, 0x61, 0x64, 0x64, 0x72,
+	0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x09, 0x52, 0x05, 0x61, 0x64, 0x64, 0x72, 0x73, 0x22, 0x19,
+	0x0a, 0x17, 0x52, 0x65, 0x73, 0x65, 0x74, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69,
+	0x6f, 0x6e, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x22, 0x1a, 0x0a, 0x18, 0x52, 0x65, 0x73,
+	0x65, 0x74, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x65, 0x73,
+	0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x2f, 0x0a, 0x17, 0x56, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63,
+	0x61, 0x74, 0x69, 0x6f, 0x6e, 0x45, 0x78, 0x65, 0x63, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74,
+	0x12, 0x14, 0x0a, 0x05, 0x71, 0x75, 0x65, 0x72, 0x79, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52,
+	0x05, 0x71, 0x75, 0x65, 0x72, 0x79, 0x22, 0x46, 0x0a, 0x18, 0x56, 0x52, 0x65, 0x70, 0x6c, 0x69,
+	0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x45, 0x78, 0x65, 0x63, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e,
+	0x73, 0x65, 0x12, 0x2a, 0x0a, 0x06, 0x72, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x18, 0x01, 0x20, 0x01,
+	0x28, 0x0b, 0x32, 0x12, 0x2e, 0x71, 0x75, 0x65, 0x72, 0x79, 0x2e, 0x51, 0x75, 0x65, 0x72, 0x79,
+	0x52, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x52, 0x06, 0x72, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x22, 0x4b,
+	0x0a, 0x1d, 0x56, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x57, 0x61,
+	0x69, 0x74, 0x46, 0x6f, 0x72, 0x50, 0x6f, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12,
+	0x0e, 0x0a, 0x02, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x05, 0x52, 0x02, 0x69, 0x64, 0x12,
+	0x1a, 0x0a, 0x08, 0x70, 0x6f, 0x73, 0x69, 0x74, 0x69, 0x6f, 0x6e, 0x18, 0x02, 0x20, 0x01, 0x28,
+	0x09, 0x52, 0x08, 0x70, 0x6f, 0x73, 0x69, 0x74, 0x69, 0x6f, 0x6e, 0x22, 0x20, 0x0a, 0x1e, 0x56,
 	0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x57, 0x61, 0x69, 0x74, 0x46,
-	0x6f, 0x72, 0x50, 0x6f, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x0e, 0x0a, 0x02,
-	0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x05, 0x52, 0x02, 0x69, 0x64, 0x12, 0x1a, 0x0a, 0x08,
-	0x70, 0x6f, 0x73, 0x69, 0x74, 0x69, 0x6f, 0x6e, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08,
-	0x70, 0x6f, 0x73, 0x69, 0x74, 0x69, 0x6f, 0x6e, 0x22, 0x20, 0x0a, 0x1e, 0x56, 0x52, 0x65, 0x70,
-	0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x57, 0x61, 0x69, 0x74, 0x46, 0x6f, 0x72, 0x50,
-	0x6f, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x30, 0x0a, 0x12, 0x49, 0x6e,
-	0x69, 0x74, 0x50, 0x72, 0x69, 0x6d, 0x61, 0x72, 0x79, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74,
-	0x12, 0x1a, 0x0a, 0x08, 0x73, 0x65, 0x6d, 0x69, 0x53, 0x79, 0x6e, 0x63, 0x18, 0x01, 0x20, 0x01,
-	0x28, 0x08, 0x52, 0x08, 0x73, 0x65, 0x6d, 0x69, 0x53, 0x79, 0x6e, 0x63, 0x22, 0x31, 0x0a, 0x13,
-	0x49, 0x6e, 0x69, 0x74, 0x50, 0x72, 0x69, 0x6d, 0x61, 0x72, 0x79, 0x52, 0x65, 0x73, 0x70, 0x6f,
-	0x6e, 0x73, 0x65, 0x12, 0x1a, 0x0a, 0x08, 0x70, 0x6f, 0x73, 0x69, 0x74, 0x69, 0x6f, 0x6e, 0x18,
-	0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x70, 0x6f, 0x73, 0x69, 0x74, 0x69, 0x6f, 0x6e, 0x22,
-	0xd8, 0x01, 0x0a, 0x1e, 0x50, 0x6f, 0x70, 0x75, 0x6c, 0x61, 0x74, 0x65, 0x52, 0x65, 0x70, 0x61,
-	0x72, 0x65, 0x6e, 0x74, 0x4a, 0x6f, 0x75, 0x72, 0x6e, 0x61, 0x6c, 0x52, 0x65, 0x71, 0x75, 0x65,
-	0x73, 0x74, 0x12, 0x26, 0x0a, 0x0f, 0x74, 0x69, 0x6d, 0x65, 0x5f, 0x63, 0x72, 0x65, 0x61, 0x74,
-	0x65, 0x64, 0x5f, 0x6e, 0x73, 0x18, 0x01, 0x20, 0x01, 0x28, 0x03, 0x52, 0x0d, 0x74, 0x69, 0x6d,
-	0x65, 0x43, 0x72, 0x65, 0x61, 0x74, 0x65, 0x64, 0x4e, 0x73, 0x12, 0x1f, 0x0a, 0x0b, 0x61, 0x63,
-	0x74, 0x69, 0x6f, 0x6e, 0x5f, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52,
-	0x0a, 0x61, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x4e, 0x61, 0x6d, 0x65, 0x12, 0x3a, 0x0a, 0x0d, 0x70,
-	0x72, 0x69, 0x6d, 0x61, 0x72, 0x79, 0x5f, 0x61, 0x6c, 0x69, 0x61, 0x73, 0x18, 0x03, 0x20, 0x01,
-	0x28, 0x0b, 0x32, 0x15, 0x2e, 0x74, 0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x54, 0x61,
-	0x62, 0x6c, 0x65, 0x74, 0x41, 0x6c, 0x69, 0x61, 0x73, 0x52, 0x0c, 0x70, 0x72, 0x69, 0x6d, 0x61,
-	0x72, 0x79, 0x41, 0x6c, 0x69, 0x61, 0x73, 0x12, 0x31, 0x0a, 0x14, 0x72, 0x65, 0x70, 0x6c, 0x69,
-	0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x5f, 0x70, 0x6f, 0x73, 0x69, 0x74, 0x69, 0x6f, 0x6e, 0x18,
-	0x04, 0x20, 0x01, 0x28, 0x09, 0x52, 0x13, 0x72, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69,
-	0x6f, 0x6e, 0x50, 0x6f, 0x73, 0x69, 0x74, 0x69, 0x6f, 0x6e, 0x22, 0x21, 0x0a, 0x1f, 0x50, 0x6f,
-	0x70, 0x75, 0x6c, 0x61, 0x74, 0x65, 0x52, 0x65, 0x70, 0x61, 0x72, 0x65, 0x6e, 0x74, 0x4a, 0x6f,
-	0x75, 0x72, 0x6e, 0x61, 0x6c, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0xba, 0x01,
+	0x6f, 0x72, 0x50, 0x6f, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x30, 0x0a,
+	0x12, 0x49, 0x6e, 0x69, 0x74, 0x50, 0x72, 0x69, 0x6d, 0x61, 0x72, 0x79, 0x52, 0x65, 0x71, 0x75,
+	0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08, 0x73, 0x65, 0x6d, 0x69, 0x53, 0x79, 0x6e, 0x63, 0x18,
+	0x01, 0x20, 0x01, 0x28, 0x08, 0x52, 0x08, 0x73, 0x65, 0x6d, 0x69, 0x53, 0x79, 0x6e, 0x63, 0x22,
+	0x31, 0x0a, 0x13, 0x49, 0x6e, 0x69, 0x74, 0x50, 0x72, 0x69, 0x6d, 0x61, 0x72, 0x79, 0x52, 0x65,
+	0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x1a, 0x0a, 0x08, 0x70, 0x6f, 0x73, 0x69, 0x74, 0x69,
+	0x6f, 0x6e, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x70, 0x6f, 0x73, 0x69, 0x74, 0x69,
+	0x6f, 0x6e, 0x22, 0xd8, 0x01, 0x0a, 0x1e, 0x50, 0x6f, 0x70, 0x75, 0x6c, 0x61, 0x74, 0x65, 0x52,
+	0x65, 0x70, 0x61, 0x72, 0x65, 0x6e, 0x74, 0x4a, 0x6f, 0x75, 0x72, 0x6e, 0x61, 0x6c, 0x52, 0x65,
+	0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x26, 0x0a, 0x0f, 0x74, 0x69, 0x6d, 0x65, 0x5f, 0x63, 0x72,
+	0x65, 0x61, 0x74, 0x65, 0x64, 0x5f, 0x6e, 0x73, 0x18, 0x01, 0x20, 0x01, 0x28, 0x03, 0x52, 0x0d,
+	0x74, 0x69, 0x6d, 0x65, 0x43, 0x72, 0x65, 0x61, 0x74, 0x65, 0x64, 0x4e, 0x73, 0x12, 0x1f, 0x0a,
+	0x0b, 0x61, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x5f, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x02, 0x20, 0x01,
+	0x28, 0x09, 0x52, 0x0a, 0x61, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x4e, 0x61, 0x6d, 0x65, 0x12, 0x3a,
+	0x0a, 0x0d, 0x70, 0x72, 0x69, 0x6d, 0x61, 0x72, 0x79, 0x5f, 0x61, 0x6c, 0x69, 0x61, 0x73, 0x18,
+	0x03, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x15, 0x2e, 0x74, 0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74, 0x61,
+	0x2e, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x41, 0x6c, 0x69, 0x61, 0x73, 0x52, 0x0c, 0x70, 0x72,
+	0x69, 0x6d, 0x61, 0x72, 0x79, 0x41, 0x6c, 0x69, 0x61, 0x73, 0x12, 0x31, 0x0a, 0x14, 0x72, 0x65,
+	0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x5f, 0x70, 0x6f, 0x73, 0x69, 0x74, 0x69,
+	0x6f, 0x6e, 0x18, 0x04, 0x20, 0x01, 0x28, 0x09, 0x52, 0x13, 0x72, 0x65, 0x70, 0x6c, 0x69, 0x63,
+	0x61, 0x74, 0x69, 0x6f, 0x6e, 0x50, 0x6f, 0x73, 0x69, 0x74, 0x69, 0x6f, 0x6e, 0x22, 0x21, 0x0a,
+	0x1f, 0x50, 0x6f, 0x70, 0x75, 0x6c, 0x61, 0x74, 0x65, 0x52, 0x65, 0x70, 0x61, 0x72, 0x65, 0x6e,
+	0x74, 0x4a, 0x6f, 0x75, 0x72, 0x6e, 0x61, 0x6c, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65,
+	0x22, 0x20, 0x0a, 0x1e, 0x52, 0x65, 0x61, 0x64, 0x52, 0x65, 0x70, 0x61, 0x72, 0x65, 0x6e, 0x74,
+	0x4a, 0x6f, 0x75, 0x72, 0x6e, 0x61, 0x6c, 0x49, 0x6e, 0x66, 0x6f, 0x52, 0x65, 0x71, 0x75, 0x65,
+	0x73, 0x74, 0x22, 0x39, 0x0a, 0x1f, 0x52, 0x65, 0x61, 0x64, 0x52, 0x65, 0x70, 0x61, 0x72, 0x65,
+	0x6e, 0x74, 0x4a, 0x6f, 0x75, 0x72, 0x6e, 0x61, 0x6c, 0x49, 0x6e, 0x66, 0x6f, 0x52, 0x65, 0x73,
+	0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x16, 0x0a, 0x06, 0x6c, 0x65, 0x6e, 0x67, 0x74, 0x68, 0x18,
+	0x01, 0x20, 0x01, 0x28, 0x05, 0x52, 0x06, 0x6c, 0x65, 0x6e, 0x67, 0x74, 0x68, 0x22, 0xba, 0x01,
 	0x0a, 0x12, 0x49, 0x6e, 0x69, 0x74, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x52, 0x65, 0x71,
 	0x75, 0x65, 0x73, 0x74, 0x12, 0x2d, 0x0a, 0x06, 0x70, 0x61, 0x72, 0x65, 0x6e, 0x74, 0x18, 0x01,
 	0x20, 0x01, 0x28, 0x0b, 0x32, 0x15, 0x2e, 0x74, 0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74, 0x61, 0x2e,
@@ -9364,7 +9585,7 @@ func file_tabletmanagerdata_proto_rawDescGZIP() []byte {
 }
 
 var file_tabletmanagerdata_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_tabletmanagerdata_proto_msgTypes = make([]protoimpl.MessageInfo, 161)
+var file_tabletmanagerdata_proto_msgTypes = make([]protoimpl.MessageInfo, 165)
 var file_tabletmanagerdata_proto_goTypes = []any{
 	(TabletSelectionPreference)(0),                  // 0: tabletmanagerdata.TabletSelectionPreference
 	(CheckThrottlerResponseCode)(0),                 // 1: tabletmanagerdata.CheckThrottlerResponseCode
@@ -9420,234 +9641,238 @@ var file_tabletmanagerdata_proto_goTypes = []any{
 	(*GetUnresolvedTransactionsResponse)(nil),       // 51: tabletmanagerdata.GetUnresolvedTransactionsResponse
 	(*ReadTransactionRequest)(nil),                  // 52: tabletmanagerdata.ReadTransactionRequest
 	(*ReadTransactionResponse)(nil),                 // 53: tabletmanagerdata.ReadTransactionResponse
-	(*ConcludeTransactionRequest)(nil),              // 54: tabletmanagerdata.ConcludeTransactionRequest
-	(*ConcludeTransactionResponse)(nil),             // 55: tabletmanagerdata.ConcludeTransactionResponse
-	(*MysqlHostMetricsRequest)(nil),                 // 56: tabletmanagerdata.MysqlHostMetricsRequest
-	(*MysqlHostMetricsResponse)(nil),                // 57: tabletmanagerdata.MysqlHostMetricsResponse
-	(*ReplicationStatusRequest)(nil),                // 58: tabletmanagerdata.ReplicationStatusRequest
-	(*ReplicationStatusResponse)(nil),               // 59: tabletmanagerdata.ReplicationStatusResponse
-	(*PrimaryStatusRequest)(nil),                    // 60: tabletmanagerdata.PrimaryStatusRequest
-	(*PrimaryStatusResponse)(nil),                   // 61: tabletmanagerdata.PrimaryStatusResponse
-	(*PrimaryPositionRequest)(nil),                  // 62: tabletmanagerdata.PrimaryPositionRequest
-	(*PrimaryPositionResponse)(nil),                 // 63: tabletmanagerdata.PrimaryPositionResponse
-	(*WaitForPositionRequest)(nil),                  // 64: tabletmanagerdata.WaitForPositionRequest
-	(*WaitForPositionResponse)(nil),                 // 65: tabletmanagerdata.WaitForPositionResponse
-	(*StopReplicationRequest)(nil),                  // 66: tabletmanagerdata.StopReplicationRequest
-	(*StopReplicationResponse)(nil),                 // 67: tabletmanagerdata.StopReplicationResponse
-	(*StopReplicationMinimumRequest)(nil),           // 68: tabletmanagerdata.StopReplicationMinimumRequest
-	(*StopReplicationMinimumResponse)(nil),          // 69: tabletmanagerdata.StopReplicationMinimumResponse
-	(*StartReplicationRequest)(nil),                 // 70: tabletmanagerdata.StartReplicationRequest
-	(*StartReplicationResponse)(nil),                // 71: tabletmanagerdata.StartReplicationResponse
-	(*StartReplicationUntilAfterRequest)(nil),       // 72: tabletmanagerdata.StartReplicationUntilAfterRequest
-	(*StartReplicationUntilAfterResponse)(nil),      // 73: tabletmanagerdata.StartReplicationUntilAfterResponse
-	(*GetReplicasRequest)(nil),                      // 74: tabletmanagerdata.GetReplicasRequest
-	(*GetReplicasResponse)(nil),                     // 75: tabletmanagerdata.GetReplicasResponse
-	(*ResetReplicationRequest)(nil),                 // 76: tabletmanagerdata.ResetReplicationRequest
-	(*ResetReplicationResponse)(nil),                // 77: tabletmanagerdata.ResetReplicationResponse
-	(*VReplicationExecRequest)(nil),                 // 78: tabletmanagerdata.VReplicationExecRequest
-	(*VReplicationExecResponse)(nil),                // 79: tabletmanagerdata.VReplicationExecResponse
-	(*VReplicationWaitForPosRequest)(nil),           // 80: tabletmanagerdata.VReplicationWaitForPosRequest
-	(*VReplicationWaitForPosResponse)(nil),          // 81: tabletmanagerdata.VReplicationWaitForPosResponse
-	(*InitPrimaryRequest)(nil),                      // 82: tabletmanagerdata.InitPrimaryRequest
-	(*InitPrimaryResponse)(nil),                     // 83: tabletmanagerdata.InitPrimaryResponse
-	(*PopulateReparentJournalRequest)(nil),          // 84: tabletmanagerdata.PopulateReparentJournalRequest
-	(*PopulateReparentJournalResponse)(nil),         // 85: tabletmanagerdata.PopulateReparentJournalResponse
-	(*InitReplicaRequest)(nil),                      // 86: tabletmanagerdata.InitReplicaRequest
-	(*InitReplicaResponse)(nil),                     // 87: tabletmanagerdata.InitReplicaResponse
-	(*DemotePrimaryRequest)(nil),                    // 88: tabletmanagerdata.DemotePrimaryRequest
-	(*DemotePrimaryResponse)(nil),                   // 89: tabletmanagerdata.DemotePrimaryResponse
-	(*UndoDemotePrimaryRequest)(nil),                // 90: tabletmanagerdata.UndoDemotePrimaryRequest
-	(*UndoDemotePrimaryResponse)(nil),               // 91: tabletmanagerdata.UndoDemotePrimaryResponse
-	(*ReplicaWasPromotedRequest)(nil),               // 92: tabletmanagerdata.ReplicaWasPromotedRequest
-	(*ReplicaWasPromotedResponse)(nil),              // 93: tabletmanagerdata.ReplicaWasPromotedResponse
-	(*ResetReplicationParametersRequest)(nil),       // 94: tabletmanagerdata.ResetReplicationParametersRequest
-	(*ResetReplicationParametersResponse)(nil),      // 95: tabletmanagerdata.ResetReplicationParametersResponse
-	(*FullStatusRequest)(nil),                       // 96: tabletmanagerdata.FullStatusRequest
-	(*FullStatusResponse)(nil),                      // 97: tabletmanagerdata.FullStatusResponse
-	(*SetReplicationSourceRequest)(nil),             // 98: tabletmanagerdata.SetReplicationSourceRequest
-	(*SetReplicationSourceResponse)(nil),            // 99: tabletmanagerdata.SetReplicationSourceResponse
-	(*ReplicaWasRestartedRequest)(nil),              // 100: tabletmanagerdata.ReplicaWasRestartedRequest
-	(*ReplicaWasRestartedResponse)(nil),             // 101: tabletmanagerdata.ReplicaWasRestartedResponse
-	(*StopReplicationAndGetStatusRequest)(nil),      // 102: tabletmanagerdata.StopReplicationAndGetStatusRequest
-	(*StopReplicationAndGetStatusResponse)(nil),     // 103: tabletmanagerdata.StopReplicationAndGetStatusResponse
-	(*PromoteReplicaRequest)(nil),                   // 104: tabletmanagerdata.PromoteReplicaRequest
-	(*PromoteReplicaResponse)(nil),                  // 105: tabletmanagerdata.PromoteReplicaResponse
-	(*BackupRequest)(nil),                           // 106: tabletmanagerdata.BackupRequest
-	(*BackupResponse)(nil),                          // 107: tabletmanagerdata.BackupResponse
-	(*RestoreFromBackupRequest)(nil),                // 108: tabletmanagerdata.RestoreFromBackupRequest
-	(*RestoreFromBackupResponse)(nil),               // 109: tabletmanagerdata.RestoreFromBackupResponse
-	(*CreateVReplicationWorkflowRequest)(nil),       // 110: tabletmanagerdata.CreateVReplicationWorkflowRequest
-	(*CreateVReplicationWorkflowResponse)(nil),      // 111: tabletmanagerdata.CreateVReplicationWorkflowResponse
-	(*DeleteTableDataRequest)(nil),                  // 112: tabletmanagerdata.DeleteTableDataRequest
-	(*DeleteTableDataResponse)(nil),                 // 113: tabletmanagerdata.DeleteTableDataResponse
-	(*DeleteVReplicationWorkflowRequest)(nil),       // 114: tabletmanagerdata.DeleteVReplicationWorkflowRequest
-	(*DeleteVReplicationWorkflowResponse)(nil),      // 115: tabletmanagerdata.DeleteVReplicationWorkflowResponse
-	(*HasVReplicationWorkflowsRequest)(nil),         // 116: tabletmanagerdata.HasVReplicationWorkflowsRequest
-	(*HasVReplicationWorkflowsResponse)(nil),        // 117: tabletmanagerdata.HasVReplicationWorkflowsResponse
-	(*ReadVReplicationWorkflowsRequest)(nil),        // 118: tabletmanagerdata.ReadVReplicationWorkflowsRequest
-	(*ReadVReplicationWorkflowsResponse)(nil),       // 119: tabletmanagerdata.ReadVReplicationWorkflowsResponse
-	(*ReadVReplicationWorkflowRequest)(nil),         // 120: tabletmanagerdata.ReadVReplicationWorkflowRequest
-	(*ReadVReplicationWorkflowResponse)(nil),        // 121: tabletmanagerdata.ReadVReplicationWorkflowResponse
-	(*ValidateVReplicationPermissionsRequest)(nil),  // 122: tabletmanagerdata.ValidateVReplicationPermissionsRequest
-	(*ValidateVReplicationPermissionsResponse)(nil), // 123: tabletmanagerdata.ValidateVReplicationPermissionsResponse
-	(*VDiffRequest)(nil),                            // 124: tabletmanagerdata.VDiffRequest
-	(*VDiffResponse)(nil),                           // 125: tabletmanagerdata.VDiffResponse
-	(*VDiffPickerOptions)(nil),                      // 126: tabletmanagerdata.VDiffPickerOptions
-	(*VDiffReportOptions)(nil),                      // 127: tabletmanagerdata.VDiffReportOptions
-	(*VDiffCoreOptions)(nil),                        // 128: tabletmanagerdata.VDiffCoreOptions
-	(*VDiffOptions)(nil),                            // 129: tabletmanagerdata.VDiffOptions
-	(*UpdateVReplicationWorkflowRequest)(nil),       // 130: tabletmanagerdata.UpdateVReplicationWorkflowRequest
-	(*UpdateVReplicationWorkflowResponse)(nil),      // 131: tabletmanagerdata.UpdateVReplicationWorkflowResponse
-	(*UpdateVReplicationWorkflowsRequest)(nil),      // 132: tabletmanagerdata.UpdateVReplicationWorkflowsRequest
-	(*UpdateVReplicationWorkflowsResponse)(nil),     // 133: tabletmanagerdata.UpdateVReplicationWorkflowsResponse
-	(*ResetSequencesRequest)(nil),                   // 134: tabletmanagerdata.ResetSequencesRequest
-	(*ResetSequencesResponse)(nil),                  // 135: tabletmanagerdata.ResetSequencesResponse
-	(*CheckThrottlerRequest)(nil),                   // 136: tabletmanagerdata.CheckThrottlerRequest
-	(*CheckThrottlerResponse)(nil),                  // 137: tabletmanagerdata.CheckThrottlerResponse
-	(*GetThrottlerStatusRequest)(nil),               // 138: tabletmanagerdata.GetThrottlerStatusRequest
-	(*GetThrottlerStatusResponse)(nil),              // 139: tabletmanagerdata.GetThrottlerStatusResponse
-	(*ChangeTagsRequest)(nil),                       // 140: tabletmanagerdata.ChangeTagsRequest
-	(*ChangeTagsResponse)(nil),                      // 141: tabletmanagerdata.ChangeTagsResponse
-	nil,                                             // 142: tabletmanagerdata.UserPermission.PrivilegesEntry
-	nil,                                             // 143: tabletmanagerdata.DbPermission.PrivilegesEntry
-	nil,                                             // 144: tabletmanagerdata.ExecuteHookRequest.ExtraEnvEntry
-	nil,                                             // 145: tabletmanagerdata.GetGlobalStatusVarsResponse.StatusValuesEntry
-	nil,                                             // 146: tabletmanagerdata.DeleteTableDataRequest.TableFiltersEntry
-	(*ReadVReplicationWorkflowResponse_Stream)(nil), // 147: tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream
-	nil,                                   // 148: tabletmanagerdata.ReadVReplicationWorkflowResponse.ConfigOverridesEntry
-	nil,                                   // 149: tabletmanagerdata.UpdateVReplicationWorkflowRequest.ConfigOverridesEntry
-	(*CheckThrottlerResponse_Metric)(nil), // 150: tabletmanagerdata.CheckThrottlerResponse.Metric
-	nil,                                   // 151: tabletmanagerdata.CheckThrottlerResponse.MetricsEntry
-	(*GetThrottlerStatusResponse_MetricResult)(nil), // 152: tabletmanagerdata.GetThrottlerStatusResponse.MetricResult
-	nil, // 153: tabletmanagerdata.GetThrottlerStatusResponse.AggregatedMetricsEntry
-	nil, // 154: tabletmanagerdata.GetThrottlerStatusResponse.MetricThresholdsEntry
-	(*GetThrottlerStatusResponse_MetricHealth)(nil), // 155: tabletmanagerdata.GetThrottlerStatusResponse.MetricHealth
-	nil, // 156: tabletmanagerdata.GetThrottlerStatusResponse.MetricsHealthEntry
-	nil, // 157: tabletmanagerdata.GetThrottlerStatusResponse.ThrottledAppsEntry
-	nil, // 158: tabletmanagerdata.GetThrottlerStatusResponse.AppCheckedMetricsEntry
-	(*GetThrottlerStatusResponse_RecentApp)(nil), // 159: tabletmanagerdata.GetThrottlerStatusResponse.RecentApp
-	nil,                                      // 160: tabletmanagerdata.GetThrottlerStatusResponse.RecentAppsEntry
-	nil,                                      // 161: tabletmanagerdata.ChangeTagsRequest.TagsEntry
-	nil,                                      // 162: tabletmanagerdata.ChangeTagsResponse.TagsEntry
-	(*query.Field)(nil),                      // 163: query.Field
-	(topodata.TabletType)(0),                 // 164: topodata.TabletType
-	(*vtrpc.CallerID)(nil),                   // 165: vtrpc.CallerID
-	(*query.QueryResult)(nil),                // 166: query.QueryResult
-	(*query.TransactionMetadata)(nil),        // 167: query.TransactionMetadata
-	(*mysqlctl.HostMetricsResponse)(nil),     // 168: mysqlctl.HostMetricsResponse
-	(*replicationdata.Status)(nil),           // 169: replicationdata.Status
-	(*replicationdata.PrimaryStatus)(nil),    // 170: replicationdata.PrimaryStatus
-	(*topodata.TabletAlias)(nil),             // 171: topodata.TabletAlias
-	(*replicationdata.FullStatus)(nil),       // 172: replicationdata.FullStatus
-	(replicationdata.StopReplicationMode)(0), // 173: replicationdata.StopReplicationMode
-	(*replicationdata.StopReplicationStatus)(nil), // 174: replicationdata.StopReplicationStatus
-	(*logutil.Event)(nil),                         // 175: logutil.Event
-	(*vttime.Time)(nil),                           // 176: vttime.Time
-	(*binlogdata.BinlogSource)(nil),               // 177: binlogdata.BinlogSource
-	(binlogdata.VReplicationWorkflowType)(0),      // 178: binlogdata.VReplicationWorkflowType
-	(binlogdata.VReplicationWorkflowSubType)(0),   // 179: binlogdata.VReplicationWorkflowSubType
-	(binlogdata.VReplicationWorkflowState)(0),     // 180: binlogdata.VReplicationWorkflowState
-	(binlogdata.OnDDLAction)(0),                   // 181: binlogdata.OnDDLAction
-	(*topodata.ThrottledAppRule)(nil),             // 182: topodata.ThrottledAppRule
+	(*GetTransactionInfoRequest)(nil),               // 54: tabletmanagerdata.GetTransactionInfoRequest
+	(*GetTransactionInfoResponse)(nil),              // 55: tabletmanagerdata.GetTransactionInfoResponse
+	(*ConcludeTransactionRequest)(nil),              // 56: tabletmanagerdata.ConcludeTransactionRequest
+	(*ConcludeTransactionResponse)(nil),             // 57: tabletmanagerdata.ConcludeTransactionResponse
+	(*MysqlHostMetricsRequest)(nil),                 // 58: tabletmanagerdata.MysqlHostMetricsRequest
+	(*MysqlHostMetricsResponse)(nil),                // 59: tabletmanagerdata.MysqlHostMetricsResponse
+	(*ReplicationStatusRequest)(nil),                // 60: tabletmanagerdata.ReplicationStatusRequest
+	(*ReplicationStatusResponse)(nil),               // 61: tabletmanagerdata.ReplicationStatusResponse
+	(*PrimaryStatusRequest)(nil),                    // 62: tabletmanagerdata.PrimaryStatusRequest
+	(*PrimaryStatusResponse)(nil),                   // 63: tabletmanagerdata.PrimaryStatusResponse
+	(*PrimaryPositionRequest)(nil),                  // 64: tabletmanagerdata.PrimaryPositionRequest
+	(*PrimaryPositionResponse)(nil),                 // 65: tabletmanagerdata.PrimaryPositionResponse
+	(*WaitForPositionRequest)(nil),                  // 66: tabletmanagerdata.WaitForPositionRequest
+	(*WaitForPositionResponse)(nil),                 // 67: tabletmanagerdata.WaitForPositionResponse
+	(*StopReplicationRequest)(nil),                  // 68: tabletmanagerdata.StopReplicationRequest
+	(*StopReplicationResponse)(nil),                 // 69: tabletmanagerdata.StopReplicationResponse
+	(*StopReplicationMinimumRequest)(nil),           // 70: tabletmanagerdata.StopReplicationMinimumRequest
+	(*StopReplicationMinimumResponse)(nil),          // 71: tabletmanagerdata.StopReplicationMinimumResponse
+	(*StartReplicationRequest)(nil),                 // 72: tabletmanagerdata.StartReplicationRequest
+	(*StartReplicationResponse)(nil),                // 73: tabletmanagerdata.StartReplicationResponse
+	(*StartReplicationUntilAfterRequest)(nil),       // 74: tabletmanagerdata.StartReplicationUntilAfterRequest
+	(*StartReplicationUntilAfterResponse)(nil),      // 75: tabletmanagerdata.StartReplicationUntilAfterResponse
+	(*GetReplicasRequest)(nil),                      // 76: tabletmanagerdata.GetReplicasRequest
+	(*GetReplicasResponse)(nil),                     // 77: tabletmanagerdata.GetReplicasResponse
+	(*ResetReplicationRequest)(nil),                 // 78: tabletmanagerdata.ResetReplicationRequest
+	(*ResetReplicationResponse)(nil),                // 79: tabletmanagerdata.ResetReplicationResponse
+	(*VReplicationExecRequest)(nil),                 // 80: tabletmanagerdata.VReplicationExecRequest
+	(*VReplicationExecResponse)(nil),                // 81: tabletmanagerdata.VReplicationExecResponse
+	(*VReplicationWaitForPosRequest)(nil),           // 82: tabletmanagerdata.VReplicationWaitForPosRequest
+	(*VReplicationWaitForPosResponse)(nil),          // 83: tabletmanagerdata.VReplicationWaitForPosResponse
+	(*InitPrimaryRequest)(nil),                      // 84: tabletmanagerdata.InitPrimaryRequest
+	(*InitPrimaryResponse)(nil),                     // 85: tabletmanagerdata.InitPrimaryResponse
+	(*PopulateReparentJournalRequest)(nil),          // 86: tabletmanagerdata.PopulateReparentJournalRequest
+	(*PopulateReparentJournalResponse)(nil),         // 87: tabletmanagerdata.PopulateReparentJournalResponse
+	(*ReadReparentJournalInfoRequest)(nil),          // 88: tabletmanagerdata.ReadReparentJournalInfoRequest
+	(*ReadReparentJournalInfoResponse)(nil),         // 89: tabletmanagerdata.ReadReparentJournalInfoResponse
+	(*InitReplicaRequest)(nil),                      // 90: tabletmanagerdata.InitReplicaRequest
+	(*InitReplicaResponse)(nil),                     // 91: tabletmanagerdata.InitReplicaResponse
+	(*DemotePrimaryRequest)(nil),                    // 92: tabletmanagerdata.DemotePrimaryRequest
+	(*DemotePrimaryResponse)(nil),                   // 93: tabletmanagerdata.DemotePrimaryResponse
+	(*UndoDemotePrimaryRequest)(nil),                // 94: tabletmanagerdata.UndoDemotePrimaryRequest
+	(*UndoDemotePrimaryResponse)(nil),               // 95: tabletmanagerdata.UndoDemotePrimaryResponse
+	(*ReplicaWasPromotedRequest)(nil),               // 96: tabletmanagerdata.ReplicaWasPromotedRequest
+	(*ReplicaWasPromotedResponse)(nil),              // 97: tabletmanagerdata.ReplicaWasPromotedResponse
+	(*ResetReplicationParametersRequest)(nil),       // 98: tabletmanagerdata.ResetReplicationParametersRequest
+	(*ResetReplicationParametersResponse)(nil),      // 99: tabletmanagerdata.ResetReplicationParametersResponse
+	(*FullStatusRequest)(nil),                       // 100: tabletmanagerdata.FullStatusRequest
+	(*FullStatusResponse)(nil),                      // 101: tabletmanagerdata.FullStatusResponse
+	(*SetReplicationSourceRequest)(nil),             // 102: tabletmanagerdata.SetReplicationSourceRequest
+	(*SetReplicationSourceResponse)(nil),            // 103: tabletmanagerdata.SetReplicationSourceResponse
+	(*ReplicaWasRestartedRequest)(nil),              // 104: tabletmanagerdata.ReplicaWasRestartedRequest
+	(*ReplicaWasRestartedResponse)(nil),             // 105: tabletmanagerdata.ReplicaWasRestartedResponse
+	(*StopReplicationAndGetStatusRequest)(nil),      // 106: tabletmanagerdata.StopReplicationAndGetStatusRequest
+	(*StopReplicationAndGetStatusResponse)(nil),     // 107: tabletmanagerdata.StopReplicationAndGetStatusResponse
+	(*PromoteReplicaRequest)(nil),                   // 108: tabletmanagerdata.PromoteReplicaRequest
+	(*PromoteReplicaResponse)(nil),                  // 109: tabletmanagerdata.PromoteReplicaResponse
+	(*BackupRequest)(nil),                           // 110: tabletmanagerdata.BackupRequest
+	(*BackupResponse)(nil),                          // 111: tabletmanagerdata.BackupResponse
+	(*RestoreFromBackupRequest)(nil),                // 112: tabletmanagerdata.RestoreFromBackupRequest
+	(*RestoreFromBackupResponse)(nil),               // 113: tabletmanagerdata.RestoreFromBackupResponse
+	(*CreateVReplicationWorkflowRequest)(nil),       // 114: tabletmanagerdata.CreateVReplicationWorkflowRequest
+	(*CreateVReplicationWorkflowResponse)(nil),      // 115: tabletmanagerdata.CreateVReplicationWorkflowResponse
+	(*DeleteTableDataRequest)(nil),                  // 116: tabletmanagerdata.DeleteTableDataRequest
+	(*DeleteTableDataResponse)(nil),                 // 117: tabletmanagerdata.DeleteTableDataResponse
+	(*DeleteVReplicationWorkflowRequest)(nil),       // 118: tabletmanagerdata.DeleteVReplicationWorkflowRequest
+	(*DeleteVReplicationWorkflowResponse)(nil),      // 119: tabletmanagerdata.DeleteVReplicationWorkflowResponse
+	(*HasVReplicationWorkflowsRequest)(nil),         // 120: tabletmanagerdata.HasVReplicationWorkflowsRequest
+	(*HasVReplicationWorkflowsResponse)(nil),        // 121: tabletmanagerdata.HasVReplicationWorkflowsResponse
+	(*ReadVReplicationWorkflowsRequest)(nil),        // 122: tabletmanagerdata.ReadVReplicationWorkflowsRequest
+	(*ReadVReplicationWorkflowsResponse)(nil),       // 123: tabletmanagerdata.ReadVReplicationWorkflowsResponse
+	(*ReadVReplicationWorkflowRequest)(nil),         // 124: tabletmanagerdata.ReadVReplicationWorkflowRequest
+	(*ReadVReplicationWorkflowResponse)(nil),        // 125: tabletmanagerdata.ReadVReplicationWorkflowResponse
+	(*ValidateVReplicationPermissionsRequest)(nil),  // 126: tabletmanagerdata.ValidateVReplicationPermissionsRequest
+	(*ValidateVReplicationPermissionsResponse)(nil), // 127: tabletmanagerdata.ValidateVReplicationPermissionsResponse
+	(*VDiffRequest)(nil),                            // 128: tabletmanagerdata.VDiffRequest
+	(*VDiffResponse)(nil),                           // 129: tabletmanagerdata.VDiffResponse
+	(*VDiffPickerOptions)(nil),                      // 130: tabletmanagerdata.VDiffPickerOptions
+	(*VDiffReportOptions)(nil),                      // 131: tabletmanagerdata.VDiffReportOptions
+	(*VDiffCoreOptions)(nil),                        // 132: tabletmanagerdata.VDiffCoreOptions
+	(*VDiffOptions)(nil),                            // 133: tabletmanagerdata.VDiffOptions
+	(*UpdateVReplicationWorkflowRequest)(nil),       // 134: tabletmanagerdata.UpdateVReplicationWorkflowRequest
+	(*UpdateVReplicationWorkflowResponse)(nil),      // 135: tabletmanagerdata.UpdateVReplicationWorkflowResponse
+	(*UpdateVReplicationWorkflowsRequest)(nil),      // 136: tabletmanagerdata.UpdateVReplicationWorkflowsRequest
+	(*UpdateVReplicationWorkflowsResponse)(nil),     // 137: tabletmanagerdata.UpdateVReplicationWorkflowsResponse
+	(*ResetSequencesRequest)(nil),                   // 138: tabletmanagerdata.ResetSequencesRequest
+	(*ResetSequencesResponse)(nil),                  // 139: tabletmanagerdata.ResetSequencesResponse
+	(*CheckThrottlerRequest)(nil),                   // 140: tabletmanagerdata.CheckThrottlerRequest
+	(*CheckThrottlerResponse)(nil),                  // 141: tabletmanagerdata.CheckThrottlerResponse
+	(*GetThrottlerStatusRequest)(nil),               // 142: tabletmanagerdata.GetThrottlerStatusRequest
+	(*GetThrottlerStatusResponse)(nil),              // 143: tabletmanagerdata.GetThrottlerStatusResponse
+	(*ChangeTagsRequest)(nil),                       // 144: tabletmanagerdata.ChangeTagsRequest
+	(*ChangeTagsResponse)(nil),                      // 145: tabletmanagerdata.ChangeTagsResponse
+	nil,                                             // 146: tabletmanagerdata.UserPermission.PrivilegesEntry
+	nil,                                             // 147: tabletmanagerdata.DbPermission.PrivilegesEntry
+	nil,                                             // 148: tabletmanagerdata.ExecuteHookRequest.ExtraEnvEntry
+	nil,                                             // 149: tabletmanagerdata.GetGlobalStatusVarsResponse.StatusValuesEntry
+	nil,                                             // 150: tabletmanagerdata.DeleteTableDataRequest.TableFiltersEntry
+	(*ReadVReplicationWorkflowResponse_Stream)(nil), // 151: tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream
+	nil,                                   // 152: tabletmanagerdata.ReadVReplicationWorkflowResponse.ConfigOverridesEntry
+	nil,                                   // 153: tabletmanagerdata.UpdateVReplicationWorkflowRequest.ConfigOverridesEntry
+	(*CheckThrottlerResponse_Metric)(nil), // 154: tabletmanagerdata.CheckThrottlerResponse.Metric
+	nil,                                   // 155: tabletmanagerdata.CheckThrottlerResponse.MetricsEntry
+	(*GetThrottlerStatusResponse_MetricResult)(nil), // 156: tabletmanagerdata.GetThrottlerStatusResponse.MetricResult
+	nil, // 157: tabletmanagerdata.GetThrottlerStatusResponse.AggregatedMetricsEntry
+	nil, // 158: tabletmanagerdata.GetThrottlerStatusResponse.MetricThresholdsEntry
+	(*GetThrottlerStatusResponse_MetricHealth)(nil), // 159: tabletmanagerdata.GetThrottlerStatusResponse.MetricHealth
+	nil, // 160: tabletmanagerdata.GetThrottlerStatusResponse.MetricsHealthEntry
+	nil, // 161: tabletmanagerdata.GetThrottlerStatusResponse.ThrottledAppsEntry
+	nil, // 162: tabletmanagerdata.GetThrottlerStatusResponse.AppCheckedMetricsEntry
+	(*GetThrottlerStatusResponse_RecentApp)(nil), // 163: tabletmanagerdata.GetThrottlerStatusResponse.RecentApp
+	nil,                                      // 164: tabletmanagerdata.GetThrottlerStatusResponse.RecentAppsEntry
+	nil,                                      // 165: tabletmanagerdata.ChangeTagsRequest.TagsEntry
+	nil,                                      // 166: tabletmanagerdata.ChangeTagsResponse.TagsEntry
+	(*query.Field)(nil),                      // 167: query.Field
+	(topodata.TabletType)(0),                 // 168: topodata.TabletType
+	(*vtrpc.CallerID)(nil),                   // 169: vtrpc.CallerID
+	(*query.QueryResult)(nil),                // 170: query.QueryResult
+	(*query.TransactionMetadata)(nil),        // 171: query.TransactionMetadata
+	(*mysqlctl.HostMetricsResponse)(nil),     // 172: mysqlctl.HostMetricsResponse
+	(*replicationdata.Status)(nil),           // 173: replicationdata.Status
+	(*replicationdata.PrimaryStatus)(nil),    // 174: replicationdata.PrimaryStatus
+	(*topodata.TabletAlias)(nil),             // 175: topodata.TabletAlias
+	(*replicationdata.FullStatus)(nil),       // 176: replicationdata.FullStatus
+	(replicationdata.StopReplicationMode)(0), // 177: replicationdata.StopReplicationMode
+	(*replicationdata.StopReplicationStatus)(nil), // 178: replicationdata.StopReplicationStatus
+	(*logutil.Event)(nil),                         // 179: logutil.Event
+	(*vttime.Time)(nil),                           // 180: vttime.Time
+	(*binlogdata.BinlogSource)(nil),               // 181: binlogdata.BinlogSource
+	(binlogdata.VReplicationWorkflowType)(0),      // 182: binlogdata.VReplicationWorkflowType
+	(binlogdata.VReplicationWorkflowSubType)(0),   // 183: binlogdata.VReplicationWorkflowSubType
+	(binlogdata.VReplicationWorkflowState)(0),     // 184: binlogdata.VReplicationWorkflowState
+	(binlogdata.OnDDLAction)(0),                   // 185: binlogdata.OnDDLAction
+	(*topodata.ThrottledAppRule)(nil),             // 186: topodata.ThrottledAppRule
 }
 var file_tabletmanagerdata_proto_depIdxs = []int32{
-	163, // 0: tabletmanagerdata.TableDefinition.fields:type_name -> query.Field
+	167, // 0: tabletmanagerdata.TableDefinition.fields:type_name -> query.Field
 	2,   // 1: tabletmanagerdata.SchemaDefinition.table_definitions:type_name -> tabletmanagerdata.TableDefinition
 	3,   // 2: tabletmanagerdata.SchemaChangeResult.before_schema:type_name -> tabletmanagerdata.SchemaDefinition
 	3,   // 3: tabletmanagerdata.SchemaChangeResult.after_schema:type_name -> tabletmanagerdata.SchemaDefinition
-	142, // 4: tabletmanagerdata.UserPermission.privileges:type_name -> tabletmanagerdata.UserPermission.PrivilegesEntry
-	143, // 5: tabletmanagerdata.DbPermission.privileges:type_name -> tabletmanagerdata.DbPermission.PrivilegesEntry
+	146, // 4: tabletmanagerdata.UserPermission.privileges:type_name -> tabletmanagerdata.UserPermission.PrivilegesEntry
+	147, // 5: tabletmanagerdata.DbPermission.privileges:type_name -> tabletmanagerdata.DbPermission.PrivilegesEntry
 	5,   // 6: tabletmanagerdata.Permissions.user_permissions:type_name -> tabletmanagerdata.UserPermission
 	6,   // 7: tabletmanagerdata.Permissions.db_permissions:type_name -> tabletmanagerdata.DbPermission
-	144, // 8: tabletmanagerdata.ExecuteHookRequest.extra_env:type_name -> tabletmanagerdata.ExecuteHookRequest.ExtraEnvEntry
+	148, // 8: tabletmanagerdata.ExecuteHookRequest.extra_env:type_name -> tabletmanagerdata.ExecuteHookRequest.ExtraEnvEntry
 	3,   // 9: tabletmanagerdata.GetSchemaResponse.schema_definition:type_name -> tabletmanagerdata.SchemaDefinition
 	7,   // 10: tabletmanagerdata.GetPermissionsResponse.permissions:type_name -> tabletmanagerdata.Permissions
-	145, // 11: tabletmanagerdata.GetGlobalStatusVarsResponse.status_values:type_name -> tabletmanagerdata.GetGlobalStatusVarsResponse.StatusValuesEntry
-	164, // 12: tabletmanagerdata.ChangeTypeRequest.tablet_type:type_name -> topodata.TabletType
+	149, // 11: tabletmanagerdata.GetGlobalStatusVarsResponse.status_values:type_name -> tabletmanagerdata.GetGlobalStatusVarsResponse.StatusValuesEntry
+	168, // 12: tabletmanagerdata.ChangeTypeRequest.tablet_type:type_name -> topodata.TabletType
 	4,   // 13: tabletmanagerdata.PreflightSchemaResponse.change_results:type_name -> tabletmanagerdata.SchemaChangeResult
 	3,   // 14: tabletmanagerdata.ApplySchemaRequest.before_schema:type_name -> tabletmanagerdata.SchemaDefinition
 	3,   // 15: tabletmanagerdata.ApplySchemaRequest.after_schema:type_name -> tabletmanagerdata.SchemaDefinition
 	3,   // 16: tabletmanagerdata.ApplySchemaResponse.before_schema:type_name -> tabletmanagerdata.SchemaDefinition
 	3,   // 17: tabletmanagerdata.ApplySchemaResponse.after_schema:type_name -> tabletmanagerdata.SchemaDefinition
-	165, // 18: tabletmanagerdata.ExecuteQueryRequest.caller_id:type_name -> vtrpc.CallerID
-	166, // 19: tabletmanagerdata.ExecuteQueryResponse.result:type_name -> query.QueryResult
-	166, // 20: tabletmanagerdata.ExecuteFetchAsDbaResponse.result:type_name -> query.QueryResult
-	166, // 21: tabletmanagerdata.ExecuteMultiFetchAsDbaResponse.results:type_name -> query.QueryResult
-	166, // 22: tabletmanagerdata.ExecuteFetchAsAllPrivsResponse.result:type_name -> query.QueryResult
-	166, // 23: tabletmanagerdata.ExecuteFetchAsAppResponse.result:type_name -> query.QueryResult
-	167, // 24: tabletmanagerdata.GetUnresolvedTransactionsResponse.transactions:type_name -> query.TransactionMetadata
-	167, // 25: tabletmanagerdata.ReadTransactionResponse.transaction:type_name -> query.TransactionMetadata
-	168, // 26: tabletmanagerdata.MysqlHostMetricsResponse.HostMetrics:type_name -> mysqlctl.HostMetricsResponse
-	169, // 27: tabletmanagerdata.ReplicationStatusResponse.status:type_name -> replicationdata.Status
-	170, // 28: tabletmanagerdata.PrimaryStatusResponse.status:type_name -> replicationdata.PrimaryStatus
-	166, // 29: tabletmanagerdata.VReplicationExecResponse.result:type_name -> query.QueryResult
-	171, // 30: tabletmanagerdata.PopulateReparentJournalRequest.primary_alias:type_name -> topodata.TabletAlias
-	171, // 31: tabletmanagerdata.InitReplicaRequest.parent:type_name -> topodata.TabletAlias
-	170, // 32: tabletmanagerdata.DemotePrimaryResponse.primary_status:type_name -> replicationdata.PrimaryStatus
-	172, // 33: tabletmanagerdata.FullStatusResponse.status:type_name -> replicationdata.FullStatus
-	171, // 34: tabletmanagerdata.SetReplicationSourceRequest.parent:type_name -> topodata.TabletAlias
-	171, // 35: tabletmanagerdata.ReplicaWasRestartedRequest.parent:type_name -> topodata.TabletAlias
-	173, // 36: tabletmanagerdata.StopReplicationAndGetStatusRequest.stop_replication_mode:type_name -> replicationdata.StopReplicationMode
-	174, // 37: tabletmanagerdata.StopReplicationAndGetStatusResponse.status:type_name -> replicationdata.StopReplicationStatus
-	175, // 38: tabletmanagerdata.BackupResponse.event:type_name -> logutil.Event
-	176, // 39: tabletmanagerdata.RestoreFromBackupRequest.backup_time:type_name -> vttime.Time
-	176, // 40: tabletmanagerdata.RestoreFromBackupRequest.restore_to_timestamp:type_name -> vttime.Time
-	175, // 41: tabletmanagerdata.RestoreFromBackupResponse.event:type_name -> logutil.Event
-	177, // 42: tabletmanagerdata.CreateVReplicationWorkflowRequest.binlog_source:type_name -> binlogdata.BinlogSource
-	164, // 43: tabletmanagerdata.CreateVReplicationWorkflowRequest.tablet_types:type_name -> topodata.TabletType
+	169, // 18: tabletmanagerdata.ExecuteQueryRequest.caller_id:type_name -> vtrpc.CallerID
+	170, // 19: tabletmanagerdata.ExecuteQueryResponse.result:type_name -> query.QueryResult
+	170, // 20: tabletmanagerdata.ExecuteFetchAsDbaResponse.result:type_name -> query.QueryResult
+	170, // 21: tabletmanagerdata.ExecuteMultiFetchAsDbaResponse.results:type_name -> query.QueryResult
+	170, // 22: tabletmanagerdata.ExecuteFetchAsAllPrivsResponse.result:type_name -> query.QueryResult
+	170, // 23: tabletmanagerdata.ExecuteFetchAsAppResponse.result:type_name -> query.QueryResult
+	171, // 24: tabletmanagerdata.GetUnresolvedTransactionsResponse.transactions:type_name -> query.TransactionMetadata
+	171, // 25: tabletmanagerdata.ReadTransactionResponse.transaction:type_name -> query.TransactionMetadata
+	172, // 26: tabletmanagerdata.MysqlHostMetricsResponse.HostMetrics:type_name -> mysqlctl.HostMetricsResponse
+	173, // 27: tabletmanagerdata.ReplicationStatusResponse.status:type_name -> replicationdata.Status
+	174, // 28: tabletmanagerdata.PrimaryStatusResponse.status:type_name -> replicationdata.PrimaryStatus
+	170, // 29: tabletmanagerdata.VReplicationExecResponse.result:type_name -> query.QueryResult
+	175, // 30: tabletmanagerdata.PopulateReparentJournalRequest.primary_alias:type_name -> topodata.TabletAlias
+	175, // 31: tabletmanagerdata.InitReplicaRequest.parent:type_name -> topodata.TabletAlias
+	174, // 32: tabletmanagerdata.DemotePrimaryResponse.primary_status:type_name -> replicationdata.PrimaryStatus
+	176, // 33: tabletmanagerdata.FullStatusResponse.status:type_name -> replicationdata.FullStatus
+	175, // 34: tabletmanagerdata.SetReplicationSourceRequest.parent:type_name -> topodata.TabletAlias
+	175, // 35: tabletmanagerdata.ReplicaWasRestartedRequest.parent:type_name -> topodata.TabletAlias
+	177, // 36: tabletmanagerdata.StopReplicationAndGetStatusRequest.stop_replication_mode:type_name -> replicationdata.StopReplicationMode
+	178, // 37: tabletmanagerdata.StopReplicationAndGetStatusResponse.status:type_name -> replicationdata.StopReplicationStatus
+	179, // 38: tabletmanagerdata.BackupResponse.event:type_name -> logutil.Event
+	180, // 39: tabletmanagerdata.RestoreFromBackupRequest.backup_time:type_name -> vttime.Time
+	180, // 40: tabletmanagerdata.RestoreFromBackupRequest.restore_to_timestamp:type_name -> vttime.Time
+	179, // 41: tabletmanagerdata.RestoreFromBackupResponse.event:type_name -> logutil.Event
+	181, // 42: tabletmanagerdata.CreateVReplicationWorkflowRequest.binlog_source:type_name -> binlogdata.BinlogSource
+	168, // 43: tabletmanagerdata.CreateVReplicationWorkflowRequest.tablet_types:type_name -> topodata.TabletType
 	0,   // 44: tabletmanagerdata.CreateVReplicationWorkflowRequest.tablet_selection_preference:type_name -> tabletmanagerdata.TabletSelectionPreference
-	178, // 45: tabletmanagerdata.CreateVReplicationWorkflowRequest.workflow_type:type_name -> binlogdata.VReplicationWorkflowType
-	179, // 46: tabletmanagerdata.CreateVReplicationWorkflowRequest.workflow_sub_type:type_name -> binlogdata.VReplicationWorkflowSubType
-	166, // 47: tabletmanagerdata.CreateVReplicationWorkflowResponse.result:type_name -> query.QueryResult
-	146, // 48: tabletmanagerdata.DeleteTableDataRequest.table_filters:type_name -> tabletmanagerdata.DeleteTableDataRequest.TableFiltersEntry
-	166, // 49: tabletmanagerdata.DeleteVReplicationWorkflowResponse.result:type_name -> query.QueryResult
-	180, // 50: tabletmanagerdata.ReadVReplicationWorkflowsRequest.include_states:type_name -> binlogdata.VReplicationWorkflowState
-	180, // 51: tabletmanagerdata.ReadVReplicationWorkflowsRequest.exclude_states:type_name -> binlogdata.VReplicationWorkflowState
-	121, // 52: tabletmanagerdata.ReadVReplicationWorkflowsResponse.workflows:type_name -> tabletmanagerdata.ReadVReplicationWorkflowResponse
-	164, // 53: tabletmanagerdata.ReadVReplicationWorkflowResponse.tablet_types:type_name -> topodata.TabletType
+	182, // 45: tabletmanagerdata.CreateVReplicationWorkflowRequest.workflow_type:type_name -> binlogdata.VReplicationWorkflowType
+	183, // 46: tabletmanagerdata.CreateVReplicationWorkflowRequest.workflow_sub_type:type_name -> binlogdata.VReplicationWorkflowSubType
+	170, // 47: tabletmanagerdata.CreateVReplicationWorkflowResponse.result:type_name -> query.QueryResult
+	150, // 48: tabletmanagerdata.DeleteTableDataRequest.table_filters:type_name -> tabletmanagerdata.DeleteTableDataRequest.TableFiltersEntry
+	170, // 49: tabletmanagerdata.DeleteVReplicationWorkflowResponse.result:type_name -> query.QueryResult
+	184, // 50: tabletmanagerdata.ReadVReplicationWorkflowsRequest.include_states:type_name -> binlogdata.VReplicationWorkflowState
+	184, // 51: tabletmanagerdata.ReadVReplicationWorkflowsRequest.exclude_states:type_name -> binlogdata.VReplicationWorkflowState
+	125, // 52: tabletmanagerdata.ReadVReplicationWorkflowsResponse.workflows:type_name -> tabletmanagerdata.ReadVReplicationWorkflowResponse
+	168, // 53: tabletmanagerdata.ReadVReplicationWorkflowResponse.tablet_types:type_name -> topodata.TabletType
 	0,   // 54: tabletmanagerdata.ReadVReplicationWorkflowResponse.tablet_selection_preference:type_name -> tabletmanagerdata.TabletSelectionPreference
-	178, // 55: tabletmanagerdata.ReadVReplicationWorkflowResponse.workflow_type:type_name -> binlogdata.VReplicationWorkflowType
-	179, // 56: tabletmanagerdata.ReadVReplicationWorkflowResponse.workflow_sub_type:type_name -> binlogdata.VReplicationWorkflowSubType
-	147, // 57: tabletmanagerdata.ReadVReplicationWorkflowResponse.streams:type_name -> tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream
-	148, // 58: tabletmanagerdata.ReadVReplicationWorkflowResponse.config_overrides:type_name -> tabletmanagerdata.ReadVReplicationWorkflowResponse.ConfigOverridesEntry
-	129, // 59: tabletmanagerdata.VDiffRequest.options:type_name -> tabletmanagerdata.VDiffOptions
-	166, // 60: tabletmanagerdata.VDiffResponse.output:type_name -> query.QueryResult
-	126, // 61: tabletmanagerdata.VDiffOptions.picker_options:type_name -> tabletmanagerdata.VDiffPickerOptions
-	128, // 62: tabletmanagerdata.VDiffOptions.core_options:type_name -> tabletmanagerdata.VDiffCoreOptions
-	127, // 63: tabletmanagerdata.VDiffOptions.report_options:type_name -> tabletmanagerdata.VDiffReportOptions
-	164, // 64: tabletmanagerdata.UpdateVReplicationWorkflowRequest.tablet_types:type_name -> topodata.TabletType
+	182, // 55: tabletmanagerdata.ReadVReplicationWorkflowResponse.workflow_type:type_name -> binlogdata.VReplicationWorkflowType
+	183, // 56: tabletmanagerdata.ReadVReplicationWorkflowResponse.workflow_sub_type:type_name -> binlogdata.VReplicationWorkflowSubType
+	151, // 57: tabletmanagerdata.ReadVReplicationWorkflowResponse.streams:type_name -> tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream
+	152, // 58: tabletmanagerdata.ReadVReplicationWorkflowResponse.config_overrides:type_name -> tabletmanagerdata.ReadVReplicationWorkflowResponse.ConfigOverridesEntry
+	133, // 59: tabletmanagerdata.VDiffRequest.options:type_name -> tabletmanagerdata.VDiffOptions
+	170, // 60: tabletmanagerdata.VDiffResponse.output:type_name -> query.QueryResult
+	130, // 61: tabletmanagerdata.VDiffOptions.picker_options:type_name -> tabletmanagerdata.VDiffPickerOptions
+	132, // 62: tabletmanagerdata.VDiffOptions.core_options:type_name -> tabletmanagerdata.VDiffCoreOptions
+	131, // 63: tabletmanagerdata.VDiffOptions.report_options:type_name -> tabletmanagerdata.VDiffReportOptions
+	168, // 64: tabletmanagerdata.UpdateVReplicationWorkflowRequest.tablet_types:type_name -> topodata.TabletType
 	0,   // 65: tabletmanagerdata.UpdateVReplicationWorkflowRequest.tablet_selection_preference:type_name -> tabletmanagerdata.TabletSelectionPreference
-	181, // 66: tabletmanagerdata.UpdateVReplicationWorkflowRequest.on_ddl:type_name -> binlogdata.OnDDLAction
-	180, // 67: tabletmanagerdata.UpdateVReplicationWorkflowRequest.state:type_name -> binlogdata.VReplicationWorkflowState
-	149, // 68: tabletmanagerdata.UpdateVReplicationWorkflowRequest.config_overrides:type_name -> tabletmanagerdata.UpdateVReplicationWorkflowRequest.ConfigOverridesEntry
-	166, // 69: tabletmanagerdata.UpdateVReplicationWorkflowResponse.result:type_name -> query.QueryResult
-	180, // 70: tabletmanagerdata.UpdateVReplicationWorkflowsRequest.state:type_name -> binlogdata.VReplicationWorkflowState
-	166, // 71: tabletmanagerdata.UpdateVReplicationWorkflowsResponse.result:type_name -> query.QueryResult
-	151, // 72: tabletmanagerdata.CheckThrottlerResponse.metrics:type_name -> tabletmanagerdata.CheckThrottlerResponse.MetricsEntry
+	185, // 66: tabletmanagerdata.UpdateVReplicationWorkflowRequest.on_ddl:type_name -> binlogdata.OnDDLAction
+	184, // 67: tabletmanagerdata.UpdateVReplicationWorkflowRequest.state:type_name -> binlogdata.VReplicationWorkflowState
+	153, // 68: tabletmanagerdata.UpdateVReplicationWorkflowRequest.config_overrides:type_name -> tabletmanagerdata.UpdateVReplicationWorkflowRequest.ConfigOverridesEntry
+	170, // 69: tabletmanagerdata.UpdateVReplicationWorkflowResponse.result:type_name -> query.QueryResult
+	184, // 70: tabletmanagerdata.UpdateVReplicationWorkflowsRequest.state:type_name -> binlogdata.VReplicationWorkflowState
+	170, // 71: tabletmanagerdata.UpdateVReplicationWorkflowsResponse.result:type_name -> query.QueryResult
+	155, // 72: tabletmanagerdata.CheckThrottlerResponse.metrics:type_name -> tabletmanagerdata.CheckThrottlerResponse.MetricsEntry
 	1,   // 73: tabletmanagerdata.CheckThrottlerResponse.response_code:type_name -> tabletmanagerdata.CheckThrottlerResponseCode
-	153, // 74: tabletmanagerdata.GetThrottlerStatusResponse.aggregated_metrics:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.AggregatedMetricsEntry
-	154, // 75: tabletmanagerdata.GetThrottlerStatusResponse.metric_thresholds:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.MetricThresholdsEntry
-	156, // 76: tabletmanagerdata.GetThrottlerStatusResponse.metrics_health:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.MetricsHealthEntry
-	157, // 77: tabletmanagerdata.GetThrottlerStatusResponse.throttled_apps:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.ThrottledAppsEntry
-	158, // 78: tabletmanagerdata.GetThrottlerStatusResponse.app_checked_metrics:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.AppCheckedMetricsEntry
-	160, // 79: tabletmanagerdata.GetThrottlerStatusResponse.recent_apps:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.RecentAppsEntry
-	161, // 80: tabletmanagerdata.ChangeTagsRequest.tags:type_name -> tabletmanagerdata.ChangeTagsRequest.TagsEntry
-	162, // 81: tabletmanagerdata.ChangeTagsResponse.tags:type_name -> tabletmanagerdata.ChangeTagsResponse.TagsEntry
-	177, // 82: tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream.bls:type_name -> binlogdata.BinlogSource
-	176, // 83: tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream.time_updated:type_name -> vttime.Time
-	176, // 84: tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream.transaction_timestamp:type_name -> vttime.Time
-	180, // 85: tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream.state:type_name -> binlogdata.VReplicationWorkflowState
-	176, // 86: tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream.time_heartbeat:type_name -> vttime.Time
-	176, // 87: tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream.time_throttled:type_name -> vttime.Time
+	157, // 74: tabletmanagerdata.GetThrottlerStatusResponse.aggregated_metrics:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.AggregatedMetricsEntry
+	158, // 75: tabletmanagerdata.GetThrottlerStatusResponse.metric_thresholds:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.MetricThresholdsEntry
+	160, // 76: tabletmanagerdata.GetThrottlerStatusResponse.metrics_health:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.MetricsHealthEntry
+	161, // 77: tabletmanagerdata.GetThrottlerStatusResponse.throttled_apps:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.ThrottledAppsEntry
+	162, // 78: tabletmanagerdata.GetThrottlerStatusResponse.app_checked_metrics:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.AppCheckedMetricsEntry
+	164, // 79: tabletmanagerdata.GetThrottlerStatusResponse.recent_apps:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.RecentAppsEntry
+	165, // 80: tabletmanagerdata.ChangeTagsRequest.tags:type_name -> tabletmanagerdata.ChangeTagsRequest.TagsEntry
+	166, // 81: tabletmanagerdata.ChangeTagsResponse.tags:type_name -> tabletmanagerdata.ChangeTagsResponse.TagsEntry
+	181, // 82: tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream.bls:type_name -> binlogdata.BinlogSource
+	180, // 83: tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream.time_updated:type_name -> vttime.Time
+	180, // 84: tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream.transaction_timestamp:type_name -> vttime.Time
+	184, // 85: tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream.state:type_name -> binlogdata.VReplicationWorkflowState
+	180, // 86: tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream.time_heartbeat:type_name -> vttime.Time
+	180, // 87: tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream.time_throttled:type_name -> vttime.Time
 	1,   // 88: tabletmanagerdata.CheckThrottlerResponse.Metric.response_code:type_name -> tabletmanagerdata.CheckThrottlerResponseCode
-	150, // 89: tabletmanagerdata.CheckThrottlerResponse.MetricsEntry.value:type_name -> tabletmanagerdata.CheckThrottlerResponse.Metric
-	152, // 90: tabletmanagerdata.GetThrottlerStatusResponse.AggregatedMetricsEntry.value:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.MetricResult
-	176, // 91: tabletmanagerdata.GetThrottlerStatusResponse.MetricHealth.last_healthy_at:type_name -> vttime.Time
-	155, // 92: tabletmanagerdata.GetThrottlerStatusResponse.MetricsHealthEntry.value:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.MetricHealth
-	182, // 93: tabletmanagerdata.GetThrottlerStatusResponse.ThrottledAppsEntry.value:type_name -> topodata.ThrottledAppRule
-	176, // 94: tabletmanagerdata.GetThrottlerStatusResponse.RecentApp.checked_at:type_name -> vttime.Time
+	154, // 89: tabletmanagerdata.CheckThrottlerResponse.MetricsEntry.value:type_name -> tabletmanagerdata.CheckThrottlerResponse.Metric
+	156, // 90: tabletmanagerdata.GetThrottlerStatusResponse.AggregatedMetricsEntry.value:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.MetricResult
+	180, // 91: tabletmanagerdata.GetThrottlerStatusResponse.MetricHealth.last_healthy_at:type_name -> vttime.Time
+	159, // 92: tabletmanagerdata.GetThrottlerStatusResponse.MetricsHealthEntry.value:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.MetricHealth
+	186, // 93: tabletmanagerdata.GetThrottlerStatusResponse.ThrottledAppsEntry.value:type_name -> topodata.ThrottledAppRule
+	180, // 94: tabletmanagerdata.GetThrottlerStatusResponse.RecentApp.checked_at:type_name -> vttime.Time
 	1,   // 95: tabletmanagerdata.GetThrottlerStatusResponse.RecentApp.response_code:type_name -> tabletmanagerdata.CheckThrottlerResponseCode
-	159, // 96: tabletmanagerdata.GetThrottlerStatusResponse.RecentAppsEntry.value:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.RecentApp
+	163, // 96: tabletmanagerdata.GetThrottlerStatusResponse.RecentAppsEntry.value:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.RecentApp
 	97,  // [97:97] is the sub-list for method output_type
 	97,  // [97:97] is the sub-list for method input_type
 	97,  // [97:97] is the sub-list for extension type_name
@@ -10286,7 +10511,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[52].Exporter = func(v any, i int) any {
-			switch v := v.(*ConcludeTransactionRequest); i {
+			switch v := v.(*GetTransactionInfoRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -10298,7 +10523,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[53].Exporter = func(v any, i int) any {
-			switch v := v.(*ConcludeTransactionResponse); i {
+			switch v := v.(*GetTransactionInfoResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -10310,7 +10535,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[54].Exporter = func(v any, i int) any {
-			switch v := v.(*MysqlHostMetricsRequest); i {
+			switch v := v.(*ConcludeTransactionRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -10322,7 +10547,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[55].Exporter = func(v any, i int) any {
-			switch v := v.(*MysqlHostMetricsResponse); i {
+			switch v := v.(*ConcludeTransactionResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -10334,7 +10559,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[56].Exporter = func(v any, i int) any {
-			switch v := v.(*ReplicationStatusRequest); i {
+			switch v := v.(*MysqlHostMetricsRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -10346,7 +10571,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[57].Exporter = func(v any, i int) any {
-			switch v := v.(*ReplicationStatusResponse); i {
+			switch v := v.(*MysqlHostMetricsResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -10358,7 +10583,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[58].Exporter = func(v any, i int) any {
-			switch v := v.(*PrimaryStatusRequest); i {
+			switch v := v.(*ReplicationStatusRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -10370,7 +10595,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[59].Exporter = func(v any, i int) any {
-			switch v := v.(*PrimaryStatusResponse); i {
+			switch v := v.(*ReplicationStatusResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -10382,7 +10607,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[60].Exporter = func(v any, i int) any {
-			switch v := v.(*PrimaryPositionRequest); i {
+			switch v := v.(*PrimaryStatusRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -10394,7 +10619,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[61].Exporter = func(v any, i int) any {
-			switch v := v.(*PrimaryPositionResponse); i {
+			switch v := v.(*PrimaryStatusResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -10406,7 +10631,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[62].Exporter = func(v any, i int) any {
-			switch v := v.(*WaitForPositionRequest); i {
+			switch v := v.(*PrimaryPositionRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -10418,7 +10643,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[63].Exporter = func(v any, i int) any {
-			switch v := v.(*WaitForPositionResponse); i {
+			switch v := v.(*PrimaryPositionResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -10430,7 +10655,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[64].Exporter = func(v any, i int) any {
-			switch v := v.(*StopReplicationRequest); i {
+			switch v := v.(*WaitForPositionRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -10442,7 +10667,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[65].Exporter = func(v any, i int) any {
-			switch v := v.(*StopReplicationResponse); i {
+			switch v := v.(*WaitForPositionResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -10454,7 +10679,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[66].Exporter = func(v any, i int) any {
-			switch v := v.(*StopReplicationMinimumRequest); i {
+			switch v := v.(*StopReplicationRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -10466,7 +10691,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[67].Exporter = func(v any, i int) any {
-			switch v := v.(*StopReplicationMinimumResponse); i {
+			switch v := v.(*StopReplicationResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -10478,7 +10703,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[68].Exporter = func(v any, i int) any {
-			switch v := v.(*StartReplicationRequest); i {
+			switch v := v.(*StopReplicationMinimumRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -10490,7 +10715,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[69].Exporter = func(v any, i int) any {
-			switch v := v.(*StartReplicationResponse); i {
+			switch v := v.(*StopReplicationMinimumResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -10502,7 +10727,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[70].Exporter = func(v any, i int) any {
-			switch v := v.(*StartReplicationUntilAfterRequest); i {
+			switch v := v.(*StartReplicationRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -10514,7 +10739,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[71].Exporter = func(v any, i int) any {
-			switch v := v.(*StartReplicationUntilAfterResponse); i {
+			switch v := v.(*StartReplicationResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -10526,7 +10751,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[72].Exporter = func(v any, i int) any {
-			switch v := v.(*GetReplicasRequest); i {
+			switch v := v.(*StartReplicationUntilAfterRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -10538,7 +10763,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[73].Exporter = func(v any, i int) any {
-			switch v := v.(*GetReplicasResponse); i {
+			switch v := v.(*StartReplicationUntilAfterResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -10550,7 +10775,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[74].Exporter = func(v any, i int) any {
-			switch v := v.(*ResetReplicationRequest); i {
+			switch v := v.(*GetReplicasRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -10562,7 +10787,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[75].Exporter = func(v any, i int) any {
-			switch v := v.(*ResetReplicationResponse); i {
+			switch v := v.(*GetReplicasResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -10574,7 +10799,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[76].Exporter = func(v any, i int) any {
-			switch v := v.(*VReplicationExecRequest); i {
+			switch v := v.(*ResetReplicationRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -10586,7 +10811,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[77].Exporter = func(v any, i int) any {
-			switch v := v.(*VReplicationExecResponse); i {
+			switch v := v.(*ResetReplicationResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -10598,7 +10823,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[78].Exporter = func(v any, i int) any {
-			switch v := v.(*VReplicationWaitForPosRequest); i {
+			switch v := v.(*VReplicationExecRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -10610,7 +10835,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[79].Exporter = func(v any, i int) any {
-			switch v := v.(*VReplicationWaitForPosResponse); i {
+			switch v := v.(*VReplicationExecResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -10622,7 +10847,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[80].Exporter = func(v any, i int) any {
-			switch v := v.(*InitPrimaryRequest); i {
+			switch v := v.(*VReplicationWaitForPosRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -10634,7 +10859,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[81].Exporter = func(v any, i int) any {
-			switch v := v.(*InitPrimaryResponse); i {
+			switch v := v.(*VReplicationWaitForPosResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -10646,7 +10871,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[82].Exporter = func(v any, i int) any {
-			switch v := v.(*PopulateReparentJournalRequest); i {
+			switch v := v.(*InitPrimaryRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -10658,7 +10883,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[83].Exporter = func(v any, i int) any {
-			switch v := v.(*PopulateReparentJournalResponse); i {
+			switch v := v.(*InitPrimaryResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -10670,7 +10895,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[84].Exporter = func(v any, i int) any {
-			switch v := v.(*InitReplicaRequest); i {
+			switch v := v.(*PopulateReparentJournalRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -10682,7 +10907,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[85].Exporter = func(v any, i int) any {
-			switch v := v.(*InitReplicaResponse); i {
+			switch v := v.(*PopulateReparentJournalResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -10694,7 +10919,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[86].Exporter = func(v any, i int) any {
-			switch v := v.(*DemotePrimaryRequest); i {
+			switch v := v.(*ReadReparentJournalInfoRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -10706,7 +10931,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[87].Exporter = func(v any, i int) any {
-			switch v := v.(*DemotePrimaryResponse); i {
+			switch v := v.(*ReadReparentJournalInfoResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -10718,7 +10943,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[88].Exporter = func(v any, i int) any {
-			switch v := v.(*UndoDemotePrimaryRequest); i {
+			switch v := v.(*InitReplicaRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -10730,7 +10955,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[89].Exporter = func(v any, i int) any {
-			switch v := v.(*UndoDemotePrimaryResponse); i {
+			switch v := v.(*InitReplicaResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -10742,7 +10967,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[90].Exporter = func(v any, i int) any {
-			switch v := v.(*ReplicaWasPromotedRequest); i {
+			switch v := v.(*DemotePrimaryRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -10754,7 +10979,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[91].Exporter = func(v any, i int) any {
-			switch v := v.(*ReplicaWasPromotedResponse); i {
+			switch v := v.(*DemotePrimaryResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -10766,7 +10991,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[92].Exporter = func(v any, i int) any {
-			switch v := v.(*ResetReplicationParametersRequest); i {
+			switch v := v.(*UndoDemotePrimaryRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -10778,7 +11003,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[93].Exporter = func(v any, i int) any {
-			switch v := v.(*ResetReplicationParametersResponse); i {
+			switch v := v.(*UndoDemotePrimaryResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -10790,7 +11015,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[94].Exporter = func(v any, i int) any {
-			switch v := v.(*FullStatusRequest); i {
+			switch v := v.(*ReplicaWasPromotedRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -10802,7 +11027,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[95].Exporter = func(v any, i int) any {
-			switch v := v.(*FullStatusResponse); i {
+			switch v := v.(*ReplicaWasPromotedResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -10814,7 +11039,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[96].Exporter = func(v any, i int) any {
-			switch v := v.(*SetReplicationSourceRequest); i {
+			switch v := v.(*ResetReplicationParametersRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -10826,7 +11051,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[97].Exporter = func(v any, i int) any {
-			switch v := v.(*SetReplicationSourceResponse); i {
+			switch v := v.(*ResetReplicationParametersResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -10838,7 +11063,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[98].Exporter = func(v any, i int) any {
-			switch v := v.(*ReplicaWasRestartedRequest); i {
+			switch v := v.(*FullStatusRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -10850,7 +11075,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[99].Exporter = func(v any, i int) any {
-			switch v := v.(*ReplicaWasRestartedResponse); i {
+			switch v := v.(*FullStatusResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -10862,7 +11087,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[100].Exporter = func(v any, i int) any {
-			switch v := v.(*StopReplicationAndGetStatusRequest); i {
+			switch v := v.(*SetReplicationSourceRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -10874,7 +11099,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[101].Exporter = func(v any, i int) any {
-			switch v := v.(*StopReplicationAndGetStatusResponse); i {
+			switch v := v.(*SetReplicationSourceResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -10886,7 +11111,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[102].Exporter = func(v any, i int) any {
-			switch v := v.(*PromoteReplicaRequest); i {
+			switch v := v.(*ReplicaWasRestartedRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -10898,7 +11123,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[103].Exporter = func(v any, i int) any {
-			switch v := v.(*PromoteReplicaResponse); i {
+			switch v := v.(*ReplicaWasRestartedResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -10910,7 +11135,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[104].Exporter = func(v any, i int) any {
-			switch v := v.(*BackupRequest); i {
+			switch v := v.(*StopReplicationAndGetStatusRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -10922,7 +11147,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[105].Exporter = func(v any, i int) any {
-			switch v := v.(*BackupResponse); i {
+			switch v := v.(*StopReplicationAndGetStatusResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -10934,7 +11159,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[106].Exporter = func(v any, i int) any {
-			switch v := v.(*RestoreFromBackupRequest); i {
+			switch v := v.(*PromoteReplicaRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -10946,7 +11171,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[107].Exporter = func(v any, i int) any {
-			switch v := v.(*RestoreFromBackupResponse); i {
+			switch v := v.(*PromoteReplicaResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -10958,7 +11183,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[108].Exporter = func(v any, i int) any {
-			switch v := v.(*CreateVReplicationWorkflowRequest); i {
+			switch v := v.(*BackupRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -10970,7 +11195,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[109].Exporter = func(v any, i int) any {
-			switch v := v.(*CreateVReplicationWorkflowResponse); i {
+			switch v := v.(*BackupResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -10982,7 +11207,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[110].Exporter = func(v any, i int) any {
-			switch v := v.(*DeleteTableDataRequest); i {
+			switch v := v.(*RestoreFromBackupRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -10994,7 +11219,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[111].Exporter = func(v any, i int) any {
-			switch v := v.(*DeleteTableDataResponse); i {
+			switch v := v.(*RestoreFromBackupResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -11006,7 +11231,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[112].Exporter = func(v any, i int) any {
-			switch v := v.(*DeleteVReplicationWorkflowRequest); i {
+			switch v := v.(*CreateVReplicationWorkflowRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -11018,7 +11243,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[113].Exporter = func(v any, i int) any {
-			switch v := v.(*DeleteVReplicationWorkflowResponse); i {
+			switch v := v.(*CreateVReplicationWorkflowResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -11030,7 +11255,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[114].Exporter = func(v any, i int) any {
-			switch v := v.(*HasVReplicationWorkflowsRequest); i {
+			switch v := v.(*DeleteTableDataRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -11042,7 +11267,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[115].Exporter = func(v any, i int) any {
-			switch v := v.(*HasVReplicationWorkflowsResponse); i {
+			switch v := v.(*DeleteTableDataResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -11054,7 +11279,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[116].Exporter = func(v any, i int) any {
-			switch v := v.(*ReadVReplicationWorkflowsRequest); i {
+			switch v := v.(*DeleteVReplicationWorkflowRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -11066,7 +11291,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[117].Exporter = func(v any, i int) any {
-			switch v := v.(*ReadVReplicationWorkflowsResponse); i {
+			switch v := v.(*DeleteVReplicationWorkflowResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -11078,7 +11303,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[118].Exporter = func(v any, i int) any {
-			switch v := v.(*ReadVReplicationWorkflowRequest); i {
+			switch v := v.(*HasVReplicationWorkflowsRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -11090,7 +11315,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[119].Exporter = func(v any, i int) any {
-			switch v := v.(*ReadVReplicationWorkflowResponse); i {
+			switch v := v.(*HasVReplicationWorkflowsResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -11102,7 +11327,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[120].Exporter = func(v any, i int) any {
-			switch v := v.(*ValidateVReplicationPermissionsRequest); i {
+			switch v := v.(*ReadVReplicationWorkflowsRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -11114,7 +11339,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[121].Exporter = func(v any, i int) any {
-			switch v := v.(*ValidateVReplicationPermissionsResponse); i {
+			switch v := v.(*ReadVReplicationWorkflowsResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -11126,7 +11351,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[122].Exporter = func(v any, i int) any {
-			switch v := v.(*VDiffRequest); i {
+			switch v := v.(*ReadVReplicationWorkflowRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -11138,7 +11363,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[123].Exporter = func(v any, i int) any {
-			switch v := v.(*VDiffResponse); i {
+			switch v := v.(*ReadVReplicationWorkflowResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -11150,7 +11375,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[124].Exporter = func(v any, i int) any {
-			switch v := v.(*VDiffPickerOptions); i {
+			switch v := v.(*ValidateVReplicationPermissionsRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -11162,7 +11387,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[125].Exporter = func(v any, i int) any {
-			switch v := v.(*VDiffReportOptions); i {
+			switch v := v.(*ValidateVReplicationPermissionsResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -11174,7 +11399,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[126].Exporter = func(v any, i int) any {
-			switch v := v.(*VDiffCoreOptions); i {
+			switch v := v.(*VDiffRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -11186,7 +11411,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[127].Exporter = func(v any, i int) any {
-			switch v := v.(*VDiffOptions); i {
+			switch v := v.(*VDiffResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -11198,7 +11423,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[128].Exporter = func(v any, i int) any {
-			switch v := v.(*UpdateVReplicationWorkflowRequest); i {
+			switch v := v.(*VDiffPickerOptions); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -11210,7 +11435,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[129].Exporter = func(v any, i int) any {
-			switch v := v.(*UpdateVReplicationWorkflowResponse); i {
+			switch v := v.(*VDiffReportOptions); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -11222,7 +11447,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[130].Exporter = func(v any, i int) any {
-			switch v := v.(*UpdateVReplicationWorkflowsRequest); i {
+			switch v := v.(*VDiffCoreOptions); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -11234,7 +11459,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[131].Exporter = func(v any, i int) any {
-			switch v := v.(*UpdateVReplicationWorkflowsResponse); i {
+			switch v := v.(*VDiffOptions); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -11246,7 +11471,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[132].Exporter = func(v any, i int) any {
-			switch v := v.(*ResetSequencesRequest); i {
+			switch v := v.(*UpdateVReplicationWorkflowRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -11258,7 +11483,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[133].Exporter = func(v any, i int) any {
-			switch v := v.(*ResetSequencesResponse); i {
+			switch v := v.(*UpdateVReplicationWorkflowResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -11270,7 +11495,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[134].Exporter = func(v any, i int) any {
-			switch v := v.(*CheckThrottlerRequest); i {
+			switch v := v.(*UpdateVReplicationWorkflowsRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -11282,7 +11507,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[135].Exporter = func(v any, i int) any {
-			switch v := v.(*CheckThrottlerResponse); i {
+			switch v := v.(*UpdateVReplicationWorkflowsResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -11294,7 +11519,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[136].Exporter = func(v any, i int) any {
-			switch v := v.(*GetThrottlerStatusRequest); i {
+			switch v := v.(*ResetSequencesRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -11306,7 +11531,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[137].Exporter = func(v any, i int) any {
-			switch v := v.(*GetThrottlerStatusResponse); i {
+			switch v := v.(*ResetSequencesResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -11318,7 +11543,7 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[138].Exporter = func(v any, i int) any {
-			switch v := v.(*ChangeTagsRequest); i {
+			switch v := v.(*CheckThrottlerRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -11330,6 +11555,54 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 		file_tabletmanagerdata_proto_msgTypes[139].Exporter = func(v any, i int) any {
+			switch v := v.(*CheckThrottlerResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_tabletmanagerdata_proto_msgTypes[140].Exporter = func(v any, i int) any {
+			switch v := v.(*GetThrottlerStatusRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_tabletmanagerdata_proto_msgTypes[141].Exporter = func(v any, i int) any {
+			switch v := v.(*GetThrottlerStatusResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_tabletmanagerdata_proto_msgTypes[142].Exporter = func(v any, i int) any {
+			switch v := v.(*ChangeTagsRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_tabletmanagerdata_proto_msgTypes[143].Exporter = func(v any, i int) any {
 			switch v := v.(*ChangeTagsResponse); i {
 			case 0:
 				return &v.state
@@ -11341,7 +11614,7 @@ func file_tabletmanagerdata_proto_init() {
 				return nil
 			}
 		}
-		file_tabletmanagerdata_proto_msgTypes[145].Exporter = func(v any, i int) any {
+		file_tabletmanagerdata_proto_msgTypes[149].Exporter = func(v any, i int) any {
 			switch v := v.(*ReadVReplicationWorkflowResponse_Stream); i {
 			case 0:
 				return &v.state
@@ -11353,7 +11626,7 @@ func file_tabletmanagerdata_proto_init() {
 				return nil
 			}
 		}
-		file_tabletmanagerdata_proto_msgTypes[148].Exporter = func(v any, i int) any {
+		file_tabletmanagerdata_proto_msgTypes[152].Exporter = func(v any, i int) any {
 			switch v := v.(*CheckThrottlerResponse_Metric); i {
 			case 0:
 				return &v.state
@@ -11365,7 +11638,7 @@ func file_tabletmanagerdata_proto_init() {
 				return nil
 			}
 		}
-		file_tabletmanagerdata_proto_msgTypes[150].Exporter = func(v any, i int) any {
+		file_tabletmanagerdata_proto_msgTypes[154].Exporter = func(v any, i int) any {
 			switch v := v.(*GetThrottlerStatusResponse_MetricResult); i {
 			case 0:
 				return &v.state
@@ -11377,7 +11650,7 @@ func file_tabletmanagerdata_proto_init() {
 				return nil
 			}
 		}
-		file_tabletmanagerdata_proto_msgTypes[153].Exporter = func(v any, i int) any {
+		file_tabletmanagerdata_proto_msgTypes[157].Exporter = func(v any, i int) any {
 			switch v := v.(*GetThrottlerStatusResponse_MetricHealth); i {
 			case 0:
 				return &v.state
@@ -11389,7 +11662,7 @@ func file_tabletmanagerdata_proto_init() {
 				return nil
 			}
 		}
-		file_tabletmanagerdata_proto_msgTypes[157].Exporter = func(v any, i int) any {
+		file_tabletmanagerdata_proto_msgTypes[161].Exporter = func(v any, i int) any {
 			switch v := v.(*GetThrottlerStatusResponse_RecentApp); i {
 			case 0:
 				return &v.state
@@ -11402,17 +11675,17 @@ func file_tabletmanagerdata_proto_init() {
 			}
 		}
 	}
-	file_tabletmanagerdata_proto_msgTypes[104].OneofWrappers = []any{}
-	file_tabletmanagerdata_proto_msgTypes[126].OneofWrappers = []any{}
-	file_tabletmanagerdata_proto_msgTypes[128].OneofWrappers = []any{}
+	file_tabletmanagerdata_proto_msgTypes[108].OneofWrappers = []any{}
 	file_tabletmanagerdata_proto_msgTypes[130].OneofWrappers = []any{}
+	file_tabletmanagerdata_proto_msgTypes[132].OneofWrappers = []any{}
+	file_tabletmanagerdata_proto_msgTypes[134].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_tabletmanagerdata_proto_rawDesc,
 			NumEnums:      2,
-			NumMessages:   161,
+			NumMessages:   165,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

@@ -49,13 +49,14 @@ type SandboxConn struct {
 
 	// These errors are triggered only for specific functions.
 	// For now these are just for the 2PC functions.
-	MustFailPrepare             int
-	MustFailCommitPrepared      int
-	MustFailRollbackPrepared    int
-	MustFailCreateTransaction   int
-	MustFailStartCommit         int
-	MustFailSetRollback         int
-	MustFailConcludeTransaction int
+	MustFailPrepare              int
+	MustFailCommitPrepared       int
+	MustFailRollbackPrepared     int
+	MustFailCreateTransaction    int
+	MustFailStartCommit          int
+	MustFailStartCommitUncertain int
+	MustFailSetRollback          int
+	MustFailConcludeTransaction  int
 	// MustFailExecute is keyed by the statement type and stores the number
 	// of times to fail when it sees that statement type.
 	// Once, exhausted it will start returning non-error response.
@@ -155,6 +156,27 @@ func NewSandboxConn(t *topodatapb.Tablet) *SandboxConn {
 		txIDToRID:       make(map[int64]int64),
 		parser:          sqlparser.NewTestParser(),
 	}
+}
+
+// ResetCounter resets the counters in the sandboxconn.
+func (sbc *SandboxConn) ResetCounter() {
+	sbc.ExecCount.Store(0)
+	sbc.BeginCount.Store(0)
+	sbc.CommitCount.Store(0)
+	sbc.RollbackCount.Store(0)
+	sbc.AsTransactionCount.Store(0)
+	sbc.PrepareCount.Store(0)
+	sbc.CommitPreparedCount.Store(0)
+	sbc.RollbackPreparedCount.Store(0)
+	sbc.CreateTransactionCount.Store(0)
+	sbc.StartCommitCount.Store(0)
+	sbc.SetRollbackCount.Store(0)
+	sbc.ConcludeTransactionCount.Store(0)
+	sbc.ReadTransactionCount.Store(0)
+	sbc.UnresolvedTransactionsCount.Store(0)
+	sbc.ReserveCount.Store(0)
+	sbc.ReleaseCount.Store(0)
+	sbc.GetSchemaCount.Store(0)
 }
 
 // RequireQueriesLocking sets the sandboxconn to require locking the access of Queries field.
@@ -404,14 +426,22 @@ func (sbc *SandboxConn) CreateTransaction(ctx context.Context, target *querypb.T
 
 // StartCommit atomically commits the transaction along with the
 // decision to commit the associated 2pc transaction.
-func (sbc *SandboxConn) StartCommit(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (err error) {
+func (sbc *SandboxConn) StartCommit(context.Context, *querypb.Target, int64, string) (state querypb.StartCommitState, err error) {
 	sbc.panicIfNeeded()
 	sbc.StartCommitCount.Add(1)
 	if sbc.MustFailStartCommit > 0 {
 		sbc.MustFailStartCommit--
-		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "error: err")
+		return querypb.StartCommitState_Fail, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "error: err")
 	}
-	return sbc.getError()
+	if sbc.MustFailStartCommitUncertain > 0 {
+		sbc.MustFailStartCommitUncertain--
+		return querypb.StartCommitState_Unknown, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "uncertain error")
+	}
+	err = sbc.getError()
+	if err != nil {
+		return querypb.StartCommitState_Unknown, err
+	}
+	return querypb.StartCommitState_Success, nil
 }
 
 // SetRollback transitions the 2pc transaction to the Rollback state.

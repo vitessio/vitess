@@ -242,7 +242,7 @@ func (qb *queryBuilder) unionWith(other *queryBuilder, distinct bool) {
 	}
 }
 
-func (qb *queryBuilder) recursiveCteWith(other *queryBuilder, name, alias string, distinct bool) {
+func (qb *queryBuilder) recursiveCteWith(other *queryBuilder, name, alias string, distinct bool, columns sqlparser.Columns) {
 	cteUnion := &sqlparser.Union{
 		Left:     qb.stmt.(sqlparser.SelectStatement),
 		Right:    other.stmt.(sqlparser.SelectStatement),
@@ -254,7 +254,7 @@ func (qb *queryBuilder) recursiveCteWith(other *queryBuilder, name, alias string
 			Recursive: true,
 			CTEs: []*sqlparser.CommonTableExpr{{
 				ID:       sqlparser.NewIdentifierCS(name),
-				Columns:  nil,
+				Columns:  columns,
 				Subquery: cteUnion,
 			}},
 		},
@@ -726,7 +726,7 @@ func buildRecursiveCTE(op *RecurseCTE, qb *queryBuilder) {
 		panic(err)
 	}
 
-	qb.recursiveCteWith(qbR, op.Def.Name, infoFor.GetAliasedTableExpr().As.String(), op.Distinct)
+	qb.recursiveCteWith(qbR, op.Def.Name, infoFor.GetAliasedTableExpr().As.String(), op.Distinct, op.Def.Columns)
 }
 
 func mergeHaving(h1, h2 *sqlparser.Where) *sqlparser.Where {

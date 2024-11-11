@@ -326,6 +326,18 @@ message ReadTransactionResponse {
   query.TransactionMetadata transaction = 1;
 }
 
+message GetTransactionInfoRequest {
+  string dtid = 1;
+}
+
+message GetTransactionInfoResponse {
+  string state = 1;
+  string message = 2;
+  int64 time_created = 3;
+  repeated string statements = 4;
+}
+
+
 message ConcludeTransactionRequest {
   string dtid = 1;
   bool mm = 2;
@@ -446,6 +458,13 @@ message PopulateReparentJournalRequest {
 }
 
 message PopulateReparentJournalResponse {
+}
+
+message ReadReparentJournalInfoRequest {
+}
+
+message ReadReparentJournalInfoResponse {
+  int32 length = 1;
 }
 
 message InitReplicaRequest {

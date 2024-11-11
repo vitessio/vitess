@@ -304,8 +304,8 @@ func TestTabletServerCreateTransaction(t *testing.T) {
 	defer closer()
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 
-	db.AddQueryPattern(fmt.Sprintf("insert into _vt\\.dt_state\\(dtid, state, time_created\\) values \\('aa', %d,.*", int(querypb.TransactionState_PREPARE)), &sqltypes.Result{})
-	db.AddQueryPattern("insert into _vt\\.dt_participant\\(dtid, id, keyspace, shard\\) values \\('aa', 1,.*", &sqltypes.Result{})
+	db.AddQueryPattern(fmt.Sprintf("insert into _vt\\.dt_state\\(dtid, state, time_created\\) values \\(_binary'aa', %d,.*", int(querypb.TransactionState_PREPARE)), &sqltypes.Result{})
+	db.AddQueryPattern("insert into _vt\\.dt_participant\\(dtid, id, keyspace, shard\\) values \\(_binary'aa', 1,.*", &sqltypes.Result{})
 	err := tsv.CreateTransaction(ctx, &target, "aa", []*querypb.Target{{
 		Keyspace: "t1",
 		Shard:    "0",
@@ -320,16 +320,18 @@ func TestTabletServerStartCommit(t *testing.T) {
 	defer closer()
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 
-	commitTransition := fmt.Sprintf("update _vt.dt_state set state = %d where dtid = 'aa' and state = %d", int(querypb.TransactionState_COMMIT), int(querypb.TransactionState_PREPARE))
+	commitTransition := fmt.Sprintf("update _vt.dt_state set state = %d where dtid = _binary'aa' and state = %d", int(querypb.TransactionState_COMMIT), int(querypb.TransactionState_PREPARE))
 	db.AddQuery(commitTransition, &sqltypes.Result{RowsAffected: 1})
 	txid := newTxForPrep(ctx, tsv)
-	err := tsv.StartCommit(ctx, &target, txid, "aa")
+	state, err := tsv.StartCommit(ctx, &target, txid, "aa")
 	require.NoError(t, err)
+	assert.Equal(t, querypb.StartCommitState_Success, state, "StartCommit state")
 
 	db.AddQuery(commitTransition, &sqltypes.Result{})
 	txid = newTxForPrep(ctx, tsv)
-	err = tsv.StartCommit(ctx, &target, txid, "aa")
+	state, err = tsv.StartCommit(ctx, &target, txid, "aa")
 	assert.EqualError(t, err, "could not transition to COMMIT: aa", "Prepare err")
+	assert.Equal(t, querypb.StartCommitState_Fail, state, "StartCommit state")
 }
 
 func TestTabletserverSetRollback(t *testing.T) {
@@ -339,7 +341,7 @@ func TestTabletserverSetRollback(t *testing.T) {
 	defer closer()
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 
-	rollbackTransition := fmt.Sprintf("update _vt.dt_state set state = %d where dtid = 'aa' and state = %d", int(querypb.TransactionState_ROLLBACK), int(querypb.TransactionState_PREPARE))
+	rollbackTransition := fmt.Sprintf("update _vt.dt_state set state = %d where dtid = _binary'aa' and state = %d", int(querypb.TransactionState_ROLLBACK), int(querypb.TransactionState_PREPARE))
 	db.AddQuery(rollbackTransition, &sqltypes.Result{RowsAffected: 1})
 	txid := newTxForPrep(ctx, tsv)
 	err := tsv.SetRollback(ctx, &target, "aa", txid)
@@ -358,7 +360,7 @@ func TestTabletServerReadTransaction(t *testing.T) {
 	defer closer()
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 
-	db.AddQuery("select dtid, state, time_created from _vt.dt_state where dtid = 'aa'", &sqltypes.Result{})
+	db.AddQuery("select dtid, state, time_created from _vt.dt_state where dtid = _binary'aa'", &sqltypes.Result{})
 	got, err := tsv.ReadTransaction(ctx, &target, "aa")
 	require.NoError(t, err)
 	want := &querypb.TransactionMetadata{}
@@ -376,8 +378,8 @@ func TestTabletServerReadTransaction(t *testing.T) {
 			sqltypes.NewVarBinary("1"),
 		}},
 	}
-	db.AddQuery("select dtid, state, time_created from _vt.dt_state where dtid = 'aa'", txResult)
-	db.AddQuery("select keyspace, shard from _vt.dt_participant where dtid = 'aa'", &sqltypes.Result{
+	db.AddQuery("select dtid, state, time_created from _vt.dt_state where dtid = _binary'aa'", txResult)
+	db.AddQuery("select keyspace, shard from _vt.dt_participant where dtid = _binary'aa'", &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{Type: sqltypes.VarBinary},
 			{Type: sqltypes.VarBinary},
@@ -420,7 +422,7 @@ func TestTabletServerReadTransaction(t *testing.T) {
 			sqltypes.NewVarBinary("1"),
 		}},
 	}
-	db.AddQuery("select dtid, state, time_created from _vt.dt_state where dtid = 'aa'", txResult)
+	db.AddQuery("select dtid, state, time_created from _vt.dt_state where dtid = _binary'aa'", txResult)
 	want.State = querypb.TransactionState_COMMIT
 	got, err = tsv.ReadTransaction(ctx, &target, "aa")
 	require.NoError(t, err)
@@ -438,7 +440,7 @@ func TestTabletServerReadTransaction(t *testing.T) {
 			sqltypes.NewVarBinary("1"),
 		}},
 	}
-	db.AddQuery("select dtid, state, time_created from _vt.dt_state where dtid = 'aa'", txResult)
+	db.AddQuery("select dtid, state, time_created from _vt.dt_state where dtid = _binary'aa'", txResult)
 	want.State = querypb.TransactionState_ROLLBACK
 	got, err = tsv.ReadTransaction(ctx, &target, "aa")
 	require.NoError(t, err)
@@ -452,8 +454,8 @@ func TestTabletServerConcludeTransaction(t *testing.T) {
 	defer closer()
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 
-	db.AddQuery("delete from _vt.dt_state where dtid = 'aa'", &sqltypes.Result{})
-	db.AddQuery("delete from _vt.dt_participant where dtid = 'aa'", &sqltypes.Result{})
+	db.AddQuery("delete from _vt.dt_state where dtid = _binary'aa'", &sqltypes.Result{})
+	db.AddQuery("delete from _vt.dt_participant where dtid = _binary'aa'", &sqltypes.Result{})
 	err := tsv.ConcludeTransaction(ctx, &target, "aa")
 	require.NoError(t, err)
 }
