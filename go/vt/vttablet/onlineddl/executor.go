@@ -967,13 +967,13 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 	if err != nil {
 		return vterrors.Wrapf(err, "failed getting locking connection")
 	}
+	defer lockConn.Recycle()
 	// Set large enough `@@lock_wait_timeout` so that it does not interfere with the cut-over operation.
 	// The code will ensure everything that needs to be terminated by `migrationCutOverThreshold` will be terminated.
 	lockConnRestoreLockWaitTimeout, err := e.initConnectionLockWaitTimeout(ctx, lockConn.Conn, 5*migrationCutOverThreshold)
 	if err != nil {
 		return vterrors.Wrapf(err, "failed setting lock_wait_timeout on locking connection")
 	}
-	defer lockConn.Recycle()
 	defer lockConnRestoreLockWaitTimeout()
 	defer lockConn.Conn.Exec(ctx, sqlUnlockTables, 1, false)
 
