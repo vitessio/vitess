@@ -13169,7 +13169,7 @@ yydefault:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:1194
 		{
-			yyDollar[1].val.(*DDL).OptLike = &OptLike{LikeTable: yyDollar[3].val.(TableName)}
+			yyDollar[1].val.(*DDL).OptLike = &OptLike{LikeTables: []TableName{yyDollar[3].val.(TableName)}}
 			yyVAL.val = yyDollar[1].val.(*DDL)
 		}
 	case 123:

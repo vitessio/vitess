@@ -2679,19 +2679,20 @@ const (
 
 // OptLike works for create table xxx like xxx
 type OptLike struct {
-	LikeTable TableName
+	// MySQL only allows single table in LIKE clause, but Postgres allows multiple tables in their `INHERIT` clause
+	LikeTables []TableName
 }
 
 // Format formats the node.
 func (node *OptLike) Format(buf *TrackedBuffer) {
-	buf.Myprintf("like %v", node.LikeTable)
+	buf.Myprintf("like %v", node.LikeTables[0])
 }
 
 func (node *OptLike) walkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
 	}
-	return Walk(visit, node.LikeTable)
+	return Walk(visit, node.LikeTables[0])
 }
 
 type OptSelect struct {
