@@ -568,7 +568,7 @@ func testScheduler(t *testing.T) {
 			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
-				assert.True(t, row["vrepl_analyzed_timestamp"].IsNull())
+				assert.True(t, row["shadow_analyzed_timestamp"].IsNull())
 			}
 		})
 
@@ -592,7 +592,7 @@ func testScheduler(t *testing.T) {
 			for _, row := range rs.Named().Rows {
 				postponeCompletion := row.AsInt64("postpone_completion", 0)
 				assert.Equal(t, int64(0), postponeCompletion)
-				assert.False(t, row["vrepl_analyzed_timestamp"].IsNull())
+				assert.False(t, row["shadow_analyzed_timestamp"].IsNull())
 			}
 		})
 	})

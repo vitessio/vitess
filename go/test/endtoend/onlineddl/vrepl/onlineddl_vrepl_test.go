@@ -304,7 +304,7 @@ func TestVreplSchemaChanges(t *testing.T) {
 		for _, row := range rs.Named().Rows {
 			retainArtifactSeconds := row.AsInt64("retain_artifacts_seconds", 0)
 			assert.Equal(t, int64(-1), retainArtifactSeconds)
-			assert.False(t, row["vrepl_analyzed_timestamp"].IsNull())
+			assert.False(t, row["shadow_analyzed_timestamp"].IsNull())
 		}
 	})
 	t.Run("successful online alter, vtctl", func(t *testing.T) {

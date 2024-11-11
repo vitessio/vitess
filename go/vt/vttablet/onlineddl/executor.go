@@ -884,7 +884,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 	if err != nil {
 		return vterrors.Wrapf(err, "cutover: failed reading migration")
 	}
-	needsVreplTableAnalysis := row["vrepl_analyzed_timestamp"].IsNull()
+	needsShadowTableAnalysis := row["shadow_analyzed_timestamp"].IsNull()
 	isVreplicationTestSuite := onlineDDL.StrategySetting().IsVreplicationTestSuite()
 	e.updateMigrationStage(ctx, onlineDDL.UUID, "starting cut-over")
 
@@ -958,14 +958,14 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 			}
 			defer preparationConnRestoreLockWaitTimeout()
 
-			if needsVreplTableAnalysis {
+			if needsShadowTableAnalysis {
 				// Run `ANALYZE TABLE` on the vreplication table so that it has up-to-date statistics at cut-over
 				parsed := sqlparser.BuildParsedQuery(sqlAnalyzeTable, vreplTable)
 				if _, err := preparationsConn.Conn.Exec(ctx, parsed.Query, -1, false); err != nil {
 					// Best effort only. Do not fail the mgiration if this fails.
 					_ = e.updateMigrationMessage(ctx, "failed ANALYZE shadow table", s.workflow)
 				} else {
-					_ = e.updateMigrationTimestamp(ctx, "vrepl_analyzed_timestamp", s.workflow)
+					_ = e.updateMigrationTimestamp(ctx, "shadow_analyzed_timestamp", s.workflow)
 				}
 				// This command will have blocked the table for writes, presumably only for a brief time. But this can cause
 				// vreplication to now lag. Thankfully we're gonna create the sentry table and waitForPos.
