@@ -966,9 +966,22 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 
 	lockConn, err := e.pool.Get(ctx, nil)
 	if err != nil {
+<<<<<<< HEAD
 		return err
 	}
 	defer lockConn.Recycle()
+=======
+		return vterrors.Wrapf(err, "failed getting locking connection")
+	}
+	defer lockConn.Recycle()
+	// Set large enough `@@lock_wait_timeout` so that it does not interfere with the cut-over operation.
+	// The code will ensure everything that needs to be terminated by `migrationCutOverThreshold` will be terminated.
+	lockConnRestoreLockWaitTimeout, err := e.initConnectionLockWaitTimeout(ctx, lockConn.Conn, 5*migrationCutOverThreshold)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed setting lock_wait_timeout on locking connection")
+	}
+	defer lockConnRestoreLockWaitTimeout()
+>>>>>>> 8952b5af4e (Online DDL: fix defer function, potential connection pool exhaustion (#17207))
 	defer lockConn.Conn.Exec(ctx, sqlUnlockTables, 1, false)
 
 	renameCompleteChan := make(chan error)
