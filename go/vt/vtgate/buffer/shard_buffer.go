@@ -261,7 +261,7 @@ func (sb *shardBuffer) shouldBufferLocked(failoverDetected bool) bool {
 
 func (sb *shardBuffer) startBufferingLocked(ctx context.Context, kev *discovery.KeyspaceEventWatcher, err error) bool {
 	if kev != nil {
-		if !kev.MarkShardNotServing(ctx, sb.keyspace, sb.shard, IsErrorDueToReparenting(err)) {
+		if !kev.MarkShardNotServing(ctx, sb.keyspace, sb.shard, isErrorDueToReparenting(err)) {
 			// We failed to mark the shard as not serving. Do not buffer the request.
 			// This can happen if the keyspace has been deleted or if the keyspace even watcher
 			// hasn't yet seen the shard. Keyspace event watcher might not stop buffering for this

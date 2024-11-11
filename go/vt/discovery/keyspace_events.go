@@ -395,7 +395,7 @@ func (kss *keyspaceState) onHealthCheck(th *TabletHealth) {
 		// for a reparent to happen. We use waitForReparent to ensure that we don't prematurely stop
 		// buffering when we receive a serving healthcheck from the primary that is being demoted.
 		// However, if we receive a non-serving check, then we know that we won't receive any more serving
-		// healthchecks anymore until reparent finishes. Specifically, this helps us when PRS fails, but
+		// health checks until reparent finishes. Specifically, this helps us when PRS fails, but
 		// stops gracefully because the new candidate couldn't get caught up in time. In this case, we promote
 		// the previous primary back. Without turning off waitForReparent here, we wouldn't be able to stop
 		// buffering for that case.

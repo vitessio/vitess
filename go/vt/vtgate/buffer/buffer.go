@@ -94,9 +94,9 @@ func CausedByFailover(err error) bool {
 	return isFailover
 }
 
-// IsErrorDueToReparenting is a stronger check than CausedByFailover, meant to return
+// isErrorDueToReparenting is a stronger check than CausedByFailover, meant to return
 // if the failure is caused because of a reparent.
-func IsErrorDueToReparenting(err error) bool {
+func isErrorDueToReparenting(err error) bool {
 	if vterrors.Code(err) != vtrpcpb.Code_CLUSTER_EVENT {
 		return false
 	}

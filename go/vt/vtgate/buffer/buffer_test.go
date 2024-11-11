@@ -92,7 +92,7 @@ func TestIsErrorDueToReparenting(t *testing.T) {
 	}
 	for _, tt := range testcases {
 		t.Run(tt.err.Error(), func(t *testing.T) {
-			got := IsErrorDueToReparenting(tt.err)
+			got := isErrorDueToReparenting(tt.err)
 			assert.Equal(t, tt.want, got)
 		})
 	}
