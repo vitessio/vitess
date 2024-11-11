@@ -50,7 +50,7 @@ func issueRequestAndBlockRetry(ctx context.Context, t *testing.T, b *Buffer, err
 	bufferingStopped := make(chan error)
 
 	go func() {
-		retryDone, err := b.WaitForFailoverEnd(ctx, keyspace, shard, failoverErr)
+		retryDone, err := b.WaitForFailoverEnd(ctx, keyspace, shard, nil, failoverErr)
 		if err != nil {
 			bufferingStopped <- err
 		}

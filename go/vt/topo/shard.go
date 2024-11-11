@@ -165,6 +165,10 @@ func (si *ShardInfo) SetPrimaryTermStartTime(t time.Time) {
 // GetShard is a high level function to read shard data.
 // It generates trace spans.
 func (ts *Server) GetShard(ctx context.Context, keyspace, shard string) (*ShardInfo, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
 	if err := ValidateKeyspaceName(keyspace); err != nil {
 		return nil, err
 	}
@@ -200,6 +204,10 @@ func (ts *Server) updateShard(ctx context.Context, si *ShardInfo) error {
 	span.Annotate("keyspace", si.keyspace)
 	span.Annotate("shard", si.shardName)
 	defer span.Finish()
+
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 
 	data, err := si.Shard.MarshalVT()
 	if err != nil {
@@ -252,6 +260,10 @@ func (ts *Server) UpdateShardFields(ctx context.Context, keyspace, shard string,
 // This will lock the Keyspace, as we may be looking at other shard servedTypes.
 // Using GetOrCreateShard is probably a better idea for most use cases.
 func (ts *Server) CreateShard(ctx context.Context, keyspace, shard string) (err error) {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	if err := ValidateKeyspaceName(keyspace); err != nil {
 		return err
 	}
@@ -355,6 +367,10 @@ func (ts *Server) GetOrCreateShard(ctx context.Context, keyspace, shard string) 
 // DeleteShard wraps the underlying conn.Delete
 // and dispatches the event.
 func (ts *Server) DeleteShard(ctx context.Context, keyspace, shard string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	shardPath := shardFilePath(keyspace, shard)
 	if err := ts.globalCell.Delete(ctx, shardPath, nil); err != nil {
 		return err
@@ -728,6 +744,10 @@ type WatchShardData struct {
 // It has the same contract as conn.Watch, but it also unpacks the
 // contents into a Shard object
 func (ts *Server) WatchShard(ctx context.Context, keyspace, shard string) (*WatchShardData, <-chan *WatchShardData, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, nil, err
+	}
+
 	shardPath := shardFilePath(keyspace, shard)
 	ctx, cancel := context.WithCancel(ctx)
 

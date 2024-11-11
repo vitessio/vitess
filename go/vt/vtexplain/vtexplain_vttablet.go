@@ -430,6 +430,7 @@ func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options, collatio
 
 	showTableRows := make([][]sqltypes.Value, 0, len(ddls))
 	showTableWithSizesRows := make([][]sqltypes.Value, 0, len(ddls))
+	innodbTableSizesRows := make([][]sqltypes.Value, 0, len(ddls))
 
 	for _, ddl := range ddls {
 		table := ddl.GetTable().Name.String()
@@ -455,9 +456,9 @@ func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options, collatio
 		Fields: mysql.BaseShowTablesWithSizesFields,
 		Rows:   showTableWithSizesRows,
 	})
-	tEnv.addResult(mysql.TablesWithSize80, &sqltypes.Result{
-		Fields: mysql.BaseShowTablesWithSizesFields,
-		Rows:   showTableWithSizesRows,
+	tEnv.addResult(mysql.InnoDBTableSizes, &sqltypes.Result{
+		Fields: mysql.BaseInnoDBTableSizesFields,
+		Rows:   innodbTableSizesRows,
 	})
 
 	indexRows := make([][]sqltypes.Value, 0, 4)
