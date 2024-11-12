@@ -1685,7 +1685,7 @@ DROP TABLE IF EXISTS stress_test
 	t.Run("terminate throttled migration", func(t *testing.T) {
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, openEndedUUID, schema.OnlineDDLStatusRunning)
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, openEndedUUID, true)
-		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, openEndedUUID, 20*time.Second, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusCancelled)
+		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, openEndedUUID, normalWaitTime, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusCancelled)
 		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, openEndedUUID, schema.OnlineDDLStatusCancelled)
 	})
@@ -1716,6 +1716,21 @@ DROP TABLE IF EXISTS stress_test
 		uuids = append(uuids, uuid)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		checkTable(t, tableName, true)
+	})
+
+	// singleton-table
+	t.Run("fail singleton-table same table single submission", func(t *testing.T) {
+		_ = testOnlineDDLStatement(t, createParams(multiAlterTableThrottlingStatement, "vitess --singleton-table", "vtctl", "", "hint_col", "singleton-table migration rejected", false))
+		// The first of those migrations will make it, the other two will be rejected
+		onlineddl.CheckCancelAllMigrations(t, &vtParams, 1)
+	})
+	t.Run("fail singleton-table same table multi submission", func(t *testing.T) {
+		uuid := testOnlineDDLStatement(t, createParams(alterTableThrottlingStatement, "vitess --singleton-table --postpone-completion", "vtctl", "", "hint_col", "", false))
+		uuids = append(uuids, uuid)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
+
+		_ = testOnlineDDLStatement(t, createParams(alterTableThrottlingStatement, "vitess --singleton-table --postpone-completion", "vtctl", "", "hint_col", "singleton-table migration rejected", false))
+		onlineddl.CheckCancelAllMigrations(t, &vtParams, 1)
 	})
 
 	var throttledUUIDs []string
@@ -1774,29 +1789,29 @@ DROP TABLE IF EXISTS stress_test
 		uuids = append(uuids, uuid)
 		_ = testOnlineDDLStatement(t, createParams(dropNonexistentTableStatement, "vitess --singleton", "vtgate", "", "hint_col", "rejected", true))
 		onlineddl.CheckCompleteAllMigrations(t, &vtParams, len(shards))
-		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, 20*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 	})
 	t.Run("fail concurrent singleton-context with revert", func(t *testing.T) {
 		revertUUID := testRevertMigration(t, createRevertParams(uuids[len(uuids)-1], "vitess --allow-concurrent --postpone-completion --singleton-context", "vtctl", "rev:ctx", "", false))
-		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, revertUUID, 20*time.Second, schema.OnlineDDLStatusRunning)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, revertUUID, normalWaitTime, schema.OnlineDDLStatusRunning)
 		// revert is running
 		_ = testOnlineDDLStatement(t, createParams(dropNonexistentTableStatement, "vitess --allow-concurrent --singleton-context", "vtctl", "migrate:ctx", "", "rejected", true))
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, revertUUID, true)
-		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, revertUUID, 20*time.Second, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusCancelled)
+		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, revertUUID, normalWaitTime, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusCancelled)
 		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, revertUUID, schema.OnlineDDLStatusCancelled)
 	})
 	t.Run("success concurrent singleton-context with no-context revert", func(t *testing.T) {
 		revertUUID := testRevertMigration(t, createRevertParams(uuids[len(uuids)-1], "vitess --allow-concurrent --postpone-completion", "vtctl", "rev:ctx", "", false))
-		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, revertUUID, 20*time.Second, schema.OnlineDDLStatusRunning)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, revertUUID, normalWaitTime, schema.OnlineDDLStatusRunning)
 		// revert is running but has no --singleton-context. Our next migration should be able to run.
 		uuid := testOnlineDDLStatement(t, createParams(dropNonexistentTableStatement, "vitess --allow-concurrent --singleton-context", "vtctl", "migrate:ctx", "", "", false))
 		uuids = append(uuids, uuid)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, revertUUID, true)
-		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, revertUUID, 20*time.Second, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusCancelled)
+		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, revertUUID, normalWaitTime, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusCancelled)
 		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, revertUUID, schema.OnlineDDLStatusCancelled)
 	})
