@@ -157,21 +157,6 @@ func TestUpdateConfigValuesFromFlags(t *testing.T) {
 		require.Equal(t, testConfig, Config)
 	})
 
-	t.Run("override recoveryPeriodBlockDuration", func(t *testing.T) {
-		oldRecoveryPeriodBlockDuration := recoveryPeriodBlockDuration
-		recoveryPeriodBlockDuration = 5 * time.Minute
-		// Restore the changes we make
-		defer func() {
-			Config = newConfiguration()
-			recoveryPeriodBlockDuration = oldRecoveryPeriodBlockDuration
-		}()
-
-		testConfig := newConfiguration()
-		testConfig.RecoveryPeriodBlockSeconds = 300
-		UpdateConfigValuesFromFlags()
-		require.Equal(t, testConfig, Config)
-	})
-
 	t.Run("override preventCrossCellFailover", func(t *testing.T) {
 		oldPreventCrossCellFailover := preventCrossCellFailover
 		preventCrossCellFailover = true

@@ -49,9 +49,7 @@ type VTOrcProcess struct {
 }
 
 type VTOrcConfiguration struct {
-	Debug                                 bool
-	ListenAddress                         string
-	RecoveryPeriodBlockSeconds            int
+	InstancePollSeconds                   int    `json:",omitempty"`
 	TopologyRefreshSeconds                int    `json:",omitempty"`
 	PreventCrossDataCenterPrimaryFailover bool   `json:",omitempty"`
 	LockShardTimeoutSeconds               int    `json:",omitempty"`
@@ -66,11 +64,7 @@ func (config *VTOrcConfiguration) ToJSONString() string {
 }
 
 func (config *VTOrcConfiguration) AddDefaults(webPort int) {
-	config.Debug = true
-	if config.RecoveryPeriodBlockSeconds == 0 {
-		config.RecoveryPeriodBlockSeconds = 1
-	}
-	config.ListenAddress = fmt.Sprintf(":%d", webPort)
+	config.InstancePollSeconds = 1
 }
 
 // Setup starts orc process with required arguements
@@ -114,9 +108,8 @@ func (orc *VTOrcProcess) Setup() (err error) {
 		"--config", orc.ConfigPath,
 		"--port", fmt.Sprintf("%d", orc.Port),
 		// This parameter is overriden from the config file, added here to just verify that we indeed use the config file paramter over the flag
-		"--recovery-period-block-duration", "10h",
-		"--instance-poll-time", "1s",
-		// Faster topo information refresh speeds up the tests. This doesn't add any significant load either
+		"--instance-poll-time", "10h",
+		// Faster topo information refresh speeds up the tests. This doesn't add any significant load either.
 		"--topo-information-refresh-duration", "3s",
 		"--bind-address", "127.0.0.1",
 	)

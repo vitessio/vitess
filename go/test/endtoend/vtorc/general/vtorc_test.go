@@ -456,8 +456,6 @@ func TestVTOrcWithPrs(t *testing.T) {
 		"--new-primary", replica.Alias)
 	require.NoError(t, err, "error in PlannedReparentShard output - %s", output)
 
-	time.Sleep(40 * time.Second)
-
 	// check that the replica gets promoted
 	utils.CheckPrimaryTablet(t, clusterInfo, replica, true)
 	// Verify that VTOrc didn't run any other recovery

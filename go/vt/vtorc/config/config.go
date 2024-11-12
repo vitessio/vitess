@@ -50,7 +50,6 @@ var (
 	auditToBackend                 = false
 	auditToSyslog                  = false
 	auditPurgeDuration             = 7 * 24 * time.Hour // Equivalent of 7 days
-	recoveryPeriodBlockDuration    = 30 * time.Second
 	preventCrossCellFailover       = false
 	waitReplicasTimeout            = 30 * time.Second
 	tolerableReplicationLag        = 0 * time.Second
@@ -70,8 +69,6 @@ func RegisterFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&auditToBackend, "audit-to-backend", auditToBackend, "Whether to store the audit log in the VTOrc database")
 	fs.BoolVar(&auditToSyslog, "audit-to-syslog", auditToSyslog, "Whether to store the audit log in the syslog")
 	fs.DurationVar(&auditPurgeDuration, "audit-purge-duration", auditPurgeDuration, "Duration for which audit logs are held before being purged. Should be in multiples of days")
-	fs.DurationVar(&recoveryPeriodBlockDuration, "recovery-period-block-duration", recoveryPeriodBlockDuration, "Duration for which a new recovery is blocked on an instance after running a recovery")
-	fs.MarkDeprecated("recovery-period-block-duration", "As of v20 this is ignored and will be removed in a future release.")
 	fs.BoolVar(&preventCrossCellFailover, "prevent-cross-cell-failover", preventCrossCellFailover, "Prevent VTOrc from promoting a primary in a different cell than the current primary in case of a failover")
 	fs.DurationVar(&waitReplicasTimeout, "wait-replicas-timeout", waitReplicasTimeout, "Duration for which to wait for replica's to respond when issuing RPCs")
 	fs.DurationVar(&tolerableReplicationLag, "tolerable-replication-lag", tolerableReplicationLag, "Amount of replication lag that is considered acceptable for a tablet to be eligible for promotion when Vitess makes the choice of a new primary in PRS")
@@ -94,7 +91,6 @@ type Configuration struct {
 	AuditToSyslog                         bool   // If true, audit messages are written to syslog
 	AuditToBackendDB                      bool   // If true, audit messages are written to the backend DB's `audit` table (default: true)
 	AuditPurgeDays                        uint   // Days after which audit entries are purged from the database
-	RecoveryPeriodBlockSeconds            int    // (overrides `RecoveryPeriodBlockMinutes`) The time for which an instance's recovery is kept "active", so as to avoid concurrent recoveries on smae instance as well as flapping
 	PreventCrossDataCenterPrimaryFailover bool   // When true (default: false), cross-DC primary failover are not allowed, vtorc will do all it can to only fail over within same DC, or else not fail over at all.
 	WaitReplicasTimeoutSeconds            int    // Timeout on amount of time to wait for the replicas in case of ERS. Should be a small value because we should fail-fast. Should not be larger than LockTimeout since that is the total time we use for an ERS.
 	TolerableReplicationLagSeconds        int    // Amount of replication lag that is considered acceptable for a tablet to be eligible for promotion when Vitess makes the choice of a new primary in PRS.
@@ -117,14 +113,12 @@ var readFileNames []string
 func UpdateConfigValuesFromFlags() {
 	Config.SQLite3DataFile = sqliteDataFile
 	Config.InstancePollSeconds = uint(instancePollTime / time.Second)
-	Config.InstancePollSeconds = uint(instancePollTime / time.Second)
 	Config.SnapshotTopologiesIntervalHours = uint(snapshotTopologyInterval / time.Hour)
 	Config.ReasonableReplicationLagSeconds = int(reasonableReplicationLag / time.Second)
 	Config.AuditLogFile = auditFileLocation
 	Config.AuditToBackendDB = auditToBackend
 	Config.AuditToSyslog = auditToSyslog
 	Config.AuditPurgeDays = uint(auditPurgeDuration / (time.Hour * 24))
-	Config.RecoveryPeriodBlockSeconds = int(recoveryPeriodBlockDuration / time.Second)
 	Config.PreventCrossDataCenterPrimaryFailover = preventCrossCellFailover
 	Config.WaitReplicasTimeoutSeconds = int(waitReplicasTimeout / time.Second)
 	Config.TolerableReplicationLagSeconds = int(tolerableReplicationLag / time.Second)
@@ -168,7 +162,6 @@ func newConfiguration() *Configuration {
 		AuditToSyslog:                         false,
 		AuditToBackendDB:                      false,
 		AuditPurgeDays:                        7,
-		RecoveryPeriodBlockSeconds:            30,
 		PreventCrossDataCenterPrimaryFailover: false,
 		WaitReplicasTimeoutSeconds:            30,
 		TopoInformationRefreshSeconds:         15,

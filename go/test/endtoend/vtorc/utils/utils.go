@@ -376,7 +376,6 @@ func CheckPrimaryTablet(t *testing.T, clusterInfo *VTOrcClusterInfo, tablet *clu
 	for {
 		now := time.Now()
 		if now.Sub(start) > time.Second*60 {
-			//log.Exitf("error")
 			assert.FailNow(t, "failed to elect primary before timeout")
 		}
 		tabletInfo, err := clusterInfo.ClusterInstance.VtctldClientProcess.GetTablet(tablet.Alias)
