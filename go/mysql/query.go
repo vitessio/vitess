@@ -511,7 +511,6 @@ func (c *Conn) ReadQueryResultAsSliceBuffer(maxrows int) (result *sqltypes.Resul
 				}
 				more = (statusFlags & ServerMoreResultsExists) != 0
 				result.StatusFlags = statusFlags
-				// rawPackets = rawPackets[:len(rawPackets)-1]
 			} else {
 				var packetOK PacketOK
 				if err = parseOKPacket(&packetOK, data, c.enableQueryInfo, c.isSessionTrack()); err != nil {
@@ -520,13 +519,10 @@ func (c *Conn) ReadQueryResultAsSliceBuffer(maxrows int) (result *sqltypes.Resul
 				warnings = packetOK.warnings
 				more = (packetOK.statusFlags & ServerMoreResultsExists) != 0
 				result.StatusFlags = packetOK.statusFlags
-
-				// rawPackets = rawPackets[:len(rawPackets)-1]
 				result.SessionStateChanges = packetOK.sessionStateData
 				result.Info = packetOK.info
 			}
 
-			// log.Errorf("DEBUG: setting result cached proto to %v", rawPackets)
 			result.RawPackets = rawPackets
 			return result, more, warnings, nil
 

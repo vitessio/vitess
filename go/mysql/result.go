@@ -19,7 +19,6 @@ package mysql
 import (
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -28,14 +27,14 @@ func ParseResult(qr *querypb.ExecuteResponse, wantfields bool) (*sqltypes.Result
 		return sqltypes.Proto3ToResult(qr.Result), nil
 	}
 
-	log.Errorf("interpreting raw packets")
+	// log.Errorf("interpreting raw packets")
 
 	colcount, _, ok := readLenEncInt(qr.RawPackets[0], 0)
 	if !ok {
 		return nil, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "cannot get column number")
 	}
 
-	log.Errorf("col count: %d", colcount)
+	// log.Errorf("col count: %d", colcount)
 	// 0  1  2  3  4  5  6
 	// 2 c1 c2 r1 r2 r3 ok
 
@@ -65,14 +64,14 @@ func ParseResult(qr *querypb.ExecuteResponse, wantfields bool) (*sqltypes.Result
 		}
 	}
 
-	log.Errorf("fields: %+v", result.Fields)
+	// log.Errorf("fields: %+v", result.Fields)
 
-	for x, rowpkt := range rowPackets {
+	for _, rowpkt := range rowPackets {
 		r, err := parseRow(rowpkt, result.Fields, readLenEncStringAsBytes, nil)
 		if err != nil {
 			return nil, err
 		}
-		log.Errorf("row %d: %+v", x, r)
+		// log.Errorf("row %d: %+v", x, r)
 		result.Rows = append(result.Rows, r)
 	}
 
@@ -86,7 +85,7 @@ func ParseResult(qr *querypb.ExecuteResponse, wantfields bool) (*sqltypes.Result
 	result.StatusFlags = packetOK.statusFlags
 	result.Info = packetOK.info
 
-	log.Errorf("final result: %+v", result)
+	// log.Errorf("final result: %+v", result)
 
 	return result, nil
 }

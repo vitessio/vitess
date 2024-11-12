@@ -434,19 +434,19 @@ func (c *Conn) readPacketAsMemBuffer() (mem.Buffer, error) {
 	if length < MaxPacketSize {
 		c.currentEphemeralBuffer = bufPool.Get(length)
 		def := *c.currentEphemeralBuffer
-		log.Errorf("buffer packet: %+v", def)
+		// log.Errorf("buffer packet: %+v", def)
 		basePacket := initPacket()
 		copy(def, basePacket)
-		log.Errorf("after initial packet: %+v", def)
+		// log.Errorf("after initial packet: %+v", def)
 		if _, err := io.ReadFull(r, def[baseLength:]); err != nil {
 			return nil, vterrors.Wrapf(err, "io.ReadFull(packet body of length %v) failed", length)
 		}
 		updateProtoHeader(def, length-baseLength)
-		log.Errorf("after header update: %+v", def)
+		// log.Errorf("after header update: %+v", def)
 		return mem.NewBuffer(c.currentEphemeralBuffer, bufPool), nil
 	}
 
-	log.Errorf("in slow path for size: %d", length)
+	// log.Errorf("in slow path for size: %d", length)
 	// Much slower path, revert to allocating everything from scratch.
 	// We're going to concatenate a lot of data anyway, can't really
 	// optimize this code path easily.

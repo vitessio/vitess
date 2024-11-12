@@ -21,8 +21,6 @@ import (
 
 	"google.golang.org/grpc"
 
-	"vitess.io/vitess/go/vt/log"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/callinfo"
@@ -56,7 +54,7 @@ func (q *query) Execute(ctx context.Context, request *querypb.ExecuteRequest) (r
 	}
 
 	if len(result.RawPackets) > 0 {
-		log.Errorf("Execute raw packets: %+v", result.RawPackets)
+		// log.Errorf("Execute raw packets: %+v", result.RawPackets)
 		return &querypb.ExecuteResponse{
 			RawPackets_: result.RawPackets,
 		}, nil
