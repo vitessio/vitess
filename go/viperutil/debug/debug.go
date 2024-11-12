@@ -25,3 +25,7 @@ import (
 func Debug() {
 	registry.Combined().Debug()
 }
+
+func WriteConfigAs(filename string) error {
+	return registry.Combined().WriteConfigAs(filename)
+}

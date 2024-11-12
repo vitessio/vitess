@@ -49,8 +49,7 @@ type VTOrcProcess struct {
 }
 
 type VTOrcConfiguration struct {
-	InstancePollSeconds                   int    `json:",omitempty"`
-	TopologyRefreshSeconds                int    `json:",omitempty"`
+	InstancePollTime                      string `json:",omitempty"`
 	PreventCrossDataCenterPrimaryFailover bool   `json:",omitempty"`
 	LockShardTimeoutSeconds               int    `json:",omitempty"`
 	ReplicationLagQuery                   string `json:",omitempty"`
@@ -64,7 +63,7 @@ func (config *VTOrcConfiguration) ToJSONString() string {
 }
 
 func (config *VTOrcConfiguration) AddDefaults(webPort int) {
-	config.InstancePollSeconds = 1
+	config.InstancePollTime = "10h"
 }
 
 // Setup starts orc process with required arguements
@@ -105,10 +104,10 @@ func (orc *VTOrcProcess) Setup() (err error) {
 		"--topo_implementation", orc.TopoImplementation,
 		"--topo_global_server_address", orc.TopoGlobalAddress,
 		"--topo_global_root", orc.TopoGlobalRoot,
-		"--config", orc.ConfigPath,
+		"--config-file", orc.ConfigPath,
 		"--port", fmt.Sprintf("%d", orc.Port),
-		// This parameter is overriden from the config file, added here to just verify that we indeed use the config file paramter over the flag
-		"--instance-poll-time", "10h",
+		// This parameter is overriden from the config file. This verifies that we indeed use the flag value over the config file.
+		"--instance-poll-time", "1s",
 		// Faster topo information refresh speeds up the tests. This doesn't add any significant load either.
 		"--topo-information-refresh-duration", "3s",
 		"--bind-address", "127.0.0.1",

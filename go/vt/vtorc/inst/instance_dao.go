@@ -80,7 +80,7 @@ func init() {
 
 func initializeInstanceDao() {
 	config.WaitForConfigurationToBeLoaded()
-	forgetAliases = cache.New(time.Duration(config.Config.InstancePollSeconds*3)*time.Second, time.Second)
+	forgetAliases = cache.New(config.GetInstancePollTime()*3, time.Second)
 	cacheInitializationCompleted.Store(true)
 }
 
@@ -544,8 +544,8 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 	instance.ReplicationDepth = m.GetUint("replication_depth")
 	instance.IsCoPrimary = m.GetBool("is_co_primary")
 	instance.HasReplicationCredentials = m.GetBool("has_replication_credentials")
-	instance.IsUpToDate = (m.GetUint("seconds_since_last_checked") <= config.Config.InstancePollSeconds)
-	instance.IsRecentlyChecked = (m.GetUint("seconds_since_last_checked") <= config.Config.InstancePollSeconds*5)
+	instance.IsUpToDate = m.GetUint("seconds_since_last_checked") <= config.GetInstancePollSeconds()
+	instance.IsRecentlyChecked = m.GetUint("seconds_since_last_checked") <= config.GetInstancePollSeconds()*5
 	instance.LastSeenTimestamp = m.GetString("last_seen")
 	instance.IsLastCheckValid = m.GetBool("is_last_check_valid")
 	instance.SecondsSinceLastSeen = m.GetNullInt64("seconds_since_last_seen")
@@ -646,7 +646,7 @@ func ReadProblemInstances(keyspace string, shard string) ([](*Instance), error) 
 			)
 		`
 
-	args := sqlutils.Args(keyspace, keyspace, shard, shard, config.Config.InstancePollSeconds*5, config.Config.ReasonableReplicationLagSeconds, config.Config.ReasonableReplicationLagSeconds)
+	args := sqlutils.Args(keyspace, keyspace, shard, shard, config.GetInstancePollSeconds()*5, config.Config.ReasonableReplicationLagSeconds, config.Config.ReasonableReplicationLagSeconds)
 	return readInstancesByCondition(condition, args, "")
 }
 
@@ -716,7 +716,7 @@ func ReadOutdatedInstanceKeys() ([]string, error) {
 		WHERE
 			database_instance.alias IS NULL
 			`
-	args := sqlutils.Args(config.Config.InstancePollSeconds, 2*config.Config.InstancePollSeconds)
+	args := sqlutils.Args(config.GetInstancePollSeconds(), 2*config.GetInstancePollSeconds())
 
 	err := db.QueryVTOrc(query, args, func(m sqlutils.RowMap) error {
 		tabletAlias := m.GetString("alias")

@@ -67,21 +67,6 @@ func TestUpdateConfigValuesFromFlags(t *testing.T) {
 		require.Equal(t, testConfig, Config)
 	})
 
-	t.Run("override instancePollTime", func(t *testing.T) {
-		oldInstancePollTime := instancePollTime
-		instancePollTime = 7 * time.Second
-		// Restore the changes we make
-		defer func() {
-			Config = newConfiguration()
-			instancePollTime = oldInstancePollTime
-		}()
-
-		testConfig := newConfiguration()
-		testConfig.InstancePollSeconds = 7
-		UpdateConfigValuesFromFlags()
-		require.Equal(t, testConfig, Config)
-	})
-
 	t.Run("override snapshotTopologyInterval", func(t *testing.T) {
 		oldSnapshotTopologyInterval := snapshotTopologyInterval
 		snapshotTopologyInterval = 1 * time.Hour

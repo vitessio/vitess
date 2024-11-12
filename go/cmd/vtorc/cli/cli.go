@@ -29,8 +29,7 @@ import (
 )
 
 var (
-	configFile string
-	Main       = &cobra.Command{
+	Main = &cobra.Command{
 		Use:   "vtorc",
 		Short: "VTOrc is the automated fault detection and repair tool in Vitess.",
 		Example: `vtorc \
@@ -55,11 +54,6 @@ func run(cmd *cobra.Command, args []string) {
 	inst.RegisterStats()
 
 	log.Info("starting vtorc")
-	if len(configFile) > 0 {
-		config.ForceRead(configFile)
-	} else {
-		config.Read("/etc/vtorc.conf.json", "conf/vtorc.conf.json", "vtorc.conf.json")
-	}
 	if config.Config.AuditToSyslog {
 		inst.EnableAuditSyslog()
 	}
@@ -96,7 +90,5 @@ func init() {
 	servenv.MoveFlagsToCobraCommand(Main)
 
 	logic.RegisterFlags(Main.Flags())
-	config.RegisterFlags(Main.Flags())
 	acl.RegisterFlags(Main.Flags())
-	Main.Flags().StringVar(&configFile, "config", "", "config file name")
 }

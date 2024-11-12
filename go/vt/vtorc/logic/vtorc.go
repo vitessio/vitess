@@ -73,11 +73,6 @@ func init() {
 	})
 }
 
-// used in several places
-func instancePollSecondsDuration() time.Duration {
-	return time.Duration(config.Config.InstancePollSeconds) * time.Second
-}
-
 // acceptSighupSignal registers for SIGHUP signal from the OS to reload the configuration files.
 func acceptSighupSignal() {
 	c := make(chan os.Signal, 1)
@@ -161,7 +156,7 @@ func DiscoverInstance(tabletAlias string, forceDiscovery bool) {
 	defer func() {
 		latency.Stop("total")
 		discoveryTime := latency.Elapsed("total")
-		if discoveryTime > instancePollSecondsDuration() {
+		if discoveryTime > config.GetInstancePollTime() {
 			instancePollSecondsExceededCounter.Add(1)
 			log.Warningf("discoverInstance exceeded InstancePollSeconds for %+v, took %.4fs", tabletAlias, discoveryTime.Seconds())
 			if metric != nil {
@@ -177,7 +172,7 @@ func DiscoverInstance(tabletAlias string, forceDiscovery bool) {
 	// Calculate the expiry period each time as InstancePollSeconds
 	// _may_ change during the run of the process (via SIGHUP) and
 	// it is not possible to change the cache's default expiry..
-	if existsInCacheError := recentDiscoveryOperationKeys.Add(tabletAlias, true, instancePollSecondsDuration()); existsInCacheError != nil && !forceDiscovery {
+	if existsInCacheError := recentDiscoveryOperationKeys.Add(tabletAlias, true, config.GetInstancePollTime()); existsInCacheError != nil && !forceDiscovery {
 		// Just recently attempted
 		return
 	}
@@ -271,7 +266,7 @@ func onHealthTick() {
 // nolint SA1015: using time.Tick leaks the underlying ticker
 func ContinuousDiscovery() {
 	log.Infof("continuous discovery: setting up")
-	recentDiscoveryOperationKeys = cache.New(instancePollSecondsDuration(), time.Second)
+	recentDiscoveryOperationKeys = cache.New(config.GetInstancePollTime(), time.Second)
 
 	go handleDiscoveryRequests()
 

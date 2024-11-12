@@ -24,7 +24,9 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/viperutil"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
 )
 
 var configurationLoaded = make(chan bool)
@@ -42,8 +44,18 @@ const (
 )
 
 var (
+	instancePollTime = viperutil.Configure(
+		"InstancePollTime",
+		viperutil.Options[time.Duration]{
+			FlagName: "instance-poll-time",
+			Default:  5 * time.Second,
+			Dynamic:  true,
+		},
+	)
+)
+
+var (
 	sqliteDataFile                 = "file::memory:?mode=memory&cache=shared"
-	instancePollTime               = 5 * time.Second
 	snapshotTopologyInterval       = 0 * time.Hour
 	reasonableReplicationLag       = 10 * time.Second
 	auditFileLocation              = ""
@@ -59,10 +71,14 @@ var (
 	convertTabletsWithErrantGTIDs  = false
 )
 
-// RegisterFlags registers the flags required by VTOrc
-func RegisterFlags(fs *pflag.FlagSet) {
+func init() {
+	servenv.OnParseFor("vtorc", registerFlags)
+}
+
+// registerFlags registers the flags required by VTOrc
+func registerFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&sqliteDataFile, "sqlite-data-file", sqliteDataFile, "SQLite Datafile to use as VTOrc's database")
-	fs.DurationVar(&instancePollTime, "instance-poll-time", instancePollTime, "Timer duration on which VTOrc refreshes MySQL information")
+	fs.Duration("instance-poll-time", instancePollTime.Default(), "Timer duration on which VTOrc refreshes MySQL information")
 	fs.DurationVar(&snapshotTopologyInterval, "snapshot-topology-interval", snapshotTopologyInterval, "Timer duration on which VTOrc takes a snapshot of the current MySQL information it has in the database. Should be in multiple of hours")
 	fs.DurationVar(&reasonableReplicationLag, "reasonable-replication-lag", reasonableReplicationLag, "Maximum replication lag on replicas which is deemed to be acceptable")
 	fs.StringVar(&auditFileLocation, "audit-file-location", auditFileLocation, "File location where the audit logs are to be stored")
@@ -76,6 +92,10 @@ func RegisterFlags(fs *pflag.FlagSet) {
 	fs.DurationVar(&recoveryPollDuration, "recovery-poll-duration", recoveryPollDuration, "Timer duration on which VTOrc polls its database to run a recovery")
 	fs.BoolVar(&ersEnabled, "allow-emergency-reparent", ersEnabled, "Whether VTOrc should be allowed to run emergency reparent operation when it detects a dead primary")
 	fs.BoolVar(&convertTabletsWithErrantGTIDs, "change-tablets-with-errant-gtid-to-drained", convertTabletsWithErrantGTIDs, "Whether VTOrc should be changing the type of tablets with errant GTIDs to DRAINED")
+
+	viperutil.BindFlags(fs,
+		instancePollTime,
+	)
 }
 
 // Configuration makes for vtorc configuration input, which can be provided by user via JSON formatted file.
@@ -84,7 +104,6 @@ func RegisterFlags(fs *pflag.FlagSet) {
 // TODO(sougou): change this to yaml parsing, and possible merge with tabletenv.
 type Configuration struct {
 	SQLite3DataFile                       string // full path to sqlite3 datafile
-	InstancePollSeconds                   uint   // Number of seconds between instance reads
 	SnapshotTopologiesIntervalHours       uint   // Interval in hour between snapshot-topologies invocation. Default: 0 (disabled)
 	ReasonableReplicationLagSeconds       int    // Above this value is considered a problem
 	AuditLogFile                          string // Name of log file for audit operations. Disabled when empty.
@@ -106,13 +125,26 @@ func (config *Configuration) ToJSONString() string {
 
 // Config is *the* configuration instance, used globally to get configuration data
 var Config = newConfiguration()
-var readFileNames []string
+
+// GetInstancePollTime is a getter function.
+func GetInstancePollTime() time.Duration {
+	return instancePollTime.Get()
+}
+
+// SetInstancePollTime is a setter function.
+func SetInstancePollTime(v time.Duration) {
+	instancePollTime.Set(v)
+}
+
+// GetInstancePollSeconds gets the instance poll time but in seconds.
+func GetInstancePollSeconds() uint {
+	return uint(instancePollTime.Get() / time.Second)
+}
 
 // UpdateConfigValuesFromFlags is used to update the config values from the flags defined.
 // This is done before we read any configuration files from the user. So the config files take precedence.
 func UpdateConfigValuesFromFlags() {
 	Config.SQLite3DataFile = sqliteDataFile
-	Config.InstancePollSeconds = uint(instancePollTime / time.Second)
 	Config.SnapshotTopologiesIntervalHours = uint(snapshotTopologyInterval / time.Hour)
 	Config.ReasonableReplicationLagSeconds = int(reasonableReplicationLag / time.Second)
 	Config.AuditLogFile = auditFileLocation
@@ -155,7 +187,6 @@ func LogConfigValues() {
 func newConfiguration() *Configuration {
 	return &Configuration{
 		SQLite3DataFile:                       "file::memory:?mode=memory&cache=shared",
-		InstancePollSeconds:                   5,
 		SnapshotTopologiesIntervalHours:       0,
 		ReasonableReplicationLagSeconds:       10,
 		AuditLogFile:                          "",
@@ -200,31 +231,8 @@ func read(fileName string) (*Configuration, error) {
 	return Config, err
 }
 
-// Read reads configuration from zero, either, some or all given files, in order of input.
-// A file can override configuration provided in previous file.
-func Read(fileNames ...string) *Configuration {
-	for _, fileName := range fileNames {
-		_, _ = read(fileName)
-	}
-	readFileNames = fileNames
-	return Config
-}
-
-// ForceRead reads configuration from given file name or bails out if it fails
-func ForceRead(fileName string) *Configuration {
-	_, err := read(fileName)
-	if err != nil {
-		log.Fatal("Cannot read config file:", fileName, err)
-	}
-	readFileNames = []string{fileName}
-	return Config
-}
-
 // Reload re-reads configuration from last used files
 func Reload(extraFileNames ...string) *Configuration {
-	for _, fileName := range readFileNames {
-		_, _ = read(fileName)
-	}
 	for _, fileName := range extraFileNames {
 		_, _ = read(fileName)
 	}
