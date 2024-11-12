@@ -276,8 +276,8 @@ func ContinuousDiscovery() {
 	tabletTopoTick := OpenTabletDiscovery()
 	var recoveryEntrance int64
 	var snapshotTopologiesTick <-chan time.Time
-	if config.Config.SnapshotTopologiesIntervalHours > 0 {
-		snapshotTopologiesTick = time.Tick(time.Duration(config.Config.SnapshotTopologiesIntervalHours) * time.Hour)
+	if config.GetSnapshotTopologyInterval() > 0 {
+		snapshotTopologiesTick = time.Tick(config.GetSnapshotTopologyInterval())
 	}
 
 	go func() {

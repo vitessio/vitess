@@ -62,12 +62,36 @@ var (
 			Dynamic:  true,
 		},
 	)
+
+	sqliteDataFile = viperutil.Configure(
+		"SQLiteDataFile",
+		viperutil.Options[string]{
+			FlagName: "sqlite-data-file",
+			Default:  "file::memory:?mode=memory&cache=shared",
+			Dynamic:  false,
+		},
+	)
+
+	snapshotTopologyInterval = viperutil.Configure(
+		"snapshotTopologyInterval",
+		viperutil.Options[time.Duration]{
+			FlagName: "snapshot-topology-interval",
+			Default:  0 * time.Hour,
+			Dynamic:  true,
+		},
+	)
+
+	reasonableReplicationLag = viperutil.Configure(
+		"reasonableReplicationLag",
+		viperutil.Options[time.Duration]{
+			FlagName: "reasonable-replication-lag",
+			Default:  10 * time.Second,
+			Dynamic:  true,
+		},
+	)
 )
 
 var (
-	sqliteDataFile                 = "file::memory:?mode=memory&cache=shared"
-	snapshotTopologyInterval       = 0 * time.Hour
-	reasonableReplicationLag       = 10 * time.Second
 	auditFileLocation              = ""
 	auditToBackend                 = false
 	auditToSyslog                  = false
@@ -86,10 +110,10 @@ func init() {
 
 // registerFlags registers the flags required by VTOrc
 func registerFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&sqliteDataFile, "sqlite-data-file", sqliteDataFile, "SQLite Datafile to use as VTOrc's database")
+	fs.String("sqlite-data-file", sqliteDataFile.Default(), "SQLite Datafile to use as VTOrc's database")
 	fs.Duration("instance-poll-time", instancePollTime.Default(), "Timer duration on which VTOrc refreshes MySQL information")
-	fs.DurationVar(&snapshotTopologyInterval, "snapshot-topology-interval", snapshotTopologyInterval, "Timer duration on which VTOrc takes a snapshot of the current MySQL information it has in the database. Should be in multiple of hours")
-	fs.DurationVar(&reasonableReplicationLag, "reasonable-replication-lag", reasonableReplicationLag, "Maximum replication lag on replicas which is deemed to be acceptable")
+	fs.Duration("snapshot-topology-interval", snapshotTopologyInterval.Default(), "Timer duration on which VTOrc takes a snapshot of the current MySQL information it has in the database. Should be in multiple of hours")
+	fs.Duration("reasonable-replication-lag", reasonableReplicationLag.Default(), "Maximum replication lag on replicas which is deemed to be acceptable")
 	fs.StringVar(&auditFileLocation, "audit-file-location", auditFileLocation, "File location where the audit logs are to be stored")
 	fs.BoolVar(&auditToBackend, "audit-to-backend", auditToBackend, "Whether to store the audit log in the VTOrc database")
 	fs.BoolVar(&auditToSyslog, "audit-to-syslog", auditToSyslog, "Whether to store the audit log in the syslog")
@@ -105,6 +129,9 @@ func registerFlags(fs *pflag.FlagSet) {
 	viperutil.BindFlags(fs,
 		instancePollTime,
 		preventCrossCellFailover,
+		sqliteDataFile,
+		snapshotTopologyInterval,
+		reasonableReplicationLag,
 	)
 }
 
@@ -113,17 +140,14 @@ func registerFlags(fs *pflag.FlagSet) {
 // strictly expected from user.
 // TODO(sougou): change this to yaml parsing, and possible merge with tabletenv.
 type Configuration struct {
-	SQLite3DataFile                 string // full path to sqlite3 datafile
-	SnapshotTopologiesIntervalHours uint   // Interval in hour between snapshot-topologies invocation. Default: 0 (disabled)
-	ReasonableReplicationLagSeconds int    // Above this value is considered a problem
-	AuditLogFile                    string // Name of log file for audit operations. Disabled when empty.
-	AuditToSyslog                   bool   // If true, audit messages are written to syslog
-	AuditToBackendDB                bool   // If true, audit messages are written to the backend DB's `audit` table (default: true)
-	AuditPurgeDays                  uint   // Days after which audit entries are purged from the database
-	WaitReplicasTimeoutSeconds      int    // Timeout on amount of time to wait for the replicas in case of ERS. Should be a small value because we should fail-fast. Should not be larger than LockTimeout since that is the total time we use for an ERS.
-	TolerableReplicationLagSeconds  int    // Amount of replication lag that is considered acceptable for a tablet to be eligible for promotion when Vitess makes the choice of a new primary in PRS.
-	TopoInformationRefreshSeconds   int    // Timer duration on which VTOrc refreshes the keyspace and vttablet records from the topo-server.
-	RecoveryPollSeconds             int    // Timer duration on which VTOrc recovery analysis runs
+	AuditLogFile                   string // Name of log file for audit operations. Disabled when empty.
+	AuditToSyslog                  bool   // If true, audit messages are written to syslog
+	AuditToBackendDB               bool   // If true, audit messages are written to the backend DB's `audit` table (default: true)
+	AuditPurgeDays                 uint   // Days after which audit entries are purged from the database
+	WaitReplicasTimeoutSeconds     int    // Timeout on amount of time to wait for the replicas in case of ERS. Should be a small value because we should fail-fast. Should not be larger than LockTimeout since that is the total time we use for an ERS.
+	TolerableReplicationLagSeconds int    // Amount of replication lag that is considered acceptable for a tablet to be eligible for promotion when Vitess makes the choice of a new primary in PRS.
+	TopoInformationRefreshSeconds  int    // Timer duration on which VTOrc refreshes the keyspace and vttablet records from the topo-server.
+	RecoveryPollSeconds            int    // Timer duration on which VTOrc recovery analysis runs
 }
 
 // ToJSONString will marshal this configuration as JSON
@@ -155,12 +179,24 @@ func GetPreventCrossCellFailover() bool {
 	return preventCrossCellFailover.Get()
 }
 
+// GetSQLiteDataFile is a getter function.
+func GetSQLiteDataFile() string {
+	return sqliteDataFile.Get()
+}
+
+// GetReasonableReplicationLagSeconds gets the reasonable replication lag but in seconds.
+func GetReasonableReplicationLagSeconds() int64 {
+	return int64(reasonableReplicationLag.Get() / time.Second)
+}
+
+// GetSnapshotTopologyInterval is a getter function.
+func GetSnapshotTopologyInterval() time.Duration {
+	return snapshotTopologyInterval.Get()
+}
+
 // UpdateConfigValuesFromFlags is used to update the config values from the flags defined.
 // This is done before we read any configuration files from the user. So the config files take precedence.
 func UpdateConfigValuesFromFlags() {
-	Config.SQLite3DataFile = sqliteDataFile
-	Config.SnapshotTopologiesIntervalHours = uint(snapshotTopologyInterval / time.Hour)
-	Config.ReasonableReplicationLagSeconds = int(reasonableReplicationLag / time.Second)
 	Config.AuditLogFile = auditFileLocation
 	Config.AuditToBackendDB = auditToBackend
 	Config.AuditToSyslog = auditToSyslog
@@ -198,25 +234,14 @@ func LogConfigValues() {
 
 func newConfiguration() *Configuration {
 	return &Configuration{
-		SQLite3DataFile:                 "file::memory:?mode=memory&cache=shared",
-		SnapshotTopologiesIntervalHours: 0,
-		ReasonableReplicationLagSeconds: 10,
-		AuditLogFile:                    "",
-		AuditToSyslog:                   false,
-		AuditToBackendDB:                false,
-		AuditPurgeDays:                  7,
-		WaitReplicasTimeoutSeconds:      30,
-		TopoInformationRefreshSeconds:   15,
-		RecoveryPollSeconds:             1,
+		AuditLogFile:                  "",
+		AuditToSyslog:                 false,
+		AuditToBackendDB:              false,
+		AuditPurgeDays:                7,
+		WaitReplicasTimeoutSeconds:    30,
+		TopoInformationRefreshSeconds: 15,
+		RecoveryPollSeconds:           1,
 	}
-}
-
-func (config *Configuration) postReadAdjustments() error {
-	if config.SQLite3DataFile == "" {
-		return fmt.Errorf("SQLite3DataFile must be set")
-	}
-
-	return nil
 }
 
 // read reads configuration from given file, or silently skips if the file does not exist.
@@ -235,9 +260,6 @@ func read(fileName string) (*Configuration, error) {
 		log.Infof("Read config: %s", fileName)
 	} else {
 		log.Fatal("Cannot read config file:", fileName, err)
-	}
-	if err := Config.postReadAdjustments(); err != nil {
-		log.Fatal(err)
 	}
 	return Config, err
 }

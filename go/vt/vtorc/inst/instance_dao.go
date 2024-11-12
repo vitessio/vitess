@@ -562,7 +562,7 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 		instance.Problems = append(instance.Problems, "not_recently_checked")
 	} else if instance.ReplicationThreadsExist() && !instance.ReplicaRunning() {
 		instance.Problems = append(instance.Problems, "not_replicating")
-	} else if instance.ReplicationLagSeconds.Valid && util.AbsInt64(instance.ReplicationLagSeconds.Int64-int64(instance.SQLDelay)) > int64(config.Config.ReasonableReplicationLagSeconds) {
+	} else if instance.ReplicationLagSeconds.Valid && util.AbsInt64(instance.ReplicationLagSeconds.Int64-int64(instance.SQLDelay)) > int64(config.GetReasonableReplicationLagSeconds()) {
 		instance.Problems = append(instance.Problems, "replication_lag")
 	}
 	if instance.GtidErrant != "" {
@@ -646,7 +646,7 @@ func ReadProblemInstances(keyspace string, shard string) ([](*Instance), error) 
 			)
 		`
 
-	args := sqlutils.Args(keyspace, keyspace, shard, shard, config.GetInstancePollSeconds()*5, config.Config.ReasonableReplicationLagSeconds, config.Config.ReasonableReplicationLagSeconds)
+	args := sqlutils.Args(keyspace, keyspace, shard, shard, config.GetInstancePollSeconds()*5, config.GetReasonableReplicationLagSeconds(), config.GetReasonableReplicationLagSeconds())
 	return readInstancesByCondition(condition, args, "")
 }
 
@@ -1127,7 +1127,7 @@ func SnapshotTopologies() error {
 }
 
 func ExpireStaleInstanceBinlogCoordinates() error {
-	expireSeconds := config.Config.ReasonableReplicationLagSeconds * 2
+	expireSeconds := config.GetReasonableReplicationLagSeconds() * 2
 	if expireSeconds < config.StaleInstanceCoordinatesExpireSeconds {
 		expireSeconds = config.StaleInstanceCoordinatesExpireSeconds
 	}

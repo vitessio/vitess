@@ -68,7 +68,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 	}
 
 	// TODO(sougou); deprecate ReduceReplicationAnalysisCount
-	args := sqlutils.Args(config.Config.ReasonableReplicationLagSeconds, ValidSecondsFromSeenToLastAttemptedCheck(), config.Config.ReasonableReplicationLagSeconds, keyspace, shard)
+	args := sqlutils.Args(config.GetReasonableReplicationLagSeconds(), ValidSecondsFromSeenToLastAttemptedCheck(), config.GetReasonableReplicationLagSeconds(), keyspace, shard)
 	query := `
 	SELECT
 		vitess_tablet.info AS tablet_info,

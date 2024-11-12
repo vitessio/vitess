@@ -52,51 +52,6 @@ func TestUpdateConfigValuesFromFlags(t *testing.T) {
 		require.Equal(t, testConfig, Config)
 	})
 
-	t.Run("override sqliteDataFile", func(t *testing.T) {
-		oldSqliteDataFile := sqliteDataFile
-		sqliteDataFile = "newVal"
-		// Restore the changes we make
-		defer func() {
-			Config = newConfiguration()
-			sqliteDataFile = oldSqliteDataFile
-		}()
-
-		testConfig := newConfiguration()
-		testConfig.SQLite3DataFile = "newVal"
-		UpdateConfigValuesFromFlags()
-		require.Equal(t, testConfig, Config)
-	})
-
-	t.Run("override snapshotTopologyInterval", func(t *testing.T) {
-		oldSnapshotTopologyInterval := snapshotTopologyInterval
-		snapshotTopologyInterval = 1 * time.Hour
-		// Restore the changes we make
-		defer func() {
-			Config = newConfiguration()
-			snapshotTopologyInterval = oldSnapshotTopologyInterval
-		}()
-
-		testConfig := newConfiguration()
-		testConfig.SnapshotTopologiesIntervalHours = 1
-		UpdateConfigValuesFromFlags()
-		require.Equal(t, testConfig, Config)
-	})
-
-	t.Run("override reasonableReplicationLag", func(t *testing.T) {
-		oldReasonableReplicationLag := reasonableReplicationLag
-		reasonableReplicationLag = 15 * time.Second
-		// Restore the changes we make
-		defer func() {
-			Config = newConfiguration()
-			reasonableReplicationLag = oldReasonableReplicationLag
-		}()
-
-		testConfig := newConfiguration()
-		testConfig.ReasonableReplicationLagSeconds = 15
-		UpdateConfigValuesFromFlags()
-		require.Equal(t, testConfig, Config)
-	})
-
 	t.Run("override auditFileLocation", func(t *testing.T) {
 		oldAuditFileLocation := auditFileLocation
 		auditFileLocation = "newFile"
