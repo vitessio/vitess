@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -88,6 +89,22 @@ func TestAPIEndpoints(t *testing.T) {
 	// Before we disable recoveries, let us wait until VTOrc has fixed all the issues (if any).
 	_, _ = utils.MakeAPICallRetry(t, vtorc, "/api/replication-analysis", func(_ int, response string) bool {
 		return response != "null"
+	})
+
+	t.Run("Dynamic Configuration", func(t *testing.T) {
+		// Get configuration and verify the output.
+		status, resp, err := utils.MakeAPICall(t, vtorc, "/api/config")
+		require.NoError(t, err)
+		assert.Equal(t, 200, status)
+		assert.Contains(t, resp, `"snapshottopologyinterval": 0`)
+		// Update configuration and verify the output.
+		vtorc.Config.SnapshotTopologyInterval = "10h"
+		err = vtorc.RewriteConfiguration()
+		assert.NoError(t, err)
+		// Wait until the config has been updated and seen.
+		utils.MakeAPICallRetry(t, vtorc, "/api/config", func(_ int, response string) bool {
+			return !strings.Contains(response, `"snapshottopologyinterval": "10h"`)
+		})
 	})
 
 	t.Run("Database State", func(t *testing.T) {

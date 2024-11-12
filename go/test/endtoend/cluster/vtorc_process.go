@@ -50,6 +50,7 @@ type VTOrcProcess struct {
 
 type VTOrcConfiguration struct {
 	InstancePollTime                 string `json:",omitempty"`
+	SnapshotTopologyInterval         string `json:",omitempty"`
 	PreventCrossCellFailover         bool   `json:",omitempty"`
 	LockShardTimeoutSeconds          int    `json:",omitempty"`
 	ReplicationLagQuery              string `json:",omitempty"`
@@ -64,6 +65,10 @@ func (config *VTOrcConfiguration) ToJSONString() string {
 
 func (config *VTOrcConfiguration) AddDefaults(webPort int) {
 	config.InstancePollTime = "10h"
+}
+
+func (orc *VTOrcProcess) RewriteConfiguration() error {
+	return os.WriteFile(orc.ConfigPath, []byte(orc.Config.ToJSONString()), 0644)
 }
 
 // Setup starts orc process with required arguements
