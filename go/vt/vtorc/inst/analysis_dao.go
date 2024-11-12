@@ -94,13 +94,13 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 			IFNULL(
 				primary_instance.binary_log_file = database_instance_stale_binlog_coordinates.binary_log_file
 				AND primary_instance.binary_log_pos = database_instance_stale_binlog_coordinates.binary_log_pos
-				AND database_instance_stale_binlog_coordinates.first_seen < NOW() - interval ? second,
+				AND database_instance_stale_binlog_coordinates.first_seen < datetime('now', printf('-%d second', ?)),
 				0
 			)
 		) AS is_stale_binlog_coordinates,
 		MIN(
 			primary_instance.last_checked <= primary_instance.last_seen
-			and primary_instance.last_attempted_check <= primary_instance.last_seen + interval ? second
+			and primary_instance.last_attempted_check <= datetime(primary_instance.last_seen, printf('+%d second', ?))
 		) = 1 AS is_last_check_valid,
 		/* To be considered a primary, traditional async replication must not be present/valid AND the host should either */
 		/* not be a replication group member OR be the primary of the replication group */
@@ -684,7 +684,7 @@ func auditInstanceAnalysisInChangelog(tabletAlias string, analysisCode AnalysisC
 		sqlResult, err := db.ExecVTOrc(`
 			update database_instance_last_analysis set
 				analysis = ?,
-				analysis_timestamp = now()
+				analysis_timestamp = datetime('now')
 			where
 				alias = ?
 				and analysis != ?
@@ -709,10 +709,10 @@ func auditInstanceAnalysisInChangelog(tabletAlias string, analysisCode AnalysisC
 	if !lastAnalysisChanged {
 		// The insert only returns more than 1 row changed if this is the first insertion.
 		sqlResult, err := db.ExecVTOrc(`
-			insert ignore into database_instance_last_analysis (
+			insert or ignore into database_instance_last_analysis (
 					alias, analysis_timestamp, analysis
 				) values (
-					?, now(), ?
+					?, datetime('now'), ?
 				)
 			`,
 			tabletAlias, string(analysisCode),
@@ -738,7 +738,7 @@ func auditInstanceAnalysisInChangelog(tabletAlias string, analysisCode AnalysisC
 			insert into database_instance_analysis_changelog (
 					alias, analysis_timestamp, analysis
 				) values (
-					?, now(), ?
+					?, datetime('now'), ?
 				)
 			`,
 		tabletAlias, string(analysisCode),
@@ -757,7 +757,7 @@ func ExpireInstanceAnalysisChangelog() error {
 			delete
 				from database_instance_analysis_changelog
 			where
-				analysis_timestamp < now() - interval ? hour
+				analysis_timestamp < datetime('now', printf('-%d hour', ?))
 			`,
 		config.UnseenInstanceForgetHours,
 	)

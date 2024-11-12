@@ -37,10 +37,10 @@ func WriteRegisterNode(nodeHealth *NodeHealth) (healthy bool, err error) {
 
 	nodeHealth.onceHistory.Do(func() {
 		_, _ = db.ExecVTOrc(`
-			insert ignore into node_health_history
+			insert or ignore into node_health_history
 				(hostname, token, first_seen_active, extra_info, command, app_version)
 			values
-				(?, ?, NOW(), ?, ?, ?)
+				(?, ?, datetime('now'), ?, ?, ?)
 			`,
 			nodeHealth.Hostname, nodeHealth.Token, nodeHealth.ExtraInfo, nodeHealth.Command,
 			nodeHealth.AppVersion,
@@ -49,7 +49,7 @@ func WriteRegisterNode(nodeHealth *NodeHealth) (healthy bool, err error) {
 	{
 		sqlResult, err := db.ExecVTOrc(`
 			update node_health set
-				last_seen_active = now() - interval ? second,
+				last_seen_active = datetime('now', printf('-%d second', ?)),
 				extra_info = case when ? != '' then ? else extra_info end,
 				app_version = ?,
 				incrementing_indicator = incrementing_indicator + 1
@@ -79,11 +79,11 @@ func WriteRegisterNode(nodeHealth *NodeHealth) (healthy bool, err error) {
 	{
 		dbBackend := config.Config.SQLite3DataFile
 		sqlResult, err := db.ExecVTOrc(`
-			insert ignore into node_health
+			insert or ignore into node_health
 				(hostname, token, first_seen_active, last_seen_active, extra_info, command, app_version, db_backend)
 			values (
 				?, ?,
-				now() - interval ? second, now() - interval ? second,
+				datetime('now', printf('-%d second', ?)), datetime('now', printf('-%d second', ?)),
 				?, ?, ?, ?)
 			`,
 			nodeHealth.Hostname, nodeHealth.Token,
@@ -114,7 +114,7 @@ func ExpireAvailableNodes() {
 			delete
 				from node_health
 			where
-				last_seen_active < now() - interval ? second
+				last_seen_active < datetime('now', printf('-%d second', ?))
 			`,
 		config.HealthPollSeconds*5,
 	)
@@ -130,7 +130,7 @@ func ExpireNodesHistory() error {
 			delete
 				from node_health_history
 			where
-				first_seen_active < now() - interval ? hour
+				first_seen_active < datetime('now', printf('-%d hour', ?))
 			`,
 		config.UnseenInstanceForgetHours,
 	)
@@ -151,7 +151,7 @@ func ReadAvailableNodes(onlyHTTPNodes bool) (nodes [](*NodeHealth), err error) {
 		from
 			node_health
 		where
-			last_seen_active > now() - interval ? second
+			last_seen_active > datetime('now', printf('-%d second', ?))
 			and ? in (extra_info, '')
 		order by
 			hostname

@@ -111,9 +111,11 @@ func ExecDBWriteFunc(f func() error) error {
 }
 
 func ExpireTableData(tableName string, timestampColumn string) error {
-	query := fmt.Sprintf("delete from %s where %s < NOW() - INTERVAL ? DAY", tableName, timestampColumn)
 	writeFunc := func() error {
-		_, err := db.ExecVTOrc(query, config.Config.AuditPurgeDays)
+		_, err := db.ExecVTOrc(
+			fmt.Sprintf("delete from %s where %s < datetime('now', printf('-%%d DAY', ?))", tableName, timestampColumn),
+			config.Config.AuditPurgeDays,
+		)
 		return err
 	}
 	return ExecDBWriteFunc(writeFunc)
@@ -574,9 +576,9 @@ func readInstancesByCondition(condition string, args []any, sort string) ([](*In
 		query := fmt.Sprintf(`
 		select
 			*,
-			unix_timestamp() - unix_timestamp(last_checked) as seconds_since_last_checked,
+			strftime('%%s', 'now') - strftime('%%s', last_checked) as seconds_since_last_checked,
 			ifnull(last_checked <= last_seen, 0) as is_last_check_valid,
-			unix_timestamp() - unix_timestamp(last_seen) as seconds_since_last_seen
+			strftime('%%s', 'now') - strftime('%%s', last_seen) as seconds_since_last_seen
 		from
 			vitess_tablet
 			left join database_instance using (alias, hostname, port)
@@ -657,11 +659,11 @@ func ReadProblemInstances(keyspace string, shard string) ([](*Instance), error) 
 			and shard LIKE (CASE WHEN ? = '' THEN '%' ELSE ? END)
 			and (
 				(last_seen < last_checked)
-				or (unix_timestamp() - unix_timestamp(last_checked) > ?)
+				or (strftime('%%s', 'now') - strftime('%%s', last_checked) > ?)
 				or (replication_sql_thread_state not in (-1 ,1))
 				or (replication_io_thread_state not in (-1 ,1))
-				or (abs(cast(replication_lag_seconds as signed) - cast(sql_delay as signed)) > ?)
-				or (abs(cast(replica_lag_seconds as signed) - cast(sql_delay as signed)) > ?)
+				or (abs(cast(replication_lag_seconds as integer) - cast(sql_delay as integer)) > ?)
+				or (abs(cast(replica_lag_seconds as integer) - cast(sql_delay as integer)) > ?)
 				or (gtid_errant != '')
 			)
 		`
@@ -723,8 +725,8 @@ func ReadOutdatedInstanceKeys() ([]string, error) {
 		WHERE
 			CASE
 				WHEN last_attempted_check <= last_checked
-				THEN last_checked < now() - interval ? second
-				ELSE last_checked < now() - interval ? second
+				THEN last_checked < datetime('now', printf('-%d second', ?))
+				ELSE last_checked < datetime('now', printf('-%d second', ?))
 			END
 		UNION
 		SELECT
@@ -753,7 +755,7 @@ func ReadOutdatedInstanceKeys() ([]string, error) {
 	return res, err
 }
 
-func mkInsertOdku(table string, columns []string, values []string, nrRows int, insertIgnore bool) (string, error) {
+func mkInsert(table string, columns []string, values []string, nrRows int, insertIgnore bool) (string, error) {
 	if len(columns) == 0 {
 		return "", errors.New("Column list cannot be empty")
 	}
@@ -765,9 +767,9 @@ func mkInsertOdku(table string, columns []string, values []string, nrRows int, i
 	}
 
 	var q strings.Builder
-	var ignore string
+	insertStr := "REPLACE INTO"
 	if insertIgnore {
-		ignore = "ignore"
+		insertStr = "INSERT OR IGNORE INTO"
 	}
 	valRow := fmt.Sprintf("(%s)", strings.Join(values, ", "))
 	var val strings.Builder
@@ -778,26 +780,17 @@ func mkInsertOdku(table string, columns []string, values []string, nrRows int, i
 	}
 
 	col := strings.Join(columns, ", ")
-	var odku strings.Builder
-	odku.WriteString(fmt.Sprintf("%s=VALUES(%s)", columns[0], columns[0]))
-	for _, c := range columns[1:] {
-		odku.WriteString(", ")
-		odku.WriteString(fmt.Sprintf("%s=VALUES(%s)", c, c))
-	}
-
-	q.WriteString(fmt.Sprintf(`INSERT %s INTO %s
+	q.WriteString(fmt.Sprintf(`%s %s
                 (%s)
         VALUES
                 %s
-        ON DUPLICATE KEY UPDATE
-                %s
         `,
-		ignore, table, col, val.String(), odku.String()))
+		insertStr, table, col, val.String()))
 
 	return q.String(), nil
 }
 
-func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bool, updateLastSeen bool) (string, []any, error) {
+func mkInsertForInstances(instances []*Instance, instanceWasActuallyFound bool, updateLastSeen bool) (string, []any, error) {
 	if len(instances) == 0 {
 		return "", nil, nil
 	}
@@ -876,19 +869,19 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 	for i := range columns {
 		values[i] = "?"
 	}
-	values[3] = "NOW()" // last_checked
-	values[4] = "NOW()" // last_attempted_check
-	values[5] = "1"     // last_check_partial_success
+	values[3] = "datetime('now')" // last_checked
+	values[4] = "datetime('now')" // last_attempted_check
+	values[5] = "1"               // last_check_partial_success
 
 	if updateLastSeen {
 		columns = append(columns, "last_seen")
-		values = append(values, "NOW()")
+		values = append(values, "datetime('now')")
 	}
 
 	var args []any
 	for _, instance := range instances {
 		// number of columns minus 2 as last_checked and last_attempted_check
-		// updated with NOW()
+		// updated with datetime('now')
 		args = append(args, instance.InstanceAlias)
 		args = append(args, instance.Hostname)
 		args = append(args, instance.Port)
@@ -951,7 +944,7 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 		args = append(args, instance.LastDiscoveryLatency.Nanoseconds())
 	}
 
-	sql, err := mkInsertOdku("database_instance", columns, values, len(instances), insertIgnore)
+	sql, err := mkInsert("database_instance", columns, values, len(instances), insertIgnore)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to build query: %v", err)
 		log.Errorf(errMsg)
@@ -973,7 +966,7 @@ func writeManyInstances(instances []*Instance, instanceWasActuallyFound bool, up
 	if len(writeInstances) == 0 {
 		return nil // nothing to write
 	}
-	sql, args, err := mkInsertOdkuForInstances(writeInstances, instanceWasActuallyFound, updateLastSeen)
+	sql, args, err := mkInsertForInstances(writeInstances, instanceWasActuallyFound, updateLastSeen)
 	if err != nil {
 		return err
 	}
@@ -1000,7 +993,7 @@ func UpdateInstanceLastChecked(tabletAlias string, partialSuccess bool) error {
         	update
         		database_instance
         	set
-						last_checked = NOW(),
+						last_checked = datetime('now'),
 						last_check_partial_success = ?
 			where
 				alias = ?`,
@@ -1029,7 +1022,7 @@ func UpdateInstanceLastAttemptedCheck(tabletAlias string) error {
     	update
     		database_instance
     	set
-    		last_attempted_check = NOW()
+    		last_attempted_check = datetime('now')
 			where
 				alias = ?`,
 			tabletAlias,
@@ -1104,7 +1097,7 @@ func ForgetLongUnseenInstances() error {
 			delete
 				from database_instance
 			where
-				last_seen < NOW() - interval ? hour`,
+				last_seen < datetime('now', printf('-%d hour', ?))`,
 		config.UnseenInstanceForgetHours,
 	)
 	if err != nil {
@@ -1126,11 +1119,11 @@ func ForgetLongUnseenInstances() error {
 func SnapshotTopologies() error {
 	writeFunc := func() error {
 		_, err := db.ExecVTOrc(`
-        	insert ignore into
+        	insert or ignore into
         		database_instance_topology_history (snapshot_unix_timestamp,
         			alias, hostname, port, source_host, source_port, keyspace, shard, version)
         	select
-        		UNIX_TIMESTAMP(NOW()),
+        		strftime('%s', 'now'),
 				vitess_tablet.alias, vitess_tablet.hostname, vitess_tablet.port, 
 				database_instance.source_host, database_instance.source_port, 
 				vitess_tablet.keyspace, vitess_tablet.shard, database_instance.version
@@ -1171,12 +1164,12 @@ func RecordStaleInstanceBinlogCoordinates(tabletAlias string, binlogCoordinates 
 		return err
 	}
 	_, err = db.ExecVTOrc(`
-			insert ignore into
+			insert or ignore into
 				database_instance_stale_binlog_coordinates (
 					alias,	binary_log_file, binary_log_pos, first_seen
 				)
 				values (
-					?, ?, ?, NOW()
+					?, ?, ?, datetime('now')
 				)`,
 		args...)
 	if err != nil {
@@ -1193,7 +1186,7 @@ func ExpireStaleInstanceBinlogCoordinates() error {
 	writeFunc := func() error {
 		_, err := db.ExecVTOrc(`
 					delete from database_instance_stale_binlog_coordinates
-					where first_seen < NOW() - INTERVAL ? SECOND
+					where first_seen < datetime('now', printf('-%d second', ?))
 					`, expireSeconds,
 		)
 		if err != nil {

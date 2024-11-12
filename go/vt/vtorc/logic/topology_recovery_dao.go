@@ -41,14 +41,14 @@ func AttemptFailureDetectionRegistration(analysisEntry *inst.ReplicationAnalysis
 		analysisEntry.CountReplicas,
 		analysisEntry.IsActionableRecovery,
 	)
-	startActivePeriodHint := "now()"
+	startActivePeriodHint := "datetime('now')"
 	if analysisEntry.StartActivePeriod != "" {
 		startActivePeriodHint = "?"
 		args = append(args, analysisEntry.StartActivePeriod)
 	}
 
 	query := fmt.Sprintf(`
-			insert ignore
+			insert or ignore
 				into topology_failure_detection (
 					alias,
 					in_active_period,
@@ -95,10 +95,10 @@ func ClearActiveFailureDetections() error {
 	_, err := db.ExecVTOrc(`
 			update topology_failure_detection set
 				in_active_period = 0,
-				end_active_period_unixtime = UNIX_TIMESTAMP()
+				end_active_period_unixtime = strftime('%s', 'now')
 			where
 				in_active_period = 1
-				AND start_active_period < NOW() - INTERVAL ? MINUTE
+				AND start_active_period < datetime('now', printf('-%d MINUTE', ?))
 			`,
 		config.FailureDetectionPeriodBlockMinutes,
 	)
@@ -111,7 +111,7 @@ func ClearActiveFailureDetections() error {
 func writeTopologyRecovery(topologyRecovery *TopologyRecovery) (*TopologyRecovery, error) {
 	analysisEntry := topologyRecovery.AnalysisEntry
 	sqlResult, err := db.ExecVTOrc(`
-			insert ignore
+			insert or ignore
 				into topology_recovery (
 					recovery_id,
 					uid,
@@ -131,7 +131,7 @@ func writeTopologyRecovery(topologyRecovery *TopologyRecovery) (*TopologyRecover
 					?,
 					?,
 					1,
-					NOW(),
+					datetime('now'),
 					0,
 					?,
 					?,
@@ -225,10 +225,10 @@ func ClearActiveRecoveries() error {
 	_, err := db.ExecVTOrc(`
 			update topology_recovery set
 				in_active_period = 0,
-				end_active_period_unixtime = UNIX_TIMESTAMP()
+				end_active_period_unixtime = strftime('%s', 'now')
 			where
 				in_active_period = 1
-				AND start_active_period < NOW() - INTERVAL ? SECOND
+				AND start_active_period < datetime('now', printf('-%d SECOND', ?))
 			`,
 		config.Config.RecoveryPeriodBlockSeconds,
 	)
@@ -243,7 +243,7 @@ func ClearActiveRecoveries() error {
 func RegisterBlockedRecoveries(analysisEntry *inst.ReplicationAnalysis, blockingRecoveries []*TopologyRecovery) error {
 	for _, recovery := range blockingRecoveries {
 		_, err := db.ExecVTOrc(`
-			insert
+			replace
 				into blocked_topology_recovery (
 					alias,
 					keyspace,
@@ -256,15 +256,15 @@ func RegisterBlockedRecoveries(analysisEntry *inst.ReplicationAnalysis, blocking
 					?,
 					?,
 					?,
-					NOW(),
+					datetime('now'),
 					?
 				)
-				on duplicate key update
-					keyspace=values(keyspace),
-					shard=values(shard),
-					analysis=values(analysis),
-					last_blocked_timestamp=values(last_blocked_timestamp),
-					blocking_recovery_id=values(blocking_recovery_id)
+				on conflict(alias) do update set
+					keyspace=keyspace,
+					shard=shard,
+					analysis=analysis,
+					last_blocked_timestamp=last_blocked_timestamp,
+					blocking_recovery_id=blocking_recovery_id
 			`, analysisEntry.AnalyzedInstanceAlias,
 			analysisEntry.ClusterDetails.Keyspace,
 			analysisEntry.ClusterDetails.Shard,
@@ -325,7 +325,7 @@ func ExpireBlockedRecoveries() error {
 			delete
 				from blocked_topology_recovery
 				where
-					last_blocked_timestamp < NOW() - interval ? second
+					last_blocked_timestamp < datetime('now', printf('-%d second', ?))
 			`, config.Config.RecoveryPollSeconds*2,
 	)
 	if err != nil {
@@ -339,16 +339,16 @@ func acknowledgeRecoveries(owner string, comment string, markEndRecovery bool, w
 	additionalSet := ``
 	if markEndRecovery {
 		additionalSet = `
-				end_recovery=IFNULL(end_recovery, NOW()),
+				end_recovery=IFNULL(end_recovery, datetime('now')),
 			`
 	}
 	query := fmt.Sprintf(`
 			update topology_recovery set
 				in_active_period = 0,
-				end_active_period_unixtime = case when end_active_period_unixtime = 0 then UNIX_TIMESTAMP() else end_active_period_unixtime end,
+				end_active_period_unixtime = case when end_active_period_unixtime = 0 then strftime('%%s', 'now') else end_active_period_unixtime end,
 				%s
 				acknowledged = 1,
-				acknowledged_at = NOW(),
+				acknowledged_at = datetime('now'),
 				acknowledged_by = ?,
 				acknowledge_comment = ?
 			where
@@ -399,7 +399,7 @@ func writeResolveRecovery(topologyRecovery *TopologyRecovery) error {
 				is_successful = ?,
 				successor_alias = ?,
 				all_errors = ?,
-				end_recovery = NOW()
+				end_recovery = datetime('now')
 			where
 				uid = ?
 			`, topologyRecovery.IsSuccessful,
@@ -531,10 +531,10 @@ func ReadRecentRecoveries(unacknowledgedOnly bool, page int) ([]*TopologyRecover
 // writeTopologyRecoveryStep writes down a single step in a recovery process
 func writeTopologyRecoveryStep(topologyRecoveryStep *TopologyRecoveryStep) error {
 	sqlResult, err := db.ExecVTOrc(`
-			insert ignore
+			insert or ignore
 				into topology_recovery_steps (
 					recovery_step_id, recovery_uid, audit_at, message
-				) values (?, ?, now(), ?)
+				) values (?, ?, datetime('now'), ?)
 			`, sqlutils.NilIfZero(topologyRecoveryStep.ID), topologyRecoveryStep.RecoveryUID, topologyRecoveryStep.Message,
 	)
 	if err != nil {

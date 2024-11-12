@@ -60,7 +60,7 @@ func AuditOperation(auditType string, tabletAlias string, message string) error 
 				into audit (
 					audit_timestamp, audit_type, alias, keyspace, shard, message
 				) VALUES (
-					NOW(), ?, ?, ?, ?, ?
+					datetime('now'), ?, ?, ?, ?, ?
 				)
 			`,
 			auditType,

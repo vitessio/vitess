@@ -28,10 +28,10 @@ import (
 func AttemptElection() (bool, error) {
 	{
 		sqlResult, err := db.ExecVTOrc(`
-		insert ignore into active_node (
+		insert or ignore into active_node (
 				anchor, hostname, token, first_seen_active, last_seen_active
 			) values (
-				1, ?, ?, now(), now()
+				1, ?, ?, datetime('now'), datetime('now')
 			)
 		`,
 			ThisHostname, util.ProcessToken.Hash,
@@ -56,11 +56,11 @@ func AttemptElection() (bool, error) {
 			update active_node set
 				hostname = ?,
 				token = ?,
-				first_seen_active=now(),
-				last_seen_active=now()
+				first_seen_active = datetime('now'),
+				last_seen_active = datetime('now')
 			where
 				anchor = 1
-			  and last_seen_active < (now() - interval ? second)
+			  and last_seen_active < (datetime('now', printf('-%d second', ?)))
 		`,
 			ThisHostname, util.ProcessToken.Hash, config.ActiveNodeExpireSeconds,
 		)
@@ -82,7 +82,7 @@ func AttemptElection() (bool, error) {
 		// Update last_seen_active is this very node is already the active node
 		sqlResult, err := db.ExecVTOrc(`
 			update active_node set
-				last_seen_active=now()
+				last_seen_active = datetime('now')
 			where
 				anchor = 1
 				and hostname = ?
@@ -113,7 +113,7 @@ func GrabElection() error {
 			replace into active_node (
 					anchor, hostname, token, first_seen_active, last_seen_active
 				) values (
-					1, ?, ?, now(), now()
+					1, ?, ?, datetime('now'), datetime('now')
 				)
 			`,
 		ThisHostname, util.ProcessToken.Hash,

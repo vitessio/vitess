@@ -18,7 +18,6 @@ package db
 
 import (
 	"database/sql"
-	"strings"
 
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	"vitess.io/vitess/go/vt/log"
@@ -68,21 +67,13 @@ func OpenVTOrc() (db *sql.DB, err error) {
 	return db, err
 }
 
-func translateStatement(statement string) string {
-	return sqlutils.ToSqlite3Dialect(statement, true /* potentiallyDMLOrDDL */)
-}
-
-func translateQueryStatement(statement string) string {
-	return sqlutils.ToSqlite3Dialect(statement, false /* potentiallyDMLOrDDL */)
-}
-
 // registerVTOrcDeployment updates the vtorc_db_deployments table upon successful deployment
 func registerVTOrcDeployment(db *sql.DB) error {
 	query := `
     	replace into vtorc_db_deployments (
 				deployed_version, deployed_timestamp
 			) values (
-				?, NOW()
+				?, datetime('now')
 			)
 				`
 	if _, err := execInternal(db, query, ""); err != nil {
@@ -97,25 +88,12 @@ func deployStatements(db *sql.DB, queries []string) error {
 	tx, err := db.Begin()
 	if err != nil {
 		log.Fatal(err.Error())
+		return err
 	}
 	for _, query := range queries {
-		query = translateStatement(query)
 		if _, err := tx.Exec(query); err != nil {
-			if strings.Contains(err.Error(), "syntax error") {
-				log.Fatalf("Cannot initiate vtorc: %+v; query=%+v", err, query)
-				return err
-			}
-			if !sqlutils.IsAlterTable(query) && !sqlutils.IsCreateIndex(query) && !sqlutils.IsDropIndex(query) {
-				log.Fatalf("Cannot initiate vtorc: %+v; query=%+v", err, query)
-				return err
-			}
-			if !strings.Contains(err.Error(), "duplicate column name") &&
-				!strings.Contains(err.Error(), "Duplicate column name") &&
-				!strings.Contains(err.Error(), "check that column/key exists") &&
-				!strings.Contains(err.Error(), "already exists") &&
-				!strings.Contains(err.Error(), "Duplicate key name") {
-				log.Errorf("Error initiating vtorc: %+v; query=%+v", err, query)
-			}
+			log.Fatalf("Cannot initiate vtorc: %+v; query=%+v", err, query)
+			return err
 		}
 	}
 	if err := tx.Commit(); err != nil {
@@ -150,7 +128,6 @@ func initVTOrcDB(db *sql.DB) error {
 // execInternal
 func execInternal(db *sql.DB, query string, args ...any) (sql.Result, error) {
 	var err error
-	query = translateStatement(query)
 	res, err := sqlutils.ExecNoPrepare(db, query, args...)
 	return res, err
 }
@@ -166,7 +143,6 @@ func ExecVTOrc(query string, args ...any) (sql.Result, error) {
 
 // QueryVTOrcRowsMap
 func QueryVTOrcRowsMap(query string, onRow func(sqlutils.RowMap) error) error {
-	query = translateQueryStatement(query)
 	db, err := OpenVTOrc()
 	if err != nil {
 		return err
@@ -177,7 +153,6 @@ func QueryVTOrcRowsMap(query string, onRow func(sqlutils.RowMap) error) error {
 
 // QueryVTOrc
 func QueryVTOrc(query string, argsArray []any, onRow func(sqlutils.RowMap) error) error {
-	query = translateQueryStatement(query)
 	db, err := OpenVTOrc()
 	if err != nil {
 		return err
