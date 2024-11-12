@@ -98,12 +98,36 @@ var (
 			Dynamic:  false,
 		},
 	)
+
+	auditToBackend = viperutil.Configure(
+		"AuditToBackend",
+		viperutil.Options[bool]{
+			FlagName: "audit-to-backend",
+			Default:  false,
+			Dynamic:  true,
+		},
+	)
+
+	auditToSyslog = viperutil.Configure(
+		"AuditToSyslog",
+		viperutil.Options[bool]{
+			FlagName: "audit-to-syslog",
+			Default:  false,
+			Dynamic:  true,
+		},
+	)
+
+	auditPurgeDuration = viperutil.Configure(
+		"AuditPurgeDuration",
+		viperutil.Options[time.Duration]{
+			FlagName: "reasonable-replication-lag",
+			Default:  7 * 24 * time.Hour,
+			Dynamic:  true,
+		},
+	)
 )
 
 var (
-	auditToBackend                 = false
-	auditToSyslog                  = false
-	auditPurgeDuration             = 7 * 24 * time.Hour // Equivalent of 7 days
 	waitReplicasTimeout            = 30 * time.Second
 	tolerableReplicationLag        = 0 * time.Second
 	topoInformationRefreshDuration = 15 * time.Second
@@ -123,9 +147,9 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.Duration("snapshot-topology-interval", snapshotTopologyInterval.Default(), "Timer duration on which VTOrc takes a snapshot of the current MySQL information it has in the database. Should be in multiple of hours")
 	fs.Duration("reasonable-replication-lag", reasonableReplicationLag.Default(), "Maximum replication lag on replicas which is deemed to be acceptable")
 	fs.String("audit-file-location", auditFileLocation.Default(), "File location where the audit logs are to be stored")
-	fs.BoolVar(&auditToBackend, "audit-to-backend", auditToBackend, "Whether to store the audit log in the VTOrc database")
-	fs.BoolVar(&auditToSyslog, "audit-to-syslog", auditToSyslog, "Whether to store the audit log in the syslog")
-	fs.DurationVar(&auditPurgeDuration, "audit-purge-duration", auditPurgeDuration, "Duration for which audit logs are held before being purged. Should be in multiples of days")
+	fs.Bool("audit-to-backend", auditToBackend.Default(), "Whether to store the audit log in the VTOrc database")
+	fs.Bool("audit-to-syslog", auditToSyslog.Default(), "Whether to store the audit log in the syslog")
+	fs.Duration("audit-purge-duration", auditPurgeDuration.Default(), "Duration for which audit logs are held before being purged. Should be in multiples of days")
 	fs.Bool("prevent-cross-cell-failover", preventCrossCellFailover.Default(), "Prevent VTOrc from promoting a primary in a different cell than the current primary in case of a failover")
 	fs.DurationVar(&waitReplicasTimeout, "wait-replicas-timeout", waitReplicasTimeout, "Duration for which to wait for replica's to respond when issuing RPCs")
 	fs.DurationVar(&tolerableReplicationLag, "tolerable-replication-lag", tolerableReplicationLag, "Amount of replication lag that is considered acceptable for a tablet to be eligible for promotion when Vitess makes the choice of a new primary in PRS")
@@ -141,6 +165,9 @@ func registerFlags(fs *pflag.FlagSet) {
 		snapshotTopologyInterval,
 		reasonableReplicationLag,
 		auditFileLocation,
+		auditToBackend,
+		auditToSyslog,
+		auditPurgeDuration,
 	)
 }
 
@@ -149,14 +176,10 @@ func registerFlags(fs *pflag.FlagSet) {
 // strictly expected from user.
 // TODO(sougou): change this to yaml parsing, and possible merge with tabletenv.
 type Configuration struct {
-	AuditLogFile                   string // Name of log file for audit operations. Disabled when empty.
-	AuditToSyslog                  bool   // If true, audit messages are written to syslog
-	AuditToBackendDB               bool   // If true, audit messages are written to the backend DB's `audit` table (default: true)
-	AuditPurgeDays                 uint   // Days after which audit entries are purged from the database
-	WaitReplicasTimeoutSeconds     int    // Timeout on amount of time to wait for the replicas in case of ERS. Should be a small value because we should fail-fast. Should not be larger than LockTimeout since that is the total time we use for an ERS.
-	TolerableReplicationLagSeconds int    // Amount of replication lag that is considered acceptable for a tablet to be eligible for promotion when Vitess makes the choice of a new primary in PRS.
-	TopoInformationRefreshSeconds  int    // Timer duration on which VTOrc refreshes the keyspace and vttablet records from the topo-server.
-	RecoveryPollSeconds            int    // Timer duration on which VTOrc recovery analysis runs
+	WaitReplicasTimeoutSeconds     int // Timeout on amount of time to wait for the replicas in case of ERS. Should be a small value because we should fail-fast. Should not be larger than LockTimeout since that is the total time we use for an ERS.
+	TolerableReplicationLagSeconds int // Amount of replication lag that is considered acceptable for a tablet to be eligible for promotion when Vitess makes the choice of a new primary in PRS.
+	TopoInformationRefreshSeconds  int // Timer duration on which VTOrc refreshes the keyspace and vttablet records from the topo-server.
+	RecoveryPollSeconds            int // Timer duration on which VTOrc recovery analysis runs
 }
 
 // ToJSONString will marshal this configuration as JSON
@@ -213,12 +236,39 @@ func SetAuditFileLocation(v string) {
 	auditFileLocation.Set(v)
 }
 
+// GetAuditToSyslog is a getter function.
+func GetAuditToSyslog() bool {
+	return auditToSyslog.Get()
+}
+
+// SetAuditToSyslog is a setter function.
+func SetAuditToSyslog(v bool) {
+	auditToSyslog.Set(v)
+}
+
+// GetAuditToBackend is a getter function.
+func GetAuditToBackend() bool {
+	return auditToBackend.Get()
+}
+
+// SetAuditToBackend is a setter function.
+func SetAuditToBackend(v bool) {
+	auditToBackend.Set(v)
+}
+
+// GetAuditPurgeDays gets the audit purge duration but in days.
+func GetAuditPurgeDays() int64 {
+	return int64(auditPurgeDuration.Get() / (24 * time.Hour))
+}
+
+// SetAuditPurgeDays sets the audit purge duration.
+func SetAuditPurgeDays(days int64) {
+	auditPurgeDuration.Set(time.Duration(days) * 24 * time.Hour)
+}
+
 // UpdateConfigValuesFromFlags is used to update the config values from the flags defined.
 // This is done before we read any configuration files from the user. So the config files take precedence.
 func UpdateConfigValuesFromFlags() {
-	Config.AuditToBackendDB = auditToBackend
-	Config.AuditToSyslog = auditToSyslog
-	Config.AuditPurgeDays = uint(auditPurgeDuration / (time.Hour * 24))
 	Config.WaitReplicasTimeoutSeconds = int(waitReplicasTimeout / time.Second)
 	Config.TolerableReplicationLagSeconds = int(tolerableReplicationLag / time.Second)
 	Config.TopoInformationRefreshSeconds = int(topoInformationRefreshDuration / time.Second)
@@ -252,9 +302,6 @@ func LogConfigValues() {
 
 func newConfiguration() *Configuration {
 	return &Configuration{
-		AuditToSyslog:                 false,
-		AuditToBackendDB:              false,
-		AuditPurgeDays:                7,
 		WaitReplicasTimeoutSeconds:    30,
 		TopoInformationRefreshSeconds: 15,
 		RecoveryPollSeconds:           1,

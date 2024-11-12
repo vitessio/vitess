@@ -34,54 +34,6 @@ func TestUpdateConfigValuesFromFlags(t *testing.T) {
 		require.Equal(t, defaultConfig, Config)
 	})
 
-	t.Run("override auditPurgeDuration", func(t *testing.T) {
-		oldAuditPurgeDuration := auditPurgeDuration
-		auditPurgeDuration = 8 * time.Hour * 24
-		auditPurgeDuration += time.Second + 4*time.Minute
-		// Restore the changes we make
-		defer func() {
-			Config = newConfiguration()
-			auditPurgeDuration = oldAuditPurgeDuration
-		}()
-
-		testConfig := newConfiguration()
-		// auditPurgeDuration is supposed to be in multiples of days.
-		// If it is not, then we round down to the nearest number of days.
-		testConfig.AuditPurgeDays = 8
-		UpdateConfigValuesFromFlags()
-		require.Equal(t, testConfig, Config)
-	})
-
-	t.Run("override auditToBackend", func(t *testing.T) {
-		oldAuditToBackend := auditToBackend
-		auditToBackend = true
-		// Restore the changes we make
-		defer func() {
-			Config = newConfiguration()
-			auditToBackend = oldAuditToBackend
-		}()
-
-		testConfig := newConfiguration()
-		testConfig.AuditToBackendDB = true
-		UpdateConfigValuesFromFlags()
-		require.Equal(t, testConfig, Config)
-	})
-
-	t.Run("override auditToSyslog", func(t *testing.T) {
-		oldAuditToSyslog := auditToSyslog
-		auditToSyslog = true
-		// Restore the changes we make
-		defer func() {
-			Config = newConfiguration()
-			auditToSyslog = oldAuditToSyslog
-		}()
-
-		testConfig := newConfiguration()
-		testConfig.AuditToSyslog = true
-		UpdateConfigValuesFromFlags()
-		require.Equal(t, testConfig, Config)
-	})
-
 	t.Run("override waitReplicasTimeout", func(t *testing.T) {
 		oldWaitReplicasTimeout := waitReplicasTimeout
 		waitReplicasTimeout = 3*time.Minute + 4*time.Second

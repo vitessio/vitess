@@ -54,7 +54,7 @@ func run(cmd *cobra.Command, args []string) {
 	inst.RegisterStats()
 
 	log.Info("starting vtorc")
-	if config.Config.AuditToSyslog {
+	if config.GetAuditToSyslog() {
 		inst.EnableAuditSyslog()
 	}
 	config.MarkConfigurationLoaded()

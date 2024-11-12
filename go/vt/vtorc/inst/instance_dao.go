@@ -116,7 +116,7 @@ func ExpireTableData(tableName string, timestampColumn string) error {
 	writeFunc := func() error {
 		_, err := db.ExecVTOrc(
 			fmt.Sprintf("delete from %s where %s < datetime('now', printf('-%%d DAY', ?))", tableName, timestampColumn),
-			config.Config.AuditPurgeDays,
+			config.GetAuditPurgeDays(),
 		)
 		return err
 	}

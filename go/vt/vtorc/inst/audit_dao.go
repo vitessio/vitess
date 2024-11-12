@@ -54,7 +54,7 @@ func AuditOperation(auditType string, tabletAlias string, message string) error 
 			}
 		}()
 	}
-	if config.Config.AuditToBackendDB {
+	if config.GetAuditToBackend() {
 		_, err := db.ExecVTOrc(`
 			insert
 				into audit (

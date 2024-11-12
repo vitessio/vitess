@@ -35,13 +35,13 @@ import (
 // This test also verifies that we are able to read the recent audits that are written to the databaes.
 func TestAuditOperation(t *testing.T) {
 	// Restore original configurations
-	originalAuditSysLog := config.Config.AuditToSyslog
+	originalAuditSysLog := config.GetAuditToSyslog()
 	originalAuditLogFile := config.GetAuditFileLocation()
-	originalAuditBackend := config.Config.AuditToBackendDB
+	originalAuditBackend := config.GetAuditToBackend()
 	defer func() {
-		config.Config.AuditToSyslog = originalAuditSysLog
+		config.SetAuditToSyslog(originalAuditSysLog)
 		config.SetAuditFileLocation(originalAuditLogFile)
-		config.Config.AuditToBackendDB = originalAuditBackend
+		config.SetAuditToBackend(originalAuditBackend)
 	}()
 
 	orcDb, err := db.OpenVTOrc()
@@ -79,8 +79,8 @@ func TestAuditOperation(t *testing.T) {
 
 	t.Run("audit to backend", func(t *testing.T) {
 		config.SetAuditFileLocation("")
-		config.Config.AuditToSyslog = false
-		config.Config.AuditToBackendDB = true
+		config.SetAuditToSyslog(false)
+		config.SetAuditToBackend(true)
 
 		// Auditing should succeed as expected
 		err = AuditOperation(auditType, tab100Alias, message)
@@ -106,8 +106,8 @@ func TestAuditOperation(t *testing.T) {
 	})
 
 	t.Run("audit to File", func(t *testing.T) {
-		config.Config.AuditToBackendDB = false
-		config.Config.AuditToSyslog = false
+		config.SetAuditToBackend(false)
+		config.SetAuditToSyslog(false)
 
 		file, err := os.CreateTemp("", "test-auditing-*")
 		require.NoError(t, err)
