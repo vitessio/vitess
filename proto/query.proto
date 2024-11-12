@@ -615,8 +615,16 @@ message StartCommitRequest {
   string dtid = 5;
 }
 
+enum StartCommitState {
+  Unknown = 0;
+  Fail = 1;
+  Success = 2;
+}
+
 // StartCommitResponse is the returned value from StartCommit
-message StartCommitResponse {}
+message StartCommitResponse {
+  StartCommitState state = 1;
+}
 
 // SetRollbackRequest is the payload to SetRollback
 message SetRollbackRequest {

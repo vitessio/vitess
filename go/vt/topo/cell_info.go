@@ -46,6 +46,9 @@ func pathForCellInfo(cell string) string {
 // GetCellInfoNames returns the names of the existing cells. They are
 // sorted by name.
 func (ts *Server) GetCellInfoNames(ctx context.Context) ([]string, error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
 	entries, err := ts.globalCell.ListDir(ctx, CellsPath, false /*full*/)
 	switch {
 	case IsErrType(err, NoNode):
@@ -59,10 +62,10 @@ func (ts *Server) GetCellInfoNames(ctx context.Context) ([]string, error) {
 
 // GetCellInfo reads a CellInfo from the global Conn.
 func (ts *Server) GetCellInfo(ctx context.Context, cell string, strongRead bool) (*topodatapb.CellInfo, error) {
-	conn := ts.globalCell
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
+	conn := ts.globalCell
 	if !strongRead {
 		conn = ts.globalReadOnlyCell
 	}
@@ -83,6 +86,9 @@ func (ts *Server) GetCellInfo(ctx context.Context, cell string, strongRead bool)
 
 // CreateCellInfo creates a new CellInfo with the provided content.
 func (ts *Server) CreateCellInfo(ctx context.Context, cell string, ci *topodatapb.CellInfo) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
 	// Pack the content.
 	contents, err := ci.MarshalVT()
 	if err != nil {
@@ -103,6 +109,10 @@ func (ts *Server) CreateCellInfo(ctx context.Context, cell string, ci *topodatap
 func (ts *Server) UpdateCellInfoFields(ctx context.Context, cell string, update func(*topodatapb.CellInfo) error) error {
 	filePath := pathForCellInfo(cell)
 	for {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+
 		ci := &topodatapb.CellInfo{}
 
 		// Read the file, unpack the contents.
@@ -142,6 +152,9 @@ func (ts *Server) UpdateCellInfoFields(ctx context.Context, cell string, update 
 // We first try to make sure no Shard record points to the cell,
 // but we'll continue regardless if 'force' is true.
 func (ts *Server) DeleteCellInfo(ctx context.Context, cell string, force bool) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
 	srvKeyspaces, err := ts.GetSrvKeyspaceNames(ctx, cell)
 	switch {
 	case err == nil:
@@ -180,6 +193,10 @@ func (ts *Server) DeleteCellInfo(ctx context.Context, cell string, force bool) e
 // TODO(alainjobart) once the cell map is migrated to this generic
 // package, we can do better than this.
 func (ts *Server) GetKnownCells(ctx context.Context) ([]string, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
 	// Note we use the global read-only cell here, as the result
 	// is not time sensitive.
 	entries, err := ts.globalReadOnlyCell.ListDir(ctx, CellsPath, false /*full*/)

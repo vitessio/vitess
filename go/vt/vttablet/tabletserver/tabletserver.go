@@ -773,16 +773,18 @@ func (tsv *TabletServer) CreateTransaction(ctx context.Context, target *querypb.
 
 // StartCommit atomically commits the transaction along with the
 // decision to commit the associated 2pc transaction.
-func (tsv *TabletServer) StartCommit(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (err error) {
-	return tsv.execRequest(
+func (tsv *TabletServer) StartCommit(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (state querypb.StartCommitState, err error) {
+	err = tsv.execRequest(
 		ctx, tsv.loadQueryTimeout(),
 		"StartCommit", "start_commit", nil,
 		target, nil, true, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			txe := NewDTExecutor(ctx, logStats, tsv.te, tsv.qe, tsv.getShard)
-			return txe.StartCommit(transactionID, dtid)
+			state, err = txe.StartCommit(transactionID, dtid)
+			return err
 		},
 	)
+	return state, err
 }
 
 // SetRollback transitions the 2pc transaction to the Rollback state.
@@ -826,6 +828,21 @@ func (tsv *TabletServer) ReadTransaction(ctx context.Context, target *querypb.Ta
 		},
 	)
 	return metadata, err
+}
+
+// GetTransactionInfo returns the data for the specified dtid.
+func (tsv *TabletServer) GetTransactionInfo(ctx context.Context, target *querypb.Target, dtid string) (resp *tabletmanagerdatapb.GetTransactionInfoResponse, err error) {
+	err = tsv.execRequest(
+		ctx, tsv.loadQueryTimeout(),
+		"GetTransactionInfo", "get_transaction_info", nil,
+		target, nil, true, /* allowOnShutdown */
+		func(ctx context.Context, logStats *tabletenv.LogStats) error {
+			txe := NewDTExecutor(ctx, logStats, tsv.te, tsv.qe, tsv.getShard)
+			resp, err = txe.GetTransactionInfo(dtid)
+			return err
+		},
+	)
+	return resp, err
 }
 
 // UnresolvedTransactions returns the unresolved distributed transaction record.
@@ -2024,7 +2041,11 @@ func (tsv *TabletServer) StreamPoolSize() int {
 
 // SetTxPoolSize changes the tx pool size to the specified value.
 func (tsv *TabletServer) SetTxPoolSize(ctx context.Context, val int) error {
-	return tsv.te.txPool.scp.conns.SetCapacity(ctx, int64(val))
+	// TxPool manages two pools, one for normal connections and one for CLIENT_FOUND_ROWS capability enabled on the connections.
+	if err := tsv.te.txPool.scp.conns.SetCapacity(ctx, int64(val)); err != nil {
+		return err
+	}
+	return tsv.te.txPool.scp.foundRowsPool.SetCapacity(ctx, int64(val))
 }
 
 // TxPoolSize returns the tx pool size.
