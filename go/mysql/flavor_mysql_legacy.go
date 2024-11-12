@@ -72,12 +72,13 @@ GROUP BY table_name,
 // We join with a subquery that materializes the data from `information_schema.innodb_sys_tablespaces`
 // early for performance reasons. This effectively causes only a single read of `information_schema.innodb_sys_tablespaces`
 // per query.
+// Note that 5.7 has NULL for a VIEW's create_time, so we use IFNULL to make it 1 (non NULL and non zero).
 const TablesWithSize57 = `SELECT t.table_name,
 	t.table_type,
-	UNIX_TIMESTAMP(t.create_time),
+	IFNULL(UNIX_TIMESTAMP(t.create_time), 1),
 	t.table_comment,
-	IFNULL(SUM(i.file_size), SUM(t.data_length + t.index_length)),
-	IFNULL(SUM(i.allocated_size), SUM(t.data_length + t.index_length))
+	IFNULL(SUM(i.file_size), SUM(t.data_length + t.index_length)) AS file_size,
+	IFNULL(SUM(i.allocated_size), SUM(t.data_length + t.index_length)) AS allocated_size
 FROM information_schema.tables t
 LEFT OUTER JOIN (
 	SELECT space, file_size, allocated_size, name

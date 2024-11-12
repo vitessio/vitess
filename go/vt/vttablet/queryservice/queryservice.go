@@ -63,7 +63,7 @@ type QueryService interface {
 
 	// StartCommit atomically commits the transaction along with the
 	// decision to commit the associated 2pc transaction.
-	StartCommit(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (err error)
+	StartCommit(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (state querypb.StartCommitState, err error)
 
 	// SetRollback transitions the 2pc transaction to the Rollback state.
 	// If a transaction id is provided, that transaction is also rolled back.

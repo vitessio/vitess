@@ -108,6 +108,11 @@ func TestMain(m *testing.M) {
 		vtParams = clusterInstance.GetVTParams(keyspaceName)
 		vtgateGrpcAddress = fmt.Sprintf("%s:%d", clusterInstance.Hostname, clusterInstance.VtgateGrpcPort)
 
+		clusterInstance.NewVTAdminProcess()
+		if err := clusterInstance.VtadminProcess.Setup(); err != nil {
+			return 1
+		}
+
 		// create mysql instance and connection parameters
 		conn, closer, err := utils.NewMySQL(clusterInstance, keyspaceName, SchemaSQL)
 		if err != nil {

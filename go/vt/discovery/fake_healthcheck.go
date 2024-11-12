@@ -172,6 +172,21 @@ func (fhc *FakeHealthCheck) SetTabletType(tablet *topodatapb.Tablet, tabletType 
 	item.ts.Target.TabletType = tabletType
 }
 
+// SetPrimaryTimestamp sets the primary timestamp for the given tablet
+func (fhc *FakeHealthCheck) SetPrimaryTimestamp(tablet *topodatapb.Tablet, timestamp int64) {
+	if fhc.ch == nil {
+		return
+	}
+	fhc.mu.Lock()
+	defer fhc.mu.Unlock()
+	key := TabletToMapKey(tablet)
+	item, isPresent := fhc.items[key]
+	if !isPresent {
+		return
+	}
+	item.ts.PrimaryTermStartTime = timestamp
+}
+
 // Unsubscribe is not implemented.
 func (fhc *FakeHealthCheck) Unsubscribe(c chan *TabletHealth) {
 }

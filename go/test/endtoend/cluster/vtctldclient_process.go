@@ -195,7 +195,9 @@ func (vtctldclient *VtctldClientProcess) PlannedReparentShard(Keyspace string, S
 	output, err := vtctldclient.ExecuteCommandWithOutput(
 		"PlannedReparentShard",
 		fmt.Sprintf("%s/%s", Keyspace, Shard),
-		"--new-primary", alias)
+		"--new-primary", alias,
+		"--wait-replicas-timeout", "30s",
+	)
 	if err != nil {
 		log.Errorf("error in PlannedReparentShard output %s, err %s", output, err.Error())
 	}

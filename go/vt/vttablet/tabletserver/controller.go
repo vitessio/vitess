@@ -22,6 +22,7 @@ import (
 
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
@@ -106,6 +107,9 @@ type Controller interface {
 
 	// ReadTransaction returns all unresolved transactions list
 	ReadTransaction(ctx context.Context, target *querypb.Target, dtid string) (*querypb.TransactionMetadata, error)
+
+	// GetTransactionInfo returns data about a single transaction
+	GetTransactionInfo(ctx context.Context, target *querypb.Target, dtid string) (*tabletmanagerdata.GetTransactionInfoResponse, error)
 
 	// ConcludeTransaction deletes the distributed transaction metadata
 	ConcludeTransaction(ctx context.Context, target *querypb.Target, dtid string) error

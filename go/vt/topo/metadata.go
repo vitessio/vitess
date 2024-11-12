@@ -28,6 +28,10 @@ import (
 
 // UpsertMetadata sets the key/value in the metadata if it doesn't exist, otherwise it updates the content
 func (ts *Server) UpsertMetadata(ctx context.Context, key string, val string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	keyPath := path.Join(MetadataPath, key)
 
 	_, _, err := ts.globalCell.Get(ctx, keyPath)
@@ -52,6 +56,10 @@ func (ts *Server) UpsertMetadata(ctx context.Context, key string, val string) er
 
 // GetMetadata retrieves all metadata value that matches the given key regular expression. If empty all values are returned.
 func (ts *Server) GetMetadata(ctx context.Context, keyFilter string) (map[string]string, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
 	keys, err := ts.globalCell.ListDir(ctx, MetadataPath, false)
 	if err != nil {
 		return nil, err
@@ -77,6 +85,10 @@ func (ts *Server) GetMetadata(ctx context.Context, keyFilter string) (map[string
 
 // DeleteMetadata deletes the key in the metadata
 func (ts *Server) DeleteMetadata(ctx context.Context, key string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	keyPath := path.Join(MetadataPath, key)
 
 	// nil version means that it will insert if keyPath does not exist
@@ -89,6 +101,10 @@ func (ts *Server) DeleteMetadata(ctx context.Context, key string) error {
 }
 
 func (ts *Server) getMetadata(ctx context.Context, key string) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+
 	keyPath := path.Join(MetadataPath, key)
 	contents, _, err := ts.globalCell.Get(ctx, keyPath)
 	if err != nil {

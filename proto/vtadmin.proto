@@ -116,6 +116,8 @@ service VTAdmin {
     rpc GetTablets(GetTabletsRequest) returns (GetTabletsResponse) {};
     // GetTopologyPath returns the cell located at the specified path in the topology server.
     rpc GetTopologyPath(GetTopologyPathRequest) returns (vtctldata.GetTopologyPathResponse){};
+    // GetTransactionInfo returns the information about a single transaction.
+    rpc GetTransactionInfo(GetTransactionInfoRequest) returns (vtctldata.GetTransactionInfoResponse){};
     // GetUnresolvedTransactions returns the unresolved transactions for the request.
     rpc GetUnresolvedTransactions(GetUnresolvedTransactionsRequest) returns (vtctldata.GetUnresolvedTransactionsResponse){};
     // GetVSchema returns a VSchema for the specified keyspace in the specified
@@ -657,6 +659,11 @@ message GetTabletsResponse {
 message GetTopologyPathRequest {
   string cluster_id = 1;
   string path = 2;
+}
+
+message GetTransactionInfoRequest {
+    string cluster_id = 1;
+    vtctldata.GetTransactionInfoRequest request = 2;
 }
 
 message GetUnresolvedTransactionsRequest {
