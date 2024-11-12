@@ -36,11 +36,11 @@ import (
 func TestAuditOperation(t *testing.T) {
 	// Restore original configurations
 	originalAuditSysLog := config.Config.AuditToSyslog
-	originalAuditLogFile := config.Config.AuditLogFile
+	originalAuditLogFile := config.GetAuditFileLocation()
 	originalAuditBackend := config.Config.AuditToBackendDB
 	defer func() {
 		config.Config.AuditToSyslog = originalAuditSysLog
-		config.Config.AuditLogFile = originalAuditLogFile
+		config.SetAuditFileLocation(originalAuditLogFile)
 		config.Config.AuditToBackendDB = originalAuditBackend
 	}()
 
@@ -78,7 +78,7 @@ func TestAuditOperation(t *testing.T) {
 	message := "test-message"
 
 	t.Run("audit to backend", func(t *testing.T) {
-		config.Config.AuditLogFile = ""
+		config.SetAuditFileLocation("")
 		config.Config.AuditToSyslog = false
 		config.Config.AuditToBackendDB = true
 
@@ -112,7 +112,7 @@ func TestAuditOperation(t *testing.T) {
 		file, err := os.CreateTemp("", "test-auditing-*")
 		require.NoError(t, err)
 		defer os.Remove(file.Name())
-		config.Config.AuditLogFile = file.Name()
+		config.SetAuditFileLocation(file.Name())
 
 		err = AuditOperation(auditType, tab100Alias, message)
 		require.NoError(t, err)

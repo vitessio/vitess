@@ -46,7 +46,7 @@ const (
 
 var (
 	instancePollTime = viperutil.Configure(
-		"InstancePollTime",
+		"instance-pPollTime",
 		viperutil.Options[time.Duration]{
 			FlagName: "instance-poll-time",
 			Default:  5 * time.Second,
@@ -89,10 +89,18 @@ var (
 			Dynamic:  true,
 		},
 	)
+
+	auditFileLocation = viperutil.Configure(
+		"AuditFileLocation",
+		viperutil.Options[string]{
+			FlagName: "audit-file-location",
+			Default:  "",
+			Dynamic:  false,
+		},
+	)
 )
 
 var (
-	auditFileLocation              = ""
 	auditToBackend                 = false
 	auditToSyslog                  = false
 	auditPurgeDuration             = 7 * 24 * time.Hour // Equivalent of 7 days
@@ -114,7 +122,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.Duration("instance-poll-time", instancePollTime.Default(), "Timer duration on which VTOrc refreshes MySQL information")
 	fs.Duration("snapshot-topology-interval", snapshotTopologyInterval.Default(), "Timer duration on which VTOrc takes a snapshot of the current MySQL information it has in the database. Should be in multiple of hours")
 	fs.Duration("reasonable-replication-lag", reasonableReplicationLag.Default(), "Maximum replication lag on replicas which is deemed to be acceptable")
-	fs.StringVar(&auditFileLocation, "audit-file-location", auditFileLocation, "File location where the audit logs are to be stored")
+	fs.String("audit-file-location", auditFileLocation.Default(), "File location where the audit logs are to be stored")
 	fs.BoolVar(&auditToBackend, "audit-to-backend", auditToBackend, "Whether to store the audit log in the VTOrc database")
 	fs.BoolVar(&auditToSyslog, "audit-to-syslog", auditToSyslog, "Whether to store the audit log in the syslog")
 	fs.DurationVar(&auditPurgeDuration, "audit-purge-duration", auditPurgeDuration, "Duration for which audit logs are held before being purged. Should be in multiples of days")
@@ -132,6 +140,7 @@ func registerFlags(fs *pflag.FlagSet) {
 		sqliteDataFile,
 		snapshotTopologyInterval,
 		reasonableReplicationLag,
+		auditFileLocation,
 	)
 }
 
@@ -194,10 +203,19 @@ func GetSnapshotTopologyInterval() time.Duration {
 	return snapshotTopologyInterval.Get()
 }
 
+// GetAuditFileLocation is a getter function.
+func GetAuditFileLocation() string {
+	return auditFileLocation.Get()
+}
+
+// SetAuditFileLocation is a setter function.
+func SetAuditFileLocation(v string) {
+	auditFileLocation.Set(v)
+}
+
 // UpdateConfigValuesFromFlags is used to update the config values from the flags defined.
 // This is done before we read any configuration files from the user. So the config files take precedence.
 func UpdateConfigValuesFromFlags() {
-	Config.AuditLogFile = auditFileLocation
 	Config.AuditToBackendDB = auditToBackend
 	Config.AuditToSyslog = auditToSyslog
 	Config.AuditPurgeDays = uint(auditPurgeDuration / (time.Hour * 24))
@@ -234,7 +252,6 @@ func LogConfigValues() {
 
 func newConfiguration() *Configuration {
 	return &Configuration{
-		AuditLogFile:                  "",
 		AuditToSyslog:                 false,
 		AuditToBackendDB:              false,
 		AuditPurgeDays:                7,

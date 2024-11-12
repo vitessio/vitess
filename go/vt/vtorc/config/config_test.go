@@ -52,21 +52,6 @@ func TestUpdateConfigValuesFromFlags(t *testing.T) {
 		require.Equal(t, testConfig, Config)
 	})
 
-	t.Run("override auditFileLocation", func(t *testing.T) {
-		oldAuditFileLocation := auditFileLocation
-		auditFileLocation = "newFile"
-		// Restore the changes we make
-		defer func() {
-			Config = newConfiguration()
-			auditFileLocation = oldAuditFileLocation
-		}()
-
-		testConfig := newConfiguration()
-		testConfig.AuditLogFile = "newFile"
-		UpdateConfigValuesFromFlags()
-		require.Equal(t, testConfig, Config)
-	})
-
 	t.Run("override auditToBackend", func(t *testing.T) {
 		oldAuditToBackend := auditToBackend
 		auditToBackend = true
