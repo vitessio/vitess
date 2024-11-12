@@ -13,8 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { rest } from 'msw';
-import { setupServer } from 'msw/node';
+import { delay, http, HttpResponse } from 'msw';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createMemoryHistory } from 'history';
@@ -32,33 +31,27 @@ import * as Snackbar from '../../Snackbar';
 // about UI structure (boo!), which means this test is rather brittle
 // to UI changes (e.g., like how the Select works, adding new form fields, etc.)
 describe('CreateKeyspace integration test', () => {
-    const server = setupServer();
-
-    afterAll(() => {
-        server.close();
-    });
-
     it('successfully creates a keyspace', async () => {
         vi.spyOn(global, 'fetch');
         vi.spyOn(Snackbar, 'success');
 
         const cluster = { id: 'local', name: 'local' };
         const apiAddr = import.meta.env.VITE_VTADMIN_API_ADDRESS;
-        server.use(
-            rest.get(`${apiAddr}/api/clusters`, (req, res, ctx) => {
-                return res(ctx.json({ result: { clusters: [cluster] }, ok: true }));
+        global.server.use(
+            http.get(`${apiAddr}/api/clusters`, async (info) => {
+                return HttpResponse.json({ result: { clusters: [cluster] }, ok: true });
             }),
-            rest.post(`${apiAddr}/api/keyspace/:clusterID`, (req, res, ctx) => {
+            http.post(`${apiAddr}/api/keyspace/:clusterID`, async (info) => {
+                await delay();
                 const data: vtadmin.ICreateKeyspaceResponse = {
                     keyspace: {
                         cluster: { id: cluster.id, name: cluster.name },
                         keyspace: { name: 'some-keyspace' },
                     },
                 };
-                return res(ctx.json({ result: data, ok: true }));
+                return HttpResponse.json({ result: data, ok: true });
             })
         );
-        server.listen();
 
         const history = createMemoryHistory();
         vi.spyOn(history, 'push');

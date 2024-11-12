@@ -57,6 +57,7 @@ func init() {
 	servenv.OnParseFor("vtcombo", registerFlags)
 	servenv.OnParseFor("vtctld", registerFlags)
 	servenv.OnParseFor("vtgate", registerFlags)
+	servenv.OnParseFor("vtorc", registerFlags)
 }
 
 // KeyspaceInfo is a meta struct that contains metadata to give the
@@ -87,6 +88,10 @@ func ValidateKeyspaceName(name string) error {
 // CreateKeyspace wraps the underlying Conn.Create
 // and dispatches the event.
 func (ts *Server) CreateKeyspace(ctx context.Context, keyspace string, value *topodatapb.Keyspace) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
 	if err := ValidateKeyspaceName(keyspace); err != nil {
 		return vterrors.Wrapf(err, "CreateKeyspace: %s", err)
 	}
@@ -111,6 +116,10 @@ func (ts *Server) CreateKeyspace(ctx context.Context, keyspace string, value *to
 
 // GetKeyspace reads the given keyspace and returns it
 func (ts *Server) GetKeyspace(ctx context.Context, keyspace string) (*KeyspaceInfo, error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+
 	if err := ValidateKeyspaceName(keyspace); err != nil {
 		return nil, vterrors.Wrapf(err, "GetKeyspace: %s", err)
 	}
@@ -168,6 +177,10 @@ func (ts *Server) GetThrottlerConfig(ctx context.Context, keyspace string) (*top
 
 // UpdateKeyspace updates the keyspace data. It checks the keyspace is locked.
 func (ts *Server) UpdateKeyspace(ctx context.Context, ki *KeyspaceInfo) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
 	// make sure it is locked first
 	if err := CheckKeyspaceLocked(ctx, ki.keyspace); err != nil {
 		return err
@@ -206,6 +219,10 @@ type FindAllShardsInKeyspaceOptions struct {
 // If opt is non-nil, it is used to configure the method's behavior. Otherwise,
 // the default options are used.
 func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string, opt *FindAllShardsInKeyspaceOptions) (map[string]*ShardInfo, error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+
 	// Apply any necessary defaults.
 	if opt == nil {
 		opt = &FindAllShardsInKeyspaceOptions{}
@@ -371,6 +388,10 @@ func (ts *Server) GetOnlyShard(ctx context.Context, keyspace string) (*ShardInfo
 // DeleteKeyspace wraps the underlying Conn.Delete
 // and dispatches the event.
 func (ts *Server) DeleteKeyspace(ctx context.Context, keyspace string) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
 	keyspacePath := path.Join(KeyspacesPath, keyspace, KeyspaceFile)
 	if err := ts.globalCell.Delete(ctx, keyspacePath, nil); err != nil {
 		return err
@@ -392,6 +413,10 @@ func (ts *Server) DeleteKeyspace(ctx context.Context, keyspace string) error {
 
 // GetKeyspaces returns the list of keyspaces in the topology.
 func (ts *Server) GetKeyspaces(ctx context.Context) ([]string, error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+
 	children, err := ts.globalCell.ListDir(ctx, KeyspacesPath, false /*full*/)
 	switch {
 	case err == nil:
@@ -405,6 +430,10 @@ func (ts *Server) GetKeyspaces(ctx context.Context) ([]string, error) {
 
 // GetShardNames returns the list of shards in a keyspace.
 func (ts *Server) GetShardNames(ctx context.Context, keyspace string) ([]string, error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+
 	shardsPath := path.Join(KeyspacesPath, keyspace, ShardsPath)
 	children, err := ts.globalCell.ListDir(ctx, shardsPath, false /*full*/)
 	if IsErrType(err, NoNode) {

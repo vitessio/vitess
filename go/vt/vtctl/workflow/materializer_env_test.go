@@ -121,7 +121,7 @@ func newTestMaterializerEnv(t *testing.T, ctx context.Context, ms *vtctldatapb.M
 		tableName := ts.TargetTable
 		table, err := venv.Parser().TableFromStatement(ts.SourceExpression)
 		if err == nil {
-			tableName = table.Name.String()
+			tableName = sqlparser.String(table.Name)
 		}
 		var (
 			cols   []string

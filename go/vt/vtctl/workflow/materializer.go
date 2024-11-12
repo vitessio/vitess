@@ -31,7 +31,6 @@ import (
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
-	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
@@ -144,7 +143,7 @@ func (mz *materializer) createWorkflowStreams(req *tabletmanagerdatapb.CreateVRe
 		return err
 	}
 
-	return mz.forAllTargets(func(target *topo.ShardInfo) error {
+	return forAllShards(mz.targetShards, func(target *topo.ShardInfo) error {
 		targetPrimary, err := mz.ts.GetTablet(mz.ctx, target.PrimaryAlias)
 		if err != nil {
 			return vterrors.Wrapf(err, "GetTablet(%v) failed", target.PrimaryAlias)
@@ -387,9 +386,9 @@ func (mz *materializer) deploySchema() error {
 				}
 
 				if removeAutoInc {
-					var replaceFunc func(columnName string)
+					var replaceFunc func(columnName string) error
 					if mz.ms.GetWorkflowOptions().ShardedAutoIncrementHandling == vtctldatapb.ShardedAutoIncrementHandling_REPLACE {
-						replaceFunc = func(columnName string) {
+						replaceFunc = func(columnName string) error {
 							mu.Lock()
 							defer mu.Unlock()
 							// At this point we've already confirmed that the table exists in the target
@@ -397,7 +396,21 @@ func (mz *materializer) deploySchema() error {
 							table := targetVSchema.Tables[ts.TargetTable]
 							// Don't override or redo anything that already exists.
 							if table != nil && table.AutoIncrement == nil {
-								seqTableName := fmt.Sprintf(autoSequenceTableFormat, ts.TargetTable)
+								tableName, err := sqlescape.UnescapeID(ts.TargetTable)
+								if err != nil {
+									return err
+								}
+								seqTableName, err := sqlescape.EnsureEscaped(fmt.Sprintf(autoSequenceTableFormat, tableName))
+								if err != nil {
+									return err
+								}
+								if mz.ms.GetWorkflowOptions().GlobalKeyspace != "" {
+									seqKeyspace, err := sqlescape.EnsureEscaped(mz.ms.WorkflowOptions.GlobalKeyspace)
+									if err != nil {
+										return err
+									}
+									seqTableName = fmt.Sprintf("%s.%s", seqKeyspace, seqTableName)
+								}
 								// Create a Vitess AutoIncrement definition -- which uses a sequence -- to
 								// replace the MySQL auto_increment definition that we removed.
 								table.AutoIncrement = &vschemapb.AutoIncrement{
@@ -406,6 +419,7 @@ func (mz *materializer) deploySchema() error {
 								}
 								updatedVSchema = true
 							}
+							return nil
 						}
 					}
 					ddl, err = stripAutoIncrement(ddl, mz.env.Parser(), replaceFunc)
@@ -638,29 +652,12 @@ func (mz *materializer) startStreams(ctx context.Context) error {
 	})
 }
 
-func (mz *materializer) forAllTargets(f func(*topo.ShardInfo) error) error {
-	var wg sync.WaitGroup
-	allErrors := &concurrency.AllErrorRecorder{}
-	for _, target := range mz.targetShards {
-		wg.Add(1)
-		go func(target *topo.ShardInfo) {
-			defer wg.Done()
-
-			if err := f(target); err != nil {
-				allErrors.RecordError(err)
-			}
-		}(target)
-	}
-	wg.Wait()
-	return allErrors.AggrError(vterrors.Aggregate)
-}
-
 // checkTZConversion is a light-weight consistency check to validate that, if a source time zone is specified to MoveTables,
 // that the current primary has the time zone loaded in order to run the convert_tz() function used by VReplication to do the
 // datetime conversions. We only check the current primaries on each shard and note here that it is possible a new primary
 // gets elected: in this case user will either see errors during vreplication or vdiff will report mismatches.
 func (mz *materializer) checkTZConversion(ctx context.Context, tz string) error {
-	err := mz.forAllTargets(func(target *topo.ShardInfo) error {
+	err := forAllShards(mz.targetShards, func(target *topo.ShardInfo) error {
 		targetPrimary, err := mz.ts.GetTablet(ctx, target.PrimaryAlias)
 		if err != nil {
 			return vterrors.Wrapf(err, "GetTablet(%v) failed", target.PrimaryAlias)

@@ -276,6 +276,7 @@ const (
 			cancelled_timestamp=NULL,
 			completed_timestamp=NULL,
 			last_cutover_attempt_timestamp=NULL,
+			shadow_analyzed_timestamp=NULL,
 			cleanup_timestamp=NULL
 		WHERE
 			migration_status IN ('failed', 'cancelled')
@@ -297,6 +298,7 @@ const (
 			cancelled_timestamp=NULL,
 			completed_timestamp=NULL,
 			last_cutover_attempt_timestamp=NULL,
+			shadow_analyzed_timestamp=NULL,
 			cleanup_timestamp=NULL
 		WHERE
 			migration_status IN ('failed', 'cancelled')
@@ -448,6 +450,7 @@ const (
 			postpone_launch,
 			postpone_completion,
 			is_immediate_operation,
+			shadow_analyzed_timestamp,
 			reviewed_timestamp
 		FROM _vt.schema_migrations
 		WHERE

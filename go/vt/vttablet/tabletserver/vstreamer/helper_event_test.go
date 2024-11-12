@@ -142,6 +142,11 @@ type TestQuery struct {
 type TestRowChange struct {
 	before []string
 	after  []string
+
+	// If you need to customize the image you can use the raw types.
+	beforeRaw      *query.Row
+	afterRaw       *query.Row
+	dataColumnsRaw *binlogdatapb.RowChange_Bitmap
 }
 
 // TestRowEventSpec is used for defining a custom row event.
@@ -161,7 +166,12 @@ func (s *TestRowEventSpec) String() string {
 	if len(s.changes) > 0 {
 		for _, c := range s.changes {
 			rowChange := binlogdatapb.RowChange{}
-			if len(c.before) > 0 {
+			if c.dataColumnsRaw != nil {
+				rowChange.DataColumns = c.dataColumnsRaw
+			}
+			if c.beforeRaw != nil {
+				rowChange.Before = c.beforeRaw
+			} else if len(c.before) > 0 {
 				rowChange.Before = &query.Row{}
 				for _, val := range c.before {
 					if val == sqltypes.NullStr {
@@ -171,7 +181,9 @@ func (s *TestRowEventSpec) String() string {
 					rowChange.Before.Values = append(rowChange.Before.Values, []byte(val)...)
 				}
 			}
-			if len(c.after) > 0 {
+			if c.afterRaw != nil {
+				rowChange.After = c.afterRaw
+			} else if len(c.after) > 0 {
 				rowChange.After = &query.Row{}
 				for i, val := range c.after {
 					if val == sqltypes.NullStr {
@@ -354,6 +366,7 @@ func (ts *TestSpec) getBindVarsForUpdate(stmt sqlparser.Statement) (string, map[
 	require.True(ts.t, ok, "field event for table %s not found", table)
 	index := int64(0)
 	state := ts.getCurrentState(table)
+	require.NotNil(ts.t, state)
 	for i, col := range fe.cols {
 		bv[col.name] = string(state.Values[index : index+state.Lengths[i]])
 		index += state.Lengths[i]

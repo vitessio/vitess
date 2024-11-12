@@ -36,15 +36,31 @@ type (
 		Column Column
 		Uses   sqlparser.ComparisonExprOperator
 	}
+	JoinPredicate struct {
+		LHS, RHS Column
+		Uses     sqlparser.ComparisonExprOperator
+	}
 	VExplainKeys struct {
-		StatementType   string      `json:"statementType"`
-		TableName       []string    `json:"tableName,omitempty"`
-		GroupingColumns []Column    `json:"groupingColumns,omitempty"`
-		JoinColumns     []ColumnUse `json:"joinColumns,omitempty"`
-		FilterColumns   []ColumnUse `json:"filterColumns,omitempty"`
-		SelectColumns   []Column    `json:"selectColumns,omitempty"`
+		StatementType   string          `json:"statementType"`
+		TableName       []string        `json:"tableName,omitempty"`
+		GroupingColumns []Column        `json:"groupingColumns,omitempty"`
+		FilterColumns   []ColumnUse     `json:"filterColumns,omitempty"`
+		SelectColumns   []Column        `json:"selectColumns,omitempty"`
+		JoinPredicates  []JoinPredicate `json:"joinPredicates,omitempty"`
 	}
 )
+
+func newJoinPredicate(lhs, rhs Column, op sqlparser.ComparisonExprOperator) JoinPredicate {
+	// we want to try to keep the columns in the same order, no matter how the query was written
+	if lhs.String() > rhs.String() {
+		var success bool
+		op, success = op.SwitchSides()
+		if success {
+			lhs, rhs = rhs, lhs
+		}
+	}
+	return JoinPredicate{LHS: lhs, RHS: rhs, Uses: op}
+}
 
 func (c Column) MarshalJSON() ([]byte, error) {
 	if c.Table != "" {
@@ -111,6 +127,35 @@ func (cu *ColumnUse) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+func (jp *JoinPredicate) MarshalJSON() ([]byte, error) {
+	return json.Marshal(jp.String())
+}
+
+func (jp *JoinPredicate) UnmarshalJSON(data []byte) error {
+	var s string
+	if err := json.Unmarshal(data, &s); err != nil {
+		return err
+	}
+	subStrings := strings.Split(s, " ")
+	if len(subStrings) != 3 {
+		return fmt.Errorf("invalid JoinPredicate format: %s", s)
+	}
+
+	op, err := sqlparser.ComparisonExprOperatorFromJson(subStrings[1])
+	if err != nil {
+		return fmt.Errorf("invalid comparison operator: %w", err)
+	}
+	jp.Uses = op
+
+	if err = jp.LHS.UnmarshalJSON([]byte(`"` + subStrings[0] + `"`)); err != nil {
+		return err
+	}
+	if err = jp.RHS.UnmarshalJSON([]byte(`"` + subStrings[2] + `"`)); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (c Column) String() string {
 	return fmt.Sprintf("%s.%s", c.Table, c.Name)
 }
@@ -119,14 +164,25 @@ func (cu ColumnUse) String() string {
 	return fmt.Sprintf("%s %s", cu.Column, cu.Uses.JSONString())
 }
 
+func (jp JoinPredicate) String() string {
+	return fmt.Sprintf("%s %s %s", jp.LHS.String(), jp.Uses.JSONString(), jp.RHS.String())
+}
+
 type columnUse struct {
 	col *sqlparser.ColName
 	use sqlparser.ComparisonExprOperator
 }
 
+type joinPredicate struct {
+	lhs  *sqlparser.ColName
+	rhs  *sqlparser.ColName
+	uses sqlparser.ComparisonExprOperator
+}
+
 func GetVExplainKeys(ctx *plancontext.PlanningContext, stmt sqlparser.Statement) (result VExplainKeys) {
 	var groupingColumns, selectColumns []*sqlparser.ColName
 	var filterColumns, joinColumns []columnUse
+	var jps []joinPredicate
 
 	addPredicate := func(predicate sqlparser.Expr) {
 		predicates := sqlparser.SplitAndExpression(nil, predicate)
@@ -140,6 +196,7 @@ func GetVExplainKeys(ctx *plancontext.PlanningContext, stmt sqlparser.Statement)
 				if lhsOK && rhsOK && ctx.SemTable.RecursiveDeps(lhs) != ctx.SemTable.RecursiveDeps(rhs) {
 					// If the columns are from different tables, they are considered join columns
 					output = &joinColumns
+					jps = append(jps, joinPredicate{lhs: lhs, rhs: rhs, uses: cmp.Operator})
 				}
 
 				if lhsOK {
@@ -189,10 +246,32 @@ func GetVExplainKeys(ctx *plancontext.PlanningContext, stmt sqlparser.Statement)
 	return VExplainKeys{
 		SelectColumns:   getUniqueColNames(ctx, selectColumns),
 		GroupingColumns: getUniqueColNames(ctx, groupingColumns),
-		JoinColumns:     getUniqueColUsages(ctx, joinColumns),
 		FilterColumns:   getUniqueColUsages(ctx, filterColumns),
 		StatementType:   sqlparser.ASTToStatementType(stmt).String(),
+		JoinPredicates:  getUniqueJoinPredicates(ctx, jps),
 	}
+}
+
+func getUniqueJoinPredicates(ctx *plancontext.PlanningContext, joinPredicates []joinPredicate) []JoinPredicate {
+	var result []JoinPredicate
+	for _, predicate := range joinPredicates {
+		lhs := createColumn(ctx, predicate.lhs)
+		rhs := createColumn(ctx, predicate.rhs)
+		if lhs == nil || rhs == nil {
+			continue
+		}
+
+		result = append(result, newJoinPredicate(*lhs, *rhs, predicate.uses))
+	}
+
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].LHS.Name == result[j].LHS.Name {
+			return result[i].RHS.Name < result[j].RHS.Name
+		}
+		return result[i].LHS.Name < result[j].LHS.Name
+	})
+
+	return slices.Compact(result)
 }
 
 func getUniqueColNames(ctx *plancontext.PlanningContext, inCols []*sqlparser.ColName) (columns []Column) {

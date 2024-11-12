@@ -566,6 +566,16 @@ func testScheduler(t *testing.T) {
 			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 		})
+
+		t.Run("wait for ready_to_complete", func(t *testing.T) {
+			waitForReadyToComplete(t, t1uuid, true)
+			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			require.NotNil(t, rs)
+			for _, row := range rs.Named().Rows {
+				assert.True(t, row["shadow_analyzed_timestamp"].IsNull())
+			}
+		})
+
 		t.Run("check postpone_completion", func(t *testing.T) {
 			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
 			require.NotNil(t, rs)
@@ -593,6 +603,8 @@ func testScheduler(t *testing.T) {
 				cutOverThresholdSeconds := row.AsInt64("cutover_threshold_seconds", 0)
 				// Expect 17800*time.Millisecond to be truncated to 17 seconds
 				assert.EqualValues(t, 17, cutOverThresholdSeconds)
+
+				assert.False(t, row["shadow_analyzed_timestamp"].IsNull())
 			}
 		})
 	})
