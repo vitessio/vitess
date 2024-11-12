@@ -49,11 +49,11 @@ type VTOrcProcess struct {
 }
 
 type VTOrcConfiguration struct {
-	InstancePollTime                      string `json:",omitempty"`
-	PreventCrossDataCenterPrimaryFailover bool   `json:",omitempty"`
-	LockShardTimeoutSeconds               int    `json:",omitempty"`
-	ReplicationLagQuery                   string `json:",omitempty"`
-	FailPrimaryPromotionOnLagMinutes      int    `json:",omitempty"`
+	InstancePollTime                 string `json:",omitempty"`
+	PreventCrossCellFailover         bool   `json:",omitempty"`
+	LockShardTimeoutSeconds          int    `json:",omitempty"`
+	ReplicationLagQuery              string `json:",omitempty"`
+	FailPrimaryPromotionOnLagMinutes int    `json:",omitempty"`
 }
 
 // ToJSONString will marshal this configuration as JSON

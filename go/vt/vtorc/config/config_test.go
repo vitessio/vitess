@@ -142,21 +142,6 @@ func TestUpdateConfigValuesFromFlags(t *testing.T) {
 		require.Equal(t, testConfig, Config)
 	})
 
-	t.Run("override preventCrossCellFailover", func(t *testing.T) {
-		oldPreventCrossCellFailover := preventCrossCellFailover
-		preventCrossCellFailover = true
-		// Restore the changes we make
-		defer func() {
-			Config = newConfiguration()
-			preventCrossCellFailover = oldPreventCrossCellFailover
-		}()
-
-		testConfig := newConfiguration()
-		testConfig.PreventCrossDataCenterPrimaryFailover = true
-		UpdateConfigValuesFromFlags()
-		require.Equal(t, testConfig, Config)
-	})
-
 	t.Run("override waitReplicasTimeout", func(t *testing.T) {
 		oldWaitReplicasTimeout := waitReplicasTimeout
 		waitReplicasTimeout = 3*time.Minute + 4*time.Second

@@ -26,6 +26,12 @@ func Debug() {
 	registry.Combined().Debug()
 }
 
+// WriteConfigAs writes the config into the given filename.
 func WriteConfigAs(filename string) error {
 	return registry.Combined().WriteConfigAs(filename)
+}
+
+// AllSettings gets all the settings in the configuration.
+func AllSettings() map[string]any {
+	return registry.Combined().AllSettings()
 }

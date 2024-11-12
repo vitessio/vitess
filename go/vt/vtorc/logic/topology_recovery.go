@@ -236,7 +236,7 @@ func runEmergencyReparentOp(ctx context.Context, analysisEntry *inst.Replication
 		reparentutil.EmergencyReparentOptions{
 			IgnoreReplicas:            nil,
 			WaitReplicasTimeout:       time.Duration(config.Config.WaitReplicasTimeoutSeconds) * time.Second,
-			PreventCrossCellPromotion: config.Config.PreventCrossDataCenterPrimaryFailover,
+			PreventCrossCellPromotion: config.GetPreventCrossCellFailover(),
 			WaitAllTablets:            waitForAllTablets,
 		},
 	)

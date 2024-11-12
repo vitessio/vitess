@@ -25,6 +25,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/viperutil"
+	"vitess.io/vitess/go/viperutil/debug"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 )
@@ -52,6 +53,15 @@ var (
 			Dynamic:  true,
 		},
 	)
+
+	preventCrossCellFailover = viperutil.Configure(
+		"PreventCrossCellFailover",
+		viperutil.Options[bool]{
+			FlagName: "prevent-cross-cell-failover",
+			Default:  false,
+			Dynamic:  true,
+		},
+	)
 )
 
 var (
@@ -62,7 +72,6 @@ var (
 	auditToBackend                 = false
 	auditToSyslog                  = false
 	auditPurgeDuration             = 7 * 24 * time.Hour // Equivalent of 7 days
-	preventCrossCellFailover       = false
 	waitReplicasTimeout            = 30 * time.Second
 	tolerableReplicationLag        = 0 * time.Second
 	topoInformationRefreshDuration = 15 * time.Second
@@ -85,7 +94,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&auditToBackend, "audit-to-backend", auditToBackend, "Whether to store the audit log in the VTOrc database")
 	fs.BoolVar(&auditToSyslog, "audit-to-syslog", auditToSyslog, "Whether to store the audit log in the syslog")
 	fs.DurationVar(&auditPurgeDuration, "audit-purge-duration", auditPurgeDuration, "Duration for which audit logs are held before being purged. Should be in multiples of days")
-	fs.BoolVar(&preventCrossCellFailover, "prevent-cross-cell-failover", preventCrossCellFailover, "Prevent VTOrc from promoting a primary in a different cell than the current primary in case of a failover")
+	fs.Bool("prevent-cross-cell-failover", preventCrossCellFailover.Default(), "Prevent VTOrc from promoting a primary in a different cell than the current primary in case of a failover")
 	fs.DurationVar(&waitReplicasTimeout, "wait-replicas-timeout", waitReplicasTimeout, "Duration for which to wait for replica's to respond when issuing RPCs")
 	fs.DurationVar(&tolerableReplicationLag, "tolerable-replication-lag", tolerableReplicationLag, "Amount of replication lag that is considered acceptable for a tablet to be eligible for promotion when Vitess makes the choice of a new primary in PRS")
 	fs.DurationVar(&topoInformationRefreshDuration, "topo-information-refresh-duration", topoInformationRefreshDuration, "Timer duration on which VTOrc refreshes the keyspace and vttablet records from the topology server")
@@ -95,6 +104,7 @@ func registerFlags(fs *pflag.FlagSet) {
 
 	viperutil.BindFlags(fs,
 		instancePollTime,
+		preventCrossCellFailover,
 	)
 }
 
@@ -103,18 +113,17 @@ func registerFlags(fs *pflag.FlagSet) {
 // strictly expected from user.
 // TODO(sougou): change this to yaml parsing, and possible merge with tabletenv.
 type Configuration struct {
-	SQLite3DataFile                       string // full path to sqlite3 datafile
-	SnapshotTopologiesIntervalHours       uint   // Interval in hour between snapshot-topologies invocation. Default: 0 (disabled)
-	ReasonableReplicationLagSeconds       int    // Above this value is considered a problem
-	AuditLogFile                          string // Name of log file for audit operations. Disabled when empty.
-	AuditToSyslog                         bool   // If true, audit messages are written to syslog
-	AuditToBackendDB                      bool   // If true, audit messages are written to the backend DB's `audit` table (default: true)
-	AuditPurgeDays                        uint   // Days after which audit entries are purged from the database
-	PreventCrossDataCenterPrimaryFailover bool   // When true (default: false), cross-DC primary failover are not allowed, vtorc will do all it can to only fail over within same DC, or else not fail over at all.
-	WaitReplicasTimeoutSeconds            int    // Timeout on amount of time to wait for the replicas in case of ERS. Should be a small value because we should fail-fast. Should not be larger than LockTimeout since that is the total time we use for an ERS.
-	TolerableReplicationLagSeconds        int    // Amount of replication lag that is considered acceptable for a tablet to be eligible for promotion when Vitess makes the choice of a new primary in PRS.
-	TopoInformationRefreshSeconds         int    // Timer duration on which VTOrc refreshes the keyspace and vttablet records from the topo-server.
-	RecoveryPollSeconds                   int    // Timer duration on which VTOrc recovery analysis runs
+	SQLite3DataFile                 string // full path to sqlite3 datafile
+	SnapshotTopologiesIntervalHours uint   // Interval in hour between snapshot-topologies invocation. Default: 0 (disabled)
+	ReasonableReplicationLagSeconds int    // Above this value is considered a problem
+	AuditLogFile                    string // Name of log file for audit operations. Disabled when empty.
+	AuditToSyslog                   bool   // If true, audit messages are written to syslog
+	AuditToBackendDB                bool   // If true, audit messages are written to the backend DB's `audit` table (default: true)
+	AuditPurgeDays                  uint   // Days after which audit entries are purged from the database
+	WaitReplicasTimeoutSeconds      int    // Timeout on amount of time to wait for the replicas in case of ERS. Should be a small value because we should fail-fast. Should not be larger than LockTimeout since that is the total time we use for an ERS.
+	TolerableReplicationLagSeconds  int    // Amount of replication lag that is considered acceptable for a tablet to be eligible for promotion when Vitess makes the choice of a new primary in PRS.
+	TopoInformationRefreshSeconds   int    // Timer duration on which VTOrc refreshes the keyspace and vttablet records from the topo-server.
+	RecoveryPollSeconds             int    // Timer duration on which VTOrc recovery analysis runs
 }
 
 // ToJSONString will marshal this configuration as JSON
@@ -141,6 +150,11 @@ func GetInstancePollSeconds() uint {
 	return uint(instancePollTime.Get() / time.Second)
 }
 
+// GetPreventCrossCellFailover is a getter function.
+func GetPreventCrossCellFailover() bool {
+	return preventCrossCellFailover.Get()
+}
+
 // UpdateConfigValuesFromFlags is used to update the config values from the flags defined.
 // This is done before we read any configuration files from the user. So the config files take precedence.
 func UpdateConfigValuesFromFlags() {
@@ -151,7 +165,6 @@ func UpdateConfigValuesFromFlags() {
 	Config.AuditToBackendDB = auditToBackend
 	Config.AuditToSyslog = auditToSyslog
 	Config.AuditPurgeDays = uint(auditPurgeDuration / (time.Hour * 24))
-	Config.PreventCrossDataCenterPrimaryFailover = preventCrossCellFailover
 	Config.WaitReplicasTimeoutSeconds = int(waitReplicasTimeout / time.Second)
 	Config.TolerableReplicationLagSeconds = int(tolerableReplicationLag / time.Second)
 	Config.TopoInformationRefreshSeconds = int(topoInformationRefreshDuration / time.Second)
@@ -180,23 +193,21 @@ func SetConvertTabletWithErrantGTIDs(val bool) {
 
 // LogConfigValues is used to log the config values.
 func LogConfigValues() {
-	b, _ := json.MarshalIndent(Config, "", "\t")
-	log.Infof("Running with Configuration - %v", string(b))
+	log.Infof("Running with Configuration - %v", debug.AllSettings())
 }
 
 func newConfiguration() *Configuration {
 	return &Configuration{
-		SQLite3DataFile:                       "file::memory:?mode=memory&cache=shared",
-		SnapshotTopologiesIntervalHours:       0,
-		ReasonableReplicationLagSeconds:       10,
-		AuditLogFile:                          "",
-		AuditToSyslog:                         false,
-		AuditToBackendDB:                      false,
-		AuditPurgeDays:                        7,
-		PreventCrossDataCenterPrimaryFailover: false,
-		WaitReplicasTimeoutSeconds:            30,
-		TopoInformationRefreshSeconds:         15,
-		RecoveryPollSeconds:                   1,
+		SQLite3DataFile:                 "file::memory:?mode=memory&cache=shared",
+		SnapshotTopologiesIntervalHours: 0,
+		ReasonableReplicationLagSeconds: 10,
+		AuditLogFile:                    "",
+		AuditToSyslog:                   false,
+		AuditToBackendDB:                false,
+		AuditPurgeDays:                  7,
+		WaitReplicasTimeoutSeconds:      30,
+		TopoInformationRefreshSeconds:   15,
+		RecoveryPollSeconds:             1,
 	}
 }
 
