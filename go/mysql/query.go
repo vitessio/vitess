@@ -432,7 +432,7 @@ func (c *Conn) ReadQueryResultAsSliceBuffer(maxrows int) (result *sqltypes.Resul
 	var packetOk PacketOK
 
 	// Get the result.
-	buffData, colNumber, err := c.readComQueryResponseAsMemBuf(&packetOk)
+	buffData, colNumber, err := c.readComQueryResponseAsMemBuffer(&packetOk)
 	if err != nil {
 		return nil, false, 0, err
 	}
@@ -732,7 +732,7 @@ func (c *Conn) readComQueryResponse(packetOk *PacketOK) (int, error) {
 	return int(n), nil
 }
 
-func (c *Conn) readComQueryResponseAsMemBuf(packetOk *PacketOK) (buf mem.Buffer, res int, err error) {
+func (c *Conn) readComQueryResponseAsMemBuffer(packetOk *PacketOK) (buf mem.Buffer, res int, err error) {
 	defer func() {
 		if buf != nil && err != nil {
 			buf.Free()

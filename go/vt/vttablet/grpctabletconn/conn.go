@@ -24,6 +24,8 @@ import (
 	"github.com/spf13/pflag"
 	"google.golang.org/grpc"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/sqltypes"
@@ -117,9 +119,10 @@ func (conn *gRPCQueryClient) Execute(ctx context.Context, target *querypb.Target
 	if conn.cc == nil {
 		return nil, tabletconn.ConnClosed
 	}
-	if options != nil {
-		options.RawMysqlPackets = true
+	if options == nil {
+		options = &querypb.ExecuteOptions{}
 	}
+	options.RawMysqlPackets = true
 
 	req := &querypb.ExecuteRequest{
 		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
@@ -137,7 +140,11 @@ func (conn *gRPCQueryClient) Execute(ctx context.Context, target *querypb.Target
 	if err != nil {
 		return nil, tabletconn.ErrorFromGRPC(err)
 	}
-	return mysql.ParseResultFoo(er, true)
+
+	if options.RawMysqlPackets {
+		log.Errorf("Execute Query: %s \n Raw Packets: %+v", query, er.RawPackets)
+	}
+	return mysql.ParseResult(er, true)
 }
 
 // StreamExecute executes the query and streams results back through callback.
