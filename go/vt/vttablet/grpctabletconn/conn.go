@@ -477,6 +477,10 @@ func (conn *gRPCQueryClient) BeginExecute(ctx context.Context, target *querypb.T
 		return state, nil, tabletconn.ConnClosed
 	}
 
+	if options != nil {
+		options.RawMysqlPackets = false
+	}
+
 	req := &querypb.BeginExecuteRequest{
 		Target:            target,
 		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
@@ -875,6 +879,10 @@ func (conn *gRPCQueryClient) ReserveBeginExecute(ctx context.Context, target *qu
 		return state, nil, tabletconn.ConnClosed
 	}
 
+	if options != nil {
+		options.RawMysqlPackets = false
+	}
+
 	req := &querypb.ReserveBeginExecuteRequest{
 		Target:            target,
 		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
@@ -989,6 +997,10 @@ func (conn *gRPCQueryClient) ReserveExecute(ctx context.Context, target *querypb
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {
 		return state, nil, tabletconn.ConnClosed
+	}
+
+	if options != nil {
+		options.RawMysqlPackets = false
 	}
 
 	req := &querypb.ReserveExecuteRequest{

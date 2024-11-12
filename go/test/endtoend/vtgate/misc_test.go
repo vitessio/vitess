@@ -854,6 +854,7 @@ func getVar(t *testing.T, key string) interface{} {
 	return val
 }
 
+// TestShow is simple test to check if show tables works.
 func TestShow(t *testing.T) {
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
@@ -861,8 +862,11 @@ func TestShow(t *testing.T) {
 	defer conn.Close()
 
 	qr := utils.Exec(t, conn, "show tables")
-	fmt.Printf("output1: %v\n", qr.Rows)
+	assert.Equal(t, 1, len(qr.Fields))
+	assert.Equal(t, 21, len(qr.Rows))
+
 	utils.Exec(t, conn, "begin")
 	qr = utils.Exec(t, conn, "show tables")
-	fmt.Printf("output2: %v\n", qr.Rows)
+	assert.Equal(t, 1, len(qr.Fields))
+	assert.Equal(t, 21, len(qr.Rows))
 }
