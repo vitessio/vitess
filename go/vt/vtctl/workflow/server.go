@@ -715,11 +715,8 @@ func (s *Server) Materialize(ctx context.Context, ms *vtctldatapb.MaterializeSet
 		cells[i] = strings.TrimSpace(cells[i])
 	}
 
-	switch {
-	case len(ms.ReferenceTables) == 0 && len(ms.TableSettings) == 0:
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "either --table-settings or --reference-tables must be specified")
-	case len(ms.ReferenceTables) > 0 && len(ms.TableSettings) > 0:
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot specify both --table-settings and --reference-tables")
+	if err := validateMaterializeSettings(ms); err != nil {
+		return err
 	}
 
 	for _, table := range ms.ReferenceTables {
@@ -744,6 +741,17 @@ func (s *Server) Materialize(ctx context.Context, ms *vtctldatapb.MaterializeSet
 		return err
 	}
 	return mz.startStreams(ctx)
+}
+
+func validateMaterializeSettings(ms *vtctldatapb.MaterializeSettings) error {
+	switch {
+	case len(ms.ReferenceTables) == 0 && len(ms.TableSettings) == 0:
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "either --table-settings or --reference-tables must be specified")
+	case len(ms.ReferenceTables) > 0 && len(ms.TableSettings) > 0:
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot specify both --table-settings and --reference-tables")
+	}
+
+	return nil
 }
 
 // MoveTablesCreate is part of the vtctlservicepb.VtctldServer interface.
@@ -3797,27 +3805,27 @@ func (s *Server) prepareCreateLookup(ctx context.Context, workflow, keyspace str
 	return ms, sourceVSchema, targetVSchema, cancelFunc, nil
 }
 
-func generateColDef(lines []string, sourceVindexCol, vindexFromCol string) (string, error) {
-	source := sqlescape.EscapeID(sourceVindexCol)
-	target := sqlescape.EscapeID(vindexFromCol)
+// func generateColDef(lines []string, sourceVindexCol, vindexFromCol string) (string, error) {
+// 	source := sqlescape.EscapeID(sourceVindexCol)
+// 	target := sqlescape.EscapeID(vindexFromCol)
 
-	for _, line := range lines[1:] {
-		if strings.Contains(line, source) {
-			line = strings.Replace(line, source, target, 1)
-			line = strings.Replace(line, " AUTO_INCREMENT", "", 1)
-			line = strings.Replace(line, " DEFAULT NULL", "", 1)
-			// Ensure that the column definition ends with a comma as we will
-			// be appending the TO column and PRIMARY KEY definitions. If the
-			// souce column here was the last entity defined in the source
-			// table's definition then it will not already have the comma.
-			if !strings.HasSuffix(strings.TrimSpace(line), ",") {
-				line += ","
-			}
-			return line, nil
-		}
-	}
-	return "", fmt.Errorf("column %s not found in schema %v", sourceVindexCol, lines)
-}
+// 	for _, line := range lines[1:] {
+// 		if strings.Contains(line, source) {
+// 			line = strings.Replace(line, source, target, 1)
+// 			line = strings.Replace(line, " AUTO_INCREMENT", "", 1)
+// 			line = strings.Replace(line, " DEFAULT NULL", "", 1)
+// 			// Ensure that the column definition ends with a comma as we will
+// 			// be appending the TO column and PRIMARY KEY definitions. If the
+// 			// souce column here was the last entity defined in the source
+// 			// table's definition then it will not already have the comma.
+// 			if !strings.HasSuffix(strings.TrimSpace(line), ",") {
+// 				line += ","
+// 			}
+// 			return line, nil
+// 		}
+// 	}
+// 	return "", fmt.Errorf("column %s not found in schema %v", sourceVindexCol, lines)
+// }
 
 func (s *Server) MigrateCreate(ctx context.Context, req *vtctldatapb.MigrateCreateRequest) (*vtctldatapb.WorkflowStatusResponse, error) {
 	moveTablesCreateRequest := &vtctldatapb.MoveTablesCreateRequest{
