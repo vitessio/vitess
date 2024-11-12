@@ -1,4 +1,4 @@
-package vstreamer
+package vstreamclient
 
 import (
 	"fmt"
