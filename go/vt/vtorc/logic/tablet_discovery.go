@@ -71,7 +71,7 @@ func OpenTabletDiscovery() <-chan time.Time {
 	}
 	// We refresh all information from the topo once before we start the ticks to do it on a timer.
 	populateAllInformation()
-	return time.Tick(time.Second * time.Duration(config.Config.TopoInformationRefreshSeconds)) //nolint SA1015: using time.Tick leaks the underlying ticker
+	return time.Tick(config.GetTopoInformationRefreshDuration()) //nolint SA1015: using time.Tick leaks the underlying ticker
 }
 
 // populateAllInformation initializes all the information for VTOrc to function.

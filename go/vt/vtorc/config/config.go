@@ -17,9 +17,6 @@
 package config
 
 import (
-	"encoding/json"
-	"fmt"
-	"os"
 	"time"
 
 	"github.com/spf13/pflag"
@@ -46,7 +43,7 @@ const (
 
 var (
 	instancePollTime = viperutil.Configure(
-		"instance-pPollTime",
+		"InstancePollTime",
 		viperutil.Options[time.Duration]{
 			FlagName: "instance-poll-time",
 			Default:  5 * time.Second,
@@ -73,7 +70,7 @@ var (
 	)
 
 	snapshotTopologyInterval = viperutil.Configure(
-		"snapshotTopologyInterval",
+		"SnapshotTopologyInterval",
 		viperutil.Options[time.Duration]{
 			FlagName: "snapshot-topology-interval",
 			Default:  0 * time.Hour,
@@ -82,7 +79,7 @@ var (
 	)
 
 	reasonableReplicationLag = viperutil.Configure(
-		"reasonableReplicationLag",
+		"ReasonableReplicationLag",
 		viperutil.Options[time.Duration]{
 			FlagName: "reasonable-replication-lag",
 			Default:  10 * time.Second,
@@ -125,15 +122,47 @@ var (
 			Dynamic:  true,
 		},
 	)
+
+	waitReplicasTimeout = viperutil.Configure(
+		"WaitReplicasTimeout",
+		viperutil.Options[time.Duration]{
+			FlagName: "wait-replicas-timeout",
+			Default:  30 * time.Second,
+			Dynamic:  true,
+		},
+	)
+
+	tolerableReplicationLag = viperutil.Configure(
+		"TolerableReplicationLag",
+		viperutil.Options[time.Duration]{
+			FlagName: "tolerable-replication-lag",
+			Default:  0 * time.Second,
+			Dynamic:  true,
+		},
+	)
+
+	topoInformationRefreshDuration = viperutil.Configure(
+		"TopoInformationRefreshDuration",
+		viperutil.Options[time.Duration]{
+			FlagName: "topo-information-refresh-duration",
+			Default:  15 * time.Second,
+			Dynamic:  true,
+		},
+	)
+
+	recoveryPollDuration = viperutil.Configure(
+		"RecoveryPollDuration",
+		viperutil.Options[time.Duration]{
+			FlagName: "recovery-poll-duration",
+			Default:  1 * time.Second,
+			Dynamic:  true,
+		},
+	)
 )
 
 var (
-	waitReplicasTimeout            = 30 * time.Second
-	tolerableReplicationLag        = 0 * time.Second
-	topoInformationRefreshDuration = 15 * time.Second
-	recoveryPollDuration           = 1 * time.Second
-	ersEnabled                     = true
-	convertTabletsWithErrantGTIDs  = false
+	ersEnabled                    = true
+	convertTabletsWithErrantGTIDs = false
 )
 
 func init() {
@@ -151,10 +180,10 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.Bool("audit-to-syslog", auditToSyslog.Default(), "Whether to store the audit log in the syslog")
 	fs.Duration("audit-purge-duration", auditPurgeDuration.Default(), "Duration for which audit logs are held before being purged. Should be in multiples of days")
 	fs.Bool("prevent-cross-cell-failover", preventCrossCellFailover.Default(), "Prevent VTOrc from promoting a primary in a different cell than the current primary in case of a failover")
-	fs.DurationVar(&waitReplicasTimeout, "wait-replicas-timeout", waitReplicasTimeout, "Duration for which to wait for replica's to respond when issuing RPCs")
-	fs.DurationVar(&tolerableReplicationLag, "tolerable-replication-lag", tolerableReplicationLag, "Amount of replication lag that is considered acceptable for a tablet to be eligible for promotion when Vitess makes the choice of a new primary in PRS")
-	fs.DurationVar(&topoInformationRefreshDuration, "topo-information-refresh-duration", topoInformationRefreshDuration, "Timer duration on which VTOrc refreshes the keyspace and vttablet records from the topology server")
-	fs.DurationVar(&recoveryPollDuration, "recovery-poll-duration", recoveryPollDuration, "Timer duration on which VTOrc polls its database to run a recovery")
+	fs.Duration("wait-replicas-timeout", waitReplicasTimeout.Default(), "Duration for which to wait for replica's to respond when issuing RPCs")
+	fs.Duration("tolerable-replication-lag", tolerableReplicationLag.Default(), "Amount of replication lag that is considered acceptable for a tablet to be eligible for promotion when Vitess makes the choice of a new primary in PRS")
+	fs.Duration("topo-information-refresh-duration", topoInformationRefreshDuration.Default(), "Timer duration on which VTOrc refreshes the keyspace and vttablet records from the topology server")
+	fs.Duration("recovery-poll-duration", recoveryPollDuration.Default(), "Timer duration on which VTOrc polls its database to run a recovery")
 	fs.BoolVar(&ersEnabled, "allow-emergency-reparent", ersEnabled, "Whether VTOrc should be allowed to run emergency reparent operation when it detects a dead primary")
 	fs.BoolVar(&convertTabletsWithErrantGTIDs, "change-tablets-with-errant-gtid-to-drained", convertTabletsWithErrantGTIDs, "Whether VTOrc should be changing the type of tablets with errant GTIDs to DRAINED")
 
@@ -168,28 +197,12 @@ func registerFlags(fs *pflag.FlagSet) {
 		auditToBackend,
 		auditToSyslog,
 		auditPurgeDuration,
+		waitReplicasTimeout,
+		tolerableReplicationLag,
+		topoInformationRefreshDuration,
+		recoveryPollDuration,
 	)
 }
-
-// Configuration makes for vtorc configuration input, which can be provided by user via JSON formatted file.
-// Some of the parameters have reasonable default values, and some (like database credentials) are
-// strictly expected from user.
-// TODO(sougou): change this to yaml parsing, and possible merge with tabletenv.
-type Configuration struct {
-	WaitReplicasTimeoutSeconds     int // Timeout on amount of time to wait for the replicas in case of ERS. Should be a small value because we should fail-fast. Should not be larger than LockTimeout since that is the total time we use for an ERS.
-	TolerableReplicationLagSeconds int // Amount of replication lag that is considered acceptable for a tablet to be eligible for promotion when Vitess makes the choice of a new primary in PRS.
-	TopoInformationRefreshSeconds  int // Timer duration on which VTOrc refreshes the keyspace and vttablet records from the topo-server.
-	RecoveryPollSeconds            int // Timer duration on which VTOrc recovery analysis runs
-}
-
-// ToJSONString will marshal this configuration as JSON
-func (config *Configuration) ToJSONString() string {
-	b, _ := json.Marshal(config)
-	return string(b)
-}
-
-// Config is *the* configuration instance, used globally to get configuration data
-var Config = newConfiguration()
 
 // GetInstancePollTime is a getter function.
 func GetInstancePollTime() time.Duration {
@@ -266,13 +279,24 @@ func SetAuditPurgeDays(days int64) {
 	auditPurgeDuration.Set(time.Duration(days) * 24 * time.Hour)
 }
 
-// UpdateConfigValuesFromFlags is used to update the config values from the flags defined.
-// This is done before we read any configuration files from the user. So the config files take precedence.
-func UpdateConfigValuesFromFlags() {
-	Config.WaitReplicasTimeoutSeconds = int(waitReplicasTimeout / time.Second)
-	Config.TolerableReplicationLagSeconds = int(tolerableReplicationLag / time.Second)
-	Config.TopoInformationRefreshSeconds = int(topoInformationRefreshDuration / time.Second)
-	Config.RecoveryPollSeconds = int(recoveryPollDuration / time.Second)
+// GetWaitReplicasTimeout is a getter function.
+func GetWaitReplicasTimeout() time.Duration {
+	return waitReplicasTimeout.Get()
+}
+
+// GetTolerableReplicationLag is a getter function.
+func GetTolerableReplicationLag() time.Duration {
+	return tolerableReplicationLag.Get()
+}
+
+// GetTopoInformationRefreshDuration is a getter function.
+func GetTopoInformationRefreshDuration() time.Duration {
+	return topoInformationRefreshDuration.Get()
+}
+
+// GetRecoveryPollDuration is a getter function.
+func GetRecoveryPollDuration() time.Duration {
+	return recoveryPollDuration.Get()
 }
 
 // ERSEnabled reports whether VTOrc is allowed to run ERS or not.
@@ -298,42 +322,6 @@ func SetConvertTabletWithErrantGTIDs(val bool) {
 // LogConfigValues is used to log the config values.
 func LogConfigValues() {
 	log.Infof("Running with Configuration - %v", debug.AllSettings())
-}
-
-func newConfiguration() *Configuration {
-	return &Configuration{
-		WaitReplicasTimeoutSeconds:    30,
-		TopoInformationRefreshSeconds: 15,
-		RecoveryPollSeconds:           1,
-	}
-}
-
-// read reads configuration from given file, or silently skips if the file does not exist.
-// If the file does exist, then it is expected to be in valid JSON format or the function bails out.
-func read(fileName string) (*Configuration, error) {
-	if fileName == "" {
-		return Config, fmt.Errorf("Empty file name")
-	}
-	file, err := os.Open(fileName)
-	if err != nil {
-		return Config, err
-	}
-	decoder := json.NewDecoder(file)
-	err = decoder.Decode(Config)
-	if err == nil {
-		log.Infof("Read config: %s", fileName)
-	} else {
-		log.Fatal("Cannot read config file:", fileName, err)
-	}
-	return Config, err
-}
-
-// Reload re-reads configuration from last used files
-func Reload(extraFileNames ...string) *Configuration {
-	for _, fileName := range extraFileNames {
-		_, _ = read(fileName)
-	}
-	return Config
 }
 
 // MarkConfigurationLoaded is called once configuration has first been loaded.

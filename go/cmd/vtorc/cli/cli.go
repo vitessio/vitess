@@ -50,7 +50,6 @@ var (
 
 func run(cmd *cobra.Command, args []string) {
 	servenv.Init()
-	config.UpdateConfigValuesFromFlags()
 	inst.RegisterStats()
 
 	log.Info("starting vtorc")

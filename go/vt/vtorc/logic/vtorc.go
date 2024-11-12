@@ -17,11 +17,8 @@
 package logic
 
 import (
-	"os"
-	"os/signal"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"time"
 
 	"github.com/patrickmn/go-cache"
@@ -71,21 +68,6 @@ func init() {
 		}
 		discoveryRecentCountGauge.Set(int64(recentDiscoveryOperationKeys.ItemCount()))
 	})
-}
-
-// acceptSighupSignal registers for SIGHUP signal from the OS to reload the configuration files.
-func acceptSighupSignal() {
-	c := make(chan os.Signal, 1)
-
-	signal.Notify(c, syscall.SIGHUP)
-	go func() {
-		for range c {
-			log.Infof("Received SIGHUP. Reloading configuration")
-			_ = inst.AuditOperation("reload-configuration", "", "Triggered via SIGHUP")
-			config.Reload()
-			discoveryMetrics.SetExpirePeriod(time.Duration(config.DiscoveryCollectionRetentionSeconds) * time.Second)
-		}
-	}()
 }
 
 // closeVTOrc runs all the operations required to cleanly shutdown VTOrc
@@ -272,7 +254,7 @@ func ContinuousDiscovery() {
 
 	healthTick := time.Tick(config.HealthPollSeconds * time.Second)
 	caretakingTick := time.Tick(time.Minute)
-	recoveryTick := time.Tick(time.Duration(config.Config.RecoveryPollSeconds) * time.Second)
+	recoveryTick := time.Tick(config.GetRecoveryPollDuration())
 	tabletTopoTick := OpenTabletDiscovery()
 	var recoveryEntrance int64
 	var snapshotTopologiesTick <-chan time.Time
@@ -283,7 +265,6 @@ func ContinuousDiscovery() {
 	go func() {
 		_ = ometrics.InitMetrics()
 	}()
-	go acceptSighupSignal()
 	// On termination of the server, we should close VTOrc cleanly
 	servenv.OnTermSync(closeVTOrc)
 
