@@ -191,7 +191,7 @@ func TestMysql56DecodeTransactionPayload(t *testing.T) {
 				totalSize += len(eventStr)
 				require.True(t, strings.HasPrefix(eventStr, want))
 			}
-			require.Greater(t, totalSize, zstdInMemoryDecompressorMaxSize)
+			require.Greater(t, uint64(totalSize), ZstdInMemoryDecompressorMaxSize)
 		}
 	}
 }

@@ -58,11 +58,6 @@ const (
 	// Length of the binlog event header for internal events within
 	// the transaction payload.
 	headerLen = binlogEventLenOffset + eventLenBytes
-
-	// At what size should we switch from the in-memory buffer
-	// decoding to streaming mode which is much slower, but does
-	// not require everything be done in memory.
-	zstdInMemoryDecompressorMaxSize = 128 << (10 * 2) // 128MiB
 )
 
 var (
@@ -74,6 +69,11 @@ var (
 	// Metrics.
 	compressedTrxPayloadsInMem       = stats.NewCounter("CompressedTransactionPayloadsInMemory", "The number of compressed binlog transaction payloads that were processed in memory")
 	compressedTrxPayloadsUsingStream = stats.NewCounter("CompressedTransactionPayloadsViaStream", "The number of compressed binlog transaction payloads that were processed using a stream")
+
+	// At what size should we switch from the in-memory buffer
+	// decoding to streaming mode which is much slower, but does
+	// not require everything be done in memory all at once.
+	ZstdInMemoryDecompressorMaxSize = uint64(128 << (10 * 2)) // 128MiB
 
 	// A concurrent stateless decoder that caches decompressors. This is
 	// used for smaller payloads that we want to handle entirely using
@@ -284,7 +284,7 @@ func (tp *TransactionPayload) decompress() error {
 
 	// Switch to slower but less memory intensive stream mode for
 	// larger payloads.
-	if tp.uncompressedSize > zstdInMemoryDecompressorMaxSize {
+	if tp.uncompressedSize > ZstdInMemoryDecompressorMaxSize {
 		in := bytes.NewReader(tp.payload)
 		streamDecoder, err := statefulDecoderPool.Get(in)
 		if err != nil {
@@ -366,7 +366,7 @@ func (dp *decoderPool) Get(reader io.Reader) (*zstd.Decoder, error) {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] expected *zstd.Decoder but got %T", pooled)
 		}
 	} else {
-		d, err := zstd.NewReader(nil, zstd.WithDecoderMaxMemory(zstdInMemoryDecompressorMaxSize))
+		d, err := zstd.NewReader(nil, zstd.WithDecoderMaxMemory(ZstdInMemoryDecompressorMaxSize))
 		if err != nil { // Should only happen e.g. due to ENOMEM
 			return nil, vterrors.Wrap(err, "failed to create stateful stream decoder")
 		}
