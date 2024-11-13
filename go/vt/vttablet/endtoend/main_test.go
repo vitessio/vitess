@@ -178,7 +178,9 @@ create table vitess_acl_read_only(key1 bigint default 0, key2 bigint default nul
 create table vitess_acl_read_write(key1 bigint default 0, key2 bigint default null, primary key(key1));
 create table vitess_acl_admin(key1 bigint default 0, key2 bigint default null, primary key(key1));
 create table vitess_acl_unmatched(key1 bigint default 0, key2 bigint default null, primary key(key1));
-create table vitess_acl_all_user_read_only(key1 bigint default 0, key2 bigint default null, primary key(key1));`
+create table vitess_acl_all_user_read_only(key1 bigint default 0, key2 bigint default null, primary key(key1));
+
+create table oltp_test(id bigint not null auto_increment, k bigint default 0 not null, c char(120) default '' not null, pad char(60) default '' not null, primary key (id)) Engine=InnoDB;`
 
 var tableACLConfig = `{
   "table_groups": [
@@ -344,6 +346,13 @@ var tableACLConfig = `{
     {
       "name": "vitess_twopc",
       "table_names_or_prefixes": ["dt_state", "redo_state"],
+      "readers": ["dev"],
+      "writers": ["dev"],
+      "admins": ["dev"]
+    },
+    {
+      "name": "vitess_bench",
+      "table_names_or_prefixes": ["oltp_test"],
       "readers": ["dev"],
       "writers": ["dev"],
       "admins": ["dev"]
