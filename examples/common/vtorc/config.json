@@ -1,4 +1,3 @@
 {
-  "RecoveryPeriodBlockSeconds": 1,
-  "InstancePollSeconds": 1
+  "InstancePollTime": "1s"
 }

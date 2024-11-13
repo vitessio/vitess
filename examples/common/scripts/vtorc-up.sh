@@ -11,7 +11,7 @@ vtorc \
   $TOPOLOGY_FLAGS \
   --logtostderr \
   --alsologtostderr \
-  --config="${script_dir}/../vtorc/config.json" \
+  --config-path="${script_dir}/../vtorc/config.json" \
   --port $port \
   > "${log_dir}/vtorc.out" 2>&1 &
 
