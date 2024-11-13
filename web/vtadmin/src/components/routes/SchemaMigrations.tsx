@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useKeyspaces, useSchemaMigrations } from '../../hooks/api';
 import { DataCell } from '../dataTable/DataCell';
 import { DataTable } from '../dataTable/DataTable';
@@ -31,15 +31,19 @@ import { formatSchemaMigrationStatus } from '../../util/schemaMigrations';
 import { Link } from 'react-router-dom';
 import { TabletLink } from '../links/TabletLink';
 import { formatAlias } from '../../util/tablets';
+import { useURLQuery } from '../../hooks/useURLQuery';
 
 const COLUMNS = ['UUID', 'Status', 'DDL Action', 'Timestamps', 'Stage', 'Progress'];
 
 export const SchemaMigrations = () => {
     useDocumentTitle('Schema Migrations');
 
-    const keyspacesQuery = useKeyspaces();
+    const { query, replaceQuery } = useURLQuery();
+    const urlKeyspace = query['keyspace'];
+    const urlCluster = query['cluster'];
 
-    const { data: keyspaces = [] } = keyspacesQuery;
+    const keyspacesQuery = useKeyspaces();
+    const { data: keyspaces = [], ...ksQuery } = keyspacesQuery;
 
     const [selectedKeyspace, setSelectedKeypsace] = useState<vtadmin.Keyspace | null | undefined>();
 
@@ -59,6 +63,32 @@ export const SchemaMigrations = () => {
     });
 
     const schemaMigrations = schemaMigrationsQuery.data ? schemaMigrationsQuery.data.schema_migrations : [];
+
+    const handleKeyspaceChange = (ks: vtadmin.Keyspace | null | undefined) => {
+        setSelectedKeypsace(ks);
+
+        if (ks) {
+            replaceQuery({ keyspace: ks.keyspace?.name, cluster: ks.cluster?.id });
+        } else {
+            replaceQuery({ keyspace: undefined, cluster: undefined });
+        }
+    };
+
+    useEffect(() => {
+        if (urlKeyspace && urlCluster) {
+            const keyspace = keyspaces.find(
+                (ks) => ks.cluster?.id === String(urlCluster) && ks.keyspace?.name === String(urlKeyspace)
+            );
+
+            if (keyspace) {
+                setSelectedKeypsace(keyspace);
+            } else if (!ksQuery.isLoading) {
+                replaceQuery({ keyspace: undefined, cluster: undefined });
+            }
+        } else {
+            setSelectedKeypsace(undefined);
+        }
+    }, [urlKeyspace, urlCluster, keyspaces, ksQuery.isLoading, replaceQuery]);
 
     const renderRows = (rows: vtadmin.ISchemaMigration[]) => {
         return rows.map((row) => {
@@ -91,7 +121,7 @@ export const SchemaMigrations = () => {
                         <div>{formatSchemaMigrationStatus(migrationInfo)}</div>
                     </DataCell>
                     <DataCell>{migrationInfo.ddl_action ? migrationInfo.ddl_action : '-'}</DataCell>
-                    <DataCell>
+                    <DataCell className="items-end flex flex-col">
                         {migrationInfo.added_at && (
                             <div className="text-sm font-sans whitespace-nowrap">
                                 <span className="text-secondary">Added </span>
@@ -147,7 +177,7 @@ export const SchemaMigrations = () => {
                         inputClassName="block w-full"
                         items={keyspaces}
                         label="Keyspace"
-                        onChange={(ks) => setSelectedKeypsace(ks)}
+                        onChange={(ks) => handleKeyspaceChange(ks)}
                         placeholder={
                             keyspacesQuery.isLoading
                                 ? 'Loading keyspaces...'
