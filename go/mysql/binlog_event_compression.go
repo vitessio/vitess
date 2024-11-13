@@ -366,6 +366,9 @@ func (dp *decoderPool) Get(reader io.Reader) (*zstd.Decoder, error) {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] expected *zstd.Decoder but got %T", pooled)
 		}
 	} else {
+		// Use the minimum amount of memory we can in processing the transaction by
+		// setting lowMem to true and limiting the window concurrency to 1 so that
+		// there's no async decoding of multiple windows or blocks.
 		d, err := zstd.NewReader(nil, zstd.WithDecoderLowmem(true), zstd.WithDecoderConcurrency(1))
 		if err != nil { // Should only happen e.g. due to ENOMEM
 			return nil, vterrors.Wrap(err, "failed to create stateful stream decoder")
