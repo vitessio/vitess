@@ -21,7 +21,7 @@ Flags:
       --backup_storage_compress                                          if set, the backup files will be compressed. (default true)
       --backup_storage_number_blocks int                                 if backup_storage_compress is true, backup_storage_number_blocks sets the number of blocks that can be processed, in parallel, before the writer blocks, during compression (default is 2). It should be equal to the number of CPUs available for compression. (default 2)
       --bind-address string                                              Bind address for the server. If empty, the server will listen on all available unicast and anycast IP addresses of the local system.
-      --binlog-in-memory-decompressor-max-size uint                      This value sets the compressed transaction payload size at which we switch from in-memory decompression to the slower streaming mode. (default 134217728)
+      --binlog-in-memory-decompressor-max-size uint                      This value sets the compressed transaction payload size at which we switch from in-memory buffer based decompression to the slower streaming mode. (default 134217728)
       --binlog_host string                                               PITR restore parameter: hostname/IP of binlog server.
       --binlog_password string                                           PITR restore parameter: password of binlog server.
       --binlog_player_protocol string                                    the protocol to download binlogs from a vttablet (default "grpc")
