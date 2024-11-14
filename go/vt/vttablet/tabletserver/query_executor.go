@@ -105,7 +105,7 @@ func allocStreamResult() *sqltypes.Result {
 func (qre *QueryExecutor) shouldConsolidate() bool {
 	// TODO (harshit): This is a temporary implementation to test the feature.
 	// This should ideally work with consolidator.
-	if qre.options.RawMysqlPackets {
+	if qre.options.GetRawMysqlPackets() {
 		return false
 	}
 	co := qre.options.GetConsolidator()
@@ -643,7 +643,7 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 	if t.SequenceInfo.NextVal == 0 || t.SequenceInfo.NextVal+inc > t.SequenceInfo.LastVal {
 		_, err := qre.execAsTransaction(func(conn *StatefulConnection) (*sqltypes.Result, error) {
 			query := fmt.Sprintf("select next_id, cache from %s where id = 0 for update", sqlparser.String(tableName))
-			qr, err := qre.execStatefulConn(conn, query, false)
+			qr, err := qre.execStatefulConnWithOpt(conn, query, mysql.ExecuteOptions{MaxRows: int(qre.tsv.qe.maxResultSize.Load())})
 			if err != nil {
 				return nil, err
 			}
@@ -1127,12 +1127,21 @@ func (qre *QueryExecutor) execDBConn(conn *connpool.Conn, sql string, wantfields
 	opt := mysql.ExecuteOptions{
 		MaxRows:    int(qre.tsv.qe.maxResultSize.Load()),
 		WantFields: wantfields,
-		RawPackets: qre.options.RawMysqlPackets,
+		RawPackets: qre.options.GetRawMysqlPackets(),
 	}
 	return conn.ExecOpt(ctx, sql, opt)
 }
 
 func (qre *QueryExecutor) execStatefulConn(conn *StatefulConnection, sql string, wantfields bool) (*sqltypes.Result, error) {
+	opt := mysql.ExecuteOptions{
+		MaxRows:    int(qre.tsv.qe.maxResultSize.Load()),
+		WantFields: wantfields,
+		RawPackets: qre.options.GetRawMysqlPackets(),
+	}
+	return qre.execStatefulConnWithOpt(conn, sql, opt)
+}
+
+func (qre *QueryExecutor) execStatefulConnWithOpt(conn *StatefulConnection, sql string, opt mysql.ExecuteOptions) (*sqltypes.Result, error) {
 	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.execStatefulConn")
 	defer span.Finish()
 
@@ -1145,11 +1154,6 @@ func (qre *QueryExecutor) execStatefulConn(conn *StatefulConnection, sql string,
 	}
 	defer qre.tsv.statefulql.Remove(qd)
 
-	opt := mysql.ExecuteOptions{
-		MaxRows:    int(qre.tsv.qe.maxResultSize.Load()),
-		WantFields: wantfields,
-		RawPackets: qre.options.RawMysqlPackets,
-	}
 	return conn.ExecOpt(ctx, sql, opt)
 }
 
