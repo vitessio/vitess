@@ -574,7 +574,7 @@ func testBlpFunc() (int64, int32) {
 }
 
 // TestDeadlockBwCloseAndReload tests the deadlock observed between Close and Reload
-// functions. More details can be found in the issue https://github.com/vitessio/vitess/issues/17229.
+// functions. More details can be found in the issue https://github.com/vitessio/vitess/issues/17229#issuecomment-2476136610.
 func TestDeadlockBwCloseAndReload(t *testing.T) {
 	cfg := newConfig(nil)
 	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TestNotServingPrimary")
