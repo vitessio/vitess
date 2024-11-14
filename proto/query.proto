@@ -701,8 +701,6 @@ message BeginExecuteResponse {
   // The session_state_changes might be set if the transaction is a snapshot transaction
   // and the MySQL implementation supports getting a start gtid on snapshot
   string session_state_changes = 5;
-
-  repeated bytes raw_packets = 20;
 }
 
 // BeginStreamExecuteRequest is the payload to BeginStreamExecute

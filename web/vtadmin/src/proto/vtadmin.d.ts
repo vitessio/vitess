@@ -44917,9 +44917,6 @@ export namespace query {
 
         /** BeginExecuteResponse session_state_changes */
         session_state_changes?: (string|null);
-
-        /** BeginExecuteResponse raw_packets */
-        raw_packets?: (Uint8Array[]|null);
     }
 
     /** Represents a BeginExecuteResponse. */
@@ -44945,9 +44942,6 @@ export namespace query {
 
         /** BeginExecuteResponse session_state_changes. */
         public session_state_changes: string;
-
-        /** BeginExecuteResponse raw_packets. */
-        public raw_packets: Uint8Array[];
 
         /**
          * Creates a new BeginExecuteResponse instance using the specified properties.
