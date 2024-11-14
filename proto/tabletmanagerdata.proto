@@ -817,6 +817,7 @@ message CheckThrottlerRequest {
   // OKIfNotExists asks the throttler to return OK even if the metric does not exist
   bool ok_if_not_exists = 4;
   reserved 5; // used to be multi_metrics_enabled, introduced in v21 for backwards compatibility, and removed in v22
+  reserved "multi_metrics_enabled";
 }
 
 enum CheckThrottlerResponseCode {
@@ -830,6 +831,7 @@ enum CheckThrottlerResponseCode {
 
 message CheckThrottlerResponse {
   reserved 1; // was `status_code`, HTTP compliant, deprecated
+  reserved "status_code";
   // Value is the metric value collected by the tablet
   double value = 2;
   // Threshold is the throttling threshold the table was comparing the value with
