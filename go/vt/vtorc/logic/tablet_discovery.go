@@ -69,7 +69,9 @@ func OpenTabletDiscovery() <-chan time.Time {
 	}
 	// We refresh all information from the topo once before we start the ticks to do
 	// it on a timer. We can wait forever (context.Background()) for this call.
-	if err := refreshAllInformation(context.Background()); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
+	defer cancel()
+	if err := refreshAllInformation(ctx); err != nil {
 		log.Errorf("failed to initialize topo information: %+v", err)
 	}
 	return time.Tick(time.Second * time.Duration(config.Config.TopoInformationRefreshSeconds)) //nolint SA1015: using time.Tick leaks the underlying ticker
