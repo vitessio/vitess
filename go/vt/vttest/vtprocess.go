@@ -44,16 +44,17 @@ type HealthChecker func(addr string) bool
 // It can be spawned manually or through one of the available
 // helper methods.
 type VtProcess struct {
-	Name         string
-	Directory    string
-	LogDirectory string
-	Binary       string
-	ExtraArgs    []string
-	Env          []string
-	BindAddress  string
-	Port         int
-	PortGrpc     int
-	HealthCheck  HealthChecker
+	Name            string
+	Directory       string
+	LogDirectory    string
+	Binary          string
+	ExtraArgs       []string
+	Env             []string
+	BindAddress     string
+	BindAddressGprc string
+	Port            int
+	PortGrpc        int
+	HealthCheck     HealthChecker
 
 	proc *exec.Cmd
 	exit chan error
@@ -139,6 +140,11 @@ func (vtp *VtProcess) WaitStart() (err error) {
 		vtp.proc.Args = append(vtp.proc.Args, fmt.Sprintf("%d", vtp.PortGrpc))
 	}
 
+	if vtp.BindAddressGprc != "" {
+		vtp.proc.Args = append(vtp.proc.Args, "--grpc_bind_address")
+		vtp.proc.Args = append(vtp.proc.Args, vtp.BindAddressGprc)
+	}
+
 	vtp.proc.Args = append(vtp.proc.Args, vtp.ExtraArgs...)
 	vtp.proc.Env = append(vtp.proc.Env, os.Environ()...)
 	vtp.proc.Env = append(vtp.proc.Env, vtp.Env...)
@@ -199,16 +205,22 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 	if args.VtComboBindAddress != "" {
 		vtcomboBindAddress = args.VtComboBindAddress
 	}
+	grpcBindAddress := "127.0.0.1"
+	if servenv.GRPCBindAddress() != "" {
+		grpcBindAddress = servenv.GRPCBindAddress()
+	}
+
 	vt := &VtProcess{
-		Name:         "vtcombo",
-		Directory:    environment.Directory(),
-		LogDirectory: environment.LogDirectory(),
-		Binary:       environment.BinaryPath("vtcombo"),
-		BindAddress:  vtcomboBindAddress,
-		Port:         environment.PortForProtocol("vtcombo", ""),
-		PortGrpc:     environment.PortForProtocol("vtcombo", "grpc"),
-		HealthCheck:  environment.ProcessHealthCheck("vtcombo"),
-		Env:          environment.EnvVars(),
+		Name:            "vtcombo",
+		Directory:       environment.Directory(),
+		LogDirectory:    environment.LogDirectory(),
+		Binary:          environment.BinaryPath("vtcombo"),
+		BindAddress:     vtcomboBindAddress,
+		BindAddressGprc: grpcBindAddress,
+		Port:            environment.PortForProtocol("vtcombo", ""),
+		PortGrpc:        environment.PortForProtocol("vtcombo", "grpc"),
+		HealthCheck:     environment.ProcessHealthCheck("vtcombo"),
+		Env:             environment.EnvVars(),
 	}
 
 	user, pass := mysql.Auth()
