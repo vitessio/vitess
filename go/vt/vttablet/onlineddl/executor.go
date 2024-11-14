@@ -4901,7 +4901,7 @@ func (e *Executor) submitCallbackIfNonConflicting(
 ) (
 	result *sqltypes.Result, err error,
 ) {
-	if !onlineDDL.StrategySetting().IsSingleton() && !onlineDDL.StrategySetting().IsSingletonContext() {
+	if !onlineDDL.StrategySetting().IsSingleton() && !onlineDDL.StrategySetting().IsSingletonContext() && !onlineDDL.StrategySetting().IsSingletonTable() {
 		// not a singleton. No conflict
 		return callback()
 	}
@@ -4946,6 +4946,15 @@ func (e *Executor) submitCallbackIfNonConflicting(
 					return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "singleton-context migration rejected: found pending migration: %s in different context: %s", pendingUUID, pendingOnlineDDL.MigrationContext)
 				}
 				// no conflict? continue looking for other pending migrations
+			}
+		case onlineDDL.StrategySetting().IsSingletonTable():
+			// We will reject this migration if there's any pending migration for the same table
+			for _, row := range rows {
+				pendingTableName := row["mysql_table"].ToString()
+				if onlineDDL.Table == pendingTableName {
+					pendingUUID := row["migration_uuid"].ToString()
+					return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "singleton-table migration rejected: found pending migration: %s for the same table: %s", pendingUUID, onlineDDL.Table)
+				}
 			}
 		}
 		return nil
