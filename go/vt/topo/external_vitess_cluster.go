@@ -47,6 +47,9 @@ func GetExternalVitessClusterPath(clusterName string) string {
 
 // CreateExternalVitessCluster creates a topo record for the passed vitess cluster
 func (ts *Server) CreateExternalVitessCluster(ctx context.Context, clusterName string, value *topodatapb.ExternalVitessCluster) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
 	data, err := value.MarshalVT()
 	if err != nil {
 		return err
@@ -66,6 +69,9 @@ func (ts *Server) CreateExternalVitessCluster(ctx context.Context, clusterName s
 
 // GetExternalVitessCluster returns a topo record for the named vitess cluster
 func (ts *Server) GetExternalVitessCluster(ctx context.Context, clusterName string) (*ExternalVitessClusterInfo, error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
 	data, version, err := ts.globalCell.Get(ctx, GetExternalVitessClusterPath(clusterName))
 	switch {
 	case IsErrType(err, NoNode):
@@ -88,7 +94,10 @@ func (ts *Server) GetExternalVitessCluster(ctx context.Context, clusterName stri
 
 // UpdateExternalVitessCluster updates the topo record for the named vitess cluster
 func (ts *Server) UpdateExternalVitessCluster(ctx context.Context, vc *ExternalVitessClusterInfo) error {
-	//FIXME: check for cluster lock
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	// FIXME: check for cluster lock
 	data, err := vc.ExternalVitessCluster.MarshalVT()
 	if err != nil {
 		return err
@@ -109,6 +118,9 @@ func (ts *Server) UpdateExternalVitessCluster(ctx context.Context, vc *ExternalV
 
 // DeleteExternalVitessCluster deletes the topo record for the named vitess cluster
 func (ts *Server) DeleteExternalVitessCluster(ctx context.Context, clusterName string) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
 	if err := ts.globalCell.Delete(ctx, GetExternalVitessClusterPath(clusterName), nil); err != nil {
 		return err
 	}
@@ -123,6 +135,9 @@ func (ts *Server) DeleteExternalVitessCluster(ctx context.Context, clusterName s
 
 // GetExternalVitessClusters returns the list of external vitess clusters in the topology.
 func (ts *Server) GetExternalVitessClusters(ctx context.Context) ([]string, error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
 	children, err := ts.globalCell.ListDir(ctx, GetExternalVitessClusterDir(), false /*full*/)
 	switch {
 	case err == nil:
