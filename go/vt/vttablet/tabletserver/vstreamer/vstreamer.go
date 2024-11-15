@@ -419,7 +419,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 // The bufferAndTransmit function must be passed if the event is a TransactionPayloadEvent
 // as for larger payloads (> ZstdInMemoryDecompressorMaxSize) the internal events need
 // to be streamed directly here in order to avoid holding the entire payload's contents,
-// which can be 10s of GiBs, all in memory.
+// which can be 10s or even 100s of GiBs, all in memory.
 func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vevent *binlogdatapb.VEvent) error) ([]*binlogdatapb.VEvent, error) {
 	if !ev.IsValid() {
 		return nil, fmt.Errorf("can't parse binlog event: invalid data: %#v", ev)
@@ -685,7 +685,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 				// the large transaction's entire payload of events in memory, as
 				// the uncompressed size can be 10s or even 100s of GiBs in size.
 				if bufferAndTransmit == nil {
-					return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[bug] cannot stream compressed transaction payload's internal events as no bufferAndTransmit function was provided")
+					return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "[bug] cannot stream compressed transaction payload's internal events as no bufferAndTransmit function was provided")
 				}
 				for _, tpvevent := range tpvevents {
 					tpvevent.Timestamp = int64(ev.Timestamp())
@@ -695,14 +695,13 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 							return nil, nil
 						}
 						vs.vse.errorCounts.Add("TransactionPayloadBufferAndTransmit", 1)
-						return nil, fmt.Errorf("error sending compressed transaction payload's internal event: %v", err)
+						return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "error sending compressed transaction payload's internal event: %v", err)
 					}
 				}
 			} else { // Process the payload's internal events all at once
 				vevents = append(vevents, tpvevents...)
 			}
 		}
-
 		vs.vse.vstreamerCompressedTransactionsDecoded.Add(1)
 	}
 	for _, vevent := range vevents {
