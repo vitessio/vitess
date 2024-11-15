@@ -681,7 +681,6 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 				return nil, vterrors.Wrap(err, "failed to parse transaction payload's internal event")
 			}
 			if tp.StreamingContents {
-				// log.Errorf("DEBUG: processing transaction payload's internal events as a stream")
 				// Transmit each internal event individually to avoid buffering
 				// the large transaction's entire payload of events in memory, as
 				// the uncompressed size can be 10s or even 100s of GiBs in size.
@@ -691,7 +690,6 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 				for _, tpvevent := range tpvevents {
 					tpvevent.Timestamp = int64(ev.Timestamp())
 					tpvevent.CurrentTime = time.Now().UnixNano()
-					// log.Errorf("DEBUG: streaming transaction payload's internal event: %v", tpevent)
 					if err := bufferAndTransmit(tpvevent); err != nil {
 						if err == io.EOF {
 							return nil, nil
@@ -701,7 +699,6 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 					}
 				}
 			} else { // Process the payload's internal events all at once
-				//log.Errorf("DEBUG: processing transaction payload's internal events all at once: %v", tpvevents)
 				vevents = append(vevents, tpvevents...)
 			}
 		}
