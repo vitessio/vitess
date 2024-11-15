@@ -18,9 +18,9 @@ package reparentutil
 
 import (
 	"context"
-	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
@@ -189,7 +189,7 @@ func stopReplicationAndBuildStatusMaps(
 	event.DispatchUpdate(ev, "stop replication on all replicas")
 
 	var (
-		m          sync.Mutex
+		m          deadlock.Mutex
 		errChan    = make(chan concurrency.Error)
 		allTablets []*topodatapb.Tablet
 		res        = &replicationSnapshot{

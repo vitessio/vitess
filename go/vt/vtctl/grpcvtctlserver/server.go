@@ -21,8 +21,7 @@ of the remote execution of vtctl commands.
 package grpcvtctlserver
 
 import (
-	"sync"
-
+	"github.com/sasha-s/go-deadlock"
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/vt/vtenv"
@@ -59,7 +58,7 @@ func (s *VtctlServer) ExecuteVtctlCommand(args *vtctldatapb.ExecuteVtctlCommandR
 	// We may execute this in parallel (inside multiple go routines),
 	// but the stream.Send() method is not thread safe in gRPC.
 	// So use a mutex to protect it.
-	mu := sync.Mutex{}
+	mu := deadlock.Mutex{}
 	logstream := logutil.NewCallbackLogger(func(e *logutilpb.Event) {
 		// If the client disconnects, we will just fail
 		// to send the log events, but won't interrupt

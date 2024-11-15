@@ -46,8 +46,8 @@ import (
 	"context"
 	"fmt"
 	"path"
-	"sync"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/log"
@@ -140,7 +140,7 @@ type Server struct {
 	factory Factory
 
 	// mu protects the following fields.
-	mu sync.Mutex
+	mu deadlock.Mutex
 	// cellConns contains clients configured to talk to a list of
 	// topo instances representing local topo clusters. These
 	// should be accessed with the ConnForCell() method, which
@@ -155,7 +155,7 @@ type cellConn struct {
 }
 
 type cellsToAliasesMap struct {
-	mu sync.Mutex
+	mu deadlock.Mutex
 	// cellsToAliases contains all cell->alias mappings
 	cellsToAliases map[string]string
 }

@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -37,7 +38,7 @@ type relayLog struct {
 	// mu controls all variables below and is shared by canAccept and hasItems.
 	// Broadcasting must be done while holding mu. This is mainly necessary because both
 	// conditions depend on ctx.Done(), which can change state asynchronously.
-	mu       sync.Mutex
+	mu       deadlock.Mutex
 	curSize  int
 	items    [][]*binlogdatapb.VEvent
 	timedout bool

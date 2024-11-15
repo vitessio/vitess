@@ -25,8 +25,8 @@ import (
 	"net/url"
 	"os"
 	"strings"
-	"sync"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/acl"
@@ -119,7 +119,7 @@ const (
 type StreamLogger[T any] struct {
 	name       string
 	size       int
-	mu         sync.Mutex
+	mu         deadlock.Mutex
 	subscribed map[chan T]string
 }
 

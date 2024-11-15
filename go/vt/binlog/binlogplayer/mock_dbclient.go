@@ -20,10 +20,10 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -38,7 +38,7 @@ type MockDBClient struct {
 	t             *testing.T
 	UName         string
 	expect        []*mockExpect
-	expectMu      sync.Mutex
+	expectMu      deadlock.Mutex
 	currentResult int
 	done          chan struct{}
 	invariants    map[string]*sqltypes.Result

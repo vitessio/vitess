@@ -19,9 +19,9 @@ package framework
 import (
 	"context"
 	"errors"
-	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
@@ -39,7 +39,7 @@ type QueryClient struct {
 	target              *querypb.Target
 	server              *tabletserver.TabletServer
 	transactionID       int64
-	reservedIDMu        sync.Mutex
+	reservedIDMu        deadlock.Mutex
 	reservedID          int64
 	sessionStateChanges string
 }

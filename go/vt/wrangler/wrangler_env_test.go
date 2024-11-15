@@ -20,9 +20,9 @@ import (
 	"context"
 	"fmt"
 	"math/rand/v2"
-	"sync"
 	"testing"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
@@ -55,7 +55,7 @@ type testWranglerEnv struct {
 	cell       string
 	tabletType topodatapb.TabletType
 	tmc        *testWranglerTMClient
-	mu         sync.Mutex
+	mu         deadlock.Mutex
 }
 
 //----------------------------------------------

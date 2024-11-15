@@ -19,9 +19,9 @@ package srvtopo
 import (
 	"context"
 	"fmt"
-	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/log"
@@ -42,7 +42,7 @@ type watchEntry struct {
 	rw  *resilientWatcher
 	key fmt.Stringer
 
-	mutex      sync.Mutex
+	mutex      deadlock.Mutex
 	watchState watchState
 
 	watchStartingChan chan struct{}
@@ -63,7 +63,7 @@ type resilientWatcher struct {
 	cacheRefreshInterval time.Duration
 	cacheTTL             time.Duration
 
-	mutex   sync.Mutex
+	mutex   deadlock.Mutex
 	entries map[string]*watchEntry
 }
 

@@ -27,11 +27,11 @@ import (
 	"os"
 	"os/signal"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
 	vaultapi "github.com/aquarapid/vaultlib"
+	"github.com/sasha-s/go-deadlock"
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/mysql"
@@ -136,14 +136,14 @@ func GetCredentialsServer() CredentialsServer {
 // FileCredentialsServer is a simple implementation of CredentialsServer using
 // a json file. Protected by mu.
 type FileCredentialsServer struct {
-	mu            sync.Mutex
+	mu            deadlock.Mutex
 	dbCredentials map[string][]string
 }
 
 // VaultCredentialsServer implements CredentialsServer using
 // a Vault backend from HashiCorp.
 type VaultCredentialsServer struct {
-	mu                     sync.Mutex
+	mu                     deadlock.Mutex
 	dbCredsCache           map[string][]string
 	vaultCacheExpireTicker *time.Ticker
 	vaultClient            *vaultapi.Client

@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
@@ -185,7 +186,7 @@ func (vx *VExec) CallbackContext(ctx context.Context, callback func(context.Cont
 func (vx *VExec) execCallback(ctx context.Context, callback func(context.Context, *topo.TabletInfo) (*querypb.QueryResult, error)) (map[*topo.TabletInfo]*querypb.QueryResult, error) {
 	var (
 		wg sync.WaitGroup
-		mu sync.Mutex
+		mu deadlock.Mutex
 
 		allErrors = &concurrency.AllErrorRecorder{}
 		results   = make(map[*topo.TabletInfo]*querypb.QueryResult)

@@ -26,6 +26,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/mysql/replication"
@@ -217,7 +218,7 @@ func (vx *vexec) exec() (map[*topo.TabletInfo]*querypb.QueryResult, error) {
 	var wg sync.WaitGroup
 	allErrors := &concurrency.AllErrorRecorder{}
 	results := make(map[*topo.TabletInfo]*querypb.QueryResult)
-	var mu sync.Mutex
+	var mu deadlock.Mutex
 	ctx, cancel := context.WithTimeout(vx.ctx, execTimeout)
 	defer cancel()
 	for _, primary := range vx.primaries {
@@ -252,7 +253,7 @@ func (vx *vexec) execCallback(callback func(context.Context, *topo.TabletInfo) (
 	var wg sync.WaitGroup
 	allErrors := &concurrency.AllErrorRecorder{}
 	results := make(map[*topo.TabletInfo]*querypb.QueryResult)
-	var mu sync.Mutex
+	var mu deadlock.Mutex
 	ctx, cancel := context.WithTimeout(vx.ctx, execTimeout)
 	defer cancel()
 	for _, primary := range vx.primaries {

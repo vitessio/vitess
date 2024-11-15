@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/log"
 
@@ -506,7 +507,7 @@ func (erp *EmergencyReparenter) reparentReplicas(
 
 	var (
 		replicasStartedReplication []*topodatapb.Tablet
-		replicaMutex               sync.Mutex
+		replicaMutex               deadlock.Mutex
 	)
 
 	replCtx, replCancel := context.WithTimeout(context.Background(), opts.WaitReplicasTimeout)
@@ -889,7 +890,7 @@ func (erp *EmergencyReparenter) gatherReparenJournalInfo(
 	waitReplicasTimeout time.Duration,
 ) (map[string]int, error) {
 	reparentJournalLen := make(map[string]int)
-	var mu sync.Mutex
+	var mu deadlock.Mutex
 	errCh := make(chan concurrency.Error)
 	defer close(errCh)
 

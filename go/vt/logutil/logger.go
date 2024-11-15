@@ -21,9 +21,9 @@ import (
 	"io"
 	"runtime"
 	"strings"
-	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/protoutil"
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 )
@@ -212,7 +212,7 @@ type MemoryLogger struct {
 	CallbackLogger
 
 	// mu protects the Events
-	mu     sync.Mutex
+	mu     deadlock.Mutex
 	Events []*logutilpb.Event
 }
 

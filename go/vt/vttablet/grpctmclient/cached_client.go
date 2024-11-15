@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/spf13/pflag"
 	"golang.org/x/sync/semaphore"
 	"google.golang.org/grpc"
@@ -73,7 +74,7 @@ type cachedConn struct {
 }
 
 type cachedConnDialer struct {
-	m            sync.Mutex
+	m            deadlock.Mutex
 	conns        map[string]*cachedConn
 	evict        []*cachedConn
 	evictSorted  bool

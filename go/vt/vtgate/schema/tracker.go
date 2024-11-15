@@ -21,9 +21,9 @@ import (
 	"maps"
 	"slices"
 	"strings"
-	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
@@ -43,7 +43,7 @@ type (
 		ch     chan *discovery.TabletHealth
 		cancel context.CancelFunc
 
-		mu     sync.Mutex
+		mu     deadlock.Mutex
 		tables *tableMap
 		views  *viewMap
 		udfs   map[keyspaceStr][]string

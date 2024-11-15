@@ -25,6 +25,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"golang.org/x/exp/maps"
 
 	"vitess.io/vitess/go/stats"
@@ -73,7 +74,7 @@ type vstream struct {
 	// All other parts of vgtid can be read without a lock.
 	// The lock is also held to ensure that all grouped events are sent together.
 	// This can happen if vstreamer breaks up large transactions into smaller chunks.
-	mu        sync.Mutex
+	mu        deadlock.Mutex
 	vgtid     *binlogdatapb.VGtid
 	send      func(events []*binlogdatapb.VEvent) error
 	journaler map[int64]*journalEvent
@@ -82,7 +83,7 @@ type vstream struct {
 	// errMu protects err by ensuring its value is read or written by only one goroutine at a time.
 	once  sync.Once
 	err   error
-	errMu sync.Mutex
+	errMu deadlock.Mutex
 
 	// Other input parameters
 	tabletType topodatapb.TabletType
@@ -108,7 +109,7 @@ type vstream struct {
 	includeReshardJournalEvents bool
 
 	// mutex used to synchronize access to skew detection parameters
-	skewMu sync.Mutex
+	skewMu deadlock.Mutex
 	// channel is created whenever there is a skew detected. closing it implies the current skew has been fixed
 	skewCh chan bool
 	// if a skew lasts for this long, we timeout the vstream call. currently hardcoded

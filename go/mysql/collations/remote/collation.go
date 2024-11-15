@@ -22,8 +22,8 @@ import (
 	"io"
 	"math"
 	"strings"
-	"sync"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/bytes2"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
@@ -47,7 +47,7 @@ type Collation struct {
 	prefix  string
 	suffix  string
 
-	mu   sync.Mutex
+	mu   deadlock.Mutex
 	conn *mysql.Conn
 	sql  bytes2.Buffer
 	hex  io.Writer

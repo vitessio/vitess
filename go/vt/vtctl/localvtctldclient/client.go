@@ -19,15 +19,15 @@ package localvtctldclient
 import (
 	"context"
 	"errors"
-	"sync"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
 
 	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
 )
 
 var (
-	m      sync.Mutex
+	m      deadlock.Mutex
 	server vtctlservicepb.VtctldServer
 )
 

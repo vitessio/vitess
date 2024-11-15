@@ -20,9 +20,9 @@ import (
 	"context"
 	"fmt"
 	"slices"
-	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/proto"
 
@@ -57,10 +57,10 @@ type KeyspaceEventWatcher struct {
 	hc        HealthCheck
 	localCell string
 
-	mu        sync.Mutex
+	mu        deadlock.Mutex
 	keyspaces map[string]*keyspaceState
 
-	subsMu sync.Mutex
+	subsMu deadlock.Mutex
 	subs   map[chan *KeyspaceEvent]struct{}
 }
 
@@ -107,7 +107,7 @@ type keyspaceState struct {
 	kew      *KeyspaceEventWatcher
 	keyspace string
 
-	mu         sync.Mutex
+	mu         deadlock.Mutex
 	deleted    bool
 	consistent bool
 
@@ -478,7 +478,7 @@ func (kss *keyspaceState) getMoveTablesStatus(vs *vschemapb.SrvVSchema) (*MoveTa
 	}
 	// Collect all current shard information from the topo.
 	var shardInfos []*topo.ShardInfo
-	mu := sync.Mutex{}
+	mu := deadlock.Mutex{}
 	eg, ectx := errgroup.WithContext(shortCtx)
 	for _, sstate := range kss.shards {
 		eg.Go(func() error {

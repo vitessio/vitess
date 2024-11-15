@@ -30,9 +30,9 @@ package throttler
 import (
 	"fmt"
 	"math"
-	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/topodata"
@@ -119,7 +119,7 @@ type ThrottlerImpl struct {
 	threadThrottlers []*threadThrottler
 	threadFinished   []bool
 
-	mu sync.Mutex
+	mu deadlock.Mutex
 	// runningThreads tracks which threads have not finished yet.
 	runningThreads map[int]bool
 	// threadRunningsLastUpdate caches for updateMaxRate() how many threads were

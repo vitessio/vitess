@@ -17,9 +17,9 @@ limitations under the License.
 package vterrors
 
 import (
-	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -33,7 +33,7 @@ type LastError struct {
 	err            error
 	firstSeen      time.Time
 	lastSeen       time.Time
-	mu             sync.Mutex
+	mu             deadlock.Mutex
 	maxTimeInError time.Duration // if error persists for this long, shouldRetry() will return false
 }
 

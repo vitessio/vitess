@@ -32,11 +32,11 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"strconv"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
 
@@ -79,7 +79,7 @@ var (
 // A singleton object of this type is created for the test case.
 type multiTenantMigration struct {
 	t                     *testing.T
-	mu                    sync.Mutex
+	mu                    deadlock.Mutex
 	tenantMigrationStatus map[int64]tenantMigrationStatus // current migration status for each tenant
 	activeMoveTables      map[int64]*VtctldMoveTables     // the internal MoveTables object for each tenant
 

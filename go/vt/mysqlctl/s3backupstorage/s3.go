@@ -46,6 +46,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	transport "github.com/aws/smithy-go/endpoints"
 	"github.com/aws/smithy-go/middleware"
+	"github.com/sasha-s/go-deadlock"
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/concurrency"
@@ -320,7 +321,7 @@ func (s3ServerSideEncryption *S3ServerSideEncryption) reset() {
 // S3BackupStorage implements the backupstorage.BackupStorage interface.
 type S3BackupStorage struct {
 	_client   *s3.Client
-	mu        sync.Mutex
+	mu        deadlock.Mutex
 	s3SSE     S3ServerSideEncryption
 	params    backupstorage.Params
 	transport *http.Transport

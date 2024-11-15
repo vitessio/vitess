@@ -27,6 +27,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"golang.org/x/sync/errgroup"
 
 	"vitess.io/vitess/go/constants/sidecar"
@@ -593,7 +594,7 @@ func (ts *Server) FindAllTabletAliasesInShardByCell(ctx context.Context, keyspac
 
 	// read the replication graph in each cell and add all found tablets
 	wg := sync.WaitGroup{}
-	mutex := sync.Mutex{}
+	mutex := deadlock.Mutex{}
 	rec := concurrency.AllErrorRecorder{}
 	result := make([]*topodatapb.TabletAlias, 0, len(resultAsMap))
 	for _, cell := range cells {
@@ -665,7 +666,7 @@ func (ts *Server) GetTabletsByShardCell(ctx context.Context, keyspace, shard str
 		cellConcurrency = DefaultConcurrency / len(cells)
 	}
 
-	mu := sync.Mutex{}
+	mu := deadlock.Mutex{}
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.SetLimit(DefaultConcurrency)
 

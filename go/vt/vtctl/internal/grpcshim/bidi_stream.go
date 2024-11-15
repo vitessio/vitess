@@ -20,8 +20,8 @@ import (
 	"context"
 	"errors"
 	"io"
-	"sync"
 
+	"github.com/sasha-s/go-deadlock"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 )
@@ -95,7 +95,7 @@ type BidiStream struct {
 	sendClosedCtx    context.Context
 	sendClosedCancel context.CancelFunc
 
-	m        sync.Mutex
+	m        deadlock.Mutex
 	closeErr error
 }
 

@@ -21,13 +21,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/cache"
 )
 
 // Numbered allows you to manage resources by tracking them with numbers.
 // There are no interface restrictions on what you can track.
 type Numbered struct {
-	mu                   sync.Mutex
+	mu                   deadlock.Mutex
 	empty                *sync.Cond // Broadcast when pool becomes empty
 	resources            map[int64]*numberedWrapper
 	recentlyUnregistered *cache.LRUCache[*unregistered]

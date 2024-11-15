@@ -27,6 +27,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
@@ -81,7 +82,7 @@ var copyStateGCInterval = (rowsCopiedUpdateInterval * 3) - (rowsCopiedUpdateInte
 // Engine is the engine for handling vreplication.
 type Engine struct {
 	// mu synchronizes isOpen, cancelRetry, controllers and wg.
-	mu     sync.Mutex
+	mu     deadlock.Mutex
 	isOpen bool
 	// If cancelRetry is set, then a retry loop is running.
 	// Invoking the function guarantees that there will be

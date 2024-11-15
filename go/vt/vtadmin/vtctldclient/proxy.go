@@ -18,9 +18,9 @@ package vtctldclient
 
 import (
 	"context"
-	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"google.golang.org/grpc/credentials/insecure"
 
 	"google.golang.org/grpc"
@@ -66,7 +66,7 @@ type ClientProxy struct {
 	dialFunc func(ctx context.Context, addr string, ff grpcclient.FailFast, opts ...grpc.DialOption) (vtctldclient.VtctldClient, error)
 	resolver grpcresolver.Builder
 
-	m        sync.Mutex
+	m        deadlock.Mutex
 	closed   bool
 	dialedAt time.Time
 }

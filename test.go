@@ -58,6 +58,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/sasha-s/go-deadlock"
 )
 
 var usage = `Usage of test.go:
@@ -455,7 +457,7 @@ func main() {
 	}
 
 	// Keep stats for the overall run.
-	var mu sync.Mutex
+	var mu deadlock.Mutex
 	failed := 0
 	passed := 0
 	flaky := 0
@@ -807,7 +809,7 @@ func selectedTests(args []string, config *Config) []*Test {
 
 var (
 	port      = 16000
-	portMutex sync.Mutex
+	portMutex deadlock.Mutex
 )
 
 func getPortStart(size int) int {

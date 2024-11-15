@@ -1,8 +1,9 @@
 package backupstats
 
 import (
-	"sync"
 	"time"
+
+	"github.com/sasha-s/go-deadlock"
 )
 
 type FakeStats struct {
@@ -14,7 +15,7 @@ type FakeStats struct {
 	}
 	ScopeCalls   [][]Scope
 	ScopeReturns []*FakeStats
-	mutex        sync.Mutex
+	mutex        deadlock.Mutex
 }
 
 func NewFakeStats(scopes ...Scope) *FakeStats {

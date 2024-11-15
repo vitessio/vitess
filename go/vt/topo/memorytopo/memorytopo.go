@@ -25,9 +25,9 @@ import (
 	"math/rand/v2"
 	"regexp"
 	"strings"
-	"sync"
 	"sync/atomic"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
@@ -80,7 +80,7 @@ const (
 // a sub-directory in that tree.
 type Factory struct {
 	// mu protects the following fields.
-	mu sync.Mutex
+	mu deadlock.Mutex
 	// cells is the toplevel map that has one entry per cell.
 	cells map[string]*node
 	// generation is used to generate unique incrementing version
@@ -240,7 +240,7 @@ func (n *node) propagateRecursiveWatch(ev *topo.WatchDataRecursive) {
 
 var (
 	nextWatchIndex   = 0
-	nextWatchIndexMu sync.Mutex
+	nextWatchIndexMu deadlock.Mutex
 )
 
 func (n *node) addWatch(w watch) int {

@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
@@ -47,7 +48,7 @@ type VStreamer interface {
 type Tracker struct {
 	enabled bool
 
-	mu     sync.Mutex
+	mu     deadlock.Mutex
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
 

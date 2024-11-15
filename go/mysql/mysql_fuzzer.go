@@ -30,6 +30,7 @@ import (
 	"time"
 
 	gofuzzheaders "github.com/AdaLogics/go-fuzz-headers"
+	"github.com/sasha-s/go-deadlock"
 
 	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/sqltypes"
@@ -228,7 +229,7 @@ func FuzzReadQueryResults(data []byte) int {
 type fuzzTestHandler struct {
 	UnimplementedHandler
 
-	mu       sync.Mutex
+	mu       deadlock.Mutex
 	lastConn *Conn
 	result   *sqltypes.Result
 	err      error

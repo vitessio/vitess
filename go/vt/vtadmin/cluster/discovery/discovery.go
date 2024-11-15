@@ -20,8 +20,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/spf13/pflag"
 
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
@@ -91,7 +91,7 @@ type Factory func(cluster *vtadminpb.Cluster, flags *pflag.FlagSet, args []strin
 
 // nolint:gochecknoglobals
 var registry = map[string]Factory{}
-var registryMu sync.Mutex
+var registryMu deadlock.Mutex
 
 // Register registers a factory for the given implementation name. Attempting
 // to register multiple factories for the same implementation name causes a

@@ -23,10 +23,10 @@ import (
 	"net"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/mysql/sqlerror"
 
 	"vitess.io/vitess/go/vt/log"
@@ -46,7 +46,7 @@ type AuthServerStatic struct {
 	file, jsonConfig string
 	reloadInterval   time.Duration
 	// This mutex helps us prevent data races between the multiple updates of entries.
-	mu sync.Mutex
+	mu deadlock.Mutex
 	// entries contains the users, passwords and user data.
 	entries map[string][]*AuthServerStaticEntry
 

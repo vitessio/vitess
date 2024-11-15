@@ -21,9 +21,9 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"sync"
 	"sync/atomic"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -119,7 +119,7 @@ func bindvarForType(field *querypb.Field) *querypb.BindVariable {
 
 // TryStreamExecute performs a streaming exec.
 func (jn *Join) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	var mu sync.Mutex
+	var mu deadlock.Mutex
 	// We need to use this atomic since we're also reading this
 	// value outside of it being locked with the mu lock.
 	// This is still racy, but worst case it means that we may

@@ -25,6 +25,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/tchap/go-patricia/patricia"
 
 	"vitess.io/vitess/go/json2"
@@ -60,7 +61,7 @@ func (aes aclEntries) Swap(i, j int) {
 }
 
 // mu protects acls and defaultACL.
-var mu sync.Mutex
+var mu deadlock.Mutex
 
 var acls = make(map[string]acl.Factory)
 

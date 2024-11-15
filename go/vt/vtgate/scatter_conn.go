@@ -24,6 +24,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/vt/sqlparser"
 
@@ -163,7 +164,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 	}
 
 	// mu protects qr
-	var mu sync.Mutex
+	var mu deadlock.Mutex
 	qr = new(sqltypes.Result)
 
 	if session.InLockSession() && session.TriggerLockHeartBeat() {
@@ -335,7 +336,7 @@ func getQueryService(ctx context.Context, rs *srvtopo.ResolvedShard, info *shard
 	return rs.Gateway, nil
 }
 
-func (stc *ScatterConn) processOneStreamingResult(mu *sync.Mutex, fieldSent *bool, qr *sqltypes.Result, callback func(*sqltypes.Result) error) error {
+func (stc *ScatterConn) processOneStreamingResult(mu *deadlock.Mutex, fieldSent *bool, qr *sqltypes.Result, callback func(*sqltypes.Result) error) error {
 	mu.Lock()
 	defer mu.Unlock()
 	if *fieldSent {
@@ -486,7 +487,7 @@ func (stc *ScatterConn) StreamExecuteMulti(
 // timeTracker is a convenience wrapper used by MessageStream
 // to track how long a stream has been unavailable.
 type timeTracker struct {
-	mu         sync.Mutex
+	mu         deadlock.Mutex
 	timestamps map[*querypb.Target]time.Time
 }
 
@@ -526,7 +527,7 @@ func (stc *ScatterConn) MessageStream(ctx context.Context, rss []*srvtopo.Resolv
 	defer cancel()
 
 	// mu is used to merge multiple callback calls into one.
-	var mu sync.Mutex
+	var mu deadlock.Mutex
 	fieldSent := false
 	lastErrors := newTimeTracker()
 	allErrors := stc.multiGo("MessageStream", rss, func(rs *srvtopo.ResolvedShard, i int) error {

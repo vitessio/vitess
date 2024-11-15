@@ -24,12 +24,12 @@ import (
 	"os/signal"
 	"regexp"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/sasha-s/go-deadlock"
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/mysql/replication"
@@ -110,7 +110,7 @@ func registerPluginFlags(fs *pflag.FlagSet) {
 // It stores the Session in the ClientData of a Connection.
 type vtgateHandler struct {
 	mysql.UnimplementedHandler
-	mu sync.Mutex
+	mu deadlock.Mutex
 
 	vtg         *VTGate
 	connections map[uint32]*mysql.Conn

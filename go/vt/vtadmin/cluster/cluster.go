@@ -30,6 +30,7 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sets"
@@ -764,7 +765,7 @@ func (c *Cluster) findWorkflows(ctx context.Context, keyspaces []string, opts Fi
 	clusterpb := c.ToProto()
 
 	var (
-		m       sync.Mutex
+		m       deadlock.Mutex
 		wg      sync.WaitGroup
 		rec     concurrency.AllErrorRecorder
 		results []*vtadminpb.Workflow
@@ -857,7 +858,7 @@ func (c *Cluster) GetBackups(ctx context.Context, req *vtadminpb.GetBackupsReque
 	}
 
 	var (
-		m            sync.Mutex
+		m            deadlock.Mutex
 		wg           sync.WaitGroup
 		rec          concurrency.AllErrorRecorder
 		backups      []*vtadminpb.ClusterBackup
@@ -968,7 +969,7 @@ func (c *Cluster) getShardSets(ctx context.Context, keyspaces []string, keyspace
 	}
 
 	var (
-		m   sync.Mutex
+		m   deadlock.Mutex
 		wg  sync.WaitGroup
 		rec concurrency.AllErrorRecorder
 	)
@@ -1086,7 +1087,7 @@ func (c *Cluster) GetCellInfos(ctx context.Context, req *vtadminpb.GetCellInfosR
 	}
 
 	var (
-		m   sync.Mutex
+		m   deadlock.Mutex
 		wg  sync.WaitGroup
 		rec concurrency.AllErrorRecorder
 	)
@@ -1222,7 +1223,7 @@ func (c *Cluster) GetKeyspaces(ctx context.Context) ([]*vtadminpb.Keyspace, erro
 	}
 
 	var (
-		m         sync.Mutex
+		m         deadlock.Mutex
 		wg        sync.WaitGroup
 		rec       concurrency.AllErrorRecorder
 		keyspaces = make([]*vtadminpb.Keyspace, len(resp.Keyspaces))
@@ -1271,7 +1272,7 @@ func (c *Cluster) GetSrvKeyspaces(ctx context.Context, cells []string) (map[stri
 	}
 
 	var (
-		m            sync.Mutex
+		m            deadlock.Mutex
 		wg           sync.WaitGroup
 		rec          concurrency.AllErrorRecorder
 		srvKeyspaces = make(map[string]*vtctldatapb.GetSrvKeyspacesResponse, len(keyspaces.Keyspaces))
@@ -1498,7 +1499,7 @@ func (c *Cluster) GetSchemas(ctx context.Context, opts GetSchemaOptions) ([]*vta
 	}
 
 	var (
-		m   sync.Mutex
+		m   deadlock.Mutex
 		wg  sync.WaitGroup
 		rec concurrency.AllErrorRecorder
 
@@ -1661,7 +1662,7 @@ func (c *Cluster) GetSchemaMigrations(ctx context.Context, req *vtctldatapb.GetS
 // opts.Tablets value completely.
 func (c *Cluster) getSchemaFromTablets(ctx context.Context, keyspace string, tablets []*vtadminpb.Tablet, opts GetSchemaOptions) (*vtadminpb.Schema, error) {
 	var (
-		m      sync.Mutex
+		m      deadlock.Mutex
 		wg     sync.WaitGroup
 		rec    concurrency.AllErrorRecorder
 		schema = &vtadminpb.Schema{
@@ -1833,7 +1834,7 @@ func (c *Cluster) GetShardReplicationPositions(ctx context.Context, req *vtadmin
 	}
 
 	var (
-		m            sync.Mutex
+		m            deadlock.Mutex
 		wg           sync.WaitGroup
 		rec          concurrency.AllErrorRecorder
 		positions    []*vtadminpb.ClusterShardReplicationPosition
@@ -2231,7 +2232,7 @@ func (c *Cluster) reloadKeyspaceSchemas(ctx context.Context, req *vtadminpb.Relo
 	}
 
 	var (
-		m   sync.Mutex
+		m   deadlock.Mutex
 		wg  sync.WaitGroup
 		rec concurrency.AllErrorRecorder
 
@@ -2292,7 +2293,7 @@ func (c *Cluster) reloadShardSchemas(ctx context.Context, req *vtadminpb.ReloadS
 	}
 
 	var (
-		m   sync.Mutex
+		m   deadlock.Mutex
 		wg  sync.WaitGroup
 		rec concurrency.AllErrorRecorder
 
@@ -2367,7 +2368,7 @@ func (c *Cluster) reloadTabletSchemas(ctx context.Context, req *vtadminpb.Reload
 	}
 
 	var (
-		m           sync.Mutex
+		m           deadlock.Mutex
 		wg          sync.WaitGroup
 		ch          = make(chan *vtadminpb.Tablet)
 		concurrency = int(req.Concurrency)

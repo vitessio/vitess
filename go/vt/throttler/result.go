@@ -19,10 +19,10 @@ package throttler
 import (
 	"fmt"
 	"strings"
-	"sync"
 	"text/template"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 )
 
@@ -116,7 +116,7 @@ func (r Result) AgeOfBeforeLag() string {
 // resultRing implements a ring buffer for "result" instances.
 type resultRing struct {
 	// mu guards the fields below.
-	mu sync.Mutex
+	mu deadlock.Mutex
 	// position holds the index of the *next* result in the ring.
 	position int
 	// wrapped becomes true when the ring buffer "wrapped" at least once and we

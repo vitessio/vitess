@@ -19,9 +19,9 @@ package tabletservermock
 
 import (
 	"context"
-	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -82,7 +82,7 @@ type Controller struct {
 	// mu protects the next fields in this structure. They are
 	// accessed by both the methods in this interface, and the
 	// background health check.
-	mu sync.Mutex
+	mu deadlock.Mutex
 
 	// QueryServiceEnabled is a state variable.
 	queryServiceEnabled bool

@@ -37,6 +37,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/log"
@@ -70,7 +71,7 @@ const StatsAllStr = "all"
 type NewVarHook func(name string, v expvar.Var)
 
 type varGroup struct {
-	sync.Mutex
+	deadlock.Mutex
 	vars       map[string]expvar.Var
 	newVarHook NewVarHook
 }
@@ -208,7 +209,7 @@ type PushBackend interface {
 }
 
 var pushBackends = make(map[string]PushBackend)
-var pushBackendsLock sync.Mutex
+var pushBackendsLock deadlock.Mutex
 var once sync.Once
 
 func AwaitBackend(ctx context.Context) error {
@@ -272,7 +273,7 @@ func (f FloatFunc) String() string {
 
 // String is expvar.String+Get+hook
 type String struct {
-	mu sync.Mutex
+	mu deadlock.Mutex
 	s  string
 }
 
@@ -356,7 +357,7 @@ func stringMapToString(m map[string]string) string {
 }
 
 var (
-	varsMu             sync.Mutex
+	varsMu             deadlock.Mutex
 	combinedDimensions map[string]bool
 	droppedVars        map[string]bool
 )

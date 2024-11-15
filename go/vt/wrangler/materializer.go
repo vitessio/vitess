@@ -28,6 +28,7 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 
@@ -443,7 +444,7 @@ func (wr *Wrangler) checkIfPreviousJournalExists(ctx context.Context, mz *materi
 	}
 
 	var (
-		mu      sync.Mutex
+		mu      deadlock.Mutex
 		exists  bool
 		tablets []string
 		ws      = workflow.NewServer(wr.env, wr.ts, wr.tmc)
@@ -939,7 +940,7 @@ func (wr *Wrangler) ExternalizeVindex(ctx context.Context, qualifiedVindexName s
 
 func (wr *Wrangler) collectTargetStreams(ctx context.Context, mz *materializer) ([]string, error) {
 	var shardTablets []string
-	var mu sync.Mutex
+	var mu deadlock.Mutex
 	err := mz.forAllTargets(func(target *topo.ShardInfo) error {
 		var qrproto *querypb.QueryResult
 		var id int64
@@ -1172,7 +1173,7 @@ func (mz *materializer) getSourceTableDDLs(ctx context.Context) (map[string]stri
 
 func (mz *materializer) deploySchema(ctx context.Context) error {
 	var sourceDDLs map[string]string
-	var mu sync.Mutex
+	var mu deadlock.Mutex
 
 	return mz.forAllTargets(func(target *topo.ShardInfo) error {
 		allTables := []string{"/.*/"}

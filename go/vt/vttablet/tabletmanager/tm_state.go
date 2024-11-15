@@ -20,10 +20,10 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/spf13/pflag"
 	"google.golang.org/protobuf/proto"
 
@@ -69,7 +69,7 @@ type tmState struct {
 	// Because mu can be held for long, we publish the current state
 	// of these variables into displayState, which can be accessed
 	// more freely even while tmState is busy transitioning.
-	mu              sync.Mutex
+	mu              deadlock.Mutex
 	isOpen          bool
 	isOpening       bool
 	isResharding    bool
@@ -479,7 +479,7 @@ func (ts *tmState) retryPublish() {
 // of tmState may not be accessible due to longer mutex holds.
 // tmState uses publishForDisplay to keep these values uptodate.
 type displayState struct {
-	mu           sync.Mutex
+	mu           deadlock.Mutex
 	tablet       *topodatapb.Tablet
 	deniedTables []string
 }

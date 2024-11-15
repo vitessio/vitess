@@ -26,9 +26,9 @@ push() operation never blocks while pop() blocks on an empty queue.
 package discovery
 
 import (
-	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtorc/config"
 )
@@ -41,7 +41,7 @@ type QueueMetric struct {
 
 // Queue contains information for managing discovery requests
 type Queue struct {
-	sync.Mutex
+	deadlock.Mutex
 
 	name         string
 	done         chan struct{}
@@ -55,7 +55,7 @@ type Queue struct {
 // Currently this is accessed by ContinuousDiscovery() but also from http api calls.
 // I may need to protect this better?
 var discoveryQueue map[string](*Queue)
-var dcLock sync.Mutex
+var dcLock deadlock.Mutex
 
 func init() {
 	discoveryQueue = make(map[string](*Queue))

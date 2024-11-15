@@ -17,10 +17,10 @@ limitations under the License.
 package tabletserver
 
 import (
-	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
@@ -33,7 +33,7 @@ const streamBufferSize = 8
 // StreamConsolidator is a data structure capable of merging several identical streaming queries so only
 // one query is executed in MySQL and its response is fanned out to all the clients simultaneously.
 type StreamConsolidator struct {
-	mu                             sync.Mutex
+	mu                             deadlock.Mutex
 	inflight                       map[string]*streamInFlight
 	memory                         int64
 	maxMemoryTotal, maxMemoryQuery int64
@@ -180,7 +180,7 @@ func (sc *StreamConsolidator) Consolidate(waitTimings *servenv.TimingsWrapper, l
 }
 
 type streamInFlight struct {
-	mu             sync.Mutex
+	mu             deadlock.Mutex
 	catchup        []*sqltypes.Result
 	fanout         map[chan *sqltypes.Result]bool
 	err            error

@@ -30,6 +30,7 @@ import (
 	"sync"
 
 	minio "github.com/minio/minio-go"
+	"github.com/sasha-s/go-deadlock"
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/concurrency"
@@ -162,7 +163,7 @@ type CephBackupStorage struct {
 	// Once this field is set, it must not be written again/unset to nil.
 	_client *minio.Client
 	// mu guards all fields.
-	mu sync.Mutex
+	mu deadlock.Mutex
 }
 
 // ListBackups implements BackupStorage.

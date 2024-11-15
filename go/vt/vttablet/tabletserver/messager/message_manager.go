@@ -25,6 +25,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"golang.org/x/sync/semaphore"
 
 	"vitess.io/vitess/go/mysql/replication"
@@ -181,7 +182,7 @@ type messageManager struct {
 	purgeTicks   *timer.Timer
 	postponeSema *semaphore.Weighted
 
-	mu     sync.Mutex
+	mu     deadlock.Mutex
 	isOpen bool
 	// cond waits on curReceiver == -1 || cache.IsEmpty():
 	// No current receivers available or cache is empty.
@@ -213,7 +214,7 @@ type messageManager struct {
 	// poller is active.
 	// TODO(mattlord): since this is primarily a flow control mechanism, we
 	// should do it in a more idiomatic go way using channels or cond vars.
-	cacheManagementMu sync.Mutex
+	cacheManagementMu deadlock.Mutex
 	// The lastPollPosition variable is the main point of coordination
 	// between the poller and the binlog streamer to ensure that we are
 	// not re-processing older events and moving along linearly in the

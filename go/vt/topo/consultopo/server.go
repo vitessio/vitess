@@ -23,10 +23,10 @@ import (
 	"encoding/json"
 	"os"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/hashicorp/consul/api"
+	"github.com/sasha-s/go-deadlock"
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/log"
@@ -105,7 +105,7 @@ type Server struct {
 	root string
 
 	// mu protects the following fields.
-	mu sync.Mutex
+	mu deadlock.Mutex
 	// locks is a map of *lockInstance structures.
 	// The key is the filepath of the Lock file.
 	locks map[string]*lockInstance

@@ -17,9 +17,9 @@ limitations under the License.
 package evalengine
 
 import (
-	"sync"
 	"testing"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -76,7 +76,7 @@ func TestExpressionEnvTypeOf(t *testing.T) {
 			},
 			expr: &UntypedExpr{
 				env:       vtenv.NewTestEnv(),
-				mu:        sync.Mutex{},
+				mu:        deadlock.Mutex{},
 				collation: 255,
 				typed:     nil,
 				needTypes: []typedIR{sumCol, countCol},

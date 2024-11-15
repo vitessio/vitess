@@ -23,6 +23,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/discovery"
@@ -84,7 +85,7 @@ type MaxReplicationLagModule struct {
 	initialMaxReplicationLagSec int64
 
 	// mutableConfigMu guards all fields in the group below.
-	mutableConfigMu sync.Mutex
+	mutableConfigMu deadlock.Mutex
 	// mutableConfig is the mutable copy of "config" which is currently used by
 	// the module. By modifying "mutableConfig" and setting "applyMutableConfig"
 	// to true, the next ProcessRecords() execution will copy "mutableConfig"

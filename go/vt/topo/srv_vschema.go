@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -161,7 +162,7 @@ func (ts *Server) RebuildSrvVSchema(ctx context.Context, cells []string) error {
 
 	// build the SrvVSchema in parallel, protected by mu
 	wg := sync.WaitGroup{}
-	mu := sync.Mutex{}
+	mu := deadlock.Mutex{}
 	var finalErr error
 	srvVSchema := &vschemapb.SrvVSchema{
 		Keyspaces: map[string]*vschemapb.Keyspace{},

@@ -20,9 +20,9 @@ import (
 	"context"
 	"fmt"
 	"reflect"
-	"sync"
 	"testing"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -137,7 +137,7 @@ func TestScatterConnStreamExecuteMulti(t *testing.T) {
 		}
 		bvs := make([]map[string]*querypb.BindVariable, len(rss))
 		qr := new(sqltypes.Result)
-		var mu sync.Mutex
+		var mu deadlock.Mutex
 		errors := sc.StreamExecuteMulti(ctx, nil, "query", rss, bvs, NewSafeSession(&vtgatepb.Session{InTransaction: true}), true /* autocommit */, func(r *sqltypes.Result) error {
 			mu.Lock()
 			defer mu.Unlock()
@@ -370,7 +370,7 @@ func executeOnShardsReturnsErr(t *testing.T, ctx context.Context, res *srvtopo.R
 }
 
 type recordingResultsObserver struct {
-	mu       sync.Mutex
+	mu       deadlock.Mutex
 	recorded []*sqltypes.Result
 }
 

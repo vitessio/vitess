@@ -23,10 +23,10 @@ import (
 	"errors"
 	"fmt"
 	"math/rand/v2"
-	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -73,7 +73,7 @@ type (
 
 		getCount atomic.Int64
 
-		reopenMutex sync.Mutex
+		reopenMutex deadlock.Mutex
 		refresh     *poolRefresh
 	}
 )

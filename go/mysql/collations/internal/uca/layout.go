@@ -17,8 +17,9 @@ limitations under the License.
 package uca
 
 import (
-	"sync"
 	"unsafe"
+
+	"github.com/sasha-s/go-deadlock"
 )
 
 const MaxCodepoint = 0x10FFFF + 1
@@ -291,7 +292,7 @@ type tableWithPatch struct {
 }
 
 var cachedTables = make(map[tableWithPatch]Weights)
-var cachedTablesMu sync.Mutex
+var cachedTablesMu deadlock.Mutex
 
 func lookupCachedTable(table Weights, patch []Patch) (Weights, bool) {
 	data1 := unsafe.Pointer(unsafe.SliceData(table))

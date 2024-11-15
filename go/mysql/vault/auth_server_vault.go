@@ -23,11 +23,11 @@ import (
 	"os"
 	"os/signal"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
 	vaultapi "github.com/aquarapid/vaultlib"
+	"github.com/sasha-s/go-deadlock"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/sqlerror"
@@ -37,7 +37,7 @@ import (
 // AuthServerVault implements AuthServer with a config loaded from Vault.
 type AuthServerVault struct {
 	methods []mysql.AuthMethod
-	mu      sync.Mutex
+	mu      deadlock.Mutex
 	// users, passwords and user data
 	// We use the same JSON format as for --mysql_auth_server_static
 	// Acts as a cache for the in-Vault data

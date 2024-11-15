@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/stats"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -77,7 +78,7 @@ var (
 	// aggrChan buffers queryInfo objects to be processed.
 	aggrChan chan *queryInfo
 	// muAggr protects below vars.
-	muAggr sync.Mutex
+	muAggr deadlock.Mutex
 	// aggregators holds all Aggregators created.
 	aggregators []*TabletStatusAggregator
 	// gatewayStatsChanFull tracks the number of times

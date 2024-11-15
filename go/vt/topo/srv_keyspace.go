@@ -23,6 +23,7 @@ import (
 	"path"
 	"sync"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/concurrency"
@@ -134,7 +135,7 @@ func (ts *Server) GetShardServingCells(ctx context.Context, si *ShardInfo) (serv
 	wg := sync.WaitGroup{}
 	rec := concurrency.AllErrorRecorder{}
 	servingCells = make([]string, 0)
-	var mu sync.Mutex
+	var mu deadlock.Mutex
 	for _, cell := range cells {
 		wg.Add(1)
 		go func(cell string) {
@@ -185,7 +186,7 @@ func (ts *Server) GetShardServingTypes(ctx context.Context, si *ShardInfo) (serv
 	wg := sync.WaitGroup{}
 	rec := concurrency.AllErrorRecorder{}
 	servingTypes = make([]topodatapb.TabletType, 0)
-	var mu sync.Mutex
+	var mu deadlock.Mutex
 	for _, cell := range cells {
 		wg.Add(1)
 		go func(cell string) {

@@ -22,9 +22,9 @@ import (
 	"fmt"
 	"io"
 	"math/rand/v2"
-	"sync"
 	"testing"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/topo"
@@ -66,7 +66,7 @@ type testVDiffEnv struct {
 	tmc            *testVDiffTMClient
 	out            io.Writer // Capture command output
 
-	mu      sync.Mutex
+	mu      deadlock.Mutex
 	tablets map[int]*testVDiffTablet
 }
 

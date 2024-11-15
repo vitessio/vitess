@@ -18,8 +18,8 @@ package txlimiter
 
 import (
 	"strings"
-	"sync"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/log"
@@ -88,7 +88,7 @@ func (txa *TxAllowAll) Release(immediate *querypb.VTGateCallerID, effective *vtr
 type Impl struct {
 	maxPerUser int64
 	usageMap   map[string]int64
-	mu         sync.Mutex
+	mu         deadlock.Mutex
 
 	dryRun          bool
 	byUsername      bool

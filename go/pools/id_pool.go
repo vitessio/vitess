@@ -18,7 +18,8 @@ package pools
 
 import (
 	"fmt"
-	"sync"
+
+	"github.com/sasha-s/go-deadlock"
 )
 
 // IDPool is used to ensure that the set of IDs in use concurrently never
@@ -27,7 +28,7 @@ import (
 //
 // IDPool's Get() and Put() methods can be used concurrently.
 type IDPool struct {
-	sync.Mutex
+	deadlock.Mutex
 
 	// used holds the set of values that have been returned to us with Put().
 	used map[uint32]bool

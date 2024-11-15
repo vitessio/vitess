@@ -19,10 +19,10 @@ package repltracker
 import (
 	"context"
 	"fmt"
-	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/constants/sidecar"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -80,7 +80,7 @@ type heartbeatWriter struct {
 	now           func() time.Time
 	errorLog      *logutil.ThrottledLogger
 
-	mu                          sync.Mutex
+	mu                          deadlock.Mutex
 	isOpen                      bool
 	appPool                     *dbconnpool.ConnectionPool
 	allPrivsPool                *dbconnpool.ConnectionPool

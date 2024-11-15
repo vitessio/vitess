@@ -23,6 +23,7 @@ import (
 
 	"context"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -151,7 +152,7 @@ func (ts *Server) ResolveShardWildcard(ctx context.Context, param string) ([]Key
 func (ts *Server) ResolveWildcards(ctx context.Context, cell string, paths []string) ([]string, error) {
 	results := make([][]string, len(paths))
 	wg := &sync.WaitGroup{}
-	mu := &sync.Mutex{}
+	mu := &deadlock.Mutex{}
 	var firstError error
 
 	for i, p := range paths {
@@ -216,7 +217,7 @@ func (ts *Server) resolveRecursive(ctx context.Context, cell string, parts []str
 
 			results := make([][]string, len(children))
 			wg := &sync.WaitGroup{}
-			mu := &sync.Mutex{}
+			mu := &deadlock.Mutex{}
 			var firstError error
 
 			for j, child := range children {

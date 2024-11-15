@@ -18,8 +18,8 @@ package engine
 
 import (
 	"context"
-	"sync"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -109,7 +109,7 @@ func (sa *ScalarAggregate) TryStreamExecute(ctx context.Context, vcursor VCursor
 		return callback(qr.Truncate(sa.TruncateColumnCount))
 	}
 
-	var mu sync.Mutex
+	var mu deadlock.Mutex
 	var agg aggregationState
 	var fields []*querypb.Field
 	fieldsSent := !wantfields

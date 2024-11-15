@@ -22,6 +22,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 )
@@ -55,7 +56,7 @@ type Client struct {
 	appName   throttlerapp.Name
 	flags     CheckFlags
 
-	lastSuccessfulThrottleMu sync.Mutex
+	lastSuccessfulThrottleMu deadlock.Mutex
 	// lastSuccessfulThrottle records the latest tick (value of `throttleTicks`) when the throttler was
 	// satisfied for a given metric. This makes it possible to potentially skip a throttler check.
 	// key is the app name.

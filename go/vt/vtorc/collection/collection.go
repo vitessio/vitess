@@ -61,11 +61,11 @@ package collection
 
 import (
 	"errors"
-	"sync"
 	"time"
 
 	// "vitess.io/vitess/go/vt/log"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/vt/vtorc/config"
 )
 
@@ -76,11 +76,11 @@ type Metric interface {
 
 // Collection contains a collection of Metrics
 type Collection struct {
-	sync.Mutex        // for locking the structure
-	monitoring   bool // am I monitoring the queue size?
-	collection   []Metric
-	done         chan struct{} // to indicate that we are finishing expiry processing
-	expirePeriod time.Duration // time to keep the collection information for
+	deadlock.Mutex      // for locking the structure
+	monitoring     bool // am I monitoring the queue size?
+	collection     []Metric
+	done           chan struct{} // to indicate that we are finishing expiry processing
+	expirePeriod   time.Duration // time to keep the collection information for
 }
 
 // hard-coded at every second
@@ -90,7 +90,7 @@ const defaultExpireTickerPeriod = time.Second
 // metrics which can then be accessed via an API call for monitoring.
 var (
 	namedCollection     map[string](*Collection)
-	namedCollectionLock sync.Mutex
+	namedCollectionLock deadlock.Mutex
 )
 
 func init() {

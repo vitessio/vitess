@@ -24,6 +24,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"golang.org/x/sync/semaphore"
 
 	"vitess.io/vitess/go/protoutil"
@@ -491,7 +492,7 @@ func (ts *Server) GetTabletMap(ctx context.Context, tabletAliases []*topodatapb.
 	defer span.Finish()
 
 	var (
-		mu        sync.Mutex
+		mu        deadlock.Mutex
 		wg        sync.WaitGroup
 		tabletMap = make(map[string]*TabletInfo)
 		returnErr error

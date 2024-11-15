@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/sasha-s/go-deadlock"
 	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/semaphore"
@@ -119,7 +120,7 @@ type sequenceMetadata struct {
 // vdiffOutput holds the data from all shards that is needed to generate
 // the full summary results of the vdiff in the vdiff show command output.
 type vdiffOutput struct {
-	mu        sync.Mutex
+	mu        deadlock.Mutex
 	responses map[string]*tabletmanagerdatapb.VDiffResponse
 	err       error
 }
@@ -415,7 +416,7 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 	}
 
 	// Guards access to the maps used throughout.
-	m := sync.Mutex{}
+	m := deadlock.Mutex{}
 
 	shards, err := common.GetShards(ctx, s.ts, req.Keyspace, req.Shards)
 	if err != nil {
@@ -2526,7 +2527,7 @@ func (s *Server) addTablesToVSchema(ctx context.Context, sourceKeyspace string, 
 
 func (s *Server) collectTargetStreams(ctx context.Context, mz *materializer) ([]string, error) {
 	var shardTablets []string
-	var mu sync.Mutex
+	var mu deadlock.Mutex
 	err := forAllShards(mz.targetShards, func(target *topo.ShardInfo) error {
 		var err error
 		targetPrimary, err := s.ts.GetTablet(ctx, target.PrimaryAlias)
@@ -2554,7 +2555,7 @@ func (s *Server) collectTargetStreams(ctx context.Context, mz *materializer) ([]
 
 func (s *Server) checkIfPreviousJournalExists(ctx context.Context, mz *materializer, migrationID int64) (bool, []string, error) {
 	var (
-		mu      sync.Mutex
+		mu      deadlock.Mutex
 		exists  bool
 		tablets []string
 	)
@@ -3823,7 +3824,7 @@ func (s *Server) canSwitch(ctx context.Context, ts *trafficSwitcher, maxAllowedR
 	// Ensure that the tablets on both sides are in good shape as we make this same call in the
 	// process and an error will cause us to backout.
 	refreshErrors := strings.Builder{}
-	var m sync.Mutex
+	var m deadlock.Mutex
 	var wg sync.WaitGroup
 	rtbsCtx, cancel := context.WithTimeout(ctx, shardTabletRefreshTimeout)
 	defer cancel()

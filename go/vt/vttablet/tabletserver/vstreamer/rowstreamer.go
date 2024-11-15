@@ -20,9 +20,9 @@ import (
 	"context"
 	"fmt"
 	"net/url"
-	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
@@ -311,7 +311,7 @@ func (rs *rowStreamer) streamQuery(send func(*binlogdatapb.VStreamRowsResponse) 
 	throttleResponseRateLimiter := timer.NewRateLimiter(rowStreamertHeartbeatInterval)
 	defer throttleResponseRateLimiter.Stop()
 
-	var sendMu sync.Mutex
+	var sendMu deadlock.Mutex
 	safeSend := func(r *binlogdatapb.VStreamRowsResponse) error {
 		sendMu.Lock()
 		defer sendMu.Unlock()

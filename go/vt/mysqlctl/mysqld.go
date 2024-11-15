@@ -38,10 +38,10 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/config"
@@ -117,7 +117,7 @@ type Mysqld struct {
 	capabilities capabilitySet
 
 	// mutex protects the fields below.
-	mutex         sync.Mutex
+	mutex         deadlock.Mutex
 	onTermFuncs   []func()
 	cancelWaitCmd chan struct{}
 

@@ -21,8 +21,8 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"net/http"
-	"sync"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/vt/discovery"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -116,7 +116,7 @@ type tabletBalancer struct {
 	vtGateCells []string
 
 	// mu protects the allocation map
-	mu sync.Mutex
+	mu deadlock.Mutex
 
 	//
 	// Allocations for balanced mode, calculated once per target and invalidated

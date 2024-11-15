@@ -19,8 +19,8 @@ package concurrency
 import (
 	"fmt"
 	"strings"
-	"sync"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -36,7 +36,7 @@ type ErrorRecorder interface {
 // FirstErrorRecorder records the first error, logs the others.
 // Error() will return the first recorded error or nil.
 type FirstErrorRecorder struct {
-	mu         sync.Mutex
+	mu         deadlock.Mutex
 	errorCount int
 	firstError error
 }
@@ -75,7 +75,7 @@ func (fer *FirstErrorRecorder) Error() error {
 
 // AllErrorRecorder records all the errors.
 type AllErrorRecorder struct {
-	mu     sync.Mutex
+	mu     deadlock.Mutex
 	Errors []error
 }
 

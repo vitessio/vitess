@@ -19,8 +19,8 @@ package vtctl
 import (
 	"context"
 	"fmt"
-	"sync"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/logutil"
@@ -47,7 +47,7 @@ type testVTCtlEnv struct {
 	tmc        *testVTCtlTMClient
 	cmdlog     *logutil.MemoryLogger
 
-	mu      sync.Mutex
+	mu      deadlock.Mutex
 	tablets map[int]*testVTCtlTablet
 }
 

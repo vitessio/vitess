@@ -20,6 +20,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/sqltypes"
 )
@@ -45,7 +46,7 @@ type PendingResult interface {
 type consolidator struct {
 	*ConsolidatorCache
 
-	mu      sync.Mutex
+	mu      deadlock.Mutex
 	queries map[string]*pendingResult
 }
 

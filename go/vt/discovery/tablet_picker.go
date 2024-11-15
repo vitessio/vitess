@@ -22,9 +22,9 @@ import (
 	"math/rand/v2"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
@@ -61,7 +61,7 @@ const (
 
 var (
 	tabletPickerRetryDelay   = 30 * time.Second
-	muTabletPickerRetryDelay sync.Mutex
+	muTabletPickerRetryDelay deadlock.Mutex
 	globalTPStats            *tabletPickerStats
 
 	tabletPickerCellPreferenceMap = map[string]TabletPickerCellPreference{
@@ -483,7 +483,7 @@ func init() {
 }
 
 type tabletPickerStats struct {
-	mu                 sync.Mutex
+	mu                 deadlock.Mutex
 	noTabletFoundError *stats.CountersWithMultiLabels
 }
 

@@ -24,6 +24,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/vt/log"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
@@ -127,7 +128,7 @@ type ConnPool[C Connection] struct {
 	// workers is a waitgroup for all the currently running worker goroutines
 	workers    sync.WaitGroup
 	close      chan struct{}
-	capacityMu sync.Mutex
+	capacityMu deadlock.Mutex
 
 	config struct {
 		// connect is the callback to create a new connection for the pool

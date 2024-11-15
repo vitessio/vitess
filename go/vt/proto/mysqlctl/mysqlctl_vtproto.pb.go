@@ -7,11 +7,12 @@ package mysqlctl
 import (
 	binary "encoding/binary"
 	fmt "fmt"
+	io "io"
+	math "math"
+
 	protohelpers "github.com/planetscale/vtprotobuf/protohelpers"
 	proto "google.golang.org/protobuf/proto"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
-	io "io"
-	math "math"
 	topodata "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpc "vitess.io/vitess/go/vt/proto/vtrpc"
 	vttime "vitess.io/vitess/go/vt/proto/vttime"

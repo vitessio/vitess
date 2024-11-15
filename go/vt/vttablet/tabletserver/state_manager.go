@@ -23,6 +23,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"golang.org/x/sync/semaphore"
 
 	"vitess.io/vitess/go/timer"
@@ -74,7 +75,7 @@ type stateManager struct {
 	// transitioning is a semaphore that must to be obtained
 	// before attempting a state transition. To prevent deadlocks,
 	// this must be acquired before the mu lock. We use a semaphore
-	// because we need TryAcquire, which is not supported by sync.Mutex.
+	// because we need TryAcquire, which is not supported by deadlock.Mutex.
 	// If an acquire is successful, we must either Release explicitly
 	// or invoke execTransition, which will release once it's done.
 	// There are no ordering restrictions on using TryAcquire.
@@ -87,7 +88,7 @@ type stateManager struct {
 	//
 	// If a transition fails, we set retrying to true and launch
 	// retryTransition which loops until the state converges.
-	mu             sync.Mutex
+	mu             deadlock.Mutex
 	wantState      servingState
 	wantTabletType topodatapb.TabletType
 	state          servingState

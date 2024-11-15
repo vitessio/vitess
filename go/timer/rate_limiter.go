@@ -19,9 +19,10 @@ package timer
 import (
 	"context"
 	"math"
-	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/sasha-s/go-deadlock"
 )
 
 // RateLimiter runs given tasks, at no more than one per defined duration.
@@ -31,7 +32,7 @@ type RateLimiter struct {
 	tickerValue atomic.Int64
 	lastDoValue int64
 
-	mu     sync.Mutex
+	mu     deadlock.Mutex
 	cancel context.CancelFunc
 }
 

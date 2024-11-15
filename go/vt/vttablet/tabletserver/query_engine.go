@@ -24,10 +24,10 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cache/theine"
 	"vitess.io/vitess/go/mysql/sqlerror"
@@ -147,7 +147,7 @@ type QueryEngine struct {
 	se     *schema.Engine
 
 	// mu protects the following fields.
-	schemaMu sync.Mutex
+	schemaMu deadlock.Mutex
 	epoch    uint32
 	schema   atomic.Pointer[currentSchema]
 

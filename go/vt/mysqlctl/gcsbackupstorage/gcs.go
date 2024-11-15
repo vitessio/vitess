@@ -24,9 +24,9 @@ import (
 	"io"
 	"sort"
 	"strings"
-	"sync"
 
 	"cloud.google.com/go/storage"
+	"github.com/sasha-s/go-deadlock"
 	"github.com/spf13/pflag"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/iterator"
@@ -133,7 +133,7 @@ type GCSBackupStorage struct {
 	// Once this field is set, it must not be written again/unset to nil.
 	_client *storage.Client
 	// mu guards all fields.
-	mu sync.Mutex
+	mu deadlock.Mutex
 }
 
 // ListBackups implements BackupStorage.

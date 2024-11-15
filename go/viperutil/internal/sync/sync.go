@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/sasha-s/go-deadlock"
 	"github.com/spf13/afero"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -41,7 +42,7 @@ import (
 // settings from. The "live" config only updates after blocking all values from
 // reading in order to swap in the most recently-loaded config from the "disk".
 type Viper struct {
-	m    sync.Mutex // prevents races between loadFromDisk and AllSettings
+	m    deadlock.Mutex // prevents races between loadFromDisk and AllSettings
 	disk *viper.Viper
 	live *viper.Viper
 	keys map[string]*sync.RWMutex

@@ -54,6 +54,7 @@ import (
 	"time"
 
 	"github.com/patrickmn/go-cache"
+	"github.com/sasha-s/go-deadlock"
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/protoutil"
@@ -184,11 +185,11 @@ type Throttler struct {
 	metricsHealth     *cache.Cache
 	appCheckedMetrics *cache.Cache
 
-	initMutex           sync.Mutex
-	enableMutex         sync.Mutex
+	initMutex           deadlock.Mutex
+	enableMutex         deadlock.Mutex
 	cancelOpenContext   context.CancelFunc
 	cancelEnableContext context.CancelFunc
-	throttledAppsMutex  sync.Mutex
+	throttledAppsMutex  deadlock.Mutex
 
 	readSelfThrottleMetrics func(context.Context) base.ThrottleMetrics // overwritten by unit test
 }

@@ -21,12 +21,12 @@ import (
 	"context"
 	"fmt"
 	"reflect"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/google/safehtml/template"
+	"github.com/sasha-s/go-deadlock"
 
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/key"
@@ -443,7 +443,7 @@ func TestWatchSrvVSchema(t *testing.T) {
 	rs := NewResilientServer(ctx, ts, counts)
 
 	// mu protects watchValue and watchErr.
-	mu := sync.Mutex{}
+	mu := deadlock.Mutex{}
 	var watchValue *vschemapb.SrvVSchema
 	var watchErr error
 	rs.WatchSrvVSchema(ctx, "test_cell", func(v *vschemapb.SrvVSchema, e error) bool {
@@ -693,7 +693,7 @@ func TestSrvKeyspaceWatcher(t *testing.T) {
 	counts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
 	rs := NewResilientServer(ctx, ts, counts)
 
-	var wmu sync.Mutex
+	var wmu deadlock.Mutex
 	var wseen []watched
 
 	allSeen := func() []watched {

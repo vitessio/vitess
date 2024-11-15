@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/utils"
@@ -400,7 +401,7 @@ func TestWaitForConsistentKeyspaces(t *testing.T) {
 			cancel()
 			kew := KeyspaceEventWatcher{
 				keyspaces: tt.ksMap,
-				mu:        sync.Mutex{},
+				mu:        deadlock.Mutex{},
 				ts:        &fakeTopoServer{},
 			}
 			err := kew.WaitForConsistentKeyspaces(ctx, tt.ksList)
@@ -619,7 +620,7 @@ func TestOnHealthCheck(t *testing.T) {
 	ksName := "ks"
 	shard := "-80"
 	kss := &keyspaceState{
-		mu:       sync.Mutex{},
+		mu:       deadlock.Mutex{},
 		keyspace: ksName,
 		shards:   make(map[string]*shardState),
 	}

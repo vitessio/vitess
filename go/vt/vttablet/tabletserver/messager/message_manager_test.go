@@ -23,11 +23,11 @@ import (
 	"io"
 	"reflect"
 	"runtime"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/sync/semaphore"
 
@@ -829,7 +829,7 @@ type fakeTabletServer struct {
 	postponeCount atomic.Int64
 	purgeCount    atomic.Int64
 
-	mu sync.Mutex
+	mu deadlock.Mutex
 	ch chan string
 }
 
@@ -872,7 +872,7 @@ func (fts *fakeTabletServer) PurgeMessages(ctx context.Context, target *querypb.
 
 type fakeVStreamer struct {
 	streamInvocations atomic.Int64
-	mu                sync.Mutex
+	mu                deadlock.Mutex
 	streamerResponse  [][]*binlogdatapb.VEvent
 	pollerResponse    []*binlogdatapb.VStreamResultsResponse
 }

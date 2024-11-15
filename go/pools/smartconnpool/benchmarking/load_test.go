@@ -29,6 +29,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/stretchr/testify/require"
 	"gonum.org/v1/gonum/floats"
 	"gonum.org/v1/gonum/stat/distuv"
@@ -113,7 +114,7 @@ type Benchmark struct {
 	concurrent  atomic.Int64
 	concurrency []int64
 
-	mu        sync.Mutex
+	mu        deadlock.Mutex
 	waits     []time.Duration
 	connstats []*ConnStats
 }

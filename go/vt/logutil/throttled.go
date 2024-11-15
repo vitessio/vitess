@@ -18,9 +18,9 @@ package logutil
 
 import (
 	"fmt"
-	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -32,7 +32,7 @@ type ThrottledLogger struct {
 	maxInterval time.Duration
 
 	// mu protects the following members
-	mu           sync.Mutex
+	mu           deadlock.Mutex
 	lastlogTime  time.Time
 	skippedCount int
 }

@@ -26,6 +26,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 
@@ -1296,7 +1297,7 @@ func (ts *trafficSwitcher) validate(ctx context.Context) error {
 // checkJournals returns true if at least one journal has been created.
 // If so, it also returns the list of sourceWorkflows that need to be switched.
 func (ts *trafficSwitcher) checkJournals(ctx context.Context) (journalsExist bool, sourceWorkflows []string, err error) {
-	var mu sync.Mutex
+	var mu deadlock.Mutex
 
 	err = ts.ForAllSources(func(source *MigrationSource) error {
 		mu.Lock()
@@ -1442,7 +1443,7 @@ func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[s
 
 	// Now we need to locate the backing sequence table(s) which will
 	// be in another unsharded keyspace.
-	smMu := sync.Mutex{}
+	smMu := deadlock.Mutex{}
 	tableCount := len(sequencesByBackingTable)
 	tablesFound := make(map[string]struct{}) // Used to short circuit the search
 	// Define the function used to search each keyspace.
@@ -1721,7 +1722,7 @@ func (ts *trafficSwitcher) initializeTargetSequences(ctx context.Context, sequen
 		// to get the max value and set the next id for the sequence to
 		// a higher value.
 		shardResults := make([]int64, 0, len(ts.TargetShards()))
-		srMu := sync.Mutex{}
+		srMu := deadlock.Mutex{}
 		ierr := ts.ForAllTargets(func(target *MigrationTarget) error {
 			primary := target.GetPrimary()
 			if primary == nil || primary.GetAlias() == nil {

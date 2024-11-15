@@ -19,8 +19,8 @@ package wrangler
 import (
 	"context"
 	"fmt"
-	"sync"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 
 	"vitess.io/vitess/go/vt/log"
@@ -31,7 +31,7 @@ import (
 )
 
 type VDiffOutput struct {
-	mu        sync.Mutex
+	mu        deadlock.Mutex
 	Request   *tabletmanagerdata.VDiffRequest
 	Responses map[string]*tabletmanagerdata.VDiffResponse
 	Err       error

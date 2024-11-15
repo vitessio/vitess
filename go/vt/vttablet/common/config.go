@@ -22,8 +22,9 @@ import (
 	"maps"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
+
+	"github.com/sasha-s/go-deadlock"
 )
 
 /*
@@ -65,7 +66,7 @@ type VReplicationConfig struct {
 	Overrides map[string]string
 }
 
-var configMutex sync.Mutex
+var configMutex deadlock.Mutex
 
 // DefaultVReplicationConfig has the default values for VReplicationConfig initialized from the vttablet flags
 // when the workflow is initialized.

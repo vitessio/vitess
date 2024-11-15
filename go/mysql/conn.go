@@ -30,6 +30,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/bucketpool"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/sqlerror"
@@ -152,7 +153,7 @@ type Conn struct {
 	PrepareData map[uint32]*PrepareData
 
 	// protects the bufferedWriter and bufferedReader
-	bufMu sync.Mutex
+	bufMu deadlock.Mutex
 
 	// Capabilities is the current set of features this connection
 	// is using.  It is the features that are both supported by
@@ -208,7 +209,7 @@ type Conn struct {
 	keepAliveOn bool
 
 	// mu protects the fields below
-	mu sync.Mutex
+	mu deadlock.Mutex
 	// cancel keep the cancel function for the current executing query.
 	// this is used by `kill [query|connection] ID` command from other connection.
 	cancel context.CancelFunc

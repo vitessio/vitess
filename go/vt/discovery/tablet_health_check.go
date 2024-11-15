@@ -20,10 +20,10 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -49,7 +49,7 @@ type tabletHealthCheck struct {
 	// Tablet is the tablet object that was sent to HealthCheck.AddTablet.
 	Tablet *topodata.Tablet
 	// mutex to protect Conn
-	connMu sync.Mutex
+	connMu deadlock.Mutex
 	// Conn is the connection associated with the tablet.
 	Conn queryservice.QueryService
 	// Target is the current target as returned by the streaming

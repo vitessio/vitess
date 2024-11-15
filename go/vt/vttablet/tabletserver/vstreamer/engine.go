@@ -28,6 +28,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
@@ -66,7 +67,7 @@ type Engine struct {
 	// Close waits for all current streams to end by waiting on wg.
 	wg sync.WaitGroup
 
-	mu              sync.Mutex
+	mu              deadlock.Mutex
 	isOpen          int32 // 0 or 1 in place of atomic.Bool added in go 1.19
 	streamIdx       int
 	streamers       map[int]*uvstreamer

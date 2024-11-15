@@ -19,8 +19,8 @@ package throttler
 import (
 	"fmt"
 	"sort"
-	"sync"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/vt/log"
 
 	throttlerdatapb "vitess.io/vitess/go/vt/proto/throttlerdata"
@@ -62,7 +62,7 @@ type Manager interface {
 // statistics. It implements the "Manager" interface.
 type managerImpl struct {
 	// mu guards all fields in this group.
-	mu sync.Mutex
+	mu deadlock.Mutex
 	// throttlers tracks all running throttlers (by their name).
 	throttlers map[string]Throttler
 }

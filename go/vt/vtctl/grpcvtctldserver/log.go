@@ -17,8 +17,7 @@ limitations under the License.
 package grpcvtctldserver
 
 import (
-	"sync"
-
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/vt/logutil"
 
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
@@ -26,7 +25,7 @@ import (
 
 func eventStreamLogger() (logutil.Logger, func() []*logutilpb.Event) {
 	var (
-		m      sync.Mutex
+		m      deadlock.Mutex
 		events []*logutilpb.Event
 		logger = logutil.NewCallbackLogger(func(e *logutilpb.Event) {
 			m.Lock()

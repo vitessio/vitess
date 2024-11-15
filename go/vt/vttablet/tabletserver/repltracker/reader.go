@@ -19,9 +19,9 @@ package repltracker
 import (
 	"context"
 	"fmt"
-	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/timer"
@@ -53,12 +53,12 @@ type heartbeatReader struct {
 	now           func() time.Time
 	errorLog      *logutil.ThrottledLogger
 
-	runMu  sync.Mutex
+	runMu  deadlock.Mutex
 	isOpen bool
 	pool   *connpool.Pool
 	ticks  *timer.Timer
 
-	lagMu          sync.Mutex
+	lagMu          deadlock.Mutex
 	lastKnownLag   time.Duration
 	lastKnownError error
 }

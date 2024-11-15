@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/dtids"
@@ -627,7 +628,7 @@ func (txc *TxConn) ReadTransaction(ctx context.Context, transactionID string) (*
 
 func (txc *TxConn) UnresolvedTransactions(ctx context.Context, targets []*querypb.Target) ([]*querypb.TransactionMetadata, error) {
 	var tmList []*querypb.TransactionMetadata
-	var mu sync.Mutex
+	var mu deadlock.Mutex
 	err := txc.runTargets(targets, func(target *querypb.Target) error {
 		res, err := txc.tabletGateway.UnresolvedTransactions(ctx, target, 0 /* abandonAgeSeconds */)
 		if err != nil {

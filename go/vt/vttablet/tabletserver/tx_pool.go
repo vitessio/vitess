@@ -19,9 +19,9 @@ package tabletserver
 import (
 	"context"
 	"strings"
-	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/pools/smartconnpool"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/trace"
@@ -70,7 +70,7 @@ type (
 		ticks   *timer.Timer
 		limiter txlimiter.TxLimiter
 
-		logMu   sync.Mutex
+		logMu   deadlock.Mutex
 		lastLog time.Time
 		txStats *servenv.TimingsWrapper
 	}

@@ -24,6 +24,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
@@ -41,7 +42,7 @@ import (
 type Engine struct {
 	isOpen bool
 
-	mu          sync.Mutex // guards controllers
+	mu          deadlock.Mutex // guards controllers
 	controllers map[int64]*controller
 
 	// ctx is the root context for all controllers
@@ -62,7 +63,7 @@ type Engine struct {
 
 	// snapshotMu is used to ensure that only one vdiff snapshot cycle is active at a time,
 	// because we stop/start vreplication workflows during this process
-	snapshotMu sync.Mutex
+	snapshotMu deadlock.Mutex
 
 	// This should only be set when the engine is being used in tests. It then provides
 	// modified behavior for that env, e.g. not starting the retry goroutine. This should

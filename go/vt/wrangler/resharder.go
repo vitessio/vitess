@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/vt/log"
@@ -184,7 +185,7 @@ func (rs *resharder) validateTargets(ctx context.Context) error {
 }
 
 func (rs *resharder) readRefStreams(ctx context.Context) error {
-	var mu sync.Mutex
+	var mu deadlock.Mutex
 	err := rs.forAll(rs.sourceShards, func(source *topo.ShardInfo) error {
 		sourcePrimary := rs.sourcePrimaries[source.ShardName()]
 

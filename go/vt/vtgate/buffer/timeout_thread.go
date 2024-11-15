@@ -19,6 +19,8 @@ package buffer
 import (
 	"sync"
 	"time"
+
+	"github.com/sasha-s/go-deadlock"
 )
 
 // timeoutThread captures the state of the timeout thread.
@@ -36,7 +38,7 @@ type timeoutThread struct {
 
 	// mu guards access to "queueNotEmpty" between this thread and callers of
 	// notifyQueueNotEmpty().
-	mu sync.Mutex
+	mu deadlock.Mutex
 	// queueNotEmpty will be closed to notify the timeout thread when the queue
 	// state changes from empty to non-empty. After it's closed, a new object will
 	// be assigned to this field.

@@ -22,11 +22,11 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
 	"context"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/streamlog"
@@ -87,7 +87,7 @@ type TxSerializer struct {
 	logQueueExceededDryRun       *logutil.ThrottledLogger
 	logGlobalQueueExceededDryRun *logutil.ThrottledLogger
 
-	mu         sync.Mutex
+	mu         deadlock.Mutex
 	queues     map[string]*queue
 	globalSize int
 }

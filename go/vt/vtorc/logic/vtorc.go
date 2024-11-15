@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/patrickmn/go-cache"
+	"github.com/sasha-s/go-deadlock"
 	"github.com/sjmudd/stopwatch"
 
 	"vitess.io/vitess/go/stats"
@@ -47,7 +48,7 @@ const (
 // as discovery process progresses.
 var discoveryQueue *discovery.Queue
 var snapshotDiscoveryKeys chan string
-var snapshotDiscoveryKeysMutex sync.Mutex
+var snapshotDiscoveryKeysMutex deadlock.Mutex
 var hasReceivedSIGTERM int32
 
 var discoveriesCounter = stats.NewCounter("DiscoveriesAttempt", "Number of discoveries attempted")

@@ -20,6 +20,7 @@ import (
 	"context"
 	"sync"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/list"
 )
 
@@ -41,7 +42,7 @@ type waiter[C Connection] struct {
 
 type waitlist[C Connection] struct {
 	nodes sync.Pool
-	mu    sync.Mutex
+	mu    deadlock.Mutex
 	list  list.List[waiter[C]]
 }
 

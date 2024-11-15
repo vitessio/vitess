@@ -18,13 +18,15 @@ package event
 
 import (
 	"sync"
+
+	"github.com/sasha-s/go-deadlock"
 )
 
 // Hooks holds a list of parameter-less functions to call whenever the set is
 // triggered with Fire().
 type Hooks struct {
 	funcs []func()
-	mu    sync.Mutex
+	mu    deadlock.Mutex
 }
 
 // Add appends the given function to the list to be triggered.

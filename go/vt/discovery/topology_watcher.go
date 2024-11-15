@@ -26,6 +26,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	"vitess.io/vitess/go/vt/key"
@@ -77,7 +78,7 @@ type TopologyWatcher struct {
 	wg sync.WaitGroup
 
 	// mu protects all variables below
-	mu sync.Mutex
+	mu deadlock.Mutex
 	// tablets contains a map of alias -> tabletInfo for all known tablets.
 	tablets map[string]*tabletInfo
 	// topoChecksum stores a crc32 of the tablets map and is exported as a metric.

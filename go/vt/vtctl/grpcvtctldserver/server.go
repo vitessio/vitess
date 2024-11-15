@@ -31,6 +31,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/semaphore"
 	"google.golang.org/grpc"
@@ -1818,7 +1819,7 @@ func (s *VtctldServer) GetSchemaMigrations(ctx context.Context, req *vtctldatapb
 	}
 
 	var (
-		m       sync.Mutex
+		m       deadlock.Mutex
 		wg      sync.WaitGroup
 		rec     concurrency.AllErrorRecorder
 		results = map[string]*sqltypes.Result{}
@@ -2316,7 +2317,7 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 	}
 
 	var (
-		m          sync.Mutex
+		m          deadlock.Mutex
 		wg         sync.WaitGroup
 		rec        concurrency.AllErrorRecorder
 		allTablets []*topo.TabletInfo
@@ -2442,7 +2443,7 @@ func (s *VtctldServer) GetUnresolvedTransactions(ctx context.Context, req *vtctl
 	if err != nil {
 		return nil, err
 	}
-	var mu sync.Mutex
+	var mu deadlock.Mutex
 	var transactions []*querypb.TransactionMetadata
 
 	eg, newCtx := errgroup.WithContext(ctx)
@@ -2565,7 +2566,7 @@ func (s *VtctldServer) GetTransactionInfo(ctx context.Context, req *vtctldatapb.
 		Metadata: transaction,
 	}
 	// Create a mutex we use to synchronize the following go routines to read the transaction state from all the shards.
-	mu := sync.Mutex{}
+	mu := deadlock.Mutex{}
 
 	eg, newCtx := errgroup.WithContext(ctx)
 	eg.SetLimit(10)
@@ -3988,7 +3989,7 @@ func (s *VtctldServer) ShardReplicationPositions(ctx context.Context, req *vtctl
 	log.Infof("Gathering tablet replication status for: %v", tabletInfoMap)
 
 	var (
-		m         sync.Mutex
+		m         deadlock.Mutex
 		wg        sync.WaitGroup
 		rec       concurrency.AllErrorRecorder
 		results   = make(map[string]*replicationdatapb.Status, len(tabletInfoMap))
@@ -4524,7 +4525,7 @@ func (s *VtctldServer) Validate(ctx context.Context, req *vtctldatapb.ValidateRe
 	}
 
 	var (
-		m  sync.Mutex
+		m  deadlock.Mutex
 		wg sync.WaitGroup
 	)
 
@@ -4662,7 +4663,7 @@ func (s *VtctldServer) ValidateKeyspace(ctx context.Context, req *vtctldatapb.Va
 	resp.ResultsByShard = make(map[string]*vtctldatapb.ValidateShardResponse, len(shards))
 
 	var (
-		m  sync.Mutex
+		m  deadlock.Mutex
 		wg sync.WaitGroup
 	)
 	for _, shard := range shards {
@@ -4748,7 +4749,7 @@ func (s *VtctldServer) ValidateSchemaKeyspace(ctx context.Context, req *vtctldat
 	var (
 		referenceSchema *tabletmanagerdatapb.SchemaDefinition
 		referenceAlias  *topodatapb.TabletAlias
-		m               sync.Mutex
+		m               deadlock.Mutex
 		wg              sync.WaitGroup
 	)
 
@@ -5060,7 +5061,7 @@ func (s *VtctldServer) ValidateVersionKeyspace(ctx context.Context, req *vtctlda
 		return
 	}
 
-	var validateVersionKeyspaceResponseMutex sync.Mutex
+	var validateVersionKeyspaceResponseMutex deadlock.Mutex
 
 	for _, shard := range shards {
 		shardResp := vtctldatapb.ValidateShardResponse{
@@ -5068,7 +5069,7 @@ func (s *VtctldServer) ValidateVersionKeyspace(ctx context.Context, req *vtctlda
 		}
 
 		var (
-			validateShardResponseMutex sync.Mutex
+			validateShardResponseMutex deadlock.Mutex
 			tabletWaitGroup            sync.WaitGroup
 		)
 
@@ -5089,7 +5090,7 @@ func (s *VtctldServer) ValidateVersionKeyspace(ctx context.Context, req *vtctlda
 			}
 
 			tabletWaitGroup.Add(1)
-			go func(alias *topodatapb.TabletAlias, m *sync.Mutex, ctx context.Context) {
+			go func(alias *topodatapb.TabletAlias, m *deadlock.Mutex, ctx context.Context) {
 				defer tabletWaitGroup.Done()
 				replicaVersion, err := s.GetVersion(ctx, &vtctldatapb.GetVersionRequest{TabletAlias: alias})
 				if err != nil {
@@ -5198,7 +5199,7 @@ func (s *VtctldServer) ValidateVSchema(ctx context.Context, req *vtctldatapb.Val
 
 	var (
 		wg sync.WaitGroup
-		m  sync.Mutex
+		m  deadlock.Mutex
 	)
 
 	wg.Add(len(shards))
@@ -5533,7 +5534,7 @@ var getVersionFromTabletDebugVars = func(tabletAddr string) (string, error) {
 }
 
 var (
-	versionFuncMu        sync.Mutex
+	versionFuncMu        deadlock.Mutex
 	getVersionFromTablet = getVersionFromTabletDebugVars
 )
 

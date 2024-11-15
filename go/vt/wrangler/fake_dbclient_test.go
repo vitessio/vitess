@@ -20,9 +20,9 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
-	"sync"
 	"testing"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/mysql/capabilities"
@@ -65,7 +65,7 @@ func (dbrs *dbResults) exhausted() bool {
 
 // fakeDBClient fakes a binlog_player.DBClient.
 type fakeDBClient struct {
-	mu         sync.Mutex
+	mu         deadlock.Mutex
 	name       string
 	queries    map[string]*dbResults
 	queriesRE  map[string]*dbResults

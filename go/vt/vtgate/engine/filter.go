@@ -18,8 +18,8 @@ package engine
 
 import (
 	"context"
-	"sync"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -79,7 +79,7 @@ func (f *Filter) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[s
 
 // TryStreamExecute satisfies the Primitive interface.
 func (f *Filter) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	var mu sync.Mutex
+	var mu deadlock.Mutex
 
 	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
 	filter := func(results *sqltypes.Result) error {

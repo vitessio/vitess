@@ -19,9 +19,9 @@ package srvtopo
 import (
 	"context"
 	"fmt"
-	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
 )
@@ -31,7 +31,7 @@ type queryEntry struct {
 	key fmt.Stringer
 
 	// the mutex protects any access to this structure (read or write)
-	mutex sync.Mutex
+	mutex deadlock.Mutex
 
 	// refreshingChan is used to synchronize requests and avoid hammering
 	// the topo server
@@ -50,7 +50,7 @@ type resilientQuery struct {
 	cacheRefreshInterval time.Duration
 	cacheTTL             time.Duration
 
-	mutex   sync.Mutex
+	mutex   deadlock.Mutex
 	entries map[string]*queryEntry
 }
 

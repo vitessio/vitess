@@ -24,8 +24,8 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"net"
-	"sync"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -571,7 +571,7 @@ func (n *mysqlCachingSha2AuthMethod) HandleAuthPluginData(c *Conn, user string, 
 var authServers = make(map[string]AuthServer)
 
 // mu is used to lock access to authServers
-var mu sync.Mutex
+var mu deadlock.Mutex
 
 // RegisterAuthServer registers an implementations of AuthServer.
 func RegisterAuthServer(name string, authServer AuthServer) {

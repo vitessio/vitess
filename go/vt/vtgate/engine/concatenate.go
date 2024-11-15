@@ -21,6 +21,7 @@ import (
 	"slices"
 	"sync"
 
+	"github.com/sasha-s/go-deadlock"
 	"golang.org/x/sync/errgroup"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -247,8 +248,8 @@ func (c *Concatenate) parallelStreamExec(inCtx context.Context, vcursor VCursor,
 
 	// Mutexes for dealing with concurrent access to shared state.
 	var (
-		muCallback    sync.Mutex                                 // Protects callback
-		muFields      sync.Mutex                                 // Protects field state
+		muCallback    deadlock.Mutex                             // Protects callback
+		muFields      deadlock.Mutex                             // Protects field state
 		condFields    = sync.NewCond(&muFields)                  // Condition var for field arrival
 		wg            errgroup.Group                             // Wait group for all streaming goroutines
 		rest          = make([]*sqltypes.Result, len(c.Sources)) // Collects first result from each source to derive fields
@@ -356,7 +357,7 @@ func (c *Concatenate) sequentialStreamExec(ctx context.Context, vcursor VCursor,
 	// all the below fields ensure that the fields are sent only once.
 	results := make([][]*sqltypes.Result, len(c.Sources))
 
-	var mu sync.Mutex
+	var mu deadlock.Mutex
 	for idx, source := range c.Sources {
 		err := vcursor.StreamExecutePrimitive(ctx, source, bindVars, true, func(resultChunk *sqltypes.Result) error {
 			// check if context has expired.

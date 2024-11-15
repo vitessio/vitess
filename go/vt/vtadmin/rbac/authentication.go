@@ -22,9 +22,9 @@ import (
 	"fmt"
 	"net/http"
 	"plugin"
-	"sync"
 
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
+	"github.com/sasha-s/go-deadlock"
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -124,7 +124,7 @@ var (
 	// specifies an authenticator name that was not registered.
 	ErrUnregisteredAuthenticationImpl = errors.New("unregistered Authenticator implementation")
 	authenticators                    = map[string]func() Authenticator{}
-	authenticatorsM                   sync.Mutex
+	authenticatorsM                   deadlock.Mutex
 )
 
 // RegisterAuthenticator registers an authenticator implementation by name. It

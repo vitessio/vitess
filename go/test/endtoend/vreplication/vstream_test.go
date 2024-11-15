@@ -21,10 +21,10 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/log"
@@ -80,7 +80,7 @@ func testVStreamWithFailover(t *testing.T, failover bool) {
 	done := false
 
 	// don't insert while PRS is going on
-	var insertMu sync.Mutex
+	var insertMu deadlock.Mutex
 	stopInserting := false
 	id := 0
 

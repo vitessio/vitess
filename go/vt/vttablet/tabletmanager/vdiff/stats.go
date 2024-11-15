@@ -18,8 +18,8 @@ package vdiff
 
 import (
 	"fmt"
-	"sync"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/stats"
 )
 
@@ -35,7 +35,7 @@ func init() {
 // vdiffStats exports the stats for Engine. It's a separate structure to
 // prevent potential deadlocks with the mutex in Engine.
 type vdiffStats struct {
-	mu          sync.Mutex
+	mu          deadlock.Mutex
 	controllers map[int64]*controller
 
 	Count               *stats.Gauge

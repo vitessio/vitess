@@ -25,6 +25,7 @@ import (
 	"sync"
 	"text/template"
 
+	"github.com/sasha-s/go-deadlock"
 	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/encoding/prototext"
@@ -427,7 +428,7 @@ func (sm *StreamMigrator) readTabletStreams(ctx context.Context, ti *topo.Tablet
 // Note: this should be removed along with the vtctl client code / wrangler.
 func (sm *StreamMigrator) legacyReadSourceStreams(ctx context.Context, cancelMigrate bool) (map[string][]*VReplicationStream, error) {
 	var (
-		mu      sync.Mutex
+		mu      deadlock.Mutex
 		streams = make(map[string][]*VReplicationStream)
 	)
 
@@ -533,7 +534,7 @@ func (sm *StreamMigrator) legacyReadSourceStreams(ctx context.Context, cancelMig
 
 func (sm *StreamMigrator) readSourceStreams(ctx context.Context, cancelMigrate bool) (map[string][]*VReplicationStream, error) {
 	var (
-		mu      sync.Mutex
+		mu      deadlock.Mutex
 		streams = make(map[string][]*VReplicationStream)
 	)
 
@@ -643,7 +644,7 @@ func (sm *StreamMigrator) readSourceStreams(ctx context.Context, cancelMigrate b
 // Note: this should be removed along with the vtctl client code / wrangler.
 func (sm *StreamMigrator) legacyStopSourceStreams(ctx context.Context) error {
 	var (
-		mu             sync.Mutex
+		mu             deadlock.Mutex
 		stoppedStreams = make(map[string][]*VReplicationStream)
 	)
 
@@ -681,7 +682,7 @@ func (sm *StreamMigrator) legacyStopSourceStreams(ctx context.Context) error {
 
 func (sm *StreamMigrator) stopSourceStreams(ctx context.Context) error {
 	var (
-		mu             sync.Mutex
+		mu             deadlock.Mutex
 		stoppedStreams = make(map[string][]*VReplicationStream)
 	)
 
@@ -852,7 +853,7 @@ func (sm *StreamMigrator) syncSourceStreams(ctx context.Context) (map[string]rep
 // Note: this should be removed along with the vtctl client code / wrangler.
 func (sm *StreamMigrator) legacyVerifyStreamPositions(ctx context.Context, stopPositions map[string]replication.Position) ([]string, error) {
 	var (
-		mu             sync.Mutex
+		mu             deadlock.Mutex
 		stoppedStreams = make(map[string][]*VReplicationStream)
 	)
 
@@ -915,7 +916,7 @@ func (sm *StreamMigrator) legacyVerifyStreamPositions(ctx context.Context, stopP
 
 func (sm *StreamMigrator) verifyStreamPositions(ctx context.Context, stopPositions map[string]replication.Position) ([]string, error) {
 	var (
-		mu             sync.Mutex
+		mu             deadlock.Mutex
 		stoppedStreams = make(map[string][]*VReplicationStream)
 	)
 

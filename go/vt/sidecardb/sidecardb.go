@@ -27,6 +27,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/history"
 	"vitess.io/vitess/go/mysql/collations"
@@ -84,7 +85,7 @@ var (
 	ddlCount        *stats.Counter
 	ddlErrorCount   *stats.Counter
 	ddlErrorHistory *history.History
-	mu              sync.Mutex
+	mu              deadlock.Mutex
 )
 
 type sidecarTable struct {

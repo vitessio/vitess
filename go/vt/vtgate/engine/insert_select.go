@@ -21,9 +21,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
-	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -399,7 +399,7 @@ func (ins *InsertSelect) execSelectStreaming(
 	bindVars map[string]*querypb.BindVariable,
 	callback func(irr insertRowsResult) error,
 ) error {
-	var mu sync.Mutex
+	var mu deadlock.Mutex
 	return vcursor.StreamExecutePrimitiveStandalone(ctx, ins.Input, bindVars, false, func(result *sqltypes.Result) error {
 		if len(result.Rows) == 0 {
 			return nil

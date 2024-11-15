@@ -21,10 +21,10 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
@@ -223,7 +223,7 @@ type testMaterializerTMClient struct {
 	sourceShards  []string
 	tableSettings []*vtctldatapb.TableMaterializeSettings
 
-	mu                                 sync.Mutex
+	mu                                 deadlock.Mutex
 	vrQueries                          map[int][]*queryResult
 	fetchAsAllPrivsQueries             map[int]map[string]*queryResult
 	createVReplicationWorkflowRequests map[uint32]*createVReplicationWorkflowRequestResponse

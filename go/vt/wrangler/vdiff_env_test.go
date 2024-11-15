@@ -20,9 +20,9 @@ import (
 	"context"
 	"fmt"
 	"math/rand/v2"
-	"sync"
 	"testing"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/grpcclient"
@@ -62,7 +62,7 @@ type testVDiffEnv struct {
 	tabletType topodatapb.TabletType
 	tmc        *testVDiffTMClient
 
-	mu      sync.Mutex
+	mu      deadlock.Mutex
 	tablets map[int]*testVDiffTablet
 }
 

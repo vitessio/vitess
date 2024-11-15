@@ -47,7 +47,6 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -58,6 +57,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/proto/query"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/log"
@@ -80,7 +80,7 @@ var testState = &TestState{}
 
 var positions map[string]string
 var allEvents []*binlogdatapb.VEvent
-var muAllEvents sync.Mutex
+var muAllEvents deadlock.Mutex
 var callbacks map[string]func()
 
 func TestVStreamCopyFilterValidations(t *testing.T) {

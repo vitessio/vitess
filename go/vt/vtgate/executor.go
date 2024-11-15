@@ -28,6 +28,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/acl"
@@ -113,7 +114,7 @@ type Executor struct {
 	txConn      *TxConn
 	pv          plancontext.PlannerVersion
 
-	mu           sync.Mutex
+	mu           deadlock.Mutex
 	vschema      *vindexes.VSchema
 	streamSize   int
 	vschemaStats *VSchemaStats
@@ -261,7 +262,7 @@ func (e *Executor) Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConn
 }
 
 type streaminResultReceiver struct {
-	mu           sync.Mutex
+	mu           deadlock.Mutex
 	stmtType     sqlparser.StatementType
 	rowsAffected uint64
 	rowsReturned int
@@ -302,7 +303,7 @@ func (e *Executor) StreamExecute(
 
 	resultHandler := func(ctx context.Context, plan *engine.Plan, vc *vcursorImpl, bindVars map[string]*querypb.BindVariable, execStart time.Time) error {
 		var seenResults atomic.Bool
-		var resultMu sync.Mutex
+		var resultMu deadlock.Mutex
 		result := &sqltypes.Result{}
 		if canReturnRows(plan.Type) {
 			srr.callback = func(qr *sqltypes.Result) error {

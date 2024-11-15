@@ -22,9 +22,9 @@ import (
 	"fmt"
 	"slices"
 	"strings"
-	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
@@ -160,7 +160,7 @@ func (rs *resharder) validateTargets(ctx context.Context) error {
 }
 
 func (rs *resharder) readRefStreams(ctx context.Context) error {
-	var mu sync.Mutex
+	var mu deadlock.Mutex
 	err := forAllShards(rs.sourceShards, func(source *topo.ShardInfo) error {
 		sourcePrimary := rs.sourcePrimaries[source.ShardName()]
 

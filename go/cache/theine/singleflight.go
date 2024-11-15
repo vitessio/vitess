@@ -30,6 +30,8 @@ import (
 	"runtime/debug"
 	"sync"
 	"sync/atomic"
+
+	"github.com/sasha-s/go-deadlock"
 )
 
 // errGoexit indicates the runtime.Goexit was called in
@@ -80,7 +82,7 @@ type call[V any] struct {
 // which units of work can be executed with duplicate suppression.
 type Group[K comparable, V any] struct {
 	m        map[K]*call[V] // lazily initialized
-	mu       sync.Mutex     // protects m
+	mu       deadlock.Mutex // protects m
 	callPool sync.Pool
 }
 

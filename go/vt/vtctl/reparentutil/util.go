@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 
@@ -81,7 +82,7 @@ func ElectNewPrimary(
 
 	var (
 		// mutex to secure the next two fields from concurrent access
-		mu sync.Mutex
+		mu deadlock.Mutex
 		// tablets that are possible candidates to be the new primary and their positions
 		validTablets         []*topodatapb.Tablet
 		tabletPositions      []replication.Position

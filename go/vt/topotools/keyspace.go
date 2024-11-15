@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
@@ -58,7 +59,7 @@ func RefreshTabletsByShard(ctx context.Context, ts *topo.Server, tmc tmclient.Ta
 
 	// Any errors from this point onward are ignored.
 	var (
-		m              sync.Mutex
+		m              deadlock.Mutex
 		wg             sync.WaitGroup
 		refreshTimeout = 60 * time.Second
 	)

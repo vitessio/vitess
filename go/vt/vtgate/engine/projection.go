@@ -20,6 +20,7 @@ import (
 	"context"
 	"sync"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
@@ -90,7 +91,7 @@ func (p *Projection) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
 	var once sync.Once
 	var fields []*querypb.Field
-	var mu sync.Mutex
+	var mu deadlock.Mutex
 	return vcursor.StreamExecutePrimitive(ctx, p.Input, bindVars, wantfields, func(qr *sqltypes.Result) error {
 		var err error
 		mu.Lock()

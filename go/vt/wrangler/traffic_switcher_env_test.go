@@ -22,10 +22,10 @@ import (
 	"math/rand/v2"
 	"strconv"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/semaphore"
 
@@ -90,7 +90,7 @@ type testMigraterEnv struct {
 	sourceKeyRanges     []*topodatapb.KeyRange
 	targetKeyRanges     []*topodatapb.KeyRange
 	tmeDB               *fakesqldb.DB
-	mu                  sync.Mutex
+	mu                  deadlock.Mutex
 }
 
 // testShardMigraterEnv has some convenience functions for adding expected queries.

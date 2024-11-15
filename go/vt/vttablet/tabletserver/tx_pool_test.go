@@ -19,7 +19,6 @@ package tabletserver
 import (
 	"context"
 	"fmt"
-	"sync"
 	"testing"
 	"time"
 
@@ -31,6 +30,7 @@ import (
 
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
@@ -816,7 +816,7 @@ type fakeLimiterEntry struct {
 
 type fakeLimiter struct {
 	actions []fakeLimiterEntry
-	mu      sync.Mutex
+	mu      deadlock.Mutex
 }
 
 func (fl *fakeLimiter) Get(immediate *querypb.VTGateCallerID, effective *vtrpcpb.CallerID) bool {

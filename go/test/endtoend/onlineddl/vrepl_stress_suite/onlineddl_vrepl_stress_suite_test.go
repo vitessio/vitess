@@ -40,6 +40,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -84,7 +85,7 @@ var (
 	cell                  = "zone1"
 	shards                []cluster.Shard
 	opOrder               int64
-	opOrderMutex          sync.Mutex
+	opOrderMutex          deadlock.Mutex
 	schemaChangeDirectory = ""
 	tableName             = "stress_test"
 	afterTableName        = "stress_test_after"

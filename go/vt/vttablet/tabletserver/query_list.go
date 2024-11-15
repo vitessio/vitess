@@ -19,10 +19,10 @@ package tabletserver
 import (
 	"context"
 	"sort"
-	"sync"
 	"time"
 
 	"github.com/google/safehtml"
+	"github.com/sasha-s/go-deadlock"
 
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/callinfo"
@@ -55,7 +55,7 @@ func NewQueryDetail(ctx context.Context, conn killable) *QueryDetail {
 type QueryList struct {
 	name string
 
-	mu sync.Mutex
+	mu deadlock.Mutex
 	// on reconnect connection id will get reused by a different connection.
 	// so have to maintain a list to compare with the actual connection.
 	// and remove appropriately.

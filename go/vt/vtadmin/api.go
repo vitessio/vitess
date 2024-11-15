@@ -33,6 +33,7 @@ import (
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"github.com/patrickmn/go-cache"
+	"github.com/sasha-s/go-deadlock"
 
 	vreplcommon "vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/common"
 	vdiffcmd "vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/vdiff"
@@ -78,7 +79,7 @@ import (
 type API struct {
 	vtadminpb.UnimplementedVTAdminServer
 
-	clusterMu    sync.Mutex // guards `clusters` and `clusterMap`
+	clusterMu    deadlock.Mutex // guards `clusters` and `clusterMap`
 	clusters     []*cluster.Cluster
 	clusterMap   map[string]*cluster.Cluster
 	clusterCache *cache.Cache
@@ -91,7 +92,7 @@ type API struct {
 
 	// vtexplain is now global again due to stat exporters in the tablet layer
 	// we're not super concerned because we will be deleting vtexplain Soon(TM).
-	vtexplainLock sync.Mutex
+	vtexplainLock deadlock.Mutex
 
 	env *vtenv.Environment
 }
@@ -702,7 +703,7 @@ func (api *API) FindSchema(ctx context.Context, req *vtadminpb.FindSchemaRequest
 	clusters, clusterIDs := api.getClustersForRequest(req.ClusterIds)
 
 	var (
-		m       sync.Mutex
+		m       deadlock.Mutex
 		wg      sync.WaitGroup
 		rec     concurrency.AllErrorRecorder
 		results []*vtadminpb.Schema
@@ -769,7 +770,7 @@ func (api *API) GetBackups(ctx context.Context, req *vtadminpb.GetBackupsRequest
 	clusters, _ := api.getClustersForRequest(req.ClusterIds)
 
 	var (
-		m       sync.Mutex
+		m       deadlock.Mutex
 		wg      sync.WaitGroup
 		rec     concurrency.AllErrorRecorder
 		backups []*vtadminpb.ClusterBackup
@@ -821,7 +822,7 @@ func (api *API) GetCellInfos(ctx context.Context, req *vtadminpb.GetCellInfosReq
 	clusters, _ := api.getClustersForRequest(req.ClusterIds)
 
 	var (
-		m         sync.Mutex
+		m         deadlock.Mutex
 		wg        sync.WaitGroup
 		rec       concurrency.AllErrorRecorder
 		cellInfos []*vtadminpb.ClusterCellInfo
@@ -866,7 +867,7 @@ func (api *API) GetCellsAliases(ctx context.Context, req *vtadminpb.GetCellsAlia
 	clusters, _ := api.getClustersForRequest(req.ClusterIds)
 
 	var (
-		m       sync.Mutex
+		m       deadlock.Mutex
 		wg      sync.WaitGroup
 		rec     concurrency.AllErrorRecorder
 		aliases []*vtadminpb.ClusterCellsAliases
@@ -958,7 +959,7 @@ func (api *API) GetGates(ctx context.Context, req *vtadminpb.GetGatesRequest) (*
 		gates []*vtadminpb.VTGate
 		wg    sync.WaitGroup
 		er    concurrency.AllErrorRecorder
-		m     sync.Mutex
+		m     deadlock.Mutex
 	)
 
 	for _, c := range clusters {
@@ -1023,7 +1024,7 @@ func (api *API) GetKeyspaces(ctx context.Context, req *vtadminpb.GetKeyspacesReq
 		keyspaces []*vtadminpb.Keyspace
 		wg        sync.WaitGroup
 		er        concurrency.AllErrorRecorder
-		m         sync.Mutex
+		m         deadlock.Mutex
 	)
 
 	for _, c := range clusters {
@@ -1109,7 +1110,7 @@ func (api *API) GetSchemas(ctx context.Context, req *vtadminpb.GetSchemasRequest
 		schemas []*vtadminpb.Schema
 		wg      sync.WaitGroup
 		er      concurrency.AllErrorRecorder
-		m       sync.Mutex
+		m       deadlock.Mutex
 	)
 
 	for _, c := range clusters {
@@ -1168,7 +1169,7 @@ func (api *API) GetSchemaMigrations(ctx context.Context, req *vtadminpb.GetSchem
 	clusters, _ := api.getClustersForRequest(clusterIDs)
 
 	var (
-		m       sync.Mutex
+		m       deadlock.Mutex
 		wg      sync.WaitGroup
 		rec     concurrency.AllErrorRecorder
 		results = make([]*vtadminpb.SchemaMigration, 0, len(req.ClusterRequests))
@@ -1267,7 +1268,7 @@ func (api *API) GetShardReplicationPositions(ctx context.Context, req *vtadminpb
 	clusters, _ := api.getClustersForRequest(req.ClusterIds)
 
 	var (
-		m         sync.Mutex
+		m         deadlock.Mutex
 		wg        sync.WaitGroup
 		rec       concurrency.AllErrorRecorder
 		positions []*vtadminpb.ClusterShardReplicationPosition
@@ -1337,7 +1338,7 @@ func (api *API) GetSrvKeyspaces(ctx context.Context, req *vtadminpb.GetSrvKeyspa
 		sks = make(map[string]*vtctldatapb.GetSrvKeyspacesResponse)
 		wg  sync.WaitGroup
 		er  concurrency.AllErrorRecorder
-		m   sync.Mutex
+		m   deadlock.Mutex
 	)
 
 	for _, c := range clusters {
@@ -1410,7 +1411,7 @@ func (api *API) GetSrvVSchemas(ctx context.Context, req *vtadminpb.GetSrvVSchema
 		svs []*vtadminpb.SrvVSchema
 		wg  sync.WaitGroup
 		er  concurrency.AllErrorRecorder
-		m   sync.Mutex
+		m   deadlock.Mutex
 	)
 
 	for _, c := range clusters {
@@ -1467,7 +1468,7 @@ func (api *API) GetTablets(ctx context.Context, req *vtadminpb.GetTabletsRequest
 		tablets []*vtadminpb.Tablet
 		wg      sync.WaitGroup
 		er      concurrency.AllErrorRecorder
-		m       sync.Mutex
+		m       deadlock.Mutex
 	)
 
 	for _, c := range clusters {
@@ -1590,7 +1591,7 @@ func (api *API) GetVSchemas(ctx context.Context, req *vtadminpb.GetVSchemasReque
 	clusters, _ := api.getClustersForRequest(req.ClusterIds)
 
 	var (
-		m        sync.Mutex
+		m        deadlock.Mutex
 		wg       sync.WaitGroup
 		rec      concurrency.AllErrorRecorder
 		vschemas []*vtadminpb.VSchema
@@ -1632,7 +1633,7 @@ func (api *API) GetVSchemas(ctx context.Context, req *vtadminpb.GetVSchemasReque
 			getKeyspacesSpan.Finish()
 
 			var (
-				clusterM        sync.Mutex
+				clusterM        deadlock.Mutex
 				clusterWG       sync.WaitGroup
 				clusterRec      concurrency.AllErrorRecorder
 				clusterVSchemas = make([]*vtadminpb.VSchema, 0, len(keyspaces.Keyspaces))
@@ -1781,7 +1782,7 @@ func (api *API) GetVtctlds(ctx context.Context, req *vtadminpb.GetVtctldsRequest
 	clusters, _ := api.getClustersForRequest(req.ClusterIds)
 
 	var (
-		m       sync.Mutex
+		m       deadlock.Mutex
 		wg      sync.WaitGroup
 		rec     concurrency.AllErrorRecorder
 		vtctlds []*vtadminpb.Vtctld
@@ -1936,7 +1937,7 @@ func (api *API) GetWorkflows(ctx context.Context, req *vtadminpb.GetWorkflowsReq
 	clusters, _ := api.getClustersForRequest(req.ClusterIds)
 
 	var (
-		m       sync.Mutex
+		m       deadlock.Mutex
 		wg      sync.WaitGroup
 		rec     concurrency.AllErrorRecorder
 		results = map[string]*vtadminpb.ClusterWorkflows{}
@@ -2200,7 +2201,7 @@ func (api *API) ReloadSchemas(ctx context.Context, req *vtadminpb.ReloadSchemasR
 	clusters, _ := api.getClustersForRequest(req.ClusterIds)
 
 	var (
-		m    sync.Mutex
+		m    deadlock.Mutex
 		wg   sync.WaitGroup
 		rec  concurrency.AllErrorRecorder
 		resp vtadminpb.ReloadSchemasResponse
@@ -2871,7 +2872,7 @@ func (api *API) getTabletForResourceAndAction(
 	clusters, ids := api.getClustersForRequest(clusterIDs)
 
 	var (
-		m   sync.Mutex
+		m   deadlock.Mutex
 		wg  sync.WaitGroup
 		rec concurrency.AllErrorRecorder
 

@@ -21,10 +21,10 @@ package sandboxconn
 import (
 	"context"
 	"fmt"
-	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
@@ -83,7 +83,7 @@ type SandboxConn struct {
 	GetSchemaCount              atomic.Int64
 
 	queriesRequireLocking bool
-	queriesMu             sync.Mutex
+	queriesMu             deadlock.Mutex
 	// Queries stores the non-batch requests received.
 	Queries []*querypb.BoundQuery
 
@@ -119,11 +119,11 @@ type SandboxConn struct {
 	// reserve id generator
 	ReserveID atomic.Int64
 
-	mapMu     sync.Mutex // protects the map txIDToRID
+	mapMu     deadlock.Mutex // protects the map txIDToRID
 	txIDToRID map[int64]int64
 
-	sExecMu sync.Mutex
-	execMu  sync.Mutex
+	sExecMu deadlock.Mutex
+	execMu  deadlock.Mutex
 
 	// this error will only happen once
 	EphemeralShardErr error
@@ -182,7 +182,7 @@ func (sbc *SandboxConn) ResetCounter() {
 // RequireQueriesLocking sets the sandboxconn to require locking the access of Queries field.
 func (sbc *SandboxConn) RequireQueriesLocking() {
 	sbc.queriesRequireLocking = true
-	sbc.queriesMu = sync.Mutex{}
+	sbc.queriesMu = deadlock.Mutex{}
 }
 
 // GetQueries gets the Queries from sandboxconn.

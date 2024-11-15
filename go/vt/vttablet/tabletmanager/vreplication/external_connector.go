@@ -18,8 +18,8 @@ package vreplication
 
 import (
 	"context"
-	"sync"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/grpcclient"
@@ -62,7 +62,7 @@ type VStreamerClient interface {
 
 type externalConnector struct {
 	env        *vtenv.Environment
-	mu         sync.Mutex
+	mu         deadlock.Mutex
 	dbconfigs  map[string]*dbconfigs.DBConfigs
 	connectors map[string]*mysqlConnector
 }

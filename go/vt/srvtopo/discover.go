@@ -20,6 +20,7 @@ import (
 	"context"
 	"sync"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
@@ -43,7 +44,7 @@ func FindAllTargetsAndKeyspaces(ctx context.Context, ts Server, cell string, key
 
 	var targets []*querypb.Target
 	var wg sync.WaitGroup
-	var mu sync.Mutex
+	var mu deadlock.Mutex
 	var errRecorder concurrency.AllErrorRecorder
 	for _, ksName := range keyspaces {
 		wg.Add(1)

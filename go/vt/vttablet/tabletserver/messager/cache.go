@@ -18,8 +18,8 @@ package messager
 
 import (
 	"container/heap"
-	"sync"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -81,7 +81,7 @@ func (mh *messageHeap) Pop() any {
 // are marked as defunct in the cache, and are eventually
 // discarded when popped.
 type cache struct {
-	mu   sync.Mutex
+	mu   deadlock.Mutex
 	size int
 
 	sendQueue messageHeap

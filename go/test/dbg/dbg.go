@@ -32,6 +32,7 @@ import (
 
 	"github.com/kr/pretty"
 	"github.com/kr/text"
+	"github.com/sasha-s/go-deadlock"
 )
 
 type params struct {
@@ -76,7 +77,7 @@ type file struct {
 }
 
 type cache struct {
-	mu     sync.Mutex
+	mu     deadlock.Mutex
 	parsed map[string]*file
 	fset   *token.FileSet
 }

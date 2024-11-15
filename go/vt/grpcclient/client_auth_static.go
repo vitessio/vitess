@@ -21,9 +21,9 @@ import (
 	"encoding/json"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 
+	"github.com/sasha-s/go-deadlock"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
@@ -38,7 +38,7 @@ var (
 	clientCreds        *StaticAuthClientCreds
 	clientCredsCancel  context.CancelFunc
 	clientCredsErr     error
-	clientCredsMu      sync.Mutex
+	clientCredsMu      deadlock.Mutex
 	clientCredsSigChan chan os.Signal
 )
 

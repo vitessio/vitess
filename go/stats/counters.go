@@ -20,13 +20,14 @@ import (
 	"bytes"
 	"fmt"
 	"strings"
-	"sync"
+
+	"github.com/sasha-s/go-deadlock"
 )
 
 // counters is similar to expvar.Map, except that it doesn't allow floats.
 // It is used to build CountersWithSingleLabel and GaugesWithSingleLabel.
 type counters struct {
-	mu     sync.Mutex
+	mu     deadlock.Mutex
 	counts map[string]int64
 
 	help string

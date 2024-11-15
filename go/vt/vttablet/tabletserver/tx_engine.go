@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/pools/smartconnpool"
 	"vitess.io/vitess/go/timer"
@@ -69,7 +70,7 @@ type TxEngine struct {
 	env tabletenv.Env
 
 	// stateLock is to protect state and beginRequests changes.
-	stateLock sync.Mutex
+	stateLock deadlock.Mutex
 	state     txEngineState
 
 	// beginRequests is used to make sure that we do not make a state

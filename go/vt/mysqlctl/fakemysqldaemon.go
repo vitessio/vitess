@@ -23,10 +23,10 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/mysql/replication"
@@ -44,7 +44,7 @@ import (
 // FakeMysqlDaemon implements MysqlDaemon and allows the user to fake
 // everything.
 type FakeMysqlDaemon struct {
-	mu sync.Mutex
+	mu deadlock.Mutex
 	// db is the fake SQL DB we may use for some queries.
 	db *fakesqldb.DB
 

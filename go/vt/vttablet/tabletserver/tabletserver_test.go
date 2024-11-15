@@ -41,6 +41,7 @@ import (
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/test/utils"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/stretchr/testify/require"
@@ -1747,7 +1748,7 @@ func TestQueryAsString(t *testing.T) {
 }
 
 type testLogger struct {
-	logsMu sync.Mutex
+	logsMu deadlock.Mutex
 	logs   []string
 
 	savedInfof  func(format string, args ...any)

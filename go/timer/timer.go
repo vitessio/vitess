@@ -18,9 +18,10 @@ limitations under the License.
 package timer
 
 import (
-	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/sasha-s/go-deadlock"
 )
 
 // Out-of-band messages
@@ -58,7 +59,7 @@ type Timer struct {
 	interval atomic.Int64
 
 	// state management
-	mu      sync.Mutex
+	mu      deadlock.Mutex
 	running atomic.Bool
 
 	// msg is used for out-of-band messages

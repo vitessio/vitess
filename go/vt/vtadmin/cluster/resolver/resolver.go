@@ -33,6 +33,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/spf13/pflag"
 	grpcbackoff "google.golang.org/grpc/backoff"
 	grpcresolver "google.golang.org/grpc/resolver"
@@ -52,7 +53,7 @@ type builder struct {
 	opts   Options
 
 	// for debug.Debuggable
-	m         sync.Mutex
+	m         deadlock.Mutex
 	resolvers []*resolver
 }
 
@@ -294,7 +295,7 @@ type resolver struct {
 	// for debug.Debuggable
 	// TODO: consider proper exported stats - histograms for timings, error rates, etc.
 
-	m                sync.Mutex
+	m                deadlock.Mutex
 	createdAt        time.Time
 	lastResolvedAt   time.Time
 	lastResolveError error

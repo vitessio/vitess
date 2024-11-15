@@ -20,11 +20,11 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
@@ -47,7 +47,7 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-var mu sync.Mutex
+var mu deadlock.Mutex
 
 func TestVStreamSkew(t *testing.T) {
 	stream := func(conn *sandboxconn.SandboxConn, keyspace, shard string, count, idx int64) {
@@ -1256,7 +1256,7 @@ func TestVStreamIdleHeartbeat(t *testing.T) {
 	}
 	for _, tcase := range testcases {
 		t.Run(tcase.name, func(t *testing.T) {
-			var mu sync.Mutex
+			var mu deadlock.Mutex
 			var heartbeatCount int
 			ctx, cancel := context.WithCancel(ctx)
 			go func() {

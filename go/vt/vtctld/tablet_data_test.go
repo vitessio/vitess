@@ -19,10 +19,10 @@ package vtctld
 import (
 	"context"
 	"io"
-	"sync"
 	"testing"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/logutil"
@@ -44,7 +44,7 @@ type streamHealthTabletServer struct {
 	t *testing.T
 
 	// streamHealthMutex protects all the following fields
-	streamHealthMutex sync.Mutex
+	streamHealthMutex deadlock.Mutex
 	streamHealthIndex int
 	streamHealthMap   map[int]chan<- *querypb.StreamHealthResponse
 }

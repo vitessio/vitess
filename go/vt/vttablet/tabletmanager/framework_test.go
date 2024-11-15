@@ -22,9 +22,9 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"sync"
 	"testing"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
@@ -77,7 +77,7 @@ func init() {
 }
 
 type testEnv struct {
-	mu        sync.Mutex
+	mu        deadlock.Mutex
 	ctx       context.Context
 	ts        *topo.Server
 	cells     []string
@@ -394,7 +394,7 @@ type fakeTMClient struct {
 	tabletSchemas  map[int]*tabletmanagerdatapb.SchemaDefinition
 	vreQueries     map[int]map[string]*querypb.QueryResult
 
-	mu sync.Mutex
+	mu deadlock.Mutex
 	// Keep track of how many times GetSchema is called per tablet.
 	getSchemaCounts map[string]int
 	// Used to confirm the number of times WorkflowDelete was called.

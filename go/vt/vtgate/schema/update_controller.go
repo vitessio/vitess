@@ -17,9 +17,9 @@ limitations under the License.
 package schema
 
 import (
-	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/mysql/sqlerror"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -33,7 +33,7 @@ type (
 	}
 
 	updateController struct {
-		mu             sync.Mutex
+		mu             deadlock.Mutex
 		queue          *queue
 		consumeDelay   time.Duration
 		update         func(th *discovery.TabletHealth) bool

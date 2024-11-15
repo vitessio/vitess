@@ -19,7 +19,8 @@ package stats
 import (
 	"regexp"
 	"strings"
-	"sync"
+
+	"github.com/sasha-s/go-deadlock"
 )
 
 // toKebabCase produces a monitoring compliant name from the
@@ -58,6 +59,6 @@ var memoizer = memoizerType{
 }
 
 type memoizerType struct {
-	sync.Mutex
+	deadlock.Mutex
 	memo map[string]string
 }

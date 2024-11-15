@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/patrickmn/go-cache"
+	"github.com/sasha-s/go-deadlock"
 
 	"vitess.io/vitess/go/vt/log"
 )
@@ -102,7 +103,7 @@ type Config struct {
 type Cache[Key Keyer, Value any] struct {
 	cache *cache.Cache
 
-	m        sync.Mutex
+	m        deadlock.Mutex
 	lastFill map[string]time.Time
 
 	ctx       context.Context

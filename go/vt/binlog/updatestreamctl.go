@@ -22,6 +22,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/tb"
@@ -82,7 +83,7 @@ type UpdateStreamImpl struct {
 	se       *schema.Engine
 
 	// actionLock protects the following variables
-	actionLock     sync.Mutex
+	actionLock     deadlock.Mutex
 	state          atomic.Int64
 	stateWaitGroup sync.WaitGroup
 	streams        StreamList
@@ -92,7 +93,7 @@ type UpdateStreamImpl struct {
 // StreamList is a map of context.CancelFunc to mass-interrupt ongoing
 // calls.
 type StreamList struct {
-	sync.Mutex
+	deadlock.Mutex
 	currentIndex int
 	streams      map[int]context.CancelFunc
 }

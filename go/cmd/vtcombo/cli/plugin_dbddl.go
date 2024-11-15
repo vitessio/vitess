@@ -18,8 +18,8 @@ package cli
 
 import (
 	"context"
-	"sync"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 
@@ -31,7 +31,7 @@ var globalDropDb func(ctx context.Context, ksName string) error
 
 // DBDDL doesn't need to store any state - we use the global variables above instead
 type DBDDL struct {
-	mu sync.Mutex
+	mu deadlock.Mutex
 }
 
 // CreateDatabase implements the engine.DBDDLPlugin interface

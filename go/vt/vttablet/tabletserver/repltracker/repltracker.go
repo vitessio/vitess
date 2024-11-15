@@ -17,9 +17,9 @@ limitations under the License.
 package repltracker
 
 import (
-	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
@@ -54,7 +54,7 @@ var (
 type ReplTracker struct {
 	mode string
 
-	mu        sync.Mutex
+	mu        deadlock.Mutex
 	isPrimary bool
 
 	hw     *heartbeatWriter

@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"golang.org/x/sync/errgroup"
 
 	"vitess.io/vitess/go/event"
@@ -748,7 +749,7 @@ func (pr *PlannedReparenter) verifyAllTabletsReachable(ctx context.Context, tabl
 	defer verifyCancel()
 
 	innodbBufferPoolsData := make(map[string]int)
-	var mu sync.Mutex
+	var mu deadlock.Mutex
 	errorGroup, groupCtx := errgroup.WithContext(verifyCtx)
 	for tblStr, info := range tabletMap {
 		tablet := info.Tablet

@@ -26,6 +26,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -105,7 +106,7 @@ var (
 		SELECT COUNT(*) AS c FROM %s
 	`
 	countInserts int64
-	insertMutex  sync.Mutex
+	insertMutex  deadlock.Mutex
 
 	vSchema = `
 	{

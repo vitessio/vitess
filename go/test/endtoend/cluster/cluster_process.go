@@ -37,6 +37,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -125,7 +126,7 @@ type LocalProcessCluster struct {
 	VtctldExtraArgs []string
 
 	// mutex added to handle the parallel teardowns
-	mx                *sync.Mutex
+	mx                *deadlock.Mutex
 	teardownCompleted bool
 
 	context.Context
@@ -789,7 +790,7 @@ func (cluster *LocalProcessCluster) NewVtgateInstance() *VtgateProcess {
 
 // NewBareCluster instantiates a new cluster and does not assume existence of any of the vitess processes
 func NewBareCluster(cell string, hostname string) *LocalProcessCluster {
-	cluster := &LocalProcessCluster{Cell: cell, Hostname: hostname, mx: new(sync.Mutex), DefaultCharset: "utf8mb4"}
+	cluster := &LocalProcessCluster{Cell: cell, Hostname: hostname, mx: new(deadlock.Mutex), DefaultCharset: "utf8mb4"}
 	cluster.SetupCtrlCHandler()
 
 	cluster.OriginalVTDATAROOT = os.Getenv("VTDATAROOT")

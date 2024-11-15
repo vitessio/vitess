@@ -41,9 +41,9 @@ import (
 	"math/rand/v2"
 	"regexp"
 	"strings"
-	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/spf13/pflag"
 	"golang.org/x/sync/semaphore"
 
@@ -186,7 +186,7 @@ type TabletManager struct {
 
 	// mutex protects all the following fields (that start with '_'),
 	// only hold the mutex to update the fields, nothing else.
-	mutex sync.Mutex
+	mutex deadlock.Mutex
 
 	// _waitForGrantsComplete is a channel for waiting until the grants for all the mysql
 	// users have been verified.

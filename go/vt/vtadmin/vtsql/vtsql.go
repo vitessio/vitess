@@ -20,9 +20,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"google.golang.org/grpc/credentials/insecure"
 
 	"google.golang.org/grpc"
@@ -72,7 +72,7 @@ type VTGateProxy struct {
 
 	conn *sql.DB
 
-	m        sync.Mutex
+	m        deadlock.Mutex
 	closed   bool
 	dialedAt time.Time
 }

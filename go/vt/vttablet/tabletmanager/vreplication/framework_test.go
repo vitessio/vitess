@@ -24,10 +24,10 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
@@ -66,7 +66,7 @@ var (
 	playerEngine             *Engine
 	streamerEngine           *vstreamer.Engine
 	env                      *testenv.Env
-	envMu                    sync.Mutex
+	envMu                    deadlock.Mutex
 	globalFBC                = &fakeBinlogClient{}
 	vrepldb                  = "vrepl"
 	globalDBQueries          = make(chan string, 1000)

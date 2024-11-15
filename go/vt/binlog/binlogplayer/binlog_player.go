@@ -30,10 +30,10 @@ import (
 	"io"
 	"math"
 	"os"
-	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/spf13/pflag"
 	"google.golang.org/protobuf/proto"
 
@@ -90,10 +90,10 @@ type Stats struct {
 	Rates   *stats.Rates
 
 	// Last saved status
-	lastPositionMutex sync.Mutex
+	lastPositionMutex deadlock.Mutex
 	lastPosition      replication.Position
 
-	heartbeatMutex sync.Mutex
+	heartbeatMutex deadlock.Mutex
 	heartbeat      int64
 
 	ReplicationLagSeconds atomic.Int64

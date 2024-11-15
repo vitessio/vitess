@@ -25,15 +25,16 @@ package cache
 
 import (
 	"container/list"
-	"sync"
 	"time"
+
+	"github.com/sasha-s/go-deadlock"
 )
 
 // LRUCache is a typical LRU cache implementation.  If the cache
 // reaches the capacity, the least recently used item is deleted from
 // the cache.
 type LRUCache[T any] struct {
-	mu sync.Mutex
+	mu deadlock.Mutex
 
 	// list & table contain *entry objects.
 	list  *list.List

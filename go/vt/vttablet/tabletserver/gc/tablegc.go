@@ -20,10 +20,10 @@ import (
 	"context"
 	"fmt"
 	"sort"
-	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/mysql/capabilities"
@@ -117,8 +117,8 @@ type TableGC struct {
 	pool *connpool.Pool
 	ts   *topo.Server
 
-	stateMutex sync.Mutex
-	purgeMutex sync.Mutex
+	stateMutex deadlock.Mutex
+	purgeMutex deadlock.Mutex
 
 	purgingTables map[string]bool
 	// lifecycleStates indicates what states a GC table goes through. The user can set

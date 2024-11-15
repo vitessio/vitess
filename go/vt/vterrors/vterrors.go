@@ -91,8 +91,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"sync"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/spf13/pflag"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -101,7 +101,7 @@ import (
 // logErrStacks controls whether printing errors includes the
 // embedded stack trace in the output.
 var logErrStacks bool
-var muLogErrStacks sync.Mutex
+var muLogErrStacks deadlock.Mutex
 
 func getLogErrStacks() bool {
 	muLogErrStacks.Lock()

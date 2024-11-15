@@ -26,7 +26,6 @@ import (
 	"os"
 	"path"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -42,6 +41,7 @@ import (
 	"vitess.io/vitess/go/test/endtoend/onlineddl"
 	"vitess.io/vitess/go/test/endtoend/throttler"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -87,7 +87,7 @@ var (
 )
 
 type WriteMetrics struct {
-	mu                                                      sync.Mutex
+	mu                                                      deadlock.Mutex
 	insertsAttempts, insertsFailures, insertsNoops, inserts int64
 	updatesAttempts, updatesFailures, updatesNoops, updates int64
 	deletesAttempts, deletesFailures, deletesNoops, deletes int64

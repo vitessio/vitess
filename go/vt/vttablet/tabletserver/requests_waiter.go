@@ -16,12 +16,16 @@ limitations under the License.
 
 package tabletserver
 
-import "sync"
+import (
+	"sync"
+
+	"github.com/sasha-s/go-deadlock"
+)
 
 // requestsWaiter is used to wait for requests. It stores the count of the requests pending,
 // and also the number of waiters currently waiting. It has a mutex as well to protects its fields.
 type requestsWaiter struct {
-	mu sync.Mutex
+	mu deadlock.Mutex
 	wg sync.WaitGroup
 	// waitCounter is the number of goroutines that are waiting for wg to be empty.
 	// If this value is greater than zero, then we have to ensure that we don't Add to the requests

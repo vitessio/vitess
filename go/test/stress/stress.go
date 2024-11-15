@@ -19,11 +19,11 @@ package stress
 import (
 	"fmt"
 	"math/rand/v2"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/mysql"
 )
 
@@ -42,7 +42,7 @@ type (
 	table struct {
 		name         string
 		rows, nextID int
-		mu           sync.Mutex
+		mu           deadlock.Mutex
 	}
 
 	// Stresser is responsible for stressing a Vitess cluster based on a given Config.
@@ -77,7 +77,7 @@ type (
 		start    time.Time
 		t        *testing.T
 		finish   uint32
-		cfgMu    sync.Mutex
+		cfgMu    deadlock.Mutex
 	}
 
 	// Config contains all of the Stresser configuration.

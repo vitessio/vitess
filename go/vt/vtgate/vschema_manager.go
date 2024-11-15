@@ -18,8 +18,8 @@ package vtgate
 
 import (
 	"context"
-	"sync"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/vt/graph"
 	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -38,7 +38,7 @@ var _ VSchemaOperator = (*VSchemaManager)(nil)
 // VSchemaManager is used to watch for updates to the vschema and to implement
 // the DDL commands to add / remove vindexes
 type VSchemaManager struct {
-	mu                sync.Mutex
+	mu                deadlock.Mutex
 	currentSrvVschema *vschemapb.SrvVSchema
 	currentVschema    *vindexes.VSchema
 	serv              srvtopo.Server

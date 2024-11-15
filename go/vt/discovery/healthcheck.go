@@ -46,6 +46,7 @@ import (
 
 	"github.com/google/safehtml/template"
 	"github.com/google/safehtml/template/uncheckedconversions"
+	"github.com/sasha-s/go-deadlock"
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/flagutil"
@@ -275,7 +276,7 @@ type HealthCheckImpl struct {
 	ts                 *topo.Server
 	cell               string
 	// mu protects all the following fields.
-	mu sync.Mutex
+	mu deadlock.Mutex
 	// authoritative map of tabletHealth by alias
 	healthByAlias map[tabletAliasString]*tabletHealthCheck
 	// a map keyed by keyspace.shard.tabletType
@@ -291,7 +292,7 @@ type HealthCheckImpl struct {
 	// cellAliases is a cache of cell aliases
 	cellAliases map[string]string
 	// mutex to protect subscribers
-	subMu sync.Mutex
+	subMu deadlock.Mutex
 	// subscribers
 	subscribers map[chan *TabletHealth]struct{}
 	// loadTablets trigger is used to immediately load a new primary tablet when the current one has been demoted

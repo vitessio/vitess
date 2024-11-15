@@ -20,9 +20,9 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 
 	"vitess.io/vitess/go/stats"
@@ -56,7 +56,7 @@ func AddStatusPart() {
 // to this struct whenever there is a relevant change.
 // This is a singleton.
 type vrStats struct {
-	mu          sync.Mutex
+	mu          deadlock.Mutex
 	isOpen      bool
 	controllers map[int32]*controller
 

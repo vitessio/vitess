@@ -52,6 +52,8 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
+	"github.com/sasha-s/go-deadlock"
+
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -68,13 +70,13 @@ type Engine struct {
 	cp  dbconfigs.Connector
 
 	// mu protects the following fields.
-	mu         sync.Mutex
+	mu         deadlock.Mutex
 	isOpen     bool
 	tables     map[string]*Table
 	lastChange int64
 	// the position at which the schema was last loaded. it is only used in conjunction with ReloadAt
 	reloadAtPos replication.Position
-	notifierMu  sync.Mutex
+	notifierMu  deadlock.Mutex
 	notifiers   map[string]notifier
 	// isServingPrimary stores if this tablet is currently the serving primary or not.
 	isServingPrimary bool

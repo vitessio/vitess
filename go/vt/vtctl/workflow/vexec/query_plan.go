@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -86,7 +87,7 @@ func (qp *FixedQueryPlan) ExecuteScatter(ctx context.Context, targets ...*topo.T
 	}
 
 	var (
-		m       sync.Mutex
+		m       deadlock.Mutex
 		wg      sync.WaitGroup
 		rec     concurrency.AllErrorRecorder
 		results = make(map[*topo.TabletInfo]*querypb.QueryResult, len(targets))
@@ -171,7 +172,7 @@ func (qp *PerTargetQueryPlan) ExecuteScatter(ctx context.Context, targets ...*to
 	}
 
 	var (
-		m       sync.Mutex
+		m       deadlock.Mutex
 		wg      sync.WaitGroup
 		rec     concurrency.AllErrorRecorder
 		results = make(map[*topo.TabletInfo]*querypb.QueryResult, len(targets))

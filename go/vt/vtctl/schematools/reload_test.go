@@ -19,9 +19,9 @@ package schematools
 import (
 	"context"
 	"fmt"
-	"sync"
 	"testing"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/sync/semaphore"
 
@@ -40,7 +40,7 @@ type reloadSchemaTMC struct {
 	// tablet alias => positionStr => error
 	results map[string]map[string]error
 
-	m        sync.Mutex
+	m        deadlock.Mutex
 	calls    []*reloadSchemaCall
 	errCount int
 }

@@ -18,8 +18,8 @@ package tabletconn
 
 import (
 	"context"
-	"sync"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/grpcclient"
@@ -71,7 +71,7 @@ type TabletDialer func(ctx context.Context, tablet *topodatapb.Tablet, failFast 
 var dialers = make(map[string]TabletDialer)
 
 // mu This mutex helps us prevent data races when registering / getting dialers
-var mu sync.Mutex
+var mu deadlock.Mutex
 
 // RegisterDialer is meant to be used by TabletDialer implementations
 // to self register.

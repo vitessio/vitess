@@ -21,10 +21,10 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/pools/smartconnpool"
 	"vitess.io/vitess/go/sqltypes"
@@ -58,7 +58,7 @@ type Conn struct {
 	current atomic.Pointer[string]
 
 	// err will be set if a query is killed through a Kill.
-	errmu sync.Mutex
+	errmu deadlock.Mutex
 	err   error
 
 	killTimeout time.Duration

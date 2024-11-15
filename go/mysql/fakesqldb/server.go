@@ -29,6 +29,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
@@ -75,7 +76,7 @@ type DB struct {
 	// Fields set at runtime.
 
 	// mu protects all the following fields.
-	mu sync.Mutex
+	mu deadlock.Mutex
 	// name is the name of this DB. Set to 'fakesqldb' by default.
 	// Use SetName() to change.
 	name string
@@ -128,7 +129,7 @@ type DB struct {
 	neverFail atomic.Bool
 
 	// lastError stores the last error in returning a query result.
-	lastErrorMu sync.Mutex
+	lastErrorMu deadlock.Mutex
 	lastError   error
 
 	env *vtenv.Environment
@@ -189,7 +190,7 @@ func NewWithEnv(t testing.TB, env *vtenv.Environment) *DB {
 		connections:              make(map[uint32]*mysql.Conn),
 		queryPatternUserCallback: make(map[*regexp.Regexp]func(string)),
 		patternData:              make(map[string]exprResult),
-		lastErrorMu:              sync.Mutex{},
+		lastErrorMu:              deadlock.Mutex{},
 		env:                      env,
 	}
 

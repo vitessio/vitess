@@ -17,9 +17,7 @@ limitations under the License.
 // Package history implements a circular buffer with adjacent-item deduplication.
 package history
 
-import (
-	"sync"
-)
+import "github.com/sasha-s/go-deadlock"
 
 // Deduplicable is an interface that records should implement if the
 // history should perform their deduplication. An example would be
@@ -33,7 +31,7 @@ type Deduplicable interface {
 // History is a data structure that allows you to keep some number of
 // records.
 type History struct {
-	mu        sync.Mutex
+	mu        deadlock.Mutex
 	records   []any
 	lastAdded any
 	latest    any

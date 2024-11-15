@@ -19,9 +19,9 @@ package faketopo
 import (
 	"context"
 	"strings"
-	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -32,7 +32,7 @@ import (
 // FakeFactory implements the Factory interface. This is supposed to be used only for testing
 type FakeFactory struct {
 	// mu protects the following field.
-	mu sync.Mutex
+	mu deadlock.Mutex
 	// cells is the toplevel map that has one entry per cell. It has a list of connections that this fake server will return
 	cells map[string][]*FakeConn
 }
@@ -42,7 +42,7 @@ var _ topo.Factory = (*FakeFactory)(nil)
 // NewFakeTopoFactory creates a new fake topo factory
 func NewFakeTopoFactory() *FakeFactory {
 	factory := &FakeFactory{
-		mu:    sync.Mutex{},
+		mu:    deadlock.Mutex{},
 		cells: map[string][]*FakeConn{},
 	}
 	factory.cells[topo.GlobalCell] = []*FakeConn{newFakeConnection()}
@@ -85,7 +85,7 @@ type FakeConn struct {
 	serverAddr string
 
 	// mutex to protect all the operations
-	mu sync.Mutex
+	mu deadlock.Mutex
 
 	// getResultMap is a map storing the results for each filepath
 	getResultMap map[string]result

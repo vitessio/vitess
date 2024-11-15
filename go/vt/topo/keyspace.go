@@ -20,8 +20,8 @@ import (
 	"context"
 	"path"
 	"sort"
-	"sync"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/spf13/pflag"
 	"golang.org/x/sync/errgroup"
 
@@ -311,7 +311,7 @@ func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string, 
 	// level so that certain paths can be optimized (such as vtctld
 	// RebuildKeyspace calls, which do not run on every vttablet).
 	var (
-		mu     sync.Mutex
+		mu     deadlock.Mutex
 		result = make(map[string]*ShardInfo, len(shards))
 	)
 

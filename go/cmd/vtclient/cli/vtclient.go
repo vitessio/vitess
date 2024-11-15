@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/olekukonko/tablewriter"
+	"github.com/sasha-s/go-deadlock"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
@@ -338,7 +339,7 @@ func execNonDml(ctx context.Context, db *sql.DB, sql string) (*results, error) {
 }
 
 type results struct {
-	mu                 sync.Mutex
+	mu                 deadlock.Mutex
 	Fields             []string   `json:"fields"`
 	Rows               [][]string `json:"rows"`
 	rowsAffected       int64

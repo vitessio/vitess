@@ -20,8 +20,8 @@ package fakediscovery
 import (
 	"context"
 	"math/rand/v2"
-	"sync"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery"
@@ -46,7 +46,7 @@ type Fake struct {
 	gates   *gates
 	vtctlds *vtctlds
 
-	m sync.Mutex
+	m deadlock.Mutex
 }
 
 // New returns a new fake.

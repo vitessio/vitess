@@ -18,8 +18,8 @@ package txresolver
 
 import (
 	"context"
-	"sync"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -32,7 +32,7 @@ type TxResolver struct {
 
 	txConn TxConnection
 
-	mu      sync.Mutex
+	mu      deadlock.Mutex
 	resolve map[string]bool
 }
 

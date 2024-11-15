@@ -24,10 +24,10 @@ import (
 	"runtime/debug"
 	"slices"
 	"sort"
-	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -88,7 +88,7 @@ type TabletGateway struct {
 	defaultConnCollation atomic.Uint32
 
 	// mu protects the fields of this group.
-	mu sync.Mutex
+	mu deadlock.Mutex
 	// statusAggregators is a map indexed by the key
 	// keyspace/shard/tablet_type.
 	statusAggregators map[string]*TabletStatusAggregator

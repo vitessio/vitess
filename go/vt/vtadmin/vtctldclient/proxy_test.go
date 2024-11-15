@@ -19,10 +19,10 @@ package vtctldclient
 import (
 	"context"
 	"net"
-	"sync"
 	"testing"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
@@ -103,7 +103,7 @@ type testdisco struct {
 	*fakediscovery.Fake
 	notify chan struct{}
 	fired  chan struct{}
-	m      sync.Mutex
+	m      deadlock.Mutex
 }
 
 func (d *testdisco) DiscoverVtctldAddrs(ctx context.Context, tags []string) ([]string, error) {

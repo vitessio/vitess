@@ -20,8 +20,8 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"sync"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/bytes2"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations/charset"
@@ -30,7 +30,7 @@ import (
 type Charset struct {
 	name string
 
-	mu   *sync.Mutex
+	mu   *deadlock.Mutex
 	conn *mysql.Conn
 	sql  bytes2.Buffer
 	hex  io.Writer
@@ -38,7 +38,7 @@ type Charset struct {
 
 var _ charset.Charset = (*Charset)(nil)
 
-func makeRemoteCharset(conn *mysql.Conn, mu *sync.Mutex, csname string) *Charset {
+func makeRemoteCharset(conn *mysql.Conn, mu *deadlock.Mutex, csname string) *Charset {
 	cs := &Charset{
 		name: csname,
 		mu:   mu,
@@ -49,7 +49,7 @@ func makeRemoteCharset(conn *mysql.Conn, mu *sync.Mutex, csname string) *Charset
 }
 
 func NewCharset(conn *mysql.Conn, csname string) *Charset {
-	return makeRemoteCharset(conn, &sync.Mutex{}, csname)
+	return makeRemoteCharset(conn, &deadlock.Mutex{}, csname)
 }
 
 func (c *Charset) Name() string {

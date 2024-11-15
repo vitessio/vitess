@@ -19,8 +19,8 @@ package vtexplain
 import (
 	"context"
 	"fmt"
-	"sync"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/vt/topo"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -39,7 +39,7 @@ type ExplainTopo struct {
 	KeyspaceShards map[string]map[string]*topodatapb.ShardReference
 
 	// Synchronization lock
-	Lock sync.Mutex
+	Lock deadlock.Mutex
 
 	// Number of shards for sharded keyspaces
 	NumShards int

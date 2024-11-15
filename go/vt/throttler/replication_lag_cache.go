@@ -18,9 +18,9 @@ package throttler
 
 import (
 	"sort"
-	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/vt/discovery"
 )
 
@@ -31,7 +31,7 @@ type replicationLagCache struct {
 	// The map key is replicationLagRecord.LegacyTabletStats.Key.
 	entries map[string]*replicationLagHistory
 
-	mu sync.Mutex
+	mu deadlock.Mutex
 
 	// slowReplicas is a set of slow replicas.
 	// The map key is replicationLagRecord.LegacyTabletStats.Key.

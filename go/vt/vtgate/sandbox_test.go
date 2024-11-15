@@ -21,8 +21,8 @@ import (
 	"fmt"
 	"hash/fnv"
 	"strconv"
-	"sync"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/key"
@@ -56,7 +56,7 @@ func init() {
 	tabletconntest.SetProtocol("go.vt.vtgate.sandbox_test", "sandbox")
 }
 
-var sandboxMu sync.Mutex
+var sandboxMu deadlock.Mutex
 var ksToSandbox map[string]*sandbox
 var sandboxMirrorRules string
 
@@ -104,7 +104,7 @@ func setSandboxMirrorRules(mirrorRules string) {
 
 type sandbox struct {
 	// Use sandmu to access the variables below
-	sandmu sync.Mutex
+	sandmu deadlock.Mutex
 
 	// SrvKeyspaceCounter tracks how often GetSrvKeyspace was called
 	SrvKeyspaceCounter int

@@ -37,6 +37,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
@@ -61,7 +62,7 @@ var (
 	bindAddress string
 
 	// mutex used to protect the Init function
-	mu sync.Mutex
+	mu deadlock.Mutex
 
 	onInitHooks     event.Hooks
 	onTermHooks     event.Hooks
@@ -247,7 +248,7 @@ func RunDefault() {
 }
 
 var (
-	flagHooksM      sync.Mutex
+	flagHooksM      deadlock.Mutex
 	globalFlagHooks = []func(*pflag.FlagSet){
 		vterrors.RegisterFlags,
 	}

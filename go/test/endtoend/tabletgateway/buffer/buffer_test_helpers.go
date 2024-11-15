@@ -43,6 +43,7 @@ import (
 
 	"vitess.io/vitess/go/vt/log"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -70,13 +71,13 @@ const (
 // threadParams is set of params passed into read and write threads
 type threadParams struct {
 	quit                       bool
-	rpcs                       int        // Number of queries successfully executed.
-	errors                     []error    // Errors returned by the queries.
-	waitForNotification        chan bool  // Channel used to notify the main thread that this thread executed
-	notifyLock                 sync.Mutex // notifyLock guards the two fields notifyAfterNSuccessfulRpcs/rpcsSoFar.
-	notifyAfterNSuccessfulRpcs int        // If 0, notifications are disabled
-	rpcsSoFar                  int        // Number of RPCs at the time a notification was requested
-	index                      int        //
+	rpcs                       int            // Number of queries successfully executed.
+	errors                     []error        // Errors returned by the queries.
+	waitForNotification        chan bool      // Channel used to notify the main thread that this thread executed
+	notifyLock                 deadlock.Mutex // notifyLock guards the two fields notifyAfterNSuccessfulRpcs/rpcsSoFar.
+	notifyAfterNSuccessfulRpcs int            // If 0, notifications are disabled
+	rpcsSoFar                  int            // Number of RPCs at the time a notification was requested
+	index                      int            //
 	internalErrs               int
 	executeFunction            func(c *threadParams, conn *mysql.Conn) error // Implement the method for read/update.
 	typ                        string

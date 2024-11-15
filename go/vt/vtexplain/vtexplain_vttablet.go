@@ -21,8 +21,8 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
-	"sync"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/topo"
@@ -95,7 +95,7 @@ type explainTablet struct {
 	db  *fakesqldb.DB
 	tsv *tabletserver.TabletServer
 
-	mu            sync.Mutex
+	mu            deadlock.Mutex
 	tabletQueries []*TabletQuery
 	mysqlQueries  []*MysqlQuery
 	currentTime   int

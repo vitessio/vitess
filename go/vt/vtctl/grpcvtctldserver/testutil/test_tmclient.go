@@ -21,10 +21,10 @@ import (
 	"fmt"
 	"os"
 	"path"
-	"sync"
 	"testing"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 
@@ -50,8 +50,8 @@ import (
 )
 
 var (
-	tmclientLock        sync.Mutex
-	tmclientFactoryLock sync.Mutex
+	tmclientLock        deadlock.Mutex
+	tmclientFactoryLock deadlock.Mutex
 	tmclients           = map[string]tmclient.TabletManagerClient{}
 	tmclientFactories   = map[string]func() tmclient.TabletManagerClient{}
 )

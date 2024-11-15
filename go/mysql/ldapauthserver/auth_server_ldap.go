@@ -21,9 +21,9 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"gopkg.in/ldap.v2"
 
 	"vitess.io/vitess/go/mysql"
@@ -164,7 +164,7 @@ type LdapUserData struct {
 	username    string
 	lastUpdated time.Time
 	updating    bool
-	sync.Mutex
+	deadlock.Mutex
 }
 
 func (lud *LdapUserData) update() {

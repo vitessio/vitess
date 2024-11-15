@@ -20,9 +20,9 @@ import (
 	"expvar"
 	"net/http"
 	"net/url"
-	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/stats"
 )
 
@@ -44,7 +44,7 @@ const (
 
 var (
 	// exporterMu is for all variables below.
-	exporterMu sync.Mutex
+	exporterMu deadlock.Mutex
 
 	// exporters contains the full list of exporters. Entries can only be
 	// added. The creation of a new Exporter with a previously existing
@@ -103,7 +103,7 @@ type Exporter struct {
 	name, label string
 	handleFuncs map[string]*handleFunc
 	sp          *statusPage
-	mu          sync.Mutex
+	mu          deadlock.Mutex
 }
 
 func init() {
@@ -579,7 +579,7 @@ type singleCountVar interface {
 
 // singleCountVars contains all stats that support Get, like *stats.Counter.
 type singleCountVars struct {
-	mu   sync.Mutex
+	mu   deadlock.Mutex
 	vars map[string]singleCountVar
 }
 
@@ -603,7 +603,7 @@ type multiCountVar interface {
 
 // multiCountVars contains all stats that support Counts.
 type multiCountVars struct {
-	mu   sync.Mutex
+	mu   deadlock.Mutex
 	vars map[string]multiCountVar
 }
 
@@ -699,7 +699,7 @@ func (tw *MultiTimingsWrapper) Reset() {
 // handleFunc stores the http Handler for an Exporter. This function can
 // be replaced as needed.
 type handleFunc struct {
-	mu sync.Mutex
+	mu deadlock.Mutex
 	f  func(w http.ResponseWriter, r *http.Request)
 }
 

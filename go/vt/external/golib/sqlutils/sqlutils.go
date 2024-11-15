@@ -25,9 +25,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
-	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	_ "modernc.org/sqlite"
 
 	"vitess.io/vitess/go/vt/log"
@@ -140,7 +140,7 @@ func (this *RowMap) GetTime(key string) time.Time {
 
 // knownDBs is a DB cache by uri
 var knownDBs = make(map[string]*sql.DB)
-var knownDBsMutex = &sync.Mutex{}
+var knownDBsMutex = &deadlock.Mutex{}
 
 // GetSQLiteDB returns a SQLite DB instance based on DB file name.
 // bool result indicates whether the DB was returned from cache; err

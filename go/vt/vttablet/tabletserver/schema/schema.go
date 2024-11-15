@@ -17,9 +17,9 @@ limitations under the License.
 package schema
 
 import (
-	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 
@@ -69,7 +69,7 @@ type Table struct {
 // When the schema is first loaded, the values are all 0,
 // which will trigger caching on first use.
 type SequenceInfo struct {
-	sync.Mutex
+	deadlock.Mutex
 	NextVal int64
 	LastVal int64
 }

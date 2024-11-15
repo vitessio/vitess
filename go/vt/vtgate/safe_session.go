@@ -20,9 +20,9 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/sqltypes"
 
 	"google.golang.org/protobuf/proto"
@@ -47,7 +47,7 @@ type (
 	// (the use pattern is 'Find', if not found, then 'AppendOrUpdate',
 	// for a single shard)
 	SafeSession struct {
-		mu              sync.Mutex
+		mu              deadlock.Mutex
 		mustRollback    bool
 		autocommitState autocommitState
 		commitOrder     vtgatepb.CommitOrder
@@ -72,7 +72,7 @@ type (
 	}
 
 	executeLogger struct {
-		mu      sync.Mutex
+		mu      deadlock.Mutex
 		entries []engine.ExecuteEntry
 		lastID  int
 		parser  *sqlparser.Parser

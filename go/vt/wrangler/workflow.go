@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/discovery"
@@ -565,7 +566,7 @@ func (vrw *VReplicationWorkflow) canSwitch(keyspace, workflowName string) (reaso
 	// Ensure that the tablets on both sides are in good shape as we make this same call in the process
 	// and an error will cause us to backout
 	refreshErrors := strings.Builder{}
-	var m sync.Mutex
+	var m deadlock.Mutex
 	var wg sync.WaitGroup
 	rtbsCtx, cancel := context.WithTimeout(vrw.ctx, shardTabletRefreshTimeout)
 	defer cancel()

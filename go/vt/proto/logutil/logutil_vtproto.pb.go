@@ -6,10 +6,11 @@ package logutil
 
 import (
 	fmt "fmt"
+	io "io"
+
 	protohelpers "github.com/planetscale/vtprotobuf/protohelpers"
 	proto "google.golang.org/protobuf/proto"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
-	io "io"
 	vttime "vitess.io/vitess/go/vt/proto/vttime"
 )
 

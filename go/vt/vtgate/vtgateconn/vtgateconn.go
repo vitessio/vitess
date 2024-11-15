@@ -19,8 +19,8 @@ package vtgateconn
 import (
 	"context"
 	"fmt"
-	"sync"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -186,7 +186,7 @@ type DialerFunc func(ctx context.Context, address string) (Impl, error)
 
 var (
 	dialers  = make(map[string]DialerFunc)
-	dialersM sync.Mutex
+	dialersM deadlock.Mutex
 )
 
 // RegisterDialer is meant to be used by Dialer implementations

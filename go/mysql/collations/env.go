@@ -20,7 +20,8 @@ import (
 	"fmt"
 	"slices"
 	"strings"
-	"sync"
+
+	"github.com/sasha-s/go-deadlock"
 )
 
 type colldefaults struct {
@@ -79,7 +80,7 @@ func (env *Environment) BinaryCollationForCharset(charset string) ID {
 }
 
 var globalEnvironments = make(map[collver]*Environment)
-var globalEnvironmentsMu sync.Mutex
+var globalEnvironmentsMu deadlock.Mutex
 
 // fetchCacheEnvironment returns a cached Environment from a global cache.
 // We can keep a single Environment per collver version because Environment

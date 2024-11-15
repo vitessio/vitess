@@ -22,11 +22,11 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/google/safehtml/template"
+	"github.com/sasha-s/go-deadlock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -46,7 +46,7 @@ import (
 
 var (
 	connMap   map[string]*fakeConn
-	connMapMu sync.Mutex
+	connMapMu deadlock.Mutex
 )
 
 func testChecksum(t *testing.T, want, got int64) {
@@ -1502,7 +1502,7 @@ type fakeConn struct {
 	// cbErrCh is a channel which receives errors returned from the supplied callback.
 	cbErrCh chan error
 
-	mu       sync.Mutex
+	mu       deadlock.Mutex
 	canceled bool
 }
 

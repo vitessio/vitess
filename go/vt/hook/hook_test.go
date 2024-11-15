@@ -23,10 +23,10 @@ import (
 	"os/exec"
 	"path"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -241,7 +241,7 @@ func TestExecuteAsReadPipeErrorFindingHook(t *testing.T) {
 
 func TestExecuteAsWritePipe(t *testing.T) {
 	var writer strings.Builder
-	var writerMutex sync.Mutex
+	var writerMutex deadlock.Mutex
 
 	vtroot, err := vtenv.VtRoot()
 	require.NoError(t, err)

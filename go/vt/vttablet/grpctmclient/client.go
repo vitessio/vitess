@@ -20,9 +20,9 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/spf13/pflag"
 	"google.golang.org/grpc"
 
@@ -109,7 +109,7 @@ type grpcClient struct {
 	// CheckThrottler and FullStatus. Note we'll keep the clients open and close them upon Close() only.
 	// But that's OK because usually the tasks that use them are one-purpose only.
 	// The map is protected by the mutex.
-	mu             sync.Mutex
+	mu             deadlock.Mutex
 	rpcClientMap   map[string]chan *tmc
 	rpcDialPoolMap map[DialPoolGroup]addrTmcMap
 }

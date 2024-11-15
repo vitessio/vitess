@@ -19,8 +19,8 @@ package rules
 import (
 	"encoding/json"
 	"errors"
-	"sync"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 )
@@ -28,7 +28,7 @@ import (
 // Map is the maintainer of Rules from multiple sources
 type Map struct {
 	// mutex to protect following queryRulesMap
-	mu sync.Mutex
+	mu deadlock.Mutex
 	// queryRulesMap maps the names of different query rule sources to the actual Rules structure
 	queryRulesMap map[string]*Rules
 }

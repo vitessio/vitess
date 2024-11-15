@@ -22,9 +22,9 @@ import (
 	"errors"
 	"os"
 	"os/user"
-	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/trace"
@@ -115,7 +115,7 @@ type locksInfo struct {
 	// mu protects the following members of the structure.
 	// Safer to be thread safe here, in case multiple go routines
 	// lock different things.
-	mu sync.Mutex
+	mu deadlock.Mutex
 
 	// info contains all the locks we took. It is indexed by
 	// keyspace (for keyspaces) or keyspace/shard (for shards).

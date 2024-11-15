@@ -21,8 +21,8 @@ import (
 	"fmt"
 	"io"
 	"strconv"
-	"sync"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
@@ -101,7 +101,7 @@ func (l *Limit) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars 
 	// the offset in memory from the result of the scatter query with count + offset.
 	bindVars[UpperLimitStr] = sqltypes.Int64BindVariable(int64(count + offset))
 
-	var mu sync.Mutex
+	var mu deadlock.Mutex
 	err = vcursor.StreamExecutePrimitive(ctx, l.Input, bindVars, wantfields, func(qr *sqltypes.Result) error {
 		mu.Lock()
 		defer mu.Unlock()

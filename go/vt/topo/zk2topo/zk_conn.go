@@ -25,9 +25,9 @@ import (
 	"net"
 	"os"
 	"strings"
-	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/spf13/pflag"
 	"github.com/z-division/go-zookeeper/zk"
 	"golang.org/x/sync/semaphore"
@@ -92,7 +92,7 @@ type ZkConn struct {
 	sem *semaphore.Weighted
 
 	// mu protects the following fields.
-	mu   sync.Mutex
+	mu   deadlock.Mutex
 	conn *zk.Conn
 }
 

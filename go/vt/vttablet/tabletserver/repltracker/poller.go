@@ -18,9 +18,9 @@ package repltracker
 
 import (
 	"context"
-	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -33,7 +33,7 @@ var replicationLagSeconds = stats.NewGauge("replicationLagSec", "replication lag
 type poller struct {
 	mysqld mysqlctl.MysqlDaemon
 
-	mu           sync.Mutex
+	mu           deadlock.Mutex
 	lag          time.Duration
 	timeRecorded time.Time
 }

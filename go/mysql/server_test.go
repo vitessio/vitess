@@ -25,10 +25,10 @@ import (
 	"os/exec"
 	"path"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -75,7 +75,7 @@ var selectRowsResult = &sqltypes.Result{
 
 type testHandler struct {
 	UnimplementedHandler
-	mu       sync.Mutex
+	mu       deadlock.Mutex
 	lastConn *Conn
 	result   *sqltypes.Result
 	err      error

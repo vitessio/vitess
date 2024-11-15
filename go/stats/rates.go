@@ -20,8 +20,9 @@ import (
 	"context"
 	"encoding/json"
 	"math"
-	"sync"
 	"time"
+
+	"github.com/sasha-s/go-deadlock"
 )
 
 var timeNow = time.Now
@@ -51,7 +52,7 @@ func (t wrappedCountTracker) Counts() map[string]int64 { return t.f() }
 // for any variable that satisfies the CountTracker interface.
 type Rates struct {
 	// mu guards all fields.
-	mu           sync.Mutex
+	mu           deadlock.Mutex
 	timeStamps   *RingInt64
 	counts       map[string]*RingInt64
 	countTracker CountTracker

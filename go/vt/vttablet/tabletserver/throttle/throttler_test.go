@@ -21,12 +21,12 @@ import (
 	"fmt"
 	"math"
 	"net/http"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/patrickmn/go-cache"
+	"github.com/sasha-s/go-deadlock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/maps"
@@ -107,7 +107,7 @@ type fakeTMClient struct {
 	appNames []string
 	v20      atomic.Bool // help validate v20 backwards compatibility
 
-	mu sync.Mutex
+	mu deadlock.Mutex
 }
 
 func (c *fakeTMClient) Close() {

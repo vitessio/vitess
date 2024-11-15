@@ -23,9 +23,9 @@ import (
 	"regexp"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/mysql/replication"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 
@@ -84,7 +84,7 @@ type uvstreamer struct {
 	// lastTimestampNs is the last timestamp seen so far.
 	lastTimestampNs       int64
 	ReplicationLagSeconds int64
-	mu                    sync.Mutex
+	mu                    deadlock.Mutex
 
 	config *uvstreamerConfig
 

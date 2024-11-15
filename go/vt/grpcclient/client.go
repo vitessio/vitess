@@ -27,6 +27,7 @@ import (
 
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
+	"github.com/sasha-s/go-deadlock"
 	"github.com/spf13/pflag"
 	"golang.org/x/sync/semaphore"
 	"google.golang.org/grpc"
@@ -42,7 +43,7 @@ import (
 )
 
 var (
-	grpcDialOptionsMu     sync.Mutex
+	grpcDialOptionsMu     deadlock.Mutex
 	keepaliveTime         = 10 * time.Second
 	keepaliveTimeout      = 10 * time.Second
 	initialConnWindowSize int

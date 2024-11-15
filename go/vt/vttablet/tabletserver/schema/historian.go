@@ -19,9 +19,9 @@ package schema
 import (
 	"context"
 	"sort"
-	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
@@ -54,7 +54,7 @@ type historian struct {
 	conns               *connpool.Pool
 	lastID              int64
 	schemas             []*trackedSchema
-	mu                  sync.Mutex
+	mu                  deadlock.Mutex
 	enabled             bool
 	isOpen              bool
 	schemaMaxAgeSeconds int64

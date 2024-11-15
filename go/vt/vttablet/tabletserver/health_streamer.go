@@ -20,10 +20,10 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/spf13/pflag"
 
 	vtschema "vitess.io/vitess/go/vt/schema"
@@ -68,14 +68,14 @@ type healthStreamer struct {
 
 	// cancelMu is a mutex used to protect the cancel variable
 	// and for ensuring we don't call setup functions in parallel.
-	cancelMu sync.Mutex
+	cancelMu deadlock.Mutex
 	ctx      context.Context
 	cancel   context.CancelFunc
 
 	// fieldsMu is used to protect access to the fields below.
 	// We require two separate mutexes, so that we don't have to acquire the same mutex
 	// in Close and reload that can lead to a deadlock described in https://github.com/vitessio/vitess/issues/17229#issuecomment-2476136610.
-	fieldsMu sync.Mutex
+	fieldsMu deadlock.Mutex
 	clients  map[chan *querypb.StreamHealthResponse]struct{}
 	state    *querypb.StreamHealthResponse
 	// isServingPrimary stores if this tablet is currently the serving primary or not.

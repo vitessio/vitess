@@ -27,6 +27,7 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/sasha-s/go-deadlock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -138,7 +139,7 @@ type testVDiffEnv struct {
 	dbClientFactory func() binlogplayer.DBClient
 	tmClientFactory func() tmclient.TabletManagerClient
 
-	mu      sync.Mutex
+	mu      deadlock.Mutex
 	tablets map[int]*fakeTabletConn
 }
 

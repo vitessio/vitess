@@ -18,8 +18,8 @@ package tabletserver
 
 import (
 	"fmt"
-	"sync"
 
+	"github.com/sasha-s/go-deadlock"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -33,7 +33,7 @@ var (
 // The Prepare functionality and associated orchestration
 // is done by TxPool.
 type TxPreparedPool struct {
-	mu       sync.Mutex
+	mu       deadlock.Mutex
 	conns    map[string]*StatefulConnection
 	reserved map[string]error
 	// open tells if the prepared pool is open for accepting transactions.

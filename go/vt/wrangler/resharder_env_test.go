@@ -21,9 +21,9 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
-	"sync"
 	"testing"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -181,7 +181,7 @@ type testResharderTMClient struct {
 	tmclient.TabletManagerClient
 	schema *tabletmanagerdatapb.SchemaDefinition
 
-	mu        sync.Mutex
+	mu        deadlock.Mutex
 	vrQueries map[int][]*queryResult
 }
 

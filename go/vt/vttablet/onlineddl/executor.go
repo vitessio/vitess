@@ -33,6 +33,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/spf13/pflag"
 	"google.golang.org/protobuf/encoding/prototext"
 
@@ -161,9 +162,9 @@ type Executor struct {
 	shard    string
 	dbName   string
 
-	initMutex      sync.Mutex
-	migrationMutex sync.Mutex
-	submitMutex    sync.Mutex // used when submitting migrations
+	initMutex      deadlock.Mutex
+	migrationMutex deadlock.Mutex
+	submitMutex    deadlock.Mutex // used when submitting migrations
 	// ownedRunningMigrations lists UUIDs owned by this executor (consider this a map[string]bool)
 	// A UUID listed in this map stands for a migration that is executing, and that this executor can control.
 	// Migrations found to be running which are not listed in this map will either:

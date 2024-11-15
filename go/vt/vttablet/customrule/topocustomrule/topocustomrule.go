@@ -24,9 +24,9 @@ import (
 	"context"
 	"fmt"
 	"reflect"
-	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/log"
@@ -73,7 +73,7 @@ type topoCustomRule struct {
 	qrs *rules.Rules
 
 	// mu protects the following variables.
-	mu sync.Mutex
+	mu deadlock.Mutex
 
 	// cancel is the function to call to cancel the current watch, if any.
 	cancel func()

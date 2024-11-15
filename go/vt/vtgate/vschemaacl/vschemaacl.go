@@ -18,8 +18,8 @@ package vschemaacl
 
 import (
 	"strings"
-	"sync"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/servenv"
@@ -37,7 +37,7 @@ var (
 	// ddlACL contains a set of allowed usernames
 	acl map[string]struct{}
 
-	initMu sync.Mutex
+	initMu deadlock.Mutex
 )
 
 // RegisterSchemaACLFlags installs log flags on the given FlagSet.

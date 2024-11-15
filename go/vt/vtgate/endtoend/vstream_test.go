@@ -22,9 +22,9 @@ import (
 	"io"
 	"regexp"
 	"sort"
-	"sync"
 	"testing"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
@@ -790,7 +790,7 @@ func removeAnyDeprecatedDisplayWidths(orig string) string {
 	return adjusted
 }
 
-var printMu sync.Mutex
+var printMu deadlock.Mutex
 
 func printEvents(evs []*binlogdatapb.VEvent) {
 	printMu.Lock()

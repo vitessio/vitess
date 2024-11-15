@@ -90,9 +90,9 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/spf13/pflag"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -164,7 +164,7 @@ type commandGroup struct {
 
 // commandsMutex protects commands at init time. We use servenv, which calls
 // all Run hooks in parallel.
-var commandsMutex sync.Mutex
+var commandsMutex deadlock.Mutex
 
 // TODO: Convert these commands to be automatically generated from flag parser.
 var commands = []commandGroup{

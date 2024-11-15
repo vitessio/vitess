@@ -24,11 +24,11 @@ import (
 	"slices"
 	"sort"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/sasha-s/go-deadlock"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/config"
@@ -427,7 +427,7 @@ type loggingVCursor struct {
 	multiShardErrs []error
 
 	log []string
-	mu  sync.Mutex
+	mu  deadlock.Mutex
 
 	resolvedTargetTabletType topodatapb.TabletType
 

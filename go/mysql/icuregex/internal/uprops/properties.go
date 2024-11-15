@@ -24,8 +24,8 @@ package uprops
 import (
 	"strconv"
 	"strings"
-	"sync"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/mysql/icuregex/errors"
 	"vitess.io/vitess/go/mysql/icuregex/internal/normalizer"
 	"vitess.io/vitess/go/mysql/icuregex/internal/pattern"
@@ -39,7 +39,7 @@ import (
 	"vitess.io/vitess/go/mysql/icuregex/internal/utrie"
 )
 
-var inclusionsMu sync.Mutex
+var inclusionsMu deadlock.Mutex
 var inclusionsForSource = make(map[propertySource]*uset.UnicodeSet)
 var inclusionsForProperty = make(map[Property]*uset.UnicodeSet)
 

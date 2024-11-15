@@ -19,9 +19,9 @@ package vtctld
 import (
 	"context"
 	"io"
-	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/grpcclient"
@@ -44,7 +44,7 @@ var (
 )
 
 type tabletHealth struct {
-	mu sync.Mutex
+	mu deadlock.Mutex
 
 	// result stores the most recent response.
 	result *querypb.StreamHealthResponse
@@ -141,7 +141,7 @@ type tabletHealthCache struct {
 	ts *topo.Server
 
 	// mu protects the map.
-	mu sync.Mutex
+	mu deadlock.Mutex
 
 	// tabletMap is keyed by topoproto.TabletAliasString(tablet alias).
 	tabletMap map[string]*tabletHealth

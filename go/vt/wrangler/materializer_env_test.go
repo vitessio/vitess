@@ -23,9 +23,9 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"sync"
 	"testing"
 
+	"github.com/sasha-s/go-deadlock"
 	_flag "vitess.io/vitess/go/internal/flag"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -175,10 +175,10 @@ type testMaterializerTMClient struct {
 	tmclient.TabletManagerClient
 	schema map[string]*tabletmanagerdatapb.SchemaDefinition
 
-	mu              sync.Mutex
+	mu              deadlock.Mutex
 	vrQueries       map[int][]*queryResult
 	getSchemaCounts map[string]int
-	muSchemaCount   sync.Mutex
+	muSchemaCount   deadlock.Mutex
 }
 
 func newTestMaterializerTMClient() *testMaterializerTMClient {

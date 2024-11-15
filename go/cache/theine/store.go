@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/gammazero/deque"
+	"github.com/sasha-s/go-deadlock"
 
 	"vitess.io/vitess/go/cache/theine/bf"
 )
@@ -173,7 +174,7 @@ type Store[K cachekey, V cacheval] struct {
 	tailUpdate   bool
 	doorkeeper   bool
 
-	mlock       sync.Mutex
+	mlock       deadlock.Mutex
 	readCounter atomic.Uint32
 	open        atomic.Bool
 }

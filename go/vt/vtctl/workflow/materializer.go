@@ -21,9 +21,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"sync"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 
@@ -272,7 +272,7 @@ func (mz *materializer) generateBinlogSources(ctx context.Context, targetShard *
 
 func (mz *materializer) deploySchema() error {
 	var sourceDDLs map[string]string
-	var mu sync.Mutex
+	var mu deadlock.Mutex
 
 	// Auto-increment columns are typically used with unsharded MySQL tables
 	// but should not generally be used with sharded ones. Because it's common
@@ -577,7 +577,7 @@ func (mz *materializer) buildMaterializer() error {
 // It queries each shard's primary tablet and if any non-empty table is found,
 // returns an error containing a list of non-empty tables.
 func (mz *materializer) validateEmptyTables() error {
-	var mu sync.Mutex
+	var mu deadlock.Mutex
 	isNonEmptyTable := map[string]bool{}
 
 	err := forAllShards(mz.targetShards, func(shard *topo.ShardInfo) error {

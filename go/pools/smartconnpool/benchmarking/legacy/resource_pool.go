@@ -21,10 +21,10 @@ import (
 	"errors"
 	"fmt"
 	"math/rand/v2"
-	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/pools/smartconnpool"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/log"
@@ -108,7 +108,7 @@ type (
 		diffSettingCount  atomic.Int64
 		resetSettingCount atomic.Int64
 
-		reopenMutex sync.Mutex
+		reopenMutex deadlock.Mutex
 		refresh     *poolRefresh
 	}
 )

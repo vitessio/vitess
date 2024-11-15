@@ -22,10 +22,10 @@ import (
 	"io"
 	"reflect"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
@@ -53,7 +53,7 @@ type fakeRPCTM struct {
 	// slow if true will let Ping() sleep and effectively not respond to an RPC.
 	slow bool
 	// mu guards accesses of "slow".
-	mu sync.Mutex
+	mu deadlock.Mutex
 }
 
 func (fra *fakeRPCTM) CreateVReplicationWorkflow(ctx context.Context, req *tabletmanagerdatapb.CreateVReplicationWorkflowRequest) (*tabletmanagerdatapb.CreateVReplicationWorkflowResponse, error) {

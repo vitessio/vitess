@@ -18,8 +18,8 @@ package messager
 
 import (
 	"context"
-	"sync"
 
+	"github.com/sasha-s/go-deadlock"
 	"golang.org/x/sync/semaphore"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -54,13 +54,13 @@ type VStreamer interface {
 type Engine struct {
 	// mu is a mutex used to protect the isOpen variable
 	// and for ensuring we don't call setup functions in parallel.
-	mu     sync.Mutex
+	mu     deadlock.Mutex
 	isOpen bool
 
 	// managersMu is a mutex used to protect the managers field.
 	// We require two separate mutexes, so that we don't have to acquire the same mutex
 	// in Close and schemaChanged which can lead to a deadlock described in https://github.com/vitessio/vitess/issues/17229.
-	managersMu sync.Mutex
+	managersMu deadlock.Mutex
 	managers   map[string]*messageManager
 
 	tsv          TabletService

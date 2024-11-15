@@ -25,6 +25,7 @@ import (
 
 	"context"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/z-division/go-zookeeper/zk"
 
 	"vitess.io/vitess/go/vt/log"
@@ -65,7 +66,7 @@ func CreateRecursive(ctx context.Context, conn *ZkConn, zkPath string, value []b
 // the provided node.
 func ChildrenRecursive(ctx context.Context, zconn *ZkConn, zkPath string) ([]string, error) {
 	var err error
-	mutex := sync.Mutex{}
+	mutex := deadlock.Mutex{}
 	wg := sync.WaitGroup{}
 	pathList := make([]string, 0, 32)
 	children, _, err := zconn.Children(ctx, zkPath)
@@ -119,7 +120,7 @@ func ChildrenRecursive(ctx context.Context, zconn *ZkConn, zkPath string) ([]str
 func ResolveWildcards(ctx context.Context, zconn *ZkConn, zkPaths []string) ([]string, error) {
 	results := make([][]string, len(zkPaths))
 	wg := &sync.WaitGroup{}
-	mu := &sync.Mutex{}
+	mu := &deadlock.Mutex{}
 	var firstError error
 
 	for i, zkPath := range zkPaths {
@@ -183,7 +184,7 @@ func resolveRecursive(ctx context.Context, zconn *ZkConn, parts []string, toplev
 
 			results := make([][]string, len(children))
 			wg := &sync.WaitGroup{}
-			mu := &sync.Mutex{}
+			mu := &deadlock.Mutex{}
 			var firstError error
 
 			for j, child := range children {

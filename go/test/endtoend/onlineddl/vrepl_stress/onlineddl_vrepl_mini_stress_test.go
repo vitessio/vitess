@@ -29,6 +29,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -42,7 +43,7 @@ import (
 )
 
 type WriteMetrics struct {
-	mu                                                      sync.Mutex
+	mu                                                      deadlock.Mutex
 	insertsAttempts, insertsFailures, insertsNoops, inserts int64
 	updatesAttempts, updatesFailures, updatesNoops, updates int64
 	deletesAttempts, deletesFailures, deletesNoops, deletes int64
@@ -88,7 +89,7 @@ var (
 	vtParams        mysql.ConnParams
 
 	opOrder               int64
-	opOrderMutex          sync.Mutex
+	opOrderMutex          deadlock.Mutex
 	onlineDDLStrategy     = "vitess"
 	hostname              = "localhost"
 	keyspaceName          = "ks"

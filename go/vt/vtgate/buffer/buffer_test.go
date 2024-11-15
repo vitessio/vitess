@@ -25,6 +25,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -858,7 +859,7 @@ func TestParallelRangeIndex(t *testing.T) {
 	for idx, tc := range suite {
 		name := fmt.Sprintf("%d_max%d_concurrency%d", idx, tc.max, tc.concurrency)
 		t.Run(name, func(t *testing.T) {
-			var mu sync.Mutex
+			var mu deadlock.Mutex
 			var wg sync.WaitGroup
 			var counter atomic.Int64
 

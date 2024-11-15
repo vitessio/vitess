@@ -22,6 +22,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/sasha-s/go-deadlock"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -653,7 +654,7 @@ type UntypedExpr struct {
 	// the node in this slice.
 	needTypes []typedIR
 
-	mu sync.Mutex
+	mu deadlock.Mutex
 	// typed contains the lazily compiled versions of ir for every type set
 	typed []*typedExpr
 }

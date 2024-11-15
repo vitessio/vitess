@@ -20,9 +20,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"sync"
 	"testing"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
@@ -81,7 +81,7 @@ type TestClusterConfig struct {
 const discoveryTestImplName = "vtadmin.testutil"
 
 var (
-	m         sync.Mutex
+	m         deadlock.Mutex
 	testdisco discovery.Discovery
 )
 
