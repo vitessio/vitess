@@ -193,7 +193,7 @@ func TestDeadlockBwCloseAndSchemaChange(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		for i := 0; i < 100; i++ {
-			se.BroadcastForTesting(nil, nil, nil, true)
+			se.BroadcastForTesting(nil, nil, nil)
 		}
 	}()
 
