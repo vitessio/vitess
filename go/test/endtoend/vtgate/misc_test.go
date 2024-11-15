@@ -804,6 +804,8 @@ func TestDDLTargeted(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
+	defer utils.Exec(t, conn, "drop table if exists ddl_targeted")
+
 	utils.Exec(t, conn, "use `ks/-80`")
 	utils.Exec(t, conn, `begin`)
 	utils.Exec(t, conn, `create table ddl_targeted (id bigint primary key)`)
@@ -863,10 +865,10 @@ func TestShow(t *testing.T) {
 
 	qr := utils.Exec(t, conn, "show tables")
 	assert.Equal(t, 1, len(qr.Fields))
-	assert.Equal(t, 22, len(qr.Rows))
+	assert.Equal(t, 21, len(qr.Rows))
 
 	utils.Exec(t, conn, "begin")
 	qr = utils.Exec(t, conn, "show tables")
 	assert.Equal(t, 1, len(qr.Fields))
-	assert.Equal(t, 22, len(qr.Rows))
+	assert.Equal(t, 21, len(qr.Rows))
 }
