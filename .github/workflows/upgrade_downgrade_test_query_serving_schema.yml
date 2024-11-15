@@ -16,7 +16,7 @@ jobs:
 
   upgrade_downgrade_test:
     name: Run Upgrade Downgrade Test - Query Serving (Schema)
-    runs-on: gh-hosted-runners-16cores-1
+    runs-on: ${{ github.repository_owner == 'vitessio' && 'gh-hosted-runners-16cores-1' || 'ubuntu-latest' }}
 
     steps:
     - name: Skip CI

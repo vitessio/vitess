@@ -15,7 +15,7 @@ jobs:
   upgrade_downgrade_test_manual:
     timeout-minutes: 40
     name: Run Upgrade Downgrade Test - Backups - Manual
-    runs-on: gh-hosted-runners-16cores-1
+    runs-on: ${{ github.repository_owner == 'vitessio' && 'gh-hosted-runners-16cores-1' || 'ubuntu-latest' }}
 
     steps:
     - name: Skip CI

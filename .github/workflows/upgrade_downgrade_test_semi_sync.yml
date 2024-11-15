@@ -13,7 +13,7 @@ jobs:
   upgrade_downgrade_test_e2e:
     timeout-minutes: 60
     name: Run Semi Sync Upgrade Downgrade Test
-    runs-on: gh-hosted-runners-16cores-1
+    runs-on: ${{ github.repository_owner == 'vitessio' && 'gh-hosted-runners-16cores-1' || 'ubuntu-latest' }}
 
     steps:
       - name: Skip CI
@@ -93,10 +93,10 @@ jobs:
           sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
           sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
           go mod download
-          
+
           # install JUnit report formatter
           go install github.com/vitessio/go-junit-report@HEAD
-          
+
           wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
           sudo apt-get install -y gnupg2
           sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
@@ -150,7 +150,7 @@ jobs:
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
         run: |
           source build.env
-          
+
           cp /tmp/vitess-build-other/bin/vttablet $PWD/bin/vttabletold
           vttabletold --version
 

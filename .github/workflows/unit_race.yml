@@ -15,7 +15,7 @@ jobs:
 
   build:
     name: Unit Test (Race)
-    runs-on: gh-hosted-runners-16cores-1
+    runs-on: ${{ github.repository_owner == 'vitessio' && 'gh-hosted-runners-16cores-1' || 'ubuntu-latest' }}
     steps:
     - name: Skip CI
       run: |
@@ -33,7 +33,7 @@ jobs:
         fi
         echo Skip ${skip}
         echo "skip-workflow=${skip}" >> $GITHUB_OUTPUT
-        
+
         PR_DATA=$(curl \
           -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
           -H "Accept: application/vnd.github.v3+json" \
@@ -101,7 +101,7 @@ jobs:
 
         go mod download
         go install golang.org/x/tools/cmd/goimports@latest
-        
+
         # install JUnit report formatter
         go install github.com/vitessio/go-junit-report@HEAD
 
@@ -144,7 +144,7 @@ jobs:
 
         # print test output
         cat output.txt
-        
+
     - name: Test Summary
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true' && always()
       uses: test-summary/action@31493c76ec9e7aa675f1585d3ed6f1da69269a86 # v2.4

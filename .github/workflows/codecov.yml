@@ -9,7 +9,7 @@ permissions: read-all
 jobs:
   test:
     name: Code Coverage
-    runs-on: gh-hosted-runners-16cores-1
+    runs-on: ${{ github.repository_owner == 'vitessio' && 'gh-hosted-runners-16cores-1' || 'ubuntu-latest' }}
 
     steps:
     - name: Check out code
@@ -83,7 +83,7 @@ jobs:
 
         go mod download
         go install golang.org/x/tools/cmd/goimports@latest
-        
+
     - name: Run make tools
       if: steps.changes.outputs.changed_files == 'true'
       run: |

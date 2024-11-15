@@ -14,7 +14,7 @@ env:
 jobs:
   build:
     name: Run endtoend tests on {{.Name}}
-    runs-on: {{if .Cores16}}gh-hosted-runners-16cores-1{{else}}ubuntu-latest{{end}}
+    runs-on: {{if .Cores16}}{{`${{ github.repository_owner == 'vitessio' && 'gh-hosted-runners-16cores-1' || 'ubuntu-latest' }}`}}{{else}}ubuntu-latest{{end}}
 
     steps:
     - name: Skip CI
@@ -47,7 +47,7 @@ jobs:
       run: |
         totalMem=$(free -g | awk 'NR==2 {print $2}')
         echo "total memory $totalMem GB"
-        if [[ "$totalMem" -lt 15 ]]; then 
+        if [[ "$totalMem" -lt 15 ]]; then
           echo "Less memory than required"
           exit 1
         fi
