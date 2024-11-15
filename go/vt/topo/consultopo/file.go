@@ -87,7 +87,9 @@ func (s *Server) Update(ctx context.Context, filePath string, contents []byte, v
 func (s *Server) Get(ctx context.Context, filePath string) ([]byte, topo.Version, error) {
 	nodePath := path.Join(s.root, filePath)
 
-	pair, _, err := s.kv.Get(nodePath, nil)
+	pair, _, err := s.kv.Get(nodePath, &api.QueryOptions{
+		AllowStale: consulAllowStaleReads,
+	})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -102,7 +104,9 @@ func (s *Server) Get(ctx context.Context, filePath string) ([]byte, topo.Version
 func (s *Server) List(ctx context.Context, filePathPrefix string) ([]topo.KVInfo, error) {
 	nodePathPrefix := path.Join(s.root, filePathPrefix)
 
-	pairs, _, err := s.kv.List(nodePathPrefix, nil)
+	pairs, _, err := s.kv.List(nodePathPrefix, &api.QueryOptions{
+		AllowStale: consulAllowStaleReads,
+	})
 	if err != nil {
 		return []topo.KVInfo{}, err
 	}

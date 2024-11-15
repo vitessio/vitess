@@ -124,6 +124,7 @@ Usage of vtctld:
       --tablet_refresh_interval duration                                 Tablet refresh interval. (default 1m0s)
       --tablet_refresh_known_tablets                                     Whether to reload the tablet's address/port map from topo in case they change. (default true)
       --tablet_url_template string                                       Format string describing debug tablet url formatting. See getTabletDebugURL() for how to customize this. (default "http://{{.GetTabletHostPort}}")
+      --topo_consul_allow_stale_reads                                    Allow stale reads from consul servers
       --topo_consul_idle_conn_timeout duration                           Maximum amount of time to pool idle connections. (default 1m30s)
       --topo_consul_lock_delay duration                                  LockDelay for consul session. (default 15s)
       --topo_consul_lock_session_checks string                           List of checks for consul session. (default "serfHealth")

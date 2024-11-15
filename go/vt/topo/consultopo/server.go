@@ -46,6 +46,7 @@ var (
 	consulMaxConnsPerHost   int = 250 // do not use client default of 0/unlimited
 	consulMaxIdleConns      int
 	consulIdleConnTimeout   time.Duration
+	consulAllowStaleReads   bool
 )
 
 func init() {
@@ -65,6 +66,7 @@ func registerServerFlags(fs *pflag.FlagSet) {
 	fs.IntVar(&consulMaxConnsPerHost, "topo_consul_max_conns_per_host", consulMaxConnsPerHost, "Maximum number of consul connections per host.")
 	fs.IntVar(&consulMaxIdleConns, "topo_consul_max_idle_conns", defaultConsulPooledTransport.MaxIdleConns, "Maximum number of idle consul connections.")
 	fs.DurationVar(&consulIdleConnTimeout, "topo_consul_idle_conn_timeout", defaultConsulPooledTransport.IdleConnTimeout, "Maximum amount of time to pool idle connections.")
+	fs.BoolVar(&consulAllowStaleReads, "topo_consul_allow_stale_reads", consulAllowStaleReads, "Allow stale reads from consul servers")
 }
 
 // ClientAuthCred credential to use for consul clusters
