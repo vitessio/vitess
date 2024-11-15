@@ -568,7 +568,9 @@ func testBlpFunc() (int64, int32) {
 // TestDeadlockBwCloseAndReload tests the deadlock observed between Close and Reload
 // functions. More details can be found in the issue https://github.com/vitessio/vitess/issues/17229#issuecomment-2476136610.
 func TestDeadlockBwCloseAndReload(t *testing.T) {
-	cfg := newConfig(nil)
+	db := fakesqldb.New(t)
+	defer db.Close()
+	cfg := newConfig(db)
 	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TestNotServingPrimary")
 	alias := &topodatapb.TabletAlias{
 		Cell: "cell",
@@ -578,6 +580,7 @@ func TestDeadlockBwCloseAndReload(t *testing.T) {
 	// Create a new health streamer and set it to a serving primary state
 	hs := newHealthStreamer(env, alias, se)
 	hs.signalWhenSchemaChange = true
+	hs.InitDBConfig(&querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}, cfg.DB.DbaWithDB())
 	hs.Open()
 	hs.MakePrimary(true)
 	defer hs.Close()
