@@ -66,11 +66,11 @@ type healthStreamer struct {
 	degradedThreshold  time.Duration
 	unhealthyThreshold atomic.Int64
 
-	// mu is a mutex used to protect the cancel variable
+	// cancelMu is a mutex used to protect the cancel variable
 	// and for ensuring we don't call setup functions in parallel.
-	mu     sync.Mutex
-	ctx    context.Context
-	cancel context.CancelFunc
+	cancelMu sync.Mutex
+	ctx      context.Context
+	cancel   context.CancelFunc
 
 	// fieldsMu is used to protect access to the fields below.
 	// We require two separate mutexes, so that we don't have to acquire the same mutex
@@ -117,8 +117,8 @@ func (hs *healthStreamer) InitDBConfig(target *querypb.Target) {
 }
 
 func (hs *healthStreamer) Open() {
-	hs.mu.Lock()
-	defer hs.mu.Unlock()
+	hs.cancelMu.Lock()
+	defer hs.cancelMu.Unlock()
 
 	if hs.cancel != nil {
 		return
@@ -127,8 +127,8 @@ func (hs *healthStreamer) Open() {
 }
 
 func (hs *healthStreamer) Close() {
-	hs.mu.Lock()
-	defer hs.mu.Unlock()
+	hs.cancelMu.Lock()
+	defer hs.cancelMu.Unlock()
 
 	if hs.cancel != nil {
 		hs.se.UnregisterNotifier("healthStreamer")
@@ -165,8 +165,8 @@ func (hs *healthStreamer) Stream(ctx context.Context, callback func(*querypb.Str
 }
 
 func (hs *healthStreamer) register() (chan *querypb.StreamHealthResponse, context.Context) {
-	hs.mu.Lock()
-	defer hs.mu.Unlock()
+	hs.cancelMu.Lock()
+	defer hs.cancelMu.Unlock()
 
 	if hs.cancel == nil {
 		return nil, nil
