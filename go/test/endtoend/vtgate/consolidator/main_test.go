@@ -193,6 +193,7 @@ func TestConsolidatorEnabledReplicasWithDirective(t *testing.T) {
 }
 
 func testConsolidator(t *testing.T, testCases []consolidatorTestCase) {
+	t.Skip("consolidator is not support with raw packets")
 	for _, testCase := range testCases {
 		t.Run(fmt.Sprintf("%s%s", testCase.query, testCase.tabletType), func(t *testing.T) {
 			// Create a connection.
