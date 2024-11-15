@@ -81,7 +81,7 @@ var (
 	statelessDecoder *zstd.Decoder
 
 	// A pool of stateful decoders for larger payloads that we want to
-	// stream. The number of large (> zstdInMemoryDecompressorMaxSize)
+	// stream. The number of large (> ZstdInMemoryDecompressorMaxSize)
 	// payloads should typically be relatively low, but there may be times
 	// where there are many of them -- and users like vstreamer may have
 	// N concurrent streams per tablet which could lead to a lot of
@@ -271,7 +271,7 @@ func (tp *TransactionPayload) decode() error {
 }
 
 // decompress decompresses the payload. If the payload is larger than
-// zstdInMemoryDecompressorMaxSize then we stream the decompression via
+// ZstdInMemoryDecompressorMaxSize then we stream the decompression via
 // the package's pool of zstd.Decoders, otherwise we use in-memory
 // buffers with the package's concurrent statelessDecoder.
 // In either case, we setup the reader that can be used within the
