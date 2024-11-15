@@ -19,6 +19,7 @@ package messager
 import (
 	"context"
 	"reflect"
+	"sync"
 	"testing"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -156,7 +157,7 @@ func newTestEngine() *Engine {
 	tsv := &fakeTabletServer{
 		Env: tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "MessagerTest"),
 	}
-	se := schema.NewEngine(tsv)
+	se := schema.NewEngineForTests()
 	te := NewEngine(tsv, se, newFakeVStreamer())
 	te.Open()
 	return te
@@ -168,4 +169,34 @@ func newEngineReceiver() (f func(qr *sqltypes.Result) error, ch chan *sqltypes.R
 		ch <- qr
 		return nil
 	}, ch
+}
+
+// TestDeadlockBwCloseAndSchemaChange tests the deadlock observed between Close and schemaChanged
+// functions. More details can be found in the issue https://github.com/vitessio/vitess/issues/17229.
+func TestDeadlockBwCloseAndSchemaChange(t *testing.T) {
+	engine := newTestEngine()
+	defer engine.Close()
+	se := engine.se
+
+	wg := sync.WaitGroup{}
+	wg.Add(2)
+	// Try running Close and schemaChanged in parallel multiple times.
+	// This reproduces the deadlock quite readily.
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 100; i++ {
+			engine.Close()
+			engine.Open()
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 100; i++ {
+			se.BroadcastForTesting(nil, nil, nil)
+		}
+	}()
+
+	// Wait for wait group to finish.
+	wg.Wait()
 }

@@ -564,3 +564,46 @@ func testStream(hs *healthStreamer) (<-chan *querypb.StreamHealthResponse, conte
 func testBlpFunc() (int64, int32) {
 	return 1, 2
 }
+
+// TestDeadlockBwCloseAndReload tests the deadlock observed between Close and Reload
+// functions. More details can be found in the issue https://github.com/vitessio/vitess/issues/17229#issuecomment-2476136610.
+func TestDeadlockBwCloseAndReload(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	cfg := newConfig(db)
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TestNotServingPrimary")
+	alias := &topodatapb.TabletAlias{
+		Cell: "cell",
+		Uid:  1,
+	}
+	se := schema.NewEngineForTests()
+	// Create a new health streamer and set it to a serving primary state
+	hs := newHealthStreamer(env, alias, se)
+	hs.signalWhenSchemaChange = true
+	hs.InitDBConfig(&querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}, cfg.DB.DbaWithDB())
+	hs.Open()
+	hs.MakePrimary(true)
+	defer hs.Close()
+
+	wg := sync.WaitGroup{}
+	wg.Add(2)
+	// Try running Close and reload in parallel multiple times.
+	// This reproduces the deadlock quite readily.
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 100; i++ {
+			hs.Close()
+			hs.Open()
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 100; i++ {
+			se.BroadcastForTesting(nil, nil, nil)
+		}
+	}()
+
+	// Wait for wait group to finish.
+	wg.Wait()
+}

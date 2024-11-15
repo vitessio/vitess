@@ -743,6 +743,13 @@ func (se *Engine) broadcast(created, altered, dropped []*Table) {
 	}
 }
 
+// BroadcastForTesting is meant to be a testing function that triggers a broadcast call.
+func (se *Engine) BroadcastForTesting(created, altered, dropped []*Table) {
+	se.mu.Lock()
+	defer se.mu.Unlock()
+	se.broadcast(created, altered, dropped)
+}
+
 // GetTable returns the info for a table.
 func (se *Engine) GetTable(tableName sqlparser.IdentifierCS) *Table {
 	se.mu.Lock()
@@ -829,6 +836,7 @@ func NewEngineForTests() *Engine {
 		tables:    make(map[string]*Table),
 		historian: newHistorian(false, 0, nil),
 		env:       tabletenv.NewEnv(vtenv.NewTestEnv(), tabletenv.NewDefaultConfig(), "SchemaEngineForTests"),
+		notifiers: make(map[string]notifier),
 	}
 	return se
 }
