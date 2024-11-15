@@ -17,12 +17,12 @@ limitations under the License.
 package mysql
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	cmp "vitess.io/vitess/go/test/utils"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -56,7 +56,11 @@ func TestParseResult(t *testing.T) {
 	er := &querypb.ExecuteResponse{RawPackets: packets}
 	qr, err := ParseResult(er, true)
 	require.NoError(t, err)
-	assert.EqualValues(t, `[name:"Tables_in_vt_ks" type:VARCHAR table:"TABLES" org_name:"Tables_in_vt_ks" column_length:256 charset:255]`, fmt.Sprintf("%v", qr.Fields))
+
+	// validations
+	assert.EqualValues(t, 1, len(qr.Fields))
+	exp := &querypb.Field{Name: "Tables_in_vt_ks", Type: querypb.Type_VARCHAR, Table: "TABLES", OrgName: "Tables_in_vt_ks", ColumnLength: 256, Charset: 255}
+	cmp.MustMatch(t, exp, qr.Fields[0])
 	assert.EqualValues(t, 21, len(qr.Rows))
 	assert.EqualValues(t, 0, qr.RowsAffected)
 	assert.EqualValues(t, 0, qr.InsertID)
