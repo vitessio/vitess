@@ -38,6 +38,7 @@ type MySQLManager interface {
 	Start() error
 	TearDown() error
 	Auth() (string, string)
+	SetHost(host string)
 	Address() (string, int)
 	UnixSocket() string
 	TabletDir() string
@@ -49,6 +50,7 @@ type Mysqlctl struct {
 	Binary    string
 	InitFile  string
 	Directory string
+	Host      string
 	Port      int
 	MyCnf     []string
 	Env       []string
@@ -65,6 +67,7 @@ func (ctl *Mysqlctl) Setup() error {
 		ctl.Binary,
 		"--alsologtostderr",
 		"--tablet_uid", fmt.Sprintf("%d", ctl.UID),
+		"--mysql_bind_address", ctl.Host,
 		"--mysql_port", fmt.Sprintf("%d", ctl.Port),
 		"init",
 		"--init_db_sql_file", ctl.InitFile,
@@ -90,6 +93,7 @@ func (ctl *Mysqlctl) Start() error {
 		ctl.Binary,
 		"--alsologtostderr",
 		"--tablet_uid", fmt.Sprintf("%d", ctl.UID),
+		"--mysql_bind_address", ctl.Host,
 		"--mysql_port", fmt.Sprintf("%d", ctl.Port),
 		"start",
 	)
@@ -113,6 +117,7 @@ func (ctl *Mysqlctl) TearDown() error {
 		ctl.Binary,
 		"--alsologtostderr",
 		"--tablet_uid", fmt.Sprintf("%d", ctl.UID),
+		"--mysql_bind_address", ctl.Host,
 		"--mysql_port", fmt.Sprintf("%d", ctl.Port),
 		"shutdown",
 	)
@@ -131,7 +136,12 @@ func (ctl *Mysqlctl) Auth() (string, string) {
 
 // Address returns the hostname/tcp port pair required to connect to mysqld
 func (ctl *Mysqlctl) Address() (string, int) {
-	return "", ctl.Port
+	return ctl.Host, ctl.Port
+}
+
+// SetHost allows to confgireu the host as needed
+func (ctl *Mysqlctl) SetHost(host string) {
+	ctl.Host = host
 }
 
 // UnixSocket returns the path to the local Unix socket required to connect to mysqld
@@ -148,6 +158,7 @@ func (ctl *Mysqlctl) TabletDir() string {
 // using Vitess' mysql client.
 func (ctl *Mysqlctl) Params(dbname string) mysql.ConnParams {
 	return mysql.ConnParams{
+		Host:       ctl.Host,
 		DbName:     dbname,
 		Uname:      "vt_dba",
 		UnixSocket: ctl.UnixSocket(),

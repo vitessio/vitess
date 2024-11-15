@@ -39,7 +39,7 @@ func TestMycnf(t *testing.T) {
 	os.Remove(MycnfPath)
 
 	uid := uint32(11111)
-	cnf := NewMycnf(uid, 6802)
+	cnf := NewMycnf(uid, "0.0.0.0", 6802)
 	myTemplateSource := new(bytes.Buffer)
 	myTemplateSource.WriteString("[mysqld]\n")
 	// Assigning ServerID to be different from tablet UID to make sure that there are no
@@ -52,7 +52,7 @@ func TestMycnf(t *testing.T) {
 	t.Logf("data: %v", data)
 
 	// Since there is no my.cnf file, reading it should fail with a no such file error.
-	mycnf := NewMycnf(uid, 0)
+	mycnf := NewMycnf(uid, "0.0.0.0", 0)
 	mycnf.Path = MycnfPath
 	_, err = ReadMycnf(mycnf, 0)
 	require.ErrorContains(t, err, "no such file or directory")
@@ -100,7 +100,7 @@ func TestMycnf(t *testing.T) {
 // nolint
 func NoTestMycnfHook(t *testing.T) {
 	uid := uint32(11111)
-	cnf := NewMycnf(uid, 6802)
+	cnf := NewMycnf(uid, "0.0.0.0", 6802)
 	// Assigning ServerID to be different from tablet UID to make sure that there are no
 	// assumptions in the code that those IDs are the same.
 	cnf.ServerID = 22222
@@ -125,7 +125,7 @@ func NoTestMycnfHook(t *testing.T) {
 	_, err = os.ReadFile(cnf.Path)
 	require.NoError(t, err)
 
-	mycnf := NewMycnf(uid, 0)
+	mycnf := NewMycnf(uid, "0.0.0.0", 0)
 	mycnf.Path = cnf.Path
 	mycnf, err = ReadMycnf(mycnf, 0)
 	if err != nil {

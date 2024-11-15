@@ -9,6 +9,7 @@ relay-log = {{.RelayLogPath}}
 relay-log-index =  {{.RelayLogIndexPath}}
 pid-file = {{.PidFile}}
 port = {{.MysqlPort}}
+bind-address = {{.MysqlBindAddress}}
 
 {{if .SecureFilePriv}}
 secure-file-priv = {{.SecureFilePriv}}

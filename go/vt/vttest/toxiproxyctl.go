@@ -183,6 +183,9 @@ func (ctl *Toxiproxyctl) Address() (string, int) {
 	return "", ctl.port
 }
 
+// SetHost allows to confgireu the host as needed
+func (ctl *Toxiproxyctl) SetHost(host string) {}
+
 // UnixSocket returns the path to the local Unix socket required to connect to mysqld.
 func (ctl *Toxiproxyctl) UnixSocket() string {
 	// Toxiproxy does not support Unix sockets

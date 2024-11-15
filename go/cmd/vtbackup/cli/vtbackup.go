@@ -84,6 +84,7 @@ var (
 	incrementalFromPos string
 
 	// mysqlctld-like flags
+	mysqlBindAddress     = "0.0.0.0"
 	mysqlPort            = 3306
 	mysqlSocket          string
 	mysqlTimeout         = 5 * time.Minute
@@ -331,7 +332,7 @@ func takeBackup(ctx, backgroundCtx context.Context, topoServer *topo.Server, bac
 	}()
 
 	// Start up mysqld as if we are mysqlctld provisioning a fresh tablet.
-	mysqld, mycnf, err := mysqlctl.CreateMysqldAndMycnf(tabletAlias.Uid, mysqlSocket, mysqlPort, collationEnv)
+	mysqld, mycnf, err := mysqlctl.CreateMysqldAndMycnf(tabletAlias.Uid, mysqlSocket, mysqlBindAddress, mysqlPort, collationEnv)
 	if err != nil {
 		return fmt.Errorf("failed to initialize mysql config: %v", err)
 	}

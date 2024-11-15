@@ -30,10 +30,11 @@ import (
 )
 
 var (
-	mysqlPort    = 3306
-	tabletUID    = uint32(41983)
-	mysqlSocket  string
-	collationEnv *collations.Environment
+	mysqlBindAddress = "0.0.0.0"
+	mysqlPort        = 3306
+	tabletUID        = uint32(41983)
+	mysqlSocket      string
+	collationEnv     *collations.Environment
 
 	Root = &cobra.Command{
 		Use:   "mysqlctl",
@@ -70,6 +71,7 @@ func init() {
 
 	servenv.MovePersistentFlagsToCobraCommand(Root)
 
+	Root.PersistentFlags().StringVar(&mysqlBindAddress, "mysql_bind_address", mysqlBindAddress, "MySQL bind address.")
 	Root.PersistentFlags().IntVar(&mysqlPort, "mysql_port", mysqlPort, "MySQL port.")
 	Root.PersistentFlags().Uint32Var(&tabletUID, "tablet_uid", tabletUID, "Tablet UID.")
 	Root.PersistentFlags().StringVar(&mysqlSocket, "mysql_socket", mysqlSocket, "Path to the mysqld socket file.")

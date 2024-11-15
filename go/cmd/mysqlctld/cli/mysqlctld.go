@@ -41,10 +41,11 @@ var (
 	mysqld *mysqlctl.Mysqld
 	cnf    *mysqlctl.Mycnf
 
-	mysqlPort    = 3306
-	tabletUID    = uint32(41983)
-	mysqlSocket  string
-	collationEnv *collations.Environment
+	mysqlBindAddress = "0.0.0.0"
+	mysqlPort        = 3306
+	tabletUID        = uint32(41983)
+	mysqlSocket      string
+	collationEnv     *collations.Environment
 
 	// mysqlctl init flags
 	waitTime         = 5 * time.Minute
@@ -91,6 +92,7 @@ func init() {
 
 	servenv.MoveFlagsToCobraCommand(Main)
 
+	Main.Flags().StringVar(&mysqlBindAddress, "mysql_bind_address", mysqlBindAddress, "MySQL bind address")
 	Main.Flags().IntVar(&mysqlPort, "mysql_port", mysqlPort, "MySQL port")
 	Main.Flags().Uint32Var(&tabletUID, "tablet_uid", tabletUID, "Tablet UID")
 	Main.Flags().StringVar(&mysqlSocket, "mysql_socket", mysqlSocket, "Path to the mysqld socket file")
@@ -121,7 +123,7 @@ func run(cmd *cobra.Command, args []string) error {
 		log.Infof("mycnf file (%s) doesn't exist, initializing", mycnfFile)
 
 		var err error
-		mysqld, cnf, err = mysqlctl.CreateMysqldAndMycnf(tabletUID, mysqlSocket, mysqlPort, collationEnv)
+		mysqld, cnf, err = mysqlctl.CreateMysqldAndMycnf(tabletUID, mysqlSocket, mysqlBindAddress, mysqlPort, collationEnv)
 		if err != nil {
 			cancel()
 			return fmt.Errorf("failed to initialize mysql config: %w", err)

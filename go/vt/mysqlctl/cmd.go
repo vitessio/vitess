@@ -29,8 +29,8 @@ import (
 
 // CreateMysqldAndMycnf returns a Mysqld and a Mycnf object to use for working with a MySQL
 // installation that hasn't been set up yet.
-func CreateMysqldAndMycnf(tabletUID uint32, mysqlSocket string, mysqlPort int, collationEnv *collations.Environment) (*Mysqld, *Mycnf, error) {
-	mycnf := NewMycnf(tabletUID, mysqlPort)
+func CreateMysqldAndMycnf(tabletUID uint32, mysqlSocket string, mysqlBindAddress string, mysqlPort int, collationEnv *collations.Environment) (*Mysqld, *Mycnf, error) {
+	mycnf := NewMycnf(tabletUID, mysqlBindAddress, mysqlPort)
 	// Choose a random MySQL server-id, since this is a fresh data dir.
 	// We don't want to use the tablet UID as the MySQL server-id,
 	// because reusing server-ids is not safe.
@@ -56,7 +56,7 @@ func CreateMysqldAndMycnf(tabletUID uint32, mysqlSocket string, mysqlPort int, c
 // of the MySQL instance.
 func OpenMysqldAndMycnf(tabletUID uint32, collationEnv *collations.Environment) (*Mysqld, *Mycnf, error) {
 	// We pass a port of 0, this will be read and overwritten from the path on disk
-	mycnf, err := ReadMycnf(NewMycnf(tabletUID, 0), 0)
+	mycnf, err := ReadMycnf(NewMycnf(tabletUID, "0.0.0.0", 0), 0)
 	if err != nil {
 		return nil, nil, fmt.Errorf("couldn't read my.cnf file: %v", err)
 	}

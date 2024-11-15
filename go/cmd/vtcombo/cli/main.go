@@ -75,6 +75,7 @@ In particular, it contains:
 	}
 	schemaDir             string
 	startMysql            bool
+	mysqlBindAddress      = "0.0.0.0"
 	mysqlPort             = 3306
 	externalTopoServer    bool
 	plannerName           string
@@ -145,7 +146,7 @@ func startMysqld(ctx context.Context, uid uint32) (mysqld *mysqlctl.Mysqld, cnf 
 	mycnfFile := mysqlctl.MycnfFile(uid)
 
 	if _, statErr := os.Stat(mycnfFile); os.IsNotExist(statErr) {
-		mysqld, cnf, err = mysqlctl.CreateMysqldAndMycnf(uid, "", mysqlPort, env.CollationEnv())
+		mysqld, cnf, err = mysqlctl.CreateMysqldAndMycnf(uid, "", mysqlBindAddress, mysqlPort, env.CollationEnv())
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to initialize mysql config :%w", err)
 		}

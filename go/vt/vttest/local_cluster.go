@@ -117,6 +117,11 @@ type Config struct {
 	// MySQL protocol bind address.
 	// vtcombo will bind to this address when exposing the mysql protocol socket
 	MySQLBindHost string
+
+	// MySQL server bind address.
+	// mysqlctl/mysqld will bind to this address when exposing the mysql protocol socket
+	MySQLServerBindAddress string
+
 	// SnapshotFile is the path to the MySQL Snapshot that will be used to
 	// initialize the mysqld instance in the cluster. Note that some environments
 	// do not suppport initialization through snapshot files.
@@ -294,9 +299,9 @@ func (db *LocalCluster) MySQLConnParams() mysql.ConnParams {
 
 func (db *LocalCluster) MySQLTCPConnParams() mysql.ConnParams {
 	connParams := db.mysql.Params(db.DbName())
-	_, port := db.mysql.Address()
+	host, port := db.mysql.Address()
 	connParams.UnixSocket = ""
-	connParams.Host = "127.0.0.1"
+	connParams.Host = host
 	connParams.Port = port
 	return connParams
 }
@@ -387,6 +392,10 @@ func (db *LocalCluster) Setup() error {
 	initializing := true
 	if db.PersistentMode && dirExist(db.mysql.TabletDir()) {
 		initializing = false
+	}
+
+	if db.Config.MySQLServerBindAddress != "" {
+		db.mysql.SetHost(db.Config.MySQLServerBindAddress)
 	}
 
 	if initializing {
@@ -662,6 +671,7 @@ func (db *LocalCluster) JSONConfig() any {
 		"port":               db.vt.Port,
 		"socket":             db.mysql.UnixSocket(),
 		"vtcombo_mysql_port": db.Env.PortForProtocol("vtcombo_mysql_port", ""),
+		"mysql_bind_address": db.vt.BindAddressMysql,
 		"mysql":              db.Env.PortForProtocol("mysql", ""),
 	}
 

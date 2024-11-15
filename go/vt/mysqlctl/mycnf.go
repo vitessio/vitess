@@ -42,6 +42,10 @@ type Mycnf struct {
 	// Used to create a bunch of named directories.
 	ServerID uint32
 
+	// MysqlBindAddress is the host for the MySQL server running on this machine.
+	// It is mainly used to communicate with topology server.
+	MysqlBindAddress string
+
 	// MysqlPort is the port for the MySQL server running on this machine.
 	// It is mainly used to communicate with topology server.
 	MysqlPort int
@@ -218,6 +222,7 @@ func ReadMycnf(mycnf *Mycnf, waitTime time.Duration) (*Mycnf, error) {
 	mycnf.MysqlPort = port
 
 	mapping := map[string]*string{
+		"bind-address":              &mycnf.MysqlBindAddress,
 		"datadir":                   &mycnf.DataDir,
 		"innodb_data_home_dir":      &mycnf.InnodbDataHomeDir,
 		"innodb_log_group_home_dir": &mycnf.InnodbLogGroupHomeDir,

@@ -135,7 +135,7 @@ func (vte *VTExplain) newTablet(ctx context.Context, env *vtenv.Environment, opt
 	params := db.ConnParams()
 	cp := *params
 	dbcfgs := dbconfigs.NewTestDBConfigs(cp, cp, "")
-	cnf := mysqlctl.NewMycnf(22222, 6802)
+	cnf := mysqlctl.NewMycnf(22222, "0.0.0.0", 6802)
 	cnf.ServerID = 33333
 
 	target := querypb.Target{

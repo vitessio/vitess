@@ -44,16 +44,17 @@ type HealthChecker func(addr string) bool
 // It can be spawned manually or through one of the available
 // helper methods.
 type VtProcess struct {
-	Name         string
-	Directory    string
-	LogDirectory string
-	Binary       string
-	ExtraArgs    []string
-	Env          []string
-	BindAddress  string
-	Port         int
-	PortGrpc     int
-	HealthCheck  HealthChecker
+	Name             string
+	Directory        string
+	LogDirectory     string
+	Binary           string
+	ExtraArgs        []string
+	Env              []string
+	BindAddress      string
+	BindAddressMysql string
+	Port             int
+	PortGrpc         int
+	HealthCheck      HealthChecker
 
 	proc *exec.Cmd
 	exit chan error
@@ -199,16 +200,22 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 	if args.VtComboBindAddress != "" {
 		vtcomboBindAddress = args.VtComboBindAddress
 	}
+	mysqlAddress := "127.0.0.1"
+	if args.MySQLServerBindAddress != "" {
+		mysqlAddress = args.MySQLServerBindAddress
+	}
+
 	vt := &VtProcess{
-		Name:         "vtcombo",
-		Directory:    environment.Directory(),
-		LogDirectory: environment.LogDirectory(),
-		Binary:       environment.BinaryPath("vtcombo"),
-		BindAddress:  vtcomboBindAddress,
-		Port:         environment.PortForProtocol("vtcombo", ""),
-		PortGrpc:     environment.PortForProtocol("vtcombo", "grpc"),
-		HealthCheck:  environment.ProcessHealthCheck("vtcombo"),
-		Env:          environment.EnvVars(),
+		Name:             "vtcombo",
+		Directory:        environment.Directory(),
+		LogDirectory:     environment.LogDirectory(),
+		Binary:           environment.BinaryPath("vtcombo"),
+		BindAddress:      vtcomboBindAddress,
+		BindAddressMysql: mysqlAddress,
+		Port:             environment.PortForProtocol("vtcombo", ""),
+		PortGrpc:         environment.PortForProtocol("vtcombo", "grpc"),
+		HealthCheck:      environment.ProcessHealthCheck("vtcombo"),
+		Env:              environment.EnvVars(),
 	}
 
 	user, pass := mysql.Auth()
