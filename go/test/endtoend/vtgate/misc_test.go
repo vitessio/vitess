@@ -863,10 +863,10 @@ func TestShow(t *testing.T) {
 
 	qr := utils.Exec(t, conn, "show tables")
 	assert.Equal(t, 1, len(qr.Fields))
-	assert.Equal(t, 21, len(qr.Rows))
+	assert.Equal(t, 22, len(qr.Rows))
 
 	utils.Exec(t, conn, "begin")
 	qr = utils.Exec(t, conn, "show tables")
 	assert.Equal(t, 1, len(qr.Fields))
-	assert.Equal(t, 21, len(qr.Rows))
+	assert.Equal(t, 22, len(qr.Rows))
 }
