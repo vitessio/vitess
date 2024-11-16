@@ -141,6 +141,12 @@ func TestMysql56DecodeTransactionPayload(t *testing.T) {
 		},
 	}
 
+	// Ensure that we can process events where the *uncompressed* size is
+	// larger than ZstdInMemoryDecompressorMaxSize. The *compressed* size
+	// of the payload in large_compressed_trx_payload.bin is 16KiB so we
+	// set the max to 2KiB to test this.
+	ZstdInMemoryDecompressorMaxSize = 2048
+
 	for _, tc := range testCases {
 		memDecodingCnt := compressedTrxPayloadsInMem.Get()
 		streamDecodingCnt := compressedTrxPayloadsUsingStream.Get()
@@ -191,7 +197,7 @@ func TestMysql56DecodeTransactionPayload(t *testing.T) {
 				totalSize += len(eventStr)
 				require.True(t, strings.HasPrefix(eventStr, want))
 			}
-			require.Greater(t, totalSize, zstdInMemoryDecompressorMaxSize)
+			require.Greater(t, uint64(totalSize), ZstdInMemoryDecompressorMaxSize)
 		}
 	}
 }
