@@ -880,10 +880,11 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 	}
 
 	// information about source tablet
-	onlineDDL, _, err := e.readMigration(ctx, s.workflow)
+	onlineDDL, row, err := e.readMigration(ctx, s.workflow)
 	if err != nil {
 		return vterrors.Wrapf(err, "cutover: failed reading migration")
 	}
+	needsShadowTableAnalysis := row["shadow_analyzed_timestamp"].IsNull()
 	isVreplicationTestSuite := onlineDDL.StrategySetting().IsVreplicationTestSuite()
 	e.updateMigrationStage(ctx, onlineDDL.UUID, "starting cut-over")
 
@@ -942,12 +943,43 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 			// still have a record of the sentry table, and gcArtifacts() will still be able to take
 			// care of it in the future.
 		}()
-		parsed := sqlparser.BuildParsedQuery(sqlCreateSentryTable, sentryTableName)
-		if _, err := e.execQuery(ctx, parsed.Query); err != nil {
-			return vterrors.Wrapf(err, "failed creating sentry table")
-		}
-		e.updateMigrationStage(ctx, onlineDDL.UUID, "sentry table created: %s", sentryTableName)
 
+		preparation := func() error {
+			preparationsConn, err := e.pool.Get(ctx, nil)
+			if err != nil {
+				return vterrors.Wrap(err, "failed getting preparation connection")
+			}
+			defer preparationsConn.Recycle()
+			// Set large enough `@@lock_wait_timeout` so that it does not interfere with the cut-over operation.
+			// The code will ensure everything that needs to be terminated by `migrationCutOverThreshold` will be terminated.
+			preparationConnRestoreLockWaitTimeout, err := e.initConnectionLockWaitTimeout(ctx, preparationsConn.Conn, 3*migrationCutOverThreshold)
+			if err != nil {
+				return vterrors.Wrap(err, "failed setting lock_wait_timeout on locking connection")
+			}
+			defer preparationConnRestoreLockWaitTimeout()
+
+			if needsShadowTableAnalysis {
+				// Run `ANALYZE TABLE` on the vreplication table so that it has up-to-date statistics at cut-over
+				parsed := sqlparser.BuildParsedQuery(sqlAnalyzeTable, vreplTable)
+				if _, err := preparationsConn.Conn.Exec(ctx, parsed.Query, -1, false); err != nil {
+					// Best effort only. Do not fail the mgiration if this fails.
+					_ = e.updateMigrationMessage(ctx, "failed ANALYZE shadow table", s.workflow)
+				} else {
+					_ = e.updateMigrationTimestamp(ctx, "shadow_analyzed_timestamp", s.workflow)
+				}
+				// This command will have blocked the table for writes, presumably only for a brief time. But this can cause
+				// vreplication to now lag. Thankfully we're gonna create the sentry table and waitForPos.
+			}
+			parsed := sqlparser.BuildParsedQuery(sqlCreateSentryTable, sentryTableName)
+			if _, err := preparationsConn.Conn.Exec(ctx, parsed.Query, 1, false); err != nil {
+				return vterrors.Wrapf(err, "failed creating sentry table")
+			}
+			e.updateMigrationStage(ctx, onlineDDL.UUID, "sentry table created: %s", sentryTableName)
+			return nil
+		}
+		if err := preparation(); err != nil {
+			return vterrors.Wrapf(err, "failed preparation")
+		}
 		postSentryPos, err := e.primaryPosition(ctx)
 		if err != nil {
 			return vterrors.Wrapf(err, "failed getting primary pos after sentry creation")
@@ -967,13 +999,13 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 	if err != nil {
 		return vterrors.Wrapf(err, "failed getting locking connection")
 	}
+	defer lockConn.Recycle()
 	// Set large enough `@@lock_wait_timeout` so that it does not interfere with the cut-over operation.
 	// The code will ensure everything that needs to be terminated by `migrationCutOverThreshold` will be terminated.
 	lockConnRestoreLockWaitTimeout, err := e.initConnectionLockWaitTimeout(ctx, lockConn.Conn, 5*migrationCutOverThreshold)
 	if err != nil {
 		return vterrors.Wrapf(err, "failed setting lock_wait_timeout on locking connection")
 	}
-	defer lockConn.Recycle()
 	defer lockConnRestoreLockWaitTimeout()
 	defer lockConn.Conn.Exec(ctx, sqlUnlockTables, 1, false)
 
@@ -4869,7 +4901,7 @@ func (e *Executor) submitCallbackIfNonConflicting(
 ) (
 	result *sqltypes.Result, err error,
 ) {
-	if !onlineDDL.StrategySetting().IsSingleton() && !onlineDDL.StrategySetting().IsSingletonContext() {
+	if !onlineDDL.StrategySetting().IsSingleton() && !onlineDDL.StrategySetting().IsSingletonContext() && !onlineDDL.StrategySetting().IsSingletonTable() {
 		// not a singleton. No conflict
 		return callback()
 	}
@@ -4914,6 +4946,15 @@ func (e *Executor) submitCallbackIfNonConflicting(
 					return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "singleton-context migration rejected: found pending migration: %s in different context: %s", pendingUUID, pendingOnlineDDL.MigrationContext)
 				}
 				// no conflict? continue looking for other pending migrations
+			}
+		case onlineDDL.StrategySetting().IsSingletonTable():
+			// We will reject this migration if there's any pending migration for the same table
+			for _, row := range rows {
+				pendingTableName := row["mysql_table"].ToString()
+				if onlineDDL.Table == pendingTableName {
+					pendingUUID := row["migration_uuid"].ToString()
+					return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "singleton-table migration rejected: found pending migration: %s for the same table: %s", pendingUUID, onlineDDL.Table)
+				}
 			}
 		}
 		return nil

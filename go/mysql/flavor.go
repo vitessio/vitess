@@ -151,6 +151,7 @@ type flavor interface {
 
 	baseShowTables() string
 	baseShowTablesWithSizes() string
+	baseShowInnodbTableSizes() string
 
 	supportsCapability(capability capabilities.FlavorCapability) (bool, error)
 }
@@ -452,6 +453,11 @@ func (c *Conn) BaseShowTables() string {
 // BaseShowTablesWithSizes returns a query that shows tables and their sizes
 func (c *Conn) BaseShowTablesWithSizes() string {
 	return c.flavor.baseShowTablesWithSizes()
+}
+
+// BaseShowInnodbTableSizes returns a query that shows innodb-internal FULLTEXT index tables and their sizes
+func (c *Conn) BaseShowInnodbTableSizes() string {
+	return c.flavor.baseShowInnodbTableSizes()
 }
 
 // SupportsCapability checks if the database server supports the given capability

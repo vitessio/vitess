@@ -323,13 +323,15 @@ func TestTabletServerStartCommit(t *testing.T) {
 	commitTransition := fmt.Sprintf("update _vt.dt_state set state = %d where dtid = _binary'aa' and state = %d", int(querypb.TransactionState_COMMIT), int(querypb.TransactionState_PREPARE))
 	db.AddQuery(commitTransition, &sqltypes.Result{RowsAffected: 1})
 	txid := newTxForPrep(ctx, tsv)
-	err := tsv.StartCommit(ctx, &target, txid, "aa")
+	state, err := tsv.StartCommit(ctx, &target, txid, "aa")
 	require.NoError(t, err)
+	assert.Equal(t, querypb.StartCommitState_Success, state, "StartCommit state")
 
 	db.AddQuery(commitTransition, &sqltypes.Result{})
 	txid = newTxForPrep(ctx, tsv)
-	err = tsv.StartCommit(ctx, &target, txid, "aa")
+	state, err = tsv.StartCommit(ctx, &target, txid, "aa")
 	assert.EqualError(t, err, "could not transition to COMMIT: aa", "Prepare err")
+	assert.Equal(t, querypb.StartCommitState_Fail, state, "StartCommit state")
 }
 
 func TestTabletserverSetRollback(t *testing.T) {

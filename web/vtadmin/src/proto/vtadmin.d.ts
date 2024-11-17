@@ -43809,8 +43809,18 @@ export namespace query {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** StartCommitState enum. */
+    enum StartCommitState {
+        Unknown = 0,
+        Fail = 1,
+        Success = 2
+    }
+
     /** Properties of a StartCommitResponse. */
     interface IStartCommitResponse {
+
+        /** StartCommitResponse state */
+        state?: (query.StartCommitState|null);
     }
 
     /** Represents a StartCommitResponse. */
@@ -43821,6 +43831,9 @@ export namespace query {
          * @param [properties] Properties to set
          */
         constructor(properties?: query.IStartCommitResponse);
+
+        /** StartCommitResponse state. */
+        public state: query.StartCommitState;
 
         /**
          * Creates a new StartCommitResponse instance using the specified properties.

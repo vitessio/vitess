@@ -539,9 +539,9 @@ func (itc *internalTabletConn) CreateTransaction(
 }
 
 // StartCommit is part of queryservice.QueryService
-func (itc *internalTabletConn) StartCommit(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) error {
-	err := itc.tablet.qsc.QueryService().StartCommit(ctx, target, transactionID, dtid)
-	return tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
+func (itc *internalTabletConn) StartCommit(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (querypb.StartCommitState, error) {
+	state, err := itc.tablet.qsc.QueryService().StartCommit(ctx, target, transactionID, dtid)
+	return state, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 }
 
 // SetRollback is part of queryservice.QueryService

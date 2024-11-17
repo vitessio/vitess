@@ -262,11 +262,12 @@ func Open() *Server {
 // ConnForCell returns a Conn object for the given cell.
 // It caches Conn objects from previously requested cells.
 func (ts *Server) ConnForCell(ctx context.Context, cell string) (Conn, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
 	// Global cell is the easy case.
 	if cell == GlobalCell {
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
-		}
 		return ts.globalCell, nil
 	}
 

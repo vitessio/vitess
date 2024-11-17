@@ -38,6 +38,7 @@ const (
 	skipTopoFlag           = "skip-topo" // legacy. Kept for backwards compatibility, but unused
 	singletonFlag          = "singleton"
 	singletonContextFlag   = "singleton-context"
+	singletonTableFlag     = "singleton-table"
 	allowZeroInDateFlag    = "allow-zero-in-date"
 	postponeLaunchFlag     = "postpone-launch"
 	postponeCompletionFlag = "postpone-completion"
@@ -175,6 +176,11 @@ func (setting *DDLStrategySetting) IsSingleton() bool {
 // IsSingletonContext checks if strategy options include --singleton-context
 func (setting *DDLStrategySetting) IsSingletonContext() bool {
 	return setting.hasFlag(singletonContextFlag)
+}
+
+// IsSingletonTable checks if strategy options include --singleton-table
+func (setting *DDLStrategySetting) IsSingletonTable() bool {
+	return setting.hasFlag(singletonTableFlag)
 }
 
 // IsAllowZeroInDateFlag checks if strategy options include --allow-zero-in-date
@@ -322,6 +328,7 @@ func (setting *DDLStrategySetting) RuntimeOptions() []string {
 		case isFlag(opt, skipTopoFlag): // deprecated flag, parsed for backwards compatibility
 		case isFlag(opt, singletonFlag):
 		case isFlag(opt, singletonContextFlag):
+		case isFlag(opt, singletonTableFlag):
 		case isFlag(opt, allowZeroInDateFlag):
 		case isFlag(opt, postponeLaunchFlag):
 		case isFlag(opt, postponeCompletionFlag):

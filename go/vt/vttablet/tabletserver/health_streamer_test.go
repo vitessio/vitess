@@ -39,6 +39,8 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
+const baseInnoDBTableSizesPattern = `(?s).*SELECT.*its\.space = it\.space.*SUM\(its\.file_size\).*`
+
 func TestHealthStreamerClosed(t *testing.T) {
 	cfg := newConfig(nil)
 	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "ReplTrackerTest")
@@ -276,6 +278,13 @@ func TestReloadSchema(t *testing.T) {
 
 			// Update the query pattern for the query that schema.Engine uses to get the tables so that it runs a reload again.
 			// If we don't change the t.create_time to a value greater than before, then the schema engine doesn't reload the database.
+			db.AddQueryPattern(baseInnoDBTableSizesPattern,
+				sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields(
+						"it.name | normal_tables_sum_file_size | normal_tables_sum_allocated_size",
+						"varchar|int64|int64",
+					),
+				))
 			db.AddQueryPattern("SELECT .* information_schema.innodb_tablespaces .*",
 				sqltypes.MakeTestResult(
 					sqltypes.MakeTestFields(
@@ -285,7 +294,6 @@ func TestReloadSchema(t *testing.T) {
 					"product|BASE TABLE|1684735967||114688|114688",
 					"users|BASE TABLE|1684735967||114688|114688",
 				))
-
 			db.AddQuery(mysql.BaseShowTables,
 				sqltypes.MakeTestResult(
 					sqltypes.MakeTestFields(
@@ -351,6 +359,14 @@ func TestReloadView(t *testing.T) {
 	db.AddQuery("commit", &sqltypes.Result{})
 	db.AddQuery("rollback", &sqltypes.Result{})
 	// Add the query pattern for the query that schema.Engine uses to get the tables.
+	// InnoDBTableSizes query
+	db.AddQueryPattern(baseInnoDBTableSizesPattern,
+		sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"it.name | normal_tables_sum_file_size | normal_tables_sum_allocated_size",
+				"varchar|int64|int64",
+			),
+		))
 	db.AddQueryPattern("SELECT .* information_schema.innodb_tablespaces .*",
 		sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
@@ -417,7 +433,7 @@ func TestReloadView(t *testing.T) {
 		expGetViewDefinitionsQuery string
 		viewDefinitionsOutput      *sqltypes.Result
 
-		expClearQuery   string
+		expClearQuery   []string
 		expInsertQuery  []string
 		expViewsChanged []string
 	}{
@@ -433,7 +449,10 @@ func TestReloadView(t *testing.T) {
 			expViewsChanged:            []string{"view_a", "view_b"},
 			expGetViewDefinitionsQuery: "select table_name, view_definition from information_schema.views where table_schema = database() and table_name in ('view_a', 'view_b')",
 			expCreateStmtQuery:         []string{"show create table view_a", "show create table view_b"},
-			expClearQuery:              "delete from _vt.views where TABLE_SCHEMA = database() and TABLE_NAME in ('view_a', 'view_b')",
+			expClearQuery: []string{
+				"delete from _vt.views where TABLE_SCHEMA = database() and TABLE_NAME in ('view_a', 'view_b')",
+				"delete from _vt.views where TABLE_SCHEMA = database() and TABLE_NAME in ('view_b', 'view_a')",
+			},
 			expInsertQuery: []string{
 				"insert into _vt.views(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, VIEW_DEFINITION) values (database(), 'view_a', 'create_view_a', 'def_a')",
 				"insert into _vt.views(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, VIEW_DEFINITION) values (database(), 'view_b', 'create_view_b', 'def_b')",
@@ -450,7 +469,7 @@ func TestReloadView(t *testing.T) {
 			expViewsChanged:            []string{"view_b"},
 			expGetViewDefinitionsQuery: "select table_name, view_definition from information_schema.views where table_schema = database() and table_name in ('view_b')",
 			expCreateStmtQuery:         []string{"show create table view_b"},
-			expClearQuery:              "delete from _vt.views where TABLE_SCHEMA = database() and TABLE_NAME in ('view_b')",
+			expClearQuery:              []string{"delete from _vt.views where TABLE_SCHEMA = database() and TABLE_NAME in ('view_b')"},
 			expInsertQuery: []string{
 				"insert into _vt.views(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, VIEW_DEFINITION) values (database(), 'view_b', 'create_view_mod_b', 'def_mod_b')",
 			},
@@ -467,7 +486,14 @@ func TestReloadView(t *testing.T) {
 			expViewsChanged:            []string{"view_a", "view_b", "view_c"},
 			expGetViewDefinitionsQuery: "select table_name, view_definition from information_schema.views where table_schema = database() and table_name in ('view_b', 'view_c', 'view_a')",
 			expCreateStmtQuery:         []string{"show create table view_a", "show create table view_c"},
-			expClearQuery:              "delete from _vt.views where table_schema = database() and table_name in ('view_b', 'view_c', 'view_a')",
+			expClearQuery: []string{
+				"delete from _vt.views where table_schema = database() and table_name in ('view_a', 'view_b', 'view_c')",
+				"delete from _vt.views where table_schema = database() and table_name in ('view_a', 'view_c', 'view_b')",
+				"delete from _vt.views where table_schema = database() and table_name in ('view_b', 'view_a', 'view_c')",
+				"delete from _vt.views where table_schema = database() and table_name in ('view_b', 'view_c', 'view_a')",
+				"delete from _vt.views where table_schema = database() and table_name in ('view_c', 'view_a', 'view_b')",
+				"delete from _vt.views where table_schema = database() and table_name in ('view_c', 'view_b', 'view_a')",
+			},
 			expInsertQuery: []string{
 				"insert into _vt.views(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, VIEW_DEFINITION) values (database(), 'view_a', 'create_view_mod_a', 'def_mod_a')",
 				"insert into _vt.views(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, VIEW_DEFINITION) values (database(), 'view_c', 'create_view_c', 'def_c')",
@@ -486,8 +512,9 @@ func TestReloadView(t *testing.T) {
 	for idx := range tcases[0].expInsertQuery {
 		db.AddQuery(tcases[0].expInsertQuery[idx], &sqltypes.Result{})
 	}
-	db.AddQuery(tcases[0].expClearQuery, &sqltypes.Result{})
-
+	for _, query := range tcases[0].expClearQuery {
+		db.AddQuery(query, &sqltypes.Result{})
+	}
 	var tcCount atomic.Int32
 	ch := make(chan struct{})
 
@@ -519,7 +546,9 @@ func TestReloadView(t *testing.T) {
 			for i := range tcases[idx].expInsertQuery {
 				db.AddQuery(tcases[idx].expInsertQuery[i], &sqltypes.Result{})
 			}
-			db.AddQuery(tcases[idx].expClearQuery, &sqltypes.Result{})
+			for _, query := range tcases[idx].expClearQuery {
+				db.AddQuery(query, &sqltypes.Result{})
+			}
 			db.AddQueryPattern("SELECT .* information_schema.innodb_tablespaces .*", tcases[idx].showTablesWithSizesOutput)
 			db.AddQueryPattern(".*SELECT table_name, view_definition.*views.*", tcases[idx].detectViewChangeOutput)
 		case <-time.After(10 * time.Second):
@@ -542,4 +571,44 @@ func testStream(hs *healthStreamer) (<-chan *querypb.StreamHealthResponse, conte
 
 func testBlpFunc() (int64, int32) {
 	return 1, 2
+}
+
+// TestDeadlockBwCloseAndReload tests the deadlock observed between Close and Reload
+// functions. More details can be found in the issue https://github.com/vitessio/vitess/issues/17229#issuecomment-2476136610.
+func TestDeadlockBwCloseAndReload(t *testing.T) {
+	cfg := newConfig(nil)
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TestNotServingPrimary")
+	alias := &topodatapb.TabletAlias{
+		Cell: "cell",
+		Uid:  1,
+	}
+	se := schema.NewEngineForTests()
+	// Create a new health streamer and set it to a serving primary state
+	hs := newHealthStreamer(env, alias, se)
+	hs.signalWhenSchemaChange = true
+	hs.Open()
+	hs.MakePrimary(true)
+	defer hs.Close()
+
+	wg := sync.WaitGroup{}
+	wg.Add(2)
+	// Try running Close and reload in parallel multiple times.
+	// This reproduces the deadlock quite readily.
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 100; i++ {
+			hs.Close()
+			hs.Open()
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 100; i++ {
+			se.BroadcastForTesting(nil, nil, nil, true)
+		}
+	}()
+
+	// Wait for wait group to finish.
+	wg.Wait()
 }
