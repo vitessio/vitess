@@ -53,6 +53,11 @@ export const Topology = () => {
                 <DataCell>
                     <TopologyLink clusterID={cluster.id}>View Topology</TopologyLink>
                 </DataCell>
+                <DataCell>
+                    <Link className="font-bold" to={`/topologytree/${cluster.id}`}>
+                        View Topology Tree
+                    </Link>
+                </DataCell>
             </tr>
         ));
 
@@ -65,7 +70,11 @@ export const Topology = () => {
             <ContentContainer>
                 <div className="max-w-screen-sm">
                     <div className="text-xl font-bold">Clusters</div>
-                    <DataTable columns={['Name', 'Id', 'Topology']} data={rows} renderRows={renderRows} />
+                    <DataTable
+                        columns={['Name', 'Id', 'Topology', 'Topology Tree']}
+                        data={rows}
+                        renderRows={renderRows}
+                    />
                 </div>
             </ContentContainer>
         </div>
