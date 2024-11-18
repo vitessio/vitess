@@ -389,6 +389,8 @@ func (be *MySQLShellBackupEngine) ShouldStartMySQLAfterRestore() bool {
 	return false
 }
 
+func (be *MySQLShellBackupEngine) Name() string { return mysqlShellBackupEngineName }
+
 func (be *MySQLShellBackupEngine) backupPreCheck(location string) error {
 	if mysqlShellBackupLocation == "" {
 		return fmt.Errorf("%w: no backup location set via --mysql-shell-backup-location", MySQLShellPreCheckError)

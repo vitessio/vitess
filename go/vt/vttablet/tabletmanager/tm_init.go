@@ -815,9 +815,10 @@ func (tm *TabletManager) handleRestore(ctx context.Context, config *tabletenv.Ta
 					log.Exitf(fmt.Sprintf("RestoreFromBackup failed: unable to parse the --restore-to-timestamp value provided of '%s'. Error: %v", restoreToTimestampStr, err))
 				}
 			}
+
 			// restoreFromBackup will just be a regular action
 			// (same as if it was triggered remotely)
-			if err := tm.RestoreData(ctx, logutil.NewConsoleLogger(), waitForBackupInterval, false /* deleteBeforeRestore */, backupTime, restoreToTimestamp, restoreToPos, mysqlShutdownTimeout); err != nil {
+			if err := tm.RestoreData(ctx, logutil.NewConsoleLogger(), waitForBackupInterval, false /* deleteBeforeRestore */, backupTime, restoreToTimestamp, restoreToPos, restoreFromBackupAllowedEngines, mysqlShutdownTimeout); err != nil {
 				log.Exitf("RestoreFromBackup failed: %v", err)
 			}
 

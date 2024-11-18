@@ -304,6 +304,7 @@ Flags:
       --relay_log_max_size int                                           Maximum buffer size (in bytes) for VReplication target buffering. If single rows are larger than this, a single row is buffered at a time. (default 250000)
       --remote_operation_timeout duration                                time to wait for a remote operation (default 15s)
       --replication_connect_retry duration                               how long to wait in between replica reconnect attempts. Only precise to the second. (default 10s)
+      --restore-from-backup-allowed-engines strings                      (init restore parameter) if set, only backups taken with the specified engines are eligible to be restored
       --restore-to-pos string                                            (init incremental restore parameter) if set, run a point in time recovery that ends with the given position. This will attempt to use one full backup followed by zero or more incremental backups
       --restore-to-timestamp string                                      (init incremental restore parameter) if set, run a point in time recovery that restores up to the given timestamp, if possible. Given timestamp in RFC3339 format. Example: '2006-01-02T15:04:05Z07:00'
       --restore_concurrency int                                          (init restore parameter) how many concurrent files to restore at once (default 4)

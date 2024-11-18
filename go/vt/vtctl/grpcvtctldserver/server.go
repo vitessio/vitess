@@ -436,6 +436,7 @@ func (s *VtctldServer) Backup(req *vtctldatapb.BackupRequest, stream vtctlservic
 	span.Annotate("allow_primary", req.AllowPrimary)
 	span.Annotate("concurrency", req.Concurrency)
 	span.Annotate("incremental_from_pos", req.IncrementalFromPos)
+	span.Annotate("backup_engine", req.BackupEngine)
 
 	ti, err := s.ts.GetTablet(ctx, req.TabletAlias)
 	if err != nil {
@@ -522,6 +523,7 @@ func (s *VtctldServer) backupTablet(ctx context.Context, tablet *topodatapb.Tabl
 		AllowPrimary:       req.AllowPrimary,
 		IncrementalFromPos: req.IncrementalFromPos,
 		UpgradeSafe:        req.UpgradeSafe,
+		BackupEngine:       req.BackupEngine,
 	}
 	logStream, err := s.tmc.Backup(ctx, tablet, r)
 	if err != nil {
@@ -3284,10 +3286,11 @@ func (s *VtctldServer) RestoreFromBackup(req *vtctldatapb.RestoreFromBackupReque
 	span.Annotate("shard", ti.Shard)
 
 	r := &tabletmanagerdatapb.RestoreFromBackupRequest{
-		BackupTime:         req.BackupTime,
-		RestoreToPos:       req.RestoreToPos,
-		RestoreToTimestamp: req.RestoreToTimestamp,
-		DryRun:             req.DryRun,
+		BackupTime:           req.BackupTime,
+		RestoreToPos:         req.RestoreToPos,
+		RestoreToTimestamp:   req.RestoreToTimestamp,
+		DryRun:               req.DryRun,
+		AllowedBackupEngines: req.AllowedBackupEngines,
 	}
 	logStream, err := s.tmc.RestoreFromBackup(ctx, ti.Tablet, r)
 	if err != nil {

@@ -74,14 +74,7 @@ var (
 	shardKsName      = fmt.Sprintf("%s/%s", keyspaceName, shardName)
 	dbCredentialFile string
 	shardName        = "0"
-	commonTabletArg  = []string{
-		"--vreplication_retry_delay", "1s",
-		"--degraded_threshold", "5s",
-		"--lock_tables_timeout", "5s",
-		"--watch_replication_stream",
-		"--enable_replication_reporter",
-		"--serving_state_grace_period", "1s",
-	}
+	commonTabletArg  = getDefaultCommonArgs()
 
 	vtInsertTest = `
 		create table vt_insert_test (
@@ -1455,4 +1448,150 @@ func verifyTabletRestoreStats(t *testing.T, vars map[string]any) {
 	}
 
 	require.Contains(t, bd, "BackupStorage.File.File:Read")
+}
+
+func getDefaultCommonArgs() []string {
+	return []string{
+		"--vreplication_retry_delay", "1s",
+		"--degraded_threshold", "5s",
+		"--lock_tables_timeout", "5s",
+		"--watch_replication_stream",
+		"--enable_replication_reporter",
+		"--serving_state_grace_period", "1s",
+	}
+}
+
+func setDefaultCommonArgs() { commonTabletArg = getDefaultCommonArgs() }
+
+// fetch the backup engine used on the last backup triggered by the end-to-end tests.
+func getBackupEngineOfLastBackup(t *testing.T) string {
+	lastBackup := getLastBackup(t)
+
+	manifest := readManifestFile(t, path.Join(localCluster.CurrentVTDATAROOT, "backups", keyspaceName, shardName, lastBackup))
+
+	return manifest.BackupMethod
+}
+
+func getLastBackup(t *testing.T) string {
+	backups, err := localCluster.ListBackups(shardKsName)
+	require.NoError(t, err)
+
+	return backups[len(backups)-1]
+}
+
+func TestBackupEngineSelector(t *testing.T) {
+	defer setDefaultCommonArgs()
+	defer cluster.PanicHandler(t)
+
+	// launch the custer with xtrabackup as the default engine
+	code, err := LaunchCluster(XtraBackup, "xbstream", 0, &CompressionDetails{CompressorEngineName: "pgzip"})
+	require.Nilf(t, err, "setup failed with status code %d", code)
+
+	defer TearDownCluster()
+
+	localCluster.DisableVTOrcRecoveries(t)
+	defer func() {
+		localCluster.EnableVTOrcRecoveries(t)
+	}()
+	verifyInitialReplication(t)
+
+	t.Run("backup with backup-engine=builtin", func(t *testing.T) {
+		// first try to backup with an alternative engine (builtin)
+		err = localCluster.VtctldClientProcess.ExecuteCommand("Backup", "--allow-primary", "--backup-engine=builtin", primary.Alias)
+		require.NoError(t, err)
+		engineUsed := getBackupEngineOfLastBackup(t)
+		require.Equal(t, "builtin", engineUsed)
+	})
+
+	t.Run("backup with backup-engine=xtrabackup", func(t *testing.T) {
+		// then try to backup specifying the xtrabackup engine
+		err = localCluster.VtctldClientProcess.ExecuteCommand("Backup", "--allow-primary", "--backup-engine=xtrabackup", primary.Alias)
+		require.NoError(t, err)
+		engineUsed := getBackupEngineOfLastBackup(t)
+		require.Equal(t, "xtrabackup", engineUsed)
+	})
+
+	t.Run("backup without specifying backup-engine", func(t *testing.T) {
+		// check that by default we still use the xtrabackup engine if not specified
+		err = localCluster.VtctldClientProcess.ExecuteCommand("Backup", "--allow-primary", primary.Alias)
+		require.NoError(t, err)
+		engineUsed := getBackupEngineOfLastBackup(t)
+		require.Equal(t, "xtrabackup", engineUsed)
+	})
+}
+
+func TestRestoreAllowedBackupEngines(t *testing.T) {
+	defer setDefaultCommonArgs()
+	defer cluster.PanicHandler(t)
+
+	backupMsg := "right after xtrabackup backup"
+
+	cDetails := &CompressionDetails{CompressorEngineName: "pgzip"}
+
+	// launch the custer with xtrabackup as the default engine
+	code, err := LaunchCluster(XtraBackup, "xbstream", 0, cDetails)
+	require.Nilf(t, err, "setup failed with status code %d", code)
+
+	defer TearDownCluster()
+
+	localCluster.DisableVTOrcRecoveries(t)
+	defer func() {
+		localCluster.EnableVTOrcRecoveries(t)
+	}()
+	verifyInitialReplication(t)
+
+	t.Run("generate backups", func(t *testing.T) {
+		// lets take two backups, each using a different backup engine
+		err = localCluster.VtctldClientProcess.ExecuteCommand("Backup", "--allow-primary", "--backup-engine=builtin", primary.Alias)
+		require.NoError(t, err)
+
+		err = localCluster.VtctldClientProcess.ExecuteCommand("Backup", "--allow-primary", "--backup-engine=xtrabackup", primary.Alias)
+		require.NoError(t, err)
+	})
+
+	//  insert more data on the primary
+	_, err = primary.VttabletProcess.QueryTablet(fmt.Sprintf("insert into vt_insert_test (msg) values ('%s')", backupMsg), keyspaceName, true)
+	require.NoError(t, err)
+
+	t.Run("restore replica and verify data", func(t *testing.T) {
+		// now bring up another replica, letting it restore from backup.
+		restoreWaitForBackup(t, "replica", cDetails, true)
+		err = replica2.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, timeout)
+		require.NoError(t, err)
+
+		// check the new replica has the data
+		cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 2)
+		result, err := replica2.VttabletProcess.QueryTablet(
+			fmt.Sprintf("select msg from vt_insert_test where msg='%s'", backupMsg), replica2.VttabletProcess.Keyspace, true)
+		require.NoError(t, err)
+		require.Equal(t, backupMsg, result.Named().Row().AsString("msg", ""))
+	})
+
+	t.Run("test broken restore", func(t *testing.T) {
+		// now lets break the last backup in the shard
+		err = os.Remove(path.Join(localCluster.CurrentVTDATAROOT,
+			"backups", keyspaceName, shardName,
+			getLastBackup(t), "backup.xbstream.gz"))
+		require.NoError(t, err)
+
+		// and try to restore from it
+		err = localCluster.VtctldClientProcess.ExecuteCommand("RestoreFromBackup", replica2.Alias)
+		require.Error(t, err) // this should fail
+	})
+
+	t.Run("test older working backup", func(t *testing.T) {
+		// now we retry but with the first backup
+		err = localCluster.VtctldClientProcess.ExecuteCommand("RestoreFromBackup", "--allowed-backup-engines=builtin", replica2.Alias)
+		require.NoError(t, err) // this should succeed
+
+		// make sure we are replicating after the restore is done
+		err = replica2.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, timeout)
+		require.NoError(t, err)
+		cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 2)
+
+		result, err := replica2.VttabletProcess.QueryTablet(
+			fmt.Sprintf("select msg from vt_insert_test where msg='%s'", backupMsg), replica2.VttabletProcess.Keyspace, true)
+		require.NoError(t, err)
+		require.Equal(t, backupMsg, result.Named().Row().AsString("msg", ""))
+	})
 }

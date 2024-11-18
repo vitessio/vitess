@@ -23,6 +23,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -57,6 +58,7 @@ const (
 type BackupEngine interface {
 	ExecuteBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (BackupResult, error)
 	ShouldDrainForBackup(req *tabletmanagerdatapb.BackupRequest) bool
+	Name() string
 }
 
 // BackupParams is the struct that holds all params passed to ExecuteBackup
@@ -87,6 +89,8 @@ type BackupParams struct {
 	UpgradeSafe bool
 	// MysqlShutdownTimeout defines how long we wait during MySQL shutdown if that is part of the backup process.
 	MysqlShutdownTimeout time.Duration
+	// BackupEngine allows us to override which backup engine should be used for a request
+	BackupEngine string
 }
 
 func (b *BackupParams) Copy() BackupParams {
@@ -143,6 +147,8 @@ type RestoreParams struct {
 	Stats backupstats.Stats
 	// MysqlShutdownTimeout defines how long we wait during MySQL shutdown if that is part of the backup process.
 	MysqlShutdownTimeout time.Duration
+	// AllowedBackupEngines if present will filter out any backups taken with engines not included in the list
+	AllowedBackupEngines []string
 }
 
 func (p *RestoreParams) Copy() RestoreParams {
@@ -214,8 +220,12 @@ func registerBackupEngineFlags(fs *pflag.FlagSet) {
 // a particular backup by calling GetRestoreEngine().
 //
 // This must only be called after flags have been parsed.
-func GetBackupEngine() (BackupEngine, error) {
+func GetBackupEngine(backupEngine string) (BackupEngine, error) {
 	name := backupEngineImplementation
+	if backupEngine != "" {
+		name = backupEngine
+	}
+
 	be, ok := BackupRestoreEngineMap[name]
 	if !ok {
 		return nil, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "unknown BackupEngine implementation %q", name)
@@ -515,6 +525,13 @@ func FindBackupToRestore(ctx context.Context, params RestoreParams, bhs []backup
 			params.Logger.Warningf("Possibly incomplete backup %v in directory %v on BackupStorage: can't read MANIFEST: %v)", bh.Name(), backupDir, err)
 			continue
 		}
+
+		// if allowed backup engine is not empty, we only try to restore from backups taken with the specified backup engines
+		if len(params.AllowedBackupEngines) > 0 && !slices.Contains(params.AllowedBackupEngines, bm.BackupMethod) {
+			params.Logger.Warningf("Ignoring backup %v because it is using %q backup engine", bh.Name(), bm.BackupMethod)
+			continue
+		}
+
 		// the manifest is valid
 		manifests[i] = bm // manifests's order is insignificant, it will be sorted later on
 		manifestHandleMap.Map(bm, bh)

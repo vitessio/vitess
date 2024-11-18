@@ -411,6 +411,8 @@ message BackupRequest {
   // UpgradeSafe indicates if the backup should be taken with innodb_fast_shutdown=0
   // so that it's a backup that can be used for an upgrade.
   bool upgrade_safe = 5;
+  // BackupEngine specifies if we want to use a particular backup engine for this backup request
+  optional string backup_engine = 6;
 }
 
 message BackupResponse {
@@ -1443,6 +1445,8 @@ message RestoreFromBackupRequest {
   // RestoreToTimestamp, if given, requested an inremental restore up to (and excluding) the given timestamp.
   // RestoreToTimestamp and RestoreToPos are mutually exclusive.
   vttime.Time restore_to_timestamp = 5;
+  // AllowedBackupEngines, if present will filter out any backups taken with engines not included in the list
+  repeated string allowed_backup_engines = 6;
 }
 
 message RestoreFromBackupResponse {

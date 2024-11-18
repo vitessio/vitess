@@ -166,11 +166,13 @@ func Backup(ctx context.Context, params BackupParams) error {
 		// appropriate binlog files.
 		be = BackupRestoreEngineMap[builtinBackupEngineName]
 	} else {
-		be, err = GetBackupEngine()
+		be, err = GetBackupEngine(params.BackupEngine)
 		if err != nil {
 			return vterrors.Wrap(err, "failed to find backup engine")
 		}
 	}
+
+	params.Logger.Infof("Using backup engine %q", be.Name())
 
 	// Take the backup, and either AbortBackup or EndBackup.
 	backupResult, err := be.ExecuteBackup(ctx, beParams, bh)

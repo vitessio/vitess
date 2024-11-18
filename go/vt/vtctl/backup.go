@@ -209,6 +209,7 @@ func commandRestoreFromBackup(ctx context.Context, wr *wrangler.Wrangler, subFla
 	backupTimestampStr := subFlags.String("backup_timestamp", "", "Use the backup taken at or before this timestamp rather than using the latest backup.")
 	restoreToPos := subFlags.String("restore_to_pos", "", "Run a point in time recovery that ends with the given position. This will attempt to use one full backup followed by zero or more incremental backups")
 	restoreToTimestampStr := subFlags.String("restore_to_timestamp", "", "Run a point in time recovery that restores up to, and excluding, given timestamp in RFC3339 format (`2006-01-02T15:04:05Z07:00`). This will attempt to use one full backup followed by zero or more incremental backups")
+
 	dryRun := subFlags.Bool("dry_run", false, "Only validate restore steps, do not actually restore data")
 	if err := subFlags.Parse(args); err != nil {
 		return err

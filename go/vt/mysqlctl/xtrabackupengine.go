@@ -947,6 +947,8 @@ func (be *XtrabackupEngine) ShouldStartMySQLAfterRestore() bool {
 	return true
 }
 
+func (be *XtrabackupEngine) Name() string { return xtrabackupEngineName }
+
 func init() {
 	BackupRestoreEngineMap[xtrabackupEngineName] = &XtrabackupEngine{}
 }

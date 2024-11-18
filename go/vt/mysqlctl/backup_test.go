@@ -512,7 +512,7 @@ func TestRestoreManifestMySQLVersionValidation(t *testing.T) {
 
 			manifest := BackupManifest{
 				BackupTime:   time.Now().Add(-1 * time.Hour).Format(time.RFC3339),
-				BackupMethod: "fake",
+				BackupMethod: fakeBackupEngineName,
 				Keyspace:     "test",
 				Shard:        "-",
 				MySQLVersion: tc.fromVersion,
@@ -613,7 +613,7 @@ func createFakeBackupRestoreEnv(t *testing.T) *fakeBackupRestoreEnv {
 
 	manifest := BackupManifest{
 		BackupTime:   FormatRFC3339(time.Now().Add(-1 * time.Hour)),
-		BackupMethod: "fake",
+		BackupMethod: fakeBackupEngineName,
 		Keyspace:     "test",
 		Shard:        "-",
 		MySQLVersion: "8.0.32",
@@ -626,8 +626,8 @@ func createFakeBackupRestoreEnv(t *testing.T) *fakeBackupRestoreEnv {
 	testBackupEngine.ExecuteRestoreReturn = FakeBackupEngineExecuteRestoreReturn{&manifest, nil}
 
 	previousBackupEngineImplementation := backupEngineImplementation
-	BackupRestoreEngineMap["fake"] = &testBackupEngine
-	backupEngineImplementation = "fake"
+	BackupRestoreEngineMap[fakeBackupEngineName] = &testBackupEngine
+	backupEngineImplementation = fakeBackupEngineName
 
 	testBackupStorage := FakeBackupStorage{}
 	testBackupStorage.ListBackupsReturn = FakeBackupStorageListBackupsReturn{
@@ -642,9 +642,9 @@ func createFakeBackupRestoreEnv(t *testing.T) *fakeBackupRestoreEnv {
 	testBackupStorage.StartBackupReturn = FakeBackupStorageStartBackupReturn{&FakeBackupHandle{}, nil}
 	testBackupStorage.WithParamsReturn = &testBackupStorage
 
-	backupstorage.BackupStorageMap["fake"] = &testBackupStorage
+	backupstorage.BackupStorageMap[fakeBackupEngineName] = &testBackupStorage
 	previousBackupStorageImplementation := backupstorage.BackupStorageImplementation
-	backupstorage.BackupStorageImplementation = "fake"
+	backupstorage.BackupStorageImplementation = fakeBackupEngineName
 
 	// all restore integration tests must be leak checked
 	t.Cleanup(func() {
@@ -655,10 +655,10 @@ func createFakeBackupRestoreEnv(t *testing.T) *fakeBackupRestoreEnv {
 		backupstats.DeprecatedBackupDurationS.Reset()
 		backupstats.DeprecatedRestoreDurationS.Reset()
 
-		delete(BackupRestoreEngineMap, "fake")
+		delete(BackupRestoreEngineMap, fakeBackupEngineName)
 		backupEngineImplementation = previousBackupEngineImplementation
 
-		delete(backupstorage.BackupStorageMap, "fake")
+		delete(backupstorage.BackupStorageMap, fakeBackupEngineName)
 		backupstorage.BackupStorageImplementation = previousBackupStorageImplementation
 		mysqld.Close()
 		sqldb.Close()
