@@ -440,7 +440,7 @@ func (pool *membufpool) Get(length int) *[]byte {
 }
 
 func (pool *membufpool) Put(b *[]byte) {
-	pool.Put(b)
+	pool.pool.Put(b)
 }
 
 var defaultMembufPool = membufpool{sync.Pool{New: func() any {
