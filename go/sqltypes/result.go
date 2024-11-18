@@ -38,7 +38,7 @@ type Result struct {
 	Info                string           `json:"info"`
 
 	// RawPackets contains the fields and rows raw mysql packets.
-	RawPackets []mem.Buffer `json:"raw_packets"`
+	RawPackets mem.BufferSlice `json:"raw_packets"`
 }
 
 //goland:noinspection GoUnusedConst

@@ -194,7 +194,6 @@ func (client *QueryClient) SetServingType(tabletType topodatapb.TabletType) erro
 func (client *QueryClient) Execute(query string, bindvars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return client.ExecuteWithOptions(query, bindvars, &querypb.ExecuteOptions{
 		IncludedFields: querypb.ExecuteOptions_ALL,
-		// RawMysqlPackets: true,
 	})
 }
 
@@ -222,7 +221,7 @@ func (client *QueryClient) BeginExecute(query string, bindvars map[string]*query
 
 // ExecuteWithOptions executes a query using 'options'.
 func (client *QueryClient) ExecuteWithOptions(query string, bindvars map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
-	res, err := client.server.Execute(
+	return client.server.Execute(
 		client.ctx,
 		client.target,
 		query,
@@ -231,13 +230,6 @@ func (client *QueryClient) ExecuteWithOptions(query string, bindvars map[string]
 		client.reservedID,
 		options,
 	)
-	if err != nil {
-		return nil, err
-	}
-	for _, packet := range res.RawPackets {
-		packet.Free()
-	}
-	return res, nil
 }
 
 // StreamExecute executes a query & returns the results.

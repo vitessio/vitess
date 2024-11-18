@@ -20,15 +20,14 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
-	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
 )
 
 var frameworkErrors = `fail failed:
@@ -1785,9 +1784,18 @@ func name(tc framework.Testable) string {
 	return fmt.Sprintf("%T", tc)
 }
 
+/*
+export ver=v1 p=~/Desktop/raw-packets && go test \
+-run '^$' -bench '^BenchmarkTabletQueries' \
+-benchtime 10s -count 6 -cpu 6 -benchmem \
+-memprofile=$p/${ver}.mem.pprof -cpuprofile=$p/${ver}.cpu.pprof \
+| tee $p/${ver}.txt
+*/
 func BenchmarkTabletQueries(b *testing.B) {
+	framework.Server.SetMaxResultSize(10000000)
 	client := framework.NewClient()
 
+	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		tcase := TestQueryCases[rand.IntN(len(TestQueryCases))]
@@ -1799,8 +1807,9 @@ func BenchmarkTabletQueries(b *testing.B) {
 
 func TestExecute(t *testing.T) {
 	client := framework.NewClient()
-	framework.Server.QueryTimeout.Store(5 * time.Minute.Nanoseconds())
 	rs, err := client.ExecuteWithOptions("show tables", nil, &querypb.ExecuteOptions{RawMysqlPackets: true})
 	require.NoError(t, err)
-	fmt.Printf("RawPackets: %v\n", rs.RawPackets)
+	rs, err = mysql.ParseResultFromRawForTest(rs)
+	require.NoError(t, err)
+	require.Len(t, rs.Rows, 29)
 }

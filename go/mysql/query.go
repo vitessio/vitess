@@ -450,13 +450,11 @@ func (c *Conn) ReadQueryResultAsSliceBuffer(maxrows int) (result *sqltypes.Resul
 		}, more, warnings, nil
 	}
 
-	rawPackets := []mem.Buffer{buffData}
+	rawPackets := mem.BufferSlice{buffData}
 
 	defer func() {
 		if err != nil {
-			for _, rawPacket := range rawPackets {
-				rawPacket.Free()
-			}
+			rawPackets.Free()
 		}
 	}()
 

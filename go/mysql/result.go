@@ -17,19 +17,27 @@ limitations under the License.
 package mysql
 
 import (
+	"google.golang.org/grpc/encoding"
+
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-func ParseResult(qr *querypb.ExecuteResponse, wantfields bool) (*sqltypes.Result, error) {
-	if len(qr.RawPackets) == 0 {
-		return sqltypes.Proto3ToResult(qr.Result), nil
+// ParseResult parses a query result from the raw MySQL packets received in the query.ExecuteResponse.
+func ParseResult(er *querypb.ExecuteResponse, wantfields bool) (*sqltypes.Result, error) {
+	if len(er.RawPackets) == 0 {
+		return sqltypes.Proto3ToResult(er.Result), nil
 	}
 
+	result := &sqltypes.Result{}
+	return updateResFromRaw(er, wantfields, result)
+}
+
+func updateResFromRaw(er *querypb.ExecuteResponse, wantfields bool, result *sqltypes.Result) (*sqltypes.Result, error) {
 	// log.Errorf("interpreting raw packets")
 
-	colcount, _, ok := readLenEncInt(qr.RawPackets[0], 0)
+	colcount, _, ok := readLenEncInt(er.RawPackets[0], 0)
 	if !ok {
 		return nil, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "cannot get column number")
 	}
@@ -40,17 +48,15 @@ func ParseResult(qr *querypb.ExecuteResponse, wantfields bool) (*sqltypes.Result
 
 	var err error
 	fieldArray := make([]querypb.Field, colcount)
-	fieldPackets := qr.RawPackets[1 : colcount+1]
+	fieldPackets := er.RawPackets[1 : colcount+1]
 	var rowPackets [][]byte
-	if len(qr.RawPackets) > int(colcount)+2 {
-		rowPackets = qr.RawPackets[colcount+1 : len(qr.RawPackets)-1]
+	if len(er.RawPackets) > int(colcount)+2 {
+		rowPackets = er.RawPackets[colcount+1 : len(er.RawPackets)-1]
 	}
-	okPacket := qr.RawPackets[len(qr.RawPackets)-1]
+	okPacket := er.RawPackets[len(er.RawPackets)-1]
 
-	result := &sqltypes.Result{
-		Fields: make([]*querypb.Field, len(fieldPackets)),
-		Rows:   make([]sqltypes.Row, 0, len(rowPackets)),
-	}
+	result.Fields = make([]*querypb.Field, len(fieldPackets))
+	result.Rows = make([]sqltypes.Row, 0, len(rowPackets))
 
 	for i, fieldpkt := range fieldPackets {
 		result.Fields[i] = &fieldArray[i]
@@ -88,4 +94,19 @@ func ParseResult(qr *querypb.ExecuteResponse, wantfields bool) (*sqltypes.Result
 	// log.Errorf("final result: %+v", result)
 
 	return result, nil
+}
+
+// ParseResultFromRawForTest is used in test that unmarshal the raw packets in sqltypes.Result and parses the packets to provide query result in the respective fields of sqltypes.Result.
+func ParseResultFromRawForTest(result *sqltypes.Result) (*sqltypes.Result, error) {
+	if len(result.RawPackets) == 0 {
+		return result, nil
+	}
+	defer result.RawPackets.Free()
+	er := &querypb.ExecuteResponse{}
+	c := encoding.GetCodecV2("proto")
+	err := c.Unmarshal(result.RawPackets, er)
+	if err != nil {
+		return nil, err
+	}
+	return updateResFromRaw(er, true, result)
 }
