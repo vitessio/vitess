@@ -42,10 +42,6 @@ func (cached *Result) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.SessionStateChanges)))
 	// field Info string
 	size += hack.RuntimeAllocSize(int64(len(cached.Info)))
-	// field RawPackets []google.golang.org/grpc/mem.Buffer
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.RawPackets)) * int64(16))
-	}
 	return size
 }
 func (cached *Value) CachedSize(alloc bool) int64 {
