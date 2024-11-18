@@ -232,6 +232,16 @@ func isUnrecoverableError(err error) bool {
 		sqlerror.ERWrongValueCountOnRow:
 		log.Errorf("Got unrecoverable error: %v", sqlErr)
 		return true
+	case sqlerror.ERErrorDuringCommit:
+		switch sqlErr.HaErrorCode() {
+		case
+			sqlerror.HaErrCrashed,
+			sqlerror.HaErrTooBigRow,
+			sqlerror.HaErrFoundDuppUnique,
+			sqlerror.HaErrDiskFullNowait:
+			log.Errorf("Got unrecoverable error: %v", sqlErr)
+			return true
+		}
 	}
 	return false
 }

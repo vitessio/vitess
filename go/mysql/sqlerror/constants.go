@@ -203,6 +203,7 @@ const (
 	ERBlobKeyWithoutLength         = ErrorCode(1170)
 	ERPrimaryCantHaveNull          = ErrorCode(1171)
 	ERTooManyRows                  = ErrorCode(1172)
+	ERErrorDuringCommit            = ErrorCode(1180)
 	ERLockOrActiveTransaction      = ErrorCode(1192)
 	ERUnknownSystemVariable        = ErrorCode(1193)
 	ERSetConstantsOnly             = ErrorCode(1204)
@@ -299,6 +300,26 @@ const (
 
 	// server not available
 	ERServerIsntAvailable = ErrorCode(3168)
+)
+
+// HandlerErrorCode is for errors thrown by the handler, and which are then embedded in other errors.
+type HandlerErrorCode uint16
+
+func (e HandlerErrorCode) ToString() string {
+	return strconv.FormatUint(uint64(e), 10)
+}
+
+const (
+	HaErrCrashed               = HandlerErrorCode(126)
+	HaErrTooBigRow             = HandlerErrorCode(139)
+	HaErrFoundDuppUnique       = HandlerErrorCode(141)
+	HaErrLockWaitTimeout       = HandlerErrorCode(146)
+	HaErrLockTableFull         = HandlerErrorCode(147)
+	HaErrLockDeadlock          = HandlerErrorCode(149)
+	HaErrTooManyConcurrentTrxs = HandlerErrorCode(177)
+	HaErrNotInLockPartitions   = HandlerErrorCode(178)
+	HaErrQueryInterrupted      = HandlerErrorCode(196)
+	HaErrDiskFullNowait        = HandlerErrorCode(204)
 )
 
 // Sql states for errors.
