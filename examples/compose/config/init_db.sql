@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS _vt.shard_metadata (
 CREATE USER 'vt_dba'@'localhost';
 GRANT ALL ON *.* TO 'vt_dba'@'localhost';
 GRANT GRANT OPTION ON *.* TO 'vt_dba'@'localhost';
+GRANT PROXY ON ''@'' TO 'vt_dba'@'localhost' WITH GRANT OPTION;
 # User for app traffic, with global read-write access.
 CREATE USER 'vt_app'@'localhost';
 GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, PROCESS, FILE,

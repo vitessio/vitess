@@ -17,9 +17,11 @@ limitations under the License.
 package mysqlctl
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -29,6 +31,7 @@ import (
 
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -440,17 +443,19 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 		return nil, err
 	}
 
-	// mysqld needs to be running in order for mysql_upgrade to work.
-	// If we've just restored from a backup from previous MySQL version then mysqld
-	// may fail to start due to a different structure of mysql.* tables. The flag
-	// --skip-grant-tables ensures that these tables are not read until mysql_upgrade
-	// is executed. And since with --skip-grant-tables anyone can connect to MySQL
-	// without password, we are passing --skip-networking to greatly reduce the set
-	// of those who can connect.
-	params.Logger.Infof("Restore: starting mysqld for mysql_upgrade")
-	// Note Start will use dba user for waiting, this is fine, it will be allowed.
-	if err := params.Mysqld.Start(context.Background(), params.Cnf, "--skip-grant-tables", "--skip-networking"); err != nil {
-		return nil, err
+	if re.ShouldStartMySQLAfterRestore() { // all engines except mysqlshell since MySQL is always running there
+		// mysqld needs to be running in order for mysql_upgrade to work.
+		// If we've just restored from a backup from previous MySQL version then mysqld
+		// may fail to start due to a different structure of mysql.* tables. The flag
+		// --skip-grant-tables ensures that these tables are not read until mysql_upgrade
+		// is executed. And since with --skip-grant-tables anyone can connect to MySQL
+		// without password, we are passing --skip-networking to greatly reduce the set
+		// of those who can connect.
+		params.Logger.Infof("Restore: starting mysqld for mysql_upgrade")
+		// Note Start will use dba user for waiting, this is fine, it will be allowed.
+		if err := params.Mysqld.Start(context.Background(), params.Cnf, "--skip-grant-tables", "--skip-networking"); err != nil {
+			return nil, err
+		}
 	}
 
 	params.Logger.Infof("Restore: running mysql_upgrade")
@@ -495,4 +500,21 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 	params.Stats.Scope(backupstats.Operation("Restore")).TimedIncrement(time.Since(startTs))
 	params.Logger.Infof("Restore: complete")
 	return manifest, nil
+}
+
+// scanLinesToLogger scans full lines from the given Reader and sends them to
+// the given Logger until EOF.
+func scanLinesToLogger(prefix string, reader io.Reader, logger logutil.Logger, doneFunc func()) {
+	defer doneFunc()
+
+	scanner := bufio.NewScanner(reader)
+	for scanner.Scan() {
+		line := scanner.Text()
+		logger.Infof("%s: %s", prefix, line)
+	}
+	if err := scanner.Err(); err != nil {
+		// This is usually run in a background goroutine, so there's no point
+		// returning an error. Just log it.
+		logger.Warningf("error scanning lines from %s: %v", prefix, err)
+	}
 }

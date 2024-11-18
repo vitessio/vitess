@@ -1215,6 +1215,11 @@ func (be *BuiltinBackupEngine) ShouldDrainForBackup(req *tabletmanagerdatapb.Bac
 	return true
 }
 
+// ShouldStartMySQLAfterRestore signifies if this backup engine needs to restart MySQL once the restore is completed.
+func (be *BuiltinBackupEngine) ShouldStartMySQLAfterRestore() bool {
+	return true
+}
+
 func getPrimaryPosition(ctx context.Context, tmc tmclient.TabletManagerClient, ts *topo.Server, keyspace, shard string) (replication.Position, error) {
 	si, err := ts.GetShard(ctx, keyspace, shard)
 	if err != nil {

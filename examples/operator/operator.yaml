@@ -1247,6 +1247,7 @@ spec:
                       enum:
                         - builtin
                         - xtrabackup
+                        - mysqlshell
                       type: string
                     locations:
                       items:

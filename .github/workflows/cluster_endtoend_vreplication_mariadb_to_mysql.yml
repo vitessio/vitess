@@ -1,9 +1,9 @@
 # DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
 
-name: Cluster (15)
+name: Cluster (vreplication_mariadb_to_mysql)
 on: [push, pull_request]
 concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (15)')
+  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (vreplication_mariadb_to_mysql)')
   cancel-in-progress: true
 
 permissions: read-all
@@ -12,14 +12,11 @@ env:
   LAUNCHABLE_ORGANIZATION: "vitess"
   LAUNCHABLE_WORKSPACE: "vitess-app"
   GITHUB_PR_HEAD_SHA: "${{ github.event.pull_request.head.sha }}"
-  GOPRIVATE: github.com/slackhq/vitess-addons
-  GH_ACCESS_TOKEN: "${{ secrets.GH_ACCESS_TOKEN }}"
 
 jobs:
   build:
-    name: Run endtoend tests on Cluster (15)
-    runs-on:
-      group: vitess-ubuntu20
+    name: Run endtoend tests on Cluster (vreplication_mariadb_to_mysql)
+    runs-on: ubuntu-latest
 
     steps:
     - name: Skip CI
@@ -33,10 +30,13 @@ jobs:
       id: skip-workflow
       run: |
         skip='false'
+        if [[ "${{github.event.pull_request}}" ==  "" ]] && [[ "${{github.ref}}" != "refs/heads/main" ]] && [[ ! "${{github.ref}}" =~ ^refs/heads/release-[0-9]+\.[0-9]$ ]] && [[ ! "${{github.ref}}" =~ "refs/tags/.*" ]]; then
+          skip='true'
+        fi
         echo Skip ${skip}
         echo "skip-workflow=${skip}" >> $GITHUB_OUTPUT
 
-        PR_DATA=$(curl \
+        PR_DATA=$(curl -s\
           -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
           -H "Accept: application/vnd.github.v3+json" \
           "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}")
@@ -45,11 +45,11 @@ jobs:
 
     - name: Check out code
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
-      uses: actions/checkout@v4
+      uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
 
     - name: Check for changes in relevant files
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
-      uses: dorny/paths-filter@v3.0.1
+      uses: dorny/paths-filter@ebc4d7e9ebcb0b1eb21480bb8f43113e996ac77a # v3.0.1
       id: changes
       with:
         token: ''
@@ -67,21 +67,17 @@ jobs:
             - 'tools/**'
             - 'config/**'
             - 'bootstrap.sh'
-            - '.github/workflows/cluster_endtoend_15.yml'
+            - '.github/workflows/cluster_endtoend_vreplication_mariadb_to_mysql.yml'
 
     - name: Set up Go
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
       with:
-        go-version: 1.22.8
-
-    - name: Setup github.com/slackhq/vitess-addons access token
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      run: git config --global url.https://$GH_ACCESS_TOKEN@github.com/.insteadOf https://github.com/
+        go-version: 1.23.1
 
     - name: Set up python
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@39cd14951b08e74b54015e9e001cdefcf80e669f # v5.1.1
 
     - name: Tune the OS
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -100,10 +96,10 @@ jobs:
         # Get key to latest MySQL repo
         sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys A8D3785C
         # Setup MySQL 8.0
-        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.29-1_all.deb
+        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.32-1_all.deb
         echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
         sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
-        sudo apt-get update
+        sudo apt-get -qq update
         # Install everything else we need, and configure
         sudo apt-get -qq install -y mysql-server mysql-shell mysql-client make unzip g++ etcd curl git wget eatmydata xz-utils libncurses5
 
@@ -139,8 +135,30 @@ jobs:
 
         set -exo pipefail
 
+        # Increase our open file descriptor limit as we could hit this
+        ulimit -n 65536
+        cat <<-EOF>>./config/mycnf/mysql8026.cnf
+        innodb_buffer_pool_dump_at_shutdown=OFF
+        innodb_buffer_pool_in_core_file=OFF
+        innodb_buffer_pool_load_at_startup=OFF
+        innodb_buffer_pool_size=64M
+        innodb_doublewrite=OFF
+        innodb_flush_log_at_trx_commit=0
+        innodb_flush_method=O_DIRECT
+        innodb_numa_interleave=ON
+        innodb_adaptive_hash_index=OFF
+        sync_binlog=0
+        sync_relay_log=0
+        performance_schema=OFF
+        slow-query-log=OFF
+        EOF
+        
+        cat <<-EOF>>./config/mycnf/mysql8026.cnf
+        binlog-transaction-compression=ON
+        EOF
+        
         # run the tests however you normally do, then produce a JUnit XML file
-        eatmydata -- go run test.go -docker=false -follow -shard 15 | tee -a output.txt | go-junit-report -set-exit-code > report.xml
+        eatmydata -- go run test.go -docker=false -follow -shard vreplication_mariadb_to_mysql | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 
     - name: Print test output and Record test result in launchable if PR is not a draft
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true' && always()
@@ -152,3 +170,10 @@ jobs:
 
         # print test output
         cat output.txt
+
+    - name: Test Summary
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true' && always()
+      uses: test-summary/action@31493c76ec9e7aa675f1585d3ed6f1da69269a86 # v2.4
+      with:
+        paths: "report.xml"
+        show: "fail, skip"

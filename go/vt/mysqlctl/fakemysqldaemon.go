@@ -18,6 +18,7 @@ package mysqlctl
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"regexp"
@@ -530,6 +531,11 @@ func (fmd *FakeMysqlDaemon) Promote(hookExtraEnv map[string]string) (replication
 	return fmd.PromoteResult, nil
 }
 
+// ExecuteSuperQuery is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) ExecuteSuperQuery(ctx context.Context, query string) error {
+	return fmd.ExecuteSuperQueryList(ctx, []string{query})
+}
+
 // ExecuteSuperQueryList is part of the MysqlDaemon interface
 func (fmd *FakeMysqlDaemon) ExecuteSuperQueryList(ctx context.Context, queryList []string) error {
 	for _, query := range queryList {
@@ -721,4 +727,14 @@ func (fmd *FakeMysqlDaemon) GetVersionString(ctx context.Context) (string, error
 // GetVersionComment is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) GetVersionComment(ctx context.Context) (string, error) {
 	return "", nil
+}
+
+// AcquireGlobalReadLock is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) AcquireGlobalReadLock(ctx context.Context) error {
+	return errors.New("not implemented")
+}
+
+// ReleaseGlobalReadLock is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) ReleaseGlobalReadLock(ctx context.Context) error {
+	return errors.New("not implemented")
 }

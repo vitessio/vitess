@@ -110,11 +110,21 @@ type MysqlDaemon interface {
 	// GetVersionComment returns the version comment
 	GetVersionComment(ctx context.Context) (string, error)
 
+	// ExecuteSuperQuery executes a single query, no result
+	ExecuteSuperQuery(ctx context.Context, query string) error
+
 	// ExecuteSuperQueryList executes a list of queries, no result
 	ExecuteSuperQueryList(ctx context.Context, queryList []string) error
 
 	// FetchSuperQuery executes one query, returns the result
 	FetchSuperQuery(ctx context.Context, query string) (*sqltypes.Result, error)
+
+	// AcquireGlobalReadLock acquires a global read lock and keeps the connection so
+	// as to release it with the function below.
+	AcquireGlobalReadLock(ctx context.Context) error
+
+	// ReleaseGlobalReadLock release a lock acquired with the connection from the above function.
+	ReleaseGlobalReadLock(ctx context.Context) error
 
 	// Close will close this instance of Mysqld. It will wait for all dba
 	// queries to be finished.

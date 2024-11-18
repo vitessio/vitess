@@ -226,6 +226,12 @@ Flags:
       --mycnf_tmp_dir string                                             mysql tmp directory
       --mysql-server-keepalive-period duration                           TCP period between keep-alives
       --mysql-server-pool-conn-read-buffers                              If set, the server will pool incoming connection read buffers
+      --mysql-shell-backup-location string                               location where the backup will be stored
+      --mysql-shell-dump-flags string                                    flags to pass to mysql shell dump utility. This should be a JSON string and will be saved in the MANIFEST (default "{\"threads\": 4}")
+      --mysql-shell-flags string                                         execution flags to pass to mysqlsh binary to be used during dump/load (default "--defaults-file=/dev/null --js -h localhost")
+      --mysql-shell-load-flags string                                    flags to pass to mysql shell load utility. This should be a JSON string (default "{\"threads\": 4, \"loadUsers\": true, \"updateGtidSet\": \"replace\", \"skipBinlog\": true, \"progressFile\": \"\"}")
+      --mysql-shell-should-drain                                         decide if we should drain while taking a backup or continue to serving traffic
+      --mysql-shell-speedup-restore                                      speed up restore by disabling redo logging and double write buffer during the restore process
       --mysql-shutdown-timeout duration                                  timeout to use when MySQL is being shut down. (default 5m0s)
       --mysql_allow_clear_text_without_tls                               If set, the server will allow the use of a clear text password over non-SSL connections.
       --mysql_auth_server_impl string                                    Which auth server implementation to use. Options: none, ldap, clientcert, static, vault. (default "static")

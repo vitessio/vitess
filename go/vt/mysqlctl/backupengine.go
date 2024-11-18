@@ -179,6 +179,7 @@ func (p *RestoreParams) IsIncrementalRecovery() bool {
 // Returns the manifest of a backup if successful, otherwise returns an error
 type RestoreEngine interface {
 	ExecuteRestore(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle) (*BackupManifest, error)
+	ShouldStartMySQLAfterRestore() bool
 }
 
 // BackupRestoreEngine is a combination of BackupEngine and RestoreEngine.
