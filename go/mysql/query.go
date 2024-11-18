@@ -19,11 +19,14 @@ package mysql
 import (
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"strconv"
 	"strings"
+	"sync"
 
 	"google.golang.org/grpc/mem"
+	"google.golang.org/protobuf/encoding/protowire"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/sqlerror"
@@ -428,11 +431,113 @@ func (c *Conn) ExecuteFetchWithWarningCount(query string, maxrows int, wantfield
 	return res, warnings, err
 }
 
+type membufpool struct {
+	pool sync.Pool
+}
+
+func (pool *membufpool) Get(length int) *[]byte {
+	return pool.pool.Get().(*[]byte)
+}
+
+func (pool *membufpool) Put(b *[]byte) {
+	pool.Put(b)
+}
+
+var defaultMembufPool = membufpool{sync.Pool{New: func() any {
+	buf := make([]byte, 16<<10)
+	return &buf
+}}}
+
+const protoHeaderSize = 6
+
+type MemBufReader struct {
+	cur   *[]byte
+	pos   int
+	ready []mem.Buffer
+}
+
+func NewMemBufReader() MemBufReader {
+	return MemBufReader{cur: defaultMembufPool.Get(0)}
+}
+
+func (buf *MemBufReader) Free() {
+	if buf.cur != nil {
+		defaultMembufPool.Put(buf.cur)
+	}
+	for _, b := range buf.ready {
+		b.Free()
+	}
+}
+
+func (buf *MemBufReader) Take() []mem.Buffer {
+	if buf.pos > 0 {
+		buf.flush()
+	}
+	return buf.ready
+}
+
+func (buf *MemBufReader) flush() {
+	*buf.cur = (*buf.cur)[:buf.pos]
+	buf.ready = append(buf.ready, mem.NewBuffer(buf.cur, &defaultMembufPool))
+	buf.cur = defaultMembufPool.Get(0)
+	buf.pos = 0
+}
+
+func (buf *MemBufReader) NewPacket(size int) {
+	if len((*buf.cur)[buf.pos:]) < protoHeaderSize {
+		buf.flush()
+	}
+
+	tag := protowire.EncodeTag(RawPacketsPos, protowire.BytesType)
+	b := (*buf.cur)[buf.pos : buf.pos+protoHeaderSize]
+
+	b[0] = byte((tag>>0)&0x7f | 0x80)
+	b[1] = byte(tag >> 7)
+
+	b[2] = byte((size>>0)&0x7f | 0x80)
+	b[3] = byte((size>>7)&0x7f | 0x80)
+	b[4] = byte((size>>14)&0x7f | 0x80)
+	b[5] = byte(size >> 21)
+
+	buf.pos = protoHeaderSize
+}
+
+func (buf *MemBufReader) ReadPacket(packetLen int, r io.Reader) ([]byte, error) {
+	buf.NewPacket(packetLen)
+	flushed := false
+
+	for packetLen > 0 {
+		target := (*buf.cur)[buf.pos:]
+
+		if packetLen < len(target) {
+			if _, err := io.ReadFull(r, target[:packetLen]); err != nil {
+				return nil, vterrors.Wrapf(err, "io.ReadFull(packet body of length %v) failed", packetLen)
+			}
+			buf.pos += packetLen
+			if !flushed {
+				return target[:packetLen], nil
+			}
+			return nil, nil
+		}
+
+		if _, err := io.ReadFull(r, target); err != nil {
+			return nil, vterrors.Wrapf(err, "io.ReadFull(packet body of length %v) failed", packetLen)
+		}
+		packetLen -= len(target)
+
+		buf.pos += len(target)
+		buf.flush()
+		flushed = true
+	}
+	return nil, nil
+}
+
 func (c *Conn) ReadQueryResultAsSliceBuffer(maxrows int) (result *sqltypes.Result, more bool, warnings uint16, err error) {
 	var packetOk PacketOK
+	var membuf = NewMemBufReader()
 
 	// Get the result.
-	buffData, colNumber, err := c.readComQueryResponseAsMemBuffer(&packetOk)
+	colNumber, err := c.readComQueryResponseToMembuf(&membuf, &packetOk)
 	if err != nil {
 		return nil, false, 0, err
 	}
@@ -440,7 +545,7 @@ func (c *Conn) ReadQueryResultAsSliceBuffer(maxrows int) (result *sqltypes.Resul
 	warnings = packetOk.warnings
 	if colNumber == 0 {
 		// OK packet, means no results. Just use the numbers.
-		buffData.Free()
+		membuf.Free()
 		return &sqltypes.Result{
 			RowsAffected:        packetOk.affectedRows,
 			InsertID:            packetOk.lastInsertID,
@@ -450,32 +555,27 @@ func (c *Conn) ReadQueryResultAsSliceBuffer(maxrows int) (result *sqltypes.Resul
 		}, more, warnings, nil
 	}
 
-	rawPackets := mem.BufferSlice{buffData}
-
 	defer func() {
 		if err != nil {
-			rawPackets.Free()
+			membuf.Free()
 		}
 	}()
 
 	// Read column headers. One packet per column.
 	// Build the fields.
 	for i := 0; i < colNumber; i++ {
-		data, err := c.readPacketAsMemBuffer()
+		_, err = c.readPacketToMembuf(&membuf)
 		if err != nil {
 			return nil, false, 0, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, "", "")
 		}
-		rawPackets = append(rawPackets, data)
 	}
 
 	if c.Capabilities&CapabilityClientDeprecateEOF == 0 {
 		// EOF is only present here if it's not deprecated.
-		buffData, err := c.readPacketAsMemBuffer()
+		data, err := c.readPacketToMembuf(&membuf)
 		if err != nil {
 			return nil, false, 0, sqlerror.NewSQLError(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, err.Error())
 		}
-		defer buffData.Free()
-		data := buffData.ReadOnlyData()[baseLength:]
 		if c.isEOFPacket(data) {
 			// empty by design
 		} else if isErrorPacket(data) {
@@ -489,14 +589,14 @@ func (c *Conn) ReadQueryResultAsSliceBuffer(maxrows int) (result *sqltypes.Resul
 
 	// Read each row until EOF or OK packet.
 	for {
-		buffData, err := c.readPacketAsMemBuffer()
+		data, err := c.readPacketToMembuf(&membuf)
 		if err != nil {
 			return nil, false, 0, sqlerror.NewSQLError(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, err.Error())
 		}
-		rawPackets = append(rawPackets, buffData)
-		data := buffData.ReadOnlyData()[baseLength:]
 
-		if c.isEOFPacket(data) {
+		if data == nil {
+			// this is just a normalm data packet; accumulate it
+		} else if c.isEOFPacket(data) {
 			result := &sqltypes.Result{}
 
 			// The deprecated EOF packets change means that this is either an
@@ -521,7 +621,7 @@ func (c *Conn) ReadQueryResultAsSliceBuffer(maxrows int) (result *sqltypes.Resul
 				result.Info = packetOK.info
 			}
 
-			result.RawPackets = rawPackets
+			result.RawPackets = membuf.Take()
 			return result, more, warnings, nil
 
 		} else if isErrorPacket(data) {
@@ -726,41 +826,33 @@ func (c *Conn) readComQueryResponse(packetOk *PacketOK) (int, error) {
 	return int(n), nil
 }
 
-func (c *Conn) readComQueryResponseAsMemBuffer(packetOk *PacketOK) (buf mem.Buffer, res int, err error) {
-	defer func() {
-		if buf != nil && err != nil {
-			buf.Free()
-			buf = nil
-		}
-	}()
-	buf, err = c.readPacketAsMemBuffer()
+func (c *Conn) readComQueryResponseToMembuf(membuf *MemBufReader, packetOk *PacketOK) (res int, err error) {
+	data, err := c.readPacketToMembuf(membuf)
 	if err != nil {
-		return buf, 0, sqlerror.NewSQLErrorf(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "%v", err)
+		return 0, sqlerror.NewSQLErrorf(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "%v", err)
 	}
-	// defer c.recycleReadPacket()
-	data := buf.ReadOnlyData()[baseLength:]
 	if len(data) == 0 {
-		return buf, 0, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "invalid empty COM_QUERY response packet")
+		return 0, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "invalid empty COM_QUERY response packet")
 	}
 
 	switch data[0] {
 	case OKPacket:
-		return buf, 0, parseOKPacket(packetOk, data, c.enableQueryInfo, c.isSessionTrack())
+		return 0, parseOKPacket(packetOk, data, c.enableQueryInfo, c.isSessionTrack())
 	case ErrPacket:
 		// Error
-		return buf, 0, ParseErrorPacket(data)
+		return 0, ParseErrorPacket(data)
 	case 0xfb:
 		// Local infile
-		return buf, 0, vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "not implemented")
+		return 0, vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "not implemented")
 	}
 	n, pos, ok := readLenEncInt(data, 0)
 	if !ok {
-		return buf, 0, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "cannot get column number")
+		return 0, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "cannot get column number")
 	}
 	if pos != len(data) {
-		return buf, 0, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "extra data in COM_QUERY response")
+		return 0, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "extra data in COM_QUERY response")
 	}
-	return buf, int(n), nil
+	return int(n), nil
 }
 
 //

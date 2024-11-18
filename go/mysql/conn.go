@@ -30,9 +30,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"google.golang.org/grpc/mem"
-	"google.golang.org/protobuf/encoding/protowire"
-
 	"vitess.io/vitess/go/bucketpool"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/sqlerror"
@@ -412,7 +409,7 @@ func (c *Conn) readHeaderFrom(r io.Reader) (int, error) {
 	return int(uint32(c.header[0]) | uint32(c.header[1])<<8 | uint32(c.header[2])<<16), nil
 }
 
-func (c *Conn) readPacketAsMemBuffer() (mem.Buffer, error) {
+func (c *Conn) readPacketToMembuf(membuf *MemBufReader) ([]byte, error) {
 	r := c.getReader()
 
 	length, err := c.readHeaderFrom(r)
@@ -427,82 +424,10 @@ func (c *Conn) readPacketAsMemBuffer() (mem.Buffer, error) {
 		return nil, nil
 	}
 
-	// 5 bytes for protobuf header
-	length = length + baseLength
-
-	// Use the bufPool.
-	if length < MaxPacketSize {
-		c.currentEphemeralBuffer = bufPool.Get(length)
-		def := *c.currentEphemeralBuffer
-		// log.Errorf("buffer packet: %+v", def)
-		basePacket := initPacket()
-		copy(def, basePacket)
-		// log.Errorf("after initial packet: %+v", def)
-		if _, err := io.ReadFull(r, def[baseLength:]); err != nil {
-			return nil, vterrors.Wrapf(err, "io.ReadFull(packet body of length %v) failed", length)
-		}
-		updateProtoHeader(def, length-baseLength)
-		// log.Errorf("after header update: %+v", def)
-		return mem.NewBuffer(c.currentEphemeralBuffer, bufPool), nil
-	}
-
-	// log.Errorf("in slow path for size: %d", length)
-	// Much slower path, revert to allocating everything from scratch.
-	// We're going to concatenate a lot of data anyway, can't really
-	// optimize this code path easily.
-	data := make([]byte, length)
-	basePacket := initPacket()
-	copy(data, basePacket)
-
-	if _, err := io.ReadFull(r, data[baseLength:]); err != nil {
-		return nil, vterrors.Wrapf(err, "io.ReadFull(packet body of length %v) failed", length)
-	}
-	for {
-		next, err := c.readOnePacket()
-		if err != nil {
-			return nil, err
-		}
-
-		if len(next) == 0 {
-			// Again, the packet after a packet of exactly size MaxPacketSize.
-			break
-		}
-
-		data = append(data, next...)
-		if len(next) < MaxPacketSize {
-			break
-		}
-	}
-
-	updateProtoHeader(data, length-baseLength)
-	return mem.SliceBuffer(data), nil
+	return membuf.ReadPacket(length, r)
 }
 
 const RawPacketsPos = 20
-
-func initPacket() []byte {
-	basePacket := make([]byte, 0, 6)
-	basePacket = protowire.AppendTag(basePacket, RawPacketsPos, protowire.BytesType)
-	basePacket = append(basePacket, 0, 0, 0, 0)
-	return basePacket
-}
-
-var (
-	baseLength = 6
-)
-
-func updateProtoHeader(b []byte, v int) {
-	switch {
-	case v < 1<<28:
-		// Proto packet data size is 4 bytes.
-		b[2] = byte((v>>0)&0x7f | 0x80)
-		b[3] = byte((v>>7)&0x7f | 0x80)
-		b[4] = byte((v>>14)&0x7f | 0x80)
-		b[5] = byte(v >> 21)
-	default:
-		panic("QueryResult protobuf is too large for the wire")
-	}
-}
 
 // readEphemeralPacket attempts to read a packet into buffer from sync.Pool.  Do
 // not use this method if the contents of the packet needs to be kept
