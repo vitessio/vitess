@@ -173,7 +173,12 @@ func TestMultiReferenceQuery(t *testing.T) {
 }
 
 func TestDMLReferenceUsingShardedKS(t *testing.T) {
-	utils.SkipIfBinaryIsBelowVersion(t, 20, "vtgate")
+	version, err := cluster.GetMajorVersion("vtgate")
+	require.NoError(t, err)
+	if version != 20 {
+		t.Skip()
+	}
+
 	conn, closer := start(t)
 	defer closer()
 
