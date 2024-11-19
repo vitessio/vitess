@@ -235,6 +235,7 @@ func isUnrecoverableError(err error) bool {
 	case sqlerror.ERErrorDuringCommit:
 		switch sqlErr.HaErrorCode() {
 		case
+			0, // Not really a HA error.
 			sqlerror.HaErrLockDeadlock,
 			sqlerror.HaErrLockTableFull,
 			sqlerror.HaErrLockWaitTimeout,
