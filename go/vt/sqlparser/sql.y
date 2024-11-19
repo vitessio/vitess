@@ -774,17 +774,20 @@ with_select:
   }
 | WITH with_clause select_or_set_op
   {
-    $3.(SelectStatement).SetWith($2.(*With))
-    $$ = $3.(SelectStatement)
+    with := $2.(*With)
+    selectStatement := $3.(SelectStatement)
+    handleCTEAuth(selectStatement, with)
+    selectStatement.SetWith(with)
+    $$ = selectStatement
   }
 
 with_clause:
   RECURSIVE cte_list
   {
-    $$ = &With{Ctes: $2.(TableExprs), Recursive: true}
+    $$ = &With{Ctes: $2.([]*CommonTableExpr), Recursive: true}
   }
 | cte_list {
-    $$ = &With{Ctes: $1.(TableExprs), Recursive: false}
+    $$ = &With{Ctes: $1.([]*CommonTableExpr), Recursive: false}
 }
 
 base_select_no_cte:
@@ -866,11 +869,11 @@ with_clause_opt:
 cte_list:
   common_table_expression
   {
-    $$ = TableExprs{$1.(TableExpr)}
+    $$ = []*CommonTableExpr{$1.(*CommonTableExpr)}
   }
 | cte_list ',' common_table_expression
   {
-    $$ = append($1.(TableExprs), $3.(TableExpr))
+    $$ = append($1.([]*CommonTableExpr), $3.(*CommonTableExpr))
   }
 
 common_table_expression:
@@ -906,7 +909,9 @@ insert_statement:
     }
     ins.Partitions = $6.(Partitions)
     ins.OnDup = OnDup($8.(AssignmentExprs))
-    ins.With = $1.(*With)
+    with := $1.(*With)
+    handleCTEAuth(ins, with)
+    ins.With = with
     $$ = ins
   }
 | with_clause_opt insert_or_replace comment_opt ignore_opt into_table_name opt_partition_clause insert_data_select on_dup_opt
@@ -929,7 +934,9 @@ insert_statement:
     }
     ins.Partitions = $6.(Partitions)
     ins.OnDup = OnDup($8.(AssignmentExprs))
-    ins.With = $1.(*With)
+    with := $1.(*With)
+    handleCTEAuth(ins, with)
+    ins.With = with
     $$ = ins
   }
 | with_clause_opt insert_or_replace comment_opt ignore_opt into_table_name opt_partition_clause SET assignment_list on_dup_opt
@@ -945,7 +952,7 @@ insert_statement:
     if $2.(string) == ReplaceStr {
       authType = AuthType_REPLACE
     }
-    $$ = &Insert{
+    ins := &Insert{
 	Action: $2.(string),
 	Comments: Comments($3.(Comments)),
 	Ignore: $4.(string),
@@ -954,13 +961,16 @@ insert_statement:
 	Columns: cols,
 	Rows: &AliasedValues{Values: Values{vals}},
 	OnDup: OnDup($9.(AssignmentExprs)),
-	With: $1.(*With),
 	Auth: AuthInformation{
 	  AuthType: authType,
 	  TargetType: AuthTargetType_SingleTableIdentifier,
 	  TargetNames: []string{tableName.DbQualifier.String(), tableName.Name.String()},
 	},
     }
+    with := $1.(*With)
+    handleCTEAuth(ins, with)
+    ins.With = with
+    $$ = ins
   }
 
 insert_or_replace:
@@ -976,7 +986,7 @@ insert_or_replace:
 update_statement:
   with_clause_opt UPDATE comment_opt ignore_opt table_references SET assignment_list where_expression_opt order_by_opt limit_opt
   {
-    $$ = &Update{
+    update := &Update{
 	Comments: Comments($3.(Comments)),
 	Ignore: $4.(string),
 	TableExprs: SetAuthType($5.(TableExprs), AuthType_UPDATE, true).(TableExprs),
@@ -984,15 +994,18 @@ update_statement:
 	Where: NewWhere(WhereStr, tryCastExpr($8)),
 	OrderBy: $9.(OrderBy),
 	Limit: $10.(*Limit),
-	With: $1.(*With),
     }
+    with := $1.(*With)
+    handleCTEAuth(update, with)
+    update.With = with
+    $$ = update
   }
 
 delete_statement:
   with_clause_opt DELETE comment_opt FROM table_name opt_partition_clause where_expression_opt order_by_opt limit_opt
   {
     tableName := $5.(TableName)
-    $$ = &Delete{
+    delete := &Delete{
 	Comments: Comments($3.(Comments)),
 	TableExprs: TableExprs{&AliasedTableExpr{
 	  Expr: tableName,
@@ -1006,28 +1019,37 @@ delete_statement:
 	Where: NewWhere(WhereStr, tryCastExpr($7)),
 	OrderBy: $8.(OrderBy),
 	Limit: $9.(*Limit),
-	With: $1.(*With),
     }
+    with := $1.(*With)
+    handleCTEAuth(delete, with)
+    delete.With = with
+    $$ = delete
   }
 | with_clause_opt DELETE comment_opt FROM table_name_list USING table_references where_expression_opt
   {
-    $$ = &Delete{
+    delete := &Delete{
 	Comments: Comments($3.(Comments)),
 	Targets: $5.(TableNames),
 	TableExprs: SetAuthType($7.(TableExprs), AuthType_DELETE, true).(TableExprs),
 	Where: NewWhere(WhereStr, tryCastExpr($8)),
-	With: $1.(*With),
     }
+    with := $1.(*With)
+    handleCTEAuth(delete, with)
+    delete.With = with
+    $$ = delete
   }
 | with_clause_opt DELETE comment_opt table_name_list from_or_using table_references where_expression_opt
   {
-    $$ = &Delete{
+    delete := &Delete{
 	Comments: Comments($3.(Comments)),
 	Targets: $4.(TableNames),
 	TableExprs: SetAuthType($6.(TableExprs), AuthType_DELETE, true).(TableExprs),
 	Where: NewWhere(WhereStr, tryCastExpr($7)),
-	With: $1.(*With),
     }
+    with := $1.(*With)
+    handleCTEAuth(delete, with)
+    delete.With = with
+    $$ = delete
   }
 | with_clause_opt DELETE comment_opt delete_table_list from_or_using table_references where_expression_opt
   {
@@ -1037,13 +1059,16 @@ delete_statement:
     	authTargetNames[2*i] = tableName.DbQualifier.String()
     	authTargetNames[2*i+1] = tableName.Name.String()
     }
-    $$ = &Delete{
+    delete := &Delete{
 	Comments: Comments($3.(Comments)),
 	Targets: tableNames,
 	TableExprs: SetAuthType($6.(TableExprs), AuthType_DELETE, true).(TableExprs),
 	Where: NewWhere(WhereStr, tryCastExpr($7)),
-	With: $1.(*With),
     }
+    with := $1.(*With)
+    handleCTEAuth(delete, with)
+    delete.With = with
+    $$ = delete
   }
 
 from_or_using:

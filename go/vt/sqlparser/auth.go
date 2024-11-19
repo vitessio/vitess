@@ -274,3 +274,41 @@ func OverwriteAuthTargetNames(node SQLNode, targetNames []string, walkChildren b
 	}
 	return node
 }
+
+// WalkAuthNodes walks the node tree to find all nodes that implement AuthNode. This allows for fine-grained control of
+// modifying AuthInformation within a tree.
+func WalkAuthNodes(node SQLNode, f func(node AuthNode, authInfo AuthInformation)) {
+	if authNode, ok := node.(AuthNode); ok {
+		authInfo := authNode.GetAuthInformation()
+		f(authNode, authInfo)
+	}
+	if walkableNode, ok := node.(WalkableSQLNode); ok {
+		_ = walkableNode.walkSubtree(func(node SQLNode) (bool, error) {
+			if authNode, ok := node.(AuthNode); ok {
+				authInfo := authNode.GetAuthInformation()
+				f(authNode, authInfo)
+			}
+			return true, nil
+		})
+	}
+}
+
+// handleCTEAuth handles auth with CTEs, since we want to ignore any mentions of CTEs as far as auth is concerned. The
+// CTE declarations will contain their own auth checks.
+func handleCTEAuth(node SQLNode, with *With) {
+	if with == nil || node == nil {
+		return
+	}
+	aliases := make(map[string]struct{})
+	for _, cte := range with.Ctes {
+		aliases[cte.As.String()] = struct{}{}
+	}
+	WalkAuthNodes(node, func(node AuthNode, authInfo AuthInformation) {
+		for _, targetName := range authInfo.TargetNames {
+			if _, ok := aliases[targetName]; ok {
+				node.SetAuthType(AuthType_IGNORE)
+				break
+			}
+		}
+	})
+}
