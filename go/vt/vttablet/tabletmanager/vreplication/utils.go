@@ -235,10 +235,17 @@ func isUnrecoverableError(err error) bool {
 	case sqlerror.ERErrorDuringCommit:
 		switch sqlErr.HaErrorCode() {
 		case
-			sqlerror.HaErrCrashed,
-			sqlerror.HaErrTooBigRow,
-			sqlerror.HaErrFoundDuppUnique,
-			sqlerror.HaErrDiskFullNowait:
+			sqlerror.HaErrLockDeadlock,
+			sqlerror.HaErrLockTableFull,
+			sqlerror.HaErrLockWaitTimeout,
+			sqlerror.HaErrNotInLockPartitions,
+			sqlerror.HaErrQueryInterrupted,
+			sqlerror.HaErrRolledBack,
+			sqlerror.HaErrTooManyConcurrentTrxs,
+			sqlerror.HaErrUndoRecTooBig:
+			// These are recoverable errors.
+			return false
+		default:
 			log.Errorf("Got unrecoverable error: %v", sqlErr)
 			return true
 		}
