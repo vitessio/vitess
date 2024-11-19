@@ -19,14 +19,9 @@ package mysql
 import (
 	"errors"
 	"fmt"
-	"io"
 	"math"
 	"strconv"
 	"strings"
-	"sync"
-
-	"google.golang.org/grpc/mem"
-	"google.golang.org/protobuf/encoding/protowire"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/sqlerror"
@@ -429,107 +424,6 @@ func (c *Conn) ExecuteFetchWithWarningCount(query string, maxrows int, wantfield
 
 	res, _, warnings, err := c.ReadQueryResult(maxrows, wantfields)
 	return res, warnings, err
-}
-
-type membufpool struct {
-	pool sync.Pool
-}
-
-func (pool *membufpool) Get(length int) *[]byte {
-	return pool.pool.Get().(*[]byte)
-}
-
-func (pool *membufpool) Put(b *[]byte) {
-	pool.pool.Put(b)
-}
-
-var defaultMembufPool = membufpool{sync.Pool{New: func() any {
-	buf := make([]byte, 16<<10)
-	return &buf
-}}}
-
-const protoHeaderSize = 6
-
-type MemBufReader struct {
-	cur   *[]byte
-	pos   int
-	ready []mem.Buffer
-}
-
-func NewMemBufReader() MemBufReader {
-	return MemBufReader{cur: defaultMembufPool.Get(0)}
-}
-
-func (buf *MemBufReader) Free() {
-	if buf.cur != nil {
-		defaultMembufPool.Put(buf.cur)
-	}
-	for _, b := range buf.ready {
-		b.Free()
-	}
-}
-
-func (buf *MemBufReader) Take() []mem.Buffer {
-	if buf.pos > 0 {
-		buf.flush()
-	}
-	return buf.ready
-}
-
-func (buf *MemBufReader) flush() {
-	*buf.cur = (*buf.cur)[:buf.pos]
-	buf.ready = append(buf.ready, mem.NewBuffer(buf.cur, &defaultMembufPool))
-	buf.cur = defaultMembufPool.Get(0)
-	buf.pos = 0
-}
-
-func (buf *MemBufReader) NewPacket(size int) {
-	if len((*buf.cur)[buf.pos:]) < protoHeaderSize {
-		buf.flush()
-	}
-
-	tag := protowire.EncodeTag(RawPacketsPos, protowire.BytesType)
-	b := (*buf.cur)[buf.pos : buf.pos+protoHeaderSize]
-
-	b[0] = byte((tag>>0)&0x7f | 0x80)
-	b[1] = byte(tag >> 7)
-
-	b[2] = byte((size>>0)&0x7f | 0x80)
-	b[3] = byte((size>>7)&0x7f | 0x80)
-	b[4] = byte((size>>14)&0x7f | 0x80)
-	b[5] = byte(size >> 21)
-
-	buf.pos = protoHeaderSize
-}
-
-func (buf *MemBufReader) ReadPacket(packetLen int, r io.Reader) ([]byte, error) {
-	buf.NewPacket(packetLen)
-	flushed := false
-
-	for packetLen > 0 {
-		target := (*buf.cur)[buf.pos:]
-
-		if packetLen < len(target) {
-			if _, err := io.ReadFull(r, target[:packetLen]); err != nil {
-				return nil, vterrors.Wrapf(err, "io.ReadFull(packet body of length %v) failed", packetLen)
-			}
-			buf.pos += packetLen
-			if !flushed {
-				return target[:packetLen], nil
-			}
-			return nil, nil
-		}
-
-		if _, err := io.ReadFull(r, target); err != nil {
-			return nil, vterrors.Wrapf(err, "io.ReadFull(packet body of length %v) failed", packetLen)
-		}
-		packetLen -= len(target)
-
-		buf.pos += len(target)
-		buf.flush()
-		flushed = true
-	}
-	return nil, nil
 }
 
 func (c *Conn) ReadQueryResultAsSliceBuffer(maxrows int) (result *sqltypes.Result, more bool, warnings uint16, err error) {

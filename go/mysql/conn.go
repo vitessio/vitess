@@ -30,6 +30,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"google.golang.org/grpc/mem"
+	"google.golang.org/protobuf/encoding/protowire"
+
 	"vitess.io/vitess/go/bucketpool"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/sqlerror"
@@ -407,6 +410,102 @@ func (c *Conn) readHeaderFrom(r io.Reader) (int, error) {
 	c.sequence++
 
 	return int(uint32(c.header[0]) | uint32(c.header[1])<<8 | uint32(c.header[2])<<16), nil
+}
+
+type membufpool struct {
+	pool sync.Pool
+}
+
+func (pool *membufpool) Get(length int) *[]byte {
+	buf := pool.pool.Get().(*[]byte)
+	*buf = (*buf)[:cap(*buf)]
+	return buf
+}
+
+func (pool *membufpool) Put(b *[]byte) {
+	pool.pool.Put(b)
+}
+
+var defaultMembufPool = membufpool{sync.Pool{New: func() any {
+	buf := make([]byte, 16<<10)
+	return &buf
+}}}
+
+type MemBufReader struct {
+	cur   *[]byte
+	pos   int
+	ready []mem.Buffer
+}
+
+func NewMemBufReader() MemBufReader {
+	return MemBufReader{cur: defaultMembufPool.Get(0)}
+}
+
+func (buf *MemBufReader) Free() {
+	if buf.cur != nil {
+		defaultMembufPool.Put(buf.cur)
+	}
+	for _, b := range buf.ready {
+		b.Free()
+	}
+}
+
+func (buf *MemBufReader) Take() []mem.Buffer {
+	if buf.pos > 0 {
+		buf.flush()
+	}
+	return buf.ready
+}
+
+func (buf *MemBufReader) flush() {
+	*buf.cur = (*buf.cur)[:buf.pos]
+	buf.ready = append(buf.ready, mem.NewBuffer(buf.cur, &defaultMembufPool))
+	buf.cur = defaultMembufPool.Get(0)
+	buf.pos = 0
+}
+
+func (buf *MemBufReader) NewPacket(size int) {
+	const maxProtoHeaderSize = 8
+
+	if len((*buf.cur)[buf.pos:]) < maxProtoHeaderSize {
+		buf.flush()
+	}
+
+	b := (*buf.cur)[buf.pos:buf.pos]
+	b = protowire.AppendTag(b, RawPacketsPos, protowire.BytesType)
+	b = protowire.AppendVarint(b, uint64(size))
+
+	buf.pos += len(b)
+}
+
+func (buf *MemBufReader) ReadPacket(packetLen int, r io.Reader) ([]byte, error) {
+	buf.NewPacket(packetLen)
+	flushed := false
+
+	for packetLen > 0 {
+		target := (*buf.cur)[buf.pos:]
+
+		if packetLen < len(target) {
+			if _, err := io.ReadFull(r, target[:packetLen]); err != nil {
+				return nil, vterrors.Wrapf(err, "io.ReadFull(packet body of length %v) failed", packetLen)
+			}
+			buf.pos += packetLen
+			if !flushed {
+				return target[:packetLen], nil
+			}
+			return nil, nil
+		}
+
+		if _, err := io.ReadFull(r, target); err != nil {
+			return nil, vterrors.Wrapf(err, "io.ReadFull(packet body of length %v) failed", packetLen)
+		}
+		packetLen -= len(target)
+
+		buf.pos += len(target)
+		buf.flush()
+		flushed = true
+	}
+	return nil, nil
 }
 
 func (c *Conn) readPacketToMembuf(membuf *MemBufReader) ([]byte, error) {

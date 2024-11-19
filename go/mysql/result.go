@@ -17,7 +17,11 @@ limitations under the License.
 package mysql
 
 import (
+	"fmt"
+	"strconv"
+
 	"google.golang.org/grpc/encoding"
+	"google.golang.org/grpc/mem"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
@@ -96,6 +100,15 @@ func updateResFromRaw(er *querypb.ExecuteResponse, wantfields bool, result *sqlt
 	return result, nil
 }
 
+func formatPbError(err error, buf []mem.Buffer) error {
+	var q []byte
+
+	for _, b := range buf {
+		q = strconv.AppendQuoteToASCII(q, string(b.ReadOnlyData()))
+	}
+	return fmt.Errorf("failed to serialize PB: %w\nraw data: %s", err, q)
+}
+
 // ParseResultFromRawForTest is used in test that unmarshal the raw packets in sqltypes.Result and parses the packets to provide query result in the respective fields of sqltypes.Result.
 func ParseResultFromRawForTest(result *sqltypes.Result) (*sqltypes.Result, error) {
 	if len(result.RawPackets) == 0 {
@@ -106,7 +119,7 @@ func ParseResultFromRawForTest(result *sqltypes.Result) (*sqltypes.Result, error
 	c := encoding.GetCodecV2("proto")
 	err := c.Unmarshal(result.RawPackets, er)
 	if err != nil {
-		return nil, err
+		return nil, formatPbError(err, result.RawPackets)
 	}
 	return updateResFromRaw(er, true, result)
 }
