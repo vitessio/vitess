@@ -557,6 +557,7 @@ func (s *planTestSuite) TestWithUserDefaultKeyspaceFromFileSharded() {
 	}
 
 	s.testFile("select_cases_with_user_as_default.json", vschema, false)
+	s.testFile("dml_cases_with_user_as_default.json", vschema, false)
 }
 
 func (s *planTestSuite) TestWithSystemSchemaAsDefaultKeyspace() {
