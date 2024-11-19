@@ -5010,7 +5010,7 @@ func (node *AliasedTableExpr) RemoveHints() *AliasedTableExpr {
 }
 
 type With struct {
-	Ctes      []TableExpr
+	Ctes      []*CommonTableExpr
 	Recursive bool
 }
 
