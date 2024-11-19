@@ -107,7 +107,6 @@ func (dc *dbClientImpl) Commit() error {
 	_, err := dc.dbConn.ExecuteFetch("commit", 1, false)
 	if err != nil {
 		LogError("COMMIT failed w/ error", err)
-		dc.dbConn.Close()
 	}
 	return err
 }
