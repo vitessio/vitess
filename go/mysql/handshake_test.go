@@ -36,8 +36,7 @@ import (
 func TestClearTextClientAuth(t *testing.T) {
 	th := &testHandler{}
 
-	authServer := NewAuthServerStatic("", "", 0)
-	authServer.Method = MysqlClearPassword
+	authServer := NewAuthServerStaticWithAuthMethodDescription("", "", 0, MysqlClearPassword)
 	authServer.entries["user1"] = []*AuthServerStaticEntry{
 		{Password: "password1"},
 	}
@@ -95,7 +94,7 @@ func TestClearTextClientAuth(t *testing.T) {
 func TestSSLConnection(t *testing.T) {
 	th := &testHandler{}
 
-	authServer := NewAuthServerStatic("", "", 0)
+	authServer := NewAuthServerStaticWithAuthMethodDescription("", "", 0, MysqlClearPassword)
 	authServer.entries["user1"] = []*AuthServerStaticEntry{
 		{Password: "password1"},
 	}
@@ -155,7 +154,6 @@ func TestSSLConnection(t *testing.T) {
 
 	// Make sure clear text auth works over SSL.
 	t.Run("ClearText", func(t *testing.T) {
-		authServer.Method = MysqlClearPassword
 		testSSLConnectionClearText(t, params)
 	})
 }

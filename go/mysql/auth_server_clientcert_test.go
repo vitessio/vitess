@@ -35,9 +35,7 @@ const clientCertUsername = "Client Cert"
 func TestValidCert(t *testing.T) {
 	th := &testHandler{}
 
-	authServer := &AuthServerClientCert{
-		Method: MysqlClearPassword,
-	}
+	authServer := newAuthServerClientCert()
 
 	// Create the listener, so we can get its host.
 	l, err := NewListener("tcp", ":0", authServer, th, 0, 0)
@@ -122,9 +120,7 @@ func TestValidCert(t *testing.T) {
 func TestNoCert(t *testing.T) {
 	th := &testHandler{}
 
-	authServer := &AuthServerClientCert{
-		Method: MysqlClearPassword,
-	}
+	authServer := newAuthServerClientCert()
 
 	// Create the listener, so we can get its host.
 	l, err := NewListener("tcp", ":0", authServer, th, 0, 0)
@@ -144,7 +140,6 @@ func TestNoCert(t *testing.T) {
 	tlstest.CreateCA(root)
 	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", "server.example.com")
 	tlstest.CreateCRL(root, tlstest.CA)
-
 
 	// Create the server with TLS config.
 	serverConfig, err := vttls.ServerConfig(

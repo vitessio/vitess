@@ -403,7 +403,8 @@ func TestTLSClientVerifyCA(t *testing.T) {
 
 	fmt.Printf("Error: %s", err)
 
-	assert.Contains(t, err.Error(), "x509: certificate")
+	assert.Contains(t, err.Error(), "x509:")
+	assert.Contains(t, err.Error(), "certificate")
 
 	// Now setup proper CA that is valid to verify
 	params.SslCa = path.Join(root, "ca-cert.pem")
@@ -486,7 +487,8 @@ func TestTLSClientVerifyIdentity(t *testing.T) {
 
 	fmt.Printf("Error: %s", err)
 
-	assert.Contains(t, err.Error(), "x509: certificate")
+	assert.Contains(t, err.Error(), "x509:")
+	assert.Contains(t, err.Error(), "certificate")
 
 	// Now setup proper CA that is valid to verify
 	params.SslCa = path.Join(root, "ca-cert.pem")

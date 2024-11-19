@@ -91,7 +91,7 @@ func TestValidateHashGetter(t *testing.T) {
 	}
 
 	scrambled := ScramblePassword(salt, []byte("password"))
-	getter, err := auth.ValidateHash(salt, "mysql_user", scrambled, addr)
+	getter, err := auth.UserEntryWithHash(nil, salt, "mysql_user", scrambled, addr)
 	if err != nil {
 		t.Fatalf("error validating password: %v", err)
 	}
@@ -131,11 +131,9 @@ func TestStaticConfigHUPWithRotation(t *testing.T) {
 		t.Fatalf("couldn't create temp file: %v", err)
 	}
 	defer os.Remove(tmpFile.Name())
-	mysqlAuthServerStaticFile = tmpFile.Name()
 
 	savedReloadInterval := mysqlAuthServerStaticReloadInterval
 	defer func() { mysqlAuthServerStaticReloadInterval = savedReloadInterval }()
-	mysqlAuthServerStaticReloadInterval = 10 * time.Millisecond
 
 	oldStr := "str1"
 	jsonConfig := fmt.Sprintf("{\"%s\":[{\"Password\":\"%s\"}]}", oldStr, oldStr)
@@ -229,7 +227,7 @@ func TestStaticPasswords(t *testing.T) {
 			}
 
 			scrambled := ScramblePassword(salt, []byte(c.password))
-			_, err = auth.ValidateHash(salt, c.user, scrambled, addr)
+			_, err = auth.UserEntryWithHash(nil, salt, c.user, scrambled, addr)
 
 			if c.success {
 				if err != nil {
