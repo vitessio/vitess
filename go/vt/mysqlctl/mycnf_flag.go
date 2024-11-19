@@ -64,7 +64,6 @@ const (
 func RegisterFlags() {
 	servenv.OnParse(func(fs *pflag.FlagSet) {
 		fs.IntVar(&flagServerID, "mycnf_server_id", flagServerID, "mysql server id of the server (if specified, mycnf-file will be ignored)")
-		fs.StringVar(&flagMysqlBindAddress, "mycnf_mysql_bin_address", flagMysqlBindAddress, "address mysql binds on")
 		fs.IntVar(&flagMysqlPort, "mycnf_mysql_port", flagMysqlPort, "port mysql is listening on")
 		fs.StringVar(&flagDataDir, "mycnf_data_dir", flagDataDir, "data directory for mysql")
 		fs.StringVar(&flagInnodbDataHomeDir, "mycnf_innodb_data_home_dir", flagInnodbDataHomeDir, "Innodb data home directory")
@@ -83,6 +82,7 @@ func RegisterFlags() {
 		fs.StringVar(&flagSecureFilePriv, "mycnf_secure_file_priv", flagSecureFilePriv, "mysql path for loading secure files")
 
 		fs.StringVar(&flagMycnfFile, "mycnf-file", flagMycnfFile, "path to my.cnf, if reading all config params from there")
+		fs.StringVar(&flagMysqlBindAddress, "mycnf-mysql-bin-address", flagMysqlBindAddress, "address mysql binds on")
 	})
 }
 

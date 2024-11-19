@@ -92,7 +92,7 @@ func init() {
 
 	servenv.MoveFlagsToCobraCommand(Main)
 
-	Main.Flags().StringVar(&mysqlBindAddress, "mysql_bind_address", mysqlBindAddress, "MySQL bind address")
+	Main.Flags().StringVar(&mysqlBindAddress, "mysql-bind-address", mysqlBindAddress, "MySQL bind address")
 	Main.Flags().IntVar(&mysqlPort, "mysql_port", mysqlPort, "MySQL port")
 	Main.Flags().Uint32Var(&tabletUID, "tablet_uid", tabletUID, "Tablet UID")
 	Main.Flags().StringVar(&mysqlSocket, "mysql_socket", mysqlSocket, "Path to the mysqld socket file")

@@ -71,7 +71,7 @@ func init() {
 
 	servenv.MovePersistentFlagsToCobraCommand(Root)
 
-	Root.PersistentFlags().StringVar(&mysqlBindAddress, "mysql_bind_address", mysqlBindAddress, "MySQL bind address.")
+	Root.PersistentFlags().StringVar(&mysqlBindAddress, "mysql-bind-address", mysqlBindAddress, "MySQL bind address.")
 	Root.PersistentFlags().IntVar(&mysqlPort, "mysql_port", mysqlPort, "MySQL port.")
 	Root.PersistentFlags().Uint32Var(&tabletUID, "tablet_uid", tabletUID, "Tablet UID.")
 	Root.PersistentFlags().StringVar(&mysqlSocket, "mysql_socket", mysqlSocket, "Path to the mysqld socket file.")
