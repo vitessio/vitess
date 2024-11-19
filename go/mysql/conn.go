@@ -730,6 +730,11 @@ func (c *Conn) RemoteAddr() net.Addr {
 	return c.conn.RemoteAddr()
 }
 
+// LocalAddr returns the underlying socket LocalAddr().
+func (c *Conn) LocalAddr() net.Addr {
+	return c.conn.LocalAddr()
+}
+
 // ID returns the MySQL connection ID for this connection.
 func (c *Conn) ID() int64 {
 	return int64(c.ConnectionID)
