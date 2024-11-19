@@ -259,8 +259,8 @@ func (tm *TabletManager) startShardSync() {
 	// even if the receiver is busy. We can drop any additional send attempts
 	// if the buffer is full because all we care about is that the receiver will
 	// be told it needs to recheck the state.
-	tm.mutex.Lock()
-	defer tm.mutex.Unlock()
+	tm.shardSyncMutex.Lock()
+	defer tm.shardSyncMutex.Unlock()
 	tm._shardSyncChan = make(chan struct{}, 1)
 	tm._shardSyncDone = make(chan struct{})
 	ctx, cancel := context.WithCancel(context.Background())
@@ -276,12 +276,12 @@ func (tm *TabletManager) startShardSync() {
 func (tm *TabletManager) stopShardSync() {
 	var doneChan <-chan struct{}
 
-	tm.mutex.Lock()
+	tm.shardSyncMutex.Lock()
 	if tm._shardSyncCancel != nil {
 		tm._shardSyncCancel()
 	}
 	doneChan = tm._shardSyncDone
-	tm.mutex.Unlock()
+	tm.shardSyncMutex.Unlock()
 
 	// If the shard sync loop was running, wait for it to fully stop.
 	if doneChan != nil {
@@ -291,8 +291,8 @@ func (tm *TabletManager) stopShardSync() {
 
 func (tm *TabletManager) notifyShardSync() {
 	// If this is called before the shard sync is started, do nothing.
-	tm.mutex.Lock()
-	defer tm.mutex.Unlock()
+	tm.shardSyncMutex.Lock()
+	defer tm.shardSyncMutex.Unlock()
 
 	if tm._shardSyncChan == nil {
 		return

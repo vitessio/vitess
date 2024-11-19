@@ -184,13 +184,16 @@ type TabletManager struct {
 	// first before other mutexes.
 	actionSema *semaphore.Weighted
 
-	// mutex protects all the following fields (that start with '_'),
-	// only hold the mutex to update the fields, nothing else.
+	// mutex protects all the following fields (that start with '_'), except shard sync fields.
+	// Only hold the mutex to update the fields, nothing else.
 	mutex deadlock.Mutex
 
 	// _waitForGrantsComplete is a channel for waiting until the grants for all the mysql
 	// users have been verified.
 	_waitForGrantsComplete chan struct{}
+
+	// shardSyncMutex protects all the fields for shard sync.
+	shardSyncMutex deadlock.Mutex
 
 	// _shardSyncChan is a channel for informing the shard sync goroutine that
 	// it should wake up and recheck the tablet state, to make sure it and the
