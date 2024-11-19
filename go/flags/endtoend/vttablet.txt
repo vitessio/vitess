@@ -145,6 +145,7 @@ Usage of vttablet:
       --grpc_server_keepalive_enforcement_policy_min_time duration                gRPC server minimum keepalive time (default 10s)
       --grpc_server_keepalive_enforcement_policy_permit_without_stream            gRPC server permit client keepalive pings even when there are no active streams (RPCs)
       --health_check_interval duration                                            Interval between health checks (default 20s)
+      --healthcheck-dial-concurrency int                                          Maximum concurrency of new healthcheck connections. This should be less than the golang max thread limit of 10000. (default 1024)
       --heartbeat_enable                                                          If true, vttablet records (if master) or checks (if replica) the current time of a replication heartbeat in the table _vt.heartbeat. The result is used to inform the serving state of the vttablet via healthchecks.
       --heartbeat_interval duration                                               How frequently to read and write replication heartbeat. (default 1s)
       --heartbeat_on_demand_duration duration                                     If non-zero, heartbeats are only written upon consumer request, and only run for up to given duration following the request. Frequent requests can keep the heartbeat running consistently; when requests are infrequent heartbeat may completely stop between requests
@@ -311,6 +312,9 @@ Usage of vttablet:
       --tablet_manager_grpc_server_name string                                    the server name to use to validate server certificate
       --tablet_manager_protocol string                                            Protocol to use to make tabletmanager RPCs to vttablets. (default "grpc")
       --tablet_protocol string                                                    Protocol to use to make queryservice RPCs to vttablets. (default "grpc")
+      --tablet_refresh_interval duration                                          Tablet refresh interval. (default 1m0s)
+      --tablet_refresh_known_tablets                                              Whether to reload the tablet's address/port map from topo in case they change. (default true)
+      --tablet_url_template string                                                Format string describing debug tablet url formatting. See getTabletDebugURL() for how to customize this. (default "http://{{.GetTabletHostPort}}")
       --throttle_check_as_check_self                                              Should throttler/check return a throttler/check-self result (changes throttler behavior for writes)
       --throttle_metrics_query SELECT                                             Override default heartbeat/lag metric. Use either SELECT (must return single row, single value) or `SHOW GLOBAL ... LIKE ...` queries. Set -throttle_metrics_threshold respectively.
       --throttle_metrics_threshold float                                          Override default throttle threshold, respective to -throttle_metrics_query (default 1.7976931348623157e+308)
@@ -334,6 +338,7 @@ Usage of vttablet:
       --topo_k8s_context string                                                   The kubeconfig context to use, overrides the 'current-context' from the config
       --topo_k8s_kubeconfig string                                                Path to a valid kubeconfig file. When running as a k8s pod inside the same cluster you wish to use as the topo, you may omit this and the below arguments, and Vitess is capable of auto-discovering the correct values. https://kubernetes.io/docs/tasks/access-application-cluster/access-cluster/#accessing-the-api-from-a-pod
       --topo_k8s_namespace string                                                 The kubernetes namespace to use for all objects. Default comes from the context or in-cluster config
+      --topo_read_concurrency int                                                 Concurrency of topo reads. (default 32)
       --topo_zk_auth_file string                                                  auth to use when connecting to the zk topo server, file contents should be <scheme>:<auth>, e.g., digest:user:pass
       --topo_zk_base_timeout duration                                             zk base timeout (see zk.Connect) (default 30s)
       --topo_zk_max_concurrency int                                               maximum number of pending requests to send to a Zookeeper server. (default 64)

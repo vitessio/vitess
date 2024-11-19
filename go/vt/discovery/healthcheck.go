@@ -165,6 +165,7 @@ func init() {
 	}
 
 	servenv.OnParseFor("vtctld", registerWebUIFlags)
+	servenv.OnParseFor("vttablet", registerWebUIFlags)
 }
 
 func registerDiscoveryFlags(fs *pflag.FlagSet) {
