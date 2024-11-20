@@ -429,6 +429,9 @@ func (session *SafeSession) AppendOrUpdate(target *querypb.Target, info *shardAc
 	if existingSession != nil {
 		existingSession.TransactionId = info.transactionID
 		existingSession.ReservedId = info.reservedID
+		if !existingSession.RowsAffected {
+			existingSession.RowsAffected = info.rowsAffected
+		}
 		if existingSession.VindexOnly {
 			existingSession.VindexOnly = session.queryFromVindex
 		}
@@ -442,6 +445,7 @@ func (session *SafeSession) AppendOrUpdate(target *querypb.Target, info *shardAc
 		TabletAlias:   info.alias,
 		TransactionId: info.transactionID,
 		ReservedId:    info.reservedID,
+		RowsAffected:  info.rowsAffected,
 		VindexOnly:    session.queryFromVindex,
 	}
 

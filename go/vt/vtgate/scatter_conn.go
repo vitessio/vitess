@@ -272,6 +272,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 
 			if innerqr != nil {
 				resultsObserver.observe(innerqr)
+				newInfo.rowsAffected = innerqr.RowsAffected > 0
 			}
 
 			// Don't append more rows if row count is exceeded.
@@ -670,6 +671,11 @@ func (stc *ScatterConn) multiGoTransaction(
 		if updated == nil {
 			return
 		}
+		if shardSession != nil && updated.rowsAffected {
+			// We might not always update or append in the session.
+			// We need to track if rows were affected in the transaction.
+			shardSession.RowsAffected = updated.rowsAffected
+		}
 		if updated.actionNeeded != nothing && (updated.transactionID != 0 || updated.reservedID != 0) {
 			appendErr := session.AppendOrUpdate(rs.Target, info, shardSession, stc.txConn.mode)
 			if appendErr != nil {
@@ -892,6 +898,7 @@ type shardActionInfo struct {
 	actionNeeded              actionNeeded
 	reservedID, transactionID int64
 	alias                     *topodatapb.TabletAlias
+	rowsAffected              bool
 }
 
 func (sai *shardActionInfo) updateTransactionAndReservedID(txID int64, rID int64, alias *topodatapb.TabletAlias) *shardActionInfo {
