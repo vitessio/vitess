@@ -1,0 +1,24 @@
+[
+  {
+    "comment": "Update reference table from sharded keyspace to unsharded keyspace",
+    "query": "update ambiguous_ref_with_source set done = true where id = 1;",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update ambiguous_ref_with_source set done = true where id = 1;",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "Query": "update ambiguous_ref_with_source set done = true where id = 1",
+        "Table": "ambiguous_ref_with_source"
+      },
+      "TablesUsed": [
+        "main.ambiguous_ref_with_source"
+      ]
+    }
+  }
+]

@@ -14,10 +14,20 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package base
+package osutil
 
-// metricsPublisher is implemented by throttler.Throttler and is used by SelfMetric
-// implementations to query the throttler.
-type metricsPublisher interface {
-	GetCustomMetricsQuery() string
+import (
+	"fmt"
+	"strconv"
+	"strings"
+)
+
+// parseLoadAvg parses the load average from the content of /proc/loadavg or sysctl output.
+// Input such as "1.00 0.99 0.98 1/1 1", "2.83 3.01 3.36"
+func parseLoadAvg(content string) (float64, error) {
+	fields := strings.Fields(content)
+	if len(fields) == 0 {
+		return 0, fmt.Errorf("unexpected loadavg content: %s", content)
+	}
+	return strconv.ParseFloat(fields[0], 64)
 }

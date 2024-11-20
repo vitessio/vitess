@@ -52,6 +52,7 @@ type VtProcess struct {
 	Env              []string
 	BindAddress      string
 	BindAddressMysql string
+  BindAddressGprc  string
 	Port             int
 	PortGrpc         int
 	HealthCheck      HealthChecker
@@ -140,6 +141,11 @@ func (vtp *VtProcess) WaitStart() (err error) {
 		vtp.proc.Args = append(vtp.proc.Args, fmt.Sprintf("%d", vtp.PortGrpc))
 	}
 
+	if vtp.BindAddressGprc != "" {
+		vtp.proc.Args = append(vtp.proc.Args, "--grpc_bind_address")
+		vtp.proc.Args = append(vtp.proc.Args, vtp.BindAddressGprc)
+	}
+
 	vtp.proc.Args = append(vtp.proc.Args, vtp.ExtraArgs...)
 	vtp.proc.Env = append(vtp.proc.Env, os.Environ()...)
 	vtp.proc.Env = append(vtp.proc.Env, vtp.Env...)
@@ -200,6 +206,12 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 	if args.VtComboBindAddress != "" {
 		vtcomboBindAddress = args.VtComboBindAddress
 	}
+  
+  grpcBindAddress := "127.0.0.1"
+	if servenv.GRPCBindAddress() != "" {
+		grpcBindAddress = servenv.GRPCBindAddress()
+	}
+  
 	mysqlAddress := "127.0.0.1"
 	if args.MySQLServerBindAddress != "" {
 		mysqlAddress = args.MySQLServerBindAddress
@@ -211,6 +223,7 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 		LogDirectory:     environment.LogDirectory(),
 		Binary:           environment.BinaryPath("vtcombo"),
 		BindAddress:      vtcomboBindAddress,
+    BindAddressGprc:  grpcBindAddress,
 		BindAddressMysql: mysqlAddress,
 		Port:             environment.PortForProtocol("vtcombo", ""),
 		PortGrpc:         environment.PortForProtocol("vtcombo", "grpc"),

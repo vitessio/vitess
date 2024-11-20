@@ -448,9 +448,16 @@ func (node *AlterMigration) FormatFast(buf *TrackedBuffer) {
 		alterType = "force_cutover"
 	case ForceCutOverAllMigrationType:
 		alterType = "force_cutover all"
+	case SetCutOverThresholdMigrationType:
+		alterType = "cutover_threshold"
 	}
 	buf.WriteByte(' ')
 	buf.WriteString(alterType)
+	if node.Threshold != "" {
+		buf.WriteString(" '")
+		buf.WriteString(node.Threshold)
+		buf.WriteByte('\'')
+	}
 	if node.Expire != "" {
 		buf.WriteString(" expire '")
 		buf.WriteString(node.Expire)

@@ -32,13 +32,14 @@ const (
 		migration_status,
 		tablet,
 		retain_artifacts_seconds,
+		cutover_threshold_seconds,
 		postpone_launch,
 		postpone_completion,
 		allow_concurrent,
 		reverted_uuid,
 		is_view
 	) VALUES (
-		%a, %a, %a, %a, %a, %a, %a, %a, %a, NOW(6), %a, %a, %a, %a, %a, %a, %a, %a, %a
+		%a, %a, %a, %a, %a, %a, %a, %a, %a, NOW(6), %a, %a, %a, %a, %a, %a, %a, %a, %a, %a
 	)`
 
 	sqlSelectQueuedMigrations = `SELECT
@@ -178,6 +179,11 @@ const (
 	`
 	sqlUpdateForceCutOver = `UPDATE _vt.schema_migrations
 			SET force_cutover=1
+		WHERE
+			migration_uuid=%a
+	`
+	sqlUpdateCutOverThresholdSeconds = `UPDATE _vt.schema_migrations
+			SET cutover_threshold_seconds=%a
 		WHERE
 			migration_uuid=%a
 	`
@@ -429,6 +435,7 @@ const (
 			removed_unique_keys,
 			migration_context,
 			retain_artifacts_seconds,
+			cutover_threshold_seconds,
 			is_view,
 			ready_to_complete,
 			ready_to_complete_timestamp is not null as was_ready_to_complete,
