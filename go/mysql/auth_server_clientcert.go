@@ -78,7 +78,7 @@ func (asl *AuthServerClientCert) DefaultAuthMethodDescription() AuthMethodDescri
 
 // HandleUser is part of the UserValidator interface. We
 // handle any user here since we don't check up front.
-func (asl *AuthServerClientCert) HandleUser(user string) bool {
+func (asl *AuthServerClientCert) HandleUser(user string, remoteAddr net.Addr) bool {
 	return true
 }
 

@@ -159,7 +159,7 @@ func NewAuthServerStaticWithAuthMethodDescription(file, jsonConfig string, reloa
 
 // HandleUser is part of the Validator interface. We
 // handle any user here since we don't check up front.
-func (a *AuthServerStatic) HandleUser(user string) bool {
+func (a *AuthServerStatic) HandleUser(user string, remoteAddr net.Addr) bool {
 	return true
 }
 

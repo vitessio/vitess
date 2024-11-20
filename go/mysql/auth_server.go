@@ -105,7 +105,7 @@ type AuthMethod interface {
 // all the default helpers that create AuthMethod instances for
 // the various supported Mysql authentication methods.
 type UserValidator interface {
-	HandleUser(user string) bool
+	HandleUser(user string, remoteAddr net.Addr) bool
 }
 
 // CacheState is a state that is returned by the UserEntryWithCacheHash
@@ -487,7 +487,7 @@ func (n *mysqlNativePasswordAuthMethod) Name() AuthMethodDescription {
 }
 
 func (n *mysqlNativePasswordAuthMethod) HandleUser(conn *Conn, user string) bool {
-	return n.validator.HandleUser(user)
+	return n.validator.HandleUser(user, conn.RemoteAddr())
 }
 
 func (n *mysqlNativePasswordAuthMethod) AuthPluginData() ([]byte, error) {
@@ -519,7 +519,7 @@ func (n *mysqlClearAuthMethod) Name() AuthMethodDescription {
 	return MysqlClearPassword
 }
 func (n *mysqlClearAuthMethod) HandleUser(conn *Conn, user string) bool {
-	return n.validator.HandleUser(user)
+	return n.validator.HandleUser(user, conn.RemoteAddr())
 }
 func (n *mysqlClearAuthMethod) AuthPluginData() ([]byte, error) {
 	return nil, nil
@@ -545,7 +545,7 @@ func (n *mysqlDialogAuthMethod) Name() AuthMethodDescription {
 	return MysqlDialog
 }
 func (n *mysqlDialogAuthMethod) HandleUser(conn *Conn, user string) bool {
-	return n.validator.HandleUser(user)
+	return n.validator.HandleUser(user, conn.RemoteAddr())
 }
 func (n *mysqlDialogAuthMethod) AllowClearTextWithoutTLS() bool {
 	return false
@@ -574,7 +574,7 @@ func (n *mysqlCachingSha2AuthMethod) HandleUser(conn *Conn, user string) bool {
 	if !conn.TLSEnabled() && !conn.IsUnixSocket() {
 		return false
 	}
-	return n.validator.HandleUser(user)
+	return n.validator.HandleUser(user, conn.RemoteAddr())
 }
 
 func (n *mysqlCachingSha2AuthMethod) AllowClearTextWithoutTLS() bool {

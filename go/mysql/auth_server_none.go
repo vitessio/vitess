@@ -45,7 +45,7 @@ func (a *AuthServerNone) DefaultAuthMethodDescription() AuthMethodDescription {
 }
 
 // HandleUser validates if this user can use this auth method
-func (a *AuthServerNone) HandleUser(user string) bool {
+func (a *AuthServerNone) HandleUser(user string, remoteAddr net.Addr) bool {
 	return true
 }
 
