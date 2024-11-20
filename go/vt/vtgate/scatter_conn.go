@@ -662,21 +662,16 @@ func (stc *ScatterConn) multiGoTransaction(
 		startTime, statsKey := stc.startAction(name, rs.Target)
 		defer stc.endAction(startTime, allErrors, statsKey, &err, session)
 
-		shardActionInfo, err := actionInfo(ctx, rs.Target, session, autocommit, stc.txConn.mode)
+		info, shardSession, err := actionInfo(ctx, rs.Target, session, autocommit, stc.txConn.mode)
 		if err != nil {
 			return
 		}
-		updated, err := action(rs, i, shardActionInfo)
+		updated, err := action(rs, i, info)
 		if updated == nil {
 			return
 		}
 		if updated.actionNeeded != nothing && (updated.transactionID != 0 || updated.reservedID != 0) {
-			appendErr := session.AppendOrUpdate(&vtgatepb.Session_ShardSession{
-				Target:        rs.Target,
-				TransactionId: updated.transactionID,
-				ReservedId:    updated.reservedID,
-				TabletAlias:   updated.alias,
-			}, stc.txConn.mode)
+			appendErr := session.AppendOrUpdate(rs.Target, info, shardSession, stc.txConn.mode)
 			if appendErr != nil {
 				err = appendErr
 			}
@@ -830,25 +825,25 @@ func requireNewQS(err error, target *querypb.Target) bool {
 }
 
 // actionInfo looks at the current session, and returns information about what needs to be done for this tablet
-func actionInfo(ctx context.Context, target *querypb.Target, session *SafeSession, autocommit bool, txMode vtgatepb.TransactionMode) (*shardActionInfo, error) {
+func actionInfo(ctx context.Context, target *querypb.Target, session *SafeSession, autocommit bool, txMode vtgatepb.TransactionMode) (*shardActionInfo, *vtgatepb.Session_ShardSession, error) {
 	if !(session.InTransaction() || session.InReservedConn()) {
-		return &shardActionInfo{}, nil
+		return &shardActionInfo{}, nil, nil
 	}
 	ignoreSession := ctx.Value(engine.IgnoreReserveTxn)
 	if ignoreSession != nil {
-		return &shardActionInfo{}, nil
+		return &shardActionInfo{}, nil, nil
 	}
 	// No need to protect ourselves from the race condition between
 	// Find and AppendOrUpdate. The higher level functions ensure that no
 	// duplicate (target) tuples can execute
 	// this at the same time.
-	transactionID, reservedID, alias, err := session.FindAndChangeSessionIfInSingleTxMode(target.Keyspace, target.Shard, target.TabletType, txMode)
+	shardSession, err := session.FindAndChangeSessionIfInSingleTxMode(target.Keyspace, target.Shard, target.TabletType, txMode)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	shouldReserve := session.InReservedConn() && reservedID == 0
-	shouldBegin := session.InTransaction() && transactionID == 0 && !autocommit
+	shouldReserve := session.InReservedConn() && (shardSession == nil || shardSession.ReservedId == 0)
+	shouldBegin := session.InTransaction() && (shardSession == nil || shardSession.TransactionId == 0) && !autocommit
 
 	var act = nothing
 	switch {
@@ -860,12 +855,15 @@ func actionInfo(ctx context.Context, target *querypb.Target, session *SafeSessio
 		act = begin
 	}
 
-	return &shardActionInfo{
-		actionNeeded:  act,
-		transactionID: transactionID,
-		reservedID:    reservedID,
-		alias:         alias,
-	}, nil
+	info := &shardActionInfo{
+		actionNeeded: act,
+	}
+	if shardSession != nil {
+		info.transactionID = shardSession.TransactionId
+		info.reservedID = shardSession.ReservedId
+		info.alias = shardSession.TabletAlias
+	}
+	return info, shardSession, nil
 }
 
 // lockInfo looks at the current session, and returns information about what needs to be done for this tablet
