@@ -315,6 +315,17 @@ func TestInitialThrottler(t *testing.T) {
 		waitForThrottleCheckStatus(t, primaryTablet, tabletmanagerdatapb.CheckThrottlerResponseCode_THRESHOLD_EXCEEDED)
 	})
 	t.Run("setting high threshold", func(t *testing.T) {
+		{
+			req := &vtctldatapb.UpdateThrottlerConfigRequest{MetricName: base.LoadAvgMetricName.String(), Threshold: 5555}
+			_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
+			assert.NoError(t, err)
+		}
+		{
+			req := &vtctldatapb.UpdateThrottlerConfigRequest{MetricName: base.MysqldLoadAvgMetricName.String(), Threshold: 5555}
+			_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
+			assert.NoError(t, err)
+		}
+
 		req := &vtctldatapb.UpdateThrottlerConfigRequest{Threshold: extremelyHighThreshold.Seconds()}
 		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
 		assert.NoError(t, err)
@@ -335,7 +346,7 @@ func TestInitialThrottler(t *testing.T) {
 				assert.Contains(t, resp.Check.Metrics, metricName.String())
 				metric := resp.Check.Metrics[metricName.String()]
 				require.NotNil(t, metric)
-				assert.Equal(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, metric.ResponseCode)
+				assert.Equal(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, metric.ResponseCode, "metric: %+v", metric)
 			})
 		}
 	})
