@@ -56,6 +56,10 @@ func (dc *fakeDBClient) Rollback() error {
 func (dc *fakeDBClient) Close() {
 }
 
+func (dc *fakeDBClient) IsClosed() bool {
+	return false
+}
+
 func (dc *fakeDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Result, err error) {
 	query = strings.ToLower(query)
 	switch {
