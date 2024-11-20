@@ -19,9 +19,15 @@ package base
 import (
 	"context"
 	"runtime"
+	"sync/atomic"
+	"time"
 
 	"vitess.io/vitess/go/osutil"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
+)
+
+var (
+	cachedLoadAvgMetric  atomic.Pointer[ThrottleMetric]
+	loadAvgCacheDuration = 1 * time.Second
 )
 
 var _ SelfMetric = registerSelfMetric(&LoadAvgSelfMetric{})
@@ -45,8 +51,14 @@ func (m *LoadAvgSelfMetric) RequiresConn() bool {
 	return false
 }
 
-func (m *LoadAvgSelfMetric) Read(ctx context.Context, throttler ThrottlerMetricsPublisher, conn *connpool.Conn) *ThrottleMetric {
-	metric := &ThrottleMetric{
+func (m *LoadAvgSelfMetric) Read(ctx context.Context, params *SelfMetricReadParams) *ThrottleMetric {
+	// This function will be called sequentially, and therefore does not need strong mutex protection. Still, we use atomics
+	// to ensure correctness in case an external goroutine tries to read the metric concurrently.
+	metric := cachedLoadAvgMetric.Load()
+	if metric != nil {
+		return metric
+	}
+	metric = &ThrottleMetric{
 		Scope: SelfScope,
 	}
 	val, err := osutil.LoadAvg()
@@ -54,5 +66,11 @@ func (m *LoadAvgSelfMetric) Read(ctx context.Context, throttler ThrottlerMetrics
 		return metric.WithError(err)
 	}
 	metric.Value = val / float64(runtime.NumCPU())
+
+	cachedLoadAvgMetric.Store(metric)
+	time.AfterFunc(loadAvgCacheDuration, func() {
+		cachedLoadAvgMetric.Store(nil)
+	})
+
 	return metric
 }

@@ -18,39 +18,9 @@ package osutil
 
 import (
 	"fmt"
-	"os"
-	"os/exec"
-	"runtime"
 	"strconv"
 	"strings"
 )
-
-// LoadAvg returns the past 1 minute system load average. This works on linux and darwin systems.
-// On other systems, it returns 0 with no error.
-func LoadAvg() (float64, error) {
-	switch runtime.GOOS {
-	case "linux":
-		content, err := os.ReadFile("/proc/loadavg")
-		if err != nil {
-			return 0, err
-		}
-		return parseLoadAvg(string(content))
-	case "darwin":
-		cmd := exec.Command("sysctl", "-n", "vm.loadavg")
-		// Sample output: `{ 2.83 3.01 3.36 }`
-		output, err := cmd.CombinedOutput()
-		if err != nil {
-			return 0, err
-		}
-		if len(output) < 1 {
-			return 0, fmt.Errorf("unexpected sysctl output: %q", output)
-		}
-		output = output[1:] // Remove the leading `{ `
-		return parseLoadAvg(string(output))
-	default:
-		return 0, nil
-	}
-}
 
 // parseLoadAvg parses the load average from the content of /proc/loadavg or sysctl output.
 // Input such as "1.00 0.99 0.98 1/1 1", "2.83 3.01 3.36"

@@ -21,6 +21,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/textutil"
 )
 
 func TestAggregateName(t *testing.T) {
@@ -239,4 +242,26 @@ func TestKnownMetricNames(t *testing.T) {
 	assert.Contains(t, KnownMetricNames, CustomMetricName)
 	assert.Contains(t, KnownMetricNames, DefaultMetricName)
 	assert.Contains(t, KnownMetricNames, HistoryListLengthMetricName)
+	assert.Contains(t, KnownMetricNames, MysqldLoadAvgMetricName)
+	assert.Contains(t, KnownMetricNames, MysqldDatadirUsedRatioMetricName)
+}
+
+func TestKnownMetricNamesPascalCase(t *testing.T) {
+	expectCases := map[MetricName]string{
+		LagMetricName:                    "Lag",
+		ThreadsRunningMetricName:         "ThreadsRunning",
+		LoadAvgMetricName:                "Loadavg",
+		HistoryListLengthMetricName:      "HistoryListLength",
+		CustomMetricName:                 "Custom",
+		DefaultMetricName:                "Default",
+		MysqldLoadAvgMetricName:          "MysqldLoadavg",
+		MysqldDatadirUsedRatioMetricName: "MysqldDatadirUsedRatio",
+	}
+	for _, metricName := range KnownMetricNames {
+		t.Run(metricName.String(), func(t *testing.T) {
+			expect, ok := expectCases[metricName]
+			require.True(t, ok)
+			assert.Equal(t, expect, textutil.PascalCase(metricName.String()))
+		})
+	}
 }

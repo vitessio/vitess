@@ -171,3 +171,12 @@ func TestMultiReferenceQuery(t *testing.T) {
 
 	utils.Exec(t, conn, query)
 }
+
+func TestDMLReferenceUsingShardedKS(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 22, "vtgate")
+	conn, closer := start(t)
+	defer closer()
+
+	utils.Exec(t, conn, "use sks")
+	utils.Exec(t, conn, "update zip_detail set zip_id = 1 where id = 1")
+}

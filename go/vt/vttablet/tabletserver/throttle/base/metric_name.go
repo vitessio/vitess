@@ -60,12 +60,14 @@ func (names MetricNames) Unique() MetricNames {
 }
 
 const (
-	DefaultMetricName           MetricName = "default"
-	LagMetricName               MetricName = "lag"
-	ThreadsRunningMetricName    MetricName = "threads_running"
-	CustomMetricName            MetricName = "custom"
-	LoadAvgMetricName           MetricName = "loadavg"
-	HistoryListLengthMetricName MetricName = "history_list_length"
+	DefaultMetricName                MetricName = "default"
+	LagMetricName                    MetricName = "lag"
+	ThreadsRunningMetricName         MetricName = "threads_running"
+	CustomMetricName                 MetricName = "custom"
+	LoadAvgMetricName                MetricName = "loadavg"
+	HistoryListLengthMetricName      MetricName = "history_list_length"
+	MysqldLoadAvgMetricName          MetricName = "mysqld-loadavg"
+	MysqldDatadirUsedRatioMetricName MetricName = "mysqld-datadir-used-ratio"
 )
 
 func (metric MetricName) DefaultScope() Scope {

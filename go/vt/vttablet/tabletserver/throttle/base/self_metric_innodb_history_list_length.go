@@ -21,8 +21,6 @@ import (
 	"math"
 	"sync/atomic"
 	"time"
-
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 )
 
 var (
@@ -54,14 +52,14 @@ func (m *HistoryListLengthSelfMetric) RequiresConn() bool {
 	return true
 }
 
-func (m *HistoryListLengthSelfMetric) Read(ctx context.Context, throttler ThrottlerMetricsPublisher, conn *connpool.Conn) *ThrottleMetric {
+func (m *HistoryListLengthSelfMetric) Read(ctx context.Context, params *SelfMetricReadParams) *ThrottleMetric {
 	// This function will be called sequentially, and therefore does not need strong mutex protection. Still, we use atomics
 	// to ensure correctness in case an external goroutine tries to read the metric concurrently.
 	metric := cachedHistoryListLengthMetric.Load()
 	if metric != nil {
 		return metric
 	}
-	metric = ReadSelfMySQLThrottleMetric(ctx, conn, historyListLengthQuery)
+	metric = ReadSelfMySQLThrottleMetric(ctx, params.Conn, historyListLengthQuery)
 	cachedHistoryListLengthMetric.Store(metric)
 	time.AfterFunc(historyListLengthCacheDuration, func() {
 		cachedHistoryListLengthMetric.Store(nil)
