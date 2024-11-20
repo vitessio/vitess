@@ -18,8 +18,6 @@ package base
 
 import (
 	"context"
-
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 )
 
 var _ SelfMetric = registerSelfMetric(&CustomQuerySelfMetric{})
@@ -43,6 +41,6 @@ func (m *CustomQuerySelfMetric) RequiresConn() bool {
 	return true
 }
 
-func (m *CustomQuerySelfMetric) Read(ctx context.Context, throttler ThrottlerMetricsPublisher, conn *connpool.Conn) *ThrottleMetric {
-	return ReadSelfMySQLThrottleMetric(ctx, conn, throttler.GetCustomMetricsQuery())
+func (m *CustomQuerySelfMetric) Read(ctx context.Context, params *SelfMetricReadParams) *ThrottleMetric {
+	return ReadSelfMySQLThrottleMetric(ctx, params.Conn, params.Throttler.GetCustomMetricsQuery())
 }

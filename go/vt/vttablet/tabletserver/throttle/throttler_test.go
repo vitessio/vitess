@@ -70,6 +70,18 @@ var (
 			Value: 2.718,
 			Err:   nil,
 		},
+		base.MysqldLoadAvgMetricName: &base.ThrottleMetric{
+			Scope: base.SelfScope,
+			Alias: "",
+			Value: 0.3311,
+			Err:   nil,
+		},
+		base.MysqldDatadirUsedRatioMetricName: &base.ThrottleMetric{
+			Scope: base.SelfScope,
+			Alias: "",
+			Value: 0.85,
+			Err:   nil,
+		},
 	}
 	replicaMetrics = map[string]*MetricResult{
 		base.LagMetricName.String(): {
@@ -87,6 +99,14 @@ var (
 		base.LoadAvgMetricName.String(): {
 			ResponseCode: tabletmanagerdatapb.CheckThrottlerResponseCode_OK,
 			Value:        5.1,
+		},
+		base.MysqldLoadAvgMetricName.String(): {
+			ResponseCode: tabletmanagerdatapb.CheckThrottlerResponseCode_OK,
+			Value:        0.2211,
+		},
+		base.MysqldDatadirUsedRatioMetricName.String(): {
+			ResponseCode: tabletmanagerdatapb.CheckThrottlerResponseCode_OK,
+			Value:        0.87,
 		},
 	}
 	nonPrimaryTabletType atomic.Int32
@@ -276,7 +296,7 @@ func newTestThrottler() *Throttler {
 	throttler.recentCheckDormantDiff = int64(throttler.dormantPeriod / recentCheckRateLimiterInterval)
 	throttler.recentCheckDiff = int64(3 * time.Second / recentCheckRateLimiterInterval)
 
-	throttler.readSelfThrottleMetrics = func(ctx context.Context) base.ThrottleMetrics {
+	throttler.readSelfThrottleMetrics = func(ctx context.Context, tmClient tmclient.TabletManagerClient) base.ThrottleMetrics {
 		for _, metric := range selfMetrics {
 			go func() {
 				select {
@@ -1706,10 +1726,12 @@ func TestChecks(t *testing.T) {
 				assert.Equal(t, testAppName.String(), checkResult.AppName)
 				assert.Equal(t, len(base.KnownMetricNames), len(checkResult.Metrics))
 
-				assert.EqualValues(t, 0.3, checkResult.Metrics[base.LagMetricName.String()].Value)           // self lag value, because flags.Scope is set
-				assert.EqualValues(t, 26, checkResult.Metrics[base.ThreadsRunningMetricName.String()].Value) // self value, because flags.Scope is set
-				assert.EqualValues(t, 17, checkResult.Metrics[base.CustomMetricName.String()].Value)         // self value, because flags.Scope is set
-				assert.EqualValues(t, 2.718, checkResult.Metrics[base.LoadAvgMetricName.String()].Value)     // self value, because flags.Scope is set
+				assert.EqualValues(t, 0.3, checkResult.Metrics[base.LagMetricName.String()].Value)                     // self lag value, because flags.Scope is set
+				assert.EqualValues(t, 26, checkResult.Metrics[base.ThreadsRunningMetricName.String()].Value)           // self value, because flags.Scope is set
+				assert.EqualValues(t, 17, checkResult.Metrics[base.CustomMetricName.String()].Value)                   // self value, because flags.Scope is set
+				assert.EqualValues(t, 2.718, checkResult.Metrics[base.LoadAvgMetricName.String()].Value)               // self value, because flags.Scope is set
+				assert.EqualValues(t, 0.3311, checkResult.Metrics[base.MysqldLoadAvgMetricName.String()].Value)        // self value, because flags.Scope is set
+				assert.EqualValues(t, 0.85, checkResult.Metrics[base.MysqldDatadirUsedRatioMetricName.String()].Value) // self value, because flags.Scope is set
 				for _, metric := range checkResult.Metrics {
 					assert.EqualValues(t, base.SelfScope.String(), metric.Scope)
 				}
@@ -1761,10 +1783,12 @@ func TestChecks(t *testing.T) {
 				assert.Equal(t, testAppName.String(), checkResult.AppName)
 				assert.Equal(t, len(base.KnownMetricNames), len(checkResult.Metrics))
 
-				assert.EqualValues(t, 0.9, checkResult.Metrics[base.LagMetricName.String()].Value)           // shard lag value, because flags.Scope is set
-				assert.EqualValues(t, 26, checkResult.Metrics[base.ThreadsRunningMetricName.String()].Value) // shard value, because flags.Scope is set
-				assert.EqualValues(t, 17, checkResult.Metrics[base.CustomMetricName.String()].Value)         // shard value, because flags.Scope is set
-				assert.EqualValues(t, 5.1, checkResult.Metrics[base.LoadAvgMetricName.String()].Value)       // shard value, because flags.Scope is set
+				assert.EqualValues(t, 0.9, checkResult.Metrics[base.LagMetricName.String()].Value)                     // shard lag value, because flags.Scope is set
+				assert.EqualValues(t, 26, checkResult.Metrics[base.ThreadsRunningMetricName.String()].Value)           // shard value, because flags.Scope is set
+				assert.EqualValues(t, 17, checkResult.Metrics[base.CustomMetricName.String()].Value)                   // shard value, because flags.Scope is set
+				assert.EqualValues(t, 5.1, checkResult.Metrics[base.LoadAvgMetricName.String()].Value)                 // shard value, because flags.Scope is set
+				assert.EqualValues(t, 0.3311, checkResult.Metrics[base.MysqldLoadAvgMetricName.String()].Value)        // shard value, because flags.Scope is set
+				assert.EqualValues(t, 0.87, checkResult.Metrics[base.MysqldDatadirUsedRatioMetricName.String()].Value) // shard value, because flags.Scope is set
 				for _, metric := range checkResult.Metrics {
 					assert.EqualValues(t, base.ShardScope.String(), metric.Scope)
 				}
@@ -1790,14 +1814,18 @@ func TestChecks(t *testing.T) {
 				assert.ErrorIs(t, checkResult.Error, base.ErrThresholdExceeded)
 				assert.Equal(t, len(base.KnownMetricNames), len(checkResult.Metrics))
 
-				assert.EqualValues(t, 0.9, checkResult.Metrics[base.LagMetricName.String()].Value)           // shard lag value, because "shard" is the default scope for lag
-				assert.EqualValues(t, 26, checkResult.Metrics[base.ThreadsRunningMetricName.String()].Value) // self value, because "self" is the default scope for threads_running
-				assert.EqualValues(t, 17, checkResult.Metrics[base.CustomMetricName.String()].Value)         // self value, because "self" is the default scope for custom
-				assert.EqualValues(t, 2.718, checkResult.Metrics[base.LoadAvgMetricName.String()].Value)     // self value, because "self" is the default scope for loadavg
+				assert.EqualValues(t, 0.9, checkResult.Metrics[base.LagMetricName.String()].Value)                     // shard lag value, because "shard" is the default scope for lag
+				assert.EqualValues(t, 26, checkResult.Metrics[base.ThreadsRunningMetricName.String()].Value)           // self value, because "self" is the default scope for threads_running
+				assert.EqualValues(t, 17, checkResult.Metrics[base.CustomMetricName.String()].Value)                   // self value, because "self" is the default scope for custom
+				assert.EqualValues(t, 2.718, checkResult.Metrics[base.LoadAvgMetricName.String()].Value)               // self value, because "self" is the default scope for loadavg
+				assert.EqualValues(t, 0.3311, checkResult.Metrics[base.MysqldLoadAvgMetricName.String()].Value)        // self value, because "self" is the default scope for loadavg
+				assert.EqualValues(t, 0.85, checkResult.Metrics[base.MysqldDatadirUsedRatioMetricName.String()].Value) // self value, because "self" is the default scope for loadavg
 				assert.EqualValues(t, base.ShardScope.String(), checkResult.Metrics[base.LagMetricName.String()].Scope)
 				assert.EqualValues(t, base.SelfScope.String(), checkResult.Metrics[base.ThreadsRunningMetricName.String()].Scope)
 				assert.EqualValues(t, base.SelfScope.String(), checkResult.Metrics[base.CustomMetricName.String()].Scope)
 				assert.EqualValues(t, base.SelfScope.String(), checkResult.Metrics[base.LoadAvgMetricName.String()].Scope)
+				assert.EqualValues(t, base.SelfScope.String(), checkResult.Metrics[base.MysqldLoadAvgMetricName.String()].Scope)
+				assert.EqualValues(t, base.SelfScope.String(), checkResult.Metrics[base.MysqldDatadirUsedRatioMetricName.String()].Scope)
 			})
 		})
 		t.Run("checks, defined scope masks explicit scope metrics", func(t *testing.T) {
@@ -1810,6 +1838,8 @@ func TestChecks(t *testing.T) {
 					base.MetricName("self/threads_running"),
 					base.MetricName("custom"),
 					base.MetricName("shard/loadavg"),
+					base.MetricName("shard/mysqld-loadavg"),
+					base.MetricName("self/mysqld-datadir-used-ratio"),
 					base.MetricName("default"),
 				}
 				checkResult := throttler.Check(ctx, testAppName.String(), metricNames, flags)
@@ -1820,10 +1850,12 @@ func TestChecks(t *testing.T) {
 				assert.ErrorIs(t, checkResult.Error, base.ErrThresholdExceeded)
 				assert.Equal(t, len(metricNames), len(checkResult.Metrics))
 
-				assert.EqualValues(t, 0.9, checkResult.Metrics[base.LagMetricName.String()].Value)           // shard lag value, even though scope name is in metric name
-				assert.EqualValues(t, 26, checkResult.Metrics[base.ThreadsRunningMetricName.String()].Value) // shard value, even though scope name is in metric name
-				assert.EqualValues(t, 17, checkResult.Metrics[base.CustomMetricName.String()].Value)         // shard value because flags.Scope is set
-				assert.EqualValues(t, 5.1, checkResult.Metrics[base.LoadAvgMetricName.String()].Value)       // shard value, not because scope name is in metric name but because flags.Scope is set
+				assert.EqualValues(t, 0.9, checkResult.Metrics[base.LagMetricName.String()].Value)                     // shard lag value, even though scope name is in metric name
+				assert.EqualValues(t, 26, checkResult.Metrics[base.ThreadsRunningMetricName.String()].Value)           // shard value, even though scope name is in metric name
+				assert.EqualValues(t, 17, checkResult.Metrics[base.CustomMetricName.String()].Value)                   // shard value because flags.Scope is set
+				assert.EqualValues(t, 5.1, checkResult.Metrics[base.LoadAvgMetricName.String()].Value)                 // shard value, not because scope name is in metric name but because flags.Scope is set
+				assert.EqualValues(t, 0.3311, checkResult.Metrics[base.MysqldLoadAvgMetricName.String()].Value)        // shard value, not because scope name is in metric name but because flags.Scope is set
+				assert.EqualValues(t, 0.87, checkResult.Metrics[base.MysqldDatadirUsedRatioMetricName.String()].Value) // shard value, even though scope name is in metric name
 				for _, metric := range checkResult.Metrics {
 					assert.EqualValues(t, base.ShardScope.String(), metric.Scope)
 				}
@@ -2066,8 +2098,12 @@ func TestReplica(t *testing.T) {
 						base.DefaultMetricName:
 						assert.Error(t, metricResult.Error, "metricName=%v, value=%v, threshold=%v", metricName, metricResult.Value, metricResult.Threshold)
 						assert.ErrorIs(t, metricResult.Error, base.ErrThresholdExceeded)
-					case base.ThreadsRunningMetricName:
+					case base.ThreadsRunningMetricName,
+						base.MysqldLoadAvgMetricName,
+						base.MysqldDatadirUsedRatioMetricName:
 						assert.NoError(t, metricResult.Error, "metricName=%v, value=%v, threshold=%v", metricName, metricResult.Value, metricResult.Threshold)
+					default:
+						assert.Fail(t, "unexpected metric", "name=%v", metricName)
 					}
 				}
 			})

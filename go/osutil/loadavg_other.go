@@ -1,3 +1,5 @@
+//go:build !linux && !darwin
+
 /*
 Copyright 2024 The Vitess Authors.
 
@@ -14,10 +16,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package base
+package osutil
 
-// metricsPublisher is implemented by throttler.Throttler and is used by SelfMetric
-// implementations to query the throttler.
-type metricsPublisher interface {
-	GetCustomMetricsQuery() string
+// LoadAvg returns the past 1 minute system load average. This works on linux and darwin systems.
+// On other systems, it returns 0 with no error.
+func LoadAvg() (float64, error) {
+	return 0, nil
 }

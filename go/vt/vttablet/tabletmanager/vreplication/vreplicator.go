@@ -186,10 +186,17 @@ func newVReplicator(id int32, source *binlogdatapb.BinlogSource, sourceVStreamer
 // code.
 func (vr *vreplicator) Replicate(ctx context.Context) error {
 	err := vr.replicate(ctx)
-	if err != nil {
-		if err := vr.setMessage(err.Error()); err != nil {
-			binlogplayer.LogError("Failed to set error state", err)
+	if err == nil {
+		return nil
+	}
+	if vr.dbClient.IsClosed() {
+		// Connection was possible terminated by the server. We should renew it.
+		if cerr := vr.dbClient.Connect(); cerr != nil {
+			return vterrors.Wrapf(err, "failed to reconnect to the database: %v", cerr)
 		}
+	}
+	if err := vr.setMessage(err.Error()); err != nil {
+		binlogplayer.LogError("Failed to set error state", err)
 	}
 	return err
 }

@@ -484,7 +484,7 @@ func testScheduler(t *testing.T) {
 		testTableSequentialTimes(t, t1uuid, t2uuid)
 	})
 	t.Run("Postpone launch CREATE", func(t *testing.T) {
-		t1uuid = testOnlineDDLStatement(t, createParams(createT1IfNotExistsStatement, ddlStrategy+" --postpone-launch", "vtgate", "", "", true)) // skip wait
+		t1uuid = testOnlineDDLStatement(t, createParams(createT1IfNotExistsStatement, ddlStrategy+" --postpone-launch --cut-over-threshold=14s", "vtgate", "", "", true)) // skip wait
 		time.Sleep(2 * time.Second)
 		rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
 		require.NotNil(t, rs)
@@ -501,6 +501,10 @@ func testScheduler(t *testing.T) {
 			for _, row := range rs.Named().Rows {
 				postponeLaunch := row.AsInt64("postpone_launch", 0)
 				assert.Equal(t, int64(0), postponeLaunch)
+
+				cutOverThresholdSeconds := row.AsInt64("cutover_threshold_seconds", 0)
+				// Threshold supplied in DDL strategy
+				assert.EqualValues(t, 14, cutOverThresholdSeconds)
 			}
 			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
@@ -580,6 +584,9 @@ func testScheduler(t *testing.T) {
 				assert.Equal(t, int64(1), postponeCompletion)
 			}
 		})
+		t.Run("set cut-over threshold", func(t *testing.T) {
+			onlineddl.CheckSetMigrationCutOverThreshold(t, &vtParams, shards, t1uuid, 17700*time.Millisecond, "")
+		})
 		t.Run("complete", func(t *testing.T) {
 			onlineddl.CheckCompleteMigration(t, &vtParams, shards, t1uuid, true)
 			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
@@ -592,6 +599,11 @@ func testScheduler(t *testing.T) {
 			for _, row := range rs.Named().Rows {
 				postponeCompletion := row.AsInt64("postpone_completion", 0)
 				assert.Equal(t, int64(0), postponeCompletion)
+
+				cutOverThresholdSeconds := row.AsInt64("cutover_threshold_seconds", 0)
+				// Expect 17800*time.Millisecond to be truncated to 17 seconds
+				assert.EqualValues(t, 17, cutOverThresholdSeconds)
+
 				assert.False(t, row["shadow_analyzed_timestamp"].IsNull())
 			}
 		})
@@ -1062,6 +1074,10 @@ func testScheduler(t *testing.T) {
 			for _, row := range rs.Named().Rows {
 				retries := row.AsInt64("retries", 0)
 				assert.Greater(t, retries, int64(0))
+
+				cutOverThresholdSeconds := row.AsInt64("cutover_threshold_seconds", 0)
+				// No explicit cut-over threshold given. Expect the default 10s
+				assert.EqualValues(t, 10, cutOverThresholdSeconds)
 			}
 		})
 	})
@@ -1088,6 +1104,13 @@ func testScheduler(t *testing.T) {
 			executedUUID := testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy, "vtctl", "", "", true)) // skip wait
 			require.Equal(t, uuid, executedUUID)
 
+			t.Run("set low cut-over threshold", func(t *testing.T) {
+				onlineddl.CheckSetMigrationCutOverThreshold(t, &vtParams, shards, uuid, 2*time.Second, "cut-over min value")
+			})
+			t.Run("set high cut-over threshold", func(t *testing.T) {
+				onlineddl.CheckSetMigrationCutOverThreshold(t, &vtParams, shards, uuid, 2000*time.Second, "cut-over max value")
+			})
+
 			// expect it to complete
 			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
@@ -1098,6 +1121,10 @@ func testScheduler(t *testing.T) {
 			for _, row := range rs.Named().Rows {
 				retries := row.AsInt64("retries", 0)
 				assert.Greater(t, retries, int64(0))
+
+				cutOverThresholdSeconds := row.AsInt64("cutover_threshold_seconds", 0)
+				// Teh default remains unchanged.
+				assert.EqualValues(t, 10, cutOverThresholdSeconds)
 			}
 		})
 	})
