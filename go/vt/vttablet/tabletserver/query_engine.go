@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/sasha-s/go-deadlock"
+
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cache/theine"
 	"vitess.io/vitess/go/mysql/sqlerror"
