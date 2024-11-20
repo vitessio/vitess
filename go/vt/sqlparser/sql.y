@@ -10124,6 +10124,10 @@ charset_value:
   {
     $$ = &Default{}
   }
+| BINARY
+  {
+    $$ = NewStrVal($1)
+  }
 
 for_from:
   FOR
