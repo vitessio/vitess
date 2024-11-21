@@ -58,6 +58,11 @@ import (
 	"vitess.io/vitess/go/vt/servenv"
 )
 
+const (
+	sseCustomerPrefix = "sse_c:"
+	MaxPartSize       = 1024 * 1024 * 1024 * 5 // 5GiB - limited by AWS https://docs.aws.amazon.com/AmazonS3/latest/userguide/qfacts.html
+)
+
 var (
 	// AWS API region
 	region string
@@ -89,7 +94,7 @@ var (
 	delimiter = "/"
 
 	// minimum part size
-	minimumPartSize int64
+	minPartSize int64
 
 	ErrPartSize = errors.New("minimum S3 part size must be between 5MiB and 5GiB")
 )
@@ -104,7 +109,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&tlsSkipVerifyCert, "s3_backup_tls_skip_verify_cert", false, "skip the 'certificate is valid' check for SSL connections.")
 	fs.StringVar(&requiredLogLevel, "s3_backup_log_level", "LogOff", "determine the S3 loglevel to use from LogOff, LogDebug, LogDebugWithSigning, LogDebugWithHTTPBody, LogDebugWithRequestRetries, LogDebugWithRequestErrors.")
 	fs.StringVar(&sse, "s3_backup_server_side_encryption", "", "server-side encryption algorithm (e.g., AES256, aws:kms, sse_c:/path/to/key/file).")
-	fs.Int64Var(&minimumPartSize, "s3_backup_aws_minimum_partsize", 1024*1024*5, "Minimum part size to use")
+	fs.Int64Var(&minPartSize, "s3_backup_aws_min_partsize", manager.MinUploadPartSize, "Minimum part size to use, defaults to 5MiB but can be increased due to the dataset size.")
 }
 
 func init() {
@@ -117,8 +122,6 @@ func init() {
 type logNameToLogLevel map[string]aws.ClientLogMode
 
 var logNameMap logNameToLogLevel
-
-const sseCustomerPrefix = "sse_c:"
 
 type endpointResolver struct {
 	r        s3.EndpointResolverV2
@@ -239,13 +242,13 @@ func calculateUploadPartSize(filesize int64) (partSizeBytes int64, err error) {
 		}
 	}
 
-	if minimumPartSize != 0 && partSizeBytes < minimumPartSize {
-		if minimumPartSize > 1024*1024*1024*5 || minimumPartSize < 1024*1024*5 { // 5GiB and 5MiB respectively
+	if minPartSize != 0 && partSizeBytes < minPartSize {
+		if minPartSize > 1024*1024*1024*5 || minPartSize < 1024*1024*5 { // 5GiB and 5MiB respectively
 			return 0, fmt.Errorf("%w, currently set to %s",
-				ErrPartSize, humanize.IBytes(uint64(minimumPartSize)),
+				ErrPartSize, humanize.IBytes(uint64(minPartSize)),
 			)
 		}
-		partSizeBytes = int64(minimumPartSize)
+		partSizeBytes = int64(minPartSize)
 	}
 
 	return

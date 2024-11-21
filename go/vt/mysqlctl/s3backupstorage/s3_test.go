@@ -329,9 +329,9 @@ func TestWithParams(t *testing.T) {
 	assert.NotNil(t, s3.transport.Proxy)
 }
 
-func TestGetPartSize(t *testing.T) {
-	originalMinimum := minimumPartSize
-	defer func() { minimumPartSize = originalMinimum }()
+func TestCalculateUploadPartSize(t *testing.T) {
+	originalMinimum := minPartSize
+	defer func() { minPartSize = originalMinimum }()
 
 	tests := []struct {
 		name            string
@@ -386,8 +386,8 @@ func TestGetPartSize(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			minimumPartSize = tt.minimumPartSize
-			partSize, err := getPartSize(tt.filesize)
+			minPartSize = tt.minimumPartSize
+			partSize, err := calculateUploadPartSize(tt.filesize)
 			require.ErrorIs(t, err, tt.err)
 			require.Equal(t, tt.want, partSize)
 		})
