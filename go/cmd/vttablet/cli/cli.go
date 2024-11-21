@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"runtime/debug"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -109,7 +108,6 @@ func init() {
 }
 
 func run(cmd *cobra.Command, args []string) error {
-	debug.SetGCPercent(200)
 	servenv.Init()
 
 	// Ensure we open the topo before we start the context, so that the
