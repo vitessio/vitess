@@ -31,5 +31,7 @@ The following fields can be dynamically changed -
 9. `TolerableReplicationLag`
 10. `TopoInformationRefreshDuration`
 11. `RecoveryPollDuration`
+12. `AllowEmergencyReparent`
+13. `ChangeTabletsWithErrantGtidToDrained`
 
-To upgrade to the newer version of the configuration file, the users can first change to using the flags in the previous release before upgrading. They can then revert to using the configuration file in the newer release.
+To upgrade to the newer version of the configuration file, first switch to using the flags in your current deployment before upgrading. Then you can switch to using the configuration file in the newer release.

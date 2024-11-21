@@ -158,11 +158,24 @@ var (
 			Dynamic:  true,
 		},
 	)
-)
 
-var (
-	ersEnabled                    = true
-	convertTabletsWithErrantGTIDs = false
+	ersEnabled = viperutil.Configure(
+		"AllowEmergencyReparent",
+		viperutil.Options[bool]{
+			FlagName: "allow-emergency-reparent",
+			Default:  true,
+			Dynamic:  true,
+		},
+	)
+
+	convertTabletsWithErrantGTIDs = viperutil.Configure(
+		"ChangeTabletsWithErrantGtidToDrained",
+		viperutil.Options[bool]{
+			FlagName: "change-tablets-with-errant-gtid-to-drained",
+			Default:  false,
+			Dynamic:  true,
+		},
+	)
 )
 
 func init() {
@@ -184,8 +197,8 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.Duration("tolerable-replication-lag", tolerableReplicationLag.Default(), "Amount of replication lag that is considered acceptable for a tablet to be eligible for promotion when Vitess makes the choice of a new primary in PRS")
 	fs.Duration("topo-information-refresh-duration", topoInformationRefreshDuration.Default(), "Timer duration on which VTOrc refreshes the keyspace and vttablet records from the topology server")
 	fs.Duration("recovery-poll-duration", recoveryPollDuration.Default(), "Timer duration on which VTOrc polls its database to run a recovery")
-	fs.BoolVar(&ersEnabled, "allow-emergency-reparent", ersEnabled, "Whether VTOrc should be allowed to run emergency reparent operation when it detects a dead primary")
-	fs.BoolVar(&convertTabletsWithErrantGTIDs, "change-tablets-with-errant-gtid-to-drained", convertTabletsWithErrantGTIDs, "Whether VTOrc should be changing the type of tablets with errant GTIDs to DRAINED")
+	fs.Bool("allow-emergency-reparent", ersEnabled.Default(), "Whether VTOrc should be allowed to run emergency reparent operation when it detects a dead primary")
+	fs.Bool("change-tablets-with-errant-gtid-to-drained", convertTabletsWithErrantGTIDs.Default(), "Whether VTOrc should be changing the type of tablets with errant GTIDs to DRAINED")
 
 	viperutil.BindFlags(fs,
 		instancePollTime,
@@ -201,6 +214,8 @@ func registerFlags(fs *pflag.FlagSet) {
 		tolerableReplicationLag,
 		topoInformationRefreshDuration,
 		recoveryPollDuration,
+		ersEnabled,
+		convertTabletsWithErrantGTIDs,
 	)
 }
 
@@ -301,22 +316,22 @@ func GetRecoveryPollDuration() time.Duration {
 
 // ERSEnabled reports whether VTOrc is allowed to run ERS or not.
 func ERSEnabled() bool {
-	return ersEnabled
+	return ersEnabled.Get()
 }
 
 // SetERSEnabled sets the value for the ersEnabled variable. This should only be used from tests.
 func SetERSEnabled(val bool) {
-	ersEnabled = val
+	ersEnabled.Set(val)
 }
 
 // ConvertTabletWithErrantGTIDs reports whether VTOrc is allowed to change the tablet type of tablets with errant GTIDs to DRAINED.
 func ConvertTabletWithErrantGTIDs() bool {
-	return convertTabletsWithErrantGTIDs
+	return convertTabletsWithErrantGTIDs.Get()
 }
 
 // SetConvertTabletWithErrantGTIDs sets the value for the convertTabletWithErrantGTIDs variable. This should only be used from tests.
 func SetConvertTabletWithErrantGTIDs(val bool) {
-	convertTabletsWithErrantGTIDs = val
+	convertTabletsWithErrantGTIDs.Set(val)
 }
 
 // LogConfigValues is used to log the config values.
