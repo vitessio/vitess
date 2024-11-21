@@ -28,7 +28,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
+	"vitess.io/vitess/go/ioutil"
 	"vitess.io/vitess/go/test/utils"
 
 	"vitess.io/vitess/go/mysql/capabilities"
@@ -585,6 +585,117 @@ func TestExecuteRestoreWithTimedOutContext(t *testing.T) {
 	if !strings.Contains(err.Error(), "context canceled") && !strings.Contains(err.Error(), "context deadline exceeded") {
 		assert.Fail(t, "Test should fail with either `context canceled` or `context deadline exceeded`")
 	}
+}
+
+func TestAA(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
+	// Set up local backup directory
+	id := fmt.Sprintf("%d", time.Now().UnixNano())
+	backupRoot := fmt.Sprintf("testdata/builtinbackup_test_%s", id)
+	filebackupstorage.FileBackupStorageRoot = backupRoot
+	require.NoError(t, createBackupDir(backupRoot, "innodb", "log", "datadir"))
+	dataDir := path.Join(backupRoot, "datadir")
+	// Add some files under data directory to force backup to execute semaphore acquire inside
+	// backupFiles() method (https://github.com/vitessio/vitess/blob/main/go/vt/mysqlctl/builtinbackupengine.go#L483).
+	require.NoError(t, createBackupDir(dataDir, "test1"))
+	require.NoError(t, createBackupDir(dataDir, "test2"))
+	require.NoError(t, createBackupFiles(path.Join(dataDir, "test1"), 2, "ibd"))
+	require.NoError(t, createBackupFiles(path.Join(dataDir, "test2"), 2, "ibd"))
+	defer os.RemoveAll(backupRoot)
+
+	needIt, err := needInnoDBRedoLogSubdir()
+	require.NoError(t, err)
+	if needIt {
+		fpath := path.Join("log", mysql.DynamicRedoLogSubdir)
+		if err := createBackupDir(backupRoot, fpath); err != nil {
+			require.Failf(t, err.Error(), "failed to create directory: %s", fpath)
+		}
+	}
+
+	// Set up topo
+	keyspace, shard := "mykeyspace", "-"
+	ts := memorytopo.NewServer(ctx, "cell1")
+	defer ts.Close()
+
+	require.NoError(t, ts.CreateKeyspace(ctx, keyspace, &topodata.Keyspace{}))
+	require.NoError(t, ts.CreateShard(ctx, keyspace, shard))
+
+	tablet := topo.NewTablet(100, "cell1", "mykeyspace-00-80-0100")
+	tablet.Keyspace = keyspace
+	tablet.Shard = shard
+
+	require.NoError(t, ts.CreateTablet(ctx, tablet))
+
+	_, err = ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
+		si.PrimaryAlias = &topodata.TabletAlias{Uid: 100, Cell: "cell1"}
+
+		now := time.Now()
+		si.PrimaryTermStartTime = &vttime.Time{Seconds: int64(now.Second()), Nanoseconds: int32(now.Nanosecond())}
+
+		return nil
+	})
+	require.NoError(t, err)
+
+	bufferPerFiles := make(map[string]ioutil.BytesBufferWriter)
+	be := &mysqlctl.BuiltinBackupEngine{}
+	bh := &mysqlctl.FakeBackupHandle{}
+	bh.AddFileReturnF = func(filename string) mysqlctl.FakeBackupHandleAddFileReturn {
+		// This mimics what happens with the other BackupHandles where doing AddFile will either truncate or override
+		// any existing data if the same filename already exists.
+		writerCloserBuffer := ioutil.NewBytesBufferWriter()
+		bufferPerFiles[filename] = writerCloserBuffer
+
+		// if filename == "MANIFEST" {
+		// 	return mysqlctl.FakeBackupHandleAddFileReturn{WriteCloser: writerCloserBuffer}
+		// }
+		//
+		// count := 0
+		// for _, call := range bh.AddFileCalls {
+		// 	if call.Filename == filename {
+		// 		count++
+		// 	}
+		// }
+		// // if it is the first time we call AddFile for this file, let's fail the call
+		// if count == 1 {
+		// 	return mysqlctl.FakeBackupHandleAddFileReturn{Err: fmt.Errorf("failed to AddFile on %s", filename)}
+		// }
+		// if it is the second time we call AddFile for this file, let's make it pass
+		return mysqlctl.FakeBackupHandleAddFileReturn{WriteCloser: writerCloserBuffer}
+	}
+
+	// Spin up a fake daemon to be used in backups. It needs to be allowed to receive:
+	// "STOP REPLICA", "START REPLICA", in that order.
+	fakedb := fakesqldb.New(t)
+	defer fakedb.Close()
+	mysqld := mysqlctl.NewFakeMysqlDaemon(fakedb)
+	defer mysqld.Close()
+	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "START REPLICA"}
+
+	logger := logutil.NewMemoryLogger()
+	backupResult, err := be.ExecuteBackup(ctx, mysqlctl.BackupParams{
+		Logger: logger,
+		Mysqld: mysqld,
+		Cnf: &mysqlctl.Mycnf{
+			InnodbDataHomeDir:     path.Join(backupRoot, "innodb"),
+			InnodbLogGroupHomeDir: path.Join(backupRoot, "log"),
+			DataDir:               path.Join(backupRoot, "datadir"),
+		},
+		Stats:                backupstats.NewFakeStats(),
+		Concurrency:          1,
+		HookExtraEnv:         map[string]string{},
+		TopoServer:           ts,
+		Keyspace:             keyspace,
+		Shard:                shard,
+		MysqlShutdownTimeout: mysqlShutdownTimeout,
+	}, bh)
+
+	for _, event := range logger.Events {
+		fmt.Println(event.String())
+	}
+
+	require.NoError(t, err)
+	require.Equal(t, mysqlctl.BackupUsable, backupResult)
 }
 
 // needInnoDBRedoLogSubdir indicates whether we need to create a redo log subdirectory.

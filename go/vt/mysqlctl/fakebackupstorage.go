@@ -35,6 +35,7 @@ type FakeBackupHandle struct {
 	AbortBackupReturn error
 	AddFileCalls      []FakeBackupHandleAddFileCall
 	AddFileReturn     FakeBackupHandleAddFileReturn
+	AddFileReturnF    func(filename string) FakeBackupHandleAddFileReturn
 	EndBackupCalls    []context.Context
 	EndBackupReturn   error
 	ReadFileCalls     []FakeBackupHandleReadFileCall
@@ -79,6 +80,11 @@ func (fbh *FakeBackupHandle) Name() string {
 
 func (fbh *FakeBackupHandle) AddFile(ctx context.Context, filename string, filesize int64) (io.WriteCloser, error) {
 	fbh.AddFileCalls = append(fbh.AddFileCalls, FakeBackupHandleAddFileCall{ctx, filename, filesize})
+
+	if fbh.AddFileReturnF != nil {
+		r := fbh.AddFileReturnF(filename)
+		return r.WriteCloser, r.Err
+	}
 	return fbh.AddFileReturn.WriteCloser, fbh.AddFileReturn.Err
 }
 

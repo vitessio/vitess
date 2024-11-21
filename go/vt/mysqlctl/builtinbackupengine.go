@@ -60,6 +60,8 @@ const (
 	builtinBackupEngineName = "builtin"
 	AutoIncrementalFromPos  = "auto"
 	dataDictionaryFile      = "mysql.ibd"
+
+	maxRetriesPerFile = 1
 )
 
 var (
@@ -149,6 +151,11 @@ type FileEntry struct {
 	// ParentPath is an optional prefix to the Base path. If empty, it is ignored. Useful
 	// for writing files in a temporary directory
 	ParentPath string
+
+	// AttemptNb specifies how many times we attempted to restore/backup this FileEntry.
+	// If we fail to restore/backup this FileEntry, we will retry up to maxRetriesPerFile (= 1) times.
+	// Every time the builtin backup engine retries this file, we increment this field by 1.
+	AttemptNb int
 }
 
 func init() {
@@ -643,8 +650,22 @@ func (be *BuiltinBackupEngine) backupFiles(
 
 			// Backup the individual file.
 			name := fmt.Sprintf("%v", i)
-			if err := be.backupFile(ctxCancel, params, bh, fe, name); err != nil {
-				bh.RecordError(err)
+			var errBackupFile error
+			for fe.AttemptNb <= maxRetriesPerFile {
+				if errBackupFile = be.backupFile(ctxCancel, params, bh, fe, name); errBackupFile == nil || ctxCancel.Err() != nil {
+					// Either no failure or the context was canceled. In both situations, we don't want to retry.
+					// If the context was canceled, it does not make sense to retry as the backup process is
+					// bound to fail whether we retry this file or not.
+					break
+				}
+
+				// A failure was observed, let's retry.
+				fe.AttemptNb++
+			}
+
+			// If we ran out of retries, and we still have an error, let's record it and cancel the process.
+			if errBackupFile != nil {
+				bh.RecordError(vterrors.Wrapf(errBackupFile, "failed to backup file '%s' after %d attempts", name, fe.AttemptNb))
 				cancel()
 			}
 		}(i)
@@ -725,6 +746,7 @@ type backupPipe struct {
 	crc32  hash.Hash32
 	nn     int64
 	done   chan struct{}
+	failed chan struct{}
 	closed int32
 }
 
@@ -735,6 +757,7 @@ func newBackupWriter(filename string, writerBufferSize int, maxSize int64, w io.
 		filename: filename,
 		maxSize:  maxSize,
 		done:     make(chan struct{}),
+		failed:   make(chan struct{}),
 	}
 }
 
@@ -744,8 +767,13 @@ func newBackupReader(filename string, maxSize int64, r io.Reader) *backupPipe {
 		r:        r,
 		filename: filename,
 		done:     make(chan struct{}),
+		failed:   make(chan struct{}),
 		maxSize:  maxSize,
 	}
+}
+
+func attemptToString(attempt int) string {
+	return fmt.Sprintf("(attempt %d/%d)", attempt+1, maxRetriesPerFile+1)
 }
 
 func (bp *backupPipe) Read(p []byte) (int, error) {
@@ -762,9 +790,17 @@ func (bp *backupPipe) Write(p []byte) (int, error) {
 	return nn, err
 }
 
-func (bp *backupPipe) Close() error {
+func (bp *backupPipe) Close(isDone bool) (err error) {
 	if atomic.CompareAndSwapInt32(&bp.closed, 0, 1) {
-		close(bp.done)
+		// If we fail to Flush the writer we must report this backup as a failure.
+		defer func() {
+			if isDone && err == nil {
+				close(bp.done)
+				return
+			}
+			close(bp.failed)
+		}()
+
 		if bp.w != nil {
 			if err := bp.w.Flush(); err != nil {
 				return err
@@ -778,32 +814,37 @@ func (bp *backupPipe) HashString() string {
 	return hex.EncodeToString(bp.crc32.Sum(nil))
 }
 
-func (bp *backupPipe) ReportProgress(ctx context.Context, period time.Duration, logger logutil.Logger, restore bool) {
-	messageStr := "restoring "
+func (bp *backupPipe) ReportProgress(ctx context.Context, period time.Duration, logger logutil.Logger, restore bool, attemptStr string) {
+	messageStr := "restoring"
 	if !restore {
-		messageStr = "backing up "
+		messageStr = "backing up"
 	}
 	tick := time.NewTicker(period)
 	defer tick.Stop()
 	for {
 		select {
 		case <-ctx.Done():
-			logger.Infof("Canceled %s of %q file", messageStr, bp.filename)
+			logger.Infof("Canceled %s of %q file %s", messageStr, bp.filename, attemptStr)
 			return
 		case <-bp.done:
-			logger.Infof("Completed %s %q", messageStr, bp.filename)
+			logger.Infof("Completed %s %q %s", messageStr, bp.filename, attemptStr)
+			return
+		case <-bp.failed:
+			logger.Infof("Failed %s %q %s", messageStr, bp.filename, attemptStr)
 			return
 		case <-tick.C:
 			written := float64(atomic.LoadInt64(&bp.nn))
 			if bp.maxSize == 0 {
-				logger.Infof("%s %q: %.02fkb", messageStr, bp.filename, written/1024.0)
+				logger.Infof("%s %q %s: %.02fkb", messageStr, bp.filename, attemptStr, written/1024.0)
 			} else {
 				maxSize := float64(bp.maxSize)
-				logger.Infof("%s %q: %.02f%% (%.02f/%.02fkb)", messageStr, bp.filename, 100.0*written/maxSize, written/1024.0, maxSize/1024.0)
+				logger.Infof("%s %q %s: %.02f%% (%.02f/%.02fkb)", messageStr, bp.filename, attemptStr, 100.0*written/maxSize, written/1024.0, maxSize/1024.0)
 			}
 		}
 	}
 }
+
+var done bool
 
 // backupFile backs up an individual file.
 func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle, fe *FileEntry, name string) (finalErr error) {
@@ -835,11 +876,12 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 		return err
 	}
 
+	attemptStr := attemptToString(fe.AttemptNb)
 	br := newBackupReader(fe.Name, fi.Size(), timedSource)
-	go br.ReportProgress(ctx, builtinBackupProgress, params.Logger, false /*restore*/)
+	go br.ReportProgress(ctx, builtinBackupProgress, params.Logger, false /*restore*/, attemptStr)
 
 	// Open the destination file for writing, and a buffer.
-	params.Logger.Infof("Backing up file: %v", fe.Name)
+	params.Logger.Infof("Backing up file: %v %s", fe.Name, attemptStr)
 	openDestAt := time.Now()
 	dest, err := bh.AddFile(ctx, name, fi.Size())
 	if err != nil {
@@ -870,14 +912,20 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 		var writer io.Writer = bw
 
 		defer func() {
+			if name == "3" && done == false {
+				// done = true
+				createAndCopyErr = errors.New("failed to copy file 3")
+			}
+
 			// Close the backupPipe to finish writing on destination.
-			if err := bw.Close(); err != nil {
+			if err := bw.Close(createAndCopyErr == nil); err != nil {
 				createAndCopyErr = errors.Join(createAndCopyErr, vterrors.Wrapf(err, "cannot flush destination: %v", name))
 			}
 
-			if err := br.Close(); err != nil {
+			if err := br.Close(createAndCopyErr == nil); err != nil {
 				createAndCopyErr = errors.Join(createAndCopyErr, vterrors.Wrap(err, "failed to close the source reader"))
 			}
+
 		}()
 		// Create the gzip compression pipe, if necessary.
 		if backupStorageCompress {
@@ -898,9 +946,9 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 			defer func() {
 				// Close gzip to flush it, after that all data is sent to writer.
 				closeCompressorAt := time.Now()
-				params.Logger.Infof("closing compressor")
+				params.Logger.Infof("Closing compressor for file: %s %s", fe.Name, attemptStr)
 				if cerr := closer.Close(); err != nil {
-					cerr = vterrors.Wrapf(cerr, "failed to close compressor %v", name)
+					cerr = vterrors.Wrapf(cerr, "failed to close compressor %v", fe.Name)
 					params.Logger.Error(cerr)
 					createAndCopyErr = errors.Join(createAndCopyErr, cerr)
 				}
@@ -1110,8 +1158,9 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 		params.Stats.Scope(stats.Operation("Source:Close")).TimedIncrement(time.Since(closeSourceAt))
 	}()
 
+	attemptStr := attemptToString(fe.AttemptNb)
 	br := newBackupReader(name, 0, timedSource)
-	go br.ReportProgress(ctx, builtinBackupProgress, params.Logger, true)
+	go br.ReportProgress(ctx, builtinBackupProgress, params.Logger, true, attemptStr)
 	var reader io.Reader = br
 
 	// Open the destination file for writing.
@@ -1197,7 +1246,7 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 		return vterrors.Wrap(err, "failed to flush destination buffer")
 	}
 
-	if err := br.Close(); err != nil {
+	if err := br.Close(true); err != nil {
 		return vterrors.Wrap(err, "failed to close the source reader")
 	}
 
