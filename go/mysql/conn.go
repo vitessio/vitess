@@ -457,54 +457,108 @@ func (buf *MemBufReader) Take() []mem.Buffer {
 	return buf.ready
 }
 
+func (buf *MemBufReader) refill() {
+	buf.cur = defaultMembufPool.Get(0)
+}
+
 func (buf *MemBufReader) flush() {
 	*buf.cur = (*buf.cur)[:buf.pos]
 	buf.ready = append(buf.ready, mem.NewBuffer(buf.cur, &defaultMembufPool))
-	buf.cur = defaultMembufPool.Get(0)
+	buf.cur = nil
 	buf.pos = 0
 }
 
+var membufProtoTag = protowire.EncodeTag(RawPacketsPos, protowire.BytesType)
+var membufProtoTagLen = protowire.SizeTag(RawPacketsPos)
+
 func (buf *MemBufReader) NewPacket(size int) {
-	const maxProtoHeaderSize = 8
+	maxProtoHeaderSize := membufProtoTagLen + protowire.SizeVarint(uint64(size)) + 1
 
 	if len((*buf.cur)[buf.pos:]) < maxProtoHeaderSize {
 		buf.flush()
+		buf.refill()
 	}
 
 	b := (*buf.cur)[buf.pos:buf.pos]
-	b = protowire.AppendTag(b, RawPacketsPos, protowire.BytesType)
+	b = protowire.AppendVarint(b, membufProtoTag)
 	b = protowire.AppendVarint(b, uint64(size))
 
 	buf.pos += len(b)
 }
 
+func (buf *MemBufReader) ReadPacketForParsing(packetLen int, r io.Reader) ([]byte, error) {
+	buf.NewPacket(packetLen)
+
+	target := (*buf.cur)[buf.pos:]
+	if packetLen > len(target) {
+		buf.flush()
+		buf.refill()
+
+		target = (*buf.cur)[buf.pos:]
+	}
+
+	if _, err := io.ReadFull(r, target[:packetLen]); err != nil {
+		return nil, vterrors.Wrapf(err, "io.ReadFull(packet body of length %v) failed", packetLen)
+	}
+	buf.pos += packetLen
+	return target[:packetLen], nil
+}
+
+func (buf *MemBufReader) readfull(packetLen int, r io.Reader, target []byte) ([]byte, error) {
+	if _, err := io.ReadFull(r, target[:packetLen]); err != nil {
+		return nil, vterrors.Wrapf(err, "io.ReadFull(packet body of length %v) failed", packetLen)
+	}
+	buf.pos += packetLen
+	return target[:packetLen], nil
+}
+
 func (buf *MemBufReader) ReadPacket(packetLen int, r io.Reader) ([]byte, error) {
 	buf.NewPacket(packetLen)
-	flushed := false
+
+	target := (*buf.cur)[buf.pos:]
+
+	if packetLen <= len(target) {
+		return buf.readfull(packetLen, r, target)
+	}
+
+	if _, err := io.ReadFull(r, target); err != nil {
+		return nil, vterrors.Wrapf(err, "io.ReadFull(packet body of length %v) failed", packetLen)
+	}
+
+	switch target[0] {
+	case ErrPacket, EOFPacket:
+		newbuf := defaultMembufPool.Get(0)
+		if len(*newbuf) < packetLen {
+			return nil, vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "ReadPacket(%s): too large", packetLen)
+		}
+
+		copy(*newbuf, target)
+
+		buf.flush()
+		buf.cur = newbuf
+		buf.pos = len(target)
+		return buf.readfull(packetLen-len(target), r, (*buf.cur)[buf.pos:])
+
+	default:
+		packetLen -= len(target)
+		buf.pos += len(target)
+	}
 
 	for packetLen > 0 {
-		target := (*buf.cur)[buf.pos:]
+		buf.flush()
+		buf.refill()
 
-		if packetLen < len(target) {
-			if _, err := io.ReadFull(r, target[:packetLen]); err != nil {
-				return nil, vterrors.Wrapf(err, "io.ReadFull(packet body of length %v) failed", packetLen)
-			}
-			buf.pos += packetLen
-			if !flushed {
-				return target[:packetLen], nil
-			}
-			return nil, nil
-		}
+		target = (*buf.cur)[buf.pos:]
+		target = target[:min(packetLen, len(target))]
 
 		if _, err := io.ReadFull(r, target); err != nil {
 			return nil, vterrors.Wrapf(err, "io.ReadFull(packet body of length %v) failed", packetLen)
 		}
-		packetLen -= len(target)
 
+		packetLen -= len(target)
 		buf.pos += len(target)
-		buf.flush()
-		flushed = true
 	}
+
 	return nil, nil
 }
 
