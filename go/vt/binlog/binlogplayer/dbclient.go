@@ -89,7 +89,7 @@ func (dc *dbClientImpl) Connect() error {
 	ctx := context.Background()
 	dc.dbConn, err = dc.dbConfig.Connect(ctx)
 	if err != nil {
-		return fmt.Errorf("error in connecting to mysql db with connection %v, err %v", dc.dbConn, err)
+		return fmt.Errorf("error in connecting to mysql db: %w", err)
 	}
 	return nil
 }
