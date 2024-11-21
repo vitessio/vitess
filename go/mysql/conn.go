@@ -529,7 +529,7 @@ func (buf *MemBufReader) ReadPacket(packetLen int, r io.Reader) ([]byte, error) 
 	case ErrPacket, EOFPacket:
 		newbuf := defaultMembufPool.Get(0)
 		if len(*newbuf) < packetLen {
-			return nil, vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "ReadPacket(%s): too large", packetLen)
+			return nil, vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "ReadPacket(%v): too large", packetLen)
 		}
 
 		copy(*newbuf, target)
