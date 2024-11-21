@@ -40,6 +40,9 @@ func pathForCellsAlias(alias string) string {
 // GetCellsAliases returns the names of the existing cells. They are
 // sorted by name.
 func (ts *Server) GetCellsAliases(ctx context.Context, strongRead bool) (ret map[string]*topodatapb.CellsAlias, err error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
 	conn := ts.globalCell
 	if !strongRead {
 		conn = ts.globalReadOnlyCell
@@ -75,6 +78,9 @@ func (ts *Server) GetCellsAliases(ctx context.Context, strongRead bool) (ret map
 
 // GetCellsAlias returns the CellsAlias that matches the given name.
 func (ts *Server) GetCellsAlias(ctx context.Context, name string, strongRead bool) (*topodatapb.CellsAlias, error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
 	conn := ts.globalCell
 	if !strongRead {
 		conn = ts.globalReadOnlyCell
@@ -97,6 +103,9 @@ func (ts *Server) GetCellsAlias(ctx context.Context, name string, strongRead boo
 
 // DeleteCellsAlias deletes the specified CellsAlias
 func (ts *Server) DeleteCellsAlias(ctx context.Context, alias string) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
 	ts.clearCellAliasesCache()
 
 	filePath := pathForCellsAlias(alias)
@@ -123,6 +132,9 @@ func (ts *Server) CreateCellsAlias(ctx context.Context, alias string, cellsAlias
 	}
 
 	// Save it.
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
 	filePath := pathForCellsAlias(alias)
 	_, err = ts.globalCell.Create(ctx, filePath, contents)
 	return err
@@ -134,6 +146,10 @@ func (ts *Server) UpdateCellsAlias(ctx context.Context, alias string, update fun
 
 	filePath := pathForCellsAlias(alias)
 	for {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+
 		cellsAlias := &topodatapb.CellsAlias{}
 
 		// Read the file, unpack the contents.

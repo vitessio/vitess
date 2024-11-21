@@ -328,7 +328,7 @@ func updateQueryGraphWithSource(ctx *plancontext.PlanningContext, input Operator
 			if tbl.ID != tblID {
 				continue
 			}
-			tbl.Alias = sqlparser.NewAliasedTableExpr(sqlparser.NewTableName(vTbl.Name.String()), tbl.Alias.As.String())
+			tbl.Alias = sqlparser.NewAliasedTableExpr(sqlparser.NewTableNameWithQualifier(vTbl.Name.String(), vTbl.Keyspace.Name), tbl.Alias.As.String())
 			tbl.Table, _ = tbl.Alias.TableName()
 		}
 		return op, Rewrote("change query table point to source table")

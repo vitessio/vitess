@@ -53,6 +53,18 @@ func NewSQLError(number ErrorCode, sqlState string, msg string) *SQLError {
 	}
 }
 
+var handlerErrExtract = regexp.MustCompile(`Got error ([0-9]*) [-] .* (from storage engine|during COMMIT|during ROLLBACK)`)
+
+func (se *SQLError) HaErrorCode() HandlerErrorCode {
+	match := handlerErrExtract.FindStringSubmatch(se.Message)
+	if len(match) >= 1 {
+		if code, err := strconv.ParseUint(match[1], 10, 16); err == nil {
+			return HandlerErrorCode(code)
+		}
+	}
+	return 0
+}
+
 // Error implements the error interface
 func (se *SQLError) Error() string {
 	var buf strings.Builder
