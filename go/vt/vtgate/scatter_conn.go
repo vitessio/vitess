@@ -263,7 +263,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 			session.logging.log(primitive, rs.Target, rs.Gateway, queries[i].Sql, info.actionNeeded == begin || info.actionNeeded == reserveBegin, queries[i].BindVariables)
 
 			// We need to new shard info irrespective of the error.
-			newInfo := info.updateTransactionAndReservedID(transactionID, reservedID, alias)
+			newInfo := info.updateTransactionAndReservedID(transactionID, reservedID, alias, innerqr)
 			if err != nil {
 				return newInfo, err
 			}
@@ -272,12 +272,6 @@ func (stc *ScatterConn) ExecuteMultiShard(
 
 			if innerqr != nil {
 				resultsObserver.observe(innerqr)
-			}
-			if innerqr.RowsAffected > 0 && transactionID != 0 {
-				if newInfo == nil {
-					newInfo = &shardActionInfo{}
-				}
-				newInfo.rowsAffected = true
 			}
 
 			// Don't append more rows if row count is exceeded.
@@ -477,8 +471,8 @@ func (stc *ScatterConn) StreamExecuteMulti(
 			}
 			session.logging.log(primitive, rs.Target, rs.Gateway, query, info.actionNeeded == begin || info.actionNeeded == reserveBegin, bindVars[i])
 
-			// We need to new shard info irrespective of the error.
-			newInfo := info.updateTransactionAndReservedID(transactionID, reservedID, alias)
+			// We need the new shard info irrespective of the error.
+			newInfo := info.updateTransactionAndReservedID(transactionID, reservedID, alias, nil)
 			if err != nil {
 				return newInfo, err
 			}
@@ -876,6 +870,7 @@ func actionInfo(ctx context.Context, target *querypb.Target, session *SafeSessio
 		info.transactionID = shardSession.TransactionId
 		info.reservedID = shardSession.ReservedId
 		info.alias = shardSession.TabletAlias
+		info.rowsAffected = shardSession.RowsAffected
 	}
 	return info, shardSession, nil
 }
@@ -910,8 +905,12 @@ type shardActionInfo struct {
 	rowsAffected              bool
 }
 
-func (sai *shardActionInfo) updateTransactionAndReservedID(txID int64, rID int64, alias *topodatapb.TabletAlias) *shardActionInfo {
-	if txID == sai.transactionID && rID == sai.reservedID {
+func (sai *shardActionInfo) updateTransactionAndReservedID(txID int64, rID int64, alias *topodatapb.TabletAlias, qr *sqltypes.Result) *shardActionInfo {
+	firstTimeRowsAffected := false
+	if txID != 0 && qr != nil && !sai.rowsAffected {
+		firstTimeRowsAffected = qr.RowsAffected > 0
+	}
+	if txID == sai.transactionID && rID == sai.reservedID && !firstTimeRowsAffected {
 		// As transaction id and reserved id have not changed, there is nothing to update in session shard sessions.
 		return nil
 	}
@@ -919,6 +918,7 @@ func (sai *shardActionInfo) updateTransactionAndReservedID(txID int64, rID int64
 	newInfo.reservedID = rID
 	newInfo.transactionID = txID
 	newInfo.alias = alias
+	newInfo.rowsAffected = firstTimeRowsAffected
 	return &newInfo
 }
 
