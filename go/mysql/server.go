@@ -438,7 +438,7 @@ func (l *Listener) handle(ctx context.Context, conn net.Conn, connectionID uint3
 	//
 	// The latter case happens for example for MySQL 8.0 clients until 8.0.25 who advertise
 	// support for caching_sha2_password by default but with no plugin data.
-	if err != nil || len(clientAuthResponse) == 0 {
+	if err != nil || (len(clientAuthResponse) == 0 && clientAuthMethod == CachingSha2Password) {
 		l.handleConnectionError(c, "auth server failed to determine auth method")
 		if err != nil {
 			// The client will disconnect if it doesn't understand
