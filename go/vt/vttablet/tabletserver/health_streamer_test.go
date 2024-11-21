@@ -587,13 +587,14 @@ func TestDeadlockBwCloseAndReload(t *testing.T) {
 
 	wg := sync.WaitGroup{}
 	wg.Add(2)
-	// Try running Close and reload in parallel multiple times.
+	// Try running Close & MakePrimary and reload in parallel multiple times.
 	// This reproduces the deadlock quite readily.
 	go func() {
 		defer wg.Done()
 		for i := 0; i < 100; i++ {
 			hs.Close()
 			hs.Open()
+			hs.MakePrimary(true)
 		}
 	}()
 
