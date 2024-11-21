@@ -23,22 +23,19 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/sqltypes"
-
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql/datetime"
-
+	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/sysvars"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 type (
@@ -371,6 +368,11 @@ func (session *SafeSession) FindAndChangeSessionIfInSingleTxMode(keyspace, shard
 	defer session.mu.Unlock()
 
 	shardSession := session.findSessionLocked(keyspace, shard, tabletType)
+
+	if shardSession == nil {
+		return nil, nil
+	}
+
 	if !shardSession.VindexOnly {
 		return shardSession, nil
 	}
