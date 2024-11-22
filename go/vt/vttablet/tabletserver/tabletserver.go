@@ -367,7 +367,8 @@ func (tsv *TabletServer) initACL(tableACLConfigFile string, enforceTableACLConfi
 			tsv.ClearQueryPlanCache()
 		},
 	)
-	if err != nil {
+	// Log failure if either there was a problem loading the ACL, or if the ACL is empty
+	if err != nil || tableacl.GetCurrentConfig().String() == "" {
 		log.Errorf("Fail to initialize Table ACL: %v", err)
 		if enforceTableACLConfig {
 			log.Exit("Need a valid initial Table ACL when enforce-tableacl-config is set, exiting.")
