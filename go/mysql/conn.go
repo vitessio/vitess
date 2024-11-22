@@ -79,7 +79,7 @@ type Conn struct {
 
 	// authPluginName is the name of server's authentication plugin.
 	// It is set during the initial handshake.
-	authPluginName string
+	authPluginName AuthMethodDescription
 
 	// conn is the underlying network connection.
 	// Calling Close() on the Conn will close this connection.
@@ -1843,4 +1843,15 @@ func (c *Conn) GetTLSClientCerts() []*x509.Certificate {
 		return tlsConn.ConnectionState().PeerCertificates
 	}
 	return nil
+}
+
+// TLSEnabled returns true if this connection is using TLS.
+func (c *Conn) TLSEnabled() bool {
+	return c.Capabilities&CapabilityClientSSL > 0
+}
+
+// IsUnixSocket returns true if this connection is over a Unix socket.
+func (c *Conn) IsUnixSocket() bool {
+	_, ok := c.listener.listener.(*net.UnixListener)
+	return ok
 }
