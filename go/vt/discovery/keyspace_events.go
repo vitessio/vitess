@@ -173,8 +173,12 @@ func (kss *keyspaceState) beingResharded(currentShard string) bool {
 }
 
 type shardState struct {
-	target               *querypb.Target
-	serving              bool
+	target  *querypb.Target
+	serving bool
+	// waitForReparent is used to tell the keyspace event watcher
+	// that this shard should be marked serving only after a reparent
+	// operation has succeeded.
+	waitForReparent      bool
 	externallyReparented int64
 	currentPrimary       *topodatapb.TabletAlias
 }
@@ -357,8 +361,34 @@ func (kss *keyspaceState) onHealthCheck(th *TabletHealth) {
 	// if the shard went from serving to not serving, or the other way around, the keyspace
 	// is undergoing an availability event
 	if sstate.serving != th.Serving {
-		sstate.serving = th.Serving
 		kss.consistent = false
+		switch {
+		case th.Serving && sstate.waitForReparent:
+			// While waiting for a reparent, if we receive a serving primary,
+			// we should check if the primary term start time is greater than the externally reparented time.
+			// We mark the shard serving only if it is. This is required so that we don't prematurely stop
+			// buffering for PRS, or TabletExternallyReparented, after seeing a serving healthcheck from the
+			// same old primary tablet that has already been turned read-only.
+			if th.PrimaryTermStartTime > sstate.externallyReparented {
+				sstate.waitForReparent = false
+				sstate.serving = true
+			}
+		case th.Serving && !sstate.waitForReparent:
+			sstate.serving = true
+		case !th.Serving:
+			sstate.serving = false
+		}
+	}
+	if !th.Serving {
+		// Once we have seen a non-serving primary healthcheck, there is no need for us to explicitly wait
+		// for a reparent to happen. We use waitForReparent to ensure that we don't prematurely stop
+		// buffering when we receive a serving healthcheck from the primary that is being demoted.
+		// However, if we receive a non-serving check, then we know that we won't receive any more serving
+		// health checks until reparent finishes. Specifically, this helps us when PRS fails, but
+		// stops gracefully because the new candidate couldn't get caught up in time. In this case, we promote
+		// the previous primary back. Without turning off waitForReparent here, we wouldn't be able to stop
+		// buffering for that case.
+		sstate.waitForReparent = false
 	}
 
 	// if the primary for this shard has been externally reparented, we're undergoing a failover,
@@ -652,4 +682,37 @@ func (kew *KeyspaceEventWatcher) GetServingKeyspaces() []string {
 		}
 	}
 	return servingKeyspaces
+}
+
+// MarkShardNotServing marks the given shard not serving.
+// We use this when we start buffering for a given shard. This helps
+// coordinate between the sharding logic and the keyspace event watcher.
+// We take in a boolean as well to tell us whether this error is because
+// a reparent is ongoing. If it is, we also mark the shard to wait for a reparent.
+// The return argument is whether the shard was found and marked not serving successfully or not.
+func (kew *KeyspaceEventWatcher) MarkShardNotServing(ctx context.Context, keyspace string, shard string, isReparentErr bool) bool {
+	kss := kew.getKeyspaceStatus(ctx, keyspace)
+	if kss == nil {
+		// Only happens if the keyspace was deleted.
+		return false
+	}
+	kss.mu.Lock()
+	defer kss.mu.Unlock()
+	sstate := kss.shards[shard]
+	if sstate == nil {
+		// This only happens if the shard is deleted, or if
+		// the keyspace event watcher hasn't seen the shard at all.
+		return false
+	}
+	// Mark the keyspace inconsistent and the shard not serving.
+	kss.consistent = false
+	sstate.serving = false
+	if isReparentErr {
+		// If the error was triggered because a reparent operation has started.
+		// We mark the shard to wait for a reparent to finish before marking it serving.
+		// This is required to prevent premature stopping of buffering if we receive
+		// a serving healthcheck from a primary that is being demoted.
+		sstate.waitForReparent = true
+	}
+	return true
 }
