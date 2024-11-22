@@ -111,7 +111,7 @@ func (tacl *tableACL) init(configFile string, aclCB func()) error {
 		return err
 	}
 	if len(data) == 0 {
-		return error.New("tableACL config file is empty")
+		return errors.New("tableACL config file is empty")
 	}
 
 	config := &tableaclpb.Config{}

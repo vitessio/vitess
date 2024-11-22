@@ -74,6 +74,21 @@ func TestInitWithValidConfig(t *testing.T) {
 	}
 }
 
+func TestInitWithEmptyConfig(t *testing.T) {
+	tacl := tableACL{factory: &simpleacl.Factory{}}
+	f, err := os.CreateTemp("", "tableacl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(f.Name())
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := tacl.init(f.Name(), func() {}); err == nil {
+		t.Fatal("tableACL config file is empty")
+	}
+}
+
 func TestInitFromProto(t *testing.T) {
 	tacl := tableACL{factory: &simpleacl.Factory{}}
 	readerACL := tacl.Authorized("my_test_table", READER)
