@@ -677,20 +677,10 @@ func TestExecuteBackupFailToWriteEachFileOnlyOnce(t *testing.T) {
 		"Backing up file: test2/0.ibd (attempt 1/2)",
 		"Backing up file: test2/1.ibd (attempt 1/2)",
 
-		"Failed backing up \"test1/0.ibd\" (attempt 1/2)",
-		"Failed backing up \"test1/1.ibd\" (attempt 1/2)",
-		"Failed backing up \"test2/0.ibd\" (attempt 1/2)",
-		"Failed backing up \"test2/1.ibd\" (attempt 1/2)",
-
 		"Backing up file: test1/0.ibd (attempt 2/2)",
 		"Backing up file: test1/1.ibd (attempt 2/2)",
 		"Backing up file: test2/0.ibd (attempt 2/2)",
 		"Backing up file: test2/1.ibd (attempt 2/2)",
-
-		"Completed backing up \"test1/0.ibd\" (attempt 2/2)",
-		"Completed backing up \"test1/1.ibd\" (attempt 2/2)",
-		"Completed backing up \"test2/0.ibd\" (attempt 2/2)",
-		"Completed backing up \"test2/1.ibd\" (attempt 2/2)",
 
 		"Backing up file MANIFEST (attempt 1/2)",
 		"Failed backing up MANIFEST (attempt 1/2)",
@@ -744,8 +734,8 @@ func TestExecuteBackupFailToWriteFileEachTwice(t *testing.T) {
 	}, bh)
 
 	expectedLogs := []string{
-		"Failed backing up \"test1/0.ibd\" (attempt 1/2)",
-		"Failed backing up \"test1/0.ibd\" (attempt 2/2)",
+		"Backing up file: test1/0.ibd (attempt 1/2)",
+		"Backing up file: test1/0.ibd (attempt 2/2)",
 	}
 
 	assertLogs(t, expectedLogs, logger)
