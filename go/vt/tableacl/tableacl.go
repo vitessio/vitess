@@ -96,11 +96,11 @@ var currentTableACL tableACL
 //	    }
 //	  ]
 //	}
-func Init(configFile string, aclCB func()) error {
-	return currentTableACL.init(configFile, aclCB)
+func Init(configFile string, aclCB func(), enforceTableACLConfig string) error {
+	return currentTableACL.init(configFile, aclCB, enforceTableACLConfig string)
 }
 
-func (tacl *tableACL) init(configFile string, aclCB func()) error {
+func (tacl *tableACL) init(configFile string, aclCB func(), enforceTableACLConfig string) error {
 	tacl.SetCallback(aclCB)
 	if configFile == "" {
 		return nil
@@ -110,6 +110,10 @@ func (tacl *tableACL) init(configFile string, aclCB func()) error {
 		log.Infof("unable to read tableACL config file: %v  Error: %v", configFile, err)
 		return err
 	}
+	if len(data) == 0 {
+		return error.New("tableACL config file is empty")
+	}
+
 	config := &tableaclpb.Config{}
 	if err := config.UnmarshalVT(data); err != nil {
 		// try to parse tableacl as json file
