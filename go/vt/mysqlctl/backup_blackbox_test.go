@@ -18,7 +18,9 @@ limitations under the License.
 package mysqlctl_test
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -28,7 +30,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"vitess.io/vitess/go/ioutil"
+
 	"vitess.io/vitess/go/test/utils"
 
 	"vitess.io/vitess/go/mysql/capabilities"
@@ -587,6 +589,30 @@ func TestExecuteRestoreWithTimedOutContext(t *testing.T) {
 	}
 }
 
+type writeCloseFailFirstWrite struct {
+	*bytes.Buffer
+	firstWriteDone bool
+}
+
+func (w *writeCloseFailFirstWrite) Write(p []byte) (n int, err error) {
+	if w.firstWriteDone {
+		return w.Buffer.Write(p)
+	}
+	w.firstWriteDone = true
+	return 0, errors.New("failing first write")
+}
+
+func (w *writeCloseFailFirstWrite) Close() error {
+	return nil
+}
+
+func newWriteCloseFailFirstWrite(firstWriteDone bool) *writeCloseFailFirstWrite {
+	return &writeCloseFailFirstWrite{
+		Buffer:         bytes.NewBuffer(nil),
+		firstWriteDone: firstWriteDone,
+	}
+}
+
 func TestAA(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
 
@@ -637,14 +663,15 @@ func TestAA(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	bufferPerFiles := make(map[string]ioutil.BytesBufferWriter)
+	bufferPerFiles := make(map[string]*writeCloseFailFirstWrite)
 	be := &mysqlctl.BuiltinBackupEngine{}
 	bh := &mysqlctl.FakeBackupHandle{}
 	bh.AddFileReturnF = func(filename string) mysqlctl.FakeBackupHandleAddFileReturn {
 		// This mimics what happens with the other BackupHandles where doing AddFile will either truncate or override
 		// any existing data if the same filename already exists.
-		writerCloserBuffer := ioutil.NewBytesBufferWriter()
-		bufferPerFiles[filename] = writerCloserBuffer
+		_, isRetry := bufferPerFiles[filename]
+		newBuffer := newWriteCloseFailFirstWrite(isRetry)
+		bufferPerFiles[filename] = newBuffer
 
 		// if filename == "MANIFEST" {
 		// 	return mysqlctl.FakeBackupHandleAddFileReturn{WriteCloser: writerCloserBuffer}
@@ -661,7 +688,7 @@ func TestAA(t *testing.T) {
 		// 	return mysqlctl.FakeBackupHandleAddFileReturn{Err: fmt.Errorf("failed to AddFile on %s", filename)}
 		// }
 		// if it is the second time we call AddFile for this file, let's make it pass
-		return mysqlctl.FakeBackupHandleAddFileReturn{WriteCloser: writerCloserBuffer}
+		return mysqlctl.FakeBackupHandleAddFileReturn{WriteCloser: newBuffer}
 	}
 
 	// Spin up a fake daemon to be used in backups. It needs to be allowed to receive:
