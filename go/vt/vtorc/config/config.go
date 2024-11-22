@@ -117,7 +117,7 @@ var (
 	auditPurgeDuration = viperutil.Configure(
 		"AuditPurgeDuration",
 		viperutil.Options[time.Duration]{
-			FlagName: "reasonable-replication-lag",
+			FlagName: "audit-purge-duration",
 			Default:  7 * 24 * time.Hour,
 			Dynamic:  true,
 		},
