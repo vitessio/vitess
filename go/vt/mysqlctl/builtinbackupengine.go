@@ -155,7 +155,9 @@ type FileEntry struct {
 	// AttemptNb specifies how many times we attempted to restore/backup this FileEntry.
 	// If we fail to restore/backup this FileEntry, we will retry up to maxRetriesPerFile (= 1) times.
 	// Every time the builtin backup engine retries this file, we increment this field by 1.
-	AttemptNb int
+	// We don't care about adding this information to the MANIFEST and also to not cause any compatibility issue
+	// we are adding the - json tag to let Go know it can ignore the field.
+	AttemptNb int `json:"-"`
 }
 
 func init() {
@@ -685,54 +687,17 @@ func (be *BuiltinBackupEngine) backupFiles(
 		return bh.Error()
 	}
 
-	// open the MANIFEST
-	wc, err := bh.AddFile(ctx, backupManifestFileName, backupstorage.FileSizeUnknown)
-	if err != nil {
-		return vterrors.Wrapf(err, "cannot add %v to backup", backupManifestFileName)
-	}
-	defer func() {
-		closeErr := wc.Close()
-		if finalErr == nil {
-			finalErr = closeErr
+	// Backup the MANIFEST file and apply retry logic.
+	var manifestErr error
+	for currentAttempt := 0; currentAttempt <= maxRetriesPerFile; currentAttempt++ {
+		manifestErr = be.backupManifest(ctx, params, bh, backupPosition, purgedPosition, fromPosition, fromBackupName, serverUUID, mysqlVersion, incrDetails, fes, currentAttempt)
+		if manifestErr == nil || ctx.Err() != nil {
+			break
 		}
-	}()
-
-	// JSON-encode and write the MANIFEST
-	bm := &builtinBackupManifest{
-		// Common base fields
-		BackupManifest: BackupManifest{
-			BackupName:         bh.Name(),
-			BackupMethod:       builtinBackupEngineName,
-			Position:           backupPosition,
-			PurgedPosition:     purgedPosition,
-			FromPosition:       fromPosition,
-			FromBackup:         fromBackupName,
-			Incremental:        !fromPosition.IsZero(),
-			ServerUUID:         serverUUID,
-			TabletAlias:        params.TabletAlias,
-			Keyspace:           params.Keyspace,
-			Shard:              params.Shard,
-			BackupTime:         params.BackupTime.UTC().Format(time.RFC3339),
-			FinishedTime:       time.Now().UTC().Format(time.RFC3339),
-			MySQLVersion:       mysqlVersion,
-			UpgradeSafe:        params.UpgradeSafe,
-			IncrementalDetails: incrDetails,
-		},
-
-		// Builtin-specific fields
-		FileEntries:          fes,
-		SkipCompress:         !backupStorageCompress,
-		CompressionEngine:    CompressionEngineName,
-		ExternalDecompressor: ManifestExternalDecompressorCmd,
 	}
-	data, err := json.MarshalIndent(bm, "", "  ")
-	if err != nil {
-		return vterrors.Wrapf(err, "cannot JSON encode %v", backupManifestFileName)
+	if manifestErr != nil {
+		return manifestErr
 	}
-	if _, err := wc.Write([]byte(data)); err != nil {
-		return vterrors.Wrapf(err, "cannot write %v", backupManifestFileName)
-	}
-
 	return nil
 }
 
@@ -844,8 +809,6 @@ func (bp *backupPipe) ReportProgress(ctx context.Context, period time.Duration, 
 	}
 }
 
-var done bool
-
 // backupFile backs up an individual file.
 func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle, fe *FileEntry, name string) (finalErr error) {
 	ctx, cancel := context.WithCancel(ctx)
@@ -912,11 +875,6 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 		var writer io.Writer = bw
 
 		defer func() {
-			if name == "3" && done == false {
-				// done = true
-				createAndCopyErr = errors.New("failed to copy file 3")
-			}
-
 			// Close the backupPipe to finish writing on destination.
 			if err := bw.Close(createAndCopyErr == nil); err != nil {
 				createAndCopyErr = errors.Join(createAndCopyErr, vterrors.Wrapf(err, "cannot flush destination: %v", name))
@@ -975,6 +933,78 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 
 	// Save the hash.
 	fe.Hash = bw.HashString()
+	return nil
+}
+
+func (be *BuiltinBackupEngine) backupManifest(
+	ctx context.Context,
+	params BackupParams,
+	bh backupstorage.BackupHandle,
+	backupPosition replication.Position,
+	purgedPosition replication.Position,
+	fromPosition replication.Position,
+	fromBackupName string,
+	serverUUID string,
+	mysqlVersion string,
+	incrDetails *IncrementalBackupDetails,
+	fes []FileEntry,
+	currentAttempt int,
+) (finalErr error) {
+	attemptStr := attemptToString(currentAttempt)
+	params.Logger.Infof("Backing up file %s %s", backupManifestFileName, attemptStr)
+
+	// open the MANIFEST
+	wc, err := bh.AddFile(ctx, backupManifestFileName, backupstorage.FileSizeUnknown)
+	if err != nil {
+		return vterrors.Wrapf(err, "cannot add %v to backup %s", backupManifestFileName, attemptStr)
+	}
+	defer func() {
+		closeErr := wc.Close()
+		if finalErr == nil {
+			finalErr = closeErr
+		}
+		if finalErr != nil {
+			params.Logger.Infof("Failed backing up %s %s", backupManifestFileName, attemptStr)
+		} else {
+			params.Logger.Infof("Completed backing up %s %s", backupManifestFileName, attemptStr)
+		}
+	}()
+
+	// JSON-encode and write the MANIFEST
+	bm := &builtinBackupManifest{
+		// Common base fields
+		BackupManifest: BackupManifest{
+			BackupName:         bh.Name(),
+			BackupMethod:       builtinBackupEngineName,
+			Position:           backupPosition,
+			PurgedPosition:     purgedPosition,
+			FromPosition:       fromPosition,
+			FromBackup:         fromBackupName,
+			Incremental:        !fromPosition.IsZero(),
+			ServerUUID:         serverUUID,
+			TabletAlias:        params.TabletAlias,
+			Keyspace:           params.Keyspace,
+			Shard:              params.Shard,
+			BackupTime:         params.BackupTime.UTC().Format(time.RFC3339),
+			FinishedTime:       time.Now().UTC().Format(time.RFC3339),
+			MySQLVersion:       mysqlVersion,
+			UpgradeSafe:        params.UpgradeSafe,
+			IncrementalDetails: incrDetails,
+		},
+
+		// Builtin-specific fields
+		FileEntries:          fes,
+		SkipCompress:         !backupStorageCompress,
+		CompressionEngine:    CompressionEngineName,
+		ExternalDecompressor: ManifestExternalDecompressorCmd,
+	}
+	data, err := json.MarshalIndent(bm, "", "  ")
+	if err != nil {
+		return vterrors.Wrapf(err, "cannot JSON encode %v %s", backupManifestFileName, attemptStr)
+	}
+	if _, err := wc.Write([]byte(data)); err != nil {
+		return vterrors.Wrapf(err, "cannot write %v %s", backupManifestFileName, attemptStr)
+	}
 	return nil
 }
 
