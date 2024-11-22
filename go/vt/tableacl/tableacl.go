@@ -96,11 +96,11 @@ var currentTableACL tableACL
 //	    }
 //	  ]
 //	}
-func Init(configFile string, aclCB func(), enforceTableACLConfig string) error {
-	return currentTableACL.init(configFile, aclCB, enforceTableACLConfig string)
+func Init(configFile string, aclCB func()) error {
+	return currentTableACL.init(configFile, aclCB)
 }
 
-func (tacl *tableACL) init(configFile string, aclCB func(), enforceTableACLConfig string) error {
+func (tacl *tableACL) init(configFile string, aclCB func()) error {
 	tacl.SetCallback(aclCB)
 	if configFile == "" {
 		return nil
