@@ -219,11 +219,24 @@ func (gw *TabletGateway) WaitForTablets(ctx context.Context, tabletTypesToWait [
 	}
 
 	// Finds the targets to look for.
-	targets, err := srvtopo.FindAllTargets(ctx, gw.srvTopoServer, gw.localCell, discovery.KeyspacesToWatch, tabletTypesToWait)
+	targets, keyspaces, err := srvtopo.FindAllTargetsAndKeyspaces(ctx, gw.srvTopoServer, gw.localCell, discovery.KeyspacesToWatch, tabletTypesToWait)
 	if err != nil {
 		return err
 	}
-	return gw.hc.WaitForAllServingTablets(ctx, targets)
+	err = gw.hc.WaitForAllServingTablets(ctx, targets)
+	if err != nil {
+		return err
+	}
+	// After having waited for all serving tablets. We should also wait for the keyspace event watcher to have seen
+	// the updates and marked all the keyspaces as consistent (if we want to wait for primary tablets).
+	// Otherwise, we could be in a situation where even though the healthchecks have arrived, the keyspace event watcher hasn't finished processing them.
+	// So, if a primary tablet goes non-serving (because of a PRS or some other reason), we won't be able to start buffering.
+	// Waiting for the keyspaces to become consistent ensures that all the primary tablets for all the shards should be serving as seen by the keyspace event watcher
+	// and any disruption from now on, will make sure we start buffering properly.
+	if topoproto.IsTypeInList(topodatapb.TabletType_PRIMARY, tabletTypesToWait) && gw.kev != nil {
+		return gw.kev.WaitForConsistentKeyspaces(ctx, keyspaces)
+	}
+	return nil
 }
 
 // Close shuts down underlying connections.
@@ -319,18 +332,21 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 		if len(tablets) == 0 {
 			// if we have a keyspace event watcher, check if the reason why our primary is not available is that it's currently being resharded
 			// or if a reparent operation is in progress.
-			if kev := gw.kev; kev != nil {
+			// We only check for whether reshard is ongoing or primary is serving or not, only if the target is primary. We don't want to buffer
+			// replica queries, so it doesn't make any sense to check for resharding or reparenting in that case.
+			if kev := gw.kev; kev != nil && target.TabletType == topodatapb.TabletType_PRIMARY {
 				if kev.TargetIsBeingResharded(ctx, target) {
 					log.V(2).Infof("current keyspace is being resharded, retrying: %s: %s", target.Keyspace, debug.Stack())
 					err = vterrors.Errorf(vtrpcpb.Code_CLUSTER_EVENT, buffer.ClusterEventReshardingInProgress)
 					continue
 				}
-				primary, notServing := kev.PrimaryIsNotServing(ctx, target)
-				if notServing {
+				primary, shouldBuffer := kev.ShouldStartBufferingForTarget(ctx, target)
+				if shouldBuffer {
 					err = vterrors.Errorf(vtrpcpb.Code_CLUSTER_EVENT, buffer.ClusterEventReparentInProgress)
 					continue
 				}
-				// if primary is serving, but we initially found no tablet, we're in an inconsistent state
+				// if the keyspace event manager doesn't think we should buffer queries, and also sees a primary tablet,
+				// but we initially found no tablet, we're in an inconsistent state
 				// we then retry the entire loop
 				if primary != nil {
 					err = vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "inconsistent state detected, primary is serving but initially found no available tablet")

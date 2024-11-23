@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/vt/vttablet/queryservice"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/discovery"
@@ -342,4 +343,59 @@ func verifyShardErrors(t *testing.T, err error, wantErrors []string, wantCode vt
 		require.Contains(t, err.Error(), wantErr, "wanted error: \n%s\n, got error: \n%v\n", wantErr, err)
 	}
 	require.Equal(t, vterrors.Code(err), wantCode, "wanted error code: %s, got: %v", wantCode, vterrors.Code(err))
+}
+
+// TestWithRetry tests the functionality of withRetry function in different circumstances.
+func TestWithRetry(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	tg := NewTabletGateway(ctx, discovery.NewFakeHealthCheck(nil), &fakeTopoServer{}, "cell")
+	tg.kev = discovery.NewKeyspaceEventWatcher(ctx, tg.srvTopoServer, tg.hc, tg.localCell)
+	defer func() {
+		cancel()
+		tg.Close(ctx)
+	}()
+
+	testcases := []struct {
+		name          string
+		target        *querypb.Target
+		inTransaction bool
+		inner         func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error)
+		expectedErr   string
+	}{
+		{
+			name: "Transaction on a replica",
+			target: &querypb.Target{
+				Keyspace:   "ks",
+				Shard:      "0",
+				TabletType: topodatapb.TabletType_REPLICA,
+			},
+			inTransaction: true,
+			inner: func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error) {
+				return false, nil
+			},
+			expectedErr: "tabletGateway's query service can only be used for non-transactional queries on replicas",
+		}, {
+			name: "No replica tablets available",
+			target: &querypb.Target{
+				Keyspace:   "ks",
+				Shard:      "0",
+				TabletType: topodatapb.TabletType_REPLICA,
+			},
+			inTransaction: false,
+			inner: func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error) {
+				return false, nil
+			},
+			expectedErr: `target: ks.0.replica: no healthy tablet available for 'keyspace:"ks" shard:"0" tablet_type:REPLICA'`,
+		},
+	}
+	for _, tt := range testcases {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tg.withRetry(ctx, tt.target, nil, "", tt.inTransaction, tt.inner)
+			if tt.expectedErr == "" {
+				require.NoError(t, err)
+			} else {
+				require.ErrorContains(t, err, tt.expectedErr)
+			}
+		})
+	}
 }
