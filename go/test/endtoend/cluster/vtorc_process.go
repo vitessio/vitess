@@ -44,18 +44,27 @@ type VTOrcProcess struct {
 	ConfigPath  string
 	Config      VTOrcConfiguration
 	NoOverride  bool
-	WebPort     int
 	proc        *exec.Cmd
 	exit        chan error
 }
 
 type VTOrcConfiguration struct {
-	InstancePollTime                 string `json:",omitempty"`
-	SnapshotTopologyInterval         string `json:",omitempty"`
-	PreventCrossCellFailover         bool   `json:",omitempty"`
-	LockShardTimeoutSeconds          int    `json:",omitempty"`
-	ReplicationLagQuery              string `json:",omitempty"`
-	FailPrimaryPromotionOnLagMinutes int    `json:",omitempty"`
+	InstancePollTime                     string `json:",omitempty"`
+	SnapshotTopologyInterval             string `json:",omitempty"`
+	PreventCrossCellFailover             bool   `json:",omitempty"`
+	ReasonableReplicationLag             string `json:",omitempty"`
+	AuditToBackend                       bool   `json:",omitempty"`
+	AuditToSyslog                        bool   `json:",omitempty"`
+	AuditPurgeDuration                   string `json:",omitempty"`
+	WaitReplicasTimeout                  string `json:",omitempty"`
+	TolerableReplicationLag              string `json:",omitempty"`
+	TopoInformationRefreshDuration       string `json:",omitempty"`
+	RecoveryPollDuration                 string `json:",omitempty"`
+	AllowEmergencyReparent               string `json:",omitempty"`
+	ChangeTabletsWithErrantGtidToDrained bool   `json:",omitempty"`
+	LockShardTimeoutSeconds              int    `json:",omitempty"`
+	ReplicationLagQuery                  string `json:",omitempty"`
+	FailPrimaryPromotionOnLagMinutes     int    `json:",omitempty"`
 }
 
 // ToJSONString will marshal this configuration as JSON
@@ -64,7 +73,7 @@ func (config *VTOrcConfiguration) ToJSONString() string {
 	return string(b)
 }
 
-func (config *VTOrcConfiguration) AddDefaults(webPort int) {
+func (config *VTOrcConfiguration) addValuesToCheckOverride() {
 	config.InstancePollTime = "10h"
 }
 
@@ -91,7 +100,7 @@ func (orc *VTOrcProcess) Setup() (err error) {
 
 	// Add the default configurations and print them out
 	if !orc.NoOverride {
-		orc.Config.AddDefaults(orc.WebPort)
+		orc.Config.addValuesToCheckOverride()
 	}
 	log.Errorf("configuration - %v", orc.Config.ToJSONString())
 	_, err = configFile.WriteString(orc.Config.ToJSONString())

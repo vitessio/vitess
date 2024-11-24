@@ -82,6 +82,116 @@ func TestDynamicConfigs(t *testing.T) {
 		// Wait until the config has been updated and seen.
 		waitForConfig(t, vtorc, `"snapshot-topology-interval": "10h"`)
 	})
+
+	t.Run("ReasonableReplicationLag", func(t *testing.T) {
+		// Get configuration and verify the output.
+		waitForConfig(t, vtorc, `"reasonable-replication-lag": 10000000000`)
+		// Update configuration and verify the output.
+		vtorc.Config.ReasonableReplicationLag = "10h"
+		err := vtorc.RewriteConfiguration()
+		assert.NoError(t, err)
+		// Wait until the config has been updated and seen.
+		waitForConfig(t, vtorc, `"reasonable-replication-lag": "10h"`)
+	})
+
+	t.Run("AuditToBackend", func(t *testing.T) {
+		// Get configuration and verify the output.
+		waitForConfig(t, vtorc, `"audit-to-backend": false`)
+		// Update configuration and verify the output.
+		vtorc.Config.AuditToBackend = true
+		err := vtorc.RewriteConfiguration()
+		assert.NoError(t, err)
+		// Wait until the config has been updated and seen.
+		waitForConfig(t, vtorc, `"audit-to-backend": true`)
+	})
+
+	t.Run("AuditToSyslog", func(t *testing.T) {
+		// Get configuration and verify the output.
+		waitForConfig(t, vtorc, `"audit-to-syslog": false`)
+		// Update configuration and verify the output.
+		vtorc.Config.AuditToSyslog = true
+		err := vtorc.RewriteConfiguration()
+		assert.NoError(t, err)
+		// Wait until the config has been updated and seen.
+		waitForConfig(t, vtorc, `"audit-to-syslog": true`)
+	})
+
+	t.Run("AuditPurgeDuration", func(t *testing.T) {
+		// Get configuration and verify the output.
+		waitForConfig(t, vtorc, `"audit-purge-duration": 604800000000000`)
+		// Update configuration and verify the output.
+		vtorc.Config.AuditPurgeDuration = "10h"
+		err := vtorc.RewriteConfiguration()
+		assert.NoError(t, err)
+		// Wait until the config has been updated and seen.
+		waitForConfig(t, vtorc, `"audit-purge-duration": "10h"`)
+	})
+
+	t.Run("WaitReplicasTimeout", func(t *testing.T) {
+		// Get configuration and verify the output.
+		waitForConfig(t, vtorc, `"wait-replicas-timeout": 30000000000`)
+		// Update configuration and verify the output.
+		vtorc.Config.WaitReplicasTimeout = "10h"
+		err := vtorc.RewriteConfiguration()
+		assert.NoError(t, err)
+		// Wait until the config has been updated and seen.
+		waitForConfig(t, vtorc, `"wait-replicas-timeout": "10h"`)
+	})
+
+	t.Run("TolerableReplicationLag", func(t *testing.T) {
+		// Get configuration and verify the output.
+		waitForConfig(t, vtorc, `"tolerable-replication-lag": 0`)
+		// Update configuration and verify the output.
+		vtorc.Config.TolerableReplicationLag = "10h"
+		err := vtorc.RewriteConfiguration()
+		assert.NoError(t, err)
+		// Wait until the config has been updated and seen.
+		waitForConfig(t, vtorc, `"tolerable-replication-lag": "10h"`)
+	})
+
+	t.Run("TopoInformationRefreshDuration", func(t *testing.T) {
+		// Get configuration and verify the output.
+		waitForConfig(t, vtorc, `"topo-information-refresh-duration": 15000000000`)
+		// Update configuration and verify the output.
+		vtorc.Config.TopoInformationRefreshDuration = "10h"
+		err := vtorc.RewriteConfiguration()
+		assert.NoError(t, err)
+		// Wait until the config has been updated and seen.
+		waitForConfig(t, vtorc, `"topo-information-refresh-duration": "10h"`)
+	})
+
+	t.Run("RecoveryPollDuration", func(t *testing.T) {
+		// Get configuration and verify the output.
+		waitForConfig(t, vtorc, `"recovery-poll-duration": 1000000000`)
+		// Update configuration and verify the output.
+		vtorc.Config.RecoveryPollDuration = "10h"
+		err := vtorc.RewriteConfiguration()
+		assert.NoError(t, err)
+		// Wait until the config has been updated and seen.
+		waitForConfig(t, vtorc, `"recovery-poll-duration": "10h"`)
+	})
+
+	t.Run("AllowEmergencyReparent", func(t *testing.T) {
+		// Get configuration and verify the output.
+		waitForConfig(t, vtorc, `"allow-emergency-reparent": true`)
+		// Update configuration and verify the output.
+		vtorc.Config.AllowEmergencyReparent = "false"
+		err := vtorc.RewriteConfiguration()
+		assert.NoError(t, err)
+		// Wait until the config has been updated and seen.
+		waitForConfig(t, vtorc, `"allow-emergency-reparent": "false"`)
+	})
+
+	t.Run("ChangeTabletsWithErrantGtidToDrained", func(t *testing.T) {
+		// Get configuration and verify the output.
+		waitForConfig(t, vtorc, `"change-tablets-with-errant-gtid-to-drained": false`)
+		// Update configuration and verify the output.
+		vtorc.Config.ChangeTabletsWithErrantGtidToDrained = true
+		err := vtorc.RewriteConfiguration()
+		assert.NoError(t, err)
+		// Wait until the config has been updated and seen.
+		waitForConfig(t, vtorc, `"change-tablets-with-errant-gtid-to-drained": true`)
+	})
 }
 
 // waitForConfig waits for the expectedConfig to be present in the VTOrc configuration.
