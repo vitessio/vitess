@@ -476,10 +476,10 @@ func (c *Conn) ReadQueryResultAsSliceBuffer(maxrows int) (*sqltypes.Result, bool
 			c.recycleReadPacket()
 			// empty by design
 		} else if isErrorPacket(data) {
-			c.recycleReadPacket()
+			defer c.recycleReadPacket()
 			return nil, false, 0, ParseErrorPacket(data)
 		} else {
-			c.recycleReadPacket()
+			defer c.recycleReadPacket()
 			return nil, false, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected packet after fields: %v", data)
 		}
 	}
@@ -494,7 +494,8 @@ func (c *Conn) ReadQueryResultAsSliceBuffer(maxrows int) (*sqltypes.Result, bool
 		}
 		dest := make([]byte, len(data))
 		copy(dest, data)
-		rawPackets = append(rawPackets, dest)
+		data = dest
+		rawPackets = append(rawPackets, data)
 		c.recycleReadPacket()
 
 		if c.isEOFPacket(data) {
