@@ -17,8 +17,6 @@ limitations under the License.
 package mysql
 
 import (
-	"google.golang.org/grpc/encoding"
-
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -101,12 +99,6 @@ func ParseResultFromRawForTest(result *sqltypes.Result) (*sqltypes.Result, error
 	if len(result.RawPackets) == 0 {
 		return result, nil
 	}
-	defer result.RawPackets.Free()
-	er := &querypb.ExecuteResponse{}
-	c := encoding.GetCodecV2("proto")
-	err := c.Unmarshal(result.RawPackets, er)
-	if err != nil {
-		return nil, err
-	}
+	er := &querypb.ExecuteResponse{RawPackets: result.RawPackets}
 	return updateResFromRaw(er, true, result)
 }

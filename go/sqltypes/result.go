@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"slices"
 
-	"google.golang.org/grpc/mem"
 	"google.golang.org/protobuf/proto"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -38,7 +37,7 @@ type Result struct {
 	Info                string           `json:"info"`
 
 	// RawPackets contains the fields and rows raw mysql packets.
-	RawPackets mem.BufferSlice `json:"raw_packets"`
+	RawPackets [][]byte `json:"raw_packets"`
 }
 
 //goland:noinspection GoUnusedConst

@@ -25,7 +25,6 @@
 package query
 
 import (
-	"google.golang.org/grpc/mem"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
@@ -2051,8 +2050,7 @@ type ExecuteResponse struct {
 
 	Result *QueryResult `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
 	// raw_packets contains raw MySQL packets if raw_mysql_packets was set in ExecuteOptions.
-	RawPackets  [][]byte `protobuf:"bytes,20,rep,name=raw_packets,json=rawPackets,proto3" json:"raw_packets,omitempty"`
-	RawPackets_ mem.BufferSlice
+	RawPackets [][]byte `protobuf:"bytes,20,rep,name=raw_packets,json=rawPackets,proto3" json:"raw_packets,omitempty"`
 }
 
 func (x *ExecuteResponse) Reset() {

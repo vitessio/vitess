@@ -34,11 +34,6 @@ type vtprotoMessage interface {
 	SizeVT() int
 }
 
-type vtprotoMemBuffer interface {
-	vtprotoMessage
-	MarshalToMemBufferVT() (mem.BufferSlice, bool)
-}
-
 type Codec struct {
 	fallback encoding.CodecV2
 }
@@ -66,11 +61,6 @@ func marshalPooled(m vtprotoMessage) (mem.BufferSlice, error) {
 
 func (c *Codec) Marshal(v any) (mem.BufferSlice, error) {
 	switch m := v.(type) {
-	case vtprotoMemBuffer:
-		if s, ok := m.MarshalToMemBufferVT(); ok {
-			return s, nil
-		}
-		return marshalPooled(m)
 	case vtprotoMessage:
 		return marshalPooled(m)
 	default:

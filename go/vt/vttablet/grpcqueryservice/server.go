@@ -56,7 +56,7 @@ func (q *query) Execute(ctx context.Context, request *querypb.ExecuteRequest) (r
 	if len(result.RawPackets) > 0 {
 		// log.Errorf("Execute raw packets: %+v", result.RawPackets)
 		return &querypb.ExecuteResponse{
-			RawPackets_: result.RawPackets,
+			RawPackets: result.RawPackets,
 		}, nil
 	}
 

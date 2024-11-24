@@ -42,6 +42,15 @@ func (cached *Result) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.SessionStateChanges)))
 	// field Info string
 	size += hack.RuntimeAllocSize(int64(len(cached.Info)))
+	// field RawPackets [][]byte
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.RawPackets)) * int64(24))
+		for _, elem := range cached.RawPackets {
+			{
+				size += hack.RuntimeAllocSize(int64(cap(elem)))
+			}
+		}
+	}
 	return size
 }
 func (cached *Value) CachedSize(alloc bool) int64 {
