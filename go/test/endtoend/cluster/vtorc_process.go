@@ -43,6 +43,7 @@ type VTOrcProcess struct {
 	ExtraArgs   []string
 	ConfigPath  string
 	Config      VTOrcConfiguration
+	NoOverride  bool
 	WebPort     int
 	proc        *exec.Cmd
 	exit        chan error
@@ -89,7 +90,9 @@ func (orc *VTOrcProcess) Setup() (err error) {
 	orc.ConfigPath = configFile.Name()
 
 	// Add the default configurations and print them out
-	orc.Config.AddDefaults(orc.WebPort)
+	if !orc.NoOverride {
+		orc.Config.AddDefaults(orc.WebPort)
+	}
 	log.Errorf("configuration - %v", orc.Config.ToJSONString())
 	_, err = configFile.WriteString(orc.Config.ToJSONString())
 	if err != nil {
@@ -111,12 +114,16 @@ func (orc *VTOrcProcess) Setup() (err error) {
 		"--topo_global_root", orc.TopoGlobalRoot,
 		"--config-file", orc.ConfigPath,
 		"--port", fmt.Sprintf("%d", orc.Port),
-		// This parameter is overriden from the config file. This verifies that we indeed use the flag value over the config file.
-		"--instance-poll-time", "1s",
-		// Faster topo information refresh speeds up the tests. This doesn't add any significant load either.
-		"--topo-information-refresh-duration", "3s",
 		"--bind-address", "127.0.0.1",
 	)
+	if !orc.NoOverride {
+		orc.proc.Args = append(orc.proc.Args,
+			// This parameter is overriden from the config file. This verifies that we indeed use the flag value over the config file.
+			"--instance-poll-time", "1s",
+			// Faster topo information refresh speeds up the tests. This doesn't add any significant load either.
+			"--topo-information-refresh-duration", "3s",
+		)
+	}
 
 	if *isCoverage {
 		orc.proc.Args = append(orc.proc.Args, "--test.coverprofile="+getCoveragePath("orc.out"))
