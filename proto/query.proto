@@ -486,7 +486,7 @@ message ExecuteResponse {
   QueryResult result = 1;
 
   // raw_packets contains raw MySQL packets if raw_mysql_packets was set in ExecuteOptions.
-  repeated bytes raw_packets = 20;
+  repeated bytes raw_packets = 2;
 }
 
 // ResultWithError represents a query response

@@ -2576,9 +2576,7 @@ func (m *ExecuteResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 			copy(dAtA[i:], m.RawPackets[iNdEx])
 			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.RawPackets[iNdEx])))
 			i--
-			dAtA[i] = 0x1
-			i--
-			dAtA[i] = 0xa2
+			dAtA[i] = 0x12
 		}
 	}
 	if m.Result != nil {
@@ -6443,7 +6441,7 @@ func (m *ExecuteResponse) SizeVT() (n int) {
 	if len(m.RawPackets) > 0 {
 		for _, b := range m.RawPackets {
 			l = len(b)
-			n += 2 + l + protohelpers.SizeOfVarint(uint64(l))
+			n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 		}
 	}
 	n += len(m.unknownFields)
@@ -10481,7 +10479,7 @@ func (m *ExecuteResponse) UnmarshalVT(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
-		case 20:
+		case 2:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field RawPackets", wireType)
 			}
