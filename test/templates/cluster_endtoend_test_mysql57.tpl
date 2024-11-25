@@ -135,7 +135,7 @@ jobs:
         sudo apt-get update
         # We have to install this old version of libaio1. See also:
         # https://bugs.launchpad.net/ubuntu/+source/libaio/+bug/2067501
-        curl -L -O http://launchpadlibrarian.net/592755283/libaio1_0.3.112-13build1_amd64.deb
+        curl -L -O http://mirrors.kernel.org/ubuntu/pool/main/liba/libaio/libaio1_0.3.112-13build1_amd64.deb
         sudo dpkg -i libaio1_0.3.112-13build1_amd64.deb
         sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y mysql-client=5.7* mysql-community-server=5.7* mysql-server=5.7* libncurses6
 
