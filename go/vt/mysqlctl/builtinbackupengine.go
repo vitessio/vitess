@@ -1067,8 +1067,8 @@ func (be *BuiltinBackupEngine) executeRestoreIncrementalBackup(ctx context.Conte
 // we return the position from which replication should start
 // otherwise an error is returned
 func (be *BuiltinBackupEngine) ExecuteRestore(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle) (*BackupManifest, error) {
-	var bm builtinBackupManifest
-	if err := getBackupManifestInto(ctx, bh, &bm); err != nil {
+	bm, err := be.restoreManifest(ctx, params, bh)
+	if err != nil {
 		return nil, err
 	}
 
@@ -1077,7 +1077,6 @@ func (be *BuiltinBackupEngine) ExecuteRestore(ctx context.Context, params Restor
 		return nil, err
 	}
 
-	var err error
 	if bm.Incremental {
 		err = be.executeRestoreIncrementalBackup(ctx, params, bh, bm)
 	} else {
@@ -1088,6 +1087,29 @@ func (be *BuiltinBackupEngine) ExecuteRestore(ctx context.Context, params Restor
 	}
 	params.Logger.Infof("Restore: returning replication position %v", bm.Position)
 	return &bm.BackupManifest, nil
+}
+
+func (be *BuiltinBackupEngine) restoreManifest(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle) (bm builtinBackupManifest, finalErr error) {
+	var attemptNb int
+	defer func() {
+		state := "Completed"
+		if finalErr != nil {
+			state = "Failed"
+		}
+		params.Logger.Infof("%s restoring %s %s", state, backupManifestFileName, attemptToString(attemptNb))
+	}()
+
+	for ; attemptNb <= maxRetriesPerFile; attemptNb++ {
+		params.Logger.Infof("Restoring file %s %s", backupManifestFileName, attemptToString(attemptNb))
+		if finalErr = getBackupManifestInto(ctx, bh, &bm); finalErr == nil {
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				finalErr = ctxErr
+			}
+			break
+		}
+		params.Logger.Infof("Failed restoring %s %s", backupManifestFileName, attemptToString(attemptNb))
+	}
+	return
 }
 
 // restoreFiles will copy all the files from the BackupStorage to the
@@ -1153,12 +1175,26 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 			}
 
 			fe.ParentPath = createdDir
+
 			// And restore the file.
 			name := fmt.Sprintf("%v", i)
-			params.Logger.Infof("Copying file %v: %v", name, fe.Name)
-			err := be.restoreFile(ctxCancel, params, bh, fe, bm, name)
-			if err != nil {
-				rec.RecordError(vterrors.Wrapf(err, "can't restore file %v to %v", name, fe.Name))
+			var errRestore error
+			for fe.AttemptNb <= maxRetriesPerFile {
+				params.Logger.Infof("Copying file %v: %v %s", name, fe.Name, attemptToString(fe.AttemptNb))
+				if errRestore = be.restoreFile(ctxCancel, params, bh, fe, bm, name); errRestore == nil {
+					// If the restore did not fail or the context was canceled, we do not need to retry.
+					// If the context was canceled, the next attempt will fail anyway, so we should break.
+					if ctxErr := ctxCancel.Err(); ctxErr != nil {
+						errRestore = ctxErr
+					}
+					break
+				}
+
+				// We can try restoring again: the previous restore failed
+				fe.AttemptNb++
+			}
+			if errRestore != nil {
+				rec.RecordError(vterrors.Wrapf(errRestore, "failed to restore file %v to %v after %d attempts", name, fe.Name, fe.AttemptNb))
 				cancel()
 			}
 		}(i)
@@ -1171,6 +1207,7 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle, fe *FileEntry, bm builtinBackupManifest, name string) (finalErr error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+
 	// Open the source file for reading.
 	openSourceAt := time.Now()
 	source, err := bh.ReadFile(ctx, name)
@@ -1188,9 +1225,15 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 		params.Stats.Scope(stats.Operation("Source:Close")).TimedIncrement(time.Since(closeSourceAt))
 	}()
 
+	// Create the backup/source reader and start reporting progress
 	attemptStr := attemptToString(fe.AttemptNb)
-	br := newBackupReader(name, 0, timedSource)
+	br := newBackupReader(fe.Name, 0, timedSource)
 	go br.ReportProgress(ctx, builtinBackupProgress, params.Logger, true, attemptStr)
+	defer func() {
+		if err := br.Close(finalErr == nil); err != nil {
+			finalErr = vterrors.Wrap(finalErr, "failed to close the source reader")
+		}
+	}()
 	var reader io.Reader = br
 
 	// Open the destination file for writing.
@@ -1274,10 +1317,6 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 	// Flush the buffer.
 	if err := bufferedDest.Flush(); err != nil {
 		return vterrors.Wrap(err, "failed to flush destination buffer")
-	}
-
-	if err := br.Close(true); err != nil {
-		return vterrors.Wrap(err, "failed to close the source reader")
 	}
 
 	return nil
