@@ -43,7 +43,7 @@ const (
 
 var (
 	instancePollTime = viperutil.Configure(
-		"InstancePollTime",
+		"instance-poll-time",
 		viperutil.Options[time.Duration]{
 			FlagName: "instance-poll-time",
 			Default:  5 * time.Second,
@@ -52,7 +52,7 @@ var (
 	)
 
 	preventCrossCellFailover = viperutil.Configure(
-		"PreventCrossCellFailover",
+		"prevent-cross-cell-failover",
 		viperutil.Options[bool]{
 			FlagName: "prevent-cross-cell-failover",
 			Default:  false,
@@ -61,7 +61,7 @@ var (
 	)
 
 	sqliteDataFile = viperutil.Configure(
-		"SQLiteDataFile",
+		"sqlite-data-file",
 		viperutil.Options[string]{
 			FlagName: "sqlite-data-file",
 			Default:  "file::memory:?mode=memory&cache=shared",
@@ -70,7 +70,7 @@ var (
 	)
 
 	snapshotTopologyInterval = viperutil.Configure(
-		"SnapshotTopologyInterval",
+		"snapshot-topology-interval",
 		viperutil.Options[time.Duration]{
 			FlagName: "snapshot-topology-interval",
 			Default:  0 * time.Hour,
@@ -79,7 +79,7 @@ var (
 	)
 
 	reasonableReplicationLag = viperutil.Configure(
-		"ReasonableReplicationLag",
+		"reasonable-replication-lag",
 		viperutil.Options[time.Duration]{
 			FlagName: "reasonable-replication-lag",
 			Default:  10 * time.Second,
@@ -88,7 +88,7 @@ var (
 	)
 
 	auditFileLocation = viperutil.Configure(
-		"AuditFileLocation",
+		"audit-file-location",
 		viperutil.Options[string]{
 			FlagName: "audit-file-location",
 			Default:  "",
@@ -97,7 +97,7 @@ var (
 	)
 
 	auditToBackend = viperutil.Configure(
-		"AuditToBackend",
+		"audit-to-backend",
 		viperutil.Options[bool]{
 			FlagName: "audit-to-backend",
 			Default:  false,
@@ -106,7 +106,7 @@ var (
 	)
 
 	auditToSyslog = viperutil.Configure(
-		"AuditToSyslog",
+		"audit-to-syslog",
 		viperutil.Options[bool]{
 			FlagName: "audit-to-syslog",
 			Default:  false,
@@ -115,7 +115,7 @@ var (
 	)
 
 	auditPurgeDuration = viperutil.Configure(
-		"AuditPurgeDuration",
+		"audit-purge-duration",
 		viperutil.Options[time.Duration]{
 			FlagName: "audit-purge-duration",
 			Default:  7 * 24 * time.Hour,
@@ -124,7 +124,7 @@ var (
 	)
 
 	waitReplicasTimeout = viperutil.Configure(
-		"WaitReplicasTimeout",
+		"wait-replicas-timeout",
 		viperutil.Options[time.Duration]{
 			FlagName: "wait-replicas-timeout",
 			Default:  30 * time.Second,
@@ -133,7 +133,7 @@ var (
 	)
 
 	tolerableReplicationLag = viperutil.Configure(
-		"TolerableReplicationLag",
+		"tolerable-replication-lag",
 		viperutil.Options[time.Duration]{
 			FlagName: "tolerable-replication-lag",
 			Default:  0 * time.Second,
@@ -142,7 +142,7 @@ var (
 	)
 
 	topoInformationRefreshDuration = viperutil.Configure(
-		"TopoInformationRefreshDuration",
+		"topo-information-refresh-duration",
 		viperutil.Options[time.Duration]{
 			FlagName: "topo-information-refresh-duration",
 			Default:  15 * time.Second,
@@ -151,7 +151,7 @@ var (
 	)
 
 	recoveryPollDuration = viperutil.Configure(
-		"RecoveryPollDuration",
+		"recovery-poll-duration",
 		viperutil.Options[time.Duration]{
 			FlagName: "recovery-poll-duration",
 			Default:  1 * time.Second,
@@ -160,7 +160,7 @@ var (
 	)
 
 	ersEnabled = viperutil.Configure(
-		"AllowEmergencyReparent",
+		"allow-emergency-reparent",
 		viperutil.Options[bool]{
 			FlagName: "allow-emergency-reparent",
 			Default:  true,
@@ -169,7 +169,7 @@ var (
 	)
 
 	convertTabletsWithErrantGTIDs = viperutil.Configure(
-		"ChangeTabletsWithErrantGtidToDrained",
+		"change-tablets-with-errant-gtid-to-drained",
 		viperutil.Options[bool]{
 			FlagName: "change-tablets-with-errant-gtid-to-drained",
 			Default:  false,

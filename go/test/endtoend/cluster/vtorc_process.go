@@ -49,19 +49,19 @@ type VTOrcProcess struct {
 }
 
 type VTOrcConfiguration struct {
-	InstancePollTime                     string `json:",omitempty"`
-	SnapshotTopologyInterval             string `json:",omitempty"`
-	PreventCrossCellFailover             bool   `json:",omitempty"`
-	ReasonableReplicationLag             string `json:",omitempty"`
-	AuditToBackend                       bool   `json:",omitempty"`
-	AuditToSyslog                        bool   `json:",omitempty"`
-	AuditPurgeDuration                   string `json:",omitempty"`
-	WaitReplicasTimeout                  string `json:",omitempty"`
-	TolerableReplicationLag              string `json:",omitempty"`
-	TopoInformationRefreshDuration       string `json:",omitempty"`
-	RecoveryPollDuration                 string `json:",omitempty"`
-	AllowEmergencyReparent               string `json:",omitempty"`
-	ChangeTabletsWithErrantGtidToDrained bool   `json:",omitempty"`
+	InstancePollTime                     string `json:"instance-poll-time,omitempty"`
+	SnapshotTopologyInterval             string `json:"snapshot-topology-interval,omitempty"`
+	PreventCrossCellFailover             bool   `json:"prevent-cross-cell-failover,omitempty"`
+	ReasonableReplicationLag             string `json:"reasonable-replication-lag,omitempty"`
+	AuditToBackend                       bool   `json:"audit-to-backend,omitempty"`
+	AuditToSyslog                        bool   `json:"audit-to-syslog,omitempty"`
+	AuditPurgeDuration                   string `json:"audit-purge-duration,omitempty"`
+	WaitReplicasTimeout                  string `json:"wait-replicas-timeout,omitempty"`
+	TolerableReplicationLag              string `json:"tolerable-replication-lag,omitempty"`
+	TopoInformationRefreshDuration       string `json:"topo-information-refresh-duration,omitempty"`
+	RecoveryPollDuration                 string `json:"recovery-poll-duration,omitempty"`
+	AllowEmergencyReparent               string `json:"allow-emergency-reparent,omitempty"`
+	ChangeTabletsWithErrantGtidToDrained bool   `json:"change-tablets-with-errant-gtid-to-drained,omitempty"`
 	LockShardTimeoutSeconds              int    `json:",omitempty"`
 	ReplicationLagQuery                  string `json:",omitempty"`
 	FailPrimaryPromotionOnLagMinutes     int    `json:",omitempty"`
