@@ -172,10 +172,25 @@ func handlePost(tsv *TabletServer, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	displayResponse(w, msg)
+	vars := getVars(tsv)
+	sendResponse(r, w, vars, msg)
 }
 
 func handleGet(tsv *TabletServer, w http.ResponseWriter, r *http.Request) {
+	vars := getVars(tsv)
+	sendResponse(r, w, vars, "")
+}
+
+func sendResponse(r *http.Request, w http.ResponseWriter, vars []envValue, msg string) {
+	format := r.FormValue("format")
+	if format == "json" {
+		respondWithJSON(w, vars, msg)
+		return
+	}
+	respondWithHTML(w, vars, msg)
+}
+
+func getVars(tsv *TabletServer) []envValue {
 	var vars []envValue
 	vars = addVar(vars, "ReadPoolSize", tsv.PoolSize)
 	vars = addVar(vars, "StreamPoolSize", tsv.StreamPoolSize)
@@ -191,27 +206,27 @@ func handleGet(tsv *TabletServer, w http.ResponseWriter, r *http.Request) {
 		Value: tsv.ConsolidatorMode(),
 	})
 
-	format := r.FormValue("format")
-	if format == "json" {
-		respondWithJSON(w, vars)
-		return
-	}
-
-	respondWithHTML(w, vars)
+	return vars
 }
 
-func respondWithJSON(w http.ResponseWriter, vars []envValue) {
+func respondWithJSON(w http.ResponseWriter, vars []envValue, msg string) {
 	mvars := make(map[string]string)
 	for _, v := range vars {
 		mvars[v.Name] = v.Value
+	}
+	if msg != "" {
+		mvars["ResponseMessage"] = msg
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(mvars)
 }
 
-func respondWithHTML(w http.ResponseWriter, vars []envValue) {
+func respondWithHTML(w http.ResponseWriter, vars []envValue, msg string) {
 	w.Write(gridTable)
 	w.Write([]byte("<h3>Internal Variables</h3>\n"))
+	if msg != "" {
+		fmt.Fprintf(w, "<b>%s</b><br /><br />\n", html.EscapeString(msg))
+	}
 	w.Write(startTable)
 	w.Write(debugEnvHeader)
 	for _, v := range vars {
@@ -220,10 +235,4 @@ func respondWithHTML(w http.ResponseWriter, vars []envValue) {
 		}
 	}
 	w.Write(endTable)
-}
-
-func displayResponse(w http.ResponseWriter, msg string) {
-	if msg != "" {
-		fmt.Fprintf(w, "<b>%s</b><br /><br />\n", html.EscapeString(msg))
-	}
 }
