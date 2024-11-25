@@ -3,6 +3,8 @@
 ### Table of Contents
 
 - **[Major Changes](#major-changes)**
+  - **[Deprecations and Deletions](#deprecations-and-deletions)**
+    - [Deprecated VTTablet Flags](#vttablet-flags)
   - **[RPC Changes](#rpc-changes)**
   - **[Prefer not promoting a replica that is currently taking a backup](#reparents-prefer-not-backing-up)**
 
@@ -14,6 +16,12 @@
 These are the RPC changes made in this release - 
 
 1. `GetTransactionInfo` RPC has been added to both `VtctldServer`, and `TabletManagerClient` interface. These RPCs are used to fecilitate the users in reading the state of an unresolved distributed transaction. This can be useful in debugging what went wrong and how to fix the problem.
+
+### <a id="deprecations-and-deletions"/>Deprecations and Deletions</a>
+
+#### <a id="vttablet-flags"/>Deprecated VTTablet Flags</a>
+
+- `twopc_enable` flag is deprecated, `twopc_abandonage` flag if set will be used to determine if 2PC is enabled or not.
 
 ### <a id="reparents-prefer-not-backing-up"/>Prefer not promoting a replica that is currently taking a backup
 
