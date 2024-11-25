@@ -4,8 +4,8 @@ permissions: read-all
 jobs:
 
   build:
-    name: Local example using ${{ matrix.topo }} on ubuntu-22.04
-    runs-on: gh-hosted-runners-16cores-1
+    name: Local example using ${{ matrix.topo }} on ubuntu-24.04
+    runs-on: gh-hosted-runners-16cores-1-24.04
     strategy:
       matrix:
         topo: [consul,etcd,zk2]
@@ -67,7 +67,7 @@ jobs:
     - name: Get dependencies
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.examples == 'true'
       run: |
-        if [ ${{matrix.os}} = "ubuntu-22.04" ]; then
+        if [ ${{matrix.os}} = "ubuntu-24.04" ]; then
           # Get key to latest MySQL repo
           sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys A8D3785C
           # Setup MySQL 8.0
