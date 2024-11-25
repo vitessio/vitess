@@ -22,8 +22,6 @@ import (
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/viperutil"
-	"vitess.io/vitess/go/viperutil/debug"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 )
 
@@ -332,11 +330,6 @@ func ConvertTabletWithErrantGTIDs() bool {
 // SetConvertTabletWithErrantGTIDs sets the value for the convertTabletWithErrantGTIDs variable. This should only be used from tests.
 func SetConvertTabletWithErrantGTIDs(val bool) {
 	convertTabletsWithErrantGTIDs.Set(val)
-}
-
-// LogConfigValues is used to log the config values.
-func LogConfigValues() {
-	log.Infof("Running with Configuration - %v", debug.AllSettings())
 }
 
 // MarkConfigurationLoaded is called once configuration has first been loaded.

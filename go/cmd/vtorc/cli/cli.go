@@ -20,6 +20,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/acl"
+	"vitess.io/vitess/go/viperutil/debug"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtorc/config"
@@ -59,7 +60,7 @@ func run(cmd *cobra.Command, args []string) {
 	config.MarkConfigurationLoaded()
 
 	// Log final config values to debug if something goes wrong.
-	config.LogConfigValues()
+	log.Infof("Running with Configuration - %v", debug.AllSettings())
 	server.StartVTOrcDiscovery()
 
 	server.RegisterVTOrcAPIEndpoints()
