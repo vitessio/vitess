@@ -6905,6 +6905,16 @@ show_statement:
       },
     }
   }
+| SHOW SLAVE STATUS
+  {
+    $$ = &Show{
+      Type: string($2) + " " + string($3),
+      Auth: AuthInformation{
+        AuthType: AuthType_REPLICATION_CLIENT,
+        TargetType: AuthTargetType_Global,
+      },
+    }
+  }
 | SHOW FUNCTION STATUS like_or_where_opt
   {
     $$ = &Show{
