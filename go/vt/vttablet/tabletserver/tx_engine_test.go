@@ -613,7 +613,6 @@ func TestCheckReceivedError(t *testing.T) {
 	cfg := tabletenv.NewDefaultConfig()
 	cfg.DB = newDBConfigs(db)
 	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TabletServerTest")
-	env.Config().TwoPCEnable = true
 	env.Config().TwoPCAbandonAge = 5
 	te := NewTxEngine(env, nil)
 	te.AcceptReadWrite()
@@ -791,7 +790,6 @@ func TestPrepareTx(t *testing.T) {
 			db.AddRejectedQuery("retryable query", sqlerror.NewSQLError(sqlerror.CRConnectionError, "", "Retryable error"))
 			cfg := tabletenv.NewDefaultConfig()
 			cfg.DB = newDBConfigs(db)
-			cfg.TwoPCEnable = true
 			cfg.TwoPCAbandonAge = 200
 			te := NewTxEngine(tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TabletServerTest"), nil)
 			te.AcceptReadWrite()

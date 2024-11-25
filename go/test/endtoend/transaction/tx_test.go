@@ -57,7 +57,6 @@ func TestMain(m *testing.M) {
 		clusterInstance.VtgateGrpcPort = clusterInstance.GetAndReservePort()
 		// Set extra tablet args for twopc
 		clusterInstance.VtTabletExtraArgs = []string{
-			"--twopc_enable",
 			"--twopc_abandon_age", "3600",
 		}
 

@@ -108,7 +108,6 @@ func StartCustomServer(ctx context.Context, connParams, connAppDebugParams mysql
 func StartServer(ctx context.Context, connParams, connAppDebugParams mysql.ConnParams, dbName string) error {
 	config := tabletenv.NewDefaultConfig()
 	config.StrictTableACL = true
-	config.TwoPCEnable = true
 	config.TwoPCAbandonAge = 1
 	config.HotRowProtection.Mode = tabletenv.Enable
 	config.TrackSchemaVersions = true

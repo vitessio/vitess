@@ -82,7 +82,6 @@ func TestMain(m *testing.M) {
 			"--grpc_use_effective_callerid",
 		)
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
-			"--twopc_enable",
 			"--twopc_abandon_age", "1",
 			"--queryserver-config-transaction-cap", "3",
 			"--queryserver-config-transaction-timeout", "400s",

@@ -83,7 +83,6 @@ func TestMain(m *testing.M) {
 		defer cancel()
 
 		config := tabletenv.NewDefaultConfig()
-		config.TwoPCEnable = true
 		config.TwoPCAbandonAge = 1
 		err := framework.StartCustomServer(ctx, connParams, connAppDebugParams, cluster.DbName(), config)
 		if err != nil {

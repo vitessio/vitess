@@ -114,7 +114,6 @@ func (vte *VTExplain) newTablet(ctx context.Context, env *vtenv.Environment, opt
 	config.TrackSchemaVersions = false
 	if opts.ExecutionMode == ModeTwoPC {
 		config.TwoPCAbandonAge = 1.0
-		config.TwoPCEnable = true
 	}
 	config.EnableOnlineDDL = false
 	config.EnableTableGC = false
