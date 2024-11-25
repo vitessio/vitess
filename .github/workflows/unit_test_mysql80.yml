@@ -16,7 +16,7 @@ env:
 jobs:
   test:
     name: Unit Test (mysql80)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
     - name: Skip CI
