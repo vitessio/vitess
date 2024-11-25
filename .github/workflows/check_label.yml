@@ -9,7 +9,7 @@ jobs:
   check_pull_request_labels:
     name: Check Pull Request labels
     timeout-minutes: 10
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: github.repository == 'vitessio/vitess'
     steps:
       - name: Release Notes label
