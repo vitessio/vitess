@@ -70,7 +70,7 @@ jobs:
 
   build_and_push_lite:
     name: Build and push lite
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: github.repository == 'vitessio/vitess'
 
     strategy:
@@ -226,7 +226,7 @@ jobs:
 
   slack_notification:
     name: Slack Notification if failed
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs:
       - build_and_push_vttestserver
       - build_and_push_lite
