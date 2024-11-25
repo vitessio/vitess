@@ -87,13 +87,13 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
       run: |
         export DEBIAN_FRONTEND="noninteractive"
-        sudo apt-get -qq update
+        sudo apt-get update
 
         # Uninstall any previously installed MySQL first
         sudo systemctl stop apparmor
-        sudo DEBIAN_FRONTEND="noninteractive" apt-get -qq remove -y --purge mysql-server mysql-client mysql-common
-        sudo apt-get -qq -y autoremove
-        sudo apt-get -qq -y autoclean
+        sudo DEBIAN_FRONTEND="noninteractive" apt-get remove -y --purge mysql-server mysql-client mysql-common
+        sudo apt-get -y autoremove
+        sudo apt-get -y autoclean
         sudo deluser mysql
         sudo rm -rf /var/lib/mysql
         sudo rm -rf /etc/mysql
@@ -108,25 +108,25 @@ jobs:
         echo mysql-apt-config mysql-apt-config/repo-codename select bionic | sudo debconf-set-selections
         echo mysql-apt-config mysql-apt-config/select-server select mysql-5.7 | sudo debconf-set-selections
         sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
-        sudo apt-get -qq update
-        sudo DEBIAN_FRONTEND="noninteractive" apt-get -qq install -y mysql-client=5.7* mysql-community-server=5.7* mysql-server=5.7* libncurses6
+        sudo apt-get update
+        sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y mysql-client=5.7* mysql-community-server=5.7* mysql-server=5.7* libncurses6 libaio1
         {{end}}
 
         {{if (eq .Platform "mysql80")}}
         echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
         sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
-        sudo apt-get -qq update
-        sudo DEBIAN_FRONTEND="noninteractive" apt-get -qq install -y mysql-server mysql-client
+        sudo apt-get update
+        sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y mysql-server mysql-client
         {{end}}
 
         {{if (eq .Platform "mysql84")}}
         echo mysql-apt-config mysql-apt-config/select-server select mysql-8.4-lts | sudo debconf-set-selections
         sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
-        sudo apt-get -qq update
-        sudo DEBIAN_FRONTEND="noninteractive" apt-get -qq install -y mysql-server mysql-client
+        sudo apt-get update
+        sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y mysql-server mysql-client
         {{end}}
 
-        sudo apt-get -qq install -y make unzip g++ curl git wget ant openjdk-11-jdk eatmydata
+        sudo apt-get install -y make unzip g++ curl git wget ant openjdk-11-jdk eatmydata
         sudo service mysql stop
         sudo bash -c "echo '/usr/sbin/mysqld { }' > /etc/apparmor.d/usr.sbin.mysqld" # https://bugs.launchpad.net/ubuntu/+source/mariadb-10.1/+bug/1806263
         sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
