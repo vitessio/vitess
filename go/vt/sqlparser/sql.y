@@ -248,10 +248,24 @@ func tryCastStatement(v interface{}) Statement {
 %token <bytes> DUAL JSON_TABLE PATH
 
 // Table options
-%token <bytes> AVG_ROW_LENGTH CHECKSUM TABLE_CHECKSUM COMPRESSION DIRECTORY DELAY_KEY_WRITE ENGINE_ATTRIBUTE INSERT_METHOD MAX_ROWS
-%token <bytes> MIN_ROWS PACK_KEYS ROW_FORMAT SECONDARY_ENGINE SECONDARY_ENGINE_ATTRIBUTE STATS_AUTO_RECALC STATS_PERSISTENT
-%token <bytes> STATS_SAMPLE_PAGES STORAGE DISK MEMORY DYNAMIC COMPRESSED REDUNDANT
-%token <bytes> COMPACT LIST HASH PARTITIONS SUBPARTITION SUBPARTITIONS
+%token <bytes> AVG_ROW_LENGTH
+%token <bytes> CHECKSUM COMPACT COMPRESSED COMPRESSION
+%token <bytes> DISK DIRECTORY DELAY_KEY_WRITE DYNAMIC
+%token <bytes> ENGINE_ATTRIBUTE ENCRYPTED ENCRYPTION_KEY_ID
+%token <bytes> HASH
+%token <bytes> INSERT_METHOD ITEF_QUOTES
+%token <bytes> LIST
+%token <bytes> MIN_ROWS MAX_ROWS
+%token <bytes> PACK_KEYS
+%token <bytes> MEMORY
+%token <bytes> PAGE_CHECKSUM PAGE_COMPRESSED PAGE_COMPRESSION_LEVEL PARTITIONS
+%token <bytes> REDUNDANT
+%token <bytes> ROW_FORMAT
+%token <bytes> SECONDARY_ENGINE SECONDARY_ENGINE_ATTRIBUTE STATS_AUTO_RECALC STATS_PERSISTENT STATS_SAMPLE_PAGES STORAGE
+%token <bytes> SUBPARTITION SUBPARTITIONS
+%token <bytes> TABLE_CHECKSUM TRANSACTIONAL
+%token <bytes> VERSIONING
+%token <bytes> YES
 
 // Prepared statements
 %token <bytes> PREPARE DEALLOCATE
@@ -332,7 +346,7 @@ func tryCastStatement(v interface{}) Statement {
 %type <val> analyze_statement analyze_opt show_statement use_statement prepare_statement execute_statement deallocate_statement
 %type <val> describe_statement explain_statement explainable_statement
 %type <val> begin_statement commit_statement rollback_statement start_transaction_statement load_statement
-%type <bytes> work_opt no_opt chain_opt release_opt index_name_opt no_first_last
+%type <bytes> work_opt no_opt chain_opt release_opt index_name_opt no_first_last yes_no
 %type <val> comment_opt comment_list
 %type <val> distinct_opt union_op intersect_op except_op insert_or_replace
 %type <val> match_option format_opt
@@ -4773,11 +4787,23 @@ table_option:
   {
     $$ = &TableOption{Name: string($1) + " "  + string($2), Value: string($4)}
   }
+| ITEF_QUOTES equal_opt yes_no
+  {
+    $$ = &TableOption{Name: string($1), Value: string($3)}
+  }
 | DELAY_KEY_WRITE equal_opt coericble_to_integral
   {
     $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | ENCRYPTION equal_opt STRING
+  {
+    $$ = &TableOption{Name: string($1), Value: string($3)}
+  }
+| ENCRYPTED equal_opt yes_no
+  {
+    $$ = &TableOption{Name: string($1), Value: string($3)}
+  }
+| ENCRYPTION_KEY_ID equal_opt coericble_to_integral
   {
     $$ = &TableOption{Name: string($1), Value: string($3)}
   }
@@ -4809,6 +4835,18 @@ table_option:
   {
     $$ = &TableOption{Name: string($1), Value: string($3)}
   }
+| PAGE_CHECKSUM equal_opt coericble_to_integral
+  {
+    $$ = &TableOption{Name: string($1), Value: string($3)}
+  }
+| PAGE_COMPRESSED equal_opt coericble_to_integral
+  {
+    $$ = &TableOption{Name: string($1), Value: string($3)}
+  }
+| PAGE_COMPRESSION_LEVEL equal_opt coericble_to_integral
+  {
+    $$ = &TableOption{Name: string($1), Value: string($3)}
+  }
 | PASSWORD equal_opt STRING
   {
     $$ = &TableOption{Name: string($1), Value: string($3)}
@@ -4834,6 +4872,10 @@ table_option:
     $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | SECONDARY_ENGINE_ATTRIBUTE equal_opt STRING
+  {
+    $$ = &TableOption{Name: string($1), Value: string($3)}
+  }
+| SEQUENCE equal_opt coericble_to_integral
   {
     $$ = &TableOption{Name: string($1), Value: string($3)}
   }
@@ -4873,9 +4915,17 @@ table_option:
   {
     $$ = &TableOption{Name: string($1), Value: string($2) + " "  + string($3) + " "  + string($4)}
   }
+| TRANSACTIONAL equal_opt coericble_to_integral
+  {
+    $$ = &TableOption{Name: string($1), Value: string($3)}
+  }
 | UNION equal_opt openb any_identifier_list closeb
   {
     $$ = &TableOption{Name: string($1), Value: "(" + $4.(string) + ")"}
+  }
+| WITH SYSTEM VERSIONING
+  {
+    $$ = &TableOption{Name: string($1) + " " + string($2) + " " + string($3)}
   }
 
 no_first_last:
@@ -4888,6 +4938,16 @@ no_first_last:
     $$ = $1
   }
 | LAST
+  {
+    $$ = $1
+  }
+
+yes_no:
+  YES
+  {
+    $$ = $1
+  }
+| NO
   {
     $$ = $1
   }
@@ -5916,11 +5976,23 @@ alter_table_options:
   {
     $$ = &DDL{Action: AlterStr}
   }
+| ITEF_QUOTES equal_opt yes_no
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
 | DELAY_KEY_WRITE equal_opt coericble_to_integral
   {
     $$ = &DDL{Action: AlterStr}
   }
 | ENCRYPTION equal_opt STRING
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| ENCRYPTED equal_opt yes_no
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| ENCRYPTION_KEY_ID equal_opt coericble_to_integral
   {
     $$ = &DDL{Action: AlterStr}
   }
@@ -5952,6 +6024,18 @@ alter_table_options:
   {
     $$ = &DDL{Action: AlterStr}
   }
+| PAGE_CHECKSUM equal_opt coericble_to_integral
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| PAGE_COMPRESSED equal_opt coericble_to_integral
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| PAGE_COMPRESSION_LEVEL equal_opt coericble_to_integral
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
 | PASSWORD equal_opt STRING
   {
     $$ = &DDL{Action: AlterStr}
@@ -5973,6 +6057,10 @@ alter_table_options:
     $$ = &DDL{Action: AlterStr}
   }
 | SECONDARY_ENGINE_ATTRIBUTE equal_opt STRING
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| SEQUENCE equal_opt coericble_to_integral
   {
     $$ = &DDL{Action: AlterStr}
   }
@@ -6012,7 +6100,15 @@ alter_table_options:
   {
     $$ = &DDL{Action: AlterStr}
   }
+| TRANSACTIONAL equal_opt coericble_to_integral
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
 | UNION equal_opt openb any_identifier_list closeb
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| WITH SYSTEM VERSIONING
   {
     $$ = &DDL{Action: AlterStr}
   }
