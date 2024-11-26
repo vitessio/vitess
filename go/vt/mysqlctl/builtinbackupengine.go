@@ -41,7 +41,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/protoutil"
-	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	stats "vitess.io/vitess/go/vt/mysqlctl/backupstats"
@@ -1137,9 +1136,6 @@ func (be *BuiltinBackupEngine) restoreManifest(ctx context.Context, params Resto
 	for ; attemptNb <= maxRetriesPerFile; attemptNb++ {
 		params.Logger.Infof("Restoring file %s %s", backupManifestFileName, attemptToString(attemptNb))
 		if finalErr = getBackupManifestInto(ctx, bh, &bm); finalErr == nil {
-			if ctxErr := ctx.Err(); ctxErr != nil {
-				finalErr = ctxErr
-			}
 			break
 		}
 		params.Logger.Infof("Failed restoring %s %s", backupManifestFileName, attemptToString(attemptNb))
@@ -1167,35 +1163,60 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 		}
 	}
 	fes := bm.FileEntries
+	_ = be.restoreFileEntries(ctx, fes, bh, bm, params, createdDir)
+	if files := bh.GetFailedFiles(); len(files) > 0 {
+		newFes := make([]FileEntry, len(fes))
+		for _, file := range files {
+			fileNb, err := strconv.Atoi(file)
+			if err != nil {
+				return "", vterrors.Wrapf(err, "failed to retry file '%s'", file)
+			}
+			oldFes := fes[fileNb]
+			newFes[fileNb] = FileEntry{
+				Base:       oldFes.Base,
+				Name:       oldFes.Name,
+				ParentPath: oldFes.ParentPath,
+				Hash:       oldFes.Hash,
+				AttemptNb:  1,
+			}
+			bh.ResetErrorForFile(file)
+		}
+		err = be.restoreFileEntries(ctx, newFes, bh, bm, params, createdDir)
+		if err != nil {
+			return "", err
+		}
+	}
+	return createdDir, nil
+}
+
+func (be *BuiltinBackupEngine) restoreFileEntries(ctx context.Context, fes []FileEntry, bh backupstorage.BackupHandle, bm builtinBackupManifest, params RestoreParams, createdDir string) error {
 	sema := semaphore.NewWeighted(int64(params.Concurrency))
-	rec := concurrency.AllErrorRecorder{}
 	wg := sync.WaitGroup{}
 
 	ctxCancel, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	for i := range fes {
+		if fes[i].Name == "" {
+			continue
+		}
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
 			fe := &fes[i]
+			name := fmt.Sprintf("%v", i)
 			// Wait until we are ready to go, return if we encounter an error
 			acqErr := sema.Acquire(ctxCancel, 1)
 			if acqErr != nil {
 				log.Errorf("Unable to acquire semaphore needed to restore file: %s, err: %s", fe.Name, acqErr.Error())
-				rec.RecordError(acqErr)
-				cancel()
+				bh.RecordError(name, acqErr)
+				if fe.AttemptNb == maxRetriesPerFile {
+					// this is the last attempt and the file is marked as failed, we can cancel everything and fail fast.
+					cancel()
+				}
 				return
 			}
 			defer sema.Release(1)
-
-			// First check if we have any error, if we have, there is no point trying to restore this file.
-			// We check for errors before checking if the context is canceled on purpose, if there was an
-			// error, the context would have been canceled already.
-			if rec.HasErrors() {
-				params.Logger.Errorf("Failed to restore files due to error: %v", bh.Error())
-				return
-			}
 
 			// Check for context cancellation explicitly because, the way semaphore code is written, theoretically we might
 			// end up not throwing an error even after cancellation. Please see https://cs.opensource.google/go/x/sync/+/refs/tags/v0.1.0:semaphore/semaphore.go;l=66,
@@ -1204,7 +1225,7 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 			select {
 			case <-ctxCancel.Done():
 				log.Errorf("Context canceled or timed out during %q restore", fe.Name)
-				rec.RecordError(vterrors.Errorf(vtrpc.Code_CANCELED, "context canceled"))
+				bh.RecordError(name, vterrors.Errorf(vtrpc.Code_CANCELED, "context canceled"))
 				return
 			default:
 			}
@@ -1212,30 +1233,19 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 			fe.ParentPath = createdDir
 
 			// And restore the file.
-			name := fmt.Sprintf("%v", i)
-			var errRestore error
-			for fe.AttemptNb <= maxRetriesPerFile {
-				params.Logger.Infof("Copying file %v: %v %s", name, fe.Name, attemptToString(fe.AttemptNb))
-				if errRestore = be.restoreFile(ctxCancel, params, bh, fe, bm, name); errRestore == nil {
-					// If the restore did not fail or the context was canceled, we do not need to retry.
-					// If the context was canceled, the next attempt will fail anyway, so we should break.
-					if ctxErr := ctxCancel.Err(); ctxErr != nil {
-						errRestore = ctxErr
-					}
-					break
+			params.Logger.Infof("Copying file %v: %v %s", name, fe.Name, attemptToString(fe.AttemptNb))
+			if errRestore := be.restoreFile(ctxCancel, params, bh, fe, bm, name); errRestore != nil {
+				bh.RecordError(name, vterrors.Wrapf(errRestore, "failed to restore file %v to %v", name, fe.Name))
+				if fe.AttemptNb == maxRetriesPerFile {
+					// this is the last attempt and the file is marked as failed, we can cancel everything and fail fast.
+					cancel()
 				}
-
-				// We can try restoring again: the previous restore failed
-				fe.AttemptNb++
-			}
-			if errRestore != nil {
-				rec.RecordError(vterrors.Wrapf(errRestore, "failed to restore file %v to %v after %d attempts", name, fe.Name, fe.AttemptNb))
-				cancel()
 			}
 		}(i)
 	}
 	wg.Wait()
-	return createdDir, rec.Error()
+
+	return bh.Error()
 }
 
 // restoreFile restores an individual file.

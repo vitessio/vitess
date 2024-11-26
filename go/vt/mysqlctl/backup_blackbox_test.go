@@ -938,19 +938,13 @@ func TestExecuteRestoreFailToReadEachFileTwice(t *testing.T) {
 	assert.ErrorContains(t, err, "failing first read")
 	assert.Nil(t, bm)
 
-	expectedLogs := []string{
-		"Failed restoring \"test2/1.ibd\" (attempt 1/2)",
-		"Failed restoring \"test2/1.ibd\" (attempt 2/2)",
-	}
-	assertLogs(t, expectedLogs, logger)
-
 	ss := getStats(fakeStats)
-	require.Equal(t, 2, ss.destinationCloseStats)
-	require.Equal(t, 2, ss.destinationOpenStats)
+	require.Equal(t, 5, ss.destinationCloseStats)
+	require.Equal(t, 5, ss.destinationOpenStats)
 	require.Equal(t, 0, ss.destinationWriteStats)
-	require.Equal(t, 2, ss.sourceCloseStats)
-	require.Equal(t, 2, ss.sourceOpenStats)
-	require.Equal(t, 2, ss.sourceReadStats)
+	require.Equal(t, 5, ss.sourceCloseStats)
+	require.Equal(t, 5, ss.sourceOpenStats)
+	require.Equal(t, 5, ss.sourceReadStats)
 }
 
 type statSummary struct {
