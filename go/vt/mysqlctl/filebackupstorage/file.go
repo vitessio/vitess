@@ -95,6 +95,12 @@ func (fbh *FileBackupHandle) Error() error {
 	return fbh.errors.Error()
 }
 
+func (fbh *FileBackupHandle) GetFailedFiles() []string { return fbh.errors.GetFailedFiles() }
+
+func (fbh *FileBackupHandle) ResetErrorForFile(filename string) {
+	fbh.errors.ResetErrorForFile(filename)
+}
+
 // Directory is part of the BackupHandle interface
 func (fbh *FileBackupHandle) Directory() string {
 	return fbh.dir

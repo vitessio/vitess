@@ -174,6 +174,14 @@ func (bh *S3BackupHandle) Error() error {
 	return bh.errors.Error()
 }
 
+func (bh *S3BackupHandle) GetFailedFiles() []string {
+	return bh.errors.GetFailedFiles()
+}
+
+func (bh *S3BackupHandle) ResetErrorForFile(filename string) {
+	bh.errors.ResetErrorForFile(filename)
+}
+
 // AddFile is part of the backupstorage.BackupHandle interface.
 func (bh *S3BackupHandle) AddFile(ctx context.Context, filename string, filesize int64) (io.WriteCloser, error) {
 	if bh.readOnly {

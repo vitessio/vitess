@@ -70,6 +70,14 @@ func (fbh *FakeBackupHandle) Error() error {
 	return fbh.Errors.Error()
 }
 
+func (fbh *FakeBackupHandle) GetFailedFiles() []string {
+	return fbh.Errors.GetFailedFiles()
+}
+
+func (fbh *FakeBackupHandle) ResetErrorForFile(filename string) {
+	fbh.Errors.ResetErrorForFile(filename)
+}
+
 func (fbh *FakeBackupHandle) Directory() string {
 	return fbh.Dir
 }

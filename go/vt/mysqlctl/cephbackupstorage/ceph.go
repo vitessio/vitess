@@ -89,6 +89,10 @@ func (bh *CephBackupHandle) Error() error {
 	return bh.errors.Error()
 }
 
+func (bh *CephBackupHandle) GetFailedFiles() []string { return bh.errors.GetFailedFiles() }
+
+func (bh *CephBackupHandle) ResetErrorForFile(filename string) { bh.errors.ResetErrorForFile(filename) }
+
 // Directory implements BackupHandle.
 func (bh *CephBackupHandle) Directory() string {
 	return bh.dir

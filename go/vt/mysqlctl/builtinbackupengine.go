@@ -29,6 +29,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -608,22 +609,74 @@ func (be *BuiltinBackupEngine) backupFiles(
 	}
 	params.Logger.Infof("found %v files to backup", len(fes))
 
-	// Backup with the provided concurrency.
-	sema := semaphore.NewWeighted(int64(params.Concurrency))
-	wg := sync.WaitGroup{}
+	// The error here can be ignored, it will be handled differently in the following if statement
+	_ = be.backupFileEntries(ctx, fes, bh, params)
 
+	// BackupHandle supports the BackupErrorRecorder interface for tracking errors
+	// across any goroutines that fan out to take the backup. This means that we
+	// don't need a local error recorder and can put everything through the bh.
+	//
+	// This handles the scenario where bh.AddFile() encounters an error asynchronously,
+	// which ordinarily would be lost in the context of `be.backupFile`, i.e. if an
+	// error were encountered
+	// [here](https://github.com/vitessio/vitess/blob/d26b6c7975b12a87364e471e2e2dfa4e253c2a5b/go/vt/mysqlctl/s3backupstorage/s3.go#L139-L142).
+	//
+	// All the errors are grouped per file, if any file has failed, we will try backing up
+	// this file once more. If the retry fails, we definitively fail the backup process.
+	if files := bh.GetFailedFiles(); len(files) > 0 {
+		newFes := make([]FileEntry, len(fes))
+		for _, file := range files {
+			fileNb, err := strconv.Atoi(file)
+			if err != nil {
+				return vterrors.Wrapf(err, "failed to retry file '%s'", file)
+			}
+			oldFes := fes[fileNb]
+			newFes[fileNb] = FileEntry{
+				Base:       oldFes.Base,
+				Name:       oldFes.Name,
+				ParentPath: oldFes.ParentPath,
+				AttemptNb:  1,
+			}
+			bh.ResetErrorForFile(file)
+		}
+		err = be.backupFileEntries(ctx, newFes, bh, params)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Backup the MANIFEST file and apply retry logic.
+	var manifestErr error
+	for currentAttempt := 0; currentAttempt <= maxRetriesPerFile; currentAttempt++ {
+		manifestErr = be.backupManifest(ctx, params, bh, backupPosition, purgedPosition, fromPosition, fromBackupName, serverUUID, mysqlVersion, incrDetails, fes, currentAttempt)
+		if manifestErr == nil || ctx.Err() != nil {
+			break
+		}
+	}
+	if manifestErr != nil {
+		return manifestErr
+	}
+	return nil
+}
+
+func (be *BuiltinBackupEngine) backupFileEntries(ctx context.Context, fes []FileEntry, bh backupstorage.BackupHandle, params BackupParams) error {
 	ctxCancel, cancel := context.WithCancel(ctx)
 	defer func() {
-		// We may still have operations in flight that require a valid context, such as adding files to S3.
-		// Unless we encountered an error, we should not cancel the context. This is taken care of later
-		// in the process. If we encountered an error however, we can safely cancel the context as we should
-		// no longer work on anything and exit fast.
-		if finalErr != nil {
-			cancel()
-		}
+		// If we reached this defer in all cases we can cancel the context.
+		// The only ways to get here are: a panic, an error when ending the backup, a successful backup.
+		// For all three options, it is safe to cancel the context, there should be no pending operations
+		// that 1) haven't completed, 2) we care about anymore.
+		cancel()
 	}()
 
+	// Backup with the provided concurrency.
+	sema := semaphore.NewWeighted(int64(params.Concurrency))
+
+	wg := sync.WaitGroup{}
 	for i := range fes {
+		if fes[i].Name == "" {
+			continue
+		}
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
@@ -635,18 +688,13 @@ func (be *BuiltinBackupEngine) backupFiles(
 			if acqErr != nil {
 				log.Errorf("Unable to acquire semaphore needed to backup file: %s, err: %s", fe.Name, acqErr.Error())
 				bh.RecordError(name, acqErr)
-				cancel()
+				if fe.AttemptNb == maxRetriesPerFile {
+					// this is the last attempt and the file is marked as failed, we can cancel everything and fail fast.
+					cancel()
+				}
 				return
 			}
 			defer sema.Release(1)
-
-			// First check if we have any error, if we have, there is no point trying backing up this file.
-			// We check for errors before checking if the context is canceled on purpose, if there was an
-			// error, the context would have been canceled already.
-			if bh.HasErrors() {
-				params.Logger.Errorf("Failed to backup files due to error: %v", bh.Error())
-				return
-			}
 
 			// Check for context cancellation explicitly because, the way semaphore code is written, theoretically we might
 			// end up not throwing an error even after cancellation. Please see https://cs.opensource.google/go/x/sync/+/refs/tags/v0.1.0:semaphore/semaphore.go;l=66,
@@ -664,42 +712,21 @@ func (be *BuiltinBackupEngine) backupFiles(
 			var errBackupFile error
 			if errBackupFile = be.backupFile(ctxCancel, params, bh, fe, name); errBackupFile != nil {
 				bh.RecordError(name, vterrors.Wrapf(errBackupFile, "failed to backup file '%s'", name))
-				cancel()
+				if fe.AttemptNb == maxRetriesPerFile {
+					// this is the last attempt and the file is marked as failed, we can cancel everything and fail fast.
+					cancel()
+				}
 			}
 		}(i)
 	}
 
 	wg.Wait()
 
-	err = bh.EndBackup(ctx)
+	err := bh.EndBackup(ctx)
 	if err != nil {
 		return err
 	}
-
-	// BackupHandle supports the ErrorRecorder interface for tracking errors
-	// across any goroutines that fan out to take the backup. This means that we
-	// don't need a local error recorder and can put everything through the bh.
-	//
-	// This handles the scenario where bh.AddFile() encounters an error asynchronously,
-	// which ordinarily would be lost in the context of `be.backupFile`, i.e. if an
-	// error were encountered
-	// [here](https://github.com/vitessio/vitess/blob/d26b6c7975b12a87364e471e2e2dfa4e253c2a5b/go/vt/mysqlctl/s3backupstorage/s3.go#L139-L142).
-	if bh.HasErrors() {
-		return bh.Error()
-	}
-
-	// Backup the MANIFEST file and apply retry logic.
-	var manifestErr error
-	for currentAttempt := 0; currentAttempt <= maxRetriesPerFile; currentAttempt++ {
-		manifestErr = be.backupManifest(ctx, params, bh, backupPosition, purgedPosition, fromPosition, fromBackupName, serverUUID, mysqlVersion, incrDetails, fes, currentAttempt)
-		if manifestErr == nil || ctx.Err() != nil {
-			break
-		}
-	}
-	if manifestErr != nil {
-		return manifestErr
-	}
-	return nil
+	return bh.Error()
 }
 
 type backupPipe struct {

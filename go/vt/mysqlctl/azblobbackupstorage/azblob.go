@@ -233,6 +233,12 @@ func (bh *AZBlobBackupHandle) Error() error {
 	return bh.errors.Error()
 }
 
+func (bh *AZBlobBackupHandle) GetFailedFiles() []string { return bh.errors.GetFailedFiles() }
+
+func (bh *AZBlobBackupHandle) ResetErrorForFile(filename string) {
+	bh.errors.ResetErrorForFile(filename)
+}
+
 // AddFile implements BackupHandle.
 func (bh *AZBlobBackupHandle) AddFile(ctx context.Context, filename string, filesize int64) (io.WriteCloser, error) {
 	if bh.readOnly {

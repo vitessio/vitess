@@ -26,6 +26,8 @@ type BackupErrorRecorder interface {
 	RecordError(string, error)
 	HasErrors() bool
 	Error() error
+	GetFailedFiles() []string
+	ResetErrorForFile(string)
 }
 
 // PerFileErrorRecorder records all the errors.
@@ -70,5 +72,30 @@ func (pfer *PerFileErrorRecorder) Error() error {
 			errs = append(errs, err.Error())
 		}
 	}
+	if len(errs) == 0 {
+		return nil
+	}
 	return errors.New(strings.Join(errs, "; "))
+}
+
+func (pfer *PerFileErrorRecorder) GetFailedFiles() []string {
+	pfer.mu.Lock()
+	defer pfer.mu.Unlock()
+	if pfer.errors == nil {
+		return nil
+	}
+	var files []string
+	for filename := range pfer.errors {
+		files = append(files, filename)
+	}
+	return files
+}
+
+func (pfer *PerFileErrorRecorder) ResetErrorForFile(filename string) {
+	pfer.mu.Lock()
+	defer pfer.mu.Unlock()
+	if pfer.errors == nil {
+		return
+	}
+	delete(pfer.errors, filename)
 }

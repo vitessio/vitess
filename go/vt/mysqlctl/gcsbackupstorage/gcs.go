@@ -84,6 +84,10 @@ func (bh *GCSBackupHandle) Error() error {
 	return bh.errors.Error()
 }
 
+func (bh *GCSBackupHandle) GetFailedFiles() []string { return bh.errors.GetFailedFiles() }
+
+func (bh *GCSBackupHandle) ResetErrorForFile(filename string) { bh.errors.ResetErrorForFile(filename) }
+
 // Directory implements BackupHandle.
 func (bh *GCSBackupHandle) Directory() string {
 	return bh.dir
