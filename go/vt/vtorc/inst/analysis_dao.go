@@ -69,8 +69,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 
 	// TODO(sougou); deprecate ReduceReplicationAnalysisCount
 	args := sqlutils.Args(config.Config.ReasonableReplicationLagSeconds, ValidSecondsFromSeenToLastAttemptedCheck(), config.Config.ReasonableReplicationLagSeconds, keyspace, shard)
-	query := `
-	SELECT
+	query := `SELECT
 		vitess_tablet.info AS tablet_info,
 		vitess_tablet.tablet_type,
 		vitess_tablet.primary_timestamp,
@@ -91,13 +90,13 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 			IFNULL(
 				primary_instance.binary_log_file = database_instance_stale_binlog_coordinates.binary_log_file
 				AND primary_instance.binary_log_pos = database_instance_stale_binlog_coordinates.binary_log_pos
-				AND database_instance_stale_binlog_coordinates.first_seen < datetime('now', printf('-%d second', ?)),
+				AND database_instance_stale_binlog_coordinates.first_seen < DATETIME('now', PRINTF('-%d SECOND', ?)),
 				0
 			)
 		) AS is_stale_binlog_coordinates,
 		MIN(
 			primary_instance.last_checked <= primary_instance.last_seen
-			and primary_instance.last_attempted_check <= datetime(primary_instance.last_seen, printf('+%d second', ?))
+			and primary_instance.last_attempted_check <= DATETIME(primary_instance.last_seen, PRINTF('+%d SECOND', ?))
 		) = 1 AS is_last_check_valid,
 		/* To be considered a primary, traditional async replication must not be present/valid AND the host should either */
 		/* not be a replication group member OR be the primary of the replication group */
@@ -655,13 +654,13 @@ func auditInstanceAnalysisInChangelog(tabletAlias string, analysisCode AnalysisC
 	// Find if the lastAnalysisHasChanged or not while updating the row if it has.
 	lastAnalysisChanged := false
 	{
-		sqlResult, err := db.ExecVTOrc(`
-			update database_instance_last_analysis set
+		sqlResult, err := db.ExecVTOrc(`UPDATE database_instance_last_analysis
+			SET
 				analysis = ?,
-				analysis_timestamp = datetime('now')
-			where
+				analysis_timestamp = DATETIME('now')
+			WHERE
 				alias = ?
-				and analysis != ?
+				AND analysis != ?
 			`,
 			string(analysisCode), tabletAlias, string(analysisCode),
 		)
@@ -682,13 +681,16 @@ func auditInstanceAnalysisInChangelog(tabletAlias string, analysisCode AnalysisC
 	firstInsertion := false
 	if !lastAnalysisChanged {
 		// The insert only returns more than 1 row changed if this is the first insertion.
-		sqlResult, err := db.ExecVTOrc(`
-			insert or ignore into database_instance_last_analysis (
-					alias, analysis_timestamp, analysis
-				) values (
-					?, datetime('now'), ?
-				)
-			`,
+		sqlResult, err := db.ExecVTOrc(`INSERT OR IGNORE
+			INTO database_instance_last_analysis (
+				alias,
+				analysis_timestamp,
+				analysis
+			) VALUES (
+				?,
+				DATETIME('now'),
+				?
+			)`,
 			tabletAlias, string(analysisCode),
 		)
 		if err != nil {
@@ -708,13 +710,16 @@ func auditInstanceAnalysisInChangelog(tabletAlias string, analysisCode AnalysisC
 		return nil
 	}
 
-	_, err := db.ExecVTOrc(`
-			insert into database_instance_analysis_changelog (
-					alias, analysis_timestamp, analysis
-				) values (
-					?, datetime('now'), ?
-				)
-			`,
+	_, err := db.ExecVTOrc(`INSERT
+		INTO database_instance_analysis_changelog (
+			alias,
+			analysis_timestamp,
+			analysis
+		) VALUES (
+			?,
+			DATETIME('now'),
+			?
+		)`,
 		tabletAlias, string(analysisCode),
 	)
 	if err == nil {
@@ -727,12 +732,11 @@ func auditInstanceAnalysisInChangelog(tabletAlias string, analysisCode AnalysisC
 
 // ExpireInstanceAnalysisChangelog removes old-enough analysis entries from the changelog
 func ExpireInstanceAnalysisChangelog() error {
-	_, err := db.ExecVTOrc(`
-			delete
-				from database_instance_analysis_changelog
-			where
-				analysis_timestamp < datetime('now', printf('-%d hour', ?))
-			`,
+	_, err := db.ExecVTOrc(`DELETE
+		FROM database_instance_analysis_changelog
+		WHERE
+			analysis_timestamp < DATETIME('now', PRINTF('-%d HOUR', ?))
+		`,
 		config.UnseenInstanceForgetHours,
 	)
 	if err != nil {

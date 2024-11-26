@@ -58,13 +58,13 @@ func OpenVTOrc() (db *sql.DB, err error) {
 
 // registerVTOrcDeployment updates the vtorc_db_deployments table upon successful deployment
 func registerVTOrcDeployment(db *sql.DB) error {
-	query := `
-    	replace into vtorc_db_deployments (
-				deployed_version, deployed_timestamp
-			) values (
-				?, datetime('now')
-			)
-				`
+	query := `REPLACE INTO vtorc_db_deployments (
+		deployed_version,
+		deployed_timestamp
+	) VALUES (
+		?,
+		DATETIME('now')
+	)`
 	if _, err := execInternal(db, query, ""); err != nil {
 		log.Fatalf("Unable to write to vtorc_db_deployments: %+v", err)
 	}
@@ -116,9 +116,7 @@ func initVTOrcDB(db *sql.DB) error {
 
 // execInternal
 func execInternal(db *sql.DB, query string, args ...any) (sql.Result, error) {
-	var err error
-	res, err := sqlutils.ExecNoPrepare(db, query, args...)
-	return res, err
+	return sqlutils.ExecNoPrepare(db, query, args...)
 }
 
 // ExecVTOrc will execute given query on the vtorc backend database.
