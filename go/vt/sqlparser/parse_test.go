@@ -2792,6 +2792,9 @@ var (
 			input:  "start transaction read write",
 			output: "start transaction read write",
 		}, {
+			input:  "start transaction with consistent snapshot",
+			output: "start transaction",
+		}, {
 			input: "commit",
 		}, {
 			input:  "commit work",
