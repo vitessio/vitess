@@ -604,7 +604,15 @@ func (be *BuiltinBackupEngine) backupFiles(
 	wg := sync.WaitGroup{}
 
 	ctxCancel, cancel := context.WithCancel(ctx)
-	defer cancel()
+	defer func() {
+		// We may still have operations in flight that require a valid context, such as adding files to S3.
+		// Unless we encountered an error, we should not cancel the context, this is taken care of later
+		// in the process. If we encountered an error however, we can safely cancel the context as we should
+		// no longer work on anything and exit fast.
+		if finalErr != nil {
+			cancel()
+		}
+	}()
 
 	for i := range fes {
 		wg.Add(1)
