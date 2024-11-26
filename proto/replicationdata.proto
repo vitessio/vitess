@@ -49,6 +49,7 @@ message Status {
   bool has_replication_filters = 22;
   bool ssl_allowed = 23;
   bool replication_lag_unknown = 24;
+  bool backup_running = 25;
 }
 
 // StopReplicationStatus represents the replication status before calling StopReplication, and the replication status collected immediately after
@@ -56,6 +57,7 @@ message Status {
 message StopReplicationStatus {
   replicationdata.Status before = 1;
   replicationdata.Status after = 2;
+  bool backup_running = 3;
 }
 
 // StopReplicationMode is used to provide controls over how replication is stopped.

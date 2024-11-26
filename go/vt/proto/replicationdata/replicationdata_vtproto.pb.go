@@ -48,6 +48,18 @@ func (m *Status) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.BackupRunning {
+		i--
+		if m.BackupRunning {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0xc8
+	}
 	if m.ReplicationLagUnknown {
 		i--
 		if m.ReplicationLagUnknown {
@@ -273,6 +285,16 @@ func (m *StopReplicationStatus) MarshalToSizedBufferVT(dAtA []byte) (int, error)
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.BackupRunning {
+		i--
+		if m.BackupRunning {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x18
 	}
 	if m.After != nil {
 		size, err := m.After.MarshalToSizedBufferVT(dAtA[:i])
@@ -645,6 +667,9 @@ func (m *Status) SizeVT() (n int) {
 	if m.ReplicationLagUnknown {
 		n += 3
 	}
+	if m.BackupRunning {
+		n += 3
+	}
 	if m.unknownFields != nil {
 		n += len(m.unknownFields)
 	}
@@ -664,6 +689,9 @@ func (m *StopReplicationStatus) SizeVT() (n int) {
 	if m.After != nil {
 		l = m.After.SizeVT()
 		n += 1 + l + sov(uint64(l))
+	}
+	if m.BackupRunning {
+		n += 2
 	}
 	if m.unknownFields != nil {
 		n += len(m.unknownFields)
@@ -1400,6 +1428,26 @@ func (m *Status) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.ReplicationLagUnknown = bool(v != 0)
+		case 25:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field BackupRunning", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.BackupRunning = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
@@ -1523,6 +1571,26 @@ func (m *StopReplicationStatus) UnmarshalVT(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field BackupRunning", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.BackupRunning = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])

@@ -89,12 +89,16 @@ func ChooseNewPrimary(
 		go func(tablet *topodatapb.Tablet) {
 			defer wg.Done()
 			// find and store the positions for the tablet
-			pos, err := findPositionForTablet(ctx, tablet, logger, tmc, waitReplicasTimeout)
+			pos, takingBackup, err := findPositionForTablet(ctx, tablet, logger, tmc, waitReplicasTimeout)
 			mu.Lock()
 			defer mu.Unlock()
 			if err == nil {
-				validTablets = append(validTablets, tablet)
-				tabletPositions = append(tabletPositions, pos)
+				if takingBackup {
+					log.Infof("%v is taking a backup", topoproto.TabletAliasString(tablet.Alias))
+				} else {
+					validTablets = append(validTablets, tablet)
+					tabletPositions = append(tabletPositions, pos)
+				}
 			}
 		}(tablet.Tablet)
 	}
@@ -106,7 +110,7 @@ func ChooseNewPrimary(
 		return nil, nil
 	}
 
-	// sort the tablets for finding the best primary
+	// sort preferred tablets for finding the best primary
 	err := sortTabletsForReparent(validTablets, tabletPositions, durability)
 	if err != nil {
 		return nil, err
@@ -117,7 +121,7 @@ func ChooseNewPrimary(
 
 // findPositionForTablet processes the replication position for a single tablet and
 // returns it. It is safe to call from multiple goroutines.
-func findPositionForTablet(ctx context.Context, tablet *topodatapb.Tablet, logger logutil.Logger, tmc tmclient.TabletManagerClient, waitTimeout time.Duration) (mysql.Position, error) {
+func findPositionForTablet(ctx context.Context, tablet *topodatapb.Tablet, logger logutil.Logger, tmc tmclient.TabletManagerClient, waitTimeout time.Duration) (mysql.Position, bool, error) {
 	logger.Infof("getting replication position from %v", topoproto.TabletAliasString(tablet.Alias))
 
 	ctx, cancel := context.WithTimeout(ctx, waitTimeout)
@@ -128,10 +132,10 @@ func findPositionForTablet(ctx context.Context, tablet *topodatapb.Tablet, logge
 		sqlErr, isSQLErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
 		if isSQLErr && sqlErr != nil && sqlErr.Number() == mysql.ERNotReplica {
 			logger.Warningf("no replication statue from %v, using empty gtid set", topoproto.TabletAliasString(tablet.Alias))
-			return mysql.Position{}, nil
+			return mysql.Position{}, false, nil
 		}
 		logger.Warningf("failed to get replication status from %v, ignoring tablet: %v", topoproto.TabletAliasString(tablet.Alias), err)
-		return mysql.Position{}, err
+		return mysql.Position{}, false, err
 	}
 
 	// Use the relay log position if available, otherwise use the executed GTID set (binary log position).
@@ -142,10 +146,10 @@ func findPositionForTablet(ctx context.Context, tablet *topodatapb.Tablet, logge
 	pos, err := mysql.DecodePosition(positionString)
 	if err != nil {
 		logger.Warningf("cannot decode replica position %v for tablet %v, ignoring tablet: %v", positionString, topoproto.TabletAliasString(tablet.Alias), err)
-		return mysql.Position{}, err
+		return mysql.Position{}, false, err
 	}
 
-	return pos, nil
+	return pos, status.BackupRunning, nil
 }
 
 // FindCurrentPrimary returns the current primary tablet of a shard, if any. The

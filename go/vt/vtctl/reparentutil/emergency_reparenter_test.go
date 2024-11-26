@@ -4365,27 +4365,54 @@ func TestEmergencyReparenter_filterValidCandidates(t *testing.T) {
 		}
 	)
 	allTablets := []*topodatapb.Tablet{primaryTablet, replicaTablet, rdonlyTablet, replicaCrossCellTablet, rdonlyCrossCellTablet}
+	noTabletsTakingBackup := map[string]bool{
+		topoproto.TabletAliasString(primaryTablet.Alias): false, topoproto.TabletAliasString(replicaTablet.Alias): false,
+		topoproto.TabletAliasString(rdonlyTablet.Alias): false, topoproto.TabletAliasString(replicaCrossCellTablet.Alias): false,
+		topoproto.TabletAliasString(rdonlyCrossCellTablet.Alias): false,
+	}
+	replicaTakingBackup := map[string]bool{
+		topoproto.TabletAliasString(primaryTablet.Alias): false, topoproto.TabletAliasString(replicaTablet.Alias): true,
+		topoproto.TabletAliasString(rdonlyTablet.Alias): false, topoproto.TabletAliasString(replicaCrossCellTablet.Alias): false,
+		topoproto.TabletAliasString(rdonlyCrossCellTablet.Alias): false,
+	}
 	tests := []struct {
-		name             string
-		durability       string
-		validTablets     []*topodatapb.Tablet
-		tabletsReachable []*topodatapb.Tablet
-		prevPrimary      *topodatapb.Tablet
-		opts             EmergencyReparentOptions
-		filteredTablets  []*topodatapb.Tablet
-		errShouldContain string
+		name                string
+		durability          string
+		validTablets        []*topodatapb.Tablet
+		tabletsReachable    []*topodatapb.Tablet
+		tabletsTakingBackup map[string]bool
+		prevPrimary         *topodatapb.Tablet
+		opts                EmergencyReparentOptions
+		filteredTablets     []*topodatapb.Tablet
+		errShouldContain    string
 	}{
 		{
-			name:             "filter must not",
-			durability:       "none",
-			validTablets:     allTablets,
-			tabletsReachable: allTablets,
-			filteredTablets:  []*topodatapb.Tablet{primaryTablet, replicaTablet, replicaCrossCellTablet},
+			name:                "filter must not",
+			durability:          "none",
+			validTablets:        allTablets,
+			tabletsReachable:    allTablets,
+			tabletsTakingBackup: noTabletsTakingBackup,
+			filteredTablets:     []*topodatapb.Tablet{primaryTablet, replicaTablet, replicaCrossCellTablet},
 		}, {
-			name:             "filter cross cell",
-			durability:       "none",
-			validTablets:     allTablets,
-			tabletsReachable: allTablets,
+			name:                "host taking backup must not be on the list when there are other candidates",
+			durability:          "none",
+			validTablets:        allTablets,
+			tabletsReachable:    []*topodatapb.Tablet{replicaTablet, replicaCrossCellTablet, rdonlyTablet, rdonlyCrossCellTablet},
+			tabletsTakingBackup: replicaTakingBackup,
+			filteredTablets:     []*topodatapb.Tablet{replicaCrossCellTablet},
+		}, {
+			name:                "host taking backup must be the only one on the list when there are no other candidates",
+			durability:          "none",
+			validTablets:        allTablets,
+			tabletsReachable:    []*topodatapb.Tablet{replicaTablet, rdonlyTablet, rdonlyCrossCellTablet},
+			tabletsTakingBackup: replicaTakingBackup,
+			filteredTablets:     []*topodatapb.Tablet{replicaTablet},
+		}, {
+			name:                "filter cross cell",
+			durability:          "none",
+			validTablets:        allTablets,
+			tabletsReachable:    allTablets,
+			tabletsTakingBackup: noTabletsTakingBackup,
 			prevPrimary: &topodatapb.Tablet{
 				Alias: &topodatapb.TabletAlias{
 					Cell: "zone-1",
@@ -4396,11 +4423,12 @@ func TestEmergencyReparenter_filterValidCandidates(t *testing.T) {
 			},
 			filteredTablets: []*topodatapb.Tablet{primaryTablet, replicaTablet},
 		}, {
-			name:             "filter establish",
-			durability:       "cross_cell",
-			validTablets:     []*topodatapb.Tablet{primaryTablet, replicaTablet},
-			tabletsReachable: []*topodatapb.Tablet{primaryTablet, replicaTablet, rdonlyTablet, rdonlyCrossCellTablet},
-			filteredTablets:  nil,
+			name:                "filter establish",
+			durability:          "cross_cell",
+			validTablets:        []*topodatapb.Tablet{primaryTablet, replicaTablet},
+			tabletsTakingBackup: noTabletsTakingBackup,
+			tabletsReachable:    []*topodatapb.Tablet{primaryTablet, replicaTablet, rdonlyTablet, rdonlyCrossCellTablet},
+			filteredTablets:     nil,
 		}, {
 			name:       "filter mixed",
 			durability: "cross_cell",
@@ -4412,34 +4440,38 @@ func TestEmergencyReparenter_filterValidCandidates(t *testing.T) {
 			opts: EmergencyReparentOptions{
 				PreventCrossCellPromotion: true,
 			},
-			validTablets:     allTablets,
-			tabletsReachable: allTablets,
-			filteredTablets:  []*topodatapb.Tablet{replicaCrossCellTablet},
+			validTablets:        allTablets,
+			tabletsReachable:    allTablets,
+			tabletsTakingBackup: noTabletsTakingBackup,
+			filteredTablets:     []*topodatapb.Tablet{replicaCrossCellTablet},
 		}, {
-			name:             "error - requested primary must not",
-			durability:       "none",
-			validTablets:     allTablets,
-			tabletsReachable: allTablets,
+			name:                "error - requested primary must not",
+			durability:          "none",
+			validTablets:        allTablets,
+			tabletsReachable:    allTablets,
+			tabletsTakingBackup: noTabletsTakingBackup,
 			opts: EmergencyReparentOptions{
 				NewPrimaryAlias: rdonlyTablet.Alias,
 			},
 			errShouldContain: "proposed primary zone-1-0000000003 has a must not promotion rule",
 		}, {
-			name:             "error - requested primary not in same cell",
-			durability:       "none",
-			validTablets:     allTablets,
-			tabletsReachable: allTablets,
-			prevPrimary:      primaryTablet,
+			name:                "error - requested primary not in same cell",
+			durability:          "none",
+			validTablets:        allTablets,
+			tabletsReachable:    allTablets,
+			prevPrimary:         primaryTablet,
+			tabletsTakingBackup: noTabletsTakingBackup,
 			opts: EmergencyReparentOptions{
 				PreventCrossCellPromotion: true,
 				NewPrimaryAlias:           replicaCrossCellTablet.Alias,
 			},
 			errShouldContain: "proposed primary zone-2-0000000002 is is a different cell as the previous primary",
 		}, {
-			name:             "error - requested primary cannot establish",
-			durability:       "cross_cell",
-			validTablets:     allTablets,
-			tabletsReachable: []*topodatapb.Tablet{primaryTablet, replicaTablet, rdonlyTablet, rdonlyCrossCellTablet},
+			name:                "error - requested primary cannot establish",
+			durability:          "cross_cell",
+			validTablets:        allTablets,
+			tabletsReachable:    []*topodatapb.Tablet{primaryTablet, replicaTablet, rdonlyTablet, rdonlyCrossCellTablet},
+			tabletsTakingBackup: noTabletsTakingBackup,
 			opts: EmergencyReparentOptions{
 				NewPrimaryAlias: primaryTablet.Alias,
 			},
@@ -4453,7 +4485,7 @@ func TestEmergencyReparenter_filterValidCandidates(t *testing.T) {
 			tt.opts.durability = durability
 			logger := logutil.NewMemoryLogger()
 			erp := NewEmergencyReparenter(nil, nil, logger)
-			tabletList, err := erp.filterValidCandidates(tt.validTablets, tt.tabletsReachable, tt.prevPrimary, tt.opts)
+			tabletList, err := erp.filterValidCandidates(tt.validTablets, tt.tabletsReachable, tt.tabletsTakingBackup, tt.prevPrimary, tt.opts)
 			if tt.errShouldContain != "" {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tt.errShouldContain)

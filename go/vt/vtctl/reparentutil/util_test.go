@@ -132,6 +132,107 @@ func TestChooseNewPrimary(t *testing.T) {
 			shouldErr: false,
 		},
 		{
+			name: "Two good replicas, but one of them is taking a backup so we pick the other one",
+			tmc: &chooseNewPrimaryTestTMClient{
+				// both zone1-101 and zone1-102 are equivalent from a replicaiton PoV, but zone1-102 is taking a backup
+				replicationStatuses: map[string]*replicationdatapb.Status{
+					"zone1-0000000101": {
+						Position:      "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						BackupRunning: true,
+					},
+					"zone1-0000000102": {
+						Position:      "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						BackupRunning: false,
+					},
+				},
+			},
+			shardInfo: topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+				PrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			}, nil),
+			tabletMap: map[string]*topo.TabletInfo{
+				"primary": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"replica1": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"replica2": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			avoidPrimaryAlias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  0,
+			},
+			expected: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  102,
+			},
+		},
+		{
+			name: "Only one replica, but it's taking a backup. We don't elect it.",
+			tmc: &chooseNewPrimaryTestTMClient{
+				// both zone1-101 and zone1-102 are equivalent from a replicaiton PoV, but zone1-102 is taking a backup
+				replicationStatuses: map[string]*replicationdatapb.Status{
+					"zone1-0000000101": {
+						Position:      "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						BackupRunning: true,
+					},
+				},
+			},
+			shardInfo: topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+				PrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			}, nil),
+			tabletMap: map[string]*topo.TabletInfo{
+				"primary": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"replica1": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			avoidPrimaryAlias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  0,
+			},
+			expected: nil,
+		}, {
 			name: "found a replica - more advanced relay log position",
 			tmc: &chooseNewPrimaryTestTMClient{
 				// zone1-101 is behind zone1-102
@@ -459,11 +560,12 @@ func TestFindPositionForTablet(t *testing.T) {
 	ctx := context.Background()
 	logger := logutil.NewMemoryLogger()
 	tests := []struct {
-		name             string
-		tmc              *testutil.TabletManagerClient
-		tablet           *topodatapb.Tablet
-		expectedPosition string
-		expectedErr      string
+		name                 string
+		tmc                  *testutil.TabletManagerClient
+		tablet               *topodatapb.Tablet
+		expectedPosition     string
+		expectedErr          string
+		expectedTakingBackup bool
 	}{
 		{
 			name: "executed gtid set",
@@ -486,6 +588,30 @@ func TestFindPositionForTablet(t *testing.T) {
 				},
 			},
 			expectedPosition: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
+		}, {
+			name: "Host is taking a backup",
+			tmc: &testutil.TabletManagerClient{
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Position: &replicationdatapb.Status{
+							Position:              "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
+							ReplicationLagSeconds: 201,
+						},
+					},
+				},
+				TabletsBackupState: map[string]bool{"zone1-0000000100": true},
+			},
+			tablet: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			expectedTakingBackup: true,
+			expectedPosition:     "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
 		}, {
 			name: "no replication status",
 			tmc: &testutil.TabletManagerClient{
@@ -553,7 +679,7 @@ func TestFindPositionForTablet(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			pos, err := findPositionForTablet(ctx, test.tablet, logger, test.tmc, 10*time.Second)
+			pos, takingBackup, err := findPositionForTablet(ctx, test.tablet, logger, test.tmc, 10*time.Second)
 			if test.expectedErr != "" {
 				require.EqualError(t, err, test.expectedErr)
 				return
@@ -561,6 +687,7 @@ func TestFindPositionForTablet(t *testing.T) {
 			require.NoError(t, err)
 			posString := mysql.EncodePosition(pos)
 			require.Equal(t, test.expectedPosition, posString)
+			require.Equal(t, test.expectedTakingBackup, takingBackup)
 		})
 	}
 }
