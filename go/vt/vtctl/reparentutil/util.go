@@ -53,7 +53,8 @@ var (
 // cell as the current primary, and to be different from avoidPrimaryAlias. The
 // tablet with the most advanced replication position is chosen to minimize the
 // amount of time spent catching up with the current primary. Further ties are
-// broken by the durability rules.
+// broken by the durability rules. Tablets taking backups are excluded from
+// consideration.
 // Note that the search for the most advanced replication position will race
 // with transactions being executed on the current primary, so when all tablets
 // are at roughly the same position, then the choice of new primary-elect will
@@ -118,12 +119,18 @@ func ElectNewPrimary(
 		tb := tablet
 		errorGroup.Go(func() error {
 			// find and store the positions for the tablet
-			pos, replLag, err := findPositionAndLagForTablet(groupCtx, tb, logger, tmc, waitReplicasTimeout)
+			pos, replLag, takingBackup, err := findTabletPositionLagBackupStatus(groupCtx, tb, logger, tmc, waitReplicasTimeout)
 			mu.Lock()
 			defer mu.Unlock()
 			if err == nil && (tolerableReplLag == 0 || tolerableReplLag >= replLag) {
-				validTablets = append(validTablets, tb)
-				tabletPositions = append(tabletPositions, pos)
+				if takingBackup {
+					log.Infof("%v is taking a backup", topoproto.TabletAliasString(tablet.Alias))
+				} else {
+					validTablets = append(validTablets, tb)
+					tabletPositions = append(tabletPositions, pos)
+				}
+			} else {
+				log.Infof("\n%v has %v replication lag which is more than the tolerable amount", topoproto.TabletAliasString(tablet.Alias), replLag)
 			}
 			return err
 		})
@@ -148,9 +155,9 @@ func ElectNewPrimary(
 	return validTablets[0].Alias, nil
 }
 
-// findPositionAndLagForTablet processes the replication position and lag for a single tablet and
+// findTabletPositionLagBackupStatus processes the replication position and lag for a single tablet and
 // returns it. It is safe to call from multiple goroutines.
-func findPositionAndLagForTablet(ctx context.Context, tablet *topodatapb.Tablet, logger logutil.Logger, tmc tmclient.TabletManagerClient, waitTimeout time.Duration) (replication.Position, time.Duration, error) {
+func findTabletPositionLagBackupStatus(ctx context.Context, tablet *topodatapb.Tablet, logger logutil.Logger, tmc tmclient.TabletManagerClient, waitTimeout time.Duration) (replication.Position, time.Duration, bool, error) {
 	logger.Infof("getting replication position from %v", topoproto.TabletAliasString(tablet.Alias))
 
 	ctx, cancel := context.WithTimeout(ctx, waitTimeout)
@@ -161,10 +168,10 @@ func findPositionAndLagForTablet(ctx context.Context, tablet *topodatapb.Tablet,
 		sqlErr, isSQLErr := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError)
 		if isSQLErr && sqlErr != nil && sqlErr.Number() == sqlerror.ERNotReplica {
 			logger.Warningf("no replication statue from %v, using empty gtid set", topoproto.TabletAliasString(tablet.Alias))
-			return replication.Position{}, 0, nil
+			return replication.Position{}, 0, false, nil
 		}
 		logger.Warningf("failed to get replication status from %v, ignoring tablet: %v", topoproto.TabletAliasString(tablet.Alias), err)
-		return replication.Position{}, 0, err
+		return replication.Position{}, 0, false, err
 	}
 
 	// Use the relay log position if available, otherwise use the executed GTID set (binary log position).
@@ -175,10 +182,10 @@ func findPositionAndLagForTablet(ctx context.Context, tablet *topodatapb.Tablet,
 	pos, err := replication.DecodePosition(positionString)
 	if err != nil {
 		logger.Warningf("cannot decode replica position %v for tablet %v, ignoring tablet: %v", positionString, topoproto.TabletAliasString(tablet.Alias), err)
-		return replication.Position{}, 0, err
+		return replication.Position{}, 0, status.BackupRunning, err
 	}
 
-	return pos, time.Second * time.Duration(status.ReplicationLagSeconds), nil
+	return pos, time.Second * time.Duration(status.ReplicationLagSeconds), status.BackupRunning, nil
 }
 
 // FindCurrentPrimary returns the current primary tablet of a shard, if any. The

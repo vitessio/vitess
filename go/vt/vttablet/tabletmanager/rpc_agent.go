@@ -141,6 +141,8 @@ type RPCTM interface {
 
 	RestoreFromBackup(ctx context.Context, logger logutil.Logger, request *tabletmanagerdatapb.RestoreFromBackupRequest) error
 
+	IsBackupRunning() bool
+
 	// HandleRPCPanic is to be called in a defer statement in each
 	// RPC input point.
 	HandleRPCPanic(ctx context.Context, name string, args, reply any, verbose bool, err *error)

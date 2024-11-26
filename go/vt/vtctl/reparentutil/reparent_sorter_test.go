@@ -22,7 +22,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/replication"
-
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 

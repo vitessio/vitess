@@ -205,6 +205,10 @@ func (tm *TabletManager) RestoreFromBackup(ctx context.Context, logger logutil.L
 	return err
 }
 
+func (tm *TabletManager) IsBackupRunning() bool {
+	return tm._isBackupRunning
+}
+
 func (tm *TabletManager) beginBackup(backupMode string) error {
 	tm.mutex.Lock()
 	defer tm.mutex.Unlock()
