@@ -15,7 +15,7 @@ permissions: read-all
 jobs:
   build_and_push_lite:
     name: Build and push vitess/lite Docker images
-    runs-on: gh-hosted-runners-16cores-1
+    runs-on: gh-hosted-runners-16cores-1-24.04
     if: github.repository == 'vitessio/vitess'
 
     strategy:
@@ -78,7 +78,7 @@ jobs:
   build_and_push_components:
     name: Build and push vitess components Docker images
     needs: build_and_push_lite
-    runs-on: gh-hosted-runners-16cores-1
+    runs-on: gh-hosted-runners-16cores-1-24.04
     if: github.repository == 'vitessio/vitess'
 
     strategy:
