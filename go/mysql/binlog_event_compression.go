@@ -58,11 +58,6 @@ const (
 	// Length of the binlog event header for internal events within
 	// the transaction payload.
 	headerLen = binlogEventLenOffset + eventLenBytes
-
-	// At what size should we switch from the in-memory buffer
-	// decoding to streaming mode which is much slower, but does
-	// not require everything be done in memory.
-	zstdInMemoryDecompressorMaxSize = 128 << (10 * 2) // 128MiB
 )
 
 var (
@@ -75,13 +70,18 @@ var (
 	compressedTrxPayloadsInMem       = stats.NewCounter("CompressedTransactionPayloadsInMemory", "The number of compressed binlog transaction payloads that were processed in memory")
 	compressedTrxPayloadsUsingStream = stats.NewCounter("CompressedTransactionPayloadsViaStream", "The number of compressed binlog transaction payloads that were processed using a stream")
 
+	// At what size should we switch from the in-memory buffer
+	// decoding to streaming mode which is much slower, but does
+	// not require everything be done in memory all at once.
+	ZstdInMemoryDecompressorMaxSize = uint64(128 << (10 * 2)) // 128MiB
+
 	// A concurrent stateless decoder that caches decompressors. This is
 	// used for smaller payloads that we want to handle entirely using
 	// in-memory buffers via DecodeAll.
 	statelessDecoder *zstd.Decoder
 
 	// A pool of stateful decoders for larger payloads that we want to
-	// stream. The number of large (> zstdInMemoryDecompressorMaxSize)
+	// stream. The number of large (> ZstdInMemoryDecompressorMaxSize)
 	// payloads should typically be relatively low, but there may be times
 	// where there are many of them -- and users like vstreamer may have
 	// N concurrent streams per tablet which could lead to a lot of
@@ -271,7 +271,7 @@ func (tp *TransactionPayload) decode() error {
 }
 
 // decompress decompresses the payload. If the payload is larger than
-// zstdInMemoryDecompressorMaxSize then we stream the decompression via
+// ZstdInMemoryDecompressorMaxSize then we stream the decompression via
 // the package's pool of zstd.Decoders, otherwise we use in-memory
 // buffers with the package's concurrent statelessDecoder.
 // In either case, we setup the reader that can be used within the
@@ -284,7 +284,7 @@ func (tp *TransactionPayload) decompress() error {
 
 	// Switch to slower but less memory intensive stream mode for
 	// larger payloads.
-	if tp.uncompressedSize > zstdInMemoryDecompressorMaxSize {
+	if tp.uncompressedSize > ZstdInMemoryDecompressorMaxSize {
 		in := bytes.NewReader(tp.payload)
 		streamDecoder, err := statefulDecoderPool.Get(in)
 		if err != nil {
@@ -366,7 +366,10 @@ func (dp *decoderPool) Get(reader io.Reader) (*zstd.Decoder, error) {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] expected *zstd.Decoder but got %T", pooled)
 		}
 	} else {
-		d, err := zstd.NewReader(nil, zstd.WithDecoderMaxMemory(zstdInMemoryDecompressorMaxSize))
+		// Use the minimum amount of memory we can in processing the transaction by
+		// setting lowMem to true and limiting the decoder concurrency to 1 so that
+		// there's no async decoding of multiple windows or blocks.
+		d, err := zstd.NewReader(nil, zstd.WithDecoderLowmem(true), zstd.WithDecoderConcurrency(1))
 		if err != nil { // Should only happen e.g. due to ENOMEM
 			return nil, vterrors.Wrap(err, "failed to create stateful stream decoder")
 		}

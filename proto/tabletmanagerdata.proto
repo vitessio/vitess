@@ -326,6 +326,18 @@ message ReadTransactionResponse {
   query.TransactionMetadata transaction = 1;
 }
 
+message GetTransactionInfoRequest {
+  string dtid = 1;
+}
+
+message GetTransactionInfoResponse {
+  string state = 1;
+  string message = 2;
+  int64 time_created = 3;
+  repeated string statements = 4;
+}
+
+
 message ConcludeTransactionRequest {
   string dtid = 1;
   bool mm = 2;
@@ -348,6 +360,7 @@ message ReplicationStatusRequest {
 
 message ReplicationStatusResponse {
   replicationdata.Status status = 1;
+  bool backup_running = 2;
 }
 
 message PrimaryStatusRequest {
@@ -536,6 +549,7 @@ message StopReplicationAndGetStatusResponse {
 
   // Status represents the replication status call right before, and right after telling the replica to stop.
   replicationdata.StopReplicationStatus status = 2;
+  bool backup_running = 3;
 }
 
 message PromoteReplicaRequest {

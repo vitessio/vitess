@@ -9,5 +9,7 @@ To properly deprecate a major of Vitess follow the following steps:
   > - Add a redirect from the old URL to the new URL in `./layouts/index.redirects` under the `Redirect archived docs` section.
 - **Delete the `Backport To: ...` label**
   > - Delete the corresponding label for the EOL version, we do not want to motivate anymore backport to the EOL release branch.
+- **Update the Golang Upgrade GitHub Action Workflow**
+  > - The `Update Golang Version` workflow must be updated to stop upgrading the version we are EOLing.
 - **Make proper announcement on Slack**
   > - Notify the community of this deprecation. 

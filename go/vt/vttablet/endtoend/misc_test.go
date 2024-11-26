@@ -35,10 +35,15 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/callerid"
+	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
 func TestSimpleRead(t *testing.T) {
@@ -890,6 +895,11 @@ func TestShowTablesWithSizes(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
+	if query := conn.BaseShowTablesWithSizes(); query == "" {
+		// Happens in MySQL 8.0 where we use BaseShowInnodbTableSizes, instead.
+		t.Skip("BaseShowTablesWithSizes is empty in this version of MySQL")
+	}
+
 	setupQueries := []string{
 		`drop view if exists show_tables_with_sizes_v1`,
 		`drop table if exists show_tables_with_sizes_t1`,
@@ -897,12 +907,14 @@ func TestShowTablesWithSizes(t *testing.T) {
 		`create table show_tables_with_sizes_t1 (id int primary key)`,
 		`create view show_tables_with_sizes_v1 as select * from show_tables_with_sizes_t1`,
 		`CREATE TABLE show_tables_with_sizes_employees (id INT NOT NULL, store_id INT) PARTITION BY HASH(store_id) PARTITIONS 4`,
+		`create table show_tables_with_sizes_fts (id int primary key, name text, fulltext key name_fts (name))`,
 	}
 
 	defer func() {
 		_, _ = conn.ExecuteFetch(`drop view if exists show_tables_with_sizes_v1`, 1, false)
 		_, _ = conn.ExecuteFetch(`drop table if exists show_tables_with_sizes_t1`, 1, false)
 		_, _ = conn.ExecuteFetch(`drop table if exists show_tables_with_sizes_employees`, 1, false)
+		_, _ = conn.ExecuteFetch(`drop table if exists show_tables_with_sizes_fts`, 1, false)
 	}()
 	for _, query := range setupQueries {
 		_, err := conn.ExecuteFetch(query, 1, false)
@@ -913,6 +925,7 @@ func TestShowTablesWithSizes(t *testing.T) {
 		"show_tables_with_sizes_t1",
 		"show_tables_with_sizes_v1",
 		"show_tables_with_sizes_employees",
+		"show_tables_with_sizes_fts",
 	}
 	actualTables := []string{}
 
@@ -933,7 +946,7 @@ func TestShowTablesWithSizes(t *testing.T) {
 			assert.True(t, row[2].IsIntegral())
 			createTime, err := row[2].ToCastInt64()
 			assert.NoError(t, err)
-			assert.Greater(t, createTime, int64(0))
+			assert.Positive(t, createTime)
 
 			// TABLE_COMMENT
 			assert.Equal(t, "", row[3].ToString())
@@ -941,12 +954,12 @@ func TestShowTablesWithSizes(t *testing.T) {
 			assert.True(t, row[4].IsDecimal())
 			fileSize, err := row[4].ToCastInt64()
 			assert.NoError(t, err)
-			assert.Greater(t, fileSize, int64(0))
+			assert.Positive(t, fileSize)
 
 			assert.True(t, row[4].IsDecimal())
 			allocatedSize, err := row[5].ToCastInt64()
 			assert.NoError(t, err)
-			assert.Greater(t, allocatedSize, int64(0))
+			assert.Positive(t, allocatedSize)
 
 			actualTables = append(actualTables, tableName)
 		} else if tableName == "show_tables_with_sizes_v1" {
@@ -956,7 +969,7 @@ func TestShowTablesWithSizes(t *testing.T) {
 			assert.True(t, row[2].IsIntegral())
 			createTime, err := row[2].ToCastInt64()
 			assert.NoError(t, err)
-			assert.Greater(t, createTime, int64(0))
+			assert.Positive(t, createTime)
 
 			// TABLE_COMMENT
 			assert.Equal(t, "VIEW", row[3].ToString())
@@ -972,7 +985,7 @@ func TestShowTablesWithSizes(t *testing.T) {
 			assert.True(t, row[2].IsIntegral())
 			createTime, err := row[2].ToCastInt64()
 			assert.NoError(t, err)
-			assert.Greater(t, createTime, int64(0))
+			assert.Positive(t, createTime)
 
 			// TABLE_COMMENT
 			assert.Equal(t, "", row[3].ToString())
@@ -980,12 +993,35 @@ func TestShowTablesWithSizes(t *testing.T) {
 			assert.True(t, row[4].IsDecimal())
 			fileSize, err := row[4].ToCastInt64()
 			assert.NoError(t, err)
-			assert.Greater(t, fileSize, int64(0))
+			assert.Positive(t, fileSize)
 
 			assert.True(t, row[5].IsDecimal())
 			allocatedSize, err := row[5].ToCastInt64()
 			assert.NoError(t, err)
-			assert.Greater(t, allocatedSize, int64(0))
+			assert.Positive(t, allocatedSize)
+
+			actualTables = append(actualTables, tableName)
+		} else if tableName == "show_tables_with_sizes_fts" {
+			// TABLE_TYPE
+			assert.Equal(t, "BASE TABLE", row[1].ToString())
+
+			assert.True(t, row[2].IsIntegral())
+			createTime, err := row[2].ToCastInt64()
+			assert.NoError(t, err)
+			assert.Positive(t, createTime)
+
+			// TABLE_COMMENT
+			assert.Equal(t, "", row[3].ToString())
+
+			assert.True(t, row[4].IsDecimal())
+			fileSize, err := row[4].ToCastInt64()
+			assert.NoError(t, err)
+			assert.Positive(t, fileSize)
+
+			assert.True(t, row[5].IsDecimal())
+			allocatedSize, err := row[5].ToCastInt64()
+			assert.NoError(t, err)
+			assert.Positive(t, allocatedSize)
 
 			actualTables = append(actualTables, tableName)
 		}
@@ -993,6 +1029,137 @@ func TestShowTablesWithSizes(t *testing.T) {
 
 	assert.Equal(t, len(expectedTables), len(actualTables))
 	assert.ElementsMatch(t, expectedTables, actualTables)
+}
+
+func newTestSchemaEngine(connParams *mysql.ConnParams) *schema.Engine {
+	cfg := tabletenv.NewDefaultConfig()
+	cfg.DB = dbconfigs.NewTestDBConfigs(*connParams, *connParams, connParams.DbName)
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "EngineTest")
+	se := schema.NewEngine(env)
+	se.InitDBConfig(dbconfigs.New(connParams))
+	return se
+}
+
+func TestEngineReload(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &connParams)
+	require.NoError(t, err)
+	defer conn.Close()
+	t.Run("validate innodb size query", func(t *testing.T) {
+		q := conn.BaseShowInnodbTableSizes()
+		require.NotEmpty(t, q)
+	})
+	t.Run("validate conn schema", func(t *testing.T) {
+		rs, err := conn.ExecuteFetch(`select database() as d`, 1, true)
+		require.NoError(t, err)
+		row := rs.Named().Row()
+		require.NotNil(t, row)
+		database := row.AsString("d", "")
+		require.Equal(t, connParams.DbName, database)
+	})
+
+	defer func() {
+		_, _ = conn.ExecuteFetch(`drop view if exists view_simple`, 1, false)
+		_, _ = conn.ExecuteFetch(`drop view if exists view_simple2`, 1, false)
+		_, _ = conn.ExecuteFetch(`drop view if exists view_simple3`, 1, false)
+		_, _ = conn.ExecuteFetch(`drop table if exists tbl_simple`, 1, false)
+		_, _ = conn.ExecuteFetch(`drop table if exists tbl_part`, 1, false)
+		_, _ = conn.ExecuteFetch(`drop table if exists tbl_fts`, 1, false)
+	}()
+
+	engine := newTestSchemaEngine(&connParams)
+	require.NotNil(t, engine)
+	err = engine.Open()
+	require.NoError(t, err)
+	defer engine.Close()
+
+	t.Run("schema", func(t *testing.T) {
+		setupQueries := []string{
+			`drop view if exists view_simple`,
+			`drop view if exists view_simple2`,
+			`drop table if exists tbl_simple`,
+			`drop table if exists tbl_part`,
+			`drop table if exists tbl_fts`,
+			`create table tbl_simple (id int primary key)`,
+			`create view view_simple as select * from tbl_simple`,
+			`create view view_simple2 as select * from tbl_simple`,
+			`create table tbl_part (id INT NOT NULL, store_id INT) PARTITION BY HASH(store_id) PARTITIONS 4`,
+			`create table tbl_fts (id int primary key, name text, fulltext key name_fts (name))`,
+		}
+
+		for _, query := range setupQueries {
+			_, err := conn.ExecuteFetch(query, 1, false)
+			require.NoError(t, err)
+		}
+
+		expectedTables := []string{
+			"tbl_simple",
+			"tbl_part",
+			"tbl_fts",
+			"view_simple",
+			"view_simple2",
+		}
+		err := engine.Reload(ctx)
+		require.NoError(t, err)
+
+		schema := engine.GetSchema()
+		require.NotEmpty(t, schema)
+		for _, expectTable := range expectedTables {
+			t.Run(expectTable, func(t *testing.T) {
+				tbl := engine.GetTable(sqlparser.NewIdentifierCS(expectTable))
+				require.NotNil(t, tbl)
+
+				switch expectTable {
+				case "view_simple", "view_simple2":
+					assert.Zero(t, tbl.FileSize)
+					assert.Zero(t, tbl.AllocatedSize)
+				default:
+					assert.NotZero(t, tbl.FileSize)
+					assert.NotZero(t, tbl.AllocatedSize)
+				}
+			})
+		}
+	})
+	t.Run("schema changes", func(t *testing.T) {
+		setupQueries := []string{
+			`alter view view_simple as select *, 2 from tbl_simple`,
+			`drop view view_simple2`,
+			`create view view_simple3 as select * from tbl_simple`,
+		}
+
+		for _, query := range setupQueries {
+			_, err := conn.ExecuteFetch(query, 1, false)
+			require.NoError(t, err)
+		}
+
+		expectedTables := []string{
+			"tbl_simple",
+			"tbl_part",
+			"tbl_fts",
+			"view_simple",
+			"view_simple3",
+		}
+		err := engine.Reload(ctx)
+		require.NoError(t, err)
+
+		schema := engine.GetSchema()
+		require.NotEmpty(t, schema)
+		for _, expectTable := range expectedTables {
+			t.Run(expectTable, func(t *testing.T) {
+				tbl := engine.GetTable(sqlparser.NewIdentifierCS(expectTable))
+				require.NotNil(t, tbl)
+
+				switch expectTable {
+				case "view_simple", "view_simple2", "view_simple3":
+					assert.Zero(t, tbl.FileSize)
+					assert.Zero(t, tbl.AllocatedSize)
+				default:
+					assert.NotZero(t, tbl.FileSize)
+					assert.NotZero(t, tbl.AllocatedSize)
+				}
+			})
+		}
+	})
 }
 
 // TestTuple tests that bind variables having tuple values work with vttablet.

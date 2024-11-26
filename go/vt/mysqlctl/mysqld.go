@@ -47,6 +47,7 @@ import (
 	"vitess.io/vitess/config"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/osutil"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -1332,18 +1333,7 @@ func hostMetrics(ctx context.Context, cnf *Mycnf) (*mysqlctlpb.HostMetricsRespon
 
 	_ = func() error {
 		metric := newMetric("loadavg")
-		if runtime.GOOS != "linux" {
-			return withError(metric, fmt.Errorf("loadavg metric is only available on Linux"))
-		}
-		content, err := os.ReadFile("/proc/loadavg")
-		if err != nil {
-			return withError(metric, err)
-		}
-		fields := strings.Fields(string(content))
-		if len(fields) == 0 {
-			return withError(metric, fmt.Errorf("unexpected /proc/loadavg content"))
-		}
-		loadAvg, err := strconv.ParseFloat(fields[0], 64)
+		loadAvg, err := osutil.LoadAvg()
 		if err != nil {
 			return withError(metric, err)
 		}

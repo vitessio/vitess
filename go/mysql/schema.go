@@ -93,6 +93,29 @@ var BaseShowTablesWithSizesFields = append(BaseShowTablesFields, &querypb.Field{
 	Charset:      collations.CollationBinaryID,
 	Flags:        uint32(querypb.MySqlFlag_BINARY_FLAG | querypb.MySqlFlag_NUM_FLAG),
 })
+var BaseInnoDBTableSizesFields = []*querypb.Field{{
+	Name:         "it.name",
+	Type:         querypb.Type_VARCHAR,
+	Table:        "tables",
+	OrgTable:     "TABLES",
+	Database:     "information_schema",
+	OrgName:      "TABLE_NAME",
+	ColumnLength: 192,
+	Charset:      uint32(collations.SystemCollation.Collation),
+	Flags:        uint32(querypb.MySqlFlag_NOT_NULL_FLAG),
+}, {
+	Name:         "i.file_size",
+	Type:         querypb.Type_INT64,
+	ColumnLength: 11,
+	Charset:      collations.CollationBinaryID,
+	Flags:        uint32(querypb.MySqlFlag_BINARY_FLAG | querypb.MySqlFlag_NUM_FLAG),
+}, {
+	Name:         "i.allocated_size",
+	Type:         querypb.Type_INT64,
+	ColumnLength: 11,
+	Charset:      collations.CollationBinaryID,
+	Flags:        uint32(querypb.MySqlFlag_BINARY_FLAG | querypb.MySqlFlag_NUM_FLAG),
+}}
 
 // BaseShowTablesRow returns the fields from a BaseShowTables or
 // BaseShowTablesForTable command.
@@ -114,6 +137,14 @@ func BaseShowTablesWithSizesRow(tableName string, isView bool, comment string) [
 		sqltypes.MakeTrusted(sqltypes.Int64, []byte("100")), // file_size
 		sqltypes.MakeTrusted(sqltypes.Int64, []byte("150")), // allocated_size
 	)
+}
+
+func BaseInnoDBTableSizesRow(dbName string, tableName string) []sqltypes.Value {
+	return []sqltypes.Value{
+		sqltypes.MakeTrusted(sqltypes.VarChar, []byte(dbName+"/"+tableName)),
+		sqltypes.MakeTrusted(sqltypes.Int64, []byte("100")), // file_size
+		sqltypes.MakeTrusted(sqltypes.Int64, []byte("150")), // allocated_size
+	}
 }
 
 // ShowPrimaryFields contains the fields for a BaseShowPrimary.

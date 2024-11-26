@@ -27,22 +27,21 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/event/syslogger"
-	"vitess.io/vitess/go/mysql/sqlerror"
-	"vitess.io/vitess/go/vt/vtenv"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
-
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/event/syslogger"
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 )
 
 func TestTxExecutorEmptyPrepare(t *testing.T) {
@@ -349,14 +348,16 @@ func TestExecutorStartCommit(t *testing.T) {
 	commitTransition := fmt.Sprintf("update _vt.dt_state set state = %d where dtid = _binary'aa' and state = %d", int(querypb.TransactionState_COMMIT), int(querypb.TransactionState_PREPARE))
 	db.AddQuery(commitTransition, &sqltypes.Result{RowsAffected: 1})
 	txid := newTxForPrep(ctx, tsv)
-	err := txe.StartCommit(txid, "aa")
+	state, err := txe.StartCommit(txid, "aa")
 	require.NoError(t, err)
+	assert.Equal(t, querypb.StartCommitState_Success, state)
 
 	db.AddQuery(commitTransition, &sqltypes.Result{})
 	txid = newTxForPrep(ctx, tsv)
-	err = txe.StartCommit(txid, "aa")
+	state, err = txe.StartCommit(txid, "aa")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "could not transition to COMMIT: aa")
+	assert.Equal(t, querypb.StartCommitState_Fail, state)
 }
 
 func TestExecutorStartCommitFailure(t *testing.T) {
@@ -379,8 +380,9 @@ func TestExecutorStartCommitFailure(t *testing.T) {
 	db.AddQuery(rollbackTransition, sqltypes.MakeTestResult(nil))
 
 	// try 2pc commit of Metadata Manager.
-	err = txe.StartCommit(txid, "aa")
+	state, err := txe.StartCommit(txid, "aa")
 	require.EqualError(t, err, "VT10002: atomic distributed transaction not allowed: cannot commit the transaction on a reserved connection")
+	assert.Equal(t, querypb.StartCommitState_Fail, state)
 }
 
 func TestExecutorSetRollback(t *testing.T) {
@@ -671,7 +673,10 @@ func TestNoTwopc(t *testing.T) {
 		fun:  func() error { return txe.CreateTransaction("aa", nil) },
 	}, {
 		desc: "StartCommit",
-		fun:  func() error { return txe.StartCommit(1, "aa") },
+		fun: func() error {
+			_, err := txe.StartCommit(1, "aa")
+			return err
+		},
 	}, {
 		desc: "SetRollback",
 		fun:  func() error { return txe.SetRollback("aa", 1) },

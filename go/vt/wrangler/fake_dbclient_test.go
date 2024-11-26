@@ -153,6 +153,10 @@ func (dc *fakeDBClient) Rollback() error {
 func (dc *fakeDBClient) Close() {
 }
 
+func (dc *fakeDBClient) IsClosed() bool {
+	return false
+}
+
 // ExecuteFetch is part of the DBClient interface
 func (dc *fakeDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, error) {
 	dc.mu.Lock()
