@@ -169,36 +169,33 @@ func (be *MySQLShellBackupEngine) ExecuteBackup(ctx context.Context, params Back
 
 	params.Logger.Infof("running %s", cmd.String())
 
-	cmdOut, err := cmd.StdoutPipe()
-	if err != nil {
-		return BackupUnusable, vterrors.Wrap(err, "cannot create stdout pipe")
-	}
-	cmdOriginalErr, err := cmd.StderrPipe()
-	if err != nil {
-		return BackupUnusable, vterrors.Wrap(err, "cannot create stderr pipe")
-	}
-	if err := cmd.Start(); err != nil {
-		return BackupUnusable, vterrors.Wrap(err, "can't start mysqlshell")
-	}
+	stdoutReader, stdoutWriter := io.Pipe()
+	stderrReader, stderrWriter := io.Pipe()
+	lockWaiterReader, lockWaiterWriter := io.Pipe()
 
-	pipeReader, pipeWriter := io.Pipe()
-	cmdErr := io.TeeReader(cmdOriginalErr, pipeWriter)
+	cmd.Stdout = stdoutWriter
+	cmd.Stderr = stderrWriter
+	combinedErr := io.TeeReader(stderrReader, lockWaiterWriter)
 
 	cmdWg := &sync.WaitGroup{}
 	cmdWg.Add(3)
-	go releaseReadLock(ctx, pipeReader, params, cmdWg, lockAcquired)
-	go scanLinesToLogger(mysqlShellBackupEngineName+" stdout", cmdOut, params.Logger, cmdWg.Done)
-	go scanLinesToLogger(mysqlShellBackupEngineName+" stderr", cmdErr, params.Logger, cmdWg.Done)
+	go releaseReadLock(ctx, lockWaiterReader, params, cmdWg, lockAcquired)
+	go scanLinesToLogger(mysqlShellBackupEngineName+" stdout", stdoutReader, params.Logger, cmdWg.Done)
+	go scanLinesToLogger(mysqlShellBackupEngineName+" stderr", combinedErr, params.Logger, cmdWg.Done)
 
-	// Get exit status.
-	if err := cmd.Wait(); err != nil {
-		pipeWriter.Close() // make sure we close the writer so the goroutines above will complete.
+	// we run the command, wait for it to complete and close all pipes so the goroutines can complete on their own.
+	// after that we can process if an error has happened or not.
+	err = cmd.Run()
+
+	time.Sleep(time.Millisecond * 100) // give the goroutines some time to read any remaining logs before closing pipes.
+	stdoutWriter.Close()
+	stderrWriter.Close()
+	lockWaiterWriter.Close()
+	cmdWg.Wait()
+
+	if err != nil {
 		return BackupUnusable, vterrors.Wrap(err, mysqlShellBackupEngineName+" failed")
 	}
-
-	// close the pipeWriter and wait for the goroutines to have read all the logs
-	pipeWriter.Close()
-	cmdWg.Wait()
 
 	// open the MANIFEST
 	params.Logger.Infof("Writing backup MANIFEST")
