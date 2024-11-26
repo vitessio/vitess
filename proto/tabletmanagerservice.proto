@@ -97,6 +97,8 @@ service TabletManager {
 
   rpc ReadTransaction(tabletmanagerdata.ReadTransactionRequest) returns (tabletmanagerdata.ReadTransactionResponse) {};
 
+  rpc GetTransactionInfo(tabletmanagerdata.GetTransactionInfoRequest) returns (tabletmanagerdata.GetTransactionInfoResponse) {};
+
   rpc ConcludeTransaction(tabletmanagerdata.ConcludeTransactionRequest) returns (tabletmanagerdata.ConcludeTransactionResponse) {};
 
   rpc MysqlHostMetrics(tabletmanagerdata.MysqlHostMetricsRequest) returns (tabletmanagerdata.MysqlHostMetricsResponse) {};
@@ -136,6 +138,7 @@ service TabletManager {
 
   // VReplication API
   rpc CreateVReplicationWorkflow(tabletmanagerdata.CreateVReplicationWorkflowRequest) returns (tabletmanagerdata.CreateVReplicationWorkflowResponse) {};
+  rpc DeleteTableData(tabletmanagerdata.DeleteTableDataRequest) returns(tabletmanagerdata.DeleteTableDataResponse) {}
   rpc DeleteVReplicationWorkflow(tabletmanagerdata.DeleteVReplicationWorkflowRequest) returns(tabletmanagerdata.DeleteVReplicationWorkflowResponse) {};
   rpc HasVReplicationWorkflows(tabletmanagerdata.HasVReplicationWorkflowsRequest) returns(tabletmanagerdata.HasVReplicationWorkflowsResponse) {};
   rpc ReadVReplicationWorkflow(tabletmanagerdata.ReadVReplicationWorkflowRequest) returns(tabletmanagerdata.ReadVReplicationWorkflowResponse) {};
@@ -162,6 +165,9 @@ service TabletManager {
   // PopulateReparentJournal tells the tablet to add an entry to its
   // reparent journal
   rpc PopulateReparentJournal(tabletmanagerdata.PopulateReparentJournalRequest) returns (tabletmanagerdata.PopulateReparentJournalResponse) {};
+
+  // ReadReparentJournalInfo reads the information from reparent journal
+  rpc ReadReparentJournalInfo(tabletmanagerdata.ReadReparentJournalInfoRequest) returns (tabletmanagerdata.ReadReparentJournalInfoResponse) {};
 
   // InitReplica tells the tablet to reparent to the primary unconditionally
   rpc InitReplica(tabletmanagerdata.InitReplicaRequest) returns (tabletmanagerdata.InitReplicaResponse) {};

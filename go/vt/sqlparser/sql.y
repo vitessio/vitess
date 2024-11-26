@@ -329,7 +329,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> SEQUENCE MERGE TEMPORARY TEMPTABLE INVOKER SECURITY FIRST AFTER LAST
 
 // Migration tokens
-%token <str> VITESS_MIGRATION CANCEL RETRY LAUNCH COMPLETE CLEANUP THROTTLE UNTHROTTLE FORCE_CUTOVER EXPIRE RATIO
+%token <str> VITESS_MIGRATION CANCEL RETRY LAUNCH COMPLETE CLEANUP THROTTLE UNTHROTTLE FORCE_CUTOVER CUTOVER_THRESHOLD EXPIRE RATIO
 // Throttler tokens
 %token <str> VITESS_THROTTLER
 
@@ -1729,10 +1729,6 @@ text_literal %prec MULTIPLE_TEXT_LITERAL
 | underscore_charsets HEX %prec UNARY
   {
     $$ = &IntroducerExpr{CharacterSet: $1, Expr: NewHexLiteral($2)}
-  }
-| underscore_charsets column_name_or_offset %prec UNARY
-  {
-    $$ = &IntroducerExpr{CharacterSet: $1, Expr: $2}
   }
 | underscore_charsets VALUE_ARG %prec UNARY
   {
@@ -3409,6 +3405,14 @@ alter_statement:
   {
     $$ = &AlterMigration{
       Type: ForceCutOverAllMigrationType,
+    }
+  }
+| ALTER comment_opt VITESS_MIGRATION STRING CUTOVER_THRESHOLD STRING
+  {
+    $$ = &AlterMigration{
+      Type: SetCutOverThresholdMigrationType,
+      UUID: string($4),
+      Threshold: $6,
     }
   }
 
@@ -8305,6 +8309,7 @@ non_reserved_keyword:
 | COUNT %prec FUNCTION_CALL_NON_KEYWORD
 | CSV
 | CURRENT
+| CUTOVER_THRESHOLD
 | DATA
 | DATE %prec STRING_TYPE_PREFIX_NON_KEYWORD
 | DATE_ADD %prec FUNCTION_CALL_NON_KEYWORD

@@ -458,6 +458,20 @@ export namespace vtadmin {
         public getTopologyPath(request: vtadmin.IGetTopologyPathRequest): Promise<vtctldata.GetTopologyPathResponse>;
 
         /**
+         * Calls GetTransactionInfo.
+         * @param request GetTransactionInfoRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and GetTransactionInfoResponse
+         */
+        public getTransactionInfo(request: vtadmin.IGetTransactionInfoRequest, callback: vtadmin.VTAdmin.GetTransactionInfoCallback): void;
+
+        /**
+         * Calls GetTransactionInfo.
+         * @param request GetTransactionInfoRequest message or plain object
+         * @returns Promise
+         */
+        public getTransactionInfo(request: vtadmin.IGetTransactionInfoRequest): Promise<vtctldata.GetTransactionInfoResponse>;
+
+        /**
          * Calls GetUnresolvedTransactions.
          * @param request GetUnresolvedTransactionsRequest message or plain object
          * @param callback Node-style callback called with the error, if any, and GetUnresolvedTransactionsResponse
@@ -1236,6 +1250,13 @@ export namespace vtadmin {
          * @param [response] GetTopologyPathResponse
          */
         type GetTopologyPathCallback = (error: (Error|null), response?: vtctldata.GetTopologyPathResponse) => void;
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#getTransactionInfo}.
+         * @param error Error, if any
+         * @param [response] GetTransactionInfoResponse
+         */
+        type GetTransactionInfoCallback = (error: (Error|null), response?: vtctldata.GetTransactionInfoResponse) => void;
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#getUnresolvedTransactions}.
@@ -8586,6 +8607,109 @@ export namespace vtadmin {
 
         /**
          * Gets the default type url for GetTopologyPathRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a GetTransactionInfoRequest. */
+    interface IGetTransactionInfoRequest {
+
+        /** GetTransactionInfoRequest cluster_id */
+        cluster_id?: (string|null);
+
+        /** GetTransactionInfoRequest request */
+        request?: (vtctldata.IGetTransactionInfoRequest|null);
+    }
+
+    /** Represents a GetTransactionInfoRequest. */
+    class GetTransactionInfoRequest implements IGetTransactionInfoRequest {
+
+        /**
+         * Constructs a new GetTransactionInfoRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IGetTransactionInfoRequest);
+
+        /** GetTransactionInfoRequest cluster_id. */
+        public cluster_id: string;
+
+        /** GetTransactionInfoRequest request. */
+        public request?: (vtctldata.IGetTransactionInfoRequest|null);
+
+        /**
+         * Creates a new GetTransactionInfoRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetTransactionInfoRequest instance
+         */
+        public static create(properties?: vtadmin.IGetTransactionInfoRequest): vtadmin.GetTransactionInfoRequest;
+
+        /**
+         * Encodes the specified GetTransactionInfoRequest message. Does not implicitly {@link vtadmin.GetTransactionInfoRequest.verify|verify} messages.
+         * @param message GetTransactionInfoRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IGetTransactionInfoRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetTransactionInfoRequest message, length delimited. Does not implicitly {@link vtadmin.GetTransactionInfoRequest.verify|verify} messages.
+         * @param message GetTransactionInfoRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IGetTransactionInfoRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetTransactionInfoRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetTransactionInfoRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.GetTransactionInfoRequest;
+
+        /**
+         * Decodes a GetTransactionInfoRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetTransactionInfoRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.GetTransactionInfoRequest;
+
+        /**
+         * Verifies a GetTransactionInfoRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetTransactionInfoRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetTransactionInfoRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.GetTransactionInfoRequest;
+
+        /**
+         * Creates a plain object from a GetTransactionInfoRequest message. Also converts values to other types if specified.
+         * @param message GetTransactionInfoRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.GetTransactionInfoRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetTransactionInfoRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetTransactionInfoRequest
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */
@@ -25764,6 +25888,218 @@ export namespace tabletmanagerdata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** Properties of a GetTransactionInfoRequest. */
+    interface IGetTransactionInfoRequest {
+
+        /** GetTransactionInfoRequest dtid */
+        dtid?: (string|null);
+    }
+
+    /** Represents a GetTransactionInfoRequest. */
+    class GetTransactionInfoRequest implements IGetTransactionInfoRequest {
+
+        /**
+         * Constructs a new GetTransactionInfoRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IGetTransactionInfoRequest);
+
+        /** GetTransactionInfoRequest dtid. */
+        public dtid: string;
+
+        /**
+         * Creates a new GetTransactionInfoRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetTransactionInfoRequest instance
+         */
+        public static create(properties?: tabletmanagerdata.IGetTransactionInfoRequest): tabletmanagerdata.GetTransactionInfoRequest;
+
+        /**
+         * Encodes the specified GetTransactionInfoRequest message. Does not implicitly {@link tabletmanagerdata.GetTransactionInfoRequest.verify|verify} messages.
+         * @param message GetTransactionInfoRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IGetTransactionInfoRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetTransactionInfoRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.GetTransactionInfoRequest.verify|verify} messages.
+         * @param message GetTransactionInfoRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IGetTransactionInfoRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetTransactionInfoRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetTransactionInfoRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.GetTransactionInfoRequest;
+
+        /**
+         * Decodes a GetTransactionInfoRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetTransactionInfoRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.GetTransactionInfoRequest;
+
+        /**
+         * Verifies a GetTransactionInfoRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetTransactionInfoRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetTransactionInfoRequest
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.GetTransactionInfoRequest;
+
+        /**
+         * Creates a plain object from a GetTransactionInfoRequest message. Also converts values to other types if specified.
+         * @param message GetTransactionInfoRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.GetTransactionInfoRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetTransactionInfoRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetTransactionInfoRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a GetTransactionInfoResponse. */
+    interface IGetTransactionInfoResponse {
+
+        /** GetTransactionInfoResponse state */
+        state?: (string|null);
+
+        /** GetTransactionInfoResponse message */
+        message?: (string|null);
+
+        /** GetTransactionInfoResponse time_created */
+        time_created?: (number|Long|null);
+
+        /** GetTransactionInfoResponse statements */
+        statements?: (string[]|null);
+    }
+
+    /** Represents a GetTransactionInfoResponse. */
+    class GetTransactionInfoResponse implements IGetTransactionInfoResponse {
+
+        /**
+         * Constructs a new GetTransactionInfoResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IGetTransactionInfoResponse);
+
+        /** GetTransactionInfoResponse state. */
+        public state: string;
+
+        /** GetTransactionInfoResponse message. */
+        public message: string;
+
+        /** GetTransactionInfoResponse time_created. */
+        public time_created: (number|Long);
+
+        /** GetTransactionInfoResponse statements. */
+        public statements: string[];
+
+        /**
+         * Creates a new GetTransactionInfoResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetTransactionInfoResponse instance
+         */
+        public static create(properties?: tabletmanagerdata.IGetTransactionInfoResponse): tabletmanagerdata.GetTransactionInfoResponse;
+
+        /**
+         * Encodes the specified GetTransactionInfoResponse message. Does not implicitly {@link tabletmanagerdata.GetTransactionInfoResponse.verify|verify} messages.
+         * @param message GetTransactionInfoResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IGetTransactionInfoResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetTransactionInfoResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.GetTransactionInfoResponse.verify|verify} messages.
+         * @param message GetTransactionInfoResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IGetTransactionInfoResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetTransactionInfoResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetTransactionInfoResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.GetTransactionInfoResponse;
+
+        /**
+         * Decodes a GetTransactionInfoResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetTransactionInfoResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.GetTransactionInfoResponse;
+
+        /**
+         * Verifies a GetTransactionInfoResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetTransactionInfoResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetTransactionInfoResponse
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.GetTransactionInfoResponse;
+
+        /**
+         * Creates a plain object from a GetTransactionInfoResponse message. Also converts values to other types if specified.
+         * @param message GetTransactionInfoResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.GetTransactionInfoResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetTransactionInfoResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetTransactionInfoResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
     /** Properties of a ConcludeTransactionRequest. */
     interface IConcludeTransactionRequest {
 
@@ -26242,6 +26578,9 @@ export namespace tabletmanagerdata {
 
         /** ReplicationStatusResponse status */
         status?: (replicationdata.IStatus|null);
+
+        /** ReplicationStatusResponse backup_running */
+        backup_running?: (boolean|null);
     }
 
     /** Represents a ReplicationStatusResponse. */
@@ -26255,6 +26594,9 @@ export namespace tabletmanagerdata {
 
         /** ReplicationStatusResponse status. */
         public status?: (replicationdata.IStatus|null);
+
+        /** ReplicationStatusResponse backup_running. */
+        public backup_running: boolean;
 
         /**
          * Creates a new ReplicationStatusResponse instance using the specified properties.
@@ -28820,6 +29162,194 @@ export namespace tabletmanagerdata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** Properties of a ReadReparentJournalInfoRequest. */
+    interface IReadReparentJournalInfoRequest {
+    }
+
+    /** Represents a ReadReparentJournalInfoRequest. */
+    class ReadReparentJournalInfoRequest implements IReadReparentJournalInfoRequest {
+
+        /**
+         * Constructs a new ReadReparentJournalInfoRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IReadReparentJournalInfoRequest);
+
+        /**
+         * Creates a new ReadReparentJournalInfoRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ReadReparentJournalInfoRequest instance
+         */
+        public static create(properties?: tabletmanagerdata.IReadReparentJournalInfoRequest): tabletmanagerdata.ReadReparentJournalInfoRequest;
+
+        /**
+         * Encodes the specified ReadReparentJournalInfoRequest message. Does not implicitly {@link tabletmanagerdata.ReadReparentJournalInfoRequest.verify|verify} messages.
+         * @param message ReadReparentJournalInfoRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IReadReparentJournalInfoRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ReadReparentJournalInfoRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.ReadReparentJournalInfoRequest.verify|verify} messages.
+         * @param message ReadReparentJournalInfoRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IReadReparentJournalInfoRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ReadReparentJournalInfoRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ReadReparentJournalInfoRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.ReadReparentJournalInfoRequest;
+
+        /**
+         * Decodes a ReadReparentJournalInfoRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ReadReparentJournalInfoRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.ReadReparentJournalInfoRequest;
+
+        /**
+         * Verifies a ReadReparentJournalInfoRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ReadReparentJournalInfoRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ReadReparentJournalInfoRequest
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.ReadReparentJournalInfoRequest;
+
+        /**
+         * Creates a plain object from a ReadReparentJournalInfoRequest message. Also converts values to other types if specified.
+         * @param message ReadReparentJournalInfoRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.ReadReparentJournalInfoRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ReadReparentJournalInfoRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReadReparentJournalInfoRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a ReadReparentJournalInfoResponse. */
+    interface IReadReparentJournalInfoResponse {
+
+        /** ReadReparentJournalInfoResponse length */
+        length?: (number|null);
+    }
+
+    /** Represents a ReadReparentJournalInfoResponse. */
+    class ReadReparentJournalInfoResponse implements IReadReparentJournalInfoResponse {
+
+        /**
+         * Constructs a new ReadReparentJournalInfoResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IReadReparentJournalInfoResponse);
+
+        /** ReadReparentJournalInfoResponse length. */
+        public length: number;
+
+        /**
+         * Creates a new ReadReparentJournalInfoResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ReadReparentJournalInfoResponse instance
+         */
+        public static create(properties?: tabletmanagerdata.IReadReparentJournalInfoResponse): tabletmanagerdata.ReadReparentJournalInfoResponse;
+
+        /**
+         * Encodes the specified ReadReparentJournalInfoResponse message. Does not implicitly {@link tabletmanagerdata.ReadReparentJournalInfoResponse.verify|verify} messages.
+         * @param message ReadReparentJournalInfoResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IReadReparentJournalInfoResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ReadReparentJournalInfoResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.ReadReparentJournalInfoResponse.verify|verify} messages.
+         * @param message ReadReparentJournalInfoResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IReadReparentJournalInfoResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ReadReparentJournalInfoResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ReadReparentJournalInfoResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.ReadReparentJournalInfoResponse;
+
+        /**
+         * Decodes a ReadReparentJournalInfoResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ReadReparentJournalInfoResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.ReadReparentJournalInfoResponse;
+
+        /**
+         * Verifies a ReadReparentJournalInfoResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ReadReparentJournalInfoResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ReadReparentJournalInfoResponse
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.ReadReparentJournalInfoResponse;
+
+        /**
+         * Creates a plain object from a ReadReparentJournalInfoResponse message. Also converts values to other types if specified.
+         * @param message ReadReparentJournalInfoResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.ReadReparentJournalInfoResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ReadReparentJournalInfoResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReadReparentJournalInfoResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
     /** Properties of an InitReplicaRequest. */
     interface IInitReplicaRequest {
 
@@ -30462,6 +30992,9 @@ export namespace tabletmanagerdata {
 
         /** StopReplicationAndGetStatusResponse status */
         status?: (replicationdata.IStopReplicationStatus|null);
+
+        /** StopReplicationAndGetStatusResponse backup_running */
+        backup_running?: (boolean|null);
     }
 
     /** Represents a StopReplicationAndGetStatusResponse. */
@@ -30475,6 +31008,9 @@ export namespace tabletmanagerdata {
 
         /** StopReplicationAndGetStatusResponse status. */
         public status?: (replicationdata.IStopReplicationStatus|null);
+
+        /** StopReplicationAndGetStatusResponse backup_running. */
+        public backup_running: boolean;
 
         /**
          * Creates a new StopReplicationAndGetStatusResponse instance using the specified properties.
@@ -31435,6 +31971,200 @@ export namespace tabletmanagerdata {
 
         /**
          * Gets the default type url for CreateVReplicationWorkflowResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a DeleteTableDataRequest. */
+    interface IDeleteTableDataRequest {
+
+        /** DeleteTableDataRequest table_filters */
+        table_filters?: ({ [k: string]: string }|null);
+
+        /** DeleteTableDataRequest batch_size */
+        batch_size?: (number|Long|null);
+    }
+
+    /** Represents a DeleteTableDataRequest. */
+    class DeleteTableDataRequest implements IDeleteTableDataRequest {
+
+        /**
+         * Constructs a new DeleteTableDataRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IDeleteTableDataRequest);
+
+        /** DeleteTableDataRequest table_filters. */
+        public table_filters: { [k: string]: string };
+
+        /** DeleteTableDataRequest batch_size. */
+        public batch_size: (number|Long);
+
+        /**
+         * Creates a new DeleteTableDataRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns DeleteTableDataRequest instance
+         */
+        public static create(properties?: tabletmanagerdata.IDeleteTableDataRequest): tabletmanagerdata.DeleteTableDataRequest;
+
+        /**
+         * Encodes the specified DeleteTableDataRequest message. Does not implicitly {@link tabletmanagerdata.DeleteTableDataRequest.verify|verify} messages.
+         * @param message DeleteTableDataRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IDeleteTableDataRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified DeleteTableDataRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.DeleteTableDataRequest.verify|verify} messages.
+         * @param message DeleteTableDataRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IDeleteTableDataRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a DeleteTableDataRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns DeleteTableDataRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.DeleteTableDataRequest;
+
+        /**
+         * Decodes a DeleteTableDataRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns DeleteTableDataRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.DeleteTableDataRequest;
+
+        /**
+         * Verifies a DeleteTableDataRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a DeleteTableDataRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns DeleteTableDataRequest
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.DeleteTableDataRequest;
+
+        /**
+         * Creates a plain object from a DeleteTableDataRequest message. Also converts values to other types if specified.
+         * @param message DeleteTableDataRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.DeleteTableDataRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this DeleteTableDataRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for DeleteTableDataRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a DeleteTableDataResponse. */
+    interface IDeleteTableDataResponse {
+    }
+
+    /** Represents a DeleteTableDataResponse. */
+    class DeleteTableDataResponse implements IDeleteTableDataResponse {
+
+        /**
+         * Constructs a new DeleteTableDataResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IDeleteTableDataResponse);
+
+        /**
+         * Creates a new DeleteTableDataResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns DeleteTableDataResponse instance
+         */
+        public static create(properties?: tabletmanagerdata.IDeleteTableDataResponse): tabletmanagerdata.DeleteTableDataResponse;
+
+        /**
+         * Encodes the specified DeleteTableDataResponse message. Does not implicitly {@link tabletmanagerdata.DeleteTableDataResponse.verify|verify} messages.
+         * @param message DeleteTableDataResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IDeleteTableDataResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified DeleteTableDataResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.DeleteTableDataResponse.verify|verify} messages.
+         * @param message DeleteTableDataResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IDeleteTableDataResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a DeleteTableDataResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns DeleteTableDataResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.DeleteTableDataResponse;
+
+        /**
+         * Decodes a DeleteTableDataResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns DeleteTableDataResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.DeleteTableDataResponse;
+
+        /**
+         * Verifies a DeleteTableDataResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a DeleteTableDataResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns DeleteTableDataResponse
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.DeleteTableDataResponse;
+
+        /**
+         * Creates a plain object from a DeleteTableDataResponse message. Also converts values to other types if specified.
+         * @param message DeleteTableDataResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.DeleteTableDataResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this DeleteTableDataResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for DeleteTableDataResponse
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */
@@ -43091,8 +43821,18 @@ export namespace query {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** StartCommitState enum. */
+    enum StartCommitState {
+        Unknown = 0,
+        Fail = 1,
+        Success = 2
+    }
+
     /** Properties of a StartCommitResponse. */
     interface IStartCommitResponse {
+
+        /** StartCommitResponse state */
+        state?: (query.StartCommitState|null);
     }
 
     /** Represents a StartCommitResponse. */
@@ -43103,6 +43843,9 @@ export namespace query {
          * @param [properties] Properties to set
          */
         constructor(properties?: query.IStartCommitResponse);
+
+        /** StartCommitResponse state. */
+        public state: query.StartCommitState;
 
         /**
          * Creates a new StartCommitResponse instance using the specified properties.
@@ -47192,6 +47935,9 @@ export namespace replicationdata {
 
         /** Status replication_lag_unknown */
         replication_lag_unknown?: (boolean|null);
+
+        /** Status backup_running */
+        backup_running?: (boolean|null);
     }
 
     /** Represents a Status. */
@@ -47268,6 +48014,9 @@ export namespace replicationdata {
 
         /** Status replication_lag_unknown. */
         public replication_lag_unknown: boolean;
+
+        /** Status backup_running. */
+        public backup_running: boolean;
 
         /**
          * Creates a new Status instance using the specified properties.
@@ -47458,6 +48207,9 @@ export namespace replicationdata {
 
         /** StopReplicationStatus after */
         after?: (replicationdata.IStatus|null);
+
+        /** StopReplicationStatus backup_running */
+        backup_running?: (boolean|null);
     }
 
     /** Represents a StopReplicationStatus. */
@@ -47474,6 +48226,9 @@ export namespace replicationdata {
 
         /** StopReplicationStatus after. */
         public after?: (replicationdata.IStatus|null);
+
+        /** StopReplicationStatus backup_running. */
+        public backup_running: boolean;
 
         /**
          * Creates a new StopReplicationStatus instance using the specified properties.
@@ -47567,6 +48322,9 @@ export namespace replicationdata {
 
         /** PrimaryStatus file_position */
         file_position?: (string|null);
+
+        /** PrimaryStatus server_uuid */
+        server_uuid?: (string|null);
     }
 
     /** Represents a PrimaryStatus. */
@@ -47583,6 +48341,9 @@ export namespace replicationdata {
 
         /** PrimaryStatus file_position. */
         public file_position: string;
+
+        /** PrimaryStatus server_uuid. */
+        public server_uuid: string;
 
         /**
          * Creates a new PrimaryStatus instance using the specified properties.
@@ -63495,6 +64256,327 @@ export namespace vtctldata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** Properties of a GetTransactionInfoRequest. */
+    interface IGetTransactionInfoRequest {
+
+        /** GetTransactionInfoRequest dtid */
+        dtid?: (string|null);
+    }
+
+    /** Represents a GetTransactionInfoRequest. */
+    class GetTransactionInfoRequest implements IGetTransactionInfoRequest {
+
+        /**
+         * Constructs a new GetTransactionInfoRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IGetTransactionInfoRequest);
+
+        /** GetTransactionInfoRequest dtid. */
+        public dtid: string;
+
+        /**
+         * Creates a new GetTransactionInfoRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetTransactionInfoRequest instance
+         */
+        public static create(properties?: vtctldata.IGetTransactionInfoRequest): vtctldata.GetTransactionInfoRequest;
+
+        /**
+         * Encodes the specified GetTransactionInfoRequest message. Does not implicitly {@link vtctldata.GetTransactionInfoRequest.verify|verify} messages.
+         * @param message GetTransactionInfoRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IGetTransactionInfoRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetTransactionInfoRequest message, length delimited. Does not implicitly {@link vtctldata.GetTransactionInfoRequest.verify|verify} messages.
+         * @param message GetTransactionInfoRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IGetTransactionInfoRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetTransactionInfoRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetTransactionInfoRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.GetTransactionInfoRequest;
+
+        /**
+         * Decodes a GetTransactionInfoRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetTransactionInfoRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.GetTransactionInfoRequest;
+
+        /**
+         * Verifies a GetTransactionInfoRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetTransactionInfoRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetTransactionInfoRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.GetTransactionInfoRequest;
+
+        /**
+         * Creates a plain object from a GetTransactionInfoRequest message. Also converts values to other types if specified.
+         * @param message GetTransactionInfoRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.GetTransactionInfoRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetTransactionInfoRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetTransactionInfoRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a ShardTransactionState. */
+    interface IShardTransactionState {
+
+        /** ShardTransactionState shard */
+        shard?: (string|null);
+
+        /** ShardTransactionState state */
+        state?: (string|null);
+
+        /** ShardTransactionState message */
+        message?: (string|null);
+
+        /** ShardTransactionState time_created */
+        time_created?: (number|Long|null);
+
+        /** ShardTransactionState statements */
+        statements?: (string[]|null);
+    }
+
+    /** Represents a ShardTransactionState. */
+    class ShardTransactionState implements IShardTransactionState {
+
+        /**
+         * Constructs a new ShardTransactionState.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IShardTransactionState);
+
+        /** ShardTransactionState shard. */
+        public shard: string;
+
+        /** ShardTransactionState state. */
+        public state: string;
+
+        /** ShardTransactionState message. */
+        public message: string;
+
+        /** ShardTransactionState time_created. */
+        public time_created: (number|Long);
+
+        /** ShardTransactionState statements. */
+        public statements: string[];
+
+        /**
+         * Creates a new ShardTransactionState instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ShardTransactionState instance
+         */
+        public static create(properties?: vtctldata.IShardTransactionState): vtctldata.ShardTransactionState;
+
+        /**
+         * Encodes the specified ShardTransactionState message. Does not implicitly {@link vtctldata.ShardTransactionState.verify|verify} messages.
+         * @param message ShardTransactionState message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IShardTransactionState, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ShardTransactionState message, length delimited. Does not implicitly {@link vtctldata.ShardTransactionState.verify|verify} messages.
+         * @param message ShardTransactionState message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IShardTransactionState, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ShardTransactionState message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ShardTransactionState
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ShardTransactionState;
+
+        /**
+         * Decodes a ShardTransactionState message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ShardTransactionState
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ShardTransactionState;
+
+        /**
+         * Verifies a ShardTransactionState message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ShardTransactionState message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ShardTransactionState
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.ShardTransactionState;
+
+        /**
+         * Creates a plain object from a ShardTransactionState message. Also converts values to other types if specified.
+         * @param message ShardTransactionState
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.ShardTransactionState, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ShardTransactionState to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ShardTransactionState
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a GetTransactionInfoResponse. */
+    interface IGetTransactionInfoResponse {
+
+        /** GetTransactionInfoResponse metadata */
+        metadata?: (query.ITransactionMetadata|null);
+
+        /** GetTransactionInfoResponse shard_states */
+        shard_states?: (vtctldata.IShardTransactionState[]|null);
+    }
+
+    /** Represents a GetTransactionInfoResponse. */
+    class GetTransactionInfoResponse implements IGetTransactionInfoResponse {
+
+        /**
+         * Constructs a new GetTransactionInfoResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IGetTransactionInfoResponse);
+
+        /** GetTransactionInfoResponse metadata. */
+        public metadata?: (query.ITransactionMetadata|null);
+
+        /** GetTransactionInfoResponse shard_states. */
+        public shard_states: vtctldata.IShardTransactionState[];
+
+        /**
+         * Creates a new GetTransactionInfoResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetTransactionInfoResponse instance
+         */
+        public static create(properties?: vtctldata.IGetTransactionInfoResponse): vtctldata.GetTransactionInfoResponse;
+
+        /**
+         * Encodes the specified GetTransactionInfoResponse message. Does not implicitly {@link vtctldata.GetTransactionInfoResponse.verify|verify} messages.
+         * @param message GetTransactionInfoResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IGetTransactionInfoResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetTransactionInfoResponse message, length delimited. Does not implicitly {@link vtctldata.GetTransactionInfoResponse.verify|verify} messages.
+         * @param message GetTransactionInfoResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IGetTransactionInfoResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetTransactionInfoResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetTransactionInfoResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.GetTransactionInfoResponse;
+
+        /**
+         * Decodes a GetTransactionInfoResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetTransactionInfoResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.GetTransactionInfoResponse;
+
+        /**
+         * Verifies a GetTransactionInfoResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetTransactionInfoResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetTransactionInfoResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.GetTransactionInfoResponse;
+
+        /**
+         * Creates a plain object from a GetTransactionInfoResponse message. Also converts values to other types if specified.
+         * @param message GetTransactionInfoResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.GetTransactionInfoResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetTransactionInfoResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetTransactionInfoResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
     /** Properties of a ConcludeTransactionRequest. */
     interface IConcludeTransactionRequest {
 
@@ -76765,6 +77847,9 @@ export namespace vtctldata {
 
         /** WorkflowDeleteRequest shards */
         shards?: (string[]|null);
+
+        /** WorkflowDeleteRequest delete_batch_size */
+        delete_batch_size?: (number|Long|null);
     }
 
     /** Represents a WorkflowDeleteRequest. */
@@ -76790,6 +77875,9 @@ export namespace vtctldata {
 
         /** WorkflowDeleteRequest shards. */
         public shards: string[];
+
+        /** WorkflowDeleteRequest delete_batch_size. */
+        public delete_batch_size: (number|Long);
 
         /**
          * Creates a new WorkflowDeleteRequest instance using the specified properties.

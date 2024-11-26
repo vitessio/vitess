@@ -2,12 +2,15 @@
 
 ### Table of Contents
 
+- **[Known Issues](#known-issues)**
+    - **[Backup reports itself as successful despite failures](#backup-reports-as-successful)**
 - **[Major Changes](#major-changes)**
     - **[Deprecations and Deletions](#deprecations-and-deletions)**
         - [Deprecated VTTablet Flags](#vttablet-flags)
         - [Deletion of deprecated metrics](#metric-deletion)
         - [Deprecated Metrics](#deprecations-metrics)
     - **[Traffic Mirroring](#traffic-mirroring)**
+    - **[Atomic Distributed Transaction Support](#atomic-transaction)**
     - **[New VTGate Shutdown Behavior](#new-vtgate-shutdown-behavior)**
     - **[Tablet Throttler: Multi-Metric support](#tablet-throttler)**
     - **[Allow Cross Cell Promotion in PRS](#allow-cross-cell)**
@@ -18,13 +21,20 @@
     - **[Dynamic VReplication Configuration](#dynamic-vreplication-configuration)**
     - **[Reference Table Materialization](#reference-table-materialization)**
     - **[New VEXPLAIN Modes: TRACE and KEYS](#new-vexplain-modes)**
-    - **[Errant GTID Detection on VTTablets](#errant-gtid-vttablet)**
     - **[Automatically Replace MySQL auto_increment Clauses with Vitess Sequences](#auto-replace-mysql-autoinc-with-seq)**
     - **[Experimental MySQL 8.4 support](#experimental-mysql-84)**
     - **[Current Errant GTIDs Count Metric](#errant-gtid-metric)**
     - **[vtctldclient ChangeTabletTags](#vtctldclient-changetablettags)**
     - **[Support for specifying expected primary in reparents](#reparents-expectedprimary)**
 
+## <a id="known-issues"/>Known Issues</a>
+
+### <a id="backup-reports-as-successful"/>Backup reports itself as successful despite failures</a>
+
+In this release, we have identified an issue where a backup may succeed even if one of the underlying files fails to be backed up.
+The underlying errors are ignored and the backup action reports success.
+This issue exists only with the `builtin` backup engine, and it can occur only when the engine has already started backing up all files.
+Please refer to https://github.com/vitessio/vitess/issues/17063 for more details.
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -79,6 +89,17 @@ $ vtctldclient --server :15999 MoveTables --target-keyspace customer --workflow 
 ```
 
 Mirror rules can be inspected with `GetMirrorRules`.
+
+### <a id="atomic-transaction"/>Atomic Distributed Transaction Support</a>
+
+We have introduced atomic distributed transactions as an experimental feature.
+Users can now run multi-shard transactions with stronger guarantees. 
+Vitess now provides two modes of transactional guarantees for multi-shard transactions: Best Effort and Atomic. 
+These can be selected based on the user’s requirements and the trade-offs they are willing to make.
+
+Follow the documentation to enable [Atomic Distributed Transaction](https://vitess.io/docs/21.0/reference/features/distributed-transaction/)
+
+For more details on the implementation and trade-offs, please refer to the [RFC](https://github.com/vitessio/vitess/issues/16245)
 
 ### <a id="new-vtgate-shutdown-behavior"/>New VTGate Shutdown Behavior</a>
 
@@ -207,14 +228,6 @@ filter columns (potential candidates for indexes, primary keys, or sharding keys
 
 These new `VEXPLAIN` modes enhance Vitess's query analysis capabilities, allowing for more informed decisions about sharding 
 strategies and query optimization.
-
-### <a id="errant-gtid-vttablet"/>Errant GTID Detection on VTTablets</a>
-
-VTTablets now run an errant GTID detection logic before they join the replication stream. So, if a replica has an errant GTID, it will
-not start replicating from the primary. This protects us from running into situations which are very difficult to recover from.
-
-For users running with the vitess-operator on Kubernetes, this change means that replica tablets with errant GTIDs will have broken 
-replication and will report as unready. Users will need to manually replace and clean up these errant replica tablets.
 
 ### <a id="auto-replace-mysql-autoinc-with-seq"/>Automatically Replace MySQL auto_increment Clauses with Vitess Sequences</a>
 

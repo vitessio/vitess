@@ -114,10 +114,15 @@ func ExecDBWriteFunc(f func() error) error {
 
 func ExpireTableData(tableName string, timestampColumn string) error {
 	writeFunc := func() error {
-		_, err := db.ExecVTOrc(
-			fmt.Sprintf("delete from %s where %s < NOW() - INTERVAL ? DAY", tableName, timestampColumn),
-			config.Config.AuditPurgeDays,
+		query := fmt.Sprintf(`DELETE
+			FROM %s
+			WHERE
+				%s < DATETIME('now', PRINTF('-%%d DAY', ?))
+			`,
+			tableName,
+			timestampColumn,
 		)
+		_, err := db.ExecVTOrc(query, config.Config.AuditPurgeDays)
 		return err
 	}
 	return ExecDBWriteFunc(writeFunc)
@@ -357,35 +362,7 @@ Cleanup:
 		// Add replication group ancestry UUID as well. Otherwise, VTOrc thinks there are errant GTIDs in group
 		// members and its replicas, even though they are not.
 		instance.AncestryUUID = strings.Trim(instance.AncestryUUID, ",")
-		if instance.ExecutedGtidSet != "" && instance.primaryExecutedGtidSet != "" {
-			// Compare primary & replica GTID sets, but ignore the sets that present the primary's UUID.
-			// This is because vtorc may pool primary and replica at an inconvenient timing,
-			// such that the replica may _seems_ to have more entries than the primary, when in fact
-			// it's just that the primary's probing is stale.
-			redactedExecutedGtidSet, _ := NewOracleGtidSet(instance.ExecutedGtidSet)
-			for _, uuid := range strings.Split(instance.AncestryUUID, ",") {
-				if uuid != instance.ServerUUID {
-					redactedExecutedGtidSet.RemoveUUID(uuid)
-				}
-				if instance.IsCoPrimary && uuid == instance.ServerUUID {
-					// If this is a co-primary, then this server is likely to show its own generated GTIDs as errant,
-					// because its co-primary has not applied them yet
-					redactedExecutedGtidSet.RemoveUUID(uuid)
-				}
-			}
-			// Avoid querying the database if there's no point:
-			if !redactedExecutedGtidSet.IsEmpty() {
-				redactedPrimaryExecutedGtidSet, _ := NewOracleGtidSet(instance.primaryExecutedGtidSet)
-				redactedPrimaryExecutedGtidSet.RemoveUUID(instance.SourceUUID)
-
-				instance.GtidErrant, err = replication.Subtract(redactedExecutedGtidSet.String(), redactedPrimaryExecutedGtidSet.String())
-				if err == nil {
-					var gtidCount int64
-					gtidCount, err = replication.GTIDCount(instance.GtidErrant)
-					currentErrantGTIDCount.Set(tabletAlias, gtidCount)
-				}
-			}
-		}
+		err = detectErrantGTIDs(tabletAlias, instance, tablet)
 	}
 
 	latency.Stop("instance")
@@ -410,6 +387,58 @@ Cleanup:
 	_ = UpdateInstanceLastChecked(tabletAlias, partialSuccess)
 	latency.Stop("backend")
 	return nil, err
+}
+
+// detectErrantGTIDs detects the errant GTIDs on an instance.
+func detectErrantGTIDs(tabletAlias string, instance *Instance, tablet *topodatapb.Tablet) (err error) {
+	// If the tablet is not replicating from anyone, then it could be the previous primary.
+	// We should check for errant GTIDs by finding the difference with the shard's current primary.
+	if instance.primaryExecutedGtidSet == "" && instance.SourceHost == "" {
+		var primaryInstance *Instance
+		primaryAlias, _, _ := ReadShardPrimaryInformation(tablet.Keyspace, tablet.Shard)
+		if primaryAlias != "" {
+			primaryInstance, _, _ = ReadInstance(primaryAlias)
+		}
+		// Only run errant GTID detection, if we are sure that the data read of the current primary
+		// is up-to-date enough to reflect that it has been promoted. This is needed to prevent
+		// flagging incorrect errant GTIDs. If we were to use old data, we could have some GTIDs
+		// accepted by the old primary (this tablet) that don't show in the new primary's set.
+		if primaryInstance != nil {
+			if primaryInstance.SourceHost == "" {
+				instance.primaryExecutedGtidSet = primaryInstance.ExecutedGtidSet
+			}
+		}
+	}
+	if instance.ExecutedGtidSet != "" && instance.primaryExecutedGtidSet != "" {
+		// Compare primary & replica GTID sets, but ignore the sets that present the primary's UUID.
+		// This is because vtorc may pool primary and replica at an inconvenient timing,
+		// such that the replica may _seems_ to have more entries than the primary, when in fact
+		// it's just that the primary's probing is stale.
+		redactedExecutedGtidSet, _ := NewOracleGtidSet(instance.ExecutedGtidSet)
+		for _, uuid := range strings.Split(instance.AncestryUUID, ",") {
+			if uuid != instance.ServerUUID {
+				redactedExecutedGtidSet.RemoveUUID(uuid)
+			}
+			if instance.IsCoPrimary && uuid == instance.ServerUUID {
+				// If this is a co-primary, then this server is likely to show its own generated GTIDs as errant,
+				// because its co-primary has not applied them yet
+				redactedExecutedGtidSet.RemoveUUID(uuid)
+			}
+		}
+		// Avoid querying the database if there's no point:
+		if !redactedExecutedGtidSet.IsEmpty() {
+			redactedPrimaryExecutedGtidSet, _ := NewOracleGtidSet(instance.primaryExecutedGtidSet)
+			redactedPrimaryExecutedGtidSet.RemoveUUID(instance.SourceUUID)
+
+			instance.GtidErrant, err = replication.Subtract(redactedExecutedGtidSet.String(), redactedPrimaryExecutedGtidSet.String())
+			if err == nil {
+				var gtidCount int64
+				gtidCount, err = replication.GTIDCount(instance.GtidErrant)
+				currentErrantGTIDCount.Set(tabletAlias, gtidCount)
+			}
+		}
+	}
+	return err
 }
 
 // getKeyspaceShardName returns a single string having both the keyspace and shard
@@ -439,16 +468,16 @@ func ReadInstanceClusterAttributes(instance *Instance) (err error) {
 	var primaryExecutedGtidSet string
 	primaryDataFound := false
 
-	query := `
-			select
-					replication_depth,
-					source_host,
-					source_port,
-					ancestry_uuid,
-					executed_gtid_set
-				from database_instance
-				where hostname=? and port=?
-	`
+	query := `SELECT
+		replication_depth,
+		source_host,
+		source_port,
+		ancestry_uuid,
+		executed_gtid_set
+	FROM database_instance
+	WHERE
+		hostname = ?
+		AND port = ?`
 	primaryHostname := instance.SourceHost
 	primaryPort := instance.SourcePort
 	args := sqlutils.Args(primaryHostname, primaryPort)
@@ -580,20 +609,22 @@ func readInstancesByCondition(condition string, args []any, sort string) ([](*In
 		if sort == "" {
 			sort = `alias`
 		}
-		query := fmt.Sprintf(`
-		select
-			*,
-			unix_timestamp() - unix_timestamp(last_checked) as seconds_since_last_checked,
-			ifnull(last_checked <= last_seen, 0) as is_last_check_valid,
-			unix_timestamp() - unix_timestamp(last_seen) as seconds_since_last_seen
-		from
-			vitess_tablet
-			left join database_instance using (alias, hostname, port)
-		where
-			%s
-		order by
-			%s
-			`, condition, sort)
+		query := fmt.Sprintf(`SELECT
+				*,
+				STRFTIME('%%s', 'now') - STRFTIME('%%s', last_checked) AS seconds_since_last_checked,
+				IFNULL(last_checked <= last_seen, 0) AS is_last_check_valid,
+				STRFTIME('%%s', 'now') - STRFTIME('%%s', last_seen) AS seconds_since_last_seen
+			FROM
+				vitess_tablet
+				LEFT JOIN database_instance USING (alias, hostname, port)
+			WHERE
+				%s
+			ORDER BY
+				%s
+			`,
+			condition,
+			sort,
+		)
 
 		err := db.QueryVTOrc(query, args, func(m sqlutils.RowMap) error {
 			instance := readInstanceRow(m)
@@ -614,9 +645,7 @@ func readInstancesByCondition(condition string, args []any, sort string) ([](*In
 
 // ReadInstance reads an instance from the vtorc backend database
 func ReadInstance(tabletAlias string) (*Instance, bool, error) {
-	condition := `
-			alias = ?
-		`
+	condition := `alias = ?`
 	instances, err := readInstancesByCondition(condition, sqlutils.Args(tabletAlias), "")
 	// We know there will be at most one (alias is the PK).
 	// And we expect to find one.
@@ -633,18 +662,17 @@ func ReadInstance(tabletAlias string) (*Instance, bool, error) {
 // ReadProblemInstances reads all instances with problems
 func ReadProblemInstances(keyspace string, shard string) ([](*Instance), error) {
 	condition := `
-			keyspace LIKE (CASE WHEN ? = '' THEN '%' ELSE ? END)
-			and shard LIKE (CASE WHEN ? = '' THEN '%' ELSE ? END)
-			and (
-				(last_seen < last_checked)
-				or (unix_timestamp() - unix_timestamp(last_checked) > ?)
-				or (replication_sql_thread_state not in (-1 ,1))
-				or (replication_io_thread_state not in (-1 ,1))
-				or (abs(cast(replication_lag_seconds as signed) - cast(sql_delay as signed)) > ?)
-				or (abs(cast(replica_lag_seconds as signed) - cast(sql_delay as signed)) > ?)
-				or (gtid_errant != '')
-			)
-		`
+		keyspace LIKE (CASE WHEN ? = '' THEN '%' ELSE ? END)
+		AND shard LIKE (CASE WHEN ? = '' THEN '%' ELSE ? END)
+		AND (
+			(last_seen < last_checked)
+			OR (STRFTIME('%%s', 'now') - STRFTIME('%%s', last_checked) > ?)
+			OR (replication_sql_thread_state NOT IN (-1 ,1))
+			OR (replication_io_thread_state NOT IN (-1 ,1))
+			OR (ABS(CAST(replication_lag_seconds AS integer) - CAST(sql_delay AS integer)) > ?)
+			OR (ABS(CAST(replica_lag_seconds AS integer) - CAST(sql_delay AS integer)) > ?)
+			OR (gtid_errant != '')
+		)`
 
 	args := sqlutils.Args(keyspace, keyspace, shard, shard, config.Config.InstancePollSeconds*5, config.Config.ReasonableReplicationLagSeconds, config.Config.ReasonableReplicationLagSeconds)
 	return readInstancesByCondition(condition, args, "")
@@ -653,10 +681,9 @@ func ReadProblemInstances(keyspace string, shard string) ([](*Instance), error) 
 // ReadInstancesWithErrantGTIds reads all instances with errant GTIDs
 func ReadInstancesWithErrantGTIds(keyspace string, shard string) ([]*Instance, error) {
 	condition := `
-			keyspace LIKE (CASE WHEN ? = '' THEN '%' ELSE ? END)
-			and shard LIKE (CASE WHEN ? = '' THEN '%' ELSE ? END)
-			and gtid_errant != ''
-		`
+		keyspace LIKE (CASE WHEN ? = '' THEN '%' ELSE ? END)
+		AND shard LIKE (CASE WHEN ? = '' THEN '%' ELSE ? END)
+		AND gtid_errant != ''`
 
 	args := sqlutils.Args(keyspace, keyspace, shard, shard)
 	return readInstancesByCondition(condition, args, "")
@@ -664,15 +691,14 @@ func ReadInstancesWithErrantGTIds(keyspace string, shard string) ([]*Instance, e
 
 // GetKeyspaceShardName gets the keyspace shard name for the given instance key
 func GetKeyspaceShardName(tabletAlias string) (keyspace string, shard string, err error) {
-	query := `
-		select
-			keyspace,
-			shard
-		from
-			vitess_tablet
-		where
-			alias = ?
-			`
+	query := `SELECT
+		keyspace,
+		shard
+	FROM
+		vitess_tablet
+	WHERE
+		alias = ?
+	`
 	err = db.QueryVTOrc(query, sqlutils.Args(tabletAlias), func(m sqlutils.RowMap) error {
 		keyspace = m.GetString("keyspace")
 		shard = m.GetString("shard")
@@ -695,27 +721,26 @@ func GetKeyspaceShardName(tabletAlias string) (keyspace string, shard string, er
 // the instance.
 func ReadOutdatedInstanceKeys() ([]string, error) {
 	var res []string
-	query := `
-		SELECT
-			alias
-		FROM
-			database_instance
-		WHERE
-			CASE
-				WHEN last_attempted_check <= last_checked
-				THEN last_checked < now() - interval ? second
-				ELSE last_checked < now() - interval ? second
-			END
-		UNION
-		SELECT
-			vitess_tablet.alias
-		FROM
-			vitess_tablet LEFT JOIN database_instance ON (
-			vitess_tablet.alias = database_instance.alias
-		)
-		WHERE
-			database_instance.alias IS NULL
-			`
+	query := `SELECT
+		alias
+	FROM
+		database_instance
+	WHERE
+		CASE
+			WHEN last_attempted_check <= last_checked
+			THEN last_checked < DATETIME('now', PRINTF('-%d SECOND', ?))
+			ELSE last_checked < DATETIME('now', PRINTF('-%d SECOND', ?))
+		END
+	UNION
+	SELECT
+		vitess_tablet.alias
+	FROM
+		vitess_tablet LEFT JOIN database_instance ON (
+		vitess_tablet.alias = database_instance.alias
+	)
+	WHERE
+		database_instance.alias IS NULL
+	`
 	args := sqlutils.Args(config.Config.InstancePollSeconds, 2*config.Config.InstancePollSeconds)
 
 	err := db.QueryVTOrc(query, args, func(m sqlutils.RowMap) error {
@@ -733,7 +758,7 @@ func ReadOutdatedInstanceKeys() ([]string, error) {
 	return res, err
 }
 
-func mkInsertOdku(table string, columns []string, values []string, nrRows int, insertIgnore bool) (string, error) {
+func mkInsert(table string, columns []string, values []string, nrRows int, insertIgnore bool) (string, error) {
 	if len(columns) == 0 {
 		return "", errors.New("Column list cannot be empty")
 	}
@@ -745,9 +770,9 @@ func mkInsertOdku(table string, columns []string, values []string, nrRows int, i
 	}
 
 	var q strings.Builder
-	var ignore string
+	insertStr := "REPLACE INTO"
 	if insertIgnore {
-		ignore = "ignore"
+		insertStr = "INSERT OR IGNORE INTO"
 	}
 	valRow := fmt.Sprintf("(%s)", strings.Join(values, ", "))
 	var val strings.Builder
@@ -758,26 +783,22 @@ func mkInsertOdku(table string, columns []string, values []string, nrRows int, i
 	}
 
 	col := strings.Join(columns, ", ")
-	var odku strings.Builder
-	odku.WriteString(fmt.Sprintf("%s=VALUES(%s)", columns[0], columns[0]))
-	for _, c := range columns[1:] {
-		odku.WriteString(", ")
-		odku.WriteString(fmt.Sprintf("%s=VALUES(%s)", c, c))
-	}
-
-	q.WriteString(fmt.Sprintf(`INSERT %s INTO %s
-                (%s)
-        VALUES
-                %s
-        ON DUPLICATE KEY UPDATE
-                %s
-        `,
-		ignore, table, col, val.String(), odku.String()))
+	query := fmt.Sprintf(`%s %s
+			(%s)
+		VALUES
+			%s
+		`,
+		insertStr,
+		table,
+		col,
+		val.String(),
+	)
+	q.WriteString(query)
 
 	return q.String(), nil
 }
 
-func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bool, updateLastSeen bool) (string, []any, error) {
+func mkInsertForInstances(instances []*Instance, instanceWasActuallyFound bool, updateLastSeen bool) (string, []any, error) {
 	if len(instances) == 0 {
 		return "", nil, nil
 	}
@@ -858,13 +879,13 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 	for i := range columns {
 		values[i] = "?"
 	}
-	values[3] = "NOW()" // last_checked
-	values[4] = "NOW()" // last_attempted_check
-	values[5] = "1"     // last_check_partial_success
+	values[3] = "DATETIME('now')" // last_checked
+	values[4] = "DATETIME('now')" // last_attempted_check
+	values[5] = "1"               // last_check_partial_success
 
 	if updateLastSeen {
 		columns = append(columns, "last_seen")
-		values = append(values, "NOW()")
+		values = append(values, "DATETIME('now')")
 	}
 
 	var args []any
@@ -935,7 +956,7 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 		args = append(args, instance.LastDiscoveryLatency.Nanoseconds())
 	}
 
-	sql, err := mkInsertOdku("database_instance", columns, values, len(instances), insertIgnore)
+	sql, err := mkInsert("database_instance", columns, values, len(instances), insertIgnore)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to build query: %v", err)
 		log.Errorf(errMsg)
@@ -957,7 +978,7 @@ func writeManyInstances(instances []*Instance, instanceWasActuallyFound bool, up
 	if len(writeInstances) == 0 {
 		return nil // nothing to write
 	}
-	sql, args, err := mkInsertOdkuForInstances(writeInstances, instanceWasActuallyFound, updateLastSeen)
+	sql, args, err := mkInsertForInstances(writeInstances, instanceWasActuallyFound, updateLastSeen)
 	if err != nil {
 		return err
 	}
@@ -980,14 +1001,13 @@ func WriteInstance(instance *Instance, instanceWasActuallyFound bool, lastError 
 // for a given instance
 func UpdateInstanceLastChecked(tabletAlias string, partialSuccess bool) error {
 	writeFunc := func() error {
-		_, err := db.ExecVTOrc(`
-        	update
-        		database_instance
-        	set
-						last_checked = NOW(),
-						last_check_partial_success = ?
-			where
-				alias = ?`,
+		_, err := db.ExecVTOrc(`UPDATE database_instance
+			SET
+				last_checked = DATETIME('now'),
+				last_check_partial_success = ?
+			WHERE
+				alias = ?
+			`,
 			partialSuccess,
 			tabletAlias,
 		)
@@ -1009,13 +1029,12 @@ func UpdateInstanceLastChecked(tabletAlias string, partialSuccess bool) error {
 // we have a "hanging" issue.
 func UpdateInstanceLastAttemptedCheck(tabletAlias string) error {
 	writeFunc := func() error {
-		_, err := db.ExecVTOrc(`
-    	update
-    		database_instance
-    	set
-    		last_attempted_check = NOW()
-			where
-				alias = ?`,
+		_, err := db.ExecVTOrc(`UPDATE database_instance
+			SET
+				last_attempted_check = DATETIME('now')
+			WHERE
+				alias = ?
+			`,
 			tabletAlias,
 		)
 		if err != nil {
@@ -1046,11 +1065,11 @@ func ForgetInstance(tabletAlias string) error {
 	currentErrantGTIDCount.Reset(tabletAlias)
 
 	// Delete from the 'vitess_tablet' table.
-	_, err := db.ExecVTOrc(`
-					delete
-						from vitess_tablet
-					where
-						alias = ?`,
+	_, err := db.ExecVTOrc(`DELETE
+		FROM vitess_tablet
+		WHERE
+			alias = ?
+		`,
 		tabletAlias,
 	)
 	if err != nil {
@@ -1059,11 +1078,11 @@ func ForgetInstance(tabletAlias string) error {
 	}
 
 	// Also delete from the 'database_instance' table.
-	sqlResult, err := db.ExecVTOrc(`
-			delete
-				from database_instance
-			where
-				alias = ?`,
+	sqlResult, err := db.ExecVTOrc(`DELETE
+		FROM database_instance
+		WHERE
+			alias = ?
+		`,
 		tabletAlias,
 	)
 	if err != nil {
@@ -1087,11 +1106,11 @@ func ForgetInstance(tabletAlias string) error {
 
 // ForgetLongUnseenInstances will remove entries of all instances that have long since been last seen.
 func ForgetLongUnseenInstances() error {
-	sqlResult, err := db.ExecVTOrc(`
-			delete
-				from database_instance
-			where
-				last_seen < NOW() - interval ? hour`,
+	sqlResult, err := db.ExecVTOrc(`DELETE
+		FROM database_instance
+		WHERE
+			last_seen < DATETIME('now', PRINTF('-%d HOUR', ?))
+		`,
 		config.UnseenInstanceForgetHours,
 	)
 	if err != nil {
@@ -1112,18 +1131,26 @@ func ForgetLongUnseenInstances() error {
 // SnapshotTopologies records topology graph for all existing topologies
 func SnapshotTopologies() error {
 	writeFunc := func() error {
-		_, err := db.ExecVTOrc(`
-        	insert ignore into
-        		database_instance_topology_history (snapshot_unix_timestamp,
-        			alias, hostname, port, source_host, source_port, keyspace, shard, version)
-        	select
-        		UNIX_TIMESTAMP(NOW()),
-				vitess_tablet.alias, vitess_tablet.hostname, vitess_tablet.port, 
-				database_instance.source_host, database_instance.source_port, 
+		_, err := db.ExecVTOrc(`INSERT OR IGNORE
+			INTO database_instance_topology_history (
+				snapshot_unix_timestamp,
+				alias,
+				hostname,
+				port,
+				source_host,
+				source_port,
+				keyspace,
+				shard,
+				version
+			)
+			SELECT
+				STRFTIME('%s', 'now'),
+				vitess_tablet.alias, vitess_tablet.hostname, vitess_tablet.port,
+				database_instance.source_host, database_instance.source_port,
 				vitess_tablet.keyspace, vitess_tablet.shard, database_instance.version
-			from
-				vitess_tablet left join database_instance using (alias, hostname, port)
-				`,
+			FROM
+				vitess_tablet LEFT JOIN database_instance USING (alias, hostname, port)
+			`,
 		)
 		if err != nil {
 			log.Error(err)
@@ -1141,10 +1168,12 @@ func ExpireStaleInstanceBinlogCoordinates() error {
 		expireSeconds = config.StaleInstanceCoordinatesExpireSeconds
 	}
 	writeFunc := func() error {
-		_, err := db.ExecVTOrc(`
-					delete from database_instance_stale_binlog_coordinates
-					where first_seen < NOW() - INTERVAL ? SECOND
-					`, expireSeconds,
+		_, err := db.ExecVTOrc(`DELETE
+			FROM database_instance_stale_binlog_coordinates
+			WHERE
+				first_seen < DATETIME('now', PRINTF('-%d SECOND', ?))
+			`,
+			expireSeconds,
 		)
 		if err != nil {
 			log.Error(err)
@@ -1166,7 +1195,7 @@ func GetDatabaseState() (string, error) {
 		ts := tableState{
 			TableName: tableName,
 		}
-		err := db.QueryVTOrc("select * from "+tableName, nil, func(rowMap sqlutils.RowMap) error {
+		err := db.QueryVTOrc("SELECT * FROM "+tableName, nil, func(rowMap sqlutils.RowMap) error {
 			ts.Rows = append(ts.Rows, rowMap)
 			return nil
 		})

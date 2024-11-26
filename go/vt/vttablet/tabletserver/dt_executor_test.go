@@ -27,22 +27,21 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/event/syslogger"
-	"vitess.io/vitess/go/mysql/sqlerror"
-	"vitess.io/vitess/go/vt/vtenv"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
-
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/event/syslogger"
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 )
 
 func TestTxExecutorEmptyPrepare(t *testing.T) {
@@ -267,8 +266,8 @@ func TestTxExecutorCommitRedoFail(t *testing.T) {
 	require.NoError(t, err)
 
 	// fail commit prepare as the delete redo query is in rejected query.
-	db.AddRejectedQuery("delete from _vt.redo_state where dtid = 'bb'", errors.New("delete redo log fail"))
-	db.AddQuery("update _vt.redo_state set state = 0 where dtid = 'bb'", sqltypes.MakeTestResult(nil))
+	db.AddRejectedQuery("delete from _vt.redo_state where dtid = _binary'bb'", errors.New("delete redo log fail"))
+	db.AddQuery("update _vt.redo_state set state = 0 where dtid = _binary'bb'", sqltypes.MakeTestResult(nil))
 	err = txe.CommitPrepared("bb")
 	require.ErrorContains(t, err, "delete redo log fail")
 
@@ -331,8 +330,8 @@ func TestExecutorCreateTransaction(t *testing.T) {
 	txe, _, db, closer := newTestTxExecutor(t, ctx)
 	defer closer()
 
-	db.AddQueryPattern(fmt.Sprintf("insert into _vt\\.dt_state\\(dtid, state, time_created\\) values \\('aa', %d,.*", int(querypb.TransactionState_PREPARE)), &sqltypes.Result{})
-	db.AddQueryPattern("insert into _vt\\.dt_participant\\(dtid, id, keyspace, shard\\) values \\('aa', 1,.*", &sqltypes.Result{})
+	db.AddQueryPattern(fmt.Sprintf("insert into _vt\\.dt_state\\(dtid, state, time_created\\) values \\(_binary'aa', %d,.*", int(querypb.TransactionState_PREPARE)), &sqltypes.Result{})
+	db.AddQueryPattern("insert into _vt\\.dt_participant\\(dtid, id, keyspace, shard\\) values \\(_binary'aa', 1,.*", &sqltypes.Result{})
 	err := txe.CreateTransaction("aa", []*querypb.Target{{
 		Keyspace: "t1",
 		Shard:    "0",
@@ -346,17 +345,19 @@ func TestExecutorStartCommit(t *testing.T) {
 	txe, tsv, db, closer := newTestTxExecutor(t, ctx)
 	defer closer()
 
-	commitTransition := fmt.Sprintf("update _vt.dt_state set state = %d where dtid = 'aa' and state = %d", int(querypb.TransactionState_COMMIT), int(querypb.TransactionState_PREPARE))
+	commitTransition := fmt.Sprintf("update _vt.dt_state set state = %d where dtid = _binary'aa' and state = %d", int(querypb.TransactionState_COMMIT), int(querypb.TransactionState_PREPARE))
 	db.AddQuery(commitTransition, &sqltypes.Result{RowsAffected: 1})
 	txid := newTxForPrep(ctx, tsv)
-	err := txe.StartCommit(txid, "aa")
+	state, err := txe.StartCommit(txid, "aa")
 	require.NoError(t, err)
+	assert.Equal(t, querypb.StartCommitState_Success, state)
 
 	db.AddQuery(commitTransition, &sqltypes.Result{})
 	txid = newTxForPrep(ctx, tsv)
-	err = txe.StartCommit(txid, "aa")
+	state, err = txe.StartCommit(txid, "aa")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "could not transition to COMMIT: aa")
+	assert.Equal(t, querypb.StartCommitState_Fail, state)
 }
 
 func TestExecutorStartCommitFailure(t *testing.T) {
@@ -375,12 +376,13 @@ func TestExecutorStartCommitFailure(t *testing.T) {
 	sc.Unlock()
 
 	// add rollback state update expectation
-	rollbackTransition := fmt.Sprintf("update _vt.dt_state set state = %d where dtid = 'aa' and state = %d", int(querypb.TransactionState_ROLLBACK), int(querypb.TransactionState_PREPARE))
+	rollbackTransition := fmt.Sprintf("update _vt.dt_state set state = %d where dtid = _binary'aa' and state = %d", int(querypb.TransactionState_ROLLBACK), int(querypb.TransactionState_PREPARE))
 	db.AddQuery(rollbackTransition, sqltypes.MakeTestResult(nil))
 
 	// try 2pc commit of Metadata Manager.
-	err = txe.StartCommit(txid, "aa")
+	state, err := txe.StartCommit(txid, "aa")
 	require.EqualError(t, err, "VT10002: atomic distributed transaction not allowed: cannot commit the transaction on a reserved connection")
+	assert.Equal(t, querypb.StartCommitState_Fail, state)
 }
 
 func TestExecutorSetRollback(t *testing.T) {
@@ -389,7 +391,7 @@ func TestExecutorSetRollback(t *testing.T) {
 	txe, tsv, db, closer := newTestTxExecutor(t, ctx)
 	defer closer()
 
-	rollbackTransition := fmt.Sprintf("update _vt.dt_state set state = %d where dtid = 'aa' and state = %d", int(querypb.TransactionState_ROLLBACK), int(querypb.TransactionState_PREPARE))
+	rollbackTransition := fmt.Sprintf("update _vt.dt_state set state = %d where dtid = _binary'aa' and state = %d", int(querypb.TransactionState_ROLLBACK), int(querypb.TransactionState_PREPARE))
 	db.AddQuery(rollbackTransition, &sqltypes.Result{RowsAffected: 1})
 	txid := newTxForPrep(ctx, tsv)
 	err := txe.SetRollback("aa", txid)
@@ -464,8 +466,8 @@ func TestExecutorConcludeTransaction(t *testing.T) {
 	txe, _, db, closer := newTestTxExecutor(t, ctx)
 	defer closer()
 
-	db.AddQuery("delete from _vt.dt_state where dtid = 'aa'", &sqltypes.Result{})
-	db.AddQuery("delete from _vt.dt_participant where dtid = 'aa'", &sqltypes.Result{})
+	db.AddQuery("delete from _vt.dt_state where dtid = _binary'aa'", &sqltypes.Result{})
+	db.AddQuery("delete from _vt.dt_participant where dtid = _binary'aa'", &sqltypes.Result{})
 	err := txe.ConcludeTransaction("aa")
 	require.NoError(t, err)
 }
@@ -476,7 +478,7 @@ func TestExecutorReadTransaction(t *testing.T) {
 	txe, _, db, closer := newTestTxExecutor(t, ctx)
 	defer closer()
 
-	db.AddQuery("select dtid, state, time_created from _vt.dt_state where dtid = 'aa'", &sqltypes.Result{})
+	db.AddQuery("select dtid, state, time_created from _vt.dt_state where dtid = _binary'aa'", &sqltypes.Result{})
 	got, err := txe.ReadTransaction("aa")
 	require.NoError(t, err)
 	want := &querypb.TransactionMetadata{}
@@ -496,8 +498,8 @@ func TestExecutorReadTransaction(t *testing.T) {
 			sqltypes.NewVarBinary("1"),
 		}},
 	}
-	db.AddQuery("select dtid, state, time_created from _vt.dt_state where dtid = 'aa'", txResult)
-	db.AddQuery("select keyspace, shard from _vt.dt_participant where dtid = 'aa'", &sqltypes.Result{
+	db.AddQuery("select dtid, state, time_created from _vt.dt_state where dtid = _binary'aa'", txResult)
+	db.AddQuery("select keyspace, shard from _vt.dt_participant where dtid = _binary'aa'", &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{Type: sqltypes.VarChar},
 			{Type: sqltypes.VarChar},
@@ -542,7 +544,7 @@ func TestExecutorReadTransaction(t *testing.T) {
 			sqltypes.NewVarBinary("1"),
 		}},
 	}
-	db.AddQuery("select dtid, state, time_created from _vt.dt_state where dtid = 'aa'", txResult)
+	db.AddQuery("select dtid, state, time_created from _vt.dt_state where dtid = _binary'aa'", txResult)
 	want.State = querypb.TransactionState_COMMIT
 	got, err = txe.ReadTransaction("aa")
 	require.NoError(t, err)
@@ -562,7 +564,7 @@ func TestExecutorReadTransaction(t *testing.T) {
 			sqltypes.NewVarBinary("1"),
 		}},
 	}
-	db.AddQuery("select dtid, state, time_created from _vt.dt_state where dtid = 'aa'", txResult)
+	db.AddQuery("select dtid, state, time_created from _vt.dt_state where dtid = _binary'aa'", txResult)
 	want.State = querypb.TransactionState_ROLLBACK
 	got, err = txe.ReadTransaction("aa")
 	require.NoError(t, err)
@@ -671,7 +673,10 @@ func TestNoTwopc(t *testing.T) {
 		fun:  func() error { return txe.CreateTransaction("aa", nil) },
 	}, {
 		desc: "StartCommit",
-		fun:  func() error { return txe.StartCommit(1, "aa") },
+		fun: func() error {
+			_, err := txe.StartCommit(1, "aa")
+			return err
+		},
 	}, {
 		desc: "SetRollback",
 		fun:  func() error { return txe.SetRollback("aa", 1) },
@@ -714,10 +719,10 @@ func newTestTxExecutor(t *testing.T, ctx context.Context) (txe *DTExecutor, tsv 
 	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TabletServerTest")
 	se := schema.NewEngine(env)
 	qe := NewQueryEngine(env, se)
-	db.AddQueryPattern("insert into _vt\\.redo_state\\(dtid, state, time_created\\) values \\('aa', 1,.*", &sqltypes.Result{})
+	db.AddQueryPattern("insert into _vt\\.redo_state\\(dtid, state, time_created\\) values \\(_binary'aa', 1,.*", &sqltypes.Result{})
 	db.AddQueryPattern("insert into _vt\\.redo_statement.*", &sqltypes.Result{})
-	db.AddQuery("delete from _vt.redo_state where dtid = 'aa'", &sqltypes.Result{})
-	db.AddQuery("delete from _vt.redo_statement where dtid = 'aa'", &sqltypes.Result{})
+	db.AddQuery("delete from _vt.redo_state where dtid = _binary'aa'", &sqltypes.Result{})
+	db.AddQuery("delete from _vt.redo_statement where dtid = _binary'aa'", &sqltypes.Result{})
 	db.AddQuery("update test_table set `name` = 2 where pk = 1 limit 10001", &sqltypes.Result{})
 	db.AddRejectedQuery("bogus", sqlerror.NewSQLError(sqlerror.ERUnknownError, sqlerror.SSUnknownSQLState, "bogus query"))
 	return &DTExecutor{
@@ -736,10 +741,10 @@ func newShortAgeExecutor(t *testing.T, ctx context.Context) (txe *DTExecutor, ts
 	db = setUpQueryExecutorTest(t)
 	logStats := tabletenv.NewLogStats(ctx, "TestTxExecutor")
 	tsv = newTestTabletServer(ctx, smallTxPool|shortTwopcAge, db)
-	db.AddQueryPattern("insert into _vt\\.redo_state\\(dtid, state, time_created\\) values \\('aa', 1,.*", &sqltypes.Result{})
+	db.AddQueryPattern("insert into _vt\\.redo_state\\(dtid, state, time_created\\) values \\(_binary'aa', 1,.*", &sqltypes.Result{})
 	db.AddQueryPattern("insert into _vt\\.redo_statement.*", &sqltypes.Result{})
-	db.AddQuery("delete from _vt.redo_state where dtid = 'aa'", &sqltypes.Result{})
-	db.AddQuery("delete from _vt.redo_statement where dtid = 'aa'", &sqltypes.Result{})
+	db.AddQuery("delete from _vt.redo_state where dtid = _binary'aa'", &sqltypes.Result{})
+	db.AddQuery("delete from _vt.redo_statement where dtid = _binary'aa'", &sqltypes.Result{})
 	db.AddQuery("update test_table set `name` = 2 where pk = 1 limit 10001", &sqltypes.Result{})
 	return &DTExecutor{
 		ctx:      ctx,

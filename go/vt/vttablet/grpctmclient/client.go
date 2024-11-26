@@ -672,14 +672,16 @@ func (client *Client) ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.
 }
 
 // GetUnresolvedTransactions is part of the tmclient.TabletManagerClient interface.
-func (client *Client) GetUnresolvedTransactions(ctx context.Context, tablet *topodatapb.Tablet) ([]*querypb.TransactionMetadata, error) {
+func (client *Client) GetUnresolvedTransactions(ctx context.Context, tablet *topodatapb.Tablet, abandonAge int64) ([]*querypb.TransactionMetadata, error) {
 	c, closer, err := client.dialer.dial(ctx, tablet)
 	if err != nil {
 		return nil, err
 	}
 	defer closer.Close()
 
-	response, err := c.GetUnresolvedTransactions(ctx, &tabletmanagerdatapb.GetUnresolvedTransactionsRequest{})
+	response, err := c.GetUnresolvedTransactions(ctx, &tabletmanagerdatapb.GetUnresolvedTransactionsRequest{
+		AbandonAge: abandonAge,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -730,6 +732,23 @@ func (client *Client) ReadTransaction(ctx context.Context, tablet *topodatapb.Ta
 		return nil, err
 	}
 	return resp.Transaction, nil
+}
+
+// GetTransactionInfo is part of the tmclient.TabletManagerClient interface.
+func (client *Client) GetTransactionInfo(ctx context.Context, tablet *topodatapb.Tablet, dtid string) (*tabletmanagerdatapb.GetTransactionInfoResponse, error) {
+	c, closer, err := client.dialer.dial(ctx, tablet)
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+
+	resp, err := c.GetTransactionInfo(ctx, &tabletmanagerdatapb.GetTransactionInfoRequest{
+		Dtid: dtid,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
 }
 
 //
@@ -904,6 +923,19 @@ func (client *Client) CreateVReplicationWorkflow(ctx context.Context, tablet *to
 	}
 	defer closer.Close()
 	response, err := c.CreateVReplicationWorkflow(ctx, request)
+	if err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
+func (client *Client) DeleteTableData(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.DeleteTableDataRequest) (*tabletmanagerdatapb.DeleteTableDataResponse, error) {
+	c, closer, err := client.dialer.dial(ctx, tablet)
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+	response, err := c.DeleteTableData(ctx, request)
 	if err != nil {
 		return nil, err
 	}
@@ -1089,6 +1121,20 @@ func (client *Client) PopulateReparentJournal(ctx context.Context, tablet *topod
 		ReplicationPosition: pos,
 	})
 	return err
+}
+
+// ReadReparentJournalInfo is part of the tmclient.TabletManagerClient interface.
+func (client *Client) ReadReparentJournalInfo(ctx context.Context, tablet *topodatapb.Tablet) (int, error) {
+	c, closer, err := client.dialer.dial(ctx, tablet)
+	if err != nil {
+		return 0, err
+	}
+	defer closer.Close()
+	resp, err := c.ReadReparentJournalInfo(ctx, &tabletmanagerdatapb.ReadReparentJournalInfoRequest{})
+	if err != nil {
+		return 0, err
+	}
+	return int(resp.Length), nil
 }
 
 // InitReplica is part of the tmclient.TabletManagerClient interface.

@@ -154,10 +154,12 @@ type TabletManagerClient interface {
 	//
 
 	// GetUnresolvedTransactions returns the list of unresolved transactions for the tablet.
-	GetUnresolvedTransactions(ctx context.Context, tablet *topodatapb.Tablet) ([]*querypb.TransactionMetadata, error)
+	GetUnresolvedTransactions(ctx context.Context, tablet *topodatapb.Tablet, abandonAge int64) ([]*querypb.TransactionMetadata, error)
 
 	// ReadTransaction returns the metadata for the specified distributed transaction ID.
 	ReadTransaction(ctx context.Context, tablet *topodatapb.Tablet, dtid string) (*querypb.TransactionMetadata, error)
+
+	GetTransactionInfo(ctx context.Context, tablet *topodatapb.Tablet, dtid string) (*tabletmanagerdatapb.GetTransactionInfoResponse, error)
 
 	// ConcludeTransaction conclude the transaction on the tablet.
 	ConcludeTransaction(ctx context.Context, tablet *topodatapb.Tablet, dtid string, mm bool) error
@@ -205,6 +207,7 @@ type TabletManagerClient interface {
 	//
 
 	CreateVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.CreateVReplicationWorkflowRequest) (*tabletmanagerdatapb.CreateVReplicationWorkflowResponse, error)
+	DeleteTableData(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.DeleteTableDataRequest) (*tabletmanagerdatapb.DeleteTableDataResponse, error)
 	DeleteVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.DeleteVReplicationWorkflowRequest) (*tabletmanagerdatapb.DeleteVReplicationWorkflowResponse, error)
 	HasVReplicationWorkflows(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.HasVReplicationWorkflowsRequest) (*tabletmanagerdatapb.HasVReplicationWorkflowsResponse, error)
 	ReadVReplicationWorkflows(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.ReadVReplicationWorkflowsRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse, error)
@@ -234,6 +237,9 @@ type TabletManagerClient interface {
 	// PopulateReparentJournal asks the primary to insert a row in
 	// its reparent_journal table.
 	PopulateReparentJournal(ctx context.Context, tablet *topodatapb.Tablet, timeCreatedNS int64, actionName string, tabletAlias *topodatapb.TabletAlias, pos string) error
+
+	// ReadReparentJournalInfo reads the information from reparent journal
+	ReadReparentJournalInfo(ctx context.Context, tablet *topodatapb.Tablet) (int, error)
 
 	// InitReplica tells a tablet to start replicating from the
 	// passed in primary tablet alias, and wait for the row in the

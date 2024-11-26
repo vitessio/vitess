@@ -312,6 +312,18 @@ func (s *server) ReadTransaction(ctx context.Context, request *tabletmanagerdata
 	return &tabletmanagerdatapb.ReadTransactionResponse{Transaction: transaction}, nil
 }
 
+func (s *server) GetTransactionInfo(ctx context.Context, request *tabletmanagerdatapb.GetTransactionInfoRequest) (response *tabletmanagerdatapb.GetTransactionInfoResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "GetTransactionInfo", request, response, false /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+
+	response, err = s.tm.GetTransactionInfo(ctx, request)
+	if err != nil {
+		return nil, vterrors.ToGRPC(err)
+	}
+
+	return response, nil
+}
+
 func (s *server) ConcludeTransaction(ctx context.Context, request *tabletmanagerdatapb.ConcludeTransactionRequest) (response *tabletmanagerdatapb.ConcludeTransactionResponse, err error) {
 	defer s.tm.HandleRPCPanic(ctx, "ConcludeTransaction", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
@@ -342,7 +354,7 @@ func (s *server) MysqlHostMetrics(ctx context.Context, request *tabletmanagerdat
 func (s *server) ReplicationStatus(ctx context.Context, request *tabletmanagerdatapb.ReplicationStatusRequest) (response *tabletmanagerdatapb.ReplicationStatusResponse, err error) {
 	defer s.tm.HandleRPCPanic(ctx, "ReplicationStatus", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
-	response = &tabletmanagerdatapb.ReplicationStatusResponse{}
+	response = &tabletmanagerdatapb.ReplicationStatusResponse{BackupRunning: s.tm.IsBackupRunning()}
 	status, err := s.tm.ReplicationStatus(ctx)
 	if err == nil {
 		response.Status = status
@@ -442,6 +454,13 @@ func (s *server) CreateVReplicationWorkflow(ctx context.Context, request *tablet
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.CreateVReplicationWorkflowResponse{}
 	return s.tm.CreateVReplicationWorkflow(ctx, request)
+}
+
+func (s *server) DeleteTableData(ctx context.Context, request *tabletmanagerdatapb.DeleteTableDataRequest) (response *tabletmanagerdatapb.DeleteTableDataResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "DeleteTableData", request, response, true /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response = &tabletmanagerdatapb.DeleteTableDataResponse{}
+	return s.tm.DeleteTableData(ctx, request)
 }
 
 func (s *server) DeleteVReplicationWorkflow(ctx context.Context, request *tabletmanagerdatapb.DeleteVReplicationWorkflowRequest) (response *tabletmanagerdatapb.DeleteVReplicationWorkflowResponse, err error) {
@@ -545,6 +564,17 @@ func (s *server) PopulateReparentJournal(ctx context.Context, request *tabletman
 	return response, s.tm.PopulateReparentJournal(ctx, request.TimeCreatedNs, request.ActionName, request.PrimaryAlias, request.ReplicationPosition)
 }
 
+func (s *server) ReadReparentJournalInfo(ctx context.Context, request *tabletmanagerdatapb.ReadReparentJournalInfoRequest) (response *tabletmanagerdatapb.ReadReparentJournalInfoResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "ReadReparentJournalInfo", request, response, true /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response = &tabletmanagerdatapb.ReadReparentJournalInfoResponse{}
+	length, err := s.tm.ReadReparentJournalInfo(ctx)
+	if err == nil {
+		response.Length = int32(length)
+	}
+	return response, err
+}
+
 func (s *server) InitReplica(ctx context.Context, request *tabletmanagerdatapb.InitReplicaRequest) (response *tabletmanagerdatapb.InitReplicaResponse, err error) {
 	defer s.tm.HandleRPCPanic(ctx, "InitReplica", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
@@ -607,6 +637,9 @@ func (s *server) StopReplicationAndGetStatus(ctx context.Context, request *table
 	if err == nil {
 		response.Status = statusResponse.Status
 	}
+
+	response.BackupRunning = s.tm.IsBackupRunning()
+
 	return response, err
 }
 

@@ -270,7 +270,7 @@ type testTMClient struct {
 	mu                                 sync.Mutex
 	vrQueries                          map[int][]*queryResult
 	createVReplicationWorkflowRequests map[uint32]*createVReplicationWorkflowRequestResponse
-	readVReplicationWorkflowRequests   map[uint32]*tabletmanagerdatapb.ReadVReplicationWorkflowRequest
+	readVReplicationWorkflowRequests   map[uint32]*readVReplicationWorkflowRequestResponse
 	applySchemaRequests                map[uint32]*applySchemaRequestResponse
 	primaryPositions                   map[uint32]string
 	vdiffRequests                      map[uint32]*vdiffRequestResponse
@@ -293,7 +293,7 @@ func newTestTMClient(env *testEnv) *testTMClient {
 		schema:                             make(map[string]*tabletmanagerdatapb.SchemaDefinition),
 		vrQueries:                          make(map[int][]*queryResult),
 		createVReplicationWorkflowRequests: make(map[uint32]*createVReplicationWorkflowRequestResponse),
-		readVReplicationWorkflowRequests:   make(map[uint32]*tabletmanagerdatapb.ReadVReplicationWorkflowRequest),
+		readVReplicationWorkflowRequests:   make(map[uint32]*readVReplicationWorkflowRequestResponse),
 		applySchemaRequests:                make(map[uint32]*applySchemaRequestResponse),
 		readVReplicationWorkflowsResponses: make(map[string][]*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse),
 		primaryPositions:                   make(map[uint32]string),
@@ -328,9 +328,12 @@ func (tmc *testTMClient) ReadVReplicationWorkflow(ctx context.Context, tablet *t
 	tmc.mu.Lock()
 	defer tmc.mu.Unlock()
 	if expect := tmc.readVReplicationWorkflowRequests[tablet.Alias.Uid]; expect != nil {
-		if !proto.Equal(expect, req) {
+		if !proto.Equal(expect.req, req) {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected ReadVReplicationWorkflow request on tablet %s: got %+v, want %+v",
 				topoproto.TabletAliasString(tablet.Alias), req, expect)
+		}
+		if expect.res != nil {
+			return expect.res, expect.err
 		}
 	}
 	workflowType := binlogdatapb.VReplicationWorkflowType_MoveTables
@@ -372,6 +375,10 @@ func (tmc *testTMClient) ReadVReplicationWorkflow(ctx context.Context, tablet *t
 	}
 
 	return res, nil
+}
+
+func (tmc *testTMClient) DeleteTableData(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.DeleteTableDataRequest) (response *tabletmanagerdatapb.DeleteTableDataResponse, err error) {
+	return &tabletmanagerdatapb.DeleteTableDataResponse{}, nil
 }
 
 func (tmc *testTMClient) DeleteVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.DeleteVReplicationWorkflowRequest) (response *tabletmanagerdatapb.DeleteVReplicationWorkflowResponse, err error) {
@@ -440,6 +447,22 @@ func (tmc *testTMClient) expectCreateVReplicationWorkflowRequestOnTargetTablets(
 
 	for _, tablet := range tmc.env.tablets[tmc.env.targetKeyspace.KeyspaceName] {
 		tmc.createVReplicationWorkflowRequests[tablet.Alias.Uid] = req
+	}
+}
+
+func (tmc *testTMClient) expectReadVReplicationWorkflowRequest(tabletID uint32, req *readVReplicationWorkflowRequestResponse) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+
+	tmc.readVReplicationWorkflowRequests[tabletID] = req
+}
+
+func (tmc *testTMClient) expectReadVReplicationWorkflowRequestOnTargetTablets(req *readVReplicationWorkflowRequestResponse) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+
+	for _, tablet := range tmc.env.tablets[tmc.env.targetKeyspace.KeyspaceName] {
+		tmc.readVReplicationWorkflowRequests[tablet.Alias.Uid] = req
 	}
 }
 
@@ -522,6 +545,12 @@ type vdiffRequestResponse struct {
 type createVReplicationWorkflowRequestResponse struct {
 	req *tabletmanagerdatapb.CreateVReplicationWorkflowRequest
 	res *tabletmanagerdatapb.CreateVReplicationWorkflowResponse
+	err error
+}
+
+type readVReplicationWorkflowRequestResponse struct {
+	req *tabletmanagerdatapb.ReadVReplicationWorkflowRequest
+	res *tabletmanagerdatapb.ReadVReplicationWorkflowResponse
 	err error
 }
 

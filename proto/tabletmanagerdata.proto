@@ -326,6 +326,18 @@ message ReadTransactionResponse {
   query.TransactionMetadata transaction = 1;
 }
 
+message GetTransactionInfoRequest {
+  string dtid = 1;
+}
+
+message GetTransactionInfoResponse {
+  string state = 1;
+  string message = 2;
+  int64 time_created = 3;
+  repeated string statements = 4;
+}
+
+
 message ConcludeTransactionRequest {
   string dtid = 1;
   bool mm = 2;
@@ -348,6 +360,7 @@ message ReplicationStatusRequest {
 
 message ReplicationStatusResponse {
   replicationdata.Status status = 1;
+  bool backup_running = 2;
 }
 
 message PrimaryStatusRequest {
@@ -448,6 +461,13 @@ message PopulateReparentJournalRequest {
 message PopulateReparentJournalResponse {
 }
 
+message ReadReparentJournalInfoRequest {
+}
+
+message ReadReparentJournalInfoResponse {
+  int32 length = 1;
+}
+
 message InitReplicaRequest {
   topodata.TabletAlias parent = 1;
   string replication_position = 2;
@@ -529,6 +549,7 @@ message StopReplicationAndGetStatusResponse {
 
   // Status represents the replication status call right before, and right after telling the replica to stop.
   replicationdata.StopReplicationStatus status = 2;
+  bool backup_running = 3;
 }
 
 message PromoteReplicaRequest {
@@ -603,6 +624,18 @@ message CreateVReplicationWorkflowRequest {
 
 message CreateVReplicationWorkflowResponse {
   query.QueryResult result = 1;
+}
+
+message DeleteTableDataRequest {
+  // The key is the table that we want to delete data from.
+  // The value is the filter or WHERE clause to use when deleting
+  // data in the table.
+  map <string, string> table_filters = 1;
+  // BatchSize is the number of rows to delete in a single batch.
+  int64 batch_size = 2;
+}
+
+message DeleteTableDataResponse {
 }
 
 message DeleteVReplicationWorkflowRequest {

@@ -152,6 +152,16 @@ func TestIsUnrecoverableError(t *testing.T) {
 			err:      sqlerror.NewSQLError(sqlerror.ERDataOutOfRange, "data out of range", "test"),
 			expected: true,
 		},
+		{
+			name:     "SQL error with HaErrDiskFullNowait error",
+			err:      sqlerror.NewSQLError(sqlerror.ERErrorDuringCommit, "unknown", "ERROR HY000: Got error 204 - 'No more room in disk' during COMMIT"),
+			expected: true,
+		},
+		{
+			name:     "SQL error with HaErrLockDeadlock error",
+			err:      sqlerror.NewSQLError(sqlerror.ERErrorDuringCommit, "unknown", "ERROR HY000: Got error 149 - 'Lock deadlock; Retry transaction' during COMMIT"),
+			expected: false,
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {

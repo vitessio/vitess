@@ -35,10 +35,6 @@ func TestMarshalUnmarshal(t *testing.T) {
 			{Table: "orders", Name: "category"},
 			{Table: "users", Name: "department"},
 		},
-		JoinColumns: []ColumnUse{
-			{Column: Column{Table: "users", Name: "id"}, Uses: sqlparser.EqualOp},
-			{Column: Column{Table: "orders", Name: "user_id"}, Uses: sqlparser.EqualOp},
-		},
 		FilterColumns: []ColumnUse{
 			{Column: Column{Table: "users", Name: "age"}, Uses: sqlparser.GreaterThanOp},
 			{Column: Column{Table: "orders", Name: "total"}, Uses: sqlparser.LessThanOp},
@@ -48,6 +44,9 @@ func TestMarshalUnmarshal(t *testing.T) {
 			{Table: "users", Name: "name"},
 			{Table: "users", Name: "email"},
 			{Table: "orders", Name: "amount"},
+		},
+		JoinPredicates: []JoinPredicate{
+			{LHS: Column{Table: "users", Name: "id"}, RHS: Column{Table: "orders", Name: "user_id"}, Uses: sqlparser.EqualOp},
 		},
 	}
 
