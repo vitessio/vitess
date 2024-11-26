@@ -33,18 +33,18 @@ never be promoted, neither by planned nor by emergency reparents.
 The configuration file for VTOrc has been updated to now support dynamic fields. The old `--config` parameter has been removed. The alternative is to use the `--config-file` parameter. The configuration can now be provided in both json, yaml or any other format that [viper](https://github.com/spf13/viper) supports.
 
 The following fields can be dynamically changed - 
-1. `InstancePollTime`
-2. `PreventCrossCellFailover`
-3. `SnapshotTopologyInterval`
-4. `ReasonableReplicationLag`
-5. `AuditToBackend`
-6. `AuditToSyslog`
-7. `AuditPurgeDuration`
-8. `WaitReplicasTimeout`
-9. `TolerableReplicationLag`
-10. `TopoInformationRefreshDuration`
-11. `RecoveryPollDuration`
-12. `AllowEmergencyReparent`
-13. `ChangeTabletsWithErrantGtidToDrained`
+1. `instance-poll-time`
+2. `prevent-cross-cell-failover`
+3. `snapshot-topology-interval`
+4. `reasonable-replication-lag`
+5. `audit-to-backend`
+6. `audit-to-syslog`
+7. `audit-purge-duration`
+8. `wait-replicas-timeout`
+9. `tolerable-replication-lag`
+10. `topo-information-refresh-duration`
+11. `recovery-poll-duration`
+12. `allow-emergency-reparent`
+13. `change-tablets-with-errant-gtid-to-drained`
 
 To upgrade to the newer version of the configuration file, first switch to using the flags in your current deployment before upgrading. Then you can switch to using the configuration file in the newer release.
