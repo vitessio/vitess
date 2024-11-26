@@ -2486,11 +2486,23 @@ authentication:
   {
     $$ = &Authentication{Plugin: string($3)}
   }
+| IDENTIFIED WITH STRING
+  {
+    $$ = &Authentication{Plugin: string($3)}
+  }
 | IDENTIFIED WITH ID BY RANDOM PASSWORD
   {
     $$ = &Authentication{Plugin: string($3), RandomPassword: true}
   }
+| IDENTIFIED WITH STRING BY RANDOM PASSWORD
+  {
+    $$ = &Authentication{Plugin: string($3), RandomPassword: true}
+  }
 | IDENTIFIED WITH ID BY STRING
+  {
+    $$ = &Authentication{Plugin: string($3), Password: string($5)}
+  }
+| IDENTIFIED WITH STRING BY STRING
   {
     $$ = &Authentication{Plugin: string($3), Password: string($5)}
   }
