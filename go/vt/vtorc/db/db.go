@@ -47,7 +47,9 @@ func OpenVTOrc() (db *sql.DB, err error) {
 	db, fromCache, err = sqlutils.GetSQLiteDB(config.Config.SQLite3DataFile)
 	if err == nil && !fromCache {
 		log.Infof("Connected to vtorc backend: sqlite on %v", config.Config.SQLite3DataFile)
-		_ = initVTOrcDB(db)
+		if err := initVTOrcDB(db); err != nil {
+			log.Fatalf("Cannot initiate vtorc: %+v", err)
+		}
 	}
 	if db != nil {
 		db.SetMaxOpenConns(1)
@@ -76,19 +78,14 @@ func registerVTOrcDeployment(db *sql.DB) error {
 func deployStatements(db *sql.DB, queries []string) error {
 	tx, err := db.Begin()
 	if err != nil {
-		log.Fatal(err.Error())
 		return err
 	}
 	for _, query := range queries {
 		if _, err := tx.Exec(query); err != nil {
-			log.Fatalf("Cannot initiate vtorc: %+v; query=%+v", err, query)
 			return err
 		}
 	}
-	if err := tx.Commit(); err != nil {
-		log.Fatal(err.Error())
-	}
-	return nil
+	return tx.Commit()
 }
 
 // ClearVTOrcDatabase is used to clear the VTOrc database. This function is meant to be used by tests to clear the
@@ -96,7 +93,9 @@ func deployStatements(db *sql.DB, queries []string) error {
 func ClearVTOrcDatabase() {
 	db, _, _ := sqlutils.GetSQLiteDB(config.Config.SQLite3DataFile)
 	if db != nil {
-		_ = initVTOrcDB(db)
+		if err := initVTOrcDB(db); err != nil {
+			log.Fatalf("Cannot re-initiate vtorc: %+v", err)
+		}
 	}
 }
 
@@ -105,12 +104,18 @@ func ClearVTOrcDatabase() {
 func initVTOrcDB(db *sql.DB) error {
 	log.Info("Initializing vtorc")
 	log.Info("Migrating database schema")
-	_ = deployStatements(db, vtorcBackend)
-	_ = registerVTOrcDeployment(db)
-
-	_, _ = ExecVTOrc(`PRAGMA journal_mode = WAL`)
-	_, _ = ExecVTOrc(`PRAGMA synchronous = NORMAL`)
-
+	if err := deployStatements(db, vtorcBackend); err != nil {
+		return err
+	}
+	if err := registerVTOrcDeployment(db); err != nil {
+		return err
+	}
+	if _, err := ExecVTOrc(`PRAGMA journal_mode = WAL`); err != nil {
+		return err
+	}
+	if _, err := ExecVTOrc(`PRAGMA synchronous = NORMAL`); err != nil {
+		return err
+	}
 	return nil
 }
 
