@@ -649,7 +649,7 @@ func (be *BuiltinBackupEngine) backupFiles(
 	var manifestErr error
 	for currentAttempt := 0; currentAttempt <= maxRetriesPerFile; currentAttempt++ {
 		manifestErr = be.backupManifest(ctx, params, bh, backupPosition, purgedPosition, fromPosition, fromBackupName, serverUUID, mysqlVersion, incrDetails, fes, currentAttempt)
-		if manifestErr == nil || ctx.Err() != nil {
+		if manifestErr == nil {
 			break
 		}
 	}
@@ -1036,7 +1036,11 @@ func (be *BuiltinBackupEngine) backupManifest(
 	if _, err := wc.Write([]byte(data)); err != nil {
 		return vterrors.Wrapf(err, "cannot write %v %s", backupManifestFileName, attemptStr)
 	}
-	return nil
+	err = bh.EndBackup(ctx)
+	if err != nil {
+		return err
+	}
+	return bh.Error()
 }
 
 // executeRestoreFullBackup restores the files from a full backup. The underlying mysql database service is expected to be stopped.
