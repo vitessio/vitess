@@ -33,9 +33,9 @@ import (
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/viperutil"
-	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
+	"vitess.io/vitess/go/vt/mysqlctl/errorsbackup"
 	"vitess.io/vitess/go/vt/servenv"
 )
 
@@ -203,7 +203,7 @@ type AZBlobBackupHandle struct {
 	name      string
 	readOnly  bool
 	waitGroup sync.WaitGroup
-	errors    concurrency.AllErrorRecorder
+	errors    errorsbackup.PerFileErrorRecorder
 	ctx       context.Context
 	cancel    context.CancelFunc
 }
@@ -219,8 +219,8 @@ func (bh *AZBlobBackupHandle) Name() string {
 }
 
 // RecordError is part of the concurrency.ErrorRecorder interface.
-func (bh *AZBlobBackupHandle) RecordError(err error) {
-	bh.errors.RecordError(err)
+func (bh *AZBlobBackupHandle) RecordError(filename string, err error) {
+	bh.errors.RecordError(filename, err)
 }
 
 // HasErrors is part of the concurrency.ErrorRecorder interface.
@@ -263,7 +263,7 @@ func (bh *AZBlobBackupHandle) AddFile(ctx context.Context, filename string, file
 		})
 		if err != nil {
 			reader.CloseWithError(err)
-			bh.RecordError(err)
+			bh.RecordError(filename, err)
 		}
 	}()
 

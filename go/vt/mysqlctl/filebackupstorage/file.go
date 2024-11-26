@@ -27,8 +27,9 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/vt/mysqlctl/errorsbackup"
+
 	"vitess.io/vitess/go/ioutil"
-	"vitess.io/vitess/go/vt/concurrency"
 	stats "vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/servenv"
@@ -59,7 +60,7 @@ type FileBackupHandle struct {
 	dir      string
 	name     string
 	readOnly bool
-	errors   concurrency.AllErrorRecorder
+	errors   errorsbackup.PerFileErrorRecorder
 }
 
 func NewBackupHandle(
@@ -80,8 +81,8 @@ func NewBackupHandle(
 }
 
 // RecordError is part of the concurrency.ErrorRecorder interface.
-func (fbh *FileBackupHandle) RecordError(err error) {
-	fbh.errors.RecordError(err)
+func (fbh *FileBackupHandle) RecordError(filename string, err error) {
+	fbh.errors.RecordError(filename, err)
 }
 
 // HasErrors is part of the concurrency.ErrorRecorder interface.

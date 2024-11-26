@@ -628,11 +628,13 @@ func (be *BuiltinBackupEngine) backupFiles(
 		go func(i int) {
 			defer wg.Done()
 			fe := &fes[i]
+			name := fmt.Sprintf("%v", i)
+
 			// Wait until we are ready to go, return if we encounter an error
 			acqErr := sema.Acquire(ctxCancel, 1)
 			if acqErr != nil {
 				log.Errorf("Unable to acquire semaphore needed to backup file: %s, err: %s", fe.Name, acqErr.Error())
-				bh.RecordError(acqErr)
+				bh.RecordError(name, acqErr)
 				cancel()
 				return
 			}
@@ -653,35 +655,26 @@ func (be *BuiltinBackupEngine) backupFiles(
 			select {
 			case <-ctxCancel.Done():
 				log.Errorf("Context canceled or timed out during %q backup", fe.Name)
-				bh.RecordError(vterrors.Errorf(vtrpc.Code_CANCELED, "context canceled"))
+				bh.RecordError(name, vterrors.Errorf(vtrpc.Code_CANCELED, "context canceled"))
 				return
 			default:
 			}
 
 			// Backup the individual file.
-			name := fmt.Sprintf("%v", i)
 			var errBackupFile error
-			for fe.AttemptNb <= maxRetriesPerFile {
-				if errBackupFile = be.backupFile(ctxCancel, params, bh, fe, name); errBackupFile == nil || ctxCancel.Err() != nil {
-					// Either no failure or the context was canceled. In both situations, we don't want to retry.
-					// If the context was canceled, it does not make sense to retry as the backup process is
-					// bound to fail whether we retry this file or not.
-					break
-				}
-
-				// A failure was observed, let's retry.
-				fe.AttemptNb++
-			}
-
-			// If we ran out of retries, and we still have an error, let's record it and cancel the process.
-			if errBackupFile != nil {
-				bh.RecordError(vterrors.Wrapf(errBackupFile, "failed to backup file '%s' after %d attempts", name, fe.AttemptNb))
+			if errBackupFile = be.backupFile(ctxCancel, params, bh, fe, name); errBackupFile != nil {
+				bh.RecordError(name, vterrors.Wrapf(errBackupFile, "failed to backup file '%s'", name))
 				cancel()
 			}
 		}(i)
 	}
 
 	wg.Wait()
+
+	err = bh.EndBackup(ctx)
+	if err != nil {
+		return err
+	}
 
 	// BackupHandle supports the ErrorRecorder interface for tracking errors
 	// across any goroutines that fan out to take the backup. This means that we

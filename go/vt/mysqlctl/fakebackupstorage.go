@@ -21,15 +21,15 @@ import (
 	"fmt"
 	"io"
 
-	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
+	"vitess.io/vitess/go/vt/mysqlctl/errorsbackup"
 )
 
 type FakeBackupHandle struct {
 	Dir      string
 	NameV    string
 	ReadOnly bool
-	Errors   concurrency.AllErrorRecorder
+	Errors   errorsbackup.PerFileErrorRecorder
 
 	AbortBackupCalls  []context.Context
 	AbortBackupReturn error
@@ -58,8 +58,8 @@ type FakeBackupHandleReadFileCall struct {
 	Filename string
 }
 
-func (fbh *FakeBackupHandle) RecordError(err error) {
-	fbh.Errors.RecordError(err)
+func (fbh *FakeBackupHandle) RecordError(filename string, err error) {
+	fbh.Errors.RecordError(filename, err)
 }
 
 func (fbh *FakeBackupHandle) HasErrors() bool {

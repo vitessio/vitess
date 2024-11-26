@@ -32,7 +32,8 @@ import (
 	minio "github.com/minio/minio-go"
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/vt/concurrency"
+	"vitess.io/vitess/go/vt/mysqlctl/errorsbackup"
+
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/servenv"
@@ -69,13 +70,13 @@ type CephBackupHandle struct {
 	dir       string
 	name      string
 	readOnly  bool
-	errors    concurrency.AllErrorRecorder
+	errors    errorsbackup.PerFileErrorRecorder
 	waitGroup sync.WaitGroup
 }
 
 // RecordError is part of the concurrency.ErrorRecorder interface.
-func (bh *CephBackupHandle) RecordError(err error) {
-	bh.errors.RecordError(err)
+func (bh *CephBackupHandle) RecordError(filename string, err error) {
+	bh.errors.RecordError(filename, err)
 }
 
 // HasErrors is part of the concurrency.ErrorRecorder interface.
@@ -109,7 +110,7 @@ func (bh *CephBackupHandle) AddFile(ctx context.Context, filename string, filesi
 		defer bh.waitGroup.Done()
 
 		// ceph bucket name is where the backups will go
-		//backup handle dir field contains keyspace/shard value
+		// backup handle dir field contains keyspace/shard value
 		bucket := alterBucketName(bh.dir)
 
 		// Give PutObject() the read end of the pipe.
@@ -120,7 +121,7 @@ func (bh *CephBackupHandle) AddFile(ctx context.Context, filename string, filesi
 			// Signal the writer that an error occurred, in case it's not done writing yet.
 			reader.CloseWithError(err)
 			// In case the error happened after the writer finished, we need to remember it.
-			bh.RecordError(err)
+			bh.RecordError(filename, err)
 		}
 	}()
 	// Give our caller the write end of the pipe.

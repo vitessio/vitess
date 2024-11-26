@@ -48,7 +48,8 @@ import (
 	"github.com/aws/smithy-go/middleware"
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/vt/concurrency"
+	"vitess.io/vitess/go/vt/mysqlctl/errorsbackup"
+
 	"vitess.io/vitess/go/vt/log"
 	stats "vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
@@ -144,7 +145,7 @@ type S3BackupHandle struct {
 	dir       string
 	name      string
 	readOnly  bool
-	errors    concurrency.AllErrorRecorder
+	errors    errorsbackup.PerFileErrorRecorder
 	waitGroup sync.WaitGroup
 }
 
@@ -159,8 +160,8 @@ func (bh *S3BackupHandle) Name() string {
 }
 
 // RecordError is part of the concurrency.ErrorRecorder interface.
-func (bh *S3BackupHandle) RecordError(err error) {
-	bh.errors.RecordError(err)
+func (bh *S3BackupHandle) RecordError(filename string, err error) {
+	bh.errors.RecordError(filename, err)
 }
 
 // HasErrors is part of the concurrency.ErrorRecorder interface.
@@ -222,7 +223,7 @@ func (bh *S3BackupHandle) AddFile(ctx context.Context, filename string, filesize
 		})
 		if err != nil {
 			reader.CloseWithError(err)
-			bh.RecordError(err)
+			bh.RecordError(filename, err)
 		}
 	}()
 
