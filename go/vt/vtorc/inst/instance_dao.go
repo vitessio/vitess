@@ -357,35 +357,7 @@ Cleanup:
 		// Add replication group ancestry UUID as well. Otherwise, VTOrc thinks there are errant GTIDs in group
 		// members and its replicas, even though they are not.
 		instance.AncestryUUID = strings.Trim(instance.AncestryUUID, ",")
-		if instance.ExecutedGtidSet != "" && instance.primaryExecutedGtidSet != "" {
-			// Compare primary & replica GTID sets, but ignore the sets that present the primary's UUID.
-			// This is because vtorc may pool primary and replica at an inconvenient timing,
-			// such that the replica may _seems_ to have more entries than the primary, when in fact
-			// it's just that the primary's probing is stale.
-			redactedExecutedGtidSet, _ := NewOracleGtidSet(instance.ExecutedGtidSet)
-			for _, uuid := range strings.Split(instance.AncestryUUID, ",") {
-				if uuid != instance.ServerUUID {
-					redactedExecutedGtidSet.RemoveUUID(uuid)
-				}
-				if instance.IsCoPrimary && uuid == instance.ServerUUID {
-					// If this is a co-primary, then this server is likely to show its own generated GTIDs as errant,
-					// because its co-primary has not applied them yet
-					redactedExecutedGtidSet.RemoveUUID(uuid)
-				}
-			}
-			// Avoid querying the database if there's no point:
-			if !redactedExecutedGtidSet.IsEmpty() {
-				redactedPrimaryExecutedGtidSet, _ := NewOracleGtidSet(instance.primaryExecutedGtidSet)
-				redactedPrimaryExecutedGtidSet.RemoveUUID(instance.SourceUUID)
-
-				instance.GtidErrant, err = replication.Subtract(redactedExecutedGtidSet.String(), redactedPrimaryExecutedGtidSet.String())
-				if err == nil {
-					var gtidCount int64
-					gtidCount, err = replication.GTIDCount(instance.GtidErrant)
-					currentErrantGTIDCount.Set(tabletAlias, gtidCount)
-				}
-			}
-		}
+		err = detectErrantGTIDs(tabletAlias, instance, tablet)
 	}
 
 	latency.Stop("instance")
@@ -410,6 +382,58 @@ Cleanup:
 	_ = UpdateInstanceLastChecked(tabletAlias, partialSuccess)
 	latency.Stop("backend")
 	return nil, err
+}
+
+// detectErrantGTIDs detects the errant GTIDs on an instance.
+func detectErrantGTIDs(tabletAlias string, instance *Instance, tablet *topodatapb.Tablet) (err error) {
+	// If the tablet is not replicating from anyone, then it could be the previous primary.
+	// We should check for errant GTIDs by finding the difference with the shard's current primary.
+	if instance.primaryExecutedGtidSet == "" && instance.SourceHost == "" {
+		var primaryInstance *Instance
+		primaryAlias, _, _ := ReadShardPrimaryInformation(tablet.Keyspace, tablet.Shard)
+		if primaryAlias != "" {
+			primaryInstance, _, _ = ReadInstance(primaryAlias)
+		}
+		// Only run errant GTID detection, if we are sure that the data read of the current primary
+		// is up-to-date enough to reflect that it has been promoted. This is needed to prevent
+		// flagging incorrect errant GTIDs. If we were to use old data, we could have some GTIDs
+		// accepted by the old primary (this tablet) that don't show in the new primary's set.
+		if primaryInstance != nil {
+			if primaryInstance.SourceHost == "" {
+				instance.primaryExecutedGtidSet = primaryInstance.ExecutedGtidSet
+			}
+		}
+	}
+	if instance.ExecutedGtidSet != "" && instance.primaryExecutedGtidSet != "" {
+		// Compare primary & replica GTID sets, but ignore the sets that present the primary's UUID.
+		// This is because vtorc may pool primary and replica at an inconvenient timing,
+		// such that the replica may _seems_ to have more entries than the primary, when in fact
+		// it's just that the primary's probing is stale.
+		redactedExecutedGtidSet, _ := NewOracleGtidSet(instance.ExecutedGtidSet)
+		for _, uuid := range strings.Split(instance.AncestryUUID, ",") {
+			if uuid != instance.ServerUUID {
+				redactedExecutedGtidSet.RemoveUUID(uuid)
+			}
+			if instance.IsCoPrimary && uuid == instance.ServerUUID {
+				// If this is a co-primary, then this server is likely to show its own generated GTIDs as errant,
+				// because its co-primary has not applied them yet
+				redactedExecutedGtidSet.RemoveUUID(uuid)
+			}
+		}
+		// Avoid querying the database if there's no point:
+		if !redactedExecutedGtidSet.IsEmpty() {
+			redactedPrimaryExecutedGtidSet, _ := NewOracleGtidSet(instance.primaryExecutedGtidSet)
+			redactedPrimaryExecutedGtidSet.RemoveUUID(instance.SourceUUID)
+
+			instance.GtidErrant, err = replication.Subtract(redactedExecutedGtidSet.String(), redactedPrimaryExecutedGtidSet.String())
+			if err == nil {
+				var gtidCount int64
+				gtidCount, err = replication.GTIDCount(instance.GtidErrant)
+				currentErrantGTIDCount.Set(tabletAlias, gtidCount)
+			}
+		}
+	}
+	return err
 }
 
 // getKeyspaceShardName returns a single string having both the keyspace and shard

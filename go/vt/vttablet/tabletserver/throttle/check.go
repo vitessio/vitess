@@ -188,9 +188,9 @@ func (check *ThrottlerCheck) Check(ctx context.Context, appName string, scope ba
 					// Out of abundance of caution, we will protect against such a scenario.
 					return
 				}
-				stats.GetOrNewCounter(fmt.Sprintf("ThrottlerCheck%s%sTotal", textutil.SingleWordCamel(metricScope.String()), textutil.SingleWordCamel(metricName.String())), "").Add(1)
+				stats.GetOrNewCounter(fmt.Sprintf("ThrottlerCheck%s%sTotal", textutil.PascalCase(metricScope.String()), textutil.PascalCase(metricName.String())), "").Add(1)
 				if !metricCheckResult.IsOK() {
-					stats.GetOrNewCounter(fmt.Sprintf("ThrottlerCheck%s%sError", textutil.SingleWordCamel(metricScope.String()), textutil.SingleWordCamel(metricName.String())), "").Add(1)
+					stats.GetOrNewCounter(fmt.Sprintf("ThrottlerCheck%s%sError", textutil.PascalCase(metricScope.String()), textutil.PascalCase(metricName.String())), "").Add(1)
 				}
 			}(metricCheckResult)
 		}
@@ -249,7 +249,7 @@ func (check *ThrottlerCheck) localCheck(ctx context.Context, aggregatedMetricNam
 		check.throttler.markMetricHealthy(aggregatedMetricName)
 	}
 	if timeSinceHealthy, found := check.throttler.timeSinceMetricHealthy(aggregatedMetricName); found {
-		go stats.GetOrNewGauge(fmt.Sprintf("ThrottlerCheck%sSecondsSinceHealthy", textutil.SingleWordCamel(scope.String())), fmt.Sprintf("seconds since last healthy check for %v", scope)).Set(int64(timeSinceHealthy.Seconds()))
+		go stats.GetOrNewGauge(fmt.Sprintf("ThrottlerCheck%sSecondsSinceHealthy", textutil.PascalCase(scope.String())), fmt.Sprintf("seconds since last healthy check for %v", scope)).Set(int64(timeSinceHealthy.Seconds()))
 	}
 
 	return checkResult
@@ -261,7 +261,7 @@ func (check *ThrottlerCheck) reportAggregated(aggregatedMetricName string, metri
 		return
 	}
 	if value, err := metricResult.Get(); err == nil {
-		stats.GetOrNewGaugeFloat64(fmt.Sprintf("ThrottlerAggregated%s%s", textutil.SingleWordCamel(scope.String()), textutil.SingleWordCamel(metricName.String())), fmt.Sprintf("aggregated value for %v", scope)).Set(value)
+		stats.GetOrNewGaugeFloat64(fmt.Sprintf("ThrottlerAggregated%s%s", textutil.PascalCase(scope.String()), textutil.PascalCase(metricName.String())), fmt.Sprintf("aggregated value for %v", scope)).Set(value)
 	}
 }
 

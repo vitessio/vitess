@@ -62,6 +62,64 @@ func TestPrimaryElection(t *testing.T) {
 	require.Len(t, res.Rows, 1, "There should only be 1 primary tablet which was elected")
 }
 
+// TestErrantGTIDOnPreviousPrimary tests that VTOrc is able to detect errant GTIDs on a previously demoted primary
+// if it has an errant GTID.
+func TestErrantGTIDOnPreviousPrimary(t *testing.T) {
+	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
+	defer cluster.PanicHandler(t)
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 3, 0, []string{"--change-tablets-with-errant-gtid-to-drained"}, cluster.VTOrcConfiguration{}, 1, "")
+	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
+	shard0 := &keyspace.Shards[0]
+
+	// find primary from topo
+	curPrimary := utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
+	assert.NotNil(t, curPrimary, "should have elected a primary")
+	vtOrcProcess := clusterInfo.ClusterInstance.VTOrcProcesses[0]
+	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.ElectNewPrimaryRecoveryName, 1)
+	utils.WaitForSuccessfulPRSCount(t, vtOrcProcess, keyspace.Name, shard0.Name, 1)
+
+	var replica, otherReplica *cluster.Vttablet
+	for _, tablet := range shard0.Vttablets {
+		// we know we have only two tablets, so the "other" one must be the new primary
+		if tablet.Alias != curPrimary.Alias {
+			if replica == nil {
+				replica = tablet
+			} else {
+				otherReplica = tablet
+			}
+		}
+	}
+	require.NotNil(t, replica, "should be able to find a replica")
+	require.NotNil(t, otherReplica, "should be able to find 2nd replica")
+	utils.CheckReplication(t, clusterInfo, curPrimary, []*cluster.Vttablet{replica, otherReplica}, 15*time.Second)
+
+	// Disable global recoveries for the cluster.
+	vtOrcProcess.DisableGlobalRecoveries(t)
+
+	// Run PRS to promote a different replica.
+	output, err := clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(
+		"PlannedReparentShard",
+		fmt.Sprintf("%s/%s", keyspace.Name, shard0.Name),
+		"--new-primary", replica.Alias)
+	require.NoError(t, err, "error in PlannedReparentShard output - %s", output)
+
+	// Stop replicatin on the previous primary to simulate it not reparenting properly.
+	// Also insert an errant GTID on the previous primary.
+	err = utils.RunSQLs(t, []string{
+		"STOP REPLICA",
+		"RESET REPLICA ALL",
+		"set global read_only=OFF",
+		"insert into vt_ks.vt_insert_test(id, msg) values (10173, 'test 178342')",
+	}, curPrimary, "")
+	require.NoError(t, err)
+
+	// Wait for VTOrc to detect the errant GTID and change the tablet to a drained type.
+	vtOrcProcess.EnableGlobalRecoveries(t)
+
+	// Wait for the tablet to be drained.
+	utils.WaitForTabletType(t, curPrimary, "drained")
+}
+
 // Cases to test:
 // 1. create cluster with 1 replica and 1 rdonly, let orc choose primary
 // verify rdonly is not elected, only replica

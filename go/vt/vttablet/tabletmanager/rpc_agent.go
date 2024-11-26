@@ -89,6 +89,8 @@ type RPCTM interface {
 
 	ReadTransaction(ctx context.Context, req *tabletmanagerdatapb.ReadTransactionRequest) (*querypb.TransactionMetadata, error)
 
+	GetTransactionInfo(ctx context.Context, req *tabletmanagerdatapb.GetTransactionInfoRequest) (*tabletmanagerdatapb.GetTransactionInfoResponse, error)
+
 	ConcludeTransaction(ctx context.Context, req *tabletmanagerdatapb.ConcludeTransactionRequest) error
 
 	MysqlHostMetrics(ctx context.Context, req *tabletmanagerdatapb.MysqlHostMetricsRequest) (*tabletmanagerdatapb.MysqlHostMetricsResponse, error)
@@ -163,6 +165,8 @@ type RPCTM interface {
 	Backup(ctx context.Context, logger logutil.Logger, request *tabletmanagerdatapb.BackupRequest) error
 
 	RestoreFromBackup(ctx context.Context, logger logutil.Logger, request *tabletmanagerdatapb.RestoreFromBackupRequest) error
+
+	IsBackupRunning() bool
 
 	// HandleRPCPanic is to be called in a defer statement in each
 	// RPC input point.

@@ -31,6 +31,10 @@ import (
 // SaveVSchema saves a Vschema. A valid Vschema should be passed in. It does not verify its correctness.
 // If the VSchema is empty, just remove it.
 func (ts *Server) SaveVSchema(ctx context.Context, keyspace string, vschema *vschemapb.Keyspace) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	nodePath := path.Join(KeyspacesPath, keyspace, VSchemaFile)
 	data, err := vschema.MarshalVT()
 	if err != nil {
@@ -49,12 +53,19 @@ func (ts *Server) SaveVSchema(ctx context.Context, keyspace string, vschema *vsc
 // DeleteVSchema delete the keyspace if it exists
 func (ts *Server) DeleteVSchema(ctx context.Context, keyspace string) error {
 	log.Infof("deleting vschema for keyspace %s", keyspace)
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	nodePath := path.Join(KeyspacesPath, keyspace, VSchemaFile)
 	return ts.globalCell.Delete(ctx, nodePath, nil)
 }
 
 // GetVSchema fetches the vschema from the topo.
 func (ts *Server) GetVSchema(ctx context.Context, keyspace string) (*vschemapb.Keyspace, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
 	nodePath := path.Join(KeyspacesPath, keyspace, VSchemaFile)
 	data, _, err := ts.globalCell.Get(ctx, nodePath)
 	if err != nil {
@@ -90,6 +101,10 @@ func (ts *Server) EnsureVSchema(ctx context.Context, keyspace string) error {
 
 // SaveRoutingRules saves the routing rules into the topo.
 func (ts *Server) SaveRoutingRules(ctx context.Context, routingRules *vschemapb.RoutingRules) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	data, err := routingRules.MarshalVT()
 	if err != nil {
 		return err
@@ -109,6 +124,10 @@ func (ts *Server) SaveRoutingRules(ctx context.Context, routingRules *vschemapb.
 
 // GetRoutingRules fetches the routing rules from the topo.
 func (ts *Server) GetRoutingRules(ctx context.Context) (*vschemapb.RoutingRules, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
 	rr := &vschemapb.RoutingRules{}
 	data, _, err := ts.globalCell.Get(ctx, RoutingRulesFile)
 	if err != nil {
@@ -126,6 +145,10 @@ func (ts *Server) GetRoutingRules(ctx context.Context) (*vschemapb.RoutingRules,
 
 // SaveShardRoutingRules saves the shard routing rules into the topo.
 func (ts *Server) SaveShardRoutingRules(ctx context.Context, shardRoutingRules *vschemapb.ShardRoutingRules) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	data, err := shardRoutingRules.MarshalVT()
 	if err != nil {
 		return err
@@ -144,6 +167,10 @@ func (ts *Server) SaveShardRoutingRules(ctx context.Context, shardRoutingRules *
 
 // GetShardRoutingRules fetches the shard routing rules from the topo.
 func (ts *Server) GetShardRoutingRules(ctx context.Context) (*vschemapb.ShardRoutingRules, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
 	srr := &vschemapb.ShardRoutingRules{}
 	data, _, err := ts.globalCell.Get(ctx, ShardRoutingRulesFile)
 	if err != nil {
@@ -161,6 +188,10 @@ func (ts *Server) GetShardRoutingRules(ctx context.Context) (*vschemapb.ShardRou
 
 // CreateKeyspaceRoutingRules wraps the underlying Conn.Create.
 func (ts *Server) CreateKeyspaceRoutingRules(ctx context.Context, value *vschemapb.KeyspaceRoutingRules) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	data, err := value.MarshalVT()
 	if err != nil {
 		return err
@@ -189,6 +220,10 @@ func (ts *Server) CreateKeyspaceRoutingRules(ctx context.Context, value *vschema
 // we may come up with a better model and apply it to the keyspace routing rules
 // as well.
 func (ts *Server) SaveKeyspaceRoutingRules(ctx context.Context, rules *vschemapb.KeyspaceRoutingRules) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	data, err := rules.MarshalVT()
 	if err != nil {
 		return err
@@ -198,6 +233,10 @@ func (ts *Server) SaveKeyspaceRoutingRules(ctx context.Context, rules *vschemapb
 }
 
 func (ts *Server) GetKeyspaceRoutingRules(ctx context.Context) (*vschemapb.KeyspaceRoutingRules, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
 	rules := &vschemapb.KeyspaceRoutingRules{}
 	data, _, err := ts.globalCell.Get(ctx, ts.GetKeyspaceRoutingRulesPath())
 	if err != nil {
@@ -215,6 +254,10 @@ func (ts *Server) GetKeyspaceRoutingRules(ctx context.Context) (*vschemapb.Keysp
 
 // GetMirrorRules fetches the mirror rules from the topo.
 func (ts *Server) GetMirrorRules(ctx context.Context) (*vschemapb.MirrorRules, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
 	rr := &vschemapb.MirrorRules{}
 	data, _, err := ts.globalCell.Get(ctx, MirrorRulesFile)
 	if err != nil {
@@ -232,6 +275,10 @@ func (ts *Server) GetMirrorRules(ctx context.Context) (*vschemapb.MirrorRules, e
 
 // SaveMirrorRules saves the mirror rules into the topo.
 func (ts *Server) SaveMirrorRules(ctx context.Context, mirrorRules *vschemapb.MirrorRules) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	data, err := mirrorRules.MarshalVT()
 	if err != nil {
 		return err

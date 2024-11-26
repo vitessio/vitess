@@ -572,13 +572,15 @@ func (exec *TabletExecutor) executeOneTablet(
 	errChan chan ShardWithError,
 	successChan chan ShardResult) {
 
-	var result *querypb.QueryResult
+	var results []*querypb.QueryResult
 	var err error
 	if viaQueryService {
-		result, err = exec.tmc.ExecuteQuery(ctx, tablet, &tabletmanagerdatapb.ExecuteQueryRequest{
+		result, reserr := exec.tmc.ExecuteQuery(ctx, tablet, &tabletmanagerdatapb.ExecuteQueryRequest{
 			Query:   []byte(sql),
 			MaxRows: 10,
 		})
+		results = []*querypb.QueryResult{result}
+		err = reserr
 	} else {
 		if exec.ddlStrategySetting != nil && exec.ddlStrategySetting.IsAllowZeroInDateFlag() {
 			// --allow-zero-in-date Applies to DDLs
@@ -588,14 +590,14 @@ func (exec *TabletExecutor) executeOneTablet(
 				return
 			}
 		}
-		request := &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
-			Query:   []byte(sql),
+		request := &tabletmanagerdatapb.ExecuteMultiFetchAsDbaRequest{
+			Sql:     []byte(sql),
 			MaxRows: 10,
 		}
 		if exec.ddlStrategySetting != nil && exec.ddlStrategySetting.IsAllowForeignKeysFlag() {
 			request.DisableForeignKeyChecks = true
 		}
-		result, err = exec.tmc.ExecuteFetchAsDba(ctx, tablet, false, request)
+		results, err = exec.tmc.ExecuteMultiFetchAsDba(ctx, tablet, false, request)
 
 	}
 	if err != nil {
@@ -614,7 +616,7 @@ func (exec *TabletExecutor) executeOneTablet(
 	}
 	successChan <- ShardResult{
 		Shard:    tablet.Shard,
-		Result:   result,
+		Results:  results,
 		Position: pos,
 	}
 }

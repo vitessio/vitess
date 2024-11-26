@@ -14,6 +14,7 @@ import (
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
@@ -770,6 +771,123 @@ func TestExpireTableData(t *testing.T) {
 			})
 			require.NoError(t, err)
 			require.EqualValues(t, tt.expectedRowCount, rowsCount)
+		})
+	}
+}
+
+func TestDetectErrantGTIDs(t *testing.T) {
+	tests := []struct {
+		name            string
+		instance        *Instance
+		primaryInstance *Instance
+		wantErr         bool
+		wantErrantGTID  string
+	}{
+		{
+			name: "No errant GTIDs",
+			instance: &Instance{
+				ExecutedGtidSet:        "230ea8ea-81e3-11e4-972a-e25ec4bd140a:1-10539,8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-34",
+				primaryExecutedGtidSet: "230ea8ea-81e3-11e4-972a-e25ec4bd140a:1-10591,8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-34",
+				AncestryUUID:           "316d193c-70e5-11e5-adb2-ecf4bb2262ff,230ea8ea-81e3-11e4-972a-e25ec4bd140a",
+				ServerUUID:             "316d193c-70e5-11e5-adb2-ecf4bb2262ff",
+				SourceUUID:             "230ea8ea-81e3-11e4-972a-e25ec4bd140a",
+			},
+		}, {
+			name: "Errant GTIDs on replica",
+			instance: &Instance{
+				ExecutedGtidSet:        "230ea8ea-81e3-11e4-972a-e25ec4bd140a:1-10539,8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-34,316d193c-70e5-11e5-adb2-ecf4bb2262ff:34",
+				primaryExecutedGtidSet: "230ea8ea-81e3-11e4-972a-e25ec4bd140a:1-10591,8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-34",
+				AncestryUUID:           "316d193c-70e5-11e5-adb2-ecf4bb2262ff,230ea8ea-81e3-11e4-972a-e25ec4bd140a",
+				ServerUUID:             "316d193c-70e5-11e5-adb2-ecf4bb2262ff",
+				SourceUUID:             "230ea8ea-81e3-11e4-972a-e25ec4bd140a",
+			},
+			wantErrantGTID: "316d193c-70e5-11e5-adb2-ecf4bb2262ff:34",
+		},
+		{
+			name: "No errant GTIDs on old primary",
+			instance: &Instance{
+				ExecutedGtidSet: "230ea8ea-81e3-11e4-972a-e25ec4bd140a:1-10539,8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-34,316d193c-70e5-11e5-adb2-ecf4bb2262ff:1-341",
+				AncestryUUID:    "316d193c-70e5-11e5-adb2-ecf4bb2262ff",
+				ServerUUID:      "316d193c-70e5-11e5-adb2-ecf4bb2262ff",
+			},
+			primaryInstance: &Instance{
+				SourceHost:      "",
+				ExecutedGtidSet: "230ea8ea-81e3-11e4-972a-e25ec4bd140a:1-10589,8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-34,316d193c-70e5-11e5-adb2-ecf4bb2262ff:1-341",
+			},
+		},
+		{
+			name: "Errant GTIDs on old primary",
+			instance: &Instance{
+				ExecutedGtidSet: "230ea8ea-81e3-11e4-972a-e25ec4bd140a:1-10539,8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-34,316d193c-70e5-11e5-adb2-ecf4bb2262ff:1-342",
+				AncestryUUID:    "316d193c-70e5-11e5-adb2-ecf4bb2262ff",
+				ServerUUID:      "316d193c-70e5-11e5-adb2-ecf4bb2262ff",
+			},
+			primaryInstance: &Instance{
+				SourceHost:      "",
+				ExecutedGtidSet: "230ea8ea-81e3-11e4-972a-e25ec4bd140a:1-10589,8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-34,316d193c-70e5-11e5-adb2-ecf4bb2262ff:1-341",
+			},
+			wantErrantGTID: "316d193c-70e5-11e5-adb2-ecf4bb2262ff:342",
+		}, {
+			name: "Old information for new primary",
+			instance: &Instance{
+				ExecutedGtidSet: "230ea8ea-81e3-11e4-972a-e25ec4bd140a:1-10539,8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-34,316d193c-70e5-11e5-adb2-ecf4bb2262ff:1-342",
+				AncestryUUID:    "316d193c-70e5-11e5-adb2-ecf4bb2262ff",
+				ServerUUID:      "316d193c-70e5-11e5-adb2-ecf4bb2262ff",
+			},
+			primaryInstance: &Instance{
+				SourceHost:      "localhost",
+				ExecutedGtidSet: "230ea8ea-81e3-11e4-972a-e25ec4bd140a:1-10539,8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-34,316d193c-70e5-11e5-adb2-ecf4bb2262ff:1-311",
+			},
+		},
+	}
+
+	keyspaceName := "ks"
+	shardName := "0"
+	tablet := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "zone-1",
+			Uid:  100,
+		},
+		Keyspace: keyspaceName,
+		Shard:    shardName,
+	}
+	primaryTablet := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "zone-1",
+			Uid:  100,
+		},
+		Keyspace: keyspaceName,
+		Shard:    shardName,
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Clear the database after the test. The easiest way to do that is to run all the initialization commands again.
+			defer func() {
+				db.ClearVTOrcDatabase()
+			}()
+			db.ClearVTOrcDatabase()
+
+			// Save shard record for the primary tablet.
+			err := SaveShard(topo.NewShardInfo(keyspaceName, shardName, &topodatapb.Shard{
+				PrimaryAlias: primaryTablet.Alias,
+			}, nil))
+			require.NoError(t, err)
+
+			if tt.primaryInstance != nil {
+				tt.primaryInstance.InstanceAlias = topoproto.TabletAliasString(primaryTablet.Alias)
+				err = SaveTablet(primaryTablet)
+				require.NoError(t, err)
+				err = WriteInstance(tt.primaryInstance, true, nil)
+				require.NoError(t, err)
+			}
+
+			err = detectErrantGTIDs(topoproto.TabletAliasString(tablet.Alias), tt.instance, tablet)
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			require.EqualValues(t, tt.wantErrantGTID, tt.instance.GtidErrant)
 		})
 	}
 }

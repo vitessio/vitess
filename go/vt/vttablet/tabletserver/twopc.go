@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -75,7 +76,9 @@ type TwoPC struct {
 	readPool *connpool.Pool
 
 	insertRedoTx        *sqlparser.ParsedQuery
+	readRedoTx          *sqlparser.ParsedQuery
 	insertRedoStmt      *sqlparser.ParsedQuery
+	readRedoStmts       *sqlparser.ParsedQuery
 	updateRedoTx        *sqlparser.ParsedQuery
 	deleteRedoTx        *sqlparser.ParsedQuery
 	deleteRedoStmt      *sqlparser.ParsedQuery
@@ -105,9 +108,15 @@ func (tpc *TwoPC) initializeQueries() {
 	tpc.insertRedoTx = sqlparser.BuildParsedQuery(
 		"insert into %s.redo_state(dtid, state, time_created) values (%a, %a, %a)",
 		dbname, ":dtid", ":state", ":time_created")
+	tpc.readRedoTx = sqlparser.BuildParsedQuery(
+		"select state, time_created, message from %s.redo_state where dtid = %a",
+		dbname, ":dtid")
 	tpc.insertRedoStmt = sqlparser.BuildParsedQuery(
 		"insert into %s.redo_statement(dtid, id, statement) values %a",
 		dbname, ":vals")
+	tpc.readRedoStmts = sqlparser.BuildParsedQuery(
+		"select statement from %s.redo_statement where dtid = %a order by id",
+		dbname, ":dtid")
 	tpc.updateRedoTx = sqlparser.BuildParsedQuery(
 		"update %s.redo_state set state = %a, message = %a where dtid = %a",
 		dbname, ":state", ":message", ":dtid")
@@ -148,6 +157,18 @@ func (tpc *TwoPC) initializeQueries() {
 		dbname, dbname, ":time_created")
 	tpc.countUnresolvedTransaction = sqlparser.BuildParsedQuery(countUnresolvedTransactions,
 		dbname, ":time_created")
+}
+
+// getStateString gets the redo state of the transaction as a string.
+func getStateString(st int) string {
+	switch st {
+	case RedoStateFailed:
+		return "FAILED"
+	case RedoStatePrepared:
+		return "PREPARED"
+	default:
+		return "UNKNOWN"
+	}
 }
 
 // Open starts the TwoPC service.
@@ -397,6 +418,47 @@ func (tpc *TwoPC) ReadTransaction(ctx context.Context, dtid string) (*querypb.Tr
 		})
 	}
 	result.Participants = participants
+	return result, nil
+}
+
+// GetTransactionInfo returns the data for the transaction.
+func (tpc *TwoPC) GetTransactionInfo(ctx context.Context, dtid string) (*tabletmanagerdatapb.GetTransactionInfoResponse, error) {
+	conn, err := tpc.readPool.Get(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Recycle()
+
+	result := &tabletmanagerdatapb.GetTransactionInfoResponse{}
+	bindVars := map[string]*querypb.BindVariable{
+		"dtid": sqltypes.BytesBindVariable([]byte(dtid)),
+	}
+	qr, err := tpc.read(ctx, conn.Conn, tpc.readRedoTx, bindVars)
+	if err != nil {
+		return nil, err
+	}
+	if len(qr.Rows) == 0 {
+		return result, nil
+	}
+	state, err := qr.Rows[0][0].ToInt()
+	if err != nil {
+		return nil, err
+	}
+	result.State = getStateString(state)
+	// A failure in time parsing will show up as a very old time,
+	// which is harmless.
+	tm, _ := qr.Rows[0][1].ToCastInt64()
+	result.TimeCreated = tm
+	result.Message = qr.Rows[0][2].ToString()
+
+	qr, err = tpc.read(ctx, conn.Conn, tpc.readRedoStmts, bindVars)
+	if err != nil {
+		return nil, err
+	}
+	result.Statements = make([]string, len(qr.Rows))
+	for idx, row := range qr.Rows {
+		result.Statements[idx] = row[0].ToString()
+	}
 	return result, nil
 }
 
