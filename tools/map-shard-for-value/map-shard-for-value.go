@@ -140,12 +140,10 @@ func main() {
 		}
 		*shardsCSV = generateUniformShardRanges(*totalShards)
 	}
-
 	if *shardsCSV == "" {
-		*shardsCSV = "-80,80-" // default for testing //FIXME: remove before merging
-		// log.Fatalf("shards or total_shards must be specified")
+		log.Fatal("shards or total_shards must be specified")
 	}
-	log.Printf("shardsCSV: %s\n", *shardsCSV)
+
 	shards := getShardMap(shardsCSV)
 
 	vindex, err := vindexes.CreateVindex(*vindexName, *vindexName, nil)
