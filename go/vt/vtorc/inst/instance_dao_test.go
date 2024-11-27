@@ -854,7 +854,7 @@ func TestDetectErrantGTIDs(t *testing.T) {
 	primaryTablet := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
 			Cell: "zone-1",
-			Uid:  100,
+			Uid:  101,
 		},
 		Keyspace: keyspaceName,
 		Shard:    shardName,
@@ -890,4 +890,48 @@ func TestDetectErrantGTIDs(t *testing.T) {
 			require.EqualValues(t, tt.wantErrantGTID, tt.instance.GtidErrant)
 		})
 	}
+}
+
+// TestPrimaryErrantGTIDs tests that we don't run Errant GTID detection on the primary tablet itself!
+func TestPrimaryErrantGTIDs(t *testing.T) {
+	// Clear the database after the test. The easiest way to do that is to run all the initialization commands again.
+	defer func() {
+		db.ClearVTOrcDatabase()
+	}()
+	db.ClearVTOrcDatabase()
+	keyspaceName := "ks"
+	shardName := "0"
+	tablet := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "zone-1",
+			Uid:  100,
+		},
+		Keyspace: keyspaceName,
+		Shard:    shardName,
+	}
+	instance := &Instance{
+		SourceHost:      "",
+		ExecutedGtidSet: "230ea8ea-81e3-11e4-972a-e25ec4bd140a:1-10589,8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-34,316d193c-70e5-11e5-adb2-ecf4bb2262ff:1-341",
+	}
+
+	// Save shard record for the primary tablet.
+	err := SaveShard(topo.NewShardInfo(keyspaceName, shardName, &topodatapb.Shard{
+		PrimaryAlias: tablet.Alias,
+	}, nil))
+	require.NoError(t, err)
+
+	// Store the tablet record and the instance.
+	instance.InstanceAlias = topoproto.TabletAliasString(tablet.Alias)
+	err = SaveTablet(tablet)
+	require.NoError(t, err)
+	err = WriteInstance(instance, true, nil)
+	require.NoError(t, err)
+
+	// After this if we read a new information for the record that updates its
+	// gtid set further, we shouldn't be detecting errant GTIDs on it since it is the primary!
+	// We shouldn't be comparing it with a previous version of itself!
+	instance.ExecutedGtidSet = "230ea8ea-81e3-11e4-972a-e25ec4bd140a:1-10589,8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-34,316d193c-70e5-11e5-adb2-ecf4bb2262ff:1-351"
+	err = detectErrantGTIDs(topoproto.TabletAliasString(tablet.Alias), instance, tablet)
+	require.NoError(t, err)
+	require.EqualValues(t, "", instance.GtidErrant)
 }

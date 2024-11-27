@@ -397,6 +397,11 @@ func detectErrantGTIDs(tabletAlias string, instance *Instance, tablet *topodatap
 		var primaryInstance *Instance
 		primaryAlias, _, _ := ReadShardPrimaryInformation(tablet.Keyspace, tablet.Shard)
 		if primaryAlias != "" {
+			// Check if the current tablet is the primary.
+			// If it is, then we don't need to run errant gtid detection on it.
+			if primaryAlias == tabletAlias {
+				return nil
+			}
 			primaryInstance, _, _ = ReadInstance(primaryAlias)
 		}
 		// Only run errant GTID detection, if we are sure that the data read of the current primary
