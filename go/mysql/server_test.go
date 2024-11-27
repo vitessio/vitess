@@ -1424,7 +1424,9 @@ func TestListenerShutdown(t *testing.T) {
 
 	l.Shutdown()
 
-	waitForConnRefuse(t, 1)
+	require.Eventually(t, func() bool {
+		return connRefuse.Get() == 1
+	}, 1*time.Minute, 100*time.Millisecond, "could not reach the desired connRefuse value")
 
 	err = conn.Ping()
 	require.EqualError(t, err, "Server shutdown in progress (errno 1053) (sqlstate 08S01)")
@@ -1434,24 +1436,6 @@ func TestListenerShutdown(t *testing.T) {
 	require.Equal(t, sqlerror.ERServerShutdown, sqlErr.Number())
 	require.Equal(t, sqlerror.SSNetError, sqlErr.SQLState())
 	require.Equal(t, "Server shutdown in progress", sqlErr.Message)
-}
-
-func waitForConnRefuse(t *testing.T, valWanted int64) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	tick := time.NewTicker(100 * time.Millisecond)
-	defer tick.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			require.FailNow(t, "connRefuse did not reach %v", valWanted)
-		case <-tick.C:
-			if connRefuse.Get() == valWanted {
-				return
-			}
-		}
-	}
 }
 
 func TestParseConnAttrs(t *testing.T) {
