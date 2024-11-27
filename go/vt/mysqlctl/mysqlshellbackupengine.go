@@ -187,7 +187,6 @@ func (be *MySQLShellBackupEngine) ExecuteBackup(ctx context.Context, params Back
 	// after that we can process if an error has happened or not.
 	err = cmd.Run()
 
-	time.Sleep(time.Millisecond * 100) // give the goroutines some time to read any remaining logs before closing pipes.
 	stdoutWriter.Close()
 	stderrWriter.Close()
 	lockWaiterWriter.Close()

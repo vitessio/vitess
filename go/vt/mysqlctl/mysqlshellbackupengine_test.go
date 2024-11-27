@@ -356,7 +356,8 @@ func TestMySQLShellBackupEngine_ExecuteBackup_ReleaseLock(t *testing.T) {
 		}
 
 		// this simulates mysql shell completing without any issues.
-		generateTestFile(t, be.binaryName, fmt.Sprintf("#!/bin/bash\n>&2 echo %s", mysqlShellLockMessage))
+		generateTestFile(t, be.binaryName, fmt.Sprintf(
+			"#!/bin/bash\n>&2 echo %s; echo \"backup completed\"; sleep 0.01", mysqlShellLockMessage))
 
 		bh, err := bs.StartBackup(context.Background(), t.TempDir(), t.Name())
 		require.NoError(t, err)
@@ -377,7 +378,7 @@ func TestMySQLShellBackupEngine_ExecuteBackup_ReleaseLock(t *testing.T) {
 			"failed to release the global lock after mysqlsh")
 	})
 
-	t.Run("lock released if when we don't see mysqlsh released it", func(t *testing.T) {
+	t.Run("lock released if we don't see mysqlsh release it", func(t *testing.T) {
 		be := &MySQLShellBackupEngine{binaryName: path.Join(t.TempDir(), "mysqlsh.sh")}
 		mysql.GlobalReadLock = false // clear lock status.
 		logger.Clear()
