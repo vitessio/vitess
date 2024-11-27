@@ -66,7 +66,7 @@ func OpenTabletDiscovery() <-chan time.Time {
 	ts = topo.Open()
 	tmc = inst.InitializeTMC()
 	// Clear existing cache and perform a new refresh.
-	if _, err := db.ExecVTOrc("delete from vitess_tablet"); err != nil {
+	if _, err := db.ExecVTOrc("DELETE FROM vitess_tablet"); err != nil {
 		log.Error(err)
 	}
 	// We refresh all information from the topo once before we start the ticks to do it on a timer.
