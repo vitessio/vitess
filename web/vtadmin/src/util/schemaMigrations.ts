@@ -17,9 +17,9 @@ import { invertBy } from 'lodash-es';
 import { vtctldata } from '../proto/vtadmin';
 
 /**
- * SCEMA_MIGRATION_STATUS maps numeric schema migration status back to human readable strings.
+ * SCHEMA_MIGRATION_STATUS maps numeric schema migration status back to human readable strings.
  */
-export const SCEMA_MIGRATION_STATUS = Object.entries(invertBy(vtctldata.SchemaMigration.Status)).reduce(
+export const SCHEMA_MIGRATION_STATUS = Object.entries(invertBy(vtctldata.SchemaMigration.Status)).reduce(
     (acc, [k, vs]) => {
         acc[k] = vs[0];
         return acc;
@@ -28,4 +28,4 @@ export const SCEMA_MIGRATION_STATUS = Object.entries(invertBy(vtctldata.SchemaMi
 );
 
 export const formatSchemaMigrationStatus = (schemaMigration: vtctldata.ISchemaMigration) =>
-    schemaMigration.status && SCEMA_MIGRATION_STATUS[schemaMigration.status];
+    schemaMigration.status && SCHEMA_MIGRATION_STATUS[schemaMigration.status];
