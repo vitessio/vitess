@@ -362,7 +362,7 @@ Cleanup:
 		// Add replication group ancestry UUID as well. Otherwise, VTOrc thinks there are errant GTIDs in group
 		// members and its replicas, even though they are not.
 		instance.AncestryUUID = strings.Trim(instance.AncestryUUID, ",")
-		err = detectErrantGTIDs(tabletAlias, instance, tablet)
+		err = detectErrantGTIDs(instance, tablet)
 	}
 
 	latency.Stop("instance")
@@ -390,7 +390,7 @@ Cleanup:
 }
 
 // detectErrantGTIDs detects the errant GTIDs on an instance.
-func detectErrantGTIDs(tabletAlias string, instance *Instance, tablet *topodatapb.Tablet) (err error) {
+func detectErrantGTIDs(instance *Instance, tablet *topodatapb.Tablet) (err error) {
 	// If the tablet is not replicating from anyone, then it could be the previous primary.
 	// We should check for errant GTIDs by finding the difference with the shard's current primary.
 	if instance.primaryExecutedGtidSet == "" && instance.SourceHost == "" {
@@ -399,7 +399,7 @@ func detectErrantGTIDs(tabletAlias string, instance *Instance, tablet *topodatap
 		if primaryAlias != "" {
 			// Check if the current tablet is the primary.
 			// If it is, then we don't need to run errant gtid detection on it.
-			if primaryAlias == tabletAlias {
+			if primaryAlias == instance.InstanceAlias {
 				return nil
 			}
 			primaryInstance, _, _ = ReadInstance(primaryAlias)
@@ -439,7 +439,7 @@ func detectErrantGTIDs(tabletAlias string, instance *Instance, tablet *topodatap
 			if err == nil {
 				var gtidCount int64
 				gtidCount, err = replication.GTIDCount(instance.GtidErrant)
-				currentErrantGTIDCount.Set(tabletAlias, gtidCount)
+				currentErrantGTIDCount.Set(instance.InstanceAlias, gtidCount)
 			}
 		}
 	}

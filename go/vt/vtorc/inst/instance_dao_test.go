@@ -881,7 +881,8 @@ func TestDetectErrantGTIDs(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			err = detectErrantGTIDs(topoproto.TabletAliasString(tablet.Alias), tt.instance, tablet)
+			tt.instance.InstanceAlias = topoproto.TabletAliasString(tablet.Alias)
+			err = detectErrantGTIDs(tt.instance, tablet)
 			if tt.wantErr {
 				require.Error(t, err)
 				return
@@ -912,6 +913,7 @@ func TestPrimaryErrantGTIDs(t *testing.T) {
 	instance := &Instance{
 		SourceHost:      "",
 		ExecutedGtidSet: "230ea8ea-81e3-11e4-972a-e25ec4bd140a:1-10589,8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-34,316d193c-70e5-11e5-adb2-ecf4bb2262ff:1-341",
+		InstanceAlias:   topoproto.TabletAliasString(tablet.Alias),
 	}
 
 	// Save shard record for the primary tablet.
@@ -921,7 +923,6 @@ func TestPrimaryErrantGTIDs(t *testing.T) {
 	require.NoError(t, err)
 
 	// Store the tablet record and the instance.
-	instance.InstanceAlias = topoproto.TabletAliasString(tablet.Alias)
 	err = SaveTablet(tablet)
 	require.NoError(t, err)
 	err = WriteInstance(instance, true, nil)
@@ -931,7 +932,7 @@ func TestPrimaryErrantGTIDs(t *testing.T) {
 	// gtid set further, we shouldn't be detecting errant GTIDs on it since it is the primary!
 	// We shouldn't be comparing it with a previous version of itself!
 	instance.ExecutedGtidSet = "230ea8ea-81e3-11e4-972a-e25ec4bd140a:1-10589,8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-34,316d193c-70e5-11e5-adb2-ecf4bb2262ff:1-351"
-	err = detectErrantGTIDs(topoproto.TabletAliasString(tablet.Alias), instance, tablet)
+	err = detectErrantGTIDs(instance, tablet)
 	require.NoError(t, err)
 	require.EqualValues(t, "", instance.GtidErrant)
 }
