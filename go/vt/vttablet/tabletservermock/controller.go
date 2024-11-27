@@ -274,6 +274,11 @@ func (tqsc *Controller) WaitForPreparedTwoPCTransactions(context.Context) error 
 	return nil
 }
 
+// SetDemotePrimaryBlocked is part of the tabletserver.Controller interface
+func (tqsc *Controller) SetDemotePrimaryBlocked() {
+	tqsc.MethodCalled["SetDemotePrimaryBlocked"] = true
+}
+
 // EnterLameduck implements tabletserver.Controller.
 func (tqsc *Controller) EnterLameduck() {
 	tqsc.mu.Lock()

@@ -87,18 +87,19 @@ type stateManager struct {
 	//
 	// If a transition fails, we set retrying to true and launch
 	// retryTransition which loops until the state converges.
-	mu             sync.Mutex
-	wantState      servingState
-	wantTabletType topodatapb.TabletType
-	state          servingState
-	target         *querypb.Target
-	ptsTimestamp   time.Time
-	retrying       bool
-	replHealthy    bool
-	lameduck       bool
-	alsoAllow      []topodatapb.TabletType
-	reason         string
-	transitionErr  error
+	mu                   sync.Mutex
+	wantState            servingState
+	wantTabletType       topodatapb.TabletType
+	state                servingState
+	target               *querypb.Target
+	ptsTimestamp         time.Time
+	retrying             bool
+	replHealthy          bool
+	demotePrimaryBlocked bool
+	lameduck             bool
+	alsoAllow            []topodatapb.TabletType
+	reason               string
+	transitionErr        error
 
 	rw *requestsWaiter
 
@@ -715,6 +716,10 @@ func (sm *stateManager) Broadcast() {
 	defer sm.mu.Unlock()
 
 	lag, err := sm.refreshReplHealthLocked()
+	if sm.demotePrimaryBlocked {
+		// If we are blocked from demoting primary, we should send an error for it.
+		err = vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Demoting primary is blocked")
+	}
 	sm.hs.ChangeState(sm.target.TabletType, sm.ptsTimestamp, lag, err, sm.isServingLocked())
 }
 
