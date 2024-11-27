@@ -1428,6 +1428,10 @@ func (fra *fakeRPCTM) Backup(ctx context.Context, logger logutil.Logger, request
 	return nil
 }
 
+func (fra *fakeRPCTM) IsBackupRunning() bool {
+	return false
+}
+
 func tmRPCTestBackup(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	req := &tabletmanagerdatapb.BackupRequest{Concurrency: testBackupConcurrency, AllowPrimary: testBackupAllowPrimary}
 	stream, err := client.Backup(ctx, tablet, req)

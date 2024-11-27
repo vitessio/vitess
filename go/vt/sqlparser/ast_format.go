@@ -322,8 +322,13 @@ func (node *AlterMigration) Format(buf *TrackedBuffer) {
 		alterType = "force_cutover"
 	case ForceCutOverAllMigrationType:
 		alterType = "force_cutover all"
+	case SetCutOverThresholdMigrationType:
+		alterType = "cutover_threshold"
 	}
 	buf.astPrintf(node, " %#s", alterType)
+	if node.Threshold != "" {
+		buf.astPrintf(node, " '%#s'", node.Threshold)
+	}
 	if node.Expire != "" {
 		buf.astPrintf(node, " expire '%#s'", node.Expire)
 	}
