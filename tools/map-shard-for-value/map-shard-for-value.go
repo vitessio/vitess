@@ -97,35 +97,25 @@ func getValue(valueStr string) (sqltypes.Value, int64, error) {
 
 func getShardMap(shardsCSV *string) map[string]*topodata.KeyRange {
 	shards := make(map[string]*topodata.KeyRange)
+	var err error
 	for _, shard := range strings.Split(*shardsCSV, ",") {
 		parts := strings.Split(shard, "-")
 		var start, end []byte
 		if len(parts) > 0 && parts[0] != "" {
-			start = []byte(parts[0])
+			start, err = hex.DecodeString(parts[0])
+			if err != nil {
+				log.Fatalf("failed to decode shard start: %v", err)
+			}
 		}
 		if len(parts) > 1 && parts[1] != "" {
-			end = []byte(parts[1])
+			end, err = hex.DecodeString(parts[1])
+			if err != nil {
+				log.Fatalf("failed to decode shard end: %v", err)
+			}
 		}
 		shards[shard] = &topodata.KeyRange{Start: start, End: end}
 	}
 	return shards
-}
-
-// Assumes shard digits can be specified by two hex digits each. It won't work for > 256 shards.
-func generateUniformShardRanges(totalShards int) string {
-	shardRanges := make([]string, totalShards)
-	for i := 0; i < totalShards; i++ {
-		start := fmt.Sprintf("%x", i*256/totalShards)
-		end := fmt.Sprintf("%x", (i+1)*256/totalShards)
-		if i == totalShards-1 {
-			end = ""
-		}
-		if start == "0" {
-			start = ""
-		}
-		shardRanges[i] = fmt.Sprintf("%s-%s", start, end)
-	}
-	return strings.Join(shardRanges, ",")
 }
 
 func main() {
@@ -138,7 +128,11 @@ func main() {
 		if *shardsCSV != "" {
 			log.Fatalf("cannot specify both total_shards and shards")
 		}
-		*shardsCSV = generateUniformShardRanges(*totalShards)
+		shardArr, err := key.GenerateShardRanges(*totalShards)
+		if err != nil {
+			log.Fatalf("failed to generate shard ranges: %v", err)
+		}
+		*shardsCSV = strings.Join(shardArr, ",")
 	}
 	if *shardsCSV == "" {
 		log.Fatal("shards or total_shards must be specified")
@@ -158,17 +152,17 @@ func main() {
 		if valueStr == "" {
 			continue
 		}
-		value, valueInt, err := getValue(valueStr)
+		value, _, err := getValue(valueStr)
 
 		shard, ksid, err := selectShard(vindex, value, shards)
 		if err != nil {
-			log.Printf("failed to select shard for value %d: %v", valueInt, err)
+			// ignore errors so that we can go ahead with the computation for other values
 			continue
 		}
 
 		if first {
 			// print header
-			fmt.Println("value,ksid,shard")
+			fmt.Println("value,keyspaceID,shard")
 			first = false
 		}
 
