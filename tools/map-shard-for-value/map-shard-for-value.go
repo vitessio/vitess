@@ -129,7 +129,7 @@ func generateUniformShardRanges(totalShards int) string {
 }
 
 func main() {
-	vindexName := flag.String("vindex", "hash", "name of the vindex")
+	vindexName := flag.String("vindex", "xxhash", "name of the vindex")
 	shardsCSV := flag.String("shards", "", "comma-separated list of shard ranges")
 	totalShards := flag.Int("total_shards", 0, "total number of uniformly distributed shards")
 	flag.Parse()
