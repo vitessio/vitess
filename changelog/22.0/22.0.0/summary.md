@@ -8,8 +8,10 @@
   - **[RPC Changes](#rpc-changes)**
   - **[Prefer not promoting a replica that is currently taking a backup](#reparents-prefer-not-backing-up)**
   - **[VTOrc Config File Changes](#vtorc-config-file-changes)**
+  - **[Added support for LAST_INSERT_ID(expr)](#last_insert_id)**
 - **[Minor Changes](#minor-changes)**
   - **[VTTablet Flags](#flags-vttablet)**
+
 
 
 ## <a id="major-changes"/>Major Changes</a>
@@ -59,6 +61,9 @@ The following fields can be dynamically changed -
 
 To upgrade to the newer version of the configuration file, first switch to using the flags in your current deployment before upgrading. Then you can switch to using the configuration file in the newer release.
 
+### <a id="last_insert_id"/>Added support for LAST_INSERT_ID(expr)
+
+Added support for LAST_INSERT_ID(expr) to align with MySQL behavior, enabling session-level assignment of the last insert ID via query expressions.
 
 ## <a id="minor-changes"/>Minor Changes</a>
 
