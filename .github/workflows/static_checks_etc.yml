@@ -9,7 +9,7 @@ permissions: read-all
 jobs:
   build:
     name: Static Code Checks Etc
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Skip CI
@@ -152,7 +152,7 @@ jobs:
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && (steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.go_files == 'true')
         run: |
           sudo apt-get update
-          sudo apt-get install -y make unzip g++ etcd curl git wget
+          sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget
           sudo service etcd stop
           go mod download
 
