@@ -1083,6 +1083,24 @@ func (cached *SQLCalcFoundRows) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *SaveToSession) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(32)
+	}
+	// field Source vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.Source.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Offset vitess.io/vitess/go/vt/vtgate/evalengine.Expr
+	if cc, ok := cached.Offset.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
 func (cached *ScalarAggregate) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
