@@ -21,12 +21,12 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	flag "github.com/spf13/pflag"
 	"log"
 	"os"
 	"strconv"
 	"strings"
-
-	flag "github.com/spf13/pflag"
+	"vitess.io/vitess/go/vt/topo"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -50,18 +50,11 @@ import (
  * Currently tested only for integer values and hash/xxhash vindexes.
  */
 
-func mapShard(shards map[string]*topodata.KeyRange, ksid key.DestinationKeyspaceID) (string, error) {
+func mapShard(allShards []*topodata.ShardReference, ksid key.DestinationKeyspaceID) (string, error) {
 	foundShard := ""
 	addShard := func(shard string) error {
 		foundShard = shard
 		return nil
-	}
-	allShards := make([]*topodata.ShardReference, 0, len(shards))
-	for shard, keyRange := range shards {
-		allShards = append(allShards, &topodata.ShardReference{
-			Name:     shard,
-			KeyRange: keyRange,
-		})
 	}
 	if err := ksid.Resolve(allShards, addShard); err != nil {
 		return "", fmt.Errorf("failed to resolve keyspace ID: %v:: %s", ksid.String(), err)
@@ -73,7 +66,7 @@ func mapShard(shards map[string]*topodata.KeyRange, ksid key.DestinationKeyspace
 	return foundShard, nil
 }
 
-func selectShard(vindex vindexes.Vindex, value sqltypes.Value, shards map[string]*topodata.KeyRange) (string, key.DestinationKeyspaceID, error) {
+func selectShard(vindex vindexes.Vindex, value sqltypes.Value, allShards []*topodata.ShardReference) (string, key.DestinationKeyspaceID, error) {
 	ctx := context.Background()
 
 	destinations, err := vindexes.Map(ctx, vindex, nil, [][]sqltypes.Value{{value}})
@@ -90,56 +83,104 @@ func selectShard(vindex vindexes.Vindex, value sqltypes.Value, shards map[string
 		return "", nil, fmt.Errorf("unexpected destination type: %T", destinations[0])
 	}
 
-	foundShard, err := mapShard(shards, ksid)
+	foundShard, err := mapShard(allShards, ksid)
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to map shard: %w", err)
+		return "", nil, fmt.Errorf("failed to map shard, original value %v, keyspace id %s: %w", value, ksid, err)
 	}
 	return foundShard, ksid, nil
 }
 
-func getValue(valueStr string) (sqltypes.Value, int64, error) {
+func getValue(valueStr, valueType string) (sqltypes.Value, error) {
 	var value sqltypes.Value
-	valueInt, err := strconv.ParseInt(valueStr, 10, 64)
-	if err == nil {
-		value = sqltypes.NewInt64(int64(valueInt))
-	} else {
-		valueUint, err := strconv.ParseUint(valueStr, 10, 64)
-		if err == nil {
-			value = sqltypes.NewUint64(valueUint)
-		} else {
-			value = sqltypes.NewVarChar(valueStr)
+
+	switch valueType {
+	case "int":
+		valueInt, err := strconv.ParseInt(valueStr, 10, 64)
+		if err != nil {
+			return value, fmt.Errorf("failed to parse int value: %w", err)
 		}
+		value = sqltypes.NewInt64(valueInt)
+	case "uint":
+		valueUint, err := strconv.ParseUint(valueStr, 10, 64)
+		if err != nil {
+			return value, fmt.Errorf("failed to parse uint value: %w", err)
+		}
+		value = sqltypes.NewUint64(valueUint)
+	case "string":
+		value = sqltypes.NewVarChar(valueStr)
+	default:
+		return value, fmt.Errorf("unsupported value type: %s", valueType)
 	}
-	return value, valueInt, err
+
+	return value, nil
 }
 
-func getShardMap(shardsCSV *string) map[string]*topodata.KeyRange {
-	shards := make(map[string]*topodata.KeyRange)
-	var err error
+func getShardMap(shardsCSV *string) []*topodata.ShardReference {
+	var allShards []*topodata.ShardReference
+
 	for _, shard := range strings.Split(*shardsCSV, ",") {
-		parts := strings.Split(shard, "-")
-		var start, end []byte
-		if len(parts) > 0 && parts[0] != "" {
-			start, err = hex.DecodeString(parts[0])
-			if err != nil {
-				log.Fatalf("failed to decode shard start: %v", err)
-			}
+		_, keyRange, err := topo.ValidateShardName(shard)
+		if err != nil {
+			log.Fatalf("invalid shard range: %s", shard)
 		}
-		if len(parts) > 1 && parts[1] != "" {
-			end, err = hex.DecodeString(parts[1])
-			if err != nil {
-				log.Fatalf("failed to decode shard end: %v", err)
-			}
-		}
-		shards[shard] = &topodata.KeyRange{Start: start, End: end}
+		allShards = append(allShards, &topodata.ShardReference{
+			Name:     shard,
+			KeyRange: keyRange,
+		})
 	}
-	return shards
+	return allShards
+}
+
+type output struct {
+	Value      string
+	KeyspaceID string
+	Shard      string
+}
+
+func processValues(scanner *bufio.Scanner, shardsCSV *string, vindexName string, valueType string) ([]output, error) {
+	allShards := getShardMap(shardsCSV)
+
+	vindex, err := vindexes.CreateVindex(vindexName, vindexName, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create vindex: %v", err)
+	}
+	var outputs []output
+	for scanner.Scan() {
+		valueStr := scanner.Text()
+		if valueStr == "" {
+			continue
+		}
+		value, err := getValue(valueStr, valueType)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get value for: %v, value_type %s:: %v", valueStr, valueType, err)
+		}
+		shard, ksid, err := selectShard(vindex, value, allShards)
+		if err != nil {
+			// ignore errors so that we can go ahead with the computation for other values
+			continue
+		}
+		outputs = append(outputs, output{Value: valueStr, KeyspaceID: hex.EncodeToString(ksid), Shard: shard})
+	}
+	return outputs, nil
+}
+
+func printOutput(outputs []output) {
+	fmt.Println("value,keyspaceID,shard")
+	for _, output := range outputs {
+		fmt.Printf("%s,%s,%s\n", output.Value, output.KeyspaceID, output.Shard)
+	}
 }
 
 func main() {
+	// Explicitly configuring the logger since it was flaky in displaying logs locally without this.
+	log.SetOutput(os.Stderr)
+	log.SetFlags(log.LstdFlags)
+	log.SetPrefix("LOG: ")
+
 	vindexName := flag.String("vindex", "xxhash", "name of the vindex")
 	shardsCSV := flag.String("shards", "", "comma-separated list of shard ranges")
 	totalShards := flag.Int("total_shards", 0, "total number of uniformly distributed shards")
+	valueType := flag.String("value_type", "int", "type of the value (int, uint, or string)")
 	flag.Parse()
 
 	if *totalShards > 0 {
@@ -155,40 +196,10 @@ func main() {
 	if *shardsCSV == "" {
 		log.Fatal("shards or total_shards must be specified")
 	}
-
-	shards := getShardMap(shardsCSV)
-
-	vindex, err := vindexes.CreateVindex(*vindexName, *vindexName, nil)
-	if err != nil {
-		log.Fatalf("failed to create vindex: %v", err)
-	}
-
 	scanner := bufio.NewScanner(os.Stdin)
-	first := true
-	for scanner.Scan() {
-		valueStr := scanner.Text()
-		if valueStr == "" {
-			continue
-		}
-		value, _, err := getValue(valueStr)
-
-		shard, ksid, err := selectShard(vindex, value, shards)
-		if err != nil {
-			// ignore errors so that we can go ahead with the computation for other values
-			continue
-		}
-
-		if first {
-			// print header
-			fmt.Println("value,keyspaceID,shard")
-			first = false
-		}
-
-		ksidStr := hex.EncodeToString([]byte(ksid))
-		fmt.Printf("%s,%s,%s\n", valueStr, ksidStr, shard)
+	outputs, err := processValues(scanner, shardsCSV, *vindexName, *valueType)
+	if err != nil {
+		log.Fatalf("failed to process values: %v", err)
 	}
-
-	if err := scanner.Err(); err != nil {
-		log.Fatalf("error reading from stdin: %v", err)
-	}
+	printOutput(outputs)
 }

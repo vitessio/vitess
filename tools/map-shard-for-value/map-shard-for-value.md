@@ -42,3 +42,6 @@ One (and only one) of these is required:
 - `--shards`: Comma-separated list of shard ranges
 - `--total_shards`: Total number of shards, only if shards are uniformly distributed
 
+Optional:
+- `--value_type`: Type of the value to map, one of int, uint, string (default `int`)
+
