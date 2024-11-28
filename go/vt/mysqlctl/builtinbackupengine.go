@@ -651,6 +651,7 @@ func (be *BuiltinBackupEngine) backupFiles(
 		if manifestErr == nil {
 			break
 		}
+		bh.ResetErrorForFile(backupManifestFileName)
 	}
 	if manifestErr != nil {
 		return manifestErr
@@ -989,10 +990,6 @@ func (be *BuiltinBackupEngine) backupManifest(
 		return vterrors.Wrapf(err, "cannot add %v to backup %s", backupManifestFileName, attemptStr)
 	}
 	defer func() {
-		closeErr := wc.Close()
-		if finalErr == nil {
-			finalErr = closeErr
-		}
 		if finalErr != nil {
 			params.Logger.Infof("Failed backing up %s %s", backupManifestFileName, attemptStr)
 		} else {
@@ -1032,9 +1029,14 @@ func (be *BuiltinBackupEngine) backupManifest(
 	if err != nil {
 		return vterrors.Wrapf(err, "cannot JSON encode %v %s", backupManifestFileName, attemptStr)
 	}
-	if _, err := wc.Write([]byte(data)); err != nil {
+	if _, err := wc.Write(data); err != nil {
 		return vterrors.Wrapf(err, "cannot write %v %s", backupManifestFileName, attemptStr)
 	}
+
+	if err := wc.Close(); err != nil {
+		return vterrors.Wrapf(err, "cannot close %v %s", backupManifestFileName, attemptStr)
+	}
+
 	err = bh.EndBackup(ctx)
 	if err != nil {
 		return err

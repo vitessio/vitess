@@ -40,6 +40,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/aws/retry"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -188,16 +189,7 @@ func (bh *S3BackupHandle) AddFile(ctx context.Context, filename string, filesize
 		return nil, fmt.Errorf("AddFile cannot be called on read-only backup")
 	}
 
-	// Calculate s3 upload part size using the source filesize
-	partSizeBytes := manager.DefaultUploadPartSize
-	if filesize > 0 {
-		minimumPartSize := float64(filesize) / float64(manager.MaxUploadParts)
-		// Round up to ensure large enough partsize
-		calculatedPartSizeBytes := int64(math.Ceil(minimumPartSize))
-		if calculatedPartSizeBytes > partSizeBytes {
-			partSizeBytes = calculatedPartSizeBytes
-		}
-	}
+	partSizeBytes := calculateUploadPartSize(filesize)
 
 	reader, writer := io.Pipe()
 	bh.waitGroup.Add(1)
@@ -236,6 +228,20 @@ func (bh *S3BackupHandle) AddFile(ctx context.Context, filename string, filesize
 	}()
 
 	return writer, nil
+}
+
+func calculateUploadPartSize(filesize int64) int64 {
+	// Calculate s3 upload part size using the source filesize
+	partSizeBytes := manager.DefaultUploadPartSize
+	if filesize > 0 {
+		minimumPartSize := float64(filesize) / float64(manager.MaxUploadParts)
+		// Round up to ensure large enough partsize
+		calculatedPartSizeBytes := int64(math.Ceil(minimumPartSize))
+		if calculatedPartSizeBytes > partSizeBytes {
+			partSizeBytes = calculatedPartSizeBytes
+		}
+	}
+	return partSizeBytes
 }
 
 // EndBackup is part of the backupstorage.BackupHandle interface.
@@ -518,7 +524,11 @@ func (bs *S3BackupStorage) client() (*s3.Client, error) {
 			o.UsePathStyle = forcePath
 			if retryCount >= 0 {
 				o.RetryMaxAttempts = retryCount
-				o.Retryer = &ClosedConnectionRetryer{}
+				o.Retryer = &ClosedConnectionRetryer{
+					awsRetryer: retry.NewStandard(func(options *retry.StandardOptions) {
+						options.MaxAttempts = retryCount
+					}),
+				}
 			}
 		}, s3.WithEndpointResolverV2(newEndpointResolver()))
 
