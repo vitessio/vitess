@@ -126,5 +126,6 @@ func cleanup(t *testing.T) {
 
 	utils.ClearOutTable(t, vtParams, "twopc_fuzzer_insert")
 	utils.ClearOutTable(t, vtParams, "twopc_fuzzer_update")
+	utils.ClearOutTable(t, vtParams, "twopc_fuzzer_multi")
 	utils.ClearOutTable(t, vtParams, "twopc_t1")
 }
