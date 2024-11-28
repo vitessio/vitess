@@ -21,11 +21,13 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
-	flag "github.com/spf13/pflag"
 	"log"
 	"os"
 	"strconv"
 	"strings"
+
+	flag "github.com/spf13/pflag"
+
 	"vitess.io/vitess/go/vt/topo"
 
 	"vitess.io/vitess/go/sqltypes"

@@ -19,9 +19,10 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"github.com/stretchr/testify/require"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestProcess(t *testing.T) {
