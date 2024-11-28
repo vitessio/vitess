@@ -2161,6 +2161,62 @@
     }
   },
   {
+    "comment": "save literal to session",
+    "query": "select last_insert_id(12)",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select last_insert_id(12)",
+      "Instructions": {
+        "OperatorType": "SaveToSession",
+        "Offset": "_vt_column_0",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select last_insert_id(12) from dual where 1 != 1",
+            "Query": "select last_insert_id(12) from dual",
+            "Table": "dual"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.dual"
+      ]
+    }
+  },
+  {
+    "comment": "save column value to session - sharded",
+    "query": "select bar, 12, last_insert_id(foo) from user",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select bar, 12, last_insert_id(foo) from user",
+      "Instructions": {
+        "OperatorType": "SaveToSession",
+        "Offset": "_vt_column_2",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select bar, 12, last_insert_id(foo) from `user` where 1 != 1",
+            "Query": "select bar, 12, last_insert_id(foo) from `user`",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
     "comment": "sql_calc_found_rows with SelectEqualUnique plans",
     "query": "select sql_calc_found_rows * from music where user_id = 1 limit 2",
     "plan": {
@@ -5593,15 +5649,21 @@
       "QueryType": "SELECT",
       "Original": "select last_insert_id(id) from user",
       "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select last_insert_id(id) from `user` where 1 != 1",
-        "Query": "select last_insert_id(id) from `user`",
-        "Table": "`user`"
+        "OperatorType": "SaveToSession",
+        "Offset": "_vt_column_0",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select last_insert_id(id) from `user` where 1 != 1",
+            "Query": "select last_insert_id(id) from `user`",
+            "Table": "`user`"
+          }
+        ]
       },
       "TablesUsed": [
         "user.user"

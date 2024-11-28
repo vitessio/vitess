@@ -80,13 +80,14 @@ type (
 
 	// QuerySignature is used to identify shortcuts in the planning process
 	QuerySignature struct {
-		Aggregation  bool
-		DML          bool
-		Distinct     bool
-		HashJoin     bool
-		SubQueries   bool
-		Union        bool
-		RecursiveCTE bool
+		Aggregation     bool
+		DML             bool
+		Distinct        bool
+		HashJoin        bool
+		SubQueries      bool
+		Union           bool
+		RecursiveCTE    bool
+		LastInsertIDArg bool // LastInsertIDArg is true if the query has a LAST_INSERT_ID(x) with an argument
 	}
 
 	// MirrorInfo stores information used to produce mirror

@@ -81,6 +81,8 @@ func transformToPrimitive(ctx *plancontext.PlanningContext, op operators.Operato
 		return transformRecurseCTE(ctx, op)
 	case *operators.PercentBasedMirror:
 		return transformPercentBasedMirror(ctx, op)
+	case *operators.SaveToSession:
+		return transformSaveToSession(ctx, op)
 	}
 
 	return nil, vterrors.VT13001(fmt.Sprintf("unknown type encountered: %T (transformToPrimitive)", op))
@@ -479,6 +481,29 @@ func newSimpleProjection(cols []int, colNames []string, src engine.Primitive) en
 		Cols:     cols,
 		ColNames: colNames,
 	}
+}
+
+func transformSaveToSession(ctx *plancontext.PlanningContext, op *operators.SaveToSession) (engine.Primitive, error) {
+	src, err := transformToPrimitive(ctx, op.Source)
+	if err != nil {
+		return nil, err
+	}
+
+	cfg := &evalengine.Config{
+		ResolveType: ctx.TypeForExpr,
+		Collation:   ctx.SemTable.Collation,
+		Environment: ctx.VSchema.Environment(),
+	}
+
+	offset, err := evalengine.Translate(sqlparser.NewOffset(op.Offset, nil), cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	return &engine.SaveToSession{
+		Source: src,
+		Offset: offset,
+	}, nil
 }
 
 func transformFilter(ctx *plancontext.PlanningContext, op *operators.Filter) (engine.Primitive, error) {

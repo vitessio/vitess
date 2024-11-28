@@ -182,7 +182,7 @@ type (
 		SetPriority(string)
 		SetExecQueryTimeout(timeout *int)
 		SetFoundRows(uint64)
-
+		SetLastInsertID(uint64)
 		SetDDLStrategy(string)
 		GetDDLStrategy() string
 		SetMigrationContext(string)

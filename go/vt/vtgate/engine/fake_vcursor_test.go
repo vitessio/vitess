@@ -263,6 +263,10 @@ func (t *noopVCursor) SetFoundRows(u uint64) {
 	panic("implement me")
 }
 
+func (t *noopVCursor) SetLastInsertID(id uint64) {
+	panic("implement me")
+}
+
 func (t *noopVCursor) InTransactionAndIsDML() bool {
 	panic("implement me")
 }
@@ -498,6 +502,9 @@ func (f *loggingVCursor) GetSystemVariables(func(k string, v string)) {
 }
 
 func (f *loggingVCursor) SetFoundRows(u uint64) {
+	panic("implement me")
+}
+func (f *loggingVCursor) SetLastInsertID(id uint64) {
 	panic("implement me")
 }
 

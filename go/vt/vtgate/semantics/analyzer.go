@@ -463,6 +463,10 @@ func (a *analyzer) noteQuerySignature(node sqlparser.SQLNode) {
 		a.sig.Aggregation = true
 	case *sqlparser.Delete, *sqlparser.Update, *sqlparser.Insert:
 		a.sig.DML = true
+	case *sqlparser.FuncExpr:
+		if len(node.Exprs) == 1 && node.Name.EqualString("last_insert_id") {
+			a.sig.LastInsertIDArg = true
+		}
 	}
 }
 

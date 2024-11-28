@@ -829,11 +829,34 @@ func addTruncationOrProjectionToReturnOutput(ctx *plancontext.PlanningContext, s
 
 	cols := output.GetSelectExprs(ctx)
 	sizeCorrect := len(selExprs) == len(cols) || tryTruncateColumnsAt(output, len(selExprs))
-	if sizeCorrect && colNamesAlign(selExprs, cols) {
+	if !sizeCorrect || !colNamesAlign(selExprs, cols) {
+		output = createSimpleProjection(ctx, selExprs, output)
+	}
+
+	if !ctx.SemTable.QuerySignature.LastInsertIDArg {
 		return output
 	}
 
-	return createSimpleProjection(ctx, selExprs, output)
+	var offset int
+	for i, expr := range selExprs {
+		ae, ok := expr.(*sqlparser.AliasedExpr)
+		if !ok {
+			panic(vterrors.VT09015())
+		}
+		fnc, ok := ae.Expr.(*sqlparser.FuncExpr)
+		if !ok || !fnc.Name.EqualString("last_insert_id") {
+			continue
+		}
+		offset = i
+		break
+	}
+
+	return &SaveToSession{
+		unaryOperator: unaryOperator{
+			Source: output,
+		},
+		Offset: offset,
+	}
 }
 
 func colNamesAlign(expected, actual sqlparser.SelectExprs) bool {

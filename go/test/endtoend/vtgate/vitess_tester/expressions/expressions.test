@@ -28,3 +28,7 @@ SELECT (~ (1 || 0)) IS NULL;
 
 SELECT 1
 WHERE (~ (1 || 0)) IS NULL;
+
+select last_insert_id(12);
+
+select last_insert_id();
