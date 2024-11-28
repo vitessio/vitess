@@ -14,6 +14,7 @@ import (
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
@@ -49,57 +50,48 @@ func mkTestInstances() []*Instance {
 	return instances
 }
 
-func TestMkInsertOdkuSingle(t *testing.T) {
+func TestMkInsertSingle(t *testing.T) {
 	instances := mkTestInstances()
 
-	sql, args, err := mkInsertOdkuForInstances(nil, true, true)
+	sql, args, err := mkInsertForInstances(nil, true, true)
 	require.NoError(t, err)
 	require.Equal(t, sql, "")
 	require.Equal(t, len(args), 0)
 
 	// one instance
-	s1 := `INSERT ignore INTO database_instance
+	s1 := `INSERT OR IGNORE INTO database_instance
 				(alias, hostname, port, last_checked, last_attempted_check, last_check_partial_success, server_id, server_uuid,
 				version, major_version, version_comment, binlog_server, read_only, binlog_format,
 				binlog_row_image, log_bin, log_replica_updates, binary_log_file, binary_log_pos, source_host, source_port, replica_net_timeout, heartbeat_interval,
 				replica_sql_running, replica_io_running, replication_sql_thread_state, replication_io_thread_state, has_replication_filters, supports_oracle_gtid, oracle_gtid, source_uuid, ancestry_uuid, executed_gtid_set, gtid_mode, gtid_purged, gtid_errant, mariadb_gtid, pseudo_gtid,
 				source_log_file, read_source_log_pos, relay_source_log_file, exec_source_log_pos, relay_log_file, relay_log_pos, last_sql_error, last_io_error, replication_lag_seconds, replica_lag_seconds, sql_delay, data_center, region, physical_environment, replication_depth, is_co_primary, has_replication_credentials, allow_tls, semi_sync_enforced, semi_sync_primary_enabled, semi_sync_primary_timeout, semi_sync_primary_wait_for_replica_count, semi_sync_replica_enabled, semi_sync_primary_status, semi_sync_primary_clients, semi_sync_replica_status, last_discovery_latency, last_seen)
 		VALUES
-				(?, ?, ?, NOW(), NOW(), 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
-		ON DUPLICATE KEY UPDATE
-				alias=VALUES(alias), hostname=VALUES(hostname), port=VALUES(port), last_checked=VALUES(last_checked), last_attempted_check=VALUES(last_attempted_check), last_check_partial_success=VALUES(last_check_partial_success), server_id=VALUES(server_id), server_uuid=VALUES(server_uuid), version=VALUES(version), major_version=VALUES(major_version), version_comment=VALUES(version_comment), binlog_server=VALUES(binlog_server), read_only=VALUES(read_only), binlog_format=VALUES(binlog_format), binlog_row_image=VALUES(binlog_row_image), log_bin=VALUES(log_bin), log_replica_updates=VALUES(log_replica_updates), binary_log_file=VALUES(binary_log_file), binary_log_pos=VALUES(binary_log_pos), source_host=VALUES(source_host), source_port=VALUES(source_port), replica_net_timeout=VALUES(replica_net_timeout), heartbeat_interval=VALUES(heartbeat_interval), replica_sql_running=VALUES(replica_sql_running), replica_io_running=VALUES(replica_io_running), replication_sql_thread_state=VALUES(replication_sql_thread_state), replication_io_thread_state=VALUES(replication_io_thread_state), has_replication_filters=VALUES(has_replication_filters), supports_oracle_gtid=VALUES(supports_oracle_gtid), oracle_gtid=VALUES(oracle_gtid), source_uuid=VALUES(source_uuid), ancestry_uuid=VALUES(ancestry_uuid), executed_gtid_set=VALUES(executed_gtid_set), gtid_mode=VALUES(gtid_mode), gtid_purged=VALUES(gtid_purged), gtid_errant=VALUES(gtid_errant), mariadb_gtid=VALUES(mariadb_gtid), pseudo_gtid=VALUES(pseudo_gtid), source_log_file=VALUES(source_log_file), read_source_log_pos=VALUES(read_source_log_pos), relay_source_log_file=VALUES(relay_source_log_file), exec_source_log_pos=VALUES(exec_source_log_pos), relay_log_file=VALUES(relay_log_file), relay_log_pos=VALUES(relay_log_pos), last_sql_error=VALUES(last_sql_error), last_io_error=VALUES(last_io_error), replication_lag_seconds=VALUES(replication_lag_seconds), replica_lag_seconds=VALUES(replica_lag_seconds), sql_delay=VALUES(sql_delay), data_center=VALUES(data_center), region=VALUES(region), physical_environment=VALUES(physical_environment), replication_depth=VALUES(replication_depth), is_co_primary=VALUES(is_co_primary), has_replication_credentials=VALUES(has_replication_credentials), allow_tls=VALUES(allow_tls),
-				semi_sync_enforced=VALUES(semi_sync_enforced), semi_sync_primary_enabled=VALUES(semi_sync_primary_enabled), semi_sync_primary_timeout=VALUES(semi_sync_primary_timeout), semi_sync_primary_wait_for_replica_count=VALUES(semi_sync_primary_wait_for_replica_count), semi_sync_replica_enabled=VALUES(semi_sync_replica_enabled), semi_sync_primary_status=VALUES(semi_sync_primary_status), semi_sync_primary_clients=VALUES(semi_sync_primary_clients), semi_sync_replica_status=VALUES(semi_sync_replica_status),
-				last_discovery_latency=VALUES(last_discovery_latency), last_seen=VALUES(last_seen)
+				(?, ?, ?, DATETIME('now'), DATETIME('now'), 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, DATETIME('now'))
        `
 	a1 := `zone1-i710, i710, 3306, 710, , 5.6.7, 5.6, MySQL, false, false, STATEMENT,
 	FULL, false, false, , 0, , 0, 0, 0,
 	false, false, 0, 0, false, false, false, , , , , , , false, false, , 0, mysql.000007, 10, , 0, , , {0 false}, {0 false}, 0, , , , 0, false, false, false, false, false, 0, 0, false, false, 0, false, 0,`
 
-	sql1, args1, err := mkInsertOdkuForInstances(instances[:1], false, true)
+	sql1, args1, err := mkInsertForInstances(instances[:1], false, true)
 	require.NoError(t, err)
 	require.Equal(t, normalizeQuery(sql1), normalizeQuery(s1))
 	require.Equal(t, stripSpaces(fmtArgs(args1)), stripSpaces(a1))
 }
 
-func TestMkInsertOdkuThree(t *testing.T) {
+func TestMkInsertThree(t *testing.T) {
 	instances := mkTestInstances()
 
 	// three instances
-	s3 := `INSERT  INTO database_instance
+	s3 := `REPLACE INTO database_instance
 				(alias, hostname, port, last_checked, last_attempted_check, last_check_partial_success, server_id, server_uuid,
 				version, major_version, version_comment, binlog_server, read_only, binlog_format,
 				binlog_row_image, log_bin, log_replica_updates, binary_log_file, binary_log_pos, source_host, source_port, replica_net_timeout, heartbeat_interval,
 				replica_sql_running, replica_io_running, replication_sql_thread_state, replication_io_thread_state, has_replication_filters, supports_oracle_gtid, oracle_gtid, source_uuid, ancestry_uuid, executed_gtid_set, gtid_mode, gtid_purged, gtid_errant, mariadb_gtid, pseudo_gtid,
 				source_log_file, read_source_log_pos, relay_source_log_file, exec_source_log_pos, relay_log_file, relay_log_pos, last_sql_error, last_io_error, replication_lag_seconds, replica_lag_seconds, sql_delay, data_center, region, physical_environment, replication_depth, is_co_primary, has_replication_credentials, allow_tls, semi_sync_enforced, semi_sync_primary_enabled, semi_sync_primary_timeout, semi_sync_primary_wait_for_replica_count, semi_sync_replica_enabled, semi_sync_primary_status, semi_sync_primary_clients, semi_sync_replica_status, last_discovery_latency, last_seen)
 		VALUES
-				(?, ?, ?, NOW(), NOW(), 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW()),
-				(?, ?, ?, NOW(), NOW(), 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW()),
-				(?, ?, ?, NOW(), NOW(), 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
-		ON DUPLICATE KEY UPDATE
-				alias=VALUES(alias), hostname=VALUES(hostname), port=VALUES(port), last_checked=VALUES(last_checked), last_attempted_check=VALUES(last_attempted_check), last_check_partial_success=VALUES(last_check_partial_success), server_id=VALUES(server_id), server_uuid=VALUES(server_uuid), version=VALUES(version), major_version=VALUES(major_version), version_comment=VALUES(version_comment), binlog_server=VALUES(binlog_server), read_only=VALUES(read_only), binlog_format=VALUES(binlog_format), binlog_row_image=VALUES(binlog_row_image), log_bin=VALUES(log_bin), log_replica_updates=VALUES(log_replica_updates), binary_log_file=VALUES(binary_log_file), binary_log_pos=VALUES(binary_log_pos), source_host=VALUES(source_host), source_port=VALUES(source_port), replica_net_timeout=VALUES(replica_net_timeout), heartbeat_interval=VALUES(heartbeat_interval), replica_sql_running=VALUES(replica_sql_running), replica_io_running=VALUES(replica_io_running), replication_sql_thread_state=VALUES(replication_sql_thread_state), replication_io_thread_state=VALUES(replication_io_thread_state), has_replication_filters=VALUES(has_replication_filters), supports_oracle_gtid=VALUES(supports_oracle_gtid), oracle_gtid=VALUES(oracle_gtid), source_uuid=VALUES(source_uuid), ancestry_uuid=VALUES(ancestry_uuid), executed_gtid_set=VALUES(executed_gtid_set), gtid_mode=VALUES(gtid_mode), gtid_purged=VALUES(gtid_purged), gtid_errant=VALUES(gtid_errant), mariadb_gtid=VALUES(mariadb_gtid), pseudo_gtid=VALUES(pseudo_gtid), source_log_file=VALUES(source_log_file), read_source_log_pos=VALUES(read_source_log_pos), relay_source_log_file=VALUES(relay_source_log_file), exec_source_log_pos=VALUES(exec_source_log_pos), relay_log_file=VALUES(relay_log_file), relay_log_pos=VALUES(relay_log_pos), last_sql_error=VALUES(last_sql_error), last_io_error=VALUES(last_io_error), replication_lag_seconds=VALUES(replication_lag_seconds), replica_lag_seconds=VALUES(replica_lag_seconds), sql_delay=VALUES(sql_delay), data_center=VALUES(data_center), region=VALUES(region),
-				physical_environment=VALUES(physical_environment), replication_depth=VALUES(replication_depth), is_co_primary=VALUES(is_co_primary), has_replication_credentials=VALUES(has_replication_credentials), allow_tls=VALUES(allow_tls), semi_sync_enforced=VALUES(semi_sync_enforced),
-				semi_sync_primary_enabled=VALUES(semi_sync_primary_enabled), semi_sync_primary_timeout=VALUES(semi_sync_primary_timeout), semi_sync_primary_wait_for_replica_count=VALUES(semi_sync_primary_wait_for_replica_count), semi_sync_replica_enabled=VALUES(semi_sync_replica_enabled), semi_sync_primary_status=VALUES(semi_sync_primary_status), semi_sync_primary_clients=VALUES(semi_sync_primary_clients), semi_sync_replica_status=VALUES(semi_sync_replica_status),
-				last_discovery_latency=VALUES(last_discovery_latency), last_seen=VALUES(last_seen)
+				(?, ?, ?, DATETIME('now'), DATETIME('now'), 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, DATETIME('now')),
+				(?, ?, ?, DATETIME('now'), DATETIME('now'), 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, DATETIME('now')),
+				(?, ?, ?, DATETIME('now'), DATETIME('now'), 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, DATETIME('now'))
        `
 	a3 := `
 		zone1-i710, i710, 3306, 710, , 5.6.7, 5.6, MySQL, false, false, STATEMENT, FULL, false, false, , 0, , 0, 0, 0, false, false, 0, 0, false, false, false, , , , , , , false, false, , 0, mysql.000007, 10, , 0, , , {0 false}, {0 false}, 0, , , , 0, false, false, false, false, false, 0, 0, false, false, 0, false, 0,
@@ -107,7 +99,7 @@ func TestMkInsertOdkuThree(t *testing.T) {
 		zone1-i730, i730, 3306, 730, , 5.6.7, 5.6, MySQL, false, false, STATEMENT, FULL, false, false, , 0, , 0, 0, 0, false, false, 0, 0, false, false, false, , , , , , , false, false, , 0, mysql.000007, 30, , 0, , , {0 false}, {0 false}, 0, , , , 0, false, false, false, false, false, 0, 0, false, false, 0, false, 0,
 		`
 
-	sql3, args3, err := mkInsertOdkuForInstances(instances[:3], true, true)
+	sql3, args3, err := mkInsertForInstances(instances[:3], true, true)
 	require.NoError(t, err)
 	require.Equal(t, normalizeQuery(sql3), normalizeQuery(s3))
 	require.Equal(t, stripSpaces(fmtArgs(args3)), stripSpaces(a3))
@@ -437,27 +429,27 @@ func TestReadOutdatedInstanceKeys(t *testing.T) {
 	}{
 		{
 			name:              "No problems",
-			sql:               []string{"update database_instance set last_checked = now()"},
+			sql:               []string{"update database_instance set last_checked = DATETIME('now')"},
 			instancesRequired: nil,
 		}, {
 			name: "One instance is outdated",
 			sql: []string{
-				"update database_instance set last_checked = now()",
-				"update database_instance set last_checked = datetime(now(), '-1 hour') where alias = 'zone1-0000000100'",
+				"update database_instance set last_checked = DATETIME('now')",
+				"update database_instance set last_checked = DATETIME('now', '-1 hour') where alias = 'zone1-0000000100'",
 			},
 			instancesRequired: []string{"zone1-0000000100"},
 		}, {
 			name: "One instance doesn't have myql data",
 			sql: []string{
-				"update database_instance set last_checked = now()",
+				"update database_instance set last_checked = DATETIME('now')",
 				`INSERT INTO vitess_tablet VALUES('zone1-0000000103','localhost',7706,'ks','0','zone1',2,'0001-01-01 00:00:00+00:00','');`,
 			},
 			instancesRequired: []string{"zone1-0000000103"},
 		}, {
 			name: "One instance doesn't have myql data and one is outdated",
 			sql: []string{
-				"update database_instance set last_checked = now()",
-				"update database_instance set last_checked = datetime(now(), '-1 hour') where alias = 'zone1-0000000100'",
+				"update database_instance set last_checked = DATETIME('now')",
+				"update database_instance set last_checked = DATETIME('now', '-1 hour') where alias = 'zone1-0000000100'",
 				`INSERT INTO vitess_tablet VALUES('zone1-0000000103','localhost',7706,'ks','0','zone1',2,'0001-01-01 00:00:00+00:00','');`,
 			},
 			instancesRequired: []string{"zone1-0000000103", "zone1-0000000100"},
@@ -494,10 +486,10 @@ func TestReadOutdatedInstanceKeys(t *testing.T) {
 			errInDataCollection := db.QueryVTOrcRowsMap(`select alias, 
 last_checked, 
 last_attempted_check, 
-ROUND((JULIANDAY(now()) - JULIANDAY(last_checked)) * 86400) AS difference,
+ROUND((JULIANDAY(DATETIME('now')) - JULIANDAY(last_checked)) * 86400) AS difference,
 last_attempted_check <= last_checked as use1,
-last_checked < now() - interval 1500 second as is_outdated1,
-last_checked < now() - interval 3000 second as is_outdated2
+last_checked < DATETIME('now', '-1500 second') as is_outdated1,
+last_checked < DATETIME('now', '-3000 second') as is_outdated2
 from database_instance`, func(rowMap sqlutils.RowMap) error {
 				log.Errorf("Row in database_instance - %+v", rowMap)
 				return nil
@@ -521,12 +513,12 @@ func TestUpdateInstanceLastChecked(t *testing.T) {
 			name:             "Verify updated last checked",
 			tabletAlias:      "zone1-0000000100",
 			partialSuccess:   false,
-			conditionToCheck: "last_checked >= now() - interval 30 second and last_check_partial_success = false",
+			conditionToCheck: "last_checked >= DATETIME('now', '-30 second') and last_check_partial_success = false",
 		}, {
 			name:             "Verify partial success",
 			tabletAlias:      "zone1-0000000100",
 			partialSuccess:   true,
-			conditionToCheck: "last_checked >= now() - interval 30 second and last_check_partial_success = true",
+			conditionToCheck: "last_checked >= DATETIME('now', '-30 second') and last_check_partial_success = true",
 		}, {
 			name:           "Verify no error on unknown tablet",
 			tabletAlias:    "unknown tablet",
@@ -572,7 +564,7 @@ func TestUpdateInstanceLastAttemptedCheck(t *testing.T) {
 		{
 			name:             "Verify updated last checked",
 			tabletAlias:      "zone1-0000000100",
-			conditionToCheck: "last_attempted_check >= now() - interval 30 second",
+			conditionToCheck: "last_attempted_check >= DATETIME('now', '-30 second')",
 		}, {
 			name:        "Verify no error on unknown tablet",
 			tabletAlias: "unknown tablet",
@@ -745,19 +737,19 @@ func TestExpireTableData(t *testing.T) {
 			tableName:        "audit",
 			timestampColumn:  "audit_timestamp",
 			expectedRowCount: 1,
-			insertQuery: `insert into audit (audit_id, audit_timestamp, audit_type, alias, message, keyspace, shard) values
-(1, NOW() - INTERVAL 50 DAY, 'a','a','a','a','a'),
-(2, NOW() - INTERVAL 5 DAY, 'a','a','a','a','a')`,
+			insertQuery: `INSERT INTO audit (audit_id, audit_timestamp, audit_type, alias, message, keyspace, shard) VALUES
+(1, DATETIME('now', '-50 DAY'), 'a','a','a','a','a'),
+(2, DATETIME('now', '-5 DAY'), 'a','a','a','a','a')`,
 		},
 		{
 			name:             "ExpireRecoveryDetectionHistory",
 			tableName:        "recovery_detection",
 			timestampColumn:  "detection_timestamp",
 			expectedRowCount: 2,
-			insertQuery: `insert into recovery_detection (detection_id, detection_timestamp, alias, analysis, keyspace, shard) values
-(1, NOW() - INTERVAL 3 DAY,'a','a','a','a'),
-(2, NOW() - INTERVAL 5 DAY,'a','a','a','a'),
-(3, NOW() - INTERVAL 15 DAY,'a','a','a','a')`,
+			insertQuery: `INSERT INTO recovery_detection (detection_id, detection_timestamp, alias, analysis, keyspace, shard) VALUES
+(1, DATETIME('now', '-3 DAY'),'a','a','a','a'),
+(2, DATETIME('now', '-5 DAY'),'a','a','a','a'),
+(3, DATETIME('now', '-15 DAY'),'a','a','a','a')`,
 		},
 	}
 	for _, tt := range tests {
@@ -781,4 +773,166 @@ func TestExpireTableData(t *testing.T) {
 			require.EqualValues(t, tt.expectedRowCount, rowsCount)
 		})
 	}
+}
+
+func TestDetectErrantGTIDs(t *testing.T) {
+	tests := []struct {
+		name            string
+		instance        *Instance
+		primaryInstance *Instance
+		wantErr         bool
+		wantErrantGTID  string
+	}{
+		{
+			name: "No errant GTIDs",
+			instance: &Instance{
+				ExecutedGtidSet:        "230ea8ea-81e3-11e4-972a-e25ec4bd140a:1-10539,8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-34",
+				primaryExecutedGtidSet: "230ea8ea-81e3-11e4-972a-e25ec4bd140a:1-10591,8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-34",
+				AncestryUUID:           "316d193c-70e5-11e5-adb2-ecf4bb2262ff,230ea8ea-81e3-11e4-972a-e25ec4bd140a",
+				ServerUUID:             "316d193c-70e5-11e5-adb2-ecf4bb2262ff",
+				SourceUUID:             "230ea8ea-81e3-11e4-972a-e25ec4bd140a",
+			},
+		}, {
+			name: "Errant GTIDs on replica",
+			instance: &Instance{
+				ExecutedGtidSet:        "230ea8ea-81e3-11e4-972a-e25ec4bd140a:1-10539,8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-34,316d193c-70e5-11e5-adb2-ecf4bb2262ff:34",
+				primaryExecutedGtidSet: "230ea8ea-81e3-11e4-972a-e25ec4bd140a:1-10591,8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-34",
+				AncestryUUID:           "316d193c-70e5-11e5-adb2-ecf4bb2262ff,230ea8ea-81e3-11e4-972a-e25ec4bd140a",
+				ServerUUID:             "316d193c-70e5-11e5-adb2-ecf4bb2262ff",
+				SourceUUID:             "230ea8ea-81e3-11e4-972a-e25ec4bd140a",
+			},
+			wantErrantGTID: "316d193c-70e5-11e5-adb2-ecf4bb2262ff:34",
+		},
+		{
+			name: "No errant GTIDs on old primary",
+			instance: &Instance{
+				ExecutedGtidSet: "230ea8ea-81e3-11e4-972a-e25ec4bd140a:1-10539,8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-34,316d193c-70e5-11e5-adb2-ecf4bb2262ff:1-341",
+				AncestryUUID:    "316d193c-70e5-11e5-adb2-ecf4bb2262ff",
+				ServerUUID:      "316d193c-70e5-11e5-adb2-ecf4bb2262ff",
+			},
+			primaryInstance: &Instance{
+				SourceHost:      "",
+				ExecutedGtidSet: "230ea8ea-81e3-11e4-972a-e25ec4bd140a:1-10589,8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-34,316d193c-70e5-11e5-adb2-ecf4bb2262ff:1-341",
+			},
+		},
+		{
+			name: "Errant GTIDs on old primary",
+			instance: &Instance{
+				ExecutedGtidSet: "230ea8ea-81e3-11e4-972a-e25ec4bd140a:1-10539,8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-34,316d193c-70e5-11e5-adb2-ecf4bb2262ff:1-342",
+				AncestryUUID:    "316d193c-70e5-11e5-adb2-ecf4bb2262ff",
+				ServerUUID:      "316d193c-70e5-11e5-adb2-ecf4bb2262ff",
+			},
+			primaryInstance: &Instance{
+				SourceHost:      "",
+				ExecutedGtidSet: "230ea8ea-81e3-11e4-972a-e25ec4bd140a:1-10589,8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-34,316d193c-70e5-11e5-adb2-ecf4bb2262ff:1-341",
+			},
+			wantErrantGTID: "316d193c-70e5-11e5-adb2-ecf4bb2262ff:342",
+		}, {
+			name: "Old information for new primary",
+			instance: &Instance{
+				ExecutedGtidSet: "230ea8ea-81e3-11e4-972a-e25ec4bd140a:1-10539,8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-34,316d193c-70e5-11e5-adb2-ecf4bb2262ff:1-342",
+				AncestryUUID:    "316d193c-70e5-11e5-adb2-ecf4bb2262ff",
+				ServerUUID:      "316d193c-70e5-11e5-adb2-ecf4bb2262ff",
+			},
+			primaryInstance: &Instance{
+				SourceHost:      "localhost",
+				ExecutedGtidSet: "230ea8ea-81e3-11e4-972a-e25ec4bd140a:1-10539,8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-34,316d193c-70e5-11e5-adb2-ecf4bb2262ff:1-311",
+			},
+		},
+	}
+
+	keyspaceName := "ks"
+	shardName := "0"
+	tablet := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "zone-1",
+			Uid:  100,
+		},
+		Keyspace: keyspaceName,
+		Shard:    shardName,
+	}
+	primaryTablet := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "zone-1",
+			Uid:  101,
+		},
+		Keyspace: keyspaceName,
+		Shard:    shardName,
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Clear the database after the test. The easiest way to do that is to run all the initialization commands again.
+			defer func() {
+				db.ClearVTOrcDatabase()
+			}()
+			db.ClearVTOrcDatabase()
+
+			// Save shard record for the primary tablet.
+			err := SaveShard(topo.NewShardInfo(keyspaceName, shardName, &topodatapb.Shard{
+				PrimaryAlias: primaryTablet.Alias,
+			}, nil))
+			require.NoError(t, err)
+
+			if tt.primaryInstance != nil {
+				tt.primaryInstance.InstanceAlias = topoproto.TabletAliasString(primaryTablet.Alias)
+				err = SaveTablet(primaryTablet)
+				require.NoError(t, err)
+				err = WriteInstance(tt.primaryInstance, true, nil)
+				require.NoError(t, err)
+			}
+
+			tt.instance.InstanceAlias = topoproto.TabletAliasString(tablet.Alias)
+			err = detectErrantGTIDs(tt.instance, tablet)
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			require.EqualValues(t, tt.wantErrantGTID, tt.instance.GtidErrant)
+		})
+	}
+}
+
+// TestPrimaryErrantGTIDs tests that we don't run Errant GTID detection on the primary tablet itself!
+func TestPrimaryErrantGTIDs(t *testing.T) {
+	// Clear the database after the test. The easiest way to do that is to run all the initialization commands again.
+	defer func() {
+		db.ClearVTOrcDatabase()
+	}()
+	db.ClearVTOrcDatabase()
+	keyspaceName := "ks"
+	shardName := "0"
+	tablet := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "zone-1",
+			Uid:  100,
+		},
+		Keyspace: keyspaceName,
+		Shard:    shardName,
+	}
+	instance := &Instance{
+		SourceHost:      "",
+		ExecutedGtidSet: "230ea8ea-81e3-11e4-972a-e25ec4bd140a:1-10589,8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-34,316d193c-70e5-11e5-adb2-ecf4bb2262ff:1-341",
+		InstanceAlias:   topoproto.TabletAliasString(tablet.Alias),
+	}
+
+	// Save shard record for the primary tablet.
+	err := SaveShard(topo.NewShardInfo(keyspaceName, shardName, &topodatapb.Shard{
+		PrimaryAlias: tablet.Alias,
+	}, nil))
+	require.NoError(t, err)
+
+	// Store the tablet record and the instance.
+	err = SaveTablet(tablet)
+	require.NoError(t, err)
+	err = WriteInstance(instance, true, nil)
+	require.NoError(t, err)
+
+	// After this if we read a new information for the record that updates its
+	// gtid set further, we shouldn't be detecting errant GTIDs on it since it is the primary!
+	// We shouldn't be comparing it with a previous version of itself!
+	instance.ExecutedGtidSet = "230ea8ea-81e3-11e4-972a-e25ec4bd140a:1-10589,8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-34,316d193c-70e5-11e5-adb2-ecf4bb2262ff:1-351"
+	err = detectErrantGTIDs(instance, tablet)
+	require.NoError(t, err)
+	require.EqualValues(t, "", instance.GtidErrant)
 }

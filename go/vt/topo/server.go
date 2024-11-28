@@ -262,11 +262,12 @@ func Open() *Server {
 // ConnForCell returns a Conn object for the given cell.
 // It caches Conn objects from previously requested cells.
 func (ts *Server) ConnForCell(ctx context.Context, cell string) (Conn, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
 	// Global cell is the easy case.
 	if cell == GlobalCell {
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
-		}
 		return ts.globalCell, nil
 	}
 
@@ -343,8 +344,10 @@ func GetAliasByCell(ctx context.Context, ts *Server, cell string) string {
 // Close will close all connections to underlying topo Server.
 // It will nil all member variables, so any further access will panic.
 func (ts *Server) Close() {
-	ts.globalCell.Close()
-	if ts.globalReadOnlyCell != ts.globalCell {
+	if ts.globalCell != nil {
+		ts.globalCell.Close()
+	}
+	if ts.globalReadOnlyCell != nil && ts.globalReadOnlyCell != ts.globalCell {
 		ts.globalReadOnlyCell.Close()
 	}
 	ts.globalCell = nil

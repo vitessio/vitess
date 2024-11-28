@@ -1339,21 +1339,12 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
-		"vreplication_vtctldclient_cli": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVtctldclientCLI", "-timeout", "20m"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "vreplication_migrate_vdiff2_convert_tz",
-			"RetryMax": 1,
-			"Tags": []
-		},
 		"vreplication_vtctl_migrate": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVtctlMigrate", "-timeout", "30m"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "vreplication_migrate_vdiff2_convert_tz",
+			"Shard": "vreplication_migrate",
 			"RetryMax": 1,
 			"Tags": []
 		},
@@ -1362,7 +1353,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVtctldMigrate", "-timeout", "30m"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "vreplication_migrate_vdiff2_convert_tz",
+			"Shard": "vreplication_migrate",
 			"RetryMax": 1,
 			"Tags": []
 		},
@@ -1371,7 +1362,16 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVDiff2", "-timeout", "30m"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "vreplication_migrate_vdiff2_convert_tz",
+			"Shard": "vreplication_vtctldclient_vdiff2_movetables_tz",
+			"RetryMax": 1,
+			"Tags": []
+		},
+		"vreplication_vtctldclient_cli": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVtctldclientCLI", "-timeout", "20m"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vreplication_vtctldclient_vdiff2_movetables_tz",
 			"RetryMax": 1,
 			"Tags": []
 		},
@@ -1380,7 +1380,16 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestMoveTablesTZ"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "vreplication_migrate_vdiff2_convert_tz",
+			"Shard": "vreplication_vtctldclient_vdiff2_movetables_tz",
+			"RetryMax": 1,
+			"Tags": []
+		},
+		"vtadmin": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtadmin"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "15",
 			"RetryMax": 1,
 			"Tags": []
 		},

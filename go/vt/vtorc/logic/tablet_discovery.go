@@ -35,7 +35,6 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
-	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
 	"vitess.io/vitess/go/vt/vtorc/inst"
@@ -67,7 +66,7 @@ func OpenTabletDiscovery() <-chan time.Time {
 	ts = topo.Open()
 	tmc = inst.InitializeTMC()
 	// Clear existing cache and perform a new refresh.
-	if _, err := db.ExecVTOrc("delete from vitess_tablet"); err != nil {
+	if _, err := db.ExecVTOrc("DELETE FROM vitess_tablet"); err != nil {
 		log.Error(err)
 	}
 	// We refresh all information from the topo once before we start the ticks to do it on a timer.
@@ -156,7 +155,7 @@ func refreshTabletsUsing(loader func(tabletAlias string), forceRefresh bool) {
 }
 
 func refreshTabletsInCell(ctx context.Context, cell string, loader func(tabletAlias string), forceRefresh bool) {
-	tablets, err := topotools.GetTabletMapForCell(ctx, ts, cell)
+	tablets, err := ts.GetTabletsByCell(ctx, cell, &topo.GetTabletsByCellOptions{Concurrency: topo.DefaultConcurrency})
 	if err != nil {
 		log.Errorf("Error fetching topo info for cell %v: %v", cell, err)
 		return
@@ -188,7 +187,7 @@ func refreshTabletInfoOfShard(ctx context.Context, keyspace, shard string) {
 }
 
 func refreshTabletsInKeyspaceShard(ctx context.Context, keyspace, shard string, loader func(tabletAlias string), forceRefresh bool, tabletsToIgnore []string) {
-	tablets, err := ts.GetTabletMapForShard(ctx, keyspace, shard)
+	tablets, err := ts.GetTabletsByShard(ctx, keyspace, shard)
 	if err != nil {
 		log.Errorf("Error fetching tablets for keyspace/shard %v/%v: %v", keyspace, shard, err)
 		return
@@ -198,7 +197,7 @@ func refreshTabletsInKeyspaceShard(ctx context.Context, keyspace, shard string, 
 	refreshTablets(tablets, query, args, loader, forceRefresh, tabletsToIgnore)
 }
 
-func refreshTablets(tablets map[string]*topo.TabletInfo, query string, args []any, loader func(tabletAlias string), forceRefresh bool, tabletsToIgnore []string) {
+func refreshTablets(tablets []*topo.TabletInfo, query string, args []any, loader func(tabletAlias string), forceRefresh bool, tabletsToIgnore []string) {
 	// Discover new tablets.
 	latestInstances := make(map[string]bool)
 	var wg sync.WaitGroup

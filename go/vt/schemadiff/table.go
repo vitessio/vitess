@@ -1711,8 +1711,10 @@ func (c *CreateTableEntity) diffKeys(alterTable *sqlparser.AlterTable,
 			}
 		}
 	}
-	for _, stmt := range dropKeyStatements {
-		alterTable.AlterOptions = append(alterTable.AlterOptions, stmt)
+	for _, t1Key := range t1Keys {
+		if stmt, ok := dropKeyStatements[t1Key.Info.Name.String()]; ok {
+			alterTable.AlterOptions = append(alterTable.AlterOptions, stmt)
+		}
 	}
 	return superfluousFulltextKeys
 }

@@ -23,6 +23,7 @@ import (
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -235,16 +236,16 @@ func (dte *DTExecutor) CreateTransaction(dtid string, participants []*querypb.Ta
 
 // StartCommit atomically commits the transaction along with the
 // decision to commit the associated 2pc transaction.
-func (dte *DTExecutor) StartCommit(transactionID int64, dtid string) error {
+func (dte *DTExecutor) StartCommit(transactionID int64, dtid string) (querypb.StartCommitState, error) {
 	if !dte.te.twopcEnabled {
-		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "2pc is not enabled")
+		return querypb.StartCommitState_Fail, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "2pc is not enabled")
 	}
 	defer dte.te.env.Stats().QueryTimings.Record("START_COMMIT", time.Now())
 	dte.logStats.TransactionID = transactionID
 
 	conn, err := dte.te.txPool.GetAndLock(transactionID, "for 2pc commit")
 	if err != nil {
-		return err
+		return querypb.StartCommitState_Fail, err
 	}
 	defer dte.te.txPool.RollbackAndRelease(dte.ctx, conn)
 
@@ -254,15 +255,17 @@ func (dte *DTExecutor) StartCommit(transactionID int64, dtid string) error {
 			return dte.te.twoPC.Transition(dte.ctx, conn, dtid, DTStateRollback)
 		})
 		// return the error, defer call above will roll back the transaction.
-		return vterrors.VT10002("cannot commit the transaction on a reserved connection")
+		return querypb.StartCommitState_Fail, vterrors.VT10002("cannot commit the transaction on a reserved connection")
 	}
 
 	err = dte.te.twoPC.Transition(dte.ctx, conn, dtid, DTStateCommit)
 	if err != nil {
-		return err
+		return querypb.StartCommitState_Fail, err
 	}
-	_, err = dte.te.txPool.Commit(dte.ctx, conn)
-	return err
+	if _, err = dte.te.txPool.Commit(dte.ctx, conn); err != nil {
+		return querypb.StartCommitState_Unknown, err
+	}
+	return querypb.StartCommitState_Success, nil
 }
 
 // SetRollback transitions the 2pc transaction to the Rollback state.
@@ -307,6 +310,14 @@ func (dte *DTExecutor) ReadTransaction(dtid string) (*querypb.TransactionMetadat
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "2pc is not enabled")
 	}
 	return dte.te.twoPC.ReadTransaction(dte.ctx, dtid)
+}
+
+// GetTransactionInfo returns the data of the specified dtid.
+func (dte *DTExecutor) GetTransactionInfo(dtid string) (*tabletmanagerdatapb.GetTransactionInfoResponse, error) {
+	if !dte.te.twopcEnabled {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "2pc is not enabled")
+	}
+	return dte.te.twoPC.GetTransactionInfo(dte.ctx, dtid)
 }
 
 // ReadTwopcInflight returns info about all in-flight 2pc transactions.

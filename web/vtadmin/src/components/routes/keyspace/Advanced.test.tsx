@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { rest } from 'msw';
+import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -39,11 +39,11 @@ describe('Advanced keyspace actions', () => {
     };
 
     const server = setupServer(
-        rest.get('/api/keyspace/:clusterID/:keyspace', (req, res, ctx) => {
-            return res(ctx.json({ ok: true, result: keyspace }));
+        http.get('/api/keyspace/:clusterID/:keyspace', (info) => {
+            return HttpResponse.json({ ok: true, result: keyspace });
         }),
-        rest.put('/api/schemas/reload', (req, res, ctx) => {
-            return res(ctx.json({ ok: true }));
+        http.put('/api/schemas/reload', (info) => {
+            return HttpResponse.json({ ok: true });
         })
     );
 

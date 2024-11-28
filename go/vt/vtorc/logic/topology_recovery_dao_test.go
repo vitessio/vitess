@@ -88,9 +88,9 @@ func TestExpireTableData(t *testing.T) {
 			tableName:        "recovery_detection",
 			expectedRowCount: 2,
 			insertQuery: `insert into recovery_detection (detection_id, detection_timestamp, alias, analysis, keyspace, shard) values
-(1, NOW() - INTERVAL 3 DAY,'a','a','a','a'),
-(2, NOW() - INTERVAL 5 DAY,'a','a','a','a'),
-(3, NOW() - INTERVAL 15 DAY,'a','a','a','a')`,
+(1, datetime('now', '-3 DAY'),'a','a','a','a'),
+(2, datetime('now', '-5 DAY'),'a','a','a','a'),
+(3, datetime('now', '-15 DAY'),'a','a','a','a')`,
 			expireFunc: ExpireRecoveryDetectionHistory,
 		},
 		{
@@ -98,9 +98,9 @@ func TestExpireTableData(t *testing.T) {
 			tableName:        "topology_recovery",
 			expectedRowCount: 1,
 			insertQuery: `insert into topology_recovery (recovery_id, start_recovery, alias, analysis, keyspace, shard) values
-(1, NOW() - INTERVAL 13 DAY,'a','a','a','a'),
-(2, NOW() - INTERVAL 5 DAY,'a','a','a','a'),
-(3, NOW() - INTERVAL 15 DAY,'a','a','a','a')`,
+(1, datetime('now', '-13 DAY'),'a','a','a','a'),
+(2, datetime('now', '-5 DAY'),'a','a','a','a'),
+(3, datetime('now', '-15 DAY'),'a','a','a','a')`,
 			expireFunc: ExpireTopologyRecoveryHistory,
 		},
 		{
@@ -108,9 +108,9 @@ func TestExpireTableData(t *testing.T) {
 			tableName:        "topology_recovery_steps",
 			expectedRowCount: 1,
 			insertQuery: `insert into topology_recovery_steps (recovery_step_id, audit_at, recovery_id, message) values
-(1, NOW() - INTERVAL 13 DAY, 1, 'a'),
-(2, NOW() - INTERVAL 5 DAY, 2, 'a'),
-(3, NOW() - INTERVAL 15 DAY, 3, 'a')`,
+(1, datetime('now', '-13 DAY'), 1, 'a'),
+(2, datetime('now', '-5 DAY'), 2, 'a'),
+(3, datetime('now', '-15 DAY'), 3, 'a')`,
 			expireFunc: ExpireTopologyRecoveryStepsHistory,
 		},
 	}

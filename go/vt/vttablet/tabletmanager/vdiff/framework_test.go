@@ -396,6 +396,10 @@ func (dbc *realDBClient) Close() {
 	dbc.conn.Close()
 }
 
+func (dbc *realDBClient) IsClosed() bool {
+	return dbc.conn.IsClosed()
+}
+
 func (dbc *realDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, error) {
 	// Use Clone() because the contents of memory region referenced by
 	// string can change when clients (e.g. vcopier) use unsafe string methods.

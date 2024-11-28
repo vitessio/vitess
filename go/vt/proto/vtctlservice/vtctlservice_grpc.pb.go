@@ -278,6 +278,8 @@ type VtctldClient interface {
 	GetThrottlerStatus(ctx context.Context, in *vtctldata.GetThrottlerStatusRequest, opts ...grpc.CallOption) (*vtctldata.GetThrottlerStatusResponse, error)
 	// GetTopologyPath returns the topology cell at a given path.
 	GetTopologyPath(ctx context.Context, in *vtctldata.GetTopologyPathRequest, opts ...grpc.CallOption) (*vtctldata.GetTopologyPathResponse, error)
+	// GetTransactionInfo reads a given transactions information.
+	GetTransactionInfo(ctx context.Context, in *vtctldata.GetTransactionInfoRequest, opts ...grpc.CallOption) (*vtctldata.GetTransactionInfoResponse, error)
 	// GetTransactions returns the unresolved transactions for the request.
 	GetUnresolvedTransactions(ctx context.Context, in *vtctldata.GetUnresolvedTransactionsRequest, opts ...grpc.CallOption) (*vtctldata.GetUnresolvedTransactionsResponse, error)
 	// GetVersion returns the version of a tablet from its debug vars.
@@ -1018,6 +1020,15 @@ func (c *vtctldClient) GetThrottlerStatus(ctx context.Context, in *vtctldata.Get
 func (c *vtctldClient) GetTopologyPath(ctx context.Context, in *vtctldata.GetTopologyPathRequest, opts ...grpc.CallOption) (*vtctldata.GetTopologyPathResponse, error) {
 	out := new(vtctldata.GetTopologyPathResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/GetTopologyPath", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) GetTransactionInfo(ctx context.Context, in *vtctldata.GetTransactionInfoRequest, opts ...grpc.CallOption) (*vtctldata.GetTransactionInfoResponse, error) {
+	out := new(vtctldata.GetTransactionInfoResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/GetTransactionInfo", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1796,6 +1807,8 @@ type VtctldServer interface {
 	GetThrottlerStatus(context.Context, *vtctldata.GetThrottlerStatusRequest) (*vtctldata.GetThrottlerStatusResponse, error)
 	// GetTopologyPath returns the topology cell at a given path.
 	GetTopologyPath(context.Context, *vtctldata.GetTopologyPathRequest) (*vtctldata.GetTopologyPathResponse, error)
+	// GetTransactionInfo reads a given transactions information.
+	GetTransactionInfo(context.Context, *vtctldata.GetTransactionInfoRequest) (*vtctldata.GetTransactionInfoResponse, error)
 	// GetTransactions returns the unresolved transactions for the request.
 	GetUnresolvedTransactions(context.Context, *vtctldata.GetUnresolvedTransactionsRequest) (*vtctldata.GetUnresolvedTransactionsResponse, error)
 	// GetVersion returns the version of a tablet from its debug vars.
@@ -2162,6 +2175,9 @@ func (UnimplementedVtctldServer) GetThrottlerStatus(context.Context, *vtctldata.
 }
 func (UnimplementedVtctldServer) GetTopologyPath(context.Context, *vtctldata.GetTopologyPathRequest) (*vtctldata.GetTopologyPathResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetTopologyPath not implemented")
+}
+func (UnimplementedVtctldServer) GetTransactionInfo(context.Context, *vtctldata.GetTransactionInfoRequest) (*vtctldata.GetTransactionInfoResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetTransactionInfo not implemented")
 }
 func (UnimplementedVtctldServer) GetUnresolvedTransactions(context.Context, *vtctldata.GetUnresolvedTransactionsRequest) (*vtctldata.GetUnresolvedTransactionsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetUnresolvedTransactions not implemented")
@@ -3369,6 +3385,24 @@ func _Vtctld_GetTopologyPath_Handler(srv interface{}, ctx context.Context, dec f
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VtctldServer).GetTopologyPath(ctx, req.(*vtctldata.GetTopologyPathRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_GetTransactionInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.GetTransactionInfoRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).GetTransactionInfo(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/GetTransactionInfo",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).GetTransactionInfo(ctx, req.(*vtctldata.GetTransactionInfoRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -4800,6 +4834,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetTopologyPath",
 			Handler:    _Vtctld_GetTopologyPath_Handler,
+		},
+		{
+			MethodName: "GetTransactionInfo",
+			Handler:    _Vtctld_GetTransactionInfo_Handler,
 		},
 		{
 			MethodName: "GetUnresolvedTransactions",
