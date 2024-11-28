@@ -89,7 +89,7 @@ func CausedByFailover(err error) bool {
 	log.V(2).Infof("Checking error (type: %T) if it is caused by a failover. err: %v", err, err)
 	reason, isFailover := isFailoverError(err)
 	if isFailover {
-		log.Infof("CausedByFailover signalling failover for reason: %s", reason)
+		log.V(2).Infof("CausedByFailover signalling failover for reason: %s", reason)
 	}
 	return isFailover
 }
