@@ -339,9 +339,7 @@ func (fz *fuzzer) generateAndExecuteTransaction(threadId int) {
 
 func getUpdateQuery(incrementVal int32, id int) string {
 	if rand.Intn(2) == 1 {
-		x := fmt.Sprintf(updateFuzzUpdateMulti, incrementVal, id)
-		log.Errorf(x)
-		return x
+		return fmt.Sprintf(updateFuzzUpdateMulti, incrementVal, id)
 	}
 	return fmt.Sprintf(updateFuzzUpdate, incrementVal, id)
 }
