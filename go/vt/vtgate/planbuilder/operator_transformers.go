@@ -489,13 +489,18 @@ func transformSaveToSession(ctx *plancontext.PlanningContext, op *operators.Save
 		return nil, err
 	}
 
+	v := op.Offset
+	return createSaveToSessionOnOffset(ctx, v, src)
+}
+
+func createSaveToSessionOnOffset(ctx *plancontext.PlanningContext, v int, src engine.Primitive) (engine.Primitive, error) {
 	cfg := &evalengine.Config{
 		ResolveType: ctx.TypeForExpr,
 		Collation:   ctx.SemTable.Collation,
 		Environment: ctx.VSchema.Environment(),
 	}
 
-	offset, err := evalengine.Translate(sqlparser.NewOffset(op.Offset, nil), cfg)
+	offset, err := evalengine.Translate(sqlparser.NewOffset(v, nil), cfg)
 	if err != nil {
 		return nil, err
 	}

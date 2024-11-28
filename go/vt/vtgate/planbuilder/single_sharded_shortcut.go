@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -56,6 +57,29 @@ func selectUnshardedShortcut(ctx *plancontext.PlanningContext, stmt sqlparser.Se
 	prim, err := WireupRoute(ctx, eroute, stmt)
 	if err != nil {
 		return nil, nil, err
+	}
+
+	if ctx.SemTable.QuerySignature.LastInsertIDArg {
+		var offset *int
+		for i, expr := range stmt.GetColumns() {
+			ae, ok := expr.(*sqlparser.AliasedExpr)
+			if !ok {
+				panic(vterrors.VT09015())
+			}
+			fnc, ok := ae.Expr.(*sqlparser.FuncExpr)
+			if !ok || !fnc.Name.EqualString("last_insert_id") {
+				continue
+			}
+			offset = &i
+			break
+		}
+		if offset == nil {
+			return nil, nil, vterrors.VT12001("couldn't find last_insert_id in select expressions")
+		}
+		prim, err = createSaveToSessionOnOffset(ctx, *offset, prim)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 	return prim, operators.QualifiedTableNames(ks, tableNames), nil
 }

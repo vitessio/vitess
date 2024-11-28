@@ -2217,6 +2217,34 @@
     }
   },
   {
+    "comment": "save column value to session - unsharded",
+    "query": "select bar, 12, last_insert_id(foo) from unsharded",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select bar, 12, last_insert_id(foo) from unsharded",
+      "Instructions": {
+        "OperatorType": "SaveToSession",
+        "Offset": "_vt_column_2",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select bar, 12, last_insert_id(foo) from unsharded where 1 != 1",
+            "Query": "select bar, 12, last_insert_id(foo) from unsharded",
+            "Table": "unsharded"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded"
+      ]
+    }
+  },
+  {
     "comment": "sql_calc_found_rows with SelectEqualUnique plans",
     "query": "select sql_calc_found_rows * from music where user_id = 1 limit 2",
     "plan": {
