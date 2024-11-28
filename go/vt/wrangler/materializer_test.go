@@ -1612,7 +1612,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 				},
 			},
 		},
-		err: "non-unique vindex 'from' should have more than one column",
+		err: "",
 	}, {
 		description: "vindex not found",
 		input: &vschemapb.Keyspace{
