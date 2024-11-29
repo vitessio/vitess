@@ -594,6 +594,9 @@ func (be *BuiltinBackupEngine) backupFiles(
 	mysqlVersion string,
 	incrDetails *IncrementalBackupDetails,
 ) (finalErr error) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	// Get the files to backup.
 	// We don't care about totalSize because we add each file separately.
 	var fes []FileEntry

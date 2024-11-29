@@ -14,40 +14,116 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package mysqlctl_test
+package integration
 
 import (
 	"context"
 	"os"
+	"os/exec"
 	"path"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"log"
+
+	"github.com/minio/minio-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"vitess.io/vitess/go/mysql/replication"
-
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
+	"vitess.io/vitess/go/vt/mysqlctl/blackbox"
 	"vitess.io/vitess/go/vt/mysqlctl/s3backupstorage"
 )
 
 /*
-	The tests in this file are meant to only be run locally for now. This allows us to avoid putting
-	AWS secrets in GitHub Actions. In order to run this test locally you must have an AWS S3 bucket
-	and set the proper environment variables, the full list of variables is available in checkEnvForS3.
+	These tests use Minio to emulate AWS S3. It allows us to run the tests on
+	GitHub Actions without having the security burden of carrying out AWS secrets
+	in our GitHub repo.
+
+	Minio is almost a drop-in replacement for AWS S3, if you want to run these
+	tests against a true AWS S3 Bucket, you can do so by not running the TestMain
+	and setting the 'AWS_*' environment variable to your own values.
 */
+
+func TestMain(m *testing.M) {
+	f := func() int {
+		minioPath, err := exec.LookPath("minio")
+		if err != nil {
+			log.Fatalf("minio binary not found: %v", err)
+		}
+
+		dataDir, err := os.MkdirTemp("", "")
+		if err != nil {
+			log.Fatalf("could not create temporary directory: %v", err)
+		}
+		err = os.MkdirAll(dataDir, 0755)
+		if err != nil {
+			log.Fatalf("failed to create MinIO data directory: %v", err)
+		}
+
+		cmd := exec.Command(minioPath, "server", dataDir, "--console-address", ":9001")
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+
+		err = cmd.Start()
+		if err != nil {
+			log.Fatalf("failed to start MinIO: %v", err)
+		}
+		defer func() {
+			cmd.Process.Kill()
+		}()
+
+		// Local MinIO credentials
+		accessKey := "minioadmin"
+		secretKey := "minioadmin"
+		minioEndpoint := "http://localhost:9000"
+		bucketName := "test-bucket"
+		region := "us-east-1"
+
+		client, err := minio.New("localhost:9000", accessKey, secretKey, false)
+		if err != nil {
+			log.Fatalf("failed to create MinIO client: %v", err)
+		}
+		waitForMinio(client)
+
+		err = client.MakeBucket(bucketName, region)
+		if err != nil {
+			log.Fatalf("failed to create test bucket: %v", err)
+		}
+
+		// Same env variables that are used between AWS S3 and Minio
+		os.Setenv("AWS_ACCESS_KEY_ID", accessKey)
+		os.Setenv("AWS_SECRET_ACCESS_KEY", secretKey)
+		os.Setenv("AWS_BUCKET", bucketName)
+		os.Setenv("AWS_ENDPOINT", minioEndpoint)
+		os.Setenv("AWS_REGION", region)
+
+		return m.Run()
+	}
+
+	os.Exit(f())
+}
+
+func waitForMinio(client *minio.Client) {
+	for i := 0; i < 60; i++ {
+		_, err := client.ListBuckets()
+		if err == nil {
+			return
+		}
+		time.Sleep(1 * time.Second)
+	}
+	log.Fatalf("MinIO server did not become ready in time")
+}
 
 func checkEnvForS3(t *testing.T) {
 	envRequired := []string{
 		"AWS_ACCESS_KEY_ID",
 		"AWS_SECRET_ACCESS_KEY",
-		"AWS_SESSION_TOKEN",
 		"AWS_BUCKET",
 		"AWS_ENDPOINT",
 		"AWS_REGION",
@@ -74,13 +150,13 @@ func TestExecuteBackupS3FailEachFileOnce(t *testing.T) {
 	})
 
 	ctx := context.Background()
-	backupRoot, keyspace, shard, ts := setupCluster(ctx, t, 2, 2)
+	backupRoot, keyspace, shard, ts := blackbox.SetupCluster(ctx, t, 2, 2)
 
 	be := &mysqlctl.BuiltinBackupEngine{}
 
 	// Configure a tight deadline to force a timeout
-	oldDeadline := setBuiltinBackupMysqldDeadline(time.Second)
-	defer setBuiltinBackupMysqldDeadline(oldDeadline)
+	oldDeadline := blackbox.SetBuiltinBackupMysqldDeadline(time.Second)
+	defer blackbox.SetBuiltinBackupMysqldDeadline(oldDeadline)
 
 	fakeStats := backupstats.NewFakeStats()
 	logger := logutil.NewMemoryLogger()
@@ -115,21 +191,21 @@ func TestExecuteBackupS3FailEachFileOnce(t *testing.T) {
 		Keyspace:             keyspace,
 		Shard:                shard,
 		Stats:                fakeStats,
-		MysqlShutdownTimeout: mysqlShutdownTimeout,
+		MysqlShutdownTimeout: blackbox.MysqlShutdownTimeout,
 	}, bh)
 
 	require.NoError(t, err)
 	require.Equal(t, mysqlctl.BackupUsable, backupResult)
 
-	ss := getStats(fakeStats)
+	ss := blackbox.GetStats(fakeStats)
 
 	// Even though we have 4 files, we expect '8' for all the values below as we re-do every file once.
-	require.Equal(t, 8, ss.destinationCloseStats)
-	require.Equal(t, 8, ss.destinationOpenStats)
-	require.Equal(t, 8, ss.destinationWriteStats)
-	require.Equal(t, 8, ss.sourceCloseStats)
-	require.Equal(t, 8, ss.sourceOpenStats)
-	require.Equal(t, 8, ss.sourceReadStats)
+	require.Equal(t, 8, ss.DestinationCloseStats)
+	require.Equal(t, 8, ss.DestinationOpenStats)
+	require.Equal(t, 8, ss.DestinationWriteStats)
+	require.Equal(t, 8, ss.SourceCloseStats)
+	require.Equal(t, 8, ss.SourceOpenStats)
+	require.Equal(t, 8, ss.SourceReadStats)
 }
 
 func TestExecuteBackupS3FailEachFileTwice(t *testing.T) {
@@ -142,13 +218,13 @@ func TestExecuteBackupS3FailEachFileTwice(t *testing.T) {
 	})
 
 	ctx := context.Background()
-	backupRoot, keyspace, shard, ts := setupCluster(ctx, t, 2, 2)
+	backupRoot, keyspace, shard, ts := blackbox.SetupCluster(ctx, t, 2, 2)
 
 	be := &mysqlctl.BuiltinBackupEngine{}
 
 	// Configure a tight deadline to force a timeout
-	oldDeadline := setBuiltinBackupMysqldDeadline(time.Second)
-	defer setBuiltinBackupMysqldDeadline(oldDeadline)
+	oldDeadline := blackbox.SetBuiltinBackupMysqldDeadline(time.Second)
+	defer blackbox.SetBuiltinBackupMysqldDeadline(oldDeadline)
 
 	fakeStats := backupstats.NewFakeStats()
 	logger := logutil.NewMemoryLogger()
@@ -187,24 +263,24 @@ func TestExecuteBackupS3FailEachFileTwice(t *testing.T) {
 		Keyspace:             keyspace,
 		Shard:                shard,
 		Stats:                fakeStats,
-		MysqlShutdownTimeout: mysqlShutdownTimeout,
+		MysqlShutdownTimeout: blackbox.MysqlShutdownTimeout,
 	}, bh)
 
 	require.Error(t, err)
 	require.Equal(t, mysqlctl.BackupUnusable, backupResult)
 
-	ss := getStats(fakeStats)
+	ss := blackbox.GetStats(fakeStats)
 
 	// All stats here must be equal to 5, we have four files, we go each of them, they all fail.
 	// The logic decides to retry each file once, we retry the first failed file, it fails again
 	// but since it has reached the limit of retries, the backup will fail anyway, thus we don't
 	// retry the other 3 files.
-	require.Equal(t, 5, ss.destinationCloseStats)
-	require.Equal(t, 5, ss.destinationOpenStats)
-	require.Equal(t, 5, ss.destinationWriteStats)
-	require.Equal(t, 5, ss.sourceCloseStats)
-	require.Equal(t, 5, ss.sourceOpenStats)
-	require.Equal(t, 5, ss.sourceReadStats)
+	require.Equal(t, 5, ss.DestinationCloseStats)
+	require.Equal(t, 5, ss.DestinationOpenStats)
+	require.Equal(t, 5, ss.DestinationWriteStats)
+	require.Equal(t, 5, ss.SourceCloseStats)
+	require.Equal(t, 5, ss.SourceOpenStats)
+	require.Equal(t, 5, ss.SourceReadStats)
 }
 
 func TestExecuteRestoreS3FailEachFileOnce(t *testing.T) {
@@ -217,7 +293,7 @@ func TestExecuteRestoreS3FailEachFileOnce(t *testing.T) {
 	})
 
 	ctx := context.Background()
-	backupRoot, keyspace, shard, ts := setupCluster(ctx, t, 2, 2)
+	backupRoot, keyspace, shard, ts := blackbox.SetupCluster(ctx, t, 2, 2)
 
 	fakeStats := backupstats.NewFakeStats()
 	logger := logutil.NewMemoryLogger()
@@ -253,7 +329,7 @@ func TestExecuteRestoreS3FailEachFileOnce(t *testing.T) {
 		TopoServer:           ts,
 		Keyspace:             keyspace,
 		Shard:                shard,
-		MysqlShutdownTimeout: mysqlShutdownTimeout,
+		MysqlShutdownTimeout: blackbox.MysqlShutdownTimeout,
 	}, bh)
 
 	require.NoError(t, err)
@@ -292,7 +368,7 @@ func TestExecuteRestoreS3FailEachFileOnce(t *testing.T) {
 		RestoreToTimestamp:   time.Time{},
 		DryRun:               false,
 		Stats:                fakeStats,
-		MysqlShutdownTimeout: mysqlShutdownTimeout,
+		MysqlShutdownTimeout: blackbox.MysqlShutdownTimeout,
 	}
 
 	// Successful restore.
@@ -300,13 +376,13 @@ func TestExecuteRestoreS3FailEachFileOnce(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, bm)
 
-	ss := getStats(fakeStats)
-	require.Equal(t, 8, ss.destinationCloseStats)
-	require.Equal(t, 8, ss.destinationOpenStats)
-	require.Equal(t, 4, ss.destinationWriteStats) // 4, because on the first attempt, we fail to read before writing to the filesystem
-	require.Equal(t, 8, ss.sourceCloseStats)
-	require.Equal(t, 8, ss.sourceOpenStats)
-	require.Equal(t, 8, ss.sourceReadStats)
+	ss := blackbox.GetStats(fakeStats)
+	require.Equal(t, 8, ss.DestinationCloseStats)
+	require.Equal(t, 8, ss.DestinationOpenStats)
+	require.Equal(t, 4, ss.DestinationWriteStats) // 4, because on the first attempt, we fail to read before writing to the filesystem
+	require.Equal(t, 8, ss.SourceCloseStats)
+	require.Equal(t, 8, ss.SourceOpenStats)
+	require.Equal(t, 8, ss.SourceReadStats)
 }
 
 func TestExecuteRestoreS3FailEachFileTwice(t *testing.T) {
@@ -319,7 +395,7 @@ func TestExecuteRestoreS3FailEachFileTwice(t *testing.T) {
 	})
 
 	ctx := context.Background()
-	backupRoot, keyspace, shard, ts := setupCluster(ctx, t, 2, 2)
+	backupRoot, keyspace, shard, ts := blackbox.SetupCluster(ctx, t, 2, 2)
 
 	fakeStats := backupstats.NewFakeStats()
 	logger := logutil.NewMemoryLogger()
@@ -355,7 +431,7 @@ func TestExecuteRestoreS3FailEachFileTwice(t *testing.T) {
 		TopoServer:           ts,
 		Keyspace:             keyspace,
 		Shard:                shard,
-		MysqlShutdownTimeout: mysqlShutdownTimeout,
+		MysqlShutdownTimeout: blackbox.MysqlShutdownTimeout,
 	}, bh)
 
 	require.NoError(t, err)
@@ -394,21 +470,21 @@ func TestExecuteRestoreS3FailEachFileTwice(t *testing.T) {
 		RestoreToTimestamp:   time.Time{},
 		DryRun:               false,
 		Stats:                fakeStats,
-		MysqlShutdownTimeout: mysqlShutdownTimeout,
+		MysqlShutdownTimeout: blackbox.MysqlShutdownTimeout,
 	}
 
 	// Successful restore.
 	_, err = be.ExecuteRestore(ctx, restoreParams, restoreBh)
 	assert.ErrorContains(t, err, "failing read")
 
-	ss := getStats(fakeStats)
+	ss := blackbox.GetStats(fakeStats)
 	// Everything except destination writes must be equal to 5:
 	// +1 for every file on the first attempt (= 4), and +1 for the first file we try for the second time.
 	// Since we fail early as soon as a second-attempt-file fails, we won't see a value above 5.
-	require.Equal(t, 5, ss.destinationCloseStats)
-	require.Equal(t, 5, ss.destinationOpenStats)
-	require.Equal(t, 0, ss.destinationWriteStats) // 0, because on the both attempts, we fail to read before writing to the filesystem
-	require.Equal(t, 5, ss.sourceCloseStats)
-	require.Equal(t, 5, ss.sourceOpenStats)
-	require.Equal(t, 5, ss.sourceReadStats)
+	require.Equal(t, 5, ss.DestinationCloseStats)
+	require.Equal(t, 5, ss.DestinationOpenStats)
+	require.Equal(t, 0, ss.DestinationWriteStats) // 0, because on the both attempts, we fail to read before writing to the filesystem
+	require.Equal(t, 5, ss.SourceCloseStats)
+	require.Equal(t, 5, ss.SourceOpenStats)
+	require.Equal(t, 5, ss.SourceReadStats)
 }

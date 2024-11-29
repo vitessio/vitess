@@ -14,8 +14,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package mysqlctl_test is the blackbox tests for package mysqlctl.
-package mysqlctl_test
+// Package blackbox is the blackbox tests for package mysqlctl.
+package blackbox
 
 import (
 	"bytes"
@@ -25,7 +25,6 @@ import (
 	"io"
 	"os"
 	"path"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -35,7 +34,6 @@ import (
 
 	"vitess.io/vitess/go/test/utils"
 
-	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/mysql/replication"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -51,40 +49,6 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 )
-
-const mysqlShutdownTimeout = 1 * time.Minute
-
-func setBuiltinBackupMysqldDeadline(t time.Duration) time.Duration {
-	old := mysqlctl.BuiltinBackupMysqldTimeout
-	mysqlctl.BuiltinBackupMysqldTimeout = t
-
-	return old
-}
-
-func createBackupDir(root string, dirs ...string) error {
-	for _, dir := range dirs {
-		if err := os.MkdirAll(path.Join(root, dir), 0755); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func createBackupFiles(root string, fileCount int, ext string) error {
-	for i := 0; i < fileCount; i++ {
-		f, err := os.Create(path.Join(root, fmt.Sprintf("%d.%s", i, ext)))
-		if err != nil {
-			return err
-		}
-		if _, err := f.Write([]byte("hello, world!")); err != nil {
-			return err
-		}
-		defer f.Close()
-	}
-
-	return nil
-}
 
 func TestExecuteBackup(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
@@ -137,8 +101,8 @@ func TestExecuteBackup(t *testing.T) {
 	be := &mysqlctl.BuiltinBackupEngine{}
 
 	// Configure a tight deadline to force a timeout
-	oldDeadline := setBuiltinBackupMysqldDeadline(time.Second)
-	defer setBuiltinBackupMysqldDeadline(oldDeadline)
+	oldDeadline := SetBuiltinBackupMysqldDeadline(time.Second)
+	defer SetBuiltinBackupMysqldDeadline(oldDeadline)
 
 	bh := filebackupstorage.NewBackupHandle(nil, "", "", false)
 
@@ -167,7 +131,7 @@ func TestExecuteBackup(t *testing.T) {
 		Keyspace:             keyspace,
 		Shard:                shard,
 		Stats:                fakeStats,
-		MysqlShutdownTimeout: mysqlShutdownTimeout,
+		MysqlShutdownTimeout: MysqlShutdownTimeout,
 	}, bh)
 
 	require.NoError(t, err)
@@ -225,7 +189,7 @@ func TestExecuteBackup(t *testing.T) {
 		TopoServer:           ts,
 		Keyspace:             keyspace,
 		Shard:                shard,
-		MysqlShutdownTimeout: mysqlShutdownTimeout,
+		MysqlShutdownTimeout: MysqlShutdownTimeout,
 	}, bh)
 
 	assert.Error(t, err)
@@ -283,8 +247,8 @@ func TestExecuteBackupWithSafeUpgrade(t *testing.T) {
 	be := &mysqlctl.BuiltinBackupEngine{}
 
 	// Configure a tight deadline to force a timeout
-	oldDeadline := setBuiltinBackupMysqldDeadline(time.Second)
-	defer setBuiltinBackupMysqldDeadline(oldDeadline)
+	oldDeadline := SetBuiltinBackupMysqldDeadline(time.Second)
+	defer SetBuiltinBackupMysqldDeadline(oldDeadline)
 
 	bh := filebackupstorage.NewBackupHandle(nil, "", "", false)
 
@@ -314,7 +278,7 @@ func TestExecuteBackupWithSafeUpgrade(t *testing.T) {
 		Shard:                shard,
 		Stats:                backupstats.NewFakeStats(),
 		UpgradeSafe:          true,
-		MysqlShutdownTimeout: mysqlShutdownTimeout,
+		MysqlShutdownTimeout: MysqlShutdownTimeout,
 	}, bh)
 
 	require.NoError(t, err)
@@ -401,7 +365,7 @@ func TestExecuteBackupWithCanceledContext(t *testing.T) {
 		TopoServer:           ts,
 		Keyspace:             keyspace,
 		Shard:                shard,
-		MysqlShutdownTimeout: mysqlShutdownTimeout,
+		MysqlShutdownTimeout: MysqlShutdownTimeout,
 	}, bh)
 
 	require.Error(t, err)
@@ -486,7 +450,7 @@ func TestExecuteRestoreWithTimedOutContext(t *testing.T) {
 		TopoServer:           ts,
 		Keyspace:             keyspace,
 		Shard:                shard,
-		MysqlShutdownTimeout: mysqlShutdownTimeout,
+		MysqlShutdownTimeout: MysqlShutdownTimeout,
 	}, bh)
 
 	require.NoError(t, err)
@@ -525,7 +489,7 @@ func TestExecuteRestoreWithTimedOutContext(t *testing.T) {
 		RestoreToTimestamp:   time.Time{},
 		DryRun:               false,
 		Stats:                fakeStats,
-		MysqlShutdownTimeout: mysqlShutdownTimeout,
+		MysqlShutdownTimeout: MysqlShutdownTimeout,
 	}
 
 	// Successful restore.
@@ -625,7 +589,7 @@ func newWriteCloseFailFirstWrite(firstWriteDone bool) *rwCloseFailFirstCall {
 
 func TestExecuteBackupFailToWriteEachFileOnlyOnce(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
-	backupRoot, keyspace, shard, ts := setupCluster(ctx, t, 2, 2)
+	backupRoot, keyspace, shard, ts := SetupCluster(ctx, t, 2, 2)
 
 	bufferPerFiles := make(map[string]*rwCloseFailFirstCall)
 	be := &mysqlctl.BuiltinBackupEngine{}
@@ -662,7 +626,7 @@ func TestExecuteBackupFailToWriteEachFileOnlyOnce(t *testing.T) {
 		TopoServer:           ts,
 		Keyspace:             keyspace,
 		Shard:                shard,
-		MysqlShutdownTimeout: mysqlShutdownTimeout,
+		MysqlShutdownTimeout: MysqlShutdownTimeout,
 	}, bh)
 
 	expectedLogs := []string{
@@ -682,7 +646,7 @@ func TestExecuteBackupFailToWriteEachFileOnlyOnce(t *testing.T) {
 		"Completed backing up MANIFEST (attempt 2/2)",
 	}
 
-	assertLogs(t, expectedLogs, logger)
+	AssertLogs(t, expectedLogs, logger)
 
 	require.NoError(t, err)
 	require.Equal(t, mysqlctl.BackupUsable, backupResult)
@@ -690,7 +654,7 @@ func TestExecuteBackupFailToWriteEachFileOnlyOnce(t *testing.T) {
 
 func TestExecuteBackupFailToWriteFileTwice(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
-	backupRoot, keyspace, shard, ts := setupCluster(ctx, t, 1, 1)
+	backupRoot, keyspace, shard, ts := SetupCluster(ctx, t, 1, 1)
 
 	bufferPerFiles := make(map[string]*rwCloseFailFirstCall)
 	be := &mysqlctl.BuiltinBackupEngine{}
@@ -726,22 +690,22 @@ func TestExecuteBackupFailToWriteFileTwice(t *testing.T) {
 		TopoServer:           ts,
 		Keyspace:             keyspace,
 		Shard:                shard,
-		MysqlShutdownTimeout: mysqlShutdownTimeout,
+		MysqlShutdownTimeout: MysqlShutdownTimeout,
 	}, bh)
 
 	expectedLogs := []string{
 		"Backing up file: test1/0.ibd (attempt 1/2)",
 		"Backing up file: test1/0.ibd (attempt 2/2)",
 	}
-	assertLogs(t, expectedLogs, logger)
+	AssertLogs(t, expectedLogs, logger)
 
-	ss := getStats(fakeStats)
-	require.Equal(t, 2, ss.destinationCloseStats)
-	require.Equal(t, 2, ss.destinationOpenStats)
-	require.Equal(t, 2, ss.destinationWriteStats)
-	require.Equal(t, 2, ss.sourceCloseStats)
-	require.Equal(t, 2, ss.sourceOpenStats)
-	require.Equal(t, 2, ss.sourceReadStats)
+	ss := GetStats(fakeStats)
+	require.Equal(t, 2, ss.DestinationCloseStats)
+	require.Equal(t, 2, ss.DestinationOpenStats)
+	require.Equal(t, 2, ss.DestinationWriteStats)
+	require.Equal(t, 2, ss.SourceCloseStats)
+	require.Equal(t, 2, ss.SourceOpenStats)
+	require.Equal(t, 2, ss.SourceReadStats)
 
 	require.ErrorContains(t, err, "failing first write")
 	require.Equal(t, mysqlctl.BackupUnusable, backupResult)
@@ -749,7 +713,7 @@ func TestExecuteBackupFailToWriteFileTwice(t *testing.T) {
 
 func TestExecuteRestoreFailToReadEachFileOnlyOnce(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
-	backupRoot, keyspace, shard, ts := setupCluster(ctx, t, 2, 2)
+	backupRoot, keyspace, shard, ts := SetupCluster(ctx, t, 2, 2)
 
 	be := &mysqlctl.BuiltinBackupEngine{}
 	bufferPerFiles := make(map[string]*rwCloseFailFirstCall)
@@ -783,7 +747,7 @@ func TestExecuteRestoreFailToReadEachFileOnlyOnce(t *testing.T) {
 		TopoServer:           ts,
 		Keyspace:             keyspace,
 		Shard:                shard,
-		MysqlShutdownTimeout: mysqlShutdownTimeout,
+		MysqlShutdownTimeout: MysqlShutdownTimeout,
 	}, bh)
 
 	require.NoError(t, err)
@@ -832,7 +796,7 @@ func TestExecuteRestoreFailToReadEachFileOnlyOnce(t *testing.T) {
 		RestoreToTimestamp:   time.Time{},
 		DryRun:               false,
 		Stats:                fakeStats,
-		MysqlShutdownTimeout: mysqlShutdownTimeout,
+		MysqlShutdownTimeout: MysqlShutdownTimeout,
 	}
 
 	// Successful restore.
@@ -840,18 +804,18 @@ func TestExecuteRestoreFailToReadEachFileOnlyOnce(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, bm)
 
-	ss := getStats(fakeStats)
-	require.Equal(t, 8, ss.destinationCloseStats)
-	require.Equal(t, 8, ss.destinationOpenStats)
-	require.Equal(t, 4, ss.destinationWriteStats)
-	require.Equal(t, 8, ss.sourceCloseStats)
-	require.Equal(t, 8, ss.sourceOpenStats)
-	require.Equal(t, 8, ss.sourceReadStats)
+	ss := GetStats(fakeStats)
+	require.Equal(t, 8, ss.DestinationCloseStats)
+	require.Equal(t, 8, ss.DestinationOpenStats)
+	require.Equal(t, 4, ss.DestinationWriteStats)
+	require.Equal(t, 8, ss.SourceCloseStats)
+	require.Equal(t, 8, ss.SourceOpenStats)
+	require.Equal(t, 8, ss.SourceReadStats)
 }
 
 func TestExecuteRestoreFailToReadEachFileTwice(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
-	backupRoot, keyspace, shard, ts := setupCluster(ctx, t, 2, 2)
+	backupRoot, keyspace, shard, ts := SetupCluster(ctx, t, 2, 2)
 
 	be := &mysqlctl.BuiltinBackupEngine{}
 	bufferPerFiles := make(map[string]*rwCloseFailFirstCall)
@@ -885,7 +849,7 @@ func TestExecuteRestoreFailToReadEachFileTwice(t *testing.T) {
 		TopoServer:           ts,
 		Keyspace:             keyspace,
 		Shard:                shard,
-		MysqlShutdownTimeout: mysqlShutdownTimeout,
+		MysqlShutdownTimeout: MysqlShutdownTimeout,
 	}, bh)
 
 	require.NoError(t, err)
@@ -934,7 +898,7 @@ func TestExecuteRestoreFailToReadEachFileTwice(t *testing.T) {
 		RestoreToTimestamp:   time.Time{},
 		DryRun:               false,
 		Stats:                fakeStats,
-		MysqlShutdownTimeout: mysqlShutdownTimeout,
+		MysqlShutdownTimeout: MysqlShutdownTimeout,
 	}
 
 	// Successful restore.
@@ -942,146 +906,11 @@ func TestExecuteRestoreFailToReadEachFileTwice(t *testing.T) {
 	assert.ErrorContains(t, err, "failing first read")
 	assert.Nil(t, bm)
 
-	ss := getStats(fakeStats)
-	require.Equal(t, 5, ss.destinationCloseStats)
-	require.Equal(t, 5, ss.destinationOpenStats)
-	require.Equal(t, 0, ss.destinationWriteStats)
-	require.Equal(t, 5, ss.sourceCloseStats)
-	require.Equal(t, 5, ss.sourceOpenStats)
-	require.Equal(t, 5, ss.sourceReadStats)
-}
-
-type statSummary struct {
-	destinationCloseStats int
-	destinationOpenStats  int
-	destinationWriteStats int
-	sourceCloseStats      int
-	sourceOpenStats       int
-	sourceReadStats       int
-}
-
-func getStats(stats *backupstats.FakeStats) statSummary {
-	var ss statSummary
-
-	for _, sr := range stats.ScopeReturns {
-		switch sr.ScopeV[backupstats.ScopeOperation] {
-		case "Destination:Close":
-			if len(sr.TimedIncrementCalls) > 0 {
-				ss.destinationCloseStats++
-			}
-		case "Destination:Open":
-			if len(sr.TimedIncrementCalls) > 0 {
-				ss.destinationOpenStats++
-			}
-		case "Destination:Write":
-			if len(sr.TimedIncrementBytesCalls) > 0 {
-				ss.destinationWriteStats++
-			}
-		case "Source:Close":
-			if len(sr.TimedIncrementCalls) > 0 {
-				ss.sourceCloseStats++
-			}
-		case "Source:Open":
-			if len(sr.TimedIncrementCalls) > 0 {
-				ss.sourceOpenStats++
-			}
-		case "Source:Read":
-			if len(sr.TimedIncrementBytesCalls) > 0 {
-				ss.sourceReadStats++
-			}
-		}
-	}
-	return ss
-}
-
-func assertLogs(t *testing.T, expectedLogs []string, logger *logutil.MemoryLogger) {
-	for _, log := range expectedLogs {
-		var found bool
-		for _, event := range logger.Events {
-			if log == event.GetValue() {
-				found = true
-				break
-			}
-		}
-		if !found {
-			require.Failf(t, "missing log line", "%s is missing from the logs", log)
-		}
-	}
-}
-
-func setupCluster(ctx context.Context, t *testing.T, dirs, filesPerDir int) (backupRoot string, keyspace string, shard string, ts *topo.Server) {
-	// Set up local backup directory
-	id := fmt.Sprintf("%d", time.Now().UnixNano())
-	backupRoot = fmt.Sprintf("testdata/builtinbackup_test_%s", id)
-	filebackupstorage.FileBackupStorageRoot = backupRoot
-	require.NoError(t, createBackupDir(backupRoot, "innodb", "log", "datadir"))
-	dataDir := path.Join(backupRoot, "datadir")
-	// Add some files under data directory to force backup to execute semaphore acquire inside
-	// backupFiles() method (https://github.com/vitessio/vitess/blob/main/go/vt/mysqlctl/builtinbackupengine.go#L483).
-	for dirI := range dirs {
-		dirName := "test" + strconv.Itoa(dirI+1)
-		require.NoError(t, createBackupDir(dataDir, dirName))
-		require.NoError(t, createBackupFiles(path.Join(dataDir, dirName), filesPerDir, "ibd"))
-	}
-	t.Cleanup(func() {
-		require.NoError(t, os.RemoveAll(backupRoot))
-	})
-
-	needIt, err := needInnoDBRedoLogSubdir()
-	require.NoError(t, err)
-	if needIt {
-		fpath := path.Join("log", mysql.DynamicRedoLogSubdir)
-		if err := createBackupDir(backupRoot, fpath); err != nil {
-			require.Failf(t, err.Error(), "failed to create directory: %s", fpath)
-		}
-	}
-
-	// Set up topo
-	keyspace, shard = "mykeyspace", "-"
-	ts = memorytopo.NewServer(ctx, "cell1")
-	t.Cleanup(func() {
-		ts.Close()
-	})
-
-	require.NoError(t, ts.CreateKeyspace(ctx, keyspace, &topodata.Keyspace{}))
-	require.NoError(t, ts.CreateShard(ctx, keyspace, shard))
-
-	tablet := topo.NewTablet(100, "cell1", "mykeyspace-00-80-0100")
-	tablet.Keyspace = keyspace
-	tablet.Shard = shard
-
-	require.NoError(t, ts.CreateTablet(ctx, tablet))
-
-	_, err = ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
-		si.PrimaryAlias = &topodata.TabletAlias{Uid: 100, Cell: "cell1"}
-
-		now := time.Now()
-		si.PrimaryTermStartTime = &vttime.Time{Seconds: int64(now.Second()), Nanoseconds: int32(now.Nanosecond())}
-
-		return nil
-	})
-	require.NoError(t, err)
-	return backupRoot, keyspace, shard, ts
-}
-
-// needInnoDBRedoLogSubdir indicates whether we need to create a redo log subdirectory.
-// Starting with MySQL 8.0.30, the InnoDB redo logs are stored in a subdirectory of the
-// <innodb_log_group_home_dir> (<datadir>/. by default) called "#innodb_redo". See:
-//
-//	https://dev.mysql.com/doc/refman/8.0/en/innodb-redo-log.html#innodb-modifying-redo-log-capacity
-func needInnoDBRedoLogSubdir() (needIt bool, err error) {
-	mysqldVersionStr, err := mysqlctl.GetVersionString()
-	if err != nil {
-		return needIt, err
-	}
-	_, sv, err := mysqlctl.ParseVersionString(mysqldVersionStr)
-	if err != nil {
-		return needIt, err
-	}
-	versionStr := fmt.Sprintf("%d.%d.%d", sv.Major, sv.Minor, sv.Patch)
-	capableOf := mysql.ServerVersionCapableOf(versionStr)
-	if capableOf == nil {
-		return needIt, fmt.Errorf("cannot determine database flavor details for version %s", versionStr)
-	}
-	return capableOf(capabilities.DynamicRedoLogCapacityFlavorCapability)
+	ss := GetStats(fakeStats)
+	require.Equal(t, 5, ss.DestinationCloseStats)
+	require.Equal(t, 5, ss.DestinationOpenStats)
+	require.Equal(t, 0, ss.DestinationWriteStats)
+	require.Equal(t, 5, ss.SourceCloseStats)
+	require.Equal(t, 5, ss.SourceOpenStats)
+	require.Equal(t, 5, ss.SourceReadStats)
 }

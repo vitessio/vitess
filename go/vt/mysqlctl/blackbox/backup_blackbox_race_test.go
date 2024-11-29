@@ -16,8 +16,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package mysqlctl_test is the blackbox tests for package mysqlctl.
-package mysqlctl_test
+// Package blackbox is the blackbox tests for package mysqlctl.
+package blackbox
 
 import (
 	"fmt"
@@ -144,7 +144,7 @@ func TestExecuteBackupWithFailureOnLastFile(t *testing.T) {
 		TopoServer:           ts,
 		Keyspace:             keyspace,
 		Shard:                shard,
-		MysqlShutdownTimeout: mysqlShutdownTimeout,
+		MysqlShutdownTimeout: MysqlShutdownTimeout,
 	}, bh)
 
 	require.ErrorContains(t, err, "cannot add file: 3")
