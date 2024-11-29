@@ -30,7 +30,9 @@ type BackupErrorRecorder interface {
 	ResetErrorForFile(string)
 }
 
-// PerFileErrorRecorder records all the errors.
+// PerFileErrorRecorder records errors and group them by filename.
+// This is particularly useful when processing several files at the same time
+// and wanting to know which files failed.
 type PerFileErrorRecorder struct {
 	mu     sync.Mutex
 	errors map[string][]error
@@ -59,6 +61,7 @@ func (pfer *PerFileErrorRecorder) HasErrors() bool {
 	return len(pfer.errors) > 0
 }
 
+// Error returns all the errors that were recorded
 func (pfer *PerFileErrorRecorder) Error() error {
 	pfer.mu.Lock()
 	defer pfer.mu.Unlock()
@@ -78,6 +81,7 @@ func (pfer *PerFileErrorRecorder) Error() error {
 	return errors.New(strings.Join(errs, "; "))
 }
 
+// GetFailedFiles returns a slice of filenames, each of this file have at least 1 error.
 func (pfer *PerFileErrorRecorder) GetFailedFiles() []string {
 	pfer.mu.Lock()
 	defer pfer.mu.Unlock()
@@ -91,6 +95,7 @@ func (pfer *PerFileErrorRecorder) GetFailedFiles() []string {
 	return files
 }
 
+// ResetErrorForFile removes all the errors of a given file.
 func (pfer *PerFileErrorRecorder) ResetErrorForFile(filename string) {
 	pfer.mu.Lock()
 	defer pfer.mu.Unlock()

@@ -91,7 +91,7 @@ type BackupHandle interface {
 	ReadFile(ctx context.Context, filename string) (io.ReadCloser, error)
 
 	// BackupErrorRecorder is embedded here to coordinate reporting and
-	// handling of errors among all the components involved in taking a backup.
+	// handling of errors among all the components involved in taking/restoring a backup.
 	errorsbackup.BackupErrorRecorder
 }
 

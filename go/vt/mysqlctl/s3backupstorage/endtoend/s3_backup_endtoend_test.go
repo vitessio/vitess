@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package integration
+package endtoend
 
 import (
 	"context"
@@ -48,7 +48,11 @@ import (
 
 	Minio is almost a drop-in replacement for AWS S3, if you want to run these
 	tests against a true AWS S3 Bucket, you can do so by not running the TestMain
-	and setting the 'AWS_*' environment variable to your own values.
+	and setting the 'AWS_*' environment variables to your own values.
+
+	This package and file are named 'endtoend', but it's more an integration test.
+	However, we don't want our CI infra to mistake this for a regular unit-test,
+	hence the rename to 'endtoend'.
 */
 
 func TestMain(m *testing.M) {
