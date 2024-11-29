@@ -1057,7 +1057,7 @@ var defaultConfig = TabletConfig{
 
 	EnablePerWorkloadTableMetrics: false,
 
-	// TwoPCAbandonAge: Seconds((10 * time.Minute).Seconds()),
+	TwoPCAbandonAge: Seconds((15 * time.Minute).Seconds()),
 }
 
 // defaultTxThrottlerConfig returns the default TxThrottlerConfigFlag object based on

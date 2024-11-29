@@ -21,7 +21,7 @@ These are the RPC changes made in this release -
 
 #### <a id="vttablet-flags"/>Deprecated VTTablet Flags</a>
 
-- `twopc_enable` flag is deprecated, `twopc_abandonage` flag if set will be used to determine if 2PC is enabled or not.
+- `twopc_enable` flag is deprecated. Usage of TwoPC commit will be determined by the `transaction_mode` set on VTGate via flag or session variable.
 
 ### <a id="reparents-prefer-not-backing-up"/>Prefer not promoting a replica that is currently taking a backup
 
