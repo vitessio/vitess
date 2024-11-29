@@ -1373,6 +1373,15 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
+		"loopkup_index": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestLookupIndex"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vreplication_vtctldclient_vdiff2_movetables_tz",
+			"RetryMax": 1,
+			"Tags": []
+		},
 		"vtadmin": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtadmin"],
