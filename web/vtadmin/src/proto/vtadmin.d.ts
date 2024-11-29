@@ -26578,9 +26578,6 @@ export namespace tabletmanagerdata {
 
         /** ReplicationStatusResponse status */
         status?: (replicationdata.IStatus|null);
-
-        /** ReplicationStatusResponse backup_running */
-        backup_running?: (boolean|null);
     }
 
     /** Represents a ReplicationStatusResponse. */
@@ -26594,9 +26591,6 @@ export namespace tabletmanagerdata {
 
         /** ReplicationStatusResponse status. */
         public status?: (replicationdata.IStatus|null);
-
-        /** ReplicationStatusResponse backup_running. */
-        public backup_running: boolean;
 
         /**
          * Creates a new ReplicationStatusResponse instance using the specified properties.
@@ -48207,9 +48201,6 @@ export namespace replicationdata {
 
         /** StopReplicationStatus after */
         after?: (replicationdata.IStatus|null);
-
-        /** StopReplicationStatus backup_running */
-        backup_running?: (boolean|null);
     }
 
     /** Represents a StopReplicationStatus. */
@@ -48226,9 +48217,6 @@ export namespace replicationdata {
 
         /** StopReplicationStatus after. */
         public after?: (replicationdata.IStatus|null);
-
-        /** StopReplicationStatus backup_running. */
-        public backup_running: boolean;
 
         /**
          * Creates a new StopReplicationStatus instance using the specified properties.

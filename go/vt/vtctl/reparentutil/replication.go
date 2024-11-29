@@ -216,9 +216,6 @@ func stopReplicationAndBuildStatusMaps(
 		logger.Infof("getting replication position from %v", alias)
 
 		stopReplicationStatus, err := tmc.StopReplicationAndGetStatus(groupCtx, tabletInfo.Tablet, replicationdatapb.StopReplicationMode_IOTHREADONLY)
-		m.Lock()
-		res.tabletsBackupState[alias] = stopReplicationStatus.GetBackupRunning()
-		m.Unlock()
 		if err != nil {
 			sqlErr, isSQLErr := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError)
 			if isSQLErr && sqlErr != nil && sqlErr.Number() == sqlerror.ERNotReplica {
@@ -242,6 +239,10 @@ func stopReplicationAndBuildStatusMaps(
 				err = vterrors.Wrapf(err, "error when getting replication status for alias %v: %v", alias, err)
 			}
 		} else {
+			m.Lock()
+			res.tabletsBackupState[alias] = stopReplicationStatus.After.BackupRunning
+			m.Unlock()
+
 			var sqlThreadRunning bool
 			// Check if the sql thread was running for the tablet
 			sqlThreadRunning, err = SQLThreadWasRunning(stopReplicationStatus)
