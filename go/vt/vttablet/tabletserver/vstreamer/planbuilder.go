@@ -583,12 +583,19 @@ func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) er
 			if err != nil {
 				return err
 			}
+			// The Right Expr is typically expected to be a Literal value,
+			// except for the IN operator, where a Tuple value is expected.
+			// Handle the IN operator case first.
 			if opcode == In {
 				values, ok := expr.Right.(sqlparser.ValTuple)
 				if !ok {
 					return fmt.Errorf("unexpected: %v", sqlparser.String(expr))
 				}
-				return plan.appendTupleFilter(values, opcode, colnum)
+				err := plan.appendTupleFilter(values, opcode, colnum)
+				if err != nil {
+					return err
+				}
+				continue
 			}
 			val, ok := expr.Right.(*sqlparser.Literal)
 			if !ok {

@@ -2089,7 +2089,7 @@ func TestFilteredInOperator(t *testing.T) {
 			filter: &binlogdatapb.Filter{
 				Rules: []*binlogdatapb.Rule{{
 					Match:  "t1",
-					Filter: "select id1, val from t1 where val in ('eee', 'bbb', 'ddd')",
+					Filter: "select id1, val from t1 where val in ('eee', 'bbb', 'ddd') and id1 in (4, 5)",
 				}},
 			},
 		},
@@ -2100,7 +2100,7 @@ func TestFilteredInOperator(t *testing.T) {
 	ts.tests = [][]*TestQuery{{
 		{"begin", nil},
 		{"insert into t1 values (1, 100, 'aaa')", noEvents},
-		{"insert into t1 values (2, 200, 'bbb')", nil},
+		{"insert into t1 values (2, 200, 'bbb')", noEvents},
 		{"insert into t1 values (3, 100, 'ccc')", noEvents},
 		{"insert into t1 values (4, 200, 'ddd')", nil},
 		{"insert into t1 values (5, 200, 'eee')", nil},
