@@ -17,7 +17,7 @@ jobs:
       matrix:
         branch: [ main, release-21.0, release-20.0, release-19.0 ]
     name: Update Golang Version
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Check out code
         uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
