@@ -30986,9 +30986,6 @@ export namespace tabletmanagerdata {
 
         /** StopReplicationAndGetStatusResponse status */
         status?: (replicationdata.IStopReplicationStatus|null);
-
-        /** StopReplicationAndGetStatusResponse backup_running */
-        backup_running?: (boolean|null);
     }
 
     /** Represents a StopReplicationAndGetStatusResponse. */
@@ -31002,9 +30999,6 @@ export namespace tabletmanagerdata {
 
         /** StopReplicationAndGetStatusResponse status. */
         public status?: (replicationdata.IStopReplicationStatus|null);
-
-        /** StopReplicationAndGetStatusResponse backup_running. */
-        public backup_running: boolean;
 
         /**
          * Creates a new StopReplicationAndGetStatusResponse instance using the specified properties.
