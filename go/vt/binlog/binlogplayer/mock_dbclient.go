@@ -181,6 +181,10 @@ func (dc *MockDBClient) Rollback() error {
 func (dc *MockDBClient) Close() {
 }
 
+func (dc *MockDBClient) IsClosed() bool {
+	return false
+}
+
 // ExecuteFetch is part of the DBClient interface
 func (dc *MockDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Result, err error) {
 	// Serialize ExecuteFetch to enforce a strict order on shared dbClients.

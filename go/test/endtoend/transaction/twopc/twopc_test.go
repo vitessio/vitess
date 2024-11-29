@@ -1395,8 +1395,6 @@ func TestReadTransactionStatus(t *testing.T) {
 		"insert into twopc_t1(id, col) values(6, 4)",
 		"insert into twopc_t1(id, col) values(9, 4)",
 	})
-	// Allow enough time for the commit to have started.
-	time.Sleep(1 * time.Second)
 
 	// Create a tablet manager client and use it to read the transaction state.
 	tmc := grpctmclient.NewClient()
@@ -1405,12 +1403,24 @@ func TestReadTransactionStatus(t *testing.T) {
 	defer cancel()
 
 	primaryTablet := getTablet(clusterInstance.Keyspaces[0].Shards[2].FindPrimaryTablet().GrpcPort)
+	// Wait for the transaction to show up in the unresolved list.
 	var unresTransaction *querypb.TransactionMetadata
-	for _, shard := range clusterInstance.Keyspaces[0].Shards {
-		urtRes, err := tmc.GetUnresolvedTransactions(ctx, getTablet(shard.FindPrimaryTablet().GrpcPort), 1)
-		require.NoError(t, err)
-		if len(urtRes) > 0 {
-			unresTransaction = urtRes[0]
+	timeout := time.After(10 * time.Second)
+	for {
+		for _, shard := range clusterInstance.Keyspaces[0].Shards {
+			urtRes, err := tmc.GetUnresolvedTransactions(ctx, getTablet(shard.FindPrimaryTablet().GrpcPort), 1)
+			require.NoError(t, err)
+			if len(urtRes) > 0 {
+				unresTransaction = urtRes[0]
+			}
+		}
+		if unresTransaction != nil {
+			break
+		}
+		select {
+		case <-timeout:
+			require.Fail(t, "timed out waiting for unresolved transaction")
+		default:
 		}
 	}
 	require.NotNil(t, unresTransaction)

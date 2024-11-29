@@ -3720,6 +3720,12 @@ export namespace vtadmin {
         /** ApplySchemaRequest cluster_id */
         cluster_id?: (string|null);
 
+        /** ApplySchemaRequest sql */
+        sql?: (string|null);
+
+        /** ApplySchemaRequest caller_id */
+        caller_id?: (string|null);
+
         /** ApplySchemaRequest request */
         request?: (vtctldata.IApplySchemaRequest|null);
     }
@@ -3735,6 +3741,12 @@ export namespace vtadmin {
 
         /** ApplySchemaRequest cluster_id. */
         public cluster_id: string;
+
+        /** ApplySchemaRequest sql. */
+        public sql: string;
+
+        /** ApplySchemaRequest caller_id. */
+        public caller_id: string;
 
         /** ApplySchemaRequest request. */
         public request?: (vtctldata.IApplySchemaRequest|null);
@@ -26578,6 +26590,9 @@ export namespace tabletmanagerdata {
 
         /** ReplicationStatusResponse status */
         status?: (replicationdata.IStatus|null);
+
+        /** ReplicationStatusResponse backup_running */
+        backup_running?: (boolean|null);
     }
 
     /** Represents a ReplicationStatusResponse. */
@@ -26591,6 +26606,9 @@ export namespace tabletmanagerdata {
 
         /** ReplicationStatusResponse status. */
         public status?: (replicationdata.IStatus|null);
+
+        /** ReplicationStatusResponse backup_running. */
+        public backup_running: boolean;
 
         /**
          * Creates a new ReplicationStatusResponse instance using the specified properties.
@@ -30986,6 +31004,9 @@ export namespace tabletmanagerdata {
 
         /** StopReplicationAndGetStatusResponse status */
         status?: (replicationdata.IStopReplicationStatus|null);
+
+        /** StopReplicationAndGetStatusResponse backup_running */
+        backup_running?: (boolean|null);
     }
 
     /** Represents a StopReplicationAndGetStatusResponse. */
@@ -30999,6 +31020,9 @@ export namespace tabletmanagerdata {
 
         /** StopReplicationAndGetStatusResponse status. */
         public status?: (replicationdata.IStopReplicationStatus|null);
+
+        /** StopReplicationAndGetStatusResponse backup_running. */
+        public backup_running: boolean;
 
         /**
          * Creates a new StopReplicationAndGetStatusResponse instance using the specified properties.
@@ -47923,6 +47947,9 @@ export namespace replicationdata {
 
         /** Status replication_lag_unknown */
         replication_lag_unknown?: (boolean|null);
+
+        /** Status backup_running */
+        backup_running?: (boolean|null);
     }
 
     /** Represents a Status. */
@@ -47999,6 +48026,9 @@ export namespace replicationdata {
 
         /** Status replication_lag_unknown. */
         public replication_lag_unknown: boolean;
+
+        /** Status backup_running. */
+        public backup_running: boolean;
 
         /**
          * Creates a new Status instance using the specified properties.
@@ -48189,6 +48219,9 @@ export namespace replicationdata {
 
         /** StopReplicationStatus after */
         after?: (replicationdata.IStatus|null);
+
+        /** StopReplicationStatus backup_running */
+        backup_running?: (boolean|null);
     }
 
     /** Represents a StopReplicationStatus. */
@@ -48205,6 +48238,9 @@ export namespace replicationdata {
 
         /** StopReplicationStatus after. */
         public after?: (replicationdata.IStatus|null);
+
+        /** StopReplicationStatus backup_running. */
+        public backup_running: boolean;
 
         /**
          * Creates a new StopReplicationStatus instance using the specified properties.

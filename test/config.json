@@ -1238,6 +1238,17 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
+		"vtop_example": {
+			"File": "",
+			"Args": [],
+			"Command": [
+				"test/vtop_example.sh"
+			],
+			"Manual": false,
+			"Shard": "",
+			"RetryMax": 1,
+			"Tags": []
+		},
 		"vtorc_primary_failure": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtorc/primaryfailure"],

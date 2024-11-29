@@ -293,8 +293,10 @@ func (hs *healthStreamer) SetUnhealthyThreshold(v time.Duration) {
 // so it can read and write to the MySQL instance for schema-tracking.
 func (hs *healthStreamer) MakePrimary(serving bool) {
 	hs.fieldsMu.Lock()
-	defer hs.fieldsMu.Unlock()
 	hs.isServingPrimary = serving
+	// We let go of the lock here because we don't want to hold the lock when calling RegisterNotifier.
+	// If we keep holding the lock, there is a potential deadlock that can happen.
+	hs.fieldsMu.Unlock()
 	// We register for notifications from the schema Engine only when schema tracking is enabled,
 	// and we are going to a serving primary state.
 	if serving && hs.signalWhenSchemaChange {
