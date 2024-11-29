@@ -24,7 +24,6 @@ import (
 	"github.com/tidwall/gjson"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 )
 
@@ -35,7 +34,7 @@ type TestClusterSpec struct {
 }
 
 var lookupClusterSpec = TestClusterSpec{
-	keyspaceName: "lookuptest",
+	keyspaceName: "lookup",
 	vschema: `
 {
   "sharded": true,
@@ -81,6 +80,15 @@ func setupLookupIndexKeyspace(t *testing.T) map[string]*cluster.VttabletProcess 
 	return tablets
 }
 
+type lookupTestCase struct {
+	name         string
+	li           *lookupIndex
+	initQuery    string
+	initRows     int
+	runningQuery string
+	runningRows  int
+}
+
 func TestLookupIndex(t *testing.T) {
 	setSidecarDBName("_vt")
 	origDefaultReplicas := defaultReplicas
@@ -97,28 +105,52 @@ func TestLookupIndex(t *testing.T) {
 	tabs := setupLookupIndexKeyspace(t)
 	_ = tabs
 
+	testCases := []lookupTestCase{
+		{
+			name: "lookup index",
+			li: &lookupIndex{
+				typ:                "lookup",
+				name:               "t1_c2_lookup",
+				tableKeyspace:      lookupClusterSpec.keyspaceName,
+				table:              "t1",
+				columns:            []string{"c2"},
+				ownerTable:         "t1",
+				ownerTableKeyspace: lookupClusterSpec.keyspaceName,
+				ignoreNulls:        true,
+				t:                  t,
+			},
+			initQuery:    "insert into t1 (c1, c2, val) values (1, 1, 'val1'), (2, 2, 'val2'), (3, 3, 'val3')",
+			initRows:     3,
+			runningQuery: "insert into t1 (c1, c2, val) values (4, 4, 'val4'), (5, 5, 'val5'), (6, 6, 'val6')",
+			runningRows:  6,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			testLookupVindex(t, &tc)
+		})
+	}
+}
+
+func testLookupVindex(t *testing.T, tc *lookupTestCase) {
+
 	vtgateConn, cancel := getVTGateConn()
 	defer cancel()
-	_, err := vtgateConn.ExecuteFetch("insert into t1 (c1, c2, val) values (1, 1, 'val1'), (2, 2, 'val2'), (3, 3, 'val3')", 1000, false)
+	_, err := vtgateConn.ExecuteFetch(tc.initQuery, 1000, false)
 	require.NoError(t, err)
-	rows := 3
 
-	vindexName := "t1_c2_lookup"
-	lks := lookupClusterSpec.keyspaceName
-	err = vc.VtctldClient.ExecuteCommand("LookupVindex", "--name", vindexName, "--table-keyspace="+lks, "create", "--keyspace="+lks,
-		"--type=lookup", "--table-owner=t1", "--table-owner-columns=c2", "--ignore-nulls", "--tablet-types=PRIMARY")
-	require.NoError(t, err, "error executing LookupVindex create: %v", err)
-	waitForWorkflowState(t, vc, fmt.Sprintf(lks+".%s", vindexName), binlogdatapb.VReplicationWorkflowState_Running.String())
-	waitForRowCount(t, vtgateConn, lks, vindexName, rows)
+	tc.li.create()
+	lks := tc.li.tableKeyspace
+	vindexName := tc.li.name
+	waitForRowCount(t, vtgateConn, lks, vindexName, tc.initRows)
 	vschema, err := vc.VtctldClient.ExecuteCommandWithOutput("GetVSchema", lks)
 	require.NoError(t, err, "error executing GetVSchema: %v", err)
 	vdx := gjson.Get(vschema, fmt.Sprintf("vindexes.%s", vindexName))
 	require.NotNil(t, vdx, "lookup vindex %s not found", vindexName)
 	require.Equal(t, "true", vdx.Get("params.write_only").String(), "expected write_only parameter to be true")
 
-	_, err = vtgateConn.ExecuteFetch("insert into t1 (c1, c2, val) values (4, 4, 'val4'), (5, 5, 'val5'), (6, 6, 'val6')", 1000, false)
+	_, err = vtgateConn.ExecuteFetch(tc.runningQuery, 1000, false)
 	require.NoError(t, err)
-	rows = 6
-	waitForRowCount(t, vtgateConn, lks, vindexName, rows)
-
+	waitForRowCount(t, vtgateConn, lks, vindexName, tc.runningRows)
 }
