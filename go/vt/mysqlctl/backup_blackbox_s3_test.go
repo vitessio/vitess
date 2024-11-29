@@ -18,26 +18,23 @@ package mysqlctl_test
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
+
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
-	"vitess.io/vitess/go/vt/mysqlctl/filebackupstorage"
 	"vitess.io/vitess/go/vt/mysqlctl/s3backupstorage"
-	"vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/proto/vttime"
-	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/topo/memorytopo"
 )
 
 /*
@@ -69,53 +66,15 @@ func checkEnvForS3(t *testing.T) {
 
 func TestExecuteBackupS3FailEachFileOnce(t *testing.T) {
 	checkEnvForS3(t)
+	s3backupstorage.InitFlag(s3backupstorage.FakeConfig{
+		Region:    os.Getenv("AWS_REGION"),
+		Endpoint:  os.Getenv("AWS_ENDPOINT"),
+		Bucket:    os.Getenv("AWS_BUCKET"),
+		ForcePath: true,
+	})
 
 	ctx := context.Background()
-
-	// Set up local backup directory
-	backupRoot := "testdata/builtinbackup_test"
-	filebackupstorage.FileBackupStorageRoot = backupRoot
-	require.NoError(t, createBackupDir(backupRoot, "innodb", "log", "datadir"))
-	dataDir := path.Join(backupRoot, "datadir")
-	// Add some files under data directory to force backup to actually backup files.
-	require.NoError(t, createBackupDir(dataDir, "test1"))
-	require.NoError(t, createBackupDir(dataDir, "test2"))
-	require.NoError(t, createBackupFiles(path.Join(dataDir, "test1"), 2, "ibd"))
-	require.NoError(t, createBackupFiles(path.Join(dataDir, "test2"), 2, "ibd"))
-	defer os.RemoveAll(backupRoot)
-
-	needIt, err := needInnoDBRedoLogSubdir()
-	require.NoError(t, err)
-	if needIt {
-		fpath := path.Join("log", mysql.DynamicRedoLogSubdir)
-		if err := createBackupDir(backupRoot, fpath); err != nil {
-			require.Failf(t, err.Error(), "failed to create directory: %s", fpath)
-		}
-	}
-
-	// Set up topo
-	keyspace, shard := "mykeyspace", "-80"
-	ts := memorytopo.NewServer(ctx, "cell1")
-	defer ts.Close()
-
-	require.NoError(t, ts.CreateKeyspace(ctx, keyspace, &topodata.Keyspace{}))
-	require.NoError(t, ts.CreateShard(ctx, keyspace, shard))
-
-	tablet := topo.NewTablet(100, "cell1", "mykeyspace-00-80-0100")
-	tablet.Keyspace = keyspace
-	tablet.Shard = shard
-
-	require.NoError(t, ts.CreateTablet(ctx, tablet))
-
-	_, err = ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
-		si.PrimaryAlias = &topodata.TabletAlias{Uid: 100, Cell: "cell1"}
-
-		now := time.Now()
-		si.PrimaryTermStartTime = &vttime.Time{Seconds: int64(now.Second()), Nanoseconds: int32(now.Nanosecond())}
-
-		return nil
-	})
-	require.NoError(t, err)
+	backupRoot, keyspace, shard, ts := setupCluster(ctx, t, 2, 2)
 
 	be := &mysqlctl.BuiltinBackupEngine{}
 
@@ -125,13 +84,6 @@ func TestExecuteBackupS3FailEachFileOnce(t *testing.T) {
 
 	fakeStats := backupstats.NewFakeStats()
 	logger := logutil.NewMemoryLogger()
-
-	s3backupstorage.InitFlag(s3backupstorage.FakeConfig{
-		Region:    os.Getenv("AWS_REGION"),
-		Endpoint:  os.Getenv("AWS_ENDPOINT"),
-		Bucket:    os.Getenv("AWS_BUCKET"),
-		ForcePath: true,
-	})
 
 	bh, err := s3backupstorage.NewFakeS3BackupHandle(ctx, t.Name(), time.Now().Format(mysqlctl.BackupTimestampFormat), logger, fakeStats)
 	require.NoError(t, err)
@@ -169,10 +121,6 @@ func TestExecuteBackupS3FailEachFileOnce(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, mysqlctl.BackupUsable, backupResult)
 
-	for _, event := range logger.Events {
-		fmt.Println(event.String())
-	}
-
 	ss := getStats(fakeStats)
 
 	// Even though we have 4 files, we expect '8' for all the values below as we re-do every file once.
@@ -182,4 +130,285 @@ func TestExecuteBackupS3FailEachFileOnce(t *testing.T) {
 	require.Equal(t, 8, ss.sourceCloseStats)
 	require.Equal(t, 8, ss.sourceOpenStats)
 	require.Equal(t, 8, ss.sourceReadStats)
+}
+
+func TestExecuteBackupS3FailEachFileTwice(t *testing.T) {
+	checkEnvForS3(t)
+	s3backupstorage.InitFlag(s3backupstorage.FakeConfig{
+		Region:    os.Getenv("AWS_REGION"),
+		Endpoint:  os.Getenv("AWS_ENDPOINT"),
+		Bucket:    os.Getenv("AWS_BUCKET"),
+		ForcePath: true,
+	})
+
+	ctx := context.Background()
+	backupRoot, keyspace, shard, ts := setupCluster(ctx, t, 2, 2)
+
+	be := &mysqlctl.BuiltinBackupEngine{}
+
+	// Configure a tight deadline to force a timeout
+	oldDeadline := setBuiltinBackupMysqldDeadline(time.Second)
+	defer setBuiltinBackupMysqldDeadline(oldDeadline)
+
+	fakeStats := backupstats.NewFakeStats()
+	logger := logutil.NewMemoryLogger()
+
+	bh, err := s3backupstorage.NewFakeS3BackupHandle(ctx, t.Name(), time.Now().Format(mysqlctl.BackupTimestampFormat), logger, fakeStats)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		// If the code works as expected by this test, no files will be created on S3 and AbortBackup will
+		// fail, for this reason, let's not check the error return.
+		// We still call AbortBackup anyway in the event that the code is not behaving as expected and some
+		// files were created by mistakes, we delete them.
+		_ = bh.AbortBackup(ctx)
+	})
+	// Modify the fake S3 storage to always fail when trying to write a file for the first time
+	bh.AddFileReturnF = s3backupstorage.FailAllWrites
+
+	// Spin up a fake daemon to be used in backups. It needs to be allowed to receive:
+	//  "STOP REPLICA", "START REPLICA", in that order.
+	fakedb := fakesqldb.New(t)
+	defer fakedb.Close()
+	mysqld := mysqlctl.NewFakeMysqlDaemon(fakedb)
+	defer mysqld.Close()
+	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "START REPLICA"}
+
+	backupResult, err := be.ExecuteBackup(ctx, mysqlctl.BackupParams{
+		Logger: logger,
+		Mysqld: mysqld,
+		Cnf: &mysqlctl.Mycnf{
+			InnodbDataHomeDir:     path.Join(backupRoot, "innodb"),
+			InnodbLogGroupHomeDir: path.Join(backupRoot, "log"),
+			DataDir:               path.Join(backupRoot, "datadir"),
+		},
+		Concurrency:          1,
+		HookExtraEnv:         map[string]string{},
+		TopoServer:           ts,
+		Keyspace:             keyspace,
+		Shard:                shard,
+		Stats:                fakeStats,
+		MysqlShutdownTimeout: mysqlShutdownTimeout,
+	}, bh)
+
+	require.Error(t, err)
+	require.Equal(t, mysqlctl.BackupUnusable, backupResult)
+
+	ss := getStats(fakeStats)
+
+	// All stats here must be equal to 5, we have four files, we go each of them, they all fail.
+	// The logic decides to retry each file once, we retry the first failed file, it fails again
+	// but since it has reached the limit of retries, the backup will fail anyway, thus we don't
+	// retry the other 3 files.
+	require.Equal(t, 5, ss.destinationCloseStats)
+	require.Equal(t, 5, ss.destinationOpenStats)
+	require.Equal(t, 5, ss.destinationWriteStats)
+	require.Equal(t, 5, ss.sourceCloseStats)
+	require.Equal(t, 5, ss.sourceOpenStats)
+	require.Equal(t, 5, ss.sourceReadStats)
+}
+
+func TestExecuteRestoreS3FailEachFileOnce(t *testing.T) {
+	checkEnvForS3(t)
+	s3backupstorage.InitFlag(s3backupstorage.FakeConfig{
+		Region:    os.Getenv("AWS_REGION"),
+		Endpoint:  os.Getenv("AWS_ENDPOINT"),
+		Bucket:    os.Getenv("AWS_BUCKET"),
+		ForcePath: true,
+	})
+
+	ctx := context.Background()
+	backupRoot, keyspace, shard, ts := setupCluster(ctx, t, 2, 2)
+
+	fakeStats := backupstats.NewFakeStats()
+	logger := logutil.NewMemoryLogger()
+
+	be := &mysqlctl.BuiltinBackupEngine{}
+	dirName := time.Now().Format(mysqlctl.BackupTimestampFormat)
+	name := t.Name() + "-" + strconv.Itoa(int(time.Now().Unix()))
+	bh, err := s3backupstorage.NewFakeS3BackupHandle(ctx, name, dirName, logger, fakeStats)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, bh.AbortBackup(ctx))
+	})
+
+	// Spin up a fake daemon to be used in backups. It needs to be allowed to receive:
+	// "STOP REPLICA", "START REPLICA", in that order.
+	fakedb := fakesqldb.New(t)
+	defer fakedb.Close()
+	mysqld := mysqlctl.NewFakeMysqlDaemon(fakedb)
+	defer mysqld.Close()
+	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "START REPLICA"}
+
+	backupResult, err := be.ExecuteBackup(ctx, mysqlctl.BackupParams{
+		Logger: logutil.NewConsoleLogger(),
+		Mysqld: mysqld,
+		Cnf: &mysqlctl.Mycnf{
+			InnodbDataHomeDir:     path.Join(backupRoot, "innodb"),
+			InnodbLogGroupHomeDir: path.Join(backupRoot, "log"),
+			DataDir:               path.Join(backupRoot, "datadir"),
+		},
+		Stats:                backupstats.NewFakeStats(),
+		Concurrency:          1,
+		HookExtraEnv:         map[string]string{},
+		TopoServer:           ts,
+		Keyspace:             keyspace,
+		Shard:                shard,
+		MysqlShutdownTimeout: mysqlShutdownTimeout,
+	}, bh)
+
+	require.NoError(t, err)
+	require.Equal(t, mysqlctl.BackupUsable, backupResult)
+
+	restoreBh, err := s3backupstorage.NewFakeS3RestoreHandle(ctx, name, logger, fakeStats)
+	require.NoError(t, err)
+	restoreBh.ReadFileReturnF = s3backupstorage.FailFirstRead
+
+	fakedb = fakesqldb.New(t)
+	defer fakedb.Close()
+	mysqld = mysqlctl.NewFakeMysqlDaemon(fakedb)
+	defer mysqld.Close()
+	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "START REPLICA"}
+
+	restoreParams := mysqlctl.RestoreParams{
+		Cnf: &mysqlctl.Mycnf{
+			InnodbDataHomeDir:     path.Join(backupRoot, "innodb"),
+			InnodbLogGroupHomeDir: path.Join(backupRoot, "log"),
+			DataDir:               path.Join(backupRoot, "datadir"),
+			BinLogPath:            path.Join(backupRoot, "binlog"),
+			RelayLogPath:          path.Join(backupRoot, "relaylog"),
+			RelayLogIndexPath:     path.Join(backupRoot, "relaylogindex"),
+			RelayLogInfoPath:      path.Join(backupRoot, "relayloginfo"),
+		},
+		Logger:               logger,
+		Mysqld:               mysqld,
+		Concurrency:          1,
+		HookExtraEnv:         map[string]string{},
+		DeleteBeforeRestore:  false,
+		DbName:               "test",
+		Keyspace:             "test",
+		Shard:                "-",
+		StartTime:            time.Now(),
+		RestoreToPos:         replication.Position{},
+		RestoreToTimestamp:   time.Time{},
+		DryRun:               false,
+		Stats:                fakeStats,
+		MysqlShutdownTimeout: mysqlShutdownTimeout,
+	}
+
+	// Successful restore.
+	bm, err := be.ExecuteRestore(ctx, restoreParams, restoreBh)
+	assert.NoError(t, err)
+	assert.NotNil(t, bm)
+
+	ss := getStats(fakeStats)
+	require.Equal(t, 8, ss.destinationCloseStats)
+	require.Equal(t, 8, ss.destinationOpenStats)
+	require.Equal(t, 4, ss.destinationWriteStats) // 4, because on the first attempt, we fail to read before writing to the filesystem
+	require.Equal(t, 8, ss.sourceCloseStats)
+	require.Equal(t, 8, ss.sourceOpenStats)
+	require.Equal(t, 8, ss.sourceReadStats)
+}
+
+func TestExecuteRestoreS3FailEachFileTwice(t *testing.T) {
+	checkEnvForS3(t)
+	s3backupstorage.InitFlag(s3backupstorage.FakeConfig{
+		Region:    os.Getenv("AWS_REGION"),
+		Endpoint:  os.Getenv("AWS_ENDPOINT"),
+		Bucket:    os.Getenv("AWS_BUCKET"),
+		ForcePath: true,
+	})
+
+	ctx := context.Background()
+	backupRoot, keyspace, shard, ts := setupCluster(ctx, t, 2, 2)
+
+	fakeStats := backupstats.NewFakeStats()
+	logger := logutil.NewMemoryLogger()
+
+	be := &mysqlctl.BuiltinBackupEngine{}
+	dirName := time.Now().Format(mysqlctl.BackupTimestampFormat)
+	name := t.Name() + "-" + strconv.Itoa(int(time.Now().Unix()))
+	bh, err := s3backupstorage.NewFakeS3BackupHandle(ctx, name, dirName, logger, fakeStats)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, bh.AbortBackup(ctx))
+	})
+
+	// Spin up a fake daemon to be used in backups. It needs to be allowed to receive:
+	// "STOP REPLICA", "START REPLICA", in that order.
+	fakedb := fakesqldb.New(t)
+	defer fakedb.Close()
+	mysqld := mysqlctl.NewFakeMysqlDaemon(fakedb)
+	defer mysqld.Close()
+	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "START REPLICA"}
+
+	backupResult, err := be.ExecuteBackup(ctx, mysqlctl.BackupParams{
+		Logger: logutil.NewConsoleLogger(),
+		Mysqld: mysqld,
+		Cnf: &mysqlctl.Mycnf{
+			InnodbDataHomeDir:     path.Join(backupRoot, "innodb"),
+			InnodbLogGroupHomeDir: path.Join(backupRoot, "log"),
+			DataDir:               path.Join(backupRoot, "datadir"),
+		},
+		Stats:                backupstats.NewFakeStats(),
+		Concurrency:          1,
+		HookExtraEnv:         map[string]string{},
+		TopoServer:           ts,
+		Keyspace:             keyspace,
+		Shard:                shard,
+		MysqlShutdownTimeout: mysqlShutdownTimeout,
+	}, bh)
+
+	require.NoError(t, err)
+	require.Equal(t, mysqlctl.BackupUsable, backupResult)
+
+	restoreBh, err := s3backupstorage.NewFakeS3RestoreHandle(ctx, name, logger, fakeStats)
+	require.NoError(t, err)
+	restoreBh.ReadFileReturnF = s3backupstorage.FailAllReadExpectManifest
+
+	fakedb = fakesqldb.New(t)
+	defer fakedb.Close()
+	mysqld = mysqlctl.NewFakeMysqlDaemon(fakedb)
+	defer mysqld.Close()
+	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "START REPLICA"}
+
+	restoreParams := mysqlctl.RestoreParams{
+		Cnf: &mysqlctl.Mycnf{
+			InnodbDataHomeDir:     path.Join(backupRoot, "innodb"),
+			InnodbLogGroupHomeDir: path.Join(backupRoot, "log"),
+			DataDir:               path.Join(backupRoot, "datadir"),
+			BinLogPath:            path.Join(backupRoot, "binlog"),
+			RelayLogPath:          path.Join(backupRoot, "relaylog"),
+			RelayLogIndexPath:     path.Join(backupRoot, "relaylogindex"),
+			RelayLogInfoPath:      path.Join(backupRoot, "relayloginfo"),
+		},
+		Logger:               logger,
+		Mysqld:               mysqld,
+		Concurrency:          1,
+		HookExtraEnv:         map[string]string{},
+		DeleteBeforeRestore:  false,
+		DbName:               "test",
+		Keyspace:             "test",
+		Shard:                "-",
+		StartTime:            time.Now(),
+		RestoreToPos:         replication.Position{},
+		RestoreToTimestamp:   time.Time{},
+		DryRun:               false,
+		Stats:                fakeStats,
+		MysqlShutdownTimeout: mysqlShutdownTimeout,
+	}
+
+	// Successful restore.
+	_, err = be.ExecuteRestore(ctx, restoreParams, restoreBh)
+	assert.ErrorContains(t, err, "failing read")
+
+	ss := getStats(fakeStats)
+	// Everything except destination writes must be equal to 5:
+	// +1 for every file on the first attempt (= 4), and +1 for the first file we try for the second time.
+	// Since we fail early as soon as a second-attempt-file fails, we won't see a value above 5.
+	require.Equal(t, 5, ss.destinationCloseStats)
+	require.Equal(t, 5, ss.destinationOpenStats)
+	require.Equal(t, 0, ss.destinationWriteStats) // 0, because on the both attempts, we fail to read before writing to the filesystem
+	require.Equal(t, 5, ss.sourceCloseStats)
+	require.Equal(t, 5, ss.sourceOpenStats)
+	require.Equal(t, 5, ss.sourceReadStats)
 }

@@ -22,11 +22,6 @@ import (
 	"fmt"
 	"io"
 	"sync"
-	"time"
-
-	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/aws/smithy-go/middleware"
 
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
@@ -36,7 +31,12 @@ import (
 type FakeS3BackupHandle struct {
 	*S3BackupHandle
 
-	AddFileReturnF func(s3 *S3BackupHandle, ctx context.Context, filename string, filesize int64) (io.WriteCloser, error)
+	AddFileReturnF  func(s3 *S3BackupHandle, ctx context.Context, filename string, filesize int64, firstAdd bool) (io.WriteCloser, error)
+	ReadFileReturnF func(s3 *S3BackupHandle, ctx context.Context, filename string, firstRead bool) (io.ReadCloser, error)
+
+	mu          sync.Mutex
+	addPerFile  map[string]int
+	readPerFile map[string]int
 }
 
 type FakeConfig struct {
@@ -65,6 +65,25 @@ func NewFakeS3BackupHandle(ctx context.Context, dir, name string, logger logutil
 	}
 	return &FakeS3BackupHandle{
 		S3BackupHandle: bh.(*S3BackupHandle),
+		addPerFile:     make(map[string]int),
+		readPerFile:    make(map[string]int),
+	}, nil
+}
+
+func NewFakeS3RestoreHandle(ctx context.Context, dir string, logger logutil.Logger, stats backupstats.Stats) (*FakeS3BackupHandle, error) {
+	s := newS3BackupStorage()
+	bs := s.WithParams(backupstorage.Params{
+		Logger: logger,
+		Stats:  stats,
+	})
+	bhs, err := bs.ListBackups(ctx, dir)
+	if err != nil {
+		return nil, err
+	}
+	return &FakeS3BackupHandle{
+		S3BackupHandle: bhs[0].(*S3BackupHandle),
+		addPerFile:     make(map[string]int),
+		readPerFile:    make(map[string]int),
 	}, nil
 }
 
@@ -77,8 +96,14 @@ func (fbh *FakeS3BackupHandle) Name() string {
 }
 
 func (fbh *FakeS3BackupHandle) AddFile(ctx context.Context, filename string, filesize int64) (io.WriteCloser, error) {
+	fbh.mu.Lock()
+	defer func() {
+		fbh.addPerFile[filename] += 1
+		fbh.mu.Unlock()
+	}()
+
 	if fbh.AddFileReturnF != nil {
-		return fbh.AddFileReturnF(fbh.S3BackupHandle, ctx, filename, filesize)
+		return fbh.AddFileReturnF(fbh.S3BackupHandle, ctx, filename, filesize, fbh.addPerFile[filename] == 0)
 	}
 	return fbh.S3BackupHandle.AddFile(ctx, filename, filesize)
 }
@@ -92,6 +117,15 @@ func (fbh *FakeS3BackupHandle) AbortBackup(ctx context.Context) error {
 }
 
 func (fbh *FakeS3BackupHandle) ReadFile(ctx context.Context, filename string) (io.ReadCloser, error) {
+	fbh.mu.Lock()
+	defer func() {
+		fbh.readPerFile[filename] += 1
+		fbh.mu.Unlock()
+	}()
+
+	if fbh.ReadFileReturnF != nil {
+		return fbh.ReadFileReturnF(fbh.S3BackupHandle, ctx, filename, fbh.readPerFile[filename] == 0)
+	}
 	return fbh.S3BackupHandle.ReadFile(ctx, filename)
 }
 
@@ -115,20 +149,15 @@ func (fbh *FakeS3BackupHandle) ResetErrorForFile(s string) {
 	fbh.S3BackupHandle.ResetErrorForFile(s)
 }
 
-var (
-	firstReadMu  sync.Mutex
-	firstReadMap = make(map[string]bool)
-)
-
-type failFirstRead struct {
+type failReadPipeReader struct {
 	*io.PipeReader
 }
 
-func (fwr *failFirstRead) Read(p []byte) (n int, err error) {
-	return 0, errors.New("failing first read")
+func (fwr *failReadPipeReader) Read(p []byte) (n int, err error) {
+	return 0, errors.New("failing read")
 }
 
-func FailFirstWrite(s3bh *S3BackupHandle, ctx context.Context, filename string, filesize int64) (io.WriteCloser, error) {
+func FailFirstWrite(s3bh *S3BackupHandle, ctx context.Context, filename string, filesize int64, firstAdd bool) (io.WriteCloser, error) {
 	if s3bh.readOnly {
 		return nil, fmt.Errorf("AddFile cannot be called on read-only backup")
 	}
@@ -137,47 +166,57 @@ func FailFirstWrite(s3bh *S3BackupHandle, ctx context.Context, filename string, 
 	reader, writer := io.Pipe()
 	r := io.Reader(reader)
 
-	firstReadMu.Lock()
-	defer firstReadMu.Unlock()
-	if ok := firstReadMap[filename]; !ok {
-		firstReadMap[filename] = true
-		r = &failFirstRead{PipeReader: reader}
+	if firstAdd {
+		r = &failReadPipeReader{PipeReader: reader}
 	}
 
-	s3bh.waitGroup.Add(1)
-
-	go func() {
-		defer s3bh.waitGroup.Done()
-		uploader := manager.NewUploader(s3bh.client, func(u *manager.Uploader) {
-			u.PartSize = partSizeBytes
-		})
-		object := objName(s3bh.dir, s3bh.name, filename)
-		sendStats := s3bh.bs.params.Stats.Scope(backupstats.Operation("AWS:Request:Send"))
-		_, err := uploader.Upload(ctx, &s3.PutObjectInput{
-			Bucket:               &bucket,
-			Key:                  &object,
-			Body:                 r,
-			ServerSideEncryption: s3bh.bs.s3SSE.awsAlg,
-			SSECustomerAlgorithm: s3bh.bs.s3SSE.customerAlg,
-			SSECustomerKey:       s3bh.bs.s3SSE.customerKey,
-			SSECustomerKeyMD5:    s3bh.bs.s3SSE.customerMd5,
-		}, func(u *manager.Uploader) {
-			u.ClientOptions = append(u.ClientOptions, func(o *s3.Options) {
-				o.APIOptions = append(o.APIOptions, func(stack *middleware.Stack) error {
-					return stack.Finalize.Add(middleware.FinalizeMiddlewareFunc("CompleteAttemptMiddleware", func(ctx context.Context, input middleware.FinalizeInput, next middleware.FinalizeHandler) (middleware.FinalizeOutput, middleware.Metadata, error) {
-						start := time.Now()
-						output, metadata, err := next.HandleFinalize(ctx, input)
-						sendStats.TimedIncrement(time.Since(start))
-						return output, metadata, err
-					}), middleware.Before)
-				})
-			})
-		})
-		if err != nil {
-			reader.CloseWithError(err)
-			s3bh.RecordError(filename, err)
-		}
-	}()
-
+	s3bh.handleAddFile(ctx, filename, partSizeBytes, r, func(err error) {
+		reader.CloseWithError(err)
+	})
 	return writer, nil
+}
+
+func FailAllWrites(s3bh *S3BackupHandle, ctx context.Context, filename string, filesize int64, _ bool) (io.WriteCloser, error) {
+	if s3bh.readOnly {
+		return nil, fmt.Errorf("AddFile cannot be called on read-only backup")
+	}
+
+	partSizeBytes := calculateUploadPartSize(filesize)
+	reader, writer := io.Pipe()
+	r := &failReadPipeReader{PipeReader: reader}
+
+	s3bh.handleAddFile(ctx, filename, partSizeBytes, r, func(err error) {
+		r.PipeReader.CloseWithError(err)
+	})
+	return writer, nil
+}
+
+type failRead struct{}
+
+func (fr *failRead) Read(p []byte) (n int, err error) {
+	return 0, errors.New("failing read")
+}
+
+func (fr *failRead) Close() error {
+	return nil
+}
+
+func FailFirstRead(s3bh *S3BackupHandle, ctx context.Context, filename string, firstRead bool) (io.ReadCloser, error) {
+	rc, err := s3bh.ReadFile(ctx, filename)
+	if err != nil {
+		return nil, err
+	}
+	if firstRead {
+		return &failRead{}, nil
+	}
+	return rc, nil
+}
+
+// FailAllReadExpectManifest is used to fail every attempt at reading a file from S3.
+// Only the MANIFEST file is allowed to be read, because otherwise we wouldn't even try to read the normal files.
+func FailAllReadExpectManifest(s3bh *S3BackupHandle, ctx context.Context, filename string, _ bool) (io.ReadCloser, error) {
+	if filename == "MANIFEST" {
+		return s3bh.ReadFile(ctx, filename)
+	}
+	return &failRead{}, nil
 }

@@ -624,7 +624,8 @@ func newWriteCloseFailFirstWrite(firstWriteDone bool) *rwCloseFailFirstCall {
 }
 
 func TestExecuteBackupFailToWriteEachFileOnlyOnce(t *testing.T) {
-	ctx, backupRoot, keyspace, shard, ts := setupCluster(t, 2, 2)
+	ctx := utils.LeakCheckContext(t)
+	backupRoot, keyspace, shard, ts := setupCluster(ctx, t, 2, 2)
 
 	bufferPerFiles := make(map[string]*rwCloseFailFirstCall)
 	be := &mysqlctl.BuiltinBackupEngine{}
@@ -688,7 +689,8 @@ func TestExecuteBackupFailToWriteEachFileOnlyOnce(t *testing.T) {
 }
 
 func TestExecuteBackupFailToWriteFileTwice(t *testing.T) {
-	ctx, backupRoot, keyspace, shard, ts := setupCluster(t, 1, 1)
+	ctx := utils.LeakCheckContext(t)
+	backupRoot, keyspace, shard, ts := setupCluster(ctx, t, 1, 1)
 
 	bufferPerFiles := make(map[string]*rwCloseFailFirstCall)
 	be := &mysqlctl.BuiltinBackupEngine{}
@@ -746,7 +748,8 @@ func TestExecuteBackupFailToWriteFileTwice(t *testing.T) {
 }
 
 func TestExecuteRestoreFailToReadEachFileOnlyOnce(t *testing.T) {
-	ctx, backupRoot, keyspace, shard, ts := setupCluster(t, 2, 2)
+	ctx := utils.LeakCheckContext(t)
+	backupRoot, keyspace, shard, ts := setupCluster(ctx, t, 2, 2)
 
 	be := &mysqlctl.BuiltinBackupEngine{}
 	bufferPerFiles := make(map[string]*rwCloseFailFirstCall)
@@ -847,7 +850,8 @@ func TestExecuteRestoreFailToReadEachFileOnlyOnce(t *testing.T) {
 }
 
 func TestExecuteRestoreFailToReadEachFileTwice(t *testing.T) {
-	ctx, backupRoot, keyspace, shard, ts := setupCluster(t, 2, 2)
+	ctx := utils.LeakCheckContext(t)
+	backupRoot, keyspace, shard, ts := setupCluster(ctx, t, 2, 2)
 
 	be := &mysqlctl.BuiltinBackupEngine{}
 	bufferPerFiles := make(map[string]*rwCloseFailFirstCall)
@@ -1005,9 +1009,7 @@ func assertLogs(t *testing.T, expectedLogs []string, logger *logutil.MemoryLogge
 	}
 }
 
-func setupCluster(t *testing.T, dirs, filesPerDir int) (ctx context.Context, backupRoot string, keyspace string, shard string, ts *topo.Server) {
-	ctx = utils.LeakCheckContext(t)
-
+func setupCluster(ctx context.Context, t *testing.T, dirs, filesPerDir int) (backupRoot string, keyspace string, shard string, ts *topo.Server) {
 	// Set up local backup directory
 	id := fmt.Sprintf("%d", time.Now().UnixNano())
 	backupRoot = fmt.Sprintf("testdata/builtinbackup_test_%s", id)
@@ -1059,7 +1061,7 @@ func setupCluster(t *testing.T, dirs, filesPerDir int) (ctx context.Context, bac
 		return nil
 	})
 	require.NoError(t, err)
-	return ctx, backupRoot, keyspace, shard, ts
+	return backupRoot, keyspace, shard, ts
 }
 
 // needInnoDBRedoLogSubdir indicates whether we need to create a redo log subdirectory.

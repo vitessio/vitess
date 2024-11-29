@@ -192,6 +192,14 @@ func (bh *S3BackupHandle) AddFile(ctx context.Context, filename string, filesize
 	partSizeBytes := calculateUploadPartSize(filesize)
 
 	reader, writer := io.Pipe()
+	bh.handleAddFile(ctx, filename, partSizeBytes, reader, func(err error) {
+		reader.CloseWithError(err)
+	})
+
+	return writer, nil
+}
+
+func (bh *S3BackupHandle) handleAddFile(ctx context.Context, filename string, partSizeBytes int64, reader io.Reader, closer func(error)) {
 	bh.waitGroup.Add(1)
 
 	go func() {
@@ -222,12 +230,10 @@ func (bh *S3BackupHandle) AddFile(ctx context.Context, filename string, filesize
 			})
 		})
 		if err != nil {
-			reader.CloseWithError(err)
+			closer(err)
 			bh.RecordError(filename, err)
 		}
 	}()
-
-	return writer, nil
 }
 
 func calculateUploadPartSize(filesize int64) int64 {
