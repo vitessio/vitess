@@ -646,6 +646,10 @@ func TestExecuteBackupFailToWriteEachFileOnlyOnce(t *testing.T) {
 		"Completed backing up MANIFEST (attempt 2/2)",
 	}
 
+	// Sleep just long enough for everything to complete.
+	// It's not flaky, the race detector detects a race when there isn't,
+	// the machine is just too slow to propagate the ctxCancel() to all goroutines.
+	time.Sleep(2 * time.Second)
 	AssertLogs(t, expectedLogs, logger)
 
 	require.NoError(t, err)
@@ -693,6 +697,11 @@ func TestExecuteBackupFailToWriteFileTwice(t *testing.T) {
 		MysqlShutdownTimeout: MysqlShutdownTimeout,
 	}, bh)
 
+	// Sleep just long enough for everything to complete.
+	// It's not flaky, the race detector detects a race when there isn't,
+	// the machine is just too slow to propagate the ctxCancel() to all goroutines.
+	time.Sleep(2 * time.Second)
+
 	expectedLogs := []string{
 		"Backing up file: test1/0.ibd (attempt 1/2)",
 		"Backing up file: test1/0.ibd (attempt 2/2)",
@@ -706,7 +715,6 @@ func TestExecuteBackupFailToWriteFileTwice(t *testing.T) {
 	require.Equal(t, 2, ss.SourceCloseStats)
 	require.Equal(t, 2, ss.SourceOpenStats)
 	require.Equal(t, 2, ss.SourceReadStats)
-
 	require.ErrorContains(t, err, "failing first write")
 	require.Equal(t, mysqlctl.BackupUnusable, backupResult)
 }
