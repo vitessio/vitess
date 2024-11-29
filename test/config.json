@@ -136,9 +136,9 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
-		"backup_integration_s3": {
+		"backup_s3": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/vt/mysqlctl/s3backupstorage/integration", "-timeout", "30m"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/backup/s3_builtin", "-timeout", "30m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "21",
