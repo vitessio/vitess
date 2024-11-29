@@ -17,11 +17,9 @@ limitations under the License.
 package vreplication
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"github.com/tidwall/gjson"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
@@ -81,12 +79,11 @@ func setupLookupIndexKeyspace(t *testing.T) map[string]*cluster.VttabletProcess 
 }
 
 type lookupTestCase struct {
-	name         string
-	li           *lookupIndex
-	initQuery    string
-	initRows     int
-	runningQuery string
-	runningRows  int
+	name                 string
+	li                   *lookupIndex
+	initQuery            string
+	runningQuery         string
+	postExternalizeQuery string
 }
 
 func TestLookupIndex(t *testing.T) {
@@ -109,7 +106,7 @@ func TestLookupIndex(t *testing.T) {
 		{
 			name: "lookup index",
 			li: &lookupIndex{
-				typ:                "lookup",
+				typ:                "consistent_lookup",
 				name:               "t1_c2_lookup",
 				tableKeyspace:      lookupClusterSpec.keyspaceName,
 				table:              "t1",
@@ -119,10 +116,9 @@ func TestLookupIndex(t *testing.T) {
 				ignoreNulls:        true,
 				t:                  t,
 			},
-			initQuery:    "insert into t1 (c1, c2, val) values (1, 1, 'val1'), (2, 2, 'val2'), (3, 3, 'val3')",
-			initRows:     3,
-			runningQuery: "insert into t1 (c1, c2, val) values (4, 4, 'val4'), (5, 5, 'val5'), (6, 6, 'val6')",
-			runningRows:  6,
+			initQuery:            "insert into t1 (c1, c2, val) values (1, 1, 'val1'), (2, 2, 'val2'), (3, 3, 'val3')",
+			runningQuery:         "insert into t1 (c1, c2, val) values (4, 4, 'val4'), (5, 5, 'val5'), (6, 6, 'val6')",
+			postExternalizeQuery: "insert into t1 (c1, c2, val) values (7, 7, 'val7'), (8, 8, 'val8'), (9, 9, 'val9')",
 		},
 	}
 
@@ -137,20 +133,32 @@ func testLookupVindex(t *testing.T, tc *lookupTestCase) {
 
 	vtgateConn, cancel := getVTGateConn()
 	defer cancel()
-	_, err := vtgateConn.ExecuteFetch(tc.initQuery, 1000, false)
-	require.NoError(t, err)
+	var totalRows int
+	li := tc.li
+	t.Run("init data", func(t *testing.T) {
+		totalRows += getNumRowsInQuery(t, tc.initQuery)
+		_, err := vtgateConn.ExecuteFetch(tc.initQuery, 1000, false)
+		require.NoError(t, err)
+	})
 
-	tc.li.create()
-	lks := tc.li.tableKeyspace
-	vindexName := tc.li.name
-	waitForRowCount(t, vtgateConn, lks, vindexName, tc.initRows)
-	vschema, err := vc.VtctldClient.ExecuteCommandWithOutput("GetVSchema", lks)
-	require.NoError(t, err, "error executing GetVSchema: %v", err)
-	vdx := gjson.Get(vschema, fmt.Sprintf("vindexes.%s", vindexName))
-	require.NotNil(t, vdx, "lookup vindex %s not found", vindexName)
-	require.Equal(t, "true", vdx.Get("params.write_only").String(), "expected write_only parameter to be true")
+	t.Run("create", func(t *testing.T) {
+		tc.li.create()
 
-	_, err = vtgateConn.ExecuteFetch(tc.runningQuery, 1000, false)
-	require.NoError(t, err)
-	waitForRowCount(t, vtgateConn, lks, vindexName, tc.runningRows)
+		lks := li.tableKeyspace
+		vindexName := li.name
+		waitForRowCount(t, vtgateConn, lks, vindexName, totalRows)
+		totalRows += getNumRowsInQuery(t, tc.runningQuery)
+		_, err := vtgateConn.ExecuteFetch(tc.runningQuery, 1000, false)
+		require.NoError(t, err)
+		waitForRowCount(t, vtgateConn, tc.li.ownerTableKeyspace, li.name, totalRows)
+	})
+
+	t.Run("externalize", func(t *testing.T) {
+		tc.li.externalize()
+		totalRows += getNumRowsInQuery(t, tc.postExternalizeQuery)
+		_, err := vtgateConn.ExecuteFetch(tc.postExternalizeQuery, 1000, false)
+		require.NoError(t, err)
+		waitForRowCount(t, vtgateConn, tc.li.ownerTableKeyspace, li.name, totalRows)
+	})
+
 }

@@ -22,6 +22,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"github.com/tidwall/gjson"
+
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
@@ -44,6 +47,8 @@ func (li *lookupIndex) String() string {
 }
 
 func (li *lookupIndex) create() {
+	//err = vc.VtctldClient.ExecuteCommand("LookupVindex", "--name", vindexName, "--table-keyspace=product", "create", "--keyspace=customer",
+	//			"--type=consistent_lookup", "--table-owner=customer", "--table-owner-columns=name,cid", "--ignore-nulls", "--tablet-types=PRIMARY")
 	cols := strings.Join(li.columns, ",")
 	args := []string{
 		"LookupVindex",
@@ -63,16 +68,48 @@ func (li *lookupIndex) create() {
 	err := vc.VtctldClient.ExecuteCommand(args...)
 	require.NoError(li.t, err, "error executing LookupVindex create: %v", err)
 	waitForWorkflowState(li.t, vc, fmt.Sprintf("%s.%s", li.ownerTableKeyspace, li.name), binlogdatapb.VReplicationWorkflowState_Running.String())
+	li.expectWriteOnly(true)
 }
 
-func (li *lookupIndex) cancel() error {
-	return nil
+func (li *lookupIndex) cancel() {
+	panic("not implemented")
 }
 
-func (li *lookupIndex) externalize() error {
-	return nil
+func (li *lookupIndex) externalize() {
+	args := []string{
+		"LookupVindex",
+		"--name", li.name,
+		"--table-keyspace=" + li.ownerTableKeyspace,
+		"externalize",
+		"--keyspace=" + li.tableKeyspace,
+	}
+	err := vc.VtctldClient.ExecuteCommand(args...)
+	require.NoError(li.t, err, "error executing LookupVindex externalize: %v", err)
+	li.expectWriteOnly(false)
 }
 
 func (li *lookupIndex) show() error {
 	return nil
+}
+
+func (li *lookupIndex) expectWriteOnly(expected bool) {
+	vschema, err := vc.VtctldClient.ExecuteCommandWithOutput("GetVSchema", li.ownerTableKeyspace)
+	require.NoError(li.t, err, "error executing GetVSchema: %v", err)
+	vdx := gjson.Get(vschema, fmt.Sprintf("vindexes.%s", li.name))
+	require.NotNil(li.t, vdx, "lookup vindex %s not found", li.name)
+	want := ""
+	if expected {
+		want = "true"
+	}
+	require.Equal(li.t, want, vdx.Get("params.write_only").String(), "expected write_only parameter to be %s", want)
+}
+
+func getNumRowsInQuery(t *testing.T, query string) int {
+	stmt, err := sqlparser.NewTestParser().Parse(query)
+	require.NoError(t, err)
+	insertStmt, ok := stmt.(*sqlparser.Insert)
+	require.True(t, ok)
+	rows, ok := insertStmt.Rows.(sqlparser.Values)
+	require.True(t, ok)
+	return len(rows)
 }
