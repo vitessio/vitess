@@ -84,6 +84,7 @@ type lookupTestCase struct {
 	initQuery            string
 	runningQuery         string
 	postExternalizeQuery string
+	cleanupQuery         string
 }
 
 func TestLookupIndex(t *testing.T) {
@@ -102,9 +103,14 @@ func TestLookupIndex(t *testing.T) {
 	tabs := setupLookupIndexKeyspace(t)
 	_ = tabs
 
+	initQuery := "insert into t1 (c1, c2, val) values (1, 1, 'val1'), (2, 2, 'val2'), (3, 3, 'val3')"
+	runningQuery := "insert into t1 (c1, c2, val) values (4, 4, 'val4'), (5, 5, 'val5'), (6, 6, 'val6')"
+	postExternalizeQuery := "insert into t1 (c1, c2, val) values (7, 7, 'val7'), (8, 8, 'val8'), (9, 9, 'val9')"
+	cleanupQuery := "delete from t1"
+
 	testCases := []lookupTestCase{
 		{
-			name: "lookup index",
+			name: "non-unique lookup index, one column",
 			li: &lookupIndex{
 				typ:                "consistent_lookup",
 				name:               "t1_c2_lookup",
@@ -116,25 +122,54 @@ func TestLookupIndex(t *testing.T) {
 				ignoreNulls:        true,
 				t:                  t,
 			},
-			initQuery:            "insert into t1 (c1, c2, val) values (1, 1, 'val1'), (2, 2, 'val2'), (3, 3, 'val3')",
-			runningQuery:         "insert into t1 (c1, c2, val) values (4, 4, 'val4'), (5, 5, 'val5'), (6, 6, 'val6')",
-			postExternalizeQuery: "insert into t1 (c1, c2, val) values (7, 7, 'val7'), (8, 8, 'val8'), (9, 9, 'val9')",
+		},
+		{
+			name: "lookup index, two columns",
+			li: &lookupIndex{
+				typ:                "lookup",
+				name:               "t1_c2_val_lookup",
+				tableKeyspace:      lookupClusterSpec.keyspaceName,
+				table:              "t1",
+				columns:            []string{"c2", "val"},
+				ownerTable:         "t1",
+				ownerTableKeyspace: lookupClusterSpec.keyspaceName,
+				ignoreNulls:        true,
+				t:                  t,
+			},
+		},
+		{
+			name: "unique lookup index, one column",
+			li: &lookupIndex{
+				typ:                "lookup_unique",
+				name:               "t1_c2_unique_lookup",
+				tableKeyspace:      lookupClusterSpec.keyspaceName,
+				table:              "t1",
+				columns:            []string{"c2"},
+				ownerTable:         "t1",
+				ownerTableKeyspace: lookupClusterSpec.keyspaceName,
+				ignoreNulls:        true,
+				t:                  t,
+			},
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			tc.initQuery = initQuery
+			tc.runningQuery = runningQuery
+			tc.postExternalizeQuery = postExternalizeQuery
+			tc.cleanupQuery = cleanupQuery
 			testLookupVindex(t, &tc)
 		})
 	}
 }
 
 func testLookupVindex(t *testing.T, tc *lookupTestCase) {
-
 	vtgateConn, cancel := getVTGateConn()
 	defer cancel()
 	var totalRows int
 	li := tc.li
+
 	t.Run("init data", func(t *testing.T) {
 		totalRows += getNumRowsInQuery(t, tc.initQuery)
 		_, err := vtgateConn.ExecuteFetch(tc.initQuery, 1000, false)
@@ -161,4 +196,9 @@ func testLookupVindex(t *testing.T, tc *lookupTestCase) {
 		waitForRowCount(t, vtgateConn, tc.li.ownerTableKeyspace, li.name, totalRows)
 	})
 
+	t.Run("cleanup", func(t *testing.T) {
+		_, err := vtgateConn.ExecuteFetch(tc.cleanupQuery, 1000, false)
+		require.NoError(t, err)
+		waitForRowCount(t, vtgateConn, tc.li.ownerTableKeyspace, li.name, 0)
+	})
 }
