@@ -14,6 +14,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+/*
+workflows.go contains the functions that are used for fetching and retrieving
+information about VReplication workflows, including the copy states.
+The functions here are mainly used by `GetWorkflows()` in server.go.
+*/
 package workflow
 
 import (
