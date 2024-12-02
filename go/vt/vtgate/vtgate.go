@@ -51,6 +51,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
+	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	vtschema "vitess.io/vitess/go/vt/vtgate/schema"
 	"vitess.io/vitess/go/vt/vtgate/txresolver"
@@ -469,7 +470,7 @@ func (vtg *VTGate) Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConn
 	if bvErr := sqltypes.ValidateBindVariables(bindVariables); bvErr != nil {
 		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", bvErr)
 	} else {
-		safeSession := NewSafeSession(session)
+		safeSession := econtext.NewSafeSession(session)
 		qr, err = vtg.executor.Execute(ctx, mysqlCtx, "Execute", safeSession, sql, bindVariables)
 		safeSession.RemoveInternalSavepoint()
 	}
@@ -526,7 +527,7 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.MyS
 
 	defer vtg.timings.Record(statsKey, time.Now())
 
-	safeSession := NewSafeSession(session)
+	safeSession := econtext.NewSafeSession(session)
 	var err error
 	if bvErr := sqltypes.ValidateBindVariables(bindVariables); bvErr != nil {
 		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", bvErr)
@@ -560,7 +561,7 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.MyS
 // same effect as if a "rollback" statement was executed, but does not affect the query
 // statistics.
 func (vtg *VTGate) CloseSession(ctx context.Context, session *vtgatepb.Session) error {
-	return vtg.executor.CloseSession(ctx, NewSafeSession(session))
+	return vtg.executor.CloseSession(ctx, econtext.NewSafeSession(session))
 }
 
 // Prepare supports non-streaming prepare statement query with multi shards
@@ -575,7 +576,7 @@ func (vtg *VTGate) Prepare(ctx context.Context, session *vtgatepb.Session, sql s
 		goto handleError
 	}
 
-	fld, err = vtg.executor.Prepare(ctx, "Prepare", NewSafeSession(session), sql, bindVariables)
+	fld, err = vtg.executor.Prepare(ctx, "Prepare", econtext.NewSafeSession(session), sql, bindVariables)
 	if err == nil {
 		return session, fld, nil
 	}

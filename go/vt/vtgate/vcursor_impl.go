@@ -50,6 +50,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/buffer"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 	"vitess.io/vitess/go/vt/vtgate/logstats"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -68,14 +69,14 @@ var (
 type (
 	// vcursor_impl needs these facilities to be able to be able to execute queries for vindexes
 	iExecute interface {
-		Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, method string, session *SafeSession, s string, vars map[string]*querypb.BindVariable) (*sqltypes.Result, error)
-		ExecuteMultiShard(ctx context.Context, primitive engine.Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *SafeSession, autocommit bool, ignoreMaxMemoryRows bool, resultsObserver resultsObserver) (qr *sqltypes.Result, errs []error)
-		StreamExecuteMulti(ctx context.Context, primitive engine.Primitive, query string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, session *SafeSession, autocommit bool, callback func(reply *sqltypes.Result) error, observer resultsObserver) []error
-		ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, session *SafeSession, lockFuncType sqlparser.LockingFuncType) (*sqltypes.Result, error)
-		Commit(ctx context.Context, safeSession *SafeSession) error
+		Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, method string, session *econtext.SafeSession, s string, vars map[string]*querypb.BindVariable) (*sqltypes.Result, error)
+		ExecuteMultiShard(ctx context.Context, primitive engine.Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *econtext.SafeSession, autocommit bool, ignoreMaxMemoryRows bool, resultsObserver resultsObserver) (qr *sqltypes.Result, errs []error)
+		StreamExecuteMulti(ctx context.Context, primitive engine.Primitive, query string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, session *econtext.SafeSession, autocommit bool, callback func(reply *sqltypes.Result) error, observer resultsObserver) []error
+		ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, session *econtext.SafeSession, lockFuncType sqlparser.LockingFuncType) (*sqltypes.Result, error)
+		Commit(ctx context.Context, safeSession *econtext.SafeSession) error
 		ExecuteMessageStream(ctx context.Context, rss []*srvtopo.ResolvedShard, name string, callback func(*sqltypes.Result) error) error
 		ExecuteVStream(ctx context.Context, rss []*srvtopo.ResolvedShard, filter *binlogdatapb.Filter, gtid string, callback func(evs []*binlogdatapb.VEvent) error) error
-		ReleaseLock(ctx context.Context, session *SafeSession) error
+		ReleaseLock(ctx context.Context, session *econtext.SafeSession) error
 
 		showVitessReplicationStatus(ctx context.Context, filter *sqlparser.ShowFilter) (*sqltypes.Result, error)
 		showShards(ctx context.Context, filter *sqlparser.ShowFilter, destTabletType topodatapb.TabletType) (*sqltypes.Result, error)
@@ -102,7 +103,7 @@ type (
 	// vcursorImpl implements the VCursor functionality used by dependent
 	// packages to call back into VTGate.
 	vcursorImpl struct {
-		safeSession    *SafeSession
+		safeSession    *econtext.SafeSession
 		keyspace       string
 		tabletType     topodatapb.TabletType
 		destination    key.Destination
@@ -145,7 +146,7 @@ type (
 // including as identifying markers. So, they have to be added back to all queries that are executed
 // on behalf of the original query.
 func newVCursorImpl(
-	safeSession *SafeSession,
+	safeSession *econtext.SafeSession,
 	marginComments sqlparser.MarginComments,
 	executor *Executor,
 	logStats *logstats.LogStats,
@@ -612,8 +613,7 @@ func (vc *vcursorImpl) Execute(ctx context.Context, method string, query string,
 	session := vc.safeSession
 	if co == vtgatepb.CommitOrder_AUTOCOMMIT {
 		// For autocommit, we have to create an independent session.
-		session = NewAutocommitSession(vc.safeSession.Session)
-		session.logging = vc.safeSession.logging
+		session = vc.safeSession.NewAutocommitSession()
 		rollbackOnError = false
 	} else {
 		session.SetCommitOrder(co)
@@ -647,8 +647,6 @@ func (vc *vcursorImpl) markSavepoint(ctx context.Context, needsRollbackOnParialE
 	vc.safeSession.SetSavepoint(uID)
 	return nil
 }
-
-const txRollback = "Rollback Transaction"
 
 // ExecuteMultiShard is part of the engine.VCursor interface.
 func (vc *vcursorImpl) ExecuteMultiShard(ctx context.Context, primitive engine.Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, canAutocommit bool) (*sqltypes.Result, []error) {
@@ -699,7 +697,7 @@ func (vc *vcursorImpl) ExecuteStandalone(ctx context.Context, primitive engine.P
 	}
 	// The autocommit flag is always set to false because we currently don't
 	// execute DMLs through ExecuteStandalone.
-	qr, errs := vc.executor.ExecuteMultiShard(ctx, primitive, rss, bqs, NewAutocommitSession(vc.safeSession.Session), false /* autocommit */, vc.ignoreMaxMemoryRows, vc.resultsObserver)
+	qr, errs := vc.executor.ExecuteMultiShard(ctx, primitive, rss, bqs, econtext.NewAutocommitSession(vc.safeSession.Session), false /* autocommit */, vc.ignoreMaxMemoryRows, vc.resultsObserver)
 	vc.logShardsQueried(primitive, len(rss))
 	return qr, vterrors.Aggregate(errs)
 }
@@ -722,9 +720,9 @@ func (vc *vcursorImpl) ExecuteKeyspaceID(ctx context.Context, keyspace string, k
 	// This creates a transaction but that transaction is for locking purpose only and should not cause multi-db transaction error.
 	// This fields helps in to ignore multi-db transaction error when it states `queryFromVindex`.
 	if !rollbackOnError {
-		vc.safeSession.queryFromVindex = true
+		vc.safeSession.SetQueryFromVindex(true)
 		defer func() {
-			vc.safeSession.queryFromVindex = false
+			vc.safeSession.SetQueryFromVindex(false)
 		}()
 	}
 	qr, errs := vc.ExecuteMultiShard(ctx, nil, rss, queries, rollbackOnError, autocommit)
@@ -1023,8 +1021,7 @@ func (vc *vcursorImpl) SetWorkloadName(workloadName string) {
 
 // SetFoundRows implements the SessionActions interface
 func (vc *vcursorImpl) SetFoundRows(foundRows uint64) {
-	vc.safeSession.FoundRows = foundRows
-	vc.safeSession.foundRowsHandled = true
+	vc.safeSession.SetFoundRows(foundRows)
 }
 
 // SetDDLStrategy implements the SessionActions interface
@@ -1387,8 +1384,7 @@ func (vc *vcursorImpl) ReleaseLock(ctx context.Context) error {
 }
 
 func (vc *vcursorImpl) cloneWithAutocommitSession() *vcursorImpl {
-	safeSession := NewAutocommitSession(vc.safeSession.Session)
-	safeSession.logging = vc.safeSession.logging
+	safeSession := vc.safeSession.NewAutocommitSession()
 	return &vcursorImpl{
 		safeSession:     safeSession,
 		keyspace:        vc.keyspace,
@@ -1413,7 +1409,7 @@ func (vc *vcursorImpl) VExplainLogging() {
 }
 
 func (vc *vcursorImpl) GetVExplainLogs() []engine.ExecuteEntry {
-	return vc.safeSession.logging.GetLogs()
+	return vc.safeSession.GetLogs()
 }
 
 func (vc *vcursorImpl) FindRoutedShard(keyspace, shard string) (keyspaceName string, err error) {
@@ -1460,7 +1456,7 @@ func (vc *vcursorImpl) CloneForReplicaWarming(ctx context.Context) engine.VCurso
 	clonedCtx := callerid.NewContext(timedCtx, callerId, immediateCallerId)
 
 	v := &vcursorImpl{
-		safeSession:         NewAutocommitSession(vc.safeSession.Session),
+		safeSession:         econtext.NewAutocommitSession(vc.safeSession.Session),
 		keyspace:            vc.keyspace,
 		tabletType:          topodatapb.TabletType_REPLICA,
 		destination:         vc.destination,
@@ -1492,7 +1488,7 @@ func (vc *vcursorImpl) CloneForMirroring(ctx context.Context) engine.VCursor {
 	clonedCtx := callerid.NewContext(ctx, callerId, immediateCallerId)
 
 	v := &vcursorImpl{
-		safeSession:         NewAutocommitSession(vc.safeSession.Session),
+		safeSession:         econtext.NewAutocommitSession(vc.safeSession.Session),
 		keyspace:            vc.keyspace,
 		tabletType:          vc.tabletType,
 		destination:         vc.destination,

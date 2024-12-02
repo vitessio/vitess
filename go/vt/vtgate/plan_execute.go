@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 	"vitess.io/vitess/go/vt/vtgate/logstats"
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
 )
@@ -59,7 +60,7 @@ func waitForNewerVSchema(ctx context.Context, e *Executor, lastVSchemaCreated ti
 func (e *Executor) newExecute(
 	ctx context.Context,
 	mysqlCtx vtgateservice.MySQLConnection,
-	safeSession *SafeSession,
+	safeSession *econtext.SafeSession,
 	sql string,
 	bindVars map[string]*querypb.BindVariable,
 	logStats *logstats.LogStats,
@@ -225,7 +226,7 @@ func (e *Executor) newExecute(
 func (e *Executor) handleTransactions(
 	ctx context.Context,
 	mysqlCtx vtgateservice.MySQLConnection,
-	safeSession *SafeSession,
+	safeSession *econtext.SafeSession,
 	plan *engine.Plan,
 	logStats *logstats.LogStats,
 	vcursor *vcursorImpl,
@@ -267,7 +268,7 @@ func (e *Executor) handleTransactions(
 	return nil, nil
 }
 
-func (e *Executor) startTxIfNecessary(ctx context.Context, safeSession *SafeSession) error {
+func (e *Executor) startTxIfNecessary(ctx context.Context, safeSession *econtext.SafeSession) error {
 	if !safeSession.Autocommit && !safeSession.InTransaction() {
 		if err := e.txConn.Begin(ctx, safeSession, nil); err != nil {
 			return err
@@ -276,7 +277,7 @@ func (e *Executor) startTxIfNecessary(ctx context.Context, safeSession *SafeSess
 	return nil
 }
 
-func (e *Executor) insideTransaction(ctx context.Context, safeSession *SafeSession, logStats *logstats.LogStats, execPlan func() error) error {
+func (e *Executor) insideTransaction(ctx context.Context, safeSession *econtext.SafeSession, logStats *logstats.LogStats, execPlan func() error) error {
 	mustCommit := false
 	if safeSession.Autocommit && !safeSession.InTransaction() {
 		mustCommit = true
@@ -320,7 +321,7 @@ func (e *Executor) insideTransaction(ctx context.Context, safeSession *SafeSessi
 
 func (e *Executor) executePlan(
 	ctx context.Context,
-	safeSession *SafeSession,
+	safeSession *econtext.SafeSession,
 	plan *engine.Plan,
 	vcursor *vcursorImpl,
 	bindVars map[string]*querypb.BindVariable,
@@ -342,7 +343,7 @@ func (e *Executor) executePlan(
 }
 
 // rollbackExecIfNeeded rollbacks the partial execution if earlier it was detected that it needs partial query execution to be rolled back.
-func (e *Executor) rollbackExecIfNeeded(ctx context.Context, safeSession *SafeSession, bindVars map[string]*querypb.BindVariable, logStats *logstats.LogStats, err error) error {
+func (e *Executor) rollbackExecIfNeeded(ctx context.Context, safeSession *econtext.SafeSession, bindVars map[string]*querypb.BindVariable, logStats *logstats.LogStats, err error) error {
 	if safeSession.InTransaction() && safeSession.IsRollbackSet() {
 		rErr := e.rollbackPartialExec(ctx, safeSession, bindVars, logStats)
 		return vterrors.Wrap(err, rErr.Error())
@@ -353,7 +354,7 @@ func (e *Executor) rollbackExecIfNeeded(ctx context.Context, safeSession *SafeSe
 // rollbackPartialExec rollbacks to the savepoint or rollbacks transaction based on the value set on SafeSession.rollbackOnPartialExec.
 // Once, it is used the variable is reset.
 // If it fails to rollback to the previous savepoint then, the transaction is forced to be rolled back.
-func (e *Executor) rollbackPartialExec(ctx context.Context, safeSession *SafeSession, bindVars map[string]*querypb.BindVariable, logStats *logstats.LogStats) error {
+func (e *Executor) rollbackPartialExec(ctx context.Context, safeSession *econtext.SafeSession, bindVars map[string]*querypb.BindVariable, logStats *logstats.LogStats) error {
 	var err error
 	var errMsg strings.Builder
 
@@ -367,8 +368,8 @@ func (e *Executor) rollbackPartialExec(ctx context.Context, safeSession *SafeSes
 	}
 
 	// needs to rollback only once.
-	rQuery := safeSession.rollbackOnPartialExec
-	if rQuery != txRollback {
+	rQuery := safeSession.GetRollbackOnPartialExec()
+	if rQuery != econtext.TxRollback {
 		safeSession.SavepointRollback()
 		_, _, err = e.execute(ctx, nil, safeSession, rQuery, bindVars, logStats)
 		// If no error, the revert is successful with the savepoint. Notify the reason as error to the client.

@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package vtgate
+package executorcontext
 
 import (
 	"fmt"
@@ -23,22 +23,19 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/sqltypes"
-
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql/datetime"
-
+	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/sysvars"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 type (
@@ -58,7 +55,7 @@ type (
 		rollbackOnPartialExec string
 		savepointName         string
 
-		// this is a signal that found_rows has already been handles by the primitives,
+		// this is a signal that found_rows has already been handled by the primitives,
 		// and doesn't have to be updated by the executor
 		foundRowsHandled bool
 
@@ -66,12 +63,12 @@ type (
 		// as the query that started a new transaction on the shard belong to a vindex.
 		queryFromVindex bool
 
-		logging *executeLogger
+		logging *ExecuteLogger
 
 		*vtgatepb.Session
 	}
 
-	executeLogger struct {
+	ExecuteLogger struct {
 		mu      sync.Mutex
 		entries []engine.ExecuteEntry
 		lastID  int
@@ -126,6 +123,8 @@ const (
 	// savepointRollback - rollback happened on the savepoint
 	savepointRollback
 )
+
+const TxRollback = "Rollback Transaction"
 
 // NewSafeSession returns a new SafeSession based on the Session
 func NewSafeSession(sessn *vtgatepb.Session) *SafeSession {
@@ -203,6 +202,50 @@ func (session *SafeSession) resetCommonLocked() {
 	if session.Options != nil {
 		session.Options.TransactionAccessMode = nil
 	}
+}
+
+// NewAutocommitSession returns a SafeSession based on the original
+// session, but with autocommit enabled.
+func (session *SafeSession) NewAutocommitSession() *SafeSession {
+	ss := NewAutocommitSession(session.Session)
+	ss.logging = session.logging
+	return ss
+}
+
+// IsFoundRowsHandled returns the foundRowsHandled.
+func (session *SafeSession) IsFoundRowsHandled() bool {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	return session.foundRowsHandled
+}
+
+// SetFoundRows set the found rows value.
+func (session *SafeSession) SetFoundRows(value uint64) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.FoundRows = value
+	session.foundRowsHandled = true
+}
+
+// GetRollbackOnPartialExec returns the rollbackOnPartialExec value.
+func (session *SafeSession) GetRollbackOnPartialExec() string {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	return session.rollbackOnPartialExec
+}
+
+// SetQueryFromVindex set the queryFromVindex value.
+func (session *SafeSession) SetQueryFromVindex(value bool) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.queryFromVindex = value
+}
+
+// GetQueryFromVindex returns the queryFromVindex value.
+func (session *SafeSession) GetQueryFromVindex() bool {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	return session.queryFromVindex
 }
 
 // SetQueryTimeout sets the query timeout
@@ -312,7 +355,7 @@ func (session *SafeSession) SetRollbackCommand() {
 	if session.savepointState == savepointSet {
 		session.rollbackOnPartialExec = fmt.Sprintf("rollback to %s", session.savepointName)
 	} else {
-		session.rollbackOnPartialExec = txRollback
+		session.rollbackOnPartialExec = TxRollback
 	}
 	session.savepointState = savepointRollbackSet
 }
@@ -338,6 +381,18 @@ func (session *SafeSession) SetCommitOrder(co vtgatepb.CommitOrder) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	session.commitOrder = co
+}
+
+// GetCommitOrder returns the commit order.
+func (session *SafeSession) GetCommitOrder() vtgatepb.CommitOrder {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	return session.commitOrder
+}
+
+// GetLogger returns executor logger.
+func (session *SafeSession) GetLogger() *ExecuteLogger {
+	return session.logging
 }
 
 // InTransaction returns true if we are in a transaction
@@ -678,12 +733,11 @@ func (session *SafeSession) UpdateLockHeartbeat() {
 	session.LastLockHeartbeat = time.Now().Unix()
 }
 
-// TriggerLockHeartBeat returns if it time to trigger next lock heartbeat
-func (session *SafeSession) TriggerLockHeartBeat() bool {
+// GetLockHeartbeat returns last time the lock heartbeat was sent.
+func (session *SafeSession) GetLockHeartbeat() int64 {
 	session.mu.Lock()
 	defer session.mu.Unlock()
-	now := time.Now().Unix()
-	return now-session.LastLockHeartbeat >= int64(lockHeartbeatTime.Seconds())
+	return session.LastLockHeartbeat
 }
 
 // InLockSession returns whether locking is used on this session.
@@ -836,9 +890,7 @@ func (session *SafeSession) GetOrCreateOptions() *querypb.ExecuteOptions {
 	return session.Session.Options
 }
 
-var _ iQueryOption = (*SafeSession)(nil)
-
-func (session *SafeSession) cachePlan() bool {
+func (session *SafeSession) CachePlan() bool {
 	if session == nil || session.Options == nil {
 		return true
 	}
@@ -849,7 +901,7 @@ func (session *SafeSession) cachePlan() bool {
 	return !(session.Options.SkipQueryPlanCache || session.Options.HasCreatedTempTables)
 }
 
-func (session *SafeSession) getSelectLimit() int {
+func (session *SafeSession) GetSelectLimit() int {
 	if session == nil || session.Options == nil {
 		return -1
 	}
@@ -860,16 +912,16 @@ func (session *SafeSession) getSelectLimit() int {
 	return int(session.Options.SqlSelectLimit)
 }
 
-// isTxOpen returns true if there is open connection to any of the shard.
-func (session *SafeSession) isTxOpen() bool {
+// IsTxOpen returns true if there is open connection to any of the shard.
+func (session *SafeSession) IsTxOpen() bool {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 
 	return len(session.ShardSessions) > 0 || len(session.PreSessions) > 0 || len(session.PostSessions) > 0
 }
 
-// getSessions returns the shard session for the current commit order.
-func (session *SafeSession) getSessions() []*vtgatepb.Session_ShardSession {
+// GetSessions returns the shard session for the current commit order.
+func (session *SafeSession) GetSessions() []*vtgatepb.Session_ShardSession {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 
@@ -956,7 +1008,7 @@ func (session *SafeSession) EnableLogging(parser *sqlparser.Parser) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 
-	session.logging = &executeLogger{
+	session.logging = &ExecuteLogger{
 		parser: parser,
 	}
 }
@@ -994,7 +1046,15 @@ func (session *SafeSession) GetPrepareData(name string) *vtgatepb.PrepareData {
 	return session.PrepareStatement[name]
 }
 
-func (l *executeLogger) log(primitive engine.Primitive, target *querypb.Target, gateway srvtopo.Gateway, query string, begin bool, bv map[string]*querypb.BindVariable) {
+func (session *SafeSession) Log(primitive engine.Primitive, target *querypb.Target, gateway srvtopo.Gateway, query string, begin bool, bv map[string]*querypb.BindVariable) {
+	session.logging.Log(primitive, target, gateway, query, begin, bv)
+}
+
+func (session *SafeSession) GetLogs() []engine.ExecuteEntry {
+	return session.logging.GetLogs()
+}
+
+func (l *ExecuteLogger) Log(primitive engine.Primitive, target *querypb.Target, gateway srvtopo.Gateway, query string, begin bool, bv map[string]*querypb.BindVariable) {
 	if l == nil {
 		return
 	}
@@ -1033,7 +1093,10 @@ func (l *executeLogger) log(primitive engine.Primitive, target *querypb.Target, 
 	})
 }
 
-func (l *executeLogger) GetLogs() []engine.ExecuteEntry {
+func (l *ExecuteLogger) GetLogs() []engine.ExecuteEntry {
+	if l == nil {
+		return nil
+	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	result := make([]engine.ExecuteEntry, len(l.entries))
