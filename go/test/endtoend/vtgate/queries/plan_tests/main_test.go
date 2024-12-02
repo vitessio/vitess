@@ -35,15 +35,19 @@ var (
 	clusterInstance *cluster.LocalProcessCluster
 	vtParams        mysql.ConnParams
 	mysqlParams     mysql.ConnParams
-	keyspaceName    = "user"
-	cell            = "test_aggr"
+	uks             = "main"
+	sks             = "user"
+	cell            = "plantests"
 )
 
 func TestMain(m *testing.M) {
 	defer cluster.PanicHandler(nil)
 
-	schemaSQL := readFile("vschemas/schema.sql")
-	vschema := extractUserKS(readFile("vschemas/schema.json"))
+	vschema := readFile("vschemas/schema.json")
+	userVs := extractUserKS(vschema)
+	mainVs := extractMainKS(vschema)
+	sSQL := readFile("schemas/sschema.sql")
+	uSQL := readFile("schemas/uschema.sql")
 
 	exitCode := func() int {
 		clusterInstance = cluster.NewCluster(cell, "localhost")
@@ -56,13 +60,25 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		// Start keyspace
-		keyspace := &cluster.Keyspace{
-			Name:      keyspaceName,
-			SchemaSQL: schemaSQL,
-			VSchema:   vschema,
+		// Start unsharded keyspace
+		uKeyspace := &cluster.Keyspace{
+			Name:      uks,
+			SchemaSQL: uSQL,
+			VSchema:   mainVs,
 		}
-		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 0, false)
+		err = clusterInstance.StartUnshardedKeyspace(*uKeyspace, 0, false)
+		if err != nil {
+			fmt.Println(err.Error())
+			return 1
+		}
+
+		// Start sharded keyspace
+		skeyspace := &cluster.Keyspace{
+			Name:      sks,
+			SchemaSQL: sSQL,
+			VSchema:   userVs,
+		}
+		err = clusterInstance.StartKeyspace(*skeyspace, []string{"-80", "80-"}, 0, false)
 		if err != nil {
 			fmt.Println(err.Error())
 			return 1
@@ -81,10 +97,10 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		vtParams = clusterInstance.GetVTParams(keyspaceName)
+		vtParams = clusterInstance.GetVTParams(sks)
 
 		// create mysql instance and connection parameters
-		conn, closer, err := utils.NewMySQL(clusterInstance, keyspaceName, schemaSQL)
+		conn, closer, err := utils.NewMySQL(clusterInstance, sks, sSQL, uSQL)
 		if err != nil {
 			fmt.Println(err.Error())
 			return 1
@@ -166,7 +182,7 @@ func extractUserKS(jsonString string) string {
 
 	user, ok := keyspaces["user"].(map[string]any)
 	if !ok {
-		panic("User keyspaces not found")
+		panic("User keyspace not found")
 	}
 
 	tables, ok := user["tables"].(map[string]any)
@@ -188,4 +204,29 @@ func extractUserKS(jsonString string) string {
 	}
 
 	return string(userJson)
+}
+
+func extractMainKS(jsonString string) string {
+	var result map[string]any
+	if err := json.Unmarshal([]byte(jsonString), &result); err != nil {
+		panic(err.Error())
+	}
+
+	keyspaces, ok := result["keyspaces"].(map[string]any)
+	if !ok {
+		panic("Keyspaces not found")
+	}
+
+	main, ok := keyspaces["main"].(map[string]any)
+	if !ok {
+		panic("main keyspace not found")
+	}
+
+	// Marshal the inner part back to JSON string
+	mainJson, err := json.Marshal(main)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	return string(mainJson)
 }
