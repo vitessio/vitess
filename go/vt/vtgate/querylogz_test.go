@@ -35,7 +35,7 @@ import (
 
 func TestQuerylogzHandlerFormatting(t *testing.T) {
 	req, _ := http.NewRequest("GET", "/querylogz?timeout=10&limit=1", nil)
-	logStats := logstats.NewLogStats(context.Background(), "Execute", "select name from test_table limit 1000", "suuid", nil)
+	logStats := logstats.NewLogStats(context.Background(), "Execute", "select name, 'inject <script>alert();</script>' from test_table limit 1000", "suuid", nil)
 	logStats.StmtType = "select"
 	logStats.RowsAffected = 1000
 	logStats.ShardQueries = 1
@@ -64,7 +64,7 @@ func TestQuerylogzHandlerFormatting(t *testing.T) {
 		`<td>0.002</td>`,
 		`<td>0.003</td>`,
 		`<td>select</td>`,
-		`<td>select name from test_table limit 1000</td>`,
+		regexp.QuoteMeta(`<td>select name,​ &#39;inject &lt;script&gt;alert()​;&lt;/script&gt;&#39; from test_table limit 1000</td>`),
 		`<td>1</td>`,
 		`<td>1000</td>`,
 		`<td></td>`,
@@ -94,7 +94,7 @@ func TestQuerylogzHandlerFormatting(t *testing.T) {
 		`<td>0.002</td>`,
 		`<td>0.003</td>`,
 		`<td>select</td>`,
-		`<td>select name from test_table limit 1000</td>`,
+		regexp.QuoteMeta(`<td>select name,​ &#39;inject &lt;script&gt;alert()​;&lt;/script&gt;&#39; from test_table limit 1000</td>`),
 		`<td>1</td>`,
 		`<td>1000</td>`,
 		`<td></td>`,
@@ -124,7 +124,7 @@ func TestQuerylogzHandlerFormatting(t *testing.T) {
 		`<td>0.002</td>`,
 		`<td>0.003</td>`,
 		`<td>select</td>`,
-		`<td>select name from test_table limit 1000</td>`,
+		regexp.QuoteMeta(`<td>select name,​ &#39;inject &lt;script&gt;alert()​;&lt;/script&gt;&#39; from test_table limit 1000</td>`),
 		`<td>1</td>`,
 		`<td>1000</td>`,
 		`<td></td>`,
