@@ -23,8 +23,9 @@ import (
 	"html"
 	"net/http"
 	"strconv"
-	"text/template"
 	"time"
+
+	"github.com/google/safehtml/template"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/log"
