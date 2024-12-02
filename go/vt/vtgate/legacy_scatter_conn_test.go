@@ -376,7 +376,7 @@ type recordingResultsObserver struct {
 	recorded []*sqltypes.Result
 }
 
-func (o *recordingResultsObserver) observe(result *sqltypes.Result) {
+func (o *recordingResultsObserver) Observe(result *sqltypes.Result) {
 	mu.Lock()
 	o.recorded = append(o.recorded, result)
 	mu.Unlock()

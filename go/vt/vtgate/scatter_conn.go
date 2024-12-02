@@ -72,13 +72,10 @@ type shardActionFunc func(rs *srvtopo.ResolvedShard, i int) error
 type shardActionTransactionFunc func(rs *srvtopo.ResolvedShard, i int, shardActionInfo *shardActionInfo) (*shardActionInfo, error)
 
 type (
-	resultsObserver interface {
-		observe(*sqltypes.Result)
-	}
 	nullResultsObserver struct{}
 )
 
-func (nullResultsObserver) observe(*sqltypes.Result) {}
+func (nullResultsObserver) Observe(*sqltypes.Result) {}
 
 // NewScatterConn creates a new ScatterConn.
 func NewScatterConn(statsName string, txConn *TxConn, gw *TabletGateway) *ScatterConn {
@@ -154,7 +151,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 	session *econtext.SafeSession,
 	autocommit bool,
 	ignoreMaxMemoryRows bool,
-	resultsObserver resultsObserver,
+	resultsObserver econtext.ResultsObserver,
 ) (qr *sqltypes.Result, errs []error) {
 
 	if len(rss) != len(queries) {
@@ -270,7 +267,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 			defer mu.Unlock()
 
 			if innerqr != nil {
-				resultsObserver.observe(innerqr)
+				resultsObserver.Observe(innerqr)
 			}
 
 			// Don't append more rows if row count is exceeded.
@@ -373,7 +370,7 @@ func (stc *ScatterConn) StreamExecuteMulti(
 	session *econtext.SafeSession,
 	autocommit bool,
 	callback func(reply *sqltypes.Result) error,
-	resultsObserver resultsObserver,
+	resultsObserver econtext.ResultsObserver,
 ) []error {
 	if session.InLockSession() && triggerLockHeartBeat(session) {
 		go stc.runLockQuery(ctx, session)
@@ -381,7 +378,7 @@ func (stc *ScatterConn) StreamExecuteMulti(
 
 	observedCallback := func(reply *sqltypes.Result) error {
 		if reply != nil {
-			resultsObserver.observe(reply)
+			resultsObserver.Observe(reply)
 		}
 		return callback(reply)
 	}

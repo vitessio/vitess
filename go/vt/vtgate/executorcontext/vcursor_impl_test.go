@@ -1,4 +1,20 @@
-package vtgate
+/*
+Copyright 2024 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package executorcontext
 
 import (
 	"context"
@@ -12,12 +28,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
-
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
-	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtgate/logstats"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
@@ -39,48 +52,6 @@ func (f fakeVSchemaOperator) GetCurrentSrvVschema() *vschemapb.SrvVSchema {
 
 func (f fakeVSchemaOperator) UpdateVSchema(ctx context.Context, ksName string, vschema *vschemapb.SrvVSchema) error {
 	panic("implement me")
-}
-
-type fakeTopoServer struct{}
-
-// GetTopoServer returns the full topo.Server instance.
-func (f *fakeTopoServer) GetTopoServer() (*topo.Server, error) {
-	return nil, nil
-}
-
-// GetSrvKeyspaceNames returns the list of keyspaces served in
-// the provided cell.
-func (f *fakeTopoServer) GetSrvKeyspaceNames(ctx context.Context, cell string, staleOK bool) ([]string, error) {
-	return []string{"ks1"}, nil
-}
-
-// GetSrvKeyspace returns the SrvKeyspace for a cell/keyspace.
-func (f *fakeTopoServer) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error) {
-	zeroHexBytes, _ := hex.DecodeString("")
-	eightyHexBytes, _ := hex.DecodeString("80")
-	ks := &topodatapb.SrvKeyspace{
-		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
-			{
-				ServedType: topodatapb.TabletType_PRIMARY,
-				ShardReferences: []*topodatapb.ShardReference{
-					{Name: "-80", KeyRange: &topodatapb.KeyRange{Start: zeroHexBytes, End: eightyHexBytes}},
-					{Name: "80-", KeyRange: &topodatapb.KeyRange{Start: eightyHexBytes, End: zeroHexBytes}},
-				},
-			},
-		},
-	}
-	return ks, nil
-}
-
-func (f *fakeTopoServer) WatchSrvKeyspace(ctx context.Context, cell, keyspace string, callback func(*topodatapb.SrvKeyspace, error) bool) {
-	ks, err := f.GetSrvKeyspace(ctx, cell, keyspace)
-	callback(ks, err)
-}
-
-// WatchSrvVSchema starts watching the SrvVSchema object for
-// the provided cell.  It will call the callback when
-// a new value or an error occurs.
-func (f *fakeTopoServer) WatchSrvVSchema(ctx context.Context, cell string, callback func(*vschemapb.SrvVSchema, error) bool) {
 }
 
 func TestDestinationKeyspace(t *testing.T) {
@@ -186,13 +157,14 @@ func TestDestinationKeyspace(t *testing.T) {
 	}, {
 		vschema:       vschemaWith2KS,
 		targetString:  "",
-		expectedError: errNoKeyspace.Error(),
+		expectedError: ErrNoKeyspace.Error(),
 	}}
 
 	r, _, _, _, _ := createExecutorEnv(t)
 	for i, tc := range tests {
 		t.Run(strconv.Itoa(i)+tc.targetString, func(t *testing.T) {
-			impl, _ := newVCursorImpl(econtext.NewSafeSession(&vtgatepb.Session{TargetString: tc.targetString}), sqlparser.MarginComments{}, r, nil, &fakeVSchemaOperator{vschema: tc.vschema}, tc.vschema, nil, nil, false, querypb.ExecuteOptions_Gen4)
+			session := NewSafeSession(&vtgatepb.Session{TargetString: tc.targetString})
+			impl, _ := NewVCursorImpl(session, sqlparser.MarginComments{}, r, nil, &fakeVSchemaOperator{vschema: tc.vschema}, tc.vschema, nil, nil, false, querypb.ExecuteOptions_Gen4)
 			impl.vschema = tc.vschema
 			dest, keyspace, tabletType, err := impl.TargetDestination(tc.qualifier)
 			if tc.expectedError == "" {
@@ -252,15 +224,16 @@ func TestSetTarget(t *testing.T) {
 		expectedError: "can't execute the given command because you have an active transaction",
 	}}
 
-	r, _, _, _, _ := createExecutorEnv(t)
+	// r, _, _, _, _ := createExecutorEnv(t)
 	for i, tc := range tests {
 		t.Run(fmt.Sprintf("%d#%s", i, tc.targetString), func(t *testing.T) {
-			vc, _ := newVCursorImpl(econtext.NewSafeSession(&vtgatepb.Session{InTransaction: true}), sqlparser.MarginComments{}, r, nil, &fakeVSchemaOperator{vschema: tc.vschema}, tc.vschema, nil, nil, false, querypb.ExecuteOptions_Gen4)
+			cfg := VCursorConfig{}
+			vc, _ := NewVCursorImpl(NewSafeSession(&vtgatepb.Session{InTransaction: true}), sqlparser.MarginComments{}, nil, nil, &fakeVSchemaOperator{vschema: tc.vschema}, tc.vschema, nil, nil, false, querypb.ExecuteOptions_Gen4, cfg)
 			vc.vschema = tc.vschema
 			err := vc.SetTarget(tc.targetString)
 			if tc.expectedError == "" {
 				require.NoError(t, err)
-				require.Equal(t, vc.safeSession.TargetString, tc.targetString)
+				require.Equal(t, vc.SafeSession.TargetString, tc.targetString)
 			} else {
 				require.EqualError(t, err, tc.expectedError)
 			}
@@ -301,17 +274,16 @@ func TestKeyForPlan(t *testing.T) {
 		expectedPlanPrefixKey: "ks1@replica+Collate:utf8mb4_0900_ai_ci+Query:SELECT 1",
 	}}
 
-	r, _, _, _, _ := createExecutorEnv(t)
 	for i, tc := range tests {
 		t.Run(fmt.Sprintf("%d#%s", i, tc.targetString), func(t *testing.T) {
-			ss := econtext.NewSafeSession(&vtgatepb.Session{InTransaction: false})
+			ss := NewSafeSession(&vtgatepb.Session{InTransaction: false})
 			ss.SetTargetString(tc.targetString)
-			vc, err := newVCursorImpl(ss, sqlparser.MarginComments{}, r, nil, &fakeVSchemaOperator{vschema: tc.vschema}, tc.vschema, srvtopo.NewResolver(&fakeTopoServer{}, nil, ""), nil, false, querypb.ExecuteOptions_Gen4)
+			vc, err := NewVCursorImpl(ss, sqlparser.MarginComments{}, nil, nil, &fakeVSchemaOperator{vschema: tc.vschema}, tc.vschema, srvtopo.NewResolver(&FakeTopoServer{}, nil, ""), nil, false, querypb.ExecuteOptions_Gen4, VCursorConfig{})
 			require.NoError(t, err)
 			vc.vschema = tc.vschema
 
 			var buf strings.Builder
-			vc.keyForPlan(context.Background(), "SELECT 1", &buf)
+			vc.KeyForPlan(context.Background(), "SELECT 1", &buf)
 			require.Equal(t, tc.expectedPlanPrefixKey, buf.String())
 		})
 	}
@@ -329,8 +301,7 @@ func TestFirstSortedKeyspace(t *testing.T) {
 		},
 	}
 
-	r, _, _, _, _ := createExecutorEnv(t)
-	vc, err := newVCursorImpl(econtext.NewSafeSession(nil), sqlparser.MarginComments{}, r, nil, &fakeVSchemaOperator{vschema: vschemaWith2KS}, vschemaWith2KS, srvtopo.NewResolver(&fakeTopoServer{}, nil, ""), nil, false, querypb.ExecuteOptions_Gen4)
+	vc, err := NewVCursorImpl(NewSafeSession(nil), sqlparser.MarginComments{}, nil, nil, &fakeVSchemaOperator{vschema: vschemaWith2KS}, vschemaWith2KS, srvtopo.NewResolver(&FakeTopoServer{}, nil, ""), nil, false, querypb.ExecuteOptions_Gen4, VCursorConfig{})
 	require.NoError(t, err)
 	ks, err := vc.FirstSortedKeyspace()
 	require.NoError(t, err)
@@ -341,8 +312,8 @@ func TestFirstSortedKeyspace(t *testing.T) {
 // Validates the timeout value is set based on override rule.
 func TestSetExecQueryTimeout(t *testing.T) {
 	executor, _, _, _, _ := createExecutorEnv(t)
-	safeSession := econtext.NewSafeSession(nil)
-	vc, err := newVCursorImpl(safeSession, sqlparser.MarginComments{}, executor, nil, nil, &vindexes.VSchema{}, nil, nil, false, querypb.ExecuteOptions_Gen4)
+	safeSession := NewSafeSession(nil)
+	vc, err := NewVCursorImpl(safeSession, sqlparser.MarginComments{}, executor, nil, nil, &vindexes.VSchema{}, nil, nil, false, querypb.ExecuteOptions_Gen4)
 	require.NoError(t, err)
 
 	// flag timeout
@@ -384,9 +355,9 @@ func TestSetExecQueryTimeout(t *testing.T) {
 
 func TestRecordMirrorStats(t *testing.T) {
 	executor, _, _, _, _ := createExecutorEnv(t)
-	safeSession := econtext.NewSafeSession(nil)
+	safeSession := NewSafeSession(nil)
 	logStats := logstats.NewLogStats(context.Background(), t.Name(), "select 1", "", nil)
-	vc, err := newVCursorImpl(safeSession, sqlparser.MarginComments{}, executor, logStats, nil, &vindexes.VSchema{}, nil, nil, false, querypb.ExecuteOptions_Gen4)
+	vc, err := NewVCursorImpl(safeSession, sqlparser.MarginComments{}, executor, logStats, nil, &vindexes.VSchema{}, nil, nil, false, querypb.ExecuteOptions_Gen4)
 	require.NoError(t, err)
 
 	require.Zero(t, logStats.MirrorSourceExecuteTime)

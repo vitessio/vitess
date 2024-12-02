@@ -34,7 +34,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
 )
 
-type planExec func(ctx context.Context, plan *engine.Plan, vc *vcursorImpl, bindVars map[string]*querypb.BindVariable, startTime time.Time) error
+type planExec func(ctx context.Context, plan *engine.Plan, vc *econtext.VCursorImpl, bindVars map[string]*querypb.BindVariable, startTime time.Time) error
 type txResult func(sqlparser.StatementType, *sqltypes.Result) error
 
 var vschemaWaitTimeout = 30 * time.Second
@@ -56,6 +56,8 @@ func waitForNewerVSchema(ctx context.Context, e *Executor, lastVSchemaCreated ti
 		}
 	}
 }
+
+const MaxBufferingRetries = 3
 
 func (e *Executor) newExecute(
 	ctx context.Context,
@@ -117,7 +119,7 @@ func (e *Executor) newExecute(
 			}
 		}
 
-		vcursor, err := newVCursorImpl(safeSession, comments, e, logStats, e.vm, vs, e.resolver.resolver, e.serv, e.warnShardedOnly, e.pv)
+		vcursor, err := econtext.NewVCursorImpl(safeSession, comments, e, logStats, e.vm, vs, e.resolver.resolver, e.serv, e.warnShardedOnly, e.pv, e.getVCursorConfig())
 		if err != nil {
 			return err
 		}
@@ -147,10 +149,8 @@ func (e *Executor) newExecute(
 		}
 
 		// set the overall query timeout if it is not already set
-		if vcursor.queryTimeout > 0 && cancel == nil {
-			ctx, cancel = context.WithTimeout(ctx, vcursor.queryTimeout)
-			defer cancel()
-		}
+		ctx, cancel = vcursor.GetContextWithTimeOut(ctx)
+		defer cancel()
 
 		result, err = e.handleTransactions(ctx, mysqlCtx, safeSession, plan, logStats, vcursor, stmt)
 		if err != nil {
@@ -229,7 +229,7 @@ func (e *Executor) handleTransactions(
 	safeSession *econtext.SafeSession,
 	plan *engine.Plan,
 	logStats *logstats.LogStats,
-	vcursor *vcursorImpl,
+	vcursor *econtext.VCursorImpl,
 	stmt sqlparser.Statement,
 ) (*sqltypes.Result, error) {
 	// We need to explicitly handle errors, and begin/commit/rollback, since these control transactions. Everything else
@@ -248,19 +248,19 @@ func (e *Executor) handleTransactions(
 		qr, err := e.handleSavepoint(ctx, safeSession, plan.Original, "Savepoint", logStats, func(_ string) (*sqltypes.Result, error) {
 			// Safely to ignore as there is no transaction.
 			return &sqltypes.Result{}, nil
-		}, vcursor.ignoreMaxMemoryRows)
+		}, vcursor.IgnoreMaxMemoryRows())
 		return qr, err
 	case sqlparser.StmtSRollback:
 		qr, err := e.handleSavepoint(ctx, safeSession, plan.Original, "Rollback Savepoint", logStats, func(query string) (*sqltypes.Result, error) {
 			// Error as there is no transaction, so there is no savepoint that exists.
 			return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.SPDoesNotExist, "SAVEPOINT does not exist: %s", query)
-		}, vcursor.ignoreMaxMemoryRows)
+		}, vcursor.IgnoreMaxMemoryRows())
 		return qr, err
 	case sqlparser.StmtRelease:
 		qr, err := e.handleSavepoint(ctx, safeSession, plan.Original, "Release Savepoint", logStats, func(query string) (*sqltypes.Result, error) {
 			// Error as there is no transaction, so there is no savepoint that exists.
 			return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.SPDoesNotExist, "SAVEPOINT does not exist: %s", query)
-		}, vcursor.ignoreMaxMemoryRows)
+		}, vcursor.IgnoreMaxMemoryRows())
 		return qr, err
 	case sqlparser.StmtKill:
 		return e.handleKill(ctx, mysqlCtx, stmt, logStats)
@@ -323,7 +323,7 @@ func (e *Executor) executePlan(
 	ctx context.Context,
 	safeSession *econtext.SafeSession,
 	plan *engine.Plan,
-	vcursor *vcursorImpl,
+	vcursor *econtext.VCursorImpl,
 	bindVars map[string]*querypb.BindVariable,
 	logStats *logstats.LogStats,
 	execStart time.Time,
@@ -389,9 +389,9 @@ func (e *Executor) rollbackPartialExec(ctx context.Context, safeSession *econtex
 	return vterrors.New(vtrpcpb.Code_ABORTED, errMsg.String())
 }
 
-func (e *Executor) setLogStats(logStats *logstats.LogStats, plan *engine.Plan, vcursor *vcursorImpl, execStart time.Time, err error, qr *sqltypes.Result) {
+func (e *Executor) setLogStats(logStats *logstats.LogStats, plan *engine.Plan, vcursor *econtext.VCursorImpl, execStart time.Time, err error, qr *sqltypes.Result) {
 	logStats.StmtType = plan.Type.String()
-	logStats.ActiveKeyspace = vcursor.keyspace
+	logStats.ActiveKeyspace = vcursor.GetKeyspace()
 	logStats.TablesUsed = plan.TablesUsed
 	logStats.TabletType = vcursor.TabletType().String()
 	errCount := e.logExecutionEnd(logStats, execStart, plan, err, qr)
