@@ -526,17 +526,24 @@ func (bs *S3BackupStorage) client() (*s3.Client, error) {
 			return nil, err
 		}
 
-		bs._client = s3.NewFromConfig(cfg, func(o *s3.Options) {
-			o.UsePathStyle = forcePath
-			if retryCount >= 0 {
-				o.RetryMaxAttempts = retryCount
-				o.Retryer = &ClosedConnectionRetryer{
-					awsRetryer: retry.NewStandard(func(options *retry.StandardOptions) {
-						options.MaxAttempts = retryCount
-					}),
+		options := []func(options *s3.Options){
+			func(o *s3.Options) {
+				o.UsePathStyle = forcePath
+				if retryCount >= 0 {
+					o.RetryMaxAttempts = retryCount
+					o.Retryer = &ClosedConnectionRetryer{
+						awsRetryer: retry.NewStandard(func(options *retry.StandardOptions) {
+							options.MaxAttempts = retryCount
+						}),
+					}
 				}
-			}
-		}, s3.WithEndpointResolverV2(newEndpointResolver()))
+			},
+		}
+		if endpoint != "" {
+			options = append(options, s3.WithEndpointResolverV2(newEndpointResolver()))
+		}
+
+		bs._client = s3.NewFromConfig(cfg, options...)
 
 		if len(bucket) == 0 {
 			return nil, fmt.Errorf("--s3_backup_storage_bucket required")
