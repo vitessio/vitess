@@ -61,7 +61,11 @@ func (tm *TabletManager) ReplicationStatus(ctx context.Context) (*replicationdat
 	if err != nil {
 		return nil, err
 	}
-	return mysql.ReplicationStatusToProto(status), nil
+
+	protoStatus := mysql.ReplicationStatusToProto(status)
+	protoStatus.BackupRunning = tm.IsBackupRunning()
+
+	return protoStatus, nil
 }
 
 // FullStatus returns the full status of MySQL including the replication information, semi-sync information, GTID information among others
@@ -909,6 +913,7 @@ func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopRe
 		return StopReplicationAndGetStatusResponse{}, vterrors.Wrap(err, "before status failed")
 	}
 	before := mysql.ReplicationStatusToProto(rs)
+	before.BackupRunning = tm.IsBackupRunning()
 
 	if stopReplicationMode == replicationdatapb.StopReplicationMode_IOTHREADONLY {
 		if !rs.IOHealthy() {
@@ -955,6 +960,7 @@ func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopRe
 		}, vterrors.Wrap(err, "acquiring replication status failed")
 	}
 	after := mysql.ReplicationStatusToProto(rsAfter)
+	after.BackupRunning = tm.IsBackupRunning()
 
 	rs.Position = rsAfter.Position
 	rs.RelayLogPosition = rsAfter.RelayLogPosition

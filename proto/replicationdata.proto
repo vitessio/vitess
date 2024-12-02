@@ -57,7 +57,6 @@ message Status {
 message StopReplicationStatus {
   replicationdata.Status before = 1;
   replicationdata.Status after = 2;
-  bool backup_running = 3;
 }
 
 // StopReplicationMode is used to provide controls over how replication is stopped.

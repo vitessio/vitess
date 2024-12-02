@@ -259,8 +259,6 @@ func (s *server) ReplicationStatus(ctx context.Context, request *tabletmanagerda
 		response.Status = status
 	}
 
-	response.BackupRunning = s.tm.IsBackupRunning()
-
 	return response, err
 }
 
