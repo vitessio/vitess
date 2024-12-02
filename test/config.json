@@ -138,7 +138,7 @@
 		},
 		"backup_s3": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/backup/s3_builtin", "-timeout", "30m"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/backup/s3", "-timeout", "30m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "21",
