@@ -15,10 +15,16 @@ limitations under the License.
 */
 
 /*
-workflows.go contains the functions that are used for fetching and retrieving
-information about VReplication workflows, including the copy states.
-The functions here are mainly used by `GetWorkflows()` in server.go.
+This file provides functions for fetching and retrieving information about VReplication workflows
+
+At the moment it is used by the `GetWorkflows` function in `server.go and includes functionality to
+get the following:
+- Fetch workflows by shard
+- Fetch copy states by shard stream
+- Build workflows with metadata
+- Fetch stream logs
 */
+
 package workflow
 
 import (
