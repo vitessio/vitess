@@ -98,6 +98,7 @@ func TestLookupIndex(t *testing.T) {
 	defaultReplicas = 1
 	defaultRdonly = 0
 	vc = setupMinimalCluster(t)
+	defer vc.TearDown()
 	vttablet.InitVReplicationConfigDefaults()
 
 	tabs := setupLookupIndexKeyspace(t)
