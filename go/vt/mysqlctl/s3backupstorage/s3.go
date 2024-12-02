@@ -40,6 +40,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/aws/retry"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -505,17 +506,24 @@ func (bs *S3BackupStorage) client() (*s3.Client, error) {
 			return nil, err
 		}
 
-		var endpointResolverV2 func(options *s3.Options) = nil
-		if endpoint != "" {
-			endpointResolverV2 = s3.WithEndpointResolverV2(newEndpointResolver())
+		options := []func(options *s3.Options){
+			func(o *s3.Options) {
+				o.UsePathStyle = forcePath
+				if retryCount >= 0 {
+					o.RetryMaxAttempts = retryCount
+					o.Retryer = &ClosedConnectionRetryer{
+						awsRetryer: retry.NewStandard(func(options *retry.StandardOptions) {
+							options.MaxAttempts = retryCount
+						}),
+					}
+				}
+			},
 		}
-		bs._client = s3.NewFromConfig(cfg, func(o *s3.Options) {
-			o.UsePathStyle = forcePath
-			if retryCount >= 0 {
-				o.RetryMaxAttempts = retryCount
-				o.Retryer = &ClosedConnectionRetryer{}
-			}
-		}, endpointResolverV2)
+		if endpoint != "" {
+			options = append(options, s3.WithEndpointResolverV2(newEndpointResolver()))
+		}
+
+		bs._client = s3.NewFromConfig(cfg, options...)
 
 		if len(bucket) == 0 {
 			return nil, fmt.Errorf("--s3_backup_storage_bucket required")
