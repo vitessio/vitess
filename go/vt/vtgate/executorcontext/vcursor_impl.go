@@ -194,17 +194,6 @@ func NewVCursorImpl(
 		}
 	}
 
-	// // we only support collations for the new TabletGateway implementation
-	// TODO: make sure to do this on the executor side
-	// var connCollation collations.ID
-	// if executor != nil {
-	// 	if gw, isTabletGw := executor.resolver.resolver.GetGateway().(*TabletGateway); isTabletGw {
-	// 		connCollation = gw.DefaultConnCollation()
-	// 	}
-	// }
-	// if connCollation == collations.Unknown {
-	// 	connCollation = executor.env.CollationEnv().DefaultConnectionCharset()
-	// }
 	return &VCursorImpl{
 		config:          cfg,
 		SafeSession:     safeSession,
@@ -502,10 +491,10 @@ func (vc *VCursorImpl) getActualKeyspace() string {
 	return ks.Name
 }
 
-// DefaultKeyspace returns the default keyspace of the current request
+// SelectedKeyspace returns the selected keyspace of the current request
 // if there is one. If the keyspace specified in the target cannot be
 // identified, it returns an error.
-func (vc *VCursorImpl) DefaultKeyspace() (*vindexes.Keyspace, error) {
+func (vc *VCursorImpl) SelectedKeyspace() (*vindexes.Keyspace, error) {
 	if ignoreKeyspace(vc.keyspace) {
 		return nil, ErrNoKeyspace
 	}
@@ -519,7 +508,7 @@ func (vc *VCursorImpl) DefaultKeyspace() (*vindexes.Keyspace, error) {
 var errNoDbAvailable = vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.NoDB, "no database available")
 
 func (vc *VCursorImpl) AnyKeyspace() (*vindexes.Keyspace, error) {
-	keyspace, err := vc.DefaultKeyspace()
+	keyspace, err := vc.SelectedKeyspace()
 	if err == nil {
 		return keyspace, nil
 	}

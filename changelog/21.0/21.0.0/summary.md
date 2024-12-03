@@ -9,6 +9,7 @@
         - [Deprecated VTTablet Flags](#vttablet-flags)
         - [Deletion of deprecated metrics](#metric-deletion)
         - [Deprecated Metrics](#deprecations-metrics)
+    - **[RPC Changes](#rpc-changes)**
     - **[Traffic Mirroring](#traffic-mirroring)**
     - **[Atomic Distributed Transaction Support](#atomic-transaction)**
     - **[New VTGate Shutdown Behavior](#new-vtgate-shutdown-behavior)**
@@ -76,6 +77,12 @@ The following metrics are now deprecated and will be deleted in a future release
 | `vttablet` | `QueryCacheEvictions` | `QueryEnginePlanCacheEvictions` |
 | `vttablet` |   `QueryCacheHits`    |   `QueryEnginePlanCacheHits`    |
 | `vttablet` |  `QueryCacheMisses`   |  `QueryEnginePlanCacheMisses`   |
+
+### <a id="rpc-changes"/>RPC Changes</a>
+
+These are the RPC changes made in this release - 
+1. `ReadReparentJournalInfo` RPC has been added in TabletManagerClient interface, that is going to be used in EmergencyReparentShard for better errant GTID detection.
+2. `PrimaryStatus` RPC in TabletManagerClient interface has been updated to also return the server UUID of the primary. This is going to be used in the vttablets so that they can do their own errant GTID detection in `SetReplicationSource`.
 
 ### <a id="traffic-mirroring"/>Traffic Mirroring</a>
 

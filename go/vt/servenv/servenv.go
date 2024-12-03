@@ -370,6 +370,14 @@ func moveFlags(name string, fs *pflag.FlagSet) {
 // functions.
 func CobraPreRunE(cmd *cobra.Command, args []string) error {
 	_flag.TrickGlog()
+	// Register logging on config file change.
+	ch := make(chan struct{})
+	viperutil.NotifyConfigReload(ch)
+	go func() {
+		for range ch {
+			log.Infof("Change in configuration - %v", viperdebug.AllSettings())
+		}
+	}()
 
 	watchCancel, err := viperutil.LoadConfig()
 	if err != nil {
@@ -377,6 +385,10 @@ func CobraPreRunE(cmd *cobra.Command, args []string) error {
 	}
 
 	OnTerm(watchCancel)
+	// Register a function to be called on termination that closes the channel.
+	// This is done after the watchCancel has registered to ensure that we don't end up
+	// sending on a closed channel.
+	OnTerm(func() { close(ch) })
 	HTTPHandleFunc("/debug/config", viperdebug.HandlerFunc)
 
 	logutil.PurgeLogs()
