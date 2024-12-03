@@ -30,7 +30,7 @@ never be promoted, neither by planned nor by emergency reparents.
 
 ### <a id="vtorc-config-file-changes"/>VTOrc Config File Changes</a>
 
-The configuration file for VTOrc has been updated to now support dynamic fields. The old `--config` parameter has been removed. The alternative is to use the `--config-file` parameter. The configuration can now be provided in both json, yaml or any other format that [viper](https://github.com/spf13/viper) supports.
+The configuration file for VTOrc has been updated to now support dynamic fields. The old `--config` parameter has been removed. The alternative is to use the `--config-file` parameter. The configuration can now be provided in json, yaml or any other format that [viper](https://github.com/spf13/viper) supports.
 
 The following fields can be dynamically changed - 
 1. `instance-poll-time`
