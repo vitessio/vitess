@@ -242,11 +242,11 @@ func TestReadProblemInstances(t *testing.T) {
 
 	// We need to set InstancePollSeconds to a large value otherwise all the instances are reported as having problems since their last_checked is very old.
 	// Setting this value to a hundred years, we ensure that this test doesn't fail with this issue for the next hundred years.
-	oldVal := config.Config.InstancePollSeconds
+	oldVal := config.GetInstancePollTime()
 	defer func() {
-		config.Config.InstancePollSeconds = oldVal
+		config.SetInstancePollTime(oldVal)
 	}()
-	config.Config.InstancePollSeconds = 60 * 60 * 24 * 365 * 100
+	config.SetInstancePollTime(60 * 60 * 24 * 365 * 100 * time.Second)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -326,11 +326,11 @@ func TestReadInstancesWithErrantGTIds(t *testing.T) {
 
 	// We need to set InstancePollSeconds to a large value otherwise all the instances are reported as having problems since their last_checked is very old.
 	// Setting this value to a hundred years, we ensure that this test doesn't fail with this issue for the next hundred years.
-	oldVal := config.Config.InstancePollSeconds
+	oldVal := config.GetInstancePollTime()
 	defer func() {
-		config.Config.InstancePollSeconds = oldVal
+		config.SetInstancePollTime(oldVal)
 	}()
-	config.Config.InstancePollSeconds = 60 * 60 * 24 * 365 * 100
+	config.SetInstancePollTime(60 * 60 * 24 * 365 * 100 * time.Second)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -460,13 +460,13 @@ func TestReadOutdatedInstanceKeys(t *testing.T) {
 	waitForCacheInitialization()
 
 	// We are setting InstancePollSeconds to 59 minutes, just for the test.
-	oldVal := config.Config.InstancePollSeconds
+	oldVal := config.GetInstancePollTime()
 	oldCache := forgetAliases
 	defer func() {
 		forgetAliases = oldCache
-		config.Config.InstancePollSeconds = oldVal
+		config.SetInstancePollTime(oldVal)
 	}()
-	config.Config.InstancePollSeconds = 60 * 25
+	config.SetInstancePollTime(60 * 25 * time.Second)
 	forgetAliases = cache.New(time.Minute, time.Minute)
 
 	for _, tt := range tests {
@@ -719,10 +719,10 @@ func TestGetDatabaseState(t *testing.T) {
 }
 
 func TestExpireTableData(t *testing.T) {
-	oldVal := config.Config.AuditPurgeDays
-	config.Config.AuditPurgeDays = 10
+	oldVal := config.GetAuditPurgeDays()
+	config.SetAuditPurgeDays(10)
 	defer func() {
-		config.Config.AuditPurgeDays = oldVal
+		config.SetAuditPurgeDays(oldVal)
 	}()
 
 	tests := []struct {
