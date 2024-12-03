@@ -89,6 +89,8 @@ const (
 	NotEqual
 	// IsNotNull is used to filter a column if it is NULL
 	IsNotNull
+	// In is used to filter a comparable column if equals any of the values from a specific tuple
+	In
 )
 
 // Filter contains opcodes for filtering.
@@ -96,6 +98,9 @@ type Filter struct {
 	Opcode Opcode
 	ColNum int
 	Value  sqltypes.Value
+
+	// Values will be used to store tuple/list values.
+	Values []sqltypes.Value
 
 	// Parameters for VindexMatch.
 	// Vindex, VindexColumns and KeyRange, if set, will be used
@@ -166,6 +171,8 @@ func getOpcode(comparison *sqlparser.ComparisonExpr) (Opcode, error) {
 		opcode = GreaterThanEqual
 	case sqlparser.NotEqualOp:
 		opcode = NotEqual
+	case sqlparser.InOp:
+		opcode = In
 	default:
 		return -1, fmt.Errorf("comparison operator %s not supported", comparison.Operator.ToString())
 	}
@@ -236,6 +243,24 @@ func (plan *Plan) filter(values, result []sqltypes.Value, charsets []collations.
 			}
 		case IsNotNull:
 			if values[filter.ColNum].IsNull() {
+				return false, nil
+			}
+		case In:
+			if filter.Values == nil {
+				return false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected empty filter values when performing IN operator")
+			}
+			found := false
+			for _, filterValue := range filter.Values {
+				match, err := compare(Equal, values[filter.ColNum], filterValue, plan.env.CollationEnv(), charsets[filter.ColNum])
+				if err != nil {
+					return false, err
+				}
+				if match {
+					found = true
+					break
+				}
+			}
+			if !found {
 				return false, nil
 			}
 		default:
@@ -514,6 +539,27 @@ func (plan *Plan) getColumnFuncExpr(columnName string) *sqlparser.FuncExpr {
 	return nil
 }
 
+func (plan *Plan) appendTupleFilter(values sqlparser.ValTuple, opcode Opcode, colnum int) error {
+	pv, err := evalengine.Translate(values, &evalengine.Config{
+		Collation:   plan.env.CollationEnv().DefaultConnectionCharset(),
+		Environment: plan.env,
+	})
+	if err != nil {
+		return err
+	}
+	env := evalengine.EmptyExpressionEnv(plan.env)
+	resolved, err := env.Evaluate(pv)
+	if err != nil {
+		return err
+	}
+	plan.Filters = append(plan.Filters, Filter{
+		Opcode: opcode,
+		ColNum: colnum,
+		Values: resolved.TupleValues(),
+	})
+	return nil
+}
+
 func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) error {
 	if where == nil {
 		return nil
@@ -536,6 +582,20 @@ func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) er
 			colnum, err := findColumn(plan.Table, qualifiedName.Name)
 			if err != nil {
 				return err
+			}
+			// The Right Expr is typically expected to be a Literal value,
+			// except for the IN operator, where a Tuple value is expected.
+			// Handle the IN operator case first.
+			if opcode == In {
+				values, ok := expr.Right.(sqlparser.ValTuple)
+				if !ok {
+					return fmt.Errorf("unexpected: %v", sqlparser.String(expr))
+				}
+				err := plan.appendTupleFilter(values, opcode, colnum)
+				if err != nil {
+					return err
+				}
+				continue
 			}
 			val, ok := expr.Right.(*sqlparser.Literal)
 			if !ok {
