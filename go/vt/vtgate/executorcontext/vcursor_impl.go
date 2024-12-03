@@ -107,7 +107,6 @@ type (
 		SetVitessMetadata(ctx context.Context, name, value string) error
 
 		// TODO: remove when resolver is gone
-		ParseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.Destination, error)
 		VSchema() *vindexes.VSchema
 		PlanPrepareStmt(ctx context.Context, vcursor *VCursorImpl, query string) (*engine.Plan, sqlparser.Statement, error)
 
@@ -179,7 +178,7 @@ func NewVCursorImpl(
 	observer ResultsObserver,
 	cfg VCursorConfig,
 ) (*VCursorImpl, error) {
-	keyspace, tabletType, destination, err := parseDestinationTarget(safeSession.TargetString, vschema, cfg.DefaultTabletType)
+	keyspace, tabletType, destination, err := ParseDestinationTarget(safeSession.TargetString, cfg.DefaultTabletType, vschema)
 	if err != nil {
 		return nil, err
 	}
@@ -399,7 +398,7 @@ func (vc *VCursorImpl) StartPrimitiveTrace() func() engine.Stats {
 // FindTable finds the specified table. If the keyspace what specified in the input, it gets used as qualifier.
 // Otherwise, the keyspace from the request is used, if one was provided.
 func (vc *VCursorImpl) FindTable(name sqlparser.TableName) (*vindexes.Table, string, topodatapb.TabletType, key.Destination, error) {
-	destKeyspace, destTabletType, dest, err := vc.executor.ParseDestinationTarget(name.Qualifier.String())
+	destKeyspace, destTabletType, dest, err := vc.ParseDestinationTarget(name.Qualifier.String())
 	if err != nil {
 		return nil, "", destTabletType, nil, err
 	}
@@ -414,7 +413,7 @@ func (vc *VCursorImpl) FindTable(name sqlparser.TableName) (*vindexes.Table, str
 }
 
 func (vc *VCursorImpl) FindView(name sqlparser.TableName) sqlparser.SelectStatement {
-	ks, _, _, err := vc.executor.ParseDestinationTarget(name.Qualifier.String())
+	ks, _, _, err := vc.ParseDestinationTarget(name.Qualifier.String())
 	if err != nil {
 		return nil
 	}
@@ -425,7 +424,7 @@ func (vc *VCursorImpl) FindView(name sqlparser.TableName) sqlparser.SelectStatem
 }
 
 func (vc *VCursorImpl) FindRoutedTable(name sqlparser.TableName) (*vindexes.Table, error) {
-	destKeyspace, destTabletType, _, err := vc.executor.ParseDestinationTarget(name.Qualifier.String())
+	destKeyspace, destTabletType, _, err := vc.ParseDestinationTarget(name.Qualifier.String())
 	if err != nil {
 		return nil, err
 	}
@@ -449,7 +448,7 @@ func (vc *VCursorImpl) FindTableOrVindex(name sqlparser.TableName) (*vindexes.Ta
 		return vc.getDualTable()
 	}
 
-	destKeyspace, destTabletType, dest, err := vc.executor.ParseDestinationTarget(name.Qualifier.String())
+	destKeyspace, destTabletType, dest, err := ParseDestinationTarget(name.Qualifier.String(), vc.tabletType, vc.vschema)
 	if err != nil {
 		return nil, nil, "", destTabletType, nil, err
 	}
@@ -461,6 +460,22 @@ func (vc *VCursorImpl) FindTableOrVindex(name sqlparser.TableName) (*vindexes.Ta
 		return nil, nil, "", destTabletType, nil, err
 	}
 	return table, vindex, destKeyspace, destTabletType, dest, nil
+}
+
+func (vc *VCursorImpl) ParseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.Destination, error) {
+	return ParseDestinationTarget(targetString, vc.tabletType, vc.vschema)
+}
+
+// ParseDestinationTarget parses destination target string and provides a keyspace if possible.
+func ParseDestinationTarget(targetString string, tablet topodatapb.TabletType, vschema *vindexes.VSchema) (string, topodatapb.TabletType, key.Destination, error) {
+	destKeyspace, destTabletType, dest, err := topoprotopb.ParseDestination(targetString, tablet)
+	// If the keyspace is not specified, and there is only one keyspace in the VSchema, use that.
+	if destKeyspace == "" && len(vschema.Keyspaces) == 1 {
+		for k := range vschema.Keyspaces {
+			destKeyspace = k
+		}
+	}
+	return destKeyspace, destTabletType, dest, err
 }
 
 func (vc *VCursorImpl) getDualTable() (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error) {
@@ -925,6 +940,8 @@ func (vc *VCursorImpl) SetTarget(target string) error {
 		return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.LockOrActiveTransaction, "can't execute the given command because you have an active transaction")
 	}
 	vc.SafeSession.SetTargetString(target)
+	vc.keyspace = keyspace
+	vc.tabletType = tabletType
 	return nil
 }
 
@@ -1286,7 +1303,7 @@ func (vc *VCursorImpl) GetAggregateUDFs() []string {
 // FindMirrorRule finds the mirror rule for the requested table name and
 // VSchema tablet type.
 func (vc *VCursorImpl) FindMirrorRule(name sqlparser.TableName) (*vindexes.MirrorRule, error) {
-	destKeyspace, destTabletType, _, err := vc.executor.ParseDestinationTarget(name.Qualifier.String())
+	destKeyspace, destTabletType, _, err := vc.ParseDestinationTarget(name.Qualifier.String())
 	if err != nil {
 		return nil, err
 	}
@@ -1298,18 +1315,6 @@ func (vc *VCursorImpl) FindMirrorRule(name sqlparser.TableName) (*vindexes.Mirro
 		return nil, err
 	}
 	return mirrorRule, err
-}
-
-// ParseDestinationTarget parses destination target string and sets default keyspace if possible.
-func parseDestinationTarget(targetString string, vschema *vindexes.VSchema, defaultTabletType topodatapb.TabletType) (string, topodatapb.TabletType, key.Destination, error) {
-	destKeyspace, destTabletType, dest, err := topoprotopb.ParseDestination(targetString, defaultTabletType)
-	// Set default keyspace
-	if destKeyspace == "" && len(vschema.Keyspaces) == 1 {
-		for k := range vschema.Keyspaces {
-			destKeyspace = k
-		}
-	}
-	return destKeyspace, destTabletType, dest, err
 }
 
 func (vc *VCursorImpl) KeyForPlan(ctx context.Context, query string, buf io.StringWriter) {
