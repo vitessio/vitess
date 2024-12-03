@@ -299,12 +299,12 @@ func (vw *VSchemaWrapper) getActualKeyspace() string {
 	return ks.Name
 }
 
-func (vw *VSchemaWrapper) DefaultKeyspace() (*vindexes.Keyspace, error) {
+func (vw *VSchemaWrapper) SelectedKeyspace() (*vindexes.Keyspace, error) {
 	return vw.V.Keyspaces["main"].Keyspace, nil
 }
 
 func (vw *VSchemaWrapper) AnyKeyspace() (*vindexes.Keyspace, error) {
-	return vw.DefaultKeyspace()
+	return vw.SelectedKeyspace()
 }
 
 func (vw *VSchemaWrapper) FirstSortedKeyspace() (*vindexes.Keyspace, error) {

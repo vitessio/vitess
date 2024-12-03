@@ -81,7 +81,7 @@ func buildGeneralDDLPlan(ctx context.Context, sql string, ddlStatement sqlparser
 }
 
 func buildByPassPlan(sql string, vschema plancontext.VSchema, isDDL bool) (*planResult, error) {
-	keyspace, err := vschema.DefaultKeyspace()
+	keyspace, err := vschema.SelectedKeyspace()
 	if err != nil {
 		return nil, err
 	}

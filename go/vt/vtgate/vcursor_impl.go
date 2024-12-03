@@ -392,10 +392,10 @@ func (vc *vcursorImpl) getActualKeyspace() string {
 	return ks.Name
 }
 
-// DefaultKeyspace returns the default keyspace of the current request
+// SelectedKeyspace returns the selected keyspace of the current request
 // if there is one. If the keyspace specified in the target cannot be
 // identified, it returns an error.
-func (vc *vcursorImpl) DefaultKeyspace() (*vindexes.Keyspace, error) {
+func (vc *vcursorImpl) SelectedKeyspace() (*vindexes.Keyspace, error) {
 	if ignoreKeyspace(vc.keyspace) {
 		return nil, errNoKeyspace
 	}
@@ -409,7 +409,7 @@ func (vc *vcursorImpl) DefaultKeyspace() (*vindexes.Keyspace, error) {
 var errNoDbAvailable = vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.NoDB, "no database available")
 
 func (vc *vcursorImpl) AnyKeyspace() (*vindexes.Keyspace, error) {
-	keyspace, err := vc.DefaultKeyspace()
+	keyspace, err := vc.SelectedKeyspace()
 	if err == nil {
 		return keyspace, nil
 	}
