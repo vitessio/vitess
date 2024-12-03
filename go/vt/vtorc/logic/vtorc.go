@@ -18,8 +18,6 @@ package logic
 
 import (
 	"context"
-	"os"
-	"os/signal"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -309,8 +307,7 @@ func ContinuousDiscovery() {
 				go inst.SnapshotTopologies()
 			}()
 		case <-tabletTopoTick:
-			timeout := time.Second * time.Duration(config.Config.TopoInformationRefreshSeconds)
-			ctx, cancel := context.WithTimeout(context.Background(), timeout)
+			ctx, cancel := context.WithTimeout(context.Background(), config.GetTopoInformationRefreshDuration())
 			if err := refreshAllInformation(ctx); err != nil {
 				log.Errorf("failed to refresh topo information: %+v", err)
 			}
