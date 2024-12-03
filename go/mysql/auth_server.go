@@ -618,13 +618,18 @@ func (n *mysqlCachingSha2AuthMethod) HandleAuthPluginData(c *Conn, user string, 
 		return result, nil
 	}
 	if !c.TLSEnabled() && !c.IsUnixSocket() {
-		return nil, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
+		return nil, NewSQLError(ERAccessDeniedError, SSAccessDeniedError,
+			"Access denied for user '%v' (not using TLS or Unix socket)", user)
 	}
-	data := c.startEphemeralPacket(1)
+
+	data := c.startEphemeralPacket(2)
 	pos := 0
 	pos = writeByte(data, pos, AuthMoreDataPacket)
 	writeByte(data, pos, CachingSha2FullAuth)
-	c.writeEphemeralPacket()
+	if err = c.writeEphemeralPacket(); err != nil {
+		return nil, err
+	}
+
 	password, err := readPacketPasswordString(c)
 	if err != nil {
 		return nil, err
