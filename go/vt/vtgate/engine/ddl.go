@@ -25,6 +25,7 @@ import (
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/dynamicconfig"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -42,8 +43,7 @@ type DDL struct {
 	NormalDDL *Send
 	OnlineDDL *OnlineDDL
 
-	DirectDDLEnabled bool
-	OnlineDDLEnabled bool
+	Config dynamicconfig.DDL
 
 	CreateTempTable bool
 }
@@ -107,12 +107,12 @@ func (ddl *DDL) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[st
 
 	switch {
 	case ddl.isOnlineSchemaDDL():
-		if !ddl.OnlineDDLEnabled {
+		if !ddl.Config.OnlineEnabled() {
 			return nil, schema.ErrOnlineDDLDisabled
 		}
 		return vcursor.ExecutePrimitive(ctx, ddl.OnlineDDL, bindVars, wantfields)
 	default: // non online-ddl
-		if !ddl.DirectDDLEnabled {
+		if !ddl.Config.DirectEnabled() {
 			return nil, schema.ErrDirectDDLDisabled
 		}
 		return vcursor.ExecutePrimitive(ctx, ddl.NormalDDL, bindVars, wantfields)

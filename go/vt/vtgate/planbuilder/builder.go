@@ -28,6 +28,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/dynamicconfig"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -63,6 +64,16 @@ func singleTable(ks, tbl string) string {
 	return fmt.Sprintf("%s.%s", ks, tbl)
 }
 
+type staticConfig struct{}
+
+func (staticConfig) OnlineEnabled() bool {
+	return true
+}
+
+func (staticConfig) DirectEnabled() bool {
+	return true
+}
+
 // TestBuilder builds a plan for a query based on the specified vschema.
 // This method is only used from tests
 func TestBuilder(query string, vschema plancontext.VSchema, keyspace string) (*engine.Plan, error) {
@@ -92,12 +103,12 @@ func TestBuilder(query string, vschema plancontext.VSchema, keyspace string) (*e
 	}
 
 	reservedVars := sqlparser.NewReservedVars("vtg", reserved)
-	return BuildFromStmt(context.Background(), query, result.AST, reservedVars, vschema, result.BindVarNeeds, true, true)
+	return BuildFromStmt(context.Background(), query, result.AST, reservedVars, vschema, result.BindVarNeeds, staticConfig{})
 }
 
 // BuildFromStmt builds a plan based on the AST provided.
-func BuildFromStmt(ctx context.Context, query string, stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, bindVarNeeds *sqlparser.BindVarNeeds, enableOnlineDDL, enableDirectDDL bool) (*engine.Plan, error) {
-	planResult, err := createInstructionFor(ctx, query, stmt, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+func BuildFromStmt(ctx context.Context, query string, stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, bindVarNeeds *sqlparser.BindVarNeeds, cfg dynamicconfig.DDL) (*engine.Plan, error) {
+	planResult, err := createInstructionFor(ctx, query, stmt, reservedVars, vschema, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -154,7 +165,7 @@ func buildRoutePlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVa
 	return f(stmt, reservedVars, vschema)
 }
 
-func createInstructionFor(ctx context.Context, query string, stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {
+func createInstructionFor(ctx context.Context, query string, stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, cfg dynamicconfig.DDL) (*planResult, error) {
 	switch stmt := stmt.(type) {
 	case *sqlparser.Select, *sqlparser.Insert, *sqlparser.Update, *sqlparser.Delete:
 		configuredPlanner, err := getConfiguredPlanner(vschema, stmt, query)
@@ -169,13 +180,13 @@ func createInstructionFor(ctx context.Context, query string, stmt sqlparser.Stat
 		}
 		return buildRoutePlan(stmt, reservedVars, vschema, configuredPlanner)
 	case sqlparser.DDLStatement:
-		return buildGeneralDDLPlan(ctx, query, stmt, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+		return buildGeneralDDLPlan(ctx, query, stmt, reservedVars, vschema, cfg)
 	case *sqlparser.AlterMigration:
-		return buildAlterMigrationPlan(query, stmt, vschema, enableOnlineDDL)
+		return buildAlterMigrationPlan(query, stmt, vschema, cfg)
 	case *sqlparser.RevertMigration:
-		return buildRevertMigrationPlan(query, stmt, vschema, enableOnlineDDL)
+		return buildRevertMigrationPlan(query, stmt, vschema, cfg)
 	case *sqlparser.ShowMigrationLogs:
-		return buildShowMigrationLogsPlan(query, vschema, enableOnlineDDL)
+		return buildShowMigrationLogsPlan(query, vschema, cfg)
 	case *sqlparser.ShowThrottledApps:
 		return buildShowThrottledAppsPlan(query, vschema)
 	case *sqlparser.ShowThrottlerStatus:
@@ -189,7 +200,7 @@ func createInstructionFor(ctx context.Context, query string, stmt sqlparser.Stat
 	case *sqlparser.ExplainStmt:
 		return buildRoutePlan(stmt, reservedVars, vschema, buildExplainStmtPlan)
 	case *sqlparser.VExplainStmt:
-		return buildVExplainPlan(ctx, stmt, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+		return buildVExplainPlan(ctx, stmt, reservedVars, vschema, cfg)
 	case *sqlparser.OtherAdmin:
 		return buildOtherReadAndAdmin(query, vschema)
 	case *sqlparser.Analyze:

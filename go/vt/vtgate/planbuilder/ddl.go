@@ -9,6 +9,7 @@ import (
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/dynamicconfig"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -43,11 +44,11 @@ func (fk *fkContraint) FkWalk(node sqlparser.SQLNode) (kontinue bool, err error)
 // a session context. It's only when we Execute() the primitive that we have that context.
 // This is why we return a compound primitive (DDL) which contains fully populated primitives (Send & OnlineDDL),
 // and which chooses which of the two to invoke at runtime.
-func buildGeneralDDLPlan(ctx context.Context, sql string, ddlStatement sqlparser.DDLStatement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {
+func buildGeneralDDLPlan(ctx context.Context, sql string, ddlStatement sqlparser.DDLStatement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, cfg dynamicconfig.DDL) (*planResult, error) {
 	if vschema.Destination() != nil {
 		return buildByPassPlan(sql, vschema, true)
 	}
-	normalDDLPlan, onlineDDLPlan, err := buildDDLPlans(ctx, sql, ddlStatement, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+	normalDDLPlan, onlineDDLPlan, err := buildDDLPlans(ctx, sql, ddlStatement, reservedVars, vschema, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -61,15 +62,12 @@ func buildGeneralDDLPlan(ctx context.Context, sql string, ddlStatement sqlparser
 	}
 
 	eddl := &engine.DDL{
-		Keyspace:  normalDDLPlan.Keyspace,
-		SQL:       normalDDLPlan.Query,
-		DDL:       ddlStatement,
-		NormalDDL: normalDDLPlan,
-		OnlineDDL: onlineDDLPlan,
-
-		DirectDDLEnabled: enableDirectDDL,
-		OnlineDDLEnabled: enableOnlineDDL,
-
+		Keyspace:        normalDDLPlan.Keyspace,
+		SQL:             normalDDLPlan.Query,
+		DDL:             ddlStatement,
+		NormalDDL:       normalDDLPlan,
+		OnlineDDL:       onlineDDLPlan,
+		Config:          cfg,
 		CreateTempTable: ddlStatement.IsTemporary(),
 	}
 	tc := &tableCollector{}
@@ -94,7 +92,7 @@ func buildByPassPlan(sql string, vschema plancontext.VSchema, isDDL bool) (*plan
 	return newPlanResult(send), nil
 }
 
-func buildDDLPlans(ctx context.Context, sql string, ddlStatement sqlparser.DDLStatement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*engine.Send, *engine.OnlineDDL, error) {
+func buildDDLPlans(ctx context.Context, sql string, ddlStatement sqlparser.DDLStatement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, cfg dynamicconfig.DDL) (*engine.Send, *engine.OnlineDDL, error) {
 	var destination key.Destination
 	var keyspace *vindexes.Keyspace
 	var err error
@@ -113,9 +111,9 @@ func buildDDLPlans(ctx context.Context, sql string, ddlStatement sqlparser.DDLSt
 		}
 		err = checkFKError(vschema, ddlStatement, keyspace)
 	case *sqlparser.CreateView:
-		destination, keyspace, err = buildCreateViewCommon(ctx, vschema, reservedVars, enableOnlineDDL, enableDirectDDL, ddl.Select, ddl)
+		destination, keyspace, err = buildCreateViewCommon(ctx, vschema, reservedVars, cfg, ddl.Select, ddl)
 	case *sqlparser.AlterView:
-		destination, keyspace, err = buildCreateViewCommon(ctx, vschema, reservedVars, enableOnlineDDL, enableDirectDDL, ddl.Select, ddl)
+		destination, keyspace, err = buildCreateViewCommon(ctx, vschema, reservedVars, cfg, ddl.Select, ddl)
 	case *sqlparser.DropView:
 		destination, keyspace, err = buildDropView(vschema, ddlStatement)
 	case *sqlparser.DropTable:
@@ -197,7 +195,7 @@ func buildCreateViewCommon(
 	ctx context.Context,
 	vschema plancontext.VSchema,
 	reservedVars *sqlparser.ReservedVars,
-	enableOnlineDDL, enableDirectDDL bool,
+	cfg dynamicconfig.DDL,
 	ddlSelect sqlparser.SelectStatement,
 	ddl sqlparser.DDLStatement,
 ) (key.Destination, *vindexes.Keyspace, error) {
@@ -214,7 +212,7 @@ func buildCreateViewCommon(
 		expressions = append(expressions, sqlparser.Clone(p.SelectExprs))
 		return nil
 	})
-	selectPlan, err := createInstructionFor(ctx, sqlparser.String(ddlSelect), ddlSelect, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+	selectPlan, err := createInstructionFor(ctx, sqlparser.String(ddlSelect), ddlSelect, reservedVars, vschema, cfg)
 	if err != nil {
 		return nil, nil, err
 	}
