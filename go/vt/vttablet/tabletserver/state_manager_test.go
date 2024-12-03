@@ -669,7 +669,7 @@ func TestStateManagerNotify(t *testing.T) {
 	sm.StopService()
 }
 
-func TestDemotePrimaryBlocked(t *testing.T) {
+func TestDemotePrimaryStalled(t *testing.T) {
 	sm := newTestStateManager()
 	defer sm.StopService()
 	err := sm.SetServingType(topodatapb.TabletType_PRIMARY, testNow, StateServing, "")
@@ -695,11 +695,11 @@ func TestDemotePrimaryBlocked(t *testing.T) {
 	gotshr := <-ch
 	require.Empty(t, gotshr.RealtimeStats.HealthError)
 
-	// If demote primary is blocked, then we should get an error.
-	sm.demotePrimaryBlocked = true
+	// If demote primary is stalled, then we should get an error.
+	sm.demotePrimaryStalled = true
 	sm.Broadcast()
 	gotshr = <-ch
-	require.EqualValues(t, "Demoting primary is blocked", gotshr.RealtimeStats.HealthError)
+	require.EqualValues(t, "Failed to complete primary demotion", gotshr.RealtimeStats.HealthError)
 
 	// Stop the state manager.
 	sm.StopService()

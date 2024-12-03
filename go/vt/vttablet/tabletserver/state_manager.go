@@ -95,7 +95,7 @@ type stateManager struct {
 	ptsTimestamp         time.Time
 	retrying             bool
 	replHealthy          bool
-	demotePrimaryBlocked bool
+	demotePrimaryStalled bool
 	lameduck             bool
 	alsoAllow            []topodatapb.TabletType
 	reason               string
@@ -716,9 +716,9 @@ func (sm *stateManager) Broadcast() {
 	defer sm.mu.Unlock()
 
 	lag, err := sm.refreshReplHealthLocked()
-	if sm.demotePrimaryBlocked {
-		// If we are blocked from demoting primary, we should send an error for it.
-		err = vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Demoting primary is blocked")
+	if sm.demotePrimaryStalled {
+		// If we are stalled while demoting primary, we should send an error for it.
+		err = vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Failed to complete primary demotion")
 	}
 	sm.hs.ChangeState(sm.target.TabletType, sm.ptsTimestamp, lag, err, sm.isServingLocked())
 }

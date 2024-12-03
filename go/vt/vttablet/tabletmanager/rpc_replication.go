@@ -530,9 +530,9 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 		// Finished running DemotePrimary. Nothing to do.
 		case <-time.After(10 * topo.RemoteOperationTimeout):
 			// We waited for over 10 times of remote operation timeout, but DemotePrimary is still not done.
-			// Collect more information and signal demote primary is indefinitely stuck.
-			log.Errorf("DemotePrimary seems to be blocked. Collecting more information.")
-			tm.QueryServiceControl.SetDemotePrimaryBlocked()
+			// Collect more information and signal demote primary is indefinitely stalled.
+			log.Errorf("DemotePrimary seems to be stalled. Collecting more information.")
+			tm.QueryServiceControl.SetDemotePrimaryStalled()
 			buf := make([]byte, 1<<16) // 64 KB buffer size
 			stackSize := runtime.Stack(buf, true)
 			log.Errorf("Stack trace:\n%s", string(buf[:stackSize]))

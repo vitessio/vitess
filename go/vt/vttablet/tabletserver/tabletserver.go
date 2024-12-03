@@ -758,9 +758,9 @@ func (tsv *TabletServer) WaitForPreparedTwoPCTransactions(ctx context.Context) e
 	}
 }
 
-// SetDemotePrimaryBlocked marks that demote primary is blocked in the state manager.
-func (tsv *TabletServer) SetDemotePrimaryBlocked() {
-	tsv.sm.demotePrimaryBlocked = true
+// SetDemotePrimaryStalled marks that demote primary is stalled in the state manager.
+func (tsv *TabletServer) SetDemotePrimaryStalled() {
+	tsv.sm.demotePrimaryStalled = true
 }
 
 // CreateTransaction creates the metadata for a 2PC transaction.
