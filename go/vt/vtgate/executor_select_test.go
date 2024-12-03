@@ -201,11 +201,7 @@ func TestSystemVariablesMySQLBelow80(t *testing.T) {
 func TestSystemVariablesWithSetVarDisabled(t *testing.T) {
 	executor, sbc1, _, _, _ := createCustomExecutor(t, "{}", "8.0.0")
 	executor.normalize = true
-
-	setVarEnabled = false
-	defer func() {
-		setVarEnabled = true
-	}()
+	executor.vConfig.SetVarEnabled = false
 	session := econtext.NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: "TestExecutor"})
 
 	sbc1.SetResults([]*sqltypes.Result{{
@@ -4370,6 +4366,7 @@ func TestWarmingReads(t *testing.T) {
 
 // waitUntilQueryCount waits until the number of queries run on the tablet reach the specified count.
 func waitUntilQueryCount(t *testing.T, tab *sandboxconn.SandboxConn, count int) {
+	t.Helper()
 	timeout := time.After(1 * time.Second)
 	for {
 		select {

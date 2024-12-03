@@ -73,19 +73,20 @@ type (
 	}
 
 	VCursorConfig struct {
-		WarmingReadsPercent int
-		warmingReadsChannel chan bool
-		Collation           collations.ID
+		Collation collations.ID
 
-		MaxMemoryRows       int
-		EnableShardRouting  bool
-		DefaultTabletType   topodatapb.TabletType
-		QueryTimeout        int
-		DBDDLPlugin         string
-		ForeignKeyMode      vschemapb.Keyspace_ForeignKeyMode
-		SetVarEnabled       bool
-		EnableViews         bool
-		warmingReadsTimeout time.Duration
+		MaxMemoryRows      int
+		EnableShardRouting bool
+		DefaultTabletType  topodatapb.TabletType
+		QueryTimeout       int
+		DBDDLPlugin        string
+		ForeignKeyMode     vschemapb.Keyspace_ForeignKeyMode
+		SetVarEnabled      bool
+		EnableViews        bool
+
+		WarmingReadsPercent int
+		WarmingReadsTimeout time.Duration
+		WarmingReadsChannel chan bool
 	}
 
 	// vcursor_impl needs these facilities to be able to be able to execute queries for vindexes
@@ -175,6 +176,7 @@ func NewVCursorImpl(
 	serv srvtopo.Server,
 	warnShardedOnly bool,
 	pv plancontext.PlannerVersion,
+	observer ResultsObserver,
 	cfg VCursorConfig,
 ) (*VCursorImpl, error) {
 	keyspace, tabletType, destination, err := parseDestinationTarget(safeSession.TargetString, vschema, cfg.DefaultTabletType)
@@ -218,6 +220,7 @@ func NewVCursorImpl(
 		topoServer:      ts,
 		warnShardedOnly: warnShardedOnly,
 		pv:              pv,
+		observer:        observer,
 	}, nil
 }
 
@@ -244,7 +247,9 @@ func (vc *VCursorImpl) CloneForMirroring(ctx context.Context) engine.VCursor {
 		semTable:            vc.semTable,
 		warnShardedOnly:     vc.warnShardedOnly,
 		warnings:            vc.warnings,
-		pv:                  vc.pv}
+		pv:                  vc.pv,
+		observer:            vc.observer,
+	}
 
 	v.marginComments.Trailing += "/* mirror query */"
 
@@ -255,7 +260,7 @@ func (vc *VCursorImpl) CloneForReplicaWarming(ctx context.Context) engine.VCurso
 	callerId := callerid.EffectiveCallerIDFromContext(ctx)
 	immediateCallerId := callerid.ImmediateCallerIDFromContext(ctx)
 
-	timedCtx, _ := context.WithTimeout(context.Background(), vc.config.warmingReadsTimeout) // nolint
+	timedCtx, _ := context.WithTimeout(context.Background(), vc.config.WarmingReadsTimeout) // nolint
 	clonedCtx := callerid.NewContext(timedCtx, callerId, immediateCallerId)
 
 	v := &VCursorImpl{
@@ -277,6 +282,8 @@ func (vc *VCursorImpl) CloneForReplicaWarming(ctx context.Context) engine.VCurso
 		warnShardedOnly:     vc.warnShardedOnly,
 		warnings:            vc.warnings,
 		pv:                  vc.pv,
+
+		observer: vc.observer,
 	}
 
 	v.marginComments.Trailing += "/* warming read */"
@@ -301,6 +308,7 @@ func (vc *VCursorImpl) cloneWithAutocommitSession() *VCursorImpl {
 		topoServer:      vc.topoServer,
 		warnShardedOnly: vc.warnShardedOnly,
 		pv:              vc.pv,
+		observer:        vc.observer,
 	}
 }
 
@@ -1046,11 +1054,6 @@ func (vc *VCursorImpl) SetSQLSelectLimit(limit int64) error {
 	return nil
 }
 
-// SetSQLSelectLimit implements the SessionActions interface
-func (vc *VCursorImpl) GetSelectLimit() int {
-	return int(vc.SafeSession.GetOrCreateOptions().SqlSelectLimit)
-}
-
 // SetTransactionMode implements the SessionActions interface
 func (vc *VCursorImpl) SetTransactionMode(mode vtgatepb.TransactionMode) {
 	vc.SafeSession.TransactionMode = mode
@@ -1536,7 +1539,7 @@ func (vc *VCursorImpl) GetWarmingReadsPercent() int {
 }
 
 func (vc *VCursorImpl) GetWarmingReadsChannel() chan bool {
-	return vc.config.warmingReadsChannel
+	return vc.config.WarmingReadsChannel
 }
 
 // UpdateForeignKeyChecksState updates the foreign key checks state of the vcursor.

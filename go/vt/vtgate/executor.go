@@ -30,6 +30,8 @@ import (
 
 	"github.com/spf13/pflag"
 
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cache/theine"
 	"vitess.io/vitess/go/mysql/capabilities"
@@ -135,6 +137,8 @@ type Executor struct {
 
 	warmingReadsPercent int
 	warmingReadsChannel chan bool
+
+	vConfig econtext.VCursorConfig
 }
 
 var executorOnce sync.Once
@@ -167,7 +171,6 @@ func NewExecutor(
 	pv plancontext.PlannerVersion,
 	warmingReadsPercent int,
 ) *Executor {
-	warnings.Add("WarnUnshardedOnly", 1)
 	e := &Executor{
 		env:                 env,
 		serv:                serv,
@@ -185,6 +188,8 @@ func NewExecutor(
 		warmingReadsPercent: warmingReadsPercent,
 		warmingReadsChannel: make(chan bool, warmingReadsConcurrency),
 	}
+	// setting the vcursor config.
+	e.initVConfig()
 
 	vschemaacl.Init()
 	// we subscribe to update from the VSchemaManager
@@ -1132,7 +1137,7 @@ func (e *Executor) getPlan(
 		bindVars,
 		parameterize,
 		vcursor.GetKeyspace(),
-		vcursor.GetSelectLimit(),
+		vcursor.SafeSession.GetSelectLimit(),
 		setVarComment,
 		vcursor.GetSystemVariablesCopy(),
 		vcursor.GetForeignKeyChecksState(),
@@ -1404,29 +1409,40 @@ func (e *Executor) prepare(ctx context.Context, safeSession *econtext.SafeSessio
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unrecognized prepare statement: %s", sql)
 }
 
-func (e *Executor) getVCursorConfig() econtext.VCursorConfig {
+func (e *Executor) initVConfig() {
 	connCollation := collations.Unknown
 	if gw, isTabletGw := e.resolver.resolver.GetGateway().(*TabletGateway); isTabletGw {
 		connCollation = gw.DefaultConnCollation()
 	}
-	return econtext.VCursorConfig{
-		WarmingReadsPercent: warmingReadsPercent,
-		Collation:           connCollation,
-		MaxMemoryRows:       0,
-		EnableShardRouting:  false,
-		DefaultTabletType:   0,
-		QueryTimeout:        0,
-		DBDDLPlugin:         "",
-		ForeignKeyMode:      0,
-		SetVarEnabled:       false,
-		EnableViews:         false,
+	if connCollation == collations.Unknown {
+		connCollation = e.env.CollationEnv().DefaultConnectionCharset()
+	}
+
+	e.vConfig = econtext.VCursorConfig{
+		Collation:         connCollation,
+		DefaultTabletType: defaultTabletType,
+
+		QueryTimeout:  queryTimeout,
+		MaxMemoryRows: maxMemoryRows,
+
+		SetVarEnabled:      sysVarSetEnabled,
+		EnableViews:        enableViews,
+		ForeignKeyMode:     fkMode(foreignKeyMode),
+		EnableShardRouting: enableShardRouting,
+
+		DBDDLPlugin: dbDDLPlugin,
+
+		WarmingReadsPercent: e.warmingReadsPercent,
+		WarmingReadsTimeout: warmingReadsQueryTimeout,
+		WarmingReadsChannel: e.warmingReadsChannel,
 	}
 }
 
 func (e *Executor) handlePrepare(ctx context.Context, safeSession *econtext.SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *logstats.LogStats) ([]*querypb.Field, error) {
 	query, comments := sqlparser.SplitMarginComments(sql)
 
-	vcursor, _ := econtext.NewVCursorImpl(safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, e.warnShardedOnly, e.pv, e.getVCursorConfig())
+	vcursor, _ := econtext.NewVCursorImpl(safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, e.warnShardedOnly, e.pv,
+		nullResultsObserver{}, e.vConfig)
 
 	stmt, reservedVars, err := parseAndValidateQuery(query, e.env.Parser())
 	if err != nil {
@@ -1661,4 +1677,17 @@ type (
 
 func (nullErrorTransformer) TransformError(err error) error {
 	return err
+}
+
+func fkMode(foreignkey string) vschemapb.Keyspace_ForeignKeyMode {
+	switch foreignkey {
+	case "disallow":
+		return vschemapb.Keyspace_disallow
+	case "managed":
+		return vschemapb.Keyspace_managed
+	case "unmanaged":
+		return vschemapb.Keyspace_unmanaged
+
+	}
+	return vschemapb.Keyspace_unspecified
 }
