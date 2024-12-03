@@ -6,6 +6,24 @@
     },
     "reverse_bits": {
       "type": "reverse_bits"
+    },
+    "lookup_vdx": {
+      "type": "lookup",
+      "params": {
+        "table": "lookup",
+        "from": "col,id",
+        "to": "keyspace_id"
+      },
+      "owner": "twopc_lookup"
+    },
+    "lookup_unique_vdx": {
+      "type": "lookup_unique",
+      "params": {
+        "table": "lookup_unique",
+        "from": "col_unique",
+        "to": "keyspace_id"
+      },
+      "owner": "twopc_lookup"
     }
   },
   "tables": {
@@ -30,6 +48,41 @@
         {
           "column": "id",
           "name": "reverse_bits"
+        }
+      ]
+    },
+    "twopc_lookup": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "reverse_bits"
+        },
+        {
+          "columns": [
+            "col",
+            "id"
+          ],
+          "name": "lookup_vdx"
+        },
+        {
+          "column": "col_unique",
+          "name": "lookup_unique_vdx"
+        }
+      ]
+    },
+    "lookup": {
+      "column_vindexes": [
+        {
+          "column": "col",
+          "name": "xxhash"
+        }
+      ]
+    },
+    "lookup_unique": {
+      "column_vindexes": [
+        {
+          "column": "col_unique",
+          "name": "xxhash"
         }
       ]
     }
