@@ -44,9 +44,9 @@ func (m *vtorcDB) QueryVTOrc(query string, argsArray []any, onRow func(sqlutils.
 // OpenTopology returns the DB instance for the vtorc backed database
 func OpenVTOrc() (db *sql.DB, err error) {
 	var fromCache bool
-	db, fromCache, err = sqlutils.GetSQLiteDB(config.Config.SQLite3DataFile)
+	db, fromCache, err = sqlutils.GetSQLiteDB(config.GetSQLiteDataFile())
 	if err == nil && !fromCache {
-		log.Infof("Connected to vtorc backend: sqlite on %v", config.Config.SQLite3DataFile)
+		log.Infof("Connected to vtorc backend: sqlite on %v", config.GetSQLiteDataFile())
 		if err := initVTOrcDB(db); err != nil {
 			log.Fatalf("Cannot initiate vtorc: %+v", err)
 		}
@@ -91,7 +91,7 @@ func deployStatements(db *sql.DB, queries []string) error {
 // ClearVTOrcDatabase is used to clear the VTOrc database. This function is meant to be used by tests to clear the
 // database to get a clean slate without starting a new one.
 func ClearVTOrcDatabase() {
-	db, _, _ := sqlutils.GetSQLiteDB(config.Config.SQLite3DataFile)
+	db, _, _ := sqlutils.GetSQLiteDB(config.GetSQLiteDataFile())
 	if db != nil {
 		if err := initVTOrcDB(db); err != nil {
 			log.Fatalf("Cannot re-initiate vtorc: %+v", err)

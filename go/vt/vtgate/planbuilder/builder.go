@@ -275,7 +275,7 @@ func buildDBDDLPlan(stmt sqlparser.Statement, _ *sqlparser.ReservedVars, vschema
 	dbDDLstmt := stmt.(sqlparser.DBDDLStatement)
 	ksName := dbDDLstmt.GetDatabaseName()
 	if ksName == "" {
-		ks, err := vschema.DefaultKeyspace()
+		ks, err := vschema.SelectedKeyspace()
 		if err != nil {
 			return nil, err
 		}
@@ -310,7 +310,7 @@ func buildDBDDLPlan(stmt sqlparser.Statement, _ *sqlparser.ReservedVars, vschema
 }
 
 func buildLoadPlan(query string, vschema plancontext.VSchema) (*planResult, error) {
-	keyspace, err := vschema.DefaultKeyspace()
+	keyspace, err := vschema.SelectedKeyspace()
 	if err != nil {
 		return nil, err
 	}
@@ -355,7 +355,7 @@ func buildFlushOptions(stmt *sqlparser.Flush, vschema plancontext.VSchema) (*pla
 		return nil, vterrors.VT09012("FLUSH", vschema.TabletType().String())
 	}
 
-	keyspace, err := vschema.DefaultKeyspace()
+	keyspace, err := vschema.SelectedKeyspace()
 	if err != nil {
 		return nil, err
 	}

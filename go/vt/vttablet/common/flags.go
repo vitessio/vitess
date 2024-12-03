@@ -33,8 +33,7 @@ const (
 )
 
 var (
-	// Default flags: currently VReplicationExperimentalFlagVPlayerBatching is not enabled by default.
-	vreplicationExperimentalFlags   = VReplicationExperimentalFlagOptimizeInserts | VReplicationExperimentalFlagAllowNoBlobBinlogRowImage
+	vreplicationExperimentalFlags   = VReplicationExperimentalFlagOptimizeInserts | VReplicationExperimentalFlagAllowNoBlobBinlogRowImage | VReplicationExperimentalFlagVPlayerBatching
 	vreplicationNetReadTimeout      = 300
 	vreplicationNetWriteTimeout     = 600
 	vreplicationCopyPhaseDuration   = 1 * time.Hour

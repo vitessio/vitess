@@ -711,8 +711,14 @@ func TestPlanBuilderFilterComparison(t *testing.T) {
 			{Opcode: LessThanEqual, ColNum: 1, Value: sqltypes.NewVarChar("xyz")},
 		},
 	}, {
+		name:     "in-operator",
+		inFilter: "select * from t1 where id in (1, 2)",
+		outFilters: []Filter{
+			{Opcode: In, ColNum: 0, Values: []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}},
+		},
+	}, {
 		name:     "vindex-and-operators",
-		inFilter: "select * from t1 where in_keyrange(id, 'hash', '-80') and id = 2 and val <> 'xyz'",
+		inFilter: "select * from t1 where in_keyrange(id, 'hash', '-80') and id = 2 and val <> 'xyz' and id in (100, 30)",
 		outFilters: []Filter{
 			{
 				Opcode:        VindexMatch,
@@ -727,6 +733,7 @@ func TestPlanBuilderFilterComparison(t *testing.T) {
 			},
 			{Opcode: Equal, ColNum: 0, Value: sqltypes.NewInt64(2)},
 			{Opcode: NotEqual, ColNum: 1, Value: sqltypes.NewVarChar("xyz")},
+			{Opcode: In, ColNum: 0, Values: []sqltypes.Value{sqltypes.NewInt64(100), sqltypes.NewInt64(30)}},
 		},
 	}}
 

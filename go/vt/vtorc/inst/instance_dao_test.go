@@ -242,11 +242,11 @@ func TestReadProblemInstances(t *testing.T) {
 
 	// We need to set InstancePollSeconds to a large value otherwise all the instances are reported as having problems since their last_checked is very old.
 	// Setting this value to a hundred years, we ensure that this test doesn't fail with this issue for the next hundred years.
-	oldVal := config.Config.InstancePollSeconds
+	oldVal := config.GetInstancePollTime()
 	defer func() {
-		config.Config.InstancePollSeconds = oldVal
+		config.SetInstancePollTime(oldVal)
 	}()
-	config.Config.InstancePollSeconds = 60 * 60 * 24 * 365 * 100
+	config.SetInstancePollTime(60 * 60 * 24 * 365 * 100 * time.Second)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -326,11 +326,11 @@ func TestReadInstancesWithErrantGTIds(t *testing.T) {
 
 	// We need to set InstancePollSeconds to a large value otherwise all the instances are reported as having problems since their last_checked is very old.
 	// Setting this value to a hundred years, we ensure that this test doesn't fail with this issue for the next hundred years.
-	oldVal := config.Config.InstancePollSeconds
+	oldVal := config.GetInstancePollTime()
 	defer func() {
-		config.Config.InstancePollSeconds = oldVal
+		config.SetInstancePollTime(oldVal)
 	}()
-	config.Config.InstancePollSeconds = 60 * 60 * 24 * 365 * 100
+	config.SetInstancePollTime(60 * 60 * 24 * 365 * 100 * time.Second)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -460,13 +460,13 @@ func TestReadOutdatedInstanceKeys(t *testing.T) {
 	waitForCacheInitialization()
 
 	// We are setting InstancePollSeconds to 59 minutes, just for the test.
-	oldVal := config.Config.InstancePollSeconds
+	oldVal := config.GetInstancePollTime()
 	oldCache := forgetAliases
 	defer func() {
 		forgetAliases = oldCache
-		config.Config.InstancePollSeconds = oldVal
+		config.SetInstancePollTime(oldVal)
 	}()
-	config.Config.InstancePollSeconds = 60 * 25
+	config.SetInstancePollTime(60 * 25 * time.Second)
 	forgetAliases = cache.New(time.Minute, time.Minute)
 
 	for _, tt := range tests {
@@ -719,10 +719,10 @@ func TestGetDatabaseState(t *testing.T) {
 }
 
 func TestExpireTableData(t *testing.T) {
-	oldVal := config.Config.AuditPurgeDays
-	config.Config.AuditPurgeDays = 10
+	oldVal := config.GetAuditPurgeDays()
+	config.SetAuditPurgeDays(10)
 	defer func() {
-		config.Config.AuditPurgeDays = oldVal
+		config.SetAuditPurgeDays(oldVal)
 	}()
 
 	tests := []struct {
@@ -854,7 +854,7 @@ func TestDetectErrantGTIDs(t *testing.T) {
 	primaryTablet := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
 			Cell: "zone-1",
-			Uid:  100,
+			Uid:  101,
 		},
 		Keyspace: keyspaceName,
 		Shard:    shardName,
@@ -881,7 +881,8 @@ func TestDetectErrantGTIDs(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			err = detectErrantGTIDs(topoproto.TabletAliasString(tablet.Alias), tt.instance, tablet)
+			tt.instance.InstanceAlias = topoproto.TabletAliasString(tablet.Alias)
+			err = detectErrantGTIDs(tt.instance, tablet)
 			if tt.wantErr {
 				require.Error(t, err)
 				return
@@ -890,4 +891,48 @@ func TestDetectErrantGTIDs(t *testing.T) {
 			require.EqualValues(t, tt.wantErrantGTID, tt.instance.GtidErrant)
 		})
 	}
+}
+
+// TestPrimaryErrantGTIDs tests that we don't run Errant GTID detection on the primary tablet itself!
+func TestPrimaryErrantGTIDs(t *testing.T) {
+	// Clear the database after the test. The easiest way to do that is to run all the initialization commands again.
+	defer func() {
+		db.ClearVTOrcDatabase()
+	}()
+	db.ClearVTOrcDatabase()
+	keyspaceName := "ks"
+	shardName := "0"
+	tablet := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "zone-1",
+			Uid:  100,
+		},
+		Keyspace: keyspaceName,
+		Shard:    shardName,
+	}
+	instance := &Instance{
+		SourceHost:      "",
+		ExecutedGtidSet: "230ea8ea-81e3-11e4-972a-e25ec4bd140a:1-10589,8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-34,316d193c-70e5-11e5-adb2-ecf4bb2262ff:1-341",
+		InstanceAlias:   topoproto.TabletAliasString(tablet.Alias),
+	}
+
+	// Save shard record for the primary tablet.
+	err := SaveShard(topo.NewShardInfo(keyspaceName, shardName, &topodatapb.Shard{
+		PrimaryAlias: tablet.Alias,
+	}, nil))
+	require.NoError(t, err)
+
+	// Store the tablet record and the instance.
+	err = SaveTablet(tablet)
+	require.NoError(t, err)
+	err = WriteInstance(instance, true, nil)
+	require.NoError(t, err)
+
+	// After this if we read a new information for the record that updates its
+	// gtid set further, we shouldn't be detecting errant GTIDs on it since it is the primary!
+	// We shouldn't be comparing it with a previous version of itself!
+	instance.ExecutedGtidSet = "230ea8ea-81e3-11e4-972a-e25ec4bd140a:1-10589,8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-34,316d193c-70e5-11e5-adb2-ecf4bb2262ff:1-351"
+	err = detectErrantGTIDs(instance, tablet)
+	require.NoError(t, err)
+	require.EqualValues(t, "", instance.GtidErrant)
 }

@@ -3,6 +3,9 @@
   "vindexes": {
     "reverse_bits": {
       "type": "reverse_bits"
+    },
+    "xxhash": {
+      "type": "xxhash"
     }
   },
   "tables": {
@@ -19,6 +22,14 @@
         {
           "column": "id",
           "name": "reverse_bits"
+        }
+      ]
+    },
+    "twopc_fuzzer_multi": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "xxhash"
         }
       ]
     },
