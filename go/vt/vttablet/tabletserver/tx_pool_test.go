@@ -701,11 +701,11 @@ func TestTxPoolBeginStatements(t *testing.T) {
 		expBeginSQL:      "set transaction isolation level serializable; start transaction read only",
 	}, {
 		txIsolationLevel: querypb.ExecuteOptions_CONSISTENT_SNAPSHOT_READ_ONLY,
-		expBeginSQL:      "set session session_track_gtids = START_GTID; set transaction isolation level repeatable read; start transaction with consistent snapshot, read only",
+		expBeginSQL:      "set transaction isolation level repeatable read; start transaction with consistent snapshot, read only",
 	}, {
 		txIsolationLevel: querypb.ExecuteOptions_CONSISTENT_SNAPSHOT_READ_ONLY,
 		readOnly:         true,
-		expBeginSQL:      "set session session_track_gtids = START_GTID; set transaction isolation level repeatable read; start transaction with consistent snapshot, read only",
+		expBeginSQL:      "set transaction isolation level repeatable read; start transaction with consistent snapshot, read only",
 	}, {
 		txIsolationLevel: querypb.ExecuteOptions_AUTOCOMMIT,
 		expBeginSQL:      "",

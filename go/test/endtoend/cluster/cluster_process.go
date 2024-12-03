@@ -1301,7 +1301,6 @@ func (cluster *LocalProcessCluster) NewVTOrcProcess(config VTOrcConfiguration) *
 		VtctlProcess: *base,
 		LogDir:       cluster.TmpDirectory,
 		Config:       config,
-		WebPort:      cluster.GetAndReservePort(),
 		Port:         cluster.GetAndReservePort(),
 	}
 }

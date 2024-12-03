@@ -1,0 +1,13 @@
+instance-poll-time: 1s
+prevent-cross-cell-failover: false
+snapshot-topology-interval: 0h
+reasonable-replication-lag: 10s
+audit-to-backend: false
+audit-to-syslog: false
+audit-purge-duration: 168h
+wait-replicas-timeout: 30s
+tolerable-replication-lag: 0s
+topo-information-refresh-duration: 15s
+recovery-poll-duration: 1s
+allow-emergency-reparent: true
+change-tablets-with-errant-gtid-to-drained: false

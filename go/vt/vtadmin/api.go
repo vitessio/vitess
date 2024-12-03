@@ -59,6 +59,7 @@ import (
 	"vitess.io/vitess/go/vt/vtadmin/rbac"
 	"vitess.io/vitess/go/vt/vtadmin/sort"
 	"vitess.io/vitess/go/vt/vtadmin/vtadminproto"
+	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -487,6 +488,31 @@ func (api *API) ApplySchema(ctx context.Context, req *vtadminpb.ApplySchemaReque
 	if err != nil {
 		return nil, err
 	}
+
+	// Parser with default options. New() itself initializes with default MySQL version.
+	parser, err := sqlparser.New(sqlparser.Options{
+		TruncateUILen:  512,
+		TruncateErrLen: 0,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Split the sql statement received from request.
+	sqlParts, err := parser.SplitStatementToPieces(req.Sql)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Request.Sql = sqlParts
+
+	// Set the callerID if not empty.
+	if req.CallerId != "" {
+		req.Request.CallerId = &vtrpcpb.CallerID{Principal: req.CallerId}
+	}
+
+	// Set the default wait replicas timeout.
+	req.Request.WaitReplicasTimeout = protoutil.DurationToProto(grpcvtctldserver.DefaultWaitReplicasTimeout)
 
 	return c.ApplySchema(ctx, req.Request)
 }
