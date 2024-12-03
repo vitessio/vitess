@@ -52,6 +52,12 @@ var (
 )
 
 func TestRefreshAllKeyspaces(t *testing.T) {
+	// reset keyspaceShardNames
+	keyspaceShardNames = make(map[string][]string)
+	defer func() {
+		keyspaceShardNames = make(map[string][]string)
+	}()
+
 	// Store the old flags and restore on test completion
 	oldTs := ts
 	oldClustersToWatch := clustersToWatch
@@ -119,6 +125,17 @@ func TestRefreshAllKeyspaces(t *testing.T) {
 	verifyKeyspaceInfo(t, "ks4", keyspaceDurabilityTest, "")
 	verifyPrimaryAlias(t, "ks4", "80-", "zone_ks4-0000000101", "")
 
+	// Confirm caching of shard names
+	require.Equal(t, map[string][]string{
+		"ks1": {"-80", "80-"},
+		"ks2": {"-80", "80-"},
+		"ks3": {"-80", "80-"},
+		"ks4": {"-80", "80-"},
+	}, keyspaceShardNames)
+	for _, ksName := range keyspaceNames {
+		require.Equal(t, []string{"-80", "80-"}, GetKeyspaceShardNames(ksName))
+	}
+	require.Len(t, GetKeyspaceShardNames("does-not-exist"), 0)
 }
 
 func TestRefreshKeyspace(t *testing.T) {
