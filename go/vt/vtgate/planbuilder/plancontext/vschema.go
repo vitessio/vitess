@@ -28,8 +28,8 @@ type VSchema interface {
 	FindView(name sqlparser.TableName) sqlparser.SelectStatement
 	FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error)
 
-	// CurrentKeyspace returns the current keyspace if set, otherwise returns an error
-	CurrentKeyspace() (*vindexes.Keyspace, error)
+	// SelectedKeyspace returns the current keyspace if set, otherwise returns an error
+	SelectedKeyspace() (*vindexes.Keyspace, error)
 	TargetString() string
 	Destination() key.Destination
 	TabletType() topodatapb.TabletType
