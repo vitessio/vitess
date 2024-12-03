@@ -19,13 +19,14 @@ package executorcontext
 import (
 	"context"
 	"fmt"
-	"github.com/google/uuid"
-	"golang.org/x/exp/maps"
 	"io"
 	"sort"
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"github.com/google/uuid"
+	"golang.org/x/exp/maps"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/config"
@@ -203,6 +204,7 @@ func NewVCursorImpl(
 	// 	connCollation = executor.env.CollationEnv().DefaultConnectionCharset()
 	// }
 	return &VCursorImpl{
+		config:          cfg,
 		SafeSession:     safeSession,
 		keyspace:        keyspace,
 		tabletType:      tabletType,
@@ -362,7 +364,7 @@ func (vc *VCursorImpl) RecordWarning(warning *querypb.QueryWarning) {
 
 // IsShardRoutingEnabled implements the VCursor interface.
 func (vc *VCursorImpl) IsShardRoutingEnabled() bool {
-	return vc.IsShardRoutingEnabled()
+	return vc.config.EnableShardRouting
 }
 
 func (vc *VCursorImpl) ReadTransaction(ctx context.Context, transactionID string) (*querypb.TransactionMetadata, error) {
