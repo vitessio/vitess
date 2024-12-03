@@ -36,7 +36,7 @@ import (
 )
 
 func TestPoolSize(t *testing.T) {
-	revert := changeVar(t, "PoolSize", "1")
+	revert := changeVar(t, "ReadPoolSize", "1")
 	defer revert()
 
 	vstart := framework.DebugVars()
@@ -92,7 +92,7 @@ func TestTxPoolSize(t *testing.T) {
 	defer client2.Rollback()
 	verifyIntValue(t, framework.DebugVars(), "FoundRowsPoolAvailable", framework.FetchInt(vstart, "FoundRowsPoolAvailable")-1)
 
-	revert := changeVar(t, "TxPoolSize", "1")
+	revert := changeVar(t, "TransactionPoolSize", "1")
 	defer revert()
 	vend := framework.DebugVars()
 	verifyIntValue(t, vend, "TransactionPoolAvailable", 0)

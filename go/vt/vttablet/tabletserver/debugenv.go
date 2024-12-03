@@ -23,8 +23,9 @@ import (
 	"html"
 	"net/http"
 	"strconv"
-	"text/template"
 	"time"
+
+	"github.com/google/safehtml/template"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/log"
@@ -70,90 +71,131 @@ func debugEnvHandler(tsv *TabletServer, w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	switch r.Method {
+	case http.MethodPost:
+		handlePost(tsv, w, r)
+	case http.MethodGet:
+		handleGet(tsv, w, r)
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func handlePost(tsv *TabletServer, w http.ResponseWriter, r *http.Request) {
+	varname := r.FormValue("varname")
+	value := r.FormValue("value")
+
 	var msg string
-	if r.Method == "POST" {
-		varname := r.FormValue("varname")
-		value := r.FormValue("value")
-		setIntVal := func(f func(int)) {
-			ival, err := strconv.Atoi(value)
-			if err != nil {
-				msg = fmt.Sprintf("Failed setting value for %v: %v", varname, err)
-				return
-			}
-			f(ival)
-			msg = fmt.Sprintf("Setting %v to: %v", varname, value)
-		}
-		setIntValCtx := func(f func(context.Context, int) error) {
-			ival, err := strconv.Atoi(value)
-			if err == nil {
-				err = f(r.Context(), ival)
-				if err == nil {
-					msg = fmt.Sprintf("Setting %v to: %v", varname, value)
-					return
-				}
-			}
-			msg = fmt.Sprintf("Failed setting value for %v: %v", varname, err)
-		}
-		setInt64Val := func(f func(int64)) {
-			ival, err := strconv.ParseInt(value, 10, 64)
-			if err != nil {
-				msg = fmt.Sprintf("Failed setting value for %v: %v", varname, err)
-				return
-			}
-			f(ival)
-			msg = fmt.Sprintf("Setting %v to: %v", varname, value)
-		}
-		setDurationVal := func(f func(time.Duration)) {
-			durationVal, err := time.ParseDuration(value)
-			if err != nil {
-				msg = fmt.Sprintf("Failed setting value for %v: %v", varname, err)
-				return
-			}
-			f(durationVal)
-			msg = fmt.Sprintf("Setting %v to: %v", varname, value)
-		}
-		setFloat64Val := func(f func(float64)) {
-			fval, err := strconv.ParseFloat(value, 64)
-			if err != nil {
-				msg = fmt.Sprintf("Failed setting value for %v: %v", varname, err)
-				return
-			}
-			f(fval)
-			msg = fmt.Sprintf("Setting %v to: %v", varname, value)
-		}
-		switch varname {
-		case "PoolSize":
-			setIntValCtx(tsv.SetPoolSize)
-		case "StreamPoolSize":
-			setIntValCtx(tsv.SetStreamPoolSize)
-		case "TxPoolSize":
-			setIntValCtx(tsv.SetTxPoolSize)
-		case "MaxResultSize":
-			setIntVal(tsv.SetMaxResultSize)
-		case "WarnResultSize":
-			setIntVal(tsv.SetWarnResultSize)
-		case "RowStreamerMaxInnoDBTrxHistLen":
-			setInt64Val(func(val int64) { tsv.Config().RowStreamer.MaxInnoDBTrxHistLen = val })
-		case "RowStreamerMaxMySQLReplLagSecs":
-			setInt64Val(func(val int64) { tsv.Config().RowStreamer.MaxMySQLReplLagSecs = val })
-		case "UnhealthyThreshold":
-			setDurationVal(func(d time.Duration) { tsv.Config().Healthcheck.UnhealthyThreshold = d })
-			setDurationVal(tsv.hs.SetUnhealthyThreshold)
-			setDurationVal(tsv.sm.SetUnhealthyThreshold)
-		case "ThrottleMetricThreshold":
-			setFloat64Val(tsv.SetThrottleMetricThreshold)
-		case "Consolidator":
-			tsv.SetConsolidatorMode(value)
-			msg = fmt.Sprintf("Setting %v to: %v", varname, value)
-		}
+	if varname == "" || value == "" {
+		http.Error(w, "Missing varname or value", http.StatusBadRequest)
+		return
 	}
 
+	setIntVal := func(f func(int)) error {
+		ival, err := strconv.Atoi(value)
+		if err != nil {
+			return fmt.Errorf("invalid int value for %v: %v", varname, err)
+		}
+		f(ival)
+		msg = fmt.Sprintf("Setting %v to: %v", varname, value)
+		return nil
+	}
+
+	setIntValCtx := func(f func(context.Context, int) error) error {
+		ival, err := strconv.Atoi(value)
+		if err == nil {
+			err = f(r.Context(), ival)
+		}
+		if err != nil {
+			return fmt.Errorf("failed setting value for %v: %v", varname, err)
+		}
+		msg = fmt.Sprintf("Setting %v to: %v", varname, value)
+		return nil
+	}
+
+	setInt64Val := func(f func(int64)) error {
+		ival, err := strconv.ParseInt(value, 10, 64)
+		if err != nil {
+			return fmt.Errorf("invalid int64 value for %v: %v", varname, err)
+		}
+		f(ival)
+		msg = fmt.Sprintf("Setting %v to: %v", varname, value)
+		return nil
+	}
+
+	setDurationVal := func(f func(time.Duration)) error {
+		durationVal, err := time.ParseDuration(value)
+		if err != nil {
+			return fmt.Errorf("invalid duration value for %v: %v", varname, err)
+		}
+		f(durationVal)
+		msg = fmt.Sprintf("Setting %v to: %v", varname, value)
+		return nil
+	}
+
+	setFloat64Val := func(f func(float64)) error {
+		fval, err := strconv.ParseFloat(value, 64)
+		if err != nil {
+			return fmt.Errorf("invalid float64 value for %v: %v", varname, err)
+		}
+		f(fval)
+		msg = fmt.Sprintf("Setting %v to: %v", varname, value)
+		return nil
+	}
+
+	var err error
+	switch varname {
+	case "ReadPoolSize":
+		err = setIntValCtx(tsv.SetPoolSize)
+	case "StreamPoolSize":
+		err = setIntValCtx(tsv.SetStreamPoolSize)
+	case "TransactionPoolSize":
+		err = setIntValCtx(tsv.SetTxPoolSize)
+	case "MaxResultSize":
+		err = setIntVal(tsv.SetMaxResultSize)
+	case "WarnResultSize":
+		err = setIntVal(tsv.SetWarnResultSize)
+	case "RowStreamerMaxInnoDBTrxHistLen":
+		err = setInt64Val(func(val int64) { tsv.Config().RowStreamer.MaxInnoDBTrxHistLen = val })
+	case "RowStreamerMaxMySQLReplLagSecs":
+		err = setInt64Val(func(val int64) { tsv.Config().RowStreamer.MaxMySQLReplLagSecs = val })
+	case "UnhealthyThreshold":
+		err = setDurationVal(func(d time.Duration) { tsv.Config().Healthcheck.UnhealthyThreshold = d })
+	case "ThrottleMetricThreshold":
+		err = setFloat64Val(tsv.SetThrottleMetricThreshold)
+	case "Consolidator":
+		tsv.SetConsolidatorMode(value)
+		msg = fmt.Sprintf("Setting %v to: %v", varname, value)
+	}
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	vars := getVars(tsv)
+	sendResponse(r, w, vars, msg)
+}
+
+func handleGet(tsv *TabletServer, w http.ResponseWriter, r *http.Request) {
+	vars := getVars(tsv)
+	sendResponse(r, w, vars, "")
+}
+
+func sendResponse(r *http.Request, w http.ResponseWriter, vars []envValue, msg string) {
+	format := r.FormValue("format")
+	if format == "json" {
+		respondWithJSON(w, vars, msg)
+		return
+	}
+	respondWithHTML(w, vars, msg)
+}
+
+func getVars(tsv *TabletServer) []envValue {
 	var vars []envValue
-	vars = addVar(vars, "PoolSize", tsv.PoolSize)
+	vars = addVar(vars, "ReadPoolSize", tsv.PoolSize)
 	vars = addVar(vars, "StreamPoolSize", tsv.StreamPoolSize)
-	vars = addVar(vars, "TxPoolSize", tsv.TxPoolSize)
-	vars = addVar(vars, "QueryCacheCapacity", tsv.QueryPlanCacheCap) // QueryCacheCapacity is deprecated in v21, it is replaced by QueryEnginePlanCacheCapacity
-	vars = addVar(vars, "QueryEnginePlanCacheCapacity", tsv.QueryPlanCacheCap)
+	vars = addVar(vars, "TransactionPoolSize", tsv.TxPoolSize)
 	vars = addVar(vars, "MaxResultSize", tsv.MaxResultSize)
 	vars = addVar(vars, "WarnResultSize", tsv.WarnResultSize)
 	vars = addVar(vars, "RowStreamerMaxInnoDBTrxHistLen", func() int64 { return tsv.Config().RowStreamer.MaxInnoDBTrxHistLen })
@@ -165,18 +207,22 @@ func debugEnvHandler(tsv *TabletServer, w http.ResponseWriter, r *http.Request) 
 		Value: tsv.ConsolidatorMode(),
 	})
 
-	format := r.FormValue("format")
-	if format == "json" {
-		mvars := make(map[string]string)
-		for _, v := range vars {
-			mvars[v.Name] = v.Value
-		}
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(mvars)
-		return
-	}
+	return vars
+}
 
-	// gridTable is reused from twopcz.go.
+func respondWithJSON(w http.ResponseWriter, vars []envValue, msg string) {
+	mvars := make(map[string]string)
+	for _, v := range vars {
+		mvars[v.Name] = v.Value
+	}
+	if msg != "" {
+		mvars["ResponseMessage"] = msg
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(mvars)
+}
+
+func respondWithHTML(w http.ResponseWriter, vars []envValue, msg string) {
 	w.Write(gridTable)
 	w.Write([]byte("<h3>Internal Variables</h3>\n"))
 	if msg != "" {
