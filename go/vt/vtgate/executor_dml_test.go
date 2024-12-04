@@ -3142,3 +3142,62 @@ func TestDeleteMultiTable(t *testing.T) {
 	// delete from `user` where (`user`.id) in ::dml_vals - 1 shard
 	testQueryLog(t, executor, logChan, "TestExecute", "DELETE", "delete `user` from `user` join music on `user`.col = music.col where music.user_id = 1", 18)
 }
+
+// TestSessionRowsAffected test that rowsAffected is set correctly for each shard session.
+func TestSessionRowsAffected(t *testing.T) {
+	method := t.Name()
+	executor, _, sbc4060, _, ctx := createExecutorEnv(t)
+
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{})
+
+	// start the transaction
+	_, err := executor.Execute(ctx, nil, method, session, "begin", nil)
+	require.NoError(t, err)
+
+	// -20 - select query
+	_, err = executor.Execute(ctx, nil, method, session, "select * from user where id = 1", nil)
+	require.NoError(t, err)
+	require.Len(t, session.ShardSessions, 1)
+	require.False(t, session.ShardSessions[0].RowsAffected)
+
+	// -20 - update query (rows affected)
+	_, err = executor.Execute(ctx, nil, method, session, "update user set foo = 41 where id = 1", nil)
+	require.NoError(t, err)
+	require.True(t, session.ShardSessions[0].RowsAffected)
+
+	// e0- - select query
+	_, err = executor.Execute(ctx, nil, method, session, "select * from user where id = 7", nil)
+	require.NoError(t, err)
+	assert.Len(t, session.ShardSessions, 2)
+	require.False(t, session.ShardSessions[1].RowsAffected)
+
+	// c0-e0 - update query (rows affected)
+	_, err = executor.Execute(ctx, nil, method, session, "update user set foo = 42 where id = 5", nil)
+	require.NoError(t, err)
+	require.Len(t, session.ShardSessions, 3)
+	require.True(t, session.ShardSessions[2].RowsAffected)
+
+	// 40-60 - update query (no rows affected)
+	sbc4060.SetResults([]*sqltypes.Result{{RowsAffected: 0}})
+	_, err = executor.Execute(ctx, nil, method, session, "update user set foo = 42 where id = 3", nil)
+	require.NoError(t, err)
+	assert.Len(t, session.ShardSessions, 4)
+	require.False(t, session.ShardSessions[3].RowsAffected)
+
+	// 40-60 - select query
+	_, err = executor.Execute(ctx, nil, method, session, "select * from user where id = 3", nil)
+	require.NoError(t, err)
+	require.False(t, session.ShardSessions[3].RowsAffected)
+
+	// 40-60 - delete query (rows affected)
+	_, err = executor.Execute(ctx, nil, method, session, "delete from user where id = 3", nil)
+	require.NoError(t, err)
+	require.True(t, session.ShardSessions[0].RowsAffected)
+	require.False(t, session.ShardSessions[1].RowsAffected)
+	require.True(t, session.ShardSessions[2].RowsAffected)
+	require.True(t, session.ShardSessions[3].RowsAffected)
+
+	_, err = executor.Execute(ctx, nil, method, session, "commit", nil)
+	require.NoError(t, err)
+	require.Zero(t, session.ShardSessions)
+}
