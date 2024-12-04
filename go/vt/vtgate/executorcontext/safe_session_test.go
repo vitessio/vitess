@@ -29,6 +29,31 @@ import (
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
 
+type fakeInfo struct {
+	transactionID int64
+	alias         *topodatapb.TabletAlias
+}
+
+func (s *fakeInfo) TransactionID() int64 {
+	return s.transactionID
+}
+
+func (s *fakeInfo) ReservedID() int64 {
+	return 0
+}
+
+func (s *fakeInfo) RowsAffected() bool {
+	return false
+}
+
+func (s *fakeInfo) Alias() *topodatapb.TabletAlias {
+	return s.alias
+}
+
+func info(txId, uid int) myShardActionInfo {
+	return &fakeInfo{transactionID: int64(txId), alias: &topodatapb.TabletAlias{Cell: "cell", Uid: uint32(uid)}}
+}
+
 // TestFailToMultiShardWhenSetToSingleDb tests that single db transactions fails on going multi shard.
 func TestFailToMultiShardWhenSetToSingleDb(t *testing.T) {
 	session := NewSafeSession(&vtgatepb.Session{
@@ -37,13 +62,13 @@ func TestFailToMultiShardWhenSetToSingleDb(t *testing.T) {
 
 	err := session.AppendOrUpdate(
 		&querypb.Target{Keyspace: "keyspace", Shard: "0"},
-		&shardActionInfo{transactionID: 1, alias: &topodatapb.TabletAlias{Cell: "cell", Uid: 0}},
+		info(1, 0),
 		nil,
 		vtgatepb.TransactionMode_SINGLE)
 	require.NoError(t, err)
 	err = session.AppendOrUpdate(
 		&querypb.Target{Keyspace: "keyspace", Shard: "1"},
-		&shardActionInfo{transactionID: 1, alias: &topodatapb.TabletAlias{Cell: "cell", Uid: 1}},
+		info(1, 1),
 		nil,
 		vtgatepb.TransactionMode_SINGLE)
 	require.Error(t, err)
@@ -59,7 +84,7 @@ func TestSingleDbUpdateToMultiShard(t *testing.T) {
 	session.queryFromVindex = true
 	err := session.AppendOrUpdate(
 		&querypb.Target{Keyspace: "keyspace", Shard: "0"},
-		&shardActionInfo{transactionID: 1, alias: &topodatapb.TabletAlias{Cell: "cell", Uid: 0}},
+		info(1, 0),
 		nil,
 		vtgatepb.TransactionMode_SINGLE)
 	require.NoError(t, err)
@@ -68,7 +93,7 @@ func TestSingleDbUpdateToMultiShard(t *testing.T) {
 	// shard session s1
 	err = session.AppendOrUpdate(
 		&querypb.Target{Keyspace: "keyspace", Shard: "1"},
-		&shardActionInfo{transactionID: 1, alias: &topodatapb.TabletAlias{Cell: "cell", Uid: 1}},
+		info(1, 1),
 		nil,
 		vtgatepb.TransactionMode_SINGLE)
 	require.NoError(t, err)
@@ -76,7 +101,7 @@ func TestSingleDbUpdateToMultiShard(t *testing.T) {
 	// shard session s0 with normal query
 	err = session.AppendOrUpdate(
 		&querypb.Target{Keyspace: "keyspace", Shard: "0"},
-		&shardActionInfo{transactionID: 1, alias: &topodatapb.TabletAlias{Cell: "cell", Uid: 1}},
+		info(1, 1),
 		session.ShardSessions[0],
 		vtgatepb.TransactionMode_SINGLE)
 	require.Error(t, err)
@@ -93,7 +118,7 @@ func TestSingleDbPreFailOnFind(t *testing.T) {
 	session.queryFromVindex = true
 	err := session.AppendOrUpdate(
 		&querypb.Target{Keyspace: "keyspace", Shard: "0"},
-		&shardActionInfo{transactionID: 1, alias: &topodatapb.TabletAlias{Cell: "cell", Uid: 0}},
+		info(1, 0),
 		nil,
 		vtgatepb.TransactionMode_SINGLE)
 	require.NoError(t, err)
@@ -102,7 +127,7 @@ func TestSingleDbPreFailOnFind(t *testing.T) {
 	// shard session s1
 	err = session.AppendOrUpdate(
 		&querypb.Target{Keyspace: "keyspace", Shard: "1"},
-		&shardActionInfo{transactionID: 1, alias: &topodatapb.TabletAlias{Cell: "cell", Uid: 1}},
+		info(1, 1),
 		nil,
 		vtgatepb.TransactionMode_SINGLE)
 	require.NoError(t, err)
