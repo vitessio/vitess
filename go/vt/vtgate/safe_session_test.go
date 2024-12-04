@@ -29,25 +29,101 @@ import (
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
 
+// TestFailToMultiShardWhenSetToSingleDb tests that single db transactions fails on going multi shard.
 func TestFailToMultiShardWhenSetToSingleDb(t *testing.T) {
 	session := NewSafeSession(&vtgatepb.Session{
 		InTransaction: true, TransactionMode: vtgatepb.TransactionMode_SINGLE,
 	})
 
-	sess0 := &vtgatepb.Session_ShardSession{
-		Target:        &querypb.Target{Keyspace: "keyspace", Shard: "0"},
-		TabletAlias:   &topodatapb.TabletAlias{Cell: "cell", Uid: 0},
-		TransactionId: 1,
-	}
-	sess1 := &vtgatepb.Session_ShardSession{
-		Target:        &querypb.Target{Keyspace: "keyspace", Shard: "1"},
-		TabletAlias:   &topodatapb.TabletAlias{Cell: "cell", Uid: 1},
-		TransactionId: 1,
-	}
-
-	err := session.AppendOrUpdate(sess0, vtgatepb.TransactionMode_SINGLE)
+	err := session.AppendOrUpdate(
+		&querypb.Target{Keyspace: "keyspace", Shard: "0"},
+		&shardActionInfo{transactionID: 1, alias: &topodatapb.TabletAlias{Cell: "cell", Uid: 0}},
+		nil,
+		vtgatepb.TransactionMode_SINGLE)
 	require.NoError(t, err)
-	err = session.AppendOrUpdate(sess1, vtgatepb.TransactionMode_SINGLE)
+	err = session.AppendOrUpdate(
+		&querypb.Target{Keyspace: "keyspace", Shard: "1"},
+		&shardActionInfo{transactionID: 1, alias: &topodatapb.TabletAlias{Cell: "cell", Uid: 1}},
+		nil,
+		vtgatepb.TransactionMode_SINGLE)
+	require.Error(t, err)
+}
+
+// TestSingleDbUpdateToMultiShard tests that a single db transaction cannot be updated to multi shard.
+func TestSingleDbUpdateToMultiShard(t *testing.T) {
+	session := NewSafeSession(&vtgatepb.Session{
+		InTransaction: true, TransactionMode: vtgatepb.TransactionMode_SINGLE,
+	})
+
+	// shard session s0 due to a vindex query
+	session.queryFromVindex = true
+	err := session.AppendOrUpdate(
+		&querypb.Target{Keyspace: "keyspace", Shard: "0"},
+		&shardActionInfo{transactionID: 1, alias: &topodatapb.TabletAlias{Cell: "cell", Uid: 0}},
+		nil,
+		vtgatepb.TransactionMode_SINGLE)
+	require.NoError(t, err)
+	session.queryFromVindex = false
+
+	// shard session s1
+	err = session.AppendOrUpdate(
+		&querypb.Target{Keyspace: "keyspace", Shard: "1"},
+		&shardActionInfo{transactionID: 1, alias: &topodatapb.TabletAlias{Cell: "cell", Uid: 1}},
+		nil,
+		vtgatepb.TransactionMode_SINGLE)
+	require.NoError(t, err)
+
+	// shard session s0 with normal query
+	err = session.AppendOrUpdate(
+		&querypb.Target{Keyspace: "keyspace", Shard: "0"},
+		&shardActionInfo{transactionID: 1, alias: &topodatapb.TabletAlias{Cell: "cell", Uid: 1}},
+		session.ShardSessions[0],
+		vtgatepb.TransactionMode_SINGLE)
+	require.Error(t, err)
+}
+
+// TestSingleDbPreFailOnFind tests that finding a shard session fails
+// if already shard session exists on another shard and the query is not from vindex.
+func TestSingleDbPreFailOnFind(t *testing.T) {
+	session := NewSafeSession(&vtgatepb.Session{
+		InTransaction: true, TransactionMode: vtgatepb.TransactionMode_SINGLE,
+	})
+
+	// shard session s0 due to a vindex query
+	session.queryFromVindex = true
+	err := session.AppendOrUpdate(
+		&querypb.Target{Keyspace: "keyspace", Shard: "0"},
+		&shardActionInfo{transactionID: 1, alias: &topodatapb.TabletAlias{Cell: "cell", Uid: 0}},
+		nil,
+		vtgatepb.TransactionMode_SINGLE)
+	require.NoError(t, err)
+	session.queryFromVindex = false
+
+	// shard session s1
+	err = session.AppendOrUpdate(
+		&querypb.Target{Keyspace: "keyspace", Shard: "1"},
+		&shardActionInfo{transactionID: 1, alias: &topodatapb.TabletAlias{Cell: "cell", Uid: 1}},
+		nil,
+		vtgatepb.TransactionMode_SINGLE)
+	require.NoError(t, err)
+
+	// shard session s1 for normal query again - should not fail as already part of the session.
+	ss, err := session.FindAndChangeSessionIfInSingleTxMode(
+		"keyspace",
+		"1",
+		topodatapb.TabletType_UNKNOWN,
+		vtgatepb.TransactionMode_SINGLE)
+	require.NoError(t, err)
+	require.NotNil(t, ss)
+	require.False(t, ss.VindexOnly)
+	require.EqualValues(t, 1, ss.TabletAlias.Uid)
+
+	// shard session s0 for normal query
+	_, err = session.FindAndChangeSessionIfInSingleTxMode(
+		"keyspace",
+		"0",
+		topodatapb.TabletType_UNKNOWN,
+		vtgatepb.TransactionMode_SINGLE)
 	require.Error(t, err)
 }
 

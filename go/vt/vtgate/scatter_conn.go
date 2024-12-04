@@ -24,26 +24,24 @@ import (
 	"sync/atomic"
 	"time"
 
-	"vitess.io/vitess/go/mysql/sqlerror"
-	"vitess.io/vitess/go/vt/sqlparser"
-
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // ScatterConn is used for executing queries across
@@ -224,6 +222,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 					retryRequest(func() {
 						// we seem to have lost our connection. it was a reserved connection, let's try to recreate it
 						info.actionNeeded = reserve
+						info.ignoreOldSession = true
 						var state queryservice.ReservedState
 						state, innerqr, err = qs.ReserveExecute(ctx, rs.Target, session.SetPreQueries(), queries[i].Sql, queries[i].BindVariables, 0 /*transactionId*/, opts)
 						reservedID = state.ReservedID
@@ -239,6 +238,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 					retryRequest(func() {
 						// we seem to have lost our connection. it was a reserved connection, let's try to recreate it
 						info.actionNeeded = reserveBegin
+						info.ignoreOldSession = true
 						var state queryservice.ReservedTransactionState
 						state, innerqr, err = qs.ReserveBeginExecute(ctx, rs.Target, session.SetPreQueries(), session.SavePoints(), queries[i].Sql, queries[i].BindVariables, opts)
 						transactionID = state.TransactionID
@@ -263,7 +263,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 			session.logging.log(primitive, rs.Target, rs.Gateway, queries[i].Sql, info.actionNeeded == begin || info.actionNeeded == reserveBegin, queries[i].BindVariables)
 
 			// We need to new shard info irrespective of the error.
-			newInfo := info.updateTransactionAndReservedID(transactionID, reservedID, alias)
+			newInfo := info.updateTransactionAndReservedID(transactionID, reservedID, alias, innerqr)
 			if err != nil {
 				return newInfo, err
 			}
@@ -471,8 +471,8 @@ func (stc *ScatterConn) StreamExecuteMulti(
 			}
 			session.logging.log(primitive, rs.Target, rs.Gateway, query, info.actionNeeded == begin || info.actionNeeded == reserveBegin, bindVars[i])
 
-			// We need to new shard info irrespective of the error.
-			newInfo := info.updateTransactionAndReservedID(transactionID, reservedID, alias)
+			// We need the new shard info irrespective of the error.
+			newInfo := info.updateTransactionAndReservedID(transactionID, reservedID, alias, nil)
 			if err != nil {
 				return newInfo, err
 			}
@@ -662,21 +662,24 @@ func (stc *ScatterConn) multiGoTransaction(
 		startTime, statsKey := stc.startAction(name, rs.Target)
 		defer stc.endAction(startTime, allErrors, statsKey, &err, session)
 
-		shardActionInfo, err := actionInfo(ctx, rs.Target, session, autocommit, stc.txConn.mode)
+		info, shardSession, err := actionInfo(ctx, rs.Target, session, autocommit, stc.txConn.mode)
 		if err != nil {
 			return
 		}
-		updated, err := action(rs, i, shardActionInfo)
-		if updated == nil {
+		info, err = action(rs, i, info)
+		if info == nil {
 			return
 		}
-		if updated.actionNeeded != nothing && (updated.transactionID != 0 || updated.reservedID != 0) {
-			appendErr := session.AppendOrUpdate(&vtgatepb.Session_ShardSession{
-				Target:        rs.Target,
-				TransactionId: updated.transactionID,
-				ReservedId:    updated.reservedID,
-				TabletAlias:   updated.alias,
-			}, stc.txConn.mode)
+		if info.ignoreOldSession {
+			shardSession = nil
+		}
+		if shardSession != nil && info.rowsAffected {
+			// We might not always update or append in the session.
+			// We need to track if rows were affected in the transaction.
+			shardSession.RowsAffected = info.rowsAffected
+		}
+		if info.actionNeeded != nothing && (info.transactionID != 0 || info.reservedID != 0) {
+			appendErr := session.AppendOrUpdate(rs.Target, info, shardSession, stc.txConn.mode)
 			if appendErr != nil {
 				err = appendErr
 			}
@@ -830,25 +833,25 @@ func requireNewQS(err error, target *querypb.Target) bool {
 }
 
 // actionInfo looks at the current session, and returns information about what needs to be done for this tablet
-func actionInfo(ctx context.Context, target *querypb.Target, session *SafeSession, autocommit bool, txMode vtgatepb.TransactionMode) (*shardActionInfo, error) {
+func actionInfo(ctx context.Context, target *querypb.Target, session *SafeSession, autocommit bool, txMode vtgatepb.TransactionMode) (*shardActionInfo, *vtgatepb.Session_ShardSession, error) {
 	if !(session.InTransaction() || session.InReservedConn()) {
-		return &shardActionInfo{}, nil
+		return &shardActionInfo{}, nil, nil
 	}
 	ignoreSession := ctx.Value(engine.IgnoreReserveTxn)
 	if ignoreSession != nil {
-		return &shardActionInfo{}, nil
+		return &shardActionInfo{}, nil, nil
 	}
 	// No need to protect ourselves from the race condition between
 	// Find and AppendOrUpdate. The higher level functions ensure that no
 	// duplicate (target) tuples can execute
 	// this at the same time.
-	transactionID, reservedID, alias, err := session.FindAndChangeSessionIfInSingleTxMode(target.Keyspace, target.Shard, target.TabletType, txMode)
+	shardSession, err := session.FindAndChangeSessionIfInSingleTxMode(target.Keyspace, target.Shard, target.TabletType, txMode)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	shouldReserve := session.InReservedConn() && reservedID == 0
-	shouldBegin := session.InTransaction() && transactionID == 0 && !autocommit
+	shouldReserve := session.InReservedConn() && (shardSession == nil || shardSession.ReservedId == 0)
+	shouldBegin := session.InTransaction() && (shardSession == nil || shardSession.TransactionId == 0) && !autocommit
 
 	var act = nothing
 	switch {
@@ -860,12 +863,16 @@ func actionInfo(ctx context.Context, target *querypb.Target, session *SafeSessio
 		act = begin
 	}
 
-	return &shardActionInfo{
-		actionNeeded:  act,
-		transactionID: transactionID,
-		reservedID:    reservedID,
-		alias:         alias,
-	}, nil
+	info := &shardActionInfo{
+		actionNeeded: act,
+	}
+	if shardSession != nil {
+		info.transactionID = shardSession.TransactionId
+		info.reservedID = shardSession.ReservedId
+		info.alias = shardSession.TabletAlias
+		info.rowsAffected = shardSession.RowsAffected
+	}
+	return info, shardSession, nil
 }
 
 // lockInfo looks at the current session, and returns information about what needs to be done for this tablet
@@ -894,10 +901,19 @@ type shardActionInfo struct {
 	actionNeeded              actionNeeded
 	reservedID, transactionID int64
 	alias                     *topodatapb.TabletAlias
+
+	// ignoreOldSession is used when there is a retry on the same shard due to connection loss for a reserved connection.
+	// The old reference should be ignored and new shard session should be added to the session.
+	ignoreOldSession bool
+	rowsAffected     bool
 }
 
-func (sai *shardActionInfo) updateTransactionAndReservedID(txID int64, rID int64, alias *topodatapb.TabletAlias) *shardActionInfo {
-	if txID == sai.transactionID && rID == sai.reservedID {
+func (sai *shardActionInfo) updateTransactionAndReservedID(txID int64, rID int64, alias *topodatapb.TabletAlias, qr *sqltypes.Result) *shardActionInfo {
+	firstTimeRowsAffected := false
+	if txID != 0 && qr != nil && !sai.rowsAffected {
+		firstTimeRowsAffected = qr.RowsAffected > 0
+	}
+	if txID == sai.transactionID && rID == sai.reservedID && !firstTimeRowsAffected {
 		// As transaction id and reserved id have not changed, there is nothing to update in session shard sessions.
 		return nil
 	}
@@ -905,6 +921,7 @@ func (sai *shardActionInfo) updateTransactionAndReservedID(txID int64, rID int64
 	newInfo.reservedID = rID
 	newInfo.transactionID = txID
 	newInfo.alias = alias
+	newInfo.rowsAffected = firstTimeRowsAffected
 	return &newInfo
 }
 
