@@ -1651,14 +1651,6 @@ func TestSemiSyncRequiredWithTwoPC(t *testing.T) {
 
 	out, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=none")
 	require.NoError(t, err, out)
-	defer func() {
-		_, err = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=semi_sync")
-		require.NoError(t, err)
-		for _, shard := range clusterInstance.Keyspaces[0].Shards {
-			err = clusterInstance.VtctldClientProcess.PlannedReparentShard(keyspaceName, shard.Name, shard.Vttablets[0].Alias)
-			require.NoError(t, err)
-		}
-	}()
 
 	// After changing the durability policy for the given keyspace to none, we run PRS.
 	shard := clusterInstance.Keyspaces[0].Shards[2]
@@ -1677,4 +1669,18 @@ func TestSemiSyncRequiredWithTwoPC(t *testing.T) {
 	_, err = utils.ExecAllowError(t, conn, "commit")
 	require.Error(t, err)
 	require.ErrorContains(t, err, "two-pc is enabled, but semi-sync is not")
+
+	_, err = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=semi_sync")
+	require.NoError(t, err)
+	for _, shard := range clusterInstance.Keyspaces[0].Shards {
+		err = clusterInstance.VtctldClientProcess.PlannedReparentShard(keyspaceName, shard.Name, shard.Vttablets[0].Alias)
+		require.NoError(t, err)
+	}
+
+	utils.Exec(t, conn, "begin")
+	utils.Exec(t, conn, "insert into twopc_t1(id, col) values(4, 4)")
+	utils.Exec(t, conn, "insert into twopc_t1(id, col) values(6, 4)")
+	utils.Exec(t, conn, "insert into twopc_t1(id, col) values(9, 4)")
+	_, err = utils.ExecAllowError(t, conn, "commit")
+	require.NoError(t, err)
 }
