@@ -482,11 +482,12 @@ EOF
   waitForKeyspaceToBeServing customer 80- 1
 }
 
+kind delete cluster --name kind || true
 
 # Build the docker image for vitess/lite using the local code
 docker build -f docker/lite/Dockerfile -t vitess/lite:pr .
 # Build the docker image for vitess/vtadmin using the local code
-docker build -f docker/binaries/vtadmin/Dockerfile --build-arg VT_BASE_VER=pr -t vitess/vtadmin:pr .
+docker build -f docker/binaries/vtadmin/Dockerfile --build-arg VT_BASE_VER=pr -t vitess/vtadmin:pr ./docker/binaries/vtadmin
 
 # Print the docker images available
 docker image ls

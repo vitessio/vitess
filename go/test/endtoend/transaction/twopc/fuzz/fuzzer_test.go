@@ -53,7 +53,9 @@ var (
 	}
 
 	insertIntoFuzzUpdate   = "INSERT INTO twopc_fuzzer_update (id, col) VALUES (%d, %d)"
+	insertIntoFuzzMulti    = "INSERT INTO twopc_fuzzer_multi (id) VALUES (%d)"
 	updateFuzzUpdate       = "UPDATE twopc_fuzzer_update SET col = col + %d WHERE id = %d"
+	updateFuzzUpdateMulti  = "UPDATE twopc_fuzzer_update join twopc_fuzzer_multi using (id) SET col = col + %d WHERE id = %d"
 	insertIntoFuzzInsert   = "INSERT INTO twopc_fuzzer_insert (id, updateSet, threadId) VALUES (%d, %d, %d)"
 	selectFromFuzzUpdate   = "SELECT col FROM twopc_fuzzer_update WHERE id = %d"
 	selectIdFromFuzzInsert = "SELECT threadId FROM twopc_fuzzer_insert WHERE updateSet = %d AND id = %d ORDER BY col"
@@ -294,6 +296,10 @@ func (fz *fuzzer) initialize(t *testing.T, conn *mysql.Conn) {
 		for _, id := range updateSet {
 			_, err := conn.ExecuteFetch(fmt.Sprintf(insertIntoFuzzUpdate, id, 0), 0, false)
 			require.NoError(t, err)
+			// We insert the same id values in multi table as we in the update table. We use this for running
+			// multi-table updates and inserts.
+			_, err = conn.ExecuteFetch(fmt.Sprintf(insertIntoFuzzMulti, id), 0, false)
+			require.NoError(t, err)
 		}
 	}
 }
@@ -331,12 +337,20 @@ func (fz *fuzzer) generateAndExecuteTransaction(threadId int) {
 	_, _ = conn.ExecuteFetch(finalCommand, 0, false)
 }
 
+func getUpdateQuery(incrementVal int32, id int) string {
+	if rand.Intn(2) == 1 {
+		return fmt.Sprintf(updateFuzzUpdateMulti, incrementVal, id)
+	}
+	return fmt.Sprintf(updateFuzzUpdate, incrementVal, id)
+}
+
 // generateUpdateQueries generates the queries to run updates on the twopc_fuzzer_update table.
 // It takes the update set index and the value to increment the set by.
 func (fz *fuzzer) generateUpdateQueries(updateSet int, incrementVal int32) []string {
 	var queries []string
 	for _, id := range fz.updateRowsVals[updateSet] {
-		queries = append(queries, fmt.Sprintf(updateFuzzUpdate, incrementVal, id))
+		// Use multi table DML queries half the time.
+		queries = append(queries, getUpdateQuery(incrementVal, id))
 	}
 	rand.Shuffle(len(queries), func(i, j int) {
 		queries[i], queries[j] = queries[j], queries[i]
@@ -427,7 +441,7 @@ func (fz *fuzzer) randomDML() string {
 	}
 	// Generate UPDATE
 	updateId := fz.updateRowsVals[rand.Intn(len(fz.updateRowsVals))][rand.Intn(len(updateRowBaseVals))]
-	return fmt.Sprintf(updateFuzzUpdate, rand.Intn(100000), updateId)
+	return getUpdateQuery(rand.Int31n(100000), updateId)
 }
 
 /*

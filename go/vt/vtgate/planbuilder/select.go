@@ -46,7 +46,7 @@ func gen4SelectStmtPlanner(
 		}
 		if p != nil {
 			used := "dual"
-			keyspace, ksErr := vschema.DefaultKeyspace()
+			keyspace, ksErr := vschema.SelectedKeyspace()
 			if ksErr == nil {
 				// we are just getting the ks to log the correct table use.
 				// no need to fail this if we can't find the default keyspace
@@ -101,7 +101,7 @@ func gen4SelectStmtPlanner(
 
 func gen4planSQLCalcFoundRows(vschema plancontext.VSchema, sel *sqlparser.Select, query string, reservedVars *sqlparser.ReservedVars) (*planResult, error) {
 	ksName := ""
-	if ks, _ := vschema.DefaultKeyspace(); ks != nil {
+	if ks, _ := vschema.SelectedKeyspace(); ks != nil {
 		ksName = ks.Name
 	}
 	semTable, err := semantics.Analyze(sel, ksName, vschema)

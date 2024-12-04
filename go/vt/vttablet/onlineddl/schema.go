@@ -87,6 +87,11 @@ const (
 		WHERE
 			migration_uuid=%a
 	`
+	sqlUpdateMigrationVreplicationLagSeconds = `UPDATE _vt.schema_migrations
+			SET vreplication_lag_seconds=%a
+		WHERE
+			migration_uuid=%a
+	`
 	sqlUpdateMigrationIsView = `UPDATE _vt.schema_migrations
 			SET is_view=%a
 		WHERE

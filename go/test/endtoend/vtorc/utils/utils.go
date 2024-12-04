@@ -376,7 +376,6 @@ func CheckPrimaryTablet(t *testing.T, clusterInfo *VTOrcClusterInfo, tablet *clu
 	for {
 		now := time.Now()
 		if now.Sub(start) > time.Second*60 {
-			//log.Exitf("error")
 			assert.FailNow(t, "failed to elect primary before timeout")
 		}
 		tabletInfo, err := clusterInfo.ClusterInstance.VtctldClientProcess.GetTablet(tablet.Alias)
@@ -775,10 +774,10 @@ func MakeAPICallRetry(t *testing.T, vtorc *cluster.VTOrcProcess, url string, ret
 	for {
 		select {
 		case <-timeout:
-			t.Fatal("timed out waiting for api to work")
+			t.Fatalf("timed out waiting for api to work. Last response - %s", response)
 			return
 		default:
-			status, response, _ := MakeAPICall(t, vtorc, url)
+			status, response, _ = MakeAPICall(t, vtorc, url)
 			if retry(status, response) {
 				time.Sleep(1 * time.Second)
 				break

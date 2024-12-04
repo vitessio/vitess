@@ -25,6 +25,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/callerid"
@@ -138,7 +140,7 @@ func TestPlanExecutorAlterVSchemaKeyspace(t *testing.T) {
 		vschemaacl.AuthorizedDDLUsers = ""
 	}()
 	executor, _, _, _, ctx := createExecutorEnv(t)
-	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary", Autocommit: true})
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@primary", Autocommit: true})
 
 	vschemaUpdates := make(chan *vschemapb.SrvVSchema, 2)
 	executor.serv.WatchSrvVSchema(ctx, "aa", func(vschema *vschemapb.SrvVSchema, err error) bool {
@@ -180,7 +182,7 @@ func TestPlanExecutorCreateVindexDDL(t *testing.T) {
 		t.Fatalf("test_vindex should not exist in original vschema")
 	}
 
-	session := NewSafeSession(&vtgatepb.Session{TargetString: ks})
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: ks})
 	stmt := "alter vschema create vindex test_vindex using hash"
 	_, err := executor.Execute(ctx, nil, "TestExecute", session, stmt, nil)
 	require.NoError(t, err)
@@ -222,7 +224,7 @@ func TestPlanExecutorDropVindexDDL(t *testing.T) {
 		t.Fatalf("test_vindex should not exist in original vschema")
 	}
 
-	session := NewSafeSession(&vtgatepb.Session{TargetString: ks})
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: ks})
 	stmt := "alter vschema drop vindex test_vindex"
 	_, err := executor.Execute(ctx, nil, "TestExecute", session, stmt, nil)
 	wantErr := "vindex test_vindex does not exists in keyspace TestExecutor"
@@ -296,7 +298,7 @@ func TestPlanExecutorAddDropVschemaTableDDL(t *testing.T) {
 		vschemaTables = append(vschemaTables, t)
 	}
 
-	session := NewSafeSession(&vtgatepb.Session{TargetString: ks})
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: ks})
 	stmt := "alter vschema add table test_table"
 	_, err := executor.Execute(ctx, nil, "TestExecute", session, stmt, nil)
 	require.NoError(t, err)
@@ -308,7 +310,7 @@ func TestPlanExecutorAddDropVschemaTableDDL(t *testing.T) {
 	_ = waitForVschemaTables(t, ks, append([]string{"test_table", "test_table2"}, vschemaTables...), executor)
 
 	// Should fail adding a table on a sharded keyspace
-	session = NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
+	session = econtext.NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
 	stmt = "alter vschema add table test_table"
 	_, err = executor.Execute(ctx, nil, "TestExecute", session, stmt, nil)
 	wantErr := "add vschema table: unsupported on sharded keyspace TestExecutor"
@@ -343,7 +345,7 @@ func TestExecutorAddSequenceDDL(t *testing.T) {
 		vschemaTables = append(vschemaTables, t)
 	}
 
-	session := NewSafeSession(&vtgatepb.Session{TargetString: ks})
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: ks})
 	stmt := "alter vschema add sequence test_seq"
 	_, err := executor.Execute(ctx, nil, "TestExecute", session, stmt, nil)
 	require.NoError(t, err)
@@ -357,7 +359,7 @@ func TestExecutorAddSequenceDDL(t *testing.T) {
 
 	// Should fail adding a table on a sharded keyspace
 	ksSharded := "TestExecutor"
-	session = NewSafeSession(&vtgatepb.Session{TargetString: ksSharded})
+	session = econtext.NewSafeSession(&vtgatepb.Session{TargetString: ksSharded})
 
 	stmt = "alter vschema add sequence sequence_table"
 	_, err = executor.Execute(ctx, nil, "TestExecute", session, stmt, nil)
@@ -403,7 +405,7 @@ func TestExecutorDropSequenceDDL(t *testing.T) {
 		t.Fatalf("test_seq should not exist in original vschema")
 	}
 
-	session := NewSafeSession(&vtgatepb.Session{TargetString: ks})
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: ks})
 
 	// add test sequence
 	stmt := "alter vschema add sequence test_seq"
@@ -428,7 +430,7 @@ func TestExecutorDropSequenceDDL(t *testing.T) {
 	}
 
 	// Should fail dropping a non-existing test sequence
-	session = NewSafeSession(&vtgatepb.Session{TargetString: ks})
+	session = econtext.NewSafeSession(&vtgatepb.Session{TargetString: ks})
 
 	stmt = "alter vschema drop sequence test_seq"
 	_, err = executor.Execute(ctx, nil, "TestExecute", session, stmt, nil)
@@ -447,7 +449,7 @@ func TestExecutorDropAutoIncDDL(t *testing.T) {
 	executor, _, _, _, ctx := createExecutorEnv(t)
 	ks := KsTestUnsharded
 
-	session := NewSafeSession(&vtgatepb.Session{TargetString: ks})
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: ks})
 
 	stmt := "alter vschema add table test_table"
 	_, err := executor.Execute(ctx, nil, "TestExecute", session, stmt, nil)
@@ -488,7 +490,7 @@ func TestExecutorAddDropVindexDDL(t *testing.T) {
 	}()
 	executor, sbc1, sbc2, sbclookup, ctx := createExecutorEnv(t)
 	ks := "TestExecutor"
-	session := NewSafeSession(&vtgatepb.Session{TargetString: ks})
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: ks})
 	vschemaUpdates := make(chan *vschemapb.SrvVSchema, 4)
 	executor.serv.WatchSrvVSchema(ctx, "aa", func(vschema *vschemapb.SrvVSchema, err error) bool {
 		vschemaUpdates <- vschema
@@ -706,7 +708,7 @@ func TestExecutorAddDropVindexDDL(t *testing.T) {
 	require.EqualError(t, err, "table TestExecutor.nonexistent not defined in vschema")
 
 	stmt = "alter vschema on nonexistent drop vindex test_lookup"
-	_, err = executor.Execute(ctx, nil, "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: "InvalidKeyspace"}), stmt, nil)
+	_, err = executor.Execute(ctx, nil, "TestExecute", econtext.NewSafeSession(&vtgatepb.Session{TargetString: "InvalidKeyspace"}), stmt, nil)
 	require.EqualError(t, err, "VT05003: unknown database 'InvalidKeyspace' in vschema")
 
 	stmt = "alter vschema on nowhere.nohow drop vindex test_lookup"
@@ -731,7 +733,7 @@ func TestPlanExecutorVindexDDLACL(t *testing.T) {
 	// t.Skip("not yet planned")
 	executor, _, _, _, ctx := createExecutorEnv(t)
 	ks := "TestExecutor"
-	session := NewSafeSession(&vtgatepb.Session{TargetString: ks})
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: ks})
 
 	ctxRedUser := callerid.NewContext(ctx, &vtrpcpb.CallerID{}, &querypb.VTGateCallerID{Username: "redUser"})
 	ctxBlueUser := callerid.NewContext(ctx, &vtrpcpb.CallerID{}, &querypb.VTGateCallerID{Username: "blueUser"})
