@@ -57,6 +57,7 @@ func TestNewSQLErrorFromError(t *testing.T) {
 	var tCases = []struct {
 		err error
 		num ErrorCode
+		ha  HandlerErrorCode
 		ss  string
 	}{
 		{
@@ -179,6 +180,24 @@ func TestNewSQLErrorFromError(t *testing.T) {
 			num: ERDupEntry,
 			ss:  SSConstraintViolation,
 		},
+		{
+			err: fmt.Errorf("ERROR HY000: Got error 204 - 'No more room in disk' during COMMIT"),
+			num: ERUnknownError,
+			ss:  SSUnknownSQLState,
+			ha:  HaErrDiskFullNowait,
+		},
+		{
+			err: fmt.Errorf("COMMIT failed w/ error: Got error 204 - 'No more room in disk' during COMMIT (errno 1180) (sqlstate HY000) during query: commit"),
+			num: ERErrorDuringCommit,
+			ss:  SSUnknownSQLState,
+			ha:  HaErrDiskFullNowait,
+		},
+		{
+			err: fmt.Errorf("COMMIT failed w/ error: Got error 149 - 'Lock deadlock; Retry transaction' during COMMIT (errno 1180) (sqlstate HY000) during query: commit"),
+			num: ERErrorDuringCommit,
+			ss:  SSUnknownSQLState,
+			ha:  HaErrLockDeadlock,
+		},
 	}
 
 	for _, tc := range tCases {
@@ -187,6 +206,8 @@ func TestNewSQLErrorFromError(t *testing.T) {
 			require.ErrorAs(t, NewSQLErrorFromError(tc.err), &err)
 			assert.Equal(t, tc.num, err.Number())
 			assert.Equal(t, tc.ss, err.SQLState())
+			ha := err.HaErrorCode()
+			assert.Equal(t, tc.ha, ha)
 		})
 	}
 }

@@ -366,6 +366,10 @@ func (*filePosFlavor) baseShowTablesWithSizes() string {
 	return TablesWithSize56
 }
 
+func (filePosFlavor) baseShowInnodbTableSizes() string {
+	return ""
+}
+
 // supportsCapability is part of the Flavor interface.
 func (f *filePosFlavor) supportsCapability(capability capabilities.FlavorCapability) (bool, error) {
 	switch capability {

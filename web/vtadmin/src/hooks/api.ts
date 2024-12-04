@@ -82,6 +82,8 @@ import {
     createMoveTables,
     startWorkflow,
     stopWorkflow,
+    FetchTransactionParams,
+    fetchTransaction,
     FetchTransactionsParams,
     fetchTransactions,
     completeMoveTables,
@@ -93,6 +95,8 @@ import {
     showVDiff,
     ShowVDiffParams,
     createMaterialize,
+    fetchSchemaMigrations,
+    applySchema,
 } from '../api/http';
 import { vtadmin as pb, vtctldata } from '../proto/vtadmin';
 import { formatAlias } from '../util/tablets';
@@ -425,6 +429,16 @@ export const useTransactions = (
     options?: UseQueryOptions<vtctldata.GetUnresolvedTransactionsResponse, Error> | undefined
 ) => {
     return useQuery(['transactions', params], () => fetchTransactions(params), { ...options });
+};
+
+/**
+ * useTransaction is a query hook that fetches the details of a transaction for the given dtid.
+ */
+export const useTransaction = (
+    params: FetchTransactionParams,
+    options?: UseQueryOptions<vtctldata.GetTransactionInfoResponse, Error> | undefined
+) => {
+    return useQuery(['transaction', params], () => fetchTransaction(params), { ...options });
 };
 
 /**
@@ -783,4 +797,26 @@ export const useShowVDiff = (
     options?: UseQueryOptions<pb.VDiffShowResponse, Error> | undefined
 ) => {
     return useQuery(['vdiff_show', params], () => showVDiff(params), { ...options });
+};
+
+/**
+ * useSchemaMigrations is a query hook that fetches schema migrations.
+ */
+export const useSchemaMigrations = (
+    request: pb.IGetSchemaMigrationsRequest,
+    options?: UseQueryOptions<pb.GetSchemaMigrationsResponse, Error> | undefined
+) => {
+    return useQuery(['migrations', request], () => fetchSchemaMigrations(request), { ...options });
+};
+
+/**
+ * useApplySchema is a mutation query hook that creates ApplySchema request.
+ */
+export const useApplySchema = (
+    params: Parameters<typeof applySchema>[0],
+    options: UseMutationOptions<Awaited<ReturnType<typeof applySchema>>, Error>
+) => {
+    return useMutation<Awaited<ReturnType<typeof applySchema>>, Error>(() => {
+        return applySchema(params);
+    }, options);
 };

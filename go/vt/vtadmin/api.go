@@ -59,6 +59,7 @@ import (
 	"vitess.io/vitess/go/vt/vtadmin/rbac"
 	"vitess.io/vitess/go/vt/vtadmin/sort"
 	"vitess.io/vitess/go/vt/vtadmin/vtadminproto"
+	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -425,6 +426,7 @@ func (api *API) Handler() http.Handler {
 	router.HandleFunc("/tablet/{tablet}/externally_promoted", httpAPI.Adapt(vtadminhttp.TabletExternallyPromoted)).Name("API.TabletExternallyPromoted").Methods("POST")
 	router.HandleFunc("/transactions/{cluster_id}/{keyspace}", httpAPI.Adapt(vtadminhttp.GetUnresolvedTransactions)).Name("API.GetUnresolvedTransactions").Methods("GET")
 	router.HandleFunc("/transaction/{cluster_id}/{dtid}/conclude", httpAPI.Adapt(vtadminhttp.ConcludeTransaction)).Name("API.ConcludeTransaction")
+	router.HandleFunc("/transaction/{cluster_id}/{dtid}/info", httpAPI.Adapt(vtadminhttp.GetTransactionInfo)).Name("API.GetTransactionInfo")
 	router.HandleFunc("/vschema/{cluster_id}/{keyspace}", httpAPI.Adapt(vtadminhttp.GetVSchema)).Name("API.GetVSchema")
 	router.HandleFunc("/vschemas", httpAPI.Adapt(vtadminhttp.GetVSchemas)).Name("API.GetVSchemas")
 	router.HandleFunc("/vdiff/{cluster_id}/", httpAPI.Adapt(vtadminhttp.VDiffCreate)).Name("API.VDiffCreate").Methods("POST")
@@ -486,6 +488,31 @@ func (api *API) ApplySchema(ctx context.Context, req *vtadminpb.ApplySchemaReque
 	if err != nil {
 		return nil, err
 	}
+
+	// Parser with default options. New() itself initializes with default MySQL version.
+	parser, err := sqlparser.New(sqlparser.Options{
+		TruncateUILen:  512,
+		TruncateErrLen: 0,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Split the sql statement received from request.
+	sqlParts, err := parser.SplitStatementToPieces(req.Sql)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Request.Sql = sqlParts
+
+	// Set the callerID if not empty.
+	if req.CallerId != "" {
+		req.Request.CallerId = &vtrpcpb.CallerID{Principal: req.CallerId}
+	}
+
+	// Set the default wait replicas timeout.
+	req.Request.WaitReplicasTimeout = protoutil.DurationToProto(grpcvtctldserver.DefaultWaitReplicasTimeout)
 
 	return c.ApplySchema(ctx, req.Request)
 }
@@ -1519,6 +1546,25 @@ func (api *API) GetTopologyPath(ctx context.Context, req *vtadminpb.GetTopologyP
 	}
 
 	return c.Vtctld.GetTopologyPath(ctx, &vtctldatapb.GetTopologyPathRequest{Path: req.Path})
+}
+
+// GetTransactionInfo is part of the vtadminpb.VTAdminServer interface.
+func (api *API) GetTransactionInfo(ctx context.Context, req *vtadminpb.GetTransactionInfoRequest) (*vtctldatapb.GetTransactionInfoResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.GetTransactionInfo")
+	defer span.Finish()
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	cluster.AnnotateSpan(c, span)
+
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.ClusterResource, rbac.GetAction) {
+		return nil, nil
+	}
+
+	return c.Vtctld.GetTransactionInfo(ctx, req.Request)
 }
 
 // GetUnresolvedTransactions is part of the vtadminpb.VTAdminServer interface.

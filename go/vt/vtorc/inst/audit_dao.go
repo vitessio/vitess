@@ -38,10 +38,10 @@ func AuditOperation(auditType string, tabletAlias string, message string) error 
 	}
 
 	auditWrittenToFile := false
-	if config.Config.AuditLogFile != "" {
+	if config.GetAuditFileLocation() != "" {
 		auditWrittenToFile = true
 		go func() {
-			f, err := os.OpenFile(config.Config.AuditLogFile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0640)
+			f, err := os.OpenFile(config.GetAuditFileLocation(), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0640)
 			if err != nil {
 				log.Error(err)
 				return
@@ -54,15 +54,23 @@ func AuditOperation(auditType string, tabletAlias string, message string) error 
 			}
 		}()
 	}
-	if config.Config.AuditToBackendDB {
-		_, err := db.ExecVTOrc(`
-			insert
-				into audit (
-					audit_timestamp, audit_type, alias, keyspace, shard, message
-				) VALUES (
-					NOW(), ?, ?, ?, ?, ?
-				)
-			`,
+	if config.GetAuditToBackend() {
+		_, err := db.ExecVTOrc(`INSERT
+			INTO audit (
+				audit_timestamp,
+				audit_type,
+				alias,
+				keyspace,
+				shard,
+				message
+			) VALUES (
+				DATETIME('now'),
+				?,
+				?,
+				?,
+				?,
+				?
+			)`,
 			auditType,
 			tabletAlias,
 			keyspace,

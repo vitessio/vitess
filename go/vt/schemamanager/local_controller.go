@@ -208,8 +208,10 @@ func (controller *LocalController) writeToLogDir(ctx context.Context, result *Ex
 	rowsReturned := uint64(0)
 	rowsAffected := uint64(0)
 	for _, queryResult := range result.SuccessShards {
-		rowsReturned += uint64(len(queryResult.Result.Rows))
-		rowsAffected += queryResult.Result.RowsAffected
+		for _, result := range queryResult.Results {
+			rowsReturned += uint64(len(result.Rows))
+			rowsAffected += result.RowsAffected
+		}
 	}
 	logFile.WriteString(fmt.Sprintf("-- Rows returned: %d\n", rowsReturned))
 	logFile.WriteString(fmt.Sprintf("-- Rows affected: %d\n", rowsAffected))

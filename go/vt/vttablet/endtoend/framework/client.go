@@ -158,7 +158,7 @@ func (client *QueryClient) CreateTransaction(dtid string, participants []*queryp
 }
 
 // StartCommit issues a StartCommit to TabletServer for the current transaction.
-func (client *QueryClient) StartCommit(dtid string) error {
+func (client *QueryClient) StartCommit(dtid string) (querypb.StartCommitState, error) {
 	defer func() { client.transactionID = 0 }()
 	return client.server.StartCommit(client.ctx, client.target, client.transactionID, dtid)
 }

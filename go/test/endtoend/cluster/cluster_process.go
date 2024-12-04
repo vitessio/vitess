@@ -104,6 +104,7 @@ type LocalProcessCluster struct {
 	VtctlclientProcess  VtctlClientProcess
 	VtctldClientProcess VtctldClientProcess
 	VtctlProcess        VtctlProcess
+	VtadminProcess      VtAdminProcess
 
 	// background executable processes
 	TopoProcess     TopoProcess
@@ -1061,6 +1062,10 @@ func (cluster *LocalProcessCluster) Teardown() {
 		}
 	}
 
+	if err := cluster.VtadminProcess.TearDown(); err != nil {
+		log.Errorf("Error in vtadmin teardown: %v", err)
+	}
+
 	var mysqlctlProcessList []*exec.Cmd
 	var mysqlctlTabletUIDs []int
 	for _, keyspace := range cluster.Keyspaces {
@@ -1296,8 +1301,20 @@ func (cluster *LocalProcessCluster) NewVTOrcProcess(config VTOrcConfiguration) *
 		VtctlProcess: *base,
 		LogDir:       cluster.TmpDirectory,
 		Config:       config,
-		WebPort:      cluster.GetAndReservePort(),
 		Port:         cluster.GetAndReservePort(),
+	}
+}
+
+// NewVTAdminProcess creates a new VTAdminProcess object
+func (cluster *LocalProcessCluster) NewVTAdminProcess() {
+	cluster.VtadminProcess = VtAdminProcess{
+		Binary:         "vtadmin",
+		Port:           cluster.GetAndReservePort(),
+		LogDir:         cluster.TmpDirectory,
+		VtGateGrpcPort: cluster.VtgateProcess.GrpcPort,
+		VtGateWebPort:  cluster.VtgateProcess.Port,
+		VtctldWebPort:  cluster.VtctldProcess.Port,
+		VtctldGrpcPort: cluster.VtctldProcess.GrpcPort,
 	}
 }
 

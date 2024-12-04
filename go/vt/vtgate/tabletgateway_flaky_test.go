@@ -20,6 +20,8 @@ import (
 	"testing"
 	"time"
 
+	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -53,7 +55,7 @@ func TestGatewayBufferingWhenPrimarySwitchesServingState(t *testing.T) {
 		TabletType: tabletType,
 	}
 
-	ts := &fakeTopoServer{}
+	ts := &econtext.FakeTopoServer{}
 	// create a new fake health check. We want to check the buffering code which uses Subscribe, so we must also pass a channel
 	hc := discovery.NewFakeHealthCheck(make(chan *discovery.TabletHealth))
 	// create a new tablet gateway
@@ -156,7 +158,7 @@ func TestGatewayBufferingWhileReparenting(t *testing.T) {
 		TabletType: tabletType,
 	}
 
-	ts := &fakeTopoServer{}
+	ts := &econtext.FakeTopoServer{}
 	// create a new fake health check. We want to check the buffering code which uses Subscribe, so we must also pass a channel
 	hc := discovery.NewFakeHealthCheck(make(chan *discovery.TabletHealth))
 	// create a new tablet gateway
@@ -234,6 +236,7 @@ func TestGatewayBufferingWhileReparenting(t *testing.T) {
 	hc.SetTabletType(primaryTablet, topodatapb.TabletType_REPLICA)
 	hc.Broadcast(primaryTablet)
 	hc.SetTabletType(replicaTablet, topodatapb.TabletType_PRIMARY)
+	hc.SetPrimaryTimestamp(replicaTablet, 100) // We set a higher timestamp than before to simulate a PRS.
 	hc.SetServing(replicaTablet, true)
 	hc.Broadcast(replicaTablet)
 
@@ -245,7 +248,7 @@ outer:
 			require.Fail(t, "timed out - could not verify the new primary")
 		case <-time.After(10 * time.Millisecond):
 			newPrimary, shouldBuffer := tg.kev.ShouldStartBufferingForTarget(ctx, target)
-			if newPrimary != nil && newPrimary.Uid == 1 && !shouldBuffer {
+			if newPrimary != nil && newPrimary.Uid == replicaTablet.Alias.Uid && !shouldBuffer {
 				break outer
 			}
 		}
@@ -285,7 +288,7 @@ func TestInconsistentStateDetectedBuffering(t *testing.T) {
 		TabletType: tabletType,
 	}
 
-	ts := &fakeTopoServer{}
+	ts := &econtext.FakeTopoServer{}
 	// create a new fake health check. We want to check the buffering code which uses Subscribe, so we must also pass a channel
 	hc := discovery.NewFakeHealthCheck(make(chan *discovery.TabletHealth))
 	// create a new tablet gateway

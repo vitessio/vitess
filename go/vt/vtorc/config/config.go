@@ -17,14 +17,12 @@
 package config
 
 import (
-	"encoding/json"
-	"fmt"
-	"os"
 	"time"
 
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/viperutil"
+	"vitess.io/vitess/go/vt/servenv"
 )
 
 var configurationLoaded = make(chan bool)
@@ -42,200 +40,296 @@ const (
 )
 
 var (
-	sqliteDataFile                 = "file::memory:?mode=memory&cache=shared"
-	instancePollTime               = 5 * time.Second
-	snapshotTopologyInterval       = 0 * time.Hour
-	reasonableReplicationLag       = 10 * time.Second
-	auditFileLocation              = ""
-	auditToBackend                 = false
-	auditToSyslog                  = false
-	auditPurgeDuration             = 7 * 24 * time.Hour // Equivalent of 7 days
-	recoveryPeriodBlockDuration    = 30 * time.Second
-	preventCrossCellFailover       = false
-	waitReplicasTimeout            = 30 * time.Second
-	tolerableReplicationLag        = 0 * time.Second
-	topoInformationRefreshDuration = 15 * time.Second
-	recoveryPollDuration           = 1 * time.Second
-	ersEnabled                     = true
-	convertTabletsWithErrantGTIDs  = false
+	instancePollTime = viperutil.Configure(
+		"instance-poll-time",
+		viperutil.Options[time.Duration]{
+			FlagName: "instance-poll-time",
+			Default:  5 * time.Second,
+			Dynamic:  true,
+		},
+	)
+
+	preventCrossCellFailover = viperutil.Configure(
+		"prevent-cross-cell-failover",
+		viperutil.Options[bool]{
+			FlagName: "prevent-cross-cell-failover",
+			Default:  false,
+			Dynamic:  true,
+		},
+	)
+
+	sqliteDataFile = viperutil.Configure(
+		"sqlite-data-file",
+		viperutil.Options[string]{
+			FlagName: "sqlite-data-file",
+			Default:  "file::memory:?mode=memory&cache=shared",
+			Dynamic:  false,
+		},
+	)
+
+	snapshotTopologyInterval = viperutil.Configure(
+		"snapshot-topology-interval",
+		viperutil.Options[time.Duration]{
+			FlagName: "snapshot-topology-interval",
+			Default:  0 * time.Hour,
+			Dynamic:  true,
+		},
+	)
+
+	reasonableReplicationLag = viperutil.Configure(
+		"reasonable-replication-lag",
+		viperutil.Options[time.Duration]{
+			FlagName: "reasonable-replication-lag",
+			Default:  10 * time.Second,
+			Dynamic:  true,
+		},
+	)
+
+	auditFileLocation = viperutil.Configure(
+		"audit-file-location",
+		viperutil.Options[string]{
+			FlagName: "audit-file-location",
+			Default:  "",
+			Dynamic:  false,
+		},
+	)
+
+	auditToBackend = viperutil.Configure(
+		"audit-to-backend",
+		viperutil.Options[bool]{
+			FlagName: "audit-to-backend",
+			Default:  false,
+			Dynamic:  true,
+		},
+	)
+
+	auditToSyslog = viperutil.Configure(
+		"audit-to-syslog",
+		viperutil.Options[bool]{
+			FlagName: "audit-to-syslog",
+			Default:  false,
+			Dynamic:  true,
+		},
+	)
+
+	auditPurgeDuration = viperutil.Configure(
+		"audit-purge-duration",
+		viperutil.Options[time.Duration]{
+			FlagName: "audit-purge-duration",
+			Default:  7 * 24 * time.Hour,
+			Dynamic:  true,
+		},
+	)
+
+	waitReplicasTimeout = viperutil.Configure(
+		"wait-replicas-timeout",
+		viperutil.Options[time.Duration]{
+			FlagName: "wait-replicas-timeout",
+			Default:  30 * time.Second,
+			Dynamic:  true,
+		},
+	)
+
+	tolerableReplicationLag = viperutil.Configure(
+		"tolerable-replication-lag",
+		viperutil.Options[time.Duration]{
+			FlagName: "tolerable-replication-lag",
+			Default:  0 * time.Second,
+			Dynamic:  true,
+		},
+	)
+
+	topoInformationRefreshDuration = viperutil.Configure(
+		"topo-information-refresh-duration",
+		viperutil.Options[time.Duration]{
+			FlagName: "topo-information-refresh-duration",
+			Default:  15 * time.Second,
+			Dynamic:  true,
+		},
+	)
+
+	recoveryPollDuration = viperutil.Configure(
+		"recovery-poll-duration",
+		viperutil.Options[time.Duration]{
+			FlagName: "recovery-poll-duration",
+			Default:  1 * time.Second,
+			Dynamic:  true,
+		},
+	)
+
+	ersEnabled = viperutil.Configure(
+		"allow-emergency-reparent",
+		viperutil.Options[bool]{
+			FlagName: "allow-emergency-reparent",
+			Default:  true,
+			Dynamic:  true,
+		},
+	)
+
+	convertTabletsWithErrantGTIDs = viperutil.Configure(
+		"change-tablets-with-errant-gtid-to-drained",
+		viperutil.Options[bool]{
+			FlagName: "change-tablets-with-errant-gtid-to-drained",
+			Default:  false,
+			Dynamic:  true,
+		},
+	)
 )
 
-// RegisterFlags registers the flags required by VTOrc
-func RegisterFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&sqliteDataFile, "sqlite-data-file", sqliteDataFile, "SQLite Datafile to use as VTOrc's database")
-	fs.DurationVar(&instancePollTime, "instance-poll-time", instancePollTime, "Timer duration on which VTOrc refreshes MySQL information")
-	fs.DurationVar(&snapshotTopologyInterval, "snapshot-topology-interval", snapshotTopologyInterval, "Timer duration on which VTOrc takes a snapshot of the current MySQL information it has in the database. Should be in multiple of hours")
-	fs.DurationVar(&reasonableReplicationLag, "reasonable-replication-lag", reasonableReplicationLag, "Maximum replication lag on replicas which is deemed to be acceptable")
-	fs.StringVar(&auditFileLocation, "audit-file-location", auditFileLocation, "File location where the audit logs are to be stored")
-	fs.BoolVar(&auditToBackend, "audit-to-backend", auditToBackend, "Whether to store the audit log in the VTOrc database")
-	fs.BoolVar(&auditToSyslog, "audit-to-syslog", auditToSyslog, "Whether to store the audit log in the syslog")
-	fs.DurationVar(&auditPurgeDuration, "audit-purge-duration", auditPurgeDuration, "Duration for which audit logs are held before being purged. Should be in multiples of days")
-	fs.DurationVar(&recoveryPeriodBlockDuration, "recovery-period-block-duration", recoveryPeriodBlockDuration, "Duration for which a new recovery is blocked on an instance after running a recovery")
-	fs.MarkDeprecated("recovery-period-block-duration", "As of v20 this is ignored and will be removed in a future release.")
-	fs.BoolVar(&preventCrossCellFailover, "prevent-cross-cell-failover", preventCrossCellFailover, "Prevent VTOrc from promoting a primary in a different cell than the current primary in case of a failover")
-	fs.DurationVar(&waitReplicasTimeout, "wait-replicas-timeout", waitReplicasTimeout, "Duration for which to wait for replica's to respond when issuing RPCs")
-	fs.DurationVar(&tolerableReplicationLag, "tolerable-replication-lag", tolerableReplicationLag, "Amount of replication lag that is considered acceptable for a tablet to be eligible for promotion when Vitess makes the choice of a new primary in PRS")
-	fs.DurationVar(&topoInformationRefreshDuration, "topo-information-refresh-duration", topoInformationRefreshDuration, "Timer duration on which VTOrc refreshes the keyspace and vttablet records from the topology server")
-	fs.DurationVar(&recoveryPollDuration, "recovery-poll-duration", recoveryPollDuration, "Timer duration on which VTOrc polls its database to run a recovery")
-	fs.BoolVar(&ersEnabled, "allow-emergency-reparent", ersEnabled, "Whether VTOrc should be allowed to run emergency reparent operation when it detects a dead primary")
-	fs.BoolVar(&convertTabletsWithErrantGTIDs, "change-tablets-with-errant-gtid-to-drained", convertTabletsWithErrantGTIDs, "Whether VTOrc should be changing the type of tablets with errant GTIDs to DRAINED")
+func init() {
+	servenv.OnParseFor("vtorc", registerFlags)
 }
 
-// Configuration makes for vtorc configuration input, which can be provided by user via JSON formatted file.
-// Some of the parameters have reasonable default values, and some (like database credentials) are
-// strictly expected from user.
-// TODO(sougou): change this to yaml parsing, and possible merge with tabletenv.
-type Configuration struct {
-	SQLite3DataFile                       string // full path to sqlite3 datafile
-	InstancePollSeconds                   uint   // Number of seconds between instance reads
-	SnapshotTopologiesIntervalHours       uint   // Interval in hour between snapshot-topologies invocation. Default: 0 (disabled)
-	ReasonableReplicationLagSeconds       int    // Above this value is considered a problem
-	AuditLogFile                          string // Name of log file for audit operations. Disabled when empty.
-	AuditToSyslog                         bool   // If true, audit messages are written to syslog
-	AuditToBackendDB                      bool   // If true, audit messages are written to the backend DB's `audit` table (default: true)
-	AuditPurgeDays                        uint   // Days after which audit entries are purged from the database
-	RecoveryPeriodBlockSeconds            int    // (overrides `RecoveryPeriodBlockMinutes`) The time for which an instance's recovery is kept "active", so as to avoid concurrent recoveries on smae instance as well as flapping
-	PreventCrossDataCenterPrimaryFailover bool   // When true (default: false), cross-DC primary failover are not allowed, vtorc will do all it can to only fail over within same DC, or else not fail over at all.
-	WaitReplicasTimeoutSeconds            int    // Timeout on amount of time to wait for the replicas in case of ERS. Should be a small value because we should fail-fast. Should not be larger than LockTimeout since that is the total time we use for an ERS.
-	TolerableReplicationLagSeconds        int    // Amount of replication lag that is considered acceptable for a tablet to be eligible for promotion when Vitess makes the choice of a new primary in PRS.
-	TopoInformationRefreshSeconds         int    // Timer duration on which VTOrc refreshes the keyspace and vttablet records from the topo-server.
-	RecoveryPollSeconds                   int    // Timer duration on which VTOrc recovery analysis runs
+// registerFlags registers the flags required by VTOrc
+func registerFlags(fs *pflag.FlagSet) {
+	fs.String("sqlite-data-file", sqliteDataFile.Default(), "SQLite Datafile to use as VTOrc's database")
+	fs.Duration("instance-poll-time", instancePollTime.Default(), "Timer duration on which VTOrc refreshes MySQL information")
+	fs.Duration("snapshot-topology-interval", snapshotTopologyInterval.Default(), "Timer duration on which VTOrc takes a snapshot of the current MySQL information it has in the database. Should be in multiple of hours")
+	fs.Duration("reasonable-replication-lag", reasonableReplicationLag.Default(), "Maximum replication lag on replicas which is deemed to be acceptable")
+	fs.String("audit-file-location", auditFileLocation.Default(), "File location where the audit logs are to be stored")
+	fs.Bool("audit-to-backend", auditToBackend.Default(), "Whether to store the audit log in the VTOrc database")
+	fs.Bool("audit-to-syslog", auditToSyslog.Default(), "Whether to store the audit log in the syslog")
+	fs.Duration("audit-purge-duration", auditPurgeDuration.Default(), "Duration for which audit logs are held before being purged. Should be in multiples of days")
+	fs.Bool("prevent-cross-cell-failover", preventCrossCellFailover.Default(), "Prevent VTOrc from promoting a primary in a different cell than the current primary in case of a failover")
+	fs.Duration("wait-replicas-timeout", waitReplicasTimeout.Default(), "Duration for which to wait for replica's to respond when issuing RPCs")
+	fs.Duration("tolerable-replication-lag", tolerableReplicationLag.Default(), "Amount of replication lag that is considered acceptable for a tablet to be eligible for promotion when Vitess makes the choice of a new primary in PRS")
+	fs.Duration("topo-information-refresh-duration", topoInformationRefreshDuration.Default(), "Timer duration on which VTOrc refreshes the keyspace and vttablet records from the topology server")
+	fs.Duration("recovery-poll-duration", recoveryPollDuration.Default(), "Timer duration on which VTOrc polls its database to run a recovery")
+	fs.Bool("allow-emergency-reparent", ersEnabled.Default(), "Whether VTOrc should be allowed to run emergency reparent operation when it detects a dead primary")
+	fs.Bool("change-tablets-with-errant-gtid-to-drained", convertTabletsWithErrantGTIDs.Default(), "Whether VTOrc should be changing the type of tablets with errant GTIDs to DRAINED")
+
+	viperutil.BindFlags(fs,
+		instancePollTime,
+		preventCrossCellFailover,
+		sqliteDataFile,
+		snapshotTopologyInterval,
+		reasonableReplicationLag,
+		auditFileLocation,
+		auditToBackend,
+		auditToSyslog,
+		auditPurgeDuration,
+		waitReplicasTimeout,
+		tolerableReplicationLag,
+		topoInformationRefreshDuration,
+		recoveryPollDuration,
+		ersEnabled,
+		convertTabletsWithErrantGTIDs,
+	)
 }
 
-// ToJSONString will marshal this configuration as JSON
-func (config *Configuration) ToJSONString() string {
-	b, _ := json.Marshal(config)
-	return string(b)
+// GetInstancePollTime is a getter function.
+func GetInstancePollTime() time.Duration {
+	return instancePollTime.Get()
 }
 
-// Config is *the* configuration instance, used globally to get configuration data
-var Config = newConfiguration()
-var readFileNames []string
+// SetInstancePollTime is a setter function.
+func SetInstancePollTime(v time.Duration) {
+	instancePollTime.Set(v)
+}
 
-// UpdateConfigValuesFromFlags is used to update the config values from the flags defined.
-// This is done before we read any configuration files from the user. So the config files take precedence.
-func UpdateConfigValuesFromFlags() {
-	Config.SQLite3DataFile = sqliteDataFile
-	Config.InstancePollSeconds = uint(instancePollTime / time.Second)
-	Config.InstancePollSeconds = uint(instancePollTime / time.Second)
-	Config.SnapshotTopologiesIntervalHours = uint(snapshotTopologyInterval / time.Hour)
-	Config.ReasonableReplicationLagSeconds = int(reasonableReplicationLag / time.Second)
-	Config.AuditLogFile = auditFileLocation
-	Config.AuditToBackendDB = auditToBackend
-	Config.AuditToSyslog = auditToSyslog
-	Config.AuditPurgeDays = uint(auditPurgeDuration / (time.Hour * 24))
-	Config.RecoveryPeriodBlockSeconds = int(recoveryPeriodBlockDuration / time.Second)
-	Config.PreventCrossDataCenterPrimaryFailover = preventCrossCellFailover
-	Config.WaitReplicasTimeoutSeconds = int(waitReplicasTimeout / time.Second)
-	Config.TolerableReplicationLagSeconds = int(tolerableReplicationLag / time.Second)
-	Config.TopoInformationRefreshSeconds = int(topoInformationRefreshDuration / time.Second)
-	Config.RecoveryPollSeconds = int(recoveryPollDuration / time.Second)
+// GetInstancePollSeconds gets the instance poll time but in seconds.
+func GetInstancePollSeconds() uint {
+	return uint(instancePollTime.Get() / time.Second)
+}
+
+// GetPreventCrossCellFailover is a getter function.
+func GetPreventCrossCellFailover() bool {
+	return preventCrossCellFailover.Get()
+}
+
+// GetSQLiteDataFile is a getter function.
+func GetSQLiteDataFile() string {
+	return sqliteDataFile.Get()
+}
+
+// GetReasonableReplicationLagSeconds gets the reasonable replication lag but in seconds.
+func GetReasonableReplicationLagSeconds() int64 {
+	return int64(reasonableReplicationLag.Get() / time.Second)
+}
+
+// GetSnapshotTopologyInterval is a getter function.
+func GetSnapshotTopologyInterval() time.Duration {
+	return snapshotTopologyInterval.Get()
+}
+
+// GetAuditFileLocation is a getter function.
+func GetAuditFileLocation() string {
+	return auditFileLocation.Get()
+}
+
+// SetAuditFileLocation is a setter function.
+func SetAuditFileLocation(v string) {
+	auditFileLocation.Set(v)
+}
+
+// GetAuditToSyslog is a getter function.
+func GetAuditToSyslog() bool {
+	return auditToSyslog.Get()
+}
+
+// SetAuditToSyslog is a setter function.
+func SetAuditToSyslog(v bool) {
+	auditToSyslog.Set(v)
+}
+
+// GetAuditToBackend is a getter function.
+func GetAuditToBackend() bool {
+	return auditToBackend.Get()
+}
+
+// SetAuditToBackend is a setter function.
+func SetAuditToBackend(v bool) {
+	auditToBackend.Set(v)
+}
+
+// GetAuditPurgeDays gets the audit purge duration but in days.
+func GetAuditPurgeDays() int64 {
+	return int64(auditPurgeDuration.Get() / (24 * time.Hour))
+}
+
+// SetAuditPurgeDays sets the audit purge duration.
+func SetAuditPurgeDays(days int64) {
+	auditPurgeDuration.Set(time.Duration(days) * 24 * time.Hour)
+}
+
+// GetWaitReplicasTimeout is a getter function.
+func GetWaitReplicasTimeout() time.Duration {
+	return waitReplicasTimeout.Get()
+}
+
+// GetTolerableReplicationLag is a getter function.
+func GetTolerableReplicationLag() time.Duration {
+	return tolerableReplicationLag.Get()
+}
+
+// GetTopoInformationRefreshDuration is a getter function.
+func GetTopoInformationRefreshDuration() time.Duration {
+	return topoInformationRefreshDuration.Get()
+}
+
+// GetRecoveryPollDuration is a getter function.
+func GetRecoveryPollDuration() time.Duration {
+	return recoveryPollDuration.Get()
 }
 
 // ERSEnabled reports whether VTOrc is allowed to run ERS or not.
 func ERSEnabled() bool {
-	return ersEnabled
+	return ersEnabled.Get()
 }
 
 // SetERSEnabled sets the value for the ersEnabled variable. This should only be used from tests.
 func SetERSEnabled(val bool) {
-	ersEnabled = val
+	ersEnabled.Set(val)
 }
 
 // ConvertTabletWithErrantGTIDs reports whether VTOrc is allowed to change the tablet type of tablets with errant GTIDs to DRAINED.
 func ConvertTabletWithErrantGTIDs() bool {
-	return convertTabletsWithErrantGTIDs
+	return convertTabletsWithErrantGTIDs.Get()
 }
 
 // SetConvertTabletWithErrantGTIDs sets the value for the convertTabletWithErrantGTIDs variable. This should only be used from tests.
 func SetConvertTabletWithErrantGTIDs(val bool) {
-	convertTabletsWithErrantGTIDs = val
-}
-
-// LogConfigValues is used to log the config values.
-func LogConfigValues() {
-	b, _ := json.MarshalIndent(Config, "", "\t")
-	log.Infof("Running with Configuration - %v", string(b))
-}
-
-func newConfiguration() *Configuration {
-	return &Configuration{
-		SQLite3DataFile:                       "file::memory:?mode=memory&cache=shared",
-		InstancePollSeconds:                   5,
-		SnapshotTopologiesIntervalHours:       0,
-		ReasonableReplicationLagSeconds:       10,
-		AuditLogFile:                          "",
-		AuditToSyslog:                         false,
-		AuditToBackendDB:                      false,
-		AuditPurgeDays:                        7,
-		RecoveryPeriodBlockSeconds:            30,
-		PreventCrossDataCenterPrimaryFailover: false,
-		WaitReplicasTimeoutSeconds:            30,
-		TopoInformationRefreshSeconds:         15,
-		RecoveryPollSeconds:                   1,
-	}
-}
-
-func (config *Configuration) postReadAdjustments() error {
-	if config.SQLite3DataFile == "" {
-		return fmt.Errorf("SQLite3DataFile must be set")
-	}
-
-	return nil
-}
-
-// read reads configuration from given file, or silently skips if the file does not exist.
-// If the file does exist, then it is expected to be in valid JSON format or the function bails out.
-func read(fileName string) (*Configuration, error) {
-	if fileName == "" {
-		return Config, fmt.Errorf("Empty file name")
-	}
-	file, err := os.Open(fileName)
-	if err != nil {
-		return Config, err
-	}
-	decoder := json.NewDecoder(file)
-	err = decoder.Decode(Config)
-	if err == nil {
-		log.Infof("Read config: %s", fileName)
-	} else {
-		log.Fatal("Cannot read config file:", fileName, err)
-	}
-	if err := Config.postReadAdjustments(); err != nil {
-		log.Fatal(err)
-	}
-	return Config, err
-}
-
-// Read reads configuration from zero, either, some or all given files, in order of input.
-// A file can override configuration provided in previous file.
-func Read(fileNames ...string) *Configuration {
-	for _, fileName := range fileNames {
-		_, _ = read(fileName)
-	}
-	readFileNames = fileNames
-	return Config
-}
-
-// ForceRead reads configuration from given file name or bails out if it fails
-func ForceRead(fileName string) *Configuration {
-	_, err := read(fileName)
-	if err != nil {
-		log.Fatal("Cannot read config file:", fileName, err)
-	}
-	readFileNames = []string{fileName}
-	return Config
-}
-
-// Reload re-reads configuration from last used files
-func Reload(extraFileNames ...string) *Configuration {
-	for _, fileName := range readFileNames {
-		_, _ = read(fileName)
-	}
-	for _, fileName := range extraFileNames {
-		_, _ = read(fileName)
-	}
-	return Config
+	convertTabletsWithErrantGTIDs.Set(val)
 }
 
 // MarkConfigurationLoaded is called once configuration has first been loaded.

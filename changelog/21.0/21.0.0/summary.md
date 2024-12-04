@@ -2,13 +2,14 @@
 
 ### Table of Contents
 
-- **[Known Issue](#known-issues)**
+- **[Known Issues](#known-issues)**
     - **[Backup reports itself as successful despite failures](#backup-reports-as-successful)**
 - **[Major Changes](#major-changes)**
     - **[Deprecations and Deletions](#deprecations-and-deletions)**
         - [Deprecated VTTablet Flags](#vttablet-flags)
         - [Deletion of deprecated metrics](#metric-deletion)
         - [Deprecated Metrics](#deprecations-metrics)
+    - **[RPC Changes](#rpc-changes)**
     - **[Traffic Mirroring](#traffic-mirroring)**
     - **[Atomic Distributed Transaction Support](#atomic-transaction)**
     - **[New VTGate Shutdown Behavior](#new-vtgate-shutdown-behavior)**
@@ -27,14 +28,14 @@
     - **[vtctldclient ChangeTabletTags](#vtctldclient-changetablettags)**
     - **[Support for specifying expected primary in reparents](#reparents-expectedprimary)**
 
-## <a id="known-issue"/>Known Issue</a>
+## <a id="known-issues"/>Known Issues</a>
 
 ### <a id="backup-reports-as-successful"/>Backup reports itself as successful despite failures</a>
 
-In this release, we identified an issue where a backup may succeed even if a file fails to be backed up.
-Leading to a successful backup, even if some errors occurred.
-This only happen with the Builtin Backup Engine, and when all files have already been initiated in the backup process.
-For more details, please refer to the related GitHub Issue https://github.com/vitessio/vitess/issues/17063.
+In this release, we have identified an issue where a backup may succeed even if one of the underlying files fails to be backed up.
+The underlying errors are ignored and the backup action reports success.
+This issue exists only with the `builtin` backup engine, and it can occur only when the engine has already started backing up all files.
+Please refer to https://github.com/vitessio/vitess/issues/17063 for more details.
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -76,6 +77,12 @@ The following metrics are now deprecated and will be deleted in a future release
 | `vttablet` | `QueryCacheEvictions` | `QueryEnginePlanCacheEvictions` |
 | `vttablet` |   `QueryCacheHits`    |   `QueryEnginePlanCacheHits`    |
 | `vttablet` |  `QueryCacheMisses`   |  `QueryEnginePlanCacheMisses`   |
+
+### <a id="rpc-changes"/>RPC Changes</a>
+
+These are the RPC changes made in this release - 
+1. `ReadReparentJournalInfo` RPC has been added in TabletManagerClient interface, that is going to be used in EmergencyReparentShard for better errant GTID detection.
+2. `PrimaryStatus` RPC in TabletManagerClient interface has been updated to also return the server UUID of the primary. This is going to be used in the vttablets so that they can do their own errant GTID detection in `SetReplicationSource`.
 
 ### <a id="traffic-mirroring"/>Traffic Mirroring</a>
 

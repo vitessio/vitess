@@ -226,7 +226,7 @@ func (client *FakeTabletManagerClient) ExecuteFetchAsApp(ctx context.Context, ta
 }
 
 // GetUnresolvedTransactions is part of the tmclient.TabletManagerClient interface.
-func (client *FakeTabletManagerClient) GetUnresolvedTransactions(ctx context.Context, tablet *topodatapb.Tablet) ([]*querypb.TransactionMetadata, error) {
+func (client *FakeTabletManagerClient) GetUnresolvedTransactions(ctx context.Context, tablet *topodatapb.Tablet, abandonAge int64) ([]*querypb.TransactionMetadata, error) {
 	return nil, nil
 }
 
@@ -242,6 +242,10 @@ func (client *FakeTabletManagerClient) MysqlHostMetrics(ctx context.Context, tab
 
 // ReadTransaction is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) ReadTransaction(ctx context.Context, tablet *topodatapb.Tablet, dtid string) (*querypb.TransactionMetadata, error) {
+	return nil, nil
+}
+
+func (client *FakeTabletManagerClient) GetTransactionInfo(ctx context.Context, tablet *topodatapb.Tablet, dtid string) (*tabletmanagerdatapb.GetTransactionInfoResponse, error) {
 	return nil, nil
 }
 

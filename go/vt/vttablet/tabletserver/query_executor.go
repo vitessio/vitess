@@ -991,6 +991,8 @@ func (qre *QueryExecutor) execAlterMigration() (*sqltypes.Result, error) {
 		return qre.tsv.onlineDDLExecutor.ForceCutOverMigration(qre.ctx, alterMigration.UUID)
 	case sqlparser.ForceCutOverAllMigrationType:
 		return qre.tsv.onlineDDLExecutor.ForceCutOverPendingMigrations(qre.ctx)
+	case sqlparser.SetCutOverThresholdMigrationType:
+		return qre.tsv.onlineDDLExecutor.SetMigrationCutOverThreshold(qre.ctx, alterMigration.UUID, alterMigration.Threshold)
 	}
 	return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "ALTER VITESS_MIGRATION not implemented")
 }
