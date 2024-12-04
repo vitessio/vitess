@@ -199,6 +199,7 @@ func tryCastStatement(v interface{}) Statement {
 %token <bytes> REPLICA REPLICAS SOURCE STOP RESET FILTER LOG MASTER
 %token <bytes> SOURCE_HOST SOURCE_USER SOURCE_PASSWORD SOURCE_PORT SOURCE_CONNECT_RETRY SOURCE_RETRY_COUNT SOURCE_AUTO_POSITION
 %token <bytes> REPLICATE_DO_TABLE REPLICATE_IGNORE_TABLE
+%token <bytes> IO_THREAD SQL_THREAD
 
 // Transaction Tokens
 %token <bytes> BEGIN START TRANSACTION COMMIT ROLLBACK SAVEPOINT WORK RELEASE CHAIN CONSISTENT SNAPSHOT
@@ -324,6 +325,7 @@ func tryCastStatement(v interface{}) Statement {
 %type <val> loop_statement leave_statement iterate_statement repeat_statement while_statement return_statement
 %type <val> savepoint_statement rollback_savepoint_statement release_savepoint_statement purge_binary_logs_statement
 %type <val> lock_statement unlock_statement kill_statement grant_statement revoke_statement flush_statement replication_statement
+%type <bytes> thread_type_opt
 %type <val> statement_list
 %type <val> case_statement_case_list
 %type <val> case_statement_case
@@ -4309,7 +4311,7 @@ replication_statement:
       },
     }
   }
-| STOP REPLICA
+| STOP REPLICA thread_type_opt
   {
     $$ = &StopReplica{
       Auth: AuthInformation{
@@ -4334,6 +4336,18 @@ all_opt:
 | ALL
   { $$ = true }
 
+thread_type_opt:
+  {
+    $$ = nil
+  }
+| IO_THREAD
+  {
+    $$ = $1
+  }
+| SQL_THREAD
+  {
+    $$ = $1
+  }
 
 replication_option_list:
   replication_option
@@ -11245,6 +11259,7 @@ non_reserved_keyword:
 | INSTANT
 | INVISIBLE
 | INVOKER
+| IO_THREAD
 | ISOLATION
 | ISSUER
 | JSON
@@ -11374,6 +11389,7 @@ non_reserved_keyword:
 | SOURCE_AUTO_POSITION
 | SOURCE_RETRY_COUNT
 | SOURCE_USER
+| SQL_THREAD
 | SRID
 | START
 | STARTS

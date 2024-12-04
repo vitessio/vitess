@@ -146,6 +146,14 @@ var (
 			input: "stop replica",
 		},
 		{
+			input:  "stop replica io_thread",
+			output: "stop replica",
+		},
+		{
+			input:  "stop replica sql_thread",
+			output: "stop replica",
+		},
+		{
 			input: "show replica status",
 		},
 		{
