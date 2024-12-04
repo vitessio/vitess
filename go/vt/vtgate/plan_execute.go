@@ -119,7 +119,7 @@ func (e *Executor) newExecute(
 			}
 		}
 
-		vcursor, err := econtext.NewVCursorImpl(safeSession, comments, e, logStats, e.vm, vs, e.resolver.resolver, e.serv, e.warnShardedOnly, e.pv, nullResultsObserver{}, e.vConfig)
+		vcursor, err := econtext.NewVCursorImpl(safeSession, comments, e, logStats, e.vm, vs, e.resolver.resolver, e.serv, nullResultsObserver{}, e.vConfig)
 		if err != nil {
 			return err
 		}

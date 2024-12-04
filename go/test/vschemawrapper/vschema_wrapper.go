@@ -63,12 +63,11 @@ func NewVschemaWrapper(
 	builder func(string, plancontext.VSchema, string) (*engine.Plan, error),
 ) (*VSchemaWrapper, error) {
 	ss := econtext.NewAutocommitSession(&vtgatepb.Session{})
-	vcursor, err := econtext.NewVCursorImpl(ss, sqlparser.MarginComments{}, nil, nil, nil, vschema,
-		nil, nil, false, querypb.ExecuteOptions_Gen4, nil, econtext.VCursorConfig{
-			Collation:         env.CollationEnv().DefaultConnectionCharset(),
-			DefaultTabletType: topodatapb.TabletType_PRIMARY,
-			SetVarEnabled:     true,
-		})
+	vcursor, err := econtext.NewVCursorImpl(ss, sqlparser.MarginComments{}, nil, nil, nil, vschema, nil, nil, nil, econtext.VCursorConfig{
+		Collation:         env.CollationEnv().DefaultConnectionCharset(),
+		DefaultTabletType: topodatapb.TabletType_PRIMARY,
+		SetVarEnabled:     true,
+	})
 	if err != nil {
 		return nil, err
 	}

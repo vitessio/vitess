@@ -466,7 +466,6 @@ func TestCreateTableValidTimestamp(t *testing.T) {
 func TestGen4SelectDBA(t *testing.T) {
 	executor, sbc1, _, _, _ := createExecutorEnv(t)
 	executor.normalize = true
-	executor.pv = querypb.ExecuteOptions_Gen4
 
 	query := "select * from INFORMATION_SCHEMA.TABLE_CONSTRAINTS"
 	_, err := executor.Execute(context.Background(), nil, "TestSelectDBA",
@@ -1281,7 +1280,6 @@ func TestSelectEqual(t *testing.T) {
 
 func TestSelectINFromOR(t *testing.T) {
 	executor, sbc1, _, _, ctx := createExecutorEnv(t)
-	executor.pv = querypb.ExecuteOptions_Gen4
 
 	session := &vtgatepb.Session{
 		TargetString: "@primary",
@@ -3408,7 +3406,7 @@ func TestSelectScatterFails(t *testing.T) {
 func TestGen4SelectStraightJoin(t *testing.T) {
 	executor, sbc1, _, _, _ := createExecutorEnv(t)
 	executor.normalize = true
-	executor.pv = querypb.ExecuteOptions_Gen4
+
 	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
 	query := "select u.id from user u straight_join user2 u2 on u.id = u2.id"
 	_, err := executor.Execute(context.Background(), nil,
@@ -3430,7 +3428,6 @@ func TestGen4SelectStraightJoin(t *testing.T) {
 func TestGen4MultiColumnVindexEqual(t *testing.T) {
 	executor, sbc1, sbc2, _, _ := createExecutorEnv(t)
 	executor.normalize = true
-	executor.pv = querypb.ExecuteOptions_Gen4
 
 	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
 	query := "select * from user_region where cola = 1 and colb = 2"
@@ -3469,7 +3466,6 @@ func TestGen4MultiColumnVindexEqual(t *testing.T) {
 func TestGen4MultiColumnVindexIn(t *testing.T) {
 	executor, sbc1, sbc2, _, _ := createExecutorEnv(t)
 	executor.normalize = true
-	executor.pv = querypb.ExecuteOptions_Gen4
 
 	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
 	query := "select * from user_region where cola IN (1,17984) and colb IN (2,3,4)"
@@ -3508,7 +3504,6 @@ func TestGen4MultiColumnVindexIn(t *testing.T) {
 func TestGen4MultiColMixedColComparision(t *testing.T) {
 	executor, sbc1, sbc2, _, _ := createExecutorEnv(t)
 	executor.normalize = true
-	executor.pv = querypb.ExecuteOptions_Gen4
 
 	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
 	query := "select * from user_region where colb = 2 and cola IN (1,17984)"
@@ -3545,7 +3540,6 @@ func TestGen4MultiColMixedColComparision(t *testing.T) {
 func TestGen4MultiColBestVindexSel(t *testing.T) {
 	executor, sbc1, sbc2, _, _ := createExecutorEnv(t)
 	executor.normalize = true
-	executor.pv = querypb.ExecuteOptions_Gen4
 
 	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
 	query := "select * from user_region where colb = 2 and cola IN (1,17984) and cola = 1"
@@ -3591,7 +3585,6 @@ func TestGen4MultiColBestVindexSel(t *testing.T) {
 func TestGen4MultiColMultiEqual(t *testing.T) {
 	executor, sbc1, sbc2, _, _ := createExecutorEnv(t)
 	executor.normalize = true
-	executor.pv = querypb.ExecuteOptions_Gen4
 
 	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
 	query := "select * from user_region where (cola,colb) in ((17984,2),(17984,3))"
@@ -3613,7 +3606,6 @@ func TestGen4MultiColMultiEqual(t *testing.T) {
 
 func TestGen4SelectUnqualifiedReferenceTable(t *testing.T) {
 	executor, sbc1, sbc2, sbclookup, ctx := createExecutorEnv(t)
-	executor.pv = querypb.ExecuteOptions_Gen4
 
 	query := "select * from zip_detail"
 	session := &vtgatepb.Session{
@@ -3634,7 +3626,6 @@ func TestGen4SelectUnqualifiedReferenceTable(t *testing.T) {
 
 func TestGen4SelectQualifiedReferenceTable(t *testing.T) {
 	executor, sbc1, sbc2, sbclookup, ctx := createExecutorEnv(t)
-	executor.pv = querypb.ExecuteOptions_Gen4
 
 	query := fmt.Sprintf("select * from %s.zip_detail", KsTestSharded)
 	session := &vtgatepb.Session{
@@ -3655,7 +3646,6 @@ func TestGen4SelectQualifiedReferenceTable(t *testing.T) {
 
 func TestGen4JoinUnqualifiedReferenceTable(t *testing.T) {
 	executor, sbc1, sbc2, sbclookup, ctx := createExecutorEnv(t)
-	executor.pv = querypb.ExecuteOptions_Gen4
 
 	query := "select * from user join zip_detail on user.zip_detail_id = zip_detail.id"
 	session := &vtgatepb.Session{
@@ -3692,7 +3682,6 @@ func TestGen4JoinUnqualifiedReferenceTable(t *testing.T) {
 
 func TestGen4CrossShardJoinQualifiedReferenceTable(t *testing.T) {
 	executor, sbc1, sbc2, sbclookup, ctx := createExecutorEnv(t)
-	executor.pv = querypb.ExecuteOptions_Gen4
 
 	query := "select user.id from user join TestUnsharded.zip_detail on user.zip_detail_id = TestUnsharded.zip_detail.id"
 	session := &vtgatepb.Session{
@@ -3749,7 +3738,6 @@ func TestRegionRange(t *testing.T) {
 	}
 	executor := createExecutor(ctx, serv, cell, resolver)
 	defer executor.Close()
-	executor.pv = querypb.ExecuteOptions_Gen4
 
 	tcases := []struct {
 		regionID          int
@@ -3799,7 +3787,6 @@ func TestMultiCol(t *testing.T) {
 	}
 	executor := createExecutor(ctx, serv, cell, resolver)
 	defer executor.Close()
-	executor.pv = querypb.ExecuteOptions_Gen4
 
 	tcases := []struct {
 		cola, colb, colc int
@@ -3880,7 +3867,6 @@ func TestMultiColPartial(t *testing.T) {
 	}
 	executor := createExecutor(ctx, serv, cell, resolver)
 	defer executor.Close()
-	executor.pv = querypb.ExecuteOptions_Gen4
 
 	tcases := []struct {
 		where  string
@@ -3944,7 +3930,6 @@ func TestSelectAggregationNoData(t *testing.T) {
 	}
 	executor := createExecutor(ctx, serv, cell, resolver)
 	defer executor.Close()
-	executor.pv = querypb.ExecuteOptions_Gen4
 
 	tcases := []struct {
 		sql         string
@@ -4036,7 +4021,6 @@ func TestSelectAggregationData(t *testing.T) {
 	}
 	executor := createExecutor(ctx, serv, cell, resolver)
 	defer executor.Close()
-	executor.pv = querypb.ExecuteOptions_Gen4
 
 	tcases := []struct {
 		sql         string
@@ -4194,7 +4178,6 @@ func TestSelectAggregationRandom(t *testing.T) {
 
 	executor := createExecutor(ctx, serv, cell, resolver)
 	defer executor.Close()
-	executor.pv = querypb.ExecuteOptions_Gen4
 	session := econtext.NewAutocommitSession(&vtgatepb.Session{})
 
 	rs, err := executor.Execute(context.Background(), nil, "TestSelectCFC", session, "select /*vt+ PLANNER=gen4 */ A.a, A.b, (A.a / A.b) as c from (select sum(a) as a, sum(b) as b from user) A", nil)

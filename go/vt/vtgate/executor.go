@@ -113,7 +113,6 @@ type Executor struct {
 	resolver    *Resolver
 	scatterConn *ScatterConn
 	txConn      *TxConn
-	pv          plancontext.PlannerVersion
 
 	mu           sync.Mutex
 	vschema      *vindexes.VSchema
@@ -123,8 +122,7 @@ type Executor struct {
 	plans *PlanCache
 	epoch atomic.Uint32
 
-	normalize       bool
-	warnShardedOnly bool
+	normalize bool
 
 	vm            *VSchemaManager
 	schemaTracker SchemaInfo
@@ -179,17 +177,15 @@ func NewExecutor(
 		scatterConn:         resolver.scatterConn,
 		txConn:              resolver.scatterConn.txConn,
 		normalize:           normalize,
-		warnShardedOnly:     warnOnShardedOnly,
 		streamSize:          streamSize,
 		schemaTracker:       schemaTracker,
 		allowScatter:        !noScatter,
-		pv:                  pv,
 		plans:               plans,
 		warmingReadsPercent: warmingReadsPercent,
 		warmingReadsChannel: make(chan bool, warmingReadsConcurrency),
 	}
 	// setting the vcursor config.
-	e.initVConfig()
+	e.initVConfig(warnOnShardedOnly, pv)
 
 	vschemaacl.Init()
 	// we subscribe to update from the VSchemaManager
@@ -1402,7 +1398,7 @@ func (e *Executor) prepare(ctx context.Context, safeSession *econtext.SafeSessio
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unrecognized prepare statement: %s", sql)
 }
 
-func (e *Executor) initVConfig() {
+func (e *Executor) initVConfig(warnOnShardedOnly bool, pv plancontext.PlannerVersion) {
 	connCollation := collations.Unknown
 	if gw, isTabletGw := e.resolver.resolver.GetGateway().(*TabletGateway); isTabletGw {
 		connCollation = gw.DefaultConnCollation()
@@ -1414,6 +1410,7 @@ func (e *Executor) initVConfig() {
 	e.vConfig = econtext.VCursorConfig{
 		Collation:         connCollation,
 		DefaultTabletType: defaultTabletType,
+		PlannerVersion:    pv,
 
 		QueryTimeout:  queryTimeout,
 		MaxMemoryRows: maxMemoryRows,
@@ -1422,6 +1419,7 @@ func (e *Executor) initVConfig() {
 		EnableViews:        enableViews,
 		ForeignKeyMode:     fkMode(foreignKeyMode),
 		EnableShardRouting: enableShardRouting,
+		WarnShardedOnly:    warnOnShardedOnly,
 
 		DBDDLPlugin: dbDDLPlugin,
 
@@ -1434,8 +1432,7 @@ func (e *Executor) initVConfig() {
 func (e *Executor) handlePrepare(ctx context.Context, safeSession *econtext.SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *logstats.LogStats) ([]*querypb.Field, error) {
 	query, comments := sqlparser.SplitMarginComments(sql)
 
-	vcursor, _ := econtext.NewVCursorImpl(safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, e.warnShardedOnly, e.pv,
-		nullResultsObserver{}, e.vConfig)
+	vcursor, _ := econtext.NewVCursorImpl(safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, nullResultsObserver{}, e.vConfig)
 
 	stmt, reservedVars, err := parseAndValidateQuery(query, e.env.Parser())
 	if err != nil {

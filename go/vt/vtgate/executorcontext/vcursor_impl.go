@@ -83,6 +83,8 @@ type (
 		ForeignKeyMode     vschemapb.Keyspace_ForeignKeyMode
 		SetVarEnabled      bool
 		EnableViews        bool
+		WarnShardedOnly    bool
+		PlannerVersion     plancontext.PlannerVersion
 
 		WarmingReadsPercent int
 		WarmingReadsTimeout time.Duration
@@ -145,11 +147,9 @@ type (
 		vschema             *vindexes.VSchema
 		vm                  VSchemaOperator
 		semTable            *semantics.SemTable
-		warnShardedOnly     bool // when using sharded only features, a warning will be warnings field
 		queryTimeout        time.Duration
 
 		warnings []*querypb.QueryWarning // any warnings that are accumulated during the planning phase are stored here
-		pv       plancontext.PlannerVersion
 
 		observer ResultsObserver
 
@@ -160,7 +160,7 @@ type (
 	}
 )
 
-// newVcursorImpl creates a VCursorImpl. Before creating this object, you have to separate out any marginComments that came with
+// NewVCursorImpl creates a VCursorImpl. Before creating this object, you have to separate out any marginComments that came with
 // the query and supply it here. Trailing comments are typically sent by the application for various reasons,
 // including as identifying markers. So, they have to be added back to all queries that are executed
 // on behalf of the original query.
@@ -173,8 +173,6 @@ func NewVCursorImpl(
 	vschema *vindexes.VSchema,
 	resolver *srvtopo.Resolver,
 	serv srvtopo.Server,
-	warnShardedOnly bool,
-	pv plancontext.PlannerVersion,
 	observer ResultsObserver,
 	cfg VCursorConfig,
 ) (*VCursorImpl, error) {
@@ -194,21 +192,20 @@ func NewVCursorImpl(
 	}
 
 	return &VCursorImpl{
-		config:          cfg,
-		SafeSession:     safeSession,
-		keyspace:        keyspace,
-		tabletType:      tabletType,
-		destination:     destination,
-		marginComments:  marginComments,
-		executor:        executor,
-		logStats:        logStats,
-		resolver:        resolver,
-		vschema:         vschema,
-		vm:              vm,
-		topoServer:      ts,
-		warnShardedOnly: warnShardedOnly,
-		pv:              pv,
-		observer:        observer,
+		config:         cfg,
+		SafeSession:    safeSession,
+		keyspace:       keyspace,
+		tabletType:     tabletType,
+		destination:    destination,
+		marginComments: marginComments,
+		executor:       executor,
+		logStats:       logStats,
+		resolver:       resolver,
+		vschema:        vschema,
+		vm:             vm,
+		topoServer:     ts,
+
+		observer: observer,
 	}, nil
 }
 
@@ -233,9 +230,7 @@ func (vc *VCursorImpl) CloneForMirroring(ctx context.Context) engine.VCursor {
 		vschema:             vc.vschema,
 		vm:                  vc.vm,
 		semTable:            vc.semTable,
-		warnShardedOnly:     vc.warnShardedOnly,
 		warnings:            vc.warnings,
-		pv:                  vc.pv,
 		observer:            vc.observer,
 	}
 
@@ -267,11 +262,8 @@ func (vc *VCursorImpl) CloneForReplicaWarming(ctx context.Context) engine.VCurso
 		vschema:             vc.vschema,
 		vm:                  vc.vm,
 		semTable:            vc.semTable,
-		warnShardedOnly:     vc.warnShardedOnly,
 		warnings:            vc.warnings,
-		pv:                  vc.pv,
-
-		observer: vc.observer,
+		observer:            vc.observer,
 	}
 
 	v.marginComments.Trailing += "/* warming read */"
@@ -282,21 +274,19 @@ func (vc *VCursorImpl) CloneForReplicaWarming(ctx context.Context) engine.VCurso
 func (vc *VCursorImpl) cloneWithAutocommitSession() *VCursorImpl {
 	safeSession := vc.SafeSession.NewAutocommitSession()
 	return &VCursorImpl{
-		config:          vc.config,
-		SafeSession:     safeSession,
-		keyspace:        vc.keyspace,
-		tabletType:      vc.tabletType,
-		destination:     vc.destination,
-		marginComments:  vc.marginComments,
-		executor:        vc.executor,
-		logStats:        vc.logStats,
-		resolver:        vc.resolver,
-		vschema:         vc.vschema,
-		vm:              vc.vm,
-		topoServer:      vc.topoServer,
-		warnShardedOnly: vc.warnShardedOnly,
-		pv:              vc.pv,
-		observer:        vc.observer,
+		config:         vc.config,
+		SafeSession:    safeSession,
+		keyspace:       vc.keyspace,
+		tabletType:     vc.tabletType,
+		destination:    vc.destination,
+		marginComments: vc.marginComments,
+		executor:       vc.executor,
+		logStats:       vc.logStats,
+		resolver:       vc.resolver,
+		vschema:        vc.vschema,
+		vm:             vc.vm,
+		topoServer:     vc.topoServer,
+		observer:       vc.observer,
 	}
 }
 
@@ -622,7 +612,7 @@ func (vc *VCursorImpl) Planner() plancontext.PlannerVersion {
 		vc.SafeSession.Options.PlannerVersion != querypb.ExecuteOptions_DEFAULT_PLANNER {
 		return vc.SafeSession.Options.PlannerVersion
 	}
-	return vc.pv
+	return vc.config.PlannerVersion
 }
 
 // GetSemTable implements the ContextVSchema interface
@@ -1256,7 +1246,7 @@ func (vc *VCursorImpl) GetAndEmptyWarnings() []*querypb.QueryWarning {
 
 // WarnUnshardedOnly implements the VCursor interface
 func (vc *VCursorImpl) WarnUnshardedOnly(format string, params ...any) {
-	if vc.warnShardedOnly {
+	if vc.config.WarnShardedOnly {
 		vc.warnings = append(vc.warnings, &querypb.QueryWarning{
 			Code:    uint32(sqlerror.ERNotSupportedYet),
 			Message: fmt.Sprintf(format, params...),
