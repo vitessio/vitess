@@ -468,7 +468,7 @@ func (session *SafeSession) findSessionLocked(keyspace, shard string, tabletType
 	return nil
 }
 
-type myShardActionInfo interface {
+type ShardActionInfo interface {
 	TransactionID() int64
 	ReservedID() int64
 	RowsAffected() bool
@@ -476,7 +476,7 @@ type myShardActionInfo interface {
 }
 
 // AppendOrUpdate adds a new ShardSession, or updates an existing one if one already exists for the given shard session
-func (session *SafeSession) AppendOrUpdate(target *querypb.Target, info myShardActionInfo, existingSession *vtgatepb.Session_ShardSession, txMode vtgatepb.TransactionMode) error {
+func (session *SafeSession) AppendOrUpdate(target *querypb.Target, info ShardActionInfo, existingSession *vtgatepb.Session_ShardSession, txMode vtgatepb.TransactionMode) error {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 

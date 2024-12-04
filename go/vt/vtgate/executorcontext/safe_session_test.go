@@ -50,7 +50,7 @@ func (s *fakeInfo) Alias() *topodatapb.TabletAlias {
 	return s.alias
 }
 
-func info(txId, uid int) myShardActionInfo {
+func info(txId, uid int) ShardActionInfo {
 	return &fakeInfo{transactionID: int64(txId), alias: &topodatapb.TabletAlias{Cell: "cell", Uid: uint32(uid)}}
 }
 
