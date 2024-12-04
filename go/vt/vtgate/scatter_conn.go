@@ -912,6 +912,22 @@ type shardActionInfo struct {
 	rowsAffected     bool
 }
 
+func (sai *shardActionInfo) TransactionID() int64 {
+	return sai.transactionID
+}
+
+func (sai *shardActionInfo) ReservedID() int64 {
+	return sai.reservedID
+}
+
+func (sai *shardActionInfo) RowsAffected() bool {
+	return sai.rowsAffected
+}
+
+func (sai *shardActionInfo) Alias() *topodatapb.TabletAlias {
+	return sai.alias
+}
+
 func (sai *shardActionInfo) updateTransactionAndReservedID(txID int64, rID int64, alias *topodatapb.TabletAlias, qr *sqltypes.Result) *shardActionInfo {
 	firstTimeRowsAffected := false
 	if txID != 0 && qr != nil && !sai.rowsAffected {

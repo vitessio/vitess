@@ -468,15 +468,22 @@ func (session *SafeSession) findSessionLocked(keyspace, shard string, tabletType
 	return nil
 }
 
+type myShardActionInfo interface {
+	TransactionID() int64
+	ReservedID() int64
+	RowsAffected() bool
+	Alias() *topodatapb.TabletAlias
+}
+
 // AppendOrUpdate adds a new ShardSession, or updates an existing one if one already exists for the given shard session
-func (session *SafeSession) AppendOrUpdate(target *querypb.Target, info *shardActionInfo, existingSession *vtgatepb.Session_ShardSession, txMode vtgatepb.TransactionMode) error {
+func (session *SafeSession) AppendOrUpdate(target *querypb.Target, info myShardActionInfo, existingSession *vtgatepb.Session_ShardSession, txMode vtgatepb.TransactionMode) error {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 
 	// additional check of transaction id is required
 	// as now in autocommit mode there can be session due to reserved connection
 	// that needs to be stored as shard session.
-	if session.autocommitState == autocommitted && info.transactionID != 0 {
+	if session.autocommitState == autocommitted && info.TransactionID() != 0 {
 		// Should be unreachable
 		return vterrors.VT13001("unexpected 'autocommitted' state in transaction")
 	}
@@ -487,10 +494,10 @@ func (session *SafeSession) AppendOrUpdate(target *querypb.Target, info *shardAc
 	session.autocommitState = notAutocommittable
 
 	if existingSession != nil {
-		existingSession.TransactionId = info.transactionID
-		existingSession.ReservedId = info.reservedID
+		existingSession.TransactionId = info.TransactionID()
+		existingSession.ReservedId = info.ReservedID()
 		if !existingSession.RowsAffected {
-			existingSession.RowsAffected = info.rowsAffected
+			existingSession.RowsAffected = info.RowsAffected()
 		}
 		if existingSession.VindexOnly {
 			existingSession.VindexOnly = session.queryFromVindex
@@ -502,10 +509,10 @@ func (session *SafeSession) AppendOrUpdate(target *querypb.Target, info *shardAc
 	}
 	newSession := &vtgatepb.Session_ShardSession{
 		Target:        target,
-		TabletAlias:   info.alias,
-		TransactionId: info.transactionID,
-		ReservedId:    info.reservedID,
-		RowsAffected:  info.rowsAffected,
+		TabletAlias:   info.Alias(),
+		TransactionId: info.TransactionID(),
+		ReservedId:    info.ReservedID(),
+		RowsAffected:  info.RowsAffected(),
 		VindexOnly:    session.queryFromVindex,
 	}
 
