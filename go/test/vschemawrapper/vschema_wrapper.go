@@ -33,6 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -40,7 +41,10 @@ import (
 
 var _ plancontext.VSchema = (*VSchemaWrapper)(nil)
 
+// VSchemaWrapper is a wrapper around VSchema that implements the ContextVSchema interface.
+// It is used in tests to provide a VSchema implementation.
 type VSchemaWrapper struct {
+	Vcursor               *econtext.VCursorImpl
 	V                     *vindexes.VSchema
 	Keyspace              *vindexes.Keyspace
 	TabletType_           topodatapb.TabletType
@@ -51,6 +55,30 @@ type VSchemaWrapper struct {
 	EnableViews           bool
 	TestBuilder           func(query string, vschema plancontext.VSchema, keyspace string) (*engine.Plan, error)
 	Env                   *vtenv.Environment
+}
+
+func NewVschemaWrapper(
+	env *vtenv.Environment,
+	vschema *vindexes.VSchema,
+	builder func(string, plancontext.VSchema, string) (*engine.Plan, error),
+) (*VSchemaWrapper, error) {
+	ss := econtext.NewAutocommitSession(&vtgatepb.Session{})
+	vcursor, err := econtext.NewVCursorImpl(ss, sqlparser.MarginComments{}, nil, nil, nil, vschema, nil, nil, nil, econtext.VCursorConfig{
+		Collation:         env.CollationEnv().DefaultConnectionCharset(),
+		DefaultTabletType: topodatapb.TabletType_PRIMARY,
+		SetVarEnabled:     true,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &VSchemaWrapper{
+		Env:           env,
+		V:             vschema,
+		Vcursor:       vcursor,
+		TestBuilder:   builder,
+		TabletType_:   topodatapb.TabletType_PRIMARY,
+		SysVarEnabled: true,
+	}, nil
 }
 
 func (vw *VSchemaWrapper) GetPrepareData(stmtName string) *vtgatepb.PrepareData {
@@ -244,34 +272,7 @@ func (vw *VSchemaWrapper) FindView(tab sqlparser.TableName) sqlparser.SelectStat
 }
 
 func (vw *VSchemaWrapper) FindTableOrVindex(tab sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error) {
-	if tab.Qualifier.IsEmpty() && tab.Name.String() == "dual" {
-		ksName := vw.getActualKeyspace()
-		var ks *vindexes.Keyspace
-		if ksName == "" {
-			ks = vw.getfirstKeyspace()
-			ksName = ks.Name
-		} else {
-			ks = vw.V.Keyspaces[ksName].Keyspace
-		}
-		tbl := &vindexes.Table{
-			Name:     sqlparser.NewIdentifierCS("dual"),
-			Keyspace: ks,
-			Type:     vindexes.TypeReference,
-		}
-		return tbl, nil, ksName, topodatapb.TabletType_PRIMARY, nil, nil
-	}
-	destKeyspace, destTabletType, destTarget, err := topoproto.ParseDestination(tab.Qualifier.String(), topodatapb.TabletType_PRIMARY)
-	if err != nil {
-		return nil, nil, destKeyspace, destTabletType, destTarget, err
-	}
-	if destKeyspace == "" {
-		destKeyspace = vw.getActualKeyspace()
-	}
-	table, vindex, err := vw.V.FindTableOrVindex(destKeyspace, tab.Name.String(), topodatapb.TabletType_PRIMARY)
-	if err != nil {
-		return nil, nil, destKeyspace, destTabletType, destTarget, err
-	}
-	return table, vindex, destKeyspace, destTabletType, destTarget, nil
+	return vw.Vcursor.FindTableOrVindex(tab)
 }
 
 func (vw *VSchemaWrapper) getfirstKeyspace() (ks *vindexes.Keyspace) {

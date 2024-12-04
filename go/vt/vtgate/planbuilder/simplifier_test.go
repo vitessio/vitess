@@ -38,21 +38,21 @@ func TestSimplifyBuggyQuery(t *testing.T) {
 	query := "select distinct count(distinct a), count(distinct 4) from user left join unsharded on 0 limit 5"
 	// select 0 from unsharded union select 0 from `user` union select 0 from unsharded
 	// select 0 from unsharded union (select 0 from `user` union select 0 from unsharded)
-	vschema := &vschemawrapper.VSchemaWrapper{
-		V:       loadSchema(t, "vschemas/schema.json", true),
-		Version: Gen4,
-		Env:     vtenv.NewTestEnv(),
-	}
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(t, "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	require.NoError(t, err)
+
 	stmt, reserved, err := sqlparser.NewTestParser().Parse2(query)
 	require.NoError(t, err)
-	rewritten, _ := sqlparser.RewriteAST(sqlparser.Clone(stmt), vschema.CurrentDb(), sqlparser.SQLSelectLimitUnset, "", nil, nil, nil)
+	rewritten, _ := sqlparser.RewriteAST(sqlparser.Clone(stmt), vw.CurrentDb(), sqlparser.SQLSelectLimitUnset, "", nil, nil, nil)
 	reservedVars := sqlparser.NewReservedVars("vtg", reserved)
 
 	simplified := simplifier.SimplifyStatement(
 		stmt.(sqlparser.SelectStatement),
-		vschema.CurrentDb(),
-		vschema,
-		keepSameError(query, reservedVars, vschema, rewritten.BindVarNeeds),
+		vw.CurrentDb(),
+		vw,
+		keepSameError(query, reservedVars, vw, rewritten.BindVarNeeds),
 	)
 
 	fmt.Println(sqlparser.String(simplified))
@@ -61,21 +61,22 @@ func TestSimplifyBuggyQuery(t *testing.T) {
 func TestSimplifyPanic(t *testing.T) {
 	t.Skip("not needed to run")
 	query := "(select id from unsharded union select id from unsharded_auto) union (select id from unsharded_auto union select name from unsharded)"
-	vschema := &vschemawrapper.VSchemaWrapper{
-		V:       loadSchema(t, "vschemas/schema.json", true),
-		Version: Gen4,
-		Env:     vtenv.NewTestEnv(),
-	}
+
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(t, "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	require.NoError(t, err)
+
 	stmt, reserved, err := sqlparser.NewTestParser().Parse2(query)
 	require.NoError(t, err)
-	rewritten, _ := sqlparser.RewriteAST(sqlparser.Clone(stmt), vschema.CurrentDb(), sqlparser.SQLSelectLimitUnset, "", nil, nil, nil)
+	rewritten, _ := sqlparser.RewriteAST(sqlparser.Clone(stmt), vw.CurrentDb(), sqlparser.SQLSelectLimitUnset, "", nil, nil, nil)
 	reservedVars := sqlparser.NewReservedVars("vtg", reserved)
 
 	simplified := simplifier.SimplifyStatement(
 		stmt.(sqlparser.SelectStatement),
-		vschema.CurrentDb(),
-		vschema,
-		keepPanicking(query, reservedVars, vschema, rewritten.BindVarNeeds),
+		vw.CurrentDb(),
+		vw,
+		keepPanicking(query, reservedVars, vw, rewritten.BindVarNeeds),
 	)
 
 	fmt.Println(sqlparser.String(simplified))
@@ -83,11 +84,11 @@ func TestSimplifyPanic(t *testing.T) {
 
 func TestUnsupportedFile(t *testing.T) {
 	t.Skip("run manually to see if any queries can be simplified")
-	vschema := &vschemawrapper.VSchemaWrapper{
-		V:       loadSchema(t, "vschemas/schema.json", true),
-		Version: Gen4,
-		Env:     vtenv.NewTestEnv(),
-	}
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(t, "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	require.NoError(t, err)
+
 	fmt.Println(vschema)
 	for _, tcase := range readJSONTests("unsupported_cases.txt") {
 		t.Run(tcase.Query, func(t *testing.T) {
@@ -99,11 +100,10 @@ func TestUnsupportedFile(t *testing.T) {
 				t.Skip()
 				return
 			}
-			rewritten, err := sqlparser.RewriteAST(stmt, vschema.CurrentDb(), sqlparser.SQLSelectLimitUnset, "", nil, nil, nil)
+			rewritten, err := sqlparser.RewriteAST(stmt, vw.CurrentDb(), sqlparser.SQLSelectLimitUnset, "", nil, nil, nil)
 			if err != nil {
 				t.Skip()
 			}
-			vschema.CurrentDb()
 
 			reservedVars := sqlparser.NewReservedVars("vtg", reserved)
 			ast := rewritten.AST
@@ -111,9 +111,9 @@ func TestUnsupportedFile(t *testing.T) {
 			stmt, _, _ = sqlparser.NewTestParser().Parse2(tcase.Query)
 			simplified := simplifier.SimplifyStatement(
 				stmt.(sqlparser.SelectStatement),
-				vschema.CurrentDb(),
-				vschema,
-				keepSameError(tcase.Query, reservedVars, vschema, rewritten.BindVarNeeds),
+				vw.CurrentDb(),
+				vw,
+				keepSameError(tcase.Query, reservedVars, vw, rewritten.BindVarNeeds),
 			)
 
 			if simplified == nil {

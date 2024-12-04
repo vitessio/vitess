@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 
 	"github.com/stretchr/testify/require"
 )
@@ -56,7 +57,7 @@ func TestDDLFlags(t *testing.T) {
 	for _, testcase := range testcases {
 		t.Run(fmt.Sprintf("%s-%v-%v", testcase.sql, testcase.enableDirectDDL, testcase.enableOnlineDDL), func(t *testing.T) {
 			executor, _, _, _, ctx := createExecutorEnv(t)
-			session := NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded})
+			session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded})
 			enableDirectDDL.Set(testcase.enableDirectDDL)
 			enableOnlineDDL.Set(testcase.enableOnlineDDL)
 			_, err := executor.Execute(ctx, nil, "TestDDLFlags", session, testcase.sql, nil)
