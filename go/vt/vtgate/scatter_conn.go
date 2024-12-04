@@ -901,8 +901,11 @@ type shardActionInfo struct {
 	actionNeeded              actionNeeded
 	reservedID, transactionID int64
 	alias                     *topodatapb.TabletAlias
-	ignoreOldSession          bool
-	rowsAffected              bool
+
+	// ignoreOldSession is used when there is a retry on the same shard due to connection loss for a reserved connection.
+	// The old reference should be ignored and new shard session should be added to the session.
+	ignoreOldSession bool
+	rowsAffected     bool
 }
 
 func (sai *shardActionInfo) updateTransactionAndReservedID(txID int64, rID int64, alias *topodatapb.TabletAlias, qr *sqltypes.Result) *shardActionInfo {
