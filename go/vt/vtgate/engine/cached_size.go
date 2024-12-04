@@ -131,7 +131,7 @@ func (cached *DDL) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(64)
+		size += int64(80)
 	}
 	// field Keyspace *vitess.io/vitess/go/vt/vtgate/vindexes.Keyspace
 	size += cached.Keyspace.CachedSize(true)
@@ -145,6 +145,10 @@ func (cached *DDL) CachedSize(alloc bool) int64 {
 	size += cached.NormalDDL.CachedSize(true)
 	// field OnlineDDL *vitess.io/vitess/go/vt/vtgate/engine.OnlineDDL
 	size += cached.OnlineDDL.CachedSize(true)
+	// field Config vitess.io/vitess/go/vt/vtgate/dynamicconfig.DDL
+	if cc, ok := cached.Config.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
 	return size
 }
 func (cached *DML) CachedSize(alloc bool) int64 {

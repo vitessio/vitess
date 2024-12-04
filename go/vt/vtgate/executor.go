@@ -1164,7 +1164,11 @@ func (e *Executor) buildStatement(
 	reservedVars *sqlparser.ReservedVars,
 	bindVarNeeds *sqlparser.BindVarNeeds,
 ) (*engine.Plan, error) {
-	plan, err := planbuilder.BuildFromStmt(ctx, query, stmt, reservedVars, vcursor, bindVarNeeds, enableOnlineDDL, enableDirectDDL)
+	cfg := &dynamicViperConfig{
+		onlineDDL: enableOnlineDDL,
+		directDDL: enableDirectDDL,
+	}
+	plan, err := planbuilder.BuildFromStmt(ctx, query, stmt, reservedVars, vcursor, bindVarNeeds, cfg)
 	if err != nil {
 		return nil, err
 	}
