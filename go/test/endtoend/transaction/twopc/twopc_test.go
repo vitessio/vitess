@@ -1344,40 +1344,6 @@ func TestDTSavepointResolveAfterMMCommit(t *testing.T) {
 		"mismatch expected: \n got: %s, want: %s", prettyPrint(logTable), prettyPrint(expectations))
 }
 
-// TestSemiSyncRequiredWithTwoPC tests that semi-sync is required when using two-phase commit.
-func TestSemiSyncRequiredWithTwoPC(t *testing.T) {
-	// cleanup all the old data.
-	conn, closer := start(t)
-	defer closer()
-
-	out, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=none")
-	require.NoError(t, err, out)
-	defer func() {
-		clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=semi_sync")
-		for _, shard := range clusterInstance.Keyspaces[0].Shards {
-			clusterInstance.VtctldClientProcess.PlannedReparentShard(keyspaceName, shard.Name, shard.Vttablets[0].Alias)
-		}
-	}()
-
-	// After changing the durability policy for the given keyspace to none, we run PRS.
-	shard := clusterInstance.Keyspaces[0].Shards[2]
-	newPrimary := shard.Vttablets[1]
-	_, err = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(
-		"PlannedReparentShard",
-		fmt.Sprintf("%s/%s", keyspaceName, shard.Name),
-		"--new-primary", newPrimary.Alias)
-	require.NoError(t, err)
-
-	// A new distributed transaction should fail.
-	utils.Exec(t, conn, "begin")
-	utils.Exec(t, conn, "insert into twopc_t1(id, col) values(4, 4)")
-	utils.Exec(t, conn, "insert into twopc_t1(id, col) values(6, 4)")
-	utils.Exec(t, conn, "insert into twopc_t1(id, col) values(9, 4)")
-	_, err = utils.ExecAllowError(t, conn, "commit")
-	require.Error(t, err)
-	require.ErrorContains(t, err, "two-pc is enabled, but semi-sync is not")
-}
-
 // TestReadTransactionStatus tests that read transaction state rpc works as expected.
 func TestReadTransactionStatus(t *testing.T) {
 	conn, closer := start(t)
@@ -1675,4 +1641,40 @@ func getTablet(tabletGrpcPort int) *tabletpb.Tablet {
 	portMap := make(map[string]int32)
 	portMap["grpc"] = int32(tabletGrpcPort)
 	return &tabletpb.Tablet{Hostname: hostname, PortMap: portMap}
+}
+
+// TestSemiSyncRequiredWithTwoPC tests that semi-sync is required when using two-phase commit.
+func TestSemiSyncRequiredWithTwoPC(t *testing.T) {
+	// cleanup all the old data.
+	conn, closer := start(t)
+	defer closer()
+
+	out, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=none")
+	require.NoError(t, err, out)
+	defer func() {
+		_, err = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=semi_sync")
+		require.NoError(t, err)
+		for _, shard := range clusterInstance.Keyspaces[0].Shards {
+			err = clusterInstance.VtctldClientProcess.PlannedReparentShard(keyspaceName, shard.Name, shard.Vttablets[0].Alias)
+			require.NoError(t, err)
+		}
+	}()
+
+	// After changing the durability policy for the given keyspace to none, we run PRS.
+	shard := clusterInstance.Keyspaces[0].Shards[2]
+	newPrimary := shard.Vttablets[1]
+	_, err = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(
+		"PlannedReparentShard",
+		fmt.Sprintf("%s/%s", keyspaceName, shard.Name),
+		"--new-primary", newPrimary.Alias)
+	require.NoError(t, err)
+
+	// A new distributed transaction should fail.
+	utils.Exec(t, conn, "begin")
+	utils.Exec(t, conn, "insert into twopc_t1(id, col) values(4, 4)")
+	utils.Exec(t, conn, "insert into twopc_t1(id, col) values(6, 4)")
+	utils.Exec(t, conn, "insert into twopc_t1(id, col) values(9, 4)")
+	_, err = utils.ExecAllowError(t, conn, "commit")
+	require.Error(t, err)
+	require.ErrorContains(t, err, "two-pc is enabled, but semi-sync is not")
 }
