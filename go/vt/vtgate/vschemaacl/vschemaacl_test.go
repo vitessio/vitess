@@ -35,8 +35,7 @@ func TestVschemaAcl(t *testing.T) {
 	}
 
 	// Test wildcard
-	AuthorizedDDLUsers = "%"
-	Init()
+	AuthorizedDDLUsers.Set(NewAuthorizedDDLUsers("%"))
 
 	if !Authorized(&redUser) {
 		t.Errorf("user should be authorized")
@@ -46,8 +45,7 @@ func TestVschemaAcl(t *testing.T) {
 	}
 
 	// Test user list
-	AuthorizedDDLUsers = "oneUser, twoUser, redUser, blueUser"
-	Init()
+	AuthorizedDDLUsers.Set(NewAuthorizedDDLUsers("oneUser, twoUser, redUser, blueUser"))
 
 	if !Authorized(&redUser) {
 		t.Errorf("user should be authorized")
@@ -57,8 +55,7 @@ func TestVschemaAcl(t *testing.T) {
 	}
 
 	// Revert to baseline state for other tests
-	AuthorizedDDLUsers = ""
-	Init()
+	AuthorizedDDLUsers.Set(NewAuthorizedDDLUsers(""))
 
 	// By default no users are allowed in
 	if Authorized(&redUser) {
