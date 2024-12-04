@@ -41,6 +41,8 @@ import (
 
 var _ plancontext.VSchema = (*VSchemaWrapper)(nil)
 
+// VSchemaWrapper is a wrapper around VSchema that implements the ContextVSchema interface.
+// It is used in tests to provide a VSchema implementation.
 type VSchemaWrapper struct {
 	Vcursor               *econtext.VCursorImpl
 	V                     *vindexes.VSchema
