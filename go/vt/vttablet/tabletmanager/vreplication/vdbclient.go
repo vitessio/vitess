@@ -171,7 +171,7 @@ func (vc *vdbClient) Execute(query string) (*sqltypes.Result, error) {
 func (vc *vdbClient) ExecuteWithRetry(ctx context.Context, query string) (*sqltypes.Result, error) {
 	qr, err := vc.Execute(query)
 	for err != nil {
-		if sqlErr, ok := err.(*sqlerror.SQLError); ok && sqlErr.Number() == sqlerror.ERLockDeadlock || sqlErr.Number() == sqlerror.ERLockWaitTimeout {
+		if sqlErr, ok := err.(*sqlerror.SQLError); ok && (sqlErr.Number() == sqlerror.ERLockDeadlock || sqlErr.Number() == sqlerror.ERLockWaitTimeout) {
 			log.Infof("retryable error: %v, waiting for %v and retrying", sqlErr, dbLockRetryDelay)
 			if err := vc.Rollback(); err != nil {
 				return nil, err

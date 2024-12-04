@@ -175,6 +175,16 @@ func throttledApps(tablet *cluster.Vttablet) (resp *http.Response, respBody stri
 	return resp, respBody, err
 }
 
+func vitessThrottleCheck(tablet *cluster.Vttablet, skipRequestHeartbeats bool) (*vtctldatapb.CheckThrottlerResponse, error) {
+	flags := &throttle.CheckFlags{
+		Scope:                 base.ShardScope,
+		SkipRequestHeartbeats: skipRequestHeartbeats,
+		MultiMetricsEnabled:   true,
+	}
+	resp, err := throttler.CheckThrottler(clusterInstance, tablet, throttlerapp.VitessName, flags)
+	return resp, err
+}
+
 func throttleCheck(tablet *cluster.Vttablet, skipRequestHeartbeats bool) (*vtctldatapb.CheckThrottlerResponse, error) {
 	flags := &throttle.CheckFlags{
 		Scope:                 base.ShardScope,
@@ -305,6 +315,17 @@ func TestInitialThrottler(t *testing.T) {
 		waitForThrottleCheckStatus(t, primaryTablet, tabletmanagerdatapb.CheckThrottlerResponseCode_THRESHOLD_EXCEEDED)
 	})
 	t.Run("setting high threshold", func(t *testing.T) {
+		{
+			req := &vtctldatapb.UpdateThrottlerConfigRequest{MetricName: base.LoadAvgMetricName.String(), Threshold: 5555}
+			_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
+			assert.NoError(t, err)
+		}
+		{
+			req := &vtctldatapb.UpdateThrottlerConfigRequest{MetricName: base.MysqldLoadAvgMetricName.String(), Threshold: 5555}
+			_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
+			assert.NoError(t, err)
+		}
+
 		req := &vtctldatapb.UpdateThrottlerConfigRequest{Threshold: extremelyHighThreshold.Seconds()}
 		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
 		assert.NoError(t, err)
@@ -317,6 +338,19 @@ func TestInitialThrottler(t *testing.T) {
 	t.Run("validating OK response from throttler with high threshold", func(t *testing.T) {
 		waitForThrottleCheckStatus(t, primaryTablet, tabletmanagerdatapb.CheckThrottlerResponseCode_OK)
 	})
+	t.Run("validating vitess app throttler check", func(t *testing.T) {
+		resp, err := vitessThrottleCheck(primaryTablet, true)
+		require.NoError(t, err)
+		for _, metricName := range base.KnownMetricNames {
+			t.Run(metricName.String(), func(t *testing.T) {
+				assert.Contains(t, resp.Check.Metrics, metricName.String())
+				metric := resp.Check.Metrics[metricName.String()]
+				require.NotNil(t, metric)
+				assert.Equal(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, metric.ResponseCode, "metric: %+v", metric)
+			})
+		}
+	})
+
 	t.Run("setting low threshold", func(t *testing.T) {
 		req := &vtctldatapb.UpdateThrottlerConfigRequest{Threshold: throttler.DefaultThreshold.Seconds()}
 		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)

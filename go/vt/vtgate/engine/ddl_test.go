@@ -27,13 +27,23 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
+type ddlConfig struct{}
+
+func (ddlConfig) DirectEnabled() bool {
+	return true
+}
+
+func (ddlConfig) OnlineEnabled() bool {
+	return true
+}
+
 func TestDDL(t *testing.T) {
 	ddl := &DDL{
 		DDL: &sqlparser.CreateTable{
 			Table: sqlparser.NewTableName("a"),
 		},
-		DirectDDLEnabled: true,
-		OnlineDDL:        &OnlineDDL{},
+		Config:    ddlConfig{},
+		OnlineDDL: &OnlineDDL{},
 		NormalDDL: &Send{
 			Keyspace: &vindexes.Keyspace{
 				Name:    "ks",

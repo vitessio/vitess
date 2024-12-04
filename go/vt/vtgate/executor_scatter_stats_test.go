@@ -24,12 +24,13 @@ import (
 	"github.com/stretchr/testify/require"
 
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 )
 
 func TestScatterStatsWithNoScatterQuery(t *testing.T) {
 	executor, _, _, _, ctx := createExecutorEnv(t)
 
-	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
 
 	_, err := executor.Execute(ctx, nil, "TestExecutorResultsExceeded", session, "select * from main1", nil)
 	require.NoError(t, err)
@@ -41,7 +42,7 @@ func TestScatterStatsWithNoScatterQuery(t *testing.T) {
 
 func TestScatterStatsWithSingleScatterQuery(t *testing.T) {
 	executor, _, _, _, ctx := createExecutorEnv(t)
-	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
 
 	_, err := executor.Execute(ctx, nil, "TestExecutorResultsExceeded", session, "select * from user", nil)
 	require.NoError(t, err)
@@ -53,7 +54,7 @@ func TestScatterStatsWithSingleScatterQuery(t *testing.T) {
 
 func TestScatterStatsHttpWriting(t *testing.T) {
 	executor, _, _, _, ctx := createExecutorEnv(t)
-	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
 
 	_, err := executor.Execute(ctx, nil, "TestExecutorResultsExceeded", session, "select * from user", nil)
 	require.NoError(t, err)

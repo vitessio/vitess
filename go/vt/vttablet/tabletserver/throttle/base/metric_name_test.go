@@ -241,15 +241,17 @@ func TestKnownMetricNames(t *testing.T) {
 	assert.Contains(t, KnownMetricNames, LoadAvgMetricName)
 	assert.Contains(t, KnownMetricNames, CustomMetricName)
 	assert.Contains(t, KnownMetricNames, DefaultMetricName)
+	assert.Contains(t, KnownMetricNames, HistoryListLengthMetricName)
 	assert.Contains(t, KnownMetricNames, MysqldLoadAvgMetricName)
 	assert.Contains(t, KnownMetricNames, MysqldDatadirUsedRatioMetricName)
 }
 
-func TestSingleWordCamelKnownMetricNames(t *testing.T) {
+func TestKnownMetricNamesPascalCase(t *testing.T) {
 	expectCases := map[MetricName]string{
 		LagMetricName:                    "Lag",
 		ThreadsRunningMetricName:         "ThreadsRunning",
 		LoadAvgMetricName:                "Loadavg",
+		HistoryListLengthMetricName:      "HistoryListLength",
 		CustomMetricName:                 "Custom",
 		DefaultMetricName:                "Default",
 		MysqldLoadAvgMetricName:          "MysqldLoadavg",

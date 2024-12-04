@@ -35,6 +35,7 @@ func (m *Session_ShardSession) CloneVT() *Session_ShardSession {
 	r.TabletAlias = m.TabletAlias.CloneVT()
 	r.ReservedId = m.ReservedId
 	r.VindexOnly = m.VindexOnly
+	r.RowsAffected = m.RowsAffected
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -512,6 +513,16 @@ func (m *Session_ShardSession) MarshalToSizedBufferVT(dAtA []byte) (int, error) 
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.RowsAffected {
+		i--
+		if m.RowsAffected {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x30
 	}
 	if m.VindexOnly {
 		i--
@@ -1903,6 +1914,9 @@ func (m *Session_ShardSession) SizeVT() (n int) {
 	if m.VindexOnly {
 		n += 2
 	}
+	if m.RowsAffected {
+		n += 2
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -2563,6 +2577,26 @@ func (m *Session_ShardSession) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.VindexOnly = bool(v != 0)
+		case 6:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field RowsAffected", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.RowsAffected = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])

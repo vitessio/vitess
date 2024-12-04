@@ -66,12 +66,12 @@ func OpenTabletDiscovery() <-chan time.Time {
 	ts = topo.Open()
 	tmc = inst.InitializeTMC()
 	// Clear existing cache and perform a new refresh.
-	if _, err := db.ExecVTOrc("delete from vitess_tablet"); err != nil {
+	if _, err := db.ExecVTOrc("DELETE FROM vitess_tablet"); err != nil {
 		log.Error(err)
 	}
 	// We refresh all information from the topo once before we start the ticks to do it on a timer.
 	populateAllInformation()
-	return time.Tick(time.Second * time.Duration(config.Config.TopoInformationRefreshSeconds)) //nolint SA1015: using time.Tick leaks the underlying ticker
+	return time.Tick(config.GetTopoInformationRefreshDuration()) //nolint SA1015: using time.Tick leaks the underlying ticker
 }
 
 // populateAllInformation initializes all the information for VTOrc to function.

@@ -1068,3 +1068,41 @@ export const showVDiff = async ({ clusterID, request }: ShowVDiffParams) => {
 
     return vtadmin.VDiffShowResponse.create(result);
 };
+
+export const fetchSchemaMigrations = async (request: vtadmin.IGetSchemaMigrationsRequest) => {
+    const { result } = await vtfetch(`/api/migrations/`, {
+        body: JSON.stringify(request),
+        method: 'post',
+    });
+
+    const err = vtadmin.GetSchemaMigrationsResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtadmin.GetSchemaMigrationsResponse.create(result);
+};
+
+export interface ApplySchemaParams {
+    clusterID: string;
+    keyspace: string;
+    callerID: string;
+    sql: string;
+    request: vtctldata.IApplySchemaRequest;
+}
+
+export const applySchema = async ({ clusterID, keyspace, callerID, sql, request }: ApplySchemaParams) => {
+    const body = {
+        sql,
+        caller_id: callerID,
+        request,
+    };
+
+    const { result } = await vtfetch(`/api/migration/${clusterID}/${keyspace}`, {
+        body: JSON.stringify(body),
+        method: 'post',
+    });
+
+    const err = vtctldata.ApplySchemaResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.ApplySchemaResponse.create(result);
+};

@@ -3583,53 +3583,36 @@ func (e *Executor) isPreserveForeignKeySupported(ctx context.Context) (isSupport
 // and is up to date with the binlogs.
 func (e *Executor) isVReplMigrationReadyToCutOver(ctx context.Context, onlineDDL *schema.OnlineDDL, s *VReplStream) (isReady bool, err error) {
 	// Check all the cases where migration is still running:
-	{
-		// when ready to cut-over, pos must have some value
-		if s.pos == "" {
-			return false, nil
-		}
+	// when ready to cut-over, pos must have some value
+	if s.pos == "" {
+		return false, nil
 	}
-	{
-		// Both time_updated and transaction_timestamp must be in close proximity to each
-		// other and to the time now, otherwise that means we're lagging and it's not a good time
-		// to cut-over
-		durationDiff := func(t1, t2 time.Time) time.Duration {
-			return t1.Sub(t2).Abs()
-		}
-		timeNow := time.Now()
-		timeUpdated := time.Unix(s.timeUpdated, 0)
-		if durationDiff(timeNow, timeUpdated) > onlineDDL.CutOverThreshold {
-			return false, nil
-		}
-		// Let's look at transaction timestamp. This gets written by any ongoing
-		// writes on the server (whether on this table or any other table)
-		transactionTimestamp := time.Unix(s.transactionTimestamp, 0)
-		if durationDiff(timeNow, transactionTimestamp) > onlineDDL.CutOverThreshold {
-			return false, nil
-		}
+	// Both time_updated and transaction_timestamp must be in close proximity to each
+	// other and to the time now, otherwise that means we're lagging and it's not a good time
+	// to cut-over
+	if s.Lag() > onlineDDL.CutOverThreshold {
+		return false, nil
 	}
-	{
-		// copy_state must have no entries for this vreplication id: if entries are
-		// present that means copy is still in progress
-		query, err := sqlparser.ParseAndBind(sqlReadCountCopyState,
-			sqltypes.Int32BindVariable(s.id),
-		)
-		if err != nil {
-			return false, err
-		}
-		r, err := e.execQuery(ctx, query)
-		if err != nil {
-			return false, err
-		}
-		csRow := r.Named().Row()
-		if csRow == nil {
-			return false, err
-		}
-		count := csRow.AsInt64("cnt", 0)
-		if count > 0 {
-			// Still copying
-			return false, nil
-		}
+	// copy_state must have no entries for this vreplication id: if entries are
+	// present that means copy is still in progress
+	query, err := sqlparser.ParseAndBind(sqlReadCountCopyState,
+		sqltypes.Int32BindVariable(s.id),
+	)
+	if err != nil {
+		return false, err
+	}
+	r, err := e.execQuery(ctx, query)
+	if err != nil {
+		return false, err
+	}
+	csRow := r.Named().Row()
+	if csRow == nil {
+		return false, err
+	}
+	count := csRow.AsInt64("cnt", 0)
+	if count > 0 {
+		// Still copying
+		return false, nil
 	}
 
 	return true, nil
@@ -3776,6 +3759,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 				}
 				_ = e.updateRowsCopied(ctx, uuid, s.rowsCopied)
 				_ = e.updateMigrationProgressByRowsCopied(ctx, uuid, s.rowsCopied)
+				_ = e.updateMigrationVreplicationLagSeconds(ctx, uuid, int64(s.Lag().Seconds()))
 				_ = e.updateMigrationETASecondsByProgress(ctx, uuid)
 				if s.timeThrottled != 0 {
 					// Avoid creating a 0000-00-00 00:00:00 timestamp
@@ -4525,6 +4509,18 @@ func (e *Executor) updateRowsCopied(ctx context.Context, uuid string, rowsCopied
 	}
 	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationRowsCopied,
 		sqltypes.Int64BindVariable(rowsCopied),
+		sqltypes.StringBindVariable(uuid),
+	)
+	if err != nil {
+		return err
+	}
+	_, err = e.execQuery(ctx, query)
+	return err
+}
+
+func (e *Executor) updateMigrationVreplicationLagSeconds(ctx context.Context, uuid string, vreplicationLagSeconds int64) error {
+	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationVreplicationLagSeconds,
+		sqltypes.Int64BindVariable(vreplicationLagSeconds),
 		sqltypes.StringBindVariable(uuid),
 	)
 	if err != nil {

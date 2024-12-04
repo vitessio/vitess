@@ -303,7 +303,9 @@ func (s *VtctldServer) ApplySchema(ctx context.Context, req *vtctldatapb.ApplySc
 	}
 
 	for _, shard := range execResult.SuccessShards {
-		resp.RowsAffectedByShard[shard.Shard] = shard.Result.RowsAffected
+		for _, result := range shard.Results {
+			resp.RowsAffectedByShard[shard.Shard] += result.RowsAffected
+		}
 	}
 
 	return resp, err

@@ -26,6 +26,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
+
 	"vitess.io/vitess/go/mysql/collations"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -99,7 +101,7 @@ func TestLegacyExecuteFailOnAutocommit(t *testing.T) {
 		},
 		Autocommit: false,
 	}
-	_, errs := sc.ExecuteMultiShard(ctx, nil, rss, queries, NewSafeSession(session), true /*autocommit*/, false, nullResultsObserver{})
+	_, errs := sc.ExecuteMultiShard(ctx, nil, rss, queries, econtext.NewSafeSession(session), true /*autocommit*/, false, nullResultsObserver{})
 	err := vterrors.Aggregate(errs)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "in autocommit mode, transactionID should be zero but was: 123")
@@ -123,7 +125,7 @@ func TestScatterConnExecuteMulti(t *testing.T) {
 			}
 		}
 
-		qr, errs := sc.ExecuteMultiShard(ctx, nil, rss, queries, NewSafeSession(nil), false /*autocommit*/, false, nullResultsObserver{})
+		qr, errs := sc.ExecuteMultiShard(ctx, nil, rss, queries, econtext.NewSafeSession(nil), false /*autocommit*/, false, nullResultsObserver{})
 		return qr, vterrors.Aggregate(errs)
 	})
 }
@@ -138,7 +140,7 @@ func TestScatterConnStreamExecuteMulti(t *testing.T) {
 		bvs := make([]map[string]*querypb.BindVariable, len(rss))
 		qr := new(sqltypes.Result)
 		var mu sync.Mutex
-		errors := sc.StreamExecuteMulti(ctx, nil, "query", rss, bvs, NewSafeSession(&vtgatepb.Session{InTransaction: true}), true /* autocommit */, func(r *sqltypes.Result) error {
+		errors := sc.StreamExecuteMulti(ctx, nil, "query", rss, bvs, econtext.NewSafeSession(&vtgatepb.Session{InTransaction: true}), true /* autocommit */, func(r *sqltypes.Result) error {
 			mu.Lock()
 			defer mu.Unlock()
 			qr.AppendResult(r)
@@ -280,7 +282,7 @@ func TestMaxMemoryRows(t *testing.T) {
 		[]key.Destination{key.DestinationShard("0"), key.DestinationShard("1")})
 	require.NoError(t, err)
 
-	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
+	session := econtext.NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	queries := []*querypb.BoundQuery{{
 		Sql:           "query1",
 		BindVariables: map[string]*querypb.BindVariable{},
@@ -328,7 +330,7 @@ func TestLegaceHealthCheckFailsOnReservedConnections(t *testing.T) {
 
 	res := srvtopo.NewResolver(newSandboxForCells(ctx, []string{"aa"}), sc.gateway, "aa")
 
-	session := NewSafeSession(&vtgatepb.Session{InTransaction: false, InReservedConn: true})
+	session := econtext.NewSafeSession(&vtgatepb.Session{InTransaction: false, InReservedConn: true})
 	destinations := []key.Destination{key.DestinationShard("0")}
 	rss, _, err := res.ResolveDestinations(ctx, keyspace, topodatapb.TabletType_REPLICA, nil, destinations)
 	require.NoError(t, err)
@@ -346,12 +348,12 @@ func TestLegaceHealthCheckFailsOnReservedConnections(t *testing.T) {
 	require.Error(t, vterrors.Aggregate(errs))
 }
 
-func executeOnShards(t *testing.T, ctx context.Context, res *srvtopo.Resolver, keyspace string, sc *ScatterConn, session *SafeSession, destinations []key.Destination) {
+func executeOnShards(t *testing.T, ctx context.Context, res *srvtopo.Resolver, keyspace string, sc *ScatterConn, session *econtext.SafeSession, destinations []key.Destination) {
 	t.Helper()
 	require.Empty(t, executeOnShardsReturnsErr(t, ctx, res, keyspace, sc, session, destinations))
 }
 
-func executeOnShardsReturnsErr(t *testing.T, ctx context.Context, res *srvtopo.Resolver, keyspace string, sc *ScatterConn, session *SafeSession, destinations []key.Destination) error {
+func executeOnShardsReturnsErr(t *testing.T, ctx context.Context, res *srvtopo.Resolver, keyspace string, sc *ScatterConn, session *econtext.SafeSession, destinations []key.Destination) error {
 	t.Helper()
 	rss, _, err := res.ResolveDestinations(ctx, keyspace, topodatapb.TabletType_REPLICA, nil, destinations)
 	require.NoError(t, err)
@@ -374,7 +376,7 @@ type recordingResultsObserver struct {
 	recorded []*sqltypes.Result
 }
 
-func (o *recordingResultsObserver) observe(result *sqltypes.Result) {
+func (o *recordingResultsObserver) Observe(result *sqltypes.Result) {
 	mu.Lock()
 	o.recorded = append(o.recorded, result)
 	mu.Unlock()
@@ -429,7 +431,7 @@ func TestMultiExecs(t *testing.T) {
 
 	observer := recordingResultsObserver{}
 
-	session := NewSafeSession(&vtgatepb.Session{})
+	session := econtext.NewSafeSession(&vtgatepb.Session{})
 	_, err := sc.ExecuteMultiShard(ctx, nil, rss, queries, session, false, false, &observer)
 	require.NoError(t, vterrors.Aggregate(err))
 	if len(sbc0.Queries) == 0 || len(sbc1.Queries) == 0 {
@@ -511,7 +513,7 @@ func TestScatterConnSingleDB(t *testing.T) {
 	want := "multi-db transaction attempted"
 
 	// TransactionMode_SINGLE in session
-	session := NewSafeSession(&vtgatepb.Session{InTransaction: true, TransactionMode: vtgatepb.TransactionMode_SINGLE})
+	session := econtext.NewSafeSession(&vtgatepb.Session{InTransaction: true, TransactionMode: vtgatepb.TransactionMode_SINGLE})
 	queries := []*querypb.BoundQuery{{Sql: "query1"}}
 	_, errors := sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false, nullResultsObserver{})
 	require.Empty(t, errors)
@@ -521,7 +523,7 @@ func TestScatterConnSingleDB(t *testing.T) {
 
 	// TransactionMode_SINGLE in txconn
 	sc.txConn.mode = vtgatepb.TransactionMode_SINGLE
-	session = NewSafeSession(&vtgatepb.Session{InTransaction: true})
+	session = econtext.NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	_, errors = sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false, nullResultsObserver{})
 	require.Empty(t, errors)
 	_, errors = sc.ExecuteMultiShard(ctx, nil, rss1, queries, session, false, false, nullResultsObserver{})
@@ -530,7 +532,7 @@ func TestScatterConnSingleDB(t *testing.T) {
 
 	// TransactionMode_MULTI in txconn. Should not fail.
 	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
-	session = NewSafeSession(&vtgatepb.Session{InTransaction: true})
+	session = econtext.NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	_, errors = sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false, nullResultsObserver{})
 	require.Empty(t, errors)
 	_, errors = sc.ExecuteMultiShard(ctx, nil, rss1, queries, session, false, false, nullResultsObserver{})
@@ -601,7 +603,7 @@ func TestReservePrequeries(t *testing.T) {
 
 	res := srvtopo.NewResolver(newSandboxForCells(ctx, []string{"aa"}), sc.gateway, "aa")
 
-	session := NewSafeSession(&vtgatepb.Session{
+	session := econtext.NewSafeSession(&vtgatepb.Session{
 		InTransaction:  false,
 		InReservedConn: true,
 		SystemVariables: map[string]string{

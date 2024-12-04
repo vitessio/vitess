@@ -37,7 +37,7 @@ func TestQuerylogzHandler(t *testing.T) {
 	req, _ := http.NewRequest("GET", "/querylogz?timeout=10&limit=1", nil)
 	logStats := tabletenv.NewLogStats(context.Background(), "Execute")
 	logStats.PlanType = planbuilder.PlanSelect.String()
-	logStats.OriginalSQL = "select name from test_table limit 1000"
+	logStats.OriginalSQL = "select name, 'inject <script>alert();</script>' from test_table limit 1000"
 	logStats.RowsAffected = 1000
 	logStats.NumberOfQueries = 1
 	logStats.StartTime, _ = time.Parse("Jan 2 15:04:05", "Nov 29 13:33:09")
@@ -64,7 +64,7 @@ func TestQuerylogzHandler(t *testing.T) {
 		`<td>0.001</td>`,
 		`<td>1e-08</td>`,
 		`<td>Select</td>`,
-		`<td>select name from test_table limit 1000</td>`,
+		regexp.QuoteMeta(`<td>select name,​ &#39;inject &lt;script&gt;alert()​;&lt;/script&gt;&#39; from test_table limit 1000</td>`),
 		`<td>1</td>`,
 		`<td>none</td>`,
 		`<td>1000</td>`,
@@ -95,7 +95,7 @@ func TestQuerylogzHandler(t *testing.T) {
 		`<td>0.001</td>`,
 		`<td>1e-08</td>`,
 		`<td>Select</td>`,
-		`<td>select name from test_table limit 1000</td>`,
+		regexp.QuoteMeta(`<td>select name,​ &#39;inject &lt;script&gt;alert()​;&lt;/script&gt;&#39; from test_table limit 1000</td>`),
 		`<td>1</td>`,
 		`<td>none</td>`,
 		`<td>1000</td>`,
@@ -126,7 +126,7 @@ func TestQuerylogzHandler(t *testing.T) {
 		`<td>0.001</td>`,
 		`<td>1e-08</td>`,
 		`<td>Select</td>`,
-		`<td>select name from test_table limit 1000</td>`,
+		regexp.QuoteMeta(`<td>select name,​ &#39;inject &lt;script&gt;alert()​;&lt;/script&gt;&#39; from test_table limit 1000</td>`),
 		`<td>1</td>`,
 		`<td>none</td>`,
 		`<td>1000</td>`,

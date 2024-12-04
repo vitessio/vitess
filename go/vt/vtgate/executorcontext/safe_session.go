@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package vtgate
+package executorcontext
 
 import (
 	"fmt"
@@ -23,22 +23,19 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/sqltypes"
-
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql/datetime"
-
+	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/sysvars"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 type (
@@ -58,7 +55,7 @@ type (
 		rollbackOnPartialExec string
 		savepointName         string
 
-		// this is a signal that found_rows has already been handles by the primitives,
+		// this is a signal that found_rows has already been handled by the primitives,
 		// and doesn't have to be updated by the executor
 		foundRowsHandled bool
 
@@ -66,12 +63,12 @@ type (
 		// as the query that started a new transaction on the shard belong to a vindex.
 		queryFromVindex bool
 
-		logging *executeLogger
+		logging *ExecuteLogger
 
 		*vtgatepb.Session
 	}
 
-	executeLogger struct {
+	ExecuteLogger struct {
 		mu      sync.Mutex
 		entries []engine.ExecuteEntry
 		lastID  int
@@ -126,6 +123,8 @@ const (
 	// savepointRollback - rollback happened on the savepoint
 	savepointRollback
 )
+
+const TxRollback = "Rollback Transaction"
 
 // NewSafeSession returns a new SafeSession based on the Session
 func NewSafeSession(sessn *vtgatepb.Session) *SafeSession {
@@ -203,6 +202,50 @@ func (session *SafeSession) resetCommonLocked() {
 	if session.Options != nil {
 		session.Options.TransactionAccessMode = nil
 	}
+}
+
+// NewAutocommitSession returns a SafeSession based on the original
+// session, but with autocommit enabled.
+func (session *SafeSession) NewAutocommitSession() *SafeSession {
+	ss := NewAutocommitSession(session.Session)
+	ss.logging = session.logging
+	return ss
+}
+
+// IsFoundRowsHandled returns the foundRowsHandled.
+func (session *SafeSession) IsFoundRowsHandled() bool {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	return session.foundRowsHandled
+}
+
+// SetFoundRows set the found rows value.
+func (session *SafeSession) SetFoundRows(value uint64) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.FoundRows = value
+	session.foundRowsHandled = true
+}
+
+// GetRollbackOnPartialExec returns the rollbackOnPartialExec value.
+func (session *SafeSession) GetRollbackOnPartialExec() string {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	return session.rollbackOnPartialExec
+}
+
+// SetQueryFromVindex set the queryFromVindex value.
+func (session *SafeSession) SetQueryFromVindex(value bool) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.queryFromVindex = value
+}
+
+// GetQueryFromVindex returns the queryFromVindex value.
+func (session *SafeSession) GetQueryFromVindex() bool {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	return session.queryFromVindex
 }
 
 // SetQueryTimeout sets the query timeout
@@ -312,7 +355,7 @@ func (session *SafeSession) SetRollbackCommand() {
 	if session.savepointState == savepointSet {
 		session.rollbackOnPartialExec = fmt.Sprintf("rollback to %s", session.savepointName)
 	} else {
-		session.rollbackOnPartialExec = txRollback
+		session.rollbackOnPartialExec = TxRollback
 	}
 	session.savepointState = savepointRollbackSet
 }
@@ -340,6 +383,18 @@ func (session *SafeSession) SetCommitOrder(co vtgatepb.CommitOrder) {
 	session.commitOrder = co
 }
 
+// GetCommitOrder returns the commit order.
+func (session *SafeSession) GetCommitOrder() vtgatepb.CommitOrder {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	return session.commitOrder
+}
+
+// GetLogger returns executor logger.
+func (session *SafeSession) GetLogger() *ExecuteLogger {
+	return session.logging
+}
+
 // InTransaction returns true if we are in a transaction
 func (session *SafeSession) InTransaction() bool {
 	session.mu.Lock()
@@ -347,73 +402,88 @@ func (session *SafeSession) InTransaction() bool {
 	return session.Session.InTransaction
 }
 
-// FindAndChangeSessionIfInSingleTxMode returns the transactionId and tabletAlias, if any, for a session
-// modifies the shard session in a specific case for single mode transaction.
-func (session *SafeSession) FindAndChangeSessionIfInSingleTxMode(keyspace, shard string, tabletType topodatapb.TabletType, txMode vtgatepb.TransactionMode) (int64, int64, *topodatapb.TabletAlias, error) {
+// FindAndChangeSessionIfInSingleTxMode retrieves the ShardSession matching the given keyspace, shard, and tablet type.
+// It performs additional checks and may modify the ShardSession in specific cases for single-mode transactions.
+//
+// Key behavior:
+// 1. Retrieves the appropriate list of sessions (PreSessions, PostSessions, or default ShardSessions) based on the commit order.
+// 2. Identifies a matching session by keyspace, shard, and tablet type.
+// 3. If the session meets specific conditions (e.g., non-vindex-only, single transaction mode), it updates the session state:
+//   - Converts a vindex-only session to a standard session if required by the transaction type.
+//   - If a multi-shard transaction is detected in Single mode, marks the session for rollback and returns an error.
+//
+// Parameters:
+// - keyspace: The keyspace of the target shard.
+// - shard: The shard name of the target.
+// - tabletType: The type of the tablet for the shard session.
+// - txMode: The transaction mode (e.g., Single, Multi).
+//
+// Returns:
+// - The matching ShardSession, if found and valid for the operation.
+// - An error if a Single-mode transaction attempts to span multiple shards.
+func (session *SafeSession) FindAndChangeSessionIfInSingleTxMode(keyspace, shard string, tabletType topodatapb.TabletType, txMode vtgatepb.TransactionMode) (*vtgatepb.Session_ShardSession, error) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
-	sessions := session.ShardSessions
+
+	shardSession := session.findSessionLocked(keyspace, shard, tabletType)
+
+	if shardSession == nil {
+		return nil, nil
+	}
+
+	if !shardSession.VindexOnly {
+		return shardSession, nil
+	}
+
+	if err := session.singleModeErrorOnCrossShard(txMode, 0); err != nil {
+		return nil, err
+	}
+
+	// the shard session is now used by non-vindex query as well,
+	// so it is not an exclusive vindex only shard session anymore.
+	shardSession.VindexOnly = false
+	return shardSession, nil
+}
+
+func (session *SafeSession) findSessionLocked(keyspace, shard string, tabletType topodatapb.TabletType) *vtgatepb.Session_ShardSession {
+	// Select the appropriate session list based on the commit order.
+	var sessions []*vtgatepb.Session_ShardSession
 	switch session.commitOrder {
 	case vtgatepb.CommitOrder_PRE:
 		sessions = session.PreSessions
 	case vtgatepb.CommitOrder_POST:
 		sessions = session.PostSessions
+	default:
+		sessions = session.ShardSessions
 	}
+
+	// Find and return the matching shard session.
 	for _, shardSession := range sessions {
-		if keyspace == shardSession.Target.Keyspace && tabletType == shardSession.Target.TabletType && shard == shardSession.Target.Shard {
-			if txMode != vtgatepb.TransactionMode_SINGLE || !shardSession.VindexOnly || session.queryFromVindex {
-				return shardSession.TransactionId, shardSession.ReservedId, shardSession.TabletAlias, nil
-			}
-			count := actualNoOfShardSession(session.ShardSessions)
-			// If the count of shard session which are non vindex only is greater than 0, then it is a
-			if count > 0 {
-				session.mustRollback = true
-				return 0, 0, nil, vterrors.Errorf(vtrpcpb.Code_ABORTED, "multi-db transaction attempted: %v", session.ShardSessions)
-			}
-			// the shard session is now used by non-vindex query as well,
-			// so it is not an exclusive vindex only shard session anymore.
-			shardSession.VindexOnly = false
-			return shardSession.TransactionId, shardSession.ReservedId, shardSession.TabletAlias, nil
+		if shardSession.Target.Keyspace == keyspace &&
+			shardSession.Target.Shard == shard &&
+			shardSession.Target.TabletType == tabletType {
+			return shardSession
 		}
 	}
-	return 0, 0, nil, nil
+	return nil
 }
 
-func addOrUpdate(shardSession *vtgatepb.Session_ShardSession, sessions []*vtgatepb.Session_ShardSession) ([]*vtgatepb.Session_ShardSession, error) {
-	appendSession := true
-	for i, sess := range sessions {
-		targetedAtSameTablet := sess.Target.Keyspace == shardSession.Target.Keyspace &&
-			sess.Target.TabletType == shardSession.Target.TabletType &&
-			sess.Target.Shard == shardSession.Target.Shard
-		if targetedAtSameTablet {
-			if !proto.Equal(sess.TabletAlias, shardSession.TabletAlias) {
-				errorDetails := fmt.Sprintf("got non-matching aliases (%v vs %v) for the same target (keyspace: %v, tabletType: %v, shard: %v)",
-					sess.TabletAlias, shardSession.TabletAlias,
-					sess.Target.Keyspace, sess.Target.TabletType, sess.Target.Shard)
-				return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, errorDetails)
-			}
-			// replace the old info with the new one
-			sessions[i] = shardSession
-			appendSession = false
-			break
-		}
-	}
-	if appendSession {
-		sessions = append(sessions, shardSession)
-	}
-
-	return sessions, nil
+type ShardActionInfo interface {
+	TransactionID() int64
+	ReservedID() int64
+	RowsAffected() bool
+	Alias() *topodatapb.TabletAlias
 }
 
 // AppendOrUpdate adds a new ShardSession, or updates an existing one if one already exists for the given shard session
-func (session *SafeSession) AppendOrUpdate(shardSession *vtgatepb.Session_ShardSession, txMode vtgatepb.TransactionMode) error {
+func (session *SafeSession) AppendOrUpdate(target *querypb.Target, info ShardActionInfo, existingSession *vtgatepb.Session_ShardSession, txMode vtgatepb.TransactionMode) error {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 
 	// additional check of transaction id is required
 	// as now in autocommit mode there can be session due to reserved connection
 	// that needs to be stored as shard session.
-	if session.autocommitState == autocommitted && shardSession.TransactionId != 0 {
+	if session.autocommitState == autocommitted && info.TransactionID() != 0 {
 		// Should be unreachable
 		return vterrors.VT13001("unexpected 'autocommitted' state in transaction")
 	}
@@ -423,45 +493,62 @@ func (session *SafeSession) AppendOrUpdate(shardSession *vtgatepb.Session_ShardS
 	}
 	session.autocommitState = notAutocommittable
 
+	if existingSession != nil {
+		existingSession.TransactionId = info.TransactionID()
+		existingSession.ReservedId = info.ReservedID()
+		if !existingSession.RowsAffected {
+			existingSession.RowsAffected = info.RowsAffected()
+		}
+		if existingSession.VindexOnly {
+			existingSession.VindexOnly = session.queryFromVindex
+		}
+		if err := session.singleModeErrorOnCrossShard(txMode, 1); err != nil {
+			return err
+		}
+		return nil
+	}
+	newSession := &vtgatepb.Session_ShardSession{
+		Target:        target,
+		TabletAlias:   info.Alias(),
+		TransactionId: info.TransactionID(),
+		ReservedId:    info.ReservedID(),
+		RowsAffected:  info.RowsAffected(),
+		VindexOnly:    session.queryFromVindex,
+	}
+
 	// Always append, in order for rollback to succeed.
 	switch session.commitOrder {
 	case vtgatepb.CommitOrder_NORMAL:
-		if session.queryFromVindex {
-			shardSession.VindexOnly = true
-		}
-		newSessions, err := addOrUpdate(shardSession, session.ShardSessions)
-		if err != nil {
+		session.ShardSessions = append(session.ShardSessions, newSession)
+		if err := session.singleModeErrorOnCrossShard(txMode, 1); err != nil {
 			return err
-		}
-		session.ShardSessions = newSessions
-
-		if session.queryFromVindex {
-			break
-		}
-		// isSingle is enforced only for normal commit order operations.
-		if session.isSingleDB(txMode) && len(session.ShardSessions) > 1 {
-			count := actualNoOfShardSession(session.ShardSessions)
-			if count <= 1 {
-				break
-			}
-			session.mustRollback = true
-			return vterrors.Errorf(vtrpcpb.Code_ABORTED, "multi-db transaction attempted: %v", session.ShardSessions)
 		}
 	case vtgatepb.CommitOrder_PRE:
-		newSessions, err := addOrUpdate(shardSession, session.PreSessions)
-		if err != nil {
-			return err
-		}
-		session.PreSessions = newSessions
+		session.PreSessions = append(session.PreSessions, newSession)
 	case vtgatepb.CommitOrder_POST:
-		newSessions, err := addOrUpdate(shardSession, session.PostSessions)
-		if err != nil {
-			return err
-		}
-		session.PostSessions = newSessions
+		session.PostSessions = append(session.PostSessions, newSession)
 	default:
 		// Should be unreachable
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] SafeSession.AppendOrUpdate: unexpected commitOrder")
+		return vterrors.VT13001(fmt.Sprintf("unexpected commitOrder to append shard session: %v", session.commitOrder))
+	}
+
+	return nil
+}
+
+// singleModeErrorOnCrossShard checks if a transaction violates the Single mode constraint by spanning multiple shards.
+func (session *SafeSession) singleModeErrorOnCrossShard(txMode vtgatepb.TransactionMode, exceedsCrossShard int) error {
+	// Skip the check if:
+	// 1. The query comes from a lookup vindex.
+	// 2. The transaction mode is not Single.
+	// 3. The transaction is not in the normal shard session.
+	if session.queryFromVindex || session.commitOrder != vtgatepb.CommitOrder_NORMAL || !session.isSingleDB(txMode) {
+		return nil
+	}
+
+	// If the transaction spans multiple shards, abort it.
+	if actualNoOfShardSession(session.ShardSessions) > exceedsCrossShard {
+		session.mustRollback = true // Mark the session for rollback.
+		return vterrors.Errorf(vtrpcpb.Code_ABORTED, "multi-db transaction attempted: %v", session.ShardSessions)
 	}
 
 	return nil
@@ -678,12 +765,11 @@ func (session *SafeSession) UpdateLockHeartbeat() {
 	session.LastLockHeartbeat = time.Now().Unix()
 }
 
-// TriggerLockHeartBeat returns if it time to trigger next lock heartbeat
-func (session *SafeSession) TriggerLockHeartBeat() bool {
+// GetLockHeartbeat returns last time the lock heartbeat was sent.
+func (session *SafeSession) GetLockHeartbeat() int64 {
 	session.mu.Lock()
 	defer session.mu.Unlock()
-	now := time.Now().Unix()
-	return now-session.LastLockHeartbeat >= int64(lockHeartbeatTime.Seconds())
+	return session.LastLockHeartbeat
 }
 
 // InLockSession returns whether locking is used on this session.
@@ -836,9 +922,7 @@ func (session *SafeSession) GetOrCreateOptions() *querypb.ExecuteOptions {
 	return session.Session.Options
 }
 
-var _ iQueryOption = (*SafeSession)(nil)
-
-func (session *SafeSession) cachePlan() bool {
+func (session *SafeSession) CachePlan() bool {
 	if session == nil || session.Options == nil {
 		return true
 	}
@@ -849,7 +933,7 @@ func (session *SafeSession) cachePlan() bool {
 	return !(session.Options.SkipQueryPlanCache || session.Options.HasCreatedTempTables)
 }
 
-func (session *SafeSession) getSelectLimit() int {
+func (session *SafeSession) GetSelectLimit() int {
 	if session == nil || session.Options == nil {
 		return -1
 	}
@@ -860,16 +944,16 @@ func (session *SafeSession) getSelectLimit() int {
 	return int(session.Options.SqlSelectLimit)
 }
 
-// isTxOpen returns true if there is open connection to any of the shard.
-func (session *SafeSession) isTxOpen() bool {
+// IsTxOpen returns true if there is open connection to any of the shard.
+func (session *SafeSession) IsTxOpen() bool {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 
 	return len(session.ShardSessions) > 0 || len(session.PreSessions) > 0 || len(session.PostSessions) > 0
 }
 
-// getSessions returns the shard session for the current commit order.
-func (session *SafeSession) getSessions() []*vtgatepb.Session_ShardSession {
+// GetSessions returns the shard session for the current commit order.
+func (session *SafeSession) GetSessions() []*vtgatepb.Session_ShardSession {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 
@@ -956,7 +1040,7 @@ func (session *SafeSession) EnableLogging(parser *sqlparser.Parser) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 
-	session.logging = &executeLogger{
+	session.logging = &ExecuteLogger{
 		parser: parser,
 	}
 }
@@ -994,7 +1078,15 @@ func (session *SafeSession) GetPrepareData(name string) *vtgatepb.PrepareData {
 	return session.PrepareStatement[name]
 }
 
-func (l *executeLogger) log(primitive engine.Primitive, target *querypb.Target, gateway srvtopo.Gateway, query string, begin bool, bv map[string]*querypb.BindVariable) {
+func (session *SafeSession) Log(primitive engine.Primitive, target *querypb.Target, gateway srvtopo.Gateway, query string, begin bool, bv map[string]*querypb.BindVariable) {
+	session.logging.Log(primitive, target, gateway, query, begin, bv)
+}
+
+func (session *SafeSession) GetLogs() []engine.ExecuteEntry {
+	return session.logging.GetLogs()
+}
+
+func (l *ExecuteLogger) Log(primitive engine.Primitive, target *querypb.Target, gateway srvtopo.Gateway, query string, begin bool, bv map[string]*querypb.BindVariable) {
 	if l == nil {
 		return
 	}
@@ -1033,7 +1125,10 @@ func (l *executeLogger) log(primitive engine.Primitive, target *querypb.Target, 
 	})
 }
 
-func (l *executeLogger) GetLogs() []engine.ExecuteEntry {
+func (l *ExecuteLogger) GetLogs() []engine.ExecuteEntry {
+	if l == nil {
+		return nil
+	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	result := make([]engine.ExecuteEntry, len(l.entries))
