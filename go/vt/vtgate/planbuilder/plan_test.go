@@ -313,69 +313,75 @@ func (s *planTestSuite) TestOneTPCC() {
 	reset := operators.EnableDebugPrinting()
 	defer reset()
 
-	vschema := &vschemawrapper.VSchemaWrapper{
-		V:   loadSchema(s.T(), "vschemas/tpcc_schema.json", true),
-		Env: vtenv.NewTestEnv(),
-	}
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(s.T(), "vschemas/tpcc_schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	require.NoError(s.T(), err)
 
-	s.testFile("onecase.json", vschema, false)
+	s.testFile("onecase.json", vw, false)
 }
 
 func (s *planTestSuite) TestOneWithMainAsDefault() {
 	reset := operators.EnableDebugPrinting()
 	defer reset()
-	vschema := &vschemawrapper.VSchemaWrapper{
-		V: loadSchema(s.T(), "vschemas/schema.json", true),
-		Keyspace: &vindexes.Keyspace{
-			Name:    "main",
-			Sharded: false,
-		},
-		Env: vtenv.NewTestEnv(),
-	}
 
-	s.testFile("onecase.json", vschema, false)
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	require.NoError(s.T(), err)
+
+	vw.Vcursor.SetTarget("main")
+	vw.Keyspace = &vindexes.Keyspace{Name: "main"}
+
+	s.testFile("onecase.json", vw, false)
 }
 
 func (s *planTestSuite) TestOneWithSecondUserAsDefault() {
 	reset := operators.EnableDebugPrinting()
 	defer reset()
-	vschema := &vschemawrapper.VSchemaWrapper{
-		V: loadSchema(s.T(), "vschemas/schema.json", true),
-		Keyspace: &vindexes.Keyspace{
-			Name:    "second_user",
-			Sharded: true,
-		},
-		Env: vtenv.NewTestEnv(),
+
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	require.NoError(s.T(), err)
+
+	vw.Vcursor.SetTarget("second_user")
+	vw.Keyspace = &vindexes.Keyspace{
+		Name:    "second_user",
+		Sharded: true,
 	}
 
-	s.testFile("onecase.json", vschema, false)
+	s.testFile("onecase.json", vw, false)
 }
 
 func (s *planTestSuite) TestOneWithUserAsDefault() {
 	reset := operators.EnableDebugPrinting()
 	defer reset()
-	vschema := &vschemawrapper.VSchemaWrapper{
-		V: loadSchema(s.T(), "vschemas/schema.json", true),
-		Keyspace: &vindexes.Keyspace{
-			Name:    "user",
-			Sharded: true,
-		},
-		Env: vtenv.NewTestEnv(),
+
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	require.NoError(s.T(), err)
+
+	vw.Vcursor.SetTarget("user")
+	vw.Keyspace = &vindexes.Keyspace{
+		Name:    "user",
+		Sharded: true,
 	}
 
-	s.testFile("onecase.json", vschema, false)
+	s.testFile("onecase.json", vw, false)
 }
 
 func (s *planTestSuite) TestOneWithTPCHVSchema() {
 	reset := operators.EnableDebugPrinting()
 	defer reset()
-	vschema := &vschemawrapper.VSchemaWrapper{
-		V:             loadSchema(s.T(), "vschemas/tpch_schema.json", true),
-		SysVarEnabled: true,
-		Env:           vtenv.NewTestEnv(),
-	}
 
-	s.testFile("onecase.json", vschema, false)
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	require.NoError(s.T(), err)
+
+	s.testFile("onecase.json", vw, false)
 }
 
 func (s *planTestSuite) TestOneWith57Version() {
@@ -442,11 +448,10 @@ func BenchmarkTPCH(b *testing.B) {
 }
 
 func benchmarkWorkload(b *testing.B, name string) {
-	vw := &vschemawrapper.VSchemaWrapper{
-		V:             loadSchema(b, "vschemas/"+name+"_schema.json", true),
-		SysVarEnabled: true,
-		Env:           vtenv.NewTestEnv(),
-	}
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(b, "vschemas/"+name+"_schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	require.NoError(b, err)
 
 	testCases := readJSONTests(name + "_cases.json")
 	b.ResetTimer()
@@ -469,20 +474,18 @@ func (s *planTestSuite) TestBypassPlanningShardTargetFromFile() {
 }
 
 func (s *planTestSuite) TestBypassPlanningKeyrangeTargetFromFile() {
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	require.NoError(s.T(), err)
+
 	keyRange, _ := key.ParseShardingSpec("-")
+	vw.Dest = key.DestinationExactKeyRange{KeyRange: keyRange[0]}
 
-	vschema := &vschemawrapper.VSchemaWrapper{
-		V: loadSchema(s.T(), "vschemas/schema.json", true),
-		Keyspace: &vindexes.Keyspace{
-			Name:    "main",
-			Sharded: false,
-		},
-		TabletType_: topodatapb.TabletType_PRIMARY,
-		Dest:        key.DestinationExactKeyRange{KeyRange: keyRange[0]},
-		Env:         vtenv.NewTestEnv(),
-	}
+	vw.Vcursor.SetTarget("main")
+	vw.Keyspace = &vindexes.Keyspace{Name: "main"}
 
-	s.testFile("bypass_keyrange_cases.json", vschema, false)
+	s.testFile("bypass_keyrange_cases.json", vw, false)
 }
 
 func (s *planTestSuite) TestWithDefaultKeyspaceFromFile() {
@@ -591,15 +594,13 @@ func (s *planTestSuite) TestMirrorPlanning() {
 func (s *planTestSuite) TestOneMirror() {
 	reset := operators.EnableDebugPrinting()
 	defer reset()
-	vschema := &vschemawrapper.VSchemaWrapper{
-		V:             loadSchema(s.T(), "vschemas/mirror_schema.json", true),
-		TabletType_:   topodatapb.TabletType_PRIMARY,
-		SysVarEnabled: true,
-		TestBuilder:   TestBuilder,
-		Env:           vtenv.NewTestEnv(),
-	}
 
-	s.testFile("onecase.json", vschema, false)
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	require.NoError(s.T(), err)
+
+	s.testFile("onecase.json", vw, false)
 }
 
 func loadSchema(t testing.TB, filename string, setCollation bool) *vindexes.VSchema {
@@ -772,30 +773,29 @@ func locateFile(name string) string {
 var benchMarkFiles = []string{"from_cases.json", "filter_cases.json", "large_cases.json", "aggr_cases.json", "select_cases.json", "union_cases.json"}
 
 func BenchmarkPlanner(b *testing.B) {
-	vschema := &vschemawrapper.VSchemaWrapper{
-		V:             loadSchema(b, "vschemas/schema.json", true),
-		SysVarEnabled: true,
-		Env:           vtenv.NewTestEnv(),
-	}
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(b, "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	require.NoError(b, err)
+
 	for _, filename := range benchMarkFiles {
 		testCases := readJSONTests(filename)
 		b.Run(filename+"-gen4", func(b *testing.B) {
-			benchmarkPlanner(b, Gen4, testCases, vschema)
+			benchmarkPlanner(b, Gen4, testCases, vw)
 		})
 	}
 }
 
 func BenchmarkSemAnalysis(b *testing.B) {
-	vschema := &vschemawrapper.VSchemaWrapper{
-		V:             loadSchema(b, "vschemas/schema.json", true),
-		SysVarEnabled: true,
-		Env:           vtenv.NewTestEnv(),
-	}
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(b, "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	require.NoError(b, err)
 
 	for i := 0; i < b.N; i++ {
 		for _, filename := range benchMarkFiles {
 			for _, tc := range readJSONTests(filename) {
-				exerciseAnalyzer(tc.Query, vschema.CurrentDb(), vschema)
+				exerciseAnalyzer(tc.Query, vw.CurrentDb(), vw)
 			}
 		}
 	}
@@ -820,12 +820,10 @@ func exerciseAnalyzer(query, database string, s semantics.SchemaInformation) {
 }
 
 func BenchmarkSelectVsDML(b *testing.B) {
-	vschema := &vschemawrapper.VSchemaWrapper{
-		V:             loadSchema(b, "vschemas/schema.json", true),
-		SysVarEnabled: true,
-		Version:       Gen4,
-		Env:           vtenv.NewTestEnv(),
-	}
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(b, "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	require.NoError(b, err)
 
 	dmlCases := readJSONTests("dml_cases.json")
 	selectCases := readJSONTests("select_cases.json")
@@ -839,40 +837,33 @@ func BenchmarkSelectVsDML(b *testing.B) {
 	})
 
 	b.Run("DML (random sample, N=32)", func(b *testing.B) {
-		benchmarkPlanner(b, Gen4, dmlCases[:32], vschema)
+		benchmarkPlanner(b, Gen4, dmlCases[:32], vw)
 	})
 
 	b.Run("Select (random sample, N=32)", func(b *testing.B) {
-		benchmarkPlanner(b, Gen4, selectCases[:32], vschema)
+		benchmarkPlanner(b, Gen4, selectCases[:32], vw)
 	})
 }
 
 func BenchmarkBaselineVsMirrored(b *testing.B) {
+	env := vtenv.NewTestEnv()
 	baseline := loadSchema(b, "vschemas/mirror_schema.json", true)
 	baseline.MirrorRules = map[string]*vindexes.MirrorRule{}
-	baselineVschema := &vschemawrapper.VSchemaWrapper{
-		V:             baseline,
-		SysVarEnabled: true,
-		Version:       Gen4,
-		Env:           vtenv.NewTestEnv(),
-	}
+	bvw, err := vschemawrapper.NewVschemaWrapper(env, baseline, TestBuilder)
+	require.NoError(b, err)
 
 	mirroredSchema := loadSchema(b, "vschemas/mirror_schema.json", true)
-	mirroredVschema := &vschemawrapper.VSchemaWrapper{
-		V:             mirroredSchema,
-		SysVarEnabled: true,
-		Version:       Gen4,
-		Env:           vtenv.NewTestEnv(),
-	}
+	mvw, err := vschemawrapper.NewVschemaWrapper(env, mirroredSchema, TestBuilder)
+	require.NoError(b, err)
 
 	cases := readJSONTests("mirror_cases.json")
 
 	b.Run("Baseline", func(b *testing.B) {
-		benchmarkPlanner(b, Gen4, cases, baselineVschema)
+		benchmarkPlanner(b, Gen4, cases, bvw)
 	})
 
 	b.Run("Mirrored", func(b *testing.B) {
-		benchmarkPlanner(b, Gen4, cases, mirroredVschema)
+		benchmarkPlanner(b, Gen4, cases, mvw)
 	})
 }
 
