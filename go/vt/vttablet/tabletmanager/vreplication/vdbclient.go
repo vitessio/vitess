@@ -56,16 +56,19 @@ func (vc *vdbClient) Begin() error {
 	if vc.InTransaction {
 		return nil
 	}
-	if err := vc.DBClient.Begin(); err != nil {
-		return err
+	if vc.maxBatchSize == 0 {
+		// We're not batching so we BEGIN the transaction here.
+		if err := vc.DBClient.Begin(); err != nil {
+			return err
+		}
+	} else {
+		// If we're batching, we batch the contents of the
+		// transaction, which starts with the BEGIN and ends with
+		// the COMMIT, so we do not send a BEGIN down the wire
+		// ahead of time.
+		vc.queriesPos = int64(len(vc.queries))
+		vc.batchSize = 6 // begin and semicolon
 	}
-
-	// If we're batching, we only batch the contents of the
-	// transaction, which starts with the begin and ends with
-	// the commit.
-	vc.queriesPos = int64(len(vc.queries))
-	vc.batchSize = 6 // begin and semicolon
-
 	vc.queries = append(vc.queries, "begin")
 	vc.InTransaction = true
 	vc.startTime = time.Now()
