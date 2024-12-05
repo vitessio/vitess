@@ -146,8 +146,8 @@ type S3BackupHandle struct {
 	dir       string
 	name      string
 	readOnly  bool
-	errors    errorsbackup.PerFileErrorRecorder
 	waitGroup sync.WaitGroup
+	errorsbackup.PerFileErrorRecorder
 }
 
 // Directory is part of the backupstorage.BackupHandle interface.
@@ -158,29 +158,6 @@ func (bh *S3BackupHandle) Directory() string {
 // Name is part of the backupstorage.BackupHandle interface.
 func (bh *S3BackupHandle) Name() string {
 	return bh.name
-}
-
-// RecordError is part of the concurrency.ErrorRecorder interface.
-func (bh *S3BackupHandle) RecordError(filename string, err error) {
-	bh.errors.RecordError(filename, err)
-}
-
-// HasErrors is part of the concurrency.ErrorRecorder interface.
-func (bh *S3BackupHandle) HasErrors() bool {
-	return bh.errors.HasErrors()
-}
-
-// Error is part of the concurrency.ErrorRecorder interface.
-func (bh *S3BackupHandle) Error() error {
-	return bh.errors.Error()
-}
-
-func (bh *S3BackupHandle) GetFailedFiles() []string {
-	return bh.errors.GetFailedFiles()
-}
-
-func (bh *S3BackupHandle) ResetErrorForFile(filename string) {
-	bh.errors.ResetErrorForFile(filename)
 }
 
 // AddFile is part of the backupstorage.BackupHandle interface.

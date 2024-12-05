@@ -70,28 +70,9 @@ type CephBackupHandle struct {
 	dir       string
 	name      string
 	readOnly  bool
-	errors    errorsbackup.PerFileErrorRecorder
 	waitGroup sync.WaitGroup
+	errorsbackup.PerFileErrorRecorder
 }
-
-// RecordError is part of the concurrency.ErrorRecorder interface.
-func (bh *CephBackupHandle) RecordError(filename string, err error) {
-	bh.errors.RecordError(filename, err)
-}
-
-// HasErrors is part of the concurrency.ErrorRecorder interface.
-func (bh *CephBackupHandle) HasErrors() bool {
-	return bh.errors.HasErrors()
-}
-
-// Error is part of the concurrency.ErrorRecorder interface.
-func (bh *CephBackupHandle) Error() error {
-	return bh.errors.Error()
-}
-
-func (bh *CephBackupHandle) GetFailedFiles() []string { return bh.errors.GetFailedFiles() }
-
-func (bh *CephBackupHandle) ResetErrorForFile(filename string) { bh.errors.ResetErrorForFile(filename) }
 
 // Directory implements BackupHandle.
 func (bh *CephBackupHandle) Directory() string {

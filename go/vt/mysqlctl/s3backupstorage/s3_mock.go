@@ -215,7 +215,8 @@ func FailFirstRead(s3bh *S3BackupHandle, ctx context.Context, filename string, f
 // FailAllReadExpectManifest is used to fail every attempt at reading a file from S3.
 // Only the MANIFEST file is allowed to be read, because otherwise we wouldn't even try to read the normal files.
 func FailAllReadExpectManifest(s3bh *S3BackupHandle, ctx context.Context, filename string, _ bool) (io.ReadCloser, error) {
-	if filename == "MANIFEST" {
+	const manifestFileName = "MANIFEST"
+	if filename == manifestFileName {
 		return s3bh.ReadFile(ctx, filename)
 	}
 	return &failRead{}, nil

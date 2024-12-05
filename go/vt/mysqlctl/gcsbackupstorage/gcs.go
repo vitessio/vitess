@@ -66,27 +66,8 @@ type GCSBackupHandle struct {
 	dir      string
 	name     string
 	readOnly bool
-	errors   errorsbackup.PerFileErrorRecorder
+	errorsbackup.PerFileErrorRecorder
 }
-
-// RecordError is part of the concurrency.ErrorRecorder interface.
-func (bh *GCSBackupHandle) RecordError(filename string, err error) {
-	bh.errors.RecordError(filename, err)
-}
-
-// HasErrors is part of the concurrency.ErrorRecorder interface.
-func (bh *GCSBackupHandle) HasErrors() bool {
-	return bh.errors.HasErrors()
-}
-
-// Error is part of the concurrency.ErrorRecorder interface.
-func (bh *GCSBackupHandle) Error() error {
-	return bh.errors.Error()
-}
-
-func (bh *GCSBackupHandle) GetFailedFiles() []string { return bh.errors.GetFailedFiles() }
-
-func (bh *GCSBackupHandle) ResetErrorForFile(filename string) { bh.errors.ResetErrorForFile(filename) }
 
 // Directory implements BackupHandle.
 func (bh *GCSBackupHandle) Directory() string {

@@ -29,7 +29,7 @@ type FakeBackupHandle struct {
 	Dir      string
 	NameV    string
 	ReadOnly bool
-	Errors   errorsbackup.PerFileErrorRecorder
+	errorsbackup.PerFileErrorRecorder
 
 	AbortBackupCalls  []context.Context
 	AbortBackupReturn error
@@ -56,26 +56,6 @@ type FakeBackupHandleAddFileReturn struct {
 type FakeBackupHandleReadFileCall struct {
 	Ctx      context.Context
 	Filename string
-}
-
-func (fbh *FakeBackupHandle) RecordError(filename string, err error) {
-	fbh.Errors.RecordError(filename, err)
-}
-
-func (fbh *FakeBackupHandle) HasErrors() bool {
-	return fbh.Errors.HasErrors()
-}
-
-func (fbh *FakeBackupHandle) Error() error {
-	return fbh.Errors.Error()
-}
-
-func (fbh *FakeBackupHandle) GetFailedFiles() []string {
-	return fbh.Errors.GetFailedFiles()
-}
-
-func (fbh *FakeBackupHandle) ResetErrorForFile(filename string) {
-	fbh.Errors.ResetErrorForFile(filename)
 }
 
 func (fbh *FakeBackupHandle) Directory() string {

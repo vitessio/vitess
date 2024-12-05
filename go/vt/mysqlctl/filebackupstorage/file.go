@@ -60,7 +60,7 @@ type FileBackupHandle struct {
 	dir      string
 	name     string
 	readOnly bool
-	errors   errorsbackup.PerFileErrorRecorder
+	errorsbackup.PerFileErrorRecorder
 }
 
 func NewBackupHandle(
@@ -78,27 +78,6 @@ func NewBackupHandle(
 		name:     name,
 		readOnly: readOnly,
 	}
-}
-
-// RecordError is part of the concurrency.ErrorRecorder interface.
-func (fbh *FileBackupHandle) RecordError(filename string, err error) {
-	fbh.errors.RecordError(filename, err)
-}
-
-// HasErrors is part of the concurrency.ErrorRecorder interface.
-func (fbh *FileBackupHandle) HasErrors() bool {
-	return fbh.errors.HasErrors()
-}
-
-// Error is part of the concurrency.ErrorRecorder interface.
-func (fbh *FileBackupHandle) Error() error {
-	return fbh.errors.Error()
-}
-
-func (fbh *FileBackupHandle) GetFailedFiles() []string { return fbh.errors.GetFailedFiles() }
-
-func (fbh *FileBackupHandle) ResetErrorForFile(filename string) {
-	fbh.errors.ResetErrorForFile(filename)
 }
 
 // Directory is part of the BackupHandle interface

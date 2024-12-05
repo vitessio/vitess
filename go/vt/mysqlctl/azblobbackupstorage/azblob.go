@@ -203,9 +203,9 @@ type AZBlobBackupHandle struct {
 	name      string
 	readOnly  bool
 	waitGroup sync.WaitGroup
-	errors    errorsbackup.PerFileErrorRecorder
 	ctx       context.Context
 	cancel    context.CancelFunc
+	errorsbackup.PerFileErrorRecorder
 }
 
 // Directory implements BackupHandle.
@@ -216,27 +216,6 @@ func (bh *AZBlobBackupHandle) Directory() string {
 // Name implements BackupHandle.
 func (bh *AZBlobBackupHandle) Name() string {
 	return bh.name
-}
-
-// RecordError is part of the concurrency.ErrorRecorder interface.
-func (bh *AZBlobBackupHandle) RecordError(filename string, err error) {
-	bh.errors.RecordError(filename, err)
-}
-
-// HasErrors is part of the concurrency.ErrorRecorder interface.
-func (bh *AZBlobBackupHandle) HasErrors() bool {
-	return bh.errors.HasErrors()
-}
-
-// Error is part of the concurrency.ErrorRecorder interface.
-func (bh *AZBlobBackupHandle) Error() error {
-	return bh.errors.Error()
-}
-
-func (bh *AZBlobBackupHandle) GetFailedFiles() []string { return bh.errors.GetFailedFiles() }
-
-func (bh *AZBlobBackupHandle) ResetErrorForFile(filename string) {
-	bh.errors.ResetErrorForFile(filename)
 }
 
 // AddFile implements BackupHandle.
