@@ -1732,9 +1732,6 @@ func TestPlayerDDL(t *testing.T) {
 	pos1 := primaryPosition(t)
 	// The stop position must be the GTID of the first DDL
 	expectDBClientQueries(t, qh.Expect(
-		// The first state update comes from vreplicator, which is unaware of
-		// the vplayer batching, with the batch including the same update.
-		"/update _vt.vreplication set state='Stopped'",
 		"begin",
 		fmt.Sprintf("/update _vt.vreplication set pos='%s'", pos1),
 		"/update _vt.vreplication set state='Stopped'",
@@ -1755,9 +1752,6 @@ func TestPlayerDDL(t *testing.T) {
 		// Second update is from vreplicator.
 		"/update _vt.vreplication set message='Picked source tablet.*",
 		"/update.*'Running'",
-		// The first state update comes from vreplicator, which is unaware of
-		// the vplayer batching, with the batch including the same update.
-		"/update _vt.vreplication set state='Stopped'",
 		"begin",
 		fmt.Sprintf("/update.*'%s'", pos2),
 		"/update _vt.vreplication set state='Stopped'",
@@ -1923,9 +1917,6 @@ func TestPlayerStopPos(t *testing.T) {
 		// Second update is from vreplicator.
 		"/update _vt.vreplication set message='Picked source tablet.*",
 		"/update.*'Running'",
-		// The first state update comes from vreplicator, which is unaware of
-		// the vplayer batching, with the batch including the same update.
-		"/update.*'Stopped'",
 		"begin",
 		"insert into yes(id,val) values (1,'aaa')",
 		fmt.Sprintf("/update.*compress.*'%s'", stopPos),
@@ -1951,9 +1942,6 @@ func TestPlayerStopPos(t *testing.T) {
 		// Second update is from vreplicator.
 		"/update _vt.vreplication set message='Picked source tablet.*",
 		"/update.*'Running'",
-		// The first state update comes from vreplicator, which is unaware of
-		// the vplayer batching, with the batch including the same update.
-		"/update.*'Stopped'",
 		"begin",
 		// Since 'no' generates empty transactions that are skipped by
 		// vplayer, a commit is done only for the stop position event.
