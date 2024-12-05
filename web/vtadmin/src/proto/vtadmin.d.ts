@@ -3720,6 +3720,12 @@ export namespace vtadmin {
         /** ApplySchemaRequest cluster_id */
         cluster_id?: (string|null);
 
+        /** ApplySchemaRequest sql */
+        sql?: (string|null);
+
+        /** ApplySchemaRequest caller_id */
+        caller_id?: (string|null);
+
         /** ApplySchemaRequest request */
         request?: (vtctldata.IApplySchemaRequest|null);
     }
@@ -3735,6 +3741,12 @@ export namespace vtadmin {
 
         /** ApplySchemaRequest cluster_id. */
         public cluster_id: string;
+
+        /** ApplySchemaRequest sql. */
+        public sql: string;
+
+        /** ApplySchemaRequest caller_id. */
+        public caller_id: string;
 
         /** ApplySchemaRequest request. */
         public request?: (vtctldata.IApplySchemaRequest|null);

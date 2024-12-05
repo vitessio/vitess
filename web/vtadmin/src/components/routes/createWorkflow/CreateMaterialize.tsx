@@ -31,7 +31,7 @@ import Toggle from '../../toggle/Toggle';
 import { tabletmanagerdata, vtadmin, vtctldata } from '../../../proto/vtadmin';
 import { MultiSelect } from '../../inputs/MultiSelect';
 import { TABLET_TYPES } from '../../../util/tablets';
-import ErrorDialog from './ErrorDialog';
+import ErrorDialog from '../../dialog/ErrorDialog';
 
 interface FormData {
     clusterID: string;

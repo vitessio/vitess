@@ -1966,7 +1966,7 @@ func TestFilteredMultipleWhere(t *testing.T) {
 			filter: &binlogdatapb.Filter{
 				Rules: []*binlogdatapb.Rule{{
 					Match:  "t1",
-					Filter: "select id1, val from t1 where in_keyrange('-80') and id2 = 200 and id3 = 1000 and val = 'newton'",
+					Filter: "select id1, val from t1 where in_keyrange('-80') and id2 = 200 and id3 = 1000 and val = 'newton' and id1 in (1, 2, 129)",
 				}},
 			},
 			customFieldEvents: true,
@@ -1988,9 +1988,7 @@ func TestFilteredMultipleWhere(t *testing.T) {
 			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{after: []string{"2", "newton"}}}}},
 		}},
 		{"insert into t1 values (3, 100, 2000, 'kepler')", noEvents},
-		{"insert into t1 values (128, 200, 1000, 'newton')", []TestRowEvent{
-			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{after: []string{"128", "newton"}}}}},
-		}},
+		{"insert into t1 values (128, 200, 1000, 'newton')", noEvents},
 		{"insert into t1 values (5, 200, 2000, 'kepler')", noEvents},
 		{"insert into t1 values (129, 200, 1000, 'kepler')", noEvents},
 		{"commit", nil},
@@ -2076,6 +2074,36 @@ func TestGeneratedInvisiblePrimaryKey(t *testing.T) {
 		{"update t1 set val = 'bbb' where my_row_id = 1", []TestRowEvent{
 			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{before: []string{"1", "aaa"}, after: []string{"1", "bbb"}}}}},
 		}},
+		{"commit", nil},
+	}}
+	ts.Run()
+}
+
+func TestFilteredInOperator(t *testing.T) {
+	ts := &TestSpec{
+		t: t,
+		ddls: []string{
+			"create table t1(id1 int, id2 int, val varbinary(128), primary key(id1))",
+		},
+		options: &TestSpecOptions{
+			filter: &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{{
+					Match:  "t1",
+					Filter: "select id1, val from t1 where val in ('eee', 'bbb', 'ddd') and id1 in (4, 5)",
+				}},
+			},
+		},
+	}
+	defer ts.Close()
+	ts.Init()
+	ts.fieldEvents["t1"].cols[1].skip = true
+	ts.tests = [][]*TestQuery{{
+		{"begin", nil},
+		{"insert into t1 values (1, 100, 'aaa')", noEvents},
+		{"insert into t1 values (2, 200, 'bbb')", noEvents},
+		{"insert into t1 values (3, 100, 'ccc')", noEvents},
+		{"insert into t1 values (4, 200, 'ddd')", nil},
+		{"insert into t1 values (5, 200, 'eee')", nil},
 		{"commit", nil},
 	}}
 	ts.Run()

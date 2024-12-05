@@ -36,7 +36,6 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
-	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -140,9 +139,6 @@ func TestVDiff2(t *testing.T) {
 	extraVTTabletArgs = []string{
 		// This forces us to use multiple vstream packets even with small test tables.
 		"--vstream_packet_size=1",
-		// Test VPlayer batching mode.
-		fmt.Sprintf("--vreplication_experimental_flags=%d",
-			vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage|vttablet.VReplicationExperimentalFlagOptimizeInserts|vttablet.VReplicationExperimentalFlagVPlayerBatching),
 	}
 
 	vc = NewVitessCluster(t, &clusterOptions{cells: strings.Split(cellNames, ",")})

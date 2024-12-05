@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand/v2"
-	"time"
 
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
@@ -235,8 +234,8 @@ func runEmergencyReparentOp(ctx context.Context, analysisEntry *inst.Replication
 		tablet.Shard,
 		reparentutil.EmergencyReparentOptions{
 			IgnoreReplicas:            nil,
-			WaitReplicasTimeout:       time.Duration(config.Config.WaitReplicasTimeoutSeconds) * time.Second,
-			PreventCrossCellPromotion: config.Config.PreventCrossDataCenterPrimaryFailover,
+			WaitReplicasTimeout:       config.GetWaitReplicasTimeout(),
+			PreventCrossCellPromotion: config.GetPreventCrossCellFailover(),
 			WaitAllTablets:            waitForAllTablets,
 		},
 	)
@@ -703,8 +702,8 @@ func electNewPrimary(ctx context.Context, analysisEntry *inst.ReplicationAnalysi
 		analyzedTablet.Keyspace,
 		analyzedTablet.Shard,
 		reparentutil.PlannedReparentOptions{
-			WaitReplicasTimeout: time.Duration(config.Config.WaitReplicasTimeoutSeconds) * time.Second,
-			TolerableReplLag:    time.Duration(config.Config.TolerableReplicationLagSeconds) * time.Second,
+			WaitReplicasTimeout: config.GetWaitReplicasTimeout(),
+			TolerableReplLag:    config.GetTolerableReplicationLag(),
 		},
 	)
 

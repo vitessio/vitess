@@ -44,7 +44,7 @@ func TestDownPrimary(t *testing.T) {
 	// If that replica is more advanced than the same-cell-replica, then we try to promote the cross-cell replica as an intermediate source.
 	// If we don't specify a small value of --wait-replicas-timeout, then we would end up waiting for 30 seconds for the dead-primary to respond, failing this test.
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, []string{"--remote_operation_timeout=10s", "--wait-replicas-timeout=5s"}, cluster.VTOrcConfiguration{
-		PreventCrossDataCenterPrimaryFailover: true,
+		PreventCrossCellFailover: true,
 	}, 1, "semi_sync")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
@@ -150,7 +150,7 @@ func TestDownPrimaryBeforeVTOrc(t *testing.T) {
 
 	// Start a VTOrc instance
 	utils.StartVTOrcs(t, clusterInfo, []string{"--remote_operation_timeout=10s"}, cluster.VTOrcConfiguration{
-		PreventCrossDataCenterPrimaryFailover: true,
+		PreventCrossCellFailover: true,
 	}, 1)
 
 	vtOrcProcess := clusterInfo.ClusterInstance.VTOrcProcesses[0]
@@ -244,7 +244,7 @@ func TestDeadPrimaryRecoversImmediately(t *testing.T) {
 	// If that replica is more advanced than the same-cell-replica, then we try to promote the cross-cell replica as an intermediate source.
 	// If we don't specify a small value of --wait-replicas-timeout, then we would end up waiting for 30 seconds for the dead-primary to respond, failing this test.
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, []string{"--remote_operation_timeout=10s", "--wait-replicas-timeout=5s"}, cluster.VTOrcConfiguration{
-		PreventCrossDataCenterPrimaryFailover: true,
+		PreventCrossCellFailover: true,
 	}, 1, "semi_sync")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
@@ -324,7 +324,7 @@ func TestCrossDataCenterFailure(t *testing.T) {
 	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
 	defer cluster.PanicHandler(t)
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, nil, cluster.VTOrcConfiguration{
-		PreventCrossDataCenterPrimaryFailover: true,
+		PreventCrossCellFailover: true,
 	}, 1, "")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
@@ -370,7 +370,7 @@ func TestCrossDataCenterFailureError(t *testing.T) {
 	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
 	defer cluster.PanicHandler(t)
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 1, 1, nil, cluster.VTOrcConfiguration{
-		PreventCrossDataCenterPrimaryFailover: true,
+		PreventCrossCellFailover: true,
 	}, 1, "")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
@@ -417,7 +417,7 @@ func TestLostRdonlyOnPrimaryFailure(t *testing.T) {
 	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
 	defer cluster.PanicHandler(t)
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 2, nil, cluster.VTOrcConfiguration{
-		PreventCrossDataCenterPrimaryFailover: true,
+		PreventCrossCellFailover: true,
 	}, 1, "")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
@@ -728,8 +728,8 @@ func TestDownPrimaryPromotionRuleWithLagCrossCenter(t *testing.T) {
 	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
 	defer cluster.PanicHandler(t)
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, nil, cluster.VTOrcConfiguration{
-		LockShardTimeoutSeconds:               5,
-		PreventCrossDataCenterPrimaryFailover: true,
+		LockShardTimeoutSeconds:  5,
+		PreventCrossCellFailover: true,
 	}, 1, "test")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]

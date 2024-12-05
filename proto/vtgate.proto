@@ -76,6 +76,8 @@ message Session {
     // reserved connection if a dedicated connection is needed
     int64 reserved_id = 4;
     bool vindex_only = 5;
+    // rows_affected tracks if any query has modified the rows.
+    bool rows_affected = 6;
   }
   // shard_sessions keep track of per-shard transaction info.
   repeated ShardSession shard_sessions = 2;

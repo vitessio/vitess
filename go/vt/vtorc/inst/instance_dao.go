@@ -80,7 +80,7 @@ func init() {
 
 func initializeInstanceDao() {
 	config.WaitForConfigurationToBeLoaded()
-	forgetAliases = cache.New(time.Duration(config.Config.InstancePollSeconds*3)*time.Second, time.Second)
+	forgetAliases = cache.New(config.GetInstancePollTime()*3, time.Second)
 	cacheInitializationCompleted.Store(true)
 }
 
@@ -122,7 +122,7 @@ func ExpireTableData(tableName string, timestampColumn string) error {
 			tableName,
 			timestampColumn,
 		)
-		_, err := db.ExecVTOrc(query, config.Config.AuditPurgeDays)
+		_, err := db.ExecVTOrc(query, config.GetAuditPurgeDays())
 		return err
 	}
 	return ExecDBWriteFunc(writeFunc)
@@ -578,8 +578,8 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 	instance.ReplicationDepth = m.GetUint("replication_depth")
 	instance.IsCoPrimary = m.GetBool("is_co_primary")
 	instance.HasReplicationCredentials = m.GetBool("has_replication_credentials")
-	instance.IsUpToDate = (m.GetUint("seconds_since_last_checked") <= config.Config.InstancePollSeconds)
-	instance.IsRecentlyChecked = (m.GetUint("seconds_since_last_checked") <= config.Config.InstancePollSeconds*5)
+	instance.IsUpToDate = m.GetUint("seconds_since_last_checked") <= config.GetInstancePollSeconds()
+	instance.IsRecentlyChecked = m.GetUint("seconds_since_last_checked") <= config.GetInstancePollSeconds()*5
 	instance.LastSeenTimestamp = m.GetString("last_seen")
 	instance.IsLastCheckValid = m.GetBool("is_last_check_valid")
 	instance.SecondsSinceLastSeen = m.GetNullInt64("seconds_since_last_seen")
@@ -596,7 +596,7 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 		instance.Problems = append(instance.Problems, "not_recently_checked")
 	} else if instance.ReplicationThreadsExist() && !instance.ReplicaRunning() {
 		instance.Problems = append(instance.Problems, "not_replicating")
-	} else if instance.ReplicationLagSeconds.Valid && util.AbsInt64(instance.ReplicationLagSeconds.Int64-int64(instance.SQLDelay)) > int64(config.Config.ReasonableReplicationLagSeconds) {
+	} else if instance.ReplicationLagSeconds.Valid && util.AbsInt64(instance.ReplicationLagSeconds.Int64-int64(instance.SQLDelay)) > int64(config.GetReasonableReplicationLagSeconds()) {
 		instance.Problems = append(instance.Problems, "replication_lag")
 	}
 	if instance.GtidErrant != "" {
@@ -679,7 +679,7 @@ func ReadProblemInstances(keyspace string, shard string) ([](*Instance), error) 
 			OR (gtid_errant != '')
 		)`
 
-	args := sqlutils.Args(keyspace, keyspace, shard, shard, config.Config.InstancePollSeconds*5, config.Config.ReasonableReplicationLagSeconds, config.Config.ReasonableReplicationLagSeconds)
+	args := sqlutils.Args(keyspace, keyspace, shard, shard, config.GetInstancePollSeconds()*5, config.GetReasonableReplicationLagSeconds(), config.GetReasonableReplicationLagSeconds())
 	return readInstancesByCondition(condition, args, "")
 }
 
@@ -746,7 +746,7 @@ func ReadOutdatedInstanceKeys() ([]string, error) {
 	WHERE
 		database_instance.alias IS NULL
 	`
-	args := sqlutils.Args(config.Config.InstancePollSeconds, 2*config.Config.InstancePollSeconds)
+	args := sqlutils.Args(config.GetInstancePollSeconds(), 2*config.GetInstancePollSeconds())
 
 	err := db.QueryVTOrc(query, args, func(m sqlutils.RowMap) error {
 		tabletAlias := m.GetString("alias")
@@ -1168,7 +1168,7 @@ func SnapshotTopologies() error {
 }
 
 func ExpireStaleInstanceBinlogCoordinates() error {
-	expireSeconds := config.Config.ReasonableReplicationLagSeconds * 2
+	expireSeconds := config.GetReasonableReplicationLagSeconds() * 2
 	if expireSeconds < config.StaleInstanceCoordinatesExpireSeconds {
 		expireSeconds = config.StaleInstanceCoordinatesExpireSeconds
 	}
