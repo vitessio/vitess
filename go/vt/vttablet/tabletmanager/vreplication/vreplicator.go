@@ -511,7 +511,7 @@ func (vr *vreplicator) setState(state binlogdatapb.VReplicationWorkflowState, me
 	// If we're batching a transaction, then include the state update
 	// in the current transaction batch.
 	if vr.dbClient.InTransaction && vr.dbClient.maxBatchSize > 0 {
-		vr.dbClient.queries = append(vr.dbClient.queries, query)
+		vr.dbClient.AddQueryToTrxBatch(query)
 	} else { // Otherwise, send it down the wire
 		if _, err := vr.dbClient.ExecuteFetch(query, 1); err != nil {
 			return fmt.Errorf("could not set state: %v: %v", query, err)
