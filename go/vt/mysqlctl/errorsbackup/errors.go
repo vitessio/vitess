@@ -49,7 +49,7 @@ func (pfer *PerFileErrorRecorder) RecordError(filename string, err error) {
 	defer pfer.mu.Unlock()
 
 	if pfer.errors == nil {
-		pfer.errors = make(map[string][]error)
+		pfer.errors = make(map[string][]error, 1)
 	}
 	pfer.errors[filename] = append(pfer.errors[filename], err)
 }
@@ -88,7 +88,7 @@ func (pfer *PerFileErrorRecorder) GetFailedFiles() []string {
 	if pfer.errors == nil {
 		return nil
 	}
-	var files []string
+	files := make([]string, 0, len(pfer.errors))
 	for filename := range pfer.errors {
 		files = append(files, filename)
 	}

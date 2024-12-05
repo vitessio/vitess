@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"slices"
 	"strconv"
 	"testing"
 	"time"
@@ -33,6 +34,7 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	"vitess.io/vitess/go/vt/mysqlctl/filebackupstorage"
+	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/topo"
@@ -54,25 +56,17 @@ func GetStats(stats *backupstats.FakeStats) StatSummary {
 	for _, sr := range stats.ScopeReturns {
 		switch sr.ScopeV[backupstats.ScopeOperation] {
 		case "Destination:Close":
-			if len(sr.TimedIncrementCalls) > 0 {
-				ss.DestinationCloseStats++
-			}
+			ss.DestinationCloseStats += len(sr.TimedIncrementCalls)
 		case "Destination:Open":
-			if len(sr.TimedIncrementCalls) > 0 {
-				ss.DestinationOpenStats++
-			}
+			ss.DestinationOpenStats += len(sr.TimedIncrementCalls)
 		case "Destination:Write":
 			if len(sr.TimedIncrementBytesCalls) > 0 {
 				ss.DestinationWriteStats++
 			}
 		case "Source:Close":
-			if len(sr.TimedIncrementCalls) > 0 {
-				ss.SourceCloseStats++
-			}
+			ss.SourceCloseStats += len(sr.TimedIncrementCalls)
 		case "Source:Open":
-			if len(sr.TimedIncrementCalls) > 0 {
-				ss.SourceOpenStats++
-			}
+			ss.SourceOpenStats += len(sr.TimedIncrementCalls)
 		case "Source:Read":
 			if len(sr.TimedIncrementBytesCalls) > 0 {
 				ss.SourceReadStats++
@@ -84,16 +78,9 @@ func GetStats(stats *backupstats.FakeStats) StatSummary {
 
 func AssertLogs(t *testing.T, expectedLogs []string, logger *logutil.MemoryLogger) {
 	for _, log := range expectedLogs {
-		var found bool
-		for _, event := range logger.Events {
-			if log == event.GetValue() {
-				found = true
-				break
-			}
-		}
-		if !found {
-			require.Failf(t, "missing log line", "%s is missing from the logs", log)
-		}
+		require.Truef(t, slices.ContainsFunc(logger.Events, func(event *logutilpb.Event) bool {
+			return event.GetValue() == log
+		}), "%s is missing from the logs", log)
 	}
 }
 
@@ -115,7 +102,7 @@ func SetupCluster(ctx context.Context, t *testing.T, dirs, filesPerDir int) (bac
 		require.NoError(t, os.RemoveAll(backupRoot))
 	})
 
-	needIt, err := needInnoDBRedoLogSubdir()
+	needIt, err := NeedInnoDBRedoLogSubdir()
 	require.NoError(t, err)
 	if needIt {
 		fpath := path.Join("log", mysql.DynamicRedoLogSubdir)
@@ -152,12 +139,12 @@ func SetupCluster(ctx context.Context, t *testing.T, dirs, filesPerDir int) (bac
 	return backupRoot, keyspace, shard, ts
 }
 
-// needInnoDBRedoLogSubdir indicates whether we need to create a redo log subdirectory.
+// NeedInnoDBRedoLogSubdir indicates whether we need to create a redo log subdirectory.
 // Starting with MySQL 8.0.30, the InnoDB redo logs are stored in a subdirectory of the
 // <innodb_log_group_home_dir> (<datadir>/. by default) called "#innodb_redo". See:
 //
 //	https://dev.mysql.com/doc/refman/8.0/en/innodb-redo-log.html#innodb-modifying-redo-log-capacity
-func needInnoDBRedoLogSubdir() (needIt bool, err error) {
+func NeedInnoDBRedoLogSubdir() (needIt bool, err error) {
 	mysqldVersionStr, err := mysqlctl.GetVersionString()
 	if err != nil {
 		return needIt, err

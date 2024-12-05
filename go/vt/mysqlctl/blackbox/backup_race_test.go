@@ -75,7 +75,7 @@ func TestExecuteBackupWithFailureOnLastFile(t *testing.T) {
 	require.NoError(t, createBackupFiles(path.Join(dataDir, "test2"), 2, "ibd"))
 	defer os.RemoveAll(backupRoot)
 
-	needIt, err := needInnoDBRedoLogSubdir()
+	needIt, err := NeedInnoDBRedoLogSubdir()
 	require.NoError(t, err)
 	if needIt {
 		fpath := path.Join("log", mysql.DynamicRedoLogSubdir)
