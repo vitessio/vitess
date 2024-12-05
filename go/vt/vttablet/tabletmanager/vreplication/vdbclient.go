@@ -30,6 +30,8 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
+const beginStmtLen = int64(len("begin;"))
+
 // vdbClient is a wrapper on binlogplayer.DBClient.
 // It allows us to retry a failed transactions on lock errors.
 type vdbClient struct {
@@ -61,7 +63,7 @@ func (vc *vdbClient) Begin() error {
 		// starts with the BEGIN and ends with the COMMIT, so we
 		// do not send a BEGIN down the wire ahead of time.
 		vc.queriesPos = int64(len(vc.queries))
-		vc.batchSize = 6 // begin and semicolon
+		vc.batchSize = beginStmtLen
 	} else {
 		// We're not batching so we start the transaction here
 		// by sending the BEGIN down the wire.
