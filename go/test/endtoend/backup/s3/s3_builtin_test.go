@@ -18,6 +18,7 @@ package s3
 
 import (
 	"context"
+	"io"
 	"os"
 	"os/exec"
 	"path"
@@ -126,6 +127,13 @@ func waitForMinio(client *minio.Client) {
 }
 
 func checkEnvForS3(t *testing.T) {
+	// We never want to skip the tests if we are running on CI.
+	// We will always run these tests on CI with the TestMain and Minio.
+	// There should not be a need to skip the tests due to missing ENV vars.
+	if os.Getenv("GITHUB_ACTIONS") != "" {
+		return
+	}
+
 	envRequired := []string{
 		"AWS_ACCESS_KEY_ID",
 		"AWS_SECRET_ACCESS_KEY",
@@ -145,7 +153,15 @@ func checkEnvForS3(t *testing.T) {
 	}
 }
 
-func TestExecuteBackupS3FailEachFileOnce(t *testing.T) {
+type backupTestConfig struct {
+	concurrency       int
+	addFileReturnFn   func(s3 *s3backupstorage.S3BackupHandle, ctx context.Context, filename string, filesize int64, firstAdd bool) (io.WriteCloser, error)
+	checkCleanupError bool
+	expectedResult    mysqlctl.BackupResult
+	expectedStats     blackbox.StatSummary
+}
+
+func runBackupTest(t *testing.T, cfg backupTestConfig) {
 	checkEnvForS3(t)
 	s3backupstorage.InitFlag(s3backupstorage.FakeConfig{
 		Region:    os.Getenv("AWS_REGION"),
@@ -169,10 +185,12 @@ func TestExecuteBackupS3FailEachFileOnce(t *testing.T) {
 	bh, err := s3backupstorage.NewFakeS3BackupHandle(ctx, t.Name(), time.Now().Format(mysqlctl.BackupTimestampFormat), logger, fakeStats)
 	require.NoError(t, err)
 	t.Cleanup(func() {
-		require.NoError(t, bh.AbortBackup(ctx))
+		err := bh.AbortBackup(ctx)
+		if cfg.checkCleanupError {
+			require.NoError(t, err)
+		}
 	})
-	// Modify the fake S3 storage to always fail when trying to write a file for the first time
-	bh.AddFileReturnF = s3backupstorage.FailFirstWrite
+	bh.AddFileReturnF = cfg.addFileReturnFn
 
 	// Spin up a fake daemon to be used in backups. It needs to be allowed to receive:
 	//  "STOP REPLICA", "START REPLICA", in that order.
@@ -190,7 +208,7 @@ func TestExecuteBackupS3FailEachFileOnce(t *testing.T) {
 			InnodbLogGroupHomeDir: path.Join(backupRoot, "log"),
 			DataDir:               path.Join(backupRoot, "datadir"),
 		},
-		Concurrency:          2,
+		Concurrency:          cfg.concurrency,
 		HookExtraEnv:         map[string]string{},
 		TopoServer:           ts,
 		Keyspace:             keyspace,
@@ -199,96 +217,80 @@ func TestExecuteBackupS3FailEachFileOnce(t *testing.T) {
 		MysqlShutdownTimeout: blackbox.MysqlShutdownTimeout,
 	}, bh)
 
-	require.NoError(t, err)
-	require.Equal(t, mysqlctl.BackupUsable, backupResult)
+	require.Equal(t, cfg.expectedResult, backupResult)
+	switch cfg.expectedResult {
+	case mysqlctl.BackupUsable:
+		require.NoError(t, err)
+	case mysqlctl.BackupUnusable, mysqlctl.BackupEmpty:
+		require.Error(t, err)
+	}
 
 	ss := blackbox.GetStats(fakeStats)
+	require.Equal(t, cfg.expectedStats.DestinationCloseStats, ss.DestinationCloseStats)
+	require.Equal(t, cfg.expectedStats.DestinationOpenStats, ss.DestinationOpenStats)
+	require.Equal(t, cfg.expectedStats.DestinationWriteStats, ss.DestinationWriteStats)
+	require.Equal(t, cfg.expectedStats.SourceCloseStats, ss.SourceCloseStats)
+	require.Equal(t, cfg.expectedStats.SourceOpenStats, ss.SourceOpenStats)
+	require.Equal(t, cfg.expectedStats.SourceReadStats, ss.SourceReadStats)
+}
 
-	// Even though we have 4 files, we expect '8' for all the values below as we re-do every file once.
-	require.Equal(t, 8, ss.DestinationCloseStats)
-	require.Equal(t, 8, ss.DestinationOpenStats)
-	require.Equal(t, 8, ss.DestinationWriteStats)
-	require.Equal(t, 8, ss.SourceCloseStats)
-	require.Equal(t, 8, ss.SourceOpenStats)
-	require.Equal(t, 8, ss.SourceReadStats)
+func TestExecuteBackupS3FailEachFileOnce(t *testing.T) {
+	runBackupTest(t, backupTestConfig{
+		concurrency: 2,
+
+		// Modify the fake S3 storage to always fail when trying to write a file for the first time
+		addFileReturnFn:   s3backupstorage.FailFirstWrite,
+		checkCleanupError: true,
+		expectedResult:    mysqlctl.BackupUsable,
+
+		// Even though we have 4 files, we expect '8' for all the values below as we re-do every file once.
+		expectedStats: blackbox.StatSummary{
+			DestinationCloseStats: 8,
+			DestinationOpenStats:  8,
+			DestinationWriteStats: 8,
+			SourceCloseStats:      8,
+			SourceOpenStats:       8,
+			SourceReadStats:       8,
+		},
+	})
 }
 
 func TestExecuteBackupS3FailEachFileTwice(t *testing.T) {
-	checkEnvForS3(t)
-	s3backupstorage.InitFlag(s3backupstorage.FakeConfig{
-		Region:    os.Getenv("AWS_REGION"),
-		Endpoint:  os.Getenv("AWS_ENDPOINT"),
-		Bucket:    os.Getenv("AWS_BUCKET"),
-		ForcePath: true,
-	})
+	runBackupTest(t, backupTestConfig{
+		concurrency: 1,
 
-	ctx := context.Background()
-	backupRoot, keyspace, shard, ts := blackbox.SetupCluster(ctx, t, 2, 2)
+		// Modify the fake S3 storage to always fail when trying to write a file for the first time
+		addFileReturnFn: s3backupstorage.FailAllWrites,
 
-	be := &mysqlctl.BuiltinBackupEngine{}
-
-	// Configure a tight deadline to force a timeout
-	oldDeadline := blackbox.SetBuiltinBackupMysqldDeadline(time.Second)
-	defer blackbox.SetBuiltinBackupMysqldDeadline(oldDeadline)
-
-	fakeStats := backupstats.NewFakeStats()
-	logger := logutil.NewMemoryLogger()
-
-	bh, err := s3backupstorage.NewFakeS3BackupHandle(ctx, t.Name(), time.Now().Format(mysqlctl.BackupTimestampFormat), logger, fakeStats)
-	require.NoError(t, err)
-	t.Cleanup(func() {
 		// If the code works as expected by this test, no files will be created on S3 and AbortBackup will
 		// fail, for this reason, let's not check the error return.
 		// We still call AbortBackup anyway in the event that the code is not behaving as expected and some
 		// files were created by mistakes, we delete them.
-		_ = bh.AbortBackup(ctx)
-	})
-	// Modify the fake S3 storage to always fail when trying to write a file for the first time
-	bh.AddFileReturnF = s3backupstorage.FailAllWrites
+		checkCleanupError: false,
+		expectedResult:    mysqlctl.BackupUnusable,
 
-	// Spin up a fake daemon to be used in backups. It needs to be allowed to receive:
-	//  "STOP REPLICA", "START REPLICA", in that order.
-	fakedb := fakesqldb.New(t)
-	defer fakedb.Close()
-	mysqld := mysqlctl.NewFakeMysqlDaemon(fakedb)
-	defer mysqld.Close()
-	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "START REPLICA"}
-
-	backupResult, err := be.ExecuteBackup(ctx, mysqlctl.BackupParams{
-		Logger: logger,
-		Mysqld: mysqld,
-		Cnf: &mysqlctl.Mycnf{
-			InnodbDataHomeDir:     path.Join(backupRoot, "innodb"),
-			InnodbLogGroupHomeDir: path.Join(backupRoot, "log"),
-			DataDir:               path.Join(backupRoot, "datadir"),
+		// All stats here must be equal to 5, we have four files, we go each of them, they all fail.
+		// The logic decides to retry each file once, we retry the first failed file, it fails again
+		// but since it has reached the limit of retries, the backup will fail anyway, thus we don't
+		// retry the other 3 files.
+		expectedStats: blackbox.StatSummary{
+			DestinationCloseStats: 5,
+			DestinationOpenStats:  5,
+			DestinationWriteStats: 5,
+			SourceCloseStats:      5,
+			SourceOpenStats:       5,
+			SourceReadStats:       5,
 		},
-		Concurrency:          1,
-		HookExtraEnv:         map[string]string{},
-		TopoServer:           ts,
-		Keyspace:             keyspace,
-		Shard:                shard,
-		Stats:                fakeStats,
-		MysqlShutdownTimeout: blackbox.MysqlShutdownTimeout,
-	}, bh)
-
-	require.Error(t, err)
-	require.Equal(t, mysqlctl.BackupUnusable, backupResult)
-
-	ss := blackbox.GetStats(fakeStats)
-
-	// All stats here must be equal to 5, we have four files, we go each of them, they all fail.
-	// The logic decides to retry each file once, we retry the first failed file, it fails again
-	// but since it has reached the limit of retries, the backup will fail anyway, thus we don't
-	// retry the other 3 files.
-	require.Equal(t, 5, ss.DestinationCloseStats)
-	require.Equal(t, 5, ss.DestinationOpenStats)
-	require.Equal(t, 5, ss.DestinationWriteStats)
-	require.Equal(t, 5, ss.SourceCloseStats)
-	require.Equal(t, 5, ss.SourceOpenStats)
-	require.Equal(t, 5, ss.SourceReadStats)
+	})
 }
 
-func TestExecuteRestoreS3FailEachFileOnce(t *testing.T) {
+type restoreTestConfig struct {
+	readFileReturnFn func(s3 *s3backupstorage.S3BackupHandle, ctx context.Context, filename string, firstRead bool) (io.ReadCloser, error)
+	expectSuccess    bool
+	expectedStats    blackbox.StatSummary
+}
+
+func runRestoreTest(t *testing.T, cfg restoreTestConfig) {
 	checkEnvForS3(t)
 	s3backupstorage.InitFlag(s3backupstorage.FakeConfig{
 		Region:    os.Getenv("AWS_REGION"),
@@ -340,9 +342,11 @@ func TestExecuteRestoreS3FailEachFileOnce(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, mysqlctl.BackupUsable, backupResult)
 
+	// Backup is done, let's move on to the restore now
+
 	restoreBh, err := s3backupstorage.NewFakeS3RestoreHandle(ctx, name, logger, fakeStats)
 	require.NoError(t, err)
-	restoreBh.ReadFileReturnF = s3backupstorage.FailFirstRead
+	restoreBh.ReadFileReturnF = cfg.readFileReturnFn
 
 	fakedb = fakesqldb.New(t)
 	defer fakedb.Close()
@@ -378,118 +382,53 @@ func TestExecuteRestoreS3FailEachFileOnce(t *testing.T) {
 
 	// Successful restore.
 	bm, err := be.ExecuteRestore(ctx, restoreParams, restoreBh)
-	assert.NoError(t, err)
-	assert.NotNil(t, bm)
+
+	if cfg.expectSuccess {
+		assert.NoError(t, err)
+		assert.NotNil(t, bm)
+	} else {
+		assert.Error(t, err)
+	}
 
 	ss := blackbox.GetStats(fakeStats)
-	require.Equal(t, 8, ss.DestinationCloseStats)
-	require.Equal(t, 8, ss.DestinationOpenStats)
-	require.Equal(t, 4, ss.DestinationWriteStats) // 4, because on the first attempt, we fail to read before writing to the filesystem
-	require.Equal(t, 8, ss.SourceCloseStats)
-	require.Equal(t, 8, ss.SourceOpenStats)
-	require.Equal(t, 8, ss.SourceReadStats)
+	require.Equal(t, cfg.expectedStats.DestinationCloseStats, ss.DestinationCloseStats)
+	require.Equal(t, cfg.expectedStats.DestinationOpenStats, ss.DestinationOpenStats)
+	require.Equal(t, cfg.expectedStats.DestinationWriteStats, ss.DestinationWriteStats)
+	require.Equal(t, cfg.expectedStats.SourceCloseStats, ss.SourceCloseStats)
+	require.Equal(t, cfg.expectedStats.SourceOpenStats, ss.SourceOpenStats)
+	require.Equal(t, cfg.expectedStats.SourceReadStats, ss.SourceReadStats)
+}
+
+func TestExecuteRestoreS3FailEachFileOnce(t *testing.T) {
+	runRestoreTest(t, restoreTestConfig{
+		readFileReturnFn: s3backupstorage.FailFirstRead,
+		expectSuccess:    true,
+		expectedStats: blackbox.StatSummary{
+			DestinationCloseStats: 8,
+			DestinationOpenStats:  8,
+			DestinationWriteStats: 4, // 4, because on the first attempt, we fail to read before writing to the filesystem
+			SourceCloseStats:      8,
+			SourceOpenStats:       8,
+			SourceReadStats:       8,
+		},
+	})
 }
 
 func TestExecuteRestoreS3FailEachFileTwice(t *testing.T) {
-	checkEnvForS3(t)
-	s3backupstorage.InitFlag(s3backupstorage.FakeConfig{
-		Region:    os.Getenv("AWS_REGION"),
-		Endpoint:  os.Getenv("AWS_ENDPOINT"),
-		Bucket:    os.Getenv("AWS_BUCKET"),
-		ForcePath: true,
-	})
+	runRestoreTest(t, restoreTestConfig{
+		readFileReturnFn: s3backupstorage.FailAllReadExpectManifest,
+		expectSuccess:    false,
 
-	ctx := context.Background()
-	backupRoot, keyspace, shard, ts := blackbox.SetupCluster(ctx, t, 2, 2)
-
-	fakeStats := backupstats.NewFakeStats()
-	logger := logutil.NewMemoryLogger()
-
-	be := &mysqlctl.BuiltinBackupEngine{}
-	dirName := time.Now().Format(mysqlctl.BackupTimestampFormat)
-	name := t.Name() + "-" + strconv.Itoa(int(time.Now().Unix()))
-	bh, err := s3backupstorage.NewFakeS3BackupHandle(ctx, name, dirName, logger, fakeStats)
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		require.NoError(t, bh.AbortBackup(ctx))
-	})
-
-	// Spin up a fake daemon to be used in backups. It needs to be allowed to receive:
-	// "STOP REPLICA", "START REPLICA", in that order.
-	fakedb := fakesqldb.New(t)
-	defer fakedb.Close()
-	mysqld := mysqlctl.NewFakeMysqlDaemon(fakedb)
-	defer mysqld.Close()
-	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "START REPLICA"}
-
-	backupResult, err := be.ExecuteBackup(ctx, mysqlctl.BackupParams{
-		Logger: logutil.NewConsoleLogger(),
-		Mysqld: mysqld,
-		Cnf: &mysqlctl.Mycnf{
-			InnodbDataHomeDir:     path.Join(backupRoot, "innodb"),
-			InnodbLogGroupHomeDir: path.Join(backupRoot, "log"),
-			DataDir:               path.Join(backupRoot, "datadir"),
+		// Everything except destination writes must be equal to 5:
+		// +1 for every file on the first attempt (= 4), and +1 for the first file we try for the second time.
+		// Since we fail early as soon as a second-attempt-file fails, we won't see a value above 5.
+		expectedStats: blackbox.StatSummary{
+			DestinationCloseStats: 5,
+			DestinationOpenStats:  5,
+			DestinationWriteStats: 0, // 0, because on the both attempts, we fail to read before writing to the filesystem
+			SourceCloseStats:      5,
+			SourceOpenStats:       5,
+			SourceReadStats:       5,
 		},
-		Stats:                backupstats.NewFakeStats(),
-		Concurrency:          1,
-		HookExtraEnv:         map[string]string{},
-		TopoServer:           ts,
-		Keyspace:             keyspace,
-		Shard:                shard,
-		MysqlShutdownTimeout: blackbox.MysqlShutdownTimeout,
-	}, bh)
-
-	require.NoError(t, err)
-	require.Equal(t, mysqlctl.BackupUsable, backupResult)
-
-	restoreBh, err := s3backupstorage.NewFakeS3RestoreHandle(ctx, name, logger, fakeStats)
-	require.NoError(t, err)
-	restoreBh.ReadFileReturnF = s3backupstorage.FailAllReadExpectManifest
-
-	fakedb = fakesqldb.New(t)
-	defer fakedb.Close()
-	mysqld = mysqlctl.NewFakeMysqlDaemon(fakedb)
-	defer mysqld.Close()
-	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "START REPLICA"}
-
-	restoreParams := mysqlctl.RestoreParams{
-		Cnf: &mysqlctl.Mycnf{
-			InnodbDataHomeDir:     path.Join(backupRoot, "innodb"),
-			InnodbLogGroupHomeDir: path.Join(backupRoot, "log"),
-			DataDir:               path.Join(backupRoot, "datadir"),
-			BinLogPath:            path.Join(backupRoot, "binlog"),
-			RelayLogPath:          path.Join(backupRoot, "relaylog"),
-			RelayLogIndexPath:     path.Join(backupRoot, "relaylogindex"),
-			RelayLogInfoPath:      path.Join(backupRoot, "relayloginfo"),
-		},
-		Logger:               logger,
-		Mysqld:               mysqld,
-		Concurrency:          1,
-		HookExtraEnv:         map[string]string{},
-		DeleteBeforeRestore:  false,
-		DbName:               "test",
-		Keyspace:             "test",
-		Shard:                "-",
-		StartTime:            time.Now(),
-		RestoreToPos:         replication.Position{},
-		RestoreToTimestamp:   time.Time{},
-		DryRun:               false,
-		Stats:                fakeStats,
-		MysqlShutdownTimeout: blackbox.MysqlShutdownTimeout,
-	}
-
-	// Successful restore.
-	_, err = be.ExecuteRestore(ctx, restoreParams, restoreBh)
-	assert.ErrorContains(t, err, "failing read")
-
-	ss := blackbox.GetStats(fakeStats)
-	// Everything except destination writes must be equal to 5:
-	// +1 for every file on the first attempt (= 4), and +1 for the first file we try for the second time.
-	// Since we fail early as soon as a second-attempt-file fails, we won't see a value above 5.
-	require.Equal(t, 5, ss.DestinationCloseStats)
-	require.Equal(t, 5, ss.DestinationOpenStats)
-	require.Equal(t, 0, ss.DestinationWriteStats) // 0, because on the both attempts, we fail to read before writing to the filesystem
-	require.Equal(t, 5, ss.SourceCloseStats)
-	require.Equal(t, 5, ss.SourceOpenStats)
-	require.Equal(t, 5, ss.SourceReadStats)
+	})
 }
