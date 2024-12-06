@@ -156,7 +156,7 @@ func tryCastStatement(v interface{}) Statement {
 %token <bytes> SCHEMA TABLE INDEX INDEXES VIEW TO IGNORE IF PRIMARY COLUMN SPATIAL VECTOR FULLTEXT KEY_BLOCK_SIZE CHECK
 %token <bytes> ACTION CASCADE CONSTRAINT FOREIGN NO REFERENCES RESTRICT
 %token <bytes> FIRST AFTER LAST
-%token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE FORMAT EXTENDED
+%token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE FORMAT EXTENDED PLAN
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER TRIGGERS FUNCTION
 %token <bytes> STATUS VARIABLES WARNINGS ERRORS KILL CONNECTION
 %token <bytes> SEQUENCE ENABLE DISABLE
@@ -351,7 +351,7 @@ func tryCastStatement(v interface{}) Statement {
 %type <bytes> work_opt no_opt chain_opt release_opt index_name_opt no_first_last yes_no
 %type <val> comment_opt comment_list
 %type <val> distinct_opt union_op intersect_op except_op insert_or_replace
-%type <val> match_option format_opt
+%type <val> match_option format_opt plan_opt
 %type <val> separator_opt
 %type <val> like_escape_opt
 %type <val> select_expression_list argument_expression_list argument_expression_list_opt
@@ -7541,17 +7541,17 @@ release_savepoint_statement:
   }
 
 explain_statement:
-  explain_verb format_opt explainable_statement
+  explain_verb format_opt plan_opt explainable_statement
   {
-    $$ = &Explain{ExplainFormat: $2.(string), Statement: tryCastStatement($3)}
+    $$ = &Explain{ExplainFormat: $2.(string), Plan: $3.(bool), Statement: tryCastStatement($4)}
   }
-| explain_verb EXTENDED format_opt explainable_statement
+| explain_verb EXTENDED format_opt plan_opt explainable_statement
   {
-    $$ = &Explain{ExplainFormat: $3.(string), Statement: tryCastStatement($4)}
+    $$ = &Explain{ExplainFormat: $3.(string), Plan: $4.(bool), Statement: tryCastStatement($5)}
   }
-| explain_verb ANALYZE select_statement_with_no_trailing_into
+| explain_verb ANALYZE plan_opt select_statement_with_no_trailing_into
   {
-    $$ = &Explain{Analyze: true, ExplainFormat: TreeStr, Statement: $3.(SelectStatement)}
+    $$ = &Explain{Analyze: true, Plan: $3.(bool), ExplainFormat: TreeStr, Statement: $4.(SelectStatement)}
   }
 
 explainable_statement:
@@ -7570,6 +7570,15 @@ format_opt:
 | FORMAT '=' ID
   {
     $$ = string($3)
+  }
+
+plan_opt:
+  {
+    $$ = false
+  }
+| PLAN
+  {
+    $$ = true
   }
 
 explain_verb:

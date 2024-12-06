@@ -2459,22 +2459,54 @@ var (
 		}, {
 			input:  "show columns from a for system_time as of 'foo'",
 			output: "show columns from a as of 'foo'",
-		}, {
+		},
+		{
 			input: "explain select * from foobar",
-		}, {
+		},
+		{
 			input: "explain format = tree select * from foobar",
-		}, {
+		},
+		{
 			input: "explain analyze select * from foobar",
-		}, {
+		},
+		{
 			input:  "explain extended select * from foobar",
 			output: "explain select * from foobar",
-		}, {
+		},
+		{
 			input: "explain update foobar set foo = bar",
-		}, {
+		},
+		{
 			input: "explain delete from foobar where foo = bar",
-		}, {
+		},
+		{
 			input: "explain insert into foobar values (1, 2, 3)",
-		}, {
+		},
+
+		{
+			input: "explain plan select * from foobar",
+		},
+		{
+			input: "explain format = tree plan select * from foobar",
+		},
+		{
+			input: "explain analyze plan select * from foobar",
+		},
+		{
+			input:  "explain extended plan select * from foobar",
+			output: "explain plan select * from foobar",
+		},
+		{
+			input: "explain plan update foobar set foo = bar",
+		},
+		{
+			input: "explain plan delete from foobar where foo = bar",
+		},
+		{
+			input: "explain plan insert into foobar values (1, 2, 3)",
+		},
+
+		{
 			input:  "truncate table foo",
 			output: "truncate table foo",
 		}, {

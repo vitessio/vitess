@@ -3936,6 +3936,7 @@ const (
 // Explain represents an explain statement
 type Explain struct {
 	Statement     Statement
+	Plan          bool
 	Analyze       bool
 	ExplainFormat string
 }
@@ -3950,7 +3951,11 @@ func (node *Explain) Format(buf *TrackedBuffer) {
 	if !node.Analyze && node.ExplainFormat != "" {
 		formatOpt = fmt.Sprintf("format = %s ", node.ExplainFormat)
 	}
-	buf.Myprintf("explain %s%s%v", analyzeOpt, formatOpt, node.Statement)
+	planOpt := ""
+	if node.Plan {
+		planOpt = "plan "
+	}
+	buf.Myprintf("explain %s%s%s%v", analyzeOpt, formatOpt, planOpt, node.Statement)
 }
 
 const (

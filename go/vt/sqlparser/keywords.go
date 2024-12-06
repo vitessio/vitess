@@ -466,6 +466,7 @@ var keywords = map[string]int{
 	"persist":                       PERSIST,
 	"persist_only":                  PERSIST_ONLY,
 	"persist_ro_variables_admin":    PERSIST_RO_VARIABLES_ADMIN,
+	"plan":                          PLAN,
 	"plugins":                       PLUGINS,
 	"point":                         POINT,
 	"polygon":                       POLYGON,
