@@ -402,7 +402,7 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 	span.Annotate("include_logs", req.IncludeLogs)
 	span.Annotate("shards", req.Shards)
 
-	w := &workflow{
+	w := &workflowFetcher{
 		ts:     s.ts,
 		tmc:    s.tmc,
 		parser: s.SQLParser(),
