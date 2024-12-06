@@ -31,6 +31,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	"vitess.io/vitess/go/vt/vtenv"
+	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 	"vitess.io/vitess/go/vt/vtgate/logstats"
 	_ "vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/sandboxconn"
@@ -102,7 +103,7 @@ func executorStreamMessages(executor *Executor, sql string) (qr *sqltypes.Result
 		ctx,
 		nil,
 		"TestExecuteStream",
-		NewSafeSession(session),
+		econtext.NewSafeSession(session),
 		sql,
 		nil,
 		func(qr *sqltypes.Result) error {

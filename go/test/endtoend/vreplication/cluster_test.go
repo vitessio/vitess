@@ -39,7 +39,6 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
@@ -98,18 +97,6 @@ func (cc *ClusterConfig) enableGTIDCompression() func() {
 	cc.vreplicationCompressGTID = true
 	return func() {
 		cc.vreplicationCompressGTID = false
-	}
-}
-
-// setAllVTTabletExperimentalFlags sets all the experimental flags for vttablet and returns a function
-// that can be used to reset them in a defer.
-func setAllVTTabletExperimentalFlags() func() {
-	experimentalArgs := fmt.Sprintf("--vreplication_experimental_flags=%d",
-		vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage|vttablet.VReplicationExperimentalFlagOptimizeInserts|vttablet.VReplicationExperimentalFlagVPlayerBatching)
-	oldArgs := extraVTTabletArgs
-	extraVTTabletArgs = append(extraVTTabletArgs, experimentalArgs)
-	return func() {
-		extraVTTabletArgs = oldArgs
 	}
 }
 

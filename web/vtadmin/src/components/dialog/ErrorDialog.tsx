@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 import React from 'react';
-import Dialog from '../../dialog/Dialog';
-import { Icon, Icons } from '../../Icon';
+import Dialog from './Dialog';
+import { Icon, Icons } from '../Icon';
 
 export interface ErrorDialogProps {
     errorTitle?: string;

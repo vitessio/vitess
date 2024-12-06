@@ -141,7 +141,6 @@ func setup(ctx context.Context) (func(), int) {
 	resetBinlogClient()
 
 	vttablet.InitVReplicationConfigDefaults()
-	vttablet.DefaultVReplicationConfig.ExperimentalFlags = 0
 
 	// Engines cannot be initialized in testenv because it introduces circular dependencies.
 	streamerEngine = vstreamer.NewEngine(env.TabletEnv, env.SrvTopo, env.SchemaEngine, nil, env.Cells[0])
@@ -477,6 +476,10 @@ func (dbc *realDBClient) Rollback() error {
 
 func (dbc *realDBClient) Close() {
 	dbc.conn.Close()
+}
+
+func (dbc *realDBClient) IsClosed() bool {
+	return dbc.conn.IsClosed()
 }
 
 func (dbc *realDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, error) {

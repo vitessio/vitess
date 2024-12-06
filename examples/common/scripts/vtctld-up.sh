@@ -33,6 +33,7 @@ vtctld \
  --port $vtctld_web_port \
  --grpc_port $grpc_port \
  --pid_file $VTDATAROOT/tmp/vtctld.pid \
+ --pprof-http \
   > $VTDATAROOT/tmp/vtctld.out 2>&1 &
 
 for _ in {0..300}; do

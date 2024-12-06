@@ -354,7 +354,7 @@ func (s *server) MysqlHostMetrics(ctx context.Context, request *tabletmanagerdat
 func (s *server) ReplicationStatus(ctx context.Context, request *tabletmanagerdatapb.ReplicationStatusRequest) (response *tabletmanagerdatapb.ReplicationStatusResponse, err error) {
 	defer s.tm.HandleRPCPanic(ctx, "ReplicationStatus", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
-	response = &tabletmanagerdatapb.ReplicationStatusResponse{}
+	response = &tabletmanagerdatapb.ReplicationStatusResponse{BackupRunning: s.tm.IsBackupRunning()}
 	status, err := s.tm.ReplicationStatus(ctx)
 	if err == nil {
 		response.Status = status
@@ -637,6 +637,9 @@ func (s *server) StopReplicationAndGetStatus(ctx context.Context, request *table
 	if err == nil {
 		response.Status = statusResponse.Status
 	}
+
+	response.BackupRunning = s.tm.IsBackupRunning()
+
 	return response, err
 }
 
