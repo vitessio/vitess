@@ -200,16 +200,16 @@ func (pd PrimitiveDescription) Equals(other PrimitiveDescription) string {
 		return fmt.Sprintf("OperatorType: %v != %v", pd.OperatorType, other.OperatorType)
 	}
 
-	switch {
-	case pd.Keyspace == nil && other.Keyspace == nil:
-		// do nothing
-	case pd.Keyspace != nil && other.Keyspace != nil:
-		if pd.Keyspace.Name != other.Keyspace.Name {
-			return fmt.Sprintf("Keyspace.Name: %v != %v", pd.Keyspace.Name, other.Keyspace.Name)
-		}
-	default:
-		return "Keyspace is nil in one of the descriptions"
-	}
+	// switch {
+	// case pd.Keyspace == nil && other.Keyspace == nil:
+	// 	// do nothing
+	// case pd.Keyspace != nil && other.Keyspace != nil:
+	// 	if pd.Keyspace.Name != other.Keyspace.Name {
+	// 		return fmt.Sprintf("Keyspace.Name: %v != %v", pd.Keyspace.Name, other.Keyspace.Name)
+	// 	}
+	// default:
+	// 	return "Keyspace is nil in one of the descriptions"
+	// }
 
 	switch {
 	case pd.TargetDestination == nil && other.TargetDestination == nil:
