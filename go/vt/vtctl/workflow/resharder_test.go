@@ -229,6 +229,7 @@ func TestReadRefStreams(t *testing.T) {
 	}
 
 	env := newTestEnv(t, ctx, defaultCellName, sourceKeyspace, targetKeyspace)
+	defer env.close()
 
 	s1, err := env.ts.UpdateShardFields(ctx, targetKeyspace.KeyspaceName, "-", func(si *topo.ShardInfo) error {
 		return nil
