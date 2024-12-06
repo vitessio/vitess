@@ -223,6 +223,9 @@ func (tr *ShardedRouting) resetRoutingLogic(ctx *plancontext.PlanningContext) Ro
 func (tr *ShardedRouting) searchForNewVindexes(ctx *plancontext.PlanningContext, predicate sqlparser.Expr) (Routing, bool) {
 	newVindexFound := false
 	switch node := predicate.(type) {
+	case *sqlparser.BetweenExpr:
+		return tr.planBetweenOp(ctx, node)
+
 	case *sqlparser.ComparisonExpr:
 		return tr.planComparison(ctx, node)
 
@@ -232,6 +235,24 @@ func (tr *ShardedRouting) searchForNewVindexes(ctx *plancontext.PlanningContext,
 	}
 
 	return nil, newVindexFound
+}
+
+func (tr *ShardedRouting) planBetweenOp(ctx *plancontext.PlanningContext, node *sqlparser.BetweenExpr) (routing Routing, foundNew bool) {
+	// x BETWEEN a AND b => x >= a AND x <= b
+	column, ok := node.Left.(*sqlparser.ColName)
+	if !ok {
+		return nil, false
+	}
+	vals := []sqlparser.Expr{}
+	vals = append(vals, node.From, node.To)
+	var vdValue sqlparser.ValTuple = vals
+	opcode := func(*vindexes.ColumnVindex) engine.Opcode { return engine.Between }
+
+	val := makeEvalEngineExpr(ctx, vdValue)
+	if val == nil {
+		return nil, false
+	}
+	return nil, tr.haveMatchingVindex(ctx, node, vdValue, column, val, opcode, justTheVindex)
 }
 
 func (tr *ShardedRouting) planComparison(ctx *plancontext.PlanningContext, cmp *sqlparser.ComparisonExpr) (routing Routing, foundNew bool) {

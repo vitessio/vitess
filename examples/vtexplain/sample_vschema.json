@@ -1,0 +1,20 @@
+{
+    "ks1": {
+        "sharded": true,
+        "vindexes": {
+            "binary_vdx": {
+                "type": "binary"
+            }
+        },
+        "tables": {
+            "t1": {
+                "columnVindexes": [
+                    {
+                        "column": "c1",
+                        "name": "binary_vdx"
+                    }
+                ]
+            }
+        }
+    }
+}

@@ -145,3 +145,18 @@ func TestBinaryReverseMap(t *testing.T) {
 		t.Errorf("ReverseMap(): %v, want %s", err, wantErr)
 	}
 }
+
+func TestBinaryRangeMap(t *testing.T) {
+
+	startInterval := "0x01"
+	endInterval := "0x10"
+
+	got, err := binOnlyVindex.(Between).RangeMap(context.Background(), nil, sqltypes.NewHexNum([]byte(startInterval)),
+		sqltypes.NewHexNum([]byte(endInterval)))
+	require.NoError(t, err)
+	want := "DestinationKeyRange(01-10)"
+	if !reflect.DeepEqual(got[0].String(), want) {
+		t.Errorf("RangeMap(): %+v, want %+v", got, want)
+	}
+
+}
