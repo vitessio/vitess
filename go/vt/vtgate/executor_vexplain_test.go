@@ -26,6 +26,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -135,7 +137,7 @@ func TestVExplainKeys(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.Query, func(t *testing.T) {
 			executor, _, _, _, _ := createExecutorEnv(t)
-			session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
+			session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
 			gotResult, err := executor.Execute(context.Background(), nil, "Execute", session, "vexplain keys "+tt.Query, nil)
 			require.NoError(t, err)
 

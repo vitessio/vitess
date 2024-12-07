@@ -20,6 +20,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/acl"
+	"vitess.io/vitess/go/viperutil/debug"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtorc/config"
@@ -29,8 +30,7 @@ import (
 )
 
 var (
-	configFile string
-	Main       = &cobra.Command{
+	Main = &cobra.Command{
 		Use:   "vtorc",
 		Short: "VTOrc is the automated fault detection and repair tool in Vitess.",
 		Example: `vtorc \
@@ -51,22 +51,16 @@ var (
 
 func run(cmd *cobra.Command, args []string) {
 	servenv.Init()
-	config.UpdateConfigValuesFromFlags()
 	inst.RegisterStats()
 
 	log.Info("starting vtorc")
-	if len(configFile) > 0 {
-		config.ForceRead(configFile)
-	} else {
-		config.Read("/etc/vtorc.conf.json", "conf/vtorc.conf.json", "vtorc.conf.json")
-	}
-	if config.Config.AuditToSyslog {
+	if config.GetAuditToSyslog() {
 		inst.EnableAuditSyslog()
 	}
 	config.MarkConfigurationLoaded()
 
 	// Log final config values to debug if something goes wrong.
-	config.LogConfigValues()
+	log.Infof("Running with Configuration - %v", debug.AllSettings())
 	server.StartVTOrcDiscovery()
 
 	server.RegisterVTOrcAPIEndpoints()
@@ -96,7 +90,5 @@ func init() {
 	servenv.MoveFlagsToCobraCommand(Main)
 
 	logic.RegisterFlags(Main.Flags())
-	config.RegisterFlags(Main.Flags())
 	acl.RegisterFlags(Main.Flags())
-	Main.Flags().StringVar(&configFile, "config", "", "config file name")
 }

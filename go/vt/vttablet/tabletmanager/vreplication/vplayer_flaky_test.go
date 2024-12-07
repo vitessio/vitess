@@ -628,7 +628,6 @@ func TestPlayerStatementModeWithFilterAndErrorHandling(t *testing.T) {
 
 	// It does not work when filter is enabled
 	output := qh.Expect(
-		"begin",
 		"rollback",
 		fmt.Sprintf("/update _vt.vreplication set message='%s", expectedMsg),
 	)
@@ -975,8 +974,7 @@ func TestPlayerFilters(t *testing.T) {
 		input: "insert into src4 values (1,100,'aaa'),(2,200,'bbb'),(3,100,'ccc')",
 		output: qh.Expect(
 			"begin",
-			"insert into dst4(id1,val) values (1,_binary'aaa')",
-			"insert into dst4(id1,val) values (3,_binary'ccc')",
+			"insert into dst4(id1,val) values (1,_binary'aaa'), (3,_binary'ccc')",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		),
@@ -987,8 +985,7 @@ func TestPlayerFilters(t *testing.T) {
 		input: "insert into src5 values (1,100,'abc'),(2,200,'xyz'),(3,100,'xyz'),(4,300,'abc'),(5,200,'xyz')",
 		output: qh.Expect(
 			"begin",
-			"insert into dst5(id1,val) values (1,_binary'abc')",
-			"insert into dst5(id1,val) values (4,_binary'abc')",
+			"insert into dst5(id1,val) values (1,_binary'abc'), (4,_binary'abc')",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		),
@@ -1495,9 +1492,7 @@ func TestPlayerRowMove(t *testing.T) {
 	})
 	expectDBClientQueries(t, qh.Expect(
 		"begin",
-		"insert into dst(val1,sval2,rcount) values (1,ifnull(1, 0),1) on duplicate key update sval2=sval2+ifnull(values(sval2), 0), rcount=rcount+1",
-		"insert into dst(val1,sval2,rcount) values (2,ifnull(2, 0),1) on duplicate key update sval2=sval2+ifnull(values(sval2), 0), rcount=rcount+1",
-		"insert into dst(val1,sval2,rcount) values (2,ifnull(3, 0),1) on duplicate key update sval2=sval2+ifnull(values(sval2), 0), rcount=rcount+1",
+		"insert into dst(val1,sval2,rcount) values (1,ifnull(1, 0),1), (2,ifnull(2, 0),1), (2,ifnull(3, 0),1) on duplicate key update sval2=sval2+ifnull(values(sval2), 0), rcount=rcount+1",
 		"/update _vt.vreplication set pos=",
 		"commit",
 	))
@@ -1505,7 +1500,7 @@ func TestPlayerRowMove(t *testing.T) {
 		{"1", "1", "1"},
 		{"2", "5", "2"},
 	})
-	validateQueryCountStat(t, "replicate", 3)
+	validateQueryCountStat(t, "replicate", 1)
 
 	execStatements(t, []string{
 		"update src set val1=1, val2=4 where id=3",
@@ -1521,7 +1516,7 @@ func TestPlayerRowMove(t *testing.T) {
 		{"1", "5", "2"},
 		{"2", "2", "1"},
 	})
-	validateQueryCountStat(t, "replicate", 5)
+	validateQueryCountStat(t, "replicate", 3)
 }
 
 func TestPlayerTypes(t *testing.T) {
@@ -2179,6 +2174,14 @@ func TestPlayerSplitTransaction(t *testing.T) {
 func TestPlayerLockErrors(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
+	// The immediate retry behavior does not apply when doing
+	// VPlayer Batching.
+	origExperimentalFlags := vttablet.DefaultVReplicationConfig.ExperimentalFlags
+	vttablet.DefaultVReplicationConfig.ExperimentalFlags = 0
+	defer func() {
+		vttablet.DefaultVReplicationConfig.ExperimentalFlags = origExperimentalFlags
+	}()
+
 	execStatements(t, []string{
 		"create table t1(id int, val varchar(128), primary key(id))",
 		fmt.Sprintf("create table %s.t1(id int, val varchar(128), primary key(id))", vrepldb),
@@ -2257,6 +2260,14 @@ func TestPlayerLockErrors(t *testing.T) {
 
 func TestPlayerCancelOnLock(t *testing.T) {
 	defer deleteTablet(addTablet(100))
+
+	// The immediate retry behavior does not apply when doing
+	// VPlayer Batching.
+	origExperimentalFlags := vttablet.DefaultVReplicationConfig.ExperimentalFlags
+	vttablet.DefaultVReplicationConfig.ExperimentalFlags = 0
+	defer func() {
+		vttablet.DefaultVReplicationConfig.ExperimentalFlags = origExperimentalFlags
+	}()
 
 	execStatements(t, []string{
 		"create table t1(id int, val varchar(128), primary key(id))",

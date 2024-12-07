@@ -18,7 +18,6 @@ package workflow
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -41,11 +40,9 @@ import (
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/ptr"
-	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/trace"
-	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
@@ -58,7 +55,6 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtctl/schematools"
-	"vitess.io/vitess/go/vt/vtctl/workflow/common"
 	"vitess.io/vitess/go/vt/vtctl/workflow/vexec"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -406,545 +402,27 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 	span.Annotate("include_logs", req.IncludeLogs)
 	span.Annotate("shards", req.Shards)
 
-	readReq := &tabletmanagerdatapb.ReadVReplicationWorkflowsRequest{}
-	if req.Workflow != "" {
-		readReq.IncludeWorkflows = []string{req.Workflow}
-	}
-	if req.ActiveOnly {
-		readReq.ExcludeStates = []binlogdatapb.VReplicationWorkflowState{binlogdatapb.VReplicationWorkflowState_Stopped}
+	w := &workflowFetcher{
+		ts:     s.ts,
+		tmc:    s.tmc,
+		parser: s.SQLParser(),
+		logger: s.Logger(),
 	}
 
-	// Guards access to the maps used throughout.
-	m := sync.Mutex{}
-
-	shards, err := common.GetShards(ctx, s.ts, req.Keyspace, req.Shards)
+	workflowsByShard, err := w.fetchWorkflowsByShard(ctx, req)
 	if err != nil {
 		return nil, err
 	}
-	results := make(map[*topo.TabletInfo]*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse, len(shards))
-	readWorkflowsEg, readWorkflowsCtx := errgroup.WithContext(ctx)
-	for _, shard := range shards {
-		readWorkflowsEg.Go(func() error {
-			si, err := s.ts.GetShard(readWorkflowsCtx, req.Keyspace, shard)
-			if err != nil {
-				return err
-			}
-			if si.PrimaryAlias == nil {
-				return fmt.Errorf("%w %s/%s", vexec.ErrNoShardPrimary, req.Keyspace, shard)
-			}
-			primary, err := s.ts.GetTablet(readWorkflowsCtx, si.PrimaryAlias)
-			if err != nil {
-				return err
-			}
-			if primary == nil {
-				return fmt.Errorf("%w %s/%s: tablet %v not found", vexec.ErrNoShardPrimary, req.Keyspace, shard, topoproto.TabletAliasString(si.PrimaryAlias))
-			}
-			// Clone the request so that we can set the correct DB name for tablet.
-			req := readReq.CloneVT()
-			wres, err := s.tmc.ReadVReplicationWorkflows(readWorkflowsCtx, primary.Tablet, req)
-			if err != nil {
-				return err
-			}
-			m.Lock()
-			defer m.Unlock()
-			results[primary] = wres
-			return nil
-		})
-	}
-	if readWorkflowsEg.Wait() != nil {
+
+	copyStatesByShardStreamId, err := w.fetchCopyStatesByShardStream(ctx, workflowsByShard)
+	if err != nil {
 		return nil, err
 	}
 
-	copyStatesByShardStreamId := make(map[string][]*vtctldatapb.Workflow_Stream_CopyState, len(results))
-
-	fetchCopyStates := func(ctx context.Context, tablet *topo.TabletInfo, streamIds []int32) error {
-		span, ctx := trace.NewSpan(ctx, "workflow.Server.fetchCopyStates")
-		defer span.Finish()
-
-		span.Annotate("keyspace", req.Keyspace)
-		span.Annotate("shard", tablet.Shard)
-		span.Annotate("tablet_alias", tablet.AliasString())
-
-		copyStates, err := s.getWorkflowCopyStates(ctx, tablet, streamIds)
-		if err != nil {
-			return err
-		}
-
-		m.Lock()
-		defer m.Unlock()
-
-		for _, copyState := range copyStates {
-			shardStreamId := fmt.Sprintf("%s/%d", tablet.Shard, copyState.StreamId)
-			copyStatesByShardStreamId[shardStreamId] = append(
-				copyStatesByShardStreamId[shardStreamId],
-				copyState,
-			)
-		}
-
-		return nil
-	}
-
-	fetchCopyStatesEg, fetchCopyStatesCtx := errgroup.WithContext(ctx)
-	for tablet, result := range results {
-		tablet := tablet // loop closure
-
-		streamIds := make([]int32, 0, len(result.Workflows))
-		for _, wf := range result.Workflows {
-			for _, stream := range wf.Streams {
-				streamIds = append(streamIds, stream.Id)
-			}
-		}
-
-		if len(streamIds) == 0 {
-			continue
-		}
-
-		fetchCopyStatesEg.Go(func() error {
-			return fetchCopyStates(fetchCopyStatesCtx, tablet, streamIds)
-		})
-	}
-
-	if err := fetchCopyStatesEg.Wait(); err != nil {
+	workflows, err := w.buildWorkflows(ctx, workflowsByShard, copyStatesByShardStreamId, req)
+	if err != nil {
 		return nil, err
 	}
-
-	workflowsMap := make(map[string]*vtctldatapb.Workflow, len(results))
-	sourceKeyspaceByWorkflow := make(map[string]string, len(results))
-	sourceShardsByWorkflow := make(map[string]sets.Set[string], len(results))
-	targetKeyspaceByWorkflow := make(map[string]string, len(results))
-	targetShardsByWorkflow := make(map[string]sets.Set[string], len(results))
-	maxVReplicationLagByWorkflow := make(map[string]float64, len(results))
-	maxVReplicationTransactionLagByWorkflow := make(map[string]float64, len(results))
-
-	// We guarantee the following invariants when this function is called for a
-	// given workflow:
-	// - workflow.Name != "" (more precisely, ".Name is set 'properly'")
-	// - workflowsMap[workflow.Name] == workflow
-	// - sourceShardsByWorkflow[workflow.Name] != nil
-	// - targetShardsByWorkflow[workflow.Name] != nil
-	// - workflow.ShardStatuses != nil
-	scanWorkflow := func(ctx context.Context, workflow *vtctldatapb.Workflow, res *tabletmanagerdatapb.ReadVReplicationWorkflowResponse, tablet *topo.TabletInfo) error {
-		// This is not called concurrently, but we still protect the maps to ensure
-		// that we're concurrency-safe in the face of future changes (e.g. where other
-		// things are running concurrently with this which also access these maps).
-		m.Lock()
-		defer m.Unlock()
-		for _, rstream := range res.Streams {
-			// The value in the pos column can be compressed and thus not
-			// have a valid GTID consisting of valid UTF-8 characters so we
-			// have to decode it so that it's properly decompressed first
-			// when needed.
-			pos := rstream.Pos
-			if pos != "" {
-				mpos, err := binlogplayer.DecodePosition(pos)
-				if err != nil {
-					return err
-				}
-				pos = mpos.String()
-			}
-
-			cells := strings.Split(res.Cells, ",")
-			for i := range cells {
-				cells[i] = strings.TrimSpace(cells[i])
-			}
-			options := res.Options
-			if options != "" {
-				if err := json.Unmarshal([]byte(options), &workflow.Options); err != nil {
-					return err
-				}
-			}
-			stream := &vtctldatapb.Workflow_Stream{
-				Id:                        int64(rstream.Id),
-				Shard:                     tablet.Shard,
-				Tablet:                    tablet.Alias,
-				BinlogSource:              rstream.Bls,
-				Position:                  pos,
-				StopPosition:              rstream.StopPos,
-				State:                     rstream.State.String(),
-				DbName:                    tablet.DbName(),
-				TabletTypes:               res.TabletTypes,
-				TabletSelectionPreference: res.TabletSelectionPreference,
-				Cells:                     cells,
-				TransactionTimestamp:      rstream.TransactionTimestamp,
-				TimeUpdated:               rstream.TimeUpdated,
-				Message:                   rstream.Message,
-				Tags:                      strings.Split(res.Tags, ","),
-				RowsCopied:                rstream.RowsCopied,
-				ThrottlerStatus: &vtctldatapb.Workflow_Stream_ThrottlerStatus{
-					ComponentThrottled: rstream.ComponentThrottled,
-					TimeThrottled:      rstream.TimeThrottled,
-				},
-			}
-
-			// Merge in copy states, which we've already fetched.
-			shardStreamId := fmt.Sprintf("%s/%d", tablet.Shard, stream.Id)
-			if copyState, ok := copyStatesByShardStreamId[shardStreamId]; ok {
-				stream.CopyStates = copyState
-			}
-
-			if rstream.TimeUpdated == nil {
-				rstream.TimeUpdated = &vttimepb.Time{}
-			}
-
-			switch {
-			case strings.Contains(strings.ToLower(stream.Message), "error"):
-				stream.State = binlogdatapb.VReplicationWorkflowState_Error.String()
-			case stream.State == binlogdatapb.VReplicationWorkflowState_Running.String() && len(stream.CopyStates) > 0:
-				stream.State = binlogdatapb.VReplicationWorkflowState_Copying.String()
-			case stream.State == binlogdatapb.VReplicationWorkflowState_Running.String() && int64(time.Now().Second())-rstream.TimeUpdated.Seconds > 10:
-				stream.State = binlogdatapb.VReplicationWorkflowState_Lagging.String()
-			}
-
-			shardStreamKey := fmt.Sprintf("%s/%s", tablet.Shard, tablet.AliasString())
-			shardStream, ok := workflow.ShardStreams[shardStreamKey]
-			if !ok {
-				ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
-				defer cancel()
-
-				si, err := s.ts.GetShard(ctx, req.Keyspace, tablet.Shard)
-				if err != nil {
-					return err
-				}
-
-				shardStream = &vtctldatapb.Workflow_ShardStream{
-					Streams:          nil,
-					TabletControls:   si.TabletControls,
-					IsPrimaryServing: si.IsPrimaryServing,
-				}
-
-				workflow.ShardStreams[shardStreamKey] = shardStream
-			}
-
-			shardStream.Streams = append(shardStream.Streams, stream)
-			sourceShardsByWorkflow[workflow.Name].Insert(stream.BinlogSource.Shard)
-			targetShardsByWorkflow[workflow.Name].Insert(tablet.Shard)
-
-			if ks, ok := sourceKeyspaceByWorkflow[workflow.Name]; ok && ks != stream.BinlogSource.Keyspace {
-				return vterrors.Wrapf(ErrMultipleSourceKeyspaces, "workflow = %v, ks1 = %v, ks2 = %v", workflow.Name, ks, stream.BinlogSource.Keyspace)
-			}
-
-			sourceKeyspaceByWorkflow[workflow.Name] = stream.BinlogSource.Keyspace
-
-			if ks, ok := targetKeyspaceByWorkflow[workflow.Name]; ok && ks != tablet.Keyspace {
-				return vterrors.Wrapf(ErrMultipleTargetKeyspaces, "workflow = %v, ks1 = %v, ks2 = %v", workflow.Name, ks, tablet.Keyspace)
-			}
-
-			targetKeyspaceByWorkflow[workflow.Name] = tablet.Keyspace
-
-			if stream.TimeUpdated == nil {
-				stream.TimeUpdated = &vttimepb.Time{}
-			}
-			timeUpdated := time.Unix(stream.TimeUpdated.Seconds, 0)
-			vreplicationLag := time.Since(timeUpdated)
-
-			// MaxVReplicationLag represents the time since we last processed any event
-			// in the workflow.
-			if currentMaxLag, ok := maxVReplicationLagByWorkflow[workflow.Name]; ok {
-				if vreplicationLag.Seconds() > currentMaxLag {
-					maxVReplicationLagByWorkflow[workflow.Name] = vreplicationLag.Seconds()
-				}
-			} else {
-				maxVReplicationLagByWorkflow[workflow.Name] = vreplicationLag.Seconds()
-			}
-
-			workflow.WorkflowType = res.WorkflowType.String()
-			workflow.WorkflowSubType = res.WorkflowSubType.String()
-			workflow.DeferSecondaryKeys = res.DeferSecondaryKeys
-
-			// MaxVReplicationTransactionLag estimates the actual statement processing lag
-			// between the source and the target. If we are still processing source events it
-			// is the difference b/w current time and the timestamp of the last event. If
-			// heartbeats are more recent than the last event, then the lag is the time since
-			// the last heartbeat as there can be an actual event immediately after the
-			// heartbeat, but which has not yet been processed on the target.
-			// We don't allow switching during the copy phase, so in that case we just return
-			// a large lag. All timestamps are in seconds since epoch.
-			if _, ok := maxVReplicationTransactionLagByWorkflow[workflow.Name]; !ok {
-				maxVReplicationTransactionLagByWorkflow[workflow.Name] = 0
-			}
-			if rstream.TransactionTimestamp == nil {
-				rstream.TransactionTimestamp = &vttimepb.Time{}
-			}
-			lastTransactionTime := rstream.TransactionTimestamp.Seconds
-			if rstream.TimeHeartbeat == nil {
-				rstream.TimeHeartbeat = &vttimepb.Time{}
-			}
-			lastHeartbeatTime := rstream.TimeHeartbeat.Seconds
-			if stream.State == binlogdatapb.VReplicationWorkflowState_Copying.String() {
-				maxVReplicationTransactionLagByWorkflow[workflow.Name] = math.MaxInt64
-			} else {
-				if lastTransactionTime == 0 /* no new events after copy */ ||
-					lastHeartbeatTime > lastTransactionTime /* no recent transactions, so all caught up */ {
-
-					lastTransactionTime = lastHeartbeatTime
-				}
-				now := time.Now().Unix() /* seconds since epoch */
-				transactionReplicationLag := float64(now - lastTransactionTime)
-				if transactionReplicationLag > maxVReplicationTransactionLagByWorkflow[workflow.Name] {
-					maxVReplicationTransactionLagByWorkflow[workflow.Name] = transactionReplicationLag
-				}
-			}
-		}
-
-		return nil
-	}
-
-	for tablet, result := range results {
-		// In the old implementation, we knew we had at most one (0 <= N <= 1)
-		// workflow for each shard primary we queried. There might be multiple
-		// rows (streams) comprising that workflow, so we would aggregate the
-		// rows for a given primary into a single value ("the workflow",
-		// ReplicationStatusResult in the old types).
-		//
-		// In this version, we have many (N >= 0) workflows for each shard
-		// primary we queried, so we need to determine if each row corresponds
-		// to a workflow we're already aggregating, or if it's a workflow we
-		// haven't seen yet for that shard primary. We use the workflow name to
-		// dedupe for this.
-		for _, wfres := range result.Workflows {
-			workflowName := wfres.Workflow
-			workflow, ok := workflowsMap[workflowName]
-			if !ok {
-				workflow = &vtctldatapb.Workflow{
-					Name:         workflowName,
-					ShardStreams: map[string]*vtctldatapb.Workflow_ShardStream{},
-				}
-
-				workflowsMap[workflowName] = workflow
-				sourceShardsByWorkflow[workflowName] = sets.New[string]()
-				targetShardsByWorkflow[workflowName] = sets.New[string]()
-			}
-
-			if err := scanWorkflow(ctx, workflow, wfres, tablet); err != nil {
-				return nil, err
-			}
-		}
-	}
-
-	var (
-		fetchLogsWG  sync.WaitGroup
-		vrepLogQuery = strings.TrimSpace(`
-SELECT
-	id,
-	vrepl_id,
-	type,
-	state,
-	message,
-	created_at,
-	updated_at,
-	count
-FROM
-	_vt.vreplication_log
-WHERE vrepl_id IN %a
-ORDER BY
-	vrepl_id ASC,
-	id ASC
-`)
-	)
-
-	fetchStreamLogs := func(ctx context.Context, workflow *vtctldatapb.Workflow) {
-		span, ctx := trace.NewSpan(ctx, "workflow.Server.fetchStreamLogs")
-		defer span.Finish()
-
-		span.Annotate("keyspace", req.Keyspace)
-		span.Annotate("workflow", workflow.Name)
-
-		vreplIDs := make([]int64, 0, len(workflow.ShardStreams))
-		for _, shardStream := range maps.Values(workflow.ShardStreams) {
-			for _, stream := range shardStream.Streams {
-				vreplIDs = append(vreplIDs, stream.Id)
-			}
-		}
-		idsBV, err := sqltypes.BuildBindVariable(vreplIDs)
-		if err != nil {
-			return
-		}
-
-		query, err := sqlparser.ParseAndBind(vrepLogQuery, idsBV)
-		if err != nil {
-			return
-		}
-
-		vx := vexec.NewVExec(req.Keyspace, workflow.Name, s.ts, s.tmc, s.SQLParser())
-		results, err := vx.QueryContext(ctx, query)
-		if err != nil {
-			// Note that we do not return here. If there are any query results
-			// in the map (i.e. some tablets returned successfully), we will
-			// still try to read log rows from them on a best-effort basis. But,
-			// we will also pre-emptively record the top-level fetch error on
-			// every stream in every shard in the workflow. Further processing
-			// below may override the error message for certain streams.
-			for _, streams := range workflow.ShardStreams {
-				for _, stream := range streams.Streams {
-					stream.LogFetchError = err.Error()
-				}
-			}
-		}
-
-		for target, p3qr := range results {
-			qr := sqltypes.Proto3ToResult(p3qr)
-			shardStreamKey := fmt.Sprintf("%s/%s", target.Shard, target.AliasString())
-
-			ss, ok := workflow.ShardStreams[shardStreamKey]
-			if !ok || ss == nil {
-				continue
-			}
-
-			streams := ss.Streams
-			streamIdx := 0
-			markErrors := func(err error) {
-				if streamIdx >= len(streams) {
-					return
-				}
-
-				streams[streamIdx].LogFetchError = err.Error()
-			}
-
-			for _, row := range qr.Rows {
-				id, err := row[0].ToCastInt64()
-				if err != nil {
-					markErrors(err)
-					continue
-				}
-
-				streamID, err := row[1].ToCastInt64()
-				if err != nil {
-					markErrors(err)
-					continue
-				}
-
-				typ := row[2].ToString()
-				state := row[3].ToString()
-				message := row[4].ToString()
-
-				createdAt, err := time.Parse("2006-01-02 15:04:05", row[5].ToString())
-				if err != nil {
-					markErrors(err)
-					continue
-				}
-
-				updatedAt, err := time.Parse("2006-01-02 15:04:05", row[6].ToString())
-				if err != nil {
-					markErrors(err)
-					continue
-				}
-
-				count, err := row[7].ToCastInt64()
-				if err != nil {
-					markErrors(err)
-					continue
-				}
-
-				streamLog := &vtctldatapb.Workflow_Stream_Log{
-					Id:       id,
-					StreamId: streamID,
-					Type:     typ,
-					State:    state,
-					CreatedAt: &vttimepb.Time{
-						Seconds: createdAt.Unix(),
-					},
-					UpdatedAt: &vttimepb.Time{
-						Seconds: updatedAt.Unix(),
-					},
-					Message: message,
-					Count:   count,
-				}
-
-				// Earlier, in the main loop where we called scanWorkflow for
-				// each _vt.vreplication row, we also sorted each ShardStreams
-				// slice by ascending id, and our _vt.vreplication_log query
-				// ordered by (stream_id ASC, id ASC), so we can walk the
-				// streams in index order in O(n) amortized over all the rows
-				// for this tablet.
-				for streamIdx < len(streams) {
-					stream := streams[streamIdx]
-					if stream.Id < streamLog.StreamId {
-						streamIdx++
-						continue
-					}
-
-					if stream.Id > streamLog.StreamId {
-						s.Logger().Warningf("Found stream log for nonexistent stream: %+v", streamLog)
-						// This can happen on manual/failed workflow cleanup so move to the next log.
-						break
-					}
-
-					// stream.Id == streamLog.StreamId
-					stream.Logs = append(stream.Logs, streamLog)
-					break
-				}
-			}
-		}
-	}
-
-	workflows := make([]*vtctldatapb.Workflow, 0, len(workflowsMap))
-
-	for name, workflow := range workflowsMap {
-		sourceShards, ok := sourceShardsByWorkflow[name]
-		if !ok {
-			return nil, vterrors.Wrapf(ErrInvalidWorkflow, "%s has no source shards", name)
-		}
-
-		sourceKeyspace, ok := sourceKeyspaceByWorkflow[name]
-		if !ok {
-			return nil, vterrors.Wrapf(ErrInvalidWorkflow, "%s has no source keyspace", name)
-		}
-
-		targetShards, ok := targetShardsByWorkflow[name]
-		if !ok {
-			return nil, vterrors.Wrapf(ErrInvalidWorkflow, "%s has no target shards", name)
-		}
-
-		targetKeyspace, ok := targetKeyspaceByWorkflow[name]
-		if !ok {
-			return nil, vterrors.Wrapf(ErrInvalidWorkflow, "%s has no target keyspace", name)
-		}
-
-		maxVReplicationLag, ok := maxVReplicationLagByWorkflow[name]
-		if !ok {
-			return nil, vterrors.Wrapf(ErrInvalidWorkflow, "%s has no tracked vreplication lag", name)
-		}
-
-		maxVReplicationTransactionLag, ok := maxVReplicationTransactionLagByWorkflow[name]
-		if !ok {
-			return nil, vterrors.Wrapf(ErrInvalidWorkflow, "%s has no tracked vreplication transaction lag", name)
-		}
-
-		workflow.Source = &vtctldatapb.Workflow_ReplicationLocation{
-			Keyspace: sourceKeyspace,
-			Shards:   sets.List(sourceShards),
-		}
-
-		workflow.Target = &vtctldatapb.Workflow_ReplicationLocation{
-			Keyspace: targetKeyspace,
-			Shards:   sets.List(targetShards),
-		}
-
-		workflow.MaxVReplicationLag = int64(maxVReplicationLag)
-		workflow.MaxVReplicationTransactionLag = int64(maxVReplicationTransactionLag)
-
-		// Sort shard streams by stream_id ASC, to support an optimization
-		// in fetchStreamLogs below.
-		for _, shardStreams := range workflow.ShardStreams {
-			sort.Slice(shardStreams.Streams, func(i, j int) bool {
-				return shardStreams.Streams[i].Id < shardStreams.Streams[j].Id
-			})
-		}
-
-		workflows = append(workflows, workflow)
-
-		if req.IncludeLogs {
-			// Fetch logs for all streams associated with this workflow in the background.
-			fetchLogsWG.Add(1)
-			go func(ctx context.Context, workflow *vtctldatapb.Workflow) {
-				defer fetchLogsWG.Done()
-				fetchStreamLogs(ctx, workflow)
-			}(ctx, workflow)
-		}
-	}
-
-	// Wait for all the log fetchers to finish.
-	fetchLogsWG.Wait()
 
 	return &vtctldatapb.GetWorkflowsResponse{
 		Workflows: workflows,
@@ -1078,51 +556,6 @@ func (s *Server) getWorkflowState(ctx context.Context, targetKeyspace, workflowN
 	}
 
 	return ts, state, nil
-}
-
-func (s *Server) getWorkflowCopyStates(ctx context.Context, tablet *topo.TabletInfo, streamIds []int32) ([]*vtctldatapb.Workflow_Stream_CopyState, error) {
-	span, ctx := trace.NewSpan(ctx, "workflow.Server.getWorkflowCopyStates")
-	defer span.Finish()
-
-	span.Annotate("keyspace", tablet.Keyspace)
-	span.Annotate("shard", tablet.Shard)
-	span.Annotate("tablet_alias", tablet.AliasString())
-	span.Annotate("stream_ids", fmt.Sprintf("%#v", streamIds))
-
-	idsBV, err := sqltypes.BuildBindVariable(streamIds)
-	if err != nil {
-		return nil, err
-	}
-	query, err := sqlparser.ParseAndBind("select vrepl_id, table_name, lastpk from _vt.copy_state where vrepl_id in %a and id in (select max(id) from _vt.copy_state where vrepl_id in %a group by vrepl_id, table_name)",
-		idsBV, idsBV)
-	if err != nil {
-		return nil, err
-	}
-	qr, err := s.tmc.VReplicationExec(ctx, tablet.Tablet, query)
-	if err != nil {
-		return nil, err
-	}
-
-	result := sqltypes.Proto3ToResult(qr)
-	if result == nil {
-		return nil, nil
-	}
-
-	copyStates := make([]*vtctldatapb.Workflow_Stream_CopyState, len(result.Rows))
-	for i, row := range result.Rows {
-		streamId, err := row[0].ToInt64()
-		if err != nil {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to cast vrepl_id to int64: %v", err)
-		}
-		// These string fields are technically varbinary, but this is close enough.
-		copyStates[i] = &vtctldatapb.Workflow_Stream_CopyState{
-			StreamId: streamId,
-			Table:    row[1].ToString(),
-			LastPk:   row[2].ToString(),
-		}
-	}
-
-	return copyStates, nil
 }
 
 // LookupVindexCreate creates the lookup vindex in the specified
@@ -1545,7 +978,7 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		}
 	}
 	if isStandardMoveTables() { // Non-standard ones do not use shard scoped mechanisms
-		if err := s.setupInitialDeniedTables(ctx, ts); err != nil {
+		if err := setupInitialDeniedTables(ctx, ts); err != nil {
 			return nil, vterrors.Wrapf(err, "failed to put initial denied tables entries in place on the target shards")
 		}
 	}
@@ -1600,7 +1033,7 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 	})
 }
 
-func (s *Server) validateRoutingRuleFlags(req *vtctldatapb.MoveTablesCreateRequest, mz *materializer) error {
+func validateRoutingRuleFlags(req *vtctldatapb.MoveTablesCreateRequest, mz *materializer) error {
 	if mz.IsMultiTenantMigration() {
 		switch {
 		case req.NoRoutingRules:
@@ -1612,7 +1045,7 @@ func (s *Server) validateRoutingRuleFlags(req *vtctldatapb.MoveTablesCreateReque
 	return nil
 }
 
-func (s *Server) setupInitialDeniedTables(ctx context.Context, ts *trafficSwitcher) error {
+func setupInitialDeniedTables(ctx context.Context, ts *trafficSwitcher) error {
 	if ts.MigrationType() != binlogdatapb.MigrationType_TABLES {
 		return nil
 	}
@@ -1630,7 +1063,7 @@ func (s *Server) setupInitialDeniedTables(ctx context.Context, ts *trafficSwitch
 }
 
 func (s *Server) setupInitialRoutingRules(ctx context.Context, req *vtctldatapb.MoveTablesCreateRequest, mz *materializer, tables []string) error {
-	if err := s.validateRoutingRuleFlags(req, mz); err != nil {
+	if err := validateRoutingRuleFlags(req, mz); err != nil {
 		return err
 	}
 
