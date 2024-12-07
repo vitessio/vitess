@@ -847,3 +847,59 @@ func TestChangeShardRouting(t *testing.T) {
 	assert.NoError(t, err)
 	assert.True(t, targetShardInfo.IsPrimaryServing, "target shard should have it's primary serving after changeShardRouting() is called.")
 }
+
+func TestAddParticipatingTablesToKeyspace(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	workflowName := "wf1"
+	tableName := "t1"
+	sourceKeyspaceName := "sourceks"
+	targetKeyspaceName := "targetks"
+
+	sourceKeyspace := &testKeyspace{
+		KeyspaceName: sourceKeyspaceName,
+		ShardNames:   []string{"0"},
+	}
+	targetKeyspace := &testKeyspace{
+		KeyspaceName: targetKeyspaceName,
+		ShardNames:   []string{"0"},
+	}
+
+	schema := map[string]*tabletmanagerdatapb.SchemaDefinition{
+		tableName: {
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+				{
+					Name:   tableName,
+					Schema: fmt.Sprintf("CREATE TABLE %s (id BIGINT, name VARCHAR(64), PRIMARY KEY (id))", tableName),
+				},
+			},
+		},
+	}
+
+	env := newTestEnv(t, ctx, defaultCellName, sourceKeyspace, targetKeyspace)
+	defer env.close()
+	env.tmc.schema = schema
+
+	ts, _, err := env.ws.getWorkflowState(ctx, targetKeyspaceName, workflowName)
+	require.NoError(t, err)
+
+	err = ts.addParticipatingTablesToKeyspace(ctx, sourceKeyspaceName, "")
+	assert.NoError(t, err)
+
+	vs, err := env.ts.GetVSchema(ctx, sourceKeyspaceName)
+	assert.NoError(t, err)
+	assert.NotNil(t, vs.Tables["t1"])
+	assert.Empty(t, vs.Tables["t1"])
+
+	specs := `{"t1":{"column_vindexes":[{"column":"col1","name":"v1"}, {"column":"col2","name":"v2"}]},"t2":{"column_vindexes":[{"column":"col2","name":"v2"}]}}`
+	err = ts.addParticipatingTablesToKeyspace(ctx, sourceKeyspaceName, specs)
+	assert.NoError(t, err)
+
+	vs, err = env.ts.GetVSchema(ctx, sourceKeyspaceName)
+	assert.NoError(t, err)
+	require.NotNil(t, vs.Tables["t1"])
+	require.NotNil(t, vs.Tables["t2"])
+	assert.Len(t, vs.Tables["t1"].ColumnVindexes, 2)
+	assert.Len(t, vs.Tables["t2"].ColumnVindexes, 1)
+}
