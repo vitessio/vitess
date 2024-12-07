@@ -27,7 +27,7 @@ func TestSelectCases(t *testing.T) {
 	defer closer()
 	tests := readJSONTests("select_cases.json")
 	for _, test := range tests {
-		mcmp.Run(test.Query, func(mcmp *utils.MySQLCompare) {
+		mcmp.Run(test.Comment, func(mcmp *utils.MySQLCompare) {
 			if test.SkipE2E {
 				mcmp.AsT().Skip(test.Query)
 			}
