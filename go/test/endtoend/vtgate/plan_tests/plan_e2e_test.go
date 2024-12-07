@@ -34,6 +34,9 @@ func TestSelectCases(t *testing.T) {
 			mcmp.Exec(test.Query)
 			pd := utils.ExecTrace(mcmp.AsT(), mcmp.VtConn, test.Query)
 			verifyTestExpectations(mcmp.AsT(), pd, test)
+			if mcmp.VtConn.IsClosed() {
+				mcmp.AsT().Fatal("vtgate connection is closed")
+			}
 		})
 	}
 }

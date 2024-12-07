@@ -46,8 +46,8 @@ func TestMain(m *testing.M) {
 	vschema := readFile("vschemas/schema.json")
 	userVs := extractUserKS(vschema)
 	mainVs := extractMainKS(vschema)
-	sSQL := readFile("schemas/sschema.sql")
-	uSQL := readFile("schemas/uschema.sql")
+	sSQL := readFile("schemas/user.sql")
+	uSQL := readFile("schemas/main.sql")
 
 	exitCode := func() int {
 		clusterInstance = cluster.NewCluster(cell, "localhost")
@@ -146,7 +146,7 @@ func readJSONTests(filename string) []planbuilder.PlanTest {
 }
 
 func locateFile(name string) string {
-	return "../../../../../vt/vtgate/planbuilder/testdata/" + name
+	return "../../../../vt/vtgate/planbuilder/testdata/" + name
 }
 
 // verifyTestExpectations verifies the expectations of the test.

@@ -90,3 +90,11 @@ CREATE TABLE t1
     c3 INT,
     PRIMARY KEY (c1)
 );
+
+CREATE TABLE authoritative
+(
+    user_id bigint NOT NULL,
+    col1    VARCHAR(255),
+    col2    bigint,
+    PRIMARY KEY (user_id)
+) ENGINE=InnoDB;
