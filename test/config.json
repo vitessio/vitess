@@ -887,6 +887,15 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
+		"vtgate_plantests": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/plan_tests"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtgate_plantests",
+			"RetryMax": 1,
+			"Tags": []
+		},
 		"vtgate_unsharded": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/unsharded"],
