@@ -200,6 +200,7 @@ func (pd PrimitiveDescription) Equals(other PrimitiveDescription) string {
 		return fmt.Sprintf("OperatorType: %v != %v", pd.OperatorType, other.OperatorType)
 	}
 
+	// TODO (harshit): enable this to compare keyspace as well
 	// switch {
 	// case pd.Keyspace == nil && other.Keyspace == nil:
 	// 	// do nothing
