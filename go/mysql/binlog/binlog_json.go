@@ -17,7 +17,9 @@ limitations under the License.
 package binlog
 
 import (
+	"bytes"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"math"
 	"strconv"
@@ -25,9 +27,12 @@ import (
 	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/format"
 	"vitess.io/vitess/go/mysql/json"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
 )
 
 /*
@@ -44,6 +49,14 @@ https://github.com/shyiko/mysql-binlog-connector-java/pull/119/files
 https://github.com/noplay/python-mysql-replication/blob/175df28cc8b536a68522ff9b09dc5440adad6094/pymysqlreplication/packet.py
 */
 
+type jsonDiffOp uint8
+
+const (
+	jsonDiffOpReplace = jsonDiffOp(0)
+	jsonDiffOpInsert  = jsonDiffOp(1)
+	jsonDiffOpRemove  = jsonDiffOp(2)
+)
+
 // ParseBinaryJSON provides the parsing function from the mysql binary json
 // representation to a JSON value instance.
 func ParseBinaryJSON(data []byte) (*json.Value, error) {
@@ -58,6 +71,62 @@ func ParseBinaryJSON(data []byte) (*json.Value, error) {
 		}
 	}
 	return node, nil
+}
+
+// ParseBinaryJSONDiff provides the parsing function from the MySQL JSON
+// diff representation to an SQL expression.
+func ParseBinaryJSONDiff(data []byte) (sqltypes.Value, error) {
+	log.Errorf("DEBUG: json diff data hex: %s, string: %s", hex.EncodeToString(data), string(data))
+	pos := 0
+	opType := jsonDiffOp(data[pos])
+	pos++
+	diff := bytes.Buffer{}
+
+	switch opType {
+	case jsonDiffOpReplace:
+		diff.WriteString("JSON_REPLACE(")
+	case jsonDiffOpInsert:
+		diff.WriteString("JSON_INSERT(")
+	case jsonDiffOpRemove:
+		diff.WriteString("JSON_REMOVE(")
+	}
+	diff.WriteString("%s, ") // This will later be replaced by the field name
+
+	log.Errorf("DEBUG: json diff opType: %d", opType)
+
+	pathLen, readTo, ok := readLenEncInt(data, pos)
+	if !ok {
+		return sqltypes.Value{}, fmt.Errorf("cannot read JSON diff path length")
+	}
+	pos = readTo
+
+	log.Errorf("DEBUG: json diff path length: %d", pathLen)
+
+	path := data[pos : uint64(pos)+pathLen]
+	pos += int(pathLen)
+	log.Errorf("DEBUG: json diff path: %s", string(path))
+	diff.WriteString(fmt.Sprintf("'%s', ", path))
+
+	if opType == jsonDiffOpRemove { // No value for remove
+		diff.WriteString(")")
+		return sqltypes.MakeTrusted(sqltypes.Expression, diff.Bytes()), nil
+	}
+
+	valueLen, readTo, ok := readLenEncInt(data, pos)
+	if !ok {
+		return sqltypes.Value{}, fmt.Errorf("cannot read JSON diff path length")
+	}
+	pos = readTo
+	log.Errorf("DEBUG: json diff value length: %d", valueLen)
+
+	value, err := ParseBinaryJSON(data[pos : uint64(pos)+valueLen])
+	if err != nil {
+		return sqltypes.Value{}, fmt.Errorf("cannot read JSON diff value for path %s: %w", path, err)
+	}
+	log.Errorf("DEBUG: json diff value: %v", value)
+	diff.WriteString(fmt.Sprintf("%s)", value))
+
+	return sqltypes.MakeTrusted(sqltypes.Expression, diff.Bytes()), nil
 }
 
 // jsonDataType has the values used in the mysql json binary representation to denote types.
@@ -315,7 +384,7 @@ func binparserOpaque(_ jsonDataType, data []byte, pos int) (node *json.Value, er
 		precision := decimalData[0]
 		scale := decimalData[1]
 		metadata := (uint16(precision) << 8) + uint16(scale)
-		val, _, err := CellValue(decimalData, 2, TypeNewDecimal, metadata, &querypb.Field{Type: querypb.Type_DECIMAL})
+		val, _, err := CellValue(decimalData, 2, TypeNewDecimal, metadata, &querypb.Field{Type: querypb.Type_DECIMAL}, false)
 		if err != nil {
 			return nil, err
 		}
@@ -393,4 +462,46 @@ func binparserObject(typ jsonDataType, data []byte, pos int) (node *json.Value, 
 	}
 
 	return json.NewObject(object), nil
+}
+
+func readLenEncInt(data []byte, pos int) (uint64, int, bool) {
+	if pos >= len(data) {
+		return 0, 0, false
+	}
+
+	// reslice to avoid arithmetic below
+	data = data[pos:]
+
+	switch data[0] {
+	case 0xfc:
+		// Encoded in the next 2 bytes.
+		if 2 >= len(data) {
+			return 0, 0, false
+		}
+		return uint64(data[1]) |
+			uint64(data[2])<<8, pos + 3, true
+	case 0xfd:
+		// Encoded in the next 3 bytes.
+		if 3 >= len(data) {
+			return 0, 0, false
+		}
+		return uint64(data[1]) |
+			uint64(data[2])<<8 |
+			uint64(data[3])<<16, pos + 4, true
+	case 0xfe:
+		// Encoded in the next 8 bytes.
+		if 8 >= len(data) {
+			return 0, 0, false
+		}
+		return uint64(data[1]) |
+			uint64(data[2])<<8 |
+			uint64(data[3])<<16 |
+			uint64(data[4])<<24 |
+			uint64(data[5])<<32 |
+			uint64(data[6])<<40 |
+			uint64(data[7])<<48 |
+			uint64(data[8])<<56, pos + 9, true
+	default:
+		return uint64(data[0]), pos + 1, true
+	}
 }

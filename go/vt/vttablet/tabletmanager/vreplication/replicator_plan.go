@@ -28,8 +28,10 @@ import (
 	"vitess.io/vitess/go/mysql/collations/colldata"
 	vjson "vitess.io/vitess/go/mysql/json"
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -377,6 +379,7 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 		}
 	}
 	if rowChange.After != nil {
+		jsonIndex := 0
 		after = true
 		vals := sqltypes.MakeRowTrusted(tp.Fields, rowChange.After)
 		for i, field := range tp.Fields {
@@ -384,15 +387,25 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 			var newVal *sqltypes.Value
 			var err error
 			if field.Type == querypb.Type_JSON {
+				log.Errorf("DEBUG: vplayer applyChange: field.Type == querypb.Type_JSON, val type: %v, vals[i]: %+v", vals[i].Type(), vals[i].RawStr())
 				if vals[i].IsNull() { // An SQL NULL and not an actual JSON value
 					newVal = &sqltypes.NULL
+				} else if rowChange.JsonPartialValues != nil && isBitSet(rowChange.JsonPartialValues.Cols, jsonIndex) {
+					// An SQL expression that can be converted to a JSON value such
+					// as JSON_INSERT().
+					// This occurs e.g. when using partial JSON values as a result of
+					// mysqld using binlog-row-value-options=PARTIAL_JSON.
+					s := fmt.Sprintf(vals[i].RawStr(), field.Name)
+					newVal = ptr.Of(sqltypes.MakeTrusted(querypb.Type_EXPRESSION, []byte(s)))
 				} else { // A JSON value (which may be a JSON null literal value)
 					newVal, err = vjson.MarshalSQLValue(vals[i].Raw())
 					if err != nil {
 						return nil, err
 					}
 				}
+				log.Errorf("DEBUG: vplayer applyChange: field.Type == querypb.Type_JSON, newVal: %+v", newVal)
 				bindVar, err = tp.bindFieldVal(field, newVal)
+				jsonIndex++
 			} else {
 				bindVar, err = tp.bindFieldVal(field, &vals[i])
 			}
