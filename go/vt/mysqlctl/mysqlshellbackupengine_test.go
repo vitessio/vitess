@@ -325,13 +325,10 @@ func generateTestFile(t *testing.T, name, contents string) {
 // during ExecuteBackup(), even if the backup didn't succeed.
 func TestMySQLShellBackupEngine_ExecuteBackup_ReleaseLock(t *testing.T) {
 	originalLocation := mysqlShellBackupLocation
-	originalBinary := mysqlShellBackupBinaryName
 	mysqlShellBackupLocation = "logical"
-	mysqlShellBackupBinaryName = path.Join(t.TempDir(), "test.sh")
 
-	defer func() { // restore the original values.
+	defer func() { // restore the original value.
 		mysqlShellBackupLocation = originalLocation
-		mysqlShellBackupBinaryName = originalBinary
 	}()
 
 	logger := logutil.NewMemoryLogger()
@@ -340,7 +337,6 @@ func TestMySQLShellBackupEngine_ExecuteBackup_ReleaseLock(t *testing.T) {
 	mysql := NewFakeMysqlDaemon(fakedb)
 	defer mysql.Close()
 
-	be := &MySQLShellBackupEngine{}
 	params := BackupParams{
 		TabletAlias: "test",
 		Logger:      logger,
@@ -351,6 +347,7 @@ func TestMySQLShellBackupEngine_ExecuteBackup_ReleaseLock(t *testing.T) {
 	}
 
 	t.Run("lock released if we see the mysqlsh lock being acquired", func(t *testing.T) {
+		be := &MySQLShellBackupEngine{binaryName: path.Join(t.TempDir(), "mysqlsh.sh")}
 		logger.Clear()
 		manifestBuffer := ioutil.NewBytesBufferWriter()
 		bs.StartBackupReturn.BackupHandle = &FakeBackupHandle{
@@ -359,7 +356,8 @@ func TestMySQLShellBackupEngine_ExecuteBackup_ReleaseLock(t *testing.T) {
 		}
 
 		// this simulates mysql shell completing without any issues.
-		generateTestFile(t, mysqlShellBackupBinaryName, fmt.Sprintf("#!/bin/bash\n>&2 echo %s", mysqlShellLockMessage))
+		generateTestFile(t, be.binaryName, fmt.Sprintf(
+			"#!/bin/bash\n>&2 echo %s; echo \"backup completed\"; sleep 0.01", mysqlShellLockMessage))
 
 		bh, err := bs.StartBackup(context.Background(), t.TempDir(), t.Name())
 		require.NoError(t, err)
@@ -380,7 +378,8 @@ func TestMySQLShellBackupEngine_ExecuteBackup_ReleaseLock(t *testing.T) {
 			"failed to release the global lock after mysqlsh")
 	})
 
-	t.Run("lock released if when we don't see mysqlsh released it", func(t *testing.T) {
+	t.Run("lock released if we don't see mysqlsh release it", func(t *testing.T) {
+		be := &MySQLShellBackupEngine{binaryName: path.Join(t.TempDir(), "mysqlsh.sh")}
 		mysql.GlobalReadLock = false // clear lock status.
 		logger.Clear()
 		manifestBuffer := ioutil.NewBytesBufferWriter()
@@ -390,7 +389,7 @@ func TestMySQLShellBackupEngine_ExecuteBackup_ReleaseLock(t *testing.T) {
 		}
 
 		// this simulates mysqlshell completing, but we don't see the message that is released its lock.
-		generateTestFile(t, mysqlShellBackupBinaryName, "#!/bin/bash\nexit 0")
+		generateTestFile(t, be.binaryName, "#!/bin/bash\nexit 0")
 
 		bh, err := bs.StartBackup(context.Background(), t.TempDir(), t.Name())
 		require.NoError(t, err)
@@ -407,6 +406,7 @@ func TestMySQLShellBackupEngine_ExecuteBackup_ReleaseLock(t *testing.T) {
 	})
 
 	t.Run("lock released when backup fails", func(t *testing.T) {
+		be := &MySQLShellBackupEngine{binaryName: path.Join(t.TempDir(), "mysqlsh.sh")}
 		mysql.GlobalReadLock = false // clear lock status.
 		logger.Clear()
 		manifestBuffer := ioutil.NewBytesBufferWriter()
@@ -416,7 +416,7 @@ func TestMySQLShellBackupEngine_ExecuteBackup_ReleaseLock(t *testing.T) {
 		}
 
 		// this simulates the backup process failing.
-		generateTestFile(t, mysqlShellBackupBinaryName, "#!/bin/bash\nexit 1")
+		generateTestFile(t, be.binaryName, "#!/bin/bash\nexit 1")
 
 		bh, err := bs.StartBackup(context.Background(), t.TempDir(), t.Name())
 		require.NoError(t, err)
