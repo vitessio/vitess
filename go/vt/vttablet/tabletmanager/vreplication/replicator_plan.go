@@ -595,6 +595,7 @@ func execParsedQuery(pq *sqlparser.ParsedQuery, bindvars map[string]*querypb.Bin
 	if err != nil {
 		return nil, err
 	}
+	log.Errorf("DEBUG: vplayer execParsedQuery: query: %s", query)
 	return executor(query)
 }
 

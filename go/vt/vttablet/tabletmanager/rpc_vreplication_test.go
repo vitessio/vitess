@@ -1753,7 +1753,7 @@ func addInvariants(dbClient *binlogplayer.MockDBClient, vreplID, sourceTabletUID
 		fmt.Sprintf("%s||0|0|Stopped|1|%s|0|0", position, workflow),
 	))
 	dbClient.AddInvariant(setSessionTZ, &sqltypes.Result{})
-	dbClient.AddInvariant(setNames, &sqltypes.Result{})
+	//dbClient.AddInvariant(setNames, &sqltypes.Result{})
 	dbClient.AddInvariant(setNetReadTimeout, &sqltypes.Result{})
 	dbClient.AddInvariant(setNetWriteTimeout, &sqltypes.Result{})
 

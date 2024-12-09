@@ -215,11 +215,6 @@ func setDBClientSettings(dbClient binlogplayer.DBClient, workflowConfig *vttable
 	if _, err := dbClient.ExecuteFetch("set @@session.time_zone = '+00:00'", maxRows); err != nil {
 		return err
 	}
-	// Tables may have varying character sets. To ship the bits without interpreting them
-	// we set the character set to be binary.
-	if _, err := dbClient.ExecuteFetch("set names 'binary'", maxRows); err != nil {
-		return err
-	}
 	if _, err := dbClient.ExecuteFetch(fmt.Sprintf("set @@session.net_read_timeout = %v",
 		workflowConfig.NetReadTimeout), maxRows); err != nil {
 		return err
