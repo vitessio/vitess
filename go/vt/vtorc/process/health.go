@@ -36,6 +36,8 @@ var FirstDiscoveryCycleComplete atomic.Bool
 
 var lastHealthCheckCache = cache.New(config.HealthPollSeconds*time.Second, time.Second)
 
+func ResetLastHealthCheckCache() { lastHealthCheckCache.Flush() }
+
 type NodeHealth struct {
 	Hostname        string
 	Token           string
@@ -105,18 +107,11 @@ func RegisterNode(nodeHealth *NodeHealth) (healthy bool, err error) {
 }
 
 // HealthTest attempts to write to the backend database and get a result
-<<<<<<< HEAD
 func HealthTest() (health *HealthStatus, err error) {
 	cacheKey := util.ProcessToken.Hash
 	if healthStatus, found := lastHealthCheckCache.Get(cacheKey); found {
 		return healthStatus.(*HealthStatus), nil
 	}
-=======
-func HealthTest() (health *NodeHealth, discoveredOnce bool) {
-	ThisNodeHealth.LastReported = time.Now()
-	discoveredOnce = FirstDiscoveryCycleComplete.Load()
-	ThisNodeHealth.Healthy = discoveredOnce && writeHealthToDatabase()
->>>>>>> 91811154ac (`vtorc`: require topo for `Healthy: true` in `/debug/health` (#17129))
 
 	health = &HealthStatus{Healthy: false, Hostname: ThisHostname, Token: util.ProcessToken.Hash}
 	defer lastHealthCheckCache.Set(cacheKey, health, cache.DefaultExpiration)
@@ -127,8 +122,8 @@ func HealthTest() (health *NodeHealth, discoveredOnce bool) {
 		log.Error(err)
 		return health, err
 	}
-	health.Healthy = healthy
 	health.DiscoveredOnce = FirstDiscoveryCycleComplete.Load()
+	health.Healthy = healthy && health.DiscoveredOnce
 
 	if health.ActiveNode, health.IsActiveNode, err = ElectedNode(); err != nil {
 		health.Error = err

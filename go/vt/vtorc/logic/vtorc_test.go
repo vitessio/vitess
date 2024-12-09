@@ -62,6 +62,8 @@ func waitForLocksReleaseAndGetTimeWaitedFor() time.Duration {
 }
 
 func TestRefreshAllInformation(t *testing.T) {
+	defer process.ResetLastHealthCheckCache()
+
 	// Store the old flags and restore on test completion
 	oldTs := ts
 	defer func() {
@@ -74,12 +76,12 @@ func TestRefreshAllInformation(t *testing.T) {
 	}()
 
 	// Verify in the beginning, we have the first DiscoveredOnce field false.
-	_, discoveredOnce := process.HealthTest()
-	require.False(t, discoveredOnce)
+	_, err := process.HealthTest()
+	require.NoError(t, err)
 
 	// Create a memory topo-server and create the keyspace and shard records
 	ts = memorytopo.NewServer(context.Background(), cell1)
-	_, err := ts.GetOrCreateShard(context.Background(), keyspace, shard)
+	_, err = ts.GetOrCreateShard(context.Background(), keyspace, shard)
 	require.NoError(t, err)
 
 	// Test error
@@ -87,14 +89,18 @@ func TestRefreshAllInformation(t *testing.T) {
 	cancel() // cancel context to simulate timeout
 	require.Error(t, refreshAllInformation(ctx))
 	require.False(t, process.FirstDiscoveryCycleComplete.Load())
-	_, discoveredOnce = process.HealthTest()
-	require.False(t, discoveredOnce)
+	health, err := process.HealthTest()
+	require.NoError(t, err)
+	require.False(t, health.DiscoveredOnce)
+	process.ResetLastHealthCheckCache()
 
 	// Test success
 	ctx2, cancel2 := context.WithCancel(context.Background())
 	defer cancel2()
 	require.NoError(t, refreshAllInformation(ctx2))
 	require.True(t, process.FirstDiscoveryCycleComplete.Load())
-	_, discoveredOnce = process.HealthTest()
-	require.True(t, discoveredOnce)
+	health, err = process.HealthTest()
+	require.NoError(t, err)
+	require.True(t, health.DiscoveredOnce)
+	process.ResetLastHealthCheckCache()
 }

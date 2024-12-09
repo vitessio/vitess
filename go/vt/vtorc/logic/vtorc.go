@@ -17,12 +17,9 @@
 package logic
 
 import (
-<<<<<<< HEAD
+	"context"
 	"os"
 	"os/signal"
-=======
-	"context"
->>>>>>> 91811154ac (`vtorc`: require topo for `Healthy: true` in `/debug/health` (#17129))
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -420,33 +417,7 @@ func ContinuousDiscovery() {
 				}
 			}()
 		case <-tabletTopoTick:
-<<<<<<< HEAD
-			// Create a wait group
-			var wg sync.WaitGroup
-
-			// Refresh all keyspace information.
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				RefreshAllKeyspacesAndShards()
-			}()
-
-			// Refresh all tablets.
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				refreshAllTablets()
-			}()
-
-			// Wait for both the refreshes to complete
-			wg.Wait()
-			// We have completed one discovery cycle in the entirety of it. We should update the process health.
-			process.FirstDiscoveryCycleComplete.Store(true)
-		}
-	}
-}
-=======
-			ctx, cancel := context.WithTimeout(context.Background(), config.GetTopoInformationRefreshDuration())
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second*time.Duration(config.Config.TopoInformationRefreshSeconds))
 			if err := refreshAllInformation(ctx); err != nil {
 				log.Errorf("failed to refresh topo information: %+v", err)
 			}
@@ -477,4 +448,3 @@ func refreshAllInformation(ctx context.Context) error {
 	}
 	return err
 }
->>>>>>> 91811154ac (`vtorc`: require topo for `Healthy: true` in `/debug/health` (#17129))
