@@ -160,8 +160,7 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	_ = fs.Bool("twopc_enable", true, "TwoPC is enabled")
 	_ = fs.MarkDeprecated("twopc_enable", "TwoPC is always enabled, the transaction abandon age can be configured")
 	flagutil.FloatDuration(fs, &currentConfig.TwoPCAbandonAge, "twopc_abandon_age", defaultConfig.TwoPCAbandonAge,
-		"Any unresolved transaction older than this time will be sent to the coordinator to be resolved. "+
-			"NOTE: Providing time as seconds (float64) is deprecated. Use time.Duration format (e.g., '1s', '2m', '1h').")
+		"Any unresolved transaction older than this time will be sent to the coordinator to be resolved. NOTE: Providing time as seconds (float64) is deprecated. Use time.Duration format (e.g., '1s', '2m', '1h').")
 
 	// Tx throttler config
 	flagutil.DualFormatBoolVar(fs, &currentConfig.EnableTxThrottler, "enable_tx_throttler", defaultConfig.EnableTxThrottler, "If true replication-lag-based throttling on transactions will be enabled.")

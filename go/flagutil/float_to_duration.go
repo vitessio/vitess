@@ -57,7 +57,7 @@ func (f *FloatOrDuration) Set(value string) error {
 
 // Type returns the type description
 func (f *FloatOrDuration) Type() string {
-	return "time.Duration (or float64 interpreted as seconds)"
+	return "time.Duration"
 }
 
 // FloatDuration defines a flag with the specified name, default value, and usage string and binds it to a time.Duration variable.
