@@ -26,21 +26,23 @@ func TestHealthTest(t *testing.T) {
 	defer func() {
 		FirstDiscoveryCycleComplete.Store(false)
 		ThisNodeHealth = &NodeHealth{}
+		ResetLastHealthCheckCache()
 	}()
 
 	require.Zero(t, ThisNodeHealth.LastReported)
-	require.False(t, ThisNodeHealth.Healthy)
 
 	ThisNodeHealth = &NodeHealth{}
-	health, discoveredOnce := HealthTest()
+	health, err := HealthTest()
+	require.NoError(t, err)
 	require.False(t, health.Healthy)
-	require.False(t, discoveredOnce)
+	require.False(t, health.DiscoveredOnce)
 	require.NotZero(t, ThisNodeHealth.LastReported)
 
 	ThisNodeHealth = &NodeHealth{}
 	FirstDiscoveryCycleComplete.Store(true)
-	health, discoveredOnce = HealthTest()
+	health, err = HealthTest()
+	require.NoError(t, err)
 	require.True(t, health.Healthy)
-	require.True(t, discoveredOnce)
+	require.True(t, health.DiscoveredOnce)
 	require.NotZero(t, ThisNodeHealth.LastReported)
 }
