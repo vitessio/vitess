@@ -287,9 +287,6 @@ func (ev binlogEvent) Rows(f BinlogFormat, tm *TableMap) (Rows, error) {
 		typ == eDeleteRowsEventV1 || typ == eDeleteRowsEventV2
 	hasData := typ == eWriteRowsEventV1 || typ == eWriteRowsEventV2 ||
 		typ == eUpdateRowsEventV1 || typ == ePartialUpdateRowsEvent || typ == eUpdateRowsEventV2
-	//if typ == ePartialUpdateRowsEvent {
-	//	log.Errorf("DEBUG: PartialUpdateRowsEvent bytes: %v", ev.Bytes())
-	//}
 
 	result := Rows{}
 	pos := 6

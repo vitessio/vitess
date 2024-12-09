@@ -75,18 +75,21 @@ func ParseBinaryJSON(data []byte) (*json.Value, error) {
 // diff representation to an SQL expression.
 func ParseBinaryJSONDiff(data []byte) (sqltypes.Value, error) {
 	diff := bytes.Buffer{}
+	// Reasonable estimate of the space we'll need to build the SQL
+	// expression in order to try and avoid reallocations w/o
+	// overallocating too much.
 	diff.Grow(int(float32(len(data)) * 1.5))
 	pos := 0
 	outer := false
 	innerStr := ""
 
 	for pos < len(data) {
+		opType := jsonDiffOp(data[pos])
+		pos++
 		if outer {
 			innerStr = diff.String()
 			diff.Reset()
 		}
-		opType := jsonDiffOp(data[pos])
-		pos++
 		switch opType {
 		case jsonDiffOpReplace:
 			diff.WriteString("JSON_REPLACE(")
@@ -114,6 +117,7 @@ func ParseBinaryJSONDiff(data []byte) (sqltypes.Value, error) {
 		if opType == jsonDiffOpRemove { // No value for remove
 			diff.WriteString(")")
 		} else {
+			diff.WriteString(", ")
 			valueLen, readTo := readVariableLength(data, pos)
 			pos = readTo
 			value, err := ParseBinaryJSON(data[pos : pos+valueLen])
@@ -122,7 +126,7 @@ func ParseBinaryJSONDiff(data []byte) (sqltypes.Value, error) {
 			}
 			pos += valueLen
 			if value.Type() == json.TypeString {
-				diff.WriteString(", _utf8mb4")
+				diff.WriteString("_utf8mb4")
 			}
 			diff.WriteString(fmt.Sprintf("%s)", value))
 		}
