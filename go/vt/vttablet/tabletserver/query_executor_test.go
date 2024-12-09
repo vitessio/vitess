@@ -1522,9 +1522,9 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 	if flags&noTwopc > 0 {
 		cfg.TwoPCAbandonAge = 0
 	} else if flags&shortTwopcAge > 0 {
-		cfg.TwoPCAbandonAge = 0.5
+		cfg.TwoPCAbandonAge = 500 * time.Millisecond
 	} else {
-		cfg.TwoPCAbandonAge = 10
+		cfg.TwoPCAbandonAge = 10 * time.Second
 	}
 	if flags&smallResultSize > 0 {
 		cfg.Oltp.MaxRows = 2

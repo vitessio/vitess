@@ -128,7 +128,7 @@ func NewTxEngine(env tabletenv.Env, dxNotifier func()) *TxEngine {
 		te.twopcEnabled = false
 	}
 
-	te.abandonAge = config.TwoPCAbandonAge.Get()
+	te.abandonAge = config.TwoPCAbandonAge
 	te.ticks = timer.NewTimer(te.abandonAge / 2)
 
 	// Set the prepared pool capacity to something lower than

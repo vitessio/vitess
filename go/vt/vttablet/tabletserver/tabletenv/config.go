@@ -159,7 +159,9 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 
 	_ = fs.Bool("twopc_enable", true, "TwoPC is enabled")
 	_ = fs.MarkDeprecated("twopc_enable", "TwoPC is always enabled, the transaction abandon age can be configured")
-	SecondsVar(fs, &currentConfig.TwoPCAbandonAge, "twopc_abandon_age", defaultConfig.TwoPCAbandonAge, "time in seconds. Any unresolved transaction older than this time will be sent to the coordinator to be resolved.")
+	flagutil.FloatDuration(fs, &currentConfig.TwoPCAbandonAge, "twopc_abandon_age", defaultConfig.TwoPCAbandonAge,
+		"Any unresolved transaction older than this time will be sent to the coordinator to be resolved. "+
+			"NOTE: Providing time as seconds (float64) is deprecated. Use time.Duration format (e.g., '1s', '2m', '1h').")
 
 	// Tx throttler config
 	flagutil.DualFormatBoolVar(fs, &currentConfig.EnableTxThrottler, "enable_tx_throttler", defaultConfig.EnableTxThrottler, "If true replication-lag-based throttling on transactions will be enabled.")
@@ -334,11 +336,11 @@ type TabletConfig struct {
 
 	ExternalConnections map[string]*dbconfigs.DBConfigs `json:"externalConnections,omitempty"`
 
-	SanitizeLogMessages  bool    `json:"-"`
-	StrictTableACL       bool    `json:"-"`
-	EnableTableACLDryRun bool    `json:"-"`
-	TableACLExemptACL    string  `json:"-"`
-	TwoPCAbandonAge      Seconds `json:"-"`
+	SanitizeLogMessages  bool          `json:"-"`
+	StrictTableACL       bool          `json:"-"`
+	EnableTableACLDryRun bool          `json:"-"`
+	TableACLExemptACL    string        `json:"-"`
+	TwoPCAbandonAge      time.Duration `json:"-"`
 
 	EnableTxThrottler              bool                          `json:"-"`
 	TxThrottlerConfig              *TxThrottlerConfigFlag        `json:"-"`
@@ -1057,7 +1059,7 @@ var defaultConfig = TabletConfig{
 
 	EnablePerWorkloadTableMetrics: false,
 
-	TwoPCAbandonAge: Seconds((15 * time.Minute).Seconds()),
+	TwoPCAbandonAge: 15 * time.Minute,
 }
 
 // defaultTxThrottlerConfig returns the default TxThrottlerConfigFlag object based on
