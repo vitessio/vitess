@@ -1353,7 +1353,6 @@ func TestSemiSyncRequiredWithTwoPC(t *testing.T) {
 	out, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=none")
 	require.NoError(t, err, out)
 	defer func() {
-		clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=semi_sync")
 		for _, shard := range clusterInstance.Keyspaces[0].Shards {
 			clusterInstance.VtctldClientProcess.PlannedReparentShard(keyspaceName, shard.Name, shard.Vttablets[0].Alias)
 		}
@@ -1376,6 +1375,21 @@ func TestSemiSyncRequiredWithTwoPC(t *testing.T) {
 	_, err = utils.ExecAllowError(t, conn, "commit")
 	require.Error(t, err)
 	require.ErrorContains(t, err, "two-pc is enabled, but semi-sync is not")
+
+	_, err = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=semi_sync")
+	require.NoError(t, err)
+	for _, shard := range clusterInstance.Keyspaces[0].Shards {
+		err = clusterInstance.VtctldClientProcess.PlannedReparentShard(keyspaceName, shard.Name, shard.Vttablets[1].Alias)
+		require.NoError(t, err)
+	}
+
+	// Transaction should now succeed.
+	utils.Exec(t, conn, "begin")
+	utils.Exec(t, conn, "insert into twopc_t1(id, col) values(4, 4)")
+	utils.Exec(t, conn, "insert into twopc_t1(id, col) values(6, 4)")
+	utils.Exec(t, conn, "insert into twopc_t1(id, col) values(9, 4)")
+	_, err = utils.ExecAllowError(t, conn, "commit")
+	require.NoError(t, err)
 }
 
 // TestReadTransactionStatus tests that read transaction state rpc works as expected.
