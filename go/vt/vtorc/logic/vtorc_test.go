@@ -92,6 +92,7 @@ func TestRefreshAllInformation(t *testing.T) {
 	health, err := process.HealthTest()
 	require.NoError(t, err)
 	require.False(t, health.DiscoveredOnce)
+	require.False(t, health.Healthy)
 	process.ResetLastHealthCheckCache()
 
 	// Test success
@@ -102,5 +103,6 @@ func TestRefreshAllInformation(t *testing.T) {
 	health, err = process.HealthTest()
 	require.NoError(t, err)
 	require.True(t, health.DiscoveredOnce)
+	require.True(t, health.Healthy)
 	process.ResetLastHealthCheckCache()
 }
