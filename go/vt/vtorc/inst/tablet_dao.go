@@ -56,13 +56,13 @@ func fullStatus(tabletAlias string) (*replicationdatapb.FullStatus, error) {
 
 // ReadTablet reads the vitess tablet record.
 func ReadTablet(tabletAlias string) (*topodatapb.Tablet, error) {
-	query := `
-		select
-			info
-		from
-			vitess_tablet
-		where alias = ?
-		`
+	query := `SELECT
+		info
+	FROM
+		vitess_tablet
+	WHERE
+		alias = ?
+	`
 	args := sqlutils.Args(tabletAlias)
 	tablet := &topodatapb.Tablet{}
 	opts := prototext.UnmarshalOptions{DiscardUnknown: true}
@@ -84,14 +84,28 @@ func SaveTablet(tablet *topodatapb.Tablet) error {
 	if err != nil {
 		return err
 	}
-	_, err = db.ExecVTOrc(`
-		replace
-			into vitess_tablet (
-				alias, hostname, port, cell, keyspace, shard, tablet_type, primary_timestamp, info
-			) values (
-				?, ?, ?, ?, ?, ?, ?, ?, ?
-			)
-		`,
+	_, err = db.ExecVTOrc(`REPLACE
+		INTO vitess_tablet (
+			alias,
+			hostname,
+			port,
+			cell,
+			keyspace,
+			shard,
+			tablet_type,
+			primary_timestamp,
+			info
+		) VALUES (
+			?,
+			?,
+			?,
+			?,
+			?,
+			?,
+			?,
+			?,
+			?
+		)`,
 		topoproto.TabletAliasString(tablet.Alias),
 		tablet.MysqlHostname,
 		int(tablet.MysqlPort),

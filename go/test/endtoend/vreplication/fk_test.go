@@ -29,7 +29,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
-	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
@@ -43,9 +42,6 @@ func TestFKWorkflow(t *testing.T) {
 	extraVTTabletArgs = []string{
 		// Ensure that there are multiple copy phase cycles per table.
 		"--vstream_packet_size=256",
-		// Test VPlayer batching mode.
-		fmt.Sprintf("--vreplication_experimental_flags=%d",
-			vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage|vttablet.VReplicationExperimentalFlagOptimizeInserts|vttablet.VReplicationExperimentalFlagVPlayerBatching),
 	}
 	defer func() { extraVTTabletArgs = nil }()
 

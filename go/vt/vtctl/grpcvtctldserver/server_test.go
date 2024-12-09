@@ -5544,6 +5544,108 @@ func TestConcludeTransaction(t *testing.T) {
 	}
 }
 
+func TestGetTransactionInfo(t *testing.T) {
+	ks := "testkeyspace"
+	tests := []struct {
+		name       string
+		tmc        *testutil.TabletManagerClient
+		dtid       string
+		expErr     string
+		respWanted *vtctldatapb.GetTransactionInfoResponse
+	}{
+		{
+			name:   "invalid dtid",
+			tmc:    &testutil.TabletManagerClient{},
+			dtid:   "dtid01",
+			expErr: "invalid parts in dtid: dtid01",
+		}, {
+			name:   "invalid transaction id",
+			tmc:    &testutil.TabletManagerClient{},
+			dtid:   "ks:80-:013c",
+			expErr: "invalid transaction id in dtid: ks:80-:013c",
+		}, {
+			name: "Success",
+			tmc: &testutil.TabletManagerClient{
+				ReadTransactionResult: map[string]*querypb.TransactionMetadata{
+					"80-": {
+						Dtid: "bb",
+						Participants: []*querypb.Target{
+							{Keyspace: ks, Shard: "-80", TabletType: topodatapb.TabletType_PRIMARY},
+						},
+					},
+				},
+				GetTransactionInfoResult: map[string]*tabletmanagerdatapb.GetTransactionInfoResponse{
+					"-80": {
+						State:      "FAILED",
+						Statements: []string{"stmt1", "stmt2"},
+					},
+					"80-": {}, // Empty result is expected when the transaction has been resolved on that shard or if its the resource manager.
+				},
+			},
+			dtid: "testkeyspace:80-:1234",
+			respWanted: &vtctldatapb.GetTransactionInfoResponse{
+				Metadata: &querypb.TransactionMetadata{
+					Dtid: "bb",
+					Participants: []*querypb.Target{
+						{Keyspace: ks, Shard: "-80", TabletType: topodatapb.TabletType_PRIMARY},
+						{Keyspace: ks, Shard: "80-", TabletType: topodatapb.TabletType_PRIMARY},
+					},
+				},
+				ShardStates: []*vtctldatapb.ShardTransactionState{
+					{
+						Shard:      "-80",
+						State:      "FAILED",
+						Statements: []string{"stmt1", "stmt2"},
+					},
+					{
+						Shard: "80-",
+					},
+				},
+			},
+		}, {
+			name: "Success - empty metadata",
+			tmc: &testutil.TabletManagerClient{
+				ReadTransactionResult: map[string]*querypb.TransactionMetadata{},
+			},
+			dtid:       "testkeyspace:80-:1234",
+			respWanted: nil, // We expected an empty response if the metadata is not found.
+		},
+	}
+
+	tablets := []*topodatapb.Tablet{{
+		Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+		Keyspace: ks,
+		Shard:    "-80",
+		Type:     topodatapb.TabletType_PRIMARY,
+	}, {
+		Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 200},
+		Keyspace: ks,
+		Shard:    "80-",
+		Type:     topodatapb.TabletType_PRIMARY,
+	}}
+	ts := memorytopo.NewServer(context.Background(), "zone1")
+	testutil.AddTablets(context.Background(), t, ts, &testutil.AddTabletOptions{AlsoSetShardPrimary: true}, tablets...)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(vtenv.NewTestEnv(), ts)
+			})
+			req := &vtctldatapb.GetTransactionInfoRequest{Dtid: tt.dtid}
+			resp, err := vtctld.GetTransactionInfo(ctx, req)
+			if tt.expErr != "" {
+				require.ErrorContains(t, err, tt.expErr)
+				return
+			}
+			require.NoError(t, err)
+			require.EqualValues(t, tt.respWanted, resp)
+		})
+	}
+}
+
 func TestFindAllShardsInKeyspace(t *testing.T) {
 	t.Parallel()
 

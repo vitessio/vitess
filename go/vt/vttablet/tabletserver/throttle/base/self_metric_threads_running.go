@@ -18,8 +18,6 @@ package base
 
 import (
 	"context"
-
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 )
 
 var (
@@ -47,6 +45,6 @@ func (m *ThreadsRunningSelfMetric) RequiresConn() bool {
 	return true
 }
 
-func (m *ThreadsRunningSelfMetric) Read(ctx context.Context, throttler ThrottlerMetricsPublisher, conn *connpool.Conn) *ThrottleMetric {
-	return ReadSelfMySQLThrottleMetric(ctx, conn, threadsRunningMetricQuery)
+func (m *ThreadsRunningSelfMetric) Read(ctx context.Context, params *SelfMetricReadParams) *ThrottleMetric {
+	return ReadSelfMySQLThrottleMetric(ctx, params.Conn, threadsRunningMetricQuery)
 }

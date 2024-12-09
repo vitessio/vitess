@@ -293,6 +293,13 @@ func (client *fakeTabletManagerClient) ExecuteFetchAsDba(ctx context.Context, ta
 	return client.TabletManagerClient.ExecuteFetchAsDba(ctx, tablet, usePool, req)
 }
 
+func (client *fakeTabletManagerClient) ExecuteMultiFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteMultiFetchAsDbaRequest) ([]*querypb.QueryResult, error) {
+	if client.EnableExecuteFetchAsDbaError {
+		return nil, fmt.Errorf("ExecuteMultiFetchAsDba occur an unknown error")
+	}
+	return client.TabletManagerClient.ExecuteMultiFetchAsDba(ctx, tablet, usePool, req)
+}
+
 // newFakeTopo returns a topo with:
 // - a keyspace named 'test_keyspace'.
 // - 3 shards named '1', '2', '3'.

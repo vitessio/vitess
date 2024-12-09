@@ -15,9 +15,9 @@ jobs:
       pull-requests: write
     strategy:
       matrix:
-        branch: [ main, release-21.0, release-20.0, release-19.0, release-18.0 ]
+        branch: [ main, release-21.0, release-20.0, release-19.0 ]
     name: Update Golang Version
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Check out code
         uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
@@ -39,8 +39,10 @@ jobs:
 
           if [ ${{ matrix.branch }} == "main" ]; then
             go run ./go/tools/go-upgrade/go-upgrade.go upgrade --main --allow-major-upgrade
-          else
+          elif [ ${{ matrix.branch }} == "release-21.0" ]; then
             go run ./go/tools/go-upgrade/go-upgrade.go upgrade
+          else
+            go run ./go/tools/go-upgrade/go-upgrade.go upgrade --workflow-update=false
           fi
 
           output=$(git status -s)

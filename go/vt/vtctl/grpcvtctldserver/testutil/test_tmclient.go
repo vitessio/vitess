@@ -188,6 +188,8 @@ type TabletManagerClient struct {
 		EventJitter   time.Duration
 		ErrorAfter    time.Duration
 	}
+	// Backing Up - keyed by tablet alias.
+	TabletsBackupState map[string]bool
 	// keyed by tablet alias.
 	ChangeTagsResult map[string]struct {
 		Response *tabletmanagerdatapb.ChangeTagsResponse
@@ -266,6 +268,7 @@ type TabletManagerClient struct {
 	}
 	GetUnresolvedTransactionsResults map[string][]*querypb.TransactionMetadata
 	ReadTransactionResult            map[string]*querypb.TransactionMetadata
+	GetTransactionInfoResult         map[string]*tabletmanagerdatapb.GetTransactionInfoResponse
 	// keyed by tablet alias.
 	InitPrimaryDelays map[string]time.Duration
 	// keyed by tablet alias. injects a sleep to the end of the function
@@ -696,7 +699,7 @@ func (fake *TabletManagerClient) ExecuteQuery(ctx context.Context, tablet *topod
 }
 
 // GetUnresolvedTransactions is part of the tmclient.TabletManagerClient interface.
-func (fake *TabletManagerClient) GetUnresolvedTransactions(ctx context.Context, tablet *topodatapb.Tablet) ([]*querypb.TransactionMetadata, error) {
+func (fake *TabletManagerClient) GetUnresolvedTransactions(ctx context.Context, tablet *topodatapb.Tablet, abandonAge int64) ([]*querypb.TransactionMetadata, error) {
 	if len(fake.GetUnresolvedTransactionsResults) == 0 {
 		return nil, fmt.Errorf("%w: no GetUnresolvedTransactions results on fake TabletManagerClient", assert.AnError)
 	}
@@ -714,6 +717,18 @@ func (fake *TabletManagerClient) ReadTransaction(ctx context.Context, tablet *to
 	}
 
 	return fake.ReadTransactionResult[tablet.Shard], nil
+}
+
+// GetTransactionInfo is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) GetTransactionInfo(ctx context.Context, tablet *topodatapb.Tablet, dtid string) (*tabletmanagerdatapb.GetTransactionInfoResponse, error) {
+	if fake.CallError {
+		return nil, fmt.Errorf("%w: blocked call for GetTransactionInfo on fake TabletManagerClient", assert.AnError)
+	}
+	if fake.GetTransactionInfoResult == nil {
+		return nil, fmt.Errorf("%w: no GetTransactionInfo result on fake TabletManagerClient", assert.AnError)
+	}
+
+	return fake.GetTransactionInfoResult[tablet.Shard], nil
 }
 
 // ConcludeTransaction is part of the tmclient.TabletManagerClient interface.
@@ -1067,6 +1082,9 @@ func (fake *TabletManagerClient) ReplicationStatus(ctx context.Context, tablet *
 	}
 
 	if result, ok := fake.ReplicationStatusResults[key]; ok {
+		if _, ok = fake.TabletsBackupState[key]; ok {
+			result.Position.BackupRunning = fake.TabletsBackupState[key]
+		}
 		return result.Position, result.Error
 	}
 

@@ -459,6 +459,16 @@ func (vttablet *VttabletProcess) QueryTablet(query string, keyspace string, useD
 	return executeQuery(conn, query)
 }
 
+// MultiQueryTablet lets you execute a query in this tablet and get the result
+func (vttablet *VttabletProcess) MultiQueryTablet(sql string, keyspace string, useDb bool) error {
+	conn, err := vttablet.TabletConn(keyspace, useDb)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	return executeMultiQuery(conn, sql)
+}
+
 // SemiSyncExtensionLoaded returns what type of semi-sync extension is loaded
 func (vttablet *VttabletProcess) SemiSyncExtensionLoaded() (mysql.SemiSyncType, error) {
 	conn, err := vttablet.TabletConn("", false)

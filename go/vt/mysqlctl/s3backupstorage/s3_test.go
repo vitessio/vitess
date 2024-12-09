@@ -53,7 +53,7 @@ func (sfc *s3FakeClient) PutObject(ctx context.Context, in *s3.PutObjectInput, o
 		_ = apiOption(stack)
 	}
 
-	handler := middleware.DecorateHandler(smithyhttp.NewClientHandler(&fakeClientDo{delay: sfc.delay}), stack)
+	handler := middleware.DecorateHandler(smithyhttp.NewClientHandlerWithOptions(&fakeClientDo{delay: sfc.delay}), stack)
 	_, _, err := handler.Handle(ctx, in)
 	if err != nil {
 		return nil, err

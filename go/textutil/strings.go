@@ -90,6 +90,19 @@ func SingleWordCamel(w string) string {
 	return strings.ToUpper(w[0:1]) + strings.ToLower(w[1:])
 }
 
+var multiWordSplitterRegexp = regexp.MustCompile(`[-_.\s]+`)
+
+// PascalCase turns a string into PascalCase by splitting it into words and
+// capitalizing the first letter of each word.
+func PascalCase(w string) string {
+	var b strings.Builder
+	words := multiWordSplitterRegexp.Split(w, -1)
+	for _, word := range words {
+		b.WriteString(SingleWordCamel(word))
+	}
+	return b.String()
+}
+
 // ValueIsSimulatedNull returns true if the slice value represents
 // a NULL or unknown/unspecified value. This is used to distinguish
 // between a zero value empty slice and a user provided value of an

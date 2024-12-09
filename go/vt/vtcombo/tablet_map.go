@@ -539,9 +539,9 @@ func (itc *internalTabletConn) CreateTransaction(
 }
 
 // StartCommit is part of queryservice.QueryService
-func (itc *internalTabletConn) StartCommit(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) error {
-	err := itc.tablet.qsc.QueryService().StartCommit(ctx, target, transactionID, dtid)
-	return tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
+func (itc *internalTabletConn) StartCommit(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (querypb.StartCommitState, error) {
+	state, err := itc.tablet.qsc.QueryService().StartCommit(ctx, target, transactionID, dtid)
+	return state, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 }
 
 // SetRollback is part of queryservice.QueryService
@@ -908,7 +908,7 @@ func (itmc *internalTabletManagerClient) ExecuteFetchAsApp(context.Context, *top
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 
-func (itmc *internalTabletManagerClient) GetUnresolvedTransactions(ctx context.Context, tablet *topodatapb.Tablet) ([]*querypb.TransactionMetadata, error) {
+func (itmc *internalTabletManagerClient) GetUnresolvedTransactions(ctx context.Context, tablet *topodatapb.Tablet, abandonAge int64) ([]*querypb.TransactionMetadata, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 
@@ -921,6 +921,10 @@ func (itmc *internalTabletManagerClient) MysqlHostMetrics(context.Context, *topo
 }
 
 func (itmc *internalTabletManagerClient) ReadTransaction(ctx context.Context, tablet *topodatapb.Tablet, dtid string) (*querypb.TransactionMetadata, error) {
+	return nil, fmt.Errorf("not implemented in vtcombo")
+}
+
+func (itmc *internalTabletManagerClient) GetTransactionInfo(ctx context.Context, tablet *topodatapb.Tablet, dtid string) (*tabletmanagerdatapb.GetTransactionInfoResponse, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 

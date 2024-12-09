@@ -262,7 +262,6 @@ func TestVreplicationCopyThrottling(t *testing.T) {
 }
 
 func TestBasicVreplicationWorkflow(t *testing.T) {
-	defer setAllVTTabletExperimentalFlags()
 	sourceKsOpts["DBTypeVersion"] = "mysql-8.0"
 	targetKsOpts["DBTypeVersion"] = "mysql-8.0"
 	testBasicVreplicationWorkflow(t, "noblob")
@@ -556,12 +555,14 @@ func testVStreamCellFlag(t *testing.T) {
 	}
 }
 
-// TestCellAliasVreplicationWorkflow tests replication from a cell with an alias to test the tablet picker's alias functionality
-// We also reuse the setup of this test to validate that the "vstream * from" vtgate query functionality is functional
+// TestCellAliasVreplicationWorkflow tests replication from a cell with an alias to test
+// the tablet picker's alias functionality.
+// We also reuse the setup of this test to validate that the "vstream * from" vtgate
+// query functionality is functional.
 func TestCellAliasVreplicationWorkflow(t *testing.T) {
 	cells := []string{"zone1", "zone2"}
-	defer mainClusterConfig.enableGTIDCompression()
-	defer setAllVTTabletExperimentalFlags()
+	resetCompression := mainClusterConfig.enableGTIDCompression()
+	defer resetCompression()
 	vc = NewVitessCluster(t, &clusterOptions{cells: cells})
 	defer vc.TearDown()
 
@@ -687,12 +688,12 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 		defer vtgateConn.Close()
 		// Confirm that the 0 scale decimal field, dec80, is replicated correctly
-		dec80Replicated := false
 		execVtgateQuery(t, vtgateConn, sourceKs, "update customer set dec80 = 0")
 		execVtgateQuery(t, vtgateConn, sourceKs, "update customer set blb = \"new blob data\" where cid=3")
 		execVtgateQuery(t, vtgateConn, sourceKs, "update json_tbl set j1 = null, j2 = 'null', j3 = '\"null\"'")
 		execVtgateQuery(t, vtgateConn, sourceKs, "insert into json_tbl(id, j1, j2, j3) values (7, null, 'null', '\"null\"')")
 		waitForNoWorkflowLag(t, vc, targetKs, workflow)
+		dec80Replicated := false
 		for _, tablet := range []*cluster.VttabletProcess{customerTab1, customerTab2} {
 			// Query the tablet's mysqld directly as the targets will have denied table entries.
 			dbc, err := tablet.TabletConn(targetKs, true)

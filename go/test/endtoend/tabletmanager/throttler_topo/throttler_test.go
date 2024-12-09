@@ -153,6 +153,16 @@ func TestMain(m *testing.M) {
 	os.Exit(exitCode)
 }
 
+func vitessThrottleCheck(tablet *cluster.Vttablet, skipRequestHeartbeats bool) (*vtctldatapb.CheckThrottlerResponse, error) {
+	flags := &throttle.CheckFlags{
+		Scope:                 base.ShardScope,
+		SkipRequestHeartbeats: skipRequestHeartbeats,
+		MultiMetricsEnabled:   true,
+	}
+	resp, err := throttler.CheckThrottler(&clusterInstance.VtctldClientProcess, tablet, throttlerapp.VitessName, flags)
+	return resp, err
+}
+
 func throttleCheck(tablet *cluster.Vttablet, skipRequestHeartbeats bool) (*vtctldatapb.CheckThrottlerResponse, error) {
 	flags := &throttle.CheckFlags{
 		Scope:                 base.ShardScope,
@@ -191,12 +201,13 @@ func warmUpHeartbeat(t *testing.T) tabletmanagerdatapb.CheckThrottlerResponseCod
 }
 
 // waitForThrottleCheckStatus waits for the tablet to return the provided HTTP code in a throttle check
-func waitForThrottleCheckStatus(t *testing.T, tablet *cluster.Vttablet, wantCode tabletmanagerdatapb.CheckThrottlerResponseCode) bool {
+func waitForThrottleCheckStatus(t *testing.T, tablet *cluster.Vttablet, wantCode tabletmanagerdatapb.CheckThrottlerResponseCode) (*tabletmanagerdatapb.CheckThrottlerResponse, bool) {
 	_ = warmUpHeartbeat(t)
 
 	flags := &throttle.CheckFlags{SkipRequestHeartbeats: true}
-	_, ok := throttler.WaitForCheckThrottlerResult(t, &clusterInstance.VtctldClientProcess, tablet, throttlerapp.TestingName, flags, wantCode, onDemandHeartbeatDuration*4)
-	return ok
+	resp, ok := throttler.WaitForCheckThrottlerResult(t, &clusterInstance.VtctldClientProcess, tablet, throttlerapp.TestingName, flags, wantCode, onDemandHeartbeatDuration*4)
+	require.NotNil(t, resp)
+	return resp.Check, ok
 }
 
 func vtgateExec(t *testing.T, query string, expectError string) *sqltypes.Result {
@@ -265,6 +276,17 @@ func TestInitialThrottler(t *testing.T) {
 		waitForThrottleCheckStatus(t, primaryTablet, tabletmanagerdatapb.CheckThrottlerResponseCode_THRESHOLD_EXCEEDED)
 	})
 	t.Run("setting high threshold", func(t *testing.T) {
+		{
+			req := &vtctldatapb.UpdateThrottlerConfigRequest{MetricName: base.LoadAvgMetricName.String(), Threshold: 5555}
+			_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
+			assert.NoError(t, err)
+		}
+		{
+			req := &vtctldatapb.UpdateThrottlerConfigRequest{MetricName: base.MysqldLoadAvgMetricName.String(), Threshold: 5555}
+			_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
+			assert.NoError(t, err)
+		}
+
 		req := &vtctldatapb.UpdateThrottlerConfigRequest{Threshold: extremelyHighThreshold.Seconds()}
 		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
 		assert.NoError(t, err)
@@ -277,6 +299,19 @@ func TestInitialThrottler(t *testing.T) {
 	t.Run("validating OK response from throttler with high threshold", func(t *testing.T) {
 		waitForThrottleCheckStatus(t, primaryTablet, tabletmanagerdatapb.CheckThrottlerResponseCode_OK)
 	})
+	t.Run("validating vitess app throttler check", func(t *testing.T) {
+		resp, err := vitessThrottleCheck(primaryTablet, true)
+		require.NoError(t, err)
+		for _, metricName := range base.KnownMetricNames {
+			t.Run(metricName.String(), func(t *testing.T) {
+				assert.Contains(t, resp.Check.Metrics, metricName.String())
+				metric := resp.Check.Metrics[metricName.String()]
+				require.NotNil(t, metric)
+				assert.Equal(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, metric.ResponseCode, "metric: %+v", metric)
+			})
+		}
+	})
+
 	t.Run("setting low threshold", func(t *testing.T) {
 		req := &vtctldatapb.UpdateThrottlerConfigRequest{Threshold: throttler.DefaultThreshold.Seconds()}
 		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
@@ -390,7 +425,7 @@ func TestThrottleViaApplySchema(t *testing.T) {
 		require.NotNil(t, keyspace.Keyspace.ThrottlerConfig.ThrottledApps)
 		// ThrottledApps will actually be empty at this point, but more specifically we want to see that "online-ddl" is not there.
 		appRule, ok := keyspace.Keyspace.ThrottlerConfig.ThrottledApps[throttlerapp.OnlineDDLName.String()]
-		assert.True(t, ok, "app rule: %v", appRule)
+		assert.False(t, ok, "app rule: %v", appRule)
 	})
 }
 
@@ -737,16 +772,16 @@ func TestUpdateAppCheckedMetrics(t *testing.T) {
 		}
 		waitForThrottleCheckStatus(t, primaryTablet, tabletmanagerdatapb.CheckThrottlerResponseCode_THRESHOLD_EXCEEDED)
 	})
-	t.Run("assigning 'loadavg' metrics to 'test' app", func(t *testing.T) {
+	t.Run("assigning 'threads_running' metrics to 'test' app", func(t *testing.T) {
 		{
-			req := &vtctldatapb.UpdateThrottlerConfigRequest{MetricName: "loadavg", Threshold: 7777}
+			req := &vtctldatapb.UpdateThrottlerConfigRequest{MetricName: base.ThreadsRunningMetricName.String(), Threshold: 7777}
 			_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
 			assert.NoError(t, err)
 		}
 		{
 			req := &vtctldatapb.UpdateThrottlerConfigRequest{}
 			appCheckedMetrics := map[string]*topodatapb.ThrottlerConfig_MetricNames{
-				testAppName.String(): {Names: []string{"loadavg"}},
+				testAppName.String(): {Names: []string{base.ThreadsRunningMetricName.String()}},
 			}
 			_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, appCheckedMetrics)
 			assert.NoError(t, err)
@@ -760,18 +795,18 @@ func TestUpdateAppCheckedMetrics(t *testing.T) {
 		for _, tablet := range []cluster.Vttablet{*primaryTablet, *replicaTablet} {
 			throttler.WaitForThrottlerStatusEnabled(t, &clusterInstance.VtctldClientProcess, &tablet, true, &throttler.Config{Query: throttler.DefaultQuery, Threshold: unreasonablyLowThreshold.Seconds()}, throttlerEnabledTimeout)
 		}
-		t.Run("validating OK response from throttler since it's checking loadavg", func(t *testing.T) {
-			if !waitForThrottleCheckStatus(t, primaryTablet, tabletmanagerdatapb.CheckThrottlerResponseCode_OK) {
+		t.Run("validating OK response from throttler since it's checking threads_running", func(t *testing.T) {
+			if _, ok := waitForThrottleCheckStatus(t, primaryTablet, tabletmanagerdatapb.CheckThrottlerResponseCode_OK); !ok {
 				t.Logf("throttler primary status: %+v", throttleStatus(t, primaryTablet))
 				t.Logf("throttler replica status: %+v", throttleStatus(t, replicaTablet))
 			}
 		})
 	})
-	t.Run("assigning 'loadavg,lag' metrics to 'test' app", func(t *testing.T) {
+	t.Run("assigning 'threads_running,lag' metrics to 'test' app", func(t *testing.T) {
 		{
 			req := &vtctldatapb.UpdateThrottlerConfigRequest{}
 			appCheckedMetrics := map[string]*topodatapb.ThrottlerConfig_MetricNames{
-				testAppName.String(): {Names: []string{"loadavg,lag"}},
+				testAppName.String(): {Names: []string{base.ThreadsRunningMetricName.String(), base.LagMetricName.String()}},
 			}
 			_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, appCheckedMetrics)
 			assert.NoError(t, err)
@@ -789,9 +824,51 @@ func TestUpdateAppCheckedMetrics(t *testing.T) {
 			waitForThrottleCheckStatus(t, primaryTablet, tabletmanagerdatapb.CheckThrottlerResponseCode_THRESHOLD_EXCEEDED)
 		})
 	})
+	t.Run("assigning 'mysqld-loadavg,mysqld-datadir-used-ratio' metrics to 'test' app", func(t *testing.T) {
+		{
+			req := &vtctldatapb.UpdateThrottlerConfigRequest{MetricName: base.MysqldDatadirUsedRatioMetricName.String(), Threshold: 0.9999}
+			_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
+			assert.NoError(t, err)
+		}
+		{
+			req := &vtctldatapb.UpdateThrottlerConfigRequest{MetricName: base.MysqldLoadAvgMetricName.String(), Threshold: 5555}
+			_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
+			assert.NoError(t, err)
+		}
+		{
+			req := &vtctldatapb.UpdateThrottlerConfigRequest{}
+			appCheckedMetrics := map[string]*topodatapb.ThrottlerConfig_MetricNames{
+				testAppName.String(): {Names: []string{base.MysqldDatadirUsedRatioMetricName.String(), base.MysqldLoadAvgMetricName.String()}},
+			}
+			_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, appCheckedMetrics)
+			assert.NoError(t, err)
+		}
+		{
+			req := &vtctldatapb.UpdateThrottlerConfigRequest{Threshold: extremelyHighThreshold.Seconds()}
+			_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
+			assert.NoError(t, err)
+		}
+		// Wait for the throttler to be enabled everywhere with new config.
+		for _, tablet := range []cluster.Vttablet{*primaryTablet, *replicaTablet} {
+			throttler.WaitForThrottlerStatusEnabled(t, &clusterInstance.VtctldClientProcess, &tablet, true, &throttler.Config{Query: throttler.DefaultQuery, Threshold: extremelyHighThreshold.Seconds()}, throttlerEnabledTimeout)
+		}
+		t.Run("validating OK response from throttler since it's checking mysqld-loadavg,mysqld-datadir-used-ratio", func(t *testing.T) {
+			resp, ok := waitForThrottleCheckStatus(t, primaryTablet, tabletmanagerdatapb.CheckThrottlerResponseCode_OK)
+			if !ok {
+				t.Logf("response: %+v", resp)
+				t.Logf("throttler primary status: %+v", throttleStatus(t, primaryTablet))
+				t.Logf("throttler replica status: %+v", throttleStatus(t, replicaTablet))
+			}
+			require.Contains(t, resp.Metrics, base.MysqldDatadirUsedRatioMetricName.String())
+			require.Contains(t, resp.Metrics, base.MysqldLoadAvgMetricName.String())
+			assert.NotContains(t, resp.Metrics, base.ThreadsRunningMetricName.String())
+
+			assert.NotZero(t, resp.Metrics[base.MysqldDatadirUsedRatioMetricName.String()].Value)
+		})
+	})
 	t.Run("removing assignment from 'test' app and restoring defaults", func(t *testing.T) {
 		{
-			req := &vtctldatapb.UpdateThrottlerConfigRequest{MetricName: "loadavg", Threshold: 0}
+			req := &vtctldatapb.UpdateThrottlerConfigRequest{MetricName: base.ThreadsRunningMetricName.String(), Threshold: 0}
 			_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
 			assert.NoError(t, err)
 		}

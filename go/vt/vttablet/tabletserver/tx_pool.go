@@ -40,9 +40,8 @@ import (
 )
 
 const (
-	txLogInterval  = 1 * time.Minute
-	beginWithCSRO  = "start transaction with consistent snapshot, read only"
-	trackGtidQuery = "set session session_track_gtids = START_GTID"
+	txLogInterval = 1 * time.Minute
+	beginWithCSRO = "start transaction with consistent snapshot, read only"
 )
 
 var txIsolations = map[querypb.ExecuteOptions_TransactionIsolation]string{
@@ -394,16 +393,6 @@ func createStartTxStmt(options *querypb.ExecuteOptions, readOnly bool) (string, 
 }
 
 func handleConsistentSnapshotCase(ctx context.Context, conn *StatefulConnection) (beginSQL string, sessionStateChanges string, err error) {
-	_, err = conn.execWithRetry(ctx, trackGtidQuery, 1, false)
-	// We allow this to fail since this is a custom MySQL extension, but we return
-	// then if this query was executed or not.
-	//
-	// Callers also can know because the sessionStateChanges will be empty for a snapshot
-	// transaction and get GTID information in another (less efficient) way.
-	if err == nil {
-		beginSQL = trackGtidQuery + "; "
-	}
-
 	isolationLevel := txIsolations[querypb.ExecuteOptions_CONSISTENT_SNAPSHOT_READ_ONLY]
 
 	execSQL, err := setIsolationLevel(ctx, conn, isolationLevel)

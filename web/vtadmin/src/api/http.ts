@@ -421,6 +421,20 @@ export const fetchVSchema = async ({ clusterID, keyspace }: FetchVSchemaParams) 
     return pb.VSchema.create(result);
 };
 
+export interface FetchTransactionParams {
+    clusterID: string;
+    dtid: string;
+}
+
+export const fetchTransaction = async ({ clusterID, dtid }: FetchTransactionParams) => {
+    const { result } = await vtfetch(`/api/transaction/${clusterID}/${dtid}/info`);
+
+    const err = vtctldata.GetTransactionInfoResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.GetTransactionInfoResponse.create(result);
+};
+
 export interface FetchTransactionsParams {
     clusterID: string;
     keyspace: string;
@@ -1053,4 +1067,42 @@ export const showVDiff = async ({ clusterID, request }: ShowVDiffParams) => {
     if (err) throw Error(err);
 
     return vtadmin.VDiffShowResponse.create(result);
+};
+
+export const fetchSchemaMigrations = async (request: vtadmin.IGetSchemaMigrationsRequest) => {
+    const { result } = await vtfetch(`/api/migrations/`, {
+        body: JSON.stringify(request),
+        method: 'post',
+    });
+
+    const err = vtadmin.GetSchemaMigrationsResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtadmin.GetSchemaMigrationsResponse.create(result);
+};
+
+export interface ApplySchemaParams {
+    clusterID: string;
+    keyspace: string;
+    callerID: string;
+    sql: string;
+    request: vtctldata.IApplySchemaRequest;
+}
+
+export const applySchema = async ({ clusterID, keyspace, callerID, sql, request }: ApplySchemaParams) => {
+    const body = {
+        sql,
+        caller_id: callerID,
+        request,
+    };
+
+    const { result } = await vtfetch(`/api/migration/${clusterID}/${keyspace}`, {
+        body: JSON.stringify(body),
+        method: 'post',
+    });
+
+    const err = vtctldata.ApplySchemaResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.ApplySchemaResponse.create(result);
 };

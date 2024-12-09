@@ -37,6 +37,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	vtschema "vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
@@ -374,7 +375,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 				}
 				return fmt.Errorf("unexpected server EOF")
 			}
-			vevents, err := vs.parseEvent(ev)
+			vevents, err := vs.parseEvent(ev, bufferAndTransmit)
 			if err != nil {
 				vs.vse.errorCounts.Add("ParseEvent", 1)
 				return err
@@ -415,7 +416,11 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 }
 
 // parseEvent parses an event from the binlog and converts it to a list of VEvents.
-func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, error) {
+// The bufferAndTransmit function must be passed if the event is a TransactionPayloadEvent
+// as for larger payloads (> ZstdInMemoryDecompressorMaxSize) the internal events need
+// to be streamed directly here in order to avoid holding the entire payload's contents,
+// which can be 10s or even 100s of GiBs, all in memory.
+func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vevent *binlogdatapb.VEvent) error) ([]*binlogdatapb.VEvent, error) {
 	if !ev.IsValid() {
 		return nil, fmt.Errorf("can't parse binlog event: invalid data: %#v", ev)
 	}
@@ -671,11 +676,31 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 				}
 				return nil, err
 			}
-			tpvevents, err := vs.parseEvent(tpevent)
+			tpvevents, err := vs.parseEvent(tpevent, nil) // Parse the internal event
 			if err != nil {
 				return nil, vterrors.Wrap(err, "failed to parse transaction payload's internal event")
 			}
-			vevents = append(vevents, tpvevents...)
+			if tp.StreamingContents {
+				// Transmit each internal event individually to avoid buffering
+				// the large transaction's entire payload of events in memory, as
+				// the uncompressed size can be 10s or even 100s of GiBs in size.
+				if bufferAndTransmit == nil {
+					return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "[bug] cannot stream compressed transaction payload's internal events as no bufferAndTransmit function was provided")
+				}
+				for _, tpvevent := range tpvevents {
+					tpvevent.Timestamp = int64(ev.Timestamp())
+					tpvevent.CurrentTime = time.Now().UnixNano()
+					if err := bufferAndTransmit(tpvevent); err != nil {
+						if err == io.EOF {
+							return nil, nil
+						}
+						vs.vse.errorCounts.Add("TransactionPayloadBufferAndTransmit", 1)
+						return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "error sending compressed transaction payload's internal event: %v", err)
+					}
+				}
+			} else { // Process the payload's internal events all at once
+				vevents = append(vevents, tpvevents...)
+			}
 		}
 		vs.vse.vstreamerCompressedTransactionsDecoded.Add(1)
 	}
@@ -783,7 +808,7 @@ func (vs *vstreamer) buildTablePlan(id uint64, tm *mysql.TableMap) (*binlogdatap
 		vs.plans[id] = nil
 		return nil, nil
 	}
-	if err := addEnumAndSetMappingstoPlan(plan, cols, tm.Metadata); err != nil {
+	if err := addEnumAndSetMappingstoPlan(vs.se.Environment(), plan, cols, tm.Metadata); err != nil {
 		return nil, vterrors.Wrapf(err, "failed to build ENUM and SET column integer to string mappings")
 	}
 	vs.plans[id] = &streamerPlan{
@@ -1097,13 +1122,13 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 			// Convert the integer values in the binlog event for any SET and ENUM fields into their
 			// string representations.
 			if plan.Table.Fields[colNum].Type == querypb.Type_ENUM || mysqlType == mysqlbinlog.TypeEnum {
-				value, err = buildEnumStringValue(plan, colNum, value)
+				value, err = buildEnumStringValue(vs.se.Environment(), plan, colNum, value)
 				if err != nil {
 					return false, nil, false, vterrors.Wrapf(err, "failed to perform ENUM column integer to string value mapping")
 				}
 			}
 			if plan.Table.Fields[colNum].Type == querypb.Type_SET || mysqlType == mysqlbinlog.TypeSet {
-				value, err = buildSetStringValue(plan, colNum, value)
+				value, err = buildSetStringValue(vs.se.Environment(), plan, colNum, value)
 				if err != nil {
 					return false, nil, false, vterrors.Wrapf(err, "failed to perform SET column integer to string value mapping")
 				}
@@ -1120,7 +1145,7 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 }
 
 // addEnumAndSetMappingstoPlan sets up any necessary ENUM and SET integer to string mappings.
-func addEnumAndSetMappingstoPlan(plan *Plan, cols []*querypb.Field, metadata []uint16) error {
+func addEnumAndSetMappingstoPlan(env *vtenv.Environment, plan *Plan, cols []*querypb.Field, metadata []uint16) error {
 	plan.EnumSetValuesMap = make(map[int]map[int]string)
 	for i, col := range cols {
 		// If the column is a CHAR based type with a binary collation (e.g. utf8mb4_bin) then
@@ -1139,21 +1164,25 @@ func addEnumAndSetMappingstoPlan(plan *Plan, cols []*querypb.Field, metadata []u
 				return fmt.Errorf("enum or set column %s does not have valid string values: %s",
 					col.Name, col.ColumnType)
 			}
-			plan.EnumSetValuesMap[i] = vtschema.ParseEnumOrSetTokensMap(col.ColumnType[begin+1 : end])
+			var err error
+			plan.EnumSetValuesMap[i], err = vtschema.ParseEnumOrSetTokensMap(env, col.ColumnType[begin+1:end])
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil
 }
 
 // buildEnumStringValue takes the integer value of an ENUM column and returns the string value.
-func buildEnumStringValue(plan *streamerPlan, colNum int, value sqltypes.Value) (sqltypes.Value, error) {
+func buildEnumStringValue(env *vtenv.Environment, plan *streamerPlan, colNum int, value sqltypes.Value) (sqltypes.Value, error) {
 	if value.IsNull() { // No work is needed
 		return value, nil
 	}
 	// Add the mappings just-in-time in case we haven't properly received and processed a
 	// table map event to initialize it.
 	if plan.EnumSetValuesMap == nil {
-		if err := addEnumAndSetMappingstoPlan(plan.Plan, plan.Table.Fields, plan.TableMap.Metadata); err != nil {
+		if err := addEnumAndSetMappingstoPlan(env, plan.Plan, plan.Table.Fields, plan.TableMap.Metadata); err != nil {
 			return sqltypes.Value{}, err
 		}
 	}
@@ -1181,14 +1210,14 @@ func buildEnumStringValue(plan *streamerPlan, colNum int, value sqltypes.Value) 
 }
 
 // buildSetStringValue takes the integer value of a SET column and returns the string value.
-func buildSetStringValue(plan *streamerPlan, colNum int, value sqltypes.Value) (sqltypes.Value, error) {
+func buildSetStringValue(env *vtenv.Environment, plan *streamerPlan, colNum int, value sqltypes.Value) (sqltypes.Value, error) {
 	if value.IsNull() { // No work is needed
 		return value, nil
 	}
 	// Add the mappings just-in-time in case we haven't properly received and processed a
 	// table map event to initialize it.
 	if plan.EnumSetValuesMap == nil {
-		if err := addEnumAndSetMappingstoPlan(plan.Plan, plan.Table.Fields, plan.TableMap.Metadata); err != nil {
+		if err := addEnumAndSetMappingstoPlan(env, plan.Plan, plan.Table.Fields, plan.TableMap.Metadata); err != nil {
 			return sqltypes.Value{}, err
 		}
 	}

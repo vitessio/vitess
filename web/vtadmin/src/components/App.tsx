@@ -42,8 +42,11 @@ import { Topology } from './routes/topology/Topology';
 import { ClusterTopology } from './routes/topology/ClusterTopology';
 import { CreateMoveTables } from './routes/createWorkflow/CreateMoveTables';
 import { Transactions } from './routes/Transactions';
+import { Transaction } from './routes/transaction/Transaction';
 import { CreateReshard } from './routes/createWorkflow/CreateReshard';
 import { CreateMaterialize } from './routes/createWorkflow/CreateMaterialize';
+import { SchemaMigrations } from './routes/SchemaMigrations';
+import { CreateSchemaMigration } from './routes/createSchemaMigration/CreateSchemaMigration';
 
 export const App = () => {
     return (
@@ -139,8 +142,22 @@ export const App = () => {
                             <Workflow />
                         </Route>
 
+                        <Route exact path="/migrations">
+                            <SchemaMigrations />
+                        </Route>
+
+                        {!isReadOnlyMode() && (
+                            <Route exact path="/migrations/create">
+                                <CreateSchemaMigration />
+                            </Route>
+                        )}
+
                         <Route path="/transactions">
                             <Transactions />
+                        </Route>
+
+                        <Route path="/transaction/:clusterID/:dtid">
+                            <Transaction />
                         </Route>
 
                         <Route path="/topology/:clusterID">
