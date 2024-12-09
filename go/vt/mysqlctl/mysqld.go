@@ -118,9 +118,10 @@ type Mysqld struct {
 	capabilities capabilitySet
 
 	// mutex protects the fields below.
-	mutex         sync.Mutex
-	onTermFuncs   []func()
-	cancelWaitCmd chan struct{}
+	mutex          sync.Mutex
+	onTermFuncs    []func()
+	onFailureFuncs []func(error)
+	cancelWaitCmd  chan struct{}
 
 	semiSyncType mysql.SemiSyncType
 }
@@ -445,6 +446,11 @@ func (mysqld *Mysqld) startNoWait(cnf *Mycnf, mysqldArgs ...string) error {
 				for _, callback := range mysqld.onTermFuncs {
 					go callback()
 				}
+				if err != nil {
+					for _, failureFunc := range mysqld.onFailureFuncs {
+						go failureFunc(err)
+					}
+				}
 				mysqld.mutex.Unlock()
 			}
 		}(mysqld.cancelWaitCmd)
@@ -609,12 +615,12 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bo
 
 	// We're shutting down on purpose. We no longer want to be notified when
 	// mysqld terminates.
-	mysqld.mutex.Lock()
-	if mysqld.cancelWaitCmd != nil {
-		close(mysqld.cancelWaitCmd)
-		mysqld.cancelWaitCmd = nil
-	}
-	mysqld.mutex.Unlock()
+	// mysqld.mutex.Lock()
+	// if mysqld.cancelWaitCmd != nil {
+	// 	close(mysqld.cancelWaitCmd)
+	// 	mysqld.cancelWaitCmd = nil
+	// }
+	// mysqld.mutex.Unlock()
 
 	// possibly mysql is already shutdown, check for a few files first
 	_, socketPathErr := os.Stat(cnf.SocketFile)
@@ -1245,6 +1251,12 @@ func (mysqld *Mysqld) OnTerm(f func()) {
 	mysqld.mutex.Lock()
 	defer mysqld.mutex.Unlock()
 	mysqld.onTermFuncs = append(mysqld.onTermFuncs, f)
+}
+
+func (mysqld *Mysqld) OnFailure(f func(error)) {
+	mysqld.mutex.Lock()
+	defer mysqld.mutex.Unlock()
+	mysqld.onFailureFuncs = append(mysqld.onFailureFuncs, f)
 }
 
 func buildLdPaths() ([]string, error) {

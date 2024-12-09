@@ -65,6 +65,11 @@ const (
 	phaseNameTakeNewBackup               = "TakeNewBackup"
 	phaseStatusCatchupReplicationStalled = "Stalled"
 	phaseStatusCatchupReplicationStopped = "Stopped"
+
+	// We will allow maximum 60 errors in a row when waiting for replication status before taking the new backup.
+	// As we try every second, this is equivalent to minimum 1 minute of continuously erroring before failing.
+	// It allows us to ignore transient errors while avoiding repeated errors in a loop (for over 60 seconds).
+	maximumErrorCountWhenWaitingForReplicationStatus = 60
 )
 
 var (
@@ -335,6 +340,14 @@ func takeBackup(ctx, backgroundCtx context.Context, topoServer *topo.Server, bac
 	if err != nil {
 		return fmt.Errorf("failed to initialize mysql config: %v", err)
 	}
+	ctx, cancelCtx := context.WithCancel(ctx)
+	backgroundCtx, cancelbackgroundCtx := context.WithCancel(backgroundCtx)
+	mysqld.OnFailure(func(err error) {
+		log.Warning("Cancelling the vtbackup context as MySQL has failed")
+		cancelCtx()
+		cancelbackgroundCtx()
+	})
+
 	initCtx, initCancel := context.WithTimeout(ctx, mysqlTimeout)
 	defer initCancel()
 	initMysqldAt := time.Now()
@@ -519,8 +532,14 @@ func takeBackup(ctx, backgroundCtx context.Context, topoServer *topo.Server, bac
 		statusErr  error
 
 		waitStartTime = time.Now()
+
+		continuousErrorCount int
 	)
 	for {
+		if continuousErrorCount == maximumErrorCountWhenWaitingForReplicationStatus {
+			return fmt.Errorf("timeout waiting for replication status after %d errors", maximumErrorCountWhenWaitingForReplicationStatus)
+		}
+
 		select {
 		case <-ctx.Done():
 			return fmt.Errorf("error in replication catch up: %v", ctx.Err())
@@ -531,6 +550,7 @@ func takeBackup(ctx, backgroundCtx context.Context, topoServer *topo.Server, bac
 		status, statusErr = mysqld.ReplicationStatus(ctx)
 		if statusErr != nil {
 			log.Warningf("Error getting replication status: %v", statusErr)
+			continuousErrorCount++
 			continue
 		}
 		if status.Position.AtLeast(primaryPos) {
@@ -553,7 +573,11 @@ func takeBackup(ctx, backgroundCtx context.Context, topoServer *topo.Server, bac
 			if err := startReplication(ctx, mysqld, topoServer); err != nil {
 				log.Warningf("Failed to restart replication: %v", err)
 			}
+			continuousErrorCount++
 		} else {
+			// Since replication is working if we got here, let's reset the error count to zero.
+			// This allows us to avoid failing if we only have transient errors from time to time.
+			continuousErrorCount = 0
 			phaseStatus.Set([]string{phaseNameCatchupReplication, phaseStatusCatchupReplicationStopped}, 0)
 		}
 	}
