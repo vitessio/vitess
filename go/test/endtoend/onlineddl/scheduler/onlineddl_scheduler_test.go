@@ -239,7 +239,6 @@ func waitForMessage(t *testing.T, uuid string, messageSubstring string) {
 }
 
 func TestMain(m *testing.M) {
-	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	exitcode, err := func() (int, error) {

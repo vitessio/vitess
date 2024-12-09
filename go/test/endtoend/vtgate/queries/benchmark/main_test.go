@@ -65,7 +65,6 @@ var shards4 = []string{
 }
 
 func TestMain(m *testing.M) {
-	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	exitCode := func() int {

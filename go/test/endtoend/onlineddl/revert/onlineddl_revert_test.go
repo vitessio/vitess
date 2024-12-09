@@ -137,7 +137,6 @@ type revertibleTestCase struct {
 }
 
 func TestMain(m *testing.M) {
-	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	exitcode, err := func() (int, error) {

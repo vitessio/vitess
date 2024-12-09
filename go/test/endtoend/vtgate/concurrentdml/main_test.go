@@ -66,7 +66,6 @@ INSERT INTO t1_seq (id, next_id, cache) values(0, 1, 1000);
 )
 
 func TestMain(m *testing.M) {
-	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	exitCode := func() int {

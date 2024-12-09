@@ -50,7 +50,6 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	defer cluster.PanicHandler(nil)
 
 	exitCode := func() int {
 		clusterInstance = cluster.NewCluster(cell, "localhost")

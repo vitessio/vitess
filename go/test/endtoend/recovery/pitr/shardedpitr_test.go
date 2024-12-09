@@ -126,7 +126,6 @@ var (
 // - asserting that restoring to restoreTime2 (going from 2 shards to 2 shards with past time) is working, it will assert for both shards
 // - asserting that restoring to restoreTime3 is working, we should get complete data after restoring,  as we have in existing shards.
 func TestPITRRecovery(t *testing.T) {
-	defer cluster.PanicHandler(nil)
 	initializeCluster(t)
 	defer clusterInstance.Teardown()
 
