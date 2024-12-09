@@ -47,8 +47,6 @@ func (li *lookupIndex) String() string {
 }
 
 func (li *lookupIndex) create() {
-	//err = vc.VtctldClient.ExecuteCommand("LookupVindex", "--name", vindexName, "--table-keyspace=product", "create", "--keyspace=customer",
-	//			"--type=consistent_lookup", "--table-owner=customer", "--table-owner-columns=name,cid", "--ignore-nulls", "--tablet-types=PRIMARY")
 	cols := strings.Join(li.columns, ",")
 	args := []string{
 		"LookupVindex",

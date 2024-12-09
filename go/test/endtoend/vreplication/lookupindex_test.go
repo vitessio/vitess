@@ -57,7 +57,7 @@ var lookupClusterSpec = TestClusterSpec{
 create table t1(
 	c1 int,
 	c2 int,
-    val varchar(128),
+	val varchar(128),
 	primary key(c1)
 );
 `,
@@ -67,7 +67,7 @@ func setupLookupIndexKeyspace(t *testing.T) map[string]*cluster.VttabletProcess 
 	tablets := make(map[string]*cluster.VttabletProcess)
 	if _, err := vc.AddKeyspace(t, []*Cell{vc.Cells["zone1"]}, lookupClusterSpec.keyspaceName, "-80,80-",
 		lookupClusterSpec.vschema, lookupClusterSpec.schema, defaultReplicas, defaultRdonly, 200, nil); err != nil {
-		t.Fatal(err)
+		require.NoError(t, err)
 	}
 	defaultCell := vc.Cells[vc.CellNames[0]]
 	ks := vc.Cells[defaultCell.Name].Keyspaces[lookupClusterSpec.keyspaceName]
@@ -101,8 +101,7 @@ func TestLookupIndex(t *testing.T) {
 	defer vc.TearDown()
 	vttablet.InitVReplicationConfigDefaults()
 
-	tabs := setupLookupIndexKeyspace(t)
-	_ = tabs
+	_ = setupLookupIndexKeyspace(t)
 
 	initQuery := "insert into t1 (c1, c2, val) values (1, 1, 'val1'), (2, 2, 'val2'), (3, 3, 'val3')"
 	runningQuery := "insert into t1 (c1, c2, val) values (4, 4, 'val4'), (5, 5, 'val5'), (6, 6, 'val6')"
