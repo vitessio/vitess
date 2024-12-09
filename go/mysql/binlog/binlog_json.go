@@ -74,53 +74,61 @@ func ParseBinaryJSON(data []byte) (*json.Value, error) {
 // ParseBinaryJSONDiff provides the parsing function from the MySQL JSON
 // diff representation to an SQL expression.
 func ParseBinaryJSONDiff(data []byte) (sqltypes.Value, error) {
-	pos := 0
-	opType := jsonDiffOp(data[pos])
-	pos++
 	diff := bytes.Buffer{}
+	diff.Grow(int(float32(len(data)) * 1.5))
+	pos := 0
+	outer := false
+	innerStr := ""
 
-	switch opType {
-	case jsonDiffOpReplace:
-		diff.WriteString("JSON_REPLACE(")
-	case jsonDiffOpInsert:
-		diff.WriteString("JSON_INSERT(")
-	case jsonDiffOpRemove:
-		diff.WriteString("JSON_REMOVE(")
-	}
-	diff.WriteString("%s, ") // This will later be replaced by the field name
+	for pos < len(data) {
+		if outer {
+			innerStr = diff.String()
+			diff.Reset()
+		}
+		opType := jsonDiffOp(data[pos])
+		pos++
+		switch opType {
+		case jsonDiffOpReplace:
+			diff.WriteString("JSON_REPLACE(")
+		case jsonDiffOpInsert:
+			diff.WriteString("JSON_INSERT(")
+		case jsonDiffOpRemove:
+			diff.WriteString("JSON_REMOVE(")
+		}
+		if outer {
+			diff.WriteString(innerStr)
+			diff.WriteString(", ")
+		} else { // Only the inner most function has the field name
+			diff.WriteString("%s, ") // This will later be replaced by the field name
+		}
 
-	pathLen, readTo, ok := readLenEncInt(data, pos)
-	if !ok {
-		return sqltypes.Value{}, fmt.Errorf("cannot read JSON diff path length")
-	}
-	pos = readTo
+		pathLen, readTo := readVariableLength(data, pos)
+		pos = readTo
+		path := data[pos : pos+pathLen]
+		pos += pathLen
+		// We have to specify the unicode character set for the strings we
+		// use in the expression as the connection can be using a different
+		// character set (e.g. vreplication always uses set names binary).
+		diff.WriteString(fmt.Sprintf("_utf8mb4'%s'", path))
 
-	path := data[pos : uint64(pos)+pathLen]
-	pos += int(pathLen)
-	// We have to specify the unicode character set for the strings we
-	// use in the expression as the connection can be using a different
-	// character set (e.g. vreplication always uses set names binary).
-	diff.WriteString(fmt.Sprintf("_utf8mb4'%s', ", path))
+		if opType == jsonDiffOpRemove { // No value for remove
+			diff.WriteString(")")
+		} else {
+			valueLen, readTo := readVariableLength(data, pos)
+			pos = readTo
+			value, err := ParseBinaryJSON(data[pos : pos+valueLen])
+			if err != nil {
+				return sqltypes.Value{}, fmt.Errorf("cannot read JSON diff value for path %s: %w", path, err)
+			}
+			pos += valueLen
+			if value.Type() == json.TypeString {
+				diff.WriteString(", _utf8mb4")
+			}
+			diff.WriteString(fmt.Sprintf("%s)", value))
+		}
 
-	if opType == jsonDiffOpRemove { // No value for remove
-		diff.WriteString(")")
-		return sqltypes.MakeTrusted(sqltypes.Expression, diff.Bytes()), nil
+		outer = true
 	}
-
-	valueLen, readTo, ok := readLenEncInt(data, pos)
-	if !ok {
-		return sqltypes.Value{}, fmt.Errorf("cannot read JSON diff path length")
-	}
-	pos = readTo
-
-	value, err := ParseBinaryJSON(data[pos : uint64(pos)+valueLen])
-	if err != nil {
-		return sqltypes.Value{}, fmt.Errorf("cannot read JSON diff value for path %s: %w", path, err)
-	}
-	if value.Type() == json.TypeString {
-		diff.WriteString("_utf8mb4")
-	}
-	diff.WriteString(fmt.Sprintf("%s)", value))
 
 	return sqltypes.MakeTrusted(sqltypes.Expression, diff.Bytes()), nil
 }
