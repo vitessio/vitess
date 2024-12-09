@@ -388,16 +388,17 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 			var err error
 			if field.Type == querypb.Type_JSON {
 				log.Errorf("DEBUG: vplayer applyChange: field.Type == querypb.Type_JSON, val type: %v, vals[i]: %+v", vals[i].Type(), vals[i].RawStr())
-				if vals[i].IsNull() { // An SQL NULL and not an actual JSON value
+				switch {
+				case vals[i].IsNull(): // An SQL NULL and not an actual JSON value
 					newVal = &sqltypes.NULL
-				} else if rowChange.JsonPartialValues != nil && isBitSet(rowChange.JsonPartialValues.Cols, jsonIndex) {
+				case rowChange.JsonPartialValues != nil && isBitSet(rowChange.JsonPartialValues.Cols, jsonIndex):
 					// An SQL expression that can be converted to a JSON value such
 					// as JSON_INSERT().
 					// This occurs e.g. when using partial JSON values as a result of
 					// mysqld using binlog-row-value-options=PARTIAL_JSON.
 					s := fmt.Sprintf(vals[i].RawStr(), field.Name)
 					newVal = ptr.Of(sqltypes.MakeTrusted(querypb.Type_EXPRESSION, []byte(s)))
-				} else { // A JSON value (which may be a JSON null literal value)
+				default: // A JSON value (which may be a JSON null literal value)
 					newVal, err = vjson.MarshalSQLValue(vals[i].Raw())
 					if err != nil {
 						return nil, err
