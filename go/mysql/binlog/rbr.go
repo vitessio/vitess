@@ -26,7 +26,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -682,12 +681,10 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, field *querypb.F
 		if typ == TypeJSON {
 			jsonData := data[pos : pos+l]
 			if partialJSON {
-				log.Errorf("DEBUG: partialJSON cell value: %s", string(jsonData))
 				val, err := ParseBinaryJSONDiff(jsonData)
 				if err != nil {
 					panic(err)
 				}
-				log.Errorf("DEBUG: decoded partialJSON cell value: %v", val)
 				return val, l + int(metadata), nil
 			}
 			jsonVal, err := ParseBinaryJSON(jsonData)

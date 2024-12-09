@@ -21,7 +21,6 @@ import (
 
 	"vitess.io/vitess/go/mysql/binlog"
 	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -370,15 +369,12 @@ func (ev binlogEvent) Rows(f BinlogFormat, tm *TableMap) (Rows, error) {
 		}
 
 		if ev.Type() == ePartialUpdateRowsEvent {
-			log.Errorf("DEBUG: PartialUpdateRowsEvent found with %d JSON columns", numJSONColumns)
 			// The first byte indicates whether or not any JSON values are partial.
 			// If it's 0 then there's nothing else to do.
 			partialJSON := uint8(data[pos])
-			log.Errorf("DEBUG: PartialJSON: %d", partialJSON)
 			pos++
 			if partialJSON == 1 {
 				row.JSONPartialValues, pos = newBitmap(data, pos, numJSONColumns)
-				log.Errorf("DEBUG: PartialUpdateRowsEvent: JSONPartialValues: %08b", row.JSONPartialValues)
 			}
 		}
 

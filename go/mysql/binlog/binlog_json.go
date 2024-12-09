@@ -19,7 +19,6 @@ package binlog
 import (
 	"bytes"
 	"encoding/binary"
-	"encoding/hex"
 	"fmt"
 	"math"
 	"strconv"
@@ -28,7 +27,6 @@ import (
 	"vitess.io/vitess/go/mysql/format"
 	"vitess.io/vitess/go/mysql/json"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -76,7 +74,6 @@ func ParseBinaryJSON(data []byte) (*json.Value, error) {
 // ParseBinaryJSONDiff provides the parsing function from the MySQL JSON
 // diff representation to an SQL expression.
 func ParseBinaryJSONDiff(data []byte) (sqltypes.Value, error) {
-	log.Errorf("DEBUG: json diff data hex: %s, string: %s", hex.EncodeToString(data), string(data))
 	pos := 0
 	opType := jsonDiffOp(data[pos])
 	pos++
@@ -92,19 +89,14 @@ func ParseBinaryJSONDiff(data []byte) (sqltypes.Value, error) {
 	}
 	diff.WriteString("%s, ") // This will later be replaced by the field name
 
-	log.Errorf("DEBUG: json diff opType: %d", opType)
-
 	pathLen, readTo, ok := readLenEncInt(data, pos)
 	if !ok {
 		return sqltypes.Value{}, fmt.Errorf("cannot read JSON diff path length")
 	}
 	pos = readTo
 
-	log.Errorf("DEBUG: json diff path length: %d", pathLen)
-
 	path := data[pos : uint64(pos)+pathLen]
 	pos += int(pathLen)
-	log.Errorf("DEBUG: json diff path: %s", string(path))
 	// We have to specify the unicode character set for the strings we
 	// use in the expression as the connection can be using a different
 	// character set (e.g. vreplication always uses set names binary).
@@ -120,13 +112,11 @@ func ParseBinaryJSONDiff(data []byte) (sqltypes.Value, error) {
 		return sqltypes.Value{}, fmt.Errorf("cannot read JSON diff path length")
 	}
 	pos = readTo
-	log.Errorf("DEBUG: json diff value length: %d", valueLen)
 
 	value, err := ParseBinaryJSON(data[pos : uint64(pos)+valueLen])
 	if err != nil {
 		return sqltypes.Value{}, fmt.Errorf("cannot read JSON diff value for path %s: %w", path, err)
 	}
-	log.Errorf("DEBUG: json diff value: %v", value)
 	if value.Type() == json.TypeString {
 		diff.WriteString("_utf8mb4")
 	}

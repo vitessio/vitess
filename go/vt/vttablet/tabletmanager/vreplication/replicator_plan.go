@@ -31,7 +31,6 @@ import (
 	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -387,7 +386,6 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 			var newVal *sqltypes.Value
 			var err error
 			if field.Type == querypb.Type_JSON {
-				log.Errorf("DEBUG: vplayer applyChange: field.Type == querypb.Type_JSON, val type: %v, vals[i]: %+v", vals[i].Type(), vals[i].RawStr())
 				switch {
 				case vals[i].IsNull(): // An SQL NULL and not an actual JSON value
 					newVal = &sqltypes.NULL
@@ -404,7 +402,6 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 						return nil, err
 					}
 				}
-				log.Errorf("DEBUG: vplayer applyChange: field.Type == querypb.Type_JSON, newVal: %+v", newVal)
 				bindVar, err = tp.bindFieldVal(field, newVal)
 				jsonIndex++
 			} else {
@@ -596,7 +593,6 @@ func execParsedQuery(pq *sqlparser.ParsedQuery, bindvars map[string]*querypb.Bin
 	if err != nil {
 		return nil, err
 	}
-	log.Errorf("DEBUG: vplayer execParsedQuery: query: %s", query)
 	return executor(query)
 }
 

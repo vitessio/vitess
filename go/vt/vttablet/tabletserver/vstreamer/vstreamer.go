@@ -1116,7 +1116,6 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 		partialJSON := false
 		if jsonPartialValues.Count() > 0 && plan.Table.Fields[colNum].Type == querypb.Type_JSON {
 			partialJSON = jsonPartialValues.Bit(jsonIndex)
-			log.Errorf("DEBUG: extractRowAndFilter: table: %s, column: %v, partialJSON: %v", plan.Table.Name, plan.Table.Fields[colNum], partialJSON)
 			jsonIndex++
 		}
 		value, l, err := mysqlbinlog.CellValue(data, pos, plan.TableMap.Types[colNum], plan.TableMap.Metadata[colNum], plan.Table.Fields[colNum], partialJSON)
@@ -1125,8 +1124,6 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 				err, plan.Table.Name, colNum, plan.Table.Fields, values)
 			return false, nil, false, err
 		}
-		log.Errorf("DEBUG: extractRowAndFilter: table: %s, column: %v, type: %v, value: %v",
-			plan.Table.Name, plan.Table.Fields[colNum], plan.TableMap.Types[colNum], value)
 		pos += l
 
 		if !value.IsNull() { // ENUMs and SETs require no special handling if they are NULL
