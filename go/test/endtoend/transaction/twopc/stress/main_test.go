@@ -70,7 +70,6 @@ func TestMain(m *testing.M) {
 			"--tablet_refresh_interval", "2s",
 		)
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
-			"--twopc_enable",
 			"--twopc_abandon_age", "1",
 			"--migration_check_interval", "2s",
 			"--onterm_timeout", "1s",
