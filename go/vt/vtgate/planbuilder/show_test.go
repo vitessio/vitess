@@ -32,10 +32,13 @@ import (
 )
 
 func TestBuildDBPlan(t *testing.T) {
-	vschema := &vschemawrapper.VSchemaWrapper{
-		Keyspace: &vindexes.Keyspace{Name: "main"},
-		Env:      vtenv.NewTestEnv(),
-	}
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(t, "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	require.NoError(t, err)
+
+	vw.Vcursor.SetTarget("main")
+	vw.Keyspace = &vindexes.Keyspace{Name: "main"}
 
 	testCases := []struct {
 		query    string
@@ -54,7 +57,7 @@ func TestBuildDBPlan(t *testing.T) {
 			require.NoError(t, err)
 
 			show := parserOut.(*sqlparser.Show)
-			primitive, err := buildDBPlan(show.Internal.(*sqlparser.ShowBasic), vschema)
+			primitive, err := buildDBPlan(show.Internal.(*sqlparser.ShowBasic), vw)
 			require.NoError(t, err)
 
 			result, err := primitive.TryExecute(context.Background(), nil, nil, false)

@@ -508,8 +508,14 @@ func (vr *vreplicator) setState(state binlogdatapb.VReplicationWorkflowState, me
 	}
 	vr.stats.State.Store(state.String())
 	query := fmt.Sprintf("update _vt.vreplication set state='%v', message=%v where id=%v", state, encodeString(binlogplayer.MessageTruncate(message)), vr.id)
-	if _, err := vr.dbClient.ExecuteFetch(query, 1); err != nil {
-		return fmt.Errorf("could not set state: %v: %v", query, err)
+	// If we're batching a transaction, then include the state update
+	// in the current transaction batch.
+	if vr.dbClient.InTransaction && vr.dbClient.maxBatchSize > 0 {
+		vr.dbClient.AddQueryToTrxBatch(query)
+	} else { // Otherwise, send it down the wire
+		if _, err := vr.dbClient.ExecuteFetch(query, 1); err != nil {
+			return fmt.Errorf("could not set state: %v: %v", query, err)
+		}
 	}
 	if state == vr.state {
 		return nil

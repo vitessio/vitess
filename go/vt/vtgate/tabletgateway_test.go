@@ -22,6 +22,8 @@ import (
 	"strings"
 	"testing"
 
+	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -109,7 +111,7 @@ func TestTabletGatewayShuffleTablets(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
 
 	hc := discovery.NewFakeHealthCheck(nil)
-	ts := &fakeTopoServer{}
+	ts := &econtext.FakeTopoServer{}
 	tg := NewTabletGateway(ctx, hc, ts, "local")
 	defer tg.Close(ctx)
 
@@ -183,7 +185,7 @@ func TestTabletGatewayReplicaTransactionError(t *testing.T) {
 		TabletType: tabletType,
 	}
 	hc := discovery.NewFakeHealthCheck(nil)
-	ts := &fakeTopoServer{}
+	ts := &econtext.FakeTopoServer{}
 	tg := NewTabletGateway(ctx, hc, ts, "cell")
 	defer tg.Close(ctx)
 
@@ -218,7 +220,7 @@ func testTabletGatewayGenericHelper(t *testing.T, ctx context.Context, f func(ct
 		TabletType: tabletType,
 	}
 	hc := discovery.NewFakeHealthCheck(nil)
-	ts := &fakeTopoServer{}
+	ts := &econtext.FakeTopoServer{}
 	tg := NewTabletGateway(ctx, hc, ts, "cell")
 	defer tg.Close(ctx)
 	// no tablet
@@ -306,7 +308,7 @@ func testTabletGatewayTransact(t *testing.T, ctx context.Context, f func(ctx con
 		TabletType: tabletType,
 	}
 	hc := discovery.NewFakeHealthCheck(nil)
-	ts := &fakeTopoServer{}
+	ts := &econtext.FakeTopoServer{}
 	tg := NewTabletGateway(ctx, hc, ts, "cell")
 	defer tg.Close(ctx)
 
@@ -348,7 +350,7 @@ func verifyShardErrors(t *testing.T, err error, wantErrors []string, wantCode vt
 // TestWithRetry tests the functionality of withRetry function in different circumstances.
 func TestWithRetry(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
-	tg := NewTabletGateway(ctx, discovery.NewFakeHealthCheck(nil), &fakeTopoServer{}, "cell")
+	tg := NewTabletGateway(ctx, discovery.NewFakeHealthCheck(nil), &econtext.FakeTopoServer{}, "cell")
 	tg.kev = discovery.NewKeyspaceEventWatcher(ctx, tg.srvTopoServer, tg.hc, tg.localCell)
 	defer func() {
 		cancel()

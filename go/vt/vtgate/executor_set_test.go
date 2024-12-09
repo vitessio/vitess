@@ -22,6 +22,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/sqlerror"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 
 	"vitess.io/vitess/go/test/utils"
 
@@ -266,7 +267,7 @@ func TestExecutorSet(t *testing.T) {
 	}}
 	for i, tcase := range testcases {
 		t.Run(fmt.Sprintf("%d-%s", i, tcase.in), func(t *testing.T) {
-			session := NewSafeSession(&vtgatepb.Session{Autocommit: true})
+			session := econtext.NewSafeSession(&vtgatepb.Session{Autocommit: true})
 			_, err := executorEnv.Execute(ctx, nil, "TestExecute", session, tcase.in, nil)
 			if tcase.err == "" {
 				require.NoError(t, err)
@@ -374,7 +375,7 @@ func TestExecutorSetOp(t *testing.T) {
 	}}
 	for _, tcase := range testcases {
 		t.Run(tcase.in, func(t *testing.T) {
-			session := NewAutocommitSession(&vtgatepb.Session{
+			session := econtext.NewAutocommitSession(&vtgatepb.Session{
 				TargetString: "@primary",
 			})
 			session.TargetString = KsTestUnsharded
@@ -392,7 +393,7 @@ func TestExecutorSetMetadata(t *testing.T) {
 
 	t.Run("Session 1", func(t *testing.T) {
 		executor, _, _, _, ctx := createExecutorEnv(t)
-		session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary", Autocommit: true})
+		session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@primary", Autocommit: true})
 
 		set := "set @@vitess_metadata.app_keyspace_v1= '1'"
 		_, err := executor.Execute(ctx, nil, "TestExecute", session, set, nil)
@@ -406,7 +407,7 @@ func TestExecutorSetMetadata(t *testing.T) {
 		}()
 
 		executor, _, _, _, ctx := createExecutorEnv(t)
-		session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary", Autocommit: true})
+		session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@primary", Autocommit: true})
 
 		set := "set @@vitess_metadata.app_keyspace_v1= '1'"
 		_, err := executor.Execute(ctx, nil, "TestExecute", session, set, nil)
@@ -469,7 +470,7 @@ func TestPlanExecutorSetUDV(t *testing.T) {
 	}}
 	for _, tcase := range testcases {
 		t.Run(tcase.in, func(t *testing.T) {
-			session := NewSafeSession(&vtgatepb.Session{Autocommit: true})
+			session := econtext.NewSafeSession(&vtgatepb.Session{Autocommit: true})
 			_, err := executor.Execute(ctx, nil, "TestExecute", session, tcase.in, nil)
 			if err != nil {
 				require.EqualError(t, err, tcase.err)
@@ -515,7 +516,7 @@ func TestSetVar(t *testing.T) {
 	executor, _, _, sbc, ctx := createCustomExecutor(t, "{}", "8.0.0")
 	executor.normalize = true
 
-	session := NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded})
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded})
 
 	sbc.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
@@ -554,7 +555,7 @@ func TestSetVarShowVariables(t *testing.T) {
 	executor, _, _, sbc, ctx := createCustomExecutor(t, "{}", "8.0.0")
 	executor.normalize = true
 
-	session := NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded})
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded})
 
 	sbc.SetResults([]*sqltypes.Result{
 		// select query result for checking any change in system settings
@@ -597,7 +598,7 @@ func TestExecutorSetAndSelect(t *testing.T) {
 		sysVar: "tx_isolation",
 		exp:    `[[VARCHAR("READ-UNCOMMITTED")]]`, // this returns the value set in previous query.
 	}}
-	session := NewAutocommitSession(&vtgatepb.Session{TargetString: KsTestUnsharded, EnableSystemSettings: true})
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{TargetString: KsTestUnsharded, EnableSystemSettings: true})
 	for _, tcase := range testcases {
 		t.Run(fmt.Sprintf("%s-%s", tcase.sysVar, tcase.val), func(t *testing.T) {
 			sbc.ExecCount.Store(0) // reset the value
@@ -631,7 +632,7 @@ func TestExecutorSetAndSelect(t *testing.T) {
 func TestExecutorTimeZone(t *testing.T) {
 	e, _, _, _, ctx := createExecutorEnv(t)
 
-	session := NewAutocommitSession(&vtgatepb.Session{TargetString: KsTestUnsharded, EnableSystemSettings: true})
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{TargetString: KsTestUnsharded, EnableSystemSettings: true})
 	session.SetSystemVariable("time_zone", "'+08:00'")
 
 	qr, err := e.Execute(ctx, nil, "TestExecutorSetAndSelect", session, "select now()", nil)

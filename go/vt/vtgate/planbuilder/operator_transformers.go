@@ -545,7 +545,7 @@ func routeToEngineRoute(ctx *plancontext.PlanningContext, op *operators.Route, h
 }
 
 func newRoutingParams(ctx *plancontext.PlanningContext, opCode engine.Opcode) *engine.RoutingParameters {
-	ks, _ := ctx.VSchema.DefaultKeyspace()
+	ks, _ := ctx.VSchema.SelectedKeyspace()
 	if ks == nil {
 		// if we don't have a selected keyspace, any keyspace will do
 		// this is used by operators that do not set the keyspace

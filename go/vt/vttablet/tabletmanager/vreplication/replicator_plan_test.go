@@ -21,17 +21,18 @@ import (
 	"strings"
 	"testing"
 
-	vttablet "vitess.io/vitess/go/vt/vttablet/common"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/bytes2"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 )
 
 type TestReplicatorPlan struct {
@@ -828,4 +829,138 @@ func TestBuildPlayerPlanExclude(t *testing.T) {
 	gotPlan, _ := json.Marshal(plan)
 	wantPlan, _ := json.Marshal(want)
 	assert.Equal(t, string(gotPlan), string(wantPlan))
+}
+
+func TestAppendFromRow(t *testing.T) {
+	testCases := []struct {
+		name    string
+		tp      *TablePlan
+		row     *querypb.Row
+		want    string
+		wantErr string
+	}{
+		{
+			name: "simple",
+			tp: &TablePlan{
+				BulkInsertValues: sqlparser.BuildParsedQuery("values (%a, %a, %a)",
+					":c1", ":c2", ":c3",
+				),
+				Fields: []*querypb.Field{
+					{Name: "c1", Type: querypb.Type_INT32},
+					{Name: "c2", Type: querypb.Type_INT32},
+					{Name: "c3", Type: querypb.Type_INT32},
+				},
+			},
+			row: sqltypes.RowToProto3(
+				[]sqltypes.Value{
+					sqltypes.NewInt64(1),
+					sqltypes.NewInt64(2),
+					sqltypes.NewInt64(3),
+				},
+			),
+			want: "values (1, 2, 3)",
+		},
+		{
+			name: "too few fields",
+			tp: &TablePlan{
+				BulkInsertValues: sqlparser.BuildParsedQuery("values (%a, %a, %a)",
+					":c1", ":c2", ":c3",
+				),
+				Fields: []*querypb.Field{
+					{Name: "c1", Type: querypb.Type_INT32},
+					{Name: "c2", Type: querypb.Type_INT32},
+				},
+			},
+			wantErr: "wrong number of fields: got 2 fields for 3 bind locations",
+		},
+		{
+			name: "skip half",
+			tp: &TablePlan{
+				BulkInsertValues: sqlparser.BuildParsedQuery("values (%a, %a, %a, %a)",
+					":c1", ":c2", ":c4", ":c8",
+				),
+				Fields: []*querypb.Field{
+					{Name: "c1", Type: querypb.Type_INT32},
+					{Name: "c2", Type: querypb.Type_INT32},
+					{Name: "c3", Type: querypb.Type_INT32},
+					{Name: "c4", Type: querypb.Type_INT32},
+					{Name: "c5", Type: querypb.Type_INT32},
+					{Name: "c6", Type: querypb.Type_INT32},
+					{Name: "c7", Type: querypb.Type_INT32},
+					{Name: "c8", Type: querypb.Type_INT32},
+				},
+				FieldsToSkip: map[string]bool{
+					"c3": true,
+					"c5": true,
+					"c6": true,
+					"c7": true,
+				},
+			},
+			row: sqltypes.RowToProto3(
+				[]sqltypes.Value{
+					sqltypes.NewInt64(1),
+					sqltypes.NewInt64(2),
+					sqltypes.NewInt64(3),
+					sqltypes.NewInt64(4),
+					sqltypes.NewInt64(5),
+					sqltypes.NewInt64(6),
+					sqltypes.NewInt64(7),
+					sqltypes.NewInt64(8),
+				},
+			),
+			want: "values (1, 2, 4, 8)",
+		},
+		{
+			name: "skip all but one",
+			tp: &TablePlan{
+				BulkInsertValues: sqlparser.BuildParsedQuery("values (%a)",
+					":c4",
+				),
+				Fields: []*querypb.Field{
+					{Name: "c1", Type: querypb.Type_INT32},
+					{Name: "c2", Type: querypb.Type_INT32},
+					{Name: "c3", Type: querypb.Type_INT32},
+					{Name: "c4", Type: querypb.Type_INT32},
+					{Name: "c5", Type: querypb.Type_INT32},
+					{Name: "c6", Type: querypb.Type_INT32},
+					{Name: "c7", Type: querypb.Type_INT32},
+					{Name: "c8", Type: querypb.Type_INT32},
+				},
+				FieldsToSkip: map[string]bool{
+					"c1": true,
+					"c2": true,
+					"c3": true,
+					"c5": true,
+					"c6": true,
+					"c7": true,
+					"c8": true,
+				},
+			},
+			row: sqltypes.RowToProto3(
+				[]sqltypes.Value{
+					sqltypes.NewInt64(1),
+					sqltypes.NewInt64(2),
+					sqltypes.NewInt64(3),
+					sqltypes.NewInt64(4),
+					sqltypes.NewInt64(5),
+					sqltypes.NewInt64(6),
+					sqltypes.NewInt64(7),
+					sqltypes.NewInt64(8),
+				},
+			),
+			want: "values (4)",
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			bb := &bytes2.Buffer{}
+			err := tc.tp.appendFromRow(bb, tc.row)
+			if tc.wantErr != "" {
+				require.EqualError(t, err, tc.wantErr)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, tc.want, bb.String())
+			}
+		})
+	}
 }

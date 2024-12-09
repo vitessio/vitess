@@ -186,9 +186,11 @@ func TestMysql56DecodeTransactionPayload(t *testing.T) {
 			}
 		}
 		if tc.inMemory {
+			require.False(t, tp.StreamingContents)
 			require.Equal(t, memDecodingCnt+1, compressedTrxPayloadsInMem.Get())
 			require.Equal(t, tc.want, eventStrs)
 		} else {
+			require.True(t, tp.StreamingContents)
 			require.Equal(t, streamDecodingCnt+1, compressedTrxPayloadsUsingStream.Get())
 			require.Len(t, eventStrs, len(tc.want))
 			totalSize := 0

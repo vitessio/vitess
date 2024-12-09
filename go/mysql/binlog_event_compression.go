@@ -98,6 +98,11 @@ type TransactionPayload struct {
 	payload          []byte
 	reader           io.Reader
 	iterator         func() (BinlogEvent, error)
+	// StreamingContents tells the consumer that we are streaming the
+	// decompressed payload and they should also stream the events.
+	// This ensures that neither the producer nor the consumer are
+	// holding the entire payload's contents in memory.
+	StreamingContents bool
 }
 
 // IsTransactionPayload returns true if a compressed transaction
@@ -292,6 +297,8 @@ func (tp *TransactionPayload) decompress() error {
 		}
 		compressedTrxPayloadsUsingStream.Add(1)
 		tp.reader = streamDecoder
+		// Signal the consumer to also stream the contents.
+		tp.StreamingContents = true
 		return nil
 	}
 
