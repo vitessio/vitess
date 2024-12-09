@@ -55,6 +55,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -178,16 +179,32 @@ func waitForQueryResult(t *testing.T, conn *mysql.Conn, database string, query s
 
 // waitForTabletThrottlingStatus waits for the tablet to return the provided HTTP code for
 // the provided app name in its self check.
-func waitForTabletThrottlingStatus(t *testing.T, tablet *cluster.VttabletProcess, throttlerApp throttlerapp.Name, wantCode int64) {
-	var gotCode int64
+func waitForTabletThrottlingStatus(t *testing.T, tablet *cluster.VttabletProcess, throttlerApp throttlerapp.Name, wantCode int) {
 	timer := time.NewTimer(defaultTimeout)
 	defer timer.Stop()
 	for {
 		output, err := throttlerCheckSelf(tablet, throttlerApp)
 		require.NoError(t, err)
 
-		gotCode, err = jsonparser.GetInt([]byte(output), "StatusCode")
-		require.NoError(t, err)
+		responseCode, err := jsonparser.GetInt([]byte(output), "ResponseCode")
+		require.NoError(t, err, "waitForTabletThrottlingStatus output: %v", output)
+
+		var gotCode int
+		switch tabletmanagerdatapb.CheckThrottlerResponseCode(responseCode) {
+		case tabletmanagerdatapb.CheckThrottlerResponseCode_OK:
+			gotCode = http.StatusOK
+		case tabletmanagerdatapb.CheckThrottlerResponseCode_APP_DENIED:
+			gotCode = http.StatusExpectationFailed
+		case tabletmanagerdatapb.CheckThrottlerResponseCode_THRESHOLD_EXCEEDED:
+			gotCode = http.StatusTooManyRequests
+		case tabletmanagerdatapb.CheckThrottlerResponseCode_UNKNOWN_METRIC:
+			gotCode = http.StatusNotFound
+		case tabletmanagerdatapb.CheckThrottlerResponseCode_INTERNAL_ERROR:
+			gotCode = http.StatusInternalServerError
+		default:
+			gotCode = http.StatusInternalServerError
+		}
+
 		if wantCode == gotCode {
 			// Wait for any cached check values to be cleared and the new
 			// status value to be in effect everywhere before returning.

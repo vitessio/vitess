@@ -70,8 +70,7 @@ func NewBackgroundClient(throttler *Throttler, appName throttlerapp.Name, scope 
 		throttler: throttler,
 		appName:   appName,
 		flags: CheckFlags{
-			Scope:               scope,
-			MultiMetricsEnabled: true,
+			Scope: scope,
 		},
 		lastSuccessfulThrottle: make(map[string]int64),
 	}
