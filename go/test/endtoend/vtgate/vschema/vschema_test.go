@@ -69,17 +69,21 @@ func TestMain(m *testing.M) {
 		}
 
 		// List of users authorized to execute vschema ddl operations
-		timeNow := time.Now().Unix()
-		configFile = path.Join(os.TempDir(), fmt.Sprintf("vtgate-config-%d.json", timeNow))
-		err := writeConfig(configFile, map[string]string{
-			"vschema_ddl_authorized_users": "%",
-		})
-		if err != nil {
-			return 1, err
-		}
-		defer os.Remove(configFile)
+		if utils.BinaryIsAtLeastAtVersion(22, "vtgate") {
+			timeNow := time.Now().Unix()
+			configFile = path.Join(os.TempDir(), fmt.Sprintf("vtgate-config-%d.json", timeNow))
+			err := writeConfig(configFile, map[string]string{
+				"vschema_ddl_authorized_users": "%",
+			})
+			if err != nil {
+				return 1, err
+			}
+			defer os.Remove(configFile)
 
-		clusterInstance.VtGateExtraArgs = []string{fmt.Sprintf("--config-file=%s", configFile), "--schema_change_signal=false"}
+			clusterInstance.VtGateExtraArgs = []string{fmt.Sprintf("--config-file=%s", configFile), "--schema_change_signal=false"}
+		} else {
+			clusterInstance.VtGateExtraArgs = []string{"--vschema_ddl_authorized_users=%", "--schema_change_signal=false"}
+		}
 
 		// Start keyspace
 		keyspace := &cluster.Keyspace{
@@ -160,13 +164,15 @@ func TestVSchema(t *testing.T) {
 
 	utils.AssertMatches(t, conn, "delete from vt_user", `[]`)
 
-	writeConfig(configFile, map[string]string{
-		"vschema_ddl_authorized_users": "",
-	})
+	if utils.BinaryIsAtLeastAtVersion(22, "vtgate") {
+		writeConfig(configFile, map[string]string{
+			"vschema_ddl_authorized_users": "",
+		})
 
-	require.EventuallyWithT(t, func(t *assert.CollectT) {
-		_, err = conn.ExecuteFetch("ALTER VSCHEMA DROP TABLE main", 1000, false)
-		assert.Error(t, err)
-		assert.ErrorContains(t, err, "is not authorized to perform vschema operations")
-	}, 5*time.Second, 100*time.Millisecond)
+		require.EventuallyWithT(t, func(t *assert.CollectT) {
+			_, err = conn.ExecuteFetch("ALTER VSCHEMA DROP TABLE main", 1000, false)
+			assert.Error(t, err)
+			assert.ErrorContains(t, err, "is not authorized to perform vschema operations")
+		}, 5*time.Second, 100*time.Millisecond)
+	}
 }
