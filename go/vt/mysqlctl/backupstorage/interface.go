@@ -25,7 +25,8 @@ import (
 
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/vt/concurrency"
+	"vitess.io/vitess/go/vt/mysqlctl/errors"
+
 	"vitess.io/vitess/go/vt/servenv"
 )
 
@@ -89,9 +90,9 @@ type BackupHandle interface {
 	// ReadCloser is closed.
 	ReadFile(ctx context.Context, filename string) (io.ReadCloser, error)
 
-	// concurrency.ErrorRecorder is embedded here to coordinate reporting and
-	// handling of errors among all the components involved in taking a backup.
-	concurrency.ErrorRecorder
+	// BackupErrorRecorder is embedded here to coordinate reporting and
+	// handling of errors among all the components involved in taking/restoring a backup.
+	errors.BackupErrorRecorder
 }
 
 // BackupStorage is the interface to the storage system
