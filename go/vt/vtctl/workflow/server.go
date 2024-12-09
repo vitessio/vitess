@@ -3459,10 +3459,6 @@ func (s *Server) prepareCreateLookup(ctx context.Context, workflow, keyspace str
 		if len(vindexFromCols) != 1 {
 			return nil, nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unique vindex 'from' should have only one column")
 		}
-	} else {
-		if len(vindexFromCols) < 2 {
-			return nil, nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "non-unique vindex 'from' should have more than one column")
-		}
 	}
 	vindexToCol = vindex.Params["to"]
 	// Make the vindex write_only. If one exists already in the vschema,
