@@ -25,7 +25,7 @@ import (
 
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/vt/mysqlctl/errorsbackup"
+	"vitess.io/vitess/go/vt/mysqlctl/errors"
 
 	"vitess.io/vitess/go/vt/servenv"
 )
@@ -92,7 +92,7 @@ type BackupHandle interface {
 
 	// BackupErrorRecorder is embedded here to coordinate reporting and
 	// handling of errors among all the components involved in taking/restoring a backup.
-	errorsbackup.BackupErrorRecorder
+	errors.BackupErrorRecorder
 }
 
 // BackupStorage is the interface to the storage system

@@ -32,10 +32,11 @@ import (
 	"github.com/Azure/azure-storage-blob-go/azblob"
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/vt/mysqlctl/errors"
+
 	"vitess.io/vitess/go/viperutil"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
-	"vitess.io/vitess/go/vt/mysqlctl/errorsbackup"
 	"vitess.io/vitess/go/vt/servenv"
 )
 
@@ -205,7 +206,7 @@ type AZBlobBackupHandle struct {
 	waitGroup sync.WaitGroup
 	ctx       context.Context
 	cancel    context.CancelFunc
-	errorsbackup.PerFileErrorRecorder
+	errors.PerFileErrorRecorder
 }
 
 // Directory implements BackupHandle.

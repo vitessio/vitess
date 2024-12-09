@@ -32,10 +32,10 @@ import (
 	minio "github.com/minio/minio-go"
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/vt/mysqlctl/errorsbackup"
+	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
+	errorsbackup "vitess.io/vitess/go/vt/mysqlctl/errors"
 	"vitess.io/vitess/go/vt/servenv"
 )
 

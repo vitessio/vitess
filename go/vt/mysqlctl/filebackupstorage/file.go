@@ -27,7 +27,7 @@ import (
 
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/vt/mysqlctl/errorsbackup"
+	"vitess.io/vitess/go/vt/mysqlctl/errors"
 
 	"vitess.io/vitess/go/ioutil"
 	stats "vitess.io/vitess/go/vt/mysqlctl/backupstats"
@@ -60,7 +60,7 @@ type FileBackupHandle struct {
 	dir      string
 	name     string
 	readOnly bool
-	errorsbackup.PerFileErrorRecorder
+	errors.PerFileErrorRecorder
 }
 
 func NewBackupHandle(

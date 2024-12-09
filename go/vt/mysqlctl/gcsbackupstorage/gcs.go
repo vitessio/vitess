@@ -32,7 +32,7 @@ import (
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 
-	"vitess.io/vitess/go/vt/mysqlctl/errorsbackup"
+	"vitess.io/vitess/go/vt/mysqlctl/errors"
 
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
@@ -66,7 +66,7 @@ type GCSBackupHandle struct {
 	dir      string
 	name     string
 	readOnly bool
-	errorsbackup.PerFileErrorRecorder
+	errors.PerFileErrorRecorder
 }
 
 // Directory implements BackupHandle.

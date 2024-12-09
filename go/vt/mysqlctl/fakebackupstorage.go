@@ -22,14 +22,14 @@ import (
 	"io"
 
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
-	"vitess.io/vitess/go/vt/mysqlctl/errorsbackup"
+	"vitess.io/vitess/go/vt/mysqlctl/errors"
 )
 
 type FakeBackupHandle struct {
 	Dir      string
 	NameV    string
 	ReadOnly bool
-	errorsbackup.PerFileErrorRecorder
+	errors.PerFileErrorRecorder
 
 	AbortBackupCalls  []context.Context
 	AbortBackupReturn error

@@ -49,7 +49,7 @@ import (
 	"github.com/aws/smithy-go/middleware"
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/vt/mysqlctl/errorsbackup"
+	errorsbackup "vitess.io/vitess/go/vt/mysqlctl/errors"
 
 	"vitess.io/vitess/go/vt/log"
 	stats "vitess.io/vitess/go/vt/mysqlctl/backupstats"
