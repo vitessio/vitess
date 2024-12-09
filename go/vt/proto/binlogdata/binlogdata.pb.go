@@ -1340,7 +1340,7 @@ type RowChange struct {
 	// set if the value in the after image is a partial JSON value that
 	// is represented as an expression of
 	// JSON_[INSERT|REPLACE|REMOVE](%s, '$.path', value) which then is
-	// used to add/update/replace a path in the JSON document. When the
+	// used to add/update/remove a path in the JSON document. When the
 	// value is used the fmt directive must be replaced by the actual
 	// column name of the JSON field.
 	JsonPartialValues *RowChange_Bitmap `protobuf:"bytes,4,opt,name=json_partial_values,json=jsonPartialValues,proto3" json:"json_partial_values,omitempty"`

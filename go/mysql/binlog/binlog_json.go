@@ -105,7 +105,10 @@ func ParseBinaryJSONDiff(data []byte) (sqltypes.Value, error) {
 	path := data[pos : uint64(pos)+pathLen]
 	pos += int(pathLen)
 	log.Errorf("DEBUG: json diff path: %s", string(path))
-	diff.WriteString(fmt.Sprintf("'%s', ", path))
+	// We have to specify the unicode character set for the strings we
+	// use in the expression as the connection can be using a different
+	// character set (e.g. vreplication always uses set names binary).
+	diff.WriteString(fmt.Sprintf("_utf8mb4'%s', ", path))
 
 	if opType == jsonDiffOpRemove { // No value for remove
 		diff.WriteString(")")
@@ -124,6 +127,9 @@ func ParseBinaryJSONDiff(data []byte) (sqltypes.Value, error) {
 		return sqltypes.Value{}, fmt.Errorf("cannot read JSON diff value for path %s: %w", path, err)
 	}
 	log.Errorf("DEBUG: json diff value: %v", value)
+	if value.Type() == json.TypeString {
+		diff.WriteString("_utf8mb4")
+	}
 	diff.WriteString(fmt.Sprintf("%s)", value))
 
 	return sqltypes.MakeTrusted(sqltypes.Expression, diff.Bytes()), nil

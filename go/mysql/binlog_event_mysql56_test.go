@@ -353,7 +353,7 @@ func TestMySQL56PartialUpdateRowsEvent(t *testing.T) {
 		vals, err := ev.StringValuesForTests(tm, i)
 		require.NoError(t, err)
 		// The third column is the JSON column.
-		require.Equal(t, vals[2], `JSON_INSERT(%s, '$.role', "manager")`)
+		require.Equal(t, `JSON_INSERT(%s, _utf8mb4'$.role', _utf8mb4"manager")`, vals[2])
 		t.Logf("Rows: %v", vals)
 	}
 }
