@@ -1141,9 +1141,8 @@ func (ts *trafficSwitcher) cancelMigration(ctx context.Context, sm *StreamMigrat
 	var err error
 
 	if ctx.Err() != nil {
-		// We are creating a new context for cancelMigration, but we still record any error,
-		// for any forensics in case of failures, to help determine whether the migration is being
-		// cancelled due to a client timeout or some other reason.
+		// Even though we create a new context later on we still record any context error:
+		// for forensics in case of failures.
 		ts.Logger().Infof("In Cancel migration: original context invalid: %s", ctx.Err())
 	}
 
