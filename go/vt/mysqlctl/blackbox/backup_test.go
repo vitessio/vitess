@@ -612,6 +612,7 @@ func TestExecuteBackupFailToWriteEachFileOnlyOnce(t *testing.T) {
 	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "START REPLICA"}
 
 	logger := logutil.NewMemoryLogger()
+	ctx, cancel := context.WithCancel(ctx)
 	backupResult, err := be.ExecuteBackup(ctx, mysqlctl.BackupParams{
 		Logger: logger,
 		Mysqld: mysqld,
@@ -628,6 +629,7 @@ func TestExecuteBackupFailToWriteEachFileOnlyOnce(t *testing.T) {
 		Shard:                shard,
 		MysqlShutdownTimeout: MysqlShutdownTimeout,
 	}, bh)
+	cancel()
 
 	expectedLogs := []string{
 		"Backing up file: test1/0.ibd (attempt 1/2)",
@@ -680,6 +682,7 @@ func TestExecuteBackupFailToWriteFileTwice(t *testing.T) {
 
 	logger := logutil.NewMemoryLogger()
 	fakeStats := backupstats.NewFakeStats()
+	ctx, cancel := context.WithCancel(ctx)
 	backupResult, err := be.ExecuteBackup(ctx, mysqlctl.BackupParams{
 		Logger: logger,
 		Mysqld: mysqld,
@@ -696,6 +699,7 @@ func TestExecuteBackupFailToWriteFileTwice(t *testing.T) {
 		Shard:                shard,
 		MysqlShutdownTimeout: MysqlShutdownTimeout,
 	}, bh)
+	cancel()
 
 	// Sleep just long enough for everything to complete.
 	// It's not flaky, the race detector detects a race when there isn't,
