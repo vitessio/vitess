@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	_ "modernc.org/sqlite"
 )
 
 func TestHealthTest(t *testing.T) {
@@ -37,6 +38,7 @@ func TestHealthTest(t *testing.T) {
 	require.False(t, health.Healthy)
 	require.False(t, health.DiscoveredOnce)
 	require.NotZero(t, ThisNodeHealth.LastReported)
+	ResetLastHealthCheckCache()
 
 	ThisNodeHealth = &NodeHealth{}
 	FirstDiscoveryCycleComplete.Store(true)
@@ -45,4 +47,5 @@ func TestHealthTest(t *testing.T) {
 	require.True(t, health.Healthy)
 	require.True(t, health.DiscoveredOnce)
 	require.NotZero(t, ThisNodeHealth.LastReported)
+	ResetLastHealthCheckCache()
 }
