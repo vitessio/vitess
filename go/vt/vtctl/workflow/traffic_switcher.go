@@ -1158,7 +1158,7 @@ func (ts *trafficSwitcher) cancelMigration(ctx context.Context, sm *StreamMigrat
 		err = ts.changeShardsAccess(cmCtx, ts.SourceKeyspaceName(), ts.SourceShards(), allowWrites)
 	}
 	if err != nil {
-		ts.Logger().Errorf("Cancel migration failed: %v", err)
+		ts.Logger().Errorf("Cancel migration failed: could not revert denied tables / shard access: %v", err)
 	}
 
 	sm.CancelStreamMigrations(cmCtx)
