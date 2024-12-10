@@ -97,7 +97,6 @@ Topology: We create a keyspace with two shards , having 3 tablets each. Primarie
 to 'zone1' and replicas/rdonly belongs to cell2.
 */
 func TestMain(m *testing.M) {
-	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	exitcode, err := func() (int, error) {
