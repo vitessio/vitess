@@ -1130,8 +1130,8 @@ func (vc *VCursorImpl) SetFoundRows(foundRows uint64) {
 	vc.SafeSession.SetFoundRows(foundRows)
 }
 
-func (vc *vcursorImpl) SetLastInsertID(id uint64) {
-	vc.safeSession.LastInsertId = id
+func (vc *VCursorImpl) SetLastInsertID(id uint64) {
+	vc.SafeSession.LastInsertId = id
 }
 
 // SetDDLStrategy implements the SessionActions interface

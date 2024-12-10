@@ -32,8 +32,7 @@ import (
 func planQuery(ctx *plancontext.PlanningContext, root Operator) Operator {
 	var selExpr sqlparser.SelectExprs
 	if horizon, isHorizon := root.(*Horizon); isHorizon {
-		sel := sqlparser.GetFirstSelect(horizon.Query)
-		selExpr = sqlparser.Clone(sel.SelectExprs)
+		selExpr = extractSelectExpressions(horizon)
 	}
 
 	output := runPhases(ctx, root)
@@ -821,42 +820,93 @@ func tryPushUnion(ctx *plancontext.PlanningContext, op *Union) (Operator, *Apply
 	return newUnion(sources, selects, op.unionColumns, op.distinct), Rewrote("merge union inputs")
 }
 
-// addTruncationOrProjectionToReturnOutput uses the original Horizon to make sure that the output columns line up with what the user asked for
-func addTruncationOrProjectionToReturnOutput(ctx *plancontext.PlanningContext, selExprs sqlparser.SelectExprs, output Operator) Operator {
-	if len(selExprs) == 0 {
-		return output
-	}
-
-	cols := output.GetSelectExprs(ctx)
-	sizeCorrect := len(selExprs) == len(cols) || tryTruncateColumnsAt(output, len(selExprs))
-	if !sizeCorrect || !colNamesAlign(selExprs, cols) {
-		output = createSimpleProjection(ctx, selExprs, output)
-	}
-
-	if !ctx.SemTable.QuerySignature.LastInsertIDArg {
-		return output
-	}
-
-	var offset int
-	for i, expr := range selExprs {
+func handleLastInsertIDColumns(ctx *plancontext.PlanningContext, output Operator) Operator {
+	offset := -1
+	topLevel := false
+	var arg sqlparser.Expr
+	for i, expr := range output.GetSelectExprs(ctx) {
 		ae, ok := expr.(*sqlparser.AliasedExpr)
 		if !ok {
 			panic(vterrors.VT09015())
 		}
-		fnc, ok := ae.Expr.(*sqlparser.FuncExpr)
-		if !ok || !fnc.Name.EqualString("last_insert_id") {
-			continue
+
+		replaceFn := func(node sqlparser.Expr) (sqlparser.Expr, bool) {
+			fnc, ok := node.(*sqlparser.FuncExpr)
+			if !ok || !fnc.Name.EqualString("last_insert_id") {
+				return node, false
+			}
+			if offset != -1 {
+				panic(vterrors.VT12001("last_insert_id() found multiple times in select list"))
+			}
+			arg = fnc.Exprs[0]
+			if node == ae.Expr {
+				topLevel = true
+			}
+			offset = i
+			return arg, true
 		}
-		offset = i
-		break
+
+		newExpr := sqlparser.CopyAndReplaceExpr(ae.Expr, replaceFn)
+		ae.Expr = newExpr.(sqlparser.Expr)
 	}
 
+	if topLevel {
+		return &SaveToSession{
+			unaryOperator: unaryOperator{
+				Source: output,
+			},
+			Offset: offset,
+		}
+	}
+
+	offset = output.AddColumn(ctx, false, false, aeWrap(arg))
 	return &SaveToSession{
 		unaryOperator: unaryOperator{
 			Source: output,
 		},
 		Offset: offset,
 	}
+}
+
+// addTruncationOrProjectionToReturnOutput uses the original Horizon to make sure that the output columns line up with what the user asked for
+func addTruncationOrProjectionToReturnOutput(ctx *plancontext.PlanningContext, selExprs sqlparser.SelectExprs, output Operator) Operator {
+	if len(selExprs) == 0 {
+		return output
+	}
+
+	if ctx.SemTable.QuerySignature.LastInsertIDArg {
+		output = handleLastInsertIDColumns(ctx, output)
+	}
+
+	cols := output.GetSelectExprs(ctx)
+	sizeCorrect := len(selExprs) == len(cols) || tryTruncateColumnsAt(output, len(selExprs))
+	if sizeCorrect && colNamesAlign(selExprs, cols) {
+		return output
+	}
+
+	return createSimpleProjection(ctx, selExprs, output)
+}
+
+func extractSelectExpressions(horizon *Horizon) sqlparser.SelectExprs {
+	sel := sqlparser.GetFirstSelect(horizon.Query)
+	// we handle last_insert_id with arguments separately - no need to send this down to mysql
+	selExprs := sqlparser.CopyAndReplaceExpr(sel.SelectExprs, func(node sqlparser.Expr) (sqlparser.Expr, bool) {
+		switch node := node.(type) {
+		case *sqlparser.FuncExpr:
+			if node.Name.EqualString("last_insert_id") && len(node.Exprs) == 1 {
+				return node.Exprs[0], true
+			}
+			return node, true
+		case sqlparser.Expr:
+			// we do this to make sure we get a clone of the expression
+			// if planning changes the expression, we should not change the original
+			return node, true
+		default:
+			return nil, false
+		}
+	})
+
+	return selExprs.(sqlparser.SelectExprs)
 }
 
 func colNamesAlign(expected, actual sqlparser.SelectExprs) bool {

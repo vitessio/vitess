@@ -53,6 +53,32 @@ func CopyOnRewrite(
 	return out
 }
 
+func CopyAndReplaceExpr(node SQLNode, replaceFn func(node Expr) (Expr, bool)) SQLNode {
+	var replace Expr
+	pre := func(node, _ SQLNode) bool {
+		expr, ok := node.(Expr)
+		if !ok {
+			return true
+		}
+		newExpr, ok := replaceFn(expr)
+		if !ok {
+			return true
+		}
+		replace = newExpr
+		return false
+	}
+
+	post := func(cursor *CopyOnWriteCursor) {
+		if replace == nil {
+			return
+		}
+		cursor.Replace(replace)
+		replace = nil
+	}
+
+	return CopyOnRewrite(node, pre, post, nil)
+}
+
 // StopTreeWalk aborts the current tree walking. No more nodes will be visited, and the rewriter will exit out early
 func (c *CopyOnWriteCursor) StopTreeWalk() {
 	c.stop = true
