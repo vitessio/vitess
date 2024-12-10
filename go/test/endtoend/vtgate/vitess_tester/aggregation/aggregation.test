@@ -65,3 +65,6 @@ from (select id, count(*) as num_segments from t1 group by 1 order by 2 desc lim
 
 select name
 from (select name from t1 group by name having count(t1.id) > 1) t1;
+
+# this query uses last_insert_id with a column argument to show that this works well
+select id, last_insert_id(count(*)) as num_segments from t1 group by id;

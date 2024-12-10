@@ -4135,6 +4135,34 @@
     }
   },
   {
+    "comment": "Save the count in last_insert_id",
+    "query": "select id, last_insert_id(count(*)) as num_segments from user group by id",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select id, last_insert_id(count(*)) as num_segments from user group by id",
+      "Instructions": {
+        "OperatorType": "SaveToSession",
+        "Offset": "_vt_column_1",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id, last_insert_id(count(*)) as num_segments from `user` where 1 != 1 group by id",
+            "Query": "select id, last_insert_id(count(*)) as num_segments from `user` group by id",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
     "comment": "Aggregations from derived table used in arithmetic outside derived table",
     "query": "select A.a, A.b, (A.a / A.b) as d from (select sum(a) as a, sum(b) as b from user) A",
     "plan": {
