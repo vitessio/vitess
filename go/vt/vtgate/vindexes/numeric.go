@@ -31,7 +31,7 @@ var (
 	_ Reversible      = (*Numeric)(nil)
 	_ Hashing         = (*Numeric)(nil)
 	_ ParamValidating = (*Numeric)(nil)
-	_ Between         = (*Numeric)(nil)
+	_ Sequential      = (*Numeric)(nil)
 )
 
 // Numeric defines a bit-pattern mapping of a uint64 to the KeyspaceId.

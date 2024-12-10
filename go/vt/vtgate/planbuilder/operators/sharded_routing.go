@@ -238,21 +238,26 @@ func (tr *ShardedRouting) searchForNewVindexes(ctx *plancontext.PlanningContext,
 }
 
 func (tr *ShardedRouting) planBetweenOp(ctx *plancontext.PlanningContext, node *sqlparser.BetweenExpr) (routing Routing, foundNew bool) {
-	// x BETWEEN a AND b => x >= a AND x <= b
 	column, ok := node.Left.(*sqlparser.ColName)
 	if !ok {
 		return nil, false
 	}
-	vals := []sqlparser.Expr{}
-	vals = append(vals, node.From, node.To)
-	var vdValue sqlparser.ValTuple = vals
+	var vdValue sqlparser.ValTuple = sqlparser.ValTuple([]sqlparser.Expr{node.From, node.To})
 	opcode := func(*vindexes.ColumnVindex) engine.Opcode { return engine.Between }
+
+	sequentialVdx := func(vindex *vindexes.ColumnVindex) vindexes.Vindex {
+		if _, ok := vindex.Vindex.(vindexes.Sequential); ok {
+			return vindex.Vindex
+		}
+		// if vindex is not of type Sequential, we can't use this vindex at all
+		return nil
+	}
 
 	val := makeEvalEngineExpr(ctx, vdValue)
 	if val == nil {
 		return nil, false
 	}
-	return nil, tr.haveMatchingVindex(ctx, node, vdValue, column, val, opcode, justTheVindex)
+	return nil, tr.haveMatchingVindex(ctx, node, vdValue, column, val, opcode, sequentialVdx)
 }
 
 func (tr *ShardedRouting) planComparison(ctx *plancontext.PlanningContext, cmp *sqlparser.ComparisonExpr) (routing Routing, foundNew bool) {

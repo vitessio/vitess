@@ -52,7 +52,7 @@ const (
 	// Requires: A Vindex, and a multi Values.
 	IN
 	// Between is for routing a statement to a multi shard
-	// Requires: A Vindex, and a multi Values.
+	// Requires: A Vindex, and start and end Value.
 	Between
 	// MultiEqual is used for routing queries with IN with tuple clause
 	// Requires: A Vindex, and a multi Tuple Values.
@@ -167,7 +167,7 @@ func (rp *RoutingParameters) findRoute(ctx context.Context, vcursor VCursor, bin
 			return rp.between(ctx, vcursor, bindVars)
 		default:
 			// Only SingleColumn vindex supported.
-			return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "opcode: %v not supported", rp.Opcode)
+			return nil, nil, vterrors.VT13001("between supported on SingleColumn vindex only")
 		}
 	case MultiEqual:
 		switch rp.Vindex.(type) {
@@ -414,7 +414,7 @@ func (rp *RoutingParameters) between(ctx context.Context, vcursor VCursor, bindV
 	if err != nil {
 		return nil, nil, err
 	}
-	rss, values, err := resolveShardsBetween(ctx, vcursor, rp.Vindex.(vindexes.Between), rp.Keyspace, value.TupleValues())
+	rss, values, err := resolveShardsBetween(ctx, vcursor, rp.Vindex.(vindexes.Sequential), rp.Keyspace, value.TupleValues())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -545,7 +545,7 @@ func buildMultiColumnVindexValues(shardsValues [][][]sqltypes.Value) [][][]*quer
 	return shardsIds
 }
 
-func resolveShardsBetween(ctx context.Context, vcursor VCursor, vindex vindexes.Between, keyspace *vindexes.Keyspace, vindexKeys []sqltypes.Value) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
+func resolveShardsBetween(ctx context.Context, vcursor VCursor, vindex vindexes.Sequential, keyspace *vindexes.Keyspace, vindexKeys []sqltypes.Value) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
 	// Convert vindexKeys to []*querypb.Value
 	ids := make([]*querypb.Value, len(vindexKeys))
 	for i, vik := range vindexKeys {

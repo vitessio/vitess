@@ -30,7 +30,7 @@ var (
 	_ Reversible      = (*Binary)(nil)
 	_ Hashing         = (*Binary)(nil)
 	_ ParamValidating = (*Binary)(nil)
-	_ Between         = (*Binary)(nil)
+	_ Sequential      = (*Binary)(nil)
 )
 
 // Binary is a vindex that converts binary bits to a keyspace id.

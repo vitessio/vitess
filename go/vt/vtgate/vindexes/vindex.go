@@ -130,10 +130,10 @@ type (
 		ReverseMap(vcursor VCursor, ks [][]byte) ([]sqltypes.Value, error)
 	}
 
-	// A Between vindex is an optional interface one that maps to a keyspace range
+	// A Sequential vindex is an optional interface one that maps to a keyspace range
 	// instead of a single keyspace id. It's being used to reduce the fan out for
 	// 'BETWEEN' expressions.
-	Between interface {
+	Sequential interface {
 		RangeMap(ctx context.Context, vcursor VCursor, startId sqltypes.Value, endId sqltypes.Value) ([]key.Destination, error)
 	}
 
