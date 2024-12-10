@@ -68,11 +68,6 @@ func OpenTabletDiscovery() <-chan time.Time {
 	if _, err := db.ExecVTOrc("delete from vitess_tablet"); err != nil {
 		log.Error(err)
 	}
-<<<<<<< HEAD
-	// We refresh all information from the topo once before we start the ticks to do it on a timer.
-	populateAllInformation()
-	return time.Tick(time.Second * time.Duration(config.Config.TopoInformationRefreshSeconds)) //nolint SA1015: using time.Tick leaks the underlying ticker
-=======
 	// We refresh all information from the topo once before we start the ticks to do
 	// it on a timer.
 	ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
@@ -80,8 +75,7 @@ func OpenTabletDiscovery() <-chan time.Time {
 	if err := refreshAllInformation(ctx); err != nil {
 		log.Errorf("failed to initialize topo information: %+v", err)
 	}
-	return time.Tick(config.GetTopoInformationRefreshDuration()) //nolint SA1015: using time.Tick leaks the underlying ticker
->>>>>>> 91811154ac (`vtorc`: require topo for `Healthy: true` in `/debug/health` (#17129))
+	return time.Tick(time.Second * time.Duration(config.Config.TopoInformationRefreshSeconds)) //nolint SA1015: using time.Tick leaks the underlying ticker
 }
 
 // refreshAllTablets reloads the tablets from topo and discovers the ones which haven't been refreshed in a while
