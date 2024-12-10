@@ -103,6 +103,7 @@ var (
 		"vtgate_vindex_heavy",
 		"vtgate_vschema",
 		"vtgate_queries",
+		"vtgate_plantests",
 		"vtgate_schema_tracker",
 		"vtgate_foreignkey_stress",
 		"vtorc",

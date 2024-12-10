@@ -58,34 +58,52 @@
       "sharded": true,
       "vindexes": {
         "user_index": {
-          "type": "hash_test",
+          "type": "hash",
           "owner": "user"
         },
         "kid_index": {
-          "type": "hash_test",
+          "type": "hash",
           "owner": "multicolvin"
+        },
+        "hash": {
+          "type": "hash"
         },
         "user_md5_index": {
           "type": "unicode_loose_md5"
         },
         "music_user_map": {
-          "type": "lookup_test",
-          "owner": "music"
+          "type": "lookup_unique",
+          "owner": "music",
+          "params": {
+            "table": "name_user_vdx",
+            "from": "name",
+            "to": "keyspace_id"
+          }
         },
         "cola_map": {
-          "type": "lookup_test",
-          "owner": "multicolvin"
+          "type": "lookup_unique",
+          "owner": "multicolvin",
+          "params": {
+            "table": "cola_map",
+            "from": "cola",
+            "to": "keyspace_id"
+          }
         },
         "colb_colc_map": {
-          "type": "lookup_test",
-          "owner": "multicolvin"
+          "type": "lookup_unique",
+          "owner": "multicolvin",
+          "params": {
+            "table": "colb_colc_map",
+            "from": "colb,colc",
+            "to": "keyspace_id"
+          }
         },
         "cola_kid_map": {
-          "type": "lookup_test",
+          "type": "lookup_unique",
           "owner": "overlap_vindex"
         },
         "name_user_map": {
-          "type": "name_lkp_test",
+          "type": "lookup",
           "owner": "user",
           "params": {
             "table": "name_user_vdx",
@@ -94,42 +112,56 @@
           }
         },
         "email_user_map": {
-          "type": "lookup_test",
+          "type": "lookup_unique",
           "owner": "user_metadata"
         },
         "address_user_map": {
-          "type": "lookup_test",
+          "type": "lookup_unique",
           "owner": "user_metadata"
         },
         "costly_map": {
-          "type": "costly",
-          "owner": "user"
+          "type": "lookup_cost",
+          "owner": "user",
+          "params": {
+            "table": "costly_map",
+            "from": "costly",
+            "to": "keyspace_id",
+            "cost": "100"
+          }
         },
         "hash_dup": {
-          "type": "hash_test",
+          "type": "hash",
           "owner": "user"
         },
         "vindex1": {
-          "type": "hash_test",
+          "type": "hash",
           "owner": "samecolvin"
         },
         "vindex2": {
-          "type": "lookup_test",
+          "type": "lookup_unique",
           "owner": "samecolvin"
         },
         "cfc": {
           "type": "cfc"
         },
         "multicolIdx": {
-          "type": "multiCol_test"
+          "type": "multicol",
+          "params": {
+            "column_count": "2"
+          }
         },
         "colc_map": {
-          "type": "lookup_test",
+          "type": "lookup_unique",
           "owner": "multicol_tbl"
         },
         "name_muticoltbl_map": {
-          "type": "name_lkp_test",
-          "owner": "multicol_tbl"
+          "type": "lookup",
+          "owner": "multicol_tbl",
+          "params": {
+            "table": "name_user_vdx",
+            "from": "name",
+            "to": "keyspace_id"
+          }
         },
         "non_planable_user_map": {
           "type": "lookup_unicodeloosemd5_hash",
@@ -141,7 +173,7 @@
           "owner": "user_metadata"
         },
         "lkp_shard_map": {
-          "type": "name_lkp_test",
+          "type": "lookup_unique",
           "owner": "mixed_tbl",
           "params": {
             "table": "lkp_shard_vdx",
@@ -153,18 +185,18 @@
           "type": "xxhash"
         },
         "unq_lkp_bf_vdx": {
-            "type": "unq_lkp_test",
+            "type": "lookup_unique",
             "owner": "customer",
             "params": {
               "table": "unq_lkp_idx",
-              "from": " ",
+              "from": "unq_key",
               "to": "keyspace_id",
               "cost": "100",
               "write_only": "true"
             }
         },
         "unq_lkp_vdx": {
-            "type": "unq_lkp_test",
+            "type": "lookup_unique",
             "owner": "customer",
             "params": {
               "table": "unq_lkp_idx",
@@ -174,11 +206,11 @@
             }
         },
         "lkp_bf_vdx": {
-          "type": "name_lkp_test",
+          "type": "lookup_unique",
           "owner": "customer",
           "params": {
             "table": "lkp_shard_vdx",
-            "from": " ",
+            "from": "unq_key",
             "to": "keyspace_id",
             "write_only": "true"
           }
@@ -352,6 +384,22 @@
             }
           ]
         },
+        "cola_map": {
+          "column_vindexes": [
+            {
+              "column": "cola",
+              "name": "hash"
+            }
+          ]
+        },
+        "colb_colc_map": {
+          "column_vindexes": [
+            {
+              "column": "colb",
+              "name": "hash"
+            }
+          ]
+        },
         "overlap_vindex": {
           "column_vindexes": [
             {
@@ -459,6 +507,14 @@
             {
               "column": "non_planable",
               "name": "user_index"
+            }
+          ]
+        },
+        "costly_map": {
+          "column_vindexes": [
+            {
+              "column": "name",
+              "name": "user_md5_index"
             }
           ]
         },
@@ -641,7 +697,10 @@
           "type": "hash_test"
         },
         "multicolIdx": {
-          "type": "multiCol_test"
+          "type": "multicol",
+          "params": {
+            "column_count": "3"
+          }
         }
       },
       "tables": {
