@@ -225,7 +225,6 @@ func TestMain(m *testing.M) {
 }
 
 func TestVreplMiniStressSchemaChanges(t *testing.T) {
-	defer cluster.PanicHandler(t)
 
 	ctx := context.Background()
 

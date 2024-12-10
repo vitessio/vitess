@@ -86,7 +86,6 @@ func TestMain(m *testing.M) {
 }
 
 func TestTransactionRollBackWhenShutDown(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
@@ -121,7 +120,6 @@ func TestTransactionRollBackWhenShutDown(t *testing.T) {
 }
 
 func TestErrorInAutocommitSession(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)

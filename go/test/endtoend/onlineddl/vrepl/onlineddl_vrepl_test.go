@@ -223,7 +223,6 @@ func TestMain(m *testing.M) {
 }
 
 func TestVreplSchemaChanges(t *testing.T) {
-	defer cluster.PanicHandler(t)
 
 	shards = clusterInstance.Keyspaces[0].Shards
 	require.Equal(t, 2, len(shards))

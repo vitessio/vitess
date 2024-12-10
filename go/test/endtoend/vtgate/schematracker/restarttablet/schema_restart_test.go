@@ -115,7 +115,6 @@ func TestMain(m *testing.M) {
 }
 
 func TestVSchemaTrackerInit(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
@@ -136,7 +135,6 @@ func TestVSchemaTrackerInit(t *testing.T) {
 // properly handles primary tablet restarts -- meaning that we maintain
 // the exact same vschema state as before the restart.
 func TestVSchemaTrackerKeyspaceReInit(t *testing.T) {
-	defer cluster.PanicHandler(t)
 
 	primaryTablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
 

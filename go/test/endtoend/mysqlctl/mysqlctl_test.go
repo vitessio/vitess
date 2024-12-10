@@ -138,7 +138,6 @@ func initCluster(shardNames []string, totalTabletsRequired int) {
 }
 
 func TestRestart(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	err := primaryTablet.MysqlctlProcess.Stop()
 	require.NoError(t, err)
 	primaryTablet.MysqlctlProcess.CleanupFiles(primaryTablet.TabletUID)
@@ -147,7 +146,6 @@ func TestRestart(t *testing.T) {
 }
 
 func TestAutoDetect(t *testing.T) {
-	defer cluster.PanicHandler(t)
 
 	err := clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].VttabletProcess.Setup()
 	require.NoError(t, err)

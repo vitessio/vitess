@@ -86,7 +86,6 @@ func start(t *testing.T, vtParams mysql.ConnParams) (*mysql.Conn, func()) {
 	return vtConn, func() {
 		deleteAll()
 		vtConn.Close()
-		cluster.PanicHandler(t)
 	}
 }
 

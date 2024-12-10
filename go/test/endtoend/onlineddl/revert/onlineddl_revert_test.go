@@ -203,7 +203,6 @@ func TestMain(m *testing.M) {
 }
 
 func TestRevertSchemaChanges(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	shards = clusterInstance.Keyspaces[0].Shards
 	require.Equal(t, 1, len(shards))
 

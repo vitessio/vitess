@@ -100,7 +100,6 @@ func TestMain(m *testing.M) {
 }
 
 func TestSchemaChange(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	testWithInitialSchema(t)
 	testWithAlterSchema(t)
 	testWithAlterDatabase(t)

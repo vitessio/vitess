@@ -200,7 +200,6 @@ func TestMainImpl(m *testing.M) {
 //
 // 7. check that vtgate queries work correctly
 func TestRecoveryImpl(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	defer tabletsTeardown()
 	verifyInitialReplication(t)
 

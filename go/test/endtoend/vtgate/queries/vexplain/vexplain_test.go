@@ -24,7 +24,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/test/endtoend/cluster"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/utils"
@@ -49,7 +48,6 @@ func start(t *testing.T) (*mysql.Conn, func()) {
 	return vtConn, func() {
 		deleteAll()
 		vtConn.Close()
-		cluster.PanicHandler(t)
 	}
 }
 

@@ -124,7 +124,6 @@ func TestMain(m *testing.M) {
 }
 
 func TestStreamMessaging(t *testing.T) {
-	defer cluster.PanicHandler(t)
 
 	cnf := vitessdriver.Configuration{
 		Protocol: "grpc",

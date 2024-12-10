@@ -101,7 +101,6 @@ func TestMain(m *testing.M) {
 }
 
 func TestShardedKeyspace(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	shard1 := clusterInstance.Keyspaces[0].Shards[0]
 	shard2 := clusterInstance.Keyspaces[0].Shards[1]
 

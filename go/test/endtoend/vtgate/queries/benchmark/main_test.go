@@ -168,6 +168,5 @@ func start(b *testing.B) (*mysql.Conn, func()) {
 	return conn, func() {
 		deleteAll()
 		conn.Close()
-		cluster.PanicHandler(b)
 	}
 }

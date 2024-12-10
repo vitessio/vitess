@@ -115,7 +115,6 @@ func TestMain(m *testing.M) {
 }
 
 func TestRepeatedInitShardPrimary(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	// Test that using InitShardPrimary can go back and forth between 2 hosts.
 
 	// Make replica tablet as primary
@@ -154,7 +153,6 @@ func TestRepeatedInitShardPrimary(t *testing.T) {
 }
 
 func TestPrimaryRestartSetsPTSTimestamp(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	// Test that PTS timestamp is set when we restart the PRIMARY vttablet.
 	// PTS = PrimaryTermStart.
 	// See StreamHealthResponse.primary_term_start_timestamp for details.

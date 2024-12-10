@@ -160,7 +160,6 @@ func TestNewTable(t *testing.T) {
 }
 
 func TestAmbiguousColumnJoin(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)

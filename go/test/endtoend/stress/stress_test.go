@@ -83,7 +83,6 @@ func TestMain(m *testing.M) {
 // The stressor is started on its own goroutine while the end-to-end test
 // is executed on the same cluster.
 func TestSimpleStressTest(t *testing.T) {
-	defer cluster.PanicHandler(t)
 
 	cfg := stress.DefaultConfig
 	cfg.ConnParams = &vtParams

@@ -196,7 +196,6 @@ func TestMain(m *testing.M) {
 }
 
 func TestOnlineDDLFlow(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 
 	require.NotNil(t, clusterInstance)
