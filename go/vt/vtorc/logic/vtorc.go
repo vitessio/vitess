@@ -17,12 +17,9 @@
 package logic
 
 import (
-<<<<<<< HEAD
+	"context"
 	"os"
 	"os/signal"
-=======
-	"context"
->>>>>>> 91811154ac (`vtorc`: require topo for `Healthy: true` in `/debug/health` (#17129))
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -334,7 +331,8 @@ func ContinuousDiscovery() {
 				go inst.SnapshotTopologies()
 			}()
 		case <-tabletTopoTick:
-			ctx, cancel := context.WithTimeout(context.Background(), config.GetTopoInformationRefreshDuration())
+			timeout := time.Second * time.Duration(config.Config.TopoInformationRefreshSeconds)
+			ctx, cancel := context.WithTimeout(context.Background(), timeout)
 			if err := refreshAllInformation(ctx); err != nil {
 				log.Errorf("failed to refresh topo information: %+v", err)
 			}
