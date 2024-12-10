@@ -823,31 +823,29 @@ func tryPushUnion(ctx *plancontext.PlanningContext, op *Union) (Operator, *Apply
 func handleLastInsertIDColumns(ctx *plancontext.PlanningContext, output Operator) Operator {
 	offset := -1
 	topLevel := false
-	var arg sqlparser.Expr
+	var foundFunc *sqlparser.FuncExpr
 	for i, expr := range output.GetSelectExprs(ctx) {
 		ae, ok := expr.(*sqlparser.AliasedExpr)
 		if !ok {
 			panic(vterrors.VT09015())
 		}
 
-		replaceFn := func(node sqlparser.Expr) (sqlparser.Expr, bool) {
+		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
 			fnc, ok := node.(*sqlparser.FuncExpr)
 			if !ok || !fnc.Name.EqualString("last_insert_id") {
-				return node, false
+				return true, nil
 			}
 			if offset != -1 {
 				panic(vterrors.VT12001("last_insert_id() found multiple times in select list"))
 			}
-			arg = fnc.Exprs[0]
+			foundFunc = fnc
 			if node == ae.Expr {
 				topLevel = true
 			}
 			offset = i
-			return arg, true
-		}
+			return false, nil
 
-		newExpr := sqlparser.CopyAndReplaceExpr(ae.Expr, replaceFn)
-		ae.Expr = newExpr.(sqlparser.Expr)
+		}, ae.Expr)
 	}
 	if offset == -1 {
 		panic(vterrors.VT12001("last_insert_id(<expr>) only supported in the select list"))
@@ -861,7 +859,7 @@ func handleLastInsertIDColumns(ctx *plancontext.PlanningContext, output Operator
 		}
 	}
 
-	offset = output.AddColumn(ctx, false, false, aeWrap(arg))
+	offset = output.AddColumn(ctx, false, false, aeWrap(foundFunc))
 	return &SaveToSession{
 		unaryOperator: unaryOperator{
 			Source: output,
@@ -890,25 +888,7 @@ func addTruncationOrProjectionToReturnOutput(ctx *plancontext.PlanningContext, s
 }
 
 func extractSelectExpressions(horizon *Horizon) sqlparser.SelectExprs {
-	sel := sqlparser.GetFirstSelect(horizon.Query)
-	// we handle last_insert_id with arguments separately - no need to send this down to mysql
-	selExprs := sqlparser.CopyAndReplaceExpr(sel.SelectExprs, func(node sqlparser.Expr) (sqlparser.Expr, bool) {
-		switch node := node.(type) {
-		case *sqlparser.FuncExpr:
-			if node.Name.EqualString("last_insert_id") && len(node.Exprs) == 1 {
-				return node.Exprs[0], true
-			}
-			return node, true
-		case sqlparser.Expr:
-			// we do this to make sure we get a clone of the expression
-			// if planning changes the expression, we should not change the original
-			return node, true
-		default:
-			return nil, false
-		}
-	})
-
-	return selExprs.(sqlparser.SelectExprs)
+	return sqlparser.CloneSelectExprs(sqlparser.GetFirstSelect(horizon.Query).SelectExprs)
 }
 
 func colNamesAlign(expected, actual sqlparser.SelectExprs) bool {
