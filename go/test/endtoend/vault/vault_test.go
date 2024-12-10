@@ -99,7 +99,6 @@ var (
 )
 
 func TestVaultAuth(t *testing.T) {
-	defer cluster.PanicHandler(nil)
 
 	// Instantiate Vitess Cluster objects and start topo
 	initializeClusterEarly(t)

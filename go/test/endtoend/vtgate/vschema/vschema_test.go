@@ -123,7 +123,6 @@ func writeConfig(path string, cfg map[string]string) error {
 }
 
 func TestVSchema(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)

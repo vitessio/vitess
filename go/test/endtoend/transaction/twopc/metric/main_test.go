@@ -48,7 +48,6 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	exitcode := func() int {
@@ -110,7 +109,6 @@ func start(t *testing.T) (*mysql.Conn, func()) {
 }
 
 func cleanup(t *testing.T) {
-	cluster.PanicHandler(t)
 	twopcutil.ClearOutTable(t, vtParams, "twopc_user")
 	twopcutil.ClearOutTable(t, vtParams, "twopc_t1")
 }

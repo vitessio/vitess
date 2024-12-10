@@ -349,17 +349,6 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
-		"pitr": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/recovery/pitr"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "10",
-			"RetryMax": 1,
-			"Tags": [
-				"site_test"
-			]
-		},
 		"recovery": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/recovery/unshardedrecovery"],
