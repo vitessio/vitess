@@ -96,7 +96,6 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	exitCode := func() int {
@@ -241,7 +240,6 @@ func vtgateExec(t *testing.T, query string, expectError string) *sqltypes.Result
 }
 
 func TestInitialThrottler(t *testing.T) {
-	defer cluster.PanicHandler(t)
 
 	t.Run("validating OK response from disabled throttler", func(t *testing.T) {
 		waitForThrottleCheckStatus(t, primaryTablet, http.StatusOK)
@@ -333,7 +331,6 @@ func TestInitialThrottler(t *testing.T) {
 }
 
 func TestThrottlerAfterMetricsCollected(t *testing.T) {
-	defer cluster.PanicHandler(t)
 
 	// By this time metrics will have been collected. We expect no lag, and something like:
 	// {"StatusCode":200,"Value":0.282278,"Threshold":1,"Message":""}
@@ -362,7 +359,6 @@ func TestThrottlerAfterMetricsCollected(t *testing.T) {
 }
 
 func TestLag(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	// Temporarily disable VTOrc recoveries because we want to
 	// STOP replication specifically in order to increase the
 	// lag and we DO NOT want VTOrc to try and fix this.
@@ -437,7 +433,6 @@ func TestLag(t *testing.T) {
 }
 
 func TestNoReplicas(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	t.Run("changing replica to RDONLY", func(t *testing.T) {
 		err := clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", replicaTablet.Alias, "RDONLY")
 		assert.NoError(t, err)
@@ -455,7 +450,6 @@ func TestNoReplicas(t *testing.T) {
 }
 
 func TestCustomQuery(t *testing.T) {
-	defer cluster.PanicHandler(t)
 
 	t.Run("enabling throttler with custom query and threshold", func(t *testing.T) {
 		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, true, false, customThreshold, customQuery, nil)
@@ -522,7 +516,6 @@ func TestCustomQuery(t *testing.T) {
 }
 
 func TestRestoreDefaultQuery(t *testing.T) {
-	defer cluster.PanicHandler(t)
 
 	// Validate going back from custom-query to default-query (replication lag) still works.
 	t.Run("enabling throttler with default query and threshold", func(t *testing.T) {

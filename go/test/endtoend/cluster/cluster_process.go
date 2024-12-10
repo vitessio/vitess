@@ -992,7 +992,6 @@ func (cluster *LocalProcessCluster) VtctlclientChangeTabletType(tablet *Vttablet
 
 // Teardown brings down the cluster by invoking teardown for individual processes
 func (cluster *LocalProcessCluster) Teardown() {
-	PanicHandler(nil)
 	cluster.mx.Lock()
 	defer cluster.mx.Unlock()
 	if cluster.teardownCompleted {

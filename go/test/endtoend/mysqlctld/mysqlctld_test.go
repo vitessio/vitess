@@ -44,7 +44,6 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	exitCode := func() int {
@@ -141,7 +140,6 @@ func initCluster(shardNames []string, totalTabletsRequired int) error {
 }
 
 func TestRestart(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	err := primaryTablet.MysqlctldProcess.Stop()
 	require.Nil(t, err)
 	require.Truef(t, primaryTablet.MysqlctldProcess.WaitForMysqlCtldShutdown(), "Mysqlctld has not stopped...")
@@ -151,7 +149,6 @@ func TestRestart(t *testing.T) {
 }
 
 func TestAutoDetect(t *testing.T) {
-	defer cluster.PanicHandler(t)
 
 	err := clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].VttabletProcess.Setup()
 	require.Nil(t, err, "error should be nil")

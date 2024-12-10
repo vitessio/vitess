@@ -22,8 +22,6 @@ import (
 	"vitess.io/vitess/go/test/endtoend/utils"
 
 	"github.com/stretchr/testify/require"
-
-	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
 func start(t *testing.T) (utils.MySQLCompare, func()) {
@@ -44,7 +42,6 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 	return mcmp, func() {
 		deleteAll()
 		mcmp.Close()
-		cluster.PanicHandler(t)
 	}
 }
 

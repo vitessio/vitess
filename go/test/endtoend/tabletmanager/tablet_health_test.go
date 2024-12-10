@@ -40,7 +40,6 @@ import (
 
 // TabletReshuffle test if a vttablet can be pointed at an existing mysql
 func TestTabletReshuffle(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 
 	conn, err := mysql.Connect(ctx, &primaryTabletParams)
@@ -93,7 +92,6 @@ func TestTabletReshuffle(t *testing.T) {
 
 func TestHealthCheck(t *testing.T) {
 	// Add one replica that starts not initialized
-	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	clusterInstance.DisableVTOrcRecoveries(t)
 	defer clusterInstance.EnableVTOrcRecoveries(t)
@@ -201,7 +199,6 @@ func TestHealthCheck(t *testing.T) {
 // TestHealthCheckSchemaChangeSignal tests the tables and views, which report their schemas have changed in the output of a StreamHealth.
 func TestHealthCheckSchemaChangeSignal(t *testing.T) {
 	// Add one replica that starts not initialized
-	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 
 	vtParams := clusterInstance.GetVTParams(keyspaceName)
@@ -386,7 +383,6 @@ func TestHealthCheckDrainedStateDoesNotShutdownQueryService(t *testing.T) {
 	// - the query service won't be shutdown
 
 	// Wait if tablet is not in service state
-	defer cluster.PanicHandler(t)
 	clusterInstance.DisableVTOrcRecoveries(t)
 	defer clusterInstance.EnableVTOrcRecoveries(t)
 	err := rdonlyTablet.VttabletProcess.WaitForTabletStatus("SERVING")

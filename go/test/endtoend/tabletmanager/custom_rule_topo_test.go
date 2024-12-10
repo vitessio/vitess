@@ -33,7 +33,6 @@ import (
 
 func TestTopoCustomRule(t *testing.T) {
 
-	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &primaryTabletParams)
 	require.NoError(t, err)

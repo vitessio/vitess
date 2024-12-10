@@ -39,7 +39,6 @@ import (
 // verify that with multiple vtorc instances, we still only have 1 PlannedReparentShard call
 func TestPrimaryElection(t *testing.T) {
 	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
-	defer cluster.PanicHandler(t)
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, nil, cluster.VTOrcConfiguration{
 		PreventCrossDataCenterPrimaryFailover: true,
 	}, 2, "")
@@ -67,7 +66,6 @@ func TestPrimaryElection(t *testing.T) {
 // verify replication is setup
 func TestSingleKeyspace(t *testing.T) {
 	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
-	defer cluster.PanicHandler(t)
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 1, 1, []string{"--clusters_to_watch", "ks"}, cluster.VTOrcConfiguration{
 		PreventCrossDataCenterPrimaryFailover: true,
 	}, 1, "")
@@ -86,7 +84,6 @@ func TestSingleKeyspace(t *testing.T) {
 // verify replication is setup
 func TestKeyspaceShard(t *testing.T) {
 	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
-	defer cluster.PanicHandler(t)
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 1, 1, []string{"--clusters_to_watch", "ks/0"}, cluster.VTOrcConfiguration{
 		PreventCrossDataCenterPrimaryFailover: true,
 	}, 1, "")
@@ -108,7 +105,6 @@ func TestKeyspaceShard(t *testing.T) {
 // 6. disable recoveries and make sure the detected problems are set correctly.
 func TestVTOrcRepairs(t *testing.T) {
 	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
-	defer cluster.PanicHandler(t)
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 3, 0, []string{"--change-tablets-with-errant-gtid-to-drained"}, cluster.VTOrcConfiguration{
 		PreventCrossDataCenterPrimaryFailover: true,
 	}, 1, "")
@@ -275,7 +271,6 @@ func TestRepairAfterTER(t *testing.T) {
 	// test fails intermittently on CI, skip until it can be fixed.
 	t.SkipNow()
 	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
-	defer cluster.PanicHandler(t)
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 0, nil, cluster.VTOrcConfiguration{
 		PreventCrossDataCenterPrimaryFailover: true,
 	}, 1, "")
@@ -377,7 +372,6 @@ func TestSemiSync(t *testing.T) {
 // TestVTOrcWithPrs tests that VTOrc works fine even when PRS is called from vtctld
 func TestVTOrcWithPrs(t *testing.T) {
 	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
-	defer cluster.PanicHandler(t)
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 4, 0, nil, cluster.VTOrcConfiguration{
 		PreventCrossDataCenterPrimaryFailover: true,
 	}, 1, "")
@@ -429,7 +423,6 @@ func TestVTOrcWithPrs(t *testing.T) {
 // TestMultipleDurabilities tests that VTOrc works with 2 keyspaces having 2 different durability policies
 func TestMultipleDurabilities(t *testing.T) {
 	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
-	defer cluster.PanicHandler(t)
 	// Setup a normal cluster and start vtorc
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 1, 1, nil, cluster.VTOrcConfiguration{}, 1, "")
 	// Setup a semi-sync cluster
@@ -498,7 +491,6 @@ func TestDurabilityPolicySetLater(t *testing.T) {
 
 func TestFullStatusConnectionPooling(t *testing.T) {
 	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
-	defer cluster.PanicHandler(t)
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 4, 0, []string{
 		"--tablet_manager_grpc_concurrency=1",
 	}, cluster.VTOrcConfiguration{
