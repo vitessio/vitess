@@ -53,6 +53,9 @@ func CopyOnRewrite(
 	return out
 }
 
+// CopyAndReplaceExpr traverses a syntax tree recursively, starting with root,
+// and replaceFn is called for each node that is an Expr. If replaceFn returns
+// true, the node is replaced with the returned node.
 func CopyAndReplaceExpr(node SQLNode, replaceFn func(node Expr) (Expr, bool)) SQLNode {
 	var replace Expr
 	pre := func(node, _ SQLNode) bool {
