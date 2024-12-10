@@ -10,7 +10,7 @@
   - **[VTOrc Config File Changes](#vtorc-config-file-changes)**
 - **[Minor Changes](#minor-changes)**
   - **[VTTablet Flags](#flags-vttablet)**
-
+  - **[Topology read concurrency behaviour changes](#topo-read-concurrency-changes)**
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -67,3 +67,9 @@ To upgrade to the newer version of the configuration file, first switch to using
 - `twopc_abandon_age` flag now supports values in the time.Duration format (e.g., 1s, 2m, 1h). 
 While the flag will continue to accept float values (interpreted as seconds) for backward compatibility, 
 **float inputs are deprecated** and will be removed in a future release.
+
+### <a id="topo-read-concurrency-changes"/>`--topo_read_concurrency` behaviour changes
+
+The `--topo_read_concurrency` flag was added to all components that access the topology and the provided limit is now applied separately for each global or local cell _(default `32`)_.
+
+All topology read calls _(`Get`, `GetVersion`, `List` and `ListDir`)_ now respect this per-cell limit. Previous to this version a single limit was applied to all cell calls and it was not respected by many topology calls.
