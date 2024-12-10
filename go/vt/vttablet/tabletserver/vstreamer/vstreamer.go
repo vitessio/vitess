@@ -1031,19 +1031,23 @@ func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *strea
 		}
 		if afterOK {
 			rowChange.After = sqltypes.RowToProto3(afterValues)
+			//log.Errorf("DEBUG: partial = %v", partial)
+			//log.Errorf("DEBUG: rowChange: After: %+v", rowChange.After)
 			if (vs.config.ExperimentalFlags /**/ & /**/ vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage != 0) &&
-				partial {
+				(partial || row.JSONPartialValues.Count() > 0) {
 
 				rowChange.DataColumns = &binlogdatapb.RowChange_Bitmap{
 					Count: int64(rows.DataColumns.Count()),
 					Cols:  rows.DataColumns.Bits(),
 				}
+				//log.Errorf("DEBUG: rowChange: DataColumns: %08b", rowChange.DataColumns.Cols)
 			}
 			if row.JSONPartialValues.Count() > 0 {
 				rowChange.JsonPartialValues = &binlogdatapb.RowChange_Bitmap{
 					Count: int64(row.JSONPartialValues.Count()),
 					Cols:  row.JSONPartialValues.Bits(),
 				}
+				//log.Errorf("DEBUG: rowChange: JSONPartialColumns: %08b", rowChange.JsonPartialValues.Cols)
 			}
 		}
 		rowChanges = append(rowChanges, rowChange)

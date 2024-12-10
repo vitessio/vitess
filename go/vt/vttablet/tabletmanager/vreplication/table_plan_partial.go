@@ -36,6 +36,16 @@ func isBitSet(data []byte, index int) bool {
 	return data[byteIndex]&bitMask > 0
 }
 
+func setBit(data []byte, index int, value bool) {
+	byteIndex := index / 8
+	bitMask := byte(1 << (uint(index) & 0x7))
+	if value {
+		data[byteIndex] |= bitMask
+	} else {
+		data[byteIndex] &= 0xff - bitMask
+	}
+}
+
 func (tp *TablePlan) isPartial(rowChange *binlogdatapb.RowChange) bool {
 	if (tp.WorkflowConfig.ExperimentalFlags /**/ & /**/ vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage) == 0 ||
 		rowChange.DataColumns == nil ||

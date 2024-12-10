@@ -386,6 +386,7 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 			var newVal *sqltypes.Value
 			var err error
 			if field.Type == querypb.Type_JSON {
+				//log.Errorf("DEBUG: JSON field %v, value: %v", field.Name, vals[i].RawStr())
 				switch {
 				case vals[i].IsNull(): // An SQL NULL and not an actual JSON value
 					newVal = &sqltypes.NULL
@@ -394,6 +395,12 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 					// as JSON_INSERT().
 					// This occurs e.g. when using partial JSON values as a result of
 					// mysqld using binlog-row-value-options=PARTIAL_JSON.
+					if len(vals[i].Raw()) == 0 {
+						// When using BOTH binlog_row_image=NOBLOB AND
+						// binlog_row_value_options=PARTIAL_JSON then the JSON column
+						// has the data bit set and the diff is empty.
+						setBit(rowChange.DataColumns.Cols, i, false)
+					}
 					s := fmt.Sprintf(vals[i].RawStr(), field.Name)
 					newVal = ptr.Of(sqltypes.MakeTrusted(querypb.Type_EXPRESSION, []byte(s)))
 				default: // A JSON value (which may be a JSON null literal value)
@@ -437,6 +444,7 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 	case before && after:
 		if !tp.pkChanged(bindvars) && !tp.HasExtraSourcePkColumns {
 			if tp.isPartial(rowChange) {
+				//log.Errorf("DEBUG: building partial update query using DataColumns: %08b", rowChange.DataColumns.Cols)
 				upd, err := tp.getPartialUpdateQuery(rowChange.DataColumns)
 				if err != nil {
 					return nil, err
@@ -452,6 +460,12 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 				return nil, err
 			}
 		}
+		// TODO: the INSERTs done here after deleting the row with the original PK
+		// need to use the values from the BEFORE image for the columns NOT present
+		// in the AFTER image due to being a partial image due to the source's usage
+		// of binlog-row-image=NOBLOB.
+		// For JSON columns when binlog-row-value-options=PARTIAL_JSON is used, we
+		// need to wrap the JSON diff function(s) around the BEFORE value.
 		if tp.isOutsidePKRange(bindvars, before, after, "insert") {
 			return nil, nil
 		}
@@ -593,6 +607,7 @@ func execParsedQuery(pq *sqlparser.ParsedQuery, bindvars map[string]*querypb.Bin
 	if err != nil {
 		return nil, err
 	}
+	//log.Errorf("DEBUG: execParsedQuery: %s", query)
 	return executor(query)
 }
 
