@@ -89,7 +89,6 @@ create table corder(
 
 // TestMain sets up the vitess cluster for any subsequent tests
 func TestMain(m *testing.M) {
-	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	exitCode := func() int {

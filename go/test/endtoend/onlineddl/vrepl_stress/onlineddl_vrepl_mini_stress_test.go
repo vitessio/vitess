@@ -160,7 +160,6 @@ func nextOpOrder() int64 {
 }
 
 func TestMain(m *testing.M) {
-	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	exitcode, err := func() (int, error) {
@@ -230,8 +229,6 @@ func TestMain(m *testing.M) {
 }
 
 func TestSchemaChange(t *testing.T) {
-	defer cluster.PanicHandler(t)
-
 	ctx := context.Background()
 
 	shards = clusterInstance.Keyspaces[0].Shards
