@@ -57,7 +57,6 @@ var (
 )
 
 func TestLoadKeyspaceWithNoTablet(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	var err error
 
 	clusterInstance = cluster.NewCluster(cell, hostname)
@@ -100,7 +99,6 @@ func TestLoadKeyspaceWithNoTablet(t *testing.T) {
 }
 
 func TestNoInitialKeyspace(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	var err error
 
 	clusterInstance = cluster.NewCluster(cell, hostname)

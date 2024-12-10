@@ -41,8 +41,6 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	defer cluster.PanicHandler(nil)
-
 	vschema := readFile("vschemas/schema.json")
 	userVs := extractUserKS(vschema)
 	mainVs := extractMainKS(vschema)

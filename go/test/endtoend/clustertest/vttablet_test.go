@@ -25,12 +25,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-
-	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
 func TestVttabletProcess(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	firstTabletPort := clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].HTTPPort
 	testURL(t, fmt.Sprintf("http://localhost:%d/debug/vars/", firstTabletPort), "tablet debug var url")
 	resp, err := http.Get(fmt.Sprintf("http://localhost:%d/debug/vars", firstTabletPort))
@@ -48,7 +45,6 @@ func TestVttabletProcess(t *testing.T) {
 }
 
 func TestDeleteTablet(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	primary := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
 	require.NotNil(t, primary)
 	_, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("DeleteTablets", "--allow-primary", primary.Alias)
