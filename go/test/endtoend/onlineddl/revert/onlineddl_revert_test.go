@@ -21,7 +21,6 @@ import (
 	"flag"
 	"fmt"
 	"math/rand/v2"
-	"net/http"
 	"os"
 	"path"
 	"strings"
@@ -33,6 +32,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/vt/log"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
@@ -207,7 +207,7 @@ func TestRevertSchemaChanges(t *testing.T) {
 	require.Equal(t, 1, len(shards))
 
 	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance)
-	throttler.WaitForCheckThrottlerResult(t, clusterInstance, primaryTablet, throttlerapp.TestingName, nil, http.StatusOK, time.Minute)
+	throttler.WaitForCheckThrottlerResult(t, clusterInstance, primaryTablet, throttlerapp.TestingName, nil, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, time.Minute)
 
 	t.Run("revertible", testRevertible)
 	t.Run("revert", testRevert)

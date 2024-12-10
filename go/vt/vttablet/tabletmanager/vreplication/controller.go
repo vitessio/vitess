@@ -77,6 +77,8 @@ type controller struct {
 	WorkflowConfig    *vttablet.VReplicationConfig
 }
 
+type dbClientGenerator func() (binlogplayer.DBClient, error)
+
 func processWorkflowOptions(params map[string]string) (*vttablet.VReplicationConfig, error) {
 	options, ok := params["options"]
 	if !ok {
@@ -296,7 +298,21 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		}
 		defer vsClient.Close(ctx)
 
-		vr := newVReplicator(ct.id, ct.source, vsClient, ct.blpStats, dbClient, ct.mysqld, ct.vre, ct.WorkflowConfig)
+		var dbClients []binlogplayer.DBClient
+		dbClientGen := func() (binlogplayer.DBClient, error) {
+			dbClient := ct.dbClientFactory()
+			if err := dbClient.Connect(); err != nil {
+				return nil, err
+			}
+			dbClients = append(dbClients, dbClient)
+			return dbClient, nil
+		}
+		defer func() {
+			for _, dbClient := range dbClients {
+				dbClient.Close()
+			}
+		}()
+		vr := newVReplicator(ct.id, ct.source, vsClient, ct.blpStats, dbClient, dbClientGen, ct.mysqld, ct.vre, ct.WorkflowConfig)
 		err = vr.Replicate(ctx)
 		ct.lastWorkflowError.Record(err)
 

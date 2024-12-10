@@ -159,7 +159,7 @@ func TestMariadDBGTIDEVent(t *testing.T) {
 	event, _, err := event.StripChecksum(f)
 	require.NoError(t, err, "StripChecksum failed: %v", err)
 
-	gtid, hasBegin, err := event.GTID(f)
+	gtid, hasBegin, _, _, err := event.GTID(f)
 	require.NoError(t, err, "NewMariaDBGTIDEvent().GTID() returned error: %v", err)
 	require.True(t, hasBegin, "NewMariaDBGTIDEvent() didn't store hasBegin properly.")
 
@@ -178,7 +178,7 @@ func TestMariadDBGTIDEVent(t *testing.T) {
 	event, _, err = event.StripChecksum(f)
 	require.NoError(t, err, "StripChecksum failed: %v", err)
 
-	gtid, hasBegin, err = event.GTID(f)
+	gtid, hasBegin, _, _, err = event.GTID(f)
 	require.NoError(t, err, "NewMariaDBGTIDEvent().GTID() returned error: %v", err)
 	require.False(t, hasBegin, "NewMariaDBGTIDEvent() didn't store hasBegin properly.")
 

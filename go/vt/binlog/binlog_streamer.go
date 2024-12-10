@@ -19,6 +19,7 @@ package binlog
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -278,7 +279,7 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 				Position:  replication.EncodePosition(pos),
 			}
 			if err = bls.sendTransaction(eventToken, statements); err != nil {
-				if err == io.EOF {
+				if errors.Is(err, io.EOF) {
 					return ErrClientEOF
 				}
 				return fmt.Errorf("send reply error: %v", err)
@@ -344,7 +345,7 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 
 		switch {
 		case ev.IsPseudo():
-			gtid, _, err = ev.GTID(format)
+			gtid, _, _, _, err = ev.GTID(format)
 			if err != nil {
 				return pos, fmt.Errorf("can't get GTID from binlog event: %v, event data: %#v", err, ev)
 			}
@@ -360,7 +361,7 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			}
 		case ev.IsGTID(): // GTID_EVENT: update current GTID, maybe BEGIN.
 			var hasBegin bool
-			gtid, hasBegin, err = ev.GTID(format)
+			gtid, hasBegin, _, _, err = ev.GTID(format)
 			if err != nil {
 				return pos, fmt.Errorf("can't get GTID from binlog event: %v, event data: %#v", err, ev)
 			}

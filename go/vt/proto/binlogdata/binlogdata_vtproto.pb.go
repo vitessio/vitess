@@ -511,6 +511,8 @@ func (m *VEvent) CloneVT() *VEvent {
 	r.Shard = m.Shard
 	r.Throttled = m.Throttled
 	r.ThrottledReason = m.ThrottledReason
+	r.LastCommitted = m.LastCommitted
+	r.SequenceNumber = m.SequenceNumber
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -2158,6 +2160,20 @@ func (m *VEvent) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.SequenceNumber != 0 {
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.SequenceNumber))
+		i--
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0xd8
+	}
+	if m.LastCommitted != 0 {
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.LastCommitted))
+		i--
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0xd0
 	}
 	if len(m.ThrottledReason) > 0 {
 		i -= len(m.ThrottledReason)
@@ -3875,6 +3891,12 @@ func (m *VEvent) SizeVT() (n int) {
 	l = len(m.ThrottledReason)
 	if l > 0 {
 		n += 2 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	if m.LastCommitted != 0 {
+		n += 2 + protohelpers.SizeOfVarint(uint64(m.LastCommitted))
+	}
+	if m.SequenceNumber != 0 {
+		n += 2 + protohelpers.SizeOfVarint(uint64(m.SequenceNumber))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -8194,6 +8216,44 @@ func (m *VEvent) UnmarshalVT(dAtA []byte) error {
 			}
 			m.ThrottledReason = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
+		case 26:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field LastCommitted", wireType)
+			}
+			m.LastCommitted = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.LastCommitted |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 27:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field SequenceNumber", wireType)
+			}
+			m.SequenceNumber = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.SequenceNumber |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])

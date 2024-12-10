@@ -19,6 +19,7 @@ package vstreamer
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -80,9 +81,11 @@ type vstreamer struct {
 	versionTableID uint64
 
 	// format and pos are updated by parseEvent.
-	format  mysql.BinlogFormat
-	pos     replication.Position
-	stopPos string
+	format         mysql.BinlogFormat
+	pos            replication.Position
+	stopPos        string
+	lastCommitted  int64
+	sequenceNumber int64
 
 	phase   string
 	vse     *Engine
@@ -382,7 +385,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			}
 			for _, vevent := range vevents {
 				if err := bufferAndTransmit(vevent); err != nil {
-					if err == io.EOF {
+					if errors.Is(err, io.EOF) {
 						return nil
 					}
 					vs.vse.errorCounts.Add("BufferAndTransmit", 1)
@@ -405,7 +408,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 		case <-hbTimer.C:
 			checkResult, ok := vs.vse.throttlerClient.ThrottleCheckOK(ctx, vs.throttlerApp)
 			if err := injectHeartbeat(!ok, checkResult.Summary()); err != nil {
-				if err == io.EOF {
+				if errors.Is(err, io.EOF) {
 					return nil
 				}
 				vs.vse.errorCounts.Add("Send", 1)
@@ -458,16 +461,20 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 	var vevents []*binlogdatapb.VEvent
 	switch {
 	case ev.IsGTID():
-		gtid, hasBegin, err := ev.GTID(vs.format)
+		gtid, hasBegin, lastCommitted, sequenceNumber, err := ev.GTID(vs.format)
 		if err != nil {
 			return nil, fmt.Errorf("can't get GTID from binlog event: %v, event data: %#v", err, ev)
 		}
 		if hasBegin {
 			vevents = append(vevents, &binlogdatapb.VEvent{
-				Type: binlogdatapb.VEventType_BEGIN,
+				Type:           binlogdatapb.VEventType_BEGIN,
+				LastCommitted:  lastCommitted,
+				SequenceNumber: sequenceNumber,
 			})
 		}
 		vs.pos = replication.AppendGTID(vs.pos, gtid)
+		vs.lastCommitted = lastCommitted
+		vs.sequenceNumber = sequenceNumber
 	case ev.IsXID():
 		vevents = append(vevents, &binlogdatapb.VEvent{
 			Type: binlogdatapb.VEventType_GTID,
@@ -671,7 +678,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 		for {
 			tpevent, err := tp.GetNextEvent()
 			if err != nil {
-				if err == io.EOF {
+				if errors.Is(err, io.EOF) {
 					break
 				}
 				return nil, err
@@ -707,6 +714,8 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 	for _, vevent := range vevents {
 		vevent.Timestamp = int64(ev.Timestamp())
 		vevent.CurrentTime = time.Now().UnixNano()
+		vevent.SequenceNumber = vs.sequenceNumber
+		vevent.LastCommitted = vs.lastCommitted
 	}
 	return vevents, nil
 }

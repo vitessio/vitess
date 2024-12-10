@@ -38353,6 +38353,12 @@ export namespace binlogdata {
 
         /** VEvent throttled_reason */
         throttled_reason?: (string|null);
+
+        /** VEvent last_committed */
+        last_committed?: (number|Long|null);
+
+        /** VEvent sequence_number */
+        sequence_number?: (number|Long|null);
     }
 
     /** Represents a VEvent. */
@@ -38408,6 +38414,12 @@ export namespace binlogdata {
 
         /** VEvent throttled_reason. */
         public throttled_reason: string;
+
+        /** VEvent last_committed. */
+        public last_committed: (number|Long);
+
+        /** VEvent sequence_number. */
+        public sequence_number: (number|Long);
 
         /**
          * Creates a new VEvent instance using the specified properties.
