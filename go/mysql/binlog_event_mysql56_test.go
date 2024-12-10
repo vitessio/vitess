@@ -352,7 +352,7 @@ func TestMySQL56PartialUpdateRowsEvent(t *testing.T) {
 				97, 110, 97, 103, 101, 114,
 			},
 			numRows: 5,
-			want:    "JSON_INSERT(%s, _utf8mb4'$.role', _utf8mb4\"manager\")",
+			want:    "JSON_INSERT(`%s`, _utf8mb4'$.role', _utf8mb4\"manager\")",
 		},
 		{
 			// The mysqlbinlog -vvv --base64-output=decode-rows output for the following event:
@@ -373,7 +373,7 @@ func TestMySQL56PartialUpdateRowsEvent(t *testing.T) {
 			},
 			name:    "REPLACE",
 			numRows: 1,
-			want:    "JSON_REPLACE(%s, _utf8mb4'$.role', _utf8mb4\"IC\")",
+			want:    "JSON_REPLACE(`%s`, _utf8mb4'$.role', _utf8mb4\"IC\")",
 		},
 		{
 			name: "REMOVE",
@@ -394,7 +394,7 @@ func TestMySQL56PartialUpdateRowsEvent(t *testing.T) {
 				111, 108, 101, 115, 97, 108, 97, 114, 121, 7, 109, 97, 110, 97, 103, 101, 114, 1, 1, 0, 2, 0, 0, 0, 0, 0, 0, 0, 14, 98, 111, 98, 64, 100, 111, 109,
 				97, 105, 110, 46, 99, 111, 109, 10, 0, 0, 0, 2, 8, 36, 46, 115, 97, 108, 97, 114, 121,
 			},
-			want: "JSON_REMOVE(%s, _utf8mb4'$.salary')",
+			want: "JSON_REMOVE(`%s`, _utf8mb4'$.salary')",
 		},
 		{
 			name: "REMOVE and REPLACE",
@@ -486,7 +486,7 @@ func TestMySQL56PartialUpdateRowsEvent(t *testing.T) {
 				100, 97, 121, 2, 16, 36, 46, 102, 97, 118, 111, 114, 105, 116, 101, 95, 99, 111, 108, 111, 114,
 			},
 			numRows: 5,
-			want:    "JSON_REMOVE(JSON_REPLACE(%s, _utf8mb4'$.day', _utf8mb4\"monday\"), _utf8mb4'$.favorite_color')",
+			want:    "JSON_REMOVE(JSON_REPLACE(`%s`, _utf8mb4'$.day', _utf8mb4\"monday\"), _utf8mb4'$.favorite_color')",
 		},
 		{
 			name: "INSERT and REMOVE and REPLACE",
@@ -514,7 +514,7 @@ func TestMySQL56PartialUpdateRowsEvent(t *testing.T) {
 				1, 7, 36, 46, 104, 111, 98, 98, 121, 8, 12, 6, 115, 107, 105, 105, 110, 103,
 			},
 			numRows: 1,
-			want:    "JSON_INSERT(JSON_REMOVE(JSON_REPLACE(%s, _utf8mb4'$.day', _utf8mb4\"tuesday\"), _utf8mb4'$.favorite_color'), _utf8mb4'$.hobby', _utf8mb4\"skiing\")",
+			want:    "JSON_INSERT(JSON_REMOVE(JSON_REPLACE(`%s`, _utf8mb4'$.day', _utf8mb4\"tuesday\"), _utf8mb4'$.favorite_color'), _utf8mb4'$.hobby', _utf8mb4\"skiing\")",
 		},
 		{
 			name: "REPLACE with null",
@@ -535,7 +535,7 @@ func TestMySQL56PartialUpdateRowsEvent(t *testing.T) {
 				109, 97, 105, 110, 46, 99, 111, 109, 13, 0, 0, 0, 0, 8, 36, 46, 115, 97, 108, 97, 114, 121, 2, 4, 0,
 			},
 			numRows: 1,
-			want:    "JSON_REPLACE(%s, _utf8mb4'$.salary', null)",
+			want:    "JSON_REPLACE(`%s`, _utf8mb4'$.salary', null)",
 		},
 		{
 			name: "REPLACE 2 paths",
@@ -557,7 +557,30 @@ func TestMySQL56PartialUpdateRowsEvent(t *testing.T) {
 				105, 110, 46, 99, 111, 109, 27, 0, 0, 0, 0, 8, 36, 46, 115, 97, 108, 97, 114, 121, 3, 5, 110, 0, 0, 6, 36, 46, 114, 111, 108, 101, 4, 12, 2, 73, 67,
 			},
 			numRows: 1,
-			want:    "JSON_REPLACE(JSON_REPLACE(%s, _utf8mb4'$.salary', 110), _utf8mb4'$.role', _utf8mb4\"IC\")",
+			want:    "JSON_REPLACE(JSON_REPLACE(`%s`, _utf8mb4'$.salary', 110), _utf8mb4'$.role', _utf8mb4\"IC\")",
+		},
+		{
+			name: "JSON null",
+			// The mysqlbinlog -vvv --base64-output=decode-rows output for the following event:
+			// ### UPDATE `vt_commerce`.`customer`
+			// ### WHERE
+			// ###   @1=5 /* LONGINT meta=0 nullable=0 is_null=0 */
+			// ###   @2='neweve@domain.com' /* VARSTRING(128) meta=128 nullable=1 is_null=0 */
+			// ###   @3='{"day": "friday", "role": "manager", "color": "red", "salary": 100, "favorite_color": "black"}' /* JSON meta=4 nullable=1 is_null=0 */
+			// ### SET
+			// ###   @1=5 /* LONGINT meta=0 nullable=0 is_null=0 */
+			// ###   @2='neweve@domain.com' /* VARSTRING(128) meta=128 nullable=1 is_null=0 */
+			// ###   @3='null' /* JSON meta=4 nullable=1 is_null=0 */
+			rawEvent: []byte{
+				109, 200, 88, 103, 39, 57, 91, 186, 0, 194, 0, 0, 0, 0, 0, 0, 0, 0, 0, 178, 0, 0, 0, 0, 0, 1, 0, 2, 0, 3, 7, 7, 0, 5, 0, 0, 0, 0, 0, 0, 0, 17, 110,
+				101, 119, 101, 118, 101, 64, 100, 111, 109, 97, 105, 110, 46, 99, 111, 109, 97, 0, 0, 0, 0, 5, 0, 96, 0, 39, 0, 3, 0, 42, 0, 4, 0, 46, 0, 5, 0, 51,
+				0, 6, 0, 57, 0, 14, 0, 12, 71, 0, 12, 78, 0, 12, 86, 0, 5, 100, 0, 12, 90, 0, 100, 97, 121, 114, 111, 108, 101, 99, 111, 108, 111, 114, 115, 97,
+				108, 97, 114, 121, 102, 97, 118, 111, 114, 105, 116, 101, 95, 99, 111, 108, 111, 114, 6, 102, 114, 105, 100, 97, 121, 7, 109, 97, 110, 97, 103, 101,
+				114, 3, 114, 101, 100, 5, 98, 108, 97, 99, 107, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 17, 110, 101, 119, 101, 118, 101, 64, 100, 111, 109, 97, 105, 110, 46,
+				99, 111, 109, 2, 0, 0, 0, 4, 0,
+			},
+			numRows: 1,
+			want:    "null",
 		},
 	}
 

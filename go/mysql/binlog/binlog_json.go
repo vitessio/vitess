@@ -97,12 +97,19 @@ func ParseBinaryJSONDiff(data []byte) (sqltypes.Value, error) {
 			diff.WriteString("JSON_INSERT(")
 		case jsonDiffOpRemove:
 			diff.WriteString("JSON_REMOVE(")
+		default:
+			// Can be a literal JSON null.
+			js, err := ParseBinaryJSON(data)
+			if err == nil && js.Type() == json.TypeNull {
+				return sqltypes.MakeTrusted(sqltypes.Expression, js.MarshalTo(nil)), nil
+			}
+			return sqltypes.Value{}, fmt.Errorf("invalid JSON diff operation: %d", opType)
 		}
 		if outer {
 			diff.WriteString(innerStr)
 			diff.WriteString(", ")
 		} else { // Only the inner most function has the field name
-			diff.WriteString("%s, ") // This will later be replaced by the field name
+			diff.WriteString("`%s`, ") // This will later be replaced by the field name
 		}
 
 		pathLen, readTo := readVariableLength(data, pos)

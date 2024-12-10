@@ -691,8 +691,9 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, field *querypb.F
 			if err != nil {
 				panic(err)
 			}
-			jd := jsonVal.MarshalTo(nil)
-			return sqltypes.MakeTrusted(sqltypes.Expression, jd), l + int(metadata), nil
+			d := jsonVal.MarshalTo(nil)
+			return sqltypes.MakeTrusted(sqltypes.Expression,
+				d), l + int(metadata), nil
 		}
 
 		return sqltypes.MakeTrusted(querypb.Type_VARBINARY,
