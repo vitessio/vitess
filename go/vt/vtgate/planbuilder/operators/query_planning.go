@@ -849,7 +849,9 @@ func handleLastInsertIDColumns(ctx *plancontext.PlanningContext, output Operator
 		newExpr := sqlparser.CopyAndReplaceExpr(ae.Expr, replaceFn)
 		ae.Expr = newExpr.(sqlparser.Expr)
 	}
-
+	if offset == -1 {
+		panic(vterrors.VT12001("last_insert_id(<expr>) only supported in the select list"))
+	}
 	if topLevel {
 		return &SaveToSession{
 			unaryOperator: unaryOperator{

@@ -383,5 +383,10 @@
     "comment": "SOME/ANY/ALL comparison operator not supported for unsharded queries",
     "query": "select 1 from user where foo = ALL (select 1 from user_extra where foo = 1)",
     "plan": "VT12001: unsupported: ANY/ALL/SOME comparison operator"
+  },
+  {
+    "comment": "last_insert_id(<expr>) only supported in the select list",
+    "query": "select id, foo from user where last_insert_id(bar) = 12",
+    "plan": "VT12001: unsupported: last_insert_id(<expr>) only supported in the select list"
   }
 ]
