@@ -68,3 +68,6 @@ from (select name from t1 group by name having count(t1.id) > 1) t1;
 
 # this query uses last_insert_id with a column argument to show that this works well
 select id, last_insert_id(count(*)) as num_segments from t1 group by id;
+
+# checking that we stored the correct value in the last_insert_id
+select last_insert_id();

@@ -2190,10 +2190,10 @@
   },
   {
     "comment": "save column value to session - sharded",
-    "query": "select bar, 12, last_insert_id(foo) from user",
+    "query": "select col, 12, last_insert_id(intcol) from user",
     "plan": {
       "QueryType": "SELECT",
-      "Original": "select bar, 12, last_insert_id(foo) from user",
+      "Original": "select col, 12, last_insert_id(intcol) from user",
       "Instructions": {
         "OperatorType": "SaveToSession",
         "Offset": "_vt_column_2",
@@ -2205,8 +2205,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select bar, 12, last_insert_id(foo) from `user` where 1 != 1",
-            "Query": "select bar, 12, last_insert_id(foo) from `user`",
+            "FieldQuery": "select col, 12, last_insert_id(intcol) from `user` where 1 != 1",
+            "Query": "select col, 12, last_insert_id(intcol) from `user`",
             "Table": "`user`"
           }
         ]
@@ -2218,10 +2218,10 @@
   },
   {
     "comment": "save column value to session - unsharded",
-    "query": "select bar, 12, last_insert_id(foo) from unsharded",
+    "query": "select col1, 12, last_insert_id(id) from unsharded",
     "plan": {
       "QueryType": "SELECT",
-      "Original": "select bar, 12, last_insert_id(foo) from unsharded",
+      "Original": "select col1, 12, last_insert_id(id) from unsharded",
       "Instructions": {
         "OperatorType": "SaveToSession",
         "Offset": "_vt_column_2",
@@ -2233,8 +2233,8 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select bar, 12, last_insert_id(foo) from unsharded where 1 != 1",
-            "Query": "select bar, 12, last_insert_id(foo) from unsharded",
+            "FieldQuery": "select col1, 12, last_insert_id(id) from unsharded where 1 != 1",
+            "Query": "select col1, 12, last_insert_id(id) from unsharded",
             "Table": "unsharded"
           }
         ]
