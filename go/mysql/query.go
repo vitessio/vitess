@@ -488,6 +488,7 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, 
 				result.SessionStateChanges = packetEof.sessionStateData
 				result.StatusFlags = packetEof.statusFlags
 				result.Info = packetEof.info
+				result.InsertID = packetEof.lastInsertID
 			}
 			return result, more, warnings, nil
 

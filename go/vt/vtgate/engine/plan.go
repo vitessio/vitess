@@ -32,12 +32,13 @@ import (
 // each node does its part by combining the results of the
 // sub-nodes.
 type Plan struct {
-	Type         sqlparser.StatementType // The type of query we have
-	Original     string                  // Original is the original query.
-	Instructions Primitive               // Instructions contains the instructions needed to fulfil the query.
-	BindVarNeeds *sqlparser.BindVarNeeds // Stores BindVars needed to be provided as part of expression rewriting
-	Warnings     []*query.QueryWarning   // Warnings that need to be yielded every time this query runs
-	TablesUsed   []string                // TablesUsed is the list of tables that this plan will query
+	Type                  sqlparser.StatementType // The type of query we have
+	Original              string                  // Original is the original query.
+	Instructions          Primitive               // Instructions contains the instructions needed to fulfil the query.
+	BindVarNeeds          *sqlparser.BindVarNeeds // Stores BindVars needed to be provided as part of expression rewriting
+	Warnings              []*query.QueryWarning   // Warnings that need to be yielded every time this query runs
+	TablesUsed            []string                // TablesUsed is the list of tables that this plan will query
+	ForceReadLastInsertID bool                    // ForceReadLastInsertID is set to true when we need to set the session's last insert ID value to what this plan returns no matter what
 
 	ExecCount    uint64 // Count of times this plan was executed
 	ExecTime     uint64 // Total execution time

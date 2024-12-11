@@ -37,5 +37,5 @@ func buildOtherReadAndAdmin(sql string, vschema plancontext.VSchema) (*planResul
 		TargetDestination: destination,
 		Query:             sql, // This is original sql query to be passed as the parser can provide partial ddl AST.
 		SingleShardOnly:   true,
-	}), nil
+	}, false), nil
 }

@@ -119,7 +119,7 @@ func buildSetPlan(stmt *sqlparser.Set, vschema plancontext.VSchema) (*planResult
 	return newPlanResult(&engine.Set{
 		Ops:   setOps,
 		Input: input,
-	}), nil
+	}, false), nil
 }
 
 func buildSetOpReadOnly(setting) planFunc {

@@ -61,7 +61,7 @@ func gen4UpdateStmtPlanner(
 		if !ctx.SemTable.ForeignKeysPresent() {
 			plan := updateUnshardedShortcut(updStmt, ks, tables)
 			setCommentDirectivesOnPlan(plan, updStmt)
-			return newPlanResult(plan, operators.QualifiedTables(ks, tables)...), nil
+			return newPlanResult(plan, false, operators.QualifiedTables(ks, tables)...), nil
 		}
 	}
 
@@ -79,7 +79,7 @@ func gen4UpdateStmtPlanner(
 		return nil, err
 	}
 
-	return newPlanResult(plan, operators.TablesUsed(op)...), nil
+	return newPlanResult(plan, false, operators.TablesUsed(op)...), nil
 }
 
 func updateUnshardedShortcut(stmt *sqlparser.Update, ks *vindexes.Keyspace, tables []*vindexes.Table) engine.Primitive {

@@ -75,7 +75,7 @@ func buildGeneralDDLPlan(ctx context.Context, sql string, ddlStatement sqlparser
 		tc.addASTTable(normalDDLPlan.Keyspace.Name, tbl)
 	}
 
-	return newPlanResult(eddl, tc.getTables()...), nil
+	return newPlanResult(eddl, false, tc.getTables()...), nil
 }
 
 func buildByPassPlan(sql string, vschema plancontext.VSchema, isDDL bool) (*planResult, error) {
@@ -89,7 +89,7 @@ func buildByPassPlan(sql string, vschema plancontext.VSchema, isDDL bool) (*plan
 		Query:             sql,
 		IsDDL:             isDDL,
 	}
-	return newPlanResult(send), nil
+	return newPlanResult(send, false), nil
 }
 
 func buildDDLPlans(ctx context.Context, sql string, ddlStatement sqlparser.DDLStatement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, cfg dynamicconfig.DDL) (*engine.Send, *engine.OnlineDDL, error) {

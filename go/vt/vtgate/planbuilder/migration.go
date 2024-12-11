@@ -78,7 +78,7 @@ func buildAlterMigrationThrottleAppPlan(query string, alterMigration *sqlparser.
 	return newPlanResult(&engine.ThrottleApp{
 		Keyspace:         keyspace,
 		ThrottledAppRule: throttledAppRule,
-	}), nil
+	}, false), nil
 }
 
 func buildAlterMigrationPlan(query string, alterMigration *sqlparser.AlterMigration, vschema plancontext.VSchema, cfg dynamicconfig.DDL) (*planResult, error) {
@@ -116,7 +116,7 @@ func buildAlterMigrationPlan(query string, alterMigration *sqlparser.AlterMigrat
 		TargetDestination: dest,
 		Query:             query,
 	}
-	return newPlanResult(send), nil
+	return newPlanResult(send, false), nil
 }
 
 func buildRevertMigrationPlan(query string, stmt *sqlparser.RevertMigration, vschema plancontext.VSchema, cfg dynamicconfig.DDL) (*planResult, error) {
@@ -145,7 +145,7 @@ func buildRevertMigrationPlan(query string, stmt *sqlparser.RevertMigration, vsc
 		Stmt:              stmt,
 		Query:             query,
 	}
-	return newPlanResult(emig), nil
+	return newPlanResult(emig, false), nil
 }
 
 func buildShowMigrationLogsPlan(query string, vschema plancontext.VSchema, cfg dynamicconfig.DDL) (*planResult, error) {
@@ -173,5 +173,5 @@ func buildShowMigrationLogsPlan(query string, vschema plancontext.VSchema, cfg d
 		TargetDestination: dest,
 		Query:             query,
 	}
-	return newPlanResult(send), nil
+	return newPlanResult(send, false), nil
 }

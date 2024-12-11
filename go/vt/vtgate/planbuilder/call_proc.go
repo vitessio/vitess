@@ -47,7 +47,7 @@ func buildCallProcPlan(stmt *sqlparser.CallProc, vschema plancontext.VSchema) (*
 		Keyspace:          keyspace,
 		TargetDestination: dest,
 		Query:             sqlparser.String(stmt),
-	}), nil
+	}, false), nil
 }
 
 const errNotAllowWhenSharded = "CALL is not supported for sharded keyspace"

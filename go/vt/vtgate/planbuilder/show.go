@@ -66,7 +66,7 @@ func buildShowPlan(sql string, stmt *sqlparser.Show, _ *sqlparser.ReservedVars, 
 		return nil, err
 	}
 
-	return newPlanResult(prim), nil
+	return newPlanResult(prim, false), nil
 }
 
 // buildShowTransactionStatusPlan builds the transaction status plan

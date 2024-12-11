@@ -271,12 +271,12 @@ type streaminResultReceiver struct {
 	callback     func(*sqltypes.Result) error
 }
 
-func (s *streaminResultReceiver) storeResultStats(typ sqlparser.StatementType, qr *sqltypes.Result) error {
+func (s *streaminResultReceiver) storeResultStats(typ sqlparser.StatementType, qr *sqltypes.Result, forceReadLastInsertID bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.rowsAffected += qr.RowsAffected
 	s.rowsReturned += len(qr.Rows)
-	if qr.InsertID != 0 {
+	if forceReadLastInsertID || qr.InsertID != 0 {
 		s.insertID = qr.InsertID
 	}
 	s.stmtType = typ
@@ -344,7 +344,7 @@ func (e *Executor) StreamExecute(
 
 		// 4: Execute!
 		err := vc.StreamExecutePrimitive(ctx, plan.Instructions, bindVars, true, func(qr *sqltypes.Result) error {
-			return srr.storeResultStats(plan.Type, qr)
+			return srr.storeResultStats(plan.Type, qr, plan.ForceReadLastInsertID)
 		})
 
 		// Check if there was partial DML execution. If so, rollback the effect of the partially executed query.
@@ -439,8 +439,14 @@ func (e *Executor) execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConn
 	err = e.newExecute(ctx, mysqlCtx, safeSession, sql, bindVars, logStats, func(ctx context.Context, plan *engine.Plan, vc *econtext.VCursorImpl, bindVars map[string]*querypb.BindVariable, time time.Time) error {
 		stmtType = plan.Type
 		qr, err = e.executePlan(ctx, safeSession, plan, vc, bindVars, logStats, time)
-		return err
-	}, func(typ sqlparser.StatementType, result *sqltypes.Result) error {
+		if err != nil {
+			return err
+		}
+		if plan.ForceReadLastInsertID {
+			safeSession.LastInsertId = qr.InsertID
+		}
+		return nil
+	}, func(typ sqlparser.StatementType, result *sqltypes.Result, _ bool) error {
 		stmtType = typ
 		qr = result
 		return nil
@@ -1144,7 +1150,7 @@ func (e *Executor) getPlan(
 	logStats.SQL = comments.Leading + query + comments.Trailing
 	logStats.BindVariables = sqltypes.CopyBindVariables(bindVars)
 
-	return e.cacheAndBuildStatement(ctx, vcursor, query, stmt, reservedVars, bindVarNeeds, logStats)
+	return e.getFromCacheOrBuildStatement(ctx, vcursor, query, stmt, reservedVars, bindVarNeeds, logStats)
 }
 
 func (e *Executor) hashPlan(ctx context.Context, vcursor *econtext.VCursorImpl, query string) PlanCacheKey {
@@ -1179,7 +1185,7 @@ func (e *Executor) buildStatement(
 	return plan, err
 }
 
-func (e *Executor) cacheAndBuildStatement(
+func (e *Executor) getFromCacheOrBuildStatement(
 	ctx context.Context,
 	vcursor *econtext.VCursorImpl,
 	query string,

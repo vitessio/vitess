@@ -63,7 +63,7 @@ func gen4DeleteStmtPlanner(
 	if ks, tables := ctx.SemTable.SingleUnshardedKeyspace(); ks != nil {
 		if !ctx.SemTable.ForeignKeysPresent() {
 			plan := deleteUnshardedShortcut(deleteStmt, ks, tables)
-			return newPlanResult(plan, operators.QualifiedTables(ks, tables)...), nil
+			return newPlanResult(plan, false, operators.QualifiedTables(ks, tables)...), nil
 		}
 	}
 
@@ -83,7 +83,7 @@ func gen4DeleteStmtPlanner(
 		return nil, err
 	}
 
-	return newPlanResult(plan, operators.TablesUsed(op)...), nil
+	return newPlanResult(plan, false, operators.TablesUsed(op)...), nil
 }
 
 func rewriteSingleTbl(del *sqlparser.Delete) (*sqlparser.Delete, error) {

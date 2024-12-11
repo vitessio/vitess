@@ -23,5 +23,5 @@ import (
 
 func buildUsePlan(stmt *sqlparser.Use) (*planResult, error) {
 	prim := &engine.UpdateTarget{Target: stmt.DBName.String()}
-	return newPlanResult(prim), nil
+	return newPlanResult(prim, false), nil
 }

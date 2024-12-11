@@ -52,7 +52,7 @@ func gen4SelectStmtPlanner(
 				// no need to fail this if we can't find the default keyspace
 				used = keyspace.Name + ".dual"
 			}
-			return newPlanResult(p, used), nil
+			return newPlanResult(p, false, used), nil
 		}
 
 		if sel.SQLCalcFoundRows && sel.Limit != nil {
@@ -62,26 +62,26 @@ func gen4SelectStmtPlanner(
 		sel.SQLCalcFoundRows = false
 	}
 
-	getPlan := func(selStatement sqlparser.SelectStatement) (engine.Primitive, []string, error) {
+	getPlan := func(selStatement sqlparser.SelectStatement) (*planResult, error) {
 		return newBuildSelectPlan(selStatement, reservedVars, vschema, plannerVersion)
 	}
 
-	plan, tablesUsed, err := getPlan(stmt)
+	planRes, err := getPlan(stmt)
 	if err != nil {
 		return nil, err
 	}
 
-	if shouldRetryAfterPredicateRewriting(plan) {
+	if shouldRetryAfterPredicateRewriting(planRes.primitive) {
 		// by transforming the predicates to CNF, the planner will sometimes find better plans
 		// TODO: this should move to the operator side of planning
-		prim2, tablesUsed := gen4PredicateRewrite(stmt, getPlan)
-		if prim2 != nil {
-			return newPlanResult(prim2, tablesUsed...), nil
+		planRes2 := gen4PredicateRewrite(stmt, getPlan)
+		if planRes2 != nil {
+			return planRes2, nil
 		}
 	}
 
 	if !isSel {
-		return newPlanResult(plan, tablesUsed...), nil
+		return planRes, nil
 	}
 
 	// this is done because engine.Route doesn't handle the empty result well
@@ -89,14 +89,14 @@ func gen4SelectStmtPlanner(
 	// All other engine primitives can handle this, so we only need it when
 	// Route is the last (and only) instruction before the user sees a result
 	if isOnlyDual(sel) || (sel.GroupBy == nil && sel.SelectExprs.AllAggregation()) {
-		switch prim := plan.(type) {
+		switch prim := planRes.primitive.(type) {
 		case *engine.Route:
 			prim.NoRoutesSpecialHandling = true
 		case *engine.VindexLookup:
 			prim.SendTo.NoRoutesSpecialHandling = true
 		}
 	}
-	return newPlanResult(plan, tablesUsed...), nil
+	return planRes, nil
 }
 
 func gen4planSQLCalcFoundRows(vschema plancontext.VSchema, sel *sqlparser.Select, query string, reservedVars *sqlparser.ReservedVars) (*planResult, error) {
@@ -115,7 +115,7 @@ func gen4planSQLCalcFoundRows(vschema plancontext.VSchema, sel *sqlparser.Select
 	if err != nil {
 		return nil, err
 	}
-	return newPlanResult(plan, tablesUsed...), nil
+	return newPlanResult(plan, false, tablesUsed...), nil
 }
 
 func buildSQLCalcFoundRowsPlan(
@@ -124,7 +124,7 @@ func buildSQLCalcFoundRowsPlan(
 	reservedVars *sqlparser.ReservedVars,
 	vschema plancontext.VSchema,
 ) (engine.Primitive, []string, error) {
-	limitPlan, _, err := newBuildSelectPlan(sel, reservedVars, vschema, Gen4)
+	limitPlanResult, err := newBuildSelectPlan(sel, reservedVars, vschema, Gen4)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -164,34 +164,34 @@ func buildSQLCalcFoundRowsPlan(
 
 	reservedVars2 := sqlparser.NewReservedVars("vtg", reserved2)
 
-	countPlan, tablesUsed, err := newBuildSelectPlan(sel2, reservedVars2, vschema, Gen4)
+	countPlanResult, err := newBuildSelectPlan(sel2, reservedVars2, vschema, Gen4)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	rb, ok := countPlan.(*engine.Route)
+	rb, ok := countPlanResult.primitive.(*engine.Route)
 	if ok {
 		// if our count query is an aggregation, we want the no-match result to still return a zero
 		rb.NoRoutesSpecialHandling = true
 	}
 	return &engine.SQLCalcFoundRows{
-		LimitPrimitive: limitPlan,
-		CountPrimitive: countPlan,
-	}, tablesUsed, nil
+		LimitPrimitive: limitPlanResult.primitive,
+		CountPrimitive: countPlanResult.primitive,
+	}, countPlanResult.tables, nil
 }
 
-func gen4PredicateRewrite(stmt sqlparser.Statement, getPlan func(selStatement sqlparser.SelectStatement) (engine.Primitive, []string, error)) (engine.Primitive, []string) {
+func gen4PredicateRewrite(stmt sqlparser.Statement, getPlan func(selStatement sqlparser.SelectStatement) (*planResult, error)) *planResult {
 	rewritten, isSel := sqlparser.RewritePredicate(stmt).(sqlparser.SelectStatement)
 	if !isSel {
 		// Fail-safe code, should never happen
-		return nil, nil
+		return nil
 	}
-	plan2, op, err := getPlan(rewritten)
-	if err == nil && !shouldRetryAfterPredicateRewriting(plan2) {
+	planRes, err := getPlan(rewritten)
+	if err == nil && !shouldRetryAfterPredicateRewriting(planRes.primitive) {
 		// we only use this new plan if it's better than the old one we got
-		return plan2, op
+		return planRes
 	}
-	return nil, nil
+	return nil
 }
 
 func newBuildSelectPlan(
@@ -199,36 +199,36 @@ func newBuildSelectPlan(
 	reservedVars *sqlparser.ReservedVars,
 	vschema plancontext.VSchema,
 	version querypb.ExecuteOptions_PlannerVersion,
-) (plan engine.Primitive, tablesUsed []string, err error) {
+) (res *planResult, err error) {
 	ctx, err := plancontext.CreatePlanningContext(selStmt, reservedVars, vschema, version)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	if ks, ok := ctx.SemTable.CanTakeSelectUnshardedShortcut(); ok {
-		plan, tablesUsed, err = selectUnshardedShortcut(ctx, selStmt, ks)
+		plan, tablesUsed, err := selectUnshardedShortcut(ctx, selStmt, ks)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 		setCommentDirectivesOnPlan(plan, selStmt)
-		return plan, tablesUsed, err
+		return newPlanResult(plan, ctx.SemTable.QuerySignature.LastInsertIDArg, tablesUsed...), err
 	}
 
 	if ctx.SemTable.NotUnshardedErr != nil {
-		return nil, nil, ctx.SemTable.NotUnshardedErr
+		return nil, ctx.SemTable.NotUnshardedErr
 	}
 
 	op, err := createSelectOperator(ctx, selStmt, reservedVars)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	plan, err = transformToPrimitive(ctx, op)
+	plan, err := transformToPrimitive(ctx, op)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	return plan, operators.TablesUsed(op), nil
+	return newPlanResult(plan, ctx.SemTable.QuerySignature.LastInsertIDArg, operators.TablesUsed(op)...), nil
 }
 
 func createSelectOperator(ctx *plancontext.PlanningContext, selStmt sqlparser.SelectStatement, reservedVars *sqlparser.ReservedVars) (operators.Operator, error) {

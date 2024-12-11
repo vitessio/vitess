@@ -28,10 +28,10 @@ import (
 // buildLockPlan plans lock tables statement.
 func buildLockPlan(stmt sqlparser.Statement, _ *sqlparser.ReservedVars, _ plancontext.VSchema) (*planResult, error) {
 	log.Warningf("Lock Tables statement is ignored: %v", stmt)
-	return newPlanResult(engine.NewRowsPrimitive(make([][]sqltypes.Value, 0), make([]*querypb.Field, 0))), nil
+	return newPlanResult(engine.NewRowsPrimitive(make([][]sqltypes.Value, 0), make([]*querypb.Field, 0)), false), nil
 }
 
 // buildUnlockPlan plans lock tables statement.
 func buildUnlockPlan(stmt sqlparser.Statement, _ *sqlparser.ReservedVars, _ plancontext.VSchema) (*planResult, error) {
-	return newPlanResult(&engine.Unlock{}), nil
+	return newPlanResult(&engine.Unlock{}, false), nil
 }

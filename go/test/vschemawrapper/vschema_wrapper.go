@@ -344,12 +344,12 @@ func (vw *VSchemaWrapper) IsViewsEnabled() bool {
 
 // FindMirrorRule finds the mirror rule for the requested keyspace, table
 // name, and the tablet type in the VSchema.
-func (vs *VSchemaWrapper) FindMirrorRule(tab sqlparser.TableName) (*vindexes.MirrorRule, error) {
+func (vw *VSchemaWrapper) FindMirrorRule(tab sqlparser.TableName) (*vindexes.MirrorRule, error) {
 	destKeyspace, destTabletType, _, err := topoproto.ParseDestination(tab.Qualifier.String(), topodatapb.TabletType_PRIMARY)
 	if err != nil {
 		return nil, err
 	}
-	mirrorRule, err := vs.V.FindMirrorRule(destKeyspace, tab.Name.String(), destTabletType)
+	mirrorRule, err := vw.V.FindMirrorRule(destKeyspace, tab.Name.String(), destTabletType)
 	if err != nil {
 		return nil, err
 	}

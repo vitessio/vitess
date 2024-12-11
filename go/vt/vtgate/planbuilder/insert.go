@@ -53,7 +53,7 @@ func gen4InsertStmtPlanner(version querypb.ExecuteOptions_PlannerVersion, insStm
 		if tables[0].AutoIncrement == nil && !ctx.SemTable.ForeignKeysPresent() {
 			plan := insertUnshardedShortcut(insStmt, ks, tables)
 			setCommentDirectivesOnPlan(plan, insStmt)
-			return newPlanResult(plan, operators.QualifiedTables(ks, tables)...), nil
+			return newPlanResult(plan, false, operators.QualifiedTables(ks, tables)...), nil
 		}
 	}
 
@@ -80,7 +80,7 @@ func gen4InsertStmtPlanner(version querypb.ExecuteOptions_PlannerVersion, insStm
 		return nil, err
 	}
 
-	return newPlanResult(plan, operators.TablesUsed(op)...), nil
+	return newPlanResult(plan, false, operators.TablesUsed(op)...), nil
 }
 
 func errOutIfPlanCannotBeConstructed(ctx *plancontext.PlanningContext, vTbl *vindexes.Table) error {

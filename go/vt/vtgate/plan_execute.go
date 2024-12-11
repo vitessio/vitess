@@ -35,7 +35,7 @@ import (
 )
 
 type planExec func(ctx context.Context, plan *engine.Plan, vc *econtext.VCursorImpl, bindVars map[string]*querypb.BindVariable, startTime time.Time) error
-type txResult func(sqlparser.StatementType, *sqltypes.Result) error
+type txResult func(sqlparser.StatementType, *sqltypes.Result, bool) error
 
 var vschemaWaitTimeout = 30 * time.Second
 
@@ -157,7 +157,7 @@ func (e *Executor) newExecute(
 			return err
 		}
 		if result != nil {
-			return recResult(plan.Type, result)
+			return recResult(plan.Type, result, plan.ForceReadLastInsertID)
 		}
 
 		// 4: Prepare for execution.

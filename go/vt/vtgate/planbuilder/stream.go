@@ -40,5 +40,5 @@ func buildStreamPlan(stmt *sqlparser.Stream, vschema plancontext.VSchema) (*plan
 		Keyspace:          table.Keyspace,
 		TargetDestination: dest,
 		TableName:         table.Name.CompliantName(),
-	}), nil
+	}, false), nil
 }

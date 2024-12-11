@@ -49,15 +49,16 @@ var (
 
 type (
 	planResult struct {
-		primitive engine.Primitive
-		tables    []string
+		primitive             engine.Primitive
+		tables                []string
+		forceReadLastInsertID bool
 	}
 
 	stmtPlanner func(sqlparser.Statement, *sqlparser.ReservedVars, plancontext.VSchema) (*planResult, error)
 )
 
-func newPlanResult(prim engine.Primitive, tablesUsed ...string) *planResult {
-	return &planResult{primitive: prim, tables: tablesUsed}
+func newPlanResult(prim engine.Primitive, lastInsertID bool, tablesUsed ...string) *planResult {
+	return &planResult{primitive: prim, tables: tablesUsed, forceReadLastInsertID: lastInsertID}
 }
 
 func singleTable(ks, tbl string) string {
@@ -115,16 +116,20 @@ func BuildFromStmt(ctx context.Context, query string, stmt sqlparser.Statement, 
 
 	var primitive engine.Primitive
 	var tablesUsed []string
+	var forceReadLastInsertID bool
 	if planResult != nil {
 		primitive = planResult.primitive
 		tablesUsed = planResult.tables
+		forceReadLastInsertID = planResult.forceReadLastInsertID
 	}
+
 	plan := &engine.Plan{
-		Type:         sqlparser.ASTToStatementType(stmt),
-		Original:     query,
-		Instructions: primitive,
-		BindVarNeeds: bindVarNeeds,
-		TablesUsed:   tablesUsed,
+		Type:                  sqlparser.ASTToStatementType(stmt),
+		Original:              query,
+		Instructions:          primitive,
+		BindVarNeeds:          bindVarNeeds,
+		TablesUsed:            tablesUsed,
+		ForceReadLastInsertID: forceReadLastInsertID,
 	}
 	return plan, nil
 }
@@ -239,7 +244,7 @@ func createInstructionFor(ctx context.Context, query string, stmt sqlparser.Stat
 	case *sqlparser.CommentOnly:
 		// There is only a comment in the input.
 		// This is essentially a No-op
-		return newPlanResult(engine.NewRowsPrimitive(nil, nil)), nil
+		return newPlanResult(engine.NewRowsPrimitive(nil, nil), false), nil
 	}
 
 	return nil, vterrors.VT13001(fmt.Sprintf("unexpected statement type: %T", stmt))
@@ -279,7 +284,7 @@ func buildAnalyzePlan(stmt sqlparser.Statement, _ *sqlparser.ReservedVars, vsche
 		TargetDestination: dest,
 		Query:             sqlparser.String(analyzeStmt),
 	}
-	return newPlanResult(prim, sqlparser.String(analyzeStmt.Table)), nil
+	return newPlanResult(prim, false, sqlparser.String(analyzeStmt.Table)), nil
 }
 
 func buildDBDDLPlan(stmt sqlparser.Statement, _ *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
@@ -297,12 +302,12 @@ func buildDBDDLPlan(stmt sqlparser.Statement, _ *sqlparser.ReservedVars, vschema
 	switch dbDDL := dbDDLstmt.(type) {
 	case *sqlparser.DropDatabase:
 		if dbDDL.IfExists && !ksExists {
-			return newPlanResult(engine.NewRowsPrimitive(make([][]sqltypes.Value, 0), make([]*querypb.Field, 0))), nil
+			return newPlanResult(engine.NewRowsPrimitive(make([][]sqltypes.Value, 0), make([]*querypb.Field, 0)), false), nil
 		}
 		if !ksExists {
 			return nil, vterrors.VT05001(ksName)
 		}
-		return newPlanResult(engine.NewDBDDL(ksName, false, queryTimeout(dbDDL.Comments.Directives()))), nil
+		return newPlanResult(engine.NewDBDDL(ksName, false, queryTimeout(dbDDL.Comments.Directives())), false), nil
 	case *sqlparser.AlterDatabase:
 		if !ksExists {
 			return nil, vterrors.VT05002(ksName)
@@ -310,12 +315,12 @@ func buildDBDDLPlan(stmt sqlparser.Statement, _ *sqlparser.ReservedVars, vschema
 		return nil, vterrors.VT12001("ALTER DATABASE")
 	case *sqlparser.CreateDatabase:
 		if dbDDL.IfNotExists && ksExists {
-			return newPlanResult(engine.NewRowsPrimitive(make([][]sqltypes.Value, 0), make([]*querypb.Field, 0))), nil
+			return newPlanResult(engine.NewRowsPrimitive(make([][]sqltypes.Value, 0), make([]*querypb.Field, 0)), false), nil
 		}
 		if !dbDDL.IfNotExists && ksExists {
 			return nil, vterrors.VT06001(ksName)
 		}
-		return newPlanResult(engine.NewDBDDL(ksName, true, queryTimeout(dbDDL.Comments.Directives()))), nil
+		return newPlanResult(engine.NewDBDDL(ksName, true, queryTimeout(dbDDL.Comments.Directives())), false), nil
 	}
 	return nil, vterrors.VT13001(fmt.Sprintf("database DDL not recognized: %s", sqlparser.String(dbDDLstmt)))
 }
@@ -340,7 +345,7 @@ func buildLoadPlan(query string, vschema plancontext.VSchema) (*planResult, erro
 		Query:             query,
 		IsDML:             true,
 		SingleShardOnly:   true,
-	}), nil
+	}, false), nil
 }
 
 func buildVSchemaDDLPlan(stmt *sqlparser.AlterVschema, vschema plancontext.VSchema) (*planResult, error) {
@@ -351,7 +356,7 @@ func buildVSchemaDDLPlan(stmt *sqlparser.AlterVschema, vschema plancontext.VSche
 	return newPlanResult(&engine.AlterVSchema{
 		Keyspace:        keyspace,
 		AlterVschemaDDL: stmt,
-	}, singleTable(keyspace.Name, stmt.Table.Name.String())), nil
+	}, false, singleTable(keyspace.Name, stmt.Table.Name.String())), nil
 }
 
 func buildFlushPlan(stmt *sqlparser.Flush, vschema plancontext.VSchema) (*planResult, error) {
@@ -381,7 +386,7 @@ func buildFlushOptions(stmt *sqlparser.Flush, vschema plancontext.VSchema) (*pla
 		TargetDestination:        dest,
 		Query:                    sqlparser.String(stmt),
 		ReservedConnectionNeeded: stmt.WithLock,
-	}), nil
+	}, false), nil
 }
 
 func buildFlushTables(stmt *sqlparser.Flush, vschema plancontext.VSchema) (*planResult, error) {
@@ -433,7 +438,7 @@ func buildFlushTables(stmt *sqlparser.Flush, vschema plancontext.VSchema) (*plan
 				TargetDestination:        sendDest.dest,
 				Query:                    sqlparser.String(newFlushStmt(stmt, tables)),
 				ReservedConnectionNeeded: stmt.WithLock,
-			}, tc.getTables()...), nil
+			}, false, tc.getTables()...), nil
 		}
 	}
 
@@ -451,7 +456,7 @@ func buildFlushTables(stmt *sqlparser.Flush, vschema plancontext.VSchema) (*plan
 		}
 		sources = append(sources, plan)
 	}
-	return newPlanResult(engine.NewConcatenate(sources, nil), tc.getTables()...), nil
+	return newPlanResult(engine.NewConcatenate(sources, nil), false, tc.getTables()...), nil
 }
 
 type tableCollector struct {

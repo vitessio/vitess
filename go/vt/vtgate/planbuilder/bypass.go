@@ -65,7 +65,7 @@ func buildPlanForBypass(stmt sqlparser.Statement, _ *sqlparser.ReservedVars, vsc
 		MultishardAutocommit: hints.multiShardAutocommit,
 		QueryTimeout:         hints.queryTimeout,
 	}
-	return newPlanResult(send), nil
+	return newPlanResult(send, false), nil
 }
 
 func GetShardRoute(vschema plancontext.VSchema, keyspace, shard string) (*vindexes.Keyspace, error) {

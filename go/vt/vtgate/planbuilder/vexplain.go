@@ -90,7 +90,7 @@ func explainTabPlan(explain *sqlparser.ExplainTab, vschema plancontext.VSchema) 
 		TargetDestination: destination,
 		Query:             sqlparser.String(explain),
 		SingleShardOnly:   true,
-	}, singleTable(keyspace.Name, explain.Table.Name.String())), nil
+	}, false, singleTable(keyspace.Name, explain.Table.Name.String())), nil
 }
 
 func buildVExplainVtgatePlan(ctx context.Context, explainStatement sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, cfg dynamicconfig.DDL) (*planResult, error) {
@@ -113,7 +113,7 @@ func getJsonResultPlan(v any, colName string) (*planResult, error) {
 	}
 	fields := []*querypb.Field{{Name: colName, Type: querypb.Type_VARCHAR}}
 	rows := []sqltypes.Row{{sqltypes.NewVarChar(string(output))}}
-	return newPlanResult(engine.NewRowsPrimitive(rows, fields)), nil
+	return newPlanResult(engine.NewRowsPrimitive(rows, fields), false), nil
 }
 
 func buildVExplainKeysPlan(statement sqlparser.Statement, vschema plancontext.VSchema) (*planResult, error) {
@@ -186,7 +186,7 @@ func explainPlan(explain *sqlparser.ExplainStmt, reservedVars *sqlparser.Reserve
 		TargetDestination: key.DestinationAnyShard{},
 		Query:             sqlparser.String(explain),
 		SingleShardOnly:   true,
-	}, tables...), nil
+	}, false, tables...), nil
 }
 
 func buildVExplainTracePlan(ctx context.Context, explainStatement sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, cfg dynamicconfig.DDL) (*planResult, error) {

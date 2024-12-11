@@ -45,7 +45,7 @@ func buildShowThrottledAppsPlan(query string, vschema plancontext.VSchema) (*pla
 		Keyspace:          ks,
 		TargetDestination: dest,
 		Query:             query,
-	}), nil
+	}, false), nil
 }
 
 func buildShowThrottlerStatusPlan(query string, vschema plancontext.VSchema) (*planResult, error) {
@@ -69,5 +69,5 @@ func buildShowThrottlerStatusPlan(query string, vschema plancontext.VSchema) (*p
 		Keyspace:          ks,
 		TargetDestination: dest,
 		Query:             query,
-	}), nil
+	}, false), nil
 }

@@ -63,7 +63,7 @@ func buildVStreamPlan(stmt *sqlparser.VStream, vschema plancontext.VSchema) (*pl
 		TableName:         table.Name.CompliantName(),
 		Position:          pos,
 		Limit:             limit,
-	}), nil
+	}, false), nil
 }
 
 func getVStreamStartPos(stmt *sqlparser.VStream) (string, error) {
