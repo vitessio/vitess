@@ -5,7 +5,7 @@
 			"column_vindexes": [
 				{
 					"column": "page",
-					"name": "hash"
+					"name": "xxhash"
 				},
 				{
 					"column": "message",
@@ -17,7 +17,7 @@
 			"column_vindexes": [
 				{
 					"column": "page",
-					"name": "hash"
+					"name": "xxhash"
 				},
 				{
 					"column": "token",

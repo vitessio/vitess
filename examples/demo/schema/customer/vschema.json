@@ -34,7 +34,7 @@
       "column_vindexes": [
         {
           "column": "customer_id",
-          "name": "hash"
+          "name": "xxhash"
         }
       ],
       "auto_increment": {
@@ -46,7 +46,7 @@
       "column_vindexes": [
         {
           "column": "customer_id",
-          "name": "hash"
+          "name": "xxhash"
         },
         {
           "column": "corder_id",

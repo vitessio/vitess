@@ -10,7 +10,7 @@
       "column_vindexes": [
         {
           "column": "page",
-          "name": "hash"
+          "name": "xxhash"
         }
       ]
     }
