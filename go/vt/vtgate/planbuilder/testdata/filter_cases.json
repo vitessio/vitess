@@ -4906,10 +4906,7 @@
       },
       "FieldQuery": "select cola, colb, colc from multicol_tbl where 1 != 1",
       "Query": "select cola, colb, colc from multicol_tbl where cola between 1 and 5",
-      "Table": "multicol_tbl",
-      "Values": [
-        "(1, 5)"
-      ]
+      "Table": "multicol_tbl"
     },
     "TablesUsed": [
       "user.multicol_tbl"

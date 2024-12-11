@@ -473,6 +473,12 @@ func (tr *ShardedRouting) processMultiColumnVindex(
 		return newVindexFound
 	}
 
+	routeOpcode := opcode(v.ColVindex)
+	vindex := vfunc(v.ColVindex)
+	if vindex == nil || routeOpcode == engine.Scatter {
+		return newVindexFound
+	}
+
 	var newOption []*VindexOption
 	for _, op := range v.Options {
 		if op.Ready {
