@@ -1,7 +1,7 @@
 {
     "sharded": true,
     "vindexes": {
-        "hash": {
+        "xxhash": {
             "type": "xxhash"
         }
     },
