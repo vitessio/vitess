@@ -582,6 +582,50 @@ func TestMySQL56PartialUpdateRowsEvent(t *testing.T) {
 			numRows: 1,
 			want:    "null",
 		},
+		{
+			name: "null literal string",
+			// The mysqlbinlog -vvv --base64-output=decode-rows output for the following event:
+			// ### UPDATE `vt_commerce`.`customer`
+			// ### WHERE
+			// ###   @1=10 /* LONGINT meta=0 nullable=0 is_null=0 */
+			// ###   @2='mlord@planetscale.com' /* VARSTRING(128) meta=128 nullable=1 is_null=0 */
+			// ###   @3=NULL /* JSON meta=4 nullable=1 is_null=1 */
+			// ### SET
+			// ###   @1=10 /* LONGINT meta=0 nullable=0 is_null=0 */
+			// ###   @2='mlord@planetscale.com' /* VARSTRING(128) meta=128 nullable=1 is_null=0 */
+			// ###   @3='null' /* JSON meta=4 nullable=1 is_null=0 */
+			rawEvent: []byte{
+				178, 168, 89, 103, 39, 37, 191, 137, 18, 105, 0, 0, 0, 0, 0, 0, 0, 0, 0, 153, 0, 0, 0, 0, 0, 1, 0, 2, 0, 3, 7, 7, 4, 10, 0, 0, 0, 0, 0, 0, 0, 21,
+				109, 108, 111, 114, 100, 64, 112, 108, 97, 110, 101, 116, 115, 99, 97, 108, 101, 46, 99, 111, 109, 0, 0, 10, 0, 0, 0, 0, 0, 0, 0, 21, 109, 108, 111,
+				114, 100, 64, 112, 108, 97, 110, 101, 116, 115, 99, 97, 108, 101, 46, 99, 111, 109, 6, 0, 0, 0, 12, 4, 110, 117, 108, 108,
+			},
+			numRows: 1,
+			want:    "\"null\"",
+		},
+		{
+			name: "JSON object",
+			// The mysqlbinlog -vvv --base64-output=decode-rows output for the following event:
+			// ### UPDATE `vt_commerce`.`customer`
+			// ### WHERE
+			// ###   @1=1 /* LONGINT meta=0 nullable=0 is_null=0 */
+			// ###   @2='newalice@domain.com' /* VARSTRING(128) meta=128 nullable=1 is_null=0 */
+			// ###   @3='{"day": "wednesday", "role": "manager", "color": "red", "salary": 100}' /* JSON meta=4 nullable=1 is_null=0 */
+			// ### SET
+			// ###   @1=1 /* LONGINT meta=0 nullable=0 is_null=0 */
+			// ###   @2='newalice@domain.com' /* VARSTRING(128) meta=128 nullable=1 is_null=0 */
+			// ###   @3=JSON_INSERT(@3, '$.misc', '{"address":"1012 S Park", "town":"Hastings", "state":"MI"}') /* JSON meta=4 nullable=1 is_null=0 */
+			rawEvent: []byte{
+				208, 160, 89, 103, 39, 202, 59, 214, 68, 242, 0, 0, 0, 0, 0, 0, 0, 0, 0, 153, 0, 0, 0, 0, 0, 1, 0, 2, 0, 3, 7, 7, 0, 1, 0, 0, 0, 0, 0, 0, 0, 19, 110,
+				101, 119, 97, 108, 105, 99, 101, 64, 100, 111, 109, 97, 105, 110, 46, 99, 111, 109, 73, 0, 0, 0, 0, 4, 0, 72, 0, 32, 0, 3, 0, 35, 0, 4, 0, 39, 0, 5,
+				0, 44, 0, 6, 0, 12, 50, 0, 12, 60, 0, 12, 68, 0, 5, 100, 0, 100, 97, 121, 114, 111, 108, 101, 99, 111, 108, 111, 114, 115, 97, 108, 97, 114, 121, 9,
+				119, 101, 100, 110, 101, 115, 100, 97, 121, 7, 109, 97, 110, 97, 103, 101, 114, 3, 114, 101, 100, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 19, 110, 101, 119,
+				97, 108, 105, 99, 101, 64, 100, 111, 109, 97, 105, 110, 46, 99, 111, 109, 69, 0, 0, 0, 1, 6, 36, 46, 109, 105, 115, 99, 60, 12, 58, 123, 34, 97, 100,
+				100, 114, 101, 115, 115, 34, 58, 34, 49, 48, 49, 50, 32, 83, 32, 80, 97, 114, 107, 34, 44, 32, 34, 116, 111, 119, 110, 34, 58, 34, 72, 97, 115, 116,
+				105, 110, 103, 115, 34, 44, 32, 34, 115, 116, 97, 116, 101, 34, 58, 34, 77, 73, 34, 125,
+			},
+			numRows: 1,
+			want:    "JSON_INSERT(`%s`, _utf8mb4'$.misc', _utf8mb4\"{\\\"address\\\":\\\"1012 S Park\\\", \\\"town\\\":\\\"Hastings\\\", \\\"state\\\":\\\"MI\\\"}\")",
+		},
 	}
 
 	for _, tc := range testCases {
