@@ -4820,5 +4820,100 @@
         "user.authoritative"
       ]
     }
+  },
+  {
+    "comment": "Between clause on primary indexed id column (binary vindex on id)",
+    "query": "select id from seq_tbl where id between 1 and 5",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select id from seq_tbl where id between 1 and 5",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Between",
+        "Keyspace": {
+          "Name": "sequential",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from seq_tbl where 1 != 1",
+        "Query": "select id from seq_tbl where id between 1 and 5",
+        "Table": "seq_tbl",
+        "Values": [
+          "(1, 5)"
+        ],
+        "Vindex": "binary"
+      },
+      "TablesUsed": [
+        "sequential.seq_tbl"
+      ]
+    }
+  },
+{
+    "comment": "Between clause on group_id column (xxhash vindex on group_id)",
+    "query": "select id, group_id from seq_tbl where group_id between 1 and 5",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select id, group_id from seq_tbl where group_id between 1 and 5",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "sequential",
+          "Sharded": true
+        },
+        "FieldQuery": "select id, group_id from seq_tbl where 1 != 1",
+        "Query": "select id, group_id from seq_tbl where group_id between 1 and 5",
+        "Table": "seq_tbl"
+      },
+      "TablesUsed": [
+        "sequential.seq_tbl"
+      ]
+    }
+  },
+{
+    "comment": "Between clause on col2 column (there is no vindex on this column)",
+    "query": "select id, col2 from seq_tbl where col2 between 10 and 50",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select id, col2 from seq_tbl where col2 between 10 and 50",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "sequential",
+          "Sharded": true
+        },
+        "FieldQuery": "select id, col2 from seq_tbl where 1 != 1",
+        "Query": "select id, col2 from seq_tbl where col2 between 10 and 50",
+        "Table": "seq_tbl"
+      },
+      "TablesUsed": [
+        "sequential.seq_tbl"
+      ]
+    }
+},
+{
+  "comment": "Between clause on multicolumn vindex (cola,colb)",
+  "query": "select cola,colb,col1 from seq_multicol_tbl where cola between 1 and 5",
+  "plan": {
+    "QueryType": "SELECT",
+    "Original": "select cola,colb,col1 from seq_multicol_tbl where cola between 1 and 5",
+    "Instructions": {
+      "OperatorType": "Route",
+      "Variant": "Scatter",
+      "Keyspace": {
+        "Name": "sequential",
+        "Sharded": true
+      },
+      "FieldQuery": "select cola, colb, col1 from seq_multicol_tbl where 1 != 1",
+      "Query": "select cola, colb, col1 from seq_multicol_tbl where cola between 1 and 5",
+      "Table": "seq_multicol_tbl",
+      "Values": [
+        "(1, 5)"
+      ]
+    },
+    "TablesUsed": [
+      "sequential.seq_multicol_tbl"
+    ]
   }
+}
 ]
