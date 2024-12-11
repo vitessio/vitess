@@ -243,7 +243,13 @@ func (tr *ShardedRouting) planBetweenOp(ctx *plancontext.PlanningContext, node *
 		return nil, false
 	}
 	var vdValue sqlparser.ValTuple = sqlparser.ValTuple([]sqlparser.Expr{node.From, node.To})
-	opcode := func(*vindexes.ColumnVindex) engine.Opcode { return engine.Between }
+
+	opcode := func(vindex *vindexes.ColumnVindex) engine.Opcode {
+		if _, ok := vindex.Vindex.(vindexes.Sequential); ok {
+			return engine.Between
+		}
+		return engine.Scatter
+	}
 
 	sequentialVdx := func(vindex *vindexes.ColumnVindex) vindexes.Vindex {
 		if _, ok := vindex.Vindex.(vindexes.Sequential); ok {
