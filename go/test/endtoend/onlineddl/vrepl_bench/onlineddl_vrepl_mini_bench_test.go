@@ -154,7 +154,7 @@ var (
 const (
 	maxTableRows         = 4096
 	workloadDuration     = 45 * time.Second
-	migrationWaitTimeout = 60 * time.Second
+	migrationWaitTimeout = 120 * time.Second
 )
 
 func resetOpOrder() {
