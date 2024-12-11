@@ -84,8 +84,6 @@ func (s *planTestSuite) TestPlan() {
 	s.addPKsProvided(vschema, "user", []string{"user_extra"}, []string{"id", "user_id"})
 	s.addPKsProvided(vschema, "ordering", []string{"order"}, []string{"oid", "region_id"})
 	s.addPKsProvided(vschema, "ordering", []string{"order_event"}, []string{"oid", "ename"})
-	s.addPKsProvided(vschema, "sequential", []string{"seq_tbl"}, []string{"id"})
-	s.addPKsProvided(vschema, "sequential", []string{"seq_multicol_tbl"}, []string{"cola", "colb"})
 
 	// You will notice that some tests expect user.Id instead of user.id.
 	// This is because we now pre-create vindex columns in the symbol

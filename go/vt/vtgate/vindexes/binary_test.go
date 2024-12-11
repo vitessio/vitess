@@ -158,8 +158,6 @@ func TestBinaryRangeMap(t *testing.T) {
 		sqltypes.NewHexNum([]byte(endInterval)))
 	require.NoError(t, err)
 	want := "DestinationKeyRange(01-10)"
-	if !assert.Equal(t, got[0].String(), want) {
-		t.Errorf("RangeMap(): %+v, want %+v", got, want)
-	}
+	assert.Equal(t, want, got[0].String())
 
 }

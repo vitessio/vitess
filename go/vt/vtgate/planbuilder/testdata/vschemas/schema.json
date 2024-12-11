@@ -182,6 +182,9 @@
             "to": "keyspace_id",
             "write_only": "true"
           }
+        },
+        "binary": {
+          "type": "binary"
         }
       },
       "tables": {
@@ -513,6 +516,20 @@
               "name": "shard_index"
             }
           ]
+        },
+        "unq_binary_idx": {
+          "column_vindexes" : [
+            {
+              "column" : "id",
+              "name": "binary"
+            }
+          ],
+          "columns" :[
+              {
+                "name": "col1",
+                "type": "INT16"
+              }
+            ]
         }
       }
     },
@@ -947,61 +964,6 @@
             }
           ]
         }
-      }
-    },
-    "sequential": {
-      "sharded": true,
-      "vindexes": {
-        "xxhash": {
-          "type": "xxhash"
-        },
-        "binary": {
-          "type": "binary"
-        },
-        "multicolIdx": {
-          "type": "multiCol_test"
-        }
-      },
-      "tables": {
-        "seq_tbl": {
-          "column_vindexes": [
-            {
-              "column": "id",
-              "name": "binary"
-            },
-            {
-              "column": "group_id",
-              "name": "xxhash"
-            }
-          ],
-          "columns": [
-            {
-              "name": "col1",
-              "type": "VARCHAR"
-            },
-            {
-              "name": "col2",
-              "type": "INT16"
-            }
-          ]
-        },
-        "seq_multicol_tbl": {
-          "column_vindexes": [
-            {
-              "columns": [
-                "cola",
-                "colb"
-              ],
-              "name": "multicolIdx"
-            }
-          ],
-          "columns" : [
-            {
-              "name": "col1",
-              "type": "INT16"
-            }
-          ]
-          }
       }
     }
   }
