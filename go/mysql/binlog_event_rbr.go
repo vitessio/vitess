@@ -435,6 +435,9 @@ func (rs *Rows) StringValuesForTests(tm *TableMap, rowIndex int) ([]string, erro
 			// This column is represented, but its value is NULL.
 			result = append(result, "NULL")
 			valueIndex++
+			if tm.Types[c] == binlog.TypeJSON {
+				jsonIndex++
+			}
 			continue
 		}
 

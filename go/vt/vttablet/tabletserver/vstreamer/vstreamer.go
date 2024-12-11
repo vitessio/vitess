@@ -1111,6 +1111,9 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 		}
 		if nullColumns.Bit(valueIndex) {
 			valueIndex++
+			if plan.Table.Fields[colNum].Type == querypb.Type_JSON {
+				jsonIndex++
+			}
 			continue
 		}
 		partialJSON := false
