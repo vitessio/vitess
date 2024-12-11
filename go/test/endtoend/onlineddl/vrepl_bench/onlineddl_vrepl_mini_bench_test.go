@@ -148,12 +148,12 @@ var (
 )
 
 var (
-	countIterations = 1
+	countIterations = 3
 )
 
 const (
 	maxTableRows         = 4096
-	workloadDuration     = 30 * time.Second
+	workloadDuration     = 45 * time.Second
 	migrationWaitTimeout = 60 * time.Second
 )
 
