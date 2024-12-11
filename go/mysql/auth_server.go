@@ -601,19 +601,23 @@ func (n *mysqlCachingSha2AuthMethod) HandleAuthPluginData(c *Conn, user string, 
 	if cacheState == AuthRejected {
 		return nil, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
 	}
-	// If we get a result back from the cache that's valid, we can return that immediately.
+	// If we get a result back from the cache that's valid, we have successfully authenticated
 	if cacheState == AuthAccepted {
-		// We need to write a more data packet to indicate the
-		// handshake completed properly. This  will be followed
-		// by a regular OK packet which the caller of this method will send.
-
-		data := c.startEphemeralPacket(2)
-		pos := 0
-		pos = writeByte(data, pos, AuthMoreDataPacket)
-		_ = writeByte(data, pos, CachingSha2FastAuth)
-		err = c.writeEphemeralPacket()
-		if err != nil {
-			return nil, err
+		// If the client hasn't sent any authentication data (i.e. a scrambled password), then don't send
+		// the CachingSha2FastAuth packet, since clients don't expect it and error with "Malformed packet"
+		emptyClientAuthResponse := len(clientAuthPluginData) == 0 || (len(clientAuthPluginData) == 1 && clientAuthPluginData[0] == 0)
+		if !emptyClientAuthResponse {
+			// Otherwise, we need to write a more data packet to indicate the
+			// handshake completed properly. This will be followed
+			// by a regular OK packet which the caller of this method will send.
+			data := c.startEphemeralPacket(2)
+			pos := 0
+			pos = writeByte(data, pos, AuthMoreDataPacket)
+			_ = writeByte(data, pos, CachingSha2FastAuth)
+			err = c.writeEphemeralPacket()
+			if err != nil {
+				return nil, err
+			}
 		}
 		return result, nil
 	}

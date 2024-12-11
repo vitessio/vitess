@@ -439,7 +439,6 @@ func (l *Listener) handle(ctx context.Context, conn net.Conn, connectionID uint3
 	// The latter case happens for example for MySQL 8.0 clients until 8.0.25 who advertise
 	// support for caching_sha2_password by default but with no plugin data.
 	if err != nil || (len(clientAuthResponse) == 0 && clientAuthMethod == CachingSha2Password) {
-		l.handleConnectionError(c, "auth server failed to determine auth method")
 		if err != nil {
 			// The client will disconnect if it doesn't understand
 			// the first auth method that we send, so we only have to send the
@@ -452,29 +451,31 @@ func (l *Listener) handle(ctx context.Context, conn net.Conn, connectionID uint3
 			}
 		}
 		if negotiatedAuthMethod == nil {
+			l.handleConnectionError(c, "No authentication methods available for authentication.")
 			c.writeErrorPacket(CRServerHandshakeErr, SSUnknownSQLState, "No authentication methods available for authentication.")
 			return
 		}
 
 		if !l.AllowClearTextWithoutTLS.Get() && !c.TLSEnabled() && !negotiatedAuthMethod.AllowClearTextWithoutTLS() {
+			l.handleConnectionError(c, "Cannot use clear text authentication over non-SSL connections.")
 			c.writeErrorPacket(CRServerHandshakeErr, SSUnknownSQLState, "Cannot use clear text authentication over non-SSL connections.")
 			return
 		}
 
 		serverAuthPluginData, err = negotiatedAuthMethod.AuthPluginData()
 		if err != nil {
-			log.Errorf("Error generating auth switch packet for %s: %v", c, err)
+			l.handleConnectionError(c, fmt.Sprintf("Error generating auth switch packet for %s: %v", c, err))
 			return
 		}
 
 		if err := c.writeAuthSwitchRequest(string(negotiatedAuthMethod.Name()), serverAuthPluginData); err != nil {
-			log.Errorf("Error writing auth switch packet for %s: %v", c, err)
+			l.handleConnectionError(c, fmt.Sprintf("Error writing auth switch packet for %s: %v", c, err))
 			return
 		}
 
 		clientAuthResponse, err = c.readEphemeralPacket(context.Background())
 		if err != nil {
-			log.Errorf("Error reading auth switch response for %s: %v", c, err)
+			l.handleConnectionError(c, fmt.Sprintf("Error reading auth switch response for %s: %v", c, err))
 			return
 		}
 		c.recycleReadPacket()
@@ -482,7 +483,7 @@ func (l *Listener) handle(ctx context.Context, conn net.Conn, connectionID uint3
 
 	userData, err := negotiatedAuthMethod.HandleAuthPluginData(c, user, serverAuthPluginData, clientAuthResponse, conn.RemoteAddr())
 	if err != nil {
-		log.Warningf("Error authenticating user %s using: %s", user, negotiatedAuthMethod.Name())
+		l.handleConnectionWarning(c, fmt.Sprintf("Error authenticating user %s using: %s", user, negotiatedAuthMethod.Name()))
 		c.writeErrorPacketFromError(err)
 		return
 	}
