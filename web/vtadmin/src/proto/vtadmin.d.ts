@@ -40733,6 +40733,9 @@ export namespace query {
 
         /** ExecuteOptions authoritative_timeout */
         authoritative_timeout?: (number|Long|null);
+
+        /** ExecuteOptions fetch_last_insert_id */
+        fetch_last_insert_id?: (boolean|null);
     }
 
     /** Represents an ExecuteOptions. */
@@ -40782,6 +40785,9 @@ export namespace query {
 
         /** ExecuteOptions authoritative_timeout. */
         public authoritative_timeout?: (number|Long|null);
+
+        /** ExecuteOptions fetch_last_insert_id. */
+        public fetch_last_insert_id: boolean;
 
         /** ExecuteOptions timeout. */
         public timeout?: "authoritative_timeout";
