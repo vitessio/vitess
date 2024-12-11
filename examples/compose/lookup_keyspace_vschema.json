@@ -20,7 +20,7 @@
 	},
 	"vindexes": {
 		"hash": {
-			"type": "hash"
+			"type": "xxhash"
 		}
 	}
 }

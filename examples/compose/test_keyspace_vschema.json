@@ -28,7 +28,7 @@
 	},
 	"vindexes": {
 		"hash": {
-			"type": "hash"
+			"type": "xxhash"
 		},
 		"messages_message_lookup": {
 			"type": "lookup_hash",

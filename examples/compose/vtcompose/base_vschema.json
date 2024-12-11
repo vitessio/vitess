@@ -2,9 +2,8 @@
   "sharded": true,
   "vindexes": {
     "hash": {
-      "type": "hash"
+      "type": "xxhash"
     }
   },
-  "tables": {
-  }
+  "tables": {}
 }
