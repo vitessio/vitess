@@ -356,7 +356,7 @@ func BuildVSchema(source *vschemapb.SrvVSchema, parser *sqlparser.Parser) (vsche
 	buildKeyspaces(source, vschema, parser)
 	// buildGlobalTables before buildReferences so that buildReferences can
 	// resolve sources which reference global tables.
-	buildGlobalTables(source, vschema)
+	BuildGlobalTables(source, vschema, true)
 	buildReferences(source, vschema)
 	buildRoutingRule(source, vschema, parser)
 	buildShardRoutingRule(source, vschema)
@@ -461,7 +461,7 @@ func (vschema *VSchema) AddUDF(ksname, udfName string) error {
 	return nil
 }
 
-func buildGlobalTables(source *vschemapb.SrvVSchema, vschema *VSchema) {
+func BuildGlobalTables(source *vschemapb.SrvVSchema, vschema *VSchema, skipIfAlreadyGlobal bool) {
 	for ksname, ks := range source.Keyspaces {
 		ksvschema := vschema.Keyspaces[ksname]
 		// If the keyspace requires explicit routing, don't include any of
@@ -469,15 +469,19 @@ func buildGlobalTables(source *vschemapb.SrvVSchema, vschema *VSchema) {
 		if ks.RequireExplicitRouting {
 			continue
 		}
-		buildKeyspaceGlobalTables(vschema, ksvschema)
+		buildKeyspaceGlobalTables(vschema, ksvschema, skipIfAlreadyGlobal)
 	}
 }
 
-func buildKeyspaceGlobalTables(vschema *VSchema, ksvschema *KeyspaceSchema) {
+func buildKeyspaceGlobalTables(vschema *VSchema, ksvschema *KeyspaceSchema, skipIfAlreadyGlobal bool) {
 	for tname, t := range ksvschema.Tables {
 		if gt, ok := vschema.globalTables[tname]; ok {
 			// There is already an entry table stored in global tables
 			// with this name.
+			if !skipIfAlreadyGlobal {
+				// Called when updating from schema tracking
+				continue
+			}
 			if gt == nil {
 				// Table name is already marked ambiguous, nothing to do.
 				continue

@@ -520,3 +520,40 @@ func TestDualJoinQueries(t *testing.T) {
 	mcmp.Exec("select t.title, t2.id from t2 left join (select 'ABC' as title) as t on t.title = t2.tcol1")
 
 }
+
+// TestSchemaTrackingGlobalTables tests that schema tracking works as intended with global table routing.
+// This test creates a new table in a schema and verifies we can query it without needing to add it to the vschema as long
+// as the name of the table is unique. It also creates a table which is already in the vschema to ensure that we
+// don't mark it as ambiguous when schema tracking also finds it.
+func TestSchemaTrackingGlobalTables(t *testing.T) {
+	// Create a new vtgate connection.
+	tables := []string{"uniqueTableName", "t1"}
+	for _, table := range tables {
+		t.Run(table, func(t *testing.T) {
+			vtConn, err := mysql.Connect(context.Background(), &vtParams)
+			require.NoError(t, err)
+			defer vtConn.Close()
+
+			// Create a new table in the unsharded keyspace such that it has a unique name that allows for global routing.
+			utils.Exec(t, vtConn, `use `+unshardedKs)
+			// Use the same schema as t1 from sharded_schema.sql
+			utils.Exec(t, vtConn, fmt.Sprintf(`create table if not exists %s(id bigint, col bigint, primary key(id))`, table))
+			defer utils.Exec(t, vtConn, fmt.Sprintf(`drop table %s`, table))
+
+			// Wait for schema tracking to see this column.
+			err = utils.WaitForAuthoritative(t, unshardedKs, table, clusterInstance.VtgateProcess.ReadVSchema)
+			require.NoError(t, err)
+
+			// Create a new vtgate connection.
+			vtConn2, err := mysql.Connect(context.Background(), &vtParams)
+			require.NoError(t, err)
+			defer vtConn2.Close()
+
+			// Insert rows into the table and select them to verify we can use them.
+			utils.Exec(t, vtConn2, fmt.Sprintf(`insert into %s(id, col) values (10, 100),(20, 200)`, table))
+			require.NoError(t, err)
+			utils.AssertMatches(t, vtConn2, fmt.Sprintf(`select * from %s order by id`, table),
+				`[[INT64(10) INT64(100)] [INT64(20) INT64(200)]]`)
+		})
+	}
+}
