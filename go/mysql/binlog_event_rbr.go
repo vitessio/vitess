@@ -370,7 +370,7 @@ func (ev binlogEvent) Rows(f BinlogFormat, tm *TableMap) (Rows, error) {
 
 		if ev.Type() == ePartialUpdateRowsEvent {
 			// The first byte indicates whether or not any JSON values are partial.
-			// If it's not 1 then there's nothing else to do for the row as any
+			// If it's not 1 then there's nothing special to do for the row as any
 			// columns use the full value.
 			partialJSON := uint8(data[pos])
 			pos++

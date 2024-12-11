@@ -71,14 +71,14 @@ func ParseBinaryJSON(data []byte) (*json.Value, error) {
 	return node, nil
 }
 
-// ParseBinaryJSONDiff provides the parsing function from the MySQL JSON
-// diff representation to an SQL expression.
+// ParseBinaryJSONDiff provides the parsing function from the binary MySQL
+// JSON diff representation to an SQL expression.
 func ParseBinaryJSONDiff(data []byte) (sqltypes.Value, error) {
 	diff := bytes.Buffer{}
 	// Reasonable estimate of the space we'll need to build the SQL
 	// expression in order to try and avoid reallocations w/o
 	// overallocating too much.
-	diff.Grow(int(float32(len(data)) * 1.5))
+	diff.Grow(int(float32(len(data)) * 1.25))
 	pos := 0
 	outer := false
 	innerStr := ""
@@ -98,12 +98,13 @@ func ParseBinaryJSONDiff(data []byte) (sqltypes.Value, error) {
 		case jsonDiffOpRemove:
 			diff.WriteString("JSON_REMOVE(")
 		default:
-			// Can be a literal JSON null.
+			// Can be a JSON null.
 			js, err := ParseBinaryJSON(data)
 			if err == nil && js.Type() == json.TypeNull {
 				return sqltypes.MakeTrusted(sqltypes.Expression, js.MarshalTo(nil)), nil
 			}
-			return sqltypes.Value{}, fmt.Errorf("invalid JSON diff operation: %d", opType)
+			return sqltypes.Value{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+				"invalid JSON diff operation: %d", opType)
 		}
 		if outer {
 			diff.WriteString(innerStr)
@@ -129,7 +130,8 @@ func ParseBinaryJSONDiff(data []byte) (sqltypes.Value, error) {
 			pos = readTo
 			value, err := ParseBinaryJSON(data[pos : pos+valueLen])
 			if err != nil {
-				return sqltypes.Value{}, fmt.Errorf("cannot read JSON diff value for path %s: %w", path, err)
+				return sqltypes.Value{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+					"cannot read JSON diff value for path %s: %v", path, err)
 			}
 			pos += valueLen
 			if value.Type() == json.TypeString {

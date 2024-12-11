@@ -394,12 +394,14 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 					!slices.Equal(vals[i].Raw(), sqltypes.NullBytes):
 					// An SQL expression that can be converted to a JSON value such
 					// as JSON_INSERT().
-					// This occurs e.g. when using partial JSON values as a result of
+					// This occurs when using partial JSON values as a result of
 					// mysqld using binlog-row-value-options=PARTIAL_JSON.
 					if len(vals[i].Raw()) == 0 {
 						// When using BOTH binlog_row_image=NOBLOB AND
-						// binlog_row_value_options=PARTIAL_JSON then the JSON column
-						// has the data bit set and the diff is empty.
+						// binlog_row_value_options=PARTIAL_JSON then the JSON
+						// column has the data bit set and the diff is empty. So
+						// we have to account for this by unsetting the data bit
+						// so that the current JSON value is not overwritten.
 						setBit(rowChange.DataColumns.Cols, i, false)
 						newVal = ptr.Of(sqltypes.MakeTrusted(querypb.Type_EXPRESSION, nil))
 					} else {

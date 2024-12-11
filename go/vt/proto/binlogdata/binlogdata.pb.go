@@ -1336,9 +1336,9 @@ type RowChange struct {
 	// DataColumns is a bitmap of all columns: bit is set if column is
 	// present in the after image.
 	DataColumns *RowChange_Bitmap `protobuf:"bytes,3,opt,name=data_columns,json=dataColumns,proto3" json:"data_columns,omitempty"`
-	// JsonPartialValues is a bitmap of any JSON columns where the bit is
-	// set if the value in the after image is a partial JSON value that
-	// is represented as an expression of
+	// JsonPartialValues is a bitmap of any JSON columns, where the bit
+	// is set if the value in the AFTER image is a partial JSON value
+	// that is represented as an expression of
 	// JSON_[INSERT|REPLACE|REMOVE](%s, '$.path', value) which then is
 	// used to add/update/remove a path in the JSON document. When the
 	// value is used the fmt directive must be replaced by the actual

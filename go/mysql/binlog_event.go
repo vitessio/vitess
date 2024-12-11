@@ -270,9 +270,10 @@ type Row struct {
 	// It is only set for UPDATE and DELETE events.
 	Identify []byte
 
-	// If this row represents a PartialUpdateRow event there will be a
-	// shared-image that sits between the before and after images that
-	// defines how the JSON column values are represented.
+	// If this row was from a PartialUpdateRows event and it contains
+	// 1 or more JSON columns with partial values, then this will be
+	// set as a bitmap of which JSON columns in the AFTER image have
+	// partial values.
 	JSONPartialValues Bitmap
 
 	// Data is the raw data.
