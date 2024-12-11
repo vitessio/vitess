@@ -1,9 +1,9 @@
 # DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
 
-name: Cluster (vtgate_gen4)
+name: Cluster (onlineddl_vrepl_bench)
 on: [push, pull_request]
 concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (vtgate_gen4)')
+  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (onlineddl_vrepl_bench)')
   cancel-in-progress: true
 
 permissions: read-all
@@ -15,8 +15,8 @@ env:
 
 jobs:
   build:
-    name: Run endtoend tests on Cluster (vtgate_gen4)
-    runs-on: ubuntu-24.04
+    name: Run endtoend tests on Cluster (onlineddl_vrepl_bench)
+    runs-on: gh-hosted-runners-16cores-1-24.04
 
     steps:
     - name: Skip CI
@@ -67,7 +67,8 @@ jobs:
             - 'tools/**'
             - 'config/**'
             - 'bootstrap.sh'
-            - '.github/workflows/cluster_endtoend_vtgate_gen4.yml'
+            - '.github/workflows/cluster_endtoend_onlineddl_vrepl_bench.yml'
+            - 'go/test/endtoend/onlineddl/vrepl_suite/testdata'
 
     - name: Set up Go
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -144,8 +145,12 @@ jobs:
 
         set -exo pipefail
 
+        cat <<-EOF>>./config/mycnf/mysql8026.cnf
+        binlog-transaction-compression=ON
+        EOF
+        
         # run the tests however you normally do, then produce a JUnit XML file
-        eatmydata -- go run test.go -docker=false -follow -shard vtgate_gen4 | tee -a output.txt | go-junit-report -set-exit-code > report.xml
+        eatmydata -- go run test.go -docker=false -follow -shard onlineddl_vrepl_bench | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 
     - name: Print test output and Record test result in launchable if PR is not a draft
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true' && always()
