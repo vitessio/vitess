@@ -4912,5 +4912,56 @@
       "user.multicol_tbl"
     ]
   }
+},
+{
+  "comment": "Between clause on a binary vindex field with values from a different table",
+  "query": "select s.oid,s.col1, se.colb from sales s join sales_extra se on s.col1 = se.cola where s.oid between se.start and se.end",
+  "plan": {
+    "QueryType": "SELECT",
+    "Original": "select s.oid,s.col1, se.colb from sales s join sales_extra se on s.col1 = se.cola where s.oid between se.start and se.end",
+    "Instructions": {
+      "OperatorType": "Join",
+      "Variant": "Join",
+      "JoinColumnIndexes": "R:0,R:1,L:0",
+      "JoinVars": {
+        "se_cola": 1,
+        "se_end": 3,
+        "se_start": 2
+      },
+      "TableName": "sales_extra_sales",
+      "Inputs": [
+        {
+          "OperatorType": "Route",
+          "Variant": "Scatter",
+          "Keyspace": {
+            "Name": "user",
+            "Sharded": true
+          },
+          "FieldQuery": "select se.colb, se.cola, se.`start`, se.`end` from sales_extra as se where 1 != 1",
+          "Query": "select se.colb, se.cola, se.`start`, se.`end` from sales_extra as se",
+          "Table": "sales_extra"
+        },
+        {
+          "OperatorType": "Route",
+          "Variant": "Between",
+          "Keyspace": {
+            "Name": "user",
+            "Sharded": true
+          },
+          "FieldQuery": "select s.oid, s.col1 from sales as s where 1 != 1",
+          "Query": "select s.oid, s.col1 from sales as s where s.oid between :se_start /* INT16 */ and :se_end /* INT16 */ and s.col1 = :se_cola /* VARCHAR */",
+          "Table": "sales",
+          "Values": [
+            "(:se_start, :se_end)"
+          ],
+          "Vindex": "binary"
+        }
+      ]
+    },
+    "TablesUsed": [
+      "user.sales",
+      "user.sales_extra"
+    ]
+  }
 }
 ]

@@ -364,6 +364,8 @@ func (tr *ShardedRouting) Cost() int {
 		return 5
 	case engine.IN:
 		return 10
+	case engine.Between:
+		return 10
 	case engine.MultiEqual:
 		return 10
 	case engine.Scatter:

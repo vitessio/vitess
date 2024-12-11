@@ -530,6 +530,48 @@
                 "type": "INT16"
               }
             ]
+        },
+        "sales": {
+          "column_vindexes" : [
+            {
+              "column" : "oid",
+              "name" : "binary"
+            }
+          ],
+          "columns" : [
+            {
+              "name" : "col1",
+              "type" : "VARCHAR"
+            }
+          ]
+        },
+        "sales_extra" : {
+          "column_vindexes": [
+            {
+              "columns": [
+                "colx"
+              ],
+              "name": "shard_index"
+            }
+          ],
+          "columns" : [
+            {
+              "name" : "cola",
+              "type" : "VARCHAR"
+            },
+            {
+              "name" : "colb",
+              "type" : "VARCHAR"
+            },
+            {
+              "name" : "start",
+              "type" : "INT16"
+            },
+            {
+              "name" : "end",
+              "type" : "INT16"
+            }
+          ]
         }
       }
     },
