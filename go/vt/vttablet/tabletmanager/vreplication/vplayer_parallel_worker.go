@@ -22,7 +22,6 @@ import (
 	"io"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"vitess.io/vitess/go/mysql/replication"
@@ -45,8 +44,8 @@ var (
 type parallelWorker struct {
 	pool           *parallelWorkersPool
 	index          int
-	lastCommitted  atomic.Int64
-	sequenceNumber atomic.Int64
+	lastCommitted  int64
+	sequenceNumber int64
 	dbClient       *vdbClient
 	queryFunc      func(ctx context.Context, sql string) (*sqltypes.Result, error)
 	vp             *vplayer
@@ -165,10 +164,6 @@ func (w *parallelWorker) applyQueuedEvents(ctx context.Context) error {
 			if vevent == terminateWorkerEvent {
 				// An indication that there are no more events for this worker
 				return nil
-			}
-			if vevent.SequenceNumber != w.sequenceNumber.Load() {
-				w.sequenceNumber.Store(vevent.SequenceNumber)
-				w.lastCommitted.Store(vevent.LastCommitted)
 			}
 			if err := w.applyQueuedEvent(ctx, vevent, true); err != nil {
 				// wasError = true

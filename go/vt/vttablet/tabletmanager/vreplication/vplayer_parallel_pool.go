@@ -30,6 +30,7 @@ import (
 const (
 	defaultParallelWorkersPoolSize = 8
 	maxBatchedCommitsPerWorker     = 5
+	maxWorkerEventsQueueSize       = 10
 )
 
 type parallelWorkersPool struct {
@@ -116,9 +117,9 @@ func (p *parallelWorkersPool) availableWorker(ctx context.Context, lastCommitted
 		return w, nil
 	}
 
-	w.events = make(chan *binlogdatapb.VEvent, 10)
-	w.lastCommitted.Store(lastCommitted)
-	w.sequenceNumber.Store(sequenceNumber)
+	w.events = make(chan *binlogdatapb.VEvent, maxWorkerEventsQueueSize)
+	w.lastCommitted = lastCommitted
+	w.sequenceNumber = sequenceNumber
 
 	go func() {
 		if err := w.applyQueuedEvents(ctx); err != nil {
@@ -130,6 +131,7 @@ func (p *parallelWorkersPool) availableWorker(ctx context.Context, lastCommitted
 		if w.index == p.head {
 			p.handoverHead(w.index)
 		}
+		w.events = nil // GC
 		w.recycle()
 	}()
 	return w, nil
@@ -183,11 +185,11 @@ func (p *parallelWorkersPool) isApplicable(w *parallelWorker, eventType binlogda
 		return false
 	}
 
-	if w.lastCommitted.Load() == 0 {
+	if w.sequenceNumber == 0 {
 		// No info. We therefore execute sequentially.
 		return false
 	}
-	if w.lastCommitted.Load() == 1 {
+	if w.sequenceNumber == 1 {
 		// First in the binary log. We therefore execute sequentially.
 		return false
 	}
@@ -198,11 +200,11 @@ func (p *parallelWorkersPool) isApplicable(w *parallelWorker, eventType binlogda
 			// reached this worker. It is applicable.
 			return true
 		}
-		if otherWorker.sequenceNumber.Load() == 0 {
+		if otherWorker.sequenceNumber == 0 {
 			// unknown event. Used for draining. Sequentialize.
 			return false
 		}
-		if otherWorker.sequenceNumber.Load() <= w.lastCommitted.Load() {
+		if otherWorker.sequenceNumber <= w.lastCommitted {
 			// worker w depends on a previous event that has not committed yet.
 			// Was this event applied by the same worker who is asking? If so, that's fine
 			return false
