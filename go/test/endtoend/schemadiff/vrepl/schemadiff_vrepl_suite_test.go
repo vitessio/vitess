@@ -68,7 +68,6 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	exitcode, err := func() (int, error) {
@@ -132,7 +131,6 @@ func TestMain(m *testing.M) {
 }
 
 func TestSchemadiffSchemaChanges(t *testing.T) {
-	defer cluster.PanicHandler(t)
 
 	shards := clusterInstance.Keyspaces[0].Shards
 	require.Equal(t, 1, len(shards))
@@ -275,7 +273,6 @@ func testSingle(t *testing.T, testName string) {
 }
 
 // func TestRandomSchemaChanges(t *testing.T) {
-// 	defer cluster.PanicHandler(t)
 
 // 	hints := &schemadiff.DiffHints{AutoIncrementStrategy: schemadiff.AutoIncrementIgnore}
 // 	// count := 20

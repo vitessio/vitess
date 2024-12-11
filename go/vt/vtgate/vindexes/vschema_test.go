@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -3549,6 +3550,20 @@ func TestFindTableWithSequences(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestGlobalTables(t *testing.T) {
+	input, err := os.ReadFile("../planbuilder/testdata/vschemas/schema.json")
+	require.NoError(t, err)
+
+	var vs vschemapb.SrvVSchema
+	err = json2.UnmarshalPB(input, &vs)
+	require.NoError(t, err)
+
+	got := BuildVSchema(&vs, sqlparser.NewTestParser())
+	tbl, err := got.findGlobalTable("user", false)
+	require.NoError(t, err)
+	assert.NotNil(t, tbl)
 }
 
 func vindexNames(vindexes []*ColumnVindex) (result []string) {

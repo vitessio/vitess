@@ -72,7 +72,6 @@ var (
 
 // TestMain is the main entry point
 func TestMain(m *testing.M) {
-	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	exitcode, err := func() (int, error) {
@@ -131,12 +130,10 @@ func TestMain(m *testing.M) {
 }
 
 func TestShards(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	assert.Equal(t, 2, len(clusterInstance.Keyspaces[0].Shards))
 }
 
 func TestDeploySchema(t *testing.T) {
-	defer cluster.PanicHandler(t)
 
 	if clusterInstance.ReusingVTDATAROOT {
 		// we assume data is already deployed
@@ -163,7 +160,6 @@ func TestDeploySchema(t *testing.T) {
 }
 
 func TestTablesExist(t *testing.T) {
-	defer cluster.PanicHandler(t)
 
 	checkTables(t, "", totalTableCount)
 }

@@ -121,6 +121,13 @@ jobs:
         # install JUnit report formatter
         go install github.com/vitessio/go-junit-report@HEAD
 
+    - name: Install Minio
+      if: steps.skip-workflow.outputs.skip-workflow == 'false'
+      run: |
+        wget https://dl.min.io/server/minio/release/linux-amd64/minio
+        chmod +x minio
+        mv minio /usr/local/bin
+    
     - name: Setup launchable dependencies
       if: steps.skip-workflow.outputs.is_draft == 'false' && steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true' && github.base_ref == 'main'
       run: |

@@ -1043,7 +1043,6 @@ func (cluster *LocalProcessCluster) StreamTabletHealthUntil(ctx context.Context,
 
 // Teardown brings down the cluster by invoking teardown for individual processes
 func (cluster *LocalProcessCluster) Teardown() {
-	PanicHandler(nil)
 	cluster.mx.Lock()
 	defer cluster.mx.Unlock()
 	if cluster.teardownCompleted {

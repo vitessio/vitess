@@ -40,7 +40,6 @@ import (
 )
 
 func TestVtgateHealthCheck(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	// Healthcheck interval on tablet is set to 1s, so sleep for 2s
 	time.Sleep(2 * time.Second)
 	verifyVtgateVariables(t, clusterInstance.VtgateProcess.VerifyURL)
@@ -54,7 +53,6 @@ func TestVtgateHealthCheck(t *testing.T) {
 }
 
 func TestVtgateReplicationStatusCheck(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	// Healthcheck interval on tablet is set to 1s, so sleep for 2s
 	time.Sleep(2 * time.Second)
 	verifyVtgateVariables(t, clusterInstance.VtgateProcess.VerifyURL)
@@ -104,7 +102,6 @@ func TestVtgateReplicationStatusCheck(t *testing.T) {
 }
 
 func TestVtgateReplicationStatusCheckWithTabletTypeChange(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	// Healthcheck interval on tablet is set to 1s, so sleep for 2s
 	time.Sleep(2 * time.Second)
 	verifyVtgateVariables(t, clusterInstance.VtgateProcess.VerifyURL)
@@ -180,7 +177,6 @@ func retryNTimes(t *testing.T, maxRetries int, f func() bool) {
 
 func TestReplicaTransactions(t *testing.T) {
 	// TODO(deepthi): this test seems to depend on previous test. Fix tearDown so that tests are independent
-	defer cluster.PanicHandler(t)
 	// Healthcheck interval on tablet is set to 1s, so sleep for 2s
 	time.Sleep(2 * time.Second)
 	ctx := context.Background()
@@ -287,7 +283,6 @@ func TestReplicaTransactions(t *testing.T) {
 
 // TestStreamingRPCStuck tests that StreamExecute calls don't get stuck on the vttablets if a client stop reading from a stream.
 func TestStreamingRPCStuck(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	vtConn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)

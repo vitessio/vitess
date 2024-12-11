@@ -30,7 +30,6 @@ import (
 
 // TestDynamicConfigs tests the dyanamic configurations that VTOrc offers.
 func TestDynamicConfigs(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, nil, cluster.VTOrcConfiguration{}, 1, "")
 	vtorc := clusterInfo.ClusterInstance.VTOrcProcesses[0]
 
