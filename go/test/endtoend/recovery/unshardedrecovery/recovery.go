@@ -72,7 +72,6 @@ var (
 
 // TestMainImpl creates cluster for unsharded recovery testing.
 func TestMainImpl(m *testing.M) {
-	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	exitCode, err := func() (int, error) {
@@ -201,7 +200,6 @@ func TestMainImpl(m *testing.M) {
 //
 // 7. check that vtgate queries work correctly
 func TestRecoveryImpl(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	defer tabletsTeardown()
 	verifyInitialReplication(t)
 

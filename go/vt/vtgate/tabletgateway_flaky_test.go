@@ -20,6 +20,8 @@ import (
 	"testing"
 	"time"
 
+	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -53,7 +55,7 @@ func TestGatewayBufferingWhenPrimarySwitchesServingState(t *testing.T) {
 		TabletType: tabletType,
 	}
 
-	ts := &fakeTopoServer{}
+	ts := &econtext.FakeTopoServer{}
 	// create a new fake health check. We want to check the buffering code which uses Subscribe, so we must also pass a channel
 	hc := discovery.NewFakeHealthCheck(make(chan *discovery.TabletHealth))
 	// create a new tablet gateway
@@ -156,7 +158,7 @@ func TestGatewayBufferingWhileReparenting(t *testing.T) {
 		TabletType: tabletType,
 	}
 
-	ts := &fakeTopoServer{}
+	ts := &econtext.FakeTopoServer{}
 	// create a new fake health check. We want to check the buffering code which uses Subscribe, so we must also pass a channel
 	hc := discovery.NewFakeHealthCheck(make(chan *discovery.TabletHealth))
 	// create a new tablet gateway
@@ -286,7 +288,7 @@ func TestInconsistentStateDetectedBuffering(t *testing.T) {
 		TabletType: tabletType,
 	}
 
-	ts := &fakeTopoServer{}
+	ts := &econtext.FakeTopoServer{}
 	// create a new fake health check. We want to check the buffering code which uses Subscribe, so we must also pass a channel
 	hc := discovery.NewFakeHealthCheck(make(chan *discovery.TabletHealth))
 	// create a new tablet gateway

@@ -91,7 +91,7 @@ func CreatePlanningContext(stmt sqlparser.Statement,
 	version querypb.ExecuteOptions_PlannerVersion,
 ) (*PlanningContext, error) {
 	ksName := ""
-	if ks, _ := vschema.DefaultKeyspace(); ks != nil {
+	if ks, _ := vschema.SelectedKeyspace(); ks != nil {
 		ksName = ks.Name
 	}
 

@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
 // AssertContains ensures the given query result contains the expected results.
@@ -158,6 +159,19 @@ func Exec(t testing.TB, conn *mysql.Conn, query string) *sqltypes.Result {
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 	require.NoError(t, err, "for query: "+query)
 	return qr
+}
+
+// ExecTrace executes the given query with trace using the given connection. The trace result is returned.
+// The test fails if the query produces an error.
+func ExecTrace(t testing.TB, conn *mysql.Conn, query string) engine.PrimitiveDescription {
+	t.Helper()
+	qr, err := conn.ExecuteFetch(fmt.Sprintf("vexplain trace %s", query), 10000, false)
+	require.NoError(t, err, "for query: "+query)
+
+	// Extract the trace result and format it with indentation for pretty printing
+	pd, err := engine.PrimitiveDescriptionFromString(qr.Rows[0][0].ToString())
+	require.NoError(t, err)
+	return pd
 }
 
 // ExecMulti executes the given (potential multi) queries using the given connection.

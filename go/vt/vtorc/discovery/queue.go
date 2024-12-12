@@ -153,7 +153,7 @@ func (q *Queue) Consume() string {
 
 	// alarm if have been waiting for too long
 	timeOnQueue := time.Since(q.queuedKeys[key])
-	if timeOnQueue > time.Duration(config.Config.InstancePollSeconds)*time.Second {
+	if timeOnQueue > config.GetInstancePollTime() {
 		log.Warningf("key %v spent %.4fs waiting on a discoveryQueue", key, timeOnQueue.Seconds())
 	}
 

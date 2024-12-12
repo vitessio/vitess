@@ -163,8 +163,7 @@ func TestExternalConnectorPlay(t *testing.T) {
 
 	expectDBClientAndVreplicationQueries(t, []string{
 		"begin",
-		"insert into tab1(id,val) values (1,_binary'a')",
-		"insert into tab1(id,val) values (2,_binary'b')",
+		"insert into tab1(id,val) values (1,_binary'a'), (2,_binary'b')",
 		"/update _vt.vreplication set pos=",
 		"commit",
 	}, pos)

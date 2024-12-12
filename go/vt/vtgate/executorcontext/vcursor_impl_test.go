@@ -1,8 +1,23 @@
-package vtgate
+/*
+Copyright 2024 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package executorcontext
 
 import (
 	"context"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"strconv"
@@ -12,10 +27,16 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/sqltypes"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
+
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
-	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtgate/logstats"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
@@ -37,48 +58,6 @@ func (f fakeVSchemaOperator) GetCurrentSrvVschema() *vschemapb.SrvVSchema {
 
 func (f fakeVSchemaOperator) UpdateVSchema(ctx context.Context, ksName string, vschema *vschemapb.SrvVSchema) error {
 	panic("implement me")
-}
-
-type fakeTopoServer struct{}
-
-// GetTopoServer returns the full topo.Server instance.
-func (f *fakeTopoServer) GetTopoServer() (*topo.Server, error) {
-	return nil, nil
-}
-
-// GetSrvKeyspaceNames returns the list of keyspaces served in
-// the provided cell.
-func (f *fakeTopoServer) GetSrvKeyspaceNames(ctx context.Context, cell string, staleOK bool) ([]string, error) {
-	return []string{"ks1"}, nil
-}
-
-// GetSrvKeyspace returns the SrvKeyspace for a cell/keyspace.
-func (f *fakeTopoServer) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error) {
-	zeroHexBytes, _ := hex.DecodeString("")
-	eightyHexBytes, _ := hex.DecodeString("80")
-	ks := &topodatapb.SrvKeyspace{
-		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
-			{
-				ServedType: topodatapb.TabletType_PRIMARY,
-				ShardReferences: []*topodatapb.ShardReference{
-					{Name: "-80", KeyRange: &topodatapb.KeyRange{Start: zeroHexBytes, End: eightyHexBytes}},
-					{Name: "80-", KeyRange: &topodatapb.KeyRange{Start: eightyHexBytes, End: zeroHexBytes}},
-				},
-			},
-		},
-	}
-	return ks, nil
-}
-
-func (f *fakeTopoServer) WatchSrvKeyspace(ctx context.Context, cell, keyspace string, callback func(*topodatapb.SrvKeyspace, error) bool) {
-	ks, err := f.GetSrvKeyspace(ctx, cell, keyspace)
-	callback(ks, err)
-}
-
-// WatchSrvVSchema starts watching the SrvVSchema object for
-// the provided cell.  It will call the callback when
-// a new value or an error occurs.
-func (f *fakeTopoServer) WatchSrvVSchema(ctx context.Context, cell string, callback func(*vschemapb.SrvVSchema, error) bool) {
 }
 
 func TestDestinationKeyspace(t *testing.T) {
@@ -184,13 +163,17 @@ func TestDestinationKeyspace(t *testing.T) {
 	}, {
 		vschema:       vschemaWith2KS,
 		targetString:  "",
-		expectedError: errNoKeyspace.Error(),
+		expectedError: ErrNoKeyspace.Error(),
 	}}
 
-	r, _, _, _, _ := createExecutorEnv(t)
 	for i, tc := range tests {
 		t.Run(strconv.Itoa(i)+tc.targetString, func(t *testing.T) {
-			impl, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: tc.targetString}), sqlparser.MarginComments{}, r, nil, &fakeVSchemaOperator{vschema: tc.vschema}, tc.vschema, nil, nil, false, querypb.ExecuteOptions_Gen4)
+			session := NewSafeSession(&vtgatepb.Session{TargetString: tc.targetString})
+			impl, _ := NewVCursorImpl(session, sqlparser.MarginComments{}, nil, nil,
+				&fakeVSchemaOperator{vschema: tc.vschema}, tc.vschema, nil, nil,
+				fakeObserver{}, VCursorConfig{
+					DefaultTabletType: topodatapb.TabletType_PRIMARY,
+				})
 			impl.vschema = tc.vschema
 			dest, keyspace, tabletType, err := impl.TargetDestination(tc.qualifier)
 			if tc.expectedError == "" {
@@ -250,15 +233,15 @@ func TestSetTarget(t *testing.T) {
 		expectedError: "can't execute the given command because you have an active transaction",
 	}}
 
-	r, _, _, _, _ := createExecutorEnv(t)
 	for i, tc := range tests {
 		t.Run(fmt.Sprintf("%d#%s", i, tc.targetString), func(t *testing.T) {
-			vc, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{InTransaction: true}), sqlparser.MarginComments{}, r, nil, &fakeVSchemaOperator{vschema: tc.vschema}, tc.vschema, nil, nil, false, querypb.ExecuteOptions_Gen4)
+			cfg := VCursorConfig{DefaultTabletType: topodatapb.TabletType_PRIMARY}
+			vc, _ := NewVCursorImpl(NewSafeSession(&vtgatepb.Session{InTransaction: true}), sqlparser.MarginComments{}, nil, nil, &fakeVSchemaOperator{vschema: tc.vschema}, tc.vschema, nil, nil, fakeObserver{}, cfg)
 			vc.vschema = tc.vschema
 			err := vc.SetTarget(tc.targetString)
 			if tc.expectedError == "" {
 				require.NoError(t, err)
-				require.Equal(t, vc.safeSession.TargetString, tc.targetString)
+				require.Equal(t, vc.SafeSession.TargetString, tc.targetString)
 			} else {
 				require.EqualError(t, err, tc.expectedError)
 			}
@@ -299,17 +282,20 @@ func TestKeyForPlan(t *testing.T) {
 		expectedPlanPrefixKey: "ks1@replica+Collate:utf8mb4_0900_ai_ci+Query:SELECT 1",
 	}}
 
-	r, _, _, _, _ := createExecutorEnv(t)
 	for i, tc := range tests {
 		t.Run(fmt.Sprintf("%d#%s", i, tc.targetString), func(t *testing.T) {
 			ss := NewSafeSession(&vtgatepb.Session{InTransaction: false})
 			ss.SetTargetString(tc.targetString)
-			vc, err := newVCursorImpl(ss, sqlparser.MarginComments{}, r, nil, &fakeVSchemaOperator{vschema: tc.vschema}, tc.vschema, srvtopo.NewResolver(&fakeTopoServer{}, nil, ""), nil, false, querypb.ExecuteOptions_Gen4)
+			cfg := VCursorConfig{
+				Collation:         collations.CollationUtf8mb4ID,
+				DefaultTabletType: topodatapb.TabletType_PRIMARY,
+			}
+			vc, err := NewVCursorImpl(ss, sqlparser.MarginComments{}, &fakeExecutor{}, nil, &fakeVSchemaOperator{vschema: tc.vschema}, tc.vschema, srvtopo.NewResolver(&FakeTopoServer{}, nil, ""), nil, fakeObserver{}, cfg)
 			require.NoError(t, err)
 			vc.vschema = tc.vschema
 
 			var buf strings.Builder
-			vc.keyForPlan(context.Background(), "SELECT 1", &buf)
+			vc.KeyForPlan(context.Background(), "SELECT 1", &buf)
 			require.Equal(t, tc.expectedPlanPrefixKey, buf.String())
 		})
 	}
@@ -327,8 +313,7 @@ func TestFirstSortedKeyspace(t *testing.T) {
 		},
 	}
 
-	r, _, _, _, _ := createExecutorEnv(t)
-	vc, err := newVCursorImpl(NewSafeSession(nil), sqlparser.MarginComments{}, r, nil, &fakeVSchemaOperator{vschema: vschemaWith2KS}, vschemaWith2KS, srvtopo.NewResolver(&fakeTopoServer{}, nil, ""), nil, false, querypb.ExecuteOptions_Gen4)
+	vc, err := NewVCursorImpl(NewSafeSession(nil), sqlparser.MarginComments{}, nil, nil, &fakeVSchemaOperator{vschema: vschemaWith2KS}, vschemaWith2KS, srvtopo.NewResolver(&FakeTopoServer{}, nil, ""), nil, fakeObserver{}, VCursorConfig{})
 	require.NoError(t, err)
 	ks, err := vc.FirstSortedKeyspace()
 	require.NoError(t, err)
@@ -338,13 +323,13 @@ func TestFirstSortedKeyspace(t *testing.T) {
 // TestSetExecQueryTimeout tests the SetExecQueryTimeout method.
 // Validates the timeout value is set based on override rule.
 func TestSetExecQueryTimeout(t *testing.T) {
-	executor, _, _, _, _ := createExecutorEnv(t)
 	safeSession := NewSafeSession(nil)
-	vc, err := newVCursorImpl(safeSession, sqlparser.MarginComments{}, executor, nil, nil, &vindexes.VSchema{}, nil, nil, false, querypb.ExecuteOptions_Gen4)
+	vc, err := NewVCursorImpl(safeSession, sqlparser.MarginComments{}, nil, nil, nil, &vindexes.VSchema{}, nil, nil, fakeObserver{}, VCursorConfig{
+		// flag timeout
+		QueryTimeout: 20,
+	})
 	require.NoError(t, err)
 
-	// flag timeout
-	queryTimeout = 20
 	vc.SetExecQueryTimeout(nil)
 	require.Equal(t, 20*time.Millisecond, vc.queryTimeout)
 	require.NotNil(t, safeSession.Options.Timeout)
@@ -371,8 +356,8 @@ func TestSetExecQueryTimeout(t *testing.T) {
 	require.NotNil(t, safeSession.Options.Timeout)
 	require.EqualValues(t, 0, safeSession.Options.GetAuthoritativeTimeout())
 
-	// reset
-	queryTimeout = 0
+	// reset flag timeout
+	vc.config.QueryTimeout = 0
 	safeSession.SetQueryTimeout(0)
 	vc.SetExecQueryTimeout(nil)
 	require.Equal(t, 0*time.Millisecond, vc.queryTimeout)
@@ -381,10 +366,9 @@ func TestSetExecQueryTimeout(t *testing.T) {
 }
 
 func TestRecordMirrorStats(t *testing.T) {
-	executor, _, _, _, _ := createExecutorEnv(t)
 	safeSession := NewSafeSession(nil)
 	logStats := logstats.NewLogStats(context.Background(), t.Name(), "select 1", "", nil)
-	vc, err := newVCursorImpl(safeSession, sqlparser.MarginComments{}, executor, logStats, nil, &vindexes.VSchema{}, nil, nil, false, querypb.ExecuteOptions_Gen4)
+	vc, err := NewVCursorImpl(safeSession, sqlparser.MarginComments{}, nil, logStats, nil, &vindexes.VSchema{}, nil, nil, fakeObserver{}, VCursorConfig{})
 	require.NoError(t, err)
 
 	require.Zero(t, logStats.MirrorSourceExecuteTime)
@@ -397,3 +381,113 @@ func TestRecordMirrorStats(t *testing.T) {
 	require.Equal(t, 20*time.Millisecond, logStats.MirrorTargetExecuteTime)
 	require.ErrorContains(t, logStats.MirrorTargetError, "test error")
 }
+
+type fakeExecutor struct{}
+
+func (f fakeExecutor) Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, method string, session *SafeSession, s string, vars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (f fakeExecutor) ExecuteMultiShard(ctx context.Context, primitive engine.Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *SafeSession, autocommit bool, ignoreMaxMemoryRows bool, resultsObserver ResultsObserver) (qr *sqltypes.Result, errs []error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (f fakeExecutor) StreamExecuteMulti(ctx context.Context, primitive engine.Primitive, query string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, session *SafeSession, autocommit bool, callback func(reply *sqltypes.Result) error, observer ResultsObserver) []error {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (f fakeExecutor) ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, session *SafeSession, lockFuncType sqlparser.LockingFuncType) (*sqltypes.Result, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (f fakeExecutor) Commit(ctx context.Context, safeSession *SafeSession) error {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (f fakeExecutor) ExecuteMessageStream(ctx context.Context, rss []*srvtopo.ResolvedShard, name string, callback func(*sqltypes.Result) error) error {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (f fakeExecutor) ExecuteVStream(ctx context.Context, rss []*srvtopo.ResolvedShard, filter *binlogdatapb.Filter, gtid string, callback func(evs []*binlogdatapb.VEvent) error) error {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (f fakeExecutor) ReleaseLock(ctx context.Context, session *SafeSession) error {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (f fakeExecutor) ShowVitessReplicationStatus(ctx context.Context, filter *sqlparser.ShowFilter) (*sqltypes.Result, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (f fakeExecutor) ShowShards(ctx context.Context, filter *sqlparser.ShowFilter, destTabletType topodatapb.TabletType) (*sqltypes.Result, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (f fakeExecutor) ShowTablets(filter *sqlparser.ShowFilter) (*sqltypes.Result, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (f fakeExecutor) ShowVitessMetadata(ctx context.Context, filter *sqlparser.ShowFilter) (*sqltypes.Result, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (f fakeExecutor) SetVitessMetadata(ctx context.Context, name, value string) error {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (f fakeExecutor) ParseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.Destination, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (f fakeExecutor) VSchema() *vindexes.VSchema {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (f fakeExecutor) PlanPrepareStmt(ctx context.Context, vcursor *VCursorImpl, query string) (*engine.Plan, sqlparser.Statement, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (f fakeExecutor) Environment() *vtenv.Environment {
+	return vtenv.NewTestEnv()
+}
+
+func (f fakeExecutor) ReadTransaction(ctx context.Context, transactionID string) (*querypb.TransactionMetadata, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (f fakeExecutor) UnresolvedTransactions(ctx context.Context, targets []*querypb.Target) ([]*querypb.TransactionMetadata, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (f fakeExecutor) AddWarningCount(name string, value int64) {
+	// TODO implement me
+	panic("implement me")
+}
+
+var _ iExecute = (*fakeExecutor)(nil)
+
+type fakeObserver struct{}
+
+func (f fakeObserver) Observe(*sqltypes.Result) {
+}
+
+var _ ResultsObserver = (*fakeObserver)(nil)

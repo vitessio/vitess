@@ -23,10 +23,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 )
 
 // This file contains tests for all the autocommit code paths
@@ -382,7 +382,7 @@ func TestAutocommitTransactionStarted(t *testing.T) {
 
 	// single shard query - no savepoint needed
 	sql := "update `user` set a = 2 where id = 1"
-	_, err := executor.Execute(context.Background(), nil, "TestExecute", NewSafeSession(session), sql, map[string]*querypb.BindVariable{})
+	_, err := executor.Execute(context.Background(), nil, "TestExecute", econtext.NewSafeSession(session), sql, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 	require.Len(t, sbc1.Queries, 1)
 	require.Equal(t, sql, sbc1.Queries[0].Sql)
@@ -394,7 +394,7 @@ func TestAutocommitTransactionStarted(t *testing.T) {
 	// multi shard query - savepoint needed
 	sql = "update `user` set a = 2 where id in (1, 4)"
 	expectedSql := "update `user` set a = 2 where id in ::__vals"
-	_, err = executor.Execute(context.Background(), nil, "TestExecute", NewSafeSession(session), sql, map[string]*querypb.BindVariable{})
+	_, err = executor.Execute(context.Background(), nil, "TestExecute", econtext.NewSafeSession(session), sql, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 	require.Len(t, sbc1.Queries, 2)
 	require.Contains(t, sbc1.Queries[0].Sql, "savepoint")
@@ -413,7 +413,7 @@ func TestAutocommitDirectTarget(t *testing.T) {
 	}
 	sql := "insert into `simple`(val) values ('val')"
 
-	_, err := executor.Execute(context.Background(), nil, "TestExecute", NewSafeSession(session), sql, map[string]*querypb.BindVariable{})
+	_, err := executor.Execute(context.Background(), nil, "TestExecute", econtext.NewSafeSession(session), sql, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 
 	assertQueries(t, sbclookup, []*querypb.BoundQuery{{
@@ -434,7 +434,7 @@ func TestAutocommitDirectRangeTarget(t *testing.T) {
 	}
 	sql := "delete from sharded_user_msgs limit 1000"
 
-	_, err := executor.Execute(context.Background(), nil, "TestExecute", NewSafeSession(session), sql, map[string]*querypb.BindVariable{})
+	_, err := executor.Execute(context.Background(), nil, "TestExecute", econtext.NewSafeSession(session), sql, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 
 	assertQueries(t, sbc1, []*querypb.BoundQuery{{
@@ -451,5 +451,5 @@ func autocommitExec(executor *Executor, sql string) (*sqltypes.Result, error) {
 		TransactionMode: vtgatepb.TransactionMode_MULTI,
 	}
 
-	return executor.Execute(context.Background(), nil, "TestExecute", NewSafeSession(session), sql, map[string]*querypb.BindVariable{})
+	return executor.Execute(context.Background(), nil, "TestExecute", econtext.NewSafeSession(session), sql, map[string]*querypb.BindVariable{})
 }

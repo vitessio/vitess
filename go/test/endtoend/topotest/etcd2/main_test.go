@@ -64,7 +64,6 @@ CREATE TABLE t1 (
 )
 
 func TestMain(m *testing.M) {
-	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	exitCode := func() int {
@@ -99,7 +98,6 @@ func TestMain(m *testing.M) {
 }
 
 func TestTopoDownServingQuery(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	vtParams := mysql.ConnParams{
 		Host: "localhost",

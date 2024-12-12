@@ -1514,20 +1514,17 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 	} else {
 		cfg.StrictTableACL = false
 	}
-	if flags&noTwopc > 0 {
-		cfg.TwoPCEnable = false
-	} else {
-		cfg.TwoPCEnable = true
-	}
 	if flags&disableOnlineDDL > 0 {
 		cfg.EnableOnlineDDL = false
 	} else {
 		cfg.EnableOnlineDDL = true
 	}
-	if flags&shortTwopcAge > 0 {
-		cfg.TwoPCAbandonAge = 0.5
+	if flags&noTwopc > 0 {
+		cfg.TwoPCAbandonAge = 0
+	} else if flags&shortTwopcAge > 0 {
+		cfg.TwoPCAbandonAge = 500 * time.Millisecond
 	} else {
-		cfg.TwoPCAbandonAge = 10
+		cfg.TwoPCAbandonAge = 10 * time.Second
 	}
 	if flags&smallResultSize > 0 {
 		cfg.Oltp.MaxRows = 2

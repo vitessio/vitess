@@ -1,0 +1,12 @@
+CREATE TABLE `unsharded` (
+    `id` INT NOT NULL PRIMARY KEY,
+    `col1` VARCHAR(255) DEFAULT NULL,
+    `col2` VARCHAR(255) DEFAULT NULL,
+    `name` VARCHAR(255) DEFAULT NULL
+);
+
+CREATE TABLE `unsharded_auto` (
+    `id` INT NOT NULL PRIMARY KEY,
+    `col1` VARCHAR(255) DEFAULT NULL,
+    `col2` VARCHAR(255) DEFAULT NULL
+);

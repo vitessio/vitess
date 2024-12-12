@@ -51,7 +51,6 @@ create table u_b
 )
 
 func TestMain(m *testing.M) {
-	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	exitCode := func() int {
@@ -92,7 +91,6 @@ func TestMain(m *testing.M) {
 
 // TestVtadminAPIs tests the vtadmin APIs.
 func TestVtadminAPIs(t *testing.T) {
-	defer cluster.PanicHandler(t)
 
 	// Test the vtadmin APIs
 	t.Run("keyspaces api", func(t *testing.T) {

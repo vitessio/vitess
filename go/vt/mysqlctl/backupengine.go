@@ -272,7 +272,7 @@ func getBackupManifestInto(ctx context.Context, backup backupstorage.BackupHandl
 	if err := json.NewDecoder(file).Decode(outManifest); err != nil {
 		return vterrors.Wrap(err, "can't decode MANIFEST")
 	}
-	return nil
+	return backup.Error()
 }
 
 // IncrementalBackupDetails lists some incremental backup specific information

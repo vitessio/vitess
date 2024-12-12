@@ -40,6 +40,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/aws/retry"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -48,7 +49,8 @@ import (
 	"github.com/aws/smithy-go/middleware"
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/vt/concurrency"
+	errorsbackup "vitess.io/vitess/go/vt/mysqlctl/errors"
+
 	"vitess.io/vitess/go/vt/log"
 	stats "vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
@@ -144,8 +146,8 @@ type S3BackupHandle struct {
 	dir       string
 	name      string
 	readOnly  bool
-	errors    concurrency.AllErrorRecorder
 	waitGroup sync.WaitGroup
+	errorsbackup.PerFileErrorRecorder
 }
 
 // Directory is part of the backupstorage.BackupHandle interface.
@@ -158,39 +160,23 @@ func (bh *S3BackupHandle) Name() string {
 	return bh.name
 }
 
-// RecordError is part of the concurrency.ErrorRecorder interface.
-func (bh *S3BackupHandle) RecordError(err error) {
-	bh.errors.RecordError(err)
-}
-
-// HasErrors is part of the concurrency.ErrorRecorder interface.
-func (bh *S3BackupHandle) HasErrors() bool {
-	return bh.errors.HasErrors()
-}
-
-// Error is part of the concurrency.ErrorRecorder interface.
-func (bh *S3BackupHandle) Error() error {
-	return bh.errors.Error()
-}
-
 // AddFile is part of the backupstorage.BackupHandle interface.
 func (bh *S3BackupHandle) AddFile(ctx context.Context, filename string, filesize int64) (io.WriteCloser, error) {
 	if bh.readOnly {
 		return nil, fmt.Errorf("AddFile cannot be called on read-only backup")
 	}
 
-	// Calculate s3 upload part size using the source filesize
-	partSizeBytes := manager.DefaultUploadPartSize
-	if filesize > 0 {
-		minimumPartSize := float64(filesize) / float64(manager.MaxUploadParts)
-		// Round up to ensure large enough partsize
-		calculatedPartSizeBytes := int64(math.Ceil(minimumPartSize))
-		if calculatedPartSizeBytes > partSizeBytes {
-			partSizeBytes = calculatedPartSizeBytes
-		}
-	}
+	partSizeBytes := calculateUploadPartSize(filesize)
 
 	reader, writer := io.Pipe()
+	bh.handleAddFile(ctx, filename, partSizeBytes, reader, func(err error) {
+		reader.CloseWithError(err)
+	})
+
+	return writer, nil
+}
+
+func (bh *S3BackupHandle) handleAddFile(ctx context.Context, filename string, partSizeBytes int64, reader io.Reader, closer func(error)) {
 	bh.waitGroup.Add(1)
 
 	go func() {
@@ -221,12 +207,24 @@ func (bh *S3BackupHandle) AddFile(ctx context.Context, filename string, filesize
 			})
 		})
 		if err != nil {
-			reader.CloseWithError(err)
-			bh.RecordError(err)
+			closer(err)
+			bh.RecordError(filename, err)
 		}
 	}()
+}
 
-	return writer, nil
+func calculateUploadPartSize(filesize int64) int64 {
+	// Calculate s3 upload part size using the source filesize
+	partSizeBytes := manager.DefaultUploadPartSize
+	if filesize > 0 {
+		minimumPartSize := float64(filesize) / float64(manager.MaxUploadParts)
+		// Round up to ensure large enough partsize
+		calculatedPartSizeBytes := int64(math.Ceil(minimumPartSize))
+		if calculatedPartSizeBytes > partSizeBytes {
+			partSizeBytes = calculatedPartSizeBytes
+		}
+	}
+	return partSizeBytes
 }
 
 // EndBackup is part of the backupstorage.BackupHandle interface.
@@ -505,13 +503,24 @@ func (bs *S3BackupStorage) client() (*s3.Client, error) {
 			return nil, err
 		}
 
-		bs._client = s3.NewFromConfig(cfg, func(o *s3.Options) {
-			o.UsePathStyle = forcePath
-			if retryCount >= 0 {
-				o.RetryMaxAttempts = retryCount
-				o.Retryer = &ClosedConnectionRetryer{}
-			}
-		}, s3.WithEndpointResolverV2(newEndpointResolver()))
+		options := []func(options *s3.Options){
+			func(o *s3.Options) {
+				o.UsePathStyle = forcePath
+				if retryCount >= 0 {
+					o.RetryMaxAttempts = retryCount
+					o.Retryer = &ClosedConnectionRetryer{
+						awsRetryer: retry.NewStandard(func(options *retry.StandardOptions) {
+							options.MaxAttempts = retryCount
+						}),
+					}
+				}
+			},
+		}
+		if endpoint != "" {
+			options = append(options, s3.WithEndpointResolverV2(newEndpointResolver()))
+		}
+
+		bs._client = s3.NewFromConfig(cfg, options...)
 
 		if len(bucket) == 0 {
 			return nil, fmt.Errorf("--s3_backup_storage_bucket required")

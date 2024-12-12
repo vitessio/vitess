@@ -47,7 +47,7 @@ func init() {
 func initializeAnalysisDaoPostConfiguration() {
 	config.WaitForConfigurationToBeLoaded()
 
-	recentInstantAnalysis = cache.New(time.Duration(config.Config.RecoveryPollSeconds*2)*time.Second, time.Second)
+	recentInstantAnalysis = cache.New(config.GetRecoveryPollDuration()*2, time.Second)
 }
 
 type clusterAnalysis struct {
@@ -68,7 +68,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 	}
 
 	// TODO(sougou); deprecate ReduceReplicationAnalysisCount
-	args := sqlutils.Args(config.Config.ReasonableReplicationLagSeconds, ValidSecondsFromSeenToLastAttemptedCheck(), config.Config.ReasonableReplicationLagSeconds, keyspace, shard)
+	args := sqlutils.Args(config.GetReasonableReplicationLagSeconds(), ValidSecondsFromSeenToLastAttemptedCheck(), config.GetReasonableReplicationLagSeconds(), keyspace, shard)
 	query := `SELECT
 		vitess_tablet.info AS tablet_info,
 		vitess_tablet.tablet_type,

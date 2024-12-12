@@ -62,7 +62,7 @@ func writeHealthToDatabase() bool {
 func HealthTest() (health *NodeHealth, discoveredOnce bool) {
 	ThisNodeHealth.LastReported = time.Now()
 	discoveredOnce = FirstDiscoveryCycleComplete.Load()
-	ThisNodeHealth.Healthy = writeHealthToDatabase()
+	ThisNodeHealth.Healthy = discoveredOnce && writeHealthToDatabase()
 
 	return ThisNodeHealth, discoveredOnce
 }
