@@ -132,12 +132,10 @@ func TestParseClustersToWatch(t *testing.T) {
 			expected: map[string]bool{},
 		},
 		{
-			in:       []string{"test/"},
-			expected: map[string]bool{"test/": true},
-		},
-		{
-			in:       []string{"test/-"},
-			expected: map[string]bool{"test/-": true},
+			in: []string{"test/-"},
+			expected: map[string]bool{
+				"test/-": true,
+			},
 		},
 		{
 			in: []string{"test/-", "test2/-80", "test2/80-"},
@@ -150,6 +148,13 @@ func TestParseClustersToWatch(t *testing.T) {
 		{
 			// confirm shards fetch from topo
 			in: []string{keyspace},
+			expected: map[string]bool{
+				topoproto.KeyspaceShardString(keyspace, shard): true,
+			},
+		},
+		{
+			// confirm shards fetch from topo when keyspace has trailing-slash
+			in: []string{keyspace + "/"},
 			expected: map[string]bool{
 				topoproto.KeyspaceShardString(keyspace, shard): true,
 			},

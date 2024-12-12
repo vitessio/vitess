@@ -59,7 +59,7 @@ var (
 // time because the list never changes.
 func parseClustersToWatch() {
 	for _, ks := range clustersToWatch {
-		if strings.Contains(ks, "/") {
+		if strings.Contains(ks, "/") && !strings.HasSuffix(ks, "/") {
 			// Validate keyspace/shard parses.
 			if _, _, err := topoproto.ParseKeyspaceShard(ks); err != nil {
 				log.Errorf("Could not parse keyspace/shard %q: %+v", ks, err)
@@ -67,6 +67,11 @@ func parseClustersToWatch() {
 			}
 			shardsToWatch[ks] = true
 		} else {
+			// Remove trailing slash, if exists
+			if strings.HasSuffix(ks, "/") {
+				ks = strings.TrimSuffix(ks, "/")
+			}
+
 			// Assume this is a keyspace and find all shards in keyspace.
 			ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
 			defer cancel()
