@@ -78,7 +78,7 @@ func GetStats(stats *backupstats.FakeStats) StatSummary {
 
 func AssertLogs(t *testing.T, expectedLogs []string, logger *logutil.MemoryLogger) {
 	for _, log := range expectedLogs {
-		require.Truef(t, slices.ContainsFunc(logger.Events, func(event *logutilpb.Event) bool {
+		require.Truef(t, slices.ContainsFunc(logger.LogEvents(), func(event *logutilpb.Event) bool {
 			return event.GetValue() == log
 		}), "%s is missing from the logs", log)
 	}
