@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/mysql/format"
 	"vitess.io/vitess/go/mysql/json"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -110,7 +111,7 @@ func ParseBinaryJSONDiff(data []byte) (sqltypes.Value, error) {
 			diff.WriteString(innerStr)
 			diff.WriteString(", ")
 		} else { // Only the inner most function has the field name
-			diff.WriteString("`%s`, ") // This will later be replaced by the field name
+			diff.WriteString("%s, ") // This will later be replaced by the field name
 		}
 
 		pathLen, readTo := readVariableLength(data, pos)
@@ -120,7 +121,10 @@ func ParseBinaryJSONDiff(data []byte) (sqltypes.Value, error) {
 		// We have to specify the unicode character set for the strings we
 		// use in the expression as the connection can be using a different
 		// character set (e.g. vreplication always uses set names binary).
-		diff.WriteString(fmt.Sprintf("_utf8mb4'%s'", path))
+		diff.WriteString(sqlparser.Utf8mb4Str)
+		diff.WriteByte('\'')
+		diff.Write(path)
+		diff.WriteByte('\'')
 
 		if opType == jsonDiffOpRemove { // No value for remove
 			diff.WriteString(")")
@@ -135,7 +139,7 @@ func ParseBinaryJSONDiff(data []byte) (sqltypes.Value, error) {
 			}
 			pos += valueLen
 			if value.Type() == json.TypeString {
-				diff.WriteString("_utf8mb4")
+				diff.WriteString(sqlparser.Utf8mb4Str)
 			}
 			diff.WriteString(fmt.Sprintf("%s)", value))
 		}

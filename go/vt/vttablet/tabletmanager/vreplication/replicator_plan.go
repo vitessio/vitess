@@ -17,6 +17,7 @@ limitations under the License.
 package vreplication
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"slices"
@@ -30,6 +31,7 @@ import (
 	vjson "vitess.io/vitess/go/mysql/json"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/ptr"
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -365,7 +367,10 @@ func (tp *TablePlan) bindFieldVal(field *querypb.Field, val *sqltypes.Value) (*q
 
 func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor func(string) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
 	// MakeRowTrusted is needed here because Proto3ToResult is not convenient.
-	var before, after bool
+	var (
+		before, after bool
+		afterVals     []sqltypes.Value
+	)
 	bindvars := make(map[string]*querypb.BindVariable, len(tp.Fields))
 	if rowChange.Before != nil {
 		before = true
@@ -381,36 +386,37 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 	if rowChange.After != nil {
 		jsonIndex := 0
 		after = true
-		vals := sqltypes.MakeRowTrusted(tp.Fields, rowChange.After)
+		afterVals = sqltypes.MakeRowTrusted(tp.Fields, rowChange.After)
 		for i, field := range tp.Fields {
-			var bindVar *querypb.BindVariable
-			var newVal *sqltypes.Value
-			var err error
+			var (
+				bindVar *querypb.BindVariable
+				newVal  *sqltypes.Value
+				err     error
+			)
 			if field.Type == querypb.Type_JSON {
 				switch {
-				case vals[i].IsNull(): // An SQL NULL and not an actual JSON value
+				case afterVals[i].IsNull(): // An SQL NULL and not an actual JSON value
 					newVal = &sqltypes.NULL
 				case rowChange.JsonPartialValues != nil && isBitSet(rowChange.JsonPartialValues.Cols, jsonIndex) &&
-					!slices.Equal(vals[i].Raw(), sqltypes.NullBytes):
-					// An SQL expression that can be converted to a JSON value such
-					// as JSON_INSERT().
-					// This occurs when using partial JSON values as a result of
-					// mysqld using binlog-row-value-options=PARTIAL_JSON.
-					if len(vals[i].Raw()) == 0 {
+					!slices.Equal(afterVals[i].Raw(), sqltypes.NullBytes):
+					// An SQL expression that can be converted to a JSON value such as JSON_INSERT().
+					// This occurs when using partial JSON values as a result of mysqld using
+					// binlog-row-value-options=PARTIAL_JSON.
+					if len(afterVals[i].Raw()) == 0 {
 						// When using BOTH binlog_row_image=NOBLOB AND
-						// binlog_row_value_options=PARTIAL_JSON then the JSON
-						// column has the data bit set and the diff is empty. So
-						// we have to account for this by unsetting the data bit
-						// so that the current JSON value is not overwritten.
+						// binlog_row_value_options=PARTIAL_JSON then the JSON column has the data bit
+						// set and the diff is empty when it's not present. So we have to account for
+						// this by unsetting the data bit so that the current JSON value is not lost.
 						setBit(rowChange.DataColumns.Cols, i, false)
 						newVal = ptr.Of(sqltypes.MakeTrusted(querypb.Type_EXPRESSION, nil))
 					} else {
+						escapedName := sqlescape.EscapeID(field.Name)
 						newVal = ptr.Of(sqltypes.MakeTrusted(querypb.Type_EXPRESSION, []byte(
-							fmt.Sprintf(vals[i].RawStr(), field.Name),
+							fmt.Sprintf(afterVals[i].RawStr(), escapedName),
 						)))
 					}
 				default: // A JSON value (which may be a JSON null literal value)
-					newVal, err = vjson.MarshalSQLValue(vals[i].Raw())
+					newVal, err = vjson.MarshalSQLValue(afterVals[i].Raw())
 					if err != nil {
 						return nil, err
 					}
@@ -418,7 +424,7 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 				bindVar, err = tp.bindFieldVal(field, newVal)
 				jsonIndex++
 			} else {
-				bindVar, err = tp.bindFieldVal(field, &vals[i])
+				bindVar, err = tp.bindFieldVal(field, &afterVals[i])
 			}
 			if err != nil {
 				return nil, err
@@ -428,7 +434,7 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 	}
 	switch {
 	case !before && after:
-		// only apply inserts for rows whose primary keys are within the range of rows already copied
+		// Only apply inserts for rows whose primary keys are within the range of rows already copied.
 		if tp.isOutsidePKRange(bindvars, before, after, "insert") {
 			return nil, nil
 		}
@@ -465,14 +471,67 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 				return nil, err
 			}
 		}
-		// TODO: the INSERTs done here after deleting the row with the original PK
-		// need to use the values from the BEFORE image for the columns NOT present
-		// in the AFTER image due to being a partial image due to the source's usage
-		// of binlog-row-image=NOBLOB.
-		// For JSON columns when binlog-row-value-options=PARTIAL_JSON is used, we
-		// need to wrap the JSON diff function(s) around the BEFORE value.
 		if tp.isOutsidePKRange(bindvars, before, after, "insert") {
 			return nil, nil
+		}
+		if tp.isPartial(rowChange) {
+			// We need to use a combination of the values in the BEFORE and AFTER image to generate
+			// the new row.
+			jsonIndex := 0
+			for i, field := range tp.Fields {
+				if field.Type == querypb.Type_JSON && rowChange.JsonPartialValues != nil {
+					if !isBitSet(rowChange.JsonPartialValues.Cols, jsonIndex) {
+						// We use the full AFTER value which we already have.
+						jsonIndex++
+						continue
+					}
+					if len(afterVals[i].Raw()) == 0 {
+						// When using BOTH binlog_row_image=NOBLOB AND
+						// binlog_row_value_options=PARTIAL_JSON then the JSON column has the data bit
+						// set and the diff is empty when it's not present. So we want to use the
+						// BEFORE image value.
+						beforeVal, err := vjson.MarshalSQLValue(bindvars["b_"+field.Name].Value)
+						if err != nil {
+							return nil, vterrors.Wrapf(err, "failed to convert JSON to SQL field value for %s.%s when building insert query",
+								tp.TargetName, field.Name)
+						}
+						bindvars["a_"+field.Name], err = tp.bindFieldVal(field, beforeVal)
+						if err != nil {
+							return nil, vterrors.Wrapf(err, "failed to bind field value for %s.%s when building insert query",
+								tp.TargetName, field.Name)
+						}
+					} else {
+						// For JSON columns when binlog-row-value-options=PARTIAL_JSON is used, we
+						// need to wrap the JSON diff function(s) around the BEFORE value.
+						diff := bindvars["a_"+field.Name].Value
+						beforeVal := bindvars["b_"+field.Name].Value
+						afterVal := bytes.Buffer{}
+						afterVal.Grow(len(diff) + len(beforeVal) + len(sqlparser.Utf8mb4Str) + 2) // +2 is for the enclosing quotes
+						// If the JSON column is partial, we need to specify the BEFORE value as
+						// the input for the diff function(s).
+						afterVal.WriteString(sqlparser.Utf8mb4Str)
+						afterVal.WriteByte('\'')
+						afterVal.Write(beforeVal)
+						afterVal.WriteByte('\'')
+						newVal := sqltypes.MakeTrusted(querypb.Type_EXPRESSION, []byte(
+							fmt.Sprintf(afterVals[i].RawStr(), afterVal.String()),
+						))
+						bindVar, err := tp.bindFieldVal(field, &newVal)
+						if err != nil {
+							return nil, vterrors.Wrapf(err, "failed to bind field value for %s.%s when building insert query",
+								tp.TargetName, field.Name)
+						}
+						bindvars["a_"+field.Name] = bindVar
+					}
+					jsonIndex++
+					continue
+				}
+				if !isBitSet(rowChange.DataColumns.Cols, i) {
+					return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
+						"binary log event missing a needed value for %s.%s due to the usage of binlog-row-image=NOBLOB; you will need to re-run the workflow with binlog-row-image=FULL",
+						tp.TargetName, field.Name)
+				}
+			}
 		}
 		return execParsedQuery(tp.Insert, bindvars, executor)
 	}

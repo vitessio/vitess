@@ -1519,6 +1519,67 @@ func TestPlayerRowMove(t *testing.T) {
 	validateQueryCountStat(t, "replicate", 3)
 }
 
+/* TODO: build this out and get it working
+func TestPlayerUpdatePK(t *testing.T) {
+	defer deleteTablet(addTablet(100))
+
+	execStatements(t, []string{
+		"create table src(id int, bd blob, jd json, primary key(id))",
+		fmt.Sprintf("create table %s.dst(id int, bd blob, jd json, primary key(id))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table src",
+		fmt.Sprintf("drop table %s.dst", vrepldb),
+	})
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "dst",
+			Filter: "select * from src",
+		}},
+	}
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	cancel, _ := startVReplication(t, bls, "")
+	defer cancel()
+
+	execStatements(t, []string{
+		"insert into src values(1, 'blob data', _utf8mb4'{\"key1\":\"val1\"}'), (2, 'blob data2', _utf8mb4'{\"key2\":\"val2\"}'), (3, 'blob data3', _utf8mb4'{\"key3\":\"val3\"}')",
+	})
+	expectDBClientQueries(t, qh.Expect(
+		"begin",
+		"insert into dst(id,bd,jd) values (1,_binary'blob data','{\"key1\": \"val1\"}'), (2,_binary'blob data2','{\"key2\": \"val2\"}'), (3,_binary'blob data3','{\"key3\": \"val3\"}')",
+		"/update _vt.vreplication set pos=",
+		"commit",
+	))
+	expectData(t, "dst", [][]string{
+		{"1", "1", "1"},
+		{"2", "5", "2"},
+	})
+	validateQueryCountStat(t, "replicate", 1)
+
+	execStatements(t, []string{
+		"update src set val1=1, val2=4 where id=3",
+	})
+	expectDBClientQueries(t, qh.Expect(
+		"begin",
+		"update dst set sval2=sval2-ifnull(3, 0), rcount=rcount-1 where val1=2",
+		"insert into dst(val1,sval2,rcount) values (1,ifnull(4, 0),1) on duplicate key update sval2=sval2+ifnull(values(sval2), 0), rcount=rcount+1",
+		"/update _vt.vreplication set pos=",
+		"commit",
+	))
+	expectData(t, "dst", [][]string{
+		{"1", "5", "2"},
+		{"2", "2", "1"},
+	})
+	validateQueryCountStat(t, "replicate", 3)
+}
+*/
+
 func TestPlayerTypes(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 	execStatements(t, []string{
