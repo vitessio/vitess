@@ -498,6 +498,11 @@ func (tmc *testTMClient) ExecuteFetchAsAllPrivs(ctx context.Context, tablet *top
 	return nil, nil
 }
 
+func (tmc *testTMClient) ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteFetchAsAppRequest) (*querypb.QueryResult, error) {
+	// Reuse VReplicationExec.
+	return tmc.VReplicationExec(ctx, tablet, string(req.Query))
+}
+
 func (tmc *testTMClient) expectApplySchemaRequest(tabletID uint32, req *applySchemaRequestResponse) {
 	tmc.mu.Lock()
 	defer tmc.mu.Unlock()
@@ -617,6 +622,10 @@ func (tmc *testTMClient) HasVReplicationWorkflows(ctx context.Context, tablet *t
 	return &tabletmanagerdatapb.HasVReplicationWorkflowsResponse{
 		Has: false,
 	}, nil
+}
+
+func (tmc *testTMClient) ResetSequences(ctx context.Context, tablet *topodatapb.Tablet, tables []string) error {
+	return nil
 }
 
 func (tmc *testTMClient) ReadVReplicationWorkflows(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ReadVReplicationWorkflowsRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse, error) {
