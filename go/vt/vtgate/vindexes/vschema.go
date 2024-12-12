@@ -356,7 +356,7 @@ func BuildVSchema(source *vschemapb.SrvVSchema, parser *sqlparser.Parser) (vsche
 	buildKeyspaces(source, vschema, parser)
 	// buildGlobalTables before buildReferences so that buildReferences can
 	// resolve sources which reference global tables.
-	BuildGlobalTables(source, vschema, true)
+	BuildGlobalTables(source, vschema, false)
 	buildReferences(source, vschema)
 	buildRoutingRule(source, vschema, parser)
 	buildShardRoutingRule(source, vschema)
