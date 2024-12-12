@@ -246,6 +246,12 @@ func (ml *MemoryLogger) Clear() {
 	ml.mu.Unlock()
 }
 
+func (ml *MemoryLogger) LogEvents() []*logutilpb.Event {
+	ml.mu.Lock()
+	defer ml.mu.Unlock()
+	return ml.Events
+}
+
 // LoggerWriter is an adapter that implements the io.Writer interface.
 type LoggerWriter struct {
 	logger Logger
