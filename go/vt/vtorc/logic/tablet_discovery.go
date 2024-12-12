@@ -34,7 +34,6 @@ import (
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtorc/config"
@@ -49,15 +48,11 @@ var (
 	clustersToWatch   []string
 	shutdownWaitTime  = 30 * time.Second
 	shardsLockCounter int32
-	shardsToWatch     map[string]bool
+	shardsToWatch     = make(map[string]bool, 0)
 
 	// ErrNoPrimaryTablet is a fixed error message.
 	ErrNoPrimaryTablet = errors.New("no primary tablet found")
 )
-
-func init() {
-	servenv.OnInit(parseClustersToWatch)
-}
 
 // parseClustersToWatch parses the --clusters_to_watch flag-value
 // into a map of keyspace/shards. This is called once at init
@@ -131,6 +126,8 @@ func OpenTabletDiscovery() <-chan time.Time {
 	if _, err := db.ExecVTOrc("DELETE FROM vitess_tablet"); err != nil {
 		log.Error(err)
 	}
+	// Parse --clusters_to_watch into a filter.
+	parseClustersToWatch()
 	// We refresh all information from the topo once before we start the ticks to do
 	// it on a timer.
 	ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)

@@ -19,6 +19,7 @@ package logic
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -100,6 +101,55 @@ var (
 		},
 	}
 )
+
+func TestParseClustersToWatch(t *testing.T) {
+	oldClustersToWatch := clustersToWatch
+	oldTs := ts
+	defer func() {
+		clustersToWatch = oldClustersToWatch
+		shardsToWatch = nil
+		ts = oldTs
+	}()
+
+	// Create a memory topo-server and create the keyspace and shard records
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ts = memorytopo.NewServer(ctx, cell1)
+	_, err := ts.GetOrCreateShard(context.Background(), keyspace, shard)
+	require.NoError(t, err)
+
+	testCases := []struct {
+		in       []string
+		expected map[string]bool
+	}{
+		{
+			in:       []string{"test/"},
+			expected: map[string]bool{"test/": true},
+		},
+		{
+			in:       []string{"test/-"},
+			expected: map[string]bool{"test/-": true},
+		},
+		{
+			in: []string{keyspace},
+			expected: map[string]bool{
+				topoproto.KeyspaceShardString(keyspace, shard): true,
+			},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(strings.Join(testCase.in, ","), func(t *testing.T) {
+			defer func() {
+				shardsToWatch = make(map[string]bool, 0)
+			}()
+			clustersToWatch = testCase.in
+			parseClustersToWatch()
+			require.Equal(t, testCase.expected, shardsToWatch)
+		})
+	}
+}
 
 func TestRefreshTabletsInKeyspaceShard(t *testing.T) {
 	// Store the old flags and restore on test completion
