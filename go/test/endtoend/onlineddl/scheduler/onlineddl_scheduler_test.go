@@ -226,7 +226,6 @@ func waitForMessage(t *testing.T, uuid string, messageSubstring string) {
 }
 
 func TestMain(m *testing.M) {
-	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	exitcode, err := func() (int, error) {
@@ -307,7 +306,6 @@ func TestSchemaChange(t *testing.T) {
 }
 
 func testScheduler(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	shards = clusterInstance.Keyspaces[0].Shards
 	require.Equal(t, 1, len(shards))
 
@@ -1268,7 +1266,6 @@ func testScheduler(t *testing.T) {
 }
 
 func testSingleton(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	shards = clusterInstance.Keyspaces[0].Shards
 	require.Equal(t, 1, len(shards))
 
@@ -1503,7 +1500,6 @@ DROP TABLE IF EXISTS stress_test
 	})
 }
 func testDeclarative(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	shards = clusterInstance.Keyspaces[0].Shards
 	require.Equal(t, 1, len(shards))
 
@@ -2175,7 +2171,6 @@ func testDeclarative(t *testing.T) {
 }
 
 func testForeignKeys(t *testing.T) {
-	defer cluster.PanicHandler(t)
 
 	var (
 		createStatements = []string{

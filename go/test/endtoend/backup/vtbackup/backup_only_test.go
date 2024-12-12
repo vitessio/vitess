@@ -58,7 +58,6 @@ func TestTabletInitialBackup(t *testing.T) {
 	//    - Take a Second Backup
 	//    - Bring up a second replica, and restore from the second backup
 	//    - list the backups, remove them
-	defer cluster.PanicHandler(t)
 
 	waitForReplicationToCatchup([]cluster.Vttablet{*replica1, *replica2})
 
@@ -102,7 +101,6 @@ func TestTabletBackupOnly(t *testing.T) {
 	//    - Take a Second Backup
 	//    - Bring up a second replica, and restore from the second backup
 	//    - list the backups, remove them
-	defer cluster.PanicHandler(t)
 
 	// Reset the tablet object values in order on init tablet in the next step.
 	primary.VttabletProcess.ServingStatus = "NOT_SERVING"

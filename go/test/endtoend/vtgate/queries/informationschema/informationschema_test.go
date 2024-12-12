@@ -25,7 +25,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
 )
 
@@ -47,7 +46,6 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 	return mcmp, func() {
 		deleteAll()
 		mcmp.Close()
-		cluster.PanicHandler(t)
 	}
 }
 
@@ -114,7 +112,6 @@ func TestFKConstraintUsingInformationSchema(t *testing.T) {
 }
 
 func TestConnectWithSystemSchema(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	for _, dbname := range []string{"information_schema", "mysql", "performance_schema", "sys"} {
 		vtConnParams := vtParams
 		vtConnParams.DbName = dbname

@@ -29,7 +29,6 @@ import (
 )
 
 func TestFallbackSecurityPolicy(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	mTablet := clusterInstance.NewVttabletInstance("replica", 0, "")
 
@@ -84,7 +83,6 @@ func assertAllowedURLTest(t *testing.T, url string) {
 }
 
 func TestDenyAllSecurityPolicy(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	mTablet := clusterInstance.NewVttabletInstance("replica", 0, "")
 
@@ -116,7 +114,6 @@ func TestDenyAllSecurityPolicy(t *testing.T) {
 }
 
 func TestReadOnlySecurityPolicy(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	mTablet := clusterInstance.NewVttabletInstance("replica", 0, "")
 

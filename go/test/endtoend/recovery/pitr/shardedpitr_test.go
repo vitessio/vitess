@@ -126,7 +126,6 @@ var (
 // - asserting that restoring to restoreTime2 (going from 2 shards to 2 shards with past time) is working, it will assert for both shards
 // - asserting that restoring to restoreTime3 is working, we should get complete data after restoring,  as we have in existing shards.
 func TestPITRRecovery(t *testing.T) {
-	defer cluster.PanicHandler(nil)
 	initializeCluster(t)
 	defer clusterInstance.Teardown()
 
@@ -525,7 +524,6 @@ func launchRecoveryTablet(t *testing.T, tablet *cluster.Vttablet, binlogServer *
 	tablet.MysqlctlProcess = *mysqlctlProcess
 	extraArgs := []string{"--db-credentials-file", dbCredentialFile}
 	tablet.MysqlctlProcess.InitDBFile = initDBFileWithPassword
-	tablet.VttabletProcess.DbPassword = mysqlPassword
 	tablet.MysqlctlProcess.ExtraArgs = extraArgs
 	err = tablet.MysqlctlProcess.Start()
 	require.NoError(t, err)
@@ -545,6 +543,7 @@ func launchRecoveryTablet(t *testing.T, tablet *cluster.Vttablet, binlogServer *
 		clusterInstance.VtTabletExtraArgs,
 		clusterInstance.DefaultCharset)
 	tablet.Alias = tablet.VttabletProcess.TabletPath
+	tablet.VttabletProcess.DbPassword = mysqlPassword
 	tablet.VttabletProcess.SupportsBackup = true
 	tablet.VttabletProcess.Keyspace = restoreKeyspaceName
 	tablet.VttabletProcess.ExtraArgs = []string{

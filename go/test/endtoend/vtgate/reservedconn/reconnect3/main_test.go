@@ -42,7 +42,6 @@ var (
 var enableSettingsPool bool
 
 func TestMain(m *testing.M) {
-	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	code := runAllTests(m)
