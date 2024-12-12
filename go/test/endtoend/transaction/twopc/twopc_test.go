@@ -1349,23 +1349,15 @@ func TestSemiSyncRequiredWithTwoPC(t *testing.T) {
 	// cleanup all the old data.
 	conn, closer := start(t)
 	defer closer()
-
-	out, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=none")
-	require.NoError(t, err, out)
 	defer func() {
-		for _, shard := range clusterInstance.Keyspaces[0].Shards {
-			clusterInstance.VtctldClientProcess.PlannedReparentShard(keyspaceName, shard.Name, shard.Vttablets[0].Alias)
-		}
+		reparentAllShards(t, clusterInstance, 0)
 	}()
 
-	// After changing the durability policy for the given keyspace to none, we run PRS.
-	shard := clusterInstance.Keyspaces[0].Shards[2]
-	newPrimary := shard.Vttablets[1]
-	_, err = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(
-		"PlannedReparentShard",
-		fmt.Sprintf("%s/%s", keyspaceName, shard.Name),
-		"--new-primary", newPrimary.Alias)
-	require.NoError(t, err)
+	reparentAllShards(t, clusterInstance, 0)
+	out, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=none")
+	require.NoError(t, err, out)
+	// After changing the durability policy for the given keyspace to none, we run PRS to ensure the changes have taken effect.
+	reparentAllShards(t, clusterInstance, 1)
 
 	// A new distributed transaction should fail.
 	utils.Exec(t, conn, "begin")
@@ -1378,10 +1370,7 @@ func TestSemiSyncRequiredWithTwoPC(t *testing.T) {
 
 	_, err = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=semi_sync")
 	require.NoError(t, err)
-	for _, shard := range clusterInstance.Keyspaces[0].Shards {
-		err = clusterInstance.VtctldClientProcess.PlannedReparentShard(keyspaceName, shard.Name, shard.Vttablets[1].Alias)
-		require.NoError(t, err)
-	}
+	reparentAllShards(t, clusterInstance, 0)
 
 	// Transaction should now succeed.
 	utils.Exec(t, conn, "begin")
@@ -1390,6 +1379,14 @@ func TestSemiSyncRequiredWithTwoPC(t *testing.T) {
 	utils.Exec(t, conn, "insert into twopc_t1(id, col) values(9, 4)")
 	_, err = utils.ExecAllowError(t, conn, "commit")
 	require.NoError(t, err)
+}
+
+// reparentAllShards reparents all the shards to the given tablet index for that shard.
+func reparentAllShards(t *testing.T, clusterInstance *cluster.LocalProcessCluster, idx int) {
+	for _, shard := range clusterInstance.Keyspaces[0].Shards {
+		err := clusterInstance.VtctldClientProcess.PlannedReparentShard(keyspaceName, shard.Name, shard.Vttablets[idx].Alias)
+		require.NoError(t, err)
+	}
 }
 
 // TestReadTransactionStatus tests that read transaction state rpc works as expected.
