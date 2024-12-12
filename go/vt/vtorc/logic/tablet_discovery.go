@@ -67,17 +67,15 @@ func parseClustersToWatch() {
 			}
 			shardsToWatch[ks] = true
 		} else {
-			// Remove trailing slash, if exists
-			if strings.HasSuffix(ks, "/") {
-				ks = strings.TrimSuffix(ks, "/")
-			}
+			// Remove trailing slash, if exists.
+			ks = strings.TrimSuffix(ks, "/")
 
 			// Assume this is a keyspace and find all shards in keyspace.
 			ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
 			defer cancel()
 			shards, err := ts.GetShardNames(ctx, ks)
 			if err != nil {
-				// Log the errr and continue
+				// Log the err and continue.
 				log.Errorf("Error fetching shards for keyspace: %v", ks)
 				continue
 			}
