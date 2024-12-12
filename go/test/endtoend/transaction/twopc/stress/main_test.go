@@ -123,4 +123,5 @@ func start(t *testing.T) (*mysql.Conn, func()) {
 func cleanup(t *testing.T) {
 	utils.ClearOutTable(t, vtParams, "twopc_fuzzer_insert")
 	utils.ClearOutTable(t, vtParams, "twopc_fuzzer_update")
+	utils.ClearOutTable(t, vtParams, "twopc_t1")
 }
