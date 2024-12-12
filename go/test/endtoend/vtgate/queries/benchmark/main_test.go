@@ -65,7 +65,6 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	exitCode := func() int {
@@ -119,6 +118,5 @@ func start(b *testing.B) (*mysql.Conn, func()) {
 	return conn, func() {
 		deleteAll()
 		conn.Close()
-		cluster.PanicHandler(b)
 	}
 }
