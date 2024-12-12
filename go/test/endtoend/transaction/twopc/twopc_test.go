@@ -1028,19 +1028,15 @@ func TestSemiSyncRequiredWithTwoPC(t *testing.T) {
 	// cleanup all the old data.
 	conn, closer := start(t)
 	defer closer()
+	defer func() {
+		reparentAllShards(t, clusterInstance, 0)
+	}()
 
+	reparentAllShards(t, clusterInstance, 0)
 	out, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=none")
 	require.NoError(t, err, out)
-	defer clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=semi_sync")
-
-	// After changing the durability policy for the given keyspace to none, we run PRS.
-	shard := clusterInstance.Keyspaces[0].Shards[2]
-	newPrimary := shard.Vttablets[1]
-	_, err = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(
-		"PlannedReparentShard",
-		fmt.Sprintf("%s/%s", keyspaceName, shard.Name),
-		"--new-primary", newPrimary.Alias)
-	require.NoError(t, err)
+	// After changing the durability policy for the given keyspace to none, we run PRS to ensure the changes have taken effect.
+	reparentAllShards(t, clusterInstance, 1)
 
 	// A new distributed transaction should fail.
 	utils.Exec(t, conn, "begin")
@@ -1050,4 +1046,24 @@ func TestSemiSyncRequiredWithTwoPC(t *testing.T) {
 	_, err = utils.ExecAllowError(t, conn, "commit")
 	require.Error(t, err)
 	require.ErrorContains(t, err, "two-pc is enabled, but semi-sync is not")
+
+	_, err = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=semi_sync")
+	require.NoError(t, err)
+	reparentAllShards(t, clusterInstance, 0)
+
+	// Transaction should now succeed.
+	utils.Exec(t, conn, "begin")
+	utils.Exec(t, conn, "insert into twopc_t1(id, col) values(4, 4)")
+	utils.Exec(t, conn, "insert into twopc_t1(id, col) values(6, 4)")
+	utils.Exec(t, conn, "insert into twopc_t1(id, col) values(9, 4)")
+	_, err = utils.ExecAllowError(t, conn, "commit")
+	require.NoError(t, err)
+}
+
+// reparentAllShards reparents all the shards to the given tablet index for that shard.
+func reparentAllShards(t *testing.T, clusterInstance *cluster.LocalProcessCluster, idx int) {
+	for _, shard := range clusterInstance.Keyspaces[0].Shards {
+		err := clusterInstance.VtctldClientProcess.PlannedReparentShard(keyspaceName, shard.Name, shard.Vttablets[idx].Alias)
+		require.NoError(t, err)
+	}
 }
