@@ -28,7 +28,6 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/sqlerror"
-	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
 )
 
@@ -783,7 +782,6 @@ func TestJoinWithMergedRouteWithPredicate(t *testing.T) {
 func TestRowCountExceed(t *testing.T) {
 	conn, _ := start(t)
 	defer func() {
-		cluster.PanicHandler(t)
 		// needs special delete logic as it exceeds row count.
 		for i := 50; i <= 300; i += 50 {
 			utils.Exec(t, conn, fmt.Sprintf("delete from t1 where id1 < %d", i))

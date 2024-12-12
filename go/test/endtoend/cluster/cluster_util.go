@@ -126,15 +126,6 @@ func VerifyRowsInTablet(t *testing.T, vttablet *Vttablet, ksName string, expecte
 	VerifyRowsInTabletForTable(t, vttablet, ksName, expectedRows, "vt_insert_test")
 }
 
-// PanicHandler handles the panic in the testcase.
-func PanicHandler(t testing.TB) {
-	err := recover()
-	if t == nil {
-		return
-	}
-	require.Nilf(t, err, "panic occured in testcase %v", t.Name())
-}
-
 // ListBackups Lists back preset in shard
 func (cluster LocalProcessCluster) ListBackups(shardKsName string) ([]string, error) {
 	output, err := cluster.VtctldClientProcess.ExecuteCommandWithOutput("GetBackups", shardKsName)

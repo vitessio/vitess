@@ -24,8 +24,6 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/utils"
-
-	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
 func start(t *testing.T) (*mysql.Conn, func()) {
@@ -35,7 +33,6 @@ func start(t *testing.T) (*mysql.Conn, func()) {
 
 	return vtConn, func() {
 		vtConn.Close()
-		cluster.PanicHandler(t)
 	}
 }
 

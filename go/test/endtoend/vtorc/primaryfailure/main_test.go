@@ -21,7 +21,6 @@ import (
 	"os"
 	"testing"
 
-	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/vtorc/utils"
 )
 
@@ -52,8 +51,6 @@ func TestMain(m *testing.M) {
 
 		return m.Run(), nil
 	}()
-
-	cluster.PanicHandler(nil)
 
 	if clusterInfo != nil {
 		// stop vtorc first otherwise its logs get polluted
