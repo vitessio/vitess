@@ -121,42 +121,41 @@ func TestUpdateShardsToWatch(t *testing.T) {
 
 	testCases := []struct {
 		in       []string
-		expected map[string]bool
+		expected map[string][]string
 	}{
 		{
 			in:       []string{},
-			expected: map[string]bool{},
+			expected: nil,
 		},
 		{
 			in:       []string{""},
-			expected: map[string]bool{},
+			expected: map[string][]string{},
 		},
 		{
 			in: []string{"test/-"},
-			expected: map[string]bool{
-				"test/-": true,
+			expected: map[string][]string{
+				"test": []string{"-"},
 			},
 		},
 		{
 			in: []string{"test/-", "test2/-80", "test2/80-"},
-			expected: map[string]bool{
-				"test/-":    true,
-				"test2/-80": true,
-				"test2/80-": true,
+			expected: map[string][]string{
+				"test":  []string{"-"},
+				"test2": []string{"-80", "80-"},
 			},
 		},
 		{
 			// confirm shards fetch from topo
 			in: []string{keyspace},
-			expected: map[string]bool{
-				topoproto.KeyspaceShardString(keyspace, shard): true,
+			expected: map[string][]string{
+				keyspace: []string{shard},
 			},
 		},
 		{
 			// confirm shards fetch from topo when keyspace has trailing-slash
 			in: []string{keyspace + "/"},
-			expected: map[string]bool{
-				topoproto.KeyspaceShardString(keyspace, shard): true,
+			expected: map[string][]string{
+				keyspace: []string{shard},
 			},
 		},
 	}
@@ -164,7 +163,7 @@ func TestUpdateShardsToWatch(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(strings.Join(testCase.in, ","), func(t *testing.T) {
 			defer func() {
-				shardsToWatch = make(map[string]bool, 0)
+				shardsToWatch = make(map[string][]string, 0)
 			}()
 			clustersToWatch = testCase.in
 			updateShardsToWatch()
