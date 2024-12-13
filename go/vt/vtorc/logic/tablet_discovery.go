@@ -49,15 +49,27 @@ var (
 	shutdownWaitTime  = 30 * time.Second
 	shardsLockCounter int32
 	shardsToWatch     = make(map[string]bool, 0)
+	shardsToWatchMu   sync.Mutex
 
 	// ErrNoPrimaryTablet is a fixed error message.
 	ErrNoPrimaryTablet = errors.New("no primary tablet found")
 )
 
-// parseClustersToWatch parses the --clusters_to_watch flag-value
-// into a map of keyspace/shards. This is called once at init
-// time because the list never changes.
-func parseClustersToWatch() {
+// RegisterFlags registers the flags required by VTOrc
+func RegisterFlags(fs *pflag.FlagSet) {
+	fs.StringSliceVar(&clustersToWatch, "clusters_to_watch", clustersToWatch, "Comma-separated list of keyspaces or keyspace/shards that this instance will monitor and repair. Defaults to all clusters in the topology. Example: \"ks1,ks2/-80\"")
+	fs.DurationVar(&shutdownWaitTime, "shutdown_wait_time", shutdownWaitTime, "Maximum time to wait for VTOrc to release all the locks that it is holding before shutting down on SIGTERM")
+}
+
+// updateShardsToWatch parses the --clusters_to_watch flag-value
+// into a map of keyspace/shards.
+func updateShardsToWatch() {
+	if ts == nil {
+		return
+	}
+	shardsToWatchMu.Lock()
+	defer shardsToWatchMu.Unlock()
+
 	for _, ks := range clustersToWatch {
 		if strings.Contains(ks, "/") && !strings.HasSuffix(ks, "/") {
 			// Validate keyspace/shard parses.
@@ -90,14 +102,8 @@ func parseClustersToWatch() {
 	}
 }
 
-// RegisterFlags registers the flags required by VTOrc
-func RegisterFlags(fs *pflag.FlagSet) {
-	fs.StringSliceVar(&clustersToWatch, "clusters_to_watch", clustersToWatch, "Comma-separated list of keyspaces or keyspace/shards that this instance will monitor and repair. Defaults to all clusters in the topology. Example: \"ks1,ks2/-80\"")
-	fs.DurationVar(&shutdownWaitTime, "shutdown_wait_time", shutdownWaitTime, "Maximum time to wait for VTOrc to release all the locks that it is holding before shutting down on SIGTERM")
-}
-
-// GetAllTablets gets all tablets from all cells using a goroutine per cell.
-func GetAllTablets(ctx context.Context, cells []string) []*topo.TabletInfo {
+// getAllTablets gets all tablets from all cells using a goroutine per cell.
+func getAllTablets(ctx context.Context, cells []string) []*topo.TabletInfo {
 	var tabletsMu sync.Mutex
 	tablets := make([]*topo.TabletInfo, 0)
 	eg, ctx := errgroup.WithContext(ctx)
@@ -130,7 +136,7 @@ func OpenTabletDiscovery() <-chan time.Time {
 		log.Error(err)
 	}
 	// Parse --clusters_to_watch into a filter.
-	parseClustersToWatch()
+	updateShardsToWatch()
 	// We refresh all information from the topo once before we start the ticks to do
 	// it on a timer.
 	ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
@@ -161,25 +167,29 @@ func refreshTabletsUsing(ctx context.Context, loader func(tabletAlias string), f
 	// Get all tablets from all cells.
 	getTabletsCtx, getTabletsCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer getTabletsCancel()
-	tablets := GetAllTablets(getTabletsCtx, cells)
+	tablets := getAllTablets(getTabletsCtx, cells)
 	if len(tablets) == 0 {
 		log.Error("Found no tablets")
 		return nil
 	}
 
 	// Filter tablets that should not be watched using shardsToWatch map.
-	filteredTablets := make([]*topo.TabletInfo, 0, len(tablets))
-	for _, t := range tablets {
-		shardKey := topoproto.KeyspaceShardString(t.Tablet.Keyspace, t.Tablet.Shard)
-		if len(shardsToWatch) > 0 && !shardsToWatch[shardKey] {
-			continue // filter
+	matchedTablets := make([]*topo.TabletInfo, 0, len(tablets))
+	func() {
+		shardsToWatchMu.Lock()
+		defer shardsToWatchMu.Unlock()
+		for _, t := range tablets {
+			shardKey := topoproto.KeyspaceShardString(t.Tablet.Keyspace, t.Tablet.Shard)
+			if len(shardsToWatch) > 0 && !shardsToWatch[shardKey] {
+				continue // filter
+			}
+			matchedTablets = append(matchedTablets, t)
 		}
-		filteredTablets = append(filteredTablets, t)
-	}
+	}()
 
 	// Refresh the filtered tablets.
 	query := "select alias from vitess_tablet"
-	refreshTablets(filteredTablets, query, nil, loader, forceRefresh, nil)
+	refreshTablets(matchedTablets, query, nil, loader, forceRefresh, nil)
 
 	return nil
 }

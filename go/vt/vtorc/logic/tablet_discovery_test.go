@@ -102,7 +102,7 @@ var (
 	}
 )
 
-func TestParseClustersToWatch(t *testing.T) {
+func TestUpdateShardsToWatch(t *testing.T) {
 	oldClustersToWatch := clustersToWatch
 	oldTs := ts
 	defer func() {
@@ -167,7 +167,7 @@ func TestParseClustersToWatch(t *testing.T) {
 				shardsToWatch = make(map[string]bool, 0)
 			}()
 			clustersToWatch = testCase.in
-			parseClustersToWatch()
+			updateShardsToWatch()
 			require.Equal(t, testCase.expected, shardsToWatch)
 		})
 	}
