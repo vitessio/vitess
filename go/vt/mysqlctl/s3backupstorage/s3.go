@@ -243,7 +243,7 @@ func calculateUploadPartSize(filesize int64) (partSizeBytes int64, err error) {
 	}
 
 	if minPartSize != 0 && partSizeBytes < minPartSize {
-		if minPartSize > 1024*1024*1024*5 || minPartSize < 1024*1024*5 { // 5GiB and 5MiB respectively
+		if minPartSize > MaxPartSize || minPartSize < manager.MinUploadPartSize { // 5GiB and 5MiB respectively
 			return 0, fmt.Errorf("%w, currently set to %s",
 				ErrPartSize, humanize.IBytes(uint64(minPartSize)),
 			)
