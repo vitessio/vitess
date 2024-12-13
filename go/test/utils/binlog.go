@@ -27,7 +27,8 @@ const (
 	BinlogRowImageCnf = "binlog-row-image.cnf"
 )
 
-// SetBinlogRowImageMode  creates a temp cnf file to set binlog_row_image to noblob for vreplication unit tests.
+// SetBinlogRowImageMode creates a temp cnf file to set binlog_row_image=NOBLOB and
+// binlog_row_value_options=PARTIAL_JSON for vreplication unit tests.
 // It adds it to the EXTRA_MY_CNF environment variable which appends text from them into my.cnf.
 func SetBinlogRowImageMode(mode string, cnfDir string) error {
 	var newCnfs []string
@@ -54,6 +55,15 @@ func SetBinlogRowImageMode(mode string, cnfDir string) error {
 		_, err = f.WriteString(fmt.Sprintf("\nbinlog_row_image=%s\n", mode))
 		if err != nil {
 			return err
+		}
+		lm := strings.ToLower(mode)
+		if lm == "noblob" || lm == "minimal" {
+			// We're testing partial binlog row images so let's also test partial
+			// JSON values in the images.
+			_, err = f.WriteString("\nbinlog_row_value_options=PARTIAL_JSON\n")
+			if err != nil {
+				return err
+			}
 		}
 		err = f.Close()
 		if err != nil {

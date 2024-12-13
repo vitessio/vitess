@@ -528,7 +528,7 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 				}
 				if !isBitSet(rowChange.DataColumns.Cols, i) {
 					return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
-						"binary log event missing a needed value for %s.%s due to the usage of binlog-row-image=NOBLOB; you will need to re-run the workflow with binlog-row-image=FULL",
+						"binary log event missing a needed value for %s.%s due to not using binlog-row-image=FULL; you will need to re-run the workflow with binlog-row-image=FULL",
 						tp.TargetName, field.Name)
 				}
 			}
@@ -629,11 +629,28 @@ func (tp *TablePlan) applyBulkInsertChanges(rowInserts []*binlogdatapb.RowChange
 
 	newStmt := true
 	for _, rowInsert := range rowInserts {
+		var (
+			err     error
+			bindVar *querypb.BindVariable
+		)
 		rowValues := &strings.Builder{}
 		bindvars := make(map[string]*querypb.BindVariable, len(tp.Fields))
 		vals := sqltypes.MakeRowTrusted(tp.Fields, rowInsert.After)
 		for n, field := range tp.Fields {
-			bindVar, err := tp.bindFieldVal(field, &vals[n])
+			if field.Type == querypb.Type_JSON {
+				var jsVal *sqltypes.Value
+				if vals[n].IsNull() { // An SQL NULL and not an actual JSON value
+					jsVal = &sqltypes.NULL
+				} else { // A JSON value (which may be a JSON null literal value)
+					jsVal, err = vjson.MarshalSQLValue(vals[n].Raw())
+					if err != nil {
+						return nil, err
+					}
+				}
+				bindVar, err = tp.bindFieldVal(field, jsVal)
+			} else {
+				bindVar, err = tp.bindFieldVal(field, &vals[n])
+			}
 			if err != nil {
 				return nil, err
 			}

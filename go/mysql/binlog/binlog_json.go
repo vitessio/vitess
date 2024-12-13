@@ -127,7 +127,7 @@ func ParseBinaryJSONDiff(data []byte) (sqltypes.Value, error) {
 		diff.WriteByte('\'')
 
 		if opType == jsonDiffOpRemove { // No value for remove
-			diff.WriteString(")")
+			diff.WriteByte(')')
 		} else {
 			diff.WriteString(", ")
 			valueLen, readTo := readVariableLength(data, pos)
@@ -141,7 +141,8 @@ func ParseBinaryJSONDiff(data []byte) (sqltypes.Value, error) {
 			if value.Type() == json.TypeString {
 				diff.WriteString(sqlparser.Utf8mb4Str)
 			}
-			diff.WriteString(fmt.Sprintf("%s)", value))
+			diff.Write(value.MarshalTo(nil))
+			diff.WriteByte(')')
 		}
 
 		outer = true
