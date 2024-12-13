@@ -1521,12 +1521,18 @@ func TestPlayerRowMove(t *testing.T) {
 
 // TestPlayerPartialImagesUpdatePK tests the behavior of the vplayer when we
 // have partial binlog images, meaning that binlog-row-image=NOBLOB and
-// binlog-row-value-options=PARTIAL_JSON. These are both set together when
-// running the unit tests with runNoBlobTest=true. So we skip the test if
-// it's not set.
+// binlog-row-value-options=PARTIAL_JSON. These are both set when running the
+// unit tests with runNoBlobTest=true and runPartialJSONTest=true.
+// If the test is running in the CI and the database platform is not MySQL
+// 8.0 or later (which you can control using the CI_DB_PLATFORM env variable),
+// then runPartialJSONTest will be false and the test will be skipped.
+// the test if it's not set.
 func TestPlayerPartialImagesUpdatePK(t *testing.T) {
 	if !runNoBlobTest {
-		t.Skip("Skipping test as runNoBlobTest is not set")
+		t.Skip("Skipping test as binlog_row_image=NOBLOB is not set")
+	}
+	if !runPartialJSONTest {
+		t.Skip("Skipping test as binlog-row-value-options=PARTIAL_JSON is not set (most likely because the database type is not MySQL 8.0 or later)")
 	}
 
 	defer deleteTablet(addTablet(100))
@@ -1554,12 +1560,13 @@ func TestPlayerPartialImagesUpdatePK(t *testing.T) {
 	cancel, _ := startVReplication(t, bls, "")
 	defer cancel()
 
-	testCases := []struct {
+	type testCase struct {
 		input  string
 		output []string
 		data   [][]string
 		error  string
-	}{
+	}
+	testCases := []testCase{
 		{
 			input:  "insert into src (id, jd, bd) values (1,'{\"key1\": \"val1\"}','blob data'), (2,'{\"key2\": \"val2\"}','blob data2'), (3,'{\"key3\": \"val3\"}','blob data3')",
 			output: []string{"insert into dst(id,jd,bd) values (1,JSON_OBJECT(_utf8mb4'key1', _utf8mb4'val1'),_binary'blob data'), (2,JSON_OBJECT(_utf8mb4'key2', _utf8mb4'val2'),_binary'blob data2'), (3,JSON_OBJECT(_utf8mb4'key3', _utf8mb4'val3'),_binary'blob data3')"},
@@ -1757,10 +1764,12 @@ func TestPlayerTypes(t *testing.T) {
 			{"2", "null", `{"name": null}`, "123", `{"a": [42, 100]}`, `{"foo": "bar"}`},
 		},
 	}}
-	if !runNoBlobTest {
+	if runNoBlobTest && runPartialJSONTest {
+		// With partial JSON values we don't replicate the JSON columns that aren't
+		// actually updated.
 		testcases = append(testcases, testcase{
 			input:  "update vitess_json set val1 = '{\"bar\": \"foo\"}', val4 = '{\"a\": [98, 123]}', val5 = convert(x'7b7d' using utf8mb4) where id=1",
-			output: "update vitess_json set val1=JSON_OBJECT(_utf8mb4'bar', _utf8mb4'foo'), val2=JSON_OBJECT(), val3=CAST(123 as JSON), val4=JSON_OBJECT(_utf8mb4'a', JSON_ARRAY(98, 123)), val5=JSON_OBJECT() where id=1",
+			output: "update vitess_json set val1=JSON_OBJECT(_utf8mb4'bar', _utf8mb4'foo'), val4=JSON_OBJECT(_utf8mb4'a', JSON_ARRAY(98, 123)), val5=JSON_OBJECT() where id=1",
 			table:  "vitess_json",
 			data: [][]string{
 				{"1", `{"bar": "foo"}`, "{}", "123", `{"a": [98, 123]}`, `{}`},
@@ -1768,11 +1777,9 @@ func TestPlayerTypes(t *testing.T) {
 			},
 		})
 	} else {
-		// With partial JSON values we don't replicate the JSON columns that aren't
-		// actually updated.
 		testcases = append(testcases, testcase{
 			input:  "update vitess_json set val1 = '{\"bar\": \"foo\"}', val4 = '{\"a\": [98, 123]}', val5 = convert(x'7b7d' using utf8mb4) where id=1",
-			output: "update vitess_json set val1=JSON_OBJECT(_utf8mb4'bar', _utf8mb4'foo'), val4=JSON_OBJECT(_utf8mb4'a', JSON_ARRAY(98, 123)), val5=JSON_OBJECT() where id=1",
+			output: "update vitess_json set val1=JSON_OBJECT(_utf8mb4'bar', _utf8mb4'foo'), val2=JSON_OBJECT(), val3=CAST(123 as JSON), val4=JSON_OBJECT(_utf8mb4'a', JSON_ARRAY(98, 123)), val5=JSON_OBJECT() where id=1",
 			table:  "vitess_json",
 			data: [][]string{
 				{"1", `{"bar": "foo"}`, "{}", "123", `{"a": [98, 123]}`, `{}`},

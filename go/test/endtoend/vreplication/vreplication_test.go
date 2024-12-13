@@ -323,8 +323,10 @@ func testVreplicationWorkflows(t *testing.T, limited bool, binlogRowImage string
 	defer func() { defaultReplicas = 1 }()
 
 	if binlogRowImage != "" {
-		require.NoError(t, utils.SetBinlogRowImageMode("noblob", vc.ClusterConfig.tmpDir))
-		defer utils.SetBinlogRowImageMode("", vc.ClusterConfig.tmpDir)
+		// Run the e2e test with binlog_row_image=NOBLOB and
+		// binlog_row_value_options=PARTIAL_JSON.
+		require.NoError(t, utils.SetBinlogRowImageMode("noblob", vc.ClusterConfig.tmpDir, true))
+		defer utils.SetBinlogRowImageMode("", vc.ClusterConfig.tmpDir, false)
 	}
 
 	defaultCell := vc.Cells[defaultCellName]
@@ -600,8 +602,10 @@ func TestCellAliasVreplicationWorkflow(t *testing.T) {
 	keyspace := "product"
 	shard := "0"
 
-	require.NoError(t, utils.SetBinlogRowImageMode("noblob", vc.ClusterConfig.tmpDir))
-	defer utils.SetBinlogRowImageMode("", vc.ClusterConfig.tmpDir)
+	// Run the e2e test with binlog_row_image=NOBLOB and
+	// binlog_row_value_options=PARTIAL_JSON.
+	require.NoError(t, utils.SetBinlogRowImageMode("noblob", vc.ClusterConfig.tmpDir, true))
+	defer utils.SetBinlogRowImageMode("", vc.ClusterConfig.tmpDir, false)
 
 	cell1 := vc.Cells["zone1"]
 	cell2 := vc.Cells["zone2"]
