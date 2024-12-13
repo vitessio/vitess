@@ -705,8 +705,10 @@ func TestNoTwopc(t *testing.T) {
 
 	want := "2pc is not enabled"
 	for _, tc := range testcases {
-		err := tc.fun()
-		require.EqualError(t, err, want)
+		t.Run(tc.desc, func(t *testing.T) {
+			err := tc.fun()
+			require.EqualError(t, err, want)
+		})
 	}
 }
 

@@ -28,7 +28,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
@@ -36,6 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
+	"vitess.io/vitess/go/vt/mysqlctl/blackbox"
 	"vitess.io/vitess/go/vt/mysqlctl/filebackupstorage"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -132,7 +132,7 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 		require.NoError(t, os.MkdirAll(s, os.ModePerm))
 	}
 
-	needIt, err := needInnoDBRedoLogSubdir()
+	needIt, err := blackbox.NeedInnoDBRedoLogSubdir()
 	require.NoError(t, err)
 	if needIt {
 		newPath := path.Join(sourceInnodbLogDir, mysql.DynamicRedoLogSubdir)
@@ -371,7 +371,7 @@ func TestBackupRestoreLagged(t *testing.T) {
 	}
 	require.NoError(t, os.WriteFile(path.Join(sourceInnodbDataDir, "innodb_data_1"), []byte("innodb data 1 contents"), os.ModePerm))
 
-	needIt, err := needInnoDBRedoLogSubdir()
+	needIt, err := blackbox.NeedInnoDBRedoLogSubdir()
 	require.NoError(t, err)
 	if needIt {
 		newPath := path.Join(sourceInnodbLogDir, mysql.DynamicRedoLogSubdir)
@@ -591,7 +591,7 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 	}
 	require.NoError(t, os.WriteFile(path.Join(sourceInnodbDataDir, "innodb_data_1"), []byte("innodb data 1 contents"), os.ModePerm))
 
-	needIt, err := needInnoDBRedoLogSubdir()
+	needIt, err := blackbox.NeedInnoDBRedoLogSubdir()
 	require.NoError(t, err)
 	if needIt {
 		newPath := path.Join(sourceInnodbLogDir, mysql.DynamicRedoLogSubdir)
@@ -767,7 +767,7 @@ func TestDisableActiveReparents(t *testing.T) {
 	}
 	require.NoError(t, os.WriteFile(path.Join(sourceInnodbDataDir, "innodb_data_1"), []byte("innodb data 1 contents"), os.ModePerm))
 
-	needIt, err := needInnoDBRedoLogSubdir()
+	needIt, err := blackbox.NeedInnoDBRedoLogSubdir()
 	require.NoError(t, err)
 	if needIt {
 		newPath := path.Join(sourceInnodbLogDir, mysql.DynamicRedoLogSubdir)
@@ -876,26 +876,4 @@ func TestDisableActiveReparents(t *testing.T) {
 	require.NoError(t, destTablet.FakeMysqlDaemon.CheckSuperQueryList(), "destTablet.FakeMysqlDaemon.CheckSuperQueryList failed")
 	assert.False(t, destTablet.FakeMysqlDaemon.Replicating)
 	assert.True(t, destTablet.FakeMysqlDaemon.Running)
-}
-
-// needInnoDBRedoLogSubdir indicates whether we need to create a redo log subdirectory.
-// Starting with MySQL 8.0.30, the InnoDB redo logs are stored in a subdirectory of the
-// <innodb_log_group_home_dir> (<datadir>/. by default) called "#innodb_redo". See:
-//
-//	https://dev.mysql.com/doc/refman/8.0/en/innodb-redo-log.html#innodb-modifying-redo-log-capacity
-func needInnoDBRedoLogSubdir() (needIt bool, err error) {
-	mysqldVersionStr, err := mysqlctl.GetVersionString()
-	if err != nil {
-		return needIt, err
-	}
-	_, sv, err := mysqlctl.ParseVersionString(mysqldVersionStr)
-	if err != nil {
-		return needIt, err
-	}
-	versionStr := fmt.Sprintf("%d.%d.%d", sv.Major, sv.Minor, sv.Patch)
-	capableOf := mysql.ServerVersionCapableOf(versionStr)
-	if capableOf == nil {
-		return needIt, fmt.Errorf("cannot determine database flavor details for version %s", versionStr)
-	}
-	return capableOf(capabilities.DynamicRedoLogCapacityFlavorCapability)
 }

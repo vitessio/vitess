@@ -405,7 +405,6 @@ func TestBackup(t *testing.T, setupType int, streamMode string, stripes int, cDe
 		}, //
 	}
 
-	defer cluster.PanicHandler(t)
 	// setup cluster for the testing
 	code, err := LaunchCluster(setupType, streamMode, stripes, cDetails)
 	require.Nilf(t, err, "setup failed with status code %d", code)
@@ -1507,7 +1506,6 @@ func getLastBackup(t *testing.T) string {
 
 func TestBackupEngineSelector(t *testing.T) {
 	defer setDefaultCommonArgs()
-	defer cluster.PanicHandler(t)
 
 	// launch the custer with xtrabackup as the default engine
 	code, err := LaunchCluster(XtraBackup, "xbstream", 0, &CompressionDetails{CompressorEngineName: "pgzip"})
@@ -1548,7 +1546,6 @@ func TestBackupEngineSelector(t *testing.T) {
 
 func TestRestoreAllowedBackupEngines(t *testing.T) {
 	defer setDefaultCommonArgs()
-	defer cluster.PanicHandler(t)
 
 	backupMsg := "right after xtrabackup backup"
 

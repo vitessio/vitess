@@ -208,6 +208,7 @@ func (b *Buffer) WaitForFailoverEnd(ctx context.Context, keyspace, shard string,
 }
 
 func (b *Buffer) HandleKeyspaceEvent(ksevent *discovery.KeyspaceEvent) {
+	log.Infof("Keyspace Event received for keyspace %v", ksevent.Keyspace)
 	for _, shard := range ksevent.Shards {
 		sb := b.getOrCreateBuffer(shard.Target.Keyspace, shard.Target.Shard)
 		if sb != nil {

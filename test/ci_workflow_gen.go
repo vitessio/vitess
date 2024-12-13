@@ -103,6 +103,7 @@ var (
 		"vtgate_vindex_heavy",
 		"vtgate_vschema",
 		"vtgate_queries",
+		"vtgate_plantests",
 		"vtgate_schema_tracker",
 		"vtgate_foreignkey_stress",
 		"vtorc",
@@ -157,6 +158,9 @@ var (
 		"vreplication_migrate",
 		"vreplication_vtctldclient_vdiff2_movetables_tz",
 	}
+	clusterRequiringMinio = []string{
+		"21",
+	}
 )
 
 type unitTest struct {
@@ -174,6 +178,7 @@ type clusterTest struct {
 	EnableBinlogTransactionCompression bool
 	PartialKeyspace                    bool
 	Cores16                            bool
+	NeedsMinio                         bool
 }
 
 type vitessTesterTest struct {
@@ -283,6 +288,13 @@ func generateClusterWorkflows(list []string, tpl string) {
 			for _, xtraBackupCluster := range xtraBackupClusters {
 				if xtraBackupCluster == cluster {
 					test.InstallXtraBackup = true
+					break
+				}
+			}
+			minioClusters := canonnizeList(clusterRequiringMinio)
+			for _, minioCluster := range minioClusters {
+				if minioCluster == cluster {
+					test.NeedsMinio = true
 					break
 				}
 			}
