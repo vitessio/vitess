@@ -134,28 +134,28 @@ func TestUpdateShardsToWatch(t *testing.T) {
 		{
 			in: []string{"test/-"},
 			expected: map[string][]string{
-				"test": []string{"-"},
+				"test": {"-"},
 			},
 		},
 		{
 			in: []string{"test/-", "test2/-80", "test2/80-"},
 			expected: map[string][]string{
-				"test":  []string{"-"},
-				"test2": []string{"-80", "80-"},
+				"test":  {"-"},
+				"test2": {"-80", "80-"},
 			},
 		},
 		{
 			// confirm shards fetch from topo
 			in: []string{keyspace},
 			expected: map[string][]string{
-				keyspace: []string{shard},
+				keyspace: {shard},
 			},
 		},
 		{
 			// confirm shards fetch from topo when keyspace has trailing-slash
 			in: []string{keyspace + "/"},
 			expected: map[string][]string{
-				keyspace: []string{shard},
+				keyspace: {shard},
 			},
 		},
 	}
