@@ -86,7 +86,7 @@ var (
 
 	// vtops
 	vtopsService      = fmt.Sprintf("%s-%s-%s", os.Getenv("BEDROCK_CONTAINER_NAME"), os.Getenv("POOL"), os.Getenv("VITESS_ENVIRONMENT"))
-	vtopsExec         = external.NewExecVTOps(os.Getenv("VTOPS_PATH"), os.Getenv("VTOPS_HTTP_PROXY"), vtopsService, os.Getenv("HOSTNAME"))
+	vtopsExec         = external.NewExecVTOps(os.Getenv("VTOPS_PATH"), vtopsService, os.Getenv("HOSTNAME"))
 	vtopsSlackChannel = os.Getenv("SLACK_CHANNEL")
 )
 
@@ -304,7 +304,7 @@ func postErsCompletion(topologyRecovery *TopologyRecovery, analysisEntry *inst.R
 		_ = AuditTopologyRecovery(topologyRecovery, message)
 		_ = inst.AuditOperation(recoveryName, analysisEntry.AnalyzedInstanceAlias, message)
 		_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("%v: successfully promoted %+v", recoveryName, promotedReplica.InstanceAlias))
-		vtopsExec.RaiseProblem(analysisEntry.AnalyzedInstanceHostname, "orc-dead-tablet", true)
+		vtopsExec.RaiseProblem(analysisEntry.AnalyzedInstanceHostname, "orc-dead-tablet")
 	}
 }
 
@@ -726,12 +726,12 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.ReplicationAnalysis) (er
 	if err != nil {
 		message := fmt.Sprintf("Recovery failed on %s for problem %s. Error: %s", analysisEntry.AnalyzedInstanceHostname, analysisEntry.Analysis, err.Error())
 		log.Info(message)
-		vtopsExec.SendSlackMessage(message, vtopsSlackChannel, true)
+		vtopsExec.SendSlackMessage(message, vtopsSlackChannel)
 		recoveriesFailureCounter.Add(recoveryName, 1)
 	} else {
 		message := fmt.Sprintf("Recovery succeeded on %s for problem %s.", analysisEntry.AnalyzedInstanceHostname, analysisEntry.Analysis)
 		log.Info(message)
-		vtopsExec.SendSlackMessage(message, vtopsSlackChannel, true)
+		vtopsExec.SendSlackMessage(message, vtopsSlackChannel)
 		recoveriesSuccessfulCounter.Add(recoveryName, 1)
 	}
 	if topologyRecovery == nil {
