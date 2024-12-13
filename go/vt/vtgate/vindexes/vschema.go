@@ -478,7 +478,7 @@ func buildKeyspaceGlobalTables(vschema *VSchema, ksvschema *KeyspaceSchema, skip
 		if gt, ok := vschema.globalTables[tname]; ok {
 			// There is already an entry table stored in global tables
 			// with this name.
-			if !skipIfAlreadyGlobal {
+			if skipIfAlreadyGlobal {
 				// Called when updating from schema tracking
 				continue
 			}
