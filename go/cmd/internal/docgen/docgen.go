@@ -194,7 +194,7 @@ func anonymizeHomedir(file string) (err error) {
 	// We're replacing the stuff inside the square brackets in the example sed
 	// below:
 	// 	's:Paths to search for config files in. (default \[.*\])$:Paths to search for config files in. (default \[<WORKDIR>\]):'
-	sed := exec.Command("sed", "-i", "-e", fmt.Sprintf("s:%s:<WORKDIR>:i", wd), file)
+	sed := exec.Command("sed", "-i", "", "-e", fmt.Sprintf("s:%s:%s:", wd, "<WORKDIR>"), file)
 	if out, err := sed.CombinedOutput(); err != nil {
 		return fmt.Errorf("%w: %s", err, out)
 	}
@@ -224,7 +224,6 @@ func getCommitID(ref string) (string, error) {
 const frontmatter = `---
 title: %s
 series: %s
-commit: %s
 ---
 `
 
@@ -240,7 +239,7 @@ func frontmatterFilePrepender(sha string) func(filename string) string {
 
 		cmdName = strings.ReplaceAll(cmdName, "_", " ")
 
-		return fmt.Sprintf(frontmatter, cmdName, root, sha)
+		return fmt.Sprintf(frontmatter, cmdName, root)
 	}
 }
 
