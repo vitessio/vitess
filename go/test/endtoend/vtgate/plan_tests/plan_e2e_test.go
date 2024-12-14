@@ -40,3 +40,22 @@ func TestSelectCases(t *testing.T) {
 		})
 	}
 }
+
+func TestFilterCases(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+	tests := readJSONTests("filter_cases.json")
+	for _, test := range tests {
+		mcmp.Run(test.Comment, func(mcmp *utils.MySQLCompare) {
+			if test.SkipE2E {
+				mcmp.AsT().Skip(test.Query)
+			}
+			mcmp.Exec(test.Query)
+			pd := utils.ExecTrace(mcmp.AsT(), mcmp.VtConn, test.Query)
+			verifyTestExpectations(mcmp.AsT(), pd, test)
+			if mcmp.VtConn.IsClosed() {
+				mcmp.AsT().Fatal("vtgate connection is closed")
+			}
+		})
+	}
+}
