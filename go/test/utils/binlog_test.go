@@ -45,6 +45,8 @@ func TestUtils(t *testing.T) {
 		require.Contains(t, string(data), "binlog_row_image=noblob")
 		require.Contains(t, string(data), "binlog_row_value_options=PARTIAL_JSON")
 		require.Contains(t, os.Getenv(ExtraCnf), BinlogRowImageCnf)
+	} else {
+		require.Error(t, SetBinlogRowImageMode("noblob", tmpDir, true))
 	}
 
 	// Test that clearing the mode will remove the cnf file and the cnf from the EXTRA_MY_CNF env var.

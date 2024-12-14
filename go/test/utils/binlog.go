@@ -88,10 +88,9 @@ func SetBinlogRowImageMode(mode string, cnfDir string, includePartialJSON bool) 
 // variable is empty -- meaning we're not running in the CI and we assume
 // MySQL8.0 or later is used, and you can understand the failures and make
 // adjustments as necessary -- or it's set to reflect usage of MySQL 8.0 or
-// later. This relies on the current standard values used such as mysql5.7,
-// mysql8.0, mysql8.4, mariadb10.7, etc. This can be used when the CI test
-// behavior needs to be altered based on the specific database platform
-// we're testing against.
+// later. This relies on the current standard values used such as mysql57,
+// mysql80, mysql84, etc. This can be used when the CI test behavior needs
+// to be altered based on the specific database platform we're testing against.
 func CIDBPlatformIsMySQL8orLater() bool {
 	dbPlatform := strings.ToLower(os.Getenv("CI_DB_PLATFORM"))
 	if dbPlatform == "" {

@@ -1519,14 +1519,15 @@ func TestPlayerRowMove(t *testing.T) {
 	validateQueryCountStat(t, "replicate", 3)
 }
 
-// TestPlayerPartialImagesUpdatePK tests the behavior of the vplayer when we
-// have partial binlog images, meaning that binlog-row-image=NOBLOB and
-// binlog-row-value-options=PARTIAL_JSON. These are both set when running the
-// unit tests with runNoBlobTest=true and runPartialJSONTest=true.
+// TestPlayerPartialImagesUpdatePK tests the behavior of the vplayer when
+// updating the Primary Key for a row when we have partial binlog
+// images, meaning that binlog-row-image=NOBLOB and
+// binlog-row-value-options=PARTIAL_JSON. These are both set when running
+// the unit tests with runNoBlobTest=true and runPartialJSONTest=true.
 // If the test is running in the CI and the database platform is not MySQL
-// 8.0 or later (which you can control using the CI_DB_PLATFORM env variable),
-// then runPartialJSONTest will be false and the test will be skipped.
-// the test if it's not set.
+// 8.0 or later (which you can control using the CI_DB_PLATFORM env
+// variable), then runPartialJSONTest will be false and the test will be
+// skipped.
 func TestPlayerPartialImagesUpdatePK(t *testing.T) {
 	if !runNoBlobTest {
 		t.Skip("Skipping test as binlog_row_image=NOBLOB is not set")
@@ -1586,15 +1587,26 @@ func TestPlayerPartialImagesUpdatePK(t *testing.T) {
 			},
 		},
 		{
-			input: `update src set id = id+10, bd = 'new blob data' where id = 2`,
+			input: `update src set bd = 'new blob data' where id = 2`,
+			output: []string{
+				"update dst set bd=_binary'new blob data' where id=2",
+			},
+			data: [][]string{
+				{"1", "{\"key1\": \"val1\", \"color\": \"red\"}", "blob data"},
+				{"2", "{\"key2\": \"val2\"}", "new blob data"},
+				{"3", "{\"key3\": \"val3\"}", "blob data3"},
+			},
+		},
+		{
+			input: `update src set id = id+10, bd = 'newest blob data' where id = 2`,
 			output: []string{
 				"delete from dst where id=2",
-				"insert into dst(id,jd,bd) values (12,JSON_OBJECT(_utf8mb4'key2', _utf8mb4'val2'),_binary'new blob data')",
+				"insert into dst(id,jd,bd) values (12,JSON_OBJECT(_utf8mb4'key2', _utf8mb4'val2'),_binary'newest blob data')",
 			},
 			data: [][]string{
 				{"1", "{\"key1\": \"val1\", \"color\": \"red\"}", "blob data"},
 				{"3", "{\"key3\": \"val3\"}", "blob data3"},
-				{"12", "{\"key2\": \"val2\"}", "new blob data"},
+				{"12", "{\"key2\": \"val2\"}", "newest blob data"},
 			},
 		},
 		{

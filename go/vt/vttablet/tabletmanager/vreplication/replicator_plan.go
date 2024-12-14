@@ -480,12 +480,10 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 			jsonIndex := 0
 			for i, field := range tp.Fields {
 				if field.Type == querypb.Type_JSON && rowChange.JsonPartialValues != nil {
-					if !isBitSet(rowChange.JsonPartialValues.Cols, jsonIndex) {
+					switch {
+					case !isBitSet(rowChange.JsonPartialValues.Cols, jsonIndex):
 						// We use the full AFTER value which we already have.
-						jsonIndex++
-						continue
-					}
-					if len(afterVals[i].Raw()) == 0 {
+					case len(afterVals[i].Raw()) == 0:
 						// When using BOTH binlog_row_image=NOBLOB AND
 						// binlog_row_value_options=PARTIAL_JSON then the JSON column has the data bit
 						// set and the diff is empty when it's not present. So we want to use the
@@ -500,7 +498,7 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 							return nil, vterrors.Wrapf(err, "failed to bind field value for %s.%s when building insert query",
 								tp.TargetName, field.Name)
 						}
-					} else {
+					default:
 						// For JSON columns when binlog-row-value-options=PARTIAL_JSON is used, we
 						// need to wrap the JSON diff function(s) around the BEFORE value.
 						diff := bindvars["a_"+field.Name].Value

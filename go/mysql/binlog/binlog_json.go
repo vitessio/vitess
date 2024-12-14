@@ -113,6 +113,7 @@ func ParseBinaryJSONDiff(data []byte) (sqltypes.Value, error) {
 		} else { // Only the inner most function has the field name
 			diff.WriteString("%s, ") // This will later be replaced by the field name
 		}
+		outer = true
 
 		pathLen, readTo := readVariableLength(data, pos)
 		pos = readTo
@@ -125,27 +126,25 @@ func ParseBinaryJSONDiff(data []byte) (sqltypes.Value, error) {
 		diff.WriteByte('\'')
 		diff.Write(path)
 		diff.WriteByte('\'')
-
 		if opType == jsonDiffOpRemove { // No value for remove
 			diff.WriteByte(')')
-		} else {
-			diff.WriteString(", ")
-			valueLen, readTo := readVariableLength(data, pos)
-			pos = readTo
-			value, err := ParseBinaryJSON(data[pos : pos+valueLen])
-			if err != nil {
-				return sqltypes.Value{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
-					"cannot read JSON diff value for path %s: %v", path, err)
-			}
-			pos += valueLen
-			if value.Type() == json.TypeString {
-				diff.WriteString(sqlparser.Utf8mb4Str)
-			}
-			diff.Write(value.MarshalTo(nil))
-			diff.WriteByte(')')
+			continue
 		}
 
-		outer = true
+		diff.WriteString(", ")
+		valueLen, readTo := readVariableLength(data, pos)
+		pos = readTo
+		value, err := ParseBinaryJSON(data[pos : pos+valueLen])
+		if err != nil {
+			return sqltypes.Value{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+				"cannot read JSON diff value for path %s: %v", path, err)
+		}
+		pos += valueLen
+		if value.Type() == json.TypeString {
+			diff.WriteString(sqlparser.Utf8mb4Str)
+		}
+		diff.Write(value.MarshalTo(nil))
+		diff.WriteByte(')')
 	}
 
 	return sqltypes.MakeTrusted(sqltypes.Expression, diff.Bytes()), nil
