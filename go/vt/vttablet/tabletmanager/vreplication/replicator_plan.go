@@ -404,9 +404,11 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 					// binlog-row-value-options=PARTIAL_JSON.
 					if len(afterVals[i].Raw()) == 0 {
 						// When using BOTH binlog_row_image=NOBLOB AND
-						// binlog_row_value_options=PARTIAL_JSON then the JSON column has the data bit
-						// set and the diff is empty when it's not present. So we have to account for
-						// this by unsetting the data bit so that the current JSON value is not lost.
+						// binlog_row_value_options=PARTIAL_JSON, if the JSON column was NOT updated
+						// then the JSON column is marked as partial and the diff is empty as a way
+						// to exclude it from the AFTER image. It still has the data bit set, however,
+						// even though it's not really present. So we have to account for this by
+						// unsetting the data bit so that the current JSON value is not lost.
 						setBit(rowChange.DataColumns.Cols, i, false)
 						newVal = ptr.Of(sqltypes.MakeTrusted(querypb.Type_EXPRESSION, nil))
 					} else {
@@ -475,8 +477,8 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 			return nil, nil
 		}
 		if tp.isPartial(rowChange) {
-			// We need to use a combination of the values in the BEFORE and AFTER image to generate
-			// the new row.
+			// We need to use a combination of the values in the BEFORE and AFTER image to generate the
+			// new row.
 			jsonIndex := 0
 			for i, field := range tp.Fields {
 				if field.Type == querypb.Type_JSON && rowChange.JsonPartialValues != nil {
@@ -485,9 +487,9 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 						// We use the full AFTER value which we already have.
 					case len(afterVals[i].Raw()) == 0:
 						// When using BOTH binlog_row_image=NOBLOB AND
-						// binlog_row_value_options=PARTIAL_JSON then the JSON column has the data bit
-						// set and the diff is empty when it's not present. So we want to use the
-						// BEFORE image value.
+						// binlog_row_value_options=PARTIAL_JSON, if the JSON column was NOT updated
+						// then the JSON column is marked as partial and the diff is empty as a way
+						// to exclude it from the AFTER image. So we want to use the BEFORE image value.
 						beforeVal, err := vjson.MarshalSQLValue(bindvars["b_"+field.Name].Value)
 						if err != nil {
 							return nil, vterrors.Wrapf(err, "failed to convert JSON to SQL field value for %s.%s when building insert query",
