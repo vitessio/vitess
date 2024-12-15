@@ -58,12 +58,9 @@ type parallelWorker struct {
 	// foreignKeyChecksStateInitialized is set to true once we have initialized the foreignKeyChecksEnabled.
 	// The initialization is done on the first row event that this vplayer sees.
 	foreignKeyChecksStateInitialized bool
+	isHead                           bool
 	events                           chan *binlogdatapb.VEvent
 	stats                            *VrLogStats
-}
-
-func (w *parallelWorker) recycle() {
-	w.pool.pool <- w
 }
 
 func (w *parallelWorker) begin() error {
@@ -156,6 +153,13 @@ func (w *parallelWorker) applyEvent(ctx context.Context, event *binlogdatapb.VEv
 }
 
 func (w *parallelWorker) applyQueuedEvents(ctx context.Context) error {
+	defer func() {
+		if w.dbClient.InTransaction {
+			if err := w.dbClient.Rollback(); err != nil {
+				log.Errorf("Error rolling back transaction: %v", err)
+			}
+		}
+	}()
 	for {
 		select {
 		case <-ctx.Done():
@@ -191,24 +195,6 @@ func (w *parallelWorker) applyQueuedEvents(ctx context.Context) error {
 }
 
 func (w *parallelWorker) applyQueuedCommit(ctx context.Context, vevent *binlogdatapb.VEvent) error {
-	// Only the head worker can commit. This is because we want to
-	// commit in the order of events. It is theoretically possible to commit
-	// out of order, but we want to keep the code simple as well as to comply
-	// with vreplication's sequential GTID tracking.
-	for {
-		headIndex := w.pool.headIndex()
-		if w.index == headIndex {
-			break
-		}
-		select {
-		case err := <-w.pool.workerErrors:
-			return err
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
-	// Now that we're at head, we should be able to commit. If we fail to, that's a
-	// vreplication / vplayer error.
 	if err := w.dbClient.Begin(); err != nil {
 		return err
 	}
@@ -226,8 +212,6 @@ func (w *parallelWorker) applyQueuedCommit(ctx context.Context, vevent *binlogda
 	if err := w.dbClient.Commit(); err != nil {
 		return err
 	}
-
-	w.pool.handoverHead(w.index)
 
 	if posReached {
 		w.pool.posReached.Store(true)
@@ -292,8 +276,12 @@ func (w *parallelWorker) applyQueuedRowEvent(ctx context.Context, vevent *binlog
 }
 
 func (w *parallelWorker) applyQueuedEvent(ctx context.Context, event *binlogdatapb.VEvent, mustSave bool) error {
-	for !w.pool.isApplicable(w, event.Type) {
-		<-w.wakeup
+	for !w.pool.isApplicable(w, event) {
+		select {
+		case <-w.wakeup:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	}
 	applyFunc := func(sql string) (*sqltypes.Result, error) {
 		return w.queryFunc(ctx, sql)
@@ -301,6 +289,8 @@ func (w *parallelWorker) applyQueuedEvent(ctx context.Context, event *binlogdata
 
 	stats := NewVrLogStats(event.Type.String())
 	switch event.Type {
+	case binlogdatapb.VEventType_UNKNOWN:
+		// No-op. Used for serialization
 	case binlogdatapb.VEventType_GTID:
 		pos, err := binlogplayer.DecodePosition(event.Gtid)
 		if err != nil {

@@ -18,7 +18,6 @@ package vreplication
 
 import (
 	"context"
-	"math"
 	"sync"
 	"sync/atomic"
 
@@ -29,8 +28,7 @@ import (
 
 const (
 	defaultParallelWorkersPoolSize = 8
-	maxBatchedCommitsPerWorker     = 5
-	maxWorkerEventsQueueSize       = 10
+	maxBatchedCommitsPerWorker     = 50
 )
 
 type parallelWorkersPool struct {
@@ -75,7 +73,7 @@ func newParallelWorkersPool(size int, dbClientGen dbClientGenerator, vp *vplayer
 	if size > 1 {
 		p.maxBatchedCommitsPerWorker = maxBatchedCommitsPerWorker
 	} else {
-		p.maxBatchedCommitsPerWorker = math.MaxInt
+		p.maxBatchedCommitsPerWorker = vp.vr.workflowConfig.RelayLogMaxItems
 	}
 	return p, nil
 }
@@ -84,46 +82,62 @@ func (p *parallelWorkersPool) drain(ctx context.Context) (err error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	var rollbackErr error
-
 	func() {
 		p.mu.Lock()
 		defer p.mu.Unlock()
 		for i := range len(p.workers) {
-			p.workers[i].applyEvent(ctx, terminateWorkerEvent, true)
+			index := (p.head + i) % len(p.workers)
+			p.workers[index].applyEvent(ctx, &binlogdatapb.VEvent{
+				Type: binlogdatapb.VEventType_UNKNOWN,
+			}, true)
+			p.workers[index].applyEvent(ctx, terminateWorkerEvent, true)
 		}
 	}()
+	var workers []*parallelWorker
 	for range len(p.workers) {
-		w, err := p.availableWorker(ctx, 0, 0, true) // blocks until all workers are idle
+		w, err := p.availableWorker(ctx, -1, -1) // blocks until all workers are idle
 		if err != nil {
 			return vterrors.Wrapf(err, "drain aborted")
 		}
-		// Release at end of function, after all have been acquired.
-		w.applyEvent(ctx, terminateWorkerEvent, true)
+
+		workers = append(workers, w)
 	}
+	for _, w := range workers {
+		p.recycleWorker(w)
+	}
+
 	// context cancellation will recycle all workers.
-	return rollbackErr
+	return p.workersError()
 }
 
-func (p *parallelWorkersPool) availableWorker(ctx context.Context, lastCommitted int64, sequenceNumber int64, forDrain bool) (w *parallelWorker, err error) {
+func (p *parallelWorkersPool) recycleWorker(w *parallelWorker) {
+	p.pool <- w
+}
+
+func (p *parallelWorkersPool) availableWorker(ctx context.Context, lastCommitted int64, sequenceNumber int64) (w *parallelWorker, err error) {
 	select {
 	case w = <-p.pool:
-	case err := <-p.workerErrors:
-		return nil, vterrors.Wrapf(err, "parallel worker rejected due to error from previous worker")
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
-	if forDrain {
+	events := make(chan *binlogdatapb.VEvent, p.maxBatchedCommitsPerWorker*5)
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	w.events = events
+	w.lastCommitted = lastCommitted
+	w.sequenceNumber = sequenceNumber
+	w.isHead = false
+
+	if lastCommitted < 0 {
+		// Only happens when called by drain()
 		return w, nil
 	}
 
-	w.events = make(chan *binlogdatapb.VEvent, maxWorkerEventsQueueSize)
-	w.lastCommitted = lastCommitted
-	w.sequenceNumber = sequenceNumber
-
 	go func() {
 		if err := w.applyQueuedEvents(ctx); err != nil {
-			p.workerErrors <- err
+			go func() { p.workerErrors <- err }()
 		}
 		p.mu.Lock()
 		defer p.mu.Unlock()
@@ -131,8 +145,7 @@ func (p *parallelWorkersPool) availableWorker(ctx context.Context, lastCommitted
 		if w.index == p.head {
 			p.handoverHead(w.index)
 		}
-		w.events = nil // GC
-		w.recycle()
+		p.recycleWorker(w)
 	}()
 	return w, nil
 }
@@ -164,8 +177,13 @@ func (p *parallelWorkersPool) headIndex() int {
 	return p.head
 }
 
-func (p *parallelWorkersPool) isApplicable(w *parallelWorker, eventType binlogdatapb.VEventType) bool {
-	switch eventType {
+func (p *parallelWorkersPool) isApplicable(w *parallelWorker, event *binlogdatapb.VEvent) bool {
+	if w.isHead {
+		// optimization; skip mutex lock
+		// Once the worker is at the head, only the worker can change the head value.
+		return true
+	}
+	switch event.Type {
 	case binlogdatapb.VEventType_GTID:
 		return true
 	case binlogdatapb.VEventType_BEGIN:
@@ -179,17 +197,18 @@ func (p *parallelWorkersPool) isApplicable(w *parallelWorker, eventType binlogda
 
 	if w.index == p.head {
 		// head worker is always applicable
+		w.isHead = true
 		return true
 	}
-	if eventType != binlogdatapb.VEventType_ROW {
+	if event.Type != binlogdatapb.VEventType_ROW {
 		return false
 	}
 
-	if w.sequenceNumber == 0 {
+	if event.SequenceNumber == 0 {
 		// No info. We therefore execute sequentially.
 		return false
 	}
-	if w.sequenceNumber == 1 {
+	if event.SequenceNumber == 1 {
 		// First in the binary log. We therefore execute sequentially.
 		return false
 	}
@@ -204,12 +223,11 @@ func (p *parallelWorkersPool) isApplicable(w *parallelWorker, eventType binlogda
 			// unknown event. Used for draining. Sequentialize.
 			return false
 		}
-		if otherWorker.sequenceNumber <= w.lastCommitted {
+		if otherWorker.sequenceNumber <= event.LastCommitted {
 			// worker w depends on a previous event that has not committed yet.
-			// Was this event applied by the same worker who is asking? If so, that's fine
 			return false
 		}
 	}
-	// Technically we'll never get here. The loop will always exit with "otherWorker.index == w.index"
+	// Technically we'll never get here. The loop will always exit, at worst, with "otherWorker.index == w.index"
 	return true
 }

@@ -69,8 +69,6 @@ type vplayer struct {
 	// that are then sent as a single multi-statement protocol request to the database.
 	batchMode    bool
 	parallelMode bool
-	parallelPool *parallelWorkersPool
-	pw           *parallelWorker
 
 	pos replication.Position
 	// unsavedEvent is set any time we skip an event without
@@ -226,6 +224,9 @@ func (vp *vplayer) play(ctx context.Context) error {
 func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 	log.Infof("Starting VReplication player id: %v, startPos: %v, stop: %v, filter: %v", vp.vr.id, vp.startPos, vp.stopPos, vp.vr.source)
 
+	var wg sync.WaitGroup
+	defer wg.Wait()
+
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -235,7 +236,7 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 	if vp.parallelMode {
 		parallelWorkers = defaultParallelWorkersPoolSize
 	}
-	vp.parallelPool, err = newParallelWorkersPool(parallelWorkers, vp.vr.dbClientGen, vp)
+	parallelPool, err := newParallelWorkersPool(parallelWorkers, vp.vr.dbClientGen, vp)
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to create parallel events buffer")
 	}
@@ -252,11 +253,19 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 	}()
 
 	applyErr := make(chan error, 1)
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		var err error
-		err = errors.Join(err, vp.applyEvents(ctx, relay))
-		err = errors.Join(err, vp.parallelPool.drain(ctx))
+		err = errors.Join(err, vp.applyEvents(ctx, relay, parallelPool))
+		err = errors.Join(err, parallelPool.drain(ctx))
 		applyErr <- err
+		countCommits := 0
+		for _, w := range parallelPool.workers {
+			countCommits += w.dbClient.TemporaryDevTrackingCountCommits
+		}
+		log.Errorf("======= QQQ maxBatchedCommitsPerWorker: %v, countCommits: %v", parallelPool.maxBatchedCommitsPerWorker, countCommits)
+		log.Errorf("======= QQQ parallel workers: %v, maxConcurrency: %v", len(parallelPool.workers), parallelPool.maxConcurrency.Load())
 	}()
 
 	select {
@@ -389,7 +398,7 @@ func (vp *vplayer) recordHeartbeat() error {
 // this from becoming a tight loop.
 // TODO(sougou): we can look at recognizing self-generated events and find a better
 // way to handle them.
-func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
+func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog, parallelPool *parallelWorkersPool) error {
 	// defer vp.vr.dbClient.Rollback()
 
 	estimateLag := func() {
@@ -404,11 +413,22 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 	defer vp.vr.stats.ReplicationLagSeconds.Store(math.MaxInt64)
 	defer vp.vr.stats.VReplicationLags.Add(strconv.Itoa(int(vp.vr.id)), math.MaxInt64)
 	var lagSecs int64
+	var lastSequenceNumber int64 = -1
+	drainedOnNewBinlog := false
+	countCommitsPerWorker := 0
+	maxBatchedCommitsPerWorker := 0
+	batchNextWorkerCommit := false
+	var pw *parallelWorker
+	defer func() {
+		if pw != nil {
+			pw.applyEvent(ctx, terminateWorkerEvent, true)
+		}
+	}()
 	for {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		if vp.parallelPool.posReached.Load() {
+		if parallelPool.posReached.Load() {
 			return io.EOF
 		}
 		// Check throttler.
@@ -441,10 +461,6 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 		}
 
 		lagSecs = -1
-		var lastSequenceNumber int64 = -1
-		drainedOnNewBinlog := false
-		countBatchedCommitsPerWorker := 0
-		batchNextWorkerCommit := false
 		for i, events := range items {
 			for j, event := range events {
 				if event.Timestamp != 0 {
@@ -469,22 +485,22 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 						mustSave = true
 						break
 					}
+					countCommitsPerWorker++
 					// In order to group multiple commits into a single one, we look ahead for
 					// the next commit. If there is one, we skip the current commit, which ends up
 					// applying the next set of events as part of the current transaction. This approach
 					// also handles the case where the last transaction is partial. In that case,
 					// we only group the transactions with commits we've seen so far.
-					if countBatchedCommitsPerWorker < vp.parallelPool.maxBatchedCommitsPerWorker && hasAnotherCommit(items, i, j+1) {
-						countBatchedCommitsPerWorker++
+					if countCommitsPerWorker < parallelPool.maxBatchedCommitsPerWorker && hasAnotherCommit(items, i, j+1) {
 						batchNextWorkerCommit = true
 						continue
 					}
 				}
-				if event.SequenceNumber == 1 && vp.pw != nil && !drainedOnNewBinlog {
+				if event.SequenceNumber == 1 && pw != nil && !drainedOnNewBinlog {
 					// This indicates a rotation into a new binary log. All WRITESET history
 					// is reset, and we have no information about dependencies of this first event.
 					// We must wit for all previous binlog workers to complete.
-					if err := vp.parallelPool.drain(ctx); err != nil {
+					if err := parallelPool.drain(ctx); err != nil {
 						return err
 					}
 					drainedOnNewBinlog = true
@@ -496,23 +512,28 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 					if batchNextWorkerCommit {
 						batchNextWorkerCommit = false
 					} else {
-						if vp.pw != nil {
+						if pw != nil {
+							// Worker errors come asynchronously, because of course the worker applies events
+							// asynchronously. So we just seize periodic opportunities to check for errors.
+							// This one is a good opportunity.
+							if err := parallelPool.workersError(); err != nil {
+								return err
+							}
 							// Let the worker know its work is done
-							vp.pw.applyEvent(ctx, terminateWorkerEvent, true)
-
-							countBatchedCommitsPerWorker = 0
+							pw.applyEvent(ctx, terminateWorkerEvent, true)
+							if countCommitsPerWorker > maxBatchedCommitsPerWorker {
+								maxBatchedCommitsPerWorker = countCommitsPerWorker
+							}
+							countCommitsPerWorker = 0
 						}
-						vp.pw, err = vp.parallelPool.availableWorker(ctx, event.LastCommitted, event.SequenceNumber, false)
+						pw, err = parallelPool.availableWorker(ctx, event.LastCommitted, event.SequenceNumber)
 						if err != nil {
 							return err
 						}
 					}
 					lastSequenceNumber = event.SequenceNumber
 				}
-				if err := vp.pw.applyEvent(ctx, event, mustSave); err != nil {
-					return err
-				}
-				if err := vp.pw.pool.workersError(); err != nil {
+				if err := pw.applyEvent(ctx, event, mustSave); err != nil {
 					return err
 				}
 			}
