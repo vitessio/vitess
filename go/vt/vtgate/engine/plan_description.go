@@ -126,6 +126,133 @@ func (pd PrimitiveDescription) MarshalJSON() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+// PrimitiveDescriptionFromString creates primitive description out of a data string.
+func PrimitiveDescriptionFromString(data string) (pd PrimitiveDescription, err error) {
+	resultMap := make(map[string]any)
+	err = json.Unmarshal([]byte(data), &resultMap)
+	if err != nil {
+		return PrimitiveDescription{}, err
+	}
+	return PrimitiveDescriptionFromMap(resultMap)
+}
+
+// PrimitiveDescriptionFromMap populates the fields of a PrimitiveDescription from a map representation.
+func PrimitiveDescriptionFromMap(data map[string]any) (pd PrimitiveDescription, err error) {
+	if opType, isPresent := data["OperatorType"]; isPresent {
+		pd.OperatorType = opType.(string)
+	}
+	if variant, isPresent := data["Variant"]; isPresent {
+		pd.Variant = variant.(string)
+	}
+	if ksMap, isPresent := data["Keyspace"]; isPresent {
+		ksMap := ksMap.(map[string]any)
+		pd.Keyspace = &vindexes.Keyspace{
+			Name:    ksMap["Name"].(string),
+			Sharded: ksMap["Sharded"].(bool),
+		}
+	}
+	if ttt, isPresent := data["TargetTabletType"]; isPresent {
+		pd.TargetTabletType = topodatapb.TabletType(ttt.(int))
+	}
+	if other, isPresent := data["Other"]; isPresent {
+		pd.Other = other.(map[string]any)
+	}
+	if inpName, isPresent := data["InputName"]; isPresent {
+		pd.InputName = inpName.(string)
+	}
+	if avgRows, isPresent := data["AvgNumberOfRows"]; isPresent {
+		pd.RowsReceived = RowsReceived{
+			int(avgRows.(float64)),
+		}
+	}
+	if sq, isPresent := data["ShardsQueried"]; isPresent {
+		sq := int(sq.(float64))
+		pd.ShardsQueried = (*ShardsQueried)(&sq)
+	}
+	if inputs, isPresent := data["Inputs"]; isPresent {
+		inputs := inputs.([]any)
+		for _, input := range inputs {
+			inputMap := input.(map[string]any)
+			inp, err := PrimitiveDescriptionFromMap(inputMap)
+			if err != nil {
+				return PrimitiveDescription{}, err
+			}
+			pd.Inputs = append(pd.Inputs, inp)
+		}
+	}
+	return pd, nil
+}
+
+// WalkPrimitiveDescription walks the primitive description.
+func WalkPrimitiveDescription(pd PrimitiveDescription, f func(PrimitiveDescription)) {
+	f(pd)
+	for _, child := range pd.Inputs {
+		WalkPrimitiveDescription(child, f)
+	}
+}
+
+func (pd PrimitiveDescription) Equals(other PrimitiveDescription) string {
+	if pd.Variant != other.Variant {
+		return fmt.Sprintf("Variant: %v != %v", pd.Variant, other.Variant)
+	}
+
+	if pd.OperatorType != other.OperatorType {
+		return fmt.Sprintf("OperatorType: %v != %v", pd.OperatorType, other.OperatorType)
+	}
+
+	// TODO (harshit): enable this to compare keyspace as well
+	// switch {
+	// case pd.Keyspace == nil && other.Keyspace == nil:
+	// 	// do nothing
+	// case pd.Keyspace != nil && other.Keyspace != nil:
+	// 	if pd.Keyspace.Name != other.Keyspace.Name {
+	// 		return fmt.Sprintf("Keyspace.Name: %v != %v", pd.Keyspace.Name, other.Keyspace.Name)
+	// 	}
+	// default:
+	// 	return "Keyspace is nil in one of the descriptions"
+	// }
+
+	switch {
+	case pd.TargetDestination == nil && other.TargetDestination == nil:
+		// do nothing
+	case pd.TargetDestination != nil && other.TargetDestination != nil:
+		if pd.TargetDestination.String() != other.TargetDestination.String() {
+			return fmt.Sprintf("TargetDestination: %v != %v", pd.TargetDestination, other.TargetDestination)
+		}
+	default:
+		return "TargetDestination is nil in one of the descriptions"
+	}
+
+	if pd.TargetTabletType != other.TargetTabletType {
+		return fmt.Sprintf("TargetTabletType: %v != %v", pd.TargetTabletType, other.TargetTabletType)
+	}
+
+	switch {
+	case pd.Other == nil && other.Other == nil:
+	// do nothing
+	case pd.Other != nil && other.Other != nil:
+		if len(pd.Other) != len(other.Other) {
+			return fmt.Sprintf("Other length did not match: %v != %v", pd.Other, other.Other)
+		}
+		for ky, val := range pd.Other {
+			if other.Other[ky] != val {
+				return fmt.Sprintf("Other[%v]: %v != %v", ky, val, other.Other[ky])
+			}
+		}
+	default:
+		return "Other is nil in one of the descriptions"
+	}
+	if len(pd.Inputs) != len(other.Inputs) {
+		return fmt.Sprintf("Inputs length did not match: %v != %v", len(pd.Inputs), len(other.Inputs))
+	}
+	for idx, input := range pd.Inputs {
+		if diff := input.Equals(other.Inputs[idx]); diff != "" {
+			return diff
+		}
+	}
+	return ""
+}
+
 func average(nums []int) float64 {
 	total := 0
 	for _, num := range nums {

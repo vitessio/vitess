@@ -48,7 +48,6 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	exitcode := func() int {
@@ -69,7 +68,6 @@ func TestMain(m *testing.M) {
 			"--grpc_use_effective_callerid",
 		)
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
-			"--twopc_enable",
 			"--twopc_abandon_age", "1",
 			"--queryserver-config-transaction-cap", "100",
 		)
@@ -111,7 +109,6 @@ func start(t *testing.T) (*mysql.Conn, func()) {
 }
 
 func cleanup(t *testing.T) {
-	cluster.PanicHandler(t)
 	twopcutil.ClearOutTable(t, vtParams, "twopc_user")
 	twopcutil.ClearOutTable(t, vtParams, "twopc_t1")
 }

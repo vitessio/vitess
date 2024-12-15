@@ -21,20 +21,21 @@ import (
 	"fmt"
 	"io"
 
-	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
+	"vitess.io/vitess/go/vt/mysqlctl/errors"
 )
 
 type FakeBackupHandle struct {
 	Dir      string
 	NameV    string
 	ReadOnly bool
-	Errors   concurrency.AllErrorRecorder
+	errors.PerFileErrorRecorder
 
 	AbortBackupCalls  []context.Context
 	AbortBackupReturn error
 	AddFileCalls      []FakeBackupHandleAddFileCall
 	AddFileReturn     FakeBackupHandleAddFileReturn
+	AddFileReturnF    func(filename string) FakeBackupHandleAddFileReturn
 	EndBackupCalls    []context.Context
 	EndBackupReturn   error
 	ReadFileCalls     []FakeBackupHandleReadFileCall
@@ -57,18 +58,6 @@ type FakeBackupHandleReadFileCall struct {
 	Filename string
 }
 
-func (fbh *FakeBackupHandle) RecordError(err error) {
-	fbh.Errors.RecordError(err)
-}
-
-func (fbh *FakeBackupHandle) HasErrors() bool {
-	return fbh.Errors.HasErrors()
-}
-
-func (fbh *FakeBackupHandle) Error() error {
-	return fbh.Errors.Error()
-}
-
 func (fbh *FakeBackupHandle) Directory() string {
 	return fbh.Dir
 }
@@ -79,6 +68,11 @@ func (fbh *FakeBackupHandle) Name() string {
 
 func (fbh *FakeBackupHandle) AddFile(ctx context.Context, filename string, filesize int64) (io.WriteCloser, error) {
 	fbh.AddFileCalls = append(fbh.AddFileCalls, FakeBackupHandleAddFileCall{ctx, filename, filesize})
+
+	if fbh.AddFileReturnF != nil {
+		r := fbh.AddFileReturnF(filename)
+		return r.WriteCloser, r.Err
+	}
 	return fbh.AddFileReturn.WriteCloser, fbh.AddFileReturn.Err
 }
 

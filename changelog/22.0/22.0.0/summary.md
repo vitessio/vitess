@@ -3,9 +3,13 @@
 ### Table of Contents
 
 - **[Major Changes](#major-changes)**
+  - **[Deprecations and Deletions](#deprecations-and-deletions)**
+    - [Deprecated VTTablet Flags](#vttablet-flags)
   - **[RPC Changes](#rpc-changes)**
   - **[Prefer not promoting a replica that is currently taking a backup](#reparents-prefer-not-backing-up)**
   - **[VTOrc Config File Changes](#vtorc-config-file-changes)**
+- **[Minor Changes](#minor-changes)**
+  - **[VTTablet Flags](#flags-vttablet)**
 
 
 ## <a id="major-changes"/>Major Changes</a>
@@ -15,6 +19,12 @@
 These are the RPC changes made in this release - 
 
 1. `GetTransactionInfo` RPC has been added to both `VtctldServer`, and `TabletManagerClient` interface. These RPCs are used to fecilitate the users in reading the state of an unresolved distributed transaction. This can be useful in debugging what went wrong and how to fix the problem.
+
+### <a id="deprecations-and-deletions"/>Deprecations and Deletions</a>
+
+#### <a id="vttablet-flags"/>Deprecated VTTablet Flags</a>
+
+- `twopc_enable` flag is deprecated. Usage of TwoPC commit will be determined by the `transaction_mode` set on VTGate via flag or session variable.
 
 ### <a id="reparents-prefer-not-backing-up"/>Prefer not promoting a replica that is currently taking a backup
 
@@ -48,3 +58,12 @@ The following fields can be dynamically changed -
 13. `change-tablets-with-errant-gtid-to-drained`
 
 To upgrade to the newer version of the configuration file, first switch to using the flags in your current deployment before upgrading. Then you can switch to using the configuration file in the newer release.
+
+
+## <a id="minor-changes"/>Minor Changes</a>
+
+#### <a id="flags-vttablet"/>VTTablet Flags</a>
+
+- `twopc_abandon_age` flag now supports values in the time.Duration format (e.g., 1s, 2m, 1h). 
+While the flag will continue to accept float values (interpreted as seconds) for backward compatibility, 
+**float inputs are deprecated** and will be removed in a future release.

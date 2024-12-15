@@ -684,6 +684,14 @@ func testPlayerCopyBigTable(t *testing.T) {
 	reset := vstreamer.AdjustPacketSize(1)
 	defer reset()
 
+	// The test is written to match the behavior w/o
+	// VReplicationExperimentalFlagOptimizeInserts enabled.
+	origExperimentalFlags := vttablet.DefaultVReplicationConfig.ExperimentalFlags
+	vttablet.DefaultVReplicationConfig.ExperimentalFlags = 0
+	defer func() {
+		vttablet.DefaultVReplicationConfig.ExperimentalFlags = origExperimentalFlags
+	}()
+
 	savedCopyPhaseDuration := vttablet.DefaultVReplicationConfig.CopyPhaseDuration
 	// copyPhaseDuration should be low enough to have time to send one row.
 	vttablet.DefaultVReplicationConfig.CopyPhaseDuration = 500 * time.Millisecond
@@ -813,6 +821,14 @@ func testPlayerCopyWildcardRule(t *testing.T) {
 
 	reset := vstreamer.AdjustPacketSize(1)
 	defer reset()
+
+	// The test is written to match the behavior w/o
+	// VReplicationExperimentalFlagOptimizeInserts enabled.
+	origExperimentalFlags := vttablet.DefaultVReplicationConfig.ExperimentalFlags
+	vttablet.DefaultVReplicationConfig.ExperimentalFlags = 0
+	defer func() {
+		vttablet.DefaultVReplicationConfig.ExperimentalFlags = origExperimentalFlags
+	}()
 
 	savedCopyPhaseDuration := vttablet.DefaultVReplicationConfig.CopyPhaseDuration
 	// copyPhaseDuration should be low enough to have time to send one row.

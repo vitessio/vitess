@@ -35,14 +35,12 @@ import (
 	"vitess.io/vitess/go/mysql/sqlerror"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/cluster"
 
 	_ "github.com/go-sql-driver/mysql"
 )
 
 // TestMultiStmt checks that multiStatements=True and multiStatements=False work properly.
 func TestMultiStatement(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 
 	// connect database with multiStatements=True
@@ -70,7 +68,6 @@ func TestMultiStatement(t *testing.T) {
 
 // TestLargeComment add large comment in insert stmt and validate the insert process.
 func TestLargeComment(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 
 	conn, err := mysql.Connect(ctx, &vtParams)
@@ -89,7 +86,6 @@ func TestLargeComment(t *testing.T) {
 
 // TestInsertLargerThenGrpcLimit insert blob larger then grpc limit and verify the error.
 func TestInsertLargerThenGrpcLimit(t *testing.T) {
-	defer cluster.PanicHandler(t)
 
 	ctx := context.Background()
 
@@ -109,7 +105,6 @@ func TestInsertLargerThenGrpcLimit(t *testing.T) {
 
 // TestTimeout executes sleep(5) with query_timeout of 1 second, and verifies the error.
 func TestTimeout(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 
 	conn, err := mysql.Connect(ctx, &vtParams)
@@ -125,7 +120,6 @@ func TestTimeout(t *testing.T) {
 
 // TestInvalidField tries to fetch invalid column and verifies the error.
 func TestInvalidField(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 
 	conn, err := mysql.Connect(ctx, &vtParams)
@@ -141,7 +135,6 @@ func TestInvalidField(t *testing.T) {
 
 // TestWarnings validates the behaviour of SHOW WARNINGS.
 func TestWarnings(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 
 	conn, err := mysql.Connect(ctx, &vtParams)
@@ -183,7 +176,6 @@ func TestWarnings(t *testing.T) {
 // TestSelectWithUnauthorizedUser verifies that an unauthorized user
 // is not able to read from the table.
 func TestSelectWithUnauthorizedUser(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 
 	tmpVtParam := vtParams
@@ -202,7 +194,6 @@ func TestSelectWithUnauthorizedUser(t *testing.T) {
 
 // TestPartitionedTable validates that partitioned tables are recognized by schema engine
 func TestPartitionedTable(t *testing.T) {
-	defer cluster.PanicHandler(t)
 
 	tablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
 

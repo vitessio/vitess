@@ -86,7 +86,6 @@ create table my_message(
 )
 
 func TestMain(m *testing.M) {
-	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	exitCode := func() int {
@@ -125,7 +124,6 @@ func TestMain(m *testing.M) {
 }
 
 func TestStreamMessaging(t *testing.T) {
-	defer cluster.PanicHandler(t)
 
 	cnf := vitessdriver.Configuration{
 		Protocol: "grpc",

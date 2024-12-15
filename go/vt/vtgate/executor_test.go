@@ -335,9 +335,9 @@ func TestExecutorTransactionsAutoCommitStreaming(t *testing.T) {
 }
 
 func TestExecutorDeleteMetadata(t *testing.T) {
-	vschemaacl.AuthorizedDDLUsers = "%"
+	vschemaacl.AuthorizedDDLUsers.Set(vschemaacl.NewAuthorizedDDLUsers("%"))
 	defer func() {
-		vschemaacl.AuthorizedDDLUsers = ""
+		vschemaacl.AuthorizedDDLUsers.Set(vschemaacl.NewAuthorizedDDLUsers(""))
 	}()
 
 	executor, _, _, _, ctx := createExecutorEnv(t)
@@ -1318,9 +1318,9 @@ func TestExecutorDDLFk(t *testing.T) {
 }
 
 func TestExecutorAlterVSchemaKeyspace(t *testing.T) {
-	vschemaacl.AuthorizedDDLUsers = "%"
+	vschemaacl.AuthorizedDDLUsers.Set(vschemaacl.NewAuthorizedDDLUsers("%"))
 	defer func() {
-		vschemaacl.AuthorizedDDLUsers = ""
+		vschemaacl.AuthorizedDDLUsers.Set(vschemaacl.NewAuthorizedDDLUsers(""))
 	}()
 
 	executor, _, _, _, ctx := createExecutorEnv(t)
@@ -1347,9 +1347,9 @@ func TestExecutorAlterVSchemaKeyspace(t *testing.T) {
 }
 
 func TestExecutorCreateVindexDDL(t *testing.T) {
-	vschemaacl.AuthorizedDDLUsers = "%"
+	vschemaacl.AuthorizedDDLUsers.Set(vschemaacl.NewAuthorizedDDLUsers("%"))
 	defer func() {
-		vschemaacl.AuthorizedDDLUsers = ""
+		vschemaacl.AuthorizedDDLUsers.Set(vschemaacl.NewAuthorizedDDLUsers(""))
 	}()
 	executor, sbc1, sbc2, sbclookup, ctx := createExecutorEnv(t)
 	ks := "TestExecutor"
@@ -1417,9 +1417,9 @@ func TestExecutorCreateVindexDDL(t *testing.T) {
 }
 
 func TestExecutorAddDropVschemaTableDDL(t *testing.T) {
-	vschemaacl.AuthorizedDDLUsers = "%"
+	vschemaacl.AuthorizedDDLUsers.Set(vschemaacl.NewAuthorizedDDLUsers("%"))
 	defer func() {
-		vschemaacl.AuthorizedDDLUsers = ""
+		vschemaacl.AuthorizedDDLUsers.Set(vschemaacl.NewAuthorizedDDLUsers(""))
 	}()
 	executor, sbc1, sbc2, sbclookup, ctx := createExecutorEnv(t)
 	ks := KsTestUnsharded
@@ -1486,8 +1486,7 @@ func TestExecutorVindexDDLACL(t *testing.T) {
 	require.EqualError(t, err, `User 'blueUser' is not authorized to perform vschema operations`)
 
 	// test when all users are enabled
-	vschemaacl.AuthorizedDDLUsers = "%"
-	vschemaacl.Init()
+	vschemaacl.AuthorizedDDLUsers.Set(vschemaacl.NewAuthorizedDDLUsers("%"))
 	_, err = executor.Execute(ctxRedUser, nil, "TestExecute", session, stmt, nil)
 	if err != nil {
 		t.Errorf("unexpected error '%v'", err)
@@ -1499,8 +1498,7 @@ func TestExecutorVindexDDLACL(t *testing.T) {
 	}
 
 	// test when only one user is enabled
-	vschemaacl.AuthorizedDDLUsers = "orangeUser, blueUser, greenUser"
-	vschemaacl.Init()
+	vschemaacl.AuthorizedDDLUsers.Set(vschemaacl.NewAuthorizedDDLUsers("orangeUser, blueUser, greenUser"))
 	_, err = executor.Execute(ctxRedUser, nil, "TestExecute", session, stmt, nil)
 	require.EqualError(t, err, `User 'redUser' is not authorized to perform vschema operations`)
 
@@ -1511,7 +1509,7 @@ func TestExecutorVindexDDLACL(t *testing.T) {
 	}
 
 	// restore the disallowed state
-	vschemaacl.AuthorizedDDLUsers = ""
+	vschemaacl.AuthorizedDDLUsers.Set(vschemaacl.NewAuthorizedDDLUsers(""))
 }
 
 func TestExecutorUnrecognized(t *testing.T) {

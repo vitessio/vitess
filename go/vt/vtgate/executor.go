@@ -187,7 +187,6 @@ func NewExecutor(
 	// setting the vcursor config.
 	e.initVConfig(warnOnShardedOnly, pv)
 
-	vschemaacl.Init()
 	// we subscribe to update from the VSchemaManager
 	e.vm = &VSchemaManager{
 		subscriber: e.SaveVSchema,

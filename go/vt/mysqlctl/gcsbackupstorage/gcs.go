@@ -32,8 +32,9 @@ import (
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 
+	"vitess.io/vitess/go/vt/mysqlctl/errors"
+
 	"vitess.io/vitess/go/trace"
-	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/servenv"
 )
@@ -65,22 +66,7 @@ type GCSBackupHandle struct {
 	dir      string
 	name     string
 	readOnly bool
-	errors   concurrency.AllErrorRecorder
-}
-
-// RecordError is part of the concurrency.ErrorRecorder interface.
-func (bh *GCSBackupHandle) RecordError(err error) {
-	bh.errors.RecordError(err)
-}
-
-// HasErrors is part of the concurrency.ErrorRecorder interface.
-func (bh *GCSBackupHandle) HasErrors() bool {
-	return bh.errors.HasErrors()
-}
-
-// Error is part of the concurrency.ErrorRecorder interface.
-func (bh *GCSBackupHandle) Error() error {
-	return bh.errors.Error()
+	errors.PerFileErrorRecorder
 }
 
 // Directory implements BackupHandle.
