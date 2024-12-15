@@ -116,7 +116,6 @@ func restructure(rootDir string, dir string, name string, commands []*cobra.Comm
 		fullCmdFilename := strings.Join([]string{name, cmd.Name()}, "_")
 
 		children := cmd.Commands()
-
 		switch {
 		case len(children) > 0:
 			// Command (top-level or not) with children.
@@ -151,7 +150,6 @@ func restructure(rootDir string, dir string, name string, commands []*cobra.Comm
 
 			oldName := filepath.Join(rootDir, fullCmdFilename+".md")
 			newName := filepath.Join(dir, fullCmdFilename+".md")
-
 			if err := os.Rename(oldName, newName); err != nil {
 				return fmt.Errorf("failed to move child command %s to its parent's dir: %w", fullCmdFilename, err)
 			}
@@ -166,6 +164,16 @@ func restructure(rootDir string, dir string, name string, commands []*cobra.Comm
 			}
 		default:
 			// Top-level command without children. Nothing to restructure.
+			// However we still need to anonymize the homedir in the help text.
+			if cmd.Name() == "help" {
+				// all commands with children have their own "help" subcommand,
+				// which we do not generate docs for
+				continue
+			}
+			f := filepath.Join(dir, fullCmdFilename+".md")
+			if err := anonymizeHomedir(f); err != nil {
+				return fmt.Errorf("failed to anonymize homedir in help text for command %s: %w", f, err)
+			}
 			continue
 		}
 	}
