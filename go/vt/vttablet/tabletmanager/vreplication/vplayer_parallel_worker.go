@@ -24,7 +24,6 @@ import (
 	"strings"
 	"time"
 
-	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
@@ -52,7 +51,6 @@ type parallelWorker struct {
 	vp             *vplayer
 	wakeup         chan int
 
-	pos replication.Position
 	// foreignKeyChecksEnabled is the current state of the foreign key checks for the current session.
 	// It reflects what we have set the @@session.foreign_key_checks session variable to.
 	foreignKeyChecksEnabled bool
@@ -62,10 +60,6 @@ type parallelWorker struct {
 	isHead                           bool
 	events                           chan *binlogdatapb.VEvent
 	stats                            *VrLogStats
-}
-
-func (w *parallelWorker) begin() error {
-	return w.dbClient.Begin()
 }
 
 // applyQueuedStmtEvent applies an actual DML statement received from the source, directly onto the backend database
@@ -87,15 +81,15 @@ func (w *parallelWorker) applyQueuedStmtEvent(ctx context.Context, event *binlog
 
 // updatePos should get called at a minimum of vreplicationMinimumHeartbeatUpdateInterval.
 func (w *parallelWorker) updatePos(ctx context.Context, ts int64) (posReached bool, err error) {
-	update := binlogplayer.GenerateUpdatePos(w.vp.vr.id, w.pos, time.Now().Unix(), ts, w.vp.vr.stats.CopyRowCount.Get(), w.vp.vr.workflowConfig.StoreCompressedGTID)
+	update := binlogplayer.GenerateUpdatePos(w.vp.vr.id, *w.vp.pos.Load(), time.Now().Unix(), ts, w.vp.vr.stats.CopyRowCount.Get(), w.vp.vr.workflowConfig.StoreCompressedGTID)
 	if _, err := w.queryFunc(ctx, update); err != nil {
 		return false, fmt.Errorf("error %v updating position", err)
 	}
 	w.vp.numAccumulatedHeartbeats = 0
 	w.vp.unsavedEvent = nil
 	w.vp.timeLastSaved = time.Now()
-	w.vp.vr.stats.SetLastPosition(w.pos)
-	posReached = !w.vp.stopPos.IsZero() && w.pos.AtLeast(w.vp.stopPos)
+	w.vp.vr.stats.SetLastPosition(*w.vp.pos.Load())
+	posReached = !w.vp.stopPos.IsZero() && w.vp.pos.Load().AtLeast(w.vp.stopPos)
 	if posReached {
 		log.Infof("Stopped at position: %v", w.vp.stopPos)
 		if w.vp.saveStop {
@@ -184,7 +178,7 @@ func (w *parallelWorker) applyQueuedEvents(ctx context.Context) error {
 					if table != "" {
 						tableLogMsg = fmt.Sprintf(" for table %s", table)
 					}
-					gtidLogMsg = fmt.Sprintf(" while processing position %v", w.pos)
+					gtidLogMsg = fmt.Sprintf(" while processing position %v", w.vp.pos.Load())
 					log.Errorf("Error applying event%s%s: %s", tableLogMsg, gtidLogMsg, err.Error())
 					err = vterrors.Wrapf(err, "error applying event%s%s", tableLogMsg, gtidLogMsg)
 				}
@@ -298,7 +292,7 @@ func (w *parallelWorker) applyQueuedEvent(ctx context.Context, event *binlogdata
 		if err != nil {
 			return err
 		}
-		w.pos = pos
+		w.vp.pos.Store(&pos)
 		// A new position should not be saved until a saveable event occurs.
 		w.vp.unsavedEvent = nil
 		if w.vp.stopPos.IsZero() {
@@ -346,6 +340,9 @@ func (w *parallelWorker) applyQueuedEvent(ctx context.Context, event *binlogdata
 			stats.Send(sql)
 		}
 	case binlogdatapb.VEventType_ROW:
+		if err := w.dbClient.Begin(); err != nil {
+			return err
+		}
 		if err := w.applyQueuedRowEvent(ctx, event, applyFunc); err != nil {
 			return err
 		}

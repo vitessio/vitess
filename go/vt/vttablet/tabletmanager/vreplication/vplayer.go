@@ -24,6 +24,7 @@ import (
 	"math"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"vitess.io/vitess/go/mysql/replication"
@@ -70,7 +71,7 @@ type vplayer struct {
 	batchMode    bool
 	parallelMode bool
 
-	pos replication.Position
+	pos atomic.Pointer[replication.Position]
 	// unsavedEvent is set any time we skip an event without
 	// saving, which is on an empty commit.
 	// If nothing else happens for idleTimeout since timeLastSaved,
@@ -167,7 +168,6 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 	vp := &vplayer{
 		vr:               vr,
 		startPos:         settings.StartPos,
-		pos:              settings.StartPos,
 		stopPos:          settings.StopPos,
 		saveStop:         saveStop,
 		copyState:        copyState,
@@ -180,6 +180,7 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 		batchMode:        batchMode,
 		parallelMode:     parallelMode,
 	}
+	vp.pos.Store(&settings.StartPos)
 	return vp
 }
 
@@ -308,15 +309,15 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 
 // updatePos should get called at a minimum of vreplicationMinimumHeartbeatUpdateInterval.
 func (vp *vplayer) updatePos(ctx context.Context, ts int64) (posReached bool, err error) {
-	update := binlogplayer.GenerateUpdatePos(vp.vr.id, vp.pos, time.Now().Unix(), ts, vp.vr.stats.CopyRowCount.Get(), vp.vr.workflowConfig.StoreCompressedGTID)
+	update := binlogplayer.GenerateUpdatePos(vp.vr.id, *vp.pos.Load(), time.Now().Unix(), ts, vp.vr.stats.CopyRowCount.Get(), vp.vr.workflowConfig.StoreCompressedGTID)
 	if _, err := vp.query(ctx, update); err != nil {
 		return false, fmt.Errorf("error %v updating position", err)
 	}
 	vp.numAccumulatedHeartbeats = 0
 	vp.unsavedEvent = nil
 	vp.timeLastSaved = time.Now()
-	vp.vr.stats.SetLastPosition(vp.pos)
-	posReached = !vp.stopPos.IsZero() && vp.pos.AtLeast(vp.stopPos)
+	vp.vr.stats.SetLastPosition(*vp.pos.Load())
+	posReached = !vp.stopPos.IsZero() && vp.pos.Load().AtLeast(vp.stopPos)
 	if posReached {
 		log.Infof("Stopped at position: %v", vp.stopPos)
 		if vp.saveStop {
@@ -481,7 +482,8 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog, parallelPoo
 					// If we've reached the stop position, we must save the current commit
 					// even if it's empty. So, the next applyEvent is invoked with the
 					// mustSave flag.
-					if !vp.stopPos.IsZero() && vp.pos.AtLeast(vp.stopPos) {
+					if !vp.stopPos.IsZero() && vp.pos.Load().AtLeast(vp.stopPos) {
+						log.Errorf("======= QQQ MustSave. reached stop position: %v", vp.stopPos)
 						event.MustSave = true
 						break
 					}
