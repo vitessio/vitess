@@ -103,7 +103,7 @@ func (rl *relayLog) Fetch() ([][]*binlogdatapb.VEvent, error) {
 	}
 	cancelTimer := rl.startFetchTimer()
 	defer cancelTimer()
-	for len(rl.items) == 0 && !rl.timedout {
+	for len(rl.items) <= rl.maxItems/2 && !rl.timedout {
 		rl.hasItems.Wait()
 		if err := rl.checkDone(); err != nil {
 			return nil, err
