@@ -933,6 +933,19 @@ func (vc *VitessCluster) startQuery(t *testing.T, query string) (func(t *testing
 	return commit, rollback
 }
 
+func killBinaries() {
+	binaries := []string{"mysqld_safe", "mysqld", "etcd", "mysqlctl", "mysqlctld", "vtgate", "vttablet", "vtctld", "vtctl", "vtorc"}
+	for _, bin := range binaries {
+		cmd := exec.Command("pkill", fmt.Sprintf(".*%s.*", bin))
+		err := cmd.Run()
+		if err != nil {
+			log.Infof("Error killing %s: %v", bin, err)
+		} else {
+			log.Infof("Killed %s", bin)
+		}
+	}
+}
+
 // setupDBTypeVersion will perform any work needed to enable a specific
 // database type and version if not already installed. It returns a
 // function to reset any environment changes made.

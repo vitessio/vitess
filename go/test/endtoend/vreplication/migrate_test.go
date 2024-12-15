@@ -48,6 +48,7 @@ func insertInitialDataIntoExternalCluster(t *testing.T, conn *mysql.Conn) {
 // hence the VTDATAROOT env variable gets overwritten.
 // Each time we need to create vt processes in the "other" cluster we need to set the appropriate VTDATAROOT
 func TestVtctlMigrate(t *testing.T) {
+	killBinaries()
 	vc = NewVitessCluster(t, nil)
 
 	oldDefaultReplicas := defaultReplicas
@@ -175,6 +176,7 @@ func TestVtctlMigrate(t *testing.T) {
 // hence the VTDATAROOT env variable gets overwritten.
 // Each time we need to create vt processes in the "other" cluster we need to set the appropriate VTDATAROOT
 func TestVtctldMigrateUnsharded(t *testing.T) {
+	killBinaries()
 	vc = NewVitessCluster(t, nil)
 
 	oldDefaultReplicas := defaultReplicas
@@ -320,6 +322,7 @@ func TestVtctldMigrateUnsharded(t *testing.T) {
 // doesn't match that of the source cluster. The test migrates from a cluster with keyspace customer to an "external"
 // cluster with keyspace rating.
 func TestVtctldMigrateSharded(t *testing.T) {
+	killBinaries()
 	setSidecarDBName("_vt")
 	currentWorkflowType = binlogdatapb.VReplicationWorkflowType_MoveTables
 	oldDefaultReplicas := defaultReplicas
