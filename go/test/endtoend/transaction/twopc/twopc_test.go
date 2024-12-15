@@ -1627,6 +1627,120 @@ func TestVindexes(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "Consistent Lookup Single Update",
+			initQueries: []string{
+				"insert into twopc_consistent_lookup(id, col, col_unique) values(4, 4, 6)",
+				"insert into twopc_consistent_lookup(id, col, col_unique) values(6, 4, 9)",
+				"insert into twopc_consistent_lookup(id, col, col_unique) values(9, 4, 4)",
+			},
+			testQueries: []string{
+				"begin",
+				"update twopc_consistent_lookup set col = 9 where col_unique = 9",
+				"commit",
+			},
+			logExpected: map[string][]string{
+				"ks.twopc_consistent_lookup:40-80": {
+					"update:[INT64(6) INT64(9) INT64(9)]",
+				},
+				"ks.consistent_lookup:80-": {
+					"insert:[INT64(9) INT64(6) VARBINARY(\"`\\x00\\x00\\x00\\x00\\x00\\x00\\x00\")]",
+					"delete:[INT64(4) INT64(6) VARBINARY(\"`\\x00\\x00\\x00\\x00\\x00\\x00\\x00\")]",
+				},
+			},
+		},
+		{
+			name: "Consistent Lookup-Unique Single Update",
+			initQueries: []string{
+				"insert into twopc_consistent_lookup(id, col, col_unique) values(4, 4, 6)",
+				"insert into twopc_consistent_lookup(id, col, col_unique) values(6, 4, 9)",
+				"insert into twopc_consistent_lookup(id, col, col_unique) values(9, 4, 4)",
+			},
+			testQueries: []string{
+				"begin",
+				"update twopc_consistent_lookup set col_unique = 20 where col_unique = 9",
+				"commit",
+			},
+			logExpected: map[string][]string{
+				"ks.twopc_consistent_lookup:40-80": {
+					"update:[INT64(6) INT64(4) INT64(20)]",
+				},
+				"ks.consistent_lookup_unique:80-": {
+					"insert:[INT64(20) VARBINARY(\"`\\x00\\x00\\x00\\x00\\x00\\x00\\x00\")]",
+					"delete:[INT64(9) VARBINARY(\"`\\x00\\x00\\x00\\x00\\x00\\x00\\x00\")]",
+				},
+			},
+		},
+		{
+			name: "Consistent Lookup And Consistent Lookup-Unique Single Delete",
+			initQueries: []string{
+				"insert into twopc_consistent_lookup(id, col, col_unique) values(4, 4, 6)",
+				"insert into twopc_consistent_lookup(id, col, col_unique) values(6, 4, 9)",
+				"insert into twopc_consistent_lookup(id, col, col_unique) values(9, 4, 4)",
+			},
+			testQueries: []string{
+				"begin",
+				"delete from twopc_consistent_lookup where col_unique = 9",
+				"commit",
+			},
+			logExpected: map[string][]string{
+				"ks.twopc_consistent_lookup:40-80": {
+					"delete:[INT64(6) INT64(4) INT64(9)]",
+				},
+				"ks.consistent_lookup_unique:80-": {
+					"delete:[INT64(9) VARBINARY(\"`\\x00\\x00\\x00\\x00\\x00\\x00\\x00\")]",
+				},
+				"ks.consistent_lookup:80-": {
+					"delete:[INT64(4) INT64(6) VARBINARY(\"`\\x00\\x00\\x00\\x00\\x00\\x00\\x00\")]",
+				},
+			},
+		},
+		{
+			name: "Consistent Lookup And Consistent Lookup-Unique Mix",
+			initQueries: []string{
+				"insert into twopc_consistent_lookup(id, col, col_unique) values(4, 4, 6)",
+				"insert into twopc_consistent_lookup(id, col, col_unique) values(6, 4, 9)",
+				"insert into twopc_consistent_lookup(id, col, col_unique) values(9, 4, 4)",
+			},
+			testQueries: []string{
+				"begin",
+				"insert into twopc_consistent_lookup(id, col, col_unique) values(20, 4, 22)",
+				"update twopc_consistent_lookup set col = 9 where col_unique = 9",
+				"delete from twopc_consistent_lookup where id = 9",
+				"commit",
+			},
+			logExpected: map[string][]string{
+				"ks.redo_statement:80-": {
+					"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"delete from twopc_consistent_lookup where id = 9 limit 10001 /* INT64 */\")]",
+					"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"delete from twopc_consistent_lookup where id = 9 limit 10001 /* INT64 */\")]",
+				},
+				"ks.redo_statement:40-80": {
+					"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"update twopc_consistent_lookup set col = 9 where col_unique = 9 limit 10001 /* INT64 */\")]",
+					"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"update twopc_consistent_lookup set col = 9 where col_unique = 9 limit 10001 /* INT64 */\")]",
+				},
+				"ks.twopc_consistent_lookup:-40": {
+					"insert:[INT64(20) INT64(4) INT64(22)]",
+				},
+				"ks.twopc_consistent_lookup:40-80": {
+					"update:[INT64(6) INT64(9) INT64(9)]",
+				},
+				"ks.twopc_consistent_lookup:80-": {
+					"delete:[INT64(9) INT64(4) INT64(4)]",
+				},
+				"ks.consistent_lookup_unique:-40": {
+					"insert:[INT64(22) VARBINARY(\"(\\x00\\x00\\x00\\x00\\x00\\x00\\x00\")]",
+				},
+				"ks.consistent_lookup_unique:80-": {
+					"delete:[INT64(4) VARBINARY(\"\\x90\\x00\\x00\\x00\\x00\\x00\\x00\\x00\")]",
+				},
+				"ks.consistent_lookup:80-": {
+					"insert:[INT64(4) INT64(20) VARBINARY(\"(\\x00\\x00\\x00\\x00\\x00\\x00\\x00\")]",
+					"insert:[INT64(9) INT64(6) VARBINARY(\"`\\x00\\x00\\x00\\x00\\x00\\x00\\x00\")]",
+					"delete:[INT64(4) INT64(6) VARBINARY(\"`\\x00\\x00\\x00\\x00\\x00\\x00\\x00\")]",
+					"delete:[INT64(4) INT64(9) VARBINARY(\"\\x90\\x00\\x00\\x00\\x00\\x00\\x00\\x00\")]",
+				},
+			},
+		},
 	}
 
 	for _, tt := range testcases {
