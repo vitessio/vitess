@@ -201,6 +201,9 @@ func anonymizeHomedir(file string) (err error) {
 	if err != nil {
 		return err
 	}
+	if _, err := os.Stat(file); err != nil {
+		return nil
+	}
 
 	// We're replacing the stuff inside the square brackets in the example sed
 	// below:
