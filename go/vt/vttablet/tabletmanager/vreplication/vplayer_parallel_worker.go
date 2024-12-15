@@ -81,24 +81,7 @@ func (w *parallelWorker) applyQueuedStmtEvent(ctx context.Context, event *binlog
 
 // updatePos should get called at a minimum of vreplicationMinimumHeartbeatUpdateInterval.
 func (w *parallelWorker) updatePos(ctx context.Context, ts int64) (posReached bool, err error) {
-	update := binlogplayer.GenerateUpdatePos(w.vp.vr.id, *w.vp.pos.Load(), time.Now().Unix(), ts, w.vp.vr.stats.CopyRowCount.Get(), w.vp.vr.workflowConfig.StoreCompressedGTID)
-	if _, err := w.queryFunc(ctx, update); err != nil {
-		return false, fmt.Errorf("error %v updating position", err)
-	}
-	w.vp.numAccumulatedHeartbeats = 0
-	w.vp.unsavedEvent = nil
-	w.vp.timeLastSaved = time.Now()
-	w.vp.vr.stats.SetLastPosition(*w.vp.pos.Load())
-	posReached = !w.vp.stopPos.IsZero() && w.vp.pos.Load().AtLeast(w.vp.stopPos)
-	if posReached {
-		log.Infof("Stopped at position: %v", w.vp.stopPos)
-		if w.vp.saveStop {
-			if err := w.vp.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, fmt.Sprintf("Stopped at position %v", w.vp.stopPos)); err != nil {
-				return false, err
-			}
-		}
-	}
-	return posReached, nil
+	return w.vp.updatePos(ctx, ts, w.queryFunc)
 }
 
 // updateFKCheck updates the @@session.foreign_key_checks variable based on the binlog row event flags.

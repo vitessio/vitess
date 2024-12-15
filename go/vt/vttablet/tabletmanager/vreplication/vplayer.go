@@ -308,9 +308,9 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 }
 
 // updatePos should get called at a minimum of vreplicationMinimumHeartbeatUpdateInterval.
-func (vp *vplayer) updatePos(ctx context.Context, ts int64) (posReached bool, err error) {
+func (vp *vplayer) updatePos(ctx context.Context, ts int64, queryFunc func(ctx context.Context, sql string) (*sqltypes.Result, error)) (posReached bool, err error) {
 	update := binlogplayer.GenerateUpdatePos(vp.vr.id, *vp.pos.Load(), time.Now().Unix(), ts, vp.vr.stats.CopyRowCount.Get(), vp.vr.workflowConfig.StoreCompressedGTID)
-	if _, err := vp.query(ctx, update); err != nil {
+	if _, err := queryFunc(ctx, update); err != nil {
 		return false, fmt.Errorf("error %v updating position", err)
 	}
 	vp.numAccumulatedHeartbeats = 0
@@ -452,7 +452,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog, parallelPoo
 		// In both cases, now > timeLastSaved. If so, the GTID of the last unsavedEvent
 		// must be saved.
 		if time.Since(vp.timeLastSaved) >= idleTimeout && vp.unsavedEvent != nil {
-			posReached, err := vp.updatePos(ctx, vp.unsavedEvent.Timestamp)
+			posReached, err := vp.updatePos(ctx, vp.unsavedEvent.Timestamp, vp.query)
 			if err != nil {
 				return err
 			}
