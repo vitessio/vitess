@@ -501,27 +501,26 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 								tp.TargetName, field.Name)
 						}
 					default:
-						// For JSON columns when binlog-row-value-options=PARTIAL_JSON is used, we
-						// need to wrap the JSON diff function(s) around the BEFORE value.
-						diff := bindvars["a_"+field.Name].Value
+						// For JSON columns when binlog-row-value-options=PARTIAL_JSON is used and the
+						// column is marked as partial, we need to wrap the JSON diff function(s)
+						// around the BEFORE value.
+						diff := afterVals[i].RawStr()
 						beforeVal := bindvars["b_"+field.Name].Value
-						afterVal := bytes.Buffer{}
-						afterVal.Grow(len(diff) + len(beforeVal) + len(sqlparser.Utf8mb4Str) + 2) // +2 is for the enclosing quotes
-						// If the JSON column is partial, we need to specify the BEFORE value as
-						// the input for the diff function(s).
-						afterVal.WriteString(sqlparser.Utf8mb4Str)
-						afterVal.WriteByte('\'')
-						afterVal.Write(beforeVal)
-						afterVal.WriteByte('\'')
+						buf := bytes.Buffer{}
+						buf.Grow(len(diff) + len(beforeVal) + len(sqlparser.Utf8mb4Str) + 2) // +2 is for the enclosing quotes
+						buf.WriteString(sqlparser.Utf8mb4Str)
+						buf.WriteByte('\'')
+						buf.Write(beforeVal)
+						buf.WriteByte('\'')
 						newVal := sqltypes.MakeTrusted(querypb.Type_EXPRESSION, []byte(
-							fmt.Sprintf(afterVals[i].RawStr(), afterVal.String()),
+							fmt.Sprintf(diff, buf.String()),
 						))
-						bindVar, err := tp.bindFieldVal(field, &newVal)
+						bv, err := tp.bindFieldVal(field, &newVal)
 						if err != nil {
 							return nil, vterrors.Wrapf(err, "failed to bind field value for %s.%s when building insert query",
 								tp.TargetName, field.Name)
 						}
-						bindvars["a_"+field.Name] = bindVar
+						bindvars["a_"+field.Name] = bv
 					}
 					jsonIndex++
 					continue
