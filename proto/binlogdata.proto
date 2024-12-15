@@ -473,6 +473,8 @@ message VEvent {
   int64 last_committed = 26;
   // For GTID events, the sequence number of this transaction.
   int64 sequence_number = 27;
+  // MustSave is a decoration by VPlayer
+  bool must_save = 28;
 }
 
 message MinimalTable {

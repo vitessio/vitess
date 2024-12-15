@@ -38359,6 +38359,9 @@ export namespace binlogdata {
 
         /** VEvent sequence_number */
         sequence_number?: (number|Long|null);
+
+        /** VEvent must_save */
+        must_save?: (boolean|null);
     }
 
     /** Represents a VEvent. */
@@ -38420,6 +38423,9 @@ export namespace binlogdata {
 
         /** VEvent sequence_number. */
         public sequence_number: (number|Long);
+
+        /** VEvent must_save. */
+        public must_save: boolean;
 
         /**
          * Creates a new VEvent instance using the specified properties.
