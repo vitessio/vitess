@@ -112,6 +112,7 @@ const NoForeignKeyCheckFlagBitmask uint32 = 1 << 1
 //
 //	This is used by the fastForward function during copying.
 func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map[string]*sqltypes.Result, pausePos replication.Position, phase string) *vplayer {
+	log.Errorf("========= QQQ newVPlayer: %v", settings)
 	saveStop := true
 	if !pausePos.IsZero() {
 		settings.StopPos = pausePos
@@ -421,7 +422,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog, parallelPoo
 	var pw *parallelWorker
 	defer func() {
 		if pw != nil {
-			pw.applyEvent(ctx, terminateWorkerEvent, true)
+			pw.applyEvent(ctx, terminateWorkerEvent)
 		}
 	}()
 	for {
@@ -475,14 +476,13 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog, parallelPoo
 						lagSecs = event.CurrentTime/1e9 - event.Timestamp
 					}
 				}
-				mustSave := false
 				switch event.Type {
 				case binlogdatapb.VEventType_COMMIT:
 					// If we've reached the stop position, we must save the current commit
 					// even if it's empty. So, the next applyEvent is invoked with the
 					// mustSave flag.
 					if !vp.stopPos.IsZero() && vp.pos.AtLeast(vp.stopPos) {
-						mustSave = true
+						event.MustSave = true
 						break
 					}
 					countCommitsPerWorker++
@@ -520,7 +520,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog, parallelPoo
 								return err
 							}
 							// Let the worker know its work is done
-							pw.applyEvent(ctx, terminateWorkerEvent, true)
+							pw.applyEvent(ctx, terminateWorkerEvent)
 							if countCommitsPerWorker > maxBatchedCommitsPerWorker {
 								maxBatchedCommitsPerWorker = countCommitsPerWorker
 							}
@@ -533,7 +533,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog, parallelPoo
 					}
 					lastSequenceNumber = event.SequenceNumber
 				}
-				if err := pw.applyEvent(ctx, event, mustSave); err != nil {
+				if err := pw.applyEvent(ctx, event); err != nil {
 					return err
 				}
 			}

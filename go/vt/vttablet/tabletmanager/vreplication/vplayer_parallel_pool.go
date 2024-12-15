@@ -89,8 +89,8 @@ func (p *parallelWorkersPool) drain(ctx context.Context) (err error) {
 			index := (p.head + i) % len(p.workers)
 			p.workers[index].applyEvent(ctx, &binlogdatapb.VEvent{
 				Type: binlogdatapb.VEventType_UNKNOWN,
-			}, true)
-			p.workers[index].applyEvent(ctx, terminateWorkerEvent, true)
+			})
+			p.workers[index].applyEvent(ctx, terminateWorkerEvent)
 		}
 	}()
 	var workers []*parallelWorker

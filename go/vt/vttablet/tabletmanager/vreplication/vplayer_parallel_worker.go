@@ -38,6 +38,7 @@ var (
 		Type:           binlogdatapb.VEventType_UNKNOWN,
 		LastCommitted:  0,
 		SequenceNumber: 0,
+		MustSave:       true,
 	}
 )
 
@@ -147,7 +148,7 @@ func (w *parallelWorker) updateFKCheck(ctx context.Context, flags2 uint32) error
 	return nil
 }
 
-func (w *parallelWorker) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, mustSave bool) error {
+func (w *parallelWorker) applyEvent(ctx context.Context, event *binlogdatapb.VEvent) error {
 	w.events <- event
 	return nil
 }
@@ -195,10 +196,11 @@ func (w *parallelWorker) applyQueuedEvents(ctx context.Context) error {
 }
 
 func (w *parallelWorker) applyQueuedCommit(ctx context.Context, vevent *binlogdatapb.VEvent) error {
-	if err := w.dbClient.Begin(); err != nil {
-		return err
+	if vevent.MustSave {
+		if err := w.dbClient.Begin(); err != nil {
+			return err
+		}
 	}
-
 	if !w.dbClient.InTransaction {
 		// We're skipping an empty transaction. We may have to save the position on inactivity.
 		w.vp.unsavedEvent = vevent
