@@ -171,6 +171,12 @@ func restructure(rootDir string, dir string, name string, commands []*cobra.Comm
 				continue
 			}
 			f := filepath.Join(dir, fullCmdFilename+".md")
+			if _, err := os.Stat(f); err != nil {
+				if errors.Is(err, fs.ErrNotExist) {
+					continue
+				}
+				return fmt.Errorf("failed to get file info for %s: %w", f, err)
+			}
 			if err := anonymizeHomedir(f); err != nil {
 				return fmt.Errorf("failed to anonymize homedir in help text for command %s: %w", f, err)
 			}
