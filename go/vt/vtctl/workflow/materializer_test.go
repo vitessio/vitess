@@ -1515,7 +1515,7 @@ func TestCreateLookupVindexCreateDDL(t *testing.T) {
 					setStartingVschema()
 				}()
 			}
-			w := &workflow{
+			w := &workflowFetcher{
 				ts:     env.ws.ts,
 				tmc:    env.ws.tmc,
 				logger: env.ws.Logger(),
@@ -1769,7 +1769,7 @@ func TestCreateLookupVindexSourceVSchema(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		w := &workflow{
+		w := &workflowFetcher{
 			ts:     env.ws.ts,
 			tmc:    env.ws.tmc,
 			logger: env.ws.Logger(),
@@ -2011,7 +2011,7 @@ func TestCreateLookupVindexTargetVSchema(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			w := &workflow{
+			w := &workflowFetcher{
 				ts:     env.ws.ts,
 				tmc:    env.ws.tmc,
 				logger: env.ws.Logger(),
@@ -2139,7 +2139,7 @@ func TestCreateLookupVindexSameKeyspace(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	w := &workflow{
+	w := &workflowFetcher{
 		ts:     env.ws.ts,
 		tmc:    env.ws.tmc,
 		logger: env.ws.Logger(),
@@ -2271,7 +2271,7 @@ func TestCreateCustomizedVindex(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	w := &workflow{
+	w := &workflowFetcher{
 		ts:     env.ws.ts,
 		tmc:    env.ws.tmc,
 		logger: env.ws.Logger(),
@@ -2395,7 +2395,7 @@ func TestCreateLookupVindexIgnoreNulls(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	w := &workflow{
+	w := &workflowFetcher{
 		ts:     env.ws.ts,
 		tmc:    env.ws.tmc,
 		logger: env.ws.Logger(),
@@ -2481,7 +2481,7 @@ func TestStopAfterCopyFlag(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	w := &workflow{
+	w := &workflowFetcher{
 		ts:     env.ws.ts,
 		tmc:    env.ws.tmc,
 		logger: env.ws.Logger(),
@@ -2632,7 +2632,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 			err: "unique vindex 'from' should have only one column",
 		},
 		{
-			description: "non-unique lookup should have more than one column",
+			description: "non-unique lookup can have only one column",
 			input: &vschemapb.Keyspace{
 				Vindexes: map[string]*vschemapb.Vindex{
 					"v": {
@@ -2645,7 +2645,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 					},
 				},
 			},
-			err: "non-unique vindex 'from' should have more than one column",
+			err: "",
 		},
 		{
 			description: "vindex not found",

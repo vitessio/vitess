@@ -115,7 +115,7 @@ func TestGetWorkflowCopyStates(t *testing.T) {
 		},
 	}, sourceShards, targetShards)
 
-	w := workflow{
+	wf := workflowFetcher{
 		ts:  te.ws.ts,
 		tmc: te.tmc,
 	}
@@ -133,7 +133,7 @@ func TestGetWorkflowCopyStates(t *testing.T) {
 		"1|table1|2", "1|table2|1",
 	))
 
-	copyStates, err := w.getWorkflowCopyStates(ctx, &topo.TabletInfo{
+	copyStates, err := wf.getWorkflowCopyStates(ctx, &topo.TabletInfo{
 		Tablet: tablet,
 	}, []int32{1})
 	assert.NoError(t, err)
@@ -175,7 +175,7 @@ func TestFetchCopyStatesByShardStream(t *testing.T) {
 		},
 	}, sourceShards, targetShards)
 
-	w := workflow{
+	wf := workflowFetcher{
 		ts:  te.ws.ts,
 		tmc: te.tmc,
 	}
@@ -241,7 +241,7 @@ func TestFetchCopyStatesByShardStream(t *testing.T) {
 			},
 		},
 	}
-	copyStatesByStreamId, err := w.fetchCopyStatesByShardStream(ctx, readVReplicationResponse)
+	copyStatesByStreamId, err := wf.fetchCopyStatesByShardStream(ctx, readVReplicationResponse)
 	assert.NoError(t, err)
 
 	copyStates1 := copyStatesByStreamId["-80/1"]

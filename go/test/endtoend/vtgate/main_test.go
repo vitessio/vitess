@@ -54,7 +54,6 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	defer cluster.PanicHandler(nil)
 	flag.Parse()
 	exitCode := func() int {
 		clusterInstance = cluster.NewCluster(Cell, "localhost")
@@ -122,6 +121,5 @@ func start(t *testing.T) (*mysql.Conn, func()) {
 	return conn, func() {
 		deleteAll()
 		conn.Close()
-		cluster.PanicHandler(t)
 	}
 }

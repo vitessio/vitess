@@ -618,49 +618,40 @@ func valsEqual(v1, v2 sqltypes.Value) bool {
 func (tp *TablePlan) appendFromRow(buf *bytes2.Buffer, row *querypb.Row) error {
 	bindLocations := tp.BulkInsertValues.BindLocations()
 	if len(tp.Fields) < len(bindLocations) {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "wrong number of fields: got %d fields for %d bind locations ",
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "wrong number of fields: got %d fields for %d bind locations",
 			len(tp.Fields), len(bindLocations))
 	}
 
-	type colInfo struct {
-		typ    querypb.Type
-		length int64
-		offset int64
-		field  *querypb.Field
-	}
-	rowInfo := make([]*colInfo, 0)
-
-	offset := int64(0)
-	for i, field := range tp.Fields { // collect info required for fields to be bound
-		length := row.Lengths[i]
-		if !tp.FieldsToSkip[strings.ToLower(field.Name)] {
-			rowInfo = append(rowInfo, &colInfo{
-				typ:    field.Type,
-				length: length,
-				offset: offset,
-				field:  field,
-			})
-		}
-		if length > 0 {
-			offset += row.Lengths[i]
-		}
-	}
-
-	// bind field values to locations
-	var offsetQuery int
+	// Bind field values to locations.
+	var (
+		offset      int64
+		offsetQuery int
+		fieldsIndex int
+		field       *querypb.Field
+	)
 	for i, loc := range bindLocations {
-		col := rowInfo[i]
+		field = tp.Fields[fieldsIndex]
+		length := row.Lengths[fieldsIndex]
+		for tp.FieldsToSkip[strings.ToLower(field.Name)] {
+			if length > 0 {
+				offset += length
+			}
+			fieldsIndex++
+			field = tp.Fields[fieldsIndex]
+			length = row.Lengths[fieldsIndex]
+		}
+
 		buf.WriteString(tp.BulkInsertValues.Query[offsetQuery:loc.Offset])
-		typ := col.typ
+		typ := field.Type
 
 		switch typ {
 		case querypb.Type_TUPLE:
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected Type_TUPLE for value %d", i)
 		case querypb.Type_JSON:
-			if col.length < 0 { // An SQL NULL and not an actual JSON value
+			if length < 0 { // An SQL NULL and not an actual JSON value
 				buf.WriteString(sqltypes.NullStr)
 			} else { // A JSON value (which may be a JSON null literal value)
-				buf2 := row.Values[col.offset : col.offset+col.length]
+				buf2 := row.Values[offset : offset+length]
 				vv, err := vjson.MarshalSQLValue(buf2)
 				if err != nil {
 					return err
@@ -668,16 +659,16 @@ func (tp *TablePlan) appendFromRow(buf *bytes2.Buffer, row *querypb.Row) error {
 				buf.WriteString(vv.RawStr())
 			}
 		default:
-			if col.length < 0 {
+			if length < 0 {
 				// -1 means a null variable; serialize it directly
 				buf.WriteString(sqltypes.NullStr)
 			} else {
-				raw := row.Values[col.offset : col.offset+col.length]
+				raw := row.Values[offset : offset+length]
 				var vv sqltypes.Value
 
-				if conversion, ok := tp.ConvertCharset[col.field.Name]; ok && col.length > 0 {
+				if conversion, ok := tp.ConvertCharset[field.Name]; ok && length > 0 {
 					// Non-null string value, for which we have a charset conversion instruction
-					out, err := tp.convertStringCharset(raw, conversion, col.field.Name)
+					out, err := tp.convertStringCharset(raw, conversion, field.Name)
 					if err != nil {
 						return err
 					}
@@ -690,6 +681,10 @@ func (tp *TablePlan) appendFromRow(buf *bytes2.Buffer, row *querypb.Row) error {
 			}
 		}
 		offsetQuery = loc.Offset + loc.Length
+		if length > 0 {
+			offset += length
+		}
+		fieldsIndex++
 	}
 	buf.WriteString(tp.BulkInsertValues.Query[offsetQuery:])
 	return nil

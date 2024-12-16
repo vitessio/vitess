@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
@@ -83,8 +84,7 @@ func TestMain(m *testing.M) {
 		defer cancel()
 
 		config := tabletenv.NewDefaultConfig()
-		config.TwoPCEnable = true
-		config.TwoPCAbandonAge = 1
+		config.TwoPCAbandonAge = 1 * time.Second
 		err := framework.StartCustomServer(ctx, connParams, connAppDebugParams, cluster.DbName(), config)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%v", err)

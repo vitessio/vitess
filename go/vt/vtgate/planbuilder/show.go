@@ -676,7 +676,7 @@ func buildVschemaKeyspacesPlan(vschema plancontext.VSchema) (engine.Primitive, e
 
 func buildVschemaTablesPlan(vschema plancontext.VSchema) (engine.Primitive, error) {
 	vs := vschema.GetVSchema()
-	ks, err := vschema.DefaultKeyspace()
+	ks, err := vschema.SelectedKeyspace()
 	if err != nil {
 		return nil, err
 	}

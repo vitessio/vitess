@@ -40,7 +40,7 @@ import (
 
 // prepareCreateLookup performs the preparatory steps for creating a
 // Lookup Vindex.
-func (w *workflow) prepareCreateLookup(ctx context.Context, workflow, keyspace string, specs *vschemapb.Keyspace, continueAfterCopyWithOwner bool) (
+func (wf *workflowFetcher) prepareCreateLookup(ctx context.Context, workflow, keyspace string, specs *vschemapb.Keyspace, continueAfterCopyWithOwner bool) (
 	ms *vtctldatapb.MaterializeSettings, sourceVSchema, targetVSchema *vschemapb.Keyspace, cancelFunc func() error, err error) {
 	var (
 		// sourceVSchemaTable is the table info present in the vschema.
@@ -54,7 +54,7 @@ func (w *workflow) prepareCreateLookup(ctx context.Context, workflow, keyspace s
 	)
 
 	// Validate input vindex.
-	vindex, vInfo, err := w.validateAndGetVindex(specs)
+	vindex, vInfo, err := wf.validateAndGetVindex(specs)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
@@ -69,7 +69,7 @@ func (w *workflow) prepareCreateLookup(ctx context.Context, workflow, keyspace s
 		return nil, nil, nil, nil, err
 	}
 
-	sourceVSchema, targetVSchema, err = w.getTargetAndSourceVSchema(ctx, keyspace, vInfo.targetKeyspace)
+	sourceVSchema, targetVSchema, err = wf.getTargetAndSourceVSchema(ctx, keyspace, vInfo.targetKeyspace)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
@@ -91,7 +91,7 @@ func (w *workflow) prepareCreateLookup(ctx context.Context, workflow, keyspace s
 	}
 
 	// Validate against source schema.
-	sourceShards, err := w.ts.GetServingShards(ctx, keyspace)
+	sourceShards, err := wf.ts.GetServingShards(ctx, keyspace)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
@@ -102,7 +102,7 @@ func (w *workflow) prepareCreateLookup(ctx context.Context, workflow, keyspace s
 	}
 
 	req := &tabletmanagerdatapb.GetSchemaRequest{Tables: []string{vInfo.sourceTableName}}
-	tableSchema, err := schematools.GetSchema(ctx, w.ts, w.tmc, onesource.PrimaryAlias, req)
+	tableSchema, err := schematools.GetSchema(ctx, wf.ts, wf.tmc, onesource.PrimaryAlias, req)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
@@ -113,7 +113,7 @@ func (w *workflow) prepareCreateLookup(ctx context.Context, workflow, keyspace s
 	}
 
 	// Generate "create table" statement.
-	createDDL, err = w.generateCreateDDLStatement(tableSchema, sourceVindexColumns, vInfo, vindex)
+	createDDL, err = wf.generateCreateDDLStatement(tableSchema, sourceVindexColumns, vInfo, vindex)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
@@ -191,7 +191,7 @@ func (w *workflow) prepareCreateLookup(ctx context.Context, workflow, keyspace s
 	if targetChanged {
 		cancelFunc = func() error {
 			// Restore the original target vschema.
-			return w.ts.SaveVSchema(ctx, vInfo.targetKeyspace, ogTargetVSchema)
+			return wf.ts.SaveVSchema(ctx, vInfo.targetKeyspace, ogTargetVSchema)
 		}
 	}
 
@@ -230,7 +230,7 @@ type vindexInfo struct {
 }
 
 // validateAndGetVindex validates and extracts vindex configuration
-func (w *workflow) validateAndGetVindex(specs *vschemapb.Keyspace) (*vschemapb.Vindex, *vindexInfo, error) {
+func (wf *workflowFetcher) validateAndGetVindex(specs *vschemapb.Keyspace) (*vschemapb.Vindex, *vindexInfo, error) {
 	if specs == nil {
 		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "no vindex provided")
 	}
@@ -245,7 +245,7 @@ func (w *workflow) validateAndGetVindex(specs *vschemapb.Keyspace) (*vschemapb.V
 		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "vindex %s is not a lookup type", vindex.Type)
 	}
 
-	targetKeyspace, targetTableName, err := w.parser.ParseTable(vindex.Params["table"])
+	targetKeyspace, targetTableName, err := wf.parser.ParseTable(vindex.Params["table"])
 	if err != nil || targetKeyspace == "" {
 		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
 			"vindex table name (%s) must be in the form <keyspace>.<table>", vindex.Params["table"])
@@ -306,8 +306,8 @@ func (w *workflow) validateAndGetVindex(specs *vschemapb.Keyspace) (*vschemapb.V
 	}, nil
 }
 
-func (w *workflow) getTargetAndSourceVSchema(ctx context.Context, sourceKeyspace string, targetKeyspace string) (sourceVSchema *vschemapb.Keyspace, targetVSchema *vschemapb.Keyspace, err error) {
-	sourceVSchema, err = w.ts.GetVSchema(ctx, sourceKeyspace)
+func (wf *workflowFetcher) getTargetAndSourceVSchema(ctx context.Context, sourceKeyspace string, targetKeyspace string) (sourceVSchema *vschemapb.Keyspace, targetVSchema *vschemapb.Keyspace, err error) {
+	sourceVSchema, err = wf.ts.GetVSchema(ctx, sourceKeyspace)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -319,7 +319,7 @@ func (w *workflow) getTargetAndSourceVSchema(ctx context.Context, sourceKeyspace
 	if sourceKeyspace == targetKeyspace {
 		targetVSchema = sourceVSchema
 	} else {
-		targetVSchema, err = w.ts.GetVSchema(ctx, targetKeyspace)
+		targetVSchema, err = wf.ts.GetVSchema(ctx, targetKeyspace)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -367,7 +367,7 @@ func getSourceTable(specs *vschemapb.Keyspace, targetTableName string, fromCols 
 	return sourceTable, sourceTableName, nil
 }
 
-func (w *workflow) generateCreateDDLStatement(tableSchema *tabletmanagerdatapb.SchemaDefinition, sourceVindexColumns []string, vInfo *vindexInfo, vindex *vschemapb.Vindex) (string, error) {
+func (wf *workflowFetcher) generateCreateDDLStatement(tableSchema *tabletmanagerdatapb.SchemaDefinition, sourceVindexColumns []string, vInfo *vindexInfo, vindex *vschemapb.Vindex) (string, error) {
 	lines := strings.Split(tableSchema.TableDefinitions[0].Schema, "\n")
 	if len(lines) < 3 {
 		// Should never happen.
@@ -405,7 +405,7 @@ func (w *workflow) generateCreateDDLStatement(tableSchema *tabletmanagerdatapb.S
 	createDDL := strings.Join(modified, "\n")
 
 	// Confirm that our DDL is valid before we create anything.
-	if _, err := w.parser.ParseStrictDDL(createDDL); err != nil {
+	if _, err := wf.parser.ParseStrictDDL(createDDL); err != nil {
 		return "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "error: %v; invalid lookup table definition generated: %s",
 			err, createDDL)
 	}

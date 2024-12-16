@@ -132,29 +132,6 @@ func (conn *snapshotConn) startSnapshot(ctx context.Context, table string) (gtid
 	return replication.EncodePosition(mpos), nil
 }
 
-// startSnapshotWithConsistentGTID performs the snapshotting without locking tables. This assumes
-// session_track_gtids = START_GTID, which is a contribution to MySQL and is not in vanilla MySQL at the
-// time of this writing.
-func (conn *snapshotConn) startSnapshotWithConsistentGTID(ctx context.Context) (gtid string, err error) {
-	if _, err := conn.ExecuteFetch("set transaction isolation level repeatable read", 1, false); err != nil {
-		return "", err
-	}
-	result, err := conn.ExecuteFetch("start transaction with consistent snapshot, read only", 1, false)
-	if err != nil {
-		return "", err
-	}
-	// The "session_track_gtids = START_GTID" patch is only applicable to MySQL56 GTID, which is
-	// why we hardcode the position as mysql.Mysql56FlavorID
-	mpos, err := replication.ParsePosition(replication.Mysql56FlavorID, result.SessionStateChanges)
-	if err != nil {
-		return "", err
-	}
-	if _, err := conn.ExecuteFetch("set @@session.time_zone = '+00:00'", 1, false); err != nil {
-		return "", err
-	}
-	return replication.EncodePosition(mpos), nil
-}
-
 // Close rolls back any open transactions and closes the connection.
 func (conn *snapshotConn) Close() {
 	_, _ = conn.ExecuteFetch("rollback", 1, false)

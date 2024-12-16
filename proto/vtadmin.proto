@@ -388,7 +388,11 @@ message WorkflowSwitchTrafficRequest {
 
 message ApplySchemaRequest {
     string cluster_id = 1;
-    vtctldata.ApplySchemaRequest request = 2;
+    // Request.Sql will be overriden by this Sql field.
+    string sql = 2;
+    // Request.CallerId will be overriden by this CallerId field.
+    string caller_id = 3;
+    vtctldata.ApplySchemaRequest request = 4;
 }
 
 message CancelSchemaMigrationRequest {

@@ -175,6 +175,18 @@ func (cached *Keyspace) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Name)))
 	return size
 }
+func (cached *LookupCost) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(16)
+	}
+	// field LookupNonUnique *vitess.io/vitess/go/vt/vtgate/vindexes.LookupNonUnique
+	size += cached.LookupNonUnique.CachedSize(true)
+	return size
+}
 func (cached *LookupHash) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

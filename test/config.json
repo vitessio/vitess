@@ -136,6 +136,15 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
+		"backup_s3": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/backup/s3", "-timeout", "30m"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "21",
+			"RetryMax": 1,
+			"Tags": []
+		},
 		"backup_only": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/backup/vtbackup", "-timeout", "20m"],
@@ -339,17 +348,6 @@
 			"Shard": "schemadiff_vrepl",
 			"RetryMax": 1,
 			"Tags": []
-		},
-		"pitr": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/recovery/pitr"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "10",
-			"RetryMax": 1,
-			"Tags": [
-				"site_test"
-			]
 		},
 		"recovery": {
 			"File": "unused.go",
@@ -887,6 +885,15 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
+		"vtgate_plantests": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/plan_tests"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtgate_plantests",
+			"RetryMax": 1,
+			"Tags": []
+		},
 		"vtgate_unsharded": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/unsharded"],
@@ -1238,6 +1245,17 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
+		"vtop_example": {
+			"File": "",
+			"Args": [],
+			"Command": [
+				"test/vtop_example.sh"
+			],
+			"Manual": false,
+			"Shard": "",
+			"RetryMax": 1,
+			"Tags": []
+		},
 		"vtorc_primary_failure": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtorc/primaryfailure"],
@@ -1367,6 +1385,15 @@
 		"vreplication_movetables_tz": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestMoveTablesTZ"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vreplication_vtctldclient_vdiff2_movetables_tz",
+			"RetryMax": 1,
+			"Tags": []
+		},
+		"loopkup_index": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestLookupIndex"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_vtctldclient_vdiff2_movetables_tz",

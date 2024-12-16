@@ -22,14 +22,20 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/exp/maps"
 
+	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
@@ -65,6 +71,8 @@ func TestReshardCreate(t *testing.T) {
 		sourceKeyspace, targetKeyspace *testKeyspace
 		preFunc                        func(env *testEnv)
 		want                           *vtctldatapb.WorkflowStatusResponse
+		updateVReplicationRequest      *tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest
+		autoStart                      bool
 		wantErr                        string
 	}{
 		{
@@ -76,6 +84,11 @@ func TestReshardCreate(t *testing.T) {
 			targetKeyspace: &testKeyspace{
 				KeyspaceName: targetKeyspaceName,
 				ShardNames:   []string{"-80", "80-"},
+			},
+			autoStart: true,
+			updateVReplicationRequest: &tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest{
+				AllWorkflows: true,
+				State:        ptr.Of(binlogdatapb.VReplicationWorkflowState_Running),
 			},
 			want: &vtctldatapb.WorkflowStatusResponse{
 				ShardStreams: map[string]*vtctldatapb.WorkflowStatusResponse_ShardStreams{
@@ -137,6 +150,7 @@ func TestReshardCreate(t *testing.T) {
 				SourceShards: tc.sourceKeyspace.ShardNames,
 				TargetShards: tc.targetKeyspace.ShardNames,
 				Cells:        []string{env.cell},
+				AutoStart:    tc.autoStart,
 			}
 
 			for i := range tc.sourceKeyspace.ShardNames {
@@ -172,6 +186,9 @@ func TestReshardCreate(t *testing.T) {
 					"select vrepl_id, table_name, lastpk from _vt.copy_state where vrepl_id in (1) and id in (select max(id) from _vt.copy_state where vrepl_id in (1) group by vrepl_id, table_name)",
 					&sqltypes.Result{},
 				)
+				if tc.updateVReplicationRequest != nil {
+					env.tmc.AddUpdateVReplicationRequests(uint32(tabletUID), tc.updateVReplicationRequest)
+				}
 			}
 
 			if tc.preFunc != nil {
@@ -186,6 +203,300 @@ func TestReshardCreate(t *testing.T) {
 			require.NoError(t, err)
 			if tc.want != nil {
 				require.Equal(t, tc.want, res)
+			}
+
+			// Expect updateVReplicationWorklowsRequests to be empty,
+			// if AutoStart is enabled. This is because we delete the specific
+			// key from the map in the testTMC, once updateVReplicationWorklows()
+			// with the expected request is called.
+			if tc.autoStart {
+				assert.Len(t, env.tmc.updateVReplicationWorklowsRequests, 0)
+			}
+		})
+	}
+}
+
+func TestReadRefStreams(t *testing.T) {
+	ctx := context.Background()
+
+	sourceKeyspace := &testKeyspace{
+		KeyspaceName: "sourceKeyspace",
+		ShardNames:   []string{"-"},
+	}
+	targetKeyspace := &testKeyspace{
+		KeyspaceName: "targetKeyspace",
+		ShardNames:   []string{"-"},
+	}
+
+	env := newTestEnv(t, ctx, defaultCellName, sourceKeyspace, targetKeyspace)
+	defer env.close()
+
+	s1, err := env.ts.UpdateShardFields(ctx, targetKeyspace.KeyspaceName, "-", func(si *topo.ShardInfo) error {
+		return nil
+	})
+	require.NoError(t, err)
+
+	sourceTablet, ok := env.tablets[sourceKeyspace.KeyspaceName][100]
+	require.True(t, ok)
+
+	env.tmc.schema = map[string]*tabletmanagerdatapb.SchemaDefinition{
+		"t1": {},
+	}
+
+	rules := make([]*binlogdatapb.Rule, len(env.tmc.schema))
+	for i, table := range maps.Keys(env.tmc.schema) {
+		rules[i] = &binlogdatapb.Rule{
+			Match:  table,
+			Filter: fmt.Sprintf("select * from %s", table),
+		}
+	}
+
+	refKey := fmt.Sprintf("wf:%s:-", sourceKeyspace.KeyspaceName)
+
+	testCases := []struct {
+		name                             string
+		addVReplicationWorkflowsResponse *tabletmanagerdatapb.ReadVReplicationWorkflowsResponse
+		preRefStreams                    map[string]*refStream
+		wantRefStreamKeys                []string
+		wantErr                          bool
+		errContains                      string
+	}{
+		{
+			name: "error for unnamed workflow",
+			addVReplicationWorkflowsResponse: &tabletmanagerdatapb.ReadVReplicationWorkflowsResponse{
+				Workflows: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse{
+					{
+						Workflow:     "",
+						WorkflowType: binlogdatapb.VReplicationWorkflowType_Reshard,
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "populate ref streams",
+			addVReplicationWorkflowsResponse: &tabletmanagerdatapb.ReadVReplicationWorkflowsResponse{
+				Workflows: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse{
+					{
+						Workflow:     "wf",
+						WorkflowType: binlogdatapb.VReplicationWorkflowType_Reshard,
+						Streams: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{
+							{
+
+								Bls: &binlogdatapb.BinlogSource{
+									Keyspace: sourceKeyspace.KeyspaceName,
+									Shard:    "-",
+									Tables:   maps.Keys(env.tmc.schema),
+									Filter: &binlogdatapb.Filter{
+										Rules: rules,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantRefStreamKeys: []string{refKey},
+		},
+		{
+			name:          "mismatched streams with empty map",
+			preRefStreams: map[string]*refStream{},
+			addVReplicationWorkflowsResponse: &tabletmanagerdatapb.ReadVReplicationWorkflowsResponse{
+				Workflows: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse{
+					{
+						Workflow:     "wf",
+						WorkflowType: binlogdatapb.VReplicationWorkflowType_Reshard,
+						Streams: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{
+							{
+
+								Bls: &binlogdatapb.BinlogSource{
+									Keyspace: sourceKeyspace.KeyspaceName,
+									Shard:    "-",
+									Tables:   maps.Keys(env.tmc.schema),
+									Filter: &binlogdatapb.Filter{
+										Rules: rules,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr:     true,
+			errContains: "mismatch",
+		},
+		{
+			name: "mismatched streams",
+			preRefStreams: map[string]*refStream{
+				refKey:        nil,
+				"nonexisting": nil,
+			},
+			addVReplicationWorkflowsResponse: &tabletmanagerdatapb.ReadVReplicationWorkflowsResponse{
+				Workflows: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse{
+					{
+						Workflow:     "wf",
+						WorkflowType: binlogdatapb.VReplicationWorkflowType_Reshard,
+						Streams: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{
+							{
+
+								Bls: &binlogdatapb.BinlogSource{
+									Keyspace: sourceKeyspace.KeyspaceName,
+									Shard:    "-",
+									Tables:   maps.Keys(env.tmc.schema),
+									Filter: &binlogdatapb.Filter{
+										Rules: rules,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr:     true,
+			errContains: "mismatch",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			rs := &resharder{
+				s:            env.ws,
+				keyspace:     targetKeyspace.KeyspaceName,
+				sourceShards: []*topo.ShardInfo{s1},
+				sourcePrimaries: map[string]*topo.TabletInfo{
+					"-": {
+						Tablet: sourceTablet,
+					},
+				},
+				workflow: "wf",
+				vschema: &vschemapb.Keyspace{
+					Tables: map[string]*vschemapb.Table{
+						"t1": {
+							Type: vindexes.TypeReference,
+						},
+					},
+				},
+				refStreams: tc.preRefStreams,
+			}
+
+			workflowKey := env.tmc.GetWorkflowKey(sourceKeyspace.KeyspaceName, "-")
+
+			env.tmc.AddVReplicationWorkflowsResponse(workflowKey, tc.addVReplicationWorkflowsResponse)
+
+			err := rs.readRefStreams(ctx)
+			if !tc.wantErr {
+				assert.NoError(t, err)
+				for _, rk := range tc.wantRefStreamKeys {
+					assert.Contains(t, rs.refStreams, rk)
+				}
+				return
+			}
+
+			assert.Error(t, err)
+			assert.ErrorContains(t, err, tc.errContains)
+		})
+	}
+}
+
+func TestBlsIsReference(t *testing.T) {
+	testCases := []struct {
+		name        string
+		bls         *binlogdatapb.BinlogSource
+		tables      map[string]*vschemapb.Table
+		expected    bool
+		wantErr     bool
+		errContains string
+	}{
+		{
+			name: "all references",
+			bls: &binlogdatapb.BinlogSource{
+				Filter: &binlogdatapb.Filter{
+					Rules: []*binlogdatapb.Rule{
+						{Match: "ref_table1"},
+						{Match: "ref_table2"},
+					},
+				},
+			},
+			tables: map[string]*vschemapb.Table{
+				"ref_table1": {Type: vindexes.TypeReference},
+				"ref_table2": {Type: vindexes.TypeReference},
+			},
+			expected: true,
+		},
+		{
+			name: "all sharded",
+			bls: &binlogdatapb.BinlogSource{
+				Filter: &binlogdatapb.Filter{
+					Rules: []*binlogdatapb.Rule{
+						{Match: "sharded_table1"},
+						{Match: "sharded_table2"},
+					},
+				},
+			},
+			tables: map[string]*vschemapb.Table{
+				"sharded_table1": {Type: vindexes.TypeTable},
+				"sharded_table2": {Type: vindexes.TypeTable},
+			},
+			expected: false,
+		},
+		{
+			name: "mixed reference and sharded tables",
+			bls: &binlogdatapb.BinlogSource{
+				Filter: &binlogdatapb.Filter{
+					Rules: []*binlogdatapb.Rule{
+						{Match: "ref_table"},
+						{Match: "sharded_table"},
+					},
+				},
+			},
+			tables: map[string]*vschemapb.Table{
+				"ref_table":     {Type: vindexes.TypeReference},
+				"sharded_table": {Type: vindexes.TypeTable},
+			},
+			wantErr: true,
+		},
+		{
+			name: "rule table not found in vschema",
+			bls: &binlogdatapb.BinlogSource{
+				Filter: &binlogdatapb.Filter{
+					Rules: []*binlogdatapb.Rule{
+						{Match: "unknown_table"},
+					},
+				},
+			},
+			tables:      map[string]*vschemapb.Table{},
+			wantErr:     true,
+			errContains: "unknown_table",
+		},
+		{
+			name: "internal operation table ignored",
+			bls: &binlogdatapb.BinlogSource{
+				Filter: &binlogdatapb.Filter{
+					Rules: []*binlogdatapb.Rule{
+						{Match: "_vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_"},
+					},
+				},
+			},
+			tables:   map[string]*vschemapb.Table{},
+			expected: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			rs := &resharder{
+				vschema: &vschemapb.Keyspace{
+					Tables: tc.tables,
+				},
+			}
+
+			result, err := rs.blsIsReference(tc.bls)
+
+			if tc.wantErr {
+				assert.ErrorContains(t, err, tc.errContains)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tc.expected, result)
 			}
 		})
 	}

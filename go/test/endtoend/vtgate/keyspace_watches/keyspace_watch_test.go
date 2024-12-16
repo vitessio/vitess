@@ -117,7 +117,6 @@ func createCluster(extraVTGateArgs []string) (*cluster.LocalProcessCluster, int)
 }
 
 func TestRoutingWithKeyspacesToWatch(t *testing.T) {
-	defer cluster.PanicHandler(t)
 
 	clusterInstance, exitCode := createCluster(nil)
 	defer clusterInstance.Teardown()
@@ -141,7 +140,6 @@ func TestRoutingWithKeyspacesToWatch(t *testing.T) {
 }
 
 func TestVSchemaDDLWithKeyspacesToWatch(t *testing.T) {
-	defer cluster.PanicHandler(t)
 
 	extraVTGateArgs := []string{
 		"--vschema_ddl_authorized_users", "%",

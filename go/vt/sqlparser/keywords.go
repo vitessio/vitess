@@ -205,6 +205,7 @@ var keywords = []keyword{
 	{"current_timestamp", CURRENT_TIMESTAMP},
 	{"current_user", CURRENT_USER},
 	{"cursor", UNUSED},
+	{"cutover_threshold", CUTOVER_THRESHOLD},
 	{"data", DATA},
 	{"database", DATABASE},
 	{"databases", DATABASES},

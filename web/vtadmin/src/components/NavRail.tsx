@@ -66,6 +66,9 @@ export const NavRail = () => {
 
                 <ul className={style.navList}>
                     <li>
+                        <NavRailLink hotkey="M" text="Migrations" to="/migrations" />
+                    </li>
+                    <li>
                         <NavRailLink hotkey="T" text="Transactions" to="/transactions" />
                     </li>
                     <li>

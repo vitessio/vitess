@@ -637,6 +637,7 @@ func (s *server) StopReplicationAndGetStatus(ctx context.Context, request *table
 	if err == nil {
 		response.Status = statusResponse.Status
 	}
+
 	return response, err
 }
 
