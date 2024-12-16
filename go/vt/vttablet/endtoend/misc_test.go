@@ -618,6 +618,16 @@ func TestLastInsertId(t *testing.T) {
 	assert.Truef(t, qr.Rows[0][0].Equal(wantCol), "Execute: \n%#v, want \n%#v", qr.Rows[0][0], wantCol)
 }
 
+func TestSelectLastInsertId(t *testing.T) {
+	client := framework.NewClient()
+	rs, err := client.ExecuteWithOptions("select 1 from dual where last_insert_id(42) = 42", nil, &querypb.ExecuteOptions{
+		IncludedFields:    querypb.ExecuteOptions_ALL,
+		FetchLastInsertId: true,
+	})
+	require.NoError(t, err)
+	assert.EqualValues(t, 42, rs.InsertID)
+}
+
 func TestAppDebugRequest(t *testing.T) {
 	client := framework.NewClient()
 

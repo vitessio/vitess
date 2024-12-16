@@ -1121,7 +1121,17 @@ func (qre *QueryExecutor) execDBConn(conn *connpool.Conn, sql string, wantfields
 	}
 	defer qre.tsv.statelessql.Remove(qd)
 
-	return conn.Exec(ctx, sql, int(qre.tsv.qe.maxResultSize.Load()), wantfields)
+	exec, err := conn.Exec(ctx, sql, int(qre.tsv.qe.maxResultSize.Load()), wantfields)
+	if err != nil {
+		return nil, err
+	}
+	if qre.options.FetchLastInsertId {
+		err := qre.fetchLastInsertID(ctx, conn, exec)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return exec, nil
 }
 
 func (qre *QueryExecutor) execStatefulConn(conn *StatefulConnection, sql string, wantfields bool) (*sqltypes.Result, error) {
@@ -1137,7 +1147,32 @@ func (qre *QueryExecutor) execStatefulConn(conn *StatefulConnection, sql string,
 	}
 	defer qre.tsv.statefulql.Remove(qd)
 
-	return conn.Exec(ctx, sql, int(qre.tsv.qe.maxResultSize.Load()), wantfields)
+	exec, err := conn.Exec(ctx, sql, int(qre.tsv.qe.maxResultSize.Load()), wantfields)
+	if err != nil {
+		return nil, err
+	}
+	if qre.options.FetchLastInsertId {
+		err = qre.fetchLastInsertID(ctx, conn.UnderlyingDBConn().Conn, exec)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return exec, nil
+}
+
+func (qre *QueryExecutor) fetchLastInsertID(ctx context.Context, conn *connpool.Conn, exec *sqltypes.Result) error {
+	result, err := conn.Exec(ctx, "select last_insert_id()", 1, false)
+	if err != nil {
+		return err
+	}
+
+	cell := result.Rows[0][0]
+	insertID, err := cell.ToCastUint64()
+	if err != nil {
+		return err
+	}
+	exec.InsertID = insertID
+	return nil
 }
 
 func (qre *QueryExecutor) execStreamSQL(conn *connpool.PooledConn, isTransaction bool, sql string, callback func(*sqltypes.Result) error) error {
