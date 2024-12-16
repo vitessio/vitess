@@ -259,8 +259,11 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 	go func() {
 		defer wg.Done()
 		var err error
+		log.Errorf("======= QQQ applying events. err=%v", err)
 		err = errors.Join(err, vp.applyEvents(ctx, relay, parallelPool))
+		log.Errorf("======= QQQ about to drain. err=%v", err)
 		err = errors.Join(err, parallelPool.drain(ctx))
+		log.Errorf("======= QQQ drain complete. err=%v", err)
 		applyErr <- err
 		countCommits := 0
 		for _, w := range parallelPool.workers {
@@ -401,8 +404,6 @@ func (vp *vplayer) recordHeartbeat() error {
 // TODO(sougou): we can look at recognizing self-generated events and find a better
 // way to handle them.
 func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog, parallelPool *parallelWorkersPool) error {
-	// defer vp.vr.dbClient.Rollback()
-
 	estimateLag := func() {
 		behind := time.Now().UnixNano() - vp.lastTimestampNs - vp.timeOffsetNs
 		vp.vr.stats.ReplicationLagSeconds.Store(behind / 1e9)

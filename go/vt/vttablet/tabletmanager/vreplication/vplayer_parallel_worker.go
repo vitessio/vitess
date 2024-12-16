@@ -39,6 +39,9 @@ var (
 		SequenceNumber: 0,
 		MustSave:       true,
 	}
+	unknownEvent = &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_UNKNOWN,
+	}
 )
 
 type parallelWorker struct {
@@ -126,8 +129,12 @@ func (w *parallelWorker) updateFKCheck(ctx context.Context, flags2 uint32) error
 }
 
 func (w *parallelWorker) applyEvent(ctx context.Context, event *binlogdatapb.VEvent) error {
-	w.events <- event
-	return nil
+	select {
+	case w.events <- event:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func (w *parallelWorker) applyQueuedEvents(ctx context.Context) error {
@@ -194,6 +201,7 @@ func (w *parallelWorker) applyQueuedCommit(ctx context.Context, vevent *binlogda
 
 	if posReached {
 		w.pool.posReached.Store(true)
+		log.Errorf("========== QQQ posReached = true: %v", w.vp.pos.Load())
 		return io.EOF
 	}
 	// No more events for this worker
@@ -292,16 +300,21 @@ func (w *parallelWorker) applyQueuedEvent(ctx context.Context, event *binlogdata
 		if err := w.dbClient.Begin(); err != nil {
 			return err
 		}
-		tplan, err := w.vp.replicatorPlan.buildExecutionPlan(event.FieldEvent)
-		if err != nil {
-			return err
-		}
-		func() {
+		onField := func() error {
 			w.vp.planMu.Lock()
 			defer w.vp.planMu.Unlock()
 
+			tplan, err := w.vp.replicatorPlan.buildExecutionPlan(event.FieldEvent)
+			if err != nil {
+				return err
+			}
+
 			w.vp.tablePlans[event.FieldEvent.TableName] = tplan
-		}()
+			return nil
+		}
+		if err := onField(); err != nil {
+			return err
+		}
 		stats.Send(fmt.Sprintf("%v", event.FieldEvent))
 
 	case binlogdatapb.VEventType_INSERT, binlogdatapb.VEventType_DELETE, binlogdatapb.VEventType_UPDATE,

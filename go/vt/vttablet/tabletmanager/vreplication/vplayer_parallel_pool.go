@@ -50,7 +50,7 @@ func newParallelWorkersPool(size int, dbClientGen dbClientGenerator, vp *vplayer
 	p = &parallelWorkersPool{
 		workers:      make([]*parallelWorker, size),
 		pool:         make(chan *parallelWorker, size),
-		workerErrors: make(chan error, size),
+		workerErrors: make(chan error, size*2),
 	}
 	for i := range size {
 		w := &parallelWorker{
@@ -82,17 +82,23 @@ func (p *parallelWorkersPool) drain(ctx context.Context) (err error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	func() {
+	terminateWorkers := func() error {
 		p.mu.Lock()
 		defer p.mu.Unlock()
 		for i := range len(p.workers) {
 			index := (p.head + i) % len(p.workers)
-			p.workers[index].applyEvent(ctx, &binlogdatapb.VEvent{
-				Type: binlogdatapb.VEventType_UNKNOWN,
-			})
-			p.workers[index].applyEvent(ctx, terminateWorkerEvent)
+			if err := p.workers[index].applyEvent(ctx, unknownEvent); err != nil {
+				return err
+			}
+			if err := p.workers[index].applyEvent(ctx, terminateWorkerEvent); err != nil {
+				return err
+			}
 		}
-	}()
+		return nil
+	}
+	if err := terminateWorkers(); err != nil {
+		return err
+	}
 	var workers []*parallelWorker
 	for range len(p.workers) {
 		w, err := p.availableWorker(ctx, -1, -1) // blocks until all workers are idle
@@ -137,7 +143,7 @@ func (p *parallelWorkersPool) availableWorker(ctx context.Context, lastCommitted
 
 	go func() {
 		if err := w.applyQueuedEvents(ctx); err != nil {
-			go func() { p.workerErrors <- err }()
+			p.workerErrors <- err
 		}
 		p.mu.Lock()
 		defer p.mu.Unlock()
@@ -153,28 +159,15 @@ func (p *parallelWorkersPool) availableWorker(ctx context.Context, lastCommitted
 func (p *parallelWorkersPool) workersError() error {
 	select {
 	case err := <-p.workerErrors:
-		p.workerErrors <- err
 		return err
 	default:
 		return nil
 	}
 }
 
-func (p *parallelWorkersPool) incrementHead() {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.head = (p.head + 1) % len(p.workers)
-}
-
 func (p *parallelWorkersPool) handoverHead(fromIndex int) {
 	p.head = (fromIndex + 1) % len(p.workers)
 	go func() { p.workers[p.head].wakeup <- fromIndex }()
-}
-
-func (p *parallelWorkersPool) headIndex() int {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	return p.head
 }
 
 func (p *parallelWorkersPool) isApplicable(w *parallelWorker, event *binlogdatapb.VEvent) bool {
