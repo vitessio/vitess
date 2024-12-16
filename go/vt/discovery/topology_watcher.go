@@ -26,16 +26,13 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/vt/topo/topoproto"
-
-	"vitess.io/vitess/go/vt/key"
-
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/trace"
-
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/proto/topodata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 )
 
 const (
@@ -56,7 +53,7 @@ var (
 // tabletInfo is used internally by the TopologyWatcher struct.
 type tabletInfo struct {
 	alias  string
-	tablet *topodata.Tablet
+	tablet *topodatapb.Tablet
 }
 
 // TopologyWatcher polls the topology periodically for changes to
@@ -70,7 +67,6 @@ type TopologyWatcher struct {
 	cell                string
 	refreshInterval     time.Duration
 	refreshKnownTablets bool
-	concurrency         int
 	ctx                 context.Context
 	cancelFunc          context.CancelFunc
 	// wg keeps track of all launched Go routines.
@@ -92,7 +88,7 @@ type TopologyWatcher struct {
 
 // NewTopologyWatcher returns a TopologyWatcher that monitors all
 // the tablets in a cell, and reloads them as needed.
-func NewTopologyWatcher(ctx context.Context, topoServer *topo.Server, hc HealthCheck, f TabletFilter, cell string, refreshInterval time.Duration, refreshKnownTablets bool, topoReadConcurrency int) *TopologyWatcher {
+func NewTopologyWatcher(ctx context.Context, topoServer *topo.Server, hc HealthCheck, f TabletFilter, cell string, refreshInterval time.Duration, refreshKnownTablets bool) *TopologyWatcher {
 	tw := &TopologyWatcher{
 		topoServer:          topoServer,
 		healthcheck:         hc,
@@ -100,7 +96,6 @@ func NewTopologyWatcher(ctx context.Context, topoServer *topo.Server, hc HealthC
 		cell:                cell,
 		refreshInterval:     refreshInterval,
 		refreshKnownTablets: refreshKnownTablets,
-		concurrency:         topoReadConcurrency,
 		tablets:             make(map[string]*tabletInfo),
 	}
 	tw.firstLoadChan = make(chan struct{})
@@ -112,7 +107,7 @@ func NewTopologyWatcher(ctx context.Context, topoServer *topo.Server, hc HealthC
 }
 
 func (tw *TopologyWatcher) getTablets() ([]*topo.TabletInfo, error) {
-	return tw.topoServer.GetTabletsByCell(tw.ctx, tw.cell, &topo.GetTabletsByCellOptions{Concurrency: tw.concurrency})
+	return tw.topoServer.GetTabletsByCell(tw.ctx, tw.cell, nil)
 }
 
 // Start starts the topology watcher.
@@ -271,14 +266,14 @@ func (tw *TopologyWatcher) TopoChecksum() uint32 {
 // to be applied as an additional filter on the list of tablets returned by its getTablets function.
 type TabletFilter interface {
 	// IsIncluded returns whether tablet is included in this filter
-	IsIncluded(tablet *topodata.Tablet) bool
+	IsIncluded(tablet *topodatapb.Tablet) bool
 }
 
 // TabletFilters contains filters for tablets.
 type TabletFilters []TabletFilter
 
 // IsIncluded returns true if a tablet passes all filters.
-func (tf TabletFilters) IsIncluded(tablet *topodata.Tablet) bool {
+func (tf TabletFilters) IsIncluded(tablet *topodatapb.Tablet) bool {
 	for _, filter := range tf {
 		if !filter.IsIncluded(tablet) {
 			return false
@@ -299,7 +294,7 @@ type FilterByShard struct {
 type filterShard struct {
 	keyspace string
 	shard    string
-	keyRange *topodata.KeyRange // only set if shard is also a KeyRange
+	keyRange *topodatapb.KeyRange // only set if shard is also a KeyRange
 }
 
 // NewFilterByShard creates a new FilterByShard for use by a
@@ -344,7 +339,7 @@ func NewFilterByShard(filters []string) (*FilterByShard, error) {
 }
 
 // IsIncluded returns true iff the tablet's keyspace and shard match what we have.
-func (fbs *FilterByShard) IsIncluded(tablet *topodata.Tablet) bool {
+func (fbs *FilterByShard) IsIncluded(tablet *topodatapb.Tablet) bool {
 	canonical, kr, err := topo.ValidateShardName(tablet.Shard)
 	if err != nil {
 		log.Errorf("Error parsing shard name %v, will ignore tablet: %v", tablet.Shard, err)
@@ -384,7 +379,7 @@ func NewFilterByKeyspace(selectedKeyspaces []string) *FilterByKeyspace {
 }
 
 // IsIncluded returns true if the tablet's keyspace matches what we have.
-func (fbk *FilterByKeyspace) IsIncluded(tablet *topodata.Tablet) bool {
+func (fbk *FilterByKeyspace) IsIncluded(tablet *topodatapb.Tablet) bool {
 	_, exist := fbk.keyspaces[tablet.Keyspace]
 	return exist
 }
@@ -403,7 +398,7 @@ func NewFilterByTabletTags(tabletTags map[string]string) *FilterByTabletTags {
 }
 
 // IsIncluded returns true if the tablet's tags match what we expect.
-func (fbtg *FilterByTabletTags) IsIncluded(tablet *topodata.Tablet) bool {
+func (fbtg *FilterByTabletTags) IsIncluded(tablet *topodatapb.Tablet) bool {
 	if fbtg.tags == nil {
 		return true
 	}
