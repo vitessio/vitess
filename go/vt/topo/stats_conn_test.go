@@ -184,16 +184,31 @@ func (st *fakeConn) IsReadOnly() bool {
 	return st.readOnly
 }
 
+// createSemaphoreContention simulates semaphore contention on the test read semaphore.
+func createSemaphoreContention(ctx context.Context, duration time.Duration) {
+	if err := testStatsConnReadSem.Acquire(ctx, 1); err != nil {
+		panic(err)
+	}
+	defer testStatsConnReadSem.Release(1)
+	time.Sleep(duration)
+}
+
 // TestStatsConnTopoListDir emits stats on ListDir
 func TestStatsConnTopoListDir(t *testing.T) {
 	conn := &fakeConn{}
 	statsConn := NewStatsConn("global", conn, testStatsConnReadSem)
 	ctx := context.Background()
 
+	go createSemaphoreContention(ctx, 100*time.Millisecond)
 	statsConn.ListDir(ctx, "", true)
 	timingCounts := topoStatsConnTimings.Counts()["ListDir.global"]
 	if got, want := timingCounts, int64(1); got != want {
 		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
+	}
+
+	waitTimingsCounts := topoStatsConnReadWaitTimings.Counts()["ListDir.global"]
+	if got := waitTimingsCounts; got != 1 {
+		t.Errorf("stats were not properly recorded: got = %d, want = 1", got)
 	}
 
 	// error is zero before getting an error
@@ -271,10 +286,16 @@ func TestStatsConnTopoGet(t *testing.T) {
 	statsConn := NewStatsConn("global", conn, testStatsConnReadSem)
 	ctx := context.Background()
 
+	go createSemaphoreContention(ctx, time.Millisecond*100)
 	statsConn.Get(ctx, "")
 	timingCounts := topoStatsConnTimings.Counts()["Get.global"]
 	if got, want := timingCounts, int64(1); got != want {
 		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
+	}
+
+	waitTimingsCounts := topoStatsConnReadWaitTimings.Counts()["Get.global"]
+	if got := waitTimingsCounts; got != 1 {
+		t.Errorf("stats were not properly recorded: got = %d, want = 1", got)
 	}
 
 	// error is zero before getting an error
