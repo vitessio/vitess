@@ -70,10 +70,10 @@ func TestTopologyRecovery(t *testing.T) {
 }
 
 func TestExpireTableData(t *testing.T) {
-	oldVal := config.Config.AuditPurgeDays
-	config.Config.AuditPurgeDays = 10
+	oldVal := config.GetAuditPurgeDays()
+	config.SetAuditPurgeDays(10)
 	defer func() {
-		config.Config.AuditPurgeDays = oldVal
+		config.SetAuditPurgeDays(oldVal)
 	}()
 
 	tests := []struct {

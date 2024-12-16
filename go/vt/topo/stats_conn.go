@@ -20,6 +20,8 @@ import (
 	"context"
 	"time"
 
+	"golang.org/x/sync/semaphore"
+
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -37,6 +39,11 @@ var (
 		"TopologyConnErrors",
 		"TopologyConnErrors errors per operation",
 		[]string{"Operation", "Cell"})
+
+	topoStatsConnReadWaitTimings = stats.NewMultiTimings(
+		"TopologyConnReadWaits",
+		"TopologyConnReadWait timings",
+		[]string{"Operation", "Cell"})
 )
 
 const readOnlyErrorStrFormat = "cannot perform %s on %s as the topology server connection is read-only"
@@ -46,14 +53,16 @@ type StatsConn struct {
 	cell     string
 	conn     Conn
 	readOnly bool
+	readSem  *semaphore.Weighted
 }
 
 // NewStatsConn returns a StatsConn
-func NewStatsConn(cell string, conn Conn) *StatsConn {
+func NewStatsConn(cell string, conn Conn, readSem *semaphore.Weighted) *StatsConn {
 	return &StatsConn{
 		cell:     cell,
 		conn:     conn,
 		readOnly: false,
+		readSem:  readSem,
 	}
 }
 
@@ -61,6 +70,12 @@ func NewStatsConn(cell string, conn Conn) *StatsConn {
 func (st *StatsConn) ListDir(ctx context.Context, dirPath string, full bool) ([]DirEntry, error) {
 	startTime := time.Now()
 	statsKey := []string{"ListDir", st.cell}
+	if err := st.readSem.Acquire(ctx, 1); err != nil {
+		return nil, err
+	}
+	defer st.readSem.Release(1)
+	topoStatsConnReadWaitTimings.Record(statsKey, startTime)
+	startTime = time.Now() // reset
 	defer topoStatsConnTimings.Record(statsKey, startTime)
 	res, err := st.conn.ListDir(ctx, dirPath, full)
 	if err != nil {
@@ -106,6 +121,12 @@ func (st *StatsConn) Update(ctx context.Context, filePath string, contents []byt
 func (st *StatsConn) Get(ctx context.Context, filePath string) ([]byte, Version, error) {
 	startTime := time.Now()
 	statsKey := []string{"Get", st.cell}
+	if err := st.readSem.Acquire(ctx, 1); err != nil {
+		return nil, nil, err
+	}
+	defer st.readSem.Release(1)
+	topoStatsConnReadWaitTimings.Record(statsKey, startTime)
+	startTime = time.Now() // reset
 	defer topoStatsConnTimings.Record(statsKey, startTime)
 	bytes, version, err := st.conn.Get(ctx, filePath)
 	if err != nil {
@@ -119,6 +140,12 @@ func (st *StatsConn) Get(ctx context.Context, filePath string) ([]byte, Version,
 func (st *StatsConn) GetVersion(ctx context.Context, filePath string, version int64) ([]byte, error) {
 	startTime := time.Now()
 	statsKey := []string{"GetVersion", st.cell}
+	if err := st.readSem.Acquire(ctx, 1); err != nil {
+		return nil, err
+	}
+	defer st.readSem.Release(1)
+	topoStatsConnReadWaitTimings.Record(statsKey, startTime)
+	startTime = time.Now() // reset
 	defer topoStatsConnTimings.Record(statsKey, startTime)
 	bytes, err := st.conn.GetVersion(ctx, filePath, version)
 	if err != nil {
@@ -132,6 +159,12 @@ func (st *StatsConn) GetVersion(ctx context.Context, filePath string, version in
 func (st *StatsConn) List(ctx context.Context, filePathPrefix string) ([]KVInfo, error) {
 	startTime := time.Now()
 	statsKey := []string{"List", st.cell}
+	if err := st.readSem.Acquire(ctx, 1); err != nil {
+		return nil, err
+	}
+	defer st.readSem.Release(1)
+	topoStatsConnReadWaitTimings.Record(statsKey, startTime)
+	startTime = time.Now() // reset
 	defer topoStatsConnTimings.Record(statsKey, startTime)
 	bytes, err := st.conn.List(ctx, filePathPrefix)
 	if err != nil {

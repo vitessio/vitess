@@ -48,7 +48,6 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	exitcode := func() int {
@@ -70,7 +69,6 @@ func TestMain(m *testing.M) {
 			"--tablet_refresh_interval", "2s",
 		)
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
-			"--twopc_enable",
 			"--twopc_abandon_age", "1",
 			"--migration_check_interval", "2s",
 		)
@@ -122,9 +120,9 @@ func start(t *testing.T) (*mysql.Conn, func()) {
 }
 
 func cleanup(t *testing.T) {
-	cluster.PanicHandler(t)
 
 	utils.ClearOutTable(t, vtParams, "twopc_fuzzer_insert")
 	utils.ClearOutTable(t, vtParams, "twopc_fuzzer_update")
+	utils.ClearOutTable(t, vtParams, "twopc_fuzzer_multi")
 	utils.ClearOutTable(t, vtParams, "twopc_t1")
 }

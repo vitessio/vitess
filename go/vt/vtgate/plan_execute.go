@@ -29,11 +29,12 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 	"vitess.io/vitess/go/vt/vtgate/logstats"
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
 )
 
-type planExec func(ctx context.Context, plan *engine.Plan, vc *vcursorImpl, bindVars map[string]*querypb.BindVariable, startTime time.Time) error
+type planExec func(ctx context.Context, plan *engine.Plan, vc *econtext.VCursorImpl, bindVars map[string]*querypb.BindVariable, startTime time.Time) error
 type txResult func(sqlparser.StatementType, *sqltypes.Result) error
 
 var vschemaWaitTimeout = 30 * time.Second
@@ -56,10 +57,12 @@ func waitForNewerVSchema(ctx context.Context, e *Executor, lastVSchemaCreated ti
 	}
 }
 
+const MaxBufferingRetries = 3
+
 func (e *Executor) newExecute(
 	ctx context.Context,
 	mysqlCtx vtgateservice.MySQLConnection,
-	safeSession *SafeSession,
+	safeSession *econtext.SafeSession,
 	sql string,
 	bindVars map[string]*querypb.BindVariable,
 	logStats *logstats.LogStats,
@@ -116,7 +119,7 @@ func (e *Executor) newExecute(
 			}
 		}
 
-		vcursor, err := newVCursorImpl(safeSession, comments, e, logStats, e.vm, vs, e.resolver.resolver, e.serv, e.warnShardedOnly, e.pv)
+		vcursor, err := econtext.NewVCursorImpl(safeSession, comments, e, logStats, e.vm, vs, e.resolver.resolver, e.serv, nullResultsObserver{}, e.vConfig)
 		if err != nil {
 			return err
 		}
@@ -146,10 +149,8 @@ func (e *Executor) newExecute(
 		}
 
 		// set the overall query timeout if it is not already set
-		if vcursor.queryTimeout > 0 && cancel == nil {
-			ctx, cancel = context.WithTimeout(ctx, vcursor.queryTimeout)
-			defer cancel()
-		}
+		ctx, cancel = vcursor.GetContextWithTimeOut(ctx)
+		defer cancel()
 
 		result, err = e.handleTransactions(ctx, mysqlCtx, safeSession, plan, logStats, vcursor, stmt)
 		if err != nil {
@@ -225,10 +226,10 @@ func (e *Executor) newExecute(
 func (e *Executor) handleTransactions(
 	ctx context.Context,
 	mysqlCtx vtgateservice.MySQLConnection,
-	safeSession *SafeSession,
+	safeSession *econtext.SafeSession,
 	plan *engine.Plan,
 	logStats *logstats.LogStats,
-	vcursor *vcursorImpl,
+	vcursor *econtext.VCursorImpl,
 	stmt sqlparser.Statement,
 ) (*sqltypes.Result, error) {
 	// We need to explicitly handle errors, and begin/commit/rollback, since these control transactions. Everything else
@@ -247,19 +248,19 @@ func (e *Executor) handleTransactions(
 		qr, err := e.handleSavepoint(ctx, safeSession, plan.Original, "Savepoint", logStats, func(_ string) (*sqltypes.Result, error) {
 			// Safely to ignore as there is no transaction.
 			return &sqltypes.Result{}, nil
-		}, vcursor.ignoreMaxMemoryRows)
+		}, vcursor.IgnoreMaxMemoryRows())
 		return qr, err
 	case sqlparser.StmtSRollback:
 		qr, err := e.handleSavepoint(ctx, safeSession, plan.Original, "Rollback Savepoint", logStats, func(query string) (*sqltypes.Result, error) {
 			// Error as there is no transaction, so there is no savepoint that exists.
 			return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.SPDoesNotExist, "SAVEPOINT does not exist: %s", query)
-		}, vcursor.ignoreMaxMemoryRows)
+		}, vcursor.IgnoreMaxMemoryRows())
 		return qr, err
 	case sqlparser.StmtRelease:
 		qr, err := e.handleSavepoint(ctx, safeSession, plan.Original, "Release Savepoint", logStats, func(query string) (*sqltypes.Result, error) {
 			// Error as there is no transaction, so there is no savepoint that exists.
 			return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.SPDoesNotExist, "SAVEPOINT does not exist: %s", query)
-		}, vcursor.ignoreMaxMemoryRows)
+		}, vcursor.IgnoreMaxMemoryRows())
 		return qr, err
 	case sqlparser.StmtKill:
 		return e.handleKill(ctx, mysqlCtx, stmt, logStats)
@@ -267,7 +268,7 @@ func (e *Executor) handleTransactions(
 	return nil, nil
 }
 
-func (e *Executor) startTxIfNecessary(ctx context.Context, safeSession *SafeSession) error {
+func (e *Executor) startTxIfNecessary(ctx context.Context, safeSession *econtext.SafeSession) error {
 	if !safeSession.Autocommit && !safeSession.InTransaction() {
 		if err := e.txConn.Begin(ctx, safeSession, nil); err != nil {
 			return err
@@ -276,7 +277,7 @@ func (e *Executor) startTxIfNecessary(ctx context.Context, safeSession *SafeSess
 	return nil
 }
 
-func (e *Executor) insideTransaction(ctx context.Context, safeSession *SafeSession, logStats *logstats.LogStats, execPlan func() error) error {
+func (e *Executor) insideTransaction(ctx context.Context, safeSession *econtext.SafeSession, logStats *logstats.LogStats, execPlan func() error) error {
 	mustCommit := false
 	if safeSession.Autocommit && !safeSession.InTransaction() {
 		mustCommit = true
@@ -320,9 +321,9 @@ func (e *Executor) insideTransaction(ctx context.Context, safeSession *SafeSessi
 
 func (e *Executor) executePlan(
 	ctx context.Context,
-	safeSession *SafeSession,
+	safeSession *econtext.SafeSession,
 	plan *engine.Plan,
-	vcursor *vcursorImpl,
+	vcursor *econtext.VCursorImpl,
 	bindVars map[string]*querypb.BindVariable,
 	logStats *logstats.LogStats,
 	execStart time.Time,
@@ -342,7 +343,7 @@ func (e *Executor) executePlan(
 }
 
 // rollbackExecIfNeeded rollbacks the partial execution if earlier it was detected that it needs partial query execution to be rolled back.
-func (e *Executor) rollbackExecIfNeeded(ctx context.Context, safeSession *SafeSession, bindVars map[string]*querypb.BindVariable, logStats *logstats.LogStats, err error) error {
+func (e *Executor) rollbackExecIfNeeded(ctx context.Context, safeSession *econtext.SafeSession, bindVars map[string]*querypb.BindVariable, logStats *logstats.LogStats, err error) error {
 	if safeSession.InTransaction() && safeSession.IsRollbackSet() {
 		rErr := e.rollbackPartialExec(ctx, safeSession, bindVars, logStats)
 		return vterrors.Wrap(err, rErr.Error())
@@ -353,7 +354,7 @@ func (e *Executor) rollbackExecIfNeeded(ctx context.Context, safeSession *SafeSe
 // rollbackPartialExec rollbacks to the savepoint or rollbacks transaction based on the value set on SafeSession.rollbackOnPartialExec.
 // Once, it is used the variable is reset.
 // If it fails to rollback to the previous savepoint then, the transaction is forced to be rolled back.
-func (e *Executor) rollbackPartialExec(ctx context.Context, safeSession *SafeSession, bindVars map[string]*querypb.BindVariable, logStats *logstats.LogStats) error {
+func (e *Executor) rollbackPartialExec(ctx context.Context, safeSession *econtext.SafeSession, bindVars map[string]*querypb.BindVariable, logStats *logstats.LogStats) error {
 	var err error
 	var errMsg strings.Builder
 
@@ -367,8 +368,8 @@ func (e *Executor) rollbackPartialExec(ctx context.Context, safeSession *SafeSes
 	}
 
 	// needs to rollback only once.
-	rQuery := safeSession.rollbackOnPartialExec
-	if rQuery != txRollback {
+	rQuery := safeSession.GetRollbackOnPartialExec()
+	if rQuery != econtext.TxRollback {
 		safeSession.SavepointRollback()
 		_, _, err = e.execute(ctx, nil, safeSession, rQuery, bindVars, logStats)
 		// If no error, the revert is successful with the savepoint. Notify the reason as error to the client.
@@ -388,9 +389,9 @@ func (e *Executor) rollbackPartialExec(ctx context.Context, safeSession *SafeSes
 	return vterrors.New(vtrpcpb.Code_ABORTED, errMsg.String())
 }
 
-func (e *Executor) setLogStats(logStats *logstats.LogStats, plan *engine.Plan, vcursor *vcursorImpl, execStart time.Time, err error, qr *sqltypes.Result) {
+func (e *Executor) setLogStats(logStats *logstats.LogStats, plan *engine.Plan, vcursor *econtext.VCursorImpl, execStart time.Time, err error, qr *sqltypes.Result) {
 	logStats.StmtType = plan.Type.String()
-	logStats.ActiveKeyspace = vcursor.keyspace
+	logStats.ActiveKeyspace = vcursor.GetKeyspace()
 	logStats.TablesUsed = plan.TablesUsed
 	logStats.TabletType = vcursor.TabletType().String()
 	errCount := e.logExecutionEnd(logStats, execStart, plan, err, qr)

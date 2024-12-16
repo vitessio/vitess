@@ -3404,19 +3404,44 @@
       "QueryType": "SELECT",
       "Original": "select * from multicolvin where column_b = 1",
       "Instructions": {
-        "OperatorType": "Route",
+        "OperatorType": "VindexLookup",
         "Variant": "EqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select * from multicolvin where 1 != 1",
-        "Query": "select * from multicolvin where column_b = 1",
-        "Table": "multicolvin",
         "Values": [
           "1"
         ],
-        "Vindex": "colb_colc_map"
+        "Vindex": "colb_colc_map",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "IN",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select colb, keyspace_id from colb_colc_map where 1 != 1",
+            "Query": "select colb, keyspace_id from colb_colc_map where colb in ::__vals",
+            "Table": "colb_colc_map",
+            "Values": [
+              "::colb"
+            ],
+            "Vindex": "hash"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "ByDestination",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select * from multicolvin where 1 != 1",
+            "Query": "select * from multicolvin where column_b = 1",
+            "Table": "multicolvin"
+          }
+        ]
       },
       "TablesUsed": [
         "user.multicolvin"
@@ -3430,19 +3455,44 @@
       "QueryType": "SELECT",
       "Original": "select * from multicolvin where column_b = 1 and column_c = 2",
       "Instructions": {
-        "OperatorType": "Route",
+        "OperatorType": "VindexLookup",
         "Variant": "EqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select * from multicolvin where 1 != 1",
-        "Query": "select * from multicolvin where column_b = 1 and column_c = 2",
-        "Table": "multicolvin",
         "Values": [
           "1"
         ],
-        "Vindex": "colb_colc_map"
+        "Vindex": "colb_colc_map",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "IN",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select colb, keyspace_id from colb_colc_map where 1 != 1",
+            "Query": "select colb, keyspace_id from colb_colc_map where colb in ::__vals",
+            "Table": "colb_colc_map",
+            "Values": [
+              "::colb"
+            ],
+            "Vindex": "hash"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "ByDestination",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select * from multicolvin where 1 != 1",
+            "Query": "select * from multicolvin where column_b = 1 and column_c = 2",
+            "Table": "multicolvin"
+          }
+        ]
       },
       "TablesUsed": [
         "user.multicolvin"
@@ -3456,19 +3506,44 @@
       "QueryType": "SELECT",
       "Original": "select * from multicolvin where column_b = 1 and column_c = 2 and column_a = 3",
       "Instructions": {
-        "OperatorType": "Route",
+        "OperatorType": "VindexLookup",
         "Variant": "EqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select * from multicolvin where 1 != 1",
-        "Query": "select * from multicolvin where column_b = 1 and column_c = 2 and column_a = 3",
-        "Table": "multicolvin",
         "Values": [
           "1"
         ],
-        "Vindex": "colb_colc_map"
+        "Vindex": "colb_colc_map",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "IN",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select colb, keyspace_id from colb_colc_map where 1 != 1",
+            "Query": "select colb, keyspace_id from colb_colc_map where colb in ::__vals",
+            "Table": "colb_colc_map",
+            "Values": [
+              "::colb"
+            ],
+            "Vindex": "hash"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "ByDestination",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select * from multicolvin where 1 != 1",
+            "Query": "select * from multicolvin where column_b = 1 and column_c = 2 and column_a = 3",
+            "Table": "multicolvin"
+          }
+        ]
       },
       "TablesUsed": [
         "user.multicolvin"
@@ -3482,19 +3557,44 @@
       "QueryType": "SELECT",
       "Original": "select * from multicolvin where column_a = 3 and column_b = 1",
       "Instructions": {
-        "OperatorType": "Route",
+        "OperatorType": "VindexLookup",
         "Variant": "EqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select * from multicolvin where 1 != 1",
-        "Query": "select * from multicolvin where column_a = 3 and column_b = 1",
-        "Table": "multicolvin",
         "Values": [
           "1"
         ],
-        "Vindex": "colb_colc_map"
+        "Vindex": "colb_colc_map",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "IN",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select colb, keyspace_id from colb_colc_map where 1 != 1",
+            "Query": "select colb, keyspace_id from colb_colc_map where colb in ::__vals",
+            "Table": "colb_colc_map",
+            "Values": [
+              "::colb"
+            ],
+            "Vindex": "hash"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "ByDestination",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select * from multicolvin where 1 != 1",
+            "Query": "select * from multicolvin where column_a = 3 and column_b = 1",
+            "Table": "multicolvin"
+          }
+        ]
       },
       "TablesUsed": [
         "user.multicolvin"

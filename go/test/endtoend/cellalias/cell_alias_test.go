@@ -90,7 +90,6 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	exitcode, err := func() (int, error) {
@@ -232,7 +231,6 @@ func TestMain(m *testing.M) {
 }
 
 func TestAlias(t *testing.T) {
-	defer cluster.PanicHandler(t)
 
 	insertInitialValues(t)
 	defer deleteInitialValues(t)
@@ -296,7 +294,6 @@ func TestAlias(t *testing.T) {
 }
 
 func TestAddAliasWhileVtgateUp(t *testing.T) {
-	defer cluster.PanicHandler(t)
 
 	insertInitialValues(t)
 	defer deleteInitialValues(t)

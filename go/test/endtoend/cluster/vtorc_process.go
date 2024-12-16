@@ -43,20 +43,28 @@ type VTOrcProcess struct {
 	ExtraArgs   []string
 	ConfigPath  string
 	Config      VTOrcConfiguration
-	WebPort     int
+	NoOverride  bool
 	proc        *exec.Cmd
 	exit        chan error
 }
 
 type VTOrcConfiguration struct {
-	Debug                                 bool
-	ListenAddress                         string
-	RecoveryPeriodBlockSeconds            int
-	TopologyRefreshSeconds                int    `json:",omitempty"`
-	PreventCrossDataCenterPrimaryFailover bool   `json:",omitempty"`
-	LockShardTimeoutSeconds               int    `json:",omitempty"`
-	ReplicationLagQuery                   string `json:",omitempty"`
-	FailPrimaryPromotionOnLagMinutes      int    `json:",omitempty"`
+	InstancePollTime                     string `json:"instance-poll-time,omitempty"`
+	SnapshotTopologyInterval             string `json:"snapshot-topology-interval,omitempty"`
+	PreventCrossCellFailover             bool   `json:"prevent-cross-cell-failover,omitempty"`
+	ReasonableReplicationLag             string `json:"reasonable-replication-lag,omitempty"`
+	AuditToBackend                       bool   `json:"audit-to-backend,omitempty"`
+	AuditToSyslog                        bool   `json:"audit-to-syslog,omitempty"`
+	AuditPurgeDuration                   string `json:"audit-purge-duration,omitempty"`
+	WaitReplicasTimeout                  string `json:"wait-replicas-timeout,omitempty"`
+	TolerableReplicationLag              string `json:"tolerable-replication-lag,omitempty"`
+	TopoInformationRefreshDuration       string `json:"topo-information-refresh-duration,omitempty"`
+	RecoveryPollDuration                 string `json:"recovery-poll-duration,omitempty"`
+	AllowEmergencyReparent               string `json:"allow-emergency-reparent,omitempty"`
+	ChangeTabletsWithErrantGtidToDrained bool   `json:"change-tablets-with-errant-gtid-to-drained,omitempty"`
+	LockShardTimeoutSeconds              int    `json:",omitempty"`
+	ReplicationLagQuery                  string `json:",omitempty"`
+	FailPrimaryPromotionOnLagMinutes     int    `json:",omitempty"`
 }
 
 // ToJSONString will marshal this configuration as JSON
@@ -65,12 +73,12 @@ func (config *VTOrcConfiguration) ToJSONString() string {
 	return string(b)
 }
 
-func (config *VTOrcConfiguration) AddDefaults(webPort int) {
-	config.Debug = true
-	if config.RecoveryPeriodBlockSeconds == 0 {
-		config.RecoveryPeriodBlockSeconds = 1
-	}
-	config.ListenAddress = fmt.Sprintf(":%d", webPort)
+func (config *VTOrcConfiguration) addValuesToCheckOverride() {
+	config.InstancePollTime = "10h"
+}
+
+func (orc *VTOrcProcess) RewriteConfiguration() error {
+	return os.WriteFile(orc.ConfigPath, []byte(orc.Config.ToJSONString()), 0644)
 }
 
 // Setup starts orc process with required arguements
@@ -91,7 +99,9 @@ func (orc *VTOrcProcess) Setup() (err error) {
 	orc.ConfigPath = configFile.Name()
 
 	// Add the default configurations and print them out
-	orc.Config.AddDefaults(orc.WebPort)
+	if !orc.NoOverride {
+		orc.Config.addValuesToCheckOverride()
+	}
 	log.Errorf("configuration - %v", orc.Config.ToJSONString())
 	_, err = configFile.WriteString(orc.Config.ToJSONString())
 	if err != nil {
@@ -111,15 +121,18 @@ func (orc *VTOrcProcess) Setup() (err error) {
 		"--topo_implementation", orc.TopoImplementation,
 		"--topo_global_server_address", orc.TopoGlobalAddress,
 		"--topo_global_root", orc.TopoGlobalRoot,
-		"--config", orc.ConfigPath,
+		"--config-file", orc.ConfigPath,
 		"--port", fmt.Sprintf("%d", orc.Port),
-		// This parameter is overriden from the config file, added here to just verify that we indeed use the config file paramter over the flag
-		"--recovery-period-block-duration", "10h",
-		"--instance-poll-time", "1s",
-		// Faster topo information refresh speeds up the tests. This doesn't add any significant load either
-		"--topo-information-refresh-duration", "3s",
 		"--bind-address", "127.0.0.1",
 	)
+	if !orc.NoOverride {
+		orc.proc.Args = append(orc.proc.Args,
+			// This parameter is overriden from the config file. This verifies that we indeed use the flag value over the config file.
+			"--instance-poll-time", "1s",
+			// Faster topo information refresh speeds up the tests. This doesn't add any significant load either.
+			"--topo-information-refresh-duration", "3s",
+		)
+	}
 
 	if *isCoverage {
 		orc.proc.Args = append(orc.proc.Args, "--test.coverprofile="+getCoveragePath("orc.out"))

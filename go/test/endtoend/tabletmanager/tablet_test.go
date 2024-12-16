@@ -31,7 +31,6 @@ import (
 
 // TestEnsureDB tests that vttablet creates the db as needed
 func TestEnsureDB(t *testing.T) {
-	defer cluster.PanicHandler(t)
 
 	// Create new tablet
 	tablet := clusterInstance.NewVttabletInstance("replica", 0, "")
@@ -67,7 +66,6 @@ func TestEnsureDB(t *testing.T) {
 
 // TestResetReplicationParameters tests that the RPC ResetReplicationParameters works as intended.
 func TestResetReplicationParameters(t *testing.T) {
-	defer cluster.PanicHandler(t)
 
 	// Create new tablet
 	tablet := clusterInstance.NewVttabletInstance("replica", 0, "")

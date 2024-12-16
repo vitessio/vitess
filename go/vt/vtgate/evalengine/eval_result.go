@@ -62,6 +62,7 @@ func (er EvalResult) String() string {
 
 // TupleValues allows for retrieval of the value we expose for public consumption
 func (er EvalResult) TupleValues() []sqltypes.Value {
+	// TODO: Make this collation-aware
 	switch v := er.v.(type) {
 	case *evalTuple:
 		result := make([]sqltypes.Value, 0, len(v.t))

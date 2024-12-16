@@ -66,7 +66,6 @@ INSERT INTO t1_seq (id, next_id, cache) values(0, 1, 1000);
 )
 
 func TestMain(m *testing.M) {
-	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	exitCode := func() int {
@@ -108,7 +107,6 @@ func TestMain(m *testing.M) {
 }
 
 func TestInsertIgnoreOnLookupUniqueVindex(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	vtParams := mysql.ConnParams{
 		Host: "localhost",
@@ -137,7 +135,6 @@ func TestInsertIgnoreOnLookupUniqueVindex(t *testing.T) {
 
 func TestOpenTxBlocksInSerial(t *testing.T) {
 	t.Skip("Update and Insert in same transaction does not work with the unique consistent lookup having same value.")
-	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	vtParams := mysql.ConnParams{
 		Host: "localhost",
@@ -169,7 +166,6 @@ func TestOpenTxBlocksInSerial(t *testing.T) {
 
 func TestOpenTxBlocksInConcurrent(t *testing.T) {
 	t.Skip("Update and Insert in same transaction does not work with the unique consistent lookup having same value.")
-	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	vtParams := mysql.ConnParams{
 		Host: "localhost",
@@ -207,7 +203,6 @@ func TestOpenTxBlocksInConcurrent(t *testing.T) {
 }
 
 func TestUpdateLookupUniqueVindex(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	vtParams := mysql.ConnParams{
 		Host: "localhost",
