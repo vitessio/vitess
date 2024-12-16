@@ -718,7 +718,7 @@ func (sm *stateManager) Broadcast() {
 	lag, err := sm.refreshReplHealthLocked()
 	if sm.demotePrimaryStalled {
 		// If we are stalled while demoting primary, we should send an error for it.
-		err = vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Failed to complete primary demotion")
+		err = vterrors.VT09031()
 	}
 	sm.hs.ChangeState(sm.target.TabletType, sm.ptsTimestamp, lag, err, sm.isServingLocked())
 }
