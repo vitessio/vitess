@@ -272,10 +272,6 @@ func (l *lookup) validateAndGetVindex(specs *vschemapb.Keyspace) (*vschemapb.Vin
 		if len(vindexFromCols) != 1 {
 			return nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unique vindex 'from' should have only one column")
 		}
-	} else {
-		if len(vindexFromCols) < 2 {
-			return nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "non-unique vindex 'from' should have more than one column")
-		}
 	}
 
 	vindexToCol := vindex.Params["to"]
