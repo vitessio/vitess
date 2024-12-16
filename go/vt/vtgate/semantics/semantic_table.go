@@ -1014,6 +1014,13 @@ func (st *SemTable) GetMirrorInfo() MirrorInfo {
 	return mirrorInfo(st.Tables)
 }
 
+func (st *SemTable) ShouldFetchLastInsertID() bool {
+	if st == nil {
+		return false
+	}
+	return st.QuerySignature.LastInsertIDArg
+}
+
 // mirrorInfo looks through all tables with mirror rules defined, and returns a
 // MirrorInfo containing the lowest mirror percentage found across all rules.
 //

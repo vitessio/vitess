@@ -2236,6 +2236,52 @@
     }
   },
   {
+    "comment": "update with last_insert_id in SET",
+    "query": "update user_extra set val = last_insert_id(123)",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update user_extra set val = last_insert_id(123)",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "FetchLastInsertID": true,
+        "Query": "update user_extra set val = last_insert_id(123)",
+        "Table": "user_extra"
+      },
+      "TablesUsed": [
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "delete with last_insert_id in where",
+    "query": "delete from user_extra where val = last_insert_id(123)",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from user_extra where val = last_insert_id(123)",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "FetchLastInsertID": true,
+        "Query": "delete from user_extra where val = last_insert_id(123)",
+        "Table": "user_extra"
+      },
+      "TablesUsed": [
+        "user.user_extra"
+      ]
+    }
+  },
+  {
     "comment": "delete from with no where clause",
     "query": "delete from user_extra",
     "plan": {

@@ -385,6 +385,10 @@ func (ins *Insert) description() PrimitiveDescription {
 		}
 	}
 
+	if ins.FetchLastInsertID {
+		other["FetchLastInsertID"] = true
+	}
+
 	return PrimitiveDescription{
 		OperatorType:     "Insert",
 		Keyspace:         ins.Keyspace,

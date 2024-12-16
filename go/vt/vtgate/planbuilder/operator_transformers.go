@@ -536,6 +536,7 @@ func routeToEngineRoute(ctx *plancontext.PlanningContext, op *operators.Route, h
 		TableName:           strings.Join(tableNames, ", "),
 		RoutingParameters:   rp,
 		TruncateColumnCount: op.ResultColumns,
+		FetchLastInsertID:   ctx.SemTable.ShouldFetchLastInsertID(),
 	}
 	if hints != nil {
 		e.ScatterErrorsAsWarnings = hints.scatterErrorsAsWarnings
@@ -601,7 +602,7 @@ func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (
 	case *sqlparser.Delete:
 		return buildDeletePrimitive(ctx, op, dmlOp, stmt, hints)
 	case *sqlparser.Insert:
-		return buildInsertPrimitive(op, dmlOp, stmt, hints)
+		return buildInsertPrimitive(ctx, op, dmlOp, stmt, hints)
 	default:
 		return nil, vterrors.VT13001(fmt.Sprintf("dont know how to %T", stmt))
 	}
@@ -637,7 +638,10 @@ func buildRoutePrimitive(ctx *plancontext.PlanningContext, op *operators.Route, 
 }
 
 func buildInsertPrimitive(
-	rb *operators.Route, op operators.Operator, stmt *sqlparser.Insert,
+	ctx *plancontext.PlanningContext,
+	rb *operators.Route,
+	op operators.Operator,
+	stmt *sqlparser.Insert,
 	hints *queryHints,
 ) (engine.Primitive, error) {
 	ins := op.(*operators.Insert)
@@ -656,8 +660,9 @@ func buildInsertPrimitive(
 	}
 
 	eins := &engine.Insert{
-		InsertCommon: ic,
-		VindexValues: ins.VindexValues,
+		InsertCommon:      ic,
+		VindexValues:      ins.VindexValues,
+		FetchLastInsertID: ctx.SemTable.ShouldFetchLastInsertID(),
 	}
 
 	// we would need to generate the query on the fly. The only exception here is
@@ -788,6 +793,7 @@ func createDMLPrimitive(ctx *plancontext.PlanningContext, rb *operators.Route, h
 		Vindexes:          colVindexes,
 		OwnedVindexQuery:  vindexQuery,
 		RoutingParameters: rp,
+		FetchLastInsertID: ctx.SemTable.ShouldFetchLastInsertID(),
 	}
 
 	if rb.Routing.OpCode() != engine.Unsharded && vindexQuery != "" {

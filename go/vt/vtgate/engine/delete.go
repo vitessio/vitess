@@ -131,6 +131,9 @@ func (del *Delete) description() PrimitiveDescription {
 	}
 
 	addFieldsIfNotEmpty(del.DML, other)
+	if del.FetchLastInsertID {
+		other["FetchLastInsertID"] = del.FetchLastInsertID
+	}
 
 	return PrimitiveDescription{
 		OperatorType:     "Delete",
