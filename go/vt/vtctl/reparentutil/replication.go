@@ -165,9 +165,10 @@ func SetReplicationSource(ctx context.Context, ts *topo.Server, tmc tmclient.Tab
 // replicationSnapshot stores the status maps and the tablets that were reachable
 // when trying to stopReplicationAndBuildStatusMaps.
 type replicationSnapshot struct {
-	statusMap        map[string]*replicationdatapb.StopReplicationStatus
-	primaryStatusMap map[string]*replicationdatapb.PrimaryStatus
-	reachableTablets []*topodatapb.Tablet
+	statusMap          map[string]*replicationdatapb.StopReplicationStatus
+	primaryStatusMap   map[string]*replicationdatapb.PrimaryStatus
+	reachableTablets   []*topodatapb.Tablet
+	tabletsBackupState map[string]bool
 }
 
 // stopReplicationAndBuildStatusMaps stops replication on all replicas, then
@@ -193,9 +194,10 @@ func stopReplicationAndBuildStatusMaps(
 		errChan    = make(chan concurrency.Error)
 		allTablets []*topodatapb.Tablet
 		res        = &replicationSnapshot{
-			statusMap:        map[string]*replicationdatapb.StopReplicationStatus{},
-			primaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{},
-			reachableTablets: []*topodatapb.Tablet{},
+			statusMap:          map[string]*replicationdatapb.StopReplicationStatus{},
+			primaryStatusMap:   map[string]*replicationdatapb.PrimaryStatus{},
+			reachableTablets:   []*topodatapb.Tablet{},
+			tabletsBackupState: map[string]bool{},
 		}
 	)
 
@@ -237,6 +239,20 @@ func stopReplicationAndBuildStatusMaps(
 				err = vterrors.Wrapf(err, "error when getting replication status for alias %v: %v", alias, err)
 			}
 		} else {
+			isTakingBackup := false
+
+			// Prefer the most up-to-date information regarding whether the tablet is taking a backup from the After
+			// replication status, but fall back to the Before status if After is nil.
+			if stopReplicationStatus.After != nil {
+				isTakingBackup = stopReplicationStatus.After.BackupRunning
+			} else if stopReplicationStatus.Before != nil {
+				isTakingBackup = stopReplicationStatus.Before.BackupRunning
+			}
+
+			m.Lock()
+			res.tabletsBackupState[alias] = isTakingBackup
+			m.Unlock()
+
 			var sqlThreadRunning bool
 			// Check if the sql thread was running for the tablet
 			sqlThreadRunning, err = SQLThreadWasRunning(stopReplicationStatus)

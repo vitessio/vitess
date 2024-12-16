@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestShouldCutOverAccordingToBackoff(t *testing.T) {
@@ -161,6 +162,62 @@ func TestShouldCutOverAccordingToBackoff(t *testing.T) {
 			)
 			assert.Equal(t, tcase.expectShouldCutOver, shouldCutOver)
 			assert.Equal(t, tcase.expectShouldForceCutOver, shouldForceCutOver)
+		})
+	}
+}
+
+func TestSafeMigrationCutOverThreshold(t *testing.T) {
+	require.NotZero(t, defaultCutOverThreshold)
+	require.GreaterOrEqual(t, defaultCutOverThreshold, minCutOverThreshold)
+	require.LessOrEqual(t, defaultCutOverThreshold, maxCutOverThreshold)
+
+	tcases := []struct {
+		threshold time.Duration
+		expect    time.Duration
+		isErr     bool
+	}{
+		{
+			threshold: 0,
+			expect:    defaultCutOverThreshold,
+		},
+		{
+			threshold: 2 * time.Second,
+			expect:    defaultCutOverThreshold,
+			isErr:     true,
+		},
+		{
+			threshold: 75 * time.Second,
+			expect:    defaultCutOverThreshold,
+			isErr:     true,
+		},
+		{
+			threshold: defaultCutOverThreshold,
+			expect:    defaultCutOverThreshold,
+		},
+		{
+			threshold: 5 * time.Second,
+			expect:    5 * time.Second,
+		},
+		{
+			threshold: 15 * time.Second,
+			expect:    15 * time.Second,
+		},
+		{
+			threshold: 25 * time.Second,
+			expect:    25 * time.Second,
+		},
+	}
+	for _, tcase := range tcases {
+		t.Run(tcase.threshold.String(), func(t *testing.T) {
+			threshold, err := safeMigrationCutOverThreshold(tcase.threshold)
+			if tcase.isErr {
+				assert.Error(t, err)
+				require.Equal(t, tcase.expect, defaultCutOverThreshold)
+				// And keep testing, because we then also expect the threshold to be the default
+			} else {
+				assert.NoError(t, err)
+			}
+			assert.Equal(t, tcase.expect, threshold)
 		})
 	}
 }

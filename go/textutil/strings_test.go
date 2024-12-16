@@ -122,6 +122,64 @@ func TestSingleWordCamel(t *testing.T) {
 	}
 }
 
+func TestPascalCase(t *testing.T) {
+	tt := []struct {
+		word   string
+		expect string
+	}{
+		{
+			word:   "",
+			expect: "",
+		},
+		{
+			word:   "_",
+			expect: "",
+		},
+		{
+			word:   "_a",
+			expect: "A",
+		},
+		{
+			word:   "A",
+			expect: "A",
+		},
+		{
+			word:   "mysql",
+			expect: "Mysql",
+		},
+		{
+			word:   "mySQL",
+			expect: "Mysql",
+		},
+		{
+			word:   "foo-bar",
+			expect: "FooBar",
+		},
+		{
+			word:   "mysql-server",
+			expect: "MysqlServer",
+		},
+		{
+			word:   "io_util",
+			expect: "IoUtil",
+		},
+		{
+			word:   "there and back again",
+			expect: "ThereAndBackAgain",
+		},
+		{
+			word:   "combine_all_OF the\tabove",
+			expect: "CombineAllOfTheAbove",
+		},
+	}
+	for _, tc := range tt {
+		t.Run(tc.word, func(t *testing.T) {
+			pascal := PascalCase(tc.word)
+			assert.Equal(t, tc.expect, pascal)
+		})
+	}
+}
+
 func TestValueIsSimulatedNull(t *testing.T) {
 	tt := []struct {
 		name   string

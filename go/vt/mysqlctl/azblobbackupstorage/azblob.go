@@ -32,8 +32,9 @@ import (
 	"github.com/Azure/azure-storage-blob-go/azblob"
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/vt/mysqlctl/errors"
+
 	"vitess.io/vitess/go/viperutil"
-	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/servenv"
@@ -203,9 +204,9 @@ type AZBlobBackupHandle struct {
 	name      string
 	readOnly  bool
 	waitGroup sync.WaitGroup
-	errors    concurrency.AllErrorRecorder
 	ctx       context.Context
 	cancel    context.CancelFunc
+	errors.PerFileErrorRecorder
 }
 
 // Directory implements BackupHandle.
@@ -216,21 +217,6 @@ func (bh *AZBlobBackupHandle) Directory() string {
 // Name implements BackupHandle.
 func (bh *AZBlobBackupHandle) Name() string {
 	return bh.name
-}
-
-// RecordError is part of the concurrency.ErrorRecorder interface.
-func (bh *AZBlobBackupHandle) RecordError(err error) {
-	bh.errors.RecordError(err)
-}
-
-// HasErrors is part of the concurrency.ErrorRecorder interface.
-func (bh *AZBlobBackupHandle) HasErrors() bool {
-	return bh.errors.HasErrors()
-}
-
-// Error is part of the concurrency.ErrorRecorder interface.
-func (bh *AZBlobBackupHandle) Error() error {
-	return bh.errors.Error()
 }
 
 // AddFile implements BackupHandle.
@@ -263,7 +249,7 @@ func (bh *AZBlobBackupHandle) AddFile(ctx context.Context, filename string, file
 		})
 		if err != nil {
 			reader.CloseWithError(err)
-			bh.RecordError(err)
+			bh.RecordError(filename, err)
 		}
 	}()
 

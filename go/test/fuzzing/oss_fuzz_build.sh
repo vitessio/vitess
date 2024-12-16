@@ -54,10 +54,10 @@ mv api_marshal_fuzzer.go $SRC/vitess/go/test/fuzzing/
 compile_go_fuzzer vitess.io/vitess/go/test/fuzzing FuzzAPIMarshal api_marshal_fuzzer
 
 # collation fuzzer
-mv ./go/mysql/collations/uca_test.go \
-   ./go/mysql/collations/uca_test_fuzz.go
+mv ./go/mysql/collations/colldata/uca_test.go \
+   ./go/mysql/collations/colldata/uca_test_fuzz.go
 
-compile_go_fuzzer vitess.io/vitess/go/mysql/collations FuzzCollations fuzz_collations
+compile_go_fuzzer vitess.io/vitess/go/mysql/collations/colldata FuzzCollations fuzz_collations
 
 
 compile_go_fuzzer vitess.io/vitess/go/vt/vtgate/planbuilder FuzzTestBuilder fuzz_test_builder gofuzz

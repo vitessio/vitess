@@ -18,20 +18,16 @@ package base
 
 import (
 	"context"
-	"fmt"
-	"os"
 	"runtime"
-	"strconv"
-	"strings"
+	"sync/atomic"
+	"time"
 
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
+	"vitess.io/vitess/go/osutil"
 )
 
 var (
-	loadavgOnlyAvailableOnLinuxMetric = &ThrottleMetric{
-		Scope: SelfScope,
-		Err:   fmt.Errorf("loadavg metric is only available on Linux"),
-	}
+	cachedLoadAvgMetric  atomic.Pointer[ThrottleMetric]
+	loadAvgCacheDuration = 1 * time.Second
 )
 
 var _ SelfMetric = registerSelfMetric(&LoadAvgSelfMetric{})
@@ -55,27 +51,26 @@ func (m *LoadAvgSelfMetric) RequiresConn() bool {
 	return false
 }
 
-func (m *LoadAvgSelfMetric) Read(ctx context.Context, throttler ThrottlerMetricsPublisher, conn *connpool.Conn) *ThrottleMetric {
-	if runtime.GOOS != "linux" {
-		return loadavgOnlyAvailableOnLinuxMetric
+func (m *LoadAvgSelfMetric) Read(ctx context.Context, params *SelfMetricReadParams) *ThrottleMetric {
+	// This function will be called sequentially, and therefore does not need strong mutex protection. Still, we use atomics
+	// to ensure correctness in case an external goroutine tries to read the metric concurrently.
+	metric := cachedLoadAvgMetric.Load()
+	if metric != nil {
+		return metric
 	}
-	metric := &ThrottleMetric{
+	metric = &ThrottleMetric{
 		Scope: SelfScope,
 	}
-	{
-		content, err := os.ReadFile("/proc/loadavg")
-		if err != nil {
-			return metric.WithError(err)
-		}
-		fields := strings.Fields(string(content))
-		if len(fields) == 0 {
-			return metric.WithError(fmt.Errorf("unexpected /proc/loadavg content"))
-		}
-		loadAvg, err := strconv.ParseFloat(fields[0], 64)
-		if err != nil {
-			return metric.WithError(err)
-		}
-		metric.Value = loadAvg / float64(runtime.NumCPU())
+	val, err := osutil.LoadAvg()
+	if err != nil {
+		return metric.WithError(err)
 	}
+	metric.Value = val / float64(runtime.NumCPU())
+
+	cachedLoadAvgMetric.Store(metric)
+	time.AfterFunc(loadAvgCacheDuration, func() {
+		cachedLoadAvgMetric.Store(nil)
+	})
+
 	return metric
 }

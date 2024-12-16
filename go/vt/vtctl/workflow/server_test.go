@@ -2470,7 +2470,7 @@ func TestGetWorkflowsStreamLogs(t *testing.T) {
 	}, sourceShards, targetShards)
 
 	logResult := sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields("id|vrepl_id|type|state|message|created_at|updated_at|`count`", "int64|int64|varchar|varchar|varchar|varchar|varchar|int64"),
+		sqltypes.MakeTestFields("id|vrepl_id|type|state|message|created_at|updated_at|count", "int64|int64|varchar|varchar|varchar|varchar|varchar|int64"),
 		"1|0|State Change|Running|test message for non-existent 1|2006-01-02 15:04:05|2006-01-02 15:04:05|1",
 		"2|0|State Change|Stopped|test message for non-existent 2|2006-01-02 15:04:06|2006-01-02 15:04:06|1",
 		"3|1|State Change|Running|log message|2006-01-02 15:04:07|2006-01-02 15:04:07|1",
@@ -2498,4 +2498,64 @@ func TestGetWorkflowsStreamLogs(t *testing.T) {
 	assert.Equal(t, gotLogs[0].Message, "log message")
 	assert.Equal(t, gotLogs[0].State, "Running")
 	assert.Equal(t, gotLogs[0].Id, int64(3))
+}
+
+func TestWorkflowStatus(t *testing.T) {
+	ctx := context.Background()
+
+	sourceKeyspace := "source_keyspace"
+	targetKeyspace := "target_keyspace"
+	workflow := "test_workflow"
+
+	sourceShards := []string{"-"}
+	targetShards := []string{"-"}
+
+	te := newTestMaterializerEnv(t, ctx, &vtctldatapb.MaterializeSettings{
+		SourceKeyspace: sourceKeyspace,
+		TargetKeyspace: targetKeyspace,
+		Workflow:       workflow,
+		TableSettings: []*vtctldatapb.TableMaterializeSettings{
+			{
+				TargetTable:      "table1",
+				SourceExpression: fmt.Sprintf("select * from %s", "table1"),
+			},
+			{
+				TargetTable:      "table2",
+				SourceExpression: fmt.Sprintf("select * from %s", "table2"),
+			},
+		},
+	}, sourceShards, targetShards)
+
+	tablesResult := sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name", "varchar"), "table1", "table2")
+	te.tmc.expectVRQuery(200, "select distinct table_name from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = 1", tablesResult)
+
+	tablesTargetCopyResult := sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name|table_rows|data_length", "varchar|int64|int64"), "table1|50|500", "table2|100|250")
+	te.tmc.expectVRQuery(200, "select table_name, table_rows, data_length from information_schema.tables where table_schema = 'vt_target_keyspace' and table_name in ('table1','table2')", tablesTargetCopyResult)
+
+	tablesSourceCopyResult := sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name|table_rows|data_length", "varchar|int64|int64"), "table1|100|1000", "table2|200|500")
+	te.tmc.expectVRQuery(100, "select table_name, table_rows, data_length from information_schema.tables where table_schema = 'vt_source_keyspace' and table_name in ('table1','table2')", tablesSourceCopyResult)
+
+	te.tmc.expectVRQuery(200, "select vrepl_id, table_name, lastpk from _vt.copy_state where vrepl_id in (1) and id in (select max(id) from _vt.copy_state where vrepl_id in (1) group by vrepl_id, table_name)", &sqltypes.Result{})
+
+	res, err := te.ws.WorkflowStatus(ctx, &vtctldatapb.WorkflowStatusRequest{
+		Keyspace: targetKeyspace,
+		Workflow: workflow,
+		Shards:   targetShards,
+	})
+
+	assert.NoError(t, err)
+
+	require.NotNil(t, res.TableCopyState)
+
+	stateTable1 := res.TableCopyState["table1"]
+	stateTable2 := res.TableCopyState["table2"]
+	require.NotNil(t, stateTable1)
+	require.NotNil(t, stateTable2)
+
+	assert.Equal(t, int64(100), stateTable1.RowsTotal)
+	assert.Equal(t, int64(200), stateTable2.RowsTotal)
+	assert.Equal(t, int64(50), stateTable1.RowsCopied)
+	assert.Equal(t, int64(100), stateTable2.RowsCopied)
+	assert.Equal(t, float32(50), stateTable1.RowsPercentage)
+	assert.Equal(t, float32(50), stateTable2.RowsPercentage)
 }

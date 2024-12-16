@@ -28,6 +28,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
+
 	"vitess.io/vitess/go/cache/theine"
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/sqltypes"
@@ -307,7 +309,7 @@ func executorExecSession(ctx context.Context, executor *Executor, sql string, bv
 		ctx,
 		nil,
 		"TestExecute",
-		NewSafeSession(session),
+		econtext.NewSafeSession(session),
 		sql,
 		bv)
 }
@@ -320,7 +322,7 @@ func executorPrepare(ctx context.Context, executor *Executor, session *vtgatepb.
 	return executor.Prepare(
 		ctx,
 		"TestExecute",
-		NewSafeSession(session),
+		econtext.NewSafeSession(session),
 		sql,
 		bv)
 }
@@ -331,7 +333,7 @@ func executorStream(ctx context.Context, executor *Executor, sql string) (qr *sq
 		ctx,
 		nil,
 		"TestExecuteStream",
-		NewSafeSession(nil),
+		econtext.NewSafeSession(nil),
 		sql,
 		nil,
 		func(qr *sqltypes.Result) error {

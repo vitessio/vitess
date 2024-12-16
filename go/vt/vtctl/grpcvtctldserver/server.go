@@ -303,7 +303,9 @@ func (s *VtctldServer) ApplySchema(ctx context.Context, req *vtctldatapb.ApplySc
 	}
 
 	for _, shard := range execResult.SuccessShards {
-		resp.RowsAffectedByShard[shard.Shard] = shard.Result.RowsAffected
+		for _, result := range shard.Results {
+			resp.RowsAffectedByShard[shard.Shard] += result.RowsAffected
+		}
 	}
 
 	return resp, err
@@ -2096,14 +2098,12 @@ func (s *VtctldServer) UpdateThrottlerConfig(ctx context.Context, req *vtctldata
 			throttlerConfig.CheckAsCheckSelf = false
 		}
 		if req.ThrottledApp != nil && req.ThrottledApp.Name != "" {
-			// TODO(shlomi) in v22: replace the following line with the commented out block
-			throttlerConfig.ThrottledApps[req.ThrottledApp.Name] = req.ThrottledApp
-			// 	timeNow := time.Now()
-			// if protoutil.TimeFromProto(req.ThrottledApp.ExpiresAt).After(timeNow) {
-			// 	throttlerConfig.ThrottledApps[req.ThrottledApp.Name] = req.ThrottledApp
-			// } else {
-			// 	delete(throttlerConfig.ThrottledApps, req.ThrottledApp.Name)
-			// }
+			timeNow := time.Now()
+			if protoutil.TimeFromProto(req.ThrottledApp.ExpiresAt).After(timeNow) {
+				throttlerConfig.ThrottledApps[req.ThrottledApp.Name] = req.ThrottledApp
+			} else {
+				delete(throttlerConfig.ThrottledApps, req.ThrottledApp.Name)
+			}
 		}
 		return throttlerConfig
 	}

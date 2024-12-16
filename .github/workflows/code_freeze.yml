@@ -7,7 +7,7 @@ permissions: read-all
 jobs:
   build:
     name: Code Freeze
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
     - name: Fail if Code Freeze is enabled
       run: |

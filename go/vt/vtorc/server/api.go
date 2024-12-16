@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/acl"
+	"vitess.io/vitess/go/viperutil/debug"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtorc/collection"
 	"vitess.io/vitess/go/vt/vtorc/discovery"
@@ -46,6 +47,7 @@ const (
 	enableGlobalRecoveriesAPI     = "/api/enable-global-recoveries"
 	replicationAnalysisAPI        = "/api/replication-analysis"
 	databaseStateAPI              = "/api/database-state"
+	configAPI                     = "/api/config"
 	healthAPI                     = "/debug/health"
 	AggregatedDiscoveryMetricsAPI = "/api/aggregated-discovery-metrics"
 
@@ -62,6 +64,7 @@ var (
 		enableGlobalRecoveriesAPI,
 		replicationAnalysisAPI,
 		databaseStateAPI,
+		configAPI,
 		healthAPI,
 		AggregatedDiscoveryMetricsAPI,
 	}
@@ -90,6 +93,8 @@ func (v *vtorcAPI) ServeHTTP(response http.ResponseWriter, request *http.Request
 		replicationAnalysisAPIHandler(response, request)
 	case databaseStateAPI:
 		databaseStateAPIHandler(response)
+	case configAPI:
+		configAPIHandler(response)
 	case AggregatedDiscoveryMetricsAPI:
 		AggregatedDiscoveryMetricsAPIHandler(response, request)
 	default:
@@ -106,7 +111,7 @@ func getACLPermissionLevelForAPI(apiEndpoint string) string {
 		return acl.MONITORING
 	case disableGlobalRecoveriesAPI, enableGlobalRecoveriesAPI:
 		return acl.ADMIN
-	case replicationAnalysisAPI:
+	case replicationAnalysisAPI, configAPI:
 		return acl.MONITORING
 	case healthAPI, databaseStateAPI:
 		return acl.MONITORING
@@ -178,6 +183,17 @@ func databaseStateAPIHandler(response http.ResponseWriter) {
 		return
 	}
 	writePlainTextResponse(response, ds, http.StatusOK)
+}
+
+// configAPIHandler is the handler for the configAPI endpoint
+func configAPIHandler(response http.ResponseWriter) {
+	settingsMap := debug.AllSettings()
+	jsonOut, err := json.MarshalIndent(settingsMap, "", "\t")
+	if err != nil {
+		http.Error(response, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writePlainTextResponse(response, string(jsonOut), http.StatusOK)
 }
 
 // AggregatedDiscoveryMetricsAPIHandler is the handler for the discovery metrics endpoint

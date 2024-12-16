@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 
@@ -76,7 +77,7 @@ func TestVStreamSQLUnsharded(t *testing.T) {
 
 	results := make(chan *sqltypes.Result, 20)
 	go func() {
-		err := executor.StreamExecute(ctx, nil, "TestExecuteStream", NewAutocommitSession(&vtgatepb.Session{TargetString: KsTestUnsharded}), sql, nil, func(qr *sqltypes.Result) error {
+		err := executor.StreamExecute(ctx, nil, "TestExecuteStream", econtext.NewAutocommitSession(&vtgatepb.Session{TargetString: KsTestUnsharded}), sql, nil, func(qr *sqltypes.Result) error {
 			results <- qr
 			return nil
 		})

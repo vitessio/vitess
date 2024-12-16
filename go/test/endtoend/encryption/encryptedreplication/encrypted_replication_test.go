@@ -42,7 +42,6 @@ var (
 
 // This test makes sure that we can use SSL replication with Vitess
 func TestSecure(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	testReplicationBase(t, true)
 	testReplicationBase(t, false)
 }

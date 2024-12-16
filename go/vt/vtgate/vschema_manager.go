@@ -33,8 +33,6 @@ import (
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
-var _ VSchemaOperator = (*VSchemaManager)(nil)
-
 // VSchemaManager is used to watch for updates to the vschema and to implement
 // the DDL commands to add / remove vindexes
 type VSchemaManager struct {

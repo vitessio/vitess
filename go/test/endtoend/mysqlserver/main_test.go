@@ -61,7 +61,6 @@ END;
 )
 
 func TestMain(m *testing.M) {
-	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	// setting grpc max size

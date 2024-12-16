@@ -75,7 +75,7 @@ spec:
           cpu: 100m
           memory: 128Mi
       extraFlags:
-        recovery-period-block-duration: 5s
+        instance-poll-time: 1s
     partitionings:
     - equal:
         parts: 1

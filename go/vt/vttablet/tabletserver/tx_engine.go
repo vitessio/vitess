@@ -116,20 +116,19 @@ func NewTxEngine(env tabletenv.Env, dxNotifier func()) *TxEngine {
 	te.txPool = NewTxPool(env, limiter)
 	// We initially allow twoPC (handles vttablet restarts).
 	// We will disallow them for a few reasons -
-	//	1. when a new tablet is promoted if semi-sync is turned off.
+	//	1. When a new tablet is promoted if semi-sync is turned off.
 	//  2. TabletControls have been set by a Resharding workflow.
 	te.twopcAllowed = make([]bool, TwoPCAllowed_Len)
 	for idx := range te.twopcAllowed {
 		te.twopcAllowed[idx] = true
 	}
-	te.twopcEnabled = config.TwoPCEnable
-	if te.twopcEnabled {
-		if config.TwoPCAbandonAge <= 0 {
-			log.Error("2PC abandon age not specified: Disabling 2PC")
-			te.twopcEnabled = false
-		}
+	te.twopcEnabled = true
+	if config.TwoPCAbandonAge <= 0 {
+		log.Error("2PC abandon age not specified: Disabling 2PC")
+		te.twopcEnabled = false
 	}
-	te.abandonAge = config.TwoPCAbandonAge.Get()
+
+	te.abandonAge = config.TwoPCAbandonAge
 	te.ticks = timer.NewTimer(te.abandonAge / 2)
 
 	// Set the prepared pool capacity to something lower than
