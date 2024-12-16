@@ -699,7 +699,7 @@ func TestDemotePrimaryStalled(t *testing.T) {
 	sm.demotePrimaryStalled = true
 	sm.Broadcast()
 	gotshr = <-ch
-	require.EqualValues(t, "Failed to complete primary demotion", gotshr.RealtimeStats.HealthError)
+	require.EqualValues(t, "VT09031: Failed to complete primary demotion", gotshr.RealtimeStats.HealthError)
 
 	// Stop the state manager.
 	sm.StopService()
