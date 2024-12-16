@@ -638,6 +638,9 @@ func TestQuerySignatureLastInsertID(t *testing.T) {
 	}, {
 		query:    "select last_insert_id(123)",
 		expected: true,
+	}, {
+		query:    "update user_extra set val = last_insert_id(123)",
+		expected: true,
 	}}
 
 	for _, tc := range queries {
@@ -645,8 +648,7 @@ func TestQuerySignatureLastInsertID(t *testing.T) {
 			ast, err := sqlparser.NewTestParser().Parse(tc.query)
 			require.NoError(t, err)
 
-			sel := ast.(*sqlparser.Select)
-			st, err := AnalyzeStrict(sel, "dbName", fakeSchemaInfo())
+			st, err := AnalyzeStrict(ast, "dbName", fakeSchemaInfo())
 			require.NoError(t, err)
 			require.Equal(t, tc.expected, st.QuerySignature.LastInsertIDArg)
 		})

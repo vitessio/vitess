@@ -376,6 +376,9 @@ func (route *Route) description() PrimitiveDescription {
 		"Table":      route.GetTableName(),
 		"FieldQuery": route.FieldQuery,
 	}
+	if route.FetchLastInsertID {
+		other["FetchLastInsertID"] = true
+	}
 	if route.Vindex != nil {
 		other["Vindex"] = route.Vindex.String()
 	}

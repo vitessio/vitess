@@ -214,6 +214,9 @@ func (upd *Update) description() PrimitiveDescription {
 	if len(changedVindexes) > 0 {
 		other["ChangedVindexValues"] = changedVindexes
 	}
+	if upd.FetchLastInsertID {
+		other["FetchLastInsertID"] = upd.FetchLastInsertID
+	}
 
 	return PrimitiveDescription{
 		OperatorType:     "Update",

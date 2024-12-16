@@ -5599,6 +5599,7 @@
           "Name": "user",
           "Sharded": true
         },
+        "FetchLastInsertID": true,
         "FieldQuery": "select last_insert_id(id) from `user` where 1 != 1",
         "Query": "select last_insert_id(id) from `user`",
         "Table": "`user`"
