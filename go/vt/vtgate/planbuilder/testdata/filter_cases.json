@@ -925,10 +925,10 @@
   },
   {
     "comment": "Single table equality route with val arg",
-    "query": "select id from user where name = 'a'",
+    "query": "select id from user where name = :a",
     "plan": {
       "QueryType": "SELECT",
-      "Original": "select id from user where name = 'a'",
+      "Original": "select id from user where name = :a",
       "Instructions": {
         "OperatorType": "VindexLookup",
         "Variant": "Equal",
@@ -937,7 +937,7 @@
           "Sharded": true
         },
         "Values": [
-          "'a'"
+          ":a"
         ],
         "Vindex": "name_user_map",
         "Inputs": [
@@ -964,7 +964,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` where `name` = 'a'",
+            "Query": "select id from `user` where `name` = :a",
             "Table": "`user`"
           }
         ]
@@ -972,7 +972,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e":true
   },
   {
     "comment": "Merging subqueries should remove keyspace from query",
@@ -2702,10 +2703,10 @@
   },
   {
     "comment": "select * from samecolvin where col = :col",
-    "query": "select * from samecolvin where col = 'val'",
+    "query": "select * from samecolvin where col = :col",
     "plan": {
       "QueryType": "SELECT",
-      "Original": "select * from samecolvin where col = 'val'",
+      "Original": "select * from samecolvin where col = :col",
       "Instructions": {
         "OperatorType": "Route",
         "Variant": "EqualUnique",
@@ -2714,17 +2715,18 @@
           "Sharded": true
         },
         "FieldQuery": "select col from samecolvin where 1 != 1",
-        "Query": "select col from samecolvin where col = 'val'",
+        "Query": "select col from samecolvin where col = :col",
         "Table": "samecolvin",
         "Values": [
-          "'val'"
+          ":col"
         ],
         "Vindex": "vindex1"
       },
       "TablesUsed": [
         "user.samecolvin"
       ]
-    }
+    },
+    "skip_e2e":true
   },
   {
     "comment": "non unique predicate on vindex",
