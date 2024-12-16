@@ -563,7 +563,11 @@ func compareMaps(t *testing.T, expected, actual map[string][]string, flexibleExp
 // TestDTResolveAfterMMCommit tests that transaction is committed on recovery
 // failure after MM commit.
 func TestDTResolveAfterMMCommit(t *testing.T) {
-	defer cleanup(t)
+	initconn, closer := start(t)
+	defer closer()
+
+	// Do an insertion into a table that has a consistent lookup vindex.
+	utils.Exec(t, initconn, "insert into twopc_consistent_lookup(id, col, col_unique) values(4, 4, 6)")
 
 	vtgateConn, err := cluster.DialVTGate(context.Background(), t.Name(), vtgateGrpcAddress, "dt_user", "")
 	require.NoError(t, err)
@@ -588,6 +592,10 @@ func TestDTResolveAfterMMCommit(t *testing.T) {
 	_, err = conn.Execute(qCtx, "insert into twopc_user(id, name) values(9,'baz')", nil)
 	require.NoError(t, err)
 	_, err = conn.Execute(qCtx, "insert into twopc_user(id, name) values(10,'apa')", nil)
+	require.NoError(t, err)
+	// Also do an insertion into a table that has a consistent lookup vindex.
+	// We expect to see only the pre-session changes in the logs.
+	_, err = conn.Execute(qCtx, "update twopc_consistent_lookup set col = 22 where id = 4", nil)
 	require.NoError(t, err)
 
 	// The caller ID is used to simulate the failure at the desired point.
@@ -625,7 +633,9 @@ func TestDTResolveAfterMMCommit(t *testing.T) {
 		},
 		"ks.redo_statement:-40": {
 			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (10, 'apa')\")]",
+			"insert:[VARCHAR(\"dtid-1\") INT64(2) BLOB(\"update twopc_consistent_lookup set col = 22 where id = 4 limit 10001 /* INT64 */\")]",
 			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (10, 'apa')\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(2) BLOB(\"update twopc_consistent_lookup set col = 22 where id = 4 limit 10001 /* INT64 */\")]",
 		},
 		"ks.redo_statement:40-80": {
 			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (8, 'bar')\")]",
@@ -641,6 +651,12 @@ func TestDTResolveAfterMMCommit(t *testing.T) {
 			`insert:[INT64(7) VARCHAR("foo")]`,
 			`insert:[INT64(9) VARCHAR("baz")]`,
 		},
+		"ks.consistent_lookup:-40": {
+			"insert:[INT64(22) INT64(4) VARBINARY(\" \\x00\\x00\\x00\\x00\\x00\\x00\\x00\")]",
+		},
+		"ks.twopc_consistent_lookup:-40": {
+			"update:[INT64(4) INT64(22) INT64(6)]",
+		},
 	}
 	assert.Equal(t, expectations, logTable,
 		"mismatch expected: \n got: %s, want: %s", prettyPrint(logTable), prettyPrint(expectations))
@@ -649,7 +665,11 @@ func TestDTResolveAfterMMCommit(t *testing.T) {
 // TestDTResolveAfterRMPrepare tests that transaction is rolled back on recovery
 // failure after RM prepare and before MM commit.
 func TestDTResolveAfterRMPrepare(t *testing.T) {
-	defer cleanup(t)
+	initconn, closer := start(t)
+	defer closer()
+
+	// Do an insertion into a table that has a consistent lookup vindex.
+	utils.Exec(t, initconn, "insert into twopc_consistent_lookup(id, col, col_unique) values(4, 4, 6)")
 
 	vtgateConn, err := cluster.DialVTGate(context.Background(), t.Name(), vtgateGrpcAddress, "dt_user", "")
 	require.NoError(t, err)
@@ -670,6 +690,10 @@ func TestDTResolveAfterRMPrepare(t *testing.T) {
 	_, err = conn.Execute(qCtx, "insert into twopc_user(id, name) values(7,'foo')", nil)
 	require.NoError(t, err)
 	_, err = conn.Execute(qCtx, "insert into twopc_user(id, name) values(8,'bar')", nil)
+	require.NoError(t, err)
+	// Also do an insertion into a table that has a consistent lookup vindex.
+	// We expect to see only the pre-session changes in the logs.
+	_, err = conn.Execute(qCtx, "update twopc_consistent_lookup set col = 22 where id = 4", nil)
 	require.NoError(t, err)
 
 	// The caller ID is used to simulate the failure at the desired point.
@@ -693,15 +717,28 @@ func TestDTResolveAfterRMPrepare(t *testing.T) {
 		},
 		"ks.dt_participant:80-": {
 			"insert:[VARCHAR(\"dtid-1\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"40-80\")]",
+			"insert:[VARCHAR(\"dtid-1\") INT64(2) VARCHAR(\"ks\") VARCHAR(\"-40\")]",
 			"delete:[VARCHAR(\"dtid-1\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"40-80\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(2) VARCHAR(\"ks\") VARCHAR(\"-40\")]",
 		},
 		"ks.redo_state:40-80": {
+			"insert:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
+			"delete:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
+		},
+		"ks.redo_state:-40": {
 			"insert:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
 			"delete:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
 		},
 		"ks.redo_statement:40-80": {
 			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (8, 'bar')\")]",
 			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (8, 'bar')\")]",
+		},
+		"ks.redo_statement:-40": {
+			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"update twopc_consistent_lookup set col = 22 where id = 4 limit 10001 /* INT64 */\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"update twopc_consistent_lookup set col = 22 where id = 4 limit 10001 /* INT64 */\")]",
+		},
+		"ks.consistent_lookup:-40": {
+			"insert:[INT64(22) INT64(4) VARBINARY(\" \\x00\\x00\\x00\\x00\\x00\\x00\\x00\")]",
 		},
 	}
 	assert.Equal(t, expectations, logTable,

@@ -119,22 +119,25 @@ func (txc *TxConn) Commit(ctx context.Context, session *econtext.SafeSession) er
 
 	defer recordCommitTime(session, twopc, time.Now())
 
-	if err := txc.runSessions(ctx, session.PreSessions, session.GetLogger(), txc.commitShard); err != nil {
+	err := txc.runSessions(ctx, session.PreSessions, session.GetLogger(), txc.commitShard)
+	if err != nil {
 		_ = txc.Release(ctx, session)
 		return err
 	}
 
 	if twopc {
-		if err := txc.commit2PC(ctx, session); err != nil {
-			return err
-		}
+		err = txc.commit2PC(ctx, session)
 	} else {
-		if err := txc.commitNormal(ctx, session); err != nil {
-			return err
-		}
+		err = txc.commitNormal(ctx, session)
 	}
 
-	if err := txc.runSessions(ctx, session.PostSessions, session.GetLogger(), txc.commitShard); err != nil {
+	if err != nil {
+		_ = txc.Release(ctx, session)
+		return err
+	}
+
+	err = txc.runSessions(ctx, session.PostSessions, session.GetLogger(), txc.commitShard)
+	if err != nil {
 		// If last commit fails, there will be nothing to rollback.
 		session.RecordWarning(&querypb.QueryWarning{Message: fmt.Sprintf("post-operation transaction had an error: %v", err)})
 		// With reserved connection we should release them.
@@ -209,7 +212,6 @@ func (txc *TxConn) commitNormal(ctx context.Context, session *econtext.SafeSessi
 				})
 				warnings.Add("NonAtomicCommit", 1)
 			}
-			_ = txc.Release(ctx, session)
 			return err
 		}
 	}
