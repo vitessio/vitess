@@ -45,6 +45,7 @@ import { Transactions } from './routes/Transactions';
 import { Transaction } from './routes/transaction/Transaction';
 import { CreateReshard } from './routes/createWorkflow/CreateReshard';
 import { CreateMaterialize } from './routes/createWorkflow/CreateMaterialize';
+import { TopologyTree } from './routes/topologyTree/TopologyTree';
 import { SchemaMigrations } from './routes/SchemaMigrations';
 import { CreateSchemaMigration } from './routes/createSchemaMigration/CreateSchemaMigration';
 
@@ -162,6 +163,10 @@ export const App = () => {
 
                         <Route path="/topology/:clusterID">
                             <ClusterTopology />
+                        </Route>
+
+                        <Route path="/topologytree/:clusterID">
+                            <TopologyTree />
                         </Route>
 
                         <Route path="/topology">
