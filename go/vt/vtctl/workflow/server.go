@@ -567,13 +567,13 @@ func (s *Server) LookupVindexCreate(ctx context.Context, req *vtctldatapb.Lookup
 	span.Annotate("cells", req.Cells)
 	span.Annotate("tablet_types", req.TabletTypes)
 
-	w := &workflowFetcher{
+	l := &lookup{
 		ts:     s.ts,
 		tmc:    s.tmc,
 		logger: s.Logger(),
 		parser: s.SQLParser(),
 	}
-	ms, sourceVSchema, targetVSchema, cancelFunc, err := w.prepareCreateLookup(ctx, req.Workflow, req.Keyspace, req.Vindex, req.ContinueAfterCopyWithOwner)
+	ms, sourceVSchema, targetVSchema, cancelFunc, err := l.prepareCreateLookup(ctx, req.Workflow, req.Keyspace, req.Vindex, req.ContinueAfterCopyWithOwner)
 	if err != nil {
 		return nil, err
 	}
