@@ -368,7 +368,7 @@ func (t *noopVCursor) Execute(ctx context.Context, method string, query string, 
 	panic("unimplemented")
 }
 
-func (t *noopVCursor) ExecuteMultiShard(ctx context.Context, primitive Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, canAutocommit bool) (*sqltypes.Result, []error) {
+func (t *noopVCursor) ExecuteMultiShard(ctx context.Context, primitive Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, canAutocommit, fetchLastInsertID bool) (*sqltypes.Result, []error) {
 	panic("unimplemented")
 }
 
@@ -587,7 +587,7 @@ func (f *loggingVCursor) Execute(ctx context.Context, method string, query strin
 	return f.nextResult()
 }
 
-func (f *loggingVCursor) ExecuteMultiShard(ctx context.Context, primitive Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, canAutocommit bool) (*sqltypes.Result, []error) {
+func (f *loggingVCursor) ExecuteMultiShard(ctx context.Context, primitive Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, canAutocommit, fetchLastInsertID bool) (*sqltypes.Result, []error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.log = append(f.log, fmt.Sprintf("ExecuteMultiShard %v%v %v", printResolvedShardQueries(rss, queries), rollbackOnError, canAutocommit))

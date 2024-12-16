@@ -95,6 +95,8 @@ type Route struct {
 	// select count(*) from tbl where lookupColumn = 'not there'
 	// select exists(<subq>)
 	NoRoutesSpecialHandling bool
+
+	FetchLastInsertID bool
 }
 
 // NewRoute creates a Route.
@@ -181,7 +183,7 @@ func (route *Route) executeShards(
 	}
 
 	queries := getQueries(route.Query, bvs)
-	result, errs := vcursor.ExecuteMultiShard(ctx, route, rss, queries, false /* rollbackOnError */, false /* canAutocommit */)
+	result, errs := vcursor.ExecuteMultiShard(ctx, route, rss, queries, false, false, route.FetchLastInsertID)
 
 	route.executeWarmingReplicaRead(ctx, vcursor, bindVars, queries)
 
@@ -351,7 +353,7 @@ func (route *Route) GetFields(ctx context.Context, vcursor VCursor, bindVars map
 		}
 		rs = rss[0]
 	}
-	qr, err := execShard(ctx, route, vcursor, route.FieldQuery, bindVars, rs, false /* rollbackOnError */, false /* canAutocommit */)
+	qr, err := execShard(ctx, route, vcursor, route.FieldQuery, bindVars, rs, false /* rollbackOnError */, false /* canAutocommit */, route.FetchLastInsertID)
 	if err != nil {
 		return nil, err
 	}
@@ -479,7 +481,7 @@ func execShard(
 	query string,
 	bindVars map[string]*querypb.BindVariable,
 	rs *srvtopo.ResolvedShard,
-	rollbackOnError, canAutocommit bool,
+	rollbackOnError, canAutocommit, fetchLastInsertID bool,
 ) (*sqltypes.Result, error) {
 	autocommit := canAutocommit && vcursor.AutocommitApproval()
 	result, errs := vcursor.ExecuteMultiShard(ctx, primitive, []*srvtopo.ResolvedShard{rs}, []*querypb.BoundQuery{
@@ -487,7 +489,7 @@ func execShard(
 			Sql:           query,
 			BindVariables: bindVars,
 		},
-	}, rollbackOnError, autocommit)
+	}, rollbackOnError, autocommit, fetchLastInsertID)
 	return result, vterrors.Aggregate(errs)
 }
 
@@ -534,7 +536,7 @@ func (route *Route) executeWarmingReplicaRead(ctx context.Context, vcursor VCurs
 				return
 			}
 
-			_, errs := replicaVCursor.ExecuteMultiShard(ctx, route, rss, queries, false /* rollbackOnError */, false /* autocommit */)
+			_, errs := replicaVCursor.ExecuteMultiShard(ctx, route, rss, queries, false, false, route.FetchLastInsertID)
 			if len(errs) > 0 {
 				log.Warningf("Failed to execute warming replica read: %v", errs)
 			} else {

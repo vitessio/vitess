@@ -58,6 +58,8 @@ type Insert struct {
 
 	// Alias represents the row alias with columns if specified in the query.
 	Alias string
+
+	FetchLastInsertID bool
 }
 
 // newQueryInsert creates an Insert with a query string.
@@ -169,7 +171,7 @@ func (ins *Insert) executeInsertQueries(
 	if err != nil {
 		return nil, err
 	}
-	result, errs := vcursor.ExecuteMultiShard(ctx, ins, rss, queries, true /* rollbackOnError */, autocommit)
+	result, errs := vcursor.ExecuteMultiShard(ctx, ins, rss, queries, true, autocommit, ins.FetchLastInsertID)
 	if errs != nil {
 		return nil, vterrors.Aggregate(errs)
 	}

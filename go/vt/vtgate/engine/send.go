@@ -116,7 +116,7 @@ func (s *Send) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[str
 	}
 
 	rollbackOnError := s.IsDML // for non-dml queries, there's no need to do a rollback
-	result, errs := vcursor.ExecuteMultiShard(ctx, s, rss, queries, rollbackOnError, s.canAutoCommit(vcursor, rss))
+	result, errs := vcursor.ExecuteMultiShard(ctx, s, rss, queries, rollbackOnError, s.canAutoCommit(vcursor, rss), false)
 	err = vterrors.Aggregate(errs)
 	if err != nil {
 		return nil, err
