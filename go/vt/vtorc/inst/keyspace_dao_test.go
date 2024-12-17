@@ -18,6 +18,7 @@ package inst
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -123,4 +124,38 @@ func TestSaveAndReadKeyspace(t *testing.T) {
 			require.EqualValues(t, tt.semiSyncAckersWanted, reparentutil.SemiSyncAckers(durabilityPolicy, nil))
 		})
 	}
+}
+
+func TestDeleteStaleKeyspaces(t *testing.T) {
+	// Clear the database after the test. The easiest way to do that is to run all the initialization commands again.
+	defer func() {
+		db.ClearVTOrcDatabase()
+	}()
+
+	keyspaceInfo := &topo.KeyspaceInfo{
+		Keyspace: &topodatapb.Keyspace{
+			KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
+			DurabilityPolicy: "none",
+			BaseKeyspace:     "baseKeyspace",
+		},
+	}
+	keyspaceInfo.SetKeyspaceName("ks1")
+	err := SaveKeyspace(keyspaceInfo)
+	require.NoError(t, err)
+
+	readKeyspaceInfo, err := ReadKeyspace("ks1")
+	require.NoError(t, err)
+	require.NotNil(t, readKeyspaceInfo)
+
+	// test a staletime before save causes no delete
+	require.NoError(t, DeleteStaleKeyspaces(time.Now().Add(-time.Hour)))
+	readKeyspaceInfo, err = ReadKeyspace("ks1")
+	require.NoError(t, err)
+	require.NotNil(t, readKeyspaceInfo)
+
+	// test statetime of now deletes everything
+	require.NoError(t, DeleteStaleKeyspaces(time.Now()))
+	readKeyspaceInfo, err = ReadKeyspace("ks1")
+	require.Error(t, err)
+	require.Nil(t, readKeyspaceInfo)
 }
