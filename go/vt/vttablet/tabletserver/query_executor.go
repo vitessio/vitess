@@ -70,7 +70,7 @@ type QueryExecutor struct {
 
 const (
 	streamRowsSize   = 256
-	resetLastIDQuery = "select last_insert_id(-4200)"
+	resetLastIDQuery = "select last_insert_id(18446744073709547416)"
 	resetLastIDValue = 18446744073709547416
 )
 
@@ -1113,71 +1113,73 @@ func (qre *QueryExecutor) getSelectLimit() int64 {
 func (qre *QueryExecutor) execDBConn(conn *connpool.Conn, sql string, wantfields bool) (*sqltypes.Result, error) {
 	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.execDBConn")
 	defer span.Finish()
-
 	defer qre.logStats.AddRewrittenSQL(sql, time.Now())
 
 	qd := NewQueryDetail(qre.logStats.Ctx, conn)
-	err := qre.tsv.statelessql.Add(qd)
-	if err != nil {
+
+	if err := qre.tsv.statelessql.Add(qd); err != nil {
 		return nil, err
 	}
 	defer qre.tsv.statelessql.Remove(qd)
 
-	if qre.options.ShouldFetchLastInsertID() {
-		_, err = conn.Exec(ctx, resetLastIDQuery, 1, false)
-		if err != nil {
-			return nil, err
-		}
+	if err := qre.resetLastInsertIDIfNeeded(ctx, conn); err != nil {
+		return nil, err
 	}
 
 	exec, err := conn.Exec(ctx, sql, int(qre.tsv.qe.maxResultSize.Load()), wantfields)
 	if err != nil {
 		return nil, err
 	}
-	if qre.options.ShouldFetchLastInsertID() {
-		err := qre.fetchLastInsertID(ctx, conn, exec)
-		if err != nil {
-			return nil, err
-		}
+
+	if err := qre.fetchLastInsertID(ctx, conn, exec); err != nil {
+		return nil, err
 	}
+
 	return exec, nil
 }
 
 func (qre *QueryExecutor) execStatefulConn(conn *StatefulConnection, sql string, wantfields bool) (*sqltypes.Result, error) {
 	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.execStatefulConn")
 	defer span.Finish()
-
 	defer qre.logStats.AddRewrittenSQL(sql, time.Now())
 
 	qd := NewQueryDetail(qre.logStats.Ctx, conn)
-	err := qre.tsv.statefulql.Add(qd)
-	if err != nil {
+
+	if err := qre.tsv.statefulql.Add(qd); err != nil {
 		return nil, err
 	}
 	defer qre.tsv.statefulql.Remove(qd)
 
-	if qre.options.ShouldFetchLastInsertID() {
-		_, err = conn.Exec(ctx, resetLastIDQuery, 1, false)
-		if err != nil {
-			return nil, err
-		}
+	if err := qre.resetLastInsertIDIfNeeded(ctx, conn.UnderlyingDBConn().Conn); err != nil {
+		return nil, err
 	}
 
 	exec, err := conn.Exec(ctx, sql, int(qre.tsv.qe.maxResultSize.Load()), wantfields)
 	if err != nil {
 		return nil, err
 	}
-	if qre.options.ShouldFetchLastInsertID() {
-		err = qre.fetchLastInsertID(ctx, conn.UnderlyingDBConn().Conn, exec)
-		if err != nil {
-			return nil, err
-		}
+
+	if err := qre.fetchLastInsertID(ctx, conn.UnderlyingDBConn().Conn, exec); err != nil {
+		return nil, err
 	}
+
 	return exec, nil
 }
 
+func (qre *QueryExecutor) resetLastInsertIDIfNeeded(ctx context.Context, conn *connpool.Conn) error {
+	if qre.options.ShouldFetchLastInsertID() {
+		// if the query contains a last_insert_id(x) function,
+		// we need to reset the last insert id to check if it was set by the query or not
+		_, err := conn.Exec(ctx, resetLastIDQuery, 1, false)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (qre *QueryExecutor) fetchLastInsertID(ctx context.Context, conn *connpool.Conn, exec *sqltypes.Result) error {
-	if exec.InsertID != 0 {
+	if exec.InsertID != 0 || !qre.options.ShouldFetchLastInsertID() {
 		return nil
 	}
 
