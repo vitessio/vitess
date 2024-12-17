@@ -139,23 +139,23 @@ func TestDeleteStaleKeyspaces(t *testing.T) {
 			BaseKeyspace:     "baseKeyspace",
 		},
 	}
-	keyspaceInfo.SetKeyspaceName("ks1")
+	keyspaceInfo.SetKeyspaceName(t.Name())
 	err := SaveKeyspace(keyspaceInfo)
 	require.NoError(t, err)
 
-	readKeyspaceInfo, err := ReadKeyspace("ks1")
+	readKeyspaceInfo, err := ReadKeyspace(t.Name())
 	require.NoError(t, err)
 	require.NotNil(t, readKeyspaceInfo)
 
 	// test a staletime before save causes no delete
 	require.NoError(t, DeleteStaleKeyspaces(time.Now().Add(-time.Hour)))
-	readKeyspaceInfo, err = ReadKeyspace("ks1")
+	readKeyspaceInfo, err = ReadKeyspace(t.Name())
 	require.NoError(t, err)
 	require.NotNil(t, readKeyspaceInfo)
 
 	// test statetime of now deletes everything
 	require.NoError(t, DeleteStaleKeyspaces(time.Now()))
-	readKeyspaceInfo, err = ReadKeyspace("ks1")
+	readKeyspaceInfo, err = ReadKeyspace(t.Name())
 	require.Error(t, err)
 	require.Nil(t, readKeyspaceInfo)
 }
