@@ -1,5 +1,10 @@
 # This file is auto-included when MariaDB 10 is detected.
 
+# all db instances should skip starting replication threads - that way we can do any
+# additional configuration (like enabling semi-sync) before we connect to
+# the source.
+skip_slave_start
+
 # Semi-sync replication is required for automated unplanned failover
 # (when the primary goes away). Here we just load the plugin so it's
 # available if desired, but it's disabled at startup.
