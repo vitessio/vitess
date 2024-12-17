@@ -18,16 +18,18 @@ package vreplication
 
 import (
 	"context"
+	"io"
 	"sync"
 	"sync/atomic"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
 const (
-	defaultParallelWorkersPoolSize = 8
+	defaultParallelWorkersPoolSize = 1
 	maxBatchedCommitsPerWorker     = 50
 )
 
@@ -43,21 +45,24 @@ type parallelWorkersPool struct {
 	maxConcurrency             atomic.Int64
 	maxBatchedCommitsPerWorker int
 
-	numCommits atomic.Int64
+	numCommits atomic.Int64 // temporary. TODO: remove
+
+	wakeup sync.Cond
 }
 
 func newParallelWorkersPool(size int, dbClientGen dbClientGenerator, vp *vplayer) (p *parallelWorkersPool, err error) {
+	log.Errorf("======= QQQ NEW PARALLEL POOOL siz=%v", size)
 	p = &parallelWorkersPool{
 		workers:      make([]*parallelWorker, size),
 		pool:         make(chan *parallelWorker, size),
 		workerErrors: make(chan error, size*2),
 	}
+	p.wakeup.L = &p.mu
 	for i := range size {
 		w := &parallelWorker{
-			index:  i,
-			pool:   p,
-			wakeup: make(chan int, 1),
-			vp:     vp,
+			index: i,
+			pool:  p,
+			vp:    vp,
 		}
 		dbClient, err := dbClientGen()
 		if err != nil {
@@ -99,20 +104,20 @@ func (p *parallelWorkersPool) drain(ctx context.Context) (err error) {
 	if err := terminateWorkers(); err != nil {
 		return err
 	}
-	var workers []*parallelWorker
+	// Get all workers (ensures they're all idle):
 	for range len(p.workers) {
-		w, err := p.availableWorker(ctx, -1, -1) // blocks until all workers are idle
+		_, err := p.availableWorker(ctx, -1, -1, false)
 		if err != nil {
 			return vterrors.Wrapf(err, "drain aborted")
 		}
-
-		workers = append(workers, w)
 	}
-	for _, w := range workers {
-		p.recycleWorker(w)
-	}
-
-	// context cancellation will recycle all workers.
+	// 	p.mu.Lock()
+	// 	defer p.mu.Unlock()
+	//
+	// 	p.head = 0
+	// 	for i := range p.workers {
+	// 		p.recycleWorker(p.workers[i])
+	// 	}
 	return p.workersError()
 }
 
@@ -120,7 +125,7 @@ func (p *parallelWorkersPool) recycleWorker(w *parallelWorker) {
 	p.pool <- w
 }
 
-func (p *parallelWorkersPool) availableWorker(ctx context.Context, lastCommitted int64, sequenceNumber int64) (w *parallelWorker, err error) {
+func (p *parallelWorkersPool) availableWorker(ctx context.Context, lastCommitted int64, sequenceNumber int64, firstInBinlog bool) (w *parallelWorker, err error) {
 	select {
 	case w = <-p.pool:
 	case <-ctx.Done():
@@ -134,23 +139,42 @@ func (p *parallelWorkersPool) availableWorker(ctx context.Context, lastCommitted
 	w.events = events
 	w.lastCommitted = lastCommitted
 	w.sequenceNumber = sequenceNumber
-	w.isHead = false
+	w.isFirstInBinlog = firstInBinlog
+	w.appliedevents = nil
+	w.doneevents.Store(false)
+	log.Errorf("========== QQQ availableWorker w=%v initialized with seq=%v, lastComm=%v, firstInBinlog=%v", w.index, w.sequenceNumber, w.lastCommitted, firstInBinlog)
 
 	if lastCommitted < 0 {
-		// Only happens when called by drain()
+		// Only happens when called by drain(), in which case there is no need for this worker
+		// to start applying events, nor will this worker be recycled. This is the end of the line.
 		return w, nil
 	}
 
 	go func() {
 		if err := w.applyQueuedEvents(ctx); err != nil {
+			if err == io.EOF {
+				w.pool.posReached.Store(true)
+			}
 			p.workerErrors <- err
+			log.Errorf("========== QQQ applyQueuedEvents worker %v is done with error=%v", w.index, err)
 		}
+		// log.Errorf("========== QQQ applyQueuedEvents worker %v is done!", w.index)
 		p.mu.Lock()
 		defer p.mu.Unlock()
 
+		log.Errorf("========== QQQ applyQueuedEvents worker %v is done! head=%v", w.index, p.head)
+		if w.index != p.head && w.sequenceNumber > 0 {
+			log.Errorf("========== QQQ applyQueuedEvents WHOAAAAAAA how can a worker be done when it's not in head? applied: %v/%v", w.index, w.appliedevents)
+
+		}
 		if w.index == p.head {
 			p.handoverHead(w.index)
+			log.Errorf("========== QQQ applyQueuedEvents new head=%v with %d queued, first in binlog =%v", p.head, len(p.workers[p.head].events), p.workers[p.head].isFirstInBinlog)
 		}
+		w.lastCommitted = 0
+		w.sequenceNumber = 0
+		w.isFirstInBinlog = false
+		w.appliedevents = nil
 		p.recycleWorker(w)
 	}()
 	return w, nil
@@ -161,48 +185,46 @@ func (p *parallelWorkersPool) workersError() error {
 	case err := <-p.workerErrors:
 		return err
 	default:
+		if p.posReached.Load() {
+			return io.EOF
+		}
 		return nil
 	}
 }
 
 func (p *parallelWorkersPool) handoverHead(fromIndex int) {
 	p.head = (fromIndex + 1) % len(p.workers)
-	go func() { p.workers[p.head].wakeup <- fromIndex }()
+	for _, w := range p.workers {
+		if w.index == fromIndex {
+			continue
+		}
+		p.wakeup.Broadcast()
+	}
 }
 
 func (p *parallelWorkersPool) isApplicable(w *parallelWorker, event *binlogdatapb.VEvent) bool {
-	if w.isHead {
-		// optimization; skip mutex lock
-		// Once the worker is at the head, only the worker can change the head value.
-		return true
-	}
-	switch event.Type {
-	case binlogdatapb.VEventType_GTID:
-		return true
-	case binlogdatapb.VEventType_BEGIN:
-		return true
-	case binlogdatapb.VEventType_FIELD:
-		return true
-	}
-
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
 	if w.index == p.head {
 		// head worker is always applicable
-		w.isHead = true
 		return true
 	}
-	if event.Type != binlogdatapb.VEventType_ROW {
+
+	// Not head.
+	if w.isFirstInBinlog {
+		// First in the binary log. Only applicable when this worker is at head.
 		return false
 	}
-
 	if event.SequenceNumber == 0 {
 		// No info. We therefore execute sequentially.
 		return false
 	}
-	if event.SequenceNumber == 1 {
-		// First in the binary log. We therefore execute sequentially.
+	switch event.Type {
+	case binlogdatapb.VEventType_GTID,
+		binlogdatapb.VEventType_BEGIN,
+		binlogdatapb.VEventType_FIELD,
+		binlogdatapb.VEventType_ROW:
+		// logic to follow
+	default:
+		// Only parallelize row events.
 		return false
 	}
 
@@ -212,8 +234,20 @@ func (p *parallelWorkersPool) isApplicable(w *parallelWorker, event *binlogdatap
 			// reached this worker. It is applicable.
 			return true
 		}
+		if otherWorker.sequenceNumber < 0 {
+			// Happens on draining. Skip this worker.
+			log.Errorf("========== QQQ isApplicable WHOA-1 otherWorker %v sequenceNumber=%v", otherWorker.index, otherWorker.sequenceNumber)
+			continue
+		}
 		if otherWorker.sequenceNumber == 0 {
-			// unknown event. Used for draining. Sequentialize.
+			// unknown event.
+			log.Errorf("========== QQQ isApplicable WHOA0 otherWorker %v sequenceNumber=%v", otherWorker.index, otherWorker.sequenceNumber)
+			return false
+		}
+		if otherWorker.isFirstInBinlog && i > 0 {
+			log.Errorf("========== QQQ isApplicable: false, because worker %v sees otherWorker %v which is first in binlog at i=%v. head=%v", w.index, otherWorker.index, i, p.head)
+			// This means we've rotated a binary log. We therefore
+			// Wait until all previous binlog events are consumed.
 			return false
 		}
 		if otherWorker.sequenceNumber <= event.LastCommitted {
@@ -221,6 +255,6 @@ func (p *parallelWorkersPool) isApplicable(w *parallelWorker, event *binlogdatap
 			return false
 		}
 	}
-	// Technically we'll never get here. The loop will always exit, at worst, with "otherWorker.index == w.index"
+	// Never going to reach this code, because our loop will always eventually hit `otherWorker.index == w.index`.
 	return true
 }

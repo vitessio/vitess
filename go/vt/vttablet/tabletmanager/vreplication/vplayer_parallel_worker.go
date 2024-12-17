@@ -18,10 +18,12 @@ package vreplication
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -42,6 +44,7 @@ var (
 	unknownEvent = &binlogdatapb.VEvent{
 		Type: binlogdatapb.VEventType_UNKNOWN,
 	}
+	errRetryEvent = errors.New("retry event")
 )
 
 type parallelWorker struct {
@@ -52,7 +55,6 @@ type parallelWorker struct {
 	dbClient       *vdbClient
 	queryFunc      func(ctx context.Context, sql string) (*sqltypes.Result, error)
 	vp             *vplayer
-	wakeup         chan int
 
 	// foreignKeyChecksEnabled is the current state of the foreign key checks for the current session.
 	// It reflects what we have set the @@session.foreign_key_checks session variable to.
@@ -60,9 +62,12 @@ type parallelWorker struct {
 	// foreignKeyChecksStateInitialized is set to true once we have initialized the foreignKeyChecksEnabled.
 	// The initialization is done on the first row event that this vplayer sees.
 	foreignKeyChecksStateInitialized bool
-	isHead                           bool
+	isFirstInBinlog                  bool
 	events                           chan *binlogdatapb.VEvent
 	stats                            *VrLogStats
+
+	appliedevents []binlogdatapb.VEventType
+	doneevents    atomic.Bool
 }
 
 // applyQueuedStmtEvent applies an actual DML statement received from the source, directly onto the backend database
@@ -129,6 +134,9 @@ func (w *parallelWorker) updateFKCheck(ctx context.Context, flags2 uint32) error
 }
 
 func (w *parallelWorker) applyEvent(ctx context.Context, event *binlogdatapb.VEvent) error {
+	if w.doneevents.Load() {
+		log.Errorf("============== QQQ applyEvent when doneevents is true, w=%v, event=%v", w.index, event.Type)
+	}
 	select {
 	case w.events <- event:
 		return nil
@@ -137,44 +145,51 @@ func (w *parallelWorker) applyEvent(ctx context.Context, event *binlogdatapb.VEv
 	}
 }
 
-func (w *parallelWorker) applyQueuedEvents(ctx context.Context) error {
+func (w *parallelWorker) applyQueuedEvents(ctx context.Context) (err error) {
+	defer w.doneevents.Store(true)
+
 	defer func() {
-		if w.dbClient.InTransaction {
+		if err != nil {
 			if err := w.dbClient.Rollback(); err != nil {
 				log.Errorf("Error rolling back transaction: %v", err)
 			}
 		}
+		// }
 	}()
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		case vevent := <-w.events:
-			if vevent == terminateWorkerEvent {
-				// An indication that there are no more events for this worker
-				return nil
-			}
-			if err := w.applyQueuedEvent(ctx, vevent, true); err != nil {
-				// wasError = true
-				if err != io.EOF {
-					w.vp.vr.stats.ErrorCounts.Add([]string{"Apply"}, 1)
-					var table, tableLogMsg, gtidLogMsg string
-					switch {
-					case vevent.GetFieldEvent() != nil:
-						table = vevent.GetFieldEvent().TableName
-					case vevent.GetRowEvent() != nil:
-						table = vevent.GetRowEvent().TableName
-					}
-					if table != "" {
-						tableLogMsg = fmt.Sprintf(" for table %s", table)
-					}
-					gtidLogMsg = fmt.Sprintf(" while processing position %v", w.vp.pos.Load())
-					log.Errorf("Error applying event%s%s: %s", tableLogMsg, gtidLogMsg, err.Error())
-					err = vterrors.Wrapf(err, "error applying event%s%s", tableLogMsg, gtidLogMsg)
+			if err := w.applyQueuedEvent(ctx, vevent); err != nil {
+				if err == io.EOF {
+					return err
 				}
+				// Not EOF
+				w.vp.vr.stats.ErrorCounts.Add([]string{"Apply"}, 1)
+				var table, tableLogMsg, gtidLogMsg string
+				switch {
+				case vevent.GetFieldEvent() != nil:
+					table = vevent.GetFieldEvent().TableName
+				case vevent.GetRowEvent() != nil:
+					table = vevent.GetRowEvent().TableName
+				}
+				if table != "" {
+					tableLogMsg = fmt.Sprintf(" for table %s", table)
+				}
+				gtidLogMsg = fmt.Sprintf(" while processing position %v", w.vp.pos.Load())
+				log.Errorf("Error applying event%s%s: %s", tableLogMsg, gtidLogMsg, err.Error())
+				err = vterrors.Wrapf(err, "error applying event%s%s", tableLogMsg, gtidLogMsg)
+				err = vterrors.Wrapf(err, "worker=%d", w.index)
+				err = vterrors.Wrapf(err, "event sequence_number=%d, event last_committed=%d", vevent.SequenceNumber, vevent.LastCommitted)
+				err = vterrors.Wrapf(err, "sequence_number=%v, last_committed=%v", w.sequenceNumber, w.lastCommitted)
 				return err
 			}
 			// No error
+			w.appliedevents = append(w.appliedevents, vevent.Type)
+			if vevent == terminateWorkerEvent {
+				return w.dbClient.Commit()
+			}
 		}
 	}
 }
@@ -187,7 +202,7 @@ func (w *parallelWorker) applyQueuedCommit(ctx context.Context, vevent *binlogda
 	}
 	if !w.dbClient.InTransaction {
 		// We're skipping an empty transaction. We may have to save the position on inactivity.
-		w.vp.unsavedEvent = vevent
+		w.vp.unsavedEvent.Store(vevent)
 		return nil
 	}
 	posReached, err := w.updatePos(ctx, vevent.Timestamp)
@@ -200,8 +215,6 @@ func (w *parallelWorker) applyQueuedCommit(ctx context.Context, vevent *binlogda
 	}
 
 	if posReached {
-		w.pool.posReached.Store(true)
-		log.Errorf("========== QQQ posReached = true: %v", w.vp.pos.Load())
 		return io.EOF
 	}
 	// No more events for this worker
@@ -219,7 +232,7 @@ func (w *parallelWorker) applyQueuedRowEvent(ctx context.Context, vevent *binlog
 		tplan = w.vp.tablePlans[vevent.RowEvent.TableName]
 	}()
 	if tplan == nil {
-		return fmt.Errorf("unexpected event on table %s", vevent.RowEvent.TableName)
+		return vterrors.Wrapf(errRetryEvent, "unexpected event on table %s", vevent.RowEvent.TableName)
 	}
 	applyFuncWithStats := func(sql string) (*sqltypes.Result, error) {
 		stats := NewVrLogStats("ROWCHANGE")
@@ -262,30 +275,81 @@ func (w *parallelWorker) applyQueuedRowEvent(ctx context.Context, vevent *binlog
 	return nil
 }
 
-func (w *parallelWorker) applyQueuedEvent(ctx context.Context, event *binlogdatapb.VEvent, mustSave bool) error {
-	for !w.pool.isApplicable(w, event) {
-		select {
-		case <-w.wakeup:
-		case <-ctx.Done():
-			return ctx.Err()
-		}
+func (w *parallelWorker) applyQueuedEvent(ctx context.Context, event *binlogdatapb.VEvent) error {
+	switch event.Type {
+	case binlogdatapb.VEventType_UNKNOWN:
+		// An indication that there are no more events for this worker
+		return nil
 	}
+	isHead := false
+	requireWait := false
+	for {
+		wokeup := false
+		func() {
+			w.pool.mu.Lock()
+			defer w.pool.mu.Unlock()
+
+			isHead = w.index == w.pool.head
+			if isHead {
+				// head worker is always applicable
+				return
+			}
+			for requireWait || !w.pool.isApplicable(w, event) {
+				// log.Errorf("========== QQQ applyQueuedEvent worker %v WAITING. head=%v", w.index, w.pool.head)
+				w.pool.wakeup.Wait()
+				wokeup = true
+				requireWait = false
+			}
+		}()
+		if wokeup {
+			log.Errorf("========== QQQ applyQueuedEvent worker %v WOKE UP. events=%v, next event: %v", w.index, len(w.events), event.Type)
+		}
+		err := w.applyApplicableQueuedEvent(ctx, event)
+		if errors.Is(vterrors.UnwrapAll(err), errRetryEvent) && !isHead {
+			requireWait = true
+			log.Errorf("========== QQQ error is errRetryEvent: %v", err)
+			continue
+		} else if err != nil {
+			log.Errorf("========== QQQ error is NOT errRetryEvent: %v", err)
+		}
+		return err
+	}
+}
+
+func (w *parallelWorker) applyApplicableQueuedEvent(ctx context.Context, event *binlogdatapb.VEvent) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	applyFunc := func(sql string) (*sqltypes.Result, error) {
 		return w.queryFunc(ctx, sql)
 	}
 
+	t := time.NewTimer(5 * time.Second)
+	defer t.Stop()
+	go func() {
+		select {
+		case <-t.C:
+			log.Errorf("========== QQQ applyQueuedEvent worker %v TIMED OUT. event=%v", w.index, event.Type)
+		case <-ctx.Done():
+			return
+		}
+	}()
+
 	stats := NewVrLogStats(event.Type.String())
 	switch event.Type {
-	case binlogdatapb.VEventType_UNKNOWN:
-		// No-op. Used for serialization
 	case binlogdatapb.VEventType_GTID:
 		pos, err := binlogplayer.DecodePosition(event.Gtid)
 		if err != nil {
 			return err
 		}
-		w.vp.pos.Store(&pos)
-		// A new position should not be saved until a saveable event occurs.
-		w.vp.unsavedEvent = nil
+		func() {
+			w.vp.posMu.Lock()
+			defer w.vp.posMu.Unlock()
+
+			w.vp.pos.Store(&pos)
+			// A new position should not be saved until a saveable event occurs.
+			w.vp.unsavedEvent.Store(nil)
+		}()
 		if w.vp.stopPos.IsZero() {
 			return nil
 		}
