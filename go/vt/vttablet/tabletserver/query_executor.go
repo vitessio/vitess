@@ -1125,7 +1125,7 @@ func (qre *QueryExecutor) execDBConn(conn *connpool.Conn, sql string, wantfields
 	if err != nil {
 		return nil, err
 	}
-	if qre.options.FetchLastInsertId {
+	if qre.options.ShouldFetchLastInsertID() {
 		err := qre.fetchLastInsertID(ctx, conn, exec)
 		if err != nil {
 			return nil, err
@@ -1151,7 +1151,7 @@ func (qre *QueryExecutor) execStatefulConn(conn *StatefulConnection, sql string,
 	if err != nil {
 		return nil, err
 	}
-	if qre.options.FetchLastInsertId {
+	if qre.options.ShouldFetchLastInsertID() {
 		err = qre.fetchLastInsertID(ctx, conn.UnderlyingDBConn().Conn, exec)
 		if err != nil {
 			return nil, err
