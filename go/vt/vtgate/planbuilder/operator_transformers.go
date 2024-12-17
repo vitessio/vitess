@@ -647,12 +647,13 @@ func buildInsertPrimitive(
 	ins := op.(*operators.Insert)
 
 	ic := engine.InsertCommon{
-		Opcode:      mapToInsertOpCode(rb.Routing.OpCode()),
-		Keyspace:    rb.Routing.Keyspace(),
-		TableName:   ins.VTable.Name.String(),
-		Ignore:      ins.Ignore,
-		Generate:    autoIncGenerate(ins.AutoIncrement),
-		ColVindexes: ins.ColVindexes,
+		Opcode:            mapToInsertOpCode(rb.Routing.OpCode()),
+		Keyspace:          rb.Routing.Keyspace(),
+		TableName:         ins.VTable.Name.String(),
+		Ignore:            ins.Ignore,
+		Generate:          autoIncGenerate(ins.AutoIncrement),
+		ColVindexes:       ins.ColVindexes,
+		FetchLastInsertID: ctx.SemTable.ShouldFetchLastInsertID(),
 	}
 	if hints != nil {
 		ic.MultiShardAutocommit = hints.multiShardAutocommit

@@ -145,7 +145,7 @@ func TestScatterConnStreamExecuteMulti(t *testing.T) {
 			defer mu.Unlock()
 			qr.AppendResult(r)
 			return nil
-		}, nullResultsObserver{})
+		}, nullResultsObserver{}, false)
 		return qr, vterrors.Aggregate(errors)
 	})
 }
@@ -484,7 +484,7 @@ func TestMultiExecs(t *testing.T) {
 	observer = recordingResultsObserver{}
 	_ = sc.StreamExecuteMulti(ctx, nil, "query", rss, bvs, session, false /* autocommit */, func(*sqltypes.Result) error {
 		return nil
-	}, &observer)
+	}, &observer, false)
 	if !reflect.DeepEqual(sbc0.Queries[0].BindVariables, wantVars0) {
 		t.Errorf("got %+v, want %+v", sbc0.Queries[0].BindVariables, wantVars0)
 	}
