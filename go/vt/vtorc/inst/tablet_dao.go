@@ -61,8 +61,7 @@ func ReadTablet(tabletAlias string) (*topodatapb.Tablet, error) {
 	FROM
 		vitess_tablet
 	WHERE
-		alias = ?
-	`
+		alias = ?`
 	args := sqlutils.Args(tabletAlias)
 	tablet := &topodatapb.Tablet{}
 	opts := prototext.UnmarshalOptions{DiscardUnknown: true}
@@ -94,7 +93,8 @@ func SaveTablet(tablet *topodatapb.Tablet) error {
 			shard,
 			tablet_type,
 			primary_timestamp,
-			info
+			info,
+			updated_timestamp
 		) VALUES (
 			?,
 			?,
@@ -104,7 +104,8 @@ func SaveTablet(tablet *topodatapb.Tablet) error {
 			?,
 			?,
 			?,
-			?
+			?,
+			DATETIME('now')
 		)`,
 		topoproto.TabletAliasString(tablet.Alias),
 		tablet.MysqlHostname,

@@ -442,7 +442,7 @@ func TestReadOutdatedInstanceKeys(t *testing.T) {
 			name: "One instance doesn't have myql data",
 			sql: []string{
 				"update database_instance set last_checked = DATETIME('now')",
-				`INSERT INTO vitess_tablet VALUES('zone1-0000000103','localhost',7706,'ks','0','zone1',2,'0001-01-01 00:00:00+00:00','');`,
+				`INSERT INTO vitess_tablet VALUES('zone1-0000000103','localhost',7706,'ks','0','zone1',2,'0001-01-01 00:00:00+00:00','',DATETIME('now'));`,
 			},
 			instancesRequired: []string{"zone1-0000000103"},
 		}, {
@@ -450,7 +450,7 @@ func TestReadOutdatedInstanceKeys(t *testing.T) {
 			sql: []string{
 				"update database_instance set last_checked = DATETIME('now')",
 				"update database_instance set last_checked = DATETIME('now', '-1 hour') where alias = 'zone1-0000000100'",
-				`INSERT INTO vitess_tablet VALUES('zone1-0000000103','localhost',7706,'ks','0','zone1',2,'0001-01-01 00:00:00+00:00','');`,
+				`INSERT INTO vitess_tablet VALUES('zone1-0000000103','localhost',7706,'ks','0','zone1',2,'0001-01-01 00:00:00+00:00','',DATETIME('now'));`,
 			},
 			instancesRequired: []string{"zone1-0000000103", "zone1-0000000100"},
 		},
