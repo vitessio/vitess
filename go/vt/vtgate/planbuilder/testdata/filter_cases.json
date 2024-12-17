@@ -5109,7 +5109,6 @@
       "user.sales",
       "user.sales_extra"
     ]
-  },
-  "skip_e2e":true
+  }
 }
 ]

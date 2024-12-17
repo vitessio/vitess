@@ -44,6 +44,7 @@ func TestSelectCases(t *testing.T) {
 func TestFilterCases(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
+	loadSampleData(t, mcmp)
 	tests := readJSONTests("filter_cases.json")
 	for _, test := range tests {
 		mcmp.Run(test.Comment, func(mcmp *utils.MySQLCompare) {
