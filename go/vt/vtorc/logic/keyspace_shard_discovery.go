@@ -166,7 +166,7 @@ func refreshAllShards(ctx context.Context, keyspaceName string) error {
 			return err
 		}
 	}
-	return inst.DeleteStaleKeyspaceShards(keyspace, beginSaveTime)
+	return inst.DeleteStaleKeyspaceShards(keyspaceName, beginSaveTime)
 }
 
 // refreshSingleShardHelper is a helper function that refreshes the shard record of the given keyspace/shard.
