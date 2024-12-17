@@ -433,6 +433,7 @@ message QueryResult {
   repeated Row rows = 4;
   string info = 6;
   string session_state_changes = 7;
+  bool insert_id_changed=8;
 }
 
 // QueryWarning is used to convey out of band query execution warnings

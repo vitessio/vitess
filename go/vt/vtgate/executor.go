@@ -234,9 +234,9 @@ func (e *Executor) Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConn
 	stmtType, result, err := e.execute(ctx, mysqlCtx, safeSession, sql, bindVars, logStats)
 	logStats.Error = err
 	if result == nil {
-		saveSessionStats(safeSession, stmtType, 0, 0, 0, err)
+		saveSessionStats(safeSession, stmtType, false, 0, 0, 0, err)
 	} else {
-		saveSessionStats(safeSession, stmtType, result.RowsAffected, result.InsertID, len(result.Rows), err)
+		saveSessionStats(safeSession, stmtType, result.InsertIDChanged, result.InsertID, result.RowsAffected, len(result.Rows), err)
 	}
 	if result != nil && len(result.Rows) > warnMemoryRows {
 		warnings.Add("ResultsExceeded", 1)
@@ -262,12 +262,13 @@ func (e *Executor) Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConn
 }
 
 type streaminResultReceiver struct {
-	mu           sync.Mutex
-	stmtType     sqlparser.StatementType
-	rowsAffected uint64
-	rowsReturned int
-	insertID     uint64
-	callback     func(*sqltypes.Result) error
+	mu              sync.Mutex
+	stmtType        sqlparser.StatementType
+	rowsAffected    uint64
+	rowsReturned    int
+	insertID        uint64
+	insertIDChanged bool
+	callback        func(*sqltypes.Result) error
 }
 
 func (s *streaminResultReceiver) storeResultStats(typ sqlparser.StatementType, qr *sqltypes.Result) error {
@@ -275,9 +276,10 @@ func (s *streaminResultReceiver) storeResultStats(typ sqlparser.StatementType, q
 	defer s.mu.Unlock()
 	s.rowsAffected += qr.RowsAffected
 	s.rowsReturned += len(qr.Rows)
-	if qr.InsertID != 0 {
+	if qr.InsertID != 0 || qr.InsertIDChanged {
 		s.insertID = qr.InsertID
 	}
+	s.insertIDChanged = s.insertIDChanged || qr.InsertIDChanged
 	s.stmtType = typ
 	return s.callback(qr)
 }
@@ -379,7 +381,7 @@ func (e *Executor) StreamExecute(
 	err = e.newExecute(ctx, mysqlCtx, safeSession, sql, bindVars, logStats, resultHandler, srr.storeResultStats)
 
 	logStats.Error = err
-	saveSessionStats(safeSession, srr.stmtType, srr.rowsAffected, srr.insertID, srr.rowsReturned, err)
+	saveSessionStats(safeSession, srr.stmtType, srr.insertIDChanged, srr.insertID, srr.rowsAffected, srr.rowsReturned, err)
 	if srr.rowsReturned > warnMemoryRows {
 		warnings.Add("ResultsExceeded", 1)
 		piiSafeSQL, err := e.env.Parser().RedactSQLQuery(sql)
@@ -412,7 +414,7 @@ func canReturnRows(stmtType sqlparser.StatementType) bool {
 	}
 }
 
-func saveSessionStats(safeSession *econtext.SafeSession, stmtType sqlparser.StatementType, rowsAffected, insertID uint64, rowsReturned int, err error) {
+func saveSessionStats(safeSession *econtext.SafeSession, stmtType sqlparser.StatementType, insertIDChanged bool, insertID, rowsAffected uint64, rowsReturned int, err error) {
 	safeSession.RowCount = -1
 	if err != nil {
 		return
@@ -420,7 +422,7 @@ func saveSessionStats(safeSession *econtext.SafeSession, stmtType sqlparser.Stat
 	if !safeSession.IsFoundRowsHandled() {
 		safeSession.FoundRows = uint64(rowsReturned)
 	}
-	if insertID > 0 {
+	if insertID != 0 || insertIDChanged {
 		safeSession.LastInsertId = insertID
 	}
 	switch stmtType {

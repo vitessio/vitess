@@ -131,6 +131,17 @@ func TestCast(t *testing.T) {
 	mcmp.AssertMatches("select cast('3.2' as unsigned)", `[[UINT64(3)]]`)
 }
 
+// TestSetAndGetLastInsertID tests that the last_insert_id function works as intended when used with different arguments.
+func TestSetAndGetLastInsertID(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("select last_insert_id(42)")
+	mcmp.Exec("select last_insert_id()")
+	mcmp.Exec("select last_insert_id(0)")
+	mcmp.Exec("select last_insert_id()")
+}
+
 // TestVindexHints tests that vindex hints work as intended.
 func TestVindexHints(t *testing.T) {
 	mcmp, closer := start(t)

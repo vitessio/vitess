@@ -269,6 +269,7 @@ func (m *QueryResult) CloneVT() *QueryResult {
 	r.InsertId = m.InsertId
 	r.Info = m.Info
 	r.SessionStateChanges = m.SessionStateChanges
+	r.InsertIdChanged = m.InsertIdChanged
 	if rhs := m.Fields; rhs != nil {
 		tmpContainer := make([]*Field, len(rhs))
 		for k, v := range rhs {
@@ -2210,6 +2211,16 @@ func (m *QueryResult) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.InsertIdChanged {
+		i--
+		if m.InsertIdChanged {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x40
 	}
 	if len(m.SessionStateChanges) > 0 {
 		i -= len(m.SessionStateChanges)
@@ -6300,6 +6311,9 @@ func (m *QueryResult) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
+	if m.InsertIdChanged {
+		n += 2
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -9672,6 +9686,26 @@ func (m *QueryResult) UnmarshalVT(dAtA []byte) error {
 			}
 			m.SessionStateChanges = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
+		case 8:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field InsertIdChanged", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.InsertIdChanged = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
