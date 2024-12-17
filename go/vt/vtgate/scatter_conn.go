@@ -152,6 +152,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 	autocommit bool,
 	ignoreMaxMemoryRows bool,
 	resultsObserver econtext.ResultsObserver,
+	fetchLastInsertID bool,
 ) (qr *sqltypes.Result, errs []error) {
 
 	if len(rss) != len(queries) {
@@ -186,6 +187,9 @@ func (stc *ScatterConn) ExecuteMultiShard(
 			if session != nil && session.Session != nil {
 				opts = session.Session.Options
 			}
+
+			// TODO reset this?
+			opts.FetchLastInsertId = fetchLastInsertID
 
 			if autocommit {
 				// As this is auto-commit, the transactionID is supposed to be zero.
