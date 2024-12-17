@@ -110,7 +110,7 @@ func RefreshAllKeyspacesAndShards(ctx context.Context) error {
 	if err = eg.Wait(); err == nil {
 		// delete stale records from the previous success or older
 		if staleTime := lastAllKeyspaceShardsRefreshTime; !staleTime.IsZero() {
-			if staleTime.Unix() != time.Now().Unix() {
+			if staleTime.Unix() == time.Now().Unix() {
 				return nil
 			}
 			if err := inst.DeleteStaleShards(staleTime); err != nil {
