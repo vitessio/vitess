@@ -133,38 +133,43 @@ func TestCast(t *testing.T) {
 
 // TestSetAndGetLastInsertID tests that the last_insert_id function works as intended when used with different arguments.
 func TestSetAndGetLastInsertID(t *testing.T) {
-	mcmp, closer := start(t)
-	defer closer()
+	notZero := 1
+	for _, workload := range []string{"olap", "oltp"} {
+		mcmp, closer := start(t)
+		defer closer()
 
-	checkQuery := func(query string) {
-		mcmp.Run(query, func(mcmp *utils.MySQLCompare) {
-			mcmp.Exec(query)
-			mcmp.Exec("select last_insert_id()")
-		})
+		_, err := mcmp.VtConn.ExecuteFetch(fmt.Sprintf("set workload = %s", workload), 1000, false)
+		require.NoError(t, err)
+		checkQuery := func(i string) {
+			for _, val := range []int{0, notZero} {
+				query := fmt.Sprintf(i, val)
+				name := fmt.Sprintf("%s - %s", workload, query)
+				mcmp.Run(name, func(mcmp *utils.MySQLCompare) {
+					mcmp.Exec(query)
+					mcmp.Exec("select last_insert_id()")
+				})
+			}
+			notZero++
+		}
+
+		checkQuery("select last_insert_id(%d)")
+
+		// Test within SELECT expressions
+		checkQuery("select last_insert_id(%d), id1, id2 from t1 limit 1")
+		checkQuery("select last_insert_id(%d), id1, id2 from t1 where 1 = 2")
+		checkQuery("select 12 from t1 where last_insert_id(%d)")
+
+		// Add a row so we can test the last_insert_id in UPDATE statements
+		mcmp.Exec("insert into t1 (id1, id2) values (1, 10)")
+
+		// Test in UPDATE statements
+		checkQuery("update t1 set id2 = last_insert_id(%d) where id1 = 1") // this should run
+		checkQuery("update t1 set id2 = last_insert_id(%d) where id1 = 2") // this should not run
+		checkQuery("update t1 set id2 = 88 where id1 = last_insert_id(%d)")
+
+		// Test in DELETE statements
+		checkQuery("delete from t1 where id1 = last_insert_id(%d)")
 	}
-
-	checkQuery("select last_insert_id(42)")
-	checkQuery("select last_insert_id(0)")
-
-	// Test within SELECT expressions
-	checkQuery("select last_insert_id(123), id1, id2 from t1 limit 1")
-	checkQuery("select id1, last_insert_id(999) as li, id2 from t1 where id1 > last_insert_id(0)")
-
-	// Test in WHERE clauses
-	checkQuery("select id1 from t1 where id1 = last_insert_id(55)")
-	checkQuery("select id1 from t1 where last_insert_id(0) = 0")
-
-	// Add a row so we can test the last_insert_id in UPDATE statements
-	mcmp.Exec("insert into t1 (id1, id2) values (1, 10)")
-
-	// Test in UPDATE statements
-	checkQuery("update t1 set id2 = last_insert_id(777) where id1 = 1") // this should run
-	checkQuery("update t1 set id2 = last_insert_id(456) where id1 = 2") // this should not run
-	checkQuery("update t1 set id2 = 88 where id1 = last_insert_id(0)")
-
-	// Test in DELETE statements
-	checkQuery("delete from t1 where id1 = last_insert_id(456)")
-	checkQuery("delete from t1 where id1 = last_insert_id(1)")
 }
 
 // TestVindexHints tests that vindex hints work as intended.
