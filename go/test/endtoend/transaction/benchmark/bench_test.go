@@ -100,6 +100,13 @@ func cleanup(b *testing.B) {
 
 // BenchmarkTwoPCCommit benchmarks the performance of a two-phase commit transaction
 // with varying numbers of inserts.
+// Recommended run options:
+/*
+export ver=v1 p=~/path && go test \
+-run '^$' -bench '^BenchmarkTwoPCCommit' \
+-benchtime 3s -count 6 -cpu 8
+| tee $p/${ver}.txt
+*/
 func BenchmarkTwoPCCommit(b *testing.B) {
 	// Pre-generate 100 random strings
 	const sampleSize = 100
@@ -119,10 +126,9 @@ func BenchmarkTwoPCCommit(b *testing.B) {
 	// Incremental id for inserts
 	id := 1
 
-	for _, commitMode := range []string{"multi", "twopc"} {
-
-		for _, tc := range testCases {
-			conn, done := start(b)
+	for _, tc := range testCases {
+		for _, commitMode := range []string{"twopc", "multi"} {
+			conn, _ := start(b)
 			_, err := conn.ExecuteFetch(fmt.Sprintf("set transaction_mode = %s", commitMode), 0, false)
 			if err != nil {
 				b.Fatal(err)
@@ -151,7 +157,7 @@ func BenchmarkTwoPCCommit(b *testing.B) {
 					}
 				}
 			})
-			done()
+			conn.Close()
 		}
 	}
 }
