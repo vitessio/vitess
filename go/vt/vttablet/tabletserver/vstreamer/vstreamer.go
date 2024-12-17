@@ -242,7 +242,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 
 		switch vevent.Type {
 		case binlogdatapb.VEventType_GTID, binlogdatapb.VEventType_BEGIN, binlogdatapb.VEventType_FIELD,
-			binlogdatapb.VEventType_JOURNAL:
+			binlogdatapb.VEventType_PREVIOUS_GTIDS, binlogdatapb.VEventType_JOURNAL:
 			// We never have to send GTID, BEGIN, FIELD events on their own.
 			// A JOURNAL event is always preceded by a BEGIN and followed by a COMMIT.
 			// So, we don't have to send it right away.
@@ -460,6 +460,10 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 
 	var vevents []*binlogdatapb.VEvent
 	switch {
+	case ev.IsPreviousGTIDs():
+		vevents = append(vevents, &binlogdatapb.VEvent{
+			Type: binlogdatapb.VEventType_PREVIOUS_GTIDS,
+		})
 	case ev.IsGTID():
 		gtid, hasBegin, lastCommitted, sequenceNumber, err := ev.GTID(vs.format)
 		if err != nil {
