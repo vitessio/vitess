@@ -64,20 +64,18 @@ func (vm *VSchemaManager) GetCurrentSrvVschema() *vschemapb.SrvVSchema {
 // UpdateVSchema propagates the updated vschema to the topo. The entry for
 // the given keyspace is updated in the global topo, and the full SrvVSchema
 // is updated in all known cells.
-func (vm *VSchemaManager) UpdateVSchema(ctx context.Context, ksName string, vschema *vschemapb.SrvVSchema) error {
+func (vm *VSchemaManager) UpdateVSchema(ctx context.Context, ks *topo.KeyspaceVSchemaInfo, srv *vschemapb.SrvVSchema) error {
 	topoServer, err := vm.serv.GetTopoServer()
 	if err != nil {
 		return err
 	}
 
-	ks := vschema.Keyspaces[ksName]
-
-	_, err = vindexes.BuildKeyspace(ks, vm.parser)
+	_, err = vindexes.BuildKeyspace(ks.Keyspace, vm.parser)
 	if err != nil {
 		return err
 	}
 
-	err = topoServer.SaveVSchema(ctx, ksName, ks)
+	err = topoServer.SaveVSchema(ctx, ks)
 	if err != nil {
 		return err
 	}
@@ -89,7 +87,7 @@ func (vm *VSchemaManager) UpdateVSchema(ctx context.Context, ksName string, vsch
 
 	// even if one cell fails, continue to try the others
 	for _, cell := range cells {
-		cellErr := topoServer.UpdateSrvVSchema(ctx, cell, vschema)
+		cellErr := topoServer.UpdateSrvVSchema(ctx, cell, srv)
 		if cellErr != nil {
 			err = cellErr
 			log.Errorf("error updating vschema in cell %s: %v", cell, cellErr)
@@ -100,7 +98,7 @@ func (vm *VSchemaManager) UpdateVSchema(ctx context.Context, ksName string, vsch
 	}
 
 	// Update all the local copy of VSchema if the topo update is successful.
-	vm.VSchemaUpdate(vschema, err)
+	vm.VSchemaUpdate(srv, err)
 
 	return nil
 }

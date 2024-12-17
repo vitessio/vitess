@@ -140,7 +140,6 @@ func TestRoutingWithKeyspacesToWatch(t *testing.T) {
 }
 
 func TestVSchemaDDLWithKeyspacesToWatch(t *testing.T) {
-
 	extraVTGateArgs := []string{
 		"--vschema_ddl_authorized_users", "%",
 	}

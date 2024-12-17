@@ -338,7 +338,9 @@ func (s *VtctldServer) ApplyVSchema(ctx context.Context, req *vtctldatapb.ApplyV
 		return nil, err
 	}
 
-	var vs *vschemapb.Keyspace
+	ksvs := &topo.KeyspaceVSchemaInfo{
+		Name: req.Keyspace,
+	}
 
 	if req.Sql != "" {
 		span.Annotate("sql_mode", true)
@@ -355,29 +357,29 @@ func (s *VtctldServer) ApplyVSchema(ctx context.Context, req *vtctldatapb.ApplyV
 			return nil, err
 		}
 
-		vs, err = s.ts.GetVSchema(ctx, req.Keyspace)
+		ksvs, err = s.ts.GetVSchema(ctx, req.Keyspace)
 		if err != nil && !topo.IsErrType(err, topo.NoNode) {
 			err = vterrors.Wrapf(err, "GetVSchema(%s)", req.Keyspace)
 			return nil, err
 		} // otherwise, we keep the empty vschema object from above
 
-		vs, err = topotools.ApplyVSchemaDDL(req.Keyspace, vs, ddl)
+		ksvs, err = topotools.ApplyVSchemaDDL(req.Keyspace, ksvs, ddl)
 		if err != nil {
-			err = vterrors.Wrapf(err, "ApplyVSchemaDDL(%s,%v,%v)", req.Keyspace, vs, ddl)
+			err = vterrors.Wrapf(err, "ApplyVSchemaDDL(%s,%v,%v)", req.Keyspace, ksvs, ddl)
 			return nil, err
 		}
 	} else { // "jsonMode"
 		span.Annotate("sql_mode", false)
-		vs = req.VSchema
+		ksvs.Keyspace = req.VSchema
 	}
 
-	ksVs, err := vindexes.BuildKeyspace(vs, s.ws.SQLParser())
+	ksVs, err := vindexes.BuildKeyspace(ksvs.Keyspace, s.ws.SQLParser())
 	if err != nil {
 		err = vterrors.Wrapf(err, "BuildKeyspace(%s)", req.Keyspace)
 		return nil, err
 	}
 	response := &vtctldatapb.ApplyVSchemaResponse{
-		VSchema:             vs,
+		VSchema:             ksvs.Keyspace,
 		UnknownVindexParams: make(map[string]*vtctldatapb.ApplyVSchemaResponse_ParamList),
 	}
 
@@ -409,7 +411,7 @@ func (s *VtctldServer) ApplyVSchema(ctx context.Context, req *vtctldatapb.ApplyV
 		return response, err
 	}
 
-	if err = s.ts.SaveVSchema(ctx, req.Keyspace, vs); err != nil {
+	if err = s.ts.SaveVSchema(ctx, ksvs); err != nil {
 		err = vterrors.Wrapf(err, "SaveVSchema(%s, %v)", req.Keyspace, req.VSchema)
 		return nil, err
 	}
@@ -425,7 +427,7 @@ func (s *VtctldServer) ApplyVSchema(ctx context.Context, req *vtctldatapb.ApplyV
 		err = vterrors.Wrapf(err, "GetVSchema(%s)", req.Keyspace)
 		return nil, err
 	}
-	response.VSchema = updatedVS
+	response.VSchema = updatedVS.Keyspace
 	return response, nil
 }
 
@@ -934,13 +936,17 @@ func (s *VtctldServer) CreateKeyspace(ctx context.Context, req *vtctldatapb.Crea
 	}
 
 	if req.Type == topodatapb.KeyspaceType_SNAPSHOT {
-		var vs *vschemapb.Keyspace
-		vs, err = s.ts.GetVSchema(ctx, req.BaseKeyspace)
+		// Copy vschema from the base keyspace.
+		bksvs, err := s.ts.GetVSchema(ctx, req.BaseKeyspace)
+		ksvs := &topo.KeyspaceVSchemaInfo{
+			Name: req.Name,
+		}
 		if err != nil {
 			log.Infof("error from GetVSchema(%v) = %v", req.BaseKeyspace, err)
 			if topo.IsErrType(err, topo.NoNode) {
 				log.Infof("base keyspace %v does not exist; continuing with bare, unsharded vschema", req.BaseKeyspace)
-				vs = &vschemapb.Keyspace{
+				// Create an empty vschema for the keyspace.
+				ksvs.Keyspace = &vschemapb.Keyspace{
 					Sharded:  false,
 					Tables:   map[string]*vschemapb.Table{},
 					Vindexes: map[string]*vschemapb.Vindex{},
@@ -950,11 +956,13 @@ func (s *VtctldServer) CreateKeyspace(ctx context.Context, req *vtctldatapb.Crea
 			}
 		}
 
+		// Copy the vschema from the base keyspace to the new one.
+		ksvs.Keyspace = bksvs.Keyspace.CloneVT()
 		// SNAPSHOT keyspaces are excluded from global routing.
-		vs.RequireExplicitRouting = true
+		ksvs.RequireExplicitRouting = true
 
-		if err = s.ts.SaveVSchema(ctx, req.Name, vs); err != nil {
-			err = fmt.Errorf("SaveVSchema(%v) = %w", vs, err)
+		if err = s.ts.SaveVSchema(ctx, ksvs); err != nil {
+			err = fmt.Errorf("SaveVSchema(%v) = %w", ksvs, err)
 			return nil, err
 		}
 	}
@@ -2656,13 +2664,13 @@ func (s *VtctldServer) GetVSchema(ctx context.Context, req *vtctldatapb.GetVSche
 
 	span.Annotate("keyspace", req.Keyspace)
 
-	vschema, err := s.ts.GetVSchema(ctx, req.Keyspace)
+	ks, err := s.ts.GetVSchema(ctx, req.Keyspace)
 	if err != nil {
 		return nil, err
 	}
 
 	return &vtctldatapb.GetVSchemaResponse{
-		VSchema: vschema,
+		VSchema: ks.Keyspace,
 	}, nil
 }
 

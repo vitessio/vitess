@@ -122,7 +122,7 @@ type (
 	// VSchemaOperator is an interface to Vschema Operations
 	VSchemaOperator interface {
 		GetCurrentSrvVschema() *vschemapb.SrvVSchema
-		UpdateVSchema(ctx context.Context, ksName string, vschema *vschemapb.SrvVSchema) error
+		UpdateVSchema(ctx context.Context, ks *topo.KeyspaceVSchemaInfo, vschema *vschemapb.SrvVSchema) error
 	}
 
 	// VCursorImpl implements the VCursor functionality used by dependent
@@ -1359,7 +1359,10 @@ func (vc *VCursorImpl) ExecuteVSchema(ctx context.Context, keyspace string, vsch
 	}
 
 	// Resolve the keyspace either from the table qualifier or the target keyspace
-	var ksName string
+	var (
+		ksName string
+		err    error
+	)
 	if !vschemaDDL.Table.IsEmpty() {
 		ksName = vschemaDDL.Table.Qualifier.String()
 	}
@@ -1370,15 +1373,26 @@ func (vc *VCursorImpl) ExecuteVSchema(ctx context.Context, keyspace string, vsch
 		return ErrNoKeyspace
 	}
 
-	ks := srvVschema.Keyspaces[ksName]
-	ks, err := topotools.ApplyVSchemaDDL(ksName, ks, vschemaDDL)
+	ksvs := &topo.KeyspaceVSchemaInfo{}
+	if vc.topoServer != nil {
+		// Get the most recent version if we can.
+		ksvs, err = vc.topoServer.GetVSchema(ctx, ksName)
+		if err != nil {
+			return err
+		}
+	} else {
+		// Use the cached version.
+		ksvs.Name = ksName
+		ksvs.Keyspace = srvVschema.Keyspaces[ksName]
+	}
+	ksvs, err = topotools.ApplyVSchemaDDL(ksName, ksvs, vschemaDDL)
 	if err != nil {
 		return err
 	}
 
-	srvVschema.Keyspaces[ksName] = ks
+	srvVschema.Keyspaces[ksName] = ksvs.Keyspace
 
-	return vc.vm.UpdateVSchema(ctx, ksName, srvVschema)
+	return vc.vm.UpdateVSchema(ctx, ksvs, srvVschema)
 }
 
 func (vc *VCursorImpl) MessageStream(ctx context.Context, rss []*srvtopo.ResolvedShard, tableName string, callback func(*sqltypes.Result) error) error {
