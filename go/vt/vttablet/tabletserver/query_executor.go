@@ -69,7 +69,9 @@ type QueryExecutor struct {
 }
 
 const (
-	streamRowsSize = 256
+	streamRowsSize   = 256
+	resetLastIDQuery = "select last_insert_id(-4200)"
+	resetLastIDValue = 18446744073709547416
 )
 
 var (
@@ -1121,6 +1123,13 @@ func (qre *QueryExecutor) execDBConn(conn *connpool.Conn, sql string, wantfields
 	}
 	defer qre.tsv.statelessql.Remove(qd)
 
+	if qre.options.ShouldFetchLastInsertID() {
+		_, err = conn.Exec(ctx, resetLastIDQuery, 1, false)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	exec, err := conn.Exec(ctx, sql, int(qre.tsv.qe.maxResultSize.Load()), wantfields)
 	if err != nil {
 		return nil, err
@@ -1147,6 +1156,13 @@ func (qre *QueryExecutor) execStatefulConn(conn *StatefulConnection, sql string,
 	}
 	defer qre.tsv.statefulql.Remove(qd)
 
+	if qre.options.ShouldFetchLastInsertID() {
+		_, err = conn.Exec(ctx, resetLastIDQuery, 1, false)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	exec, err := conn.Exec(ctx, sql, int(qre.tsv.qe.maxResultSize.Load()), wantfields)
 	if err != nil {
 		return nil, err
@@ -1161,6 +1177,10 @@ func (qre *QueryExecutor) execStatefulConn(conn *StatefulConnection, sql string,
 }
 
 func (qre *QueryExecutor) fetchLastInsertID(ctx context.Context, conn *connpool.Conn, exec *sqltypes.Result) error {
+	if exec.InsertID != 0 {
+		return nil
+	}
+
 	result, err := conn.Exec(ctx, "select last_insert_id()", 1, false)
 	if err != nil {
 		return err
@@ -1171,7 +1191,10 @@ func (qre *QueryExecutor) fetchLastInsertID(ctx context.Context, conn *connpool.
 	if err != nil {
 		return err
 	}
-	exec.InsertID = insertID
+	if resetLastIDValue != insertID {
+		exec.InsertID = insertID
+		exec.InsertIDChanged = true
+	}
 	return nil
 }
 
