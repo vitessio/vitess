@@ -91,7 +91,7 @@ func RefreshAllKeyspacesAndShards(ctx context.Context) error {
 	refreshCtx, refreshCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer refreshCancel()
 
-	eg, egCtx := errgroup.WithContext(refreshCtx)
+	eg, refreshCtx := errgroup.WithContext(refreshCtx)
 	for idx, keyspace := range keyspaces {
 		// Check if the current keyspace name is the same as the last one.
 		// If it is, then we know we have already refreshed its information.
@@ -100,16 +100,16 @@ func RefreshAllKeyspacesAndShards(ctx context.Context) error {
 			continue
 		}
 		eg.Go(func() error {
-			return refreshKeyspaceHelper(egCtx, keyspace)
+			return refreshKeyspaceHelper(refreshCtx, keyspace)
 		})
 		eg.Go(func() error {
-			return refreshAllShards(egCtx, keyspace)
+			return refreshAllShards(refreshCtx, keyspace)
 		})
 	}
 
 	if err = eg.Wait(); err == nil {
 		// delete stale records from the previous success or older
-		if staleTime := lastAllKeyspaceShardsRefreshTime; !staleTime.IsZero() {
+		if staleTime := lastAllKeyspaceShardsRefreshTime; !staleTime.IsZero() && staleTime.Unix() != time.Now().Unix() {
 			if err := inst.DeleteStaleShards(staleTime); err != nil {
 				return err
 			}
