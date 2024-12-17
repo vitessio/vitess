@@ -39,6 +39,6 @@ type shardRoute struct {
 // StreamExecute performs a streaming exec.
 func (sr *shardRoute) StreamExecute(ctx context.Context, vcursor VCursor, _ map[string]*querypb.BindVariable, _ bool, callback func(*sqltypes.Result) error) error {
 	// TODO rollback on error and autocommit should probably not be used like this
-	errors := vcursor.StreamExecuteMulti(ctx, sr.primitive, sr.query, []*srvtopo.ResolvedShard{sr.rs}, []map[string]*querypb.BindVariable{sr.bv}, false /* rollbackOnError */, false /* autocommit */, callback)
+	errors := vcursor.StreamExecuteMulti(ctx, sr.primitive, sr.query, []*srvtopo.ResolvedShard{sr.rs}, []map[string]*querypb.BindVariable{sr.bv}, false /* rollbackOnError */, false /* autocommit */, false, callback)
 	return vterrors.Aggregate(errors)
 }

@@ -77,6 +77,8 @@ type (
 		// ColVindexes are the vindexes that will use the VindexValues
 		ColVindexes []*vindexes.ColumnVindex
 
+		FetchLastInsertID bool
+
 		// Prefix, Suffix are for sharded insert plans.
 		Prefix string
 		Suffix sqlparser.OnDup
@@ -451,7 +453,7 @@ func (ic *InsertCommon) execGenerate(ctx context.Context, vcursor VCursor, loggi
 		return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "auto sequence generation can happen through single shard only, it is getting routed to %d shards", len(rss))
 	}
 	bindVars := map[string]*querypb.BindVariable{nextValBV: sqltypes.Int64BindVariable(count)}
-	qr, err := vcursor.ExecuteStandalone(ctx, loggingPrimitive, ic.Generate.Query, bindVars, rss[0])
+	qr, err := vcursor.ExecuteStandalone(ctx, loggingPrimitive, ic.Generate.Query, bindVars, rss[0], ic.FetchLastInsertID)
 	if err != nil {
 		return 0, err
 	}

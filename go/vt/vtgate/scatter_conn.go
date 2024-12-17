@@ -377,6 +377,7 @@ func (stc *ScatterConn) StreamExecuteMulti(
 	autocommit bool,
 	callback func(reply *sqltypes.Result) error,
 	resultsObserver econtext.ResultsObserver,
+	fetchLastInsertID bool,
 ) []error {
 	if session.InLockSession() && triggerLockHeartBeat(session) {
 		go stc.runLockQuery(ctx, session)
@@ -406,6 +407,10 @@ func (stc *ScatterConn) StreamExecuteMulti(
 
 			if session != nil && session.Session != nil {
 				opts = session.Session.Options
+			}
+
+			if fetchLastInsertID {
+				opts.FetchLastInsertId = true
 			}
 
 			if autocommit {
