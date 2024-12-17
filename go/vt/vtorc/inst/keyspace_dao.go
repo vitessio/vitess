@@ -18,6 +18,7 @@ package inst
 
 import (
 	"errors"
+	"time"
 
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -35,14 +36,12 @@ func ReadKeyspace(keyspaceName string) (*topo.KeyspaceInfo, error) {
 		return nil, err
 	}
 
-	query := `
-		select
-			keyspace_type,
-			durability_policy
-		from
-			vitess_keyspace
-		where keyspace=?
-		`
+	query := `SELECT
+		keyspace_type,
+		durability_policy
+	FROM
+		vitess_keyspace
+	WHERE keyspace = ?`
 	args := sqlutils.Args(keyspaceName)
 	keyspace := &topo.KeyspaceInfo{
 		Keyspace: &topodatapb.Keyspace{},
@@ -64,17 +63,26 @@ func ReadKeyspace(keyspaceName string) (*topo.KeyspaceInfo, error) {
 
 // SaveKeyspace saves the keyspace record against the keyspace name.
 func SaveKeyspace(keyspace *topo.KeyspaceInfo) error {
-	_, err := db.ExecVTOrc(`
-		replace
-			into vitess_keyspace (
-				keyspace, keyspace_type, durability_policy
-			) values (
-				?, ?, ?
-			)
-		`,
+	_, err := db.ExecVTOrc(`REPLACE
+		INTO vitess_keyspace (
+			keyspace, keyspace_type, durability_policy, updated_timestamp
+		) VALUES (
+			?, ?, ?, DATETIME('now')
+		)`,
 		keyspace.KeyspaceName(),
 		int(keyspace.KeyspaceType),
 		keyspace.GetDurabilityPolicy(),
+	)
+	return err
+}
+
+// DeleteStaleKeyspaces deletes keyspace records that have not been updated since a provided time.
+func DeleteStaleKeyspaces(staleTime time.Time) error {
+	_, err := db.ExecVTOrc(`DELETE FROM vitess_keyspace
+		WHERE
+			updated_timestamp <= DATETIME(?, 'unixepoch')
+		`,
+		staleTime.Unix(),
 	)
 	return err
 }

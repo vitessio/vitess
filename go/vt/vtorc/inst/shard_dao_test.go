@@ -139,7 +139,7 @@ func TestGetKeyspaceShardNames(t *testing.T) {
 	require.Equal(t, []string{"-80", "80-"}, shardNames)
 }
 
-func TestDeleteStaleKeyspaceShards(t *testing.T) {
+func TestDeleteStaleShards(t *testing.T) {
 	// Clear the database after the test. The easiest way to do that is to run all the initialization commands again.
 	defer func() {
 		db.ClearVTOrcDatabase()
@@ -148,19 +148,19 @@ func TestDeleteStaleKeyspaceShards(t *testing.T) {
 	shardInfo := topo.NewShardInfo("ks1", "-80", &topodatapb.Shard{}, nil)
 	err := SaveShard(shardInfo)
 	require.NoError(t, err)
-	shards, err := GetKeyspaceShardNames("ks1")
+	shards, err := GetAllShardNames()
 	require.NoError(t, err)
 	require.Len(t, shards, 1)
 
 	// test a staletime before save causes no delete
-	require.NoError(t, DeleteStaleKeyspaceShards("ks1", time.Now().Add(-time.Hour)))
-	shards, err = GetKeyspaceShardNames("ks1")
+	require.NoError(t, DeleteStaleShards(time.Now().Add(-time.Hour)))
+	shards, err = GetAllShardNames()
 	require.NoError(t, err)
 	require.Len(t, shards, 1)
 
 	// test statetime of now deletes everything
-	require.NoError(t, DeleteStaleKeyspaceShards("ks1", time.Now()))
-	shards, err = GetKeyspaceShardNames("ks1")
+	require.NoError(t, DeleteStaleShards(time.Now()))
+	shards, err = GetAllShardNames()
 	require.NoError(t, err)
 	require.Len(t, shards, 0)
 }

@@ -104,15 +104,12 @@ func SaveShard(shard *topo.ShardInfo) error {
 	return err
 }
 
-// DeleteStaleKeyspaceShards deletes shard records that have not been updated since a provided time.
-func DeleteStaleKeyspaceShards(keyspaceName string, staleTime time.Time) error {
+// DeleteStaleShards deletes shard records that have not been updated since a provided time.
+func DeleteStaleShards(staleTime time.Time) error {
 	_, err := db.ExecVTOrc(`DELETE FROM vitess_shard
 		WHERE
-			keyspace = ?
-			AND
 			updated_timestamp <= DATETIME(?, 'unixepoch')
 		`,
-		keyspaceName,
 		staleTime.Unix(),
 	)
 	return err
