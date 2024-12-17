@@ -319,6 +319,8 @@ enum VEventType {
   // If a client experiences some disruptions before receiving the event,
   // the client should restart the copy operation.
   COPY_COMPLETED = 20;
+  // Indicates rotation into a new binary log
+  PREVIOUS_GTIDS = 21;
 }
 
 
