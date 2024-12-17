@@ -18,6 +18,7 @@ package inst
 
 import (
 	"errors"
+	"time"
 
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
@@ -38,13 +39,12 @@ func ReadShardPrimaryInformation(keyspaceName, shardName string) (primaryAlias s
 		return
 	}
 
-	query := `
-		select
+	query := `SELECT
 			primary_alias, primary_timestamp
-		from
+		FROM
 			vitess_shard
-		where keyspace=? and shard=?
-		`
+		WHERE
+			keyspace = ? AND shard = ?`
 	args := sqlutils.Args(keyspaceName, shardName)
 	shardFound := false
 	err = db.QueryVTOrc(query, args, func(row sqlutils.RowMap) error {
@@ -62,20 +62,58 @@ func ReadShardPrimaryInformation(keyspaceName, shardName string) (primaryAlias s
 	return primaryAlias, primaryTimestamp, nil
 }
 
+// GetAllShardNames returns the names of all keyspace/shards.
+func GetAllShardNames() (map[string][]string, error) {
+	shards := make(map[string][]string, 0)
+	query := `SELECT keyspace, shard FROM vitess_shard`
+	err := db.QueryVTOrc(query, nil, func(row sqlutils.RowMap) error {
+		keyspace := row.GetString("keyspace")
+		shards[keyspace] = append(shards[keyspace], row.GetString("shard"))
+		return nil
+	})
+	return shards, err
+}
+
+// GetKeyspaceShardNames returns the names of all shards in a keyspace.
+func GetKeyspaceShardNames(keyspaceName string) ([]string, error) {
+	shards := make([]string, 0)
+	query := `SELECT shard FROM vitess_shard WHERE keyspace = ?`
+	args := sqlutils.Args(keyspaceName)
+	err := db.QueryVTOrc(query, args, func(row sqlutils.RowMap) error {
+		shards = append(shards, row.GetString("shard"))
+		return nil
+	})
+	return shards, err
+}
+
 // SaveShard saves the shard record against the shard name.
 func SaveShard(shard *topo.ShardInfo) error {
 	_, err := db.ExecVTOrc(`
-		replace
-			into vitess_shard (
-				keyspace, shard, primary_alias, primary_timestamp
-			) values (
-				?, ?, ?, ?
+		REPLACE
+			INTO vitess_shard (
+				keyspace, shard, primary_alias, primary_timestamp, updated_timestamp
+			) VALUES (
+				?, ?, ?, ?, DATETIME('now')
 			)
 		`,
 		shard.Keyspace(),
 		shard.ShardName(),
 		getShardPrimaryAliasString(shard),
 		getShardPrimaryTermStartTimeString(shard),
+	)
+	return err
+}
+
+// DeleteStaleKeyspaceShards deletes shard records that have not been updated since a provided time.
+func DeleteStaleKeyspaceShards(keyspace string, staleTime time.Time) error {
+	_, err := db.ExecVTOrc(`DELETE FROM vitess_shard
+		WHERE
+			keyspace = ?
+			AND
+			updated_timestamp < DATETIME(?, 'unixepoch')
+		`,
+		keyspace,
+		staleTime.Unix(),
 	)
 	return err
 }

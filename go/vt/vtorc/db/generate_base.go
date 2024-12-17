@@ -305,24 +305,28 @@ CREATE TABLE vitess_shard (
 	shard varchar(128) NOT NULL,
 	primary_alias varchar(512) NOT NULL,
 	primary_timestamp varchar(512) NOT NULL,
+	updated_timestamp timestamp NOT NULL,
 	PRIMARY KEY (keyspace, shard)
 )`,
 	`
-CREATE INDEX source_host_port_idx_database_instance_database_instance on database_instance (source_host, source_port)
+CREATE INDEX source_host_port_idx_database_instance_database_instance ON database_instance (source_host, source_port)
 	`,
 	`
-CREATE INDEX keyspace_shard_idx_topology_recovery on topology_recovery (keyspace, shard)
+CREATE INDEX keyspace_shard_idx_topology_recovery ON topology_recovery (keyspace, shard)
 	`,
 	`
-CREATE INDEX end_recovery_idx_topology_recovery on topology_recovery (end_recovery)
+CREATE INDEX end_recovery_idx_topology_recovery ON topology_recovery (end_recovery)
 	`,
 	`
-CREATE INDEX instance_timestamp_idx_database_instance_analysis_changelog on database_instance_analysis_changelog (alias, analysis_timestamp)
+CREATE INDEX instance_timestamp_idx_database_instance_analysis_changelog ON database_instance_analysis_changelog (alias, analysis_timestamp)
 	`,
 	`
-CREATE INDEX detection_idx_topology_recovery on topology_recovery (detection_id)
+CREATE INDEX detection_idx_topology_recovery ON topology_recovery (detection_id)
 	`,
 	`
-CREATE INDEX recovery_id_idx_topology_recovery_steps ON topology_recovery_steps(recovery_id)
+CREATE INDEX recovery_id_idx_topology_recovery_steps ON topology_recovery_steps (recovery_id)
+	`,
+	`
+CREATE INDEX keyspace_updated_timestamp_idx_vitess_shard ON vitess_shard (keyspace, updated_timestamp)
 	`,
 }

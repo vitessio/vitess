@@ -21,6 +21,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
@@ -28,35 +29,26 @@ import (
 	"vitess.io/vitess/go/vt/vtorc/inst"
 )
 
-var (
-	// keyspaceShardNames stores the current names of shards by keyspace.
-	keyspaceShardNames         = make(map[string][]string)
-	keyspaceShardNamesMu       sync.Mutex
-	statsKeyspaceShardsWatched = stats.NewGaugesFuncWithMultiLabels("KeyspaceShardsWatched",
-		"The keyspace/shards watched by VTOrc",
-		[]string{"Keyspace", "Shard"},
-		getKeyspaceShardsStats,
-	)
+var statsKeyspaceShardsWatched = stats.NewGaugesFuncWithMultiLabels("KeyspaceShardsWatched",
+	"The keyspace/shards watched by VTOrc",
+	[]string{"Keyspace", "Shard"},
+	getKeyspaceShardsStats,
 )
 
 // getKeyspaceShardsStats returns the current keyspace/shards watched in stats format.
 func getKeyspaceShardsStats() map[string]int64 {
-	keyspaceShardNamesMu.Lock()
-	defer keyspaceShardNamesMu.Unlock()
-	keyspaceShards := make(map[string]int64)
-	for ks, shards := range keyspaceShardNames {
+	ksShardNames, err := inst.GetAllShardNames()
+	if err != nil {
+		log.Errorf("Failed to get shards from backend: %+v", err)
+		return nil
+	}
+	stats := make(map[string]int64, 0)
+	for keyspace, shards := range ksShardNames {
 		for _, shard := range shards {
-			keyspaceShards[ks+"."+shard] = 1
+			stats[keyspace+"."+shard] = 1
 		}
 	}
-	return keyspaceShards
-}
-
-// GetKeyspaceShardNames returns the names of the shards in a given keyspace.
-func GetKeyspaceShardNames(keyspaceName string) []string {
-	keyspaceShardNamesMu.Lock()
-	defer keyspaceShardNamesMu.Unlock()
-	return keyspaceShardNames[keyspaceName]
+	return stats
 }
 
 // RefreshAllKeyspacesAndShards reloads the keyspace and shard information for the keyspaces that vtorc is concerned with.
@@ -166,23 +158,15 @@ func refreshAllShards(ctx context.Context, keyspaceName string) error {
 		log.Error(err)
 		return err
 	}
-
-	shardNames := make([]string, 0, len(shardInfos))
-	for shardName, shardInfo := range shardInfos {
+	beginSaveTime := time.Now()
+	for _, shardInfo := range shardInfos {
 		err = inst.SaveShard(shardInfo)
 		if err != nil {
 			log.Error(err)
 			return err
 		}
-		shardNames = append(shardNames, shardName)
 	}
-	sort.Strings(shardNames)
-
-	keyspaceShardNamesMu.Lock()
-	defer keyspaceShardNamesMu.Unlock()
-	keyspaceShardNames[keyspaceName] = shardNames
-
-	return nil
+	return inst.DeleteStaleKeyspaceShards(keyspace, beginSaveTime)
 }
 
 // refreshSingleShardHelper is a helper function that refreshes the shard record of the given keyspace/shard.

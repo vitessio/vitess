@@ -104,3 +104,37 @@ func TestSaveAndReadShard(t *testing.T) {
 		})
 	}
 }
+
+func TestGetAllShardNames(t *testing.T) {
+	// Clear the database after the test. The easiest way to do that is to run all the initialization commands again.
+	defer func() {
+		db.ClearVTOrcDatabase()
+	}()
+
+	shardInfo := topo.NewShardInfo("ks1", "-80", &topodatapb.Shard{}, nil)
+	err := SaveShard(shardInfo)
+	require.NoError(t, err)
+
+	shardNames, err := GetAllShardNames()
+	require.NoError(t, err)
+	require.Equal(t, map[string][]string{
+		"ks1": {"-80"},
+	}, shardNames)
+}
+
+func TestGetKeyspaceShardNames(t *testing.T) {
+	// Clear the database after the test. The easiest way to do that is to run all the initialization commands again.
+	defer func() {
+		db.ClearVTOrcDatabase()
+	}()
+
+	for _, shardName := range []string{"-80", "80-"} {
+		shardInfo := topo.NewShardInfo("ks1", shardName, &topodatapb.Shard{}, nil)
+		err := SaveShard(shardInfo)
+		require.NoError(t, err)
+	}
+
+	shardNames, err := GetKeyspaceShardNames("ks1")
+	require.NoError(t, err)
+	require.Equal(t, []string{"-80", "80-"}, shardNames)
+}
