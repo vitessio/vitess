@@ -20,14 +20,17 @@ import (
 	"context"
 	"sort"
 	"strings"
-	"sync"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 )
+
+var lastAllKeyspaceShardsRefreshTime time.Time
 
 var statsKeyspaceShardsWatched = stats.NewGaugesFuncWithMultiLabels("KeyspaceShardsWatched",
 	"The keyspace/shards watched by VTOrc",
@@ -53,13 +56,13 @@ func getKeyspaceShardsStats() map[string]int64 {
 
 // RefreshAllKeyspacesAndShards reloads the keyspace and shard information for the keyspaces that vtorc is concerned with.
 func RefreshAllKeyspacesAndShards(ctx context.Context) error {
+	var err error
 	var keyspaces []string
 	if len(clustersToWatch) == 0 { // all known keyspaces
-		ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
-		defer cancel()
-		var err error
+		getCtx, getCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+		defer getCancel()
 		// Get all the keyspaces
-		keyspaces, err = ts.GetKeyspaces(ctx)
+		keyspaces, err = ts.GetKeyspaces(getCtx)
 		if err != nil {
 			return err
 		}
@@ -84,9 +87,11 @@ func RefreshAllKeyspacesAndShards(ctx context.Context) error {
 	// Sort the list of keyspaces.
 	// The list can have duplicates because the input to clusters to watch may have multiple shards of the same keyspace
 	sort.Strings(keyspaces)
+
 	refreshCtx, refreshCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer refreshCancel()
-	var wg sync.WaitGroup
+
+	eg, egCtx := errgroup.WithContext(refreshCtx)
 	for idx, keyspace := range keyspaces {
 		// Check if the current keyspace name is the same as the last one.
 		// If it is, then we know we have already refreshed its information.
@@ -94,17 +99,26 @@ func RefreshAllKeyspacesAndShards(ctx context.Context) error {
 		if idx != 0 && keyspace == keyspaces[idx-1] {
 			continue
 		}
-		wg.Add(2)
-		go func(keyspace string) {
-			defer wg.Done()
-			_ = refreshKeyspaceHelper(refreshCtx, keyspace)
-		}(keyspace)
-		go func(keyspace string) {
-			defer wg.Done()
-			_ = refreshAllShards(refreshCtx, keyspace)
-		}(keyspace)
+		eg.Go(func() error {
+			return refreshKeyspaceHelper(egCtx, keyspace)
+		})
+		eg.Go(func() error {
+			return refreshAllShards(egCtx, keyspace)
+		})
 	}
-	wg.Wait()
+
+	if err = eg.Wait(); err == nil {
+		// delete stale records from the previous success or older
+		if staleTime := lastAllKeyspaceShardsRefreshTime; !staleTime.IsZero() {
+			if err := inst.DeleteStaleShards(staleTime); err != nil {
+				return err
+			}
+			if err := inst.DeleteStaleKeyspaces(staleTime); err != nil {
+				return err
+			}
+		}
+		lastAllKeyspaceShardsRefreshTime = time.Now()
+	}
 
 	return nil
 }
@@ -158,7 +172,6 @@ func refreshAllShards(ctx context.Context, keyspaceName string) error {
 		log.Error(err)
 		return err
 	}
-	beginSaveTime := time.Now()
 	for _, shardInfo := range shardInfos {
 		err = inst.SaveShard(shardInfo)
 		if err != nil {
@@ -166,7 +179,7 @@ func refreshAllShards(ctx context.Context, keyspaceName string) error {
 			return err
 		}
 	}
-	return inst.DeleteStaleKeyspaceShards(keyspaceName, beginSaveTime)
+	return nil
 }
 
 // refreshSingleShardHelper is a helper function that refreshes the shard record of the given keyspace/shard.

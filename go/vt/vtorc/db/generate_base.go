@@ -294,6 +294,7 @@ CREATE TABLE vitess_keyspace (
 	keyspace varchar(128) NOT NULL,
 	keyspace_type smallint(5) NOT NULL,
 	durability_policy varchar(512) NOT NULL,
+	updated_timestamp timestamp NOT NULL,
 	PRIMARY KEY (keyspace)
 )`,
 	`
@@ -327,6 +328,9 @@ CREATE INDEX detection_idx_topology_recovery ON topology_recovery (detection_id)
 CREATE INDEX recovery_id_idx_topology_recovery_steps ON topology_recovery_steps (recovery_id)
 	`,
 	`
-CREATE INDEX keyspace_updated_timestamp_idx_vitess_shard ON vitess_shard (keyspace, updated_timestamp)
+CREATE INDEX updated_timestamp_idx_vitess_keyspace ON vitess_keyspace (updated_timestamp)
+	`,
+	`
+CREATE INDEX updated_timestamp_idx_vitess_shard ON vitess_shard (updated_timestamp)
 	`,
 }
