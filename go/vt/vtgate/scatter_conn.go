@@ -188,8 +188,13 @@ func (stc *ScatterConn) ExecuteMultiShard(
 				opts = session.Session.Options
 			}
 
-			// TODO reset this?
-			opts.FetchLastInsertId = fetchLastInsertID
+			if fetchLastInsertID {
+				if opts == nil {
+					opts = &querypb.ExecuteOptions{FetchLastInsertId: fetchLastInsertID}
+				} else {
+					opts.FetchLastInsertId = fetchLastInsertID
+				}
+			}
 
 			if autocommit {
 				// As this is auto-commit, the transactionID is supposed to be zero.
@@ -410,7 +415,11 @@ func (stc *ScatterConn) StreamExecuteMulti(
 			}
 
 			if fetchLastInsertID {
-				opts.FetchLastInsertId = true
+				if opts == nil {
+					opts = &querypb.ExecuteOptions{FetchLastInsertId: fetchLastInsertID}
+				} else {
+					opts.FetchLastInsertId = fetchLastInsertID
+				}
 			}
 
 			if autocommit {
