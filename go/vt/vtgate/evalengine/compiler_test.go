@@ -883,6 +883,74 @@ func TestBindVarLiteral(t *testing.T) {
 	}
 }
 
+type testVcursor struct {
+	lastInsertID uint64
+	env          *vtenv.Environment
+}
+
+func (t *testVcursor) TimeZone() *time.Location {
+	return time.UTC
+}
+
+func (t *testVcursor) GetKeyspace() string {
+	return "apa"
+}
+
+func (t *testVcursor) SQLMode() string {
+	return "oltp"
+}
+
+func (t *testVcursor) Environment() *vtenv.Environment {
+	return t.env
+}
+
+func (t *testVcursor) SetLastInsertID(id uint64) {
+	t.lastInsertID = id
+}
+
+var _ evalengine.VCursor = (*testVcursor)(nil)
+
+func TestLastInsertID(t *testing.T) {
+	var testCases = []struct {
+		expression string
+		result     uint64
+	}{
+		{
+			expression: `last_insert_id(1)`,
+			result:     1,
+		}, {
+			expression: `12`,
+			result:     0,
+		}, {
+			expression: `last_insert_id(666)`,
+			result:     666,
+		},
+	}
+
+	venv := vtenv.NewTestEnv()
+	for _, tc := range testCases {
+		t.Run(tc.expression, func(t *testing.T) {
+			expr, err := venv.Parser().ParseExpr(tc.expression)
+			require.NoError(t, err)
+			cfg := &evalengine.Config{
+				Collation:         collations.CollationUtf8mb4ID,
+				Environment:       venv,
+				NoConstantFolding: true,
+			}
+
+			converted, err := evalengine.Translate(expr, cfg)
+			require.NoError(t, err)
+
+			vc := &testVcursor{env: venv}
+			env := evalengine.NewExpressionEnv(context.Background(), nil, vc)
+
+			_, err = env.EvaluateAST(converted)
+			require.NoError(t, err)
+			assert.Equal(t, tc.result, vc.lastInsertID)
+		})
+	}
+}
+
 func TestCompilerNonConstant(t *testing.T) {
 	var testCases = []struct {
 		expression string
