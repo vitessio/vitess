@@ -329,10 +329,11 @@ func newTxThrottlerState(txThrottler *txThrottler, config *tabletenv.TabletConfi
 	return state, nil
 }
 
-
 func (ts *txThrottlerStateImpl) initHealthCheck(topoServer *topo.Server, target *querypb.Target) (err error) {
 	ts.healthCheck, err = healthCheckFactory(ts.ctx, topoServer, target.Cell, target.Keyspace, target.Shard, ts.healthCheckCells)
 	if err != nil {
+		ts.healthCheck = nil
+
 		return err
 	}
 
@@ -391,7 +392,13 @@ func (ts *txThrottlerStateImpl) healthChecksProcessor(topoServer *topo.Server, t
 }
 
 func (ts *txThrottlerStateImpl) makePrimary() {
-	ts.initHealthCheck()
+	err := ts.initHealthCheck(ts.txThrottler.topoServer, ts.target)
+	if err != nil {
+		log.Errorf("txThrottler: failed to initialize health check while attempting to make primary: %v", err)
+
+		return
+	}
+
 	var ctx context.Context
 	ctx, ts.healthCheckCancel = context.WithCancel(context.Background())
 
