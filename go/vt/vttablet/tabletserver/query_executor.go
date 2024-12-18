@@ -1206,9 +1206,9 @@ func (qre *QueryExecutor) execStreamSQL(conn *connpool.PooledConn, isTransaction
 	callBackClosingSpan := func(result *sqltypes.Result) error {
 		defer span.Finish()
 
-		if err := qre.fetchLastInsertID(ctx, conn.Conn, result); err != nil {
-			return err
-		}
+		// if err := qre.fetchLastInsertID(ctx, conn.Conn, result); err != nil {
+		// 	return err
+		// }
 
 		return callback(result)
 	}
@@ -1222,9 +1222,9 @@ func (qre *QueryExecutor) execStreamSQL(conn *connpool.PooledConn, isTransaction
 	// This change will ensure that long-running streaming stateful queries get gracefully shutdown during ServingTypeChange
 	// once their grace period is over.
 	qd := NewQueryDetail(qre.logStats.Ctx, conn.Conn)
-	if err := qre.resetLastInsertIDIfNeeded(ctx, conn.Conn); err != nil {
-		return err
-	}
+	// if err := qre.resetLastInsertIDIfNeeded(ctx, conn.Conn); err != nil {
+	// 	return err
+	// }
 
 	if isTransaction {
 		err := qre.tsv.statefulql.Add(qd)
