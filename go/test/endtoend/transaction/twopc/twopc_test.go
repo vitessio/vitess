@@ -593,7 +593,7 @@ func TestDTResolveAfterMMCommit(t *testing.T) {
 	require.NoError(t, err)
 	_, err = conn.Execute(qCtx, "insert into twopc_user(id, name) values(10,'apa')", nil)
 	require.NoError(t, err)
-	// Also do an insertion into a table that has a consistent lookup vindex.
+	// Also do an update to a table that has a consistent lookup vindex.
 	// We expect to see only the pre-session changes in the logs.
 	_, err = conn.Execute(qCtx, "update twopc_consistent_lookup set col = 22 where id = 4", nil)
 	require.NoError(t, err)
@@ -691,7 +691,7 @@ func TestDTResolveAfterRMPrepare(t *testing.T) {
 	require.NoError(t, err)
 	_, err = conn.Execute(qCtx, "insert into twopc_user(id, name) values(8,'bar')", nil)
 	require.NoError(t, err)
-	// Also do an insertion into a table that has a consistent lookup vindex.
+	// Also do an update to a table that has a consistent lookup vindex.
 	// We expect to see only the pre-session changes in the logs.
 	_, err = conn.Execute(qCtx, "update twopc_consistent_lookup set col = 22 where id = 4", nil)
 	require.NoError(t, err)
