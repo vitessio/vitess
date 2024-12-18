@@ -42,7 +42,7 @@ import (
 )
 
 // lookup is responsible for performing actions related to lookup vindexes.
-type lookup struct {
+type lookupVindex struct {
 	ts  *topo.Server
 	tmc tmclient.TabletManagerClient
 
@@ -50,9 +50,8 @@ type lookup struct {
 	parser *sqlparser.Parser
 }
 
-// prepareCreateLookup performs the preparatory steps for creating a
-// Lookup Vindex.
-func (l *lookup) prepareCreateLookup(ctx context.Context, workflow, keyspace string, specs *vschemapb.Keyspace, continueAfterCopyWithOwner bool) (
+// prepareCreate performs the preparatory steps for creating a Lookup Vindex.
+func (l *lookupVindex) prepareCreate(ctx context.Context, workflow, keyspace string, specs *vschemapb.Keyspace, continueAfterCopyWithOwner bool) (
 	ms *vtctldatapb.MaterializeSettings, sourceVSchema, targetVSchema *vschemapb.Keyspace, cancelFunc func() error, err error) {
 	var (
 		// sourceVSchemaTable is the table info present in the vschema.
@@ -242,7 +241,7 @@ type vindexInfo struct {
 }
 
 // validateAndGetVindex validates and extracts vindex configuration
-func (l *lookup) validateAndGetVindex(specs *vschemapb.Keyspace) (*vschemapb.Vindex, *vindexInfo, error) {
+func (l *lookupVindex) validateAndGetVindex(specs *vschemapb.Keyspace) (*vschemapb.Vindex, *vindexInfo, error) {
 	if specs == nil {
 		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "no vindex provided")
 	}
@@ -314,7 +313,7 @@ func (l *lookup) validateAndGetVindex(specs *vschemapb.Keyspace) (*vschemapb.Vin
 	}, nil
 }
 
-func (l *lookup) getTargetAndSourceVSchema(ctx context.Context, sourceKeyspace string, targetKeyspace string) (sourceVSchema *vschemapb.Keyspace, targetVSchema *vschemapb.Keyspace, err error) {
+func (l *lookupVindex) getTargetAndSourceVSchema(ctx context.Context, sourceKeyspace string, targetKeyspace string) (sourceVSchema *vschemapb.Keyspace, targetVSchema *vschemapb.Keyspace, err error) {
 	sourceVSchema, err = l.ts.GetVSchema(ctx, sourceKeyspace)
 	if err != nil {
 		return nil, nil, err
@@ -375,7 +374,7 @@ func getSourceTable(specs *vschemapb.Keyspace, targetTableName string, fromCols 
 	return sourceTable, sourceTableName, nil
 }
 
-func (l *lookup) generateCreateDDLStatement(tableSchema *tabletmanagerdatapb.SchemaDefinition, sourceVindexColumns []string, vInfo *vindexInfo, vindex *vschemapb.Vindex) (string, error) {
+func (l *lookupVindex) generateCreateDDLStatement(tableSchema *tabletmanagerdatapb.SchemaDefinition, sourceVindexColumns []string, vInfo *vindexInfo, vindex *vschemapb.Vindex) (string, error) {
 	lines := strings.Split(tableSchema.TableDefinitions[0].Schema, "\n")
 	if len(lines) < 3 {
 		// Should never happen.
