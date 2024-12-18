@@ -143,6 +143,9 @@ func cleanup(t *testing.T) {
 	twopcutil.ClearOutTable(t, vtParams, "twopc_lookup")
 	twopcutil.ClearOutTable(t, vtParams, "lookup_unique")
 	twopcutil.ClearOutTable(t, vtParams, "lookup")
+	twopcutil.ClearOutTable(t, vtParams, "twopc_consistent_lookup")
+	twopcutil.ClearOutTable(t, vtParams, "consistent_lookup_unique")
+	twopcutil.ClearOutTable(t, vtParams, "consistent_lookup")
 	sm.reset()
 }
 

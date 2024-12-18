@@ -24,6 +24,24 @@
         "to": "keyspace_id"
       },
       "owner": "twopc_lookup"
+    },
+    "consistent_lookup_vdx": {
+      "type": "consistent_lookup",
+      "params": {
+        "table": "consistent_lookup",
+        "from": "col,id",
+        "to": "keyspace_id"
+      },
+      "owner": "twopc_consistent_lookup"
+    },
+    "consistent_lookup_unique_vdx": {
+      "type": "consistent_lookup_unique",
+      "params": {
+        "table": "consistent_lookup_unique",
+        "from": "col_unique",
+        "to": "keyspace_id"
+      },
+      "owner": "twopc_consistent_lookup"
     }
   },
   "tables": {
@@ -79,6 +97,41 @@
       ]
     },
     "lookup_unique": {
+      "column_vindexes": [
+        {
+          "column": "col_unique",
+          "name": "xxhash"
+        }
+      ]
+    },
+    "twopc_consistent_lookup": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "reverse_bits"
+        },
+        {
+          "columns": [
+            "col",
+            "id"
+          ],
+          "name": "consistent_lookup_vdx"
+        },
+        {
+          "column": "col_unique",
+          "name": "consistent_lookup_unique_vdx"
+        }
+      ]
+    },
+    "consistent_lookup": {
+      "column_vindexes": [
+        {
+          "column": "col",
+          "name": "xxhash"
+        }
+      ]
+    },
+    "consistent_lookup_unique": {
       "column_vindexes": [
         {
           "column": "col_unique",
