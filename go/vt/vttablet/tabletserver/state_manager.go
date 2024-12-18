@@ -545,7 +545,7 @@ func (sm *stateManager) connect(tabletType topodatapb.TabletType, serving bool) 
 	if err := sm.qe.Open(); err != nil {
 		return err
 	}
-	return sm.txThrottler.Open()
+	return nil
 }
 
 func (sm *stateManager) unserveCommon() {
