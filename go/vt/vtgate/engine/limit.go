@@ -220,6 +220,9 @@ func (l *Limit) description() PrimitiveDescription {
 	if l.Offset != nil {
 		other["Offset"] = sqlparser.String(l.Offset)
 	}
+	if l.RequireCompleteInput {
+		other["RequireCompleteInput"] = true
+	}
 
 	return PrimitiveDescription{
 		OperatorType: "Limit",
