@@ -317,7 +317,7 @@ func (vp *vplayer) updatePos(ctx context.Context, ts int64, queryFunc func(ctx c
 	vp.posMu.Lock()
 	defer vp.posMu.Unlock()
 
-	if ts < vp.lastPosTs {
+	if ts <= vp.lastPosTs {
 		// Skip if the timestamp is not increasing.
 		return false, nil
 	}
