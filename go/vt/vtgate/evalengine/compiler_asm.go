@@ -5146,3 +5146,10 @@ func (asm *assembler) Fn_LAST_INSERT_ID() {
 		return 1
 	}, "FN LAST_INSERT_ID UINT64(SP-1)")
 }
+
+func (asm *assembler) Fn_LAST_INSERT_ID_NULL() {
+	asm.emit(func(env *ExpressionEnv) int {
+		env.VCursor().SetLastInsertID(0)
+		return 1
+	}, "FN LAST_INSERT_ID NULL")
+}

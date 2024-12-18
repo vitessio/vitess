@@ -222,17 +222,13 @@ func (call *builtinLastInsertID) compile(c *compiler) (ctype, error) {
 
 	setZero := c.compileNullCheck1(arg)
 	c.compileToUint64(arg, 1)
-	setLastInsertID := c.asm.jumpFrom()
+	c.asm.Fn_LAST_INSERT_ID()
+	end := c.asm.jumpFrom()
 
 	c.asm.jumpDestination(setZero)
-	c.asm.emit(func(env *ExpressionEnv) int {
-		env.vm.stack[env.vm.sp] = env.vm.arena.newEvalUint64(0)
-		env.vm.sp++
-		return 1
-	}, "PUSH UINT64(0)")
+	c.asm.Fn_LAST_INSERT_ID_NULL()
 
-	c.asm.jumpDestination(setLastInsertID)
-	c.asm.Fn_LAST_INSERT_ID()
+	c.asm.jumpDestination(end)
 
 	return ctype{Type: sqltypes.Uint64, Flag: flagNullable, Col: collationNumeric}, nil
 }
