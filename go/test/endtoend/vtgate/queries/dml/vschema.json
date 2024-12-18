@@ -188,6 +188,14 @@
           "name": "hash"
         }
       ]
+    },
+    "j_tbl": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "hash"
+        }
+      ]
     }
   }
 }

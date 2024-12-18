@@ -26,7 +26,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vttablet"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 )
 
 // isBitSet returns true if the bit at index is set
@@ -37,7 +37,7 @@ func isBitSet(data []byte, index int) bool {
 }
 
 func (tp *TablePlan) isPartial(rowChange *binlogdatapb.RowChange) bool {
-	if (vttablet.VReplicationExperimentalFlags /**/ & /**/ vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage) == 0 ||
+	if (tp.WorkflowConfig.ExperimentalFlags /**/ & /**/ vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage) == 0 ||
 		rowChange.DataColumns == nil ||
 		rowChange.DataColumns.Count == 0 {
 
@@ -50,10 +50,7 @@ func (tpb *tablePlanBuilder) generatePartialValuesPart(buf *sqlparser.TrackedBuf
 	bvf.mode = bvAfter
 	separator := "("
 	for ind, cexpr := range tpb.colExprs {
-		if tpb.isColumnGenerated(cexpr.colName) {
-			continue
-		}
-		if !isBitSet(dataColumns.Cols, ind) {
+		if cexpr.isGenerated || !isBitSet(dataColumns.Cols, ind) {
 			continue
 		}
 		buf.Myprintf("%s", separator)
@@ -84,7 +81,7 @@ func (tpb *tablePlanBuilder) generatePartialInsertPart(buf *sqlparser.TrackedBuf
 	buf.Myprintf("insert into %v(", tpb.name)
 	separator := ""
 	for ind, cexpr := range tpb.colExprs {
-		if tpb.isColumnGenerated(cexpr.colName) {
+		if cexpr.isGenerated {
 			continue
 		}
 		if !isBitSet(dataColumns.Cols, ind) {
@@ -102,7 +99,7 @@ func (tpb *tablePlanBuilder) generatePartialSelectPart(buf *sqlparser.TrackedBuf
 	buf.WriteString(" select ")
 	separator := ""
 	for ind, cexpr := range tpb.colExprs {
-		if tpb.isColumnGenerated(cexpr.colName) {
+		if cexpr.isGenerated {
 			continue
 		}
 		if !isBitSet(dataColumns.Cols, ind) {
@@ -141,17 +138,11 @@ func (tpb *tablePlanBuilder) createPartialUpdateQuery(dataColumns *binlogdatapb.
 	buf.Myprintf("update %v set ", tpb.name)
 	separator := ""
 	for i, cexpr := range tpb.colExprs {
-		if cexpr.isPK {
-			continue
-		}
-		if tpb.isColumnGenerated(cexpr.colName) {
-			continue
-		}
 		if int64(i) >= dataColumns.Count {
 			log.Errorf("Ran out of columns trying to generate query for %s", tpb.name.CompliantName())
 			return nil
 		}
-		if !isBitSet(dataColumns.Cols, i) {
+		if cexpr.isPK || cexpr.isGenerated || !isBitSet(dataColumns.Cols, i) {
 			continue
 		}
 		buf.Myprintf("%s%v=", separator, cexpr.colName)

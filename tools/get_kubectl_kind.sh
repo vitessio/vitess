@@ -12,7 +12,7 @@ source build.env
 mkdir -p "$VTROOT/bin"
 cd "$VTROOT/bin"
 
-KUBE_VERSION="${KUBE_VERSION:-v1.21.1}"
+KUBE_VERSION="${KUBE_VERSION:-v1.31.0}"
 KUBERNETES_RELEASE_URL="${KUBERNETES_RELEASE_URL:-https://dl.k8s.io}"
 
 # Download kubectl if needed.
@@ -28,7 +28,7 @@ ln -sf "kubectl-${KUBE_VERSION}" kubectl
 if ! command -v kind &> /dev/null
 then
     echo "Downloading kind..."
-    curl -L https://kind.sigs.k8s.io/dl/v0.12.0/kind-linux-amd64 > "kind"
+    curl -L https://kind.sigs.k8s.io/dl/v0.22.0/kind-linux-amd64 > "kind"
     chmod +x "kind"
     echo "Installed kind"
 else

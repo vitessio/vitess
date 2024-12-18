@@ -18,11 +18,11 @@ package vdiff
 
 import (
 	"fmt"
-	"sort"
-	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
+
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
 const (
@@ -63,9 +63,9 @@ type RowDiff struct {
 	Query string            `json:"Query,omitempty"`
 }
 
-func (td *tableDiffer) genRowDiff(queryStmt string, row []sqltypes.Value, debug, onlyPks bool) (*RowDiff, error) {
-	drp := &RowDiff{}
-	drp.Row = make(map[string]string)
+func (td *tableDiffer) genRowDiff(queryStmt string, row []sqltypes.Value, opts *tabletmanagerdatapb.VDiffReportOptions) (*RowDiff, error) {
+	rd := &RowDiff{}
+	rd.Row = make(map[string]string)
 	statement, err := td.wd.ct.vde.parser.Parse(queryStmt)
 	if err != nil {
 		return nil, err
@@ -75,30 +75,44 @@ func (td *tableDiffer) genRowDiff(queryStmt string, row []sqltypes.Value, debug,
 		return nil, fmt.Errorf("unexpected: %+v", sqlparser.String(statement))
 	}
 
-	if debug {
-		drp.Query = td.genDebugQueryDiff(sel, row, onlyPks)
+	if opts.GetDebugQuery() {
+		rd.Query = td.genDebugQueryDiff(sel, row, opts.GetOnlyPks())
 	}
 
-	setVal := func(index int) {
+	addVal := func(index int, truncateAt int) {
 		buf := sqlparser.NewTrackedBuffer(nil)
 		sel.SelectExprs[index].Format(buf)
 		col := buf.String()
-		drp.Row[col] = row[index].ToString()
-	}
-
-	if onlyPks {
-		for _, pkI := range td.tablePlan.selectPks {
-			setVal(pkI)
+		// Let's truncate if it's really worth it to avoid losing
+		// value for a few chars.
+		if truncateAt > 0 && row[index].Len() >= truncateAt+len(truncatedNotation)+20 {
+			rd.Row[col] = row[index].ToString()[:truncateAt] + truncatedNotation
+		} else {
+			rd.Row[col] = row[index].ToString()
 		}
-		return drp, nil
 	}
 
+	// Include PK columns first and do not truncate them so that
+	// the user can always at a minimum identify the row for
+	// further investigation.
+	pks := make(map[int]struct{}, len(td.tablePlan.selectPks))
+	for _, pkI := range td.tablePlan.selectPks {
+		addVal(pkI, 0)
+		pks[pkI] = struct{}{}
+	}
+
+	if opts.GetOnlyPks() {
+		return rd, nil
+	}
+
+	truncateAt := int(opts.GetRowDiffColumnTruncateAt())
 	for i := range sel.SelectExprs {
-		setVal(i)
+		if _, pk := pks[i]; !pk {
+			addVal(i, truncateAt)
+		}
 	}
-	formatSampleRow(drp)
 
-	return drp, nil
+	return rd, nil
 }
 
 func (td *tableDiffer) genDebugQueryDiff(sel *sqlparser.Select, row []sqltypes.Value, onlyPks bool) string {
@@ -129,23 +143,4 @@ func (td *tableDiffer) genDebugQueryDiff(sel *sqlparser.Select, row []sqltypes.V
 	}
 	buf.Myprintf(";")
 	return buf.String()
-}
-
-// formatSampleRow returns a formatted string representing a sample
-// extra/mismatched row
-func formatSampleRow(rd *RowDiff) {
-	keys := make([]string, 0, len(rd.Row))
-	rowString := strings.Builder{}
-	for k := range rd.Row {
-		keys = append(keys, k)
-	}
-
-	sort.Strings(keys)
-	for _, k := range keys {
-		// Let's truncate if it's really worth it to avoid losing value for a few chars
-		if len(rd.Row[k]) >= 30+len(truncatedNotation)+20 {
-			rd.Row[k] = rd.Row[k][:30] + truncatedNotation
-		}
-		rowString.WriteString(fmt.Sprintf("%s: %s\n", k, rd.Row[k]))
-	}
 }

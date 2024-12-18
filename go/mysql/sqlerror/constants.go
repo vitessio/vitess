@@ -123,6 +123,7 @@ const (
 	ErSPNotVarArg                   = ErrorCode(1414)
 	ERRowIsReferenced2              = ErrorCode(1451)
 	ErNoReferencedRow2              = ErrorCode(1452)
+	ERInnodbIndexCorrupt            = ErrorCode(1817)
 	ERDupIndex                      = ErrorCode(1831)
 	ERInnodbReadOnly                = ErrorCode(1874)
 
@@ -202,6 +203,7 @@ const (
 	ERBlobKeyWithoutLength         = ErrorCode(1170)
 	ERPrimaryCantHaveNull          = ErrorCode(1171)
 	ERTooManyRows                  = ErrorCode(1172)
+	ERErrorDuringCommit            = ErrorCode(1180)
 	ERLockOrActiveTransaction      = ErrorCode(1192)
 	ERUnknownSystemVariable        = ErrorCode(1193)
 	ERSetConstantsOnly             = ErrorCode(1204)
@@ -246,6 +248,7 @@ const (
 	ERNoSuchUser                   = ErrorCode(1449)
 	ERForbidSchemaChange           = ErrorCode(1450)
 	ERWrongValue                   = ErrorCode(1525)
+	ERWrongParamcountToNativeFct   = ErrorCode(1582)
 	ERDataOutOfRange               = ErrorCode(1690)
 	ERInvalidJSONText              = ErrorCode(3140)
 	ERInvalidJSONTextInParams      = ErrorCode(3141)
@@ -255,27 +258,32 @@ const (
 	ERJSONValueTooBig              = ErrorCode(3150)
 	ERJSONDocumentTooDeep          = ErrorCode(3157)
 
-	ERLockNowait                = ErrorCode(3572)
-	ERRegexpStringNotTerminated = ErrorCode(3684)
-	ERRegexpBufferOverflow      = ErrorCode(3684)
-	ERRegexpIllegalArgument     = ErrorCode(3685)
-	ERRegexpIndexOutOfBounds    = ErrorCode(3686)
-	ERRegexpInternal            = ErrorCode(3687)
-	ERRegexpRuleSyntax          = ErrorCode(3688)
-	ERRegexpBadEscapeSequence   = ErrorCode(3689)
-	ERRegexpUnimplemented       = ErrorCode(3690)
-	ERRegexpMismatchParen       = ErrorCode(3691)
-	ERRegexpBadInterval         = ErrorCode(3692)
-	ERRRegexpMaxLtMin           = ErrorCode(3693)
-	ERRegexpInvalidBackRef      = ErrorCode(3694)
-	ERRegexpLookBehindLimit     = ErrorCode(3695)
-	ERRegexpMissingCloseBracket = ErrorCode(3696)
-	ERRegexpInvalidRange        = ErrorCode(3697)
-	ERRegexpStackOverflow       = ErrorCode(3698)
-	ERRegexpTimeOut             = ErrorCode(3699)
-	ERRegexpPatternTooBig       = ErrorCode(3700)
-	ERRegexpInvalidCaptureGroup = ErrorCode(3887)
-	ERRegexpInvalidFlag         = ErrorCode(3900)
+	ERLockNowait                          = ErrorCode(3572)
+	ERCTERecursiveRequiresUnion           = ErrorCode(3573)
+	ERCTERecursiveForbidsAggregation      = ErrorCode(3575)
+	ERCTERecursiveForbiddenJoinOrder      = ErrorCode(3576)
+	ERCTERecursiveRequiresSingleReference = ErrorCode(3577)
+	ERCTEMaxRecursionDepth                = ErrorCode(3636)
+	ERRegexpStringNotTerminated           = ErrorCode(3684)
+	ERRegexpBufferOverflow                = ErrorCode(3684)
+	ERRegexpIllegalArgument               = ErrorCode(3685)
+	ERRegexpIndexOutOfBounds              = ErrorCode(3686)
+	ERRegexpInternal                      = ErrorCode(3687)
+	ERRegexpRuleSyntax                    = ErrorCode(3688)
+	ERRegexpBadEscapeSequence             = ErrorCode(3689)
+	ERRegexpUnimplemented                 = ErrorCode(3690)
+	ERRegexpMismatchParen                 = ErrorCode(3691)
+	ERRegexpBadInterval                   = ErrorCode(3692)
+	ERRRegexpMaxLtMin                     = ErrorCode(3693)
+	ERRegexpInvalidBackRef                = ErrorCode(3694)
+	ERRegexpLookBehindLimit               = ErrorCode(3695)
+	ERRegexpMissingCloseBracket           = ErrorCode(3696)
+	ERRegexpInvalidRange                  = ErrorCode(3697)
+	ERRegexpStackOverflow                 = ErrorCode(3698)
+	ERRegexpTimeOut                       = ErrorCode(3699)
+	ERRegexpPatternTooBig                 = ErrorCode(3700)
+	ERRegexpInvalidCaptureGroup           = ErrorCode(3887)
+	ERRegexpInvalidFlag                   = ErrorCode(3900)
 
 	ERCharacterSetMismatch = ErrorCode(3995)
 
@@ -292,6 +300,195 @@ const (
 
 	// server not available
 	ERServerIsntAvailable = ErrorCode(3168)
+)
+
+// HandlerErrorCode is for errors thrown by the handler, and which are then embedded in other errors.
+// See https://github.com/mysql/mysql-server/blob/trunk/include/my_base.h
+type HandlerErrorCode uint16
+
+func (e HandlerErrorCode) ToString() string {
+	return strconv.FormatUint(uint64(e), 10)
+}
+
+const (
+	// Didn't find key on read or update
+	HaErrKeyNotFound = HandlerErrorCode(120)
+	// Duplicate key on write
+	HaErrFoundDuppKey = HandlerErrorCode(121)
+	// Internal error
+	HaErrInternalError = HandlerErrorCode(122)
+	// Uppdate with is recoverable
+	HaErrRecordChanged = HandlerErrorCode(123)
+	// Wrong index given to function
+	HaErrWrongIndex = HandlerErrorCode(124)
+	// Transaction has been rolled back
+	HaErrRolledBack = HandlerErrorCode(125)
+	// Indexfile is crashed
+	HaErrCrashed = HandlerErrorCode(126)
+	// Record-file is crashed
+	HaErrWrongInRecord = HandlerErrorCode(127)
+	// Record-file is crashed
+	HaErrOutOfMem = HandlerErrorCode(128)
+	// not a MYI file - no signature
+	HaErrNotATable = HandlerErrorCode(130)
+	// Command not supported
+	HaErrWrongCommand = HandlerErrorCode(131)
+	// old database file
+	HaErrOldFile = HandlerErrorCode(132)
+	// No record read in update()
+	HaErrNoActiveRecord = HandlerErrorCode(133)
+	// A record is not there
+	HaErrRecordDeleted = HandlerErrorCode(134)
+	// No more room in file
+	HaErrRecordFileFull = HandlerErrorCode(135)
+	// No more room in file
+	HaErrIndexFileFull = HandlerErrorCode(136)
+	// end in next/prev/first/last
+	HaErrEndOfFile = HandlerErrorCode(137)
+	// unsupported extension used
+	HaErrUnsupported = HandlerErrorCode(138)
+	// Too big row
+	HaErrTooBigRow = HandlerErrorCode(139)
+	// Wrong create option
+	HaWrongCreateOption = HandlerErrorCode(140)
+	// Duplicate unique on write
+	HaErrFoundDuppUnique = HandlerErrorCode(141)
+	// Can't open charset
+	HaErrUnknownCharset = HandlerErrorCode(142)
+	// conflicting tables in MERGE
+	HaErrWrongMrgTableDef = HandlerErrorCode(143)
+	// Last (automatic?) repair failed
+	HaErrCrashedOnRepair = HandlerErrorCode(144)
+	// Table must be repaired
+	HaErrCrashedOnUsage = HandlerErrorCode(145)
+	// Lock wait timeout
+	HaErrLockWaitTimeout = HandlerErrorCode(146)
+	// Lock table is full
+	HaErrLockTableFull = HandlerErrorCode(147)
+	// Updates not allowed
+	HaErrReadOnlyTransaction = HandlerErrorCode(148)
+	// Deadlock found when trying to get lock
+	HaErrLockDeadlock = HandlerErrorCode(149)
+	// Cannot add a foreign key constr.
+	HaErrCannotAddForeign = HandlerErrorCode(150)
+	// Cannot add a child row
+	HaErrNoReferencedRow = HandlerErrorCode(151)
+	// Cannot delete a parent row
+	HaErrRowIsReferenced = HandlerErrorCode(152)
+	// No savepoint with that name
+	HaErrNoSavepoint = HandlerErrorCode(153)
+	// Non unique key block size
+	HaErrNonUniqueBlockSize = HandlerErrorCode(154)
+	// The table does not exist in engine
+	HaErrNoSuchTable = HandlerErrorCode(155)
+	// The table existed in storage engine
+	HaErrTableExist = HandlerErrorCode(156)
+	// Could not connect to storage engine
+	HaErrNoConnection = HandlerErrorCode(157)
+	// NULLs are not supported in spatial index
+	HaErrNullInSpatial = HandlerErrorCode(158)
+	// The table changed in storage engine
+	HaErrTableDefChanged = HandlerErrorCode(159)
+	// There's no partition in table for given value
+	HaErrNoPartitionFound = HandlerErrorCode(160)
+	// Row-based binlogging of row failed
+	HaErrRbrLoggingFailed = HandlerErrorCode(161)
+	// Index needed in foreign key constraint
+	HaErrDropIndexFk = HandlerErrorCode(162)
+	// Upholding foreign key constraints would lead to a duplicate key error in some other table.
+	HaErrForeignDuplicateKey = HandlerErrorCode(163)
+	// The table changed in storage engine
+	HaErrTableNeedsUpgrade = HandlerErrorCode(164)
+	// The table is not writable
+	HaErrTableReadonly = HandlerErrorCode(165)
+	// Failed to get next autoinc value
+	HaErrAutoincReadFailed = HandlerErrorCode(166)
+	// Failed to set row autoinc value
+	HaErrAutoincErange = HandlerErrorCode(167)
+	// Generic error
+	HaErrGeneric = HandlerErrorCode(168)
+	// row not actually updated: new values same as the old values
+	HaErrRecordIsTheSame = HandlerErrorCode(169)
+	// It is not possible to log this statement
+	HaErrLoggingImpossible = HandlerErrorCode(170)
+	// The event was corrupt, leading to illegal data being read
+	HaErrCorruptEvent = HandlerErrorCode(171)
+	// New file format
+	HaErrNewFile = HandlerErrorCode(172)
+	// The event could not be processed no other handler error happened
+	HaErrRowsEventApply = HandlerErrorCode(173)
+	// Error during initialization
+	HaErrInitialization = HandlerErrorCode(174)
+	// File too short
+	HaErrFileTooShort = HandlerErrorCode(175)
+	// Wrong CRC on page
+	HaErrWrongCrc = HandlerErrorCode(176)
+	// Too many active concurrent transactions
+	HaErrTooManyConcurrentTrxs = HandlerErrorCode(177)
+	// There's no explicitly listed partition in table for the given value
+	HaErrNotInLockPartitions = HandlerErrorCode(178)
+	// Index column length exceeds limit
+	HaErrIndexColTooLong = HandlerErrorCode(179)
+	// InnoDB index corrupted
+	HaErrIndexCorrupt = HandlerErrorCode(180)
+	// Undo log record too big
+	HaErrUndoRecTooBig = HandlerErrorCode(181)
+	// Invalid InnoDB Doc ID
+	HaFtsInvalidDocid = HandlerErrorCode(182)
+	// Table being used in foreign key check
+	HaErrTableInFkCheck = HandlerErrorCode(183)
+	// The tablespace existed in storage engine
+	HaErrTablespaceExists = HandlerErrorCode(184)
+	// Table has too many columns
+	HaErrTooManyFields = HandlerErrorCode(185)
+	// Row in wrong partition
+	HaErrRowInWrongPartition = HandlerErrorCode(186)
+	// InnoDB is in read only mode.
+	HaErrInnodbReadOnly = HandlerErrorCode(187)
+	// FTS query exceeds result cache limit
+	HaErrFtsExceedResultCacheLimit = HandlerErrorCode(188)
+	// Temporary file write failure
+	HaErrTempFileWriteFailure = HandlerErrorCode(189)
+	// Innodb is in force recovery mode
+	HaErrInnodbForcedRecovery = HandlerErrorCode(190)
+	// Too many words in a phrase
+	HaErrFtsTooManyWordsInPhrase = HandlerErrorCode(191)
+	// FK cascade depth exceeded
+	HaErrFkDepthExceeded = HandlerErrorCode(192)
+	// Option Missing during Create
+	HaMissingCreateOption = HandlerErrorCode(193)
+	// Out of memory in storage engine
+	HaErrSeOutOfMemory = HandlerErrorCode(194)
+	// Table/Clustered index is corrupted.
+	HaErrTableCorrupt = HandlerErrorCode(195)
+	// The query was interrupted
+	HaErrQueryInterrupted = HandlerErrorCode(196)
+	// Missing Tablespace
+	HaErrTablespaceMissing = HandlerErrorCode(197)
+	// Tablespace is not empty
+	HaErrTablespaceIsNotEmpty = HandlerErrorCode(198)
+	// Invalid Filename
+	HaErrWrongFileName = HandlerErrorCode(199)
+	// Operation is not allowed
+	HaErrNotAllowedCommand = HandlerErrorCode(200)
+	// Compute generated column value failed
+	HaErrComputeFailed = HandlerErrorCode(201)
+	// Table's row format has changed in the storage engine. Information in the data-dictionary needs to be updated.
+	HaErrRowFormatChanged = HandlerErrorCode(202)
+	// Don't wait for record lock
+	HaErrNoWaitLock = HandlerErrorCode(203)
+	// No more room in disk
+	HaErrDiskFullNowait = HandlerErrorCode(204)
+	// No session temporary space available
+	HaErrNoSessionTemp = HandlerErrorCode(205)
+	// Wrong or Invalid table name
+	HaErrWrongTableName = HandlerErrorCode(206)
+	// Path is too long for the OS
+	HaErrTooLongPath = HandlerErrorCode(207)
+	// Histogram sampling initialization failed
+	HaErrSamplingInitFailed = HandlerErrorCode(208)
+	// Too many sub-expression in search string
+	HaErrFtsTooManyNestedExp = HandlerErrorCode(209)
 )
 
 // Sql states for errors.

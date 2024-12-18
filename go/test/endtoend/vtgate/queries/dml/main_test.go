@@ -66,7 +66,6 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	exitCode := func() int {
@@ -133,7 +132,7 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 
 		tables := []string{
 			"s_tbl", "num_vdx_tbl", "user_tbl", "order_tbl", "oevent_tbl", "oextra_tbl",
-			"auto_tbl", "oid_vdx_tbl", "unq_idx", "nonunq_idx", "u_tbl", "mixed_tbl", "lkp_map_idx",
+			"auto_tbl", "oid_vdx_tbl", "unq_idx", "nonunq_idx", "u_tbl", "mixed_tbl", "lkp_map_idx", "j_tbl", "j_utbl",
 		}
 		for _, table := range tables {
 			// TODO (@frouioui): following assertions produce different results between MySQL and Vitess
@@ -148,6 +147,5 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 	return mcmp, func() {
 		deleteAll()
 		mcmp.Close()
-		cluster.PanicHandler(t)
 	}
 }

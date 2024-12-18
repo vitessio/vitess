@@ -59,6 +59,14 @@ func commandReshardCreate(cmd *cobra.Command, args []string) error {
 	tsp := common.GetTabletSelectionPreference(cmd)
 	cli.FinishedParsing(cmd)
 
+	configOverrides, err := common.ParseConfigOverrides(common.CreateOptions.ConfigOverrides)
+	if err != nil {
+		return err
+	}
+	workflowOptions := &vtctldatapb.WorkflowOptions{
+		Config: configOverrides,
+	}
+
 	req := &vtctldatapb.ReshardCreateRequest{
 		Workflow:                  common.BaseOptions.Workflow,
 		Keyspace:                  common.BaseOptions.TargetKeyspace,
@@ -72,6 +80,7 @@ func commandReshardCreate(cmd *cobra.Command, args []string) error {
 		SourceShards:              reshardCreateOptions.sourceShards,
 		TargetShards:              reshardCreateOptions.targetShards,
 		SkipSchemaCopy:            reshardCreateOptions.skipSchemaCopy,
+		WorkflowOptions:           workflowOptions,
 	}
 	resp, err := common.GetClient().ReshardCreate(common.GetCommandCtx(), req)
 	if err != nil {

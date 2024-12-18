@@ -23,15 +23,12 @@ import (
 
 	"vitess.io/vitess/go/test/endtoend/utils"
 
-	"vitess.io/vitess/go/test/endtoend/cluster"
-
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 )
 
 func TestFunctionInDefault(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
@@ -223,7 +220,6 @@ func BenchmarkReservedConnWhenSettingSysVar(b *testing.B) {
 }
 
 func TestJsonFunctions(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)

@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -40,6 +41,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 type testcase struct {
@@ -51,10 +53,7 @@ func checkIfOptionIsSupported(t *testing.T, variable string) bool {
 	qr, err := env.Mysqld.FetchSuperQuery(context.Background(), fmt.Sprintf("show variables like '%s'", variable))
 	require.NoError(t, err)
 	require.NotNil(t, qr)
-	if qr.Rows != nil && len(qr.Rows) == 1 {
-		return true
-	}
-	return false
+	return len(qr.Rows) == 1
 }
 
 // TestPlayerNoBlob sets up a new environment with mysql running with
@@ -89,6 +88,9 @@ func TestNoBlob(t *testing.T) {
 			"create table t2(id int, txt text, val varchar(4), unique key(id, val))",
 			// t3 has a text column and a primary key. The text column will not be in update row events.
 			"create table t3(id int, txt text, val varchar(4), primary key(id))",
+			// t4 has a blob column and a primary key, along with a generated virtual column. The blob
+			// column will not be in update row events.
+			"create table t4(id int, cOl varbinary(8) generated always as (concat(val, 'tsty')) virtual, blb blob, val varbinary(4), primary key(id))",
 		},
 		options: &TestSpecOptions{
 			noblob: true,
@@ -96,6 +98,18 @@ func TestNoBlob(t *testing.T) {
 	}
 	defer ts.Close()
 	ts.Init()
+
+	insertGeneratedFE := &TestFieldEvent{
+		table: "t4",
+		db:    testenv.DBName,
+		cols: []*TestColumn{
+			{name: "id", dataType: "INT32", colType: "int(11)", len: 11, collationID: 63},
+			{name: "cOl", dataType: "VARBINARY", colType: "varbinary(8)", len: 8, collationID: 63},
+			{name: "blb", dataType: "BLOB", colType: "blob", len: 65535, collationID: 63},
+			{name: "val", dataType: "VARBINARY", colType: "varbinary(4)", len: 4, collationID: 63},
+		},
+	}
+
 	ts.tests = [][]*TestQuery{{
 		{"begin", nil},
 		{"insert into t1 values (1, 'blob1', 'aaa')", nil},
@@ -108,6 +122,29 @@ func TestNoBlob(t *testing.T) {
 	}, {{"begin", nil},
 		{"insert into t3 values (1, 'text1', 'aaa')", nil},
 		{"update t3 set val = 'bbb'", nil},
+		{"commit", nil},
+	}, {{"begin", nil},
+		{"insert into t4 (id, blb, val) values (1, 'text1', 'aaa')", []TestRowEvent{
+			{event: insertGeneratedFE.String()},
+			{spec: &TestRowEventSpec{table: "t4", changes: []TestRowChange{{after: []string{"1", "aaatsty", "text1", "aaa"}}}}},
+		}},
+		{"update t4 set val = 'bbb'", []TestRowEvent{
+			// The blob column is not in the update row event's before or after image.
+			{spec: &TestRowEventSpec{table: "t4", changes: []TestRowChange{{
+				beforeRaw: &querypb.Row{
+					Lengths: []int64{1, 7, -1, 3}, // -1 for the 3rd column / blob field, as it's not present
+					Values:  []byte("1aaatstyaaa"),
+				},
+				afterRaw: &querypb.Row{
+					Lengths: []int64{1, 7, -1, 3}, // -1 for the 3rd column / blob field, as it's not present
+					Values:  []byte("1bbbtstybbb"),
+				},
+				dataColumnsRaw: &binlogdatapb.RowChange_Bitmap{
+					Count: 4,
+					Cols:  []byte{0x0b}, // Columns bitmap of 00001011 as the third column/bit position representing the blob column has no data
+				},
+			}}}},
+		}},
 		{"commit", nil},
 	}}
 	ts.Run()
@@ -398,6 +435,70 @@ func TestMissingTables(t *testing.T) {
 	runCases(t, filter, testcases, startPos, nil)
 }
 
+// TestSidecarDBTables tests streaming of sidecar db tables.
+func TestSidecarDBTables(t *testing.T) {
+	ts := &TestSpec{
+		t: t,
+		ddls: []string{
+			"create table t1(id11 int, id12 int, primary key(id11))",
+			"create table _vt.internal1(id int, primary key(id))",
+			"create table _vt.internal2(id int, primary key(id))",
+		},
+	}
+	ts.Init()
+	defer func() {
+		execStatements(t, []string{
+			"drop table _vt.internal1",
+			"drop table _vt.internal2",
+		})
+	}()
+	defer ts.Close()
+	position := primaryPosition(t)
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "t1",
+			Filter: "select * from t1",
+		}},
+	}
+	execStatements(t, []string{
+		"insert into t1 values (1, 1)",
+		"insert into t1 values (2, 2)",
+		"insert into _vt.internal1 values (1)",
+		"insert into _vt.internal2 values (1)",
+		"insert into _vt.internal2 values (2)",
+	})
+	options := &binlogdatapb.VStreamOptions{
+		InternalTables: []string{"internal1", "internal2"},
+	}
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(10*time.Second))
+	defer cancel()
+	wantRowEvents := map[string]int{
+		"t1":        2,
+		"internal1": 1,
+		"internal2": 2,
+	}
+	gotRowEvents := make(map[string]int)
+	gotFieldEvents := make(map[string]int)
+	err := engine.Stream(ctx, position, nil, filter, "", func(events []*binlogdatapb.VEvent) error {
+		for _, ev := range events {
+			if ev.Type == binlogdatapb.VEventType_ROW {
+				gotRowEvents[ev.RowEvent.TableName]++
+				require.Equal(t, slices.Contains(options.InternalTables, ev.RowEvent.TableName), ev.RowEvent.IsInternalTable)
+			}
+			if ev.Type == binlogdatapb.VEventType_FIELD {
+				require.Equal(t, slices.Contains(options.InternalTables, ev.FieldEvent.TableName), ev.FieldEvent.IsInternalTable)
+				gotFieldEvents[ev.FieldEvent.TableName]++
+			}
+		}
+		return nil
+	}, options)
+	require.NoError(t, err)
+	require.EqualValues(t, wantRowEvents, gotRowEvents)
+	for k, v := range gotFieldEvents {
+		require.Equal(t, 1, v, "gotFieldEvents[%s] = %d", k, v)
+	}
+}
+
 // TestVStreamMissingFieldsInLastPK tests that we error out if the lastpk for a table is missing the fields spec.
 func TestVStreamMissingFieldsInLastPK(t *testing.T) {
 	ts := &TestSpec{
@@ -408,6 +509,7 @@ func TestVStreamMissingFieldsInLastPK(t *testing.T) {
 	}
 	ts.Init()
 	defer ts.Close()
+
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
 			Match:  "t1",
@@ -435,7 +537,6 @@ func TestVStreamCopySimpleFlow(t *testing.T) {
 	}
 	ts.Init()
 	defer ts.Close()
-
 	log.Infof("Pos before bulk insert: %s", primaryPosition(t))
 	insertSomeRows(t, 10)
 	log.Infof("Pos after bulk insert: %s", primaryPosition(t))
@@ -663,11 +764,11 @@ func TestVStreamCopyWithDifferentFilters(t *testing.T) {
 				return io.EOF
 			}
 			return nil
-		})
+		}, nil)
 	}()
 	wg.Wait()
 	if errGoroutine != nil {
-		t.Fatalf(errGoroutine.Error())
+		t.Fatal(errGoroutine.Error())
 	}
 }
 
@@ -1487,7 +1588,7 @@ func TestBestEffortNameInFieldEvent(t *testing.T) {
 
 // todo: migrate to new framework
 // test that vstreamer ignores tables created by OnlineDDL
-func TestInternalTables(t *testing.T) {
+func TestOnlineDDLTables(t *testing.T) {
 	if version.GoOS == "darwin" {
 		t.Skip("internal online ddl table matching doesn't work on Mac because it is case insensitive")
 	}
@@ -1763,7 +1864,7 @@ func TestMinimalMode(t *testing.T) {
 		engine = oldEngine
 		env = oldEnv
 	}()
-	err := engine.Stream(context.Background(), "current", nil, nil, throttlerapp.VStreamerName, func(evs []*binlogdatapb.VEvent) error { return nil })
+	err := engine.Stream(context.Background(), "current", nil, nil, throttlerapp.VStreamerName, func(evs []*binlogdatapb.VEvent) error { return nil }, nil)
 	require.Error(t, err, "minimal binlog_row_image is not supported by Vitess VReplication")
 }
 
@@ -1865,7 +1966,7 @@ func TestFilteredMultipleWhere(t *testing.T) {
 			filter: &binlogdatapb.Filter{
 				Rules: []*binlogdatapb.Rule{{
 					Match:  "t1",
-					Filter: "select id1, val from t1 where in_keyrange('-80') and id2 = 200 and id3 = 1000 and val = 'newton'",
+					Filter: "select id1, val from t1 where in_keyrange('-80') and id2 = 200 and id3 = 1000 and val = 'newton' and id1 in (1, 2, 129)",
 				}},
 			},
 			customFieldEvents: true,
@@ -1887,9 +1988,7 @@ func TestFilteredMultipleWhere(t *testing.T) {
 			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{after: []string{"2", "newton"}}}}},
 		}},
 		{"insert into t1 values (3, 100, 2000, 'kepler')", noEvents},
-		{"insert into t1 values (128, 200, 1000, 'newton')", []TestRowEvent{
-			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{after: []string{"128", "newton"}}}}},
-		}},
+		{"insert into t1 values (128, 200, 1000, 'newton')", noEvents},
 		{"insert into t1 values (5, 200, 2000, 'kepler')", noEvents},
 		{"insert into t1 values (129, 200, 1000, 'kepler')", noEvents},
 		{"commit", nil},
@@ -1975,6 +2074,36 @@ func TestGeneratedInvisiblePrimaryKey(t *testing.T) {
 		{"update t1 set val = 'bbb' where my_row_id = 1", []TestRowEvent{
 			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{before: []string{"1", "aaa"}, after: []string{"1", "bbb"}}}}},
 		}},
+		{"commit", nil},
+	}}
+	ts.Run()
+}
+
+func TestFilteredInOperator(t *testing.T) {
+	ts := &TestSpec{
+		t: t,
+		ddls: []string{
+			"create table t1(id1 int, id2 int, val varbinary(128), primary key(id1))",
+		},
+		options: &TestSpecOptions{
+			filter: &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{{
+					Match:  "t1",
+					Filter: "select id1, val from t1 where val in ('eee', 'bbb', 'ddd') and id1 in (4, 5)",
+				}},
+			},
+		},
+	}
+	defer ts.Close()
+	ts.Init()
+	ts.fieldEvents["t1"].cols[1].skip = true
+	ts.tests = [][]*TestQuery{{
+		{"begin", nil},
+		{"insert into t1 values (1, 100, 'aaa')", noEvents},
+		{"insert into t1 values (2, 200, 'bbb')", noEvents},
+		{"insert into t1 values (3, 100, 'ccc')", noEvents},
+		{"insert into t1 values (4, 200, 'ddd')", nil},
+		{"insert into t1 values (5, 200, 'eee')", nil},
 		{"commit", nil},
 	}}
 	ts.Run()

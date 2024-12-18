@@ -177,6 +177,8 @@ func (cached *AlterDatabase) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(64)
 	}
+	// field Comments *vitess.io/vitess/go/vt/sqlparser.ParsedComments
+	size += cached.Comments.CachedSize(true)
 	// field DBName vitess.io/vitess/go/vt/sqlparser.IdentifierCS
 	size += cached.DBName.CachedSize(false)
 	// field AlterOptions []vitess.io/vitess/go/vt/sqlparser.DatabaseOption
@@ -206,7 +208,7 @@ func (cached *AlterMigration) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(64)
+		size += int64(80)
 	}
 	// field UUID string
 	size += hack.RuntimeAllocSize(int64(len(cached.UUID)))
@@ -214,6 +216,8 @@ func (cached *AlterMigration) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Expire)))
 	// field Ratio *vitess.io/vitess/go/vt/sqlparser.Literal
 	size += cached.Ratio.CachedSize(true)
+	// field Threshold string
+	size += hack.RuntimeAllocSize(int64(len(cached.Threshold)))
 	// field Shards string
 	size += hack.RuntimeAllocSize(int64(len(cached.Shards)))
 	return size
@@ -834,7 +838,7 @@ func (cached *CommonTableExpr) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(48)
+		size += int64(64)
 	}
 	// field ID vitess.io/vitess/go/vt/sqlparser.IdentifierCS
 	size += cached.ID.CachedSize(false)
@@ -845,8 +849,10 @@ func (cached *CommonTableExpr) CachedSize(alloc bool) int64 {
 			size += elem.CachedSize(false)
 		}
 	}
-	// field Subquery *vitess.io/vitess/go/vt/sqlparser.Subquery
-	size += cached.Subquery.CachedSize(true)
+	// field Subquery vitess.io/vitess/go/vt/sqlparser.SelectStatement
+	if cc, ok := cached.Subquery.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
 	return size
 }
 func (cached *ComparisonExpr) CachedSize(alloc bool) int64 {
@@ -3928,8 +3934,10 @@ func (cached *ShowTransactionStatus) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(16)
+		size += int64(32)
 	}
+	// field Keyspace string
+	size += hack.RuntimeAllocSize(int64(len(cached.Keyspace)))
 	// field TransactionID string
 	size += hack.RuntimeAllocSize(int64(len(cached.TransactionID)))
 	return size

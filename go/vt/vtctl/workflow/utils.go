@@ -37,6 +37,7 @@ import (
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
@@ -122,7 +123,8 @@ func validateNewWorkflow(ctx context.Context, ts *topo.Server, tmc tmclient.Tabl
 			}
 			for _, wf := range res.Workflows {
 				if wf.Workflow == workflow {
-					allErrors.RecordError(fmt.Errorf("workflow %s already exists in keyspace %s on tablet %v", workflow, keyspace, primary.Alias))
+					allErrors.RecordError(fmt.Errorf("workflow %s already exists in keyspace %s on tablet %s",
+						workflow, keyspace, topoproto.TabletAliasString(primary.Alias)))
 					return
 				}
 			}
@@ -216,21 +218,34 @@ func stripTableForeignKeys(ddl string, parser *sqlparser.Parser) (string, error)
 	return newDDL, nil
 }
 
-func stripAutoIncrement(ddl string, parser *sqlparser.Parser) (string, error) {
+// stripAutoIncrement will strip any MySQL auto_increment clause in the given
+// table definition. If an optional replace function is specified then that
+// callback will be used to e.g. replace the MySQL clause with a Vitess
+// VSchema AutoIncrement definition.
+func stripAutoIncrement(ddl string, parser *sqlparser.Parser, replace func(columnName string) error) (string, error) {
 	newDDL, err := parser.ParseStrictDDL(ddl)
 	if err != nil {
 		return "", err
 	}
 
-	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+	err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
 		case *sqlparser.ColumnDefinition:
 			if node.Type.Options.Autoincrement {
 				node.Type.Options.Autoincrement = false
+				if replace != nil {
+					if err := replace(sqlparser.String(node.Name)); err != nil {
+						return false, vterrors.Wrapf(err, "failed to replace auto_increment column %q in %q", sqlparser.String(node.Name), ddl)
+					}
+
+				}
 			}
 		}
 		return true, nil
 	}, newDDL)
+	if err != nil {
+		return "", err
+	}
 
 	return sqlparser.String(newDDL), nil
 }
@@ -397,8 +412,7 @@ func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManag
 		optionsJSON := wf.GetOptions()
 		if optionsJSON != "" {
 			if err := json.Unmarshal([]byte(optionsJSON), &options); err != nil {
-				log.Errorf("failed to unmarshal options: %v %s", err, optionsJSON)
-				return nil, err
+				return nil, vterrors.Wrapf(err, "failed to unmarshal options: %s", optionsJSON)
 			}
 		}
 
@@ -544,7 +558,7 @@ func doValidateWorkflowHasCompleted(ctx context.Context, ts *trafficSwitcher) er
 		_ = ts.ForAllSources(func(source *MigrationSource) error {
 			wg.Add(1)
 			if source.GetShard().IsPrimaryServing {
-				rec.RecordError(fmt.Errorf(fmt.Sprintf("Shard %s is still serving", source.GetShard().ShardName())))
+				rec.RecordError(fmt.Errorf("shard %s is still serving", source.GetShard().ShardName()))
 			}
 			wg.Done()
 			return nil
@@ -640,7 +654,7 @@ func parseTabletTypes(tabletTypes []topodatapb.TabletType) (hasReplica, hasRdonl
 func areTabletsAvailableToStreamFrom(ctx context.Context, req *vtctldatapb.WorkflowSwitchTrafficRequest, ts *trafficSwitcher, keyspace string, shards []*topo.ShardInfo) error {
 	// We use the value from the workflow for the TabletPicker.
 	tabletTypesStr := ts.optTabletTypes
-	cells := req.Cells
+	cells := req.GetCells()
 	// If no cells were provided in the command then use the value from the workflow.
 	if len(cells) == 0 && ts.optCells != "" {
 		cells = strings.Split(strings.TrimSpace(ts.optCells), ",")
@@ -670,7 +684,7 @@ func areTabletsAvailableToStreamFrom(ctx context.Context, req *vtctldatapb.Workf
 
 	wg.Wait()
 	if allErrors.HasErrors() {
-		log.Errorf("%s", allErrors.Error())
+		ts.Logger().Error(allErrors.Error())
 		return allErrors.Error()
 	}
 	return nil
@@ -902,7 +916,7 @@ func validateTenantId(dataType querypb.Type, value string) error {
 }
 
 func updateKeyspaceRoutingState(ctx context.Context, ts *topo.Server, sourceKeyspace, targetKeyspace string, state *State) error {
-	// For multi-tenant migrations, we only support switching traffic to all cells at once
+	// For multi-tenant migrations, we only support switching traffic to all cells at once.
 	cells, err := ts.GetCellInfoNames(ctx)
 	if err != nil {
 		return err
@@ -958,4 +972,82 @@ func IsTableDidNotExistError(err error) bool {
 		return sqlErr.Num == sqlerror.ERNoSuchTable || sqlErr.Num == sqlerror.ERBadTable
 	}
 	return false
+}
+
+func getOptionsJSON(workflowOptions *vtctldatapb.WorkflowOptions) (string, error) {
+	defaultJSON := "{}"
+	if workflowOptions == nil {
+		return defaultJSON, nil
+	}
+	optionsJSON, err := json.Marshal(workflowOptions)
+	if err != nil || optionsJSON == nil {
+		return defaultJSON, err
+	}
+	return string(optionsJSON), nil
+}
+
+// defaultErrorHandler provides a way to consistently handle errors by logging and
+// returning them.
+func defaultErrorHandler(logger logutil.Logger, message string, err error) (*[]string, error) {
+	werr := vterrors.Wrap(err, message)
+	logger.Error(werr)
+	return nil, werr
+}
+
+// applyTargetShards applies the targetShards, coming from a command, to the trafficSwitcher's
+// migration targets.
+// It will return an error if the targetShards list contains a shard that is not a valid shard
+// for the workflow.
+// It will then remove any migration targets from the trafficSwitcher that are not in the
+// targetShards list.
+func applyTargetShards(ts *trafficSwitcher, targetShards []string) error {
+	if ts == nil {
+		return nil
+	}
+	if ts.targets == nil {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no targets found for workflow %s", ts.workflow)
+	}
+	tsm := make(map[string]struct{}, len(targetShards))
+	for _, targetShard := range targetShards {
+		if _, ok := ts.targets[targetShard]; !ok {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "specified target shard %s not a valid target for workflow %s",
+				targetShard, ts.workflow)
+		}
+		tsm[targetShard] = struct{}{}
+	}
+	for key, target := range ts.targets {
+		if target == nil || target.GetShard() == nil { // Should never happen
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid target found for workflow %s", ts.workflow)
+		}
+		if _, ok := tsm[target.GetShard().ShardName()]; !ok {
+			delete(ts.targets, key)
+		}
+	}
+	return nil
+}
+
+// validateSourceTablesExist validates that tables provided are present
+// in the source keyspace.
+func validateSourceTablesExist(ctx context.Context, sourceKeyspace string, ksTables, tables []string) error {
+	var missingTables []string
+	for _, table := range tables {
+		if schema.IsInternalOperationTableName(table) {
+			continue
+		}
+		found := false
+
+		for _, ksTable := range ksTables {
+			if table == ksTable {
+				found = true
+				break
+			}
+		}
+		if !found {
+			missingTables = append(missingTables, table)
+		}
+	}
+	if len(missingTables) > 0 {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "table(s) not found in source keyspace %s: %s", sourceKeyspace, strings.Join(missingTables, ","))
+	}
+	return nil
 }

@@ -87,7 +87,7 @@ func (ast *astCompiler) translateComparisonExpr2(op sqlparser.ComparisonExprOper
 			Negate: op == sqlparser.NotRegexpOp,
 		}, nil
 	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, op.ToString())
+		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, op.ToString())
 	}
 }
 
@@ -309,10 +309,6 @@ func (ast *astCompiler) translateBinaryExpr(binary *sqlparser.BinaryExpr) (IR, e
 		return &BitwiseExpr{BinaryExpr: binaryExpr, Op: &opBitShl{}}, nil
 	case sqlparser.ShiftRightOp:
 		return &BitwiseExpr{BinaryExpr: binaryExpr, Op: &opBitShr{}}, nil
-	case sqlparser.JSONExtractOp:
-		return builtinJSONExtractRewrite(left, right)
-	case sqlparser.JSONUnquoteExtractOp:
-		return builtinJSONExtractUnquoteRewrite(left, right)
 	default:
 		return nil, translateExprNotSupported(binary)
 	}

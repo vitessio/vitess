@@ -148,7 +148,7 @@ func (flv *filePosFlavor) readBinlogEvent(c *Conn) (BinlogEvent, error) {
 		}
 		switch result[0] {
 		case EOFPacket:
-			return nil, sqlerror.NewSQLError(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "%v", io.EOF)
+			return nil, sqlerror.NewSQLErrorf(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "%v", io.EOF)
 		case ErrPacket:
 			return nil, ParseErrorPacket(result)
 		}
@@ -364,6 +364,10 @@ func (*filePosFlavor) baseShowTables() string {
 // baseShowTablesWithSizes is part of the Flavor interface.
 func (*filePosFlavor) baseShowTablesWithSizes() string {
 	return TablesWithSize56
+}
+
+func (filePosFlavor) baseShowInnodbTableSizes() string {
+	return ""
 }
 
 // supportsCapability is part of the Flavor interface.

@@ -17,6 +17,7 @@
 package logic
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -29,21 +30,20 @@ import (
 
 // InsertRecoveryDetection inserts the recovery analysis that has been detected.
 func InsertRecoveryDetection(analysisEntry *inst.ReplicationAnalysis) error {
-	sqlResult, err := db.ExecVTOrc(`
-			insert ignore
-				into recovery_detection (
-					alias,
-					analysis,
-					keyspace,
-					shard,
-					detection_timestamp
-				) values (
-					?,
-					?,
-					?,
-					?,
-					now()
-				)`,
+	sqlResult, err := db.ExecVTOrc(`INSERT OR IGNORE
+		INTO recovery_detection (
+			alias,
+			analysis,
+			keyspace,
+			shard,
+			detection_timestamp
+		) VALUES (
+			?,
+			?,
+			?,
+			?,
+			DATETIME('now')
+		)`,
 		analysisEntry.AnalyzedInstanceAlias,
 		string(analysisEntry.Analysis),
 		analysisEntry.ClusterDetails.Keyspace,
@@ -64,26 +64,24 @@ func InsertRecoveryDetection(analysisEntry *inst.ReplicationAnalysis) error {
 
 func writeTopologyRecovery(topologyRecovery *TopologyRecovery) (*TopologyRecovery, error) {
 	analysisEntry := topologyRecovery.AnalysisEntry
-	sqlResult, err := db.ExecVTOrc(`
-			insert ignore
-				into topology_recovery (
-					recovery_id,
-					alias,
-					start_recovery,
-					analysis,
-					keyspace,
-					shard,
-					detection_id
-				) values (
-					?,
-					?,
-					NOW(),
-					?,
-					?,
-					?,
-					?
-				)
-			`,
+	sqlResult, err := db.ExecVTOrc(`INSERT OR IGNORE
+		INTO topology_recovery (
+			recovery_id,
+			alias,
+			start_recovery,
+			analysis,
+			keyspace,
+			shard,
+			detection_id
+		) VALUES (
+			?,
+			?,
+			DATETIME('now'),
+			?,
+			?,
+			?,
+			?
+		)`,
 		sqlutils.NilIfZero(topologyRecovery.ID),
 		analysisEntry.AnalyzedInstanceAlias,
 		string(analysisEntry.Analysis),
@@ -121,7 +119,7 @@ func AttemptRecoveryRegistration(analysisEntry *inst.ReplicationAnalysis) (*Topo
 	if len(recoveries) > 0 {
 		errMsg := fmt.Sprintf("AttemptRecoveryRegistration: Active recovery (id:%v) in the cluster %s:%s for %s", recoveries[0].ID, analysisEntry.ClusterDetails.Keyspace, analysisEntry.ClusterDetails.Shard, recoveries[0].AnalysisEntry.Analysis)
 		log.Errorf(errMsg)
-		return nil, fmt.Errorf(errMsg)
+		return nil, errors.New(errMsg)
 	}
 
 	topologyRecovery := NewTopologyRecovery(*analysisEntry)
@@ -137,15 +135,16 @@ func AttemptRecoveryRegistration(analysisEntry *inst.ReplicationAnalysis) (*Topo
 // ResolveRecovery is called on completion of a recovery process and updates the recovery status.
 // It does not clear the "active period" as this still takes place in order to avoid flapping.
 func writeResolveRecovery(topologyRecovery *TopologyRecovery) error {
-	_, err := db.ExecVTOrc(`
-			update topology_recovery set
-				is_successful = ?,
-				successor_alias = ?,
-				all_errors = ?,
-				end_recovery = NOW()
-			where
-				recovery_id = ?
-			`, topologyRecovery.IsSuccessful,
+	_, err := db.ExecVTOrc(`UPDATE topology_recovery
+		SET
+			is_successful = ?,
+			successor_alias = ?,
+			all_errors = ?,
+			end_recovery = DATETIME('now')
+		WHERE
+			recovery_id = ?
+		`,
+		topologyRecovery.IsSuccessful,
 		topologyRecovery.SuccessorAlias,
 		strings.Join(topologyRecovery.AllErrors, "\n"),
 		topologyRecovery.ID,
@@ -159,26 +158,27 @@ func writeResolveRecovery(topologyRecovery *TopologyRecovery) error {
 // readRecoveries reads recovery entry/audit entries from topology_recovery
 func readRecoveries(whereCondition string, limit string, args []any) ([]*TopologyRecovery, error) {
 	res := []*TopologyRecovery{}
-	query := fmt.Sprintf(`
-		select
-		recovery_id,
-		alias,
-		start_recovery,
-		IFNULL(end_recovery, '') AS end_recovery,
-		is_successful,
-		ifnull(successor_alias, '') as successor_alias,
-		analysis,
-		keyspace,
-		shard,
-		all_errors,
-		detection_id
-		from
+	query := fmt.Sprintf(`SELECT
+			recovery_id,
+			alias,
+			start_recovery,
+			IFNULL(end_recovery, '') AS end_recovery,
+			is_successful,
+			IFNULL(successor_alias, '') AS successor_alias,
+			analysis,
+			keyspace,
+			shard,
+			all_errors,
+			detection_id
+		FROM
 			topology_recovery
 		%s
-		order by
-			recovery_id desc
+		ORDER BY recovery_id DESC
 		%s
-		`, whereCondition, limit)
+		`,
+		whereCondition,
+		limit,
+	)
 	err := db.QueryVTOrc(query, args, func(m sqlutils.RowMap) error {
 		topologyRecovery := *NewTopologyRecovery(inst.ReplicationAnalysis{})
 		topologyRecovery.ID = m.GetInt64("recovery_id")
@@ -210,11 +210,10 @@ func readRecoveries(whereCondition string, limit string, args []any) ([]*Topolog
 
 // ReadActiveClusterRecoveries reads recoveries that are ongoing for the given cluster.
 func ReadActiveClusterRecoveries(keyspace string, shard string) ([]*TopologyRecovery, error) {
-	whereClause := `
-		where
-			end_recovery IS NULL
-			and keyspace=?
-			and shard=?`
+	whereClause := `WHERE
+		end_recovery IS NULL
+		AND keyspace = ?
+		AND shard = ?`
 	return readRecoveries(whereClause, ``, sqlutils.Args(keyspace, shard))
 }
 
@@ -224,23 +223,30 @@ func ReadRecentRecoveries(page int) ([]*TopologyRecovery, error) {
 	whereClause := ""
 	var args []any
 	if len(whereConditions) > 0 {
-		whereClause = fmt.Sprintf("where %s", strings.Join(whereConditions, " and "))
+		whereClause = fmt.Sprintf("WHERE %s", strings.Join(whereConditions, " AND "))
 	}
-	limit := `
-		limit ?
-		offset ?`
+	limit := `LIMIT ? OFFSET ?`
 	args = append(args, config.AuditPageSize, page*config.AuditPageSize)
 	return readRecoveries(whereClause, limit, args)
 }
 
 // writeTopologyRecoveryStep writes down a single step in a recovery process
 func writeTopologyRecoveryStep(topologyRecoveryStep *TopologyRecoveryStep) error {
-	sqlResult, err := db.ExecVTOrc(`
-			insert ignore
-				into topology_recovery_steps (
-					recovery_step_id, recovery_id, audit_at, message
-				) values (?, ?, now(), ?)
-			`, sqlutils.NilIfZero(topologyRecoveryStep.ID), topologyRecoveryStep.RecoveryID, topologyRecoveryStep.Message,
+	sqlResult, err := db.ExecVTOrc(`INSERT OR IGNORE
+		INTO topology_recovery_steps (
+			recovery_step_id,
+			recovery_id,
+			audit_at,
+			message
+		) VALUES (
+			?,
+			?,
+			DATETIME('now'),
+			?
+		)`,
+		sqlutils.NilIfZero(topologyRecoveryStep.ID),
+		topologyRecoveryStep.RecoveryID,
+		topologyRecoveryStep.Message,
 	)
 	if err != nil {
 		log.Error(err)

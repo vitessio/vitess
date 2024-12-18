@@ -34,19 +34,26 @@ func ApplySchema(ctx context.Context, r Request, api *API) *JSONResponse {
 	decoder := json.NewDecoder(r.Body)
 	defer r.Body.Close()
 
-	var req vtctldatapb.ApplySchemaRequest
-	if err := decoder.Decode(&req); err != nil {
+	var body struct {
+		Sql      string                         `json:"sql"`
+		CallerId string                         `json:"caller_id"`
+		Request  vtctldatapb.ApplySchemaRequest `json:"request"`
+	}
+
+	if err := decoder.Decode(&body); err != nil {
 		return NewJSONResponse(nil, &errors.BadRequest{
 			Err: err,
 		})
 	}
 
 	vars := mux.Vars(r.Request)
-	req.Keyspace = vars["keyspace"]
+	body.Request.Keyspace = vars["keyspace"]
 
 	resp, err := api.server.ApplySchema(ctx, &vtadminpb.ApplySchemaRequest{
 		ClusterId: vars["cluster_id"],
-		Request:   &req,
+		Sql:       body.Sql,
+		CallerId:  body.CallerId,
+		Request:   &body.Request,
 	})
 
 	return NewJSONResponse(resp, err)

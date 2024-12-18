@@ -101,7 +101,6 @@ CREATE TABLE test_vdx (
 )
 
 func TestMain(m *testing.M) {
-	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	exitCode := func() int {

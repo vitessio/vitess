@@ -20,6 +20,8 @@ import (
 	"testing"
 	"time"
 
+	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -53,7 +55,7 @@ func TestGatewayBufferingWhenPrimarySwitchesServingState(t *testing.T) {
 		TabletType: tabletType,
 	}
 
-	ts := &fakeTopoServer{}
+	ts := &econtext.FakeTopoServer{}
 	// create a new fake health check. We want to check the buffering code which uses Subscribe, so we must also pass a channel
 	hc := discovery.NewFakeHealthCheck(make(chan *discovery.TabletHealth))
 	// create a new tablet gateway
@@ -67,7 +69,7 @@ func TestGatewayBufferingWhenPrimarySwitchesServingState(t *testing.T) {
 	waitForBuffering := func(enabled bool) {
 		timer := time.NewTimer(bufferingWaitTimeout)
 		defer timer.Stop()
-		for _, buffering := tg.kev.PrimaryIsNotServing(ctx, target); buffering != enabled; _, buffering = tg.kev.PrimaryIsNotServing(ctx, target) {
+		for _, buffering := tg.kev.ShouldStartBufferingForTarget(ctx, target); buffering != enabled; _, buffering = tg.kev.ShouldStartBufferingForTarget(ctx, target) {
 			select {
 			case <-timer.C:
 				require.Fail(t, "timed out waiting for buffering of enabled: %t", enabled)
@@ -156,7 +158,7 @@ func TestGatewayBufferingWhileReparenting(t *testing.T) {
 		TabletType: tabletType,
 	}
 
-	ts := &fakeTopoServer{}
+	ts := &econtext.FakeTopoServer{}
 	// create a new fake health check. We want to check the buffering code which uses Subscribe, so we must also pass a channel
 	hc := discovery.NewFakeHealthCheck(make(chan *discovery.TabletHealth))
 	// create a new tablet gateway
@@ -213,8 +215,8 @@ func TestGatewayBufferingWhileReparenting(t *testing.T) {
 	hc.Broadcast(primaryTablet)
 
 	require.Len(t, tg.hc.GetHealthyTabletStats(target), 0, "GetHealthyTabletStats has tablets even though it shouldn't")
-	_, isNotServing := tg.kev.PrimaryIsNotServing(ctx, target)
-	require.True(t, isNotServing)
+	_, shouldStartBuffering := tg.kev.ShouldStartBufferingForTarget(ctx, target)
+	require.True(t, shouldStartBuffering)
 
 	// add a result to the sandbox connection of the new primary
 	sbcReplica.SetResults([]*sqltypes.Result{sqlResult1})
@@ -234,6 +236,7 @@ func TestGatewayBufferingWhileReparenting(t *testing.T) {
 	hc.SetTabletType(primaryTablet, topodatapb.TabletType_REPLICA)
 	hc.Broadcast(primaryTablet)
 	hc.SetTabletType(replicaTablet, topodatapb.TabletType_PRIMARY)
+	hc.SetPrimaryTimestamp(replicaTablet, 100) // We set a higher timestamp than before to simulate a PRS.
 	hc.SetServing(replicaTablet, true)
 	hc.Broadcast(replicaTablet)
 
@@ -244,8 +247,8 @@ outer:
 		case <-timeout:
 			require.Fail(t, "timed out - could not verify the new primary")
 		case <-time.After(10 * time.Millisecond):
-			newPrimary, notServing := tg.kev.PrimaryIsNotServing(ctx, target)
-			if newPrimary != nil && newPrimary.Uid == 1 && !notServing {
+			newPrimary, shouldBuffer := tg.kev.ShouldStartBufferingForTarget(ctx, target)
+			if newPrimary != nil && newPrimary.Uid == replicaTablet.Alias.Uid && !shouldBuffer {
 				break outer
 			}
 		}
@@ -285,7 +288,7 @@ func TestInconsistentStateDetectedBuffering(t *testing.T) {
 		TabletType: tabletType,
 	}
 
-	ts := &fakeTopoServer{}
+	ts := &econtext.FakeTopoServer{}
 	// create a new fake health check. We want to check the buffering code which uses Subscribe, so we must also pass a channel
 	hc := discovery.NewFakeHealthCheck(make(chan *discovery.TabletHealth))
 	// create a new tablet gateway

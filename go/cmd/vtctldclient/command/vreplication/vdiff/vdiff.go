@@ -46,7 +46,7 @@ import (
 )
 
 var (
-	tabletTypesDefault = []topodatapb.TabletType{
+	TabletTypesDefault = []topodatapb.TabletType{
 		topodatapb.TabletType_RDONLY,
 		topodatapb.TabletType_REPLICA,
 		topodatapb.TabletType_PRIMARY,
@@ -69,6 +69,8 @@ var (
 		WaitUpdateInterval          time.Duration
 		AutoRetry                   bool
 		MaxDiffDuration             time.Duration
+		RowDiffColumnTruncateAt     int64
+		AutoStart                   bool
 	}{}
 
 	deleteOptions = struct {
@@ -76,7 +78,8 @@ var (
 	}{}
 
 	resumeOptions = struct {
-		UUID uuid.UUID
+		UUID         uuid.UUID
+		TargetShards []string
 	}{}
 
 	showOptions = struct {
@@ -85,7 +88,8 @@ var (
 	}{}
 
 	stopOptions = struct {
-		UUID uuid.UUID
+		UUID         uuid.UUID
+		TargetShards []string
 	}{}
 
 	parseAndValidateCreate = func(cmd *cobra.Command, args []string) error {
@@ -98,7 +102,7 @@ var (
 			createOptions.UUID = uuid.New()
 		}
 		if !cmd.Flags().Lookup("tablet-types").Changed {
-			createOptions.TabletTypes = tabletTypesDefault
+			createOptions.TabletTypes = TabletTypesDefault
 		}
 		if cmd.Flags().Lookup("source-cells").Changed {
 			for i, cell := range createOptions.SourceCells {
@@ -142,7 +146,7 @@ var (
 		Use:   "create",
 		Short: "Create and run a VDiff to compare the tables involved in a VReplication workflow between the source and target.",
 		Example: `vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --target-keyspace customer create
-vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --target-keyspace customer create b3f59678-5241-11ee-be56-0242ac120002`,
+vtctldclient --server :15999 vdiff --workflow c2c --target-keyspace customer create b3f59678-5241-11ee-be56-0242ac120002 --source-cells zone1 --tablet-types "rdonly,replica" --target-cells zone1 --update-table-stats --max-report-sample-rows 1000 --wait --wait-update-interval 5s --max-diff-duration 1h --row-diff-column-truncate-at 0`,
 		SilenceUsage:          true,
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"Create"},
@@ -190,7 +194,8 @@ vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --targe
 				return fmt.Errorf("invalid UUID provided: %v", err)
 			}
 			resumeOptions.UUID = uuid
-			return nil
+
+			return common.ValidateShards(resumeOptions.TargetShards)
 		},
 		RunE: commandResume,
 	}
@@ -199,8 +204,8 @@ vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --targe
 	show = &cobra.Command{
 		Use:   "show",
 		Short: "Show the status of a VDiff.",
-		Example: `vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --target-keyspace customer show last
-vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --target-keyspace customer show a037a9e2-5628-11ee-8c99-0242ac120002
+		Example: `vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --target-keyspace customer show last --verbose --format json
+vtctldclient --server :15999 vdiff --workflow commerce2customer --target-keyspace customer show a037a9e2-5628-11ee-8c99-0242ac120002
 vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --target-keyspace customer show all`,
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"Show"},
@@ -235,7 +240,8 @@ vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --targe
 				return fmt.Errorf("invalid UUID provided: %v", err)
 			}
 			stopOptions.UUID = uuid
-			return nil
+
+			return common.ValidateShards(stopOptions.TargetShards)
 		},
 		RunE: commandStop,
 	}
@@ -294,6 +300,8 @@ func commandCreate(cmd *cobra.Command, args []string) error {
 		AutoRetry:                   createOptions.AutoRetry,
 		MaxReportSampleRows:         createOptions.MaxReportSampleRows,
 		MaxDiffDuration:             protoutil.DurationToProto(createOptions.MaxDiffDuration),
+		RowDiffColumnTruncateAt:     createOptions.RowDiffColumnTruncateAt,
+		AutoStart:                   &createOptions.AutoStart,
 	})
 
 	if err != nil {
@@ -377,6 +385,7 @@ func commandResume(cmd *cobra.Command, args []string) error {
 		Workflow:       common.BaseOptions.Workflow,
 		TargetKeyspace: common.BaseOptions.TargetKeyspace,
 		Uuid:           resumeOptions.UUID.String(),
+		TargetShards:   resumeOptions.TargetShards,
 	})
 
 	if err != nil {
@@ -408,12 +417,14 @@ type summary struct {
 	RowsCompared       int64
 	HasMismatch        bool
 	Shards             string
-	StartedAt          string                                 `json:"StartedAt,omitempty"`
-	CompletedAt        string                                 `json:"CompletedAt,omitempty"`
-	TableSummaryMap    map[string]tableSummary                `json:"TableSummary,omitempty"`
-	Reports            map[string]map[string]vdiff.DiffReport `json:"Reports,omitempty"`
-	Errors             map[string]string                      `json:"Errors,omitempty"`
-	Progress           *vdiff.ProgressReport                  `json:"Progress,omitempty"`
+	StartedAt          string                  `json:"StartedAt,omitempty"`
+	CompletedAt        string                  `json:"CompletedAt,omitempty"`
+	TableSummaryMap    map[string]tableSummary `json:"TableSummary,omitempty"`
+	// This is keyed by table name and then by shard name.
+	Reports map[string]map[string]vdiff.DiffReport `json:"Reports,omitempty"`
+	// This is keyed by shard name.
+	Errors   map[string]string     `json:"Errors,omitempty"`
+	Progress *vdiff.ProgressReport `json:"Progress,omitempty"`
 }
 
 const summaryTextTemplate = `
@@ -696,6 +707,9 @@ func buildSingleSummary(keyspace, workflow, uuid string, resp *vtctldatapb.VDiff
 				// Table summary information that must be accounted for across all shards.
 				{
 					table := row.AsString("table_name", "")
+					if table == "" { // This occurs when the table diff has not started on 1 or more shards
+						continue
+					}
 					// Create the global VDiff table summary object if it doesn't exist.
 					if _, ok := tableSummaryMap[table]; !ok {
 						tableSummaryMap[table] = tableSummary{
@@ -778,7 +792,7 @@ func buildSingleSummary(keyspace, workflow, uuid string, resp *vtctldatapb.VDiff
 
 	// If the vdiff has been started then we can calculate the progress.
 	if summary.State == vdiff.StartedState {
-		buildProgressReport(summary, totalRowsToCompare)
+		summary.Progress = BuildProgressReport(summary.RowsCompared, totalRowsToCompare, summary.StartedAt)
 	}
 
 	sort.Strings(shards) // Sort for predictable output
@@ -797,17 +811,17 @@ func buildSingleSummary(keyspace, workflow, uuid string, resp *vtctldatapb.VDiff
 	return summary, nil
 }
 
-func buildProgressReport(summary *summary, rowsToCompare int64) {
+func BuildProgressReport(rowsCompared int64, rowsToCompare int64, startedAt string) *vdiff.ProgressReport {
 	report := &vdiff.ProgressReport{}
-	if summary.RowsCompared >= 1 {
+	if rowsCompared >= 1 {
 		// Round to 2 decimal points.
-		report.Percentage = math.Round(math.Min((float64(summary.RowsCompared)/float64(rowsToCompare))*100, 100.00)*100) / 100
+		report.Percentage = math.Round(math.Min((float64(rowsCompared)/float64(rowsToCompare))*100, 100.00)*100) / 100
 	}
 	if math.IsNaN(report.Percentage) {
 		report.Percentage = 0
 	}
 	pctToGo := math.Abs(report.Percentage - 100.00)
-	startTime, _ := time.Parse(vdiff.TimestampFormat, summary.StartedAt)
+	startTime, _ := time.Parse(vdiff.TimestampFormat, startedAt)
 	curTime := time.Now().UTC()
 	runTime := curTime.Unix() - startTime.Unix()
 	if report.Percentage >= 1 {
@@ -818,7 +832,7 @@ func buildProgressReport(summary *summary, rowsToCompare int64) {
 			report.ETA = eta.Format(vdiff.TimestampFormat)
 		}
 	}
-	summary.Progress = report
+	return report
 }
 
 func commandShow(cmd *cobra.Command, args []string) error {
@@ -856,6 +870,7 @@ func commandStop(cmd *cobra.Command, args []string) error {
 		Workflow:       common.BaseOptions.Workflow,
 		TargetKeyspace: common.BaseOptions.TargetKeyspace,
 		Uuid:           stopOptions.UUID.String(),
+		TargetShards:   stopOptions.TargetShards,
 	})
 
 	if err != nil {
@@ -879,23 +894,27 @@ func registerCommands(root *cobra.Command) {
 	create.Flags().Int64Var(&createOptions.Limit, "limit", math.MaxInt64, "Max rows to stop comparing after.")
 	create.Flags().BoolVar(&createOptions.DebugQuery, "debug-query", false, "Adds a mysql query to the report that can be used for further debugging.")
 	create.Flags().Int64Var(&createOptions.MaxReportSampleRows, "max-report-sample-rows", 10, "Maximum number of row differences to report (0 for all differences). NOTE: when increasing this value it is highly recommended to also specify --only-pks")
-	create.Flags().BoolVar(&createOptions.OnlyPKs, "only-pks", false, "When reporting missing rows, only show primary keys in the report.")
+	create.Flags().BoolVar(&createOptions.OnlyPKs, "only-pks", false, "When reporting row differences, only show primary keys in the report.")
 	create.Flags().StringSliceVar(&createOptions.Tables, "tables", nil, "Only run vdiff for these tables in the workflow.")
 	create.Flags().Int64Var(&createOptions.MaxExtraRowsToCompare, "max-extra-rows-to-compare", 1000, "If there are collation differences between the source and target, you can have rows that are identical but simply returned in a different order from MySQL. We will do a second pass to compare the rows for any actual differences in this case and this flag allows you to control the resources used for this operation.")
 	create.Flags().BoolVar(&createOptions.Wait, "wait", false, "When creating or resuming a vdiff, wait for it to finish before exiting.")
 	create.Flags().DurationVar(&createOptions.WaitUpdateInterval, "wait-update-interval", time.Duration(1*time.Minute), "When waiting on a vdiff to finish, check and display the current status this often.")
 	create.Flags().BoolVar(&createOptions.AutoRetry, "auto-retry", true, "Should this vdiff automatically retry and continue in case of recoverable errors.")
-	create.Flags().BoolVar(&createOptions.UpdateTableStats, "update-table-stats", false, "Update the table statistics, using ANALYZE TABLE, on each table involved in the VDiff during initialization. This will ensure that progress estimates are as accurate as possible -- but it does involve locks and can potentially impact query processing on the target keyspace.")
+	create.Flags().BoolVar(&createOptions.UpdateTableStats, "update-table-stats", false, "Update the table statistics, using ANALYZE TABLE, on each table involved in the vdiff during initialization. This will ensure that progress estimates are as accurate as possible -- but it does involve locks and can potentially impact query processing on the target keyspace.")
 	create.Flags().DurationVar(&createOptions.MaxDiffDuration, "max-diff-duration", 0, "How long should an individual table diff run before being stopped and restarted in order to lessen the impact on tablets due to holding open database snapshots for long periods of time (0 is the default and means no time limit).")
+	create.Flags().Int64Var(&createOptions.RowDiffColumnTruncateAt, "row-diff-column-truncate-at", 128, "When showing row differences, truncate the non Primary Key column values to this length. A value less than 1 means do not truncate.")
+	create.Flags().BoolVar(&createOptions.AutoStart, "auto-start", true, "Start the vdiff upon creation. When false, the vdiff will be created but will not run until resumed.")
 	base.AddCommand(create)
 
 	base.AddCommand(delete)
 
+	resume.Flags().StringSliceVar(&resumeOptions.TargetShards, "target-shards", nil, "The target shards to resume the vdiff on; default is all shards.")
 	base.AddCommand(resume)
 
 	show.Flags().BoolVar(&showOptions.Verbose, "verbose", false, "Show verbose output in summaries")
 	base.AddCommand(show)
 
+	stop.Flags().StringSliceVar(&stopOptions.TargetShards, "target-shards", nil, "The target shards to stop the vdiff on; default is all shards.")
 	base.AddCommand(stop)
 }
 

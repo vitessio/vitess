@@ -22,12 +22,9 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv/tabletenvtest"
-
-	"google.golang.org/protobuf/proto"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/utils"
@@ -35,7 +32,6 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
 func TestCommit(t *testing.T) {
@@ -202,30 +198,6 @@ func TestAutoCommit(t *testing.T) {
 	}
 }
 
-func TestTxPoolSize(t *testing.T) {
-	tabletenvtest.LoadTabletEnvFlags()
-
-	vstart := framework.DebugVars()
-
-	client1 := framework.NewClient()
-	err := client1.Begin(false)
-	require.NoError(t, err)
-	defer client1.Rollback()
-	verifyIntValue(t, framework.DebugVars(), "TransactionPoolAvailable", tabletenv.NewCurrentConfig().TxPool.Size-1)
-
-	revert := changeVar(t, "TxPoolSize", "1")
-	defer revert()
-	vend := framework.DebugVars()
-	verifyIntValue(t, vend, "TransactionPoolAvailable", 0)
-	verifyIntValue(t, vend, "TransactionPoolCapacity", 1)
-
-	client2 := framework.NewClient()
-	err = client2.Begin(false)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "connection limit exceeded")
-	compareIntDiff(t, framework.DebugVars(), "Errors/RESOURCE_EXHAUSTED", vstart, 1)
-}
-
 func TestForUpdate(t *testing.T) {
 	for _, mode := range []string{"for update", "lock in share mode"} {
 		client := framework.NewClient()
@@ -256,7 +228,7 @@ func TestPrepareRollback(t *testing.T) {
 	err = client.Prepare("aa")
 	if err != nil {
 		client.RollbackPrepared("aa", 0)
-		t.Fatalf(err.Error())
+		t.Fatal(err.Error())
 	}
 	err = client.RollbackPrepared("aa", 0)
 	require.NoError(t, err)
@@ -529,8 +501,9 @@ func TestMMCommitFlow(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Duplicate entry")
 
-	err = client.StartCommit("aa")
+	state, err := client.StartCommit("aa")
 	require.NoError(t, err)
+	assert.Equal(t, querypb.StartCommitState_Success, state)
 
 	err = client.SetRollback("aa", 0)
 	require.EqualError(t, err, "could not transition to ROLLBACK: aa (CallerID: dev)")
@@ -794,7 +767,14 @@ func TestUnresolvedTransactions(t *testing.T) {
 		State:        querypb.TransactionState_PREPARE,
 		Participants: participants,
 	}}
-	utils.MustMatch(t, want, transactions)
+
+	require.Len(t, want, len(transactions))
+	for i, transaction := range transactions {
+		// Skipping check for TimeCreated
+		assert.Equal(t, want[i].Dtid, transaction.Dtid)
+		assert.Equal(t, want[i].State, transaction.State)
+		assert.Equal(t, want[i].Participants, transaction.Participants)
+	}
 }
 
 // TestUnresolvedTransactions tests the UnresolvedTransactions API.
@@ -857,5 +837,12 @@ func TestUnresolvedTransactionsOrdering(t *testing.T) {
 		State:        querypb.TransactionState_PREPARE,
 		Participants: participants1,
 	}}
-	utils.MustMatch(t, want, transactions)
+
+	require.Len(t, want, len(transactions))
+	for i, transaction := range transactions {
+		// Skipping check for TimeCreated
+		assert.Equal(t, want[i].Dtid, transaction.Dtid)
+		assert.Equal(t, want[i].State, transaction.State)
+		assert.Equal(t, want[i].Participants, transaction.Participants)
+	}
 }

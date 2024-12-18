@@ -45,14 +45,14 @@ const (
 
 func buildShowPlan(sql string, stmt *sqlparser.Show, _ *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
 	if vschema.Destination() != nil {
-		return buildByPassPlan(sql, vschema)
+		return buildByPassPlan(sql, vschema, false)
 	}
 
 	var prim engine.Primitive
 	var err error
 	switch show := stmt.Internal.(type) {
 	case *sqlparser.ShowTransactionStatus:
-		prim, err = buildShowTransactionStatusPlan(show, vschema)
+		prim, err = buildShowTransactionStatusPlan(show)
 	case *sqlparser.ShowBasic:
 		prim, err = buildShowBasicPlan(show, vschema)
 	case *sqlparser.ShowCreate:
@@ -70,8 +70,9 @@ func buildShowPlan(sql string, stmt *sqlparser.Show, _ *sqlparser.ReservedVars, 
 }
 
 // buildShowTransactionStatusPlan builds the transaction status plan
-func buildShowTransactionStatusPlan(show *sqlparser.ShowTransactionStatus, vschema plancontext.VSchema) (engine.Primitive, error) {
+func buildShowTransactionStatusPlan(show *sqlparser.ShowTransactionStatus) (engine.Primitive, error) {
 	return &engine.TransactionStatus{
+		Keyspace:      show.Keyspace,
 		TransactionID: show.TransactionID,
 	}, nil
 }
@@ -675,7 +676,7 @@ func buildVschemaKeyspacesPlan(vschema plancontext.VSchema) (engine.Primitive, e
 
 func buildVschemaTablesPlan(vschema plancontext.VSchema) (engine.Primitive, error) {
 	vs := vschema.GetVSchema()
-	ks, err := vschema.DefaultKeyspace()
+	ks, err := vschema.SelectedKeyspace()
 	if err != nil {
 		return nil, err
 	}

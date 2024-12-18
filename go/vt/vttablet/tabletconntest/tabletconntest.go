@@ -294,26 +294,31 @@ func testStartCommit(t *testing.T, conn queryservice.QueryService, f *FakeQueryS
 	t.Log("testStartCommit")
 	ctx := context.Background()
 	ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-	err := conn.StartCommit(ctx, TestTarget, commitTransactionID, Dtid)
-	if err != nil {
-		t.Fatalf("StartCommit failed: %v", err)
-	}
+	state, err := conn.StartCommit(ctx, TestTarget, commitTransactionID, Dtid)
+	assert.Equal(t, querypb.StartCommitState_Success, state, "Unexpected state from StartCommit")
+	assert.NoError(t, err, "StartCommit failed")
 }
 
 func testStartCommitError(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
 	t.Log("testStartCommitError")
 	f.HasError = true
-	testErrorHelper(t, f, "StartCommit", func(ctx context.Context) error {
-		return conn.StartCommit(ctx, TestTarget, commitTransactionID, Dtid)
+	var state querypb.StartCommitState
+	testErrorHelper(t, f, "StartCommit", func(ctx context.Context) (err error) {
+		state, err = conn.StartCommit(ctx, TestTarget, commitTransactionID, Dtid)
+		return err
 	})
 	f.HasError = false
+	assert.Equal(t, querypb.StartCommitState_Unknown, state, "Unexpected state from StartCommit")
 }
 
 func testStartCommitPanics(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
 	t.Log("testStartCommitPanics")
-	testPanicHelper(t, f, "StartCommit", func(ctx context.Context) error {
-		return conn.StartCommit(ctx, TestTarget, commitTransactionID, Dtid)
+	var state querypb.StartCommitState
+	testPanicHelper(t, f, "StartCommit", func(ctx context.Context) (err error) {
+		state, err = conn.StartCommit(ctx, TestTarget, commitTransactionID, Dtid)
+		return err
 	})
+	assert.Equal(t, querypb.StartCommitState_Unknown, state, "Unexpected state from StartCommit")
 }
 
 func testSetRollback(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
@@ -403,7 +408,7 @@ func testUnresolvedTransactions(t *testing.T, conn queryservice.QueryService, f 
 	t.Log("testUnresolvedTransactions")
 	ctx := context.Background()
 	ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-	transactions, err := conn.UnresolvedTransactions(ctx, TestTarget)
+	transactions, err := conn.UnresolvedTransactions(ctx, TestTarget, 0 /* abandonAgeSeconds */)
 	require.NoError(t, err)
 	require.True(t, proto.Equal(transactions[0], Metadata))
 }
@@ -412,7 +417,7 @@ func testUnresolvedTransactionsError(t *testing.T, conn queryservice.QueryServic
 	t.Log("testUnresolvedTransactionsError")
 	f.HasError = true
 	testErrorHelper(t, f, "UnresolvedTransactions", func(ctx context.Context) error {
-		_, err := conn.UnresolvedTransactions(ctx, TestTarget)
+		_, err := conn.UnresolvedTransactions(ctx, TestTarget, 0 /* abandonAgeSeconds */)
 		return err
 	})
 	f.HasError = false
@@ -421,7 +426,7 @@ func testUnresolvedTransactionsError(t *testing.T, conn queryservice.QueryServic
 func testUnresolvedTransactionsPanics(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
 	t.Log("testUnresolvedTransactionsPanics")
 	testPanicHelper(t, f, "UnresolvedTransactions", func(ctx context.Context) error {
-		_, err := conn.UnresolvedTransactions(ctx, TestTarget)
+		_, err := conn.UnresolvedTransactions(ctx, TestTarget, 0 /* abandonAgeSeconds */)
 		return err
 	})
 }

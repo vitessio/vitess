@@ -18,5 +18,6 @@ CREATE TABLE IF NOT EXISTS redo_state(
   dtid varbinary(512) NOT NULL,
   state bigint NOT NULL,
   time_created bigint NOT NULL,
+  message text,
   primary key(dtid)
-) ENGINE = InnoDB
+) ENGINE = InnoDB CHARSET = utf8mb4

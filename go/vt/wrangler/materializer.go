@@ -18,6 +18,7 @@ package wrangler
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"hash/fnv"
 	"math"
@@ -355,7 +356,7 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 				migrationID, strings.Join(tablets, ","))
 			msg += fmt.Sprintf("please review and delete it before proceeding and restart the workflow using the Workflow %s.%s start",
 				workflow, targetKeyspace)
-			return fmt.Errorf(msg)
+			return errors.New(msg)
 		}
 	}
 	if autoStart {
@@ -550,11 +551,8 @@ func (wr *Wrangler) prepareCreateLookup(ctx context.Context, keyspace string, sp
 		if len(vindexFromCols) != 1 {
 			return nil, nil, nil, fmt.Errorf("unique vindex 'from' should have only one column: %v", vindex)
 		}
-	} else {
-		if len(vindexFromCols) < 2 {
-			return nil, nil, nil, fmt.Errorf("non-unique vindex 'from' should have more than one column: %v", vindex)
-		}
 	}
+
 	vindexToCol = vindex.Params["to"]
 	// Make the vindex write_only. If one exists already in the vschema,
 	// it will need to match this vindex exactly, including the write_only setting.
@@ -1397,7 +1395,19 @@ func (mz *materializer) generateInserts(ctx context.Context, sourceShards []*top
 				for _, mappedCol := range mappedCols {
 					subExprs = append(subExprs, mappedCol)
 				}
-				vindexName := fmt.Sprintf("%s.%s", mz.ms.TargetKeyspace, cv.Name)
+				var vindexName string
+				if mz.getWorkflowType() == binlogdatapb.VReplicationWorkflowType_Migrate {
+					// For a Migrate, if the TargetKeyspace name is different from the SourceKeyspace name, we need to use the
+					// SourceKeyspace name to determine the vindex since the TargetKeyspace name is not known to the source.
+					// Note: it is expected that the source and target keyspaces have the same vindex name and data type.
+					keyspace := mz.ms.TargetKeyspace
+					if mz.ms.ExternalCluster != "" {
+						keyspace = mz.ms.SourceKeyspace
+					}
+					vindexName = fmt.Sprintf("%s.%s", keyspace, cv.Name)
+				} else {
+					vindexName = fmt.Sprintf("%s.%s", mz.ms.TargetKeyspace, cv.Name)
+				}
 				subExprs = append(subExprs, sqlparser.NewStrLiteral(vindexName))
 				subExprs = append(subExprs, sqlparser.NewStrLiteral("{{.keyrange}}"))
 				inKeyRange := &sqlparser.FuncExpr{
@@ -1442,7 +1452,7 @@ func (mz *materializer) generateInserts(ctx context.Context, sourceShards []*top
 		ig.AddRow(mz.ms.Workflow, bls, "", mz.ms.Cell, tabletTypeStr,
 			workflowType,
 			workflowSubType,
-			mz.ms.DeferSecondaryKeys,
+			mz.ms.DeferSecondaryKeys, "",
 		)
 	}
 	return ig.String(), nil

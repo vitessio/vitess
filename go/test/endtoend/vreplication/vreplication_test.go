@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"runtime"
 	"strconv"
@@ -58,7 +59,7 @@ var (
 	targetKsOpts           = make(map[string]string)
 	httpClient             = throttlebase.SetupHTTPClient(time.Second)
 	sourceThrottlerAppName = throttlerapp.VStreamerName
-	targetThrottlerAppName = throttlerapp.VReplicationName
+	targetThrottlerAppName = throttlerapp.VPlayerName
 )
 
 const (
@@ -292,7 +293,6 @@ func TestVreplicationCopyThrottling(t *testing.T) {
 }
 
 func TestBasicVreplicationWorkflow(t *testing.T) {
-	defer setAllVTTabletExperimentalFlags()
 	sourceKsOpts["DBTypeVersion"] = "mysql-8.0"
 	targetKsOpts["DBTypeVersion"] = "mysql-8.0"
 	testBasicVreplicationWorkflow(t, "noblob")
@@ -586,12 +586,14 @@ func testVStreamCellFlag(t *testing.T) {
 	}
 }
 
-// TestCellAliasVreplicationWorkflow tests replication from a cell with an alias to test the tablet picker's alias functionality
-// We also reuse the setup of this test to validate that the "vstream * from" vtgate query functionality is functional
+// TestCellAliasVreplicationWorkflow tests replication from a cell with an alias to test
+// the tablet picker's alias functionality.
+// We also reuse the setup of this test to validate that the "vstream * from" vtgate
+// query functionality is functional.
 func TestCellAliasVreplicationWorkflow(t *testing.T) {
 	cells := []string{"zone1", "zone2"}
-	defer mainClusterConfig.enableGTIDCompression()
-	defer setAllVTTabletExperimentalFlags()
+	resetCompression := mainClusterConfig.enableGTIDCompression()
+	defer resetCompression()
 	vc = NewVitessCluster(t, &clusterOptions{cells: cells})
 	defer vc.TearDown()
 
@@ -717,12 +719,12 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 		defer vtgateConn.Close()
 		// Confirm that the 0 scale decimal field, dec80, is replicated correctly
-		dec80Replicated := false
 		execVtgateQuery(t, vtgateConn, sourceKs, "update customer set dec80 = 0")
 		execVtgateQuery(t, vtgateConn, sourceKs, "update customer set blb = \"new blob data\" where cid=3")
 		execVtgateQuery(t, vtgateConn, sourceKs, "update json_tbl set j1 = null, j2 = 'null', j3 = '\"null\"'")
 		execVtgateQuery(t, vtgateConn, sourceKs, "insert into json_tbl(id, j1, j2, j3) values (7, null, 'null', '\"null\"')")
 		waitForNoWorkflowLag(t, vc, targetKs, workflow)
+		dec80Replicated := false
 		for _, tablet := range []*cluster.VttabletProcess{customerTab1, customerTab2} {
 			// Query the tablet's mysqld directly as the targets will have denied table entries.
 			dbc, err := tablet.TabletConn(targetKs, true)
@@ -797,6 +799,11 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			commit, _ = vc.startQuery(t, openTxQuery)
 		}
 		switchWritesDryRun(t, workflowType, ksWorkflow, dryRunResultsSwitchWritesCustomerShard)
+		shardNames := make([]string, 0, len(vc.Cells[defaultCell.Name].Keyspaces[sourceKs].Shards))
+		for shardName := range maps.Keys(vc.Cells[defaultCell.Name].Keyspaces[sourceKs].Shards) {
+			shardNames = append(shardNames, shardName)
+		}
+		testSwitchTrafficPermissionChecks(t, workflowType, sourceKs, shardNames, targetKs, workflow)
 		switchWrites(t, workflowType, ksWorkflow, false)
 
 		checkThatVDiffFails(t, targetKs, workflow)
@@ -1228,18 +1235,7 @@ func materializeProduct(t *testing.T, useVtctldClient bool) {
 			for _, tab := range customerTablets {
 				waitForRowCountInTablet(t, tab, keyspace, workflow, 5)
 				// Confirm that we updated the stats on the target tablets as expected.
-				jsVal, err := getDebugVar(t, tab.Port, []string{"VReplicationThrottledCounts"})
-				require.NoError(t, err)
-				require.NotEqual(t, "{}", jsVal)
-				// The JSON value looks like this: {"cproduct.4.tablet.vstreamer": 2}
-				vstreamerThrottledCount := gjson.Get(jsVal, fmt.Sprintf(`%s\.*\.tablet\.vstreamer`, workflow)).Int()
-				require.Greater(t, vstreamerThrottledCount, int64(0))
-				// We only need to do this stat check once.
-				val, err := getDebugVar(t, tab.Port, []string{"VReplicationThrottledCountTotal"})
-				require.NoError(t, err)
-				throttledCount, err := strconv.ParseInt(val, 10, 64)
-				require.NoError(t, err)
-				require.GreaterOrEqual(t, throttledCount, vstreamerThrottledCount)
+				confirmVReplicationThrottling(t, tab, sourceKs, workflow, sourceThrottlerAppName)
 			}
 		})
 		t.Run("unthrottle-app-product", func(t *testing.T) {
@@ -1274,12 +1270,7 @@ func materializeProduct(t *testing.T, useVtctldClient bool) {
 			for _, tab := range customerTablets {
 				waitForRowCountInTablet(t, tab, keyspace, workflow, 8)
 				// Confirm that we updated the stats on the target tablets as expected.
-				jsVal, err := getDebugVar(t, tab.Port, []string{"VReplicationThrottledCounts"})
-				require.NoError(t, err)
-				require.NotEqual(t, "{}", jsVal)
-				// The JSON value now looks like this: {"cproduct.4.tablet.vstreamer": 2, "cproduct.4.tablet.vplayer": 4}
-				vplayerThrottledCount := gjson.Get(jsVal, fmt.Sprintf(`%s\.*\.tablet\.vplayer`, workflow)).Int()
-				require.Greater(t, vplayerThrottledCount, int64(0))
+				confirmVReplicationThrottling(t, tab, sourceKs, workflow, targetThrottlerAppName)
 			}
 		})
 		t.Run("unthrottle-app-customer", func(t *testing.T) {
@@ -1605,6 +1596,60 @@ func switchWritesDryRun(t *testing.T, workflowType, ksWorkflow string, dryRunRes
 	validateDryRunResults(t, output, dryRunResults)
 }
 
+// testSwitchTrafficPermissionsChecks confirms that for the SwitchTraffic command, the
+// necessary permissions are checked properly on the source keyspace's primary tablets.
+// This ensures that we can create and manage the reverse vreplication workflow.
+func testSwitchTrafficPermissionChecks(t *testing.T, workflowType, sourceKeyspace string, sourceShards []string, targetKeyspace, workflow string) {
+	applyPrivileges := func(query string) {
+		for _, shard := range sourceShards {
+			primary := vc.getPrimaryTablet(t, sourceKeyspace, shard)
+			_, err := primary.QueryTablet(query, primary.Keyspace, false)
+			require.NoError(t, err)
+		}
+	}
+	runDryRunCmd := func(expectErr bool) {
+		_, err := vc.VtctldClient.ExecuteCommandWithOutput(workflowType, "--workflow", workflow, "--target-keyspace", targetKeyspace,
+			"SwitchTraffic", "--tablet-types=primary", "--dry-run")
+		require.True(t, ((err != nil) == expectErr), "expected error: %t, got: %v", expectErr, err)
+	}
+
+	defer func() {
+		// Put the default global privs back in place.
+		applyPrivileges("grant select,insert,update,delete on *.* to vt_filtered@localhost")
+	}()
+
+	t.Run("test switch traffic permission checks", func(t *testing.T) {
+		t.Run("test without global privileges", func(t *testing.T) {
+			applyPrivileges("revoke select,insert,update,delete on *.* from vt_filtered@localhost")
+			runDryRunCmd(true)
+		})
+
+		t.Run("test with db level privileges", func(t *testing.T) {
+			applyPrivileges(fmt.Sprintf("grant select,insert,update,delete on %s.* to vt_filtered@localhost",
+				sidecarDBIdentifier))
+			runDryRunCmd(false)
+		})
+
+		t.Run("test without global or db level privileges", func(t *testing.T) {
+			applyPrivileges(fmt.Sprintf("revoke select,insert,update,delete on %s.* from vt_filtered@localhost",
+				sidecarDBIdentifier))
+			runDryRunCmd(true)
+		})
+
+		t.Run("test with table level privileges", func(t *testing.T) {
+			applyPrivileges(fmt.Sprintf("grant select,insert,update,delete on %s.vreplication to vt_filtered@localhost",
+				sidecarDBIdentifier))
+			runDryRunCmd(false)
+		})
+
+		t.Run("test without global, db, or table level privileges", func(t *testing.T) {
+			applyPrivileges(fmt.Sprintf("revoke select,insert,update,delete on %s.vreplication from vt_filtered@localhost",
+				sidecarDBIdentifier))
+			runDryRunCmd(true)
+		})
+	})
+}
+
 // restartWorkflow confirms that a workflow can be successfully
 // stopped and started.
 func restartWorkflow(t *testing.T, ksWorkflow string) {
@@ -1708,4 +1753,53 @@ func waitForInnoDBHistoryLength(t *testing.T, tablet *cluster.VttabletProcess, e
 
 func releaseInnoDBRowHistory(t *testing.T, dbConn *mysql.Conn) {
 	execQuery(t, dbConn, "rollback")
+}
+
+// confirmVReplicationThrottling confirms that the throttling related metrics reflect that
+// the workflow is being throttled as expected, via the expected app name, and that this
+// is impacting the lag as expected.
+// The tablet passed should be a target tablet for the given workflow while the keyspace
+// name provided should be the source keyspace as the target tablet stats note the stream's
+// source keyspace and shard.
+func confirmVReplicationThrottling(t *testing.T, tab *cluster.VttabletProcess, keyspace, workflow string, appname throttlerapp.Name) {
+	const (
+		sleepTime = 5 * time.Second
+		zv        = int64(0)
+	)
+	time.Sleep(sleepTime) // To be sure that we accrue some lag
+
+	jsVal, err := getDebugVar(t, tab.Port, []string{"VReplicationThrottledCounts"})
+	require.NoError(t, err)
+	require.NotEqual(t, "{}", jsVal)
+	// The JSON value looks like this: {"cproduct.4.tablet.vstreamer": 2, "cproduct.4.tablet.vplayer": 4}
+	throttledCount := gjson.Get(jsVal, fmt.Sprintf(`%s\.*\.tablet\.%s`, workflow, appname)).Int()
+	require.Greater(t, throttledCount, zv, "JSON value: %s", jsVal)
+
+	val, err := getDebugVar(t, tab.Port, []string{"VReplicationThrottledCountTotal"})
+	require.NoError(t, err)
+	require.NotEqual(t, "", val)
+	throttledCountTotal, err := strconv.ParseInt(val, 10, 64)
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, throttledCountTotal, throttledCount, "Value: %s", val)
+
+	// We do not calculate replication lag for the vcopier as it's not replicating
+	// events.
+	if appname != throttlerapp.VCopierName {
+		jsVal, err = getDebugVar(t, tab.Port, []string{"VReplicationLagSeconds"})
+		require.NoError(t, err)
+		require.NotEqual(t, "{}", jsVal)
+		// The JSON value looks like this: {"product.0.cproduct.4": 6}
+		vreplLagSeconds := gjson.Get(jsVal, fmt.Sprintf(`%s\.*\.%s\.*`, keyspace, workflow)).Int()
+		require.NoError(t, err)
+		// Take off 1 second to deal with timing issues in the test.
+		minLagSecs := int64(int64(sleepTime.Seconds()) - 1)
+		require.GreaterOrEqual(t, vreplLagSeconds, minLagSecs, "JSON value: %s", jsVal)
+
+		val, err = getDebugVar(t, tab.Port, []string{"VReplicationLagSecondsMax"})
+		require.NoError(t, err)
+		require.NotEqual(t, "", val)
+		vreplLagSecondsMax, err := strconv.ParseInt(val, 10, 64)
+		require.NoError(t, err)
+		require.GreaterOrEqual(t, vreplLagSecondsMax, vreplLagSeconds, "Value: %s", val)
+	}
 }

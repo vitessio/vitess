@@ -24,12 +24,11 @@ import (
 	"os"
 	"testing"
 
-	"vitess.io/vitess/go/test/endtoend/utils"
-
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/utils"
 )
 
 var (
@@ -47,7 +46,6 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	exitcode, err := func() (int, error) {
@@ -58,7 +56,6 @@ func TestMain(m *testing.M) {
 		clusterInstance.VtgateGrpcPort = clusterInstance.GetAndReservePort()
 		// Set extra tablet args for twopc
 		clusterInstance.VtTabletExtraArgs = []string{
-			"--twopc_enable",
 			"--twopc_abandon_age", "3600",
 		}
 
@@ -69,9 +66,10 @@ func TestMain(m *testing.M) {
 
 		// Start keyspace
 		keyspace := &cluster.Keyspace{
-			Name:      keyspaceName,
-			SchemaSQL: SchemaSQL,
-			VSchema:   VSchema,
+			Name:             keyspaceName,
+			SchemaSQL:        SchemaSQL,
+			VSchema:          VSchema,
+			DurabilityPolicy: "semi_sync",
 		}
 		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, false); err != nil {
 			return 1, err
@@ -95,7 +93,6 @@ func TestMain(m *testing.M) {
 
 // TestTransactionModes tests transactions using twopc mode
 func TestTransactionModes(t *testing.T) {
-	defer cluster.PanicHandler(t)
 
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
@@ -141,7 +138,6 @@ func TestTransactionModes(t *testing.T) {
 
 // TestTransactionIsolation tests transaction isolation level.
 func TestTransactionIsolation(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 
 	conn, err := mysql.Connect(ctx, &vtParams)
@@ -248,6 +244,5 @@ func start(t *testing.T) func() {
 
 	return func() {
 		deleteAll()
-		cluster.PanicHandler(t)
 	}
 }

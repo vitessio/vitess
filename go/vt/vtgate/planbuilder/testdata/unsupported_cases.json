@@ -330,11 +330,6 @@
     "plan": "VT12001: unsupported: do not support CTE that use the CTE alias inside the CTE query"
   },
   {
-    "comment": "Recursive WITH",
-    "query": "WITH RECURSIVE cte (n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM cte WHERE n < 5) SELECT * FROM cte",
-    "plan": "VT12001: unsupported: recursive common table expression"
-  },
-  {
     "comment": "Alias cannot clash with base tables",
     "query": "WITH user AS (SELECT col FROM user) SELECT * FROM user",
     "plan": "VT12001: unsupported: do not support CTE that use the CTE alias inside the CTE query"

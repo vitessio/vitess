@@ -1,5 +1,10 @@
 # This file is auto-included when MySQL 5.7 is detected.
 
+# all db instances should skip starting replication threads - that way we can do any
+# additional configuration (like enabling semi-sync) before we connect to
+# the source.
+skip_slave_start
+
 # MySQL 5.7 does not enable the binary log by default, and 
 # info repositories default to file
 

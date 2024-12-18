@@ -26,6 +26,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
+
 	"vitess.io/vitess/go/mysql/collations"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -99,7 +101,7 @@ func TestLegacyExecuteFailOnAutocommit(t *testing.T) {
 		},
 		Autocommit: false,
 	}
-	_, errs := sc.ExecuteMultiShard(ctx, nil, rss, queries, NewSafeSession(session), true /*autocommit*/, false)
+	_, errs := sc.ExecuteMultiShard(ctx, nil, rss, queries, econtext.NewSafeSession(session), true /*autocommit*/, false, nullResultsObserver{})
 	err := vterrors.Aggregate(errs)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "in autocommit mode, transactionID should be zero but was: 123")
@@ -123,7 +125,7 @@ func TestScatterConnExecuteMulti(t *testing.T) {
 			}
 		}
 
-		qr, errs := sc.ExecuteMultiShard(ctx, nil, rss, queries, NewSafeSession(nil), false /*autocommit*/, false)
+		qr, errs := sc.ExecuteMultiShard(ctx, nil, rss, queries, econtext.NewSafeSession(nil), false /*autocommit*/, false, nullResultsObserver{})
 		return qr, vterrors.Aggregate(errs)
 	})
 }
@@ -138,12 +140,12 @@ func TestScatterConnStreamExecuteMulti(t *testing.T) {
 		bvs := make([]map[string]*querypb.BindVariable, len(rss))
 		qr := new(sqltypes.Result)
 		var mu sync.Mutex
-		errors := sc.StreamExecuteMulti(ctx, nil, "query", rss, bvs, NewSafeSession(&vtgatepb.Session{InTransaction: true}), true /* autocommit */, func(r *sqltypes.Result) error {
+		errors := sc.StreamExecuteMulti(ctx, nil, "query", rss, bvs, econtext.NewSafeSession(&vtgatepb.Session{InTransaction: true}), true /* autocommit */, func(r *sqltypes.Result) error {
 			mu.Lock()
 			defer mu.Unlock()
 			qr.AppendResult(r)
 			return nil
-		})
+		}, nullResultsObserver{})
 		return qr, vterrors.Aggregate(errors)
 	})
 }
@@ -280,7 +282,7 @@ func TestMaxMemoryRows(t *testing.T) {
 		[]key.Destination{key.DestinationShard("0"), key.DestinationShard("1")})
 	require.NoError(t, err)
 
-	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
+	session := econtext.NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	queries := []*querypb.BoundQuery{{
 		Sql:           "query1",
 		BindVariables: map[string]*querypb.BindVariable{},
@@ -310,7 +312,7 @@ func TestMaxMemoryRows(t *testing.T) {
 		sbc0.SetResults([]*sqltypes.Result{tworows, tworows})
 		sbc1.SetResults([]*sqltypes.Result{tworows, tworows})
 
-		_, errs := sc.ExecuteMultiShard(ctx, nil, rss, queries, session, false, test.ignoreMaxMemoryRows)
+		_, errs := sc.ExecuteMultiShard(ctx, nil, rss, queries, session, false, test.ignoreMaxMemoryRows, nullResultsObserver{})
 		if test.ignoreMaxMemoryRows {
 			require.NoError(t, err)
 		} else {
@@ -328,7 +330,7 @@ func TestLegaceHealthCheckFailsOnReservedConnections(t *testing.T) {
 
 	res := srvtopo.NewResolver(newSandboxForCells(ctx, []string{"aa"}), sc.gateway, "aa")
 
-	session := NewSafeSession(&vtgatepb.Session{InTransaction: false, InReservedConn: true})
+	session := econtext.NewSafeSession(&vtgatepb.Session{InTransaction: false, InReservedConn: true})
 	destinations := []key.Destination{key.DestinationShard("0")}
 	rss, _, err := res.ResolveDestinations(ctx, keyspace, topodatapb.TabletType_REPLICA, nil, destinations)
 	require.NoError(t, err)
@@ -342,16 +344,16 @@ func TestLegaceHealthCheckFailsOnReservedConnections(t *testing.T) {
 		})
 	}
 
-	_, errs := sc.ExecuteMultiShard(ctx, nil, rss, queries, session, false, false)
+	_, errs := sc.ExecuteMultiShard(ctx, nil, rss, queries, session, false, false, nullResultsObserver{})
 	require.Error(t, vterrors.Aggregate(errs))
 }
 
-func executeOnShards(t *testing.T, ctx context.Context, res *srvtopo.Resolver, keyspace string, sc *ScatterConn, session *SafeSession, destinations []key.Destination) {
+func executeOnShards(t *testing.T, ctx context.Context, res *srvtopo.Resolver, keyspace string, sc *ScatterConn, session *econtext.SafeSession, destinations []key.Destination) {
 	t.Helper()
 	require.Empty(t, executeOnShardsReturnsErr(t, ctx, res, keyspace, sc, session, destinations))
 }
 
-func executeOnShardsReturnsErr(t *testing.T, ctx context.Context, res *srvtopo.Resolver, keyspace string, sc *ScatterConn, session *SafeSession, destinations []key.Destination) error {
+func executeOnShardsReturnsErr(t *testing.T, ctx context.Context, res *srvtopo.Resolver, keyspace string, sc *ScatterConn, session *econtext.SafeSession, destinations []key.Destination) error {
 	t.Helper()
 	rss, _, err := res.ResolveDestinations(ctx, keyspace, topodatapb.TabletType_REPLICA, nil, destinations)
 	require.NoError(t, err)
@@ -365,8 +367,19 @@ func executeOnShardsReturnsErr(t *testing.T, ctx context.Context, res *srvtopo.R
 		})
 	}
 
-	_, errs := sc.ExecuteMultiShard(ctx, nil, rss, queries, session, false, false)
+	_, errs := sc.ExecuteMultiShard(ctx, nil, rss, queries, session, false, false, nullResultsObserver{})
 	return vterrors.Aggregate(errs)
+}
+
+type recordingResultsObserver struct {
+	mu       sync.Mutex
+	recorded []*sqltypes.Result
+}
+
+func (o *recordingResultsObserver) Observe(result *sqltypes.Result) {
+	mu.Lock()
+	o.recorded = append(o.recorded, result)
+	mu.Unlock()
 }
 
 func TestMultiExecs(t *testing.T) {
@@ -409,9 +422,17 @@ func TestMultiExecs(t *testing.T) {
 			},
 		},
 	}
+	results := []*sqltypes.Result{
+		{Info: "r0"},
+		{Info: "r1"},
+	}
+	sbc0.SetResults(results[0:1])
+	sbc1.SetResults(results[1:2])
 
-	session := NewSafeSession(&vtgatepb.Session{})
-	_, err := sc.ExecuteMultiShard(ctx, nil, rss, queries, session, false, false)
+	observer := recordingResultsObserver{}
+
+	session := econtext.NewSafeSession(&vtgatepb.Session{})
+	_, err := sc.ExecuteMultiShard(ctx, nil, rss, queries, session, false, false, &observer)
 	require.NoError(t, vterrors.Aggregate(err))
 	if len(sbc0.Queries) == 0 || len(sbc1.Queries) == 0 {
 		t.Fatalf("didn't get expected query")
@@ -428,8 +449,12 @@ func TestMultiExecs(t *testing.T) {
 	if !reflect.DeepEqual(sbc1.Queries[0].BindVariables, wantVars1) {
 		t.Errorf("got %+v, want %+v", sbc0.Queries[0].BindVariables, wantVars1)
 	}
+	assert.ElementsMatch(t, results, observer.recorded)
+
 	sbc0.Queries = nil
 	sbc1.Queries = nil
+	sbc0.SetResults(results[0:1])
+	sbc1.SetResults(results[1:2])
 
 	rss = []*srvtopo.ResolvedShard{
 		{
@@ -455,15 +480,18 @@ func TestMultiExecs(t *testing.T) {
 			"bv1": sqltypes.Int64BindVariable(1),
 		},
 	}
+
+	observer = recordingResultsObserver{}
 	_ = sc.StreamExecuteMulti(ctx, nil, "query", rss, bvs, session, false /* autocommit */, func(*sqltypes.Result) error {
 		return nil
-	})
+	}, &observer)
 	if !reflect.DeepEqual(sbc0.Queries[0].BindVariables, wantVars0) {
 		t.Errorf("got %+v, want %+v", sbc0.Queries[0].BindVariables, wantVars0)
 	}
 	if !reflect.DeepEqual(sbc1.Queries[0].BindVariables, wantVars1) {
 		t.Errorf("got %+v, want %+v", sbc0.Queries[0].BindVariables, wantVars1)
 	}
+	assert.ElementsMatch(t, results, observer.recorded)
 }
 
 func TestScatterConnSingleDB(t *testing.T) {
@@ -485,29 +513,29 @@ func TestScatterConnSingleDB(t *testing.T) {
 	want := "multi-db transaction attempted"
 
 	// TransactionMode_SINGLE in session
-	session := NewSafeSession(&vtgatepb.Session{InTransaction: true, TransactionMode: vtgatepb.TransactionMode_SINGLE})
+	session := econtext.NewSafeSession(&vtgatepb.Session{InTransaction: true, TransactionMode: vtgatepb.TransactionMode_SINGLE})
 	queries := []*querypb.BoundQuery{{Sql: "query1"}}
-	_, errors := sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false)
+	_, errors := sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false, nullResultsObserver{})
 	require.Empty(t, errors)
-	_, errors = sc.ExecuteMultiShard(ctx, nil, rss1, queries, session, false, false)
+	_, errors = sc.ExecuteMultiShard(ctx, nil, rss1, queries, session, false, false, nullResultsObserver{})
 	require.Error(t, errors[0])
 	assert.Contains(t, errors[0].Error(), want)
 
 	// TransactionMode_SINGLE in txconn
 	sc.txConn.mode = vtgatepb.TransactionMode_SINGLE
-	session = NewSafeSession(&vtgatepb.Session{InTransaction: true})
-	_, errors = sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false)
+	session = econtext.NewSafeSession(&vtgatepb.Session{InTransaction: true})
+	_, errors = sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false, nullResultsObserver{})
 	require.Empty(t, errors)
-	_, errors = sc.ExecuteMultiShard(ctx, nil, rss1, queries, session, false, false)
+	_, errors = sc.ExecuteMultiShard(ctx, nil, rss1, queries, session, false, false, nullResultsObserver{})
 	require.Error(t, errors[0])
 	assert.Contains(t, errors[0].Error(), want)
 
 	// TransactionMode_MULTI in txconn. Should not fail.
 	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
-	session = NewSafeSession(&vtgatepb.Session{InTransaction: true})
-	_, errors = sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false)
+	session = econtext.NewSafeSession(&vtgatepb.Session{InTransaction: true})
+	_, errors = sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false, nullResultsObserver{})
 	require.Empty(t, errors)
-	_, errors = sc.ExecuteMultiShard(ctx, nil, rss1, queries, session, false, false)
+	_, errors = sc.ExecuteMultiShard(ctx, nil, rss1, queries, session, false, false, nullResultsObserver{})
 	require.Empty(t, errors)
 }
 
@@ -575,7 +603,7 @@ func TestReservePrequeries(t *testing.T) {
 
 	res := srvtopo.NewResolver(newSandboxForCells(ctx, []string{"aa"}), sc.gateway, "aa")
 
-	session := NewSafeSession(&vtgatepb.Session{
+	session := econtext.NewSafeSession(&vtgatepb.Session{
 		InTransaction:  false,
 		InReservedConn: true,
 		SystemVariables: map[string]string{
@@ -594,6 +622,6 @@ func newTestScatterConn(ctx context.Context, hc discovery.HealthCheck, serv srvt
 	// in '-cells_to_watch' command line parameter, which is
 	// empty by default. So it's unused in this test, set to nil.
 	gw := NewTabletGateway(ctx, hc, serv, cell)
-	tc := NewTxConn(gw, vtgatepb.TransactionMode_TWOPC)
+	tc := NewTxConn(gw, vtgatepb.TransactionMode_MULTI)
 	return NewScatterConn("", tc, gw)
 }

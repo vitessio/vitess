@@ -27,12 +27,13 @@ import (
 	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/mysql/collations/colldata"
 	vjson "vitess.io/vitess/go/mysql/json"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
-	"vitess.io/vitess/go/vt/vttablet"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -53,13 +54,14 @@ import (
 // of the members, leaving the original plan unchanged.
 // The constructor is buildReplicatorPlan in table_plan_builder.go
 type ReplicatorPlan struct {
-	VStreamFilter *binlogdatapb.Filter
-	TargetTables  map[string]*TablePlan
-	TablePlans    map[string]*TablePlan
-	ColInfoMap    map[string][]*ColumnInfo
-	stats         *binlogplayer.Stats
-	Source        *binlogdatapb.BinlogSource
-	collationEnv  *collations.Environment
+	VStreamFilter  *binlogdatapb.Filter
+	TargetTables   map[string]*TablePlan
+	TablePlans     map[string]*TablePlan
+	ColInfoMap     map[string][]*ColumnInfo
+	stats          *binlogplayer.Stats
+	Source         *binlogdatapb.BinlogSource
+	collationEnv   *collations.Environment
+	workflowConfig *vttablet.VReplicationConfig
 }
 
 // buildExecution plan uses the field info as input and the partially built
@@ -88,7 +90,7 @@ func (rp *ReplicatorPlan) buildExecutionPlan(fieldEvent *binlogdatapb.FieldEvent
 	// select * construct was used. We need to use the field names.
 	tplan, err := rp.buildFromFields(prelim.TargetName, prelim.Lastpk, fieldEvent.Fields)
 	if err != nil {
-		return nil, err
+		return nil, vterrors.Wrapf(err, "failed to build replication plan for %s table", fieldEvent.TableName)
 	}
 	tplan.Fields = fieldEvent.Fields
 	return tplan, nil
@@ -99,27 +101,27 @@ func (rp *ReplicatorPlan) buildExecutionPlan(fieldEvent *binlogdatapb.FieldEvent
 // requires us to wait for the field info sent by the source.
 func (rp *ReplicatorPlan) buildFromFields(tableName string, lastpk *sqltypes.Result, fields []*querypb.Field) (*TablePlan, error) {
 	tpb := &tablePlanBuilder{
-		name:         sqlparser.NewIdentifierCS(tableName),
-		lastpk:       lastpk,
-		colInfos:     rp.ColInfoMap[tableName],
-		stats:        rp.stats,
-		source:       rp.Source,
-		collationEnv: rp.collationEnv,
+		name:           sqlparser.NewIdentifierCS(tableName),
+		lastpk:         lastpk,
+		colInfos:       rp.ColInfoMap[tableName],
+		stats:          rp.stats,
+		source:         rp.Source,
+		collationEnv:   rp.collationEnv,
+		workflowConfig: rp.workflowConfig,
 	}
 	for _, field := range fields {
 		colName := sqlparser.NewIdentifierCI(field.Name)
-		isGenerated := false
+		generated := false
+		// We have to loop over the columns in the plan as the columns between the
+		// source and target are not always 1 to 1.
 		for _, colInfo := range tpb.colInfos {
 			if !strings.EqualFold(colInfo.Name, field.Name) {
 				continue
 			}
 			if colInfo.IsGenerated {
-				isGenerated = true
+				generated = true
 			}
 			break
-		}
-		if isGenerated {
-			continue
 		}
 		cexpr := &colExpr{
 			colName: colName,
@@ -130,6 +132,7 @@ func (rp *ReplicatorPlan) buildFromFields(tableName string, lastpk *sqltypes.Res
 			references: map[string]bool{
 				field.Name: true,
 			},
+			isGenerated: generated,
 		}
 		tpb.colExprs = append(tpb.colExprs, cexpr)
 	}
@@ -219,7 +222,8 @@ type TablePlan struct {
 	// PartialUpdates are same as PartialInserts, but for update statements
 	PartialUpdates map[string]*sqlparser.ParsedQuery
 
-	CollationEnv *collations.Environment
+	CollationEnv   *collations.Environment
+	WorkflowConfig *vttablet.VReplicationConfig
 }
 
 // MarshalJSON performs a custom JSON Marshalling.
@@ -257,7 +261,7 @@ func (tp *TablePlan) applyBulkInsert(sqlbuffer *bytes2.Buffer, rows []*querypb.R
 		if i > 0 {
 			sqlbuffer.WriteString(", ")
 		}
-		if err := appendFromRow(tp.BulkInsertValues, sqlbuffer, tp.Fields, row, tp.FieldsToSkip); err != nil {
+		if err := tp.appendFromRow(sqlbuffer, row); err != nil {
 			return nil, err
 		}
 	}
@@ -285,7 +289,7 @@ func (tp *TablePlan) applyBulkInsert(sqlbuffer *bytes2.Buffer, rows []*querypb.R
 // now and punt on the others.
 func (tp *TablePlan) isOutsidePKRange(bindvars map[string]*querypb.BindVariable, before, after bool, stmtType string) bool {
 	// added empty comments below, otherwise gofmt removes the spaces between the bitwise & and obfuscates this check!
-	if vttablet.VReplicationExperimentalFlags /**/ & /**/ vttablet.VReplicationExperimentalFlagOptimizeInserts == 0 {
+	if tp.WorkflowConfig.ExperimentalFlags /**/ & /**/ vttablet.VReplicationExperimentalFlagOptimizeInserts == 0 {
 		return false
 	}
 	// Ensure there is one and only one value in lastpk and pkrefs.
@@ -296,7 +300,7 @@ func (tp *TablePlan) isOutsidePKRange(bindvars map[string]*querypb.BindVariable,
 		case !before && after:
 			bindvar = bindvars["a_"+tp.PKReferences[0]]
 		}
-		if bindvar == nil { //should never happen
+		if bindvar == nil { // should never happen
 			return false
 		}
 
@@ -312,6 +316,30 @@ func (tp *TablePlan) isOutsidePKRange(bindvars map[string]*querypb.BindVariable,
 	return false
 }
 
+// convertStringCharset does a charset conversion given raw data and an applicable conversion rule.
+// In case of a conversion error, it returns an equivalent of MySQL error 1366, which is what you'd
+// get in a failed `CONVERT()` function, e.g.:
+//
+//	> create table tascii(v varchar(100) charset ascii);
+//	> insert into tascii values ('€');
+//	ERROR 1366 (HY000): Incorrect string value: '\xE2\x82\xAC' for column 'v' at row 1
+func (tp *TablePlan) convertStringCharset(raw []byte, conversion *binlogdatapb.CharsetConversion, fieldName string) ([]byte, error) {
+	fromCollation := tp.CollationEnv.DefaultCollationForCharset(conversion.FromCharset)
+	if fromCollation == collations.Unknown {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "character set %s not supported for column %s", conversion.FromCharset, fieldName)
+	}
+	toCollation := tp.CollationEnv.DefaultCollationForCharset(conversion.ToCharset)
+	if toCollation == collations.Unknown {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "character set %s not supported for column %s", conversion.ToCharset, fieldName)
+	}
+
+	out, err := charset.Convert(nil, colldata.Lookup(toCollation).Charset(), raw, colldata.Lookup(fromCollation).Charset())
+	if err != nil {
+		return nil, sqlerror.NewSQLErrorf(sqlerror.ERTruncatedWrongValueForField, sqlerror.SSUnknownSQLState, "Incorrect string value: %s", err.Error())
+	}
+	return out, nil
+}
+
 // bindFieldVal returns a bind variable based on given field and value.
 // Most values will just bind directly. But some values may need manipulation:
 // - text values with charset conversion
@@ -320,11 +348,7 @@ func (tp *TablePlan) isOutsidePKRange(bindvars map[string]*querypb.BindVariable,
 func (tp *TablePlan) bindFieldVal(field *querypb.Field, val *sqltypes.Value) (*querypb.BindVariable, error) {
 	if conversion, ok := tp.ConvertCharset[field.Name]; ok && !val.IsNull() {
 		// Non-null string value, for which we have a charset conversion instruction
-		fromCollation := tp.CollationEnv.DefaultCollationForCharset(conversion.FromCharset)
-		if fromCollation == collations.Unknown {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", conversion.FromCharset, field.Name)
-		}
-		out, err := charset.Convert(nil, charset.Charset_utf8mb4{}, val.Raw(), colldata.Lookup(fromCollation).Charset())
+		out, err := tp.convertStringCharset(val.Raw(), conversion, field.Name)
 		if err != nil {
 			return nil, err
 		}
@@ -584,56 +608,50 @@ func valsEqual(v1, v2 sqltypes.Value) bool {
 	return v1.ToString() == v2.ToString()
 }
 
-// AppendFromRow behaves like Append but takes a querypb.Row directly, assuming that
-// the fields in the row are in the same order as the placeholders in this query. The fields might include generated
-// columns which are dropped, by checking against skipFields, before binding the variables
-// note: there can be more fields than bind locations since extra columns might be requested from the source if not all
-// primary keys columns are present in the target table, for example. Also some values in the row may not correspond for
-// values from the database on the source: sum/count for aggregation queries, for example
-func appendFromRow(pq *sqlparser.ParsedQuery, buf *bytes2.Buffer, fields []*querypb.Field, row *querypb.Row, skipFields map[string]bool) error {
-	bindLocations := pq.BindLocations()
-	if len(fields) < len(bindLocations) {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "wrong number of fields: got %d fields for %d bind locations ",
-			len(fields), len(bindLocations))
+// AppendFromRow behaves like Append but takes a querypb.Row directly, assuming that the
+// fields in the row are in the same order as the placeholders in this query. The fields
+// might include generated columns which are dropped before binding the variables note:
+// there can be more fields than bind locations since extra columns might be requested
+// from the source if not all primary keys columns are present in the target table, for
+// example. Also some values in the row may not correspond for values from the database
+// on the source: sum/count for aggregation queries, for example.
+func (tp *TablePlan) appendFromRow(buf *bytes2.Buffer, row *querypb.Row) error {
+	bindLocations := tp.BulkInsertValues.BindLocations()
+	if len(tp.Fields) < len(bindLocations) {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "wrong number of fields: got %d fields for %d bind locations",
+			len(tp.Fields), len(bindLocations))
 	}
 
-	type colInfo struct {
-		typ    querypb.Type
-		length int64
-		offset int64
-	}
-	rowInfo := make([]*colInfo, 0)
-
-	offset := int64(0)
-	for i, field := range fields { // collect info required for fields to be bound
-		length := row.Lengths[i]
-		if !skipFields[strings.ToLower(field.Name)] {
-			rowInfo = append(rowInfo, &colInfo{
-				typ:    field.Type,
-				length: length,
-				offset: offset,
-			})
-		}
-		if length > 0 {
-			offset += row.Lengths[i]
-		}
-	}
-
-	// bind field values to locations
-	var offsetQuery int
+	// Bind field values to locations.
+	var (
+		offset      int64
+		offsetQuery int
+		fieldsIndex int
+		field       *querypb.Field
+	)
 	for i, loc := range bindLocations {
-		col := rowInfo[i]
-		buf.WriteString(pq.Query[offsetQuery:loc.Offset])
-		typ := col.typ
+		field = tp.Fields[fieldsIndex]
+		length := row.Lengths[fieldsIndex]
+		for tp.FieldsToSkip[strings.ToLower(field.Name)] {
+			if length > 0 {
+				offset += length
+			}
+			fieldsIndex++
+			field = tp.Fields[fieldsIndex]
+			length = row.Lengths[fieldsIndex]
+		}
+
+		buf.WriteString(tp.BulkInsertValues.Query[offsetQuery:loc.Offset])
+		typ := field.Type
 
 		switch typ {
 		case querypb.Type_TUPLE:
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected Type_TUPLE for value %d", i)
 		case querypb.Type_JSON:
-			if col.length < 0 { // An SQL NULL and not an actual JSON value
+			if length < 0 { // An SQL NULL and not an actual JSON value
 				buf.WriteString(sqltypes.NullStr)
 			} else { // A JSON value (which may be a JSON null literal value)
-				buf2 := row.Values[col.offset : col.offset+col.length]
+				buf2 := row.Values[offset : offset+length]
 				vv, err := vjson.MarshalSQLValue(buf2)
 				if err != nil {
 					return err
@@ -641,16 +659,33 @@ func appendFromRow(pq *sqlparser.ParsedQuery, buf *bytes2.Buffer, fields []*quer
 				buf.WriteString(vv.RawStr())
 			}
 		default:
-			if col.length < 0 {
+			if length < 0 {
 				// -1 means a null variable; serialize it directly
 				buf.WriteString(sqltypes.NullStr)
 			} else {
-				vv := sqltypes.MakeTrusted(typ, row.Values[col.offset:col.offset+col.length])
+				raw := row.Values[offset : offset+length]
+				var vv sqltypes.Value
+
+				if conversion, ok := tp.ConvertCharset[field.Name]; ok && length > 0 {
+					// Non-null string value, for which we have a charset conversion instruction
+					out, err := tp.convertStringCharset(raw, conversion, field.Name)
+					if err != nil {
+						return err
+					}
+					vv = sqltypes.MakeTrusted(typ, out)
+				} else {
+					vv = sqltypes.MakeTrusted(typ, raw)
+				}
+
 				vv.EncodeSQLBytes2(buf)
 			}
 		}
 		offsetQuery = loc.Offset + loc.Length
+		if length > 0 {
+			offset += length
+		}
+		fieldsIndex++
 	}
-	buf.WriteString(pq.Query[offsetQuery:])
+	buf.WriteString(tp.BulkInsertValues.Query[offsetQuery:])
 	return nil
 }

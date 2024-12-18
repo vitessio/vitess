@@ -35,8 +35,17 @@ import { Tooltip } from '../tooltip/Tooltip';
 import { KeyspaceLink } from '../links/KeyspaceLink';
 import { QueryLoadingPlaceholder } from '../placeholders/QueryLoadingPlaceholder';
 import { UseQueryResult } from 'react-query';
+import { ReadOnlyGate } from '../ReadOnlyGate';
+import Dropdown from '../dropdown/Dropdown';
+import MenuItem from '../dropdown/MenuItem';
+import { Icons } from '../Icon';
+import WorkflowActions from './workflows/WorkflowActions';
+import { isReadOnlyMode } from '../../util/env';
 
 export const ThrottleThresholdSeconds = 60;
+
+const COLUMNS = ['Workflow', 'Source', 'Target', 'Streams', 'Last Updated', 'Actions'];
+const READ_ONLY_COLUMNS = ['Workflow', 'Source', 'Target', 'Streams', 'Last Updated'];
 
 export const Workflows = () => {
     useDocumentTitle('Workflows');
@@ -180,6 +189,20 @@ export const Workflows = () => {
                         <div className="font-sans whitespace-nowrap">{formatDateTime(row.timeUpdated)}</div>
                         <div className="font-sans text-sm text-secondary">{formatRelativeTime(row.timeUpdated)}</div>
                     </DataCell>
+
+                    <ReadOnlyGate>
+                        <DataCell>
+                            <WorkflowActions
+                                workflows={workflowsQuery.data}
+                                streamsByState={row.streams}
+                                refetchWorkflows={workflowsQuery.refetch}
+                                keyspace={row.keyspace as string}
+                                clusterID={row.clusterID as string}
+                                name={row.name as string}
+                                workflowType={row.workflowType as string}
+                            />
+                        </DataCell>
+                    </ReadOnlyGate>
                 </tr>
             );
         });
@@ -187,7 +210,28 @@ export const Workflows = () => {
     return (
         <div>
             <WorkspaceHeader>
-                <WorkspaceTitle>Workflows</WorkspaceTitle>
+                <div className="flex items-top justify-between">
+                    <WorkspaceTitle>Workflows</WorkspaceTitle>
+                    <ReadOnlyGate>
+                        <div>
+                            <Dropdown
+                                dropdownButton={Icons.circleAdd}
+                                title="Create Workflow"
+                                className="!text-[32px] w-16 h-16"
+                            >
+                                <Link to="/workflows/movetables/create">
+                                    <MenuItem>MoveTables</MenuItem>
+                                </Link>
+                                <Link to="/workflows/reshard/create">
+                                    <MenuItem>Reshard</MenuItem>
+                                </Link>
+                                <Link to="/workflows/materialize/create">
+                                    <MenuItem>Materialize</MenuItem>
+                                </Link>
+                            </Dropdown>
+                        </div>
+                    </ReadOnlyGate>
+                </div>
             </WorkspaceHeader>
             <ContentContainer>
                 <DataFilter
@@ -199,7 +243,7 @@ export const Workflows = () => {
                 />
 
                 <DataTable
-                    columns={['Workflow', 'Source', 'Target', 'Streams', 'Last Updated']}
+                    columns={isReadOnlyMode() ? READ_ONLY_COLUMNS : COLUMNS}
                     data={sortedData}
                     renderRows={renderRows}
                 />

@@ -30,6 +30,7 @@ package logic
 // go to the database each time.
 
 import (
+	"errors"
 	"fmt"
 
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
@@ -39,14 +40,13 @@ import (
 
 // IsRecoveryDisabled returns true if Recoveries are disabled globally
 func IsRecoveryDisabled() (disabled bool, err error) {
-	query := `
-		SELECT
-			COUNT(*) as mycount
-		FROM
-			global_recovery_disable
-		WHERE
-			disable_recovery=?
-		`
+	query := `SELECT
+		COUNT(*) AS mycount
+	FROM
+		global_recovery_disable
+	WHERE
+		disable_recovery = ?
+	`
 	err = db.QueryVTOrc(query, sqlutils.Args(1), func(m sqlutils.RowMap) error {
 		mycount := m.GetInt("mycount")
 		disabled = (mycount > 0)
@@ -55,28 +55,26 @@ func IsRecoveryDisabled() (disabled bool, err error) {
 	if err != nil {
 		errMsg := fmt.Sprintf("recovery.IsRecoveryDisabled(): %v", err)
 		log.Errorf(errMsg)
-		err = fmt.Errorf(errMsg)
+		err = errors.New(errMsg)
 	}
 	return disabled, err
 }
 
 // DisableRecovery ensures recoveries are disabled globally
 func DisableRecovery() error {
-	_, err := db.ExecVTOrc(`
-		INSERT IGNORE INTO global_recovery_disable
-			(disable_recovery)
-		VALUES  (1)
-	`,
-	)
+	_, err := db.ExecVTOrc(`INSERT OR IGNORE
+		INTO global_recovery_disable (
+			disable_recovery
+		) VALUES (1)`)
 	return err
 }
 
 // EnableRecovery ensures recoveries are enabled globally
 func EnableRecovery() error {
 	// The "WHERE" clause is just to avoid full-scan reports by monitoring tools
-	_, err := db.ExecVTOrc(`
-		DELETE FROM global_recovery_disable WHERE disable_recovery >= 0
-	`,
-	)
+	_, err := db.ExecVTOrc(`DELETE
+		FROM global_recovery_disable
+		WHERE
+			disable_recovery >= 0`)
 	return err
 }

@@ -73,7 +73,6 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	exitCode := func() int {
@@ -204,4 +203,14 @@ func TestReplicationRepairAfterPrimaryTabletChange(t *testing.T) {
 	require.NoError(t, err)
 	// sidecardb should find the desired _vt schema and not apply any new creates or upgrades when the tablet comes up again
 	require.Equal(t, sidecarDDLCount, int64(0))
+}
+
+func TestReparentJournalInfo(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	for _, vttablet := range clusterInstance.Keyspaces[0].Shards[0].Vttablets {
+		length, err := tmClient.ReadReparentJournalInfo(ctx, getTablet(vttablet.GrpcPort))
+		require.NoError(t, err)
+		require.EqualValues(t, 1, length)
+	}
 }

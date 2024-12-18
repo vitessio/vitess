@@ -22,15 +22,16 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/pools/smartconnpool"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/trace"
-	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/dtids"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -75,9 +76,14 @@ type TxEngine struct {
 	// transition while creating new transactions
 	beginRequests sync.WaitGroup
 
-	twopcEnabled        bool
+	// twopcEnabled is the flag value of whether the user has enabled twopc or not.
+	twopcEnabled bool
+	// twopcAllowed is whether it is safe to allow two pc transactions or not.
+	// There are multiple reasons to disallow TwoPC:
+	//  1. If the primary tablet doesn't run with semi-sync we set this to false, and disallow any prepared calls.
+	//  2. TabletControls have been set in the tablet record, and Query service is going to be disabled.
+	twopcAllowed        []bool
 	shutdownGracePeriod time.Duration
-	coordinatorAddress  string
 	abandonAge          time.Duration
 	ticks               *timer.Timer
 
@@ -87,9 +93,16 @@ type TxEngine struct {
 	txPool       *TxPool
 	preparedPool *TxPreparedPool
 	twoPC        *TwoPC
-	twoPCReady   sync.WaitGroup
 	dxNotify     func()
 }
+
+// TwoPC can be disallowed for various reasons. These are the reasons we keep track off
+// when deciding if new prepared transactions should be allowed or not.
+const (
+	TwoPCAllowed_SemiSync = iota
+	TwoPCAllowed_TabletControls
+	TwoPCAllowed_Len
+)
 
 // NewTxEngine creates a new TxEngine.
 func NewTxEngine(env tabletenv.Env, dxNotifier func()) *TxEngine {
@@ -101,14 +114,21 @@ func NewTxEngine(env tabletenv.Env, dxNotifier func()) *TxEngine {
 	}
 	limiter := txlimiter.New(env)
 	te.txPool = NewTxPool(env, limiter)
-	te.twopcEnabled = config.TwoPCEnable
-	if te.twopcEnabled {
-		if config.TwoPCAbandonAge <= 0 {
-			log.Error("2PC abandon age not specified: Disabling 2PC")
-			te.twopcEnabled = false
-		}
+	// We initially allow twoPC (handles vttablet restarts).
+	// We will disallow them for a few reasons -
+	//	1. When a new tablet is promoted if semi-sync is turned off.
+	//  2. TabletControls have been set by a Resharding workflow.
+	te.twopcAllowed = make([]bool, TwoPCAllowed_Len)
+	for idx := range te.twopcAllowed {
+		te.twopcAllowed[idx] = true
 	}
-	te.abandonAge = config.TwoPCAbandonAge.Get()
+	te.twopcEnabled = true
+	if config.TwoPCAbandonAge <= 0 {
+		log.Error("2PC abandon age not specified: Disabling 2PC")
+		te.twopcEnabled = false
+	}
+
+	te.abandonAge = config.TwoPCAbandonAge
 	te.ticks = timer.NewTimer(te.abandonAge / 2)
 
 	// Set the prepared pool capacity to something lower than
@@ -116,7 +136,7 @@ func NewTxEngine(env tabletenv.Env, dxNotifier func()) *TxEngine {
 	// perform metadata state change operations. Without this,
 	// the system can deadlock if all connections get moved to
 	// the TxPreparedPool.
-	te.preparedPool = NewTxPreparedPool(config.TxPool.Size - 2)
+	te.preparedPool = NewTxPreparedPool(config.TxPool.Size-2, te.twopcEnabled)
 	readPool := connpool.NewPool(env, "TxReadPool", tabletenv.ConnPoolConfig{
 		Size:        3,
 		IdleTimeout: env.Config().TxPool.IdleTimeout,
@@ -128,9 +148,6 @@ func NewTxEngine(env tabletenv.Env, dxNotifier func()) *TxEngine {
 }
 
 // AcceptReadWrite will start accepting all transactions.
-// If transitioning from RO mode, transactions are rolled
-// back before accepting new transactions. This is to allow
-// for 2PC state to be correctly initialized.
 func (te *TxEngine) AcceptReadWrite() {
 	te.transition(AcceptingReadAndWrite)
 }
@@ -149,37 +166,70 @@ func (te *TxEngine) transition(state txEngineState) {
 	}
 
 	log.Infof("TxEngine transition: %v", state)
-	switch te.state {
-	case AcceptingReadOnly, AcceptingReadAndWrite:
+
+	// When we are transitioning from read write state, we should close all transactions.
+	if te.state == AcceptingReadAndWrite {
 		te.shutdownLocked()
-	case NotServing:
-		// No special action.
 	}
 
 	te.state = state
-	te.txPool.Open(te.env.Config().DB.AppWithDB(), te.env.Config().DB.DbaWithDB(), te.env.Config().DB.AppDebugWithDB())
-
 	if te.twopcEnabled && te.state == AcceptingReadAndWrite {
-		// Set the preparedPool to start accepting connections.
-		te.preparedPool.shutdown = false
-		// If there are errors, we choose to raise an alert and
-		// continue anyway. Serving traffic is considered more important
-		// than blocking everything for the sake of a few transactions.
-		// We do this async; so we do not end up blocking writes on
-		// failover for our setup tasks if using semi-sync replication.
-		te.twoPCReady.Add(1)
-		go func() {
-			defer te.twoPCReady.Done()
-			if err := te.twoPC.Open(te.env.Config().DB); err != nil {
-				te.env.Stats().InternalErrors.Add("TwopcOpen", 1)
-				log.Errorf("Could not open TwoPC engine: %v", err)
-			}
-			if err := te.prepareFromRedo(); err != nil {
-				te.env.Stats().InternalErrors.Add("TwopcResurrection", 1)
-				log.Errorf("Could not prepare transactions: %v", err)
-			}
-			te.startTransactionWatcher()
-		}()
+		// If the prepared pool is not open, then we need to redo the prepared transactions
+		// before we open the transaction engine to accept new writes.
+		// This check is required because during a Promotion, we would have already setup the prepared pool
+		// and redid the prepared transactions when we turn super_read_only off. So we don't need to do it again.
+		if !te.preparedPool.IsOpen() {
+			// We need to redo prepared transactions here to handle vttablet restarts.
+			// If MySQL continues to work fine, then we won't end up redoing the prepared transactions as part of any RPC call
+			// since VTOrc won't call `UndoDemotePrimary`. We need to do them as part of this transition.
+			te.redoPreparedTransactionsLocked()
+		}
+		te.startTransactionWatcher()
+	}
+	te.txPool.Open(te.env.Config().DB.AppWithDB(), te.env.Config().DB.DbaWithDB(), te.env.Config().DB.AppDebugWithDB())
+}
+
+// RedoPreparedTransactions acquires the state lock and calls redoPreparedTransactionsLocked.
+func (te *TxEngine) RedoPreparedTransactions() {
+	if te.twopcEnabled {
+		te.stateLock.Lock()
+		defer te.stateLock.Unlock()
+		te.redoPreparedTransactionsLocked()
+	}
+}
+
+// redoPreparedTransactionsLocked redoes the prepared transactions.
+// If there are errors, we choose to raise an alert and
+// continue anyway. Serving traffic is considered more important
+// than blocking everything for the sake of a few transactions.
+// We do this async; so we do not end up blocking writes on
+// failover for our setup tasks if using semi-sync replication.
+func (te *TxEngine) redoPreparedTransactionsLocked() {
+	oldState := te.state
+	// We shutdown to ensure no other writes are in progress.
+	te.shutdownLocked()
+	defer func() {
+		te.state = oldState
+	}()
+
+	if err := te.twoPC.Open(te.env.Config().DB); err != nil {
+		te.env.Stats().InternalErrors.Add("TwopcOpen", 1)
+		log.Errorf("Could not open TwoPC engine: %v", err)
+		return
+	}
+
+	// We should only open the prepared pool and the transaction pool if the opening of twoPC pool is successful.
+	// We use the prepared pool being open to know if we need to redo the prepared transactions.
+	// So if we open the prepared pool and then opening of twoPC fails, we will never end up opening the twoPC pool at all!
+	// This is why opening prepared pool after the twoPC pool is crucial for correctness.
+	te.preparedPool.Open()
+	// We have to defer opening the transaction pool because we call shutdown in the beginning that closes it.
+	// We want to open the transaction pool after the prepareFromRedo has run. Also, we want this to run even if that fails.
+	defer te.txPool.Open(te.env.Config().DB.AppWithDB(), te.env.Config().DB.DbaWithDB(), te.env.Config().DB.AppDebugWithDB())
+
+	if err := te.prepareFromRedo(); err != nil {
+		te.env.Stats().InternalErrors.Add("TwopcResurrection", 1)
+		log.Errorf("Could not prepare transactions: %v", err)
 	}
 }
 
@@ -219,7 +269,7 @@ func (te *TxEngine) isTxPoolAvailable(addToWaitGroup func(int)) error {
 // statement(s) used to execute the begin (if any).
 //
 // Subsequent statements can access the connection through the transaction id.
-func (te *TxEngine) Begin(ctx context.Context, savepointQueries []string, reservedID int64, setting *smartconnpool.Setting, options *querypb.ExecuteOptions) (int64, string, string, error) {
+func (te *TxEngine) Begin(ctx context.Context, reservedID int64, setting *smartconnpool.Setting, options *querypb.ExecuteOptions) (int64, string, string, error) {
 	span, ctx := trace.NewSpan(ctx, "TxEngine.Begin")
 	defer span.Finish()
 
@@ -234,7 +284,7 @@ func (te *TxEngine) Begin(ctx context.Context, savepointQueries []string, reserv
 	}
 
 	defer te.beginRequests.Done()
-	conn, beginSQL, sessionStateChanges, err := te.txPool.Begin(ctx, options, te.state == AcceptingReadOnly, reservedID, savepointQueries, setting)
+	conn, beginSQL, sessionStateChanges, err := te.txPool.Begin(ctx, options, te.state == AcceptingReadOnly, reservedID, setting)
 	if err != nil {
 		return 0, "", "", err
 	}
@@ -306,11 +356,6 @@ func (te *TxEngine) shutdownLocked() {
 	te.stateLock.Lock()
 	log.Infof("TxEngine - state lock acquired again")
 
-	// Shut down functions are idempotent.
-	// No need to check if 2pc is enabled.
-	log.Infof("TxEngine - stop watchdog")
-	te.stopTransactionWatcher()
-
 	poolEmpty := make(chan bool)
 	rollbackDone := make(chan bool)
 	// This goroutine decides if transactions have to be
@@ -333,13 +378,6 @@ func (te *TxEngine) shutdownLocked() {
 		// connections.
 		te.txPool.scp.ShutdownNonTx()
 		if te.shutdownGracePeriod <= 0 {
-			// No grace period was specified. Wait indefinitely for transactions to be concluded.
-			// TODO(sougou): invoking rollbackPrepared is incorrect here. Prepared statements should
-			// actually be rolled back last. But this will cause the shutdown to hang because the
-			// tx pool will never become empty, because the prepared pool is holding on to connections
-			// from the tx pool. But we plan to deprecate this approach to 2PC. So, this
-			// should eventually be deleted.
-			te.rollbackPrepared()
 			log.Info("No grace period specified: performing normal wait.")
 			return
 		}
@@ -354,6 +392,9 @@ func (te *TxEngine) shutdownLocked() {
 			log.Info("Transactions completed before grace period: shutting down.")
 		}
 	}()
+	// It is important to note, that we aren't rolling back prepared transactions here.
+	// That is happneing in the same place where we are killing queries. This will block
+	// until either all prepared transactions get resolved or rollbacked.
 	log.Infof("TxEngine - waiting for empty txPool")
 	te.txPool.WaitForEmpty()
 	// If the goroutine is still running, signal that it can exit.
@@ -362,10 +403,19 @@ func (te *TxEngine) shutdownLocked() {
 	log.Infof("TxEngine - making sure the goroutine has returned")
 	<-rollbackDone
 
+	// We stop the transaction watcher so late, because if the user isn't running
+	// with any shutdown grace period, we still want the watcher to run while we are waiting
+	// for resolving transactions.
+	log.Infof("TxEngine - stop transaction watcher")
+	te.stopTransactionWatcher()
+
+	// Mark the prepared pool closed.
 	log.Infof("TxEngine - closing the txPool")
 	te.txPool.Close()
 	log.Infof("TxEngine - closing twoPC")
 	te.twoPC.Close()
+	log.Infof("TxEngine - closing the prepared pool")
+	te.preparedPool.Close()
 	log.Infof("TxEngine - finished shutdownLocked")
 }
 
@@ -375,74 +425,164 @@ func (te *TxEngine) shutdownLocked() {
 // to ensure there are no future collisions.
 func (te *TxEngine) prepareFromRedo() error {
 	ctx := tabletenv.LocalContext()
-	var allErr concurrency.AllErrorRecorder
-	prepared, failed, err := te.twoPC.ReadAllRedo(ctx)
-	if err != nil {
-		return err
+
+	prepared, failed, readErr := te.twoPC.ReadAllRedo(ctx)
+	if readErr != nil {
+		return readErr
 	}
 
-	maxid := int64(0)
-outer:
+	var (
+		maxID           = int64(0)
+		preparedCounter = 0
+		failedCounter   = len(failed)
+		allErrs         []error
+	)
+
+	// While going through the prepared transaction.
+	// We will extract the transaction ID from the dtid and
+	// update the last transaction ID to max value to avoid any collision with the new transactions.
+
 	for _, preparedTx := range prepared {
-		txid, err := dtids.TransactionID(preparedTx.Dtid)
+		txID, _ := dtids.TransactionID(preparedTx.Dtid)
+		if txID > maxID {
+			maxID = txID
+		}
+
+		prepFailed, err := te.prepareTx(ctx, preparedTx)
 		if err != nil {
-			log.Errorf("Error extracting transaction ID from dtid: %v", err)
-		}
-		if txid > maxid {
-			maxid = txid
-		}
-		conn, _, _, err := te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil, nil)
-		if err != nil {
-			allErr.RecordError(err)
-			continue
-		}
-		for _, stmt := range preparedTx.Queries {
-			conn.TxProperties().RecordQuery(stmt)
-			_, err := conn.Exec(ctx, stmt, 1, false)
-			if err != nil {
-				allErr.RecordError(err)
-				te.txPool.RollbackAndRelease(ctx, conn)
-				continue outer
+			allErrs = append(allErrs, vterrors.Wrapf(err, "dtid - %v", preparedTx.Dtid))
+			if prepFailed {
+				failedCounter++
+				te.env.Stats().RedoPreparedFail.Add("NonRetryable", 1)
+			} else {
+				te.env.Stats().RedoPreparedFail.Add("Retryable", 1)
 			}
-		}
-		// We should not use the external Prepare because
-		// we don't want to write again to the redo log.
-		err = te.preparedPool.Put(conn, preparedTx.Dtid)
-		if err != nil {
-			allErr.RecordError(err)
-			continue
+		} else {
+			preparedCounter++
 		}
 	}
+
 	for _, preparedTx := range failed {
-		txid, err := dtids.TransactionID(preparedTx.Dtid)
-		if err != nil {
-			log.Errorf("Error extracting transaction ID from dtid: %v", err)
-		}
-		if txid > maxid {
-			maxid = txid
+		txID, _ := dtids.TransactionID(preparedTx.Dtid)
+		if txID > maxID {
+			maxID = txID
 		}
 		te.preparedPool.SetFailed(preparedTx.Dtid)
 	}
-	te.txPool.AdjustLastID(maxid)
-	log.Infof("TwoPC: Prepared %d transactions, and registered %d failures.", len(prepared), len(failed))
-	return allErr.Error()
+
+	te.txPool.AdjustLastID(maxID)
+	log.Infof("TwoPC: Prepared %d transactions, and registered %d failures.", preparedCounter, failedCounter)
+	return vterrors.Aggregate(allErrs)
 }
 
-// shutdownTransactions rolls back all open transactions
-// including the prepared ones.
-// This is used for transitioning from a primary to a non-primary
-// serving type.
+func (te *TxEngine) prepareTx(ctx context.Context, preparedTx *tx.PreparedTx) (failed bool, err error) {
+	defer func() {
+		if err != nil {
+			failed = te.checkErrorAndMarkFailed(ctx, preparedTx.Dtid, err, "TwopcPrepareRedo")
+		}
+	}()
+
+	// We need to check whether the first query is a SET query or not.
+	// If it is then we need to run it before we begin the transaction because
+	// some connection settings can't be modified after a transaction has started
+	// For example -
+	// mysql> begin;
+	// Query OK, 0 rows affected (0.00 sec)
+	// mysql> set @@transaction_isolation="read-committed";
+	// ERROR 1568 (25001): Transaction characteristics can't be changed while a transaction is in progress.
+	var settingsQuery string
+	firstQuery := preparedTx.Queries[0]
+	if sqlparser.Preview(firstQuery) == sqlparser.StmtSet {
+		settingsQuery = firstQuery
+		preparedTx.Queries = preparedTx.Queries[1:]
+	}
+
+	// We need to redo the prepared transactions using a dba user because MySQL might still be in read only mode.
+	var conn *StatefulConnection
+	if conn, err = te.beginNewDbaConnection(ctx, settingsQuery); err != nil {
+		return
+	}
+
+	for _, stmt := range preparedTx.Queries {
+		conn.TxProperties().RecordQuery(stmt, te.env.Environment().Parser())
+		if _, err = conn.Exec(ctx, stmt, 1, false); err != nil {
+			te.txPool.RollbackAndRelease(ctx, conn)
+			return
+		}
+	}
+	// We should not use the external Prepare because
+	// we don't want to write again to the redo log.
+	err = te.preparedPool.Put(conn, preparedTx.Dtid)
+	return
+}
+
+// checkErrorAndMarkFailed check that the error is retryable or non-retryable error.
+// If it is a non-retryable error than it marks the dtid as failed in the prepared pool,
+// increments the InternalErrors counter, and also changes the state of the transaction in the redo log as failed.
+func (te *TxEngine) checkErrorAndMarkFailed(ctx context.Context, dtid string, receivedErr error, metricName string) (fail bool) {
+	state := RedoStateFailed
+	if isRetryableError(receivedErr) {
+		log.Infof("retryable error for dtid: %s", dtid)
+		state = RedoStatePrepared
+	} else {
+		fail = true
+		te.env.Stats().InternalErrors.Add(metricName, 1)
+		te.preparedPool.SetFailed(dtid)
+	}
+
+	// Update the state of the transaction in the redo log.
+	// Retryable Error: Update the message with error message.
+	// Non-retryable Error: Along with message, update the state as RedoStateFailed.
+	conn, _, _, err := te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
+	if err != nil {
+		log.Errorf("markFailed: Begin failed for dtid %s: %v", dtid, err)
+		return
+	}
+	defer te.txPool.RollbackAndRelease(ctx, conn)
+
+	if err = te.twoPC.UpdateRedo(ctx, conn, dtid, state, receivedErr.Error()); err != nil {
+		log.Errorf("markFailed: UpdateRedo failed for dtid %s: %v", dtid, err)
+		return
+	}
+
+	if _, err = te.txPool.Commit(ctx, conn); err != nil {
+		log.Errorf("markFailed: Commit failed for dtid %s: %v", dtid, err)
+	}
+	return
+}
+
+func isRetryableError(err error) bool {
+	switch vterrors.Code(err) {
+	case vtrpcpb.Code_OK,
+		vtrpcpb.Code_DEADLINE_EXCEEDED,
+		vtrpcpb.Code_CANCELED,
+		vtrpcpb.Code_UNAVAILABLE:
+		return true
+	case vtrpcpb.Code_UNKNOWN:
+		// If the error is unknown, convert to SQL Error.
+		sqlErr := sqlerror.NewSQLErrorFromError(err)
+		// Connection errors are retryable
+		return sqlerror.IsConnErr(sqlErr)
+	default:
+		return false
+	}
+}
+
+// shutdownTransactions rolls back all open transactions that are idol.
+// These are transactions that are open but no write is executing on them right now.
+// By definition, prepared transactions aren't part of them since these are transactions on which
+// the user has issued a commit command. These transactions are rollbacked elsewhere when we kill all writes.
+// This is used for transitioning from a primary to a non-primary serving type.
 func (te *TxEngine) shutdownTransactions() {
-	te.rollbackPrepared()
 	ctx := tabletenv.LocalContext()
-	// The order of rollbacks is currently not material because
-	// we don't allow new statements or commits during
-	// this function. In case of any such change, this will
-	// have to be revisited.
 	te.txPool.Shutdown(ctx)
 }
 
-func (te *TxEngine) rollbackPrepared() {
+// RollbackPrepared rollbacks all the prepared transactions.
+// This should only be called after we are certain no other writes are in progress.
+// If there were some other conflicting write in progress that hadn't been killed, then it could potentially go through
+// and cause data corruption since we won't be able to prepare the transaction again.
+func (te *TxEngine) RollbackPrepared() {
 	ctx := tabletenv.LocalContext()
 	for _, conn := range te.preparedPool.FetchAllForRollback() {
 		te.txPool.Rollback(ctx, conn)
@@ -457,14 +597,13 @@ func (te *TxEngine) startTransactionWatcher() {
 		ctx, cancel := context.WithTimeout(tabletenv.LocalContext(), te.abandonAge/4)
 		defer cancel()
 
-		// Raise alerts on prepares that have been unresolved for too long.
-		// Use 5x abandonAge to give opportunity for transaction coordinator to resolve these redo logs.
-		count, err := te.twoPC.CountUnresolvedRedo(ctx, time.Now().Add(-te.abandonAge*5))
+		// Track unresolved redo logs.
+		count, err := te.twoPC.CountUnresolvedRedo(ctx, time.Now().Add(-te.abandonAge))
 		if err != nil {
 			te.env.Stats().InternalErrors.Add("RedoWatcherFail", 1)
 			log.Errorf("Error reading prepared transactions: %v", err)
 		}
-		te.env.Stats().Unresolved.Set("Prepares", count)
+		te.env.Stats().Unresolved.Set("ResourceManager", count)
 
 		// Notify lingering distributed transactions.
 		count, err = te.twoPC.CountUnresolvedTransaction(ctx, time.Now().Add(-te.abandonAge))
@@ -473,6 +612,7 @@ func (te *TxEngine) startTransactionWatcher() {
 			log.Errorf("Error reading unresolved transactions: %v", err)
 			return
 		}
+		te.env.Stats().Unresolved.Set("MetadataManager", count)
 		if count > 0 {
 			te.dxNotify()
 		}
@@ -485,7 +625,7 @@ func (te *TxEngine) stopTransactionWatcher() {
 }
 
 // ReserveBegin creates a reserved connection, and in it opens a transaction
-func (te *TxEngine) ReserveBegin(ctx context.Context, options *querypb.ExecuteOptions, preQueries []string, savepointQueries []string) (int64, string, error) {
+func (te *TxEngine) ReserveBegin(ctx context.Context, options *querypb.ExecuteOptions, preQueries []string) (int64, string, error) {
 	span, ctx := trace.NewSpan(ctx, "TxEngine.ReserveBegin")
 	defer span.Finish()
 	err := te.isTxPoolAvailable(te.beginRequests.Add)
@@ -499,7 +639,7 @@ func (te *TxEngine) ReserveBegin(ctx context.Context, options *querypb.ExecuteOp
 		return 0, "", err
 	}
 	defer conn.UnlockUpdateTime()
-	_, sessionStateChanges, err := te.txPool.begin(ctx, options, te.state == AcceptingReadOnly, conn, savepointQueries)
+	_, sessionStateChanges, err := te.txPool.begin(ctx, options, te.state == AcceptingReadOnly, conn)
 	if err != nil {
 		conn.Close()
 		conn.Release(tx.ConnInitFail)
@@ -580,4 +720,40 @@ func (te *TxEngine) Release(connID int64) error {
 	conn.Release(tx.ConnRelease)
 
 	return nil
+}
+
+// beginNewDbaConnection gets a new dba connection and starts a transaction in it.
+// This should only be used to redo prepared transactions. All the other writes should use the normal pool.
+func (te *TxEngine) beginNewDbaConnection(ctx context.Context, settingsQuery string) (*StatefulConnection, error) {
+	dbConn, err := connpool.NewConn(ctx, te.env.Config().DB.DbaWithDB(), nil, nil, te.env)
+	if err != nil {
+		return nil, err
+	}
+
+	// If we have a settings query that we need to apply, we do that before starting the transaction.
+	if settingsQuery != "" {
+		if _, err = dbConn.ExecOnce(ctx, settingsQuery, 1, false); err != nil {
+			return nil, err
+		}
+	}
+
+	sc := &StatefulConnection{
+		dbConn: &connpool.PooledConn{
+			Conn: dbConn,
+		},
+		env: te.env,
+	}
+
+	_, _, err = te.txPool.begin(ctx, nil, false, sc)
+	return sc, err
+}
+
+// IsTwoPCAllowed checks if TwoPC is allowed.
+func (te *TxEngine) IsTwoPCAllowed() bool {
+	for _, allowed := range te.twopcAllowed {
+		if !allowed {
+			return false
+		}
+	}
+	return true
 }

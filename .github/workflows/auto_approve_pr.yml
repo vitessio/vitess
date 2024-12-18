@@ -9,14 +9,14 @@ permissions:
 jobs:
   auto_approve:
     name: Auto Approve Pull Request
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     permissions:
       pull-requests: write  # only given on local PRs, forks run with `read` access
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
       - name: Auto Approve Pull Request
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

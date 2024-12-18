@@ -17,14 +17,16 @@ limitations under the License.
 package operators
 
 import (
+	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 // Join represents a join. If we have a predicate, this is an inner join. If no predicate exists, it is a cross join
 type Join struct {
-	LHS, RHS  Operator
+	binaryOperator
 	Predicate sqlparser.Expr
 	// JoinType is permitted to store only 3 of the possible values
 	// NormalJoinType, StraightJoinType and LeftJoinType.
@@ -40,26 +42,11 @@ func (j *Join) Clone(inputs []Operator) Operator {
 	clone := *j
 	clone.LHS = inputs[0]
 	clone.RHS = inputs[1]
-	return &Join{
-		LHS:       inputs[0],
-		RHS:       inputs[1],
-		Predicate: j.Predicate,
-		JoinType:  j.JoinType,
-	}
+	return &clone
 }
 
 func (j *Join) GetOrdering(*plancontext.PlanningContext) []OrderBy {
 	return nil
-}
-
-// Inputs implements the Operator interface
-func (j *Join) Inputs() []Operator {
-	return []Operator{j.LHS, j.RHS}
-}
-
-// SetInputs implements the Operator interface
-func (j *Join) SetInputs(ops []Operator) {
-	j.LHS, j.RHS = ops[0], ops[1]
 }
 
 func (j *Join) Compact(ctx *plancontext.PlanningContext) (Operator, *ApplyResult) {
@@ -87,7 +74,10 @@ func (j *Join) Compact(ctx *plancontext.PlanningContext) (Operator, *ApplyResult
 
 func createStraightJoin(ctx *plancontext.PlanningContext, join *sqlparser.JoinTableExpr, lhs, rhs Operator) Operator {
 	// for inner joins we can treat the predicates as filters on top of the join
-	joinOp := &Join{LHS: lhs, RHS: rhs, JoinType: join.Join}
+	joinOp := &Join{
+		binaryOperator: newBinaryOp(lhs, rhs),
+		JoinType:       join.Join,
+	}
 
 	return addJoinPredicates(ctx, join.Condition.On, joinOp)
 }
@@ -103,7 +93,10 @@ func createLeftOuterJoin(ctx *plancontext.PlanningContext, join *sqlparser.JoinT
 		join.Join = sqlparser.NaturalLeftJoinType
 	}
 
-	joinOp := &Join{LHS: lhs, RHS: rhs, JoinType: join.Join}
+	joinOp := &Join{
+		binaryOperator: newBinaryOp(lhs, rhs),
+		JoinType:       join.Join,
+	}
 
 	// mark the RHS as outer tables so we know which columns are nullable
 	ctx.OuterTables = ctx.OuterTables.Merge(TableID(rhs))
@@ -141,9 +134,47 @@ func addJoinPredicates(
 		if subq != nil {
 			continue
 		}
+
+		// if we are inside a CTE, we need to check if we depend on the recursion table
+		if cte := ctx.ActiveCTE(); cte != nil && ctx.SemTable.DirectDeps(pred).IsOverlapping(cte.Id) {
+			original := pred
+			pred = addCTEPredicate(ctx, pred, cte)
+			ctx.AddJoinPredicates(original, pred)
+		}
 		op = op.AddPredicate(ctx, pred)
 	}
 	return sqc.getRootOperator(op, nil)
+}
+
+// addCTEPredicate breaks the expression into LHS and RHS
+func addCTEPredicate(
+	ctx *plancontext.PlanningContext,
+	pred sqlparser.Expr,
+	cte *plancontext.ContextCTE,
+) sqlparser.Expr {
+	expr := breakCTEExpressionInLhsAndRhs(ctx, pred, cte.Id)
+	cte.Predicates = append(cte.Predicates, expr)
+	return expr.RightExpr
+}
+
+func breakCTEExpressionInLhsAndRhs(ctx *plancontext.PlanningContext, pred sqlparser.Expr, lhsID semantics.TableSet) *plancontext.RecurseExpression {
+	col := breakExpressionInLHSandRHS(ctx, pred, lhsID)
+
+	lhsExprs := slice.Map(col.LHSExprs, func(bve BindVarExpr) plancontext.BindVarExpr {
+		col, ok := bve.Expr.(*sqlparser.ColName)
+		if !ok {
+			panic(vterrors.VT13001("expected column name"))
+		}
+		return plancontext.BindVarExpr{
+			Name: bve.Name,
+			Expr: col,
+		}
+	})
+	return &plancontext.RecurseExpression{
+		Original:  col.Original,
+		RightExpr: col.RHSExpr,
+		LeftExprs: lhsExprs,
+	}
 }
 
 func createJoin(ctx *plancontext.PlanningContext, LHS, RHS Operator) Operator {
@@ -157,7 +188,9 @@ func createJoin(ctx *plancontext.PlanningContext, LHS, RHS Operator) Operator {
 		}
 		return op
 	}
-	return &Join{LHS: LHS, RHS: RHS}
+	return &Join{
+		binaryOperator: newBinaryOp(LHS, RHS),
+	}
 }
 
 func (j *Join) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {

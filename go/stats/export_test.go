@@ -19,6 +19,7 @@ package stats
 import (
 	"expvar"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -188,4 +189,74 @@ func TestStringMapWithMultiLabels(t *testing.T) {
 	require.Equal(t, keyLabels[1], "bbb")
 
 	require.Equal(t, c.ValueLabel(), "ccc")
+}
+
+func TestSafeJoinLabels(t *testing.T) {
+	cases := []struct {
+		labels   []string
+		combined []bool
+		want     string
+	}{
+		{
+			labels: []string{},
+			want:   "",
+		},
+		{
+			labels: []string{"foo"},
+			want:   "foo",
+		},
+		{
+			labels: []string{"foo.bar"},
+			want:   "foo_bar",
+		},
+		{
+			labels:   []string{"foo"},
+			combined: []bool{true},
+			want:     "all",
+		},
+		{
+			labels: []string{"foo", "bar"},
+			want:   "foo.bar",
+		},
+		{
+			labels:   []string{"foo", "bar"},
+			combined: []bool{true, false},
+			want:     "all.bar",
+		},
+		{
+			labels:   []string{"foo", "bar"},
+			combined: []bool{true, true},
+			want:     "all.all",
+		},
+		{
+			labels:   []string{"foo", "bar"},
+			combined: []bool{false, true},
+			want:     "foo.all",
+		},
+		{
+			labels: []string{"foo.bar", "bar.baz"},
+			want:   "foo_bar.bar_baz",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(strings.Join(tc.labels, ","), func(t *testing.T) {
+			require.Equal(t, tc.want, safeJoinLabels(tc.labels, tc.combined))
+		})
+	}
+}
+func BenchmarkSafeJoinLabels(b *testing.B) {
+	labels := [5]string{"foo:bar", "foo.bar", "c1a", "testing", "testing.a.b"}
+	combined := [5]bool{true, true, true, true, true}
+	b.Run("no combined", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			_ = safeJoinLabels(labels[:], nil)
+		}
+	})
+	b.Run("combined", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			_ = safeJoinLabels(labels[:], combined[:])
+		}
+	})
 }

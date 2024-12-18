@@ -30,6 +30,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
@@ -94,6 +95,19 @@ func (v *VReplStream) hasError() (isTerminal bool, vreplError error) {
 		return false, errors.New(v.message)
 	}
 	return false, nil
+}
+
+// Lag returns the vreplication lag, as determined by the higher of the transaction timestamp and the time updated.
+func (s *VReplStream) Lag() time.Duration {
+	durationDiff := func(t1, t2 time.Time) time.Duration {
+		return t1.Sub(t2).Abs()
+	}
+	timeNow := time.Now()
+	timeUpdated := time.Unix(s.timeUpdated, 0)
+	// Let's look at transaction timestamp. This gets written by any ongoing
+	// writes on the server (whether on this table or any other table)
+	transactionTimestamp := time.Unix(s.transactionTimestamp, 0)
+	return max(durationDiff(timeNow, timeUpdated), durationDiff(timeNow, transactionTimestamp))
 }
 
 // VRepl is an online DDL helper for VReplication based migrations (ddl_strategy="online")
@@ -289,6 +303,9 @@ func (v *VRepl) generateFilterQuery() error {
 			sb.WriteString(fmt.Sprintf("CONCAT(%s)", escapeName(name)))
 		case sourceCol.Type() == "json":
 			sb.WriteString(fmt.Sprintf("convert(%s using utf8mb4)", escapeName(name)))
+		case targetCol.Type() == "json": // we already know the source col is not JSON, per the above `case` condition
+			// Convert any type to JSON: encode the type as utf8mb4 text
+			sb.WriteString(fmt.Sprintf("convert(%s using utf8mb4)", escapeName(name)))
 		case sourceCol.IsTextual():
 			// Check source and target charset/encoding. If needed, create
 			// a binlogdatapb.CharsetConversion entry (later written to vreplication)
@@ -301,19 +318,19 @@ func (v *VRepl) generateFilterQuery() error {
 			if targetCol.IsTextual() && toCollation == collations.Unknown {
 				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", targetCol.Charset(), targetCol.Name())
 			}
-
-			if trivialCharset(fromCollation) && trivialCharset(toCollation) && targetCol.Type() != "json" {
+			if trivialCharset(fromCollation) && trivialCharset(toCollation) {
+				sb.WriteString(escapeName(name))
+			} else if fromCollation == toCollation {
+				// No need for charset conversions as both have the same collation.
 				sb.WriteString(escapeName(name))
 			} else {
+				// Charset conversion required:
 				v.convertCharset[targetName] = &binlogdatapb.CharsetConversion{
 					FromCharset: sourceCol.Charset(),
 					ToCharset:   targetCol.Charset(),
 				}
-				sb.WriteString(fmt.Sprintf("convert(%s using utf8mb4)", escapeName(name)))
+				sb.WriteString(escapeName(name))
 			}
-		case targetCol.Type() == "json" && sourceCol.Type() != "json":
-			// Convert any type to JSON: encode the type as utf8mb4 text
-			sb.WriteString(fmt.Sprintf("convert(%s using utf8mb4)", escapeName(name)))
 		default:
 			sb.WriteString(escapeName(name))
 		}
@@ -386,7 +403,7 @@ func (v *VRepl) analyze(ctx context.Context, conn *dbconnpool.DBConnection) erro
 func (v *VRepl) generateInsertStatement() (string, error) {
 	ig := vreplication.NewInsertGenerator(binlogdatapb.VReplicationWorkflowState_Stopped, v.dbName)
 	ig.AddRow(v.workflow, v.bls, v.pos, "", "in_order:REPLICA,PRIMARY",
-		binlogdatapb.VReplicationWorkflowType_OnlineDDL, binlogdatapb.VReplicationWorkflowSubType_None, false)
+		binlogdatapb.VReplicationWorkflowType_OnlineDDL, binlogdatapb.VReplicationWorkflowSubType_None, false, "")
 
 	return ig.String(), nil
 }

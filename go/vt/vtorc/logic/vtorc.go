@@ -17,15 +17,14 @@
 package logic
 
 import (
-	"os"
-	"os/signal"
+	"context"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"time"
 
 	"github.com/patrickmn/go-cache"
 	"github.com/sjmudd/stopwatch"
+	"golang.org/x/sync/errgroup"
 
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
@@ -35,6 +34,7 @@ import (
 	"vitess.io/vitess/go/vt/vtorc/discovery"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 	ometrics "vitess.io/vitess/go/vt/vtorc/metrics"
+	"vitess.io/vitess/go/vt/vtorc/process"
 	"vitess.io/vitess/go/vt/vtorc/util"
 )
 
@@ -71,26 +71,6 @@ func init() {
 		}
 		discoveryRecentCountGauge.Set(int64(recentDiscoveryOperationKeys.ItemCount()))
 	})
-}
-
-// used in several places
-func instancePollSecondsDuration() time.Duration {
-	return time.Duration(config.Config.InstancePollSeconds) * time.Second
-}
-
-// acceptSighupSignal registers for SIGHUP signal from the OS to reload the configuration files.
-func acceptSighupSignal() {
-	c := make(chan os.Signal, 1)
-
-	signal.Notify(c, syscall.SIGHUP)
-	go func() {
-		for range c {
-			log.Infof("Received SIGHUP. Reloading configuration")
-			_ = inst.AuditOperation("reload-configuration", "", "Triggered via SIGHUP")
-			config.Reload()
-			discoveryMetrics.SetExpirePeriod(time.Duration(config.DiscoveryCollectionRetentionSeconds) * time.Second)
-		}
-	}()
 }
 
 // closeVTOrc runs all the operations required to cleanly shutdown VTOrc
@@ -161,7 +141,7 @@ func DiscoverInstance(tabletAlias string, forceDiscovery bool) {
 	defer func() {
 		latency.Stop("total")
 		discoveryTime := latency.Elapsed("total")
-		if discoveryTime > instancePollSecondsDuration() {
+		if discoveryTime > config.GetInstancePollTime() {
 			instancePollSecondsExceededCounter.Add(1)
 			log.Warningf("discoverInstance exceeded InstancePollSeconds for %+v, took %.4fs", tabletAlias, discoveryTime.Seconds())
 			if metric != nil {
@@ -177,7 +157,7 @@ func DiscoverInstance(tabletAlias string, forceDiscovery bool) {
 	// Calculate the expiry period each time as InstancePollSeconds
 	// _may_ change during the run of the process (via SIGHUP) and
 	// it is not possible to change the cache's default expiry..
-	if existsInCacheError := recentDiscoveryOperationKeys.Add(tabletAlias, true, instancePollSecondsDuration()); existsInCacheError != nil && !forceDiscovery {
+	if existsInCacheError := recentDiscoveryOperationKeys.Add(tabletAlias, true, config.GetInstancePollTime()); existsInCacheError != nil && !forceDiscovery {
 		// Just recently attempted
 		return
 	}
@@ -271,24 +251,23 @@ func onHealthTick() {
 // nolint SA1015: using time.Tick leaks the underlying ticker
 func ContinuousDiscovery() {
 	log.Infof("continuous discovery: setting up")
-	recentDiscoveryOperationKeys = cache.New(instancePollSecondsDuration(), time.Second)
+	recentDiscoveryOperationKeys = cache.New(config.GetInstancePollTime(), time.Second)
 
 	go handleDiscoveryRequests()
 
 	healthTick := time.Tick(config.HealthPollSeconds * time.Second)
 	caretakingTick := time.Tick(time.Minute)
-	recoveryTick := time.Tick(time.Duration(config.Config.RecoveryPollSeconds) * time.Second)
+	recoveryTick := time.Tick(config.GetRecoveryPollDuration())
 	tabletTopoTick := OpenTabletDiscovery()
 	var recoveryEntrance int64
 	var snapshotTopologiesTick <-chan time.Time
-	if config.Config.SnapshotTopologiesIntervalHours > 0 {
-		snapshotTopologiesTick = time.Tick(time.Duration(config.Config.SnapshotTopologiesIntervalHours) * time.Hour)
+	if config.GetSnapshotTopologyInterval() > 0 {
+		snapshotTopologiesTick = time.Tick(config.GetSnapshotTopologyInterval())
 	}
 
 	go func() {
 		_ = ometrics.InitMetrics()
 	}()
-	go acceptSighupSignal()
 	// On termination of the server, we should close VTOrc cleanly
 	servenv.OnTermSync(closeVTOrc)
 
@@ -328,30 +307,34 @@ func ContinuousDiscovery() {
 				go inst.SnapshotTopologies()
 			}()
 		case <-tabletTopoTick:
-			refreshAllInformation()
+			ctx, cancel := context.WithTimeout(context.Background(), config.GetTopoInformationRefreshDuration())
+			if err := refreshAllInformation(ctx); err != nil {
+				log.Errorf("failed to refresh topo information: %+v", err)
+			}
+			cancel()
 		}
 	}
 }
 
 // refreshAllInformation refreshes both shard and tablet information. This is meant to be run on tablet topo ticks.
-func refreshAllInformation() {
-	// Create a wait group
-	var wg sync.WaitGroup
+func refreshAllInformation(ctx context.Context) error {
+	// Create an errgroup
+	eg, ctx := errgroup.WithContext(ctx)
 
 	// Refresh all keyspace information.
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		RefreshAllKeyspacesAndShards()
-	}()
+	eg.Go(func() error {
+		return RefreshAllKeyspacesAndShards(ctx)
+	})
 
 	// Refresh all tablets.
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		refreshAllTablets()
-	}()
+	eg.Go(func() error {
+		return refreshAllTablets(ctx)
+	})
 
 	// Wait for both the refreshes to complete
-	wg.Wait()
+	err := eg.Wait()
+	if err == nil {
+		process.FirstDiscoveryCycleComplete.Store(true)
+	}
+	return err
 }

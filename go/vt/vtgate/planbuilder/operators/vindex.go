@@ -35,7 +35,7 @@ type (
 		Columns []*sqlparser.ColName
 		Value   sqlparser.Expr
 
-		noInputs
+		nullaryOperator
 	}
 
 	// VindexTable contains information about the vindex table we want to query
@@ -164,8 +164,8 @@ func (v *Vindex) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.E
 
 // TablesUsed implements the Operator interface.
 // It is not keyspace-qualified.
-func (v *Vindex) TablesUsed() []string {
-	return []string{v.Table.Table.Name.String()}
+func (v *Vindex) TablesUsed(in []string) []string {
+	return append(in, v.Table.Table.Name.String())
 }
 
 func (v *Vindex) ShortDescription() string {

@@ -47,7 +47,7 @@ import (
 	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/vttablet"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/queryservice/fakes"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
@@ -140,7 +140,7 @@ func setup(ctx context.Context) (func(), int) {
 	globalDBQueries = make(chan string, 1000)
 	resetBinlogClient()
 
-	vttablet.VReplicationExperimentalFlags = 0
+	vttablet.InitVReplicationConfigDefaults()
 
 	// Engines cannot be initialized in testenv because it introduces circular dependencies.
 	streamerEngine = vstreamer.NewEngine(env.TabletEnv, env.SrvTopo, env.SchemaEngine, nil, env.Cells[0])
@@ -237,7 +237,7 @@ func execConnStatements(t *testing.T, conn *dbconnpool.DBConnection, queries []s
 	}
 }
 
-//--------------------------------------
+// --------------------------------------
 // Topos and tablets
 
 func addTablet(id int) *topodatapb.Tablet {
@@ -319,7 +319,7 @@ func (ftc *fakeTabletConn) VStream(ctx context.Context, request *binlogdatapb.VS
 	if vstreamHook != nil {
 		vstreamHook(ctx)
 	}
-	return streamerEngine.Stream(ctx, request.Position, request.TableLastPKs, request.Filter, throttlerapp.VStreamerName, send)
+	return streamerEngine.Stream(ctx, request.Position, request.TableLastPKs, request.Filter, throttlerapp.VStreamerName, send, nil)
 }
 
 // vstreamRowsHook allows you to do work just before calling VStreamRows.
@@ -341,15 +341,18 @@ func (ftc *fakeTabletConn) VStreamRows(ctx context.Context, request *binlogdatap
 		}
 		row = r.Rows[0]
 	}
+	vstreamOptions := &binlogdatapb.VStreamOptions{
+		ConfigOverrides: vttablet.GetVReplicationConfigDefaults(false).Map(),
+	}
 	return streamerEngine.StreamRows(ctx, request.Query, row, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		if vstreamRowsSendHook != nil {
 			vstreamRowsSendHook(ctx)
 		}
 		return send(rows)
-	})
+	}, vstreamOptions)
 }
 
-//--------------------------------------
+// --------------------------------------
 // Binlog Client to TabletManager
 
 // fakeBinlogClient satisfies binlogplayer.Client.
@@ -426,7 +429,7 @@ func expectFBCRequest(t *testing.T, tablet *topodatapb.Tablet, pos string, table
 	}
 }
 
-//--------------------------------------
+// --------------------------------------
 // DBCLient wrapper
 
 func realDBClientFactory() binlogplayer.DBClient {
@@ -475,6 +478,10 @@ func (dbc *realDBClient) Close() {
 	dbc.conn.Close()
 }
 
+func (dbc *realDBClient) IsClosed() bool {
+	return dbc.conn.IsClosed()
+}
+
 func (dbc *realDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, error) {
 	// Use Clone() because the contents of memory region referenced by
 	// string can change when clients (e.g. vcopier) use unsafe string methods.
@@ -487,7 +494,7 @@ func (dbc *realDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Resu
 		globalDBQueries <- query
 	} else if testSetForeignKeyQueries && strings.Contains(query, "set foreign_key_checks") {
 		globalDBQueries <- query
-	} else if testForeignKeyQueries && strings.Contains(query, "foreign_key_checks") { //allow select/set for foreign_key_checks
+	} else if testForeignKeyQueries && strings.Contains(query, "foreign_key_checks") { // allow select/set for foreign_key_checks
 		globalDBQueries <- query
 	}
 	return qr, err
@@ -684,7 +691,7 @@ func expectNontxQueries(t *testing.T, expectations qh.ExpectationSequence, recvT
 			}
 
 			result := validator.AcceptQuery(got)
-
+			require.NotNil(t, result)
 			require.True(t, result.Accepted, fmt.Sprintf(
 				"query:%q\nmessage:%s\nexpectation:%s\nmatched:%t\nerror:%v\nhistory:%s",
 				got, result.Message, result.Expectation, result.Matched, result.Error, validator.History(),

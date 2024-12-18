@@ -55,8 +55,7 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 		"--topo_global_root", clusterInfo.ClusterInstance.VtctlProcess.TopoGlobalRoot,
 	}
 	servenv.ParseFlags("vtorc")
-	config.Config.RecoveryPeriodBlockSeconds = 1
-	config.Config.InstancePollSeconds = 1
+	config.SetInstancePollTime(1 * time.Second)
 	config.MarkConfigurationLoaded()
 	server.StartVTOrcDiscovery()
 
@@ -78,7 +77,7 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 	assert.Contains(t, primaryInstance.InstanceAlias, "zone1")
 	assert.NotEqual(t, 0, primaryInstance.ServerID)
 	assert.Greater(t, len(primaryInstance.ServerUUID), 10)
-	assert.Regexp(t, "[58].[70].*", primaryInstance.Version)
+	assert.Regexp(t, "[58].[704].*", primaryInstance.Version)
 	assert.NotEmpty(t, primaryInstance.VersionComment)
 	assert.False(t, primaryInstance.ReadOnly)
 	assert.True(t, primaryInstance.LogBinEnabled)
@@ -128,7 +127,7 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 	assert.Contains(t, replicaInstance.InstanceAlias, "zone1")
 	assert.NotEqual(t, 0, replicaInstance.ServerID)
 	assert.Greater(t, len(replicaInstance.ServerUUID), 10)
-	assert.Regexp(t, "[58].[70].*", replicaInstance.Version)
+	assert.Regexp(t, "[58].[704].*", replicaInstance.Version)
 	assert.NotEmpty(t, replicaInstance.VersionComment)
 	assert.True(t, replicaInstance.ReadOnly)
 	assert.True(t, replicaInstance.LogBinEnabled)

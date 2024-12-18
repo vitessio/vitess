@@ -459,6 +459,16 @@ func (vttablet *VttabletProcess) QueryTablet(query string, keyspace string, useD
 	return executeQuery(conn, query)
 }
 
+// MultiQueryTablet lets you execute a query in this tablet and get the result
+func (vttablet *VttabletProcess) MultiQueryTablet(sql string, keyspace string, useDb bool) error {
+	conn, err := vttablet.TabletConn(keyspace, useDb)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	return executeMultiQuery(conn, sql)
+}
+
 // SemiSyncExtensionLoaded returns what type of semi-sync extension is loaded
 func (vttablet *VttabletProcess) SemiSyncExtensionLoaded() (mysql.SemiSyncType, error) {
 	conn, err := vttablet.TabletConn("", false)
@@ -611,6 +621,7 @@ func (vttablet *VttabletProcess) getDBSystemValues(placeholder string, value str
 
 // WaitForVReplicationToCatchup waits for "workflow" to finish copying
 func (vttablet *VttabletProcess) WaitForVReplicationToCatchup(t testing.TB, workflow, database string, sidecarDBName string, duration time.Duration) {
+	t.Helper()
 	if sidecarDBName == "" {
 		sidecarDBName = sidecar.DefaultName
 	}
@@ -636,7 +647,7 @@ func (vttablet *VttabletProcess) WaitForVReplicationToCatchup(t testing.TB, work
 	for ind, query := range queries {
 		waitDuration := 500 * time.Millisecond
 		for duration > 0 {
-			log.Infof("Executing query %s on %s", query, vttablet.Name)
+			log.Infof("Executing query %s on %s", query, vttablet.TabletPath)
 			lastChecked = time.Now()
 			qr, err := executeQuery(conn, query)
 			if err != nil {

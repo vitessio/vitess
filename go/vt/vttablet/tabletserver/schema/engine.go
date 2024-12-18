@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
@@ -40,6 +41,7 @@ import (
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/servenv"
@@ -85,9 +87,10 @@ type Engine struct {
 
 	historian *historian
 
-	conns         *connpool.Pool
-	ticks         *timer.Timer
-	reloadTimeout time.Duration
+	conns           *connpool.Pool
+	ticks           *timer.Timer
+	reloadTimeout   time.Duration
+	throttledLogger *logutil.ThrottledLogger
 
 	// dbCreationFailed is for preventing log spam.
 	dbCreationFailed bool
@@ -109,7 +112,8 @@ func NewEngine(env tabletenv.Env) *Engine {
 			Size:        3,
 			IdleTimeout: env.Config().OltpReadPool.IdleTimeout,
 		}),
-		ticks: timer.NewTimer(reloadTime),
+		ticks:           timer.NewTimer(reloadTime),
+		throttledLogger: logutil.NewThrottledLogger("schema-tracker", 1*time.Minute),
 	}
 	se.schemaCopy = env.Config().SignalWhenSchemaChange
 	_ = env.Exporter().NewGaugeDurationFunc("SchemaReloadTime", "vttablet keeps table schemas in its own memory and periodically refreshes it from MySQL. This config controls the reload time.", se.ticks.Interval)
@@ -177,14 +181,15 @@ func (se *Engine) syncSidecarDB(ctx context.Context, conn *dbconnpool.DBConnecti
 // EnsureConnectionAndDB ensures that we can connect to mysql.
 // If tablet type is primary and there is no db, then the database is created.
 // This function can be called before opening the Engine.
-func (se *Engine) EnsureConnectionAndDB(tabletType topodatapb.TabletType) error {
+func (se *Engine) EnsureConnectionAndDB(tabletType topodatapb.TabletType, serving bool) error {
 	ctx := tabletenv.LocalContext()
 	// We use AllPrivs since syncSidecarDB() might need to upgrade the schema
 	conn, err := dbconnpool.NewDBConnection(ctx, se.env.Config().DB.AllPrivsWithDB())
 	if err == nil {
 		se.dbCreationFailed = false
 		// upgrade sidecar db if required, for a tablet with an existing database
-		if tabletType == topodatapb.TabletType_PRIMARY {
+		// only run DDL updates when a PRIMARY is transitioning to serving state.
+		if tabletType == topodatapb.TabletType_PRIMARY && serving {
 			if err := se.syncSidecarDB(ctx, conn); err != nil {
 				conn.Close()
 				return err
@@ -193,7 +198,7 @@ func (se *Engine) EnsureConnectionAndDB(tabletType topodatapb.TabletType) error 
 		conn.Close()
 		return nil
 	}
-	if tabletType != topodatapb.TabletType_PRIMARY {
+	if tabletType != topodatapb.TabletType_PRIMARY || !serving {
 		return err
 	}
 	if merr, isSQLErr := err.(*sqlerror.SQLError); !isSQLErr || merr.Num != sqlerror.ERBadDb {
@@ -420,10 +425,55 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 		return err
 	}
 
+	var innodbTablesStats map[string]*Table
+	if includeStats {
+		if innodbTableSizesQuery := conn.Conn.BaseShowInnodbTableSizes(); innodbTableSizesQuery != "" {
+			// Since the InnoDB table size query is available to us on this MySQL version, we should use it.
+			// We therefore don't want to query for table sizes in getTableData()
+			includeStats = false
+
+			innodbResults, err := conn.Conn.Exec(ctx, innodbTableSizesQuery, maxTableCount, false)
+			if err != nil {
+				return vterrors.Wrapf(err, "in Engine.reload(), reading innodb tables")
+			}
+			innodbTablesStats = make(map[string]*Table, len(innodbResults.Rows))
+			for _, row := range innodbResults.Rows {
+				innodbTableName := row[0].ToString() // In the form of encoded `schema/table`
+				fileSize, _ := row[1].ToCastUint64()
+				allocatedSize, _ := row[2].ToCastUint64()
+
+				if _, ok := innodbTablesStats[innodbTableName]; !ok {
+					innodbTablesStats[innodbTableName] = &Table{}
+				}
+				// There could be multiple appearances of the same table in the result set:
+				// A table that has FULLTEXT indexes will appear once for the table itself,
+				// with total size of row data, and once for the aggregates size of all
+				// FULLTEXT indexes. We aggregate the sizes of all appearances of the same table.
+				table := innodbTablesStats[innodbTableName]
+				table.FileSize += fileSize
+				table.AllocatedSize += allocatedSize
+
+				if originalTableName, _, found := strings.Cut(innodbTableName, "#p#"); found {
+					// innodbTableName is encoded any special characters are turned into some @0-f0-f0-f value.
+					// Therefore this "#p#" here is a clear indication that we are looking at a partitioned table.
+					// We turn `my@002ddb/tbl_part#p#p0` into `my@002ddb/tbl_part`
+					// and aggregate the total partition sizes.
+					if _, ok := innodbTablesStats[originalTableName]; !ok {
+						innodbTablesStats[originalTableName] = &Table{}
+						originalTable := innodbTablesStats[originalTableName]
+						originalTable.FileSize += fileSize
+						originalTable.AllocatedSize += allocatedSize
+					}
+				}
+			}
+			// See testing in TestEngineReload
+		}
+	}
 	tableData, err := getTableData(ctx, conn.Conn, includeStats)
 	if err != nil {
 		return vterrors.Wrapf(err, "in Engine.reload(), reading tables")
 	}
+
 	// On the primary tablet, we also check the data we have stored in our schema tables to see what all needs reloading.
 	shouldUseDatabase := se.isServingPrimary && se.schemaCopy
 
@@ -448,7 +498,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 
 	udfsChanged, err := getChangedUserDefinedFunctions(ctx, conn.Conn, shouldUseDatabase)
 	if err != nil {
-		return err
+		se.throttledLogger.Errorf("error in getting changed UDFs: %v", err)
 	}
 
 	rec := concurrency.AllErrorRecorder{}
@@ -458,8 +508,14 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 	changedTables := make(map[string]*Table)
 	// created and altered contain the names of created and altered tables for broadcast.
 	var created, altered []*Table
+	databaseName := se.cp.DBName()
 	for _, row := range tableData.Rows {
 		tableName := row[0].ToString()
+		var innodbTable *Table
+		if innodbTablesStats != nil {
+			innodbTableName := fmt.Sprintf("%s/%s", charset.TablenameToFilename(databaseName), charset.TablenameToFilename(tableName))
+			innodbTable = innodbTablesStats[innodbTableName]
+		}
 		curTables[tableName] = true
 		createTime, _ := row[2].ToCastInt64()
 		var fileSize, allocatedSize uint64
@@ -470,6 +526,9 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 			// publish the size metrics
 			se.tableFileSizeGauge.Set(tableName, int64(fileSize))
 			se.tableAllocatedSizeGauge.Set(tableName, int64(allocatedSize))
+		} else if innodbTable != nil {
+			se.tableFileSizeGauge.Set(tableName, int64(innodbTable.FileSize))
+			se.tableAllocatedSizeGauge.Set(tableName, int64(innodbTable.AllocatedSize))
 		}
 
 		// Table schemas are cached by tabletserver. For each table we cache `information_schema.tables.create_time` (`tbl.CreateTime`).
@@ -497,6 +556,9 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 			if includeStats {
 				tbl.FileSize = fileSize
 				tbl.AllocatedSize = allocatedSize
+			} else if innodbTable != nil {
+				tbl.FileSize = innodbTable.FileSize
+				tbl.AllocatedSize = innodbTable.AllocatedSize
 			}
 			continue
 		}
@@ -516,6 +578,9 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 		if includeStats {
 			table.FileSize = fileSize
 			table.AllocatedSize = allocatedSize
+		} else if innodbTable != nil {
+			table.FileSize = innodbTable.FileSize
+			table.AllocatedSize = innodbTable.AllocatedSize
 		}
 		table.CreateTime = createTime
 		changedTables[tableName] = table
@@ -800,6 +865,13 @@ func (se *Engine) broadcast(created, altered, dropped []*Table, udfsChanged bool
 	}
 }
 
+// BroadcastForTesting is meant to be a testing function that triggers a broadcast call.
+func (se *Engine) BroadcastForTesting(created, altered, dropped []*Table, udfsChanged bool) {
+	se.mu.Lock()
+	defer se.mu.Unlock()
+	se.broadcast(created, altered, dropped, udfsChanged)
+}
+
 // GetTable returns the info for a table.
 func (se *Engine) GetTable(tableName sqlparser.IdentifierCS) *Table {
 	se.mu.Lock()
@@ -886,6 +958,7 @@ func NewEngineForTests() *Engine {
 		tables:    make(map[string]*Table),
 		historian: newHistorian(false, 0, nil),
 		env:       tabletenv.NewEnv(vtenv.NewTestEnv(), tabletenv.NewDefaultConfig(), "SchemaEngineForTests"),
+		notifiers: make(map[string]notifier),
 	}
 	return se
 }

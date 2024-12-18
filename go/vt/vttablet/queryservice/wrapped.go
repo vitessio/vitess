@@ -146,11 +146,13 @@ func (ws *wrappedService) CreateTransaction(ctx context.Context, target *querypb
 	})
 }
 
-func (ws *wrappedService) StartCommit(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (err error) {
-	return ws.wrapper(ctx, target, ws.impl, "StartCommit", true, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
-		innerErr := conn.StartCommit(ctx, target, transactionID, dtid)
+func (ws *wrappedService) StartCommit(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (state querypb.StartCommitState, err error) {
+	err = ws.wrapper(ctx, target, ws.impl, "StartCommit", true, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
+		var innerErr error
+		state, innerErr = conn.StartCommit(ctx, target, transactionID, dtid)
 		return canRetry(ctx, innerErr), innerErr
 	})
+	return state, err
 }
 
 func (ws *wrappedService) SetRollback(ctx context.Context, target *querypb.Target, dtid string, transactionID int64) (err error) {
@@ -176,10 +178,10 @@ func (ws *wrappedService) ReadTransaction(ctx context.Context, target *querypb.T
 	return metadata, err
 }
 
-func (ws *wrappedService) UnresolvedTransactions(ctx context.Context, target *querypb.Target) (transactions []*querypb.TransactionMetadata, err error) {
+func (ws *wrappedService) UnresolvedTransactions(ctx context.Context, target *querypb.Target, abandonAgeSeconds int64) (transactions []*querypb.TransactionMetadata, err error) {
 	err = ws.wrapper(ctx, target, ws.impl, "UnresolvedTransactions", false, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
 		var innerErr error
-		transactions, innerErr = conn.UnresolvedTransactions(ctx, target)
+		transactions, innerErr = conn.UnresolvedTransactions(ctx, target, abandonAgeSeconds)
 		return canRetry(ctx, innerErr), innerErr
 	})
 	return transactions, err

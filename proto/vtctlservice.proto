@@ -58,6 +58,8 @@ service Vtctld {
   rpc BackupShard(vtctldata.BackupShardRequest) returns (stream vtctldata.BackupResponse) {};
   // CancelSchemaMigration cancels one or all migrations, terminating any running ones as needed.
   rpc CancelSchemaMigration(vtctldata.CancelSchemaMigrationRequest) returns (vtctldata.CancelSchemaMigrationResponse) {};
+  // ChangeTabletTags changes the tags of the specified tablet, if possible.
+  rpc ChangeTabletTags(vtctldata.ChangeTabletTagsRequest) returns (vtctldata.ChangeTabletTagsResponse) {};
   // ChangeTabletType changes the db type for the specified tablet, if possible.
   // This is used primarily to arrange replicas, and it will not convert a
   // primary. For that, use InitShardPrimary.
@@ -70,6 +72,8 @@ service Vtctld {
   rpc CleanupSchemaMigration(vtctldata.CleanupSchemaMigrationRequest) returns (vtctldata.CleanupSchemaMigrationResponse) {};
   // CompleteSchemaMigration completes one or all migrations executed with --postpone-completion.
   rpc CompleteSchemaMigration(vtctldata.CompleteSchemaMigrationRequest) returns (vtctldata.CompleteSchemaMigrationResponse) {};
+  // CompleteSchemaMigration completes one or all migrations executed with --postpone-completion.
+  rpc ConcludeTransaction(vtctldata.ConcludeTransactionRequest) returns (vtctldata.ConcludeTransactionResponse) {};
   // CreateKeyspace creates the specified keyspace in the topology. For a
   // SNAPSHOT keyspace, the request must specify the name of a base keyspace,
   // as well as a snapshot time.
@@ -169,6 +173,10 @@ service Vtctld {
   rpc GetThrottlerStatus(vtctldata.GetThrottlerStatusRequest) returns (vtctldata.GetThrottlerStatusResponse) {};
   // GetTopologyPath returns the topology cell at a given path.
   rpc GetTopologyPath(vtctldata.GetTopologyPathRequest) returns (vtctldata.GetTopologyPathResponse) {};
+  // GetTransactionInfo reads a given transactions information.
+  rpc GetTransactionInfo(vtctldata.GetTransactionInfoRequest) returns (vtctldata.GetTransactionInfoResponse) {};
+  // GetTransactions returns the unresolved transactions for the request.
+  rpc GetUnresolvedTransactions(vtctldata.GetUnresolvedTransactionsRequest) returns (vtctldata.GetUnresolvedTransactionsResponse) {};
   // GetVersion returns the version of a tablet from its debug vars.
   rpc GetVersion(vtctldata.GetVersionRequest) returns (vtctldata.GetVersionResponse) {};
   // GetVSchema returns the vschema for a keyspace.

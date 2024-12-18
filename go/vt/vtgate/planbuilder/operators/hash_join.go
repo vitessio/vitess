@@ -31,7 +31,7 @@ import (
 
 type (
 	HashJoin struct {
-		LHS, RHS Operator
+		binaryOperator
 
 		// LeftJoin will be true in the case of an outer join
 		LeftJoin bool
@@ -79,10 +79,9 @@ var _ JoinOp = (*HashJoin)(nil)
 
 func NewHashJoin(lhs, rhs Operator, outerJoin bool) *HashJoin {
 	hj := &HashJoin{
-		LHS:      lhs,
-		RHS:      rhs,
-		LeftJoin: outerJoin,
-		columns:  &hashJoinColumns{},
+		binaryOperator: newBinaryOp(lhs, rhs),
+		LeftJoin:       outerJoin,
+		columns:        &hashJoinColumns{},
 	}
 	return hj
 }
@@ -95,14 +94,6 @@ func (hj *HashJoin) Clone(inputs []Operator) Operator {
 	kopy.RHSKeys = slices.Clone(hj.RHSKeys)
 	kopy.JoinComparisons = slices.Clone(hj.JoinComparisons)
 	return &kopy
-}
-
-func (hj *HashJoin) Inputs() []Operator {
-	return []Operator{hj.LHS, hj.RHS}
-}
-
-func (hj *HashJoin) SetInputs(operators []Operator) {
-	hj.LHS, hj.RHS = operators[0], operators[1]
 }
 
 func (hj *HashJoin) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {

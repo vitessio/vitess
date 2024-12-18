@@ -55,6 +55,8 @@ public class RetryingInterceptorTest {
       Assert.fail("Should have failed after 1 attempt");
     } catch (Exception e) {
       Assert.assertEquals(1, forceRetryNTimesInterceptor.getNumRetryableFailures());
+    }finally {
+      channel.shutdownNow();
     }
   }
 
@@ -75,6 +77,8 @@ public class RetryingInterceptorTest {
     } catch (Exception e) {
       e.printStackTrace();
       Assert.assertEquals(3, forceRetryNTimesInterceptor.getNumRetryableFailures());
+    } finally {
+      channel.shutdownNow();
     }
   }
 
@@ -95,6 +99,8 @@ public class RetryingInterceptorTest {
       Assert.fail("Should have failed");
     } catch (Exception e) {
       Assert.assertEquals(1, forceRetryNTimesInterceptor.getNumRetryableFailures());
+    }finally {
+      channel.shutdownNow();
     }
   }
 

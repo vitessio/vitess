@@ -19,7 +19,7 @@ env:
 jobs:
   build:
     name: Run endtoend tests on {{.Name}}
-    runs-on: {{if .Cores16}}gh-hosted-runners-16cores-1{{else}}gh-hosted-runners-4cores-1{{end}}
+    runs-on: {{if .Cores16}}gh-hosted-runners-16cores-1-24.04{{else}}ubuntu-24.04{{end}}
 
     steps:
     - name: Skip CI
@@ -61,11 +61,11 @@ jobs:
 
     - name: Check out code
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
-      uses: actions/checkout@v4
+      uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
 
     - name: Check for changes in relevant files
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
-      uses: dorny/paths-filter@v3.0.1
+      uses: dorny/paths-filter@ebc4d7e9ebcb0b1eb21480bb8f43113e996ac77a # v3.0.1
       id: changes
       with:
         token: ''
@@ -90,13 +90,13 @@ jobs:
 
     - name: Set up Go
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
       with:
-        go-version: 1.22.5
+        go-version-file: go.mod
 
     - name: Set up python
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@39cd14951b08e74b54015e9e001cdefcf80e669f # v5.1.1
 
     - name: Tune the OS
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -126,16 +126,20 @@ jobs:
         # Get key to latest MySQL repo
         sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys A8D3785C
 
-        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.32-1_all.deb
+        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.33-1_all.deb
         # Bionic packages are still compatible for Jammy since there's no MySQL 5.7
         # packages for Jammy.
         echo mysql-apt-config mysql-apt-config/repo-codename select bionic | sudo debconf-set-selections
         echo mysql-apt-config mysql-apt-config/select-server select mysql-5.7 | sudo debconf-set-selections
         sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
         sudo apt-get update
-        sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y mysql-client=5.7* mysql-community-server=5.7* mysql-server=5.7* libncurses5
+        # We have to install this old version of libaio1. See also:
+        # https://bugs.launchpad.net/ubuntu/+source/libaio/+bug/2067501
+        curl -L -O http://mirrors.kernel.org/ubuntu/pool/main/liba/libaio/libaio1_0.3.112-13build1_amd64.deb
+        sudo dpkg -i libaio1_0.3.112-13build1_amd64.deb
+        sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y mysql-client=5.7* mysql-community-server=5.7* mysql-server=5.7* libncurses6
 
-        sudo apt-get install -y make unzip g++ etcd curl git wget eatmydata
+        sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget eatmydata
         sudo service mysql stop
         sudo service etcd stop
 
@@ -228,7 +232,7 @@ jobs:
 
     - name: Test Summary
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true' && always()
-      uses: test-summary/action@v2
+      uses: test-summary/action@31493c76ec9e7aa675f1585d3ed6f1da69269a86 # v2.4
       with:
         paths: "report.xml"
-        show: "fail, skip"
+        show: "fail"

@@ -128,7 +128,7 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 	fp := m.resetStack()
 	*fp.inputIdx() = startIdx
 	*fp.patIdx() = 0
-	for i := 0; i < len(m.data); i++ {
+	for i := range len(m.data) {
 		m.data[i] = 0
 	}
 

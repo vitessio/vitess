@@ -29,6 +29,7 @@ import "replicationdata.proto";
 import "logutil.proto";
 import "vttime.proto";
 import "vtrpc.proto";
+import "mysqlctl.proto";
 
 //
 // Data structures
@@ -309,6 +310,51 @@ message ExecuteFetchAsAppResponse {
   query.QueryResult result = 1;
 }
 
+message GetUnresolvedTransactionsRequest {
+  int64 abandon_age = 1;
+}
+
+message GetUnresolvedTransactionsResponse {
+  repeated query.TransactionMetadata transactions = 1;
+}
+
+message ReadTransactionRequest {
+  string dtid = 1;
+}
+
+message ReadTransactionResponse {
+  query.TransactionMetadata transaction = 1;
+}
+
+message GetTransactionInfoRequest {
+  string dtid = 1;
+}
+
+message GetTransactionInfoResponse {
+  string state = 1;
+  string message = 2;
+  int64 time_created = 3;
+  repeated string statements = 4;
+}
+
+
+message ConcludeTransactionRequest {
+  string dtid = 1;
+  bool mm = 2;
+}
+
+message ConcludeTransactionResponse {
+}
+
+
+message MysqlHostMetricsRequest {
+}
+
+message MysqlHostMetricsResponse {
+  mysqlctl.HostMetricsResponse HostMetrics = 1;
+}
+
+
 message ReplicationStatusRequest {
 }
 
@@ -414,6 +460,13 @@ message PopulateReparentJournalRequest {
 message PopulateReparentJournalResponse {
 }
 
+message ReadReparentJournalInfoRequest {
+}
+
+message ReadReparentJournalInfoResponse {
+  int32 length = 1;
+}
+
 message InitReplicaRequest {
   topodata.TabletAlias parent = 1;
   string replication_position = 2;
@@ -516,6 +569,8 @@ message BackupRequest {
   // UpgradeSafe indicates if the backup should be taken with innodb_fast_shutdown=0
   // so that it's a backup that can be used for an upgrade.
   bool upgrade_safe = 4;
+  // BackupEngine specifies if we want to use a particular backup engine for this backup request
+  optional string backup_engine = 5;
 }
 
 message BackupResponse {
@@ -533,6 +588,8 @@ message RestoreFromBackupRequest {
   // RestoreToTimestamp, if given, requested an inremental restore up to (and excluding) the given timestamp.
   // RestoreToTimestamp and RestoreToPos are mutually exclusive.
   vttime.Time restore_to_timestamp = 4;
+  // AllowedBackupEngines, if present will filter out any backups taken with engines not included in the list
+  repeated string allowed_backup_engines = 5;
 }
 
 message RestoreFromBackupResponse {
@@ -565,6 +622,18 @@ message CreateVReplicationWorkflowRequest {
 
 message CreateVReplicationWorkflowResponse {
   query.QueryResult result = 1;
+}
+
+message DeleteTableDataRequest {
+  // The key is the table that we want to delete data from.
+  // The value is the filter or WHERE clause to use when deleting
+  // data in the table.
+  map <string, string> table_filters = 1;
+  // BatchSize is the number of rows to delete in a single batch.
+  int64 batch_size = 2;
+}
+
+message DeleteTableDataResponse {
 }
 
 message DeleteVReplicationWorkflowRequest {
@@ -627,6 +696,18 @@ message ReadVReplicationWorkflowResponse {
   }
   repeated Stream streams = 11;
   string options = 12;
+  map<string, string> config_overrides = 13;
+}
+
+message ValidateVReplicationPermissionsRequest {
+}
+
+message ValidateVReplicationPermissionsResponse {
+  // The --db_filtered_user on the tablet.
+  string user = 1;
+  // Does the user have the minimum privileges needed to manage
+  // vreplication metadata.
+  bool ok = 2;
 }
 
 message VDiffRequest {
@@ -657,6 +738,7 @@ message VDiffReportOptions {
   bool debug_query = 2;
   string format = 3;
   int64 max_sample_rows = 4;
+  int64 row_diff_column_truncate_at = 5;
 }
 
 message VDiffCoreOptions {
@@ -669,6 +751,7 @@ message VDiffCoreOptions {
   int64 max_extra_rows_to_compare = 7;
   bool update_table_stats = 8;
   int64 max_diff_seconds = 9;
+  optional bool auto_start = 10;
 }
 
 message VDiffOptions {
@@ -676,6 +759,7 @@ message VDiffOptions {
   VDiffCoreOptions core_options = 2;
   VDiffReportOptions report_options = 3;
 }
+
 
 // UpdateVReplicationWorkflowRequest is used to update an existing VReplication
 // workflow. Note that the following fields MUST have an explicit value provided
@@ -687,10 +771,11 @@ message UpdateVReplicationWorkflowRequest {
   string workflow = 1;
   repeated string cells = 2;
   repeated topodata.TabletType tablet_types = 3;
-  TabletSelectionPreference tablet_selection_preference = 4;
-  binlogdata.OnDDLAction on_ddl = 5;
-  binlogdata.VReplicationWorkflowState state = 6;
+  optional TabletSelectionPreference tablet_selection_preference = 4;
+  optional binlogdata.OnDDLAction on_ddl = 5;
+  optional binlogdata.VReplicationWorkflowState state = 6;
   reserved 7; // unused, was: repeated string shards
+  map<string, string> config_overrides = 8;
 }
 
 message UpdateVReplicationWorkflowResponse {
@@ -707,9 +792,9 @@ message UpdateVReplicationWorkflowsRequest {
   bool all_workflows = 1;
   repeated string include_workflows = 2;
   repeated string exclude_workflows = 3;
-  binlogdata.VReplicationWorkflowState state = 4;
-  string message = 5;
-  string stop_position = 6;
+  optional binlogdata.VReplicationWorkflowState state = 4;
+  optional string message = 5;
+  optional string stop_position = 6;
 }
 
 message UpdateVReplicationWorkflowsResponse {
@@ -853,4 +938,13 @@ message GetThrottlerStatusResponse {
   }
   // RecentApps is a map of app names to their recent check status
   map<string, RecentApp> recent_apps = 18;
+}
+
+message ChangeTagsRequest {
+  map<string, string> tags = 1;
+  bool replace = 2;
+}
+
+message ChangeTagsResponse {
+  map<string, string> tags = 1;
 }

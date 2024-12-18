@@ -138,7 +138,7 @@ func (mcmp *MySQLCompare) AssertContainsError(query, expected string) {
 	mcmp.t.Helper()
 	_, err := mcmp.ExecAllowAndCompareError(query, CompareOptions{})
 	require.Error(mcmp.t, err)
-	assert.Contains(mcmp.t, err.Error(), expected, "actual error: %s", err.Error())
+	assert.ErrorContains(mcmp.t, err, expected, "actual error: %s", err.Error())
 }
 
 // AssertMatchesNoOrder executes the given query against both Vitess and MySQL.
@@ -211,6 +211,18 @@ func (mcmp *MySQLCompare) Exec(query string) *sqltypes.Result {
 
 	mysqlQr, err := mcmp.MySQLConn.ExecuteFetch(query, 1000, true)
 	require.NoError(mcmp.t, err, "[MySQL Error] for query: "+query)
+	compareVitessAndMySQLResults(mcmp.t, query, mcmp.VtConn, vtQr, mysqlQr, CompareOptions{})
+	return vtQr
+}
+
+// ExecAssert is the same as Exec, but it only does assertions, it won't FailNow
+func (mcmp *MySQLCompare) ExecAssert(query string) *sqltypes.Result {
+	mcmp.t.Helper()
+	vtQr, err := mcmp.VtConn.ExecuteFetch(query, 1000, true)
+	assert.NoError(mcmp.t, err, "[Vitess Error] for query: "+query)
+
+	mysqlQr, err := mcmp.MySQLConn.ExecuteFetch(query, 1000, true)
+	assert.NoError(mcmp.t, err, "[MySQL Error] for query: "+query)
 	compareVitessAndMySQLResults(mcmp.t, query, mcmp.VtConn, vtQr, mysqlQr, CompareOptions{})
 	return vtQr
 }

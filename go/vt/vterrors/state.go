@@ -62,6 +62,11 @@ const (
 	NoReferencedRow2
 	UnknownStmtHandler
 	KeyDoesNotExist
+	CTERecursiveRequiresSingleReference
+	CTERecursiveRequiresUnion
+	CTERecursiveForbidsAggregation
+	CTERecursiveForbiddenJoinOrder
+	CTEMaxRecursionDepth
 
 	// not found
 	BadDb

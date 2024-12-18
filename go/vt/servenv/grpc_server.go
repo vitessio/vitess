@@ -169,6 +169,11 @@ func GRPCPort() int {
 	return gRPCPort
 }
 
+// GRPCPort returns the value of the `--grpc_bind_address` flag.
+func GRPCBindAddress() string {
+	return gRPCBindAddress
+}
+
 // isGRPCEnabled returns true if gRPC server is set
 func isGRPCEnabled() bool {
 	if gRPCPort != 0 {

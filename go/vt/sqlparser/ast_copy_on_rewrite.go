@@ -761,9 +761,11 @@ func (c *cow) copyOnRewriteRefOfAlterDatabase(n *AlterDatabase, parent SQLNode) 
 	}
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
+		_Comments, changedComments := c.copyOnRewriteRefOfParsedComments(n.Comments, n)
 		_DBName, changedDBName := c.copyOnRewriteIdentifierCS(n.DBName, n)
-		if changedDBName {
+		if changedComments || changedDBName {
 			res := *n
+			res.Comments, _ = _Comments.(*ParsedComments)
 			res.DBName, _ = _DBName.(IdentifierCS)
 			out = &res
 			if c.cloned != nil {
@@ -1522,12 +1524,12 @@ func (c *cow) copyOnRewriteRefOfCommonTableExpr(n *CommonTableExpr, parent SQLNo
 	if c.pre == nil || c.pre(n, parent) {
 		_ID, changedID := c.copyOnRewriteIdentifierCS(n.ID, n)
 		_Columns, changedColumns := c.copyOnRewriteColumns(n.Columns, n)
-		_Subquery, changedSubquery := c.copyOnRewriteRefOfSubquery(n.Subquery, n)
+		_Subquery, changedSubquery := c.copyOnRewriteSelectStatement(n.Subquery, n)
 		if changedID || changedColumns || changedSubquery {
 			res := *n
 			res.ID, _ = _ID.(IdentifierCS)
 			res.Columns, _ = _Columns.(Columns)
-			res.Subquery, _ = _Subquery.(*Subquery)
+			res.Subquery, _ = _Subquery.(SelectStatement)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)

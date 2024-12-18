@@ -79,7 +79,6 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	exitCode := func() int {
@@ -105,6 +104,7 @@ func TestMain(m *testing.M) {
 			"--heartbeat_enable",
 			"--health_check_interval", tabletHealthcheckRefreshInterval.String(),
 			"--unhealthy_threshold", tabletUnhealthyThreshold.String(),
+			"--twopc_abandon_age", "200",
 		}
 
 		// Start keyspace

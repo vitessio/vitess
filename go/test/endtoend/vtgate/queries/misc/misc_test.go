@@ -17,18 +17,19 @@ limitations under the License.
 package misc
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"vitess.io/vitess/go/mysql"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
 )
 
@@ -48,7 +49,6 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 	return mcmp, func() {
 		deleteAll()
 		mcmp.Close()
-		cluster.PanicHandler(t)
 	}
 }
 
@@ -197,7 +197,7 @@ func TestHighNumberOfParams(t *testing.T) {
 	var vals []any
 	var params []string
 	for i := 0; i < paramCount; i++ {
-		vals = append(vals, strconv.Itoa(i))
+		vals = append(vals, i)
 		params = append(params, "?")
 	}
 
@@ -472,4 +472,50 @@ func TestEnumSetVals(t *testing.T) {
 
 	mcmp.AssertMatches("select id, enum_col, cast(enum_col as signed) from tbl_enum_set order by enum_col, id", `[[INT64(4) ENUM("xsmall") INT64(1)] [INT64(2) ENUM("small") INT64(2)] [INT64(1) ENUM("medium") INT64(3)] [INT64(5) ENUM("medium") INT64(3)] [INT64(3) ENUM("large") INT64(4)]]`)
 	mcmp.AssertMatches("select id, set_col, cast(set_col as unsigned) from tbl_enum_set order by set_col, id", `[[INT64(4) SET("a,b") UINT64(3)] [INT64(3) SET("c") UINT64(4)] [INT64(5) SET("a,d") UINT64(9)] [INT64(1) SET("a,b,e") UINT64(19)] [INT64(2) SET("e,f,g") UINT64(112)]]`)
+}
+
+func TestTimeZones(t *testing.T) {
+	testCases := []struct {
+		name         string
+		targetTZ     string
+		expectedDiff time.Duration
+	}{
+		{"UTC to +08:00", "+08:00", 8 * time.Hour},
+		{"UTC to -08:00", "-08:00", -8 * time.Hour},
+		{"UTC to +05:30", "+05:30", 5*time.Hour + 30*time.Minute},
+		{"UTC to -05:45", "-05:45", -(5*time.Hour + 45*time.Minute)},
+		{"UTC to +09:00", "+09:00", 9 * time.Hour},
+		{"UTC to -12:00", "-12:00", -12 * time.Hour},
+	}
+
+	// Connect to Vitess
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Set the initial time zone and get the time
+			utils.Exec(t, conn, "set time_zone = '+00:00'")
+			rs1 := utils.Exec(t, conn, "select now()")
+
+			// Set the target time zone and get the time
+			utils.Exec(t, conn, fmt.Sprintf("set time_zone = '%s'", tc.targetTZ))
+			rs2 := utils.Exec(t, conn, "select now()")
+
+			// Parse the times from the query result
+			layout := "2006-01-02 15:04:05" // MySQL default datetime format
+			time1, err := time.Parse(layout, rs1.Rows[0][0].ToString())
+			require.NoError(t, err)
+			time2, err := time.Parse(layout, rs2.Rows[0][0].ToString())
+			require.NoError(t, err)
+
+			// Calculate the actual difference between time2 and time1
+			actualDiff := time2.Sub(time1)
+			allowableDeviation := time.Second // allow up to 1-second difference
+
+			// Use a range to allow for slight variations
+			require.InDeltaf(t, tc.expectedDiff.Seconds(), actualDiff.Seconds(), allowableDeviation.Seconds(),
+				"time2 should be approximately %v after time1, within 1 second tolerance\n%v vs %v", tc.expectedDiff, time1, time2)
+		})
+	}
 }

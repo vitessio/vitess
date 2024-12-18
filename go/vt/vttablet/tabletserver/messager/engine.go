@@ -45,15 +45,23 @@ type TabletService interface {
 // VStreamer defines  the functions of VStreamer
 // that the messager needs.
 type VStreamer interface {
-	Stream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, throttlerApp throttlerapp.Name, send func([]*binlogdatapb.VEvent) error) error
+	Stream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter,
+		throttlerApp throttlerapp.Name, send func([]*binlogdatapb.VEvent) error, options *binlogdatapb.VStreamOptions) error
 	StreamResults(ctx context.Context, query string, send func(*binlogdatapb.VStreamResultsResponse) error) error
 }
 
 // Engine is the engine for handling messages.
 type Engine struct {
-	mu       sync.Mutex
-	isOpen   bool
-	managers map[string]*messageManager
+	// mu is a mutex used to protect the isOpen variable
+	// and for ensuring we don't call setup functions in parallel.
+	mu     sync.Mutex
+	isOpen bool
+
+	// managersMu is a mutex used to protect the managers field.
+	// We require two separate mutexes, so that we don't have to acquire the same mutex
+	// in Close and schemaChanged which can lead to a deadlock described in https://github.com/vitessio/vitess/issues/17229.
+	managersMu sync.Mutex
+	managers   map[string]*messageManager
 
 	tsv          TabletService
 	se           *schema.Engine
@@ -75,15 +83,12 @@ func NewEngine(tsv TabletService, se *schema.Engine, vs VStreamer) *Engine {
 // Open starts the Engine service.
 func (me *Engine) Open() {
 	me.mu.Lock()
+	defer me.mu.Unlock()
 	if me.isOpen {
-		me.mu.Unlock()
 		return
 	}
 	me.isOpen = true
-	me.mu.Unlock()
 	log.Info("Messager: opening")
-	// Unlock before invoking RegisterNotifier because it
-	// obtains the same lock.
 	me.se.RegisterNotifier("messages", me.schemaChanged, true)
 }
 
@@ -101,6 +106,8 @@ func (me *Engine) Close() {
 	log.Infof("messager Engine - unregistering notifiers")
 	me.se.UnregisterNotifier("messages")
 	log.Infof("messager Engine - closing all managers")
+	me.managersMu.Lock()
+	defer me.managersMu.Unlock()
 	for _, mm := range me.managers {
 		mm.Close()
 	}
@@ -109,8 +116,8 @@ func (me *Engine) Close() {
 }
 
 func (me *Engine) GetGenerator(name string) (QueryGenerator, error) {
-	me.mu.Lock()
-	defer me.mu.Unlock()
+	me.managersMu.Lock()
+	defer me.managersMu.Unlock()
 	mm := me.managers[name]
 	if mm == nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "message table %s not found in schema", name)
@@ -131,6 +138,8 @@ func (me *Engine) Subscribe(ctx context.Context, name string, send func(*sqltype
 	if !me.isOpen {
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "messager engine is closed, probably because this is not a primary any more")
 	}
+	me.managersMu.Lock()
+	defer me.managersMu.Unlock()
 	mm := me.managers[name]
 	if mm == nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "message table %s not found", name)
@@ -139,8 +148,8 @@ func (me *Engine) Subscribe(ctx context.Context, name string, send func(*sqltype
 }
 
 func (me *Engine) schemaChanged(tables map[string]*schema.Table, created, altered, dropped []*schema.Table, _ bool) {
-	me.mu.Lock()
-	defer me.mu.Unlock()
+	me.managersMu.Lock()
+	defer me.managersMu.Unlock()
 	for _, table := range append(dropped, altered...) {
 		name := table.Name.String()
 		mm := me.managers[name]

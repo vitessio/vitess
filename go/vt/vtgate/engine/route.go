@@ -130,36 +130,6 @@ func (route *Route) GetTableName() string {
 
 // TryExecute performs a non-streaming exec.
 func (route *Route) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	ctx, cancelFunc := addQueryTimeout(ctx, vcursor, route.QueryTimeout)
-	defer cancelFunc()
-	qr, err := route.executeInternal(ctx, vcursor, bindVars, wantfields)
-	if err != nil {
-		return nil, err
-	}
-	return qr.Truncate(route.TruncateColumnCount), nil
-}
-
-// addQueryTimeout adds a query timeout to the context it receives and returns the modified context along with the cancel function.
-func addQueryTimeout(ctx context.Context, vcursor VCursor, queryTimeout int) (context.Context, context.CancelFunc) {
-	timeout := vcursor.Session().GetQueryTimeout(queryTimeout)
-	if timeout != 0 {
-		return context.WithTimeout(ctx, time.Duration(timeout)*time.Millisecond)
-	}
-	return ctx, func() {}
-}
-
-type cxtKey int
-
-const (
-	IgnoreReserveTxn cxtKey = iota
-)
-
-func (route *Route) executeInternal(
-	ctx context.Context,
-	vcursor VCursor,
-	bindVars map[string]*querypb.BindVariable,
-	wantfields bool,
-) (*sqltypes.Result, error) {
 	rss, bvs, err := route.findRoute(ctx, vcursor, bindVars)
 	if err != nil {
 		return nil, err
@@ -167,6 +137,12 @@ func (route *Route) executeInternal(
 
 	return route.executeShards(ctx, vcursor, bindVars, wantfields, rss, bvs)
 }
+
+type cxtKey int
+
+const (
+	IgnoreReserveTxn cxtKey = iota
+)
 
 func (route *Route) executeShards(
 	ctx context.Context,
@@ -223,11 +199,15 @@ func (route *Route) executeShards(
 		}
 	}
 
-	if len(route.OrderBy) == 0 {
-		return result, nil
+	if len(route.OrderBy) != 0 {
+		var err error
+		result, err = route.sort(result)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	return route.sort(result)
+	return result.Truncate(route.TruncateColumnCount), nil
 }
 
 func filterOutNilErrors(errs []error) []error {
@@ -384,10 +364,8 @@ func (route *Route) sort(in *sqltypes.Result) (*sqltypes.Result, error) {
 	// the contents of any row.
 	out := in.ShallowCopy()
 
-	if err := route.OrderBy.SortResult(out); err != nil {
-		return nil, err
-	}
-	return out.Truncate(route.TruncateColumnCount), nil
+	err := route.OrderBy.SortResult(out)
+	return out, err
 }
 
 func (route *Route) description() PrimitiveDescription {

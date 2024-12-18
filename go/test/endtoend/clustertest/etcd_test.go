@@ -24,12 +24,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 	clientv3 "go.etcd.io/etcd/client/v3"
-
-	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
 func TestEtcdServer(t *testing.T) {
-	defer cluster.PanicHandler(t)
 
 	// Confirm the basic etcd cluster health.
 	etcdHealthURL := fmt.Sprintf("http://%s:%d/health", clusterInstance.Hostname, clusterInstance.TopoPort)

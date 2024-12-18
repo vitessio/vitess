@@ -18,8 +18,10 @@ package sqltypes
 
 import (
 	"math"
+	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 
@@ -367,34 +369,28 @@ func TestEncode(t *testing.T) {
 		outSQL   string
 		outASCII string
 	}{{
-		in:       NULL,
-		outSQL:   "null",
-		outASCII: "null",
+		in:     NULL,
+		outSQL: "null",
 	}, {
-		in:       TestValue(Int64, "1"),
-		outSQL:   "1",
-		outASCII: "1",
+		in:     TestValue(Int64, "1"),
+		outSQL: "1",
 	}, {
-		in:       TestValue(VarChar, "foo"),
-		outSQL:   "'foo'",
-		outASCII: "'Zm9v'",
+		in:     TestValue(VarChar, "foo"),
+		outSQL: "'foo'",
 	}, {
-		in:       TestValue(VarChar, "\x00'\"\b\n\r\t\x1A\\"),
-		outSQL:   "'\\0\\'\"\\b\\n\\r\\t\\Z\\\\'",
-		outASCII: "'ACciCAoNCRpc'",
+		in:     TestValue(VarChar, "\x00'\"\b\n\r\t\x1A\\"),
+		outSQL: "'\\0\\'\"\\b\\n\\r\\t\\Z\\\\'",
 	}, {
-		in:       TestValue(Bit, "a"),
-		outSQL:   "b'01100001'",
-		outASCII: "'YQ=='",
+		in:     TestValue(VarBinary, "\x00'\"\b\n\r\t\x1A\\"),
+		outSQL: "_binary'\\0\\'\"\\b\\n\\r\\t\\Z\\\\'",
+	}, {
+		in:     TestValue(Bit, "a"),
+		outSQL: "b'01100001'",
 	}}
 	for _, tcase := range testcases {
 		var buf strings.Builder
 		tcase.in.EncodeSQL(&buf)
 		assert.Equal(t, tcase.outSQL, buf.String())
-
-		buf.Reset()
-		tcase.in.EncodeASCII(&buf)
-		assert.Equal(t, tcase.outASCII, buf.String())
 	}
 }
 
@@ -617,6 +613,155 @@ func TestToUint32(t *testing.T) {
 	}
 }
 
+var randomLocation = time.FixedZone("Nowhere", 3*60*60)
+
+func DatetimeValue(str string) Value {
+	return TestValue(Datetime, str)
+}
+
+func DateValue(str string) Value {
+	return TestValue(Date, str)
+}
+
+func TestDatetimeToNative(t *testing.T) {
+	tcases := []struct {
+		val Value
+		loc *time.Location
+		out time.Time
+		err bool
+	}{{
+		val: DatetimeValue("1899-08-24 17:20:00"),
+		out: time.Date(1899, 8, 24, 17, 20, 0, 0, time.UTC),
+	}, {
+		val: DatetimeValue("1952-03-11 01:02:03"),
+		loc: time.Local,
+		out: time.Date(1952, 3, 11, 1, 2, 3, 0, time.Local),
+	}, {
+		val: DatetimeValue("1952-03-11 01:02:03"),
+		loc: randomLocation,
+		out: time.Date(1952, 3, 11, 1, 2, 3, 0, randomLocation),
+	}, {
+		val: DatetimeValue("1952-03-11 01:02:03"),
+		loc: time.UTC,
+		out: time.Date(1952, 3, 11, 1, 2, 3, 0, time.UTC),
+	}, {
+		val: DatetimeValue("1899-08-24 17:20:00.000000"),
+		out: time.Date(1899, 8, 24, 17, 20, 0, 0, time.UTC),
+	}, {
+		val: DatetimeValue("1899-08-24 17:20:00.000001"),
+		out: time.Date(1899, 8, 24, 17, 20, 0, int(1*time.Microsecond), time.UTC),
+	}, {
+		val: DatetimeValue("1899-08-24 17:20:00.123456"),
+		out: time.Date(1899, 8, 24, 17, 20, 0, int(123456*time.Microsecond), time.UTC),
+	}, {
+		val: DatetimeValue("1899-08-24 17:20:00.222"),
+		out: time.Date(1899, 8, 24, 17, 20, 0, int(222*time.Millisecond), time.UTC),
+	}, {
+		val: DatetimeValue("1899-08-24 17:20:00.1234567"),
+		err: true,
+	}, {
+		val: DatetimeValue("1899-08-24 17:20:00.1"),
+		out: time.Date(1899, 8, 24, 17, 20, 0, int(100*time.Millisecond), time.UTC),
+	}, {
+		val: DatetimeValue("0000-00-00 00:00:00"),
+		out: time.Time{},
+	}, {
+		val: DatetimeValue("0000-00-00 00:00:00.0"),
+		out: time.Time{},
+	}, {
+		val: DatetimeValue("0000-00-00 00:00:00.000"),
+		out: time.Time{},
+	}, {
+		val: DatetimeValue("0000-00-00 00:00:00.000000"),
+		out: time.Time{},
+	}, {
+		val: DatetimeValue("0000-00-00 00:00:00.0000000"),
+		err: true,
+	}, {
+		val: DatetimeValue("1899-08-24T17:20:00.000000"),
+		err: true,
+	}, {
+		val: DatetimeValue("1899-02-31 17:20:00.000000"),
+		err: true,
+	}, {
+		val: DatetimeValue("1899-08-24 17:20:00."),
+		out: time.Date(1899, 8, 24, 17, 20, 0, 0, time.UTC),
+	}, {
+		val: DatetimeValue("0000-00-00 00:00:00.000001"),
+		err: true,
+	}, {
+		val: DatetimeValue("1899-08-24 17:20:00 +02:00"),
+		err: true,
+	}, {
+		val: DatetimeValue("1899-08-24"),
+		err: true,
+	}, {
+		val: DatetimeValue("This is not a valid timestamp"),
+		err: true,
+	}}
+
+	for _, tcase := range tcases {
+		got, err := datetimeToNative(tcase.val, tcase.loc)
+		if tcase.err && err == nil {
+			t.Errorf("datetimeToNative(%v, %#v) succeeded; expected error", tcase.val, tcase.loc)
+		}
+		if !tcase.err && err != nil {
+			t.Errorf("datetimeToNative(%v, %#v) failed: %v", tcase.val, tcase.loc, err)
+		}
+		if !reflect.DeepEqual(got, tcase.out) {
+			t.Errorf("datetimeToNative(%v, %#v): %v, want %v", tcase.val, tcase.loc, got, tcase.out)
+		}
+	}
+}
+
+func TestDateToNative(t *testing.T) {
+	tcases := []struct {
+		val Value
+		loc *time.Location
+		out time.Time
+		err bool
+	}{{
+		val: DateValue("1899-08-24"),
+		out: time.Date(1899, 8, 24, 0, 0, 0, 0, time.UTC),
+	}, {
+		val: DateValue("1952-03-11"),
+		loc: time.Local,
+		out: time.Date(1952, 3, 11, 0, 0, 0, 0, time.Local),
+	}, {
+		val: DateValue("1952-03-11"),
+		loc: randomLocation,
+		out: time.Date(1952, 3, 11, 0, 0, 0, 0, randomLocation),
+	}, {
+		val: DateValue("0000-00-00"),
+		out: time.Time{},
+	}, {
+		val: DateValue("1899-02-31"),
+		err: true,
+	}, {
+		val: DateValue("1899-08-24 17:20:00"),
+		err: true,
+	}, {
+		val: DateValue("0000-00-00 00:00:00"),
+		err: true,
+	}, {
+		val: DateValue("This is not a valid timestamp"),
+		err: true,
+	}}
+
+	for _, tcase := range tcases {
+		got, err := dateToNative(tcase.val, tcase.loc)
+		if tcase.err && err == nil {
+			t.Errorf("dateToNative(%v, %#v) succeeded; expected error", tcase.val, tcase.loc)
+		}
+		if !tcase.err && err != nil {
+			t.Errorf("dateToNative(%v, %#v) failed: %v", tcase.val, tcase.loc, err)
+		}
+		if !reflect.DeepEqual(got, tcase.out) {
+			t.Errorf("dateToNative(%v, %#v): %v, want %v", tcase.val, tcase.loc, got, tcase.out)
+		}
+	}
+}
+
 func TestEncodeSQLStringBuilder(t *testing.T) {
 	testcases := []struct {
 		in     Value
@@ -639,6 +784,9 @@ func TestEncodeSQLStringBuilder(t *testing.T) {
 	}, {
 		in:     TestTuple(TestValue(Int64, "1"), TestValue(VarChar, "foo")),
 		outSQL: "(1, 'foo')",
+	}, {
+		in:     TestValue(VarBinary, "foo"),
+		outSQL: "_binary'foo'",
 	}}
 	for _, tcase := range testcases {
 		var buf strings.Builder

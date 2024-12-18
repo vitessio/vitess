@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/dynamicconfig"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -80,8 +81,8 @@ func buildAlterMigrationThrottleAppPlan(query string, alterMigration *sqlparser.
 	}), nil
 }
 
-func buildAlterMigrationPlan(query string, alterMigration *sqlparser.AlterMigration, vschema plancontext.VSchema, enableOnlineDDL bool) (*planResult, error) {
-	if !enableOnlineDDL {
+func buildAlterMigrationPlan(query string, alterMigration *sqlparser.AlterMigration, vschema plancontext.VSchema, cfg dynamicconfig.DDL) (*planResult, error) {
+	if !cfg.OnlineEnabled() {
 		return nil, schema.ErrOnlineDDLDisabled
 	}
 
@@ -118,8 +119,8 @@ func buildAlterMigrationPlan(query string, alterMigration *sqlparser.AlterMigrat
 	return newPlanResult(send), nil
 }
 
-func buildRevertMigrationPlan(query string, stmt *sqlparser.RevertMigration, vschema plancontext.VSchema, enableOnlineDDL bool) (*planResult, error) {
-	if !enableOnlineDDL {
+func buildRevertMigrationPlan(query string, stmt *sqlparser.RevertMigration, vschema plancontext.VSchema, cfg dynamicconfig.DDL) (*planResult, error) {
+	if !cfg.OnlineEnabled() {
 		return nil, schema.ErrOnlineDDLDisabled
 	}
 	dest, ks, tabletType, err := vschema.TargetDestination("")
@@ -147,8 +148,8 @@ func buildRevertMigrationPlan(query string, stmt *sqlparser.RevertMigration, vsc
 	return newPlanResult(emig), nil
 }
 
-func buildShowMigrationLogsPlan(query string, vschema plancontext.VSchema, enableOnlineDDL bool) (*planResult, error) {
-	if !enableOnlineDDL {
+func buildShowMigrationLogsPlan(query string, vschema plancontext.VSchema, cfg dynamicconfig.DDL) (*planResult, error) {
+	if !cfg.OnlineEnabled() {
 		return nil, schema.ErrOnlineDDLDisabled
 	}
 	dest, ks, tabletType, err := vschema.TargetDestination("")

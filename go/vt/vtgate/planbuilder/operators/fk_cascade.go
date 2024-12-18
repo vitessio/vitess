@@ -61,9 +61,6 @@ func (fkc *FkCascade) Inputs() []Operator {
 
 // SetInputs implements the Operator interface
 func (fkc *FkCascade) SetInputs(operators []Operator) {
-	if len(operators) < 2 {
-		panic("incorrect count of inputs for FkCascade")
-	}
 	fkc.Parent = operators[0]
 	fkc.Selection = operators[1]
 	for idx, operator := range operators {

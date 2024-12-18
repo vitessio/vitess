@@ -128,6 +128,7 @@ Flags:
       --file_backup_storage_root string                             Root directory for the file backup storage.
       --gcs_backup_storage_bucket string                            Google Cloud Storage bucket to use for backups.
       --gcs_backup_storage_root string                              Root prefix for all backup-related object names.
+      --grpc-dial-concurrency-limit int                             Maximum concurrency of grpc dial operations. This should be less than the golang max thread limit of 10000. (default 1024)
       --grpc_auth_static_client_creds string                        When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.
       --grpc_compression string                                     Which protocol to use for compressing gRPC. Default: nothing. Supported: snappy
       --grpc_enable_tracing                                         Enable gRPC tracing.
@@ -175,6 +176,12 @@ Flags:
       --mycnf_slow_log_path string                                  mysql slow query log path
       --mycnf_socket_file string                                    mysql socket file
       --mycnf_tmp_dir string                                        mysql tmp directory
+      --mysql-shell-backup-location string                          location where the backup will be stored
+      --mysql-shell-dump-flags string                               flags to pass to mysql shell dump utility. This should be a JSON string and will be saved in the MANIFEST (default "{\"threads\": 4}")
+      --mysql-shell-flags string                                    execution flags to pass to mysqlsh binary to be used during dump/load (default "--defaults-file=/dev/null --js -h localhost")
+      --mysql-shell-load-flags string                               flags to pass to mysql shell load utility. This should be a JSON string (default "{\"threads\": 4, \"loadUsers\": true, \"updateGtidSet\": \"replace\", \"skipBinlog\": true, \"progressFile\": \"\"}")
+      --mysql-shell-should-drain                                    decide if we should drain while taking a backup or continue to serving traffic
+      --mysql-shell-speedup-restore                                 speed up restore by disabling redo logging and double write buffer during the restore process
       --mysql-shutdown-timeout duration                             how long to wait for mysqld shutdown (default 5m0s)
       --mysql_port int                                              mysql port (default 3306)
       --mysql_server_version string                                 MySQL server version to advertise. (default "8.0.30-Vitess")
@@ -224,6 +231,7 @@ Flags:
       --topo_global_root string                                     the path of the global topology data in the global topology server
       --topo_global_server_address string                           the address of the global topology server
       --topo_implementation string                                  the topology implementation to use
+      --topo_read_concurrency int                                   Maximum concurrency of topo reads per global or local cell. (default 32)
       --topo_zk_auth_file string                                    auth to use when connecting to the zk topo server, file contents should be <scheme>:<auth>, e.g., digest:user:pass
       --topo_zk_base_timeout duration                               zk base timeout (see zk.Connect) (default 30s)
       --topo_zk_max_concurrency int                                 maximum number of pending requests to send to a Zookeeper server. (default 64)

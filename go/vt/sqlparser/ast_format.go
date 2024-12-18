@@ -167,7 +167,7 @@ func (node *With) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *CommonTableExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%v%v as %v ", node.ID, node.Columns, node.Subquery)
+	buf.astPrintf(node, "%v%v as (%v) ", node.ID, node.Columns, node.Subquery)
 }
 
 // Format formats the node.
@@ -322,8 +322,13 @@ func (node *AlterMigration) Format(buf *TrackedBuffer) {
 		alterType = "force_cutover"
 	case ForceCutOverAllMigrationType:
 		alterType = "force_cutover all"
+	case SetCutOverThresholdMigrationType:
+		alterType = "cutover_threshold"
 	}
 	buf.astPrintf(node, " %#s", alterType)
+	if node.Threshold != "" {
+		buf.astPrintf(node, " '%#s'", node.Threshold)
+	}
 	if node.Expire != "" {
 		buf.astPrintf(node, " expire '%#s'", node.Expire)
 	}
@@ -1357,7 +1362,7 @@ func (node *AssignmentExpr) Format(buf *TrackedBuffer) {
 func (node *Literal) Format(buf *TrackedBuffer) {
 	switch node.Type {
 	case StrVal:
-		sqltypes.MakeTrusted(sqltypes.VarBinary, node.Bytes()).EncodeSQL(buf)
+		sqltypes.MakeTrusted(sqltypes.VarChar, node.Bytes()).EncodeSQL(buf)
 	case IntVal, FloatVal, DecimalVal, HexNum, BitNum:
 		buf.astPrintf(node, "%#s", node.Val)
 	case HexVal:
@@ -2152,6 +2157,13 @@ func (node *ShowBasic) Format(buf *TrackedBuffer) {
 }
 
 func (node *ShowTransactionStatus) Format(buf *TrackedBuffer) {
+	if node.TransactionID == "" {
+		buf.astPrintf(node, "show unresolved transactions")
+		if node.Keyspace != "" {
+			buf.astPrintf(node, " for %#s", node.Keyspace)
+		}
+		return
+	}
 	buf.astPrintf(node, "show transaction status for '%#s'", node.TransactionID)
 }
 
@@ -2179,7 +2191,7 @@ func (node *SelectInto) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *CreateDatabase) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "create database %v", node.Comments)
+	buf.astPrintf(node, "create %vdatabase ", node.Comments)
 	if node.IfNotExists {
 		buf.literal("if not exists ")
 	}
@@ -2198,7 +2210,7 @@ func (node *CreateDatabase) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *AlterDatabase) Format(buf *TrackedBuffer) {
-	buf.literal("alter database")
+	buf.astPrintf(node, "alter %vdatabase", node.Comments)
 	if node.DBName.NotEmpty() {
 		buf.astPrintf(node, " %v", node.DBName)
 	}

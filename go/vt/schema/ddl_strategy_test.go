@@ -189,6 +189,8 @@ func TestParseDDLStrategy(t *testing.T) {
 		options              string
 		isDeclarative        bool
 		isSingleton          bool
+		isSingletonContext   bool
+		isSingletonTable     bool
 		isPostponeLaunch     bool
 		isPostponeCompletion bool
 		isInOrderCompletion  bool
@@ -257,6 +259,20 @@ func TestParseDDLStrategy(t *testing.T) {
 			options:          "-singleton",
 			runtimeOptions:   "",
 			isSingleton:      true,
+		},
+		{
+			strategyVariable:   "vitess --singleton-context",
+			strategy:           DDLStrategyVitess,
+			options:            "--singleton-context",
+			runtimeOptions:     "",
+			isSingletonContext: true,
+		},
+		{
+			strategyVariable: "vitess --singleton-table",
+			strategy:         DDLStrategyVitess,
+			options:          "--singleton-table",
+			runtimeOptions:   "",
+			isSingletonTable: true,
 		},
 		{
 			strategyVariable: "online -postpone-launch",
@@ -329,6 +345,13 @@ func TestParseDDLStrategy(t *testing.T) {
 			forceCutOverAfter: 3 * time.Minute,
 		},
 		{
+			strategyVariable:  "vitess --force-cut-over-after=-1ms",
+			strategy:          DDLStrategyVitess,
+			options:           "--force-cut-over-after=-1ms",
+			runtimeOptions:    "",
+			forceCutOverAfter: -1 * time.Millisecond,
+		},
+		{
 			strategyVariable: "vitess --force-cut-over-after=r3m",
 			strategy:         DDLStrategyVitess,
 			runtimeOptions:   "",
@@ -380,6 +403,8 @@ func TestParseDDLStrategy(t *testing.T) {
 			assert.Equal(t, ts.options, setting.Options)
 			assert.Equal(t, ts.isDeclarative, setting.IsDeclarative())
 			assert.Equal(t, ts.isSingleton, setting.IsSingleton())
+			assert.Equal(t, ts.isSingletonContext, setting.IsSingletonContext())
+			assert.Equal(t, ts.isSingletonTable, setting.IsSingletonTable())
 			assert.Equal(t, ts.isPostponeCompletion, setting.IsPostponeCompletion())
 			assert.Equal(t, ts.isPostponeLaunch, setting.IsPostponeLaunch())
 			assert.Equal(t, ts.isAllowConcurrent, setting.IsAllowConcurrent())

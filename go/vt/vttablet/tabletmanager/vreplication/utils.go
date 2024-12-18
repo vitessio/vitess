@@ -134,7 +134,12 @@ func isUnrecoverableError(err error) bool {
 	if err == nil {
 		return false
 	}
-	if vterrors.Code(err) == vtrpcpb.Code_FAILED_PRECONDITION {
+	switch vterrors.Code(err) {
+	case vtrpcpb.Code_FAILED_PRECONDITION:
+		if vterrors.RxWrongTablet.MatchString(err.Error()) {
+			// If the chosen tablet type picked changes, say due to PRS/ERS, we should retry.
+			return false
+		}
 		return true
 	}
 	sqlErr, isSQLErr := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError)
@@ -222,10 +227,29 @@ func isUnrecoverableError(err error) bool {
 		sqlerror.ERWrongParametersToProcedure,
 		sqlerror.ERWrongUsage,
 		sqlerror.ERWrongValue,
+		sqlerror.ERWrongParamcountToNativeFct,
 		sqlerror.ERVectorConversion,
 		sqlerror.ERWrongValueCountOnRow:
 		log.Errorf("Got unrecoverable error: %v", sqlErr)
 		return true
+	case sqlerror.ERErrorDuringCommit:
+		switch sqlErr.HaErrorCode() {
+		case
+			0, // Not really a HA error.
+			sqlerror.HaErrLockDeadlock,
+			sqlerror.HaErrLockTableFull,
+			sqlerror.HaErrLockWaitTimeout,
+			sqlerror.HaErrNotInLockPartitions,
+			sqlerror.HaErrQueryInterrupted,
+			sqlerror.HaErrRolledBack,
+			sqlerror.HaErrTooManyConcurrentTrxs,
+			sqlerror.HaErrUndoRecTooBig:
+			// These are recoverable errors.
+			return false
+		default:
+			log.Errorf("Got unrecoverable error: %v", sqlErr)
+			return true
+		}
 	}
 	return false
 }

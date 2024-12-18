@@ -201,7 +201,7 @@ func (v *vschema) FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.Ta
 	panic("implement me")
 }
 
-func (v *vschema) DefaultKeyspace() (*vindexes.Keyspace, error) {
+func (v *vschema) SelectedKeyspace() (*vindexes.Keyspace, error) {
 	// TODO implement me
 	panic("implement me")
 }
@@ -363,6 +363,11 @@ func (v *vschema) StorePrepareData(name string, pd *vtgatepb.PrepareData) {
 func (v *vschema) GetAggregateUDFs() []string {
 	// TODO implement me
 	panic("implement me")
+}
+
+// FindMirrorRule implements VSchema.
+func (v *vschema) FindMirrorRule(tablename sqlparser.TableName) (*vindexes.MirrorRule, error) {
+	panic("unimplemented")
 }
 
 var _ VSchema = (*vschema)(nil)

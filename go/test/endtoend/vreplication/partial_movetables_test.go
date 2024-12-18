@@ -83,10 +83,13 @@ func testCancel(t *testing.T) {
 
 func testPartialMoveTablesBasic(t *testing.T, flavor workflowFlavor) {
 	setSidecarDBName("_vt")
+	origDefaultReplicas := defaultReplicas
 	origDefaultRdonly := defaultRdonly
 	defer func() {
+		defaultReplicas = origDefaultReplicas
 		defaultRdonly = origDefaultRdonly
 	}()
+	defaultReplicas = 0
 	defaultRdonly = 0
 	origExtraVTGateArgs := extraVTGateArgs
 	// We need to enable shard routing for partial movetables routing.

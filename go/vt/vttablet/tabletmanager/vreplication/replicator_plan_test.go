@@ -24,12 +24,15 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/bytes2"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 )
 
 type TestReplicatorPlan struct {
@@ -574,7 +577,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "bad query",
 			}},
 		},
-		err: "syntax error at position 4 near 'bad' in query: bad query",
+		err: "failed to build table replication plan for t1 table: syntax error at position 4 near 'bad' in query: bad query",
 	}, {
 		// not a select
 		input: &binlogdatapb.Filter{
@@ -583,7 +586,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "update t1 set val = 1",
 			}},
 		},
-		err: "unsupported non-select statement in query: update t1 set val = 1",
+		err: "failed to build table replication plan for t1 table: unsupported non-select statement in query: update t1 set val = 1",
 	}, {
 		// no distinct
 		input: &binlogdatapb.Filter{
@@ -592,7 +595,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "select distinct c1 from t1",
 			}},
 		},
-		err: "unsupported distinct clause in query: select distinct c1 from t1",
+		err: "failed to build table replication plan for t1 table: unsupported distinct clause in query: select distinct c1 from t1",
 	}, {
 		// no ',' join
 		input: &binlogdatapb.Filter{
@@ -601,7 +604,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "select * from t1, t2",
 			}},
 		},
-		err: "unsupported multi-table usage in query: select * from t1, t2",
+		err: "failed to build table replication plan for t1 table: unsupported multi-table usage in query: select * from t1, t2",
 	}, {
 		// no join
 		input: &binlogdatapb.Filter{
@@ -610,7 +613,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "select * from t1 join t2",
 			}},
 		},
-		err: "unsupported from expression (*sqlparser.JoinTableExpr) in query: select * from t1 join t2",
+		err: "failed to build table replication plan for t1 table: unsupported from expression (*sqlparser.JoinTableExpr) in query: select * from t1 join t2",
 	}, {
 		// no subqueries
 		input: &binlogdatapb.Filter{
@@ -619,7 +622,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "select * from (select * from t2) as a",
 			}},
 		},
-		err: "unsupported from source (*sqlparser.DerivedTable) in query: select * from (select * from t2) as a",
+		err: "failed to build table replication plan for t1 table: unsupported from source (*sqlparser.DerivedTable) in query: select * from (select * from t2) as a",
 	}, {
 		// cannot combine '*' with other
 		input: &binlogdatapb.Filter{
@@ -628,7 +631,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "select *, c1 from t1",
 			}},
 		},
-		err: "unsupported mix of '*' and columns in query: select *, c1 from t1",
+		err: "failed to build table replication plan for t1 table: unsupported mix of '*' and columns in query: select *, c1 from t1",
 	}, {
 		// cannot combine '*' with other (different code path)
 		input: &binlogdatapb.Filter{
@@ -637,7 +640,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "select c1, * from t1",
 			}},
 		},
-		err: "invalid expression: * in query: select c1, * from t1",
+		err: "failed to build table replication plan for t1 table: invalid expression: * in query: select c1, * from t1",
 	}, {
 		// no distinct in func
 		input: &binlogdatapb.Filter{
@@ -646,7 +649,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "select hour(distinct c1) as a from t1",
 			}},
 		},
-		err: "syntax error at position 21 near 'distinct' in query: select hour(distinct c1) as a from t1",
+		err: "failed to build table replication plan for t1 table: syntax error at position 21 near 'distinct' in query: select hour(distinct c1) as a from t1",
 	}, {
 		// funcs need alias
 		input: &binlogdatapb.Filter{
@@ -655,7 +658,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "select hour(c1) from t1",
 			}},
 		},
-		err: "expression needs an alias: hour(c1) in query: select hour(c1) from t1",
+		err: "failed to build table replication plan for t1 table: expression needs an alias: hour(c1) in query: select hour(c1) from t1",
 	}, {
 		// only count(*)
 		input: &binlogdatapb.Filter{
@@ -664,7 +667,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "select count(c1) as c from t1",
 			}},
 		},
-		err: "only count(*) is supported: count(c1) in query: select count(c1) as c from t1",
+		err: "failed to build table replication plan for t1 table: only count(*) is supported: count(c1) in query: select count(c1) as c from t1",
 	}, {
 		// no sum(*)
 		input: &binlogdatapb.Filter{
@@ -673,7 +676,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "select sum(*) as c from t1",
 			}},
 		},
-		err: "syntax error at position 13 in query: select sum(*) as c from t1",
+		err: "failed to build table replication plan for t1 table: syntax error at position 13 in query: select sum(*) as c from t1",
 	}, {
 		// sum should have only one argument
 		input: &binlogdatapb.Filter{
@@ -682,7 +685,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "select sum(a, b) as c from t1",
 			}},
 		},
-		err: "syntax error at position 14 in query: select sum(a, b) as c from t1",
+		err: "failed to build table replication plan for t1 table: syntax error at position 14 in query: select sum(a, b) as c from t1",
 	}, {
 		// no complex expr in sum
 		input: &binlogdatapb.Filter{
@@ -691,7 +694,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "select sum(a + b) as c from t1",
 			}},
 		},
-		err: "unsupported non-column name in sum clause: sum(a + b) in query: select sum(a + b) as c from t1",
+		err: "failed to build table replication plan for t1 table: unsupported non-column name in sum clause: sum(a + b) in query: select sum(a + b) as c from t1",
 	}, {
 		// no complex expr in group by
 		input: &binlogdatapb.Filter{
@@ -700,7 +703,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "select a from t1 group by a + 1",
 			}},
 		},
-		err: "unsupported non-column name or alias in group by clause: a + 1 in query: select a from t1 group by a + 1",
+		err: "failed to build table replication plan for t1 table: unsupported non-column name or alias in group by clause: a + 1 in query: select a from t1 group by a + 1",
 	}, {
 		// group by does not reference alias
 		input: &binlogdatapb.Filter{
@@ -709,7 +712,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "select a as b from t1 group by a",
 			}},
 		},
-		err: "group by expression does not reference an alias in the select list: a in query: select a as b from t1 group by a",
+		err: "failed to build table replication plan for t1 table: group by expression does not reference an alias in the select list: a in query: select a as b from t1 group by a",
 	}, {
 		// cannot group by aggr
 		input: &binlogdatapb.Filter{
@@ -718,7 +721,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "select count(*) as a from t1 group by a",
 			}},
 		},
-		err: "group by expression is not allowed to reference an aggregate expression: a in query: select count(*) as a from t1 group by a",
+		err: "failed to build table replication plan for t1 table: group by expression is not allowed to reference an aggregate expression: a in query: select count(*) as a from t1 group by a",
 	}}
 
 	PrimaryKeyInfos := map[string][]*ColumnInfo{
@@ -735,8 +738,12 @@ func TestBuildPlayerPlan(t *testing.T) {
 		),
 	}
 
+	vttablet.InitVReplicationConfigDefaults()
 	for _, tcase := range testcases {
-		plan, err := buildReplicatorPlan(getSource(tcase.input), PrimaryKeyInfos, nil, binlogplayer.NewStats(), collations.MySQL8(), sqlparser.NewTestParser())
+		vr := &vreplicator{
+			workflowConfig: vttablet.DefaultVReplicationConfig,
+		}
+		plan, err := vr.buildReplicatorPlan(getSource(tcase.input), PrimaryKeyInfos, nil, binlogplayer.NewStats(), collations.MySQL8(), sqlparser.NewTestParser())
 		gotErr := ""
 		if err != nil {
 			gotErr = err.Error()
@@ -745,8 +752,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 		gotPlan, _ := json.Marshal(plan)
 		wantPlan, _ := json.Marshal(tcase.plan)
 		require.Equal(t, string(wantPlan), string(gotPlan), "Filter(%v):\n%s, want\n%s", tcase.input, gotPlan, wantPlan)
-
-		plan, err = buildReplicatorPlan(getSource(tcase.input), PrimaryKeyInfos, copyState, binlogplayer.NewStats(), collations.MySQL8(), sqlparser.NewTestParser())
+		plan, err = vr.buildReplicatorPlan(getSource(tcase.input), PrimaryKeyInfos, copyState, binlogplayer.NewStats(), collations.MySQL8(), sqlparser.NewTestParser())
 		if err != nil {
 			continue
 		}
@@ -774,7 +780,10 @@ func TestBuildPlayerPlanNoDup(t *testing.T) {
 			Filter: "select * from t",
 		}},
 	}
-	_, err := buildReplicatorPlan(getSource(input), PrimaryKeyInfos, nil, binlogplayer.NewStats(), collations.MySQL8(), sqlparser.NewTestParser())
+	vr := &vreplicator{
+		workflowConfig: vttablet.DefaultVReplicationConfig,
+	}
+	_, err := vr.buildReplicatorPlan(getSource(input), PrimaryKeyInfos, nil, binlogplayer.NewStats(), collations.MySQL8(), sqlparser.NewTestParser())
 	want := "more than one target for source table t"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("buildReplicatorPlan err: %v, must contain: %v", err, want)
@@ -795,7 +804,10 @@ func TestBuildPlayerPlanExclude(t *testing.T) {
 			Filter: "",
 		}},
 	}
-	plan, err := buildReplicatorPlan(getSource(input), PrimaryKeyInfos, nil, binlogplayer.NewStats(), collations.MySQL8(), sqlparser.NewTestParser())
+	vr := &vreplicator{
+		workflowConfig: vttablet.DefaultVReplicationConfig,
+	}
+	plan, err := vr.buildReplicatorPlan(getSource(input), PrimaryKeyInfos, nil, binlogplayer.NewStats(), collations.MySQL8(), sqlparser.NewTestParser())
 	assert.NoError(t, err)
 
 	want := &TestReplicatorPlan{
@@ -817,4 +829,138 @@ func TestBuildPlayerPlanExclude(t *testing.T) {
 	gotPlan, _ := json.Marshal(plan)
 	wantPlan, _ := json.Marshal(want)
 	assert.Equal(t, string(gotPlan), string(wantPlan))
+}
+
+func TestAppendFromRow(t *testing.T) {
+	testCases := []struct {
+		name    string
+		tp      *TablePlan
+		row     *querypb.Row
+		want    string
+		wantErr string
+	}{
+		{
+			name: "simple",
+			tp: &TablePlan{
+				BulkInsertValues: sqlparser.BuildParsedQuery("values (%a, %a, %a)",
+					":c1", ":c2", ":c3",
+				),
+				Fields: []*querypb.Field{
+					{Name: "c1", Type: querypb.Type_INT32},
+					{Name: "c2", Type: querypb.Type_INT32},
+					{Name: "c3", Type: querypb.Type_INT32},
+				},
+			},
+			row: sqltypes.RowToProto3(
+				[]sqltypes.Value{
+					sqltypes.NewInt64(1),
+					sqltypes.NewInt64(2),
+					sqltypes.NewInt64(3),
+				},
+			),
+			want: "values (1, 2, 3)",
+		},
+		{
+			name: "too few fields",
+			tp: &TablePlan{
+				BulkInsertValues: sqlparser.BuildParsedQuery("values (%a, %a, %a)",
+					":c1", ":c2", ":c3",
+				),
+				Fields: []*querypb.Field{
+					{Name: "c1", Type: querypb.Type_INT32},
+					{Name: "c2", Type: querypb.Type_INT32},
+				},
+			},
+			wantErr: "wrong number of fields: got 2 fields for 3 bind locations",
+		},
+		{
+			name: "skip half",
+			tp: &TablePlan{
+				BulkInsertValues: sqlparser.BuildParsedQuery("values (%a, %a, %a, %a)",
+					":c1", ":c2", ":c4", ":c8",
+				),
+				Fields: []*querypb.Field{
+					{Name: "c1", Type: querypb.Type_INT32},
+					{Name: "c2", Type: querypb.Type_INT32},
+					{Name: "c3", Type: querypb.Type_INT32},
+					{Name: "c4", Type: querypb.Type_INT32},
+					{Name: "c5", Type: querypb.Type_INT32},
+					{Name: "c6", Type: querypb.Type_INT32},
+					{Name: "c7", Type: querypb.Type_INT32},
+					{Name: "c8", Type: querypb.Type_INT32},
+				},
+				FieldsToSkip: map[string]bool{
+					"c3": true,
+					"c5": true,
+					"c6": true,
+					"c7": true,
+				},
+			},
+			row: sqltypes.RowToProto3(
+				[]sqltypes.Value{
+					sqltypes.NewInt64(1),
+					sqltypes.NewInt64(2),
+					sqltypes.NewInt64(3),
+					sqltypes.NewInt64(4),
+					sqltypes.NewInt64(5),
+					sqltypes.NewInt64(6),
+					sqltypes.NewInt64(7),
+					sqltypes.NewInt64(8),
+				},
+			),
+			want: "values (1, 2, 4, 8)",
+		},
+		{
+			name: "skip all but one",
+			tp: &TablePlan{
+				BulkInsertValues: sqlparser.BuildParsedQuery("values (%a)",
+					":c4",
+				),
+				Fields: []*querypb.Field{
+					{Name: "c1", Type: querypb.Type_INT32},
+					{Name: "c2", Type: querypb.Type_INT32},
+					{Name: "c3", Type: querypb.Type_INT32},
+					{Name: "c4", Type: querypb.Type_INT32},
+					{Name: "c5", Type: querypb.Type_INT32},
+					{Name: "c6", Type: querypb.Type_INT32},
+					{Name: "c7", Type: querypb.Type_INT32},
+					{Name: "c8", Type: querypb.Type_INT32},
+				},
+				FieldsToSkip: map[string]bool{
+					"c1": true,
+					"c2": true,
+					"c3": true,
+					"c5": true,
+					"c6": true,
+					"c7": true,
+					"c8": true,
+				},
+			},
+			row: sqltypes.RowToProto3(
+				[]sqltypes.Value{
+					sqltypes.NewInt64(1),
+					sqltypes.NewInt64(2),
+					sqltypes.NewInt64(3),
+					sqltypes.NewInt64(4),
+					sqltypes.NewInt64(5),
+					sqltypes.NewInt64(6),
+					sqltypes.NewInt64(7),
+					sqltypes.NewInt64(8),
+				},
+			),
+			want: "values (4)",
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			bb := &bytes2.Buffer{}
+			err := tc.tp.appendFromRow(bb, tc.row)
+			if tc.wantErr != "" {
+				require.EqualError(t, err, tc.wantErr)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, tc.want, bb.String())
+			}
+		})
+	}
 }

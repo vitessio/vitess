@@ -91,7 +91,7 @@ func TestSidecarDB(t *testing.T) {
 
 		prs(t, keyspace, shard)
 		currentPrimary = tablet101
-		expectedChanges100 += numChanges
+		expectedChanges101 += numChanges
 		validateSidecarDBTables(t, tablet100, sidecarDBTables)
 		validateSidecarDBTables(t, tablet101, sidecarDBTables)
 		require.Equal(t, expectedChanges100, getNumExecutedDDLQueries(t, tablet100Port))
@@ -100,7 +100,7 @@ func TestSidecarDB(t *testing.T) {
 
 	t.Run("modify schema, prs, and self heal on new primary", func(t *testing.T) {
 		numChanges := modifySidecarDBSchema(t, vc, currentPrimary, ddls1)
-		expectedChanges101 += numChanges
+		expectedChanges100 += numChanges
 		prs(t, keyspace, shard)
 		// nolint
 		currentPrimary = tablet100

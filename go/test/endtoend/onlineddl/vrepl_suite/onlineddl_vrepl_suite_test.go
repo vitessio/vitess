@@ -67,7 +67,6 @@ const (
 
 // Use $VREPL_SUITE_TEST_FILTER environment variable to filter tests by name.
 func TestMain(m *testing.M) {
-	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	testsFilter = os.Getenv(testFilterEnvVar)
@@ -132,8 +131,7 @@ func TestMain(m *testing.M) {
 
 }
 
-func TestSchemaChange(t *testing.T) {
-	defer cluster.PanicHandler(t)
+func TestVreplSuiteSchemaChanges(t *testing.T) {
 
 	shards := clusterInstance.Keyspaces[0].Shards
 	require.Equal(t, 1, len(shards))

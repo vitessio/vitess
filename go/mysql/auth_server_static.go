@@ -50,8 +50,10 @@ type AuthServerStatic struct {
 	// entries contains the users, passwords and user data.
 	entries map[string][]*AuthServerStaticEntry
 
+	// Signal handling related fields.
 	sigChan chan os.Signal
 	ticker  *time.Ticker
+	done    chan struct{} // Tell the signal related goroutines to stop
 }
 
 // AuthServerStaticEntry stores the values for a given user.
@@ -162,7 +164,7 @@ func (a *AuthServerStatic) UserEntryWithPassword(conn *Conn, user string, passwo
 	a.mu.Unlock()
 
 	if !ok {
-		return &StaticUserData{}, sqlerror.NewSQLError(sqlerror.ERAccessDeniedError, sqlerror.SSAccessDeniedError, "Access denied for user '%v'", user)
+		return &StaticUserData{}, sqlerror.NewSQLErrorf(sqlerror.ERAccessDeniedError, sqlerror.SSAccessDeniedError, "Access denied for user '%v'", user)
 	}
 
 	for _, entry := range entries {
@@ -171,7 +173,7 @@ func (a *AuthServerStatic) UserEntryWithPassword(conn *Conn, user string, passwo
 			return &StaticUserData{entry.UserData, entry.Groups}, nil
 		}
 	}
-	return &StaticUserData{}, sqlerror.NewSQLError(sqlerror.ERAccessDeniedError, sqlerror.SSAccessDeniedError, "Access denied for user '%v'", user)
+	return &StaticUserData{}, sqlerror.NewSQLErrorf(sqlerror.ERAccessDeniedError, sqlerror.SSAccessDeniedError, "Access denied for user '%v'", user)
 }
 
 // UserEntryWithHash implements password lookup based on a
@@ -182,14 +184,14 @@ func (a *AuthServerStatic) UserEntryWithHash(conn *Conn, salt []byte, user strin
 	a.mu.Unlock()
 
 	if !ok {
-		return &StaticUserData{}, sqlerror.NewSQLError(sqlerror.ERAccessDeniedError, sqlerror.SSAccessDeniedError, "Access denied for user '%v'", user)
+		return &StaticUserData{}, sqlerror.NewSQLErrorf(sqlerror.ERAccessDeniedError, sqlerror.SSAccessDeniedError, "Access denied for user '%v'", user)
 	}
 
 	for _, entry := range entries {
 		if entry.MysqlNativePassword != "" {
 			hash, err := DecodeMysqlNativePasswordHex(entry.MysqlNativePassword)
 			if err != nil {
-				return &StaticUserData{entry.UserData, entry.Groups}, sqlerror.NewSQLError(sqlerror.ERAccessDeniedError, sqlerror.SSAccessDeniedError, "Access denied for user '%v'", user)
+				return &StaticUserData{entry.UserData, entry.Groups}, sqlerror.NewSQLErrorf(sqlerror.ERAccessDeniedError, sqlerror.SSAccessDeniedError, "Access denied for user '%v'", user)
 			}
 
 			isPass := VerifyHashedMysqlNativePassword(authResponse, salt, hash)
@@ -204,7 +206,7 @@ func (a *AuthServerStatic) UserEntryWithHash(conn *Conn, salt []byte, user strin
 			}
 		}
 	}
-	return &StaticUserData{}, sqlerror.NewSQLError(sqlerror.ERAccessDeniedError, sqlerror.SSAccessDeniedError, "Access denied for user '%v'", user)
+	return &StaticUserData{}, sqlerror.NewSQLErrorf(sqlerror.ERAccessDeniedError, sqlerror.SSAccessDeniedError, "Access denied for user '%v'", user)
 }
 
 // UserEntryWithCacheHash implements password lookup based on a
@@ -215,7 +217,7 @@ func (a *AuthServerStatic) UserEntryWithCacheHash(conn *Conn, salt []byte, user 
 	a.mu.Unlock()
 
 	if !ok {
-		return &StaticUserData{}, AuthRejected, sqlerror.NewSQLError(sqlerror.ERAccessDeniedError, sqlerror.SSAccessDeniedError, "Access denied for user '%v'", user)
+		return &StaticUserData{}, AuthRejected, sqlerror.NewSQLErrorf(sqlerror.ERAccessDeniedError, sqlerror.SSAccessDeniedError, "Access denied for user '%v'", user)
 	}
 
 	for _, entry := range entries {
@@ -226,7 +228,7 @@ func (a *AuthServerStatic) UserEntryWithCacheHash(conn *Conn, salt []byte, user 
 			return &StaticUserData{entry.UserData, entry.Groups}, AuthAccepted, nil
 		}
 	}
-	return &StaticUserData{}, AuthRejected, sqlerror.NewSQLError(sqlerror.ERAccessDeniedError, sqlerror.SSAccessDeniedError, "Access denied for user '%v'", user)
+	return &StaticUserData{}, AuthRejected, sqlerror.NewSQLErrorf(sqlerror.ERAccessDeniedError, sqlerror.SSAccessDeniedError, "Access denied for user '%v'", user)
 }
 
 // AuthMethods returns the AuthMethod instances this auth server can handle.
@@ -267,11 +269,17 @@ func (a *AuthServerStatic) installSignalHandlers() {
 		return
 	}
 
+	a.done = make(chan struct{})
 	a.sigChan = make(chan os.Signal, 1)
 	signal.Notify(a.sigChan, syscall.SIGHUP)
 	go func() {
-		for range a.sigChan {
-			a.reload()
+		for {
+			select {
+			case <-a.done:
+				return
+			case <-a.sigChan:
+				a.reload()
+			}
 		}
 	}()
 
@@ -279,14 +287,22 @@ func (a *AuthServerStatic) installSignalHandlers() {
 	if a.reloadInterval > 0 {
 		a.ticker = time.NewTicker(a.reloadInterval)
 		go func() {
-			for range a.ticker.C {
-				a.sigChan <- syscall.SIGHUP
+			for {
+				select {
+				case <-a.done:
+					return
+				case <-a.ticker.C:
+					a.sigChan <- syscall.SIGHUP
+				}
 			}
 		}()
 	}
 }
 
 func (a *AuthServerStatic) close() {
+	if a.done != nil {
+		close(a.done)
+	}
 	if a.ticker != nil {
 		a.ticker.Stop()
 	}

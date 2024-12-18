@@ -68,21 +68,24 @@ type testedBackupTimestampInfo struct {
 	postTimestamp time.Time
 }
 
-func waitForReplica(t *testing.T, replicaIndex int) {
+// waitForReplica waits for the replica to have same row set as on primary.
+func waitForReplica(t *testing.T, replicaIndex int) int {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
 	pMsgs := ReadRowsFromPrimary(t)
 	for {
 		rMsgs := ReadRowsFromReplica(t, replicaIndex)
 		if len(pMsgs) == len(rMsgs) {
 			// success
-			return
+			return len(pMsgs)
 		}
 		select {
 		case <-ctx.Done():
 			assert.FailNow(t, "timeout waiting for replica to catch up")
-			return
-		case <-time.After(time.Second):
+			return 0
+		case <-ticker.C:
 			//
 		}
 	}
@@ -92,7 +95,6 @@ func waitForReplica(t *testing.T, replicaIndex int) {
 // in between, it makes writes to the database, and takes notes: what data was available in what backup.
 // It then restores each and every one of those backups, in random order, and expects to find the specific data associated with the backup.
 func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase) {
-	defer cluster.PanicHandler(t)
 
 	t.Run(tcase.Name, func(t *testing.T) {
 		// setup cluster for the testing
@@ -289,6 +291,12 @@ func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase)
 					if sampleTestedBackupPos == "" {
 						sampleTestedBackupPos = pos
 					}
+					t.Run("post-pitr, wait for replica to catch up", func(t *testing.T) {
+						// Replica is DRAINED and does not have replication configuration.
+						// We now connect the replica to the primary and validate it's able to catch up.
+						ReconnectReplicaToPrimary(t, 0)
+						waitForReplica(t, 0)
+					})
 				})
 			}
 		}
@@ -330,7 +338,6 @@ func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase)
 
 // ExecTestIncrementalBackupAndRestoreToPos
 func ExecTestIncrementalBackupAndRestoreToTimestamp(t *testing.T, tcase *PITRTestCase) {
-	defer cluster.PanicHandler(t)
 
 	var lastInsertedRowTimestamp time.Time
 	insertRowOnPrimary := func(t *testing.T, hint string) {
@@ -539,6 +546,12 @@ func ExecTestIncrementalBackupAndRestoreToTimestamp(t *testing.T, tcase *PITRTes
 						if sampleTestedBackupIndex < 0 {
 							sampleTestedBackupIndex = backupIndex
 						}
+						t.Run("post-pitr, wait for replica to catch up", func(t *testing.T) {
+							// Replica is DRAINED and does not have replication configuration.
+							// We now connect the replica to the primary and validate it's able to catch up.
+							ReconnectReplicaToPrimary(t, 0)
+							waitForReplica(t, 0)
+						})
 					} else {
 						numFailedRestores++
 					}
@@ -590,7 +603,6 @@ func ExecTestIncrementalBackupAndRestoreToTimestamp(t *testing.T, tcase *PITRTes
 // Specifically, it's designed to test how incremental backups are taken by interleaved replicas, so that they successfully build on
 // one another.
 func ExecTestIncrementalBackupOnTwoTablets(t *testing.T, tcase *PITRTestCase) {
-	defer cluster.PanicHandler(t)
 
 	t.Run(tcase.Name, func(t *testing.T) {
 		// setup cluster for the testing

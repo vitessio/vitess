@@ -1,5 +1,5 @@
 run:
-  go: 1.20
+  go: 1.23
   timeout: 10m
 
 linters-settings:
@@ -11,7 +11,38 @@ linters-settings:
           - pkg: "math/rand$"
             desc: Please use math/rand/v2
   errcheck:
-    exclude: ./misc/errcheck_excludes.txt
+    exclude-functions:
+      - flag.Set
+      - (*flag.FlagSet).Parse
+      - (flag.Value).Set
+      - fmt.Fprint
+      - fmt.Fprintf
+      - io.WriteString(fmt.State)
+      - io.WriteString(net/http.ResponseWriter)
+      - (net.Listener).Close
+      - (net/http.ResponseWriter).Write
+      - (*os.File).Close
+      - os.Remove
+      - os.RemoveAll
+      - os.Rename
+      - (*github.com/spf13/cobra.Command).Help
+      - (*github.com/spf13/cobra.Command).MarkFlagRequired
+      - (*github.com/spf13/cobra.Command).MarkPersistentFlagRequired
+      - (*github.com/spf13/cobra.Command).MarkPersistentFlagFilename
+      - (*github.com/spf13/pflag.FlagSet).MarkDeprecated
+      - (*google.golang.org/grpc.ClientConn).Close
+      - (*google.golang.org/grpc.Server).Serve
+      - (*vitess.io/vitess/go/bytes2.Buffer).Write
+      - (*vitess.io/vitess/go/bytes2.Buffer).WriteByte
+      - (*vitess.io/vitess/go/bytes2.Buffer).WriteString
+      - (vitess.io/vitess/go/sqltypes.BinWriter).Write
+      - vitess.io/vitess/go/vt/orchestrator/external/golib/log.Errore
+      - vitess.io/vitess/go/vt/orchestrator/external/golib/log.Errorf
+      - vitess.io/vitess/go/vt/orchestrator/external/golib/log.Fatal
+      - vitess.io/vitess/go/vt/orchestrator/external/golib/log.Fatale
+      - vitess.io/vitess/go/vt/orchestrator/external/golib/log.Fatalf
+      - (*vitess.io/vitess/go/vt/vttest.LocalCluster).TearDown
+
   goimports:
     local-prefixes: vitess.io/vitess
   govet:
