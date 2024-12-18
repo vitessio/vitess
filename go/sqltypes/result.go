@@ -330,17 +330,14 @@ func (result *Result) StripMetadata(incl querypb.ExecuteOptions_IncludedFields) 
 // to another result.Note currently it doesn't handle cases like
 // if two results have different fields.We will enhance this function.
 func (result *Result) AppendResult(src *Result) {
-	if src.RowsAffected == 0 && len(src.Rows) == 0 && len(src.Fields) == 0 {
-		return
-	}
-	if result.Fields == nil {
-		result.Fields = src.Fields
-	}
 	result.RowsAffected += src.RowsAffected
 	if src.InsertID != 0 || src.InsertIDChanged {
 		result.InsertID = src.InsertID
 	}
 	result.InsertIDChanged = result.InsertIDChanged || src.InsertIDChanged
+	if result.Fields == nil {
+		result.Fields = src.Fields
+	}
 	result.Rows = append(result.Rows, src.Rows...)
 }
 
