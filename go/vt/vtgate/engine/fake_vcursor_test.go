@@ -893,6 +893,9 @@ func (t *loggingVCursor) RecordMirrorStats(sourceExecTime, targetExecTime time.D
 	}
 }
 
+func (t *loggingVCursor) SetLastInsertID(id uint64) {}
+func (t *noopVCursor) SetLastInsertID(id uint64)    {}
+
 func (t *noopVCursor) VExplainLogging() {}
 func (t *noopVCursor) DisableLogging()  {}
 func (t *noopVCursor) GetVExplainLogs() []ExecuteEntry {

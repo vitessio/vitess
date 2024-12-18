@@ -5138,3 +5138,11 @@ func (asm *assembler) Introduce(offset int, t sqltypes.Type, col collations.Type
 		return 1
 	}, "INTRODUCE (SP-1)")
 }
+
+func (asm *assembler) Fn_LAST_INSERT_ID() {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-1].(*evalUint64)
+		env.VCursor().SetLastInsertID(arg.u)
+		return 1
+	}, "FN LAST_INSERT_ID UINT64(SP-1)")
+}
