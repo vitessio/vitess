@@ -29,8 +29,8 @@ import (
 )
 
 const (
-	defaultParallelWorkersPoolSize = 1
-	maxBatchedCommitsPerWorker     = 50
+	defaultParallelWorkersPoolSize = 8
+	maxBatchedCommitsPerWorker     = 100
 )
 
 type parallelWorkersPool struct {
@@ -51,7 +51,6 @@ type parallelWorkersPool struct {
 }
 
 func newParallelWorkersPool(size int, dbClientGen dbClientGenerator, vp *vplayer) (p *parallelWorkersPool, err error) {
-	log.Errorf("======= QQQ NEW PARALLEL POOOL siz=%v", size)
 	p = &parallelWorkersPool{
 		workers:      make([]*parallelWorker, size),
 		pool:         make(chan *parallelWorker, size),
@@ -90,12 +89,8 @@ func (p *parallelWorkersPool) drain(ctx context.Context) (err error) {
 	terminateWorkers := func() error {
 		p.mu.Lock()
 		defer p.mu.Unlock()
-		for i := range len(p.workers) {
-			index := (p.head + i) % len(p.workers)
-			if err := p.workers[index].applyEvent(ctx, unknownEvent); err != nil {
-				return err
-			}
-			if err := p.workers[index].applyEvent(ctx, terminateWorkerEvent); err != nil {
+		for _, w := range p.workers {
+			if err := w.applyEvent(ctx, terminateWorkerEvent); err != nil {
 				return err
 			}
 		}
@@ -140,9 +135,7 @@ func (p *parallelWorkersPool) availableWorker(ctx context.Context, lastCommitted
 	w.lastCommitted = lastCommitted
 	w.sequenceNumber = sequenceNumber
 	w.isFirstInBinlog = firstInBinlog
-	w.appliedevents = nil
-	w.doneevents.Store(false)
-	log.Errorf("========== QQQ availableWorker w=%v initialized with seq=%v, lastComm=%v, firstInBinlog=%v", w.index, w.sequenceNumber, w.lastCommitted, firstInBinlog)
+	// log.Errorf("========== QQQ availableWorker w=%v initialized with seq=%v, lastComm=%v, firstInBinlog=%v", w.index, w.sequenceNumber, w.lastCommitted, firstInBinlog)
 
 	if lastCommitted < 0 {
 		// Only happens when called by drain(), in which case there is no need for this worker
@@ -156,25 +149,24 @@ func (p *parallelWorkersPool) availableWorker(ctx context.Context, lastCommitted
 				w.pool.posReached.Store(true)
 			}
 			p.workerErrors <- err
-			log.Errorf("========== QQQ applyQueuedEvents worker %v is done with error=%v", w.index, err)
+			// log.Errorf("========== QQQ applyQueuedEvents worker %v is done with error=%v", w.index, err)
 		}
 		// log.Errorf("========== QQQ applyQueuedEvents worker %v is done!", w.index)
 		p.mu.Lock()
 		defer p.mu.Unlock()
 
-		log.Errorf("========== QQQ applyQueuedEvents worker %v is done! head=%v", w.index, p.head)
+		// log.Errorf("========== QQQ applyQueuedEvents worker %v is done! head=%v", w.index, p.head)
 		if w.index != p.head && w.sequenceNumber > 0 {
-			log.Errorf("========== QQQ applyQueuedEvents WHOAAAAAAA how can a worker be done when it's not in head? applied: %v/%v", w.index, w.appliedevents)
+			log.Errorf("========== QQQ applyQueuedEvents WHOAAAAAAA how can a worker be done when it's not in head? index=%v, p.head=%v", w.index, p.head)
 
 		}
 		if w.index == p.head {
 			p.handoverHead(w.index)
-			log.Errorf("========== QQQ applyQueuedEvents new head=%v with %d queued, first in binlog =%v", p.head, len(p.workers[p.head].events), p.workers[p.head].isFirstInBinlog)
+			// log.Errorf("========== QQQ applyQueuedEvents new head=%v with %d queued, first in binlog =%v", p.head, len(p.workers[p.head].events), p.workers[p.head].isFirstInBinlog)
 		}
 		w.lastCommitted = 0
 		w.sequenceNumber = 0
 		w.isFirstInBinlog = false
-		w.appliedevents = nil
 		p.recycleWorker(w)
 	}()
 	return w, nil
@@ -245,7 +237,7 @@ func (p *parallelWorkersPool) isApplicable(w *parallelWorker, event *binlogdatap
 			return false
 		}
 		if otherWorker.isFirstInBinlog && i > 0 {
-			log.Errorf("========== QQQ isApplicable: false, because worker %v sees otherWorker %v which is first in binlog at i=%v. head=%v", w.index, otherWorker.index, i, p.head)
+			// log.Errorf("========== QQQ isApplicable: false, because worker %v sees otherWorker %v which is first in binlog at i=%v. head=%v", w.index, otherWorker.index, i, p.head)
 			// This means we've rotated a binary log. We therefore
 			// Wait until all previous binlog events are consumed.
 			return false

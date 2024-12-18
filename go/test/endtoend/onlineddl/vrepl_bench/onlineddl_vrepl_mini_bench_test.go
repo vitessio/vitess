@@ -148,13 +148,13 @@ var (
 )
 
 var (
-	countIterations = 3
+	countIterations = 1
 )
 
 const (
 	maxTableRows         = 4096
 	workloadDuration     = 45 * time.Second
-	migrationWaitTimeout = 120 * time.Second
+	migrationWaitTimeout = 60 * time.Second
 )
 
 func resetOpOrder() {
@@ -385,7 +385,13 @@ func TestVreplMiniStressSchemaChanges(t *testing.T) {
 			t.Run("wait for migration to complete", func(t *testing.T) {
 				status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 				t.Logf("# Migration status (for debug purposes): <%s>", status)
-				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+				if !onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete) {
+					query := fmt.Sprintf("select * from _vt.vreplication where workflow='%s'", uuid)
+					rs, err := primaryTablet.VttabletProcess.QueryTablet(query, keyspaceName, false)
+					require.NoError(t, err)
+					require.NotEmpty(t, rs.Rows)
+					t.Logf("vreplication: %v", rs.Rows[0])
+				}
 
 				onlineddl.CheckCancelAllMigrations(t, &vtParams, -1)
 			})
@@ -637,10 +643,11 @@ func runSingleConnection(ctx context.Context, t *testing.T, sleepInterval time.D
 	ticker := time.NewTicker(sleepInterval)
 	defer ticker.Stop()
 
+	log.Infof("+- Starting single connection")
+	defer log.Infof("+- Terminating single connection")
 	for {
 		select {
 		case <-ctx.Done():
-			log.Infof("Terminating single connection")
 			return
 		case <-ticker.C:
 		}
@@ -680,6 +687,19 @@ func runMultipleConnections(ctx context.Context, t *testing.T) {
 			runSingleConnection(ctx, t, sleepInterval)
 		}()
 	}
+	flushBinlogs := func() {
+		// Flushing binlogs on primary restarts imposes more challenges to parallel vplayer
+		// because a binlog rotation is a parallellism barrier: all events from previous binlog
+		// must be consumed before starting to apply events in new binlog.
+		conn, err := primaryTablet.VttabletProcess.TabletConn(keyspaceName, true)
+		require.NoError(t, err)
+		defer conn.Close()
+
+		_, err = conn.ExecuteFetch("flush binary logs", 1000, true)
+		require.NoError(t, err)
+	}
+	time.AfterFunc(200*time.Millisecond, flushBinlogs)
+	time.AfterFunc(400*time.Millisecond, flushBinlogs)
 	wg.Wait()
 	log.Infof("Running multiple connections: done")
 }

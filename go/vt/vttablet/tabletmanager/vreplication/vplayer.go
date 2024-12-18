@@ -71,8 +71,9 @@ type vplayer struct {
 	batchMode    bool
 	parallelMode bool
 
-	pos   atomic.Pointer[replication.Position]
-	posMu sync.Mutex
+	pos       atomic.Pointer[replication.Position]
+	lastPosTs int64
+	posMu     sync.Mutex
 	// unsavedEvent is set any time we skip an event without
 	// saving, which is on an empty commit.
 	// If nothing else happens for idleTimeout since timeLastSaved,
@@ -211,7 +212,6 @@ func (vp *vplayer) play(ctx context.Context) error {
 	}
 
 	err = vp.fetchAndApply(ctx)
-	log.Errorf("========== QQQ play err: %v", err)
 	return err
 }
 
@@ -316,6 +316,12 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 func (vp *vplayer) updatePos(ctx context.Context, ts int64, queryFunc func(ctx context.Context, sql string) (*sqltypes.Result, error)) (posReached bool, err error) {
 	vp.posMu.Lock()
 	defer vp.posMu.Unlock()
+
+	if ts < vp.lastPosTs {
+		// Skip if the timestamp is not increasing.
+		return false, nil
+	}
+	vp.lastPosTs = ts
 
 	update := binlogplayer.GenerateUpdatePos(vp.vr.id, *vp.pos.Load(), time.Now().Unix(), ts, vp.vr.stats.CopyRowCount.Get(), vp.vr.workflowConfig.StoreCompressedGTID)
 	if _, err := queryFunc(ctx, update); err != nil {
@@ -429,7 +435,6 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog, parallelPoo
 	var pw *parallelWorker
 	defer func() {
 		if pw != nil {
-			// log.Errorf("========== QQQ applyEvents: last event")
 			pw.applyEvent(ctx, terminateWorkerEvent)
 		}
 	}()
@@ -451,7 +456,6 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog, parallelPoo
 		if err != nil {
 			return err
 		}
-		// log.Errorf("========== QQQ applyEvents: got %v items", len(items))
 
 		// Empty transactions are saved at most once every idleTimeout.
 		// This covers two situations:
@@ -496,7 +500,6 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog, parallelPoo
 					// even if it's empty. So, the next applyEvent is invoked with the
 					// mustSave flag.
 					if !vp.stopPos.IsZero() && vp.pos.Load().AtLeast(vp.stopPos) {
-						// log.Errorf("======= QQQ applyEvents: MustSave. reached stop position: %v", vp.stopPos)
 						event.MustSave = true
 						break
 					}
@@ -519,11 +522,9 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog, parallelPoo
 							// Worker errors come asynchronously, because of course the worker applies events
 							// asynchronously. So we just seize periodic opportunities to check for errors.
 							// This one is a good opportunity.
-							// log.Errorf("======= QQQ applyEvents: replacing worker.")
 							if err := parallelPool.workersError(); err != nil {
 								return err
 							}
-							// log.Errorf("======= QQQ applyEvents: replacing worker, no worker error. Terminating")
 							// Let the worker know its work is done
 							pw.applyEvent(ctx, terminateWorkerEvent)
 							if countCommitsPerWorker > maxBatchedCommitsPerWorker {
@@ -531,14 +532,11 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog, parallelPoo
 							}
 							countCommitsPerWorker = 0
 						}
-						// log.Errorf("======= QQQ applyEvents: replacing worker, getting available worker; seq=%v, last_committed=%v", event.SequenceNumber, event.LastCommitted)
 						pw, err = parallelPool.availableWorker(ctx, event.LastCommitted, event.SequenceNumber, firstInBinlog)
 						if err != nil {
-							log.Errorf("======= QQQ applyEvents: ERROR getting worker: %v", err)
 							return err
 						}
 						firstInBinlog = false
-						// log.Errorf("======= QQQ applyEvents: replacing worker, new worker %v, seq=%v, last_committed=%v, firstInBinlog=%v", pw.index, pw.sequenceNumber, pw.lastCommitted, pw.isFirstInBinlog)
 					}
 					lastSequenceNumber = event.SequenceNumber
 				}

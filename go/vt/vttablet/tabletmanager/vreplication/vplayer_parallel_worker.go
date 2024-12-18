@@ -23,9 +23,9 @@ import (
 	"io"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"time"
 
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
@@ -41,9 +41,6 @@ var (
 		SequenceNumber: 0,
 		MustSave:       true,
 	}
-	unknownEvent = &binlogdatapb.VEvent{
-		Type: binlogdatapb.VEventType_UNKNOWN,
-	}
 	errRetryEvent = errors.New("retry event")
 )
 
@@ -55,6 +52,7 @@ type parallelWorker struct {
 	dbClient       *vdbClient
 	queryFunc      func(ctx context.Context, sql string) (*sqltypes.Result, error)
 	vp             *vplayer
+	lastPos        replication.Position
 
 	// foreignKeyChecksEnabled is the current state of the foreign key checks for the current session.
 	// It reflects what we have set the @@session.foreign_key_checks session variable to.
@@ -65,9 +63,6 @@ type parallelWorker struct {
 	isFirstInBinlog                  bool
 	events                           chan *binlogdatapb.VEvent
 	stats                            *VrLogStats
-
-	appliedevents []binlogdatapb.VEventType
-	doneevents    atomic.Bool
 }
 
 // applyQueuedStmtEvent applies an actual DML statement received from the source, directly onto the backend database
@@ -134,9 +129,6 @@ func (w *parallelWorker) updateFKCheck(ctx context.Context, flags2 uint32) error
 }
 
 func (w *parallelWorker) applyEvent(ctx context.Context, event *binlogdatapb.VEvent) error {
-	if w.doneevents.Load() {
-		log.Errorf("============== QQQ applyEvent when doneevents is true, w=%v, event=%v", w.index, event.Type)
-	}
 	select {
 	case w.events <- event:
 		return nil
@@ -146,15 +138,12 @@ func (w *parallelWorker) applyEvent(ctx context.Context, event *binlogdatapb.VEv
 }
 
 func (w *parallelWorker) applyQueuedEvents(ctx context.Context) (err error) {
-	defer w.doneevents.Store(true)
-
 	defer func() {
 		if err != nil {
 			if err := w.dbClient.Rollback(); err != nil {
 				log.Errorf("Error rolling back transaction: %v", err)
 			}
 		}
-		// }
 	}()
 	for {
 		select {
@@ -186,8 +175,10 @@ func (w *parallelWorker) applyQueuedEvents(ctx context.Context) (err error) {
 				return err
 			}
 			// No error
-			w.appliedevents = append(w.appliedevents, vevent.Type)
 			if vevent == terminateWorkerEvent {
+				if !w.lastPos.IsZero() {
+					w.vp.pos.Store(&w.lastPos)
+				}
 				return w.dbClient.Commit()
 			}
 		}
@@ -276,20 +267,14 @@ func (w *parallelWorker) applyQueuedRowEvent(ctx context.Context, vevent *binlog
 }
 
 func (w *parallelWorker) applyQueuedEvent(ctx context.Context, event *binlogdatapb.VEvent) error {
-	switch event.Type {
-	case binlogdatapb.VEventType_UNKNOWN:
-		// An indication that there are no more events for this worker
-		return nil
-	}
 	isHead := false
 	requireWait := false
 	for {
-		wokeup := false
 		func() {
 			w.pool.mu.Lock()
 			defer w.pool.mu.Unlock()
 
-			isHead = w.index == w.pool.head
+			isHead = (w.index == w.pool.head)
 			if isHead {
 				// head worker is always applicable
 				return
@@ -297,33 +282,39 @@ func (w *parallelWorker) applyQueuedEvent(ctx context.Context, event *binlogdata
 			for requireWait || !w.pool.isApplicable(w, event) {
 				// log.Errorf("========== QQQ applyQueuedEvent worker %v WAITING. head=%v", w.index, w.pool.head)
 				w.pool.wakeup.Wait()
-				wokeup = true
 				requireWait = false
 			}
 		}()
-		if wokeup {
-			log.Errorf("========== QQQ applyQueuedEvent worker %v WOKE UP. events=%v, next event: %v", w.index, len(w.events), event.Type)
-		}
 		err := w.applyApplicableQueuedEvent(ctx, event)
 		if errors.Is(vterrors.UnwrapAll(err), errRetryEvent) && !isHead {
 			requireWait = true
-			log.Errorf("========== QQQ error is errRetryEvent: %v", err)
+			log.Errorf("========== QQQ worker %v error is errRetryEvent: %v", w.index, err)
+			// The error here is that we tried to apply a ROW event, but the table map for this row change
+			// we advertised in a FIELD event to a different worker. This happens because vstreamer optimizes
+			// table map events: it only sends the single first event for any table (until log is rotated or until
+			// table is changed). As we slice the relaylog events and distribute into different worker, it is possible
+			// that worker #3 will attempt to run a ROW event before worker #2 has applied the FIELD event for the same table.
+			// So what we do here is to .Wait() again (to be woken up when a previous worker completes its event queue).
 			continue
-		} else if err != nil {
-			log.Errorf("========== QQQ error is NOT errRetryEvent: %v", err)
 		}
 		return err
 	}
 }
 
 func (w *parallelWorker) applyApplicableQueuedEvent(ctx context.Context, event *binlogdatapb.VEvent) error {
+	switch event.Type {
+	case binlogdatapb.VEventType_UNKNOWN:
+		// An indication that there are no more events for this worker
+		return nil
+	}
+
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	applyFunc := func(sql string) (*sqltypes.Result, error) {
 		return w.queryFunc(ctx, sql)
 	}
-
+	//
 	t := time.NewTimer(5 * time.Second)
 	defer t.Stop()
 	go func() {
@@ -350,6 +341,7 @@ func (w *parallelWorker) applyApplicableQueuedEvent(ctx context.Context, event *
 			// A new position should not be saved until a saveable event occurs.
 			w.vp.unsavedEvent.Store(nil)
 		}()
+		w.lastPos = pos
 		if w.vp.stopPos.IsZero() {
 			return nil
 		}
