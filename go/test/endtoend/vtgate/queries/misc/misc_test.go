@@ -163,6 +163,7 @@ func TestSetAndGetLastInsertID(t *testing.T) {
 		"update t1 set id2 = last_insert_id(%d) where id1 = 2",
 		"update t1 set id2 = 88 where id1 = last_insert_id(%d)",
 		"delete from t1 where id1 = last_insert_id(%d)",
+		"select id2, last_insert_id(count(*)) from t1 where %d group by id2",
 	}
 
 	for _, workload := range []string{"olap", "oltp"} {
@@ -175,7 +176,7 @@ func TestSetAndGetLastInsertID(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			// Insert a row for UPDATE tests
+			// Insert a few rows for UPDATE tests
 			mcmp.Exec("insert into t1 (id1, id2) values (1, 10)")
 
 			for _, query := range queries {

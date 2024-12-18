@@ -81,6 +81,10 @@ type (
 	builtinUUIDToBin struct {
 		CallExpr
 	}
+
+	builtinLastInsertID struct {
+		CallExpr
+	}
 )
 
 var _ IR = (*builtinInetAton)(nil)
@@ -95,6 +99,7 @@ var _ IR = (*builtinBinToUUID)(nil)
 var _ IR = (*builtinIsUUID)(nil)
 var _ IR = (*builtinUUID)(nil)
 var _ IR = (*builtinUUIDToBin)(nil)
+var _ IR = (*builtinLastInsertID)(nil)
 
 func (call *builtinInetAton) eval(env *ExpressionEnv) (eval, error) {
 	arg, err := call.arg1(env)
@@ -155,6 +160,7 @@ func (call *builtinInetNtoa) compile(c *compiler) (ctype, error) {
 	c.compileToUint64(arg, 1)
 	col := typedCoercionCollation(sqltypes.VarChar, call.collate)
 	c.asm.Fn_INET_NTOA(col)
+
 	c.asm.jumpDestination(skip)
 
 	return ctype{Type: sqltypes.VarChar, Flag: flagNullable, Col: col}, nil
@@ -192,6 +198,40 @@ func (call *builtinInet6Aton) compile(c *compiler) (ctype, error) {
 	c.asm.jumpDestination(skip)
 
 	return ctype{Type: sqltypes.VarBinary, Flag: flagNullable, Col: collationBinary}, nil
+}
+
+func (call *builtinLastInsertID) eval(env *ExpressionEnv) (eval, error) {
+	arg, err := call.arg1(env)
+	if err != nil {
+		return nil, err
+	}
+	if arg == nil {
+		env.VCursor().SetLastInsertID(0)
+		return nil, err
+	}
+	insertID := uint64(evalToInt64(arg).i)
+	env.VCursor().SetLastInsertID(insertID)
+	return newEvalUint64(insertID), nil
+}
+
+func (call *builtinLastInsertID) compile(c *compiler) (ctype, error) {
+	arg, err := call.Arguments[0].compile(c)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	setZero := c.compileNullCheck1(arg)
+	c.compileToUint64(arg, 1)
+	c.asm.Fn_LAST_INSERT_ID()
+	end := c.asm.jumpFrom()
+	c.asm.addJump(end)
+
+	c.asm.jumpDestination(setZero)
+	c.asm.Fn_LAST_INSERT_ID_NULL()
+
+	c.asm.jumpDestination(end)
+
+	return ctype{Type: sqltypes.Uint64, Flag: flagNullable, Col: collationNumeric}, nil
 }
 
 func printIPv6AsIPv4(addr netip.Addr) (netip.Addr, bool) {
