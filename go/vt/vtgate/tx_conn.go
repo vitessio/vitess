@@ -118,10 +118,34 @@ func (txc *TxConn) Commit(ctx context.Context, session *econtext.SafeSession) er
 	}
 
 	defer recordCommitTime(session, twopc, time.Now())
-	if twopc {
-		return txc.commit2PC(ctx, session)
+
+	err := txc.runSessions(ctx, session.PreSessions, session.GetLogger(), txc.commitShard)
+	if err != nil {
+		_ = txc.Release(ctx, session)
+		return err
 	}
-	return txc.commitNormal(ctx, session)
+
+	if twopc {
+		err = txc.commit2PC(ctx, session)
+	} else {
+		err = txc.commitNormal(ctx, session)
+	}
+
+	if err != nil {
+		_ = txc.Release(ctx, session)
+		return err
+	}
+
+	err = txc.runSessions(ctx, session.PostSessions, session.GetLogger(), txc.commitShard)
+	if err != nil {
+		// If last commit fails, there will be nothing to rollback.
+		session.RecordWarning(&querypb.QueryWarning{Message: fmt.Sprintf("post-operation transaction had an error: %v", err)})
+		// With reserved connection we should release them.
+		if session.InReservedConn() {
+			_ = txc.Release(ctx, session)
+		}
+	}
+	return nil
 }
 
 func recordCommitTime(session *econtext.SafeSession, twopc bool, startTime time.Time) {
@@ -165,11 +189,6 @@ func (txc *TxConn) commitShard(ctx context.Context, s *vtgatepb.Session_ShardSes
 }
 
 func (txc *TxConn) commitNormal(ctx context.Context, session *econtext.SafeSession) error {
-	if err := txc.runSessions(ctx, session.PreSessions, session.GetLogger(), txc.commitShard); err != nil {
-		_ = txc.Release(ctx, session)
-		return err
-	}
-
 	// Retain backward compatibility on commit order for the normal session.
 	for i, shardSession := range session.ShardSessions {
 		if err := txc.commitShard(ctx, shardSession, session.GetLogger()); err != nil {
@@ -193,17 +212,7 @@ func (txc *TxConn) commitNormal(ctx context.Context, session *econtext.SafeSessi
 				})
 				warnings.Add("NonAtomicCommit", 1)
 			}
-			_ = txc.Release(ctx, session)
 			return err
-		}
-	}
-
-	if err := txc.runSessions(ctx, session.PostSessions, session.GetLogger(), txc.commitShard); err != nil {
-		// If last commit fails, there will be nothing to rollback.
-		session.RecordWarning(&querypb.QueryWarning{Message: fmt.Sprintf("post-operation transaction had an error: %v", err)})
-		// With reserved connection we should release them.
-		if session.InReservedConn() {
-			_ = txc.Release(ctx, session)
 		}
 	}
 	return nil
@@ -214,11 +223,6 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *econtext.SafeSession)
 	// If the number of participants is one or less, then it's a normal commit.
 	if len(session.ShardSessions) <= 1 {
 		return txc.commitNormal(ctx, session)
-	}
-
-	if err := txc.checkValidCondition(session); err != nil {
-		_ = txc.Rollback(ctx, session)
-		return err
 	}
 
 	mmShard := session.ShardSessions[0]
@@ -298,13 +302,6 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *econtext.SafeSession)
 	// This step is to clean up the transaction metadata.
 	txPhase = Commit2pcConclude
 	_ = txc.tabletGateway.ConcludeTransaction(ctx, mmShard.Target, dtid)
-	return nil
-}
-
-func (txc *TxConn) checkValidCondition(session *econtext.SafeSession) error {
-	if len(session.PreSessions) != 0 || len(session.PostSessions) != 0 {
-		return vterrors.VT12001("atomic distributed transaction commit with consistent lookup vindex")
-	}
 	return nil
 }
 
