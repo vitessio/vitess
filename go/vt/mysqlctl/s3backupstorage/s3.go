@@ -228,7 +228,7 @@ func (bh *S3BackupHandle) handleAddFile(ctx context.Context, filename string, pa
 	}()
 }
 
-// this is a helper to calculate the part size, taking into consideration the minimum part size
+// calculateUploadPartSize is a helper to calculate the part size, taking into consideration the minimum part size
 // passed in by an operator.
 func calculateUploadPartSize(filesize int64) (partSizeBytes int64, err error) {
 	// Calculate s3 upload part size using the source filesize
