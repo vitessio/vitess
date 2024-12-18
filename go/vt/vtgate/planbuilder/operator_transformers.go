@@ -22,12 +22,10 @@ import (
 	"strconv"
 	"strings"
 
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/sysvars"
-	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
@@ -887,18 +885,18 @@ func transformUnionPlan(ctx *plancontext.PlanningContext, op *operators.Union) (
 }
 
 func transformLimit(ctx *plancontext.PlanningContext, op *operators.Limit) (engine.Primitive, error) {
-	plan, err := transformToPrimitive(ctx, op.Source)
+	input, err := transformToPrimitive(ctx, op.Source)
 	if err != nil {
 		return nil, err
 	}
 
-	return createLimit(plan, op.AST, ctx.VSchema.Environment(), ctx.VSchema.ConnCollation())
+	return createLimit(ctx, input, op.AST)
 }
 
-func createLimit(input engine.Primitive, limit *sqlparser.Limit, env *vtenv.Environment, coll collations.ID) (engine.Primitive, error) {
+func createLimit(ctx *plancontext.PlanningContext, input engine.Primitive, limit *sqlparser.Limit) (engine.Primitive, error) {
 	cfg := &evalengine.Config{
-		Collation:   coll,
-		Environment: env,
+		Collation:   ctx.VSchema.ConnCollation(),
+		Environment: ctx.VSchema.Environment(),
 	}
 	count, err := evalengine.Translate(limit.Rowcount, cfg)
 	if err != nil {
@@ -913,9 +911,10 @@ func createLimit(input engine.Primitive, limit *sqlparser.Limit, env *vtenv.Envi
 	}
 
 	return &engine.Limit{
-		Input:  input,
-		Count:  count,
-		Offset: offset,
+		Count:                count,
+		Offset:               offset,
+		RequireCompleteInput: ctx.SemTable.ShouldFetchLastInsertID(),
+		Input:                input,
 	}, nil
 }
 

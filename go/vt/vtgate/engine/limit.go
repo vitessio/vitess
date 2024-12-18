@@ -19,6 +19,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"io"
 	"strconv"
 	"sync"
 
@@ -36,9 +37,10 @@ var _ Primitive = (*Limit)(nil)
 
 // Limit is a primitive that performs the LIMIT operation.
 type Limit struct {
-	Count  evalengine.Expr
-	Offset evalengine.Expr
-	Input  Primitive
+	Count                evalengine.Expr
+	Offset               evalengine.Expr
+	RequireCompleteInput bool
+	Input                Primitive
 }
 
 var UpperLimitStr = "__upper_limit"
@@ -141,9 +143,16 @@ func (l *Limit) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars 
 			return err
 		}
 
-		return nil
+		if l.RequireCompleteInput || vcursor.Session().InTransaction() {
+			return nil
+		}
+
+		return io.EOF
 	})
 
+	if err == io.EOF {
+		return nil
+	}
 	if err != nil {
 		return err
 	}
