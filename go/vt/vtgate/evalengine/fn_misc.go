@@ -224,6 +224,7 @@ func (call *builtinLastInsertID) compile(c *compiler) (ctype, error) {
 	c.compileToUint64(arg, 1)
 	c.asm.Fn_LAST_INSERT_ID()
 	end := c.asm.jumpFrom()
+	c.asm.addJump(end)
 
 	c.asm.jumpDestination(setZero)
 	c.asm.Fn_LAST_INSERT_ID_NULL()

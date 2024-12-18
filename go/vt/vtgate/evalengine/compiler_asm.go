@@ -5153,3 +5153,9 @@ func (asm *assembler) Fn_LAST_INSERT_ID_NULL() {
 		return 1
 	}, "FN LAST_INSERT_ID NULL")
 }
+
+func (asm *assembler) addJump(end *jump) {
+	asm.emit(func(env *ExpressionEnv) int {
+		return end.offset()
+	}, "JUMP")
+}

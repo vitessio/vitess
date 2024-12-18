@@ -966,7 +966,7 @@ func runTest(t *testing.T, expr sqlparser.Expr, cfg *evalengine.Config, tc struc
 	vc := &testVcursor{env: vtenv.NewTestEnv()}
 	env := evalengine.NewExpressionEnv(context.Background(), nil, vc)
 
-	_, err = env.EvaluateAST(converted)
+	_, err = env.Evaluate(converted)
 	require.NoError(t, err)
 	if tc.missing {
 		require.Nil(t, vc.lastInsertID)
