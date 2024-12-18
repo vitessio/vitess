@@ -134,41 +134,51 @@ func TestCast(t *testing.T) {
 // TestSetAndGetLastInsertID tests that the last_insert_id function works as intended when used with different arguments.
 func TestSetAndGetLastInsertID(t *testing.T) {
 	notZero := 1
-	for _, workload := range []string{"olap", "oltp"} {
-		mcmp, closer := start(t)
-		defer closer()
-
-		_, err := mcmp.VtConn.ExecuteFetch(fmt.Sprintf("set workload = %s", workload), 1000, false)
-		require.NoError(t, err)
-		checkQuery := func(i string) {
-			for _, val := range []int{0, notZero} {
-				query := fmt.Sprintf(i, val)
-				name := fmt.Sprintf("%s - %s", workload, query)
-				mcmp.Run(name, func(mcmp *utils.MySQLCompare) {
-					mcmp.Exec(query)
-					mcmp.Exec("select last_insert_id()")
-				})
+	checkQuery := func(i string, workload string, tx bool, mcmp utils.MySQLCompare) {
+		for _, val := range []int{0, notZero} {
+			query := fmt.Sprintf(i, val)
+			name := fmt.Sprintf("%s - %s", workload, query)
+			if tx {
+				name = "tx - " + name
 			}
-			notZero++
+			mcmp.Run(name, func(mcmp *utils.MySQLCompare) {
+				mcmp.Exec(query)
+				mcmp.Exec("select last_insert_id()")
+			})
 		}
+		// we need this value to be not zero, and then we keep changing it so different queries don't interact with each other
+		notZero++
+	}
 
-		checkQuery("select last_insert_id(%d)")
+	queries := []string{
+		"select last_insert_id(%d)",
+		"select last_insert_id(%d), id1, id2 from t1 limit 1",
+		"select last_insert_id(%d), id1, id2 from t1 where 1 = 2",
+		"select 12 from t1 where last_insert_id(%d)",
+		"update t1 set id2 = last_insert_id(%d) where id1 = 1",
+		"update t1 set id2 = last_insert_id(%d) where id1 = 2",
+		"update t1 set id2 = 88 where id1 = last_insert_id(%d)",
+		"delete from t1 where id1 = last_insert_id(%d)",
+	}
 
-		// Test within SELECT expressions
-		checkQuery("select last_insert_id(%d), id1, id2 from t1 limit 1")
-		checkQuery("select last_insert_id(%d), id1, id2 from t1 where 1 = 2")
-		checkQuery("select 12 from t1 where last_insert_id(%d)")
+	for _, workload := range []string{"olap", "oltp"} {
+		for _, tx := range []bool{true, false} {
+			mcmp, closer := start(t)
+			_, err := mcmp.VtConn.ExecuteFetch(fmt.Sprintf("set workload = %s", workload), 1000, false)
+			require.NoError(t, err)
+			if tx {
+				_, err := mcmp.VtConn.ExecuteFetch("begin", 1000, false)
+				require.NoError(t, err)
+			}
 
-		// Add a row so we can test the last_insert_id in UPDATE statements
-		mcmp.Exec("insert into t1 (id1, id2) values (1, 10)")
+			// Insert a row for UPDATE tests
+			mcmp.Exec("insert into t1 (id1, id2) values (1, 10)")
 
-		// Test in UPDATE statements
-		checkQuery("update t1 set id2 = last_insert_id(%d) where id1 = 1") // this should run
-		checkQuery("update t1 set id2 = last_insert_id(%d) where id1 = 2") // this should not run
-		checkQuery("update t1 set id2 = 88 where id1 = last_insert_id(%d)")
-
-		// Test in DELETE statements
-		checkQuery("delete from t1 where id1 = last_insert_id(%d)")
+			for _, query := range queries {
+				checkQuery(query, workload, tx, mcmp)
+			}
+			closer()
+		}
 	}
 }
 
