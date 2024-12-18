@@ -30,7 +30,7 @@ import (
 
 const (
 	defaultParallelWorkersPoolSize = 8
-	maxBatchedCommitsPerWorker     = 100
+	maxBatchedCommitsPerWorker     = 50
 )
 
 type parallelWorkersPool struct {
@@ -155,11 +155,6 @@ func (p *parallelWorkersPool) availableWorker(ctx context.Context, lastCommitted
 		p.mu.Lock()
 		defer p.mu.Unlock()
 
-		// log.Errorf("========== QQQ applyQueuedEvents worker %v is done! head=%v", w.index, p.head)
-		if w.index != p.head && w.sequenceNumber > 0 {
-			log.Errorf("========== QQQ applyQueuedEvents WHOAAAAAAA how can a worker be done when it's not in head? index=%v, p.head=%v", w.index, p.head)
-
-		}
 		if w.index == p.head {
 			p.handoverHead(w.index)
 			// log.Errorf("========== QQQ applyQueuedEvents new head=%v with %d queued, first in binlog =%v", p.head, len(p.workers[p.head].events), p.workers[p.head].isFirstInBinlog)
@@ -228,7 +223,6 @@ func (p *parallelWorkersPool) isApplicable(w *parallelWorker, event *binlogdatap
 		}
 		if otherWorker.sequenceNumber < 0 {
 			// Happens on draining. Skip this worker.
-			log.Errorf("========== QQQ isApplicable WHOA-1 otherWorker %v sequenceNumber=%v", otherWorker.index, otherWorker.sequenceNumber)
 			continue
 		}
 		if otherWorker.sequenceNumber == 0 {
