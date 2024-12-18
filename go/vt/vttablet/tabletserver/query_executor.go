@@ -1202,16 +1202,8 @@ func (qre *QueryExecutor) fetchLastInsertID(ctx context.Context, conn *connpool.
 
 func (qre *QueryExecutor) execStreamSQL(conn *connpool.PooledConn, isTransaction bool, sql string, callback func(*sqltypes.Result) error) error {
 	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.execStreamSQL")
+	defer span.Finish()
 	trace.AnnotateSQL(span, sqlparser.Preview(sql))
-	callBackClosingSpan := func(result *sqltypes.Result) error {
-		defer span.Finish()
-
-		// if err := qre.fetchLastInsertID(ctx, conn.Conn, result); err != nil {
-		// 	return err
-		// }
-
-		return callback(result)
-	}
 
 	start := time.Now()
 	defer qre.logStats.AddRewrittenSQL(sql, start)
@@ -1222,28 +1214,47 @@ func (qre *QueryExecutor) execStreamSQL(conn *connpool.PooledConn, isTransaction
 	// This change will ensure that long-running streaming stateful queries get gracefully shutdown during ServingTypeChange
 	// once their grace period is over.
 	qd := NewQueryDetail(qre.logStats.Ctx, conn.Conn)
-	// if err := qre.resetLastInsertIDIfNeeded(ctx, conn.Conn); err != nil {
-	// 	return err
-	// }
 
+	if err := qre.resetLastInsertIDIfNeeded(ctx, conn.Conn); err != nil {
+		return err
+	}
+
+	lastInsertIDSet := false
+	cb := func(result *sqltypes.Result) error {
+		if result != nil && result.InsertID != 0 {
+			lastInsertIDSet = true
+		}
+		return callback(result)
+	}
+
+	var err error
 	if isTransaction {
-		err := qre.tsv.statefulql.Add(qd)
+		err = qre.tsv.statefulql.Add(qd)
 		if err != nil {
 			return err
 		}
 		defer qre.tsv.statefulql.Remove(qd)
-		err = conn.Conn.StreamOnce(ctx, sql, callBackClosingSpan, allocStreamResult, int(qre.tsv.qe.streamBufferSize.Load()), sqltypes.IncludeFieldsOrDefault(qre.options))
+		err = conn.Conn.StreamOnce(ctx, sql, cb, allocStreamResult, int(qre.tsv.qe.streamBufferSize.Load()), sqltypes.IncludeFieldsOrDefault(qre.options))
+	} else {
+		err = qre.tsv.olapql.Add(qd)
 		if err != nil {
 			return err
 		}
-		return nil
+		defer qre.tsv.olapql.Remove(qd)
+		err = conn.Conn.Stream(ctx, sql, cb, allocStreamResult, int(qre.tsv.qe.streamBufferSize.Load()), sqltypes.IncludeFieldsOrDefault(qre.options))
 	}
-	err := qre.tsv.olapql.Add(qd)
-	if err != nil {
+
+	if err != nil || lastInsertIDSet || !qre.options.GetFetchLastInsertId() {
 		return err
 	}
-	defer qre.tsv.olapql.Remove(qd)
-	return conn.Conn.Stream(ctx, sql, callBackClosingSpan, allocStreamResult, int(qre.tsv.qe.streamBufferSize.Load()), sqltypes.IncludeFieldsOrDefault(qre.options))
+	res := &sqltypes.Result{}
+	if err = qre.fetchLastInsertID(ctx, conn.Conn, res); err != nil {
+		return err
+	}
+	if res.InsertIDChanged {
+		return callback(res)
+	}
+	return nil
 }
 
 func (qre *QueryExecutor) recordUserQuery(queryType string, duration int64) {
