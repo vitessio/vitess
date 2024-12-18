@@ -321,6 +321,9 @@ func (w *parallelWorker) applyApplicableQueuedEvent(ctx context.Context, event *
 		select {
 		case <-t.C:
 			log.Errorf("========== QQQ applyQueuedEvent worker %v TIMED OUT. event=%v", w.index, event.Type)
+			if event.Type == binlogdatapb.VEventType_ROW {
+				log.Errorf("========== QQQ applyQueuedEvent worker %v TIMED OUT. event=%v. table=%v", w.index, event.Type, event.RowEvent.TableName)
+			}
 		case <-ctx.Done():
 			return
 		}
