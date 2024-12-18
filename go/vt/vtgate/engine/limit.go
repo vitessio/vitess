@@ -19,9 +19,10 @@ package engine
 import (
 	"context"
 	"fmt"
-	"io"
 	"strconv"
 	"sync"
+
+	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -105,6 +106,7 @@ func (l *Limit) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars 
 	err = vcursor.StreamExecutePrimitive(ctx, l.Input, bindVars, wantfields, func(qr *sqltypes.Result) error {
 		mu.Lock()
 		defer mu.Unlock()
+		log.Errorf("LastInsertID: %d InsertIDChanged %t\n", qr.InsertID, qr.InsertIDChanged)
 		if wantfields && len(qr.Fields) != 0 {
 			if err := callback(&sqltypes.Result{Fields: qr.Fields}); err != nil {
 				return err
@@ -112,7 +114,7 @@ func (l *Limit) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars 
 		}
 		inputSize := len(qr.Rows)
 		if inputSize == 0 {
-			return nil
+			return callback(qr)
 		}
 
 		// we've still not seen all rows we need to see before we can return anything to the client
@@ -126,30 +128,22 @@ func (l *Limit) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars 
 			offset = 0
 		}
 
-		if count == 0 {
-			return io.EOF
-		}
-
 		// reduce count till 0.
-		result := &sqltypes.Result{Rows: qr.Rows}
-		resultSize := len(result.Rows)
+		resultSize := len(qr.Rows)
 		if count > resultSize {
 			count -= resultSize
-			return callback(result)
+			return callback(qr)
 		}
-		result.Rows = result.Rows[:count]
+
+		qr.Rows = qr.Rows[:count]
 		count = 0
-		if err := callback(result); err != nil {
+		if err := callback(qr); err != nil {
 			return err
 		}
-		return io.EOF
+
+		return nil
 	})
 
-	if err == io.EOF {
-		// We may get back the EOF we returned in the callback.
-		// If so, suppress it.
-		return nil
-	}
 	if err != nil {
 		return err
 	}
