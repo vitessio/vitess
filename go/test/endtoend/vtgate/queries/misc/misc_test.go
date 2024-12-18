@@ -144,8 +144,9 @@ func TestSetAndGetLastInsertID(t *testing.T) {
 			mcmp.Run(name, func(mcmp *utils.MySQLCompare) {
 				mcmp.Exec(query)
 				mcmp.Exec("select last_insert_id()")
-				if mcmp.AsT().Failed() {
-					mcmp.VExplain(query)
+				t := mcmp.AsT()
+				if t.Failed() {
+					t.Log(mcmp.VExplain(query))
 				}
 			})
 		}

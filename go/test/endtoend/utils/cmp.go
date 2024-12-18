@@ -314,9 +314,9 @@ func (mcmp *MySQLCompare) ExecAllowError(query string) (*sqltypes.Result, error)
 	return vtQr, vtErr
 }
 
-func (mcmp *MySQLCompare) VExplain(query string) {
+func (mcmp *MySQLCompare) VExplain(query string) string {
 	mcmp.t.Helper()
 	vtQr, vtErr := mcmp.VtConn.ExecuteFetch("vexplain plan "+query, 1, true)
 	require.NoError(mcmp.t, vtErr, "[Vitess Error] for query: "+query)
-	fmt.Printf("Vitess VExplain Plan: \n%v\n", vtQr.Rows[0][0].ToString())
+	return vtQr.Rows[0][0].ToString()
 }
