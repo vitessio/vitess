@@ -160,6 +160,7 @@ func (call *builtinInetNtoa) compile(c *compiler) (ctype, error) {
 	c.compileToUint64(arg, 1)
 	col := typedCoercionCollation(sqltypes.VarChar, call.collate)
 	c.asm.Fn_INET_NTOA(col)
+
 	c.asm.jumpDestination(skip)
 
 	return ctype{Type: sqltypes.VarChar, Flag: flagNullable, Col: col}, nil
@@ -201,7 +202,11 @@ func (call *builtinInet6Aton) compile(c *compiler) (ctype, error) {
 
 func (call *builtinLastInsertID) eval(env *ExpressionEnv) (eval, error) {
 	arg, err := call.arg1(env)
-	if arg == nil || err != nil {
+	if err != nil {
+		return nil, err
+	}
+	if arg == nil {
+		env.VCursor().SetLastInsertID(0)
 		return nil, err
 	}
 	insertID := uint64(evalToInt64(arg).i)
@@ -215,12 +220,19 @@ func (call *builtinLastInsertID) compile(c *compiler) (ctype, error) {
 		return ctype{}, err
 	}
 
-	skip := c.compileNullCheck1(arg)
-
+	setZero := c.compileNullCheck1(arg)
 	c.compileToUint64(arg, 1)
-	c.asm.Fn_LAST_INSERT_ID()
+	setLastInsertID := c.asm.jumpFrom()
 
-	c.asm.jumpDestination(skip)
+	c.asm.jumpDestination(setZero)
+	c.asm.emit(func(env *ExpressionEnv) int {
+		env.vm.stack[env.vm.sp] = env.vm.arena.newEvalUint64(0)
+		env.vm.sp++
+		return 1
+	}, "PUSH UINT64(0)")
+
+	c.asm.jumpDestination(setLastInsertID)
+	c.asm.Fn_LAST_INSERT_ID()
 
 	return ctype{Type: sqltypes.Uint64, Flag: flagNullable, Col: collationNumeric}, nil
 }
