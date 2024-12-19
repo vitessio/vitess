@@ -31,7 +31,7 @@ import (
 
 var testStatsConnReadSem = semaphore.NewWeighted(1)
 
-func testResetStats() {
+func testStatsConnStatsReset() {
 	topoStatsConnErrors.ResetAll()
 	topoStatsConnTimings.Reset()
 	topoStatsConnReadWaitTimings.Reset()
@@ -202,7 +202,7 @@ func createTestReadSemaphoreContention(ctx context.Context, duration time.Durati
 
 // TestStatsConnTopoListDir emits stats on ListDir
 func TestStatsConnTopoListDir(t *testing.T) {
-	defer testResetStats()
+	defer testStatsConnStatsReset()
 
 	conn := &fakeConn{}
 	statsConn := NewStatsConn("global", conn, testStatsConnReadSem)
@@ -229,7 +229,7 @@ func TestStatsConnTopoListDir(t *testing.T) {
 
 // TestStatsConnTopoCreate emits stats on Create
 func TestStatsConnTopoCreate(t *testing.T) {
-	defer testResetStats()
+	defer testStatsConnStatsReset()
 
 	conn := &fakeConn{}
 	statsConn := NewStatsConn("global", conn, testStatsConnReadSem)
@@ -251,7 +251,7 @@ func TestStatsConnTopoCreate(t *testing.T) {
 
 // TestStatsConnTopoUpdate emits stats on Update
 func TestStatsConnTopoUpdate(t *testing.T) {
-	defer testResetStats()
+	defer testStatsConnStatsReset()
 
 	conn := &fakeConn{}
 	statsConn := NewStatsConn("global", conn, testStatsConnReadSem)
@@ -273,7 +273,7 @@ func TestStatsConnTopoUpdate(t *testing.T) {
 
 // TestStatsConnTopoGet emits stats on Get
 func TestStatsConnTopoGet(t *testing.T) {
-	defer testResetStats()
+	defer testStatsConnStatsReset()
 
 	conn := &fakeConn{}
 	statsConn := NewStatsConn("global", conn, testStatsConnReadSem)
@@ -300,7 +300,7 @@ func TestStatsConnTopoGet(t *testing.T) {
 
 // TestStatsConnTopoDelete emits stats on Delete
 func TestStatsConnTopoDelete(t *testing.T) {
-	defer testResetStats()
+	defer testStatsConnStatsReset()
 
 	conn := &fakeConn{}
 	statsConn := NewStatsConn("global", conn, testStatsConnReadSem)
@@ -322,7 +322,7 @@ func TestStatsConnTopoDelete(t *testing.T) {
 
 // TestStatsConnTopoLock emits stats on Lock
 func TestStatsConnTopoLock(t *testing.T) {
-	defer testResetStats()
+	defer testStatsConnStatsReset()
 
 	conn := &fakeConn{}
 	statsConn := NewStatsConn("global", conn, testStatsConnReadSem)
@@ -350,7 +350,7 @@ func TestStatsConnTopoLock(t *testing.T) {
 
 // TestStatsConnTopoWatch emits stats on Watch
 func TestStatsConnTopoWatch(t *testing.T) {
-	defer testResetStats()
+	defer testStatsConnStatsReset()
 
 	conn := &fakeConn{}
 	statsConn := NewStatsConn("global", conn, testStatsConnReadSem)
@@ -364,7 +364,7 @@ func TestStatsConnTopoWatch(t *testing.T) {
 
 // TestStatsConnTopoNewLeaderParticipation emits stats on NewLeaderParticipation
 func TestStatsConnTopoNewLeaderParticipation(t *testing.T) {
-	defer testResetStats()
+	defer testStatsConnStatsReset()
 
 	conn := &fakeConn{}
 	statsConn := NewStatsConn("global", conn, testStatsConnReadSem)
@@ -385,7 +385,7 @@ func TestStatsConnTopoNewLeaderParticipation(t *testing.T) {
 
 // TestStatsConnTopoClose emits stats on Close
 func TestStatsConnTopoClose(t *testing.T) {
-	defer testResetStats()
+	defer testStatsConnStatsReset()
 
 	conn := &fakeConn{}
 	statsConn := NewStatsConn("global", conn, testStatsConnReadSem)
