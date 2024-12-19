@@ -356,7 +356,7 @@ func BuildVSchema(source *vschemapb.SrvVSchema, parser *sqlparser.Parser) (vsche
 	buildKeyspaces(source, vschema, parser)
 	// buildGlobalTables before buildReferences so that buildReferences can
 	// resolve sources which reference global tables.
-	BuildGlobalTables(source, vschema, false)
+	BuildGlobalTables(source, vschema)
 	buildReferences(source, vschema)
 	buildRoutingRule(source, vschema, parser)
 	buildShardRoutingRule(source, vschema)
@@ -461,7 +461,7 @@ func (vschema *VSchema) AddUDF(ksname, udfName string) error {
 	return nil
 }
 
-func BuildGlobalTables(source *vschemapb.SrvVSchema, vschema *VSchema, skipIfAlreadyGlobal bool) {
+func BuildGlobalTables(source *vschemapb.SrvVSchema, vschema *VSchema) {
 	for ksname, ks := range source.Keyspaces {
 		ksvschema := vschema.Keyspaces[ksname]
 		// If the keyspace requires explicit routing, don't include any of
@@ -469,19 +469,55 @@ func BuildGlobalTables(source *vschemapb.SrvVSchema, vschema *VSchema, skipIfAlr
 		if ks.RequireExplicitRouting {
 			continue
 		}
-		buildKeyspaceGlobalTables(vschema, ksvschema, skipIfAlreadyGlobal)
+		buildKeyspaceGlobalTables(vschema, ksvschema)
 	}
 }
 
-func buildKeyspaceGlobalTables(vschema *VSchema, ksvschema *KeyspaceSchema, skipIfAlreadyGlobal bool) {
+// AddAdditionalGlobalTables adds unique tables from unsharded keyspaces to the global tables.
+// It is expected to be called from the schema tracking code.
+func AddAdditionalGlobalTables(source *vschemapb.SrvVSchema, vschema *VSchema) {
+	type tableInfo struct {
+		table *Table
+		cnt   int
+	}
+	newTables := make(map[string]*tableInfo)
+
+	// Collect valid uniquely named tables from unsharded keyspaces.
+	for ksname, ks := range source.Keyspaces {
+		ksvschema := vschema.Keyspaces[ksname]
+		// Ignore sharded keyspaces and those flagged for explicit routing.
+		if ks.RequireExplicitRouting || ks.Sharded {
+			continue
+		}
+		for tname, table := range ksvschema.Tables {
+			// Ignore tables already global or ambiguous.
+			if _, found := vschema.globalTables[tname]; !found {
+				_, ok := newTables[tname]
+				if !ok {
+					table.Keyspace = &Keyspace{Name: ksname}
+					newTables[tname] = &tableInfo{table: table, cnt: 0}
+				}
+				newTables[tname].cnt++
+			}
+		}
+	}
+
+	// Mark new tables found just once as globally routable, rest as ambiguous.
+	for tname, ti := range newTables {
+		switch ti.cnt {
+		case 1:
+			vschema.globalTables[tname] = ti.table
+		default:
+			vschema.globalTables[tname] = nil
+		}
+	}
+}
+
+func buildKeyspaceGlobalTables(vschema *VSchema, ksvschema *KeyspaceSchema) {
 	for tname, t := range ksvschema.Tables {
 		if gt, ok := vschema.globalTables[tname]; ok {
 			// There is already an entry table stored in global tables
 			// with this name.
-			if skipIfAlreadyGlobal {
-				// Called when updating from schema tracking
-				continue
-			}
 			if gt == nil {
 				// Table name is already marked ambiguous, nothing to do.
 				continue
