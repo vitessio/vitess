@@ -135,7 +135,7 @@ func TestCast(t *testing.T) {
 func TestSetAndGetLastInsertID(t *testing.T) {
 	notZero := 1
 	checkQuery := func(i string, workload string, tx bool, mcmp utils.MySQLCompare) {
-		for _, val := range []int{0, notZero} {
+		for _, val := range []int{notZero, 0, notZero * 2} {
 			query := fmt.Sprintf(i, val)
 			name := fmt.Sprintf("%s - %s", workload, query)
 			if tx {
