@@ -62,7 +62,6 @@ type InfoForRecoveryAnalysis struct {
 	DowntimeEndTimestamp                      string
 	DowntimeRemainingSeconds                  int
 	CountValidOracleGTIDReplicas              uint
-	CountValidMariaDBGTIDReplicas             uint
 	CountValidBinlogServerReplicas            uint
 	SemiSyncPrimaryEnabled                    int
 	SemiSyncPrimaryStatus                     int
@@ -94,7 +93,6 @@ func (info *InfoForRecoveryAnalysis) ConvertToRowMap() sqlutils.RowMap {
 	rowMap["count_downtimed_replicas"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.CountDowntimedReplicas), Valid: true}
 	rowMap["count_lagging_replicas"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.CountLaggingReplicas), Valid: true}
 	rowMap["count_logging_replicas"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.CountLoggingReplicas), Valid: true}
-	rowMap["count_mariadb_gtid_replicas"] = sqlutils.CellData{Valid: false}
 	rowMap["count_mixed_based_logging_replicas"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.CountMixedBasedLoggingReplicas), Valid: true}
 	rowMap["count_oracle_gtid_replicas"] = sqlutils.CellData{Valid: false}
 	rowMap["count_replicas"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.CountReplicas), Valid: true}
@@ -102,7 +100,6 @@ func (info *InfoForRecoveryAnalysis) ConvertToRowMap() sqlutils.RowMap {
 	rowMap["count_semi_sync_replicas"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.CountSemiSyncReplicasEnabled), Valid: true}
 	rowMap["count_statement_based_logging_replicas"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.CountStatementBasedLoggingReplicas), Valid: true}
 	rowMap["count_valid_binlog_server_replicas"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.CountValidBinlogServerReplicas), Valid: true}
-	rowMap["count_valid_mariadb_gtid_replicas"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.CountValidMariaDBGTIDReplicas), Valid: true}
 	rowMap["count_valid_oracle_gtid_replicas"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.CountValidOracleGTIDReplicas), Valid: true}
 	rowMap["count_valid_replicas"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.CountValidReplicas), Valid: true}
 	rowMap["count_valid_replicating_replicas"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.CountValidReplicatingReplicas), Valid: true}
