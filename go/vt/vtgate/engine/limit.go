@@ -112,29 +112,16 @@ func (l *Limit) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars 
 		defer mu.Unlock()
 
 		inputSize := len(qr.Rows)
-		if inputSize == 0 {
-			if wantfields && len(qr.Fields) != 0 {
-				wantfields = false
-			}
-			return callback(qr)
-		}
-
-		// If this is the first callback and fields are requested, send the fields immediately.
-		if wantfields && len(qr.Fields) != 0 {
-			wantfields = false
-			// otherwise, we need to send the fields first, and then the rows
-			if err := callback(&sqltypes.Result{Fields: qr.Fields}); err != nil {
-				return err
-			}
-		}
-
 		// If we still need to skip `offset` rows before returning any to the client:
 		if offset > 0 {
 			if inputSize <= offset {
 				// not enough to return anything yet, but we still want to pass on metadata such as last_insert_id
 				offset -= inputSize
-				if !l.mustRetrieveAll(vcursor) {
+				if !wantfields && !l.mustRetrieveAll(vcursor) {
 					return nil
+				}
+				if len(qr.Fields) > 0 {
+					wantfields = false
 				}
 				qr.Rows = nil
 				return callback(qr)
@@ -147,14 +134,21 @@ func (l *Limit) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars 
 		// At this point, we've dealt with the offset. Now handle the count (limit).
 		if count == 0 {
 			// If count is zero, we've fetched everything we need.
-			if !l.mustRetrieveAll(vcursor) {
+			if !wantfields && !l.mustRetrieveAll(vcursor) {
 				return io.EOF
+			}
+			if len(qr.Fields) > 0 {
+				wantfields = false
 			}
 
 			// If we require the complete input, or we are in a transaction, we cannot return io.EOF early.
 			// Instead, we return empty results as needed until input ends.
 			qr.Rows = nil
 			return callback(qr)
+		}
+
+		if len(qr.Fields) > 0 {
+			wantfields = false
 		}
 
 		// reduce count till 0.

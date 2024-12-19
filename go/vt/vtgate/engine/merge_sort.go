@@ -21,13 +21,11 @@ import (
 	"io"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
 	"vitess.io/vitess/go/sqltypes"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
 // StreamExecutor is a subset of Primitive that MergeSort
@@ -216,9 +214,10 @@ func (ms *MergeSort) description() PrimitiveDescription {
 // routine that pulls the rows out of each streamHandle can abort the stream
 // by calling canceling the context.
 type streamHandle struct {
-	fields chan []*querypb.Field
-	row    chan []sqltypes.Value
-	err    error
+	fields    chan []*querypb.Field
+	fieldSeen bool
+	row       chan []sqltypes.Value
+	err       error
 }
 
 // runOnestream starts a streaming query on one shard, and returns a streamHandle for it.
@@ -233,7 +232,8 @@ func runOneStream(ctx context.Context, vcursor VCursor, input StreamExecutor, bi
 		defer close(handle.row)
 
 		handle.err = input.StreamExecute(ctx, vcursor, bindVars, wantfields, func(qr *sqltypes.Result) error {
-			if len(qr.Fields) != 0 {
+			if !handle.fieldSeen && len(qr.Fields) != 0 {
+				handle.fieldSeen = true
 				select {
 				case handle.fields <- qr.Fields:
 				case <-ctx.Done():
