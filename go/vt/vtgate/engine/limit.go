@@ -89,6 +89,10 @@ func (l *Limit) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[st
 	return result, nil
 }
 
+func (l *Limit) mustRetrieveAll(vcursor VCursor) bool {
+	return l.RequireCompleteInput || vcursor.Session().InTransaction()
+}
+
 // TryStreamExecute satisfies the Primitive interface.
 func (l *Limit) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	count, offset, err := l.getCountAndOffset(ctx, vcursor, bindVars)
@@ -107,15 +111,21 @@ func (l *Limit) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars 
 		mu.Lock()
 		defer mu.Unlock()
 
+		inputSize := len(qr.Rows)
+		if inputSize == 0 {
+			if wantfields && len(qr.Fields) != 0 {
+				wantfields = false
+			}
+			return callback(qr)
+		}
+
 		// If this is the first callback and fields are requested, send the fields immediately.
 		if wantfields && len(qr.Fields) != 0 {
+			wantfields = false
+			// otherwise, we need to send the fields first, and then the rows
 			if err := callback(&sqltypes.Result{Fields: qr.Fields}); err != nil {
 				return err
 			}
-		}
-		inputSize := len(qr.Rows)
-		if inputSize == 0 {
-			return callback(qr)
 		}
 
 		// If we still need to skip `offset` rows before returning any to the client:
@@ -123,6 +133,9 @@ func (l *Limit) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars 
 			if inputSize <= offset {
 				// not enough to return anything yet, but we still want to pass on metadata such as last_insert_id
 				offset -= inputSize
+				if !l.mustRetrieveAll(vcursor) {
+					return nil
+				}
 				qr.Rows = nil
 				return callback(qr)
 			}
@@ -134,7 +147,7 @@ func (l *Limit) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars 
 		// At this point, we've dealt with the offset. Now handle the count (limit).
 		if count == 0 {
 			// If count is zero, we've fetched everything we need.
-			if !l.RequireCompleteInput && !vcursor.Session().InTransaction() {
+			if !l.mustRetrieveAll(vcursor) {
 				return io.EOF
 			}
 
@@ -159,7 +172,7 @@ func (l *Limit) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars 
 
 		// If we required complete input or are in a transaction, we must not exit early.
 		// We'll return empty batches until the input is done.
-		if l.RequireCompleteInput || vcursor.Session().InTransaction() {
+		if l.mustRetrieveAll(vcursor) {
 			return nil
 		}
 
