@@ -29,12 +29,16 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
+// testStatsConnReadSem is a semaphore for unit tests.
+// It intentionally has a concurrency limit of '1' to
+// allow semaphore contention in tests.
 var testStatsConnReadSem = semaphore.NewWeighted(1)
 
+// testStatsConnStatsReset resets StatsConn-based stats.
 func testStatsConnStatsReset() {
 	topoStatsConnErrors.ResetAll()
-	topoStatsConnTimings.Reset()
 	topoStatsConnReadWaitTimings.Reset()
+	topoStatsConnTimings.Reset()
 }
 
 // The fakeConn is a wrapper for a Conn that emits stats for every operation
