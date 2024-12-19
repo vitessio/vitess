@@ -84,7 +84,7 @@ func (flv *filePosFlavor) gtidMode(c *Conn) (string, error) {
 
 // serverUUID is part of the Flavor interface.
 func (flv *filePosFlavor) serverUUID(c *Conn) (string, error) {
-	// keep @@global as lowercase, as some servers like the Ripple binlog server only honors a lowercase `global` value
+	// keep @@global as lowercase, as some servers like a binlog server only honors a lowercase `global` value
 	qr, err := c.ExecuteFetch("SELECT @@global.server_uuid", 1, false)
 	if err != nil {
 		return "", err
