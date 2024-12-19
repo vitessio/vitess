@@ -31,6 +31,12 @@ import (
 
 var testStatsConnReadSem = semaphore.NewWeighted(1)
 
+func testResetStats() {
+	topoStatsConnErrors.ResetAll()
+	topoStatsConnTimings.Reset()
+	topoStatsConnReadWaitTimings.Reset()
+}
+
 // The fakeConn is a wrapper for a Conn that emits stats for every operation
 type fakeConn struct {
 	v        Version
@@ -196,10 +202,7 @@ func createTestReadSemaphoreContention(ctx context.Context, duration time.Durati
 
 // TestStatsConnTopoListDir emits stats on ListDir
 func TestStatsConnTopoListDir(t *testing.T) {
-	defer func() {
-		topoStatsConnTimings.Reset()
-		topoStatsConnReadWaitTimings.Reset()
-	}()
+	defer testResetStats()
 
 	conn := &fakeConn{}
 	statsConn := NewStatsConn("global", conn, testStatsConnReadSem)
@@ -226,10 +229,7 @@ func TestStatsConnTopoListDir(t *testing.T) {
 
 // TestStatsConnTopoCreate emits stats on Create
 func TestStatsConnTopoCreate(t *testing.T) {
-	defer func() {
-		topoStatsConnTimings.Reset()
-		topoStatsConnReadWaitTimings.Reset()
-	}()
+	defer testResetStats()
 
 	conn := &fakeConn{}
 	statsConn := NewStatsConn("global", conn, testStatsConnReadSem)
@@ -238,6 +238,7 @@ func TestStatsConnTopoCreate(t *testing.T) {
 	statsConn.Create(ctx, "", []byte{})
 	require.Equal(t, int64(1), topoStatsConnTimings.Counts()["Create.global"])
 	require.NotZero(t, topoStatsConnTimings.Time())
+	require.Zero(t, topoStatsConnReadWaitTimings.Time())
 
 	// error is zero before getting an error
 	require.Zero(t, topoStatsConnErrors.Counts()["Create.global"])
@@ -250,10 +251,7 @@ func TestStatsConnTopoCreate(t *testing.T) {
 
 // TestStatsConnTopoUpdate emits stats on Update
 func TestStatsConnTopoUpdate(t *testing.T) {
-	defer func() {
-		topoStatsConnTimings.Reset()
-		topoStatsConnReadWaitTimings.Reset()
-	}()
+	defer testResetStats()
 
 	conn := &fakeConn{}
 	statsConn := NewStatsConn("global", conn, testStatsConnReadSem)
@@ -262,6 +260,7 @@ func TestStatsConnTopoUpdate(t *testing.T) {
 	statsConn.Update(ctx, "", []byte{}, conn.v)
 	require.Equal(t, int64(1), topoStatsConnTimings.Counts()["Update.global"])
 	require.NotZero(t, topoStatsConnTimings.Time())
+	require.Zero(t, topoStatsConnReadWaitTimings.Time())
 
 	// error is zero before getting an error
 	require.Zero(t, topoStatsConnErrors.Counts()["Update.global"])
@@ -274,10 +273,7 @@ func TestStatsConnTopoUpdate(t *testing.T) {
 
 // TestStatsConnTopoGet emits stats on Get
 func TestStatsConnTopoGet(t *testing.T) {
-	defer func() {
-		topoStatsConnTimings.Reset()
-		topoStatsConnReadWaitTimings.Reset()
-	}()
+	defer testResetStats()
 
 	conn := &fakeConn{}
 	statsConn := NewStatsConn("global", conn, testStatsConnReadSem)
@@ -304,10 +300,7 @@ func TestStatsConnTopoGet(t *testing.T) {
 
 // TestStatsConnTopoDelete emits stats on Delete
 func TestStatsConnTopoDelete(t *testing.T) {
-	defer func() {
-		topoStatsConnTimings.Reset()
-		topoStatsConnReadWaitTimings.Reset()
-	}()
+	defer testResetStats()
 
 	conn := &fakeConn{}
 	statsConn := NewStatsConn("global", conn, testStatsConnReadSem)
@@ -316,6 +309,7 @@ func TestStatsConnTopoDelete(t *testing.T) {
 	statsConn.Delete(ctx, "", conn.v)
 	require.Equal(t, int64(1), topoStatsConnTimings.Counts()["Delete.global"])
 	require.NotZero(t, topoStatsConnTimings.Time())
+	require.Zero(t, topoStatsConnReadWaitTimings.Time())
 
 	// error is zero before getting an error
 	require.Zero(t, topoStatsConnErrors.Counts()["Delete.global"])
@@ -328,10 +322,7 @@ func TestStatsConnTopoDelete(t *testing.T) {
 
 // TestStatsConnTopoLock emits stats on Lock
 func TestStatsConnTopoLock(t *testing.T) {
-	defer func() {
-		topoStatsConnTimings.Reset()
-		topoStatsConnReadWaitTimings.Reset()
-	}()
+	defer testResetStats()
 
 	conn := &fakeConn{}
 	statsConn := NewStatsConn("global", conn, testStatsConnReadSem)
@@ -340,6 +331,7 @@ func TestStatsConnTopoLock(t *testing.T) {
 	statsConn.Lock(ctx, "", "")
 	require.Equal(t, int64(1), topoStatsConnTimings.Counts()["Lock.global"])
 	require.NotZero(t, topoStatsConnTimings.Time())
+	require.Zero(t, topoStatsConnReadWaitTimings.Time())
 
 	statsConn.LockWithTTL(ctx, "", "", time.Second)
 	require.Equal(t, int64(1), topoStatsConnTimings.Counts()["LockWithTTL.global"])
@@ -358,7 +350,7 @@ func TestStatsConnTopoLock(t *testing.T) {
 
 // TestStatsConnTopoWatch emits stats on Watch
 func TestStatsConnTopoWatch(t *testing.T) {
-	defer topoStatsConnTimings.Reset()
+	defer testResetStats()
 
 	conn := &fakeConn{}
 	statsConn := NewStatsConn("global", conn, testStatsConnReadSem)
@@ -367,14 +359,12 @@ func TestStatsConnTopoWatch(t *testing.T) {
 	statsConn.Watch(ctx, "")
 	require.Equal(t, int64(1), topoStatsConnTimings.Counts()["Watch.global"])
 	require.NotZero(t, topoStatsConnTimings.Time())
+	require.Zero(t, topoStatsConnReadWaitTimings.Time())
 }
 
 // TestStatsConnTopoNewLeaderParticipation emits stats on NewLeaderParticipation
 func TestStatsConnTopoNewLeaderParticipation(t *testing.T) {
-	defer func() {
-		topoStatsConnTimings.Reset()
-		topoStatsConnReadWaitTimings.Reset()
-	}()
+	defer testResetStats()
 
 	conn := &fakeConn{}
 	statsConn := NewStatsConn("global", conn, testStatsConnReadSem)
@@ -382,6 +372,7 @@ func TestStatsConnTopoNewLeaderParticipation(t *testing.T) {
 	_, _ = statsConn.NewLeaderParticipation("", "")
 	require.Equal(t, int64(1), topoStatsConnTimings.Counts()["NewLeaderParticipation.global"])
 	require.NotZero(t, topoStatsConnTimings.Time())
+	require.Zero(t, topoStatsConnReadWaitTimings.Time())
 
 	// error is zero before getting an error
 	require.Zero(t, topoStatsConnErrors.Counts()["NewLeaderParticipation.global"])
@@ -394,7 +385,7 @@ func TestStatsConnTopoNewLeaderParticipation(t *testing.T) {
 
 // TestStatsConnTopoClose emits stats on Close
 func TestStatsConnTopoClose(t *testing.T) {
-	defer topoStatsConnTimings.Reset()
+	defer testResetStats()
 
 	conn := &fakeConn{}
 	statsConn := NewStatsConn("global", conn, testStatsConnReadSem)
@@ -402,4 +393,5 @@ func TestStatsConnTopoClose(t *testing.T) {
 	statsConn.Close()
 	require.Equal(t, int64(1), topoStatsConnTimings.Counts()["Close.global"])
 	require.NotZero(t, topoStatsConnTimings.Time())
+	require.Zero(t, topoStatsConnReadWaitTimings.Time())
 }
