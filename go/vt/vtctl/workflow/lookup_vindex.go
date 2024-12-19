@@ -41,7 +41,7 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-// lookup is responsible for performing actions related to lookup vindexes.
+// lookupVindex is responsible for performing actions related to lookup vindexes.
 type lookupVindex struct {
 	ts  *topo.Server
 	tmc tmclient.TabletManagerClient
