@@ -202,6 +202,7 @@ func createTestReadSemaphoreContention(ctx context.Context, duration time.Durati
 
 // TestStatsConnTopoListDir emits stats on ListDir
 func TestStatsConnTopoListDir(t *testing.T) {
+	testStatsConnStatsReset()
 	defer testStatsConnStatsReset()
 
 	conn := &fakeConn{}
@@ -229,6 +230,7 @@ func TestStatsConnTopoListDir(t *testing.T) {
 
 // TestStatsConnTopoCreate emits stats on Create
 func TestStatsConnTopoCreate(t *testing.T) {
+	testStatsConnStatsReset()
 	defer testStatsConnStatsReset()
 
 	conn := &fakeConn{}
@@ -251,6 +253,7 @@ func TestStatsConnTopoCreate(t *testing.T) {
 
 // TestStatsConnTopoUpdate emits stats on Update
 func TestStatsConnTopoUpdate(t *testing.T) {
+	testStatsConnStatsReset()
 	defer testStatsConnStatsReset()
 
 	conn := &fakeConn{}
@@ -273,6 +276,7 @@ func TestStatsConnTopoUpdate(t *testing.T) {
 
 // TestStatsConnTopoGet emits stats on Get
 func TestStatsConnTopoGet(t *testing.T) {
+	testStatsConnStatsReset()
 	defer testStatsConnStatsReset()
 
 	conn := &fakeConn{}
@@ -300,6 +304,7 @@ func TestStatsConnTopoGet(t *testing.T) {
 
 // TestStatsConnTopoDelete emits stats on Delete
 func TestStatsConnTopoDelete(t *testing.T) {
+	testStatsConnStatsReset()
 	defer testStatsConnStatsReset()
 
 	conn := &fakeConn{}
@@ -322,6 +327,7 @@ func TestStatsConnTopoDelete(t *testing.T) {
 
 // TestStatsConnTopoLock emits stats on Lock
 func TestStatsConnTopoLock(t *testing.T) {
+	testStatsConnStatsReset()
 	defer testStatsConnStatsReset()
 
 	conn := &fakeConn{}
@@ -350,6 +356,7 @@ func TestStatsConnTopoLock(t *testing.T) {
 
 // TestStatsConnTopoWatch emits stats on Watch
 func TestStatsConnTopoWatch(t *testing.T) {
+	testStatsConnStatsReset()
 	defer testStatsConnStatsReset()
 
 	conn := &fakeConn{}
@@ -364,6 +371,7 @@ func TestStatsConnTopoWatch(t *testing.T) {
 
 // TestStatsConnTopoNewLeaderParticipation emits stats on NewLeaderParticipation
 func TestStatsConnTopoNewLeaderParticipation(t *testing.T) {
+	testStatsConnStatsReset()
 	defer testStatsConnStatsReset()
 
 	conn := &fakeConn{}
@@ -385,6 +393,7 @@ func TestStatsConnTopoNewLeaderParticipation(t *testing.T) {
 
 // TestStatsConnTopoClose emits stats on Close
 func TestStatsConnTopoClose(t *testing.T) {
+	testStatsConnStatsReset()
 	defer testStatsConnStatsReset()
 
 	conn := &fakeConn{}
