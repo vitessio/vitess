@@ -129,8 +129,8 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 	}
 }
 
-// parseSQL statements - querySQL may be a multi-line sql blob
-func parseSQL(querySQL ...string) ([]string, error) {
+// splitSQL statements - querySQL may be a multi-line sql blob
+func splitSQL(querySQL ...string) ([]string, error) {
 	parser := sqlparser.NewTestParser()
 	var sqls []string
 	for _, sql := range querySQL {
@@ -145,7 +145,7 @@ func parseSQL(querySQL ...string) ([]string, error) {
 
 func loadSampleData(t *testing.T, mcmp utils.MySQLCompare) {
 	sampleDataSQL := readFile("sampledata/user.sql")
-	insertSQL, err := parseSQL(sampleDataSQL)
+	insertSQL, err := splitSQL(sampleDataSQL)
 	if err != nil {
 		require.NoError(t, err)
 	}
