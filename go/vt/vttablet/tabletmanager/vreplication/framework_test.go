@@ -183,10 +183,10 @@ func TestMain(m *testing.M) {
 	exitCode := func() int {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		if err := utils.SetBinlogRowImageMode("full", tempDir, false); err != nil {
+		if err := utils.SetBinlogRowImageOptions("full", false, tempDir); err != nil {
 			panic(err)
 		}
-		defer utils.SetBinlogRowImageMode("", tempDir, false)
+		defer utils.SetBinlogRowImageOptions("", false, tempDir)
 		cancel, ret := setup(ctx)
 		if ret > 0 {
 			return ret
@@ -202,10 +202,10 @@ func TestMain(m *testing.M) {
 		// We still run unit tests with MySQL 5.7, so we cannot add it to the cnf file
 		// when using 5.7 or mysqld will fail to start.
 		runPartialJSONTest = utils.CIDBPlatformIsMySQL8orLater()
-		if err := utils.SetBinlogRowImageMode("noblob", tempDir, runPartialJSONTest); err != nil {
+		if err := utils.SetBinlogRowImageOptions("noblob", runPartialJSONTest, tempDir); err != nil {
 			panic(err)
 		}
-		defer utils.SetBinlogRowImageMode("", tempDir, false)
+		defer utils.SetBinlogRowImageOptions("", false, tempDir)
 		cancel, ret = setup(ctx)
 		if ret > 0 {
 			return ret

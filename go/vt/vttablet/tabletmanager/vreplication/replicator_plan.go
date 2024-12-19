@@ -403,12 +403,11 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 					// This occurs when using partial JSON values as a result of mysqld using
 					// binlog-row-value-options=PARTIAL_JSON.
 					if len(afterVals[i].Raw()) == 0 {
-						// When using BOTH binlog_row_image=NOBLOB AND
-						// binlog_row_value_options=PARTIAL_JSON, if the JSON column was NOT updated
-						// then the JSON column is marked as partial and the diff is empty as a way
-						// to exclude it from the AFTER image. It still has the data bit set, however,
-						// even though it's not really present. So we have to account for this by
-						// unsetting the data bit so that the current JSON value is not lost.
+						// If the JSON column was NOT updated then the JSON column is marked as
+						// partial and the diff is empty as a way to exclude it from the AFTER image.
+						// It still has the data bit set, however, even though it's not really
+						// present. So we have to account for this by unsetting the data bit so
+						// that the column's current JSON value is not lost.
 						setBit(rowChange.DataColumns.Cols, i, false)
 						newVal = ptr.Of(sqltypes.MakeTrusted(querypb.Type_EXPRESSION, nil))
 					} else {
@@ -486,10 +485,9 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 					case !isBitSet(rowChange.JsonPartialValues.Cols, jsonIndex):
 						// We use the full AFTER value which we already have.
 					case len(afterVals[i].Raw()) == 0:
-						// When using BOTH binlog_row_image=NOBLOB AND
-						// binlog_row_value_options=PARTIAL_JSON, if the JSON column was NOT updated
-						// then the JSON column is marked as partial and the diff is empty as a way
-						// to exclude it from the AFTER image. So we want to use the BEFORE image value.
+						// If the JSON column was NOT updated then the JSON column is marked as partial
+						// and the diff is empty as a way to exclude it from the AFTER image. So we
+						// want to use the BEFORE image value.
 						beforeVal, err := vjson.MarshalSQLValue(bindvars["b_"+field.Name].Value)
 						if err != nil {
 							return nil, vterrors.Wrapf(err, "failed to convert JSON to SQL field value for %s.%s when building insert query",

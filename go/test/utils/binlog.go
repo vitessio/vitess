@@ -28,12 +28,12 @@ const (
 	BinlogRowImageCnf = "binlog-row-image.cnf"
 )
 
-// SetBinlogRowImageMode creates a temp cnf file to set binlog_row_image=NOBLOB and
+// SetBinlogRowImageOptions creates a temp cnf file to set binlog_row_image=NOBLOB and
 // optionally binlog_row_value_options=PARTIAL_JSON (since it does not exist in 5.7)
 // for vreplication unit tests.
 // It adds it to the EXTRA_MY_CNF environment variable which appends text from them
 // into my.cnf.
-func SetBinlogRowImageMode(mode string, cnfDir string, includePartialJSON bool) error {
+func SetBinlogRowImageOptions(mode string, partialJSON bool, cnfDir string) error {
 	var newCnfs []string
 
 	// remove any existing extra cnfs for binlog row image
@@ -59,7 +59,7 @@ func SetBinlogRowImageMode(mode string, cnfDir string, includePartialJSON bool) 
 		if err != nil {
 			return err
 		}
-		if includePartialJSON {
+		if partialJSON {
 			if !CIDBPlatformIsMySQL8orLater() {
 				return fmt.Errorf("partial JSON values are only supported in MySQL 8.0 or later")
 			}

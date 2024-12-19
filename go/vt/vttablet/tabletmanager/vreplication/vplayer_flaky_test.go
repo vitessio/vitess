@@ -1521,19 +1521,11 @@ func TestPlayerRowMove(t *testing.T) {
 
 // TestPlayerPartialImagesUpdatePK tests the behavior of the vplayer when
 // updating the Primary Key for a row when we have partial binlog
-// images, meaning that binlog-row-image=NOBLOB and
-// binlog-row-value-options=PARTIAL_JSON. These are both set when running
-// the unit tests with runNoBlobTest=true and runPartialJSONTest=true.
-// If the test is running in the CI and the database platform is not MySQL
-// 8.0 or later (which you can control using the CI_DB_PLATFORM env
-// variable), then runPartialJSONTest will be false and the test will be
-// skipped.
+// images, meaning that binlog-row-image=NOBLOB and/or
+// binlog-row-value-options=PARTIAL_JSON.
 func TestPlayerPartialImagesUpdatePK(t *testing.T) {
-	if !runNoBlobTest {
-		t.Skip("Skipping test as binlog_row_image=NOBLOB is not set")
-	}
 	if !runPartialJSONTest {
-		t.Skip("Skipping test as binlog-row-value-options=PARTIAL_JSON is not set (most likely because the database type is not MySQL 8.0 or later)")
+		t.Skip("Skipping test as binlog_row_value_options=PARTIAL_JSON is not enabled")
 	}
 
 	defer deleteTablet(addTablet(100))
@@ -1577,7 +1569,9 @@ func TestPlayerPartialImagesUpdatePK(t *testing.T) {
 				{"3", "{\"key3\": \"val3\"}", "blob data3"},
 			},
 		},
-		{
+	}
+	if runNoBlobTest {
+		testCases = append(testCases, testCase{
 			input:  `update src set jd=JSON_SET(jd, '$.color', 'red') where id = 1`,
 			output: []string{"update dst set jd=JSON_INSERT(`jd`, _utf8mb4'$.color', _utf8mb4\"red\") where id=1"},
 			data: [][]string{
@@ -1585,7 +1579,19 @@ func TestPlayerPartialImagesUpdatePK(t *testing.T) {
 				{"2", "{\"key2\": \"val2\"}", "blob data2"},
 				{"3", "{\"key3\": \"val3\"}", "blob data3"},
 			},
-		},
+		})
+	} else {
+		testCases = append(testCases, testCase{
+			input:  `update src set jd=JSON_SET(jd, '$.color', 'red') where id = 1`,
+			output: []string{"update dst set jd=JSON_INSERT(`jd`, _utf8mb4'$.color', _utf8mb4\"red\"), bd=_binary'blob data' where id=1"},
+			data: [][]string{
+				{"1", "{\"key1\": \"val1\", \"color\": \"red\"}", "blob data"},
+				{"2", "{\"key2\": \"val2\"}", "blob data2"},
+				{"3", "{\"key3\": \"val3\"}", "blob data3"},
+			},
+		})
+	}
+	testCases = append(testCases, []testCase{
 		{
 			input: `update src set bd = 'new blob data' where id = 2`,
 			output: []string{
@@ -1609,10 +1615,25 @@ func TestPlayerPartialImagesUpdatePK(t *testing.T) {
 				{"12", "{\"key2\": \"val2\"}", "newest blob data"},
 			},
 		},
-		{
+	}...)
+	if runNoBlobTest {
+		testCases = append(testCases, testCase{
 			input: `update src set id = id+10 where id = 3`,
 			error: "binary log event missing a needed value for dst.bd due to not using binlog-row-image=FULL",
-		},
+		})
+	} else {
+		testCases = append(testCases, testCase{
+			input: `update src set id = id+10 where id = 3`,
+			output: []string{
+				"delete from dst where id=3",
+				"insert into dst(id,jd,bd) values (13,JSON_OBJECT(_utf8mb4'key3', _utf8mb4'val3'),_binary'blob data3')",
+			},
+			data: [][]string{
+				{"1", "{\"key1\": \"val1\", \"color\": \"red\"}", "blob data"},
+				{"12", "{\"key2\": \"val2\"}", "newest blob data"},
+				{"13", "{\"key3\": \"val3\"}", "blob data3"},
+			},
+		})
 	}
 
 	for _, tc := range testCases {
@@ -1776,7 +1797,7 @@ func TestPlayerTypes(t *testing.T) {
 			{"2", "null", `{"name": null}`, "123", `{"a": [42, 100]}`, `{"foo": "bar"}`},
 		},
 	}}
-	if runNoBlobTest && runPartialJSONTest {
+	if runPartialJSONTest {
 		// With partial JSON values we don't replicate the JSON columns that aren't
 		// actually updated.
 		testcases = append(testcases, testcase{
