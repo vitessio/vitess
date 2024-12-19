@@ -219,19 +219,8 @@ func (call *builtinLastInsertID) compile(c *compiler) (ctype, error) {
 	if err != nil {
 		return ctype{}, err
 	}
-
-	setZero := c.compileNullCheck1(arg)
-	c.compileToUint64(arg, 1)
 	c.asm.Fn_LAST_INSERT_ID()
-	end := c.asm.jumpFrom()
-	c.asm.addJump(end)
-
-	c.asm.jumpDestination(setZero)
-	c.asm.Fn_LAST_INSERT_ID_NULL()
-
-	c.asm.jumpDestination(end)
-
-	return ctype{Type: sqltypes.Uint64, Flag: flagNullable, Col: collationNumeric}, nil
+	return ctype{Type: sqltypes.Uint64, Flag: arg.Flag & flagNullable, Col: collationNumeric}, nil
 }
 
 func printIPv6AsIPv4(addr netip.Addr) (netip.Addr, bool) {
