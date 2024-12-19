@@ -1519,11 +1519,11 @@ func TestPlayerRowMove(t *testing.T) {
 	validateQueryCountStat(t, "replicate", 3)
 }
 
-// TestPlayerPartialImagesUpdatePK tests the behavior of the vplayer when
-// updating the Primary Key for a row when we have partial binlog
-// images, meaning that binlog-row-image=NOBLOB and/or
-// binlog-row-value-options=PARTIAL_JSON.
-func TestPlayerPartialImagesUpdatePK(t *testing.T) {
+// TestPlayerPartialImages tests the behavior of the vplayer when modifying
+// a table with BLOB and JSON columns, including when modifying the Primary
+// Key for a row, when we have partial binlog images, meaning that
+// binlog-row-image=NOBLOB and/or binlog-row-value-options=PARTIAL_JSON.
+func TestPlayerPartialImages(t *testing.T) {
 	if !runPartialJSONTest {
 		t.Skip("Skipping test as binlog_row_value_options=PARTIAL_JSON is not enabled")
 	}
@@ -1559,6 +1559,7 @@ func TestPlayerPartialImagesUpdatePK(t *testing.T) {
 		data   [][]string
 		error  string
 	}
+
 	testCases := []testCase{
 		{
 			input:  "insert into src (id, jd, bd) values (1,'{\"key1\": \"val1\"}','blob data'), (2,'{\"key2\": \"val2\"}','blob data2'), (3,'{\"key3\": \"val3\"}','blob data3')",
@@ -1718,12 +1719,14 @@ func TestPlayerTypes(t *testing.T) {
 	}
 	cancel, _ := startVReplication(t, bls, "")
 	defer cancel()
+
 	type testcase struct {
 		input  string
 		output string
 		table  string
 		data   [][]string
 	}
+
 	testcases := []testcase{{
 		input:  "insert into vitess_ints values(-128, 255, -32768, 65535, -8388608, 16777215, -2147483648, 4294967295, -9223372036854775808, 18446744073709551615, 2012)",
 		output: "insert into vitess_ints(tiny,tinyu,small,smallu,medium,mediumu,normal,normalu,big,bigu,y) values (-128,255,-32768,65535,-8388608,16777215,-2147483648,4294967295,-9223372036854775808,18446744073709551615,2012)",
