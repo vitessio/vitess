@@ -87,19 +87,20 @@ func GetKeyspaceShardNames(keyspaceName string) ([]string, error) {
 }
 
 // SaveShard saves the shard record against the shard name.
-func SaveShard(shard *topo.ShardInfo) error {
+func SaveShard(shard *topo.ShardInfo, updatedTimestamp time.Time) error {
 	_, err := db.ExecVTOrc(`
 		REPLACE
 			INTO vitess_shard (
 				keyspace, shard, primary_alias, primary_timestamp, updated_timestamp
 			) VALUES (
-				?, ?, ?, ?, DATETIME('now')
+				?, ?, ?, ?, DATETIME(?, 'unixepoch')
 			)
 		`,
 		shard.Keyspace(),
 		shard.ShardName(),
 		getShardPrimaryAliasString(shard),
 		getShardPrimaryTermStartTimeString(shard),
+		updatedTimestamp.Unix(),
 	)
 	return err
 }

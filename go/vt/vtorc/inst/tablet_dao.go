@@ -93,8 +93,7 @@ func SaveTablet(tablet *topodatapb.Tablet) error {
 			shard,
 			tablet_type,
 			primary_timestamp,
-			info,
-			updated_timestamp
+			info
 		) VALUES (
 			?,
 			?,
@@ -104,8 +103,7 @@ func SaveTablet(tablet *topodatapb.Tablet) error {
 			?,
 			?,
 			?,
-			?,
-			DATETIME('now')
+			?
 		)`,
 		topoproto.TabletAliasString(tablet.Alias),
 		tablet.MysqlHostname,

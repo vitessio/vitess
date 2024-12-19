@@ -278,7 +278,6 @@ CREATE TABLE vitess_tablet (
 	tablet_type smallint(5) NOT NULL,
 	primary_timestamp timestamp NOT NULL,
 	info varchar(512) NOT NULL,
-	updated_timestamp timestamp NOT NULL,
 	PRIMARY KEY (alias)
 )`,
 	`
@@ -333,8 +332,5 @@ CREATE INDEX updated_timestamp_idx_vitess_keyspace ON vitess_keyspace (updated_t
 	`,
 	`
 CREATE INDEX updated_timestamp_idx_vitess_shard ON vitess_shard (updated_timestamp)
-	`,
-	`
-CREATE INDEX updated_timestamp_idx_vitess_tablet ON vitess_tablet (updated_timestamp)
 	`,
 }

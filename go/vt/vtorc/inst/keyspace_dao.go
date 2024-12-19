@@ -62,16 +62,17 @@ func ReadKeyspace(keyspaceName string) (*topo.KeyspaceInfo, error) {
 }
 
 // SaveKeyspace saves the keyspace record against the keyspace name.
-func SaveKeyspace(keyspace *topo.KeyspaceInfo) error {
+func SaveKeyspace(keyspace *topo.KeyspaceInfo, updatedTimestamp time.Time) error {
 	_, err := db.ExecVTOrc(`REPLACE
 		INTO vitess_keyspace (
 			keyspace, keyspace_type, durability_policy, updated_timestamp
 		) VALUES (
-			?, ?, ?, DATETIME('now')
+			?, ?, ?, DATETIME(?, 'unixepoch')
 		)`,
 		keyspace.KeyspaceName(),
 		int(keyspace.KeyspaceType),
 		keyspace.GetDurabilityPolicy(),
+		updatedTimestamp.Unix(),
 	)
 	return err
 }

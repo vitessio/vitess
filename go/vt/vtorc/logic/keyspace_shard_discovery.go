@@ -154,7 +154,7 @@ func refreshKeyspaceHelper(ctx context.Context, keyspaceName string) error {
 		log.Error(err)
 		return err
 	}
-	err = inst.SaveKeyspace(keyspaceInfo)
+	err = inst.SaveKeyspace(keyspaceInfo, time.Now() /* updated_timestamp */)
 	if err != nil {
 		log.Error(err)
 	}
@@ -174,7 +174,7 @@ func refreshAllShards(ctx context.Context, keyspaceName string) error {
 		return err
 	}
 	for _, shardInfo := range shardInfos {
-		err = inst.SaveShard(shardInfo)
+		err = inst.SaveShard(shardInfo, time.Now() /* updated_timestamp */)
 		if err != nil {
 			log.Error(err)
 			return err
@@ -190,7 +190,7 @@ func refreshSingleShardHelper(ctx context.Context, keyspaceName string, shardNam
 		log.Error(err)
 		return err
 	}
-	err = inst.SaveShard(shardInfo)
+	err = inst.SaveShard(shardInfo, time.Now() /* updated_timestamp */)
 	if err != nil {
 		log.Error(err)
 	}
