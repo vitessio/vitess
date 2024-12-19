@@ -128,7 +128,7 @@ type Config struct {
 	// TransactionMode is SINGLE, MULTI or TWOPC
 	TransactionMode string
 
-	TransactionTimeout float64
+	TransactionTimeout time.Duration
 
 	// The host name to use for the table otherwise it will be resolved from the local hostname
 	TabletHostName string
