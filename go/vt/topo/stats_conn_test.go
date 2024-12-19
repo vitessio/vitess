@@ -209,7 +209,7 @@ func TestStatsConnTopoListDir(t *testing.T) {
 	statsConn := NewStatsConn("global", conn, testStatsConnReadSem)
 	ctx := context.Background()
 
-	semAcquiredChan := make(chan bool, 0 /* no buffer */)
+	semAcquiredChan := make(chan bool)
 	go createTestReadSemaphoreContention(ctx, 100*time.Millisecond, semAcquiredChan)
 	<-semAcquiredChan
 	statsConn.ListDir(ctx, "", true)
@@ -283,7 +283,7 @@ func TestStatsConnTopoGet(t *testing.T) {
 	statsConn := NewStatsConn("global", conn, testStatsConnReadSem)
 	ctx := context.Background()
 
-	semAcquiredChan := make(chan bool, 0 /* no buffer */)
+	semAcquiredChan := make(chan bool)
 	go createTestReadSemaphoreContention(ctx, time.Millisecond*100, semAcquiredChan)
 	<-semAcquiredChan
 	statsConn.Get(ctx, "")
