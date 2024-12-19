@@ -134,7 +134,7 @@ func allowOnlyPrimary(rss ...*srvtopo.ResolvedShard) error {
 
 func (dml *DML) execMultiShard(ctx context.Context, primitive Primitive, vcursor VCursor, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery) (*sqltypes.Result, error) {
 	autocommit := (len(rss) == 1 || dml.MultiShardAutocommit) && vcursor.AutocommitApproval()
-	result, errs := vcursor.ExecuteMultiShard(ctx, primitive, rss, queries, true, autocommit, dml.FetchLastInsertID)
+	result, errs := vcursor.ExecuteMultiShard(ctx, primitive, rss, queries, true /*rollbackOnError*/, autocommit, dml.FetchLastInsertID)
 	return result, vterrors.Aggregate(errs)
 }
 

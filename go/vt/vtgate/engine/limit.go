@@ -33,12 +33,22 @@ import (
 
 var _ Primitive = (*Limit)(nil)
 
-// Limit is a primitive that performs the LIMIT operation.
+// Limit performs the LIMIT operation, restricting the number of rows returned.
 type Limit struct {
-	Count                evalengine.Expr
-	Offset               evalengine.Expr
+	// Count specifies the maximum number of rows to return.
+	Count evalengine.Expr
+
+	// Offset specifies the number of rows to skip before returning results.
+	Offset evalengine.Expr
+
+	// RequireCompleteInput determines if all input rows must be fully retrieved.
+	// - If true, all Result structs are passed through, and the total rows are limited.
+	// - If false, Limit returns io.EOF once the limit is reached in streaming mode,
+	//   signaling the tablet to stop sending data.
 	RequireCompleteInput bool
-	Input                Primitive
+
+	// Input provides the input rows.
+	Input Primitive
 }
 
 var UpperLimitStr = "__upper_limit"

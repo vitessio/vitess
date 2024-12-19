@@ -183,7 +183,7 @@ func (route *Route) executeShards(
 	}
 
 	queries := getQueries(route.Query, bvs)
-	result, errs := vcursor.ExecuteMultiShard(ctx, route, rss, queries, false, false, route.FetchLastInsertID)
+	result, errs := vcursor.ExecuteMultiShard(ctx, route, rss, queries, false /*rollbackOnError*/, false /*canAutocommit*/, route.FetchLastInsertID)
 
 	route.executeWarmingReplicaRead(ctx, vcursor, bindVars, queries)
 
@@ -318,10 +318,12 @@ func (route *Route) mergeSort(
 			primitive: route,
 		})
 	}
+
 	ms := MergeSort{
 		Primitives:              prims,
 		OrderBy:                 route.OrderBy,
 		ScatterErrorsAsWarnings: route.ScatterErrorsAsWarnings,
+		FetchLastInsertID:       route.FetchLastInsertID,
 	}
 	return vcursor.StreamExecutePrimitive(ctx, &ms, bindVars, wantfields, func(qr *sqltypes.Result) error {
 		return callback(qr.Truncate(route.TruncateColumnCount))
@@ -539,7 +541,7 @@ func (route *Route) executeWarmingReplicaRead(ctx context.Context, vcursor VCurs
 				return
 			}
 
-			_, errs := replicaVCursor.ExecuteMultiShard(ctx, route, rss, queries, false, false, route.FetchLastInsertID)
+			_, errs := replicaVCursor.ExecuteMultiShard(ctx, route, rss, queries, false /*rollbackOnError*/, false /*canAutocommit*/, route.FetchLastInsertID)
 			if len(errs) > 0 {
 				log.Warningf("Failed to execute warming replica read: %v", errs)
 			} else {

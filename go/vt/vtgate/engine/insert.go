@@ -171,7 +171,7 @@ func (ins *Insert) executeInsertQueries(
 	if err != nil {
 		return nil, err
 	}
-	result, errs := vcursor.ExecuteMultiShard(ctx, ins, rss, queries, true, autocommit, ins.FetchLastInsertID)
+	result, errs := vcursor.ExecuteMultiShard(ctx, ins, rss, queries, true /*rollbackOnError*/, autocommit, ins.FetchLastInsertID)
 	if errs != nil {
 		return nil, vterrors.Aggregate(errs)
 	}

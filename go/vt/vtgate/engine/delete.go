@@ -87,7 +87,7 @@ func (del *Delete) deleteVindexEntries(ctx context.Context, vcursor VCursor, bin
 	for i := range rss {
 		queries[i] = &querypb.BoundQuery{Sql: del.OwnedVindexQuery, BindVariables: bindVars}
 	}
-	subQueryResults, errors := vcursor.ExecuteMultiShard(ctx, del, rss, queries, false, false, del.FetchLastInsertID)
+	subQueryResults, errors := vcursor.ExecuteMultiShard(ctx, del, rss, queries, false /*rollbackOnError*/, false /*canAutocommit*/, del.FetchLastInsertID)
 	for _, err := range errors {
 		if err != nil {
 			return err

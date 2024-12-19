@@ -1167,7 +1167,7 @@ func (qre *QueryExecutor) execStatefulConn(conn *StatefulConnection, sql string,
 }
 
 func (qre *QueryExecutor) resetLastInsertIDIfNeeded(ctx context.Context, conn *connpool.Conn) error {
-	if qre.options.ShouldFetchLastInsertID() {
+	if qre.options.GetFetchLastInsertId() {
 		// if the query contains a last_insert_id(x) function,
 		// we need to reset the last insert id to check if it was set by the query or not
 		_, err := conn.Exec(ctx, resetLastIDQuery, 1, false)
@@ -1179,7 +1179,7 @@ func (qre *QueryExecutor) resetLastInsertIDIfNeeded(ctx context.Context, conn *c
 }
 
 func (qre *QueryExecutor) fetchLastInsertID(ctx context.Context, conn *connpool.Conn, exec *sqltypes.Result) error {
-	if exec.InsertID != 0 || !qre.options.ShouldFetchLastInsertID() {
+	if exec.InsertID != 0 || !qre.options.GetFetchLastInsertId() {
 		return nil
 	}
 

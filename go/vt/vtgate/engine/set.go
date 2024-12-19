@@ -308,7 +308,7 @@ func (svs *SysVarReservedConn) Execute(ctx context.Context, vcursor VCursor, env
 			BindVariables: env.BindVars,
 		}
 	}
-	_, errs := vcursor.ExecuteMultiShard(ctx, nil, rss, queries, false, false, false)
+	_, errs := vcursor.ExecuteMultiShard(ctx, nil /*primitive*/, rss, queries, false /*rollbackOnError*/, false /*canAutocommit*/, false /*fetchLastInsertID*/)
 	return vterrors.Aggregate(errs)
 }
 
@@ -320,7 +320,7 @@ func (svs *SysVarReservedConn) execSetStatement(ctx context.Context, vcursor VCu
 			BindVariables: env.BindVars,
 		}
 	}
-	_, errs := vcursor.ExecuteMultiShard(ctx, nil, rss, queries, false, false, false)
+	_, errs := vcursor.ExecuteMultiShard(ctx, nil /*primitive*/, rss, queries, false /*rollbackOnError*/, false /*canAutocommit*/, false /*fetchLastInsertID*/)
 	return vterrors.Aggregate(errs)
 }
 
@@ -333,7 +333,7 @@ func (svs *SysVarReservedConn) checkAndUpdateSysVar(ctx context.Context, vcursor
 	if err != nil {
 		return false, err
 	}
-	qr, err := execShard(ctx, nil, vcursor, sysVarExprValidationQuery, res.BindVars, rss[0], false /* rollbackOnError */, false /* canAutocommit */, false)
+	qr, err := execShard(ctx, nil /*primitive*/, vcursor, sysVarExprValidationQuery, res.BindVars, rss[0], false /* rollbackOnError */, false /* canAutocommit */, false /*fetchLastInsertID*/)
 	if err != nil {
 		return false, err
 	}
