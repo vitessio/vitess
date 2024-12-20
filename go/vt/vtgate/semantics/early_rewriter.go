@@ -1224,16 +1224,12 @@ type expanderState struct {
 // addColumn adds columns to the expander state. If we have vschema info about the query,
 // we also store which columns were expanded
 func (e *expanderState) addColumn(col ColumnInfo, tbl TableInfo, tblName sqlparser.TableName) {
-	withQualifier := e.needsQualifier
 	var colName *sqlparser.ColName
 	var alias sqlparser.IdentifierCI
-	if withQualifier {
+	if e.needsQualifier {
 		colName = sqlparser.NewColNameWithQualifier(col.Name, tblName)
 	} else {
 		colName = sqlparser.NewColName(col.Name)
-	}
-	if e.needsQualifier {
-		alias = sqlparser.NewIdentifierCI(col.Name)
 	}
 	e.colNames = append(e.colNames, &sqlparser.AliasedExpr{Expr: colName, As: alias})
 	e.storeExpandInfo(tbl, tblName, colName)

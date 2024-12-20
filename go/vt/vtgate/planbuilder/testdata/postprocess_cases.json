@@ -1586,6 +1586,10 @@
       "Original": "select name, name from user, music order by name",
       "Instructions": {
         "OperatorType": "SimpleProjection",
+        "ColumnNames": [
+          "name",
+          "name"
+        ],
         "Columns": [
           0,
           0
