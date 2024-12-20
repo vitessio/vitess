@@ -212,10 +212,6 @@ func init() {
 	servenv.OnParseFor("vtcombo", registerFlags)
 }
 
-func getTxMode() vtgatepb.TransactionMode {
-	return transactionMode.Get()
-}
-
 var (
 	// vschemaCounters needs to be initialized before planner to
 	// catch the initial load stats.

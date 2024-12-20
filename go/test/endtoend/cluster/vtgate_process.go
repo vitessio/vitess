@@ -57,6 +57,8 @@ type VtgateProcess struct {
 	Directory             string
 	VerifyURL             string
 	VSchemaURL            string
+	ConfigFile            string
+	Config                VTGateConfiguration
 	SysVarSetEnabled      bool
 	PlannerVersion        plancontext.PlannerVersion
 	// Extra Args to be set before starting the vtgate process
@@ -64,6 +66,20 @@ type VtgateProcess struct {
 
 	proc *exec.Cmd
 	exit chan error
+}
+
+type VTGateConfiguration struct {
+	TransactionMode string `json:"transaction_mode,omitempty"`
+}
+
+// ToJSONString will marshal this configuration as JSON
+func (config *VTGateConfiguration) ToJSONString() string {
+	b, _ := json.MarshalIndent(config, "", "\t")
+	return string(b)
+}
+
+func (vtgate *VtgateProcess) RewriteConfiguration() error {
+	return os.WriteFile(vtgate.ConfigFile, []byte(vtgate.Config.ToJSONString()), 0644)
 }
 
 const defaultVtGatePlannerVersion = planbuilder.Gen4
@@ -74,6 +90,7 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 		"--topo_implementation", vtgate.CommonArg.TopoImplementation,
 		"--topo_global_server_address", vtgate.CommonArg.TopoGlobalAddress,
 		"--topo_global_root", vtgate.CommonArg.TopoGlobalRoot,
+		"--config-file", vtgate.ConfigFile,
 		"--log_dir", vtgate.LogDir,
 		"--log_queries_to_file", vtgate.FileToLogQueries,
 		"--port", fmt.Sprintf("%d", vtgate.Port),
@@ -97,6 +114,19 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 			msvflag = true
 			break
 		}
+	}
+	configFile, err := os.Create(vtgate.ConfigFile)
+	if err != nil {
+		log.Errorf("cannot create config file for vtgate: %v", err)
+		return err
+	}
+	_, err = configFile.WriteString(vtgate.Config.ToJSONString())
+	if err != nil {
+		return err
+	}
+	err = configFile.Close()
+	if err != nil {
+		return err
 	}
 	if !msvflag {
 		version, err := mysqlctl.GetVersionString()
@@ -287,6 +317,7 @@ func VtgateProcessInstance(
 		Name:                  "vtgate",
 		Binary:                "vtgate",
 		FileToLogQueries:      path.Join(tmpDirectory, "/vtgate_querylog.txt"),
+		ConfigFile:            path.Join(tmpDirectory, fmt.Sprintf("vtgate-config-%d.json", port)),
 		Directory:             os.Getenv("VTDATAROOT"),
 		ServiceMap:            "grpc-tabletmanager,grpc-throttler,grpc-queryservice,grpc-updatestream,grpc-vtctl,grpc-vtgateservice",
 		LogDir:                tmpDirectory,
