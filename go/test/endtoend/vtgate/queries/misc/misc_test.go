@@ -164,6 +164,7 @@ func TestSetAndGetLastInsertID(t *testing.T) {
 		"update t1 set id2 = 88 where id1 = last_insert_id(%d)",
 		"delete from t1 where id1 = last_insert_id(%d)",
 		"select id2, last_insert_id(count(*)) from t1 where %d group by id2",
+		"set @x = last_insert_id(%d)",
 	}
 
 	for _, workload := range []string{"olap", "oltp"} {
@@ -185,6 +186,39 @@ func TestSetAndGetLastInsertID(t *testing.T) {
 			closer()
 		}
 	}
+}
+
+func TestSetAndGetLastInsertIDWithInsert(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("insert into t1(id1, id2) values (last_insert_id(12),0)")
+	mcmp.Exec("select last_insert_id()")
+	mcmp.Exec("insert into t1(id1, id2) values (13,last_insert_id(0))")
+	mcmp.Exec("select last_insert_id()")
+
+	mcmp.Exec("begin")
+	mcmp.Exec("insert into t1(id1, id2) values (last_insert_id(14),0)")
+	mcmp.Exec("select last_insert_id()")
+	mcmp.Exec("insert into t1(id1, id2) values (15,last_insert_id(0))")
+	mcmp.Exec("select last_insert_id()")
+	mcmp.Exec("commit")
+
+	_, err := mcmp.VtConn.ExecuteFetch("set workload = olap", 1, false)
+	require.NoError(t, err)
+
+	mcmp.Exec("insert into t1(id1, id2) values (last_insert_id(16),0)")
+	mcmp.Exec("select last_insert_id()")
+	mcmp.Exec("insert into t1(id1, id2) values (17,last_insert_id(0))")
+	mcmp.Exec("select last_insert_id()")
+
+	mcmp.Exec("begin")
+	mcmp.Exec("insert into t1(id1, id2) values (last_insert_id(18),0)")
+	mcmp.Exec("select last_insert_id()")
+	mcmp.Exec("insert into t1(id1, id2) values (19,last_insert_id(0))")
+	mcmp.Exec("select last_insert_id()")
+	mcmp.Exec("commit")
+
 }
 
 // TestVindexHints tests that vindex hints work as intended.

@@ -223,6 +223,10 @@ func (call *builtinLastInsertID) compile(c *compiler) (ctype, error) {
 	return ctype{Type: sqltypes.Uint64, Flag: arg.Flag & flagNullable, Col: collationNumeric}, nil
 }
 
+func (call *builtinLastInsertID) constant() bool {
+	return false // we don't want this function to be simplified away
+}
+
 func printIPv6AsIPv4(addr netip.Addr) (netip.Addr, bool) {
 	b := addr.AsSlice()
 	if len(b) != 16 {
