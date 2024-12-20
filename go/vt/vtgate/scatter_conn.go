@@ -394,6 +394,11 @@ func (stc *ScatterConn) StreamExecuteMulti(
 		}
 		return callback(reply)
 	}
+
+	if session.Options != nil {
+		session.Options.FetchLastInsertId = fetchLastInsertID
+	}
+
 	allErrors := stc.multiGoTransaction(
 		ctx,
 		"StreamExecute",

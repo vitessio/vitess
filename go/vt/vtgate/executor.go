@@ -262,13 +262,11 @@ func (e *Executor) Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConn
 }
 
 type streaminResultReceiver struct {
-	mu              sync.Mutex
-	stmtType        sqlparser.StatementType
-	rowsAffected    uint64
-	rowsReturned    int
-	insertID        uint64
-	insertIDChanged bool
-	callback        func(*sqltypes.Result) error
+	mu           sync.Mutex
+	stmtType     sqlparser.StatementType
+	rowsAffected uint64
+	rowsReturned int
+	callback     func(*sqltypes.Result) error
 }
 
 func (s *streaminResultReceiver) storeResultStats(typ sqlparser.StatementType, qr *sqltypes.Result) error {
@@ -276,10 +274,6 @@ func (s *streaminResultReceiver) storeResultStats(typ sqlparser.StatementType, q
 	defer s.mu.Unlock()
 	s.rowsAffected += qr.RowsAffected
 	s.rowsReturned += len(qr.Rows)
-	if qr.InsertIDUpdated() {
-		s.insertID = qr.InsertID
-	}
-	s.insertIDChanged = s.insertIDChanged || qr.InsertIDUpdated()
 	s.stmtType = typ
 	return s.callback(qr)
 }
