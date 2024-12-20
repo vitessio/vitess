@@ -18,14 +18,13 @@ limitations under the License.
 package sqltypes
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"strconv"
 
 	"github.com/dolthub/vitess/go/bytes2"
-	"github.com/dolthub/vitess/go/hack"
-
 	querypb "github.com/dolthub/vitess/go/vt/proto/query"
 )
 
@@ -209,7 +208,7 @@ func (v Value) ToString() string {
 	if v.typ == Expression {
 		return ""
 	}
-	return hack.String(v.val)
+	return string(v.val)
 }
 
 // String returns a printable version of the value.
@@ -220,7 +219,7 @@ func (v Value) String() string {
 	if v.IsQuoted() || v.typ == Bit {
 		return fmt.Sprintf("%v(%q)", v.typ, v.val)
 	}
-	return fmt.Sprintf("%v(%s)", v.typ, v.val)
+	return fmt.Sprintf("%v(%s)", v.typ, bytes.Clone(v.val))
 }
 
 // EncodeSQL encodes the value into an SQL statement. Can be binary.
