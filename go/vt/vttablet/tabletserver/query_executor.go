@@ -1179,7 +1179,7 @@ func (qre *QueryExecutor) resetLastInsertIDIfNeeded(ctx context.Context, conn *c
 }
 
 func (qre *QueryExecutor) fetchLastInsertID(ctx context.Context, conn *connpool.Conn, exec *sqltypes.Result) error {
-	if exec.InsertID != 0 || !qre.options.GetFetchLastInsertId() {
+	if exec.InsertIDUpdated() || !qre.options.GetFetchLastInsertId() {
 		return nil
 	}
 
@@ -1221,7 +1221,7 @@ func (qre *QueryExecutor) execStreamSQL(conn *connpool.PooledConn, isTransaction
 
 	lastInsertIDSet := false
 	cb := func(result *sqltypes.Result) error {
-		if result != nil && result.InsertID != 0 {
+		if result != nil && result.InsertIDUpdated() {
 			lastInsertIDSet = true
 		}
 		return callback(result)

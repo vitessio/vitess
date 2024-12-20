@@ -335,7 +335,7 @@ func (result *Result) AppendResult(src *Result) {
 		result.InsertID = src.InsertID
 		result.InsertIDChanged = true
 	}
-	if result.Fields == nil {
+	if len(result.Fields) == 0 {
 		result.Fields = src.Fields
 	}
 	result.Rows = append(result.Rows, src.Rows...)
