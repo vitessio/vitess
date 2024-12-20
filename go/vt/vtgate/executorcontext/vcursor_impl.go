@@ -772,7 +772,7 @@ func (vc *VCursorImpl) ExecuteMultiShard(ctx context.Context, primitive engine.P
 	qr, errs := vc.executor.ExecuteMultiShard(ctx, primitive, rss, commentedShardQueries(queries, vc.marginComments), vc.SafeSession, canAutocommit, vc.ignoreMaxMemoryRows, vc.observer, fetchLastInsertID)
 	vc.setRollbackOnPartialExecIfRequired(len(errs) != len(rss), rollbackOnError)
 	vc.logShardsQueried(primitive, len(rss))
-	if qr.InsertIDUpdated() {
+	if qr != nil && qr.InsertIDUpdated() {
 		vc.SafeSession.LastInsertId = qr.InsertID
 	}
 	return qr, errs
