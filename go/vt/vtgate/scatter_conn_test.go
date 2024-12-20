@@ -108,6 +108,40 @@ func TestExecuteFailOnAutocommit(t *testing.T) {
 func TestFetchLastInsertIDResets(t *testing.T) {
 	// This test verifies that the FetchLastInsertID flag is reset after a call to ExecuteMultiShard.
 	ks := "TestFetchLastInsertIDResets"
+	ctx := utils.LeakCheckContext(t)
+
+	createSandbox(ks)
+	hc := discovery.NewFakeHealthCheck(nil)
+	sc := newTestScatterConn(ctx, hc, newSandboxForCells(ctx, []string{"aa"}), "aa")
+	sbc0 := hc.AddTestTablet("aa", "0", 1, ks, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	sbc1 := hc.AddTestTablet("aa", "1", 1, ks, "1", topodatapb.TabletType_PRIMARY, true, 1, nil)
+
+	rss := []*srvtopo.ResolvedShard{{
+		Target: &querypb.Target{
+			Keyspace:   ks,
+			Shard:      "0",
+			TabletType: topodatapb.TabletType_PRIMARY,
+		},
+		Gateway: sbc0,
+	}, {
+		Target: &querypb.Target{
+			Keyspace:   ks,
+			Shard:      "1",
+			TabletType: topodatapb.TabletType_PRIMARY,
+		},
+		Gateway: sbc1,
+	}}
+	queries := []*querypb.BoundQuery{{
+		Sql: "query1",
+		BindVariables: map[string]*querypb.BindVariable{
+			"bv0": sqltypes.Int64BindVariable(0),
+		},
+	}, {
+		Sql: "query2",
+		BindVariables: map[string]*querypb.BindVariable{
+			"bv1": sqltypes.Int64BindVariable(1),
+		},
+	}}
 	tests := []struct {
 		name               string
 		initialSessionOpts *querypb.ExecuteOptions
@@ -148,41 +182,6 @@ func TestFetchLastInsertIDResets(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := utils.LeakCheckContext(t)
-
-			createSandbox(ks)
-			hc := discovery.NewFakeHealthCheck(nil)
-			sc := newTestScatterConn(ctx, hc, newSandboxForCells(ctx, []string{"aa"}), "aa")
-			sbc0 := hc.AddTestTablet("aa", "0", 1, ks, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
-			sbc1 := hc.AddTestTablet("aa", "1", 1, ks, "1", topodatapb.TabletType_PRIMARY, true, 1, nil)
-
-			rss := []*srvtopo.ResolvedShard{{
-				Target: &querypb.Target{
-					Keyspace:   ks,
-					Shard:      "0",
-					TabletType: topodatapb.TabletType_PRIMARY,
-				},
-				Gateway: sbc0,
-			}, {
-				Target: &querypb.Target{
-					Keyspace:   ks,
-					Shard:      "1",
-					TabletType: topodatapb.TabletType_PRIMARY,
-				},
-				Gateway: sbc1,
-			}}
-			queries := []*querypb.BoundQuery{{
-				Sql: "query1",
-				BindVariables: map[string]*querypb.BindVariable{
-					"bv0": sqltypes.Int64BindVariable(0),
-				},
-			}, {
-				Sql: "query2",
-				BindVariables: map[string]*querypb.BindVariable{
-					"bv1": sqltypes.Int64BindVariable(1),
-				},
-			}}
-
 			session := econtext.NewSafeSession(nil)
 			session.Options = tt.initialSessionOpts
 
