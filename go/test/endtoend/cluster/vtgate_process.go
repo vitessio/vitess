@@ -28,6 +28,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"testing"
 	"time"
 
 	"vitess.io/vitess/go/vt/log"
@@ -80,6 +81,63 @@ func (config *VTGateConfiguration) ToJSONString() string {
 
 func (vtgate *VtgateProcess) RewriteConfiguration() error {
 	return os.WriteFile(vtgate.ConfigFile, []byte(vtgate.Config.ToJSONString()), 0644)
+}
+
+// WaitForConfig waits for the expectedConfig to be present in the vtgate configuration.
+func (vtgate *VtgateProcess) WaitForConfig(expectedConfig string) error {
+	timeout := time.After(30 * time.Second)
+	var response string
+	for {
+		select {
+		case <-timeout:
+			return fmt.Errorf("timed out waiting for api to work. Last response - %s", response)
+		default:
+			_, response, _ = vtgate.MakeAPICall("/debug/config")
+			if strings.Contains(response, expectedConfig) {
+				return nil
+			}
+			time.Sleep(1 * time.Second)
+		}
+	}
+}
+
+// MakeAPICall makes an API call on the given endpoint of VTOrc
+func (vtgate *VtgateProcess) MakeAPICall(endpoint string) (status int, response string, err error) {
+	url := fmt.Sprintf("http://localhost:%d/%s", vtgate.Port, endpoint)
+	resp, err := http.Get(url)
+	if err != nil {
+		if resp != nil {
+			status = resp.StatusCode
+		}
+		return status, "", err
+	}
+	defer func() {
+		if resp != nil && resp.Body != nil {
+			resp.Body.Close()
+		}
+	}()
+
+	respByte, _ := io.ReadAll(resp.Body)
+	return resp.StatusCode, string(respByte), err
+}
+
+// MakeAPICallRetry is used to make an API call and retries until success
+func (vtgate *VtgateProcess) MakeAPICallRetry(t *testing.T, url string) {
+	t.Helper()
+	timeout := time.After(10 * time.Second)
+	for {
+		select {
+		case <-timeout:
+			t.Fatal("timed out waiting for api to work")
+			return
+		default:
+			status, _, err := vtgate.MakeAPICall(url)
+			if err == nil && status == 200 {
+				return
+			}
+			time.Sleep(1 * time.Second)
+		}
+	}
 }
 
 const defaultVtGatePlannerVersion = planbuilder.Gen4

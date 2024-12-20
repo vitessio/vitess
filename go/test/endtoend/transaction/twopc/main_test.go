@@ -106,6 +106,9 @@ func TestMain(m *testing.M) {
 		if err := clusterInstance.VtgateProcess.RewriteConfiguration(); err != nil {
 			return 1
 		}
+		if err := clusterInstance.VtgateProcess.WaitForConfig(`"transaction_mode":"TWOPC"`); err != nil {
+			return 1
+		}
 		vtParams = clusterInstance.GetVTParams(keyspaceName)
 		vtgateGrpcAddress = fmt.Sprintf("%s:%d", clusterInstance.Hostname, clusterInstance.VtgateGrpcPort)
 
