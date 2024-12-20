@@ -675,15 +675,20 @@ func (vc *VCursorImpl) ExecutePrimitiveStandalone(ctx context.Context, primitive
 
 func (vc *VCursorImpl) wrapCallback(callback func(*sqltypes.Result) error, primitive engine.Primitive) func(*sqltypes.Result) error {
 	if vc.interOpStats == nil {
-		return callback
+		return func(r *sqltypes.Result) error {
+			if r.InsertIDChanged {
+				vc.SafeSession.LastInsertId = r.InsertID
+			}
+			return callback(r)
+		}
 	}
 
-	return func(result *sqltypes.Result) error {
-		if result.InsertIDChanged {
-			vc.SafeSession.LastInsertId = result.InsertID
+	return func(r *sqltypes.Result) error {
+		if r.InsertIDChanged {
+			vc.SafeSession.LastInsertId = r.InsertID
 		}
-		vc.logOpTraffic(primitive, result)
-		return callback(result)
+		vc.logOpTraffic(primitive, r)
+		return callback(r)
 	}
 }
 
