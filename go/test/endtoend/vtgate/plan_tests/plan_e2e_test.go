@@ -23,7 +23,7 @@ import (
 )
 
 func TestE2ECases(t *testing.T) {
-	e2eTestCaseFiles := []string{"select_cases.json", "filter_cases.json"}
+	e2eTestCaseFiles := []string{"select_cases.json", "filter_cases.json", "dml_cases.json"}
 	mcmp, closer := start(t)
 	defer closer()
 	loadSampleData(t, mcmp)

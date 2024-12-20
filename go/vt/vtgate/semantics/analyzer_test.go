@@ -625,6 +625,36 @@ func TestSubqueryOrderByBinding(t *testing.T) {
 	}
 }
 
+func TestQuerySignatureLastInsertID(t *testing.T) {
+	queries := []struct {
+		query    string
+		expected bool
+	}{{
+		query:    "select 12",
+		expected: false,
+	}, {
+		query:    "select last_insert_id()",
+		expected: false,
+	}, {
+		query:    "select last_insert_id(123)",
+		expected: true,
+	}, {
+		query:    "update user_extra set val = last_insert_id(123)",
+		expected: true,
+	}}
+
+	for _, tc := range queries {
+		t.Run(tc.query, func(t *testing.T) {
+			ast, err := sqlparser.NewTestParser().Parse(tc.query)
+			require.NoError(t, err)
+
+			st, err := AnalyzeStrict(ast, "dbName", fakeSchemaInfo())
+			require.NoError(t, err)
+			require.Equal(t, tc.expected, st.QuerySignature.LastInsertIDArg)
+		})
+	}
+}
+
 func TestOrderByBindingTable(t *testing.T) {
 	tcases := []struct {
 		sql  string
