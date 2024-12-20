@@ -124,7 +124,7 @@ func createDeleteWithInputOp(ctx *plancontext.PlanningContext, del *sqlparser.De
 	}
 
 	var delOps []dmlOp
-	for _, target := range ctx.SemTable.Targets.Constituents() {
+	for _, target := range ctx.SemTable.DMLTargets.Constituents() {
 		op := createDeleteOpWithTarget(ctx, target, del.Ignore)
 		delOps = append(delOps, op)
 	}
