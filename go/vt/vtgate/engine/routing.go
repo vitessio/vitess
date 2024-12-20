@@ -51,6 +51,9 @@ const (
 	// IN is for routing a statement to a multi shard.
 	// Requires: A Vindex, and a multi Values.
 	IN
+	// Between is for routing a statement to a multi shard
+	// Requires: A Vindex, and start and end Value.
+	Between
 	// MultiEqual is used for routing queries with IN with tuple clause
 	// Requires: A Vindex, and a multi Tuple Values.
 	MultiEqual
@@ -78,6 +81,7 @@ var opName = map[Opcode]string{
 	EqualUnique:   "EqualUnique",
 	Equal:         "Equal",
 	IN:            "IN",
+	Between:       "Between",
 	MultiEqual:    "MultiEqual",
 	Scatter:       "Scatter",
 	DBA:           "DBA",
@@ -156,6 +160,14 @@ func (rp *RoutingParameters) findRoute(ctx context.Context, vcursor VCursor, bin
 			return rp.inMultiCol(ctx, vcursor, bindVars)
 		default:
 			return rp.in(ctx, vcursor, bindVars)
+		}
+	case Between:
+		switch rp.Vindex.(type) {
+		case vindexes.SingleColumn:
+			return rp.between(ctx, vcursor, bindVars)
+		default:
+			// Only SingleColumn vindex supported.
+			return nil, nil, vterrors.VT13001("between supported on SingleColumn vindex only")
 		}
 	case MultiEqual:
 		switch rp.Vindex.(type) {
@@ -396,6 +408,19 @@ func (rp *RoutingParameters) inMultiCol(ctx context.Context, vcursor VCursor, bi
 	return rss, shardVarsMultiCol(bindVars, mapVals, isSingleVal), nil
 }
 
+func (rp *RoutingParameters) between(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
+	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
+	value, err := env.Evaluate(rp.Values[0])
+	if err != nil {
+		return nil, nil, err
+	}
+	rss, values, err := resolveShardsBetween(ctx, vcursor, rp.Vindex.(vindexes.Sequential), rp.Keyspace, value.TupleValues())
+	if err != nil {
+		return nil, nil, err
+	}
+	return rss, shardVars(bindVars, values), nil
+}
+
 func (rp *RoutingParameters) multiEqual(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
 	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
 	value, err := env.Evaluate(rp.Values[0])
@@ -518,6 +543,24 @@ func buildMultiColumnVindexValues(shardsValues [][][]sqltypes.Value) [][][]*quer
 		shardsIds = append(shardsIds, shardIds)
 	}
 	return shardsIds
+}
+
+func resolveShardsBetween(ctx context.Context, vcursor VCursor, vindex vindexes.Sequential, keyspace *vindexes.Keyspace, vindexKeys []sqltypes.Value) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
+	// Convert vindexKeys to []*querypb.Value
+	ids := make([]*querypb.Value, len(vindexKeys))
+	for i, vik := range vindexKeys {
+		ids[i] = sqltypes.ValueToProto(vik)
+	}
+
+	// RangeMap using the Vindex
+	destinations, err := vindex.RangeMap(ctx, vcursor, vindexKeys[0], vindexKeys[1])
+	if err != nil {
+		return nil, nil, err
+
+	}
+
+	// And use the Resolver to map to ResolvedShards.
+	return vcursor.ResolveDestinations(ctx, keyspace.Name, ids, destinations)
 }
 
 func shardVars(bv map[string]*querypb.BindVariable, mapVals [][]*querypb.Value) []map[string]*querypb.BindVariable {

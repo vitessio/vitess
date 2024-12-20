@@ -21,10 +21,16 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"vitess.io/vitess/go/test/utils"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
+
+func assertEqualResults(t *testing.T, a, b *Result) {
+	t.Helper()
+	assert.Truef(t, a.Equal(b), "Results are not equal: \n%v\n%v", a, b)
+	if !a.Equal(b) {
+		t.Errorf("Results are not equal: %v %v", a, b)
+	}
+}
 
 func TestRepair(t *testing.T) {
 	fields := []*querypb.Field{{
@@ -45,9 +51,7 @@ func TestRepair(t *testing.T) {
 		},
 	}
 	in.Repair(fields)
-	if !in.Equal(want) {
-		t.Errorf("Repair:\n%#v, want\n%#v", in, want)
-	}
+	assertEqualResults(t, in, want)
 }
 
 func TestCopy(t *testing.T) {
@@ -57,8 +61,9 @@ func TestCopy(t *testing.T) {
 		}, {
 			Type: VarChar,
 		}},
-		InsertID:     1,
-		RowsAffected: 2,
+		InsertID:        1,
+		InsertIDChanged: true,
+		RowsAffected:    2,
 		Rows: [][]Value{
 			{TestValue(Int64, "1"), MakeTrusted(Null, nil)},
 			{TestValue(Int64, "2"), MakeTrusted(VarChar, nil)},
@@ -66,7 +71,7 @@ func TestCopy(t *testing.T) {
 		},
 	}
 	out := in.Copy()
-	utils.MustMatch(t, in, out)
+	assertEqualResults(t, in, out)
 }
 
 func TestTruncate(t *testing.T) {
@@ -76,8 +81,9 @@ func TestTruncate(t *testing.T) {
 		}, {
 			Type: VarChar,
 		}},
-		InsertID:     1,
-		RowsAffected: 2,
+		InsertID:        1,
+		InsertIDChanged: true,
+		RowsAffected:    2,
 		Rows: [][]Value{
 			{TestValue(Int64, "1"), MakeTrusted(Null, nil)},
 			{TestValue(Int64, "2"), MakeTrusted(VarChar, nil)},
@@ -86,26 +92,23 @@ func TestTruncate(t *testing.T) {
 	}
 
 	out := in.Truncate(0)
-	if !out.Equal(in) {
-		t.Errorf("Truncate(0):\n%v, want\n%v", out, in)
-	}
+	assertEqualResults(t, in, out)
 
 	out = in.Truncate(1)
 	want := &Result{
 		Fields: []*querypb.Field{{
 			Type: Int64,
 		}},
-		InsertID:     1,
-		RowsAffected: 2,
+		InsertID:        1,
+		InsertIDChanged: true,
+		RowsAffected:    2,
 		Rows: [][]Value{
 			{TestValue(Int64, "1")},
 			{TestValue(Int64, "2")},
 			{TestValue(Int64, "3")},
 		},
 	}
-	if !out.Equal(want) {
-		t.Errorf("Truncate(1):\n%v, want\n%v", out, want)
-	}
+	assertEqualResults(t, out, want)
 }
 
 func TestStripMetaData(t *testing.T) {
@@ -283,9 +286,7 @@ func TestStripMetaData(t *testing.T) {
 		t.Run(tcase.name, func(t *testing.T) {
 			inCopy := tcase.in.Copy()
 			out := inCopy.StripMetadata(tcase.includedFields)
-			if !out.Equal(tcase.expected) {
-				t.Errorf("StripMetaData unexpected result for %v: %v", tcase.name, out)
-			}
+			assertEqualResults(t, out, tcase.expected)
 			if len(tcase.in.Fields) > 0 {
 				// check the out array is different than the in array.
 				if out.Fields[0] == inCopy.Fields[0] && tcase.includedFields != querypb.ExecuteOptions_ALL {
@@ -293,7 +294,7 @@ func TestStripMetaData(t *testing.T) {
 				}
 			}
 			// check we didn't change the original result.
-			utils.MustMatch(t, tcase.in, inCopy)
+			assertEqualResults(t, tcase.in, inCopy)
 		})
 	}
 }
@@ -305,8 +306,9 @@ func TestAppendResult(t *testing.T) {
 		}, {
 			Type: VarChar,
 		}},
-		InsertID:     1,
-		RowsAffected: 2,
+		InsertIDChanged: true,
+		InsertID:        1,
+		RowsAffected:    2,
 		Rows: [][]Value{
 			{TestValue(Int64, "2"), MakeTrusted(VarChar, nil)},
 			{TestValue(Int64, "3"), TestValue(VarChar, "")},
@@ -319,8 +321,9 @@ func TestAppendResult(t *testing.T) {
 		}, {
 			Type: VarChar,
 		}},
-		InsertID:     3,
-		RowsAffected: 4,
+		InsertID:        3,
+		InsertIDChanged: true,
+		RowsAffected:    4,
 		Rows: [][]Value{
 			{TestValue(Int64, "1"), MakeTrusted(Null, nil)},
 		},
@@ -332,8 +335,9 @@ func TestAppendResult(t *testing.T) {
 		}, {
 			Type: VarChar,
 		}},
-		InsertID:     1,
-		RowsAffected: 6,
+		InsertID:        1,
+		InsertIDChanged: true,
+		RowsAffected:    6,
 		Rows: [][]Value{
 			{TestValue(Int64, "1"), MakeTrusted(Null, nil)},
 			{TestValue(Int64, "2"), MakeTrusted(VarChar, nil)},
@@ -342,10 +346,7 @@ func TestAppendResult(t *testing.T) {
 	}
 
 	result.AppendResult(src)
-
-	if !result.Equal(want) {
-		t.Errorf("Got:\n%#v, want:\n%#v", result, want)
-	}
+	assertEqualResults(t, result, want)
 }
 
 func TestReplaceKeyspace(t *testing.T) {

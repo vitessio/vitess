@@ -3302,6 +3302,49 @@ func TestSelectFromInformationSchema(t *testing.T) {
 		sbc1.StringQueries())
 }
 
+func TestStreamOrderByWithMultipleResults(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
+	// Special setup: Don't use createExecutorEnv.
+	cell := "aa"
+	hc := discovery.NewFakeHealthCheck(nil)
+	u := createSandbox(KsTestUnsharded)
+	s := createSandbox(KsTestSharded)
+	s.VSchema = executorVSchema
+	u.VSchema = unshardedVSchema
+	serv := newSandboxForCells(ctx, []string{cell})
+	resolver := newTestResolver(ctx, hc, serv, cell)
+	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
+	count := 1
+	for _, shard := range shards {
+		sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_PRIMARY, true, 1, nil)
+		sbc.SetResults([]*sqltypes.Result{
+			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col|weight_string(id)", "int32|int32|varchar"), fmt.Sprintf("%d|%d|NULL", count, count)),
+			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col|weight_string(id)", "int32|int32|varchar"), fmt.Sprintf("%d|%d|NULL", count+10, count)),
+		})
+		count++
+	}
+	queryLogger := streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize)
+	plans := DefaultPlanCache()
+	executor := NewExecutor(ctx, vtenv.NewTestEnv(), serv, cell, resolver, true, false, testBufferSize, plans, nil, false, querypb.ExecuteOptions_Gen4, 0)
+	executor.SetQueryLogger(queryLogger)
+	defer executor.Close()
+	// some sleep for all goroutines to start
+	time.Sleep(100 * time.Millisecond)
+	before := runtime.NumGoroutine()
+
+	query := "select id, col from user order by id"
+	gotResult, err := executorStream(ctx, executor, query)
+	require.NoError(t, err)
+
+	wantResult := sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col", "int32|int32"),
+		"1|1", "2|2", "3|3", "4|4", "5|5", "6|6", "7|7", "8|8", "11|1", "12|2", "13|3", "14|4", "15|5", "16|6", "17|7", "18|8")
+	assert.Equal(t, fmt.Sprintf("%v", wantResult.Rows), fmt.Sprintf("%v", gotResult.Rows))
+	// some sleep to close all goroutines.
+	time.Sleep(100 * time.Millisecond)
+	assert.GreaterOrEqual(t, before, runtime.NumGoroutine(), "left open goroutines lingering")
+}
+
 func TestStreamOrderByLimitWithMultipleResults(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
 

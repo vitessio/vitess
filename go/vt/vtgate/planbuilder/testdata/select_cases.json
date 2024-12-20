@@ -4958,6 +4958,36 @@
     }
   },
   {
+    "comment": "We are using last_insert_id with argument, so we need to fetch all results",
+    "query": "select last_insert_id(5) from user limit 12",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select last_insert_id(5) from user limit 12",
+      "Instructions": {
+        "OperatorType": "Limit",
+        "Count": "12",
+        "RequireCompleteInput": true,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FetchLastInsertID": true,
+            "FieldQuery": "select last_insert_id(5) from `user` where 1 != 1",
+            "Query": "select last_insert_id(5) from `user` limit 12",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
     "comment": "Unmergeable subquery with multiple levels of derived statements, using a multi value `IN` predicate",
     "query": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT * FROM (SELECT music.id FROM music WHERE music.user_id IN (5, 6) LIMIT 10) subquery_for_limit) subquery_for_limit)",
     "plan": {
@@ -5599,6 +5629,7 @@
           "Name": "user",
           "Sharded": true
         },
+        "FetchLastInsertID": true,
         "FieldQuery": "select last_insert_id(id) from `user` where 1 != 1",
         "Query": "select last_insert_id(id) from `user`",
         "Table": "`user`"

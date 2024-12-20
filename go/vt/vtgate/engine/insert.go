@@ -58,6 +58,8 @@ type Insert struct {
 
 	// Alias represents the row alias with columns if specified in the query.
 	Alias string
+
+	FetchLastInsertID bool
 }
 
 // newQueryInsert creates an Insert with a query string.
@@ -169,13 +171,14 @@ func (ins *Insert) executeInsertQueries(
 	if err != nil {
 		return nil, err
 	}
-	result, errs := vcursor.ExecuteMultiShard(ctx, ins, rss, queries, true /* rollbackOnError */, autocommit)
+	result, errs := vcursor.ExecuteMultiShard(ctx, ins, rss, queries, true /*rollbackOnError*/, autocommit, ins.FetchLastInsertID)
 	if errs != nil {
 		return nil, vterrors.Aggregate(errs)
 	}
 
 	if insertID != 0 {
 		result.InsertID = insertID
+		result.InsertIDChanged = true
 	}
 	return result, nil
 }
@@ -381,6 +384,10 @@ func (ins *Insert) description() PrimitiveDescription {
 		if shardedQuery != ins.Query {
 			other["ActualQuery"] = shardedQuery
 		}
+	}
+
+	if ins.FetchLastInsertID {
+		other["FetchLastInsertID"] = true
 	}
 
 	return PrimitiveDescription{
