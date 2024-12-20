@@ -188,12 +188,10 @@ func (stc *ScatterConn) ExecuteMultiShard(
 				opts = session.Session.Options
 			}
 
-			if fetchLastInsertID {
-				if opts == nil {
-					opts = &querypb.ExecuteOptions{FetchLastInsertId: fetchLastInsertID}
-				} else {
-					opts.FetchLastInsertId = fetchLastInsertID
-				}
+			if opts != nil {
+				opts.FetchLastInsertId = fetchLastInsertID
+			} else if fetchLastInsertID {
+				opts = &querypb.ExecuteOptions{FetchLastInsertId: fetchLastInsertID}
 			}
 
 			if autocommit {
@@ -414,12 +412,10 @@ func (stc *ScatterConn) StreamExecuteMulti(
 				opts = session.Session.Options
 			}
 
-			if fetchLastInsertID {
-				if opts == nil {
-					opts = &querypb.ExecuteOptions{FetchLastInsertId: fetchLastInsertID}
-				} else {
-					opts.FetchLastInsertId = fetchLastInsertID
-				}
+			if opts != nil {
+				opts.FetchLastInsertId = fetchLastInsertID
+			} else if fetchLastInsertID {
+				opts = &querypb.ExecuteOptions{FetchLastInsertId: fetchLastInsertID}
 			}
 
 			if autocommit {
