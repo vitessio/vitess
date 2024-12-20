@@ -57,8 +57,9 @@ func TestCopy(t *testing.T) {
 		}, {
 			Type: VarChar,
 		}},
-		InsertID:     1,
-		RowsAffected: 2,
+		InsertID:        1,
+		InsertIDChanged: true,
+		RowsAffected:    2,
 		Rows: [][]Value{
 			{TestValue(Int64, "1"), MakeTrusted(Null, nil)},
 			{TestValue(Int64, "2"), MakeTrusted(VarChar, nil)},
@@ -76,8 +77,9 @@ func TestTruncate(t *testing.T) {
 		}, {
 			Type: VarChar,
 		}},
-		InsertID:     1,
-		RowsAffected: 2,
+		InsertID:        1,
+		InsertIDChanged: true,
+		RowsAffected:    2,
 		Rows: [][]Value{
 			{TestValue(Int64, "1"), MakeTrusted(Null, nil)},
 			{TestValue(Int64, "2"), MakeTrusted(VarChar, nil)},
@@ -95,8 +97,9 @@ func TestTruncate(t *testing.T) {
 		Fields: []*querypb.Field{{
 			Type: Int64,
 		}},
-		InsertID:     1,
-		RowsAffected: 2,
+		InsertID:        1,
+		InsertIDChanged: true,
+		RowsAffected:    2,
 		Rows: [][]Value{
 			{TestValue(Int64, "1")},
 			{TestValue(Int64, "2")},
@@ -305,8 +308,9 @@ func TestAppendResult(t *testing.T) {
 		}, {
 			Type: VarChar,
 		}},
-		InsertID:     1,
-		RowsAffected: 2,
+		InsertIDChanged: true,
+		InsertID:        1,
+		RowsAffected:    2,
 		Rows: [][]Value{
 			{TestValue(Int64, "2"), MakeTrusted(VarChar, nil)},
 			{TestValue(Int64, "3"), TestValue(VarChar, "")},
@@ -319,8 +323,9 @@ func TestAppendResult(t *testing.T) {
 		}, {
 			Type: VarChar,
 		}},
-		InsertID:     3,
-		RowsAffected: 4,
+		InsertID:        3,
+		InsertIDChanged: true,
+		RowsAffected:    4,
 		Rows: [][]Value{
 			{TestValue(Int64, "1"), MakeTrusted(Null, nil)},
 		},
@@ -332,8 +337,9 @@ func TestAppendResult(t *testing.T) {
 		}, {
 			Type: VarChar,
 		}},
-		InsertID:     1,
-		RowsAffected: 6,
+		InsertID:        1,
+		InsertIDChanged: true,
+		RowsAffected:    6,
 		Rows: [][]Value{
 			{TestValue(Int64, "1"), MakeTrusted(Null, nil)},
 			{TestValue(Int64, "2"), MakeTrusted(VarChar, nil)},

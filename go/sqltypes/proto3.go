@@ -120,7 +120,7 @@ func Proto3ToResult(qr *querypb.QueryResult) *Result {
 		Fields:              qr.Fields,
 		RowsAffected:        qr.RowsAffected,
 		InsertID:            qr.InsertId,
-		InsertIDChanged:     qr.InsertIdChanged,
+		InsertIDChanged:     qr.InsertIdChanged || qr.InsertId != 0,
 		Rows:                proto3ToRows(qr.Fields, qr.Rows),
 		Info:                qr.Info,
 		SessionStateChanges: qr.SessionStateChanges,
