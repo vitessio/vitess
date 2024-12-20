@@ -419,9 +419,7 @@ func (stc *ScatterConn) StreamExecuteMulti(
 				opts = session.Session.Options
 			}
 
-			if opts != nil {
-				opts.FetchLastInsertId = fetchLastInsertID
-			} else if fetchLastInsertID {
+			if opts == nil && fetchLastInsertID {
 				opts = &querypb.ExecuteOptions{FetchLastInsertId: fetchLastInsertID}
 			}
 
