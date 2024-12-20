@@ -93,7 +93,7 @@ func (result *Result) Copy() *Result {
 	out := &Result{
 		RowsAffected:        result.RowsAffected,
 		InsertID:            result.InsertID,
-		InsertIDChanged:     result.InsertIDUpdated(),
+		InsertIDChanged:     result.InsertIDChanged,
 		SessionStateChanges: result.SessionStateChanges,
 		StatusFlags:         result.StatusFlags,
 		Info:                result.Info,
@@ -132,7 +132,7 @@ func (result *Result) Metadata() *Result {
 	return &Result{
 		Fields:              result.Fields,
 		InsertID:            result.InsertID,
-		InsertIDChanged:     result.InsertIDUpdated(),
+		InsertIDChanged:     result.InsertIDChanged,
 		RowsAffected:        result.RowsAffected,
 		Info:                result.Info,
 		SessionStateChanges: result.SessionStateChanges,
@@ -157,7 +157,7 @@ func (result *Result) Truncate(l int) *Result {
 
 	out := &Result{
 		InsertID:            result.InsertID,
-		InsertIDChanged:     result.InsertIDUpdated(),
+		InsertIDChanged:     result.InsertIDChanged,
 		RowsAffected:        result.RowsAffected,
 		Info:                result.Info,
 		SessionStateChanges: result.SessionStateChanges,
@@ -333,8 +333,8 @@ func (result *Result) AppendResult(src *Result) {
 	result.RowsAffected += src.RowsAffected
 	if src.InsertIDUpdated() {
 		result.InsertID = src.InsertID
+		result.InsertIDChanged = true
 	}
-	result.InsertIDChanged = result.InsertIDUpdated() || src.InsertIDUpdated()
 	if result.Fields == nil {
 		result.Fields = src.Fields
 	}
