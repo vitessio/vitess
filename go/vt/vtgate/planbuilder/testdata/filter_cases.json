@@ -699,7 +699,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Composite IN: RHS not tuple",
@@ -722,7 +723,8 @@
         "user.music",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e":true
   },
   {
     "comment": "Composite IN: RHS has no simple values",
@@ -970,7 +972,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e":true
   },
   {
     "comment": "Merging subqueries should remove keyspace from query",
@@ -1095,7 +1098,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Multi-table unique vindex constraint",
@@ -1252,7 +1256,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e":true
   },
   {
     "comment": "Multi-route unique vindex route on both routes",
@@ -1279,7 +1284,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e":true
   },
   {
     "comment": "Multi-route with cross-route constraint",
@@ -1328,7 +1334,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e":true
   },
   {
     "comment": "Multi-route with non-route constraint, should use first route.",
@@ -1373,7 +1380,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e":true
   },
   {
     "comment": "Route with multiple route constraints, SelectIN is the best constraint.",
@@ -1654,7 +1662,8 @@
         "main.unsharded",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e":true
   },
   {
     "comment": "routing rules: choose the redirected table",
@@ -1680,7 +1689,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e":true
   },
   {
     "comment": "subquery",
@@ -1729,7 +1739,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e":true
   },
   {
     "comment": "correlated subquery merge-able into a route of a join tree",
@@ -1778,7 +1789,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e":true
   },
   {
     "comment": "ensure subquery reordering gets us a better plan",
@@ -1824,7 +1836,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e":true
   },
   {
     "comment": "nested subquery",
@@ -1873,7 +1886,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e":true
   },
   {
     "comment": "Correlated subquery in where clause",
@@ -1896,7 +1910,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e":true
   },
   {
     "comment": "outer and inner subquery route by same int val",
@@ -1923,7 +1938,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e":true
   },
   {
     "comment": "outer and inner subquery route by same str val",
@@ -1950,7 +1966,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e":true
   },
   {
     "comment": "outer and inner subquery route by same val arg",
@@ -1977,12 +1994,14 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e":true
   },
   {
     "comment": "unresolved symbol in inner subquery.",
     "query": "select id from user where id = :a and user.col in (select user_extra.col from user_extra where user_extra.user_id = :a and foo.id = 1)",
-    "plan": "column 'foo.id' not found"
+    "plan": "column 'foo.id' not found",
+    "skip_e2e":true
   },
   {
     "comment": "outer and inner subquery route by same outermost column value",
@@ -2005,7 +2024,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e":true
   },
   {
     "comment": "cross-shard subquery in IN clause.\n# Note the improved Underlying plan as SelectIN.",
@@ -2290,7 +2310,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e":true
   },
   {
     "comment": "routing rules subquery pullout",
@@ -2339,7 +2360,8 @@
         "main.unsharded",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e":true
   },
   {
     "comment": "Case preservation test",
@@ -2366,7 +2388,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e":true
   },
   {
     "comment": "database() call in where clause.",
@@ -2649,7 +2672,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e":true
   },
   {
     "comment": "solving LIKE query with a CFC prefix vindex",
@@ -2701,7 +2725,8 @@
       "TablesUsed": [
         "user.samecolvin"
       ]
-    }
+    },
+    "skip_e2e":true
   },
   {
     "comment": "non unique predicate on vindex",
@@ -2819,7 +2844,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e":true
   },
   {
     "comment": "SelectDBA with uncorrelated subqueries",
@@ -2838,7 +2864,8 @@
         "Query": "select t.table_schema from information_schema.`tables` as t where t.table_schema in (select c.column_name from information_schema.`columns` as c)",
         "Table": "information_schema.`tables`"
       }
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "SelectReference with uncorrelated subqueries",
@@ -3040,7 +3067,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e":true
   },
   {
     "comment": "The outer and second inner are SelectEqualUnique with same Vindex value, the first inner has different Vindex value",
@@ -3094,7 +3122,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e":true
   },
   {
     "comment": "two correlated subqueries that can be merge in a single route",
@@ -3117,7 +3146,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e":true
   },
   {
     "comment": "transitive closures for the win",
@@ -3166,7 +3196,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e":true
   },
   {
     "comment": "not supported transitive closures with equality inside of an OR",
@@ -3215,7 +3246,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e":true
   },
   {
     "comment": "routing rules subquery merge with alias",
@@ -3237,7 +3269,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e":true
   },
   {
     "comment": "left join where clauses where we can optimize into an inner join",
@@ -3282,12 +3315,14 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e":true
   },
   {
     "comment": "this query lead to a nil pointer error",
     "query": "select user.id from user left join user_extra on user.col = user_extra.col where foo(user_extra.foobar)",
-    "plan": "expr cannot be translated, not supported: foo(user_extra.foobar)"
+    "plan": "expr cannot be translated, not supported: foo(user_extra.foobar)",
+    "skip_e2e" :true
   },
   {
     "comment": "filter after outer join",
@@ -3339,7 +3374,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e":true
   },
   {
     "comment": "subquery on other table",
@@ -3994,7 +4030,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e":true
   },
   {
     "comment": "conditions following a null safe comparison operator can be used for routing",
@@ -4444,7 +4481,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e":true
   },
   {
     "comment": "two predicates that mean the same thing",
@@ -4530,7 +4568,8 @@
         "main.unsharded",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "push filter under aggregation",
@@ -4598,7 +4637,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e":true
   },
   {
     "comment": "query that would time out because planning was too slow",
@@ -4628,7 +4668,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e":true
   },
   {
     "comment": "union inside subquery. all routes can be merged by literal value",
@@ -4682,7 +4723,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "list args: single column vindex on non-zero offset",
@@ -4708,7 +4750,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "list args: multi column vindex",
@@ -4735,7 +4778,8 @@
       "TablesUsed": [
         "user.multicol_tbl"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "list args: multi column vindex - subshard",
@@ -4761,7 +4805,8 @@
       "TablesUsed": [
         "user.multicol_tbl"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "list args: multi column vindex - more columns",
@@ -4788,7 +4833,8 @@
       "TablesUsed": [
         "user.multicol_tbl"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "list args: multi column vindex - columns rearranged",
@@ -4815,7 +4861,8 @@
       "TablesUsed": [
         "user.multicol_tbl"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "order by with filter removing the keyspace from order by",
@@ -4920,5 +4967,148 @@
         "user.authoritative"
       ]
     }
+  },
+  {
+    "comment": "Between clause on primary indexed id column (binary vindex on id)",
+    "query": "select id from unq_binary_idx where id between 1 and 5",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select id from unq_binary_idx where id between 1 and 5",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Between",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from unq_binary_idx where 1 != 1",
+        "Query": "select id from unq_binary_idx where id between 1 and 5",
+        "Table": "unq_binary_idx",
+        "Values": [
+          "(1, 5)"
+        ],
+        "Vindex": "binary"
+      },
+      "TablesUsed": [
+        "user.unq_binary_idx"
+      ]
+    }
+  },
+{
+    "comment": "Between clause on customer.id column (xxhash vindex on id)",
+    "query": "select id from customer where id between 1 and 5",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select id from customer where id between 1 and 5",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from customer where 1 != 1",
+        "Query": "select id from customer where id between 1 and 5",
+        "Table": "customer"
+      },
+      "TablesUsed": [
+        "user.customer"
+      ]
+    }
+  },
+{
+    "comment": "Between clause on col1 column (there is no vindex on this column)",
+    "query": "select id, col1 from unq_binary_idx where col1 between 10 and 50",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select id, col1 from unq_binary_idx where col1 between 10 and 50",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id, col1 from unq_binary_idx where 1 != 1",
+        "Query": "select id, col1 from unq_binary_idx where col1 between 10 and 50",
+        "Table": "unq_binary_idx"
+      },
+      "TablesUsed": [
+        "user.unq_binary_idx"
+      ]
+    }
+},
+{
+  "comment": "Between clause on multicolumn vindex (cola,colb)",
+  "query": "select cola,colb,colc from multicol_tbl where cola between 1 and 5",
+  "plan": {
+    "QueryType": "SELECT",
+    "Original": "select cola,colb,colc from multicol_tbl where cola between 1 and 5",
+    "Instructions": {
+      "OperatorType": "Route",
+      "Variant": "Scatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "FieldQuery": "select cola, colb, colc from multicol_tbl where 1 != 1",
+      "Query": "select cola, colb, colc from multicol_tbl where cola between 1 and 5",
+      "Table": "multicol_tbl"
+    },
+    "TablesUsed": [
+      "user.multicol_tbl"
+    ]
   }
+},
+{
+  "comment": "Between clause on a binary vindex field with values from a different table",
+  "query": "select s.oid,s.col1, se.colb from sales s join sales_extra se on s.col1 = se.cola where s.oid between se.start and se.end",
+  "plan": {
+    "QueryType": "SELECT",
+    "Original": "select s.oid,s.col1, se.colb from sales s join sales_extra se on s.col1 = se.cola where s.oid between se.start and se.end",
+    "Instructions": {
+      "OperatorType": "Join",
+      "Variant": "Join",
+      "JoinColumnIndexes": "R:0,R:1,L:0",
+      "JoinVars": {
+        "se_cola": 1,
+        "se_end": 3,
+        "se_start": 2
+      },
+      "TableName": "sales_extra_sales",
+      "Inputs": [
+        {
+          "OperatorType": "Route",
+          "Variant": "Scatter",
+          "Keyspace": {
+            "Name": "user",
+            "Sharded": true
+          },
+          "FieldQuery": "select se.colb, se.cola, se.`start`, se.`end` from sales_extra as se where 1 != 1",
+          "Query": "select se.colb, se.cola, se.`start`, se.`end` from sales_extra as se",
+          "Table": "sales_extra"
+        },
+        {
+          "OperatorType": "Route",
+          "Variant": "Between",
+          "Keyspace": {
+            "Name": "user",
+            "Sharded": true
+          },
+          "FieldQuery": "select s.oid, s.col1 from sales as s where 1 != 1",
+          "Query": "select s.oid, s.col1 from sales as s where s.oid between :se_start /* INT16 */ and :se_end /* INT16 */ and s.col1 = :se_cola /* VARCHAR */",
+          "Table": "sales",
+          "Values": [
+            "(:se_start, :se_end)"
+          ],
+          "Vindex": "binary"
+        }
+      ]
+    },
+    "TablesUsed": [
+      "user.sales",
+      "user.sales_extra"
+    ]
+  }
+}
 ]
