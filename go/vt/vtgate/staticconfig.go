@@ -14,15 +14,24 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package dynamicconfig
+package vtgate
 
 import vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 
-type DDL interface {
-	OnlineEnabled() bool
-	DirectEnabled() bool
+type StaticConfig struct {
+	OnlineDDLEnabled bool
+	DirectDDLEnabled bool
+	TxMode           vtgatepb.TransactionMode
 }
 
-type TxMode interface {
-	TransactionMode() vtgatepb.TransactionMode
+func (s *StaticConfig) OnlineEnabled() bool {
+	return s.OnlineDDLEnabled
+}
+
+func (s *StaticConfig) DirectEnabled() bool {
+	return s.DirectDDLEnabled
+}
+
+func (s *StaticConfig) TransactionMode() vtgatepb.TransactionMode {
+	return s.TxMode
 }
