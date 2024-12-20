@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder"
 )
@@ -125,6 +126,31 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 	require.NoError(t, err)
 	return mcmp, func() {
 		mcmp.Close()
+	}
+}
+
+// splitSQL statements - querySQL may be a multi-line sql blob
+func splitSQL(querySQL ...string) ([]string, error) {
+	parser := sqlparser.NewTestParser()
+	var sqls []string
+	for _, sql := range querySQL {
+		split, err := parser.SplitStatementToPieces(sql)
+		if err != nil {
+			return nil, err
+		}
+		sqls = append(sqls, split...)
+	}
+	return sqls, nil
+}
+
+func loadSampleData(t *testing.T, mcmp utils.MySQLCompare) {
+	sampleDataSQL := readFile("sampledata/user.sql")
+	insertSQL, err := splitSQL(sampleDataSQL)
+	if err != nil {
+		require.NoError(t, err)
+	}
+	for _, sql := range insertSQL {
+		mcmp.ExecNoCompare(sql)
 	}
 }
 
