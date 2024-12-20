@@ -167,6 +167,10 @@ func (stc *ScatterConn) ExecuteMultiShard(
 		go stc.runLockQuery(ctx, session)
 	}
 
+	if session.Options != nil {
+		session.Options.FetchLastInsertId = fetchLastInsertID
+	}
+
 	allErrors := stc.multiGoTransaction(
 		ctx,
 		"Execute",
@@ -188,9 +192,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 				opts = session.Session.Options
 			}
 
-			if opts != nil {
-				opts.FetchLastInsertId = fetchLastInsertID
-			} else if fetchLastInsertID {
+			if opts == nil && fetchLastInsertID {
 				opts = &querypb.ExecuteOptions{FetchLastInsertId: fetchLastInsertID}
 			}
 
