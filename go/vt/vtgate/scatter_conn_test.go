@@ -149,11 +149,14 @@ func TestFetchLastInsertIDResets(t *testing.T) {
 	}}
 
 	session := econtext.NewSafeSession(&vtgatepb.Session{Options: &querypb.ExecuteOptions{}})
-	_, errs := sc.ExecuteMultiShard(ctx, nil, rss, queries, session, true /*autocommit*/, false, nullResultsObserver{}, true)
+
+	fetchLastInsertID := true
+	_, errs := sc.ExecuteMultiShard(ctx, nil, rss, queries, session, true /*autocommit*/, false, nullResultsObserver{}, fetchLastInsertID)
 	require.NoError(t, vterrors.Aggregate(errs))
 	assert.True(t, session.Options.FetchLastInsertId)
 
-	_, errs = sc.ExecuteMultiShard(ctx, nil, rss, queries, session, true /*autocommit*/, false, nullResultsObserver{}, false)
+	fetchLastInsertID = false
+	_, errs = sc.ExecuteMultiShard(ctx, nil, rss, queries, session, true /*autocommit*/, false, nullResultsObserver{}, fetchLastInsertID)
 	require.NoError(t, vterrors.Aggregate(errs))
 	assert.False(t, session.Options.FetchLastInsertId)
 }
