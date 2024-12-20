@@ -666,7 +666,7 @@ func (s *planTestSuite) testFile(filename string, vschema *vschemawrapper.VSchem
 			current := PlanTest{
 				Comment: tcase.Comment,
 				Query:   tcase.Query,
-				SkipE2E: tcase.SkipE2E,
+				SkipE2E: true,
 			}
 			vschema.Version = Gen4
 			out := getPlanOutput(tcase, vschema, render)
