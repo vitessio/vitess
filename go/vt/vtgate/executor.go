@@ -234,9 +234,9 @@ func (e *Executor) Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConn
 	stmtType, result, err := e.execute(ctx, mysqlCtx, safeSession, sql, bindVars, logStats)
 	logStats.Error = err
 	if result == nil {
-		saveSessionStats(safeSession, stmtType, false, 0, 0, 0, err)
+		saveSessionStats(safeSession, stmtType, 0, 0, err)
 	} else {
-		saveSessionStats(safeSession, stmtType, result.InsertIDChanged, result.InsertID, result.RowsAffected, len(result.Rows), err)
+		saveSessionStats(safeSession, stmtType, result.RowsAffected, len(result.Rows), err)
 	}
 	if result != nil && len(result.Rows) > warnMemoryRows {
 		warnings.Add("ResultsExceeded", 1)
@@ -381,7 +381,7 @@ func (e *Executor) StreamExecute(
 	err = e.newExecute(ctx, mysqlCtx, safeSession, sql, bindVars, logStats, resultHandler, srr.storeResultStats)
 
 	logStats.Error = err
-	saveSessionStats(safeSession, srr.stmtType, srr.insertIDChanged, srr.insertID, srr.rowsAffected, srr.rowsReturned, err)
+	saveSessionStats(safeSession, srr.stmtType, srr.rowsAffected, srr.rowsReturned, err)
 	if srr.rowsReturned > warnMemoryRows {
 		warnings.Add("ResultsExceeded", 1)
 		piiSafeSQL, err := e.env.Parser().RedactSQLQuery(sql)
@@ -414,16 +414,13 @@ func canReturnRows(stmtType sqlparser.StatementType) bool {
 	}
 }
 
-func saveSessionStats(safeSession *econtext.SafeSession, stmtType sqlparser.StatementType, insertIDChanged bool, insertID, rowsAffected uint64, rowsReturned int, err error) {
+func saveSessionStats(safeSession *econtext.SafeSession, stmtType sqlparser.StatementType, rowsAffected uint64, rowsReturned int, err error) {
 	safeSession.RowCount = -1
 	if err != nil {
 		return
 	}
 	if !safeSession.IsFoundRowsHandled() {
 		safeSession.FoundRows = uint64(rowsReturned)
-	}
-	if insertID != 0 || insertIDChanged {
-		safeSession.LastInsertId = insertID
 	}
 	switch stmtType {
 	case sqlparser.StmtInsert, sqlparser.StmtReplace, sqlparser.StmtUpdate, sqlparser.StmtDelete:
