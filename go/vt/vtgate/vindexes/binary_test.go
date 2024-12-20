@@ -24,6 +24,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -144,4 +145,19 @@ func TestBinaryReverseMap(t *testing.T) {
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("ReverseMap(): %v, want %s", err, wantErr)
 	}
+}
+
+// TestBinaryRangeMap takes start and env values,
+// and checks against a destination keyrange.
+func TestBinaryRangeMap(t *testing.T) {
+
+	startInterval := "0x01"
+	endInterval := "0x10"
+
+	got, err := binOnlyVindex.(Sequential).RangeMap(context.Background(), nil, sqltypes.NewHexNum([]byte(startInterval)),
+		sqltypes.NewHexNum([]byte(endInterval)))
+	require.NoError(t, err)
+	want := "DestinationKeyRange(01-10)"
+	assert.Equal(t, want, got[0].String())
+
 }
