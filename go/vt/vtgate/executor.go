@@ -276,10 +276,10 @@ func (s *streaminResultReceiver) storeResultStats(typ sqlparser.StatementType, q
 	defer s.mu.Unlock()
 	s.rowsAffected += qr.RowsAffected
 	s.rowsReturned += len(qr.Rows)
-	if qr.InsertID != 0 || qr.InsertIDChanged {
+	if qr.InsertIDUpdated() {
 		s.insertID = qr.InsertID
 	}
-	s.insertIDChanged = s.insertIDChanged || qr.InsertIDChanged
+	s.insertIDChanged = s.insertIDChanged || qr.InsertIDUpdated()
 	s.stmtType = typ
 	return s.callback(qr)
 }

@@ -1251,7 +1251,7 @@ func (qre *QueryExecutor) execStreamSQL(conn *connpool.PooledConn, isTransaction
 	if err = qre.fetchLastInsertID(ctx, conn.Conn, res); err != nil {
 		return err
 	}
-	if res.InsertIDChanged {
+	if res.InsertIDUpdated() {
 		return callback(res)
 	}
 	return nil

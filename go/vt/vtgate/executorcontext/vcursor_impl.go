@@ -676,7 +676,7 @@ func (vc *VCursorImpl) ExecutePrimitiveStandalone(ctx context.Context, primitive
 func (vc *VCursorImpl) wrapCallback(callback func(*sqltypes.Result) error, primitive engine.Primitive) func(*sqltypes.Result) error {
 	if vc.interOpStats == nil {
 		return func(r *sqltypes.Result) error {
-			if r.InsertIDChanged {
+			if r.InsertIDUpdated() {
 				vc.SafeSession.LastInsertId = r.InsertID
 			}
 			return callback(r)
@@ -684,7 +684,7 @@ func (vc *VCursorImpl) wrapCallback(callback func(*sqltypes.Result) error, primi
 	}
 
 	return func(r *sqltypes.Result) error {
-		if r.InsertIDChanged {
+		if r.InsertIDUpdated() {
 			vc.SafeSession.LastInsertId = r.InsertID
 		}
 		vc.logOpTraffic(primitive, r)
@@ -772,7 +772,7 @@ func (vc *VCursorImpl) ExecuteMultiShard(ctx context.Context, primitive engine.P
 	qr, errs := vc.executor.ExecuteMultiShard(ctx, primitive, rss, commentedShardQueries(queries, vc.marginComments), vc.SafeSession, canAutocommit, vc.ignoreMaxMemoryRows, vc.observer, fetchLastInsertID)
 	vc.setRollbackOnPartialExecIfRequired(len(errs) != len(rss), rollbackOnError)
 	vc.logShardsQueried(primitive, len(rss))
-	if qr.InsertIDChanged {
+	if qr.InsertIDUpdated() {
 		vc.SafeSession.LastInsertId = qr.InsertID
 	}
 	return qr, errs
@@ -814,7 +814,7 @@ func (vc *VCursorImpl) ExecuteStandalone(ctx context.Context, primitive engine.P
 	// execute DMLs through ExecuteStandalone.
 	qr, errs := vc.executor.ExecuteMultiShard(ctx, primitive, rss, bqs, NewAutocommitSession(vc.SafeSession.Session), false /* autocommit */, vc.ignoreMaxMemoryRows, vc.observer, fetchLastInsertID)
 	vc.logShardsQueried(primitive, len(rss))
-	if qr.InsertIDChanged {
+	if qr.InsertIDUpdated() {
 		vc.SafeSession.LastInsertId = qr.InsertID
 	}
 	return qr, vterrors.Aggregate(errs)

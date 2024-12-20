@@ -103,7 +103,7 @@ func ResultToProto3(qr *Result) *querypb.QueryResult {
 		Fields:              qr.Fields,
 		RowsAffected:        qr.RowsAffected,
 		InsertId:            qr.InsertID,
-		InsertIdChanged:     qr.InsertIDChanged,
+		InsertIdChanged:     qr.InsertIDUpdated(),
 		Rows:                RowsToProto3(qr.Rows),
 		Info:                qr.Info,
 		SessionStateChanges: qr.SessionStateChanges,

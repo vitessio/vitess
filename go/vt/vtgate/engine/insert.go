@@ -178,6 +178,7 @@ func (ins *Insert) executeInsertQueries(
 
 	if insertID != 0 {
 		result.InsertID = insertID
+		result.InsertIDChanged = true
 	}
 	return result, nil
 }

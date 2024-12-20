@@ -171,6 +171,7 @@ func (ins *InsertCommon) executeUnshardedTableQuery(ctx context.Context, vcursor
 	// values, we don't return an error because this behavior
 	// is required to support migration.
 	if insertID != 0 {
+		qr.InsertIDChanged = true
 		qr.InsertID = insertID
 	}
 	return qr, nil

@@ -93,7 +93,7 @@ func (result *Result) Copy() *Result {
 	out := &Result{
 		RowsAffected:        result.RowsAffected,
 		InsertID:            result.InsertID,
-		InsertIDChanged:     result.InsertIDChanged,
+		InsertIDChanged:     result.InsertIDUpdated(),
 		SessionStateChanges: result.SessionStateChanges,
 		StatusFlags:         result.StatusFlags,
 		Info:                result.Info,
@@ -132,7 +132,7 @@ func (result *Result) Metadata() *Result {
 	return &Result{
 		Fields:              result.Fields,
 		InsertID:            result.InsertID,
-		InsertIDChanged:     result.InsertIDChanged,
+		InsertIDChanged:     result.InsertIDUpdated(),
 		RowsAffected:        result.RowsAffected,
 		Info:                result.Info,
 		SessionStateChanges: result.SessionStateChanges,
@@ -157,7 +157,7 @@ func (result *Result) Truncate(l int) *Result {
 
 	out := &Result{
 		InsertID:            result.InsertID,
-		InsertIDChanged:     result.InsertIDChanged,
+		InsertIDChanged:     result.InsertIDUpdated(),
 		RowsAffected:        result.RowsAffected,
 		Info:                result.Info,
 		SessionStateChanges: result.SessionStateChanges,
@@ -331,10 +331,10 @@ func (result *Result) StripMetadata(incl querypb.ExecuteOptions_IncludedFields) 
 // if two results have different fields.We will enhance this function.
 func (result *Result) AppendResult(src *Result) {
 	result.RowsAffected += src.RowsAffected
-	if src.InsertID != 0 || src.InsertIDChanged {
+	if src.InsertIDUpdated() {
 		result.InsertID = src.InsertID
 	}
-	result.InsertIDChanged = result.InsertIDChanged || src.InsertIDChanged
+	result.InsertIDChanged = result.InsertIDUpdated() || src.InsertIDUpdated()
 	if result.Fields == nil {
 		result.Fields = src.Fields
 	}
@@ -354,4 +354,8 @@ func (result *Result) IsMoreResultsExists() bool {
 // IsInTransaction returns true if the status flag has SERVER_STATUS_IN_TRANS set
 func (result *Result) IsInTransaction() bool {
 	return result.StatusFlags&ServerStatusInTrans == ServerStatusInTrans
+}
+
+func (result *Result) InsertIDUpdated() bool {
+	return result.InsertIDChanged || result.InsertID > 0
 }

@@ -699,7 +699,7 @@ func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *
 		got = &sqltypes.Result{}
 		got.RowsAffected = result.RowsAffected
 		got.InsertID = result.InsertID
-		got.InsertIDChanged = result.InsertIDChanged
+		got.InsertIDChanged = result.InsertIDUpdated()
 		got.Fields, err = cConn.Fields()
 		if err != nil {
 			fatalError = fmt.Sprintf("Fields(%v) failed: %v", query, err)
