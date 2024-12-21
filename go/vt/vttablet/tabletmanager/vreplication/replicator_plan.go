@@ -505,7 +505,7 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 						diff := afterVals[i].RawStr()
 						beforeVal := bindvars["b_"+field.Name].Value
 						buf := bytes.Buffer{}
-						buf.Grow(len(diff) + len(beforeVal) + len(sqlparser.Utf8mb4Str) + 2) // +2 is for the enclosing quotes
+						buf.Grow(len(beforeVal) + len(sqlparser.Utf8mb4Str) + 2) // +2 is for the enclosing quotes
 						buf.WriteString(sqlparser.Utf8mb4Str)
 						buf.WriteByte('\'')
 						buf.Write(beforeVal)
