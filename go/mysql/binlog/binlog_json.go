@@ -51,9 +51,9 @@ https://github.com/noplay/python-mysql-replication/blob/175df28cc8b536a68522ff9b
 type jsonDiffOp uint8
 
 const (
-	jsonDiffOpReplace = jsonDiffOp(0)
-	jsonDiffOpInsert  = jsonDiffOp(1)
-	jsonDiffOpRemove  = jsonDiffOp(2)
+	jsonDiffOpReplace = jsonDiffOp(iota)
+	jsonDiffOpInsert
+	jsonDiffOpRemove
 )
 
 // ParseBinaryJSON provides the parsing function from the mysql binary json
@@ -75,6 +75,10 @@ func ParseBinaryJSON(data []byte) (*json.Value, error) {
 // ParseBinaryJSONDiff provides the parsing function from the binary MySQL
 // JSON diff representation to an SQL expression.
 func ParseBinaryJSONDiff(data []byte) (sqltypes.Value, error) {
+	if len(data) == 0 {
+		return sqltypes.MakeTrusted(sqltypes.Expression, data), nil
+	}
+
 	diff := bytes.Buffer{}
 	// Reasonable estimate of the space we'll need to build the SQL
 	// expression in order to try and avoid reallocations w/o
