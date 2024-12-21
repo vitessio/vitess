@@ -140,8 +140,8 @@ func ParseBinaryJSONDiff(data []byte) (sqltypes.Value, error) {
 		pos = readTo
 		value, err := ParseBinaryJSON(data[pos : pos+valueLen])
 		if err != nil {
-			return sqltypes.Value{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
-				"cannot read JSON diff value for path %s: %v", path, err)
+			return sqltypes.Value{}, vterrors.Wrapf(err,
+				"cannot read JSON diff value for path %q", path)
 		}
 		pos += valueLen
 		if value.Type() == json.TypeString {

@@ -17,6 +17,7 @@ limitations under the License.
 package utils
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -61,7 +62,7 @@ func SetBinlogRowImageOptions(mode string, partialJSON bool, cnfDir string) erro
 		}
 		if partialJSON {
 			if !CIDBPlatformIsMySQL8orLater() {
-				return fmt.Errorf("partial JSON values are only supported in MySQL 8.0 or later")
+				return errors.New("partial JSON values are only supported in MySQL 8.0 or later")
 			}
 			// We're testing partial binlog row images so let's also test partial
 			// JSON values in the images.
