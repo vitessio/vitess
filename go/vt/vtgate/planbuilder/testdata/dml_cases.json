@@ -2,12 +2,14 @@
   {
     "comment": "update table not found",
     "query": "update nouser set val = 1",
-    "plan": "table nouser not found"
+    "plan": "table nouser not found",
+    "skip_e2e": true
   },
   {
     "comment": "delete table not found",
     "query": "delete from nouser",
-    "plan": "table nouser not found"
+    "plan": "table nouser not found",
+    "skip_e2e": true
   },
   {
     "comment": "explicit keyspace reference",
@@ -29,7 +31,8 @@
       "TablesUsed": [
         "main.m1"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "update unsharded",
@@ -51,7 +54,8 @@
       "TablesUsed": [
         "main.unsharded"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "subqueries in unsharded update",
@@ -73,7 +77,8 @@
       "TablesUsed": [
         "main.unsharded"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "unsharded union in subquery of unsharded update",
@@ -95,7 +100,8 @@
       "TablesUsed": [
         "main.unsharded"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "unsharded join in subquery of unsharded update",
@@ -117,7 +123,8 @@
       "TablesUsed": [
         "main.unsharded"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "update with join subquery",
@@ -139,7 +146,8 @@
       "TablesUsed": [
         "main.unsharded"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "routing rules: updated of a routed table",
@@ -165,7 +173,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "update: routing rules for subquery.",
@@ -188,7 +197,8 @@
         "main.unsharded",
         "main.unsharded_a"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "delete unsharded",
@@ -210,7 +220,8 @@
       "TablesUsed": [
         "main.unsharded"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "delete from sequence",
@@ -232,7 +243,8 @@
       "TablesUsed": [
         "main.seq"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "delete from reference table in unsharded keyspace",
@@ -254,7 +266,8 @@
       "TablesUsed": [
         "main.unsharded_ref"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "update by primary keyspace id",
@@ -280,7 +293,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "update by primary keyspace id with alias",
@@ -306,7 +320,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "update by primary keyspace id with parenthesized expression",
@@ -332,7 +347,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "update by primary keyspace id with multi-part where clause with parens",
@@ -358,7 +374,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "update by primary keyspace id, changing one vindex column",
@@ -390,12 +407,14 @@
       "TablesUsed": [
         "user.user_metadata"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "update by primary keyspace id, changing same vindex twice",
     "query": "update user_metadata set email = 'a', email = 'b' where user_id = 1",
-    "plan": "VT03015: column has duplicate set values: 'email'"
+    "plan": "VT03015: column has duplicate set values: 'email'",
+    "skip_e2e": true
   },
   {
     "comment": "update by primary keyspace id, changing multiple vindex columns",
@@ -428,7 +447,8 @@
       "TablesUsed": [
         "user.user_metadata"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "update by primary keyspace id, changing one vindex column, using order by and limit",
@@ -460,7 +480,8 @@
       "TablesUsed": [
         "user.user_metadata"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "update changes non owned vindex column",
@@ -492,7 +513,8 @@
       "TablesUsed": [
         "user.music_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "update by primary keyspace id, stray where clause",
@@ -518,7 +540,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "update by primary keyspace id, stray where clause with conversion error",
@@ -544,7 +567,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "delete from by primary keyspace id",
@@ -573,7 +597,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "multi-table delete with comma join",
@@ -596,7 +621,8 @@
         "main.unsharded_a",
         "main.unsharded_b"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "multi-table delete with ansi join",
@@ -619,7 +645,8 @@
         "main.unsharded_a",
         "main.unsharded_b"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "delete with join from subquery",
@@ -641,7 +668,8 @@
       "TablesUsed": [
         "main.unsharded"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "routing rules: deleted from a routed table",
@@ -670,7 +698,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "delete: routing rules for subquery",
@@ -693,7 +722,8 @@
         "main.unsharded",
         "main.unsharded_a"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "update by lookup",
@@ -719,7 +749,8 @@
       "TablesUsed": [
         "user.music"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "update multi-table ansi join",
@@ -742,7 +773,8 @@
         "main.unsharded_a",
         "main.unsharded_b"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "update multi-table comma join",
@@ -765,7 +797,8 @@
         "main.unsharded_a",
         "main.unsharded_b"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "delete from by lookup",
@@ -794,7 +827,8 @@
       "TablesUsed": [
         "user.music"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "delete from, no owned vindexes",
@@ -820,7 +854,8 @@
       "TablesUsed": [
         "user.music_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "simple insert, no values",
@@ -842,7 +877,8 @@
       "TablesUsed": [
         "main.unsharded"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "simple insert unsharded",
@@ -864,7 +900,8 @@
       "TablesUsed": [
         "main.unsharded"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "simple upsert unsharded",
@@ -886,7 +923,8 @@
       "TablesUsed": [
         "main.unsharded"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "unsharded insert, no col list with auto-inc and authoritative column list",
@@ -909,7 +947,8 @@
       "TablesUsed": [
         "main.unsharded_authoritative"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "sharded upsert with sharding key set to vindex column",
@@ -936,7 +975,8 @@
       "TablesUsed": [
         "user.music"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "sharded bulk upsert with sharding key set to vindex column",
@@ -963,7 +1003,8 @@
       "TablesUsed": [
         "user.music"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "insert unsharded with select",
@@ -986,7 +1027,8 @@
         "main.unsharded",
         "main.unsharded_auto"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "insert unsharded with select with join",
@@ -1009,7 +1051,8 @@
         "main.unsharded",
         "main.unsharded_auto"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "insert unsharded, invalid value for auto-inc",
@@ -1032,7 +1075,8 @@
       "TablesUsed": [
         "main.unsharded_auto"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "insert unsharded, column present",
@@ -1055,7 +1099,8 @@
       "TablesUsed": [
         "main.unsharded_auto"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "insert unsharded, column absent",
@@ -1078,7 +1123,8 @@
       "TablesUsed": [
         "main.unsharded_auto"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "insert unsharded, column absent",
@@ -1101,7 +1147,8 @@
       "TablesUsed": [
         "main.unsharded_auto"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "insert unsharded, multi-val",
@@ -1124,7 +1171,8 @@
       "TablesUsed": [
         "main.unsharded_auto"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "unsharded insert subquery in insert value",
@@ -1146,7 +1194,8 @@
       "TablesUsed": [
         "main.unsharded"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "sharded insert subquery in insert value",
@@ -1174,7 +1223,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "insert into a routed table",
@@ -1202,12 +1252,14 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "insert with mimatched column list",
     "query": "insert into user(id) values (1, 2)",
-    "plan": "VT03006: column count does not match value count with the row"
+    "plan": "VT03006: column count does not match value count with the row",
+    "skip_e2e": true
   },
   {
     "comment": "insert no column list for sharded authoritative table",
@@ -1232,7 +1284,8 @@
       "TablesUsed": [
         "user.authoritative"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "insert sharded, no values",
@@ -1260,7 +1313,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "insert with one vindex",
@@ -1288,7 +1342,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "insert ignore sharded",
@@ -1317,7 +1372,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "insert on duplicate key",
@@ -1346,7 +1402,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "insert with one vindex and bind var",
@@ -1374,7 +1431,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "insert with non vindex",
@@ -1402,7 +1460,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "insert with default seq",
@@ -1430,7 +1489,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "insert with non vindex bool value",
@@ -1458,7 +1518,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "insert with all vindexes supplied",
@@ -1486,7 +1547,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "insert for non-vindex autoinc",
@@ -1512,7 +1574,8 @@
       "TablesUsed": [
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "insert for non-compliant names",
@@ -1537,7 +1600,8 @@
       "TablesUsed": [
         "user.weird`name"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "unsharded insert from union",
@@ -1560,7 +1624,8 @@
         "main.dual",
         "main.unsharded"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "insert for non-vindex autoinc, invalid value",
@@ -1586,7 +1651,8 @@
       "TablesUsed": [
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "insert invalid index value",
@@ -1612,17 +1678,20 @@
       "TablesUsed": [
         "user.music_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "insert invalid index value",
     "query": "insert into music_extra(music_id, user_id) values(1, id)",
-    "plan": "cannot lookup column 'id' (column access not supported here)"
+    "plan": "cannot lookup column 'id' (column access not supported here)",
+    "skip_e2e": true
   },
   {
     "comment": "insert invalid table",
     "query": "insert into noexist(music_id, user_id) values(1, 18446744073709551616)",
-    "plan": "table noexist not found"
+    "plan": "table noexist not found",
+    "skip_e2e": true
   },
   {
     "comment": "insert with multiple rows",
@@ -1650,7 +1719,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "insert with query timeout",
@@ -1679,7 +1749,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "insert with multiple rows - multi-shard autocommit",
@@ -1708,12 +1779,14 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "insert into a vindex not allowed",
     "query": "insert into user_index(id) values(1)",
-    "plan": "VT09014: vindex cannot be modified"
+    "plan": "VT09014: vindex cannot be modified",
+    "skip_e2e": true
   },
   {
     "comment": "simple replace unsharded",
@@ -1735,7 +1808,8 @@
       "TablesUsed": [
         "main.unsharded"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "replace unsharded with select",
@@ -1758,7 +1832,8 @@
         "main.unsharded",
         "main.unsharded_auto"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "replace unsharded, invalid value for auto-inc",
@@ -1781,7 +1856,8 @@
       "TablesUsed": [
         "main.unsharded_auto"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "replace unsharded, column present",
@@ -1804,7 +1880,8 @@
       "TablesUsed": [
         "main.unsharded_auto"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "replace unsharded, column absent",
@@ -1827,7 +1904,8 @@
       "TablesUsed": [
         "main.unsharded_auto"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "replace unsharded, multi-val",
@@ -1850,12 +1928,14 @@
       "TablesUsed": [
         "main.unsharded_auto"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "replace invalid table",
     "query": "replace into noexist(music_id, user_id) values(1, 18446744073709551616)",
-    "plan": "table noexist not found"
+    "plan": "table noexist not found",
+    "skip_e2e": true
   },
   {
     "comment": "insert a row in a multi column vindex table",
@@ -1882,7 +1962,8 @@
       "TablesUsed": [
         "user.multicolvin"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "insert for overlapped vindex columns",
@@ -1908,7 +1989,8 @@
       "TablesUsed": [
         "user.overlap_vindex"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "insert multiple rows in a multi column vindex table",
@@ -1935,7 +2017,8 @@
       "TablesUsed": [
         "user.multicolvin"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "delete row in a multi column vindex table",
@@ -1964,7 +2047,8 @@
       "TablesUsed": [
         "user.multicolvin"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "update columns of multi column vindex",
@@ -1996,7 +2080,8 @@
       "TablesUsed": [
         "user.multicolvin"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "update multiple vindexes, with multi column vindex",
@@ -2029,7 +2114,8 @@
       "TablesUsed": [
         "user.multicolvin"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "update with no primary vindex on where clause (scatter update)",
@@ -2051,7 +2137,8 @@
       "TablesUsed": [
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "update with target destination",
@@ -2073,7 +2160,8 @@
       "TablesUsed": [
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "update with no primary vindex on where clause (scatter update)   - multi shard autocommit",
@@ -2096,7 +2184,8 @@
       "TablesUsed": [
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "update with no primary vindex on where clause (scatter update)   - query timeout",
@@ -2119,7 +2208,8 @@
       "TablesUsed": [
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "update with non-comparison expr",
@@ -2141,7 +2231,8 @@
       "TablesUsed": [
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "update with primary id through IN clause",
@@ -2167,7 +2258,8 @@
       "TablesUsed": [
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "update with non-unique key",
@@ -2189,7 +2281,8 @@
       "TablesUsed": [
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "update by lookup with IN clause",
@@ -2211,7 +2304,8 @@
       "TablesUsed": [
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "update with where clause with parens",
@@ -2228,6 +2322,53 @@
         },
         "TargetTabletType": "PRIMARY",
         "Query": "update user_extra set val = 1 where `name` = 'foo' or id = 1",
+        "Table": "user_extra"
+      },
+      "TablesUsed": [
+        "user.user_extra"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "update with last_insert_id in SET",
+    "query": "update user_extra set col = last_insert_id(123)",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update user_extra set col = last_insert_id(123)",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "FetchLastInsertID": true,
+        "Query": "update user_extra set col = last_insert_id(123)",
+        "Table": "user_extra"
+      },
+      "TablesUsed": [
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "delete with last_insert_id in where",
+    "query": "delete from user_extra where col = last_insert_id(123)",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from user_extra where col = last_insert_id(123)",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "FetchLastInsertID": true,
+        "Query": "delete from user_extra where col = last_insert_id(123)",
         "Table": "user_extra"
       },
       "TablesUsed": [
@@ -2255,7 +2396,8 @@
       "TablesUsed": [
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "delete with target destination",
@@ -2277,7 +2419,8 @@
       "TablesUsed": [
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "delete with non-comparison expr",
@@ -2299,7 +2442,8 @@
       "TablesUsed": [
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "delete from with no index match",
@@ -2321,7 +2465,8 @@
       "TablesUsed": [
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "delete from with no index match - multi shard autocommit",
@@ -2344,7 +2489,8 @@
       "TablesUsed": [
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "delete from with no index match - query timeout",
@@ -2367,7 +2513,8 @@
       "TablesUsed": [
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "delete from with primary id in through IN clause",
@@ -2393,7 +2540,8 @@
       "TablesUsed": [
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "unsharded update where inner query references outer query",
@@ -2417,7 +2565,8 @@
         "main.unsharded_a",
         "main.unsharded_b"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "unsharded delete where inner query references outer query",
@@ -2440,7 +2589,8 @@
         "main.unsharded",
         "main.unsharded_a"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "update vindex value to null",
@@ -2472,7 +2622,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "insert using last_insert_id",
@@ -2494,7 +2645,8 @@
       "TablesUsed": [
         "main.unsharded"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "update vindex value to null with multiple primary keyspace id",
@@ -2526,7 +2678,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "update vindex value to null without a where clause",
@@ -2554,7 +2707,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "update vindex value to null with complex where clause",
@@ -2582,7 +2736,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "delete from user by primary keyspace id with in clause",
@@ -2611,7 +2766,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "delete from user by complex expression",
@@ -2636,7 +2792,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "delete from user without a where clause",
@@ -2661,7 +2818,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "delete with single table targets",
@@ -2690,7 +2848,8 @@
       "TablesUsed": [
         "user.music"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "scatter update table with owned vindexes without changing lookup vindex",
@@ -2712,7 +2871,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "scatter delete with owned lookup vindex",
@@ -2737,7 +2897,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "update multi column vindex, without values for all the vindex columns",
@@ -2769,7 +2930,8 @@
       "TablesUsed": [
         "user.multicolvin"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "update with binary value",
@@ -2801,7 +2963,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "delete with binary value",
@@ -2830,7 +2993,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "delete with shard targeting",
@@ -2855,7 +3019,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "update with shard targeting",
@@ -2883,7 +3048,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "update with shard targeting without vindex",
@@ -2905,7 +3071,8 @@
       "TablesUsed": [
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "multi-table delete with single table",
@@ -2930,22 +3097,26 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "delete with unknown reference",
     "query": "delete music from user where id = 1",
-    "plan": "VT03003: unknown table 'music' in MULTI DELETE"
+    "plan": "VT03003: unknown table 'music' in MULTI DELETE",
+    "skip_e2e": true
   },
   {
     "comment": "delete with derived tables",
     "query": "delete music from (select * from user) music where id = 1",
-    "plan": "VT03004: the target table music of the DELETE is not updatable"
+    "plan": "VT03004: the target table music of the DELETE is not updatable",
+    "skip_e2e": true
   },
   {
     "comment": "delete with derived tables with unknown table",
     "query": "delete user from (select * from user) music where id = 1",
-    "plan": "VT03003: unknown table 'user' in MULTI DELETE"
+    "plan": "VT03003: unknown table 'user' in MULTI DELETE",
+    "skip_e2e": true
   },
   {
     "comment": "INSERT INTO main.user_privacy_consents (user_id, accepted_at)  SELECT user_id, accepted_at FROM (SELECT 1 as user_id, 1629194864 as accepted_at) AS tmp WHERE NOT EXISTS (SELECT user_id FROM main.user_privacy_consents WHERE user_id = 1)",
@@ -2968,7 +3139,8 @@
         "main.dual",
         "main.user_privacy_consents"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Delete on backfilling unique lookup vindex should be a scatter",
@@ -2993,7 +3165,8 @@
       "TablesUsed": [
         "zlookup_unique.t1"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Update on backfilling unique lookup vindex should be a scatter",
@@ -3021,7 +3194,8 @@
       "TablesUsed": [
         "zlookup_unique.t1"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Delete on backfilling and non-backfilling unique lookup vindexes should be a delete equal",
@@ -3050,7 +3224,8 @@
       "TablesUsed": [
         "zlookup_unique.t1"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Update on backfilling and non-backfilling unique lookup vindexes should be an equal",
@@ -3082,7 +3257,8 @@
       "TablesUsed": [
         "zlookup_unique.t1"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Delete EQUAL and IN on backfilling and non-backfilling unique lookup vindexes should be a delete IN",
@@ -3111,7 +3287,8 @@
       "TablesUsed": [
         "zlookup_unique.t1"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Update EQUAL and IN on backfilling and non-backfilling unique lookup vindexes should be an update IN",
@@ -3143,7 +3320,8 @@
       "TablesUsed": [
         "zlookup_unique.t1"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "update with alias table",
@@ -3171,7 +3349,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "delete with alias table",
@@ -3196,7 +3375,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "update with a multicol vindex",
@@ -3223,7 +3403,8 @@
       "TablesUsed": [
         "user.multicol_tbl"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "update with a multicol vindex - reverse order",
@@ -3250,7 +3431,8 @@
       "TablesUsed": [
         "user.multicol_tbl"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "update with a multicol vindex using an IN clause",
@@ -3277,7 +3459,8 @@
       "TablesUsed": [
         "user.multicol_tbl"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "update with a multicol vindex using an IN clause",
@@ -3304,7 +3487,8 @@
       "TablesUsed": [
         "user.multicol_tbl"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "delete with a multicol vindex",
@@ -3334,7 +3518,8 @@
       "TablesUsed": [
         "user.multicol_tbl"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "delete with a multicol vindex - reverse order",
@@ -3364,7 +3549,8 @@
       "TablesUsed": [
         "user.multicol_tbl"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "delete with a multicol vindex using an IN clause",
@@ -3394,7 +3580,8 @@
       "TablesUsed": [
         "user.multicol_tbl"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "delete with a multicol vindex using an IN clause",
@@ -3424,7 +3611,8 @@
       "TablesUsed": [
         "user.multicol_tbl"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "update with multicol and an owned vindex which changes",
@@ -3457,7 +3645,8 @@
       "TablesUsed": [
         "user.multicol_tbl"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "update with routing using non-unique lookup vindex",
@@ -3483,7 +3672,8 @@
       "TablesUsed": [
         "user.multicol_tbl"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "update with routing using subsharding column",
@@ -3509,7 +3699,8 @@
       "TablesUsed": [
         "user.multicol_tbl"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "update with routing using subsharding column on lookup vindex",
@@ -3541,7 +3732,8 @@
       "TablesUsed": [
         "user.multicol_tbl"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "update with routing using subsharding column with in query",
@@ -3573,7 +3765,8 @@
       "TablesUsed": [
         "user.multicol_tbl"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "update with routing using subsharding column with in query as lower cost over lookup vindex",
@@ -3599,7 +3792,8 @@
       "TablesUsed": [
         "user.multicol_tbl"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "delete with routing using non-unique lookup vindex",
@@ -3628,7 +3822,8 @@
       "TablesUsed": [
         "user.multicol_tbl"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "delete with routing using subsharding column",
@@ -3657,7 +3852,8 @@
       "TablesUsed": [
         "user.multicol_tbl"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "delete with routing using subsharding column with in query",
@@ -3686,7 +3882,8 @@
       "TablesUsed": [
         "user.multicol_tbl"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "delete with routing using subsharding column with in query as lower cost over lookup vindex",
@@ -3715,7 +3912,8 @@
       "TablesUsed": [
         "user.multicol_tbl"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "insert using select with simple table.",
@@ -3754,22 +3952,26 @@
         "user.music",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "insert using select with more columns in insert",
     "query": "insert into music(id, user_id) select 1",
-    "plan": "VT03006: column count does not match value count with the row"
+    "plan": "VT03006: column count does not match value count with the row",
+    "skip_e2e": true
   },
   {
     "comment": "insert using select with more columns in select",
     "query": "insert into music(id, user_id) select id, count(user_id), sum(user_id) from user group by id",
-    "plan": "VT03006: column count does not match value count with the row"
+    "plan": "VT03006: column count does not match value count with the row",
+    "skip_e2e": true
   },
   {
     "comment": "insert using select with more columns in select after accounting for star column",
     "query": "insert into music(id, user_id) select id, *, 2 from user",
-    "plan": "VT03006: column count does not match value count with the row"
+    "plan": "VT03006: column count does not match value count with the row",
+    "skip_e2e": true
   },
   {
     "comment": "insert using select with auto-inc column using vitess sequence, sequence column not present",
@@ -3808,7 +4010,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "insert using select with auto-inc column using vitess sequence, sequence column present",
@@ -3847,7 +4050,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "sharded insert from select",
@@ -3888,7 +4092,8 @@
         "main.dual",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "insert using select with sharding column is autoinc and not present in the insert column query",
@@ -3929,12 +4134,14 @@
         "main.dual",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "insert using select with sharding column is not an autoinc and not present in the insert column query",
     "query": "insert into user_extra(pattern) SELECT 1",
-    "plan": "VT09003: INSERT query does not have primary vindex column 'user_id' in the column list"
+    "plan": "VT09003: INSERT query does not have primary vindex column 'user_id' in the column list",
+    "skip_e2e": true
   },
   {
     "comment": "sharded same keyspace",
@@ -3973,7 +4180,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "unsharded same keyspace",
@@ -3996,7 +4204,8 @@
         "main.unsharded",
         "main.unsharded_auto"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "sharded different keyspace",
@@ -4035,7 +4244,8 @@
         "user.user_extra",
         "zlookup_unique.t1"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "sharded insert table, unsharded select table",
@@ -4074,7 +4284,8 @@
         "main_2.unsharded_tab",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "unsharded different keyspace",
@@ -4109,7 +4320,8 @@
         "main.unsharded",
         "main_2.unsharded_tab"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "unsharded insert table, sharded select table",
@@ -4144,7 +4356,8 @@
         "main.unsharded",
         "zlookup_unique.t1"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "unsharded subquery in sharded update, not the same keyspace between outer and inner",
@@ -4189,7 +4402,8 @@
         "main.unsharded",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "sharded subquery in unsharded update, not the same keyspace",
@@ -4234,7 +4448,8 @@
         "main.unsharded",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "sharded join unsharded subqueries in unsharded update",
@@ -4305,7 +4520,8 @@
         "main.unsharded",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "sharded update with sub query where the sources can be merged into a single query",
@@ -4332,7 +4548,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "merge through correlated subquery",
@@ -4359,7 +4576,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "merge through correlated subquery #2",
@@ -4382,7 +4600,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "all defaults empty column, empty values",
@@ -4407,12 +4626,14 @@
       "TablesUsed": [
         "user.authoritative"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "vexplain all dml without any directive should fail",
     "query": "vexplain all delete from user",
-    "plan": "VT09008: vexplain queries/all will actually run queries"
+    "plan": "VT09008: vexplain queries/all will actually run queries",
+    "skip_e2e": true
   },
   {
     "comment": "vexplain dml with actually_run_query directive",
@@ -4443,7 +4664,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "explain dml with actually_run_query directive - 2",
@@ -4474,7 +4696,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "delete with join from multi table join subquery",
@@ -4497,7 +4720,8 @@
         "main.unsharded",
         "main.unsharded_b"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "update with routing using multi column vindex",
@@ -4523,7 +4747,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "delete with routing using multi column vindex",
@@ -4552,7 +4777,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "insert into ref; TODO(maxeng) is this a bug?",
@@ -4574,7 +4800,8 @@
       "TablesUsed": [
         "user.ref"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "update using last_insert_id with an argument",
@@ -4596,7 +4823,8 @@
       "TablesUsed": [
         "main.m1"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "unsharded update query with comment directive",
@@ -4619,7 +4847,8 @@
       "TablesUsed": [
         "main.unsharded"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "unsharded insert query with comment directive",
@@ -4642,7 +4871,8 @@
       "TablesUsed": [
         "main.unsharded"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "insert with select using same tables, cannot stream parallel",
@@ -4685,7 +4915,8 @@
       "TablesUsed": [
         "user.music"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "insert + lookup vindex + auto increment on lookup column - not provided",
@@ -4712,7 +4943,8 @@
       "TablesUsed": [
         "user.mixed_tbl"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "insert + lookup vindex + auto increment on lookup column - partially provided",
@@ -4739,7 +4971,8 @@
       "TablesUsed": [
         "user.mixed_tbl"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "insert + lookup vindex + auto increment on lookup column + select - not provided",
@@ -4783,7 +5016,8 @@
         "user.mixed_tbl",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "insert + lookup vindex + auto increment on lookup column + select - provided",
@@ -4827,12 +5061,14 @@
         "user.mixed_tbl",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "insert into a vindex not allowed",
     "query": "insert into user_index(id) values(1)",
-    "plan": "VT09014: vindex cannot be modified"
+    "plan": "VT09014: vindex cannot be modified",
+    "skip_e2e": true
   },
   {
     "comment": "insert with select takes shared lock",
@@ -4873,32 +5109,38 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Unsupported INSERT statement with a target destination",
     "query": "insert into `user[-]`.user_metadata (a, b) values (1,2)",
-    "plan": "VT09017: INSERT with a target destination is not allowed"
+    "plan": "VT09017: INSERT with a target destination is not allowed",
+    "skip_e2e": true
   },
   {
     "comment": "Unsupported delete statement with a replica target destination",
     "query": "DELETE FROM `user[-]@replica`.user_metadata limit 1",
-    "plan": "VT09002: delete statement with a replica target"
+    "plan": "VT09002: delete statement with a replica target",
+    "skip_e2e": true
   },
   {
     "comment": "Unsupported update statement with a replica target destination",
     "query": "update `user[-]@replica`.user_metadata set id=2",
-    "plan": "VT09002: update statement with a replica target"
+    "plan": "VT09002: update statement with a replica target",
+    "skip_e2e": true
   },
   {
     "comment": "insert row values smaller than number of columns",
     "query": "insert into user(one, two, three, four) values (1, 2, 3)",
-    "plan": "VT03006: column count does not match value count with the row"
+    "plan": "VT03006: column count does not match value count with the row",
+    "skip_e2e": true
   },
   {
     "comment": "insert row values greater than number of columns",
     "query": "insert into user(one, two, three) values (1, 2, 3, 4)",
-    "plan": "VT03006: column count does not match value count with the row"
+    "plan": "VT03006: column count does not match value count with the row",
+    "skip_e2e": true
   },
   {
     "comment": "insert on duplicate key update with database qualifier",
@@ -4925,7 +5167,8 @@
       "TablesUsed": [
         "user.music"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "delete from reference table - query send to source table",
@@ -4947,7 +5190,8 @@
       "TablesUsed": [
         "main.source_of_ref"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "delete from reference table - no source",
@@ -4969,7 +5213,8 @@
       "TablesUsed": [
         "user.ref"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "delete by target destination with limit",
@@ -4994,7 +5239,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "delete sharded table with join with reference table",
@@ -5020,7 +5266,8 @@
         "user.ref_with_source",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "delete sharded table with join with another sharded table on vindex column",
@@ -5046,7 +5293,8 @@
         "user.music",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "multi delete multi table",
@@ -5122,7 +5370,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "multi delete multi table with alias",
@@ -5194,7 +5443,8 @@
         "user.music",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "reverse the join order for delete",
@@ -5266,7 +5516,8 @@
         "user.music",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "multi table delete with join on vindex column",
@@ -5292,7 +5543,8 @@
         "user.music",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "delete 3 way join with sharding key and primary key same",
@@ -5365,7 +5617,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "delete 3 way join with sharding key and primary key different",
@@ -5438,7 +5691,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "sharded delete with limit clause",
@@ -5493,7 +5747,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "sharded delete with order by and limit clause",
@@ -5549,7 +5804,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "update with limit clause",
@@ -5601,7 +5857,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "update a vindex column with limit",
@@ -5659,7 +5916,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "update with multi table join with single target",
@@ -5738,7 +5996,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "update with multi table join with single target modifying lookup vindex",
@@ -5817,7 +6076,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "update with multi table join with single target having dependent column update",
@@ -5893,7 +6153,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "update with multi table join with single target having multiple dependent column update",
@@ -5969,7 +6230,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "update with multi table join with multi target having dependent column update",
@@ -6068,17 +6330,20 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "update with multi table reference with multi target update on a derived table",
     "query": "update ignore (select foo, col, bar from user) u, music m set u.foo = 21, u.bar = 'abc' where u.col = m.col",
-    "plan": "VT03032: the target table (select foo, col, bar from `user`) as u of the UPDATE is not updatable"
+    "plan": "VT03032: the target table (select foo, col, bar from `user`) as u of the UPDATE is not updatable",
+    "skip_e2e": true
   },
   {
     "comment": "update with derived table",
     "query": "update (select id from user) as u set id = 4",
-    "plan": "VT03032: the target table (select id from `user`) as u of the UPDATE is not updatable"
+    "plan": "VT03032: the target table (select id from `user`) as u of the UPDATE is not updatable",
+    "skip_e2e": true
   },
   {
     "comment": "Delete with routed table on music",
@@ -6103,7 +6368,8 @@
       "TablesUsed": [
         "user.music"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Update with routed table on music",
@@ -6125,7 +6391,8 @@
       "TablesUsed": [
         "user.music"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Insert with routed table on music",
@@ -6151,7 +6418,8 @@
       "TablesUsed": [
         "user.music"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "sharded subquery in sharded delete",
@@ -6207,7 +6475,8 @@
         "user.music",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "unsharded subquery in sharded delete",
@@ -6255,7 +6524,8 @@
         "main.unsharded",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "sharded subquery in unsharded delete",
@@ -6300,7 +6570,8 @@
         "main.unsharded",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "sharded subquery in unsharded subquery in unsharded delete",
@@ -6367,7 +6638,8 @@
         "main.unsharded",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "sharded join unsharded subquery in unsharded delete",
@@ -6438,7 +6710,8 @@
         "main.unsharded",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "multi target delete on sharded table",
@@ -6530,7 +6803,8 @@
         "user.music",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "delete with multi-table targets",
@@ -6625,7 +6899,8 @@
         "user.music",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "multi table delete with 2 sharded tables join on vindex column",
@@ -6694,7 +6969,8 @@
         "user.music",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "multi table delete with 2 sharded tables join on non-vindex column",
@@ -6785,7 +7061,8 @@
         "user.music",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "multi target delete with composite primary key having single column vindex",
@@ -6851,7 +7128,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "multi target delete with composite primary key with lookup vindex as sharding column",
@@ -6917,7 +7195,8 @@
         "ordering.order",
         "ordering.order_event"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "update with multi table reference with multi target update",
@@ -7002,7 +7281,8 @@
         "user.music",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "RowAlias in INSERT",
@@ -7028,7 +7308,8 @@
       "TablesUsed": [
         "user.authoritative"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "RowAlias with explicit columns in INSERT",
@@ -7054,7 +7335,8 @@
       "TablesUsed": [
         "user.authoritative"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "RowAlias in INSERT (no column list)",
@@ -7080,7 +7362,8 @@
       "TablesUsed": [
         "user.authoritative"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "RowAlias with explicit columns in INSERT (no column list)",
@@ -7106,6 +7389,7 @@
       "TablesUsed": [
         "user.authoritative"
       ]
-    }
+    },
+    "skip_e2e": true
   }
 ]

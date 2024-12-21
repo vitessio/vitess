@@ -22,21 +22,25 @@ import (
 	"vitess.io/vitess/go/test/endtoend/utils"
 )
 
-func TestSelectCases(t *testing.T) {
+func TestE2ECases(t *testing.T) {
+	e2eTestCaseFiles := []string{"select_cases.json", "filter_cases.json", "dml_cases.json"}
 	mcmp, closer := start(t)
 	defer closer()
-	tests := readJSONTests("select_cases.json")
-	for _, test := range tests {
-		mcmp.Run(test.Comment, func(mcmp *utils.MySQLCompare) {
-			if test.SkipE2E {
-				mcmp.AsT().Skip(test.Query)
-			}
-			mcmp.Exec(test.Query)
-			pd := utils.ExecTrace(mcmp.AsT(), mcmp.VtConn, test.Query)
-			verifyTestExpectations(mcmp.AsT(), pd, test)
-			if mcmp.VtConn.IsClosed() {
-				mcmp.AsT().Fatal("vtgate connection is closed")
-			}
-		})
+	loadSampleData(t, mcmp)
+	for _, fileName := range e2eTestCaseFiles {
+		tests := readJSONTests(fileName)
+		for _, test := range tests {
+			mcmp.Run(test.Comment, func(mcmp *utils.MySQLCompare) {
+				if test.SkipE2E {
+					mcmp.AsT().Skip(test.Query)
+				}
+				mcmp.Exec(test.Query)
+				pd := utils.ExecTrace(mcmp.AsT(), mcmp.VtConn, test.Query)
+				verifyTestExpectations(mcmp.AsT(), pd, test)
+				if mcmp.VtConn.IsClosed() {
+					mcmp.AsT().Fatal("vtgate connection is closed")
+				}
+			})
+		}
 	}
 }
