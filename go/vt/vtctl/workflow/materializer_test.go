@@ -1515,12 +1515,7 @@ func TestCreateLookupVindexCreateDDL(t *testing.T) {
 					setStartingVschema()
 				}()
 			}
-			lv := &lookupVindex{
-				ts:     env.ws.ts,
-				tmc:    env.ws.tmc,
-				logger: env.ws.Logger(),
-				parser: env.ws.SQLParser(),
-			}
+			lv := newLookupVindex(env.ws)
 			outms, _, _, cancelFunc, err := lv.prepareCreate(ctx, "workflow", ms.SourceKeyspace, tcase.specs, false)
 			if tcase.err != "" {
 				require.Error(t, err)
@@ -1769,12 +1764,7 @@ func TestCreateLookupVindexSourceVSchema(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		lv := &lookupVindex{
-			ts:     env.ws.ts,
-			tmc:    env.ws.tmc,
-			logger: env.ws.Logger(),
-			parser: env.ws.SQLParser(),
-		}
+		lv := newLookupVindex(env.ws)
 		_, got, _, _, err := lv.prepareCreate(ctx, "workflow", ms.SourceKeyspace, specs, false)
 		require.NoError(t, err)
 		if !proto.Equal(got, tcase.out) {
@@ -2011,12 +2001,7 @@ func TestCreateLookupVindexTargetVSchema(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			lv := &lookupVindex{
-				ts:     env.ws.ts,
-				tmc:    env.ws.tmc,
-				logger: env.ws.Logger(),
-				parser: env.ws.SQLParser(),
-			}
+			lv := newLookupVindex(env.ws)
 			_, _, got, cancelFunc, err := lv.prepareCreate(ctx, "workflow", ms.SourceKeyspace, specs, false)
 			if tcase.err != "" {
 				if err == nil || !strings.Contains(err.Error(), tcase.err) {
@@ -2139,12 +2124,7 @@ func TestCreateLookupVindexSameKeyspace(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	lv := &lookupVindex{
-		ts:     env.ws.ts,
-		tmc:    env.ws.tmc,
-		logger: env.ws.Logger(),
-		parser: env.ws.SQLParser(),
-	}
+	lv := newLookupVindex(env.ws)
 	_, got, _, _, err := lv.prepareCreate(ctx, "keyspace", ms.TargetKeyspace, specs, false)
 	require.NoError(t, err)
 	if !proto.Equal(got, want) {
@@ -2271,12 +2251,7 @@ func TestCreateCustomizedVindex(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	lv := &lookupVindex{
-		ts:     env.ws.ts,
-		tmc:    env.ws.tmc,
-		logger: env.ws.Logger(),
-		parser: env.ws.SQLParser(),
-	}
+	lv := newLookupVindex(env.ws)
 	_, got, _, _, err := lv.prepareCreate(ctx, "workflow", ms.TargetKeyspace, specs, false)
 	require.NoError(t, err)
 	if !proto.Equal(got, want) {
@@ -2395,12 +2370,7 @@ func TestCreateLookupVindexIgnoreNulls(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	lv := &lookupVindex{
-		ts:     env.ws.ts,
-		tmc:    env.ws.tmc,
-		logger: env.ws.Logger(),
-		parser: env.ws.SQLParser(),
-	}
+	lv := newLookupVindex(env.ws)
 	ms, ks, _, _, err := lv.prepareCreate(ctx, "workflow", ms.TargetKeyspace, specs, false)
 	require.NoError(t, err)
 	if !proto.Equal(wantKs, ks) {
@@ -2481,12 +2451,7 @@ func TestStopAfterCopyFlag(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	lv := &lookupVindex{
-		ts:     env.ws.ts,
-		tmc:    env.ws.tmc,
-		logger: env.ws.Logger(),
-		parser: env.ws.SQLParser(),
-	}
+	lv := newLookupVindex(env.ws)
 	ms1, _, _, _, err := lv.prepareCreate(ctx, "workflow", ms.TargetKeyspace, specs, false)
 	require.NoError(t, err)
 	require.Equal(t, ms1.StopAfterCopy, true)
