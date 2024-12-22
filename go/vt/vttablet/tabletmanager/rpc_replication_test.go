@@ -18,6 +18,7 @@ package tabletmanager
 
 import (
 	"context"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -50,11 +51,11 @@ func TestWaitForGrantsToHaveApplied(t *testing.T) {
 type demotePrimaryStallQS struct {
 	tabletserver.Controller
 	waitTime       time.Duration
-	primaryStalled bool
+	primaryStalled atomic.Bool
 }
 
 func (d *demotePrimaryStallQS) SetDemotePrimaryStalled() {
-	d.primaryStalled = true
+	d.primaryStalled.Store(true)
 }
 
 func (d *demotePrimaryStallQS) IsServing() bool {
@@ -73,8 +74,7 @@ func TestDemotePrimaryStalled(t *testing.T) {
 
 	// Create a fake query service control to intercept calls from DemotePrimary function.
 	qsc := &demotePrimaryStallQS{
-		waitTime:       2 * time.Second,
-		primaryStalled: false,
+		waitTime: 2 * time.Second,
 	}
 	// Create a tablet manager with a replica type tablet.
 	tm := &TabletManager{
@@ -91,5 +91,5 @@ func TestDemotePrimaryStalled(t *testing.T) {
 	// We make IsServing stall for over 2 seconds, which is longer than 10 * remote operation timeout.
 	// This should cause the demote primary operation to be stalled.
 	tm.demotePrimary(context.Background(), false)
-	require.True(t, qsc.primaryStalled)
+	require.True(t, qsc.primaryStalled.Load())
 }
