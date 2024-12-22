@@ -1,0 +1,17 @@
+cleanup() {
+    rm -rf /Users/rohit/vtdataroot/*
+    rm -f queries.txt
+    killall vtctldclient vtctld vttablet vtgate vtorc mysqlctl etcd
+    ps | grep /vtdataroot | awk '{print $1}' | xargs kill -9
+
+    rm -rf ~/vtdataroot/*
+    mkdir -p ~/vtdataroot
+    mkdir -p ~/vtdataroot/tmp
+    mkdir -p ~/vtdataroot/ext
+    mkdir -p ~/vtdataroot/ext/tmp
+}
+cleanup
+cd ~/vitess
+make
+cd ~/vitess/go/test/endtoend/vreplication
+./r
