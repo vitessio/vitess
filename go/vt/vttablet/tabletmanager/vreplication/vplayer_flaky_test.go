@@ -1667,13 +1667,13 @@ func TestPlayerPartialImages(t *testing.T) {
 			},
 		},
 		{
-			input: `update src set jd=JSON_SET(jd, '$.idontknow', null) where id = 3`,
+			input: `update src set jd=JSON_SET(jd, '$.idontknow', null, '$.idontknoweither', 'null') where id = 3`,
 			output: []string{
-				"update dst set jd=JSON_INSERT(`jd`, _utf8mb4'$.idontknow', CAST(_utf8mb4'null' as JSON)) where id=3",
+				"update dst set jd=JSON_INSERT(JSON_INSERT(`jd`, _utf8mb4'$.idontknow', CAST(_utf8mb4'null' as JSON)), _utf8mb4'$.idontknoweither', CAST(JSON_QUOTE(_utf8mb4'null') as JSON)) where id=3",
 			},
 			data: [][]string{
 				{"1", "{\"key1\": \"val1\", \"color\": \"red\", \"years\": 5, \"hobbies\": [\"skiing\", \"video games\", \"hiking\"]}", "blob data"},
-				{"3", "{\"key3\": \"val3\", \"idontknow\": null}", "blob data3"},
+				{"3", "{\"key3\": \"val3\", \"idontknow\": null, \"idontknoweither\": \"null\"}", "blob data3"},
 				{"12", "{\"key2\": \"val2\", \"misc\": \"{\\\"address\\\":\\\"1012 S Park\\\", \\\"town\\\":\\\"Hastings\\\", \\\"state\\\":\\\"MI\\\"}\", \"current\": true}", "newest blob data"},
 			},
 		},

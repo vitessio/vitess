@@ -106,7 +106,7 @@ func ParseBinaryJSONDiff(data []byte) (sqltypes.Value, error) {
 			// Can be a JSON null.
 			js, err := ParseBinaryJSON(data)
 			if err == nil && js.Type() == json.TypeNull {
-				return sqltypes.MakeTrusted(sqltypes.Expression, js.MarshalTo(nil)), nil
+				return sqltypes.MakeTrusted(sqltypes.Expression, js.MarshalSQLTo(nil)), nil
 			}
 			return sqltypes.Value{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
 				"invalid JSON diff operation: %d", opType)
@@ -144,8 +144,7 @@ func ParseBinaryJSONDiff(data []byte) (sqltypes.Value, error) {
 				"cannot read JSON diff value for path %q", path)
 		}
 		pos += valueLen
-		buf := value.MarshalSQLTo(nil)
-		diff.Write(buf)
+		diff.Write(value.MarshalSQLTo(nil))
 		diff.WriteByte(')')
 	}
 
