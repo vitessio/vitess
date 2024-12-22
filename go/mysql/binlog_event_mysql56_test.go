@@ -352,7 +352,7 @@ func TestMySQL56PartialUpdateRowsEvent(t *testing.T) {
 				97, 110, 97, 103, 101, 114,
 			},
 			numRows: 5,
-			want:    "JSON_INSERT(%s, _utf8mb4'$.role', _utf8mb4\"manager\")",
+			want:    "JSON_INSERT(%s, _utf8mb4'$.role', CAST(JSON_QUOTE(_utf8mb4'manager') as JSON))",
 		},
 		{
 			// The mysqlbinlog -vvv --base64-output=decode-rows output for the following event:
@@ -373,7 +373,7 @@ func TestMySQL56PartialUpdateRowsEvent(t *testing.T) {
 			},
 			name:    "REPLACE",
 			numRows: 1,
-			want:    "JSON_REPLACE(%s, _utf8mb4'$.role', _utf8mb4\"IC\")",
+			want:    "JSON_REPLACE(%s, _utf8mb4'$.role', CAST(JSON_QUOTE(_utf8mb4'IC') as JSON))",
 		},
 		{
 			name: "REMOVE",
@@ -486,7 +486,7 @@ func TestMySQL56PartialUpdateRowsEvent(t *testing.T) {
 				100, 97, 121, 2, 16, 36, 46, 102, 97, 118, 111, 114, 105, 116, 101, 95, 99, 111, 108, 111, 114,
 			},
 			numRows: 5,
-			want:    "JSON_REMOVE(JSON_REPLACE(%s, _utf8mb4'$.day', _utf8mb4\"monday\"), _utf8mb4'$.favorite_color')",
+			want:    "JSON_REMOVE(JSON_REPLACE(%s, _utf8mb4'$.day', CAST(JSON_QUOTE(_utf8mb4'monday') as JSON)), _utf8mb4'$.favorite_color')",
 		},
 		{
 			name: "INSERT and REMOVE and REPLACE",
@@ -514,7 +514,7 @@ func TestMySQL56PartialUpdateRowsEvent(t *testing.T) {
 				1, 7, 36, 46, 104, 111, 98, 98, 121, 8, 12, 6, 115, 107, 105, 105, 110, 103,
 			},
 			numRows: 1,
-			want:    "JSON_INSERT(JSON_REMOVE(JSON_REPLACE(%s, _utf8mb4'$.day', _utf8mb4\"tuesday\"), _utf8mb4'$.favorite_color'), _utf8mb4'$.hobby', _utf8mb4\"skiing\")",
+			want:    "JSON_INSERT(JSON_REMOVE(JSON_REPLACE(%s, _utf8mb4'$.day', CAST(JSON_QUOTE(_utf8mb4'tuesday') as JSON)), _utf8mb4'$.favorite_color'), _utf8mb4'$.hobby', CAST(JSON_QUOTE(_utf8mb4'skiing') as JSON))",
 		},
 		{
 			name: "REPLACE with null",
@@ -535,7 +535,7 @@ func TestMySQL56PartialUpdateRowsEvent(t *testing.T) {
 				109, 97, 105, 110, 46, 99, 111, 109, 13, 0, 0, 0, 0, 8, 36, 46, 115, 97, 108, 97, 114, 121, 2, 4, 0,
 			},
 			numRows: 1,
-			want:    "JSON_REPLACE(%s, _utf8mb4'$.salary', null)",
+			want:    "JSON_REPLACE(%s, _utf8mb4'$.salary', CAST(_utf8mb4'null' as JSON))",
 		},
 		{
 			name: "REPLACE 2 paths",
@@ -557,7 +557,7 @@ func TestMySQL56PartialUpdateRowsEvent(t *testing.T) {
 				105, 110, 46, 99, 111, 109, 27, 0, 0, 0, 0, 8, 36, 46, 115, 97, 108, 97, 114, 121, 3, 5, 110, 0, 0, 6, 36, 46, 114, 111, 108, 101, 4, 12, 2, 73, 67,
 			},
 			numRows: 1,
-			want:    "JSON_REPLACE(JSON_REPLACE(%s, _utf8mb4'$.salary', 110), _utf8mb4'$.role', _utf8mb4\"IC\")",
+			want:    "JSON_REPLACE(JSON_REPLACE(%s, _utf8mb4'$.salary', CAST(110 as JSON)), _utf8mb4'$.role', CAST(JSON_QUOTE(_utf8mb4'IC') as JSON))",
 		},
 		{
 			name: "JSON null",
@@ -624,7 +624,7 @@ func TestMySQL56PartialUpdateRowsEvent(t *testing.T) {
 				105, 110, 103, 115, 34, 44, 32, 34, 115, 116, 97, 116, 101, 34, 58, 34, 77, 73, 34, 125,
 			},
 			numRows: 1,
-			want:    "JSON_INSERT(%s, _utf8mb4'$.misc', _utf8mb4\"{\\\"address\\\":\\\"1012 S Park\\\", \\\"town\\\":\\\"Hastings\\\", \\\"state\\\":\\\"MI\\\"}\")",
+			want:    "JSON_INSERT(%s, _utf8mb4'$.misc', CAST(JSON_QUOTE(_utf8mb4'{\"address\":\"1012 S Park\", \"town\":\"Hastings\", \"state\":\"MI\"}') as JSON))",
 		},
 		{
 			name: "JSON field not updated",
