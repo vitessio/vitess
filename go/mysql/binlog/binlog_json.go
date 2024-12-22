@@ -144,10 +144,8 @@ func ParseBinaryJSONDiff(data []byte) (sqltypes.Value, error) {
 				"cannot read JSON diff value for path %q", path)
 		}
 		pos += valueLen
-		if value.Type() == json.TypeString {
-			diff.WriteString(sqlparser.Utf8mb4Str)
-		}
-		diff.Write(value.MarshalTo(nil))
+		buf := value.MarshalSQLTo(nil)
+		diff.Write(buf)
 		diff.WriteByte(')')
 	}
 
