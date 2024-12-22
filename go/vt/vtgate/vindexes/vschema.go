@@ -25,6 +25,8 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/ptr"
 
 	"vitess.io/vitess/go/json2"
@@ -1354,6 +1356,7 @@ func (vschema *VSchema) findGlobalTable(
 	}
 
 	if ok {
+		log.Infof(">>>>>>>> ambiguous %s, global tables are %+v", tablename, vschema.globalTables)
 		return nil, vterrors.Errorf(
 			vtrpcpb.Code_FAILED_PRECONDITION,
 			"ambiguous table reference: %s",

@@ -162,6 +162,8 @@ var (
 	warmingReadsPercent      = 0
 	warmingReadsQueryTimeout = 5 * time.Second
 	warmingReadsConcurrency  = 500
+
+	MarkUniqueUnshardedTablesAsGlobal = true
 )
 
 func registerFlags(fs *pflag.FlagSet) {
@@ -200,6 +202,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.IntVar(&warmingReadsConcurrency, "warming-reads-concurrency", 500, "Number of concurrent warming reads allowed")
 	fs.DurationVar(&warmingReadsQueryTimeout, "warming-reads-query-timeout", 5*time.Second, "Timeout of warming read queries")
 
+	fs.BoolVar(&MarkUniqueUnshardedTablesAsGlobal, "mark_unique_unsharded_tables_as_global", MarkUniqueUnshardedTablesAsGlobal, "Mark unique unsharded tables as global tables")
 	viperutil.BindFlags(fs,
 		enableOnlineDDL,
 		enableDirectDDL,

@@ -197,7 +197,10 @@ func (vm *VSchemaManager) buildAndEnhanceVSchema(v *vschemapb.SrvVSchema) *vinde
 		// Add tables from schema tracking into globally routable tables, if they are not already present.
 		// We need to skip if already present, to handle the case where MoveTables has switched traffic
 		// and removed the source vschema but not from the source database because user asked to --keep-data
-		vindexes.AddAdditionalGlobalTables(v, vschema)
+		if MarkUniqueUnshardedTablesAsGlobal {
+			log.Infof(">>>>>>>> Marking unique unsharded tables as global")
+			vindexes.AddAdditionalGlobalTables(v, vschema)
+		}
 	}
 	return vschema
 }
