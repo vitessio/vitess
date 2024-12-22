@@ -83,7 +83,7 @@ func ParseBinaryJSONDiff(data []byte) (sqltypes.Value, error) {
 	// Reasonable estimate of the space we'll need to build the SQL
 	// expression in order to try and avoid reallocations w/o
 	// overallocating too much.
-	diff.Grow(int(float32(len(data)) * 1.25))
+	diff.Grow(len(data) + 80)
 	pos := 0
 	outer := false
 	innerStr := ""
