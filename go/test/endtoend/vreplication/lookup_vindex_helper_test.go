@@ -29,7 +29,7 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
-type lookupIndex struct {
+type lookupVindex struct {
 	typ                string
 	name               string
 	tableKeyspace      string
@@ -42,64 +42,64 @@ type lookupIndex struct {
 	t *testing.T
 }
 
-func (li *lookupIndex) String() string {
-	return li.typ + " " + li.name + " on " + li.tableKeyspace + "." + li.table + " (" + li.columns[0] + ")"
+func (lv *lookupVindex) String() string {
+	return lv.typ + " " + lv.name + " on " + lv.tableKeyspace + "." + lv.table + " (" + lv.columns[0] + ")"
 }
 
-func (li *lookupIndex) create() {
-	cols := strings.Join(li.columns, ",")
+func (lv *lookupVindex) create() {
+	cols := strings.Join(lv.columns, ",")
 	args := []string{
 		"LookupVindex",
-		"--name", li.name,
-		"--table-keyspace=" + li.ownerTableKeyspace,
+		"--name", lv.name,
+		"--table-keyspace=" + lv.ownerTableKeyspace,
 		"create",
-		"--keyspace=" + li.tableKeyspace,
-		"--type=" + li.typ,
-		"--table-owner=" + li.ownerTable,
+		"--keyspace=" + lv.tableKeyspace,
+		"--type=" + lv.typ,
+		"--table-owner=" + lv.ownerTable,
 		"--table-owner-columns=" + cols,
 		"--tablet-types=PRIMARY",
 	}
-	if li.ignoreNulls {
+	if lv.ignoreNulls {
 		args = append(args, "--ignore-nulls")
 	}
 
 	err := vc.VtctldClient.ExecuteCommand(args...)
-	require.NoError(li.t, err, "error executing LookupVindex create: %v", err)
-	waitForWorkflowState(li.t, vc, fmt.Sprintf("%s.%s", li.ownerTableKeyspace, li.name), binlogdatapb.VReplicationWorkflowState_Running.String())
-	li.expectWriteOnly(true)
+	require.NoError(lv.t, err, "error executing LookupVindex create: %v", err)
+	waitForWorkflowState(lv.t, vc, fmt.Sprintf("%s.%s", lv.ownerTableKeyspace, lv.name), binlogdatapb.VReplicationWorkflowState_Running.String())
+	lv.expectWriteOnly(true)
 }
 
-func (li *lookupIndex) cancel() {
+func (lv *lookupVindex) cancel() {
 	panic("not implemented")
 }
 
-func (li *lookupIndex) externalize() {
+func (lv *lookupVindex) externalize() {
 	args := []string{
 		"LookupVindex",
-		"--name", li.name,
-		"--table-keyspace=" + li.ownerTableKeyspace,
+		"--name", lv.name,
+		"--table-keyspace=" + lv.ownerTableKeyspace,
 		"externalize",
-		"--keyspace=" + li.tableKeyspace,
+		"--keyspace=" + lv.tableKeyspace,
 	}
 	err := vc.VtctldClient.ExecuteCommand(args...)
-	require.NoError(li.t, err, "error executing LookupVindex externalize: %v", err)
-	li.expectWriteOnly(false)
+	require.NoError(lv.t, err, "error executing LookupVindex externalize: %v", err)
+	lv.expectWriteOnly(false)
 }
 
-func (li *lookupIndex) show() error {
+func (lv *lookupVindex) show() error {
 	return nil
 }
 
-func (li *lookupIndex) expectWriteOnly(expected bool) {
-	vschema, err := vc.VtctldClient.ExecuteCommandWithOutput("GetVSchema", li.ownerTableKeyspace)
-	require.NoError(li.t, err, "error executing GetVSchema: %v", err)
-	vdx := gjson.Get(vschema, fmt.Sprintf("vindexes.%s", li.name))
-	require.NotNil(li.t, vdx, "lookup vindex %s not found", li.name)
+func (lv *lookupVindex) expectWriteOnly(expected bool) {
+	vschema, err := vc.VtctldClient.ExecuteCommandWithOutput("GetVSchema", lv.ownerTableKeyspace)
+	require.NoError(lv.t, err, "error executing GetVSchema: %v", err)
+	vdx := gjson.Get(vschema, fmt.Sprintf("vindexes.%s", lv.name))
+	require.NotNil(lv.t, vdx, "lookup vindex %s not found", lv.name)
 	want := ""
 	if expected {
 		want = "true"
 	}
-	require.Equal(li.t, want, vdx.Get("params.write_only").String(), "expected write_only parameter to be %s", want)
+	require.Equal(lv.t, want, vdx.Get("params.write_only").String(), "expected write_only parameter to be %s", want)
 }
 
 func getNumRowsInQuery(t *testing.T, query string) int {
