@@ -302,7 +302,6 @@ func TestCreateVReplicationWorkflow(t *testing.T) {
 // results returned. Followed by ensuring that SwitchTraffic
 // and ReverseTraffic also work as expected.
 func TestMoveTablesUnsharded(t *testing.T) {
-	t.Skip("Skipping test temporarily as it is flaky on CI, pending investigation")
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	sourceKs := "sourceks"
@@ -1764,7 +1763,7 @@ func addInvariants(dbClient *binlogplayer.MockDBClient, vreplID, sourceTabletUID
 		"0",
 	))
 	dbClient.AddInvariant(fmt.Sprintf(updatePickedSourceTablet, cell, sourceTabletUID, vreplID), &sqltypes.Result{})
-
+	dbClient.AddInvariant("update _vt.vreplication set state='Running', message='' where id=1", &sqltypes.Result{})
 }
 
 func addMaterializeSettingsTablesToSchema(ms *vtctldatapb.MaterializeSettings, tenv *testEnv, venv *vtenv.Environment) {
