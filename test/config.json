@@ -1310,6 +1310,15 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
+		"global_routing": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestGlobalRouting", "-timeout", "30m"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vreplication_v2",
+			"RetryMax": 1,
+			"Tags": []
+		},
 		"vreplication_fk": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestFKWorkflow"],

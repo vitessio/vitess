@@ -233,11 +233,16 @@ func (h *grHelpers) getUnshardedVschema(unshardedHasVSchema bool, tables []strin
 	return vschema
 }
 
-func (h *grHelpers) rebuildGraphs(t *testing.T) {
-	err := vc.VtctldClient.ExecuteCommand("RebuildVSchemaGraph")
+func (h *grHelpers) rebuildGraphs(t *testing.T, keyspaces []string) {
+	var err error
+	for _, ks := range keyspaces {
+		err = vc.VtctldClient.ExecuteCommand("RebuildKeyspaceGraph", ks)
+		require.NoError(t, err)
+	}
 	require.NoError(t, err)
-	err = vc.VtctldClient.ExecuteCommand("RebuildKeyspaceGraph", grTestConfig.ksU1, grTestConfig.ksU2)
+	err = vc.VtctldClient.ExecuteCommand("RebuildVSchemaGraph")
 	require.NoError(t, err)
+
 }
 
 func TestGlobalRouting(t *testing.T) {
@@ -273,10 +278,13 @@ func testGlobalRouting(t *testing.T, markAsGlobal, unshardedHasVSchema bool, fun
 		h.insertData(t, config.ksU1, table, 1, config.ksU1)
 		vtgateConn, cancel := getVTGateConn()
 		waitForRowCount(t, vtgateConn, config.ksU1+"@replica", table, 1)
+		log.Infof("waitForRowCount succeeded for %s, %s", config.ksU1+"@replica", table)
 		cancel()
 	}
+	keyspaces := []string{config.ksU1}
+	h.rebuildGraphs(t, keyspaces)
+	// FIXME: figure out how to ensure vtgate has processed the updated vschema
 	time.Sleep(5 * time.Second)
-
 	funcs.postKsU1(t)
 
 	vc.AddKeyspace(t, []*Cell{zone1}, config.ksU2, "0", h.getUnshardedVschema(unshardedHasVSchema, config.ksU2Tables),
@@ -286,10 +294,12 @@ func testGlobalRouting(t *testing.T, markAsGlobal, unshardedHasVSchema bool, fun
 		h.insertData(t, config.ksU2, table, 1, config.ksU2)
 		vtgateConn, cancel := getVTGateConn()
 		waitForRowCount(t, vtgateConn, config.ksU2+"@replica", table, 1)
+		log.Infof("waitForRowCount succeeded for %s, %s", config.ksU2+"@replica", table)
 		cancel()
 	}
+	keyspaces = append(keyspaces, config.ksU2)
+	h.rebuildGraphs(t, keyspaces)
 	time.Sleep(5 * time.Second)
-	h.rebuildGraphs(t)
 	funcs.postKsU2(t)
 
 	vc.AddKeyspace(t, []*Cell{zone1}, config.ksS1, "-80,80-", h.getShardedVSchema(config.ksS1Tables), h.getSchema(config.ksS1Tables),
@@ -299,9 +309,11 @@ func testGlobalRouting(t *testing.T, markAsGlobal, unshardedHasVSchema bool, fun
 		h.insertData(t, config.ksS1, table, 1, config.ksS1)
 		vtgateConn, cancel := getVTGateConn()
 		waitForRowCount(t, vtgateConn, config.ksS1+"@replica", table, 1)
+		log.Infof("waitForRowCount succeeded for %s, %s", config.ksS1+"@replica", table)
 		cancel()
 	}
+	keyspaces = append(keyspaces, config.ksS1)
+	h.rebuildGraphs(t, keyspaces)
 	time.Sleep(5 * time.Second)
-	h.rebuildGraphs(t)
 	funcs.postKsS1(t)
 }
