@@ -209,7 +209,7 @@ func ParseBinaryJSONDiff(data []byte) (sqltypes.Value, error) {
 		diff.Write(path)
 		diff.WriteByte('\'')
 		if opType == jsonDiffOpRemove { // No value for remove
-			diff.WriteByte(')')
+			diff.WriteByte(')') // Close the JSON function
 			continue
 		}
 
