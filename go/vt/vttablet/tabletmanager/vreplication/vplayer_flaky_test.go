@@ -1519,6 +1519,270 @@ func TestPlayerRowMove(t *testing.T) {
 	validateQueryCountStat(t, "replicate", 3)
 }
 
+// TestPlayerPartialImages tests the behavior of the vplayer when modifying
+// a table with BLOB and JSON columns, including when modifying the Primary
+// Key for a row, when we have partial binlog images, meaning that
+// binlog-row-image=NOBLOB and/or binlog-row-value-options=PARTIAL_JSON.
+func TestPlayerPartialImages(t *testing.T) {
+	if !runPartialJSONTest {
+		t.Skip("Skipping test as binlog_row_value_options=PARTIAL_JSON is not enabled")
+	}
+
+	defer deleteTablet(addTablet(100))
+	execStatements(t, []string{
+		"create table src (id int, jd json, bd blob, primary key(id))",
+		fmt.Sprintf("create table %s.dst (id int, jd json, bd blob, primary key(id))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table src",
+		fmt.Sprintf("drop table %s.dst", vrepldb),
+	})
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "dst",
+			Filter: "select * from src",
+		}},
+	}
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	cancel, _ := startVReplication(t, bls, "")
+	defer cancel()
+
+	type testCase struct {
+		input  string
+		output []string
+		data   [][]string
+		error  string
+	}
+
+	testCases := []testCase{
+		{
+			input: "insert into src (id, jd, bd) values (1,'{\"key1\": \"val1\"}','blob data'), (2,'{\"key2\": \"val2\"}','blob data2'), (3,'{\"key3\": \"val3\"}','blob data3')",
+			output: []string{
+				"insert into dst(id,jd,bd) values (1,JSON_OBJECT(_utf8mb4'key1', _utf8mb4'val1'),_binary'blob data'), (2,JSON_OBJECT(_utf8mb4'key2', _utf8mb4'val2'),_binary'blob data2'), (3,JSON_OBJECT(_utf8mb4'key3', _utf8mb4'val3'),_binary'blob data3')",
+			},
+			data: [][]string{
+				{"1", "{\"key1\": \"val1\"}", "blob data"},
+				{"2", "{\"key2\": \"val2\"}", "blob data2"},
+				{"3", "{\"key3\": \"val3\"}", "blob data3"},
+			},
+		},
+	}
+	if runNoBlobTest {
+		testCases = append(testCases, testCase{
+			input: `update src set jd=JSON_SET(jd, '$.color', 'red') where id = 1`,
+			output: []string{
+				"update dst set jd=JSON_INSERT(`jd`, _utf8mb4'$.color', CAST(JSON_QUOTE(_utf8mb4'red') as JSON)) where id=1",
+			},
+			data: [][]string{
+				{"1", "{\"key1\": \"val1\", \"color\": \"red\"}", "blob data"},
+				{"2", "{\"key2\": \"val2\"}", "blob data2"},
+				{"3", "{\"key3\": \"val3\"}", "blob data3"},
+			},
+		})
+	} else {
+		testCases = append(testCases, testCase{
+			input: `update src set jd=JSON_SET(jd, '$.color', 'red') where id = 1`,
+			output: []string{
+				"update dst set jd=JSON_INSERT(`jd`, _utf8mb4'$.color', CAST(JSON_QUOTE(_utf8mb4'red') as JSON)), bd=_binary'blob data' where id=1",
+			},
+			data: [][]string{
+				{"1", "{\"key1\": \"val1\", \"color\": \"red\"}", "blob data"},
+				{"2", "{\"key2\": \"val2\"}", "blob data2"},
+				{"3", "{\"key3\": \"val3\"}", "blob data3"},
+			},
+		})
+	}
+	testCases = append(testCases, []testCase{
+		{
+			input: `update src set bd = 'new blob data' where id = 2`,
+			output: []string{
+				"update dst set bd=_binary'new blob data' where id=2",
+			},
+			data: [][]string{
+				{"1", "{\"key1\": \"val1\", \"color\": \"red\"}", "blob data"},
+				{"2", "{\"key2\": \"val2\"}", "new blob data"},
+				{"3", "{\"key3\": \"val3\"}", "blob data3"},
+			},
+		},
+		{
+			input: `update src set id = id+10, bd = 'newest blob data' where id = 2`,
+			output: []string{
+				"delete from dst where id=2",
+				"insert into dst(id,jd,bd) values (12,JSON_OBJECT(_utf8mb4'key2', _utf8mb4'val2'),_binary'newest blob data')",
+			},
+			data: [][]string{
+				{"1", "{\"key1\": \"val1\", \"color\": \"red\"}", "blob data"},
+				{"3", "{\"key3\": \"val3\"}", "blob data3"},
+				{"12", "{\"key2\": \"val2\"}", "newest blob data"},
+			},
+		},
+	}...)
+	if runNoBlobTest {
+		testCases = append(testCases, []testCase{
+			{
+				input: `update src set jd=JSON_SET(jd, '$.years', 5) where id = 1`,
+				output: []string{
+					"update dst set jd=JSON_INSERT(`jd`, _utf8mb4'$.years', CAST(5 as JSON)) where id=1",
+				},
+				data: [][]string{
+					{"1", "{\"key1\": \"val1\", \"color\": \"red\", \"years\": 5}", "blob data"},
+					{"3", "{\"key3\": \"val3\"}", "blob data3"},
+					{"12", "{\"key2\": \"val2\"}", "newest blob data"},
+				},
+			},
+			{
+				input: `update src set jd=JSON_SET(jd, '$.hobbies', JSON_ARRAY('skiing', 'video games', 'hiking')) where id = 1`,
+				output: []string{
+					"update dst set jd=JSON_INSERT(`jd`, _utf8mb4'$.hobbies', JSON_ARRAY(_utf8mb4'skiing', _utf8mb4'video games', _utf8mb4'hiking')) where id=1",
+				},
+				data: [][]string{
+					{"1", "{\"key1\": \"val1\", \"color\": \"red\", \"years\": 5, \"hobbies\": [\"skiing\", \"video games\", \"hiking\"]}", "blob data"},
+					{"3", "{\"key3\": \"val3\"}", "blob data3"},
+					{"12", "{\"key2\": \"val2\"}", "newest blob data"},
+				},
+			},
+			{
+				input: `update src set jd=JSON_SET(jd, '$.misc', '{"address":"1012 S Park", "town":"Hastings", "state":"MI"}') where id = 12`,
+				output: []string{
+					"update dst set jd=JSON_INSERT(`jd`, _utf8mb4'$.misc', CAST(JSON_QUOTE(_utf8mb4'{\"address\":\"1012 S Park\", \"town\":\"Hastings\", \"state\":\"MI\"}') as JSON)) where id=12",
+				},
+				data: [][]string{
+					{"1", "{\"key1\": \"val1\", \"color\": \"red\", \"years\": 5, \"hobbies\": [\"skiing\", \"video games\", \"hiking\"]}", "blob data"},
+					{"3", "{\"key3\": \"val3\"}", "blob data3"},
+					{"12", "{\"key2\": \"val2\", \"misc\": \"{\\\"address\\\":\\\"1012 S Park\\\", \\\"town\\\":\\\"Hastings\\\", \\\"state\\\":\\\"MI\\\"}\"}", "newest blob data"},
+				},
+			},
+			{
+				input: `update src set jd=JSON_SET(jd, '$.current', true) where id = 12`,
+				output: []string{
+					"update dst set jd=JSON_INSERT(`jd`, _utf8mb4'$.current', CAST(_utf8mb4'true' as JSON)) where id=12",
+				},
+				data: [][]string{
+					{"1", "{\"key1\": \"val1\", \"color\": \"red\", \"years\": 5, \"hobbies\": [\"skiing\", \"video games\", \"hiking\"]}", "blob data"},
+					{"3", "{\"key3\": \"val3\"}", "blob data3"},
+					{"12", "{\"key2\": \"val2\", \"misc\": \"{\\\"address\\\":\\\"1012 S Park\\\", \\\"town\\\":\\\"Hastings\\\", \\\"state\\\":\\\"MI\\\"}\", \"current\": true}", "newest blob data"},
+				},
+			},
+			{
+				input: `update src set jd=JSON_SET(jd, '$.idontknow', null, '$.idontknoweither', 'null') where id = 3`,
+				output: []string{
+					"update dst set jd=JSON_INSERT(JSON_INSERT(`jd`, _utf8mb4'$.idontknow', CAST(_utf8mb4'null' as JSON)), _utf8mb4'$.idontknoweither', CAST(JSON_QUOTE(_utf8mb4'null') as JSON)) where id=3",
+				},
+				data: [][]string{
+					{"1", "{\"key1\": \"val1\", \"color\": \"red\", \"years\": 5, \"hobbies\": [\"skiing\", \"video games\", \"hiking\"]}", "blob data"},
+					{"3", "{\"key3\": \"val3\", \"idontknow\": null, \"idontknoweither\": \"null\"}", "blob data3"},
+					{"12", "{\"key2\": \"val2\", \"misc\": \"{\\\"address\\\":\\\"1012 S Park\\\", \\\"town\\\":\\\"Hastings\\\", \\\"state\\\":\\\"MI\\\"}\", \"current\": true}", "newest blob data"},
+				},
+			},
+			{
+				input: `update src set id = id+10 where id = 3`,
+				error: "binary log event missing a needed value for dst.bd due to not using binlog-row-image=FULL",
+			},
+		}...)
+	} else {
+		testCases = append(testCases, []testCase{
+			{
+				input: `update src set jd=JSON_SET(jd, '$.years', 5) where id = 1`,
+				output: []string{
+					"update dst set jd=JSON_INSERT(`jd`, _utf8mb4'$.years', CAST(5 as JSON)), bd=_binary'blob data' where id=1",
+				},
+				data: [][]string{
+					{"1", "{\"key1\": \"val1\", \"color\": \"red\", \"years\": 5}", "blob data"},
+					{"3", "{\"key3\": \"val3\"}", "blob data3"},
+					{"12", "{\"key2\": \"val2\"}", "newest blob data"},
+				},
+			},
+			{
+				input: `update src set jd=JSON_SET(jd, '$.hobbies', JSON_ARRAY('skiing', 'video games', 'hiking')) where id = 1`,
+				output: []string{
+					"update dst set jd=JSON_INSERT(`jd`, _utf8mb4'$.hobbies', JSON_ARRAY(_utf8mb4'skiing', _utf8mb4'video games', _utf8mb4'hiking')), bd=_binary'blob data' where id=1",
+				},
+				data: [][]string{
+					{"1", "{\"key1\": \"val1\", \"color\": \"red\", \"years\": 5, \"hobbies\": [\"skiing\", \"video games\", \"hiking\"]}", "blob data"},
+					{"3", "{\"key3\": \"val3\"}", "blob data3"},
+					{"12", "{\"key2\": \"val2\"}", "newest blob data"},
+				},
+			},
+			{
+				input: `update src set jd=JSON_SET(jd, '$.misc', '{"address":"1012 S Park", "town":"Hastings", "state":"MI"}') where id = 12`,
+				output: []string{
+					"update dst set jd=JSON_INSERT(`jd`, _utf8mb4'$.misc', CAST(JSON_QUOTE(_utf8mb4'{\"address\":\"1012 S Park\", \"town\":\"Hastings\", \"state\":\"MI\"}') as JSON)), bd=_binary'newest blob data' where id=12",
+				},
+				data: [][]string{
+					{"1", "{\"key1\": \"val1\", \"color\": \"red\", \"years\": 5, \"hobbies\": [\"skiing\", \"video games\", \"hiking\"]}", "blob data"},
+					{"3", "{\"key3\": \"val3\"}", "blob data3"},
+					{"12", "{\"key2\": \"val2\", \"misc\": \"{\\\"address\\\":\\\"1012 S Park\\\", \\\"town\\\":\\\"Hastings\\\", \\\"state\\\":\\\"MI\\\"}\"}", "newest blob data"},
+				},
+			},
+			{
+				input: `update src set jd=JSON_SET(jd, '$.current', true) where id = 12`,
+				output: []string{
+					"update dst set jd=JSON_INSERT(`jd`, _utf8mb4'$.current', CAST(_utf8mb4'true' as JSON)), bd=_binary'newest blob data' where id=12",
+				},
+				data: [][]string{
+					{"1", "{\"key1\": \"val1\", \"color\": \"red\", \"years\": 5, \"hobbies\": [\"skiing\", \"video games\", \"hiking\"]}", "blob data"},
+					{"3", "{\"key3\": \"val3\"}", "blob data3"},
+					{"12", "{\"key2\": \"val2\", \"misc\": \"{\\\"address\\\":\\\"1012 S Park\\\", \\\"town\\\":\\\"Hastings\\\", \\\"state\\\":\\\"MI\\\"}\", \"current\": true}", "newest blob data"},
+				},
+			},
+			{
+				input: `update src set jd=JSON_SET(jd, '$.idontknow', null, '$.idontknoweither', 'null') where id = 3`,
+				output: []string{
+					"update dst set jd=JSON_INSERT(JSON_INSERT(`jd`, _utf8mb4'$.idontknow', CAST(_utf8mb4'null' as JSON)), _utf8mb4'$.idontknoweither', CAST(JSON_QUOTE(_utf8mb4'null') as JSON)), bd=_binary'blob data3' where id=3",
+				},
+				data: [][]string{
+					{"1", "{\"key1\": \"val1\", \"color\": \"red\", \"years\": 5, \"hobbies\": [\"skiing\", \"video games\", \"hiking\"]}", "blob data"},
+					{"3", "{\"key3\": \"val3\", \"idontknow\": null, \"idontknoweither\": \"null\"}", "blob data3"},
+					{"12", "{\"key2\": \"val2\", \"misc\": \"{\\\"address\\\":\\\"1012 S Park\\\", \\\"town\\\":\\\"Hastings\\\", \\\"state\\\":\\\"MI\\\"}\", \"current\": true}", "newest blob data"},
+				},
+			},
+			{
+				input: `update src set id = id+10 where id = 3`,
+				output: []string{
+					"delete from dst where id=3",
+					"insert into dst(id,jd,bd) values (13,JSON_OBJECT(_utf8mb4'idontknow', null, _utf8mb4'idontknoweither', _utf8mb4'null', _utf8mb4'key3', _utf8mb4'val3'),_binary'blob data3')",
+				},
+				data: [][]string{
+					{"1", "{\"key1\": \"val1\", \"color\": \"red\", \"years\": 5, \"hobbies\": [\"skiing\", \"video games\", \"hiking\"]}", "blob data"},
+					{"12", "{\"key2\": \"val2\", \"misc\": \"{\\\"address\\\":\\\"1012 S Park\\\", \\\"town\\\":\\\"Hastings\\\", \\\"state\\\":\\\"MI\\\"}\", \"current\": true}", "newest blob data"},
+					{"13", "{\"key3\": \"val3\", \"idontknow\": null, \"idontknoweither\": \"null\"}", "blob data3"},
+				},
+			},
+		}...)
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.input, func(t *testing.T) {
+			execStatements(t, []string{tc.input})
+			var want qh.ExpectationSequencer
+			if tc.error != "" {
+				want = qh.Expect(
+					"rollback",
+				).Then(qh.Immediately(
+					fmt.Sprintf("/update _vt.vreplication set message=.*%s.*", tc.error),
+				))
+				expectDBClientQueries(t, want)
+			} else {
+				want = qh.Expect(
+					"begin",
+					tc.output...,
+				).Then(qh.Immediately(
+					"/update _vt.vreplication set pos=",
+					"commit",
+				))
+				expectDBClientQueries(t, want)
+				expectData(t, "dst", tc.data)
+			}
+		})
+	}
+}
+
 func TestPlayerTypes(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 	execStatements(t, []string{
@@ -1575,12 +1839,14 @@ func TestPlayerTypes(t *testing.T) {
 	}
 	cancel, _ := startVReplication(t, bls, "")
 	defer cancel()
+
 	type testcase struct {
 		input  string
 		output string
 		table  string
 		data   [][]string
 	}
+
 	testcases := []testcase{{
 		input:  "insert into vitess_ints values(-128, 255, -32768, 65535, -8388608, 16777215, -2147483648, 4294967295, -9223372036854775808, 18446744073709551615, 2012)",
 		output: "insert into vitess_ints(tiny,tinyu,small,smallu,medium,mediumu,normal,normalu,big,bigu,y) values (-128,255,-32768,65535,-8388608,16777215,-2147483648,4294967295,-9223372036854775808,18446744073709551615,2012)",
@@ -1653,15 +1919,30 @@ func TestPlayerTypes(t *testing.T) {
 			{"1", "", "{}", "123", `{"a": [42, 100]}`, `{"foo": "bar"}`},
 			{"2", "null", `{"name": null}`, "123", `{"a": [42, 100]}`, `{"foo": "bar"}`},
 		},
-	}, {
-		input:  "update vitess_json set val1 = '{\"bar\": \"foo\"}', val4 = '{\"a\": [98, 123]}', val5 = convert(x'7b7d' using utf8mb4) where id=1",
-		output: "update vitess_json set val1=JSON_OBJECT(_utf8mb4'bar', _utf8mb4'foo'), val2=JSON_OBJECT(), val3=CAST(123 as JSON), val4=JSON_OBJECT(_utf8mb4'a', JSON_ARRAY(98, 123)), val5=JSON_OBJECT() where id=1",
-		table:  "vitess_json",
-		data: [][]string{
-			{"1", `{"bar": "foo"}`, "{}", "123", `{"a": [98, 123]}`, `{}`},
-			{"2", "null", `{"name": null}`, "123", `{"a": [42, 100]}`, `{"foo": "bar"}`},
-		},
 	}}
+	if runPartialJSONTest {
+		// With partial JSON values we don't replicate the JSON columns that aren't
+		// actually updated.
+		testcases = append(testcases, testcase{
+			input:  "update vitess_json set val1 = '{\"bar\": \"foo\"}', val4 = '{\"a\": [98, 123]}', val5 = convert(x'7b7d' using utf8mb4) where id=1",
+			output: "update vitess_json set val1=JSON_OBJECT(_utf8mb4'bar', _utf8mb4'foo'), val4=JSON_OBJECT(_utf8mb4'a', JSON_ARRAY(98, 123)), val5=JSON_OBJECT() where id=1",
+			table:  "vitess_json",
+			data: [][]string{
+				{"1", `{"bar": "foo"}`, "{}", "123", `{"a": [98, 123]}`, `{}`},
+				{"2", "null", `{"name": null}`, "123", `{"a": [42, 100]}`, `{"foo": "bar"}`},
+			},
+		})
+	} else {
+		testcases = append(testcases, testcase{
+			input:  "update vitess_json set val1 = '{\"bar\": \"foo\"}', val4 = '{\"a\": [98, 123]}', val5 = convert(x'7b7d' using utf8mb4) where id=1",
+			output: "update vitess_json set val1=JSON_OBJECT(_utf8mb4'bar', _utf8mb4'foo'), val2=JSON_OBJECT(), val3=CAST(123 as JSON), val4=JSON_OBJECT(_utf8mb4'a', JSON_ARRAY(98, 123)), val5=JSON_OBJECT() where id=1",
+			table:  "vitess_json",
+			data: [][]string{
+				{"1", `{"bar": "foo"}`, "{}", "123", `{"a": [98, 123]}`, `{}`},
+				{"2", "null", `{"name": null}`, "123", `{"a": [42, 100]}`, `{"foo": "bar"}`},
+			},
+		})
+	}
 
 	for _, tcases := range testcases {
 		execStatements(t, []string{tcases.input})

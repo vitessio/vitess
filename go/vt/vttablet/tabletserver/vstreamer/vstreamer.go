@@ -623,7 +623,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 		if vevent != nil {
 			vevents = append(vevents, vevent)
 		}
-	case ev.IsWriteRows() || ev.IsDeleteRows() || ev.IsUpdateRows():
+	case ev.IsWriteRows() || ev.IsDeleteRows() || ev.IsUpdateRows() || ev.IsPartialUpdateRows():
 		// The existence of before and after images can be used to
 		// identify statement types. It's also possible that the
 		// before and after images end up going to different shards.
@@ -973,7 +973,7 @@ func (vs *vstreamer) processJournalEvent(vevents []*binlogdatapb.VEvent, plan *s
 	}
 nextrow:
 	for _, row := range rows.Rows {
-		afterOK, afterValues, _, err := vs.extractRowAndFilter(plan, row.Data, rows.DataColumns, row.NullColumns)
+		afterOK, afterValues, _, err := vs.extractRowAndFilter(plan, row.Data, rows.DataColumns, row.NullColumns, row.JSONPartialValues)
 		if err != nil {
 			return nil, err
 		}
@@ -1011,11 +1011,14 @@ nextrow:
 func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *streamerPlan, rows mysql.Rows) ([]*binlogdatapb.VEvent, error) {
 	rowChanges := make([]*binlogdatapb.RowChange, 0, len(rows.Rows))
 	for _, row := range rows.Rows {
-		beforeOK, beforeValues, _, err := vs.extractRowAndFilter(plan, row.Identify, rows.IdentifyColumns, row.NullIdentifyColumns)
+		// The BEFORE image does not have partial JSON values so we pass an empty bitmap.
+		beforeOK, beforeValues, _, err := vs.extractRowAndFilter(plan, row.Identify, rows.IdentifyColumns, row.NullIdentifyColumns, mysql.Bitmap{})
 		if err != nil {
 			return nil, err
 		}
-		afterOK, afterValues, partial, err := vs.extractRowAndFilter(plan, row.Data, rows.DataColumns, row.NullColumns)
+		// The AFTER image is where we may have partial JSON values, as reflected in the
+		// row's JSONPartialValues bitmap.
+		afterOK, afterValues, partial, err := vs.extractRowAndFilter(plan, row.Data, rows.DataColumns, row.NullColumns, row.JSONPartialValues)
 		if err != nil {
 			return nil, err
 		}
@@ -1029,11 +1032,17 @@ func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *strea
 		if afterOK {
 			rowChange.After = sqltypes.RowToProto3(afterValues)
 			if (vs.config.ExperimentalFlags /**/ & /**/ vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage != 0) &&
-				partial {
+				(partial || row.JSONPartialValues.Count() > 0) {
 
 				rowChange.DataColumns = &binlogdatapb.RowChange_Bitmap{
 					Count: int64(rows.DataColumns.Count()),
 					Cols:  rows.DataColumns.Bits(),
+				}
+			}
+			if row.JSONPartialValues.Count() > 0 {
+				rowChange.JsonPartialValues = &binlogdatapb.RowChange_Bitmap{
+					Count: int64(row.JSONPartialValues.Count()),
+					Cols:  row.JSONPartialValues.Bits(),
 				}
 			}
 		}
@@ -1081,13 +1090,14 @@ func (vs *vstreamer) rebuildPlans() error {
 //   - true, if row needs to be skipped because of workflow filter rules
 //   - data values, array of one value per column
 //   - true, if the row image was partial (i.e. binlog_row_image=noblob and dml doesn't update one or more blob/text columns)
-func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataColumns, nullColumns mysql.Bitmap) (bool, []sqltypes.Value, bool, error) {
+func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataColumns, nullColumns mysql.Bitmap, jsonPartialValues mysql.Bitmap) (bool, []sqltypes.Value, bool, error) {
 	if len(data) == 0 {
 		return false, nil, false, nil
 	}
 	values := make([]sqltypes.Value, dataColumns.Count())
 	charsets := make([]collations.ID, len(values))
 	valueIndex := 0
+	jsonIndex := 0
 	pos := 0
 	partial := false
 	for colNum := 0; colNum < dataColumns.Count(); colNum++ {
@@ -1101,9 +1111,17 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 		}
 		if nullColumns.Bit(valueIndex) {
 			valueIndex++
+			if plan.Table.Fields[colNum].Type == querypb.Type_JSON {
+				jsonIndex++
+			}
 			continue
 		}
-		value, l, err := mysqlbinlog.CellValue(data, pos, plan.TableMap.Types[colNum], plan.TableMap.Metadata[colNum], plan.Table.Fields[colNum])
+		partialJSON := false
+		if jsonPartialValues.Count() > 0 && plan.Table.Fields[colNum].Type == querypb.Type_JSON {
+			partialJSON = jsonPartialValues.Bit(jsonIndex)
+			jsonIndex++
+		}
+		value, l, err := mysqlbinlog.CellValue(data, pos, plan.TableMap.Types[colNum], plan.TableMap.Metadata[colNum], plan.Table.Fields[colNum], partialJSON)
 		if err != nil {
 			log.Errorf("extractRowAndFilter: %s, table: %s, colNum: %d, fields: %+v, current values: %+v",
 				err, plan.Table.Name, colNum, plan.Table.Fields, values)

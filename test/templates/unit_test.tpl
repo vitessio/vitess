@@ -177,6 +177,9 @@ jobs:
 
         export NOVTADMINBUILD=1
         export VTEVALENGINETEST="{{.Evalengine}}"
+        # We sometimes need to alter the behavior based on the platform we're
+        # testing, e.g. MySQL 5.7 vs 8.0.
+        export CI_DB_PLATFORM="{{.Platform}}"
         
         eatmydata -- make unit_test | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 
