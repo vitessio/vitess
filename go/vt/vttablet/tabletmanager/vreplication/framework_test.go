@@ -169,8 +169,7 @@ func setup(ctx context.Context) (func(), int) {
 var (
 	// We run unit tests twice, first with binlog_row_image=FULL, then with NOBLOB.
 	runNoBlobTest = false
-	// When using MySQL 8.0 or later, we also set binlog_row_value_options=PARTIAL_JSON
-	// when using NOBLOB.
+	// When using MySQL 8.0 or later, we set binlog_row_value_options=PARTIAL_JSON.
 	runPartialJSONTest = false
 )
 
@@ -183,7 +182,11 @@ func TestMain(m *testing.M) {
 	exitCode := func() int {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		if err := utils.SetBinlogRowImageOptions("full", false, tempDir); err != nil {
+		// binlog-row-value-options=PARTIAL_JSON is only supported in MySQL 8.0 and later.
+		// We still run unit tests with MySQL 5.7, so we cannot add it to the cnf file
+		// when using 5.7 or mysqld will fail to start.
+		runPartialJSONTest = utils.CIDBPlatformIsMySQL8orLater()
+		if err := utils.SetBinlogRowImageOptions("full", runPartialJSONTest, tempDir); err != nil {
 			panic(err)
 		}
 		defer utils.SetBinlogRowImageOptions("", false, tempDir)
@@ -198,10 +201,6 @@ func TestMain(m *testing.M) {
 		cancel()
 
 		runNoBlobTest = true
-		// binlog-row-value-options=PARTIAL_JSON is only supported in MySQL 8.0 and later.
-		// We still run unit tests with MySQL 5.7, so we cannot add it to the cnf file
-		// when using 5.7 or mysqld will fail to start.
-		runPartialJSONTest = utils.CIDBPlatformIsMySQL8orLater()
 		if err := utils.SetBinlogRowImageOptions("noblob", runPartialJSONTest, tempDir); err != nil {
 			panic(err)
 		}
