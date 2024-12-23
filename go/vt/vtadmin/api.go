@@ -1785,7 +1785,7 @@ func (api *API) VDiffShow(ctx context.Context, req *vtadminpb.VDiffShowRequest) 
 			}
 		}
 		if report.State == string(vdiff.StartedState) {
-			progress := vdiffcmd.BuildProgressReport(report.RowsCompared, totalRowsToCompare, report.StartedAt)
+			progress := workflow.BuildProgressReport(report.RowsCompared, totalRowsToCompare, report.StartedAt)
 			report.Progress = &vtadminpb.VDiffProgress{
 				Percentage: progress.Percentage,
 				Eta:        progress.ETA,

@@ -131,6 +131,61 @@ func TestCast(t *testing.T) {
 	mcmp.AssertMatches("select cast('3.2' as unsigned)", `[[UINT64(3)]]`)
 }
 
+// TestSetAndGetLastInsertID tests that the last_insert_id function works as intended when used with different arguments.
+func TestSetAndGetLastInsertID(t *testing.T) {
+	notZero := 1
+	checkQuery := func(i string, workload string, tx bool, mcmp utils.MySQLCompare) {
+		for _, val := range []int{notZero, 0, notZero * 2} {
+			query := fmt.Sprintf(i, val)
+			name := fmt.Sprintf("%s - %s", workload, query)
+			if tx {
+				name = "tx - " + name
+			}
+			mcmp.Run(name, func(mcmp *utils.MySQLCompare) {
+				mcmp.Exec(query)
+				mcmp.Exec("select last_insert_id()")
+				t := mcmp.AsT()
+				if t.Failed() {
+					t.Log(mcmp.VExplain(query))
+				}
+			})
+		}
+		// we need this value to be not zero, and then we keep changing it so different queries don't interact with each other
+		notZero++
+	}
+
+	queries := []string{
+		"select last_insert_id(%d)",
+		"select last_insert_id(%d), id1, id2 from t1 limit 1",
+		"select last_insert_id(%d), id1, id2 from t1 where 1 = 2",
+		"select 12 from t1 where last_insert_id(%d)",
+		"update t1 set id2 = last_insert_id(%d) where id1 = 1",
+		"update t1 set id2 = last_insert_id(%d) where id1 = 2",
+		"update t1 set id2 = 88 where id1 = last_insert_id(%d)",
+		"delete from t1 where id1 = last_insert_id(%d)",
+	}
+
+	for _, workload := range []string{"olap", "oltp"} {
+		for _, tx := range []bool{true, false} {
+			mcmp, closer := start(t)
+			_, err := mcmp.VtConn.ExecuteFetch(fmt.Sprintf("set workload = %s", workload), 1000, false)
+			require.NoError(t, err)
+			if tx {
+				_, err := mcmp.VtConn.ExecuteFetch("begin", 1000, false)
+				require.NoError(t, err)
+			}
+
+			// Insert a row for UPDATE tests
+			mcmp.Exec("insert into t1 (id1, id2) values (1, 10)")
+
+			for _, query := range queries {
+				checkQuery(query, workload, tx, mcmp)
+			}
+			closer()
+		}
+	}
+}
+
 // TestVindexHints tests that vindex hints work as intended.
 func TestVindexHints(t *testing.T) {
 	mcmp, closer := start(t)

@@ -37,9 +37,11 @@ type shardStreamer struct {
 	err              error
 }
 
+var _ engine.StreamExecutor = (*shardStreamer)(nil)
+
 // StreamExecute implements the StreamExecutor interface of the Primitive executor and
 // it simply waits for a result to be available for this shard and sends it to the merge sorter.
-func (sm *shardStreamer) StreamExecute(ctx context.Context, vcursor engine.VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (sm *shardStreamer) StreamExecute(_ context.Context, _ engine.VCursor, _ map[string]*querypb.BindVariable, _, _ bool, callback func(*sqltypes.Result) error) error {
 	for result := range sm.result {
 		if err := callback(result); err != nil {
 			return err

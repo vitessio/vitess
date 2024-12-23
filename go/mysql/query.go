@@ -404,6 +404,7 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, 
 		return &sqltypes.Result{
 			RowsAffected:        packetOk.affectedRows,
 			InsertID:            packetOk.lastInsertID,
+			InsertIDChanged:     packetOk.lastInsertID > 0,
 			SessionStateChanges: packetOk.sessionStateData,
 			StatusFlags:         packetOk.statusFlags,
 			Info:                packetOk.info,

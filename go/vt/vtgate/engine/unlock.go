@@ -60,7 +60,7 @@ func (u *Unlock) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[s
 	for i := 0; i < len(rss); i++ {
 		bqs[i] = &querypb.BoundQuery{Sql: unlockTables}
 	}
-	qr, errs := vcursor.ExecuteMultiShard(ctx, u, rss, bqs, true, false)
+	qr, errs := vcursor.ExecuteMultiShard(ctx, u, rss, bqs, true, false, false)
 	return qr, vterrors.Aggregate(errs)
 }
 

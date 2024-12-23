@@ -80,13 +80,14 @@ type (
 
 	// QuerySignature is used to identify shortcuts in the planning process
 	QuerySignature struct {
-		Aggregation  bool
-		DML          bool
-		Distinct     bool
-		HashJoin     bool
-		SubQueries   bool
-		Union        bool
-		RecursiveCTE bool
+		Aggregation     bool
+		DML             bool
+		Distinct        bool
+		HashJoin        bool
+		SubQueries      bool
+		Union           bool
+		RecursiveCTE    bool
+		LastInsertIDArg bool // LastInsertIDArg is true if the query has a LAST_INSERT_ID(x) with an argument
 	}
 
 	// MirrorInfo stores information used to produce mirror
@@ -1011,6 +1012,13 @@ func canTakeSelectUnshardedShortcut(tableInfos []TableInfo) (*vindexes.Keyspace,
 
 func (st *SemTable) GetMirrorInfo() MirrorInfo {
 	return mirrorInfo(st.Tables)
+}
+
+func (st *SemTable) ShouldFetchLastInsertID() bool {
+	if st == nil {
+		return false
+	}
+	return st.QuerySignature.LastInsertIDArg
 }
 
 // mirrorInfo looks through all tables with mirror rules defined, and returns a
