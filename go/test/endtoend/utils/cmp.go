@@ -215,6 +215,18 @@ func (mcmp *MySQLCompare) Exec(query string) *sqltypes.Result {
 	return vtQr
 }
 
+// ExecVitessAndMySQL executes Vitess and MySQL with the queries provided.
+func (mcmp *MySQLCompare) ExecVitessAndMySQL(vtQ, mQ string) *sqltypes.Result {
+	mcmp.t.Helper()
+	vtQr, err := mcmp.VtConn.ExecuteFetch(vtQ, 1000, true)
+	require.NoError(mcmp.t, err, "[Vitess Error] for query: "+vtQ)
+
+	mysqlQr, err := mcmp.MySQLConn.ExecuteFetch(mQ, 1000, true)
+	require.NoError(mcmp.t, err, "[MySQL Error] for query: "+mQ)
+	compareVitessAndMySQLResults(mcmp.t, vtQ, mcmp.VtConn, vtQr, mysqlQr, CompareOptions{})
+	return vtQr
+}
+
 // ExecAssert is the same as Exec, but it only does assertions, it won't FailNow
 func (mcmp *MySQLCompare) ExecAssert(query string) *sqltypes.Result {
 	mcmp.t.Helper()

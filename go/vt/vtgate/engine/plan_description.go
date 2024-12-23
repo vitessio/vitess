@@ -152,7 +152,7 @@ func PrimitiveDescriptionFromMap(data map[string]any) (pd PrimitiveDescription, 
 		}
 	}
 	if ttt, isPresent := data["TargetTabletType"]; isPresent {
-		pd.TargetTabletType = topodatapb.TabletType(ttt.(int))
+		pd.TargetTabletType = topodatapb.TabletType(topodatapb.TabletType_value[ttt.(string)])
 	}
 	if other, isPresent := data["Other"]; isPresent {
 		pd.Other = other.(map[string]any)
