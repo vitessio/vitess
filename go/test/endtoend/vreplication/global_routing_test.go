@@ -17,9 +17,11 @@ limitations under the License.
 package vreplication
 
 import (
+	"bytes"
 	"fmt"
 	"strings"
 	"testing"
+	"text/template"
 	"time"
 
 	"github.com/stretchr/testify/require"
@@ -28,15 +30,34 @@ import (
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 )
 
-/*
-* Create unsharded keyspace with two tables, t1,t2,t3, empty vschema. Confirm global routing works. Also try @primary, @replica
-* Add another unsharded keyspace  with t2,t4,t5. Check what happens
-* Add MoveTables into sharded keyspace moving t2, t4 . Check what happens on Create/SwitchRead/SwitchWrites/Complete
-* Check global routing for each with an expectation.
-* First BEFORE and then AFTEr the logic change
- */
+type tgrTestConfig struct {
+	ksU1, ksU2, ksS1                   string
+	ksU1Tables, ksU2Tables, ksS1Tables []string
+}
 
-func getSchema(tables []string) string {
+var grTestConfig tgrTestConfig = tgrTestConfig{
+	ksU1:       "unsharded1",
+	ksU2:       "unsharded2",
+	ksS1:       "sharded1",
+	ksU1Tables: []string{"t1", "t2", "t3"},
+	ksU2Tables: []string{"t2", "t4", "t5"},
+	ksS1Tables: []string{"t2", "t4", "t6"},
+}
+
+type grTestExpectations struct {
+	postKsU1, postKsU2, postKsS1 func(t *testing.T)
+}
+
+type grTestCase struct {
+	markAsGlobal        bool
+	unshardedHasVSchema bool
+}
+
+type grHelpers struct {
+	t *testing.T
+}
+
+func (h *grHelpers) getSchema(tables []string) string {
 	var createSQL string
 	for _, table := range tables {
 		createSQL += "CREATE TABLE " + table + " (id int primary key, val varchar(32)) ENGINE=InnoDB;\n"
@@ -44,15 +65,8 @@ func getSchema(tables []string) string {
 	return createSQL
 }
 
-func insertData(t *testing.T, keyspace string, table string, id int, val string) {
-	vtgateConn, cancel := getVTGateConn()
-	defer cancel()
-	_, err := vtgateConn.ExecuteFetch(fmt.Sprintf("insert into %s.%s(id, val) values(%d, '%s')", keyspace, table, id, val), 1, false)
-	require.NoError(t, err)
-}
-
-var ksS1VSchema = `
-{
+func (h *grHelpers) getShardedVSchema(tables []string) string {
+	const vSchemaTmpl = `{
   "sharded": true,
   "vindexes": {
     "reverse_bits": {
@@ -60,15 +74,9 @@ var ksS1VSchema = `
     }
   },
   "tables": {
-    "t2": {
-      "column_vindexes": [
-        {
-          "column": "id",
-          "name": "reverse_bits"
-        }
-      ]
-    },
- 	"t4": {
+    {{- range $i, $table := .Tables}}
+    {{- if gt $i 0}},{{end}}
+    "{{ $table }}": {
       "column_vindexes": [
         {
           "column": "id",
@@ -76,11 +84,30 @@ var ksS1VSchema = `
         }
       ]
     }
+    {{- end}}
   }
 }
 `
+	type VSchemaData struct {
+		Tables []string
+	}
+	tmpl, err := template.New("vschema").Parse(vSchemaTmpl)
+	require.NoError(h.t, err)
+	var buf bytes.Buffer
+	err = tmpl.Execute(&buf, VSchemaData{tables})
+	require.NoError(h.t, err)
+	return buf.String()
+}
 
-func isGlobal(t *testing.T, tables []string, expectedVal string) bool {
+func (h *grHelpers) insertData(t *testing.T, keyspace string, table string, id int, val string) {
+	vtgateConn, cancel := getVTGateConn()
+	defer cancel()
+	_, err := vtgateConn.ExecuteFetch(fmt.Sprintf("insert into %s.%s(id, val) values(%d, '%s')",
+		keyspace, table, id, val), 1, false)
+	require.NoError(t, err)
+}
+
+func (h *grHelpers) isGlobal(t *testing.T, tables []string, expectedVal string) bool {
 	vtgateConn, cancel := getVTGateConn()
 	defer cancel()
 	var err error
@@ -100,7 +127,7 @@ func isGlobal(t *testing.T, tables []string, expectedVal string) bool {
 	return asExpected
 }
 
-func isNotGlobal(t *testing.T, tables []string) bool {
+func (h *grHelpers) isNotGlobal(t *testing.T, tables []string) bool {
 	vtgateConn, cancel := getVTGateConn()
 	defer cancel()
 	var err error
@@ -119,7 +146,7 @@ func isNotGlobal(t *testing.T, tables []string) bool {
 	return asExpected
 }
 
-func isAmbiguous(t *testing.T, tables []string) bool {
+func (h *grHelpers) isAmbiguous(t *testing.T, tables []string) bool {
 	vtgateConn, cancel := getVTGateConn()
 	defer cancel()
 	var err error
@@ -137,98 +164,62 @@ func isAmbiguous(t *testing.T, tables []string) bool {
 	return asExpected
 }
 
-type tGlobalRoutingTestConfig struct {
-	ksU1, ksU2, ksS1                   string
-	ksU1Tables, ksU2Tables, ksS1Tables []string
-}
-
-var globalRoutingTestConfig tGlobalRoutingTestConfig = tGlobalRoutingTestConfig{
-	ksU1:       "unsharded1",
-	ksU2:       "unsharded2",
-	ksS1:       "sharded1",
-	ksU1Tables: []string{"t1", "t2", "t3"},
-	ksU2Tables: []string{"t2", "t4", "t5"},
-	ksS1Tables: []string{"t2", "t4"},
-}
-
-type tGlobalRoutingTestExpectationFuncs struct {
-	postKsU1, postKsU2, postKsS1 func(t *testing.T)
-}
-
-type globalRoutingTestCase struct {
-	markAsGlobal         bool
-	unshardedHaveVSchema bool
-}
-
-func setExpectations(t *testing.T) *map[globalRoutingTestCase]*tGlobalRoutingTestExpectationFuncs {
-	var exp = make(map[globalRoutingTestCase]*tGlobalRoutingTestExpectationFuncs)
-	exp[globalRoutingTestCase{unshardedHaveVSchema: false, markAsGlobal: false}] = &tGlobalRoutingTestExpectationFuncs{
+func (h *grHelpers) getExpectations() *map[grTestCase]*grTestExpectations {
+	var exp = make(map[grTestCase]*grTestExpectations)
+	exp[grTestCase{unshardedHasVSchema: false, markAsGlobal: false}] = &grTestExpectations{
 		postKsU1: func(t *testing.T) {
-			require.True(t, isGlobal(t, []string{"t1", "t2", "t3"}, globalRoutingTestConfig.ksU1))
+			require.True(t, h.isGlobal(t, []string{"t1", "t2", "t3"}, grTestConfig.ksU1))
 		},
 		postKsU2: func(t *testing.T) {
-			require.True(t, isNotGlobal(t, []string{"t1", "t2", "t3"}))
-			require.True(t, isNotGlobal(t, []string{"t4", "t5"}))
+			require.True(t, h.isNotGlobal(t, []string{"t1", "t2", "t3"}))
+			require.True(t, h.isNotGlobal(t, []string{"t4", "t5"}))
 		},
 		postKsS1: func(t *testing.T) {
-			require.True(t, isGlobal(t, []string{"t2", "t4"}, globalRoutingTestConfig.ksS1))
-			require.True(t, isNotGlobal(t, []string{"t1", "t3"}))
-			require.True(t, isNotGlobal(t, []string{"t5"}))
+			require.True(t, h.isGlobal(t, []string{"t2", "t4"}, grTestConfig.ksS1))
+			require.True(t, h.isNotGlobal(t, []string{"t1", "t3"}))
+			require.True(t, h.isNotGlobal(t, []string{"t5"}))
+			require.True(t, h.isGlobal(t, []string{"t6"}, grTestConfig.ksS1))
 		},
 	}
-	exp[globalRoutingTestCase{unshardedHaveVSchema: false, markAsGlobal: true}] = &tGlobalRoutingTestExpectationFuncs{
+	exp[grTestCase{unshardedHasVSchema: false, markAsGlobal: true}] = &grTestExpectations{
 		postKsU1: func(t *testing.T) {
-			require.True(t, isGlobal(t, []string{"t1", "t2", "t3"}, globalRoutingTestConfig.ksU1))
+			require.True(t, h.isGlobal(t, []string{"t1", "t2", "t3"}, grTestConfig.ksU1))
 		},
 		postKsU2: func(t *testing.T) {
-			require.True(t, isGlobal(t, []string{"t1", "t3"}, globalRoutingTestConfig.ksU1))
-			require.True(t, isGlobal(t, []string{"t4", "t5"}, globalRoutingTestConfig.ksU2))
-			require.True(t, isAmbiguous(t, []string{"t2"}))
+			require.True(t, h.isGlobal(t, []string{"t1", "t3"}, grTestConfig.ksU1))
+			require.True(t, h.isGlobal(t, []string{"t4", "t5"}, grTestConfig.ksU2))
+			require.True(t, h.isAmbiguous(t, []string{"t2"}))
 		},
 		postKsS1: func(t *testing.T) {
-			require.True(t, isGlobal(t, []string{"t2", "t4"}, globalRoutingTestConfig.ksS1))
-			require.True(t, isGlobal(t, []string{"t1", "t3"}, globalRoutingTestConfig.ksU1))
-			require.True(t, isGlobal(t, []string{"t5"}, globalRoutingTestConfig.ksU2))
+			require.True(t, h.isGlobal(t, []string{"t2", "t4"}, grTestConfig.ksS1))
+			require.True(t, h.isGlobal(t, []string{"t1", "t3"}, grTestConfig.ksU1))
+			require.True(t, h.isGlobal(t, []string{"t5"}, grTestConfig.ksU2))
+			require.True(t, h.isGlobal(t, []string{"t6"}, grTestConfig.ksS1))
 		},
 	}
-	exp[globalRoutingTestCase{unshardedHaveVSchema: true, markAsGlobal: false}] = &tGlobalRoutingTestExpectationFuncs{
+	exp[grTestCase{unshardedHasVSchema: true, markAsGlobal: false}] = &grTestExpectations{
 		postKsU1: func(t *testing.T) {
-			require.True(t, isGlobal(t, []string{"t1", "t2", "t3"}, globalRoutingTestConfig.ksU1))
+			require.True(t, h.isGlobal(t, []string{"t1", "t2", "t3"}, grTestConfig.ksU1))
 		},
 		postKsU2: func(t *testing.T) {
-			require.True(t, isGlobal(t, []string{"t1", "t3"}, globalRoutingTestConfig.ksU1))
-			require.True(t, isGlobal(t, []string{"t4", "t5"}, globalRoutingTestConfig.ksU2))
-			require.True(t, isAmbiguous(t, []string{"t2"}))
+			require.True(t, h.isGlobal(t, []string{"t1", "t3"}, grTestConfig.ksU1))
+			require.True(t, h.isGlobal(t, []string{"t4", "t5"}, grTestConfig.ksU2))
+			require.True(t, h.isAmbiguous(t, []string{"t2"}))
 		},
 		postKsS1: func(t *testing.T) {
-			require.True(t, isAmbiguous(t, []string{"t2", "t4"}))
-			require.True(t, isGlobal(t, []string{"t1", "t3"}, globalRoutingTestConfig.ksU1))
-			require.True(t, isGlobal(t, []string{"t5"}, globalRoutingTestConfig.ksU2))
+			require.True(t, h.isAmbiguous(t, []string{"t2", "t4"}))
+			require.True(t, h.isGlobal(t, []string{"t1", "t3"}, grTestConfig.ksU1))
+			require.True(t, h.isGlobal(t, []string{"t5"}, grTestConfig.ksU2))
 		},
 	}
-	exp[globalRoutingTestCase{unshardedHaveVSchema: true, markAsGlobal: true}] =
-		exp[globalRoutingTestCase{unshardedHaveVSchema: true, markAsGlobal: false}]
+	exp[grTestCase{unshardedHasVSchema: true, markAsGlobal: true}] =
+		exp[grTestCase{unshardedHasVSchema: true, markAsGlobal: false}]
 	return &exp
 
 }
 
-func TestGlobalRouting(t *testing.T) {
-	exp := *setExpectations(t)
-	testCases := []globalRoutingTestCase{
-		{unshardedHaveVSchema: false, markAsGlobal: true},
-		{unshardedHaveVSchema: false, markAsGlobal: false},
-		{unshardedHaveVSchema: true, markAsGlobal: true},
-		{unshardedHaveVSchema: true, markAsGlobal: false},
-	}
-	for _, tc := range testCases {
-		funcs := exp[tc]
-		require.NotNil(t, funcs)
-		testGlobalRouting(t, tc.markAsGlobal, tc.unshardedHaveVSchema, funcs)
-	}
-}
-
-func getUnshardedVschema(unshardedHaveVSchema bool, tables []string) string {
-	if !unshardedHaveVSchema {
+func (h *grHelpers) getUnshardedVschema(unshardedHasVSchema bool, tables []string) string {
+	if !unshardedHasVSchema {
 		return ""
 	}
 	vschema := `{"tables": {`
@@ -242,7 +233,31 @@ func getUnshardedVschema(unshardedHaveVSchema bool, tables []string) string {
 	return vschema
 }
 
-func testGlobalRouting(t *testing.T, markAsGlobal, unshardedHaveVSchema bool, funcs *tGlobalRoutingTestExpectationFuncs) {
+func (h *grHelpers) rebuildGraphs(t *testing.T) {
+	err := vc.VtctldClient.ExecuteCommand("RebuildVSchemaGraph")
+	require.NoError(t, err)
+	err = vc.VtctldClient.ExecuteCommand("RebuildKeyspaceGraph", grTestConfig.ksU1, grTestConfig.ksU2)
+	require.NoError(t, err)
+}
+
+func TestGlobalRouting(t *testing.T) {
+	h := grHelpers{t}
+	exp := *h.getExpectations()
+	testCases := []grTestCase{
+		{unshardedHasVSchema: false, markAsGlobal: true},
+		{unshardedHasVSchema: false, markAsGlobal: false},
+		{unshardedHasVSchema: true, markAsGlobal: true},
+		{unshardedHasVSchema: true, markAsGlobal: false},
+	}
+	for _, tc := range testCases {
+		funcs := exp[tc]
+		require.NotNil(t, funcs)
+		testGlobalRouting(t, tc.markAsGlobal, tc.unshardedHasVSchema, funcs)
+	}
+}
+
+func testGlobalRouting(t *testing.T, markAsGlobal, unshardedHasVSchema bool, funcs *grTestExpectations) {
+	h := grHelpers{t: t}
 	setSidecarDBName("_vt")
 	vttablet.InitVReplicationConfigDefaults()
 	extraVTGateArgs = append(extraVTGateArgs, fmt.Sprintf("--mark_unique_unsharded_tables_as_global=%t", markAsGlobal))
@@ -250,39 +265,43 @@ func testGlobalRouting(t *testing.T, markAsGlobal, unshardedHaveVSchema bool, fu
 	vc = NewVitessCluster(t, nil)
 	defer vc.TearDown()
 	zone1 := vc.Cells["zone1"]
-	config := globalRoutingTestConfig
-	vc.AddKeyspace(t, []*Cell{zone1}, config.ksU1, "0", getUnshardedVschema(unshardedHaveVSchema, config.ksU1Tables),
-		getSchema(config.ksU1Tables), 1, 0, 100, nil)
+	config := grTestConfig
+	vc.AddKeyspace(t, []*Cell{zone1}, config.ksU1, "0", h.getUnshardedVschema(unshardedHasVSchema, config.ksU1Tables),
+		h.getSchema(config.ksU1Tables), 1, 0, 100, nil)
 	verifyClusterHealth(t, vc)
 	for _, table := range config.ksU1Tables {
-		insertData(t, config.ksU1, table, 1, config.ksU1)
+		h.insertData(t, config.ksU1, table, 1, config.ksU1)
+		vtgateConn, cancel := getVTGateConn()
+		waitForRowCount(t, vtgateConn, config.ksU1+"@replica", table, 1)
+		cancel()
 	}
 	time.Sleep(5 * time.Second)
+
 	funcs.postKsU1(t)
 
-	vc.AddKeyspace(t, []*Cell{zone1}, config.ksU2, "0", getUnshardedVschema(unshardedHaveVSchema, config.ksU2Tables),
-		getSchema(config.ksU2Tables), 1, 0, 200, nil)
+	vc.AddKeyspace(t, []*Cell{zone1}, config.ksU2, "0", h.getUnshardedVschema(unshardedHasVSchema, config.ksU2Tables),
+		h.getSchema(config.ksU2Tables), 1, 0, 200, nil)
 	verifyClusterHealth(t, vc)
 	for _, table := range config.ksU2Tables {
-		insertData(t, config.ksU2, table, 1, config.ksU2)
-	}
-	time.Sleep(5 * time.Second) // FIXME: wait for the mysql replication to catch up on the replica
-	rebuild(t)
-	funcs.postKsU2(t)
-
-	vc.AddKeyspace(t, []*Cell{zone1}, config.ksS1, "-80,80-", ksS1VSchema, getSchema(config.ksS1Tables), 1, 0, 300, nil)
-	verifyClusterHealth(t, vc)
-	for _, table := range config.ksS1Tables {
-		insertData(t, config.ksS1, table, 1, config.ksS1)
+		h.insertData(t, config.ksU2, table, 1, config.ksU2)
+		vtgateConn, cancel := getVTGateConn()
+		waitForRowCount(t, vtgateConn, config.ksU2+"@replica", table, 1)
+		cancel()
 	}
 	time.Sleep(5 * time.Second)
-	rebuild(t)
-	funcs.postKsS1(t)
-}
+	h.rebuildGraphs(t)
+	funcs.postKsU2(t)
 
-func rebuild(t *testing.T) {
-	err := vc.VtctldClient.ExecuteCommand("RebuildVSchemaGraph")
-	require.NoError(t, err)
-	err = vc.VtctldClient.ExecuteCommand("RebuildKeyspaceGraph", globalRoutingTestConfig.ksU1, globalRoutingTestConfig.ksU2)
-	require.NoError(t, err)
+	vc.AddKeyspace(t, []*Cell{zone1}, config.ksS1, "-80,80-", h.getShardedVSchema(config.ksS1Tables), h.getSchema(config.ksS1Tables),
+		1, 0, 300, nil)
+	verifyClusterHealth(t, vc)
+	for _, table := range config.ksS1Tables {
+		h.insertData(t, config.ksS1, table, 1, config.ksS1)
+		vtgateConn, cancel := getVTGateConn()
+		waitForRowCount(t, vtgateConn, config.ksS1+"@replica", table, 1)
+		cancel()
+	}
+	time.Sleep(5 * time.Second)
+	h.rebuildGraphs(t)
+	funcs.postKsS1(t)
 }
