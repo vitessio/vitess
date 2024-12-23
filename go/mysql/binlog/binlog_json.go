@@ -148,13 +148,14 @@ func ParseBinaryJSONDiff(data []byte) (sqltypes.Value, error) {
 	// (INSERT, '$.g', '"gg"')
 	// And build an SQL expression from it:
 	// JSON_INSERT(
-	// JSON_INSERT(
-	// JSON_INSERT(
-	// JSON_REMOVE(
-	// JSON_REPLACE(col, '$.a', 7),
-	// '$.d[0]'),
-	// '$.e', 'ee'),
-	// '$.f[3]', 'ff'),
+	//   JSON_INSERT(
+	//     JSON_INSERT(
+	//       JSON_REMOVE(
+	//         JSON_REPLACE(
+	//         col, '$.a', 7),
+	//       '$.d[0]'),
+	//     '$.e', 'ee'),
+	//   '$.f[3]', 'ff'),
 	// '$.g', 'gg')
 	for pos < len(data) {
 		opType := jsonDiffOp(data[pos])
@@ -164,8 +165,8 @@ func ParseBinaryJSONDiff(data []byte) (sqltypes.Value, error) {
 			// expression from the inner most function to the outer most
 			// and thus need to wrap any subsequent functions around the
 			// previous one(s). For example:
-			// The inner: JSON_REPLACE(%s, '$.a', 7)
-			// The outer: JSON_REMOVE(<inner>, '$.b')
+			//  - inner: JSON_REPLACE(%s, '$.a', 7)
+			//  - outer: JSON_REMOVE(<inner>, '$.b')
 			innerStr = diff.String()
 			diff.Reset()
 		}
@@ -202,8 +203,7 @@ func ParseBinaryJSONDiff(data []byte) (sqltypes.Value, error) {
 		// We have to specify the unicode character set for the path we
 		// use in the expression as the connection can be using a different
 		// character set (e.g. vreplication always uses set names binary).
-		// The generated path will look like this:
-		// _utf8mb4'$.role'
+		// The generated path will look like this: _utf8mb4'$.role'
 		diff.WriteString(sqlparser.Utf8mb4Str)
 		diff.WriteByte('\'')
 		diff.Write(path)
@@ -227,7 +227,7 @@ func ParseBinaryJSONDiff(data []byte) (sqltypes.Value, error) {
 		pos += valueLen
 
 		// Generate the SQL clause for the JSON diff's value. For example:
-		// "CAST(JSON_QUOTE(_utf8mb4'manager') as JSON)"
+		// CAST(JSON_QUOTE(_utf8mb4'manager') as JSON)
 		diff.Write(value.MarshalSQLTo(nil))
 		diff.WriteByte(')') // Close the JSON function
 	}
