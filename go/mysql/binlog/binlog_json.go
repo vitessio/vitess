@@ -214,19 +214,18 @@ func ParseBinaryJSONDiff(data []byte) (sqltypes.Value, error) {
 		}
 
 		diff.WriteString(", ")
-		// Read the JSON document value that we want to set.
+		// Read the value that we want to set.
 		valueLen, readTo := readVariableLength(data, pos)
 		pos = readTo
-		// The native JSON type and value that we want to
-		// set (string, number, object, array, null).
+		// Parse the native JSON type and its value that we want to set
+		// (string, number, object, array, null).
 		value, err := ParseBinaryJSON(data[pos : pos+valueLen])
 		if err != nil {
 			return sqltypes.Value{}, vterrors.Wrapf(err,
 				"cannot read JSON diff value for path %q", path)
 		}
 		pos += valueLen
-
-		// Generate the SQL clause for the JSON diff's value. For example:
+		// Generate the SQL clause for the JSON value. For example:
 		// CAST(JSON_QUOTE(_utf8mb4'manager') as JSON)
 		diff.Write(value.MarshalSQLTo(nil))
 		diff.WriteByte(')') // Close the JSON function
