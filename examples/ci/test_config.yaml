@@ -1,0 +1,7 @@
+test_cases:
+  - name: "user_insertion"
+    - query: "INSERT INTO users (email) VALUES (_binary ?)"
+    + query: "INSERT INTO users (email) VALUES (?)"
+    params:
+      - - "test@example.com"
+      + "test@example.com" 

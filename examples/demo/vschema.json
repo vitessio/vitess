@@ -1,0 +1,18 @@
+{
+  "sharded": true,
+  "vindexes": {
+    "name_index": {
+      "type": "xxhash"
+    }
+  },
+  "tables": {
+    "product": {
+      "column_vindexes": [
+        {
+          "column": "sku",
+          "name": "product_index"
+        }
+      ]
+    }
+  }
+} 

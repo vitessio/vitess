@@ -1,0 +1,18 @@
+{
+  "sharded": true,
+  "vindexes": {
+    "hash": {
+      "type": "xxhash"
+    }
+  },
+  "tables": {
+    "customer": {
+      "column_vindexes": [
+        {
+          "column": "email",
+          "name": "hash"
+        }
+      ]
+    }
+  }
+} 
