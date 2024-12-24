@@ -604,28 +604,25 @@ func TemporalRangePartitioningRetention(createTableEntity *CreateTableEntity, ex
 		// We reject this operation.
 		return nil, fmt.Errorf("retention at %s would drop all partitions in table %s", expireDatetime.Format(0), createTableEntity.Name())
 	}
-	if distinctDiffs {
-		for _, name := range droppedPartitionNames {
-			alterTable := &sqlparser.AlterTable{
-				Table: createTableEntity.Table,
-				PartitionSpec: &sqlparser.PartitionSpec{
-					Action: sqlparser.DropAction,
-				},
-			}
-			alterTable.PartitionSpec.Names = append(alterTable.PartitionSpec.Names, name)
-			diff := &AlterTableEntityDiff{alterTable: alterTable, from: createTableEntity}
-			diffs = append(diffs, diff)
-		}
-	} else {
+	appendAlterTable := func(names sqlparser.Partitions) {
 		alterTable := &sqlparser.AlterTable{
 			Table: createTableEntity.Table,
 			PartitionSpec: &sqlparser.PartitionSpec{
 				Action: sqlparser.DropAction,
+				Names:  names,
 			},
 		}
-		alterTable.PartitionSpec.Names = droppedPartitionNames
 		diff := &AlterTableEntityDiff{alterTable: alterTable, from: createTableEntity}
 		diffs = append(diffs, diff)
+	}
+	if distinctDiffs {
+		// Generate a separate ALTER TABLE for each partition to be dropped.
+		for _, name := range droppedPartitionNames {
+			appendAlterTable(sqlparser.Partitions{name})
+		}
+	} else {
+		// Generate a single ALTER TABLE for all partitions to be dropped.
+		appendAlterTable(droppedPartitionNames)
 	}
 	return diffs, nil
 }
