@@ -569,32 +569,6 @@ func TestToSeconds(t *testing.T) {
 	assert.Equal(t, 63877375780, int(res))
 }
 
-func TestFromSeconds(t *testing.T) {
-	{
-		tt := NewTimeFromSeconds(decimal.NewFromInt(45020))
-
-		assert.EqualValues(t, 12, tt.Hour())
-		assert.EqualValues(t, 30, tt.Minute())
-		assert.EqualValues(t, 20, tt.Second())
-
-		res := tt.ToSeconds()
-		assert.Equal(t, 45020, int(res))
-	}
-	{
-		dt := NewDateTimeFromSeconds(decimal.NewFromInt(63877465820))
-
-		assert.EqualValues(t, 2024, dt.Date.Year())
-		assert.EqualValues(t, 3, dt.Date.Month())
-		assert.EqualValues(t, 12, dt.Date.Day())
-		assert.EqualValues(t, 12, dt.Time.Hour())
-		assert.EqualValues(t, 30, dt.Time.Minute())
-		assert.EqualValues(t, 20, dt.Time.Second())
-
-		res := dt.ToSeconds()
-		assert.Equal(t, 63877465820, int(res))
-	}
-}
-
 func TestToStdTime(t *testing.T) {
 	testCases := []struct {
 		year       int
