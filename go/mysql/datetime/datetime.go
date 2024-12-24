@@ -778,3 +778,14 @@ func NewDateTimeFromStd(t time.Time) DateTime {
 		Time: NewTimeFromStd(t),
 	}
 }
+
+func NewDateTimeFromSeconds(seconds decimal.Decimal) DateTime {
+	secondsInt64, _ := seconds.Int64()
+	timeSeconds := secondsInt64 % (24 * 3600)
+	tt := NewTimeFromSeconds(decimal.NewFromInt(timeSeconds))
+	d := DateFromDayNumber(int(secondsInt64 / (24 * 3600)))
+	return DateTime{
+		Date: d,
+		Time: tt,
+	}
+}
