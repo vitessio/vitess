@@ -256,6 +256,16 @@ func (e *InvalidColumnInPartitionError) Error() string {
 		sqlescape.EscapeID(e.Column), sqlescape.EscapeID(e.Table))
 }
 
+type UnsupportedRangeColumnsTypeError struct {
+	Table  string
+	Column string
+	Type   string
+}
+
+func (e *UnsupportedRangeColumnsTypeError) Error() string {
+	return fmt.Sprintf("unsupported column type %s for column %s indicated by RANGE COLUMNS in table %s", e.Type, e.Column, e.Table)
+}
+
 type MissingPartitionColumnInUniqueKeyError struct {
 	Table     string
 	Column    string

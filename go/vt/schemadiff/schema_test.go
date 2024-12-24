@@ -522,6 +522,29 @@ func TestInvalidSchema(t *testing.T) {
 		{
 			schema: "create table post (id varchar(191) charset utf8mb4 not null, `title` text, primary key (`id`)); create table post_fks (id varchar(191) not null, `post_id` varchar(191) collate utf8mb4_0900_ai_ci, primary key (id), constraint post_fk foreign key (post_id) references post (id)) charset utf8mb4, collate utf8mb4_0900_as_ci;",
 		},
+		// Partitioning:
+		{
+			// RANGE COLUMNS uses valid column
+			schema: "CREATE TABLE t (id int, dt DATE, PRIMARY KEY (id, dt)) PARTITION BY RANGE COLUMNS (dt) (PARTITION p0 VALUES LESS THAN (1))",
+		},
+		{
+			// RANGE COLUMNS uses valid column
+			schema: "CREATE TABLE t (id int, i BIGINT, PRIMARY KEY (id, i)) PARTITION BY RANGE COLUMNS (i) (PARTITION p0 VALUES LESS THAN (1))",
+		},
+		{
+			// RANGE COLUMNS uses valid column
+			schema: "CREATE TABLE t (id int, v VARCHAR(100), PRIMARY KEY (id, v)) PARTITION BY RANGE COLUMNS (v) (PARTITION p0 VALUES LESS THAN (1))",
+		},
+		{
+			// RANGE COLUMNS uses non-existent column
+			schema:    "CREATE TABLE t (id int, i INT, PRIMARY KEY (id, i)) PARTITION BY RANGE COLUMNS (i2) (PARTITION p0 VALUES LESS THAN (1))",
+			expectErr: &InvalidColumnInPartitionError{Table: "t", Column: "i2"},
+		},
+		{
+			// RANGE COLUMNS uses unsupported column type
+			schema:    "CREATE TABLE t (id int, tm TIME, PRIMARY KEY (id, tm)) PARTITION BY RANGE COLUMNS (tm) (PARTITION p0 VALUES LESS THAN (1))",
+			expectErr: &UnsupportedRangeColumnsTypeError{Table: "t", Column: "tm", Type: "time"},
+		},
 	}
 	for _, ts := range tt {
 		t.Run(ts.schema, func(t *testing.T) {

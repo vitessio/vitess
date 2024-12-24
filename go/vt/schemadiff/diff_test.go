@@ -587,9 +587,11 @@ func TestDiffSchemas(t *testing.T) {
 		diffs       []string
 		cdiffs      []string
 		expectError string
-		tableRename int
 		annotated   []string
+		// hints:
+		tableRename int
 		fkStrategy  int
+		rotation    int
 	}{
 		{
 			name: "identical tables",
@@ -922,6 +924,35 @@ func TestDiffSchemas(t *testing.T) {
 				"ALTER TABLE `t` RENAME INDEX `i_idx` TO `i_alternative`",
 			},
 		},
+		// Partitions
+		{
+			name:     "change partitioning range: statements, add",
+			from:     "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20))",
+			to:       "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20), partition p3 values less than (30))",
+			rotation: RangeRotationDistinctStatements,
+			diffs: []string{
+				"alter table t1 add partition (partition p3 values less than (30))",
+			},
+			cdiffs: []string{
+				"ALTER TABLE `t1` ADD PARTITION (PARTITION `p3` VALUES LESS THAN (30))",
+			},
+		},
+		{
+			name:     "change partitioning range: statements, multiple drops, distinct",
+			from:     "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20), partition p3 values less than (30))",
+			to:       "create table t1 (id int primary key) partition by range (id) (partition p3 values less than (30))",
+			rotation: RangeRotationDistinctStatements,
+			diffs:    []string{"alter table t1 drop partition p1, p2"},
+			cdiffs:   []string{"ALTER TABLE `t1` DROP PARTITION `p1`, `p2`"},
+		},
+		{
+			name:     "change partitioning range: statements, multiple, assorted",
+			from:     "create table t1 (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20), partition p3 values less than (30))",
+			to:       "create table t1 (id int primary key) partition by range (id) (partition p2 values less than (20), partition p3 values less than (30), partition p4 values less than (40))",
+			rotation: RangeRotationDistinctStatements,
+			diffs:    []string{"alter table t1 drop partition p1", "alter table t1 add partition (partition p4 values less than (40))"},
+			cdiffs:   []string{"ALTER TABLE `t1` DROP PARTITION `p1`", "ALTER TABLE `t1` ADD PARTITION (PARTITION `p4` VALUES LESS THAN (40))"},
+		},
 		// Views
 		{
 			name: "identical views",
@@ -1043,6 +1074,7 @@ func TestDiffSchemas(t *testing.T) {
 			hints := &DiffHints{
 				TableRenameStrategy:     ts.tableRename,
 				ForeignKeyCheckStrategy: ts.fkStrategy,
+				RangeRotationStrategy:   ts.rotation,
 			}
 			diff, err := DiffSchemasSQL(env, ts.from, ts.to, hints)
 			if ts.expectError != "" {
