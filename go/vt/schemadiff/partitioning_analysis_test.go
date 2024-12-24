@@ -326,8 +326,9 @@ func TestAnalyzeTemporalRangePartitioning(t *testing.T) {
 				FuncExpr: &sqlparser.FuncExpr{
 					Name: sqlparser.NewIdentifierCI("TO_DAYS"),
 				},
+				HighestValueIntVal: 739617,
 			},
-			expectHighestValue: "2025-01-01 00:00:00",
+			expectHighestValue: "0000-00-00 00:00:00",
 		},
 		{
 			name:      "range by TO_DAYS(TIMESTAMP)",
@@ -472,7 +473,7 @@ func TestAnalyzeTemporalRangePartitioning(t *testing.T) {
 				require.NotEmpty(t, tcase.expectHighestValue)
 				dt, _, ok := datetime.ParseDateTime(tcase.expectHighestValue, -1)
 				require.True(t, ok)
-				tcase.expect.HighestValue = dt
+				tcase.expect.HighestValueDateTime = dt
 			}
 
 			assert.Equal(t, tcase.expect.IsRangePartitioned, result.IsRangePartitioned, "IsRangePartitioned")
@@ -497,7 +498,8 @@ func TestAnalyzeTemporalRangePartitioning(t *testing.T) {
 			} else {
 				assert.Nil(t, result.MaxvaluePartition, "maxvaluePartition")
 			}
-			assert.Equal(t, tcase.expect.HighestValue, result.HighestValue)
+			assert.Equal(t, tcase.expect.HighestValueDateTime, result.HighestValueDateTime)
+			assert.Equal(t, tcase.expect.HighestValueIntVal, result.HighestValueIntVal)
 		})
 	}
 }

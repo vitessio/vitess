@@ -25,7 +25,6 @@ import (
 
 	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/mysql/datetime"
-	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -93,7 +92,8 @@ type TemporalRangePartitioningAnalysis struct {
 	Col                        *ColumnDefinitionEntity        // The column used in the RANGE expression
 	FuncExpr                   *sqlparser.FuncExpr            // The function used in the RANGE expression, if any
 	MaxvaluePartition          *sqlparser.PartitionDefinition // The partition that has MAXVALUE, if any
-	HighestValue               datetime.DateTime              // The datetime value of the highest partition (excluding MAXVALUE)
+	HighestValueDateTime       datetime.DateTime              // The datetime value of the highest partition (excluding MAXVALUE)
+	HighestValueIntVal         int64                          // The integer value of the highest partition (excluding MAXVALUE)
 	Reason                     string                         // Why IsTemporalRangePartitioned is false
 	Error                      error                          // If there was an error during analysis
 }
@@ -248,15 +248,16 @@ func AnalyzeTemporalRangePartitioning(createTableEntity *CreateTableEntity) (*Te
 		if partition.Options.ValueRange.Maxvalue {
 			analysis.MaxvaluePartition = partition
 		} else {
-			highestValue, err := computeDateTime(partition.Options.ValueRange.Range[0], analysis.Col.Type(), analysis.FuncExpr)
+			highestValueDateTime, highestValueIntval, err := computeDateTime(partition.Options.ValueRange.Range[0], analysis.Col.Type(), analysis.FuncExpr)
 			if err != nil {
 				return analysis, err
 			}
-			highestValue, err = truncateDateTime(highestValue, analysis.MinimalInterval)
+			highestValueDateTime, err = truncateDateTime(highestValueDateTime, analysis.MinimalInterval)
 			if err != nil {
 				return analysis, err
 			}
-			analysis.HighestValue = highestValue
+			analysis.HighestValueDateTime = highestValueDateTime
+			analysis.HighestValueIntVal = highestValueIntval
 		}
 	}
 	return analysis, nil
@@ -289,18 +290,19 @@ func parseDateTime(s string, colType string) (result datetime.DateTime, err erro
 // computeDateTime computes a datetime value from a given expression.
 // We assume AnalyzeTemporalRangePartitioning has already executed, which means we've validated the expression
 // to be one of supported variations.
-func computeDateTime(expr sqlparser.Expr, colType string, funcExpr *sqlparser.FuncExpr) (result datetime.DateTime, err error) {
+func computeDateTime(expr sqlparser.Expr, colType string, funcExpr *sqlparser.FuncExpr) (dt datetime.DateTime, intval int64, err error) {
 	if funcExpr == nil {
 		// This is a simple column name, and we only support DATE and DATETIME types. So the value
 		// must be a literal date or datetime representation, e.g. '2021-01-05' or '2021-01-05 17:00:00'.
 		literal, ok := expr.(*sqlparser.Literal)
 		if !ok {
-			return result, fmt.Errorf("expected literal value in %s", sqlparser.CanonicalString(expr))
+			return dt, 0, fmt.Errorf("expected literal value in %s", sqlparser.CanonicalString(expr))
 		}
 		if literal.Type != sqlparser.StrVal {
-			return result, fmt.Errorf("expected string literal value in %s", sqlparser.CanonicalString(expr))
+			return dt, 0, fmt.Errorf("expected string literal value in %s", sqlparser.CanonicalString(expr))
 		}
-		return parseDateTime(literal.Val, colType)
+		dt, err = parseDateTime(literal.Val, colType)
+		return dt, 0, err
 	}
 	// The table is partitioned using a function.
 	// The function may or may not appear in the expression. Normally it will not, since MySQL computes a literal out of a
@@ -324,45 +326,48 @@ func computeDateTime(expr sqlparser.Expr, colType string, funcExpr *sqlparser.Fu
 		return true, nil
 	}, expr)
 	if err != nil {
-		return result, err
+		return dt, 0, err
 	}
 	if literal == nil {
-		return result, fmt.Errorf("expected literal value in %s", sqlparser.CanonicalString(expr))
+		return dt, 0, fmt.Errorf("expected literal value in %s", sqlparser.CanonicalString(expr))
 	}
 	if hasFuncExpr {
 		// e.g. `PARTITION p0 VALUES LESS THAN (TO_DAYS('2021-01-01'))`
 		// The literal must be a DATE or DATETIME, on which the function operates.
 		if literal.Type != sqlparser.StrVal {
-			return result, fmt.Errorf("expected string literal value in %s", sqlparser.CanonicalString(expr))
+			return dt, 0, fmt.Errorf("expected string literal value in %s", sqlparser.CanonicalString(expr))
 		}
 		// The literal is the the value we're looking for.
-		return parseDateTime(literal.Val, colType)
+		dt, err = parseDateTime(literal.Val, colType)
+		return dt, 0, err
 	}
 	// No function expression
 	// e.g. `PARTITION p0 VALUES LESS THAN (738156)`
 	// The literal must be an integer, because the function is not present in the expression.
 	if literal.Type != sqlparser.IntVal {
-		return result, fmt.Errorf("expected integer literal value in %s", sqlparser.CanonicalString(expr))
+		return dt, 0, fmt.Errorf("expected integer literal value in %s", sqlparser.CanonicalString(expr))
 	}
-	intval, err := strconv.ParseInt(literal.Val, 0, 64)
+	intval, err = strconv.ParseInt(literal.Val, 0, 64)
 	if err != nil {
-		return result, err
+		return dt, 0, err
 	}
-	// We now want to produce the original DATE or DATETIME value by reversing function on the literal.
+	return dt, intval, nil
+}
+
+func applyFuncExprToDateTime(dt datetime.DateTime, funcExpr *sqlparser.FuncExpr) (intval int64, err error) {
 	switch funcExpr.Name.Lowered() {
 	case "unix_timestamp":
-		t := time.Unix(intval, 0)
-		return datetime.NewDateTimeFromStd(t), nil
+		intval = dt.ToStdTime(time.Time{}).UTC().Unix()
 	case "to_seconds":
-		return datetime.NewDateTimeFromSeconds(decimal.NewFromInt(intval)), nil
+		intval = dt.ToSeconds()
 	case "to_days":
-		d := datetime.DateFromDayNumber(int(intval))
-		return datetime.DateTime{Date: d}, nil
+		intval = int64(datetime.MysqlDayNumber(dt.Date.Year(), dt.Date.Month(), dt.Date.Day()))
 	case "year":
-		return parseDateTime(fmt.Sprintf("%d-01-01", intval), "date")
+		intval = int64(dt.Date.Year())
 	default:
-		return result, fmt.Errorf("unsupported function %s in RANGE expression", funcExpr.Name.Lowered())
+		return 0, fmt.Errorf("unsupported funcExpr %s", funcExpr.Name.String())
 	}
+	return intval, nil
 }
 
 // temporalPartitionName returns a name for a partition, based on a given DATETIME and resolution.
@@ -452,7 +457,7 @@ func TemporalRangePartitioningNextRotation(createTableEntity *CreateTableEntity,
 		if !ok {
 			return nil, fmt.Errorf("failed to add interval %v to reference time %v", aheadInterval, reference)
 		}
-		if aheadDatetime.Compare(analysis.HighestValue) <= 0 {
+		if !analysis.HighestValueDateTime.IsZero() && aheadDatetime.Compare(analysis.HighestValueDateTime) <= 0 {
 			// This `LESS THAN` value is already covered by an existing partition.
 			continue
 		}
@@ -472,19 +477,15 @@ func TemporalRangePartitioningNextRotation(createTableEntity *CreateTableEntity,
 			}
 		case analysis.FuncExpr != nil:
 			partitionExpr.Type = sqlparser.IntVal
-			var intval int64
-			switch analysis.FuncExpr.Name.Lowered() {
-			case "unix_timestamp":
-				intval = aheadDatetime.ToStdTime(reference).UTC().Unix()
-			case "to_seconds":
-				intval = aheadDatetime.ToSeconds()
-			case "to_days":
-				intval = int64(datetime.MysqlDayNumber(aheadDatetime.Date.Year(), aheadDatetime.Date.Month(), aheadDatetime.Date.Day()))
-			case "year":
-				intval = int64(aheadDatetime.Date.Year())
-			default:
-				return nil, fmt.Errorf("unsupported partitioning rotation in table %s", createTableEntity.Name())
+			intval, err := applyFuncExprToDateTime(aheadDatetime, analysis.FuncExpr)
+			if err != nil {
+				return nil, err
 			}
+			if analysis.HighestValueDateTime.IsZero() && intval <= analysis.HighestValueIntVal {
+				// This `LESS THAN` value is already covered by an existing partition.
+				continue
+			}
+
 			partitionExpr.Val = fmt.Sprintf("%d", intval)
 		default:
 			return nil, fmt.Errorf("unsupported partitioning rotation in table %s", createTableEntity.Name())
@@ -572,12 +573,28 @@ func TemporalRangePartitioningRetention(createTableEntity *CreateTableEntity, ex
 			break
 		}
 		countValueRangePartitions++
-		value, err := computeDateTime(partition.Options.ValueRange.Range[0], analysis.Col.Type(), analysis.FuncExpr)
+		dt, intval, err := computeDateTime(partition.Options.ValueRange.Range[0], analysis.Col.Type(), analysis.FuncExpr)
 		if err != nil {
 			return nil, err
 		}
-		if value.Compare(expireDatetime) <= 0 {
-			alterTable.PartitionSpec.Names = append(alterTable.PartitionSpec.Names, partition.Name)
+		switch {
+		case dt.IsZero():
+			// Partition uses an intval, such as in:
+			// PARTITION p0 VALUES LESS THAN (738156)
+			expireIntval, err := applyFuncExprToDateTime(expireDatetime, analysis.FuncExpr)
+			if err != nil {
+				return nil, err
+			}
+			if intval <= expireIntval {
+				alterTable.PartitionSpec.Names = append(alterTable.PartitionSpec.Names, partition.Name)
+			}
+		default:
+			// Partition uses a datetime, such as in these examples:
+			// - PARTITION p0 VALUES LESS THAN ('2021-01-01 00:00:00')
+			// - PARTITION p0 VALUES LESS THAN (TO_DAYS('2021-01-01'))
+			if dt.Compare(expireDatetime) <= 0 {
+				alterTable.PartitionSpec.Names = append(alterTable.PartitionSpec.Names, partition.Name)
+			}
 		}
 	}
 	if len(alterTable.PartitionSpec.Names) == 0 {
