@@ -543,7 +543,7 @@ func TemporalRangePartitioningNextRotation(createTableEntity *CreateTableEntity,
 // TemporalRangePartitioningRetention generates a ALTER TABLE ... DROP PARTITION diff that drops all temporal partitions
 // expired by given time. The function returns nil if no partitions are expired. The functions returns an error if
 // all partitions were to be dropped, as this is highly unlikely to be the intended action.
-func TemporalRangePartitioningRetention(createTableEntity *CreateTableEntity, expire time.Time) (diff *AlterTableEntityDiff, err error) {
+func TemporalRangePartitioningRetention(createTableEntity *CreateTableEntity, expire time.Time, distinctDiffs bool) (diffs []*AlterTableEntityDiff, err error) {
 	analysis, err := AnalyzeTemporalRangePartitioning(createTableEntity)
 	if err != nil {
 		return nil, err
@@ -555,12 +555,8 @@ func TemporalRangePartitioningRetention(createTableEntity *CreateTableEntity, ex
 	if err != nil {
 		return nil, err
 	}
-	alterTable := &sqlparser.AlterTable{
-		Table: createTableEntity.Table,
-		PartitionSpec: &sqlparser.PartitionSpec{
-			Action: sqlparser.DropAction,
-		},
-	}
+
+	var droppedPartitionNames sqlparser.Partitions
 	countValueRangePartitions := 0
 	for _, partition := range createTableEntity.TableSpec.PartitionOption.Definitions {
 		if partition.Options == nil {
@@ -586,28 +582,50 @@ func TemporalRangePartitioningRetention(createTableEntity *CreateTableEntity, ex
 				return nil, err
 			}
 			if intval <= expireIntval {
-				alterTable.PartitionSpec.Names = append(alterTable.PartitionSpec.Names, partition.Name)
+				droppedPartitionNames = append(droppedPartitionNames, partition.Name)
 			}
 		case !dt.IsZero():
 			// Partition uses a datetime, such as in these examples:
 			// - PARTITION p0 VALUES LESS THAN ('2021-01-01 00:00:00')
 			// - PARTITION p0 VALUES LESS THAN (TO_DAYS('2021-01-01'))
 			if dt.Compare(expireDatetime) <= 0 {
-				alterTable.PartitionSpec.Names = append(alterTable.PartitionSpec.Names, partition.Name)
+				droppedPartitionNames = append(droppedPartitionNames, partition.Name)
 			}
 		default:
 			// Should never get here
 			return nil, fmt.Errorf("unsupported partitioning in table %s", createTableEntity.Name())
 		}
 	}
-	if len(alterTable.PartitionSpec.Names) == 0 {
+	if len(droppedPartitionNames) == 0 {
 		return nil, nil
 	}
-	if len(alterTable.PartitionSpec.Names) == countValueRangePartitions {
+	if len(droppedPartitionNames) == countValueRangePartitions {
 		// This would DROP all partitions, which is highly unlikely to be the intended action.
 		// We reject this operation.
 		return nil, fmt.Errorf("retention at %s would drop all partitions in table %s", expireDatetime.Format(0), createTableEntity.Name())
 	}
-	diff = &AlterTableEntityDiff{alterTable: alterTable, from: createTableEntity}
-	return diff, nil
+	if distinctDiffs {
+		for _, name := range droppedPartitionNames {
+			alterTable := &sqlparser.AlterTable{
+				Table: createTableEntity.Table,
+				PartitionSpec: &sqlparser.PartitionSpec{
+					Action: sqlparser.DropAction,
+				},
+			}
+			alterTable.PartitionSpec.Names = append(alterTable.PartitionSpec.Names, name)
+			diff := &AlterTableEntityDiff{alterTable: alterTable, from: createTableEntity}
+			diffs = append(diffs, diff)
+		}
+	} else {
+		alterTable := &sqlparser.AlterTable{
+			Table: createTableEntity.Table,
+			PartitionSpec: &sqlparser.PartitionSpec{
+				Action: sqlparser.DropAction,
+			},
+		}
+		alterTable.PartitionSpec.Names = droppedPartitionNames
+		diff := &AlterTableEntityDiff{alterTable: alterTable, from: createTableEntity}
+		diffs = append(diffs, diff)
+	}
+	return diffs, nil
 }

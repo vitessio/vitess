@@ -733,11 +733,12 @@ func TestTemporalRangePartitioningNextRotation(t *testing.T) {
 
 func TestTemporalRangePartitioningRetention(t *testing.T) {
 	tcases := []struct {
-		name            string
-		create          string
-		expire          string
-		expectStatement string
-		expectErr       error
+		name                     string
+		create                   string
+		expire                   string
+		expectStatement          string
+		expectDistinctStatements []string
+		expectErr                error
 	}{
 		{
 			name:      "not partitioned",
@@ -789,6 +790,9 @@ func TestTemporalRangePartitioningRetention(t *testing.T) {
 								)`,
 			expire:          "2024-12-19 00:00:00",
 			expectStatement: "ALTER TABLE `t` DROP PARTITION `p0`",
+			expectDistinctStatements: []string{
+				"ALTER TABLE `t` DROP PARTITION `p0`",
+			},
 		},
 		{
 			name: "range columns over datetime, day interval with 7 days and MAXVALUE, single partition dropped, passed threshold",
@@ -801,6 +805,9 @@ func TestTemporalRangePartitioningRetention(t *testing.T) {
 								)`,
 			expire:          "2024-12-19 01:02:03",
 			expectStatement: "ALTER TABLE `t` DROP PARTITION `p0`",
+			expectDistinctStatements: []string{
+				"ALTER TABLE `t` DROP PARTITION `p0`",
+			},
 		},
 		{
 			name: "range columns over datetime, day interval with 7 days and MAXVALUE, two partitions dropped",
@@ -813,6 +820,10 @@ func TestTemporalRangePartitioningRetention(t *testing.T) {
 								)`,
 			expire:          "2024-12-20 00:00:00",
 			expectStatement: "ALTER TABLE `t` DROP PARTITION `p0`, `p20241220`",
+			expectDistinctStatements: []string{
+				"ALTER TABLE `t` DROP PARTITION `p0`",
+				"ALTER TABLE `t` DROP PARTITION `p20241220`",
+			},
 		},
 		{
 			name: "range columns over datetime, day interval with 7 days and MAXVALUE, two partitions dropped, passed threshold",
@@ -825,6 +836,10 @@ func TestTemporalRangePartitioningRetention(t *testing.T) {
 								)`,
 			expire:          "2024-12-20 23:59:59",
 			expectStatement: "ALTER TABLE `t` DROP PARTITION `p0`, `p20241220`",
+			expectDistinctStatements: []string{
+				"ALTER TABLE `t` DROP PARTITION `p0`",
+				"ALTER TABLE `t` DROP PARTITION `p20241220`",
+			},
 		},
 		{
 			name: "range columns over datetime, day interval with 7 days and MAXVALUE, error dropping all partitions",
@@ -872,6 +887,9 @@ func TestTemporalRangePartitioningRetention(t *testing.T) {
 								)`,
 			expire:          "2024-12-19 00:00:00",
 			expectStatement: "ALTER TABLE `t` DROP PARTITION `p0`",
+			expectDistinctStatements: []string{
+				"ALTER TABLE `t` DROP PARTITION `p0`",
+			},
 		},
 		{
 			name: "day interval using TO_DAYS, DATETIME, drop 2 partitions",
@@ -884,6 +902,10 @@ func TestTemporalRangePartitioningRetention(t *testing.T) {
 								)`,
 			expire:          "2024-12-20 00:00:00",
 			expectStatement: "ALTER TABLE `t` DROP PARTITION `p0`, `p20241219`",
+			expectDistinctStatements: []string{
+				"ALTER TABLE `t` DROP PARTITION `p0`",
+				"ALTER TABLE `t` DROP PARTITION `p20241219`",
+			},
 		},
 		{
 			name: "day interval using TO_DAYS, DATETIME, error dropping all partitions",
@@ -919,6 +941,9 @@ func TestTemporalRangePartitioningRetention(t *testing.T) {
 								)`,
 			expire:          "2024-12-19 00:00:00",
 			expectStatement: "ALTER TABLE `t` DROP PARTITION `p0`",
+			expectDistinctStatements: []string{
+				"ALTER TABLE `t` DROP PARTITION `p0`",
+			},
 		},
 		{
 			name: "day interval using TO_DAYS in expression, DATETIME, drop 2 partitions",
@@ -931,6 +956,10 @@ func TestTemporalRangePartitioningRetention(t *testing.T) {
 								)`,
 			expire:          "2024-12-20 00:00:00",
 			expectStatement: "ALTER TABLE `t` DROP PARTITION `p0`, `p20241219`",
+			expectDistinctStatements: []string{
+				"ALTER TABLE `t` DROP PARTITION `p0`",
+				"ALTER TABLE `t` DROP PARTITION `p20241219`",
+			},
 		},
 		{
 			name: "day interval using TO_DAYS in expression, DATETIME, error dropping all partitions",
@@ -960,20 +989,44 @@ func TestTemporalRangePartitioningRetention(t *testing.T) {
 			entity, err := NewCreateTableEntityFromSQL(env, tcase.create)
 			require.NoError(t, err)
 
-			diff, err := TemporalRangePartitioningRetention(entity, expire)
-			if tcase.expectErr != nil {
-				require.Error(t, err)
-				assert.EqualError(t, err, tcase.expectErr.Error())
-				return
-			}
-			require.NoError(t, err)
+			// Validate test input itself
 			if tcase.expectStatement == "" {
-				assert.Nil(t, diff)
+				require.Empty(t, tcase.expectDistinctStatements)
 			} else {
-				require.NotNil(t, diff)
-				assert.Equal(t, tcase.expectStatement, diff.CanonicalStatementString())
+				require.NotEmpty(t, tcase.expectDistinctStatements)
 			}
+			t.Run("combined", func(t *testing.T) {
+				diffs, err := TemporalRangePartitioningRetention(entity, expire, false)
+				if tcase.expectErr != nil {
+					require.Error(t, err)
+					assert.EqualError(t, err, tcase.expectErr.Error())
+					return
+				}
+				require.NoError(t, err)
+				if tcase.expectStatement == "" {
+					assert.Empty(t, diffs)
+				} else {
+					require.Len(t, diffs, 1)
+					assert.Equal(t, tcase.expectStatement, diffs[0].CanonicalStatementString())
+				}
+			})
+			t.Run("distinct", func(t *testing.T) {
+				diffs, err := TemporalRangePartitioningRetention(entity, expire, true)
+				if tcase.expectErr != nil {
+					require.Error(t, err)
+					assert.EqualError(t, err, tcase.expectErr.Error())
+					return
+				}
+				require.NoError(t, err)
+				if len(tcase.expectDistinctStatements) == 0 {
+					assert.Empty(t, diffs)
+				} else {
+					require.Len(t, diffs, len(tcase.expectDistinctStatements))
+					for i, diff := range diffs {
+						assert.Equal(t, tcase.expectDistinctStatements[i], diff.CanonicalStatementString())
+					}
+				}
+			})
 		})
 	}
-
 }
