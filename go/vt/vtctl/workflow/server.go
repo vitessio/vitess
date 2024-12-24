@@ -605,7 +605,7 @@ func (s *Server) LookupVindexCreate(ctx context.Context, req *vtctldatapb.Lookup
 
 // LookupVindexExternalize externalizes a lookup vindex that's
 // finished backfilling or has caught up. If the vindex has an
-// owner then the workflow will also be deleted.
+// owner then the workflow will also be stopped.
 func (s *Server) LookupVindexExternalize(ctx context.Context, req *vtctldatapb.LookupVindexExternalizeRequest) (*vtctldatapb.LookupVindexExternalizeResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "workflow.Server.LookupVindexExternalize")
 	defer span.Finish()
@@ -614,7 +614,7 @@ func (s *Server) LookupVindexExternalize(ctx context.Context, req *vtctldatapb.L
 	span.Annotate("name", req.Name)
 	span.Annotate("table_keyspace", req.TableKeyspace)
 
-	// Find the lookup vindex by by name.
+	// Find the lookup vindex by name.
 	sourceVschema, err := s.ts.GetVSchema(ctx, req.Keyspace)
 	if err != nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get vschema for the %s keyspace", req.Keyspace)
@@ -669,22 +669,123 @@ func (s *Server) LookupVindexExternalize(ctx context.Context, req *vtctldatapb.L
 	resp := &vtctldatapb.LookupVindexExternalizeResponse{}
 
 	if vindex.Owner != "" {
-		// If there is an owner, we have to delete the streams. Once we externalize it
+		// If there is an owner, we have to stop the streams. Once we externalize it
 		// the VTGate will now be responsible for keeping the lookup table up to date
 		// with the owner table.
-		if _, derr := s.WorkflowDelete(ctx, &vtctldatapb.WorkflowDeleteRequest{
-			Keyspace:         req.TableKeyspace,
-			Workflow:         req.Name,
-			KeepData:         true, // Not relevant
-			KeepRoutingRules: true, // Not relevant
-		}); derr != nil {
-			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "failed to delete workflow %s: %v", req.Name, derr)
+		err = forAllShards(targetShards, func(si *topo.ShardInfo) error {
+			tabletInfo, err := s.ts.GetTablet(ctx, si.PrimaryAlias)
+			if err != nil {
+				return err
+			}
+			// Stop the workflow.
+			_, err = s.tmc.UpdateVReplicationWorkflow(ctx, tabletInfo.Tablet, &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
+				Workflow: req.Name,
+				State:    ptr.Of(binlogdatapb.VReplicationWorkflowState_Stopped),
+			})
+			if err != nil {
+				return vterrors.Wrapf(err, "failed to stop workflow %s on shard %s/%s", req.Name, tabletInfo.Keyspace, tabletInfo.Shard)
+			}
+			// Mark workflow as frozen.
+			query := fmt.Sprintf("update _vt.vreplication set message = '%s' where db_name=%s and workflow=%s", Frozen,
+				encodeString(tabletInfo.DbName()), encodeString(req.Name))
+			_, err = s.tmc.VReplicationExec(ctx, tabletInfo.Tablet, query)
+			return err
+		})
+		if err != nil {
+			return nil, err
 		}
-		resp.WorkflowDeleted = true
+		resp.WorkflowStopped = true
 	}
 
 	// Remove the write_only param and save the source vschema.
 	delete(vindex.Params, "write_only")
+	if err := s.ts.SaveVSchema(ctx, req.Keyspace, sourceVschema); err != nil {
+		return nil, err
+	}
+	return resp, s.ts.RebuildSrvVSchema(ctx, nil)
+}
+
+// LookupVindexInternalize internalizes a lookup vindex. If the vindex has an
+// owner then the stopped workflow will also be started.
+func (s *Server) LookupVindexInternalize(ctx context.Context, req *vtctldatapb.LookupVindexInternalizeRequest) (*vtctldatapb.LookupVindexInternalizeResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "workflow.Server.LookupVindexInternalize")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("name", req.Name)
+	span.Annotate("table_keyspace", req.TableKeyspace)
+
+	// Find the lookup vindex by name.
+	sourceVschema, err := s.ts.GetVSchema(ctx, req.Keyspace)
+	if err != nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get vschema for the %s keyspace", req.Keyspace)
+	}
+	vindex := sourceVschema.Vindexes[req.Name]
+	if vindex == nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vindex %s not found in the %s keyspace", req.Name, req.Keyspace)
+	}
+
+	targetShards, err := s.ts.GetServingShards(ctx, req.TableKeyspace)
+	if err != nil {
+		return nil, err
+	}
+
+	err = forAllShards(targetShards, func(targetShard *topo.ShardInfo) error {
+		targetPrimary, err := s.ts.GetTablet(ctx, targetShard.PrimaryAlias)
+		if err != nil {
+			return err
+		}
+		res, err := s.tmc.ReadVReplicationWorkflow(ctx, targetPrimary.Tablet, &tabletmanagerdatapb.ReadVReplicationWorkflowRequest{
+			Workflow: req.Name,
+		})
+		if err != nil {
+			return err
+		}
+		if res == nil {
+			return vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "workflow %s not found on %v", req.Name, targetPrimary.Alias)
+		}
+		for _, stream := range res.Streams {
+			if stream.Bls.Filter == nil || len(stream.Bls.Filter.Rules) != 1 {
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid binlog source")
+			}
+			if vindex.Owner == "" {
+				// If there's no owner, all streams need to be running.
+				if stream.State != binlogdatapb.VReplicationWorkflowState_Running {
+					return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "stream %d for %v.%v is not in Running state: %v", stream.Id, targetShard.Keyspace(), targetShard.ShardName(), stream.State)
+				}
+			} else {
+				// If there's an owner, all streams need to be stopped.
+				if stream.State != binlogdatapb.VReplicationWorkflowState_Stopped {
+					return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "stream %d for %v.%v is not in Stopped state: %v, %v", stream.Id, targetShard.Keyspace(), targetShard.ShardName(), stream.State, stream.Message)
+				}
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &vtctldatapb.LookupVindexInternalizeResponse{}
+	if vindex.Owner != "" {
+		err := forAllShards(targetShards, func(si *topo.ShardInfo) error {
+			tabletInfo, err := s.ts.GetTablet(ctx, si.PrimaryAlias)
+			if err != nil {
+				return err
+			}
+			query := fmt.Sprintf("update _vt.vreplication set state='Running', message='' where db_name=%s and workflow=%s",
+				encodeString(tabletInfo.DbName()), encodeString(req.Name))
+			_, err = s.tmc.VReplicationExec(ctx, tabletInfo.Tablet, query)
+			return err
+		})
+		if err != nil {
+			return nil, err
+		}
+		resp.WorkflowStarted = true
+	}
+
+	// Make the vindex back to write_only and save the source vschema.
+	vindex.Params["write_only"] = "true"
 	if err := s.ts.SaveVSchema(ctx, req.Keyspace, sourceVschema); err != nil {
 		return nil, err
 	}

@@ -299,6 +299,7 @@ type VtctldClient interface {
 	LaunchSchemaMigration(ctx context.Context, in *vtctldata.LaunchSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.LaunchSchemaMigrationResponse, error)
 	LookupVindexCreate(ctx context.Context, in *vtctldata.LookupVindexCreateRequest, opts ...grpc.CallOption) (*vtctldata.LookupVindexCreateResponse, error)
 	LookupVindexExternalize(ctx context.Context, in *vtctldata.LookupVindexExternalizeRequest, opts ...grpc.CallOption) (*vtctldata.LookupVindexExternalizeResponse, error)
+	LookupVindexInternalize(ctx context.Context, in *vtctldata.LookupVindexInternalizeRequest, opts ...grpc.CallOption) (*vtctldata.LookupVindexInternalizeResponse, error)
 	// MaterializeCreate creates a workflow to materialize one or more tables
 	// from a source keyspace to a target keyspace using a provided expressions.
 	MaterializeCreate(ctx context.Context, in *vtctldata.MaterializeCreateRequest, opts ...grpc.CallOption) (*vtctldata.MaterializeCreateResponse, error)
@@ -1107,6 +1108,15 @@ func (c *vtctldClient) LookupVindexExternalize(ctx context.Context, in *vtctldat
 	return out, nil
 }
 
+func (c *vtctldClient) LookupVindexInternalize(ctx context.Context, in *vtctldata.LookupVindexInternalizeRequest, opts ...grpc.CallOption) (*vtctldata.LookupVindexInternalizeResponse, error) {
+	out := new(vtctldata.LookupVindexInternalizeResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/LookupVindexInternalize", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vtctldClient) MaterializeCreate(ctx context.Context, in *vtctldata.MaterializeCreateRequest, opts ...grpc.CallOption) (*vtctldata.MaterializeCreateResponse, error) {
 	out := new(vtctldata.MaterializeCreateResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/MaterializeCreate", in, out, opts...)
@@ -1828,6 +1838,7 @@ type VtctldServer interface {
 	LaunchSchemaMigration(context.Context, *vtctldata.LaunchSchemaMigrationRequest) (*vtctldata.LaunchSchemaMigrationResponse, error)
 	LookupVindexCreate(context.Context, *vtctldata.LookupVindexCreateRequest) (*vtctldata.LookupVindexCreateResponse, error)
 	LookupVindexExternalize(context.Context, *vtctldata.LookupVindexExternalizeRequest) (*vtctldata.LookupVindexExternalizeResponse, error)
+	LookupVindexInternalize(context.Context, *vtctldata.LookupVindexInternalizeRequest) (*vtctldata.LookupVindexInternalizeResponse, error)
 	// MaterializeCreate creates a workflow to materialize one or more tables
 	// from a source keyspace to a target keyspace using a provided expressions.
 	MaterializeCreate(context.Context, *vtctldata.MaterializeCreateRequest) (*vtctldata.MaterializeCreateResponse, error)
@@ -2202,6 +2213,9 @@ func (UnimplementedVtctldServer) LookupVindexCreate(context.Context, *vtctldata.
 }
 func (UnimplementedVtctldServer) LookupVindexExternalize(context.Context, *vtctldata.LookupVindexExternalizeRequest) (*vtctldata.LookupVindexExternalizeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method LookupVindexExternalize not implemented")
+}
+func (UnimplementedVtctldServer) LookupVindexInternalize(context.Context, *vtctldata.LookupVindexInternalizeRequest) (*vtctldata.LookupVindexInternalizeResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method LookupVindexInternalize not implemented")
 }
 func (UnimplementedVtctldServer) MaterializeCreate(context.Context, *vtctldata.MaterializeCreateRequest) (*vtctldata.MaterializeCreateResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method MaterializeCreate not implemented")
@@ -3551,6 +3565,24 @@ func _Vtctld_LookupVindexExternalize_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vtctld_LookupVindexInternalize_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.LookupVindexInternalizeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).LookupVindexInternalize(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/LookupVindexInternalize",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).LookupVindexInternalize(ctx, req.(*vtctldata.LookupVindexInternalizeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Vtctld_MaterializeCreate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtctldata.MaterializeCreateRequest)
 	if err := dec(in); err != nil {
@@ -4870,6 +4902,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "LookupVindexExternalize",
 			Handler:    _Vtctld_LookupVindexExternalize_Handler,
+		},
+		{
+			MethodName: "LookupVindexInternalize",
+			Handler:    _Vtctld_LookupVindexInternalize_Handler,
 		},
 		{
 			MethodName: "MaterializeCreate",

@@ -195,6 +195,7 @@ service Vtctld {
 
   rpc LookupVindexCreate(vtctldata.LookupVindexCreateRequest) returns (vtctldata.LookupVindexCreateResponse) {};
   rpc LookupVindexExternalize(vtctldata.LookupVindexExternalizeRequest) returns (vtctldata.LookupVindexExternalizeResponse) {};
+  rpc LookupVindexInternalize(vtctldata.LookupVindexInternalizeRequest) returns (vtctldata.LookupVindexInternalizeResponse) {};
 
   // MaterializeCreate creates a workflow to materialize one or more tables
   // from a source keyspace to a target keyspace using a provided expressions.

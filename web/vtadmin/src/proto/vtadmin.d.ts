@@ -66143,8 +66143,8 @@ export namespace vtctldata {
     /** Properties of a LookupVindexExternalizeResponse. */
     interface ILookupVindexExternalizeResponse {
 
-        /** LookupVindexExternalizeResponse workflow_deleted */
-        workflow_deleted?: (boolean|null);
+        /** LookupVindexExternalizeResponse workflow_stopped */
+        workflow_stopped?: (boolean|null);
     }
 
     /** Represents a LookupVindexExternalizeResponse. */
@@ -66156,8 +66156,8 @@ export namespace vtctldata {
          */
         constructor(properties?: vtctldata.ILookupVindexExternalizeResponse);
 
-        /** LookupVindexExternalizeResponse workflow_deleted. */
-        public workflow_deleted: boolean;
+        /** LookupVindexExternalizeResponse workflow_stopped. */
+        public workflow_stopped: boolean;
 
         /**
          * Creates a new LookupVindexExternalizeResponse instance using the specified properties.
@@ -66231,6 +66231,212 @@ export namespace vtctldata {
 
         /**
          * Gets the default type url for LookupVindexExternalizeResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a LookupVindexInternalizeRequest. */
+    interface ILookupVindexInternalizeRequest {
+
+        /** LookupVindexInternalizeRequest keyspace */
+        keyspace?: (string|null);
+
+        /** LookupVindexInternalizeRequest name */
+        name?: (string|null);
+
+        /** LookupVindexInternalizeRequest table_keyspace */
+        table_keyspace?: (string|null);
+    }
+
+    /** Represents a LookupVindexInternalizeRequest. */
+    class LookupVindexInternalizeRequest implements ILookupVindexInternalizeRequest {
+
+        /**
+         * Constructs a new LookupVindexInternalizeRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.ILookupVindexInternalizeRequest);
+
+        /** LookupVindexInternalizeRequest keyspace. */
+        public keyspace: string;
+
+        /** LookupVindexInternalizeRequest name. */
+        public name: string;
+
+        /** LookupVindexInternalizeRequest table_keyspace. */
+        public table_keyspace: string;
+
+        /**
+         * Creates a new LookupVindexInternalizeRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns LookupVindexInternalizeRequest instance
+         */
+        public static create(properties?: vtctldata.ILookupVindexInternalizeRequest): vtctldata.LookupVindexInternalizeRequest;
+
+        /**
+         * Encodes the specified LookupVindexInternalizeRequest message. Does not implicitly {@link vtctldata.LookupVindexInternalizeRequest.verify|verify} messages.
+         * @param message LookupVindexInternalizeRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.ILookupVindexInternalizeRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified LookupVindexInternalizeRequest message, length delimited. Does not implicitly {@link vtctldata.LookupVindexInternalizeRequest.verify|verify} messages.
+         * @param message LookupVindexInternalizeRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.ILookupVindexInternalizeRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a LookupVindexInternalizeRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns LookupVindexInternalizeRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.LookupVindexInternalizeRequest;
+
+        /**
+         * Decodes a LookupVindexInternalizeRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns LookupVindexInternalizeRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.LookupVindexInternalizeRequest;
+
+        /**
+         * Verifies a LookupVindexInternalizeRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a LookupVindexInternalizeRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns LookupVindexInternalizeRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.LookupVindexInternalizeRequest;
+
+        /**
+         * Creates a plain object from a LookupVindexInternalizeRequest message. Also converts values to other types if specified.
+         * @param message LookupVindexInternalizeRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.LookupVindexInternalizeRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this LookupVindexInternalizeRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for LookupVindexInternalizeRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a LookupVindexInternalizeResponse. */
+    interface ILookupVindexInternalizeResponse {
+
+        /** LookupVindexInternalizeResponse workflow_started */
+        workflow_started?: (boolean|null);
+    }
+
+    /** Represents a LookupVindexInternalizeResponse. */
+    class LookupVindexInternalizeResponse implements ILookupVindexInternalizeResponse {
+
+        /**
+         * Constructs a new LookupVindexInternalizeResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.ILookupVindexInternalizeResponse);
+
+        /** LookupVindexInternalizeResponse workflow_started. */
+        public workflow_started: boolean;
+
+        /**
+         * Creates a new LookupVindexInternalizeResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns LookupVindexInternalizeResponse instance
+         */
+        public static create(properties?: vtctldata.ILookupVindexInternalizeResponse): vtctldata.LookupVindexInternalizeResponse;
+
+        /**
+         * Encodes the specified LookupVindexInternalizeResponse message. Does not implicitly {@link vtctldata.LookupVindexInternalizeResponse.verify|verify} messages.
+         * @param message LookupVindexInternalizeResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.ILookupVindexInternalizeResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified LookupVindexInternalizeResponse message, length delimited. Does not implicitly {@link vtctldata.LookupVindexInternalizeResponse.verify|verify} messages.
+         * @param message LookupVindexInternalizeResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.ILookupVindexInternalizeResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a LookupVindexInternalizeResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns LookupVindexInternalizeResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.LookupVindexInternalizeResponse;
+
+        /**
+         * Decodes a LookupVindexInternalizeResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns LookupVindexInternalizeResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.LookupVindexInternalizeResponse;
+
+        /**
+         * Verifies a LookupVindexInternalizeResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a LookupVindexInternalizeResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns LookupVindexInternalizeResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.LookupVindexInternalizeResponse;
+
+        /**
+         * Creates a plain object from a LookupVindexInternalizeResponse message. Also converts values to other types if specified.
+         * @param message LookupVindexInternalizeResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.LookupVindexInternalizeResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this LookupVindexInternalizeResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for LookupVindexInternalizeResponse
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */

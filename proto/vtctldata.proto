@@ -1240,8 +1240,22 @@ message LookupVindexExternalizeRequest {
 }
 
 message LookupVindexExternalizeResponse {
-  // Was the workflow also deleted.
-  bool workflow_deleted = 1;
+  // Was the workflow stopped.
+  bool workflow_stopped = 1;
+}
+
+message LookupVindexInternalizeRequest {
+  // Where the lookup vindex lives.
+  string keyspace = 1;
+  // This is the name of the lookup vindex and the vreplication workflow.
+  string name = 2;
+  // Where the vreplication workflow lives.
+  string table_keyspace = 3;
+}
+
+message LookupVindexInternalizeResponse {
+  // Was the workflow started.
+  bool workflow_started = 1;
 }
 
 message MaterializeCreateRequest {

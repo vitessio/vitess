@@ -3022,6 +3022,21 @@ func (s *VtctldServer) LookupVindexExternalize(ctx context.Context, req *vtctlda
 	return resp, err
 }
 
+// LookupVindexInternalize is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) LookupVindexInternalize(ctx context.Context, req *vtctldatapb.LookupVindexInternalizeRequest) (resp *vtctldatapb.LookupVindexInternalizeResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.LookupVindexInternalize")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("name", req.Name)
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("table_keyspace", req.TableKeyspace)
+
+	resp, err = s.ws.LookupVindexInternalize(ctx, req)
+	return resp, err
+}
+
 // MaterializeCreate is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) MaterializeCreate(ctx context.Context, req *vtctldatapb.MaterializeCreateRequest) (resp *vtctldatapb.MaterializeCreateResponse, err error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.MaterializeCreate")
