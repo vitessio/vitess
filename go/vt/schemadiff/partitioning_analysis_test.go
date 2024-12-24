@@ -195,13 +195,19 @@ func TestTruncateDateTime(t *testing.T) {
 }
 
 func TestAnalyzeTemporalRangePartitioning(t *testing.T) {
+	parseDateTime := func(s string) datetime.DateTime {
+		dt, _, ok := datetime.ParseDateTime(s, -1)
+		require.True(t, ok)
+
+		require.Equal(t, s, string(dt.Format(0)))
+		return dt
+	}
 	tcases := []struct {
-		name               string
-		create             string
-		env                *Environment
-		expect             *TemporalRangePartitioningAnalysis
-		expectHighestValue string
-		expectErr          error
+		name      string
+		create    string
+		env       *Environment
+		expect    *TemporalRangePartitioningAnalysis
+		expectErr error
 	}{
 		{
 			name:   "not partitioned",
@@ -252,8 +258,8 @@ func TestAnalyzeTemporalRangePartitioning(t *testing.T) {
 				Col: &ColumnDefinitionEntity{
 					ColumnDefinition: &sqlparser.ColumnDefinition{Name: sqlparser.NewIdentifierCI("dt")},
 				},
+				HighestValueDateTime: parseDateTime("2025-01-01 00:00:00"),
 			},
-			expectHighestValue: "2025-01-01 00:00:00",
 		},
 		{
 			name:   "range by DATE column with MAXVALUE",
@@ -266,9 +272,9 @@ func TestAnalyzeTemporalRangePartitioning(t *testing.T) {
 				Col: &ColumnDefinitionEntity{
 					ColumnDefinition: &sqlparser.ColumnDefinition{Name: sqlparser.NewIdentifierCI("dt")},
 				},
-				MaxvaluePartition: &sqlparser.PartitionDefinition{Name: sqlparser.NewIdentifierCI("pmax")},
+				MaxvaluePartition:    &sqlparser.PartitionDefinition{Name: sqlparser.NewIdentifierCI("pmax")},
+				HighestValueDateTime: parseDateTime("2025-01-01 00:00:00"),
 			},
-			expectHighestValue: "2025-01-01 00:00:00",
 		},
 		{
 			name:   "range by date (lower case) column",
@@ -281,8 +287,8 @@ func TestAnalyzeTemporalRangePartitioning(t *testing.T) {
 				Col: &ColumnDefinitionEntity{
 					ColumnDefinition: &sqlparser.ColumnDefinition{Name: sqlparser.NewIdentifierCI("dt")},
 				},
+				HighestValueDateTime: parseDateTime("2025-01-01 00:00:00"),
 			},
-			expectHighestValue: "2025-01-01 00:00:00",
 		},
 		{
 			name:   "range by DATETIME column",
@@ -294,8 +300,8 @@ func TestAnalyzeTemporalRangePartitioning(t *testing.T) {
 				Col: &ColumnDefinitionEntity{
 					ColumnDefinition: &sqlparser.ColumnDefinition{Name: sqlparser.NewIdentifierCI("dt")},
 				},
+				HighestValueDateTime: parseDateTime("2025-01-01 00:00:00"),
 			},
-			expectHighestValue: "2025-01-01 00:00:00",
 		},
 		{
 			name:   "range by nonstandard named DATETIME column",
@@ -310,8 +316,8 @@ func TestAnalyzeTemporalRangePartitioning(t *testing.T) {
 				FuncExpr: &sqlparser.FuncExpr{
 					Name: sqlparser.NewIdentifierCI("TO_DAYS"),
 				},
+				HighestValueDateTime: parseDateTime("2025-01-01 00:00:00"),
 			},
-			expectHighestValue: "2025-01-01 00:00:00",
 		},
 		{
 			name:   "range by DATETIME column, literal value",
@@ -326,9 +332,9 @@ func TestAnalyzeTemporalRangePartitioning(t *testing.T) {
 				FuncExpr: &sqlparser.FuncExpr{
 					Name: sqlparser.NewIdentifierCI("TO_DAYS"),
 				},
-				HighestValueIntVal: 739617,
+				HighestValueIntVal:   739617,
+				HighestValueDateTime: datetime.DateTime{},
 			},
-			expectHighestValue: "0000-00-00 00:00:00",
 		},
 		{
 			name:      "range by TO_DAYS(TIMESTAMP)",
@@ -348,8 +354,8 @@ func TestAnalyzeTemporalRangePartitioning(t *testing.T) {
 				FuncExpr: &sqlparser.FuncExpr{
 					Name: sqlparser.NewIdentifierCI("TO_DAYS"),
 				},
+				HighestValueDateTime: parseDateTime("2024-12-19 00:00:00"),
 			},
-			expectHighestValue: "2024-12-19 00:00:00",
 		},
 		{
 			name:   "range by TO_DAYS(DATETIME) with MAXVALUE",
@@ -364,9 +370,9 @@ func TestAnalyzeTemporalRangePartitioning(t *testing.T) {
 				FuncExpr: &sqlparser.FuncExpr{
 					Name: sqlparser.NewIdentifierCI("TO_DAYS"),
 				},
-				MaxvaluePartition: &sqlparser.PartitionDefinition{Name: sqlparser.NewIdentifierCI("pmax")},
+				MaxvaluePartition:    &sqlparser.PartitionDefinition{Name: sqlparser.NewIdentifierCI("pmax")},
+				HighestValueDateTime: parseDateTime("2024-12-19 00:00:00"),
 			},
-			expectHighestValue: "2024-12-19 00:00:00",
 		},
 		{
 			name:   "range by to_days(DATETIME) (lower case)",
@@ -381,8 +387,8 @@ func TestAnalyzeTemporalRangePartitioning(t *testing.T) {
 				FuncExpr: &sqlparser.FuncExpr{
 					Name: sqlparser.NewIdentifierCI("to_days"),
 				},
+				HighestValueDateTime: parseDateTime("2024-12-19 00:00:00"),
 			},
-			expectHighestValue: "2024-12-19 00:00:00",
 		},
 		{
 			name:   "range by to_seconds(DATETIME)",
@@ -397,8 +403,8 @@ func TestAnalyzeTemporalRangePartitioning(t *testing.T) {
 				FuncExpr: &sqlparser.FuncExpr{
 					Name: sqlparser.NewIdentifierCI("to_seconds"),
 				},
+				HighestValueDateTime: parseDateTime("2024-12-19 09:56:32"),
 			},
-			expectHighestValue: "2024-12-19 09:56:32",
 		}, {
 			name:   "range by year(DATETIME)",
 			create: "CREATE TABLE t (id int, created_at DATETIME, PRIMARY KEY(id, created_at)) PARTITION BY RANGE (year(created_at)) (PARTITION p0 VALUES LESS THAN (year('2024-12-19 09:56:32')))",
@@ -412,8 +418,8 @@ func TestAnalyzeTemporalRangePartitioning(t *testing.T) {
 				FuncExpr: &sqlparser.FuncExpr{
 					Name: sqlparser.NewIdentifierCI("year"),
 				},
+				HighestValueDateTime: parseDateTime("2024-01-01 00:00:00"),
 			},
-			expectHighestValue: "2024-01-01 00:00:00",
 		},
 		{
 			name:      "unsupported function expression",
@@ -444,8 +450,8 @@ func TestAnalyzeTemporalRangePartitioning(t *testing.T) {
 				FuncExpr: &sqlparser.FuncExpr{
 					Name: sqlparser.NewIdentifierCI("UNIX_TIMESTAMP"),
 				},
+				HighestValueDateTime: parseDateTime("2024-12-19 09:56:32"),
 			},
-			expectHighestValue: "2024-12-19 09:56:32",
 		},
 	}
 	for _, tcase := range tcases {
@@ -468,13 +474,6 @@ func TestAnalyzeTemporalRangePartitioning(t *testing.T) {
 			require.NotNil(t, tcase.expect)
 			assert.Equal(t, tcase.expect.Reason, result.Reason)
 			require.NotNil(t, result)
-
-			if tcase.expect.IsTemporalRangePartitioned {
-				require.NotEmpty(t, tcase.expectHighestValue)
-				dt, _, ok := datetime.ParseDateTime(tcase.expectHighestValue, -1)
-				require.True(t, ok)
-				tcase.expect.HighestValueDateTime = dt
-			}
 
 			assert.Equal(t, tcase.expect.IsRangePartitioned, result.IsRangePartitioned, "IsRangePartitioned")
 			assert.Equal(t, tcase.expect.IsTemporalRangePartitioned, result.IsTemporalRangePartitioned, "IsTemporalRangePartitioned")
