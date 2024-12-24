@@ -578,7 +578,7 @@ func TemporalRangePartitioningRetention(createTableEntity *CreateTableEntity, ex
 			return nil, err
 		}
 		switch {
-		case dt.IsZero():
+		case dt.IsZero() && analysis.FuncExpr != nil:
 			// Partition uses an intval, such as in:
 			// PARTITION p0 VALUES LESS THAN (738156)
 			expireIntval, err := applyFuncExprToDateTime(expireDatetime, analysis.FuncExpr)
@@ -588,13 +588,16 @@ func TemporalRangePartitioningRetention(createTableEntity *CreateTableEntity, ex
 			if intval <= expireIntval {
 				alterTable.PartitionSpec.Names = append(alterTable.PartitionSpec.Names, partition.Name)
 			}
-		default:
+		case !dt.IsZero():
 			// Partition uses a datetime, such as in these examples:
 			// - PARTITION p0 VALUES LESS THAN ('2021-01-01 00:00:00')
 			// - PARTITION p0 VALUES LESS THAN (TO_DAYS('2021-01-01'))
 			if dt.Compare(expireDatetime) <= 0 {
 				alterTable.PartitionSpec.Names = append(alterTable.PartitionSpec.Names, partition.Name)
 			}
+		default:
+			// Should never get here
+			return nil, fmt.Errorf("unsupported partitioning in table %s", createTableEntity.Name())
 		}
 	}
 	if len(alterTable.PartitionSpec.Names) == 0 {
