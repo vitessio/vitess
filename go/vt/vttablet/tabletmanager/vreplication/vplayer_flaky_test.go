@@ -1560,8 +1560,24 @@ func TestPlayerPartialImages(t *testing.T) {
 		error  string
 	}
 
-	testCases := []testCase{
-		{
+	var testCases []testCase
+
+	if vttablet.DefaultVReplicationConfig.ExperimentalFlags&vttablet.VReplicationExperimentalFlagVPlayerBatching == 0 {
+		testCases = append(testCases, testCase{
+			input: "insert into src (id, jd, bd) values (1,'{\"key1\": \"val1\"}','blob data'), (2,'{\"key2\": \"val2\"}','blob data2'), (3,'{\"key3\": \"val3\"}','blob data3')",
+			output: []string{
+				"insert into dst(id,jd,bd) values (1,JSON_OBJECT(_utf8mb4'key1', _utf8mb4'val1'),_binary'blob data')",
+				"insert into dst(id,jd,bd) values (2,JSON_OBJECT(_utf8mb4'key2', _utf8mb4'val2'),_binary'blob data2')",
+				"insert into dst(id,jd,bd) values (3,JSON_OBJECT(_utf8mb4'key3', _utf8mb4'val3'),_binary'blob data3')",
+			},
+			data: [][]string{
+				{"1", "{\"key1\": \"val1\"}", "blob data"},
+				{"2", "{\"key2\": \"val2\"}", "blob data2"},
+				{"3", "{\"key3\": \"val3\"}", "blob data3"},
+			},
+		})
+	} else {
+		testCases = append(testCases, testCase{
 			input: "insert into src (id, jd, bd) values (1,'{\"key1\": \"val1\"}','blob data'), (2,'{\"key2\": \"val2\"}','blob data2'), (3,'{\"key3\": \"val3\"}','blob data3')",
 			output: []string{
 				"insert into dst(id,jd,bd) values (1,JSON_OBJECT(_utf8mb4'key1', _utf8mb4'val1'),_binary'blob data'), (2,JSON_OBJECT(_utf8mb4'key2', _utf8mb4'val2'),_binary'blob data2'), (3,JSON_OBJECT(_utf8mb4'key3', _utf8mb4'val3'),_binary'blob data3')",
@@ -1571,7 +1587,7 @@ func TestPlayerPartialImages(t *testing.T) {
 				{"2", "{\"key2\": \"val2\"}", "blob data2"},
 				{"3", "{\"key3\": \"val3\"}", "blob data3"},
 			},
-		},
+		})
 	}
 	if runNoBlobTest {
 		testCases = append(testCases, testCase{
@@ -1762,11 +1778,21 @@ func TestPlayerPartialImages(t *testing.T) {
 			execStatements(t, []string{tc.input})
 			var want qh.ExpectationSequencer
 			if tc.error != "" {
-				want = qh.Expect(
-					"rollback",
-				).Then(qh.Immediately(
-					fmt.Sprintf("/update _vt.vreplication set message=.*%s.*", tc.error),
-				))
+				if vttablet.DefaultVReplicationConfig.ExperimentalFlags&vttablet.VReplicationExperimentalFlagVPlayerBatching == 0 {
+					want = qh.Expect(
+						"begin",
+						"delete from dst where id=3",
+						"rollback",
+					).Then(qh.Immediately(
+						fmt.Sprintf("/update _vt.vreplication set message=.*%s.*", tc.error),
+					))
+				} else {
+					want = qh.Expect(
+						"rollback",
+					).Then(qh.Immediately(
+						fmt.Sprintf("/update _vt.vreplication set message=.*%s.*", tc.error),
+					))
+				}
 				expectDBClientQueries(t, want)
 			} else {
 				want = qh.Expect(

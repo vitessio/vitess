@@ -1031,8 +1031,8 @@ func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *strea
 		}
 		if afterOK {
 			rowChange.After = sqltypes.RowToProto3(afterValues)
-			if (vs.config.ExperimentalFlags /**/ & /**/ vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage != 0) &&
-				(partial || row.JSONPartialValues.Count() > 0) {
+			if ((vs.config.ExperimentalFlags /**/ & /**/ vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage != 0) && partial) ||
+				(row.JSONPartialValues.Count() > 0) {
 
 				rowChange.DataColumns = &binlogdatapb.RowChange_Bitmap{
 					Count: int64(rows.DataColumns.Count()),
