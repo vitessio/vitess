@@ -8,6 +8,7 @@
   - **[RPC Changes](#rpc-changes)**
   - **[Prefer not promoting a replica that is currently taking a backup](#reparents-prefer-not-backing-up)**
   - **[VTOrc Config File Changes](#vtorc-config-file-changes)**
+  - **[VTGate Config File Changes](#vtgate-config-file-changes)**
   - **[Support for More Efficient JSON Replication](#efficient-json-replication)**
 - **[Minor Changes](#minor-changes)**
   - **[VTTablet Flags](#flags-vttablet)**
@@ -59,6 +60,19 @@ The following fields can be dynamically changed -
 13. `change-tablets-with-errant-gtid-to-drained`
 
 To upgrade to the newer version of the configuration file, first switch to using the flags in your current deployment before upgrading. Then you can switch to using the configuration file in the newer release.
+
+### <a id="vtgate-config-file-changes"/>VTGate Config File Changes</a>
+
+The Viper configuration keys for the following flags has been changed to match their flag names. Previously they had a discovery prefix instead of it being part of the name. 
+
+| Flag Name                                        | Old Configuration Key                            | New Configuration Key                            |
+|--------------------------------------------------|--------------------------------------------------|--------------------------------------------------|
+| `discovery_low_replication_lag`                  | `discovery.low_replication_lag`                  | `discovery_low_replication_lag`                  |
+| `discovery_high_replication_lag_minimum_serving` | `discovery.high_replication_lag_minimum_serving` | `discovery_high_replication_lag_minimum_serving` |
+| `discovery_min_number_serving_vttablets`         | `discovery.min_number_serving_vttablets`         | `discovery_min_number_serving_vttablets`         |
+| `discovery_legacy_replication_lag_algorithm`     | `discovery.legacy_replication_lag_algorithm`     | `discovery_legacy_replication_lag_algorithm`     |
+
+To upgrade to the newer version of the configuration keys, first switch to using the flags in your current deployment before upgrading. Then you can switch to using the new configuration keys in the newer release.
 
 ### <a id="efficient-json-replication"/>Support for More Efficient JSON Replication</a>
 
