@@ -374,10 +374,7 @@ func (u fmtWeek0) parse(t *timeparts, bytes string) (string, bool) {
 type fmtWeek1 struct{}
 
 func (fmtWeek1) format(dst []byte, t DateTime, prec uint8) []byte {
-	year, week := t.Date.ISOWeek()
-	if year < t.Date.Year() {
-		week = 0
-	}
+	week := t.Date.Week(1)
 	return appendInt(dst, week, 2)
 }
 

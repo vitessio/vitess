@@ -741,8 +741,24 @@ func TestCompilerSingle(t *testing.T) {
 			result:     `VARBINARY("\x00\x00\x00\xff")`,
 		},
 		{
-			expression: `DATE_FORMAT(timestamp '2024-12-30 10:34:58', "%u");`,
+			expression: `DATE_FORMAT(timestamp '2024-12-30 10:34:58', "%u")`,
 			result:     `VARCHAR("53")`,
+		},
+		{
+			expression: `WEEK(timestamp '2024-12-30 10:34:58', 0)`,
+			result:     `INT64(52)`,
+		},
+		{
+			expression: `WEEK(timestamp '2024-12-30 10:34:58', 1)`,
+			result:     `INT64(53)`,
+		},
+		{
+			expression: `WEEK(timestamp '2024-01-01 10:34:58', 0)`,
+			result:     `INT64(0)`,
+		},
+		{
+			expression: `WEEK(timestamp '2024-01-01 10:34:58', 1)`,
+			result:     `INT64(1)`,
 		},
 	}
 
