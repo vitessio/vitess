@@ -89,6 +89,7 @@ const (
 	json_unquote(json_extract(action, '$.type'))=%a and vrepl_id=%a and table_name=%a`
 	sqlDeletePostCopyAction = `delete from _vt.post_copy_action where vrepl_id=%a and
 	table_name=%a and id=%a`
+	SqlMaxAllowedPacket = "select @@session.max_allowed_packet as max_allowed_packet"
 )
 
 // vreplicator provides the core logic to start vreplication streams
