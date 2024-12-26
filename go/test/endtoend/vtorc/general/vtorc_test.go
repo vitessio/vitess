@@ -216,7 +216,7 @@ func TestVTOrcRepairs(t *testing.T) {
 	})
 
 	t.Run("StopReplication", func(t *testing.T) {
-		// use vtctlclient to stop replication
+		// use vtctldclient to stop replication
 		_, err := clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("StopReplication", replica.Alias)
 		require.NoError(t, err)
 

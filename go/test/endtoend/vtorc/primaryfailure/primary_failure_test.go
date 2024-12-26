@@ -199,7 +199,7 @@ func TestDeletedPrimaryTablet(t *testing.T) {
 
 	// Disable VTOrc recoveries
 	vtOrcProcess.DisableGlobalRecoveries(t)
-	// use vtctlclient to stop replication on the replica
+	// use vtctldclient to stop replication on the replica
 	_, err := clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("StopReplication", replica.Alias)
 	require.NoError(t, err)
 	// insert a write that is not available on the replica.
@@ -209,7 +209,7 @@ func TestDeletedPrimaryTablet(t *testing.T) {
 	_ = curPrimary.VttabletProcess.TearDown()
 	err = curPrimary.MysqlctlProcess.Stop()
 	require.NoError(t, err)
-	// use vtctlclient to start replication on the replica back
+	// use vtctldclient to start replication on the replica back
 	_, err = clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("StartReplication", replica.Alias)
 	require.NoError(t, err)
 	err = clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommand("DeleteTablets", "--allow-primary", curPrimary.Alias)

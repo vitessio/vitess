@@ -122,7 +122,7 @@ func TestVtctlMigrate(t *testing.T) {
 		execVtgateQuery(t, extVtgateConn, "rating", "insert into rating(gid, pid, rating) values(3, 1, 3);")
 		waitForRowCount(t, vtgateConn, "product:0", "rating", 3)
 		waitForRowCount(t, vtgateConn, "product:0", "review", 4)
-		vdiffSideBySide(t, ksWorkflow, "extcell1")
+		doVDiff(t, ksWorkflow, "extcell1")
 
 		if output, err = vc.VtctlClient.ExecuteCommandWithOutput("Migrate", "complete", ksWorkflow); err != nil {
 			t.Fatalf("Migrate command failed with %+v : %s\n", err, output)
@@ -256,7 +256,7 @@ func TestVtctldMigrateUnsharded(t *testing.T) {
 		execVtgateQuery(t, extVtgateConn, "rating", "insert into rating(gid, pid, rating) values(3, 1, 3);")
 		waitForRowCountInTablet(t, targetPrimary, "product", "rating", 3)
 		waitForRowCountInTablet(t, targetPrimary, "product", "review", 4)
-		vdiffSideBySide(t, ksWorkflow, "extcell1")
+		doVDiff(t, ksWorkflow, "extcell1")
 
 		output, err = vc.VtctldClient.ExecuteCommandWithOutput("Migrate",
 			"--target-keyspace", "product", "--workflow", "e1", "show")

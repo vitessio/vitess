@@ -13881,11 +13881,11 @@ func TestValidateSchemaKeyspace(t *testing.T) {
 	}
 
 	tests := []*struct {
-		name      string
-		req       *vtctldatapb.ValidateSchemaKeyspaceRequest
-		expected  *vtctldatapb.ValidateSchemaKeyspaceResponse
-		setup     func()
-		shouldErr bool
+		name     string
+		req      *vtctldatapb.ValidateSchemaKeyspaceRequest
+		expected *vtctldatapb.ValidateSchemaKeyspaceResponse
+		setup    func()
+		err      string
 	}{
 		{
 			name: "valid schemas",
@@ -13908,7 +13908,6 @@ func TestValidateSchemaKeyspace(t *testing.T) {
 					Uid:  101,
 				}, schema1)
 			},
-			shouldErr: false,
 		},
 		{
 			name: "different schemas",
@@ -13931,7 +13930,6 @@ func TestValidateSchemaKeyspace(t *testing.T) {
 					Uid:  101,
 				}, schema2)
 			},
-			shouldErr: false,
 		},
 		{
 			name: "skip-no-primary: no primary",
@@ -13956,7 +13954,6 @@ func TestValidateSchemaKeyspace(t *testing.T) {
 					Uid:  201,
 				}, schema1)
 			},
-			shouldErr: false,
 		},
 	}
 
@@ -13964,8 +13961,8 @@ func TestValidateSchemaKeyspace(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.setup()
 			resp, err := vtctld.ValidateSchemaKeyspace(ctx, tt.req)
-			if tt.shouldErr {
-				assert.Error(t, err)
+			if tt.err != "" {
+				assert.EqualError(t, err, tt.err)
 				return
 			}
 

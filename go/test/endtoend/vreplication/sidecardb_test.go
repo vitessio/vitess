@@ -14,7 +14,7 @@ import (
 const GetCurrentTablesQuery = "show tables from _vt"
 
 func getSidecarDBTables(t *testing.T, tabletID string) (numTablets int, tables []string) {
-	output, err := vc.VtctlClient.ExecuteCommandWithOutput("ExecuteFetchAsDba", "--", "--json", tabletID, GetCurrentTablesQuery)
+	output, err := vc.VtctldClient.ExecuteCommandWithOutput("ExecuteFetchAsDBA", "--json", tabletID, GetCurrentTablesQuery)
 	require.NoError(t, err)
 	result := gjson.Get(output, "rows")
 	require.NotNil(t, result)
@@ -118,7 +118,7 @@ func validateSidecarDBTables(t *testing.T, tabletID string, tables []string) {
 
 func modifySidecarDBSchema(t *testing.T, vc *VitessCluster, tabletID string, ddls []string) (numChanges int) {
 	for _, ddl := range ddls {
-		output, err := vc.VtctlClient.ExecuteCommandWithOutput("ExecuteFetchAsDba", "--", tabletID, ddl)
+		output, err := vc.VtctldClient.ExecuteCommandWithOutput("ExecuteFetchAsDBA", tabletID, ddl)
 		require.NoErrorf(t, err, output)
 	}
 	return len(ddls)
