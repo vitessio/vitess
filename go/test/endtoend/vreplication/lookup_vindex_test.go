@@ -63,7 +63,7 @@ create table t1(
 `,
 }
 
-func setupLookupIndexKeyspace(t *testing.T) map[string]*cluster.VttabletProcess {
+func setupLookupVindexKeyspace(t *testing.T) map[string]*cluster.VttabletProcess {
 	tablets := make(map[string]*cluster.VttabletProcess)
 	if _, err := vc.AddKeyspace(t, []*Cell{vc.Cells["zone1"]}, lookupClusterSpec.keyspaceName, "-80,80-",
 		lookupClusterSpec.vschema, lookupClusterSpec.schema, defaultReplicas, defaultRdonly, 200, nil); err != nil {
@@ -80,14 +80,14 @@ func setupLookupIndexKeyspace(t *testing.T) map[string]*cluster.VttabletProcess 
 
 type lookupTestCase struct {
 	name                 string
-	li                   *lookupIndex
+	lv                   *lookupVindex
 	initQuery            string
 	runningQuery         string
 	postExternalizeQuery string
 	cleanupQuery         string
 }
 
-func TestLookupIndex(t *testing.T) {
+func TestLookupVindex(t *testing.T) {
 	setSidecarDBName("_vt")
 	origDefaultReplicas := defaultReplicas
 	origDefaultRdonly := defaultRdonly
@@ -101,7 +101,7 @@ func TestLookupIndex(t *testing.T) {
 	defer vc.TearDown()
 	vttablet.InitVReplicationConfigDefaults()
 
-	_ = setupLookupIndexKeyspace(t)
+	_ = setupLookupVindexKeyspace(t)
 
 	initQuery := "insert into t1 (c1, c2, val) values (1, 1, 'val1'), (2, 2, 'val2'), (3, 3, 'val3')"
 	runningQuery := "insert into t1 (c1, c2, val) values (4, 4, 'val4'), (5, 5, 'val5'), (6, 6, 'val6')"
@@ -111,7 +111,7 @@ func TestLookupIndex(t *testing.T) {
 	testCases := []lookupTestCase{
 		{
 			name: "non-unique lookup index, one column",
-			li: &lookupIndex{
+			lv: &lookupVindex{
 				typ:                "consistent_lookup",
 				name:               "t1_c2_lookup",
 				tableKeyspace:      lookupClusterSpec.keyspaceName,
@@ -125,7 +125,7 @@ func TestLookupIndex(t *testing.T) {
 		},
 		{
 			name: "lookup index, two columns",
-			li: &lookupIndex{
+			lv: &lookupVindex{
 				typ:                "lookup",
 				name:               "t1_c2_val_lookup",
 				tableKeyspace:      lookupClusterSpec.keyspaceName,
@@ -139,7 +139,7 @@ func TestLookupIndex(t *testing.T) {
 		},
 		{
 			name: "unique lookup index, one column",
-			li: &lookupIndex{
+			lv: &lookupVindex{
 				typ:                "lookup_unique",
 				name:               "t1_c2_unique_lookup",
 				tableKeyspace:      lookupClusterSpec.keyspaceName,
@@ -168,7 +168,7 @@ func testLookupVindex(t *testing.T, tc *lookupTestCase) {
 	vtgateConn, cancel := getVTGateConn()
 	defer cancel()
 	var totalRows int
-	li := tc.li
+	lv := tc.lv
 
 	t.Run("init data", func(t *testing.T) {
 		totalRows += getNumRowsInQuery(t, tc.initQuery)
@@ -177,28 +177,28 @@ func testLookupVindex(t *testing.T, tc *lookupTestCase) {
 	})
 
 	t.Run("create", func(t *testing.T) {
-		tc.li.create()
+		tc.lv.create()
 
-		lks := li.tableKeyspace
-		vindexName := li.name
+		lks := lv.tableKeyspace
+		vindexName := lv.name
 		waitForRowCount(t, vtgateConn, lks, vindexName, totalRows)
 		totalRows += getNumRowsInQuery(t, tc.runningQuery)
 		_, err := vtgateConn.ExecuteFetch(tc.runningQuery, 1000, false)
 		require.NoError(t, err)
-		waitForRowCount(t, vtgateConn, tc.li.ownerTableKeyspace, li.name, totalRows)
+		waitForRowCount(t, vtgateConn, tc.lv.ownerTableKeyspace, lv.name, totalRows)
 	})
 
 	t.Run("externalize", func(t *testing.T) {
-		tc.li.externalize()
+		tc.lv.externalize()
 		totalRows += getNumRowsInQuery(t, tc.postExternalizeQuery)
 		_, err := vtgateConn.ExecuteFetch(tc.postExternalizeQuery, 1000, false)
 		require.NoError(t, err)
-		waitForRowCount(t, vtgateConn, tc.li.ownerTableKeyspace, li.name, totalRows)
+		waitForRowCount(t, vtgateConn, tc.lv.ownerTableKeyspace, lv.name, totalRows)
 	})
 
 	t.Run("cleanup", func(t *testing.T) {
 		_, err := vtgateConn.ExecuteFetch(tc.cleanupQuery, 1000, false)
 		require.NoError(t, err)
-		waitForRowCount(t, vtgateConn, tc.li.ownerTableKeyspace, li.name, 0)
+		waitForRowCount(t, vtgateConn, tc.lv.ownerTableKeyspace, lv.name, 0)
 	})
 }
