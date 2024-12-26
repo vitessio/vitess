@@ -740,6 +740,10 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `cast(_utf32 0x0000FF as binary)`,
 			result:     `VARBINARY("\x00\x00\x00\xff")`,
 		},
+		{
+			expression: `DATE_FORMAT(timestamp '2024-12-30 10:34:58', "%u");`,
+			result:     `VARCHAR("53")`,
+		},
 	}
 
 	tz, _ := time.LoadLocation("Europe/Madrid")
