@@ -248,7 +248,7 @@ func buildDropView(vschema plancontext.VSchema, ddlStatement sqlparser.DDLStatem
 	var ks *vindexes.Keyspace
 	viewMap := make(map[string]any)
 	for _, tbl := range ddlStatement.GetFromTables() {
-		_, ksForView, _, err := vschema.TargetDestination(tbl.Qualifier.String())
+		ksForView, err := vschema.FindViewTarget(tbl)
 		if err != nil {
 			return nil, nil, err
 		}
