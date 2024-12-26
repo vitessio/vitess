@@ -119,6 +119,9 @@ type Controller interface {
 
 	// WaitForPreparedTwoPCTransactions waits for all prepared transactions to be resolved.
 	WaitForPreparedTwoPCTransactions(ctx context.Context) error
+
+	// SetDemotePrimaryStalled marks that demote primary is stalled in the state manager.
+	SetDemotePrimaryStalled()
 }
 
 // Ensure TabletServer satisfies Controller interface.
