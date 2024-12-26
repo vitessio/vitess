@@ -33,7 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
 
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 var (
@@ -57,6 +57,13 @@ For --sql, semi-colons and repeated values may be mixed, for example:
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(1),
 		RunE:                  commandApplySchema,
+	}
+	CopySchemaShard = &cobra.Command{
+		Use:                   "CopySchemaShard [--tables=<table1>,<table2>,...] [--exclude-tables=<table1>,<table2>,...] [--include-views] [--skip-verify] [--wait-replicas-timeout=10s] {<source keyspace/shard> || <source tablet alias>} <destination keyspace/shard>",
+		Short:                 "Copies the schema from a source shard's primary (or a specific tablet) to a destination shard. The schema is applied directly on the primary of the destination shard, and it is propagated to the replicas through binlogs.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(2),
+		RunE:                  commandCopySchemaShard,
 	}
 	// GetSchema makes a GetSchema gRPC call to a vtctld.
 	GetSchema = &cobra.Command{
@@ -129,9 +136,9 @@ func commandApplySchema(cmd *cobra.Command, args []string) error {
 
 	cli.FinishedParsing(cmd)
 
-	var cid *vtrpc.CallerID
+	var cid *vtrpcpb.CallerID
 	if applySchemaOptions.CallerID != "" {
-		cid = &vtrpc.CallerID{Principal: applySchemaOptions.CallerID}
+		cid = &vtrpcpb.CallerID{Principal: applySchemaOptions.CallerID}
 	}
 
 	ks := cmd.Flags().Arg(0)
@@ -151,6 +158,47 @@ func commandApplySchema(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Println(strings.Join(resp.UuidList, "\n"))
+	return nil
+}
+
+func commandCopySchemaShard(cmd *cobra.Command, args []string) error {
+	/*
+		tables := subFlags.String("tables", "", "Specifies a comma-separated list of tables to copy. Each is either an exact match, or a regular expression of the form /regexp/")
+		excludeTables := subFlags.String("exclude_tables", "", "Specifies a comma-separated list of tables to exclude. Each is either an exact match, or a regular expression of the form /regexp/")
+		includeViews := subFlags.Bool("include-views", true, "Includes views in the output")
+		skipVerify := subFlags.Bool("skip-verify", false, "Skip verification of source and target schema after copy")
+		// for backwards compatibility
+		waitReplicasTimeout := subFlags.Duration("wait_replicas_timeout", grpcvtctldserver.DefaultWaitReplicasTimeout, "The amount of time to wait for replicas to receive the schema change via replication.")
+		if err := subFlags.Parse(args); err != nil {
+			return err
+		}
+
+		if subFlags.NArg() != 2 {
+			return fmt.Errorf("the <source keyspace/shard> and <destination keyspace/shard> arguments are both required for the CopySchemaShard command. Instead of the <source keyspace/shard> argument, you can also specify <tablet alias> which refers to a specific tablet of the shard in the source keyspace")
+		}
+		var tableArray []string
+		if *tables != "" {
+			tableArray = strings.Split(*tables, ",")
+		}
+		var excludeTableArray []string
+		if *excludeTables != "" {
+			excludeTableArray = strings.Split(*excludeTables, ",")
+		}
+		destKeyspace, destShard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(1))
+		if err != nil {
+			return err
+		}
+
+		sourceKeyspace, sourceShard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
+		if err == nil {
+			return wr.CopySchemaShardFromShard(ctx, tableArray, excludeTableArray, *includeViews, sourceKeyspace, sourceShard, destKeyspace, destShard, *waitReplicasTimeout, *skipVerify)
+		}
+		sourceTabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
+		if err == nil {
+			return wr.CopySchemaShard(ctx, sourceTabletAlias, tableArray, excludeTableArray, *includeViews, destKeyspace, destShard, *waitReplicasTimeout, *skipVerify)
+		}
+		return err
+	*/
 	return nil
 }
 
