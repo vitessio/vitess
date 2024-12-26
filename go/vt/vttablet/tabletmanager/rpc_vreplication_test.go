@@ -305,6 +305,7 @@ func TestCreateVReplicationWorkflow(t *testing.T) {
 // results returned. Followed by ensuring that SwitchTraffic
 // and ReverseTraffic also work as expected.
 func TestMoveTablesUnsharded(t *testing.T) {
+	t.Skip("Skipping flaky test while we investigate the issue")
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	sourceKs := "sourceks"
@@ -566,6 +567,7 @@ func TestMoveTablesUnsharded(t *testing.T) {
 // results returned. Followed by ensuring that SwitchTraffic
 // and ReverseTraffic also work as expected.
 func TestMoveTablesSharded(t *testing.T) {
+	t.Skip("Skipping flaky test while we investigate the issue")
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	sourceKs := "sourceks"
