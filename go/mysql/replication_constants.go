@@ -110,6 +110,9 @@ const (
 	//eViewChangeEvent         = 37
 	//eXAPrepareLogEvent       = 38
 
+	// PartialUpdateRowsEvent when binlog_row_value_options=PARTIAL_JSON.
+	ePartialUpdateRowsEvent = 39
+
 	// Transaction_payload_event when binlog_transaction_compression=ON.
 	eTransactionPayloadEvent = 40
 

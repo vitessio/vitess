@@ -323,8 +323,10 @@ func testVreplicationWorkflows(t *testing.T, limited bool, binlogRowImage string
 	defer func() { defaultReplicas = 1 }()
 
 	if binlogRowImage != "" {
-		require.NoError(t, utils.SetBinlogRowImageMode("noblob", vc.ClusterConfig.tmpDir))
-		defer utils.SetBinlogRowImageMode("", vc.ClusterConfig.tmpDir)
+		// Run the e2e test with binlog_row_image=NOBLOB and
+		// binlog_row_value_options=PARTIAL_JSON.
+		require.NoError(t, utils.SetBinlogRowImageOptions("noblob", true, vc.ClusterConfig.tmpDir))
+		defer utils.SetBinlogRowImageOptions("", false, vc.ClusterConfig.tmpDir)
 	}
 
 	defaultCell := vc.Cells[defaultCellName]
@@ -600,8 +602,10 @@ func TestCellAliasVreplicationWorkflow(t *testing.T) {
 	keyspace := "product"
 	shard := "0"
 
-	require.NoError(t, utils.SetBinlogRowImageMode("noblob", vc.ClusterConfig.tmpDir))
-	defer utils.SetBinlogRowImageMode("", vc.ClusterConfig.tmpDir)
+	// Run the e2e test with binlog_row_image=NOBLOB and
+	// binlog_row_value_options=PARTIAL_JSON.
+	require.NoError(t, utils.SetBinlogRowImageOptions("noblob", true, vc.ClusterConfig.tmpDir))
+	defer utils.SetBinlogRowImageOptions("", false, vc.ClusterConfig.tmpDir)
 
 	cell1 := vc.Cells["zone1"]
 	cell2 := vc.Cells["zone2"]
@@ -721,8 +725,18 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		// Confirm that the 0 scale decimal field, dec80, is replicated correctly
 		execVtgateQuery(t, vtgateConn, sourceKs, "update customer set dec80 = 0")
 		execVtgateQuery(t, vtgateConn, sourceKs, "update customer set blb = \"new blob data\" where cid=3")
-		execVtgateQuery(t, vtgateConn, sourceKs, "update json_tbl set j1 = null, j2 = 'null', j3 = '\"null\"'")
+		execVtgateQuery(t, vtgateConn, sourceKs, "update json_tbl set j1 = null, j2 = 'null', j3 = '\"null\"' where id = 5")
 		execVtgateQuery(t, vtgateConn, sourceKs, "insert into json_tbl(id, j1, j2, j3) values (7, null, 'null', '\"null\"')")
+		// Test binlog-row-value-options=PARTIAL_JSON
+		execVtgateQuery(t, vtgateConn, sourceKs, "update json_tbl set j3 = JSON_SET(j3, '$.role', 'manager')")
+		execVtgateQuery(t, vtgateConn, sourceKs, "update json_tbl set j3 = JSON_SET(j3, '$.color', 'red')")
+		execVtgateQuery(t, vtgateConn, sourceKs, "update json_tbl set j3 = JSON_SET(j3, '$.day', 'wednesday')")
+		execVtgateQuery(t, vtgateConn, sourceKs, "update json_tbl set j3 = JSON_INSERT(JSON_REPLACE(j3, '$.day', 'friday'), '$.favorite_color', 'black')")
+		execVtgateQuery(t, vtgateConn, sourceKs, "update json_tbl set j3 = JSON_SET(JSON_REMOVE(JSON_REPLACE(j3, '$.day', 'monday'), '$.favorite_color'), '$.hobby', 'skiing') where id = 3")
+		execVtgateQuery(t, vtgateConn, sourceKs, "update json_tbl set j3 = JSON_SET(JSON_REMOVE(JSON_REPLACE(j3, '$.day', 'tuesday'), '$.favorite_color'), '$.hobby', 'skiing') where id = 4")
+		execVtgateQuery(t, vtgateConn, sourceKs, "update json_tbl set j3 = JSON_SET(JSON_SET(j3, '$.salary', 110), '$.role', 'IC') where id = 4")
+		execVtgateQuery(t, vtgateConn, sourceKs, "update json_tbl set j3 = JSON_SET(j3, '$.misc', '{\"address\":\"1012 S Park St\", \"town\":\"Hastings\", \"state\":\"MI\"}') where id = 1")
+		execVtgateQuery(t, vtgateConn, sourceKs, "update json_tbl set id=id+1000, j3=JSON_SET(j3, '$.day', 'friday')")
 		waitForNoWorkflowLag(t, vc, targetKs, workflow)
 		dec80Replicated := false
 		for _, tablet := range []*cluster.VttabletProcess{customerTab1, customerTab2} {
