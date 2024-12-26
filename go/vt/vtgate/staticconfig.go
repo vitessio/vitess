@@ -18,6 +18,9 @@ package vtgate
 
 import vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 
+// StaticConfig is a static configuration for vtgate.
+// It is used for tests and vtexplain_vtgate where we don't want the user to
+// control certain configs.
 type StaticConfig struct {
 	OnlineDDLEnabled bool
 	DirectDDLEnabled bool

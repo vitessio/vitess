@@ -17,26 +17,34 @@ limitations under the License.
 package vtgate
 
 import (
+	"vitess.io/vitess/go/viperutil"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
 
 // DynamicViperConfig is a dynamic config that uses viper.
 type DynamicViperConfig struct {
+	onlineDDL viperutil.Value[bool]
+	directDDL viperutil.Value[bool]
+	txMode    viperutil.Value[vtgatepb.TransactionMode]
 }
 
 // NewDynamicViperConfig creates a new dynamic viper config
 func NewDynamicViperConfig() *DynamicViperConfig {
-	return &DynamicViperConfig{}
+	return &DynamicViperConfig{
+		onlineDDL: enableOnlineDDL,
+		directDDL: enableDirectDDL,
+		txMode:    transactionMode,
+	}
 }
 
 func (d *DynamicViperConfig) OnlineEnabled() bool {
-	return enableOnlineDDL.Get()
+	return d.onlineDDL.Get()
 }
 
 func (d *DynamicViperConfig) DirectEnabled() bool {
-	return enableDirectDDL.Get()
+	return d.directDDL.Get()
 }
 
 func (d *DynamicViperConfig) TransactionMode() vtgatepb.TransactionMode {
-	return transactionMode.Get()
+	return d.txMode.Get()
 }
