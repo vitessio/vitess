@@ -1217,6 +1217,20 @@ message LaunchSchemaMigrationResponse {
   map<string, uint64> rows_affected_by_shard = 1;
 }
 
+message LookupVindexCompleteRequest {
+  // Where the lookup vindex lives.
+  string keyspace = 1;
+  // This is the name of the lookup vindex and the vreplication workflow.
+  string name = 2;
+  // Where the vreplication workflow lives.
+  string table_keyspace = 3;
+}
+
+message LookupVindexCompleteResponse {
+  // Was the workflow deleted.
+  bool workflow_deleted = 1;
+}
+
 message LookupVindexCreateRequest {
   string keyspace = 1;
   string workflow = 2;

@@ -193,6 +193,7 @@ service Vtctld {
   // LaunchSchemaMigration launches one or all migrations executed with --postpone-launch.
   rpc LaunchSchemaMigration(vtctldata.LaunchSchemaMigrationRequest) returns (vtctldata.LaunchSchemaMigrationResponse) {};
 
+  rpc LookupVindexComplete(vtctldata.LookupVindexCompleteRequest) returns (vtctldata.LookupVindexCompleteResponse) {};
   rpc LookupVindexCreate(vtctldata.LookupVindexCreateRequest) returns (vtctldata.LookupVindexCreateResponse) {};
   rpc LookupVindexExternalize(vtctldata.LookupVindexExternalizeRequest) returns (vtctldata.LookupVindexExternalizeResponse) {};
   rpc LookupVindexInternalize(vtctldata.LookupVindexInternalizeRequest) returns (vtctldata.LookupVindexInternalizeResponse) {};

@@ -554,6 +554,82 @@ func (s *Server) getWorkflowState(ctx context.Context, targetKeyspace, workflowN
 	return ts, state, nil
 }
 
+// LookupVindexComplete checks if the lookup vindex has been externalized,
+// and if the vindex has an owner, it deletes the workflow.
+func (s *Server) LookupVindexComplete(ctx context.Context, req *vtctldatapb.LookupVindexCompleteRequest) (*vtctldatapb.LookupVindexCompleteResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "workflow.Server.LookupVindexInternalize")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("name", req.Name)
+	span.Annotate("table_keyspace", req.TableKeyspace)
+
+	// Find the lookup vindex by name.
+	sourceVschema, err := s.ts.GetVSchema(ctx, req.Keyspace)
+	if err != nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get vschema for the %s keyspace", req.Keyspace)
+	}
+	vindex := sourceVschema.Vindexes[req.Name]
+	if vindex == nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vindex %s not found in the %s keyspace", req.Name, req.Keyspace)
+	}
+
+	targetShards, err := s.ts.GetServingShards(ctx, req.TableKeyspace)
+	if err != nil {
+		return nil, err
+	}
+
+	// Validate if the lookup vindex was externalized.
+	err = forAllShards(targetShards, func(targetShard *topo.ShardInfo) error {
+		targetPrimary, err := s.ts.GetTablet(ctx, targetShard.PrimaryAlias)
+		if err != nil {
+			return err
+		}
+		res, err := s.tmc.ReadVReplicationWorkflow(ctx, targetPrimary.Tablet, &tabletmanagerdatapb.ReadVReplicationWorkflowRequest{
+			Workflow: req.Name,
+		})
+		if err != nil {
+			return err
+		}
+		if res == nil {
+			return vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "workflow %s not found on %v", req.Name, targetPrimary.Alias)
+		}
+		for _, stream := range res.Streams {
+			if vindex.Owner == "" {
+				// If there's no owner, all streams need to be running.
+				if stream.State != binlogdatapb.VReplicationWorkflowState_Running {
+					return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "stream %d for %v.%v is not in Running state: %v", stream.Id, targetShard.Keyspace(), targetShard.ShardName(), stream.State)
+				}
+			} else {
+				// If there's an owner, all streams need to be frozen.
+				if stream.State != binlogdatapb.VReplicationWorkflowState_Stopped || stream.Message != Frozen {
+					return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "stream %d for %v.%v is not frozen: %v, %v", stream.Id, targetShard.Keyspace(), targetShard.ShardName(), stream.State, stream.Message)
+				}
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Assuming that the lookup vindex was externalized, we don't need to
+	// delete the write_only parameter from the vindex.
+	resp := &vtctldatapb.LookupVindexCompleteResponse{}
+	if vindex.Owner != "" {
+		if _, derr := s.WorkflowDelete(ctx, &vtctldatapb.WorkflowDeleteRequest{
+			Keyspace:         req.TableKeyspace,
+			Workflow:         req.Name,
+			KeepData:         true,
+			KeepRoutingRules: true,
+		}); derr != nil {
+			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "failed to delete workflow %s: %v", req.Name, derr)
+		}
+		resp.WorkflowDeleted = true
+	}
+	return resp, nil
+}
+
 // LookupVindexCreate creates the lookup vindex in the specified
 // keyspace and creates a VReplication workflow to backfill that
 // vindex from the keyspace to the target/lookup table specified.
@@ -754,9 +830,9 @@ func (s *Server) LookupVindexInternalize(ctx context.Context, req *vtctldatapb.L
 					return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "stream %d for %v.%v is not in Running state: %v", stream.Id, targetShard.Keyspace(), targetShard.ShardName(), stream.State)
 				}
 			} else {
-				// If there's an owner, all streams need to be stopped.
-				if stream.State != binlogdatapb.VReplicationWorkflowState_Stopped {
-					return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "stream %d for %v.%v is not in Stopped state: %v, %v", stream.Id, targetShard.Keyspace(), targetShard.ShardName(), stream.State, stream.Message)
+				// If there's an owner, all streams need to be frozen.
+				if stream.State != binlogdatapb.VReplicationWorkflowState_Stopped || stream.Message != Frozen {
+					return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "stream %d for %v.%v is not frozen: %v, %v", stream.Id, targetShard.Keyspace(), targetShard.ShardName(), stream.State, stream.Message)
 				}
 			}
 		}

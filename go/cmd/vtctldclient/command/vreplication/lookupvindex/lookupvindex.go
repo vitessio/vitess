@@ -78,6 +78,10 @@ var (
 		Keyspace string
 	}{}
 
+	completeOptions = struct {
+		Keyspace string
+	}{}
+
 	parseAndValidateCreate = func(cmd *cobra.Command, args []string) error {
 		if createOptions.TableName == "" { // Use vindex name
 			createOptions.TableName = baseOptions.Name
@@ -146,6 +150,18 @@ var (
 		RunE:                  commandCancel,
 	}
 
+	// complete makes a LookupVindexComplete call to a vtctld.
+	complete = &cobra.Command{
+		Use:                   "complete",
+		Short:                 "Complete the Lookup Vindex. If the Vindex has an owner the VReplication workflow will also be deleted.",
+		Example:               `vtctldclient --server localhost:15999 LookupVindex --name corder_lookup_vdx --table-keyspace customer complete`,
+		SilenceUsage:          true,
+		DisableFlagsInUseLine: true,
+		Aliases:               []string{"Complete"},
+		Args:                  cobra.NoArgs,
+		RunE:                  commandComplete,
+	}
+
 	// create makes a LookupVindexCreate call to a vtctld.
 	create = &cobra.Command{
 		Use:                   "create",
@@ -210,6 +226,33 @@ func commandCancel(cmd *cobra.Command, args []string) error {
 
 	output := fmt.Sprintf("LookupVindex %s left in place and the %s VReplication wokflow has been deleted",
 		baseOptions.Name, baseOptions.Name)
+	fmt.Println(output)
+
+	return nil
+}
+
+func commandComplete(cmd *cobra.Command, args []string) error {
+	if completeOptions.Keyspace == "" {
+		completeOptions.Keyspace = baseOptions.TableKeyspace
+	}
+	cli.FinishedParsing(cmd)
+
+	resp, err := common.GetClient().LookupVindexComplete(common.GetCommandCtx(), &vtctldatapb.LookupVindexCompleteRequest{
+		Keyspace: completeOptions.Keyspace,
+		// The name of the workflow and lookup vindex.
+		Name: baseOptions.Name,
+		// Where the lookup table and VReplication workflow were created.
+		TableKeyspace: baseOptions.TableKeyspace,
+	})
+
+	if err != nil {
+		return err
+	}
+
+	output := fmt.Sprintf("LookupVindex %s has been completed", baseOptions.Name)
+	if resp.WorkflowDeleted {
+		output = output + fmt.Sprintf(" and the %s VReplication workflow has been deleted", baseOptions.Name)
+	}
 	fmt.Println(output)
 
 	return nil
@@ -355,6 +398,9 @@ func registerCommands(root *cobra.Command) {
 
 	internalize.Flags().StringVar(&internalizeOptions.Keyspace, "keyspace", "", "The keyspace containing the Lookup Vindex. If no value is specified then the table-keyspace will be used.")
 	base.AddCommand(internalize)
+
+	complete.Flags().StringVar(&completeOptions.Keyspace, "keyspace", "", "The keyspace containing the Lookup Vindex. If no value is specified then the table-keyspace will be used.")
+	base.AddCommand(complete)
 
 	// The cancel command deletes the VReplication workflow used
 	// to backfill the lookup vindex. It ends up making a

@@ -587,6 +587,15 @@ func (client *gRPCVtctldClient) LaunchSchemaMigration(ctx context.Context, in *v
 	return client.c.LaunchSchemaMigration(ctx, in, opts...)
 }
 
+// LookupVindexComplete is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) LookupVindexComplete(ctx context.Context, in *vtctldatapb.LookupVindexCompleteRequest, opts ...grpc.CallOption) (*vtctldatapb.LookupVindexCompleteResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.LookupVindexComplete(ctx, in, opts...)
+}
+
 // LookupVindexCreate is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) LookupVindexCreate(ctx context.Context, in *vtctldatapb.LookupVindexCreateRequest, opts ...grpc.CallOption) (*vtctldatapb.LookupVindexCreateResponse, error) {
 	if client.c == nil {

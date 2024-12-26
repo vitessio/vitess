@@ -2990,6 +2990,21 @@ func (s *VtctldServer) LaunchSchemaMigration(ctx context.Context, req *vtctldata
 	return resp, nil
 }
 
+// LookupVindexComplete is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) LookupVindexComplete(ctx context.Context, req *vtctldatapb.LookupVindexCompleteRequest) (resp *vtctldatapb.LookupVindexCompleteResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.LookupVindexComplete")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("name", req.Name)
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("table_keyspace", req.TableKeyspace)
+
+	resp, err = s.ws.LookupVindexComplete(ctx, req)
+	return resp, err
+}
+
 // LookupVindexCreate is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) LookupVindexCreate(ctx context.Context, req *vtctldatapb.LookupVindexCreateRequest) (resp *vtctldatapb.LookupVindexCreateResponse, err error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.LookupVindexCreate")

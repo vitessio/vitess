@@ -297,6 +297,7 @@ type VtctldClient interface {
 	InitShardPrimary(ctx context.Context, in *vtctldata.InitShardPrimaryRequest, opts ...grpc.CallOption) (*vtctldata.InitShardPrimaryResponse, error)
 	// LaunchSchemaMigration launches one or all migrations executed with --postpone-launch.
 	LaunchSchemaMigration(ctx context.Context, in *vtctldata.LaunchSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.LaunchSchemaMigrationResponse, error)
+	LookupVindexComplete(ctx context.Context, in *vtctldata.LookupVindexCompleteRequest, opts ...grpc.CallOption) (*vtctldata.LookupVindexCompleteResponse, error)
 	LookupVindexCreate(ctx context.Context, in *vtctldata.LookupVindexCreateRequest, opts ...grpc.CallOption) (*vtctldata.LookupVindexCreateResponse, error)
 	LookupVindexExternalize(ctx context.Context, in *vtctldata.LookupVindexExternalizeRequest, opts ...grpc.CallOption) (*vtctldata.LookupVindexExternalizeResponse, error)
 	LookupVindexInternalize(ctx context.Context, in *vtctldata.LookupVindexInternalizeRequest, opts ...grpc.CallOption) (*vtctldata.LookupVindexInternalizeResponse, error)
@@ -1090,6 +1091,15 @@ func (c *vtctldClient) LaunchSchemaMigration(ctx context.Context, in *vtctldata.
 	return out, nil
 }
 
+func (c *vtctldClient) LookupVindexComplete(ctx context.Context, in *vtctldata.LookupVindexCompleteRequest, opts ...grpc.CallOption) (*vtctldata.LookupVindexCompleteResponse, error) {
+	out := new(vtctldata.LookupVindexCompleteResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/LookupVindexComplete", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vtctldClient) LookupVindexCreate(ctx context.Context, in *vtctldata.LookupVindexCreateRequest, opts ...grpc.CallOption) (*vtctldata.LookupVindexCreateResponse, error) {
 	out := new(vtctldata.LookupVindexCreateResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/LookupVindexCreate", in, out, opts...)
@@ -1836,6 +1846,7 @@ type VtctldServer interface {
 	InitShardPrimary(context.Context, *vtctldata.InitShardPrimaryRequest) (*vtctldata.InitShardPrimaryResponse, error)
 	// LaunchSchemaMigration launches one or all migrations executed with --postpone-launch.
 	LaunchSchemaMigration(context.Context, *vtctldata.LaunchSchemaMigrationRequest) (*vtctldata.LaunchSchemaMigrationResponse, error)
+	LookupVindexComplete(context.Context, *vtctldata.LookupVindexCompleteRequest) (*vtctldata.LookupVindexCompleteResponse, error)
 	LookupVindexCreate(context.Context, *vtctldata.LookupVindexCreateRequest) (*vtctldata.LookupVindexCreateResponse, error)
 	LookupVindexExternalize(context.Context, *vtctldata.LookupVindexExternalizeRequest) (*vtctldata.LookupVindexExternalizeResponse, error)
 	LookupVindexInternalize(context.Context, *vtctldata.LookupVindexInternalizeRequest) (*vtctldata.LookupVindexInternalizeResponse, error)
@@ -2207,6 +2218,9 @@ func (UnimplementedVtctldServer) InitShardPrimary(context.Context, *vtctldata.In
 }
 func (UnimplementedVtctldServer) LaunchSchemaMigration(context.Context, *vtctldata.LaunchSchemaMigrationRequest) (*vtctldata.LaunchSchemaMigrationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method LaunchSchemaMigration not implemented")
+}
+func (UnimplementedVtctldServer) LookupVindexComplete(context.Context, *vtctldata.LookupVindexCompleteRequest) (*vtctldata.LookupVindexCompleteResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method LookupVindexComplete not implemented")
 }
 func (UnimplementedVtctldServer) LookupVindexCreate(context.Context, *vtctldata.LookupVindexCreateRequest) (*vtctldata.LookupVindexCreateResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method LookupVindexCreate not implemented")
@@ -3525,6 +3539,24 @@ func _Vtctld_LaunchSchemaMigration_Handler(srv interface{}, ctx context.Context,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VtctldServer).LaunchSchemaMigration(ctx, req.(*vtctldata.LaunchSchemaMigrationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_LookupVindexComplete_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.LookupVindexCompleteRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).LookupVindexComplete(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/LookupVindexComplete",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).LookupVindexComplete(ctx, req.(*vtctldata.LookupVindexCompleteRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -4894,6 +4926,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "LaunchSchemaMigration",
 			Handler:    _Vtctld_LaunchSchemaMigration_Handler,
+		},
+		{
+			MethodName: "LookupVindexComplete",
+			Handler:    _Vtctld_LookupVindexComplete_Handler,
 		},
 		{
 			MethodName: "LookupVindexCreate",

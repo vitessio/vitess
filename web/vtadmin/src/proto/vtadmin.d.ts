@@ -65807,6 +65807,212 @@ export namespace vtctldata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** Properties of a LookupVindexCompleteRequest. */
+    interface ILookupVindexCompleteRequest {
+
+        /** LookupVindexCompleteRequest keyspace */
+        keyspace?: (string|null);
+
+        /** LookupVindexCompleteRequest name */
+        name?: (string|null);
+
+        /** LookupVindexCompleteRequest table_keyspace */
+        table_keyspace?: (string|null);
+    }
+
+    /** Represents a LookupVindexCompleteRequest. */
+    class LookupVindexCompleteRequest implements ILookupVindexCompleteRequest {
+
+        /**
+         * Constructs a new LookupVindexCompleteRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.ILookupVindexCompleteRequest);
+
+        /** LookupVindexCompleteRequest keyspace. */
+        public keyspace: string;
+
+        /** LookupVindexCompleteRequest name. */
+        public name: string;
+
+        /** LookupVindexCompleteRequest table_keyspace. */
+        public table_keyspace: string;
+
+        /**
+         * Creates a new LookupVindexCompleteRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns LookupVindexCompleteRequest instance
+         */
+        public static create(properties?: vtctldata.ILookupVindexCompleteRequest): vtctldata.LookupVindexCompleteRequest;
+
+        /**
+         * Encodes the specified LookupVindexCompleteRequest message. Does not implicitly {@link vtctldata.LookupVindexCompleteRequest.verify|verify} messages.
+         * @param message LookupVindexCompleteRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.ILookupVindexCompleteRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified LookupVindexCompleteRequest message, length delimited. Does not implicitly {@link vtctldata.LookupVindexCompleteRequest.verify|verify} messages.
+         * @param message LookupVindexCompleteRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.ILookupVindexCompleteRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a LookupVindexCompleteRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns LookupVindexCompleteRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.LookupVindexCompleteRequest;
+
+        /**
+         * Decodes a LookupVindexCompleteRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns LookupVindexCompleteRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.LookupVindexCompleteRequest;
+
+        /**
+         * Verifies a LookupVindexCompleteRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a LookupVindexCompleteRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns LookupVindexCompleteRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.LookupVindexCompleteRequest;
+
+        /**
+         * Creates a plain object from a LookupVindexCompleteRequest message. Also converts values to other types if specified.
+         * @param message LookupVindexCompleteRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.LookupVindexCompleteRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this LookupVindexCompleteRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for LookupVindexCompleteRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a LookupVindexCompleteResponse. */
+    interface ILookupVindexCompleteResponse {
+
+        /** LookupVindexCompleteResponse workflow_deleted */
+        workflow_deleted?: (boolean|null);
+    }
+
+    /** Represents a LookupVindexCompleteResponse. */
+    class LookupVindexCompleteResponse implements ILookupVindexCompleteResponse {
+
+        /**
+         * Constructs a new LookupVindexCompleteResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.ILookupVindexCompleteResponse);
+
+        /** LookupVindexCompleteResponse workflow_deleted. */
+        public workflow_deleted: boolean;
+
+        /**
+         * Creates a new LookupVindexCompleteResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns LookupVindexCompleteResponse instance
+         */
+        public static create(properties?: vtctldata.ILookupVindexCompleteResponse): vtctldata.LookupVindexCompleteResponse;
+
+        /**
+         * Encodes the specified LookupVindexCompleteResponse message. Does not implicitly {@link vtctldata.LookupVindexCompleteResponse.verify|verify} messages.
+         * @param message LookupVindexCompleteResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.ILookupVindexCompleteResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified LookupVindexCompleteResponse message, length delimited. Does not implicitly {@link vtctldata.LookupVindexCompleteResponse.verify|verify} messages.
+         * @param message LookupVindexCompleteResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.ILookupVindexCompleteResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a LookupVindexCompleteResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns LookupVindexCompleteResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.LookupVindexCompleteResponse;
+
+        /**
+         * Decodes a LookupVindexCompleteResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns LookupVindexCompleteResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.LookupVindexCompleteResponse;
+
+        /**
+         * Verifies a LookupVindexCompleteResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a LookupVindexCompleteResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns LookupVindexCompleteResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.LookupVindexCompleteResponse;
+
+        /**
+         * Creates a plain object from a LookupVindexCompleteResponse message. Also converts values to other types if specified.
+         * @param message LookupVindexCompleteResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.LookupVindexCompleteResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this LookupVindexCompleteResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for LookupVindexCompleteResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
     /** Properties of a LookupVindexCreateRequest. */
     interface ILookupVindexCreateRequest {
 
