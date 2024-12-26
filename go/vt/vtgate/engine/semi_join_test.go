@@ -18,6 +18,7 @@ package engine
 
 import (
 	"context"
+	"sync"
 	"testing"
 
 	"vitess.io/vitess/go/test/utils"
@@ -208,11 +209,32 @@ func TestSemiJoinStreamExecuteParallelExecution(t *testing.T) {
 			"bv": 1,
 		},
 	}
+	var res *sqltypes.Result
+	var mu sync.Mutex
 	err := jn.TryStreamExecute(context.Background(), &noopVCursor{}, map[string]*querypb.BindVariable{}, true, func(result *sqltypes.Result) error {
+		mu.Lock()
+		defer mu.Unlock()
+		if res == nil {
+			res = result
+		} else {
+			res.Rows = append(res.Rows, result.Rows...)
+		}
 		return nil
 	})
 	require.NoError(t, err)
 	leftPrim.ExpectLog(t, []string{
 		`StreamExecute  true`,
 	})
+	// We'll get all the rows back in left primitive, since we're returning the same set of rows
+	// from the right primitive that makes them all qualify.
+	expectResultAnyOrder(t, res, sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"col1|col2|col3",
+			"int64|varchar|varchar",
+		),
+		"1|a|aa",
+		"2|b|bb",
+		"3|c|cc",
+		"4|d|dd",
+	))
 }
