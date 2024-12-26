@@ -18,10 +18,13 @@ package command
 
 import (
 	"fmt"
+	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
+	"vitess.io/vitess/go/vt/topo"
 
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
@@ -35,12 +38,30 @@ var (
 		Args:                  cobra.ExactArgs(1),
 		RunE:                  commandGetTopologyPath,
 	}
-
 	// The version of the key/path to get. If not specified, the latest/current
 	// version is returned.
 	version int64 = 0
 	// If true, only the data is output and it is in JSON format rather than prototext.
 	dataAsJSON bool = false
+
+	// WriteTopologyPath writes the contents of a local file to a path
+	// in the topology server.
+	WriteTopologyPath = &cobra.Command{
+		Use:                   "WriteTopologyPath --server=local <path> <file>",
+		Short:                 "Copies a local file to the topology server at the given path.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(2),
+		PreRunE: func(cmd *cobra.Command, args []string) error {
+			if VtctldClientProtocol != "local" {
+				cli.FinishedParsing(cmd)
+				return fmt.Errorf("The WriteTopologyPath command can only be used with --server=%s", useInternalVtctld)
+			}
+			return nil
+		},
+		RunE: commandWriteTopologyPath,
+	}
+	// The cell to use for the copy. Defaults to the global cell.
+	cell string
 )
 
 func commandGetTopologyPath(cmd *cobra.Command, args []string) error {
@@ -75,8 +96,36 @@ func commandGetTopologyPath(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func commandWriteTopologyPath(cmd *cobra.Command, args []string) error {
+	path := cmd.Flags().Arg(0)
+	file := cmd.Flags().Arg(1)
+	ts, err := topo.OpenServer(topoOptions.implementation, strings.Join(topoOptions.globalServerAddresses, ","), topoOptions.globalRoot)
+	if err != nil {
+		return fmt.Errorf("failed to connect to the topology server: %v", err)
+	}
+	cli.FinishedParsing(cmd)
+
+	conn, err := ts.ConnForCell(cmd.Context(), cell)
+	if err != nil {
+		return fmt.Errorf("failed to connect to the topology server: %v", err)
+	}
+	data, err := os.ReadFile(file)
+	if err != nil {
+		return fmt.Errorf("failed to read %s: %v", file, err)
+	}
+	_, err = conn.Update(cmd.Context(), path, data, nil)
+	if err != nil {
+		return fmt.Errorf("failed to write to topology server path %s: %v", path, err)
+	}
+
+	return nil
+}
+
 func init() {
 	GetTopologyPath.Flags().Int64Var(&version, "version", version, "The version of the path's key to get. If not specified, the latest version is returned.")
 	GetTopologyPath.Flags().BoolVar(&dataAsJSON, "data-as-json", dataAsJSON, "If true, only the data is output and it is in JSON format rather than prototext.")
 	Root.AddCommand(GetTopologyPath)
+
+	WriteTopologyPath.Flags().StringVar(&cell, "cell", topo.GlobalCell, "Topology server cell to copy the file to.")
+	Root.AddCommand(WriteTopologyPath)
 }
