@@ -345,8 +345,7 @@ func assertQueryDoesNotExecutesOnTablet(t *testing.T, conn *mysql.Conn, tablet *
 }
 
 func waitForWorkflowToBeCreated(t *testing.T, vc *VitessCluster, ksWorkflow string) {
-	keyspace, workflow, ok := strings.Cut(ksWorkflow, ".")
-	require.True(t, ok, "invalid <keyspace>.<workflow> value: %s", ksWorkflow)
+	keyspace, workflow := parseKeyspaceWorkflow(t, ksWorkflow)
 	require.NoError(t, waitForCondition("workflow to be created", func() bool {
 		output, err := vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", keyspace, "show", "--workflow", workflow, "--compact", "--include-logs=false")
 		return err == nil && output != emptyWorkflowShowResponse
@@ -359,8 +358,7 @@ func waitForWorkflowToBeCreated(t *testing.T, vc *VitessCluster, ksWorkflow stri
 // additional stream sub-state such as "message==for vdiff".
 // Invalid checks are ignored.
 func waitForWorkflowState(t *testing.T, vc *VitessCluster, ksWorkflow string, wantState string, fieldEqualityChecks ...string) {
-	keyspace, workflow, ok := strings.Cut(ksWorkflow, ".")
-	require.True(t, ok, "invalid <keyspace>.<workflow> value: %s", ksWorkflow)
+	keyspace, workflow := parseKeyspaceWorkflow(t, ksWorkflow)
 	done := false
 	timer := time.NewTimer(workflowStateTimeout)
 	log.Infof("Waiting for workflow %q to fully reach %q state", ksWorkflow, wantState)
@@ -1052,4 +1050,11 @@ func validateOverrides(t *testing.T, tabs map[string]*cluster.VttabletProcess, w
 			require.EqualValues(t, v, config[k])
 		}
 	}
+}
+
+func parseKeyspaceWorkflow(t *testing.T, ksWorkflow string) (string, string) {
+	t.Helper()
+	keyspace, workflow, ok := strings.Cut(ksWorkflow, ".")
+	require.True(t, ok, "invalid <keyspace>.<workflow> value: %s", ksWorkflow)
+	return keyspace, workflow
 }
