@@ -126,7 +126,7 @@ var Cases = []TestCase{
 	{Run: FnSHA1},
 	{Run: FnSHA2},
 	{Run: FnRandomBytes},
-	// Temporarily commenting failing test // {Run: FnDateFormat},
+	{Run: FnDateFormat},
 	{Run: FnConvertTz},
 	{Run: FnDate},
 	{Run: FnDayOfMonth},
