@@ -13736,7 +13736,7 @@ type ValidatePermissionsKeyspaceRequest struct {
 	unknownFields protoimpl.UnknownFields
 
 	Keyspace string `protobuf:"bytes,1,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
-	// If you want to validate a subset of the shards in the
+	// If you only want to validate a subset of the shards in the
 	// keyspace, then specify a list of shard names.
 	Shards []string `protobuf:"bytes,2,rep,name=shards,proto3" json:"shards,omitempty"`
 }
