@@ -510,7 +510,7 @@ func validateDryRunResults(t *testing.T, output string, want []string) {
 	gotDryRun := strings.Split(output, "\n")
 	require.True(t, len(gotDryRun) > 3)
 	var startRow int
-	if strings.HasPrefix(gotDryRun[1], "Parameters:") { // vtctlclient
+	if strings.HasPrefix(gotDryRun[1], "Parameters:") { // vtctldclient
 		startRow = 3
 	} else if strings.Contains(gotDryRun[0], "deprecated") {
 		startRow = 4

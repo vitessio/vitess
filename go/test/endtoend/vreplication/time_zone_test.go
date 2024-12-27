@@ -174,7 +174,7 @@ func TestMoveTablesTZ(t *testing.T) {
 		require.Equal(t, row.AsString("dt2", ""), qrTargetUSPacific.Named().Rows[i].AsString("dt2", ""))
 		require.Equal(t, row.AsString("ts1", ""), qrTargetUSPacific.Named().Rows[i].AsString("ts1", ""))
 	}
-	output, err = vc.VtctlClient.ExecuteCommandWithOutput("MoveTables", "--", "SwitchTraffic", ksWorkflow)
+	output, err = vc.VtctldClient.ExecuteCommandWithOutput("MoveTables", "--target-keyspace", targetKs, "SwitchTraffic", "--workflow", workflow)
 	require.NoError(t, err, output)
 
 	qr, err := productTab.QueryTablet(sqlparser.BuildParsedQuery("select * from %s.vreplication where workflow='%s_reverse'",
