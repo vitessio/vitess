@@ -97,6 +97,25 @@ For --sql, semi-colons and repeated values may be mixed, for example:
 		Args:                  cobra.ExactArgs(1),
 		RunE:                  commandReloadSchemaShard,
 	}
+	// ValidateSchemaKeyspace makes a ValidateSchemaKeyspace gRPC call to a vtctld.
+	ValidateSchemaKeyspace = &cobra.Command{
+		Use:                   "ValidateSchemaKeyspace [--exclude-tables=<exclude_tables>] [--include-views] [--skip-no-primary] [--include-vschema] <keyspace>",
+		Short:                 "Validates that the schema on the primary tablet for the first shard matches the schema on all other tablets in the keyspace.",
+		DisableFlagsInUseLine: true,
+		Aliases:               []string{"validateschemakeyspace"},
+		Args:                  cobra.ExactArgs(1),
+		RunE:                  commandValidateSchemaKeyspace,
+	}
+	// ValidateSchemaShard makes a ValidateSchemaKeyspace gRPC call to a vtctld WITH
+	// 1 specific shard to examine in the keyspace.
+	ValidateSchemaShard = &cobra.Command{
+		Use:                   "ValidateSchemaShard [--exclude-tables=<exclude_tables>] [--include-views] [--skip-no-primary] [--include-vschema] <keyspace/shard>",
+		Short:                 "Validates that the schema on the primary tablet for the specified shard matches the schema on all other tablets in that shard.",
+		DisableFlagsInUseLine: true,
+		Aliases:               []string{"validateschemashard"},
+		Args:                  cobra.ExactArgs(1),
+		RunE:                  commandValidateSchemaShard,
+	}
 )
 
 var applySchemaOptions = struct {
@@ -332,6 +351,75 @@ func commandReloadSchemaShard(cmd *cobra.Command, args []string) error {
 	return err
 }
 
+var validateSchemaKeyspaceOptions = struct {
+	ExcludeTables  []string
+	IncludeViews   bool
+	SkipNoPrimary  bool
+	IncludeVSchema bool
+}{}
+
+func commandValidateSchemaKeyspace(cmd *cobra.Command, args []string) error {
+	cli.FinishedParsing(cmd)
+
+	ks := cmd.Flags().Arg(0)
+	resp, err := client.ValidateSchemaKeyspace(commandCtx, &vtctldatapb.ValidateSchemaKeyspaceRequest{
+		Keyspace:       ks,
+		ExcludeTables:  validateSchemaKeyspaceOptions.ExcludeTables,
+		IncludeVschema: validateSchemaKeyspaceOptions.IncludeVSchema,
+		SkipNoPrimary:  validateSchemaKeyspaceOptions.SkipNoPrimary,
+		IncludeViews:   validateSchemaKeyspaceOptions.IncludeViews,
+	})
+
+	if err != nil {
+		return err
+	}
+
+	data, err := cli.MarshalJSON(resp)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%s\n", data)
+	return nil
+}
+
+var validateSchemaShardOptions = struct {
+	Shard          string
+	ExcludeTables  []string
+	IncludeViews   bool
+	SkipNoPrimary  bool
+	IncludeVSchema bool
+}{}
+
+func commandValidateSchemaShard(cmd *cobra.Command, args []string) error {
+	cli.FinishedParsing(cmd)
+
+	keyspace, shard, ok := strings.Cut(cmd.Flags().Arg(0), "/")
+	if !ok {
+		return fmt.Errorf("invalid '<keyspace>/<shard>' argument: %s", cmd.Flags().Arg(0))
+	}
+	resp, err := client.ValidateSchemaKeyspace(commandCtx, &vtctldatapb.ValidateSchemaKeyspaceRequest{
+		Keyspace:       keyspace,
+		Shards:         []string{shard},
+		ExcludeTables:  validateSchemaKeyspaceOptions.ExcludeTables,
+		IncludeVschema: validateSchemaKeyspaceOptions.IncludeVSchema,
+		SkipNoPrimary:  validateSchemaKeyspaceOptions.SkipNoPrimary,
+		IncludeViews:   validateSchemaKeyspaceOptions.IncludeViews,
+	})
+
+	if err != nil {
+		return err
+	}
+
+	data, err := cli.MarshalJSON(resp)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%s\n", data)
+	return nil
+}
+
 func init() {
 	ApplySchema.Flags().StringVar(&applySchemaOptions.DDLStrategy, "ddl-strategy", string(schema.DDLStrategyDirect), "Online DDL strategy, compatible with @@ddl_strategy session variable (examples: 'gh-ost', 'pt-osc', 'gh-ost --max-load=Threads_running=100'.")
 	ApplySchema.Flags().StringSliceVar(&applySchemaOptions.UUIDList, "uuid", nil, "Optional, comma-delimited, repeatable, explicit UUIDs for migration. If given, must match number of DDL changes.")
@@ -362,4 +450,16 @@ func init() {
 	ReloadSchemaShard.Flags().Int32Var(&reloadSchemaShardOptions.Concurrency, "concurrency", 10, "Number of tablets to reload in parallel. Set to zero for unbounded concurrency.")
 	ReloadSchemaShard.Flags().BoolVar(&reloadSchemaShardOptions.IncludePrimary, "include-primary", false, "Also reload the primary tablet.")
 	Root.AddCommand(ReloadSchemaShard)
+
+	ValidateSchemaKeyspace.Flags().BoolVar(&validateSchemaKeyspaceOptions.IncludeViews, "include-views", false, "Includes views in compared schemas.")
+	ValidateSchemaKeyspace.Flags().BoolVar(&validateSchemaKeyspaceOptions.IncludeVSchema, "include-vschema", false, "Includes VSchema validation in validation results.")
+	ValidateSchemaKeyspace.Flags().BoolVar(&validateSchemaKeyspaceOptions.SkipNoPrimary, "skip-no-primary", false, "Skips validation on whether or not a primary exists in shards.")
+	ValidateSchemaKeyspace.Flags().StringSliceVar(&validateSchemaKeyspaceOptions.ExcludeTables, "exclude-tables", []string{}, "Tables to exclude during schema comparison.")
+	Root.AddCommand(ValidateSchemaKeyspace)
+
+	ValidateSchemaShard.Flags().BoolVar(&validateSchemaKeyspaceOptions.IncludeViews, "include-views", false, "Includes views in compared schemas.")
+	ValidateSchemaShard.Flags().BoolVar(&validateSchemaKeyspaceOptions.IncludeVSchema, "include-vschema", false, "Includes VSchema validation in validation results.")
+	ValidateSchemaShard.Flags().BoolVar(&validateSchemaKeyspaceOptions.SkipNoPrimary, "skip-no-primary", false, "Skips validation on whether or not a primary exists in shards.")
+	ValidateSchemaShard.Flags().StringSliceVar(&validateSchemaKeyspaceOptions.ExcludeTables, "exclude-tables", []string{}, "Tables to exclude during schema comparison.")
+	Root.AddCommand(ValidateSchemaShard)
 }

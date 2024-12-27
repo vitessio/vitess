@@ -1866,6 +1866,9 @@ message ValidateSchemaKeyspaceRequest {
   bool include_views = 3;
   bool skip_no_primary = 4;
   bool include_vschema = 5;
+  // If you only want to validate a subset of the shards in the
+  // keyspace, then specify a list of shard names.
+  repeated string shards = 6;
 }
 
 message ValidateSchemaKeyspaceResponse {

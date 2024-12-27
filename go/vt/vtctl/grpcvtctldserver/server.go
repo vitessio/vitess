@@ -4706,11 +4706,18 @@ func (s *VtctldServer) ValidateSchemaKeyspace(ctx context.Context, req *vtctldat
 		Results: []string{},
 	}
 
-	shards, err := s.ts.GetShardNames(ctx, keyspace)
-	if err != nil {
-		resp.Results = append(resp.Results, fmt.Sprintf("TopologyServer.GetShardNames(%v) failed: %v", req.Keyspace, err))
-		err = nil
-		return resp, err
+	var shards []string
+	if len(req.Shards) != 0 {
+		// If the user has specified a list of specific shards, we'll use that.
+		shards = req.Shards
+	} else {
+		// Otherwise we look at all the shards in the keyspace.
+		shards, err = s.ts.GetShardNames(ctx, keyspace)
+		if err != nil {
+			resp.Results = append(resp.Results, fmt.Sprintf("TopologyServer.GetShardNames(%v) failed: %v", req.Keyspace, err))
+			err = nil
+			return resp, err
+		}
 	}
 
 	resp.ResultsByShard = make(map[string]*vtctldatapb.ValidateShardResponse, len(shards))
@@ -4753,7 +4760,7 @@ func (s *VtctldServer) ValidateSchemaKeyspace(ctx context.Context, req *vtctldat
 	)
 
 	r := &tabletmanagerdatapb.GetSchemaRequest{ExcludeTables: req.ExcludeTables, IncludeViews: req.IncludeViews}
-	for _, shard := range shards[0:] {
+	for _, shard := range shards {
 		wg.Add(1)
 		go func(shard string) {
 			defer wg.Done()

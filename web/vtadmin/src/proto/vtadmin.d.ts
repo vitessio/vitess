@@ -75670,6 +75670,9 @@ export namespace vtctldata {
 
         /** ValidateSchemaKeyspaceRequest include_vschema */
         include_vschema?: (boolean|null);
+
+        /** ValidateSchemaKeyspaceRequest shards */
+        shards?: (string[]|null);
     }
 
     /** Represents a ValidateSchemaKeyspaceRequest. */
@@ -75695,6 +75698,9 @@ export namespace vtctldata {
 
         /** ValidateSchemaKeyspaceRequest include_vschema. */
         public include_vschema: boolean;
+
+        /** ValidateSchemaKeyspaceRequest shards. */
+        public shards: string[];
 
         /**
          * Creates a new ValidateSchemaKeyspaceRequest instance using the specified properties.
