@@ -286,7 +286,7 @@ func TestVreplicationCopyThrottling(t *testing.T) {
 	moveTablesActionWithTabletTypes(t, "Create", defaultCell.Name, workflow, sourceKs, targetKs, table, "primary", true)
 	// Wait for the copy phase to start
 	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKs, workflow), binlogdatapb.VReplicationWorkflowState_Copying.String())
-	// The initial copy phase should be blocking on the history list
+	// The initial copy phase should be blocking on the history list.
 	confirmWorkflowHasCopiedNoData(t, targetKs, workflow)
 	releaseInnoDBRowHistory(t, trxConn)
 	trxConn.Close()
@@ -623,7 +623,7 @@ func TestCellAliasVreplicationWorkflow(t *testing.T) {
 		testVStreamFrom(t, vtgate, keyspace, 2)
 	})
 	shardCustomer(t, true, []*Cell{cell1, cell2}, "alias", false)
-	isTableInDenyList(t, vc, "product:0", "customer")
+	isTableInDenyList(t, vc, "product/0", "customer")
 	// we tag along this test so as not to create the overhead of creating another cluster
 	testVStreamCellFlag(t)
 }
@@ -878,13 +878,13 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			switchWrites(t, workflowType, ksWorkflow, false)
 
 			var exists bool
-			exists, err = isTableInDenyList(t, vc, "product:0", "customer")
+			exists, err = isTableInDenyList(t, vc, "product/0", "customer")
 			require.NoError(t, err, "Error getting denylist for customer:0")
 			require.True(t, exists)
 
 			moveTablesAction(t, "Complete", cellNames, workflow, sourceKs, targetKs, tables)
 
-			exists, err = isTableInDenyList(t, vc, "product:0", "customer")
+			exists, err = isTableInDenyList(t, vc, "product/0", "customer")
 			require.NoError(t, err, "Error getting denylist for customer:0")
 			require.False(t, exists)
 
@@ -1739,12 +1739,12 @@ func waitForInnoDBHistoryLength(t *testing.T, tablet *cluster.VttabletProcess, e
 		require.Equal(t, 1, len(res.Rows))
 		historyLen, err = res.Rows[0][0].ToInt64()
 		require.NoError(t, err)
-		if historyLen > expectedLength {
+		if historyLen >= expectedLength {
 			return
 		}
 		select {
 		case <-timer.C:
-			t.Fatalf("Did not reach the expected InnoDB history length of %d before the timeout of %s; last seen value: %d", expectedLength, defaultTimeout, historyLen)
+			require.FailNow(t, "Did not reach the minimum expected InnoDB history length of %d before the timeout of %s; last seen value: %d", expectedLength, defaultTimeout, historyLen)
 		default:
 			time.Sleep(defaultTick)
 		}
