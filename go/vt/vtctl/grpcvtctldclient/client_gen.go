@@ -1046,6 +1046,15 @@ func (client *gRPCVtctldClient) ValidateKeyspace(ctx context.Context, in *vtctld
 	return client.c.ValidateKeyspace(ctx, in, opts...)
 }
 
+// ValidatePermissionsKeyspace is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) ValidatePermissionsKeyspace(ctx context.Context, in *vtctldatapb.ValidatePermissionsKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.ValidatePermissionsKeyspaceResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.ValidatePermissionsKeyspace(ctx, in, opts...)
+}
+
 // ValidateSchemaKeyspace is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) ValidateSchemaKeyspace(ctx context.Context, in *vtctldatapb.ValidateSchemaKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.ValidateSchemaKeyspaceResponse, error) {
 	if client.c == nil {

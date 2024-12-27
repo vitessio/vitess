@@ -4691,6 +4691,89 @@ func (s *VtctldServer) ValidateKeyspace(ctx context.Context, req *vtctldatapb.Va
 	return resp, err
 }
 
+// ValidatePermissionsKeyspace validates that all the permissions are the
+// same in a keyspace.
+func (s *VtctldServer) ValidatePermissionsKeyspace(ctx context.Context, req *vtctldatapb.ValidatePermissionsKeyspaceRequest) (resp *vtctldatapb.ValidatePermissionsKeyspaceResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ValidatePermissionsKeyspace")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("shards", req.Shards)
+
+	var shards []string
+	if len(req.Shards) != 0 {
+		// If the user has specified a list of specific shards, we'll use that.
+		shards = req.Shards
+	} else {
+		// Validate all the shards
+		shards, err = s.ts.GetShardNames(ctx, req.Keyspace)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if len(shards) == 0 {
+		return nil, fmt.Errorf("no shards in keyspace %v", req.Keyspace)
+	}
+	sort.Strings(shards)
+
+	// Find the reference permissions using the first shard's primary.
+	si, err := s.ts.GetShard(ctx, req.Keyspace, shards[0])
+	if err != nil {
+		return nil, err
+	}
+	if !si.HasPrimary() {
+		return nil, fmt.Errorf("no primary tablet in shard %s/%s", req.Keyspace, shards[0])
+	}
+	referenceAlias := si.PrimaryAlias
+	log.Infof("Gathering permissions for reference primary %s", topoproto.TabletAliasString(referenceAlias))
+	pres, err := s.GetPermissions(ctx, &vtctldatapb.GetPermissionsRequest{
+		TabletAlias: si.PrimaryAlias,
+	})
+	if err != nil {
+		return nil, err
+	}
+	referencePermissions := pres.Permissions
+
+	// Then diff the first tablet with all others.
+	eg, egctx := errgroup.WithContext(ctx)
+	for _, shard := range shards {
+		eg.Go(func() error {
+			aliases, err := s.ts.FindAllTabletAliasesInShard(egctx, req.Keyspace, shard)
+			if err != nil {
+				return err
+			}
+			for _, alias := range aliases {
+				if topoproto.TabletAliasEqual(alias, si.PrimaryAlias) {
+					continue
+				}
+				log.Infof("Gathering permissions for %v", topoproto.TabletAliasString(alias))
+				presp, err := s.GetPermissions(ctx, &vtctldatapb.GetPermissionsRequest{
+					TabletAlias: alias,
+				})
+				if err != nil {
+					return err
+				}
+
+				log.Infof("Diffing permissions for %s", topoproto.TabletAliasString(alias))
+				er := &concurrency.AllErrorRecorder{}
+				tmutils.DiffPermissions(topoproto.TabletAliasString(referenceAlias), referencePermissions,
+					topoproto.TabletAliasString(alias), presp.Permissions, er)
+				if er.HasErrors() {
+					return er.Error()
+				}
+			}
+			return nil
+		})
+	}
+	if err := eg.Wait(); err != nil {
+		return nil, fmt.Errorf("permissions diffs: %v", err)
+	}
+	return &vtctldatapb.ValidatePermissionsKeyspaceResponse{}, nil
+}
+
 // ValidateSchemaKeyspace is a part of the vtctlservicepb.VtctldServer interface.
 // It will diff the schema from all the tablets in the keyspace.
 func (s *VtctldServer) ValidateSchemaKeyspace(ctx context.Context, req *vtctldatapb.ValidateSchemaKeyspaceRequest) (resp *vtctldatapb.ValidateSchemaKeyspaceResponse, err error) {

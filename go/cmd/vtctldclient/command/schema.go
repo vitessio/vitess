@@ -356,6 +356,7 @@ var validateSchemaKeyspaceOptions = struct {
 	IncludeViews   bool
 	SkipNoPrimary  bool
 	IncludeVSchema bool
+	Shard          string
 }{}
 
 func commandValidateSchemaKeyspace(cmd *cobra.Command, args []string) error {
@@ -383,21 +384,14 @@ func commandValidateSchemaKeyspace(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-var validateSchemaShardOptions = struct {
-	Shard          string
-	ExcludeTables  []string
-	IncludeViews   bool
-	SkipNoPrimary  bool
-	IncludeVSchema bool
-}{}
-
 func commandValidateSchemaShard(cmd *cobra.Command, args []string) error {
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(cmd.Flags().Arg(0))
+	if err != nil {
+		return err
+	}
+
 	cli.FinishedParsing(cmd)
 
-	keyspace, shard, ok := strings.Cut(cmd.Flags().Arg(0), "/")
-	if !ok {
-		return fmt.Errorf("invalid '<keyspace>/<shard>' argument: %s", cmd.Flags().Arg(0))
-	}
 	resp, err := client.ValidateSchemaKeyspace(commandCtx, &vtctldatapb.ValidateSchemaKeyspaceRequest{
 		Keyspace:       keyspace,
 		Shards:         []string{shard},

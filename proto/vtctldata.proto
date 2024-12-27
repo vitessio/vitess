@@ -1860,6 +1860,16 @@ message ValidateKeyspaceResponse {
   map<string, ValidateShardResponse> results_by_shard = 2;
 }
 
+message ValidatePermissionsKeyspaceRequest {
+  string keyspace = 1;
+  // If you only want to validate a subset of the shards in the
+  // keyspace, then specify a list of shard names.
+  repeated string shards = 2;
+}
+
+message ValidatePermissionsKeyspaceResponse {
+}
+
 message ValidateSchemaKeyspaceRequest {
   string keyspace = 1;
   repeated string exclude_tables = 2;

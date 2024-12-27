@@ -449,7 +449,9 @@ type VtctldClient interface {
 	// ValidateKeyspace validates that all nodes reachable from the specified
 	// keyspace are consistent.
 	ValidateKeyspace(ctx context.Context, in *vtctldata.ValidateKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.ValidateKeyspaceResponse, error)
-	// ValidateSchemaKeyspace validates that the schema on the primary tablet for the first shard matches the schema on all of the other tablets in the keyspace.
+	// // ValidatePermissionsKeyspace validates that all the permissions are the same in a keyspace.
+	ValidatePermissionsKeyspace(ctx context.Context, in *vtctldata.ValidatePermissionsKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.ValidatePermissionsKeyspaceResponse, error)
+	// // ValidatePermissionsShard validates that all the permissions are the same in a keyspace.
 	ValidateSchemaKeyspace(ctx context.Context, in *vtctldata.ValidateSchemaKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.ValidateSchemaKeyspaceResponse, error)
 	// ValidateShard validates that all nodes reachable from the specified shard
 	// are consistent.
@@ -1517,6 +1519,15 @@ func (c *vtctldClient) ValidateKeyspace(ctx context.Context, in *vtctldata.Valid
 	return out, nil
 }
 
+func (c *vtctldClient) ValidatePermissionsKeyspace(ctx context.Context, in *vtctldata.ValidatePermissionsKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.ValidatePermissionsKeyspaceResponse, error) {
+	out := new(vtctldata.ValidatePermissionsKeyspaceResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/ValidatePermissionsKeyspace", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vtctldClient) ValidateSchemaKeyspace(ctx context.Context, in *vtctldata.ValidateSchemaKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.ValidateSchemaKeyspaceResponse, error) {
 	out := new(vtctldata.ValidateSchemaKeyspaceResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/ValidateSchemaKeyspace", in, out, opts...)
@@ -1978,7 +1989,9 @@ type VtctldServer interface {
 	// ValidateKeyspace validates that all nodes reachable from the specified
 	// keyspace are consistent.
 	ValidateKeyspace(context.Context, *vtctldata.ValidateKeyspaceRequest) (*vtctldata.ValidateKeyspaceResponse, error)
-	// ValidateSchemaKeyspace validates that the schema on the primary tablet for the first shard matches the schema on all of the other tablets in the keyspace.
+	// // ValidatePermissionsKeyspace validates that all the permissions are the same in a keyspace.
+	ValidatePermissionsKeyspace(context.Context, *vtctldata.ValidatePermissionsKeyspaceRequest) (*vtctldata.ValidatePermissionsKeyspaceResponse, error)
+	// // ValidatePermissionsShard validates that all the permissions are the same in a keyspace.
 	ValidateSchemaKeyspace(context.Context, *vtctldata.ValidateSchemaKeyspaceRequest) (*vtctldata.ValidateSchemaKeyspaceResponse, error)
 	// ValidateShard validates that all nodes reachable from the specified shard
 	// are consistent.
@@ -2331,6 +2344,9 @@ func (UnimplementedVtctldServer) Validate(context.Context, *vtctldata.ValidateRe
 }
 func (UnimplementedVtctldServer) ValidateKeyspace(context.Context, *vtctldata.ValidateKeyspaceRequest) (*vtctldata.ValidateKeyspaceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ValidateKeyspace not implemented")
+}
+func (UnimplementedVtctldServer) ValidatePermissionsKeyspace(context.Context, *vtctldata.ValidatePermissionsKeyspaceRequest) (*vtctldata.ValidatePermissionsKeyspaceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ValidatePermissionsKeyspace not implemented")
 }
 func (UnimplementedVtctldServer) ValidateSchemaKeyspace(context.Context, *vtctldata.ValidateSchemaKeyspaceRequest) (*vtctldata.ValidateSchemaKeyspaceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ValidateSchemaKeyspace not implemented")
@@ -4328,6 +4344,24 @@ func _Vtctld_ValidateKeyspace_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vtctld_ValidatePermissionsKeyspace_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.ValidatePermissionsKeyspaceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).ValidatePermissionsKeyspace(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/ValidatePermissionsKeyspace",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).ValidatePermissionsKeyspace(ctx, req.(*vtctldata.ValidatePermissionsKeyspaceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Vtctld_ValidateSchemaKeyspace_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtctldata.ValidateSchemaKeyspaceRequest)
 	if err := dec(in); err != nil {
@@ -5038,6 +5072,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ValidateKeyspace",
 			Handler:    _Vtctld_ValidateKeyspace_Handler,
+		},
+		{
+			MethodName: "ValidatePermissionsKeyspace",
+			Handler:    _Vtctld_ValidatePermissionsKeyspace_Handler,
 		},
 		{
 			MethodName: "ValidateSchemaKeyspace",
