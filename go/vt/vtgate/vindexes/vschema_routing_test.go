@@ -4,7 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 	"sort"
+	"strings"
 	"testing"
+
+	"vitess.io/vitess/go/vt/log"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -14,6 +17,17 @@ import (
 )
 
 func TestAutoGlobalRoutingExt(t *testing.T) {
+	isTableGloballyRoutable := func(vschema *VSchema, tableName string) (isGlobal, isAmbiguous bool) {
+		table, err := vschema.FindTable("", tableName)
+		if err != nil {
+			if strings.Contains(err.Error(), "ambiguous") {
+				return false, true
+			}
+			log.Infof("error finding table %s: %v", tableName, err)
+			return false, false
+		}
+		return table != nil, false
+	}
 	type testKeySpace struct {
 		name string
 		ks   *vschemapb.Keyspace
@@ -41,42 +55,55 @@ func TestAutoGlobalRoutingExt(t *testing.T) {
 			},
 		},
 	}
-	sharded1 := &vschemapb.Keyspace{
-		Sharded: true,
-		Vindexes: map[string]*vschemapb.Vindex{
-			"xxhash": {
-				Type: "xxhash",
+	sharded1 := &testKeySpace{
+		name: "sharded1",
+		ks: &vschemapb.Keyspace{
+			Sharded: true,
+			Vindexes: map[string]*vschemapb.Vindex{
+				"xxhash": {
+					Type: "xxhash",
+				},
+			},
+			Tables: map[string]*vschemapb.Table{
+				"table5":   {}, // unique, should be added to global routing
+				"scommon1": {}, // common with unsharded1 and unsharded2, should be added to global routing because it's in the vschema
+				"scommon2": {}, // common with unsharded2, ambiguous because of sharded2
 			},
 		},
-		Tables: map[string]*vschemapb.Table{
-			"table5":   {}, // unique, should be added to global routing
-			"scommon1": {}, // common with unsharded1 and unsharded2, should be added to global routing because it's in the vschema
-			"scommon2": {}, // common with unsharded2, ambiguous because of sharded2
-		},
 	}
-	sharded2 := &vschemapb.Keyspace{
-		Sharded:                true,
-		RequireExplicitRouting: true,
-		Vindexes: map[string]*vschemapb.Vindex{
-			"xxhash": {
-				Type: "xxhash",
+	sharded2 := &testKeySpace{
+		name: "sharded2",
+		ks: &vschemapb.Keyspace{
+			Sharded:                true,
+			RequireExplicitRouting: true,
+			Vindexes: map[string]*vschemapb.Vindex{
+				"xxhash": {
+					Type: "xxhash",
+				},
+			},
+			// none should be considered for choice as global or ambiguous because of RequireExplicitRouting
+			Tables: map[string]*vschemapb.Table{
+				"table6":   {}, // unique
+				"scommon2": {}, // common with sharded2, but has RequireExplicitRouting
+				"scommon3": {}, // common with sharded2
 			},
 		},
-		// none should be considered for choice as global or ambiguous because of RequireExplicitRouting
-		Tables: map[string]*vschemapb.Table{
-			"table6":   {}, // unique
-			"scommon2": {}, // common with sharded2, but has RequireExplicitRouting
-			"scommon3": {}, // common with sharded2
-		},
 	}
-	_ = sharded1
-	_ = sharded2
+	for _, tables := range []*vschemapb.Keyspace{sharded1.ks, sharded2.ks} {
+		for _, t := range tables.Tables {
+			t.ColumnVindexes = append(t.ColumnVindexes, &vschemapb.ColumnVindex{
+				Column: "c1",
+				Name:   "xxhash",
+			})
+		}
+	}
 	type testCase struct {
 		name                            string
 		keyspaces                       []*testKeySpace
 		expectedGlobalTables            []string
 		expectedAmbiguousTables         []string
 		requireExplicitRoutingKeyspaces []string
+		enabled                         bool
 	}
 	testCases := []testCase{
 		{
@@ -84,34 +111,54 @@ func TestAutoGlobalRoutingExt(t *testing.T) {
 			keyspaces:               []*testKeySpace{},
 			expectedGlobalTables:    nil,
 			expectedAmbiguousTables: nil,
+			enabled:                 true,
 		},
 		{
 			name:                    "one unsharded keyspace",
 			keyspaces:               []*testKeySpace{unsharded1},
 			expectedGlobalTables:    []string{"table1", "table2", "scommon1", "ucommon3"},
 			expectedAmbiguousTables: nil,
+			enabled:                 true,
 		},
 		{
 			name:                    "two unsharded keyspaces",
 			keyspaces:               []*testKeySpace{unsharded1, unsharded2},
 			expectedGlobalTables:    []string{"table1", "table2", "table3", "table4", "scommon2"},
 			expectedAmbiguousTables: []string{"scommon1", "ucommon3"},
+			enabled:                 true,
 		},
 		{
 			name:                            "two unsharded keyspaces, one with RequireExplicitRouting",
 			keyspaces:                       []*testKeySpace{unsharded1, unsharded2},
 			requireExplicitRoutingKeyspaces: []string{"unsharded1"},
 			expectedGlobalTables:            []string{"table3", "table4", "scommon1", "scommon2", "ucommon3"},
+			enabled:                         false,
+		},
+		{
+			name:                 "one sharded keyspace",
+			keyspaces:            []*testKeySpace{sharded1},
+			expectedGlobalTables: []string{"table5", "scommon1", "scommon2"},
+			enabled:              true,
 		},
 	}
 	for _, tc := range testCases {
+		if !tc.enabled {
+			continue
+		}
 		t.Run(tc.name, func(t *testing.T) {
+			allTables := make(map[string]bool)
 			source := &vschemapb.SrvVSchema{
 				Keyspaces: make(map[string]*vschemapb.Keyspace),
 			}
 			for _, ks := range tc.keyspaces {
 				source.Keyspaces[ks.name] = ks.ks
 				ks.ks.RequireExplicitRouting = false
+				for tname := range ks.ks.Tables {
+					_, ok := allTables[tname]
+					if !ok {
+						allTables[tname] = true
+					}
+				}
 			}
 			for _, ksName := range tc.requireExplicitRoutingKeyspaces {
 				source.Keyspaces[ksName].RequireExplicitRouting = true
@@ -121,10 +168,11 @@ func TestAutoGlobalRoutingExt(t *testing.T) {
 			AddAdditionalGlobalTables(source, vschema)
 
 			var globalTables, ambiguousTables []string
-			for tname, table := range vschema.globalTables {
-				if table != nil {
+			for tname := range allTables {
+				isGlobal, isAmbiguous := isTableGloballyRoutable(vschema, tname)
+				if isGlobal {
 					globalTables = append(globalTables, tname)
-				} else {
+				} else if isAmbiguous {
 					ambiguousTables = append(ambiguousTables, tname)
 				}
 			}
@@ -132,8 +180,8 @@ func TestAutoGlobalRoutingExt(t *testing.T) {
 			sort.Strings(ambiguousTables)
 			sort.Strings(tc.expectedGlobalTables)
 			sort.Strings(tc.expectedAmbiguousTables)
-			assert.Equal(t, tc.expectedGlobalTables, globalTables)
-			assert.Equal(t, tc.expectedAmbiguousTables, ambiguousTables)
+			require.EqualValuesf(t, tc.expectedGlobalTables, globalTables, "global tables mismatch")
+			require.EqualValuesf(t, tc.expectedAmbiguousTables, ambiguousTables, "ambiguous tables mismatch")
 		})
 	}
 }
