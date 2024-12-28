@@ -365,13 +365,13 @@ func testPartialMoveTablesBasic(t *testing.T, flavor workflowFlavor) {
 
 		output, err := vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", reverseKs, "show", "--workflow", reverseWf, "--shards", opts.shardSubset)
 		require.NoError(t, err)
-		require.Equal(t, emptyWorkflowShowResponse, output)
+		require.True(t, isEmptyWorkflowShowOutput(output))
 
 		// Be sure we've deleted the original workflow.
 		_, _ = vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", targetKs, "delete", "--workflow", wf, "--shards", opts.shardSubset)
 		output, err = vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", targetKs, "show", "--workflow", wf, "--shards", opts.shardSubset)
 		require.NoError(t, err, output)
-		require.Equal(t, emptyWorkflowShowResponse, output)
+		require.True(t, isEmptyWorkflowShowOutput(output))
 	}
 
 	// Confirm that the global routing rules are now gone.

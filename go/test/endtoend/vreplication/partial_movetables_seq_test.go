@@ -38,11 +38,6 @@ import (
 	As part of a separate cleanup we will build on this framework to replace the existing one.
 */
 
-const emptyWorkflowShowResponse = `{
-  "workflows": []
-}
-`
-
 type keyspace struct {
 	name    string
 	vschema string
@@ -505,13 +500,13 @@ func TestPartialMoveTablesWithSequences(t *testing.T) {
 
 			output, err := tc.vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", reverseKs, "show", "--workflow", reverseWf)
 			require.NoError(t, err)
-			require.Equal(t, emptyWorkflowShowResponse, output)
+			require.True(t, isEmptyWorkflowShowOutput(output))
 
 			// Be sure that we've deleted the original workflow.
 			_, _ = tc.vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", targetKs, "delete", "--workflow", wf)
 			output, err = tc.vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", targetKs, "show", "--workflow", wf)
 			require.NoError(t, err)
-			require.Equal(t, emptyWorkflowShowResponse, output)
+			require.True(t, isEmptyWorkflowShowOutput(output))
 		}
 
 		// Confirm that the global routing rules are now gone.
