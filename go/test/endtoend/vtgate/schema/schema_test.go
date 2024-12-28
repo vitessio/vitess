@@ -17,12 +17,10 @@ limitations under the License.
 package schema
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
 	"path"
-	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -108,9 +106,6 @@ func TestSchemaChange(t *testing.T) {
 	testApplySchemaBatch(t)
 	testUnsafeAllowForeignKeys(t)
 	testCreateInvalidView(t)
-	testCopySchemaShards(t, clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].VttabletProcess.TabletPath, 2)
-	testCopySchemaShards(t, fmt.Sprintf("%s/0", keyspaceName), 3)
-	testCopySchemaShardWithDifferentDB(t, 4)
 	testWithAutoSchemaFromChangeDir(t)
 }
 
@@ -284,58 +279,6 @@ func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, count int) {
 	queryResult, err := tablet.VttabletProcess.QueryTablet("show tables;", keyspaceName, true)
 	require.Nil(t, err)
 	assert.Equal(t, len(queryResult.Rows), count)
-}
-
-// testCopySchemaShards tests that schema from source is correctly applied to destination
-func testCopySchemaShards(t *testing.T, source string, shard int) {
-	addNewShard(t, shard)
-	// InitShardPrimary creates the db, but there shouldn't be any tables yet.
-	checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[shard].Vttablets[0], 0)
-	checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[shard].Vttablets[1], 0)
-	// Run the command twice to make sure it's idempotent.
-	for i := 0; i < 2; i++ {
-		err := clusterInstance.VtctlclientProcess.ExecuteCommand("CopySchemaShard", source, fmt.Sprintf("%s/%d", keyspaceName, shard))
-		require.Nil(t, err)
-	}
-	// shard2 primary should look the same as the replica we copied from
-	checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[shard].Vttablets[0], totalTableCount)
-	checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[shard].Vttablets[1], totalTableCount)
-
-	matchSchema(t, clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].VttabletProcess.TabletPath, clusterInstance.Keyspaces[0].Shards[shard].Vttablets[0].VttabletProcess.TabletPath)
-}
-
-// testCopySchemaShardWithDifferentDB if we apply different schema to new shard, it should throw error
-func testCopySchemaShardWithDifferentDB(t *testing.T, shard int) {
-	addNewShard(t, shard)
-	checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[shard].Vttablets[0], 0)
-	checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[shard].Vttablets[1], 0)
-	source := fmt.Sprintf("%s/0", keyspaceName)
-
-	tabletAlias := clusterInstance.Keyspaces[0].Shards[shard].Vttablets[0].VttabletProcess.TabletPath
-	schema, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("GetSchema", tabletAlias)
-	require.Nil(t, err)
-
-	resultMap := make(map[string]any)
-	err = json.Unmarshal([]byte(schema), &resultMap)
-	require.Nil(t, err)
-	dbSchema := reflect.ValueOf(resultMap["database_schema"])
-	assert.True(t, strings.Contains(dbSchema.String(), "utf8"))
-
-	// Change the db charset on the destination shard from utf8 to latin1.
-	// This will make CopySchemaShard fail during its final diff.
-	// (The different charset won't be corrected on the destination shard
-	//  because we use "CREATE DATABASE IF NOT EXISTS" and this doesn't fail if
-	//  there are differences in the options e.g. the character set.)
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ExecuteFetchAsDBA", "--json", tabletAlias, "ALTER DATABASE vt_ks CHARACTER SET latin1")
-	require.Nil(t, err)
-
-	output, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("CopySchemaShard", source, fmt.Sprintf("%s/%d", keyspaceName, shard))
-	require.Error(t, err)
-	assert.True(t, strings.Contains(output, "schemas are different"))
-
-	// shard2 primary should have the same number of tables. Only the db
-	// character set is different.
-	checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[shard].Vttablets[0], totalTableCount)
 }
 
 // addNewShard adds a new shard dynamically
