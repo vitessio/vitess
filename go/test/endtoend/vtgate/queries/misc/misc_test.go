@@ -480,3 +480,23 @@ func TestEnumSetVals(t *testing.T) {
 	mcmp.AssertMatches("select id, enum_col, cast(enum_col as signed) from tbl_enum_set order by enum_col, id", `[[INT64(4) ENUM("xsmall") INT64(1)] [INT64(2) ENUM("small") INT64(2)] [INT64(1) ENUM("medium") INT64(3)] [INT64(5) ENUM("medium") INT64(3)] [INT64(3) ENUM("large") INT64(4)]]`)
 	mcmp.AssertMatches("select id, set_col, cast(set_col as unsigned) from tbl_enum_set order by set_col, id", `[[INT64(4) SET("a,b") UINT64(3)] [INT64(3) SET("c") UINT64(4)] [INT64(5) SET("a,d") UINT64(9)] [INT64(1) SET("a,b,e") UINT64(19)] [INT64(2) SET("e,f,g") UINT64(112)]]`)
 }
+
+// TestSemiJoin tests that the semi join works as intended.
+func TestSemiJoin(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	for i := 1; i <= 1000; i++ {
+		mcmp.Exec(fmt.Sprintf("insert into t1(id1, id2) values (%d, %d)", i, 2*i))
+		mcmp.Exec(fmt.Sprintf("insert into tbl(id, unq_col, nonunq_col) values (%d, %d, %d)", i, 2*i, 3*i))
+	}
+
+	// Test that the semi join works as intended
+	for _, mode := range []string{"oltp", "olap"} {
+		mcmp.Run(mode, func(mcmp *utils.MySQLCompare) {
+			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = %s", mode))
+
+			mcmp.Exec("select id1, id2 from t1 where exists (select id from tbl where nonunq_col = t1.id2) order by id1")
+		})
+	}
+}
