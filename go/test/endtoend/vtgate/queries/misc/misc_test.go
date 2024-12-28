@@ -577,7 +577,6 @@ func TestTimeZones(t *testing.T) {
 
 // TestSemiJoin tests that the semi join works as intended.
 func TestSemiJoin(t *testing.T) {
-	utils.SkipIfBinaryIsBelowVersion(t, 22, "vtgate")
 	mcmp, closer := start(t)
 	defer closer()
 
