@@ -361,6 +361,7 @@ func waitForWorkflowState(t *testing.T, vc *VitessCluster, ksWorkflow string, wa
 	keyspace, workflow := parseKeyspaceWorkflow(t, ksWorkflow)
 	done := false
 	timer := time.NewTimer(workflowStateTimeout)
+	defer timer.Stop()
 	log.Infof("Waiting for workflow %q to fully reach %q state", ksWorkflow, wantState)
 	for {
 		output, err := vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", keyspace, "show", "--workflow", workflow, "--compact", "--include-logs=false")
@@ -417,7 +418,8 @@ func waitForWorkflowState(t *testing.T, vc *VitessCluster, ksWorkflow string, wa
 // were re-added by the time the workflow hits the running phase.
 // For a Reshard workflow, where no tables are specified, pass
 // an empty string for the tables and all tables in the target
-// keyspace will be checked.
+// keyspace will be checked. It checks for the expected state until
+// the timeout is reached.
 func confirmTablesHaveSecondaryKeys(t *testing.T, tablets []*cluster.VttabletProcess, ksName string, tables string) {
 	require.NotNil(t, tablets)
 	require.NotNil(t, tablets[0])
@@ -434,36 +436,52 @@ func confirmTablesHaveSecondaryKeys(t *testing.T, tablets []*cluster.VttabletPro
 			tableArr = append(tableArr, row[0].ToString())
 		}
 	}
-	for _, tablet := range tablets {
-		// Be sure that the schema is up to date.
-		err := vc.VtctldClient.ExecuteCommand("ReloadSchema", topoproto.TabletAliasString(&topodatapb.TabletAlias{
-			Cell: tablet.Cell,
-			Uid:  uint32(tablet.TabletUID),
-		}))
-		require.NoError(t, err)
-		for _, table := range tableArr {
-			if schema.IsInternalOperationTableName(table) {
-				continue
-			}
-			table := strings.TrimSpace(table)
-			secondaryKeys := 0
-			res, err := tablet.QueryTablet(fmt.Sprintf("show create table %s", sqlescape.EscapeID(table)), ksName, true)
+	timer := time.NewTimer(defaultTimeout)
+	defer timer.Stop()
+	for {
+		tablesWithoutSecondaryKeys := make([]string, 0)
+		for _, tablet := range tablets {
+			// Be sure that the schema is up to date.
+			err := vc.VtctldClient.ExecuteCommand("ReloadSchema", topoproto.TabletAliasString(&topodatapb.TabletAlias{
+				Cell: tablet.Cell,
+				Uid:  uint32(tablet.TabletUID),
+			}))
 			require.NoError(t, err)
-			require.NotNil(t, res)
-			row := res.Named().Row()
-			tableSchema := row["Create Table"].ToString()
-			parsedDDL, err := sqlparser.NewTestParser().ParseStrictDDL(tableSchema)
-			require.NoError(t, err)
-			createTable, ok := parsedDDL.(*sqlparser.CreateTable)
-			require.True(t, ok)
-			require.NotNil(t, createTable)
-			require.NotNil(t, createTable.GetTableSpec())
-			for _, index := range createTable.GetTableSpec().Indexes {
-				if index.Info.Type != sqlparser.IndexTypePrimary {
-					secondaryKeys++
+			for _, table := range tableArr {
+				if schema.IsInternalOperationTableName(table) {
+					continue
+				}
+				table := strings.TrimSpace(table)
+				secondaryKeys := 0
+				res, err := tablet.QueryTablet(fmt.Sprintf("show create table %s", sqlescape.EscapeID(table)), ksName, true)
+				require.NoError(t, err)
+				require.NotNil(t, res)
+				row := res.Named().Row()
+				tableSchema := row["Create Table"].ToString()
+				parsedDDL, err := sqlparser.NewTestParser().ParseStrictDDL(tableSchema)
+				require.NoError(t, err)
+				createTable, ok := parsedDDL.(*sqlparser.CreateTable)
+				require.True(t, ok)
+				require.NotNil(t, createTable)
+				require.NotNil(t, createTable.GetTableSpec())
+				for _, index := range createTable.GetTableSpec().Indexes {
+					if index.Info.Type != sqlparser.IndexTypePrimary {
+						secondaryKeys++
+					}
+				}
+				if secondaryKeys == 0 {
+					tablesWithoutSecondaryKeys = append(tablesWithoutSecondaryKeys, table)
 				}
 			}
-			require.Greater(t, secondaryKeys, 0, "Table %s does not have any secondary keys", table)
+		}
+		if len(tablesWithoutSecondaryKeys) == 0 {
+			return
+		}
+		select {
+		case <-timer.C:
+			require.FailNow(t, "The following table(s) do not have any secondary keys: %s", strings.Join(tablesWithoutSecondaryKeys, ", "))
+		default:
+			time.Sleep(defaultTick)
 		}
 	}
 }
