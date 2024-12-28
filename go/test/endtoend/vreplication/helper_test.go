@@ -348,7 +348,7 @@ func waitForWorkflowToBeCreated(t *testing.T, vc *VitessCluster, ksWorkflow stri
 	keyspace, workflow := parseKeyspaceWorkflow(t, ksWorkflow)
 	require.NoError(t, waitForCondition("workflow to be created", func() bool {
 		output, err := vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", keyspace, "show", "--workflow", workflow, "--compact", "--include-logs=false")
-		return err == nil && isEmptyWorkflowShowOutput(output)
+		return err == nil && !isEmptyWorkflowShowOutput(output)
 	}, defaultTimeout))
 }
 
@@ -1082,9 +1082,8 @@ func isEmptyWorkflowShowOutput(output string) bool {
 		emptyJSON                           = `{}`
 		emptyNonCompactWorkflowShowResponse = `{
   "workflows": []
-}
-`
+}`
 	)
 
-	return output == emptyJSON || output == emptyNonCompactWorkflowShowResponse
+	return strings.TrimSpace(output) == emptyJSON || strings.TrimSpace(output) == emptyNonCompactWorkflowShowResponse
 }
