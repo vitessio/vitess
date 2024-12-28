@@ -522,7 +522,7 @@ func TestScatterConnSingleDB(t *testing.T) {
 	assert.Contains(t, errors[0].Error(), want)
 
 	// TransactionMode_SINGLE in txconn
-	sc.txConn.mode = vtgatepb.TransactionMode_SINGLE
+	sc.txConn.txMode = &StaticConfig{TxMode: vtgatepb.TransactionMode_SINGLE}
 	session = econtext.NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	_, errors = sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false, nullResultsObserver{}, false)
 	require.Empty(t, errors)
@@ -531,7 +531,7 @@ func TestScatterConnSingleDB(t *testing.T) {
 	assert.Contains(t, errors[0].Error(), want)
 
 	// TransactionMode_MULTI in txconn. Should not fail.
-	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
+	sc.txConn.txMode = &StaticConfig{TxMode: vtgatepb.TransactionMode_MULTI}
 	session = econtext.NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	_, errors = sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false, nullResultsObserver{}, false)
 	require.Empty(t, errors)
@@ -622,6 +622,8 @@ func newTestScatterConn(ctx context.Context, hc discovery.HealthCheck, serv srvt
 	// in '-cells_to_watch' command line parameter, which is
 	// empty by default. So it's unused in this test, set to nil.
 	gw := NewTabletGateway(ctx, hc, serv, cell)
-	tc := NewTxConn(gw, vtgatepb.TransactionMode_MULTI)
+	tc := NewTxConn(gw, &StaticConfig{
+		TxMode: vtgatepb.TransactionMode_MULTI,
+	})
 	return NewScatterConn("", tc, gw)
 }

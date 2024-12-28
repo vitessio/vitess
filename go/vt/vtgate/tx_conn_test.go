@@ -72,7 +72,7 @@ func TestTxConnCommitFailure(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
 
 	sc, sbcs, rssm, rssa := newTestTxConnEnvNShards(t, ctx, "TestTxConn", 3)
-	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
+	sc.txConn.txMode = &StaticConfig{TxMode: vtgatepb.TransactionMode_MULTI}
 	nonAtomicCommitCount := warnings.Counts()["NonAtomicCommit"]
 
 	// Sequence the executes to ensure commit order
@@ -173,7 +173,7 @@ func TestTxConnCommitFailureAfterNonAtomicCommitMaxShards(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
 
 	sc, sbcs, rssm, _ := newTestTxConnEnvNShards(t, ctx, "TestTxConn", 18)
-	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
+	sc.txConn.txMode = &StaticConfig{TxMode: vtgatepb.TransactionMode_MULTI}
 	nonAtomicCommitCount := warnings.Counts()["NonAtomicCommit"]
 
 	// Sequence the executes to ensure commit order
@@ -227,7 +227,7 @@ func TestTxConnCommitFailureBeforeNonAtomicCommitMaxShards(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
 
 	sc, sbcs, rssm, _ := newTestTxConnEnvNShards(t, ctx, "TestTxConn", 17)
-	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
+	sc.txConn.txMode = &StaticConfig{TxMode: vtgatepb.TransactionMode_MULTI}
 	nonAtomicCommitCount := warnings.Counts()["NonAtomicCommit"]
 
 	// Sequence the executes to ensure commit order
@@ -281,7 +281,7 @@ func TestTxConnCommitSuccess(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
 
 	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, ctx, "TestTxConn")
-	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
+	sc.txConn.txMode = &StaticConfig{TxMode: vtgatepb.TransactionMode_MULTI}
 
 	// Sequence the executes to ensure commit order
 	session := econtext.NewSafeSession(&vtgatepb.Session{InTransaction: true})
@@ -334,7 +334,7 @@ func TestTxConnReservedCommitSuccess(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
 
 	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, ctx, "TestTxConn")
-	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
+	sc.txConn.txMode = &StaticConfig{TxMode: vtgatepb.TransactionMode_MULTI}
 
 	// Sequence the executes to ensure commit order
 	session := econtext.NewSafeSession(&vtgatepb.Session{InTransaction: true, InReservedConn: true})
@@ -419,7 +419,7 @@ func TestTxConnReservedOn2ShardTxOn1ShardAndCommit(t *testing.T) {
 
 	keyspace := "TestTxConn"
 	sc, sbc0, sbc1, rss0, rss1, _ := newTestTxConnEnv(t, ctx, keyspace)
-	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
+	sc.txConn.txMode = &StaticConfig{TxMode: vtgatepb.TransactionMode_MULTI}
 
 	// Sequence the executes to ensure shard session order
 	session := econtext.NewSafeSession(&vtgatepb.Session{InReservedConn: true})
@@ -514,7 +514,7 @@ func TestTxConnReservedOn2ShardTxOn1ShardAndRollback(t *testing.T) {
 
 	keyspace := "TestTxConn"
 	sc, sbc0, sbc1, rss0, rss1, _ := newTestTxConnEnv(t, ctx, keyspace)
-	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
+	sc.txConn.txMode = &StaticConfig{TxMode: vtgatepb.TransactionMode_MULTI}
 
 	// Sequence the executes to ensure shard session order
 	session := econtext.NewSafeSession(&vtgatepb.Session{InReservedConn: true})
@@ -608,7 +608,7 @@ func TestTxConnCommitOrderFailure1(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
 
 	sc, sbc0, sbc1, rss0, rss1, _ := newTestTxConnEnv(t, ctx, "TestTxConn")
-	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
+	sc.txConn.txMode = &StaticConfig{TxMode: vtgatepb.TransactionMode_MULTI}
 
 	queries := []*querypb.BoundQuery{{Sql: "query1"}}
 
@@ -641,7 +641,7 @@ func TestTxConnCommitOrderFailure2(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
 
 	sc, sbc0, sbc1, rss0, rss1, _ := newTestTxConnEnv(t, ctx, "TestTxConn")
-	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
+	sc.txConn.txMode = &StaticConfig{TxMode: vtgatepb.TransactionMode_MULTI}
 
 	queries := []*querypb.BoundQuery{{
 		Sql: "query1",
@@ -675,7 +675,7 @@ func TestTxConnCommitOrderFailure3(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
 
 	sc, sbc0, sbc1, rss0, rss1, _ := newTestTxConnEnv(t, ctx, "TestTxConn")
-	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
+	sc.txConn.txMode = &StaticConfig{TxMode: vtgatepb.TransactionMode_MULTI}
 
 	queries := []*querypb.BoundQuery{{
 		Sql: "query1",
@@ -717,7 +717,7 @@ func TestTxConnCommitOrderSuccess(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
 
 	sc, sbc0, sbc1, rss0, rss1, _ := newTestTxConnEnv(t, ctx, "TestTxConn")
-	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
+	sc.txConn.txMode = &StaticConfig{TxMode: vtgatepb.TransactionMode_MULTI}
 
 	queries := []*querypb.BoundQuery{{
 		Sql: "query1",
@@ -815,7 +815,7 @@ func TestTxConnReservedCommitOrderSuccess(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
 
 	sc, sbc0, sbc1, rss0, rss1, _ := newTestTxConnEnv(t, ctx, "TestTxConn")
-	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
+	sc.txConn.txMode = &StaticConfig{TxMode: vtgatepb.TransactionMode_MULTI}
 
 	queries := []*querypb.BoundQuery{{
 		Sql: "query1",
