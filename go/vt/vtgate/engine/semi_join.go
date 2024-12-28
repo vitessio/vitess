@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync/atomic"
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -72,23 +73,25 @@ func (jn *SemiJoin) TryExecute(ctx context.Context, vcursor VCursor, bindVars ma
 
 // TryStreamExecute performs a streaming exec.
 func (jn *SemiJoin) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	joinVars := make(map[string]*querypb.BindVariable)
 	err := vcursor.StreamExecutePrimitive(ctx, jn.Left, bindVars, wantfields, func(lresult *sqltypes.Result) error {
+		joinVars := make(map[string]*querypb.BindVariable)
 		result := &sqltypes.Result{Fields: projectFields(lresult.Fields, jn.Cols)}
 		for _, lrow := range lresult.Rows {
 			for k, col := range jn.Vars {
 				joinVars[k] = sqltypes.ValueBindVariable(lrow[col])
 			}
-			rowAdded := false
+			var rowAdded atomic.Bool
 			err := vcursor.StreamExecutePrimitive(ctx, jn.Right, combineVars(bindVars, joinVars), false, func(rresult *sqltypes.Result) error {
-				if len(rresult.Rows) > 0 && !rowAdded {
-					result.Rows = append(result.Rows, projectRows(lrow, jn.Cols))
-					rowAdded = true
+				if len(rresult.Rows) > 0 {
+					rowAdded.Store(true)
 				}
 				return nil
 			})
 			if err != nil {
 				return err
+			}
+			if rowAdded.Load() {
+				result.Rows = append(result.Rows, projectRows(lrow, jn.Cols))
 			}
 		}
 		return callback(result)
