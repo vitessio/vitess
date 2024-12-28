@@ -98,47 +98,54 @@ func TestAutoGlobalRoutingExt(t *testing.T) {
 		}
 	}
 	type testCase struct {
-		name                            string
-		keyspaces                       []*testKeySpace
-		expectedGlobalTables            []string
-		expectedAmbiguousTables         []string
-		requireExplicitRoutingKeyspaces []string
-		enabled                         bool
+		name               string
+		keyspaces          []*testKeySpace
+		expGlobalTables    []string
+		expAmbiguousTables []string
+		explicit           []string
+		enabled            bool
 	}
 	testCases := []testCase{
 		{
-			name:                    "no keyspaces",
-			keyspaces:               []*testKeySpace{},
-			expectedGlobalTables:    nil,
-			expectedAmbiguousTables: nil,
-			enabled:                 true,
+			name:               "no keyspaces",
+			keyspaces:          []*testKeySpace{},
+			expGlobalTables:    nil,
+			expAmbiguousTables: nil,
+			enabled:            true,
 		},
 		{
-			name:                    "one unsharded keyspace",
-			keyspaces:               []*testKeySpace{unsharded1},
-			expectedGlobalTables:    []string{"table1", "table2", "scommon1", "ucommon3"},
-			expectedAmbiguousTables: nil,
-			enabled:                 true,
+			name:               "one unsharded keyspace",
+			keyspaces:          []*testKeySpace{unsharded1},
+			expGlobalTables:    []string{"table1", "table2", "scommon1", "ucommon3"},
+			expAmbiguousTables: nil,
+			enabled:            true,
 		},
 		{
-			name:                    "two unsharded keyspaces",
-			keyspaces:               []*testKeySpace{unsharded1, unsharded2},
-			expectedGlobalTables:    []string{"table1", "table2", "table3", "table4", "scommon2"},
-			expectedAmbiguousTables: []string{"scommon1", "ucommon3"},
-			enabled:                 true,
+			name:               "two unsharded keyspaces",
+			keyspaces:          []*testKeySpace{unsharded1, unsharded2},
+			expGlobalTables:    []string{"table1", "table2", "table3", "table4", "scommon2"},
+			expAmbiguousTables: []string{"scommon1", "ucommon3"},
+			enabled:            true,
 		},
 		{
-			name:                            "two unsharded keyspaces, one with RequireExplicitRouting",
-			keyspaces:                       []*testKeySpace{unsharded1, unsharded2},
-			requireExplicitRoutingKeyspaces: []string{"unsharded1"},
-			expectedGlobalTables:            []string{"table3", "table4", "scommon1", "scommon2", "ucommon3"},
-			enabled:                         false,
+			name:            "two unsharded keyspaces, one with RequireExplicitRouting",
+			keyspaces:       []*testKeySpace{unsharded1, unsharded2},
+			explicit:        []string{"unsharded1"},
+			expGlobalTables: []string{"table3", "table4", "scommon1", "scommon2", "ucommon3"},
+			enabled:         false,
 		},
 		{
-			name:                 "one sharded keyspace",
-			keyspaces:            []*testKeySpace{sharded1},
-			expectedGlobalTables: []string{"table5", "scommon1", "scommon2"},
-			enabled:              true,
+			name:            "one sharded keyspace",
+			keyspaces:       []*testKeySpace{sharded1},
+			expGlobalTables: []string{"table5", "scommon1", "scommon2"},
+			enabled:         true,
+		},
+		{
+			name:               "two sharded keyspaces",
+			keyspaces:          []*testKeySpace{sharded1, sharded2},
+			expGlobalTables:    []string{"table5", "table6", "scommon1", "scommon3"},
+			expAmbiguousTables: []string{"scommon2"},
+			enabled:            true,
 		},
 	}
 	for _, tc := range testCases {
@@ -160,7 +167,7 @@ func TestAutoGlobalRoutingExt(t *testing.T) {
 					}
 				}
 			}
-			for _, ksName := range tc.requireExplicitRoutingKeyspaces {
+			for _, ksName := range tc.explicit {
 				source.Keyspaces[ksName].RequireExplicitRouting = true
 			}
 			vschema := BuildVSchema(source, sqlparser.NewTestParser())
@@ -178,10 +185,10 @@ func TestAutoGlobalRoutingExt(t *testing.T) {
 			}
 			sort.Strings(globalTables)
 			sort.Strings(ambiguousTables)
-			sort.Strings(tc.expectedGlobalTables)
-			sort.Strings(tc.expectedAmbiguousTables)
-			require.EqualValuesf(t, tc.expectedGlobalTables, globalTables, "global tables mismatch")
-			require.EqualValuesf(t, tc.expectedAmbiguousTables, ambiguousTables, "ambiguous tables mismatch")
+			sort.Strings(tc.expGlobalTables)
+			sort.Strings(tc.expAmbiguousTables)
+			require.EqualValuesf(t, tc.expGlobalTables, globalTables, "global tables mismatch")
+			require.EqualValuesf(t, tc.expAmbiguousTables, ambiguousTables, "ambiguous tables mismatch")
 		})
 	}
 }
