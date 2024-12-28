@@ -363,6 +363,12 @@ message ExecuteOptions {
   oneof timeout {
     int64 authoritative_timeout = 17;
   }
+
+  // fetch_last_insert_id indicates that after executing a DML involving last_insert_id(x),
+  // a subsequent "SELECT last_insert_id()" should be performed to retrieve the updated value.
+  // This is to circumvent a bug where setting last_insert_id(x) to zero is not signaled by mysql
+  // https://bugs.mysql.com/bug.php?id=116939
+  bool fetch_last_insert_id = 18;
 }
 
 // Field describes a single column returned by a query
@@ -427,6 +433,7 @@ message QueryResult {
   repeated Row rows = 4;
   string info = 6;
   string session_state_changes = 7;
+  bool insert_id_changed=8;
 }
 
 // QueryWarning is used to convey out of band query execution warnings

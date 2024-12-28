@@ -19,6 +19,7 @@ package tabletmanager
 import (
 	"context"
 	"fmt"
+	"runtime"
 	"strings"
 	"time"
 
@@ -29,6 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
@@ -523,6 +525,23 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 		return nil, err
 	}
 	defer tm.unlock()
+
+	finishCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() {
+		select {
+		case <-finishCtx.Done():
+		// Finished running DemotePrimary. Nothing to do.
+		case <-time.After(10 * topo.RemoteOperationTimeout):
+			// We waited for over 10 times of remote operation timeout, but DemotePrimary is still not done.
+			// Collect more information and signal demote primary is indefinitely stalled.
+			log.Errorf("DemotePrimary seems to be stalled. Collecting more information.")
+			tm.QueryServiceControl.SetDemotePrimaryStalled()
+			buf := make([]byte, 1<<16) // 64 KB buffer size
+			stackSize := runtime.Stack(buf, true)
+			log.Errorf("Stack trace:\n%s", string(buf[:stackSize]))
+		}
+	}()
 
 	tablet := tm.Tablet()
 	wasPrimary := tablet.Type == topodatapb.TabletType_PRIMARY

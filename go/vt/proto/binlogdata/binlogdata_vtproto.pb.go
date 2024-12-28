@@ -314,6 +314,7 @@ func (m *RowChange) CloneVT() *RowChange {
 	r.Before = m.Before.CloneVT()
 	r.After = m.After.CloneVT()
 	r.DataColumns = m.DataColumns.CloneVT()
+	r.JsonPartialValues = m.JsonPartialValues.CloneVT()
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -1674,6 +1675,16 @@ func (m *RowChange) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.JsonPartialValues != nil {
+		size, err := m.JsonPartialValues.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		i--
+		dAtA[i] = 0x22
 	}
 	if m.DataColumns != nil {
 		size, err := m.DataColumns.MarshalToSizedBufferVT(dAtA[:i])
@@ -3634,6 +3645,10 @@ func (m *RowChange) SizeVT() (n int) {
 	}
 	if m.DataColumns != nil {
 		l = m.DataColumns.SizeVT()
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	if m.JsonPartialValues != nil {
+		l = m.JsonPartialValues.SizeVT()
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -6616,6 +6631,42 @@ func (m *RowChange) UnmarshalVT(dAtA []byte) error {
 				m.DataColumns = &RowChange_Bitmap{}
 			}
 			if err := m.DataColumns.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field JsonPartialValues", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.JsonPartialValues == nil {
+				m.JsonPartialValues = &RowChange_Bitmap{}
+			}
+			if err := m.JsonPartialValues.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex

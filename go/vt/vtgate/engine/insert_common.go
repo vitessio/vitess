@@ -77,6 +77,8 @@ type (
 		// ColVindexes are the vindexes that will use the VindexValues
 		ColVindexes []*vindexes.ColumnVindex
 
+		FetchLastInsertID bool
+
 		// Prefix, Suffix are for sharded insert plans.
 		Prefix string
 		Suffix sqlparser.OnDup
@@ -159,7 +161,7 @@ func (ins *InsertCommon) executeUnshardedTableQuery(ctx context.Context, vcursor
 	if err != nil {
 		return nil, err
 	}
-	qr, err := execShard(ctx, loggingPrimitive, vcursor, query, bindVars, rss[0], true, !ins.PreventAutoCommit /* canAutocommit */)
+	qr, err := execShard(ctx, loggingPrimitive, vcursor, query, bindVars, rss[0], true, !ins.PreventAutoCommit /* canAutocommit */, false)
 	if err != nil {
 		return nil, err
 	}
@@ -169,6 +171,7 @@ func (ins *InsertCommon) executeUnshardedTableQuery(ctx context.Context, vcursor
 	// values, we don't return an error because this behavior
 	// is required to support migration.
 	if insertID != 0 {
+		qr.InsertIDChanged = true
 		qr.InsertID = insertID
 	}
 	return qr, nil
@@ -451,7 +454,7 @@ func (ic *InsertCommon) execGenerate(ctx context.Context, vcursor VCursor, loggi
 		return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "auto sequence generation can happen through single shard only, it is getting routed to %d shards", len(rss))
 	}
 	bindVars := map[string]*querypb.BindVariable{nextValBV: sqltypes.Int64BindVariable(count)}
-	qr, err := vcursor.ExecuteStandalone(ctx, loggingPrimitive, ic.Generate.Query, bindVars, rss[0])
+	qr, err := vcursor.ExecuteStandalone(ctx, loggingPrimitive, ic.Generate.Query, bindVars, rss[0], ic.FetchLastInsertID)
 	if err != nil {
 		return 0, err
 	}

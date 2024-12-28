@@ -224,6 +224,12 @@ jobs:
         EOF
         {{end}}
 
+        {{if .EnablePartialJSON}}
+        cat <<-EOF>>./config/mycnf/mysql8026.cnf
+        binlog-row-value-options=PARTIAL_JSON
+        EOF
+        {{end}}
+
         # run the tests however you normally do, then produce a JUnit XML file
         eatmydata -- go run test.go -docker={{if .Docker}}true -flavor={{.Platform}}{{else}}false{{end}} -follow -shard {{.Shard}}{{if .PartialKeyspace}} -partial-keyspace=true {{end}}{{if .BuildTag}} -build-tag={{.BuildTag}} {{end}} | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 

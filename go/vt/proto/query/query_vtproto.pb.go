@@ -176,6 +176,7 @@ func (m *ExecuteOptions) CloneVT() *ExecuteOptions {
 	r.Consolidator = m.Consolidator
 	r.WorkloadName = m.WorkloadName
 	r.Priority = m.Priority
+	r.FetchLastInsertId = m.FetchLastInsertId
 	if rhs := m.TransactionAccessMode; rhs != nil {
 		tmpContainer := make([]ExecuteOptions_TransactionAccessMode, len(rhs))
 		copy(tmpContainer, rhs)
@@ -268,6 +269,7 @@ func (m *QueryResult) CloneVT() *QueryResult {
 	r.InsertId = m.InsertId
 	r.Info = m.Info
 	r.SessionStateChanges = m.SessionStateChanges
+	r.InsertIdChanged = m.InsertIdChanged
 	if rhs := m.Fields; rhs != nil {
 		tmpContainer := make([]*Field, len(rhs))
 		for k, v := range rhs {
@@ -1893,6 +1895,18 @@ func (m *ExecuteOptions) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		}
 		i -= size
 	}
+	if m.FetchLastInsertId {
+		i--
+		if m.FetchLastInsertId {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0x90
+	}
 	if len(m.Priority) > 0 {
 		i -= len(m.Priority)
 		copy(dAtA[i:], m.Priority)
@@ -2197,6 +2211,16 @@ func (m *QueryResult) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.InsertIdChanged {
+		i--
+		if m.InsertIdChanged {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x40
 	}
 	if len(m.SessionStateChanges) > 0 {
 		i -= len(m.SessionStateChanges)
@@ -6169,6 +6193,9 @@ func (m *ExecuteOptions) SizeVT() (n int) {
 	if vtmsg, ok := m.Timeout.(interface{ SizeVT() int }); ok {
 		n += vtmsg.SizeVT()
 	}
+	if m.FetchLastInsertId {
+		n += 3
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -6283,6 +6310,9 @@ func (m *QueryResult) SizeVT() (n int) {
 	l = len(m.SessionStateChanges)
 	if l > 0 {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	if m.InsertIdChanged {
+		n += 2
 	}
 	n += len(m.unknownFields)
 	return n
@@ -8914,6 +8944,26 @@ func (m *ExecuteOptions) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.Timeout = &ExecuteOptions_AuthoritativeTimeout{AuthoritativeTimeout: v}
+		case 18:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field FetchLastInsertId", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.FetchLastInsertId = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
@@ -9636,6 +9686,26 @@ func (m *QueryResult) UnmarshalVT(dAtA []byte) error {
 			}
 			m.SessionStateChanges = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
+		case 8:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field InsertIdChanged", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.InsertIdChanged = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
