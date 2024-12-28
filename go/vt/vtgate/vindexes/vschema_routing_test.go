@@ -7,8 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"vitess.io/vitess/go/vt/log"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -23,7 +21,6 @@ func TestAutoGlobalRoutingExt(t *testing.T) {
 			if strings.Contains(err.Error(), "ambiguous") {
 				return false, true
 			}
-			log.Infof("error finding table %s: %v", tableName, err)
 			return false, false
 		}
 		return table != nil, false
@@ -103,7 +100,6 @@ func TestAutoGlobalRoutingExt(t *testing.T) {
 		expGlobalTables    []string
 		expAmbiguousTables []string
 		explicit           []string
-		enabled            bool
 	}
 	testCases := []testCase{
 		{
@@ -111,47 +107,63 @@ func TestAutoGlobalRoutingExt(t *testing.T) {
 			keyspaces:          []*testKeySpace{},
 			expGlobalTables:    nil,
 			expAmbiguousTables: nil,
-			enabled:            true,
 		},
 		{
 			name:               "one unsharded keyspace",
 			keyspaces:          []*testKeySpace{unsharded1},
 			expGlobalTables:    []string{"table1", "table2", "scommon1", "ucommon3"},
 			expAmbiguousTables: nil,
-			enabled:            true,
 		},
 		{
 			name:               "two unsharded keyspaces",
 			keyspaces:          []*testKeySpace{unsharded1, unsharded2},
 			expGlobalTables:    []string{"table1", "table2", "table3", "table4", "scommon2"},
 			expAmbiguousTables: []string{"scommon1", "ucommon3"},
-			enabled:            true,
 		},
 		{
 			name:            "two unsharded keyspaces, one with RequireExplicitRouting",
 			keyspaces:       []*testKeySpace{unsharded1, unsharded2},
 			explicit:        []string{"unsharded1"},
 			expGlobalTables: []string{"table3", "table4", "scommon1", "scommon2", "ucommon3"},
-			enabled:         false,
 		},
 		{
 			name:            "one sharded keyspace",
 			keyspaces:       []*testKeySpace{sharded1},
 			expGlobalTables: []string{"table5", "scommon1", "scommon2"},
-			enabled:         true,
 		},
 		{
 			name:               "two sharded keyspaces",
 			keyspaces:          []*testKeySpace{sharded1, sharded2},
 			expGlobalTables:    []string{"table5", "table6", "scommon1", "scommon3"},
 			expAmbiguousTables: []string{"scommon2"},
-			enabled:            true,
+		},
+		{
+			name:            "two sharded keyspaces, one with RequireExplicitRouting",
+			keyspaces:       []*testKeySpace{sharded1, sharded2},
+			explicit:        []string{"sharded2"},
+			expGlobalTables: []string{"table5", "scommon1", "scommon2"},
+		},
+		{
+			name:            "two sharded keyspaces, both with RequireExplicitRouting",
+			keyspaces:       []*testKeySpace{sharded1, sharded2},
+			explicit:        []string{"sharded1", "sharded2"},
+			expGlobalTables: nil,
+		},
+		{
+			name:               "two sharded keyspaces, one unsharded keyspace",
+			keyspaces:          []*testKeySpace{sharded1, sharded2, unsharded1},
+			expGlobalTables:    []string{"table1", "table2", "table5", "table6", "scommon3", "ucommon3"},
+			expAmbiguousTables: []string{"scommon1", "scommon2"},
+		},
+		{
+			name:               "two sharded keyspaces, one unsharded keyspace, one with RequireExplicitRouting",
+			keyspaces:          []*testKeySpace{sharded1, sharded2, unsharded1, unsharded2},
+			explicit:           []string{"unsharded1"},
+			expGlobalTables:    []string{"table3", "table4", "table5", "table6", "scommon3", "ucommon3"},
+			expAmbiguousTables: []string{"scommon1", "scommon2"},
 		},
 	}
 	for _, tc := range testCases {
-		if !tc.enabled {
-			continue
-		}
 		t.Run(tc.name, func(t *testing.T) {
 			allTables := make(map[string]bool)
 			source := &vschemapb.SrvVSchema{
