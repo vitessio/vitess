@@ -41,7 +41,7 @@ func insertInitialDataIntoExternalCluster(t *testing.T, conn *mysql.Conn) {
 	})
 }
 
-// TestMigrate runs an e2e test for importing from an external cluster using the vtctld Mount and Migrate commands.
+// TestMigrate runs an e2e test for importing from an external cluster using the vtctldclient Mount and Migrate commands.
 // We have an anti-pattern in Vitess: vt executables look for an environment variable VTDATAROOT for certain cluster parameters
 // like the log directory when they are created. Until this test we just needed a single cluster for e2e tests.
 // However now we need to create an external Vitess cluster. For this we need a different VTDATAROOT and

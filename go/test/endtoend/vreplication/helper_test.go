@@ -1084,6 +1084,6 @@ func isEmptyWorkflowShowOutput(output string) bool {
   "workflows": []
 }`
 	)
-
-	return strings.TrimSpace(output) == emptyJSON || strings.TrimSpace(output) == emptyNonCompactWorkflowShowResponse
+	v := strings.TrimSpace(output)
+	return v == emptyJSON || v == emptyNonCompactWorkflowShowResponse
 }

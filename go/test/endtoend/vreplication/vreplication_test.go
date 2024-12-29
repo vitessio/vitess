@@ -1168,11 +1168,9 @@ func shardMerchant(t *testing.T) {
 }
 
 func materialize(t *testing.T, spec string) {
-	t.Run("vtctldclient materialize", func(t *testing.T) {
+	t.Run("materialize", func(t *testing.T) {
 		// Split out the parameters from the JSON spec for
 		// use in the vtctldclient command flags.
-		// This allows us to test both clients with the same
-		// input.
 		sj := gjson.Parse(spec)
 		workflow := sj.Get("workflow").String()
 		require.NotEmpty(t, workflow, "workflow not found in spec: %s", spec)
