@@ -84,6 +84,7 @@ type lookupTestCase struct {
 	initQuery            string
 	runningQuery         string
 	postExternalizeQuery string
+	postInternalizeQuery string
 	cleanupQuery         string
 }
 
@@ -106,6 +107,7 @@ func TestLookupVindex(t *testing.T) {
 	initQuery := "insert into t1 (c1, c2, val) values (1, 1, 'val1'), (2, 2, 'val2'), (3, 3, 'val3')"
 	runningQuery := "insert into t1 (c1, c2, val) values (4, 4, 'val4'), (5, 5, 'val5'), (6, 6, 'val6')"
 	postExternalizeQuery := "insert into t1 (c1, c2, val) values (7, 7, 'val7'), (8, 8, 'val8'), (9, 9, 'val9')"
+	postInternalizeQuery := "insert into t1 (c1, c2, val) values (10, 10, 'val10'), (11, 11, 'val11'), (12, 12, 'val12')"
 	cleanupQuery := "delete from t1"
 
 	testCases := []lookupTestCase{
@@ -158,6 +160,7 @@ func TestLookupVindex(t *testing.T) {
 			tc.initQuery = initQuery
 			tc.runningQuery = runningQuery
 			tc.postExternalizeQuery = postExternalizeQuery
+			tc.postInternalizeQuery = postInternalizeQuery
 			tc.cleanupQuery = cleanupQuery
 			testLookupVindex(t, &tc)
 		})
@@ -192,6 +195,14 @@ func testLookupVindex(t *testing.T, tc *lookupTestCase) {
 		tc.lv.externalize()
 		totalRows += getNumRowsInQuery(t, tc.postExternalizeQuery)
 		_, err := vtgateConn.ExecuteFetch(tc.postExternalizeQuery, 1000, false)
+		require.NoError(t, err)
+		waitForRowCount(t, vtgateConn, tc.lv.ownerTableKeyspace, lv.name, totalRows)
+	})
+
+	t.Run("internalize", func(t *testing.T) {
+		tc.lv.internalize()
+		totalRows += getNumRowsInQuery(t, tc.postInternalizeQuery)
+		_, err := vtgateConn.ExecuteFetch(tc.postInternalizeQuery, 1000, false)
 		require.NoError(t, err)
 		waitForRowCount(t, vtgateConn, tc.lv.ownerTableKeyspace, lv.name, totalRows)
 	})

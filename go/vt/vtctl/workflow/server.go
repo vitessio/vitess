@@ -127,6 +127,9 @@ const (
 	lockTablesCycles = 2
 	// Time to wait between LOCK TABLES cycles on the sources during SwitchWrites.
 	lockTablesCycleDelay = time.Duration(100 * time.Millisecond)
+
+	SqlFreezeWorkflow   = "update _vt.vreplication set message = '%s' where db_name=%s and workflow=%s"
+	SqlUnfreezeWorkflow = "update _vt.vreplication set state='Running', message='' where db_name=%s and workflow=%s"
 )
 
 var (
@@ -762,7 +765,7 @@ func (s *Server) LookupVindexExternalize(ctx context.Context, req *vtctldatapb.L
 				return vterrors.Wrapf(err, "failed to stop workflow %s on shard %s/%s", req.Name, tabletInfo.Keyspace, tabletInfo.Shard)
 			}
 			// Mark workflow as frozen.
-			query := fmt.Sprintf("update _vt.vreplication set message = '%s' where db_name=%s and workflow=%s", Frozen,
+			query := fmt.Sprintf(SqlFreezeWorkflow, Frozen,
 				encodeString(tabletInfo.DbName()), encodeString(req.Name))
 			_, err = s.tmc.VReplicationExec(ctx, tabletInfo.Tablet, query)
 			return err
@@ -849,7 +852,7 @@ func (s *Server) LookupVindexInternalize(ctx context.Context, req *vtctldatapb.L
 			if err != nil {
 				return err
 			}
-			query := fmt.Sprintf("update _vt.vreplication set state='Running', message='' where db_name=%s and workflow=%s",
+			query := fmt.Sprintf(SqlUnfreezeWorkflow,
 				encodeString(tabletInfo.DbName()), encodeString(req.Name))
 			_, err = s.tmc.VReplicationExec(ctx, tabletInfo.Tablet, query)
 			return err

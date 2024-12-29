@@ -1914,7 +1914,7 @@ func TestExternalizeLookupVindex(t *testing.T) {
 		vrResponse      *sqltypes.Result
 		err             string
 		expectedVschema *vschemapb.Keyspace
-		expectDelete    bool
+		expectStopped   bool
 	}{
 		{
 			request: &vtctldatapb.LookupVindexExternalizeRequest{
@@ -1936,7 +1936,7 @@ func TestExternalizeLookupVindex(t *testing.T) {
 					},
 				},
 			},
-			expectDelete: true,
+			expectStopped: true,
 		},
 		{
 			request: &vtctldatapb.LookupVindexExternalizeRequest{
@@ -1979,7 +1979,7 @@ func TestExternalizeLookupVindex(t *testing.T) {
 					},
 				},
 			},
-			expectDelete: true,
+			expectStopped: true,
 		},
 		{
 			request: &vtctldatapb.LookupVindexExternalizeRequest{
@@ -2032,6 +2032,551 @@ func TestExternalizeLookupVindex(t *testing.T) {
 
 			require.NotNil(t, tcase.request, "No request provided")
 
+			bls := fmt.Sprintf("keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"t1\" filter:\"select * from t1\"}}", sourceKs, sourceShard)
+
+			idQuery, err := sqlparser.ParseAndBind("select id from _vt.vreplication where id = %a",
+				sqltypes.Int64BindVariable(int64(vreplID)))
+			require.NoError(t, err)
+			idRes := sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields(
+					"id",
+					"int64",
+				),
+				fmt.Sprintf("%d", vreplID),
+			)
+
+			streamsResult := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+				"id|state|cell|tablet_types|source",
+				"int64|varchar|varchar|varchar|varchar"),
+				fmt.Sprintf("%d|%s|cell1|PRIMARY|keyspace:\"%s\" shard:\"%s\"", 1, binlogdatapb.VReplicationWorkflowState_Stopped.String(), sourceKs, sourceShard),
+			)
+			for _, targetTablet := range targetShards {
+				targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readWorkflow, tcase.request.Name, tenv.dbName), tcase.vrResponse, nil)
+				// Update queries are required only if the Vindex is owned.
+				if len(tcase.expectedVschema.Vindexes) > 0 && tcase.expectedVschema.Vindexes[tcase.request.Name].Owner != "" {
+					targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readWorkflowConfig, tcase.request.Name), sqltypes.MakeTestResult(
+						sqltypes.MakeTestFields(
+							"id|source|cell|tablet_types|state|message",
+							"int64|blob|varchar|varchar|varchar|varchar",
+						),
+						fmt.Sprintf("%d|%s||primary|Stopped|", vreplID, bls),
+					), nil)
+					targetTablet.vrdbClient.ExpectRequest(idQuery, idRes, nil)
+					targetTablet.vrdbClient.ExpectRequest(`update _vt.vreplication set state = 'Stopped', source = 'keyspace:"sourceks" shard:"0" filter:{rules:{match:"t1" filter:"select * from t1"}}', cell = '', tablet_types = '' where id in (1)`, &sqltypes.Result{}, nil)
+					targetTablet.vrdbClient.ExpectRequest(`select * from _vt.vreplication where id = 1`, streamsResult, nil)
+
+					freezeQuery := fmt.Sprintf(workflow.SqlFreezeWorkflow, workflow.Frozen, sqltypes.EncodeStringSQL("vt_targetks"), sqltypes.EncodeStringSQL(tcase.request.Name))
+					tenv.tmc.setVReplicationExecResults(targetTablet.tablet, freezeQuery, &sqltypes.Result{})
+				}
+			}
+
+			preWorkflowStopCalls := tenv.tmc.workflowStopCalls
+			_, err = ws.LookupVindexExternalize(ctx, tcase.request)
+			if tcase.err != "" {
+				if err == nil || !strings.Contains(err.Error(), tcase.err) {
+					require.FailNow(t, "LookupVindexExternalize error", "LookupVindexExternalize(%v) err: %v, must contain %v", tcase.request, err, tcase.err)
+				}
+				return
+			}
+			require.NoError(t, err)
+			expectedWorkflowStopCalls := preWorkflowStopCalls
+			if tcase.expectStopped {
+				// We expect the RPC to be called on each target shard.
+				expectedWorkflowStopCalls = preWorkflowStopCalls + (len(targetShards))
+			}
+			require.Equal(t, expectedWorkflowStopCalls, tenv.tmc.workflowStopCalls)
+
+			aftervschema, err := tenv.ts.GetVSchema(ctx, ms.SourceKeyspace)
+			require.NoError(t, err)
+			vindex := aftervschema.Vindexes[tcase.request.Name]
+			expectedVindex := tcase.expectedVschema.Vindexes[tcase.request.Name]
+			require.NotNil(t, vindex, "vindex %s not found in vschema", tcase.request.Name)
+			require.NotContains(t, vindex.Params, "write_only", tcase.request)
+			require.Equal(t, expectedVindex, vindex, "vindex mismatch. expected: %+v, got: %+v", expectedVindex, vindex)
+		})
+	}
+}
+
+func TestInternalizeLookupVindex(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	sourceKs := "sourceks"
+	sourceShard := "0"
+	sourceTabletUID := 200
+	targetKs := "targetks"
+	targetShards := make(map[string]*fakeTabletConn)
+	targetTabletUID := 300
+	wf := "testwf"
+	vreplID := 1
+	vtenv := vtenv.NewTestEnv()
+	tenv := newTestEnv(t, ctx, sourceKs, []string{shard})
+	defer tenv.close()
+
+	sourceTablet := tenv.addTablet(t, sourceTabletUID, sourceKs, sourceShard)
+	defer tenv.deleteTablet(sourceTablet.tablet)
+
+	targetShards["-80"] = tenv.addTablet(t, targetTabletUID, targetKs, "-80")
+	defer tenv.deleteTablet(targetShards["-80"].tablet)
+	addInvariants(targetShards["-80"].vrdbClient, vreplID, sourceTabletUID, position, wf, tenv.cells[0])
+	targetShards["80-"] = tenv.addTablet(t, targetTabletUID+10, targetKs, "80-")
+	defer tenv.deleteTablet(targetShards["80-"].tablet)
+	addInvariants(targetShards["80-"].vrdbClient, vreplID, sourceTabletUID, position, wf, tenv.cells[0])
+
+	ws := workflow.NewServer(vtenv, tenv.ts, tenv.tmc)
+	ms := &vtctldatapb.MaterializeSettings{
+		// Keyspace where the vindex is created.
+		SourceKeyspace: sourceKs,
+		// Keyspace where the lookup table and VReplication workflow is created.
+		TargetKeyspace: targetKs,
+		Cell:           tenv.cells[0],
+		TabletTypes: topoproto.MakeStringTypeCSV([]topodatapb.TabletType{
+			topodatapb.TabletType_PRIMARY,
+			topodatapb.TabletType_RDONLY,
+		}),
+	}
+
+	sourceVschema := &vschemapb.Keyspace{
+		Sharded: false,
+		Vindexes: map[string]*vschemapb.Vindex{
+			"xxhash": {
+				Type: "xxhash",
+			},
+			"owned_lookup": {
+				Type: "lookup_unique",
+				Params: map[string]string{
+					"table":      "targetks.owned_lookup",
+					"from":       "c1",
+					"to":         "c2",
+					"write_only": "true",
+				},
+				Owner: "t1",
+			},
+			"unowned_lookup": {
+				Type: "lookup_unique",
+				Params: map[string]string{
+					"table":      "targetks.unowned_lookup",
+					"from":       "c1",
+					"to":         "c2",
+					"write_only": "true",
+				},
+			},
+			"unqualified_lookup": {
+				Type: "lookup_unique",
+				Params: map[string]string{
+					"table": "unqualified",
+					"from":  "c1",
+					"to":    "c2",
+				},
+			},
+		},
+		Tables: map[string]*vschemapb.Table{
+			"t1": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Name:   "xxhash",
+					Column: "col1",
+				}, {
+					Name:   "owned_lookup",
+					Column: "col2",
+				}},
+			},
+		},
+	}
+
+	trxTS := fmt.Sprintf("%d", time.Now().Unix())
+	fields := sqltypes.MakeTestFields(
+		"id|state|message|source|workflow_type|workflow_sub_type|max_tps|max_replication_lag|time_updated|time_heartbeat|time_throttled|transaction_timestamp|rows_copied|options",
+		"int64|varbinary|varbinary|blob|int64|int64|int64|int64|int64|int64|int64|int64|int64|varchar",
+	)
+	wftype := fmt.Sprintf("%d", binlogdatapb.VReplicationWorkflowType_CreateLookupIndex)
+	ownedSourceStopAfterCopy := fmt.Sprintf(`keyspace:"%s",shard:"0",filter:{rules:{match:"owned_lookup" filter:"select * from t1 where in_keyrange(col1, '%s.xxhash', '-80')"}} stop_after_copy:true`,
+		ms.SourceKeyspace, ms.SourceKeyspace)
+	ownedSourceKeepRunningAfterCopy := fmt.Sprintf(`keyspace:"%s",shard:"0",filter:{rules:{match:"owned_lookup" filter:"select * from t1 where in_keyrange(col1, '%s.xxhash', '-80')"}}`,
+		ms.SourceKeyspace, ms.SourceKeyspace)
+	ownedRunning := sqltypes.MakeTestResult(fields, "1|Running|msg|"+ownedSourceKeepRunningAfterCopy+"|"+wftype+"|0|0|0|0|0|0|"+trxTS+"|5|{}")
+	ownedStopped := sqltypes.MakeTestResult(fields, "1|Stopped|"+workflow.Frozen+"|"+ownedSourceStopAfterCopy+"|"+wftype+"|0|0|0|0|0|0|"+trxTS+"|5|{}")
+	unownedSourceStopAfterCopy := fmt.Sprintf(`keyspace:"%s",shard:"0",filter:{rules:{match:"unowned_lookup" filter:"select * from t1 where in_keyrange(col1, '%s.xxhash', '-80')"}} stop_after_copy:true`,
+		ms.SourceKeyspace, ms.SourceKeyspace)
+	unownedSourceKeepRunningAfterCopy := fmt.Sprintf(`keyspace:"%s",shard:"0",filter:{rules:{match:"unowned_lookup" filter:"select * from t1 where in_keyrange(col1, '%s.xxhash', '-80')"}}`,
+		ms.SourceKeyspace, ms.SourceKeyspace)
+	unownedRunning := sqltypes.MakeTestResult(fields, "2|Running|msg|"+unownedSourceKeepRunningAfterCopy+"|"+wftype+"|0|0|0|0|0|0|"+trxTS+"|5|{}")
+	unownedStopped := sqltypes.MakeTestResult(fields, "2|Stopped|Stopped after copy|"+unownedSourceStopAfterCopy+"|"+wftype+"|0|0|0|0|0|0|"+trxTS+"|5|{}")
+
+	testcases := []struct {
+		request         *vtctldatapb.LookupVindexInternalizeRequest
+		vrResponse      *sqltypes.Result
+		err             string
+		expectedVschema *vschemapb.Keyspace
+	}{
+		{
+			request: &vtctldatapb.LookupVindexInternalizeRequest{
+				Name:          "owned_lookup",
+				Keyspace:      ms.SourceKeyspace,
+				TableKeyspace: ms.TargetKeyspace,
+			},
+			vrResponse: ownedStopped,
+			expectedVschema: &vschemapb.Keyspace{
+				Vindexes: map[string]*vschemapb.Vindex{
+					"owned_lookup": {
+						Type: "lookup_unique",
+						Params: map[string]string{
+							"table":      "targetks.owned_lookup",
+							"from":       "c1",
+							"to":         "c2",
+							"write_only": "true",
+						},
+						Owner: "t1",
+					},
+				},
+			},
+		},
+		{
+			request: &vtctldatapb.LookupVindexInternalizeRequest{
+				Name:          "unowned_lookup",
+				Keyspace:      ms.SourceKeyspace,
+				TableKeyspace: ms.TargetKeyspace,
+			},
+			vrResponse: unownedStopped,
+			expectedVschema: &vschemapb.Keyspace{
+				Vindexes: map[string]*vschemapb.Vindex{
+					"unowned_lookup": {
+						Type: "lookup_unique",
+						Params: map[string]string{
+							"table": "targetks.unowned_lookup",
+							"from":  "c1",
+							"to":    "c2",
+						},
+					},
+				},
+			},
+			err: "is not in Running state",
+		},
+		{
+			request: &vtctldatapb.LookupVindexInternalizeRequest{
+				Name:          "owned_lookup",
+				Keyspace:      ms.SourceKeyspace,
+				TableKeyspace: ms.TargetKeyspace,
+			},
+			vrResponse: ownedRunning,
+			expectedVschema: &vschemapb.Keyspace{
+				Vindexes: map[string]*vschemapb.Vindex{
+					"owned_lookup": {
+						Type: "lookup_unique",
+						Params: map[string]string{
+							"table":      "targetks.owned_lookup",
+							"from":       "c1",
+							"to":         "c2",
+							"write_only": "true",
+						},
+						Owner: "t1",
+					},
+				},
+			},
+			err: "not frozen",
+		},
+		{
+			request: &vtctldatapb.LookupVindexInternalizeRequest{
+				Name:          "unowned_lookup",
+				Keyspace:      ms.SourceKeyspace,
+				TableKeyspace: ms.TargetKeyspace,
+			},
+			vrResponse: unownedRunning,
+			expectedVschema: &vschemapb.Keyspace{
+				Vindexes: map[string]*vschemapb.Vindex{
+					"unowned_lookup": {
+						Type: "lookup_unique",
+						Params: map[string]string{
+							"table":      "targetks.unowned_lookup",
+							"from":       "c1",
+							"to":         "c2",
+							"write_only": "true",
+						},
+					},
+				},
+			},
+		},
+		{
+			request: &vtctldatapb.LookupVindexInternalizeRequest{
+				Name:          "absent_lookup",
+				Keyspace:      ms.SourceKeyspace,
+				TableKeyspace: ms.TargetKeyspace,
+			},
+			expectedVschema: &vschemapb.Keyspace{
+				Vindexes: map[string]*vschemapb.Vindex{
+					"absent_lookup": {
+						Type: "lookup_unique",
+						Params: map[string]string{
+							"table": "targetks.absent_lookup",
+							"from":  "c1",
+							"to":    "c2",
+						},
+					},
+				},
+			},
+			err: "vindex absent_lookup not found in the sourceks keyspace",
+		},
+	}
+	for _, tcase := range testcases {
+		t.Run(tcase.request.Name, func(t *testing.T) {
+			// Resave the source schema for every iteration.
+			err := tenv.ts.SaveVSchema(ctx, tcase.request.Keyspace, sourceVschema)
+			require.NoError(t, err)
+			err = tenv.ts.RebuildSrvVSchema(ctx, []string{tenv.cells[0]})
+			require.NoError(t, err)
+
+			require.NotNil(t, tcase.request, "No request provided")
+
+			for _, targetTablet := range targetShards {
+				targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readWorkflow, tcase.request.Name, tenv.dbName), tcase.vrResponse, nil)
+				// Update queries are required only if the Vindex is owned.
+				if len(tcase.expectedVschema.Vindexes) > 0 && tcase.expectedVschema.Vindexes[tcase.request.Name].Owner != "" {
+					unfreezeQuery := fmt.Sprintf(workflow.SqlUnfreezeWorkflow, sqltypes.EncodeStringSQL("vt_targetks"), sqltypes.EncodeStringSQL(tcase.request.Name))
+					tenv.tmc.setVReplicationExecResults(targetTablet.tablet, unfreezeQuery, &sqltypes.Result{})
+				}
+			}
+
+			_, err = ws.LookupVindexInternalize(ctx, tcase.request)
+			if tcase.err != "" {
+				if err == nil || !strings.Contains(err.Error(), tcase.err) {
+					require.FailNow(t, "LookupVindexInternalize error", "LookupVindexInternalize(%v) err: %v, must contain %v", tcase.request, err, tcase.err)
+				}
+				return
+			}
+			require.NoError(t, err)
+			aftervschema, err := tenv.ts.GetVSchema(ctx, ms.SourceKeyspace)
+			require.NoError(t, err)
+			vindex := aftervschema.Vindexes[tcase.request.Name]
+			expectedVindex := tcase.expectedVschema.Vindexes[tcase.request.Name]
+			require.NotNil(t, vindex, "vindex %s not found in vschema", tcase.request.Name)
+			require.Equal(t, expectedVindex, vindex, "vindex mismatch. expected: %+v, got: %+v", expectedVindex, vindex)
+		})
+	}
+}
+
+func TestCompleteLookupVindex(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	sourceKs := "sourceks"
+	sourceShard := "0"
+	sourceTabletUID := 200
+	targetKs := "targetks"
+	targetShards := make(map[string]*fakeTabletConn)
+	targetTabletUID := 300
+	wf := "testwf"
+	vreplID := 1
+	vtenv := vtenv.NewTestEnv()
+	tenv := newTestEnv(t, ctx, sourceKs, []string{shard})
+	defer tenv.close()
+
+	sourceTablet := tenv.addTablet(t, sourceTabletUID, sourceKs, sourceShard)
+	defer tenv.deleteTablet(sourceTablet.tablet)
+
+	targetShards["-80"] = tenv.addTablet(t, targetTabletUID, targetKs, "-80")
+	defer tenv.deleteTablet(targetShards["-80"].tablet)
+	addInvariants(targetShards["-80"].vrdbClient, vreplID, sourceTabletUID, position, wf, tenv.cells[0])
+	targetShards["80-"] = tenv.addTablet(t, targetTabletUID+10, targetKs, "80-")
+	defer tenv.deleteTablet(targetShards["80-"].tablet)
+	addInvariants(targetShards["80-"].vrdbClient, vreplID, sourceTabletUID, position, wf, tenv.cells[0])
+
+	ws := workflow.NewServer(vtenv, tenv.ts, tenv.tmc)
+	ms := &vtctldatapb.MaterializeSettings{
+		// Keyspace where the vindex is created.
+		SourceKeyspace: sourceKs,
+		// Keyspace where the lookup table and VReplication workflow is created.
+		TargetKeyspace: targetKs,
+		Cell:           tenv.cells[0],
+		TabletTypes: topoproto.MakeStringTypeCSV([]topodatapb.TabletType{
+			topodatapb.TabletType_PRIMARY,
+			topodatapb.TabletType_RDONLY,
+		}),
+	}
+
+	sourceVschema := &vschemapb.Keyspace{
+		Sharded: false,
+		Vindexes: map[string]*vschemapb.Vindex{
+			"xxhash": {
+				Type: "xxhash",
+			},
+			"owned_lookup": {
+				Type: "lookup_unique",
+				Params: map[string]string{
+					"table": "targetks.owned_lookup",
+					"from":  "c1",
+					"to":    "c2",
+				},
+				Owner: "t1",
+			},
+			"unowned_lookup": {
+				Type: "lookup_unique",
+				Params: map[string]string{
+					"table": "targetks.unowned_lookup",
+					"from":  "c1",
+					"to":    "c2",
+				},
+			},
+			"unqualified_lookup": {
+				Type: "lookup_unique",
+				Params: map[string]string{
+					"table": "unqualified",
+					"from":  "c1",
+					"to":    "c2",
+				},
+			},
+		},
+		Tables: map[string]*vschemapb.Table{
+			"t1": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Name:   "xxhash",
+					Column: "col1",
+				}, {
+					Name:   "owned_lookup",
+					Column: "col2",
+				}},
+			},
+		},
+	}
+
+	trxTS := fmt.Sprintf("%d", time.Now().Unix())
+	fields := sqltypes.MakeTestFields(
+		"id|state|message|source|workflow_type|workflow_sub_type|max_tps|max_replication_lag|time_updated|time_heartbeat|time_throttled|transaction_timestamp|rows_copied|options",
+		"int64|varbinary|varbinary|blob|int64|int64|int64|int64|int64|int64|int64|int64|int64|varchar",
+	)
+	wftype := fmt.Sprintf("%d", binlogdatapb.VReplicationWorkflowType_CreateLookupIndex)
+	ownedSourceStopAfterCopy := fmt.Sprintf(`keyspace:"%s",shard:"0",filter:{rules:{match:"owned_lookup" filter:"select * from t1 where in_keyrange(col1, '%s.xxhash', '-80')"}} stop_after_copy:true`,
+		ms.SourceKeyspace, ms.SourceKeyspace)
+	ownedSourceKeepRunningAfterCopy := fmt.Sprintf(`keyspace:"%s",shard:"0",filter:{rules:{match:"owned_lookup" filter:"select * from t1 where in_keyrange(col1, '%s.xxhash', '-80')"}}`,
+		ms.SourceKeyspace, ms.SourceKeyspace)
+	ownedRunning := sqltypes.MakeTestResult(fields, "1|Running|msg|"+ownedSourceKeepRunningAfterCopy+"|"+wftype+"|0|0|0|0|0|0|"+trxTS+"|5|{}")
+	ownedStopped := sqltypes.MakeTestResult(fields, "1|Stopped|"+workflow.Frozen+"|"+ownedSourceStopAfterCopy+"|"+wftype+"|0|0|0|0|0|0|"+trxTS+"|5|{}")
+	unownedSourceStopAfterCopy := fmt.Sprintf(`keyspace:"%s",shard:"0",filter:{rules:{match:"unowned_lookup" filter:"select * from t1 where in_keyrange(col1, '%s.xxhash', '-80')"}} stop_after_copy:true`,
+		ms.SourceKeyspace, ms.SourceKeyspace)
+	unownedSourceKeepRunningAfterCopy := fmt.Sprintf(`keyspace:"%s",shard:"0",filter:{rules:{match:"unowned_lookup" filter:"select * from t1 where in_keyrange(col1, '%s.xxhash', '-80')"}}`,
+		ms.SourceKeyspace, ms.SourceKeyspace)
+	unownedRunning := sqltypes.MakeTestResult(fields, "2|Running|msg|"+unownedSourceKeepRunningAfterCopy+"|"+wftype+"|0|0|0|0|0|0|"+trxTS+"|5|{}")
+	unownedStopped := sqltypes.MakeTestResult(fields, "2|Stopped|Stopped after copy|"+unownedSourceStopAfterCopy+"|"+wftype+"|0|0|0|0|0|0|"+trxTS+"|5|{}")
+
+	testcases := []struct {
+		request         *vtctldatapb.LookupVindexCompleteRequest
+		vrResponse      *sqltypes.Result
+		err             string
+		expectedVschema *vschemapb.Keyspace
+		expectDelete    bool
+	}{
+		{
+			request: &vtctldatapb.LookupVindexCompleteRequest{
+				Name:          "owned_lookup",
+				Keyspace:      ms.SourceKeyspace,
+				TableKeyspace: ms.TargetKeyspace,
+			},
+			vrResponse: ownedStopped,
+			expectedVschema: &vschemapb.Keyspace{
+				Vindexes: map[string]*vschemapb.Vindex{
+					"owned_lookup": {
+						Type: "lookup_unique",
+						Params: map[string]string{
+							"table": "targetks.owned_lookup",
+							"from":  "c1",
+							"to":    "c2",
+						},
+						Owner: "t1",
+					},
+				},
+			},
+			expectDelete: true,
+		},
+		{
+			request: &vtctldatapb.LookupVindexCompleteRequest{
+				Name:          "unowned_lookup",
+				Keyspace:      ms.SourceKeyspace,
+				TableKeyspace: ms.TargetKeyspace,
+			},
+			vrResponse: unownedStopped,
+			expectedVschema: &vschemapb.Keyspace{
+				Vindexes: map[string]*vschemapb.Vindex{
+					"unowned_lookup": {
+						Type: "lookup_unique",
+						Params: map[string]string{
+							"table": "targetks.unowned_lookup",
+							"from":  "c1",
+							"to":    "c2",
+						},
+					},
+				},
+			},
+			err: "is not in Running state",
+		},
+		{
+			request: &vtctldatapb.LookupVindexCompleteRequest{
+				Name:          "owned_lookup",
+				Keyspace:      ms.SourceKeyspace,
+				TableKeyspace: ms.TargetKeyspace,
+			},
+			vrResponse: ownedRunning,
+			expectedVschema: &vschemapb.Keyspace{
+				Vindexes: map[string]*vschemapb.Vindex{
+					"owned_lookup": {
+						Type: "lookup_unique",
+						Params: map[string]string{
+							"table": "targetks.owned_lookup",
+							"from":  "c1",
+							"to":    "c2",
+						},
+						Owner: "t1",
+					},
+				},
+			},
+			err: "not frozen",
+		},
+		{
+			request: &vtctldatapb.LookupVindexCompleteRequest{
+				Name:          "unowned_lookup",
+				Keyspace:      ms.SourceKeyspace,
+				TableKeyspace: ms.TargetKeyspace,
+			},
+			vrResponse: unownedRunning,
+			expectedVschema: &vschemapb.Keyspace{
+				Vindexes: map[string]*vschemapb.Vindex{
+					"unowned_lookup": {
+						Type: "lookup_unique",
+						Params: map[string]string{
+							"table": "targetks.unowned_lookup",
+							"from":  "c1",
+							"to":    "c2",
+						},
+					},
+				},
+			},
+		},
+		{
+			request: &vtctldatapb.LookupVindexCompleteRequest{
+				Name:          "absent_lookup",
+				Keyspace:      ms.SourceKeyspace,
+				TableKeyspace: ms.TargetKeyspace,
+			},
+			expectedVschema: &vschemapb.Keyspace{
+				Vindexes: map[string]*vschemapb.Vindex{
+					"absent_lookup": {
+						Type: "lookup_unique",
+						Params: map[string]string{
+							"table": "targetks.absent_lookup",
+							"from":  "c1",
+							"to":    "c2",
+						},
+					},
+				},
+			},
+			err: "vindex absent_lookup not found in the sourceks keyspace",
+		},
+	}
+	for _, tcase := range testcases {
+		t.Run(tcase.request.Name, func(t *testing.T) {
+			// Resave the source schema for every iteration.
+			err := tenv.ts.SaveVSchema(ctx, tcase.request.Keyspace, sourceVschema)
+			require.NoError(t, err)
+			err = tenv.ts.RebuildSrvVSchema(ctx, []string{tenv.cells[0]})
+			require.NoError(t, err)
+
+			require.NotNil(t, tcase.request, "No request provided")
+
 			for _, targetTablet := range targetShards {
 				targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readWorkflow, tcase.request.Name, tenv.dbName), tcase.vrResponse, nil)
 				if tcase.err == "" {
@@ -2042,10 +2587,10 @@ func TestExternalizeLookupVindex(t *testing.T) {
 			}
 
 			preWorkflowDeleteCalls := tenv.tmc.workflowDeleteCalls
-			_, err = ws.LookupVindexExternalize(ctx, tcase.request)
+			_, err = ws.LookupVindexComplete(ctx, tcase.request)
 			if tcase.err != "" {
 				if err == nil || !strings.Contains(err.Error(), tcase.err) {
-					require.FailNow(t, "LookupVindexExternalize error", "ExternalizeVindex(%v) err: %v, must contain %v", tcase.request, err, tcase.err)
+					require.FailNow(t, "LookupVindexComplete error", "LookupVindexComplete(%v) err: %v, must contain %v", tcase.request, err, tcase.err)
 				}
 				return
 			}

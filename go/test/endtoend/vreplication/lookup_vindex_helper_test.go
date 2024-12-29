@@ -86,6 +86,19 @@ func (lv *lookupVindex) externalize() {
 	lv.expectWriteOnly(false)
 }
 
+func (lv *lookupVindex) internalize() {
+	args := []string{
+		"LookupVindex",
+		"--name", lv.name,
+		"--table-keyspace=" + lv.ownerTableKeyspace,
+		"internalize",
+		"--keyspace=" + lv.tableKeyspace,
+	}
+	err := vc.VtctldClient.ExecuteCommand(args...)
+	require.NoError(lv.t, err, "error executing LookupVindex internalize: %v", err)
+	lv.expectWriteOnly(true)
+}
+
 func (lv *lookupVindex) show() error {
 	return nil
 }
