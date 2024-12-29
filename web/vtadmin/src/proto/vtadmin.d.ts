@@ -37394,6 +37394,9 @@ export namespace binlogdata {
 
         /** RowChange data_columns */
         data_columns?: (binlogdata.RowChange.IBitmap|null);
+
+        /** RowChange json_partial_values */
+        json_partial_values?: (binlogdata.RowChange.IBitmap|null);
     }
 
     /** Represents a RowChange. */
@@ -37413,6 +37416,9 @@ export namespace binlogdata {
 
         /** RowChange data_columns. */
         public data_columns?: (binlogdata.RowChange.IBitmap|null);
+
+        /** RowChange json_partial_values. */
+        public json_partial_values?: (binlogdata.RowChange.IBitmap|null);
 
         /**
          * Creates a new RowChange instance using the specified properties.
