@@ -44,6 +44,38 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/grpctmclient"
 )
 
+// TestDynamicConfig tests that transaction mode is dynamically configurable.
+func TestDynamicConfig(t *testing.T) {
+	conn, closer := start(t)
+	defer closer()
+	defer conn.Close()
+
+	// Ensure that initially running a distributed transaction is possible.
+	utils.Exec(t, conn, "begin")
+	utils.Exec(t, conn, "insert into twopc_t1(id, col) values(4, 4)")
+	utils.Exec(t, conn, "insert into twopc_t1(id, col) values(6, 4)")
+	utils.Exec(t, conn, "insert into twopc_t1(id, col) values(9, 4)")
+	utils.Exec(t, conn, "commit")
+
+	clusterInstance.VtgateProcess.Config.TransactionMode = "SINGLE"
+	defer func() {
+		clusterInstance.VtgateProcess.Config.TransactionMode = "TWOPC"
+		err := clusterInstance.VtgateProcess.RewriteConfiguration()
+		require.NoError(t, err)
+	}()
+	err := clusterInstance.VtgateProcess.RewriteConfiguration()
+	require.NoError(t, err)
+	err = clusterInstance.VtgateProcess.WaitForConfig(`"transaction_mode":"SINGLE"`)
+	require.NoError(t, err)
+
+	// After the config changes verify running a distributed transaction fails.
+	utils.Exec(t, conn, "begin")
+	utils.Exec(t, conn, "insert into twopc_t1(id, col) values(20, 4)")
+	_, err = utils.ExecAllowError(t, conn, "insert into twopc_t1(id, col) values(22, 4)")
+	require.ErrorContains(t, err, "multi-db transaction attempted")
+	utils.Exec(t, conn, "rollback")
+}
+
 // TestDTCommit tests distributed transaction commit for insert, update and delete operations
 // It verifies the binlog events for the same with transaction state changes and redo statements.
 func TestDTCommit(t *testing.T) {

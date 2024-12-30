@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/sqltypes"
@@ -60,7 +61,6 @@ import (
 )
 
 var (
-	transactionMode  = "MULTI"
 	normalizeQueries = true
 	streamBufferSize = 32 * 1024
 
@@ -114,6 +114,33 @@ var (
 		},
 	)
 
+	transactionMode = viperutil.Configure(
+		"transaction_mode",
+		viperutil.Options[vtgatepb.TransactionMode]{
+			FlagName: "transaction_mode",
+			Default:  vtgatepb.TransactionMode_MULTI,
+			Dynamic:  true,
+			GetFunc: func(v *viper.Viper) func(key string) vtgatepb.TransactionMode {
+				return func(key string) vtgatepb.TransactionMode {
+					txMode := v.GetString(key)
+					switch strings.ToLower(txMode) {
+					case "single":
+						return vtgatepb.TransactionMode_SINGLE
+					case "multi":
+						return vtgatepb.TransactionMode_MULTI
+					case "twopc":
+						return vtgatepb.TransactionMode_TWOPC
+					default:
+						fmt.Printf("Invalid option: %v\n", txMode)
+						fmt.Println("Usage: -transaction_mode {SINGLE | MULTI | TWOPC}")
+						os.Exit(1)
+						return -1
+					}
+				}
+			},
+		},
+	)
+
 	// schema tracking flags
 	enableSchemaChangeSignal = true
 	enableViews              bool
@@ -138,7 +165,7 @@ var (
 )
 
 func registerFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&transactionMode, "transaction_mode", transactionMode, "SINGLE: disallow multi-db transactions, MULTI: allow multi-db transactions with best effort commit, TWOPC: allow multi-db transactions with 2pc commit")
+	fs.String("transaction_mode", "MULTI", "SINGLE: disallow multi-db transactions, MULTI: allow multi-db transactions with best effort commit, TWOPC: allow multi-db transactions with 2pc commit")
 	fs.BoolVar(&normalizeQueries, "normalize_queries", normalizeQueries, "Rewrite queries with bind vars. Turn this off if the app itself sends normalized queries with bind vars.")
 	fs.BoolVar(&terseErrors, "vtgate-config-terse-errors", terseErrors, "prevent bind vars from escaping in returned errors")
 	fs.IntVar(&truncateErrorLen, "truncate-error-len", truncateErrorLen, "truncate errors sent to client if they are longer than this value (0 means do not truncate)")
@@ -173,31 +200,16 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.IntVar(&warmingReadsConcurrency, "warming-reads-concurrency", 500, "Number of concurrent warming reads allowed")
 	fs.DurationVar(&warmingReadsQueryTimeout, "warming-reads-query-timeout", 5*time.Second, "Timeout of warming read queries")
 
-	viperutil.BindFlags(fs, enableOnlineDDL, enableDirectDDL)
+	viperutil.BindFlags(fs,
+		enableOnlineDDL,
+		enableDirectDDL,
+		transactionMode,
+	)
 }
 
 func init() {
 	servenv.OnParseFor("vtgate", registerFlags)
 	servenv.OnParseFor("vtcombo", registerFlags)
-}
-
-func getTxMode() vtgatepb.TransactionMode {
-	switch strings.ToLower(transactionMode) {
-	case "single":
-		log.Infof("Transaction mode: '%s'", transactionMode)
-		return vtgatepb.TransactionMode_SINGLE
-	case "multi":
-		log.Infof("Transaction mode: '%s'", transactionMode)
-		return vtgatepb.TransactionMode_MULTI
-	case "twopc":
-		log.Infof("Transaction mode: '%s'", transactionMode)
-		return vtgatepb.TransactionMode_TWOPC
-	default:
-		fmt.Printf("Invalid option: %v\n", transactionMode)
-		fmt.Println("Usage: -transaction_mode {SINGLE | MULTI | TWOPC}")
-		os.Exit(1)
-		return -1
-	}
 }
 
 var (
@@ -287,6 +299,8 @@ func Init(
 		log.Fatalf("tabletGateway.WaitForTablets failed: %v", err)
 	}
 
+	dynamicConfig := NewDynamicViperConfig()
+
 	// If we want to filter keyspaces replace the srvtopo.Server with a
 	// filtering server
 	if discovery.FilteringKeyspaces() {
@@ -301,7 +315,7 @@ func Init(
 	if _, err := schema.ParseDDLStrategy(defaultDDLStrategy); err != nil {
 		log.Fatalf("Invalid value for -ddl_strategy: %v", err.Error())
 	}
-	tc := NewTxConn(gw, getTxMode())
+	tc := NewTxConn(gw, dynamicConfig)
 	// ScatterConn depends on TxConn to perform forced rollbacks.
 	sc := NewScatterConn("VttabletCall", tc, gw)
 	// TxResolver depends on TxConn to complete distributed transaction.
@@ -352,6 +366,7 @@ func Init(
 		noScatter,
 		pv,
 		warmingReadsPercent,
+		dynamicConfig,
 	)
 
 	if err := executor.defaultQueryLogger(); err != nil {

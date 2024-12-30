@@ -187,6 +187,11 @@ func (ev binlogEvent) IsUpdateRows() bool {
 		ev.Type() == eUpdateRowsEventV2
 }
 
+// IsPartialUpdateRows implements BinlogEvent.IsPartialUpdateRows().
+func (ev binlogEvent) IsPartialUpdateRows() bool {
+	return ev.Type() == ePartialUpdateRowsEvent
+}
+
 // IsDeleteRows implements BinlogEvent.IsDeleteRows().
 // We do not support v0.
 func (ev binlogEvent) IsDeleteRows() bool {
