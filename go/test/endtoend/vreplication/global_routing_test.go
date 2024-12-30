@@ -246,14 +246,7 @@ func (h *grHelpers) rebuildGraphs(t *testing.T, keyspaces []string) {
 func TestGlobalRouting(t *testing.T) {
 	h := grHelpers{t}
 	exp := *h.getExpectations()
-	testCases := []grTestCase{
-		{unshardedHasVSchema: false, markAsGlobal: true},
-		{unshardedHasVSchema: false, markAsGlobal: false},
-		{unshardedHasVSchema: true, markAsGlobal: true},
-		{unshardedHasVSchema: true, markAsGlobal: false},
-	}
-	for _, tc := range testCases {
-		funcs := exp[tc]
+	for tc, funcs := range exp {
 		require.NotNil(t, funcs)
 		testGlobalRouting(t, tc.markAsGlobal, tc.unshardedHasVSchema, funcs)
 	}
