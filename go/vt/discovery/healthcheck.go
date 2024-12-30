@@ -377,7 +377,6 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 	}
 
 	for _, c := range cells {
-		var filters TabletFilters
 		log.Infof("Setting up healthcheck for cell: %v", c)
 		if c == "" {
 			continue
