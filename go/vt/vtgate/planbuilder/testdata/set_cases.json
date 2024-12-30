@@ -607,22 +607,26 @@
     }
   },
   {
-    "QueryType": "SET",
-    "Original": "set @foo = last_insert_id(1)",
-    "Instructions": {
-      "OperatorType": "Set",
-      "Ops": [
-        {
-          "Type": "UserDefinedVariable",
-          "Name": "foo",
-          "Expr": "last_insert_id(1)"
-        }
-      ],
-      "Inputs": [
-        {
-          "OperatorType": "SingleRow"
-        }
-      ]
+    "comment": "set last_insert_id with agrument to user defined variable",
+    "query": "set @foo = last_insert_id(1)",
+    "plan": {
+      "QueryType": "SET",
+      "Original": "set @foo = last_insert_id(1)",
+      "Instructions": {
+        "OperatorType": "Set",
+        "Ops": [
+          {
+            "Type": "UserDefinedVariable",
+            "Name": "foo",
+            "Expr": "last_insert_id(1)"
+          }
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "SingleRow"
+          }
+        ]
+      }
     }
   }
 ]
