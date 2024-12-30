@@ -73,25 +73,25 @@ func TestSemiSyncAckersForPrimary(t *testing.T) {
 	}{
 		{
 			name:               "no other tablets",
-			durabilityPolicy:   "none",
+			durabilityPolicy:   DurabilityNone,
 			primary:            primaryTablet,
 			allTablets:         []*topodatapb.Tablet{primaryTablet},
 			wantSemiSyncAckers: nil,
 		}, {
 			name:               "'none' durability policy",
-			durabilityPolicy:   "none",
+			durabilityPolicy:   DurabilityNone,
 			primary:            primaryTablet,
 			allTablets:         []*topodatapb.Tablet{primaryTablet, replicaTablet, rdonlyTablet, replicaCrossCellTablet, rdonlyCrossCellTablet},
 			wantSemiSyncAckers: nil,
 		}, {
 			name:               "'semi_sync' durability policy",
-			durabilityPolicy:   "semi_sync",
+			durabilityPolicy:   DurabilitySemiSync,
 			primary:            primaryTablet,
 			allTablets:         []*topodatapb.Tablet{primaryTablet, replicaTablet, rdonlyTablet, replicaCrossCellTablet, rdonlyCrossCellTablet},
 			wantSemiSyncAckers: []*topodatapb.Tablet{replicaTablet, replicaCrossCellTablet},
 		}, {
 			name:               "'cross_cell' durability policy",
-			durabilityPolicy:   "cross_cell",
+			durabilityPolicy:   DurabilityCrossCell,
 			primary:            primaryTablet,
 			allTablets:         []*topodatapb.Tablet{primaryTablet, replicaTablet, rdonlyTablet, replicaCrossCellTablet, rdonlyCrossCellTablet},
 			wantSemiSyncAckers: []*topodatapb.Tablet{replicaCrossCellTablet},
@@ -118,7 +118,7 @@ func Test_haveRevokedForTablet(t *testing.T) {
 	}{
 		{
 			name:             "'none' durability policy - not revoked",
-			durabilityPolicy: "none",
+			durabilityPolicy: DurabilityNone,
 			primaryEligible:  primaryTablet,
 			allTablets: []*topodatapb.Tablet{
 				primaryTablet, replicaTablet, replicaCrossCellTablet, rdonlyCrossCellTablet, rdonlyTablet,
@@ -129,7 +129,7 @@ func Test_haveRevokedForTablet(t *testing.T) {
 			revoked: false,
 		}, {
 			name:             "'none' durability policy - revoked",
-			durabilityPolicy: "none",
+			durabilityPolicy: DurabilityNone,
 			primaryEligible:  primaryTablet,
 			allTablets: []*topodatapb.Tablet{
 				primaryTablet, replicaTablet, replicaCrossCellTablet, rdonlyCrossCellTablet, rdonlyTablet,
@@ -140,7 +140,7 @@ func Test_haveRevokedForTablet(t *testing.T) {
 			revoked: true,
 		}, {
 			name:             "'semi_sync' durability policy - revoked",
-			durabilityPolicy: "semi_sync",
+			durabilityPolicy: DurabilitySemiSync,
 			primaryEligible:  primaryTablet,
 			allTablets: []*topodatapb.Tablet{
 				primaryTablet, replicaTablet, replicaCrossCellTablet, rdonlyCrossCellTablet, rdonlyTablet,
@@ -151,7 +151,7 @@ func Test_haveRevokedForTablet(t *testing.T) {
 			revoked: true,
 		}, {
 			name:             "'semi_sync' durability policy - not revoked",
-			durabilityPolicy: "semi_sync",
+			durabilityPolicy: DurabilitySemiSync,
 			primaryEligible:  primaryTablet,
 			allTablets: []*topodatapb.Tablet{
 				primaryTablet, replicaTablet, replicaCrossCellTablet, rdonlyCrossCellTablet, rdonlyTablet,
@@ -162,7 +162,7 @@ func Test_haveRevokedForTablet(t *testing.T) {
 			revoked: false,
 		}, {
 			name:             "'cross_cell' durability policy - revoked",
-			durabilityPolicy: "cross_cell",
+			durabilityPolicy: DurabilityCrossCell,
 			primaryEligible:  primaryTablet,
 			allTablets: []*topodatapb.Tablet{
 				primaryTablet, replicaTablet, replicaCrossCellTablet, rdonlyCrossCellTablet, rdonlyTablet,
@@ -173,7 +173,7 @@ func Test_haveRevokedForTablet(t *testing.T) {
 			revoked: true,
 		}, {
 			name:             "'cross_cell' durability policy - not revoked",
-			durabilityPolicy: "cross_cell",
+			durabilityPolicy: DurabilityCrossCell,
 			primaryEligible:  primaryTablet,
 			allTablets: []*topodatapb.Tablet{
 				primaryTablet, replicaTablet, replicaCrossCellTablet, rdonlyCrossCellTablet, rdonlyTablet,
@@ -184,7 +184,7 @@ func Test_haveRevokedForTablet(t *testing.T) {
 			revoked: false,
 		}, {
 			name:             "'cross_cell' durability policy - primary in list",
-			durabilityPolicy: "cross_cell",
+			durabilityPolicy: DurabilityCrossCell,
 			primaryEligible:  primaryTablet,
 			allTablets: []*topodatapb.Tablet{
 				primaryTablet, replicaTablet, replicaCrossCellTablet, rdonlyCrossCellTablet, rdonlyTablet,
@@ -215,7 +215,7 @@ func Test_haveRevoked(t *testing.T) {
 	}{
 		{
 			name:             "'none' durability policy - all tablets revoked",
-			durabilityPolicy: "none",
+			durabilityPolicy: DurabilityNone,
 			tabletsReached: []*topodatapb.Tablet{
 				primaryTablet, replicaTablet, replicaCrossCellTablet, rdonlyCrossCellTablet, rdonlyTablet,
 			},
@@ -225,7 +225,7 @@ func Test_haveRevoked(t *testing.T) {
 			revoked: true,
 		}, {
 			name:             "'semi_sync' durability policy - all tablets revoked",
-			durabilityPolicy: "semi_sync",
+			durabilityPolicy: DurabilitySemiSync,
 			tabletsReached: []*topodatapb.Tablet{
 				primaryTablet, replicaTablet, replicaCrossCellTablet, rdonlyCrossCellTablet, rdonlyTablet,
 			},
@@ -235,7 +235,7 @@ func Test_haveRevoked(t *testing.T) {
 			revoked: true,
 		}, {
 			name:             "'cross_cell' durability policy - all tablets revoked",
-			durabilityPolicy: "cross_cell",
+			durabilityPolicy: DurabilityCrossCell,
 			tabletsReached: []*topodatapb.Tablet{
 				primaryTablet, replicaTablet, replicaCrossCellTablet, rdonlyCrossCellTablet, rdonlyTablet,
 			},
@@ -245,7 +245,7 @@ func Test_haveRevoked(t *testing.T) {
 			revoked: true,
 		}, {
 			name:             "'none' durability policy - revoked",
-			durabilityPolicy: "none",
+			durabilityPolicy: DurabilityNone,
 			tabletsReached: []*topodatapb.Tablet{
 				primaryTablet, replicaTablet, replicaCrossCellTablet,
 			},
@@ -255,7 +255,7 @@ func Test_haveRevoked(t *testing.T) {
 			revoked: true,
 		}, {
 			name:             "'semi_sync' durability policy - revoked",
-			durabilityPolicy: "semi_sync",
+			durabilityPolicy: DurabilitySemiSync,
 			tabletsReached: []*topodatapb.Tablet{
 				replicaTablet, replicaCrossCellTablet, rdonlyTablet,
 			},
@@ -265,7 +265,7 @@ func Test_haveRevoked(t *testing.T) {
 			revoked: true,
 		}, {
 			name:             "'cross_cell' durability policy - revoked",
-			durabilityPolicy: "cross_cell",
+			durabilityPolicy: DurabilityCrossCell,
 			tabletsReached: []*topodatapb.Tablet{
 				replicaCrossCellTablet,
 			},
@@ -275,7 +275,7 @@ func Test_haveRevoked(t *testing.T) {
 			revoked: true,
 		}, {
 			name:             "'none' durability policy - not revoked",
-			durabilityPolicy: "none",
+			durabilityPolicy: DurabilityNone,
 			tabletsReached: []*topodatapb.Tablet{
 				primaryTablet, replicaCrossCellTablet, rdonlyCrossCellTablet, rdonlyTablet,
 			},
@@ -285,7 +285,7 @@ func Test_haveRevoked(t *testing.T) {
 			revoked: false,
 		}, {
 			name:             "'semi_sync' durability policy - not revoked",
-			durabilityPolicy: "semi_sync",
+			durabilityPolicy: DurabilitySemiSync,
 			tabletsReached: []*topodatapb.Tablet{
 				primaryTablet, rdonlyCrossCellTablet, rdonlyTablet,
 			},
@@ -295,7 +295,7 @@ func Test_haveRevoked(t *testing.T) {
 			revoked: false,
 		}, {
 			name:             "'cross_cell' durability policy - not revoked",
-			durabilityPolicy: "cross_cell",
+			durabilityPolicy: DurabilityCrossCell,
 			tabletsReached: []*topodatapb.Tablet{
 				primaryTablet, rdonlyCrossCellTablet, rdonlyTablet,
 			},
@@ -325,7 +325,7 @@ func Test_canEstablishForTablet(t *testing.T) {
 	}{
 		{
 			name:             "primary not reached",
-			durabilityPolicy: "none",
+			durabilityPolicy: DurabilityNone,
 			primaryEligible:  primaryTablet,
 			tabletsReached: []*topodatapb.Tablet{
 				replicaTablet, replicaCrossCellTablet, rdonlyCrossCellTablet, rdonlyTablet,
@@ -333,7 +333,7 @@ func Test_canEstablishForTablet(t *testing.T) {
 			canEstablish: false,
 		}, {
 			name:             "not established",
-			durabilityPolicy: "semi_sync",
+			durabilityPolicy: DurabilitySemiSync,
 			primaryEligible:  primaryTablet,
 			tabletsReached: []*topodatapb.Tablet{
 				primaryTablet, rdonlyCrossCellTablet, rdonlyTablet,
@@ -341,7 +341,7 @@ func Test_canEstablishForTablet(t *testing.T) {
 			canEstablish: false,
 		}, {
 			name:             "not established",
-			durabilityPolicy: "cross_cell",
+			durabilityPolicy: DurabilityCrossCell,
 			primaryEligible:  primaryTablet,
 			tabletsReached: []*topodatapb.Tablet{
 				primaryTablet, replicaTablet, rdonlyCrossCellTablet, rdonlyTablet,
@@ -349,7 +349,7 @@ func Test_canEstablishForTablet(t *testing.T) {
 			canEstablish: false,
 		}, {
 			name:             "established",
-			durabilityPolicy: "none",
+			durabilityPolicy: DurabilityNone,
 			primaryEligible:  primaryTablet,
 			tabletsReached: []*topodatapb.Tablet{
 				primaryTablet,
@@ -357,7 +357,7 @@ func Test_canEstablishForTablet(t *testing.T) {
 			canEstablish: true,
 		}, {
 			name:             "established",
-			durabilityPolicy: "semi_sync",
+			durabilityPolicy: DurabilitySemiSync,
 			primaryEligible:  primaryTablet,
 			tabletsReached: []*topodatapb.Tablet{
 				primaryTablet, replicaTablet,
@@ -365,7 +365,7 @@ func Test_canEstablishForTablet(t *testing.T) {
 			canEstablish: true,
 		}, {
 			name:             "established",
-			durabilityPolicy: "cross_cell",
+			durabilityPolicy: DurabilityCrossCell,
 			primaryEligible:  primaryTablet,
 			tabletsReached: []*topodatapb.Tablet{
 				primaryTablet, replicaCrossCellTablet,

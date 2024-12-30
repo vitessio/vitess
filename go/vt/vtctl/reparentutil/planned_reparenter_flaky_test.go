@@ -1186,7 +1186,7 @@ func TestPlannedReparenter_preflightChecks(t *testing.T) {
 
 			pr := NewPlannedReparenter(ts, tt.tmc, logger)
 			if tt.opts.durability == nil {
-				durability, err := GetDurabilityPolicy("none")
+				durability, err := GetDurabilityPolicy(DurabilityNone)
 				require.NoError(t, err)
 				tt.opts.durability = durability
 			}
@@ -1799,7 +1799,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 				ctx = _ctx
 			}
 
-			durability, err := GetDurabilityPolicy("none")
+			durability, err := GetDurabilityPolicy(DurabilityNone)
 			require.NoError(t, err)
 			tt.opts.durability = durability
 
@@ -1946,7 +1946,7 @@ func TestPlannedReparenter_performInitialPromotion(t *testing.T) {
 				ctx = _ctx
 			}
 
-			durability, err := GetDurabilityPolicy("none")
+			durability, err := GetDurabilityPolicy(DurabilityNone)
 			require.NoError(t, err)
 			pos, err := pr.performInitialPromotion(
 				ctx,
@@ -3423,7 +3423,7 @@ func TestPlannedReparenter_reparentTablets(t *testing.T) {
 	}{
 		{
 			name:       "success - durability = none",
-			durability: "none",
+			durability: DurabilityNone,
 			tmc: &testutil.TabletManagerClient{
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000100": nil,
@@ -3490,7 +3490,7 @@ func TestPlannedReparenter_reparentTablets(t *testing.T) {
 		},
 		{
 			name:       "success - durability = semi_sync",
-			durability: "semi_sync",
+			durability: DurabilitySemiSync,
 			tmc: &testutil.TabletManagerClient{
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000100": nil,
@@ -3556,7 +3556,7 @@ func TestPlannedReparenter_reparentTablets(t *testing.T) {
 			shouldErr: false,
 		}, {
 			name:                   "success - promote replica required",
-			durability:             "semi_sync",
+			durability:             DurabilitySemiSync,
 			promoteReplicaRequired: true,
 			tmc: &testutil.TabletManagerClient{
 				PromoteReplicaResults: map[string]struct {
@@ -3632,7 +3632,7 @@ func TestPlannedReparenter_reparentTablets(t *testing.T) {
 			shouldErr: false,
 		}, {
 			name:                   "Promote replica failed",
-			durability:             "semi_sync",
+			durability:             DurabilitySemiSync,
 			promoteReplicaRequired: true,
 			tmc: &testutil.TabletManagerClient{
 				PromoteReplicaResults: map[string]struct {
@@ -3977,7 +3977,7 @@ func TestPlannedReparenter_reparentTablets(t *testing.T) {
 			t.Parallel()
 
 			pr := NewPlannedReparenter(nil, tt.tmc, logger)
-			durabilityPolicy := "none"
+			durabilityPolicy := DurabilityNone
 			if tt.durability != "" {
 				durabilityPolicy = tt.durability
 			}

@@ -135,7 +135,7 @@ func TestReparentSorter(t *testing.T) {
 		},
 	}
 
-	durability, err := GetDurabilityPolicy("none")
+	durability, err := GetDurabilityPolicy(DurabilityNone)
 	require.NoError(t, err)
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {

@@ -48,7 +48,7 @@ func TestSaveAndReadKeyspace(t *testing.T) {
 			keyspaceName: "ks1",
 			keyspace: &topodatapb.Keyspace{
 				KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
-				DurabilityPolicy: "semi_sync",
+				DurabilityPolicy: reparentutil.DurabilitySemiSync,
 			},
 			keyspaceWanted:       nil,
 			semiSyncAckersWanted: 1,
@@ -72,12 +72,12 @@ func TestSaveAndReadKeyspace(t *testing.T) {
 			keyspaceName: "ks4",
 			keyspace: &topodatapb.Keyspace{
 				KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
-				DurabilityPolicy: "none",
+				DurabilityPolicy: reparentutil.DurabilityNone,
 				BaseKeyspace:     "baseKeyspace",
 			},
 			keyspaceWanted: &topodatapb.Keyspace{
 				KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
-				DurabilityPolicy: "none",
+				DurabilityPolicy: reparentutil.DurabilityNone,
 			},
 			semiSyncAckersWanted: 0,
 		}, {

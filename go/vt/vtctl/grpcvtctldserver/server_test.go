@@ -2777,14 +2777,14 @@ func TestCreateKeyspace(t *testing.T) {
 			req: &vtctldatapb.CreateKeyspaceRequest{
 				Name:             "testkeyspace",
 				Type:             topodatapb.KeyspaceType_NORMAL,
-				DurabilityPolicy: "semi_sync",
+				DurabilityPolicy: reparentutil.DurabilitySemiSync,
 			},
 			expected: &vtctldatapb.CreateKeyspaceResponse{
 				Keyspace: &vtctldatapb.Keyspace{
 					Name: "testkeyspace",
 					Keyspace: &topodatapb.Keyspace{
 						KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
-						DurabilityPolicy: "semi_sync",
+						DurabilityPolicy: reparentutil.DurabilitySemiSync,
 					},
 				},
 			},
@@ -11338,11 +11338,11 @@ func TestSetKeyspaceDurabilityPolicy(t *testing.T) {
 			},
 			req: &vtctldatapb.SetKeyspaceDurabilityPolicyRequest{
 				Keyspace:         "ks1",
-				DurabilityPolicy: "none",
+				DurabilityPolicy: reparentutil.DurabilityNone,
 			},
 			expected: &vtctldatapb.SetKeyspaceDurabilityPolicyResponse{
 				Keyspace: &topodatapb.Keyspace{
-					DurabilityPolicy: "none",
+					DurabilityPolicy: reparentutil.DurabilityNone,
 				},
 			},
 		},

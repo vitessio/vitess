@@ -1014,7 +1014,7 @@ zone1-0000000100 is not a replica`,
 		},
 	}
 
-	durability, err := GetDurabilityPolicy("none")
+	durability, err := GetDurabilityPolicy(DurabilityNone)
 	require.NoError(t, err)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1829,7 +1829,7 @@ func Test_getTabletsWithPromotionRules(t *testing.T) {
 			filteredTablets: nil,
 		},
 	}
-	durability, _ := GetDurabilityPolicy("none")
+	durability, _ := GetDurabilityPolicy(DurabilityNone)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			res := getTabletsWithPromotionRules(durability, tt.tablets, tt.rule)
