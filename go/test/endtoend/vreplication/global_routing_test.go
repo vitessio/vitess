@@ -26,7 +26,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/vt/log"
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 )
 
@@ -137,7 +136,6 @@ func (h *grHelpers) isNotGlobal(t *testing.T, tables []string) bool {
 			_, err = vtgateConn.ExecuteFetch(fmt.Sprintf("use %s", target), 1, false)
 			require.NoError(t, err)
 			_, err := vtgateConn.ExecuteFetch(fmt.Sprintf("select * from %s", table), 1, false)
-			log.Infof("Got error %v, for table %s.%s", err, table, target)
 			if err == nil || !strings.Contains(err.Error(), fmt.Sprintf("table %s not found", table)) {
 				asExpected = false
 			}
@@ -278,7 +276,6 @@ func testGlobalRouting(t *testing.T, markAsGlobal, unshardedHasVSchema bool, fun
 		h.insertData(t, config.ksU1, table, 1, config.ksU1)
 		vtgateConn, cancel := getVTGateConn()
 		waitForRowCount(t, vtgateConn, config.ksU1+"@replica", table, 1)
-		log.Infof("waitForRowCount succeeded for %s, %s", config.ksU1+"@replica", table)
 		cancel()
 	}
 	keyspaces := []string{config.ksU1}
@@ -294,7 +291,6 @@ func testGlobalRouting(t *testing.T, markAsGlobal, unshardedHasVSchema bool, fun
 		h.insertData(t, config.ksU2, table, 1, config.ksU2)
 		vtgateConn, cancel := getVTGateConn()
 		waitForRowCount(t, vtgateConn, config.ksU2+"@replica", table, 1)
-		log.Infof("waitForRowCount succeeded for %s, %s", config.ksU2+"@replica", table)
 		cancel()
 	}
 	keyspaces = append(keyspaces, config.ksU2)
@@ -309,7 +305,6 @@ func testGlobalRouting(t *testing.T, markAsGlobal, unshardedHasVSchema bool, fun
 		h.insertData(t, config.ksS1, table, 1, config.ksS1)
 		vtgateConn, cancel := getVTGateConn()
 		waitForRowCount(t, vtgateConn, config.ksS1+"@replica", table, 1)
-		log.Infof("waitForRowCount succeeded for %s, %s", config.ksS1+"@replica", table)
 		cancel()
 	}
 	keyspaces = append(keyspaces, config.ksS1)

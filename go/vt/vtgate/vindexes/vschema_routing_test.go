@@ -62,27 +62,25 @@ func TestAutoGlobalRoutingExt(t *testing.T) {
 				},
 			},
 			Tables: map[string]*vschemapb.Table{
-				"table5":   {}, // unique, should be added to global routing
-				"scommon1": {}, // common with unsharded1 and unsharded2, should be added to global routing because it's in the vschema
-				"scommon2": {}, // common with unsharded2, ambiguous because of sharded2
+				"table5":   {},
+				"scommon1": {},
+				"scommon2": {},
 			},
 		},
 	}
 	sharded2 := &testKeySpace{
 		name: "sharded2",
 		ks: &vschemapb.Keyspace{
-			Sharded:                true,
-			RequireExplicitRouting: true,
+			Sharded: true,
 			Vindexes: map[string]*vschemapb.Vindex{
 				"xxhash": {
 					Type: "xxhash",
 				},
 			},
-			// none should be considered for choice as global or ambiguous because of RequireExplicitRouting
 			Tables: map[string]*vschemapb.Table{
-				"table6":   {}, // unique
-				"scommon2": {}, // common with sharded2, but has RequireExplicitRouting
-				"scommon3": {}, // common with sharded2
+				"table6":   {},
+				"scommon2": {},
+				"scommon3": {},
 			},
 		},
 	}
@@ -171,6 +169,7 @@ func TestAutoGlobalRoutingExt(t *testing.T) {
 			}
 			for _, ks := range tc.keyspaces {
 				source.Keyspaces[ks.name] = ks.ks
+				// set it false for all keyspaces here and later override for those requested in the test case
 				ks.ks.RequireExplicitRouting = false
 				for tname := range ks.ks.Tables {
 					_, ok := allTables[tname]
