@@ -203,11 +203,7 @@ func anonymizeHomedir(file string) (err error) {
 	// We're replacing the stuff inside the square brackets in the example sed
 	// below:
 	// 	's:Paths to search for config files in. (default \[.*\])$:Paths to search for config files in. (default \[<WORKDIR>\]):'
-<<<<<<< HEAD
-	sed := exec.Command("sed", "-i", "", "-e", fmt.Sprintf("s:%s:<WORKDIR>:i", wd), file)
-=======
 	sed := exec.Command("sed", "-i", "", "-e", fmt.Sprintf("s:%s:%s:", wd, "<WORKDIR>"), file)
->>>>>>> 5c19f87b51 ([Direct PR] [V21 backport] CobraDocs: Remove commit hash from docs. Fix issue with workdir replacement (#17392) (#17444))
 	if out, err := sed.CombinedOutput(); err != nil {
 		return fmt.Errorf("%w: %s", err, out)
 	}
