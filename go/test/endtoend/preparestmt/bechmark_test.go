@@ -26,7 +26,7 @@ import (
 /*
 export ver=v1 p=~/benchmark && go test \
 -run '^$' -bench '^BenchmarkPreparedStmt' \
--benchtime 10s -count 6 -cpu 4 \
+-benchtime 3s -count 6 -cpu 4 \
 | tee $p/${ver}.txt
 */
 func BenchmarkPreparedStmt(b *testing.B) {
@@ -35,7 +35,7 @@ func BenchmarkPreparedStmt(b *testing.B) {
 
 	// prepare statement
 	insertStmt := `insert into sks.t1 (name, age, email, created_at, is_active) values(?,  ?,  ?,  current_timestamp,  ?)`
-	selectStmt := `select id, name, age, email from sks.t1 where age between ? and ? and is_active = ?`
+	selectStmt := `select id, name, age, email from sks.t1 where age between ? and ? and is_active = ? limit ?`
 	updateStmt := `update sks.t1 set is_active = ? where id = ?`
 	deleteStmt := `delete from sks.t1 where is_active = ? and age = ?`
 
@@ -65,7 +65,7 @@ func BenchmarkPreparedStmt(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			age := rand.IntN(80)
-			r, err := sStmt.Query(age, age+20, rand.IntN(2))
+			r, err := sStmt.Query(age, age+20, rand.IntN(2), rand.IntN(10))
 			if err != nil {
 				b.Fatal(err)
 			}
