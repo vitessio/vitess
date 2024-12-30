@@ -236,7 +236,7 @@ func TestAutoGlobalRoutingBasic(t *testing.T) {
 		Tables: map[string]*vschemapb.Table{
 			"table5":   {}, // unique, should be added to global routing
 			"scommon1": {}, // common with unsharded1 and unsharded2, should be added to global routing because it's in the vschema
-			"scommon2": {}, // common with unsharded2, ambiguous because of sharded2
+			"scommon2": {}, // common with unsharded2, not ambiguous because sharded2 sets RequireExplicitRouting
 		},
 	}
 	sharded2 := &vschemapb.Keyspace{
@@ -250,8 +250,8 @@ func TestAutoGlobalRoutingBasic(t *testing.T) {
 		// none should be considered for choice as global or ambiguous because of RequireExplicitRouting
 		Tables: map[string]*vschemapb.Table{
 			"table6":   {}, // unique
-			"scommon2": {}, // common with sharded2, but has RequireExplicitRouting
-			"scommon3": {}, // common with sharded2
+			"scommon2": {}, // common with sharded1, but has RequireExplicitRouting
+			"scommon3": {}, // unique
 		},
 	}
 	for _, ks := range []*vschemapb.Keyspace{sharded1, sharded2} {
