@@ -183,17 +183,6 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 			),
 			0
 		) AS count_valid_semi_sync_replicas,
-		MIN(
-			primary_instance.mariadb_gtid
-		) AS is_mariadb_gtid,
-		SUM(replica_instance.mariadb_gtid) AS count_mariadb_gtid_replicas,
-		IFNULL(
-			SUM(
-				replica_instance.last_checked <= replica_instance.last_seen
-				AND replica_instance.mariadb_gtid != 0
-			),
-			0
-		) AS count_valid_mariadb_gtid_replicas,
 		IFNULL(
 			SUM(
 				replica_instance.log_bin
@@ -339,8 +328,6 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 
 		countValidOracleGTIDReplicas := m.GetUint("count_valid_oracle_gtid_replicas")
 		a.OracleGTIDImmediateTopology = countValidOracleGTIDReplicas == a.CountValidReplicas && a.CountValidReplicas > 0
-		countValidMariaDBGTIDReplicas := m.GetUint("count_valid_mariadb_gtid_replicas")
-		a.MariaDBGTIDImmediateTopology = countValidMariaDBGTIDReplicas == a.CountValidReplicas && a.CountValidReplicas > 0
 		countValidBinlogServerReplicas := m.GetUint("count_valid_binlog_server_replicas")
 		a.BinlogServerImmediateTopology = countValidBinlogServerReplicas == a.CountValidReplicas && a.CountValidReplicas > 0
 		a.SemiSyncPrimaryEnabled = m.GetBool("semi_sync_primary_enabled")
@@ -541,7 +528,6 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 			}
 			if a.IsPrimary && a.CountReplicas > 1 &&
 				!a.OracleGTIDImmediateTopology &&
-				!a.MariaDBGTIDImmediateTopology &&
 				!a.BinlogServerImmediateTopology {
 				a.StructureAnalysis = append(a.StructureAnalysis, NoFailoverSupportStructureWarning)
 			}

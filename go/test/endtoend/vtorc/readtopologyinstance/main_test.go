@@ -165,7 +165,6 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 	assert.Empty(t, replicaInstance.LastSQLError)
 	assert.EqualValues(t, 0, replicaInstance.SQLDelay)
 	assert.True(t, replicaInstance.UsingOracleGTID)
-	assert.False(t, replicaInstance.UsingMariaDBGTID)
 	assert.Equal(t, replicaInstance.SourceUUID, primaryInstance.ServerUUID)
 	assert.False(t, replicaInstance.HasReplicationFilters)
 	assert.LessOrEqual(t, int(replicaInstance.SecondsBehindPrimary.Int64), 1)
