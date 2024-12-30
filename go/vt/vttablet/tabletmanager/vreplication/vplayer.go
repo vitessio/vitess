@@ -125,7 +125,8 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 		settings.StopPos = pausePos
 		saveStop = false
 	}
-	log.Infof("Starting VReplication player id: %v, startPos: %v, stop: %v, filter: %v", vr.id, settings.StartPos, settings.StopPos, vr.source)
+	log.Infof("Starting VReplication player id: %v, startPos: %v, stop: %v, filter: %+v",
+		vr.id, settings.StartPos, settings.StopPos, vr.source.Filter)
 	queryFunc := func(ctx context.Context, sql string) (*sqltypes.Result, error) {
 		return vr.dbClient.ExecuteWithRetry(ctx, sql)
 	}

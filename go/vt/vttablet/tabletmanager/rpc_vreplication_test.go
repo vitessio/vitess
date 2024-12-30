@@ -1787,7 +1787,7 @@ func addInvariants(dbClient *binlogplayer.MockDBClient, vreplID, sourceTabletUID
 	dbClient.AddInvariant("update _vt.vreplication set state='Running', message='' where id=1", &sqltypes.Result{})
 	dbClient.AddInvariant(vreplication.SqlMaxAllowedPacket, sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
-			"@@max_allowed_packet",
+			"max_allowed_packet",
 			"int64",
 		),
 		"65536",
