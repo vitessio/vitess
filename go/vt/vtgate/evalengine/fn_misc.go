@@ -160,7 +160,6 @@ func (call *builtinInetNtoa) compile(c *compiler) (ctype, error) {
 	c.compileToUint64(arg, 1)
 	col := typedCoercionCollation(sqltypes.VarChar, call.collate)
 	c.asm.Fn_INET_NTOA(col)
-
 	c.asm.jumpDestination(skip)
 
 	return ctype{Type: sqltypes.VarChar, Flag: flagNullable, Col: col}, nil
