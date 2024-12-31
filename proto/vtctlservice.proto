@@ -74,6 +74,8 @@ service Vtctld {
   rpc CompleteSchemaMigration(vtctldata.CompleteSchemaMigrationRequest) returns (vtctldata.CompleteSchemaMigrationResponse) {};
   // CompleteSchemaMigration completes one or all migrations executed with --postpone-completion.
   rpc ConcludeTransaction(vtctldata.ConcludeTransactionRequest) returns (vtctldata.ConcludeTransactionResponse) {};
+  // CopySchemaShard copies the schema from a source tablet to all tablets in a keyspace/shard.
+  rpc CopySchemaShard(vtctldata.CopySchemaShardRequest) returns (vtctldata.CopySchemaShardResponse) {};
   // CreateKeyspace creates the specified keyspace in the topology. For a
   // SNAPSHOT keyspace, the request must specify the name of a base keyspace,
   // as well as a snapshot time.

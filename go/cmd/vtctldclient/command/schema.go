@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
 
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
@@ -180,45 +181,53 @@ func commandApplySchema(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func commandCopySchemaShard(cmd *cobra.Command, args []string) error {
-	/*
-		tables := subFlags.String("tables", "", "Specifies a comma-separated list of tables to copy. Each is either an exact match, or a regular expression of the form /regexp/")
-		excludeTables := subFlags.String("exclude_tables", "", "Specifies a comma-separated list of tables to exclude. Each is either an exact match, or a regular expression of the form /regexp/")
-		includeViews := subFlags.Bool("include-views", true, "Includes views in the output")
-		skipVerify := subFlags.Bool("skip-verify", false, "Skip verification of source and target schema after copy")
-		// for backwards compatibility
-		waitReplicasTimeout := subFlags.Duration("wait_replicas_timeout", grpcvtctldserver.DefaultWaitReplicasTimeout, "The amount of time to wait for replicas to receive the schema change via replication.")
-		if err := subFlags.Parse(args); err != nil {
-			return err
-		}
+var copySchemaShardOptions = struct {
+	tables              []string
+	excludeTables       []string
+	includeViews        bool
+	skipVerify          bool
+	waitReplicasTimeout time.Duration
+}{}
 
-		if subFlags.NArg() != 2 {
-			return fmt.Errorf("the <source keyspace/shard> and <destination keyspace/shard> arguments are both required for the CopySchemaShard command. Instead of the <source keyspace/shard> argument, you can also specify <tablet alias> which refers to a specific tablet of the shard in the source keyspace")
-		}
-		var tableArray []string
-		if *tables != "" {
-			tableArray = strings.Split(*tables, ",")
-		}
-		var excludeTableArray []string
-		if *excludeTables != "" {
-			excludeTableArray = strings.Split(*excludeTables, ",")
-		}
-		destKeyspace, destShard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(1))
+func commandCopySchemaShard(cmd *cobra.Command, args []string) error {
+	destKeyspace, destShard, err := topoproto.ParseKeyspaceShard(cmd.Flags().Arg(1))
+	if err != nil {
+		return err
+	}
+
+	var sourceTabletAlias *topodatapb.TabletAlias
+	sourceKeyspace, sourceShard, err := topoproto.ParseKeyspaceShard(cmd.Flags().Arg(0))
+	if err == nil {
+		res, err := client.GetTablets(commandCtx, &vtctldatapb.GetTabletsRequest{
+			Keyspace:   sourceKeyspace,
+			Shard:      sourceShard,
+			TabletType: topodatapb.TabletType_PRIMARY,
+		})
 		if err != nil {
 			return err
 		}
+		sourceTabletAlias = res.GetTablets()[0].Alias
+	} else {
+		sourceTabletAlias, err = topoproto.ParseTabletAlias(cmd.Flags().Arg(0))
+		if err != nil {
+			return err
+		}
+	}
 
-		sourceKeyspace, sourceShard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
-		if err == nil {
-			return wr.CopySchemaShardFromShard(ctx, tableArray, excludeTableArray, *includeViews, sourceKeyspace, sourceShard, destKeyspace, destShard, *waitReplicasTimeout, *skipVerify)
-		}
-		sourceTabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
-		if err == nil {
-			return wr.CopySchemaShard(ctx, sourceTabletAlias, tableArray, excludeTableArray, *includeViews, destKeyspace, destShard, *waitReplicasTimeout, *skipVerify)
-		}
-		return err
-	*/
-	return nil
+	req := &vtctldatapb.CopySchemaShardRequest{
+		SourceTabletAlias:   sourceTabletAlias,
+		Tables:              copySchemaShardOptions.tables,
+		ExcludeTables:       copySchemaShardOptions.excludeTables,
+		IncludeViews:        copySchemaShardOptions.includeViews,
+		SkipVerify:          copySchemaShardOptions.skipVerify,
+		WaitReplicasTimeout: protoutil.DurationToProto(copySchemaShardOptions.waitReplicasTimeout),
+		DestinationKeyspace: destKeyspace,
+		DestinationShard:    destShard,
+	}
+
+	_, err = client.CopySchemaShard(commandCtx, req)
+
+	return err
 }
 
 var getSchemaOptions = struct {
@@ -423,8 +432,14 @@ func init() {
 	ApplySchema.Flags().StringArrayVar(&applySchemaOptions.SQL, "sql", nil, "Semicolon-delimited, repeatable SQL commands to apply. Exactly one of --sql|--sql-file is required.")
 	ApplySchema.Flags().StringVar(&applySchemaOptions.SQLFile, "sql-file", "", "Path to a file containing semicolon-delimited SQL commands to apply. Exactly one of --sql|--sql-file is required.")
 	ApplySchema.Flags().Int64Var(&applySchemaOptions.BatchSize, "batch-size", 0, "How many queries to batch together. Only applicable when all queries are CREATE TABLE|VIEW")
-
 	Root.AddCommand(ApplySchema)
+
+	CopySchemaShard.Flags().StringSliceVar(&copySchemaShardOptions.tables, "tables", nil, "Specifies a comma-separated list of tables to copy. Each is either an exact match, or a regular expression of the form /regexp/")
+	CopySchemaShard.Flags().StringSliceVar(&copySchemaShardOptions.excludeTables, "exclude-tables", nil, "Specifies a comma-separated list of tables to exclude. Each is either an exact match, or a regular expression of the form /regexp/")
+	CopySchemaShard.Flags().BoolVar(&copySchemaShardOptions.includeViews, "include-views", true, "Includes views in the output")
+	CopySchemaShard.Flags().BoolVar(&copySchemaShardOptions.skipVerify, "skip-verify", false, "Skip verification of source and target schema after copy")
+	CopySchemaShard.Flags().DurationVar(&copySchemaShardOptions.waitReplicasTimeout, "wait-replicas-timeout", grpcvtctldserver.DefaultWaitReplicasTimeout, "The amount of time to wait for replicas to receive the schema change via replication.")
+	Root.AddCommand(CopySchemaShard)
 
 	GetSchema.Flags().StringSliceVar(&getSchemaOptions.Tables, "tables", nil, "List of tables to display the schema for. Each is either an exact match, or a regular expression of the form `/regexp/`.")
 	GetSchema.Flags().StringSliceVar(&getSchemaOptions.ExcludeTables, "exclude-tables", nil, "List of tables to exclude from the result. Each is either an exact match, or a regular expression of the form `/regexp/`.")
@@ -432,7 +447,6 @@ func init() {
 	GetSchema.Flags().BoolVarP(&getSchemaOptions.TableNamesOnly, "table-names-only", "n", false, "Display only table names in the result.")
 	GetSchema.Flags().BoolVarP(&getSchemaOptions.TableSizesOnly, "table-sizes-only", "s", false, "Display only size information for matching tables. Ignored if --table-names-only is set.")
 	GetSchema.Flags().BoolVarP(&getSchemaOptions.TableSchemaOnly, "table-schema-only", "", false, "Skip introspecting columns and fields metadata.")
-
 	Root.AddCommand(GetSchema)
 
 	Root.AddCommand(ReloadSchema)

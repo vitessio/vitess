@@ -556,6 +556,20 @@ message CompleteSchemaMigrationResponse {
   map<string, uint64> rows_affected_by_shard = 1;
 }
 
+message CopySchemaShardRequest {
+  topodata.TabletAlias source_tablet_alias = 1;
+  repeated string tables = 2;
+  repeated string exclude_tables = 3;
+  bool include_views = 4;
+  bool skip_verify = 5;
+  vttime.Duration wait_replicas_timeout = 6;
+  string destination_keyspace = 7;
+  string destination_shard = 8;
+}
+
+message CopySchemaShardResponse {
+}
+
 message CreateKeyspaceRequest {
   // Name is the name of the keyspace.
   string name = 1;

@@ -55873,6 +55873,236 @@ export namespace vtctldata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** Properties of a CopySchemaShardRequest. */
+    interface ICopySchemaShardRequest {
+
+        /** CopySchemaShardRequest source_tablet_alias */
+        source_tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** CopySchemaShardRequest tables */
+        tables?: (string[]|null);
+
+        /** CopySchemaShardRequest exclude_tables */
+        exclude_tables?: (string[]|null);
+
+        /** CopySchemaShardRequest include_views */
+        include_views?: (boolean|null);
+
+        /** CopySchemaShardRequest skip_verify */
+        skip_verify?: (boolean|null);
+
+        /** CopySchemaShardRequest wait_replicas_timeout */
+        wait_replicas_timeout?: (vttime.IDuration|null);
+
+        /** CopySchemaShardRequest destination_keyspace */
+        destination_keyspace?: (string|null);
+
+        /** CopySchemaShardRequest destination_shard */
+        destination_shard?: (string|null);
+    }
+
+    /** Represents a CopySchemaShardRequest. */
+    class CopySchemaShardRequest implements ICopySchemaShardRequest {
+
+        /**
+         * Constructs a new CopySchemaShardRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.ICopySchemaShardRequest);
+
+        /** CopySchemaShardRequest source_tablet_alias. */
+        public source_tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** CopySchemaShardRequest tables. */
+        public tables: string[];
+
+        /** CopySchemaShardRequest exclude_tables. */
+        public exclude_tables: string[];
+
+        /** CopySchemaShardRequest include_views. */
+        public include_views: boolean;
+
+        /** CopySchemaShardRequest skip_verify. */
+        public skip_verify: boolean;
+
+        /** CopySchemaShardRequest wait_replicas_timeout. */
+        public wait_replicas_timeout?: (vttime.IDuration|null);
+
+        /** CopySchemaShardRequest destination_keyspace. */
+        public destination_keyspace: string;
+
+        /** CopySchemaShardRequest destination_shard. */
+        public destination_shard: string;
+
+        /**
+         * Creates a new CopySchemaShardRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns CopySchemaShardRequest instance
+         */
+        public static create(properties?: vtctldata.ICopySchemaShardRequest): vtctldata.CopySchemaShardRequest;
+
+        /**
+         * Encodes the specified CopySchemaShardRequest message. Does not implicitly {@link vtctldata.CopySchemaShardRequest.verify|verify} messages.
+         * @param message CopySchemaShardRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.ICopySchemaShardRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified CopySchemaShardRequest message, length delimited. Does not implicitly {@link vtctldata.CopySchemaShardRequest.verify|verify} messages.
+         * @param message CopySchemaShardRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.ICopySchemaShardRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a CopySchemaShardRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns CopySchemaShardRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.CopySchemaShardRequest;
+
+        /**
+         * Decodes a CopySchemaShardRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns CopySchemaShardRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.CopySchemaShardRequest;
+
+        /**
+         * Verifies a CopySchemaShardRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a CopySchemaShardRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns CopySchemaShardRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.CopySchemaShardRequest;
+
+        /**
+         * Creates a plain object from a CopySchemaShardRequest message. Also converts values to other types if specified.
+         * @param message CopySchemaShardRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.CopySchemaShardRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this CopySchemaShardRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for CopySchemaShardRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a CopySchemaShardResponse. */
+    interface ICopySchemaShardResponse {
+    }
+
+    /** Represents a CopySchemaShardResponse. */
+    class CopySchemaShardResponse implements ICopySchemaShardResponse {
+
+        /**
+         * Constructs a new CopySchemaShardResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.ICopySchemaShardResponse);
+
+        /**
+         * Creates a new CopySchemaShardResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns CopySchemaShardResponse instance
+         */
+        public static create(properties?: vtctldata.ICopySchemaShardResponse): vtctldata.CopySchemaShardResponse;
+
+        /**
+         * Encodes the specified CopySchemaShardResponse message. Does not implicitly {@link vtctldata.CopySchemaShardResponse.verify|verify} messages.
+         * @param message CopySchemaShardResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.ICopySchemaShardResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified CopySchemaShardResponse message, length delimited. Does not implicitly {@link vtctldata.CopySchemaShardResponse.verify|verify} messages.
+         * @param message CopySchemaShardResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.ICopySchemaShardResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a CopySchemaShardResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns CopySchemaShardResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.CopySchemaShardResponse;
+
+        /**
+         * Decodes a CopySchemaShardResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns CopySchemaShardResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.CopySchemaShardResponse;
+
+        /**
+         * Verifies a CopySchemaShardResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a CopySchemaShardResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns CopySchemaShardResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.CopySchemaShardResponse;
+
+        /**
+         * Creates a plain object from a CopySchemaShardResponse message. Also converts values to other types if specified.
+         * @param message CopySchemaShardResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.CopySchemaShardResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this CopySchemaShardResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for CopySchemaShardResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
     /** Properties of a CreateKeyspaceRequest. */
     interface ICreateKeyspaceRequest {
 

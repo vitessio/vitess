@@ -179,6 +179,8 @@ type VtctldClient interface {
 	CompleteSchemaMigration(ctx context.Context, in *vtctldata.CompleteSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.CompleteSchemaMigrationResponse, error)
 	// CompleteSchemaMigration completes one or all migrations executed with --postpone-completion.
 	ConcludeTransaction(ctx context.Context, in *vtctldata.ConcludeTransactionRequest, opts ...grpc.CallOption) (*vtctldata.ConcludeTransactionResponse, error)
+	// CopySchemaShard copies the schema from a source tablet to all tablets in a keyspace/shard.
+	CopySchemaShard(ctx context.Context, in *vtctldata.CopySchemaShardRequest, opts ...grpc.CallOption) (*vtctldata.CopySchemaShardResponse, error)
 	// CreateKeyspace creates the specified keyspace in the topology. For a
 	// SNAPSHOT keyspace, the request must specify the name of a base keyspace,
 	// as well as a snapshot time.
@@ -671,6 +673,15 @@ func (c *vtctldClient) CompleteSchemaMigration(ctx context.Context, in *vtctldat
 func (c *vtctldClient) ConcludeTransaction(ctx context.Context, in *vtctldata.ConcludeTransactionRequest, opts ...grpc.CallOption) (*vtctldata.ConcludeTransactionResponse, error) {
 	out := new(vtctldata.ConcludeTransactionResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/ConcludeTransaction", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) CopySchemaShard(ctx context.Context, in *vtctldata.CopySchemaShardRequest, opts ...grpc.CallOption) (*vtctldata.CopySchemaShardResponse, error) {
+	out := new(vtctldata.CopySchemaShardResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/CopySchemaShard", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1719,6 +1730,8 @@ type VtctldServer interface {
 	CompleteSchemaMigration(context.Context, *vtctldata.CompleteSchemaMigrationRequest) (*vtctldata.CompleteSchemaMigrationResponse, error)
 	// CompleteSchemaMigration completes one or all migrations executed with --postpone-completion.
 	ConcludeTransaction(context.Context, *vtctldata.ConcludeTransactionRequest) (*vtctldata.ConcludeTransactionResponse, error)
+	// CopySchemaShard copies the schema from a source tablet to all tablets in a keyspace/shard.
+	CopySchemaShard(context.Context, *vtctldata.CopySchemaShardRequest) (*vtctldata.CopySchemaShardResponse, error)
 	// CreateKeyspace creates the specified keyspace in the topology. For a
 	// SNAPSHOT keyspace, the request must specify the name of a base keyspace,
 	// as well as a snapshot time.
@@ -2071,6 +2084,9 @@ func (UnimplementedVtctldServer) CompleteSchemaMigration(context.Context, *vtctl
 }
 func (UnimplementedVtctldServer) ConcludeTransaction(context.Context, *vtctldata.ConcludeTransactionRequest) (*vtctldata.ConcludeTransactionResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ConcludeTransaction not implemented")
+}
+func (UnimplementedVtctldServer) CopySchemaShard(context.Context, *vtctldata.CopySchemaShardRequest) (*vtctldata.CopySchemaShardResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CopySchemaShard not implemented")
 }
 func (UnimplementedVtctldServer) CreateKeyspace(context.Context, *vtctldata.CreateKeyspaceRequest) (*vtctldata.CreateKeyspaceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateKeyspace not implemented")
@@ -2699,6 +2715,24 @@ func _Vtctld_ConcludeTransaction_Handler(srv interface{}, ctx context.Context, d
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VtctldServer).ConcludeTransaction(ctx, req.(*vtctldata.ConcludeTransactionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_CopySchemaShard_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.CopySchemaShardRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).CopySchemaShard(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/CopySchemaShard",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).CopySchemaShard(ctx, req.(*vtctldata.CopySchemaShardRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -4712,6 +4746,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ConcludeTransaction",
 			Handler:    _Vtctld_ConcludeTransaction_Handler,
+		},
+		{
+			MethodName: "CopySchemaShard",
+			Handler:    _Vtctld_CopySchemaShard_Handler,
 		},
 		{
 			MethodName: "CreateKeyspace",

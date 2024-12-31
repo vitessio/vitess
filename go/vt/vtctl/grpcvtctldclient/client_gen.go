@@ -173,6 +173,15 @@ func (client *gRPCVtctldClient) ConcludeTransaction(ctx context.Context, in *vtc
 	return client.c.ConcludeTransaction(ctx, in, opts...)
 }
 
+// CopySchemaShard is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) CopySchemaShard(ctx context.Context, in *vtctldatapb.CopySchemaShardRequest, opts ...grpc.CallOption) (*vtctldatapb.CopySchemaShardResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.CopySchemaShard(ctx, in, opts...)
+}
+
 // CreateKeyspace is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) CreateKeyspace(ctx context.Context, in *vtctldatapb.CreateKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.CreateKeyspaceResponse, error) {
 	if client.c == nil {

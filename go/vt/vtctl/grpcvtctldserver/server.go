@@ -870,6 +870,24 @@ func (s *VtctldServer) CompleteSchemaMigration(ctx context.Context, req *vtctlda
 	return resp, nil
 }
 
+// CopySchemaShard is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) CopySchemaShard(ctx context.Context, req *vtctldatapb.CopySchemaShardRequest) (resp *vtctldatapb.CopySchemaShardResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.CompleteSchemaMigration")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("source_tablet_alias", req.SourceTabletAlias)
+	span.Annotate("destination_keyspace", req.DestinationKeyspace)
+	span.Annotate("destination_shard", req.DestinationShard)
+
+	waitReplicasTimeout, _, err := protoutil.DurationFromProto(req.WaitReplicasTimeout)
+
+	return &vtctldatapb.CopySchemaShardResponse{}, s.ws.CopySchemaShard(ctx,
+		req.SourceTabletAlias, req.Tables, req.ExcludeTables, req.IncludeViews, req.DestinationKeyspace, req.DestinationShard,
+		waitReplicasTimeout, req.SkipVerify)
+}
+
 // CreateKeyspace is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) CreateKeyspace(ctx context.Context, req *vtctldatapb.CreateKeyspaceRequest) (resp *vtctldatapb.CreateKeyspaceResponse, err error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.CreateKeyspace")
