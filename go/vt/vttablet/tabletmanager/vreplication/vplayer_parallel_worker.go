@@ -147,7 +147,7 @@ func (w *parallelWorker) applyEvent(ctx context.Context, event *binlogdatapb.VEv
 
 func (w *parallelWorker) applyQueuedEvents(ctx context.Context) (err error) {
 	defer func() {
-		if err != nil {
+		if err != nil && w.dbClient != nil {
 			if err := w.dbClient.Rollback(); err != nil {
 				log.Errorf("Error rolling back transaction: %v", err)
 			}
