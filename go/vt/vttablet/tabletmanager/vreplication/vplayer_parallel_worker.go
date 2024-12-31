@@ -128,6 +128,14 @@ func (w *parallelWorker) updateFKCheck(ctx context.Context, flags2 uint32) error
 	return nil
 }
 
+func (w *parallelWorker) commit() error {
+	if w.vp.batchMode {
+		return w.dbClient.CommitTrxQueryBatch() // Commit the current trx batch
+	} else {
+		return w.dbClient.Commit()
+	}
+}
+
 func (w *parallelWorker) applyEvent(ctx context.Context, event *binlogdatapb.VEvent) error {
 	select {
 	case w.events <- event:
@@ -179,7 +187,7 @@ func (w *parallelWorker) applyQueuedEvents(ctx context.Context) (err error) {
 				if !w.lastPos.IsZero() {
 					w.vp.pos.Store(&w.lastPos)
 				}
-				return w.dbClient.Commit()
+				return w.commit()
 			}
 		}
 	}
@@ -201,7 +209,7 @@ func (w *parallelWorker) applyQueuedCommit(ctx context.Context, vevent *binlogda
 		return err
 	}
 
-	if err := w.dbClient.Commit(); err != nil {
+	if err := w.commit(); err != nil {
 		return err
 	}
 

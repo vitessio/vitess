@@ -268,10 +268,12 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 		log.Errorf("======= QQQ drain complete. err=%v", err)
 		applyErr <- err
 		countCommits := 0
+		countBatchedCommits := 0
 		for _, w := range parallelPool.workers {
 			countCommits += w.dbClient.TemporaryDevTrackingCountCommits
+			countBatchedCommits += w.dbClient.TemporaryDevTrackingCountBatchedCommits
 		}
-		log.Errorf("======= QQQ maxBatchedCommitsPerWorker: %v, countCommits: %v", parallelPool.maxBatchedCommitsPerWorker, countCommits)
+		log.Errorf("======= QQQ maxBatchedCommitsPerWorker: %v, countCommits: %v, countBatchedCommits: %v", parallelPool.maxBatchedCommitsPerWorker, countCommits, countBatchedCommits)
 		log.Errorf("======= QQQ parallel workers: %v, maxConcurrency: %v", len(parallelPool.workers), parallelPool.maxConcurrency.Load())
 	}()
 

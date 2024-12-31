@@ -30,7 +30,7 @@ import (
 
 const (
 	defaultParallelWorkersPoolSize = 8
-	maxBatchedCommitsPerWorker     = 50
+	maxBatchedCommitsPerWorker     = 10
 )
 
 type parallelWorkersPool struct {
@@ -68,8 +68,18 @@ func newParallelWorkersPool(size int, dbClientGen dbClientGenerator, vp *vplayer
 			return nil, err
 		}
 		w.dbClient = newVDBClient(dbClient, vp.vr.stats, 0)
-		w.queryFunc = func(ctx context.Context, sql string) (*sqltypes.Result, error) {
-			return w.dbClient.ExecuteWithRetry(ctx, sql)
+		if vp.batchMode {
+			log.Errorf("======= QQQ batchMode")
+			w.queryFunc = func(ctx context.Context, sql string) (*sqltypes.Result, error) {
+				if !w.dbClient.InTransaction { // Should be sent down the wire immediately
+					return w.dbClient.Execute(sql)
+				}
+				return nil, w.dbClient.AddQueryToTrxBatch(sql) // Should become part of the trx batch
+			}
+		} else {
+			w.queryFunc = func(ctx context.Context, sql string) (*sqltypes.Result, error) {
+				return w.dbClient.ExecuteWithRetry(ctx, sql)
+			}
 		}
 		p.workers[i] = w
 		p.pool <- w
