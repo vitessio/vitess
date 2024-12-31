@@ -148,7 +148,7 @@ var (
 )
 
 var (
-	countIterations = 1
+	countIterations = 5
 )
 
 const (
@@ -197,8 +197,9 @@ func TestMain(m *testing.M) {
 			// Test VPlayer batching mode.
 			fmt.Sprintf("--vreplication_experimental_flags=%d",
 				// vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage|vttablet.VReplicationExperimentalFlagOptimizeInserts),
-				vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage|vttablet.VReplicationExperimentalFlagOptimizeInserts|vttablet.VReplicationExperimentalFlagVPlayerParallel),
-			// vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage|vttablet.VReplicationExperimentalFlagOptimizeInserts|vttablet.VReplicationExperimentalFlagVPlayerBatching),
+				// vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage|vttablet.VReplicationExperimentalFlagOptimizeInserts|vttablet.VReplicationExperimentalFlagVPlayerParallel),
+				// vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage|vttablet.VReplicationExperimentalFlagOptimizeInserts|vttablet.VReplicationExperimentalFlagVPlayerBatching),
+				vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage|vttablet.VReplicationExperimentalFlagOptimizeInserts|vttablet.VReplicationExperimentalFlagVPlayerBatching|vttablet.VReplicationExperimentalFlagVPlayerParallel),
 		}
 		clusterInstance.VtGateExtraArgs = []string{
 			"--ddl_strategy", "online",
@@ -635,6 +636,8 @@ func runSingleConnection(ctx context.Context, t *testing.T, sleepInterval time.D
 	require.NoError(t, err)
 	defer conn.Close()
 
+	_, err = conn.ExecuteFetch("set innodb_lock_wait_timeout=5", 1000, true)
+	require.NoError(t, err)
 	_, err = conn.ExecuteFetch("set autocommit=1", 1000, true)
 	require.NoError(t, err)
 	_, err = conn.ExecuteFetch("set transaction isolation level read committed", 1000, true)
@@ -648,6 +651,7 @@ func runSingleConnection(ctx context.Context, t *testing.T, sleepInterval time.D
 	for {
 		select {
 		case <-ctx.Done():
+			log.Infof("runSingleConnection context timeout")
 			return
 		case <-ticker.C:
 		}
