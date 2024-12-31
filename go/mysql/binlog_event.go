@@ -86,8 +86,19 @@ type BinlogEvent interface {
 	IsWriteRows() bool
 	// IsUpdateRows returns true if this is a UPDATE_ROWS_EVENT.
 	IsUpdateRows() bool
+	// IsPartialUpdateRows returs true if a partial JSON update event
+	// is found. These events are only seen in MySQL 8.0 if the mysqld
+	// instance has binlog_row_value_options=PARTIAL_JSON set.
+	IsPartialUpdateRows() bool
 	// IsDeleteRows returns true if this is a DELETE_ROWS_EVENT.
 	IsDeleteRows() bool
+
+	// IsPseudo is for custom implementations of GTID.
+	IsPseudo() bool
+
+	// IsTransactionPayload returns true if a compressed transaction
+	// payload event is found (binlog_transaction_compression=ON).
+	IsTransactionPayload() bool
 
 	// Timestamp returns the timestamp from the event header.
 	Timestamp() uint32
@@ -123,8 +134,8 @@ type BinlogEvent interface {
 	TableMap(BinlogFormat) (*TableMap, error)
 	// Rows returns a Rows struct representing data from a
 	// {WRITE,UPDATE,DELETE}_ROWS_EVENT.  This is only valid if
-	// IsWriteRows(), IsUpdateRows(), or IsDeleteRows() returns
-	// true.
+	// IsWriteRows(), IsUpdateRows(), IsPartialUpdateRows(), or
+	// IsDeleteRows() returns true.
 	Rows(BinlogFormat, *TableMap) (Rows, error)
 	// TransactionPayload returns a TransactionPayload type which provides
 	// a GetNextEvent() method to iterate over the events contained within
@@ -140,13 +151,6 @@ type BinlogEvent interface {
 	// checksum stripped off, if any. If there is no checksum, it returns
 	// the same event and a nil checksum.
 	StripChecksum(BinlogFormat) (ev BinlogEvent, checksum []byte, err error)
-
-	// IsPseudo is for custom implementations of GTID.
-	IsPseudo() bool
-
-	// IsTransactionPayload returns true if a compressed transaction
-	// payload event is found (binlog_transaction_compression=ON).
-	IsTransactionPayload() bool
 
 	// Bytes returns the binary representation of the event
 	Bytes() []byte
@@ -265,6 +269,12 @@ type Row struct {
 	// Identify is the raw data for the columns used to identify a row.
 	// It is only set for UPDATE and DELETE events.
 	Identify []byte
+
+	// If this row was from a PartialUpdateRows event and it contains
+	// 1 or more JSON columns with partial values, then this will be
+	// set as a bitmap of which JSON columns in the AFTER image have
+	// partial values.
+	JSONPartialValues Bitmap
 
 	// Data is the raw data.
 	// It is only set for WRITE and UPDATE events.

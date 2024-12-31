@@ -44,7 +44,7 @@ const (
 
 // ClearOutTable deletes everything from a table. Sometimes the table might have more rows than allowed in a single delete query,
 // so we have to do the deletions iteratively.
-func ClearOutTable(t *testing.T, vtParams mysql.ConnParams, tableName string) {
+func ClearOutTable(t testing.TB, vtParams mysql.ConnParams, tableName string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	for {

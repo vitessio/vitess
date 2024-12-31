@@ -90,6 +90,11 @@ func Empty(id []byte) bool {
 // KeyRange helper methods
 //
 
+// Make a Key Range
+func NewKeyRange(start []byte, end []byte) *topodatapb.KeyRange {
+	return &topodatapb.KeyRange{Start: start, End: end}
+}
+
 // KeyRangeAdd adds two adjacent KeyRange values (in any order) into a single value. If the values are not adjacent,
 // it returns false.
 func KeyRangeAdd(a, b *topodatapb.KeyRange) (*topodatapb.KeyRange, bool) {

@@ -18,10 +18,15 @@ package tabletmanager
 
 import (
 	"context"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/semaphore"
+
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 )
 
 // TestWaitForGrantsToHaveApplied tests that waitForGrantsToHaveApplied only succeeds after waitForDBAGrants has been called.
@@ -41,4 +46,50 @@ func TestWaitForGrantsToHaveApplied(t *testing.T) {
 	defer secondCancel()
 	err = tm.waitForGrantsToHaveApplied(secondContext)
 	require.NoError(t, err)
+}
+
+type demotePrimaryStallQS struct {
+	tabletserver.Controller
+	waitTime       time.Duration
+	primaryStalled atomic.Bool
+}
+
+func (d *demotePrimaryStallQS) SetDemotePrimaryStalled() {
+	d.primaryStalled.Store(true)
+}
+
+func (d *demotePrimaryStallQS) IsServing() bool {
+	time.Sleep(d.waitTime)
+	return false
+}
+
+// TestDemotePrimaryStalled checks that if demote primary takes too long, then we mark it as stalled.
+func TestDemotePrimaryStalled(t *testing.T) {
+	// Set remote operation timeout to a very low value.
+	origVal := topo.RemoteOperationTimeout
+	topo.RemoteOperationTimeout = 100 * time.Millisecond
+	defer func() {
+		topo.RemoteOperationTimeout = origVal
+	}()
+
+	// Create a fake query service control to intercept calls from DemotePrimary function.
+	qsc := &demotePrimaryStallQS{
+		waitTime: 2 * time.Second,
+	}
+	// Create a tablet manager with a replica type tablet.
+	tm := &TabletManager{
+		actionSema:  semaphore.NewWeighted(1),
+		MysqlDaemon: newTestMysqlDaemon(t, 1),
+		tmState: &tmState{
+			displayState: displayState{
+				tablet: newTestTablet(t, 100, "ks", "-", map[string]string{}),
+			},
+		},
+		QueryServiceControl: qsc,
+	}
+
+	// We make IsServing stall for over 2 seconds, which is longer than 10 * remote operation timeout.
+	// This should cause the demote primary operation to be stalled.
+	tm.demotePrimary(context.Background(), false)
+	require.True(t, qsc.primaryStalled.Load())
 }

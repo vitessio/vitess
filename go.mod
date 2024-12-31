@@ -66,13 +66,13 @@ require (
 	go.etcd.io/etcd/client/pkg/v3 v3.5.17
 	go.etcd.io/etcd/client/v3 v3.5.17
 	go.uber.org/mock v0.2.0
-	golang.org/x/crypto v0.29.0 // indirect
+	golang.org/x/crypto v0.31.0 // indirect
 	golang.org/x/mod v0.22.0 // indirect
-	golang.org/x/net v0.31.0
+	golang.org/x/net v0.33.0
 	golang.org/x/oauth2 v0.24.0
-	golang.org/x/sys v0.27.0
-	golang.org/x/term v0.26.0
-	golang.org/x/text v0.20.0 // indirect
+	golang.org/x/sys v0.28.0
+	golang.org/x/term v0.27.0
+	golang.org/x/text v0.21.0 // indirect
 	golang.org/x/time v0.8.0
 	golang.org/x/tools v0.27.0
 	google.golang.org/api v0.205.0
@@ -96,6 +96,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.66.3
 	github.com/aws/smithy-go v1.22.0
 	github.com/bndr/gotabulate v1.1.2
+	github.com/dustin/go-humanize v1.0.1
 	github.com/gammazero/deque v0.2.1
 	github.com/google/safehtml v0.1.0
 	github.com/hashicorp/go-version v1.7.0
@@ -108,7 +109,7 @@ require (
 	github.com/xlab/treeprint v1.2.0
 	go.uber.org/goleak v1.3.0
 	golang.org/x/exp v0.0.0-20241108190413-2d47ceb2692f
-	golang.org/x/sync v0.9.0
+	golang.org/x/sync v0.10.0
 	gonum.org/v1/gonum v0.14.0
 	modernc.org/sqlite v1.33.1
 )
@@ -153,7 +154,6 @@ require (
 	github.com/coreos/go-systemd/v22 v22.5.0 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.5 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
-	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/eapache/queue/v2 v2.0.0-20230407133247-75960ed334e4 // indirect
 	github.com/ebitengine/purego v0.8.1 // indirect
 	github.com/envoyproxy/go-control-plane v0.13.1 // indirect

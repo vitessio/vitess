@@ -30,6 +30,7 @@ var (
 	_ Reversible      = (*Binary)(nil)
 	_ Hashing         = (*Binary)(nil)
 	_ ParamValidating = (*Binary)(nil)
+	_ Sequential      = (*Binary)(nil)
 )
 
 // Binary is a vindex that converts binary bits to a keyspace id.
@@ -106,6 +107,20 @@ func (*Binary) ReverseMap(_ VCursor, ksids [][]byte) ([]sqltypes.Value, error) {
 		reverseIds[rownum] = sqltypes.MakeTrusted(sqltypes.VarBinary, keyspaceID)
 	}
 	return reverseIds, nil
+}
+
+// RangeMap can map ids to key.Destination objects.
+func (vind *Binary) RangeMap(ctx context.Context, vcursor VCursor, startId sqltypes.Value, endId sqltypes.Value) ([]key.Destination, error) {
+	startKsId, err := vind.Hash(startId)
+	if err != nil {
+		return nil, err
+	}
+	endKsId, err := vind.Hash(endId)
+	if err != nil {
+		return nil, err
+	}
+	out := []key.Destination{&key.DestinationKeyRange{KeyRange: key.NewKeyRange(startKsId, endKsId)}}
+	return out, nil
 }
 
 // UnknownParams implements the ParamValidating interface.

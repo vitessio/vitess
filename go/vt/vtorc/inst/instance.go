@@ -56,8 +56,6 @@ type Instance struct {
 	GTIDMode              string
 	SupportsOracleGTID    bool
 	UsingOracleGTID       bool
-	UsingMariaDBGTID      bool
-	UsingPseudoGTID       bool // Legacy. Always 'false'
 	ReadBinlogCoordinates BinlogCoordinates
 	ExecBinlogCoordinates BinlogCoordinates
 	IsDetached            bool
@@ -134,11 +132,6 @@ func (instance *Instance) MajorVersionString() string {
 	return strings.Join(instance.MajorVersion(), ".")
 }
 
-// IsMariaDB checks whether this is any version of MariaDB
-func (instance *Instance) IsMariaDB() bool {
-	return strings.Contains(instance.Version, "MariaDB")
-}
-
 // IsPercona checks whether this is any version of Percona Server
 func (instance *Instance) IsPercona() bool {
 	return strings.Contains(instance.VersionComment, "Percona")
@@ -151,9 +144,6 @@ func (instance *Instance) IsBinlogServer() bool {
 
 // IsOracleMySQL checks whether this is an Oracle MySQL distribution
 func (instance *Instance) IsOracleMySQL() bool {
-	if instance.IsMariaDB() {
-		return false
-	}
 	if instance.IsPercona() {
 		return false
 	}
@@ -170,8 +160,6 @@ func (instance *Instance) applyFlavorName() {
 	}
 	if instance.IsOracleMySQL() {
 		instance.FlavorName = "MySQL"
-	} else if instance.IsMariaDB() {
-		instance.FlavorName = "MariaDB"
 	} else if instance.IsPercona() {
 		instance.FlavorName = "Percona"
 	} else {
@@ -220,7 +208,7 @@ func (instance *Instance) SQLThreadUpToDate() bool {
 	return instance.ReadBinlogCoordinates.Equals(&instance.ExecBinlogCoordinates)
 }
 
-// UsingGTID returns true when this replica is currently replicating via GTID (either Oracle or MariaDB)
+// UsingGTID returns true when this replica is currently replicating via GTID
 func (instance *Instance) UsingGTID() bool {
-	return instance.UsingOracleGTID || instance.UsingMariaDBGTID
+	return instance.UsingOracleGTID
 }

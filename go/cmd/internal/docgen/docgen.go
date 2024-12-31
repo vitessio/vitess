@@ -116,7 +116,6 @@ func restructure(rootDir string, dir string, name string, commands []*cobra.Comm
 		fullCmdFilename := strings.Join([]string{name, cmd.Name()}, "_")
 
 		children := cmd.Commands()
-
 		switch {
 		case len(children) > 0:
 			// Command (top-level or not) with children.
@@ -151,7 +150,6 @@ func restructure(rootDir string, dir string, name string, commands []*cobra.Comm
 
 			oldName := filepath.Join(rootDir, fullCmdFilename+".md")
 			newName := filepath.Join(dir, fullCmdFilename+".md")
-
 			if err := os.Rename(oldName, newName); err != nil {
 				return fmt.Errorf("failed to move child command %s to its parent's dir: %w", fullCmdFilename, err)
 			}
@@ -166,6 +164,14 @@ func restructure(rootDir string, dir string, name string, commands []*cobra.Comm
 			}
 		default:
 			// Top-level command without children. Nothing to restructure.
+			// However we still need to anonymize the homedir in the help text.
+			if cmd.Name() == "help" {
+				// all commands with children have their own "help" subcommand,
+				// which we do not generate docs for
+				continue
+			}
+			f := filepath.Join(dir, fullCmdFilename+".md")
+			_ = anonymizeHomedir(f) // it is possible that the file does not exist, so we ignore the error
 			continue
 		}
 	}
@@ -190,11 +196,14 @@ func anonymizeHomedir(file string) (err error) {
 	if err != nil {
 		return err
 	}
+	if _, err := os.Stat(file); err != nil {
+		return nil
+	}
 
 	// We're replacing the stuff inside the square brackets in the example sed
 	// below:
 	// 	's:Paths to search for config files in. (default \[.*\])$:Paths to search for config files in. (default \[<WORKDIR>\]):'
-	sed := exec.Command("sed", "-i", "-e", fmt.Sprintf("s:%s:<WORKDIR>:i", wd), file)
+	sed := exec.Command("sed", "-i", "", "-e", fmt.Sprintf("s:%s:%s:", wd, "<WORKDIR>"), file)
 	if out, err := sed.CombinedOutput(); err != nil {
 		return fmt.Errorf("%w: %s", err, out)
 	}
@@ -224,7 +233,6 @@ func getCommitID(ref string) (string, error) {
 const frontmatter = `---
 title: %s
 series: %s
-commit: %s
 ---
 `
 
@@ -240,7 +248,7 @@ func frontmatterFilePrepender(sha string) func(filename string) string {
 
 		cmdName = strings.ReplaceAll(cmdName, "_", " ")
 
-		return fmt.Sprintf(frontmatter, cmdName, root, sha)
+		return fmt.Sprintf(frontmatter, cmdName, root)
 	}
 }
 

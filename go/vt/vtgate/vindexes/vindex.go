@@ -130,6 +130,13 @@ type (
 		ReverseMap(vcursor VCursor, ks [][]byte) ([]sqltypes.Value, error)
 	}
 
+	// A Sequential vindex is an optional interface one that maps to a keyspace range
+	// instead of a single keyspace id. It's being used to reduce the fan out for
+	// 'BETWEEN' expressions.
+	Sequential interface {
+		RangeMap(ctx context.Context, vcursor VCursor, startId sqltypes.Value, endId sqltypes.Value) ([]key.Destination, error)
+	}
+
 	// A Prefixable vindex is one that maps the prefix of a id to a keyspace range
 	// instead of a single keyspace id. It's being used to reduced the fan out for
 	// 'LIKE' expressions.

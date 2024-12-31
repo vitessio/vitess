@@ -69,7 +69,9 @@ type QueryExecutor struct {
 }
 
 const (
-	streamRowsSize = 256
+	streamRowsSize   = 256
+	resetLastIDQuery = "select last_insert_id(18446744073709547416)"
+	resetLastIDValue = 18446744073709547416
 )
 
 var (
@@ -1111,42 +1113,97 @@ func (qre *QueryExecutor) getSelectLimit() int64 {
 func (qre *QueryExecutor) execDBConn(conn *connpool.Conn, sql string, wantfields bool) (*sqltypes.Result, error) {
 	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.execDBConn")
 	defer span.Finish()
-
 	defer qre.logStats.AddRewrittenSQL(sql, time.Now())
 
 	qd := NewQueryDetail(qre.logStats.Ctx, conn)
-	err := qre.tsv.statelessql.Add(qd)
-	if err != nil {
+
+	if err := qre.tsv.statelessql.Add(qd); err != nil {
 		return nil, err
 	}
 	defer qre.tsv.statelessql.Remove(qd)
 
-	return conn.Exec(ctx, sql, int(qre.tsv.qe.maxResultSize.Load()), wantfields)
+	if err := qre.resetLastInsertIDIfNeeded(ctx, conn); err != nil {
+		return nil, err
+	}
+
+	exec, err := conn.Exec(ctx, sql, int(qre.tsv.qe.maxResultSize.Load()), wantfields)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := qre.fetchLastInsertID(ctx, conn, exec); err != nil {
+		return nil, err
+	}
+
+	return exec, nil
 }
 
 func (qre *QueryExecutor) execStatefulConn(conn *StatefulConnection, sql string, wantfields bool) (*sqltypes.Result, error) {
 	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.execStatefulConn")
 	defer span.Finish()
-
 	defer qre.logStats.AddRewrittenSQL(sql, time.Now())
 
 	qd := NewQueryDetail(qre.logStats.Ctx, conn)
-	err := qre.tsv.statefulql.Add(qd)
-	if err != nil {
+
+	if err := qre.tsv.statefulql.Add(qd); err != nil {
 		return nil, err
 	}
 	defer qre.tsv.statefulql.Remove(qd)
 
-	return conn.Exec(ctx, sql, int(qre.tsv.qe.maxResultSize.Load()), wantfields)
+	if err := qre.resetLastInsertIDIfNeeded(ctx, conn.UnderlyingDBConn().Conn); err != nil {
+		return nil, err
+	}
+
+	exec, err := conn.Exec(ctx, sql, int(qre.tsv.qe.maxResultSize.Load()), wantfields)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := qre.fetchLastInsertID(ctx, conn.UnderlyingDBConn().Conn, exec); err != nil {
+		return nil, err
+	}
+
+	return exec, nil
+}
+
+func (qre *QueryExecutor) resetLastInsertIDIfNeeded(ctx context.Context, conn *connpool.Conn) error {
+	if qre.options.GetFetchLastInsertId() {
+		// if the query contains a last_insert_id(x) function,
+		// we need to reset the last insert id to check if it was set by the query or not
+		_, err := conn.Exec(ctx, resetLastIDQuery, 1, false)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (qre *QueryExecutor) fetchLastInsertID(ctx context.Context, conn *connpool.Conn, exec *sqltypes.Result) error {
+	if exec.InsertIDUpdated() || !qre.options.GetFetchLastInsertId() {
+		return nil
+	}
+
+	result, err := conn.Exec(ctx, "select last_insert_id()", 1, false)
+	if err != nil {
+		return err
+	}
+
+	cell := result.Rows[0][0]
+	insertID, err := cell.ToCastUint64()
+	if err != nil {
+		return err
+	}
+	if resetLastIDValue != insertID {
+		exec.InsertID = insertID
+		exec.InsertIDChanged = true
+	}
+	return nil
 }
 
 func (qre *QueryExecutor) execStreamSQL(conn *connpool.PooledConn, isTransaction bool, sql string, callback func(*sqltypes.Result) error) error {
 	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.execStreamSQL")
+	defer span.Finish()
 	trace.AnnotateSQL(span, sqlparser.Preview(sql))
-	callBackClosingSpan := func(result *sqltypes.Result) error {
-		defer span.Finish()
-		return callback(result)
-	}
 
 	start := time.Now()
 	defer qre.logStats.AddRewrittenSQL(sql, start)
@@ -1157,20 +1214,47 @@ func (qre *QueryExecutor) execStreamSQL(conn *connpool.PooledConn, isTransaction
 	// This change will ensure that long-running streaming stateful queries get gracefully shutdown during ServingTypeChange
 	// once their grace period is over.
 	qd := NewQueryDetail(qre.logStats.Ctx, conn.Conn)
+
+	if err := qre.resetLastInsertIDIfNeeded(ctx, conn.Conn); err != nil {
+		return err
+	}
+
+	lastInsertIDSet := false
+	cb := func(result *sqltypes.Result) error {
+		if result != nil && result.InsertIDUpdated() {
+			lastInsertIDSet = true
+		}
+		return callback(result)
+	}
+
+	var err error
 	if isTransaction {
-		err := qre.tsv.statefulql.Add(qd)
+		err = qre.tsv.statefulql.Add(qd)
 		if err != nil {
 			return err
 		}
 		defer qre.tsv.statefulql.Remove(qd)
-		return conn.Conn.StreamOnce(ctx, sql, callBackClosingSpan, allocStreamResult, int(qre.tsv.qe.streamBufferSize.Load()), sqltypes.IncludeFieldsOrDefault(qre.options))
+		err = conn.Conn.StreamOnce(ctx, sql, cb, allocStreamResult, int(qre.tsv.qe.streamBufferSize.Load()), sqltypes.IncludeFieldsOrDefault(qre.options))
+	} else {
+		err = qre.tsv.olapql.Add(qd)
+		if err != nil {
+			return err
+		}
+		defer qre.tsv.olapql.Remove(qd)
+		err = conn.Conn.Stream(ctx, sql, cb, allocStreamResult, int(qre.tsv.qe.streamBufferSize.Load()), sqltypes.IncludeFieldsOrDefault(qre.options))
 	}
-	err := qre.tsv.olapql.Add(qd)
-	if err != nil {
+
+	if err != nil || lastInsertIDSet || !qre.options.GetFetchLastInsertId() {
 		return err
 	}
-	defer qre.tsv.olapql.Remove(qd)
-	return conn.Conn.Stream(ctx, sql, callBackClosingSpan, allocStreamResult, int(qre.tsv.qe.streamBufferSize.Load()), sqltypes.IncludeFieldsOrDefault(qre.options))
+	res := &sqltypes.Result{}
+	if err = qre.fetchLastInsertID(ctx, conn.Conn, res); err != nil {
+		return err
+	}
+	if res.InsertIDUpdated() {
+		return callback(res)
+	}
+	return nil
 }
 
 func (qre *QueryExecutor) recordUserQuery(queryType string, duration int64) {

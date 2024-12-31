@@ -39,9 +39,10 @@ func TestResult(t *testing.T) {
 		Type: Float64,
 	}}
 	sqlResult := &Result{
-		Fields:       fields,
-		InsertID:     1,
-		RowsAffected: 2,
+		Fields:          fields,
+		InsertID:        1,
+		InsertIDChanged: true,
+		RowsAffected:    2,
 		Rows: [][]Value{{
 			TestValue(VarChar, "aa"),
 			TestValue(Int64, "1"),
@@ -53,9 +54,10 @@ func TestResult(t *testing.T) {
 		}},
 	}
 	p3Result := &querypb.QueryResult{
-		Fields:       fields,
-		InsertId:     1,
-		RowsAffected: 2,
+		Fields:          fields,
+		InsertId:        1,
+		InsertIdChanged: true,
+		RowsAffected:    2,
 		Rows: []*querypb.Row{{
 			Lengths: []int64{2, 1, 1},
 			Values:  []byte("aa12"),
@@ -105,18 +107,20 @@ func TestResults(t *testing.T) {
 		Type: Float64,
 	}}
 	sqlResults := []Result{{
-		Fields:       fields1,
-		InsertID:     1,
-		RowsAffected: 2,
+		Fields:          fields1,
+		InsertID:        1,
+		InsertIDChanged: true,
+		RowsAffected:    2,
 		Rows: [][]Value{{
 			TestValue(VarChar, "aa"),
 			TestValue(Int64, "1"),
 			TestValue(Float64, "2"),
 		}},
 	}, {
-		Fields:       fields2,
-		InsertID:     3,
-		RowsAffected: 4,
+		Fields:          fields2,
+		InsertID:        3,
+		InsertIDChanged: true,
+		RowsAffected:    4,
 		Rows: [][]Value{{
 			TestValue(VarChar, "bb"),
 			TestValue(Int64, "3"),
@@ -124,17 +128,19 @@ func TestResults(t *testing.T) {
 		}},
 	}}
 	p3Results := []*querypb.QueryResult{{
-		Fields:       fields1,
-		InsertId:     1,
-		RowsAffected: 2,
+		Fields:          fields1,
+		InsertId:        1,
+		InsertIdChanged: true,
+		RowsAffected:    2,
 		Rows: []*querypb.Row{{
 			Lengths: []int64{2, 1, 1},
 			Values:  []byte("aa12"),
 		}},
 	}, {
-		Fields:       fields2,
-		InsertId:     3,
-		RowsAffected: 4,
+		Fields:          fields2,
+		InsertId:        3,
+		InsertIdChanged: true,
+		RowsAffected:    4,
 		Rows: []*querypb.Row{{
 			Lengths: []int64{2, 1, 1},
 			Values:  []byte("bb34"),
@@ -176,9 +182,10 @@ func TestQueryReponses(t *testing.T) {
 	queryResponses := []QueryResponse{
 		{
 			QueryResult: &Result{
-				Fields:       fields1,
-				InsertID:     1,
-				RowsAffected: 2,
+				Fields:          fields1,
+				InsertID:        1,
+				InsertIDChanged: true,
+				RowsAffected:    2,
 				Rows: [][]Value{{
 					TestValue(VarChar, "aa"),
 					TestValue(Int64, "1"),
@@ -188,9 +195,10 @@ func TestQueryReponses(t *testing.T) {
 			QueryError: nil,
 		}, {
 			QueryResult: &Result{
-				Fields:       fields2,
-				InsertID:     3,
-				RowsAffected: 4,
+				Fields:          fields2,
+				InsertID:        3,
+				InsertIDChanged: true,
+				RowsAffected:    4,
 				Rows: [][]Value{{
 					TestValue(VarChar, "bb"),
 					TestValue(Int64, "3"),
@@ -208,9 +216,10 @@ func TestQueryReponses(t *testing.T) {
 		{
 			Error: nil,
 			Result: &querypb.QueryResult{
-				Fields:       fields1,
-				InsertId:     1,
-				RowsAffected: 2,
+				Fields:          fields1,
+				InsertId:        1,
+				InsertIdChanged: true,
+				RowsAffected:    2,
 				Rows: []*querypb.Row{{
 					Lengths: []int64{2, 1, 1},
 					Values:  []byte("aa12"),
@@ -219,9 +228,10 @@ func TestQueryReponses(t *testing.T) {
 		}, {
 			Error: nil,
 			Result: &querypb.QueryResult{
-				Fields:       fields2,
-				InsertId:     3,
-				RowsAffected: 4,
+				Fields:          fields2,
+				InsertId:        3,
+				InsertIdChanged: true,
+				RowsAffected:    4,
 				Rows: []*querypb.Row{{
 					Lengths: []int64{2, 1, 1},
 					Values:  []byte("bb34"),
