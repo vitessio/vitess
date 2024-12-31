@@ -5586,17 +5586,6 @@ func TestInvalid(t *testing.T) {
 			err:   "syntax error",
 		},
 		{
-			// TODO: should work
-			input: "select * from tbl into outfile 'outfile.txt' lines terminated by 'e' starting by 'd'",
-			err:   "syntax error",
-		},
-		{
-			// TODO: should work
-			input: "select * from tbl into outfile 'outfile.txt' lines starting by 'd' terminated by 'e' starting by 'd' terminated by 'e'",
-			err:   "syntax error",
-		},
-
-		{
 			input: "select date 20010203",
 			err:   "syntax error",
 		},
@@ -7572,6 +7561,14 @@ func TestLoadData(t *testing.T) {
 		{
 			input:  "LOAD DATA INFILE '/tmp/jokes.txt' INTO TABLE jokes FIELDS TERMINATED BY '' LINES TERMINATED BY '\n%%\n' (joke)",
 			output: "load data infile '/tmp/jokes.txt' into table jokes fields terminated by '' lines terminated by '\n%%\n' (joke)",
+		},
+		{
+			input:  "select * from tbl into outfile 'outfile.txt' lines terminated by 'e' starting by 'd'",
+			output: "select * from tbl into outfile 'outfile.txt' lines starting by 'd' terminated by 'e'",
+		},
+		{
+			input:  "select * from tbl into outfile 'outfile.txt' lines starting by 'a' terminated by 'b' starting by 'd' terminated by 'e'",
+			output: "select * from tbl into outfile 'outfile.txt' lines starting by 'd' terminated by 'e'",
 		},
 		{
 			input:  "LOAD DATA INFILE 'data.txt' INTO TABLE db2.my_table",

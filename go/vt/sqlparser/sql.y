@@ -498,9 +498,9 @@ func tryCastStatement(v interface{}) Statement {
 %type <val> characteristic_list_opt characteristic_list
 %type <val> characteristic
 %type <val> fields_opt
-%type <val> lines_opt
+%type <val> lines_opt lines_option_list
 %type <val> enclosed_by_opt
-%type <val> terminated_by_opt starting_by_opt escaped_by_opt
+%type <val> terminated_by_opt escaped_by_opt
 %type <val> lock_table_list
 %type <val> lock_table
 %type <val> lock_type
@@ -10462,18 +10462,32 @@ lines_opt:
   {
     $$ = (*Lines)(nil)
   }
-| LINES starting_by_opt terminated_by_opt
+| LINES lines_option_list
   {
-    $$ = &Lines{StartingBy: $2.(*SQLVal), TerminatedBy: $3.(*SQLVal)}
+    $$ = $2
   }
 
-starting_by_opt:
+lines_option_list:
   {
-    $$ = (*SQLVal)(nil)
+    $$ = &Lines{}
   }
-| STARTING BY STRING
+| lines_option_list STARTING BY STRING
   {
-    $$ = NewStrVal($3)
+    if $1 == nil {
+      $$ = &Lines{StartingBy: NewStrVal($4)}
+    } else {
+      $1.(*Lines).StartingBy = NewStrVal($4)
+      $$ = $1
+    }
+  }
+| lines_option_list TERMINATED BY STRING
+  {
+    if $1 == nil {
+      $$ = &Lines{TerminatedBy: NewStrVal($4)}
+    } else {
+      $1.(*Lines).TerminatedBy = NewStrVal($4)
+      $$ = $1
+    }
   }
 
 lock_statement:
