@@ -154,6 +154,9 @@ func (w *parallelWorker) applyQueuedEvents(ctx context.Context) (err error) {
 		}
 	}()
 	for {
+		if w.pool.posReached.Load() {
+			return io.EOF
+		}
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
