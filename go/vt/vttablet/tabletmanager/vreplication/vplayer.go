@@ -290,7 +290,7 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 		// is shutting down and canceled the context, or stop position was reached,
 		// or a journal event was encountered.
 		// If so, we return nil which will cause the controller to not retry.
-		if errors.Is(err, io.EOF) {
+		if errors.Is(vterrors.UnwrapAll(err), io.EOF) {
 			return nil
 		}
 		return err
@@ -308,7 +308,7 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 		}
 		// If the stream ends normally we have to return an error indicating
 		// that the controller has to retry a different vttablet.
-		if err == nil || errors.Is(err, io.EOF) {
+		if err == nil || errors.Is(vterrors.UnwrapAll(err), io.EOF) {
 			return errors.New("vstream ended")
 		}
 		return err

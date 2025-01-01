@@ -18,12 +18,28 @@ package vreplication
 
 import (
 	"errors"
+	"io"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/vt/vterrors"
 )
+
+func TestEOF(t *testing.T) {
+	{
+		err := io.EOF
+		assert.True(t, errors.Is(err, io.EOF))
+		unwrapped := vterrors.UnwrapAll(err)
+		assert.True(t, errors.Is(unwrapped, io.EOF))
+	}
+	{
+		err := vterrors.Wrapf(io.EOF, "unexpected EOF on table %s", "stress_test")
+		assert.False(t, errors.Is(err, io.EOF))
+		unwrapped := vterrors.UnwrapAll(err)
+		assert.True(t, errors.Is(unwrapped, io.EOF))
+	}
+}
 
 func TestErrRetryEvent(t *testing.T) {
 	err := vterrors.Wrapf(errRetryEvent, "unexpected event on table %s", "stress_test")
