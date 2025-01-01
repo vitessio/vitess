@@ -84,7 +84,7 @@ func (w *parallelWorker) applyQueuedStmtEvent(ctx context.Context, event *binlog
 
 // updatePos should get called at a minimum of vreplicationMinimumHeartbeatUpdateInterval.
 func (w *parallelWorker) updatePos(ctx context.Context, ts int64) (posReached bool, err error) {
-	return w.vp.updatePos(ctx, ts, w.queryFunc)
+	return w.vp.updatePos(ctx, ts, w.queryFunc, w.dbClient)
 }
 
 // updateFKCheck updates the @@session.foreign_key_checks variable based on the binlog row event flags.
@@ -453,7 +453,7 @@ func (w *parallelWorker) applyApplicableQueuedEvent(ctx context.Context, event *
 			if _, err := w.updatePos(ctx, event.Timestamp); err != nil {
 				return err
 			}
-			if err := w.vp.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, fmt.Sprintf("Stopped at DDL %s", event.Statement)); err != nil {
+			if err := w.vp.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, w.dbClient, fmt.Sprintf("Stopped at DDL %s", event.Statement)); err != nil {
 				return err
 			}
 			if err := w.dbClient.Commit(); err != nil {
@@ -517,7 +517,7 @@ func (w *parallelWorker) applyApplicableQueuedEvent(ctx context.Context, event *
 			switch {
 			case found && notFound:
 				// Some were found and some were not found. We can't handle this.
-				if err := w.vp.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, "unable to handle journal event: tables were partially matched"); err != nil {
+				if err := w.vp.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, w.dbClient, "unable to handle journal event: tables were partially matched"); err != nil {
 					return err
 				}
 				return io.EOF
@@ -529,7 +529,7 @@ func (w *parallelWorker) applyApplicableQueuedEvent(ctx context.Context, event *
 		}
 		log.Infof("Binlog event registering journal event %+v", event.Journal)
 		if err := w.vp.vr.vre.registerJournal(event.Journal, w.vp.vr.id); err != nil {
-			if err := w.vp.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, err.Error()); err != nil {
+			if err := w.vp.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, w.dbClient, err.Error()); err != nil {
 				return err
 			}
 			return io.EOF

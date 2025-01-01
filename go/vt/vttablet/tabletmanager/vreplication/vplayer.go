@@ -191,7 +191,7 @@ func (vp *vplayer) play(ctx context.Context) error {
 	if !vp.stopPos.IsZero() && vp.startPos.AtLeast(vp.stopPos) {
 		log.Infof("Stop position %v already reached: %v", vp.startPos, vp.stopPos)
 		if vp.saveStop {
-			return vp.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, fmt.Sprintf("Stop position %v already reached: %v", vp.startPos, vp.stopPos))
+			return vp.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, nil, fmt.Sprintf("Stop position %v already reached: %v", vp.startPos, vp.stopPos))
 		}
 		return nil
 	}
@@ -265,7 +265,7 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 		log.Errorf("======= QQQ applying events. err=%v", err)
 		err = errors.Join(err, vp.applyEvents(ctx, relay, parallelPool))
 		log.Errorf("======= QQQ about to drain. err=%v", err)
-		err = errors.Join(err, parallelPool.drain(context.Background()))
+		err = errors.Join(err, parallelPool.drain(ctx))
 		log.Errorf("======= QQQ drain complete. err=%v", err)
 		applyErr <- err
 		countCommits := 0
@@ -316,7 +316,12 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 }
 
 // updatePos should get called at a minimum of vreplicationMinimumHeartbeatUpdateInterval.
-func (vp *vplayer) updatePos(ctx context.Context, ts int64, queryFunc func(ctx context.Context, sql string) (*sqltypes.Result, error)) (posReached bool, err error) {
+func (vp *vplayer) updatePos(
+	ctx context.Context,
+	ts int64,
+	queryFunc func(ctx context.Context, sql string) (*sqltypes.Result, error),
+	dbClient *vdbClient,
+) (posReached bool, err error) {
 	vp.posMu.Lock()
 	defer vp.posMu.Unlock()
 
@@ -338,7 +343,7 @@ func (vp *vplayer) updatePos(ctx context.Context, ts int64, queryFunc func(ctx c
 	if posReached {
 		log.Infof("Stopped at position: %v", vp.stopPos)
 		if vp.saveStop {
-			if err := vp.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, fmt.Sprintf("Stopped at position %v", vp.stopPos)); err != nil {
+			if err := vp.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, dbClient, fmt.Sprintf("Stopped at position %v", vp.stopPos)); err != nil {
 				return false, err
 			}
 		}
@@ -467,7 +472,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog, parallelPoo
 		// In both cases, now > timeLastSaved. If so, the GTID of the last unsavedEvent
 		// must be saved.
 		if time.Since(vp.timeLastSaved) >= idleTimeout && vp.unsavedEvent.Load() != nil {
-			posReached, err := vp.updatePos(ctx, vp.unsavedEvent.Load().Timestamp, vp.query)
+			posReached, err := vp.updatePos(ctx, vp.unsavedEvent.Load().Timestamp, vp.query, nil)
 			if err != nil {
 				return err
 			}

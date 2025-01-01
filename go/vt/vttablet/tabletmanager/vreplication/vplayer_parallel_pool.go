@@ -77,6 +77,7 @@ func newParallelWorkersPool(size int, dbClientGen dbClientGenerator, vp *vplayer
 				}
 				return nil, w.dbClient.AddQueryToTrxBatch(sql) // Should become part of the trx batch
 			}
+			w.dbClient.maxBatchSize = vp.vr.dbClient.maxBatchSize
 		} else {
 			w.queryFunc = func(ctx context.Context, sql string) (*sqltypes.Result, error) {
 				return w.dbClient.ExecuteWithRetry(ctx, sql)
