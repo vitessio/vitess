@@ -68,8 +68,10 @@ func newParallelWorkersPool(size int, dbClientGen dbClientGenerator, vp *vplayer
 		if err != nil {
 			return nil, err
 		}
-		if err := setDBClientSettings(dbClient, vp.vr.workflowConfig); err != nil {
-			return nil, err
+		if vp.vr.source.Filter != nil {
+			if err := setDBClientSettings(dbClient, vp.vr.workflowConfig); err != nil {
+				return nil, err
+			}
 		}
 
 		w.dbClient = newVDBClient(dbClient, vp.vr.stats, 0)
