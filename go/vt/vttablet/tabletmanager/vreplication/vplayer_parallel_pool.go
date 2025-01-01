@@ -118,11 +118,10 @@ func (p *parallelWorkersPool) drain(ctx context.Context) (err error) {
 	}
 	// Get all workers (ensures they're all idle):
 	for range len(p.workers) {
-		w, err := p.availableWorker(ctx, -1, -1, false)
+		_, err := p.availableWorker(ctx, -1, -1, false)
 		if err != nil {
 			return vterrors.Wrapf(err, "drain aborted")
 		}
-		w.dbClient.Close()
 	}
 	return p.workersError()
 }
