@@ -38,11 +38,6 @@ var (
 		Args:                  cobra.ExactArgs(1),
 		RunE:                  commandGetTopologyPath,
 	}
-	// The version of the key/path to get. If not specified, the latest/current
-	// version is returned.
-	version int64 = 0
-	// If true, only the data is output and it is in JSON format rather than prototext.
-	dataAsJSON bool = false
 
 	// WriteTopologyPath writes the contents of a local file to a path
 	// in the topology server.
@@ -60,9 +55,15 @@ var (
 		},
 		RunE: commandWriteTopologyPath,
 	}
-	// The cell to use for the copy. Defaults to the global cell.
-	cell string
 )
+
+var getTopologyPathOptions = struct {
+	// The version of the key/path to get. If not specified, the latest/current
+	// version is returned.
+	version int64
+	// If true, only the data is output and it is in JSON format rather than prototext.
+	dataAsJSON bool
+}{}
 
 func commandGetTopologyPath(cmd *cobra.Command, args []string) error {
 	path := cmd.Flags().Arg(0)
@@ -71,14 +72,14 @@ func commandGetTopologyPath(cmd *cobra.Command, args []string) error {
 
 	resp, err := client.GetTopologyPath(commandCtx, &vtctldatapb.GetTopologyPathRequest{
 		Path:    path,
-		Version: version,
-		AsJson:  dataAsJSON,
+		Version: getTopologyPathOptions.version,
+		AsJson:  getTopologyPathOptions.dataAsJSON,
 	})
 	if err != nil {
 		return err
 	}
 
-	if dataAsJSON {
+	if getTopologyPathOptions.dataAsJSON {
 		if resp.GetCell() == nil || resp.GetCell().GetData() == "" {
 			return fmt.Errorf("no data found for path %s", path)
 		}
@@ -96,6 +97,11 @@ func commandGetTopologyPath(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+var writeTopologyPathOptions = struct {
+	// The cell to use for the copy. Defaults to the global cell.
+	cell string
+}{}
+
 func commandWriteTopologyPath(cmd *cobra.Command, args []string) error {
 	path := cmd.Flags().Arg(0)
 	file := cmd.Flags().Arg(1)
@@ -105,7 +111,7 @@ func commandWriteTopologyPath(cmd *cobra.Command, args []string) error {
 	}
 	cli.FinishedParsing(cmd)
 
-	conn, err := ts.ConnForCell(cmd.Context(), cell)
+	conn, err := ts.ConnForCell(cmd.Context(), writeTopologyPathOptions.cell)
 	if err != nil {
 		return fmt.Errorf("failed to connect to the topology server: %v", err)
 	}
@@ -122,10 +128,10 @@ func commandWriteTopologyPath(cmd *cobra.Command, args []string) error {
 }
 
 func init() {
-	GetTopologyPath.Flags().Int64Var(&version, "version", version, "The version of the path's key to get. If not specified, the latest version is returned.")
-	GetTopologyPath.Flags().BoolVar(&dataAsJSON, "data-as-json", dataAsJSON, "If true, only the data is output and it is in JSON format rather than prototext.")
+	GetTopologyPath.Flags().Int64Var(&getTopologyPathOptions.version, "version", getTopologyPathOptions.version, "The version of the path's key to get. If not specified, the latest version is returned.")
+	GetTopologyPath.Flags().BoolVar(&getTopologyPathOptions.dataAsJSON, "data-as-json", getTopologyPathOptions.dataAsJSON, "If true, only the data is output and it is in JSON format rather than prototext.")
 	Root.AddCommand(GetTopologyPath)
 
-	WriteTopologyPath.Flags().StringVar(&cell, "cell", topo.GlobalCell, "Topology server cell to copy the file to.")
+	WriteTopologyPath.Flags().StringVar(&writeTopologyPathOptions.cell, "cell", topo.GlobalCell, "Topology server cell to copy the file to.")
 	Root.AddCommand(WriteTopologyPath)
 }
