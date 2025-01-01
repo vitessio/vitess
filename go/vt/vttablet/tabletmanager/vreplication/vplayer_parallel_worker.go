@@ -226,7 +226,7 @@ func (w *parallelWorker) applyQueuedCommit(ctx context.Context, vevent *binlogda
 	return nil
 }
 
-func (w *parallelWorker) applyQueuedRowEvent(ctx context.Context, vevent *binlogdatapb.VEvent, applyFunc func(sql string) (*sqltypes.Result, error)) error {
+func (w *parallelWorker) applyQueuedRowEvent(ctx context.Context, vevent *binlogdatapb.VEvent) error {
 	if err := w.updateFKCheck(ctx, vevent.RowEvent.Flags); err != nil {
 		return err
 	}
@@ -239,7 +239,7 @@ func (w *parallelWorker) applyQueuedRowEvent(ctx context.Context, vevent *binlog
 	if tplan == nil {
 		return vterrors.Wrapf(errRetryEvent, "unexpected event on table %s", vevent.RowEvent.TableName)
 	}
-	applyFuncWithStats := func(sql string) (*sqltypes.Result, error) {
+	applyFunc := func(sql string) (*sqltypes.Result, error) {
 		stats := NewVrLogStats("ROWCHANGE")
 		start := time.Now()
 		qr, err := w.queryFunc(ctx, sql)
@@ -273,7 +273,7 @@ func (w *parallelWorker) applyQueuedRowEvent(ctx context.Context, vevent *binlog
 		w.pool.maxConcurrency.Store(currentConcurrency)
 	}
 	for _, change := range vevent.RowEvent.RowChanges {
-		if _, err := tplan.applyChange(change, applyFuncWithStats); err != nil {
+		if _, err := tplan.applyChange(change, applyFunc); err != nil {
 			return err
 		}
 	}
@@ -325,9 +325,6 @@ func (w *parallelWorker) applyApplicableQueuedEvent(ctx context.Context, event *
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	applyFunc := func(sql string) (*sqltypes.Result, error) {
-		return w.queryFunc(ctx, sql)
-	}
 	//
 	t := time.NewTimer(5 * time.Second)
 	defer t.Stop()
@@ -412,7 +409,7 @@ func (w *parallelWorker) applyApplicableQueuedEvent(ctx context.Context, event *
 		if err := w.dbClient.Begin(); err != nil {
 			return err
 		}
-		if err := w.applyQueuedRowEvent(ctx, event, applyFunc); err != nil {
+		if err := w.applyQueuedRowEvent(ctx, event); err != nil {
 			return err
 		}
 		// Row event is logged AFTER RowChanges are applied so as to calculate the total elapsed
