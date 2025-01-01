@@ -385,7 +385,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			}
 			for _, vevent := range vevents {
 				if err := bufferAndTransmit(vevent); err != nil {
-					if errors.Is(err, io.EOF) {
+					if errors.Is(vterrors.UnwrapAll(err), io.EOF) {
 						return nil
 					}
 					vs.vse.errorCounts.Add("BufferAndTransmit", 1)
@@ -408,7 +408,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 		case <-hbTimer.C:
 			checkResult, ok := vs.vse.throttlerClient.ThrottleCheckOK(ctx, vs.throttlerApp)
 			if err := injectHeartbeat(!ok, checkResult.Summary()); err != nil {
-				if errors.Is(err, io.EOF) {
+				if errors.Is(vterrors.UnwrapAll(err), io.EOF) {
 					return nil
 				}
 				vs.vse.errorCounts.Add("Send", 1)
@@ -682,7 +682,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 		for {
 			tpevent, err := tp.GetNextEvent()
 			if err != nil {
-				if errors.Is(err, io.EOF) {
+				if errors.Is(vterrors.UnwrapAll(err), io.EOF) {
 					break
 				}
 				return nil, err
