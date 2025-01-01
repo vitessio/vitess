@@ -48,7 +48,6 @@ var (
 		Args:                  cobra.ExactArgs(2),
 		PreRunE: func(cmd *cobra.Command, args []string) error {
 			if VtctldClientProtocol != "local" {
-				cli.FinishedParsing(cmd)
 				return fmt.Errorf("The WriteTopologyPath command can only be used with --server=%s", useInternalVtctld)
 			}
 			return nil
