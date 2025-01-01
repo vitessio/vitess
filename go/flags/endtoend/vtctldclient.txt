@@ -21,6 +21,7 @@ Available Commands:
   ChangeTabletTags            Changes the tablet tags for the specified tablet, if possible.
   ChangeTabletType            Changes the db type for the specified tablet, if possible.
   CheckThrottler              Issue a throttler check on the given tablet.
+  CopySchemaShard             Copies the schema from a source shard's primary (or a specific tablet) to a destination shard. The schema is applied directly on the primary of the destination shard, and it is propagated to the replicas through binlogs.
   CreateKeyspace              Creates the specified keyspace in the topology.
   CreateShard                 Creates the specified shard in the topology.
   DeleteCellInfo              Deletes the CellInfo for the provided cell.
