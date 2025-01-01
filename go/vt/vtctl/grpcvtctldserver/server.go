@@ -4801,6 +4801,7 @@ func (s *VtctldServer) ValidateSchemaKeyspace(ctx context.Context, req *vtctldat
 	defer panicHandler(&err)
 
 	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("shards", req.Shards)
 	keyspace := req.Keyspace
 
 	resp = &vtctldatapb.ValidateSchemaKeyspaceResponse{

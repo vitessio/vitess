@@ -384,16 +384,45 @@ func commandValidateSchemaKeyspace(cmd *cobra.Command, args []string) error {
 		IncludeViews:   validateSchemaKeyspaceOptions.IncludeViews,
 	})
 
+	// The client behavior here matches the behavior and output of the legacy vtctl[client].
+	// The way that the server side is written, the error is only set if an error is encountered
+	// performing the work. If there are any differences found then they are included in the
+	// results (no result is generated when the schemas match across the two tablets). It's also
+	// assumed that each tablet has the same differences with the reference/primary tablet and
+	// thus we only return the first result to match the behavior of the legacy vtctl[client]
+	// since the server side results also do not mention WHICH tablet differed from the
+	// reference/primary tablet (101 in the example below, while the tablets that had a
+	// difference which led to the result are 100 and 102). Here's an example full response:
+	// ❯ vtctldclient ValidateSchemaKeyspace commerce
+	// {
+	//   "results": [
+	//     "zone1-0000000101 has an extra table named mlord",
+	//     "zone1-0000000101 has an extra table named mlord"
+	//   ],
+	//   "results_by_shard": {
+	//     "0": {
+	//       "results": [
+	//         "zone1-0000000101 has an extra table named mlord",
+	//         "zone1-0000000101 has an extra table named mlord"
+	//       ]
+	//     }
+	//   }
+	// }
+	// TODO: This command, both client and server side, needs to be refactored:
+	// 1. We should always show the full results whether a difference is detected or not and
+	//    leave the error handling unchanged, OR we should only show the user any results when
+	//    there's a difference detected -- capturing that in the error on the server side and
+	//    then passing that on to the user as an error.
+	// 2. The results/error should clearly note which tablet(s) are involved. In the example
+	//    above the results are from zone1-0000000100 and zone1-0000000102 which differed
+	//    from zone1-0000000101, but that is not clearly reflected in the output.
 	if err != nil {
 		return err
 	}
-
-	data, err := cli.MarshalJSON(resp)
-	if err != nil {
-		return err
+	if len(resp.Results) > 0 {
+		return fmt.Errorf("%s", resp.Results[0])
 	}
-
-	fmt.Printf("%s\n", data)
+	// No errors or mismatches found.
 	return nil
 }
 
