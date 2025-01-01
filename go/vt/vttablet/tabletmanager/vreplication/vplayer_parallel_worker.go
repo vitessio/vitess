@@ -129,6 +129,9 @@ func (w *parallelWorker) updateFKCheck(ctx context.Context, flags2 uint32) error
 }
 
 func (w *parallelWorker) commit() error {
+	if w.pool.posReached.Load() {
+		return nil
+	}
 	if w.vp.batchMode {
 		return w.dbClient.CommitTrxQueryBatch() // Commit the current trx batch
 	} else {
