@@ -4725,7 +4725,7 @@ func (s *VtctldServer) ValidatePermissionsKeyspace(ctx context.Context, req *vtc
 		// If the user has specified a list of specific shards, we'll use that.
 		shards = req.Shards
 	} else {
-		// Validate all the shards
+		// Validate all of the shards.
 		shards, err = s.ts.GetShardNames(ctx, req.Keyspace)
 		if err != nil {
 			return nil, err

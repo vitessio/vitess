@@ -206,7 +206,11 @@ func commandCopySchemaShard(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return err
 		}
-		sourceTabletAlias = res.GetTablets()[0].Alias
+		tablets := res.GetTablets()
+		if len(tablets) == 0 {
+			return fmt.Errorf("no primary tablet found in source shard %s/%s", sourceKeyspace, sourceShard)
+		}
+		sourceTabletAlias = tablets[0].Alias
 	} else {
 		sourceTabletAlias, err = topoproto.ParseTabletAlias(cmd.Flags().Arg(0))
 		if err != nil {
