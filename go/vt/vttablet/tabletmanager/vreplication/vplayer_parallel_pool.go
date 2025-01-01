@@ -127,6 +127,8 @@ func (p *parallelWorkersPool) recycleWorker(w *parallelWorker) {
 func (p *parallelWorkersPool) availableWorker(ctx context.Context, lastCommitted int64, sequenceNumber int64, firstInBinlog bool) (w *parallelWorker, err error) {
 	select {
 	case w = <-p.pool:
+	case err := <-p.workerErrors:
+		return nil, err
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
