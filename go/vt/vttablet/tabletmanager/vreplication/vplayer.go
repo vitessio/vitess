@@ -241,7 +241,7 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 	if vp.parallelMode {
 		parallelWorkers = defaultParallelWorkersPoolSize
 	}
-	parallelPool, err := newParallelWorkersPool(parallelWorkers, vp.vr.dbClientGen, vp)
+	parallelPool, err := newParallelWorkersPool(ctx, parallelWorkers, vp.vr.dbClientGen, vp)
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to create parallel events buffer")
 	}

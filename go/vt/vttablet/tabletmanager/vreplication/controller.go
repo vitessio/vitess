@@ -304,6 +304,11 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 			if err := dbClient.Connect(); err != nil {
 				return nil, err
 			}
+			if ct.source.Filter != nil {
+				if err := setDBClientSettings(dbClient, ct.WorkflowConfig); err != nil {
+					return nil, err
+				}
+			}
 			dbClients = append(dbClients, dbClient)
 			return dbClient, nil
 		}

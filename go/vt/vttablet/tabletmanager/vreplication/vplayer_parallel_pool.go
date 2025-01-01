@@ -51,7 +51,7 @@ type parallelWorkersPool struct {
 	wakeup sync.Cond
 }
 
-func newParallelWorkersPool(size int, dbClientGen dbClientGenerator, vp *vplayer) (p *parallelWorkersPool, err error) {
+func newParallelWorkersPool(ctx context.Context, size int, dbClientGen dbClientGenerator, vp *vplayer) (p *parallelWorkersPool, err error) {
 	p = &parallelWorkersPool{
 		workers:      make([]*parallelWorker, size),
 		pool:         make(chan *parallelWorker, size),
@@ -68,13 +68,12 @@ func newParallelWorkersPool(size int, dbClientGen dbClientGenerator, vp *vplayer
 		if err != nil {
 			return nil, err
 		}
-		if vp.vr.source.Filter != nil {
-			if err := setDBClientSettings(dbClient, vp.vr.workflowConfig); err != nil {
-				return nil, err
-			}
-		}
 
 		w.dbClient = newVDBClient(dbClient, vp.vr.stats, 0)
+		_, err = vp.vr.setSQLMode(ctx, w.dbClient)
+		if err != nil {
+			return nil, err
+		}
 		if vp.batchMode {
 			log.Errorf("======= QQQ batchMode")
 			w.queryFunc = func(ctx context.Context, sql string) (*sqltypes.Result, error) {
