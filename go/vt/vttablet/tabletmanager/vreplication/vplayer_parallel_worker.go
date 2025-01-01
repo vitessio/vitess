@@ -163,6 +163,9 @@ func (w *parallelWorker) applyQueuedEvents(ctx context.Context) (err error) {
 		case vevent := <-w.events:
 			if err := w.applyQueuedEvent(ctx, vevent); err != nil {
 				if err == io.EOF {
+					if !w.lastPos.IsZero() {
+						w.vp.pos.Store(&w.lastPos)
+					}
 					return err
 				}
 				// Not EOF
