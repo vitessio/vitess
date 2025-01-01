@@ -882,6 +882,9 @@ func (s *VtctldServer) CopySchemaShard(ctx context.Context, req *vtctldatapb.Cop
 	span.Annotate("destination_shard", req.DestinationShard)
 
 	waitReplicasTimeout, _, err := protoutil.DurationFromProto(req.WaitReplicasTimeout)
+	if err != nil {
+		return nil, err
+	}
 
 	return &vtctldatapb.CopySchemaShardResponse{}, s.ws.CopySchemaShard(ctx,
 		req.SourceTabletAlias, req.Tables, req.ExcludeTables, req.IncludeViews, req.DestinationKeyspace, req.DestinationShard,
