@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -279,7 +280,7 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 				Position:  replication.EncodePosition(pos),
 			}
 			if err = bls.sendTransaction(eventToken, statements); err != nil {
-				if errors.Is(err, io.EOF) {
+				if errors.Is(vterrors.UnwrapAll(err), io.EOF) {
 					return ErrClientEOF
 				}
 				return fmt.Errorf("send reply error: %v", err)
