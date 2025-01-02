@@ -35,13 +35,31 @@ import (
 // VtctldClientProcess is a generic handle for a running vtctldclient command .
 // It can be spawned manually
 type VtctldClientProcess struct {
-	Name                     string
-	Binary                   string
+	VtProcess
 	Server                   string
 	TempDirectory            string
 	ZoneName                 string
 	VtctldClientMajorVersion int
 	Quiet                    bool
+}
+
+// VtctldClientProcessInstance returns a VtctldClientProcess handle
+// configured with the given Config.
+// The process must be manually started by calling setup()
+func VtctldClientProcessInstance(grpcPort int, topoPort int, hostname string, tmpDirectory string) *VtctldClientProcess {
+	version, err := GetMajorVersion("vtctld") // `vtctldclient` does not have a --version flag, so we assume both vtctl/vtctldclient have the same version
+	if err != nil {
+		log.Warningf("failed to get major vtctldclient version; interop with CLI changes for VEP-4 may not work: %s", err)
+	}
+
+	base := VtProcessInstance("vtctldclient", "vtctldclient", topoPort, hostname)
+	vtctldclient := &VtctldClientProcess{
+		VtProcess:                *base,
+		Server:                   fmt.Sprintf("%s:%d", hostname, grpcPort),
+		TempDirectory:            tmpDirectory,
+		VtctldClientMajorVersion: version,
+	}
+	return vtctldclient
 }
 
 // ExecuteCommand executes any vtctldclient command
@@ -86,22 +104,17 @@ func (vtctldclient *VtctldClientProcess) ExecuteCommandWithOutput(args ...string
 	return filterResultWhenRunsForCoverage(resultStr), err
 }
 
-// VtctldClientProcessInstance returns a VtctldProcess handle for vtctldclient process
-// configured with the given Config.
-func VtctldClientProcessInstance(hostname string, grpcPort int, tmpDirectory string) *VtctldClientProcess {
-	version, err := GetMajorVersion("vtctld") // `vtctldclient` does not have a --version flag, so we assume both vtctl/vtctldclient have the same version
-	if err != nil {
-		log.Warningf("failed to get major vtctldclient version; interop with CLI changes for VEP-4 may not work: %s", err)
+// AddCellInfo executes the vtctldclient command to add cell info.
+func (vtctldclient *VtctldClientProcess) AddCellInfo(Cell string) error {
+	args := []string{
+		"--server", "internal",
+		"AddCellInfo", "--",
+		"--root", vtctldclient.TopoRootPath + Cell,
+		"--server_address", vtctldclient.TopoServerAddress,
+		Cell,
 	}
-
-	vtctldclient := &VtctldClientProcess{
-		Name:                     "vtctldclient",
-		Binary:                   "vtctldclient",
-		Server:                   fmt.Sprintf("%s:%d", hostname, grpcPort),
-		TempDirectory:            tmpDirectory,
-		VtctldClientMajorVersion: version,
-	}
-	return vtctldclient
+	_, err := vtctldclient.ExecuteCommandWithOutput(args...)
+	return err
 }
 
 // ApplyRoutingRules applies the given routing rules.
@@ -233,16 +246,17 @@ func (vtctldclient *VtctldClientProcess) InitShardPrimary(keyspace string, shard
 	return err
 }
 
-// CreateKeyspace executes the vtctl command to create a keyspace
-func (vtctldclient *VtctldClientProcess) CreateKeyspace(keyspaceName string, sidecarDBName string) (err error) {
+// CreateKeyspace executes the vtctldclient command to create a keyspace
+func (vtctldclient *VtctldClientProcess) CreateKeyspace(keyspaceName string, sidecarDBName string, durabilityPolicy string) (err error) {
 	var output string
-	// For upgrade/downgrade tests where an older version is also used.
-	if vtctldclient.VtctldClientMajorVersion < 17 {
-		log.Errorf("CreateKeyspace does not support the --sidecar-db-name flag in vtctl version %d; ignoring...", vtctldclient.VtctldClientMajorVersion)
-		output, err = vtctldclient.ExecuteCommandWithOutput("CreateKeyspace", keyspaceName)
-	} else {
-		output, err = vtctldclient.ExecuteCommandWithOutput("CreateKeyspace", keyspaceName, "--sidecar-db-name", sidecarDBName)
+	args := []string{
+		"CreateKeyspace", keyspaceName,
+		"--sidecar-db-name", sidecarDBName,
 	}
+	if durabilityPolicy != "" {
+		args = append(args, "--durability-policy", durabilityPolicy)
+	}
+	output, err = vtctldclient.ExecuteCommandWithOutput(args...)
 	if err != nil {
 		log.Errorf("CreateKeyspace returned err: %s, output: %s", err, output)
 	}
@@ -313,4 +327,10 @@ func (vtctldclient *VtctldClientProcess) OnlineDDLShow(keyspace, workflow string
 		keyspace,
 		workflow,
 	)
+}
+
+// shouldRetry tells us if the command should be retried based on the results/output -- meaning that it
+// is likely an ephemeral or recoverable issue that is likely to succeed when retried.
+func shouldRetry(cmdResults string) bool {
+	return strings.Contains(cmdResults, "Deadlock found when trying to get lock; try restarting transaction")
 }

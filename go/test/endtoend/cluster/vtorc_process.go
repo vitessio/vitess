@@ -36,7 +36,7 @@ import (
 // VTOrcProcess is a test struct for running
 // vtorc as a separate process for testing
 type VTOrcProcess struct {
-	VtctlProcess
+	VtProcess
 	Port        int
 	LogDir      string
 	LogFileName string
@@ -83,7 +83,6 @@ func (orc *VTOrcProcess) RewriteConfiguration() error {
 
 // Setup starts orc process with required arguements
 func (orc *VTOrcProcess) Setup() (err error) {
-
 	// create the configuration file
 	timeNow := time.Now().UnixNano()
 	err = os.MkdirAll(orc.LogDir, 0755)
@@ -117,7 +116,7 @@ func (orc *VTOrcProcess) Setup() (err error) {
 	--config config/vtorc/default.json --alsologtostderr
 	*/
 	orc.proc = exec.Command(
-		orc.Binary,
+		"vtorc",
 		"--topo_implementation", orc.TopoImplementation,
 		"--topo_global_server_address", orc.TopoGlobalAddress,
 		"--topo_global_root", orc.TopoGlobalRoot,

@@ -57,7 +57,7 @@ func TestVtctldclientCLI(t *testing.T) {
 	vc = setupMinimalCluster(t)
 	vttablet.InitVReplicationConfigDefaults()
 
-	err = vc.Vtctl.AddCellInfo("zone2")
+	err = vc.VtctldClient.AddCellInfo("zone2")
 	require.NoError(t, err)
 	zone2, err := vc.AddCell(t, "zone2")
 	require.NoError(t, err)
