@@ -19,7 +19,6 @@ import { Link, Redirect, Route } from 'react-router-dom';
 import { useKeyspace } from '../../../hooks/api';
 import { useDocumentTitle } from '../../../hooks/useDocumentTitle';
 import { isReadOnlyMode } from '../../../util/env';
-import { Code } from '../../Code';
 import { ContentContainer } from '../../layout/ContentContainer';
 import { NavCrumbs } from '../../layout/NavCrumbs';
 import { WorkspaceHeader } from '../../layout/WorkspaceHeader';
@@ -32,6 +31,7 @@ import { Advanced } from './Advanced';
 import style from './Keyspace.module.scss';
 import { KeyspaceShards } from './KeyspaceShards';
 import { KeyspaceVSchema } from './KeyspaceVSchema';
+import JSONViewTree from '../../jsonViewTree/JSONViewTree';
 
 interface RouteParams {
     clusterID: string;
@@ -111,7 +111,7 @@ export const Keyspace = () => {
 
                     <Route path={`${path}/json`}>
                         <QueryLoadingPlaceholder query={kq} />
-                        <Code code={JSON.stringify(keyspace, null, 2)} />
+                        <JSONViewTree data={keyspace} />
                     </Route>
 
                     {!isReadOnlyMode() && (

@@ -30,11 +30,11 @@ import { ContentContainer } from '../../layout/ContentContainer';
 import { TabContainer } from '../../tabs/TabContainer';
 import { Tab } from '../../tabs/Tab';
 import { getStreams } from '../../../util/workflows';
-import { Code } from '../../Code';
 import { ShardLink } from '../../links/ShardLink';
 import { WorkflowVDiff } from './WorkflowVDiff';
 import { Select } from '../../inputs/Select';
 import { formatDateTimeShort } from '../../../util/time';
+import JSONViewTree from '../../jsonViewTree/JSONViewTree';
 
 interface RouteParams {
     clusterID: string;
@@ -189,7 +189,7 @@ export const Workflow = () => {
                     </Route>
 
                     <Route path={`${path}/json`}>
-                        <Code code={JSON.stringify(data, null, 2)} />
+                        <JSONViewTree data={data} />
                     </Route>
 
                     <Redirect exact from={path} to={`${path}/streams`} />

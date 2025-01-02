@@ -26,6 +26,7 @@ import style from './VTExplain.module.scss';
 import { Code } from '../Code';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { Label } from '../inputs/Label';
+import JSONViewTree from '../jsonViewTree/JSONViewTree';
 
 // TODO(doeg): persist form data in URL, error handling, loading state, um... hm. Most things still need doing.
 // This whole component is the hastiest prototype ever. :')
@@ -107,7 +108,7 @@ export const VTExplain = () => {
 
                 {error && (
                     <section className={style.errorPanel}>
-                        <Code code={JSON.stringify(error, null, 2)} />
+                        <JSONViewTree data={error} />
                     </section>
                 )}
 

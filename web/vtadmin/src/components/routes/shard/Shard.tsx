@@ -24,12 +24,12 @@ import { WorkspaceTitle } from '../../layout/WorkspaceTitle';
 import { ContentContainer } from '../../layout/ContentContainer';
 import { Tab } from '../../tabs/Tab';
 import { TabContainer } from '../../tabs/TabContainer';
-import { Code } from '../../Code';
 import { useDocumentTitle } from '../../../hooks/useDocumentTitle';
 import { KeyspaceLink } from '../../links/KeyspaceLink';
 import { useKeyspace } from '../../../hooks/api';
 import { ShardTablets } from './ShardTablets';
 import Advanced from './Advanced';
+import JSONViewTree from '../../jsonViewTree/JSONViewTree';
 
 interface RouteParams {
     clusterID: string;
@@ -122,7 +122,7 @@ export const Shard = () => {
                         <ShardTablets {...params} />
                     </Route>
 
-                    <Route path={`${path}/json`}>{shard && <Code code={JSON.stringify(shard, null, 2)} />}</Route>
+                    <Route path={`${path}/json`}>{shard && <JSONViewTree data={shard} />}</Route>
                     <Route path={`${path}/advanced`}>
                         <Advanced />
                     </Route>

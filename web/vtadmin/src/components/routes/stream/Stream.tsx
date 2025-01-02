@@ -18,12 +18,12 @@ import { Link, useParams } from 'react-router-dom';
 import { useWorkflow } from '../../../hooks/api';
 import { useDocumentTitle } from '../../../hooks/useDocumentTitle';
 import { formatStreamKey, getStream } from '../../../util/workflows';
-import { Code } from '../../Code';
 import { ContentContainer } from '../../layout/ContentContainer';
 import { NavCrumbs } from '../../layout/NavCrumbs';
 import { WorkspaceHeader } from '../../layout/WorkspaceHeader';
 import { WorkspaceTitle } from '../../layout/WorkspaceTitle';
 import style from './Stream.module.scss';
+import JSONViewTree from '../../jsonViewTree/JSONViewTree';
 
 interface RouteParams {
     clusterID: string;
@@ -72,7 +72,7 @@ export const Stream = () => {
                 </div>
             </WorkspaceHeader>
             <ContentContainer>
-                <Code code={JSON.stringify(stream, null, 2)} />
+                <JSONViewTree data={stream} />
             </ContentContainer>
         </div>
     );
