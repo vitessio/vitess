@@ -154,7 +154,7 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 	require.NoError(t, err, "Error managing topo")
 	numCell := 1
 	for numCell < len(cells) {
-		err = clusterInstance.VtctlProcess.AddCellInfo(cells[numCell])
+		err = clusterInstance.VtctldClientProcess.AddCellInfo(cells[numCell])
 		require.NoError(t, err, "Error managing topo")
 		numCell++
 	}
@@ -208,7 +208,7 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 		}
 	}
 	if clusterInstance.VtctlMajorVersion >= 14 {
-		clusterInstance.VtctldClientProcess = *cluster.VtctldClientProcessInstance("localhost", clusterInstance.VtctldProcess.GrpcPort, clusterInstance.TmpDirectory)
+		clusterInstance.VtctldClientProcess = *cluster.VtctldClientProcessInstance(clusterInstance.VtctldProcess.GrpcPort, clusterInstance.TopoPort, "localhost", clusterInstance.TmpDirectory)
 		out, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", KeyspaceName, fmt.Sprintf("--durability-policy=%s", durability))
 		require.NoError(t, err, out)
 	}
@@ -404,12 +404,6 @@ func ErsIgnoreTablet(clusterInstance *cluster.LocalProcessCluster, tab *cluster.
 		args = append(args, "--ignore-replicas", tabsString)
 	}
 	return clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(args...)
-}
-
-// ErsWithVtctl runs ERS via vtctl binary
-func ErsWithVtctl(clusterInstance *cluster.LocalProcessCluster) (string, error) {
-	args := []string{"EmergencyReparentShard", "--", "--keyspace_shard", fmt.Sprintf("%s/%s", KeyspaceName, ShardName)}
-	return clusterInstance.VtctlProcess.ExecuteCommandWithOutput(args...)
 }
 
 // endregion

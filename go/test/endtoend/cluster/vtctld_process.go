@@ -162,7 +162,7 @@ func (vtctld *VtctldProcess) TearDown() error {
 	}
 }
 
-// VtctldProcessInstance returns a VtctlProcess handle for vtctl process
+// VtctldProcessInstance returns a VtctldProcess handle
 // configured with the given Config.
 // The process must be manually started by calling setup()
 func VtctldProcessInstance(httpPort int, grpcPort int, topoPort int, hostname string, tmpDirectory string) *VtctldProcess {

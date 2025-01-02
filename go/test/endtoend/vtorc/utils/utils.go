@@ -89,7 +89,7 @@ func CreateClusterAndStartTopo(cellInfos []*CellInfo) (*VTOrcClusterInfo, error)
 	if err != nil {
 		return nil, err
 	}
-	err = clusterInstance.VtctlProcess.AddCellInfo(Cell2)
+	err = clusterInstance.VtctldClientProcess.AddCellInfo(Cell2)
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +101,7 @@ func CreateClusterAndStartTopo(cellInfos []*CellInfo) (*VTOrcClusterInfo, error)
 	}
 
 	// create topo server connection
-	ts, err := topo.OpenServer(*clusterInstance.TopoFlavorString(), clusterInstance.VtctlProcess.TopoGlobalAddress, clusterInstance.VtctlProcess.TopoGlobalRoot)
+	ts, err := topo.OpenServer(*clusterInstance.TopoFlavorString(), clusterInstance.VtctldClientProcess.TopoGlobalAddress, clusterInstance.VtctldClientProcess.TopoGlobalRoot)
 	return &VTOrcClusterInfo{
 		ClusterInstance: clusterInstance,
 		Ts:              ts,
@@ -855,7 +855,7 @@ func SetupNewClusterSemiSync(t *testing.T) *VTOrcClusterInfo {
 	require.NoError(t, err, out)
 
 	// create topo server connection
-	ts, err := topo.OpenServer(*clusterInstance.TopoFlavorString(), clusterInstance.VtctlProcess.TopoGlobalAddress, clusterInstance.VtctlProcess.TopoGlobalRoot)
+	ts, err := topo.OpenServer(*clusterInstance.TopoFlavorString(), clusterInstance.VtctldClientProcess.TopoGlobalAddress, clusterInstance.VtctldClientProcess.TopoGlobalRoot)
 	require.NoError(t, err)
 	clusterInfo := &VTOrcClusterInfo{
 		ClusterInstance: clusterInstance,
@@ -926,7 +926,7 @@ func AddSemiSyncKeyspace(t *testing.T, clusterInfo *VTOrcClusterInfo) {
 		require.NoError(t, err)
 	}
 
-	vtctldClientProcess := cluster.VtctldClientProcessInstance("localhost", clusterInfo.ClusterInstance.VtctldProcess.GrpcPort, clusterInfo.ClusterInstance.TmpDirectory)
+	vtctldClientProcess := cluster.VtctldClientProcessInstance(clusterInfo.ClusterInstance.VtctldProcess.GrpcPort, clusterInfo.ClusterInstance.TopoPort, "localhost", clusterInfo.ClusterInstance.TmpDirectory)
 	out, err := vtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceSemiSyncName, "--durability-policy=semi_sync")
 	require.NoError(t, err, out)
 }
