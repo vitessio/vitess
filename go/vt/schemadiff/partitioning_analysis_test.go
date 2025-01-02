@@ -155,6 +155,30 @@ func TestTemporalFunctions(t *testing.T) {
 		yearweek := dt.Date.YearWeek(1)
 		assert.EqualValues(t, 202451, yearweek)
 	}
+	{
+		yearweek := dt.Date.YearWeek(2)
+		assert.EqualValues(t, 202450, yearweek)
+	}
+	{
+		yearweek := dt.Date.YearWeek(3)
+		assert.EqualValues(t, 202451, yearweek)
+	}
+	{
+		yearweek := dt.Date.YearWeek(4)
+		assert.EqualValues(t, 202451, yearweek)
+	}
+	{
+		yearweek := dt.Date.YearWeek(5)
+		assert.EqualValues(t, 202451, yearweek)
+	}
+	{
+		yearweek := dt.Date.YearWeek(6)
+		assert.EqualValues(t, 202451, yearweek)
+	}
+	{
+		yearweek := dt.Date.YearWeek(7)
+		assert.EqualValues(t, 202451, yearweek)
+	}
 }
 
 func TestTruncateDateTime(t *testing.T) {
@@ -163,8 +187,10 @@ func TestTruncateDateTime(t *testing.T) {
 	dt := datetime.NewDateTimeFromStd(tm)
 
 	tcases := []struct {
-		interval datetime.IntervalType
-		expect   string
+		interval  datetime.IntervalType
+		mode      int
+		expect    string
+		expectErr error
 	}{
 		{
 			interval: datetime.IntervalYear,
@@ -173,6 +199,49 @@ func TestTruncateDateTime(t *testing.T) {
 		{
 			interval: datetime.IntervalMonth,
 			expect:   "2024-12-01 00:00:00",
+		},
+		{
+			interval: datetime.IntervalWeek,
+			expect:   "2024-12-15 00:00:00",
+		},
+		{
+			interval: datetime.IntervalWeek,
+			mode:     1,
+			expect:   "2024-12-16 00:00:00",
+		},
+		{
+			interval: datetime.IntervalWeek,
+			mode:     2,
+			expect:   "2024-12-15 00:00:00",
+		},
+		{
+			interval: datetime.IntervalWeek,
+			mode:     3,
+			expect:   "2024-12-16 00:00:00",
+		},
+		{
+			interval: datetime.IntervalWeek,
+			mode:     4,
+			expect:   "2024-12-15 00:00:00",
+		},
+		{
+			interval: datetime.IntervalWeek,
+			mode:     5,
+			expect:   "2024-12-16 00:00:00",
+		},
+		{
+			interval: datetime.IntervalWeek,
+			mode:     6,
+			expect:   "2024-12-15 00:00:00",
+		},
+		{
+			interval: datetime.IntervalWeek,
+			mode:     7,
+			expect:   "2024-12-16 00:00:00",
+		}, {
+			interval:  datetime.IntervalWeek,
+			mode:      8,
+			expectErr: fmt.Errorf("invalid mode value 8 for WEEK/YEARWEEK function"),
 		},
 		{
 			interval: datetime.IntervalDay,
@@ -195,7 +264,12 @@ func TestTruncateDateTime(t *testing.T) {
 	}
 	for _, tcase := range tcases {
 		t.Run(tcase.interval.ToString(), func(t *testing.T) {
-			truncated, err := truncateDateTime(dt, tcase.interval)
+			truncated, err := truncateDateTime(dt, tcase.interval, tcase.mode)
+			if tcase.expectErr != nil {
+				require.Error(t, err)
+				assert.EqualError(t, err, tcase.expectErr.Error())
+				return
+			}
 			require.NoError(t, err)
 			assert.Equal(t, tcase.expect, string(truncated.Format(0)))
 		})
@@ -430,19 +504,158 @@ func TestAnalyzeTemporalRangePartitioning(t *testing.T) {
 			},
 		},
 		{
-			name:      "unsupported function expression",
-			create:    "CREATE TABLE t (id int, created_at DATETIME, PRIMARY KEY(id, created_at)) PARTITION BY RANGE (YEARWEEK(created_at)) (PARTITION p0 VALUES LESS THAN (YEARWEEK('2024-12-19 09:56:32')))",
-			expectErr: fmt.Errorf("expression: YEARWEEK(`created_at`) is unsupported in temporal range partitioning analysis in table t"),
+			name:   "range by YEARWEEK(DATETIME)",
+			create: "CREATE TABLE t (id int, created_at DATETIME, PRIMARY KEY(id, created_at)) PARTITION BY RANGE (YEARWEEK(created_at)) (PARTITION p0 VALUES LESS THAN (YEARWEEK('2024-12-19 09:56:32')))",
+			expect: &TemporalRangePartitioningAnalysis{
+				IsRangePartitioned:         true,
+				IsTemporalRangePartitioned: true,
+				MinimalInterval:            datetime.IntervalWeek,
+				Col: &ColumnDefinitionEntity{
+					ColumnDefinition: &sqlparser.ColumnDefinition{Name: sqlparser.NewIdentifierCI("created_at")},
+				},
+				FuncExpr: &sqlparser.FuncExpr{
+					Name: sqlparser.NewIdentifierCI("YEARWEEK"),
+				},
+				HighestValueDateTime: parseDateTime("2024-12-15 00:00:00"),
+			},
 		},
 		{
-			name:      "unsupported function expression",
-			create:    "CREATE TABLE t (id int, created_at DATETIME, PRIMARY KEY(id, created_at)) PARTITION BY RANGE (YEARWEEK(created_at, 0)) (PARTITION p0 VALUES LESS THAN (YEARWEEK('2024-12-19 09:56:32')))",
-			expectErr: fmt.Errorf("expression: YEARWEEK(`created_at`, 0) is unsupported in temporal range partitioning analysis in table t"),
+			name:   "range by YEARWEEK(DATETIME, 0)",
+			create: "CREATE TABLE t (id int, created_at DATETIME, PRIMARY KEY(id, created_at)) PARTITION BY RANGE (YEARWEEK(created_at, 0)) (PARTITION p0 VALUES LESS THAN (YEARWEEK('2024-12-19 09:56:32')))",
+			expect: &TemporalRangePartitioningAnalysis{
+				IsRangePartitioned:         true,
+				IsTemporalRangePartitioned: true,
+				MinimalInterval:            datetime.IntervalWeek,
+				Col: &ColumnDefinitionEntity{
+					ColumnDefinition: &sqlparser.ColumnDefinition{Name: sqlparser.NewIdentifierCI("created_at")},
+				},
+				FuncExpr: &sqlparser.FuncExpr{
+					Name: sqlparser.NewIdentifierCI("YEARWEEK"),
+				},
+				HighestValueDateTime: parseDateTime("2024-12-15 00:00:00"),
+			},
 		},
 		{
-			name:      "unsupported function expression",
-			create:    "CREATE TABLE t (id int, created_at DATETIME, PRIMARY KEY(id, created_at)) PARTITION BY RANGE (YEARWEEK(created_at, 7)) (PARTITION p0 VALUES LESS THAN (YEARWEEK('2024-12-19 09:56:32')))",
-			expectErr: fmt.Errorf("expression: YEARWEEK(`created_at`, 7) is unsupported in temporal range partitioning analysis in table t"),
+			name:   "range by YEARWEEK(DATETIME, 1)",
+			create: "CREATE TABLE t (id int, created_at DATETIME, PRIMARY KEY(id, created_at)) PARTITION BY RANGE (YEARWEEK(created_at, 1)) (PARTITION p0 VALUES LESS THAN (YEARWEEK('2024-12-19 09:56:32')))",
+			expect: &TemporalRangePartitioningAnalysis{
+				IsRangePartitioned:         true,
+				IsTemporalRangePartitioned: true,
+				MinimalInterval:            datetime.IntervalWeek,
+				Col: &ColumnDefinitionEntity{
+					ColumnDefinition: &sqlparser.ColumnDefinition{Name: sqlparser.NewIdentifierCI("created_at")},
+				},
+				FuncExpr: &sqlparser.FuncExpr{
+					Name: sqlparser.NewIdentifierCI("YEARWEEK"),
+				},
+				HighestValueDateTime: parseDateTime("2024-12-16 00:00:00"),
+			},
+		},
+		{
+			name:   "range by YEARWEEK(DATETIME, 2)",
+			create: "CREATE TABLE t (id int, created_at DATETIME, PRIMARY KEY(id, created_at)) PARTITION BY RANGE (YEARWEEK(created_at, 2)) (PARTITION p0 VALUES LESS THAN (YEARWEEK('2024-12-19 09:56:32')))",
+			expect: &TemporalRangePartitioningAnalysis{
+				IsRangePartitioned:         true,
+				IsTemporalRangePartitioned: true,
+				MinimalInterval:            datetime.IntervalWeek,
+				Col: &ColumnDefinitionEntity{
+					ColumnDefinition: &sqlparser.ColumnDefinition{Name: sqlparser.NewIdentifierCI("created_at")},
+				},
+				FuncExpr: &sqlparser.FuncExpr{
+					Name: sqlparser.NewIdentifierCI("YEARWEEK"),
+				},
+				HighestValueDateTime: parseDateTime("2024-12-15 00:00:00"),
+			},
+		},
+		{
+			name:   "range by YEARWEEK(DATETIME, 3)",
+			create: "CREATE TABLE t (id int, created_at DATETIME, PRIMARY KEY(id, created_at)) PARTITION BY RANGE (YEARWEEK(created_at, 3)) (PARTITION p0 VALUES LESS THAN (YEARWEEK('2024-12-19 09:56:32')))",
+			expect: &TemporalRangePartitioningAnalysis{
+				IsRangePartitioned:         true,
+				IsTemporalRangePartitioned: true,
+				MinimalInterval:            datetime.IntervalWeek,
+				Col: &ColumnDefinitionEntity{
+					ColumnDefinition: &sqlparser.ColumnDefinition{Name: sqlparser.NewIdentifierCI("created_at")},
+				},
+				FuncExpr: &sqlparser.FuncExpr{
+					Name: sqlparser.NewIdentifierCI("YEARWEEK"),
+				},
+				HighestValueDateTime: parseDateTime("2024-12-16 00:00:00"),
+			},
+		},
+		{
+			name:   "range by YEARWEEK(DATETIME, 4)",
+			create: "CREATE TABLE t (id int, created_at DATETIME, PRIMARY KEY(id, created_at)) PARTITION BY RANGE (YEARWEEK(created_at, 4)) (PARTITION p0 VALUES LESS THAN (YEARWEEK('2024-12-19 09:56:32')))",
+			expect: &TemporalRangePartitioningAnalysis{
+				IsRangePartitioned:         true,
+				IsTemporalRangePartitioned: true,
+				MinimalInterval:            datetime.IntervalWeek,
+				Col: &ColumnDefinitionEntity{
+					ColumnDefinition: &sqlparser.ColumnDefinition{Name: sqlparser.NewIdentifierCI("created_at")},
+				},
+				FuncExpr: &sqlparser.FuncExpr{
+					Name: sqlparser.NewIdentifierCI("YEARWEEK"),
+				},
+				HighestValueDateTime: parseDateTime("2024-12-15 00:00:00"),
+			},
+		},
+		{
+			name:   "range by YEARWEEK(DATETIME, 5)",
+			create: "CREATE TABLE t (id int, created_at DATETIME, PRIMARY KEY(id, created_at)) PARTITION BY RANGE (YEARWEEK(created_at, 5)) (PARTITION p0 VALUES LESS THAN (YEARWEEK('2024-12-19 09:56:32')))",
+			expect: &TemporalRangePartitioningAnalysis{
+				IsRangePartitioned:         true,
+				IsTemporalRangePartitioned: true,
+				MinimalInterval:            datetime.IntervalWeek,
+				Col: &ColumnDefinitionEntity{
+					ColumnDefinition: &sqlparser.ColumnDefinition{Name: sqlparser.NewIdentifierCI("created_at")},
+				},
+				FuncExpr: &sqlparser.FuncExpr{
+					Name: sqlparser.NewIdentifierCI("YEARWEEK"),
+				},
+				HighestValueDateTime: parseDateTime("2024-12-16 00:00:00"),
+			},
+		},
+		{
+			name:   "range by YEARWEEK(DATETIME, 6)",
+			create: "CREATE TABLE t (id int, created_at DATETIME, PRIMARY KEY(id, created_at)) PARTITION BY RANGE (YEARWEEK(created_at, 6)) (PARTITION p0 VALUES LESS THAN (YEARWEEK('2024-12-19 09:56:32')))",
+			expect: &TemporalRangePartitioningAnalysis{
+				IsRangePartitioned:         true,
+				IsTemporalRangePartitioned: true,
+				MinimalInterval:            datetime.IntervalWeek,
+				Col: &ColumnDefinitionEntity{
+					ColumnDefinition: &sqlparser.ColumnDefinition{Name: sqlparser.NewIdentifierCI("created_at")},
+				},
+				FuncExpr: &sqlparser.FuncExpr{
+					Name: sqlparser.NewIdentifierCI("YEARWEEK"),
+				},
+				HighestValueDateTime: parseDateTime("2024-12-15 00:00:00"),
+			},
+		},
+		{
+			name:   "range by YEARWEEK(DATETIME, 7)",
+			create: "CREATE TABLE t (id int, created_at DATETIME, PRIMARY KEY(id, created_at)) PARTITION BY RANGE (YEARWEEK(created_at, 7)) (PARTITION p0 VALUES LESS THAN (YEARWEEK('2024-12-19 09:56:32')))",
+			expect: &TemporalRangePartitioningAnalysis{
+				IsRangePartitioned:         true,
+				IsTemporalRangePartitioned: true,
+				MinimalInterval:            datetime.IntervalWeek,
+				Col: &ColumnDefinitionEntity{
+					ColumnDefinition: &sqlparser.ColumnDefinition{Name: sqlparser.NewIdentifierCI("created_at")},
+				},
+				FuncExpr: &sqlparser.FuncExpr{
+					Name: sqlparser.NewIdentifierCI("YEARWEEK"),
+				},
+				HighestValueDateTime: parseDateTime("2024-12-16 00:00:00"),
+			},
+		},
+		{
+			name:      "unsupported YEARWEEK(DATETIME, 8)",
+			create:    "CREATE TABLE t (id int, created_at DATETIME, PRIMARY KEY(id, created_at)) PARTITION BY RANGE (YEARWEEK(created_at, 8)) (PARTITION p0 VALUES LESS THAN (YEARWEEK('2024-12-19 09:56:32')))",
+			expectErr: fmt.Errorf("expression: YEARWEEK(`created_at`, 8) is unsupported in temporal range partitioning analysis in table t"),
+		},
+		{
+			name:      "unsupported YEARWEEK(DATETIME, 'x')",
+			create:    "CREATE TABLE t (id int, created_at DATETIME, PRIMARY KEY(id, created_at)) PARTITION BY RANGE (YEARWEEK(created_at, 'x')) (PARTITION p0 VALUES LESS THAN (YEARWEEK('2024-12-19 09:56:32')))",
+			expectErr: fmt.Errorf("expected integer literal argument in yearweek(`created_at`, 'x') function"),
 		},
 		{
 			name:      "unsupported function expression",
@@ -493,6 +706,8 @@ func TestAnalyzeTemporalRangePartitioning(t *testing.T) {
 				assert.EqualError(t, err, tcase.expectErr.Error())
 				return
 			}
+			assert.NoError(t, err)
+			require.NotNil(t, result)
 			assert.NoError(t, result.Error)
 			require.NotNil(t, tcase.expect)
 			assert.Equal(t, tcase.expect.Reason, result.Reason)
@@ -531,6 +746,7 @@ func TestTemporalRangePartitioningNextRotation(t *testing.T) {
 		name              string
 		create            string
 		interval          datetime.IntervalType
+		mode              int
 		prepareAheadCount int
 		expactMaxValue    bool
 		expectStatements  []string
@@ -544,11 +760,39 @@ func TestTemporalRangePartitioningNextRotation(t *testing.T) {
 			expectErr:         fmt.Errorf("Table does not use PARTITION BY RANGE"),
 		},
 		{
-			name:              "interval too short",
+			name:              "interval too short: hour vs day",
 			create:            "CREATE TABLE t (id int, created_at DATETIME, PRIMARY KEY(id, created_at)) PARTITION BY RANGE (TO_DAYS(created_at)) (PARTITION p0 VALUES LESS THAN (TO_DAYS('2024-12-19 09:56:32')))",
 			interval:          datetime.IntervalHour,
 			prepareAheadCount: 7,
 			expectErr:         fmt.Errorf("interval hour is less than the minimal interval day for table t"),
+		},
+		{
+			name:              "interval too short: hour vs week",
+			create:            "CREATE TABLE t (id int, created_at DATETIME, PRIMARY KEY(id, created_at)) PARTITION BY RANGE (YEARWEEK(created_at)) (PARTITION p0 VALUES LESS THAN (YEARWEEK('2024-12-19 09:56:32')))",
+			interval:          datetime.IntervalHour,
+			prepareAheadCount: 7,
+			expectErr:         fmt.Errorf("interval hour is less than the minimal interval week for table t"),
+		},
+		{
+			name:              "interval too short: hour vs year",
+			create:            "CREATE TABLE t (id int, created_at DATETIME, PRIMARY KEY(id, created_at)) PARTITION BY RANGE (YEAR(created_at)) (PARTITION p0 VALUES LESS THAN (YEAR('2024-12-19 09:56:32')))",
+			interval:          datetime.IntervalHour,
+			prepareAheadCount: 7,
+			expectErr:         fmt.Errorf("interval hour is less than the minimal interval year for table t"),
+		},
+		{
+			name:              "interval too short: day vs year",
+			create:            "CREATE TABLE t (id int, created_at DATETIME, PRIMARY KEY(id, created_at)) PARTITION BY RANGE (YEAR(created_at)) (PARTITION p0 VALUES LESS THAN (YEAR('2024-12-19 09:56:32')))",
+			interval:          datetime.IntervalDay,
+			prepareAheadCount: 7,
+			expectErr:         fmt.Errorf("interval day is less than the minimal interval year for table t"),
+		},
+		{
+			name:              "interval too short: week vs year",
+			create:            "CREATE TABLE t (id int, created_at DATETIME, PRIMARY KEY(id, created_at)) PARTITION BY RANGE (YEAR(created_at)) (PARTITION p0 VALUES LESS THAN (YEAR('2024-12-19 09:56:32')))",
+			interval:          datetime.IntervalWeek,
+			prepareAheadCount: 7,
+			expectErr:         fmt.Errorf("interval week is less than the minimal interval year for table t"),
 		},
 		{
 			name:              "day interval with 7 days, DATE",
@@ -673,6 +917,82 @@ func TestTemporalRangePartitioningNextRotation(t *testing.T) {
 			},
 		},
 		{
+			name:              "week(0) interval with 4 weeks",
+			create:            "CREATE TABLE t (id int, created_at DATETIME, PRIMARY KEY(id, created_at)) PARTITION BY RANGE COLUMNS (created_at) (PARTITION p0 VALUES LESS THAN ('2024-12-19 09:00:00'))",
+			interval:          datetime.IntervalWeek,
+			mode:              0,
+			prepareAheadCount: 4,
+			expectStatements: []string{
+				"ALTER TABLE `t` ADD PARTITION (PARTITION `p20241215` VALUES LESS THAN ('2024-12-22 00:00:00'))",
+				"ALTER TABLE `t` ADD PARTITION (PARTITION `p20241222` VALUES LESS THAN ('2024-12-29 00:00:00'))",
+				"ALTER TABLE `t` ADD PARTITION (PARTITION `p20241229` VALUES LESS THAN ('2025-01-05 00:00:00'))",
+				"ALTER TABLE `t` ADD PARTITION (PARTITION `p20250105` VALUES LESS THAN ('2025-01-12 00:00:00'))",
+			},
+		},
+		{
+			name:              "week(1) interval with 4 weeks",
+			create:            "CREATE TABLE t (id int, created_at DATETIME, PRIMARY KEY(id, created_at)) PARTITION BY RANGE COLUMNS (created_at) (PARTITION p0 VALUES LESS THAN ('2024-12-19 09:00:00'))",
+			interval:          datetime.IntervalWeek,
+			mode:              1,
+			prepareAheadCount: 4,
+			expectStatements: []string{
+				"ALTER TABLE `t` ADD PARTITION (PARTITION `p20241216` VALUES LESS THAN ('2024-12-23 00:00:00'))",
+				"ALTER TABLE `t` ADD PARTITION (PARTITION `p20241223` VALUES LESS THAN ('2024-12-30 00:00:00'))",
+				"ALTER TABLE `t` ADD PARTITION (PARTITION `p20241230` VALUES LESS THAN ('2025-01-06 00:00:00'))",
+				"ALTER TABLE `t` ADD PARTITION (PARTITION `p20250106` VALUES LESS THAN ('2025-01-13 00:00:00'))",
+			},
+		},
+		{
+			name: "week(1) interval with 4 weeks, 2 of which are covered",
+			create: `CREATE TABLE t (id int, created_at DATETIME, PRIMARY KEY(id, created_at))
+				PARTITION BY RANGE COLUMNS (created_at) (
+					PARTITION p0 VALUES LESS THAN ('2024-12-19 09:00:00'),
+					PARTITION p20241216 VALUES LESS THAN ('2024-12-23 00:00:00'),
+					PARTITION p_somename VALUES LESS THAN ('2024-12-30 00:00:00')
+				)`,
+			interval:          datetime.IntervalWeek,
+			mode:              1,
+			prepareAheadCount: 4,
+			expectStatements: []string{
+				"ALTER TABLE `t` ADD PARTITION (PARTITION `p20241230` VALUES LESS THAN ('2025-01-06 00:00:00'))",
+				"ALTER TABLE `t` ADD PARTITION (PARTITION `p20250106` VALUES LESS THAN ('2025-01-13 00:00:00'))",
+			},
+		},
+		{
+			name:              "yearweek(0) function with 4 weeks",
+			create:            "CREATE TABLE t (id int, created_at DATETIME, PRIMARY KEY(id, created_at)) PARTITION BY RANGE (YEARWEEK(created_at, 0)) (PARTITION p0 VALUES LESS THAN (YEARWEEK('2024-12-19 09:00:00', 1)))",
+			interval:          datetime.IntervalWeek,
+			mode:              0,
+			prepareAheadCount: 4,
+			expectStatements: []string{
+				"ALTER TABLE `t` ADD PARTITION (PARTITION `p20241215` VALUES LESS THAN (202451))",
+				"ALTER TABLE `t` ADD PARTITION (PARTITION `p20241222` VALUES LESS THAN (202452))",
+				"ALTER TABLE `t` ADD PARTITION (PARTITION `p20241229` VALUES LESS THAN (202501))",
+				"ALTER TABLE `t` ADD PARTITION (PARTITION `p20250105` VALUES LESS THAN (202502))",
+			},
+		},
+		{
+			name:              "yearweek(1) function with 4 weeks",
+			create:            "CREATE TABLE t (id int, created_at DATETIME, PRIMARY KEY(id, created_at)) PARTITION BY RANGE (YEARWEEK(created_at, 1)) (PARTITION p0 VALUES LESS THAN (YEARWEEK('2024-12-19 09:00:00', 1)))",
+			interval:          datetime.IntervalWeek,
+			mode:              1,
+			prepareAheadCount: 4,
+			expectStatements: []string{
+				"ALTER TABLE `t` ADD PARTITION (PARTITION `p20241216` VALUES LESS THAN (202452))",
+				"ALTER TABLE `t` ADD PARTITION (PARTITION `p20241223` VALUES LESS THAN (202501))",
+				"ALTER TABLE `t` ADD PARTITION (PARTITION `p20241230` VALUES LESS THAN (202502))",
+				"ALTER TABLE `t` ADD PARTITION (PARTITION `p20250106` VALUES LESS THAN (202503))",
+			},
+		},
+		{
+			name:              "incompatible week mode",
+			create:            "CREATE TABLE t (id int, created_at DATETIME, PRIMARY KEY(id, created_at)) PARTITION BY RANGE (YEARWEEK(created_at, 0)) (PARTITION p0 VALUES LESS THAN (YEARWEEK('2024-12-19 09:00:00', 1)))",
+			interval:          datetime.IntervalWeek,
+			mode:              1,
+			prepareAheadCount: 4,
+			expectErr:         fmt.Errorf("mode 1 is different from the mode 0 used in table t"),
+		},
+		{
 			name:              "month interval with 3 months",
 			create:            "CREATE TABLE t (id int, created_at DATETIME, PRIMARY KEY(id, created_at)) PARTITION BY RANGE COLUMNS (created_at) (PARTITION p0 VALUES LESS THAN ('2024-12-19 09:00:00'))",
 			interval:          datetime.IntervalMonth,
@@ -733,7 +1053,7 @@ func TestTemporalRangePartitioningNextRotation(t *testing.T) {
 			entity, err := NewCreateTableEntityFromSQL(env, tcase.create)
 			require.NoError(t, err)
 
-			diffs, err := TemporalRangePartitioningNextRotation(entity, tcase.interval, tcase.prepareAheadCount, reference)
+			diffs, err := TemporalRangePartitioningNextRotation(entity, tcase.interval, tcase.mode, tcase.prepareAheadCount, reference)
 			if tcase.expectErr != nil {
 				require.Error(t, err)
 				assert.EqualError(t, err, tcase.expectErr.Error())

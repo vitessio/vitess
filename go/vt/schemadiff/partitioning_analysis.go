@@ -19,6 +19,7 @@ package schemadiff
 import (
 	"errors"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -27,6 +28,26 @@ import (
 	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
+
+const (
+	ModeUndefined = math.MinInt
+)
+
+// TemporalRangePartitioningAnalysis is the result of analyzing a table for temporal range partitioning.
+type TemporalRangePartitioningAnalysis struct {
+	IsRangePartitioned         bool                           // Is the table at all partitioned by RANGE?
+	IsTemporalRangePartitioned bool                           // Is the table range partitioned using temporal values?
+	IsRangeColumns             bool                           // Is RANGE COLUMNS used?
+	MinimalInterval            datetime.IntervalType          // The minimal interval that the table is partitioned by (e.g. if partitioned by TO_DAYS, the minimal interval is 1 day)
+	Col                        *ColumnDefinitionEntity        // The column used in the RANGE expression
+	FuncExpr                   *sqlparser.FuncExpr            // The function used in the RANGE expression, if any
+	Mode                       int                            // The mode used in the WEEK function, if that's what's used
+	MaxvaluePartition          *sqlparser.PartitionDefinition // The partition that has MAXVALUE, if any
+	HighestValueDateTime       datetime.DateTime              // The datetime value of the highest partition (excluding MAXVALUE)
+	HighestValueIntVal         int64                          // The integer value of the highest partition (excluding MAXVALUE)
+	Reason                     string                         // Why IsTemporalRangePartitioned is false
+	Error                      error                          // If there was an error during analysis
+}
 
 // IsRangePartitioned returns `true` when the given CREATE TABLE statement is partitioned by RANGE.
 func IsRangePartitioned(createTable *sqlparser.CreateTable) bool {
@@ -83,21 +104,6 @@ func AlterTableRotatesRangePartition(createTable *sqlparser.CreateTable, alterTa
 	}
 }
 
-// TemporalRangePartitioningAnalysis is the result of analyzing a table for temporal range partitioning.
-type TemporalRangePartitioningAnalysis struct {
-	IsRangePartitioned         bool                           // Is the table at all partitioned by RANGE?
-	IsTemporalRangePartitioned bool                           // Is the table range partitioned using temporal values?
-	IsRangeColumns             bool                           // Is RANGE COLUMNS used?
-	MinimalInterval            datetime.IntervalType          // The minimal interval that the table is partitioned by (e.g. if partitioned by TO_DAYS, the minimal interval is 1 day)
-	Col                        *ColumnDefinitionEntity        // The column used in the RANGE expression
-	FuncExpr                   *sqlparser.FuncExpr            // The function used in the RANGE expression, if any
-	MaxvaluePartition          *sqlparser.PartitionDefinition // The partition that has MAXVALUE, if any
-	HighestValueDateTime       datetime.DateTime              // The datetime value of the highest partition (excluding MAXVALUE)
-	HighestValueIntVal         int64                          // The integer value of the highest partition (excluding MAXVALUE)
-	Reason                     string                         // Why IsTemporalRangePartitioned is false
-	Error                      error                          // If there was an error during analysis
-}
-
 // supportedPartitioningScheme checks whether the given expression is supported for temporal range partitioning.
 // schemadiff only supports a subset of range partitioning expressions.
 func supportedPartitioningScheme(expr sqlparser.Expr, createTableEntity *CreateTableEntity, colName sqlparser.IdentifierCI, is84 bool) (matchFound bool, hasFunction bool, err error) {
@@ -105,9 +111,15 @@ func supportedPartitioningScheme(expr sqlparser.Expr, createTableEntity *CreateT
 		"create table %s (id int) PARTITION BY RANGE (%s)",
 		"create table %s (id int) PARTITION BY RANGE (to_seconds(%s))",
 		"create table %s (id int) PARTITION BY RANGE (to_days(%s))",
-		// "create table %s (id int) PARTITION BY RANGE (yearweek(%s))",
-		// "create table %s (id int) PARTITION BY RANGE (yearweek(%s, 0))",
-		// "create table %s (id int) PARTITION BY RANGE (yearweek(%s, 1))",
+		"create table %s (id int) PARTITION BY RANGE (yearweek(%s))",
+		"create table %s (id int) PARTITION BY RANGE (yearweek(%s, 0))",
+		"create table %s (id int) PARTITION BY RANGE (yearweek(%s, 1))",
+		"create table %s (id int) PARTITION BY RANGE (yearweek(%s, 2))",
+		"create table %s (id int) PARTITION BY RANGE (yearweek(%s, 3))",
+		"create table %s (id int) PARTITION BY RANGE (yearweek(%s, 4))",
+		"create table %s (id int) PARTITION BY RANGE (yearweek(%s, 5))",
+		"create table %s (id int) PARTITION BY RANGE (yearweek(%s, 6))",
+		"create table %s (id int) PARTITION BY RANGE (yearweek(%s, 7))",
 		"create table %s (id int) PARTITION BY RANGE (year(%s))",
 	}
 	if is84 {
@@ -131,6 +143,32 @@ func supportedPartitioningScheme(expr sqlparser.Expr, createTableEntity *CreateT
 		}
 	}
 	return false, false, nil
+}
+
+// extractFuncMode extracts the mode argument from a WEEK/YEARWEEK function, if applicable.
+// It returns a ModeUndefined when not applicable.
+func extractFuncMode(funcExpr *sqlparser.FuncExpr) (int, error) {
+	switch funcExpr.Name.Lowered() {
+	case "week", "yearweek":
+	default:
+		return ModeUndefined, nil
+	}
+	if len(funcExpr.Exprs) <= 1 {
+		return 0, nil
+	}
+	// There is a `mode` argument in the YEARWEEK function.
+	literal, ok := funcExpr.Exprs[1].(*sqlparser.Literal)
+	if !ok {
+		return 0, fmt.Errorf("expected literal value in %v function", sqlparser.CanonicalString(funcExpr))
+	}
+	if literal.Type != sqlparser.IntVal {
+		return 0, fmt.Errorf("expected integer literal argument in %v function", sqlparser.CanonicalString(funcExpr))
+	}
+	intval, err := strconv.ParseInt(literal.Val, 0, 64)
+	if err != nil {
+		return 0, err
+	}
+	return int(intval), nil
 }
 
 // AnalyzeTemporalRangePartitioning analyzes a table for temporal range partitioning.
@@ -162,6 +200,7 @@ func AnalyzeTemporalRangePartitioning(createTableEntity *CreateTableEntity) (*Te
 	}
 
 	analysis.IsRangeColumns = len(partitionOption.ColList) > 0
+	analysis.Mode = ModeUndefined
 	switch len(partitionOption.ColList) {
 	case 0:
 		// This is a PARTITION BY RANGE(expr), where "expr" can be just column name, or a complex expression.
@@ -175,7 +214,7 @@ func AnalyzeTemporalRangePartitioning(createTableEntity *CreateTableEntity) (*Te
 		// we create dummy statements with all supported variations, and check for equality.
 		var col *ColumnDefinitionEntity
 		expr := sqlparser.CloneExpr(partitionOption.Expr)
-		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 			switch node := node.(type) {
 			case *sqlparser.ColName:
 				col = getColumn(node.Name.Lowered()) // known to be not-nil thanks to validate()
@@ -183,9 +222,17 @@ func AnalyzeTemporalRangePartitioning(createTableEntity *CreateTableEntity) (*Te
 			case *sqlparser.FuncExpr:
 				analysis.FuncExpr = sqlparser.CloneRefOfFuncExpr(node)
 				node.Name = sqlparser.NewIdentifierCI(node.Name.Lowered())
+				mode, err := extractFuncMode(node)
+				if err != nil {
+					return false, err
+				}
+				analysis.Mode = mode
 			}
 			return true, nil
 		}, expr)
+		if err != nil {
+			return nil, err
+		}
 		matchFound, hasFunction, err := supportedPartitioningScheme(expr, createTableEntity, col.ColumnDefinition.Name, is84)
 		if err != nil {
 			return nil, err
@@ -245,6 +292,8 @@ func AnalyzeTemporalRangePartitioning(createTableEntity *CreateTableEntity) (*Te
 			analysis.MinimalInterval = datetime.IntervalSecond
 		case "to_days":
 			analysis.MinimalInterval = datetime.IntervalDay
+		case "yearweek":
+			analysis.MinimalInterval = datetime.IntervalWeek
 		case "year":
 			analysis.MinimalInterval = datetime.IntervalYear
 		}
@@ -263,7 +312,7 @@ func AnalyzeTemporalRangePartitioning(createTableEntity *CreateTableEntity) (*Te
 			if err != nil {
 				return analysis, err
 			}
-			highestValueDateTime, err = truncateDateTime(highestValueDateTime, analysis.MinimalInterval)
+			highestValueDateTime, err = truncateDateTime(highestValueDateTime, analysis.MinimalInterval, analysis.Mode)
 			if err != nil {
 				return analysis, err
 			}
@@ -332,7 +381,9 @@ func computeDateTime(expr sqlparser.Expr, colType string, funcExpr *sqlparser.Fu
 			}
 			hasFuncExpr = true
 		case *sqlparser.Literal:
-			literal = node
+			if literal == nil {
+				literal = node
+			}
 		}
 		return true, nil
 	}, expr)
@@ -373,6 +424,12 @@ func applyFuncExprToDateTime(dt datetime.DateTime, funcExpr *sqlparser.FuncExpr)
 		intval = dt.ToSeconds()
 	case "to_days":
 		intval = int64(datetime.MysqlDayNumber(dt.Date.Year(), dt.Date.Month(), dt.Date.Day()))
+	case "yearweek":
+		mode, err := extractFuncMode(funcExpr)
+		if err != nil {
+			return 0, err
+		}
+		intval = int64(dt.Date.YearWeek(mode))
 	case "year":
 		intval = int64(dt.Date.Year())
 	default:
@@ -389,6 +446,7 @@ func temporalPartitionName(dt datetime.DateTime, resolution datetime.IntervalTyp
 	switch resolution {
 	case datetime.IntervalYear,
 		datetime.IntervalMonth,
+		datetime.IntervalWeek,
 		datetime.IntervalDay:
 		return "p" + string(datetime.Date_YYYYMMDD.Format(dt, 0)), nil
 	case datetime.IntervalHour,
@@ -403,7 +461,8 @@ func temporalPartitionName(dt datetime.DateTime, resolution datetime.IntervalTyp
 // e.g. if resolution is IntervalDay, the time part is removed.
 // If resolution is IntervalMonth, the day part is set to 1.
 // etc.
-func truncateDateTime(dt datetime.DateTime, interval datetime.IntervalType) (datetime.DateTime, error) {
+// `mode` is used for WEEK calculations, see https://dev.mysql.com/doc/refman/8.4/en/date-and-time-functions.html#function_week
+func truncateDateTime(dt datetime.DateTime, interval datetime.IntervalType, mode int) (datetime.DateTime, error) {
 	if interval >= datetime.IntervalHour {
 		// Remove the minutes, seconds, subseconds parts
 		hourInterval := datetime.ParseIntervalInt64(int64(dt.Time.Hour()), datetime.IntervalHour, false)
@@ -417,6 +476,25 @@ func truncateDateTime(dt datetime.DateTime, interval datetime.IntervalType) (dat
 	if interval >= datetime.IntervalDay {
 		// Remove the Time part:
 		dt = datetime.DateTime{Date: dt.Date}
+	}
+	if interval == datetime.IntervalWeek {
+		// IntervalWeek = IntervalDay | intervalMulti, which is larger than IntervalYear, so we interject here
+		// Get back to the first day of the week:
+		var startOfWeekInterval *datetime.Interval
+		switch mode {
+		case 0, 2, 4, 6:
+			startOfWeekInterval = datetime.ParseIntervalInt64(-int64(dt.Date.Weekday()), datetime.IntervalDay, false)
+		case 1, 3, 5, 7:
+			startOfWeekInterval = datetime.ParseIntervalInt64(-int64(dt.Date.Weekday()-1), datetime.IntervalDay, false)
+		default:
+			return dt, fmt.Errorf("invalid mode value %d for WEEK/YEARWEEK function", mode)
+		}
+		var ok bool
+		dt, _, ok = dt.AddInterval(startOfWeekInterval, 0, false)
+		if !ok {
+			return dt, fmt.Errorf("failed to add interval %v to reference time %v", startOfWeekInterval, dt.Format(0))
+		}
+		return dt, nil
 	}
 	if interval >= datetime.IntervalMonth {
 		// Get back to the first day of the month:
@@ -446,7 +524,7 @@ func truncateDateTime(dt datetime.DateTime, interval datetime.IntervalType) (dat
 // e.g. "prepare 7 days ahead, starting from today".
 // The function computes values of existing partitions to determine how many new partitions are actually
 // required to satisfy the terms.
-func TemporalRangePartitioningNextRotation(createTableEntity *CreateTableEntity, interval datetime.IntervalType, prepareAheadCount int, reference time.Time) (diffs []*AlterTableEntityDiff, err error) {
+func TemporalRangePartitioningNextRotation(createTableEntity *CreateTableEntity, interval datetime.IntervalType, mode int, prepareAheadCount int, reference time.Time) (diffs []*AlterTableEntityDiff, err error) {
 	analysis, err := AnalyzeTemporalRangePartitioning(createTableEntity)
 	if err != nil {
 		return nil, err
@@ -454,10 +532,24 @@ func TemporalRangePartitioningNextRotation(createTableEntity *CreateTableEntity,
 	if !analysis.IsTemporalRangePartitioned {
 		return nil, errors.New(analysis.Reason)
 	}
-	if interval < analysis.MinimalInterval {
+	intervalIsTooSmall := false
+	// IntervalWeek = IntervalDay | intervalMulti, which is larger all of the rest of normal intervals,
+	// so we need special handling for IntervalWeek comparisons
+	switch {
+	case analysis.MinimalInterval == datetime.IntervalWeek:
+		intervalIsTooSmall = (interval <= datetime.IntervalDay)
+	case interval == datetime.IntervalWeek:
+		intervalIsTooSmall = (analysis.MinimalInterval >= datetime.IntervalMonth)
+	default:
+		intervalIsTooSmall = (interval < analysis.MinimalInterval)
+	}
+	if intervalIsTooSmall {
 		return nil, fmt.Errorf("interval %s is less than the minimal interval %s for table %s", interval.ToString(), analysis.MinimalInterval.ToString(), createTableEntity.Name())
 	}
-	referenceDatetime, err := truncateDateTime(datetime.NewDateTimeFromStd(reference), interval)
+	if analysis.Mode != ModeUndefined && mode != analysis.Mode {
+		return nil, fmt.Errorf("mode %d is different from the mode %d used in table %s", mode, analysis.Mode, createTableEntity.Name())
+	}
+	referenceDatetime, err := truncateDateTime(datetime.NewDateTimeFromStd(reference), interval, mode)
 	if err != nil {
 		return nil, err
 	}
