@@ -39,6 +39,22 @@ func BenchmarkPreparedStmt(b *testing.B) {
 	updateStmt := `update sks.t1 set is_active = ? where id = ?`
 	deleteStmt := `delete from sks.t1 where is_active = ? and age = ?`
 
+	joinStmt := `SELECT 
+    user.id AS user_id
+FROM 
+    sks.t1 AS user
+LEFT JOIN 
+    sks.t1 AS parent ON user.id = parent.id AND parent.age = ?
+LEFT JOIN 
+    sks.t1 AS manager ON user.id = manager.id AND manager.is_active = ?
+LEFT JOIN 
+    sks.t1 AS child ON user.id = child.id
+WHERE 
+    user.is_active = ? 
+    AND user.id = ?
+    AND parent.id = ?
+    AND manager.id = ?`
+
 	iStmt, err := dbo.Prepare(insertStmt)
 	if err != nil {
 		b.Fatal(err)
@@ -66,6 +82,26 @@ func BenchmarkPreparedStmt(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			age := rand.IntN(80)
 			r, err := sStmt.Query(age, age+20, rand.IntN(2), rand.IntN(10))
+			if err != nil {
+				b.Fatal(err)
+			}
+			r.Close()
+		}
+	})
+
+	jStmt, err := dbo.Prepare(joinStmt)
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer jStmt.Close()
+
+	b.Run("Join Select:Simple Route", func(b *testing.B) {
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			age := rand.IntN(80)
+			active := rand.IntN(2)
+			id := rand.IntN(2000)
+			r, err := jStmt.Query(age, active, active, id, id, id)
 			if err != nil {
 				b.Fatal(err)
 			}
