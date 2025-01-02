@@ -22,7 +22,7 @@ import (
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/vtctl/reparentutil"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtorc/db"
 )
 
@@ -80,10 +80,10 @@ func SaveKeyspace(keyspace *topo.KeyspaceInfo) error {
 }
 
 // GetDurabilityPolicy gets the durability policy for the given keyspace.
-func GetDurabilityPolicy(keyspace string) (reparentutil.Durabler, error) {
+func GetDurabilityPolicy(keyspace string) (policy.Durabler, error) {
 	ki, err := ReadKeyspace(keyspace)
 	if err != nil {
 		return nil, err
 	}
-	return reparentutil.GetDurabilityPolicy(ki.DurabilityPolicy)
+	return policy.GetDurabilityPolicy(ki.DurabilityPolicy)
 }

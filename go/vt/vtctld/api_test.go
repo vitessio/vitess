@@ -29,7 +29,7 @@ import (
 
 	"vitess.io/vitess/go/vt/servenv/testutils"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
-	"vitess.io/vitess/go/vt/vtctl/reparentutil"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/wrangler"
 
@@ -54,7 +54,7 @@ func TestAPI(t *testing.T) {
 	defer server.Close()
 
 	ks1 := &topodatapb.Keyspace{
-		DurabilityPolicy: reparentutil.DurabilitySemiSync,
+		DurabilityPolicy: policy.DurabilitySemiSync,
 		SidecarDbName:    "_vt_sidecar_ks1",
 	}
 
