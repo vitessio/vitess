@@ -164,6 +164,7 @@ func TestMain(m *testing.M) {
 			"--mysql_server_query_timeout", "1s",
 			"--mysql_auth_server_static_file", clusterInstance.TmpDirectory + "/" + mysqlAuthServerStatic,
 			"--pprof-http",
+			"--schema_change_signal=false",
 		}
 
 		// Start vtgate

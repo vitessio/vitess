@@ -26,7 +26,7 @@ import (
 /*
 export ver=v1 p=~/benchmark && go test \
 -run '^$' -bench '^BenchmarkPreparedStmt' \
--benchtime 3s -count 6 -cpu 4 \
+-benchtime 2s -count 6 -cpu 4 \
 | tee $p/${ver}.txt
 */
 func BenchmarkPreparedStmt(b *testing.B) {
