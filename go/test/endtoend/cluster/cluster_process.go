@@ -257,6 +257,15 @@ func (cluster *LocalProcessCluster) StartTopo() (err error) {
 	}
 
 	cluster.VtctldClientProcess = *cluster.NewVtctldClientProcessInstance("localhost", cluster.VtctldProcess.GrpcPort, cluster.TmpDirectory)
+	if !cluster.ReusingVTDATAROOT {
+		if err = cluster.VtctldClientProcess.AddCellInfo(cluster.Cell); err != nil {
+			log.Error(err)
+			time.Sleep(5 * time.Minute)
+			return
+		}
+		cluster.VtctldClientProcess.LogDir = cluster.TmpDirectory
+	}
+
 	return
 }
 
@@ -1294,7 +1303,7 @@ func (cluster *LocalProcessCluster) NewVTOrcProcess(config VTOrcConfiguration) *
 // VtctldClientProcessInstance returns a VtctldProcess handle for vtctldclient process
 // configured with the given Config.
 func (cluster *LocalProcessCluster) NewVtctldClientProcessInstance(hostname string, grpcPort int, tmpDirectory string) *VtctldClientProcess {
-	version, err := GetMajorVersion("vtctld") // `vtctldclient` does not have a --version flag, so we assume both vtctl/vtctldclient have the same version
+	version, err := GetMajorVersion("vtctldclient")
 	if err != nil {
 		log.Warningf("failed to get major vtctldclient version; interop with CLI changes for VEP-4 may not work: %s", err)
 	}

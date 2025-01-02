@@ -19,6 +19,7 @@ package cluster
 import (
 	"fmt"
 	"os/exec"
+	"slices"
 	"strings"
 	"time"
 
@@ -80,7 +81,10 @@ func (vtctldclient *VtctldClientProcess) ExecuteCommandWithOutput(args ...string
 	var err error
 	retries := 10
 	retryDelay := 1 * time.Second
-	pArgs := []string{"--server", vtctldclient.Server}
+	var pArgs []string
+	if !slices.Contains(args, "--server") {
+		args = append(args, "--server", vtctldclient.Server)
+	}
 	if *isCoverage {
 		pArgs = append(pArgs, "--test.coverprofile="+getCoveragePath("vtctldclient-"+args[0]+".out"), "--test.v")
 	}
@@ -108,9 +112,12 @@ func (vtctldclient *VtctldClientProcess) ExecuteCommandWithOutput(args ...string
 func (vtctldclient *VtctldClientProcess) AddCellInfo(Cell string) error {
 	args := []string{
 		"--server", "internal",
-		"AddCellInfo", "--",
+		"--topo-implementation", vtctldclient.TopoImplementation,
+		"--topo-global-server-address", vtctldclient.TopoGlobalAddress,
+		"--topo-global-root", vtctldclient.TopoGlobalRoot,
+		"AddCellInfo",
 		"--root", vtctldclient.TopoRootPath + Cell,
-		"--server_address", vtctldclient.TopoServerAddress,
+		"--server-address", vtctldclient.TopoServerAddress,
 		Cell,
 	}
 	_, err := vtctldclient.ExecuteCommandWithOutput(args...)

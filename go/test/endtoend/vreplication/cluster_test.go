@@ -398,6 +398,12 @@ func (vc *VitessCluster) setupVtctld() {
 func (vc *VitessCluster) setupVtctldClient() {
 	vc.VtctldClient = cluster.VtctldClientProcessInstance(vc.Vtctld.GrpcPort, mainClusterConfig.topoPort, vc.ClusterConfig.hostname, vc.ClusterConfig.tmpDir)
 	require.NotNil(vc.t, vc.VtctldClient)
+	for _, cellName := range vc.CellNames {
+		vc.VtctldClient.AddCellInfo(cellName)
+		cell, err := vc.AddCell(vc.t, cellName)
+		require.NoError(vc.t, err)
+		require.NotNil(vc.t, cell)
+	}
 }
 
 // CleanupDataroot deletes the vtdataroot directory. Since we run multiple tests sequentially in a single CI test shard,
