@@ -90,7 +90,7 @@ func (vtctldclient *VtctldClientProcess) ExecuteCommandWithOutput(args ...string
 	}
 	if !slices.Contains(args, "--server") {
 		// Only add the default server if one was not already specified.
-		args = append(args, "--server", vtctldclient.Server)
+		pArgs = append(pArgs, "--server", vtctldclient.Server)
 	}
 	if *isCoverage {
 		pArgs = append(pArgs, "--test.coverprofile="+getCoveragePath("vtctldclient-"+args[0]+".out"), "--test.v")
