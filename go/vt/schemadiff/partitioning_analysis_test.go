@@ -147,6 +147,14 @@ func TestTemporalFunctions(t *testing.T) {
 		// Compatible with `select to_seconds('2024-12-19 09:56:32' + INTERVAL 3 MONTH);`:
 		assert.EqualValues(t, 63909597392, dt.ToSeconds())
 	}
+	{
+		yearweek := dt.Date.YearWeek(0)
+		assert.EqualValues(t, 202450, yearweek)
+	}
+	{
+		yearweek := dt.Date.YearWeek(1)
+		assert.EqualValues(t, 202451, yearweek)
+	}
 }
 
 func TestTruncateDateTime(t *testing.T) {
