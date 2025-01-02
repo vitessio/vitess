@@ -102,11 +102,11 @@ func TestFKWorkflow(t *testing.T) {
 	targetTab := targetKs.Shards["0"].Tablets[fmt.Sprintf("%s-%d", cellName, targetTabletId)].Vttablet
 	require.NotNil(t, targetTab)
 	catchup(t, targetTab, workflowName, "MoveTables")
-	vdiff(t, targetKeyspace, workflowName, cellName, true, false, nil)
+	vdiff(t, targetKeyspace, workflowName, cellName, nil)
 	if withLoad {
 		ls.waitForAdditionalRows(200)
 	}
-	vdiff(t, targetKeyspace, workflowName, cellName, true, false, nil)
+	vdiff(t, targetKeyspace, workflowName, cellName, nil)
 	if withLoad {
 		cancel()
 		<-ch

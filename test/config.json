@@ -1346,18 +1346,9 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
-		"vreplication_vtctl_migrate": {
+		"vreplication_migrate": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVtctlMigrate", "-timeout", "30m"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "vreplication_migrate",
-			"RetryMax": 1,
-			"Tags": []
-		},
-		"vreplication_vtctld_migrate": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVtctldMigrate", "-timeout", "30m"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestMigrate", "-timeout", "30m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_migrate",
