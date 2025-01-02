@@ -37,7 +37,6 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/localvtctldclient"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
 	"vitess.io/vitess/go/vt/vtenv"
-	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	// These imports ensure init()s within them get called and they register their commands/subcommands.
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
@@ -204,14 +203,6 @@ func getClientForCommand(cmd *cobra.Command) (vtctldclient.VtctldClient, error) 
 		}
 		onTerm = append(onTerm, ts.Close)
 
-		// Use internal vtctld server implementation.
-		// Register a nil grpc handler -- we will not use tmclient at all but
-		// a factory still needs to be registered.
-		once.Do(func() {
-			tmclient.RegisterTabletManagerClientFactory("grpc", func() tmclient.TabletManagerClient {
-				return nil
-			})
-		})
 		vtctld := grpcvtctldserver.NewVtctldServer(env, ts)
 		localvtctldclient.SetServer(vtctld)
 		VtctldClientProtocol = "local"

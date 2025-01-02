@@ -74,15 +74,22 @@ func (vtctldclient *VtctldClientProcess) ExecuteCommand(args ...string) (err err
 	return err
 }
 
-// ExecuteCommandWithOutput executes any vtctldclient command and returns output
+// ExecuteCommandWithOutput executes any vtctldclient command and returns output.
 func (vtctldclient *VtctldClientProcess) ExecuteCommandWithOutput(args ...string) (string, error) {
 	var resultByte []byte
 	var resultStr string
 	var err error
 	retries := 10
 	retryDelay := 1 * time.Second
-	var pArgs []string
+	pArgs := []string{
+		// These are needed to support --server=internal and are otherwise
+		// ignored/unused.
+		"--topo-implementation", vtctldclient.TopoImplementation,
+		"--topo-global-server-address", vtctldclient.TopoGlobalAddress,
+		"--topo-global-root", vtctldclient.TopoGlobalRoot,
+	}
 	if !slices.Contains(args, "--server") {
+		// Only add the default server if one was not already specified.
 		args = append(args, "--server", vtctldclient.Server)
 	}
 	if *isCoverage {
@@ -112,9 +119,6 @@ func (vtctldclient *VtctldClientProcess) ExecuteCommandWithOutput(args ...string
 func (vtctldclient *VtctldClientProcess) AddCellInfo(Cell string) error {
 	args := []string{
 		"--server", "internal",
-		"--topo-implementation", vtctldclient.TopoImplementation,
-		"--topo-global-server-address", vtctldclient.TopoGlobalAddress,
-		"--topo-global-root", vtctldclient.TopoGlobalRoot,
 		"AddCellInfo",
 		"--root", vtctldclient.TopoRootPath + Cell,
 		"--server-address", vtctldclient.TopoServerAddress,

@@ -260,7 +260,6 @@ func (cluster *LocalProcessCluster) StartTopo() (err error) {
 	if !cluster.ReusingVTDATAROOT {
 		if err = cluster.VtctldClientProcess.AddCellInfo(cluster.Cell); err != nil {
 			log.Error(err)
-			time.Sleep(5 * time.Minute)
 			return
 		}
 		cluster.VtctldClientProcess.LogDir = cluster.TmpDirectory

@@ -138,33 +138,30 @@ func TestSecureTransport(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	// setup replication
-	var vtctldClientArgs []string
+	// Shared flags.
+	vtctldClientArgs := []string{"--server", "internal"}
+	vtctldClientArgs = append(vtctldClientArgs, tmclientExtraArgs("vttablet-client-1")...)
 
-	vtctldClientTmArgs := append(vtctldClientArgs, tmclientExtraArgs("vttablet-client-1")...)
-
-	// Reparenting
-	vtctldClientArgs = append(vtctldClientTmArgs, "InitShardPrimary", "--", "--force", "test_keyspace/0", primaryTablet.Alias)
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand(vtctldClientArgs...)
+	// Reparenting.
+	vtctlInitArgs := append(vtctldClientArgs, "InitShardPrimary", "--force", "test_keyspace/0", primaryTablet.Alias)
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand(vtctlInitArgs...)
 	require.NoError(t, err)
 
 	err = clusterInstance.StartVTOrc("test_keyspace")
 	require.NoError(t, err)
 
-	// Apply schema
-	var vtctlApplySchemaArgs = append(vtctldClientTmArgs, "ApplySchema", "--sql", createVtInsertTest, "test_keyspace")
+	// Apply schema.
+	var vtctlApplySchemaArgs = append(vtctldClientArgs, "ApplySchema", "--sql", createVtInsertTest, "test_keyspace")
 	err = clusterInstance.VtctldClientProcess.ExecuteCommand(vtctlApplySchemaArgs...)
 	require.NoError(t, err)
 
 	for _, tablet := range []cluster.Vttablet{primaryTablet, replicaTablet} {
-		var vtctlTabletArgs []string
-		vtctlTabletArgs = append(vtctlTabletArgs, tmclientExtraArgs("vttablet-client-1")...)
-		vtctlTabletArgs = append(vtctlTabletArgs, "RunHealthCheck", tablet.Alias)
+		vtctlTabletArgs := append(vtctldClientArgs, "RunHealthCheck", tablet.Alias)
 		_, err = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(vtctlTabletArgs...)
 		require.NoError(t, err)
 	}
 
-	// start vtgate
+	// Start vtgate.
 	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, tabletConnExtraArgs("vttablet-client-1")...)
 	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, serverExtraArguments("vtgate-server-instance", "vtgate-client")...)
 	err = clusterInstance.StartVtgate()

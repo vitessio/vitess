@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtctl/grpcclientcommon"
 	"vitess.io/vitess/go/vt/vtctl/vtctlclient"
+	"vitess.io/vitess/go/vt/vttablet/grpctmclient"
 
 	_flag "vitess.io/vitess/go/internal/flag"
 )
@@ -44,6 +45,7 @@ func main() {
 	grpcclient.RegisterFlags(command.Root.PersistentFlags())
 	grpccommon.RegisterFlags(command.Root.PersistentFlags())
 	grpcclientcommon.RegisterFlags(command.Root.PersistentFlags())
+	grpctmclient.RegisterFlags(command.Root.PersistentFlags())
 	servenv.RegisterMySQLServerFlags(command.Root.PersistentFlags())
 	vtctlclient.RegisterFlags(command.Root.PersistentFlags())
 	acl.RegisterFlags(command.Root.PersistentFlags())
