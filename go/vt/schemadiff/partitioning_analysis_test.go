@@ -188,7 +188,7 @@ func TestTruncateDateTime(t *testing.T) {
 
 	tcases := []struct {
 		interval  datetime.IntervalType
-		mode      int
+		weekMode  int
 		expect    string
 		expectErr error
 	}{
@@ -206,41 +206,41 @@ func TestTruncateDateTime(t *testing.T) {
 		},
 		{
 			interval: datetime.IntervalWeek,
-			mode:     1,
+			weekMode: 1,
 			expect:   "2024-12-16 00:00:00",
 		},
 		{
 			interval: datetime.IntervalWeek,
-			mode:     2,
+			weekMode: 2,
 			expect:   "2024-12-15 00:00:00",
 		},
 		{
 			interval: datetime.IntervalWeek,
-			mode:     3,
+			weekMode: 3,
 			expect:   "2024-12-16 00:00:00",
 		},
 		{
 			interval: datetime.IntervalWeek,
-			mode:     4,
+			weekMode: 4,
 			expect:   "2024-12-15 00:00:00",
 		},
 		{
 			interval: datetime.IntervalWeek,
-			mode:     5,
+			weekMode: 5,
 			expect:   "2024-12-16 00:00:00",
 		},
 		{
 			interval: datetime.IntervalWeek,
-			mode:     6,
+			weekMode: 6,
 			expect:   "2024-12-15 00:00:00",
 		},
 		{
 			interval: datetime.IntervalWeek,
-			mode:     7,
+			weekMode: 7,
 			expect:   "2024-12-16 00:00:00",
 		}, {
 			interval:  datetime.IntervalWeek,
-			mode:      8,
+			weekMode:  8,
 			expectErr: fmt.Errorf("invalid mode value 8 for WEEK/YEARWEEK function"),
 		},
 		{
@@ -264,7 +264,7 @@ func TestTruncateDateTime(t *testing.T) {
 	}
 	for _, tcase := range tcases {
 		t.Run(tcase.interval.ToString(), func(t *testing.T) {
-			truncated, err := truncateDateTime(dt, tcase.interval, tcase.mode)
+			truncated, err := truncateDateTime(dt, tcase.interval, tcase.weekMode)
 			if tcase.expectErr != nil {
 				require.Error(t, err)
 				assert.EqualError(t, err, tcase.expectErr.Error())
@@ -746,7 +746,7 @@ func TestTemporalRangePartitioningNextRotation(t *testing.T) {
 		name              string
 		create            string
 		interval          datetime.IntervalType
-		mode              int
+		weekMode          int
 		prepareAheadCount int
 		expactMaxValue    bool
 		expectStatements  []string
@@ -920,7 +920,7 @@ func TestTemporalRangePartitioningNextRotation(t *testing.T) {
 			name:              "week(0) interval with 4 weeks",
 			create:            "CREATE TABLE t (id int, created_at DATETIME, PRIMARY KEY(id, created_at)) PARTITION BY RANGE COLUMNS (created_at) (PARTITION p0 VALUES LESS THAN ('2024-12-19 09:00:00'))",
 			interval:          datetime.IntervalWeek,
-			mode:              0,
+			weekMode:          0,
 			prepareAheadCount: 4,
 			expectStatements: []string{
 				"ALTER TABLE `t` ADD PARTITION (PARTITION `p20241215` VALUES LESS THAN ('2024-12-22 00:00:00'))",
@@ -933,7 +933,7 @@ func TestTemporalRangePartitioningNextRotation(t *testing.T) {
 			name:              "week(1) interval with 4 weeks",
 			create:            "CREATE TABLE t (id int, created_at DATETIME, PRIMARY KEY(id, created_at)) PARTITION BY RANGE COLUMNS (created_at) (PARTITION p0 VALUES LESS THAN ('2024-12-19 09:00:00'))",
 			interval:          datetime.IntervalWeek,
-			mode:              1,
+			weekMode:          1,
 			prepareAheadCount: 4,
 			expectStatements: []string{
 				"ALTER TABLE `t` ADD PARTITION (PARTITION `p20241216` VALUES LESS THAN ('2024-12-23 00:00:00'))",
@@ -951,7 +951,7 @@ func TestTemporalRangePartitioningNextRotation(t *testing.T) {
 					PARTITION p_somename VALUES LESS THAN ('2024-12-30 00:00:00')
 				)`,
 			interval:          datetime.IntervalWeek,
-			mode:              1,
+			weekMode:          1,
 			prepareAheadCount: 4,
 			expectStatements: []string{
 				"ALTER TABLE `t` ADD PARTITION (PARTITION `p20241230` VALUES LESS THAN ('2025-01-06 00:00:00'))",
@@ -962,7 +962,7 @@ func TestTemporalRangePartitioningNextRotation(t *testing.T) {
 			name:              "yearweek(0) function with 4 weeks",
 			create:            "CREATE TABLE t (id int, created_at DATETIME, PRIMARY KEY(id, created_at)) PARTITION BY RANGE (YEARWEEK(created_at, 0)) (PARTITION p0 VALUES LESS THAN (YEARWEEK('2024-12-19 09:00:00', 1)))",
 			interval:          datetime.IntervalWeek,
-			mode:              0,
+			weekMode:          0,
 			prepareAheadCount: 4,
 			expectStatements: []string{
 				"ALTER TABLE `t` ADD PARTITION (PARTITION `p20241215` VALUES LESS THAN (202451))",
@@ -975,7 +975,7 @@ func TestTemporalRangePartitioningNextRotation(t *testing.T) {
 			name:              "yearweek(1) function with 4 weeks",
 			create:            "CREATE TABLE t (id int, created_at DATETIME, PRIMARY KEY(id, created_at)) PARTITION BY RANGE (YEARWEEK(created_at, 1)) (PARTITION p0 VALUES LESS THAN (YEARWEEK('2024-12-19 09:00:00', 1)))",
 			interval:          datetime.IntervalWeek,
-			mode:              1,
+			weekMode:          1,
 			prepareAheadCount: 4,
 			expectStatements: []string{
 				"ALTER TABLE `t` ADD PARTITION (PARTITION `p20241216` VALUES LESS THAN (202452))",
@@ -988,7 +988,7 @@ func TestTemporalRangePartitioningNextRotation(t *testing.T) {
 			name:              "incompatible week mode",
 			create:            "CREATE TABLE t (id int, created_at DATETIME, PRIMARY KEY(id, created_at)) PARTITION BY RANGE (YEARWEEK(created_at, 0)) (PARTITION p0 VALUES LESS THAN (YEARWEEK('2024-12-19 09:00:00', 1)))",
 			interval:          datetime.IntervalWeek,
-			mode:              1,
+			weekMode:          1,
 			prepareAheadCount: 4,
 			expectErr:         fmt.Errorf("mode 1 is different from the mode 0 used in table t"),
 		},
@@ -1053,7 +1053,7 @@ func TestTemporalRangePartitioningNextRotation(t *testing.T) {
 			entity, err := NewCreateTableEntityFromSQL(env, tcase.create)
 			require.NoError(t, err)
 
-			diffs, err := TemporalRangePartitioningNextRotation(entity, tcase.interval, tcase.mode, tcase.prepareAheadCount, reference)
+			diffs, err := TemporalRangePartitioningNextRotation(entity, tcase.interval, tcase.weekMode, tcase.prepareAheadCount, reference)
 			if tcase.expectErr != nil {
 				require.Error(t, err)
 				assert.EqualError(t, err, tcase.expectErr.Error())
