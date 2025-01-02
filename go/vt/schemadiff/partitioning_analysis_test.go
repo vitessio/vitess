@@ -1317,6 +1317,22 @@ func TestTemporalRangePartitioningRetention(t *testing.T) {
 			expectErr: fmt.Errorf("retention at 2024-12-21 00:00:00 would drop all partitions in table t"),
 		},
 		{
+			name: "week interval using YEARWEEK in expression, DATETIME, drop 2 partitions",
+			create: `CREATE TABLE t (id int, created_at DATETIME, PRIMARY KEY(id, created_at))
+							PARTITION BY RANGE (YEARWEEK(created_at, 0))
+								(
+									PARTITION p0 VALUES LESS THAN (YEARWEEK('2024-12-19 00:00:00', 0)),
+									PARTITION p20241219 VALUES LESS THAN (YEARWEEK('2024-12-26 00:00:00', 0)),
+									PARTITION p20241226 VALUES LESS THAN (YEARWEEK('2025-01-02 00:00:00', 0))
+								)`,
+			expire:          "2024-12-27 00:00:00",
+			expectStatement: "ALTER TABLE `t` DROP PARTITION `p0`, `p20241219`",
+			expectDistinctStatements: []string{
+				"ALTER TABLE `t` DROP PARTITION `p0`",
+				"ALTER TABLE `t` DROP PARTITION `p20241219`",
+			},
+		},
+		{
 			name:      "partition by INT column",
 			create:    "CREATE TABLE t (id int PRIMARY KEY) PARTITION BY RANGE (id) (PARTITION p0 VALUES LESS THAN (1))",
 			expire:    "2024-12-21 00:00:00",
