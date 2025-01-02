@@ -77,7 +77,6 @@ func TestMain(m *testing.M) {
 
 		// Set extra args for twopc
 		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
-			"--transaction_mode", "TWOPC",
 			"--grpc_use_effective_callerid",
 		)
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
@@ -101,6 +100,13 @@ func TestMain(m *testing.M) {
 
 		// Start Vtgate
 		if err := clusterInstance.StartVtgate(); err != nil {
+			return 1
+		}
+		clusterInstance.VtgateProcess.Config.TransactionMode = "TWOPC"
+		if err := clusterInstance.VtgateProcess.RewriteConfiguration(); err != nil {
+			return 1
+		}
+		if err := clusterInstance.VtgateProcess.WaitForConfig(`"transaction_mode":"TWOPC"`); err != nil {
 			return 1
 		}
 		vtParams = clusterInstance.GetVTParams(keyspaceName)

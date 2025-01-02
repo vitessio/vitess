@@ -277,24 +277,24 @@ func TestDeleteKeyspace(t *testing.T) {
 // TODO: (ajm188) if this test gets fixed, the flags need to be updated to comply with VEP-4 as well.
 // tells that in zone2 after deleting shard, there is no shard #264 and in zone1 there is only 1 #269
 /*func RemoveKeyspaceCell(t *testing.T) {
-	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("CreateKeyspace", "test_delete_keyspace_removekscell")
-	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("CreateShard", "test_delete_keyspace_removekscell/0")
-	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("CreateShard", "test_delete_keyspace_removekscell/1")
-	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("InitTablet", "--port=1234", "--bind-address=127.0.0.1", "-keyspace=test_delete_keyspace_removekscell", "--shard=0", "zone1-0000000100", "primary")
-	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("InitTablet", "--port=1234", "--bind-address=127.0.0.1", "-keyspace=test_delete_keyspace_removekscell", "--shard=1", "zone1-0000000101", "primary")
-	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("InitTablet", "--port=1234", "--bind-address=127.0.0.1", "-keyspace=test_delete_keyspace_removekscell", "--shard=0", "zone2-0000000100", "replica")
-	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("InitTablet", "--port=1234", "--bind-address=127.0.0.1", "-keyspace=test_delete_keyspace_removekscell", "--shard=1", "zone2-0000000101", "replica")
+	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("CreateKeyspace", "test_delete_keyspace_removekscell")
+	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("CreateShard", "test_delete_keyspace_removekscell/0")
+	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("CreateShard", "test_delete_keyspace_removekscell/1")
+	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("InitTablet", "--port=1234", "--bind-address=127.0.0.1", "-keyspace=test_delete_keyspace_removekscell", "--shard=0", "zone1-0000000100", "primary")
+	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("InitTablet", "--port=1234", "--bind-address=127.0.0.1", "-keyspace=test_delete_keyspace_removekscell", "--shard=1", "zone1-0000000101", "primary")
+	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("InitTablet", "--port=1234", "--bind-address=127.0.0.1", "-keyspace=test_delete_keyspace_removekscell", "--shard=0", "zone2-0000000100", "replica")
+	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("InitTablet", "--port=1234", "--bind-address=127.0.0.1", "-keyspace=test_delete_keyspace_removekscell", "--shard=1", "zone2-0000000101", "replica")
 
 	// Create the serving/replication entries and check that they exist,  so we can later check they're deleted.
-	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("RebuildKeyspaceGraph", "test_delete_keyspace_removekscell")
-	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetShardReplication", "zone2", "test_delete_keyspace_removekscell/0")
-	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetShardReplication", "zone2", "test_delete_keyspace_removekscell/1")
-	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetSrvKeyspace", "zone2", "test_delete_keyspace_removekscell")
-	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetSrvKeyspace", "zone1", "test_delete_keyspace_removekscell")
+	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("RebuildKeyspaceGraph", "test_delete_keyspace_removekscell")
+	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("GetShardReplication", "zone2", "test_delete_keyspace_removekscell/0")
+	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("GetShardReplication", "zone2", "test_delete_keyspace_removekscell/1")
+	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("GetSrvKeyspace", "zone2", "test_delete_keyspace_removekscell")
+	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("GetSrvKeyspace", "zone1", "test_delete_keyspace_removekscell")
 
 	// Just remove the shard from one cell (including tablets),
 	// but leaving the global records and other cells/shards alone.
-	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("RemoveShardCell", "--recursive", "test_delete_keyspace_removekscell/0", "zone2")
+	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("RemoveShardCell", "--recursive", "test_delete_keyspace_removekscell/0", "zone2")
 
 	//Check that the shard is gone from zone2.
 	srvKeyspaceZone2 := getSrvKeyspace(t, cell2, "test_delete_keyspace_removekscell")
@@ -308,42 +308,42 @@ func TestDeleteKeyspace(t *testing.T) {
 		assert.Equal(t, len(partition.ShardReferences), 2)
 	}
 
-	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("RebuildKeyspaceGraph", "test_delete_keyspace_removekscell")
-	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetKeyspace", "test_delete_keyspace_removekscell")
-	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetShard", "test_delete_keyspace_removekscell/0")
+	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("RebuildKeyspaceGraph", "test_delete_keyspace_removekscell")
+	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("GetKeyspace", "test_delete_keyspace_removekscell")
+	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("GetShard", "test_delete_keyspace_removekscell/0")
 
-	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetTablet", "zone1-0000000100")
+	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("GetTablet", "zone1-0000000100")
 
-	err := clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetTablet", "zone2-0000000100")
+	err := clusterForKSTest.VtctldClientProcess.ExecuteCommand("GetTablet", "zone2-0000000100")
 	require.Error(t, err)
 
-	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetTablet", "zone2-0000000101")
-	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetShardReplication", "zone1", "test_delete_keyspace_removekscell/0")
+	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("GetTablet", "zone2-0000000101")
+	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("GetShardReplication", "zone1", "test_delete_keyspace_removekscell/0")
 
-	err = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetShardReplication", "zone2", "test_delete_keyspace_removekscell/0")
+	err = clusterForKSTest.VtctldClientProcess.ExecuteCommand("GetShardReplication", "zone2", "test_delete_keyspace_removekscell/0")
 	require.Error(t, err)
 
-	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetShardReplication", "zone2", "test_delete_keyspace_removekscell/1")
-	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetSrvKeyspace", "zone2", "test_delete_keyspace_removekscell")
+	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("GetShardReplication", "zone2", "test_delete_keyspace_removekscell/1")
+	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("GetSrvKeyspace", "zone2", "test_delete_keyspace_removekscell")
 
 	// Add it back to do another test.
-	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("InitTablet", "--port=1234", "--keyspace=test_delete_keyspace_removekscell", "--shard=0", "zone2-0000000100", "replica")
-	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("RebuildKeyspaceGraph", "test_delete_keyspace_removekscell")
-	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetShardReplication", "zone2", "test_delete_keyspace_removekscell/0")
+	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("InitTablet", "--port=1234", "--keyspace=test_delete_keyspace_removekscell", "--shard=0", "zone2-0000000100", "replica")
+	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("RebuildKeyspaceGraph", "test_delete_keyspace_removekscell")
+	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("GetShardReplication", "zone2", "test_delete_keyspace_removekscell/0")
 
 	// Now use RemoveKeyspaceCell to remove all shards.
-	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("RemoveKeyspaceCell", "-recursive", "test_delete_keyspace_removekscell", "zone2")
-	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("RebuildKeyspaceGraph", "test_delete_keyspace_removekscell")
-	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetShardReplication", "zone1", "test_delete_keyspace_removekscell/0")
+	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("RemoveKeyspaceCell", "-recursive", "test_delete_keyspace_removekscell", "zone2")
+	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("RebuildKeyspaceGraph", "test_delete_keyspace_removekscell")
+	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("GetShardReplication", "zone1", "test_delete_keyspace_removekscell/0")
 
-	err = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetShardReplication", "zone2", "test_delete_keyspace_removekscell/0")
+	err = clusterForKSTest.VtctldClientProcess.ExecuteCommand("GetShardReplication", "zone2", "test_delete_keyspace_removekscell/0")
 	require.Error(t, err)
 
-	err = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetShardReplication", "zone2", "test_delete_keyspace_removekscell/1")
+	err = clusterForKSTest.VtctldClientProcess.ExecuteCommand("GetShardReplication", "zone2", "test_delete_keyspace_removekscell/1")
 	require.Error(t, err)
 
 	// Clean up
-	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("DeleteKeyspace", "-recursive", "test_delete_keyspace_removekscell")
+	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("DeleteKeyspace", "-recursive", "test_delete_keyspace_removekscell")
 } */
 
 func TestShardCountForAllKeyspaces(t *testing.T) {

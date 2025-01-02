@@ -31,6 +31,7 @@ import (
 	"github.com/spf13/pflag"
 
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	"vitess.io/vitess/go/vt/vtgate/dynamicconfig"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cache/theine"
@@ -136,7 +137,8 @@ type Executor struct {
 	warmingReadsPercent int
 	warmingReadsChannel chan bool
 
-	vConfig econtext.VCursorConfig
+	vConfig   econtext.VCursorConfig
+	ddlConfig dynamicconfig.DDL
 }
 
 var executorOnce sync.Once
@@ -168,6 +170,7 @@ func NewExecutor(
 	noScatter bool,
 	pv plancontext.PlannerVersion,
 	warmingReadsPercent int,
+	ddlConfig dynamicconfig.DDL,
 ) *Executor {
 	e := &Executor{
 		env:                 env,
@@ -183,6 +186,7 @@ func NewExecutor(
 		plans:               plans,
 		warmingReadsPercent: warmingReadsPercent,
 		warmingReadsChannel: make(chan bool, warmingReadsConcurrency),
+		ddlConfig:           ddlConfig,
 	}
 	// setting the vcursor config.
 	e.initVConfig(warnOnShardedOnly, pv)
@@ -484,7 +488,7 @@ func (e *Executor) addNeededBindVars(vcursor *econtext.VCursorImpl, bindVarNeeds
 		case sysvars.TransactionMode.Name:
 			txMode := session.TransactionMode
 			if txMode == vtgatepb.TransactionMode_UNSPECIFIED {
-				txMode = getTxMode()
+				txMode = transactionMode.Get()
 			}
 			bindVars[key] = sqltypes.StringBindVariable(txMode.String())
 		case sysvars.Workload.Name:
@@ -1156,11 +1160,7 @@ func (e *Executor) buildStatement(
 	reservedVars *sqlparser.ReservedVars,
 	bindVarNeeds *sqlparser.BindVarNeeds,
 ) (*engine.Plan, error) {
-	cfg := &dynamicViperConfig{
-		onlineDDL: enableOnlineDDL,
-		directDDL: enableDirectDDL,
-	}
-	plan, err := planbuilder.BuildFromStmt(ctx, query, stmt, reservedVars, vcursor, bindVarNeeds, cfg)
+	plan, err := planbuilder.BuildFromStmt(ctx, query, stmt, reservedVars, vcursor, bindVarNeeds, e.ddlConfig)
 	if err != nil {
 		return nil, err
 	}

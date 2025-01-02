@@ -154,7 +154,7 @@ func TestShardedKeyspace(t *testing.T) {
 	require.Nil(t, err)
 
 	output, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ValidateSchemaKeyspace", keyspaceName)
-	require.Error(t, err)
+	require.NoError(t, err)
 	// We should assert that there is a schema difference and that both the shard primaries are involved in it.
 	// However, we cannot assert in which order the two primaries will occur since the underlying function does not guarantee that
 	// We could have an output here like `schemas differ ... shard1Primary ... differs from: shard2Primary ...` or `schemas differ ... shard2Primary ... differs from: shard1Primary ...`

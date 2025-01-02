@@ -574,3 +574,23 @@ func TestTimeZones(t *testing.T) {
 		})
 	}
 }
+
+// TestSemiJoin tests that the semi join works as intended.
+func TestSemiJoin(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	for i := 1; i <= 1000; i++ {
+		mcmp.Exec(fmt.Sprintf("insert into t1(id1, id2) values (%d, %d)", i, 2*i))
+		mcmp.Exec(fmt.Sprintf("insert into tbl(id, unq_col, nonunq_col) values (%d, %d, %d)", i, 2*i, 3*i))
+	}
+
+	// Test that the semi join works as intended
+	for _, mode := range []string{"oltp", "olap"} {
+		mcmp.Run(mode, func(mcmp *utils.MySQLCompare) {
+			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = %s", mode))
+
+			mcmp.Exec("select id1, id2 from t1 where exists (select id from tbl where nonunq_col = t1.id2) order by id1")
+		})
+	}
+}

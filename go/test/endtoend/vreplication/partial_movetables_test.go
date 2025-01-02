@@ -127,7 +127,7 @@ func testPartialMoveTablesBasic(t *testing.T, flavor workflowFlavor) {
 
 	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKeyspace, workflowName), binlogdatapb.VReplicationWorkflowState_Running.String())
 	catchup(t, targetTab80Dash, workflowName, "MoveTables")
-	vdiff(t, targetKeyspace, workflowName, defaultCellName, false, true, nil)
+	vdiff(t, targetKeyspace, workflowName, defaultCellName, nil)
 	mt.SwitchReadsAndWrites()
 	time.Sleep(loadTestBufferingWindowDuration + 1*time.Second)
 	mt.Complete()
@@ -190,7 +190,7 @@ func testPartialMoveTablesBasic(t *testing.T, flavor workflowFlavor) {
 	}
 	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKeyspace, workflowName), binlogdatapb.VReplicationWorkflowState_Running.String())
 	catchup(t, targetTab80Dash, workflowName, "MoveTables")
-	vdiff(t, targetKeyspace, workflowName, defaultCellName, false, true, nil)
+	vdiff(t, targetKeyspace, workflowName, defaultCellName, nil)
 
 	vtgateConn, closeConn := getVTGateConn()
 	defer closeConn()
@@ -199,7 +199,7 @@ func testPartialMoveTablesBasic(t *testing.T, flavor workflowFlavor) {
 	waitForRowCount(t, vtgateConn, "customer2:80-", "customer", 2) // customer2: 80-
 
 	confirmGlobalRoutingToSource := func() {
-		output, err := vc.VtctlClient.ExecuteCommandWithOutput("GetRoutingRules")
+		output, err := vc.VtctldClient.ExecuteCommandWithOutput("GetRoutingRules", "--compact")
 		require.NoError(t, err)
 		result := gjson.Get(output, "rules")
 		result.ForEach(func(attributeKey, attributeValue gjson.Result) bool {
@@ -307,9 +307,6 @@ func testPartialMoveTablesBasic(t *testing.T, flavor workflowFlavor) {
 	require.Contains(t, err.Error(), "target: customer.-80.replica", "Query was routed to the target before partial SwitchTraffic")
 
 	workflowExec := tstWorkflowExec
-	if flavor == workflowFlavorVtctl {
-		workflowExec = tstWorkflowExecVtctl
-	}
 
 	// We cannot Complete a partial move tables at the moment because
 	// it will find that all traffic has (obviously) not been switched.
@@ -337,7 +334,7 @@ func testPartialMoveTablesBasic(t *testing.T, flavor workflowFlavor) {
 	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKeyspace, workflowName), binlogdatapb.VReplicationWorkflowState_Running.String())
 
 	catchup(t, targetTabDash80, workflowName, "MoveTables")
-	vdiff(t, targetKeyspace, workflowName, defaultCellName, false, true, nil)
+	vdiff(t, targetKeyspace, workflowName, defaultCellName, nil)
 	mtDash80.SwitchReadsAndWrites()
 	time.Sleep(loadTestBufferingWindowDuration + 1*time.Second)
 
@@ -366,21 +363,19 @@ func testPartialMoveTablesBasic(t *testing.T, flavor workflowFlavor) {
 		err = workflowExec(t, "", reverseWf, "", reverseKs, "", workflowActionCancel, "", "", "", opts)
 		require.NoError(t, err)
 
-		output, err := vc.VtctlClient.ExecuteCommandWithOutput("Workflow", "--", "--shards", opts.shardSubset, fmt.Sprintf("%s.%s", reverseKs, reverseWf), "show")
-		require.Error(t, err)
-		require.Contains(t, output, "no streams found")
-
-		// Delete the original workflow
-		originalKsWf := fmt.Sprintf("%s.%s", targetKs, wf)
-		_, err = vc.VtctlClient.ExecuteCommandWithOutput("Workflow", "--", "--shards", opts.shardSubset, originalKsWf, "delete")
+		output, err := vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", reverseKs, "show", "--workflow", reverseWf, "--shards", opts.shardSubset)
 		require.NoError(t, err)
-		output, err = vc.VtctlClient.ExecuteCommandWithOutput("Workflow", "--", "--shards", opts.shardSubset, originalKsWf, "show")
-		require.Error(t, err)
-		require.Contains(t, output, "no streams found")
+		require.True(t, isEmptyWorkflowShowOutput(output))
+
+		// Be sure we've deleted the original workflow.
+		_, _ = vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", targetKs, "delete", "--workflow", wf, "--shards", opts.shardSubset)
+		output, err = vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", targetKs, "show", "--workflow", wf, "--shards", opts.shardSubset)
+		require.NoError(t, err, output)
+		require.True(t, isEmptyWorkflowShowOutput(output))
 	}
 
 	// Confirm that the global routing rules are now gone.
-	output, err := vc.VtctlClient.ExecuteCommandWithOutput("GetRoutingRules")
+	output, err := vc.VtctldClient.ExecuteCommandWithOutput("GetRoutingRules", "--compact")
 	require.NoError(t, err)
 	require.Equal(t, emptyGlobalRoutingRules, output)
 
@@ -390,7 +385,6 @@ func testPartialMoveTablesBasic(t *testing.T, flavor workflowFlavor) {
 
 // TestPartialMoveTablesBasic tests partial move tables by moving each
 // customer shard -- -80,80- -- once a a time to customer2.
-// We test with both the vtctlclient and vtctldclient flavors.
 func TestPartialMoveTablesBasic(t *testing.T) {
 	currentWorkflowType = binlogdatapb.VReplicationWorkflowType_MoveTables
 	testPartialMoveTablesBasic(t, workflowFlavorVtctld)

@@ -89,7 +89,7 @@ func createReshardWorkflow(t *testing.T, sourceShards, targetShards string) erro
 	confirmTablesHaveSecondaryKeys(t, []*cluster.VttabletProcess{targetTab1}, targetKs, "")
 	catchup(t, targetTab1, workflowName, "Reshard")
 	catchup(t, targetTab2, workflowName, "Reshard")
-	vdiffSideBySide(t, ksWorkflow, "")
+	doVDiff(t, ksWorkflow, "")
 	return nil
 }
 
@@ -104,7 +104,7 @@ func createMoveTablesWorkflow(t *testing.T, tables string) {
 	confirmTablesHaveSecondaryKeys(t, []*cluster.VttabletProcess{targetTab1}, targetKs, tables)
 	catchup(t, targetTab1, workflowName, "MoveTables")
 	catchup(t, targetTab2, workflowName, "MoveTables")
-	vdiffSideBySide(t, ksWorkflow, "")
+	doVDiff(t, ksWorkflow, "")
 }
 
 func tstWorkflowAction(t *testing.T, action, tabletTypes, cells string) error {
@@ -112,7 +112,7 @@ func tstWorkflowAction(t *testing.T, action, tabletTypes, cells string) error {
 }
 
 // tstWorkflowExec executes a MoveTables or Reshard workflow command using
-// vtctldclient. If you need to use the legacy vtctlclient, use
+// vtctldclient.
 // tstWorkflowExecVtctl instead.
 func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, action, tabletTypes,
 	sourceShards, targetShards string, options *workflowExecOptions) error {
@@ -181,74 +181,6 @@ func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, 
 	return nil
 }
 
-// tstWorkflowExecVtctl executes a MoveTables or Reshard workflow command using
-// vtctlclient. It should operate exactly the same way as tstWorkflowExec, but
-// using the legacy client.
-func tstWorkflowExecVtctl(t *testing.T, cells, workflow, sourceKs, targetKs, tables, action, tabletTypes,
-	sourceShards, targetShards string, options *workflowExecOptions) error {
-
-	var args []string
-	if currentWorkflowType == binlogdatapb.VReplicationWorkflowType_MoveTables {
-		args = append(args, "MoveTables")
-	} else {
-		args = append(args, "Reshard")
-	}
-
-	args = append(args, "--")
-
-	if BypassLagCheck {
-		args = append(args, "--max_replication_lag_allowed=2542087h")
-	}
-	if options.atomicCopy {
-		args = append(args, "--atomic-copy")
-	}
-	switch action {
-	case workflowActionCreate:
-		if currentWorkflowType == binlogdatapb.VReplicationWorkflowType_MoveTables {
-			args = append(args, "--source", sourceKs)
-			if tables != "" {
-				args = append(args, "--tables", tables)
-			} else {
-				args = append(args, "--all")
-			}
-			if sourceShards != "" {
-				args = append(args, "--source_shards", sourceShards)
-			}
-		} else {
-			args = append(args, "--source_shards", sourceShards, "--target_shards", targetShards)
-		}
-		// Test new experimental --defer-secondary-keys flag
-		switch currentWorkflowType {
-		case binlogdatapb.VReplicationWorkflowType_MoveTables, binlogdatapb.VReplicationWorkflowType_Migrate, binlogdatapb.VReplicationWorkflowType_Reshard:
-			if !options.atomicCopy && options.deferSecondaryKeys {
-				args = append(args, "--defer-secondary-keys")
-			}
-			args = append(args, "--initialize-target-sequences") // Only used for MoveTables
-		}
-	case workflowActionMirrorTraffic:
-		args = append(args, "--percent", strconv.FormatFloat(float64(options.percent), byte('f'), -1, 32))
-	default:
-		if options.shardSubset != "" {
-			args = append(args, "--shards", options.shardSubset)
-		}
-	}
-	if cells != "" {
-		args = append(args, "--cells", cells)
-	}
-	if tabletTypes != "" {
-		args = append(args, "--tablet_types", tabletTypes)
-	}
-	args = append(args, "--timeout", time.Minute.String())
-	ksWorkflow := fmt.Sprintf("%s.%s", targetKs, workflow)
-	args = append(args, action, ksWorkflow)
-	output, err := vc.VtctlClient.ExecuteCommandWithOutput(args...)
-	lastOutput = output
-	if err != nil {
-		return fmt.Errorf("%s: %s", err, output)
-	}
-	return nil
-}
-
 func tstWorkflowSwitchReads(t *testing.T, tabletTypes, cells string) {
 	if tabletTypes == "" {
 		tabletTypes = "replica,rdonly"
@@ -288,23 +220,15 @@ func tstWorkflowComplete(t *testing.T) error {
 }
 
 // testWorkflowUpdate is a very simple test of the workflow update
-// vtctlclient/vtctldclient command.
+// vtctldclient command.
 // It performs a non-behavior impacting update, setting tablet-types
 // to primary,replica,rdonly (the only applicable types in these tests).
 func testWorkflowUpdate(t *testing.T) {
 	tabletTypes := "primary,replica,rdonly"
-	// Test vtctlclient first.
-	_, err := vc.VtctlClient.ExecuteCommandWithOutput("workflow", "--", "--tablet-types", tabletTypes, "noexist.noexist", "update")
-	require.Error(t, err, err)
-	resp, err := vc.VtctlClient.ExecuteCommandWithOutput("workflow", "--", "--tablet-types", tabletTypes, ksWorkflow, "update")
-	require.NoError(t, err)
-	require.NotEmpty(t, resp)
-
-	// Test vtctldclient last.
-	_, err = vc.VtctldClient.ExecuteCommandWithOutput("workflow", "--keyspace", "noexist", "update", "--workflow", "noexist", "--tablet-types", tabletTypes)
+	_, err := vc.VtctldClient.ExecuteCommandWithOutput("workflow", "--keyspace", "noexist", "update", "--workflow", "noexist", "--tablet-types", tabletTypes)
 	require.Error(t, err)
 	// Change the tablet-types to rdonly.
-	resp, err = vc.VtctldClient.ExecuteCommandWithOutput("workflow", "--keyspace", targetKs, "update", "--workflow", workflowName, "--tablet-types", "rdonly")
+	resp, err := vc.VtctldClient.ExecuteCommandWithOutput("workflow", "--keyspace", targetKs, "update", "--workflow", workflowName, "--tablet-types", "rdonly")
 	require.NoError(t, err, err)
 	// Confirm that we changed the workflow.
 	var ures vtctldatapb.WorkflowUpdateResponse
@@ -559,10 +483,10 @@ func testReplicatingWithPKEnumCols(t *testing.T) {
 	insertQuery := "insert into customer(cid, name, typ, sport, meta) values(2, 'Paül','soho','cricket',convert(x'7b7d' using utf8mb4))"
 	execVtgateQuery(t, vtgateConn, sourceKs, deleteQuery)
 	waitForNoWorkflowLag(t, vc, targetKs, workflowName)
-	vdiffSideBySide(t, ksWorkflow, "")
+	doVDiff(t, ksWorkflow, "")
 	execVtgateQuery(t, vtgateConn, sourceKs, insertQuery)
 	waitForNoWorkflowLag(t, vc, targetKs, workflowName)
-	vdiffSideBySide(t, ksWorkflow, "")
+	doVDiff(t, ksWorkflow, "")
 }
 
 func testReshardV2Workflow(t *testing.T) {
@@ -697,9 +621,9 @@ func testMoveTablesV2Workflow(t *testing.T) {
 
 	testRestOfWorkflow(t)
 	// Create our primary intra-keyspace materialization.
-	materialize(t, materializeCustomerNameSpec, false)
+	materialize(t, materializeCustomerNameSpec)
 	// Create a second one to confirm that multiple ones get migrated correctly.
-	materialize(t, materializeCustomerTypeSpec, false)
+	materialize(t, materializeCustomerTypeSpec)
 	materializeShow()
 
 	output, err = vc.VtctldClient.ExecuteCommandWithOutput(listAllArgs...)
@@ -986,7 +910,7 @@ func moveCustomerTableSwitchFlows(t *testing.T, cells []*Cell, sourceCellOrAlias
 		moveTablesAction(t, "Create", sourceCellOrAlias, workflow, sourceKs, targetKs, tables)
 		catchup(t, targetTab1, workflow, workflowType)
 		catchup(t, targetTab2, workflow, workflowType)
-		vdiffSideBySide(t, ksWorkflow, "")
+		doVDiff(t, ksWorkflow, "")
 	}
 	allCellNames := getCellNames(cells)
 	var switchReadsFollowedBySwitchWrites = func() {
