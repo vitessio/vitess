@@ -356,7 +356,7 @@ func BuildVSchema(source *vschemapb.SrvVSchema, parser *sqlparser.Parser) (vsche
 	buildKeyspaces(source, vschema, parser)
 	// buildGlobalTables before buildReferences so that buildReferences can
 	// resolve sources which reference global tables.
-	BuildGlobalTables(source, vschema)
+	buildGlobalTables(source, vschema)
 	buildReferences(source, vschema)
 	buildRoutingRule(source, vschema, parser)
 	buildShardRoutingRule(source, vschema)
@@ -461,7 +461,7 @@ func (vschema *VSchema) AddUDF(ksname, udfName string) error {
 	return nil
 }
 
-func BuildGlobalTables(source *vschemapb.SrvVSchema, vschema *VSchema) {
+func buildGlobalTables(source *vschemapb.SrvVSchema, vschema *VSchema) {
 	for ksname, ks := range source.Keyspaces {
 		ksvschema := vschema.Keyspaces[ksname]
 		// If the keyspace requires explicit routing, don't include any of

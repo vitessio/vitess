@@ -65,9 +65,6 @@ var (
 
 	//go:embed unsharded2_schema.sql
 	unsharded2SchemaSQL string
-
-	//go:embed unsharded2_vschema.json
-	unsharded2VSchema string
 )
 
 func TestMain(m *testing.M) {
@@ -110,7 +107,6 @@ func TestMain(m *testing.M) {
 		uKs2 := &cluster.Keyspace{
 			Name:      unsharded2Ks,
 			SchemaSQL: unsharded2SchemaSQL,
-			VSchema:   unsharded2VSchema,
 		}
 		err = clusterInstance.StartUnshardedKeyspace(*uKs2, 0, false)
 		if err != nil {
