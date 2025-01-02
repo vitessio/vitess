@@ -494,7 +494,7 @@ func AddAdditionalGlobalTables(source *vschemapb.SrvVSchema, vschema *VSchema) {
 			if _, found := vschema.globalTables[tname]; !found {
 				_, ok := newTables[tname]
 				if !ok {
-					table.Keyspace = &Keyspace{Name: ksname}
+					table.Keyspace = ksvschema.Keyspace
 					newTables[tname] = &tableInfo{table: table, cnt: 0}
 				}
 				newTables[tname].cnt++
