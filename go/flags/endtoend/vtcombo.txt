@@ -21,8 +21,15 @@ Flags:
       --backup_storage_compress                                          if set, the backup files will be compressed. (default true)
       --backup_storage_number_blocks int                                 if backup_storage_compress is true, backup_storage_number_blocks sets the number of blocks that can be processed, in parallel, before the writer blocks, during compression (default is 2). It should be equal to the number of CPUs available for compression. (default 2)
       --bind-address string                                              Bind address for the server. If empty, the server will listen on all available unicast and anycast IP addresses of the local system.
-      --binlog-in-memory-decompressor-max-size uint                      This value sets the uncompressed transaction payload size at which we switch from in-memory buffer based decompression to the slower streaming mode. (default 134217728)
+      --binlog_host string                                               PITR restore parameter: hostname/IP of binlog server.
+      --binlog_password string                                           PITR restore parameter: password of binlog server.
       --binlog_player_protocol string                                    the protocol to download binlogs from a vttablet (default "grpc")
+      --binlog_port int                                                  PITR restore parameter: port of binlog server.
+      --binlog_ssl_ca string                                             PITR restore parameter: Filename containing TLS CA certificate to verify binlog server TLS certificate against.
+      --binlog_ssl_cert string                                           PITR restore parameter: Filename containing mTLS client certificate to present to binlog server as authentication.
+      --binlog_ssl_key string                                            PITR restore parameter: Filename containing mTLS client private key for use in binlog server authentication.
+      --binlog_ssl_server_name string                                    PITR restore parameter: TLS server name (common name) to verify against for the binlog server we are connecting to (If not set: use the hostname or IP supplied in --binlog_host).
+      --binlog_user string                                               PITR restore parameter: username of binlog server.
       --buffer_drain_concurrency int                                     Maximum number of requests retried simultaneously. More concurrency will increase the load on the PRIMARY vttablet when draining the buffer. (default 1)
       --buffer_keyspace_shards string                                    If not empty, limit buffering to these entries (comma separated). Entry format: keyspace or keyspace/shard. Requires --enable_buffer=true.
       --buffer_max_failover_duration duration                            Stop buffering completely if a failover takes longer than this duration. (default 20s)
@@ -160,6 +167,7 @@ Flags:
       --grpc_server_keepalive_timeout duration                           After having pinged for keepalive check, the server waits for a duration of Timeout and if no activity is seen even after that the connection is closed. (default 10s)
       --grpc_use_effective_callerid                                      If set, and SSL is not used, will set the immediate caller id from the effective caller id's principal.
       --health_check_interval duration                                   Interval between health checks (default 20s)
+      --healthcheck-dial-concurrency int                                 Maximum concurrency of new healthcheck connections. This should be less than the golang max thread limit of 10000. (default 1024)
       --healthcheck_retry_delay duration                                 health check retry delay (default 2ms)
       --healthcheck_timeout duration                                     the health check timeout period (default 1m0s)
       --heartbeat_enable                                                 If true, vttablet records (if master) or checks (if replica) the current time of a replication heartbeat in the sidecar database's heartbeat table. The result is used to inform the serving state of the vttablet via healthchecks.
@@ -191,7 +199,6 @@ Flags:
       --log_rotate_max_size uint                                         size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
       --logtostderr                                                      log to standard error instead of files
       --manifest-external-decompressor string                            command with arguments to store in the backup manifest when compressing a backup with an external compression engine.
-      --mark_unique_unsharded_tables_as_global                           Mark unique unsharded tables as global tables (default true)
       --max-stack-size int                                               configure the maximum stack size in bytes (default 67108864)
       --max_concurrent_online_ddl int                                    Maximum number of online DDL changes that may run concurrently (default 256)
       --max_memory_rows int                                              Maximum number of rows that will be held in memory for intermediate results as well as the final result. (default 300000)
@@ -219,12 +226,6 @@ Flags:
       --mysql-server-drain-onterm                                        If set, the server waits for --onterm_timeout for already connected clients to complete their in flight work
       --mysql-server-keepalive-period duration                           TCP period between keep-alives
       --mysql-server-pool-conn-read-buffers                              If set, the server will pool incoming connection read buffers
-      --mysql-shell-backup-location string                               location where the backup will be stored
-      --mysql-shell-dump-flags string                                    flags to pass to mysql shell dump utility. This should be a JSON string and will be saved in the MANIFEST (default "{\"threads\": 4}")
-      --mysql-shell-flags string                                         execution flags to pass to mysqlsh binary to be used during dump/load (default "--defaults-file=/dev/null --js -h localhost")
-      --mysql-shell-load-flags string                                    flags to pass to mysql shell load utility. This should be a JSON string (default "{\"threads\": 4, \"loadUsers\": true, \"updateGtidSet\": \"replace\", \"skipBinlog\": true, \"progressFile\": \"\"}")
-      --mysql-shell-should-drain                                         decide if we should drain while taking a backup or continue to serving traffic
-      --mysql-shell-speedup-restore                                      speed up restore by disabling redo logging and double write buffer during the restore process
       --mysql-shutdown-timeout duration                                  timeout to use when MySQL is being shut down. (default 5m0s)
       --mysql_allow_clear_text_without_tls                               If set, the server will allow the use of a clear text password over non-SSL connections.
       --mysql_auth_server_impl string                                    Which auth server implementation to use. Options: none, ldap, clientcert, static, vault. (default "static")
@@ -254,6 +255,7 @@ Flags:
       --onclose_timeout duration                                         wait no more than this for OnClose handlers before stopping (default 10s)
       --onterm_timeout duration                                          wait no more than this for OnTermSync handlers before stopping (default 10s)
       --pid_file string                                                  If set, the process will write its pid to the named file, and delete it on graceful shutdown.
+      --pitr_gtid_lookup_timeout duration                                PITR restore parameter: timeout for fetching gtid from timestamp. (default 1m0s)
       --planner-version string                                           Sets the default planner to use when the session has not changed it. Valid values are: Gen4, Gen4Greedy, Gen4Left2Right
       --pool_hostname_resolve_interval duration                          if set force an update to all hostnames and reconnect if changed, defaults to 0 (disabled)
       --port int                                                         port for the server
@@ -300,11 +302,10 @@ Flags:
       --queryserver-enable-views                                         Enable views support in vttablet.
       --queryserver_enable_online_ddl                                    Enable online DDL. (default true)
       --redact-debug-ui-queries                                          redact full queries and bind variables from debug UI
-      --relay_log_max_items int                                          Maximum number of rows for vreplication target buffering. (default 5000)
-      --relay_log_max_size int                                           Maximum buffer size (in bytes) for vreplication target buffering. If single rows are larger than this, a single row is buffered at a time. (default 250000)
+      --relay_log_max_items int                                          Maximum number of rows for VReplication target buffering. (default 5000)
+      --relay_log_max_size int                                           Maximum buffer size (in bytes) for VReplication target buffering. If single rows are larger than this, a single row is buffered at a time. (default 250000)
       --remote_operation_timeout duration                                time to wait for a remote operation (default 15s)
       --replication_connect_retry duration                               how long to wait in between replica reconnect attempts. Only precise to the second. (default 10s)
-      --restore-from-backup-allowed-engines strings                      (init restore parameter) if set, only backups taken with the specified engines are eligible to be restored
       --restore-to-pos string                                            (init incremental restore parameter) if set, run a point in time recovery that ends with the given position. This will attempt to use one full backup followed by zero or more incremental backups
       --restore-to-timestamp string                                      (init incremental restore parameter) if set, run a point in time recovery that restores up to the given timestamp, if possible. Given timestamp in RFC3339 format. Example: '2006-01-02T15:04:05Z07:00'
       --restore_concurrency int                                          (init restore parameter) how many concurrent files to restore at once (default 4)
@@ -366,7 +367,7 @@ Flags:
       --topo_global_root string                                          the path of the global topology data in the global topology server
       --topo_global_server_address string                                the address of the global topology server
       --topo_implementation string                                       the topology implementation to use
-      --topo_read_concurrency int                                        Maximum concurrency of topo reads per global or local cell. (default 32)
+      --topo_read_concurrency int                                        Concurrency of topo reads. (default 32)
       --topo_zk_auth_file string                                         auth to use when connecting to the zk topo server, file contents should be <scheme>:<auth>, e.g., digest:user:pass
       --topo_zk_base_timeout duration                                    zk base timeout (see zk.Connect) (default 30s)
       --topo_zk_max_concurrency int                                      maximum number of pending requests to send to a Zookeeper server. (default 64)
@@ -387,7 +388,8 @@ Flags:
       --transaction_limit_per_user float                                 Maximum number of transactions a single user is allowed to use at any time, represented as fraction of -transaction_cap. (default 0.4)
       --transaction_mode string                                          SINGLE: disallow multi-db transactions, MULTI: allow multi-db transactions with best effort commit, TWOPC: allow multi-db transactions with 2pc commit (default "MULTI")
       --truncate-error-len int                                           truncate errors sent to client if they are longer than this value (0 means do not truncate)
-      --twopc_abandon_age time.Duration                                  Any unresolved transaction older than this time will be sent to the coordinator to be resolved. NOTE: Providing time as seconds (float64) is deprecated. Use time.Duration format (e.g., '1s', '2m', '1h'). (default 15m0s)
+      --twopc_abandon_age float                                          time in seconds. Any unresolved transaction older than this time will be sent to the coordinator to be resolved.
+      --twopc_enable                                                     if the flag is on, 2pc is enabled. Other 2pc flags must be supplied.
       --tx-throttler-config string                                       Synonym to -tx_throttler_config (default "target_replication_lag_sec:2 max_replication_lag_sec:10 initial_rate:100 max_increase:1 emergency_decrease:0.5 min_duration_between_increases_sec:40 max_duration_between_increases_sec:62 min_duration_between_decreases_sec:20 spread_backlog_across_sec:20 age_bad_rate_after_sec:180 bad_rate_increase:0.1 max_rate_approach_threshold:0.9")
       --tx-throttler-default-priority int                                Default priority assigned to queries that lack priority information (default 100)
       --tx-throttler-dry-run                                             If present, the transaction throttler only records metrics about requests received and throttled, but does not actually throttle any requests.
@@ -405,7 +407,7 @@ Flags:
       --vreplication_copy_phase_duration duration                        Duration for each copy phase loop (before running the next catchup: default 1h) (default 1h0m0s)
       --vreplication_copy_phase_max_innodb_history_list_length int       The maximum InnoDB transaction history that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet. (default 1000000)
       --vreplication_copy_phase_max_mysql_replication_lag int            The maximum MySQL replication lag (in seconds) that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet. (default 43200)
-      --vreplication_experimental_flags int                              (Bitmask) of experimental features in vreplication to enable (default 7)
+      --vreplication_experimental_flags int                              (Bitmask) of experimental features in vreplication to enable (default 3)
       --vreplication_heartbeat_update_interval int                       Frequency (in seconds, default 1, max 60) at which the time_updated column of a vreplication stream when idling (default 1)
       --vreplication_max_time_to_retry_on_error duration                 stop automatically retrying when we've had consecutive failures with the same error for this long after the first occurrence
       --vreplication_net_read_timeout int                                Session value of net_read_timeout for vreplication, in seconds (default 300)

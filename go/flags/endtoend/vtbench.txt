@@ -51,6 +51,7 @@ Flags:
       --count int                                                   Number of queries per thread (default 1000)
       --db string                                                   Database name to use when connecting / running the queries (e.g. @replica, keyspace, keyspace/shard etc)
       --deadline duration                                           Maximum duration for the test run (default 5 minutes) (default 5m0s)
+      --grpc-dial-concurrency-limit int                             Maximum concurrency of grpc dial operations. This should be less than the golang max thread limit of 10000. (default 1024)
       --grpc_auth_static_client_creds string                        When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.
       --grpc_compression string                                     Which protocol to use for compressing gRPC. Default: nothing. Supported: snappy
       --grpc_enable_tracing                                         Enable gRPC tracing.
