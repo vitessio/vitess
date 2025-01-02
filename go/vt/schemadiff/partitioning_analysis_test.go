@@ -431,6 +431,21 @@ func TestAnalyzeTemporalRangePartitioning(t *testing.T) {
 		},
 		{
 			name:      "unsupported function expression",
+			create:    "CREATE TABLE t (id int, created_at DATETIME, PRIMARY KEY(id, created_at)) PARTITION BY RANGE (YEARWEEK(created_at)) (PARTITION p0 VALUES LESS THAN (YEARWEEK('2024-12-19 09:56:32')))",
+			expectErr: fmt.Errorf("expression: YEARWEEK(`created_at`) is unsupported in temporal range partitioning analysis in table t"),
+		},
+		{
+			name:      "unsupported function expression",
+			create:    "CREATE TABLE t (id int, created_at DATETIME, PRIMARY KEY(id, created_at)) PARTITION BY RANGE (YEARWEEK(created_at, 0)) (PARTITION p0 VALUES LESS THAN (YEARWEEK('2024-12-19 09:56:32')))",
+			expectErr: fmt.Errorf("expression: YEARWEEK(`created_at`, 0) is unsupported in temporal range partitioning analysis in table t"),
+		},
+		{
+			name:      "unsupported function expression",
+			create:    "CREATE TABLE t (id int, created_at DATETIME, PRIMARY KEY(id, created_at)) PARTITION BY RANGE (YEARWEEK(created_at, 7)) (PARTITION p0 VALUES LESS THAN (YEARWEEK('2024-12-19 09:56:32')))",
+			expectErr: fmt.Errorf("expression: YEARWEEK(`created_at`, 7) is unsupported in temporal range partitioning analysis in table t"),
+		},
+		{
+			name:      "unsupported function expression",
 			create:    "CREATE TABLE t (id int, created_at DATETIME, PRIMARY KEY(id, created_at)) PARTITION BY RANGE (ABS(created_at)) (PARTITION p0 VALUES LESS THAN (TO_DAYS('2024-12-19 09:56:32')))",
 			expectErr: fmt.Errorf("expression: ABS(`created_at`) is unsupported in temporal range partitioning analysis in table t"),
 		},

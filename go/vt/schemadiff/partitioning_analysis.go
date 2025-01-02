@@ -98,6 +98,41 @@ type TemporalRangePartitioningAnalysis struct {
 	Error                      error                          // If there was an error during analysis
 }
 
+// supportedPartitioningScheme checks whether the given expression is supported for temporal range partitioning.
+// schemadiff only supports a subset of range partitioning expressions.
+func supportedPartitioningScheme(expr sqlparser.Expr, createTableEntity *CreateTableEntity, colName sqlparser.IdentifierCI, is84 bool) (matchFound bool, hasFunction bool, err error) {
+	supportedVariations := []string{
+		"create table %s (id int) PARTITION BY RANGE (%s)",
+		"create table %s (id int) PARTITION BY RANGE (to_seconds(%s))",
+		"create table %s (id int) PARTITION BY RANGE (to_days(%s))",
+		// "create table %s (id int) PARTITION BY RANGE (yearweek(%s))",
+		// "create table %s (id int) PARTITION BY RANGE (yearweek(%s, 0))",
+		// "create table %s (id int) PARTITION BY RANGE (yearweek(%s, 1))",
+		"create table %s (id int) PARTITION BY RANGE (year(%s))",
+	}
+	if is84 {
+		supportedVariations = append(supportedVariations, "create table %s (id int) PARTITION BY RANGE (unix_timestamp(%s))")
+	}
+	supportedVariationsEntities := []*CreateTableEntity{}
+	for _, supportedVariation := range supportedVariations {
+		query := fmt.Sprintf(supportedVariation,
+			sqlparser.CanonicalString(createTableEntity.CreateTable.GetTable().Name),
+			sqlparser.CanonicalString(colName),
+		)
+		cte, err := NewCreateTableEntityFromSQL(createTableEntity.Env, query)
+		if err != nil {
+			return false, false, err
+		}
+		supportedVariationsEntities = append(supportedVariationsEntities, cte)
+	}
+	for i, cte := range supportedVariationsEntities {
+		if sqlparser.Equals.Expr(expr, cte.CreateTable.TableSpec.PartitionOption.Expr) {
+			return true, i > 0, nil
+		}
+	}
+	return false, false, nil
+}
+
 // AnalyzeTemporalRangePartitioning analyzes a table for temporal range partitioning.
 func AnalyzeTemporalRangePartitioning(createTableEntity *CreateTableEntity) (*TemporalRangePartitioningAnalysis, error) {
 	analysis := &TemporalRangePartitioningAnalysis{}
@@ -151,60 +186,36 @@ func AnalyzeTemporalRangePartitioning(createTableEntity *CreateTableEntity) (*Te
 			}
 			return true, nil
 		}, expr)
-		supportedVariations := []string{
-			"create table %s (id int) PARTITION BY RANGE (%s)",
-			"create table %s (id int) PARTITION BY RANGE (to_seconds(%s))",
-			"create table %s (id int) PARTITION BY RANGE (to_days(%s))",
-			"create table %s (id int) PARTITION BY RANGE (year(%s))",
-		}
-		if is84 {
-			supportedVariations = append(supportedVariations, "create table %s (id int) PARTITION BY RANGE (unix_timestamp(%s))")
-		}
-		supportedVariationsEntities := []*CreateTableEntity{}
-		for _, supportedVariation := range supportedVariations {
-			query := fmt.Sprintf(supportedVariation,
-				sqlparser.CanonicalString(createTableEntity.CreateTable.GetTable().Name),
-				sqlparser.CanonicalString(col.ColumnDefinition.Name),
-			)
-			cte, err := NewCreateTableEntityFromSQL(createTableEntity.Env, query)
-			if err != nil {
-				return nil, err
-			}
-			supportedVariationsEntities = append(supportedVariationsEntities, cte)
-		}
-		matchFound := false
-		for i, cte := range supportedVariationsEntities {
-			if !sqlparser.Equals.Expr(expr, cte.CreateTable.TableSpec.PartitionOption.Expr) {
-				continue
-			}
-			matchFound = true
-			if i == 0 {
-				// First variation: no function, just the column
-				if col.IsIntegralType() {
-					return withReason("column %s of type %s in table %s is not a temporal type for temporal range partitioning", col.Name(), col.Type(), createTableEntity.Name())
-				}
-				return nil, fmt.Errorf("column type %s is unsupported in column %s in table %s indicated by RANGE expression", col.Type(), col.Name(), createTableEntity.Name())
-			}
-			// Has a function expression.
-			// function must operate on a TIME, DATE, DATETIME column type. See https://dev.mysql.com/doc/refman/8.0/en/partitioning-range.html
-			// And we only support DATE, DATETIME (because range rotation over a TIME column is not meaningful).
-			// In MySQL 8.4 it is also possible to use a TIMESTAMP column specifically with UNIX_TIMESTAMP() function.
-			// See https://dev.mysql.com/doc/refman/8.4/en/partitioning-range.html
-			switch strings.ToLower(col.Type()) {
-			case "date", "datetime":
-				// OK
-			case "timestamp":
-				if is84 && analysis.FuncExpr != nil && analysis.FuncExpr.Name.Lowered() == "unix_timestamp" {
-					analysis.MinimalInterval = datetime.IntervalSecond
-				} else {
-					return nil, fmt.Errorf("column type %s is unsupported in temporal range partitioning analysis for column %s in table %s", col.Type(), col.Name(), createTableEntity.Name())
-				}
-			default:
-				return nil, fmt.Errorf("column type %s is unsupported in temporal range partitioning analysis for column %s in table %s", col.Type(), col.Name(), createTableEntity.Name())
-			}
+		matchFound, hasFunction, err := supportedPartitioningScheme(expr, createTableEntity, col.ColumnDefinition.Name, is84)
+		if err != nil {
+			return nil, err
 		}
 		if !matchFound {
 			return nil, fmt.Errorf("expression: %v is unsupported in temporal range partitioning analysis in table %s", sqlparser.CanonicalString(partitionOption.Expr), createTableEntity.Name())
+		}
+		if !hasFunction {
+			// First variation: no function, just the column
+			if col.IsIntegralType() {
+				return withReason("column %s of type %s in table %s is not a temporal type for temporal range partitioning", col.Name(), col.Type(), createTableEntity.Name())
+			}
+			return nil, fmt.Errorf("column type %s is unsupported in column %s in table %s indicated by RANGE expression", col.Type(), col.Name(), createTableEntity.Name())
+		}
+		// Has a function expression.
+		// function must operate on a TIME, DATE, DATETIME column type. See https://dev.mysql.com/doc/refman/8.0/en/partitioning-range.html
+		// And we only support DATE, DATETIME (because range rotation over a TIME column is not meaningful).
+		// In MySQL 8.4 it is also possible to use a TIMESTAMP column specifically with UNIX_TIMESTAMP() function.
+		// See https://dev.mysql.com/doc/refman/8.4/en/partitioning-range.html
+		switch strings.ToLower(col.Type()) {
+		case "date", "datetime":
+			// OK
+		case "timestamp":
+			if is84 && analysis.FuncExpr != nil && analysis.FuncExpr.Name.Lowered() == "unix_timestamp" {
+				analysis.MinimalInterval = datetime.IntervalSecond
+			} else {
+				return nil, fmt.Errorf("column type %s is unsupported in temporal range partitioning analysis for column %s in table %s", col.Type(), col.Name(), createTableEntity.Name())
+			}
+		default:
+			return nil, fmt.Errorf("column type %s is unsupported in temporal range partitioning analysis for column %s in table %s", col.Type(), col.Name(), createTableEntity.Name())
 		}
 	case 1:
 		// PARTITION BY RANGE COLUMNS (single_column). For temporal range rotation, we only
