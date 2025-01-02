@@ -735,7 +735,7 @@ func (vc *VitessCluster) DeleteShard(t testing.TB, cellName string, ksName strin
 	}
 	log.Infof("Deleting Shard %s", shardName)
 	// TODO how can we avoid the use of even_if_serving?
-	if output, err := vc.VtctldClient.ExecuteCommandWithOutput("DeleteShard", "--", "--recursive", "--even-if-serving", ksName+"/"+shardName); err != nil {
+	if output, err := vc.VtctldClient.ExecuteCommandWithOutput("DeleteShard", "--recursive", "--even-if-serving", ksName+"/"+shardName); err != nil {
 		t.Fatalf("DeleteShard command failed with error %+v and output %s\n", err, output)
 	}
 
