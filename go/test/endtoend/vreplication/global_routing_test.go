@@ -219,7 +219,6 @@ func (h *grHelpers) rebuildGraphs(t *testing.T, keyspaces []string) {
 	require.NoError(t, err)
 	err = vc.VtctldClient.ExecuteCommand("RebuildVSchemaGraph")
 	require.NoError(t, err)
-
 }
 
 func TestGlobalRouting(t *testing.T) {
