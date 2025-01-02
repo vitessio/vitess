@@ -20,4 +20,5 @@ package main
 
 import (
 	_ "vitess.io/vitess/go/vt/vttablet/grpctmclient"
+	_ "vitess.io/vitess/go/vt/vttablet/tmclient"
 )

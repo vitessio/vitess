@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vtctl/localvtctldclient"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
 )
@@ -67,15 +68,18 @@ func TestRootWithInternalVtctld(t *testing.T) {
 	cell := "zone1"
 	ts, factory := memorytopo.NewServerAndFactory(ctx, cell)
 	topo.RegisterFactory("test", factory)
+	origProtocol := command.VtctldClientProtocol
 	command.VtctldClientProtocol = "local"
+	tmclient.RegisterTabletManagerClientFactory("grpc", func() tmclient.TabletManagerClient {
+		return nil
+	})
 	baseArgs := []string{"vtctldclient", "--server", "internal", "--topo-implementation", "test"}
 
 	args := append([]string{}, os.Args...)
-	protocol := command.VtctldClientProtocol
 	t.Cleanup(func() {
 		ts.Close()
 		os.Args = append([]string{}, args...)
-		command.VtctldClientProtocol = protocol
+		command.VtctldClientProtocol = origProtocol
 	})
 
 	testCases := []struct {
