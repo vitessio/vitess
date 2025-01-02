@@ -396,7 +396,7 @@ func (vc *VitessCluster) setupVtctld() {
 }
 
 func (vc *VitessCluster) setupVtctldClient() {
-	vc.VtctldClient = cluster.VtctldClientProcessInstance(vc.Vtctld.GrpcPort, mainClusterConfig.topoPort, vc.ClusterConfig.hostname, vc.ClusterConfig.tmpDir)
+	vc.VtctldClient = cluster.VtctldClientProcessInstance(vc.ClusterConfig.vtctldGrpcPort, vc.ClusterConfig.topoPort, vc.ClusterConfig.hostname, vc.ClusterConfig.tmpDir)
 	require.NotNil(vc.t, vc.VtctldClient)
 	for _, cellName := range vc.CellNames {
 		vc.VtctldClient.AddCellInfo(cellName)

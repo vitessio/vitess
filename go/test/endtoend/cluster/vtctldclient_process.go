@@ -99,7 +99,7 @@ func (vtctldclient *VtctldClientProcess) ExecuteCommandWithOutput(args ...string
 	for i := range retries {
 		tmpProcess := exec.Command(
 			vtctldclient.Binary,
-			filterDoubleDashArgs(pArgs, vtctldclient.VtctldClientMajorVersion)...,
+			pArgs...,
 		)
 		msg := binlogplayer.LimitString(strings.Join(tmpProcess.Args, " "), 256) // limit log line length
 		if !vtctldclient.Quiet {
