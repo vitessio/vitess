@@ -47,11 +47,7 @@ type grTestExpectations struct {
 	postKsU1, postKsU2, postKsS1 func(t *testing.T)
 }
 
-type grTestCase struct {
-	markAsGlobal        bool
-	unshardedHasVSchema bool
-}
-
+// Scope helpers to this test file so we don't pollute the global namespace.
 type grHelpers struct {
 	t *testing.T
 }
@@ -162,24 +158,9 @@ func (h *grHelpers) isAmbiguous(t *testing.T, tables []string) bool {
 	return asExpected
 }
 
-func (h *grHelpers) getExpectations() *map[grTestCase]*grTestExpectations {
-	var exp = make(map[grTestCase]*grTestExpectations)
-	exp[grTestCase{unshardedHasVSchema: false, markAsGlobal: false}] = &grTestExpectations{
-		postKsU1: func(t *testing.T) {
-			require.True(t, h.isGlobal(t, []string{"t1", "t2", "t3"}, grTestConfig.ksU1))
-		},
-		postKsU2: func(t *testing.T) {
-			require.True(t, h.isNotGlobal(t, []string{"t1", "t2", "t3"}))
-			require.True(t, h.isNotGlobal(t, []string{"t4", "t5"}))
-		},
-		postKsS1: func(t *testing.T) {
-			require.True(t, h.isGlobal(t, []string{"t2", "t4"}, grTestConfig.ksS1))
-			require.True(t, h.isNotGlobal(t, []string{"t1", "t3"}))
-			require.True(t, h.isNotGlobal(t, []string{"t5"}))
-			require.True(t, h.isGlobal(t, []string{"t6"}, grTestConfig.ksS1))
-		},
-	}
-	exp[grTestCase{unshardedHasVSchema: false, markAsGlobal: true}] = &grTestExpectations{
+func (h *grHelpers) getExpectations() *map[bool]*grTestExpectations {
+	var exp = make(map[bool]*grTestExpectations)
+	exp[false] = &grTestExpectations{
 		postKsU1: func(t *testing.T) {
 			require.True(t, h.isGlobal(t, []string{"t1", "t2", "t3"}, grTestConfig.ksU1))
 		},
@@ -195,7 +176,7 @@ func (h *grHelpers) getExpectations() *map[grTestCase]*grTestExpectations {
 			require.True(t, h.isGlobal(t, []string{"t6"}, grTestConfig.ksS1))
 		},
 	}
-	exp[grTestCase{unshardedHasVSchema: true, markAsGlobal: false}] = &grTestExpectations{
+	exp[true] = &grTestExpectations{
 		postKsU1: func(t *testing.T) {
 			require.True(t, h.isGlobal(t, []string{"t1", "t2", "t3"}, grTestConfig.ksU1))
 		},
@@ -210,8 +191,6 @@ func (h *grHelpers) getExpectations() *map[grTestCase]*grTestExpectations {
 			require.True(t, h.isGlobal(t, []string{"t5"}, grTestConfig.ksU2))
 		},
 	}
-	exp[grTestCase{unshardedHasVSchema: true, markAsGlobal: true}] =
-		exp[grTestCase{unshardedHasVSchema: true, markAsGlobal: false}]
 	return &exp
 
 }
@@ -246,17 +225,16 @@ func (h *grHelpers) rebuildGraphs(t *testing.T, keyspaces []string) {
 func TestGlobalRouting(t *testing.T) {
 	h := grHelpers{t}
 	exp := *h.getExpectations()
-	for tc, funcs := range exp {
+	for unshardedHasVSchema, funcs := range exp {
 		require.NotNil(t, funcs)
-		testGlobalRouting(t, tc.markAsGlobal, tc.unshardedHasVSchema, funcs)
+		testGlobalRouting(t, unshardedHasVSchema, funcs)
 	}
 }
 
-func testGlobalRouting(t *testing.T, markAsGlobal, unshardedHasVSchema bool, funcs *grTestExpectations) {
+func testGlobalRouting(t *testing.T, unshardedHasVSchema bool, funcs *grTestExpectations) {
 	h := grHelpers{t: t}
 	setSidecarDBName("_vt")
 	vttablet.InitVReplicationConfigDefaults()
-	extraVTGateArgs = append(extraVTGateArgs, fmt.Sprintf("--mark_unique_unsharded_tables_as_global=%t", markAsGlobal))
 
 	vc = NewVitessCluster(t, nil)
 	defer vc.TearDown()

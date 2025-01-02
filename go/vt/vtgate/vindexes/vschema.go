@@ -25,10 +25,9 @@ import (
 	"strings"
 	"time"
 
-	"vitess.io/vitess/go/ptr"
-
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -494,7 +493,14 @@ func AddAdditionalGlobalTables(source *vschemapb.SrvVSchema, vschema *VSchema) {
 			if _, found := vschema.globalTables[tname]; !found {
 				_, ok := newTables[tname]
 				if !ok {
-					table.Keyspace = ksvschema.Keyspace
+					ks2 := ksvschema.Keyspace
+					if ks2 == nil {
+						ks2 = &Keyspace{Name: ksname}
+					}
+					if ks2.Name == "" {
+						ks2.Name = ksname
+					}
+					table.Keyspace = ks2
 					newTables[tname] = &tableInfo{table: table, cnt: 0}
 				}
 				newTables[tname].cnt++
