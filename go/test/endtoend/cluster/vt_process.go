@@ -34,7 +34,7 @@ type VtProcess struct {
 
 // VtProcessInstance returns a VtProcess handle configured with the given Config.
 // The process must be manually started by calling setup()
-func VtProcessInstance(name, binary string, topoPort int, hostname string) *VtProcess {
+func VtProcessInstance(name, binary string, topoPort int, hostname string) VtProcess {
 	// Default values for etcd2 topo server.
 	topoImplementation := "etcd2"
 	topoRootPath := "/"
@@ -49,7 +49,7 @@ func VtProcessInstance(name, binary string, topoPort int, hostname string) *VtPr
 		topoRootPath = ""
 	}
 
-	vt := &VtProcess{
+	vt := VtProcess{
 		Name:               name,
 		Binary:             binary,
 		TopoImplementation: topoImplementation,

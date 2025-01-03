@@ -168,7 +168,7 @@ func (vtctld *VtctldProcess) TearDown() error {
 func VtctldProcessInstance(httpPort int, grpcPort int, topoPort int, hostname string, tmpDirectory string) *VtctldProcess {
 	base := VtProcessInstance("vtctld", "vtctld", topoPort, hostname)
 	vtctld := &VtctldProcess{
-		VtProcess:                   *base,
+		VtProcess:                   base,
 		ServiceMap:                  "grpc-vtctl,grpc-vtctld",
 		BackupStorageImplementation: "file",
 		FileBackupStorageRoot:       path.Join(os.Getenv("VTDATAROOT"), "/backups"),

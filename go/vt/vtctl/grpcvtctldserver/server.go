@@ -886,9 +886,10 @@ func (s *VtctldServer) CopySchemaShard(ctx context.Context, req *vtctldatapb.Cop
 		return nil, err
 	}
 
-	return &vtctldatapb.CopySchemaShardResponse{}, s.ws.CopySchemaShard(ctx,
-		req.SourceTabletAlias, req.Tables, req.ExcludeTables, req.IncludeViews, req.DestinationKeyspace, req.DestinationShard,
-		waitReplicasTimeout, req.SkipVerify)
+	err = s.ws.CopySchemaShard(ctx, req.SourceTabletAlias, req.Tables, req.ExcludeTables, req.IncludeViews,
+		req.DestinationKeyspace, req.DestinationShard, waitReplicasTimeout, req.SkipVerify)
+
+	return &vtctldatapb.CopySchemaShardResponse{}, err
 }
 
 // CreateKeyspace is part of the vtctlservicepb.VtctldServer interface.
@@ -4736,7 +4737,7 @@ func (s *VtctldServer) ValidatePermissionsKeyspace(ctx context.Context, req *vtc
 	}
 
 	if len(shards) == 0 {
-		return nil, fmt.Errorf("no shards in keyspace %v", req.Keyspace)
+		return nil, fmt.Errorf("no shards found in keyspace %s", req.Keyspace)
 	}
 	sort.Strings(shards)
 
@@ -4758,7 +4759,7 @@ func (s *VtctldServer) ValidatePermissionsKeyspace(ctx context.Context, req *vtc
 	}
 	referencePermissions := pres.Permissions
 
-	// Then diff the first tablet with all others.
+	// Then diff the first/reference tablet with all the others.
 	eg, egctx := errgroup.WithContext(ctx)
 	for _, shard := range shards {
 		eg.Go(func() error {
@@ -4770,7 +4771,7 @@ func (s *VtctldServer) ValidatePermissionsKeyspace(ctx context.Context, req *vtc
 				if topoproto.TabletAliasEqual(alias, si.PrimaryAlias) {
 					continue
 				}
-				log.Infof("Gathering permissions for %v", topoproto.TabletAliasString(alias))
+				log.Infof("Gathering permissions for %s", topoproto.TabletAliasString(alias))
 				presp, err := s.GetPermissions(ctx, &vtctldatapb.GetPermissionsRequest{
 					TabletAlias: alias,
 				})
@@ -4778,7 +4779,8 @@ func (s *VtctldServer) ValidatePermissionsKeyspace(ctx context.Context, req *vtc
 					return err
 				}
 
-				log.Infof("Diffing permissions for %s", topoproto.TabletAliasString(alias))
+				log.Infof("Diffing permissions between %s and %s", topoproto.TabletAliasString(referenceAlias),
+					topoproto.TabletAliasString(alias))
 				er := &concurrency.AllErrorRecorder{}
 				tmutils.DiffPermissions(topoproto.TabletAliasString(referenceAlias), referencePermissions,
 					topoproto.TabletAliasString(alias), presp.Permissions, er)
@@ -4792,11 +4794,13 @@ func (s *VtctldServer) ValidatePermissionsKeyspace(ctx context.Context, req *vtc
 	if err := eg.Wait(); err != nil {
 		return nil, fmt.Errorf("permissions diffs: %v", err)
 	}
+
 	return &vtctldatapb.ValidatePermissionsKeyspaceResponse{}, nil
 }
 
 // ValidateSchemaKeyspace is a part of the vtctlservicepb.VtctldServer interface.
-// It will diff the schema from all the tablets in the keyspace.
+// It will diff the schema between the tablets in all shards -- or a subset if
+// any specific shards are specified -- within the keyspace.
 func (s *VtctldServer) ValidateSchemaKeyspace(ctx context.Context, req *vtctldatapb.ValidateSchemaKeyspaceRequest) (resp *vtctldatapb.ValidateSchemaKeyspaceResponse, err error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.ValidateSchemaKeyspace")
 	defer span.Finish()
@@ -4819,7 +4823,7 @@ func (s *VtctldServer) ValidateSchemaKeyspace(ctx context.Context, req *vtctldat
 		// Otherwise we look at all the shards in the keyspace.
 		shards, err = s.ts.GetShardNames(ctx, keyspace)
 		if err != nil {
-			resp.Results = append(resp.Results, fmt.Sprintf("TopologyServer.GetShardNames(%v) failed: %v", req.Keyspace, err))
+			resp.Results = append(resp.Results, fmt.Sprintf("TopologyServer.GetShardNames(%s) failed: %v", req.Keyspace, err))
 			err = nil
 			return resp, err
 		}

@@ -132,7 +132,7 @@ func VtbackupProcessInstance(tabletUID int, mysqlPort int, newInitDBFile string,
 	cell string, hostname string, tmpDirectory string, topoPort int, initialBackup bool) *VtbackupProcess {
 	base := VtProcessInstance("vtbackup", "vtbackup", topoPort, hostname)
 	vtbackup := &VtbackupProcess{
-		VtProcess:                   *base,
+		VtProcess:                   base,
 		LogDir:                      tmpDirectory,
 		Directory:                   os.Getenv("VTDATAROOT"),
 		BackupStorageImplementation: "file",

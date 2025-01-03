@@ -55,7 +55,7 @@ func VtctldClientProcessInstance(grpcPort int, topoPort int, hostname string, tm
 
 	base := VtProcessInstance("vtctldclient", "vtctldclient", topoPort, hostname)
 	vtctldclient := &VtctldClientProcess{
-		VtProcess:                *base,
+		VtProcess:                base,
 		Server:                   fmt.Sprintf("%s:%d", hostname, grpcPort),
 		TempDirectory:            tmpDirectory,
 		VtctldClientMajorVersion: version,
@@ -116,6 +116,8 @@ func (vtctldclient *VtctldClientProcess) ExecuteCommandWithOutput(args ...string
 }
 
 // AddCellInfo executes the vtctldclient command to add cell info.
+// It uses --server=internal as there may not yet be a vtctld running
+// as we need to create a cell for vtctld to use first.
 func (vtctldclient *VtctldClientProcess) AddCellInfo(Cell string) error {
 	args := []string{
 		"--server", "internal",
@@ -340,8 +342,9 @@ func (vtctldclient *VtctldClientProcess) OnlineDDLShow(keyspace, workflow string
 	)
 }
 
-// shouldRetry tells us if the command should be retried based on the results/output -- meaning that it
-// is likely an ephemeral or recoverable issue that is likely to succeed when retried.
+// shouldRetry tells us if the command should be retried based on the results/output
+// -- meaning that it is likely an ephemeral or recoverable issue that is likely to
+// succeed when retried.
 func shouldRetry(cmdResults string) bool {
 	return strings.Contains(cmdResults, "Deadlock found when trying to get lock; try restarting transaction")
 }

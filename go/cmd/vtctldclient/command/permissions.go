@@ -36,16 +36,20 @@ var (
 		Args:                  cobra.ExactArgs(1),
 		RunE:                  commandGetPermissions,
 	}
+	// ValidatePermissionsShard makes a ValidatePermissionsKeyspace gRPC call to a
+	// vtctld with the specified shard to examine in the keyspace.
 	ValidatePermissionsShard = &cobra.Command{
 		Use:                   "ValidatePermissionsShard <keyspace/shard>",
-		Short:                 "Validates that the permissions on primary match all the replicas.",
+		Short:                 "Validates that the permissions on the primary match all of the replicas.",
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(1),
 		RunE:                  commandValidatePermissionsShard,
 	}
+	// ValidatePermissionsKeyspace makes a ValidatePermissionsKeyspace gRPC call to a
+	// vtctld.
 	ValidatePermissionsKeyspace = &cobra.Command{
 		Use:                   "ValidatePermissionsKeyspace <keyspace name>",
-		Short:                 "Validates that the permissions on primary of the first shard match those of all of the other tablets in the keyspace.",
+		Short:                 "Validates that the permissions on the primary of the first shard match those of all of the other tablets in the keyspace.",
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(1),
 		RunE:                  commandValidatePermissionsKeyspace,

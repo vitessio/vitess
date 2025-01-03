@@ -166,7 +166,7 @@ func (vc *VitessCluster) StartVTOrc() error {
 	}
 	base := cluster.VtProcessInstance("vtorc", "vtorc", vc.ClusterConfig.topoPort, vc.ClusterConfig.hostname)
 	vtorcProcess := &cluster.VTOrcProcess{
-		VtProcess: *base,
+		VtProcess: base,
 		LogDir:    vc.ClusterConfig.tmpDir,
 		Config:    cluster.VTOrcConfiguration{},
 		Port:      vc.ClusterConfig.vtorcPort,

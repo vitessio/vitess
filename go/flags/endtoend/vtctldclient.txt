@@ -105,8 +105,8 @@ Available Commands:
   VDiff                       Perform commands related to diffing tables involved in a VReplication workflow between the source and target.
   Validate                    Validates that all nodes reachable from the global replication graph, as well as all tablets in discoverable cells, are consistent.
   ValidateKeyspace            Validates that all nodes reachable from the specified keyspace are consistent.
-  ValidatePermissionsKeyspace Validates that the permissions on primary of the first shard match those of all of the other tablets in the keyspace.
-  ValidatePermissionsShard    Validates that the permissions on primary match all the replicas.
+  ValidatePermissionsKeyspace Validates that the permissions on the primary of the first shard match those of all of the other tablets in the keyspace.
+  ValidatePermissionsShard    Validates that the permissions on the primary match all of the replicas.
   ValidateSchemaKeyspace      Validates that the schema on the primary tablet for the first shard matches the schema on all other tablets in the keyspace.
   ValidateSchemaShard         Validates that the schema on the primary tablet for the specified shard matches the schema on all other tablets in that shard.
   ValidateShard               Validates that all nodes reachable from the specified shard are consistent.

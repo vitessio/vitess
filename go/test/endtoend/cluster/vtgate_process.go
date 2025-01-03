@@ -370,7 +370,7 @@ func VtgateProcessInstance(
 ) *VtgateProcess {
 	base := VtProcessInstance("vtgate", "vtgate", topoPort, hostname)
 	vtgate := &VtgateProcess{
-		VtProcess:             *base,
+		VtProcess:             base,
 		FileToLogQueries:      path.Join(tmpDirectory, "/vtgate_querylog.txt"),
 		ConfigFile:            path.Join(tmpDirectory, fmt.Sprintf("vtgate-config-%d.json", port)),
 		Directory:             os.Getenv("VTDATAROOT"),

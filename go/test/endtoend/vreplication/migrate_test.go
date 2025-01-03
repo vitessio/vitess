@@ -41,12 +41,14 @@ func insertInitialDataIntoExternalCluster(t *testing.T, conn *mysql.Conn) {
 	})
 }
 
-// TestMigrateUnsharded runs an e2e test for importing from an external cluster using the vtctldclient Mount and Migrate commands.
-// We have an anti-pattern in Vitess: vt executables look for an environment variable VTDATAROOT for certain cluster parameters
-// like the log directory when they are created. Until this test we just needed a single cluster for e2e tests.
-// However now we need to create an external Vitess cluster. For this we need a different VTDATAROOT and
-// hence the VTDATAROOT env variable gets overwritten.
-// Each time we need to create vt processes in the "other" cluster we need to set the appropriate VTDATAROOT
+// TestMigrateUnsharded runs an e2e test for importing from an external cluster using the
+// vtctldclient Mount and Migrate commands.We have an anti-pattern in Vitess: vt executables
+// look for an environment variable VTDATAROOT for certain cluster parameters like the log
+// directory when they are created. Until this test we just needed a single cluster for e2e
+// tests. However now we need to create an external Vitess cluster. For this we need a
+// different VTDATAROOT and hence the VTDATAROOT env variable gets overwritten. Each time
+// we need to create vt processes in the "other" cluster we need to set the appropriate
+// VTDATAROOT.
 func TestMigrateUnsharded(t *testing.T) {
 	vc = NewVitessCluster(t, nil)
 	defer vc.TearDown()
@@ -188,9 +190,9 @@ func TestMigrateUnsharded(t *testing.T) {
 	})
 }
 
-// TestMigrateSharded adds a test for a sharded cluster to validate a fix for a bug where the target keyspace name
-// doesn't match that of the source cluster. The test migrates from a cluster with keyspace customer to an "external"
-// cluster with keyspace rating.
+// TestMigrateSharded adds a test for a sharded cluster to validate a fix for a bug where
+// the target keyspace name doesn't match that of the source cluster. The test migrates
+// from a cluster with keyspace customer to an "external" cluster with keyspace rating.
 func TestMigrateSharded(t *testing.T) {
 	setSidecarDBName("_vt")
 	currentWorkflowType = binlogdatapb.VReplicationWorkflowType_MoveTables

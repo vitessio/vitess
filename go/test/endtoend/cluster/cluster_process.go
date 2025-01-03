@@ -1292,25 +1292,25 @@ func (cluster *LocalProcessCluster) NewVttabletInstance(tabletType string, UID i
 func (cluster *LocalProcessCluster) NewVTOrcProcess(config VTOrcConfiguration) *VTOrcProcess {
 	base := VtProcessInstance("vtorc", "vtorc", cluster.TopoProcess.Port, cluster.Hostname)
 	return &VTOrcProcess{
-		VtProcess: *base,
+		VtProcess: base,
 		LogDir:    cluster.TmpDirectory,
 		Config:    config,
 		Port:      cluster.GetAndReservePort(),
 	}
 }
 
-// VtctldClientProcessInstance returns a VtctldProcess handle for vtctldclient process
-// configured with the given Config.
+// VtctldClientProcessInstance returns a VtctldProcess handle for a
+// vtctldclient process configured with the given Config.
 func (cluster *LocalProcessCluster) NewVtctldClientProcessInstance(hostname string, grpcPort int, tmpDirectory string) *VtctldClientProcess {
 	version, err := GetMajorVersion("vtctldclient")
 	if err != nil {
-		log.Warningf("failed to get major vtctldclient version; interop with CLI changes for VEP-4 may not work: %s", err)
+		log.Warningf("failed to get major vtctldclient version; interop with CLI changes for VEP-4 may not work: %v", err)
 	}
 
 	base := VtProcessInstance("vtctldclient", "vtctldclient", cluster.TopoProcess.Port, cluster.Hostname)
 
 	vtctldclient := &VtctldClientProcess{
-		VtProcess:                *base,
+		VtProcess:                base,
 		Server:                   fmt.Sprintf("%s:%d", hostname, grpcPort),
 		TempDirectory:            tmpDirectory,
 		VtctldClientMajorVersion: version,

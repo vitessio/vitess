@@ -116,7 +116,7 @@ func commandWriteTopologyPath(cmd *cobra.Command, args []string) error {
 	}
 	data, err := os.ReadFile(file)
 	if err != nil {
-		return fmt.Errorf("failed to read %s: %v", file, err)
+		return fmt.Errorf("failed to read file %s: %v", file, err)
 	}
 	_, err = conn.Update(cmd.Context(), path, data, nil)
 	if err != nil {

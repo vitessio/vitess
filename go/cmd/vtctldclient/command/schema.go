@@ -107,8 +107,8 @@ For --sql, semi-colons and repeated values may be mixed, for example:
 		Args:                  cobra.ExactArgs(1),
 		RunE:                  commandValidateSchemaKeyspace,
 	}
-	// ValidateSchemaShard makes a ValidateSchemaKeyspace gRPC call to a vtctld WITH
-	// 1 specific shard to examine in the keyspace.
+	// ValidateSchemaShard makes a ValidateSchemaKeyspace gRPC call to a vtctld with
+	// the specified shard to examine in the keyspace.
 	ValidateSchemaShard = &cobra.Command{
 		Use:                   "ValidateSchemaShard [--exclude-tables=<exclude_tables>] [--include-views] [--skip-no-primary] [--include-vschema] <keyspace/shard>",
 		Short:                 "Validates that the schema on the primary tablet for the specified shard matches the schema on all other tablets in that shard.",
@@ -190,12 +190,12 @@ var copySchemaShardOptions = struct {
 }{}
 
 func commandCopySchemaShard(cmd *cobra.Command, args []string) error {
-	cli.FinishedParsing(cmd)
-
 	destKeyspace, destShard, err := topoproto.ParseKeyspaceShard(cmd.Flags().Arg(1))
 	if err != nil {
 		return err
 	}
+
+	cli.FinishedParsing(cmd)
 
 	var sourceTabletAlias *topodatapb.TabletAlias
 	sourceKeyspace, sourceShard, err := topoproto.ParseKeyspaceShard(cmd.Flags().Arg(0))
@@ -377,9 +377,9 @@ var validateSchemaKeyspaceOptions = struct {
 func commandValidateSchemaKeyspace(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
-	ks := cmd.Flags().Arg(0)
+	keyspace := cmd.Flags().Arg(0)
 	resp, err := client.ValidateSchemaKeyspace(commandCtx, &vtctldatapb.ValidateSchemaKeyspaceRequest{
-		Keyspace:       ks,
+		Keyspace:       keyspace,
 		ExcludeTables:  validateSchemaKeyspaceOptions.ExcludeTables,
 		IncludeVschema: validateSchemaKeyspaceOptions.IncludeVSchema,
 		SkipNoPrimary:  validateSchemaKeyspaceOptions.SkipNoPrimary,

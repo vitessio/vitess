@@ -116,7 +116,7 @@ func (orc *VTOrcProcess) Setup() (err error) {
 	--config config/vtorc/default.json --alsologtostderr
 	*/
 	orc.proc = exec.Command(
-		"vtorc",
+		orc.Binary,
 		"--topo_implementation", orc.TopoImplementation,
 		"--topo_global_server_address", orc.TopoGlobalAddress,
 		"--topo_global_root", orc.TopoGlobalRoot,

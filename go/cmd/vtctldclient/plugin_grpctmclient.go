@@ -16,7 +16,11 @@ limitations under the License.
 
 package main
 
-// Imports and register the gRPC tabletmanager client
+// Imports and registers the gRPC tabletmanager client.
+// This is needed when --server=internal as the vtctldclient
+// binary will then not only need to talk to the topo server
+// directly but it will also need to talk to tablets directly
+// via tmclient.
 
 import (
 	_ "vitess.io/vitess/go/vt/vttablet/grpctmclient"

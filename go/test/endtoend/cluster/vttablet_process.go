@@ -717,7 +717,7 @@ func (vttablet *VttabletProcess) IsShutdown() bool {
 func VttabletProcessInstance(port, grpcPort, tabletUID int, cell, shard, keyspace string, vtctldPort int, tabletType string, topoPort int, hostname, tmpDirectory string, extraArgs []string, charset string) *VttabletProcess {
 	base := VtProcessInstance("vttablet", "vttablet", topoPort, hostname)
 	vttablet := &VttabletProcess{
-		VtProcess:                   *base,
+		VtProcess:                   base,
 		FileToLogQueries:            path.Join(tmpDirectory, fmt.Sprintf("/vt_%010d_querylog.txt", tabletUID)),
 		Directory:                   path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", tabletUID)),
 		Cell:                        cell,
