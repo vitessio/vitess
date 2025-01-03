@@ -36,6 +36,9 @@ type VtbackupProcess struct {
 	MysqlPort int
 	Directory string
 
+	BackupStorageImplementation string
+	FileBackupStorageRoot       string
+
 	Cell        string
 	Keyspace    string
 	Shard       string
@@ -66,8 +69,8 @@ func (vtbackup *VtbackupProcess) Setup() (err error) {
 		"--init_shard", vtbackup.Shard,
 
 		//Backup Arguments are not optional
-		"--backup_storage_implementation", "file",
-		"--file_backup_storage_root", path.Join(os.Getenv("VTDATAROOT"), "tmp", "backupstorage"),
+		"--backup_storage_implementation", vtbackup.BackupStorageImplementation,
+		"--file_backup_storage_root", vtbackup.FileBackupStorageRoot,
 	)
 
 	if vtbackup.initialBackup {
@@ -129,16 +132,18 @@ func VtbackupProcessInstance(tabletUID int, mysqlPort int, newInitDBFile string,
 	cell string, hostname string, tmpDirectory string, topoPort int, initialBackup bool) *VtbackupProcess {
 	base := VtProcessInstance("vtbackup", "vtbackup", topoPort, hostname)
 	vtbackup := &VtbackupProcess{
-		VtProcess:     *base,
-		LogDir:        tmpDirectory,
-		Directory:     os.Getenv("VTDATAROOT"),
-		TabletAlias:   fmt.Sprintf("%s-%010d", cell, tabletUID),
-		initDBfile:    newInitDBFile,
-		Keyspace:      keyspace,
-		Shard:         shard,
-		Cell:          cell,
-		MysqlPort:     mysqlPort,
-		initialBackup: initialBackup,
+		VtProcess:                   *base,
+		LogDir:                      tmpDirectory,
+		Directory:                   os.Getenv("VTDATAROOT"),
+		BackupStorageImplementation: "file",
+		FileBackupStorageRoot:       path.Join(os.Getenv("VTDATAROOT"), "/backups"),
+		TabletAlias:                 fmt.Sprintf("%s-%010d", cell, tabletUID),
+		initDBfile:                  newInitDBFile,
+		Keyspace:                    keyspace,
+		Shard:                       shard,
+		Cell:                        cell,
+		MysqlPort:                   mysqlPort,
+		initialBackup:               initialBackup,
 	}
 	return vtbackup
 }
