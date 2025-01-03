@@ -15,7 +15,7 @@
  */
 
 import { useVSchema } from '../../../hooks/api';
-import JSONViewTree from '../../jsonViewTree/JSONViewTree';
+import { Code } from '../../Code';
 import { QueryErrorPlaceholder } from '../../placeholders/QueryErrorPlaceholder';
 import { QueryLoadingPlaceholder } from '../../placeholders/QueryLoadingPlaceholder';
 
@@ -30,7 +30,7 @@ export const KeyspaceVSchema = ({ clusterID, name }: Props) => {
         <div>
             <QueryLoadingPlaceholder query={query} />
             <QueryErrorPlaceholder query={query} title="Couldn't load VSchema" />
-            {query.isSuccess && <JSONViewTree data={query.data} />}
+            {query.isSuccess && <Code code={JSON.stringify(query.data, null, 2)} />}
         </div>
     );
 };

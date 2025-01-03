@@ -35,6 +35,7 @@ import { WorkflowVDiff } from './WorkflowVDiff';
 import { Select } from '../../inputs/Select';
 import { formatDateTimeShort } from '../../../util/time';
 import JSONViewTree from '../../jsonViewTree/JSONViewTree';
+import { Code } from '../../Code';
 
 interface RouteParams {
     clusterID: string;
@@ -168,6 +169,7 @@ export const Workflow = () => {
                     <Tab text="Details" to={`${url}/details`} />
                     <Tab text="VDiff" to={`${url}/vdiff`} />
                     <Tab text="JSON" to={`${url}/json`} />
+                    <Tab text="JSON Tree" to={`${url}/json_tree`} />
                 </TabContainer>
 
                 <Switch>
@@ -189,6 +191,10 @@ export const Workflow = () => {
                     </Route>
 
                     <Route path={`${path}/json`}>
+                        <Code code={JSON.stringify(data, null, 2)} />
+                    </Route>
+
+                    <Route path={`${path}/json_tree`}>
                         <JSONViewTree data={data} />
                     </Route>
 

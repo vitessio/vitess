@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { Link, useParams } from 'react-router-dom';
+import { Link, Redirect, Route, Switch, useParams, useRouteMatch } from 'react-router-dom';
 
 import { useWorkflow } from '../../../hooks/api';
 import { useDocumentTitle } from '../../../hooks/useDocumentTitle';
@@ -24,6 +24,9 @@ import { WorkspaceHeader } from '../../layout/WorkspaceHeader';
 import { WorkspaceTitle } from '../../layout/WorkspaceTitle';
 import style from './Stream.module.scss';
 import JSONViewTree from '../../jsonViewTree/JSONViewTree';
+import { TabContainer } from '../../tabs/TabContainer';
+import { Tab } from '../../tabs/Tab';
+import { Code } from '../../Code';
 
 interface RouteParams {
     clusterID: string;
@@ -36,6 +39,7 @@ interface RouteParams {
 
 export const Stream = () => {
     const params = useParams<RouteParams>();
+    const { path, url } = useRouteMatch();
     const { data: workflow } = useWorkflow({
         clusterID: params.clusterID,
         keyspace: params.keyspace,
@@ -72,7 +76,17 @@ export const Stream = () => {
                 </div>
             </WorkspaceHeader>
             <ContentContainer>
-                <JSONViewTree data={stream} />
+                <TabContainer>
+                    <Tab text="JSON" to={`${url}/json`} />
+                    <Tab text="JSON Tree" to={`${url}/json_tree`} />
+                </TabContainer>
+
+                <Switch>
+                    <Route path={`${path}/json`}>{stream && <Code code={JSON.stringify(stream, null, 2)} />}</Route>
+                    <Route path={`${path}/json_tree`}>{stream && <JSONViewTree data={stream} />}</Route>
+
+                    <Redirect exact from={path} to={`${path}/json`} />
+                </Switch>
             </ContentContainer>
         </div>
     );

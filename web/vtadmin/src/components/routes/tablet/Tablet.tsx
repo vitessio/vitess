@@ -34,6 +34,7 @@ import { TabletCharts } from './TabletCharts';
 import { env } from '../../../util/env';
 import FullStatus from './FullStatus';
 import JSONViewTree from '../../jsonViewTree/JSONViewTree';
+import { Code } from '../../Code';
 
 interface RouteParams {
     alias: string;
@@ -108,6 +109,7 @@ export const Tablet = () => {
                     <Tab text="QPS" to={`${url}/qps`} />
                     <Tab text="Full Status" to={`${url}/full-status`} />
                     <Tab text="JSON" to={`${url}/json`} />
+                    <Tab text="JSON Tree" to={`${url}/json_tree`} />
                     <ReadOnlyGate>
                         <Tab text="Advanced" to={`${url}/advanced`} />
                     </ReadOnlyGate>
@@ -119,6 +121,16 @@ export const Tablet = () => {
                     </Route>
 
                     <Route path={`${path}/json`}>
+                        <div>
+                            <Code code={JSON.stringify(tablet, null, 2)} />
+
+                            {env().VITE_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS && (
+                                <Code code={JSON.stringify(debugVars, null, 2)} />
+                            )}
+                        </div>
+                    </Route>
+
+                    <Route path={`${path}/json_tree`}>
                         <div>
                             <JSONViewTree data={tablet} />
 
