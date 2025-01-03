@@ -18,13 +18,14 @@ package vreplication
 
 import (
 	"bytes"
+	"context"
 	"fmt"
+	"github.com/stretchr/testify/require"
 	"strings"
 	"testing"
 	"text/template"
 	"time"
-
-	"github.com/stretchr/testify/require"
+	"vitess.io/vitess/go/sqltypes"
 
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 )
@@ -100,6 +101,31 @@ func (h *grHelpers) insertData(t *testing.T, keyspace string, table string, id i
 	_, err := vtgateConn.ExecuteFetch(fmt.Sprintf("insert into %s.%s(id, val) values(%d, '%s')",
 		keyspace, table, id, val), 1, false)
 	require.NoError(t, err)
+}
+
+func (h *grHelpers) execWithRetry(t *testing.T, query string, timeoutSeconds int) {
+	vtgateConn, cancel := getVTGateConn()
+	defer cancel()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutSeconds)*time.Second)
+	defer cancel()
+	ticker := time.NewTicker(defaultTick)
+	defer ticker.Stop()
+
+	var qr *sqltypes.Result
+	var err error
+	for {
+		qr, err = vtgateConn.ExecuteFetch(query, 1000, false)
+		if err == nil {
+			return qr
+		}
+		select {
+		case <-ctx.Done():
+			require.FailNow(t, fmt.Sprintf("query %q did not succeed before the timeout of %s; last seen result: %v",
+				query, timeout, qr))
+		case <-ticker.C:
+			log.Infof("query %q failed with error %v, retrying in %ds", query, err, defaultTick)
+		}
+	}
 }
 
 func (h *grHelpers) isGlobal(t *testing.T, tables []string, expectedVal string) bool {
@@ -221,6 +247,9 @@ func (h *grHelpers) rebuildGraphs(t *testing.T, keyspaces []string) {
 	require.NoError(t, err)
 }
 
+// TestGlobalRouting tests global routing for unsharded and sharded keyspaces by setting up keyspaces
+// with different table configurations and verifying that the tables are globally routed
+// by querying via vtgate.
 func TestGlobalRouting(t *testing.T) {
 	h := grHelpers{t}
 	exp := *h.getExpectations()
@@ -250,8 +279,8 @@ func testGlobalRouting(t *testing.T, unshardedHasVSchema bool, funcs *grTestExpe
 	}
 	keyspaces := []string{config.ksU1}
 	h.rebuildGraphs(t, keyspaces)
-	// FIXME: figure out how to ensure vtgate has processed the updated vschema
-	time.Sleep(5 * time.Second)
+	//// FIXME: figure out how to ensure vtgate has processed the updated vschema
+	//time.Sleep(5 * time.Second)
 	funcs.postKsU1(t)
 
 	vc.AddKeyspace(t, []*Cell{zone1}, config.ksU2, "0", h.getUnshardedVschema(unshardedHasVSchema, config.ksU2Tables),
@@ -265,7 +294,7 @@ func testGlobalRouting(t *testing.T, unshardedHasVSchema bool, funcs *grTestExpe
 	}
 	keyspaces = append(keyspaces, config.ksU2)
 	h.rebuildGraphs(t, keyspaces)
-	time.Sleep(5 * time.Second)
+	//time.Sleep(5 * time.Second)
 	funcs.postKsU2(t)
 
 	vc.AddKeyspace(t, []*Cell{zone1}, config.ksS1, "-80,80-", h.getShardedVSchema(config.ksS1Tables), h.getSchema(config.ksS1Tables),
@@ -279,6 +308,6 @@ func testGlobalRouting(t *testing.T, unshardedHasVSchema bool, funcs *grTestExpe
 	}
 	keyspaces = append(keyspaces, config.ksS1)
 	h.rebuildGraphs(t, keyspaces)
-	time.Sleep(5 * time.Second)
+	//time.Sleep(5 * time.Second)
 	funcs.postKsS1(t)
 }

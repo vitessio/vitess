@@ -485,7 +485,7 @@ func AddAdditionalGlobalTables(source *vschemapb.SrvVSchema, vschema *VSchema) {
 			continue
 		}
 		for tname, table := range ksvschema.Tables {
-			// Ignore tables already global or ambiguous.
+			// Ignore tables already global (i.e. if specified in the vschema of an unsharded keyspace) or ambiguous.
 			if _, found := vschema.globalTables[tname]; !found {
 				_, ok := newTables[tname]
 				if !ok {
