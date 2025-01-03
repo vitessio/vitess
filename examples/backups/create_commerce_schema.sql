@@ -1,6 +1,6 @@
 create table if not exists product(
-    sku varbinary(128),
-    description varbinary(128),
+    sku varchar(128),
+    description varchar(128),
     price bigint,
     primary key(sku)
 ) ENGINE=InnoDB;
