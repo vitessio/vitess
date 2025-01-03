@@ -475,11 +475,7 @@ func buildGlobalTables(source *vschemapb.SrvVSchema, vschema *VSchema) {
 // AddAdditionalGlobalTables adds unique tables from unsharded keyspaces to the global tables.
 // It is expected to be called from the schema tracking code.
 func AddAdditionalGlobalTables(source *vschemapb.SrvVSchema, vschema *VSchema) {
-	type tableInfo struct {
-		table *Table
-		cnt   int
-	}
-	newTables := make(map[string]*tableInfo)
+	newTables := make(map[string]*Table)
 
 	// Collect valid uniquely named tables from unsharded keyspaces.
 	for ksname, ks := range source.Keyspaces {
@@ -494,21 +490,17 @@ func AddAdditionalGlobalTables(source *vschemapb.SrvVSchema, vschema *VSchema) {
 				_, ok := newTables[tname]
 				if !ok {
 					table.Keyspace = ksvschema.Keyspace
-					newTables[tname] = &tableInfo{table: table, cnt: 0}
+					newTables[tname] = table
+				} else {
+					newTables[tname] = nil
 				}
-				newTables[tname].cnt++
 			}
 		}
 	}
 
 	// Mark new tables found just once as globally routable, rest as ambiguous.
-	for tname, ti := range newTables {
-		switch ti.cnt {
-		case 1:
-			vschema.globalTables[tname] = ti.table
-		default:
-			vschema.globalTables[tname] = nil
-		}
+	for k, v := range newTables {
+		vschema.globalTables[k] = v
 	}
 }
 
