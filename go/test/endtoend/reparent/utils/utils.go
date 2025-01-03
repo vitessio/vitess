@@ -408,7 +408,7 @@ func ErsIgnoreTablet(clusterInstance *cluster.LocalProcessCluster, tab *cluster.
 
 // ErsWithVtctldClient runs ERS via vtctldclient binary
 func ErsWithVtctldClient(clusterInstance *cluster.LocalProcessCluster) (string, error) {
-	args := []string{"EmergencyReparentShard", "--keyspace-shard", fmt.Sprintf("%s/%s", KeyspaceName, ShardName)}
+	args := []string{"EmergencyReparentShard", fmt.Sprintf("%s/%s", KeyspaceName, ShardName)}
 	return clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(args...)
 }
 
