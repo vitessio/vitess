@@ -161,7 +161,7 @@ func TestMain(m *testing.M) {
 			"--target-keyspace", shardedKeyspaceName,
 			"create",
 			"--source-keyspace", unshardedKeyspaceName,
-			"--table-settings", `'[{"target_table": "zip_detail", "source_expression": "select * from zip_detail", "create_ddl": "copy" }]'`,
+			"--table-settings", `[{"target_table": "zip_detail", "source_expression": "select * from zip_detail", "create_ddl": "copy" }]`,
 			"--tablet-types", "PRIMARY",
 		)
 		fmt.Fprintf(os.Stderr, "Output from materialize: %s\n", output)
@@ -207,8 +207,9 @@ func TestMain(m *testing.M) {
 		err = clusterInstance.VtctldClientProcess.ExecuteCommand(
 			"Workflow",
 			"--keyspace", shardedKeyspaceName,
-			"--workflow", "copy_zip_detail",
 			"delete",
+			"--workflow", "copy_zip_detail",
+			"--keep-data",
 		)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to stop materialization workflow: %v", err)
