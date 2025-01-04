@@ -48,10 +48,10 @@ func TestAPIEndpoints(t *testing.T) {
 	status, resp := utils.MakeAPICallRetry(t, vtorc, "/debug/health", func(code int, response string) bool {
 		return code == 0
 	})
-	// When VTOrc is up and hasn't run the topo-refresh, is should be healthy but HasDiscovered should be false.
-	assert.Equal(t, 500, status)
+	// When VTOrc starts it runs OpenTabletDiscovery(), which triggers a topo-refresh. VTOrc should be healthy and HasDiscovered should be true.
+	assert.Equal(t, 200, status)
 	assert.Contains(t, resp, `"Healthy": true,`)
-	assert.Contains(t, resp, `"DiscoveredOnce": false`)
+	assert.Contains(t, resp, `"DiscoveredOnce": true`)
 
 	// find primary from topo
 	primary := utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
