@@ -31,6 +31,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -83,7 +84,6 @@ type TxEngine struct {
 	//  2. TabletControls have been set in the tablet record, and Query service is going to be disabled.
 	twopcAllowed        []bool
 	shutdownGracePeriod time.Duration
-	coordinatorAddress  string
 	abandonAge          time.Duration
 	ticks               *timer.Timer
 
@@ -116,20 +116,19 @@ func NewTxEngine(env tabletenv.Env, dxNotifier func()) *TxEngine {
 	te.txPool = NewTxPool(env, limiter)
 	// We initially allow twoPC (handles vttablet restarts).
 	// We will disallow them for a few reasons -
-	//	1. when a new tablet is promoted if semi-sync is turned off.
+	//	1. When a new tablet is promoted if semi-sync is turned off.
 	//  2. TabletControls have been set by a Resharding workflow.
 	te.twopcAllowed = make([]bool, TwoPCAllowed_Len)
 	for idx := range te.twopcAllowed {
 		te.twopcAllowed[idx] = true
 	}
-	te.twopcEnabled = config.TwoPCEnable
-	if te.twopcEnabled {
-		if config.TwoPCAbandonAge <= 0 {
-			log.Error("2PC abandon age not specified: Disabling 2PC")
-			te.twopcEnabled = false
-		}
+	te.twopcEnabled = true
+	if config.TwoPCAbandonAge <= 0 {
+		log.Error("2PC abandon age not specified: Disabling 2PC")
+		te.twopcEnabled = false
 	}
-	te.abandonAge = config.TwoPCAbandonAge.Get()
+
+	te.abandonAge = config.TwoPCAbandonAge
 	te.ticks = timer.NewTimer(te.abandonAge / 2)
 
 	// Set the prepared pool capacity to something lower than
@@ -270,7 +269,7 @@ func (te *TxEngine) isTxPoolAvailable(addToWaitGroup func(int)) error {
 // statement(s) used to execute the begin (if any).
 //
 // Subsequent statements can access the connection through the transaction id.
-func (te *TxEngine) Begin(ctx context.Context, savepointQueries []string, reservedID int64, setting *smartconnpool.Setting, options *querypb.ExecuteOptions) (int64, string, string, error) {
+func (te *TxEngine) Begin(ctx context.Context, reservedID int64, setting *smartconnpool.Setting, options *querypb.ExecuteOptions) (int64, string, string, error) {
 	span, ctx := trace.NewSpan(ctx, "TxEngine.Begin")
 	defer span.Finish()
 
@@ -285,7 +284,7 @@ func (te *TxEngine) Begin(ctx context.Context, savepointQueries []string, reserv
 	}
 
 	defer te.beginRequests.Done()
-	conn, beginSQL, sessionStateChanges, err := te.txPool.Begin(ctx, options, te.state == AcceptingReadOnly, reservedID, savepointQueries, setting)
+	conn, beginSQL, sessionStateChanges, err := te.txPool.Begin(ctx, options, te.state == AcceptingReadOnly, reservedID, setting)
 	if err != nil {
 		return 0, "", "", err
 	}
@@ -454,6 +453,9 @@ func (te *TxEngine) prepareFromRedo() error {
 			allErrs = append(allErrs, vterrors.Wrapf(err, "dtid - %v", preparedTx.Dtid))
 			if prepFailed {
 				failedCounter++
+				te.env.Stats().RedoPreparedFail.Add("NonRetryable", 1)
+			} else {
+				te.env.Stats().RedoPreparedFail.Add("Retryable", 1)
 			}
 		} else {
 			preparedCounter++
@@ -480,9 +482,24 @@ func (te *TxEngine) prepareTx(ctx context.Context, preparedTx *tx.PreparedTx) (f
 		}
 	}()
 
+	// We need to check whether the first query is a SET query or not.
+	// If it is then we need to run it before we begin the transaction because
+	// some connection settings can't be modified after a transaction has started
+	// For example -
+	// mysql> begin;
+	// Query OK, 0 rows affected (0.00 sec)
+	// mysql> set @@transaction_isolation="read-committed";
+	// ERROR 1568 (25001): Transaction characteristics can't be changed while a transaction is in progress.
+	var settingsQuery string
+	firstQuery := preparedTx.Queries[0]
+	if sqlparser.Preview(firstQuery) == sqlparser.StmtSet {
+		settingsQuery = firstQuery
+		preparedTx.Queries = preparedTx.Queries[1:]
+	}
+
 	// We need to redo the prepared transactions using a dba user because MySQL might still be in read only mode.
 	var conn *StatefulConnection
-	if conn, err = te.beginNewDbaConnection(ctx); err != nil {
+	if conn, err = te.beginNewDbaConnection(ctx, settingsQuery); err != nil {
 		return
 	}
 
@@ -516,7 +533,7 @@ func (te *TxEngine) checkErrorAndMarkFailed(ctx context.Context, dtid string, re
 	// Update the state of the transaction in the redo log.
 	// Retryable Error: Update the message with error message.
 	// Non-retryable Error: Along with message, update the state as RedoStateFailed.
-	conn, _, _, err := te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil, nil)
+	conn, _, _, err := te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
 	if err != nil {
 		log.Errorf("markFailed: Begin failed for dtid %s: %v", dtid, err)
 		return
@@ -580,14 +597,13 @@ func (te *TxEngine) startTransactionWatcher() {
 		ctx, cancel := context.WithTimeout(tabletenv.LocalContext(), te.abandonAge/4)
 		defer cancel()
 
-		// Raise alerts on prepares that have been unresolved for too long.
-		// Use 5x abandonAge to give opportunity for transaction coordinator to resolve these redo logs.
-		count, err := te.twoPC.CountUnresolvedRedo(ctx, time.Now().Add(-te.abandonAge*5))
+		// Track unresolved redo logs.
+		count, err := te.twoPC.CountUnresolvedRedo(ctx, time.Now().Add(-te.abandonAge))
 		if err != nil {
 			te.env.Stats().InternalErrors.Add("RedoWatcherFail", 1)
 			log.Errorf("Error reading prepared transactions: %v", err)
 		}
-		te.env.Stats().Unresolved.Set("Prepares", count)
+		te.env.Stats().Unresolved.Set("ResourceManager", count)
 
 		// Notify lingering distributed transactions.
 		count, err = te.twoPC.CountUnresolvedTransaction(ctx, time.Now().Add(-te.abandonAge))
@@ -596,6 +612,7 @@ func (te *TxEngine) startTransactionWatcher() {
 			log.Errorf("Error reading unresolved transactions: %v", err)
 			return
 		}
+		te.env.Stats().Unresolved.Set("MetadataManager", count)
 		if count > 0 {
 			te.dxNotify()
 		}
@@ -608,7 +625,7 @@ func (te *TxEngine) stopTransactionWatcher() {
 }
 
 // ReserveBegin creates a reserved connection, and in it opens a transaction
-func (te *TxEngine) ReserveBegin(ctx context.Context, options *querypb.ExecuteOptions, preQueries []string, savepointQueries []string) (int64, string, error) {
+func (te *TxEngine) ReserveBegin(ctx context.Context, options *querypb.ExecuteOptions, preQueries []string) (int64, string, error) {
 	span, ctx := trace.NewSpan(ctx, "TxEngine.ReserveBegin")
 	defer span.Finish()
 	err := te.isTxPoolAvailable(te.beginRequests.Add)
@@ -622,7 +639,7 @@ func (te *TxEngine) ReserveBegin(ctx context.Context, options *querypb.ExecuteOp
 		return 0, "", err
 	}
 	defer conn.UnlockUpdateTime()
-	_, sessionStateChanges, err := te.txPool.begin(ctx, options, te.state == AcceptingReadOnly, conn, savepointQueries)
+	_, sessionStateChanges, err := te.txPool.begin(ctx, options, te.state == AcceptingReadOnly, conn)
 	if err != nil {
 		conn.Close()
 		conn.Release(tx.ConnInitFail)
@@ -707,10 +724,17 @@ func (te *TxEngine) Release(connID int64) error {
 
 // beginNewDbaConnection gets a new dba connection and starts a transaction in it.
 // This should only be used to redo prepared transactions. All the other writes should use the normal pool.
-func (te *TxEngine) beginNewDbaConnection(ctx context.Context) (*StatefulConnection, error) {
+func (te *TxEngine) beginNewDbaConnection(ctx context.Context, settingsQuery string) (*StatefulConnection, error) {
 	dbConn, err := connpool.NewConn(ctx, te.env.Config().DB.DbaWithDB(), nil, nil, te.env)
 	if err != nil {
 		return nil, err
+	}
+
+	// If we have a settings query that we need to apply, we do that before starting the transaction.
+	if settingsQuery != "" {
+		if _, err = dbConn.ExecOnce(ctx, settingsQuery, 1, false); err != nil {
+			return nil, err
+		}
 	}
 
 	sc := &StatefulConnection{
@@ -720,7 +744,7 @@ func (te *TxEngine) beginNewDbaConnection(ctx context.Context) (*StatefulConnect
 		env: te.env,
 	}
 
-	_, _, err = te.txPool.begin(ctx, nil, false, sc, nil)
+	_, _, err = te.txPool.begin(ctx, nil, false, sc)
 	return sc, err
 }
 

@@ -103,6 +103,7 @@ var (
 		"vtgate_vindex_heavy",
 		"vtgate_vschema",
 		"vtgate_queries",
+		"vtgate_plantests",
 		"vtgate_schema_tracker",
 		"vtgate_foreignkey_stress",
 		"vtorc",
@@ -116,7 +117,8 @@ var (
 		"vreplication_v2",
 		"vreplication_partial_movetables_and_materialize",
 		"vreplication_foreign_key_stress",
-		"vreplication_migrate_vdiff2_convert_tz",
+		"vreplication_migrate",
+		"vreplication_vtctldclient_vdiff2_movetables_tz",
 		"vreplication_multi_tenant",
 		"schemadiff_vrepl",
 		"topo_connection_cache",
@@ -153,7 +155,11 @@ var (
 		"onlineddl_vrepl_stress_suite",
 		"onlineddl_vrepl_suite",
 		"vreplication_basic",
-		"vreplication_migrate_vdiff2_convert_tz",
+		"vreplication_migrate",
+		"vreplication_vtctldclient_vdiff2_movetables_tz",
+	}
+	clusterRequiringMinio = []string{
+		"21",
 	}
 )
 
@@ -172,6 +178,7 @@ type clusterTest struct {
 	EnableBinlogTransactionCompression bool
 	PartialKeyspace                    bool
 	Cores16                            bool
+	NeedsMinio                         bool
 }
 
 type vitessTesterTest struct {
@@ -281,6 +288,13 @@ func generateClusterWorkflows(list []string, tpl string) {
 			for _, xtraBackupCluster := range xtraBackupClusters {
 				if xtraBackupCluster == cluster {
 					test.InstallXtraBackup = true
+					break
+				}
+			}
+			minioClusters := canonnizeList(clusterRequiringMinio)
+			for _, minioCluster := range minioClusters {
+				if minioCluster == cluster {
+					test.NeedsMinio = true
 					break
 				}
 			}

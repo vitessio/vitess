@@ -23,6 +23,7 @@ import (
 	"path"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -88,8 +89,31 @@ func ClearOutTable(t *testing.T, vtParams mysql.ConnParams, tableName string) {
 // WriteTestCommunicationFile writes the content to the file with the given name.
 // We use these files to coordinate with the vttablets running in the debug mode.
 func WriteTestCommunicationFile(t *testing.T, fileName string, content string) {
+	// Delete the file just to make sure it doesn't exist before we write to it.
+	DeleteFile(fileName)
 	err := os.WriteFile(path.Join(os.Getenv("VTDATAROOT"), fileName), []byte(content), 0644)
 	require.NoError(t, err)
+}
+
+// RunMultiShardCommitWithDelay runs a multi shard commit and configures it to wait for a certain amount of time in the commit phase.
+func RunMultiShardCommitWithDelay(t *testing.T, conn *mysql.Conn, commitDelayTime string, wg *sync.WaitGroup, queries []string) {
+	// Run all the queries to start the transaction.
+	for _, query := range queries {
+		utils.Exec(t, conn, query)
+	}
+	// We want to delay the commit on one of the shards to simulate slow commits on a shard.
+	WriteTestCommunicationFile(t, DebugDelayCommitShard, "80-")
+	WriteTestCommunicationFile(t, DebugDelayCommitTime, commitDelayTime)
+	// We will execute a commit in a go routine, because we know it will take some time to complete.
+	// While the commit is ongoing, we would like to run the disruption.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_, err := utils.ExecAllowError(t, conn, "commit")
+		if err != nil {
+			log.Errorf("Error in commit - %v", err)
+		}
+	}()
 }
 
 // DeleteFile deletes the file specified.
@@ -219,5 +243,24 @@ func AddShards(t *testing.T, clusterInstance *cluster.LocalProcessCluster, keysp
 		shard, err := clusterInstance.AddShard(keyspaceName, shardName, 3, false, nil)
 		require.NoError(t, err)
 		clusterInstance.Keyspaces[0].Shards = append(clusterInstance.Keyspaces[0].Shards, *shard)
+		for _, vttablet := range shard.Vttablets {
+			err = vttablet.VttabletProcess.WaitForTabletStatuses([]string{"SERVING"})
+			require.NoError(t, err)
+		}
+	}
+}
+
+type Warn struct {
+	Level string
+	Code  uint16
+	Msg   string
+}
+
+func ToWarn(row sqltypes.Row) Warn {
+	code, _ := row[1].ToUint16()
+	return Warn{
+		Level: row[0].ToString(),
+		Code:  code,
+		Msg:   row[2].ToString(),
 	}
 }

@@ -17,11 +17,20 @@ limitations under the License.
 package movetables
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/common"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
+
+// The default batch size to use when deleting tenant data
+// if a multi-tenant migration is canceled or deleted.
+const DefaultDeleteBatchSize = 1000
 
 var (
 	// base is the base command for all actions related to MoveTables.
@@ -32,6 +41,7 @@ var (
 		Aliases:               []string{"movetables"},
 		Args:                  cobra.ExactArgs(1),
 	}
+	shardedAutoIncHandlingStrOptions string
 )
 
 func registerCommands(root *cobra.Command) {
@@ -49,8 +59,16 @@ func registerCommands(root *cobra.Command) {
 	create.Flags().BoolVar(&createOptions.NoRoutingRules, "no-routing-rules", false, "(Advanced) Do not create routing rules while creating the workflow. See the reference documentation for limitations if you use this flag.")
 	create.Flags().BoolVar(&createOptions.AtomicCopy, "atomic-copy", false, "(EXPERIMENTAL) A single copy phase is run for all tables from the source. Use this, for example, if your source keyspace has tables which use foreign key constraints.")
 	create.Flags().StringVar(&createOptions.WorkflowOptions.TenantId, "tenant-id", "", "(EXPERIMENTAL: Multi-tenant migrations only) The tenant ID to use for the MoveTables workflow into a multi-tenant keyspace.")
-	create.Flags().BoolVar(&createOptions.WorkflowOptions.StripShardedAutoIncrement, "remove-sharded-auto-increment", true, "If moving the table(s) to a sharded keyspace, remove any auto_increment clauses when copying the schema to the target as sharded keyspaces should rely on either user/application generated values or Vitess sequences to ensure uniqueness.")
 	create.Flags().StringSliceVar(&createOptions.WorkflowOptions.Shards, "shards", nil, "(EXPERIMENTAL: Multi-tenant migrations only) Specify that vreplication streams should only be created on this subset of target shards. Warning: you should first ensure that all rows on the source route to the specified subset of target shards using your VIndex of choice or you could lose data during the migration.")
+	create.Flags().StringVar(&createOptions.WorkflowOptions.GlobalKeyspace, "global-keyspace", "", "If specified, then attempt to create any global resources here such as sequence tables needed to replace auto_increment table clauses that are removed due to --sharded-auto-increment-handling=REPLACE. The value must be an unsharded keyspace that already exists.")
+	create.Flags().StringVar(&createOptions.ShardedAutoIncrementHandlingStr, "sharded-auto-increment-handling", vtctldatapb.ShardedAutoIncrementHandling_REMOVE.String(),
+		fmt.Sprintf("If moving the table(s) to a sharded keyspace, remove any MySQL auto_increment clauses when copying the schema to the target as sharded keyspaces should rely on either user/application generated values or Vitess sequences to ensure uniqueness. If REPLACE is specified then they are automatically replaced by Vitess sequence definitions. (options are: %s)",
+			shardedAutoIncHandlingStrOptions))
+	// This flag was deprecated in v21 so can be removed in v22+.
+	create.Flags().StringVar(&createOptions.ShardedAutoIncrementHandlingStr, "remove-sharded-auto-increment", vtctldatapb.ShardedAutoIncrementHandling_REMOVE.String(),
+		fmt.Sprintf("If moving the table(s) to a sharded keyspace, remove any MySQL auto_increment clauses when copying the schema to the target as sharded keyspaces should rely on either user/application generated values or Vitess sequences to ensure uniqueness. If REPLACE is specified then they are automatically replaced by Vitess sequence definitions. (options are: %s)",
+			shardedAutoIncHandlingStrOptions))
+	create.Flags().MarkDeprecated("remove-sharded-auto-increment", "please use --sharded-auto-increment-handling instead.")
 	base.AddCommand(create)
 
 	opts := &common.SubCommandsOpts{
@@ -94,10 +112,24 @@ func registerCommands(root *cobra.Command) {
 	cancel := common.GetCancelCommand(opts)
 	cancel.Flags().BoolVar(&common.CancelOptions.KeepData, "keep-data", false, "Keep the partially copied table data from the MoveTables workflow in the target keyspace.")
 	cancel.Flags().BoolVar(&common.CancelOptions.KeepRoutingRules, "keep-routing-rules", false, "Keep the routing rules created for the MoveTables workflow.")
+	cancel.Flags().Int64Var(&common.CancelOptions.DeleteBatchSize, "delete-batch-size", DefaultDeleteBatchSize, "When cleaning up the migrated data in tables moved as part of a multi-tenant workflow, delete the records in batches of this size.")
 	common.AddShardSubsetFlag(cancel, &common.CancelOptions.Shards)
 	base.AddCommand(cancel)
 }
 
 func init() {
 	common.RegisterCommandHandler("MoveTables", registerCommands)
+
+	sb := strings.Builder{}
+	strvals := make([]string, len(vtctldatapb.ShardedAutoIncrementHandling_name))
+	for enumval, strval := range vtctldatapb.ShardedAutoIncrementHandling_name {
+		strvals[enumval] = strval
+	}
+	for i, v := range strvals {
+		if i > 0 {
+			sb.WriteByte(',')
+		}
+		sb.WriteString(v)
+	}
+	shardedAutoIncHandlingStrOptions = sb.String()
 }

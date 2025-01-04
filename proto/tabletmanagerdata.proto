@@ -326,6 +326,18 @@ message ReadTransactionResponse {
   query.TransactionMetadata transaction = 1;
 }
 
+message GetTransactionInfoRequest {
+  string dtid = 1;
+}
+
+message GetTransactionInfoResponse {
+  string state = 1;
+  string message = 2;
+  int64 time_created = 3;
+  repeated string statements = 4;
+}
+
+
 message ConcludeTransactionRequest {
   string dtid = 1;
   bool mm = 2;
@@ -446,6 +458,13 @@ message PopulateReparentJournalRequest {
 }
 
 message PopulateReparentJournalResponse {
+}
+
+message ReadReparentJournalInfoRequest {
+}
+
+message ReadReparentJournalInfoResponse {
+  int32 length = 1;
 }
 
 message InitReplicaRequest {
@@ -603,6 +622,18 @@ message CreateVReplicationWorkflowRequest {
 
 message CreateVReplicationWorkflowResponse {
   query.QueryResult result = 1;
+}
+
+message DeleteTableDataRequest {
+  // The key is the table that we want to delete data from.
+  // The value is the filter or WHERE clause to use when deleting
+  // data in the table.
+  map <string, string> table_filters = 1;
+  // BatchSize is the number of rows to delete in a single batch.
+  int64 batch_size = 2;
+}
+
+message DeleteTableDataResponse {
 }
 
 message DeleteVReplicationWorkflowRequest {
@@ -907,4 +938,13 @@ message GetThrottlerStatusResponse {
   }
   // RecentApps is a map of app names to their recent check status
   map<string, RecentApp> recent_apps = 18;
+}
+
+message ChangeTagsRequest {
+  map<string, string> tags = 1;
+  bool replace = 2;
+}
+
+message ChangeTagsResponse {
+  map<string, string> tags = 1;
 }

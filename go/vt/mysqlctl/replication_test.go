@@ -287,6 +287,7 @@ func TestPrimaryStatus(t *testing.T) {
 
 	db.AddQuery("SELECT 1", &sqltypes.Result{})
 	db.AddQuery("SHOW MASTER STATUS", sqltypes.MakeTestResult(sqltypes.MakeTestFields("test_field", "varchar"), "test_status"))
+	db.AddQuery("SELECT @@global.server_uuid", sqltypes.MakeTestResult(sqltypes.MakeTestFields("test_field", "varchar"), "test_uuid"))
 
 	testMysqld := NewMysqld(dbc)
 	defer testMysqld.Close()
@@ -295,6 +296,7 @@ func TestPrimaryStatus(t *testing.T) {
 	res, err := testMysqld.PrimaryStatus(ctx)
 	assert.NoError(t, err)
 	assert.NotNil(t, res)
+	assert.EqualValues(t, "test_uuid", res.ServerUUID)
 
 	db.AddQuery("SHOW MASTER STATUS", &sqltypes.Result{})
 	_, err = testMysqld.PrimaryStatus(ctx)

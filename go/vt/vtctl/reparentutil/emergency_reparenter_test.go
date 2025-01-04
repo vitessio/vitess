@@ -19,6 +19,7 @@ package reparentutil
 import (
 	"context"
 	"fmt"
+	"slices"
 	"testing"
 	"time"
 
@@ -26,6 +27,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/replication"
+	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sets"
@@ -1810,6 +1813,55 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 			shouldErr:        true,
 			errShouldContain: "proposed primary zone1-0000000102 will not be able to make forward progress on being promoted",
 		},
+		{
+			name:       "expected primary mismatch",
+			durability: "none",
+			emergencyReparentOps: EmergencyReparentOptions{
+				ExpectedPrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  101,
+				},
+			},
+			tmc: &testutil.TabletManagerClient{},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						IsPrimaryServing: true,
+						PrimaryAlias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type:     topodatapb.TabletType_PRIMARY,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+			keyspace:         "testkeyspace",
+			shard:            "-",
+			cells:            []string{"zone1"},
+			shouldErr:        true,
+			errShouldContain: "primary zone1-0000000100 is not equal to expected alias zone1-0000000101",
+		},
 	}
 
 	for _, tt := range tests {
@@ -1851,7 +1903,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 			err := erp.reparentShardLocked(ctx, ev, tt.keyspace, tt.shard, tt.emergencyReparentOps)
 			if tt.shouldErr {
 				assert.Error(t, err)
-				assert.Contains(t, err.Error(), tt.errShouldContain)
+				assert.ErrorContains(t, err, tt.errShouldContain)
 				return
 			}
 
@@ -4411,27 +4463,55 @@ func TestEmergencyReparenter_filterValidCandidates(t *testing.T) {
 		}
 	)
 	allTablets := []*topodatapb.Tablet{primaryTablet, replicaTablet, rdonlyTablet, replicaCrossCellTablet, rdonlyCrossCellTablet}
+	noTabletsTakingBackup := map[string]bool{
+		topoproto.TabletAliasString(primaryTablet.Alias): false, topoproto.TabletAliasString(replicaTablet.Alias): false,
+		topoproto.TabletAliasString(rdonlyTablet.Alias): false, topoproto.TabletAliasString(replicaCrossCellTablet.Alias): false,
+		topoproto.TabletAliasString(rdonlyCrossCellTablet.Alias): false,
+	}
+	replicaTakingBackup := map[string]bool{
+		topoproto.TabletAliasString(primaryTablet.Alias): false, topoproto.TabletAliasString(replicaTablet.Alias): true,
+		topoproto.TabletAliasString(rdonlyTablet.Alias): false, topoproto.TabletAliasString(replicaCrossCellTablet.Alias): false,
+		topoproto.TabletAliasString(rdonlyCrossCellTablet.Alias): false,
+	}
 	tests := []struct {
-		name             string
-		durability       string
-		validTablets     []*topodatapb.Tablet
-		tabletsReachable []*topodatapb.Tablet
-		prevPrimary      *topodatapb.Tablet
-		opts             EmergencyReparentOptions
-		filteredTablets  []*topodatapb.Tablet
-		errShouldContain string
+		name                string
+		durability          string
+		validTablets        []*topodatapb.Tablet
+		tabletsReachable    []*topodatapb.Tablet
+		tabletsTakingBackup map[string]bool
+		prevPrimary         *topodatapb.Tablet
+		opts                EmergencyReparentOptions
+		filteredTablets     []*topodatapb.Tablet
+		errShouldContain    string
 	}{
 		{
-			name:             "filter must not",
-			durability:       "none",
-			validTablets:     allTablets,
-			tabletsReachable: allTablets,
-			filteredTablets:  []*topodatapb.Tablet{primaryTablet, replicaTablet, replicaCrossCellTablet},
+			name:                "filter must not",
+			durability:          "none",
+			validTablets:        allTablets,
+			tabletsReachable:    allTablets,
+			tabletsTakingBackup: noTabletsTakingBackup,
+			filteredTablets:     []*topodatapb.Tablet{primaryTablet, replicaTablet, replicaCrossCellTablet},
 		}, {
-			name:             "filter cross cell",
-			durability:       "none",
-			validTablets:     allTablets,
-			tabletsReachable: allTablets,
+			name:                "host taking backup must not be on the list when there are other candidates",
+			durability:          "none",
+			validTablets:        allTablets,
+			tabletsReachable:    []*topodatapb.Tablet{replicaTablet, replicaCrossCellTablet, rdonlyTablet, rdonlyCrossCellTablet},
+			tabletsTakingBackup: replicaTakingBackup,
+			filteredTablets:     []*topodatapb.Tablet{replicaCrossCellTablet},
+		}, {
+			name:                "host taking backup must be the only one on the list when there are no other candidates",
+			durability:          "none",
+			validTablets:        allTablets,
+			tabletsReachable:    []*topodatapb.Tablet{replicaTablet, rdonlyTablet, rdonlyCrossCellTablet},
+			tabletsTakingBackup: replicaTakingBackup,
+			filteredTablets:     []*topodatapb.Tablet{replicaTablet},
+		}, {
+			name:                "filter cross cell",
+			durability:          "none",
+			validTablets:        allTablets,
+			tabletsReachable:    allTablets,
+			tabletsTakingBackup: noTabletsTakingBackup,
+
 			prevPrimary: &topodatapb.Tablet{
 				Alias: &topodatapb.TabletAlias{
 					Cell: "zone-1",
@@ -4442,11 +4522,12 @@ func TestEmergencyReparenter_filterValidCandidates(t *testing.T) {
 			},
 			filteredTablets: []*topodatapb.Tablet{primaryTablet, replicaTablet},
 		}, {
-			name:             "filter establish",
-			durability:       "cross_cell",
-			validTablets:     []*topodatapb.Tablet{primaryTablet, replicaTablet},
-			tabletsReachable: []*topodatapb.Tablet{primaryTablet, replicaTablet, rdonlyTablet, rdonlyCrossCellTablet},
-			filteredTablets:  nil,
+			name:                "filter establish",
+			durability:          "cross_cell",
+			validTablets:        []*topodatapb.Tablet{primaryTablet, replicaTablet},
+			tabletsReachable:    []*topodatapb.Tablet{primaryTablet, replicaTablet, rdonlyTablet, rdonlyCrossCellTablet},
+			tabletsTakingBackup: noTabletsTakingBackup,
+			filteredTablets:     nil,
 		}, {
 			name:       "filter mixed",
 			durability: "cross_cell",
@@ -4458,34 +4539,38 @@ func TestEmergencyReparenter_filterValidCandidates(t *testing.T) {
 			opts: EmergencyReparentOptions{
 				PreventCrossCellPromotion: true,
 			},
-			validTablets:     allTablets,
-			tabletsReachable: allTablets,
-			filteredTablets:  []*topodatapb.Tablet{replicaCrossCellTablet},
+			validTablets:        allTablets,
+			tabletsReachable:    allTablets,
+			tabletsTakingBackup: noTabletsTakingBackup,
+			filteredTablets:     []*topodatapb.Tablet{replicaCrossCellTablet},
 		}, {
-			name:             "error - requested primary must not",
-			durability:       "none",
-			validTablets:     allTablets,
-			tabletsReachable: allTablets,
+			name:                "error - requested primary must not",
+			durability:          "none",
+			validTablets:        allTablets,
+			tabletsReachable:    allTablets,
+			tabletsTakingBackup: noTabletsTakingBackup,
 			opts: EmergencyReparentOptions{
 				NewPrimaryAlias: rdonlyTablet.Alias,
 			},
 			errShouldContain: "proposed primary zone-1-0000000003 has a must not promotion rule",
 		}, {
-			name:             "error - requested primary not in same cell",
-			durability:       "none",
-			validTablets:     allTablets,
-			tabletsReachable: allTablets,
-			prevPrimary:      primaryTablet,
+			name:                "error - requested primary not in same cell",
+			durability:          "none",
+			validTablets:        allTablets,
+			tabletsReachable:    allTablets,
+			tabletsTakingBackup: noTabletsTakingBackup,
+			prevPrimary:         primaryTablet,
 			opts: EmergencyReparentOptions{
 				PreventCrossCellPromotion: true,
 				NewPrimaryAlias:           replicaCrossCellTablet.Alias,
 			},
 			errShouldContain: "proposed primary zone-2-0000000002 is is a different cell as the previous primary",
 		}, {
-			name:             "error - requested primary cannot establish",
-			durability:       "cross_cell",
-			validTablets:     allTablets,
-			tabletsReachable: []*topodatapb.Tablet{primaryTablet, replicaTablet, rdonlyTablet, rdonlyCrossCellTablet},
+			name:                "error - requested primary cannot establish",
+			durability:          "cross_cell",
+			validTablets:        allTablets,
+			tabletsTakingBackup: noTabletsTakingBackup,
+			tabletsReachable:    []*topodatapb.Tablet{primaryTablet, replicaTablet, rdonlyTablet, rdonlyCrossCellTablet},
 			opts: EmergencyReparentOptions{
 				NewPrimaryAlias: primaryTablet.Alias,
 			},
@@ -4499,7 +4584,7 @@ func TestEmergencyReparenter_filterValidCandidates(t *testing.T) {
 			tt.opts.durability = durability
 			logger := logutil.NewMemoryLogger()
 			erp := NewEmergencyReparenter(nil, nil, logger)
-			tabletList, err := erp.filterValidCandidates(tt.validTablets, tt.tabletsReachable, tt.prevPrimary, tt.opts)
+			tabletList, err := erp.filterValidCandidates(tt.validTablets, tt.tabletsReachable, tt.tabletsTakingBackup, tt.prevPrimary, tt.opts)
 			if tt.errShouldContain != "" {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tt.errShouldContain)
@@ -4507,6 +4592,945 @@ func TestEmergencyReparenter_filterValidCandidates(t *testing.T) {
 				require.NoError(t, err)
 				require.EqualValues(t, tt.filteredTablets, tabletList)
 			}
+		})
+	}
+}
+
+// getRelayLogPosition is a helper function that prints out the relay log positions.
+func getRelayLogPosition(gtidSets ...string) string {
+	u1 := "00000000-0000-0000-0000-000000000001"
+	u2 := "00000000-0000-0000-0000-000000000002"
+	u3 := "00000000-0000-0000-0000-000000000003"
+	u4 := "00000000-0000-0000-0000-000000000004"
+	uuids := []string{u1, u2, u3, u4}
+
+	res := "MySQL56/"
+	first := true
+	for idx, set := range gtidSets {
+		if set == "" {
+			continue
+		}
+		if !first {
+			res += ","
+		}
+		first = false
+		res += fmt.Sprintf("%s:%s", uuids[idx], set)
+	}
+	return res
+}
+
+// TestEmergencyReparenterFindErrantGTIDs tests that ERS can find the most advanced replica after marking tablets as errant.
+func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
+	u1 := "00000000-0000-0000-0000-000000000001"
+	u2 := "00000000-0000-0000-0000-000000000002"
+	tests := []struct {
+		name                     string
+		tmc                      tmclient.TabletManagerClient
+		statusMap                map[string]*replicationdatapb.StopReplicationStatus
+		primaryStatusMap         map[string]*replicationdatapb.PrimaryStatus
+		tabletMap                map[string]*topo.TabletInfo
+		wantedCandidates         []string
+		wantMostAdvancedPossible []string
+		wantErr                  string
+	}{
+		{
+			name: "Case 1a: No Errant GTIDs. This is the first reparent. A replica is the most advanced.",
+			tmc: &testutil.TabletManagerClient{
+				ReadReparentJournalInfoResults: map[string]int{
+					"zone1-0000000102": 1,
+					"zone1-0000000103": 1,
+					"zone1-0000000104": 1,
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000102": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "zone1-0000000102",
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000103": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "zone1-0000000103",
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  103,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000104": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "zone1-0000000104",
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  104,
+						},
+						Type: topodatapb.TabletType_RDONLY,
+					},
+				},
+			},
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"zone1-0000000102": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-100"),
+						SourceUuid:       u1,
+					},
+				},
+				"zone1-0000000103": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-99"),
+						SourceUuid:       u1,
+					},
+				},
+				"zone1-0000000104": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-100"),
+						SourceUuid:       u1,
+					},
+				},
+			},
+			wantedCandidates:         []string{"zone1-0000000102", "zone1-0000000103", "zone1-0000000104"},
+			wantMostAdvancedPossible: []string{"zone1-0000000102"},
+		},
+		{
+			name: "Case 1b: No Errant GTIDs. This is not the first reparent. A replica is the most advanced.",
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000102": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "zone1-0000000102",
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000103": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "zone1-0000000103",
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  103,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000104": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "zone1-0000000104",
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  104,
+						},
+						Type: topodatapb.TabletType_RDONLY,
+					},
+				},
+			},
+			tmc: &testutil.TabletManagerClient{
+				ReadReparentJournalInfoResults: map[string]int{
+					"zone1-0000000102": 2,
+					"zone1-0000000103": 2,
+					"zone1-0000000104": 2,
+				},
+			},
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"zone1-0000000102": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-100", "1-30"),
+						SourceUuid:       u1,
+					},
+				},
+				"zone1-0000000103": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-99", "1-30"),
+						SourceUuid:       u1,
+					},
+				},
+				"zone1-0000000104": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-100", "1-30"),
+						SourceUuid:       u1,
+					},
+				},
+			},
+			wantedCandidates:         []string{"zone1-0000000102", "zone1-0000000103", "zone1-0000000104"},
+			wantMostAdvancedPossible: []string{"zone1-0000000102"},
+		},
+		{
+			name: "Case 1c: No Errant GTIDs. This is not the first reparent. A rdonly is the most advanced.",
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000102": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "zone1-0000000102",
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000103": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "zone1-0000000103",
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  103,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000104": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "zone1-0000000104",
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  104,
+						},
+						Type: topodatapb.TabletType_RDONLY,
+					},
+				},
+			},
+			tmc: &testutil.TabletManagerClient{
+				ReadReparentJournalInfoResults: map[string]int{
+					"zone1-0000000102": 2,
+					"zone1-0000000103": 2,
+					"zone1-0000000104": 2,
+				},
+			},
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"zone1-0000000102": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-100", "1-30"),
+						SourceUuid:       u1,
+					},
+				},
+				"zone1-0000000103": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-99", "1-30"),
+						SourceUuid:       u1,
+					},
+				},
+				"zone1-0000000104": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-101", "1-30"),
+						SourceUuid:       u1,
+					},
+				},
+			},
+			wantedCandidates:         []string{"zone1-0000000102", "zone1-0000000103", "zone1-0000000104"},
+			wantMostAdvancedPossible: []string{"zone1-0000000104"},
+		},
+		{
+			name: "Case 2: Only 1 tablet is recent and all others are severely lagged",
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000102": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "zone1-0000000102",
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000103": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "zone1-0000000103",
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  103,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000104": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "zone1-0000000104",
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  104,
+						},
+						Type: topodatapb.TabletType_RDONLY,
+					},
+				},
+			},
+			tmc: &testutil.TabletManagerClient{
+				ReadReparentJournalInfoResults: map[string]int{
+					"zone1-0000000102": 3,
+					"zone1-0000000103": 2,
+					"zone1-0000000104": 1,
+				},
+			},
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"zone1-0000000102": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-100", "1-30", "1-100"),
+						SourceUuid:       u1,
+					},
+				},
+				"zone1-0000000103": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("", "1-30", "1-50"),
+						SourceUuid:       u1,
+					},
+				},
+				"zone1-0000000104": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("", "1-30"),
+						SourceUuid:       u1,
+					},
+				},
+			},
+			wantedCandidates:         []string{"zone1-0000000102", "zone1-0000000103", "zone1-0000000104"},
+			wantMostAdvancedPossible: []string{"zone1-0000000102"},
+		},
+		{
+			name: "Case 3: All replicas severely lagged (Primary tablet dies with t1: u1-100, u2:1-30, u3:1-100)",
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000102": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "zone1-0000000102",
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000103": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "zone1-0000000103",
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  103,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000104": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "zone1-0000000104",
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  104,
+						},
+						Type: topodatapb.TabletType_RDONLY,
+					},
+				},
+			},
+			tmc: &testutil.TabletManagerClient{
+				ReadReparentJournalInfoResults: map[string]int{
+					"zone1-0000000102": 2,
+					"zone1-0000000103": 2,
+					"zone1-0000000104": 1,
+				},
+			},
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"zone1-0000000102": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("", "1-30", "1-50"),
+						SourceUuid:       u1,
+					},
+				},
+				"zone1-0000000103": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("", "1-30", "1-50"),
+						SourceUuid:       u1,
+					},
+				},
+				"zone1-0000000104": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("", "1-30"),
+						SourceUuid:       u1,
+					},
+				},
+			},
+			wantedCandidates:         []string{"zone1-0000000102", "zone1-0000000103", "zone1-0000000104"},
+			wantMostAdvancedPossible: []string{"zone1-0000000102", "zone1-0000000103"},
+		},
+		{
+			name: "Case 4: Primary dies and comes back, has an extra UUID, right at the point when a new ERS has started.",
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000102": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "zone1-0000000102",
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"zone1-0000000103": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "zone1-0000000103",
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  103,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000104": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "zone1-0000000104",
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  104,
+						},
+						Type: topodatapb.TabletType_RDONLY,
+					},
+				},
+			},
+			tmc: &testutil.TabletManagerClient{
+				ReadReparentJournalInfoResults: map[string]int{
+					"zone1-0000000102": 2,
+					"zone1-0000000103": 3,
+					"zone1-0000000104": 3,
+				},
+			},
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"zone1-0000000103": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-100", "1-30", "1-50"),
+						SourceUuid:       u1,
+					},
+				},
+				"zone1-0000000104": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-90", "1-30", "1-50"),
+						SourceUuid:       u1,
+					},
+				},
+			},
+			primaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{
+				"zone1-0000000102": {
+					Position: getRelayLogPosition("", "1-31", "1-50"),
+				},
+			},
+			wantedCandidates:         []string{"zone1-0000000103", "zone1-0000000104"},
+			wantMostAdvancedPossible: []string{"zone1-0000000103"},
+		},
+		{
+			name: "Case 5a: Old Primary and a rdonly have errant GTID. Old primary is permanently lost and comes up from backup and ronly comes up during ERS",
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000102": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "zone1-0000000102",
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000103": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "zone1-0000000103",
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  103,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000104": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "zone1-0000000104",
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  104,
+						},
+						Type: topodatapb.TabletType_RDONLY,
+					},
+				},
+			},
+			tmc: &testutil.TabletManagerClient{
+				ReadReparentJournalInfoResults: map[string]int{
+					"zone1-0000000102": 2,
+					"zone1-0000000103": 3,
+					"zone1-0000000104": 2,
+				},
+			},
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"zone1-0000000102": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("", "1-20", "1-50"),
+						SourceUuid:       u1,
+					},
+				},
+				"zone1-0000000103": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-100", "1-30", "1-50"),
+						SourceUuid:       u1,
+					},
+				},
+				"zone1-0000000104": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("", "1-31", "1-50"),
+						SourceUuid:       u2,
+					},
+				},
+			},
+			wantedCandidates:         []string{"zone1-0000000102", "zone1-0000000103"},
+			wantMostAdvancedPossible: []string{"zone1-0000000103"},
+		},
+		{
+			name: "Case 5b: Old Primary and a rdonly have errant GTID. Both come up during ERS",
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000102": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "zone1-0000000102",
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"zone1-0000000103": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "zone1-0000000103",
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  103,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000104": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "zone1-0000000104",
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  104,
+						},
+						Type: topodatapb.TabletType_RDONLY,
+					},
+				},
+			},
+			tmc: &testutil.TabletManagerClient{
+				ReadReparentJournalInfoResults: map[string]int{
+					"zone1-0000000102": 2,
+					"zone1-0000000103": 3,
+					"zone1-0000000104": 2,
+				},
+			},
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"zone1-0000000103": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-100", "1-30", "1-50"),
+						SourceUuid:       u1,
+					},
+				},
+				"zone1-0000000104": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("", "1-31", "1-50"),
+						SourceUuid:       u2,
+					},
+				},
+			},
+			primaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{
+				"zone1-0000000102": {
+					Position: getRelayLogPosition("", "1-31", "1-50"),
+				},
+			},
+			wantedCandidates:         []string{"zone1-0000000103"},
+			wantMostAdvancedPossible: []string{"zone1-0000000103"},
+		},
+		{
+			name: "Case 6a: Errant GTID introduced on a replica server by a write that shouldn't happen. The replica with errant GTID is not the most advanced.",
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000102": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "zone1-0000000102",
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000103": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "zone1-0000000103",
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  103,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000104": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "zone1-0000000104",
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  104,
+						},
+						Type: topodatapb.TabletType_RDONLY,
+					},
+				},
+			},
+			tmc: &testutil.TabletManagerClient{
+				ReadReparentJournalInfoResults: map[string]int{
+					"zone1-0000000102": 3,
+					"zone1-0000000103": 3,
+					"zone1-0000000104": 3,
+				},
+			},
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"zone1-0000000102": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-99", "1-31", "1-50"),
+						SourceUuid:       u1,
+					},
+				},
+				"zone1-0000000103": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-100", "1-30", "1-50"),
+						SourceUuid:       u1,
+					},
+				},
+				"zone1-0000000104": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-100", "1-30", "1-50"),
+						SourceUuid:       u1,
+					},
+				},
+			},
+			wantedCandidates:         []string{"zone1-0000000103", "zone1-0000000104"},
+			wantMostAdvancedPossible: []string{"zone1-0000000103", "zone1-0000000104"},
+		},
+		{
+			name: "Case 6b: Errant GTID introduced on a replica server by a write that shouldn't happen. The replica with errant GTID is the most advanced.",
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000102": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "zone1-0000000102",
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000103": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "zone1-0000000103",
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  103,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000104": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "zone1-0000000104",
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  104,
+						},
+						Type: topodatapb.TabletType_RDONLY,
+					},
+				},
+			},
+			tmc: &testutil.TabletManagerClient{
+				ReadReparentJournalInfoResults: map[string]int{
+					"zone1-0000000102": 3,
+					"zone1-0000000103": 3,
+					"zone1-0000000104": 2,
+				},
+			},
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"zone1-0000000102": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-101", "1-31", "1-50"),
+						SourceUuid:       u1,
+					},
+				},
+				"zone1-0000000103": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-100", "1-30", "1-50"),
+						SourceUuid:       u1,
+					},
+				},
+				"zone1-0000000104": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-100", "1-30", "1-50"),
+						SourceUuid:       u1,
+					},
+				},
+			},
+			wantedCandidates:         []string{"zone1-0000000103", "zone1-0000000104"},
+			wantMostAdvancedPossible: []string{"zone1-0000000103"},
+		},
+		{
+			name: "Case 6c: Errant GTID introduced on a replica server by a write that shouldn't happen. Only 2 tablets exist.",
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000102": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "zone1-0000000102",
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000103": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "zone1-0000000103",
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  103,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			tmc: &testutil.TabletManagerClient{
+				ReadReparentJournalInfoResults: map[string]int{
+					"zone1-0000000102": 3,
+					"zone1-0000000103": 3,
+				},
+			},
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"zone1-0000000102": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-100", "1-31", "1-50"),
+						SourceUuid:       u1,
+					},
+				},
+				"zone1-0000000103": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-100", "1-30", "1-50"),
+						SourceUuid:       u1,
+					},
+				},
+			},
+			wantedCandidates:         []string{"zone1-0000000103"},
+			wantMostAdvancedPossible: []string{"zone1-0000000103"},
+		},
+		{
+			name: "Case 7: Both replicas with errant GTIDs",
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000102": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "zone1-0000000102",
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000103": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "zone1-0000000103",
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  103,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000104": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "zone1-0000000104",
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  104,
+						},
+						Type: topodatapb.TabletType_RDONLY,
+					},
+				},
+			},
+			tmc: &testutil.TabletManagerClient{
+				ReadReparentJournalInfoResults: map[string]int{
+					"zone1-0000000102": 3,
+					"zone1-0000000103": 3,
+					"zone1-0000000104": 3,
+				},
+			},
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"zone1-0000000102": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-100", "1-31", "1-50"),
+						SourceUuid:       u1,
+					},
+				},
+				"zone1-0000000103": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-100", "1-30", "1-51"),
+						SourceUuid:       u1,
+					},
+				},
+				"zone1-0000000104": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-90", "1-30", "1-50"),
+						SourceUuid:       u1,
+					},
+				},
+			},
+			wantedCandidates:         []string{"zone1-0000000104"},
+			wantMostAdvancedPossible: []string{"zone1-0000000104"},
+		},
+		{
+			name: "Case 8a: Old primary and rdonly have errant GTID and come up during ERS and replica has an errant GTID introduced by the user.",
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000102": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "zone1-0000000102",
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"zone1-0000000103": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "zone1-0000000103",
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  103,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000104": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "zone1-0000000104",
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  104,
+						},
+						Type: topodatapb.TabletType_RDONLY,
+					},
+				},
+			},
+			tmc: &testutil.TabletManagerClient{
+				ReadReparentJournalInfoResults: map[string]int{
+					"zone1-0000000102": 2,
+					"zone1-0000000103": 3,
+					"zone1-0000000104": 2,
+				},
+			},
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"zone1-0000000103": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-100", "1-30", "1-51"),
+						SourceUuid:       u1,
+					},
+				},
+				"zone1-0000000104": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("", "1-31", "1-50"),
+						SourceUuid:       u2,
+					},
+				},
+			},
+			primaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{
+				"zone1-0000000102": {
+					Position: getRelayLogPosition("", "1-31", "1-50"),
+				},
+			},
+			wantedCandidates:         []string{"zone1-0000000103"},
+			wantMostAdvancedPossible: []string{"zone1-0000000103"},
+		},
+		{
+			name: "Reading reparent journal fails",
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000102": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "zone1-0000000102",
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"zone1-0000000103": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "zone1-0000000103",
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  103,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000104": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "zone1-0000000104",
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  104,
+						},
+						Type: topodatapb.TabletType_RDONLY,
+					},
+				},
+			},
+			tmc: &testutil.TabletManagerClient{
+				ReadReparentJournalInfoResults: map[string]int{},
+			},
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"zone1-0000000103": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-100", "1-30", "1-51"),
+						SourceUuid:       u1,
+					},
+				},
+				"zone1-0000000104": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("", "1-31", "1-50"),
+						SourceUuid:       u2,
+					},
+				},
+			},
+			primaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{
+				"zone1-0000000102": {
+					Position: getRelayLogPosition("", "1-31", "1-50"),
+				},
+			},
+			wantErr: "could not read reparent journal information",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			erp := &EmergencyReparenter{
+				tmc: tt.tmc,
+			}
+			validCandidates, isGtid, err := FindPositionsOfAllCandidates(tt.statusMap, tt.primaryStatusMap)
+			require.NoError(t, err)
+			require.True(t, isGtid)
+			candidates, err := erp.findErrantGTIDs(context.Background(), validCandidates, tt.statusMap, tt.tabletMap, 10*time.Second)
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			keys := make([]string, 0, len(candidates))
+			for key := range candidates {
+				keys = append(keys, key)
+			}
+			slices.Sort(keys)
+			require.ElementsMatch(t, tt.wantedCandidates, keys)
+
+			dp, err := GetDurabilityPolicy("semi_sync")
+			require.NoError(t, err)
+			ers := EmergencyReparenter{logger: logutil.NewCallbackLogger(func(*logutilpb.Event) {})}
+			winningPrimary, _, err := ers.findMostAdvanced(candidates, tt.tabletMap, EmergencyReparentOptions{durability: dp})
+			require.NoError(t, err)
+			require.True(t, slices.Contains(tt.wantMostAdvancedPossible, winningPrimary.Hostname), winningPrimary.Hostname)
 		})
 	}
 }

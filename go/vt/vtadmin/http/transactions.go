@@ -20,16 +20,51 @@ import (
 	"context"
 
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 // GetUnresolvedTransactions implements the http wrapper for the
-// /transactions/{cluster_id}/{keyspace} route.
+// /transactions/{cluster_id}/{keyspace}[?abandon_age=] route.
 func GetUnresolvedTransactions(ctx context.Context, r Request, api *API) *JSONResponse {
 	vars := r.Vars()
 
+	abandonAge, err := r.ParseQueryParamAsInt64("abandon_age", 0)
+	if err != nil {
+		return NewJSONResponse(nil, err)
+	}
+
 	res, err := api.server.GetUnresolvedTransactions(ctx, &vtadminpb.GetUnresolvedTransactionsRequest{
+		ClusterId:  vars["cluster_id"],
+		Keyspace:   vars["keyspace"],
+		AbandonAge: abandonAge,
+	})
+
+	return NewJSONResponse(res, err)
+}
+
+// GetTransactionInfo implements the http wrapper for the
+// /transaction/{cluster_id}/{dtid}/info route.
+func GetTransactionInfo(ctx context.Context, r Request, api *API) *JSONResponse {
+	vars := r.Vars()
+
+	res, err := api.server.GetTransactionInfo(ctx, &vtadminpb.GetTransactionInfoRequest{
 		ClusterId: vars["cluster_id"],
-		Keyspace:  vars["keyspace"],
+		Request: &vtctldatapb.GetTransactionInfoRequest{
+			Dtid: vars["dtid"],
+		},
+	})
+
+	return NewJSONResponse(res, err)
+}
+
+// ConcludeTransaction implements the http wrapper for the
+// /transaction/{cluster_id}/{dtid}/conclude route.
+func ConcludeTransaction(ctx context.Context, r Request, api *API) *JSONResponse {
+	vars := r.Vars()
+
+	res, err := api.server.ConcludeTransaction(ctx, &vtadminpb.ConcludeTransactionRequest{
+		ClusterId: vars["cluster_id"],
+		Dtid:      vars["dtid"],
 	})
 
 	return NewJSONResponse(res, err)

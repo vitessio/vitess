@@ -201,7 +201,7 @@ func (v *vschema) FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.Ta
 	panic("implement me")
 }
 
-func (v *vschema) DefaultKeyspace() (*vindexes.Keyspace, error) {
+func (v *vschema) SelectedKeyspace() (*vindexes.Keyspace, error) {
 	// TODO implement me
 	panic("implement me")
 }

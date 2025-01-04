@@ -448,9 +448,16 @@ func (node *AlterMigration) FormatFast(buf *TrackedBuffer) {
 		alterType = "force_cutover"
 	case ForceCutOverAllMigrationType:
 		alterType = "force_cutover all"
+	case SetCutOverThresholdMigrationType:
+		alterType = "cutover_threshold"
 	}
 	buf.WriteByte(' ')
 	buf.WriteString(alterType)
+	if node.Threshold != "" {
+		buf.WriteString(" '")
+		buf.WriteString(node.Threshold)
+		buf.WriteByte('\'')
+	}
 	if node.Expire != "" {
 		buf.WriteString(" expire '")
 		buf.WriteString(node.Expire)
@@ -1768,7 +1775,7 @@ func (node *AssignmentExpr) FormatFast(buf *TrackedBuffer) {
 func (node *Literal) FormatFast(buf *TrackedBuffer) {
 	switch node.Type {
 	case StrVal:
-		sqltypes.MakeTrusted(sqltypes.VarBinary, node.Bytes()).EncodeSQL(buf)
+		sqltypes.MakeTrusted(sqltypes.VarChar, node.Bytes()).EncodeSQL(buf)
 	case IntVal, FloatVal, DecimalVal, HexNum, BitNum:
 		buf.WriteString(node.Val)
 	case HexVal:

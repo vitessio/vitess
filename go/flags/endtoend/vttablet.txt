@@ -56,6 +56,7 @@ Flags:
       --backup_storage_implementation string                             Which backup storage implementation to use for creating and restoring backups.
       --backup_storage_number_blocks int                                 if backup_storage_compress is true, backup_storage_number_blocks sets the number of blocks that can be processed, in parallel, before the writer blocks, during compression (default is 2). It should be equal to the number of CPUs available for compression. (default 2)
       --bind-address string                                              Bind address for the server. If empty, the server will listen on all available unicast and anycast IP addresses of the local system.
+      --binlog-in-memory-decompressor-max-size uint                      This value sets the uncompressed transaction payload size at which we switch from in-memory buffer based decompression to the slower streaming mode. (default 134217728)
       --binlog_host string                                               PITR restore parameter: hostname/IP of binlog server.
       --binlog_password string                                           PITR restore parameter: password of binlog server.
       --binlog_player_grpc_ca string                                     the server ca to use to validate servers when connecting
@@ -166,6 +167,7 @@ Flags:
       --gcs_backup_storage_bucket string                                 Google Cloud Storage bucket to use for backups.
       --gcs_backup_storage_root string                                   Root prefix for all backup-related object names.
       --gh-ost-path string                                               override default gh-ost binary full path (default "gh-ost")
+      --grpc-dial-concurrency-limit int                                  Maximum concurrency of grpc dial operations. This should be less than the golang max thread limit of 10000. (default 1024)
       --grpc_auth_mode string                                            Which auth plugin implementation to use (eg: static)
       --grpc_auth_mtls_allowed_substrings string                         List of substrings of at least one of the client certificate names (separated by colon).
       --grpc_auth_static_client_creds string                             When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.
@@ -374,6 +376,7 @@ Flags:
       --topo_global_root string                                          the path of the global topology data in the global topology server
       --topo_global_server_address string                                the address of the global topology server
       --topo_implementation string                                       the topology implementation to use
+      --topo_read_concurrency int                                        Maximum concurrency of topo reads per global or local cell. (default 32)
       --topo_zk_auth_file string                                         auth to use when connecting to the zk topo server, file contents should be <scheme>:<auth>, e.g., digest:user:pass
       --topo_zk_base_timeout duration                                    zk base timeout (see zk.Connect) (default 30s)
       --topo_zk_max_concurrency int                                      maximum number of pending requests to send to a Zookeeper server. (default 64)
@@ -393,8 +396,7 @@ Flags:
       --transaction_limit_by_subcomponent                                Include CallerID.subcomponent when considering who the user is for the purpose of transaction limit.
       --transaction_limit_by_username                                    Include VTGateCallerID.username when considering who the user is for the purpose of transaction limit. (default true)
       --transaction_limit_per_user float                                 Maximum number of transactions a single user is allowed to use at any time, represented as fraction of -transaction_cap. (default 0.4)
-      --twopc_abandon_age float                                          time in seconds. Any unresolved transaction older than this time will be sent to the coordinator to be resolved.
-      --twopc_enable                                                     if the flag is on, 2pc is enabled. Other 2pc flags must be supplied.
+      --twopc_abandon_age time.Duration                                  Any unresolved transaction older than this time will be sent to the coordinator to be resolved. NOTE: Providing time as seconds (float64) is deprecated. Use time.Duration format (e.g., '1s', '2m', '1h'). (default 15m0s)
       --tx-throttler-config string                                       Synonym to -tx_throttler_config (default "target_replication_lag_sec:2 max_replication_lag_sec:10 initial_rate:100 max_increase:1 emergency_decrease:0.5 min_duration_between_increases_sec:40 max_duration_between_increases_sec:62 min_duration_between_decreases_sec:20 spread_backlog_across_sec:20 age_bad_rate_after_sec:180 bad_rate_increase:0.1 max_rate_approach_threshold:0.9")
       --tx-throttler-default-priority int                                Default priority assigned to queries that lack priority information (default 100)
       --tx-throttler-dry-run                                             If present, the transaction throttler only records metrics about requests received and throttled, but does not actually throttle any requests.
@@ -412,7 +414,7 @@ Flags:
       --vreplication_copy_phase_duration duration                        Duration for each copy phase loop (before running the next catchup: default 1h) (default 1h0m0s)
       --vreplication_copy_phase_max_innodb_history_list_length int       The maximum InnoDB transaction history that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet. (default 1000000)
       --vreplication_copy_phase_max_mysql_replication_lag int            The maximum MySQL replication lag (in seconds) that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet. (default 43200)
-      --vreplication_experimental_flags int                              (Bitmask) of experimental features in vreplication to enable (default 3)
+      --vreplication_experimental_flags int                              (Bitmask) of experimental features in vreplication to enable (default 7)
       --vreplication_heartbeat_update_interval int                       Frequency (in seconds, default 1, max 60) at which the time_updated column of a vreplication stream when idling (default 1)
       --vreplication_max_time_to_retry_on_error duration                 stop automatically retrying when we've had consecutive failures with the same error for this long after the first occurrence
       --vreplication_net_read_timeout int                                Session value of net_read_timeout for vreplication, in seconds (default 300)

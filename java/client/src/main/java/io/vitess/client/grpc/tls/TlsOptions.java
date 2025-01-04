@@ -17,11 +17,10 @@
 package io.vitess.client.grpc.tls;
 
 import java.io.File;
-import java.net.InetSocketAddress;
 
 /**
  * <p>A wrapper type holding TLS-related fields for the
- * {@link io.vitess.client.RpcClientFactory#createTls(InetSocketAddress, TlsOptions)} method, so
+ * createTls(InetSocketAddress, TlsOptions) method, so
  * that this method won't have an unwieldy number of direct parameters.</p>
  *
  * <p>This path uses a builder pattern style:</p>

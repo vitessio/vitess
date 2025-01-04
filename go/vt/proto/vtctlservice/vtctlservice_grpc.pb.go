@@ -163,6 +163,8 @@ type VtctldClient interface {
 	BackupShard(ctx context.Context, in *vtctldata.BackupShardRequest, opts ...grpc.CallOption) (Vtctld_BackupShardClient, error)
 	// CancelSchemaMigration cancels one or all migrations, terminating any running ones as needed.
 	CancelSchemaMigration(ctx context.Context, in *vtctldata.CancelSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.CancelSchemaMigrationResponse, error)
+	// ChangeTabletTags changes the tags of the specified tablet, if possible.
+	ChangeTabletTags(ctx context.Context, in *vtctldata.ChangeTabletTagsRequest, opts ...grpc.CallOption) (*vtctldata.ChangeTabletTagsResponse, error)
 	// ChangeTabletType changes the db type for the specified tablet, if possible.
 	// This is used primarily to arrange replicas, and it will not convert a
 	// primary. For that, use InitShardPrimary.
@@ -276,6 +278,8 @@ type VtctldClient interface {
 	GetThrottlerStatus(ctx context.Context, in *vtctldata.GetThrottlerStatusRequest, opts ...grpc.CallOption) (*vtctldata.GetThrottlerStatusResponse, error)
 	// GetTopologyPath returns the topology cell at a given path.
 	GetTopologyPath(ctx context.Context, in *vtctldata.GetTopologyPathRequest, opts ...grpc.CallOption) (*vtctldata.GetTopologyPathResponse, error)
+	// GetTransactionInfo reads a given transactions information.
+	GetTransactionInfo(ctx context.Context, in *vtctldata.GetTransactionInfoRequest, opts ...grpc.CallOption) (*vtctldata.GetTransactionInfoResponse, error)
 	// GetTransactions returns the unresolved transactions for the request.
 	GetUnresolvedTransactions(ctx context.Context, in *vtctldata.GetUnresolvedTransactionsRequest, opts ...grpc.CallOption) (*vtctldata.GetUnresolvedTransactionsResponse, error)
 	// GetVersion returns the version of a tablet from its debug vars.
@@ -611,6 +615,15 @@ func (x *vtctldBackupShardClient) Recv() (*vtctldata.BackupResponse, error) {
 func (c *vtctldClient) CancelSchemaMigration(ctx context.Context, in *vtctldata.CancelSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.CancelSchemaMigrationResponse, error) {
 	out := new(vtctldata.CancelSchemaMigrationResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/CancelSchemaMigration", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) ChangeTabletTags(ctx context.Context, in *vtctldata.ChangeTabletTagsRequest, opts ...grpc.CallOption) (*vtctldata.ChangeTabletTagsResponse, error) {
+	out := new(vtctldata.ChangeTabletTagsResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/ChangeTabletTags", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1007,6 +1020,15 @@ func (c *vtctldClient) GetThrottlerStatus(ctx context.Context, in *vtctldata.Get
 func (c *vtctldClient) GetTopologyPath(ctx context.Context, in *vtctldata.GetTopologyPathRequest, opts ...grpc.CallOption) (*vtctldata.GetTopologyPathResponse, error) {
 	out := new(vtctldata.GetTopologyPathResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/GetTopologyPath", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) GetTransactionInfo(ctx context.Context, in *vtctldata.GetTransactionInfoRequest, opts ...grpc.CallOption) (*vtctldata.GetTransactionInfoResponse, error) {
+	out := new(vtctldata.GetTransactionInfoResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/GetTransactionInfo", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1670,6 +1692,8 @@ type VtctldServer interface {
 	BackupShard(*vtctldata.BackupShardRequest, Vtctld_BackupShardServer) error
 	// CancelSchemaMigration cancels one or all migrations, terminating any running ones as needed.
 	CancelSchemaMigration(context.Context, *vtctldata.CancelSchemaMigrationRequest) (*vtctldata.CancelSchemaMigrationResponse, error)
+	// ChangeTabletTags changes the tags of the specified tablet, if possible.
+	ChangeTabletTags(context.Context, *vtctldata.ChangeTabletTagsRequest) (*vtctldata.ChangeTabletTagsResponse, error)
 	// ChangeTabletType changes the db type for the specified tablet, if possible.
 	// This is used primarily to arrange replicas, and it will not convert a
 	// primary. For that, use InitShardPrimary.
@@ -1783,6 +1807,8 @@ type VtctldServer interface {
 	GetThrottlerStatus(context.Context, *vtctldata.GetThrottlerStatusRequest) (*vtctldata.GetThrottlerStatusResponse, error)
 	// GetTopologyPath returns the topology cell at a given path.
 	GetTopologyPath(context.Context, *vtctldata.GetTopologyPathRequest) (*vtctldata.GetTopologyPathResponse, error)
+	// GetTransactionInfo reads a given transactions information.
+	GetTransactionInfo(context.Context, *vtctldata.GetTransactionInfoRequest) (*vtctldata.GetTransactionInfoResponse, error)
 	// GetTransactions returns the unresolved transactions for the request.
 	GetUnresolvedTransactions(context.Context, *vtctldata.GetUnresolvedTransactionsRequest) (*vtctldata.GetUnresolvedTransactionsResponse, error)
 	// GetVersion returns the version of a tablet from its debug vars.
@@ -2015,6 +2041,9 @@ func (UnimplementedVtctldServer) BackupShard(*vtctldata.BackupShardRequest, Vtct
 func (UnimplementedVtctldServer) CancelSchemaMigration(context.Context, *vtctldata.CancelSchemaMigrationRequest) (*vtctldata.CancelSchemaMigrationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CancelSchemaMigration not implemented")
 }
+func (UnimplementedVtctldServer) ChangeTabletTags(context.Context, *vtctldata.ChangeTabletTagsRequest) (*vtctldata.ChangeTabletTagsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ChangeTabletTags not implemented")
+}
 func (UnimplementedVtctldServer) ChangeTabletType(context.Context, *vtctldata.ChangeTabletTypeRequest) (*vtctldata.ChangeTabletTypeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ChangeTabletType not implemented")
 }
@@ -2146,6 +2175,9 @@ func (UnimplementedVtctldServer) GetThrottlerStatus(context.Context, *vtctldata.
 }
 func (UnimplementedVtctldServer) GetTopologyPath(context.Context, *vtctldata.GetTopologyPathRequest) (*vtctldata.GetTopologyPathResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetTopologyPath not implemented")
+}
+func (UnimplementedVtctldServer) GetTransactionInfo(context.Context, *vtctldata.GetTransactionInfoRequest) (*vtctldata.GetTransactionInfoResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetTransactionInfo not implemented")
 }
 func (UnimplementedVtctldServer) GetUnresolvedTransactions(context.Context, *vtctldata.GetUnresolvedTransactionsRequest) (*vtctldata.GetUnresolvedTransactionsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetUnresolvedTransactions not implemented")
@@ -2543,6 +2575,24 @@ func _Vtctld_CancelSchemaMigration_Handler(srv interface{}, ctx context.Context,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VtctldServer).CancelSchemaMigration(ctx, req.(*vtctldata.CancelSchemaMigrationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_ChangeTabletTags_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.ChangeTabletTagsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).ChangeTabletTags(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/ChangeTabletTags",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).ChangeTabletTags(ctx, req.(*vtctldata.ChangeTabletTagsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -3335,6 +3385,24 @@ func _Vtctld_GetTopologyPath_Handler(srv interface{}, ctx context.Context, dec f
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VtctldServer).GetTopologyPath(ctx, req.(*vtctldata.GetTopologyPathRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_GetTransactionInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.GetTransactionInfoRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).GetTransactionInfo(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/GetTransactionInfo",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).GetTransactionInfo(ctx, req.(*vtctldata.GetTransactionInfoRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -4588,6 +4656,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Vtctld_CancelSchemaMigration_Handler,
 		},
 		{
+			MethodName: "ChangeTabletTags",
+			Handler:    _Vtctld_ChangeTabletTags_Handler,
+		},
+		{
 			MethodName: "ChangeTabletType",
 			Handler:    _Vtctld_ChangeTabletType_Handler,
 		},
@@ -4762,6 +4834,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetTopologyPath",
 			Handler:    _Vtctld_GetTopologyPath_Handler,
+		},
+		{
+			MethodName: "GetTransactionInfo",
+			Handler:    _Vtctld_GetTransactionInfo_Handler,
 		},
 		{
 			MethodName: "GetUnresolvedTransactions",

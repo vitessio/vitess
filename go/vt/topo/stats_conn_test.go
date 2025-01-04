@@ -23,10 +23,13 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/semaphore"
 
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
+
+var testStatsConnReadSem = semaphore.NewWeighted(1)
 
 // The fakeConn is a wrapper for a Conn that emits stats for every operation
 type fakeConn struct {
@@ -181,16 +184,31 @@ func (st *fakeConn) IsReadOnly() bool {
 	return st.readOnly
 }
 
+// createTestReadSemaphoreContention simulates semaphore contention on the test read semaphore.
+func createTestReadSemaphoreContention(ctx context.Context, duration time.Duration) {
+	if err := testStatsConnReadSem.Acquire(ctx, 1); err != nil {
+		panic(err)
+	}
+	defer testStatsConnReadSem.Release(1)
+	time.Sleep(duration)
+}
+
 // TestStatsConnTopoListDir emits stats on ListDir
 func TestStatsConnTopoListDir(t *testing.T) {
 	conn := &fakeConn{}
-	statsConn := NewStatsConn("global", conn)
+	statsConn := NewStatsConn("global", conn, testStatsConnReadSem)
 	ctx := context.Background()
 
+	go createTestReadSemaphoreContention(ctx, 100*time.Millisecond)
 	statsConn.ListDir(ctx, "", true)
 	timingCounts := topoStatsConnTimings.Counts()["ListDir.global"]
 	if got, want := timingCounts, int64(1); got != want {
 		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
+	}
+
+	waitTimingsCounts := topoStatsConnReadWaitTimings.Counts()["ListDir.global"]
+	if got := waitTimingsCounts; got != 1 {
+		t.Errorf("stats were not properly recorded: got = %d, want = 1", got)
 	}
 
 	// error is zero before getting an error
@@ -211,7 +229,7 @@ func TestStatsConnTopoListDir(t *testing.T) {
 // TestStatsConnTopoCreate emits stats on Create
 func TestStatsConnTopoCreate(t *testing.T) {
 	conn := &fakeConn{}
-	statsConn := NewStatsConn("global", conn)
+	statsConn := NewStatsConn("global", conn, testStatsConnReadSem)
 	ctx := context.Background()
 
 	statsConn.Create(ctx, "", []byte{})
@@ -238,7 +256,7 @@ func TestStatsConnTopoCreate(t *testing.T) {
 // TestStatsConnTopoUpdate emits stats on Update
 func TestStatsConnTopoUpdate(t *testing.T) {
 	conn := &fakeConn{}
-	statsConn := NewStatsConn("global", conn)
+	statsConn := NewStatsConn("global", conn, testStatsConnReadSem)
 	ctx := context.Background()
 
 	statsConn.Update(ctx, "", []byte{}, conn.v)
@@ -265,13 +283,19 @@ func TestStatsConnTopoUpdate(t *testing.T) {
 // TestStatsConnTopoGet emits stats on Get
 func TestStatsConnTopoGet(t *testing.T) {
 	conn := &fakeConn{}
-	statsConn := NewStatsConn("global", conn)
+	statsConn := NewStatsConn("global", conn, testStatsConnReadSem)
 	ctx := context.Background()
 
+	go createTestReadSemaphoreContention(ctx, time.Millisecond*100)
 	statsConn.Get(ctx, "")
 	timingCounts := topoStatsConnTimings.Counts()["Get.global"]
 	if got, want := timingCounts, int64(1); got != want {
 		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
+	}
+
+	waitTimingsCounts := topoStatsConnReadWaitTimings.Counts()["Get.global"]
+	if got := waitTimingsCounts; got != 1 {
+		t.Errorf("stats were not properly recorded: got = %d, want = 1", got)
 	}
 
 	// error is zero before getting an error
@@ -292,7 +316,7 @@ func TestStatsConnTopoGet(t *testing.T) {
 // TestStatsConnTopoDelete emits stats on Delete
 func TestStatsConnTopoDelete(t *testing.T) {
 	conn := &fakeConn{}
-	statsConn := NewStatsConn("global", conn)
+	statsConn := NewStatsConn("global", conn, testStatsConnReadSem)
 	ctx := context.Background()
 
 	statsConn.Delete(ctx, "", conn.v)
@@ -319,7 +343,7 @@ func TestStatsConnTopoDelete(t *testing.T) {
 // TestStatsConnTopoLock emits stats on Lock
 func TestStatsConnTopoLock(t *testing.T) {
 	conn := &fakeConn{}
-	statsConn := NewStatsConn("global", conn)
+	statsConn := NewStatsConn("global", conn, testStatsConnReadSem)
 	ctx := context.Background()
 
 	statsConn.Lock(ctx, "", "")
@@ -348,7 +372,7 @@ func TestStatsConnTopoLock(t *testing.T) {
 // TestStatsConnTopoWatch emits stats on Watch
 func TestStatsConnTopoWatch(t *testing.T) {
 	conn := &fakeConn{}
-	statsConn := NewStatsConn("global", conn)
+	statsConn := NewStatsConn("global", conn, testStatsConnReadSem)
 	ctx := context.Background()
 
 	statsConn.Watch(ctx, "")
@@ -362,7 +386,7 @@ func TestStatsConnTopoWatch(t *testing.T) {
 // TestStatsConnTopoNewLeaderParticipation emits stats on NewLeaderParticipation
 func TestStatsConnTopoNewLeaderParticipation(t *testing.T) {
 	conn := &fakeConn{}
-	statsConn := NewStatsConn("global", conn)
+	statsConn := NewStatsConn("global", conn, testStatsConnReadSem)
 
 	_, _ = statsConn.NewLeaderParticipation("", "")
 	timingCounts := topoStatsConnTimings.Counts()["NewLeaderParticipation.global"]
@@ -388,7 +412,7 @@ func TestStatsConnTopoNewLeaderParticipation(t *testing.T) {
 // TestStatsConnTopoClose emits stats on Close
 func TestStatsConnTopoClose(t *testing.T) {
 	conn := &fakeConn{}
-	statsConn := NewStatsConn("global", conn)
+	statsConn := NewStatsConn("global", conn, testStatsConnReadSem)
 
 	statsConn.Close()
 	timingCounts := topoStatsConnTimings.Counts()["Close.global"]

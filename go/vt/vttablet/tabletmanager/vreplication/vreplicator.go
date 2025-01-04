@@ -186,10 +186,17 @@ func newVReplicator(id int32, source *binlogdatapb.BinlogSource, sourceVStreamer
 // code.
 func (vr *vreplicator) Replicate(ctx context.Context) error {
 	err := vr.replicate(ctx)
-	if err != nil {
-		if err := vr.setMessage(err.Error()); err != nil {
-			binlogplayer.LogError("Failed to set error state", err)
+	if err == nil {
+		return nil
+	}
+	if vr.dbClient.IsClosed() {
+		// Connection was possible terminated by the server. We should renew it.
+		if cerr := vr.dbClient.Connect(); cerr != nil {
+			return vterrors.Wrapf(err, "failed to reconnect to the database: %v", cerr)
 		}
+	}
+	if err := vr.setMessage(err.Error()); err != nil {
+		binlogplayer.LogError("Failed to set error state", err)
 	}
 	return err
 }
@@ -501,8 +508,14 @@ func (vr *vreplicator) setState(state binlogdatapb.VReplicationWorkflowState, me
 	}
 	vr.stats.State.Store(state.String())
 	query := fmt.Sprintf("update _vt.vreplication set state='%v', message=%v where id=%v", state, encodeString(binlogplayer.MessageTruncate(message)), vr.id)
-	if _, err := vr.dbClient.ExecuteFetch(query, 1); err != nil {
-		return fmt.Errorf("could not set state: %v: %v", query, err)
+	// If we're batching a transaction, then include the state update
+	// in the current transaction batch.
+	if vr.dbClient.InTransaction && vr.dbClient.maxBatchSize > 0 {
+		vr.dbClient.AddQueryToTrxBatch(query)
+	} else { // Otherwise, send it down the wire
+		if _, err := vr.dbClient.ExecuteFetch(query, 1); err != nil {
+			return fmt.Errorf("could not set state: %v: %v", query, err)
+		}
 	}
 	if state == vr.state {
 		return nil

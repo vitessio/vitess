@@ -19,7 +19,9 @@ package newfeaturetest
 import (
 	"context"
 	"fmt"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -34,7 +36,6 @@ import (
 // The test takes down the vttablets of the primary and a rdonly tablet and runs ERS with the
 // default values of remote_operation_timeout, lock-timeout flags and wait_replicas_timeout subflag.
 func TestRecoverWithMultipleVttabletFailures(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
@@ -66,7 +67,6 @@ func TestRecoverWithMultipleVttabletFailures(t *testing.T) {
 // and ERS succeeds.
 func TestSingleReplicaERS(t *testing.T) {
 	// Set up a cluster with none durability policy
-	defer cluster.PanicHandler(t)
 	clusterInstance := utils.SetupReparentCluster(t, "none")
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
@@ -102,7 +102,6 @@ func TestSingleReplicaERS(t *testing.T) {
 
 // TestTabletRestart tests that a running tablet can be  restarted and everything is still fine
 func TestTabletRestart(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
@@ -115,7 +114,6 @@ func TestTabletRestart(t *testing.T) {
 
 // Tests ensures that ChangeTabletType works even when semi-sync plugins are not loaded.
 func TestChangeTypeWithoutSemiSync(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	clusterInstance := utils.SetupReparentCluster(t, "none")
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
@@ -161,7 +159,6 @@ func TestChangeTypeWithoutSemiSync(t *testing.T) {
 // TestERSWithWriteInPromoteReplica tests that ERS doesn't fail even if there is a
 // write that happens when PromoteReplica is called.
 func TestERSWithWriteInPromoteReplica(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
@@ -176,4 +173,63 @@ func TestERSWithWriteInPromoteReplica(t *testing.T) {
 	}, tablets[3])
 	_, err := utils.Ers(clusterInstance, tablets[3], "60s", "30s")
 	require.NoError(t, err, "ERS should not fail even if there is a sidecardb change")
+}
+
+func TestBufferingWithMultipleDisruptions(t *testing.T) {
+	clusterInstance := utils.SetupShardedReparentCluster(t, "semi_sync")
+	defer utils.TeardownCluster(clusterInstance)
+
+	// Stop all VTOrc instances, so that they don't interfere with the test.
+	for _, vtorc := range clusterInstance.VTOrcProcesses {
+		err := vtorc.TearDown()
+		require.NoError(t, err)
+	}
+
+	// Start by reparenting all the shards to the first tablet.
+	keyspace := clusterInstance.Keyspaces[0]
+	shards := keyspace.Shards
+	for _, shard := range shards {
+		err := clusterInstance.VtctldClientProcess.PlannedReparentShard(keyspace.Name, shard.Name, shard.Vttablets[0].Alias)
+		require.NoError(t, err)
+	}
+
+	// We simulate start of external reparent or a PRS where the healthcheck update from the tablet gets lost in transit
+	// to vtgate by just setting the primary read only. This is also why we needed to shutdown all VTOrcs, so that they don't
+	// fix this.
+	utils.RunSQL(context.Background(), t, "set global read_only=1", shards[0].Vttablets[0])
+	utils.RunSQL(context.Background(), t, "set global read_only=1", shards[1].Vttablets[0])
+
+	wg := sync.WaitGroup{}
+	rowCount := 10
+	vtParams := clusterInstance.GetVTParams(keyspace.Name)
+	// We now spawn writes for a bunch of go routines.
+	// The ones going to shard 1 and shard 2 should block, since
+	// they're in the midst of a reparenting operation (as seen by the buffering code).
+	for i := 1; i <= rowCount; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			conn, err := mysql.Connect(context.Background(), &vtParams)
+			if err != nil {
+				return
+			}
+			defer conn.Close()
+			_, err = conn.ExecuteFetch(utils.GetInsertQuery(i), 0, false)
+			require.NoError(t, err)
+		}(i)
+	}
+
+	// Now, run a PRS call on the last shard. This shouldn't unbuffer the queries that are buffered for shards 1 and 2
+	// since the disruption on the two shards hasn't stopped.
+	err := clusterInstance.VtctldClientProcess.PlannedReparentShard(keyspace.Name, shards[2].Name, shards[2].Vttablets[1].Alias)
+	require.NoError(t, err)
+	// We wait a second just to make sure the PRS changes are processed by the buffering logic in vtgate.
+	time.Sleep(1 * time.Second)
+	// Finally, we'll now make the 2 shards healthy again by running PRS.
+	err = clusterInstance.VtctldClientProcess.PlannedReparentShard(keyspace.Name, shards[0].Name, shards[0].Vttablets[1].Alias)
+	require.NoError(t, err)
+	err = clusterInstance.VtctldClientProcess.PlannedReparentShard(keyspace.Name, shards[1].Name, shards[1].Vttablets[1].Alias)
+	require.NoError(t, err)
+	// Wait for all the writes to have succeeded.
+	wg.Wait()
 }

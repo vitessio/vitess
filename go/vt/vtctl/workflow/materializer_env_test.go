@@ -25,6 +25,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
@@ -36,6 +37,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -92,18 +94,18 @@ func newTestMaterializerEnv(t *testing.T, ctx context.Context, ms *vtctldatapb.M
 	logger := logutil.NewConsoleLogger()
 	require.NoError(t, topoServ.RebuildSrvVSchema(ctx, []string{"cell"}))
 
-	tabletID := 100
+	tabletID := startingSourceTabletUID
 	sourceShardsMap := make(map[string]any)
 	for _, shard := range sourceShards {
 		sourceShardsMap[shard] = nil
 		require.NoError(t, topoServ.CreateShard(ctx, ms.SourceKeyspace, shard))
 		_ = env.addTablet(t, tabletID, env.ms.SourceKeyspace, shard, topodatapb.TabletType_PRIMARY)
-		tabletID += 10
+		tabletID += tabletUIDStep
 	}
 
 	require.NoError(t, topotools.RebuildKeyspace(ctx, logger, topoServ, ms.SourceKeyspace, []string{"cell"}, false))
 
-	tabletID = 200
+	tabletID = startingTargetTabletUID
 	for _, shard := range targetShards {
 		if ms.SourceKeyspace == ms.TargetKeyspace {
 			if _, ok := sourceShardsMap[shard]; ok {
@@ -112,14 +114,14 @@ func newTestMaterializerEnv(t *testing.T, ctx context.Context, ms *vtctldatapb.M
 		}
 		require.NoError(t, topoServ.CreateShard(ctx, ms.TargetKeyspace, shard))
 		_ = env.addTablet(t, tabletID, env.ms.TargetKeyspace, shard, topodatapb.TabletType_PRIMARY)
-		tabletID += 10
+		tabletID += tabletUIDStep
 	}
 
 	for _, ts := range ms.TableSettings {
 		tableName := ts.TargetTable
 		table, err := venv.Parser().TableFromStatement(ts.SourceExpression)
 		if err == nil {
-			tableName = table.Name.String()
+			tableName = sqlparser.String(table.Name)
 		}
 		var (
 			cols   []string
@@ -223,6 +225,7 @@ type testMaterializerTMClient struct {
 
 	mu                                 sync.Mutex
 	vrQueries                          map[int][]*queryResult
+	fetchAsAllPrivsQueries             map[int]map[string]*queryResult
 	createVReplicationWorkflowRequests map[uint32]*createVReplicationWorkflowRequestResponse
 
 	// Used to confirm the number of times WorkflowDelete was called.
@@ -230,6 +233,9 @@ type testMaterializerTMClient struct {
 
 	// Used to override the response to ReadVReplicationWorkflow.
 	readVReplicationWorkflow readVReplicationWorkflowFunc
+
+	// Responses to GetSchema RPCs for individual tablets.
+	getSchemaResponses map[uint32]*tabletmanagerdatapb.SchemaDefinition
 }
 
 func newTestMaterializerTMClient(keyspace string, sourceShards []string, tableSettings []*vtctldatapb.TableMaterializeSettings) *testMaterializerTMClient {
@@ -239,7 +245,9 @@ func newTestMaterializerTMClient(keyspace string, sourceShards []string, tableSe
 		sourceShards:                       sourceShards,
 		tableSettings:                      tableSettings,
 		vrQueries:                          make(map[int][]*queryResult),
+		fetchAsAllPrivsQueries:             make(map[int]map[string]*queryResult),
 		createVReplicationWorkflowRequests: make(map[uint32]*createVReplicationWorkflowRequestResponse),
+		getSchemaResponses:                 make(map[uint32]*tabletmanagerdatapb.SchemaDefinition),
 	}
 }
 
@@ -248,7 +256,8 @@ func (tmc *testMaterializerTMClient) CreateVReplicationWorkflow(ctx context.Cont
 	defer tmc.mu.Unlock()
 	if expect := tmc.createVReplicationWorkflowRequests[tablet.Alias.Uid]; expect != nil {
 		if expect.req != nil && !proto.Equal(expect.req, request) {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected CreateVReplicationWorkflow request: got %+v, want %+v", request, expect)
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected CreateVReplicationWorkflow request on tablet %s: got %+v, want %+v",
+				topoproto.TabletAliasString(tablet.Alias), request, expect)
 		}
 		if expect.res != nil {
 			return expect.res, expect.err
@@ -314,9 +323,23 @@ func (tmc *testMaterializerTMClient) DeleteVReplicationWorkflow(ctx context.Cont
 	}, nil
 }
 
+func (tmc *testMaterializerTMClient) SetGetSchemaResponse(tabletUID int, res *tabletmanagerdatapb.SchemaDefinition) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+
+	if tmc.getSchemaResponses == nil {
+		tmc.getSchemaResponses = make(map[uint32]*tabletmanagerdatapb.SchemaDefinition)
+	}
+	tmc.getSchemaResponses[uint32(tabletUID)] = res
+}
+
 func (tmc *testMaterializerTMClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	tmc.mu.Lock()
 	defer tmc.mu.Unlock()
+
+	if tmc.getSchemaResponses != nil && tmc.getSchemaResponses[tablet.Alias.Uid] != nil {
+		return tmc.getSchemaResponses[tablet.Alias.Uid], nil
+	}
 
 	schemaDefn := &tabletmanagerdatapb.SchemaDefinition{}
 	for _, table := range request.Tables {
@@ -348,6 +371,20 @@ func (tmc *testMaterializerTMClient) expectVRQuery(tabletID int, query string, r
 		query:  query,
 		result: sqltypes.ResultToProto3(result),
 	})
+}
+
+func (tmc *testMaterializerTMClient) expectFetchAsAllPrivsQuery(tabletID int, query string, result *sqltypes.Result) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+
+	if tmc.fetchAsAllPrivsQueries[tabletID] == nil {
+		tmc.fetchAsAllPrivsQueries[tabletID] = make(map[string]*queryResult)
+	}
+
+	tmc.fetchAsAllPrivsQueries[tabletID][query] = &queryResult{
+		query:  query,
+		result: sqltypes.ResultToProto3(result),
+	}
 }
 
 func (tmc *testMaterializerTMClient) expectCreateVReplicationWorkflowRequest(tabletID uint32, req *createVReplicationWorkflowRequestResponse) {
@@ -400,7 +437,16 @@ func (tmc *testMaterializerTMClient) ExecuteFetchAsDba(ctx context.Context, tabl
 }
 
 func (tmc *testMaterializerTMClient) ExecuteFetchAsAllPrivs(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest) (*querypb.QueryResult, error) {
-	return nil, nil
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+
+	if resultsForTablet, ok := tmc.fetchAsAllPrivsQueries[int(tablet.Alias.Uid)]; ok {
+		if result, ok := resultsForTablet[string(req.Query)]; ok {
+			return result.result, result.err
+		}
+	}
+
+	return nil, fmt.Errorf("%w: no ExecuteFetchAsAllPrivs result set for tablet %d", assert.AnError, int(tablet.Alias.Uid))
 }
 
 // Note: ONLY breaks up change.SQL into individual statements and executes it. Does NOT fully implement ApplySchema.

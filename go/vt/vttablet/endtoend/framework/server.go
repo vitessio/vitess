@@ -65,11 +65,16 @@ func StartCustomServer(ctx context.Context, connParams, connAppDebugParams mysql
 		TabletType: topodatapb.TabletType_PRIMARY,
 	}
 	TopoServer = memorytopo.NewServer(ctx, "")
+	// Create the serving keyspace for throttler.
+	err := TopoServer.UpdateSrvKeyspace(ctx, "", "vttest", &topodatapb.SrvKeyspace{})
+	if err != nil {
+		return vterrors.Wrap(err, "could not create serving keyspace in topo")
+	}
 
 	srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
 	Server = tabletserver.NewTabletServer(ctx, vtenv.NewTestEnv(), "", cfg, TopoServer, &topodatapb.TabletAlias{}, srvTopoCounts)
 	Server.Register()
-	err := Server.StartService(Target, dbcfgs, nil /* mysqld */)
+	err = Server.StartService(Target, dbcfgs, nil /* mysqld */)
 	if err != nil {
 		return vterrors.Wrap(err, "could not start service")
 	}
@@ -103,8 +108,7 @@ func StartCustomServer(ctx context.Context, connParams, connAppDebugParams mysql
 func StartServer(ctx context.Context, connParams, connAppDebugParams mysql.ConnParams, dbName string) error {
 	config := tabletenv.NewDefaultConfig()
 	config.StrictTableACL = true
-	config.TwoPCEnable = true
-	config.TwoPCAbandonAge = 1
+	config.TwoPCAbandonAge = 1 * time.Second
 	config.HotRowProtection.Mode = tabletenv.Enable
 	config.TrackSchemaVersions = true
 	config.GracePeriods.Shutdown = 2 * time.Second

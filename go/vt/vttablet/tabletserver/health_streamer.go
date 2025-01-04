@@ -65,11 +65,18 @@ type healthStreamer struct {
 	degradedThreshold  time.Duration
 	unhealthyThreshold atomic.Int64
 
-	mu      sync.Mutex
-	ctx     context.Context
-	cancel  context.CancelFunc
-	clients map[chan *querypb.StreamHealthResponse]struct{}
-	state   *querypb.StreamHealthResponse
+	// cancelMu is a mutex used to protect the cancel variable
+	// and for ensuring we don't call setup functions in parallel.
+	cancelMu sync.Mutex
+	ctx      context.Context
+	cancel   context.CancelFunc
+
+	// fieldsMu is used to protect access to the fields below.
+	// We require two separate mutexes, so that we don't have to acquire the same mutex
+	// in Close and reload that can lead to a deadlock described in https://github.com/vitessio/vitess/issues/17229#issuecomment-2476136610.
+	fieldsMu sync.Mutex
+	clients  map[chan *querypb.StreamHealthResponse]struct{}
+	state    *querypb.StreamHealthResponse
 	// isServingPrimary stores if this tablet is currently the serving primary or not.
 	isServingPrimary bool
 
@@ -112,8 +119,8 @@ func (hs *healthStreamer) InitDBConfig(target *querypb.Target) {
 }
 
 func (hs *healthStreamer) Open() {
-	hs.mu.Lock()
-	defer hs.mu.Unlock()
+	hs.cancelMu.Lock()
+	defer hs.cancelMu.Unlock()
 
 	if hs.cancel != nil {
 		return
@@ -122,8 +129,8 @@ func (hs *healthStreamer) Open() {
 }
 
 func (hs *healthStreamer) Close() {
-	hs.mu.Lock()
-	defer hs.mu.Unlock()
+	hs.cancelMu.Lock()
+	defer hs.cancelMu.Unlock()
 
 	if hs.cancel != nil {
 		hs.se.UnregisterNotifier("healthStreamer")
@@ -160,12 +167,15 @@ func (hs *healthStreamer) Stream(ctx context.Context, callback func(*querypb.Str
 }
 
 func (hs *healthStreamer) register() (chan *querypb.StreamHealthResponse, context.Context) {
-	hs.mu.Lock()
-	defer hs.mu.Unlock()
+	hs.cancelMu.Lock()
+	defer hs.cancelMu.Unlock()
 
 	if hs.cancel == nil {
 		return nil, nil
 	}
+
+	hs.fieldsMu.Lock()
+	defer hs.fieldsMu.Unlock()
 
 	ch := make(chan *querypb.StreamHealthResponse, streamHealthBufferSize)
 	hs.clients[ch] = struct{}{}
@@ -176,15 +186,15 @@ func (hs *healthStreamer) register() (chan *querypb.StreamHealthResponse, contex
 }
 
 func (hs *healthStreamer) unregister(ch chan *querypb.StreamHealthResponse) {
-	hs.mu.Lock()
-	defer hs.mu.Unlock()
+	hs.fieldsMu.Lock()
+	defer hs.fieldsMu.Unlock()
 
 	delete(hs.clients, ch)
 }
 
 func (hs *healthStreamer) ChangeState(tabletType topodatapb.TabletType, ptsTimestamp time.Time, lag time.Duration, err error, serving bool) {
-	hs.mu.Lock()
-	defer hs.mu.Unlock()
+	hs.fieldsMu.Lock()
+	defer hs.fieldsMu.Unlock()
 
 	hs.state.Target.TabletType = tabletType
 	if tabletType == topodatapb.TabletType_PRIMARY {
@@ -239,8 +249,8 @@ func (hs *healthStreamer) broadCastToClients(shr *querypb.StreamHealthResponse) 
 }
 
 func (hs *healthStreamer) AppendDetails(details []*kv) []*kv {
-	hs.mu.Lock()
-	defer hs.mu.Unlock()
+	hs.fieldsMu.Lock()
+	defer hs.fieldsMu.Unlock()
 	if hs.state.Target.TabletType == topodatapb.TabletType_PRIMARY {
 		return details
 	}
@@ -285,9 +295,11 @@ func (hs *healthStreamer) SetUnhealthyThreshold(v time.Duration) {
 // MakePrimary tells the healthstreamer that the current tablet is now the primary,
 // so it can read and write to the MySQL instance for schema-tracking.
 func (hs *healthStreamer) MakePrimary(serving bool) {
-	hs.mu.Lock()
-	defer hs.mu.Unlock()
+	hs.fieldsMu.Lock()
 	hs.isServingPrimary = serving
+	// We let go of the lock here because we don't want to hold the lock when calling RegisterNotifier.
+	// If we keep holding the lock, there is a potential deadlock that can happen.
+	hs.fieldsMu.Unlock()
 	// We register for notifications from the schema Engine only when schema tracking is enabled,
 	// and we are going to a serving primary state.
 	if serving && hs.signalWhenSchemaChange {
@@ -301,15 +313,15 @@ func (hs *healthStreamer) MakePrimary(serving bool) {
 
 // MakeNonPrimary tells the healthstreamer that the current tablet is now not a primary.
 func (hs *healthStreamer) MakeNonPrimary() {
-	hs.mu.Lock()
-	defer hs.mu.Unlock()
+	hs.fieldsMu.Lock()
+	defer hs.fieldsMu.Unlock()
 	hs.isServingPrimary = false
 }
 
 // reload reloads the schema from the underlying mysql for the tables that we get the alert on.
 func (hs *healthStreamer) reload(created, altered, dropped []*schema.Table, udfsChanged bool) error {
-	hs.mu.Lock()
-	defer hs.mu.Unlock()
+	hs.fieldsMu.Lock()
+	defer hs.fieldsMu.Unlock()
 	// Schema Reload to happen only on primary when it is serving.
 	// We can be in a state when the primary is not serving after we have run DemotePrimary. In that case,
 	// we don't want to run any queries in MySQL, so we shouldn't reload anything in the healthStreamer.
@@ -352,8 +364,8 @@ func (hs *healthStreamer) reload(created, altered, dropped []*schema.Table, udfs
 
 // sendUnresolvedTransactionSignal sends broadcast message about unresolved transactions.
 func (hs *healthStreamer) sendUnresolvedTransactionSignal() {
-	hs.mu.Lock()
-	defer hs.mu.Unlock()
+	hs.fieldsMu.Lock()
+	defer hs.fieldsMu.Unlock()
 	// send signal only when primary is serving.
 	if !hs.isServingPrimary {
 		return

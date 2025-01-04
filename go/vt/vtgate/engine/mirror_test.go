@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -76,6 +77,10 @@ func TestMirror(t *testing.T) {
 		},
 	}
 
+	sourceExecTime := atomic.Pointer[time.Duration]{}
+	targetExecTime := atomic.Pointer[time.Duration]{}
+	targetErr := atomic.Pointer[error]{}
+
 	vc := &loggingVCursor{
 		shards: []string{"0"},
 		ksShardMap: map[string][]string{
@@ -90,8 +95,13 @@ func TestMirror(t *testing.T) {
 				"hello",
 			),
 		},
-		handleMirrorClonesFn: func(ctx context.Context) VCursor {
+		onMirrorClonesFn: func(ctx context.Context) VCursor {
 			return mirrorVC
+		},
+		onRecordMirrorStatsFn: func(sourceTime time.Duration, targetTime time.Duration, err error) {
+			sourceExecTime.Store(&sourceTime)
+			targetExecTime.Store(&targetTime)
+			targetErr.Store(&err)
 		},
 	}
 
@@ -99,6 +109,9 @@ func TestMirror(t *testing.T) {
 		defer func() {
 			vc.Rewind()
 			mirrorVC.Rewind()
+			sourceExecTime.Store(nil)
+			targetExecTime.Store(nil)
+			targetErr.Store(nil)
 		}()
 
 		want := vc.results[0]
@@ -114,6 +127,8 @@ func TestMirror(t *testing.T) {
 			`ResolveDestinations ks2 [type:INT64 value:"1"] Destinations:DestinationKeyspaceID(d46405367612b4b7)`,
 			"ExecuteMultiShard ks2.-20: select f.bar from foo f where f.id = 1 {} false false",
 		})
+		require.NotNil(t, targetExecTime.Load())
+		require.Nil(t, *targetErr.Load())
 	})
 
 	t.Run("TryExecute return primitive error", func(t *testing.T) {
@@ -124,6 +139,9 @@ func TestMirror(t *testing.T) {
 			vc.results = results
 			vc.resultErr = nil
 			mirrorVC.Rewind()
+			sourceExecTime.Store(nil)
+			targetExecTime.Store(nil)
+			targetErr.Store(nil)
 		}()
 
 		vc.results = nil
@@ -143,6 +161,8 @@ func TestMirror(t *testing.T) {
 			`ResolveDestinations ks2 [type:INT64 value:"1"] Destinations:DestinationKeyspaceID(d46405367612b4b7)`,
 			"ExecuteMultiShard ks2.-20: select f.bar from foo f where f.id = 1 {} false false",
 		})
+		require.NotNil(t, targetExecTime.Load())
+		require.Nil(t, *targetErr.Load())
 	})
 
 	t.Run("TryExecute ignore mirror target error", func(t *testing.T) {
@@ -153,6 +173,9 @@ func TestMirror(t *testing.T) {
 			mirrorVC.Rewind()
 			mirrorVC.results = results
 			mirrorVC.resultErr = nil
+			sourceExecTime.Store(nil)
+			targetExecTime.Store(nil)
+			targetErr.Store(nil)
 		}()
 
 		mirrorVC.results = nil
@@ -171,17 +194,24 @@ func TestMirror(t *testing.T) {
 			`ResolveDestinations ks2 [type:INT64 value:"1"] Destinations:DestinationKeyspaceID(d46405367612b4b7)`,
 			"ExecuteMultiShard ks2.-20: select f.bar from foo f where f.id = 1 {} false false",
 		})
+
+		require.NotNil(t, targetExecTime.Load())
+		mirrorErr := targetErr.Load()
+		require.ErrorContains(t, *mirrorErr, "ignore me")
 	})
 
-	t.Run("TryExecute slow mirror target", func(t *testing.T) {
+	t.Run("TryExecute fast mirror target", func(t *testing.T) {
 		defer func() {
 			vc.Rewind()
 			vc.onExecuteMultiShardFn = nil
 			mirrorVC.Rewind()
 			mirrorVC.onExecuteMultiShardFn = nil
+			sourceExecTime.Store(nil)
+			targetExecTime.Store(nil)
+			targetErr.Store(nil)
 		}()
 
-		primitiveLatency := maxMirrorTargetLag * 2
+		primitiveLatency := 10 * time.Millisecond
 		vc.onExecuteMultiShardFn = func(ctx context.Context, _ Primitive, _ []*srvtopo.ResolvedShard, _ []*querypb.BoundQuery, _ bool, _ bool) {
 			time.Sleep(primitiveLatency)
 			select {
@@ -193,12 +223,67 @@ func TestMirror(t *testing.T) {
 
 		var wg sync.WaitGroup
 		defer wg.Wait()
-		wg.Add(1)
 		mirrorVC.onExecuteMultiShardFn = func(ctx context.Context, _ Primitive, _ []*srvtopo.ResolvedShard, _ []*querypb.BoundQuery, _ bool, _ bool) {
+			wg.Add(1)
 			defer wg.Done()
-			time.Sleep(primitiveLatency + (2 * maxMirrorTargetLag))
+			time.Sleep(primitiveLatency / 2)
 			select {
 			case <-ctx.Done():
+				require.Fail(t, "mirror target context done")
+			default:
+			}
+		}
+
+		want := vc.results[0]
+		res, err := mirror.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, true)
+		require.Equal(t, res, want)
+		require.NoError(t, err)
+
+		vc.ExpectLog(t, []string{
+			"ResolveDestinations ks1 [] Destinations:DestinationAllShards()",
+			"ExecuteMultiShard ks1.0: select f.bar from foo f where f.id = 1 {} false false",
+		})
+		mirrorVC.ExpectLog(t, []string{
+			`ResolveDestinations ks2 [type:INT64 value:"1"] Destinations:DestinationKeyspaceID(d46405367612b4b7)`,
+			"ExecuteMultiShard ks2.-20: select f.bar from foo f where f.id = 1 {} false false",
+		})
+
+		wg.Wait()
+
+		require.Greater(t, *sourceExecTime.Load(), *targetExecTime.Load())
+	})
+
+	t.Run("TryExecute slow mirror target", func(t *testing.T) {
+		defer func() {
+			vc.Rewind()
+			vc.onExecuteMultiShardFn = nil
+			mirrorVC.Rewind()
+			mirrorVC.onExecuteMultiShardFn = nil
+			sourceExecTime.Store(nil)
+			targetExecTime.Store(nil)
+			targetErr.Store(nil)
+		}()
+
+		primitiveLatency := 10 * time.Millisecond
+		vc.onExecuteMultiShardFn = func(ctx context.Context, _ Primitive, _ []*srvtopo.ResolvedShard, _ []*querypb.BoundQuery, _ bool, _ bool) {
+			time.Sleep(primitiveLatency)
+			select {
+			case <-ctx.Done():
+				require.Fail(t, "primitive context done")
+			default:
+			}
+		}
+
+		var wg sync.WaitGroup
+		defer wg.Wait()
+		mirrorVC.onExecuteMultiShardFn = func(ctx context.Context, _ Primitive, _ []*srvtopo.ResolvedShard, _ []*querypb.BoundQuery, _ bool, _ bool) {
+			wg.Add(1)
+			defer wg.Done()
+			time.Sleep(primitiveLatency + maxMirrorTargetLag + (5 * time.Millisecond))
+			select {
+			case <-ctx.Done():
+				require.NotNil(t, ctx.Err())
+				require.ErrorContains(t, ctx.Err(), "context canceled")
 			default:
 				require.Fail(t, "mirror target context not done")
 			}
@@ -217,12 +302,20 @@ func TestMirror(t *testing.T) {
 			`ResolveDestinations ks2 [type:INT64 value:"1"] Destinations:DestinationKeyspaceID(d46405367612b4b7)`,
 			"ExecuteMultiShard ks2.-20: select f.bar from foo f where f.id = 1 {} false false",
 		})
+
+		wg.Wait()
+
+		require.Greater(t, *targetExecTime.Load(), *sourceExecTime.Load())
+		require.ErrorContains(t, *targetErr.Load(), "Mirror target query took too long")
 	})
 
 	t.Run("TryStreamExecute success", func(t *testing.T) {
 		defer func() {
 			vc.Rewind()
 			mirrorVC.Rewind()
+			sourceExecTime.Store(nil)
+			targetExecTime.Store(nil)
+			targetErr.Store(nil)
 		}()
 
 		want := vc.results[0]
@@ -246,6 +339,9 @@ func TestMirror(t *testing.T) {
 			`ResolveDestinations ks2 [type:INT64 value:"1"] Destinations:DestinationKeyspaceID(d46405367612b4b7)`,
 			"StreamExecuteMulti select f.bar from foo f where f.id = 1 ks2.-20: {} ",
 		})
+
+		require.NotNil(t, targetExecTime.Load())
+		require.Nil(t, *targetErr.Load())
 	})
 
 	t.Run("TryStreamExecute return primitive error", func(t *testing.T) {
@@ -256,6 +352,9 @@ func TestMirror(t *testing.T) {
 			vc.results = results
 			vc.resultErr = nil
 			mirrorVC.Rewind()
+			sourceExecTime.Store(nil)
+			targetExecTime.Store(nil)
+			targetErr.Store(nil)
 		}()
 
 		vc.results = nil
@@ -282,6 +381,9 @@ func TestMirror(t *testing.T) {
 			`ResolveDestinations ks2 [type:INT64 value:"1"] Destinations:DestinationKeyspaceID(d46405367612b4b7)`,
 			"StreamExecuteMulti select f.bar from foo f where f.id = 1 ks2.-20: {} ",
 		})
+
+		require.NotNil(t, targetExecTime.Load())
+		require.Nil(t, *targetErr.Load())
 	})
 
 	t.Run("TryStreamExecute ignore mirror target error", func(t *testing.T) {
@@ -292,6 +394,9 @@ func TestMirror(t *testing.T) {
 			mirrorVC.Rewind()
 			mirrorVC.results = results
 			mirrorVC.resultErr = nil
+			sourceExecTime.Store(nil)
+			targetExecTime.Store(nil)
+			targetErr.Store(nil)
 		}()
 
 		mirrorVC.results = nil
@@ -318,17 +423,23 @@ func TestMirror(t *testing.T) {
 			`ResolveDestinations ks2 [type:INT64 value:"1"] Destinations:DestinationKeyspaceID(d46405367612b4b7)`,
 			"StreamExecuteMulti select f.bar from foo f where f.id = 1 ks2.-20: {} ",
 		})
+
+		require.NotNil(t, targetExecTime.Load())
+		require.ErrorContains(t, *targetErr.Load(), "ignore me")
 	})
 
-	t.Run("TryStreamExecute slow mirror target", func(t *testing.T) {
+	t.Run("TryStreamExecute fast mirror target", func(t *testing.T) {
 		defer func() {
 			vc.Rewind()
 			vc.onStreamExecuteMultiFn = nil
 			mirrorVC.Rewind()
 			mirrorVC.onStreamExecuteMultiFn = nil
+			sourceExecTime.Store(nil)
+			targetExecTime.Store(nil)
+			targetErr.Store(nil)
 		}()
 
-		primitiveLatency := maxMirrorTargetLag * 2
+		primitiveLatency := 10 * time.Millisecond
 		vc.onStreamExecuteMultiFn = func(ctx context.Context, _ Primitive, _ string, _ []*srvtopo.ResolvedShard, _ []map[string]*querypb.BindVariable, _ bool, _ bool, _ func(*sqltypes.Result) error) {
 			time.Sleep(primitiveLatency)
 			select {
@@ -340,10 +451,69 @@ func TestMirror(t *testing.T) {
 
 		var wg sync.WaitGroup
 		defer wg.Wait()
-		wg.Add(1)
 		mirrorVC.onStreamExecuteMultiFn = func(ctx context.Context, _ Primitive, _ string, _ []*srvtopo.ResolvedShard, _ []map[string]*querypb.BindVariable, _ bool, _ bool, _ func(*sqltypes.Result) error) {
+			wg.Add(1)
 			defer wg.Done()
-			time.Sleep(primitiveLatency + (2 * maxMirrorTargetLag))
+			time.Sleep(primitiveLatency / 2)
+			select {
+			case <-ctx.Done():
+				require.Fail(t, "mirror target context done")
+			default:
+			}
+		}
+
+		want := vc.results[0]
+		err := mirror.TryStreamExecute(
+			context.Background(),
+			vc,
+			map[string]*querypb.BindVariable{},
+			true,
+			func(result *sqltypes.Result) error {
+				require.Equal(t, want, result)
+				return nil
+			},
+		)
+		require.NoError(t, err)
+
+		vc.ExpectLog(t, []string{
+			"ResolveDestinations ks1 [] Destinations:DestinationAllShards()",
+			"StreamExecuteMulti select f.bar from foo f where f.id = 1 ks1.0: {} ",
+		})
+		mirrorVC.ExpectLog(t, []string{
+			`ResolveDestinations ks2 [type:INT64 value:"1"] Destinations:DestinationKeyspaceID(d46405367612b4b7)`,
+			"StreamExecuteMulti select f.bar from foo f where f.id = 1 ks2.-20: {} ",
+		})
+
+		require.Greater(t, *sourceExecTime.Load(), *targetExecTime.Load())
+	})
+
+	t.Run("TryStreamExecute slow mirror target", func(t *testing.T) {
+		defer func() {
+			vc.Rewind()
+			vc.onStreamExecuteMultiFn = nil
+			mirrorVC.Rewind()
+			mirrorVC.onStreamExecuteMultiFn = nil
+			sourceExecTime.Store(nil)
+			targetExecTime.Store(nil)
+			targetErr.Store(nil)
+		}()
+
+		primitiveLatency := 10 * time.Millisecond
+		vc.onStreamExecuteMultiFn = func(ctx context.Context, _ Primitive, _ string, _ []*srvtopo.ResolvedShard, _ []map[string]*querypb.BindVariable, _ bool, _ bool, _ func(*sqltypes.Result) error) {
+			time.Sleep(primitiveLatency)
+			select {
+			case <-ctx.Done():
+				require.Fail(t, "primitive context done")
+			default:
+			}
+		}
+
+		var wg sync.WaitGroup
+		defer wg.Wait()
+		mirrorVC.onStreamExecuteMultiFn = func(ctx context.Context, _ Primitive, _ string, _ []*srvtopo.ResolvedShard, _ []map[string]*querypb.BindVariable, _ bool, _ bool, _ func(*sqltypes.Result) error) {
+			wg.Add(1)
+			defer wg.Done()
+			time.Sleep(primitiveLatency + maxMirrorTargetLag + (5 * time.Millisecond))
 			select {
 			case <-ctx.Done():
 			default:
@@ -372,5 +542,8 @@ func TestMirror(t *testing.T) {
 			`ResolveDestinations ks2 [type:INT64 value:"1"] Destinations:DestinationKeyspaceID(d46405367612b4b7)`,
 			"StreamExecuteMulti select f.bar from foo f where f.id = 1 ks2.-20: {} ",
 		})
+
+		require.Greater(t, *targetExecTime.Load(), *sourceExecTime.Load())
+		require.ErrorContains(t, *targetErr.Load(), "Mirror target query took too long")
 	})
 }

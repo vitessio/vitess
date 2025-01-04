@@ -104,6 +104,7 @@ type LocalProcessCluster struct {
 	VtctlclientProcess  VtctlClientProcess
 	VtctldClientProcess VtctldClientProcess
 	VtctlProcess        VtctlProcess
+	VtadminProcess      VtAdminProcess
 
 	// background executable processes
 	TopoProcess     TopoProcess
@@ -168,6 +169,17 @@ type Shard struct {
 // PrimaryTablet get the 1st tablet which is always elected as primary
 func (shard *Shard) PrimaryTablet() *Vttablet {
 	return shard.Vttablets[0]
+}
+
+// FindPrimaryTablet finds the primary tablet in the shard.
+func (shard *Shard) FindPrimaryTablet() *Vttablet {
+	for _, vttablet := range shard.Vttablets {
+		tabletType := vttablet.VttabletProcess.GetTabletType()
+		if tabletType == "primary" {
+			return vttablet
+		}
+	}
+	return nil
 }
 
 // Rdonly get the last tablet which is rdonly
@@ -1031,7 +1043,6 @@ func (cluster *LocalProcessCluster) StreamTabletHealthUntil(ctx context.Context,
 
 // Teardown brings down the cluster by invoking teardown for individual processes
 func (cluster *LocalProcessCluster) Teardown() {
-	PanicHandler(nil)
 	cluster.mx.Lock()
 	defer cluster.mx.Unlock()
 	if cluster.teardownCompleted {
@@ -1048,6 +1059,10 @@ func (cluster *LocalProcessCluster) Teardown() {
 		if err := vtorcProcess.TearDown(); err != nil {
 			log.Errorf("Error in vtorc teardown: %v", err)
 		}
+	}
+
+	if err := cluster.VtadminProcess.TearDown(); err != nil {
+		log.Errorf("Error in vtadmin teardown: %v", err)
 	}
 
 	var mysqlctlProcessList []*exec.Cmd
@@ -1285,8 +1300,20 @@ func (cluster *LocalProcessCluster) NewVTOrcProcess(config VTOrcConfiguration) *
 		VtctlProcess: *base,
 		LogDir:       cluster.TmpDirectory,
 		Config:       config,
-		WebPort:      cluster.GetAndReservePort(),
 		Port:         cluster.GetAndReservePort(),
+	}
+}
+
+// NewVTAdminProcess creates a new VTAdminProcess object
+func (cluster *LocalProcessCluster) NewVTAdminProcess() {
+	cluster.VtadminProcess = VtAdminProcess{
+		Binary:         "vtadmin",
+		Port:           cluster.GetAndReservePort(),
+		LogDir:         cluster.TmpDirectory,
+		VtGateGrpcPort: cluster.VtgateProcess.GrpcPort,
+		VtGateWebPort:  cluster.VtgateProcess.Port,
+		VtctldWebPort:  cluster.VtctldProcess.Port,
+		VtctldGrpcPort: cluster.VtctldProcess.GrpcPort,
 	}
 }
 

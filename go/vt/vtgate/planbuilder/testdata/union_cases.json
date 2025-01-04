@@ -447,34 +447,84 @@
             "OperatorType": "Concatenate",
             "Inputs": [
               {
-                "OperatorType": "Route",
+                "OperatorType": "VindexLookup",
                 "Variant": "EqualUnique",
                 "Keyspace": {
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select 1 from music where 1 != 1",
-                "Query": "select distinct 1 from music where id = 1",
-                "Table": "music",
                 "Values": [
                   "1"
                 ],
-                "Vindex": "music_user_map"
+                "Vindex": "music_user_map",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "IN",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+                    "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+                    "Table": "name_user_vdx",
+                    "Values": [
+                      "::name"
+                    ],
+                    "Vindex": "user_index"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "ByDestination",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1 from music where 1 != 1",
+                    "Query": "select distinct 1 from music where id = 1",
+                    "Table": "music"
+                  }
+                ]
               },
               {
-                "OperatorType": "Route",
+                "OperatorType": "VindexLookup",
                 "Variant": "EqualUnique",
                 "Keyspace": {
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select 1 from music where 1 != 1",
-                "Query": "select distinct 1 from music where id = 2",
-                "Table": "music",
                 "Values": [
                   "2"
                 ],
-                "Vindex": "music_user_map"
+                "Vindex": "music_user_map",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "IN",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+                    "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+                    "Table": "name_user_vdx",
+                    "Values": [
+                      "::name"
+                    ],
+                    "Vindex": "user_index"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "ByDestination",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1 from music where 1 != 1",
+                    "Query": "select distinct 1 from music where id = 2",
+                    "Table": "music"
+                  }
+                ]
               }
             ]
           }

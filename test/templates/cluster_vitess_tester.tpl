@@ -14,7 +14,7 @@ env:
 jobs:
   build:
     name: Run endtoend tests on {{.Name}}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
     - name: Skip CI
@@ -93,12 +93,12 @@ jobs:
         # Get key to latest MySQL repo
         sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys A8D3785C
         # Setup MySQL 8.0
-        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.32-1_all.deb
+        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.33-1_all.deb
         echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
         sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
         sudo apt-get -qq update
         # Install everything else we need, and configure
-        sudo apt-get -qq install -y mysql-server mysql-client make unzip g++ etcd curl git wget eatmydata xz-utils libncurses5
+        sudo apt-get -qq install -y mysql-server mysql-client make unzip g++ etcd-client etcd-server curl git wget eatmydata xz-utils libncurses6
 
         sudo service mysql stop
         sudo service etcd stop
@@ -110,7 +110,7 @@ jobs:
         go install github.com/vitessio/go-junit-report@HEAD
         
         # install vitess tester
-        go install github.com/vitessio/vitess-tester/go/vt@374fd9f495c1afd3b6bea9d4ec7728119714055
+        go install github.com/vitessio/vt/go/vt@e43009309f599378504905d4b804460f47822ac5
 
     - name: Setup launchable dependencies
       if: steps.skip-workflow.outputs.is_draft == 'false' && steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true' && github.base_ref == 'main'
@@ -140,7 +140,7 @@ jobs:
         i=1
         for dir in {{.Path}}/*/; do 
           # We go over all the directories in the given path.
-          # If there is a vschema file there, we use it, otherwise we let vitess-tester autogenerate it.
+          # If there is a vschema file there, we use it, otherwise we let vt tester autogenerate it.
           if [ -f $dir/vschema.json ]; then
             vt tester --xunit --vschema "$dir"vschema.json $dir/*.test
           else 

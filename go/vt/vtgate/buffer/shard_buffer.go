@@ -137,7 +137,7 @@ func (sb *shardBuffer) disabled() bool {
 	return sb.mode == bufferModeDisabled
 }
 
-func (sb *shardBuffer) waitForFailoverEnd(ctx context.Context, keyspace, shard string, err error) (RetryDoneFunc, error) {
+func (sb *shardBuffer) waitForFailoverEnd(ctx context.Context, keyspace, shard string, kev *discovery.KeyspaceEventWatcher, err error) (RetryDoneFunc, error) {
 	// We assume if err != nil then it's always caused by a failover.
 	// Other errors must be filtered at higher layers.
 	failoverDetected := err != nil
@@ -211,7 +211,11 @@ func (sb *shardBuffer) waitForFailoverEnd(ctx context.Context, keyspace, shard s
 			return nil, nil
 		}
 
-		sb.startBufferingLocked(err)
+		// Try to start buffering. If we're unsuccessful, then we exit early.
+		if !sb.startBufferingLocked(ctx, kev, err) {
+			sb.mu.Unlock()
+			return nil, nil
+		}
 	}
 
 	if sb.mode == bufferModeDryRun {
@@ -255,7 +259,16 @@ func (sb *shardBuffer) shouldBufferLocked(failoverDetected bool) bool {
 	panic("BUG: All possible states must be covered by the switch expression above.")
 }
 
-func (sb *shardBuffer) startBufferingLocked(err error) {
+func (sb *shardBuffer) startBufferingLocked(ctx context.Context, kev *discovery.KeyspaceEventWatcher, err error) bool {
+	if kev != nil {
+		if !kev.MarkShardNotServing(ctx, sb.keyspace, sb.shard, isErrorDueToReparenting(err)) {
+			// We failed to mark the shard as not serving. Do not buffer the request.
+			// This can happen if the keyspace has been deleted or if the keyspace even watcher
+			// hasn't yet seen the shard. Keyspace event watcher might not stop buffering for this
+			// request at all until it times out. It's better to not buffer this request.
+			return false
+		}
+	}
 	// Reset monitoring data from previous failover.
 	lastRequestsInFlightMax.Set(sb.statsKey, 0)
 	lastRequestsDryRunMax.Set(sb.statsKey, 0)
@@ -273,7 +286,7 @@ func (sb *shardBuffer) startBufferingLocked(err error) {
 		msg = "Dry-run: Would have started buffering"
 	}
 	starts.Add(sb.statsKey, 1)
-	log.Infof("%v for shard: %s (window: %v, size: %v, max failover duration: %v) (A failover was detected by this seen error: %v.)",
+	log.V(2).Infof("%v for shard: %s (window: %v, size: %v, max failover duration: %v) (A failover was detected by this seen error: %v.)",
 		msg,
 		topoproto.KeyspaceShardString(sb.keyspace, sb.shard),
 		sb.buf.config.Window,
@@ -281,6 +294,7 @@ func (sb *shardBuffer) startBufferingLocked(err error) {
 		sb.buf.config.MaxFailoverDuration,
 		errorsanitizer.NormalizeError(err.Error()),
 	)
+	return true
 }
 
 // logErrorIfStateNotLocked logs an error if the current state is not "state".
@@ -474,7 +488,7 @@ func (sb *shardBuffer) recordKeyspaceEvent(alias *topodatapb.TabletAlias, stillS
 	sb.mu.Lock()
 	defer sb.mu.Unlock()
 
-	log.Infof("disruption in shard %s/%s resolved (serving: %v), movetable state %#v",
+	log.V(2).Infof("disruption in shard %s/%s resolved (serving: %v), movetable state %#v",
 		sb.keyspace, sb.shard, stillServing, keyspaceEvent.MoveTablesState)
 
 	if !topoproto.TabletAliasEqual(alias, sb.currentPrimary) {
@@ -548,7 +562,7 @@ func (sb *shardBuffer) stopBufferingLocked(reason stopReason, details string) {
 	if sb.mode == bufferModeDryRun {
 		msg = "Dry-run: Would have stopped buffering"
 	}
-	log.Infof("%v for shard: %s after: %.1f seconds due to: %v. Draining %d buffered requests now.",
+	log.V(2).Infof("%v for shard: %s after: %.1f seconds due to: %v. Draining %d buffered requests now.",
 		msg, topoproto.KeyspaceShardString(sb.keyspace, sb.shard), d.Seconds(), details, len(q))
 
 	var clientEntryError error
@@ -608,7 +622,7 @@ func (sb *shardBuffer) drain(q []*entry, err error) {
 	wg.Wait()
 
 	d := sb.timeNow().Sub(start)
-	log.Infof("Draining finished for shard: %s Took: %v for: %d requests.", topoproto.KeyspaceShardString(sb.keyspace, sb.shard), d, len(q))
+	log.V(2).Infof("Draining finished for shard: %s Took: %v for: %d requests.", topoproto.KeyspaceShardString(sb.keyspace, sb.shard), d, len(q))
 	requestsDrained.Add(sb.statsKey, int64(len(q)))
 
 	// Draining is done. Change state from "draining" to "idle".

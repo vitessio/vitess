@@ -40,6 +40,7 @@ type DBClient interface {
 	Commit() error
 	Rollback() error
 	Close()
+	IsClosed() bool
 	ExecuteFetch(query string, maxrows int) (qr *sqltypes.Result, err error)
 	ExecuteFetchMulti(query string, maxrows int) (qrs []*sqltypes.Result, err error)
 	SupportsCapability(capability capabilities.FlavorCapability) (bool, error)
@@ -123,6 +124,10 @@ func (dc *dbClientImpl) Rollback() error {
 
 func (dc *dbClientImpl) Close() {
 	dc.dbConn.Close()
+}
+
+func (dc *dbClientImpl) IsClosed() bool {
+	return dc.dbConn.IsClosed()
 }
 
 func (dc *dbClientImpl) SupportsCapability(capability capabilities.FlavorCapability) (bool, error) {

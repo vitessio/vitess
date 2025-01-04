@@ -32,13 +32,14 @@ const (
 		migration_status,
 		tablet,
 		retain_artifacts_seconds,
+		cutover_threshold_seconds,
 		postpone_launch,
 		postpone_completion,
 		allow_concurrent,
 		reverted_uuid,
 		is_view
 	) VALUES (
-		%a, %a, %a, %a, %a, %a, %a, %a, %a, NOW(6), %a, %a, %a, %a, %a, %a, %a, %a, %a
+		%a, %a, %a, %a, %a, %a, %a, %a, %a, NOW(6), %a, %a, %a, %a, %a, %a, %a, %a, %a, %a
 	)`
 
 	sqlSelectQueuedMigrations = `SELECT
@@ -83,6 +84,11 @@ const (
 	`
 	sqlUpdateMigrationRowsCopied = `UPDATE _vt.schema_migrations
 			SET rows_copied=%a
+		WHERE
+			migration_uuid=%a
+	`
+	sqlUpdateMigrationVreplicationLagSeconds = `UPDATE _vt.schema_migrations
+			SET vreplication_lag_seconds=%a
 		WHERE
 			migration_uuid=%a
 	`
@@ -181,6 +187,11 @@ const (
 		WHERE
 			migration_uuid=%a
 	`
+	sqlUpdateCutOverThresholdSeconds = `UPDATE _vt.schema_migrations
+			SET cutover_threshold_seconds=%a
+		WHERE
+			migration_uuid=%a
+	`
 	sqlUpdateLaunchMigration = `UPDATE _vt.schema_migrations
 			SET postpone_launch=0
 		WHERE
@@ -270,6 +281,7 @@ const (
 			cancelled_timestamp=NULL,
 			completed_timestamp=NULL,
 			last_cutover_attempt_timestamp=NULL,
+			shadow_analyzed_timestamp=NULL,
 			cleanup_timestamp=NULL
 		WHERE
 			migration_status IN ('failed', 'cancelled')
@@ -291,6 +303,7 @@ const (
 			cancelled_timestamp=NULL,
 			completed_timestamp=NULL,
 			last_cutover_attempt_timestamp=NULL,
+			shadow_analyzed_timestamp=NULL,
 			cleanup_timestamp=NULL
 		WHERE
 			migration_status IN ('failed', 'cancelled')
@@ -427,6 +440,7 @@ const (
 			removed_unique_keys,
 			migration_context,
 			retain_artifacts_seconds,
+			cutover_threshold_seconds,
 			is_view,
 			ready_to_complete,
 			ready_to_complete_timestamp is not null as was_ready_to_complete,
@@ -441,6 +455,7 @@ const (
 			postpone_launch,
 			postpone_completion,
 			is_immediate_operation,
+			shadow_analyzed_timestamp,
 			reviewed_timestamp
 		FROM _vt.schema_migrations
 		WHERE
@@ -515,6 +530,20 @@ const (
 		WHERE
 			workflow=%a
 		`
+	sqlReadVReplLogErrors = `SELECT
+			state,
+			message
+		FROM _vt.vreplication_log
+		WHERE
+			vrepl_id=%a
+			AND (
+				state='Error'
+				OR locate (concat(%a, ':'), message) = 1
+			)
+		ORDER BY
+			id DESC
+		LIMIT 1
+	`
 	sqlReadCountCopyState = `SELECT
 			count(*) as cnt
 		FROM

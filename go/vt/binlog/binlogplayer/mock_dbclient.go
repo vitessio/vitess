@@ -100,14 +100,6 @@ func NewMockDbaClient(t *testing.T) *MockDBClient {
 	}
 }
 
-func (dc *MockDBClient) Reset() {
-	dc.expectMu.Lock()
-	defer dc.expectMu.Unlock()
-	dc.currentResult = 0
-	dc.expect = nil
-	dc.done = make(chan struct{})
-}
-
 // ExpectRequest adds an expected result to the mock.
 // This function should not be called conncurrently with other commands.
 func (dc *MockDBClient) ExpectRequest(query string, result *sqltypes.Result, err error) {
@@ -187,6 +179,10 @@ func (dc *MockDBClient) Rollback() error {
 
 // Close is part of the DBClient interface
 func (dc *MockDBClient) Close() {
+}
+
+func (dc *MockDBClient) IsClosed() bool {
+	return false
 }
 
 // ExecuteFetch is part of the DBClient interface

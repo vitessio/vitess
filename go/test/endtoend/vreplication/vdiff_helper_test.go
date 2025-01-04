@@ -35,7 +35,7 @@ import (
 )
 
 const (
-	vdiffTimeout             = 120 * time.Second // We can leverage auto retry on error with this longer-than-usual timeout
+	vdiffTimeout             = 180 * time.Second // We can leverage auto retry on error with this longer-than-usual timeout
 	vdiffRetryTimeout        = 30 * time.Second
 	vdiffStatusCheckInterval = 5 * time.Second
 	vdiffRetryInterval       = 5 * time.Second
@@ -71,7 +71,8 @@ func doVtctlclientVDiff(t *testing.T, keyspace, workflow, cells string, want *ex
 	ksWorkflow := fmt.Sprintf("%s.%s", keyspace, workflow)
 	t.Run(fmt.Sprintf("vtctlclient vdiff %s", ksWorkflow), func(t *testing.T) {
 		// update-table-stats is needed in order to test progress reports.
-		uuid, _ := performVDiff2Action(t, true, ksWorkflow, cells, "create", "", false, "--auto-retry", "--update-table-stats")
+		uuid, _ := performVDiff2Action(t, true, ksWorkflow, cells, "create", "", false, "--auto-retry",
+			"--update-table-stats", fmt.Sprintf("--filtered_replication_wait_time=%v", vdiffTimeout/2))
 		info := waitForVDiff2ToComplete(t, true, ksWorkflow, cells, uuid, time.Time{})
 		require.NotNil(t, info)
 		require.Equal(t, workflow, info.Workflow)
@@ -164,7 +165,7 @@ func doVtctldclientVDiff(t *testing.T, keyspace, workflow, cells string, want *e
 	ksWorkflow := fmt.Sprintf("%s.%s", keyspace, workflow)
 	t.Run(fmt.Sprintf("vtctldclient vdiff %s", ksWorkflow), func(t *testing.T) {
 		// update-table-stats is needed in order to test progress reports.
-		flags := []string{"--auto-retry", "--update-table-stats"}
+		flags := []string{"--auto-retry", "--update-table-stats", fmt.Sprintf("--filtered-replication-wait-time=%v", vdiffTimeout/2)}
 		if len(extraFlags) > 0 {
 			flags = append(flags, extraFlags...)
 		}

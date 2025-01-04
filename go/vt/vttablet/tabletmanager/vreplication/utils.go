@@ -227,10 +227,29 @@ func isUnrecoverableError(err error) bool {
 		sqlerror.ERWrongParametersToProcedure,
 		sqlerror.ERWrongUsage,
 		sqlerror.ERWrongValue,
+		sqlerror.ERWrongParamcountToNativeFct,
 		sqlerror.ERVectorConversion,
 		sqlerror.ERWrongValueCountOnRow:
 		log.Errorf("Got unrecoverable error: %v", sqlErr)
 		return true
+	case sqlerror.ERErrorDuringCommit:
+		switch sqlErr.HaErrorCode() {
+		case
+			0, // Not really a HA error.
+			sqlerror.HaErrLockDeadlock,
+			sqlerror.HaErrLockTableFull,
+			sqlerror.HaErrLockWaitTimeout,
+			sqlerror.HaErrNotInLockPartitions,
+			sqlerror.HaErrQueryInterrupted,
+			sqlerror.HaErrRolledBack,
+			sqlerror.HaErrTooManyConcurrentTrxs,
+			sqlerror.HaErrUndoRecTooBig:
+			// These are recoverable errors.
+			return false
+		default:
+			log.Errorf("Got unrecoverable error: %v", sqlErr)
+			return true
+		}
 	}
 	return false
 }

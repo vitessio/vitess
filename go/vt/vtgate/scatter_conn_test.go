@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/vt/log"
+	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -100,7 +101,7 @@ func TestExecuteFailOnAutocommit(t *testing.T) {
 		},
 		Autocommit: false,
 	}
-	_, errs := sc.ExecuteMultiShard(ctx, nil, rss, queries, NewSafeSession(session), true /*autocommit*/, false, nullResultsObserver{})
+	_, errs := sc.ExecuteMultiShard(ctx, nil, rss, queries, econtext.NewSafeSession(session), true /*autocommit*/, false, nullResultsObserver{})
 	err := vterrors.Aggregate(errs)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "in autocommit mode, transactionID should be zero but was: 123")
@@ -183,7 +184,7 @@ func TestExecutePanic(t *testing.T) {
 		require.Contains(t, logMessage, "(*ScatterConn).multiGoTransaction")
 	}()
 
-	_, _ = sc.ExecuteMultiShard(ctx, nil, rss, queries, NewSafeSession(session), true /*autocommit*/, false, nullResultsObserver{})
+	_, _ = sc.ExecuteMultiShard(ctx, nil, rss, queries, econtext.NewSafeSession(session), true /*autocommit*/, false, nullResultsObserver{})
 
 }
 
@@ -204,7 +205,7 @@ func TestReservedOnMultiReplica(t *testing.T) {
 
 	res := srvtopo.NewResolver(newSandboxForCells(ctx, []string{"aa"}), sc.gateway, "aa")
 
-	session := NewSafeSession(&vtgatepb.Session{InTransaction: false, InReservedConn: true})
+	session := econtext.NewSafeSession(&vtgatepb.Session{InTransaction: false, InReservedConn: true})
 	destinations := []key.Destination{key.DestinationShard("0")}
 	for i := 0; i < 10; i++ {
 		executeOnShards(t, ctx, res, keyspace, sc, session, destinations)
@@ -351,7 +352,7 @@ func TestReservedBeginTableDriven(t *testing.T) {
 		res := srvtopo.NewResolver(newSandboxForCells(ctx, []string{"aa"}), sc.gateway, "aa")
 
 		t.Run(test.name, func(t *testing.T) {
-			session := NewSafeSession(&vtgatepb.Session{})
+			session := econtext.NewSafeSession(&vtgatepb.Session{})
 			for _, action := range test.actions {
 				session.Session.InTransaction = action.transaction
 				session.Session.InReservedConn = action.reserved
@@ -384,7 +385,7 @@ func TestReservedConnFail(t *testing.T) {
 	_ = hc.AddTestTablet("aa", "1", 1, keyspace, "1", topodatapb.TabletType_REPLICA, true, 1, nil)
 	res := srvtopo.NewResolver(newSandboxForCells(ctx, []string{"aa"}), sc.gateway, "aa")
 
-	session := NewSafeSession(&vtgatepb.Session{InTransaction: false, InReservedConn: true})
+	session := econtext.NewSafeSession(&vtgatepb.Session{InTransaction: false, InReservedConn: true})
 	destinations := []key.Destination{key.DestinationShard("0")}
 
 	executeOnShards(t, ctx, res, keyspace, sc, session, destinations)

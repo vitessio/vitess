@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"reflect"
 	"regexp"
 	"slices"
 	"strings"
@@ -38,6 +39,7 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -268,7 +270,9 @@ type testTMClient struct {
 	mu                                 sync.Mutex
 	vrQueries                          map[int][]*queryResult
 	createVReplicationWorkflowRequests map[uint32]*createVReplicationWorkflowRequestResponse
-	readVReplicationWorkflowRequests   map[uint32]*tabletmanagerdatapb.ReadVReplicationWorkflowRequest
+	readVReplicationWorkflowRequests   map[uint32]*readVReplicationWorkflowRequestResponse
+	updateVReplicationWorklowsRequests map[uint32]*tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest
+	applySchemaRequests                map[uint32]*applySchemaRequestResponse
 	primaryPositions                   map[uint32]string
 	vdiffRequests                      map[uint32]*vdiffRequestResponse
 	refreshStateErrors                 map[uint32]error
@@ -290,7 +294,9 @@ func newTestTMClient(env *testEnv) *testTMClient {
 		schema:                             make(map[string]*tabletmanagerdatapb.SchemaDefinition),
 		vrQueries:                          make(map[int][]*queryResult),
 		createVReplicationWorkflowRequests: make(map[uint32]*createVReplicationWorkflowRequestResponse),
-		readVReplicationWorkflowRequests:   make(map[uint32]*tabletmanagerdatapb.ReadVReplicationWorkflowRequest),
+		readVReplicationWorkflowRequests:   make(map[uint32]*readVReplicationWorkflowRequestResponse),
+		updateVReplicationWorklowsRequests: make(map[uint32]*tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest),
+		applySchemaRequests:                make(map[uint32]*applySchemaRequestResponse),
 		readVReplicationWorkflowsResponses: make(map[string][]*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse),
 		primaryPositions:                   make(map[uint32]string),
 		vdiffRequests:                      make(map[uint32]*vdiffRequestResponse),
@@ -305,7 +311,8 @@ func (tmc *testTMClient) CreateVReplicationWorkflow(ctx context.Context, tablet 
 
 	if expect := tmc.createVReplicationWorkflowRequests[tablet.Alias.Uid]; expect != nil {
 		if expect.req != nil && !proto.Equal(expect.req, req) {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected CreateVReplicationWorkflow request: got %+v, want %+v", req, expect)
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected CreateVReplicationWorkflow request on tablet %s: got %+v, want %+v",
+				topoproto.TabletAliasString(tablet.Alias), req, expect)
 		}
 		if expect.res != nil {
 			return expect.res, expect.err
@@ -323,8 +330,12 @@ func (tmc *testTMClient) ReadVReplicationWorkflow(ctx context.Context, tablet *t
 	tmc.mu.Lock()
 	defer tmc.mu.Unlock()
 	if expect := tmc.readVReplicationWorkflowRequests[tablet.Alias.Uid]; expect != nil {
-		if !proto.Equal(expect, req) {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected ReadVReplicationWorkflow request: got %+v, want %+v", req, expect)
+		if !proto.Equal(expect.req, req) {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected ReadVReplicationWorkflow request on tablet %s: got %+v, want %+v",
+				topoproto.TabletAliasString(tablet.Alias), req, expect)
+		}
+		if expect.res != nil {
+			return expect.res, expect.err
 		}
 	}
 	workflowType := binlogdatapb.VReplicationWorkflowType_MoveTables
@@ -366,6 +377,10 @@ func (tmc *testTMClient) ReadVReplicationWorkflow(ctx context.Context, tablet *t
 	}
 
 	return res, nil
+}
+
+func (tmc *testTMClient) DeleteTableData(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.DeleteTableDataRequest) (response *tabletmanagerdatapb.DeleteTableDataResponse, err error) {
+	return &tabletmanagerdatapb.DeleteTableDataResponse{}, nil
 }
 
 func (tmc *testTMClient) DeleteVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.DeleteVReplicationWorkflowRequest) (response *tabletmanagerdatapb.DeleteVReplicationWorkflowResponse, err error) {
@@ -437,6 +452,22 @@ func (tmc *testTMClient) expectCreateVReplicationWorkflowRequestOnTargetTablets(
 	}
 }
 
+func (tmc *testTMClient) expectReadVReplicationWorkflowRequest(tabletID uint32, req *readVReplicationWorkflowRequestResponse) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+
+	tmc.readVReplicationWorkflowRequests[tabletID] = req
+}
+
+func (tmc *testTMClient) expectReadVReplicationWorkflowRequestOnTargetTablets(req *readVReplicationWorkflowRequestResponse) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+
+	for _, tablet := range tmc.env.tablets[tmc.env.targetKeyspace.KeyspaceName] {
+		tmc.readVReplicationWorkflowRequests[tablet.Alias.Uid] = req
+	}
+}
+
 func (tmc *testTMClient) VReplicationExec(ctx context.Context, tablet *topodatapb.Tablet, query string) (*querypb.QueryResult, error) {
 	tmc.mu.Lock()
 	defer tmc.mu.Unlock()
@@ -467,8 +498,35 @@ func (tmc *testTMClient) ExecuteFetchAsAllPrivs(ctx context.Context, tablet *top
 	return nil, nil
 }
 
+func (tmc *testTMClient) ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteFetchAsAppRequest) (*querypb.QueryResult, error) {
+	// Reuse VReplicationExec.
+	return tmc.VReplicationExec(ctx, tablet, string(req.Query))
+}
+
+func (tmc *testTMClient) expectApplySchemaRequest(tabletID uint32, req *applySchemaRequestResponse) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+
+	if tmc.applySchemaRequests == nil {
+		tmc.applySchemaRequests = make(map[uint32]*applySchemaRequestResponse)
+	}
+
+	tmc.applySchemaRequests[tabletID] = req
+}
+
 // Note: ONLY breaks up change.SQL into individual statements and executes it. Does NOT fully implement ApplySchema.
 func (tmc *testTMClient) ApplySchema(ctx context.Context, tablet *topodatapb.Tablet, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+
+	if expect, ok := tmc.applySchemaRequests[tablet.Alias.Uid]; ok {
+		if !reflect.DeepEqual(change, expect.change) {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected ApplySchema request on tablet %s: got %+v, want %+v",
+				topoproto.TabletAliasString(tablet.Alias), change, expect.change)
+		}
+		return expect.res, expect.err
+	}
+
 	stmts := strings.Split(change.SQL, ";")
 
 	for _, stmt := range stmts {
@@ -497,6 +555,18 @@ type createVReplicationWorkflowRequestResponse struct {
 	err error
 }
 
+type readVReplicationWorkflowRequestResponse struct {
+	req *tabletmanagerdatapb.ReadVReplicationWorkflowRequest
+	res *tabletmanagerdatapb.ReadVReplicationWorkflowResponse
+	err error
+}
+
+type applySchemaRequestResponse struct {
+	change *tmutils.SchemaChange
+	res    *tabletmanagerdatapb.SchemaChangeResult
+	err    error
+}
+
 func (tmc *testTMClient) expectVDiffRequest(tablet *topodatapb.Tablet, vrr *vdiffRequestResponse) {
 	tmc.mu.Lock()
 	defer tmc.mu.Unlock()
@@ -513,14 +583,15 @@ func (tmc *testTMClient) VDiff(ctx context.Context, tablet *topodatapb.Tablet, r
 
 	if vrr, ok := tmc.vdiffRequests[tablet.Alias.Uid]; ok {
 		if !proto.Equal(vrr.req, req) {
-			return nil, fmt.Errorf("unexpected VDiff request on tablet: %+v; got %+v, want %+v",
-				tablet, req, vrr.req)
+			return nil, fmt.Errorf("unexpected VDiff request on tablet %s; got %+v, want %+v",
+				topoproto.TabletAliasString(tablet.Alias), req, vrr.req)
 		}
 		delete(tmc.vdiffRequests, tablet.Alias.Uid)
 		return vrr.res, vrr.err
 	}
 	if tmc.strict {
-		return nil, fmt.Errorf("unexpected VDiff request on tablet %+v: %+v", tablet, req)
+		return nil, fmt.Errorf("unexpected VDiff request on tablet %s: %+v",
+			topoproto.TabletAliasString(tablet.Alias), req)
 	}
 
 	return &tabletmanagerdatapb.VDiffResponse{
@@ -551,6 +622,10 @@ func (tmc *testTMClient) HasVReplicationWorkflows(ctx context.Context, tablet *t
 	return &tabletmanagerdatapb.HasVReplicationWorkflowsResponse{
 		Has: false,
 	}, nil
+}
+
+func (tmc *testTMClient) ResetSequences(ctx context.Context, tablet *topodatapb.Tablet, tables []string) error {
+	return nil
 }
 
 func (tmc *testTMClient) ReadVReplicationWorkflows(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ReadVReplicationWorkflowsRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse, error) {
@@ -613,6 +688,19 @@ func (tmc *testTMClient) UpdateVReplicationWorkflow(ctx context.Context, tablet 
 	}, nil
 }
 
+func (tmc *testTMClient) UpdateVReplicationWorkflows(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest) (*tabletmanagerdatapb.UpdateVReplicationWorkflowsResponse, error) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+	if expect := tmc.updateVReplicationWorklowsRequests[tablet.Alias.Uid]; expect != nil {
+		if !proto.Equal(expect, req) {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected ReadVReplicationWorkflow request on tablet %s: got %+v, want %+v",
+				topoproto.TabletAliasString(tablet.Alias), req, expect)
+		}
+	}
+	delete(tmc.updateVReplicationWorklowsRequests, tablet.Alias.Uid)
+	return nil, nil
+}
+
 func (tmc *testTMClient) ValidateVReplicationPermissions(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ValidateVReplicationPermissionsRequest) (*tabletmanagerdatapb.ValidateVReplicationPermissionsResponse, error) {
 	return &tabletmanagerdatapb.ValidateVReplicationPermissionsResponse{
 		User: "vt_filtered",
@@ -670,6 +758,12 @@ func (tmc *testTMClient) AddVReplicationWorkflowsResponse(key string, resp *tabl
 	tmc.mu.Lock()
 	defer tmc.mu.Unlock()
 	tmc.readVReplicationWorkflowsResponses[key] = append(tmc.readVReplicationWorkflowsResponses[key], resp)
+}
+
+func (tmc *testTMClient) AddUpdateVReplicationRequests(tabletUID uint32, req *tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+	tmc.updateVReplicationWorklowsRequests[tabletUID] = req
 }
 
 func (tmc *testTMClient) getVReplicationWorkflowsResponse(key string) *tabletmanagerdatapb.ReadVReplicationWorkflowsResponse {

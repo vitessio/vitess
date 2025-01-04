@@ -20,7 +20,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -31,7 +30,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
 )
 
@@ -51,7 +49,6 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 	return mcmp, func() {
 		deleteAll()
 		mcmp.Close()
-		cluster.PanicHandler(t)
 	}
 }
 
@@ -200,7 +197,7 @@ func TestHighNumberOfParams(t *testing.T) {
 	var vals []any
 	var params []string
 	for i := 0; i < paramCount; i++ {
-		vals = append(vals, strconv.Itoa(i))
+		vals = append(vals, i)
 		params = append(params, "?")
 	}
 

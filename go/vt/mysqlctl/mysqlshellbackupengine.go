@@ -85,7 +85,9 @@ type MySQLShellBackupManifest struct {
 }
 
 func init() {
-	BackupRestoreEngineMap[mysqlShellBackupEngineName] = &MySQLShellBackupEngine{}
+	BackupRestoreEngineMap[mysqlShellBackupEngineName] = &MySQLShellBackupEngine{
+		binaryName: "mysqlsh",
+	}
 
 	for _, cmd := range []string{"vtcombo", "vttablet", "vtbackup", "vttestserver", "vtctldclient"} {
 		servenv.OnParseFor(cmd, registerMysqlShellBackupEngineFlags)
@@ -104,11 +106,12 @@ func registerMysqlShellBackupEngineFlags(fs *pflag.FlagSet) {
 // MySQLShellBackupEngine encapsulates the logic to implement the restoration
 // of a mysql-shell based backup.
 type MySQLShellBackupEngine struct {
+	binaryName string
 }
 
 const (
-	mysqlShellBackupBinaryName = "mysqlsh"
 	mysqlShellBackupEngineName = "mysqlshell"
+	mysqlShellLockMessage      = "Global read lock has been released"
 )
 
 func (be *MySQLShellBackupEngine) ExecuteBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (result BackupResult, finalErr error) {
@@ -152,44 +155,46 @@ func (be *MySQLShellBackupEngine) ExecuteBackup(ctx context.Context, params Back
 	}
 	lockAcquired := time.Now() // we will report how long we hold the lock for
 
+	// we need to release the global read lock in case the backup fails to start and
+	// the lock wasn't released by releaseReadLock() yet. context might be expired,
+	// so we pass a new one.
+	defer func() { _ = params.Mysqld.ReleaseGlobalReadLock(context.Background()) }()
+
 	posBeforeBackup, err := params.Mysqld.PrimaryPosition(ctx)
 	if err != nil {
 		return BackupUnusable, vterrors.Wrap(err, "failed to fetch position")
 	}
 
-	cmd := exec.CommandContext(ctx, mysqlShellBackupBinaryName, args...)
+	cmd := exec.CommandContext(ctx, be.binaryName, args...)
 
 	params.Logger.Infof("running %s", cmd.String())
 
-	cmdOut, err := cmd.StdoutPipe()
-	if err != nil {
-		return BackupUnusable, vterrors.Wrap(err, "cannot create stdout pipe")
-	}
-	cmdOriginalErr, err := cmd.StderrPipe()
-	if err != nil {
-		return BackupUnusable, vterrors.Wrap(err, "cannot create stderr pipe")
-	}
-	if err := cmd.Start(); err != nil {
-		return BackupUnusable, vterrors.Wrap(err, "can't start mysqlshell")
-	}
+	stdoutReader, stdoutWriter := io.Pipe()
+	stderrReader, stderrWriter := io.Pipe()
+	lockWaiterReader, lockWaiterWriter := io.Pipe()
 
-	pipeReader, pipeWriter := io.Pipe()
-	cmdErr := io.TeeReader(cmdOriginalErr, pipeWriter)
+	cmd.Stdout = stdoutWriter
+	cmd.Stderr = stderrWriter
+	combinedErr := io.TeeReader(stderrReader, lockWaiterWriter)
 
 	cmdWg := &sync.WaitGroup{}
 	cmdWg.Add(3)
-	go releaseReadLock(ctx, pipeReader, params, cmdWg, lockAcquired)
-	go scanLinesToLogger(mysqlShellBackupEngineName+" stdout", cmdOut, params.Logger, cmdWg.Done)
-	go scanLinesToLogger(mysqlShellBackupEngineName+" stderr", cmdErr, params.Logger, cmdWg.Done)
+	go releaseReadLock(ctx, lockWaiterReader, params, cmdWg, lockAcquired)
+	go scanLinesToLogger(mysqlShellBackupEngineName+" stdout", stdoutReader, params.Logger, cmdWg.Done)
+	go scanLinesToLogger(mysqlShellBackupEngineName+" stderr", combinedErr, params.Logger, cmdWg.Done)
 
-	// Get exit status.
-	if err := cmd.Wait(); err != nil {
+	// we run the command, wait for it to complete and close all pipes so the goroutines can complete on their own.
+	// after that we can process if an error has happened or not.
+	err = cmd.Run()
+
+	stdoutWriter.Close()
+	stderrWriter.Close()
+	lockWaiterWriter.Close()
+	cmdWg.Wait()
+
+	if err != nil {
 		return BackupUnusable, vterrors.Wrap(err, mysqlShellBackupEngineName+" failed")
 	}
-
-	// close the pipeWriter and wait for the goroutines to have read all the logs
-	pipeWriter.Close()
-	cmdWg.Wait()
 
 	// open the MANIFEST
 	params.Logger.Infof("Writing backup MANIFEST")
@@ -363,7 +368,7 @@ func (be *MySQLShellBackupEngine) ExecuteRestore(ctx context.Context, params Res
 	if err := cmd.Wait(); err != nil {
 		return nil, vterrors.Wrap(err, mysqlShellBackupEngineName+" failed")
 	}
-	params.Logger.Infof("%s completed successfully", mysqlShellBackupBinaryName)
+	params.Logger.Infof("%s completed successfully", be.binaryName)
 
 	// disable local_infile now that the restore is done.
 	err = params.Mysqld.ExecuteSuperQuery(ctx, "SET GLOBAL LOCAL_INFILE=0")
@@ -503,7 +508,7 @@ func releaseReadLock(ctx context.Context, reader io.Reader, params BackupParams,
 
 		if !released {
 
-			if !strings.Contains(line, "Global read lock has been released") {
+			if !strings.Contains(line, mysqlShellLockMessage) {
 				continue
 			}
 			released = true
@@ -520,6 +525,10 @@ func releaseReadLock(ctx context.Context, reader io.Reader, params BackupParams,
 	}
 	if err := scanner.Err(); err != nil {
 		params.Logger.Errorf("error reading from reader: %v", err)
+	}
+
+	if !released {
+		params.Logger.Errorf("could not release global lock earlier")
 	}
 }
 

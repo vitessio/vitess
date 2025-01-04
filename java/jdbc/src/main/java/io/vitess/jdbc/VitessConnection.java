@@ -105,7 +105,7 @@ public class VitessConnection extends ConnectionProperties implements Connection
   }
 
   /**
-   * Create PreparedStatement for the given connection & sql
+   * Create PreparedStatement for the given connection and sql
    *
    * @param sql - Sql Statement
    * @return PreparedStatement Object
@@ -338,7 +338,6 @@ public class VitessConnection extends ConnectionProperties implements Connection
 
   /**
    * Return Warnings
-   * <p/>
    * TODO: Not implementing as Error is Thrown when occurred
    *
    * @return SQLWarning or null

@@ -85,8 +85,8 @@ type ShardWithError struct {
 
 // ShardResult contains sql execute information on a particular shard
 type ShardResult struct {
-	Shard  string
-	Result *querypb.QueryResult
+	Shard   string
+	Results []*querypb.QueryResult
 	// Position is a replication position that is guaranteed to be after the
 	// schema change was applied. It can be used to wait for replicas to receive
 	// the schema change via replication.

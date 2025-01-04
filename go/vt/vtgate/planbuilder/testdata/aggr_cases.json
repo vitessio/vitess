@@ -616,6 +616,35 @@
     }
   },
   {
+    "comment": "using HAVING inside a derived table still produces viable plans",
+    "query": "select id from (select id from user group by id having (count(user.id) = 2) limit 2 offset 0) subquery_for_limit",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select id from (select id from user group by id having (count(user.id) = 2) limit 2 offset 0) subquery_for_limit",
+      "Instructions": {
+        "OperatorType": "Limit",
+        "Count": "2",
+        "Offset": "0",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from (select id, count(`user`.id) = 2 from `user` where 1 != 1 group by id) as subquery_for_limit where 1 != 1",
+            "Query": "select id from (select id, count(`user`.id) = 2 from `user` group by id having count(`user`.id) = 2) as subquery_for_limit limit 2",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
     "comment": "sum with distinct no unique vindex",
     "query": "select col1, sum(distinct col2) from user group by col1",
     "plan": {
@@ -911,19 +940,44 @@
                 "Table": "`user`, user_extra"
               },
               {
-                "OperatorType": "Route",
+                "OperatorType": "VindexLookup",
                 "Variant": "EqualUnique",
                 "Keyspace": {
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select music.`name` from music where 1 != 1",
-                "Query": "select music.`name` from music where music.id = :user_id",
-                "Table": "music",
                 "Values": [
                   ":user_id"
                 ],
-                "Vindex": "music_user_map"
+                "Vindex": "music_user_map",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "IN",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+                    "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+                    "Table": "name_user_vdx",
+                    "Values": [
+                      "::name"
+                    ],
+                    "Vindex": "user_index"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "ByDestination",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select music.`name` from music where 1 != 1",
+                    "Query": "select music.`name` from music where music.id = :user_id",
+                    "Table": "music"
+                  }
+                ]
               }
             ]
           }
@@ -2963,19 +3017,44 @@
                 ]
               },
               {
-                "OperatorType": "Route",
+                "OperatorType": "VindexLookup",
                 "Variant": "EqualUnique",
                 "Keyspace": {
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select 1 from music as m where 1 != 1",
-                "Query": "select 1 from music as m where m.id = :u2_val2",
-                "Table": "music",
                 "Values": [
                   ":u2_val2"
                 ],
-                "Vindex": "music_user_map"
+                "Vindex": "music_user_map",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "IN",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+                    "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+                    "Table": "name_user_vdx",
+                    "Values": [
+                      "::name"
+                    ],
+                    "Vindex": "user_index"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "ByDestination",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1 from music as m where 1 != 1",
+                    "Query": "select 1 from music as m where m.id = :u2_val2",
+                    "Table": "music"
+                  }
+                ]
               }
             ]
           }
@@ -3774,25 +3853,42 @@
       "QueryType": "SELECT",
       "Original": "select * from (select id from user having count(*) = 1) s",
       "Instructions": {
-        "OperatorType": "Filter",
-        "Predicate": "count(*) = 1",
-        "ResultColumns": 1,
+        "OperatorType": "SimpleProjection",
+        "ColumnNames": [
+          "0:id"
+        ],
+        "Columns": "0",
         "Inputs": [
           {
-            "OperatorType": "Aggregate",
-            "Variant": "Scalar",
-            "Aggregates": "any_value(0) AS id, sum_count_star(1) AS count(*)",
+            "OperatorType": "Projection",
+            "Expressions": [
+              ":0 as id",
+              "count(*) = 1 as count(*) = 1"
+            ],
             "Inputs": [
               {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select id, count(*) from `user` where 1 != 1",
-                "Query": "select id, count(*) from `user`",
-                "Table": "`user`"
+                "OperatorType": "Filter",
+                "Predicate": "count(*) = 1",
+                "Inputs": [
+                  {
+                    "OperatorType": "Aggregate",
+                    "Variant": "Scalar",
+                    "Aggregates": "any_value(0) AS id, sum_count_star(1) AS count(*), any_value(2)",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select id, count(*), 1 from `user` where 1 != 1",
+                        "Query": "select id, count(*), 1 from `user`",
+                        "Table": "`user`"
+                      }
+                    ]
+                  }
+                ]
               }
             ]
           }

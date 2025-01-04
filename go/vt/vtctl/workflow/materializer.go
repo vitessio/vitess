@@ -24,10 +24,13 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/exp/maps"
+	"golang.org/x/sync/errgroup"
+
 	"vitess.io/vitess/go/ptr"
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
-	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
@@ -45,12 +48,17 @@ import (
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 const (
 	createDDLAsCopy                = "copy"
 	createDDLAsCopyDropConstraint  = "copy:drop_constraint"
 	createDDLAsCopyDropForeignKeys = "copy:drop_foreign_keys"
+	// For automatically created sequence tables, use a standard format
+	// of tableName_seq.
+	autoSequenceTableFormat = "%s_seq"
+	getNonEmptyTableQuery   = "select 1 from %s limit 1"
 )
 
 type materializer struct {
@@ -135,7 +143,7 @@ func (mz *materializer) createWorkflowStreams(req *tabletmanagerdatapb.CreateVRe
 		return err
 	}
 
-	return mz.forAllTargets(func(target *topo.ShardInfo) error {
+	return forAllShards(mz.targetShards, func(target *topo.ShardInfo) error {
 		targetPrimary, err := mz.ts.GetTablet(mz.ctx, target.PrimaryAlias)
 		if err != nil {
 			return vterrors.Wrapf(err, "GetTablet(%v) failed", target.PrimaryAlias)
@@ -274,13 +282,29 @@ func (mz *materializer) deploySchema() error {
 	// to remove them.
 	// We do, however, allow the user to override this behavior and retain them.
 	removeAutoInc := false
+	updatedVSchema := false
+	var targetVSchema *vschemapb.Keyspace
 	if mz.workflowType == binlogdatapb.VReplicationWorkflowType_MoveTables &&
 		(mz.targetVSchema != nil && mz.targetVSchema.Keyspace != nil && mz.targetVSchema.Keyspace.Sharded) &&
-		(mz.ms.GetWorkflowOptions() != nil && mz.ms.GetWorkflowOptions().StripShardedAutoIncrement) {
+		(mz.ms.GetWorkflowOptions() != nil && mz.ms.GetWorkflowOptions().ShardedAutoIncrementHandling != vtctldatapb.ShardedAutoIncrementHandling_LEAVE) {
 		removeAutoInc = true
+		var err error
+		targetVSchema, err = mz.ts.GetVSchema(mz.ctx, mz.ms.TargetKeyspace)
+		if err != nil {
+			return err
+		}
 	}
 
-	return forAllShards(mz.targetShards, func(target *topo.ShardInfo) error {
+	// Check if any table being moved is already non-empty in the target keyspace.
+	// Skip this check for multi-tenant migrations.
+	if !mz.IsMultiTenantMigration() {
+		err := mz.validateEmptyTables()
+		if err != nil {
+			return vterrors.Wrap(err, "failed to validate that all target tables are empty")
+		}
+	}
+
+	err := forAllShards(mz.targetShards, func(target *topo.ShardInfo) error {
 		allTables := []string{"/.*/"}
 
 		hasTargetTable := map[string]bool{}
@@ -362,7 +386,43 @@ func (mz *materializer) deploySchema() error {
 				}
 
 				if removeAutoInc {
-					ddl, err = stripAutoIncrement(ddl, mz.env.Parser())
+					var replaceFunc func(columnName string) error
+					if mz.ms.GetWorkflowOptions().ShardedAutoIncrementHandling == vtctldatapb.ShardedAutoIncrementHandling_REPLACE {
+						replaceFunc = func(columnName string) error {
+							mu.Lock()
+							defer mu.Unlock()
+							// At this point we've already confirmed that the table exists in the target
+							// vschema.
+							table := targetVSchema.Tables[ts.TargetTable]
+							// Don't override or redo anything that already exists.
+							if table != nil && table.AutoIncrement == nil {
+								tableName, err := sqlescape.UnescapeID(ts.TargetTable)
+								if err != nil {
+									return err
+								}
+								seqTableName, err := sqlescape.EnsureEscaped(fmt.Sprintf(autoSequenceTableFormat, tableName))
+								if err != nil {
+									return err
+								}
+								if mz.ms.GetWorkflowOptions().GlobalKeyspace != "" {
+									seqKeyspace, err := sqlescape.EnsureEscaped(mz.ms.WorkflowOptions.GlobalKeyspace)
+									if err != nil {
+										return err
+									}
+									seqTableName = fmt.Sprintf("%s.%s", seqKeyspace, seqTableName)
+								}
+								// Create a Vitess AutoIncrement definition -- which uses a sequence -- to
+								// replace the MySQL auto_increment definition that we removed.
+								table.AutoIncrement = &vschemapb.AutoIncrement{
+									Column:   columnName,
+									Sequence: seqTableName,
+								}
+								updatedVSchema = true
+							}
+							return nil
+						}
+					}
+					ddl, err = stripAutoIncrement(ddl, mz.env.Parser(), replaceFunc)
 					if err != nil {
 						return err
 					}
@@ -407,6 +467,15 @@ func (mz *materializer) deploySchema() error {
 
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+
+	if updatedVSchema {
+		return mz.ts.SaveVSchema(mz.ctx, mz.ms.TargetKeyspace, targetVSchema)
+	}
+
+	return nil
 }
 
 func (mz *materializer) buildMaterializer() error {
@@ -504,6 +573,66 @@ func (mz *materializer) buildMaterializer() error {
 	return nil
 }
 
+// validateEmptyTables checks if all tables are empty across all target shards.
+// It queries each shard's primary tablet and if any non-empty table is found,
+// returns an error containing a list of non-empty tables.
+func (mz *materializer) validateEmptyTables() error {
+	var mu sync.Mutex
+	isNonEmptyTable := map[string]bool{}
+
+	err := forAllShards(mz.targetShards, func(shard *topo.ShardInfo) error {
+		primary := shard.PrimaryAlias
+		if primary == nil {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "no primary tablet found for shard %s/%s", shard.Keyspace(), shard.ShardName())
+		}
+
+		ti, err := mz.ts.GetTablet(mz.ctx, primary)
+		if err != nil {
+			return err
+		}
+
+		eg, groupCtx := errgroup.WithContext(mz.ctx)
+		eg.SetLimit(20)
+
+		for _, ts := range mz.ms.TableSettings {
+			eg.Go(func() error {
+				table, err := sqlescape.EnsureEscaped(ts.TargetTable)
+				if err != nil {
+					return err
+				}
+				query := fmt.Sprintf(getNonEmptyTableQuery, table)
+				res, err := mz.tmc.ExecuteFetchAsAllPrivs(groupCtx, ti.Tablet, &tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest{
+					Query:   []byte(query),
+					MaxRows: 1,
+				})
+				// Ignore table not found error
+				if err != nil && !IsTableDidNotExistError(err) {
+					return err
+				}
+				if res != nil && len(res.Rows) > 0 {
+					mu.Lock()
+					isNonEmptyTable[ts.TargetTable] = true
+					mu.Unlock()
+				}
+				return nil
+			})
+		}
+		if err = eg.Wait(); err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	nonEmptyTables := maps.Keys(isNonEmptyTable)
+	if len(nonEmptyTables) > 0 {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "non-empty tables found in target keyspace(%s): %s", mz.ms.TargetKeyspace, strings.Join(nonEmptyTables, ", "))
+	}
+	return nil
+}
+
 func (mz *materializer) startStreams(ctx context.Context) error {
 	return forAllShards(mz.targetShards, func(target *topo.ShardInfo) error {
 		targetPrimary, err := mz.ts.GetTablet(ctx, target.PrimaryAlias)
@@ -523,29 +652,12 @@ func (mz *materializer) startStreams(ctx context.Context) error {
 	})
 }
 
-func (mz *materializer) forAllTargets(f func(*topo.ShardInfo) error) error {
-	var wg sync.WaitGroup
-	allErrors := &concurrency.AllErrorRecorder{}
-	for _, target := range mz.targetShards {
-		wg.Add(1)
-		go func(target *topo.ShardInfo) {
-			defer wg.Done()
-
-			if err := f(target); err != nil {
-				allErrors.RecordError(err)
-			}
-		}(target)
-	}
-	wg.Wait()
-	return allErrors.AggrError(vterrors.Aggregate)
-}
-
 // checkTZConversion is a light-weight consistency check to validate that, if a source time zone is specified to MoveTables,
 // that the current primary has the time zone loaded in order to run the convert_tz() function used by VReplication to do the
 // datetime conversions. We only check the current primaries on each shard and note here that it is possible a new primary
 // gets elected: in this case user will either see errors during vreplication or vdiff will report mismatches.
 func (mz *materializer) checkTZConversion(ctx context.Context, tz string) error {
-	err := mz.forAllTargets(func(target *topo.ShardInfo) error {
+	err := forAllShards(mz.targetShards, func(target *topo.ShardInfo) error {
 		targetPrimary, err := mz.ts.GetTablet(ctx, target.PrimaryAlias)
 		if err != nil {
 			return vterrors.Wrapf(err, "GetTablet(%v) failed", target.PrimaryAlias)

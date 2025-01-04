@@ -167,8 +167,14 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		}
 		defer conn.Unlock()
 		if qre.setting != nil {
-			if err = conn.ApplySetting(qre.ctx, qre.setting); err != nil {
+			applied, err := conn.ApplySetting(qre.ctx, qre.setting)
+			if err != nil {
 				return nil, vterrors.Wrap(err, "failed to execute system setting on the connection")
+			}
+			// If we have applied the settings on the connection, then we should record the query detail.
+			// This is required for redoing the transaction in case of a failure.
+			if applied {
+				conn.TxProperties().RecordQueryDetail(qre.setting.ApplyQuery(), nil)
 			}
 		}
 		return qre.txConnExec(conn)
@@ -235,7 +241,7 @@ func (qre *QueryExecutor) execAutocommit(f func(conn *StatefulConnection) (*sqlt
 		return nil, errTxThrottled
 	}
 
-	conn, _, _, err := qre.tsv.te.txPool.Begin(qre.ctx, qre.options, false, 0, nil, qre.setting)
+	conn, _, _, err := qre.tsv.te.txPool.Begin(qre.ctx, qre.options, false, 0, qre.setting)
 
 	if err != nil {
 		return nil, err
@@ -249,7 +255,7 @@ func (qre *QueryExecutor) execAsTransaction(f func(conn *StatefulConnection) (*s
 	if qre.tsv.txThrottler.Throttle(qre.tsv.getPriorityFromOptions(qre.options), qre.options.GetWorkloadName()) {
 		return nil, errTxThrottled
 	}
-	conn, beginSQL, _, err := qre.tsv.te.txPool.Begin(qre.ctx, qre.options, false, 0, nil, qre.setting)
+	conn, beginSQL, _, err := qre.tsv.te.txPool.Begin(qre.ctx, qre.options, false, 0, qre.setting)
 	if err != nil {
 		return nil, err
 	}
@@ -278,8 +284,10 @@ func (qre *QueryExecutor) execAsTransaction(f func(conn *StatefulConnection) (*s
 
 func (qre *QueryExecutor) txConnExec(conn *StatefulConnection) (*sqltypes.Result, error) {
 	switch qre.plan.PlanID {
-	case p.PlanInsert, p.PlanUpdate, p.PlanDelete, p.PlanSet:
+	case p.PlanInsert, p.PlanUpdate, p.PlanDelete:
 		return qre.txFetch(conn, true)
+	case p.PlanSet:
+		return qre.txFetch(conn, false)
 	case p.PlanInsertMessage:
 		qre.bindVars["#time_now"] = sqltypes.Int64BindVariable(time.Now().UnixNano())
 		return qre.txFetch(conn, true)
@@ -287,8 +295,12 @@ func (qre *QueryExecutor) txConnExec(conn *StatefulConnection) (*sqltypes.Result
 		return qre.execDMLLimit(conn)
 	case p.PlanOtherRead, p.PlanOtherAdmin, p.PlanFlush, p.PlanUnlockTables:
 		return qre.execStatefulConn(conn, qre.query, true)
-	case p.PlanSavepoint, p.PlanRelease, p.PlanSRollback:
-		return qre.execStatefulConn(conn, qre.query, true)
+	case p.PlanSavepoint:
+		return qre.execSavepointQuery(conn, qre.query, qre.plan.FullStmt)
+	case p.PlanSRollback:
+		return qre.execRollbackToSavepoint(conn, qre.query, qre.plan.FullStmt)
+	case p.PlanRelease:
+		return qre.execTxQuery(conn, qre.query, false)
 	case p.PlanSelect, p.PlanSelectImpossible, p.PlanShow, p.PlanSelectLockFunc:
 		maxrows := qre.getSelectLimit()
 		qre.bindVars["#maxLimit"] = sqltypes.Int64BindVariable(maxrows + 1)
@@ -378,7 +390,7 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 		}
 		defer txConn.Unlock()
 		if qre.setting != nil {
-			if err = txConn.ApplySetting(qre.ctx, qre.setting); err != nil {
+			if _, err = txConn.ApplySetting(qre.ctx, qre.setting); err != nil {
 				return vterrors.Wrap(err, "failed to execute system setting on the connection")
 			}
 		}
@@ -790,6 +802,11 @@ func (qre *QueryExecutor) txFetch(conn *StatefulConnection, record bool) (*sqlty
 	if err != nil {
 		return nil, err
 	}
+	return qre.execTxQuery(conn, sql, record)
+}
+
+// execTxQuery executes the query provided and record in Tx Property if record is true.
+func (qre *QueryExecutor) execTxQuery(conn *StatefulConnection, sql string, record bool) (*sqltypes.Result, error) {
 	qr, err := qre.execStatefulConn(conn, sql, true)
 	if err != nil {
 		return nil, err
@@ -798,6 +815,40 @@ func (qre *QueryExecutor) txFetch(conn *StatefulConnection, record bool) (*sqlty
 	if record {
 		conn.TxProperties().RecordQueryDetail(sql, qre.plan.TableNames())
 	}
+	return qr, nil
+}
+
+// execTxQuery executes the query provided and record in Tx Property if record is true.
+func (qre *QueryExecutor) execSavepointQuery(conn *StatefulConnection, sql string, ast sqlparser.Statement) (*sqltypes.Result, error) {
+	qr, err := qre.execStatefulConn(conn, sql, true)
+	if err != nil {
+		return nil, err
+	}
+
+	// Only record successful queries.
+	sp, ok := ast.(*sqlparser.Savepoint)
+	if !ok {
+		return nil, vterrors.VT13001("expected to get a savepoint statement")
+	}
+	conn.TxProperties().RecordSavePointDetail(sp.Name.String())
+
+	return qr, nil
+}
+
+// execTxQuery executes the query provided and record in Tx Property if record is true.
+func (qre *QueryExecutor) execRollbackToSavepoint(conn *StatefulConnection, sql string, ast sqlparser.Statement) (*sqltypes.Result, error) {
+	qr, err := qre.execStatefulConn(conn, sql, true)
+	if err != nil {
+		return nil, err
+	}
+
+	// Only record successful queries.
+	sp, ok := ast.(*sqlparser.SRollback)
+	if !ok {
+		return nil, vterrors.VT13001("expected to get a rollback statement")
+	}
+
+	_ = conn.TxProperties().RollbackToSavepoint(sp.Name.String())
 	return qr, nil
 }
 
@@ -940,6 +991,8 @@ func (qre *QueryExecutor) execAlterMigration() (*sqltypes.Result, error) {
 		return qre.tsv.onlineDDLExecutor.ForceCutOverMigration(qre.ctx, alterMigration.UUID)
 	case sqlparser.ForceCutOverAllMigrationType:
 		return qre.tsv.onlineDDLExecutor.ForceCutOverPendingMigrations(qre.ctx)
+	case sqlparser.SetCutOverThresholdMigrationType:
+		return qre.tsv.onlineDDLExecutor.SetMigrationCutOverThreshold(qre.ctx, alterMigration.UUID, alterMigration.Threshold)
 	}
 	return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "ALTER VITESS_MIGRATION not implemented")
 }

@@ -169,19 +169,17 @@ const (
 	IsNotFalseStr = "is not false"
 
 	// BinaryExpr.Operator
-	BitAndStr               = "&"
-	BitOrStr                = "|"
-	BitXorStr               = "^"
-	PlusStr                 = "+"
-	MinusStr                = "-"
-	MultStr                 = "*"
-	DivStr                  = "/"
-	IntDivStr               = "div"
-	ModStr                  = "%"
-	ShiftLeftStr            = "<<"
-	ShiftRightStr           = ">>"
-	JSONExtractOpStr        = "->"
-	JSONUnquoteExtractOpStr = "->>"
+	BitAndStr     = "&"
+	BitOrStr      = "|"
+	BitXorStr     = "^"
+	PlusStr       = "+"
+	MinusStr      = "-"
+	MultStr       = "*"
+	DivStr        = "/"
+	IntDivStr     = "div"
+	ModStr        = "%"
+	ShiftLeftStr  = "<<"
+	ShiftRightStr = ">>"
 
 	// UnaryExpr.Operator
 	UPlusStr    = "+"
@@ -692,47 +690,6 @@ const (
 	All
 )
 
-func (op ComparisonExprOperator) Inverse() ComparisonExprOperator {
-	switch op {
-	case EqualOp:
-		return NotEqualOp
-	case LessThanOp:
-		return GreaterEqualOp
-	case GreaterThanOp:
-		return LessEqualOp
-	case LessEqualOp:
-		return GreaterThanOp
-	case GreaterEqualOp:
-		return LessThanOp
-	case NotEqualOp:
-		return EqualOp
-	case NullSafeEqualOp:
-		return NotEqualOp
-	case InOp:
-		return NotInOp
-	case NotInOp:
-		return InOp
-	case LikeOp:
-		return NotLikeOp
-	case NotLikeOp:
-		return LikeOp
-	case RegexpOp:
-		return NotRegexpOp
-	case NotRegexpOp:
-		return RegexpOp
-	}
-	panic("unreachable")
-}
-
-func (op ComparisonExprOperator) IsCommutative() bool {
-	switch op {
-	case EqualOp, NotEqualOp, NullSafeEqualOp:
-		return true
-	default:
-		return false
-	}
-}
-
 // Constant for Enum Type - IsExprOperator
 const (
 	IsNullOp IsExprOperator = iota
@@ -756,8 +713,6 @@ const (
 	ModOp
 	ShiftLeftOp
 	ShiftRightOp
-	JSONExtractOp
-	JSONUnquoteExtractOp
 )
 
 // Constant for Enum Type - UnaryExprOperator
@@ -960,6 +915,7 @@ const (
 	UnthrottleAllMigrationType
 	ForceCutOverMigrationType
 	ForceCutOverAllMigrationType
+	SetCutOverThresholdMigrationType
 )
 
 // ColumnStorage constants
