@@ -47,7 +47,6 @@ import (
 	"github.com/google/safehtml/template"
 	"github.com/google/safehtml/template/uncheckedconversions"
 	"github.com/spf13/pflag"
-	"golang.org/x/sync/semaphore"
 
 	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/netutil"
@@ -297,8 +296,6 @@ type HealthCheckImpl struct {
 	subscribers map[chan *TabletHealth]struct{}
 	// loadTablets trigger is used to immediately load a new primary tablet when the current one has been demoted
 	loadTabletsTrigger chan struct{}
-	// healthCheckDialSem is used to limit how many healthcheck connections can be opened to tablets at once.
-	healthCheckDialSem *semaphore.Weighted
 	// nowTimeFunc is used to determine the current time.
 	nowTimeFunc func() time.Time
 }
