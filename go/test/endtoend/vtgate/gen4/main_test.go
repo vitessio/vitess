@@ -104,6 +104,8 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
+		// This keyspace is used to test automatic addition of tables to global routing rules when
+		// there are multiple unsharded keyspaces.
 		uKs2 := &cluster.Keyspace{
 			Name:      unsharded2Ks,
 			SchemaSQL: unsharded2SchemaSQL,

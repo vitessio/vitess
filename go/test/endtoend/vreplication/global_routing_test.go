@@ -1,5 +1,5 @@
 /*
-Copyright 2024 The Vitess Authors.
+Copyright 2025 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -18,15 +18,16 @@ package vreplication
 
 import (
 	"bytes"
-	"context"
 	"fmt"
-	"github.com/stretchr/testify/require"
 	"strings"
 	"testing"
 	"text/template"
 	"time"
-	"vitess.io/vitess/go/sqltypes"
 
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sqltypes"
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 )
 
@@ -35,7 +36,7 @@ type tgrTestConfig struct {
 	ksU1Tables, ksU2Tables, ksS1Tables []string
 }
 
-var grTestConfig tgrTestConfig = tgrTestConfig{
+var grTestConfig = tgrTestConfig{
 	ksU1:       "unsharded1",
 	ksU2:       "unsharded2",
 	ksS1:       "sharded1",
@@ -56,7 +57,7 @@ type grHelpers struct {
 func (h *grHelpers) getSchema(tables []string) string {
 	var createSQL string
 	for _, table := range tables {
-		createSQL += "CREATE TABLE " + table + " (id int primary key, val varchar(32)) ENGINE=InnoDB;\n"
+		createSQL += fmt.Sprintf("CREATE TABLE %s (id int primary key, val varchar(32)) ENGINE=InnoDB;\n", table)
 	}
 	return createSQL
 }
@@ -103,84 +104,66 @@ func (h *grHelpers) insertData(t *testing.T, keyspace string, table string, id i
 	require.NoError(t, err)
 }
 
-func (h *grHelpers) execWithRetry(t *testing.T, query string, timeoutSeconds int) {
-	vtgateConn, cancel := getVTGateConn()
-	defer cancel()
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutSeconds)*time.Second)
-	defer cancel()
-	ticker := time.NewTicker(defaultTick)
-	defer ticker.Stop()
-
-	var qr *sqltypes.Result
-	var err error
+// There is a race between when a table is created and it is updated in the global table cache in vtgate.
+func (h *grHelpers) waitForTableAvailability(t *testing.T, vtgateConn *mysql.Conn, table string) {
+	timer := time.NewTimer(defaultTimeout)
+	defer timer.Stop()
 	for {
-		qr, err = vtgateConn.ExecuteFetch(query, 1000, false)
-		if err == nil {
-			return qr
+		_, err := vtgateConn.ExecuteFetch(fmt.Sprintf("select * from %s", table), 1, false)
+		if err == nil || !strings.Contains(err.Error(), fmt.Sprintf("table %s not found", table)) {
+			return
 		}
 		select {
-		case <-ctx.Done():
-			require.FailNow(t, fmt.Sprintf("query %q did not succeed before the timeout of %s; last seen result: %v",
-				query, timeout, qr))
-		case <-ticker.C:
-			log.Infof("query %q failed with error %v, retrying in %ds", query, err, defaultTick)
+		case <-timer.C:
+			require.FailNow(t, "timed out waiting for table availability for %s", table)
+		default:
+			time.Sleep(defaultTick)
+		}
+	}
+}
+
+func (h *grHelpers) checkForTable(
+	t *testing.T,
+	tables []string,
+	queryCallback func(rs *sqltypes.Result, err error),
+) {
+	vtgateConn, cancel := getVTGateConn()
+	defer cancel()
+
+	for _, table := range tables {
+		for _, target := range []string{"", "@primary"} {
+			_, err := vtgateConn.ExecuteFetch(fmt.Sprintf("use %s", target), 1, false)
+			require.NoError(t, err)
+			h.waitForTableAvailability(t, vtgateConn, table)
+			rs, err := vtgateConn.ExecuteFetch(fmt.Sprintf("select * from %s", table), 1, false)
+			queryCallback(rs, err)
 		}
 	}
 }
 
 func (h *grHelpers) isGlobal(t *testing.T, tables []string, expectedVal string) bool {
-	vtgateConn, cancel := getVTGateConn()
-	defer cancel()
-	var err error
 	asExpected := true
-	for _, table := range tables {
-		for _, target := range []string{"", "@primary", "@replica"} {
-			_, err = vtgateConn.ExecuteFetch(fmt.Sprintf("use %s", target), 1, false)
-			require.NoError(t, err)
-			rs, err := vtgateConn.ExecuteFetch(fmt.Sprintf("select * from %s", table), 1, false)
-			require.NoError(t, err)
-			gotVal := rs.Rows[0][1].ToString()
-			if gotVal != expectedVal {
-				asExpected = false
-			}
-		}
-	}
-	return asExpected
-}
 
-func (h *grHelpers) isNotGlobal(t *testing.T, tables []string) bool {
-	vtgateConn, cancel := getVTGateConn()
-	defer cancel()
-	var err error
-	asExpected := true
-	for _, table := range tables {
-		for _, target := range []string{"", "@primary", "@replica"} {
-			_, err = vtgateConn.ExecuteFetch(fmt.Sprintf("use %s", target), 1, false)
-			require.NoError(t, err)
-			_, err := vtgateConn.ExecuteFetch(fmt.Sprintf("select * from %s", table), 1, false)
-			if err == nil || !strings.Contains(err.Error(), fmt.Sprintf("table %s not found", table)) {
-				asExpected = false
-			}
+	h.checkForTable(t, tables, func(rs *sqltypes.Result, err error) {
+		require.NoError(t, err)
+		gotVal := rs.Rows[0][1].ToString()
+		if gotVal != expectedVal {
+			asExpected = false
 		}
-	}
+	})
+
 	return asExpected
 }
 
 func (h *grHelpers) isAmbiguous(t *testing.T, tables []string) bool {
-	vtgateConn, cancel := getVTGateConn()
-	defer cancel()
-	var err error
 	asExpected := true
-	for _, table := range tables {
-		for _, target := range []string{"", "@primary", "@replica"} {
-			_, err = vtgateConn.ExecuteFetch(fmt.Sprintf("use %s", target), 1, false)
-			require.NoError(t, err)
-			_, err := vtgateConn.ExecuteFetch(fmt.Sprintf("select * from %s", table), 1, false)
-			if err == nil || !strings.Contains(err.Error(), "ambiguous") {
-				asExpected = false
-			}
+
+	h.checkForTable(t, tables, func(rs *sqltypes.Result, err error) {
+		if err == nil || !strings.Contains(err.Error(), "ambiguous") {
+			asExpected = false
 		}
-	}
+	})
+
 	return asExpected
 }
 
