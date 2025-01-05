@@ -31,6 +31,7 @@ import (
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/vtorc/utils"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtorc/logic"
 )
 
@@ -44,7 +45,7 @@ func TestDownPrimary(t *testing.T) {
 	// If we don't specify a small value of --wait-replicas-timeout, then we would end up waiting for 30 seconds for the dead-primary to respond, failing this test.
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, []string{"--remote_operation_timeout=10s", "--wait-replicas-timeout=5s"}, cluster.VTOrcConfiguration{
 		PreventCrossCellFailover: true,
-	}, 1, "semi_sync")
+	}, 1, policy.DurabilitySemiSync)
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	// find primary from topo
@@ -115,7 +116,7 @@ func TestDownPrimary(t *testing.T) {
 // bring down primary before VTOrc has started, let vtorc repair.
 func TestDownPrimaryBeforeVTOrc(t *testing.T) {
 	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
-	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, nil, cluster.VTOrcConfiguration{}, 0, "none")
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, nil, cluster.VTOrcConfiguration{}, 0, policy.DurabilityNone)
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	curPrimary := shard0.Vttablets[0]
@@ -170,7 +171,7 @@ func TestDownPrimaryBeforeVTOrc(t *testing.T) {
 // delete the primary record and let vtorc repair.
 func TestDeletedPrimaryTablet(t *testing.T) {
 	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
-	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, []string{"--remote_operation_timeout=10s"}, cluster.VTOrcConfiguration{}, 1, "none")
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, []string{"--remote_operation_timeout=10s"}, cluster.VTOrcConfiguration{}, 1, policy.DurabilityNone)
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	// find primary from topo
@@ -241,7 +242,7 @@ func TestDeadPrimaryRecoversImmediately(t *testing.T) {
 	// If we don't specify a small value of --wait-replicas-timeout, then we would end up waiting for 30 seconds for the dead-primary to respond, failing this test.
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, []string{"--remote_operation_timeout=10s", "--wait-replicas-timeout=5s"}, cluster.VTOrcConfiguration{
 		PreventCrossCellFailover: true,
-	}, 1, "semi_sync")
+	}, 1, policy.DurabilitySemiSync)
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	// find primary from topo
