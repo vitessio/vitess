@@ -38,6 +38,14 @@ type KeyspaceVSchemaInfo struct {
 	version Version
 }
 
+func (k *KeyspaceVSchemaInfo) CloneVT() *KeyspaceVSchemaInfo {
+	return &KeyspaceVSchemaInfo{
+		Name:     k.Name,
+		Keyspace: k.Keyspace.CloneVT(),
+		version:  Version(k.version),
+	}
+}
+
 // SaveVSchema saves a Vschema. A valid Vschema should be passed in. It does not verify its correctness.
 // If the VSchema is empty, just remove it.
 func (ts *Server) SaveVSchema(ctx context.Context, ksvs *KeyspaceVSchemaInfo) error {

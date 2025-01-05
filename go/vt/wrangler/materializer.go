@@ -148,10 +148,10 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 		log.Infof("Successfully opened external topo: %+v", externalTopo)
 	}
 
-	var vschema *topo.KeyspaceVSchemaInfo
-	origVSchema := &topo.KeyspaceVSchemaInfo{ // If we need to rollback a failed create
-		Name: targetKeyspace,
-	}
+	var (
+		vschema     *topo.KeyspaceVSchemaInfo
+		origVSchema *topo.KeyspaceVSchemaInfo // If we need to rollback a failed create
+	)
 	vschema, err = wr.ts.GetVSchema(ctx, targetKeyspace)
 	if err != nil {
 		return err
@@ -216,7 +216,7 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 		if !vschema.Sharded {
 			// Save the original in case we need to restore it for a late failure
 			// in the defer().
-			origVSchema.Keyspace = vschema.CloneVT()
+			origVSchema = vschema.CloneVT()
 			if err := wr.addTablesToVSchema(ctx, sourceKeyspace, vschema.Keyspace, tables, externalTopo == nil); err != nil {
 				return err
 			}
