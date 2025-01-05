@@ -567,14 +567,9 @@ func (s *Server) LookupVindexComplete(ctx context.Context, req *vtctldatapb.Look
 	span.Annotate("name", req.Name)
 	span.Annotate("table_keyspace", req.TableKeyspace)
 
-	// Find the lookup vindex by name.
-	sourceVschema, err := s.ts.GetVSchema(ctx, req.Keyspace)
+	vindex, _, err := getVindexAndVSchema(ctx, s.ts, req.Keyspace, req.Name)
 	if err != nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get vschema for the %s keyspace", req.Keyspace)
-	}
-	vindex := sourceVschema.Vindexes[req.Name]
-	if vindex == nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vindex %s not found in the %s keyspace", req.Name, req.Keyspace)
+		return nil, err
 	}
 
 	targetShards, err := s.ts.GetServingShards(ctx, req.TableKeyspace)
@@ -693,14 +688,9 @@ func (s *Server) LookupVindexExternalize(ctx context.Context, req *vtctldatapb.L
 	span.Annotate("name", req.Name)
 	span.Annotate("table_keyspace", req.TableKeyspace)
 
-	// Find the lookup vindex by name.
-	sourceVschema, err := s.ts.GetVSchema(ctx, req.Keyspace)
+	vindex, sourceVSchema, err := getVindexAndVSchema(ctx, s.ts, req.Keyspace, req.Name)
 	if err != nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get vschema for the %s keyspace", req.Keyspace)
-	}
-	vindex := sourceVschema.Vindexes[req.Name]
-	if vindex == nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vindex %s not found in the %s keyspace", req.Name, req.Keyspace)
+		return nil, err
 	}
 
 	targetShards, err := s.ts.GetServingShards(ctx, req.TableKeyspace)
@@ -778,7 +768,7 @@ func (s *Server) LookupVindexExternalize(ctx context.Context, req *vtctldatapb.L
 
 	// Remove the write_only param and save the source vschema.
 	delete(vindex.Params, "write_only")
-	if err := s.ts.SaveVSchema(ctx, req.Keyspace, sourceVschema); err != nil {
+	if err := s.ts.SaveVSchema(ctx, req.Keyspace, sourceVSchema); err != nil {
 		return nil, err
 	}
 	return resp, s.ts.RebuildSrvVSchema(ctx, nil)
@@ -794,14 +784,9 @@ func (s *Server) LookupVindexInternalize(ctx context.Context, req *vtctldatapb.L
 	span.Annotate("name", req.Name)
 	span.Annotate("table_keyspace", req.TableKeyspace)
 
-	// Find the lookup vindex by name.
-	sourceVschema, err := s.ts.GetVSchema(ctx, req.Keyspace)
+	vindex, sourceVSchema, err := getVindexAndVSchema(ctx, s.ts, req.Keyspace, req.Name)
 	if err != nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get vschema for the %s keyspace", req.Keyspace)
-	}
-	vindex := sourceVschema.Vindexes[req.Name]
-	if vindex == nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vindex %s not found in the %s keyspace", req.Name, req.Keyspace)
+		return nil, err
 	}
 
 	targetShards, err := s.ts.GetServingShards(ctx, req.TableKeyspace)
@@ -865,7 +850,7 @@ func (s *Server) LookupVindexInternalize(ctx context.Context, req *vtctldatapb.L
 
 	// Make the vindex back to write_only and save the source vschema.
 	vindex.Params["write_only"] = "true"
-	if err := s.ts.SaveVSchema(ctx, req.Keyspace, sourceVschema); err != nil {
+	if err := s.ts.SaveVSchema(ctx, req.Keyspace, sourceVSchema); err != nil {
 		return nil, err
 	}
 	return resp, s.ts.RebuildSrvVSchema(ctx, nil)
@@ -1013,7 +998,7 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		return nil, err
 	}
 	if len(tables) > 0 {
-		err = validateSourceTablesExist(ctx, sourceKeyspace, ksTables, tables)
+		err = validateSourceTablesExist(sourceKeyspace, ksTables, tables)
 		if err != nil {
 			return nil, err
 		}
@@ -1025,7 +1010,7 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		}
 	}
 	if len(req.ExcludeTables) > 0 {
-		err = validateSourceTablesExist(ctx, sourceKeyspace, ksTables, req.ExcludeTables)
+		err = validateSourceTablesExist(sourceKeyspace, ksTables, req.ExcludeTables)
 		if err != nil {
 			return nil, err
 		}
