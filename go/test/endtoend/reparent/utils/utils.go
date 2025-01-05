@@ -32,6 +32,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 
 	"vitess.io/vitess/go/mysql"
@@ -71,7 +72,7 @@ func SetupReparentCluster(t *testing.T, durability string) *cluster.LocalProcess
 
 // SetupRangeBasedCluster sets up the range based cluster
 func SetupRangeBasedCluster(ctx context.Context, t *testing.T) *cluster.LocalProcessCluster {
-	return setupCluster(ctx, t, ShardName, []string{cell1}, []int{2}, "semi_sync")
+	return setupCluster(ctx, t, ShardName, []string{cell1}, []int{2}, policy.DurabilitySemiSync)
 }
 
 // SetupShardedReparentCluster is used to setup a sharded cluster for testing
@@ -677,7 +678,7 @@ func CheckReparentFromOutside(t *testing.T, clusterInstance *cluster.LocalProces
 			assert.Len(t, result[cell1].Nodes, 2)
 		}
 	} else {
-		result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetShardReplication", cell1, KeyspaceShard)
+		result, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("GetShardReplication", cell1, KeyspaceShard)
 		require.Nil(t, err, "error should be Nil")
 		if !downPrimary {
 			assertNodeCount(t, result, int(3))

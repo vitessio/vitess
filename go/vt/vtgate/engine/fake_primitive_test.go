@@ -40,7 +40,8 @@ type fakePrimitive struct {
 	// sendErr is sent at the end of the stream if it's set.
 	sendErr error
 
-	log []string
+	noLog bool
+	log   []string
 
 	allResultsInOneCall bool
 
@@ -85,7 +86,9 @@ func (f *fakePrimitive) TryExecute(ctx context.Context, vcursor VCursor, bindVar
 }
 
 func (f *fakePrimitive) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	f.log = append(f.log, fmt.Sprintf("StreamExecute %v %v", printBindVars(bindVars), wantfields))
+	if !f.noLog {
+		f.log = append(f.log, fmt.Sprintf("StreamExecute %v %v", printBindVars(bindVars), wantfields))
+	}
 	if f.results == nil {
 		return f.sendErr
 	}

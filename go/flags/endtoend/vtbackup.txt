@@ -195,6 +195,7 @@ Flags:
       --remote_operation_timeout duration                           time to wait for a remote operation (default 15s)
       --restart_before_backup                                       Perform a mysqld clean/full restart after applying binlogs, but before taking the backup. Only makes sense to work around xtrabackup bugs.
       --s3_backup_aws_endpoint string                               endpoint of the S3 backend (region must be provided).
+      --s3_backup_aws_min_partsize int                              Minimum part size to use, defaults to 5MiB but can be increased due to the dataset size. (default 5242880)
       --s3_backup_aws_region string                                 AWS region to use. (default "us-east-1")
       --s3_backup_aws_retries int                                   AWS request retries. (default -1)
       --s3_backup_force_path_style                                  force the s3 path style.
@@ -231,6 +232,7 @@ Flags:
       --topo_global_root string                                     the path of the global topology data in the global topology server
       --topo_global_server_address string                           the address of the global topology server
       --topo_implementation string                                  the topology implementation to use
+      --topo_read_concurrency int                                   Maximum concurrency of topo reads per global or local cell. (default 32)
       --topo_zk_auth_file string                                    auth to use when connecting to the zk topo server, file contents should be <scheme>:<auth>, e.g., digest:user:pass
       --topo_zk_base_timeout duration                               zk base timeout (see zk.Connect) (default 30s)
       --topo_zk_max_concurrency int                                 maximum number of pending requests to send to a Zookeeper server. (default 64)

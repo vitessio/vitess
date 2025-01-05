@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/topotools/events"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
@@ -153,12 +154,12 @@ func SetReplicationSource(ctx context.Context, ts *topo.Server, tmc tmclient.Tab
 		return err
 	}
 	log.Infof("Getting a new durability policy for %v", durabilityName)
-	durability, err := GetDurabilityPolicy(durabilityName)
+	durability, err := policy.GetDurabilityPolicy(durabilityName)
 	if err != nil {
 		return err
 	}
 
-	isSemiSync := IsReplicaSemiSync(durability, shardPrimary.Tablet, tablet)
+	isSemiSync := policy.IsReplicaSemiSync(durability, shardPrimary.Tablet, tablet)
 	return tmc.SetReplicationSource(ctx, tablet, shardPrimary.Alias, 0, "", false, isSemiSync, 0)
 }
 
@@ -183,7 +184,7 @@ func stopReplicationAndBuildStatusMaps(
 	stopReplicationTimeout time.Duration,
 	ignoredTablets sets.Set[string],
 	tabletToWaitFor *topodatapb.TabletAlias,
-	durability Durabler,
+	durability policy.Durabler,
 	waitForAllTablets bool,
 	logger logutil.Logger,
 ) (*replicationSnapshot, error) {

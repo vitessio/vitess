@@ -87,18 +87,19 @@ type stateManager struct {
 	//
 	// If a transition fails, we set retrying to true and launch
 	// retryTransition which loops until the state converges.
-	mu             sync.Mutex
-	wantState      servingState
-	wantTabletType topodatapb.TabletType
-	state          servingState
-	target         *querypb.Target
-	ptsTimestamp   time.Time
-	retrying       bool
-	replHealthy    bool
-	lameduck       bool
-	alsoAllow      []topodatapb.TabletType
-	reason         string
-	transitionErr  error
+	mu                   sync.Mutex
+	wantState            servingState
+	wantTabletType       topodatapb.TabletType
+	state                servingState
+	target               *querypb.Target
+	ptsTimestamp         time.Time
+	retrying             bool
+	replHealthy          bool
+	demotePrimaryStalled bool
+	lameduck             bool
+	alsoAllow            []topodatapb.TabletType
+	reason               string
+	transitionErr        error
 
 	rw *requestsWaiter
 
@@ -387,7 +388,7 @@ func (sm *stateManager) StartRequest(ctx context.Context, target *querypb.Target
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 
-	if sm.state != StateServing || !sm.replHealthy {
+	if sm.state != StateServing || !sm.replHealthy || sm.demotePrimaryStalled {
 		// This specific error string needs to be returned for vtgate buffering to work.
 		return vterrors.New(vtrpcpb.Code_CLUSTER_EVENT, vterrors.NotServing)
 	}
@@ -715,6 +716,10 @@ func (sm *stateManager) Broadcast() {
 	defer sm.mu.Unlock()
 
 	lag, err := sm.refreshReplHealthLocked()
+	if sm.demotePrimaryStalled {
+		// If we are stalled while demoting primary, we should send an error for it.
+		err = vterrors.VT09031()
+	}
 	sm.hs.ChangeState(sm.target.TabletType, sm.ptsTimestamp, lag, err, sm.isServingLocked())
 }
 
@@ -772,7 +777,7 @@ func (sm *stateManager) IsServing() bool {
 }
 
 func (sm *stateManager) isServingLocked() bool {
-	return sm.state == StateServing && sm.wantState == StateServing && sm.replHealthy && !sm.lameduck
+	return sm.state == StateServing && sm.wantState == StateServing && sm.replHealthy && !sm.demotePrimaryStalled && !sm.lameduck
 }
 
 func (sm *stateManager) AppendDetails(details []*kv) []*kv {

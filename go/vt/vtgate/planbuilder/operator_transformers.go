@@ -22,12 +22,10 @@ import (
 	"strconv"
 	"strings"
 
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/sysvars"
-	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
@@ -536,6 +534,7 @@ func routeToEngineRoute(ctx *plancontext.PlanningContext, op *operators.Route, h
 		TableName:           strings.Join(tableNames, ", "),
 		RoutingParameters:   rp,
 		TruncateColumnCount: op.ResultColumns,
+		FetchLastInsertID:   ctx.SemTable.ShouldFetchLastInsertID(),
 	}
 	if hints != nil {
 		e.ScatterErrorsAsWarnings = hints.scatterErrorsAsWarnings
@@ -601,7 +600,7 @@ func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (
 	case *sqlparser.Delete:
 		return buildDeletePrimitive(ctx, op, dmlOp, stmt, hints)
 	case *sqlparser.Insert:
-		return buildInsertPrimitive(op, dmlOp, stmt, hints)
+		return buildInsertPrimitive(ctx, op, dmlOp, stmt, hints)
 	default:
 		return nil, vterrors.VT13001(fmt.Sprintf("dont know how to %T", stmt))
 	}
@@ -637,18 +636,22 @@ func buildRoutePrimitive(ctx *plancontext.PlanningContext, op *operators.Route, 
 }
 
 func buildInsertPrimitive(
-	rb *operators.Route, op operators.Operator, stmt *sqlparser.Insert,
+	ctx *plancontext.PlanningContext,
+	rb *operators.Route,
+	op operators.Operator,
+	stmt *sqlparser.Insert,
 	hints *queryHints,
 ) (engine.Primitive, error) {
 	ins := op.(*operators.Insert)
 
 	ic := engine.InsertCommon{
-		Opcode:      mapToInsertOpCode(rb.Routing.OpCode()),
-		Keyspace:    rb.Routing.Keyspace(),
-		TableName:   ins.VTable.Name.String(),
-		Ignore:      ins.Ignore,
-		Generate:    autoIncGenerate(ins.AutoIncrement),
-		ColVindexes: ins.ColVindexes,
+		Opcode:            mapToInsertOpCode(rb.Routing.OpCode()),
+		Keyspace:          rb.Routing.Keyspace(),
+		TableName:         ins.VTable.Name.String(),
+		Ignore:            ins.Ignore,
+		Generate:          autoIncGenerate(ins.AutoIncrement),
+		ColVindexes:       ins.ColVindexes,
+		FetchLastInsertID: ctx.SemTable.ShouldFetchLastInsertID(),
 	}
 	if hints != nil {
 		ic.MultiShardAutocommit = hints.multiShardAutocommit
@@ -656,8 +659,9 @@ func buildInsertPrimitive(
 	}
 
 	eins := &engine.Insert{
-		InsertCommon: ic,
-		VindexValues: ins.VindexValues,
+		InsertCommon:      ic,
+		VindexValues:      ins.VindexValues,
+		FetchLastInsertID: ctx.SemTable.ShouldFetchLastInsertID(),
 	}
 
 	// we would need to generate the query on the fly. The only exception here is
@@ -788,6 +792,7 @@ func createDMLPrimitive(ctx *plancontext.PlanningContext, rb *operators.Route, h
 		Vindexes:          colVindexes,
 		OwnedVindexQuery:  vindexQuery,
 		RoutingParameters: rp,
+		FetchLastInsertID: ctx.SemTable.ShouldFetchLastInsertID(),
 	}
 
 	if rb.Routing.OpCode() != engine.Unsharded && vindexQuery != "" {
@@ -880,18 +885,18 @@ func transformUnionPlan(ctx *plancontext.PlanningContext, op *operators.Union) (
 }
 
 func transformLimit(ctx *plancontext.PlanningContext, op *operators.Limit) (engine.Primitive, error) {
-	plan, err := transformToPrimitive(ctx, op.Source)
+	input, err := transformToPrimitive(ctx, op.Source)
 	if err != nil {
 		return nil, err
 	}
 
-	return createLimit(plan, op.AST, ctx.VSchema.Environment(), ctx.VSchema.ConnCollation())
+	return createLimit(ctx, input, op.AST)
 }
 
-func createLimit(input engine.Primitive, limit *sqlparser.Limit, env *vtenv.Environment, coll collations.ID) (engine.Primitive, error) {
+func createLimit(ctx *plancontext.PlanningContext, input engine.Primitive, limit *sqlparser.Limit) (engine.Primitive, error) {
 	cfg := &evalengine.Config{
-		Collation:   coll,
-		Environment: env,
+		Collation:   ctx.VSchema.ConnCollation(),
+		Environment: ctx.VSchema.Environment(),
 	}
 	count, err := evalengine.Translate(limit.Rowcount, cfg)
 	if err != nil {
@@ -906,9 +911,10 @@ func createLimit(input engine.Primitive, limit *sqlparser.Limit, env *vtenv.Envi
 	}
 
 	return &engine.Limit{
-		Input:  input,
-		Count:  count,
-		Offset: offset,
+		Count:                count,
+		Offset:               offset,
+		RequireCompleteInput: ctx.SemTable.ShouldFetchLastInsertID(),
+		Input:                input,
 	}, nil
 }
 

@@ -20,27 +20,23 @@ import (
 	"fmt"
 	"testing"
 
-	"vitess.io/vitess/go/vt/log"
-	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
-
-	"vitess.io/vitess/go/mysql/sqlerror"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-
+	"github.com/aws/smithy-go/ptr"
 	"github.com/stretchr/testify/assert"
-
-	"vitess.io/vitess/go/vt/key"
-
-	"vitess.io/vitess/go/test/utils"
-
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vterrors"
+	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 )
 
 // This file uses the sandbox_test framework.
@@ -101,12 +97,123 @@ func TestExecuteFailOnAutocommit(t *testing.T) {
 		},
 		Autocommit: false,
 	}
-	_, errs := sc.ExecuteMultiShard(ctx, nil, rss, queries, econtext.NewSafeSession(session), true /*autocommit*/, false, nullResultsObserver{})
+	_, errs := sc.ExecuteMultiShard(ctx, nil, rss, queries, econtext.NewSafeSession(session), true /*autocommit*/, false, nullResultsObserver{}, false)
 	err := vterrors.Aggregate(errs)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "in autocommit mode, transactionID should be zero but was: 123")
 	utils.MustMatch(t, 0, len(sbc0.Queries), "")
 	utils.MustMatch(t, []*querypb.BoundQuery{queries[1]}, sbc1.Queries, "")
+}
+
+func TestFetchLastInsertIDResets(t *testing.T) {
+	// This test verifies that the FetchLastInsertID flag is reset after a call to ExecuteMultiShard.
+	ks := "TestFetchLastInsertIDResets"
+	ctx := utils.LeakCheckContext(t)
+
+	createSandbox(ks)
+	hc := discovery.NewFakeHealthCheck(nil)
+	sc := newTestScatterConn(ctx, hc, newSandboxForCells(ctx, []string{"aa"}), "aa")
+	sbc0 := hc.AddTestTablet("aa", "0", 1, ks, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	sbc1 := hc.AddTestTablet("aa", "1", 1, ks, "1", topodatapb.TabletType_PRIMARY, true, 1, nil)
+
+	rss := []*srvtopo.ResolvedShard{{
+		Target: &querypb.Target{
+			Keyspace:   ks,
+			Shard:      "0",
+			TabletType: topodatapb.TabletType_PRIMARY,
+		},
+		Gateway: sbc0,
+	}, {
+		Target: &querypb.Target{
+			Keyspace:   ks,
+			Shard:      "1",
+			TabletType: topodatapb.TabletType_PRIMARY,
+		},
+		Gateway: sbc1,
+	}}
+	queries := []*querypb.BoundQuery{{
+		Sql: "query1",
+		BindVariables: map[string]*querypb.BindVariable{
+			"bv0": sqltypes.Int64BindVariable(0),
+		},
+	}, {
+		Sql: "query2",
+		BindVariables: map[string]*querypb.BindVariable{
+			"bv1": sqltypes.Int64BindVariable(1),
+		},
+	}}
+	tests := []struct {
+		name               string
+		initialSessionOpts *querypb.ExecuteOptions
+		fetchLastInsertID  bool
+		expectSessionNil   bool
+		expectFetchLastID  *bool // nil means checkLastOptionNil, otherwise checkLastOption(*bool)
+	}{
+		{
+			name:               "no session options, fetchLastInsertID = false",
+			initialSessionOpts: nil,
+			fetchLastInsertID:  false,
+			expectSessionNil:   true,
+			expectFetchLastID:  nil,
+		},
+		{
+			name:               "no session options, fetchLastInsertID = true",
+			initialSessionOpts: nil,
+			fetchLastInsertID:  true,
+			expectSessionNil:   true,
+
+			expectFetchLastID: ptr.Bool(true),
+		},
+		{
+			name:               "session options set, fetchLastInsertID = false",
+			initialSessionOpts: &querypb.ExecuteOptions{},
+			fetchLastInsertID:  false,
+			expectSessionNil:   false,
+			expectFetchLastID:  ptr.Bool(false),
+		},
+		{
+			name:               "session options set, fetchLastInsertID = true",
+			initialSessionOpts: &querypb.ExecuteOptions{},
+			fetchLastInsertID:  true,
+			expectSessionNil:   false,
+			expectFetchLastID:  ptr.Bool(true),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			session := econtext.NewSafeSession(nil)
+			session.Options = tt.initialSessionOpts
+
+			checkLastOption := func(expected bool) {
+				require.Equal(t, 1, len(sbc0.Options))
+				options := sbc0.Options[0]
+				assert.Equal(t, options.FetchLastInsertId, expected)
+				sbc0.Options = nil
+			}
+			checkLastOptionNil := func() {
+				require.Equal(t, 1, len(sbc0.Options))
+				assert.Nil(t, sbc0.Options[0])
+				sbc0.Options = nil
+			}
+
+			_, errs := sc.ExecuteMultiShard(ctx, nil, rss, queries, session, true /*autocommit*/, false, nullResultsObserver{}, tt.fetchLastInsertID)
+			require.NoError(t, vterrors.Aggregate(errs))
+
+			if tt.expectSessionNil {
+				assert.Nil(t, session.Options)
+			} else {
+				assert.NotNil(t, session.Options)
+				assert.Equal(t, tt.fetchLastInsertID, session.Options.FetchLastInsertId)
+			}
+
+			if tt.expectFetchLastID == nil {
+				checkLastOptionNil()
+			} else {
+				checkLastOption(*tt.expectFetchLastID)
+			}
+		})
+	}
 }
 
 func TestExecutePanic(t *testing.T) {
@@ -177,15 +284,10 @@ func TestExecutePanic(t *testing.T) {
 		logMessage = fmt.Sprintf(format, args...)
 	}
 
-	defer func() {
-		r := recover()
-		require.NotNil(t, r, "The code did not panic")
-		// assert we are seeing the stack trace
-		require.Contains(t, logMessage, "(*ScatterConn).multiGoTransaction")
-	}()
-
-	_, _ = sc.ExecuteMultiShard(ctx, nil, rss, queries, econtext.NewSafeSession(session), true /*autocommit*/, false, nullResultsObserver{})
-
+	assert.Panics(t, func() {
+		_, _ = sc.ExecuteMultiShard(ctx, nil, rss, queries, econtext.NewSafeSession(session), true /*autocommit*/, false, nullResultsObserver{}, false)
+	})
+	require.Contains(t, logMessage, "(*ScatterConn).multiGoTransaction")
 }
 
 func TestReservedOnMultiReplica(t *testing.T) {

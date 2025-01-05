@@ -119,8 +119,8 @@ func TestReferenceTableMaterializationAndRouting(t *testing.T) {
 	require.NoError(t, err)
 	vtgateConn.Close()
 
-	materialize(t, materializeCatSpec, false)
-	materialize(t, materializeMfgSpec, false)
+	materialize(t, materializeCatSpec)
+	materialize(t, materializeMfgSpec)
 
 	tabDash80 := vc.getPrimaryTablet(t, sks, "-80")
 	tab80Dash := vc.getPrimaryTablet(t, sks, "80-")

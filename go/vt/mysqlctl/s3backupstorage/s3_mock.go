@@ -162,7 +162,11 @@ func FailFirstWrite(s3bh *S3BackupHandle, ctx context.Context, filename string, 
 		return nil, fmt.Errorf("AddFile cannot be called on read-only backup")
 	}
 
-	partSizeBytes := calculateUploadPartSize(filesize)
+	partSizeBytes, err := calculateUploadPartSize(filesize)
+	if err != nil {
+		return nil, err
+	}
+
 	reader, writer := io.Pipe()
 	r := io.Reader(reader)
 
@@ -181,7 +185,11 @@ func FailAllWrites(s3bh *S3BackupHandle, ctx context.Context, filename string, f
 		return nil, fmt.Errorf("AddFile cannot be called on read-only backup")
 	}
 
-	partSizeBytes := calculateUploadPartSize(filesize)
+	partSizeBytes, err := calculateUploadPartSize(filesize)
+	if err != nil {
+		return nil, err
+	}
+
 	reader, writer := io.Pipe()
 	r := &failReadPipeReader{PipeReader: reader}
 
