@@ -937,34 +937,37 @@ func (s *VtctldServer) CreateKeyspace(ctx context.Context, req *vtctldatapb.Crea
 	}
 
 	if req.Type == topodatapb.KeyspaceType_SNAPSHOT {
-		// Copy vschema from the base keyspace.
 		bksvs, err := s.ts.GetVSchema(ctx, req.BaseKeyspace)
-		ksvs := &topo.KeyspaceVSchemaInfo{
-			Name: req.Name,
-		}
 		if err != nil {
 			log.Infof("error from GetVSchema(%v) = %v", req.BaseKeyspace, err)
 			if topo.IsErrType(err, topo.NoNode) {
 				log.Infof("base keyspace %v does not exist; continuing with bare, unsharded vschema", req.BaseKeyspace)
-				// Create an empty vschema for the keyspace.
-				ksvs.Keyspace = &vschemapb.Keyspace{
-					Sharded:  false,
-					Tables:   map[string]*vschemapb.Table{},
-					Vindexes: map[string]*vschemapb.Vindex{},
+				bksvs = &topo.KeyspaceVSchemaInfo{
+					Name: req.Name,
+					Keyspace: &vschemapb.Keyspace{
+						Sharded:  false,
+						Tables:   map[string]*vschemapb.Table{},
+						Vindexes: map[string]*vschemapb.Vindex{},
+					},
 				}
 			} else {
 				return nil, err
 			}
 		}
 
-		// Copy the vschema from the base keyspace to the new one.
-		ksvs.Keyspace = bksvs.Keyspace.CloneVT()
+		// We don't want to clone the base keyspace's key version
+		// so we do NOT call bksvs.CloneVT() here. We instead only
+		// clone the vschemapb.Keyspace field for the new snapshot
+		// keyspace.
+		sksvs := &topo.KeyspaceVSchemaInfo{
+			Name:     req.Name,
+			Keyspace: bksvs.Keyspace.CloneVT(),
+		}
 		// SNAPSHOT keyspaces are excluded from global routing.
-		ksvs.RequireExplicitRouting = true
+		sksvs.RequireExplicitRouting = true
 
-		if err = s.ts.SaveVSchema(ctx, ksvs); err != nil {
-			err = fmt.Errorf("SaveVSchema(%v) = %w", ksvs, err)
-			return nil, err
+		if err = s.ts.SaveVSchema(ctx, sksvs); err != nil {
+			return nil, fmt.Errorf("SaveVSchema(%v) = %w", sksvs, err)
 		}
 	}
 

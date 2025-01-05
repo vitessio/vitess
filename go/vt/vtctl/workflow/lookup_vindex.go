@@ -144,8 +144,12 @@ func (lv *lookupVindex) prepareCreate(ctx context.Context, workflow, keyspace st
 	materializeQuery = generateMaterializeQuery(vInfo, vindex, sourceVindexColumns)
 
 	// Save a copy of the original vschema if we modify it and need to provide
-	// a cancelFunc.
-	origTargetVSchema := targetVSchema.CloneVT()
+	// a cancelFunc. We do NOT want to clone the key version as we explicitly
+	// want to go back in time. So we only clone the internal vschema.Keyspace.
+	origTargetVSchema := &topo.KeyspaceVSchemaInfo{
+		Name:     vInfo.targetKeyspace,
+		Keyspace: targetVSchema.Keyspace.CloneVT(),
+	}
 	targetChanged := false
 
 	// Update targetVSchema.

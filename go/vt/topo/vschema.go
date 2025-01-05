@@ -20,8 +20,6 @@ import (
 	"context"
 	"path"
 
-	"google.golang.org/protobuf/proto"
-
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -39,11 +37,17 @@ type KeyspaceVSchemaInfo struct {
 }
 
 func (k *KeyspaceVSchemaInfo) CloneVT() *KeyspaceVSchemaInfo {
-	return &KeyspaceVSchemaInfo{
-		Name:     k.Name,
-		Keyspace: k.Keyspace.CloneVT(),
-		version:  Version(k.version),
+	if k == nil {
+		return (*KeyspaceVSchemaInfo)(nil)
 	}
+	kc := &KeyspaceVSchemaInfo{
+		Name:    k.Name,
+		version: Version(k.version),
+	}
+	if k.Keyspace != nil {
+		kc.Keyspace = k.Keyspace.CloneVT()
+	}
+	return kc
 }
 
 // SaveVSchema saves a Vschema. A valid Vschema should be passed in. It does not verify its correctness.
@@ -91,14 +95,15 @@ func (ts *Server) GetVSchema(ctx context.Context, keyspace string) (*KeyspaceVSc
 	if err != nil {
 		return nil, err
 	}
-	var vs vschemapb.Keyspace
-	err = proto.Unmarshal(data, &vs)
+
+	vs := &vschemapb.Keyspace{}
+	err = vs.UnmarshalVT(data)
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "bad vschema data: %q", data)
 	}
 	return &KeyspaceVSchemaInfo{
 		Name:     keyspace,
-		Keyspace: &vs,
+		Keyspace: vs,
 		version:  version,
 	}, nil
 }
