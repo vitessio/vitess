@@ -473,7 +473,9 @@ func buildGlobalTables(source *vschemapb.SrvVSchema, vschema *VSchema) {
 }
 
 // AddAdditionalGlobalTables adds unique tables from unsharded keyspaces to the global tables.
-// It is expected to be called from the schema tracking code.
+// It is expected to be called from the schema tracking code. Note that this is called after `BuildVSchema`
+// which means that the global tables are already populated with the tables from the sharded keyspaces and from
+// unsharded keyspaces which have tables specified in associated vschemas.
 func AddAdditionalGlobalTables(source *vschemapb.SrvVSchema, vschema *VSchema) {
 	newTables := make(map[string]*Table)
 
@@ -531,6 +533,7 @@ func buildKeyspaceGlobalTables(vschema *VSchema, ksvschema *KeyspaceSchema) {
 			if t.Type == TypeReference && t.Source != nil && t.Source.Name.String() == t.Name.String() {
 				continue
 			}
+
 			vschema.globalTables[tname] = t
 		}
 	}

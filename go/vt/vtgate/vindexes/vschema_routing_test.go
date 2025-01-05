@@ -30,9 +30,9 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
-// TestAutoGlobalRoutingExt tests the global routing of tables across various keyspace configurations,
+// TestAutoGlobalRoutingExtended tests the global routing of tables across various keyspace configurations,
 // including unsharded and sharded keyspaces, with and without the RequireExplicitRouting flag.
-func TestAutoGlobalRoutingExt(t *testing.T) {
+func TestAutoGlobalRoutingExtended(t *testing.T) {
 	isTableGloballyRoutable := func(vschema *VSchema, tableName string) (isGlobal, isAmbiguous bool) {
 		table, err := vschema.FindTable("", tableName)
 		if err != nil {

@@ -105,6 +105,7 @@ func (h *grHelpers) insertData(t *testing.T, keyspace string, table string, id i
 }
 
 // There is a race between when a table is created and it is updated in the global table cache in vtgate.
+// This function waits for the table to be available in vtgate before proceeding.
 func (h *grHelpers) waitForTableAvailability(t *testing.T, vtgateConn *mysql.Conn, table string) {
 	timer := time.NewTimer(defaultTimeout)
 	defer timer.Stop()
@@ -122,6 +123,7 @@ func (h *grHelpers) waitForTableAvailability(t *testing.T, vtgateConn *mysql.Con
 	}
 }
 
+// Check for the expected global routing behavior for the given tables. Expected logic is implemented in the callback.
 func (h *grHelpers) checkForTable(
 	t *testing.T,
 	tables []string,
@@ -167,6 +169,9 @@ func (h *grHelpers) isAmbiguous(t *testing.T, tables []string) bool {
 	return asExpected
 }
 
+// getExpectations returns a map of expectations for global routing tests. The key is a boolean indicating whether
+// the unsharded keyspace has a vschema. The value is a struct containing callbacks for verifying the global routing
+// behavior after each keyspace is added.
 func (h *grHelpers) getExpectations() *map[bool]*grTestExpectations {
 	var exp = make(map[bool]*grTestExpectations)
 	exp[false] = &grTestExpectations{
@@ -201,7 +206,6 @@ func (h *grHelpers) getExpectations() *map[bool]*grTestExpectations {
 		},
 	}
 	return &exp
-
 }
 
 func (h *grHelpers) getUnshardedVschema(unshardedHasVSchema bool, tables []string) string {
@@ -262,8 +266,6 @@ func testGlobalRouting(t *testing.T, unshardedHasVSchema bool, funcs *grTestExpe
 	}
 	keyspaces := []string{config.ksU1}
 	h.rebuildGraphs(t, keyspaces)
-	//// FIXME: figure out how to ensure vtgate has processed the updated vschema
-	//time.Sleep(5 * time.Second)
 	funcs.postKsU1(t)
 
 	vc.AddKeyspace(t, []*Cell{zone1}, config.ksU2, "0", h.getUnshardedVschema(unshardedHasVSchema, config.ksU2Tables),
@@ -277,7 +279,6 @@ func testGlobalRouting(t *testing.T, unshardedHasVSchema bool, funcs *grTestExpe
 	}
 	keyspaces = append(keyspaces, config.ksU2)
 	h.rebuildGraphs(t, keyspaces)
-	//time.Sleep(5 * time.Second)
 	funcs.postKsU2(t)
 
 	vc.AddKeyspace(t, []*Cell{zone1}, config.ksS1, "-80,80-", h.getShardedVSchema(config.ksS1Tables), h.getSchema(config.ksS1Tables),
@@ -291,6 +292,5 @@ func testGlobalRouting(t *testing.T, unshardedHasVSchema bool, funcs *grTestExpe
 	}
 	keyspaces = append(keyspaces, config.ksS1)
 	h.rebuildGraphs(t, keyspaces)
-	//time.Sleep(5 * time.Second)
 	funcs.postKsS1(t)
 }
