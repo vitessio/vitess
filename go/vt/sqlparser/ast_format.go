@@ -2439,9 +2439,7 @@ func (node *CreateTable) Format(buf *TrackedBuffer) {
 			buf.WriteByte(' ')
 			buf.WriteString(node.IgnoreOrReplace)
 		}
-		if node.HasAs {
-			buf.literal(" as")
-		}
+		buf.literal(" as")
 		buf.astPrintf(node, " %v", node.Select)
 	}
 }

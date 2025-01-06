@@ -582,7 +582,6 @@ type (
 		Comments        *ParsedComments
 		Select          TableStatement
 		IgnoreOrReplace string
-		HasAs           bool
 		FullyParsed     bool
 	}
 

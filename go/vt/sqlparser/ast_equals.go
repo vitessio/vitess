@@ -2472,7 +2472,6 @@ func (cmp *Comparator) RefOfCreateTable(a, b *CreateTable) bool {
 	return a.Temp == b.Temp &&
 		a.IfNotExists == b.IfNotExists &&
 		a.IgnoreOrReplace == b.IgnoreOrReplace &&
-		a.HasAs == b.HasAs &&
 		a.FullyParsed == b.FullyParsed &&
 		cmp.TableName(a.Table, b.Table) &&
 		cmp.RefOfTableSpec(a.TableSpec, b.TableSpec) &&

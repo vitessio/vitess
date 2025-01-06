@@ -3187,9 +3187,7 @@ func (node *CreateTable) FormatFast(buf *TrackedBuffer) {
 			buf.WriteByte(' ')
 			buf.WriteString(node.IgnoreOrReplace)
 		}
-		if node.HasAs {
-			buf.WriteString(" as")
-		}
+		buf.WriteString(" as")
 		buf.WriteByte(' ')
 		node.Select.FormatFast(buf)
 	}

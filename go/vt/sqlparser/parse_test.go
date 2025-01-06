@@ -6191,7 +6191,7 @@ func TestCreateTableSelect(t *testing.T) {
 	}{
 		{
 			"create table t2 select * from t1",
-			"create table t2 select * from t1",
+			"create table t2 as select * from t1",
 		},
 		{
 			"create table t2 as select * from t1",
@@ -6199,7 +6199,7 @@ func TestCreateTableSelect(t *testing.T) {
 		},
 		{
 			"create table t2(id int) select * from t1",
-			"create table t2 (\n\tid int\n) select * from t1",
+			"create table t2 (\n\tid int\n) as select * from t1",
 		},
 		{
 			"create table t2(id int) as select * from t1",
@@ -6207,7 +6207,7 @@ func TestCreateTableSelect(t *testing.T) {
 		},
 		{
 			"create table t2(id int) (select * from t1)",
-			"create table t2 (\n\tid int\n) select * from t1",
+			"create table t2 (\n\tid int\n) as select * from t1",
 		},
 		{
 			"create table t2(id int) as (select * from t1)",
@@ -6215,7 +6215,7 @@ func TestCreateTableSelect(t *testing.T) {
 		},
 		{
 			"create table t2(id int auto_increment, name varchar(255), primary key(id), unique key by_name(name)) select * from t1",
-			"create table t2 (\n\tid int auto_increment,\n\t`name` varchar(255),\n\tprimary key (id),\n\tunique key by_name (`name`)\n) select * from t1",
+			"create table t2 (\n\tid int auto_increment,\n\t`name` varchar(255),\n\tprimary key (id),\n\tunique key by_name (`name`)\n) as select * from t1",
 		},
 		{
 			"create table ks.t2 as select id, name from unsharded_ks.t1",
@@ -6223,11 +6223,11 @@ func TestCreateTableSelect(t *testing.T) {
 		},
 		{
 			"create table ks.t2(id int, name varchar(255)) select id, name from unsharded_ks.t1",
-			"create table ks.t2 (\n\tid int,\n\t`name` varchar(255)\n) select id, `name` from unsharded_ks.t1",
+			"create table ks.t2 (\n\tid int,\n\t`name` varchar(255)\n) as select id, `name` from unsharded_ks.t1",
 		},
 		{
 			"create table if not exists t2(id int) select * from t1",
-			"create table if not exists t2 (\n\tid int\n) select * from t1",
+			"create table if not exists t2 (\n\tid int\n) as select * from t1",
 		},
 		{
 			"create table t2 as select id, count(*) as count from t1 group by id having count >= 1",
@@ -6240,7 +6240,7 @@ func TestCreateTableSelect(t *testing.T) {
 		// temporary table
 		{
 			"create temporary table t2 select id from t1",
-			"create temporary table t2 select id from t1",
+			"create temporary table t2 as select id from t1",
 		},
 		{
 			"create temporary table t2 as select id from t1",
@@ -6248,7 +6248,7 @@ func TestCreateTableSelect(t *testing.T) {
 		},
 		{
 			"create temporary table t2(id int) select id from t1",
-			"create temporary table t2 (\n\tid int\n) select id from t1",
+			"create temporary table t2 (\n\tid int\n) as select id from t1",
 		},
 		{
 			"create temporary table t2(id int) as select id from t1",
@@ -6277,7 +6277,7 @@ partition by range (id)
 		},
 		{
 			"create table t2 replace select * from t1",
-			"create table t2 replace select * from t1",
+			"create table t2 replace as select * from t1",
 		},
 	}
 	parser := NewTestParser()
@@ -6798,8 +6798,8 @@ func TestParseMultipleEdgeCases(t *testing.T) {
 		want:  []string{"set charset ';'", "select 1 from a"},
 	}, {
 		name:    "Partial DDL",
-		input:   "create table a ignore me this is garbage; select 1 from a",
-		wantErr: "syntax error at position 22 near 'ignore'",
+		input:   "create table a disregard me this is garbage; select 1 from a",
+		wantErr: "syntax error at position 25 near 'disregard'",
 	}}
 	parser := NewTestParser()
 	for _, test := range tests {
