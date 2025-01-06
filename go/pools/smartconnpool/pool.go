@@ -413,14 +413,7 @@ func (pool *ConnPool[C]) put(conn *Pooled[C]) {
 	}
 
 	if !pool.wait.tryReturnConn(conn) {
-		// Option 1: do not care if more connections are closed than the allowed idle count
-		if pool.active.Load() > pool.idleCount.Load() {
-			conn.Close()
-			pool.closedConn()
-			return
-		}
-		// Option 2: precisely maintain the idle count
-		if pool.tryClose(conn) {
+		if pool.closeOnIdleLimitReached(conn) {
 			return
 		}
 
@@ -435,13 +428,17 @@ func (pool *ConnPool[C]) put(conn *Pooled[C]) {
 	}
 }
 
-func (pool *ConnPool[C]) tryClose(conn *Pooled[C]) bool {
+// closeOnIdleLimitReached closes a connection if the number of idle connections (active - inuse) in the pool
+// exceeds the idleCount limit. It returns true if the connection is closed, false otherwise.
+func (pool *ConnPool[C]) closeOnIdleLimitReached(conn *Pooled[C]) bool {
 	for {
 		open := pool.active.Load()
-		if open <= pool.idleCount.Load() {
+		idle := open - pool.borrowed.Load()
+		if idle <= pool.idleCount.Load() {
 			return false
 		}
 		if pool.active.CompareAndSwap(open, open-1) {
+			pool.Metrics.idleClosed.Add(1)
 			conn.Close()
 			return true
 		}
