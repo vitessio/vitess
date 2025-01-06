@@ -17,9 +17,12 @@ limitations under the License.
 package datetime
 
 import (
+	"math"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/decimal"
 )
@@ -366,4 +369,48 @@ func TestInRange(t *testing.T) {
 
 		assert.Equal(t, tc.wantInRange, got)
 	}
+}
+
+func TestParseIntervalType(t *testing.T) {
+	intervals := []IntervalType{
+		IntervalMicrosecond,
+		IntervalSecond,
+		IntervalMinute,
+		IntervalHour,
+		IntervalDay,
+		IntervalWeek,
+		IntervalMonth,
+		IntervalQuarter,
+		IntervalYear,
+		IntervalSecondMicrosecond,
+		IntervalMinuteMicrosecond,
+		IntervalMinuteSecond,
+		IntervalHourMicrosecond,
+		IntervalHourSecond,
+		IntervalHourMinute,
+		IntervalDayMicrosecond,
+		IntervalDaySecond,
+		IntervalDayMinute,
+		IntervalDayHour,
+		IntervalYearMonth,
+	}
+	for _, interval := range intervals {
+		s := interval.ToString()
+		t.Run(s, func(t *testing.T) {
+			require.NotEmpty(t, s)
+			require.NotEqual(t, "[unknown IntervalType]", s)
+			parsed := ParseIntervalType(s)
+			assert.NotEqual(t, IntervalNone, parsed)
+			assert.Equal(t, interval, parsed)
+
+			parsed = ParseIntervalType(strings.ToUpper(s))
+			assert.NotEqual(t, IntervalNone, parsed)
+			assert.Equal(t, interval, parsed)
+		})
+	}
+	interval := IntervalType(math.MaxUint8)
+	s := interval.ToString()
+	assert.Equal(t, "[unknown IntervalType]", s)
+	parsed := ParseIntervalType(s)
+	assert.Equal(t, IntervalNone, parsed)
 }
