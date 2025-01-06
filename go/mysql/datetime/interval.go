@@ -166,8 +166,8 @@ func (itv IntervalType) ToString() string {
 	}
 }
 
-// ParseIntervalType parses a string into an IntervalType. This is the inverse function of IntervalType.ToString().
-func ParseIntervalType(s string) IntervalType {
+// IntervalTypeFromString parses a string into an IntervalType. This is the inverse function of IntervalType.ToString().
+func IntervalTypeFromString(s string) IntervalType {
 	switch strings.ToLower(s) {
 	case "year":
 		return IntervalYear

@@ -371,7 +371,7 @@ func TestInRange(t *testing.T) {
 	}
 }
 
-func TestParseIntervalType(t *testing.T) {
+func TestIntervalTypeFromString(t *testing.T) {
 	intervals := []IntervalType{
 		IntervalMicrosecond,
 		IntervalSecond,
@@ -399,11 +399,11 @@ func TestParseIntervalType(t *testing.T) {
 		t.Run(s, func(t *testing.T) {
 			require.NotEmpty(t, s)
 			require.NotEqual(t, "[unknown IntervalType]", s)
-			parsed := ParseIntervalType(s)
+			parsed := IntervalTypeFromString(s)
 			assert.NotEqual(t, IntervalNone, parsed)
 			assert.Equal(t, interval, parsed)
 
-			parsed = ParseIntervalType(strings.ToUpper(s))
+			parsed = IntervalTypeFromString(strings.ToUpper(s))
 			assert.NotEqual(t, IntervalNone, parsed)
 			assert.Equal(t, interval, parsed)
 		})
@@ -411,6 +411,6 @@ func TestParseIntervalType(t *testing.T) {
 	interval := IntervalType(math.MaxUint8)
 	s := interval.ToString()
 	assert.Equal(t, "[unknown IntervalType]", s)
-	parsed := ParseIntervalType(s)
+	parsed := IntervalTypeFromString(s)
 	assert.Equal(t, IntervalNone, parsed)
 }
