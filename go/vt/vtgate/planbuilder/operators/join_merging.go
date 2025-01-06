@@ -171,6 +171,8 @@ func getRoutesOrAlternates(ctx *plancontext.PlanningContext, lhsRoute, rhsRoute 
 		return lhsRoute, rhsRoute, routingA, routingB, sameKeyspace
 	}
 
+	// If we have a reference route, we will try to find an alternate route in same keyspace as other routing keyspace.
+	// If the reference route is part of DML table update target, alternate keyspace route cannot be considered.
 	if refA, ok := routingA.(*AnyShardRouting); ok &&
 		!TableID(lhsRoute).IsOverlapping(ctx.SemTable.DMLTargets) {
 		if altARoute := refA.AlternateInKeyspace(routingB.Keyspace()); altARoute != nil {
