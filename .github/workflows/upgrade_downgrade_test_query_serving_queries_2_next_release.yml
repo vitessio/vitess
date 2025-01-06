@@ -4,7 +4,7 @@ on:
   pull_request:
 
 concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Upgrade Downgrade Testing Query Serving (Queries) Next Release')
+  group: format('{0}-{1}', ${{ github.ref }}, 'Upgrade Downgrade Testing Query Serving (Queries - 2) Next Release')
   cancel-in-progress: true
 
 permissions: read-all

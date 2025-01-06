@@ -1,10 +1,10 @@
-name: Query Serving (Queries) - Upgrade Downgrade Testing
+name: Query Serving (Queries - 2) - Upgrade Downgrade Testing
 on:
   push:
   pull_request:
 
 concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Upgrade Downgrade Testing Query Serving (Queries)')
+  group: format('{0}-{1}', ${{ github.ref }}, 'Upgrade Downgrade Testing Query Serving (Queries - 2)')
   cancel-in-progress: true
 
 permissions: read-all
@@ -15,7 +15,7 @@ permissions: read-all
 jobs:
 
   upgrade_downgrade_test:
-    name: Run Upgrade Downgrade Test - Query Serving (Queries)
+    name: Run Upgrade Downgrade Test - Query Serving (Queries - 2)
     runs-on: gh-hosted-runners-16cores-1-24.04
 
     steps:
