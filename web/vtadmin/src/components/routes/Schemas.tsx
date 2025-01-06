@@ -25,7 +25,7 @@ import { formatBytes } from '../../util/formatBytes';
 import { getTableDefinitions } from '../../util/tableDefinitions';
 import { DataCell } from '../dataTable/DataCell';
 import { DataFilter } from '../dataTable/DataFilter';
-import { DataTable } from '../dataTable/DataTable';
+import { ColumnProps, SortedDataTable } from '../dataTable/SortedDataTable';
 import { ContentContainer } from '../layout/ContentContainer';
 import { WorkspaceHeader } from '../layout/WorkspaceHeader';
 import { WorkspaceTitle } from '../layout/WorkspaceTitle';
@@ -33,10 +33,10 @@ import { KeyspaceLink } from '../links/KeyspaceLink';
 import { QueryLoadingPlaceholder } from '../placeholders/QueryLoadingPlaceholder';
 import { HelpTooltip } from '../tooltip/HelpTooltip';
 
-const TABLE_COLUMNS = [
-    'Keyspace',
-    'Table',
-    <div className="text-right">
+const TABLE_COLUMNS : Array<ColumnProps> = [
+    {display: 'Keyspace', accessor : 'keyspace'},
+    {display: 'Table' , accessor : 'table'},
+    {display : <div className="text-right">
         Approx. Size{' '}
         <HelpTooltip
             text={
@@ -45,8 +45,8 @@ const TABLE_COLUMNS = [
                 </span>
             }
         />
-    </div>,
-    <div className="text-right">
+    </div>, accessor : '_tableSize'},
+    {display: <div className="text-right">
         Approx. Rows{' '}
         <HelpTooltip
             text={
@@ -57,7 +57,7 @@ const TABLE_COLUMNS = [
                 </span>
             }
         />
-    </div>,
+    </div>, accessor : '_tableRowCount'},
 ];
 
 export const Schemas = () => {
@@ -74,6 +74,8 @@ export const Schemas = () => {
             clusterID: d.cluster?.id,
             keyspace: d.keyspace,
             table: d.tableDefinition?.name,
+            _tableSize: d.tableSize?.data_length || 0,
+            _tableRowCount: d.tableSize?.row_count || 0,
             _raw: d,
         }));
 
@@ -120,7 +122,7 @@ export const Schemas = () => {
                     placeholder="Filter schemas"
                     value={filter || ''}
                 />
-                <DataTable columns={TABLE_COLUMNS} data={filteredData} renderRows={renderRows} />
+                <SortedDataTable columns={TABLE_COLUMNS} data={filteredData} renderRows={renderRows} />
                 <QueryLoadingPlaceholder query={schemasQuery} />
             </ContentContainer>
         </div>
