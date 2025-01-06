@@ -30,6 +30,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/sqltypes"
@@ -184,6 +185,7 @@ func init() {
 }
 
 func TestMain(m *testing.M) {
+	_flag.ParseFlagsForTest()
 	exitCode := func() int {
 		var err error
 		ctx, cancel := context.WithCancel(context.Background())
@@ -277,7 +279,7 @@ func (ftc *fakeTabletConn) VStreamRows(ctx context.Context, request *binlogdatap
 			vstreamRowsSendHook(ctx)
 		}
 		return send(rows)
-	})
+	}, nil)
 }
 
 func (ftc *fakeTabletConn) Close(ctx context.Context) error {
@@ -392,6 +394,10 @@ func (dbc *realDBClient) Rollback() error {
 
 func (dbc *realDBClient) Close() {
 	dbc.conn.Close()
+}
+
+func (dbc *realDBClient) IsClosed() bool {
+	return dbc.conn.IsClosed()
 }
 
 func (dbc *realDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, error) {

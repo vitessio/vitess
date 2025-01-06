@@ -25,7 +25,6 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -37,10 +36,10 @@ const (
 )
 
 var (
-	delimitedListRegexp      = regexp.MustCompile(`[ ,;]+`)
-	SimulatedNullString      = sqltypes.NULL.String()
-	SimulatedNullStringSlice = []string{sqltypes.NULL.String()}
-	SimulatedNullInt         = -1
+	delimitedListRegexp          = regexp.MustCompile(`[ ,;]+`)
+	SimulatedNullStringSlice     = []string{sqltypes.NULL.String()}
+	SimulatedNullTabletTypeSlice = []topodatapb.TabletType{topodatapb.TabletType(SimulatedNullInt)}
+	SimulatedNullInt             = -1
 )
 
 // SplitDelimitedList splits a given string by comma, semi-colon or space, and returns non-empty strings
@@ -91,29 +90,29 @@ func SingleWordCamel(w string) string {
 	return strings.ToUpper(w[0:1]) + strings.ToLower(w[1:])
 }
 
-// ValueIsSimulatedNull returns true if the value represents
-// a NULL or unknown/unspecified value. This is used to
-// distinguish between a zero value / default and a user
-// provided value that is equivalent (e.g. an empty string
-// or slice).
+var multiWordSplitterRegexp = regexp.MustCompile(`[-_.\s]+`)
+
+// PascalCase turns a string into PascalCase by splitting it into words and
+// capitalizing the first letter of each word.
+func PascalCase(w string) string {
+	var b strings.Builder
+	words := multiWordSplitterRegexp.Split(w, -1)
+	for _, word := range words {
+		b.WriteString(SingleWordCamel(word))
+	}
+	return b.String()
+}
+
+// ValueIsSimulatedNull returns true if the slice value represents
+// a NULL or unknown/unspecified value. This is used to distinguish
+// between a zero value empty slice and a user provided value of an
+// empty slice.
 func ValueIsSimulatedNull(val any) bool {
 	switch cval := val.(type) {
-	case string:
-		return cval == SimulatedNullString
 	case []string:
 		return len(cval) == 1 && cval[0] == sqltypes.NULL.String()
-	case binlogdatapb.OnDDLAction:
-		return int32(cval) == int32(SimulatedNullInt)
-	case int:
-		return cval == SimulatedNullInt
-	case int32:
-		return int32(cval) == int32(SimulatedNullInt)
-	case int64:
-		return int64(cval) == int64(SimulatedNullInt)
 	case []topodatapb.TabletType:
 		return len(cval) == 1 && cval[0] == topodatapb.TabletType(SimulatedNullInt)
-	case binlogdatapb.VReplicationWorkflowState:
-		return int32(cval) == int32(SimulatedNullInt)
 	default:
 		return false
 	}

@@ -325,6 +325,18 @@ func TestPartialMoveTables(t *testing.T) {
 	tme := newTestTablePartialMigrater(ctx, t, shards, shards[0:1], "select * %s")
 	defer tme.stopTablets(t)
 
+	// Add the schema for the primary tablets, so that we don't fail while applying the denied table rules.
+	schm := &tabletmanagerdatapb.SchemaDefinition{
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
+			Name: "t1",
+		}, {
+			Name: "t2",
+		}},
+	}
+	for _, primary := range append(tme.sourcePrimaries, tme.targetPrimaries...) {
+		primary.FakeMysqlDaemon.Schema = schm
+	}
+
 	// Save some unrelated shard routing rules to be sure that
 	// they don't interfere in any way.
 	srr, err := tme.ts.GetShardRoutingRules(ctx)
@@ -400,6 +412,17 @@ func TestPartialMoveTablesShardSubset(t *testing.T) {
 	}
 	tme := newTestTablePartialMigrater(ctx, t, shards, shardsToMove, "select * %s")
 	defer tme.stopTablets(t)
+	// Add the schema for the primary tablets, so that we don't fail while applying the denied table rules.
+	schm := &tabletmanagerdatapb.SchemaDefinition{
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
+			Name: "t1",
+		}, {
+			Name: "t2",
+		}},
+	}
+	for _, primary := range append(tme.sourcePrimaries, tme.targetPrimaries...) {
+		primary.FakeMysqlDaemon.Schema = schm
+	}
 
 	// Save some unrelated shard routing rules to be sure that
 	// they don't interfere in any way.

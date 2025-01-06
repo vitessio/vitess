@@ -158,7 +158,7 @@ func (c *Collation_8bit_simple_ci) Collate(left, right []byte, rightIsPrefix boo
 	sortOrder := c.sort
 	cmpLen := min(len(left), len(right))
 
-	for i := 0; i < cmpLen; i++ {
+	for i := range cmpLen {
 		sortL, sortR := sortOrder[left[i]], sortOrder[right[i]]
 		if sortL != sortR {
 			return int(sortL) - int(sortR)
@@ -174,7 +174,7 @@ func (c *Collation_8bit_simple_ci) TinyWeightString(src []byte) uint32 {
 	var w32 [4]byte
 	sortOrder := c.sort
 	sortLen := min(4, len(src))
-	for i := 0; i < sortLen; i++ {
+	for i := range sortLen {
 		w32[i] = sortOrder[src[i]]
 	}
 	return binary.BigEndian.Uint32(w32[:4])

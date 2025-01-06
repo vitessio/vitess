@@ -471,7 +471,7 @@ func (u *UnicodeSet) Clear() {
 
 func (u *UnicodeSet) Len() (n int) {
 	count := u.RangeCount()
-	for i := 0; i < count; i++ {
+	for i := range count {
 		n += int(u.RangeEnd(i)) - int(u.RangeStart(i)) + 1
 	}
 	return
@@ -616,7 +616,7 @@ func (u *UnicodeSet) ApplyFilter(inclusions *UnicodeSet, filter Filter) {
 	startHasProperty := rune(-1)
 	limitRange := inclusions.RangeCount()
 
-	for j := 0; j < limitRange; j++ {
+	for j := range limitRange {
 		// get current range
 		start := inclusions.RangeStart(j)
 		end := inclusions.RangeEnd(j)

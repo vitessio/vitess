@@ -41,6 +41,7 @@ type VtctldClientProcess struct {
 	TempDirectory            string
 	ZoneName                 string
 	VtctldClientMajorVersion int
+	Quiet                    bool
 }
 
 // ExecuteCommand executes any vtctldclient command
@@ -72,7 +73,9 @@ func (vtctldclient *VtctldClientProcess) ExecuteCommandWithOutput(args ...string
 			filterDoubleDashArgs(pArgs, vtctldclient.VtctldClientMajorVersion)...,
 		)
 		msg := binlogplayer.LimitString(strings.Join(tmpProcess.Args, " "), 256) // limit log line length
-		log.Infof("Executing vtctldclient with command: %v (attempt %d of %d)", msg, i+1, retries)
+		if !vtctldclient.Quiet {
+			log.Infof("Executing vtctldclient with command: %v (attempt %d of %d)", msg, i+1, retries)
+		}
 		resultByte, err = tmpProcess.CombinedOutput()
 		resultStr = string(resultByte)
 		if err == nil || !shouldRetry(resultStr) {
@@ -195,7 +198,9 @@ func (vtctldclient *VtctldClientProcess) PlannedReparentShard(Keyspace string, S
 	output, err := vtctldclient.ExecuteCommandWithOutput(
 		"PlannedReparentShard",
 		fmt.Sprintf("%s/%s", Keyspace, Shard),
-		"--new-primary", alias)
+		"--new-primary", alias,
+		"--wait-replicas-timeout", "30s",
+	)
 	if err != nil {
 		log.Errorf("error in PlannedReparentShard output %s, err %s", output, err.Error())
 	}

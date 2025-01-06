@@ -71,7 +71,7 @@ func equalWeights900(table Weights, levels int, A, B rune) bool {
 	cA := int((*pageA)[offsetA])
 	cB := int((*pageB)[offsetB])
 
-	for l := 0; l < levels; l++ {
+	for l := range levels {
 		wA, wB := l*256, l*256
 		wA1, wB1 := wA+(cA*256*3), wB+(cB*256*3)
 
@@ -118,7 +118,7 @@ func (Layout_uca900) DebugWeights(table Weights, codepoint rune) (result []uint1
 	}
 
 	ceCount := int((*page)[offset])
-	for ce := 0; ce < ceCount; ce++ {
+	for ce := range ceCount {
 		result = append(result,
 			(*page)[256+(ce*3+0)*256+offset],
 			(*page)[256+(ce*3+1)*256+offset],
@@ -264,8 +264,8 @@ func (Layout_uca_legacy) allocPage(original *[]uint16, patches []Patch) []uint16
 	}
 
 	newPage := make([]uint16, minLenForPage)
-	for i := 0; i < CodepointsPerPage; i++ {
-		for j := 0; j < originalStride; j++ {
+	for i := range CodepointsPerPage {
+		for range originalStride {
 			newPage[1+i*newStride] = (*original)[1+i*originalStride]
 		}
 	}

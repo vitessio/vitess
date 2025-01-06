@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import * as dayjs from 'dayjs';
+import dayjs from 'dayjs';
 import localizedFormat from 'dayjs/plugin/localizedFormat';
 import relativeTime from 'dayjs/plugin/relativeTime';
 
@@ -24,6 +24,18 @@ export const parse = (timestamp: number | Long | null | undefined): dayjs.Dayjs 
     if (typeof timestamp !== 'number') {
         return null;
     }
+
+    // Convert the timestamp to a string and check the number of digits
+    let timestampStr = timestamp.toString();
+
+    // If the length of the timestamp is more than 10 digits (seconds resolution),
+    // keep dividing by 10 until it has 10 digits
+    while (timestampStr.length > 10) {
+        timestampStr = Math.floor(timestamp / 10).toString();
+        timestamp = timestamp / 10;
+    }
+
+    // Now, we assume the timestamp is in seconds resolution and use dayjs.unix()
     return dayjs.unix(timestamp);
 };
 
@@ -43,4 +55,12 @@ export const formatRelativeTime = (timestamp: number | Long | null | undefined):
 
 export const formatDateTimeShort = (timestamp: number | Long | null | undefined): string | null => {
     return format(timestamp, 'MM/DD/YY HH:mm:ss Z');
+};
+
+export const formatRelativeTimeInSeconds = (timestamp: number | Long | null | undefined): string | null => {
+    const u = parse(timestamp);
+    if (!u) return null;
+    const currentTime = dayjs();
+    const secondsElapsed = currentTime.diff(u, 'second');
+    return `${secondsElapsed} seconds ago`;
 };

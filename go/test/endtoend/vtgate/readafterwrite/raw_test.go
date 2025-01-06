@@ -100,7 +100,6 @@ CREATE TABLE test_vdx (
 )
 
 func TestMain(m *testing.M) {
-	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	exitCode := func() int {
@@ -143,7 +142,6 @@ func TestMain(m *testing.M) {
 }
 
 func TestRAWSettings(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	conn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()

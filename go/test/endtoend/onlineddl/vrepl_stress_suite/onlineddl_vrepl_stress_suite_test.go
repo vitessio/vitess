@@ -51,7 +51,6 @@ import (
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
-	"vitess.io/vitess/go/vt/vttablet"
 )
 
 type testcase struct {
@@ -408,7 +407,6 @@ func mysqlParams() *mysql.ConnParams {
 }
 
 func TestMain(m *testing.M) {
-	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	exitcode, err := func() (int, error) {
@@ -436,9 +434,6 @@ func TestMain(m *testing.M) {
 			"--migration_check_interval", "5s",
 			"--vstream_packet_size", "4096", // Keep this value small and below 10k to ensure multilple vstream iterations
 			"--watch_replication_stream",
-			// Test VPlayer batching mode.
-			fmt.Sprintf("--vreplication_experimental_flags=%d",
-				vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage|vttablet.VReplicationExperimentalFlagOptimizeInserts|vttablet.VReplicationExperimentalFlagVPlayerBatching),
 		}
 		clusterInstance.VtGateExtraArgs = []string{
 			"--ddl_strategy", "online",
@@ -482,7 +477,6 @@ func TestMain(m *testing.M) {
 }
 
 func TestVreplStressSchemaChanges(t *testing.T) {
-	defer cluster.PanicHandler(t)
 
 	shards = clusterInstance.Keyspaces[0].Shards
 	require.Equal(t, 1, len(shards))

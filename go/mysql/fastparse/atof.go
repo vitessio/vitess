@@ -64,7 +64,7 @@ func commonPrefixLenIgnoreCase(s, prefix string) int {
 	if n > len(s) {
 		n = len(s)
 	}
-	for i := 0; i < n; i++ {
+	for i := range n {
 		c := s[i]
 		if 'A' <= c && c <= 'Z' {
 			c += 'a' - 'A'

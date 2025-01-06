@@ -47,6 +47,8 @@ type Send struct {
 	// IsDML specifies how to deal with autocommit behaviour
 	IsDML bool
 
+	IsDDL bool
+
 	// SingleShardOnly specifies that the query must be send to only single shard
 	SingleShardOnly bool
 
@@ -91,8 +93,9 @@ func (s *Send) GetTableName() string {
 
 // TryExecute implements Primitive interface
 func (s *Send) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	ctx, cancelFunc := addQueryTimeout(ctx, vcursor, s.QueryTimeout)
-	defer cancelFunc()
+	if err := s.commitIfDDL(ctx, vcursor); err != nil {
+		return nil, err
+	}
 
 	rss, err := s.checkAndReturnShards(ctx, vcursor)
 	if err != nil {
@@ -113,7 +116,7 @@ func (s *Send) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[str
 	}
 
 	rollbackOnError := s.IsDML // for non-dml queries, there's no need to do a rollback
-	result, errs := vcursor.ExecuteMultiShard(ctx, s, rss, queries, rollbackOnError, s.canAutoCommit(vcursor, rss))
+	result, errs := vcursor.ExecuteMultiShard(ctx, s, rss, queries, rollbackOnError, s.canAutoCommit(vcursor, rss), false)
 	err = vterrors.Aggregate(errs)
 	if err != nil {
 		return nil, err
@@ -158,6 +161,10 @@ func copyBindVars(in map[string]*querypb.BindVariable) map[string]*querypb.BindV
 
 // TryStreamExecute implements Primitive interface
 func (s *Send) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	if err := s.commitIfDDL(ctx, vcursor); err != nil {
+		return err
+	}
+
 	rss, err := s.checkAndReturnShards(ctx, vcursor)
 	if err != nil {
 		return err
@@ -172,7 +179,7 @@ func (s *Send) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars m
 		}
 		multiBindVars[i] = bv
 	}
-	errors := vcursor.StreamExecuteMulti(ctx, s, s.Query, rss, multiBindVars, s.IsDML, s.canAutoCommit(vcursor, rss), callback)
+	errors := vcursor.StreamExecuteMulti(ctx, s, s.Query, rss, multiBindVars, s.IsDML, s.canAutoCommit(vcursor, rss), false, callback)
 	return vterrors.Aggregate(errors)
 }
 
@@ -203,4 +210,12 @@ func (s *Send) description() PrimitiveDescription {
 		TargetDestination: s.TargetDestination,
 		Other:             other,
 	}
+}
+
+// commitIfDDL commits any open transaction before executing the ddl query.
+func (s *Send) commitIfDDL(ctx context.Context, vcursor VCursor) error {
+	if s.IsDDL {
+		return vcursor.Session().Commit(ctx)
+	}
+	return nil
 }

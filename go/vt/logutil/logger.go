@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -244,6 +245,12 @@ func (ml *MemoryLogger) Clear() {
 	ml.mu.Lock()
 	ml.Events = nil
 	ml.mu.Unlock()
+}
+
+func (ml *MemoryLogger) LogEvents() []*logutilpb.Event {
+	ml.mu.Lock()
+	defer ml.mu.Unlock()
+	return slices.Clone(ml.Events)
 }
 
 // LoggerWriter is an adapter that implements the io.Writer interface.

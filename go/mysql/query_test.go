@@ -22,17 +22,13 @@ import (
 	"sync"
 	"testing"
 
-	"google.golang.org/protobuf/proto"
-
-	"vitess.io/vitess/go/mysql/sqlerror"
-
-	"vitess.io/vitess/go/mysql/collations"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -393,8 +389,9 @@ func TestQueries(t *testing.T) {
 
 	// Typical Insert result
 	checkQuery(t, "insert", sConn, cConn, &sqltypes.Result{
-		RowsAffected: 0x8010203040506070,
-		InsertID:     0x0102030405060708,
+		RowsAffected:    0x8010203040506070,
+		InsertID:        0x0102030405060708,
+		InsertIDChanged: true,
 	})
 
 	// Typical Select with TYPE_AND_NAME.
@@ -702,6 +699,7 @@ func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *
 		got = &sqltypes.Result{}
 		got.RowsAffected = result.RowsAffected
 		got.InsertID = result.InsertID
+		got.InsertIDChanged = result.InsertIDUpdated()
 		got.Fields, err = cConn.Fields()
 		if err != nil {
 			fatalError = fmt.Sprintf("Fields(%v) failed: %v", query, err)

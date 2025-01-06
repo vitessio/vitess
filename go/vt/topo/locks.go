@@ -19,6 +19,7 @@ package topo
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"os/user"
 	"sync"
@@ -175,6 +176,12 @@ func (l *Lock) lock(ctx context.Context, ts *Server, lt iTopoLock, opts ...LockO
 		return nil, err
 	}
 
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if ts.globalCell == nil {
+		return nil, errors.New("no global cell connection on the topo server")
+	}
 	switch l.Options.lockType {
 	case NonBlocking:
 		return ts.globalCell.TryLock(ctx, lt.Path(), j)

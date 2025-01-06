@@ -48,7 +48,6 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	exitCode := func() int {
@@ -63,8 +62,9 @@ func TestMain(m *testing.M) {
 
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
 			"--queryserver-config-max-result-size", "1000000",
-			"--queryserver-config-query-timeout", "200s",
-			"--queryserver-config-query-pool-timeout", "200s")
+			"--queryserver-config-query-timeout", "2s",
+			"--queryserver-config-transaction-timeout", "3s",
+			"--queryserver-config-query-pool-timeout", "2s")
 		// Start Unsharded keyspace
 		ukeyspace := &cluster.Keyspace{
 			Name:      uks,

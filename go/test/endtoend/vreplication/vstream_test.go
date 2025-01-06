@@ -28,7 +28,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/log"
-	_ "vitess.io/vitess/go/vt/vtctl/grpcvtctlclient"
 	_ "vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 
@@ -140,7 +139,7 @@ func testVStreamWithFailover(t *testing.T, failover bool) {
 		case 1:
 			if failover {
 				insertMu.Lock()
-				output, err := vc.VtctlClient.ExecuteCommandWithOutput("PlannedReparentShard", "--", "--keyspace_shard=product/0", "--new_primary=zone1-101")
+				output, err := vc.VtctldClient.ExecuteCommandWithOutput("PlannedReparentShard", "product/0", "--new-primary=zone1-101")
 				insertMu.Unlock()
 				log.Infof("output of first PRS is %s", output)
 				require.NoError(t, err)
@@ -148,7 +147,7 @@ func testVStreamWithFailover(t *testing.T, failover bool) {
 		case 2:
 			if failover {
 				insertMu.Lock()
-				output, err := vc.VtctlClient.ExecuteCommandWithOutput("PlannedReparentShard", "--", "--keyspace_shard=product/0", "--new_primary=zone1-100")
+				output, err := vc.VtctldClient.ExecuteCommandWithOutput("PlannedReparentShard", "product/0", "--new-primary=zone1-100")
 				insertMu.Unlock()
 				log.Infof("output of second PRS is %s", output)
 				require.NoError(t, err)
@@ -598,7 +597,10 @@ func TestMultiVStreamsKeyspaceReshard(t *testing.T) {
 			Match: "/customer.*",
 		}},
 	}
-	flags := &vtgatepb.VStreamFlags{}
+	flags := &vtgatepb.VStreamFlags{
+		IncludeReshardJournalEvents: true,
+	}
+	journalEvents := 0
 
 	// Stream events but stop once we have a VGTID with positions for the old/original shards.
 	var newVGTID *binlogdatapb.VGtid
@@ -678,6 +680,9 @@ func TestMultiVStreamsKeyspaceReshard(t *testing.T) {
 						default:
 							require.FailNow(t, fmt.Sprintf("received event for unexpected shard: %s", shard))
 						}
+					case binlogdatapb.VEventType_JOURNAL:
+						require.True(t, ev.Journal.MigrationType == binlogdatapb.MigrationType_SHARDS)
+						journalEvents++
 					}
 				}
 			default:
@@ -694,6 +699,8 @@ func TestMultiVStreamsKeyspaceReshard(t *testing.T) {
 	// We should have a mix of events across the old and new shards.
 	require.Greater(t, oldShardRowEvents, 0)
 	require.Greater(t, newShardRowEvents, 0)
+	// We should have seen a reshard journal event.
+	require.Greater(t, journalEvents, 0)
 
 	// The number of row events streamed by the VStream API should match the number of rows inserted.
 	customerResult := execVtgateQuery(t, vtgateConn, ks, "select count(*) from customer")

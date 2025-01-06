@@ -146,19 +146,3 @@ func TestTabletManager_ExecuteFetchAsDba(t *testing.T) {
 		require.Contains(t, got, w)
 	}
 }
-
-func TestTabletManager_UnresolvedTransactions(t *testing.T) {
-	ctx := context.Background()
-
-	tm := &TabletManager{
-		QueryServiceControl:    tabletservermock.NewController(),
-		Env:                    vtenv.NewTestEnv(),
-		_waitForGrantsComplete: make(chan struct{}),
-		BatchCtx:               ctx,
-	}
-	close(tm._waitForGrantsComplete)
-	tm.tmState = newTMState(tm, newTestTablet(t, 100, "ks", "-80"))
-
-	_, err := tm.GetUnresolvedTransactions(ctx)
-	require.NoError(t, err)
-}

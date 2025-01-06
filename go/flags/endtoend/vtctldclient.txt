@@ -18,6 +18,7 @@ Available Commands:
   ApplyVSchema                Applies the VTGate routing schema to the provided keyspace. Shows the result after application.
   Backup                      Uses the BackupStorage service on the given tablet to create and store a new backup.
   BackupShard                 Finds the most up-to-date REPLICA, RDONLY, or SPARE tablet in the given shard and uses the BackupStorage service on that tablet to create and store a new backup.
+  ChangeTabletTags            Changes the tablet tags for the specified tablet, if possible.
   ChangeTabletType            Changes the db type for the specified tablet, if possible.
   CheckThrottler              Issue a throttler check on the given tablet.
   CreateKeyspace              Creates the specified keyspace in the topology.
@@ -28,6 +29,7 @@ Available Commands:
   DeleteShards                Deletes the specified shards from the topology.
   DeleteSrvVSchema            Deletes the SrvVSchema object in the given cell.
   DeleteTablets               Deletes tablet(s) from the topology.
+  DistributedTransaction      Perform commands on distributed transaction
   EmergencyReparentShard      Reparents the shard to the new primary. Assumes the old primary is dead and not responding.
   ExecuteFetchAsApp           Executes the given query as the App user on the remote tablet.
   ExecuteFetchAsDBA           Executes the given query as the DBA user on the remote tablet.
@@ -59,7 +61,6 @@ Available Commands:
   GetTablets                  Looks up tablets according to filter criteria.
   GetThrottlerStatus          Get the throttler status for the given tablet.
   GetTopologyPath             Gets the value associated with the particular path (key) in the topology server.
-  GetUnresolvedTransactions   Retrieves unresolved transactions for the given keyspace.
   GetVSchema                  Prints a JSON representation of a keyspace's topo record.
   GetWorkflows                Gets all vreplication workflows (Reshard, MoveTables, etc) in the given keyspace.
   LegacyVtctlCommand          Invoke a legacy vtctlclient command. Flag parsing is best effort.

@@ -27,7 +27,6 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
-
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 
@@ -35,11 +34,9 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
-	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
 	"vitess.io/vitess/go/vt/vtorc/inst"
-	"vitess.io/vitess/go/vt/vtorc/process"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -67,39 +64,36 @@ func OpenTabletDiscovery() <-chan time.Time {
 	ts = topo.Open()
 	tmc = inst.InitializeTMC()
 	// Clear existing cache and perform a new refresh.
-	if _, err := db.ExecVTOrc("delete from vitess_tablet"); err != nil {
+	if _, err := db.ExecVTOrc("DELETE FROM vitess_tablet"); err != nil {
 		log.Error(err)
 	}
-	// We refresh all information from the topo once before we start the ticks to do it on a timer.
-	populateAllInformation()
-	return time.Tick(time.Second * time.Duration(config.Config.TopoInformationRefreshSeconds)) //nolint SA1015: using time.Tick leaks the underlying ticker
-}
-
-// populateAllInformation initializes all the information for VTOrc to function.
-func populateAllInformation() {
-	refreshAllInformation()
-	// We have completed one full discovery cycle. We should update the process health.
-	process.FirstDiscoveryCycleComplete.Store(true)
+	// We refresh all information from the topo once before we start the ticks to do
+	// it on a timer.
+	ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
+	defer cancel()
+	if err := refreshAllInformation(ctx); err != nil {
+		log.Errorf("failed to initialize topo information: %+v", err)
+	}
+	return time.Tick(config.GetTopoInformationRefreshDuration()) //nolint SA1015: using time.Tick leaks the underlying ticker
 }
 
 // refreshAllTablets reloads the tablets from topo and discovers the ones which haven't been refreshed in a while
-func refreshAllTablets() {
-	refreshTabletsUsing(func(tabletAlias string) {
+func refreshAllTablets(ctx context.Context) error {
+	return refreshTabletsUsing(ctx, func(tabletAlias string) {
 		DiscoverInstance(tabletAlias, false /* forceDiscovery */)
 	}, false /* forceRefresh */)
 }
 
-func refreshTabletsUsing(loader func(tabletAlias string), forceRefresh bool) {
+func refreshTabletsUsing(ctx context.Context, loader func(tabletAlias string), forceRefresh bool) error {
 	if len(clustersToWatch) == 0 { // all known clusters
-		ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
+		ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 		defer cancel()
 		cells, err := ts.GetKnownCells(ctx)
 		if err != nil {
-			log.Error(err)
-			return
+			return err
 		}
 
-		refreshCtx, refreshCancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
+		refreshCtx, refreshCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 		defer refreshCancel()
 		var wg sync.WaitGroup
 		for _, cell := range cells {
@@ -120,7 +114,7 @@ func refreshTabletsUsing(loader func(tabletAlias string), forceRefresh bool) {
 				keyspaceShards = append(keyspaceShards, &topo.KeyspaceShard{Keyspace: input[0], Shard: input[1]})
 			} else {
 				// Assume this is a keyspace and find all shards in keyspace
-				ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
+				ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 				defer cancel()
 				shards, err := ts.GetShardNames(ctx, ks)
 				if err != nil {
@@ -139,9 +133,9 @@ func refreshTabletsUsing(loader func(tabletAlias string), forceRefresh bool) {
 		}
 		if len(keyspaceShards) == 0 {
 			log.Errorf("Found no keyspaceShards for input: %+v", clustersToWatch)
-			return
+			return nil
 		}
-		refreshCtx, refreshCancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
+		refreshCtx, refreshCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 		defer refreshCancel()
 		var wg sync.WaitGroup
 		for _, ks := range keyspaceShards {
@@ -153,10 +147,11 @@ func refreshTabletsUsing(loader func(tabletAlias string), forceRefresh bool) {
 		}
 		wg.Wait()
 	}
+	return nil
 }
 
 func refreshTabletsInCell(ctx context.Context, cell string, loader func(tabletAlias string), forceRefresh bool) {
-	tablets, err := topotools.GetTabletMapForCell(ctx, ts, cell)
+	tablets, err := ts.GetTabletsByCell(ctx, cell, nil)
 	if err != nil {
 		log.Errorf("Error fetching topo info for cell %v: %v", cell, err)
 		return
@@ -188,7 +183,7 @@ func refreshTabletInfoOfShard(ctx context.Context, keyspace, shard string) {
 }
 
 func refreshTabletsInKeyspaceShard(ctx context.Context, keyspace, shard string, loader func(tabletAlias string), forceRefresh bool, tabletsToIgnore []string) {
-	tablets, err := ts.GetTabletMapForShard(ctx, keyspace, shard)
+	tablets, err := ts.GetTabletsByShard(ctx, keyspace, shard)
 	if err != nil {
 		log.Errorf("Error fetching tablets for keyspace/shard %v/%v: %v", keyspace, shard, err)
 		return
@@ -198,15 +193,12 @@ func refreshTabletsInKeyspaceShard(ctx context.Context, keyspace, shard string, 
 	refreshTablets(tablets, query, args, loader, forceRefresh, tabletsToIgnore)
 }
 
-func refreshTablets(tablets map[string]*topo.TabletInfo, query string, args []any, loader func(tabletAlias string), forceRefresh bool, tabletsToIgnore []string) {
+func refreshTablets(tablets []*topo.TabletInfo, query string, args []any, loader func(tabletAlias string), forceRefresh bool, tabletsToIgnore []string) {
 	// Discover new tablets.
 	latestInstances := make(map[string]bool)
 	var wg sync.WaitGroup
 	for _, tabletInfo := range tablets {
 		tablet := tabletInfo.Tablet
-		if tablet.Type != topodatapb.TabletType_PRIMARY && !topo.IsReplicaType(tablet.Type) {
-			continue
-		}
 		tabletAliasString := topoproto.TabletAliasString(tablet.Alias)
 		latestInstances[tabletAliasString] = true
 		old, err := inst.ReadTablet(tabletAliasString)

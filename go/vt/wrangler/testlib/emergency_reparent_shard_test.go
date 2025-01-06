@@ -33,6 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/reparenttestutil"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
@@ -60,10 +61,10 @@ func TestEmergencyReparentShard(t *testing.T) {
 	newPrimary := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, nil)
 	goodReplica1 := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, nil)
 	goodReplica2 := NewFakeTablet(t, wr, "cell2", 3, topodatapb.TabletType_REPLICA, nil)
-	reparenttestutil.SetKeyspaceDurability(context.Background(), t, ts, "test_keyspace", "semi_sync")
+	reparenttestutil.SetKeyspaceDurability(context.Background(), t, ts, "test_keyspace", policy.DurabilitySemiSync)
 
 	oldPrimary.FakeMysqlDaemon.Replicating = false
-	oldPrimary.FakeMysqlDaemon.CurrentPrimaryPosition = replication.Position{
+	oldPrimary.FakeMysqlDaemon.SetPrimaryPositionLocked(replication.Position{
 		GTIDSet: replication.MariadbGTIDSet{
 			2: replication.MariadbGTID{
 				Domain:   2,
@@ -71,7 +72,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 				Sequence: 456,
 			},
 		},
-	}
+	})
 	currentPrimaryFilePosition, _ := replication.ParseFilePosGTIDSet("mariadb-bin.000010:456")
 	oldPrimary.FakeMysqlDaemon.CurrentSourceFilePosition = replication.Position{
 		GTIDSet: currentPrimaryFilePosition,
@@ -80,7 +81,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 	// new primary
 	newPrimary.FakeMysqlDaemon.ReadOnly = true
 	newPrimary.FakeMysqlDaemon.Replicating = true
-	newPrimary.FakeMysqlDaemon.CurrentPrimaryPosition = replication.Position{
+	newPrimary.FakeMysqlDaemon.SetPrimaryPositionLocked(replication.Position{
 		GTIDSet: replication.MariadbGTIDSet{
 			2: replication.MariadbGTID{
 				Domain:   2,
@@ -88,7 +89,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 				Sequence: 456,
 			},
 		},
-	}
+	})
 	newPrimaryRelayLogPos, _ := replication.ParseFilePosGTIDSet("relay-bin.000004:456")
 	newPrimary.FakeMysqlDaemon.CurrentSourceFilePosition = replication.Position{
 		GTIDSet: newPrimaryRelayLogPos,
@@ -123,7 +124,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 	// good replica 1 is replicating
 	goodReplica1.FakeMysqlDaemon.ReadOnly = true
 	goodReplica1.FakeMysqlDaemon.Replicating = true
-	goodReplica1.FakeMysqlDaemon.CurrentPrimaryPosition = replication.Position{
+	goodReplica1.FakeMysqlDaemon.SetPrimaryPositionLocked(replication.Position{
 		GTIDSet: replication.MariadbGTIDSet{
 			2: replication.MariadbGTID{
 				Domain:   2,
@@ -131,7 +132,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 				Sequence: 455,
 			},
 		},
-	}
+	})
 	goodReplica1RelayLogPos, _ := replication.ParseFilePosGTIDSet("relay-bin.000004:455")
 	goodReplica1.FakeMysqlDaemon.CurrentSourceFilePosition = replication.Position{
 		GTIDSet: goodReplica1RelayLogPos,
@@ -154,7 +155,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 	// good replica 2 is not replicating
 	goodReplica2.FakeMysqlDaemon.ReadOnly = true
 	goodReplica2.FakeMysqlDaemon.Replicating = false
-	goodReplica2.FakeMysqlDaemon.CurrentPrimaryPosition = replication.Position{
+	goodReplica2.FakeMysqlDaemon.SetPrimaryPositionLocked(replication.Position{
 		GTIDSet: replication.MariadbGTIDSet{
 			2: replication.MariadbGTID{
 				Domain:   2,
@@ -162,7 +163,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 				Sequence: 454,
 			},
 		},
-	}
+	})
 	goodReplica2RelayLogPos, _ := replication.ParseFilePosGTIDSet("relay-bin.000004:454")
 	goodReplica2.FakeMysqlDaemon.CurrentSourceFilePosition = replication.Position{
 		GTIDSet: goodReplica2RelayLogPos,
@@ -211,13 +212,13 @@ func TestEmergencyReparentShardPrimaryElectNotBest(t *testing.T) {
 	oldPrimary := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_PRIMARY, nil)
 	newPrimary := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, nil)
 	moreAdvancedReplica := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, nil)
-	reparenttestutil.SetKeyspaceDurability(context.Background(), t, ts, "test_keyspace", "semi_sync")
+	reparenttestutil.SetKeyspaceDurability(context.Background(), t, ts, "test_keyspace", policy.DurabilitySemiSync)
 
 	// new primary
 	newPrimary.FakeMysqlDaemon.Replicating = true
 	// It has transactions in its relay log, but not as many as
 	// moreAdvancedReplica
-	newPrimary.FakeMysqlDaemon.CurrentPrimaryPosition = replication.Position{
+	newPrimary.FakeMysqlDaemon.SetPrimaryPositionLocked(replication.Position{
 		GTIDSet: replication.MariadbGTIDSet{
 			2: replication.MariadbGTID{
 				Domain:   2,
@@ -225,7 +226,7 @@ func TestEmergencyReparentShardPrimaryElectNotBest(t *testing.T) {
 				Sequence: 456,
 			},
 		},
-	}
+	})
 	newPrimaryRelayLogPos, _ := replication.ParseFilePosGTIDSet("relay-bin.000004:456")
 	newPrimary.FakeMysqlDaemon.CurrentSourceFilePosition = replication.Position{
 		GTIDSet: newPrimaryRelayLogPos,
@@ -250,7 +251,7 @@ func TestEmergencyReparentShardPrimaryElectNotBest(t *testing.T) {
 	// more advanced replica
 	moreAdvancedReplica.FakeMysqlDaemon.Replicating = true
 	// relay log position is more advanced than desired new primary
-	moreAdvancedReplica.FakeMysqlDaemon.CurrentPrimaryPosition = replication.Position{
+	moreAdvancedReplica.FakeMysqlDaemon.SetPrimaryPositionLocked(replication.Position{
 		GTIDSet: replication.MariadbGTIDSet{
 			2: replication.MariadbGTID{
 				Domain:   2,
@@ -258,14 +259,14 @@ func TestEmergencyReparentShardPrimaryElectNotBest(t *testing.T) {
 				Sequence: 457,
 			},
 		},
-	}
+	})
 	moreAdvancedReplicaLogPos, _ := replication.ParseFilePosGTIDSet("relay-bin.000004:457")
 	moreAdvancedReplica.FakeMysqlDaemon.CurrentSourceFilePosition = replication.Position{
 		GTIDSet: moreAdvancedReplicaLogPos,
 	}
 	moreAdvancedReplica.FakeMysqlDaemon.SetReplicationSourceInputs = append(moreAdvancedReplica.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(newPrimary.Tablet), topoproto.MysqlAddr(oldPrimary.Tablet))
 	moreAdvancedReplica.FakeMysqlDaemon.WaitPrimaryPositions = append(moreAdvancedReplica.FakeMysqlDaemon.WaitPrimaryPositions, moreAdvancedReplica.FakeMysqlDaemon.CurrentSourceFilePosition)
-	newPrimary.FakeMysqlDaemon.WaitPrimaryPositions = append(newPrimary.FakeMysqlDaemon.WaitPrimaryPositions, moreAdvancedReplica.FakeMysqlDaemon.CurrentPrimaryPosition)
+	newPrimary.FakeMysqlDaemon.WaitPrimaryPositions = append(newPrimary.FakeMysqlDaemon.WaitPrimaryPositions, moreAdvancedReplica.FakeMysqlDaemon.GetPrimaryPositionLocked())
 	moreAdvancedReplica.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		// These 3 statements come from tablet startup
 		"STOP REPLICA",

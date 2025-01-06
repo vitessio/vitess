@@ -1,0 +1,18 @@
+{
+  "sharded":true,
+  "vindexes": {
+    "hash_index": {
+      "type": "reverse_bits"
+    }
+  },
+  "tables": {
+    "test": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "hash_index"
+        }
+      ]
+    }
+  }
+}

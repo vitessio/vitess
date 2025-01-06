@@ -33,10 +33,8 @@ import (
 
 // TestAPIEndpoints tests the various API endpoints that VTOrc offers.
 func TestAPIEndpoints(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, nil, cluster.VTOrcConfiguration{
-		PreventCrossDataCenterPrimaryFailover: true,
-		RecoveryPeriodBlockSeconds:            5,
+		PreventCrossCellFailover: true,
 	}, 1, "")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
@@ -141,7 +139,7 @@ func TestAPIEndpoints(t *testing.T) {
 	})
 
 	t.Run("Replication Analysis API", func(t *testing.T) {
-		// use vtctlclient to stop replication
+		// use vtctldclient to stop replication
 		_, err := clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("StopReplication", replica.Alias)
 		require.NoError(t, err)
 
@@ -268,11 +266,13 @@ func TestAPIEndpoints(t *testing.T) {
 		assert.Equal(t, "Filtering by shard without keyspace isn't supported\n", resp)
 
 		// Also verify that the metric for errant GTIDs is reporting the correct count.
-		waitForErrantGTIDCount(t, vtorc, 1)
+		waitForErrantGTIDTabletCount(t, vtorc, 1)
+		// Now we check the errant GTID count for the tablet
+		verifyErrantGTIDCount(t, vtorc, replica.Alias, 1)
 	})
 }
 
-func waitForErrantGTIDCount(t *testing.T, vtorc *cluster.VTOrcProcess, errantGTIDCountWanted int) {
+func waitForErrantGTIDTabletCount(t *testing.T, vtorc *cluster.VTOrcProcess, errantGTIDCountWanted int) {
 	timeout := time.After(15 * time.Second)
 	for {
 		select {
@@ -292,4 +292,13 @@ func waitForErrantGTIDCount(t *testing.T, vtorc *cluster.VTOrcProcess, errantGTI
 			time.Sleep(100 * time.Millisecond)
 		}
 	}
+}
+
+func verifyErrantGTIDCount(t *testing.T, vtorc *cluster.VTOrcProcess, tabletAlias string, countWanted int) {
+	vars := vtorc.GetVars()
+	errantGTIDCounts := vars["CurrentErrantGTIDCount"].(map[string]interface{})
+	gtidCountVal, isPresent := errantGTIDCounts[tabletAlias]
+	require.True(t, isPresent, "Tablet %s not found in errant GTID counts", tabletAlias)
+	gtidCount := utils.GetIntFromValue(gtidCountVal)
+	require.EqualValues(t, countWanted, gtidCount, "Tablet %s has %d errant GTIDs, wanted %d", tabletAlias, gtidCount, countWanted)
 }

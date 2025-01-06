@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/transaction/twopc/utils"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 )
 
 var (
@@ -48,7 +49,6 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	exitcode := func() int {
@@ -67,11 +67,13 @@ func TestMain(m *testing.M) {
 		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
 			"--transaction_mode", "TWOPC",
 			"--grpc_use_effective_callerid",
+			"--tablet_refresh_interval", "2s",
 		)
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
-			"--twopc_enable",
 			"--twopc_abandon_age", "1",
 			"--migration_check_interval", "2s",
+			"--onterm_timeout", "1s",
+			"--onclose_timeout", "1s",
 		)
 
 		// Start keyspace
@@ -79,7 +81,7 @@ func TestMain(m *testing.M) {
 			Name:             keyspaceName,
 			SchemaSQL:        SchemaSQL,
 			VSchema:          VSchema,
-			DurabilityPolicy: "semi_sync",
+			DurabilityPolicy: policy.DurabilitySemiSync,
 		}
 		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-40", "40-80", "80-"}, 2, false); err != nil {
 			return 1
@@ -90,7 +92,7 @@ func TestMain(m *testing.M) {
 			Name:             unshardedKeyspaceName,
 			SchemaSQL:        "",
 			VSchema:          "{}",
-			DurabilityPolicy: "semi_sync",
+			DurabilityPolicy: policy.DurabilitySemiSync,
 		}
 		if err := clusterInstance.StartUnshardedKeyspace(*unshardedKeyspace, 2, false); err != nil {
 			return 1
@@ -121,9 +123,6 @@ func start(t *testing.T) (*mysql.Conn, func()) {
 }
 
 func cleanup(t *testing.T) {
-	cluster.PanicHandler(t)
-
-	utils.ClearOutTable(t, vtParams, "twopc_fuzzer_insert")
-	utils.ClearOutTable(t, vtParams, "twopc_fuzzer_update")
 	utils.ClearOutTable(t, vtParams, "twopc_t1")
+	utils.ClearOutTable(t, vtParams, "twopc_settings")
 }

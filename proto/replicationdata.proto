@@ -50,6 +50,7 @@ message Status {
   bool has_replication_filters = 22;
   bool ssl_allowed = 23;
   bool replication_lag_unknown = 24;
+  bool backup_running = 25;
 }
 
 // Configuration holds replication configuration information gathered from performance_schema and global variables.
@@ -77,6 +78,7 @@ enum StopReplicationMode {
 message PrimaryStatus {
   string position = 1;
   string file_position = 2;
+  string server_uuid = 3;
 }
 
 // FullStatus contains the full status of MySQL including the replication information, semi-sync information, GTID information among others

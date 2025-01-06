@@ -28,6 +28,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
+
 	"vitess.io/vitess/go/cache/theine"
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/sqltypes"
@@ -181,7 +183,7 @@ func createExecutorEnvCallback(t testing.TB, eachShard func(shard, ks string, ta
 	// one-off queries from thrashing the cache. Disable the doorkeeper in the tests to prevent flakiness.
 	plans := theine.NewStore[PlanCacheKey, *engine.Plan](queryPlanCacheMemory, false)
 
-	executor = NewExecutor(ctx, vtenv.NewTestEnv(), serv, cell, resolver, false, false, testBufferSize, plans, nil, false, querypb.ExecuteOptions_Gen4, 0)
+	executor = NewExecutor(ctx, vtenv.NewTestEnv(), serv, cell, resolver, false, false, testBufferSize, plans, nil, false, querypb.ExecuteOptions_Gen4, 0, NewDynamicViperConfig())
 	executor.SetQueryLogger(queryLogger)
 
 	key.AnyShardPicker = DestinationAnyShardPickerFirstShard{}
@@ -230,7 +232,7 @@ func createCustomExecutor(t testing.TB, vschema string, mysqlVersion string) (ex
 	plans := DefaultPlanCache()
 	env, err := vtenv.New(vtenv.Options{MySQLServerVersion: mysqlVersion})
 	require.NoError(t, err)
-	executor = NewExecutor(ctx, env, serv, cell, resolver, false, false, testBufferSize, plans, nil, false, querypb.ExecuteOptions_Gen4, 0)
+	executor = NewExecutor(ctx, env, serv, cell, resolver, false, false, testBufferSize, plans, nil, false, querypb.ExecuteOptions_Gen4, 0, NewDynamicViperConfig())
 	executor.SetQueryLogger(queryLogger)
 
 	t.Cleanup(func() {
@@ -267,7 +269,7 @@ func createCustomExecutorSetValues(t testing.TB, vschema string, values []*sqlty
 	sbclookup = hc.AddTestTablet(cell, "0", 1, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	queryLogger := streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize)
 	plans := DefaultPlanCache()
-	executor = NewExecutor(ctx, vtenv.NewTestEnv(), serv, cell, resolver, false, false, testBufferSize, plans, nil, false, querypb.ExecuteOptions_Gen4, 0)
+	executor = NewExecutor(ctx, vtenv.NewTestEnv(), serv, cell, resolver, false, false, testBufferSize, plans, nil, false, querypb.ExecuteOptions_Gen4, 0, NewDynamicViperConfig())
 	executor.SetQueryLogger(queryLogger)
 
 	t.Cleanup(func() {
@@ -292,7 +294,7 @@ func createExecutorEnvWithPrimaryReplicaConn(t testing.TB, ctx context.Context, 
 	replica = hc.AddTestTablet(cell, "0-replica", 1, KsTestUnsharded, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 
 	queryLogger := streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize)
-	executor = NewExecutor(ctx, vtenv.NewTestEnv(), serv, cell, resolver, false, false, testBufferSize, DefaultPlanCache(), nil, false, querypb.ExecuteOptions_Gen4, warmingReadsPercent)
+	executor = NewExecutor(ctx, vtenv.NewTestEnv(), serv, cell, resolver, false, false, testBufferSize, DefaultPlanCache(), nil, false, querypb.ExecuteOptions_Gen4, warmingReadsPercent, NewDynamicViperConfig())
 	executor.SetQueryLogger(queryLogger)
 
 	t.Cleanup(func() {
@@ -307,7 +309,7 @@ func executorExecSession(ctx context.Context, executor *Executor, sql string, bv
 		ctx,
 		nil,
 		"TestExecute",
-		NewSafeSession(session),
+		econtext.NewSafeSession(session),
 		sql,
 		bv)
 }
@@ -320,7 +322,7 @@ func executorPrepare(ctx context.Context, executor *Executor, session *vtgatepb.
 	return executor.Prepare(
 		ctx,
 		"TestExecute",
-		NewSafeSession(session),
+		econtext.NewSafeSession(session),
 		sql,
 		bv)
 }
@@ -331,7 +333,7 @@ func executorStream(ctx context.Context, executor *Executor, sql string) (qr *sq
 		ctx,
 		nil,
 		"TestExecuteStream",
-		NewSafeSession(nil),
+		econtext.NewSafeSession(nil),
 		sql,
 		nil,
 		func(qr *sqltypes.Result) error {

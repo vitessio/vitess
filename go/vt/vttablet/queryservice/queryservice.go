@@ -63,7 +63,7 @@ type QueryService interface {
 
 	// StartCommit atomically commits the transaction along with the
 	// decision to commit the associated 2pc transaction.
-	StartCommit(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (err error)
+	StartCommit(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (state querypb.StartCommitState, err error)
 
 	// SetRollback transitions the 2pc transaction to the Rollback state.
 	// If a transaction id is provided, that transaction is also rolled back.
@@ -77,7 +77,7 @@ type QueryService interface {
 	ReadTransaction(ctx context.Context, target *querypb.Target, dtid string) (metadata *querypb.TransactionMetadata, err error)
 
 	// UnresolvedTransactions returns the list of unresolved distributed transactions.
-	UnresolvedTransactions(ctx context.Context, target *querypb.Target) ([]*querypb.TransactionMetadata, error)
+	UnresolvedTransactions(ctx context.Context, target *querypb.Target, abandonAgeSeconds int64) ([]*querypb.TransactionMetadata, error)
 
 	// Execute for query execution
 	Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error)

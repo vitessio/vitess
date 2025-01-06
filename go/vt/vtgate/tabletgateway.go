@@ -101,7 +101,11 @@ type TabletGateway struct {
 }
 
 func createHealthCheck(ctx context.Context, retryDelay, timeout time.Duration, ts *topo.Server, cell, cellsToWatch string) discovery.HealthCheck {
-	return discovery.NewHealthCheck(ctx, retryDelay, timeout, ts, cell, cellsToWatch)
+	filters, err := discovery.NewVTGateHealthCheckFilters()
+	if err != nil {
+		log.Exit(err)
+	}
+	return discovery.NewHealthCheck(ctx, retryDelay, timeout, ts, cell, cellsToWatch, filters)
 }
 
 // NewTabletGateway creates and returns a new TabletGateway
@@ -306,7 +310,7 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 		// b) no transaction was created yet.
 		if gw.buffer != nil && !bufferedOnce && !inTransaction && target.TabletType == topodatapb.TabletType_PRIMARY {
 			// The next call blocks if we should buffer during a failover.
-			retryDone, bufferErr := gw.buffer.WaitForFailoverEnd(ctx, target.Keyspace, target.Shard, err)
+			retryDone, bufferErr := gw.buffer.WaitForFailoverEnd(ctx, target.Keyspace, target.Shard, gw.kev, err)
 
 			// Request may have been buffered.
 			if retryDone != nil {

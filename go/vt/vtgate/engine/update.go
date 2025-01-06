@@ -53,9 +53,6 @@ type Update struct {
 
 // TryExecute performs a non-streaming exec.
 func (upd *Update) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	ctx, cancelFunc := addQueryTimeout(ctx, vcursor, upd.QueryTimeout)
-	defer cancelFunc()
-
 	rss, bvs, err := upd.findRoute(ctx, vcursor, bindVars)
 	if err != nil {
 		return nil, err
@@ -105,7 +102,7 @@ func (upd *Update) updateVindexEntries(ctx context.Context, vcursor VCursor, bin
 	for i := range rss {
 		queries[i] = &querypb.BoundQuery{Sql: upd.OwnedVindexQuery, BindVariables: bindVars}
 	}
-	subQueryResult, errors := vcursor.ExecuteMultiShard(ctx, upd, rss, queries, false /* rollbackOnError */, false /* canAutocommit */)
+	subQueryResult, errors := vcursor.ExecuteMultiShard(ctx, upd, rss, queries, false /*rollbackOnError*/, false /*canAutocommit*/, upd.FetchLastInsertID)
 	for _, err := range errors {
 		if err != nil {
 			return err
@@ -216,6 +213,9 @@ func (upd *Update) description() PrimitiveDescription {
 	sort.Strings(changedVindexes) // We sort these so random changes in the map order does not affect output
 	if len(changedVindexes) > 0 {
 		other["ChangedVindexValues"] = changedVindexes
+	}
+	if upd.FetchLastInsertID {
+		other["FetchLastInsertID"] = upd.FetchLastInsertID
 	}
 
 	return PrimitiveDescription{

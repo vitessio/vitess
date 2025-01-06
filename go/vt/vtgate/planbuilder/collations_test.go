@@ -41,15 +41,13 @@ type collationTestCase struct {
 }
 
 func (tc *collationTestCase) run(t *testing.T) {
-	vschemaWrapper := &vschemawrapper.VSchemaWrapper{
-		V:             loadSchema(t, "vschemas/schema.json", false),
-		SysVarEnabled: true,
-		Version:       Gen4,
-		Env:           vtenv.NewTestEnv(),
-	}
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(t, "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	require.NoError(t, err)
 
-	tc.addCollationsToSchema(vschemaWrapper)
-	plan, err := TestBuilder(tc.query, vschemaWrapper, vschemaWrapper.CurrentDb())
+	tc.addCollationsToSchema(vw)
+	plan, err := TestBuilder(tc.query, vw, vw.CurrentDb())
 	require.NoError(t, err)
 	tc.check(t, tc.collations, plan.Instructions)
 }

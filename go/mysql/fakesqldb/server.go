@@ -166,6 +166,11 @@ type ExpectedExecuteFetch struct {
 
 // New creates a server, and starts listening.
 func New(t testing.TB) *DB {
+	return NewWithEnv(t, vtenv.NewTestEnv())
+}
+
+// NewWithEnv creates a server, and starts listening.
+func NewWithEnv(t testing.TB, env *vtenv.Environment) *DB {
 	// Pick a path for our socket.
 	socketDir, err := os.MkdirTemp("", "fakesqldb")
 	if err != nil {
@@ -185,7 +190,7 @@ func New(t testing.TB) *DB {
 		queryPatternUserCallback: make(map[*regexp.Regexp]func(string)),
 		patternData:              make(map[string]exprResult),
 		lastErrorMu:              sync.Mutex{},
-		env:                      vtenv.NewTestEnv(),
+		env:                      env,
 	}
 
 	db.Handler = db

@@ -171,6 +171,11 @@ func (client *localVtctldClient) CancelSchemaMigration(ctx context.Context, in *
 	return client.s.CancelSchemaMigration(ctx, in)
 }
 
+// ChangeTabletTags is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) ChangeTabletTags(ctx context.Context, in *vtctldatapb.ChangeTabletTagsRequest, opts ...grpc.CallOption) (*vtctldatapb.ChangeTabletTagsResponse, error) {
+	return client.s.ChangeTabletTags(ctx, in)
+}
+
 // ChangeTabletType is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) ChangeTabletType(ctx context.Context, in *vtctldatapb.ChangeTabletTypeRequest, opts ...grpc.CallOption) (*vtctldatapb.ChangeTabletTypeResponse, error) {
 	return client.s.ChangeTabletType(ctx, in)
@@ -189,6 +194,11 @@ func (client *localVtctldClient) CleanupSchemaMigration(ctx context.Context, in 
 // CompleteSchemaMigration is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) CompleteSchemaMigration(ctx context.Context, in *vtctldatapb.CompleteSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldatapb.CompleteSchemaMigrationResponse, error) {
 	return client.s.CompleteSchemaMigration(ctx, in)
+}
+
+// ConcludeTransaction is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) ConcludeTransaction(ctx context.Context, in *vtctldatapb.ConcludeTransactionRequest, opts ...grpc.CallOption) (*vtctldatapb.ConcludeTransactionResponse, error) {
+	return client.s.ConcludeTransaction(ctx, in)
 }
 
 // CreateKeyspace is part of the vtctlservicepb.VtctldClient interface.
@@ -384,6 +394,11 @@ func (client *localVtctldClient) GetThrottlerStatus(ctx context.Context, in *vtc
 // GetTopologyPath is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) GetTopologyPath(ctx context.Context, in *vtctldatapb.GetTopologyPathRequest, opts ...grpc.CallOption) (*vtctldatapb.GetTopologyPathResponse, error) {
 	return client.s.GetTopologyPath(ctx, in)
+}
+
+// GetTransactionInfo is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) GetTransactionInfo(ctx context.Context, in *vtctldatapb.GetTransactionInfoRequest, opts ...grpc.CallOption) (*vtctldatapb.GetTransactionInfoResponse, error) {
+	return client.s.GetTransactionInfo(ctx, in)
 }
 
 // GetUnresolvedTransactions is part of the vtctlservicepb.VtctldClient interface.

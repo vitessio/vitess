@@ -29,11 +29,11 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vttablet"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 )
 
 // This file contains just the builders for ReplicatorPlan and TablePlan.
@@ -61,7 +61,8 @@ type tablePlanBuilder struct {
 	source            *binlogdatapb.BinlogSource
 	pkIndices         []bool
 
-	collationEnv *collations.Environment
+	collationEnv   *collations.Environment
+	workflowConfig *vttablet.VReplicationConfig
 }
 
 // colExpr describes the processing to be performed to
@@ -79,10 +80,11 @@ type colExpr struct {
 	// references contains all the column names referenced in the expression.
 	references map[string]bool
 
-	isGrouped  bool
-	isPK       bool
-	dataType   string
-	columnType string
+	isGrouped   bool
+	isPK        bool
+	isGenerated bool
+	dataType    string
+	columnType  string
 }
 
 // operation is the opcode for the colExpr.
@@ -131,16 +133,17 @@ const (
 // The TablePlan built is a partial plan. The full plan for a table is built
 // when we receive field information from events or rows sent by the source.
 // buildExecutionPlan is the function that builds the full plan.
-func buildReplicatorPlan(source *binlogdatapb.BinlogSource, colInfoMap map[string][]*ColumnInfo, copyState map[string]*sqltypes.Result, stats *binlogplayer.Stats, collationEnv *collations.Environment, parser *sqlparser.Parser) (*ReplicatorPlan, error) {
+func (vr *vreplicator) buildReplicatorPlan(source *binlogdatapb.BinlogSource, colInfoMap map[string][]*ColumnInfo, copyState map[string]*sqltypes.Result, stats *binlogplayer.Stats, collationEnv *collations.Environment, parser *sqlparser.Parser) (*ReplicatorPlan, error) {
 	filter := source.Filter
 	plan := &ReplicatorPlan{
-		VStreamFilter: &binlogdatapb.Filter{FieldEventMode: filter.FieldEventMode},
-		TargetTables:  make(map[string]*TablePlan),
-		TablePlans:    make(map[string]*TablePlan),
-		ColInfoMap:    colInfoMap,
-		stats:         stats,
-		Source:        source,
-		collationEnv:  collationEnv,
+		VStreamFilter:  &binlogdatapb.Filter{FieldEventMode: filter.FieldEventMode},
+		TargetTables:   make(map[string]*TablePlan),
+		TablePlans:     make(map[string]*TablePlan),
+		ColInfoMap:     colInfoMap,
+		stats:          stats,
+		Source:         source,
+		collationEnv:   collationEnv,
+		workflowConfig: vr.workflowConfig,
 	}
 	for tableName := range colInfoMap {
 		lastpk, ok := copyState[tableName]
@@ -159,7 +162,7 @@ func buildReplicatorPlan(source *binlogdatapb.BinlogSource, colInfoMap map[strin
 		if !ok {
 			return nil, fmt.Errorf("table %s not found in schema", tableName)
 		}
-		tablePlan, err := buildTablePlan(tableName, rule, colInfos, lastpk, stats, source, collationEnv, parser)
+		tablePlan, err := buildTablePlan(tableName, rule, colInfos, lastpk, stats, source, collationEnv, parser, vr.workflowConfig)
 		if err != nil {
 			return nil, vterrors.Wrapf(err, "failed to build table replication plan for %s table", tableName)
 		}
@@ -199,7 +202,8 @@ func MatchTable(tableName string, filter *binlogdatapb.Filter) (*binlogdatapb.Ru
 }
 
 func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*ColumnInfo, lastpk *sqltypes.Result,
-	stats *binlogplayer.Stats, source *binlogdatapb.BinlogSource, collationEnv *collations.Environment, parser *sqlparser.Parser) (*TablePlan, error) {
+	stats *binlogplayer.Stats, source *binlogdatapb.BinlogSource, collationEnv *collations.Environment,
+	parser *sqlparser.Parser, workflowConfig *vttablet.VReplicationConfig) (*TablePlan, error) {
 
 	planError := func(err error, query string) error {
 		// Use the error string here to ensure things are uniform across
@@ -248,6 +252,7 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*Colum
 			ConvertCharset:   rule.ConvertCharset,
 			ConvertIntToEnum: rule.ConvertIntToEnum,
 			CollationEnv:     collationEnv,
+			WorkflowConfig:   workflowConfig,
 		}
 
 		return tablePlan, nil
@@ -259,11 +264,12 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*Colum
 			From:  sel.From,
 			Where: sel.Where,
 		},
-		lastpk:       lastpk,
-		colInfos:     colInfos,
-		stats:        stats,
-		source:       source,
-		collationEnv: collationEnv,
+		lastpk:         lastpk,
+		colInfos:       colInfos,
+		stats:          stats,
+		source:         source,
+		collationEnv:   collationEnv,
+		workflowConfig: workflowConfig,
 	}
 
 	if err := tpb.analyzeExprs(sel.SelectExprs); err != nil {
@@ -355,10 +361,9 @@ func (tpb *tablePlanBuilder) generate() *TablePlan {
 	fieldsToSkip := make(map[string]bool)
 	for _, colInfo := range tpb.colInfos {
 		if colInfo.IsGenerated {
-			fieldsToSkip[colInfo.Name] = true
+			fieldsToSkip[strings.ToLower(colInfo.Name)] = true
 		}
 	}
-
 	return &TablePlan{
 		TargetName:              tpb.name.String(),
 		Lastpk:                  tpb.lastpk,
@@ -378,6 +383,7 @@ func (tpb *tablePlanBuilder) generate() *TablePlan {
 		PartialInserts:          make(map[string]*sqlparser.ParsedQuery, 0),
 		PartialUpdates:          make(map[string]*sqlparser.ParsedQuery, 0),
 		CollationEnv:            tpb.collationEnv,
+		WorkflowConfig:          tpb.workflowConfig,
 	}
 }
 
@@ -689,7 +695,7 @@ func (tpb *tablePlanBuilder) generateInsertPart(buf *sqlparser.TrackedBuffer) *s
 	}
 	separator := ""
 	for _, cexpr := range tpb.colExprs {
-		if tpb.isColumnGenerated(cexpr.colName) {
+		if cexpr.isGenerated {
 			continue
 		}
 		buf.Myprintf("%s%v", separator, cexpr.colName)
@@ -703,7 +709,7 @@ func (tpb *tablePlanBuilder) generateValuesPart(buf *sqlparser.TrackedBuffer, bv
 	bvf.mode = bvAfter
 	separator := "("
 	for _, cexpr := range tpb.colExprs {
-		if tpb.isColumnGenerated(cexpr.colName) {
+		if cexpr.isGenerated {
 			continue
 		}
 		buf.Myprintf("%s", separator)
@@ -740,7 +746,7 @@ func (tpb *tablePlanBuilder) generateSelectPart(buf *sqlparser.TrackedBuffer, bv
 	buf.WriteString(" select ")
 	separator := ""
 	for _, cexpr := range tpb.colExprs {
-		if tpb.isColumnGenerated(cexpr.colName) {
+		if cexpr.isGenerated {
 			continue
 		}
 		buf.Myprintf("%s", separator)
@@ -776,7 +782,7 @@ func (tpb *tablePlanBuilder) generateOnDupPart(buf *sqlparser.TrackedBuffer) *sq
 		if cexpr.isGrouped || cexpr.isPK {
 			continue
 		}
-		if tpb.isColumnGenerated(cexpr.colName) {
+		if cexpr.isGenerated {
 			continue
 		}
 		buf.Myprintf("%s%v=", separator, cexpr.colName)
@@ -807,10 +813,7 @@ func (tpb *tablePlanBuilder) generateUpdateStatement() *sqlparser.ParsedQuery {
 		if cexpr.isPK {
 			tpb.pkIndices[i] = true
 		}
-		if cexpr.isGrouped || cexpr.isPK {
-			continue
-		}
-		if tpb.isColumnGenerated(cexpr.colName) {
+		if cexpr.isGrouped || cexpr.isPK || cexpr.isGenerated {
 			continue
 		}
 		buf.Myprintf("%s%v=", separator, cexpr.colName)
@@ -880,7 +883,7 @@ func (tpb *tablePlanBuilder) generateDeleteStatement() *sqlparser.ParsedQuery {
 }
 
 func (tpb *tablePlanBuilder) generateMultiDeleteStatement() *sqlparser.ParsedQuery {
-	if vttablet.VReplicationExperimentalFlags&vttablet.VReplicationExperimentalFlagVPlayerBatching == 0 ||
+	if tpb.workflowConfig.ExperimentalFlags&vttablet.VReplicationExperimentalFlagVPlayerBatching == 0 ||
 		(len(tpb.pkCols)+len(tpb.extraSourcePkCols)) != 1 {
 		return nil
 	}
@@ -954,15 +957,6 @@ func (tpb *tablePlanBuilder) generatePKConstraint(buf *sqlparser.TrackedBuffer, 
 		buf.WriteString(charSetCollations[i].collation)
 	}
 	buf.WriteString(")")
-}
-
-func (tpb *tablePlanBuilder) isColumnGenerated(col sqlparser.IdentifierCI) bool {
-	for _, colInfo := range tpb.colInfos {
-		if col.EqualString(colInfo.Name) && colInfo.IsGenerated {
-			return true
-		}
-	}
-	return false
 }
 
 // bindvarFormatter is a dual mode formatter. Its behavior

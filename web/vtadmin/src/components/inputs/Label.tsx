@@ -16,19 +16,29 @@
 import * as React from 'react';
 
 import style from './Label.module.scss';
+import { Tooltip } from '../tooltip/Tooltip';
+import { Icon, Icons } from '../Icon';
 
 type NativeLabelProps = React.DetailedHTMLProps<React.LabelHTMLAttributes<HTMLLabelElement>, HTMLLabelElement>;
 
 interface Props extends NativeLabelProps {
     label: string;
     required?: boolean;
+    helpText?: string | JSX.Element;
 }
 
-export const Label: React.FunctionComponent<Props> = ({ children, required, label, ...props }) => {
+export const Label: React.FunctionComponent<Props> = ({ children, required, label, helpText, ...props }) => {
     return (
         <label {...props}>
             <span className={style.label}>{label}</span>
             {required && <span className="text-danger"> *</span>}
+            {helpText && (
+                <Tooltip text={helpText}>
+                    <span>
+                        <Icon className={style.icon} icon={Icons.info} />
+                    </span>
+                </Tooltip>
+            )}
             {children}
         </label>
     );

@@ -66,6 +66,36 @@
     }
   },
   {
+    "comment": "join on sharding column with limit - should be a simple scatter query and limit on top with non resolved columns",
+    "query": "select * from user u join user_metadata um on u.id = um.user_id where foo=41 limit 20",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select * from user u join user_metadata um on u.id = um.user_id where foo=41 limit 20",
+      "Instructions": {
+        "OperatorType": "Limit",
+        "Count": "20",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select * from `user` as u, user_metadata as um where 1 != 1",
+            "Query": "select * from `user` as u, user_metadata as um where foo = 41 and u.id = um.user_id limit 20",
+            "Table": "`user`, user_metadata"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_metadata"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
     "comment": "select with timeout directive sets QueryTimeout in the route",
     "query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from user",
     "plan": {
@@ -168,7 +198,8 @@
       "TablesUsed": [
         "main.unsharded"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "select with partial scatter directive",
@@ -373,7 +404,8 @@
   {
     "comment": "test table lookup failure for authoritative code path",
     "query": "select a.* from authoritative",
-    "plan": "Unknown table 'a'"
+    "plan": "Unknown table 'a'",
+    "skip_e2e": true
   },
   {
     "comment": "select * from qualified authoritative table",
@@ -441,7 +473,8 @@
         "user.authoritative",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "auto-resolve anonymous columns for simple route",
@@ -464,7 +497,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "json_arrayagg in single sharded query",
@@ -490,7 +524,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "json_objectagg in single sharded query",
@@ -516,17 +551,20 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "unsupported json aggregation expressions in scatter query",
     "query": "select count(1) from user where cola = 'abc' group by n_id having json_arrayagg(a_id) = '[]'",
-    "plan": "VT12001: unsupported: in scatter query: aggregation function 'json_arrayagg(a_id)'"
+    "plan": "VT12001: unsupported: in scatter query: aggregation function 'json_arrayagg(a_id)'",
+    "skip_e2e": true
   },
   {
     "comment": "Cannot auto-resolve for cross-shard joins",
     "query": "select col from user join user_extra",
-    "plan": "Column 'col' in field list is ambiguous"
+    "plan": "Column 'col' in field list is ambiguous",
+    "skip_e2e": true
   },
   {
     "comment": "Auto-resolve should work if unique vindex columns are referenced",
@@ -568,7 +606,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "database calls should be substituted",
@@ -590,7 +629,8 @@
       "TablesUsed": [
         "main.dual"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "last_insert_id for unsharded route",
@@ -612,7 +652,8 @@
       "TablesUsed": [
         "main.unsharded"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "select from dual on unqualified keyspace",
@@ -665,7 +706,8 @@
   {
     "comment": "prefixing dual with a keyspace should not work",
     "query": "select 1 from user.dual",
-    "plan": "table dual not found"
+    "plan": "table dual not found",
+    "skip_e2e": true
   },
   {
     "comment": "RHS route referenced",
@@ -707,7 +749,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Both routes referenced",
@@ -749,7 +792,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Expression with single-route reference",
@@ -791,7 +835,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "subquery with an aggregation in order by that can be merged into a single route",
@@ -818,7 +863,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Jumbled references",
@@ -860,7 +906,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Comments",
@@ -902,7 +949,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "for update",
@@ -944,7 +992,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Field query should work for joins select bind vars",
@@ -989,7 +1038,8 @@
         "main.unsharded",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Case preservation",
@@ -1031,12 +1081,14 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "syntax error",
     "query": "the quick brown fox",
-    "plan": "syntax error at position 4 near 'the'"
+    "plan": "syntax error at position 4 near 'the'",
+    "skip_e2e": true
   },
   {
     "comment": "Hex number is not treated as a simple value",
@@ -1055,7 +1107,7 @@
         "Query": "select * from `user` where id = 0x04",
         "Table": "`user`",
         "Values": [
-          "'\u0004'"
+          "_binary'\u0004'"
         ],
         "Vindex": "user_index"
       },
@@ -1084,7 +1136,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Selection but make the planner explicitly use a vindex",
@@ -1135,12 +1188,14 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Vindex hint on a non-existing vindex",
     "query": "select * from user use vindex (does_not_exist) where id = 1",
-    "plan": "VT09021: Vindex 'does_not_exist' does not exist in table 'user.user'"
+    "plan": "VT09021: Vindex 'does_not_exist' does not exist in table 'user.user'",
+    "skip_e2e": true
   },
   {
     "comment": "sharded limit offset",
@@ -1202,7 +1257,8 @@
       "TablesUsed": [
         "user.music"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Sharding Key Condition in Parenthesis",
@@ -1228,7 +1284,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Multiple parenthesized expressions",
@@ -1254,7 +1311,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Multiple parenthesized expressions",
@@ -1280,7 +1338,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Column Aliasing with Table.Column",
@@ -1358,7 +1417,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Column as boolean-ish",
@@ -1384,7 +1444,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "PK as fake boolean, and column as boolean-ish",
@@ -1410,7 +1471,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "top level subquery in select",
@@ -1455,7 +1517,8 @@
         "main.unsharded",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "sub-expression subquery in select",
@@ -1500,7 +1563,8 @@
         "main.unsharded",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "select * from derived table expands specific columns",
@@ -1542,17 +1606,20 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "duplicate columns not allowed in derived table",
     "query": "select * from (select user.id, user_extra.id from user join user_extra) as t",
-    "plan": "Duplicate column name 'id'"
+    "plan": "Duplicate column name 'id'",
+    "skip_e2e": true
   },
   {
     "comment": "non-existent symbol in cross-shard derived table",
     "query": "select t.col from (select user.id from user join user_extra) as t",
-    "plan": "column 't.col' not found"
+    "plan": "column 't.col' not found",
+    "skip_e2e": true
   },
   {
     "comment": "union with the same target shard",
@@ -1579,7 +1646,8 @@
         "user.music",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "union with the same target shard last_insert_id",
@@ -1606,7 +1674,8 @@
         "user.music",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "unsharded union in derived table",
@@ -1764,7 +1833,8 @@
       "TablesUsed": [
         "main.unsharded"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "routing table on music",
@@ -1786,7 +1856,8 @@
       "TablesUsed": [
         "user.music"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "testing SingleRow Projection",
@@ -1933,7 +2004,8 @@
         "main.unsharded_a",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Complex expression in a subquery used in NOT IN clause of an aggregate query",
@@ -1986,7 +2058,8 @@
         "main.unsharded_a",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "testing SingleRow Projection with arithmetics",
@@ -2189,12 +2262,14 @@
   {
     "comment": "sql_calc_found_rows in sub queries",
     "query": "select * from music where user_id IN (select sql_calc_found_rows * from music limit 10)",
-    "plan": "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'"
+    "plan": "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'",
+    "skip_e2e": true
   },
   {
     "comment": "sql_calc_found_rows in derived table",
     "query": "select sql_calc_found_rows * from (select sql_calc_found_rows * from music limit 10) t limit 1",
-    "plan": "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'"
+    "plan": "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'",
+    "skip_e2e": true
   },
   {
     "comment": "select from unsharded keyspace into dumpfile",
@@ -2216,7 +2291,8 @@
       "TablesUsed": [
         "main.unsharded"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "select from unsharded keyspace into outfile",
@@ -2238,7 +2314,8 @@
       "TablesUsed": [
         "main.unsharded"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "select from unsharded keyspace into outfile s3",
@@ -2260,7 +2337,8 @@
       "TablesUsed": [
         "main.unsharded"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "left join with a dual table on left - merge-able",
@@ -2471,17 +2549,20 @@
   {
     "comment": "Union after into outfile is incorrect",
     "query": "select id from user into outfile 'out_file_name' union all select id from music",
-    "plan": "syntax error at position 55 near 'union'"
+    "plan": "syntax error at position 55 near 'union'",
+    "skip_e2e": true
   },
   {
     "comment": "Into outfile s3 in derived table is incorrect",
     "query": "select id from (select id from user into outfile s3 'inner_outfile') as t2",
-    "plan": "syntax error at position 41 near 'into'"
+    "plan": "syntax error at position 41 near 'into'",
+    "skip_e2e": true
   },
   {
     "comment": "Into outfile s3 in derived table with union incorrect",
     "query": "select id from (select id from user into outfile s3 'inner_outfile' union select 1) as t2",
-    "plan": "syntax error at position 41 near 'into'"
+    "plan": "syntax error at position 41 near 'into'",
+    "skip_e2e": true
   },
   {
     "comment": "select (select u.id from user as u where u.id = 1), a.id from user as a where a.id = 1",
@@ -2550,7 +2631,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "((((select 1))))",
@@ -2595,7 +2677,8 @@
         "main.dual",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "subquery in select expression of derived table",
@@ -2665,7 +2748,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "ORDER BY subquery",
@@ -2735,7 +2819,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "plan test for a natural character set string",
@@ -2802,7 +2887,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Straight Join ensures specific ordering of joins",
@@ -2847,7 +2933,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Dual query should be handled on the vtgate even with a LIMIT",
@@ -2921,7 +3008,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Straight Join preserved in MySQL query",
@@ -2944,7 +3032,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "correlated subquery in exists clause",
@@ -3002,7 +3091,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "correlated subquery in exists clause with an order by",
@@ -3061,7 +3151,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "correlated subquery having dependencies on two tables",
@@ -3134,7 +3225,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "correlated subquery using a column twice",
@@ -3191,7 +3283,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "correlated subquery that is dependent on one side of a join, fully mergeable",
@@ -3242,7 +3335,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "union as a derived table",
@@ -3331,7 +3425,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "mergeable derived table with order by and limit",
@@ -3353,7 +3448,8 @@
       "TablesUsed": [
         "main.unsharded"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "mergeable derived table with group by and limit",
@@ -3375,7 +3471,8 @@
       "TablesUsed": [
         "main.unsharded"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "select user.id, trim(leading 'x' from user.name) from user",
@@ -3397,7 +3494,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "json utility functions",
@@ -3419,7 +3517,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "dual query with exists clause",
@@ -3517,7 +3616,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "yeah, it does not make sense, but it's valid",
@@ -3603,14 +3703,15 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select a -> '$[4]', a ->> '$[3]' from `user` where 1 != 1",
-        "Query": "select a -> '$[4]', a ->> '$[3]' from `user`",
+        "FieldQuery": "select json_extract(a, '$[4]'), json_unquote(json_extract(a, '$[3]')) from `user` where 1 != 1",
+        "Query": "select json_extract(a, '$[4]'), json_unquote(json_extract(a, '$[3]')) from `user`",
         "Table": "`user`"
       },
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "groupe by with non aggregated columns and table alias",
@@ -3632,7 +3733,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Functions that return JSON value attributes",
@@ -3837,7 +3939,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "gtid functions",
@@ -3905,7 +4008,8 @@
         "user.user_extra",
         "user.user_metadata"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Join across multiple tables, with conditions on different vindexes, but mergeable through join predicates",
@@ -3933,7 +4037,8 @@
         "user.music_extra",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "SQL_CALC_FOUND_ROWS with vindex lookup",
@@ -4044,7 +4149,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "`None` route being merged with another route via join predicate on Vindex columns",
@@ -4093,7 +4199,8 @@
       "TablesUsed": [
         "user.music"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Subquery with `IN` condition using columns with matching lookup vindexes",
@@ -4171,7 +4278,8 @@
       "TablesUsed": [
         "user.music"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Subquery with `IN` condition using columns with matching lookup vindexes",
@@ -4285,7 +4393,8 @@
       "TablesUsed": [
         "user.music"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Mergeable scatter subquery with `GROUP BY` on unique vindex column",
@@ -4307,7 +4416,8 @@
       "TablesUsed": [
         "user.music"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Unmergeable scatter subquery with `GROUP BY` on-non vindex column",
@@ -4346,26 +4456,52 @@
           },
           {
             "InputName": "Outer",
-            "OperatorType": "Route",
+            "OperatorType": "VindexLookup",
             "Variant": "IN",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select music.id from music where 1 != 1",
-            "Query": "select music.id from music where :__sq_has_values and music.id in ::__vals",
-            "Table": "music",
             "Values": [
               "::__sq1"
             ],
-            "Vindex": "music_user_map"
+            "Vindex": "music_user_map",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "IN",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+                "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+                "Table": "name_user_vdx",
+                "Values": [
+                  "::name"
+                ],
+                "Vindex": "user_index"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "ByDestination",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select music.id from music where 1 != 1",
+                "Query": "select music.id from music where :__sq_has_values and music.id in ::__vals",
+                "Table": "music"
+              }
+            ]
           }
         ]
       },
       "TablesUsed": [
         "user.music"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Unmergeable scatter subquery with LIMIT",
@@ -4401,26 +4537,52 @@
           },
           {
             "InputName": "Outer",
-            "OperatorType": "Route",
+            "OperatorType": "VindexLookup",
             "Variant": "IN",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select music.id from music where 1 != 1",
-            "Query": "select music.id from music where :__sq_has_values and music.id in ::__vals",
-            "Table": "music",
             "Values": [
               "::__sq1"
             ],
-            "Vindex": "music_user_map"
+            "Vindex": "music_user_map",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "IN",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+                "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+                "Table": "name_user_vdx",
+                "Values": [
+                  "::name"
+                ],
+                "Vindex": "user_index"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "ByDestination",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select music.id from music where 1 != 1",
+                "Query": "select music.id from music where :__sq_has_values and music.id in ::__vals",
+                "Table": "music"
+              }
+            ]
           }
         ]
       },
       "TablesUsed": [
         "user.music"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Mergeable subquery with `MAX` aggregate and grouped by unique vindex",
@@ -4454,26 +4616,52 @@
           },
           {
             "InputName": "Outer",
-            "OperatorType": "Route",
+            "OperatorType": "VindexLookup",
             "Variant": "IN",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select music.id from music where 1 != 1",
-            "Query": "select music.id from music where :__sq_has_values and music.id in ::__vals",
-            "Table": "music",
             "Values": [
               "::__sq1"
             ],
-            "Vindex": "music_user_map"
+            "Vindex": "music_user_map",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "IN",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+                "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+                "Table": "name_user_vdx",
+                "Values": [
+                  "::name"
+                ],
+                "Vindex": "user_index"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "ByDestination",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select music.id from music where 1 != 1",
+                "Query": "select music.id from music where :__sq_has_values and music.id in ::__vals",
+                "Table": "music"
+              }
+            ]
           }
         ]
       },
       "TablesUsed": [
         "user.music"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Unmergeable subquery with `MAX` aggregate",
@@ -4514,19 +4702,44 @@
           },
           {
             "InputName": "Outer",
-            "OperatorType": "Route",
+            "OperatorType": "VindexLookup",
             "Variant": "IN",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select music.id from music where 1 != 1",
-            "Query": "select music.id from music where :__sq_has_values and music.id in ::__vals",
-            "Table": "music",
             "Values": [
               "::__sq1"
             ],
-            "Vindex": "music_user_map"
+            "Vindex": "music_user_map",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "IN",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+                "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+                "Table": "name_user_vdx",
+                "Values": [
+                  "::name"
+                ],
+                "Vindex": "user_index"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "ByDestination",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select music.id from music where 1 != 1",
+                "Query": "select music.id from music where :__sq_has_values and music.id in ::__vals",
+                "Table": "music"
+              }
+            ]
           }
         ]
       },
@@ -4567,19 +4780,44 @@
           },
           {
             "InputName": "Outer",
-            "OperatorType": "Route",
+            "OperatorType": "VindexLookup",
             "Variant": "IN",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select music.id from music where 1 != 1",
-            "Query": "select music.id from music where :__sq_has_values and music.id in ::__vals",
-            "Table": "music",
             "Values": [
               "::__sq1"
             ],
-            "Vindex": "music_user_map"
+            "Vindex": "music_user_map",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "IN",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+                "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+                "Table": "name_user_vdx",
+                "Values": [
+                  "::name"
+                ],
+                "Vindex": "user_index"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "ByDestination",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select music.id from music where 1 != 1",
+                "Query": "select music.id from music where :__sq_has_values and music.id in ::__vals",
+                "Table": "music"
+              }
+            ]
           }
         ]
       },
@@ -4620,26 +4858,52 @@
           },
           {
             "InputName": "Outer",
-            "OperatorType": "Route",
+            "OperatorType": "VindexLookup",
             "Variant": "IN",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select music.id from music where 1 != 1",
-            "Query": "select music.id from music where :__sq_has_values and music.id in ::__vals",
-            "Table": "music",
             "Values": [
               "::__sq1"
             ],
-            "Vindex": "music_user_map"
+            "Vindex": "music_user_map",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "IN",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+                "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+                "Table": "name_user_vdx",
+                "Values": [
+                  "::name"
+                ],
+                "Vindex": "user_index"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "ByDestination",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select music.id from music where 1 != 1",
+                "Query": "select music.id from music where :__sq_has_values and music.id in ::__vals",
+                "Table": "music"
+              }
+            ]
           }
         ]
       },
       "TablesUsed": [
         "user.music"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Mergeable subquery with multiple levels of derived statements",
@@ -4694,6 +4958,36 @@
     }
   },
   {
+    "comment": "We are using last_insert_id with argument, so we need to fetch all results",
+    "query": "select last_insert_id(5) from user limit 12",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select last_insert_id(5) from user limit 12",
+      "Instructions": {
+        "OperatorType": "Limit",
+        "Count": "12",
+        "RequireCompleteInput": true,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FetchLastInsertID": true,
+            "FieldQuery": "select last_insert_id(5) from `user` where 1 != 1",
+            "Query": "select last_insert_id(5) from `user` limit 12",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
     "comment": "Unmergeable subquery with multiple levels of derived statements, using a multi value `IN` predicate",
     "query": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT * FROM (SELECT music.id FROM music WHERE music.user_id IN (5, 6) LIMIT 10) subquery_for_limit) subquery_for_limit)",
     "plan": {
@@ -4731,26 +5025,52 @@
           },
           {
             "InputName": "Outer",
-            "OperatorType": "Route",
+            "OperatorType": "VindexLookup",
             "Variant": "IN",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select music.id from music where 1 != 1",
-            "Query": "select music.id from music where :__sq_has_values and music.id in ::__vals",
-            "Table": "music",
             "Values": [
               "::__sq1"
             ],
-            "Vindex": "music_user_map"
+            "Vindex": "music_user_map",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "IN",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+                "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+                "Table": "name_user_vdx",
+                "Values": [
+                  "::name"
+                ],
+                "Vindex": "user_index"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "ByDestination",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select music.id from music where 1 != 1",
+                "Query": "select music.id from music where :__sq_has_values and music.id in ::__vals",
+                "Table": "music"
+              }
+            ]
           }
         ]
       },
       "TablesUsed": [
         "user.music"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Unmergeable subquery with multiple levels of derived statements",
@@ -4786,26 +5106,52 @@
           },
           {
             "InputName": "Outer",
-            "OperatorType": "Route",
+            "OperatorType": "VindexLookup",
             "Variant": "IN",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select music.id from music where 1 != 1",
-            "Query": "select music.id from music where :__sq_has_values and music.id in ::__vals",
-            "Table": "music",
             "Values": [
               "::__sq1"
             ],
-            "Vindex": "music_user_map"
+            "Vindex": "music_user_map",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "IN",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+                "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+                "Table": "name_user_vdx",
+                "Values": [
+                  "::name"
+                ],
+                "Vindex": "user_index"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "ByDestination",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select music.id from music where 1 != 1",
+                "Query": "select music.id from music where :__sq_has_values and music.id in ::__vals",
+                "Table": "music"
+              }
+            ]
           }
         ]
       },
       "TablesUsed": [
         "user.music"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "`None` subquery as top level predicate - outer query changes from `Scatter` to `None` on merge",
@@ -5004,7 +5350,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "select user.a, t.b from user join (select id, count(*) b, req from user_extra group by req, id) as t on user.id = t.id",
@@ -5068,7 +5415,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "SELECT music.id FROM (SELECT MAX(id) as maxt FROM music WHERE music.user_id = 5) other JOIN music ON other.maxt = music.id",
@@ -5191,7 +5539,8 @@
         "main.dual",
         "main.unsharded_a"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "subquery having join table on clause, using column reference of outer select table",
@@ -5240,7 +5589,8 @@
         "main.unsharded",
         "main.unsharded_a"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "ALL modifier on unsharded table works well",
@@ -5263,7 +5613,8 @@
         "main.unsharded",
         "main.unsharded_a"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "allow last_insert_id with argument",
@@ -5278,6 +5629,7 @@
           "Name": "user",
           "Sharded": true
         },
+        "FetchLastInsertID": true,
         "FieldQuery": "select last_insert_id(id) from `user` where 1 != 1",
         "Query": "select last_insert_id(id) from `user`",
         "Table": "`user`"
@@ -5308,7 +5660,8 @@
         "user.music_extra",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Query with non-plannable lookup vindex",
@@ -5334,7 +5687,8 @@
       "TablesUsed": [
         "user.user_metadata"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "join query with lookup and join on different vindex column",
@@ -5386,7 +5740,8 @@
         "user.user",
         "user.user_metadata"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "pick email as vindex lookup",
@@ -5396,7 +5751,7 @@
       "Original": "select * from customer where email = 'a@mail.com'",
       "Instructions": {
         "OperatorType": "VindexLookup",
-        "Variant": "Equal",
+        "Variant": "EqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -5481,7 +5836,8 @@
       "TablesUsed": [
         "user.customer"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "email vindex is costly than phone vindex - but phone vindex is backfiling hence ignored",
@@ -5491,7 +5847,7 @@
       "Original": "select * from customer where email = 'a@mail.com' and phone = 123456",
       "Instructions": {
         "OperatorType": "VindexLookup",
-        "Variant": "Equal",
+        "Variant": "EqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -5542,7 +5898,7 @@
       "Original": "select * from customer where phone = 123456 and email = 'a@mail.com'",
       "Instructions": {
         "OperatorType": "VindexLookup",
-        "Variant": "Equal",
+        "Variant": "EqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -5605,7 +5961,8 @@
       "TablesUsed": [
         "user.samecolvin"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "column with qualifier is correctly used",
@@ -5648,7 +6005,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Derived tables going to a single shard still need to expand derived table columns",
@@ -5693,7 +6051,8 @@
         "main.unsharded",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "column name aliases in outer join queries",
@@ -5748,7 +6107,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Over clause works for unsharded tables",
@@ -5770,7 +6130,8 @@
       "TablesUsed": [
         "main.unsharded_a"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "join with derived table with alias and join condition - merge into route",

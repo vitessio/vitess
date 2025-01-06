@@ -158,7 +158,7 @@ func (client *QueryClient) CreateTransaction(dtid string, participants []*queryp
 }
 
 // StartCommit issues a StartCommit to TabletServer for the current transaction.
-func (client *QueryClient) StartCommit(dtid string) error {
+func (client *QueryClient) StartCommit(dtid string) (querypb.StartCommitState, error) {
 	defer func() { client.transactionID = 0 }()
 	return client.server.StartCommit(client.ctx, client.target, client.transactionID, dtid)
 }
@@ -180,7 +180,7 @@ func (client *QueryClient) ReadTransaction(dtid string) (*querypb.TransactionMet
 
 // UnresolvedTransactions invokes the UnresolvedTransactions API of TabletServer.
 func (client *QueryClient) UnresolvedTransactions() ([]*querypb.TransactionMetadata, error) {
-	return client.server.UnresolvedTransactions(client.ctx, client.target)
+	return client.server.UnresolvedTransactions(client.ctx, client.target, 0 /* abandonAgeSeconds */)
 }
 
 // SetServingType is for testing transitions.

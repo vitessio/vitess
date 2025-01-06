@@ -1763,6 +1763,7 @@ func (cmp *Comparator) RefOfAlterDatabase(a, b *AlterDatabase) bool {
 	}
 	return a.UpdateDataDirectory == b.UpdateDataDirectory &&
 		a.FullyParsed == b.FullyParsed &&
+		cmp.RefOfParsedComments(a.Comments, b.Comments) &&
 		cmp.IdentifierCS(a.DBName, b.DBName) &&
 		cmp.SliceOfDatabaseOption(a.AlterOptions, b.AlterOptions)
 }
@@ -1789,6 +1790,7 @@ func (cmp *Comparator) RefOfAlterMigration(a, b *AlterMigration) bool {
 	}
 	return a.UUID == b.UUID &&
 		a.Expire == b.Expire &&
+		a.Threshold == b.Threshold &&
 		a.Shards == b.Shards &&
 		a.Type == b.Type &&
 		cmp.RefOfLiteral(a.Ratio, b.Ratio)

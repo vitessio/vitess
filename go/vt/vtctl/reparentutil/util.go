@@ -34,6 +34,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
@@ -58,7 +59,8 @@ const (
 // cell as the current primary, and to be different from avoidPrimaryAlias. The
 // tablet with the most advanced replication position is chosen to minimize the
 // amount of time spent catching up with the current primary. Further ties are
-// broken by the durability rules.
+// broken by the durability rules. Tablets taking backups are excluded from
+// consideration.
 // Note that the search for the most advanced replication position will race
 // with transactions being executed on the current primary, so when all tablets
 // are at roughly the same position, then the choice of new primary-elect will
@@ -126,13 +128,17 @@ func ElectNewPrimary(
 		tb := tablet
 		errorGroup.Go(func() error {
 			// find and store the positions for the tablet
-			pos, replLag, err := findPositionAndLagForTablet(groupCtx, tb, logger, tmc, opts.WaitReplicasTimeout)
+			pos, replLag, takingBackup, err := findTabletPositionLagBackupStatus(groupCtx, tb, logger, tmc, opts.WaitReplicasTimeout)
 			mu.Lock()
 			defer mu.Unlock()
 			if err == nil && (opts.TolerableReplLag == 0 || opts.TolerableReplLag >= replLag) {
-				validTablets = append(validTablets, tb)
-				tabletPositions = append(tabletPositions, pos)
-				innodbBufferPool = append(innodbBufferPool, innodbBufferPoolData[topoproto.TabletAliasString(tb.Alias)])
+				if takingBackup {
+					reasonsToInvalidate.WriteString(fmt.Sprintf("\n%v is taking a backup", topoproto.TabletAliasString(tablet.Alias)))
+				} else {
+					validTablets = append(validTablets, tb)
+					tabletPositions = append(tabletPositions, pos)
+					innodbBufferPool = append(innodbBufferPool, innodbBufferPoolData[topoproto.TabletAliasString(tb.Alias)])
+				}
 			} else {
 				reasonsToInvalidate.WriteString(fmt.Sprintf("\n%v has %v replication lag which is more than the tolerable amount", topoproto.TabletAliasString(tablet.Alias), replLag))
 			}
@@ -150,7 +156,7 @@ func ElectNewPrimary(
 		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "cannot find a tablet to reparent to%v", reasonsToInvalidate.String())
 	}
 
-	// sort the tablets for finding the best primary
+	// sort preferred tablets for finding the best primary
 	err = sortTabletsForReparent(validTablets, tabletPositions, innodbBufferPool, opts.durability)
 	if err != nil {
 		return nil, err
@@ -159,9 +165,9 @@ func ElectNewPrimary(
 	return validTablets[0].Alias, nil
 }
 
-// findPositionAndLagForTablet processes the replication position and lag for a single tablet and
+// findTabletPositionLagBackupStatus processes the replication position and lag for a single tablet and
 // returns it. It is safe to call from multiple goroutines.
-func findPositionAndLagForTablet(ctx context.Context, tablet *topodatapb.Tablet, logger logutil.Logger, tmc tmclient.TabletManagerClient, waitTimeout time.Duration) (replication.Position, time.Duration, error) {
+func findTabletPositionLagBackupStatus(ctx context.Context, tablet *topodatapb.Tablet, logger logutil.Logger, tmc tmclient.TabletManagerClient, waitTimeout time.Duration) (replication.Position, time.Duration, bool, error) {
 	logger.Infof("getting replication position from %v", topoproto.TabletAliasString(tablet.Alias))
 
 	ctx, cancel := context.WithTimeout(ctx, waitTimeout)
@@ -172,10 +178,10 @@ func findPositionAndLagForTablet(ctx context.Context, tablet *topodatapb.Tablet,
 		sqlErr, isSQLErr := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError)
 		if isSQLErr && sqlErr != nil && sqlErr.Number() == sqlerror.ERNotReplica {
 			logger.Warningf("no replication statue from %v, using empty gtid set", topoproto.TabletAliasString(tablet.Alias))
-			return replication.Position{}, 0, nil
+			return replication.Position{}, 0, false, nil
 		}
 		logger.Warningf("failed to get replication status from %v, ignoring tablet: %v", topoproto.TabletAliasString(tablet.Alias), err)
-		return replication.Position{}, 0, err
+		return replication.Position{}, 0, false, err
 	}
 
 	// Use the relay log position if available, otherwise use the executed GTID set (binary log position).
@@ -186,10 +192,10 @@ func findPositionAndLagForTablet(ctx context.Context, tablet *topodatapb.Tablet,
 	pos, err := replication.DecodePosition(positionString)
 	if err != nil {
 		logger.Warningf("cannot decode replica position %v for tablet %v, ignoring tablet: %v", positionString, topoproto.TabletAliasString(tablet.Alias), err)
-		return replication.Position{}, 0, err
+		return replication.Position{}, 0, status.BackupRunning, err
 	}
 
-	return pos, time.Second * time.Duration(status.ReplicationLagSeconds), nil
+	return pos, time.Second * time.Duration(status.ReplicationLagSeconds), status.BackupRunning, nil
 }
 
 // FindCurrentPrimary returns the current primary tablet of a shard, if any. The
@@ -340,9 +346,9 @@ func findCandidate(
 }
 
 // getTabletsWithPromotionRules gets the tablets with the given promotion rule from the list of tablets
-func getTabletsWithPromotionRules(durability Durabler, tablets []*topodatapb.Tablet, rule promotionrule.CandidatePromotionRule) (res []*topodatapb.Tablet) {
+func getTabletsWithPromotionRules(durability policy.Durabler, tablets []*topodatapb.Tablet, rule promotionrule.CandidatePromotionRule) (res []*topodatapb.Tablet) {
 	for _, candidate := range tablets {
-		promotionRule := PromotionRule(durability, candidate)
+		promotionRule := policy.PromotionRule(durability, candidate)
 		if promotionRule == rule {
 			res = append(res, candidate)
 		}
