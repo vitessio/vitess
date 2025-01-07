@@ -44,7 +44,8 @@ type BinlogCoordinates struct {
 	Type    BinlogType
 }
 
-// ParseInstanceKey will parse an InstanceKey from a string representation such as 127.0.0.1:3306
+// ParseBinlogCoordinates will parse a string representation such as "mysql-bin.000001:12345"
+// into a BinlogCoordinates struct.
 func ParseBinlogCoordinates(logFileLogPos string) (*BinlogCoordinates, error) {
 	tokens := strings.SplitN(logFileLogPos, ":", 2)
 	if len(tokens) != 2 {
