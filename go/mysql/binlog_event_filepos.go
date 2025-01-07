@@ -75,12 +75,13 @@ func (ev *filePosBinlogEvent) StripChecksum(f BinlogFormat) (BinlogEvent, []byte
 
 // nextPosition returns the next file position of the binlog.
 // If no information is available, it returns 0.
-func (ev *filePosBinlogEvent) nextPosition(f BinlogFormat) uint64 {
+func (ev *filePosBinlogEvent) nextPosition(f BinlogFormat) uint32 {
 	if f.HeaderLength <= 13 {
 		// Dead code. This is just a failsafe.
 		return 0
 	}
-	return binary.LittleEndian.Uint64(ev.Bytes()[13:21])
+	// The header only uses 4 bytes for the next_position.
+	return binary.LittleEndian.Uint32(ev.Bytes()[13:17])
 }
 
 // rotate implements BinlogEvent.Rotate().

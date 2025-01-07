@@ -47,7 +47,7 @@ import (
 //	+----------------------------+
 //	| extra_headers    19 : x-19 |
 //	+============================+
-//	http://dev.mysql.com/doc/internals/en/event-header-fields.html
+//	https://dev.mysql.com/doc/dev/mysql-server/8.0.40/page_protocol_replication_binlog_event.html#sect_protocol_replication_binlog_event_header
 type binlogEvent []byte
 
 const (
