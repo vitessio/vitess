@@ -174,6 +174,15 @@ var (
 			Dynamic:  true,
 		},
 	)
+
+	enableStalledDiskPrimaryRecovery = viperutil.Configure(
+		"enable-stalled-disk-primary-recovery",
+		viperutil.Options[bool]{
+			FlagName: "enable-stalled-disk-primary-recovery",
+			Default:  false,
+			Dynamic:  true,
+		},
+	)
 )
 
 func init() {
@@ -197,6 +206,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.Duration("recovery-poll-duration", recoveryPollDuration.Default(), "Timer duration on which VTOrc polls its database to run a recovery")
 	fs.Bool("allow-emergency-reparent", ersEnabled.Default(), "Whether VTOrc should be allowed to run emergency reparent operation when it detects a dead primary")
 	fs.Bool("change-tablets-with-errant-gtid-to-drained", convertTabletsWithErrantGTIDs.Default(), "Whether VTOrc should be changing the type of tablets with errant GTIDs to DRAINED")
+	fs.Bool("enable-stalled-disk-primary-recovery", enableStalledDiskPrimaryRecovery.Default(), "Whether VTOrc should be analyzing and recovering stalled disk primary failures")
 
 	viperutil.BindFlags(fs,
 		instancePollTime,
@@ -214,6 +224,7 @@ func registerFlags(fs *pflag.FlagSet) {
 		recoveryPollDuration,
 		ersEnabled,
 		convertTabletsWithErrantGTIDs,
+		enableStalledDiskPrimaryRecovery,
 	)
 }
 
@@ -330,6 +341,11 @@ func ConvertTabletWithErrantGTIDs() bool {
 // SetConvertTabletWithErrantGTIDs sets the value for the convertTabletWithErrantGTIDs variable. This should only be used from tests.
 func SetConvertTabletWithErrantGTIDs(val bool) {
 	convertTabletsWithErrantGTIDs.Set(val)
+}
+
+// GetStalledDiskPrimaryRecovery reports whether VTOrc is allowed to check for and recovery stalled disk problems.
+func GetStalledDiskPrimaryRecovery() bool {
+	return enableStalledDiskPrimaryRecovery.Get()
 }
 
 // MarkConfigurationLoaded is called once configuration has first been loaded.
