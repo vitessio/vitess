@@ -49,7 +49,7 @@ func TestE2ECases(t *testing.T) {
 				require.NoError(mcmp.AsT(), err)
 				sqlparser.RemoveKeyspaceIgnoreSysSchema(stmt)
 
-				mcmp.ExecVitessAndMySQL(test.Query, sqlparser.String(stmt))
+				mcmp.ExecVitessAndMySQLDifferentQueries(test.Query, sqlparser.String(stmt))
 				pd := utils.ExecTrace(mcmp.AsT(), mcmp.VtConn, test.Query)
 				verifyTestExpectations(mcmp.AsT(), pd, test)
 				if mcmp.VtConn.IsClosed() {

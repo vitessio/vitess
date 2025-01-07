@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/stretchr/testify/assert"
@@ -189,7 +190,6 @@ func TestSetAndGetLastInsertID(t *testing.T) {
 }
 
 func TestSetAndGetLastInsertIDWithInsertUnsharded(t *testing.T) {
-	// in this test we can't use the mcmp, so we need to assert the returned values manually
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -206,13 +206,16 @@ func TestSetAndGetLastInsertIDWithInsertUnsharded(t *testing.T) {
 
 	runTests := func(mcmp *utils.MySQLCompare) {
 		for _, test := range tests {
+
 			lastInsertID := getVal()
 			query := fmt.Sprintf(test, lastInsertID)
-			utils.Exec(mcmp.AsT(), mcmp.VtConn, query)
-			result := utils.Exec(mcmp.AsT(), mcmp.VtConn, "select last_insert_id()")
-			uintVal, err := result.Rows[0][0].ToCastUint64()
+
+			stmt, err := sqlparser.NewTestParser().Parse(query)
 			require.NoError(mcmp.AsT(), err)
-			require.EqualValues(mcmp.AsT(), lastInsertID, uintVal, query)
+			sqlparser.RemoveKeyspaceIgnoreSysSchema(stmt)
+
+			mcmp.ExecVitessAndMySQLDifferentQueries(query, sqlparser.String(stmt))
+			mcmp.Exec("select last_insert_id()")
 		}
 	}
 
@@ -230,11 +233,11 @@ func TestSetAndGetLastInsertIDWithInsertUnsharded(t *testing.T) {
 	}
 
 	// Now test to set the last insert id to 0, see that it has changed correctly even if the value is 0
-	utils.Exec(t, mcmp.VtConn, "insert into uks.unsharded(id1, id2) values (last_insert_id(0),12)")
-	result := utils.Exec(t, mcmp.VtConn, "select last_insert_id()")
-	uintVal, err := result.Rows[0][0].ToCastUint64()
-	require.NoError(t, err)
-	require.Zero(t, uintVal)
+	mcmp.ExecVitessAndMySQLDifferentQueries(
+		"insert into uks.unsharded(id1, id2) values (last_insert_id(0),12)",
+		"insert into unsharded(id1, id2) values (last_insert_id(0),12)",
+	)
+	mcmp.Exec("select last_insert_id()")
 }
 
 func TestSetAndGetLastInsertIDWithInsert(t *testing.T) {
