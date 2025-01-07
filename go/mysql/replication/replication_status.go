@@ -31,24 +31,17 @@ type ReplicationStatus struct {
 	// it is the executed GTID set. For file replication implementation, it is same as
 	// FilePosition
 	Position Position
-	// RelayLogPosition is the Position that the replica would be at if it
-	// were to finish executing everything that's currently in its relay log.
-	// However, some MySQL flavors don't expose this information,
-	// in which case RelayLogPosition.IsZero() will be true.
-	// If ReplicationLagUnknown is true then we should not rely on the seconds
-	// behind value and we can instead try to calculate the lag ourselves when
-	// appropriate. For MySQL GTID replication implementation it is the union of
-	// executed GTID set and retrieved GTID set. For file replication implementation,
-	// it is same as RelayLogSourceBinlogEquivalentPosition
+	// RelayLogPosition is the relay log file and position that the replica would be
+	// at if it were to finish executing everything that's currently in its relay log.
 	RelayLogPosition Position
 	// FilePosition stores the position of the source tablets binary log
 	// upto which the SQL thread of the replica has run.
-	FilePosition Position
+	FilePosition BinlogFilePos
 	// RelayLogSourceBinlogEquivalentPosition stores the position of the source tablets binary log
 	// upto which the IO thread has read and added to the relay log
-	RelayLogSourceBinlogEquivalentPosition Position
+	RelayLogSourceBinlogEquivalentPosition BinlogFilePos
 	// RelayLogFilePosition stores the position in the relay log file
-	RelayLogFilePosition  Position
+	RelayLogFilePosition  BinlogFilePos
 	SourceServerID        uint32
 	IOState               ReplicationState
 	LastIOError           string
@@ -96,14 +89,14 @@ func (s *ReplicationStatus) SQLHealthy() bool {
 func ReplicationStatusToProto(s ReplicationStatus) *replicationdatapb.Status {
 	replstatuspb := &replicationdatapb.Status{
 		Position:                               EncodePosition(s.Position),
-		RelayLogPosition:                       EncodePosition(s.RelayLogPosition),
-		FilePosition:                           EncodePosition(s.FilePosition),
-		RelayLogSourceBinlogEquivalentPosition: EncodePosition(s.RelayLogSourceBinlogEquivalentPosition),
+		RelayLogPosition:                       s.RelayLogPosition.String(),
+		FilePosition:                           s.FilePosition.String(),
+		RelayLogSourceBinlogEquivalentPosition: s.RelayLogSourceBinlogEquivalentPosition.String(),
 		SourceServerId:                         s.SourceServerID,
 		ReplicationLagSeconds:                  s.ReplicationLagSeconds,
 		ReplicationLagUnknown:                  s.ReplicationLagUnknown,
 		SqlDelay:                               s.SQLDelay,
-		RelayLogFilePosition:                   EncodePosition(s.RelayLogFilePosition),
+		RelayLogFilePosition:                   s.RelayLogFilePosition.String(),
 		SourceHost:                             s.SourceHost,
 		SourceUser:                             s.SourceUser,
 		SourcePort:                             s.SourcePort,
@@ -131,15 +124,15 @@ func ProtoToReplicationStatus(s *replicationdatapb.Status) ReplicationStatus {
 	if err != nil {
 		panic(vterrors.Wrapf(err, "cannot decode RelayLogPosition"))
 	}
-	filePos, err := DecodePosition(s.FilePosition)
+	filePos, err := ParseBinlogFilePos(s.FilePosition)
 	if err != nil {
 		panic(vterrors.Wrapf(err, "cannot decode FilePosition"))
 	}
-	fileRelayPos, err := DecodePosition(s.RelayLogSourceBinlogEquivalentPosition)
+	fileRelayPos, err := ParseBinlogFilePos(s.RelayLogSourceBinlogEquivalentPosition)
 	if err != nil {
 		panic(vterrors.Wrapf(err, "cannot decode RelayLogSourceBinlogEquivalentPosition"))
 	}
-	relayFilePos, err := DecodePosition(s.RelayLogFilePosition)
+	relayFilePos, err := ParseBinlogFilePos(s.RelayLogFilePosition)
 	if err != nil {
 		panic(vterrors.Wrapf(err, "cannot decode RelayLogFilePosition"))
 	}
@@ -270,18 +263,23 @@ func ParseMariadbReplicationStatus(resultMap map[string]string) (ReplicationStat
 func ParseFilePosReplicationStatus(resultMap map[string]string) (ReplicationStatus, error) {
 	status := ParseReplicationStatus(resultMap, false)
 
-	status.Position = status.FilePosition
-	status.RelayLogPosition = status.RelayLogSourceBinlogEquivalentPosition
+	var err error
+	status.Position, err = status.FilePosition.ConvertToFlavorPosition()
+	if err != nil {
+		return status, err
+	}
+	status.RelayLogPosition, err = status.RelayLogSourceBinlogEquivalentPosition.ConvertToFlavorPosition()
 
-	return status, nil
+	return status, err
 }
 
 func ParseFilePosPrimaryStatus(resultMap map[string]string) (PrimaryStatus, error) {
 	status := ParsePrimaryStatus(resultMap)
 
-	status.Position = status.FilePosition
+	var err error
+	status.Position, err = status.FilePosition.ConvertToFlavorPosition()
 
-	return status, nil
+	return status, err
 }
 
 // ParseReplicationStatus parses the common (non-flavor-specific) fields of ReplicationStatus
@@ -348,27 +346,27 @@ func ParseReplicationStatus(fields map[string]string, replica bool) ReplicationS
 	executedPosStr := fields[execSourceLogPosField]
 	file := fields[relaySourceLogFileField]
 	if file != "" && executedPosStr != "" {
-		status.FilePosition.GTIDSet, err = ParseFilePosGTIDSet(fmt.Sprintf("%s:%s", file, executedPosStr))
+		status.FilePosition, err = ParseBinlogFilePos(fmt.Sprintf("%s:%s", file, executedPosStr))
 		if err != nil {
-			log.Warningf("Error parsing GTID set %s:%s: %v", file, executedPosStr, err)
+			log.Warningf("Error parsing binlog file and position %s:%s: %v", file, executedPosStr, err)
 		}
 	}
 
 	readPosStr := fields[readSourceLogPosField]
 	file = fields[sourceLogFileField]
 	if file != "" && readPosStr != "" {
-		status.RelayLogSourceBinlogEquivalentPosition.GTIDSet, err = ParseFilePosGTIDSet(fmt.Sprintf("%s:%s", file, readPosStr))
+		status.RelayLogSourceBinlogEquivalentPosition, err = ParseBinlogFilePos(fmt.Sprintf("%s:%s", file, readPosStr))
 		if err != nil {
-			log.Warningf("Error parsing GTID set %s:%s: %v", file, readPosStr, err)
+			log.Warningf("Error parsing relay log file and position %s:%s: %v", file, readPosStr, err)
 		}
 	}
 
 	relayPosStr := fields["Relay_Log_Pos"]
 	file = fields["Relay_Log_File"]
 	if file != "" && relayPosStr != "" {
-		status.RelayLogFilePosition.GTIDSet, err = ParseFilePosGTIDSet(fmt.Sprintf("%s:%s", file, relayPosStr))
+		status.RelayLogFilePosition, err = ParseBinlogFilePos(fmt.Sprintf("%s:%s", file, relayPosStr))
 		if err != nil {
-			log.Warningf("Error parsing GTID set %s:%s: %v", file, relayPosStr, err)
+			log.Warningf("Error parsing relay log file and position %s:%s: %v", file, relayPosStr, err)
 		}
 	}
 	return status

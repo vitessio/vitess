@@ -29,7 +29,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 
 	"vitess.io/vitess/go/mysql"
@@ -58,9 +57,8 @@ func connectForReplication(t *testing.T, rbr bool) (*mysql.Conn, mysql.BinlogFor
 	status, err := conn.ShowPrimaryStatus()
 	require.NoError(t, err, "retrieving primary status failed: %v", err)
 
-	filePos := status.FilePosition.GTIDSet.(replication.FilePosGTID)
-	file := filePos.File
-	position := filePos.Pos
+	file := status.FilePosition.File
+	position := status.FilePosition.Pos
 
 	// Tell the server that we understand the format of events
 	// that will be used if binlog_checksum is enabled on the server.

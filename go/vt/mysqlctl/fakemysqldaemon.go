@@ -89,7 +89,7 @@ type FakeMysqlDaemon struct {
 
 	// CurrentSourceFilePosition is used to determine the executed
 	// file based positioning of the replication source.
-	CurrentSourceFilePosition replication.Position
+	CurrentSourceFilePosition replication.BinlogFilePos
 
 	// ReplicationStatusError is used by ReplicationStatus.
 	ReplicationStatusError error
