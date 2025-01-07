@@ -19,11 +19,22 @@ package plan_tests
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 func TestE2ECases(t *testing.T) {
-	e2eTestCaseFiles := []string{"select_cases.json", "filter_cases.json", "dml_cases.json"}
+	err := utils.WaitForAuthoritative(t, "main", "source_of_ref", clusterInstance.VtgateProcess.ReadVSchema)
+	require.NoError(t, err)
+
+	e2eTestCaseFiles := []string{
+		"select_cases.json",
+		"filter_cases.json",
+		"dml_cases.json",
+		"reference_cases.json",
+	}
 	mcmp, closer := start(t)
 	defer closer()
 	loadSampleData(t, mcmp)
@@ -34,7 +45,11 @@ func TestE2ECases(t *testing.T) {
 				if test.SkipE2E {
 					mcmp.AsT().Skip(test.Query)
 				}
-				mcmp.Exec(test.Query)
+				stmt, err := sqlparser.NewTestParser().Parse(test.Query)
+				require.NoError(mcmp.AsT(), err)
+				sqlparser.RemoveKeyspaceIgnoreSysSchema(stmt)
+
+				mcmp.ExecVitessAndMySQL(test.Query, sqlparser.String(stmt))
 				pd := utils.ExecTrace(mcmp.AsT(), mcmp.VtConn, test.Query)
 				verifyTestExpectations(mcmp.AsT(), pd, test)
 				if mcmp.VtConn.IsClosed() {
