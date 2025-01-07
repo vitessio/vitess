@@ -29,7 +29,7 @@ type PrimaryStatus struct {
 	// Position represents the server's GTID based position.
 	Position Position
 	// FilePosition represents the server's file/pos based replication
-	// psuedo GTID position.
+	// pseudo GTID position.
 	FilePosition Position
 	// ServerUUID is the UUID of the server.
 	ServerUUID string

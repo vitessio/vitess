@@ -41,12 +41,12 @@ type ReplicationStatus struct {
 	// executed GTID set and retrieved GTID set. For file replication implementation,
 	// it is same as RelayLogSourceBinlogEquivalentPosition
 	RelayLogPosition Position
-	// FilePosition represents the server's file/pos based replication psuedo GTID position.
+	// FilePosition represents the server's file/pos based replication pseudo GTID position.
 	FilePosition Position
-	// RelayLogSourceBinlogEquivalentPosition stores the file/pos based replication psuedo
+	// RelayLogSourceBinlogEquivalentPosition stores the file/pos based replication pseudo
 	// GTID position up to which the IO thread has read and added to the relay log.
 	RelayLogSourceBinlogEquivalentPosition Position
-	// RelayLogFilePosition stores the actual binlog file and position (not any psuedo GTID
+	// RelayLogFilePosition stores the actual binlog file and position (not any pseudo GTID
 	// based position) in the relay log file.
 	RelayLogFilePosition  BinlogFilePos
 	SourceServerID        uint32
