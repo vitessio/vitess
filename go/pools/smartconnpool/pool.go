@@ -671,7 +671,9 @@ func (pool *ConnPool[C]) setCapacity(ctx context.Context, newcap int64) error {
 	if oldcap == newcap {
 		return nil
 	}
-	pool.setIdleCount()
+	// update the idle count to match the new capacity if necessary
+	// wait for connections to be returned to the pool if we're reducing the capacity.
+	defer pool.setIdleCount()
 
 	const delay = 10 * time.Millisecond
 
