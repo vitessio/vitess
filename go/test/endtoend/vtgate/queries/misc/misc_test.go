@@ -24,6 +24,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/mysql"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -192,33 +194,38 @@ func TestSetAndGetLastInsertIDWithInsert(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
 
-	mcmp.Exec("insert into t1(id1, id2) values (last_insert_id(12),0)")
-	mcmp.Exec("select last_insert_id()")
-	mcmp.Exec("insert into t1(id1, id2) values (13,last_insert_id(0))")
-	mcmp.Exec("select last_insert_id()")
+	tests := []string{
+		"insert into t1(id1, id2) values (last_insert_id(%d),%d)",
+		"insert into t1(id1, id2) values (%d, last_insert_id(%d))",
+	}
 
-	mcmp.Exec("begin")
-	mcmp.Exec("insert into t1(id1, id2) values (last_insert_id(14),0)")
-	mcmp.Exec("select last_insert_id()")
-	mcmp.Exec("insert into t1(id1, id2) values (15,last_insert_id(0))")
-	mcmp.Exec("select last_insert_id()")
-	mcmp.Exec("commit")
+	i := 0
+	getVal := func() int {
+		defer func() { i++ }()
+		return i
+	}
 
-	_, err := mcmp.VtConn.ExecuteFetch("set workload = olap", 1, false)
-	require.NoError(t, err)
+	runTests := func(mcmp *utils.MySQLCompare) {
+		for _, test := range tests {
+			query := fmt.Sprintf(test, getVal(), getVal())
+			log.Errorf("test: %s", query)
+			mcmp.Exec(query)
+			mcmp.Exec("select last_insert_id()")
+		}
+	}
 
-	mcmp.Exec("insert into t1(id1, id2) values (last_insert_id(16),0)")
-	mcmp.Exec("select last_insert_id()")
-	mcmp.Exec("insert into t1(id1, id2) values (17,last_insert_id(0))")
-	mcmp.Exec("select last_insert_id()")
+	for _, workload := range []string{"olap", "oltp"} {
+		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
+			_, err := mcmp.VtConn.ExecuteFetch("set workload = "+workload, 1, false)
+			require.NoError(t, err)
+			runTests(mcmp)
 
-	mcmp.Exec("begin")
-	mcmp.Exec("insert into t1(id1, id2) values (last_insert_id(18),0)")
-	mcmp.Exec("select last_insert_id()")
-	mcmp.Exec("insert into t1(id1, id2) values (19,last_insert_id(0))")
-	mcmp.Exec("select last_insert_id()")
-	mcmp.Exec("commit")
-
+			// run the queries again, but inside a transaction this time
+			mcmp.Exec("begin")
+			runTests(mcmp)
+			mcmp.Exec("commit")
+		})
+	}
 }
 
 // TestVindexHints tests that vindex hints work as intended.
