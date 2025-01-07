@@ -24,8 +24,6 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/log"
-
 	"vitess.io/vitess/go/mysql"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -190,13 +188,64 @@ func TestSetAndGetLastInsertID(t *testing.T) {
 	}
 }
 
+func TestSetAndGetLastInsertIDWithInsertUnsharded(t *testing.T) {
+	// in this test we can't use the mcmp, so we need to assert the returned values manually
+	mcmp, closer := start(t)
+	defer closer()
+
+	tests := []string{
+		"insert into uks.unsharded(id1, id2) values (last_insert_id(%d),12)",
+		"insert into uks.unsharded(id1, id2) select last_insert_id(%d), 453",
+	}
+
+	i := 0
+	getVal := func() int {
+		defer func() { i++ }()
+		return i
+	}
+
+	runTests := func(mcmp *utils.MySQLCompare) {
+		for _, test := range tests {
+			lastInsertID := getVal()
+			query := fmt.Sprintf(test, lastInsertID)
+			utils.Exec(mcmp.AsT(), mcmp.VtConn, query)
+			result := utils.Exec(mcmp.AsT(), mcmp.VtConn, "select last_insert_id()")
+			uintVal, err := result.Rows[0][0].ToCastUint64()
+			require.NoError(mcmp.AsT(), err)
+			require.EqualValues(mcmp.AsT(), lastInsertID, uintVal, query)
+		}
+	}
+
+	for _, workload := range []string{"olap", "oltp"} {
+		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
+			_, err := mcmp.VtConn.ExecuteFetch("set workload = "+workload, 1, false)
+			require.NoError(t, err)
+			runTests(mcmp)
+
+			// run the queries again, but inside a transaction this time
+			mcmp.Exec("begin")
+			runTests(mcmp)
+			mcmp.Exec("commit")
+		})
+	}
+
+	// Now test to set the last insert id to 0, see that it has changed correctly even if the value is 0
+	utils.Exec(t, mcmp.VtConn, "insert into uks.unsharded(id1, id2) values (last_insert_id(0),12)")
+	result := utils.Exec(t, mcmp.VtConn, "select last_insert_id()")
+	uintVal, err := result.Rows[0][0].ToCastUint64()
+	require.NoError(t, err)
+	require.Zero(t, uintVal)
+}
+
 func TestSetAndGetLastInsertIDWithInsert(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
 
 	tests := []string{
-		"insert into t1(id1, id2) values (last_insert_id(%d),%d)",
+		"insert into t1(id1, id2) values (last_insert_id(%d) ,%d)",
 		"insert into t1(id1, id2) values (%d, last_insert_id(%d))",
+		"insert into t1(id1, id2) select last_insert_id(%d), %d",
+		"insert into t1(id1, id2) select last_insert_id(id1+%d), 12 from t1 where 1 > %d",
 	}
 
 	i := 0
@@ -208,7 +257,6 @@ func TestSetAndGetLastInsertIDWithInsert(t *testing.T) {
 	runTests := func(mcmp *utils.MySQLCompare) {
 		for _, test := range tests {
 			query := fmt.Sprintf(test, getVal(), getVal())
-			log.Errorf("test: %s", query)
 			mcmp.Exec(query)
 			mcmp.Exec("select last_insert_id()")
 		}

@@ -2669,8 +2669,7 @@
       "TablesUsed": [
         "main.unsharded"
       ]
-    },
-    "skip_e2e": true
+    }
   },
   {
     "comment": "update vindex value to null with multiple primary keyspace id",
