@@ -19,7 +19,6 @@ import { useExperimentalTabletDebugVars, useTablet } from '../../../hooks/api';
 import { useDocumentTitle } from '../../../hooks/useDocumentTitle';
 import { isReadOnlyMode } from '../../../util/env';
 import { formatDisplayType, formatState } from '../../../util/tablets';
-import { Code } from '../../Code';
 import { ContentContainer } from '../../layout/ContentContainer';
 import { NavCrumbs } from '../../layout/NavCrumbs';
 import { WorkspaceHeader } from '../../layout/WorkspaceHeader';
@@ -34,6 +33,8 @@ import style from './Tablet.module.scss';
 import { TabletCharts } from './TabletCharts';
 import { env } from '../../../util/env';
 import FullStatus from './FullStatus';
+import JSONViewTree from '../../jsonViewTree/JSONViewTree';
+import { Code } from '../../Code';
 
 interface RouteParams {
     alias: string;
@@ -108,6 +109,7 @@ export const Tablet = () => {
                     <Tab text="QPS" to={`${url}/qps`} />
                     <Tab text="Full Status" to={`${url}/full-status`} />
                     <Tab text="JSON" to={`${url}/json`} />
+                    <Tab text="JSON Tree" to={`${url}/json_tree`} />
                     <ReadOnlyGate>
                         <Tab text="Advanced" to={`${url}/advanced`} />
                     </ReadOnlyGate>
@@ -125,6 +127,14 @@ export const Tablet = () => {
                             {env().VITE_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS && (
                                 <Code code={JSON.stringify(debugVars, null, 2)} />
                             )}
+                        </div>
+                    </Route>
+
+                    <Route path={`${path}/json_tree`}>
+                        <div>
+                            <JSONViewTree data={tablet} />
+
+                            {env().VITE_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS && <JSONViewTree data={debugVars} />}
                         </div>
                     </Route>
 
