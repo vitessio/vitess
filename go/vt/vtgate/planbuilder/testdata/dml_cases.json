@@ -2650,10 +2650,10 @@
   },
   {
     "comment": "insert using last_insert_id with argument",
-    "query": "insert into unsharded values(last_insert_id(24), 2)",
+    "query": "insert into unsharded values(last_insert_id(24), 2, 2, 2, 2, 2)",
     "plan": {
       "QueryType": "INSERT",
-      "Original": "insert into unsharded values(last_insert_id(24), 2)",
+      "Original": "insert into unsharded values(last_insert_id(24), 2, 2, 2, 2, 2)",
       "Instructions": {
         "OperatorType": "Insert",
         "Variant": "Unsharded",
@@ -2663,7 +2663,7 @@
         },
         "TargetTabletType": "PRIMARY",
         "FetchLastInsertID": true,
-        "Query": "insert into unsharded values (last_insert_id(24), 2)",
+        "Query": "insert into unsharded values (last_insert_id(24), 2, 2, 2, 2, 2)",
         "TableName": "unsharded"
       },
       "TablesUsed": [
