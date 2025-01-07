@@ -133,7 +133,8 @@ func TestEmergencyReparentShard(t *testing.T) {
 			},
 		},
 	})
-	goodReplica1RelayLogPos, _ := replication.ParseFilePosGTIDSet("relay-bin.000004:455")
+	goodReplica1RelayLogPos, err := replication.ParseFilePosGTIDSet("relay-bin.003222:18321744073709551612") // Requires all 64 bits or uint64
+	require.NoError(t, err)
 	goodReplica1.FakeMysqlDaemon.CurrentSourceFilePosition = replication.Position{
 		GTIDSet: goodReplica1RelayLogPos,
 	}
@@ -182,7 +183,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 
 	// run EmergencyReparentShard
 	waitReplicaTimeout := time.Second * 2
-	err := vp.Run([]string{"EmergencyReparentShard", "--wait_replicas_timeout", waitReplicaTimeout.String(), newPrimary.Tablet.Keyspace + "/" + newPrimary.Tablet.Shard,
+	err = vp.Run([]string{"EmergencyReparentShard", "--wait_replicas_timeout", waitReplicaTimeout.String(), newPrimary.Tablet.Keyspace + "/" + newPrimary.Tablet.Shard,
 		topoproto.TabletAliasString(newPrimary.Tablet.Alias)})
 	require.NoError(t, err)
 	// check what was run
