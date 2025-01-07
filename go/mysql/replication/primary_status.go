@@ -28,9 +28,9 @@ import (
 type PrimaryStatus struct {
 	// Position represents the server's GTID based position.
 	Position Position
-	// FilePosition represents the server's current binary log
-	// file and position.
-	FilePosition BinlogFilePos
+	// FilePosition represents the server's file/pos based replication
+	// psuedo GTID position.
+	FilePosition Position
 	// ServerUUID is the UUID of the server.
 	ServerUUID string
 }
@@ -39,7 +39,7 @@ type PrimaryStatus struct {
 func PrimaryStatusToProto(s PrimaryStatus) *replicationdatapb.PrimaryStatus {
 	return &replicationdatapb.PrimaryStatus{
 		Position:     EncodePosition(s.Position),
-		FilePosition: s.FilePosition.String(),
+		FilePosition: EncodePosition(s.FilePosition),
 		ServerUuid:   s.ServerUUID,
 	}
 }
@@ -64,7 +64,7 @@ func ParsePrimaryStatus(fields map[string]string) PrimaryStatus {
 	file := fields["File"]
 	if file != "" && fileExecPosStr != "" {
 		var err error
-		status.FilePosition, err = ParseBinlogFilePos(fmt.Sprintf("%s:%s", file, fileExecPosStr))
+		status.FilePosition.GTIDSet, err = ParseFilePosGTIDSet(fmt.Sprintf("%s:%s", file, fileExecPosStr))
 		if err != nil {
 			log.Warningf("Error parsing GTID set %s:%s: %v", file, fileExecPosStr, err)
 		}

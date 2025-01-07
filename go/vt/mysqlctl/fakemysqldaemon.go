@@ -315,11 +315,12 @@ func (fmd *FakeMysqlDaemon) ReplicationStatus(ctx context.Context) (replication.
 	}
 	fmd.mu.Lock()
 	defer fmd.mu.Unlock()
+	filePos, err := fmd.CurrentSourceFilePosition.ConvertToFlavorPosition()
 	return replication.ReplicationStatus{
 		Position:                               fmd.CurrentPrimaryPosition,
-		FilePosition:                           fmd.CurrentSourceFilePosition,
+		FilePosition:                           filePos,
 		RelayLogPosition:                       fmd.CurrentRelayLogPosition,
-		RelayLogSourceBinlogEquivalentPosition: fmd.CurrentSourceFilePosition,
+		RelayLogSourceBinlogEquivalentPosition: filePos,
 		ReplicationLagSeconds:                  fmd.ReplicationLagSeconds,
 		// Implemented as AND to avoid changing all tests that were
 		// previously using Replicating = false.
@@ -327,7 +328,7 @@ func (fmd *FakeMysqlDaemon) ReplicationStatus(ctx context.Context) (replication.
 		SQLState:   replication.ReplicationStatusToState(fmt.Sprintf("%v", fmd.Replicating)),
 		SourceHost: fmd.CurrentSourceHost,
 		SourcePort: fmd.CurrentSourcePort,
-	}, nil
+	}, err
 }
 
 // PrimaryStatus is part of the MysqlDaemon interface.
@@ -338,9 +339,10 @@ func (fmd *FakeMysqlDaemon) PrimaryStatus(ctx context.Context) (replication.Prim
 		return replication.PrimaryStatus{}, fmd.PrimaryStatusError
 	}
 	serverUUID, _ := fmd.GetServerUUID(ctx)
+	filePos, _ := fmd.CurrentSourceFilePosition.ConvertToFlavorPosition()
 	return replication.PrimaryStatus{
 		Position:     fmd.CurrentPrimaryPosition,
-		FilePosition: fmd.CurrentSourceFilePosition,
+		FilePosition: filePos,
 		ServerUUID:   serverUUID,
 	}, nil
 }

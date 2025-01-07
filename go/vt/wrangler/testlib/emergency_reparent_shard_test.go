@@ -89,7 +89,8 @@ func TestEmergencyReparentShard(t *testing.T) {
 			},
 		},
 	})
-	newPrimary.FakeMysqlDaemon.CurrentSourceFilePosition, _ = replication.ParseBinlogFilePos("relay-bin.000004:456")
+	newPrimary.FakeMysqlDaemon.CurrentSourceFilePosition, err = replication.ParseBinlogFilePos("relay-bin.000004:456")
+	require.NoError(t, err)
 	filePos, err := newPrimary.FakeMysqlDaemon.CurrentSourceFilePosition.ConvertToFlavorPosition()
 	require.NoError(t, err)
 	newPrimary.FakeMysqlDaemon.WaitPrimaryPositions = append(newPrimary.FakeMysqlDaemon.WaitPrimaryPositions, filePos)
@@ -131,8 +132,10 @@ func TestEmergencyReparentShard(t *testing.T) {
 			},
 		},
 	})
-	goodReplica1.FakeMysqlDaemon.CurrentSourceFilePosition, _ = replication.ParseBinlogFilePos("relay-bin.000004:455")
-	filePos, _ = goodReplica1.FakeMysqlDaemon.CurrentSourceFilePosition.ConvertToFlavorPosition()
+	goodReplica1.FakeMysqlDaemon.CurrentSourceFilePosition, err = replication.ParseBinlogFilePos("relay-bin.000004:455")
+	require.NoError(t, err)
+	filePos, err = goodReplica1.FakeMysqlDaemon.CurrentSourceFilePosition.ConvertToFlavorPosition()
+	require.NoError(t, err)
 	goodReplica1.FakeMysqlDaemon.WaitPrimaryPositions = append(goodReplica1.FakeMysqlDaemon.WaitPrimaryPositions, filePos)
 	goodReplica1.FakeMysqlDaemon.SetReplicationSourceInputs = append(goodReplica1.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(newPrimary.Tablet), topoproto.MysqlAddr(oldPrimary.Tablet))
 	goodReplica1.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
@@ -160,8 +163,10 @@ func TestEmergencyReparentShard(t *testing.T) {
 			},
 		},
 	})
-	goodReplica2.FakeMysqlDaemon.CurrentSourceFilePosition, _ = replication.ParseBinlogFilePos("relay-bin.000004:454")
-	filePos, _ = goodReplica2.FakeMysqlDaemon.CurrentSourceFilePosition.ConvertToFlavorPosition()
+	goodReplica2.FakeMysqlDaemon.CurrentSourceFilePosition, err = replication.ParseBinlogFilePos("relay-bin.000004:454")
+	require.NoError(t, err)
+	filePos, err = goodReplica2.FakeMysqlDaemon.CurrentSourceFilePosition.ConvertToFlavorPosition()
+	require.NoError(t, err)
 	goodReplica2.FakeMysqlDaemon.WaitPrimaryPositions = append(goodReplica2.FakeMysqlDaemon.WaitPrimaryPositions, filePos)
 	goodReplica2.FakeMysqlDaemon.SetReplicationSourceInputs = append(goodReplica2.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(newPrimary.Tablet), topoproto.MysqlAddr(oldPrimary.Tablet))
 	goodReplica2.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
@@ -221,8 +226,11 @@ func TestEmergencyReparentShardPrimaryElectNotBest(t *testing.T) {
 			},
 		},
 	})
-	newPrimary.FakeMysqlDaemon.CurrentSourceFilePosition, _ = replication.ParseBinlogFilePos("relay-bin.000004:456")
-	filePos, _ := newPrimary.FakeMysqlDaemon.CurrentSourceFilePosition.ConvertToFlavorPosition()
+	var err error
+	newPrimary.FakeMysqlDaemon.CurrentSourceFilePosition, err = replication.ParseBinlogFilePos("relay-bin.000004:456")
+	require.NoError(t, err)
+	filePos, err := newPrimary.FakeMysqlDaemon.CurrentSourceFilePosition.ConvertToFlavorPosition()
+	require.NoError(t, err)
 	newPrimary.FakeMysqlDaemon.WaitPrimaryPositions = append(newPrimary.FakeMysqlDaemon.WaitPrimaryPositions, filePos)
 	newPrimary.FakeMysqlDaemon.SetReplicationSourceInputs = append(newPrimary.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(moreAdvancedReplica.Tablet))
 	newPrimary.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
@@ -252,8 +260,10 @@ func TestEmergencyReparentShardPrimaryElectNotBest(t *testing.T) {
 			},
 		},
 	})
-	moreAdvancedReplica.FakeMysqlDaemon.CurrentSourceFilePosition, _ = replication.ParseBinlogFilePos("relay-bin.000004:457")
-	filePos, _ = moreAdvancedReplica.FakeMysqlDaemon.CurrentSourceFilePosition.ConvertToFlavorPosition()
+	moreAdvancedReplica.FakeMysqlDaemon.CurrentSourceFilePosition, err = replication.ParseBinlogFilePos("relay-bin.000004:457")
+	require.NoError(t, err)
+	filePos, err = moreAdvancedReplica.FakeMysqlDaemon.CurrentSourceFilePosition.ConvertToFlavorPosition()
+	require.NoError(t, err)
 	moreAdvancedReplica.FakeMysqlDaemon.WaitPrimaryPositions = append(moreAdvancedReplica.FakeMysqlDaemon.WaitPrimaryPositions, filePos)
 	moreAdvancedReplica.FakeMysqlDaemon.SetReplicationSourceInputs = append(moreAdvancedReplica.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(newPrimary.Tablet), topoproto.MysqlAddr(oldPrimary.Tablet))
 	newPrimary.FakeMysqlDaemon.WaitPrimaryPositions = append(newPrimary.FakeMysqlDaemon.WaitPrimaryPositions, moreAdvancedReplica.FakeMysqlDaemon.GetPrimaryPositionLocked())
@@ -271,7 +281,7 @@ func TestEmergencyReparentShardPrimaryElectNotBest(t *testing.T) {
 	defer moreAdvancedReplica.StopActionLoop(t)
 
 	// run EmergencyReparentShard
-	err := wr.EmergencyReparentShard(ctx, newPrimary.Tablet.Keyspace, newPrimary.Tablet.Shard, reparentutil.EmergencyReparentOptions{
+	err = wr.EmergencyReparentShard(ctx, newPrimary.Tablet.Keyspace, newPrimary.Tablet.Shard, reparentutil.EmergencyReparentOptions{
 		NewPrimaryAlias:           newPrimary.Tablet.Alias,
 		WaitAllTablets:            false,
 		WaitReplicasTimeout:       10 * time.Second,

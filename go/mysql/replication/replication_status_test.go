@@ -138,12 +138,12 @@ func TestMysqlShouldGetPosition(t *testing.T) {
 	sid, _ := ParseSID("3e11fa47-71ca-11e1-9e33-c80aa9429562")
 	want := PrimaryStatus{
 		Position:     Position{GTIDSet: Mysql56GTIDSet{sid: []interval{{start: 1, end: 5}}}},
-		FilePosition: BinlogFilePos{File: "source-bin.000003", Pos: 1307},
+		FilePosition: Position{GTIDSet: FilePosGTID{File: "source-bin.000003", Pos: 1307}},
 	}
 	got, err := ParseMysqlPrimaryStatus(resultMap)
 	require.NoError(t, err)
-	assert.Equalf(t, got.Position.GTIDSet.String(), want.Position.GTIDSet.String(), "got Position: %v; want Position: %v", got.Position.GTIDSet, want.Position.GTIDSet)
-	assert.Equalf(t, got.FilePosition.String(), want.FilePosition.String(), "got FilePosition: %v; want FilePosition: %v", got.FilePosition, want.FilePosition)
+	assert.Equalf(t, got.Position.GTIDSet, want.Position.GTIDSet, "got Position: %v; want Position: %v", got.Position.GTIDSet, want.Position.GTIDSet)
+	assert.Equalf(t, got.FilePosition, want.FilePosition, "got FilePosition: %v; want FilePosition: %v", got.FilePosition, want.FilePosition)
 }
 
 func TestMysqlRetrieveMasterServerId(t *testing.T) {
@@ -179,8 +179,8 @@ func TestMysqlRetrieveFileBasedPositions(t *testing.T) {
 	}
 
 	want := ReplicationStatus{
-		FilePosition:                           BinlogFilePos{File: "master-bin.000002", Pos: 1307},
-		RelayLogSourceBinlogEquivalentPosition: BinlogFilePos{File: "master-bin.000003", Pos: 1308},
+		FilePosition:                           Position{GTIDSet: FilePosGTID{File: "master-bin.000002", Pos: 1307}},
+		RelayLogSourceBinlogEquivalentPosition: Position{GTIDSet: FilePosGTID{File: "master-bin.000003", Pos: 1308}},
 		RelayLogFilePosition:                   BinlogFilePos{File: "relay-bin.000004", Pos: 1309},
 	}
 	got, err := ParseMysqlReplicationStatus(resultMap, false)
@@ -255,8 +255,8 @@ func TestMariadbRetrieveFileBasedPositions(t *testing.T) {
 	}
 
 	want := ReplicationStatus{
-		FilePosition:                           BinlogFilePos{File: "master-bin.000002", Pos: 1307},
-		RelayLogSourceBinlogEquivalentPosition: BinlogFilePos{File: "master-bin.000003", Pos: 1308},
+		FilePosition:                           Position{GTIDSet: FilePosGTID{File: "master-bin.000002", Pos: 1307}},
+		RelayLogSourceBinlogEquivalentPosition: Position{GTIDSet: FilePosGTID{File: "master-bin.000003", Pos: 1308}},
 		RelayLogFilePosition:                   BinlogFilePos{File: "relay-bin.000004", Pos: 1309},
 	}
 	got, err := ParseMariadbReplicationStatus(resultMap)
@@ -303,8 +303,8 @@ func TestFilePosRetrieveExecutedPosition(t *testing.T) {
 	want := ReplicationStatus{
 		Position:                               Position{GTIDSet: FilePosGTID{File: "master-bin.000002", Pos: 1307}},
 		RelayLogPosition:                       Position{GTIDSet: FilePosGTID{File: "master-bin.000003", Pos: 1308}},
-		FilePosition:                           BinlogFilePos{File: "master-bin.000002", Pos: 1307},
-		RelayLogSourceBinlogEquivalentPosition: BinlogFilePos{File: "master-bin.000003", Pos: 1308},
+		FilePosition:                           Position{GTIDSet: FilePosGTID{File: "master-bin.000002", Pos: 1307}},
+		RelayLogSourceBinlogEquivalentPosition: Position{GTIDSet: FilePosGTID{File: "master-bin.000003", Pos: 1308}},
 		RelayLogFilePosition:                   BinlogFilePos{File: "relay-bin.000004", Pos: 1309},
 	}
 	got, err := ParseFilePosReplicationStatus(resultMap)
@@ -314,12 +314,8 @@ func TestFilePosRetrieveExecutedPosition(t *testing.T) {
 	assert.Equalf(t, got.RelayLogFilePosition, want.RelayLogFilePosition, "got RelayLogFilePosition: %v; want RelayLogFilePosition: %v", got.RelayLogFilePosition, want.RelayLogFilePosition)
 	assert.Equalf(t, got.FilePosition, want.FilePosition, "got FilePosition: %v; want FilePosition: %v", got.FilePosition, want.FilePosition)
 	assert.Equalf(t, got.RelayLogSourceBinlogEquivalentPosition, want.RelayLogSourceBinlogEquivalentPosition, "got RelayLogSourceBinlogEquivalentPosition: %v; want RelayLogSourceBinlogEquivalentPosition: %v", got.RelayLogSourceBinlogEquivalentPosition, want.RelayLogSourceBinlogEquivalentPosition)
-	filePos, err := got.FilePosition.ConvertToFlavorPosition()
-	require.NoError(t, err)
-	assert.Equalf(t, got.Position.GTIDSet, filePos.GTIDSet, "FilePosition and Position don't match when they should for the FilePos flavor")
-	filePos, err = got.RelayLogSourceBinlogEquivalentPosition.ConvertToFlavorPosition()
-	require.NoError(t, err)
-	assert.Equalf(t, got.RelayLogPosition.GTIDSet, filePos.GTIDSet, "RelayLogPosition and RelayLogSourceBinlogEquivalentPosition don't match when they should for the FilePos flavor")
+	assert.Equalf(t, got.Position.GTIDSet, got.FilePosition.GTIDSet, "FilePosition and Position don't match when they should for the FilePos flavor")
+	assert.Equalf(t, got.RelayLogPosition.GTIDSet, got.RelayLogSourceBinlogEquivalentPosition.GTIDSet, "RelayLogPosition and RelayLogSourceBinlogEquivalentPosition don't match when they should for the FilePos flavor")
 }
 
 func TestFilePosShouldGetPosition(t *testing.T) {
@@ -330,13 +326,11 @@ func TestFilePosShouldGetPosition(t *testing.T) {
 
 	want := PrimaryStatus{
 		Position:     Position{GTIDSet: FilePosGTID{File: "source-bin.000003", Pos: 1307}},
-		FilePosition: BinlogFilePos{File: "source-bin.000003", Pos: 1307},
+		FilePosition: Position{GTIDSet: FilePosGTID{File: "source-bin.000003", Pos: 1307}},
 	}
 	got, err := ParseFilePosPrimaryStatus(resultMap)
 	require.NoError(t, err)
 	assert.Equalf(t, got.Position.GTIDSet, want.Position.GTIDSet, "got Position: %v; want Position: %v", got.Position.GTIDSet, want.Position.GTIDSet)
 	assert.Equalf(t, got.FilePosition, want.FilePosition, "got FilePosition: %v; want FilePosition: %v", got.FilePosition, want.FilePosition)
-	filePos, err := got.FilePosition.ConvertToFlavorPosition()
-	require.NoError(t, err)
-	assert.Equalf(t, got.Position.GTIDSet, filePos.GTIDSet, "FilePosition and Position don't match when they should for the FilePos flavor")
+	assert.Equalf(t, got.Position.GTIDSet, got.FilePosition.GTIDSet, "FilePosition and Position don't match when they should for the FilePos flavor")
 }
