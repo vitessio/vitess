@@ -108,7 +108,7 @@ func mergeUnionInputs(
 	lhsExprs, rhsExprs sqlparser.SelectExprs,
 	distinct bool,
 ) (Operator, sqlparser.SelectExprs) {
-	lhsRoute, rhsRoute, routingA, routingB, a, b, sameKeyspace := prepareInputRoutes(lhs, rhs)
+	lhsRoute, rhsRoute, routingA, routingB, a, b, sameKeyspace := prepareInputRoutes(ctx, lhs, rhs)
 	if lhsRoute == nil {
 		return nil, nil
 	}
