@@ -161,7 +161,7 @@ func (ins *InsertCommon) executeUnshardedTableQuery(ctx context.Context, vcursor
 	if err != nil {
 		return nil, err
 	}
-	qr, err := execShard(ctx, loggingPrimitive, vcursor, query, bindVars, rss[0], true, !ins.PreventAutoCommit /* canAutocommit */, false)
+	qr, err := execShard(ctx, loggingPrimitive, vcursor, query, bindVars, rss[0], true, !ins.PreventAutoCommit /* canAutocommit */, ins.FetchLastInsertID)
 	if err != nil {
 		return nil, err
 	}

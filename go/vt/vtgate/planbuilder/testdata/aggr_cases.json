@@ -6161,6 +6161,44 @@
     }
   },
   {
+    "comment": "last_insert_id on aggregation calculated at the vtgate level",
+    "query": "select last_insert_id(count(*)) from user",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select last_insert_id(count(*)) from user",
+      "Instructions": {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "last_insert_id(count(*)) as last_insert_id(count(*))"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "sum_count_star(0) AS count(*)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FetchLastInsertID": true,
+                "FieldQuery": "select count(*) from `user` where 1 != 1",
+                "Query": "select count(*) from `user`",
+                "Table": "`user`"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
     "comment": "aggregation on top of aggregation works fine",
     "query": "select distinct count(*) from user, (select distinct count(*) from user) X",
     "plan": {
