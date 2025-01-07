@@ -771,5 +771,145 @@
         "user.user_extra"
       ]
     }
+  },
+  {
+    "comment": "update reference table with join on sharded table",
+    "query": "update main.source_of_ref as sr join main.rerouted_ref as rr on sr.id = rr.id inner join user.music as m on sr.col = m.col set sr.tt = 5 where m.user_id = 1",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update main.source_of_ref as sr join main.rerouted_ref as rr on sr.id = rr.id inner join user.music as m on sr.col = m.col set sr.tt = 5 where m.user_id = 1",
+      "Instructions": {
+        "OperatorType": "DMLWithInput",
+        "TargetTabletType": "PRIMARY",
+        "Offset": [
+          "0:[0]"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "R:0",
+            "JoinVars": {
+              "m_col": 0
+            },
+            "TableName": "music_rerouted_ref, source_of_ref",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select m.col from music as m where 1 != 1",
+                "Query": "select m.col from music as m where m.user_id = 1 lock in share mode",
+                "Table": "music",
+                "Values": [
+                  "1"
+                ],
+                "Vindex": "user_index"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select sr.id from source_of_ref as sr, rerouted_ref as rr where 1 != 1",
+                "Query": "select sr.id from source_of_ref as sr, rerouted_ref as rr where sr.col = :m_col and sr.id = rr.id lock in share mode",
+                "Table": "rerouted_ref, source_of_ref"
+              }
+            ]
+          },
+          {
+            "OperatorType": "Update",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "TargetTabletType": "PRIMARY",
+            "Query": "update source_of_ref as sr set sr.tt = 5 where sr.id in ::dml_vals",
+            "Table": "source_of_ref"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.rerouted_ref",
+        "main.source_of_ref",
+        "user.music"
+      ]
+    }
+  },
+  {
+    "comment": "delete from reference table with join on sharded table",
+    "query": "delete sr from main.source_of_ref as sr join main.rerouted_ref as rr on sr.id = rr.id inner join user.music as m on sr.col = m.col where m.user_id = 1",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "delete sr from main.source_of_ref as sr join main.rerouted_ref as rr on sr.id = rr.id inner join user.music as m on sr.col = m.col where m.user_id = 1",
+      "Instructions": {
+        "OperatorType": "DMLWithInput",
+        "TargetTabletType": "PRIMARY",
+        "Offset": [
+          "0:[0]"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "R:0",
+            "JoinVars": {
+              "m_col": 0
+            },
+            "TableName": "music_rerouted_ref, source_of_ref",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select m.col from music as m where 1 != 1",
+                "Query": "select m.col from music as m where m.user_id = 1",
+                "Table": "music",
+                "Values": [
+                  "1"
+                ],
+                "Vindex": "user_index"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select sr.id from source_of_ref as sr, rerouted_ref as rr where 1 != 1",
+                "Query": "select sr.id from source_of_ref as sr, rerouted_ref as rr where sr.col = :m_col and sr.id = rr.id",
+                "Table": "rerouted_ref, source_of_ref"
+              }
+            ]
+          },
+          {
+            "OperatorType": "Delete",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "TargetTabletType": "PRIMARY",
+            "Query": "delete from source_of_ref as sr where sr.id in ::dml_vals",
+            "Table": "source_of_ref"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.rerouted_ref",
+        "main.source_of_ref",
+        "user.music"
+      ]
+    }
   }
 ]
