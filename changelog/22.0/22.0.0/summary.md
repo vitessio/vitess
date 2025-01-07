@@ -10,6 +10,7 @@
   - **[VTOrc Config File Changes](#vtorc-config-file-changes)**
   - **[VTGate Config File Changes](#vtgate-config-file-changes)**
   - **[Support for More Efficient JSON Replication](#efficient-json-replication)**
+  - **[Stalled Disk Recovery in VTOrc](#stall-disk-recovery)**
 - **[Minor Changes](#minor-changes)**
   - **[VTTablet Flags](#flags-vttablet)**
   - **[Topology read concurrency behaviour changes](#topo-read-concurrency-changes)**
@@ -80,6 +81,10 @@ In [#7345](https://github.com/vitessio/vitess/pull/17345) we added support for [
 
 If you are using MySQL 8.0 or later and using JSON columns, you can now enable this MySQL feature across your Vitess cluster(s) to lower the disk space needed for binary logs and improve the CPU and memory usage in both `mysqld` (standard intrashard MySQL replication) and `vttablet` ([VReplication](https://vitess.io/docs/reference/vreplication/vreplication/)) without losing any capabilities or features.
 
+### <a id="stall-disk-recovery"/>Stalled Disk Recovery in VTOrc</a>
+VTOrc has been augmented to be able to identify and recover from stalled disk errors. This is done by polling that the disk is writable by the vttablets and they send this information in the full status output to VTOrc. If the disk is not writable on the primary tablet, VTOrc will attempt to recover the cluster by reparenting to a different primary. This is useful in scenarios where the disk is stalled and the primary vttablet is unable to accept writes because of it.
+
+To opt into this feature, `--enable-stalled-disk-primary-recovery` flag has to be specified on VTOrc, and `--stalled-disk-write-dir` flag has to be specified on the vttablets. `--stalled-disk-write-interval` and `--stalled-disk-write-timeout` flags can be used to configure the polling interval and timeout respectively. 
 
 ## <a id="minor-changes"/>Minor Changes</a>
 
