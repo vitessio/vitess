@@ -357,6 +357,10 @@ func (pool *ConnPool[C]) SetIdleTimeout(duration time.Duration) {
 	pool.config.idleTimeout.Store(duration.Nanoseconds())
 }
 
+func (pool *ConnPool[D]) IdleCount() int64 {
+	return pool.idleCount.Load()
+}
+
 func (pool *ConnPool[D]) RefreshInterval() time.Duration {
 	return time.Duration(pool.config.refreshInterval.Load())
 }
@@ -770,6 +774,9 @@ func (pool *ConnPool[C]) RegisterStats(stats *servenv.Exporter, name string) {
 	stats.NewGaugeFunc(name+"MaxCap", "Tablet server conn pool max cap", func() int64 {
 		// the smartconnpool doesn't have a maximum capacity
 		return pool.Capacity()
+	})
+	stats.NewGaugeFunc(name+"IdleAllowed", "Tablet server conn pool idle allowed limit", func() int64 {
+		return pool.IdleCount()
 	})
 	stats.NewCounterFunc(name+"WaitCount", "Tablet server conn pool wait count", func() int64 {
 		return pool.Metrics.WaitCount()
