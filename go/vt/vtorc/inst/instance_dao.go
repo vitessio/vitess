@@ -281,7 +281,7 @@ func ReadTopologyInstanceBufferable(tabletAlias string, latency *stopwatch.Named
 		errorChan <- err
 		instance.IsDetached, _ = instance.ExecBinlogCoordinates.ExtractDetachedCoordinates()
 
-		binlogPos, err = getBinlogCoordinatesFromString(fs.ReplicationStatus.FilePosition)
+		binlogPos, err = getBinlogCoordinatesFromPositionString(fs.ReplicationStatus.FilePosition)
 		instance.RelaylogCoordinates = binlogPos
 		instance.RelaylogCoordinates.Type = RelayLog
 		errorChan <- err
@@ -448,21 +448,6 @@ func detectErrantGTIDs(instance *Instance, tablet *topodatapb.Tablet) (err error
 // getKeyspaceShardName returns a single string having both the keyspace and shard
 func getKeyspaceShardName(keyspace, shard string) string {
 	return fmt.Sprintf("%v:%v", keyspace, shard)
-}
-
-// getBinlogCoordinatesFromString is a bridge function to support upgrades and
-// downgrades when a given string may be in one of two formats depending on
-// the component versions:
-//  1. GTID position, e.g. FilePos/relay-bin.000001:12345
-//  2. A simple binlog file position, e.g. relay-bin.000001:12345
-func getBinlogCoordinatesFromString(s string) (BinlogCoordinates, error) {
-	if strings.Contains(s, "/") {
-		// We have a GTID position which includes the flavor.
-		return getBinlogCoordinatesFromPositionString(s)
-	}
-	// We have a simple binlog file position.
-	binLogCoordinates, err := ParseBinlogCoordinates(s)
-	return *binLogCoordinates, err
 }
 
 func getBinlogCoordinatesFromPositionString(position string) (BinlogCoordinates, error) {
