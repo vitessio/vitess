@@ -28,12 +28,14 @@ type BinlogFilePos struct {
 }
 
 // ParseBinlogFilePos parses a binlog file and position in the input
-// format used by commands such as SHOW REPLICA STATUS and SHOW BINARY
-// LOG STATUS.
+// format used by internal code that processes output from MySQL such
+// as SHOW REPLICA STATUS and SHOW BINARY LOG STATUS.
 func ParseBinlogFilePos(s string) (BinlogFilePos, error) {
 	bfp := BinlogFilePos{}
+	if s == "" {
+		return bfp, nil
+	}
 
-	// Split into parts.
 	file, posStr, ok := strings.Cut(s, ":")
 	if !ok {
 		return bfp, fmt.Errorf("invalid binlog file position (%v): expecting file:pos", s)
@@ -63,4 +65,8 @@ func (bfp BinlogFilePos) IsZero() bool {
 func (bfp BinlogFilePos) ConvertToFlavorPosition() (pos Position, err error) {
 	pos.GTIDSet, err = ParseFilePosGTIDSet(bfp.String())
 	return pos, err
+}
+
+func (bfp BinlogFilePos) Equal(b BinlogFilePos) bool {
+	return bfp.File == b.File && bfp.Pos == b.Pos
 }

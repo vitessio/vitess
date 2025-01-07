@@ -89,7 +89,7 @@ func (s *ReplicationStatus) SQLHealthy() bool {
 func ReplicationStatusToProto(s ReplicationStatus) *replicationdatapb.Status {
 	replstatuspb := &replicationdatapb.Status{
 		Position:                               EncodePosition(s.Position),
-		RelayLogPosition:                       s.RelayLogPosition.String(),
+		RelayLogPosition:                       EncodePosition(s.RelayLogPosition),
 		FilePosition:                           s.FilePosition.String(),
 		RelayLogSourceBinlogEquivalentPosition: s.RelayLogSourceBinlogEquivalentPosition.String(),
 		SourceServerId:                         s.SourceServerID,

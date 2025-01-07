@@ -310,12 +310,16 @@ func TestFilePosRetrieveExecutedPosition(t *testing.T) {
 	got, err := ParseFilePosReplicationStatus(resultMap)
 	require.NoError(t, err)
 	assert.Equalf(t, got.Position.GTIDSet, want.Position.GTIDSet, "got Position: %v; want Position: %v", got.Position.GTIDSet, want.Position.GTIDSet)
-	assert.Equalf(t, got.RelayLogPosition.GTIDSet, want.RelayLogPosition, "got RelayLogPosition: %v; want RelayLogPosition: %v", got.RelayLogPosition.GTIDSet, want.RelayLogPosition.GTIDSet)
+	assert.Equalf(t, got.RelayLogPosition.GTIDSet, want.RelayLogPosition.GTIDSet, "got RelayLogPosition: %v; want RelayLogPosition: %v", got.RelayLogPosition.GTIDSet, want.RelayLogPosition.GTIDSet)
 	assert.Equalf(t, got.RelayLogFilePosition, want.RelayLogFilePosition, "got RelayLogFilePosition: %v; want RelayLogFilePosition: %v", got.RelayLogFilePosition, want.RelayLogFilePosition)
 	assert.Equalf(t, got.FilePosition, want.FilePosition, "got FilePosition: %v; want FilePosition: %v", got.FilePosition, want.FilePosition)
 	assert.Equalf(t, got.RelayLogSourceBinlogEquivalentPosition, want.RelayLogSourceBinlogEquivalentPosition, "got RelayLogSourceBinlogEquivalentPosition: %v; want RelayLogSourceBinlogEquivalentPosition: %v", got.RelayLogSourceBinlogEquivalentPosition, want.RelayLogSourceBinlogEquivalentPosition)
-	assert.Equalf(t, got.Position.GTIDSet, got.FilePosition, "FilePosition and Position don't match when they should for the FilePos flavor")
-	assert.Equalf(t, got.RelayLogPosition.GTIDSet, got.RelayLogSourceBinlogEquivalentPosition, "RelayLogPosition and RelayLogSourceBinlogEquivalentPosition don't match when they should for the FilePos flavor")
+	filePos, err := got.FilePosition.ConvertToFlavorPosition()
+	require.NoError(t, err)
+	assert.Equalf(t, got.Position.GTIDSet, filePos.GTIDSet, "FilePosition and Position don't match when they should for the FilePos flavor")
+	filePos, err = got.RelayLogSourceBinlogEquivalentPosition.ConvertToFlavorPosition()
+	require.NoError(t, err)
+	assert.Equalf(t, got.RelayLogPosition.GTIDSet, filePos.GTIDSet, "RelayLogPosition and RelayLogSourceBinlogEquivalentPosition don't match when they should for the FilePos flavor")
 }
 
 func TestFilePosShouldGetPosition(t *testing.T) {
@@ -332,5 +336,7 @@ func TestFilePosShouldGetPosition(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equalf(t, got.Position.GTIDSet, want.Position.GTIDSet, "got Position: %v; want Position: %v", got.Position.GTIDSet, want.Position.GTIDSet)
 	assert.Equalf(t, got.FilePosition, want.FilePosition, "got FilePosition: %v; want FilePosition: %v", got.FilePosition, want.FilePosition)
-	assert.Equalf(t, got.Position.GTIDSet, got.FilePosition, "FilePosition and Position don't match when they should for the FilePos flavor")
+	filePos, err := got.FilePosition.ConvertToFlavorPosition()
+	require.NoError(t, err)
+	assert.Equalf(t, got.Position.GTIDSet, filePos.GTIDSet, "FilePosition and Position don't match when they should for the FilePos flavor")
 }
