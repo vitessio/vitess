@@ -33,31 +33,43 @@ import { KeyspaceLink } from '../links/KeyspaceLink';
 import { QueryLoadingPlaceholder } from '../placeholders/QueryLoadingPlaceholder';
 import { HelpTooltip } from '../tooltip/HelpTooltip';
 
-const TABLE_COLUMNS : Array<ColumnProps> = [
-    {display: 'Keyspace', accessor : 'keyspace'},
-    {display: 'Table' , accessor : 'table'},
-    {display : <div className="text-right">
-        Approx. Size{' '}
-        <HelpTooltip
-            text={
-                <span>
-                    Size is an approximate value derived from <span className="font-mono">INFORMATION_SCHEMA</span>.
-                </span>
-            }
-        />
-    </div>, accessor : '_tableSize'},
-    {display: <div className="text-right">
-        Approx. Rows{' '}
-        <HelpTooltip
-            text={
-                // c.f. https://dev.mysql.com/doc/refman/5.7/en/information-schema-tables-table.html
-                <span>
-                    Row count is an approximate value derived from <span className="font-mono">INFORMATION_SCHEMA</span>
-                    . Actual values may vary by as much as 40% to 50%.
-                </span>
-            }
-        />
-    </div>, accessor : '_tableRowCount'},
+const TABLE_COLUMNS: Array<ColumnProps> = [
+    { display: 'Keyspace', accessor: 'keyspace' },
+    { display: 'Table', accessor: 'table' },
+    {
+        display: (
+            <div className="text-right">
+                Approx. Size{' '}
+                <HelpTooltip
+                    text={
+                        <span>
+                            Size is an approximate value derived from{' '}
+                            <span className="font-mono">INFORMATION_SCHEMA</span>.
+                        </span>
+                    }
+                />
+            </div>
+        ),
+        accessor: '_tableSize',
+    },
+    {
+        display: (
+            <div className="text-right">
+                Approx. Rows{' '}
+                <HelpTooltip
+                    text={
+                        // c.f. https://dev.mysql.com/doc/refman/5.7/en/information-schema-tables-table.html
+                        <span>
+                            Row count is an approximate value derived from{' '}
+                            <span className="font-mono">INFORMATION_SCHEMA</span>. Actual values may vary by as much as
+                            40% to 50%.
+                        </span>
+                    }
+                />
+            </div>
+        ),
+        accessor: '_tableRowCount',
+    },
 ];
 
 export const Schemas = () => {

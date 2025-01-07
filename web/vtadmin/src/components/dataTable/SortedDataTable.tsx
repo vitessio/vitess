@@ -24,9 +24,9 @@ import { useCallback, useMemo, useState } from 'react';
 
 export interface ColumnProps {
     // Coulmn display name string | JSX.Element
-    display: string| JSX.Element,
-    // Column data accessor 
-    accessor: string
+    display: string | JSX.Element;
+    // Column data accessor
+    accessor: string;
 }
 
 interface Props<T> {
@@ -79,36 +79,38 @@ export const SortedDataTable = <T extends object>({
     const [sortColumn, setSortColumn] = useState(null);
     const [sortOrder, setSortOrder] = useState('asc');
 
-    const handleSort = useCallback((column: any) => {
-        if (sortColumn === column) {
-          setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-        } else {
-          setSortColumn(column);
-          setSortOrder('asc');
-        }
-      }, [sortColumn, sortOrder]);
-    
-      const sortedData = useMemo(() => {
+    const handleSort = useCallback(
+        (column: any) => {
+            if (sortColumn === column) {
+                setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+            } else {
+                setSortColumn(column);
+                setSortOrder('asc');
+            }
+        },
+        [sortColumn, sortOrder]
+    );
+
+    const sortedData = useMemo(() => {
         if (!sortColumn) return data;
-      
-        const compare = (a: { [x: string]: any; }, b: { [x: string]: any; }) => {
-          const valueA = a[sortColumn];
-          const valueB = b[sortColumn];
-    
-          if (valueA < valueB) {
-            return sortOrder === 'asc' ? -1 : 1;
-          } else if (valueA > valueB) {
-            return sortOrder === 'asc' ? 1 : -1;
-          } else {
-            return 0;
-          }
+
+        const compare = (a: { [x: string]: any }, b: { [x: string]: any }) => {
+            const valueA = a[sortColumn];
+            const valueB = b[sortColumn];
+
+            if (valueA < valueB) {
+                return sortOrder === 'asc' ? -1 : 1;
+            } else if (valueA > valueB) {
+                return sortOrder === 'asc' ? 1 : -1;
+            } else {
+                return 0;
+            }
         };
-    
+
         return [...data].sort(compare);
-      }, [data, sortColumn, sortOrder]);
+    }, [data, sortColumn, sortOrder]);
 
     const dataPage = sortedData.slice(startIndex, endIndex);
-
 
     return (
         <div>
@@ -116,16 +118,14 @@ export const SortedDataTable = <T extends object>({
                 {title && <caption>{title}</caption>}
                 <thead>
                     <tr>
-                    {columns.map((col, cdx) => (
-                        <th key={cdx} onClick={()=> handleSort(col.accessor)}>
+                        {columns.map((col, cdx) => (
+                            <th key={cdx} onClick={() => handleSort(col.accessor)}>
                                 <div style={{ display: 'flex' }}>
-                                {col.display}
-                                {sortColumn === col.accessor && (
-                                <span>{sortOrder === 'asc' ? '▲' : '▼'}</span>
-                                )}
+                                    {col.display}
+                                    {sortColumn === col.accessor && <span>{sortOrder === 'asc' ? '▲' : '▼'}</span>}
                                 </div>
-                        </th>
-                    ))}
+                            </th>
+                        ))}
                     </tr>
                 </thead>
                 <tbody>{renderRows(dataPage)}</tbody>
