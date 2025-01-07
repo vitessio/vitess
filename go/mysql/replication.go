@@ -33,8 +33,8 @@ const (
 // This file contains the methods related to replication.
 
 // WriteComBinlogDump writes a ComBinlogDump command.
-// See http://dev.mysql.com/doc/internals/en/com-binlog-dump.html for syntax.
 // Returns a SQLError.
+// See: https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_com_binlog_dump.html
 func (c *Conn) WriteComBinlogDump(serverID uint32, binlogFilename string, binlogPos uint64, flags uint16) error {
 	// The binary log file position is a uint64, but the protocol command
 	// only uses 4 bytes for the file position.

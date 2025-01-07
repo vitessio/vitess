@@ -47,7 +47,7 @@ import (
 //	+----------------------------+
 //	| extra_headers    19 : x-19 |
 //	+============================+
-//	https://dev.mysql.com/doc/dev/mysql-server/8.0.40/page_protocol_replication_binlog_event.html#sect_protocol_replication_binlog_event_header
+//	https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_replication_binlog_event.html#sect_protocol_replication_binlog_event_header
 type binlogEvent []byte
 
 const (
