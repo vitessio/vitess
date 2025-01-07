@@ -40,7 +40,7 @@ const (
 // BinlogCoordinates described binary log coordinates in the form of log file & log position.
 type BinlogCoordinates struct {
 	LogFile string
-	LogPos  uint32
+	LogPos  uint64
 	Type    BinlogType
 }
 
@@ -51,11 +51,11 @@ func ParseBinlogCoordinates(logFileLogPos string) (*BinlogCoordinates, error) {
 		return nil, fmt.Errorf("ParseBinlogCoordinates: Cannot parse BinlogCoordinates from %s. Expected format is file:pos", logFileLogPos)
 	}
 
-	logPos, err := strconv.ParseUint(tokens[1], 10, 32)
+	logPos, err := strconv.ParseUint(tokens[1], 10, 64)
 	if err != nil {
 		return nil, fmt.Errorf("ParseBinlogCoordinates: invalid pos: %s", tokens[1])
 	}
-	return &BinlogCoordinates{LogFile: tokens[0], LogPos: uint32(logPos)}, nil
+	return &BinlogCoordinates{LogFile: tokens[0], LogPos: logPos}, nil
 }
 
 // DisplayString returns a user-friendly string representation of these coordinates
@@ -177,6 +177,6 @@ func (binlogCoordinates *BinlogCoordinates) ExtractDetachedCoordinates() (isDeta
 	}
 	detachedCoordinates.LogFile = detachedCoordinatesSubmatch[1]
 	logPos, _ := strconv.ParseUint(detachedCoordinatesSubmatch[2], 10, 32)
-	detachedCoordinates.LogPos = uint32(logPos)
+	detachedCoordinates.LogPos = logPos
 	return true, detachedCoordinates
 }
