@@ -10,6 +10,7 @@
   - **[VTOrc Config File Changes](#vtorc-config-file-changes)**
   - **[VTGate Config File Changes](#vtgate-config-file-changes)**
   - **[Support for More Efficient JSON Replication](#efficient-json-replication)**
+  - **[Support for Maximum Idle Connections in the Pool](#max-idle-connections)**
 - **[Minor Changes](#minor-changes)**
   - **[VTTablet Flags](#flags-vttablet)**
   - **[Topology read concurrency behaviour changes](#topo-read-concurrency-changes)**
@@ -80,6 +81,16 @@ In [#7345](https://github.com/vitessio/vitess/pull/17345) we added support for [
 
 If you are using MySQL 8.0 or later and using JSON columns, you can now enable this MySQL feature across your Vitess cluster(s) to lower the disk space needed for binary logs and improve the CPU and memory usage in both `mysqld` (standard intrashard MySQL replication) and `vttablet` ([VReplication](https://vitess.io/docs/reference/vreplication/vreplication/)) without losing any capabilities or features.
 
+### <a id="max-idle-connections"/>Support for Maximum Idle Connections in the Pool</a>
+
+In [#17443](https://github.com/vitessio/vitess/pull/17443) we introduced a new configurable max-idle-count parameter for connection pools. This allows you to specify the maximum number of idle connections retained in each connection pool to optimize performance and resource efficiency.
+
+You can control idle connection retention for the query server’s query pool, stream pool, and transaction pool with the following flags:
+•	--queryserver-config-query-pool-max-idle-count: Defines the maximum number of idle connections retained in the query pool.
+•	--queryserver-config-stream-pool-max-idle-count: Defines the maximum number of idle connections retained in the stream pool.
+•	--queryserver-config-txpool-max-idle-count: Defines the maximum number of idle connections retained in the transaction pool.
+
+This feature ensures that, during traffic spikes, idle connections are available for faster responses, while minimizing overhead in low-traffic periods by limiting the number of idle connections retained. It helps strike a balance between performance, efficiency, and cost.
 
 ## <a id="minor-changes"/>Minor Changes</a>
 
