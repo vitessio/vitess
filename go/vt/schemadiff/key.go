@@ -68,7 +68,7 @@ func (i *IndexDefinitionEntity) IsUnique() bool {
 	return i.IndexDefinition.Info.IsUnique()
 }
 
-// IsUnique returns true if the index uses an expression, e.g. `KEY idx1 ((id + 1))`.
+// HasExpression returns true if the index uses an expression, e.g. `KEY idx1 ((id + 1))`.
 func (i *IndexDefinitionEntity) HasExpression() bool {
 	for _, col := range i.IndexDefinition.Columns {
 		if col.Expression != nil {
