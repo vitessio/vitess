@@ -190,6 +190,7 @@ func transformInsertionSelection(ctx *plancontext.PlanningContext, op *operators
 			ForceNonStreaming: op.ForceNonStreaming,
 			Generate:          autoIncGenerate(ins.AutoIncrement),
 			ColVindexes:       ins.ColVindexes,
+			FetchLastInsertID: ctx.SemTable.ShouldFetchLastInsertID(),
 		},
 		VindexValueOffset: ins.VindexValueOffset,
 	}
@@ -659,9 +660,8 @@ func buildInsertPrimitive(
 	}
 
 	eins := &engine.Insert{
-		InsertCommon:      ic,
-		VindexValues:      ins.VindexValues,
-		FetchLastInsertID: ctx.SemTable.ShouldFetchLastInsertID(),
+		InsertCommon: ic,
+		VindexValues: ins.VindexValues,
 	}
 
 	// we would need to generate the query on the fly. The only exception here is

@@ -35,6 +35,7 @@ type VCursor interface {
 	GetKeyspace() string
 	SQLMode() string
 	Environment() *vtenv.Environment
+	SetLastInsertID(id uint64)
 }
 
 type (
@@ -140,6 +141,7 @@ func (e *emptyVCursor) GetKeyspace() string {
 func (e *emptyVCursor) SQLMode() string {
 	return config.DefaultSQLMode
 }
+func (e *emptyVCursor) SetLastInsertID(_ uint64) {}
 
 func NewEmptyVCursor(env *vtenv.Environment, tz *time.Location) VCursor {
 	return &emptyVCursor{env: env, tz: tz}

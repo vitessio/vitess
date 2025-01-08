@@ -215,8 +215,8 @@ func (mcmp *MySQLCompare) Exec(query string) *sqltypes.Result {
 	return vtQr
 }
 
-// ExecVitessAndMySQL executes Vitess and MySQL with the queries provided.
-func (mcmp *MySQLCompare) ExecVitessAndMySQL(vtQ, mQ string) *sqltypes.Result {
+// ExecVitessAndMySQLDifferentQueries executes Vitess and MySQL with the queries provided.
+func (mcmp *MySQLCompare) ExecVitessAndMySQLDifferentQueries(vtQ, mQ string) *sqltypes.Result {
 	mcmp.t.Helper()
 	vtQr, err := mcmp.VtConn.ExecuteFetch(vtQ, 1000, true)
 	require.NoError(mcmp.t, err, "[Vitess Error] for query: "+vtQ)

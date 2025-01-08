@@ -903,6 +903,99 @@ func TestBindVarLiteral(t *testing.T) {
 	}
 }
 
+type testVcursor struct {
+	lastInsertID *uint64
+	env          *vtenv.Environment
+}
+
+func (t *testVcursor) TimeZone() *time.Location {
+	return time.UTC
+}
+
+func (t *testVcursor) GetKeyspace() string {
+	return "apa"
+}
+
+func (t *testVcursor) SQLMode() string {
+	return "oltp"
+}
+
+func (t *testVcursor) Environment() *vtenv.Environment {
+	return t.env
+}
+
+func (t *testVcursor) SetLastInsertID(id uint64) {
+	t.lastInsertID = &id
+}
+
+var _ evalengine.VCursor = (*testVcursor)(nil)
+
+func TestLastInsertID(t *testing.T) {
+	var testCases = []struct {
+		expression string
+		result     uint64
+		missing    bool
+	}{
+		{
+			expression: `last_insert_id(1)`,
+			result:     1,
+		}, {
+			expression: `12`,
+			missing:    true,
+		}, {
+			expression: `last_insert_id(666)`,
+			result:     666,
+		}, {
+			expression: `last_insert_id(null)`,
+			result:     0,
+		},
+	}
+
+	venv := vtenv.NewTestEnv()
+	for _, tc := range testCases {
+		t.Run(tc.expression, func(t *testing.T) {
+			expr, err := venv.Parser().ParseExpr(tc.expression)
+			require.NoError(t, err)
+
+			cfg := &evalengine.Config{
+				Collation:         collations.CollationUtf8mb4ID,
+				NoConstantFolding: true,
+				NoCompilation:     false,
+				Environment:       venv,
+			}
+			t.Run("eval", func(t *testing.T) {
+				cfg.NoCompilation = true
+				runTest(t, expr, cfg, tc)
+			})
+			t.Run("compiled", func(t *testing.T) {
+				cfg.NoCompilation = false
+				runTest(t, expr, cfg, tc)
+			})
+		})
+	}
+}
+
+func runTest(t *testing.T, expr sqlparser.Expr, cfg *evalengine.Config, tc struct {
+	expression string
+	result     uint64
+	missing    bool
+}) {
+	converted, err := evalengine.Translate(expr, cfg)
+	require.NoError(t, err)
+
+	vc := &testVcursor{env: vtenv.NewTestEnv()}
+	env := evalengine.NewExpressionEnv(context.Background(), nil, vc)
+
+	_, err = env.Evaluate(converted)
+	require.NoError(t, err)
+	if tc.missing {
+		require.Nil(t, vc.lastInsertID)
+	} else {
+		require.NotNil(t, vc.lastInsertID)
+		require.Equal(t, tc.result, *vc.lastInsertID)
+	}
+}
+
 func TestCompilerNonConstant(t *testing.T) {
 	var testCases = []struct {
 		expression string
