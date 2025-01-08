@@ -932,6 +932,11 @@ func TestRevertible(t *testing.T) {
 			toSchema:            `id int primary key, e1 set('a', 'b'), e2 set('a'), e3 set('a', 'b', 'c'), e4 set('a', 'x'), e5 set('a', 'x', 'b'), e6 set('b'), e7 varchar(1), e8 tinyint`,
 			expandedColumnNames: `e3,e4,e5,e6,e7,e8`,
 		},
+		{
+			name:       "index with expression",
+			fromSchema: "id int, primary key (id), key idx1 ((id + 1))",
+			toSchema:   "id int, primary key (id), key idx2 ((id + 2))",
+		},
 	}
 
 	var (
