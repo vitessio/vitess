@@ -361,31 +361,32 @@ func (tsv *TabletServer) SetQueryRules(ruleSource string, qrs *rules.Rules) erro
 	return nil
 }
 
-func (tsv *TabletServer) initACL(tableACLConfigFile string, enforceTableACLConfig bool) {
+func (tsv *TabletServer) initACL(tableACLConfigFile string) error {
 	// tabletacl.Init loads ACL from file if *tableACLConfig is not empty
-	err := tableacl.Init(
+	return tableacl.Init(
 		tableACLConfigFile,
 		func() {
 			tsv.ClearQueryPlanCache()
 		},
 	)
-	if err != nil {
-		log.Errorf("Fail to initialize Table ACL: %v", err)
-		if enforceTableACLConfig {
-			log.Exit("Need a valid initial Table ACL when enforce-tableacl-config is set, exiting.")
-		}
-	}
 }
 
 // InitACL loads the table ACL and sets up a SIGHUP handler for reloading it.
-func (tsv *TabletServer) InitACL(tableACLConfigFile string, enforceTableACLConfig bool, reloadACLConfigFileInterval time.Duration) {
-	tsv.initACL(tableACLConfigFile, enforceTableACLConfig)
+func (tsv *TabletServer) InitACL(tableACLConfigFile string, reloadACLConfigFileInterval time.Duration) error {
+	if err := tsv.initACL(tableACLConfigFile); err != nil {
+		return err
+	}
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGHUP)
 	go func() {
 		for range sigChan {
-			tsv.initACL(tableACLConfigFile, enforceTableACLConfig)
+			err := tsv.initACL(tableACLConfigFile)
+			if err != nil {
+				log.Errorf("Error reloading ACL config file %s in SIGHUP handler: %v", tableACLConfigFile, err)
+			} else {
+				log.Info("Successfully reloaded ACL file %s in SIGHUP handler", tableACLConfigFile)
+			}
 		}
 	}()
 
@@ -397,6 +398,7 @@ func (tsv *TabletServer) InitACL(tableACLConfigFile string, enforceTableACLConfi
 			}
 		}()
 	}
+	return nil
 }
 
 // SetServingType changes the serving type of the tabletserver. It starts or
