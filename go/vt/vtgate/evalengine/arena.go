@@ -61,6 +61,35 @@ func (a *Arena) newEvalDecimal(dec decimal.Decimal, m, d int32) *evalDecimal {
 	return a.newEvalDecimalWithPrec(dec.Clamp(m-d, d), d)
 }
 
+<<<<<<< HEAD
+=======
+func (a *Arena) newEvalEnum(raw []byte, values *EnumSetValues) *evalEnum {
+	if cap(a.aEnum) > len(a.aEnum) {
+		a.aEnum = a.aEnum[:len(a.aEnum)+1]
+	} else {
+		a.aEnum = append(a.aEnum, evalEnum{})
+	}
+	val := &a.aEnum[len(a.aEnum)-1]
+	s := string(raw)
+	val.string = s
+	val.value = valueIdx(values, s)
+	return val
+}
+
+func (a *Arena) newEvalSet(raw []byte, values *EnumSetValues) *evalSet {
+	if cap(a.aSet) > len(a.aSet) {
+		a.aSet = a.aSet[:len(a.aSet)+1]
+	} else {
+		a.aSet = append(a.aSet, evalSet{})
+	}
+	val := &a.aSet[len(a.aSet)-1]
+	s := string(raw)
+	val.string = s
+	val.set = evalSetBits(values, s)
+	return val
+}
+
+>>>>>>> 06def14056 (Fix crash in the evalengine (#17487))
 func (a *Arena) newEvalBool(b bool) *evalInt64 {
 	if b {
 		return a.newEvalInt64(1)
