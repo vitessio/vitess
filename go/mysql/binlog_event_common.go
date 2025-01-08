@@ -121,7 +121,7 @@ func (ev binlogEvent) Length() uint32 {
 // NextPosition returns the nextPosition field from the header
 func (ev binlogEvent) NextPosition() uint64 {
 	// Only 4 bytes are used for the next_position field in the header.
-	return uint64(binary.LittleEndian.Uint32(ev.Bytes()[13 : 13+4]))
+	return uint64(binary.LittleEndian.Uint32(ev.Bytes()[13:17]))
 }
 
 // IsFormatDescription implements BinlogEvent.IsFormatDescription().
