@@ -191,21 +191,21 @@ func (flv *filePosFlavor) readBinlogEvent(c *Conn) (BinlogEvent, error) {
 			eDeleteRowsEventV0, eDeleteRowsEventV1, eDeleteRowsEventV2,
 			eUpdateRowsEventV0, eUpdateRowsEventV1, eUpdateRowsEventV2:
 			flv.savedEvent = event
-			return newFilePosGTIDEvent(flv.file, uint64(event.nextPosition(flv.format)), event.Timestamp()), nil
+			return newFilePosGTIDEvent(flv.file, event.nextPosition(flv.format), event.Timestamp()), nil
 		case eQueryEvent:
 			q, err := event.Query(flv.format)
 			if err == nil && strings.HasPrefix(q.SQL, "#") {
 				continue
 			}
 			flv.savedEvent = event
-			return newFilePosGTIDEvent(flv.file, uint64(event.nextPosition(flv.format)), event.Timestamp()), nil
+			return newFilePosGTIDEvent(flv.file, event.nextPosition(flv.format), event.Timestamp()), nil
 		default:
 			// For unrecognized events, send a fake "repair" event so that
 			// the position gets transmitted.
 			if !flv.format.IsZero() {
 				if v := event.nextPosition(flv.format); v != 0 {
 					flv.savedEvent = newFilePosQueryEvent("repair", event.Timestamp())
-					return newFilePosGTIDEvent(flv.file, uint64(v), event.Timestamp()), nil
+					return newFilePosGTIDEvent(flv.file, v, event.Timestamp()), nil
 				}
 			}
 		}
