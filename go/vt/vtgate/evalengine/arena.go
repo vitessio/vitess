@@ -71,7 +71,7 @@ func (a *Arena) newEvalEnum(raw []byte, values *EnumSetValues) *evalEnum {
 	} else {
 		a.aEnum = append(a.aEnum, evalEnum{})
 	}
-	val := &a.aEnum[len(a.aInt64)-1]
+	val := &a.aEnum[len(a.aEnum)-1]
 	s := string(raw)
 	val.string = s
 	val.value = valueIdx(values, s)
@@ -84,7 +84,7 @@ func (a *Arena) newEvalSet(raw []byte, values *EnumSetValues) *evalSet {
 	} else {
 		a.aSet = append(a.aSet, evalSet{})
 	}
-	val := &a.aSet[len(a.aInt64)-1]
+	val := &a.aSet[len(a.aSet)-1]
 	s := string(raw)
 	val.string = s
 	val.set = evalSetBits(values, s)
