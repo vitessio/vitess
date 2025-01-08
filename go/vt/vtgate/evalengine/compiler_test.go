@@ -760,6 +760,20 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `WEEK(timestamp '2024-01-01 10:34:58', 1)`,
 			result:     `INT64(1)`,
 		},
+		{
+			expression: `column0 + 1`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Enum, []byte("foo"))},
+			// Returns 0, as unknown enums evaluate here to -1. We have this test to
+			// exercise the path to push enums onto the stack.
+			result: `FLOAT64(0)`,
+		},
+		{
+			expression: `column0 + 1`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Set, []byte("foo"))},
+			// Returns 1, as unknown sets evaluate here to 0. We have this test to
+			// exercise the path to push sets onto the stack.
+			result: `FLOAT64(1)`,
+		},
 	}
 
 	tz, _ := time.LoadLocation("Europe/Madrid")
