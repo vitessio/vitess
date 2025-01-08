@@ -454,6 +454,72 @@ func NewCreateTableEntity(env *Environment, c *sqlparser.CreateTable) (*CreateTa
 	return entity, nil
 }
 
+<<<<<<< HEAD
+=======
+// ColumnDefinitionEntities returns the list of column entities for the table.
+func (c *CreateTableEntity) ColumnDefinitionEntities() []*ColumnDefinitionEntity {
+	cc := getTableCharsetCollate(c.Env, &c.CreateTable.TableSpec.Options)
+	pkColumnsMaps := c.primaryKeyColumnsMap()
+	entities := make([]*ColumnDefinitionEntity, len(c.CreateTable.TableSpec.Columns))
+	for i := range c.CreateTable.TableSpec.Columns {
+		col := c.CreateTable.TableSpec.Columns[i]
+		_, inPK := pkColumnsMaps[col.Name.Lowered()]
+		entities[i] = NewColumnDefinitionEntity(c.Env, col, inPK, cc)
+	}
+	return entities
+}
+
+// ColumnDefinitionEntities returns the list of column entities for the table.
+func (c *CreateTableEntity) ColumnDefinitionEntitiesList() *ColumnDefinitionEntityList {
+	return NewColumnDefinitionEntityList(c.ColumnDefinitionEntities())
+}
+
+// ColumnDefinitionEntities returns column entities mapped by their lower cased name
+func (c *CreateTableEntity) ColumnDefinitionEntitiesMap() map[string]*ColumnDefinitionEntity {
+	entities := c.ColumnDefinitionEntities()
+	m := make(map[string]*ColumnDefinitionEntity, len(entities))
+	for _, entity := range entities {
+		m[entity.NameLowered()] = entity
+	}
+	return m
+}
+
+// IndexDefinitionEntities returns the list of index entities for the table.
+func (c *CreateTableEntity) IndexDefinitionEntities() []*IndexDefinitionEntity {
+	colMap := c.ColumnDefinitionEntitiesMap()
+	keys := c.CreateTable.TableSpec.Indexes
+	entities := make([]*IndexDefinitionEntity, len(keys))
+	for i, key := range keys {
+		colEntities := []*ColumnDefinitionEntity{}
+		for _, keyCol := range key.Columns {
+			colEntity, ok := colMap[keyCol.Column.Lowered()]
+			if !ok {
+				// This can happen if the index is on an expression, e.g. `KEY idx1 ((id + 1))`.
+				continue
+			}
+			colEntities = append(colEntities, colEntity)
+		}
+		entities[i] = NewIndexDefinitionEntity(c.Env, key, NewColumnDefinitionEntityList(colEntities))
+	}
+	return entities
+}
+
+// IndexDefinitionEntityList returns the list of index entities for the table.
+func (c *CreateTableEntity) IndexDefinitionEntitiesList() *IndexDefinitionEntityList {
+	return NewIndexDefinitionEntityList(c.IndexDefinitionEntities())
+}
+
+// IndexDefinitionEntitiesMap returns index entities mapped by their lower cased name.
+func (c *CreateTableEntity) IndexDefinitionEntitiesMap() map[string]*IndexDefinitionEntity {
+	entities := c.IndexDefinitionEntities()
+	m := make(map[string]*IndexDefinitionEntity, len(entities))
+	for _, entity := range entities {
+		m[entity.NameLowered()] = entity
+	}
+	return m
+}
+
+>>>>>>> 72d91bdae7 (schemadiff: skip keys with expressions in Online DDL analysis (#17475))
 // normalize cleans up the table definition:
 // - setting names to all keys
 // - table option case (upper/lower/special)
