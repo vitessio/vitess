@@ -2065,7 +2065,7 @@ func TestExternalizeLookupVindex(t *testing.T) {
 					targetTablet.vrdbClient.ExpectRequest(`update _vt.vreplication set state = 'Stopped', source = 'keyspace:"sourceks" shard:"0" filter:{rules:{match:"t1" filter:"select * from t1"}}', cell = '', tablet_types = '' where id in (1)`, &sqltypes.Result{}, nil)
 					targetTablet.vrdbClient.ExpectRequest(`select * from _vt.vreplication where id = 1`, streamsResult, nil)
 
-					freezeQuery := fmt.Sprintf(workflow.SqlFreezeWorkflow, workflow.Frozen, sqltypes.EncodeStringSQL("vt_targetks"), sqltypes.EncodeStringSQL(tcase.request.Name))
+					freezeQuery := fmt.Sprintf(workflow.SqlFreezeWorkflow, sqltypes.EncodeStringSQL("vt_targetks"), sqltypes.EncodeStringSQL(tcase.request.Name))
 					tenv.tmc.setVReplicationExecResults(targetTablet.tablet, freezeQuery, &sqltypes.Result{})
 				}
 			}

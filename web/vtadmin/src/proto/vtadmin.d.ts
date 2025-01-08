@@ -66254,6 +66254,9 @@ export namespace vtctldata {
 
         /** LookupVindexExternalizeRequest table_keyspace */
         table_keyspace?: (string|null);
+
+        /** LookupVindexExternalizeRequest delete_workflow */
+        delete_workflow?: (boolean|null);
     }
 
     /** Represents a LookupVindexExternalizeRequest. */
@@ -66273,6 +66276,9 @@ export namespace vtctldata {
 
         /** LookupVindexExternalizeRequest table_keyspace. */
         public table_keyspace: string;
+
+        /** LookupVindexExternalizeRequest delete_workflow. */
+        public delete_workflow: boolean;
 
         /**
          * Creates a new LookupVindexExternalizeRequest instance using the specified properties.
@@ -66357,6 +66363,9 @@ export namespace vtctldata {
 
         /** LookupVindexExternalizeResponse workflow_stopped */
         workflow_stopped?: (boolean|null);
+
+        /** LookupVindexExternalizeResponse workflow_deleted */
+        workflow_deleted?: (boolean|null);
     }
 
     /** Represents a LookupVindexExternalizeResponse. */
@@ -66370,6 +66379,9 @@ export namespace vtctldata {
 
         /** LookupVindexExternalizeResponse workflow_stopped. */
         public workflow_stopped: boolean;
+
+        /** LookupVindexExternalizeResponse workflow_deleted. */
+        public workflow_deleted: boolean;
 
         /**
          * Creates a new LookupVindexExternalizeResponse instance using the specified properties.

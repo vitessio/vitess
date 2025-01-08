@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
@@ -539,4 +540,44 @@ func generateColDef(lines []string, sourceVindexCol, vindexFromCol string) (stri
 		}
 	}
 	return "", fmt.Errorf("column %s not found in schema %v", sourceVindexCol, lines)
+}
+
+func (lv *lookupVindex) validateExternalized(ctx context.Context, vindex *vschemapb.Vindex, name string, targetShards []*topo.ShardInfo) error {
+	if _, ok := vindex.Params["write_only"]; ok {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "write_only param found in vindex %s", name)
+	}
+
+	err := forAllShards(targetShards, func(targetShard *topo.ShardInfo) error {
+		targetPrimary, err := lv.ts.GetTablet(ctx, targetShard.PrimaryAlias)
+		if err != nil {
+			return err
+		}
+		res, err := lv.tmc.ReadVReplicationWorkflow(ctx, targetPrimary.Tablet, &tabletmanagerdatapb.ReadVReplicationWorkflowRequest{
+			Workflow: name,
+		})
+		if err != nil {
+			return err
+		}
+		if res == nil || res.Workflow == "" {
+			return vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "workflow %s not found on %v", name, targetPrimary.Alias)
+		}
+		for _, stream := range res.Streams {
+			if vindex.Owner == "" {
+				// If there's no owner, all streams need to be running.
+				if stream.State != binlogdatapb.VReplicationWorkflowState_Running {
+					return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "stream %d for %v.%v is not in Running state: %v", stream.Id, targetShard.Keyspace(), targetShard.ShardName(), stream.State)
+				}
+			} else {
+				// If there's an owner, all streams need to be frozen.
+				if stream.State != binlogdatapb.VReplicationWorkflowState_Stopped || stream.Message != Frozen {
+					return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "stream %d for %v.%v is not frozen: %v, %v", stream.Id, targetShard.Keyspace(), targetShard.ShardName(), stream.State, stream.Message)
+				}
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	return nil
 }

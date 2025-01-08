@@ -3143,6 +3143,7 @@ func (m *LookupVindexExternalizeRequest) CloneVT() *LookupVindexExternalizeReque
 	r.Keyspace = m.Keyspace
 	r.Name = m.Name
 	r.TableKeyspace = m.TableKeyspace
+	r.DeleteWorkflow = m.DeleteWorkflow
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -3160,6 +3161,7 @@ func (m *LookupVindexExternalizeResponse) CloneVT() *LookupVindexExternalizeResp
 	}
 	r := new(LookupVindexExternalizeResponse)
 	r.WorkflowStopped = m.WorkflowStopped
+	r.WorkflowDeleted = m.WorkflowDeleted
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -14451,6 +14453,16 @@ func (m *LookupVindexExternalizeRequest) MarshalToSizedBufferVT(dAtA []byte) (in
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.DeleteWorkflow {
+		i--
+		if m.DeleteWorkflow {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x20
+	}
 	if len(m.TableKeyspace) > 0 {
 		i -= len(m.TableKeyspace)
 		copy(dAtA[i:], m.TableKeyspace)
@@ -14504,6 +14516,16 @@ func (m *LookupVindexExternalizeResponse) MarshalToSizedBufferVT(dAtA []byte) (i
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.WorkflowDeleted {
+		i--
+		if m.WorkflowDeleted {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x10
 	}
 	if m.WorkflowStopped {
 		i--
@@ -25055,6 +25077,9 @@ func (m *LookupVindexExternalizeRequest) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
+	if m.DeleteWorkflow {
+		n += 2
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -25066,6 +25091,9 @@ func (m *LookupVindexExternalizeResponse) SizeVT() (n int) {
 	var l int
 	_ = l
 	if m.WorkflowStopped {
+		n += 2
+	}
+	if m.WorkflowDeleted {
 		n += 2
 	}
 	n += len(m.unknownFields)
@@ -49223,6 +49251,26 @@ func (m *LookupVindexExternalizeRequest) UnmarshalVT(dAtA []byte) error {
 			}
 			m.TableKeyspace = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
+		case 4:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field DeleteWorkflow", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.DeleteWorkflow = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
@@ -49294,6 +49342,26 @@ func (m *LookupVindexExternalizeResponse) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.WorkflowStopped = bool(v != 0)
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field WorkflowDeleted", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.WorkflowDeleted = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])

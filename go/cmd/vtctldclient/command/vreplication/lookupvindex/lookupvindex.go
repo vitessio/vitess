@@ -72,6 +72,7 @@ var (
 
 	externalizeOptions = struct {
 		Keyspace string
+		Delete   bool
 	}{}
 
 	internalizeOptions = struct {
@@ -178,7 +179,7 @@ var (
 	// externalize makes a LookupVindexExternalize call to a vtctld.
 	externalize = &cobra.Command{
 		Use:                   "externalize",
-		Short:                 "Externalize the Lookup Vindex. If the Vindex has an owner the VReplication workflow will also be stopped.",
+		Short:                 "Externalize the Lookup Vindex. If the Vindex has an owner the VReplication workflow will also be stopped/deleted.",
 		Example:               `vtctldclient --server localhost:15999 LookupVindex --name corder_lookup_vdx --table-keyspace customer externalize`,
 		SilenceUsage:          true,
 		DisableFlagsInUseLine: true,
@@ -251,7 +252,9 @@ func commandComplete(cmd *cobra.Command, args []string) error {
 
 	output := fmt.Sprintf("LookupVindex %s has been completed", baseOptions.Name)
 	if resp.WorkflowDeleted {
-		output = output + fmt.Sprintf(" and the %s VReplication workflow has been deleted", baseOptions.Name)
+		output = output + " and the VReplication workflow has been deleted."
+	} else {
+		output = output + ". The VReplication workflow hasn't been stopped as the vindex is unowned."
 	}
 	fmt.Println(output)
 
@@ -295,6 +298,8 @@ func commandExternalize(cmd *cobra.Command, args []string) error {
 		Name: baseOptions.Name,
 		// Where the lookup table and VReplication workflow were created.
 		TableKeyspace: baseOptions.TableKeyspace,
+		// Delete the workflow after externalizing, instead of stopping.
+		DeleteWorkflow: externalizeOptions.Delete,
 	})
 
 	if err != nil {
@@ -303,7 +308,9 @@ func commandExternalize(cmd *cobra.Command, args []string) error {
 
 	output := fmt.Sprintf("LookupVindex %s has been externalized", baseOptions.Name)
 	if resp.WorkflowStopped {
-		output = output + fmt.Sprintf(" and the %s VReplication workflow has been stopped", baseOptions.Name)
+		output = output + " and the VReplication workflow has been stopped."
+	} else if resp.WorkflowDeleted {
+		output = output + " and the VReplication workflow has been deleted."
 	}
 	fmt.Println(output)
 
@@ -330,7 +337,7 @@ func commandInternalize(cmd *cobra.Command, args []string) error {
 
 	output := fmt.Sprintf("LookupVindex %s has been internalized", baseOptions.Name)
 	if resp.WorkflowStarted {
-		output = output + fmt.Sprintf(" and the %s VReplication workflow has been started", baseOptions.Name)
+		output = output + " and the VReplication workflow has been started."
 	}
 	fmt.Println(output)
 
@@ -394,6 +401,7 @@ func registerCommands(root *cobra.Command) {
 	// vindex has an owner as the lookup vindex will then be
 	// managed by VTGate.
 	externalize.Flags().StringVar(&externalizeOptions.Keyspace, "keyspace", "", "The keyspace containing the Lookup Vindex. If no value is specified then the table-keyspace will be used.")
+	externalize.Flags().BoolVar(&externalizeOptions.Delete, "delete", false, "Delete the VReplication workflow after externalizing LookupVindex, instead of stopping (default false).")
 	base.AddCommand(externalize)
 
 	internalize.Flags().StringVar(&internalizeOptions.Keyspace, "keyspace", "", "The keyspace containing the Lookup Vindex. If no value is specified then the table-keyspace will be used.")

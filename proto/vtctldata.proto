@@ -1251,11 +1251,16 @@ message LookupVindexExternalizeRequest {
   string name = 2;
   // Where the vreplication workflow lives.
   string table_keyspace = 3;
+  // If this is set true, we directly delete the workflow instead of stopping.
+  // Also, complete command is not required to delete workflow in that case.
+  bool delete_workflow = 4;
 }
 
 message LookupVindexExternalizeResponse {
   // Was the workflow stopped.
   bool workflow_stopped = 1;
+  // Was the workflow deleted.
+  bool workflow_deleted = 2;
 }
 
 message LookupVindexInternalizeRequest {

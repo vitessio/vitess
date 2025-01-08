@@ -128,7 +128,7 @@ const (
 	// Time to wait between LOCK TABLES cycles on the sources during SwitchWrites.
 	lockTablesCycleDelay = time.Duration(100 * time.Millisecond)
 
-	SqlFreezeWorkflow   = "update _vt.vreplication set message = '%s' where db_name=%s and workflow=%s"
+	SqlFreezeWorkflow   = "update _vt.vreplication set message = 'FROZEN' where db_name=%s and workflow=%s"
 	SqlUnfreezeWorkflow = "update _vt.vreplication set state='Running', message='' where db_name=%s and workflow=%s"
 )
 
@@ -577,37 +577,8 @@ func (s *Server) LookupVindexComplete(ctx context.Context, req *vtctldatapb.Look
 		return nil, err
 	}
 
-	// Validate if the lookup vindex was externalized.
-	err = forAllShards(targetShards, func(targetShard *topo.ShardInfo) error {
-		targetPrimary, err := s.ts.GetTablet(ctx, targetShard.PrimaryAlias)
-		if err != nil {
-			return err
-		}
-		res, err := s.tmc.ReadVReplicationWorkflow(ctx, targetPrimary.Tablet, &tabletmanagerdatapb.ReadVReplicationWorkflowRequest{
-			Workflow: req.Name,
-		})
-		if err != nil {
-			return err
-		}
-		if res == nil {
-			return vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "workflow %s not found on %v", req.Name, targetPrimary.Alias)
-		}
-		for _, stream := range res.Streams {
-			if vindex.Owner == "" {
-				// If there's no owner, all streams need to be running.
-				if stream.State != binlogdatapb.VReplicationWorkflowState_Running {
-					return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "stream %d for %v.%v is not in Running state: %v", stream.Id, targetShard.Keyspace(), targetShard.ShardName(), stream.State)
-				}
-			} else {
-				// If there's an owner, all streams need to be frozen.
-				if stream.State != binlogdatapb.VReplicationWorkflowState_Stopped || stream.Message != Frozen {
-					return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "stream %d for %v.%v is not frozen: %v, %v", stream.Id, targetShard.Keyspace(), targetShard.ShardName(), stream.State, stream.Message)
-				}
-			}
-		}
-		return nil
-	})
-	if err != nil {
+	lv := newLookupVindex(s)
+	if err = lv.validateExternalized(ctx, vindex, req.Name, targetShards); err != nil {
 		return nil, err
 	}
 
@@ -687,6 +658,7 @@ func (s *Server) LookupVindexExternalize(ctx context.Context, req *vtctldatapb.L
 	span.Annotate("keyspace", req.Keyspace)
 	span.Annotate("name", req.Name)
 	span.Annotate("table_keyspace", req.TableKeyspace)
+	span.Annotate("delete_workflow", req.DeleteWorkflow)
 
 	vindex, sourceVSchema, err := getVindexAndVSchema(ctx, s.ts, req.Keyspace, req.Name)
 	if err != nil {
@@ -709,7 +681,7 @@ func (s *Server) LookupVindexExternalize(ctx context.Context, req *vtctldatapb.L
 		if err != nil {
 			return err
 		}
-		if res == nil {
+		if res == nil || res.Workflow == "" {
 			return vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "workflow %s not found on %v", req.Name, targetPrimary.Alias)
 		}
 		for _, stream := range res.Streams {
@@ -738,32 +710,44 @@ func (s *Server) LookupVindexExternalize(ctx context.Context, req *vtctldatapb.L
 	resp := &vtctldatapb.LookupVindexExternalizeResponse{}
 
 	if vindex.Owner != "" {
-		// If there is an owner, we have to stop the streams. Once we externalize it
-		// the VTGate will now be responsible for keeping the lookup table up to date
-		// with the owner table.
-		err = forAllShards(targetShards, func(si *topo.ShardInfo) error {
-			tabletInfo, err := s.ts.GetTablet(ctx, si.PrimaryAlias)
-			if err != nil {
-				return err
+		// If there is an owner, we have to stop/delete the streams. Once we
+		// externalize it the VTGate will now be responsible for keeping the
+		// lookup table up to date with the owner table.
+		if req.DeleteWorkflow {
+			// Delete the workflow.
+			if _, derr := s.WorkflowDelete(ctx, &vtctldatapb.WorkflowDeleteRequest{
+				Keyspace:         req.TableKeyspace,
+				Workflow:         req.Name,
+				KeepData:         true, // Not relevant
+				KeepRoutingRules: true, // Not relevant
+			}); derr != nil {
+				return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "failed to delete workflow %s: %v", req.Name, derr)
 			}
+			resp.WorkflowDeleted = true
+		} else {
 			// Stop the workflow.
-			_, err = s.tmc.UpdateVReplicationWorkflow(ctx, tabletInfo.Tablet, &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
-				Workflow: req.Name,
-				State:    ptr.Of(binlogdatapb.VReplicationWorkflowState_Stopped),
+			err = forAllShards(targetShards, func(si *topo.ShardInfo) error {
+				tabletInfo, err := s.ts.GetTablet(ctx, si.PrimaryAlias)
+				if err != nil {
+					return err
+				}
+				_, err = s.tmc.UpdateVReplicationWorkflow(ctx, tabletInfo.Tablet, &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
+					Workflow: req.Name,
+					State:    ptr.Of(binlogdatapb.VReplicationWorkflowState_Stopped),
+				})
+				if err != nil {
+					return vterrors.Wrapf(err, "failed to stop workflow %s on shard %s/%s", req.Name, tabletInfo.Keyspace, tabletInfo.Shard)
+				}
+				// Mark workflow as frozen.
+				query := fmt.Sprintf(SqlFreezeWorkflow, encodeString(tabletInfo.DbName()), encodeString(req.Name))
+				_, err = s.tmc.VReplicationExec(ctx, tabletInfo.Tablet, query)
+				return err
 			})
 			if err != nil {
-				return vterrors.Wrapf(err, "failed to stop workflow %s on shard %s/%s", req.Name, tabletInfo.Keyspace, tabletInfo.Shard)
+				return nil, err
 			}
-			// Mark workflow as frozen.
-			query := fmt.Sprintf(SqlFreezeWorkflow, Frozen,
-				encodeString(tabletInfo.DbName()), encodeString(req.Name))
-			_, err = s.tmc.VReplicationExec(ctx, tabletInfo.Tablet, query)
-			return err
-		})
-		if err != nil {
-			return nil, err
+			resp.WorkflowStopped = true
 		}
-		resp.WorkflowStopped = true
 	}
 
 	// Remove the write_only param and save the source vschema.
@@ -794,39 +778,8 @@ func (s *Server) LookupVindexInternalize(ctx context.Context, req *vtctldatapb.L
 		return nil, err
 	}
 
-	err = forAllShards(targetShards, func(targetShard *topo.ShardInfo) error {
-		targetPrimary, err := s.ts.GetTablet(ctx, targetShard.PrimaryAlias)
-		if err != nil {
-			return err
-		}
-		res, err := s.tmc.ReadVReplicationWorkflow(ctx, targetPrimary.Tablet, &tabletmanagerdatapb.ReadVReplicationWorkflowRequest{
-			Workflow: req.Name,
-		})
-		if err != nil {
-			return err
-		}
-		if res == nil {
-			return vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "workflow %s not found on %v", req.Name, targetPrimary.Alias)
-		}
-		for _, stream := range res.Streams {
-			if stream.Bls.Filter == nil || len(stream.Bls.Filter.Rules) != 1 {
-				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid binlog source")
-			}
-			if vindex.Owner == "" {
-				// If there's no owner, all streams need to be running.
-				if stream.State != binlogdatapb.VReplicationWorkflowState_Running {
-					return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "stream %d for %v.%v is not in Running state: %v", stream.Id, targetShard.Keyspace(), targetShard.ShardName(), stream.State)
-				}
-			} else {
-				// If there's an owner, all streams need to be frozen.
-				if stream.State != binlogdatapb.VReplicationWorkflowState_Stopped || stream.Message != Frozen {
-					return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "stream %d for %v.%v is not frozen: %v, %v", stream.Id, targetShard.Keyspace(), targetShard.ShardName(), stream.State, stream.Message)
-				}
-			}
-		}
-		return nil
-	})
-	if err != nil {
+	lv := newLookupVindex(s)
+	if err = lv.validateExternalized(ctx, vindex, req.Name, targetShards); err != nil {
 		return nil, err
 	}
 
