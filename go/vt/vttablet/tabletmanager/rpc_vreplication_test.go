@@ -2144,20 +2144,18 @@ func TestInternalizeLookupVindex(t *testing.T) {
 			"owned_lookup": {
 				Type: "lookup_unique",
 				Params: map[string]string{
-					"table":      "targetks.owned_lookup",
-					"from":       "c1",
-					"to":         "c2",
-					"write_only": "true",
+					"table": "targetks.owned_lookup",
+					"from":  "c1",
+					"to":    "c2",
 				},
 				Owner: "t1",
 			},
 			"unowned_lookup": {
 				Type: "lookup_unique",
 				Params: map[string]string{
-					"table":      "targetks.unowned_lookup",
-					"from":       "c1",
-					"to":         "c2",
-					"write_only": "true",
+					"table": "targetks.unowned_lookup",
+					"from":  "c1",
+					"to":    "c2",
 				},
 			},
 			"unqualified_lookup": {
