@@ -223,7 +223,7 @@ enum Type {
   RAW = 2084;
   // ROW_TUPLE represents multiple rows.
   // Properties: 37, None.
-  ROW_TUPLE= 2085;
+  ROW_TUPLE = 2085;
 }
 
 // Value represents a typed value.
