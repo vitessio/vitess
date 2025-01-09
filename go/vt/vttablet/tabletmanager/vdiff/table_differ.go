@@ -196,7 +196,7 @@ func (td *tableDiffer) stopTargetVReplicationStreams(ctx context.Context, dbClie
 			return fmt.Errorf("stream %d has not started on tablet %v",
 				id, td.wd.ct.vde.thisTablet.Alias)
 		}
-		sourceBytes, err := row[source].ToBytes()
+		sourceBytes, err := row["source"].ToBytes()
 		if err != nil {
 			return err
 		}
@@ -522,8 +522,8 @@ func (td *tableDiffer) diff(ctx context.Context, coreOpts *tabletmanagerdatapb.V
 	}
 	dr.TableName = td.table.Name
 
-	sourceExecutor := newPrimitiveExecutor(ctx, td.sourcePrimitive, source)
-	targetExecutor := newPrimitiveExecutor(ctx, td.targetPrimitive, target)
+	sourceExecutor := newPrimitiveExecutor(ctx, td.sourcePrimitive, "source")
+	targetExecutor := newPrimitiveExecutor(ctx, td.targetPrimitive, "target")
 	var sourceRow, lastProcessedRow, targetRow []sqltypes.Value
 	advanceSource := true
 	advanceTarget := true
@@ -736,42 +736,20 @@ func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, dr *D
 			return err
 		}
 	} else {
-		var lastSourcePK, lastTargetPK []byte
-		lastPK := make(map[string]string, 2)
-		lastTargetPK, err = td.lastPKFromRow(lastRow, td.tablePlan.pkCols)
-		if err != nil {
-			return err
-		}
-		lastPK[target] = string(lastTargetPK)
-		if len(td.tablePlan.sourcePkCols) == 0 || slices.Equal(td.tablePlan.sourcePkCols, td.tablePlan.pkCols) {
-			lastPK[source] = string(lastTargetPK)
-		} else {
-			lastSourcePK, err = td.lastPKFromRow(lastRow, td.tablePlan.sourcePkCols)
-			if err != nil {
-				return err
-			}
-			lastPK[source] = string(lastSourcePK)
-		}
+		lastPK := td.lastPKFromRow(lastRow)
 		if td.wd.opts.CoreOptions.MaxDiffSeconds > 0 {
 			// Update the in-memory lastPK as well so that we can restart the table
 			// diff if needed.
-			lastSourcePKPB, lastTargetPKPB := &querypb.QueryResult{}, &querypb.QueryResult{}
-			if err := prototext.Unmarshal(lastSourcePK, lastSourcePKPB); err != nil {
-				return err
-			}
-			td.lastSourcePK = lastSourcePKPB
-			if err := prototext.Unmarshal(lastTargetPK, lastTargetPKPB); err != nil {
-				return err
-			}
-			td.lastTargetPK = lastTargetPKPB
+			td.lastSourcePK, td.lastTargetPK = lastPK.Source, lastPK.Target
 		}
-		lastPKJS, err := json.Marshal(lastPK)
+		lastPKTxt, err := prototext.Marshal(lastPK)
 		if err != nil {
 			return err
 		}
+		log.Errorf("DEBUG: lastpk for table %s to DB: %s", td.table.Name, string(lastPKTxt))
 		query, err = sqlparser.ParseAndBind(sqlUpdateTableProgress,
 			sqltypes.Int64BindVariable(dr.ProcessedRows),
-			sqltypes.StringBindVariable(string(lastPKJS)),
+			sqltypes.StringBindVariable(string(lastPKTxt)),
 			sqltypes.StringBindVariable(string(rpt)),
 			sqltypes.Int64BindVariable(td.wd.ct.id),
 			sqltypes.StringBindVariable(td.table.Name),
@@ -847,19 +825,31 @@ func updateTableMismatch(dbClient binlogplayer.DBClient, vdiffID int64, table st
 	return nil
 }
 
-func (td *tableDiffer) lastPKFromRow(row []sqltypes.Value, pkCols []int) ([]byte, error) {
-	pkColCnt := len(pkCols)
-	pkFields := make([]*querypb.Field, pkColCnt)
-	pkVals := make([]sqltypes.Value, pkColCnt)
-	for i, colIndex := range pkCols {
-		pkFields[i] = td.tablePlan.table.Fields[colIndex]
-		pkVals[i] = row[colIndex]
+func (td *tableDiffer) lastPKFromRow(row []sqltypes.Value) *tabletmanagerdatapb.VDiffTableLastPK {
+	var source, target *querypb.QueryResult
+	buildQR := func(pkCols []int) *querypb.QueryResult {
+		pkColCnt := len(pkCols)
+		pkFields := make([]*querypb.Field, pkColCnt)
+		pkVals := make([]sqltypes.Value, pkColCnt)
+		for i, colIndex := range td.tablePlan.pkCols {
+			pkFields[i] = td.tablePlan.table.Fields[colIndex]
+			pkVals[i] = row[colIndex]
+		}
+		return &querypb.QueryResult{
+			Fields: pkFields,
+			Rows:   []*querypb.Row{sqltypes.RowToProto3(pkVals)},
+		}
 	}
-	buf, err := prototext.Marshal(&querypb.QueryResult{
-		Fields: pkFields,
-		Rows:   []*querypb.Row{sqltypes.RowToProto3(pkVals)},
-	})
-	return buf, err
+	target = buildQR(td.tablePlan.pkCols)
+	if len(td.tablePlan.sourcePkCols) == 0 || slices.Equal(td.tablePlan.sourcePkCols, td.tablePlan.pkCols) {
+		source = target
+	} else {
+		source = buildQR(td.tablePlan.sourcePkCols)
+	}
+	return &tabletmanagerdatapb.VDiffTableLastPK{
+		Source: source,
+		Target: target,
+	}
 }
 
 // If SourceTimeZone is defined in the BinlogSource (_vt.vreplication.source), the

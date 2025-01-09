@@ -18,7 +18,6 @@ package vdiff
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
@@ -43,14 +42,8 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-)
-
-const (
-	source = "source"
-	target = "target"
 )
 
 // workflowDiffer has metadata and state for the vdiff of a single workflow on this tablet
@@ -383,8 +376,10 @@ func (wd *workflowDiffer) buildPlan(dbClient binlogplayer.DBClient, filter *binl
 		if err != nil {
 			return err
 		}
-		td.lastSourcePK = lastPK[source]
-		td.lastTargetPK = lastPK[target]
+		if lastPK != nil {
+			td.lastSourcePK = lastPK.Source
+			td.lastTargetPK = lastPK.Target
+		}
 		wd.tableDiffers[table.Name] = td
 		if _, err := td.buildTablePlan(dbClient, wd.ct.vde.dbName, wd.collationEnv); err != nil {
 			return err
@@ -404,7 +399,7 @@ func (wd *workflowDiffer) buildPlan(dbClient binlogplayer.DBClient, filter *binl
 }
 
 // getTableLastPK gets the lastPK protobuf message for a given vdiff table.
-func (wd *workflowDiffer) getTableLastPK(dbClient binlogplayer.DBClient, tableName string) (map[string]*querypb.QueryResult, error) {
+func (wd *workflowDiffer) getTableLastPK(dbClient binlogplayer.DBClient, tableName string) (*tabletmanagerdatapb.VDiffTableLastPK, error) {
 	query, err := sqlparser.ParseAndBind(sqlGetVDiffTable,
 		sqltypes.Int64BindVariable(wd.ct.id),
 		sqltypes.StringBindVariable(tableName),
@@ -421,19 +416,13 @@ func (wd *workflowDiffer) getTableLastPK(dbClient binlogplayer.DBClient, tableNa
 		if lastpk, err = qr.Named().Row().ToBytes("lastpk"); err != nil {
 			return nil, err
 		}
+		log.Errorf("DEBUG: lastpk for table %s from DB: %s", tableName, string(lastpk))
 		if len(lastpk) != 0 {
-			lastPK := make(map[string]string, 2)
-			lastPKResults := make(map[string]*querypb.QueryResult, 2)
-			if err := json.Unmarshal(lastpk, &lastPK); err != nil {
-				return nil, vterrors.Wrapf(err, "failed to unmarshal lastpk JSON for table %s", tableName)
+			lastPK := &tabletmanagerdatapb.VDiffTableLastPK{}
+			if err := prototext.Unmarshal(lastpk, lastPK); err != nil {
+				return nil, vterrors.Wrapf(err, "failed to unmarshal lastpk for table %s", tableName)
 			}
-			for k, v := range lastPK {
-				lastPKResults[k] = &querypb.QueryResult{}
-				if err := prototext.Unmarshal([]byte(v), lastPKResults[k]); err != nil {
-					return nil, vterrors.Wrapf(err, "failed to unmarshal lastpk QueryResult for table %s", tableName)
-				}
-			}
-			return lastPKResults, nil
+			return lastPK, nil
 		}
 	}
 	return nil, nil
