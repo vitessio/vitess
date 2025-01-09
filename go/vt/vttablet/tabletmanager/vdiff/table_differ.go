@@ -829,7 +829,7 @@ func (td *tableDiffer) lastPKFromRow(row []sqltypes.Value) *tabletmanagerdatapb.
 		pkColCnt := len(pkCols)
 		pkFields := make([]*querypb.Field, pkColCnt)
 		pkVals := make([]sqltypes.Value, pkColCnt)
-		for i, colIndex := range td.tablePlan.pkCols {
+		for i, colIndex := range pkCols {
 			pkFields[i] = td.tablePlan.table.Fields[colIndex]
 			pkVals[i] = row[colIndex]
 		}
@@ -935,11 +935,16 @@ func (td *tableDiffer) getSourcePKCols() error {
 			}
 			return sqltypes.Proto3ToResult(res), nil
 		}
-		pkeCols, _, err := mysqlctl.GetPrimaryKeyEquivalentColumns(ctx, executeFetch, td.wd.ct.sourceKeyspace, td.table.Name)
+		pkeCols, _, err := mysqlctl.GetPrimaryKeyEquivalentColumns(ctx, executeFetch, sourceTablet.DbName(), td.table.Name)
 		if err != nil {
 			return err
 		}
-		sourceTable.PrimaryKeyColumns = pkeCols
+		if len(pkeCols) > 0 {
+			sourceTable.PrimaryKeyColumns = pkeCols
+		} else {
+			// We use every column together as a substitute PK.
+			sourceTable.PrimaryKeyColumns = append(sourceTable.PrimaryKeyColumns, td.table.Columns...)
+		}
 	}
 	sourcePKColumns := make(map[string]struct{}, len(sourceTable.PrimaryKeyColumns))
 	td.tablePlan.sourcePkCols = make([]int, 0, len(sourceTable.PrimaryKeyColumns))
