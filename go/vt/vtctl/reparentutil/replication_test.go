@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 
 	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/mysql"
@@ -289,7 +290,7 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 	}{
 		{
 			name:       "success",
-			durability: "none",
+			durability: policy.DurabilityNone,
 			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
 				stopReplicationAndGetStatusResults: map[string]*struct {
 					StopStatus *replicationdatapb.StopReplicationStatus
@@ -358,7 +359,7 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 			shouldErr: false,
 		}, {
 			name:       "success with wait for all tablets",
-			durability: "none",
+			durability: policy.DurabilityNone,
 			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
 				stopReplicationAndGetStatusResults: map[string]*struct {
 					StopStatus *replicationdatapb.StopReplicationStatus
@@ -428,7 +429,7 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 			shouldErr:         false,
 		}, {
 			name:       "timing check with wait for all tablets",
-			durability: "none",
+			durability: policy.DurabilityNone,
 			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
 				stopReplicationAndGetStatusResults: map[string]*struct {
 					StopStatus *replicationdatapb.StopReplicationStatus
@@ -514,7 +515,7 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 		},
 		{
 			name:       "success - 2 rdonly failures",
-			durability: "none",
+			durability: policy.DurabilityNone,
 			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
 				stopReplicationAndGetStatusResults: map[string]*struct {
 					StopStatus *replicationdatapb.StopReplicationStatus
@@ -608,7 +609,7 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 		},
 		{
 			name:       "success - 1 rdonly and 1 replica failures",
-			durability: "semi_sync",
+			durability: policy.DurabilitySemiSync,
 			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
 				stopReplicationAndGetStatusResults: map[string]*struct {
 					StopStatus *replicationdatapb.StopReplicationStatus
@@ -702,7 +703,7 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 		},
 		{
 			name:       "ignore tablets",
-			durability: "none",
+			durability: policy.DurabilityNone,
 			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
 				stopReplicationAndGetStatusResults: map[string]*struct {
 					StopStatus *replicationdatapb.StopReplicationStatus
@@ -762,7 +763,7 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 		},
 		{
 			name:       "have PRIMARY tablet and can demote",
-			durability: "none",
+			durability: policy.DurabilityNone,
 			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
 				demotePrimaryResults: map[string]*struct {
 					PrimaryStatus *replicationdatapb.PrimaryStatus
@@ -841,7 +842,7 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 		},
 		{
 			name:       "one tablet is PRIMARY and cannot demote",
-			durability: "none",
+			durability: policy.DurabilityNone,
 			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
 				demotePrimaryResults: map[string]*struct {
 					PrimaryStatus *replicationdatapb.PrimaryStatus
@@ -906,7 +907,7 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 		},
 		{
 			name:       "multiple tablets are PRIMARY and cannot demote",
-			durability: "none",
+			durability: policy.DurabilityNone,
 			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
 				demotePrimaryResults: map[string]*struct {
 					PrimaryStatus *replicationdatapb.PrimaryStatus
@@ -959,7 +960,7 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 		},
 		{
 			name:       "stopReplicasTimeout exceeded",
-			durability: "none",
+			durability: policy.DurabilityNone,
 			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
 				stopReplicationAndGetStatusDelays: map[string]time.Duration{
 					"zone1-0000000100": time.Minute, // zone1-0000000100 will timeout and not be included
@@ -1023,7 +1024,7 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 		},
 		{
 			name:       "one tablet fails to StopReplication",
-			durability: "none",
+			durability: policy.DurabilityNone,
 			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
 				stopReplicationAndGetStatusResults: map[string]*struct {
 					StopStatus *replicationdatapb.StopReplicationStatus
@@ -1080,7 +1081,7 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 		},
 		{
 			name:       "multiple tablets fail StopReplication",
-			durability: "none",
+			durability: policy.DurabilityNone,
 			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
 				stopReplicationAndGetStatusResults: map[string]*struct {
 					StopStatus *replicationdatapb.StopReplicationStatus
@@ -1121,7 +1122,7 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 			shouldErr:                true,
 		}, {
 			name:       "1 tablets fail StopReplication and 1 has replication stopped",
-			durability: "none",
+			durability: policy.DurabilityNone,
 			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
 				stopReplicationAndGetStatusResults: map[string]*struct {
 					StopStatus *replicationdatapb.StopReplicationStatus
@@ -1166,7 +1167,7 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 		},
 		{
 			name:       "slow tablet is the new primary requested",
-			durability: "none",
+			durability: policy.DurabilityNone,
 			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
 				stopReplicationAndGetStatusDelays: map[string]time.Duration{
 					"zone1-0000000102": 1 * time.Second, // zone1-0000000102 is slow to respond but has to be included since it is the requested primary
@@ -1268,7 +1269,7 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 			shouldErr:                false,
 		}, {
 			name:       "Handle nil replication status After. No segfaulting when determining backup status, and fall back to Before status",
-			durability: "none",
+			durability: policy.DurabilityNone,
 			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
 				stopReplicationAndGetStatusResults: map[string]*struct {
 					StopStatus *replicationdatapb.StopReplicationStatus
@@ -1340,7 +1341,7 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			durability, err := GetDurabilityPolicy(tt.durability)
+			durability, err := policy.GetDurabilityPolicy(tt.durability)
 			require.NoError(t, err)
 			startTime := time.Now()
 			res, err := stopReplicationAndBuildStatusMaps(ctx, tt.tmc, &events.Reparent{}, tt.tabletMap, tt.stopReplicasTimeout, tt.ignoredTablets, tt.tabletToWaitFor, durability, tt.waitForAllTablets, logger)

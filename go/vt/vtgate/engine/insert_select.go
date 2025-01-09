@@ -51,7 +51,7 @@ type (
 	}
 )
 
-// newInsertSelect creates a new InsertSelect.
+// newInsertSelect creates a new InsertSelect. Used in testing.
 func newInsertSelect(
 	ignore bool,
 	keyspace *vindexes.Keyspace,

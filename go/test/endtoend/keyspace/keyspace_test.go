@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
@@ -142,18 +143,18 @@ func TestDurabilityPolicyField(t *testing.T) {
 
 	out, err := vtctldClientProcess.ExecuteCommandWithOutput("CreateKeyspace", "ks_durability", "--durability-policy=semi_sync")
 	require.NoError(t, err, out)
-	checkDurabilityPolicy(t, "semi_sync")
+	checkDurabilityPolicy(t, policy.DurabilitySemiSync)
 
 	out, err = vtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", "ks_durability", "--durability-policy=none")
 	require.NoError(t, err, out)
-	checkDurabilityPolicy(t, "none")
+	checkDurabilityPolicy(t, policy.DurabilityNone)
 
 	out, err = vtctldClientProcess.ExecuteCommandWithOutput("DeleteKeyspace", "ks_durability")
 	require.NoError(t, err, out)
 
 	out, err = clusterForKSTest.VtctldClientProcess.ExecuteCommandWithOutput("CreateKeyspace", "--durability-policy=semi_sync", "ks_durability")
 	require.NoError(t, err, out)
-	checkDurabilityPolicy(t, "semi_sync")
+	checkDurabilityPolicy(t, policy.DurabilitySemiSync)
 
 	out, err = clusterForKSTest.VtctldClientProcess.ExecuteCommandWithOutput("DeleteKeyspace", "ks_durability")
 	require.NoError(t, err, out)

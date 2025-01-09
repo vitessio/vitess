@@ -147,6 +147,8 @@ type (
 
 		// RecordMirrorStats is used to record stats about a mirror query.
 		RecordMirrorStats(time.Duration, time.Duration, error)
+
+		SetLastInsertID(uint64)
 	}
 
 	// SessionActions gives primitives ability to interact with the session state

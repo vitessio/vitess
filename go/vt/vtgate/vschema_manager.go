@@ -194,6 +194,10 @@ func (vm *VSchemaManager) buildAndEnhanceVSchema(v *vschemapb.SrvVSchema) *vinde
 		// We mark the keyspaces that have foreign key management in Vitess and have cyclic foreign keys
 		// to have an error. This makes all queries against them to fail.
 		markErrorIfCyclesInFk(vschema)
+		// Add tables from schema tracking into globally routable tables, if they are not already present.
+		// We need to skip if already present, to handle the case where MoveTables has switched traffic
+		// and removed the source vschema but not from the source database because user asked to --keep-data
+		vindexes.AddAdditionalGlobalTables(v, vschema)
 	}
 	return vschema
 }

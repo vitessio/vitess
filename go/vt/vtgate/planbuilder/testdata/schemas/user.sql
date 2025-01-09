@@ -1,25 +1,25 @@
 CREATE TABLE user
 (
-    id          INT PRIMARY KEY,
-    col         BIGINT,
-    intcol      BIGINT,
-    user_id     INT,
-    id1         INT,
-    id2         INT,
-    id3         INT,
-    m           INT,
-    bar         INT,
-    a           INT,
-    name        VARCHAR(255),
-    col1        VARCHAR(255),
-    col2        VARCHAR(255),
-    costly      VARCHAR(255),
-    predef1     VARCHAR(255),
-    predef2     VARCHAR(255),
-    textcol1    VARCHAR(255),
-    textcol2    VARCHAR(255),
-    someColumn  VARCHAR(255),
-    foo         VARCHAR(255)
+    id         INT PRIMARY KEY,
+    col        BIGINT,
+    intcol     BIGINT,
+    user_id    INT,
+    id1        INT,
+    id2        INT,
+    id3        INT,
+    m          INT,
+    bar        INT,
+    a          INT,
+    name       VARCHAR(255),
+    col1       VARCHAR(255),
+    col2       VARCHAR(255),
+    costly     VARCHAR(255),
+    predef1    VARCHAR(255),
+    predef2    VARCHAR(255),
+    textcol1   VARCHAR(255),
+    textcol2   VARCHAR(255),
+    someColumn VARCHAR(255),
+    foo        VARCHAR(255)
 );
 
 CREATE TABLE user_metadata
@@ -34,13 +34,21 @@ CREATE TABLE user_metadata
 
 CREATE TABLE music
 (
-    user_id INT,
-    id      INT,
-    col1    VARCHAR(255),
-    col2    VARCHAR(255),
-    genre   VARCHAR(255),
+    user_id   INT,
+    id        INT,
+    col       VARCHAR(255),
+    col1      VARCHAR(255),
+    col2      VARCHAR(255),
+    genre     VARCHAR(255),
     componist VARCHAR(255),
     PRIMARY KEY (user_id)
+);
+
+CREATE TABLE name_user_vdx
+(
+    name        INT,
+    keyspace_id VARBINARY(10),
+    primary key (name)
 );
 
 CREATE TABLE samecolvin
@@ -118,69 +126,63 @@ CREATE TABLE authoritative
 
 CREATE TABLE colb_colc_map
 (
-    colb  INT PRIMARY KEY,
-    colc  INT,
+    colb        INT PRIMARY KEY,
+    colc        INT,
     keyspace_id VARCHAR(255)
 );
 
 CREATE TABLE seq
 (
-    id         INT,
-    next_id    BIGINT,
-    cache      BIGINT,
+    id      INT,
+    next_id BIGINT,
+    cache   BIGINT,
     PRIMARY KEY (id)
 ) COMMENT 'vitess_sequence';
 
 CREATE TABLE user_extra
 (
-    id           INT,
-    user_id      INT,
-    extra_id     INT,
-    col          INT,
-    m2           INT,
+    id       INT,
+    user_id  INT,
+    extra_id INT,
+    col      INT,
+    m2       INT,
     PRIMARY KEY (id, extra_id)
 );
 
 CREATE TABLE name_user_map
 (
-    name          VARCHAR(255),
-    keyspace_id   VARCHAR(255)
-);
-
-CREATE TABLE name_user_vdx
-(
-    name          VARCHAR(255),
-    keyspace_id   VARCHAR(255)
+    name        VARCHAR(255),
+    keyspace_id VARCHAR(255)
 );
 
 CREATE TABLE costly_map
 (
-    costly        VARCHAR(255),
-    keyspace_id   VARCHAR(255)
+    costly      VARCHAR(255),
+    keyspace_id VARCHAR(255)
 );
 
 CREATE TABLE unq_binary_idx
 (
-    id       INT PRIMARY KEY,
-    col1     INT
+    id   INT PRIMARY KEY,
+    col1 INT
 );
 
 CREATE TABLE sales
 (
-    oid       INT PRIMARY KEY,
-    col1      VARCHAR(255)
+    oid  INT PRIMARY KEY,
+    col1 VARCHAR(255)
 );
 
 CREATE TABLE sales_extra
 (
-    colx      INT PRIMARY KEY,
-    cola      VARCHAR(255),
-    colb      VARCHAR(255),
-    start     INT,
-    end       INT
+    colx  INT PRIMARY KEY,
+    cola  VARCHAR(255),
+    colb  VARCHAR(255),
+    start INT,
+    end   INT
 );
 
 CREATE TABLE ref
 (
-    col    INT PRIMARY KEY
+    col INT PRIMARY KEY
 );

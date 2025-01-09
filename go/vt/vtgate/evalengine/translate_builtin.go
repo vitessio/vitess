@@ -662,6 +662,11 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (IR, error) {
 			return nil, argError(method)
 		}
 		return &builtinReplace{CallExpr: call, collate: ast.cfg.Collation}, nil
+	case "last_insert_id":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinLastInsertID{CallExpr: call}, nil
 	default:
 		return nil, translateExprNotSupported(fn)
 	}

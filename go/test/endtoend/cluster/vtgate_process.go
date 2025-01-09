@@ -70,7 +70,11 @@ type VtgateProcess struct {
 }
 
 type VTGateConfiguration struct {
-	TransactionMode string `json:"transaction_mode,omitempty"`
+	TransactionMode                   string `json:"transaction_mode,omitempty"`
+	DiscoveryLowReplicationLag        string `json:"discovery_low_replication_lag,omitempty"`
+	DiscoveryHighReplicationLag       string `json:"discovery_high_replication_lag,omitempty"`
+	DiscoveryMinServingVttablets      string `json:"discovery_min_number_serving_vttablets,omitempty"`
+	DiscoveryLegacyReplicationLagAlgo string `json:"discovery_legacy_replication_lag_algorithm"`
 }
 
 // ToJSONString will marshal this configuration as JSON
