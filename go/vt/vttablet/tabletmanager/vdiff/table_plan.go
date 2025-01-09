@@ -53,6 +53,10 @@ type tablePlan struct {
 	comparePKs []compareColInfo
 	// pkCols has the indices of PK cols in the select list
 	pkCols []int
+	// sourcePkCols has the indices of PK cols in the select
+	// list, but from the source keyspace. This is needed to
+	// properly store the lastpk for the source.
+	sourcePkCols []int
 
 	// selectPks is the list of pk columns as they appear in the select clause for the diff.
 	selectPks      []int
@@ -207,6 +211,7 @@ func (tp *tablePlan) findPKs(dbClient binlogplayer.DBClient, targetSelect *sqlpa
 	if len(tp.table.PrimaryKeyColumns) == 0 {
 		return nil
 	}
+
 	var orderby sqlparser.OrderBy
 	for _, pk := range tp.table.PrimaryKeyColumns {
 		found := false

@@ -18,12 +18,15 @@ package vdiff
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
 	"time"
 
+	"golang.org/x/exp/maps"
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -344,7 +347,7 @@ func (wd *workflowDiffer) buildPlan(dbClient binlogplayer.DBClient, filter *binl
 
 	for _, table := range schm.TableDefinitions {
 		// if user specified tables explicitly only use those, otherwise diff all tables in workflow
-		if len(specifiedTables) != 0 && !stringListContains(specifiedTables, table.Name) {
+		if len(specifiedTables) != 0 && !slices.Contains(specifiedTables, table.Name) {
 			continue
 		}
 		if schema.IsInternalOperationTableName(table.Name) && !schema.IsOnlineDDLTableName(table.Name) {
@@ -370,15 +373,52 @@ func (wd *workflowDiffer) buildPlan(dbClient binlogplayer.DBClient, filter *binl
 		}
 
 		td := newTableDiffer(wd, table, sourceQuery)
-		lastpkpb, err := wd.getTableLastPK(dbClient, table.Name)
+
+		lastPK, err := wd.getTableLastPK(dbClient, table.Name)
 		if err != nil {
 			return err
 		}
-		td.lastPK = lastpkpb
+		td.lastSourcePK = lastPK["source"]
+		td.lastTargetPK = lastPK["target"]
 		wd.tableDiffers[table.Name] = td
 		if _, err := td.buildTablePlan(dbClient, wd.ct.vde.dbName, wd.collationEnv); err != nil {
 			return err
 		}
+
+		// We get the PK columns from the source schema as well, as they can
+		// differ and determine the proper lastPK to use when saving progress.
+		// We use the first sourceShard as all of them should have the same schema.
+		sourceShardName := maps.Keys(wd.ct.sources)[0]
+		sourceShard, err := wd.ct.ts.GetShard(wd.ct.vde.ctx, wd.ct.sourceKeyspace, sourceShardName)
+		if err != nil {
+			return err
+		}
+		if sourceShard.PrimaryAlias == nil {
+			return fmt.Errorf("source shard %s has no primary", sourceShardName)
+		}
+		sourceTablet, err := wd.ct.ts.GetTablet(wd.ct.vde.ctx, sourceShard.PrimaryAlias)
+		if err != nil {
+			return fmt.Errorf("failed to get source shard %s primary", sourceShardName)
+		}
+		sourceSchema, err := wd.ct.tmc.GetSchema(wd.ct.vde.ctx, sourceTablet.Tablet, &tabletmanagerdatapb.GetSchemaRequest{
+			Tables: []string{table.Name},
+		})
+		if err != nil {
+			return err
+		}
+		//log.Errorf("DEBUG: sourceTable.PrimaryKeyColumns: %v", sourceSchema.TableDefinitions[0].PrimaryKeyColumns)
+		sourcePKColumns := make(map[string]struct{}, len(sourceSchema.TableDefinitions[0].PrimaryKeyColumns))
+		td.tablePlan.sourcePkCols = make([]int, 0, len(sourceSchema.TableDefinitions[0].PrimaryKeyColumns))
+		for _, pkc := range sourceSchema.TableDefinitions[0].PrimaryKeyColumns {
+			sourcePKColumns[pkc] = struct{}{}
+		}
+		//log.Errorf("DEBUG: sourcePKColumns: %v", sourcePKColumns)
+		for i, pkc := range table.PrimaryKeyColumns {
+			if _, ok := sourcePKColumns[pkc]; ok {
+				td.tablePlan.sourcePkCols = append(td.tablePlan.sourcePkCols, i)
+			}
+		}
+		//log.Errorf("DEBUG: td.tablePlan.sourcePkCols: %v", td.tablePlan.sourcePkCols)
 	}
 	if len(wd.tableDiffers) == 0 {
 		return fmt.Errorf("no tables found to diff, %s:%s, on tablet %v",
@@ -388,7 +428,7 @@ func (wd *workflowDiffer) buildPlan(dbClient binlogplayer.DBClient, filter *binl
 }
 
 // getTableLastPK gets the lastPK protobuf message for a given vdiff table.
-func (wd *workflowDiffer) getTableLastPK(dbClient binlogplayer.DBClient, tableName string) (*querypb.QueryResult, error) {
+func (wd *workflowDiffer) getTableLastPK(dbClient binlogplayer.DBClient, tableName string) (map[string]*querypb.QueryResult, error) {
 	query, err := sqlparser.ParseAndBind(sqlGetVDiffTable,
 		sqltypes.Int64BindVariable(wd.ct.id),
 		sqltypes.StringBindVariable(tableName),
@@ -406,11 +446,20 @@ func (wd *workflowDiffer) getTableLastPK(dbClient binlogplayer.DBClient, tableNa
 			return nil, err
 		}
 		if len(lastpk) != 0 {
-			var lastpkpb querypb.QueryResult
-			if err := prototext.Unmarshal(lastpk, &lastpkpb); err != nil {
-				return nil, err
+			lastPK := make(map[string]string, 2)
+			lastPKResults := make(map[string]*querypb.QueryResult, 2)
+			if err := json.Unmarshal(lastpk, &lastPK); err != nil {
+				return nil, vterrors.Wrapf(err, "failed to unmarshal lastpk JSON for table %s", tableName)
 			}
-			return &lastpkpb, nil
+			//log.Errorf("DEBUG: getTabletLastPK lastPKBytes: %v", lastPK)
+			for k, v := range lastPK {
+				lastPKResults[k] = &querypb.QueryResult{}
+				if err := prototext.Unmarshal([]byte(v), lastPKResults[k]); err != nil {
+					return nil, vterrors.Wrapf(err, "failed to unmarshal lastpk QueryResult for table %s", tableName)
+				}
+			}
+			//log.Errorf("DEBUG: getTabletLastPK lastPKRResults: %v", lastPKResults)
+			return lastPKResults, nil
 		}
 	}
 	return nil, nil

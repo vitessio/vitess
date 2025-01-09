@@ -86,9 +86,10 @@ type tableDiffer struct {
 	targetPrimitive engine.Primitive
 
 	// sourceQuery is computed from the associated query for this table in the vreplication workflow's Rule Filter
-	sourceQuery string
-	table       *tabletmanagerdatapb.TableDefinition
-	lastPK      *querypb.QueryResult
+	sourceQuery  string
+	table        *tabletmanagerdatapb.TableDefinition
+	lastSourcePK *querypb.QueryResult
+	lastTargetPK *querypb.QueryResult
 
 	// wgShardStreamers is used, with a cancellable context, to wait for all shard streamers
 	// to finish after each diff is complete.
@@ -349,7 +350,7 @@ func (td *tableDiffer) startTargetDataStream(ctx context.Context) error {
 	ct := td.wd.ct
 	gtidch := make(chan string, 1)
 	ct.targetShardStreamer.result = make(chan *sqltypes.Result, 1)
-	go td.streamOneShard(ctx, ct.targetShardStreamer, td.tablePlan.targetQuery, td.lastPK, gtidch)
+	go td.streamOneShard(ctx, ct.targetShardStreamer, td.tablePlan.targetQuery, td.lastTargetPK, gtidch)
 	gtid, ok := <-gtidch
 	if !ok {
 		log.Infof("streaming error: %v", ct.targetShardStreamer.err)
@@ -364,7 +365,7 @@ func (td *tableDiffer) startSourceDataStreams(ctx context.Context) error {
 	if err := td.forEachSource(func(source *migrationSource) error {
 		gtidch := make(chan string, 1)
 		source.result = make(chan *sqltypes.Result, 1)
-		go td.streamOneShard(ctx, source.shardStreamer, td.tablePlan.sourceQuery, td.lastPK, gtidch)
+		go td.streamOneShard(ctx, source.shardStreamer, td.tablePlan.sourceQuery, td.lastSourcePK, gtidch)
 
 		gtid, ok := <-gtidch
 		if !ok {
@@ -721,32 +722,16 @@ func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, dr *D
 	if dr == nil {
 		return fmt.Errorf("cannot update progress with a nil diff report")
 	}
-	var lastPK []byte
 	var err error
 	var query string
 	rpt, err := json.Marshal(dr)
 	if err != nil {
 		return err
 	}
-	if lastRow != nil {
-		lastPK, err = td.lastPKFromRow(lastRow)
-		if err != nil {
-			return err
-		}
 
-		if td.wd.opts.CoreOptions.MaxDiffSeconds > 0 {
-			// Update the in-memory lastPK as well so that we can restart the table
-			// diff if needed.
-			lastpkpb := &querypb.QueryResult{}
-			if err := prototext.Unmarshal(lastPK, lastpkpb); err != nil {
-				return err
-			}
-			td.lastPK = lastpkpb
-		}
-
-		query, err = sqlparser.ParseAndBind(sqlUpdateTableProgress,
+	if lastRow == nil {
+		query, err = sqlparser.ParseAndBind(sqlUpdateTableNoProgress,
 			sqltypes.Int64BindVariable(dr.ProcessedRows),
-			sqltypes.StringBindVariable(string(lastPK)),
 			sqltypes.StringBindVariable(string(rpt)),
 			sqltypes.Int64BindVariable(td.wd.ct.id),
 			sqltypes.StringBindVariable(td.table.Name),
@@ -755,8 +740,42 @@ func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, dr *D
 			return err
 		}
 	} else {
-		query, err = sqlparser.ParseAndBind(sqlUpdateTableNoProgress,
+		var lastSourcePK, lastTargetPK []byte
+		lastPK := make(map[string]string, 2)
+		if lastRow != nil {
+			lastSourcePK, err = td.lastSourcePKFromRow(lastRow)
+			if err != nil {
+				return err
+			}
+			lastPK["source"] = string(lastSourcePK)
+			lastTargetPK, err = td.lastTargetPKFromRow(lastRow)
+			if err != nil {
+				return err
+			}
+			lastPK["target"] = string(lastTargetPK)
+		}
+		if td.wd.opts.CoreOptions.MaxDiffSeconds > 0 {
+			// Update the in-memory lastPK as well so that we can restart the table
+			// diff if needed.
+			lastSourcePKPB, lastTargetPKPB := &querypb.QueryResult{}, &querypb.QueryResult{}
+			if err := prototext.Unmarshal(lastSourcePK, lastSourcePKPB); err != nil {
+				return err
+			}
+			td.lastSourcePK = lastSourcePKPB
+			if err := prototext.Unmarshal(lastTargetPK, lastTargetPKPB); err != nil {
+				return err
+			}
+			td.lastTargetPK = lastTargetPKPB
+		}
+		//log.Errorf("DEBUG: updateTableProgress lastPK map: %v", lastPK)
+		lastPKJS, err := json.Marshal(lastPK)
+		if err != nil {
+			return err
+		}
+		//log.Errorf("DEBUG: updateTableProgress lastPK JSON: %v", lastPKJS)
+		query, err = sqlparser.ParseAndBind(sqlUpdateTableProgress,
 			sqltypes.Int64BindVariable(dr.ProcessedRows),
+			sqltypes.StringBindVariable(string(lastPKJS)),
 			sqltypes.StringBindVariable(string(rpt)),
 			sqltypes.Int64BindVariable(td.wd.ct.id),
 			sqltypes.StringBindVariable(td.table.Name),
@@ -832,11 +851,31 @@ func updateTableMismatch(dbClient binlogplayer.DBClient, vdiffID int64, table st
 	return nil
 }
 
-func (td *tableDiffer) lastPKFromRow(row []sqltypes.Value) ([]byte, error) {
+func (td *tableDiffer) lastTargetPKFromRow(row []sqltypes.Value) ([]byte, error) {
 	pkColCnt := len(td.tablePlan.pkCols)
 	pkFields := make([]*querypb.Field, pkColCnt)
 	pkVals := make([]sqltypes.Value, pkColCnt)
 	for i, colIndex := range td.tablePlan.pkCols {
+		pkFields[i] = td.tablePlan.table.Fields[colIndex]
+		pkVals[i] = row[colIndex]
+	}
+	buf, err := prototext.Marshal(&querypb.QueryResult{
+		Fields: pkFields,
+		Rows:   []*querypb.Row{sqltypes.RowToProto3(pkVals)},
+	})
+	return buf, err
+}
+
+func (td *tableDiffer) lastSourcePKFromRow(row []sqltypes.Value) ([]byte, error) {
+	if len(td.tablePlan.sourcePkCols) == 0 {
+		// If there are no PKs on the source then we use
+		// the same PK[E] columns as the target.
+		td.tablePlan.sourcePkCols = td.tablePlan.pkCols
+	}
+	pkColCnt := len(td.tablePlan.sourcePkCols)
+	pkFields := make([]*querypb.Field, pkColCnt)
+	pkVals := make([]sqltypes.Value, pkColCnt)
+	for i, colIndex := range td.tablePlan.sourcePkCols {
 		pkFields[i] = td.tablePlan.table.Fields[colIndex]
 		pkVals[i] = row[colIndex]
 	}
