@@ -416,7 +416,6 @@ func (wd *workflowDiffer) getTableLastPK(dbClient binlogplayer.DBClient, tableNa
 		if lastpk, err = qr.Named().Row().ToBytes("lastpk"); err != nil {
 			return nil, err
 		}
-		log.Errorf("DEBUG: lastpk for table %s from DB: %s", tableName, string(lastpk))
 		if len(lastpk) != 0 {
 			lastPK := &tabletmanagerdatapb.VDiffTableLastPK{}
 			if err := prototext.Unmarshal(lastpk, lastPK); err != nil {
