@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/stretchr/testify/assert"
@@ -163,6 +164,8 @@ func TestSetAndGetLastInsertID(t *testing.T) {
 		"update t1 set id2 = last_insert_id(%d) where id1 = 2",
 		"update t1 set id2 = 88 where id1 = last_insert_id(%d)",
 		"delete from t1 where id1 = last_insert_id(%d)",
+		"select id2, last_insert_id(count(*)) from t1 where %d group by id2",
+		"set @x = last_insert_id(%d)",
 	}
 
 	for _, workload := range []string{"olap", "oltp"} {
@@ -175,7 +178,7 @@ func TestSetAndGetLastInsertID(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			// Insert a row for UPDATE tests
+			// Insert a few rows for UPDATE tests
 			mcmp.Exec("insert into t1 (id1, id2) values (1, 10)")
 
 			for _, query := range queries {
@@ -183,6 +186,96 @@ func TestSetAndGetLastInsertID(t *testing.T) {
 			}
 			closer()
 		}
+	}
+}
+
+func TestSetAndGetLastInsertIDWithInsertUnsharded(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	tests := []string{
+		"insert into uks.unsharded(id1, id2) values (last_insert_id(%d),12)",
+		"insert into uks.unsharded(id1, id2) select last_insert_id(%d), 453",
+	}
+
+	i := 0
+	getVal := func() int {
+		defer func() { i++ }()
+		return i
+	}
+
+	runTests := func(mcmp *utils.MySQLCompare) {
+		for _, test := range tests {
+
+			lastInsertID := getVal()
+			query := fmt.Sprintf(test, lastInsertID)
+
+			stmt, err := sqlparser.NewTestParser().Parse(query)
+			require.NoError(mcmp.AsT(), err)
+			sqlparser.RemoveKeyspaceIgnoreSysSchema(stmt)
+
+			mcmp.ExecVitessAndMySQLDifferentQueries(query, sqlparser.String(stmt))
+			mcmp.Exec("select last_insert_id()")
+		}
+	}
+
+	for _, workload := range []string{"olap", "oltp"} {
+		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
+			_, err := mcmp.VtConn.ExecuteFetch("set workload = "+workload, 1, false)
+			require.NoError(t, err)
+			runTests(mcmp)
+
+			// run the queries again, but inside a transaction this time
+			mcmp.Exec("begin")
+			runTests(mcmp)
+			mcmp.Exec("commit")
+		})
+	}
+
+	// Now test to set the last insert id to 0, see that it has changed correctly even if the value is 0
+	mcmp.ExecVitessAndMySQLDifferentQueries(
+		"insert into uks.unsharded(id1, id2) values (last_insert_id(0),12)",
+		"insert into unsharded(id1, id2) values (last_insert_id(0),12)",
+	)
+	mcmp.Exec("select last_insert_id()")
+}
+
+func TestSetAndGetLastInsertIDWithInsert(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	tests := []string{
+		"insert into t1(id1, id2) values (last_insert_id(%d) ,%d)",
+		"insert into t1(id1, id2) values (%d, last_insert_id(%d))",
+		"insert into t1(id1, id2) select last_insert_id(%d), %d",
+		"insert into t1(id1, id2) select last_insert_id(id1+%d), 12 from t1 where 1 > %d",
+	}
+
+	i := 0
+	getVal := func() int {
+		defer func() { i++ }()
+		return i
+	}
+
+	runTests := func(mcmp *utils.MySQLCompare) {
+		for _, test := range tests {
+			query := fmt.Sprintf(test, getVal(), getVal())
+			mcmp.Exec(query)
+			mcmp.Exec("select last_insert_id()")
+		}
+	}
+
+	for _, workload := range []string{"olap", "oltp"} {
+		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
+			_, err := mcmp.VtConn.ExecuteFetch("set workload = "+workload, 1, false)
+			require.NoError(t, err)
+			runTests(mcmp)
+
+			// run the queries again, but inside a transaction this time
+			mcmp.Exec("begin")
+			runTests(mcmp)
+			mcmp.Exec("commit")
+		})
 	}
 }
 

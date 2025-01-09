@@ -1594,3 +1594,9 @@ func (vc *VCursorImpl) GetContextWithTimeOut(ctx context.Context) (context.Conte
 func (vc *VCursorImpl) IgnoreMaxMemoryRows() bool {
 	return vc.ignoreMaxMemoryRows
 }
+
+func (vc *VCursorImpl) SetLastInsertID(id uint64) {
+	vc.SafeSession.mu.Lock()
+	defer vc.SafeSession.mu.Unlock()
+	vc.SafeSession.LastInsertId = id
+}
