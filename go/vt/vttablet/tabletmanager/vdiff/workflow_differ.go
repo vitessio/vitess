@@ -36,6 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtctl/schematools"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -389,14 +390,18 @@ func (wd *workflowDiffer) buildPlan(dbClient binlogplayer.DBClient, filter *binl
 		// differ and determine the proper lastPK to use when saving progress.
 		// We use the first sourceShard as all of them should have the same schema.
 		sourceShardName := maps.Keys(wd.ct.sources)[0]
-		sourceShard, err := wd.ct.ts.GetShard(wd.ct.vde.ctx, wd.ct.sourceKeyspace, sourceShardName)
+		sourceTS, err := wd.getSourceTopoServer()
+		if err != nil {
+			return vterrors.Wrap(err, "failed to get source topo server")
+		}
+		sourceShard, err := sourceTS.GetShard(wd.ct.vde.ctx, wd.ct.sourceKeyspace, sourceShardName)
 		if err != nil {
 			return err
 		}
 		if sourceShard.PrimaryAlias == nil {
 			return fmt.Errorf("source shard %s has no primary", sourceShardName)
 		}
-		sourceTablet, err := wd.ct.ts.GetTablet(wd.ct.vde.ctx, sourceShard.PrimaryAlias)
+		sourceTablet, err := sourceTS.GetTablet(wd.ct.vde.ctx, sourceShard.PrimaryAlias)
 		if err != nil {
 			return fmt.Errorf("failed to get source shard %s primary", sourceShardName)
 		}
@@ -536,4 +541,13 @@ func (wd *workflowDiffer) initVDiffTables(dbClient binlogplayer.DBClient) error 
 		}
 	}
 	return nil
+}
+
+// getSourceTopoServer returns the source topo server as for Mount+Migrate the
+// source tablets will be in a different Vitess cluster with its own TopoServer.
+func (wd *workflowDiffer) getSourceTopoServer() (*topo.Server, error) {
+	if wd.ct.externalCluster == "" {
+		return wd.ct.ts, nil
+	}
+	return wd.ct.ts.OpenExternalVitessClusterServer(wd.ct.vde.ctx, wd.ct.externalCluster)
 }

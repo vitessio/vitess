@@ -239,15 +239,9 @@ func (td *tableDiffer) selectTablets(ctx context.Context) error {
 	sourceCells := strings.Split(td.wd.opts.PickerOptions.SourceCell, ",")
 	targetCells := strings.Split(td.wd.opts.PickerOptions.TargetCell, ",")
 
-	// For Mount+Migrate, the source tablets will be in a different
-	// Vitess cluster with its own TopoServer.
-	sourceTopoServer := td.wd.ct.ts
-	if td.wd.ct.externalCluster != "" {
-		extTS, err := td.wd.ct.ts.OpenExternalVitessClusterServer(ctx, td.wd.ct.externalCluster)
-		if err != nil {
-			return err
-		}
-		sourceTopoServer = extTS
+	sourceTopoServer, err := td.wd.getSourceTopoServer()
+	if err != nil {
+		return vterrors.Wrap(err, "failed to get source topo server")
 	}
 	tabletPickerOptions := discovery.TabletPickerOptions{}
 	wg.Add(1)
