@@ -18,6 +18,7 @@ package vschemawrapper
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -275,17 +276,6 @@ func (vw *VSchemaWrapper) FindTableOrVindex(tab sqlparser.TableName) (*vindexes.
 	return vw.Vcursor.FindTableOrVindex(tab)
 }
 
-func (vw *VSchemaWrapper) getfirstKeyspace() (ks *vindexes.Keyspace) {
-	var f string
-	for name, schema := range vw.V.Keyspaces {
-		if f == "" || f > name {
-			f = name
-			ks = schema.Keyspace
-		}
-	}
-	return
-}
-
 func (vw *VSchemaWrapper) getActualKeyspace() string {
 	if vw.Keyspace == nil {
 		return ""
@@ -301,15 +291,24 @@ func (vw *VSchemaWrapper) getActualKeyspace() string {
 }
 
 func (vw *VSchemaWrapper) SelectedKeyspace() (*vindexes.Keyspace, error) {
-	return vw.V.Keyspaces["main"].Keyspace, nil
+	return vw.AnyKeyspace()
 }
 
 func (vw *VSchemaWrapper) AnyKeyspace() (*vindexes.Keyspace, error) {
-	return vw.SelectedKeyspace()
+	ks, found := vw.V.Keyspaces["main"]
+	if found {
+		return ks.Keyspace, nil
+	}
+
+	for _, ks := range vw.V.Keyspaces {
+		return ks.Keyspace, nil
+	}
+
+	return nil, errors.New("no keyspace found in vschema")
 }
 
 func (vw *VSchemaWrapper) FirstSortedKeyspace() (*vindexes.Keyspace, error) {
-	return vw.V.Keyspaces["main"].Keyspace, nil
+	return vw.AnyKeyspace()
 }
 
 func (vw *VSchemaWrapper) TargetString() string {
@@ -344,12 +343,12 @@ func (vw *VSchemaWrapper) IsViewsEnabled() bool {
 
 // FindMirrorRule finds the mirror rule for the requested keyspace, table
 // name, and the tablet type in the VSchema.
-func (vs *VSchemaWrapper) FindMirrorRule(tab sqlparser.TableName) (*vindexes.MirrorRule, error) {
+func (vw *VSchemaWrapper) FindMirrorRule(tab sqlparser.TableName) (*vindexes.MirrorRule, error) {
 	destKeyspace, destTabletType, _, err := topoproto.ParseDestination(tab.Qualifier.String(), topodatapb.TabletType_PRIMARY)
 	if err != nil {
 		return nil, err
 	}
-	mirrorRule, err := vs.V.FindMirrorRule(destKeyspace, tab.Name.String(), destTabletType)
+	mirrorRule, err := vw.V.FindMirrorRule(destKeyspace, tab.Name.String(), destTabletType)
 	if err != nil {
 		return nil, err
 	}
