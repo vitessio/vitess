@@ -1957,6 +1957,7 @@ func TestExternalizeLookupVindex(t *testing.T) {
 		err             string
 		expectedVschema *vschemapb.Keyspace
 		expectStopped   bool
+		expectDeleted   bool
 	}{
 		{
 			request: &vtctldatapb.LookupVindexExternalizeRequest{
@@ -2022,6 +2023,29 @@ func TestExternalizeLookupVindex(t *testing.T) {
 				},
 			},
 			expectStopped: true,
+		},
+		{
+			request: &vtctldatapb.LookupVindexExternalizeRequest{
+				Name:           "owned_lookup",
+				Keyspace:       ms.SourceKeyspace,
+				TableKeyspace:  ms.TargetKeyspace,
+				DeleteWorkflow: true,
+			},
+			vrResponse: ownedRunning,
+			expectedVschema: &vschemapb.Keyspace{
+				Vindexes: map[string]*vschemapb.Vindex{
+					"owned_lookup": {
+						Type: "lookup_unique",
+						Params: map[string]string{
+							"table": "targetks.owned_lookup",
+							"from":  "c1",
+							"to":    "c2",
+						},
+						Owner: "t1",
+					},
+				},
+			},
+			expectDeleted: true,
 		},
 		{
 			request: &vtctldatapb.LookupVindexExternalizeRequest{
@@ -2095,7 +2119,7 @@ func TestExternalizeLookupVindex(t *testing.T) {
 			for _, targetTablet := range targetShards {
 				targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readWorkflow, tcase.request.Name, tenv.dbName), tcase.vrResponse, nil)
 				// Update queries are required only if the Vindex is owned.
-				if len(tcase.expectedVschema.Vindexes) > 0 && tcase.expectedVschema.Vindexes[tcase.request.Name].Owner != "" {
+				if tcase.expectStopped && len(tcase.expectedVschema.Vindexes) > 0 && tcase.expectedVschema.Vindexes[tcase.request.Name].Owner != "" {
 					targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readWorkflowConfig, tcase.request.Name), sqltypes.MakeTestResult(
 						sqltypes.MakeTestFields(
 							"id|source|cell|tablet_types|state|message",
@@ -2107,9 +2131,15 @@ func TestExternalizeLookupVindex(t *testing.T) {
 					targetTablet.vrdbClient.ExpectRequest(`update _vt.vreplication set state = 'Stopped', source = 'keyspace:"sourceks" shard:"0" filter:{rules:{match:"t1" filter:"select * from t1"}}', cell = '', tablet_types = '', message = 'FROZEN' where id in (1)`, &sqltypes.Result{}, nil)
 					targetTablet.vrdbClient.ExpectRequest(`select * from _vt.vreplication where id = 1`, streamsResult, nil)
 				}
+				if tcase.expectDeleted {
+					// We query the workflow again to build the status output when
+					// it's successfully created.
+					targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readWorkflow, tcase.request.Name, tenv.dbName), tcase.vrResponse, nil)
+				}
 			}
 
 			preWorkflowStopCalls := tenv.tmc.workflowStopCalls
+			preWorkflowDeleteCalls := tenv.tmc.workflowDeleteCalls
 			_, err = ws.LookupVindexExternalize(ctx, tcase.request)
 			if tcase.err != "" {
 				if err == nil || !strings.Contains(err.Error(), tcase.err) {
@@ -2123,7 +2153,13 @@ func TestExternalizeLookupVindex(t *testing.T) {
 				// We expect the RPC to be called on each target shard.
 				expectedWorkflowStopCalls = preWorkflowStopCalls + (len(targetShards))
 			}
+			expectedWorkflowDeleteCalls := preWorkflowDeleteCalls
+			if tcase.expectDeleted {
+				// We expect the RPC to be called on each target shard.
+				expectedWorkflowDeleteCalls = preWorkflowDeleteCalls + (len(targetShards))
+			}
 			require.Equal(t, expectedWorkflowStopCalls, tenv.tmc.workflowStopCalls)
+			require.Equal(t, expectedWorkflowDeleteCalls, tenv.tmc.workflowDeleteCalls)
 
 			aftervschema, err := tenv.ts.GetVSchema(ctx, ms.SourceKeyspace)
 			require.NoError(t, err)
