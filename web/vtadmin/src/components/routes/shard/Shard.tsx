@@ -24,12 +24,13 @@ import { WorkspaceTitle } from '../../layout/WorkspaceTitle';
 import { ContentContainer } from '../../layout/ContentContainer';
 import { Tab } from '../../tabs/Tab';
 import { TabContainer } from '../../tabs/TabContainer';
-import { Code } from '../../Code';
 import { useDocumentTitle } from '../../../hooks/useDocumentTitle';
 import { KeyspaceLink } from '../../links/KeyspaceLink';
 import { useKeyspace } from '../../../hooks/api';
 import { ShardTablets } from './ShardTablets';
 import Advanced from './Advanced';
+import JSONViewTree from '../../jsonViewTree/JSONViewTree';
+import { Code } from '../../Code';
 
 interface RouteParams {
     clusterID: string;
@@ -114,6 +115,7 @@ export const Shard = () => {
                 <TabContainer>
                     <Tab text="Tablets" to={`${url}/tablets`} />
                     <Tab text="JSON" to={`${url}/json`} />
+                    <Tab text="JSON Tree" to={`${url}/json_tree`} />
                     <Tab text="Advanced" to={`${url}/advanced`} />
                 </TabContainer>
 
@@ -123,6 +125,7 @@ export const Shard = () => {
                     </Route>
 
                     <Route path={`${path}/json`}>{shard && <Code code={JSON.stringify(shard, null, 2)} />}</Route>
+                    <Route path={`${path}/json_tree`}>{shard && <JSONViewTree data={shard} />}</Route>
                     <Route path={`${path}/advanced`}>
                         <Advanced />
                     </Route>

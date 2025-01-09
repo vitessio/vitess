@@ -400,6 +400,20 @@ func (t *noopVCursor) GetDBDDLPluginName() string {
 	panic("unimplemented")
 }
 
+func (t *noopVCursor) SetLastInsertID(uint64) {}
+func (t *noopVCursor) VExplainLogging()       {}
+func (t *noopVCursor) DisableLogging()        {}
+func (t *noopVCursor) GetVExplainLogs() []ExecuteEntry {
+	return nil
+}
+func (t *noopVCursor) GetLogs() ([]ExecuteEntry, error) {
+	return nil, nil
+}
+
+// RecordMirrorStats implements VCursor.
+func (t *noopVCursor) RecordMirrorStats(sourceExecTime, targetExecTime time.Duration, targetErr error) {
+}
+
 var (
 	_ VCursor        = (*loggingVCursor)(nil)
 	_ SessionActions = (*loggingVCursor)(nil)
@@ -891,20 +905,6 @@ func (t *loggingVCursor) RecordMirrorStats(sourceExecTime, targetExecTime time.D
 	if t.onRecordMirrorStatsFn != nil {
 		t.onRecordMirrorStatsFn(sourceExecTime, targetExecTime, targetErr)
 	}
-}
-
-func (t *noopVCursor) VExplainLogging() {}
-func (t *noopVCursor) DisableLogging()  {}
-func (t *noopVCursor) GetVExplainLogs() []ExecuteEntry {
-	return nil
-}
-
-func (t *noopVCursor) GetLogs() ([]ExecuteEntry, error) {
-	return nil, nil
-}
-
-// RecordMirrorStats implements VCursor.
-func (t *noopVCursor) RecordMirrorStats(sourceExecTime, targetExecTime time.Duration, targetErr error) {
 }
 
 func expectResult(t *testing.T, result, want *sqltypes.Result) {

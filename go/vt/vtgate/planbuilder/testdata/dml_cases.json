@@ -2649,6 +2649,30 @@
     "skip_e2e": true
   },
   {
+    "comment": "insert using last_insert_id with argument (already an e2e test for this plan)",
+    "query": "insert into unsharded values(last_insert_id(789), 2)",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into unsharded values(last_insert_id(789), 2)",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "FetchLastInsertID": true,
+        "Query": "insert into unsharded values (last_insert_id(789), 2)",
+        "TableName": "unsharded"
+      },
+      "TablesUsed": [
+        "main.unsharded"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
     "comment": "update vindex value to null with multiple primary keyspace id",
     "query": "update user set name = null where id in (1, 2, 3)",
     "plan": {

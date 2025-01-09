@@ -174,7 +174,7 @@ func (a *analyzer) newSemTable(
 		Direct:                    a.binder.direct,
 		ExprTypes:                 a.typer.m,
 		Tables:                    a.tables.Tables,
-		Targets:                   a.binder.targets,
+		DMLTargets:                a.binder.targets,
 		NotSingleRouteErr:         a.notSingleRouteErr,
 		NotUnshardedErr:           a.unshardedErr,
 		Warning:                   a.warning,

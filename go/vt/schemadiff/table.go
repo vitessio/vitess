@@ -500,9 +500,14 @@ func (c *CreateTableEntity) IndexDefinitionEntities() []*IndexDefinitionEntity {
 	keys := c.CreateTable.TableSpec.Indexes
 	entities := make([]*IndexDefinitionEntity, len(keys))
 	for i, key := range keys {
-		colEntities := make([]*ColumnDefinitionEntity, len(key.Columns))
-		for i, keyCol := range key.Columns {
-			colEntities[i] = colMap[keyCol.Column.Lowered()]
+		colEntities := []*ColumnDefinitionEntity{}
+		for _, keyCol := range key.Columns {
+			colEntity, ok := colMap[keyCol.Column.Lowered()]
+			if !ok {
+				// This can happen if the index is on an expression, e.g. `KEY idx1 ((id + 1))`.
+				continue
+			}
+			colEntities = append(colEntities, colEntity)
 		}
 		entities[i] = NewIndexDefinitionEntity(c.Env, key, NewColumnDefinitionEntityList(colEntities))
 	}
