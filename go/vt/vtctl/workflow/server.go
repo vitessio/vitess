@@ -128,7 +128,6 @@ const (
 	// Time to wait between LOCK TABLES cycles on the sources during SwitchWrites.
 	lockTablesCycleDelay = time.Duration(100 * time.Millisecond)
 
-	SqlFreezeWorkflow   = "update _vt.vreplication set message = 'FROZEN' where db_name=%s and workflow=%s"
 	SqlUnfreezeWorkflow = "update _vt.vreplication set state='Running', message='' where db_name=%s and workflow=%s"
 )
 
@@ -725,7 +724,7 @@ func (s *Server) LookupVindexExternalize(ctx context.Context, req *vtctldatapb.L
 			}
 			resp.WorkflowDeleted = true
 		} else {
-			// Stop the workflow.
+			// Freeze the workflow.
 			err = forAllShards(targetShards, func(si *topo.ShardInfo) error {
 				tabletInfo, err := s.ts.GetTablet(ctx, si.PrimaryAlias)
 				if err != nil {
@@ -734,14 +733,12 @@ func (s *Server) LookupVindexExternalize(ctx context.Context, req *vtctldatapb.L
 				_, err = s.tmc.UpdateVReplicationWorkflow(ctx, tabletInfo.Tablet, &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
 					Workflow: req.Name,
 					State:    ptr.Of(binlogdatapb.VReplicationWorkflowState_Stopped),
+					Message:  ptr.Of(Frozen),
 				})
 				if err != nil {
 					return vterrors.Wrapf(err, "failed to stop workflow %s on shard %s/%s", req.Name, tabletInfo.Keyspace, tabletInfo.Shard)
 				}
-				// Mark workflow as frozen.
-				query := fmt.Sprintf(SqlFreezeWorkflow, encodeString(tabletInfo.DbName()), encodeString(req.Name))
-				_, err = s.tmc.VReplicationExec(ctx, tabletInfo.Tablet, query)
-				return err
+				return nil
 			})
 			if err != nil {
 				return nil, err

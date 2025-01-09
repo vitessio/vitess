@@ -34161,6 +34161,9 @@ export namespace tabletmanagerdata {
 
         /** UpdateVReplicationWorkflowRequest config_overrides */
         config_overrides?: ({ [k: string]: string }|null);
+
+        /** UpdateVReplicationWorkflowRequest message */
+        message?: (string|null);
     }
 
     /** Represents an UpdateVReplicationWorkflowRequest. */
@@ -34193,6 +34196,9 @@ export namespace tabletmanagerdata {
         /** UpdateVReplicationWorkflowRequest config_overrides. */
         public config_overrides: { [k: string]: string };
 
+        /** UpdateVReplicationWorkflowRequest message. */
+        public message?: (string|null);
+
         /** UpdateVReplicationWorkflowRequest _tablet_selection_preference. */
         public _tablet_selection_preference?: "tablet_selection_preference";
 
@@ -34201,6 +34207,9 @@ export namespace tabletmanagerdata {
 
         /** UpdateVReplicationWorkflowRequest _state. */
         public _state?: "state";
+
+        /** UpdateVReplicationWorkflowRequest _message. */
+        public _message?: "message";
 
         /**
          * Creates a new UpdateVReplicationWorkflowRequest instance using the specified properties.
