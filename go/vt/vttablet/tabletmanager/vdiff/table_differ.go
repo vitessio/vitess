@@ -20,10 +20,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"time"
 
+	"golang.org/x/exp/maps"
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -194,7 +196,7 @@ func (td *tableDiffer) stopTargetVReplicationStreams(ctx context.Context, dbClie
 			return fmt.Errorf("stream %d has not started on tablet %v",
 				id, td.wd.ct.vde.thisTablet.Alias)
 		}
-		sourceBytes, err := row["source"].ToBytes()
+		sourceBytes, err := row[source].ToBytes()
 		if err != nil {
 			return err
 		}
@@ -520,8 +522,8 @@ func (td *tableDiffer) diff(ctx context.Context, coreOpts *tabletmanagerdatapb.V
 	}
 	dr.TableName = td.table.Name
 
-	sourceExecutor := newPrimitiveExecutor(ctx, td.sourcePrimitive, "source")
-	targetExecutor := newPrimitiveExecutor(ctx, td.targetPrimitive, "target")
+	sourceExecutor := newPrimitiveExecutor(ctx, td.sourcePrimitive, source)
+	targetExecutor := newPrimitiveExecutor(ctx, td.targetPrimitive, target)
 	var sourceRow, lastProcessedRow, targetRow []sqltypes.Value
 	advanceSource := true
 	advanceTarget := true
@@ -736,17 +738,19 @@ func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, dr *D
 	} else {
 		var lastSourcePK, lastTargetPK []byte
 		lastPK := make(map[string]string, 2)
-		if lastRow != nil {
-			lastSourcePK, err = td.lastSourcePKFromRow(lastRow)
+		lastTargetPK, err = td.lastPKFromRow(lastRow, td.tablePlan.pkCols)
+		if err != nil {
+			return err
+		}
+		lastPK[target] = string(lastTargetPK)
+		if len(td.tablePlan.sourcePkCols) == 0 || slices.Equal(td.tablePlan.sourcePkCols, td.tablePlan.pkCols) {
+			lastPK[source] = string(lastTargetPK)
+		} else {
+			lastSourcePK, err = td.lastPKFromRow(lastRow, td.tablePlan.sourcePkCols)
 			if err != nil {
 				return err
 			}
-			lastPK["source"] = string(lastSourcePK)
-			lastTargetPK, err = td.lastTargetPKFromRow(lastRow)
-			if err != nil {
-				return err
-			}
-			lastPK["target"] = string(lastTargetPK)
+			lastPK[source] = string(lastSourcePK)
 		}
 		if td.wd.opts.CoreOptions.MaxDiffSeconds > 0 {
 			// Update the in-memory lastPK as well so that we can restart the table
@@ -761,12 +765,10 @@ func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, dr *D
 			}
 			td.lastTargetPK = lastTargetPKPB
 		}
-		//log.Errorf("DEBUG: updateTableProgress lastPK map: %v", lastPK)
 		lastPKJS, err := json.Marshal(lastPK)
 		if err != nil {
 			return err
 		}
-		//log.Errorf("DEBUG: updateTableProgress lastPK JSON: %v", lastPKJS)
 		query, err = sqlparser.ParseAndBind(sqlUpdateTableProgress,
 			sqltypes.Int64BindVariable(dr.ProcessedRows),
 			sqltypes.StringBindVariable(string(lastPKJS)),
@@ -845,31 +847,11 @@ func updateTableMismatch(dbClient binlogplayer.DBClient, vdiffID int64, table st
 	return nil
 }
 
-func (td *tableDiffer) lastTargetPKFromRow(row []sqltypes.Value) ([]byte, error) {
-	pkColCnt := len(td.tablePlan.pkCols)
+func (td *tableDiffer) lastPKFromRow(row []sqltypes.Value, pkCols []int) ([]byte, error) {
+	pkColCnt := len(pkCols)
 	pkFields := make([]*querypb.Field, pkColCnt)
 	pkVals := make([]sqltypes.Value, pkColCnt)
-	for i, colIndex := range td.tablePlan.pkCols {
-		pkFields[i] = td.tablePlan.table.Fields[colIndex]
-		pkVals[i] = row[colIndex]
-	}
-	buf, err := prototext.Marshal(&querypb.QueryResult{
-		Fields: pkFields,
-		Rows:   []*querypb.Row{sqltypes.RowToProto3(pkVals)},
-	})
-	return buf, err
-}
-
-func (td *tableDiffer) lastSourcePKFromRow(row []sqltypes.Value) ([]byte, error) {
-	if len(td.tablePlan.sourcePkCols) == 0 {
-		// If there are no PKs on the source then we use
-		// the same PK[E] columns as the target.
-		td.tablePlan.sourcePkCols = td.tablePlan.pkCols
-	}
-	pkColCnt := len(td.tablePlan.sourcePkCols)
-	pkFields := make([]*querypb.Field, pkColCnt)
-	pkVals := make([]sqltypes.Value, pkColCnt)
-	for i, colIndex := range td.tablePlan.sourcePkCols {
+	for i, colIndex := range pkCols {
 		pkFields[i] = td.tablePlan.table.Fields[colIndex]
 		pkVals[i] = row[colIndex]
 	}
@@ -924,6 +906,49 @@ func (td *tableDiffer) adjustForSourceTimeZone(targetSelectExprs sqlparser.Selec
 		return newSelectExprs
 	}
 	return targetSelectExprs
+}
+
+// getSourcePKCols populates the sourcePkCols field in the tablePlan.
+// We need this information in order to save the lastpk value for the
+// source as the PK columns may differ between the source and target.
+func (td *tableDiffer) getSourcePKCols() error {
+	ctx, cancel := context.WithTimeout(td.wd.ct.vde.ctx, topo.RemoteOperationTimeout*3)
+	defer cancel()
+	// We use the first sourceShard as all of them should have the same schema.
+	sourceShardName := maps.Keys(td.wd.ct.sources)[0]
+	sourceTS, err := td.wd.getSourceTopoServer()
+	if err != nil {
+		return vterrors.Wrap(err, "failed to get source topo server")
+	}
+	sourceShard, err := sourceTS.GetShard(ctx, td.wd.ct.sourceKeyspace, sourceShardName)
+	if err != nil {
+		return err
+	}
+	if sourceShard.PrimaryAlias == nil {
+		return fmt.Errorf("source shard %s has no primary", sourceShardName)
+	}
+	sourceTablet, err := sourceTS.GetTablet(ctx, sourceShard.PrimaryAlias)
+	if err != nil {
+		return fmt.Errorf("failed to get source shard %s primary", sourceShardName)
+	}
+	sourceSchema, err := td.wd.ct.tmc.GetSchema(ctx, sourceTablet.Tablet, &tabletmanagerdatapb.GetSchemaRequest{
+		Tables: []string{td.table.Name},
+	})
+	if err != nil {
+		return err
+	}
+	sourceTable := sourceSchema.TableDefinitions[0]
+	sourcePKColumns := make(map[string]struct{}, len(sourceTable.PrimaryKeyColumns))
+	td.tablePlan.sourcePkCols = make([]int, 0, len(sourceTable.PrimaryKeyColumns))
+	for _, pkc := range sourceTable.PrimaryKeyColumns {
+		sourcePKColumns[pkc] = struct{}{}
+	}
+	for i, pkc := range td.table.PrimaryKeyColumns {
+		if _, ok := sourcePKColumns[pkc]; ok {
+			td.tablePlan.sourcePkCols = append(td.tablePlan.sourcePkCols, i)
+		}
+	}
+	return nil
 }
 
 func getColumnNameForSelectExpr(selectExpression sqlparser.SelectExpr) (string, error) {

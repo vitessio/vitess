@@ -26,7 +26,6 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/exp/maps"
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -47,6 +46,11 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+)
+
+const (
+	source = "source"
+	target = "target"
 )
 
 // workflowDiffer has metadata and state for the vdiff of a single workflow on this tablet
@@ -379,8 +383,8 @@ func (wd *workflowDiffer) buildPlan(dbClient binlogplayer.DBClient, filter *binl
 		if err != nil {
 			return err
 		}
-		td.lastSourcePK = lastPK["source"]
-		td.lastTargetPK = lastPK["target"]
+		td.lastSourcePK = lastPK[source]
+		td.lastTargetPK = lastPK[target]
 		wd.tableDiffers[table.Name] = td
 		if _, err := td.buildTablePlan(dbClient, wd.ct.vde.dbName, wd.collationEnv); err != nil {
 			return err
@@ -388,42 +392,9 @@ func (wd *workflowDiffer) buildPlan(dbClient binlogplayer.DBClient, filter *binl
 
 		// We get the PK columns from the source schema as well, as they can
 		// differ and determine the proper lastPK to use when saving progress.
-		// We use the first sourceShard as all of them should have the same schema.
-		sourceShardName := maps.Keys(wd.ct.sources)[0]
-		sourceTS, err := wd.getSourceTopoServer()
-		if err != nil {
-			return vterrors.Wrap(err, "failed to get source topo server")
-		}
-		sourceShard, err := sourceTS.GetShard(wd.ct.vde.ctx, wd.ct.sourceKeyspace, sourceShardName)
-		if err != nil {
+		if err := td.getSourcePKCols(); err != nil {
 			return err
 		}
-		if sourceShard.PrimaryAlias == nil {
-			return fmt.Errorf("source shard %s has no primary", sourceShardName)
-		}
-		sourceTablet, err := sourceTS.GetTablet(wd.ct.vde.ctx, sourceShard.PrimaryAlias)
-		if err != nil {
-			return fmt.Errorf("failed to get source shard %s primary", sourceShardName)
-		}
-		sourceSchema, err := wd.ct.tmc.GetSchema(wd.ct.vde.ctx, sourceTablet.Tablet, &tabletmanagerdatapb.GetSchemaRequest{
-			Tables: []string{table.Name},
-		})
-		if err != nil {
-			return err
-		}
-		//log.Errorf("DEBUG: sourceTable.PrimaryKeyColumns: %v", sourceSchema.TableDefinitions[0].PrimaryKeyColumns)
-		sourcePKColumns := make(map[string]struct{}, len(sourceSchema.TableDefinitions[0].PrimaryKeyColumns))
-		td.tablePlan.sourcePkCols = make([]int, 0, len(sourceSchema.TableDefinitions[0].PrimaryKeyColumns))
-		for _, pkc := range sourceSchema.TableDefinitions[0].PrimaryKeyColumns {
-			sourcePKColumns[pkc] = struct{}{}
-		}
-		//log.Errorf("DEBUG: sourcePKColumns: %v", sourcePKColumns)
-		for i, pkc := range table.PrimaryKeyColumns {
-			if _, ok := sourcePKColumns[pkc]; ok {
-				td.tablePlan.sourcePkCols = append(td.tablePlan.sourcePkCols, i)
-			}
-		}
-		//log.Errorf("DEBUG: td.tablePlan.sourcePkCols: %v", td.tablePlan.sourcePkCols)
 	}
 	if len(wd.tableDiffers) == 0 {
 		return fmt.Errorf("no tables found to diff, %s:%s, on tablet %v",
@@ -456,14 +427,12 @@ func (wd *workflowDiffer) getTableLastPK(dbClient binlogplayer.DBClient, tableNa
 			if err := json.Unmarshal(lastpk, &lastPK); err != nil {
 				return nil, vterrors.Wrapf(err, "failed to unmarshal lastpk JSON for table %s", tableName)
 			}
-			//log.Errorf("DEBUG: getTabletLastPK lastPKBytes: %v", lastPK)
 			for k, v := range lastPK {
 				lastPKResults[k] = &querypb.QueryResult{}
 				if err := prototext.Unmarshal([]byte(v), lastPKResults[k]); err != nil {
 					return nil, vterrors.Wrapf(err, "failed to unmarshal lastpk QueryResult for table %s", tableName)
 				}
 			}
-			//log.Errorf("DEBUG: getTabletLastPK lastPKRResults: %v", lastPKResults)
 			return lastPKResults, nil
 		}
 	}
@@ -549,5 +518,7 @@ func (wd *workflowDiffer) getSourceTopoServer() (*topo.Server, error) {
 	if wd.ct.externalCluster == "" {
 		return wd.ct.ts, nil
 	}
-	return wd.ct.ts.OpenExternalVitessClusterServer(wd.ct.vde.ctx, wd.ct.externalCluster)
+	ctx, cancel := context.WithTimeout(wd.ct.vde.ctx, topo.RemoteOperationTimeout)
+	defer cancel()
+	return wd.ct.ts.OpenExternalVitessClusterServer(ctx, wd.ct.externalCluster)
 }
