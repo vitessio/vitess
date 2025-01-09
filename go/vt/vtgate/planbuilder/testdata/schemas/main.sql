@@ -1,26 +1,44 @@
-CREATE TABLE `unsharded` (
-    `id`     INT NOT NULL PRIMARY KEY,
-    `col`    VARCHAR(255) DEFAULT NULL,
-    `col1`   VARCHAR(255) DEFAULT NULL,
-    `col2`   VARCHAR(255) DEFAULT NULL,
-    `name`   VARCHAR(255) DEFAULT NULL,
-    `baz`    INT
+CREATE TABLE `unsharded`
+(
+    `id`   INT NOT NULL PRIMARY KEY,
+    `col`  VARCHAR(255) DEFAULT NULL,
+    `col1` VARCHAR(255) DEFAULT NULL,
+    `col2` VARCHAR(255) DEFAULT NULL,
+    `name` VARCHAR(255) DEFAULT NULL,
+    `baz`  INT
 );
 
-CREATE TABLE `unsharded_auto` (
+CREATE TABLE `unsharded_auto`
+(
     `id`   INT NOT NULL PRIMARY KEY,
     `col1` VARCHAR(255) DEFAULT NULL,
     `col2` VARCHAR(255) DEFAULT NULL
 );
 
-CREATE TABLE `unsharded_a` (
+CREATE TABLE `unsharded_a`
+(
     `id`   INT NOT NULL PRIMARY KEY,
     `col`  VARCHAR(255) DEFAULT NULL,
     `name` VARCHAR(255) DEFAULT NULL
 );
 
-CREATE TABLE `unsharded_b` (
+CREATE TABLE `unsharded_b`
+(
     `id`   INT NOT NULL PRIMARY KEY,
     `col`  VARCHAR(255) DEFAULT NULL,
+    `name` VARCHAR(255) DEFAULT NULL
+);
+
+CREATE TABLE `source_of_ref`
+(
+    `id`  INT NOT NULL PRIMARY KEY,
+    `col` VARCHAR(255) DEFAULT NULL,
+    `tt`  BIGINT       DEFAULT NULL
+);
+
+CREATE TABLE `rerouted_ref`
+(
+    `id`   INT NOT NULL PRIMARY KEY,
+    `ref_col`  VARCHAR(255) DEFAULT NULL,
     `name` VARCHAR(255) DEFAULT NULL
 );

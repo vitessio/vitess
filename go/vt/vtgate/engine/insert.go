@@ -58,11 +58,9 @@ type Insert struct {
 
 	// Alias represents the row alias with columns if specified in the query.
 	Alias string
-
-	FetchLastInsertID bool
 }
 
-// newQueryInsert creates an Insert with a query string.
+// newQueryInsert creates an Insert with a query string. Used in testing.
 func newQueryInsert(opcode InsertOpcode, keyspace *vindexes.Keyspace, query string) *Insert {
 	return &Insert{
 		InsertCommon: InsertCommon{
@@ -73,7 +71,7 @@ func newQueryInsert(opcode InsertOpcode, keyspace *vindexes.Keyspace, query stri
 	}
 }
 
-// newInsert creates a new Insert.
+// newInsert creates a new Insert. Used in testing.
 func newInsert(
 	opcode InsertOpcode,
 	ignore bool,

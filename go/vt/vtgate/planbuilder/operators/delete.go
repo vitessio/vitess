@@ -124,7 +124,7 @@ func createDeleteWithInputOp(ctx *plancontext.PlanningContext, del *sqlparser.De
 	}
 
 	var delOps []dmlOp
-	for _, target := range ctx.SemTable.Targets.Constituents() {
+	for _, target := range ctx.SemTable.DMLTargets.Constituents() {
 		op := createDeleteOpWithTarget(ctx, target, del.Ignore)
 		delOps = append(delOps, op)
 	}
@@ -322,7 +322,7 @@ func updateQueryGraphWithSource(ctx *plancontext.PlanningContext, input Operator
 			return op, NoRewrite
 		}
 		if len(qg.Tables) > 1 {
-			panic(vterrors.VT12001("DELETE on reference table with join"))
+			panic(vterrors.VT12001("DML on reference table with join"))
 		}
 		for _, tbl := range qg.Tables {
 			if tbl.ID != tblID {

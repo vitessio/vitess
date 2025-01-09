@@ -604,7 +604,7 @@
 			"Manual": false,
 			"Shard": "vtgate_queries",
 			"RetryMax": 2,
-			"Tags": ["upgrade_downgrade_query_serving_queries"]
+			"Tags": ["upgrade_downgrade_query_serving_queries_2"]
 		},
 		"vtgate_queries_subquery": {
 			"File": "unused.go",
@@ -613,7 +613,7 @@
 			"Manual": false,
 			"Shard": "vtgate_queries",
 			"RetryMax": 2,
-			"Tags": ["upgrade_downgrade_query_serving_queries"]
+			"Tags": ["upgrade_downgrade_query_serving_queries_2"]
 		},
 		"vtgate_queries_union": {
 			"File": "unused.go",
@@ -622,7 +622,7 @@
 			"Manual": false,
 			"Shard": "vtgate_queries",
 			"RetryMax": 2,
-			"Tags": ["upgrade_downgrade_query_serving_queries"]
+			"Tags": ["upgrade_downgrade_query_serving_queries_2"]
 		},
 		"vtgate_queries_insert": {
 			"File": "unused.go",
@@ -631,7 +631,7 @@
 			"Manual": false,
 			"Shard": "vtgate_queries",
 			"RetryMax": 2,
-			"Tags": ["upgrade_downgrade_query_serving_queries"]
+			"Tags": ["upgrade_downgrade_query_serving_queries_2"]
 		},
 		"vtgate_queries_vexplain": {
 			"File": "unused.go",
@@ -640,7 +640,7 @@
 			"Manual": false,
 			"Shard": "vtgate_queries",
 			"RetryMax": 2,
-			"Tags": ["upgrade_downgrade_query_serving_queries"]
+			"Tags": ["upgrade_downgrade_query_serving_queries_2"]
 		},
 		"vtgate_queries_reference": {
 			"File": "unused.go",
@@ -649,7 +649,7 @@
 			"Manual": false,
 			"Shard": "vtgate_queries",
 			"RetryMax": 1,
-			"Tags": ["upgrade_downgrade_query_serving_queries"]
+			"Tags": ["upgrade_downgrade_query_serving_queries_2"]
 		},
 		"vtgate_queries_random": {
 			"File": "unused.go",
@@ -658,7 +658,7 @@
 			"Manual": false,
 			"Shard": "vtgate_queries",
 			"RetryMax": 1,
-			"Tags": ["upgrade_downgrade_query_serving_queries"]
+			"Tags": ["upgrade_downgrade_query_serving_queries_2"]
 		},
 		"vtgate_kill": {
 			"File": "unused.go",
@@ -667,7 +667,7 @@
 			"Manual": false,
 			"Shard": "vtgate_queries",
 			"RetryMax": 1,
-			"Tags": ["upgrade_downgrade_query_serving_queries"]
+			"Tags": ["upgrade_downgrade_query_serving_queries_2"]
 		},
 		"vtgate_concurrentdml": {
 			"File": "unused.go",
