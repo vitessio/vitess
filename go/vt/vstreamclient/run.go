@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"os/signal"
 	"slices"
 	"time"
 
@@ -31,12 +33,12 @@ type EventFunc func(ctx context.Context, event *binlogdatapb.VEvent) error
 type FlushFunc func(ctx context.Context, rows []Row, meta FlushMeta) error
 
 // Row is the data structure that will be passed to the FlushFunc. It contains the row event, the row change,
-// and the scanned data itself. The data will be the type registered for the table, unless it is a delete event, in
-// which case it will be nil.
+// and the scanned data itself. The data will be the type registered for the table; for delete events, it will be
+// populated from the "before" image of the row.
 type Row struct {
 	RowEvent  *binlogdatapb.RowEvent
 	RowChange *binlogdatapb.RowChange
-	Data      any // will be populated as the data type registered for the table, unless it is a delete event
+	Data      any // populated as the data type registered for the table; for delete events, built from the "before" image
 }
 
 // FlushMeta is the metadata that is passed to the FlushFunc. It's not necessary, but might be useful
@@ -49,15 +51,70 @@ type FlushMeta struct {
 	VStreamStats VStreamStats
 
 	LatestVGtid *binlogdatapb.VGtid
+	FlushReason FlushReason
 }
 
-// Run starts the vstream, processing events from the stream until it ends or an error occurs.
-func (v *VStreamClient) Run(ctx context.Context) error {
-	// make a cancelable context, so the heartbeat monitor can cancel the stream if necessary
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
+type FlushReason int8
 
-	go v.monitorHeartbeat(ctx, cancel)
+const (
+	FlushReasonNone             FlushReason = 1
+	FlushReasonForced           FlushReason = 2
+	FlushReasonMinDuration      FlushReason = 3
+	FlushReasonMaxRowsPerFlush  FlushReason = 4
+	FlushReasonGracefulShutdown FlushReason = 5
+)
+
+func (r FlushReason) String() string {
+	switch r {
+	case FlushReasonNone:
+		return "none"
+	case FlushReasonForced:
+		return "forced"
+	case FlushReasonMinDuration:
+		return "minDuration"
+	case FlushReasonMaxRowsPerFlush:
+		return "maxRows"
+	case FlushReasonGracefulShutdown:
+		return "gracefulShutdown"
+	default:
+		panic(fmt.Sprintf("unknown FlushReason: %d", r))
+	}
+}
+
+// Run starts the VStream and processes events until the stream ends or an error occurs.
+// A VStreamClient is single-use: after any Run call returns, create a new client for the next attempt.
+//
+// Run returns an error in these cases:
+//   - Run is called on a client that was already used by a previous Run attempt
+//   - the underlying VStream recv loop fails
+//   - the context is canceled or times out while Run is still active
+//   - a registered event hook returns an error
+//   - row decoding or table lookup fails
+//   - FlushFn returns an error
+//   - checkpoint state updates fail
+func (v *VStreamClient) Run(ctx context.Context) error {
+	if v.isClosing.Load() {
+		return errors.New("vstreamclient: client is closed; create a new client for each Run attempt")
+	}
+	defer v.isClosing.Store(true)
+
+	// make a cancelable context for GracefulShutdown to use, so it can signal the Run loop to exit
+	ctx, v.cancelRunCtxFn = context.WithCancel(ctx)
+	defer v.cancelRunCtxFn()
+
+	// initialize the streamer
+	var err error
+	v.reader, err = v.conn.VStream(ctx, v.tabletType, v.latestVgtid, v.filter, v.flags)
+	if err != nil {
+		return fmt.Errorf("vstreamclient: failed to create vstream: %w", err)
+	}
+
+	go v.listenForGracefulShutdown(ctx)
+
+	go v.monitorHeartbeat(ctx)
+
+	// to prevent an immediate flush, we initialize LastFlushedAt here, even if it wasn't technically flushed
+	v.stats.LastFlushedAt = time.Now()
 
 	// ********************************************************************************************************
 	// Event Processing
@@ -68,124 +125,227 @@ func (v *VStreamClient) Run(ctx context.Context) error {
 	for {
 		// events come in batches, depending on how busy the keyspace is. This is where the network communication
 		// happens, so it's the most likely place for errors to occur.
-		events, err := v.reader.Recv()
+		var events []*binlogdatapb.VEvent
+		events, err = v.reader.Recv()
 		switch {
 		case err == nil: // no error, continue processing below
 
 		case errors.Is(err, io.EOF):
-			fmt.Println("vstreamclient: stream ended")
 			return nil
 
 		default:
 			return fmt.Errorf("vstreamclient: remote error: %w", err)
 		}
 
-		for _, ev := range events {
-			// check for context errors before processing the next event, since any processing will likely be wasted
-			err = ctx.Err()
+		err = v.handleEvents(ctx, events)
+		if err != nil {
+			return err
+		}
+
+		// this is also checked inside of handleEvents, but in case the flush function takes a long time, we'll check
+		// here as well to make sure we can exit in a timely manner during shutdown or if the context is canceled
+		// while processing events.
+		var shouldExit bool
+		shouldExit, err = v.shouldExitRun(ctx)
+		if err != nil {
+			return err
+		}
+		if shouldExit {
+			return nil
+		}
+	}
+}
+
+func (v *VStreamClient) shouldExitRun(ctx context.Context) (bool, error) {
+	// the select cases are executed separately, because if both the graceful shutdown flush channel is closed and
+	// the context is canceled, we want to check the graceful shutdown first. That means we can exit without
+	// returning an error, whereas if the context is canceled, we want to return the context error. They'll often both
+	// happen around the same time, in which case the select would choose pseudo-randomly between the two.
+
+	select {
+	// if we enter this case, that means the last flush completed during the shutdown process, and closed
+	// the channel, so we can exit immediately without processing any more events. This is the happy
+	// path for graceful shutdown, since we were able to flush all buffered data
+	case <-v.gracefulShutdownFlushChan:
+		return true, nil
+
+	default:
+	}
+
+	select {
+	// since any processing will likely be wasted, return early if the context is already done
+	case <-ctx.Done():
+		return true, ctx.Err()
+
+	default:
+	}
+
+	return false, nil
+}
+
+func (v *VStreamClient) handleEvents(ctx context.Context, events []*binlogdatapb.VEvent) error {
+	// if event processing / flushing takes longer than the heartbeat timeout, the heartbeat monitor might trigger
+	// and cancel the context, since no events are processed during that time. This technically leaves a tiny race
+	// condition between defer running and the next Recv happening in the Run() loop, but trying to make that
+	// perfect would add a lot of complexity, and the window is very small.
+	v.isProcessingEvents.Store(true)
+	defer func() {
+		// keep track of the last event time for heartbeat monitoring. We're purposefully not using the event
+		// timestamp, since that would cause cancellation if the stream was copying, delayed, or lagging.
+		v.lastEventProcessedAtUnixNano.Store(time.Now().UnixNano())
+		v.isProcessingEvents.Store(false)
+	}()
+
+	for _, ev := range events {
+		shouldExit, err := v.shouldExitRun(ctx)
+		if err != nil {
+			return err
+		}
+		if shouldExit {
+			return nil
+		}
+
+		// call the user-defined event function if it exists
+		fn, ok := v.eventFuncs[ev.Type]
+		if ok {
+			err = fn(ctx, ev)
 			if err != nil {
-				return fmt.Errorf("vstreamclient: context error: %w", err)
+				return fmt.Errorf("vstreamclient: user error processing %s event: %w", ev.Type.String(), err)
+			}
+		}
+
+		// handle individual events based on their type
+		switch ev.Type {
+		// field events are sent first and contain schema information for any tables that are being streamed,
+		// so we cache the fields for each table as they come in
+		case binlogdatapb.VEventType_FIELD:
+			var table *TableConfig
+			table, err = v.lookupTable(ev.FieldEvent.TableName)
+			if err != nil {
+				return err
 			}
 
-			// keep track of the last event time for heartbeat monitoring. We're purposefully not using the event
-			// timestamp, since that would cause cancellation if the stream was copying, delayed, or lagging.
-			v.lastEventReceivedAtUnix.Store(time.Now().Unix())
-
-			// call the user-defined event function, if it exists
-			fn, ok := v.eventFuncs[ev.Type]
-			if ok {
-				err = fn(ctx, ev)
-				if err != nil {
-					return fmt.Errorf("vstreamclient: user error processing %s event: %w", ev.Type.String(), err)
-				}
+			err = table.handleFieldEvent(ev.FieldEvent)
+			if err != nil {
+				return err
 			}
 
-			// handle individual events based on their type
-			switch ev.Type {
-			// field events are sent first, and contain schema information for any tables that are being streamed,
-			// so we cache the fields for each table as they come in
-			case binlogdatapb.VEventType_FIELD:
-				var table *TableConfig
-				table, ok = v.tables[ev.FieldEvent.TableName]
-				if !ok {
-					return errors.New("vstreamclient: unexpected table name: " + ev.FieldEvent.TableName)
-				}
+		// row events are the actual data changes, and we'll process them based on the table name
+		case binlogdatapb.VEventType_ROW:
+			var table *TableConfig
+			table, err = v.lookupTable(ev.RowEvent.TableName)
+			if err != nil {
+				return err
+			}
 
-				err = table.handleFieldEvent(ev.FieldEvent)
+			err = table.handleRowEvent(ev.RowEvent, &v.stats)
+			if err != nil {
+				return err
+			}
+
+		// vgtid events are sent periodically, and we'll store the latest vgtid for checkpointing. We may get
+		// this mid-transaction, so we don't flush here, so we don't propagate a partial transaction that may
+		// be rolled back.
+		case binlogdatapb.VEventType_VGTID:
+			v.latestVgtid = ev.Vgtid
+
+		// commit and other events are safe to flush on, since they indicate the end of a transaction.
+		// Otherwise, there's not much to do with these events.
+		case binlogdatapb.VEventType_COMMIT, binlogdatapb.VEventType_OTHER:
+			// only flush when we have an event that guarantees we're not flushing mid-transaction
+			err = v.flush(ctx, false)
+			if err != nil {
+				return err
+			}
+
+		// DDL events are schema changes, and we might want to handle them differently than data events.
+		// They are safe to flush on, since they indicate the end of a transaction. If you want to
+		// transparently adjust the destination schema based on DDL events, you would do that here.
+		case binlogdatapb.VEventType_DDL:
+			err = v.flush(ctx, false)
+			if err != nil {
+				return err
+			}
+
+		// COPY_COMPLETED events come through once per keyspace/shard, and an additional fully completed event
+		// as noted in go/vt/vtgate/endtoend/vstream_test.go:951.
+		// "The arrival order of COPY_COMPLETED events with keyspace/shard is not constant.
+		// On the other hand, the last event should always be a fully COPY_COMPLETED event."
+		case binlogdatapb.VEventType_COPY_COMPLETED:
+			if isFinalCopyCompletedEvent(ev) {
+				// The final copy boundary must checkpoint any buffered copy rows before
+				// we persist copy_completed, or a crash can drop them permanently.
+				err = v.flush(ctx, true)
 				if err != nil {
 					return err
 				}
-
-			// row events are the actual data changes, and we'll process them based on the table name
-			case binlogdatapb.VEventType_ROW:
-				var table *TableConfig
-				table, ok = v.tables[ev.RowEvent.TableName]
-				if !ok {
-					return errors.New("vstreamclient: unexpected table name: " + ev.FieldEvent.TableName)
-				}
-
-				err = table.handleRowEvent(ev.RowEvent, &v.stats)
-				if err != nil {
-					return err
-				}
-
-			// vgtid events are sent periodically, and we'll store the latest vgtid for checkpointing. We may get
-			// this mid-transaction, so we don't flush here, so we don't propagate a partial transaction that may
-			// be rolled back.
-			case binlogdatapb.VEventType_VGTID:
-				v.latestVgtid = ev.Vgtid
-
-			// commit and other events are safe to flush on, since they indicate the end of a transaction.
-			// Otherwise, there's not much to do with these events.
-			case binlogdatapb.VEventType_COMMIT, binlogdatapb.VEventType_OTHER:
-				// only flush when we have an event that guarantees we're not flushing mid-transaction
-				err = v.flush(ctx)
-				if err != nil {
-					return err
-				}
-
-			// DDL events are schema changes, and we might want to handle them differently than data events.
-			// They are safe to flush on, since they indicate the end of a transaction. If you want to
-			// transparently adjust the destination schema based on DDL events, you would do that here.
-			case binlogdatapb.VEventType_DDL:
-				err = v.flush(ctx)
-				if err != nil {
-					return err
-				}
-
-			case binlogdatapb.VEventType_COPY_COMPLETED:
-				// TODO: don't flush until the copy is completed? do some sort of cleanup if we haven't received this?
 
 				err = setCopyCompleted(ctx, v.session, v.name, v.vgtidStateKeyspace, v.vgtidStateTable)
 				if err != nil {
 					return err
 				}
-
-			// heartbeat events are sent periodically, if the source keyspace is idle and there are no other events.
-			// It's possible that there is still buffered data that hadn't exceeded the min duration or max rows
-			// thresholds the last time flush was called. Most of the time, that won't be the case, but flush will
-			// check for that and only run if necessary.
-			case binlogdatapb.VEventType_HEARTBEAT:
-				err = v.flush(ctx)
-				if err != nil {
-					return err
-				}
-
-			// even if there are no changes to the tables being streamed, we'll still get a begin, vgtid, and commit
-			// event for each transaction. The other two are used for checkpoints, but nothing to do here.
-			case binlogdatapb.VEventType_BEGIN:
-
-			// journal events are sent on resharding. Unless you are manually targeting shards, vstream should
-			// transparently handle resharding for you, so you shouldn't need to do anything with these events.
-			// You might want to log them for debugging purposes, or to alert on resharding events in case
-			// something goes wrong. After resharding, if the pre-reshard vgtid is no longer valid, you may need
-			// to restart the stream from the beginning.
-			case binlogdatapb.VEventType_JOURNAL:
-
-			// there aren't strong cases for handling these events, but you might want to log them for debugging
-			case binlogdatapb.VEventType_VERSION, binlogdatapb.VEventType_LASTPK, binlogdatapb.VEventType_SAVEPOINT:
 			}
+
+		// heartbeat events are sent periodically if the source keyspace is idle and there are no other events.
+		// It's possible that there is still buffered data that hadn't exceeded the min duration or max rows
+		// thresholds the last time flush was called. Most of the time, that won't be the case, but flush will
+		// check for that and only run if necessary.
+		case binlogdatapb.VEventType_HEARTBEAT:
+			err = v.flush(ctx, false)
+			if err != nil {
+				return err
+			}
+
+		// even if there are no changes to the tables being streamed, we'll still get a begin, vgtid, and commit
+		// event for each transaction. The other two are used for checkpoints, but nothing to do here.
+		case binlogdatapb.VEventType_BEGIN:
+
+		// journal events are sent on resharding. Unless you are manually targeting shards, vstream should
+		// transparently handle resharding for you, so you shouldn't need to do anything with these events.
+		// You might want to log them for debugging purposes or to alert on resharding events in case
+		// something goes wrong. After resharding, if the pre-reshard vgtid is no longer valid, you may need
+		// to restart the stream from the beginning.
+		case binlogdatapb.VEventType_JOURNAL:
+
+		// there aren't strong cases for handling these events, but you might want to log them for debugging
+		case binlogdatapb.VEventType_VERSION, binlogdatapb.VEventType_LASTPK, binlogdatapb.VEventType_SAVEPOINT:
 		}
+	}
+
+	return nil
+}
+
+func isFinalCopyCompletedEvent(ev *binlogdatapb.VEvent) bool {
+	return ev.Type == binlogdatapb.VEventType_COPY_COMPLETED && ev.Keyspace == "" && ev.Shard == ""
+}
+
+// ********************************************************************************************************
+// Graceful Shutdown
+//
+// listenForGracefulShutdown waits for either a configured shutdown channel or configured OS signals,
+// then initiates a graceful shutdown of the VStreamClient. It returns early if the provided context
+// is canceled or times out.
+// ********************************************************************************************************
+func (v *VStreamClient) listenForGracefulShutdown(ctx context.Context) {
+	if v.gracefulShutdownChan == nil && len(v.gracefulShutdownSignals) == 0 {
+		return
+	}
+
+	var signalChan chan os.Signal
+	if len(v.gracefulShutdownSignals) > 0 {
+		signalChan = make(chan os.Signal, 1)
+		signal.Notify(signalChan, v.gracefulShutdownSignals...)
+		defer signal.Stop(signalChan)
+	}
+
+	select {
+	case <-v.gracefulShutdownChan:
+		v.GracefulShutdown(v.gracefulShutdownWaitDur)
+
+	case <-signalChan:
+		v.GracefulShutdown(v.gracefulShutdownWaitDur)
+
+	case <-ctx.Done():
 	}
 }
 
@@ -195,7 +355,13 @@ func (v *VStreamClient) Run(ctx context.Context) error {
 // the heartbeat ticker will be used to ensure that we haven't been disconnected from the stream. This starts
 // a goroutine that will cancel the context if we haven't received an event in twice the heartbeat duration.
 // ********************************************************************************************************
-func (v *VStreamClient) monitorHeartbeat(ctx context.Context, cancel context.CancelFunc) {
+func (v *VStreamClient) monitorHeartbeat(ctx context.Context) {
+	// Start heartbeat liveness tracking when Run begins so startup stalls are treated the same
+	// as post-start disconnects.
+	v.lastEventProcessedAtUnixNano.Store(time.Now().UnixNano())
+
+	const timeoutMultiplier = 2
+
 	heartbeatDur := time.Duration(v.flags.HeartbeatInterval) * time.Second
 	heartbeat := time.NewTicker(heartbeatDur)
 	defer heartbeat.Stop()
@@ -203,21 +369,22 @@ func (v *VStreamClient) monitorHeartbeat(ctx context.Context, cancel context.Can
 	for {
 		select {
 		case tm := <-heartbeat.C:
-			// if we haven't received an event yet, we'll skip the heartbeat check
-			if v.lastEventReceivedAtUnix.Load() == 0 {
+			// if we're currently processing events, we should skip the heartbeat check, since it's likely that we're
+			// just busy and haven't had a chance to receive the latest event yet. This is especially important for
+			// long-running flushes since they can take longer than the heartbeat duration, and we don't want to
+			// accidentally cancel the context during a flush.
+			if v.isProcessingEvents.Load() {
 				continue
 			}
 
 			// if we haven't received an event in twice the heartbeat duration, we'll cancel the context, since
 			// we're likely disconnected, and exit the goroutine
-			if tm.Sub(time.Unix(v.lastEventReceivedAtUnix.Load(), 0)) > heartbeatDur*2 {
-				cancel()
+			if tm.Sub(time.Unix(0, v.lastEventProcessedAtUnixNano.Load())) > heartbeatDur*timeoutMultiplier {
+				v.GracefulShutdown(v.gracefulShutdownWaitDur)
 				return
 			}
 
 		case <-ctx.Done():
-			// this cancel is probably unnecessary, since the context is already done, but it's good practice
-			cancel()
 			return
 		}
 	}
@@ -226,34 +393,32 @@ func (v *VStreamClient) monitorHeartbeat(ctx context.Context, cancel context.Can
 // ********************************************************************************************************
 // Flush Data + Store Vgtid
 //
-// as we process events, we'll periodically need to check point the last vgtid and store the customers in the
-// database. You can control the frequency of this flush by adjusting the minFlushDuration and maxRowsPerFlush.
+// as we process events, we'll periodically need to checkpoint the last vgtid and persist the buffered data to
+// storage. You can control the frequency of this flush by adjusting the minFlushDuration and maxRowsPerFlush.
 // This is only called when we have an event that guarantees we're not flushing mid-transaction.
 // ********************************************************************************************************
 //
 // we might consider exporting Flush, but we'd need to have a mutex or something to block the stream from
 // processing, and technically we'd need to let it run until a commit event happens.
-func (v *VStreamClient) flush(ctx context.Context) error {
-	// if the lastFlushedVgtid is the same as the latestVgtid, we don't need to do anything
-	if proto.Equal(v.lastFlushedVgtid, v.latestVgtid) {
+func (v *VStreamClient) flush(ctx context.Context, force bool) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("vstreamclient: context error before flush: %w", err)
+	}
+
+	hasBufferedRows := v.hasBufferedRows()
+
+	// if the lastFlushedVgtid is the same as the latestVgtid and there is no buffered data,
+	// we don't need to do anything.
+	if !force && !hasBufferedRows && proto.Equal(v.lastFlushedVgtid, v.latestVgtid) {
+		if v.isClosing.Load() {
+			v.gracefulShutdownFlushOnce.Do(func() {
+				close(v.gracefulShutdownFlushChan)
+			})
+		}
 		return nil
 	}
 
-	// if we have exceeded the minFlushDuration, we'll force a flush, regardless how many rows each table has
-	shouldFlush := time.Since(v.stats.LastFlushedAt) > v.minFlushDuration
-
-	// if we haven't exceeded the min flush duration, we'll check if any of the tables have exceeded their
-	// max rows to flush. If any of them have, we will force a flush. Every table needs to be flushed at
-	// the same time, since the last vgtid covers all tables.
-	if !shouldFlush {
-		for _, table := range v.tables {
-			if len(table.currentBatch) >= table.MaxRowsPerFlush {
-				shouldFlush = true
-				break
-			}
-		}
-	}
-
+	shouldFlush, flushReason := v.shouldFlush(hasBufferedRows, force)
 	if !shouldFlush {
 		return nil
 	}
@@ -263,6 +428,10 @@ func (v *VStreamClient) flush(ctx context.Context) error {
 	for _, table := range v.tables {
 		// flush the rows to the database, chunked using the max batch size
 		for chunk := range slices.Chunk(table.currentBatch, table.MaxRowsPerFlush) {
+			if err := ctx.Err(); err != nil {
+				return fmt.Errorf("vstreamclient: context error during flush: %w", err)
+			}
+
 			err := table.FlushFn(ctx, chunk, FlushMeta{
 				Keyspace: table.Keyspace,
 				Table:    table.Table,
@@ -271,6 +440,7 @@ func (v *VStreamClient) flush(ctx context.Context) error {
 				VStreamStats: v.stats,
 
 				LatestVGtid: v.latestVgtid,
+				FlushReason: flushReason,
 			})
 			if err != nil {
 				return fmt.Errorf("vstreamclient: error flushing table %s: %w", table.Table, err)
@@ -288,7 +458,7 @@ func (v *VStreamClient) flush(ctx context.Context) error {
 		table.resetBatch()
 	}
 
-	// always store the latest vgtid, even if there are no customers to store
+	// always store the latest vgtid, even if there are no rows to store
 	err := updateLatestVGtid(ctx, v.session, v.name, v.vgtidStateKeyspace, v.vgtidStateTable, v.latestVgtid)
 	if err != nil {
 		return err
@@ -298,5 +468,53 @@ func (v *VStreamClient) flush(ctx context.Context) error {
 	v.stats.LastFlushedAt = time.Now()
 	v.lastFlushedVgtid = v.latestVgtid
 
+	// if we're in the middle of a graceful shutdown, and we've successfully flushed all the remaining data,
+	// we can close the channel to let the Run loop know it can exit
+	if v.isClosing.Load() {
+		v.gracefulShutdownFlushOnce.Do(func() {
+			close(v.gracefulShutdownFlushChan)
+		})
+	}
+
 	return nil
+}
+
+func (v *VStreamClient) hasBufferedRows() bool {
+	for _, table := range v.tables {
+		if len(table.currentBatch) > 0 {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (v *VStreamClient) shouldFlush(hasBufferedRows, force bool) (bool, FlushReason) {
+	if force {
+		return true, FlushReasonForced
+	}
+
+	// if we have exceeded the minFlushDuration, we'll force a flush, regardless how many rows each table has
+	if time.Since(v.stats.LastFlushedAt) > v.minFlushDuration {
+		return true, FlushReasonMinDuration
+	}
+
+	// if we haven't exceeded the min flush duration, we'll check if any of the tables have exceeded their
+	// max rows to flush. If any of them have, we will force a flush. Every table needs to be flushed at
+	// the same time, since the last vgtid covers all tables.
+	if hasBufferedRows {
+		for _, table := range v.tables {
+			if len(table.currentBatch) >= table.MaxRowsPerFlush {
+				return true, FlushReasonMaxRowsPerFlush
+			}
+		}
+	}
+
+	// even if we haven't hit either of minDuration or maxRows, if we're actively closing
+	// down, go ahead and force the flush.
+	if v.isClosing.Load() {
+		return true, FlushReasonGracefulShutdown
+	}
+
+	return false, FlushReasonNone
 }
