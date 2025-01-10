@@ -23,7 +23,7 @@ import (
 func Test_filePosGTID_String(t *testing.T) {
 	type fields struct {
 		file string
-		pos  uint32
+		pos  uint64
 	}
 	tests := []struct {
 		name   string
@@ -34,6 +34,11 @@ func Test_filePosGTID_String(t *testing.T) {
 			"formats gtid correctly",
 			fields{file: "mysql-bin.166031", pos: 192394},
 			"mysql-bin.166031:192394",
+		},
+		{
+			"handles large position correctly",
+			fields{file: "vt-1448040107-bin.003222", pos: 4663881395},
+			"vt-1448040107-bin.003222:4663881395",
 		},
 	}
 	for _, tt := range tests {
@@ -52,7 +57,7 @@ func Test_filePosGTID_String(t *testing.T) {
 func Test_filePosGTID_ContainsGTID(t *testing.T) {
 	type fields struct {
 		file string
-		pos  uint32
+		pos  uint64
 	}
 	type args struct {
 		other GTID
