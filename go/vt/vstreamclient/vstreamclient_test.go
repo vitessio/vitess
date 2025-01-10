@@ -2,266 +2,335 @@ package vstreamclient
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
-	"reflect"
-	"slices"
+	"math"
+	"os"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/sqltypes"
+	"github.com/stretchr/testify/assert"
+	"google.golang.org/protobuf/proto"
+
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-// Customer is the concrete type that will be built from the stream
-type Customer struct {
-	ID        int64     `vstream:"customer_id"`
-	Email     string    `vstream:"email"`
-	DeletedAt time.Time `vstream:"-"`
-}
-
-func getConn(t *testing.T, ctx context.Context) *vtgateconn.VTGateConn {
-	t.Helper()
-	conn, err := vtgateconn.Dial(ctx, "localhost:15991")
-	if err != nil {
-		t.Fatal(err)
+func TestResolveLatestVGtid(t *testing.T) {
+	explicit := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: "MySQL56/1"}},
 	}
-	return conn
+	stored := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: "MySQL56/2"}},
+	}
+
+	got, explicitUsed := resolveLatestVGtid(explicit, stored)
+	assert.True(t, explicitUsed)
+	assert.Equal(t, explicit, got)
+
+	got, explicitUsed = resolveLatestVGtid(nil, stored)
+	assert.False(t, explicitUsed)
+	assert.Equal(t, stored, got)
 }
 
-// To run the tests, this currently expects the local example to be running
-// ./101_initial_cluster.sh; mysql < ../common/insert_commerce_data.sql; ./201_customer_tablets.sh; ./202_move_tables.sh; ./203_switch_reads.sh; ./204_switch_writes.sh; ./205_clean_commerce.sh; ./301_customer_sharded.sh; ./302_new_shards.sh; ./303_reshard.sh; ./304_switch_reads.sh; ./305_switch_writes.sh; ./306_down_shard_0.sh; ./307_delete_shard_0.sh
-func TestVStreamClient(t *testing.T) {
-	conn := getConn(t, context.Background())
-	defer conn.Close()
+func TestDefaultFlagsExcludeKeyspaceFromTableName(t *testing.T) {
+	flags := DefaultFlags()
+	assert.False(t, flags.ExcludeKeyspaceFromTableName)
+}
 
-	flushCount := 0
-	gotCustomers := make([]*Customer, 0)
+func TestNew_ValidatesName(t *testing.T) {
+	_, err := New(context.Background(), "", nil, nil)
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "name is required")
 
-	tables := []TableConfig{{
-		Keyspace:        "customer",
-		Table:           "customer",
-		MaxRowsPerFlush: 7,
-		DataType:        &Customer{},
-		FlushFn: func(ctx context.Context, rows []Row, meta FlushMeta) error {
-			flushCount++
+	_, err = New(context.Background(), strings.Repeat("a", 65), nil, nil)
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "name must be 64 characters or less")
+}
 
-			fmt.Printf("upserting %d customers\n", len(rows))
-			for i, row := range rows {
-				switch {
-				// delete event
-				case row.RowChange.After == nil:
-					customer := row.Data.(*Customer)
-					customer.DeletedAt = time.Now()
+func TestWithMinFlushDuration_RejectsNonPositive(t *testing.T) {
+	v := &VStreamClient{}
+	err := WithMinFlushDuration(0)(v)
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "minimum flush duration")
+}
 
-					gotCustomers = append(gotCustomers, customer)
-					fmt.Printf("deleting customer %d: %v\n", i, row)
+func TestWithHeartbeatSeconds_RejectsNonPositive(t *testing.T) {
+	v := &VStreamClient{}
+	err := WithHeartbeatSeconds(0)(v)
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "heartbeat seconds")
+}
 
-				// insert event
-				case row.RowChange.Before == nil:
-					gotCustomers = append(gotCustomers, row.Data.(*Customer))
-					fmt.Printf("inserting customer %d: %v\n", i, row)
+func TestWithHeartbeatSeconds_RejectsOverflow(t *testing.T) {
+	overflow := uint64(math.MaxUint32) + 1
+	if strconv.IntSize < 64 || overflow > uint64(^uint(0)>>1) {
+		t.Skip("int cannot represent a value larger than uint32 on this platform")
+	}
 
-				// update event
-				case row.RowChange.Before != nil:
-					gotCustomers = append(gotCustomers, row.Data.(*Customer))
-					fmt.Printf("updating customer %d: %v\n", i, row)
-				}
-			}
+	v := &VStreamClient{}
+	err := WithHeartbeatSeconds(int(overflow))(v)
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "heartbeat seconds must be")
+	assert.ErrorContains(t, err, "or less")
+}
 
-			// a real implementation would do something more meaningful here. For a data warehouse type workload,
-			// it would probably look like streaming rows into the data warehouse, or for more complex versions,
-			// write newline delimited json or a parquet file to object storage, then trigger a load job.
-			return nil
+func TestWithTabletType_Validation(t *testing.T) {
+	v := &VStreamClient{}
+
+	err := WithTabletType(topodatapb.TabletType_UNKNOWN)(v)
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "tablet type cannot be UNKNOWN")
+
+	err = WithTabletType(topodatapb.TabletType_RDONLY)(v)
+	assert.NoError(t, err)
+	assert.Equal(t, topodatapb.TabletType_RDONLY, v.tabletType)
+}
+
+func TestWithFlags_RejectsNil(t *testing.T) {
+	v := &VStreamClient{}
+	err := WithFlags(nil)(v)
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "flags cannot be nil")
+}
+
+func TestWithGracefulShutdownChan_Validation(t *testing.T) {
+	v := &VStreamClient{}
+
+	err := WithGracefulShutdownChan(nil, time.Second)(v)
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "graceful shutdown channel")
+
+	err = WithGracefulShutdownChan(make(chan struct{}), 0)(v)
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "graceful shutdown wait")
+
+	ch := make(chan struct{})
+	err = WithGracefulShutdownChan(ch, time.Second)(v)
+	assert.NoError(t, err)
+	assert.Equal(t, (<-chan struct{})(ch), v.gracefulShutdownChan)
+	assert.Equal(t, time.Second, v.gracefulShutdownWaitDur)
+}
+
+func TestWithGracefulShutdownSignals_Validation(t *testing.T) {
+	v := &VStreamClient{}
+
+	err := WithGracefulShutdownSignals(time.Second)(v)
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "graceful shutdown signals")
+
+	err = WithGracefulShutdownSignals(0, os.Interrupt)(v)
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "graceful shutdown wait")
+
+	err = WithGracefulShutdownSignals(time.Second, os.Interrupt)(v)
+	assert.NoError(t, err)
+	assert.Equal(t, []os.Signal{os.Interrupt}, v.gracefulShutdownSignals)
+	assert.Equal(t, time.Second, v.gracefulShutdownWaitDur)
+}
+
+func TestWithEventFunc_Validation(t *testing.T) {
+	v := &VStreamClient{}
+	fn := func(_ context.Context, _ *binlogdatapb.VEvent) error { return nil }
+
+	err := WithEventFunc(fn)(v)
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "no event types provided")
+
+	err = WithEventFunc(fn, binlogdatapb.VEventType_FIELD)(v)
+	assert.NoError(t, err)
+
+	err = WithEventFunc(fn, binlogdatapb.VEventType_FIELD)(v)
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "already has a function")
+}
+
+func TestLookupTable(t *testing.T) {
+	t.Run("qualified name matches exactly", func(t *testing.T) {
+		want := &TableConfig{Keyspace: "ks", Table: "t"}
+		v := &VStreamClient{tables: map[string]*TableConfig{
+			qualifiedTableName("ks", "t"): want,
+		}}
+
+		got, err := v.lookupTable("ks.t")
+		assert.NoError(t, err)
+		assert.Same(t, want, got)
+	})
+
+	t.Run("bare name matches uniquely", func(t *testing.T) {
+		want := &TableConfig{Keyspace: "ks", Table: "t"}
+		v := &VStreamClient{tables: map[string]*TableConfig{
+			qualifiedTableName("ks", "t"): want,
+		}}
+
+		got, err := v.lookupTable("t")
+		assert.NoError(t, err)
+		assert.Same(t, want, got)
+	})
+
+	t.Run("bare name is rejected when ambiguous", func(t *testing.T) {
+		v := &VStreamClient{tables: map[string]*TableConfig{
+			qualifiedTableName("ks1", "t"): {Keyspace: "ks1", Table: "t"},
+			qualifiedTableName("ks2", "t"): {Keyspace: "ks2", Table: "t"},
+		}}
+
+		_, err := v.lookupTable("t")
+		assert.Error(t, err)
+		assert.ErrorContains(t, err, "ambiguous table name")
+	})
+}
+
+func TestIsFinalCopyCompletedEvent(t *testing.T) {
+	t.Run("shard scoped event is not final", func(t *testing.T) {
+		assert.False(t, isFinalCopyCompletedEvent(&binlogdatapb.VEvent{
+			Type:     binlogdatapb.VEventType_COPY_COMPLETED,
+			Keyspace: "ks",
+			Shard:    "-80",
+		}))
+	})
+
+	t.Run("aggregate event is final", func(t *testing.T) {
+		assert.True(t, isFinalCopyCompletedEvent(&binlogdatapb.VEvent{
+			Type: binlogdatapb.VEventType_COPY_COMPLETED,
+		}))
+	})
+}
+
+// TestRun_RejectsClosedClient verifies a client cannot be reused after a prior Run attempt.
+func TestRun_RejectsClosedClient(t *testing.T) {
+	v := &VStreamClient{}
+	v.isClosing.Store(true)
+
+	err := v.Run(context.Background())
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "client is closed")
+}
+
+func TestFlush_ClosesGracefulShutdownWhenAlreadyFlushed(t *testing.T) {
+	vgtid := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: "ks", Shard: "0", Gtid: "MySQL56/1"}},
+	}
+	v := &VStreamClient{
+		tables:                    map[string]*TableConfig{},
+		latestVgtid:               vgtid,
+		lastFlushedVgtid:          proto.Clone(vgtid).(*binlogdatapb.VGtid),
+		gracefulShutdownFlushChan: make(chan struct{}),
+	}
+	v.isClosing.Store(true)
+
+	err := v.flush(context.Background(), false)
+	assert.NoError(t, err)
+
+	select {
+	case <-v.gracefulShutdownFlushChan:
+	default:
+		t.Fatal("expected graceful shutdown flush channel to be closed")
+	}
+}
+
+func TestShouldFlush_ForceBypassesThresholds(t *testing.T) {
+	v := &VStreamClient{
+		minFlushDuration: time.Hour,
+		stats:            VStreamStats{LastFlushedAt: time.Now()},
+		tables: map[string]*TableConfig{
+			qualifiedTableName("ks", "t"): {
+				Keyspace:        "ks",
+				Table:           "t",
+				MaxRowsPerFlush: 10,
+				currentBatch:    []Row{{Data: "row"}},
+			},
 		},
-	}}
-
-	t.Run("first vstream run, should succeed", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		defer cancel()
-
-		vstreamClient, err := New(ctx, "bob", conn, tables,
-			WithMinFlushDuration(500*time.Millisecond),
-			WithHeartbeatSeconds(1),
-			WithStateTable("commerce", "vstreams"),
-			WithEventFunc(func(ctx context.Context, ev *binlogdatapb.VEvent) error {
-				fmt.Printf("** FIELD EVENT: %v\n", ev)
-				return nil
-			}, binlogdatapb.VEventType_FIELD),
-		)
-		if err != nil {
-			t.Fatalf("failed to create VStreamClient: %v", err)
-		}
-
-		err = vstreamClient.Run(ctx)
-		if err != nil && ctx.Err() == nil {
-			t.Fatalf("failed to run vstreamclient: %v", err)
-		}
-
-		slices.SortFunc(gotCustomers, func(a, b *Customer) int {
-			return int(a.ID - b.ID)
-		})
-
-		wantCustomers := []*Customer{
-			{ID: 1, Email: "alice@domain.com"},
-			{ID: 2, Email: "bob@domain.com"},
-			{ID: 3, Email: "charlie@domain.com"},
-			{ID: 4, Email: "dan@domain.com"},
-			{ID: 5, Email: "eve@domain.com"},
-		}
-
-		fmt.Printf("got %d customers | flushed %d times\n", len(gotCustomers), flushCount)
-		if !reflect.DeepEqual(gotCustomers, wantCustomers) {
-			t.Fatalf("got %d customers, want %d", len(gotCustomers), len(wantCustomers))
-		}
-	})
-
-	// this should fail because we're going to restart the stream, but with an additional table
-	t.Run("second vstream run, should fail", func(t *testing.T) {
-		withAdditionalTable := append(tables, TableConfig{
-			Keyspace: "customer",
-			Table:    "corder",
-			DataType: &Customer{},
-		})
-
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		defer cancel()
-
-		_, err := New(ctx, "bob", conn, withAdditionalTable,
-			WithStateTable("commerce", "vstreams"),
-		)
-		if err == nil {
-			t.Fatalf("expected VStreamClient error, got nil")
-		} else if err.Error() != "vstreamclient: provided tables do not match stored tables" {
-			t.Fatalf("expected error 'vstreamclient: provided tables do not match stored tables', got '%v'", err)
-		}
-	})
-}
-
-// Customer is the concrete type that will be built from the stream. This version implements
-// the VStreamScanner interface to do custom mapping of fields.
-type CustomerWithScan struct {
-	ID    int64
-	Email string
-
-	// the fields below aren't actually in the schema, but are added for illustrative purposes
-	EmailConfirmed bool
-	Details        map[string]any
-	CreatedAt      time.Time
-}
-
-var _ VStreamScanner = (*CustomerWithScan)(nil)
-
-func (customer *CustomerWithScan) VStreamScan(fields []*querypb.Field, row []sqltypes.Value, rowEvent *binlogdatapb.RowEvent, rowChange *binlogdatapb.RowChange) error {
-	var err error
-
-	for i := range row {
-		if row[i].IsNull() {
-			continue
-		}
-
-		switch fields[i].Name {
-		case "customer_id":
-			customer.ID, err = row[i].ToCastInt64()
-
-		case "email":
-			customer.Email = row[i].ToString()
-
-		// the fields below aren't actually in the example schema, but are added to
-		// show how you should handle different data types
-
-		case "email_confirmed":
-			customer.EmailConfirmed, err = row[i].ToBool()
-
-		case "details":
-			// assume the details field is a json blob
-			var b []byte
-			b, err = row[i].ToBytes()
-			if err == nil {
-				err = json.Unmarshal(b, &customer.Details)
-			}
-
-		case "created_at":
-			customer.CreatedAt, err = row[i].ToTime()
-		}
-		if err != nil {
-			return fmt.Errorf("error processing field %s: %w", fields[i].Name, err)
-		}
 	}
 
-	return nil
+	shouldFlush, reason := v.shouldFlush(true, false)
+	assert.False(t, shouldFlush)
+	assert.Equal(t, FlushReasonNone, reason)
+
+	shouldFlush, reason = v.shouldFlush(true, true)
+	assert.True(t, shouldFlush)
+	assert.Equal(t, FlushReasonForced, reason)
 }
 
-// To run the tests, this currently expects the local example to be running
-// ./101_initial_cluster.sh; mysql < ../common/insert_commerce_data.sql; ./201_customer_tablets.sh; ./202_move_tables.sh; ./203_switch_reads.sh; ./204_switch_writes.sh; ./205_clean_commerce.sh; ./301_customer_sharded.sh; ./302_new_shards.sh; ./303_reshard.sh; ./304_switch_reads.sh; ./305_switch_writes.sh; ./306_down_shard_0.sh; ./307_delete_shard_0.sh
-func TestVStreamClientWithScan(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+func TestShouldFlush_ReturnsReason(t *testing.T) {
+	t.Run("min flush duration", func(t *testing.T) {
+		v := &VStreamClient{
+			minFlushDuration: time.Second,
+			stats:            VStreamStats{LastFlushedAt: time.Now().Add(-2 * time.Second)},
+		}
+
+		shouldFlush, reason := v.shouldFlush(true, false)
+		assert.True(t, shouldFlush)
+		assert.Equal(t, FlushReasonMinDuration, reason)
+	})
+
+	t.Run("rowless checkpoint still uses last flush time", func(t *testing.T) {
+		v := &VStreamClient{
+			minFlushDuration: time.Second,
+			stats:            VStreamStats{LastFlushedAt: time.Now().Add(-2 * time.Second)},
+		}
+
+		shouldFlush, reason := v.shouldFlush(false, false)
+		assert.True(t, shouldFlush)
+		assert.Equal(t, FlushReasonMinDuration, reason)
+	})
+
+	t.Run("max rows per flush", func(t *testing.T) {
+		v := &VStreamClient{
+			minFlushDuration: time.Hour,
+			stats:            VStreamStats{LastFlushedAt: time.Now()},
+			tables: map[string]*TableConfig{
+				qualifiedTableName("ks", "t"): {
+					Keyspace:        "ks",
+					Table:           "t",
+					MaxRowsPerFlush: 1,
+					currentBatch:    []Row{{Data: "row"}},
+				},
+			},
+		}
+
+		shouldFlush, reason := v.shouldFlush(true, false)
+		assert.True(t, shouldFlush)
+		assert.Equal(t, FlushReasonMaxRowsPerFlush, reason)
+	})
+
+	t.Run("graceful shutdown", func(t *testing.T) {
+		v := &VStreamClient{
+			minFlushDuration: time.Hour,
+			stats:            VStreamStats{LastFlushedAt: time.Now()},
+		}
+		v.isClosing.Store(true)
+
+		shouldFlush, reason := v.shouldFlush(false, false)
+		assert.True(t, shouldFlush)
+		assert.Equal(t, FlushReasonGracefulShutdown, reason)
+	})
+}
+
+func TestMonitorHeartbeat_ShutsDownWhenNoInitialEventArrives(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	conn, err := vtgateconn.Dial(ctx, "localhost:15991")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer conn.Close()
-
-	flushCount := 0
-	gotCustomers := make([]*CustomerWithScan, 0)
-
-	tables := []TableConfig{{
-		Keyspace:        "customer",
-		Table:           "customer",
-		MaxRowsPerFlush: 7,
-		FlushFn: func(ctx context.Context, rows []Row, meta FlushMeta) error {
-			flushCount++
-
-			fmt.Printf("upserting %d customers\n", len(rows))
-			for i, row := range rows {
-				gotCustomers = append(gotCustomers, row.Data.(*CustomerWithScan))
-				fmt.Printf("upserting customer %d: %v\n", i, row)
-			}
-
-			// a real implementation would do something more meaningful here. For a data warehouse type workload,
-			// it would probably look like streaming rows into the data warehouse, or for more complex versions,
-			// write newline delimited json or a parquet file to object storage, then trigger a load job.
-			return nil
-		},
-		DataType: &CustomerWithScan{},
-	}}
-
-	vstreamClient, err := New(ctx, "bob2", conn, tables,
-		WithMinFlushDuration(500*time.Millisecond),
-		WithHeartbeatSeconds(1),
-		WithStateTable("commerce", "vstreams"),
-		WithEventFunc(func(ctx context.Context, ev *binlogdatapb.VEvent) error {
-			fmt.Printf("** FIELD EVENT: %v\n", ev)
-			return nil
-		}, binlogdatapb.VEventType_FIELD),
-	)
-	if err != nil {
-		t.Fatalf("failed to create VStreamClient: %v", err)
+	v := &VStreamClient{
+		flags:                     DefaultFlags(),
+		gracefulShutdownFlushChan: make(chan struct{}),
+		gracefulShutdownWaitDur:   0,
+		cancelRunCtxFn:            cancel,
 	}
 
-	err = vstreamClient.Run(ctx)
-	if err != nil && ctx.Err() == nil {
-		t.Fatalf("failed to run vstreamclient: %v", err)
-	}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		v.monitorHeartbeat(ctx)
+	}()
 
-	slices.SortFunc(gotCustomers, func(a, b *CustomerWithScan) int {
-		return int(a.ID - b.ID)
-	})
-
-	wantCustomers := []*CustomerWithScan{
-		{ID: 1, Email: "alice@domain.com"},
-		{ID: 2, Email: "bob@domain.com"},
-		{ID: 3, Email: "charlie@domain.com"},
-		{ID: 4, Email: "dan@domain.com"},
-		{ID: 5, Email: "eve@domain.com"},
-	}
-
-	fmt.Printf("got %d customers | flushed %d times\n", len(gotCustomers), flushCount)
-	if !reflect.DeepEqual(gotCustomers, wantCustomers) {
-		t.Fatalf("got %d customers, want %d", len(gotCustomers), len(wantCustomers))
-	}
+	assert.Eventually(t, func() bool {
+		select {
+		case <-done:
+			return true
+		default:
+			return false
+		}
+	}, 4*time.Second, 100*time.Millisecond)
+	assert.ErrorIs(t, ctx.Err(), context.Canceled)
+	assert.True(t, v.isClosing.Load())
 }

@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -25,9 +27,10 @@ type VStreamClient struct {
 	session *vtgateconn.VTGateSession
 
 	// the reader is the vstream reader, which is used to read the binlog events
-	reader vtgateconn.VStreamReader
-	filter *binlogdatapb.Filter
-	flags  *vtgatepb.VStreamFlags
+	reader     vtgateconn.VStreamReader
+	filter     *binlogdatapb.Filter
+	flags      *vtgatepb.VStreamFlags
+	tabletType topodatapb.TabletType
 
 	// vgtidStateKeyspace and vgtidStateTable are the keyspace and table where the last VGtid is stored
 	vgtidStateKeyspace string
@@ -48,9 +51,12 @@ type VStreamClient struct {
 	// parameter only has a granularity of seconds.
 	heartbeatSeconds int
 
-	// lastEventReceivedAtUnix is the time the last event was received, which is used in the heartbeat monitor
-	// to let us know if we've been disconnected from the stream.
-	lastEventReceivedAtUnix atomic.Int64
+	// lastEventProcessedAtUnixNano is the time after the last event was processed, including time for the user
+	// provided flush function to complete, which is used in the heartbeat monitor to let us know if we've been
+	// disconnected from the stream.
+	lastEventProcessedAtUnixNano atomic.Int64
+	isProcessingEvents           atomic.Bool
+
 	// lastFlushedVgtid is the last vgtid that was flushed, which is compared to the latestVgtid to determine
 	// if we need to flush again.
 	lastFlushedVgtid, latestVgtid *binlogdatapb.VGtid
@@ -59,6 +65,17 @@ type VStreamClient struct {
 
 	// these are the optional functions that are called for each event type
 	eventFuncs map[binlogdatapb.VEventType]EventFunc
+
+	// keeping this here allows for us to cancel the context when GracefulShutdown is called
+	cancelRunCtxFn context.CancelFunc
+
+	// these fields are used by the graceful shutdown process
+	isClosing                 atomic.Bool
+	gracefulShutdownFlushChan chan struct{}
+	gracefulShutdownFlushOnce sync.Once
+	gracefulShutdownChan      <-chan struct{}
+	gracefulShutdownSignals   []os.Signal
+	gracefulShutdownWaitDur   time.Duration
 }
 
 // VStreamStats keeps track of the number of rows processed and flushed for the whole stream
@@ -82,21 +99,31 @@ type VStreamStats struct {
 // New initializes a new VStreamClient, which is used to stream binlog events from Vitess.
 func New(ctx context.Context, name string, conn *vtgateconn.VTGateConn, tables []TableConfig, opts ...Option) (*VStreamClient, error) {
 	// validate required parameters
+	if name == "" {
+		return nil, errors.New("vstreamclient: name is required")
+	}
+
 	if len(name) > 64 {
 		return nil, fmt.Errorf("vstreamclient: name must be 64 characters or less, got %d", len(name))
 	}
 
 	if conn == nil {
-		return nil, fmt.Errorf("vstreamclient: conn is required")
+		return nil, errors.New("vstreamclient: conn is required")
 	}
 
 	// initialize the VStreamClient, with options and settings to be set later
 	v := &VStreamClient{
-		name:             name,
-		conn:             conn,
-		session:          conn.Session("", nil),
-		tables:           make(map[string]*TableConfig),
-		minFlushDuration: DefaultMinFlushDuration,
+		name:                    name,
+		conn:                    conn,
+		session:                 conn.Session("", nil),
+		tables:                  make(map[string]*TableConfig),
+		minFlushDuration:        DefaultMinFlushDuration,
+		tabletType:              topodatapb.TabletType_REPLICA,
+		gracefulShutdownWaitDur: DefaultGracefulShutdownWaitDur,
+
+		// we expect this channel to be closed by the last flush operation during GracefulShutdown, whether or not it
+		// succeeds. there is no guarantee that it will be closed before Run exits, if no flush boundary happens.
+		gracefulShutdownFlushChan: make(chan struct{}),
 	}
 
 	var err error
@@ -124,7 +151,7 @@ func New(ctx context.Context, name string, conn *vtgateconn.VTGateConn, tables [
 	// validate required options and set defaults where possible
 
 	if len(v.tables) == 0 {
-		return nil, fmt.Errorf("vstreamclient: no tables configured")
+		return nil, errors.New("vstreamclient: no tables configured")
 	}
 
 	// convert the tables into filter + rules
@@ -133,7 +160,7 @@ func New(ctx context.Context, name string, conn *vtgateconn.VTGateConn, tables [
 
 	for _, table := range v.tables {
 		rules = append(rules, &binlogdatapb.Rule{
-			Match:  table.Keyspace,
+			Match:  table.Table,
 			Filter: table.Query,
 		})
 	}
@@ -144,32 +171,51 @@ func New(ctx context.Context, name string, conn *vtgateconn.VTGateConn, tables [
 
 	if v.flags == nil {
 		v.flags = DefaultFlags()
-		if v.heartbeatSeconds > 0 {
-			v.flags.HeartbeatInterval = uint32(v.heartbeatSeconds)
-		}
+	}
+
+	if v.flags.HeartbeatInterval == 0 {
+		return nil, errors.New("vstreamclient: HeartbeatInterval must be positive")
+	}
+	if v.heartbeatSeconds > 0 {
+		v.flags.HeartbeatInterval = uint32(v.heartbeatSeconds)
 	}
 
 	// handle state lookup
+	if v.vgtidStateKeyspace == "" || v.vgtidStateTable == "" {
+		return nil, errors.New("vstreamclient: state table not configured (use WithStateTable)")
+	}
+
+	explicitStartingVGtid := v.latestVgtid
 
 	err = initStateTable(ctx, v.session, v.vgtidStateKeyspace, v.vgtidStateTable)
 	if err != nil {
 		return nil, err
 	}
 
-	var storedTableConfig map[string]*TableConfig
-	var copyCompleted bool
-	v.latestVgtid, storedTableConfig, copyCompleted, err = getLatestVGtid(ctx, v.session, v.name, v.vgtidStateKeyspace, v.vgtidStateTable)
+	storedVGtid, storedTableConfig, copyCompleted, err := getLatestVGtid(ctx, v.session, v.name, v.vgtidStateKeyspace, v.vgtidStateTable)
 	if err != nil {
 		return nil, err
 	}
 
-	if v.latestVgtid == nil {
+	var useExplicitStartingVGtid bool
+	v.latestVgtid, useExplicitStartingVGtid = resolveLatestVGtid(explicitStartingVGtid, storedVGtid)
+
+	switch {
+	case useExplicitStartingVGtid:
+		// if the caller explicitly provided a starting point, prefer it over persisted state.
+		err = initStartingVGtid(ctx, v.session, v.name, v.vgtidStateKeyspace, v.vgtidStateTable, v.latestVgtid, v.tables)
+		if err != nil {
+			return nil, err
+		}
+
+	case v.latestVgtid == nil:
 		// we need to bootstrap the stream, which means we need to create a new vgtid and store the table config
 		v.latestVgtid, err = initVGtid(ctx, v.session, v.name, v.vgtidStateKeyspace, v.vgtidStateTable, v.tables, v.shardsByKeyspace)
 		if err != nil {
 			return nil, err
 		}
-	} else {
+
+	default:
 		// we need to check if the tables have changed since the last stream, to make
 		// sure users aren't expecting to catch up on a new table that was added after the last stream.
 		err = validateTableConfig(v.tables, storedTableConfig)
@@ -177,32 +223,66 @@ func New(ctx context.Context, name string, conn *vtgateconn.VTGateConn, tables [
 			return nil, err
 		}
 
-		// since we have a vgtid, but the copy never completed, vstream docs say we need to restart from the beginning
+		// since we have a vgtid, but the copy never completed, restart the copy from the beginning
 		if !copyCompleted {
-			// TODO: we could probably handle the recovery, by resetting the vgtid to nil, and calling some user
-			//       defined function to have them truncate/recreate the intended destination tables.
-			return nil, errors.New("vstreamclient: copy phase not completed, need to restart stream")
+			v.latestVgtid, err = initVGtid(ctx, v.session, v.name, v.vgtidStateKeyspace, v.vgtidStateTable, v.tables, v.shardsByKeyspace)
+			if err != nil {
+				return nil, err
+			}
 		}
-	}
-
-	// initialize the streamer
-
-	v.reader, err = conn.VStream(ctx, topodatapb.TabletType_REPLICA, v.latestVgtid, v.filter, v.flags)
-	if err != nil {
-		return nil, fmt.Errorf("vstreamclient: failed to create vstream: %w", err)
 	}
 
 	return v, nil
 }
 
-// Close closes the VStreamClient, which stops the stream and cleans up resources.
-func (v *VStreamClient) Close(ctx context.Context) error {
-	return nil
+func resolveLatestVGtid(explicit, stored *binlogdatapb.VGtid) (*binlogdatapb.VGtid, bool) {
+	if explicit != nil {
+		return explicit, true
+	}
+
+	return stored, false
+}
+
+// GracefulShutdown waits up to the provided duration for the next safe flush boundary,
+// then cancels the active Run call.
+//   - if a safe event happens before the wait ends, buffered rows may be flushed and the
+//     client will stop processing the stream immediately afterward
+//   - if no safe event happens during that window, any buffered rows stay uncheckpointed
+//     and will be reprocessed when the stream is restarted
+//
+// GracefulShutdown returns immediately if wait is 0, or it has already been called.
+//
+// The return value does not guarantee whether one final buffered flush happened before shutdown;
+// uncheckpointed work is replayed on the next startup.
+//
+// GracefulShutdown closes the client immediately. As with any completed Run attempt,
+// call New(...) to create a fresh client before running again.
+func (v *VStreamClient) GracefulShutdown(wait time.Duration) {
+	firstCaller := v.isClosing.CompareAndSwap(false, true)
+	if !firstCaller {
+		return
+	}
+
+	if v.cancelRunCtxFn == nil {
+		return
+	}
+
+	if wait == 0 {
+		v.cancelRunCtxFn()
+		return
+	}
+
+	select {
+	case <-time.After(wait):
+	case <-v.gracefulShutdownFlushChan:
+	}
+
+	v.cancelRunCtxFn()
 }
 
 func getShardsByKeyspace(ctx context.Context, session *vtgateconn.VTGateSession) (map[string][]string, error) {
 	query := "SHOW VITESS_SHARDS"
-	result, err := session.Execute(ctx, query, nil)
+	result, err := session.Execute(ctx, query, nil, false)
 	if err != nil {
 		return nil, fmt.Errorf("vstreamclient: failed to get shards by keyspace: %w", err)
 	}

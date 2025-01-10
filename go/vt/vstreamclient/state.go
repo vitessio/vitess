@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"google.golang.org/protobuf/encoding/protojson"
+
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
@@ -41,9 +43,7 @@ func initStateTable(ctx context.Context, session *vtgateconn.VTGateSession, keys
   PRIMARY KEY (name)
 )`, keyspaceName, tableName)
 
-	fmt.Println("query: ", query)
-
-	_, err := session.Execute(ctx, query, nil)
+	_, err := session.Execute(ctx, query, nil, false)
 	if err != nil {
 		return fmt.Errorf("vstreamclient: failed to create state table: %w", err)
 	}
@@ -51,35 +51,75 @@ func initStateTable(ctx context.Context, session *vtgateconn.VTGateSession, keys
 	return nil
 }
 
+// initVGtid is used when there is no existing state for the stream, which means we need to create a new vgtid that
+// starts from the beginning of the stream (empty gtid for each shard) and persist that along with the table config.
+// This will kick off a copy phase on the vttablet side, which will read all existing data and then transition to
+// streaming new changes.
 func initVGtid(ctx context.Context, session *vtgateconn.VTGateSession, name, keyspaceName, tableName string, tables map[string]*TableConfig, shardsByKeyspace map[string][]string) (*binlogdatapb.VGtid, error) {
 	vgtid, err := newVGtid(tables, shardsByKeyspace)
 	if err != nil {
 		return nil, err
 	}
 
-	latestVgtidJSON, err := json.Marshal(vgtid)
+	latestVgtidJSON, tablesJSON, err := marshalState(vgtid, tables)
 	if err != nil {
-		return nil, fmt.Errorf("vstreamclient: failed to marshal latest vgtid: %w", err)
+		return nil, err
 	}
 
-	tablesJSON, err := json.Marshal(tablesToDBTableConfig(tables))
-	if err != nil {
-		return nil, fmt.Errorf("vstreamclient: failed to marshal tables: %w", err)
-	}
-
-	query := fmt.Sprintf(`insert into %s.%s (name, latest_vgtid, table_config) values (:name, :latest_vgtid, :table_config)`,
+	query := fmt.Sprintf(`insert into %s.%s (name, latest_vgtid, table_config) values (:name, :latest_vgtid, :table_config)
+on duplicate key update latest_vgtid = values(latest_vgtid), table_config = values(table_config)`,
 		keyspaceName, tableName,
 	)
 	_, err = session.Execute(ctx, query, map[string]*querypb.BindVariable{
 		"name":         {Type: querypb.Type_VARBINARY, Value: []byte(name)},
 		"latest_vgtid": {Type: querypb.Type_JSON, Value: latestVgtidJSON},
 		"table_config": {Type: querypb.Type_JSON, Value: tablesJSON},
-	})
+	}, false)
 	if err != nil {
 		return nil, fmt.Errorf("vstreamclient: failed to get latest vgtid for %s.%s: %w", keyspaceName, tableName, err)
 	}
 
 	return vgtid, nil
+}
+
+// initStartingVGtid is used when the caller explicitly provides a starting vgtid, which means we want to persist
+// that vgtid and the table config. Since they provided a vgtid, their intention isn't to start a copy phase, so we set
+// copy_completed to true, which means the stream will start from the provided vgtid and not attempt to do a copy phase,
+// either now or on restart.
+func initStartingVGtid(ctx context.Context, session *vtgateconn.VTGateSession, name, keyspaceName, tableName string, vgtid *binlogdatapb.VGtid, tables map[string]*TableConfig) error {
+	latestVgtidJSON, tablesJSON, err := marshalState(vgtid, tables)
+	if err != nil {
+		return err
+	}
+
+	query := fmt.Sprintf(`insert into %s.%s (name, latest_vgtid, table_config, copy_completed) values (:name, :latest_vgtid, :table_config, true)
+on duplicate key update latest_vgtid = values(latest_vgtid), table_config = values(table_config), copy_completed = true`,
+		keyspaceName, tableName,
+	)
+	_, err = session.Execute(ctx, query, map[string]*querypb.BindVariable{
+		"name":         {Type: querypb.Type_VARBINARY, Value: []byte(name)},
+		"latest_vgtid": {Type: querypb.Type_JSON, Value: latestVgtidJSON},
+		"table_config": {Type: querypb.Type_JSON, Value: tablesJSON},
+	}, false)
+	if err != nil {
+		return fmt.Errorf("vstreamclient: failed to initialize starting vgtid for %s.%s: %w", keyspaceName, tableName, err)
+	}
+
+	return nil
+}
+
+func marshalState(vgtid *binlogdatapb.VGtid, tables map[string]*TableConfig) (latestVgtidJSON []byte, tablesJSON []byte, err error) {
+	latestVgtidJSON, err = protojson.Marshal(vgtid)
+	if err != nil {
+		return nil, nil, fmt.Errorf("vstreamclient: failed to marshal latest vgtid: %w", err)
+	}
+
+	tablesJSON, err = json.Marshal(tablesToDBTableConfig(tables))
+	if err != nil {
+		return nil, nil, fmt.Errorf("vstreamclient: failed to marshal tables: %w", err)
+	}
+
+	return latestVgtidJSON, tablesJSON, nil
 }
 
 func newVGtid(tables map[string]*TableConfig, shardsByKeyspace map[string][]string) (*binlogdatapb.VGtid, error) {
@@ -104,6 +144,7 @@ func newVGtid(tables map[string]*TableConfig, shardsByKeyspace map[string][]stri
 				Gtid:     "", // start from the beginning, meaning initializing a copy phase
 			})
 		}
+		bootstrappedKeyspaces[table.Keyspace] = true
 	}
 
 	return vgtid, nil
@@ -114,7 +155,7 @@ func getLatestVGtid(ctx context.Context, session *vtgateconn.VTGateSession, name
 
 	result, err := session.Execute(ctx, query, map[string]*querypb.BindVariable{
 		"name": {Type: querypb.Type_VARBINARY, Value: []byte(name)},
-	})
+	}, false)
 	if err != nil {
 		return nil, nil, false, fmt.Errorf("vstreamclient: failed to get latest vgtid for %s.%s: %w", keyspaceName, tableName, err)
 	}
@@ -131,7 +172,7 @@ func getLatestVGtid(ctx context.Context, session *vtgateconn.VTGateSession, name
 	}
 
 	var latestVGtid binlogdatapb.VGtid
-	err = json.Unmarshal(latestVGtidJSON, &latestVGtid)
+	err = protojson.Unmarshal(latestVGtidJSON, &latestVGtid)
 	if err != nil {
 		return nil, nil, false, fmt.Errorf("vstreamclient: failed to unmarshal latest_vgtid: %w", err)
 	}
@@ -158,7 +199,7 @@ func getLatestVGtid(ctx context.Context, session *vtgateconn.VTGateSession, name
 }
 
 func updateLatestVGtid(ctx context.Context, session *vtgateconn.VTGateSession, name, keyspaceName, tableName string, vgtid *binlogdatapb.VGtid) error {
-	latestVgtid, err := json.Marshal(vgtid)
+	latestVgtid, err := protojson.Marshal(vgtid)
 	if err != nil {
 		return fmt.Errorf("vstreamclient: failed to marshal latest_vgtid: %w", err)
 	}
@@ -169,7 +210,7 @@ func updateLatestVGtid(ctx context.Context, session *vtgateconn.VTGateSession, n
 	_, err = session.Execute(ctx, query, map[string]*querypb.BindVariable{
 		"latest_vgtid": {Type: querypb.Type_JSON, Value: latestVgtid},
 		"name":         {Type: querypb.Type_VARBINARY, Value: []byte(name)},
-	})
+	}, false)
 	if err != nil {
 		return fmt.Errorf("vstreamclient: failed to update latest_vgtid for %s.%s: %w", keyspaceName, tableName, err)
 	}
@@ -183,7 +224,7 @@ func setCopyCompleted(ctx context.Context, session *vtgateconn.VTGateSession, na
 	)
 	_, err := session.Execute(ctx, query, map[string]*querypb.BindVariable{
 		"name": {Type: querypb.Type_VARBINARY, Value: []byte(name)},
-	})
+	}, false)
 	if err != nil {
 		return fmt.Errorf("vstreamclient: failed to set copy_completed for %s.%s: %w", keyspaceName, tableName, err)
 	}
