@@ -81,7 +81,7 @@ func connectForReplication(t *testing.T, rbr bool) (*mysql.Conn, mysql.BinlogFor
 	}
 
 	// Write ComBinlogDump packet with to start streaming events from here.
-	if err := conn.WriteComBinlogDump(1, file, uint32(position), 0); err != nil {
+	if err := conn.WriteComBinlogDump(1, file, position, 0); err != nil {
 		t.Fatalf("WriteComBinlogDump failed: %v", err)
 	}
 
