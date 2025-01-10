@@ -1515,7 +1515,8 @@ func TestCreateLookupVindexCreateDDL(t *testing.T) {
 					setStartingVschema()
 				}()
 			}
-			outms, _, _, cancelFunc, err := env.ws.prepareCreateLookup(ctx, "workflow", ms.SourceKeyspace, tcase.specs, false)
+			lv := newLookupVindex(env.ws)
+			outms, _, _, cancelFunc, err := lv.prepareCreate(ctx, "workflow", ms.SourceKeyspace, tcase.specs, false)
 			if tcase.err != "" {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tcase.err, "prepareCreateLookup(%s) err: %v, does not contain %v", tcase.description, err, tcase.err)
@@ -1763,7 +1764,8 @@ func TestCreateLookupVindexSourceVSchema(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		_, got, _, _, err := env.ws.prepareCreateLookup(ctx, "workflow", ms.SourceKeyspace, specs, false)
+		lv := newLookupVindex(env.ws)
+		_, got, _, _, err := lv.prepareCreate(ctx, "workflow", ms.SourceKeyspace, specs, false)
 		require.NoError(t, err)
 		if !proto.Equal(got, tcase.out) {
 			t.Errorf("%s: got:\n%v, want\n%v", tcase.description, got, tcase.out)
@@ -1984,32 +1986,35 @@ func TestCreateLookupVindexTargetVSchema(t *testing.T) {
 		err:             "type SET is not recommended for a vindex",
 	}}
 	for _, tcase := range testcases {
-		env.tmc.schema[ms.SourceKeyspace+".t1"] = &tabletmanagerdatapb.SchemaDefinition{
-			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
-				Fields: []*querypb.Field{{
-					Name: "col2",
-					Type: tcase.sourceFieldType,
+		t.Run(tcase.description, func(t *testing.T) {
+			env.tmc.schema[ms.SourceKeyspace+".t1"] = &tabletmanagerdatapb.SchemaDefinition{
+				TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
+					Fields: []*querypb.Field{{
+						Name: "col2",
+						Type: tcase.sourceFieldType,
+					}},
+					Schema: sourceSchema,
 				}},
-				Schema: sourceSchema,
-			}},
-		}
-		specs.Vindexes["v"].Params["table"] = fmt.Sprintf("%s.%s", ms.TargetKeyspace, tcase.targetTable)
-		if err := env.topoServ.SaveVSchema(ctx, ms.TargetKeyspace, tcase.targetVSchema); err != nil {
-			t.Fatal(err)
-		}
-
-		_, _, got, cancelFunc, err := env.ws.prepareCreateLookup(ctx, "workflow", ms.SourceKeyspace, specs, false)
-		if tcase.err != "" {
-			if err == nil || !strings.Contains(err.Error(), tcase.err) {
-				t.Errorf("prepareCreateLookup(%s) err: %v, must contain %v", tcase.description, err, tcase.err)
 			}
-			continue
-		}
-		require.NoError(t, err)
-		// withTable is a vschema that already contains the table and thus
-		// we don't make any vschema changes and there's nothing to cancel.
-		require.True(t, (cancelFunc != nil) == (tcase.targetVSchema != withTable))
-		utils.MustMatch(t, tcase.out, got, tcase.description)
+			specs.Vindexes["v"].Params["table"] = fmt.Sprintf("%s.%s", ms.TargetKeyspace, tcase.targetTable)
+			if err := env.topoServ.SaveVSchema(ctx, ms.TargetKeyspace, tcase.targetVSchema); err != nil {
+				t.Fatal(err)
+			}
+
+			lv := newLookupVindex(env.ws)
+			_, _, got, cancelFunc, err := lv.prepareCreate(ctx, "workflow", ms.SourceKeyspace, specs, false)
+			if tcase.err != "" {
+				if err == nil || !strings.Contains(err.Error(), tcase.err) {
+					t.Errorf("prepareCreateLookup(%s) err: %v, must contain %v", tcase.description, err, tcase.err)
+				}
+				return
+			}
+			require.NoError(t, err)
+			// withTable is a vschema that already contains the table and thus
+			// we don't make any vschema changes and there's nothing to cancel.
+			require.True(t, (cancelFunc != nil) == (tcase.targetVSchema != withTable))
+			utils.MustMatch(t, tcase.out, got, tcase.description)
+		})
 	}
 }
 
@@ -2119,7 +2124,8 @@ func TestCreateLookupVindexSameKeyspace(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, got, _, _, err := env.ws.prepareCreateLookup(ctx, "keyspace", ms.TargetKeyspace, specs, false)
+	lv := newLookupVindex(env.ws)
+	_, got, _, _, err := lv.prepareCreate(ctx, "keyspace", ms.TargetKeyspace, specs, false)
 	require.NoError(t, err)
 	if !proto.Equal(got, want) {
 		t.Errorf("same keyspace: got:\n%v, want\n%v", got, want)
@@ -2245,7 +2251,8 @@ func TestCreateCustomizedVindex(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, got, _, _, err := env.ws.prepareCreateLookup(ctx, "workflow", ms.TargetKeyspace, specs, false)
+	lv := newLookupVindex(env.ws)
+	_, got, _, _, err := lv.prepareCreate(ctx, "workflow", ms.TargetKeyspace, specs, false)
 	require.NoError(t, err)
 	if !proto.Equal(got, want) {
 		t.Errorf("customize create lookup error same: got:\n%v, want\n%v", got, want)
@@ -2363,7 +2370,8 @@ func TestCreateLookupVindexIgnoreNulls(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ms, ks, _, _, err := env.ws.prepareCreateLookup(ctx, "workflow", ms.TargetKeyspace, specs, false)
+	lv := newLookupVindex(env.ws)
+	ms, ks, _, _, err := lv.prepareCreate(ctx, "workflow", ms.TargetKeyspace, specs, false)
 	require.NoError(t, err)
 	if !proto.Equal(wantKs, ks) {
 		t.Errorf("unexpected keyspace value: got:\n%v, want\n%v", ks, wantKs)
@@ -2443,11 +2451,12 @@ func TestStopAfterCopyFlag(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ms1, _, _, _, err := env.ws.prepareCreateLookup(ctx, "workflow", ms.TargetKeyspace, specs, false)
+	lv := newLookupVindex(env.ws)
+	ms1, _, _, _, err := lv.prepareCreate(ctx, "workflow", ms.TargetKeyspace, specs, false)
 	require.NoError(t, err)
 	require.Equal(t, ms1.StopAfterCopy, true)
 
-	ms2, _, _, _, err := env.ws.prepareCreateLookup(ctx, "workflow", ms.TargetKeyspace, specs, true)
+	ms2, _, _, _, err := lv.prepareCreate(ctx, "workflow", ms.TargetKeyspace, specs, true)
 	require.NoError(t, err)
 	require.Equal(t, ms2.StopAfterCopy, false)
 }

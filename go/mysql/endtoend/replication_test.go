@@ -1064,7 +1064,7 @@ func valuesForTests(t *testing.T, rs *mysql.Rows, tm *mysql.TableMap, rowIndex i
 		}
 
 		// We have real data
-		value, l, err := binlog.CellValue(data, pos, tm.Types[c], tm.Metadata[c], &querypb.Field{Type: querypb.Type_UINT64})
+		value, l, err := binlog.CellValue(data, pos, tm.Types[c], tm.Metadata[c], &querypb.Field{Type: querypb.Type_UINT64}, false)
 		if err != nil {
 			return nil, err
 		}

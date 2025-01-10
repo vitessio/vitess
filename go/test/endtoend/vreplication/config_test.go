@@ -29,7 +29,7 @@ import (
 //  1. Composite or multi-column primary keys
 //  2. PKs that contain an ENUM column
 //  3. That we properly handle tables with auto_increment columns (which are stripped by default when
-//     moving the table to a sharded keyspace with vtctldclient and left in place when using vtctlclient)
+//     moving the table to a sharded keyspace)
 //
 // The Lead and Lead-1 tables also allows us to test several things:
 //  1. Mixed case identifiers

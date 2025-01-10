@@ -166,6 +166,10 @@ jobs:
         binlog-transaction-compression=ON
         EOF
         
+        cat <<-EOF>>./config/mycnf/mysql8026.cnf
+        binlog-row-value-options=PARTIAL_JSON
+        EOF
+        
         # run the tests however you normally do, then produce a JUnit XML file
         eatmydata -- go run test.go -docker=false -follow -shard vreplication_vtctldclient_vdiff2_movetables_tz | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 

@@ -74,7 +74,7 @@ func (vte *VTExplain) initVtgateExecutor(ctx context.Context, ts *topo.Server, v
 	var schemaTracker vtgate.SchemaInfo // no schema tracker for these tests
 	queryLogBufferSize := 10
 	plans := theine.NewStore[vtgate.PlanCacheKey, *engine.Plan](4*1024*1024, false)
-	vte.vtgateExecutor = vtgate.NewExecutor(ctx, vte.env, vte.explainTopo, Cell, resolver, opts.Normalize, false, streamSize, plans, schemaTracker, false, opts.PlannerVersion, 0)
+	vte.vtgateExecutor = vtgate.NewExecutor(ctx, vte.env, vte.explainTopo, Cell, resolver, opts.Normalize, false, streamSize, plans, schemaTracker, false, opts.PlannerVersion, 0, vtgate.NewDynamicViperConfig())
 	vte.vtgateExecutor.SetQueryLogger(streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize))
 
 	return nil
@@ -88,7 +88,9 @@ func (vte *VTExplain) newFakeResolver(ctx context.Context, opts *Options, serv s
 	if opts.ExecutionMode == ModeTwoPC {
 		txMode = vtgatepb.TransactionMode_TWOPC
 	}
-	tc := vtgate.NewTxConn(gw, txMode)
+	tc := vtgate.NewTxConn(gw, &vtgate.StaticConfig{
+		TxMode: txMode,
+	})
 	sc := vtgate.NewScatterConn("", tc, gw)
 	srvResolver := srvtopo.NewResolver(serv, gw, cell)
 	return vtgate.NewResolver(srvResolver, serv, cell, sc)

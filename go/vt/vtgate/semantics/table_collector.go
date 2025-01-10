@@ -46,6 +46,10 @@ type (
 
 		// cte is a map of CTE definitions that are used in the query
 		cte map[string]*CTE
+
+		// lastInsertIdWithArgument is used to signal to later stages that we
+		// need to do special handling of the engine primitive
+		lastInsertIdWithArgument bool
 	}
 )
 
@@ -59,18 +63,22 @@ func newEarlyTableCollector(si SchemaInformation, currentDb string) *earlyTableC
 }
 
 func (etc *earlyTableCollector) down(cursor *sqlparser.Cursor) bool {
-	with, ok := cursor.Node().(*sqlparser.With)
-	if !ok {
-		return true
-	}
-	for _, cte := range with.CTEs {
-		etc.cte[cte.ID.String()] = &CTE{
-			Name:      cte.ID.String(),
-			Query:     cte.Subquery,
-			Columns:   cte.Columns,
-			Recursive: with.Recursive,
+	switch node := cursor.Node().(type) {
+	case *sqlparser.With:
+		for _, cte := range node.CTEs {
+			etc.cte[cte.ID.String()] = &CTE{
+				Name:      cte.ID.String(),
+				Query:     cte.Subquery,
+				Columns:   cte.Columns,
+				Recursive: node.Recursive,
+			}
+		}
+	case *sqlparser.FuncExpr:
+		if node.Name.EqualString("last_insert_id") && len(node.Exprs) == 1 {
+			etc.lastInsertIdWithArgument = true
 		}
 	}
+
 	return true
 }
 

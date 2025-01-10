@@ -31,6 +31,7 @@ var (
 	_ Reversible      = (*Numeric)(nil)
 	_ Hashing         = (*Numeric)(nil)
 	_ ParamValidating = (*Numeric)(nil)
+	_ Sequential      = (*Numeric)(nil)
 )
 
 // Numeric defines a bit-pattern mapping of a uint64 to the KeyspaceId.
@@ -106,6 +107,20 @@ func (*Numeric) ReverseMap(_ VCursor, ksids [][]byte) ([]sqltypes.Value, error) 
 		reverseIds[i] = sqltypes.NewUint64(val)
 	}
 	return reverseIds, nil
+}
+
+// RangeMap implements Between.
+func (vind *Numeric) RangeMap(ctx context.Context, vcursor VCursor, startId sqltypes.Value, endId sqltypes.Value) ([]key.Destination, error) {
+	startKsId, err := vind.Hash(startId)
+	if err != nil {
+		return nil, err
+	}
+	endKsId, err := vind.Hash(endId)
+	if err != nil {
+		return nil, err
+	}
+	out := []key.Destination{&key.DestinationKeyRange{KeyRange: key.NewKeyRange(startKsId, endKsId)}}
+	return out, nil
 }
 
 // UnknownParams implements the ParamValidating interface.

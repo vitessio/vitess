@@ -24,7 +24,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topotools"
-	"vitess.io/vitess/go/vt/vtctl/reparentutil"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtorc/db"
 )
 
@@ -48,7 +48,7 @@ func TestSaveAndReadKeyspace(t *testing.T) {
 			keyspaceName: "ks1",
 			keyspace: &topodatapb.Keyspace{
 				KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
-				DurabilityPolicy: "semi_sync",
+				DurabilityPolicy: policy.DurabilitySemiSync,
 			},
 			keyspaceWanted:       nil,
 			semiSyncAckersWanted: 1,
@@ -72,12 +72,12 @@ func TestSaveAndReadKeyspace(t *testing.T) {
 			keyspaceName: "ks4",
 			keyspace: &topodatapb.Keyspace{
 				KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
-				DurabilityPolicy: "none",
+				DurabilityPolicy: policy.DurabilityNone,
 				BaseKeyspace:     "baseKeyspace",
 			},
 			keyspaceWanted: &topodatapb.Keyspace{
 				KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
-				DurabilityPolicy: "none",
+				DurabilityPolicy: policy.DurabilityNone,
 			},
 			semiSyncAckersWanted: 0,
 		}, {
@@ -120,7 +120,7 @@ func TestSaveAndReadKeyspace(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
-			require.EqualValues(t, tt.semiSyncAckersWanted, reparentutil.SemiSyncAckers(durabilityPolicy, nil))
+			require.EqualValues(t, tt.semiSyncAckersWanted, policy.SemiSyncAckers(durabilityPolicy, nil))
 		})
 	}
 }

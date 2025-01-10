@@ -203,6 +203,10 @@ func (ev filePosFakeEvent) IsUpdateRows() bool {
 	return false
 }
 
+func (ev filePosFakeEvent) IsPartialUpdateRows() bool {
+	return false
+}
+
 func (ev filePosFakeEvent) IsDeleteRows() bool {
 	return false
 }

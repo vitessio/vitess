@@ -24,7 +24,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/log"
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
 type iWorkflow interface {
@@ -50,17 +49,14 @@ type workflowFlavor int
 
 const (
 	workflowFlavorRandom workflowFlavor = iota
-	workflowFlavorVtctl
 	workflowFlavorVtctld
 )
 
 var workflowFlavors = []workflowFlavor{
-	workflowFlavorVtctl,
 	workflowFlavorVtctld,
 }
 
 var workflowFlavorNames = map[workflowFlavor]string{
-	workflowFlavorVtctl:  "vtctl",
 	workflowFlavorVtctld: "vtctld",
 }
 
@@ -100,8 +96,6 @@ func newMoveTables(vc *VitessCluster, mt *moveTablesWorkflow, flavor workflowFla
 		flavor = workflowFlavors[rand.IntN(len(workflowFlavors))]
 	}
 	switch flavor {
-	case workflowFlavorVtctl:
-		mt2 = newVtctlMoveTables(mt)
 	case workflowFlavorVtctld:
 		mt2 = newVtctldMoveTables(mt)
 	default:
@@ -109,102 +103,6 @@ func newMoveTables(vc *VitessCluster, mt *moveTablesWorkflow, flavor workflowFla
 	}
 	log.Infof("Using moveTables flavor: %s", mt2.Flavor())
 	return mt2
-}
-
-type VtctlMoveTables struct {
-	*moveTablesWorkflow
-}
-
-func (vmt *VtctlMoveTables) Flavor() string {
-	return "vtctl"
-}
-
-func newVtctlMoveTables(mt *moveTablesWorkflow) *VtctlMoveTables {
-	return &VtctlMoveTables{mt}
-}
-
-func (vmt *VtctlMoveTables) Create() {
-	currentWorkflowType = binlogdatapb.VReplicationWorkflowType_MoveTables
-	vmt.exec(workflowActionCreate)
-}
-
-func (vmt *VtctlMoveTables) MirrorTraffic() {
-	// TODO implement me
-	panic("implement me")
-}
-
-func (vmt *VtctlMoveTables) SwitchReadsAndWrites() {
-	err := tstWorkflowExecVtctl(vmt.vc.t, "", vmt.workflowName, vmt.sourceKeyspace, vmt.targetKeyspace,
-		vmt.tables, workflowActionSwitchTraffic, "", "", "", defaultWorkflowExecOptions)
-	require.NoError(vmt.vc.t, err)
-}
-
-func (vmt *VtctlMoveTables) ReverseReadsAndWrites() {
-	err := tstWorkflowExecVtctl(vmt.vc.t, "", vmt.workflowName, vmt.sourceKeyspace, vmt.targetKeyspace,
-		vmt.tables, workflowActionReverseTraffic, "", "", "", defaultWorkflowExecOptions)
-	require.NoError(vmt.vc.t, err)
-}
-
-func (vmt *VtctlMoveTables) Show() {
-	// TODO implement me
-	panic("implement me")
-}
-
-func (vmt *VtctlMoveTables) Status() {
-	currentWorkflowType = binlogdatapb.VReplicationWorkflowType_MoveTables
-	vmt.exec("Status")
-}
-
-func (vmt *VtctlMoveTables) exec(action string) {
-	options := &workflowExecOptions{
-		deferSecondaryKeys: false,
-		atomicCopy:         vmt.atomicCopy,
-	}
-	err := tstWorkflowExecVtctl(vmt.vc.t, "", vmt.workflowName, vmt.sourceKeyspace, vmt.targetKeyspace,
-		vmt.tables, action, vmt.tabletTypes, vmt.sourceShards, "", options)
-	require.NoError(vmt.vc.t, err)
-}
-func (vmt *VtctlMoveTables) SwitchReads() {
-	err := tstWorkflowExecVtctl(vmt.vc.t, "", vmt.workflowName, vmt.sourceKeyspace, vmt.targetKeyspace,
-		vmt.tables, workflowActionSwitchTraffic, "replica,rdonly", "", "", defaultWorkflowExecOptions)
-	require.NoError(vmt.vc.t, err)
-}
-
-func (vmt *VtctlMoveTables) SwitchWrites() {
-	err := tstWorkflowExecVtctl(vmt.vc.t, "", vmt.workflowName, vmt.sourceKeyspace, vmt.targetKeyspace,
-		vmt.tables, workflowActionSwitchTraffic, "primary", "", "", defaultWorkflowExecOptions)
-	require.NoError(vmt.vc.t, err)
-}
-func (vmt *VtctlMoveTables) ReverseReads() {
-	err := tstWorkflowExecVtctl(vmt.vc.t, "", vmt.workflowName, vmt.sourceKeyspace, vmt.targetKeyspace,
-		vmt.tables, workflowActionReverseTraffic, "replica,rdonly", "", "", defaultWorkflowExecOptions)
-	require.NoError(vmt.vc.t, err)
-}
-
-func (vmt *VtctlMoveTables) ReverseWrites() {
-	err := tstWorkflowExecVtctl(vmt.vc.t, "", vmt.workflowName, vmt.sourceKeyspace, vmt.targetKeyspace,
-		vmt.tables, workflowActionReverseTraffic, "primary", "", "", defaultWorkflowExecOptions)
-	require.NoError(vmt.vc.t, err)
-}
-
-func (vmt *VtctlMoveTables) Cancel() {
-	vmt.exec(workflowActionCancel)
-}
-
-func (vmt *VtctlMoveTables) Complete() {
-	vmt.exec(workflowActionComplete)
-}
-
-func (vmt *VtctlMoveTables) GetLastOutput() string {
-	return vmt.lastOutput
-}
-
-func (vmt *VtctlMoveTables) Start() {
-	panic("implement me")
-}
-
-func (vmt *VtctlMoveTables) Stop() {
-	panic("implement me")
 }
 
 var _ iMoveTables = (*VtctldMoveTables)(nil)
@@ -347,8 +245,6 @@ func newReshard(vc *VitessCluster, rs *reshardWorkflow, flavor workflowFlavor) i
 		flavor = workflowFlavors[rand.IntN(len(workflowFlavors))]
 	}
 	switch flavor {
-	case workflowFlavorVtctl:
-		rs2 = newVtctlReshard(rs)
 	case workflowFlavorVtctld:
 		rs2 = newVtctldReshard(rs)
 	default:
@@ -356,93 +252,6 @@ func newReshard(vc *VitessCluster, rs *reshardWorkflow, flavor workflowFlavor) i
 	}
 	log.Infof("Using reshard flavor: %s", rs2.Flavor())
 	return rs2
-}
-
-type VtctlReshard struct {
-	*reshardWorkflow
-}
-
-func (vrs *VtctlReshard) ReverseReads() {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (vrs *VtctlReshard) ReverseWrites() {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (vrs *VtctlReshard) Flavor() string {
-	return "vtctl"
-}
-
-func newVtctlReshard(rs *reshardWorkflow) *VtctlReshard {
-	return &VtctlReshard{rs}
-}
-
-func (vrs *VtctlReshard) Create() {
-	currentWorkflowType = binlogdatapb.VReplicationWorkflowType_Reshard
-	vrs.exec(workflowActionCreate)
-}
-
-func (vrs *VtctlReshard) MirrorTraffic() {
-	// TODO implement me
-	panic("implement me")
-}
-
-func (vrs *VtctlReshard) Status() {
-	currentWorkflowType = binlogdatapb.VReplicationWorkflowType_Reshard
-	vrs.exec("Status")
-}
-
-func (vrs *VtctlReshard) SwitchReadsAndWrites() {
-	vrs.exec(workflowActionSwitchTraffic)
-}
-
-func (vrs *VtctlReshard) ReverseReadsAndWrites() {
-	vrs.exec(workflowActionReverseTraffic)
-}
-
-func (vrs *VtctlReshard) Show() {
-	// TODO implement me
-	panic("implement me")
-}
-
-func (vrs *VtctlReshard) exec(action string) {
-	options := &workflowExecOptions{}
-	err := tstWorkflowExecVtctl(vrs.vc.t, "", vrs.workflowName, "", vrs.targetKeyspace,
-		"", action, vrs.tabletTypes, vrs.sourceShards, vrs.targetShards, options)
-	require.NoError(vrs.vc.t, err)
-}
-
-func (vrs *VtctlReshard) SwitchReads() {
-	// TODO implement me
-	panic("implement me")
-}
-
-func (vrs *VtctlReshard) SwitchWrites() {
-	// TODO implement me
-	panic("implement me")
-}
-
-func (vrs *VtctlReshard) Cancel() {
-	vrs.exec(workflowActionCancel)
-}
-
-func (vrs *VtctlReshard) Complete() {
-	vrs.exec(workflowActionComplete)
-}
-
-func (vrs *VtctlReshard) GetLastOutput() string {
-	return vrs.lastOutput
-}
-
-func (vrs *VtctlReshard) Start() {
-	panic("implement me")
-}
-
-func (vrs *VtctlReshard) Stop() {
-	panic("implement me")
 }
 
 var _ iReshard = (*VtctldReshard)(nil)
