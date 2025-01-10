@@ -85,8 +85,7 @@ var (
 	recoveriesFailureCounter = stats.NewCountersWithSingleLabel("FailedRecoveries", "Count of the different failed recoveries performed", "RecoveryType", actionableRecoveriesNames...)
 
 	// vtops
-	vtopsService      = fmt.Sprintf("%s-%s-%s", os.Getenv("BEDROCK_CONTAINER_NAME"), os.Getenv("POOL"), os.Getenv("VITESS_ENVIRONMENT"))
-	vtopsExec         = external.NewExecVTOps(os.Getenv("VTOPS_PATH"), vtopsService, os.Getenv("HOSTNAME"))
+	vtopsExec         = external.NewExecVTOps()
 	vtopsSlackChannel = os.Getenv("SLACK_CHANNEL")
 )
 
@@ -304,7 +303,7 @@ func postErsCompletion(topologyRecovery *TopologyRecovery, analysisEntry *inst.R
 		_ = AuditTopologyRecovery(topologyRecovery, message)
 		_ = inst.AuditOperation(recoveryName, analysisEntry.AnalyzedInstanceAlias, message)
 		_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("%v: successfully promoted %+v", recoveryName, promotedReplica.InstanceAlias))
-		vtopsExec.RaiseProblem(analysisEntry.AnalyzedInstanceHostname, "orc-dead-tablet")
+		vtopsExec.RaiseProblem(analysisEntry, topologyRecovery.SuccessorAlias, "orc-dead-tablet")
 	}
 }
 

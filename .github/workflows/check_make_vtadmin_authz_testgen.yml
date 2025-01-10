@@ -64,7 +64,7 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.vtadmin_changes == 'true'
       run: |
         sudo apt-get update
-        sudo apt-get install -y make unzip g++ etcd curl git wget
+        sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget
         sudo service etcd stop
         go mod download
         go install golang.org/x/tools/cmd/goimports@latest
