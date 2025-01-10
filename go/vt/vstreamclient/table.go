@@ -1,10 +1,12 @@
 package vstreamclient
 
 import (
+	"errors"
 	"fmt"
 	"maps"
 	"reflect"
 	"slices"
+	"strings"
 	"time"
 
 	"vitess.io/vitess/go/sqlescape"
@@ -18,7 +20,7 @@ type TableConfig struct {
 	Keyspace string
 	Table    string
 
-	// if no configured, this is set to "select * from keyspace.table", streaming all the fields. This can be
+	// if not configured, this is set to "select * from keyspace.table", streaming all the fields. This can be
 	// overridden to select only the fields that are needed, which can reduce memory usage and improve performance,
 	// and also alias the fields to match the struct fields.
 	Query string
@@ -90,9 +92,10 @@ type shardConfig struct {
 type fieldMapping struct {
 	rowIndex    int
 	structIndex []int
-	structType  any
+	structType  reflect.Type
 	kind        reflect.Kind
 	isPointer   bool
+	jsonDecode  bool
 }
 
 // TODO: there's a consolidation issue to deal with here. Someone could easily add a new table in
@@ -106,13 +109,23 @@ func (v *VStreamClient) initTables(tables []TableConfig) error {
 	}
 
 	if len(tables) == 0 {
-		return fmt.Errorf("vstreamclient: no tables provided")
+		return errors.New("vstreamclient: no tables provided")
 	}
+
+	queriesByTableName := make(map[string]string)
 
 	for _, table := range tables {
 		// basic validation
 		if table.DataType == nil {
 			return fmt.Errorf("vstreamclient: table %s.%s has no data type", table.Keyspace, table.Table)
+		}
+
+		dataTypeValue := reflect.ValueOf(table.DataType)
+		switch dataTypeValue.Kind() {
+		case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+			if dataTypeValue.IsNil() {
+				return fmt.Errorf("vstreamclient: table %s.%s has no data type", table.Keyspace, table.Table)
+			}
 		}
 
 		if table.Keyspace == "" {
@@ -122,22 +135,20 @@ func (v *VStreamClient) initTables(tables []TableConfig) error {
 		if table.Table == "" {
 			return fmt.Errorf("vstreamclient: table %v has no table name", table)
 		}
+		if table.FlushFn == nil {
+			return fmt.Errorf("vstreamclient: table %s.%s has no flush function", table.Keyspace, table.Table)
+		}
 
-		fmt.Println("shardsByKeyspace", v.shardsByKeyspace)
 		// make sure the keyspace exists in the cluster
 		_, ok := v.shardsByKeyspace[table.Keyspace]
 		if !ok {
 			return fmt.Errorf("vstreamclient: keyspace %s not found in the cluster", table.Keyspace)
 		}
 
-		// the key is the keyspace and table name, separated by a period. We use this because vstream events
-		// use this as the table name, so it's easier for lookup, and it's unique.
-		k := fmt.Sprintf("%s.%s", table.Keyspace, table.Table)
+		k := qualifiedTableName(table.Keyspace, table.Table)
 
-		// if the same table is referenced multiple times in the same stream, only one table will actually
-		// receive events. This prevents users from unknowingly missing events for the second table reference.
 		if _, ok = v.tables[k]; ok {
-			return fmt.Errorf("duplicate table %s in keyspace %s", table.Table, table.Keyspace)
+			return fmt.Errorf("vstreamclient: duplicate table %s", k)
 		}
 
 		// set defaults if not provided
@@ -145,8 +156,18 @@ func (v *VStreamClient) initTables(tables []TableConfig) error {
 			table.Query = "select * from " + sqlescape.EscapeID(table.Table)
 		}
 
+		// VStream rules match by bare table name, so same-named tables across keyspaces can
+		// end up sharing whichever rule is matched first. Requiring identical queries makes
+		// that overlap harmless instead of silently applying the wrong filter/projection.
+		if existingQuery, ok := queriesByTableName[table.Table]; ok && existingQuery != table.Query {
+			return fmt.Errorf("vstreamclient: same table name across keyspaces must use identical queries: %s", table.Table)
+		}
+		queriesByTableName[table.Table] = table.Query
+
 		if table.MaxRowsPerFlush == 0 {
 			table.MaxRowsPerFlush = DefaultMaxRowsPerFlush
+		} else if table.MaxRowsPerFlush < 0 {
+			return fmt.Errorf("vstreamclient: max rows per flush must be positive for table %s.%s, got %d", table.Keyspace, table.Table, table.MaxRowsPerFlush)
 		}
 
 		// if the data type implements VStreamScanner, we will use that to scan the results
@@ -172,13 +193,40 @@ func (v *VStreamClient) initTables(tables []TableConfig) error {
 	return nil
 }
 
+func qualifiedTableName(keyspace, table string) string {
+	return keyspace + "." + table
+}
+
+func (v *VStreamClient) lookupTable(tableName string) (*TableConfig, error) {
+	if table, ok := v.tables[tableName]; ok {
+		return table, nil
+	}
+
+	var matched *TableConfig
+	for _, table := range v.tables {
+		if table.Table != tableName {
+			continue
+		}
+		if matched != nil {
+			return nil, fmt.Errorf("vstreamclient: ambiguous table name: %s", tableName)
+		}
+		matched = table
+	}
+
+	if matched == nil {
+		return nil, fmt.Errorf("vstreamclient: unexpected table name: %s", tableName)
+	}
+
+	return matched, nil
+}
+
 func validateTableConfig(providedTables, dbTables map[string]*TableConfig) error {
 	providedTablesMap := tablesToDBTableConfig(providedTables)
 	dbTablesMap := tablesToDBTableConfig(dbTables)
 
 	if !maps.Equal(providedTablesMap, dbTablesMap) {
 		// TODO: this could be more user-friendly and show the differences
-		return fmt.Errorf("vstreamclient: provided tables do not match stored tables")
+		return errors.New("vstreamclient: provided tables do not match stored tables")
 	}
 
 	return nil
@@ -214,43 +262,53 @@ func (table *TableConfig) handleFieldEvent(ev *binlogdatapb.FieldEvent) error {
 func (table *TableConfig) reflectMapFields(fields []*querypb.Field) (map[string]fieldMapping, error) {
 	fieldMap := make(map[string]fieldMapping, len(fields))
 
-	for i := 0; i < table.underlyingType.NumField(); i++ {
-		structField := table.underlyingType.Field(i)
+	for structField := range table.underlyingType.Fields() {
 		if !structField.IsExported() {
 			continue
 		}
 
 		// get the field name from the vstream, db, json tag, or the field name, in that order
-		mappedFieldName := structField.Tag.Get("vstream")
+		mappedFieldName, jsonDecode := parseVStreamTag(structField.Tag.Get("vstream"))
 		if mappedFieldName == "-" {
 			continue
 		}
 		if mappedFieldName == "" {
-			mappedFieldName = structField.Tag.Get("db")
+			mappedFieldName = parseTagName(structField.Tag.Get("db"))
 		}
 		if mappedFieldName == "" {
-			mappedFieldName = structField.Tag.Get("json")
+			mappedFieldName = parseTagName(structField.Tag.Get("json"))
 		}
 		if mappedFieldName == "" {
 			mappedFieldName = structField.Name
 		}
 
-		var found bool
 		for j, tableField := range fields {
 			if tableField.Name != mappedFieldName {
 				continue
 			}
 
-			found = true
+			fieldType := structField.Type
+			isPointer := fieldType.Kind() == reflect.Ptr
+			if isPointer {
+				fieldType = fieldType.Elem()
+			}
+
 			fieldMap[mappedFieldName] = fieldMapping{
 				rowIndex:    j,
 				structIndex: structField.Index,
-				kind:        structField.Type.Kind(),
-				isPointer:   structField.Type.Kind() == reflect.Ptr,
+				structType:  fieldType,
+				kind:        fieldType.Kind(),
+				isPointer:   isPointer,
+				jsonDecode:  jsonDecode,
 			}
 		}
-		if !found && table.ErrorOnUnknownFields {
-			return nil, fmt.Errorf("vstreamclient: field %s not found in provided data type", mappedFieldName)
+	}
+
+	if table.ErrorOnUnknownFields {
+		for _, f := range fields {
+			if _, ok := fieldMap[f.Name]; !ok {
+				return nil, fmt.Errorf("vstreamclient: field %s not found in provided data type", f.Name)
+			}
 		}
 	}
 
@@ -262,10 +320,35 @@ func (table *TableConfig) reflectMapFields(fields []*querypb.Field) (map[string]
 	return fieldMap, nil
 }
 
+func parseVStreamTag(tag string) (name string, jsonDecode bool) {
+	if tag == "" {
+		return "", false
+	}
+
+	parts := strings.Split(tag, ",")
+	name = strings.TrimSpace(parts[0])
+	for _, opt := range parts[1:] {
+		if strings.EqualFold(strings.TrimSpace(opt), "json") {
+			jsonDecode = true
+		}
+	}
+
+	return name, jsonDecode
+}
+
+func parseTagName(tag string) string {
+	if tag == "" {
+		return ""
+	}
+
+	name, _, _ := strings.Cut(tag, ",")
+	return strings.TrimSpace(name)
+}
+
 func (table *TableConfig) handleRowEvent(ev *binlogdatapb.RowEvent, vstreamStats *VStreamStats) error {
 	shard, ok := table.shards[ev.Shard]
 	if !ok {
-		return fmt.Errorf("unexpected shard: %s", ev.Shard)
+		return fmt.Errorf("vstreamclient: unexpected shard: %s", ev.Shard)
 	}
 
 	table.currentBatch = slices.Grow(table.currentBatch, len(ev.RowChanges))
@@ -293,31 +376,33 @@ func (table *TableConfig) handleRowEvent(ev *binlogdatapb.RowEvent, vstreamStats
 			table.stats.RowUpdateCount++
 		}
 
+		var data any
+
 		// create a new struct for the row
-		v := reflect.New(table.underlyingType)
+		var v reflect.Value
+		if row != nil {
+			v = reflect.New(table.underlyingType)
+
+			if table.implementsScanner {
+				scanner := v.Interface().(VStreamScanner)
+				if err := scanner.VStreamScan(shard.fields, row, ev, rc); err != nil {
+					return fmt.Errorf("vstreamclient: client scan failed: %w", err)
+				}
+			} else {
+				err := copyRowToStruct(shard, row, v)
+				if err != nil {
+					return err
+				}
+			}
+
+			data = v.Interface()
+		}
+
 		table.currentBatch = append(table.currentBatch, Row{
 			RowEvent:  ev,
 			RowChange: rc,
-			Data:      v.Interface(),
+			Data:      data,
 		})
-
-		// use the custom scanner if available
-		if table.implementsScanner {
-			returnVals := v.MethodByName("VStreamScan").Call([]reflect.Value{
-				reflect.ValueOf(shard.fields),
-				reflect.ValueOf(row),
-				reflect.ValueOf(ev),
-				reflect.ValueOf(rc),
-			})
-			if !returnVals[0].IsNil() {
-				return fmt.Errorf("vstreamclient: client scan failed: %w", returnVals[0].Interface().(error))
-			}
-		} else {
-			err := copyRowToStruct(shard, row, v)
-			if err != nil {
-				return err
-			}
-		}
 	}
 
 	return nil

@@ -1,0 +1,632 @@
+package vstreamclient
+
+import (
+	"context"
+	"reflect"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+
+	"vitess.io/vitess/go/sqltypes"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+)
+
+type testRow struct {
+	ID   int64      `vstream:"id"`
+	TS   time.Time  `vstream:"ts"`
+	Opt  *int64     `vstream:"opt"`
+	OptT *time.Time `vstream:"opt_ts"`
+}
+
+type testRowSmall struct {
+	ID int64 `vstream:"id"`
+}
+
+type testScannerRow struct {
+	ID int64
+}
+
+type testFailingScannerRow struct{}
+
+type testJSONPayload struct {
+	Name  string `json:"name"`
+	Count int    `json:"count"`
+}
+
+type testJSONRow struct {
+	ID         int64            `vstream:"id"`
+	Payload    testJSONPayload  `vstream:"payload,json"`
+	OptPayload *testJSONPayload `vstream:"opt_payload,json"`
+}
+
+type testFallbackTagRow struct {
+	DBName     string `db:"db_name,omitempty"`
+	JSONName   string `json:"json_name,omitempty"`
+	OptionName string `vstream:" option_name , JSON "`
+}
+
+type testNullableJSONRow struct {
+	ID      int64            `vstream:"id"`
+	Opt     *int64           `vstream:"opt"`
+	Payload *testJSONPayload `vstream:"payload,json"`
+}
+
+type testCustomStructField struct {
+	Value string
+}
+
+type testStructFieldRow struct {
+	ID      int64                 `vstream:"id"`
+	Wrapped testCustomStructField `vstream:"wrapped"`
+}
+
+type testSmallIntRow struct {
+	Value int8 `vstream:"value"`
+}
+
+type testSmallUintRow struct {
+	Value uint8 `vstream:"value"`
+}
+
+type testSmallFloatRow struct {
+	Value float32 `vstream:"value"`
+}
+
+func (r *testScannerRow) VStreamScan(_ []*querypb.Field, row []sqltypes.Value, _ *binlogdatapb.RowEvent, _ *binlogdatapb.RowChange) error {
+	v, err := row[0].ToInt64()
+	if err != nil {
+		return err
+	}
+	r.ID = v
+	return nil
+}
+
+func (r *testFailingScannerRow) VStreamScan(_ []*querypb.Field, _ []sqltypes.Value, _ *binlogdatapb.RowEvent, _ *binlogdatapb.RowChange) error {
+	return assert.AnError
+}
+
+func TestCopyRowToStruct_TimeAndPointers(t *testing.T) {
+	fields := []*querypb.Field{
+		{Name: "id", Type: querypb.Type_INT64},
+		{Name: "ts", Type: querypb.Type_TIMESTAMP},
+		{Name: "opt", Type: querypb.Type_INT64},
+		{Name: "opt_ts", Type: querypb.Type_TIMESTAMP},
+	}
+
+	table := &TableConfig{DataType: &testRow{}}
+	table.underlyingType = reflect.Indirect(reflect.ValueOf(table.DataType)).Type()
+
+	fieldMap, err := table.reflectMapFields(fields)
+	assert.NoError(t, err)
+
+	shard := shardConfig{fieldMap: fieldMap, fields: fields}
+
+	row := []sqltypes.Value{
+		sqltypes.NewInt64(1),
+		sqltypes.NewTimestamp("2026-02-10 11:12:13"),
+		sqltypes.NULL,
+		sqltypes.NewTimestamp("2026-02-10 11:12:14"),
+	}
+
+	v := reflect.New(table.underlyingType)
+	err = copyRowToStruct(shard, row, v)
+	assert.NoError(t, err)
+
+	out := v.Interface().(*testRow)
+	assert.Equal(t, int64(1), out.ID)
+	assert.False(t, out.TS.IsZero())
+	assert.Nil(t, out.Opt)
+	if assert.NotNil(t, out.OptT) {
+		assert.False(t, out.OptT.IsZero())
+	}
+}
+
+func TestCopyRowToStruct_NullIntoNonPointerErrors(t *testing.T) {
+	fields := []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}
+
+	table := &TableConfig{DataType: &testRowSmall{}}
+	table.underlyingType = reflect.Indirect(reflect.ValueOf(table.DataType)).Type()
+
+	fieldMap, err := table.reflectMapFields(fields)
+	assert.NoError(t, err)
+
+	shard := shardConfig{fieldMap: fieldMap, fields: fields}
+	row := []sqltypes.Value{sqltypes.NULL}
+
+	v := reflect.New(table.underlyingType)
+	err = copyRowToStruct(shard, row, v)
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "NULL into non-pointer field")
+}
+
+func TestCopyRowToStruct_JSONFields(t *testing.T) {
+	fields := []*querypb.Field{
+		{Name: "id", Type: querypb.Type_INT64},
+		{Name: "payload", Type: querypb.Type_JSON},
+		{Name: "opt_payload", Type: querypb.Type_JSON},
+	}
+
+	table := &TableConfig{DataType: &testJSONRow{}}
+	table.underlyingType = reflect.Indirect(reflect.ValueOf(table.DataType)).Type()
+
+	fieldMap, err := table.reflectMapFields(fields)
+	assert.NoError(t, err)
+
+	shard := shardConfig{fieldMap: fieldMap, fields: fields}
+	row := []sqltypes.Value{
+		sqltypes.NewInt64(1),
+		sqltypes.NewVarBinary(`{"name":"alpha","count":2}`),
+		sqltypes.NULL,
+	}
+
+	v := reflect.New(table.underlyingType)
+	err = copyRowToStruct(shard, row, v)
+	assert.NoError(t, err)
+
+	out := v.Interface().(*testJSONRow)
+	assert.Equal(t, int64(1), out.ID)
+	assert.Equal(t, "alpha", out.Payload.Name)
+	assert.Equal(t, 2, out.Payload.Count)
+	assert.Nil(t, out.OptPayload)
+}
+
+func TestCopyRowToStruct_JSONFieldInvalidErrors(t *testing.T) {
+	fields := []*querypb.Field{
+		{Name: "id", Type: querypb.Type_INT64},
+		{Name: "payload", Type: querypb.Type_JSON},
+		{Name: "opt_payload", Type: querypb.Type_JSON},
+	}
+
+	table := &TableConfig{DataType: &testJSONRow{}}
+	table.underlyingType = reflect.Indirect(reflect.ValueOf(table.DataType)).Type()
+
+	fieldMap, err := table.reflectMapFields(fields)
+	assert.NoError(t, err)
+
+	shard := shardConfig{fieldMap: fieldMap, fields: fields}
+	row := []sqltypes.Value{
+		sqltypes.NewInt64(1),
+		sqltypes.NewVarBinary(`{"name":"alpha"`),
+		sqltypes.NULL,
+	}
+
+	v := reflect.New(table.underlyingType)
+	err = copyRowToStruct(shard, row, v)
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "error unmarshalling JSON for field payload")
+}
+
+func TestCopyRowToStruct_JSONFieldNullIntoNonPointerErrors(t *testing.T) {
+	fields := []*querypb.Field{
+		{Name: "id", Type: querypb.Type_INT64},
+		{Name: "payload", Type: querypb.Type_JSON},
+		{Name: "opt_payload", Type: querypb.Type_JSON},
+	}
+
+	table := &TableConfig{DataType: &testJSONRow{}}
+	table.underlyingType = reflect.Indirect(reflect.ValueOf(table.DataType)).Type()
+
+	fieldMap, err := table.reflectMapFields(fields)
+	assert.NoError(t, err)
+
+	shard := shardConfig{fieldMap: fieldMap, fields: fields}
+	row := []sqltypes.Value{
+		sqltypes.NewInt64(1),
+		sqltypes.NULL,
+		sqltypes.NULL,
+	}
+
+	v := reflect.New(table.underlyingType)
+	err = copyRowToStruct(shard, row, v)
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "error unmarshalling JSON for field payload")
+	assert.ErrorContains(t, err, "NULL into non-pointer field")
+}
+
+func TestCopyRowToStruct_UnsupportedStructFieldErrors(t *testing.T) {
+	fields := []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}, {Name: "wrapped", Type: querypb.Type_VARCHAR}}
+
+	table := &TableConfig{DataType: &testStructFieldRow{}}
+	table.underlyingType = reflect.Indirect(reflect.ValueOf(table.DataType)).Type()
+
+	fieldMap, err := table.reflectMapFields(fields)
+	assert.NoError(t, err)
+
+	shard := shardConfig{fieldMap: fieldMap, fields: fields}
+	row := []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewVarChar("value")}
+
+	v := reflect.New(table.underlyingType)
+	err = copyRowToStruct(shard, row, v)
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "unsupported struct field type")
+	assert.ErrorContains(t, err, "wrapped")
+}
+
+func TestCopyRowToStruct_IntOverflowErrors(t *testing.T) {
+	fields := []*querypb.Field{{Name: "value", Type: querypb.Type_INT64}}
+
+	table := &TableConfig{DataType: &testSmallIntRow{}}
+	table.underlyingType = reflect.Indirect(reflect.ValueOf(table.DataType)).Type()
+
+	fieldMap, err := table.reflectMapFields(fields)
+	assert.NoError(t, err)
+
+	shard := shardConfig{fieldMap: fieldMap, fields: fields}
+	row := []sqltypes.Value{sqltypes.NewInt64(128)}
+
+	v := reflect.New(table.underlyingType)
+	err = copyRowToStruct(shard, row, v)
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "overflows destination type")
+	assert.ErrorContains(t, err, "value")
+}
+
+func TestCopyRowToStruct_UintOverflowErrors(t *testing.T) {
+	fields := []*querypb.Field{{Name: "value", Type: querypb.Type_UINT64}}
+
+	table := &TableConfig{DataType: &testSmallUintRow{}}
+	table.underlyingType = reflect.Indirect(reflect.ValueOf(table.DataType)).Type()
+
+	fieldMap, err := table.reflectMapFields(fields)
+	assert.NoError(t, err)
+
+	shard := shardConfig{fieldMap: fieldMap, fields: fields}
+	row := []sqltypes.Value{sqltypes.NewUint64(256)}
+
+	v := reflect.New(table.underlyingType)
+	err = copyRowToStruct(shard, row, v)
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "overflows destination type")
+	assert.ErrorContains(t, err, "value")
+}
+
+func TestCopyRowToStruct_FloatOverflowErrors(t *testing.T) {
+	fields := []*querypb.Field{{Name: "value", Type: querypb.Type_FLOAT64}}
+
+	table := &TableConfig{DataType: &testSmallFloatRow{}}
+	table.underlyingType = reflect.Indirect(reflect.ValueOf(table.DataType)).Type()
+
+	fieldMap, err := table.reflectMapFields(fields)
+	assert.NoError(t, err)
+
+	shard := shardConfig{fieldMap: fieldMap, fields: fields}
+	row := []sqltypes.Value{sqltypes.NewFloat64(1e40)}
+
+	v := reflect.New(table.underlyingType)
+	err = copyRowToStruct(shard, row, v)
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "overflows destination type")
+	assert.ErrorContains(t, err, "value")
+}
+
+func TestReflectMapFields_ErrorOnUnknownFields(t *testing.T) {
+	fields := []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}, {Name: "extra", Type: querypb.Type_INT64}}
+
+	table := &TableConfig{DataType: &testRowSmall{}, ErrorOnUnknownFields: true}
+	table.underlyingType = reflect.Indirect(reflect.ValueOf(table.DataType)).Type()
+
+	_, err := table.reflectMapFields(fields)
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "field extra")
+}
+
+func TestReflectMapFields_FallbackTagsStripOptions(t *testing.T) {
+	fields := []*querypb.Field{
+		{Name: "db_name", Type: querypb.Type_VARCHAR},
+		{Name: "json_name", Type: querypb.Type_VARCHAR},
+		{Name: "option_name", Type: querypb.Type_VARCHAR},
+	}
+
+	table := &TableConfig{DataType: &testFallbackTagRow{}}
+	table.underlyingType = reflect.Indirect(reflect.ValueOf(table.DataType)).Type()
+
+	fieldMap, err := table.reflectMapFields(fields)
+	assert.NoError(t, err)
+
+	_, ok := fieldMap["db_name"]
+	assert.True(t, ok)
+	_, ok = fieldMap["json_name"]
+	assert.True(t, ok)
+	m, ok := fieldMap["option_name"]
+	if assert.True(t, ok) {
+		assert.True(t, m.jsonDecode)
+	}
+}
+
+func TestInitTables_RequiresFlushFn(t *testing.T) {
+	v := &VStreamClient{
+		shardsByKeyspace: map[string][]string{"ks": {"0"}},
+		tables:           make(map[string]*TableConfig),
+	}
+
+	err := v.initTables([]TableConfig{{
+		Keyspace: "ks",
+		Table:    "t",
+		DataType: &testRowSmall{},
+	}})
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "has no flush function")
+}
+
+func TestInitTables_SetsDefaults(t *testing.T) {
+	v := &VStreamClient{
+		shardsByKeyspace: map[string][]string{"ks": {"0"}},
+		tables:           make(map[string]*TableConfig),
+	}
+
+	err := v.initTables([]TableConfig{{
+		Keyspace: "ks",
+		Table:    "t",
+		DataType: &testRowSmall{},
+		FlushFn:  func(context.Context, []Row, FlushMeta) error { return nil },
+	}})
+	assert.NoError(t, err)
+
+	table := v.tables[qualifiedTableName("ks", "t")]
+	if assert.NotNil(t, table) {
+		assert.Equal(t, "select * from `t`", table.Query)
+		assert.Equal(t, DefaultMaxRowsPerFlush, table.MaxRowsPerFlush)
+		assert.Len(t, table.currentBatch, 0)
+		assert.Equal(t, DefaultMaxRowsPerFlush, cap(table.currentBatch))
+	}
+}
+
+func TestInitTables_RejectsDuplicateTables(t *testing.T) {
+	v := &VStreamClient{
+		shardsByKeyspace: map[string][]string{"ks1": {"0"}, "ks2": {"0"}},
+		tables:           make(map[string]*TableConfig),
+	}
+
+	err := v.initTables([]TableConfig{
+		{Keyspace: "ks1", Table: "t", DataType: &testRowSmall{}, FlushFn: func(context.Context, []Row, FlushMeta) error { return nil }},
+		{Keyspace: "ks2", Table: "t", DataType: &testRowSmall{}, FlushFn: func(context.Context, []Row, FlushMeta) error { return nil }},
+	})
+	assert.NoError(t, err)
+	assert.Contains(t, v.tables, qualifiedTableName("ks1", "t"))
+	assert.Contains(t, v.tables, qualifiedTableName("ks2", "t"))
+}
+
+func TestInitTables_RejectsConflictingQueriesForSameTableAcrossKeyspaces(t *testing.T) {
+	v := &VStreamClient{
+		shardsByKeyspace: map[string][]string{"ks1": {"0"}, "ks2": {"0"}},
+		tables:           make(map[string]*TableConfig),
+	}
+
+	err := v.initTables([]TableConfig{
+		{Keyspace: "ks1", Table: "t", Query: "select * from t where id < 10", DataType: &testRowSmall{}, FlushFn: func(context.Context, []Row, FlushMeta) error { return nil }},
+		{Keyspace: "ks2", Table: "t", Query: "select * from t where id >= 10", DataType: &testRowSmall{}, FlushFn: func(context.Context, []Row, FlushMeta) error { return nil }},
+	})
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "same table name across keyspaces must use identical queries")
+}
+
+func TestInitTables_RejectsUnknownKeyspace(t *testing.T) {
+	v := &VStreamClient{
+		shardsByKeyspace: map[string][]string{"ks": {"0"}},
+		tables:           make(map[string]*TableConfig),
+	}
+
+	err := v.initTables([]TableConfig{{
+		Keyspace: "missing",
+		Table:    "t",
+		DataType: &testRowSmall{},
+		FlushFn:  func(context.Context, []Row, FlushMeta) error { return nil },
+	}})
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "keyspace missing not found")
+}
+
+func TestInitTables_RejectsNonStructDataType(t *testing.T) {
+	v := &VStreamClient{
+		shardsByKeyspace: map[string][]string{"ks": {"0"}},
+		tables:           make(map[string]*TableConfig),
+	}
+
+	err := v.initTables([]TableConfig{{
+		Keyspace: "ks",
+		Table:    "t",
+		DataType: new(int64),
+		FlushFn:  func(context.Context, []Row, FlushMeta) error { return nil },
+	}})
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "must be a struct")
+}
+
+func TestInitTables_RejectsTypedNilDataType(t *testing.T) {
+	v := &VStreamClient{
+		shardsByKeyspace: map[string][]string{"ks": {"0"}},
+		tables:           make(map[string]*TableConfig),
+	}
+
+	var row *testRowSmall
+	err := v.initTables([]TableConfig{{
+		Keyspace: "ks",
+		Table:    "t",
+		DataType: row,
+		FlushFn:  func(context.Context, []Row, FlushMeta) error { return nil },
+	}})
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "has no data type")
+}
+
+func TestInitTables_RejectsNegativeMaxRowsPerFlush(t *testing.T) {
+	v := &VStreamClient{
+		shardsByKeyspace: map[string][]string{"ks": {"0"}},
+		tables:           make(map[string]*TableConfig),
+	}
+
+	err := v.initTables([]TableConfig{{
+		Keyspace:        "ks",
+		Table:           "t",
+		MaxRowsPerFlush: -1,
+		DataType:        &testRowSmall{},
+		FlushFn:         func(context.Context, []Row, FlushMeta) error { return nil },
+	}})
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "max rows per flush must be positive")
+}
+
+func TestValidateTableConfig(t *testing.T) {
+	t.Run("matching config passes", func(t *testing.T) {
+		err := validateTableConfig(
+			map[string]*TableConfig{"t": {Keyspace: "ks", Table: "t", Query: "select * from t"}},
+			map[string]*TableConfig{"t": {Keyspace: "ks", Table: "t", Query: "select * from t"}},
+		)
+		assert.NoError(t, err)
+	})
+
+	t.Run("different config fails", func(t *testing.T) {
+		err := validateTableConfig(
+			map[string]*TableConfig{"t": {Keyspace: "ks", Table: "t", Query: "select * from t"}},
+			map[string]*TableConfig{"t": {Keyspace: "ks", Table: "t", Query: "select id from t"}},
+		)
+		assert.Error(t, err)
+		assert.ErrorContains(t, err, "provided tables do not match stored tables")
+	})
+}
+
+func TestHandleRowEvent_DeleteUsesBeforeRowData(t *testing.T) {
+	fields := []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}
+
+	table := &TableConfig{Keyspace: "ks", Table: "t", DataType: &testRowSmall{}}
+	table.underlyingType = reflect.Indirect(reflect.ValueOf(table.DataType)).Type()
+	fieldMap, err := table.reflectMapFields(fields)
+	assert.NoError(t, err)
+
+	table.shards = map[string]shardConfig{"0": {fieldMap: fieldMap, fields: fields}}
+	table.resetBatch()
+
+	ev := &binlogdatapb.RowEvent{TableName: "t", Shard: "0", RowChanges: []*binlogdatapb.RowChange{{
+		Before: &querypb.Row{Lengths: []int64{1}, Values: []byte("1")},
+		After:  nil,
+	}}}
+
+	stats := &VStreamStats{}
+	err = table.handleRowEvent(ev, stats)
+	assert.NoError(t, err)
+	if assert.Len(t, table.currentBatch, 1) {
+		row, ok := table.currentBatch[0].Data.(*testRowSmall)
+		if assert.True(t, ok) {
+			assert.Equal(t, int64(1), row.ID)
+		}
+	}
+}
+
+func TestHandleRowEvent_InsertScansNullableFields(t *testing.T) {
+	fields := []*querypb.Field{
+		{Name: "id", Type: querypb.Type_INT64},
+		{Name: "opt", Type: querypb.Type_INT64},
+		{Name: "payload", Type: querypb.Type_JSON},
+	}
+
+	table := &TableConfig{Keyspace: "ks", Table: "t", DataType: &testNullableJSONRow{}}
+	table.underlyingType = reflect.Indirect(reflect.ValueOf(table.DataType)).Type()
+	fieldMap, err := table.reflectMapFields(fields)
+	assert.NoError(t, err)
+	table.shards = map[string]shardConfig{"0": {fieldMap: fieldMap, fields: fields}}
+	table.resetBatch()
+
+	ev := &binlogdatapb.RowEvent{
+		TableName: "ks.t",
+		Shard:     "0",
+		RowChanges: []*binlogdatapb.RowChange{{
+			After: sqltypes.RowToProto3([]sqltypes.Value{
+				sqltypes.NewInt64(7),
+				sqltypes.NULL,
+				sqltypes.NewVarBinary(`{"name":"beta","count":4}`),
+			}),
+		}},
+	}
+
+	stats := &VStreamStats{}
+	err = table.handleRowEvent(ev, stats)
+	assert.NoError(t, err)
+	if assert.Len(t, table.currentBatch, 1) {
+		row, ok := table.currentBatch[0].Data.(*testNullableJSONRow)
+		if assert.True(t, ok) {
+			assert.Equal(t, int64(7), row.ID)
+			assert.Nil(t, row.Opt)
+			if assert.NotNil(t, row.Payload) {
+				assert.Equal(t, "beta", row.Payload.Name)
+				assert.Equal(t, 4, row.Payload.Count)
+			}
+		}
+	}
+}
+
+func TestHandleRowEvent_UsesTypedScanner(t *testing.T) {
+	fields := []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}
+
+	table := &TableConfig{Keyspace: "ks", Table: "t", DataType: &testScannerRow{}}
+	table.implementsScanner = true
+	table.underlyingType = reflect.Indirect(reflect.ValueOf(table.DataType)).Type()
+
+	table.shards = map[string]shardConfig{"0": {fieldMap: nil, fields: fields}}
+	table.resetBatch()
+
+	ev := &binlogdatapb.RowEvent{TableName: "t", Shard: "0", RowChanges: []*binlogdatapb.RowChange{{
+		Before: nil,
+		After:  &querypb.Row{Lengths: []int64{1}, Values: []byte("7")},
+	}}}
+
+	stats := &VStreamStats{}
+	err := table.handleRowEvent(ev, stats)
+	assert.NoError(t, err)
+	if assert.Len(t, table.currentBatch, 1) {
+		row := table.currentBatch[0]
+		scanned, ok := row.Data.(*testScannerRow)
+		if assert.True(t, ok) {
+			assert.Equal(t, int64(7), scanned.ID)
+		}
+	}
+}
+
+func TestHandleRowEvent_DecodeFailureDoesNotBufferRow(t *testing.T) {
+	fields := []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}
+
+	table := &TableConfig{Keyspace: "ks", Table: "t", DataType: &testRowSmall{}}
+	table.underlyingType = reflect.Indirect(reflect.ValueOf(table.DataType)).Type()
+	fieldMap, err := table.reflectMapFields(fields)
+	assert.NoError(t, err)
+	table.shards = map[string]shardConfig{"0": {fieldMap: fieldMap, fields: fields}}
+	table.resetBatch()
+
+	ev := &binlogdatapb.RowEvent{TableName: "t", Shard: "0", RowChanges: []*binlogdatapb.RowChange{{
+		After: &querypb.Row{Lengths: []int64{3}, Values: []byte("bad")},
+	}}}
+
+	stats := &VStreamStats{}
+	err = table.handleRowEvent(ev, stats)
+	assert.Error(t, err)
+	assert.Len(t, table.currentBatch, 0)
+}
+
+func TestHandleRowEvent_ScannerFailureDoesNotBufferRow(t *testing.T) {
+	fields := []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}
+
+	table := &TableConfig{Keyspace: "ks", Table: "t", DataType: &testFailingScannerRow{}}
+	table.implementsScanner = true
+	table.underlyingType = reflect.Indirect(reflect.ValueOf(table.DataType)).Type()
+	table.shards = map[string]shardConfig{"0": {fields: fields}}
+	table.resetBatch()
+
+	ev := &binlogdatapb.RowEvent{TableName: "t", Shard: "0", RowChanges: []*binlogdatapb.RowChange{{
+		After: &querypb.Row{Lengths: []int64{1}, Values: []byte("7")},
+	}}}
+
+	stats := &VStreamStats{}
+	err := table.handleRowEvent(ev, stats)
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "client scan failed")
+	assert.Len(t, table.currentBatch, 0)
+}
+
+func TestWithFlags_RejectsZeroHeartbeatInterval(t *testing.T) {
+	v := &VStreamClient{}
+	err := WithFlags(&vtgatepb.VStreamFlags{HeartbeatInterval: 0})(v)
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "HeartbeatInterval")
+}
