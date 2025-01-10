@@ -11,6 +11,7 @@
   - **[VTGate Config File Changes](#vtgate-config-file-changes)**
   - **[Support for More Efficient JSON Replication](#efficient-json-replication)**
   - **[Support for LAST_INSERT_ID(x)](#last-insert-id)**
+  - **[Support for Maximum Idle Connections in the Pool](#max-idle-connections)**
   - **[Stalled Disk Recovery in VTOrc](#stall-disk-recovery)**
 - **[Minor Changes](#minor-changes)**
   - **[VTTablet Flags](#flags-vttablet)**
@@ -88,6 +89,17 @@ In [#17408](https://github.com/vitessio/vitess/pull/17408) and [#17409](https://
 
 **Limitations**:
 - When using `LAST_INSERT_ID(x)` in ordered queries (e.g., `SELECT last_insert_id(col) FROM table ORDER BY foo`), MySQL sets the session’s last-insert-id value according to the *last row returned*. Vitess does not guarantee the same behavior.
+
+### <a id="max-idle-connections"/>Support for Maximum Idle Connections in the Pool</a>
+
+In [#17443](https://github.com/vitessio/vitess/pull/17443) we introduced a new configurable max-idle-count parameter for connection pools. This allows you to specify the maximum number of idle connections retained in each connection pool to optimize performance and resource efficiency.
+
+You can control idle connection retention for the query server’s query pool, stream pool, and transaction pool with the following flags:
+•	--queryserver-config-query-pool-max-idle-count: Defines the maximum number of idle connections retained in the query pool.
+•	--queryserver-config-stream-pool-max-idle-count: Defines the maximum number of idle connections retained in the stream pool.
+•	--queryserver-config-txpool-max-idle-count: Defines the maximum number of idle connections retained in the transaction pool.
+
+This feature ensures that, during traffic spikes, idle connections are available for faster responses, while minimizing overhead in low-traffic periods by limiting the number of idle connections retained. It helps strike a balance between performance, efficiency, and cost.
 
 ### <a id="stall-disk-recovery"/>Stalled Disk Recovery in VTOrc</a>
 VTOrc has been augmented to be able to identify and recover from stalled disk errors. This is done by polling that the disk is writable by the vttablets and they send this information in the full status output to VTOrc. If the disk is not writable on the primary tablet, VTOrc will attempt to recover the cluster by reparenting to a different primary. This is useful in scenarios where the disk is stalled and the primary vttablet is unable to accept writes because of it.
