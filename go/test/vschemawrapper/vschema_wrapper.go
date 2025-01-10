@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -300,11 +301,19 @@ func (vw *VSchemaWrapper) AnyKeyspace() (*vindexes.Keyspace, error) {
 		return ks.Keyspace, nil
 	}
 
-	for _, ks := range vw.V.Keyspaces {
-		return ks.Keyspace, nil
+	size := len(vw.V.Keyspaces)
+	if size == 0 {
+		return nil, errors.New("no keyspace found in vschema")
 	}
 
-	return nil, errors.New("no keyspace found in vschema")
+	// Find the first keyspace in the map alphabetically to get deterministic results
+	keys := make([]string, size)
+	for key := range vw.V.Keyspaces {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	return vw.V.Keyspaces[keys[0]].Keyspace, nil
 }
 
 func (vw *VSchemaWrapper) FirstSortedKeyspace() (*vindexes.Keyspace, error) {
