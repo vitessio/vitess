@@ -744,7 +744,7 @@ func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, dr *D
 		}
 		lastPKTxt, err := prototext.Marshal(lastPK)
 		if err != nil {
-			return err
+			return vterrors.Wrapf(err, "failed to marshal lastpk value %+v for table %s", lastPK, td.table.Name)
 		}
 		query, err = sqlparser.ParseAndBind(sqlUpdateTableProgress,
 			sqltypes.Int64BindVariable(dr.ProcessedRows),
@@ -907,20 +907,21 @@ func (td *tableDiffer) getSourcePKCols() error {
 	}
 	sourceShard, err := sourceTS.GetShard(ctx, td.wd.ct.sourceKeyspace, sourceShardName)
 	if err != nil {
-		return err
+		return vterrors.Wrapf(err, "failed to get source shard %s", sourceShardName)
 	}
 	if sourceShard.PrimaryAlias == nil {
-		return fmt.Errorf("source shard %s has no primary", sourceShardName)
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "source shard %s has no primary", sourceShardName)
 	}
 	sourceTablet, err := sourceTS.GetTablet(ctx, sourceShard.PrimaryAlias)
 	if err != nil {
-		return fmt.Errorf("failed to get source shard %s primary", sourceShardName)
+		return vterrors.Wrapf(err, "failed to get primary tablet in source shard %s", sourceShardName)
 	}
 	sourceSchema, err := td.wd.ct.tmc.GetSchema(ctx, sourceTablet.Tablet, &tabletmanagerdatapb.GetSchemaRequest{
 		Tables: []string{td.table.Name},
 	})
 	if err != nil {
-		return err
+		return vterrors.Wrapf(err, "failed to get the schema for table %s from source tablet %s",
+			td.table.Name, topoproto.TabletAliasString(sourceTablet.Tablet.Alias))
 	}
 	sourceTable := sourceSchema.TableDefinitions[0]
 	if len(sourceTable.PrimaryKeyColumns) == 0 {
@@ -931,13 +932,15 @@ func (td *tableDiffer) getSourcePKCols() error {
 				MaxRows: 1,
 			})
 			if err != nil {
-				return nil, err
+				return nil, vterrors.Wrapf(err, "failed to query the %s source tablet in order to get a primary key equivalent for the %s table",
+					topoproto.TabletAliasString(sourceTablet.Tablet.Alias), td.table.Name)
 			}
 			return sqltypes.Proto3ToResult(res), nil
 		}
 		pkeCols, _, err := mysqlctl.GetPrimaryKeyEquivalentColumns(ctx, executeFetch, sourceTablet.DbName(), td.table.Name)
 		if err != nil {
-			return err
+			return vterrors.Wrapf(err, "failed to get a primary key equivalent for the %s table from source tablet %s",
+				td.table.Name, topoproto.TabletAliasString(sourceTablet.Tablet.Alias))
 		}
 		if len(pkeCols) > 0 {
 			sourceTable.PrimaryKeyColumns = pkeCols

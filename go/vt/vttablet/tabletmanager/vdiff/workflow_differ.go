@@ -388,7 +388,8 @@ func (wd *workflowDiffer) buildPlan(dbClient binlogplayer.DBClient, filter *binl
 		// We get the PK columns from the source schema as well as they can differ
 		// and they determine the proper position to use when saving our progress.
 		if err := td.getSourcePKCols(); err != nil {
-			return err
+			return vterrors.Wrapf(err, "could not get the primary key columns from the %s source keyspace",
+				wd.ct.sourceKeyspace)
 		}
 	}
 	if len(wd.tableDiffers) == 0 {
@@ -419,7 +420,8 @@ func (wd *workflowDiffer) getTableLastPK(dbClient binlogplayer.DBClient, tableNa
 		if len(lastpk) != 0 {
 			lastPK := &tabletmanagerdatapb.VDiffTableLastPK{}
 			if err := prototext.Unmarshal(lastpk, lastPK); err != nil {
-				return nil, vterrors.Wrapf(err, "failed to unmarshal lastpk for table %s", tableName)
+				return nil, vterrors.Wrapf(err, "failed to unmarshal lastpk value of %s for table %s",
+					string(lastpk), tableName)
 			}
 			return lastPK, nil
 		}
