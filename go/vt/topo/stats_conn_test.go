@@ -195,12 +195,12 @@ func (st *fakeConn) IsReadOnly() bool {
 }
 
 // createTestReadSemaphoreContention simulates semaphore contention on the test read semaphore.
-func createTestReadSemaphoreContention(ctx context.Context, duration time.Duration, semAcquiredChan chan bool) {
+func createTestReadSemaphoreContention(ctx context.Context, duration time.Duration, semAcquiredChan chan struct{}) {
 	if err := testStatsConnReadSem.Acquire(ctx, 1); err != nil {
 		panic(err)
 	}
 	defer testStatsConnReadSem.Release(1)
-	semAcquiredChan <- true
+	semAcquiredChan <- struct{}{}
 	time.Sleep(duration)
 }
 
@@ -213,7 +213,7 @@ func TestStatsConnTopoListDir(t *testing.T) {
 	statsConn := NewStatsConn("global", conn, testStatsConnReadSem)
 	ctx := context.Background()
 
-	semAcquiredChan := make(chan bool)
+	semAcquiredChan := make(chan struct{})
 	go createTestReadSemaphoreContention(ctx, 100*time.Millisecond, semAcquiredChan)
 	<-semAcquiredChan
 	statsConn.ListDir(ctx, "", true)
@@ -287,7 +287,7 @@ func TestStatsConnTopoGet(t *testing.T) {
 	statsConn := NewStatsConn("global", conn, testStatsConnReadSem)
 	ctx := context.Background()
 
-	semAcquiredChan := make(chan bool)
+	semAcquiredChan := make(chan struct{})
 	go createTestReadSemaphoreContention(ctx, time.Millisecond*100, semAcquiredChan)
 	<-semAcquiredChan
 	statsConn.Get(ctx, "")
