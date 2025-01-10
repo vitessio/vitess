@@ -17,12 +17,8 @@ limitations under the License.
 package mysql
 
 import (
-<<<<<<< HEAD
-=======
-	"fmt"
 	"math"
 
->>>>>>> 9b0bbadd8b (Use uint64 for binary log file position (#17472))
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"

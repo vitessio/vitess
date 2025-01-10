@@ -213,19 +213,11 @@ func migrate(t *testing.T, fromdb, toks string, tables []string) {
 	var sqlEscaped bytes.Buffer
 	val.EncodeSQL(&sqlEscaped)
 	query := fmt.Sprintf("insert into _vt.vreplication "+
-<<<<<<< HEAD
 		"(workflow, db_name, source, pos, max_tps, max_replication_lag, tablet_types, time_updated, transaction_timestamp, state) values"+
 		"('%s', '%s', %s, '', 9999, 9999, 'primary', 0, 0, 'Running')", tables[0], "vt_"+toks, sqlEscaped.String())
 	fmt.Printf("VReplicationExec: %s\n", query)
 	vttablet := keyspaces[toks].Shards[0].Vttablets[0].VttabletProcess
 	err := clusterInstance.VtctlclientProcess.ExecuteCommand("VReplicationExec", vttablet.TabletPath, query)
-=======
-		"(workflow, db_name, source, pos, max_tps, max_replication_lag, tablet_types, time_updated, transaction_timestamp, state, options) values"+
-		"('%s', '%s', %s, '', 9999, 9999, 'primary', 0, 0, 'Running', '{}')", tables[0], "vt_"+toks, sqlEscaped.String())
-	fmt.Printf("VReplication insert: %s\n", query)
-	vttablet := keyspaces[toks].Shards[0].Vttablets[0].Alias
-	err := clusterInstance.VtctldClientProcess.ExecuteCommand("ExecuteFetchAsDBA", vttablet, query)
->>>>>>> 9b0bbadd8b (Use uint64 for binary log file position (#17472))
 	require.NoError(t, err)
 }
 
