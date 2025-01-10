@@ -2409,19 +2409,6 @@ func RemoveKeyspaceInCol(in SQLNode) {
 	}, in)
 }
 
-// RemoveKeyspaceInTables removes the Qualifier on all TableNames in the AST
-func RemoveKeyspaceInTables(in SQLNode) {
-	// Walk will only return an error if we return an error from the inner func. safe to ignore here
-	Rewrite(in, nil, func(cursor *Cursor) bool {
-		if tbl, ok := cursor.Node().(TableName); ok && tbl.Qualifier.NotEmpty() {
-			tbl.Qualifier = NewIdentifierCS("")
-			cursor.Replace(tbl)
-		}
-
-		return true
-	})
-}
-
 // RemoveKeyspace removes the Qualifier.Qualifier on all ColNames and Qualifier on all TableNames in the AST
 func RemoveKeyspace(in SQLNode) {
 	Rewrite(in, nil, func(cursor *Cursor) bool {
@@ -2432,6 +2419,25 @@ func RemoveKeyspace(in SQLNode) {
 			}
 		case TableName:
 			if expr.Qualifier.NotEmpty() {
+				expr.Qualifier = NewIdentifierCS("")
+				cursor.Replace(expr)
+			}
+		}
+		return true
+	})
+}
+
+// RemoveSpecificKeyspace removes the Qualifier.Qualifier on all ColNames and Qualifier on all TableNames in the AST
+// when it matches the keyspace provided
+func RemoveSpecificKeyspace(in SQLNode, keyspace string) {
+	Rewrite(in, nil, func(cursor *Cursor) bool {
+		switch expr := cursor.Node().(type) {
+		case *ColName:
+			if expr.Qualifier.Qualifier.String() == keyspace {
+				expr.Qualifier.Qualifier = NewIdentifierCS("")
+			}
+		case TableName:
+			if expr.Qualifier.String() == keyspace {
 				expr.Qualifier = NewIdentifierCS("")
 				cursor.Replace(expr)
 			}
