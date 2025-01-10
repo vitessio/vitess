@@ -385,8 +385,8 @@ func (wd *workflowDiffer) buildPlan(dbClient binlogplayer.DBClient, filter *binl
 			return err
 		}
 
-		// We get the PK columns from the source schema as well, as they can
-		// differ and determine the proper lastPK to use when saving progress.
+		// We get the PK columns from the source schema as well as they can differ
+		// and they determine the proper position to use when saving our progress.
 		if err := td.getSourcePKCols(); err != nil {
 			return err
 		}
