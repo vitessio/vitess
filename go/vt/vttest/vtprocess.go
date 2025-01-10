@@ -205,7 +205,7 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 	if args.VtComboBindAddress != "" {
 		vtcomboBindAddress = args.VtComboBindAddress
 	}
-	grpcBindAddress := "127.0.0.1"
+	grpcBindAddress := ""
 	if servenv.GRPCBindAddress() != "" {
 		grpcBindAddress = servenv.GRPCBindAddress()
 	}
