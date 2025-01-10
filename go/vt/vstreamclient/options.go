@@ -1,23 +1,32 @@
 package vstreamclient
 
 import (
+	"errors"
 	"fmt"
+	"math"
+	"os"
 	"time"
 
 	"vitess.io/vitess/go/sqlescape"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
 
 var (
 	// DefaultMinFlushDuration is the default minimum duration between flushes, used if not explicitly
 	// set using WithMinFlushDuration. This can be safely modified if needed before calling New.
-	DefaultMinFlushDuration = 5 * time.Second
+	DefaultMinFlushDuration = 30 * time.Second
 
 	// DefaultMaxRowsPerFlush is the default number of rows to buffer per table, used if not explicitly
 	// set in the table configuration. This same number is also used to chunk rows when calling flush.
 	// This can be safely modified if needed before calling New.
 	DefaultMaxRowsPerFlush = 1000
+
+	// DefaultGracefulShutdownWaitDur is the default duration to wait for the stream to gracefully shutdown after
+	// receiving a shutdown signal, used if not explicitly set using WithGracefulShutdownChan or
+	// WithGracefulShutdownSignals. This can be safely modified if needed before calling New.
+	DefaultGracefulShutdownWaitDur = 5 * time.Second
 )
 
 // Option is a function that can be used to configure a VStreamClient
@@ -42,7 +51,58 @@ func WithHeartbeatSeconds(seconds int) Option {
 			return fmt.Errorf("vstreamclient: heartbeat seconds must be positive, got %d", seconds)
 		}
 
+		if uint64(seconds) > math.MaxUint32 {
+			return fmt.Errorf("vstreamclient: heartbeat seconds must be %d or less, got %d", uint64(math.MaxUint32), seconds)
+		}
+
 		v.heartbeatSeconds = seconds
+		return nil
+	}
+}
+
+// WithTabletType overrides the tablet type used when opening the VStream.
+// The default is REPLICA.
+func WithTabletType(tabletType topodatapb.TabletType) Option {
+	return func(v *VStreamClient) error {
+		if tabletType == topodatapb.TabletType_UNKNOWN {
+			return errors.New("vstreamclient: tablet type cannot be UNKNOWN")
+		}
+
+		v.tabletType = tabletType
+		return nil
+	}
+}
+
+// WithGracefulShutdownChan triggers GracefulShutdown when the provided channel is closed.
+// A common pattern is to pass a channel derived from signal.Notify or signal.NotifyContext.
+func WithGracefulShutdownChan(ch <-chan struct{}, wait time.Duration) Option {
+	return func(v *VStreamClient) error {
+		if ch == nil {
+			return errors.New("vstreamclient: graceful shutdown channel is required")
+		}
+		if wait <= 0 {
+			return fmt.Errorf("vstreamclient: graceful shutdown wait must be positive, got %s", wait)
+		}
+
+		v.gracefulShutdownChan = ch
+		v.gracefulShutdownWaitDur = wait
+		return nil
+	}
+}
+
+// WithGracefulShutdownSignals triggers GracefulShutdown when one of the provided
+// OS signals is received. A common pattern is to pass os.Interrupt and syscall.SIGTERM.
+func WithGracefulShutdownSignals(wait time.Duration, signals ...os.Signal) Option {
+	return func(v *VStreamClient) error {
+		if len(signals) == 0 {
+			return errors.New("vstreamclient: graceful shutdown signals are required")
+		}
+		if wait <= 0 {
+			return fmt.Errorf("vstreamclient: graceful shutdown wait must be positive, got %s", wait)
+		}
+
+		v.gracefulShutdownSignals = append([]os.Signal(nil), signals...)
+		v.gracefulShutdownWaitDur = wait
 		return nil
 	}
 }
@@ -69,12 +129,20 @@ func WithStateTable(keyspace, table string) Option {
 func DefaultFlags() *vtgatepb.VStreamFlags {
 	return &vtgatepb.VStreamFlags{
 		HeartbeatInterval: 1,
+		// Keep keyspace in TableName so multiple-keyspace streams disambiguate tables.
+		ExcludeKeyspaceFromTableName: false,
 	}
 }
 
 // WithFlags lets you manually control all the flag options, instead of using helper functions
 func WithFlags(flags *vtgatepb.VStreamFlags) Option {
 	return func(v *VStreamClient) error {
+		if flags == nil {
+			return errors.New("vstreamclient: flags cannot be nil")
+		}
+		if flags.HeartbeatInterval == 0 {
+			return errors.New("vstreamclient: HeartbeatInterval must be positive")
+		}
 		v.flags = flags
 		return nil
 	}
@@ -86,7 +154,11 @@ func WithFlags(flags *vtgatepb.VStreamFlags) Option {
 func WithEventFunc(fn EventFunc, eventTypes ...binlogdatapb.VEventType) Option {
 	return func(v *VStreamClient) error {
 		if len(eventTypes) == 0 {
-			return fmt.Errorf("vstreamclient: no event types provided")
+			return errors.New("vstreamclient: no event types provided")
+		}
+
+		if fn == nil {
+			return errors.New("vstreamclient: event func cannot be nil")
 		}
 
 		if v.eventFuncs == nil {
