@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/topotools/events"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
@@ -131,7 +132,7 @@ func (wr *Wrangler) TabletExternallyReparented(ctx context.Context, newPrimaryAl
 			return err
 		}
 		log.Infof("Getting a new durability policy for %v", durabilityName)
-		durability, err := reparentutil.GetDurabilityPolicy(durabilityName)
+		durability, err := policy.GetDurabilityPolicy(durabilityName)
 		if err != nil {
 			return err
 		}
@@ -152,7 +153,7 @@ func (wr *Wrangler) TabletExternallyReparented(ctx context.Context, newPrimaryAl
 		}()
 		event.DispatchUpdate(ev, "starting external reparent")
 
-		if err := wr.tmc.ChangeType(ctx, tablet, topodatapb.TabletType_PRIMARY, reparentutil.SemiSyncAckers(durability, tablet) > 0); err != nil {
+		if err := wr.tmc.ChangeType(ctx, tablet, topodatapb.TabletType_PRIMARY, policy.SemiSyncAckers(durability, tablet) > 0); err != nil {
 			log.Warningf("Error calling ChangeType on new primary %v: %v", topoproto.TabletAliasString(newPrimaryAlias), err)
 			return err
 		}

@@ -33,6 +33,7 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/dynamicconfig"
 	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 )
@@ -44,14 +45,14 @@ const nonAtomicCommitWarnMaxShards = 16
 // TxConn is used for executing transactional requests.
 type TxConn struct {
 	tabletGateway *TabletGateway
-	mode          vtgatepb.TransactionMode
+	txMode        dynamicconfig.TxMode
 }
 
 // NewTxConn builds a new TxConn.
-func NewTxConn(gw *TabletGateway, txMode vtgatepb.TransactionMode) *TxConn {
+func NewTxConn(gw *TabletGateway, txMode dynamicconfig.TxMode) *TxConn {
 	return &TxConn{
 		tabletGateway: gw,
-		mode:          txMode,
+		txMode:        txMode,
 	}
 }
 
@@ -114,7 +115,7 @@ func (txc *TxConn) Commit(ctx context.Context, session *econtext.SafeSession) er
 	case vtgatepb.TransactionMode_TWOPC:
 		twopc = true
 	case vtgatepb.TransactionMode_UNSPECIFIED:
-		twopc = txc.mode == vtgatepb.TransactionMode_TWOPC
+		twopc = txc.txMode.TransactionMode() == vtgatepb.TransactionMode_TWOPC
 	}
 
 	defer recordCommitTime(session, twopc, time.Now())

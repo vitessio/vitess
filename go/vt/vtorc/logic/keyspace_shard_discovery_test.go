@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/reparenttestutil"
 	"vitess.io/vitess/go/vt/vtorc/db"
 	"vitess.io/vitess/go/vt/vtorc/inst"
@@ -36,15 +37,15 @@ import (
 var (
 	keyspaceDurabilityNone = &topodatapb.Keyspace{
 		KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
-		DurabilityPolicy: "none",
+		DurabilityPolicy: policy.DurabilityNone,
 	}
 	keyspaceDurabilitySemiSync = &topodatapb.Keyspace{
 		KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
-		DurabilityPolicy: "semi_sync",
+		DurabilityPolicy: policy.DurabilitySemiSync,
 	}
 	keyspaceDurabilityTest = &topodatapb.Keyspace{
 		KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
-		DurabilityPolicy: "test",
+		DurabilityPolicy: policy.DurabilityTest,
 	}
 	keyspaceSnapshot = &topodatapb.Keyspace{
 		KeyspaceType: topodatapb.KeyspaceType_SNAPSHOT,
@@ -106,7 +107,7 @@ func TestRefreshAllKeyspaces(t *testing.T) {
 	// Set clusters to watch to watch all keyspaces
 	clustersToWatch = nil
 	// Change the durability policy of ks1
-	reparenttestutil.SetKeyspaceDurability(ctx, t, ts, "ks1", "semi_sync")
+	reparenttestutil.SetKeyspaceDurability(ctx, t, ts, "ks1", policy.DurabilitySemiSync)
 	require.NoError(t, RefreshAllKeyspacesAndShards(context.Background()))
 
 	// Verify that all the keyspaces are correctly reloaded
@@ -144,7 +145,7 @@ func TestRefreshKeyspace(t *testing.T) {
 			keyspaceName: "ks1",
 			keyspace: &topodatapb.Keyspace{
 				KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
-				DurabilityPolicy: "semi_sync",
+				DurabilityPolicy: policy.DurabilitySemiSync,
 			},
 			keyspaceWanted: nil,
 			err:            "",
@@ -169,12 +170,12 @@ func TestRefreshKeyspace(t *testing.T) {
 			keyspaceName: "ks4",
 			keyspace: &topodatapb.Keyspace{
 				KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
-				DurabilityPolicy: "none",
+				DurabilityPolicy: policy.DurabilityNone,
 				BaseKeyspace:     "baseKeyspace",
 			},
 			keyspaceWanted: &topodatapb.Keyspace{
 				KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
-				DurabilityPolicy: "none",
+				DurabilityPolicy: policy.DurabilityNone,
 			},
 			err: "",
 		}, {

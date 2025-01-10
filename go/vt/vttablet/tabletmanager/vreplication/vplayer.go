@@ -125,7 +125,8 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 		settings.StopPos = pausePos
 		saveStop = false
 	}
-
+	log.Infof("Starting VReplication player id: %v, startPos: %v, stop: %v, filter: %+v",
+		vr.id, settings.StartPos, settings.StopPos, vr.source.Filter)
 	queryFunc := func(ctx context.Context, sql string) (*sqltypes.Result, error) {
 		return vr.dbClient.ExecuteWithRetry(ctx, sql)
 	}
@@ -142,7 +143,7 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 		maxAllowedPacket := int64(vr.workflowConfig.RelayLogMaxSize)
 		// We explicitly do NOT want to batch this, we want to send it down the wire
 		// immediately so we use ExecuteFetch directly.
-		res, err := vr.dbClient.ExecuteFetch("select @@session.max_allowed_packet as max_allowed_packet", 1)
+		res, err := vr.dbClient.ExecuteFetch(SqlMaxAllowedPacket, 1)
 		if err != nil {
 			log.Errorf("Error getting max_allowed_packet, will use the relay_log_max_size value of %d bytes: %v", vr.workflowConfig.RelayLogMaxSize, err)
 		} else {

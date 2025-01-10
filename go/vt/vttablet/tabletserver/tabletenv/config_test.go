@@ -28,13 +28,12 @@ import (
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/throttler"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/yaml2"
-
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 func TestConfigParse(t *testing.T) {
@@ -49,10 +48,11 @@ func TestConfigParse(t *testing.T) {
 			},
 		},
 		OltpReadPool: ConnPoolConfig{
-			Size:        16,
-			Timeout:     10 * time.Second,
-			IdleTimeout: 20 * time.Second,
-			MaxLifetime: 50 * time.Second,
+			Size:         16,
+			Timeout:      10 * time.Second,
+			IdleTimeout:  20 * time.Second,
+			MaxLifetime:  50 * time.Second,
+			MaxIdleCount: 8,
 		},
 		RowStreamer: RowStreamerConfig{
 			MaxInnoDBTrxHistLen: 1000,
@@ -113,6 +113,7 @@ txPool: {}
 oltpReadPool:
   size: 16
   idleTimeoutSeconds: 20s
+  maxIdleCount: 8
   maxLifetimeSeconds: 50s
 `)
 	gotCfg := cfg

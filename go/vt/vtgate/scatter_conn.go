@@ -685,7 +685,7 @@ func (stc *ScatterConn) multiGoTransaction(
 		startTime, statsKey := stc.startAction(name, rs.Target)
 		defer stc.endAction(startTime, allErrors, statsKey, &err, session)
 
-		info, shardSession, err := actionInfo(ctx, rs.Target, session, autocommit, stc.txConn.mode)
+		info, shardSession, err := actionInfo(ctx, rs.Target, session, autocommit, stc.txConn.txMode.TransactionMode())
 		if err != nil {
 			return
 		}
@@ -702,7 +702,7 @@ func (stc *ScatterConn) multiGoTransaction(
 			shardSession.RowsAffected = info.rowsAffected
 		}
 		if info.actionNeeded != nothing && (info.transactionID != 0 || info.reservedID != 0) {
-			appendErr := session.AppendOrUpdate(rs.Target, info, shardSession, stc.txConn.mode)
+			appendErr := session.AppendOrUpdate(rs.Target, info, shardSession, stc.txConn.txMode.TransactionMode())
 			if appendErr != nil {
 				err = appendErr
 			}

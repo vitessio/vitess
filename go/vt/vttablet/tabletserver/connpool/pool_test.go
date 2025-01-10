@@ -55,10 +55,10 @@ func TestConnPoolTimeout(t *testing.T) {
 	defer db.Close()
 
 	cfg := tabletenv.ConnPoolConfig{
-		Size: 1,
+		Size:        1,
+		Timeout:     time.Second,
+		IdleTimeout: 10 * time.Second,
 	}
-	cfg.Timeout = time.Second
-	cfg.IdleTimeout = 10 * time.Second
 	connPool := NewPool(tabletenv.NewEnv(vtenv.NewTestEnv(), nil, "PoolTest"), "TestPool", cfg)
 	params := dbconfigs.New(db.ConnParams())
 	connPool.Open(params, params, params)
@@ -133,6 +133,58 @@ func TestConnPoolSetCapacity(t *testing.T) {
 	if connPool.Capacity() != 10 {
 		t.Fatalf("capacity should be 10")
 	}
+}
+
+// TestConnPoolMaxIdleCount tests the max idle count for the pool.
+// The pool should close the idle connections if the idle count is more than the allowed idle count.
+// Changing the pool capacity will affect the idle count allowed for that pool.
+func TestConnPoolMaxIdleCount(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+
+	cfg := tabletenv.ConnPoolConfig{
+		Size:         5,
+		MaxIdleCount: 2,
+	}
+	connPool := NewPool(tabletenv.NewEnv(vtenv.NewTestEnv(), nil, "PoolTest"), "TestPool", cfg)
+	params := dbconfigs.New(db.ConnParams())
+	connPool.Open(params, params, params)
+	defer connPool.Close()
+
+	assert.EqualValues(t, 5, connPool.Capacity(), "pool capacity should be 5")
+	assert.EqualValues(t, 2, connPool.IdleCount(), "pool idle count should be 2")
+
+	var conns []*PooledConn
+	for i := 0; i < 3; i++ {
+		conn, err := connPool.Get(context.Background(), nil)
+		require.NoError(t, err)
+		conns = append(conns, conn)
+	}
+
+	// after recycle - 1 idle connection
+	conns[0].Recycle()
+	assert.Zero(t, connPool.Metrics.IdleClosed(), "pool idle closed should be 0")
+
+	// after recycle - 2 idle connection
+	conns[1].Recycle()
+	assert.Zero(t, connPool.Metrics.IdleClosed(), "pool idle closed should be 0")
+
+	// after recycle - 3 idle connection, 1 will be closed
+	conns[2].Recycle()
+	assert.EqualValues(t, 1, connPool.Metrics.IdleClosed(), "pool idle closed should be 1")
+
+	// changing the pool capacity will affect the idle count allowed for that pool.
+	// If setting the capacity to lower value than max idle count.
+
+	err := connPool.SetCapacity(context.Background(), 4)
+	require.NoError(t, err)
+	assert.EqualValues(t, 4, connPool.Capacity(), "pool capacity should be 4")
+	assert.EqualValues(t, 2, connPool.IdleCount(), "pool idle count should be 2")
+
+	err = connPool.SetCapacity(context.Background(), 1)
+	require.NoError(t, err)
+	assert.EqualValues(t, 1, connPool.Capacity(), "pool capacity should be 1")
+	assert.EqualValues(t, 1, connPool.IdleCount(), "pool idle count should be changed to 1")
 }
 
 func TestConnPoolStatJSON(t *testing.T) {
