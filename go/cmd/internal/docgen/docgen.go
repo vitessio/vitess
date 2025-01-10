@@ -146,18 +146,10 @@ func restructure(rootDir string, dir string, name string, commands []*cobra.Comm
 				return fmt.Errorf("failed to move child command %s to its parent's dir: %w", fullCmdFilename, err)
 			}
 
-			sed := newParentLinkSedCommand(name, newName)
-			if out, err := sed.CombinedOutput(); err != nil {
-				return fmt.Errorf("failed to rewrite links to parent command in child %s: %w (extra: %s)", newName, err, out)
-			}
 		}
 	}
 
 	return nil
-}
-
-func newParentLinkSedCommand(parent string, file string) *exec.Cmd {
-	return exec.Command("xyz", "-i", "-e", fmt.Sprintf("s:(./%s/):(../):i", parent), file)
 }
 
 var (

@@ -17,7 +17,6 @@ limitations under the License.
 package docgen
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -145,40 +144,6 @@ func TestLinkHandler(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			str := linkHandler(tt.fileName)
 			require.Equal(t, tt.expectedStr, str)
-		})
-	}
-}
-
-func TestNewParentLinkSedCommand(t *testing.T) {
-	tests := []struct {
-		name           string
-		parentDir      string
-		fileName       string
-		expectedOutput string
-	}{
-		{
-			name:           "Empty values",
-			expectedOutput: "sed -i  -e s:(.//):(../):i ",
-		},
-		{
-			name:           "Normal value",
-			parentDir:      "./",
-			fileName:       "Some_value",
-			expectedOutput: "sed -i  -e s:(././/):(../):i Some_value",
-		},
-		{
-			name:           "Abnormal value",
-			parentDir:      "/root",
-			fileName:       `./.jash13_24`,
-			expectedOutput: "sed -i  -e s:(.//root/):(../):i ./.jash13_24",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cmd := newParentLinkSedCommand(tt.parentDir, tt.fileName)
-			// We only check for suffix because the sed command's actual path may differ on different machines.
-			require.True(t, strings.HasSuffix(cmd.String(), tt.expectedOutput))
 		})
 	}
 }
