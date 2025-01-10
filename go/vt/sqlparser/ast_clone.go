@@ -713,7 +713,7 @@ func CloneRefOfAlterView(n *AlterView) *AlterView {
 	out.ViewName = CloneTableName(n.ViewName)
 	out.Definer = CloneRefOfDefiner(n.Definer)
 	out.Columns = CloneColumns(n.Columns)
-	out.Select = CloneSelectStatement(n.Select)
+	out.Select = CloneTableSubquery(n.Select)
 	out.Comments = CloneRefOfParsedComments(n.Comments)
 	return &out
 }
@@ -1025,7 +1025,7 @@ func CloneRefOfCommonTableExpr(n *CommonTableExpr) *CommonTableExpr {
 	out := *n
 	out.ID = CloneIdentifierCS(n.ID)
 	out.Columns = CloneColumns(n.Columns)
-	out.Subquery = CloneSelectStatement(n.Subquery)
+	out.Subquery = CloneTableSubquery(n.Subquery)
 	return &out
 }
 
@@ -1140,7 +1140,7 @@ func CloneRefOfCreateView(n *CreateView) *CreateView {
 	out.ViewName = CloneTableName(n.ViewName)
 	out.Definer = CloneRefOfDefiner(n.Definer)
 	out.Columns = CloneColumns(n.Columns)
-	out.Select = CloneSelectStatement(n.Select)
+	out.Select = CloneTableSubquery(n.Select)
 	out.Comments = CloneRefOfParsedComments(n.Comments)
 	return &out
 }
@@ -1207,7 +1207,7 @@ func CloneRefOfDerivedTable(n *DerivedTable) *DerivedTable {
 		return nil
 	}
 	out := *n
-	out.Select = CloneSelectStatement(n.Select)
+	out.Select = CloneTableSubquery(n.Select)
 	return &out
 }
 
@@ -3044,7 +3044,7 @@ func CloneRefOfSubquery(n *Subquery) *Subquery {
 		return nil
 	}
 	out := *n
-	out.Select = CloneSelectStatement(n.Select)
+	out.Select = CloneTableSubquery(n.Select)
 	return &out
 }
 
@@ -3184,8 +3184,8 @@ func CloneRefOfUnion(n *Union) *Union {
 	}
 	out := *n
 	out.With = CloneRefOfWith(n.With)
-	out.Left = CloneSelectStatement(n.Left)
-	out.Right = CloneSelectStatement(n.Right)
+	out.Left = CloneTableSubquery(n.Left)
+	out.Right = CloneTableSubquery(n.Right)
 	out.OrderBy = CloneOrderBy(n.OrderBy)
 	out.Limit = CloneRefOfLimit(n.Limit)
 	out.Into = CloneRefOfSelectInto(n.Into)
@@ -3338,6 +3338,7 @@ func CloneRefOfValuesStatement(n *ValuesStatement) *ValuesStatement {
 	out := *n
 	out.With = CloneRefOfWith(n.With)
 	out.Rows = CloneValues(n.Rows)
+	out.Comments = CloneRefOfParsedComments(n.Comments)
 	out.Order = CloneOrderBy(n.Order)
 	out.Limit = CloneRefOfLimit(n.Limit)
 	return &out
@@ -4158,8 +4159,6 @@ func CloneSelectStatement(in SelectStatement) SelectStatement {
 		return CloneRefOfSelect(in)
 	case *Union:
 		return CloneRefOfUnion(in)
-	case *ValuesStatement:
-		return CloneRefOfValuesStatement(in)
 	default:
 		// this should never happen
 		return nil
@@ -4328,6 +4327,24 @@ func CloneTableExpr(in TableExpr) TableExpr {
 		return CloneRefOfJoinTableExpr(in)
 	case *ParenTableExpr:
 		return CloneRefOfParenTableExpr(in)
+	default:
+		// this should never happen
+		return nil
+	}
+}
+
+// CloneTableSubquery creates a deep clone of the input.
+func CloneTableSubquery(in TableSubquery) TableSubquery {
+	if in == nil {
+		return nil
+	}
+	switch in := in.(type) {
+	case *Select:
+		return CloneRefOfSelect(in)
+	case *Union:
+		return CloneRefOfUnion(in)
+	case *ValuesStatement:
+		return CloneRefOfValuesStatement(in)
 	default:
 		// this should never happen
 		return nil

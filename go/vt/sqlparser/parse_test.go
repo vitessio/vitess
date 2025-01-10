@@ -3876,6 +3876,8 @@ var (
 	}, {
 		input: "values row('a'), row('b')",
 	}, {
+		input: "values /*my comment*/ row('a'), row('b')",
+	}, {
 		input:  `with x as (select * from t1 limit 1) values ROW('a1', (select x.a1 from x))`,
 		output: "with x as (select * from t1 limit 1) values row('a1', (select x.a1 from x))",
 	}, {
@@ -3957,6 +3959,12 @@ func TestInvalid(t *testing.T) {
 	}, {
 		input: "/*!*/",
 		err:   "Query was empty",
+	}, {
+		input: "values row(1) into outfile s3 'out_file_name'",
+		err:   "VALUES does not support INTO at position 46",
+	}, {
+		input: "values row(1) lock in share mode",
+		err:   "VALUES does not support LOCK at position 33",
 	}, {
 		input: "select /* union with limit on lhs */ 1 from t limit 1 union select 1 from t",
 		err:   "syntax error at position 60 near 'union'",

@@ -57,6 +57,29 @@ type (
 	OrderAndLimit interface {
 		AddOrder(*Order)
 		SetLimit(*Limit)
+		GetOrderBy() OrderBy
+		SetOrderBy(OrderBy)
+		GetLimit() *Limit
+	}
+
+	TableSubquery interface {
+		iTableSubquery()
+
+		InsertRows
+		Statement
+		OrderAndLimit
+		Commented
+		ColumnResults
+		Withable
+	}
+
+	ColumnResults interface {
+		GetColumnCount() int
+		GetColumns() SelectExprs
+	}
+
+	Withable interface {
+		SetWith(with *With)
 	}
 
 	// SelectStatement any SELECT statement.
@@ -64,19 +87,15 @@ type (
 		Statement
 		InsertRows
 		OrderAndLimit
+		Commented
+		ColumnResults
+		Withable
 		iSelectStatement()
 		GetLock() Lock
 		SetLock(lock Lock)
 		SetInto(into *SelectInto)
-		SetWith(with *With)
 		MakeDistinct()
-		GetColumnCount() int
-		GetColumns() SelectExprs
-		Commented
 		IsDistinct() bool
-		GetOrderBy() OrderBy
-		SetOrderBy(OrderBy)
-		GetLimit() *Limit
 	}
 
 	// DDLStatement represents any DDL Statement
@@ -161,7 +180,7 @@ type (
 	CommonTableExpr struct {
 		ID       IdentifierCS
 		Columns  Columns
-		Subquery SelectStatement
+		Subquery TableSubquery
 	}
 	// ChangeColumn is used to change the column definition, can also rename the column in alter table command
 	ChangeColumn struct {
@@ -303,8 +322,8 @@ type (
 	// Union represents a UNION statement.
 	Union struct {
 		With     *With
-		Left     SelectStatement
-		Right    SelectStatement
+		Left     TableSubquery
+		Right    TableSubquery
 		Distinct bool
 		OrderBy  OrderBy
 		Limit    *Limit
@@ -543,7 +562,7 @@ type (
 		Definer     *Definer
 		Security    string
 		Columns     Columns
-		Select      SelectStatement
+		Select      TableSubquery
 		CheckOption string
 		IsReplace   bool
 		Comments    *ParsedComments
@@ -556,7 +575,7 @@ type (
 		Definer     *Definer
 		Security    string
 		Columns     Columns
-		Select      SelectStatement
+		Select      TableSubquery
 		CheckOption string
 		Comments    *ParsedComments
 	}
@@ -752,8 +771,10 @@ func (*Analyze) iStatement()               {}
 func (*OtherAdmin) iStatement()            {}
 func (*CommentOnly) iStatement()           {}
 func (*Select) iSelectStatement()          {}
+func (*Select) iTableSubquery()            {}
 func (*ValuesStatement) iSelectStatement() {}
 func (*Union) iSelectStatement()           {}
+func (*Union) iTableSubquery()             {}
 func (*Load) iStatement()                  {}
 func (*CreateDatabase) iStatement()        {}
 func (*AlterDatabase) iStatement()         {}
@@ -2112,13 +2133,13 @@ type (
 
 	// Subquery represents a subquery used as an value expression.
 	Subquery struct {
-		Select SelectStatement
+		Select TableSubquery
 	}
 
 	// DerivedTable represents a subquery used as a table expression.
 	DerivedTable struct {
 		Lateral bool
-		Select  SelectStatement
+		Select  TableSubquery
 	}
 )
 
@@ -3586,8 +3607,9 @@ type ValuesStatement struct {
 	Rows    Values
 	ListArg ListArg
 
-	Order OrderBy
-	Limit *Limit
+	Comments *ParsedComments
+	Order    OrderBy
+	Limit    *Limit
 }
 
 // UpdateExprs represents a list of update expressions.

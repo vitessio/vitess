@@ -125,7 +125,7 @@ func (node *ValuesStatement) Format(buf *TrackedBuffer) {
 	if node.With != nil {
 		buf.astPrintf(node, "%v", node.With)
 	}
-	buf.WriteString("values ")
+	buf.astPrintf(node, "values %v", node.Comments)
 	if node.ListArg != "" {
 		buf.astPrintf(node, "%v", node.ListArg)
 	} else {

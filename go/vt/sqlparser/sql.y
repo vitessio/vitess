@@ -62,6 +62,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %union {
   statement     Statement
   selStmt       SelectStatement
+  tblSubquery   TableSubquery
   tableExpr     TableExpr
   expr          Expr
   colTuple      ColTuple
@@ -434,7 +435,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <statement> prepare_statement execute_statement deallocate_statement
 %type <statement> stream_statement vstream_statement insert_statement update_statement delete_statement set_statement set_transaction_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement flush_statement do_statement
-%type <selStmt> select_statement select_stmt_with_into query_expression_parens query_expression query_expression_body query_primary values_statement
+%type <tblSubquery> select_statement select_stmt_with_into query_expression_parens query_expression query_expression_body query_primary values_statement
 %type <with> with_clause_opt with_clause
 %type <cte> common_table_expr
 %type <ctes> with_list
@@ -769,7 +770,7 @@ query_expression_parens:
   }
 | openb query_expression locking_clause closeb
   {
-    setLockInSelect($2, $3)
+    setLockIfPossible(yylex, $2, $3)
     $$ = $2
   }
 
@@ -810,9 +811,9 @@ query_expression:
 | with_clause query_expression_body order_by_opt limit_opt
   {
     $2.SetWith($1)
-	      $2.SetOrderBy($3)
-	      $2.SetLimit($4)
-	      $$ = $2
+    $2.SetOrderBy($3)
+    $2.SetLimit($4)
+    $$ = $2
   }
 | with_clause query_expression_parens limit_clause
   {
@@ -865,7 +866,7 @@ query_expression
   }
 | query_expression locking_clause
   {
-	setLockInSelect($1, $2)
+    setLockIfPossible(yylex, $1, $2)
     $$ = $1
   }
 | query_expression_parens
@@ -884,35 +885,35 @@ select_stmt_with_into:
   }
 | query_expression into_clause
   {
-    $1.SetInto($2)
+    setIntoIfPossible(yylex, $1, $2)
     $$ = $1
   }
 | query_expression into_clause locking_clause
   {
-    $1.SetInto($2)
-    $1.SetLock($3)
+    setIntoIfPossible(yylex, $1, $2)
+    setLockIfPossible(yylex, $1, $3)
     $$ = $1
   }
 | query_expression locking_clause into_clause
   {
-    $1.SetInto($3)
-    $1.SetLock($2)
+    setLockIfPossible(yylex, $1, $2)
+    setIntoIfPossible(yylex, $1, $3)
     $$ = $1
   }
 | query_expression_parens into_clause
   {
-    $1.SetInto($2)
+    setIntoIfPossible(yylex, $1, $2)
     $$ = $1
   }
 
 values_statement:
-  VALUES LIST_ARG
+  VALUES comment_opt LIST_ARG
   {
-    $$ = &ValuesStatement{ListArg: ListArg($2[2:])}
+    $$ = &ValuesStatement{Comments: Comments($2).Parsed(), ListArg: ListArg($3[2:])}
   }
-| VALUES row_tuple_list
+| VALUES comment_opt row_tuple_list
   {
-    $$ = &ValuesStatement{Rows: $2}
+    $$ = &ValuesStatement{Comments: Comments($2).Parsed(), Rows: $3}
   }
 
 stream_statement:

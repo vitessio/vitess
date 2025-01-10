@@ -147,6 +147,7 @@ func (node *ValuesStatement) FormatFast(buf *TrackedBuffer) {
 		node.With.FormatFast(buf)
 	}
 	buf.WriteString("values ")
+	node.Comments.FormatFast(buf)
 	if node.ListArg != "" {
 		node.ListArg.FormatFast(buf)
 	} else {

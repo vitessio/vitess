@@ -257,7 +257,7 @@ func (er *astRewriter) rewriteAliasedTable(cursor *Cursor, node *AliasedTableExp
 	}
 
 	// Aha! It's a view. Let's replace it with a derived table
-	node.Expr = &DerivedTable{Select: CloneSelectStatement(view)}
+	node.Expr = &DerivedTable{Select: CloneTableSubquery(view.(TableSubquery))} // TODO: this is a bit hacky. We want to update the schema def so it contains new types
 	if node.As.IsEmpty() {
 		node.As = NewIdentifierCS(tblName)
 	}

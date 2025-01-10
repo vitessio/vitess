@@ -872,14 +872,14 @@ func (c *cow) copyOnRewriteRefOfAlterView(n *AlterView, parent SQLNode) (out SQL
 		_ViewName, changedViewName := c.copyOnRewriteTableName(n.ViewName, n)
 		_Definer, changedDefiner := c.copyOnRewriteRefOfDefiner(n.Definer, n)
 		_Columns, changedColumns := c.copyOnRewriteColumns(n.Columns, n)
-		_Select, changedSelect := c.copyOnRewriteSelectStatement(n.Select, n)
+		_Select, changedSelect := c.copyOnRewriteTableSubquery(n.Select, n)
 		_Comments, changedComments := c.copyOnRewriteRefOfParsedComments(n.Comments, n)
 		if changedViewName || changedDefiner || changedColumns || changedSelect || changedComments {
 			res := *n
 			res.ViewName, _ = _ViewName.(TableName)
 			res.Definer, _ = _Definer.(*Definer)
 			res.Columns, _ = _Columns.(Columns)
-			res.Select, _ = _Select.(SelectStatement)
+			res.Select, _ = _Select.(TableSubquery)
 			res.Comments, _ = _Comments.(*ParsedComments)
 			out = &res
 			if c.cloned != nil {
@@ -1526,12 +1526,12 @@ func (c *cow) copyOnRewriteRefOfCommonTableExpr(n *CommonTableExpr, parent SQLNo
 	if c.pre == nil || c.pre(n, parent) {
 		_ID, changedID := c.copyOnRewriteIdentifierCS(n.ID, n)
 		_Columns, changedColumns := c.copyOnRewriteColumns(n.Columns, n)
-		_Subquery, changedSubquery := c.copyOnRewriteSelectStatement(n.Subquery, n)
+		_Subquery, changedSubquery := c.copyOnRewriteTableSubquery(n.Subquery, n)
 		if changedID || changedColumns || changedSubquery {
 			res := *n
 			res.ID, _ = _ID.(IdentifierCS)
 			res.Columns, _ = _Columns.(Columns)
-			res.Subquery, _ = _Subquery.(SelectStatement)
+			res.Subquery, _ = _Subquery.(TableSubquery)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -1759,14 +1759,14 @@ func (c *cow) copyOnRewriteRefOfCreateView(n *CreateView, parent SQLNode) (out S
 		_ViewName, changedViewName := c.copyOnRewriteTableName(n.ViewName, n)
 		_Definer, changedDefiner := c.copyOnRewriteRefOfDefiner(n.Definer, n)
 		_Columns, changedColumns := c.copyOnRewriteColumns(n.Columns, n)
-		_Select, changedSelect := c.copyOnRewriteSelectStatement(n.Select, n)
+		_Select, changedSelect := c.copyOnRewriteTableSubquery(n.Select, n)
 		_Comments, changedComments := c.copyOnRewriteRefOfParsedComments(n.Comments, n)
 		if changedViewName || changedDefiner || changedColumns || changedSelect || changedComments {
 			res := *n
 			res.ViewName, _ = _ViewName.(TableName)
 			res.Definer, _ = _Definer.(*Definer)
 			res.Columns, _ = _Columns.(Columns)
-			res.Select, _ = _Select.(SelectStatement)
+			res.Select, _ = _Select.(TableSubquery)
 			res.Comments, _ = _Comments.(*ParsedComments)
 			out = &res
 			if c.cloned != nil {
@@ -1900,10 +1900,10 @@ func (c *cow) copyOnRewriteRefOfDerivedTable(n *DerivedTable, parent SQLNode) (o
 	}
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
-		_Select, changedSelect := c.copyOnRewriteSelectStatement(n.Select, n)
+		_Select, changedSelect := c.copyOnRewriteTableSubquery(n.Select, n)
 		if changedSelect {
 			res := *n
-			res.Select, _ = _Select.(SelectStatement)
+			res.Select, _ = _Select.(TableSubquery)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -5792,10 +5792,10 @@ func (c *cow) copyOnRewriteRefOfSubquery(n *Subquery, parent SQLNode) (out SQLNo
 	}
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
-		_Select, changedSelect := c.copyOnRewriteSelectStatement(n.Select, n)
+		_Select, changedSelect := c.copyOnRewriteTableSubquery(n.Select, n)
 		if changedSelect {
 			res := *n
-			res.Select, _ = _Select.(SelectStatement)
+			res.Select, _ = _Select.(TableSubquery)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -6103,16 +6103,16 @@ func (c *cow) copyOnRewriteRefOfUnion(n *Union, parent SQLNode) (out SQLNode, ch
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
 		_With, changedWith := c.copyOnRewriteRefOfWith(n.With, n)
-		_Left, changedLeft := c.copyOnRewriteSelectStatement(n.Left, n)
-		_Right, changedRight := c.copyOnRewriteSelectStatement(n.Right, n)
+		_Left, changedLeft := c.copyOnRewriteTableSubquery(n.Left, n)
+		_Right, changedRight := c.copyOnRewriteTableSubquery(n.Right, n)
 		_OrderBy, changedOrderBy := c.copyOnRewriteOrderBy(n.OrderBy, n)
 		_Limit, changedLimit := c.copyOnRewriteRefOfLimit(n.Limit, n)
 		_Into, changedInto := c.copyOnRewriteRefOfSelectInto(n.Into, n)
 		if changedWith || changedLeft || changedRight || changedOrderBy || changedLimit || changedInto {
 			res := *n
 			res.With, _ = _With.(*With)
-			res.Left, _ = _Left.(SelectStatement)
-			res.Right, _ = _Right.(SelectStatement)
+			res.Left, _ = _Left.(TableSubquery)
+			res.Right, _ = _Right.(TableSubquery)
 			res.OrderBy, _ = _OrderBy.(OrderBy)
 			res.Limit, _ = _Limit.(*Limit)
 			res.Into, _ = _Into.(*SelectInto)
@@ -6420,13 +6420,15 @@ func (c *cow) copyOnRewriteRefOfValuesStatement(n *ValuesStatement, parent SQLNo
 		_With, changedWith := c.copyOnRewriteRefOfWith(n.With, n)
 		_Rows, changedRows := c.copyOnRewriteValues(n.Rows, n)
 		_ListArg, changedListArg := c.copyOnRewriteListArg(n.ListArg, n)
+		_Comments, changedComments := c.copyOnRewriteRefOfParsedComments(n.Comments, n)
 		_Order, changedOrder := c.copyOnRewriteOrderBy(n.Order, n)
 		_Limit, changedLimit := c.copyOnRewriteRefOfLimit(n.Limit, n)
-		if changedWith || changedRows || changedListArg || changedOrder || changedLimit {
+		if changedWith || changedRows || changedListArg || changedComments || changedOrder || changedLimit {
 			res := *n
 			res.With, _ = _With.(*With)
 			res.Rows, _ = _Rows.(Values)
 			res.ListArg, _ = _ListArg.(ListArg)
+			res.Comments, _ = _Comments.(*ParsedComments)
 			res.Order, _ = _Order.(OrderBy)
 			res.Limit, _ = _Limit.(*Limit)
 			out = &res
@@ -7430,8 +7432,6 @@ func (c *cow) copyOnRewriteSelectStatement(n SelectStatement, parent SQLNode) (o
 		return c.copyOnRewriteRefOfSelect(n, parent)
 	case *Union:
 		return c.copyOnRewriteRefOfUnion(n, parent)
-	case *ValuesStatement:
-		return c.copyOnRewriteRefOfValuesStatement(n, parent)
 	default:
 		// this should never happen
 		return nil, false
@@ -7592,6 +7592,22 @@ func (c *cow) copyOnRewriteTableExpr(n TableExpr, parent SQLNode) (out SQLNode, 
 		return c.copyOnRewriteRefOfJoinTableExpr(n, parent)
 	case *ParenTableExpr:
 		return c.copyOnRewriteRefOfParenTableExpr(n, parent)
+	default:
+		// this should never happen
+		return nil, false
+	}
+}
+func (c *cow) copyOnRewriteTableSubquery(n TableSubquery, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	switch n := n.(type) {
+	case *Select:
+		return c.copyOnRewriteRefOfSelect(n, parent)
+	case *Union:
+		return c.copyOnRewriteRefOfUnion(n, parent)
+	case *ValuesStatement:
+		return c.copyOnRewriteRefOfValuesStatement(n, parent)
 	default:
 		// this should never happen
 		return nil, false

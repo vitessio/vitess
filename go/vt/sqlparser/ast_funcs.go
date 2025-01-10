@@ -640,6 +640,26 @@ func parseBindVariable(yylex yyLexer, bvar string) *Argument {
 	return NewArgument(bvar)
 }
 
+func setIntoIfPossible(lexer yyLexer, tblSubquery TableSubquery, into *SelectInto) {
+	selStmt, ok := tblSubquery.(SelectStatement)
+	if !ok {
+		lexer.Error("VALUES does not support INTO")
+		return
+	}
+
+	selStmt.SetInto(into)
+}
+
+func setLockIfPossible(lexer yyLexer, tblSubquery TableSubquery, lock Lock) {
+	selStmt, ok := tblSubquery.(SelectStatement)
+	if !ok {
+		lexer.Error("VALUES does not support LOCK")
+		return
+	}
+
+	selStmt.SetLock(lock)
+}
+
 func NewTypedArgument(in string, t sqltypes.Type) *Argument {
 	return &Argument{Name: in, Type: t}
 }
@@ -755,12 +775,12 @@ func NewTableNameWithQualifier(name, qualifier string) TableName {
 }
 
 // NewSubquery makes a new Subquery
-func NewSubquery(selectStatement SelectStatement) *Subquery {
+func NewSubquery(selectStatement TableSubquery) *Subquery {
 	return &Subquery{Select: selectStatement}
 }
 
 // NewDerivedTable makes a new DerivedTable
-func NewDerivedTable(lateral bool, selectStatement SelectStatement) *DerivedTable {
+func NewDerivedTable(lateral bool, selectStatement TableSubquery) *DerivedTable {
 	return &DerivedTable{
 		Lateral: lateral,
 		Select:  selectStatement,
@@ -1391,7 +1411,7 @@ func (node *Union) GetParsedComments() *ParsedComments {
 	return node.Left.GetParsedComments()
 }
 
-func requiresParen(stmt SelectStatement) bool {
+func requiresParen(stmt TableSubquery) bool {
 	switch node := stmt.(type) {
 	case *Union:
 		return len(node.OrderBy) != 0 || node.Lock != 0 || node.Into != nil || node.Limit != nil
@@ -1400,10 +1420,6 @@ func requiresParen(stmt SelectStatement) bool {
 	}
 
 	return false
-}
-
-func setLockInSelect(stmt SelectStatement, lock Lock) {
-	stmt.SetLock(lock)
 }
 
 // ToString returns the string associated with the DDLAction Enum
@@ -2345,13 +2361,15 @@ func setFuncArgs(aggr AggrFunc, exprs Exprs, name string) error {
 }
 
 // GetFirstSelect gets the first select statement
-func GetFirstSelect(selStmt SelectStatement) *Select {
+func GetFirstSelect(selStmt TableSubquery) (*Select, error) {
 	if selStmt == nil {
-		return nil
+		return nil, nil
 	}
 	switch node := selStmt.(type) {
 	case *Select:
-		return node
+		return node, nil
+	case *ValuesStatement:
+		return nil, fmt.Errorf("first table_reference is a VALUES")
 	case *Union:
 		return GetFirstSelect(node.Left)
 	}
@@ -2359,12 +2377,14 @@ func GetFirstSelect(selStmt SelectStatement) *Select {
 }
 
 // GetAllSelects gets all the select statement s
-func GetAllSelects(selStmt SelectStatement) []*Select {
+func GetAllSelects(selStmt TableSubquery) []TableSubquery {
 	switch node := selStmt.(type) {
 	case *Select:
-		return []*Select{node}
+		return []TableSubquery{node}
 	case *Union:
 		return append(GetAllSelects(node.Left), GetAllSelects(node.Right)...)
+	case *ValuesStatement:
+		return []TableSubquery{node}
 	}
 	panic("[BUG]: unknown type for SelectStatement")
 }
@@ -2772,7 +2792,7 @@ func MakeColumns(colNames ...string) Columns {
 	return cols
 }
 
-func VisitAllSelects(in SelectStatement, f func(p *Select, idx int) error) error {
+func VisitAllSelects(in TableSubquery, f func(p *Select, idx int) error) error {
 	v := visitor{}
 	return v.visitAllSelects(in, f)
 }
@@ -2781,7 +2801,7 @@ type visitor struct {
 	idx int
 }
 
-func (v *visitor) visitAllSelects(in SelectStatement, f func(p *Select, idx int) error) error {
+func (v *visitor) visitAllSelects(in TableSubquery, f func(p *Select, idx int) error) error {
 	switch sel := in.(type) {
 	case *Select:
 		err := f(sel, v.idx)
@@ -2873,6 +2893,30 @@ func (node *Update) AddOrder(order *Order) {
 
 func (node *Update) SetLimit(limit *Limit) {
 	node.Limit = limit
+}
+
+func (node *Update) GetOrderBy() OrderBy {
+	return node.OrderBy
+}
+
+func (node *Update) SetOrderBy(by OrderBy) {
+	node.OrderBy = by
+}
+
+func (node *Update) GetLimit() *Limit {
+	return node.Limit
+}
+
+func (node *Delete) GetOrderBy() OrderBy {
+	return node.OrderBy
+}
+
+func (node *Delete) SetOrderBy(by OrderBy) {
+	node.OrderBy = by
+}
+
+func (node *Delete) GetLimit() *Limit {
+	return node.Limit
 }
 
 func (node *Delete) AddOrder(order *Order) {
@@ -2982,48 +3026,12 @@ func ExtractAllTables(stmt Statement) []string {
 	return tables
 }
 
-var _ SelectStatement = (*ValuesStatement)(nil)
+var _ TableSubquery = (*ValuesStatement)(nil)
 
-func (node *ValuesStatement) GetLock() Lock {
-	return NoLock
-}
-
-func (node *ValuesStatement) SetLock(lock Lock) {
-	if lock != NoLock {
-		panic("cannot set lock on Values statement")
-	}
-}
-
-func (node *ValuesStatement) SetInto(into *SelectInto) {
-	panic("cannot set Into on Values statement")
-}
+func (node *ValuesStatement) iTableSubquery() {}
 
 func (node *ValuesStatement) SetWith(with *With) {
 	node.With = with
-}
-
-func (node *ValuesStatement) MakeDistinct() {
-	panic("cannot set Distinct on Values statement")
-}
-
-func (node *ValuesStatement) GetColumnCount() int {
-	panic("cannot call Column count on Values statement")
-}
-
-func (node *ValuesStatement) GetColumns() SelectExprs {
-	panic("cannot call Columns on Values statement")
-}
-
-func (node *ValuesStatement) SetComments(comments Comments) {
-	panic("cannot set Comments on Values statement")
-}
-
-func (node *ValuesStatement) GetParsedComments() *ParsedComments {
-	panic("cannot call Parsed comments on Values statement")
-}
-
-func (node *ValuesStatement) IsDistinct() bool {
-	return false
 }
 
 func (node *ValuesStatement) GetOrderBy() OrderBy {
@@ -3045,3 +3053,22 @@ func (node *ValuesStatement) AddOrder(order *Order) {
 func (node *ValuesStatement) SetLimit(limit *Limit) {
 	node.Limit = limit
 }
+
+func (node *ValuesStatement) GetColumnCount() int {
+	if len(node.Rows) > 0 {
+		return len(node.Rows[0])
+	}
+	panic("no columns available") // TODO: we need a better solution than a panic
+}
+
+func (node *ValuesStatement) GetColumns() (result SelectExprs) {
+	columnCount := node.GetColumnCount()
+	for i := range columnCount {
+		result = append(result, &AliasedExpr{Expr: NewColName(fmt.Sprintf("column_%d", i))})
+	}
+	panic("no columns available") // TODO: we need a better solution than a panic
+}
+
+func (node *ValuesStatement) SetComments(comments Comments) {}
+
+func (node *ValuesStatement) GetParsedComments() *ParsedComments { return nil }
