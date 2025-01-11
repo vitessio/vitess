@@ -423,6 +423,9 @@ func (wd *workflowDiffer) getTableLastPK(dbClient binlogplayer.DBClient, tableNa
 				return nil, vterrors.Wrapf(err, "failed to unmarshal lastpk value of %s for table %s",
 					string(lastpk), tableName)
 			}
+			if lastPK.Source == nil { // Then it's the same as the target
+				lastPK.Source = lastPK.Target
+			}
 			return lastPK, nil
 		}
 	}

@@ -761,8 +761,10 @@ message VDiffOptions {
 }
 
 message VDiffTableLastPK {
-  query.QueryResult source = 1;
-  query.QueryResult target = 2;
+  query.QueryResult target = 1;
+  // If the source value is nil then it's the same as the target
+  // and the target value should be used for both.
+  optional query.QueryResult source = 2;
 }
 
 

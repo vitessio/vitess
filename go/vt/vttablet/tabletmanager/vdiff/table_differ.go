@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -740,7 +741,12 @@ func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, dr *D
 		if td.wd.opts.CoreOptions.MaxDiffSeconds > 0 {
 			// Update the in-memory lastPK as well so that we can restart the table
 			// diff if needed.
-			td.lastSourcePK, td.lastTargetPK = lastPK.Source, lastPK.Target
+			td.lastTargetPK = lastPK.Target
+			if lastPK.Source == nil {
+				// If the source PK is nil, we use the target value for both.
+				lastPK.Source = lastPK.Target
+			}
+			td.lastSourcePK = lastPK.Source
 		}
 		lastPKTxt, err := prototext.Marshal(lastPK)
 		if err != nil {
@@ -838,10 +844,16 @@ func (td *tableDiffer) lastPKFromRow(row []sqltypes.Value) *tabletmanagerdatapb.
 			Rows:   []*querypb.Row{sqltypes.RowToProto3(pkVals)},
 		}
 	}
-	return &tabletmanagerdatapb.VDiffTableLastPK{
-		Source: buildQR(td.tablePlan.sourcePkCols),
+	lastPK := &tabletmanagerdatapb.VDiffTableLastPK{
 		Target: buildQR(td.tablePlan.pkCols),
 	}
+	// If the source and target PKs are different, we need to save the source PK
+	// as well. Otherwise the source will be nil which means that the target value
+	// should be used for the source.
+	if !slices.Equal(td.tablePlan.pkCols, td.tablePlan.sourcePkCols) {
+		lastPK.Source = buildQR(td.tablePlan.sourcePkCols)
+	}
+	return lastPK
 }
 
 // If SourceTimeZone is defined in the BinlogSource (_vt.vreplication.source), the

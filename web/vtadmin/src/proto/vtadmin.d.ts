@@ -34141,11 +34141,11 @@ export namespace tabletmanagerdata {
     /** Properties of a VDiffTableLastPK. */
     interface IVDiffTableLastPK {
 
-        /** VDiffTableLastPK source */
-        source?: (query.IQueryResult|null);
-
         /** VDiffTableLastPK target */
         target?: (query.IQueryResult|null);
+
+        /** VDiffTableLastPK source */
+        source?: (query.IQueryResult|null);
     }
 
     /** Represents a VDiffTableLastPK. */
@@ -34157,11 +34157,14 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.IVDiffTableLastPK);
 
+        /** VDiffTableLastPK target. */
+        public target?: (query.IQueryResult|null);
+
         /** VDiffTableLastPK source. */
         public source?: (query.IQueryResult|null);
 
-        /** VDiffTableLastPK target. */
-        public target?: (query.IQueryResult|null);
+        /** VDiffTableLastPK _source. */
+        public _source?: "source";
 
         /**
          * Creates a new VDiffTableLastPK instance using the specified properties.
