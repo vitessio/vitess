@@ -1976,7 +1976,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 			err: "unique vindex 'from' should have only one column",
 		},
 		{
-			description: "non-unique lookup should have more than one column",
+			description: "non-unique lookup can have only one column",
 			input: &vschemapb.Keyspace{
 				Vindexes: map[string]*vschemapb.Vindex{
 					"v": {
@@ -1989,7 +1989,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 					},
 				},
 			},
-			err: "non-unique vindex 'from' should have more than one column",
+			err: "",
 		},
 		{
 			description: "vindex not found",
