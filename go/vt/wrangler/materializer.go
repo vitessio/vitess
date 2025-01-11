@@ -551,11 +551,8 @@ func (wr *Wrangler) prepareCreateLookup(ctx context.Context, keyspace string, sp
 		if len(vindexFromCols) != 1 {
 			return nil, nil, nil, fmt.Errorf("unique vindex 'from' should have only one column: %v", vindex)
 		}
-	} else {
-		if len(vindexFromCols) < 2 {
-			return nil, nil, nil, fmt.Errorf("non-unique vindex 'from' should have more than one column: %v", vindex)
-		}
 	}
+
 	vindexToCol = vindex.Params["to"]
 	// Make the vindex write_only. If one exists already in the vschema,
 	// it will need to match this vindex exactly, including the write_only setting.
