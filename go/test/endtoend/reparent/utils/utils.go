@@ -32,6 +32,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 
 	"vitess.io/vitess/go/mysql"
@@ -71,7 +72,7 @@ func SetupReparentCluster(t *testing.T, durability string) *cluster.LocalProcess
 
 // SetupRangeBasedCluster sets up the range based cluster
 func SetupRangeBasedCluster(ctx context.Context, t *testing.T) *cluster.LocalProcessCluster {
-	return setupCluster(ctx, t, ShardName, []string{cell1}, []int{2}, "semi_sync")
+	return setupCluster(ctx, t, ShardName, []string{cell1}, []int{2}, policy.DurabilitySemiSync)
 }
 
 // SetupShardedReparentCluster is used to setup a sharded cluster for testing

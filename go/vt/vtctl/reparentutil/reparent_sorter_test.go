@@ -23,6 +23,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/replication"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 )
 
 // TestReparentSorter tests that the sorting for tablets works correctly
@@ -135,7 +136,7 @@ func TestReparentSorter(t *testing.T) {
 		},
 	}
 
-	durability, err := GetDurabilityPolicy("none")
+	durability, err := policy.GetDurabilityPolicy(policy.DurabilityNone)
 	require.NoError(t, err)
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {

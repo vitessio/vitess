@@ -244,7 +244,7 @@ func TestOnlineDDLFlow(t *testing.T) {
 						select {
 						case <-ticker.C:
 						case <-workloadCtx.Done():
-							t.Logf("Terminating routine throttler check")
+							fmt.Println("Terminating routine throttler check")
 							return
 						}
 					}
@@ -258,8 +258,8 @@ func TestOnlineDDLFlow(t *testing.T) {
 				wg.Add(1)
 				go func() {
 					defer cancel()
-					defer t.Logf("Terminating workload")
 					defer wg.Done()
+					defer fmt.Println("Terminating workload")
 					runMultipleConnections(workloadCtx, t)
 				}()
 			})

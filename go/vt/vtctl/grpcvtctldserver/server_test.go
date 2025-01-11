@@ -30,6 +30,7 @@ import (
 
 	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -2777,14 +2778,14 @@ func TestCreateKeyspace(t *testing.T) {
 			req: &vtctldatapb.CreateKeyspaceRequest{
 				Name:             "testkeyspace",
 				Type:             topodatapb.KeyspaceType_NORMAL,
-				DurabilityPolicy: "semi_sync",
+				DurabilityPolicy: policy.DurabilitySemiSync,
 			},
 			expected: &vtctldatapb.CreateKeyspaceResponse{
 				Keyspace: &vtctldatapb.Keyspace{
 					Name: "testkeyspace",
 					Keyspace: &topodatapb.Keyspace{
 						KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
-						DurabilityPolicy: "semi_sync",
+						DurabilityPolicy: policy.DurabilitySemiSync,
 					},
 				},
 			},
@@ -11338,11 +11339,11 @@ func TestSetKeyspaceDurabilityPolicy(t *testing.T) {
 			},
 			req: &vtctldatapb.SetKeyspaceDurabilityPolicyRequest{
 				Keyspace:         "ks1",
-				DurabilityPolicy: "none",
+				DurabilityPolicy: policy.DurabilityNone,
 			},
 			expected: &vtctldatapb.SetKeyspaceDurabilityPolicyResponse{
 				Keyspace: &topodatapb.Keyspace{
-					DurabilityPolicy: "none",
+					DurabilityPolicy: policy.DurabilityNone,
 				},
 			},
 		},

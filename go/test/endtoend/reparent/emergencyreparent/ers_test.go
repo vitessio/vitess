@@ -28,10 +28,11 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/reparent/utils"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 )
 
 func TestTrivialERS(t *testing.T) {
-	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
+	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
@@ -55,7 +56,7 @@ func TestTrivialERS(t *testing.T) {
 }
 
 func TestReparentIgnoreReplicas(t *testing.T) {
-	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
+	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 	var err error
@@ -96,7 +97,7 @@ func TestReparentIgnoreReplicas(t *testing.T) {
 }
 
 func TestReparentDownPrimary(t *testing.T) {
-	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
+	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
@@ -131,7 +132,7 @@ func TestReparentDownPrimary(t *testing.T) {
 }
 
 func TestReparentNoChoiceDownPrimary(t *testing.T) {
-	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
+	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 	var err error
@@ -166,7 +167,7 @@ func TestReparentNoChoiceDownPrimary(t *testing.T) {
 
 func TestSemiSyncSetupCorrectly(t *testing.T) {
 	t.Run("semi-sync enabled", func(t *testing.T) {
-		clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
+		clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
 		defer utils.TeardownCluster(clusterInstance)
 		tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
@@ -193,7 +194,7 @@ func TestSemiSyncSetupCorrectly(t *testing.T) {
 	})
 
 	t.Run("semi-sync disabled", func(t *testing.T) {
-		clusterInstance := utils.SetupReparentCluster(t, "none")
+		clusterInstance := utils.SetupReparentCluster(t, policy.DurabilityNone)
 		defer utils.TeardownCluster(clusterInstance)
 		tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
@@ -222,7 +223,7 @@ func TestSemiSyncSetupCorrectly(t *testing.T) {
 
 // TestERSPromoteRdonly tests that we never end up promoting a rdonly instance as the primary
 func TestERSPromoteRdonly(t *testing.T) {
-	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
+	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 	var err error
@@ -249,7 +250,7 @@ func TestERSPromoteRdonly(t *testing.T) {
 
 // TestERSPreventCrossCellPromotion tests that we promote a replica in the same cell as the previous primary if prevent cross cell promotion flag is set
 func TestERSPreventCrossCellPromotion(t *testing.T) {
-	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
+	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 	var err error
@@ -271,7 +272,7 @@ func TestERSPreventCrossCellPromotion(t *testing.T) {
 // TestPullFromRdonly tests that if a rdonly tablet is the most advanced, then our promoted primary should have
 // caught up to it by pulling transactions from it
 func TestPullFromRdonly(t *testing.T) {
-	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
+	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 	var err error
@@ -342,7 +343,7 @@ func TestPullFromRdonly(t *testing.T) {
 // replicas which do not have any replication status and also succeeds if the io thread
 // is stopped on the primary elect.
 func TestNoReplicationStatusAndIOThreadStopped(t *testing.T) {
-	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
+	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
@@ -441,7 +442,7 @@ func TestERSForInitialization(t *testing.T) {
 }
 
 func TestRecoverWithMultipleFailures(t *testing.T) {
-	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
+	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
@@ -468,7 +469,7 @@ func TestRecoverWithMultipleFailures(t *testing.T) {
 // TestERSFailFast tests that ERS will fail fast if it cannot find any tablet which can be safely promoted instead of promoting
 // a tablet and hanging while inserting a row in the reparent journal on getting semi-sync ACKs
 func TestERSFailFast(t *testing.T) {
-	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
+	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
@@ -507,7 +508,7 @@ func TestERSFailFast(t *testing.T) {
 // TestReplicationStopped checks that ERS ignores the tablets that have sql thread stopped.
 // If there are more than 1, we also fail.
 func TestReplicationStopped(t *testing.T) {
-	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
+	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})

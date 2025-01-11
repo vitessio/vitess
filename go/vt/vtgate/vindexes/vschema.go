@@ -25,10 +25,9 @@ import (
 	"strings"
 	"time"
 
-	"vitess.io/vitess/go/ptr"
-
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -470,6 +469,40 @@ func buildGlobalTables(source *vschemapb.SrvVSchema, vschema *VSchema) {
 			continue
 		}
 		buildKeyspaceGlobalTables(vschema, ksvschema)
+	}
+}
+
+// AddAdditionalGlobalTables adds unique tables from unsharded keyspaces to the global tables.
+// It is expected to be called from the schema tracking code. Note that this is called after `BuildVSchema`
+// which means that the global tables are already populated with the tables from the sharded keyspaces and from
+// unsharded keyspaces which have tables specified in associated vschemas.
+func AddAdditionalGlobalTables(source *vschemapb.SrvVSchema, vschema *VSchema) {
+	newTables := make(map[string]*Table)
+
+	// Collect valid uniquely named tables from unsharded keyspaces.
+	for ksname, ks := range source.Keyspaces {
+		ksvschema := vschema.Keyspaces[ksname]
+		// Ignore sharded keyspaces and those flagged for explicit routing.
+		if ks.RequireExplicitRouting || ks.Sharded {
+			continue
+		}
+		for tname, table := range ksvschema.Tables {
+			// Ignore tables already global (i.e. if specified in the vschema of an unsharded keyspace) or ambiguous.
+			if _, found := vschema.globalTables[tname]; !found {
+				_, ok := newTables[tname]
+				if !ok {
+					table.Keyspace = ksvschema.Keyspace
+					newTables[tname] = table
+				} else {
+					newTables[tname] = nil
+				}
+			}
+		}
+	}
+
+	// Mark new tables found just once as globally routable, rest as ambiguous.
+	for k, v := range newTables {
+		vschema.globalTables[k] = v
 	}
 }
 
