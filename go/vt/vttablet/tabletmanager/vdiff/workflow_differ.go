@@ -371,7 +371,6 @@ func (wd *workflowDiffer) buildPlan(dbClient binlogplayer.DBClient, filter *binl
 		}
 
 		td := newTableDiffer(wd, table, sourceQuery)
-
 		lastPK, err := wd.getTableLastPK(dbClient, table.Name)
 		if err != nil {
 			return err
@@ -384,7 +383,6 @@ func (wd *workflowDiffer) buildPlan(dbClient binlogplayer.DBClient, filter *binl
 		if _, err := td.buildTablePlan(dbClient, wd.ct.vde.dbName, wd.collationEnv); err != nil {
 			return err
 		}
-
 		// We get the PK columns from the source schema as well as they can differ
 		// and they determine the proper position to use when saving our progress.
 		if err := td.getSourcePKCols(); err != nil {
@@ -420,7 +418,7 @@ func (wd *workflowDiffer) getTableLastPK(dbClient binlogplayer.DBClient, tableNa
 		if len(lastpk) != 0 {
 			lastPK := &tabletmanagerdatapb.VDiffTableLastPK{}
 			if err := prototext.Unmarshal(lastpk, lastPK); err != nil {
-				return nil, vterrors.Wrapf(err, "failed to unmarshal lastpk value of %s for table %s",
+				return nil, vterrors.Wrapf(err, "failed to unmarshal lastpk value of %s for the %s table",
 					string(lastpk), tableName)
 			}
 			if lastPK.Source == nil { // Then it's the same as the target

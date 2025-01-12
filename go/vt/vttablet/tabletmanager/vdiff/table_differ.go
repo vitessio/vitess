@@ -719,6 +719,7 @@ func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, dr *D
 	if dr == nil {
 		return fmt.Errorf("cannot update progress with a nil diff report")
 	}
+
 	var err error
 	var query string
 	rpt, err := json.Marshal(dr)
@@ -744,9 +745,10 @@ func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, dr *D
 			td.lastTargetPK = lastPK.Target
 			if lastPK.Source == nil {
 				// If the source PK is nil, we use the target value for both.
-				lastPK.Source = lastPK.Target
+				td.lastSourcePK = lastPK.Target
+			} else {
+				td.lastSourcePK = lastPK.Source
 			}
-			td.lastSourcePK = lastPK.Source
 		}
 		lastPKTxt, err := prototext.Marshal(lastPK)
 		if err != nil {
@@ -766,6 +768,7 @@ func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, dr *D
 	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
 		return err
 	}
+
 	td.wd.ct.TableDiffRowCounts.Add(td.table.Name, dr.ProcessedRows)
 	return nil
 }
@@ -849,7 +852,7 @@ func (td *tableDiffer) lastPKFromRow(row []sqltypes.Value) *tabletmanagerdatapb.
 	}
 	// If the source and target PKs are different, we need to save the source PK
 	// as well. Otherwise the source will be nil which means that the target value
-	// should be used for the source.
+	// should also be used for the source.
 	if !slices.Equal(td.tablePlan.pkCols, td.tablePlan.sourcePkCols) {
 		lastPK.Source = buildQR(td.tablePlan.sourcePkCols)
 	}
@@ -904,13 +907,15 @@ func (td *tableDiffer) adjustForSourceTimeZone(targetSelectExprs sqlparser.Selec
 
 // getSourcePKCols populates the sourcePkCols field in the tablePlan.
 // We need this information in order to save the lastpk value for the
-// source as the PK columns may differ between the source and target.
+// source if the PK columns differ between the source and target.
 func (td *tableDiffer) getSourcePKCols() error {
 	ctx, cancel := context.WithTimeout(td.wd.ct.vde.ctx, topo.RemoteOperationTimeout*3)
 	defer cancel()
+
 	// We use the first sourceShard as all of them should have the same schema.
 	if len(td.wd.ct.sources) == 0 {
-		return fmt.Errorf("no source shards found")
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no source shards found in %s keyspace",
+			td.wd.ct.sourceKeyspace)
 	}
 	sourceShardName := maps.Keys(td.wd.ct.sources)[0]
 	sourceTS, err := td.wd.getSourceTopoServer()
@@ -926,7 +931,8 @@ func (td *tableDiffer) getSourcePKCols() error {
 	}
 	sourceTablet, err := sourceTS.GetTablet(ctx, sourceShard.PrimaryAlias)
 	if err != nil {
-		return vterrors.Wrapf(err, "failed to get primary tablet in source shard %s", sourceShardName)
+		return vterrors.Wrapf(err, "failed to get primary tablet in source shard %s/%s",
+			td.wd.ct.sourceKeyspace, sourceShardName)
 	}
 	sourceSchema, err := td.wd.ct.tmc.GetSchema(ctx, sourceTablet.Tablet, &tabletmanagerdatapb.GetSchemaRequest{
 		Tables: []string{td.table.Name},
@@ -961,6 +967,7 @@ func (td *tableDiffer) getSourcePKCols() error {
 			sourceTable.PrimaryKeyColumns = append(sourceTable.PrimaryKeyColumns, td.table.Columns...)
 		}
 	}
+
 	sourcePKColumns := make(map[string]struct{}, len(sourceTable.PrimaryKeyColumns))
 	td.tablePlan.sourcePkCols = make([]int, 0, len(sourceTable.PrimaryKeyColumns))
 	for _, pkc := range sourceTable.PrimaryKeyColumns {
@@ -971,6 +978,7 @@ func (td *tableDiffer) getSourcePKCols() error {
 			td.tablePlan.sourcePkCols = append(td.tablePlan.sourcePkCols, i)
 		}
 	}
+
 	return nil
 }
 

@@ -104,7 +104,9 @@ func TestUpdateTableProgress(t *testing.T) {
 						TableDiffRowCounts: stats.NewCountersWithSingleLabel("", "", "Rows"),
 					},
 					opts: &tabletmanagerdatapb.VDiffOptions{
-						CoreOptions: &tabletmanagerdatapb.VDiffCoreOptions{},
+						CoreOptions: &tabletmanagerdatapb.VDiffCoreOptions{
+							MaxDiffSeconds: 100,
+						},
 					},
 				},
 				table: &tabletmanagerdatapb.TableDefinition{
