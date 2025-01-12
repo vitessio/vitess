@@ -966,7 +966,7 @@ func (td *tableDiffer) getSourcePKCols() error {
 	for _, pkc := range sourceTable.PrimaryKeyColumns {
 		sourcePKColumns[pkc] = struct{}{}
 	}
-	for i, pkc := range td.table.PrimaryKeyColumns {
+	for i, pkc := range td.table.Columns {
 		if _, ok := sourcePKColumns[pkc]; ok {
 			td.tablePlan.sourcePkCols = append(td.tablePlan.sourcePkCols, i)
 		}

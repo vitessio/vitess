@@ -175,6 +175,11 @@ func TestVDiff2(t *testing.T) {
 	require.NoError(t, err)
 	verifyClusterHealth(t, vc)
 
+	// Pre-create the customer table on the target keyspace, with the primary key on
+	// (cid) vs (cid,typ) on the source. This confirms that we are able to properly
+	// diff the table when the source and target have a different PK definition.
+	execVtgateQuery(t, vtgateConn, targetKs, customerTableModifiedPK)
+
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Primary tablets for any new shards are added in the first cell.
