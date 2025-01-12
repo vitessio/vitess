@@ -31,8 +31,22 @@ import (
 )
 
 func TestUpdateTableProgress(t *testing.T) {
+	wd := &workflowDiffer{
+		ct: &controller{
+			id:                 1,
+			TableDiffRowCounts: stats.NewCountersWithSingleLabel("", "", "Rows"),
+		},
+		opts: &tabletmanagerdatapb.VDiffOptions{
+			CoreOptions: &tabletmanagerdatapb.VDiffCoreOptions{
+				MaxDiffSeconds: 100,
+			},
+		},
+	}
+	table := &tabletmanagerdatapb.TableDefinition{
+		Name: "test",
+	}
 	dr := &DiffReport{
-		TableName:     "test",
+		TableName:     table.Name,
 		ProcessedRows: 1e9,
 	}
 	queryTemplate := `update _vt.vdiff_table set rows_compared = 1000000000, lastpk = '%s', report = '{"TableName":"test","ProcessedRows":1000000000,"MatchingRows":0,"MismatchedRows":0,"ExtraRowsSource":0,"ExtraRowsTarget":0}' where vdiff_id = 1 and table_name = 'test'`
@@ -98,20 +112,8 @@ func TestUpdateTableProgress(t *testing.T) {
 			dbc := binlogplayer.NewMockDBClient(t)
 			dbc.ExpectRequest(fmt.Sprintf(queryTemplate, tc.expectedLastPK), &sqltypes.Result{}, nil)
 			td := &tableDiffer{
-				wd: &workflowDiffer{
-					ct: &controller{
-						id:                 1,
-						TableDiffRowCounts: stats.NewCountersWithSingleLabel("", "", "Rows"),
-					},
-					opts: &tabletmanagerdatapb.VDiffOptions{
-						CoreOptions: &tabletmanagerdatapb.VDiffCoreOptions{
-							MaxDiffSeconds: 100,
-						},
-					},
-				},
-				table: &tabletmanagerdatapb.TableDefinition{
-					Name: "test",
-				},
+				wd:    wd,
+				table: table,
 				tablePlan: &tablePlan{
 					pkCols:       tc.pkCols,
 					sourcePkCols: tc.sourcePkCols,
