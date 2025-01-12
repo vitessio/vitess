@@ -306,7 +306,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 			compareCols:  []compareColInfo{{0, collations.MySQL8().LookupByName(sqltypes.NULL.String()), false, "c1"}, {1, collations.MySQL8().LookupByName(sqltypes.NULL.String()), false, "c2"}, {2, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c3"}},
 			comparePKs:   []compareColInfo{{2, collations.MySQL8().LookupByName(sqltypes.NULL.String()), true, "c3"}},
 			pkCols:       []int{2},
-			sourcePkCols: []int{},
+			sourcePkCols: []int{0},
 			selectPks:    []int{2},
 			orderBy: sqlparser.OrderBy{
 				&sqlparser.Order{
