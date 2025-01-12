@@ -436,8 +436,11 @@ func (mtm *multiTenantMigration) insertSomeData(t *testing.T, tenantId int64, ke
 	defer closeConn()
 	idx := mtm.getLastID(tenantId)
 	for i := idx + 1; i <= idx+numRows; i++ {
+		// The source table has a PK on id only, so we have to make the id value
+		// unique rather than relying on the combination of (id, tenant_id) for
+		// our uniqueness.
 		execQueryWithRetry(t, vtgateConn,
-			fmt.Sprintf("insert into %s.t1(id, tenant_id) values(%d, %d)", keyspace, i, tenantId), queryTimeout)
+			fmt.Sprintf("insert into %s.t1(id, tenant_id) values(%d, %d)", keyspace, i+(tenantId*1e4), tenantId), queryTimeout)
 	}
 	mtm.setLastID(tenantId, idx+numRows)
 }
