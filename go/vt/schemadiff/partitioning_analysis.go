@@ -51,13 +51,7 @@ type TemporalRangePartitioningAnalysis struct {
 
 // IsRangePartitioned returns `true` when the given CREATE TABLE statement is partitioned by RANGE.
 func IsRangePartitioned(createTable *sqlparser.CreateTable) bool {
-	if createTable.TableSpec.PartitionOption == nil {
-		return false
-	}
-	if createTable.TableSpec.PartitionOption.Type != sqlparser.RangeType {
-		return false
-	}
-	return true
+	return createTable.TableSpec.PartitionOption != nil && createTable.TableSpec.PartitionOption.Type == sqlparser.RangeType
 }
 
 // AlterTableRotatesRangePartition answers `true` when the given ALTER TABLE statement performs any sort
