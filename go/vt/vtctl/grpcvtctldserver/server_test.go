@@ -30,6 +30,7 @@ import (
 
 	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -2777,14 +2778,14 @@ func TestCreateKeyspace(t *testing.T) {
 			req: &vtctldatapb.CreateKeyspaceRequest{
 				Name:             "testkeyspace",
 				Type:             topodatapb.KeyspaceType_NORMAL,
-				DurabilityPolicy: "semi_sync",
+				DurabilityPolicy: policy.DurabilitySemiSync,
 			},
 			expected: &vtctldatapb.CreateKeyspaceResponse{
 				Keyspace: &vtctldatapb.Keyspace{
 					Name: "testkeyspace",
 					Keyspace: &topodatapb.Keyspace{
 						KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
-						DurabilityPolicy: "semi_sync",
+						DurabilityPolicy: policy.DurabilitySemiSync,
 					},
 				},
 			},
@@ -11338,11 +11339,11 @@ func TestSetKeyspaceDurabilityPolicy(t *testing.T) {
 			},
 			req: &vtctldatapb.SetKeyspaceDurabilityPolicyRequest{
 				Keyspace:         "ks1",
-				DurabilityPolicy: "none",
+				DurabilityPolicy: policy.DurabilityNone,
 			},
 			expected: &vtctldatapb.SetKeyspaceDurabilityPolicyResponse{
 				Keyspace: &topodatapb.Keyspace{
-					DurabilityPolicy: "none",
+					DurabilityPolicy: policy.DurabilityNone,
 				},
 			},
 		},
@@ -13881,11 +13882,11 @@ func TestValidateSchemaKeyspace(t *testing.T) {
 	}
 
 	tests := []*struct {
-		name      string
-		req       *vtctldatapb.ValidateSchemaKeyspaceRequest
-		expected  *vtctldatapb.ValidateSchemaKeyspaceResponse
-		setup     func()
-		shouldErr bool
+		name     string
+		req      *vtctldatapb.ValidateSchemaKeyspaceRequest
+		expected *vtctldatapb.ValidateSchemaKeyspaceResponse
+		setup    func()
+		err      string
 	}{
 		{
 			name: "valid schemas",
@@ -13908,7 +13909,6 @@ func TestValidateSchemaKeyspace(t *testing.T) {
 					Uid:  101,
 				}, schema1)
 			},
-			shouldErr: false,
 		},
 		{
 			name: "different schemas",
@@ -13931,7 +13931,6 @@ func TestValidateSchemaKeyspace(t *testing.T) {
 					Uid:  101,
 				}, schema2)
 			},
-			shouldErr: false,
 		},
 		{
 			name: "skip-no-primary: no primary",
@@ -13956,7 +13955,6 @@ func TestValidateSchemaKeyspace(t *testing.T) {
 					Uid:  201,
 				}, schema1)
 			},
-			shouldErr: false,
 		},
 	}
 
@@ -13964,8 +13962,8 @@ func TestValidateSchemaKeyspace(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.setup()
 			resp, err := vtctld.ValidateSchemaKeyspace(ctx, tt.req)
-			if tt.shouldErr {
-				assert.Error(t, err)
+			if tt.err != "" {
+				assert.EqualError(t, err, tt.err)
 				return
 			}
 

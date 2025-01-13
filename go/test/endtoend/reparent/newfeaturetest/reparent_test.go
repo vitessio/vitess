@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/reparent/utils"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 )
 
 // TestRecoverWithMultipleVttabletFailures tests that ERS succeeds with the default values
@@ -36,8 +37,7 @@ import (
 // The test takes down the vttablets of the primary and a rdonly tablet and runs ERS with the
 // default values of remote_operation_timeout, lock-timeout flags and wait_replicas_timeout subflag.
 func TestRecoverWithMultipleVttabletFailures(t *testing.T) {
-	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
+	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
@@ -68,8 +68,7 @@ func TestRecoverWithMultipleVttabletFailures(t *testing.T) {
 // and ERS succeeds.
 func TestSingleReplicaERS(t *testing.T) {
 	// Set up a cluster with none durability policy
-	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentCluster(t, "none")
+	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilityNone)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 	// Confirm that the replication is setup correctly in the beginning.
@@ -104,8 +103,7 @@ func TestSingleReplicaERS(t *testing.T) {
 
 // TestTabletRestart tests that a running tablet can be  restarted and everything is still fine
 func TestTabletRestart(t *testing.T) {
-	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
+	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
@@ -117,8 +115,7 @@ func TestTabletRestart(t *testing.T) {
 
 // Tests ensures that ChangeTabletType works even when semi-sync plugins are not loaded.
 func TestChangeTypeWithoutSemiSync(t *testing.T) {
-	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentCluster(t, "none")
+	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilityNone)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
@@ -163,8 +160,7 @@ func TestChangeTypeWithoutSemiSync(t *testing.T) {
 // TestERSWithWriteInPromoteReplica tests that ERS doesn't fail even if there is a
 // write that happens when PromoteReplica is called.
 func TestERSWithWriteInPromoteReplica(t *testing.T) {
-	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
+	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
@@ -181,8 +177,7 @@ func TestERSWithWriteInPromoteReplica(t *testing.T) {
 }
 
 func TestBufferingWithMultipleDisruptions(t *testing.T) {
-	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupShardedReparentCluster(t, "semi_sync")
+	clusterInstance := utils.SetupShardedReparentCluster(t, policy.DurabilitySemiSync)
 	defer utils.TeardownCluster(clusterInstance)
 
 	// Stop all VTOrc instances, so that they don't interfere with the test.

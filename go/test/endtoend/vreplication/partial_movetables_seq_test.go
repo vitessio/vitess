@@ -271,9 +271,7 @@ func (wf *workflow) complete() {
 // TestPartialMoveTablesWithSequences enhances TestPartialMoveTables by adding an unsharded keyspace which has a
 // sequence. This tests that the sequence is migrated correctly and that we can reverse traffic back to the source
 func TestPartialMoveTablesWithSequences(t *testing.T) {
-
 	origExtraVTGateArgs := extraVTGateArgs
-
 	extraVTGateArgs = append(extraVTGateArgs, []string{
 		"--enable-partial-keyspace-migration",
 		"--schema_change_signal=false",
@@ -356,8 +354,8 @@ func TestPartialMoveTablesWithSequences(t *testing.T) {
 
 	vtgateConn, closeConn = getVTGateConn()
 	defer closeConn()
-	t.Run("Confirm routing rules", func(t *testing.T) {
 
+	t.Run("Confirm routing rules", func(t *testing.T) {
 		// Global routing rules should be in place with everything going to the source keyspace (customer).
 		confirmGlobalRoutingToSource(t)
 
@@ -410,7 +408,6 @@ func TestPartialMoveTablesWithSequences(t *testing.T) {
 	defer vtgateConn.Close()
 
 	t.Run("Validate shard and tablet type routing", func(t *testing.T) {
-
 		// No shard targeting
 		_, err = vtgateConn.ExecuteFetch(shard80DashRoutedQuery, 0, false)
 		require.Error(t, err)
@@ -482,10 +479,10 @@ func TestPartialMoveTablesWithSequences(t *testing.T) {
 
 		insertCustomers(t)
 
-		output, err = tc.vc.VtctlClient.ExecuteCommandWithOutput("Workflow", "seqTgt.seq", "show")
+		output, err = tc.vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", wfSeq.toKeyspace, "show", "--workflow", wfSeq.name)
 		require.NoError(t, err)
 
-		output, err = tc.vc.VtctlClient.ExecuteCommandWithOutput("Workflow", "seqSrc.seq_reverse", "show")
+		output, err = tc.vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", wfSeq.fromKeyspace, "show", "--workflow", fmt.Sprintf("%s_reverse", wfSeq.name))
 		require.NoError(t, err)
 
 		wfSeq.complete()
@@ -501,21 +498,19 @@ func TestPartialMoveTablesWithSequences(t *testing.T) {
 			err = tstWorkflowExec(t, "", reverseWf, "", reverseKs, "", workflowActionCancel, "", "", "", defaultWorkflowExecOptions)
 			require.NoError(t, err)
 
-			output, err := tc.vc.VtctlClient.ExecuteCommandWithOutput("Workflow", fmt.Sprintf("%s.%s", reverseKs, reverseWf), "show")
-			require.Error(t, err)
-			require.Contains(t, output, "no streams found")
-
-			// Delete the original workflow
-			originalKsWf := fmt.Sprintf("%s.%s", targetKs, wf)
-			_, err = tc.vc.VtctlClient.ExecuteCommandWithOutput("Workflow", originalKsWf, "delete")
+			output, err := tc.vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", reverseKs, "show", "--workflow", reverseWf)
 			require.NoError(t, err)
-			output, err = tc.vc.VtctlClient.ExecuteCommandWithOutput("Workflow", originalKsWf, "show")
-			require.Error(t, err)
-			require.Contains(t, output, "no streams found")
+			require.True(t, isEmptyWorkflowShowOutput(output))
+
+			// Be sure that we've deleted the original workflow.
+			_, _ = tc.vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", targetKs, "delete", "--workflow", wf)
+			output, err = tc.vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", targetKs, "show", "--workflow", wf)
+			require.NoError(t, err)
+			require.True(t, isEmptyWorkflowShowOutput(output))
 		}
 
 		// Confirm that the global routing rules are now gone.
-		output, err = tc.vc.VtctlClient.ExecuteCommandWithOutput("GetRoutingRules")
+		output, err = tc.vc.VtctldClient.ExecuteCommandWithOutput("GetRoutingRules", "--compact")
 		require.NoError(t, err)
 		require.Equal(t, emptyGlobalRoutingRules, output)
 
@@ -564,7 +559,7 @@ func insertCustomers(t *testing.T) {
 }
 
 func confirmGlobalRoutingToSource(t *testing.T) {
-	output, err := vc.VtctlClient.ExecuteCommandWithOutput("GetRoutingRules")
+	output, err := vc.VtctldClient.ExecuteCommandWithOutput("GetRoutingRules", "--compact")
 	require.NoError(t, err)
 	result := gjson.Get(output, "rules")
 	result.ForEach(func(attributeKey, attributeValue gjson.Result) bool {

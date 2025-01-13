@@ -349,17 +349,6 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
-		"pitr": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/recovery/pitr"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "10",
-			"RetryMax": 1,
-			"Tags": [
-				"site_test"
-			]
-		},
 		"recovery": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/recovery/unshardedrecovery"],
@@ -615,7 +604,7 @@
 			"Manual": false,
 			"Shard": "vtgate_queries",
 			"RetryMax": 2,
-			"Tags": ["upgrade_downgrade_query_serving_queries"]
+			"Tags": ["upgrade_downgrade_query_serving_queries_2"]
 		},
 		"vtgate_queries_subquery": {
 			"File": "unused.go",
@@ -624,7 +613,7 @@
 			"Manual": false,
 			"Shard": "vtgate_queries",
 			"RetryMax": 2,
-			"Tags": ["upgrade_downgrade_query_serving_queries"]
+			"Tags": ["upgrade_downgrade_query_serving_queries_2"]
 		},
 		"vtgate_queries_union": {
 			"File": "unused.go",
@@ -633,7 +622,7 @@
 			"Manual": false,
 			"Shard": "vtgate_queries",
 			"RetryMax": 2,
-			"Tags": ["upgrade_downgrade_query_serving_queries"]
+			"Tags": ["upgrade_downgrade_query_serving_queries_2"]
 		},
 		"vtgate_queries_insert": {
 			"File": "unused.go",
@@ -642,7 +631,7 @@
 			"Manual": false,
 			"Shard": "vtgate_queries",
 			"RetryMax": 2,
-			"Tags": ["upgrade_downgrade_query_serving_queries"]
+			"Tags": ["upgrade_downgrade_query_serving_queries_2"]
 		},
 		"vtgate_queries_vexplain": {
 			"File": "unused.go",
@@ -651,7 +640,7 @@
 			"Manual": false,
 			"Shard": "vtgate_queries",
 			"RetryMax": 2,
-			"Tags": ["upgrade_downgrade_query_serving_queries"]
+			"Tags": ["upgrade_downgrade_query_serving_queries_2"]
 		},
 		"vtgate_queries_reference": {
 			"File": "unused.go",
@@ -660,7 +649,7 @@
 			"Manual": false,
 			"Shard": "vtgate_queries",
 			"RetryMax": 1,
-			"Tags": ["upgrade_downgrade_query_serving_queries"]
+			"Tags": ["upgrade_downgrade_query_serving_queries_2"]
 		},
 		"vtgate_queries_random": {
 			"File": "unused.go",
@@ -669,7 +658,7 @@
 			"Manual": false,
 			"Shard": "vtgate_queries",
 			"RetryMax": 1,
-			"Tags": ["upgrade_downgrade_query_serving_queries"]
+			"Tags": ["upgrade_downgrade_query_serving_queries_2"]
 		},
 		"vtgate_kill": {
 			"File": "unused.go",
@@ -678,7 +667,7 @@
 			"Manual": false,
 			"Shard": "vtgate_queries",
 			"RetryMax": 1,
-			"Tags": ["upgrade_downgrade_query_serving_queries"]
+			"Tags": ["upgrade_downgrade_query_serving_queries_2"]
 		},
 		"vtgate_concurrentdml": {
 			"File": "unused.go",
@@ -893,6 +882,15 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_transaction",
+			"RetryMax": 1,
+			"Tags": []
+		},
+		"vtgate_plantests": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/plan_tests"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtgate_plantests",
 			"RetryMax": 1,
 			"Tags": []
 		},
@@ -1312,6 +1310,15 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
+		"global_routing": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestGlobalRouting", "-timeout", "30m"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vreplication_v2",
+			"RetryMax": 1,
+			"Tags": []
+		},
 		"vreplication_fk": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestFKWorkflow"],
@@ -1348,18 +1355,9 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
-		"vreplication_vtctl_migrate": {
+		"vreplication_migrate": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVtctlMigrate", "-timeout", "30m"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "vreplication_migrate",
-			"RetryMax": 1,
-			"Tags": []
-		},
-		"vreplication_vtctld_migrate": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVtctldMigrate", "-timeout", "30m"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestMigrate", "-timeout", "30m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_migrate",

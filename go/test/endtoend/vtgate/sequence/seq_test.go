@@ -174,7 +174,6 @@ CREATE TABLE allDefaults (
 )
 
 func TestMain(m *testing.M) {
-	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	exitCode := func() int {
@@ -216,7 +215,6 @@ func TestMain(m *testing.M) {
 }
 
 func TestSeq(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	vtParams := mysql.ConnParams{
 		Host: "localhost",
@@ -274,7 +272,6 @@ func TestSeq(t *testing.T) {
 }
 
 func TestDotTableSeq(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	vtParams := mysql.ConnParams{
 		Host:   "localhost",
@@ -297,7 +294,6 @@ func TestDotTableSeq(t *testing.T) {
 }
 
 func TestInsertAllDefaults(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	vtParams := mysql.ConnParams{
 		Host:   "localhost",

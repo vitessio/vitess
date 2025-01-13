@@ -401,9 +401,9 @@ func TestExecutorSetMetadata(t *testing.T) {
 	})
 
 	t.Run("Session 2", func(t *testing.T) {
-		vschemaacl.AuthorizedDDLUsers = "%"
+		vschemaacl.AuthorizedDDLUsers.Set(vschemaacl.NewAuthorizedDDLUsers("%"))
 		defer func() {
-			vschemaacl.AuthorizedDDLUsers = ""
+			vschemaacl.AuthorizedDDLUsers.Set(vschemaacl.NewAuthorizedDDLUsers(""))
 		}()
 
 		executor, _, _, _, ctx := createExecutorEnv(t)
@@ -411,11 +411,11 @@ func TestExecutorSetMetadata(t *testing.T) {
 
 		set := "set @@vitess_metadata.app_keyspace_v1= '1'"
 		_, err := executor.Execute(ctx, nil, "TestExecute", session, set, nil)
-		assert.NoError(t, err, "%s error: %v", set, err)
+		require.NoError(t, err, "%s error: %v", set, err)
 
 		show := `show vitess_metadata variables like 'app\\_keyspace\\_v_'`
 		result, err := executor.Execute(ctx, nil, "TestExecute", session, show, nil)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		want := "1"
 		got := result.Rows[0][1].ToString()
@@ -424,11 +424,11 @@ func TestExecutorSetMetadata(t *testing.T) {
 		// Update metadata
 		set = "set @@vitess_metadata.app_keyspace_v2='2'"
 		_, err = executor.Execute(ctx, nil, "TestExecute", session, set, nil)
-		assert.NoError(t, err, "%s error: %v", set, err)
+		require.NoError(t, err, "%s error: %v", set, err)
 
 		show = `show vitess_metadata variables like 'app\\_keyspace\\_v%'`
 		gotqr, err := executor.Execute(ctx, nil, "TestExecute", session, show, nil)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		wantqr := &sqltypes.Result{
 			Fields: buildVarCharFields("Key", "Value"),

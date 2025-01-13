@@ -120,7 +120,6 @@ const (
 )
 
 func TestMain(m *testing.M) {
-	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	exitcode, err := func() (int, error) {
@@ -197,7 +196,6 @@ func TestMain(m *testing.M) {
 }
 
 func TestOnlineDDLFlow(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 
 	require.NotNil(t, clusterInstance)
@@ -246,7 +244,7 @@ func TestOnlineDDLFlow(t *testing.T) {
 						select {
 						case <-ticker.C:
 						case <-workloadCtx.Done():
-							t.Logf("Terminating routine throttler check")
+							fmt.Println("Terminating routine throttler check")
 							return
 						}
 					}
@@ -260,8 +258,8 @@ func TestOnlineDDLFlow(t *testing.T) {
 				wg.Add(1)
 				go func() {
 					defer cancel()
-					defer t.Logf("Terminating workload")
 					defer wg.Done()
+					defer fmt.Println("Terminating workload")
 					runMultipleConnections(workloadCtx, t)
 				}()
 			})

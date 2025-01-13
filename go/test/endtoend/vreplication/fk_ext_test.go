@@ -151,8 +151,7 @@ func TestFKExt(t *testing.T) {
 		}
 		sqls := strings.Split(FKExtSourceSchema, "\n")
 		for _, sql := range sqls {
-			output, err := vc.VtctlClient.ExecuteCommandWithOutput("ApplySchema", "--",
-				"--ddl_strategy=direct", "--sql", sql, keyspaceName)
+			output, err := vc.VtctldClient.ExecuteCommandWithOutput("ApplySchema", "--ddl-strategy=direct", "--sql", sql, keyspaceName)
 			require.NoErrorf(t, err, output)
 		}
 		doReshard(t, fkextConfig.target2KeyspaceName, "reshard2to3", "-80,80-", threeShards, tablets)
@@ -165,8 +164,7 @@ func TestFKExt(t *testing.T) {
 		tablets[shard] = vc.Cells[cellName].Keyspaces[keyspaceName].Shards[shard].Tablets[fmt.Sprintf("%s-%d", cellName, tabletID)].Vttablet
 		sqls := strings.Split(FKExtSourceSchema, "\n")
 		for _, sql := range sqls {
-			output, err := vc.VtctlClient.ExecuteCommandWithOutput("ApplySchema", "--",
-				"--ddl_strategy=direct", "--sql", sql, keyspaceName)
+			output, err := vc.VtctldClient.ExecuteCommandWithOutput("ApplySchema", "--ddl-strategy=direct", "--sql", sql, keyspaceName)
 			require.NoErrorf(t, err, output)
 		}
 		doReshard(t, fkextConfig.target2KeyspaceName, "reshard3to1", threeShards, "0", tablets)
@@ -254,7 +252,7 @@ func doReshard(t *testing.T, keyspace, workflowName, sourceShards, targetShards 
 	for _, targetTab := range targetTabs {
 		catchup(t, targetTab, workflowName, "Reshard")
 	}
-	vdiff(t, keyspace, workflowName, fkextConfig.cell, false, true, nil)
+	vdiff(t, keyspace, workflowName, fkextConfig.cell, nil)
 	rs.SwitchReadsAndWrites()
 	//if lg.WaitForAdditionalRows(100) != nil {
 	//	t.Fatal("WaitForAdditionalRows failed")
@@ -263,7 +261,7 @@ func doReshard(t *testing.T, keyspace, workflowName, sourceShards, targetShards 
 	if compareRowCounts(t, keyspace, strings.Split(sourceShards, ","), strings.Split(targetShards, ",")) != nil {
 		t.Fatal("Row counts do not match")
 	}
-	vdiff(t, keyspace, workflowName+"_reverse", fkextConfig.cell, true, false, nil)
+	vdiff(t, keyspace, workflowName+"_reverse", fkextConfig.cell, nil)
 
 	rs.ReverseReadsAndWrites()
 	//if lg.WaitForAdditionalRows(100) != nil {
@@ -273,7 +271,7 @@ func doReshard(t *testing.T, keyspace, workflowName, sourceShards, targetShards 
 	if compareRowCounts(t, keyspace, strings.Split(targetShards, ","), strings.Split(sourceShards, ",")) != nil {
 		t.Fatal("Row counts do not match")
 	}
-	vdiff(t, keyspace, workflowName, fkextConfig.cell, false, true, nil)
+	vdiff(t, keyspace, workflowName, fkextConfig.cell, nil)
 	lg.Stop()
 
 	rs.SwitchReadsAndWrites()
@@ -313,12 +311,10 @@ const fkExtMaterializeSpec = `
 
 func materializeTables(t *testing.T) {
 	wfName := "mat"
-	err := vc.VtctlClient.ExecuteCommand("ApplySchema", "--", "--ddl_strategy=direct",
-		"--sql", FKExtMaterializeSchema, fkextConfig.target1KeyspaceName)
+	err := vc.VtctldClient.ExecuteCommand("ApplySchema", "--ddl-strategy=direct", "--sql", FKExtMaterializeSchema, fkextConfig.target1KeyspaceName)
 	require.NoError(t, err, fmt.Sprintf("ApplySchema Error: %s", err))
 	materializeSpec := fmt.Sprintf(fkExtMaterializeSpec, "mat", fkextConfig.target2KeyspaceName, fkextConfig.target1KeyspaceName)
-	err = vc.VtctlClient.ExecuteCommand("Materialize", materializeSpec)
-	require.NoError(t, err, "Materialize")
+	materialize(t, materializeSpec)
 	tab := vc.getPrimaryTablet(t, fkextConfig.target1KeyspaceName, "0")
 	catchup(t, tab, wfName, "Materialize")
 	validateMaterializeRowCounts(t)
@@ -363,7 +359,7 @@ func doMoveTables(t *testing.T, sourceKeyspace, targetKeyspace, workflowName, ta
 	for _, targetTab := range targetTabs {
 		catchup(t, targetTab, workflowName, "MoveTables")
 	}
-	vdiff(t, targetKeyspace, workflowName, fkextConfig.cell, false, true, nil)
+	vdiff(t, targetKeyspace, workflowName, fkextConfig.cell, nil)
 	lg.Stop()
 	lg.SetDBStrategy("vtgate", targetKeyspace)
 	if lg.Start() != nil {
@@ -377,7 +373,7 @@ func doMoveTables(t *testing.T, sourceKeyspace, targetKeyspace, workflowName, ta
 	}
 
 	waitForLowLag(t, sourceKeyspace, workflowName+"_reverse")
-	vdiff(t, sourceKeyspace, workflowName+"_reverse", fkextConfig.cell, false, true, nil)
+	vdiff(t, sourceKeyspace, workflowName+"_reverse", fkextConfig.cell, nil)
 	if lg.WaitForAdditionalRows(100) != nil {
 		t.Fatal("WaitForAdditionalRows failed")
 	}
@@ -388,7 +384,7 @@ func doMoveTables(t *testing.T, sourceKeyspace, targetKeyspace, workflowName, ta
 	}
 	waitForLowLag(t, targetKeyspace, workflowName)
 	time.Sleep(5 * time.Second)
-	vdiff(t, targetKeyspace, workflowName, fkextConfig.cell, false, true, nil)
+	vdiff(t, targetKeyspace, workflowName, fkextConfig.cell, nil)
 	lg.Stop()
 	mt.SwitchReadsAndWrites()
 	mt.Complete()

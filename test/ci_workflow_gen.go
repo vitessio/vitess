@@ -103,6 +103,7 @@ var (
 		"vtgate_vindex_heavy",
 		"vtgate_vschema",
 		"vtgate_queries",
+		"vtgate_plantests",
 		"vtgate_schema_tracker",
 		"vtgate_foreignkey_stress",
 		"vtorc",
@@ -175,6 +176,7 @@ type clusterTest struct {
 	Docker                             bool
 	LimitResourceUsage                 bool
 	EnableBinlogTransactionCompression bool
+	EnablePartialJSON                  bool
 	PartialKeyspace                    bool
 	Cores16                            bool
 	NeedsMinio                         bool
@@ -305,6 +307,7 @@ func generateClusterWorkflows(list []string, tpl string) {
 			}
 			if strings.Contains(cluster, "vrepl") {
 				test.EnableBinlogTransactionCompression = true
+				test.EnablePartialJSON = true
 			}
 			mysqlVersionIndicator := ""
 			if mysqlVersion != defaultMySQLVersion && len(clusterMySQLVersions()) > 1 {

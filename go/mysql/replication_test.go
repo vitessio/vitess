@@ -17,6 +17,7 @@ limitations under the License.
 package mysql
 
 import (
+	"math"
 	"reflect"
 	"testing"
 
@@ -36,6 +37,10 @@ func TestComBinlogDump(t *testing.T) {
 		sConn.Close()
 		cConn.Close()
 	}()
+
+	// Try to write a ComBinlogDump packet with a position greater than 4 bytes.
+	err := cConn.WriteComBinlogDump(1, "moofarm", math.MaxInt64, 0x0d0e)
+	require.Error(t, err)
 
 	// Write ComBinlogDump packet, read it, compare.
 	if err := cConn.WriteComBinlogDump(0x01020304, "moofarm", 0x05060708, 0x090a); err != nil {

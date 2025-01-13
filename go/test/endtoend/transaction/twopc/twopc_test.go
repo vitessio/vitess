@@ -44,6 +44,38 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/grpctmclient"
 )
 
+// TestDynamicConfig tests that transaction mode is dynamically configurable.
+func TestDynamicConfig(t *testing.T) {
+	conn, closer := start(t)
+	defer closer()
+	defer conn.Close()
+
+	// Ensure that initially running a distributed transaction is possible.
+	utils.Exec(t, conn, "begin")
+	utils.Exec(t, conn, "insert into twopc_t1(id, col) values(4, 4)")
+	utils.Exec(t, conn, "insert into twopc_t1(id, col) values(6, 4)")
+	utils.Exec(t, conn, "insert into twopc_t1(id, col) values(9, 4)")
+	utils.Exec(t, conn, "commit")
+
+	clusterInstance.VtgateProcess.Config.TransactionMode = "SINGLE"
+	defer func() {
+		clusterInstance.VtgateProcess.Config.TransactionMode = "TWOPC"
+		err := clusterInstance.VtgateProcess.RewriteConfiguration()
+		require.NoError(t, err)
+	}()
+	err := clusterInstance.VtgateProcess.RewriteConfiguration()
+	require.NoError(t, err)
+	err = clusterInstance.VtgateProcess.WaitForConfig(`"transaction_mode":"SINGLE"`)
+	require.NoError(t, err)
+
+	// After the config changes verify running a distributed transaction fails.
+	utils.Exec(t, conn, "begin")
+	utils.Exec(t, conn, "insert into twopc_t1(id, col) values(20, 4)")
+	_, err = utils.ExecAllowError(t, conn, "insert into twopc_t1(id, col) values(22, 4)")
+	require.ErrorContains(t, err, "multi-db transaction attempted")
+	utils.Exec(t, conn, "rollback")
+}
+
 // TestDTCommit tests distributed transaction commit for insert, update and delete operations
 // It verifies the binlog events for the same with transaction state changes and redo statements.
 func TestDTCommit(t *testing.T) {
@@ -563,7 +595,11 @@ func compareMaps(t *testing.T, expected, actual map[string][]string, flexibleExp
 // TestDTResolveAfterMMCommit tests that transaction is committed on recovery
 // failure after MM commit.
 func TestDTResolveAfterMMCommit(t *testing.T) {
-	defer cleanup(t)
+	initconn, closer := start(t)
+	defer closer()
+
+	// Do an insertion into a table that has a consistent lookup vindex.
+	utils.Exec(t, initconn, "insert into twopc_consistent_lookup(id, col, col_unique) values(4, 4, 6)")
 
 	vtgateConn, err := cluster.DialVTGate(context.Background(), t.Name(), vtgateGrpcAddress, "dt_user", "")
 	require.NoError(t, err)
@@ -588,6 +624,10 @@ func TestDTResolveAfterMMCommit(t *testing.T) {
 	_, err = conn.Execute(qCtx, "insert into twopc_user(id, name) values(9,'baz')", nil)
 	require.NoError(t, err)
 	_, err = conn.Execute(qCtx, "insert into twopc_user(id, name) values(10,'apa')", nil)
+	require.NoError(t, err)
+	// Also do an update to a table that has a consistent lookup vindex.
+	// We expect to see only the pre-session changes in the logs.
+	_, err = conn.Execute(qCtx, "update twopc_consistent_lookup set col = 22 where id = 4", nil)
 	require.NoError(t, err)
 
 	// The caller ID is used to simulate the failure at the desired point.
@@ -625,7 +665,9 @@ func TestDTResolveAfterMMCommit(t *testing.T) {
 		},
 		"ks.redo_statement:-40": {
 			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (10, 'apa')\")]",
+			"insert:[VARCHAR(\"dtid-1\") INT64(2) BLOB(\"update twopc_consistent_lookup set col = 22 where id = 4 limit 10001 /* INT64 */\")]",
 			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (10, 'apa')\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(2) BLOB(\"update twopc_consistent_lookup set col = 22 where id = 4 limit 10001 /* INT64 */\")]",
 		},
 		"ks.redo_statement:40-80": {
 			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (8, 'bar')\")]",
@@ -641,6 +683,12 @@ func TestDTResolveAfterMMCommit(t *testing.T) {
 			`insert:[INT64(7) VARCHAR("foo")]`,
 			`insert:[INT64(9) VARCHAR("baz")]`,
 		},
+		"ks.consistent_lookup:-40": {
+			"insert:[INT64(22) INT64(4) VARBINARY(\" \\x00\\x00\\x00\\x00\\x00\\x00\\x00\")]",
+		},
+		"ks.twopc_consistent_lookup:-40": {
+			"update:[INT64(4) INT64(22) INT64(6)]",
+		},
 	}
 	assert.Equal(t, expectations, logTable,
 		"mismatch expected: \n got: %s, want: %s", prettyPrint(logTable), prettyPrint(expectations))
@@ -649,7 +697,11 @@ func TestDTResolveAfterMMCommit(t *testing.T) {
 // TestDTResolveAfterRMPrepare tests that transaction is rolled back on recovery
 // failure after RM prepare and before MM commit.
 func TestDTResolveAfterRMPrepare(t *testing.T) {
-	defer cleanup(t)
+	initconn, closer := start(t)
+	defer closer()
+
+	// Do an insertion into a table that has a consistent lookup vindex.
+	utils.Exec(t, initconn, "insert into twopc_consistent_lookup(id, col, col_unique) values(4, 4, 6)")
 
 	vtgateConn, err := cluster.DialVTGate(context.Background(), t.Name(), vtgateGrpcAddress, "dt_user", "")
 	require.NoError(t, err)
@@ -670,6 +722,10 @@ func TestDTResolveAfterRMPrepare(t *testing.T) {
 	_, err = conn.Execute(qCtx, "insert into twopc_user(id, name) values(7,'foo')", nil)
 	require.NoError(t, err)
 	_, err = conn.Execute(qCtx, "insert into twopc_user(id, name) values(8,'bar')", nil)
+	require.NoError(t, err)
+	// Also do an update to a table that has a consistent lookup vindex.
+	// We expect to see only the pre-session changes in the logs.
+	_, err = conn.Execute(qCtx, "update twopc_consistent_lookup set col = 22 where id = 4", nil)
 	require.NoError(t, err)
 
 	// The caller ID is used to simulate the failure at the desired point.
@@ -693,15 +749,28 @@ func TestDTResolveAfterRMPrepare(t *testing.T) {
 		},
 		"ks.dt_participant:80-": {
 			"insert:[VARCHAR(\"dtid-1\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"40-80\")]",
+			"insert:[VARCHAR(\"dtid-1\") INT64(2) VARCHAR(\"ks\") VARCHAR(\"-40\")]",
 			"delete:[VARCHAR(\"dtid-1\") INT64(1) VARCHAR(\"ks\") VARCHAR(\"40-80\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(2) VARCHAR(\"ks\") VARCHAR(\"-40\")]",
 		},
 		"ks.redo_state:40-80": {
+			"insert:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
+			"delete:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
+		},
+		"ks.redo_state:-40": {
 			"insert:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
 			"delete:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
 		},
 		"ks.redo_statement:40-80": {
 			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (8, 'bar')\")]",
 			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (8, 'bar')\")]",
+		},
+		"ks.redo_statement:-40": {
+			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"update twopc_consistent_lookup set col = 22 where id = 4 limit 10001 /* INT64 */\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"update twopc_consistent_lookup set col = 22 where id = 4 limit 10001 /* INT64 */\")]",
+		},
+		"ks.consistent_lookup:-40": {
+			"insert:[INT64(22) INT64(4) VARBINARY(\" \\x00\\x00\\x00\\x00\\x00\\x00\\x00\")]",
 		},
 	}
 	assert.Equal(t, expectations, logTable,
@@ -1349,23 +1418,15 @@ func TestSemiSyncRequiredWithTwoPC(t *testing.T) {
 	// cleanup all the old data.
 	conn, closer := start(t)
 	defer closer()
-
-	out, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=none")
-	require.NoError(t, err, out)
 	defer func() {
-		for _, shard := range clusterInstance.Keyspaces[0].Shards {
-			clusterInstance.VtctldClientProcess.PlannedReparentShard(keyspaceName, shard.Name, shard.Vttablets[0].Alias)
-		}
+		reparentAllShards(t, clusterInstance, 0)
 	}()
 
-	// After changing the durability policy for the given keyspace to none, we run PRS.
-	shard := clusterInstance.Keyspaces[0].Shards[2]
-	newPrimary := shard.Vttablets[1]
-	_, err = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(
-		"PlannedReparentShard",
-		fmt.Sprintf("%s/%s", keyspaceName, shard.Name),
-		"--new-primary", newPrimary.Alias)
-	require.NoError(t, err)
+	reparentAllShards(t, clusterInstance, 0)
+	out, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=none")
+	require.NoError(t, err, out)
+	// After changing the durability policy for the given keyspace to none, we run PRS to ensure the changes have taken effect.
+	reparentAllShards(t, clusterInstance, 1)
 
 	// A new distributed transaction should fail.
 	utils.Exec(t, conn, "begin")
@@ -1378,10 +1439,7 @@ func TestSemiSyncRequiredWithTwoPC(t *testing.T) {
 
 	_, err = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=semi_sync")
 	require.NoError(t, err)
-	for _, shard := range clusterInstance.Keyspaces[0].Shards {
-		err = clusterInstance.VtctldClientProcess.PlannedReparentShard(keyspaceName, shard.Name, shard.Vttablets[1].Alias)
-		require.NoError(t, err)
-	}
+	reparentAllShards(t, clusterInstance, 0)
 
 	// Transaction should now succeed.
 	utils.Exec(t, conn, "begin")
@@ -1390,6 +1448,14 @@ func TestSemiSyncRequiredWithTwoPC(t *testing.T) {
 	utils.Exec(t, conn, "insert into twopc_t1(id, col) values(9, 4)")
 	_, err = utils.ExecAllowError(t, conn, "commit")
 	require.NoError(t, err)
+}
+
+// reparentAllShards reparents all the shards to the given tablet index for that shard.
+func reparentAllShards(t *testing.T, clusterInstance *cluster.LocalProcessCluster, idx int) {
+	for _, shard := range clusterInstance.Keyspaces[0].Shards {
+		err := clusterInstance.VtctldClientProcess.PlannedReparentShard(keyspaceName, shard.Name, shard.Vttablets[idx].Alias)
+		require.NoError(t, err)
+	}
 }
 
 // TestReadTransactionStatus tests that read transaction state rpc works as expected.
@@ -1494,8 +1560,8 @@ func TestVindexes(t *testing.T) {
 					"update:[INT64(6) INT64(9) INT64(9)]",
 				},
 				"ks.lookup:80-": {
-					"delete:[VARCHAR(\"4\") INT64(6) VARBINARY(\"`\\x00\\x00\\x00\\x00\\x00\\x00\\x00\")]",
-					"insert:[VARCHAR(\"9\") INT64(6) VARBINARY(\"`\\x00\\x00\\x00\\x00\\x00\\x00\\x00\")]",
+					"delete:[INT64(4) INT64(6) VARBINARY(\"`\\x00\\x00\\x00\\x00\\x00\\x00\\x00\")]",
+					"insert:[INT64(9) INT64(6) VARBINARY(\"`\\x00\\x00\\x00\\x00\\x00\\x00\\x00\")]",
 				},
 			},
 		},
@@ -1522,8 +1588,8 @@ func TestVindexes(t *testing.T) {
 					"update:[INT64(6) INT64(4) INT64(20)]",
 				},
 				"ks.lookup_unique:80-": {
-					"delete:[VARCHAR(\"9\") VARBINARY(\"`\\x00\\x00\\x00\\x00\\x00\\x00\\x00\")]",
-					"insert:[VARCHAR(\"20\") VARBINARY(\"`\\x00\\x00\\x00\\x00\\x00\\x00\\x00\")]",
+					"delete:[INT64(9) VARBINARY(\"`\\x00\\x00\\x00\\x00\\x00\\x00\\x00\")]",
+					"insert:[INT64(20) VARBINARY(\"`\\x00\\x00\\x00\\x00\\x00\\x00\\x00\")]",
 				},
 			},
 		},
@@ -1550,10 +1616,10 @@ func TestVindexes(t *testing.T) {
 					"delete:[INT64(6) INT64(4) INT64(9)]",
 				},
 				"ks.lookup_unique:80-": {
-					"delete:[VARCHAR(\"9\") VARBINARY(\"`\\x00\\x00\\x00\\x00\\x00\\x00\\x00\")]",
+					"delete:[INT64(9) VARBINARY(\"`\\x00\\x00\\x00\\x00\\x00\\x00\\x00\")]",
 				},
 				"ks.lookup:80-": {
-					"delete:[VARCHAR(\"4\") INT64(6) VARBINARY(\"`\\x00\\x00\\x00\\x00\\x00\\x00\\x00\")]",
+					"delete:[INT64(4) INT64(6) VARBINARY(\"`\\x00\\x00\\x00\\x00\\x00\\x00\\x00\")]",
 				},
 			},
 		},
@@ -1575,10 +1641,10 @@ func TestVindexes(t *testing.T) {
 					"delete:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"insert into lookup(col, id, keyspace_id) values (4, 20, _binary'(\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0\\\\0')\")]",
 				},
 				"ks.lookup:80-": {
-					"insert:[VARCHAR(\"4\") INT64(20) VARBINARY(\"(\\x00\\x00\\x00\\x00\\x00\\x00\\x00\")]",
+					"insert:[INT64(4) INT64(20) VARBINARY(\"(\\x00\\x00\\x00\\x00\\x00\\x00\\x00\")]",
 				},
 				"ks.lookup_unique:-40": {
-					"insert:[VARCHAR(\"22\") VARBINARY(\"(\\x00\\x00\\x00\\x00\\x00\\x00\\x00\")]",
+					"insert:[INT64(22) VARBINARY(\"(\\x00\\x00\\x00\\x00\\x00\\x00\\x00\")]",
 				},
 				"ks.twopc_lookup:-40": {
 					"insert:[INT64(20) INT64(4) INT64(22)]",
@@ -1628,16 +1694,130 @@ func TestVindexes(t *testing.T) {
 					"delete:[INT64(9) INT64(4) INT64(4)]",
 				},
 				"ks.lookup_unique:-40": {
-					"insert:[VARCHAR(\"22\") VARBINARY(\"(\\x00\\x00\\x00\\x00\\x00\\x00\\x00\")]",
+					"insert:[INT64(22) VARBINARY(\"(\\x00\\x00\\x00\\x00\\x00\\x00\\x00\")]",
 				},
 				"ks.lookup_unique:80-": {
-					"delete:[VARCHAR(\"4\") VARBINARY(\"\\x90\\x00\\x00\\x00\\x00\\x00\\x00\\x00\")]",
+					"delete:[INT64(4) VARBINARY(\"\\x90\\x00\\x00\\x00\\x00\\x00\\x00\\x00\")]",
 				},
 				"ks.lookup:80-": {
-					"insert:[VARCHAR(\"4\") INT64(20) VARBINARY(\"(\\x00\\x00\\x00\\x00\\x00\\x00\\x00\")]",
-					"delete:[VARCHAR(\"4\") INT64(6) VARBINARY(\"`\\x00\\x00\\x00\\x00\\x00\\x00\\x00\")]",
-					"insert:[VARCHAR(\"9\") INT64(6) VARBINARY(\"`\\x00\\x00\\x00\\x00\\x00\\x00\\x00\")]",
-					"delete:[VARCHAR(\"4\") INT64(9) VARBINARY(\"\\x90\\x00\\x00\\x00\\x00\\x00\\x00\\x00\")]",
+					"insert:[INT64(4) INT64(20) VARBINARY(\"(\\x00\\x00\\x00\\x00\\x00\\x00\\x00\")]",
+					"delete:[INT64(4) INT64(6) VARBINARY(\"`\\x00\\x00\\x00\\x00\\x00\\x00\\x00\")]",
+					"insert:[INT64(9) INT64(6) VARBINARY(\"`\\x00\\x00\\x00\\x00\\x00\\x00\\x00\")]",
+					"delete:[INT64(4) INT64(9) VARBINARY(\"\\x90\\x00\\x00\\x00\\x00\\x00\\x00\\x00\")]",
+				},
+			},
+		},
+		{
+			name: "Consistent Lookup Single Update",
+			initQueries: []string{
+				"insert into twopc_consistent_lookup(id, col, col_unique) values(4, 4, 6)",
+				"insert into twopc_consistent_lookup(id, col, col_unique) values(6, 4, 9)",
+				"insert into twopc_consistent_lookup(id, col, col_unique) values(9, 4, 4)",
+			},
+			testQueries: []string{
+				"begin",
+				"update twopc_consistent_lookup set col = 9 where col_unique = 9",
+				"commit",
+			},
+			logExpected: map[string][]string{
+				"ks.twopc_consistent_lookup:40-80": {
+					"update:[INT64(6) INT64(9) INT64(9)]",
+				},
+				"ks.consistent_lookup:80-": {
+					"insert:[INT64(9) INT64(6) VARBINARY(\"`\\x00\\x00\\x00\\x00\\x00\\x00\\x00\")]",
+					"delete:[INT64(4) INT64(6) VARBINARY(\"`\\x00\\x00\\x00\\x00\\x00\\x00\\x00\")]",
+				},
+			},
+		},
+		{
+			name: "Consistent Lookup-Unique Single Update",
+			initQueries: []string{
+				"insert into twopc_consistent_lookup(id, col, col_unique) values(4, 4, 6)",
+				"insert into twopc_consistent_lookup(id, col, col_unique) values(6, 4, 9)",
+				"insert into twopc_consistent_lookup(id, col, col_unique) values(9, 4, 4)",
+			},
+			testQueries: []string{
+				"begin",
+				"update twopc_consistent_lookup set col_unique = 20 where col_unique = 9",
+				"commit",
+			},
+			logExpected: map[string][]string{
+				"ks.twopc_consistent_lookup:40-80": {
+					"update:[INT64(6) INT64(4) INT64(20)]",
+				},
+				"ks.consistent_lookup_unique:80-": {
+					"insert:[INT64(20) VARBINARY(\"`\\x00\\x00\\x00\\x00\\x00\\x00\\x00\")]",
+					"delete:[INT64(9) VARBINARY(\"`\\x00\\x00\\x00\\x00\\x00\\x00\\x00\")]",
+				},
+			},
+		},
+		{
+			name: "Consistent Lookup And Consistent Lookup-Unique Single Delete",
+			initQueries: []string{
+				"insert into twopc_consistent_lookup(id, col, col_unique) values(4, 4, 6)",
+				"insert into twopc_consistent_lookup(id, col, col_unique) values(6, 4, 9)",
+				"insert into twopc_consistent_lookup(id, col, col_unique) values(9, 4, 4)",
+			},
+			testQueries: []string{
+				"begin",
+				"delete from twopc_consistent_lookup where col_unique = 9",
+				"commit",
+			},
+			logExpected: map[string][]string{
+				"ks.twopc_consistent_lookup:40-80": {
+					"delete:[INT64(6) INT64(4) INT64(9)]",
+				},
+				"ks.consistent_lookup_unique:80-": {
+					"delete:[INT64(9) VARBINARY(\"`\\x00\\x00\\x00\\x00\\x00\\x00\\x00\")]",
+				},
+				"ks.consistent_lookup:80-": {
+					"delete:[INT64(4) INT64(6) VARBINARY(\"`\\x00\\x00\\x00\\x00\\x00\\x00\\x00\")]",
+				},
+			},
+		},
+		{
+			name: "Consistent Lookup And Consistent Lookup-Unique Mix",
+			initQueries: []string{
+				"insert into twopc_consistent_lookup(id, col, col_unique) values(4, 4, 6)",
+				"insert into twopc_consistent_lookup(id, col, col_unique) values(6, 4, 9)",
+				"insert into twopc_consistent_lookup(id, col, col_unique) values(9, 4, 4)",
+			},
+			testQueries: []string{
+				"begin",
+				"insert into twopc_consistent_lookup(id, col, col_unique) values(20, 4, 22)",
+				"update twopc_consistent_lookup set col = 9 where col_unique = 9",
+				"delete from twopc_consistent_lookup where id = 9",
+				"commit",
+			},
+			logExpected: map[string][]string{
+				"ks.redo_statement:80-": {
+					"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"delete from twopc_consistent_lookup where id = 9 limit 10001 /* INT64 */\")]",
+					"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"delete from twopc_consistent_lookup where id = 9 limit 10001 /* INT64 */\")]",
+				},
+				"ks.redo_statement:40-80": {
+					"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"update twopc_consistent_lookup set col = 9 where col_unique = 9 limit 10001 /* INT64 */\")]",
+					"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"update twopc_consistent_lookup set col = 9 where col_unique = 9 limit 10001 /* INT64 */\")]",
+				},
+				"ks.twopc_consistent_lookup:-40": {
+					"insert:[INT64(20) INT64(4) INT64(22)]",
+				},
+				"ks.twopc_consistent_lookup:40-80": {
+					"update:[INT64(6) INT64(9) INT64(9)]",
+				},
+				"ks.twopc_consistent_lookup:80-": {
+					"delete:[INT64(9) INT64(4) INT64(4)]",
+				},
+				"ks.consistent_lookup_unique:-40": {
+					"insert:[INT64(22) VARBINARY(\"(\\x00\\x00\\x00\\x00\\x00\\x00\\x00\")]",
+				},
+				"ks.consistent_lookup_unique:80-": {
+					"delete:[INT64(4) VARBINARY(\"\\x90\\x00\\x00\\x00\\x00\\x00\\x00\\x00\")]",
+				},
+				"ks.consistent_lookup:80-": {
+					"insert:[INT64(4) INT64(20) VARBINARY(\"(\\x00\\x00\\x00\\x00\\x00\\x00\\x00\")]",
+					"insert:[INT64(9) INT64(6) VARBINARY(\"`\\x00\\x00\\x00\\x00\\x00\\x00\\x00\")]",
+					"delete:[INT64(4) INT64(6) VARBINARY(\"`\\x00\\x00\\x00\\x00\\x00\\x00\\x00\")]",
+					"delete:[INT64(4) INT64(9) VARBINARY(\"\\x90\\x00\\x00\\x00\\x00\\x00\\x00\\x00\")]",
 				},
 			},
 		},

@@ -940,19 +940,44 @@
                 "Table": "`user`, user_extra"
               },
               {
-                "OperatorType": "Route",
+                "OperatorType": "VindexLookup",
                 "Variant": "EqualUnique",
                 "Keyspace": {
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select music.`name` from music where 1 != 1",
-                "Query": "select music.`name` from music where music.id = :user_id",
-                "Table": "music",
                 "Values": [
                   ":user_id"
                 ],
-                "Vindex": "music_user_map"
+                "Vindex": "music_user_map",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "IN",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+                    "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+                    "Table": "name_user_vdx",
+                    "Values": [
+                      "::name"
+                    ],
+                    "Vindex": "user_index"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "ByDestination",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select music.`name` from music where 1 != 1",
+                    "Query": "select music.`name` from music where music.id = :user_id",
+                    "Table": "music"
+                  }
+                ]
               }
             ]
           }
@@ -2992,19 +3017,44 @@
                 ]
               },
               {
-                "OperatorType": "Route",
+                "OperatorType": "VindexLookup",
                 "Variant": "EqualUnique",
                 "Keyspace": {
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select 1 from music as m where 1 != 1",
-                "Query": "select 1 from music as m where m.id = :u2_val2",
-                "Table": "music",
                 "Values": [
                   ":u2_val2"
                 ],
-                "Vindex": "music_user_map"
+                "Vindex": "music_user_map",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "IN",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+                    "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+                    "Table": "name_user_vdx",
+                    "Values": [
+                      "::name"
+                    ],
+                    "Vindex": "user_index"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "ByDestination",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1 from music as m where 1 != 1",
+                    "Query": "select 1 from music as m where m.id = :u2_val2",
+                    "Table": "music"
+                  }
+                ]
               }
             ]
           }
@@ -6100,6 +6150,44 @@
                     "Table": "`user`"
                   }
                 ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "last_insert_id on aggregation calculated at the vtgate level",
+    "query": "select last_insert_id(count(*)) from user",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select last_insert_id(count(*)) from user",
+      "Instructions": {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "last_insert_id(count(*)) as last_insert_id(count(*))"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "sum_count_star(0) AS count(*)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FetchLastInsertID": true,
+                "FieldQuery": "select count(*) from `user` where 1 != 1",
+                "Query": "select count(*) from `user`",
+                "Table": "`user`"
               }
             ]
           }
