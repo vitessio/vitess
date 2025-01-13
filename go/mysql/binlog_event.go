@@ -48,7 +48,7 @@ type BinlogEvent interface {
 	IsValid() bool
 
 	// General protocol events.
-	NextPosition() uint32
+	NextPosition() uint64
 
 	// IsFormatDescription returns true if this is a
 	// FORMAT_DESCRIPTION_EVENT. Do not call StripChecksum before
