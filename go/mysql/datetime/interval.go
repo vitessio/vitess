@@ -80,27 +80,37 @@ var intervalSet = [...]intervalSetter{
 	intervalSetYear,
 }
 
-var namedIntervalTypes = map[string]IntervalType{
-	"year":               IntervalYear,
-	"quarter":            IntervalQuarter,
-	"month":              IntervalMonth,
-	"week":               IntervalWeek,
-	"day":                IntervalDay,
-	"hour":               IntervalHour,
-	"minute":             IntervalMinute,
-	"second":             IntervalSecond,
-	"microsecond":        IntervalMicrosecond,
-	"year_month":         IntervalYearMonth,
-	"day_hour":           IntervalDayHour,
-	"day_minute":         IntervalDayMinute,
-	"day_second":         IntervalDaySecond,
-	"hour_minute":        IntervalHourMinute,
-	"hour_second":        IntervalHourSecond,
-	"minute_second":      IntervalMinuteSecond,
-	"day_microsecond":    IntervalDayMicrosecond,
-	"hour_microsecond":   IntervalHourMicrosecond,
-	"minute_microsecond": IntervalMinuteMicrosecond,
-	"second_microsecond": IntervalSecondMicrosecond,
+var (
+	intervalTypeNames = map[IntervalType]string{
+		IntervalYear:              "year",
+		IntervalQuarter:           "quarter",
+		IntervalMonth:             "month",
+		IntervalWeek:              "week",
+		IntervalDay:               "day",
+		IntervalHour:              "hour",
+		IntervalMinute:            "minute",
+		IntervalSecond:            "second",
+		IntervalMicrosecond:       "microsecond",
+		IntervalYearMonth:         "year_month",
+		IntervalDayHour:           "day_hour",
+		IntervalDayMinute:         "day_minute",
+		IntervalDaySecond:         "day_second",
+		IntervalHourMinute:        "hour_minute",
+		IntervalHourSecond:        "hour_second",
+		IntervalMinuteSecond:      "minute_second",
+		IntervalDayMicrosecond:    "day_microsecond",
+		IntervalHourMicrosecond:   "hour_microsecond",
+		IntervalMinuteMicrosecond: "minute_microsecond",
+		IntervalSecondMicrosecond: "second_microsecond",
+	}
+	namedIntervalTypes map[string]IntervalType
+)
+
+func init() {
+	namedIntervalTypes = make(map[string]IntervalType, len(intervalTypeNames))
+	for itv, name := range intervalTypeNames {
+		namedIntervalTypes[strings.ToLower(name)] = itv
+	}
 }
 
 // setter returns the setter method for this interval's type.
@@ -143,59 +153,18 @@ func (itv IntervalType) NeedsPrecision() bool {
 
 // ToString returns the type as a string
 func (itv IntervalType) ToString() string {
-	switch itv {
-	case IntervalYear:
-		return "year"
-	case IntervalQuarter:
-		return "quarter"
-	case IntervalMonth:
-		return "month"
-	case IntervalWeek:
-		return "week"
-	case IntervalDay:
-		return "day"
-	case IntervalHour:
-		return "hour"
-	case IntervalMinute:
-		return "minute"
-	case IntervalSecond:
-		return "second"
-	case IntervalMicrosecond:
-		return "microsecond"
-	case IntervalYearMonth:
-		return "year_month"
-	case IntervalDayHour:
-		return "day_hour"
-	case IntervalDayMinute:
-		return "day_minute"
-	case IntervalDaySecond:
-		return "day_second"
-	case IntervalHourMinute:
-		return "hour_minute"
-	case IntervalHourSecond:
-		return "hour_second"
-	case IntervalMinuteSecond:
-		return "minute_second"
-	case IntervalDayMicrosecond:
-		return "day_microsecond"
-	case IntervalHourMicrosecond:
-		return "hour_microsecond"
-	case IntervalMinuteMicrosecond:
-		return "minute_microsecond"
-	case IntervalSecondMicrosecond:
-		return "second_microsecond"
-	default:
-		return "[unknown IntervalType]"
+	if name, ok := intervalTypeNames[itv]; ok {
+		return name
 	}
+	return "[unknown IntervalType]"
 }
 
 // IntervalTypeFromString parses a string into an IntervalType. This is the inverse function of IntervalType.ToString().
 func IntervalTypeFromString(s string) IntervalType {
-	result, ok := namedIntervalTypes[strings.ToLower(s)]
-	if !ok {
-		return IntervalNone
+	if itv, ok := namedIntervalTypes[strings.ToLower(s)]; ok {
+		return itv
 	}
-	return result
+	return IntervalNone
 }
 
 func intervalSetYear(tp *Interval, val int) {
