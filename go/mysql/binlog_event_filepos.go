@@ -75,12 +75,13 @@ func (ev *filePosBinlogEvent) StripChecksum(f BinlogFormat) (BinlogEvent, []byte
 
 // nextPosition returns the next file position of the binlog.
 // If no information is available, it returns 0.
-func (ev *filePosBinlogEvent) nextPosition(f BinlogFormat) uint32 {
+func (ev *filePosBinlogEvent) nextPosition(f BinlogFormat) uint64 {
 	if f.HeaderLength <= 13 {
 		// Dead code. This is just a failsafe.
 		return 0
 	}
-	return binary.LittleEndian.Uint32(ev.Bytes()[13:17])
+	// The header only uses 4 bytes for the next_position.
+	return uint64(binary.LittleEndian.Uint32(ev.Bytes()[13:17]))
 }
 
 // rotate implements BinlogEvent.Rotate().
@@ -139,7 +140,7 @@ type filePosFakeEvent struct {
 	timestamp uint32
 }
 
-func (ev filePosFakeEvent) NextPosition() uint32 {
+func (ev filePosFakeEvent) NextPosition() uint64 {
 	return 0
 }
 
@@ -283,7 +284,7 @@ type filePosGTIDEvent struct {
 	gtid replication.FilePosGTID
 }
 
-func newFilePosGTIDEvent(file string, pos uint32, timestamp uint32) filePosGTIDEvent {
+func newFilePosGTIDEvent(file string, pos uint64, timestamp uint32) filePosGTIDEvent {
 	return filePosGTIDEvent{
 		filePosFakeEvent: filePosFakeEvent{
 			timestamp: timestamp,
