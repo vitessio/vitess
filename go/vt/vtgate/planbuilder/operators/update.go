@@ -164,7 +164,7 @@ func createUpdateWithInputOp(ctx *plancontext.PlanningContext, upd *sqlparser.Up
 	ueMap := prepareUpdateExpressionList(ctx, upd)
 
 	var updOps []dmlOp
-	for _, target := range ctx.SemTable.Targets.Constituents() {
+	for _, target := range ctx.SemTable.DMLTargets.Constituents() {
 		op := createUpdateOpWithTarget(ctx, upd, target, ueMap[target])
 		updOps = append(updOps, op)
 	}
@@ -308,7 +308,7 @@ func errIfUpdateNotSupported(ctx *plancontext.PlanningContext, stmt *sqlparser.U
 		}
 	}
 
-	// Now we check if any of the foreign key columns that are being udpated have dependencies on other updated columns.
+	// Now we check if any of the foreign key columns that are being updated have dependencies on other updated columns.
 	// This is unsafe, and we currently don't support this in Vitess.
 	if err := ctx.SemTable.ErrIfFkDependentColumnUpdated(stmt.Exprs); err != nil {
 		panic(err)

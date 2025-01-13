@@ -85,6 +85,7 @@ func (s *planTestSuite) TestPlan() {
 	s.addPKsProvided(vschemaWrapper.V, "user", []string{"user_extra"}, []string{"id", "user_id"})
 	s.addPKsProvided(vschemaWrapper.V, "ordering", []string{"order"}, []string{"oid", "region_id"})
 	s.addPKsProvided(vschemaWrapper.V, "ordering", []string{"order_event"}, []string{"oid", "ename"})
+	s.addPKsProvided(vschemaWrapper.V, "main", []string{"source_of_ref"}, []string{"id"})
 
 	// You will notice that some tests expect user.Id instead of user.id.
 	// This is because we now pre-create vindex columns in the symbol
@@ -304,6 +305,7 @@ func (s *planTestSuite) TestOne() {
 	s.addPKsProvided(lv, "user", []string{"user_extra"}, []string{"id", "user_id"})
 	s.addPKsProvided(lv, "ordering", []string{"order"}, []string{"oid", "region_id"})
 	s.addPKsProvided(lv, "ordering", []string{"order_event"}, []string{"oid", "ename"})
+	s.addPKsProvided(lv, "main", []string{"source_of_ref"}, []string{"id"})
 	vschema := &vschemawrapper.VSchemaWrapper{
 		V:           lv,
 		TestBuilder: TestBuilder,
