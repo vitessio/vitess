@@ -2440,6 +2440,25 @@ func RemoveKeyspace(in SQLNode) {
 	})
 }
 
+// RemoveKeyspaceIgnoreSysSchema removes the Qualifier.Qualifier on all ColNames and Qualifier on all TableNames in the AST
+// except for the system schema.
+func RemoveKeyspaceIgnoreSysSchema(in SQLNode) {
+	Rewrite(in, nil, func(cursor *Cursor) bool {
+		switch expr := cursor.Node().(type) {
+		case *ColName:
+			if expr.Qualifier.Qualifier.NotEmpty() && !SystemSchema(expr.Qualifier.Qualifier.String()) {
+				expr.Qualifier.Qualifier = NewIdentifierCS("")
+			}
+		case TableName:
+			if expr.Qualifier.NotEmpty() && !SystemSchema(expr.Qualifier.String()) {
+				expr.Qualifier = NewIdentifierCS("")
+				cursor.Replace(expr)
+			}
+		}
+		return true
+	})
+}
+
 func convertStringToInt(integer string) int {
 	val, _ := strconv.Atoi(integer)
 	return val

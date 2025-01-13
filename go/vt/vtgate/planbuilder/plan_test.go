@@ -84,6 +84,7 @@ func (s *planTestSuite) TestPlan() {
 	s.addPKsProvided(vschema, "user", []string{"user_extra"}, []string{"id", "user_id"})
 	s.addPKsProvided(vschema, "ordering", []string{"order"}, []string{"oid", "region_id"})
 	s.addPKsProvided(vschema, "ordering", []string{"order_event"}, []string{"oid", "ename"})
+	s.addPKsProvided(vschema, "main", []string{"source_of_ref"}, []string{"id"})
 
 	// You will notice that some tests expect user.Id instead of user.id.
 	// This is because we now pre-create vindex columns in the symbol
@@ -305,6 +306,7 @@ func (s *planTestSuite) TestOne() {
 	s.addPKsProvided(vschema, "user", []string{"user_extra"}, []string{"id", "user_id"})
 	s.addPKsProvided(vschema, "ordering", []string{"order"}, []string{"oid", "region_id"})
 	s.addPKsProvided(vschema, "ordering", []string{"order_event"}, []string{"oid", "ename"})
+	s.addPKsProvided(vschema, "main", []string{"source_of_ref"}, []string{"id"})
 
 	s.testFile("onecase.json", vw, false)
 }
@@ -666,7 +668,7 @@ func (s *planTestSuite) testFile(filename string, vschema *vschemawrapper.VSchem
 			current := PlanTest{
 				Comment: tcase.Comment,
 				Query:   tcase.Query,
-				SkipE2E: true,
+				SkipE2E: tcase.SkipE2E,
 			}
 			vschema.Version = Gen4
 			out := getPlanOutput(tcase, vschema, render)
