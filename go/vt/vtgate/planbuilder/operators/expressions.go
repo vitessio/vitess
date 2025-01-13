@@ -17,7 +17,10 @@ limitations under the License.
 package operators
 
 import (
+	"fmt"
+
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -120,4 +123,12 @@ func simplifyPredicates(ctx *plancontext.PlanningContext, in sqlparser.Expr) sql
 		return simplifyPredicates(ctx, output)
 	}
 	return output
+}
+
+func getFirstSelect(selStmt sqlparser.TableSubquery) *sqlparser.Select {
+	firstSelect, err := sqlparser.GetFirstSelect(selStmt)
+	if err != nil {
+		panic(vterrors.VT12001(fmt.Sprintf("first UNION part not a SELECT: %v", err)))
+	}
+	return firstSelect
 }

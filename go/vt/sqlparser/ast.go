@@ -82,6 +82,11 @@ type (
 		SetWith(with *With)
 	}
 
+	Distinctable interface {
+		MakeDistinct()
+		IsDistinct() bool
+	}
+
 	// SelectStatement any SELECT statement.
 	SelectStatement interface {
 		Statement
@@ -90,12 +95,11 @@ type (
 		Commented
 		ColumnResults
 		Withable
+		Distinctable
 		iSelectStatement()
 		GetLock() Lock
 		SetLock(lock Lock)
 		SetInto(into *SelectInto)
-		MakeDistinct()
-		IsDistinct() bool
 	}
 
 	// DDLStatement represents any DDL Statement
