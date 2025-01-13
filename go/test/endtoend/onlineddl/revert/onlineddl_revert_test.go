@@ -134,7 +134,6 @@ type revertibleTestCase struct {
 }
 
 func TestMain(m *testing.M) {
-	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	exitcode, err := func() (int, error) {
@@ -201,7 +200,6 @@ func TestMain(m *testing.M) {
 }
 
 func TestSchemaChange(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	shards = clusterInstance.Keyspaces[0].Shards
 	require.Equal(t, 1, len(shards))
 

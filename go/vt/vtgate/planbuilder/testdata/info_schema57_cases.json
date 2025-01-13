@@ -750,8 +750,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select a.VARIABLE_NAME as VARIABLE_NAME, a.VARIABLE_VALUE as VARIABLE_VALUE, b.CHARACTER_SET_NAME as CHARACTER_SET_NAME, b.DEFAULT_COLLATE_NAME as DEFAULT_COLLATE_NAME, b.DESCRIPTION as DESCRIPTION, b.MAXLEN as MAXLEN from information_schema.GLOBAL_STATUS as a, information_schema.CHARACTER_SETS as b where 1 != 1",
-        "Query": "select a.VARIABLE_NAME as VARIABLE_NAME, a.VARIABLE_VALUE as VARIABLE_VALUE, b.CHARACTER_SET_NAME as CHARACTER_SET_NAME, b.DEFAULT_COLLATE_NAME as DEFAULT_COLLATE_NAME, b.DESCRIPTION as DESCRIPTION, b.MAXLEN as MAXLEN from information_schema.GLOBAL_STATUS as a, information_schema.CHARACTER_SETS as b",
+        "FieldQuery": "select a.VARIABLE_NAME, a.VARIABLE_VALUE, b.CHARACTER_SET_NAME, b.DEFAULT_COLLATE_NAME, b.DESCRIPTION, b.MAXLEN from information_schema.GLOBAL_STATUS as a, information_schema.CHARACTER_SETS as b where 1 != 1",
+        "Query": "select a.VARIABLE_NAME, a.VARIABLE_VALUE, b.CHARACTER_SET_NAME, b.DEFAULT_COLLATE_NAME, b.DESCRIPTION, b.MAXLEN from information_schema.GLOBAL_STATUS as a, information_schema.CHARACTER_SETS as b",
         "Table": "information_schema.CHARACTER_SETS, information_schema.GLOBAL_STATUS"
       }
     }

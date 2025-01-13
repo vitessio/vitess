@@ -345,7 +345,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		a.AnalyzedInstancePhysicalEnvironment = m.GetString("physical_environment")
 		a.AnalyzedInstanceBinlogCoordinates = BinlogCoordinates{
 			LogFile: m.GetString("binary_log_file"),
-			LogPos:  m.GetUint32("binary_log_pos"),
+			LogPos:  m.GetUint64("binary_log_pos"),
 			Type:    BinaryLog,
 		}
 		isStaleBinlogCoordinates := m.GetBool("is_stale_binlog_coordinates")

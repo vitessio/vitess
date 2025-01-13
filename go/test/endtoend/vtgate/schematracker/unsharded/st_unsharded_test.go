@@ -49,7 +49,6 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	exitCode := func() int {
@@ -112,7 +111,6 @@ func TestMain(m *testing.M) {
 }
 
 func TestNewUnshardedTable(t *testing.T) {
-	defer cluster.PanicHandler(t)
 
 	// create a sql connection
 	ctx := context.Background()
@@ -183,7 +181,6 @@ func TestNewUnshardedTable(t *testing.T) {
 // More information at https://dev.mysql.com/doc/refman/8.0/en/identifier-case-sensitivity.html#:~:text=Table%20names%20are%20stored%20in,lowercase%20on%20storage%20and%20lookup.
 func TestCaseSensitiveSchemaTracking(t *testing.T) {
 	utils.SkipIfBinaryIsBelowVersion(t, 19, "vttablet")
-	defer cluster.PanicHandler(t)
 
 	// create a sql connection
 	ctx := context.Background()

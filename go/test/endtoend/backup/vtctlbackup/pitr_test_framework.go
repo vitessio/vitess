@@ -91,7 +91,6 @@ func waitForReplica(t *testing.T, replicaIndex int) {
 // in between, it makes writes to the database, and takes notes: what data was available in what backup.
 // It then restores each and every one of those backups, in random order, and expects to find the specific data associated with the backup.
 func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase) {
-	defer cluster.PanicHandler(t)
 
 	t.Run(tcase.Name, func(t *testing.T) {
 		// setup cluster for the testing
@@ -320,7 +319,6 @@ func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase)
 
 // ExecTestIncrementalBackupAndRestoreToPos
 func ExecTestIncrementalBackupAndRestoreToTimestamp(t *testing.T, tcase *PITRTestCase) {
-	defer cluster.PanicHandler(t)
 
 	var lastInsertedRowTimestamp time.Time
 	insertRowOnPrimary := func(t *testing.T, hint string) {
@@ -580,7 +578,6 @@ func ExecTestIncrementalBackupAndRestoreToTimestamp(t *testing.T, tcase *PITRTes
 // Specifically, it's designed to test how incremental backups are taken by interleaved replicas, so that they successfully build on
 // one another.
 func ExecTestIncrementalBackupOnTwoTablets(t *testing.T, tcase *PITRTestCase) {
-	defer cluster.PanicHandler(t)
 
 	t.Run(tcase.Name, func(t *testing.T) {
 		// setup cluster for the testing

@@ -149,7 +149,6 @@ END;
 var enableSettingsPool bool
 
 func TestMain(m *testing.M) {
-	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	code := runAllTests(m)
@@ -207,7 +206,6 @@ func runAllTests(m *testing.M) int {
 func TestSelectIntoAndLoadFrom(t *testing.T) {
 	// Test is skipped because it requires secure-file-priv variable to be set to not NULL or empty.
 	t.Skip()
-	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	vtParams := mysql.ConnParams{
 		Host: "localhost",
@@ -242,7 +240,6 @@ func TestSelectIntoAndLoadFrom(t *testing.T) {
 }
 
 func TestEmptyStatement(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	vtParams := mysql.ConnParams{
 		Host: "localhost",
@@ -259,7 +256,6 @@ func TestEmptyStatement(t *testing.T) {
 }
 
 func TestTopoDownServingQuery(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	vtParams := mysql.ConnParams{
 		Host: "localhost",
@@ -279,7 +275,6 @@ func TestTopoDownServingQuery(t *testing.T) {
 }
 
 func TestInsertAllDefaults(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	vtParams := mysql.ConnParams{
 		Host: "localhost",
@@ -294,7 +289,6 @@ func TestInsertAllDefaults(t *testing.T) {
 }
 
 func TestDDLUnsharded(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	vtParams := mysql.ConnParams{
 		Host: "localhost",
@@ -315,7 +309,6 @@ func TestDDLUnsharded(t *testing.T) {
 }
 
 func TestCallProcedure(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	vtParams := mysql.ConnParams{
 		Host:   "localhost",
@@ -364,7 +357,6 @@ func TestCallProcedure(t *testing.T) {
 }
 
 func TestTempTable(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	vtParams := mysql.ConnParams{
 		Host: "localhost",
@@ -389,7 +381,6 @@ func TestTempTable(t *testing.T) {
 }
 
 func TestReservedConnDML(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	vtParams := mysql.ConnParams{
 		Host: "localhost",
@@ -412,7 +403,6 @@ func TestReservedConnDML(t *testing.T) {
 }
 
 func TestNumericPrecisionScale(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	vtParams := mysql.ConnParams{
 		Host: "localhost",

@@ -3644,6 +3644,9 @@
       "Original": "select * from (select id from user having count(*) = 1) s",
       "Instructions": {
         "OperatorType": "SimpleProjection",
+        "ColumnNames": [
+          "id"
+        ],
         "Columns": [
           0
         ],

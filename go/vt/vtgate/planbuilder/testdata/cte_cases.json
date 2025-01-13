@@ -370,6 +370,9 @@
       "Original": "with s as (select id from user having count(*) = 1) select * from s",
       "Instructions": {
         "OperatorType": "SimpleProjection",
+        "ColumnNames": [
+          "id"
+        ],
         "Columns": [
           0
         ],
@@ -1300,6 +1303,10 @@
       "Original": "with t as (select user.id from user join user_extra) select id, t.id from  t",
       "Instructions": {
         "OperatorType": "SimpleProjection",
+        "ColumnNames": [
+          "id",
+          "id"
+        ],
         "Columns": [
           0,
           0

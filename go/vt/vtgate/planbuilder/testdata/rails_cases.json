@@ -50,8 +50,8 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select author5s.id as id, author5s.`name` as `name`, author5s.created_at as created_at, author5s.updated_at as updated_at, book6s.supplier5_id, book6s.id from author5s, book6s where 1 != 1",
-                    "Query": "select author5s.id as id, author5s.`name` as `name`, author5s.created_at as created_at, author5s.updated_at as updated_at, book6s.supplier5_id, book6s.id from author5s, book6s where book6s.author5_id = author5s.id",
+                    "FieldQuery": "select author5s.id, author5s.`name`, author5s.created_at, author5s.updated_at, book6s.supplier5_id, book6s.id from author5s, book6s where 1 != 1",
+                    "Query": "select author5s.id, author5s.`name`, author5s.created_at, author5s.updated_at, book6s.supplier5_id, book6s.id from author5s, book6s where book6s.author5_id = author5s.id",
                     "Table": "author5s, book6s"
                   },
                   {

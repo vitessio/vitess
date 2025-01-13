@@ -32,14 +32,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
 	vtorcutils "vitess.io/vitess/go/test/endtoend/vtorc/utils"
 	"vitess.io/vitess/go/vt/proto/topodata"
 )
 
 func TestVtgateHealthCheck(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	// Healthcheck interval on tablet is set to 1s, so sleep for 2s
 	time.Sleep(2 * time.Second)
 	verifyVtgateVariables(t, clusterInstance.VtgateProcess.VerifyURL)
@@ -53,7 +51,6 @@ func TestVtgateHealthCheck(t *testing.T) {
 }
 
 func TestVtgateReplicationStatusCheck(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	// Healthcheck interval on tablet is set to 1s, so sleep for 2s
 	time.Sleep(2 * time.Second)
 	verifyVtgateVariables(t, clusterInstance.VtgateProcess.VerifyURL)
@@ -102,7 +99,6 @@ func TestVtgateReplicationStatusCheck(t *testing.T) {
 }
 
 func TestVtgateReplicationStatusCheckWithTabletTypeChange(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	// Healthcheck interval on tablet is set to 1s, so sleep for 2s
 	time.Sleep(2 * time.Second)
 	verifyVtgateVariables(t, clusterInstance.VtgateProcess.VerifyURL)
@@ -178,7 +174,6 @@ func retryNTimes(t *testing.T, maxRetries int, f func() bool) {
 
 func TestReplicaTransactions(t *testing.T) {
 	// TODO(deepthi): this test seems to depend on previous test. Fix tearDown so that tests are independent
-	defer cluster.PanicHandler(t)
 	// Healthcheck interval on tablet is set to 1s, so sleep for 2s
 	time.Sleep(2 * time.Second)
 	ctx := context.Background()
