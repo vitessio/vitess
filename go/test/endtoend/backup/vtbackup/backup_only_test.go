@@ -58,15 +58,6 @@ func TestFailingReplication(t *testing.T) {
 	require.NoError(t, err)
 
 	// Disable replication from the primary by removing the grants to 'vt_repl'.
-	// Also make sure to reset the privileges to what they were before.
-	grant := func() {
-		_, err = primary.VttabletProcess.QueryTablet("GRANT REPLICATION SLAVE ON *.* TO 'vt_repl'@'%';", keyspaceName, true)
-		require.NoError(t, err)
-		_, err = primary.VttabletProcess.QueryTablet("FLUSH PRIVILEGES;", keyspaceName, true)
-		require.NoError(t, err)
-	}
-	t.Cleanup(grant)
-
 	_, err = primary.VttabletProcess.QueryTablet("REVOKE REPLICATION SLAVE ON *.* FROM 'vt_repl'@'%';", keyspaceName, true)
 	require.NoError(t, err)
 	_, err = primary.VttabletProcess.QueryTablet("FLUSH PRIVILEGES;", keyspaceName, true)
@@ -84,7 +75,10 @@ func TestFailingReplication(t *testing.T) {
 	// This will mean that vtbackup should fail to replicate for ~30 seconds, until we grant the permission again.
 	go func() {
 		<-time.After(30 * time.Second)
-		grant()
+		_, err = primary.VttabletProcess.QueryTablet("GRANT REPLICATION SLAVE ON *.* TO 'vt_repl'@'%';", keyspaceName, true)
+		require.NoError(t, err)
+		_, err = primary.VttabletProcess.QueryTablet("FLUSH PRIVILEGES;", keyspaceName, true)
+		require.NoError(t, err)
 	}()
 
 	// this will initially be stuck trying to replicate from the primary, and once we re-grant the permission in
