@@ -1,5 +1,5 @@
 /*
-Copyright 2024 The Vitess Authors.
+Copyright 2025 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -354,7 +354,7 @@ func TestAnalyzeTemporalRangePartitioning(t *testing.T) {
 				Col: &ColumnDefinitionEntity{
 					ColumnDefinition: &sqlparser.ColumnDefinition{Name: sqlparser.NewIdentifierCI("dt")},
 				},
-				MaxvaluePartition:    &sqlparser.PartitionDefinition{Name: sqlparser.NewIdentifierCI("pmax")},
+				MaxValuePartition:    &sqlparser.PartitionDefinition{Name: sqlparser.NewIdentifierCI("pmax")},
 				HighestValueDateTime: parseDateTime("2025-01-01 00:00:00"),
 			},
 		},
@@ -452,7 +452,7 @@ func TestAnalyzeTemporalRangePartitioning(t *testing.T) {
 				FuncExpr: &sqlparser.FuncExpr{
 					Name: sqlparser.NewIdentifierCI("TO_DAYS"),
 				},
-				MaxvaluePartition:    &sqlparser.PartitionDefinition{Name: sqlparser.NewIdentifierCI("pmax")},
+				MaxValuePartition:    &sqlparser.PartitionDefinition{Name: sqlparser.NewIdentifierCI("pmax")},
 				HighestValueDateTime: parseDateTime("2024-12-19 00:00:00"),
 			},
 		},
@@ -729,11 +729,11 @@ func TestAnalyzeTemporalRangePartitioning(t *testing.T) {
 			} else {
 				assert.Nil(t, result.FuncExpr, "funcExpr")
 			}
-			if tcase.expect.MaxvaluePartition != nil {
-				require.NotNil(t, result.MaxvaluePartition)
-				assert.Equal(t, tcase.expect.MaxvaluePartition.Name.String(), result.MaxvaluePartition.Name.String())
+			if tcase.expect.MaxValuePartition != nil {
+				require.NotNil(t, result.MaxValuePartition)
+				assert.Equal(t, tcase.expect.MaxValuePartition.Name.String(), result.MaxValuePartition.Name.String())
 			} else {
-				assert.Nil(t, result.MaxvaluePartition, "maxvaluePartition")
+				assert.Nil(t, result.MaxValuePartition, "maxvaluePartition")
 			}
 			assert.Equal(t, tcase.expect.HighestValueDateTime, result.HighestValueDateTime)
 			assert.Equal(t, tcase.expect.HighestValueIntVal, result.HighestValueIntVal)

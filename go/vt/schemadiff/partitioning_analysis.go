@@ -42,7 +42,7 @@ type TemporalRangePartitioningAnalysis struct {
 	Col                        *ColumnDefinitionEntity        // The column used in the RANGE expression
 	FuncExpr                   *sqlparser.FuncExpr            // The function used in the RANGE expression, if any
 	WeekMode                   int                            // The mode used in the WEEK function, if that's what's used
-	MaxvaluePartition          *sqlparser.PartitionDefinition // The partition that has MAXVALUE, if any
+	MaxValuePartition          *sqlparser.PartitionDefinition // The partition that has MAXVALUE, if any
 	HighestValueDateTime       datetime.DateTime              // The datetime value of the highest partition (excluding MAXVALUE)
 	HighestValueIntVal         int64                          // The integer value of the highest partition (excluding MAXVALUE)
 	Reason                     string                         // Why IsTemporalRangePartitioned is false
@@ -306,7 +306,7 @@ func AnalyzeTemporalRangePartitioning(createTableEntity *CreateTableEntity) (*Te
 			continue
 		}
 		if partition.Options.ValueRange.Maxvalue {
-			analysis.MaxvaluePartition = partition
+			analysis.MaxValuePartition = partition
 		} else {
 			highestValueDateTime, highestValueIntval, err := computeDateTime(partition.Options.ValueRange.Range[0], analysis.Col.Type(), analysis.FuncExpr)
 			if err != nil {
@@ -617,7 +617,7 @@ func TemporalRangePartitioningNextRotation(createTableEntity *CreateTableEntity,
 		}
 		// Build the diff
 		var partitionSpec *sqlparser.PartitionSpec
-		switch analysis.MaxvaluePartition {
+		switch analysis.MaxValuePartition {
 		case nil:
 			// ADD PARTITION
 			partitionSpec = &sqlparser.PartitionSpec{
@@ -629,8 +629,8 @@ func TemporalRangePartitioningNextRotation(createTableEntity *CreateTableEntity,
 			// alter table `test`.`quarterly_report_status` reorganize partition `p6` into (partition `p20090701000000` values less than (1246395600) /* 2009-07-01 00:00:00 */ , partition p_maxvalue values less than MAXVALUE)
 			partitionSpec = &sqlparser.PartitionSpec{
 				Action:      sqlparser.ReorganizeAction,
-				Names:       sqlparser.Partitions{analysis.MaxvaluePartition.Name},
-				Definitions: []*sqlparser.PartitionDefinition{newPartition, analysis.MaxvaluePartition},
+				Names:       sqlparser.Partitions{analysis.MaxValuePartition.Name},
+				Definitions: []*sqlparser.PartitionDefinition{newPartition, analysis.MaxValuePartition},
 			}
 		}
 		alterTable := &sqlparser.AlterTable{
