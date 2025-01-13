@@ -135,9 +135,7 @@ func getAllTablets(ctx context.Context, cells []string) []*topo.TabletInfo {
 	eg, ctx := errgroup.WithContext(ctx)
 	for _, cell := range cells {
 		eg.Go(func() error {
-			t, err := ts.GetTabletsByCell(ctx, cell, &topo.GetTabletsByCellOptions{
-				Concurrency: 1,
-			})
+			t, err := ts.GetTabletsByCell(ctx, cell, nil)
 			if err != nil {
 				log.Errorf("Failed to load tablets from cell %s: %+v", cell, err)
 				return nil
