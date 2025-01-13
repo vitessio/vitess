@@ -342,7 +342,12 @@
   {
     "comment": "reference table delete with join",
     "query": "delete r from user u join ref_with_source r on u.col = r.col",
-    "plan": "VT12001: unsupported: DELETE on reference table with join"
+    "plan": "VT12001: unsupported: DML on reference table with join"
+  },
+  {
+    "comment": "reference table update with join",
+    "query": "update user u join ref_with_source r on u.col = r.col set r.col = 5",
+    "plan": "VT12001: unsupported: DML on reference table with join"
   },
   {
     "comment": "group_concat unsupported when needs full evaluation at vtgate with more than 1 column",

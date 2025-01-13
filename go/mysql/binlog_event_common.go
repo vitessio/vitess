@@ -47,7 +47,7 @@ import (
 //	+----------------------------+
 //	| extra_headers    19 : x-19 |
 //	+============================+
-//	http://dev.mysql.com/doc/internals/en/event-header-fields.html
+//	https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_replication_binlog_event.html#sect_protocol_replication_binlog_event_header
 type binlogEvent []byte
 
 const (
@@ -119,8 +119,9 @@ func (ev binlogEvent) Length() uint32 {
 }
 
 // NextPosition returns the nextPosition field from the header
-func (ev binlogEvent) NextPosition() uint32 {
-	return binary.LittleEndian.Uint32(ev.Bytes()[13 : 13+4])
+func (ev binlogEvent) NextPosition() uint64 {
+	// Only 4 bytes are used for the next_position field in the header.
+	return uint64(binary.LittleEndian.Uint32(ev.Bytes()[13:17]))
 }
 
 // IsFormatDescription implements BinlogEvent.IsFormatDescription().

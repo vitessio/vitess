@@ -746,6 +746,51 @@ func TestExtendedLifetimeTimeout(t *testing.T) {
 	}
 }
 
+// TestMaxIdleCount tests the MaxIdleCount setting, to check if the pool closes
+// the idle connections when the number of idle connections exceeds the limit.
+func TestMaxIdleCount(t *testing.T) {
+	testMaxIdleCount := func(t *testing.T, setting *Setting, maxIdleCount int64, expClosedConn int) {
+		var state TestState
+
+		ctx := context.Background()
+		p := NewPool(&Config[*TestConn]{
+			Capacity:     5,
+			MaxIdleCount: maxIdleCount,
+			LogWait:      state.LogWait,
+		}).Open(newConnector(&state), nil)
+
+		defer p.Close()
+
+		var conns []*Pooled[*TestConn]
+		for i := 0; i < 5; i++ {
+			r, err := p.Get(ctx, setting)
+			require.NoError(t, err)
+			assert.EqualValues(t, i+1, state.open.Load())
+			assert.EqualValues(t, 0, p.Metrics.IdleClosed())
+
+			conns = append(conns, r)
+		}
+
+		for _, conn := range conns {
+			p.put(conn)
+		}
+
+		closedConn := 0
+		for _, conn := range conns {
+			if conn.Conn.IsClosed() {
+				closedConn++
+			}
+		}
+		assert.EqualValues(t, expClosedConn, closedConn)
+		assert.EqualValues(t, expClosedConn, p.Metrics.IdleClosed())
+	}
+
+	t.Run("WithoutSettings", func(t *testing.T) { testMaxIdleCount(t, nil, 2, 3) })
+	t.Run("WithSettings", func(t *testing.T) { testMaxIdleCount(t, sFoo, 2, 3) })
+	t.Run("WithoutSettings-MaxIdleCount-Zero", func(t *testing.T) { testMaxIdleCount(t, nil, 0, 0) })
+	t.Run("WithSettings-MaxIdleCount-Zero", func(t *testing.T) { testMaxIdleCount(t, sFoo, 0, 0) })
+}
+
 func TestCreateFail(t *testing.T) {
 	var state TestState
 	state.chaos.failConnect = true
