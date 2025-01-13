@@ -180,7 +180,7 @@ func AnalyzeTemporalRangePartitioning(createTableEntity *CreateTableEntity) (*Te
 		return nil, err
 	}
 	if !IsRangePartitioned(createTableEntity.CreateTable) {
-		return withReason("Table does not use PARTITION BY RANGE")
+		return withReason("table does not use PARTITION BY RANGE")
 	}
 	analysis.IsRangePartitioned = true
 	is84, err := capabilities.ServerVersionAtLeast(createTableEntity.Env.MySQLVersion(), 8, 4)
@@ -190,7 +190,7 @@ func AnalyzeTemporalRangePartitioning(createTableEntity *CreateTableEntity) (*Te
 
 	partitionOption := createTableEntity.CreateTable.TableSpec.PartitionOption
 	if partitionOption.SubPartition != nil {
-		return withReason("Table uses sub-partitions")
+		return withReason("table uses sub-partitions")
 	}
 
 	analysis.IsRangeColumns = len(partitionOption.ColList) > 0
@@ -275,7 +275,7 @@ func AnalyzeTemporalRangePartitioning(createTableEntity *CreateTableEntity) (*Te
 	default:
 		// PARTITION BY RANGE COLUMNS (col1, col2, ...)
 		// Multiple columns do not depict a temporal range.
-		return withReason("Table uses multiple columns in RANGE COLUMNS")
+		return withReason("table uses multiple columns in RANGE COLUMNS")
 	}
 	analysis.IsTemporalRangePartitioned = true
 	if analysis.FuncExpr != nil {
