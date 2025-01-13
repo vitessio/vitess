@@ -48,8 +48,6 @@ var (
 )
 
 func TestFailingReplication(t *testing.T) {
-	defer cluster.PanicHandler(t)
-
 	prepareCluster(t)
 
 	// Run the entire backup test
