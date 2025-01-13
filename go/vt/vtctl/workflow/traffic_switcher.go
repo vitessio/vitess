@@ -1012,7 +1012,7 @@ func (ts *trafficSwitcher) cancelMigration(ctx context.Context, sm *StreamMigrat
 	defer cmCancel()
 
 	if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
-		err = ts.changeTableSourceWrites(ctx, allowWrites)
+		err = ts.changeTableSourceWrites(cmCtx, allowWrites)
 	} else {
 		err = ts.changeShardsAccess(cmCtx, ts.SourceKeyspaceName(), ts.SourceShards(), allowWrites)
 	}
