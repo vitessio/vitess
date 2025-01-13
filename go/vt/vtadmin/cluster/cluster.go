@@ -17,6 +17,7 @@ limitations under the License.
 package cluster
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -27,6 +28,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"text/tabwriter"
 	"text/template"
 	"time"
 
@@ -38,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtadmin/cache"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery"
@@ -2503,6 +2506,82 @@ func (c *Cluster) ToggleTabletReplication(ctx context.Context, tablet *vtadminpb
 	}
 
 	return err
+}
+
+// GetVExplain returns the VExplain json message.
+func (c *Cluster) GetVExplain(ctx context.Context, req *vtadminpb.VExplainRequest, vexplainStmt *sqlparser.VExplainStmt) (*vtadminpb.VExplainResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.GetVExplain")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+	span.Annotate("clusterId", req.ClusterId)
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("sql", req.Sql)
+
+	query := req.GetSql()
+
+	return c.getVExplain(ctx, query, vexplainStmt)
+}
+
+func (c *Cluster) getVExplain(ctx context.Context, query string, vexplainStmt *sqlparser.VExplainStmt) (*vtadminpb.VExplainResponse, error) {
+	rows, err := c.DB.VExplain(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	switch vexplainStmt.Type {
+	case sqlparser.QueriesVExplainType:
+		return convertVExplainQueriesResultToString(rows)
+	case sqlparser.AllVExplainType, sqlparser.TraceVExplainType, sqlparser.PlanVExplainType:
+		return convertVExplainResultToString(rows)
+	default:
+		return nil, nil
+	}
+}
+
+func convertVExplainResultToString(rows *sql.Rows) (*vtadminpb.VExplainResponse, error) {
+	var queryPlan string
+	for rows.Next() {
+		if err := rows.Scan(&queryPlan); err != nil {
+			return nil, err
+		}
+	}
+	return &vtadminpb.VExplainResponse{
+		Response: queryPlan,
+	}, nil
+}
+
+func convertVExplainQueriesResultToString(rows *sql.Rows) (*vtadminpb.VExplainResponse, error) {
+
+	var buf bytes.Buffer
+	w := tabwriter.NewWriter(&buf, 0, 0, 0, ' ', tabwriter.AlignRight)
+
+	sep := []byte("|")
+	newLine := []byte("\n")
+	cols, _ := rows.Columns()
+
+	if _, err := w.Write([]byte(strings.Join(cols, string(sep)) + string(newLine))); err != nil {
+		return nil, err
+	}
+
+	row := make([][]byte, len(cols))
+	rowPtr := make([]any, len(cols))
+	for i := range row {
+		rowPtr[i] = &row[i]
+	}
+
+	for rows.Next() {
+		if err := rows.Scan(rowPtr...); err != nil {
+			return nil, err
+		}
+		if _, err := w.Write(append(bytes.Join(row, sep), newLine...)); err != nil {
+			return nil, err
+		}
+	}
+	w.Flush()
+
+	return &vtadminpb.VExplainResponse{
+		Response: buf.String(),
+	}, nil
 }
 
 // Debug returns a map of debug information for a cluster.

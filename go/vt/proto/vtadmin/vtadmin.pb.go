@@ -7200,6 +7200,102 @@ func (x *VTExplainResponse) GetResponse() string {
 	return ""
 }
 
+type VExplainRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	ClusterId string `protobuf:"bytes,1,opt,name=cluster,proto3" json:"cluster,omitempty"`
+	Keyspace  string `protobuf:"bytes,2,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
+	Sql       string `protobuf:"bytes,3,opt,name=sql,proto3" json:"sql,omitempty"`
+}
+
+func (x *VExplainRequest) Reset() {
+	*x = VExplainRequest{}
+	mi := &file_vtadmin_proto_msgTypes[124]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *VExplainRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*VExplainRequest) ProtoMessage() {}
+
+func (x *VExplainRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_vtadmin_proto_msgTypes[124]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+func (x *VExplainRequest) GetCluster() string {
+	if x != nil {
+		return x.ClusterId
+	}
+	return ""
+}
+
+func (x *VExplainRequest) GetKeyspace() string {
+	if x != nil {
+		return x.Keyspace
+	}
+	return ""
+}
+
+func (x *VExplainRequest) GetSql() string {
+	if x != nil {
+		return x.Sql
+	}
+	return ""
+}
+
+type VExplainResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Response string `protobuf:"bytes,1,opt,name=response,proto3" json:"response,omitempty"`
+}
+
+func (x *VExplainResponse) Reset() {
+	*x = VExplainResponse{}
+	mi := &file_vtadmin_proto_msgTypes[125]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *VExplainResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*VExplainResponse) ProtoMessage() {}
+
+func (x *VExplainResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_vtadmin_proto_msgTypes[125]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+func (x *VExplainResponse) GetResponse() string {
+	if x != nil {
+		return x.Response
+	}
+	return ""
+}
+
 type Schema_ShardTableSize struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache

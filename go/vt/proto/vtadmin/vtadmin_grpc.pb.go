@@ -1073,6 +1073,9 @@ type VTAdminServer interface {
 	// VTExplain provides information on how Vitess plans to execute a
 	// particular query.
 	VTExplain(context.Context, *VTExplainRequest) (*VTExplainResponse, error)
+	// VTExplain provides information on how Vitess plans to execute a
+	// particular query.
+	VExplain(context.Context, *VExplainRequest) (*VExplainResponse, error)
 	// WorkflowDelete deletes a vreplication workflow.
 	WorkflowDelete(context.Context, *WorkflowDeleteRequest) (*vtctldata.WorkflowDeleteResponse, error)
 	// WorkflowSwitchTraffic switches traffic for a VReplication workflow.

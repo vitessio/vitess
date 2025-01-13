@@ -45,6 +45,9 @@ type DB interface {
 	// ShowTablets executes `SHOW vitess_tablets` and returns the result.
 	ShowTablets(ctx context.Context) (*sql.Rows, error)
 
+	// VExplain executes query - `vexplain [ALL|PLAN|QUERIES] query` and returns the results
+	VExplain(ctx context.Context, query string) (*sql.Rows, error)
+
 	// Ping behaves like (*sql.DB).Ping.
 	Ping() error
 	// PingContext behaves like (*sql.DB).PingContext.
@@ -172,6 +175,16 @@ func (vtgate *VTGateProxy) ShowTablets(ctx context.Context) (*sql.Rows, error) {
 	vtadminproto.AnnotateClusterSpan(vtgate.cluster, span)
 
 	return vtgate.conn.QueryContext(vtgate.getQueryContext(ctx), "SHOW vitess_tablets")
+}
+
+// VExplain is part of the DB interface.
+func (vtgate *VTGateProxy) VExplain(ctx context.Context, query string) (*sql.Rows, error) {
+	span, ctx := trace.NewSpan(ctx, "VTGateProxy.VExplain")
+	defer span.Finish()
+
+	vtadminproto.AnnotateClusterSpan(vtgate.cluster, span)
+
+	return vtgate.conn.QueryContext(vtgate.getQueryContext(ctx), query)
 }
 
 // Ping is part of the DB interface.
