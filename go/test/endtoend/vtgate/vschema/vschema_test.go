@@ -18,21 +18,25 @@ package vschema
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
+	"path"
 	"testing"
+	"time"
 
-	"vitess.io/vitess/go/test/endtoend/utils"
-
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/utils"
 )
 
 var (
 	clusterInstance *cluster.LocalProcessCluster
+	configFile      string
 	vtParams        mysql.ConnParams
 	hostname        = "localhost"
 	keyspaceName    = "ks"
@@ -53,7 +57,6 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	exitcode, err := func() (int, error) {
@@ -66,7 +69,21 @@ func TestMain(m *testing.M) {
 		}
 
 		// List of users authorized to execute vschema ddl operations
-		clusterInstance.VtGateExtraArgs = []string{"--vschema_ddl_authorized_users=%", "--schema_change_signal=false"}
+		if utils.BinaryIsAtLeastAtVersion(22, "vtgate") {
+			timeNow := time.Now().Unix()
+			configFile = path.Join(os.TempDir(), fmt.Sprintf("vtgate-config-%d.json", timeNow))
+			err := writeConfig(configFile, map[string]string{
+				"vschema_ddl_authorized_users": "%",
+			})
+			if err != nil {
+				return 1, err
+			}
+			defer os.Remove(configFile)
+
+			clusterInstance.VtGateExtraArgs = []string{fmt.Sprintf("--config-file=%s", configFile), "--schema_change_signal=false"}
+		} else {
+			clusterInstance.VtGateExtraArgs = []string{"--vschema_ddl_authorized_users=%", "--schema_change_signal=false"}
+		}
 
 		// Start keyspace
 		keyspace := &cluster.Keyspace{
@@ -96,8 +113,16 @@ func TestMain(m *testing.M) {
 
 }
 
+func writeConfig(path string, cfg map[string]string) error {
+	file, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	return json.NewEncoder(file).Encode(cfg)
+}
+
 func TestVSchema(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
@@ -138,4 +163,15 @@ func TestVSchema(t *testing.T) {
 
 	utils.AssertMatches(t, conn, "delete from vt_user", `[]`)
 
+	if utils.BinaryIsAtLeastAtVersion(22, "vtgate") {
+		writeConfig(configFile, map[string]string{
+			"vschema_ddl_authorized_users": "",
+		})
+
+		require.EventuallyWithT(t, func(t *assert.CollectT) {
+			_, err = conn.ExecuteFetch("ALTER VSCHEMA DROP TABLE main", 1000, false)
+			assert.Error(t, err)
+			assert.ErrorContains(t, err, "is not authorized to perform vschema operations")
+		}, 5*time.Second, 100*time.Millisecond)
+	}
 }

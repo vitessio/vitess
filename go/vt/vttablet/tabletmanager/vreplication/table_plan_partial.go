@@ -26,7 +26,6 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vttablet"
 )
 
 // isBitSet returns true if the bit at index is set
@@ -36,24 +35,29 @@ func isBitSet(data []byte, index int) bool {
 	return data[byteIndex]&bitMask > 0
 }
 
-func (tp *TablePlan) isPartial(rowChange *binlogdatapb.RowChange) bool {
-	if (vttablet.VReplicationExperimentalFlags /**/ & /**/ vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage) == 0 ||
-		rowChange.DataColumns == nil ||
-		rowChange.DataColumns.Count == 0 {
+func setBit(data []byte, index int, value bool) {
+	byteIndex := index / 8
+	bitMask := byte(1 << (uint(index) & 0x7))
+	if value {
+		data[byteIndex] |= bitMask
+	} else {
+		data[byteIndex] &= 0xff - bitMask
+	}
+}
 
+func (tp *TablePlan) isPartial(rowChange *binlogdatapb.RowChange) bool {
+	if rowChange == nil {
 		return false
 	}
-	return true
+	return (rowChange.DataColumns != nil && rowChange.DataColumns.Count > 0) ||
+		(rowChange.JsonPartialValues != nil && rowChange.JsonPartialValues.Count > 0)
 }
 
 func (tpb *tablePlanBuilder) generatePartialValuesPart(buf *sqlparser.TrackedBuffer, bvf *bindvarFormatter, dataColumns *binlogdatapb.RowChange_Bitmap) *sqlparser.ParsedQuery {
 	bvf.mode = bvAfter
 	separator := "("
 	for ind, cexpr := range tpb.colExprs {
-		if tpb.isColumnGenerated(cexpr.colName) {
-			continue
-		}
-		if !isBitSet(dataColumns.Cols, ind) {
+		if cexpr.isGenerated || !isBitSet(dataColumns.Cols, ind) {
 			continue
 		}
 		buf.Myprintf("%s", separator)
@@ -84,7 +88,7 @@ func (tpb *tablePlanBuilder) generatePartialInsertPart(buf *sqlparser.TrackedBuf
 	buf.Myprintf("insert into %v(", tpb.name)
 	separator := ""
 	for ind, cexpr := range tpb.colExprs {
-		if tpb.isColumnGenerated(cexpr.colName) {
+		if cexpr.isGenerated {
 			continue
 		}
 		if !isBitSet(dataColumns.Cols, ind) {
@@ -102,7 +106,7 @@ func (tpb *tablePlanBuilder) generatePartialSelectPart(buf *sqlparser.TrackedBuf
 	buf.WriteString(" select ")
 	separator := ""
 	for ind, cexpr := range tpb.colExprs {
-		if tpb.isColumnGenerated(cexpr.colName) {
+		if cexpr.isGenerated {
 			continue
 		}
 		if !isBitSet(dataColumns.Cols, ind) {
@@ -141,17 +145,11 @@ func (tpb *tablePlanBuilder) createPartialUpdateQuery(dataColumns *binlogdatapb.
 	buf.Myprintf("update %v set ", tpb.name)
 	separator := ""
 	for i, cexpr := range tpb.colExprs {
-		if cexpr.isPK {
-			continue
-		}
-		if tpb.isColumnGenerated(cexpr.colName) {
-			continue
-		}
 		if int64(i) >= dataColumns.Count {
 			log.Errorf("Ran out of columns trying to generate query for %s", tpb.name.CompliantName())
 			return nil
 		}
-		if !isBitSet(dataColumns.Cols, i) {
+		if cexpr.isPK || cexpr.isGenerated || !isBitSet(dataColumns.Cols, i) {
 			continue
 		}
 		buf.Myprintf("%s%v=", separator, cexpr.colName)

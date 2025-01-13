@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/reparenttestutil"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
@@ -67,7 +68,7 @@ func TestShardReplicationStatuses(t *testing.T) {
 	}
 
 	// primary action loop (to initialize host and port)
-	primary.FakeMysqlDaemon.CurrentPrimaryPosition = replication.Position{
+	primary.FakeMysqlDaemon.SetPrimaryPositionLocked(replication.Position{
 		GTIDSet: replication.MariadbGTIDSet{
 			5: replication.MariadbGTID{
 				Domain:   5,
@@ -75,12 +76,12 @@ func TestShardReplicationStatuses(t *testing.T) {
 				Sequence: 892,
 			},
 		},
-	}
+	})
 	primary.StartActionLoop(t, wr)
 	defer primary.StopActionLoop(t)
 
 	// replica loop
-	replica.FakeMysqlDaemon.CurrentPrimaryPosition = replication.Position{
+	replica.FakeMysqlDaemon.SetPrimaryPositionLocked(replication.Position{
 		GTIDSet: replication.MariadbGTIDSet{
 			5: replication.MariadbGTID{
 				Domain:   5,
@@ -88,7 +89,7 @@ func TestShardReplicationStatuses(t *testing.T) {
 				Sequence: 890,
 			},
 		},
-	}
+	})
 	replica.FakeMysqlDaemon.CurrentSourceHost = primary.Tablet.MysqlHostname
 	replica.FakeMysqlDaemon.CurrentSourcePort = primary.Tablet.MysqlPort
 	replica.FakeMysqlDaemon.SetReplicationSourceInputs = append(replica.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(primary.Tablet))
@@ -141,7 +142,7 @@ func TestReparentTablet(t *testing.T) {
 	}
 	primary := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_PRIMARY, nil)
 	replica := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, nil)
-	reparenttestutil.SetKeyspaceDurability(context.Background(), t, ts, "test_keyspace", "semi_sync")
+	reparenttestutil.SetKeyspaceDurability(context.Background(), t, ts, "test_keyspace", policy.DurabilitySemiSync)
 
 	// mark the primary inside the shard
 	if _, err := ts.UpdateShardFields(ctx, "test_keyspace", "0", func(si *topo.ShardInfo) error {
@@ -197,7 +198,7 @@ func TestSetReplicationSource(t *testing.T) {
 	require.NoError(t, err, "CreateShard failed")
 
 	primary := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_PRIMARY, nil)
-	reparenttestutil.SetKeyspaceDurability(context.Background(), t, ts, "test_keyspace", "semi_sync")
+	reparenttestutil.SetKeyspaceDurability(context.Background(), t, ts, "test_keyspace", policy.DurabilitySemiSync)
 
 	// mark the primary inside the shard
 	_, err = ts.UpdateShardFields(ctx, "test_keyspace", "0", func(si *topo.ShardInfo) error {
@@ -205,6 +206,10 @@ func TestSetReplicationSource(t *testing.T) {
 		return nil
 	})
 	require.NoError(t, err, "UpdateShardFields failed")
+	pos, err := replication.DecodePosition("MySQL56/8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8")
+	require.NoError(t, err)
+	primary.FakeMysqlDaemon.SetPrimaryPositionLocked(pos)
+	primary.FakeMysqlDaemon.ServerUUID = "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9"
 
 	// primary action loop (to initialize host and port)
 	primary.StartActionLoop(t, wr)
@@ -239,6 +244,36 @@ func TestSetReplicationSource(t *testing.T) {
 		// run ReparentTablet
 		err = wr.SetReplicationSource(ctx, replica.Tablet)
 		require.NoError(t, err, "SetReplicationSource failed")
+
+		// check what was run
+		err = replica.FakeMysqlDaemon.CheckSuperQueryList()
+		require.NoError(t, err, "CheckSuperQueryList failed")
+		checkSemiSyncEnabled(t, false, true, replica)
+	})
+
+	t.Run("Errant GTIDs on the replica", func(t *testing.T) {
+		replica := NewFakeTablet(t, wr, "cell1", 4, topodatapb.TabletType_REPLICA, nil)
+		// replica loop
+		replica.FakeMysqlDaemon.Replicating = true
+		replica.FakeMysqlDaemon.IOThreadRunning = true
+		replica.FakeMysqlDaemon.SetReplicationSourceInputs = append(replica.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(primary.Tablet))
+		replica.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+			// These 3 statements come from tablet startup
+			"STOP REPLICA",
+			"FAKE SET SOURCE",
+			"START REPLICA",
+		}
+		replica.StartActionLoop(t, wr)
+		defer replica.StopActionLoop(t)
+
+		// Set replica's GTID to have a write that the primary's GTID doesn't have
+		pos, err = replication.DecodePosition("MySQL56/8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-7,8bc65cca-3fe4-11ed-bbfb-091034d48b3e:1")
+		require.NoError(t, err)
+		replica.FakeMysqlDaemon.CurrentRelayLogPosition = pos
+
+		// run SetReplicationSource
+		err = wr.SetReplicationSource(ctx, replica.Tablet)
+		require.ErrorContains(t, err, "Errant GTID detected")
 
 		// check what was run
 		err = replica.FakeMysqlDaemon.CheckSuperQueryList()

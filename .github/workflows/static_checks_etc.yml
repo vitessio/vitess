@@ -9,7 +9,7 @@ permissions: read-all
 jobs:
   build:
     name: Static Code Checks Etc
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Skip CI
@@ -125,7 +125,7 @@ jobs:
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && (steps.changes.outputs.go_files == 'true' || steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.proto_changes == 'true')
         uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
         with:
-          go-version: 1.23.0
+          go-version-file: go.mod
 
       - name: Tune the OS
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true'
@@ -152,7 +152,7 @@ jobs:
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && (steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.go_files == 'true')
         run: |
           sudo apt-get update
-          sudo apt-get install -y make unzip g++ etcd curl git wget
+          sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget
           sudo service etcd stop
           go mod download
 
@@ -222,6 +222,13 @@ jobs:
           echo 'Running `go mod tidy` on this CI test yields with the following changes:'
           echo "$output"
           exit 1
+
+      - name: Setup Node
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.proto_changes == 'true'
+        uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b # v4.0.3
+        with:
+          # make proto requires newer node than the pre-installed one
+          node-version: '20.12.2'
 
       - name: check_make_proto
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.proto_changes == 'true'

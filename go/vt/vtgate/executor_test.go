@@ -36,12 +36,19 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
+	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/discovery"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtgate/buffer"
@@ -50,12 +57,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vtgate/vschemaacl"
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
-	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 func TestExecutorResultsExceeded(t *testing.T) {
@@ -65,7 +66,7 @@ func TestExecutorResultsExceeded(t *testing.T) {
 	warnMemoryRows = 3
 	defer func() { warnMemoryRows = save }()
 
-	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
 
 	initial := warnings.Counts()["ResultsExceeded"]
 
@@ -89,7 +90,7 @@ func TestExecutorMaxMemoryRowsExceeded(t *testing.T) {
 	maxMemoryRows = 3
 	defer func() { maxMemoryRows = save }()
 
-	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
 	result := sqltypes.MakeTestResult(sqltypes.MakeTestFields("col", "int64"), "1", "2", "3", "4")
 	fn := func(r *sqltypes.Result) error {
 		return nil
@@ -123,7 +124,7 @@ func TestExecutorMaxMemoryRowsExceeded(t *testing.T) {
 func TestExecutorTransactionsNoAutoCommit(t *testing.T) {
 	executor, _, _, sbclookup, ctx := createExecutorEnv(t)
 
-	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary", SessionUUID: "suuid"})
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@primary", SessionUUID: "suuid"})
 
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
@@ -189,7 +190,7 @@ func TestExecutorTransactionsNoAutoCommit(t *testing.T) {
 	}
 
 	// Prevent use of non-primary if in_transaction is on.
-	session = NewSafeSession(&vtgatepb.Session{TargetString: "@primary", InTransaction: true})
+	session = econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@primary", InTransaction: true})
 	_, err = executor.Execute(ctx, nil, "TestExecute", session, "use @replica", nil)
 	require.EqualError(t, err, `can't execute the given command because you have an active transaction`)
 }
@@ -206,7 +207,7 @@ func TestDirectTargetRewrites(t *testing.T) {
 	}
 	sql := "select database()"
 
-	_, err := executor.Execute(ctx, nil, "TestExecute", NewSafeSession(session), sql, map[string]*querypb.BindVariable{})
+	_, err := executor.Execute(ctx, nil, "TestExecute", econtext.NewSafeSession(session), sql, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 	assertQueries(t, sbclookup, []*querypb.BoundQuery{{
 		Sql:           "select :__vtdbname as `database()` from dual",
@@ -217,7 +218,7 @@ func TestDirectTargetRewrites(t *testing.T) {
 func TestExecutorTransactionsAutoCommit(t *testing.T) {
 	executor, _, _, sbclookup, ctx := createExecutorEnv(t)
 
-	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary", Autocommit: true, SessionUUID: "suuid"})
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@primary", Autocommit: true, SessionUUID: "suuid"})
 
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
@@ -271,7 +272,7 @@ func TestExecutorTransactionsAutoCommitStreaming(t *testing.T) {
 	executor, _, _, sbclookup, ctx := createExecutorEnv(t)
 
 	oltpOptions := &querypb.ExecuteOptions{Workload: querypb.ExecuteOptions_OLTP}
-	session := NewSafeSession(&vtgatepb.Session{
+	session := econtext.NewSafeSession(&vtgatepb.Session{
 		TargetString: "@primary",
 		Autocommit:   true,
 		Options:      oltpOptions,
@@ -334,13 +335,13 @@ func TestExecutorTransactionsAutoCommitStreaming(t *testing.T) {
 }
 
 func TestExecutorDeleteMetadata(t *testing.T) {
-	vschemaacl.AuthorizedDDLUsers = "%"
+	vschemaacl.AuthorizedDDLUsers.Set(vschemaacl.NewAuthorizedDDLUsers("%"))
 	defer func() {
-		vschemaacl.AuthorizedDDLUsers = ""
+		vschemaacl.AuthorizedDDLUsers.Set(vschemaacl.NewAuthorizedDDLUsers(""))
 	}()
 
 	executor, _, _, _, ctx := createExecutorEnv(t)
-	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary", Autocommit: true})
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@primary", Autocommit: true})
 
 	set := "set @@vitess_metadata.app_v1= '1'"
 	_, err := executor.Execute(ctx, nil, "TestExecute", session, set, nil)
@@ -368,7 +369,7 @@ func TestExecutorDeleteMetadata(t *testing.T) {
 func TestExecutorAutocommit(t *testing.T) {
 	executor, _, _, sbclookup, ctx := createExecutorEnv(t)
 
-	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
 
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
@@ -447,7 +448,7 @@ func TestExecutorAutocommit(t *testing.T) {
 
 	// transition autocommit from 0 to 1 in the middle of a transaction.
 	startCount = sbclookup.CommitCount.Load()
-	session = NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
+	session = econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
 	_, err = executor.Execute(ctx, nil, "TestExecute", session, "begin", nil)
 	require.NoError(t, err)
 	_, err = executor.Execute(ctx, nil, "TestExecute", session, "update main1 set id=1", nil)
@@ -469,7 +470,7 @@ func TestExecutorAutocommit(t *testing.T) {
 func TestExecutorShowColumns(t *testing.T) {
 	executor, sbc1, sbc2, sbclookup, ctx := createExecutorEnv(t)
 
-	session := NewSafeSession(&vtgatepb.Session{TargetString: ""})
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: ""})
 
 	queries := []string{
 		"SHOW COLUMNS FROM `user` in `TestExecutor`",
@@ -521,7 +522,7 @@ func assertMatchesNoOrder(t *testing.T, expected, got string) {
 func TestExecutorShow(t *testing.T) {
 	executor, _, _, sbclookup, ctx := createExecutorEnv(t)
 
-	session := NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
 
 	for _, query := range []string{"show vitess_keyspaces", "show keyspaces"} {
 		qr, err := executor.Execute(ctx, nil, "TestExecute", session, query, nil)
@@ -546,7 +547,7 @@ func TestExecutorShow(t *testing.T) {
 	_, err = executor.Execute(ctx, nil, "TestExecute", session, "use @primary", nil)
 	require.NoError(t, err)
 	_, err = executor.Execute(ctx, nil, "TestExecute", session, "show tables", nil)
-	assert.EqualError(t, err, errNoKeyspace.Error(), "'show tables' should fail without a keyspace")
+	assert.EqualError(t, err, econtext.ErrNoKeyspace.Error(), "'show tables' should fail without a keyspace")
 	assert.Empty(t, sbclookup.Queries, "sbclookup unexpectedly has queries already")
 
 	showResults := &sqltypes.Result{
@@ -921,7 +922,7 @@ func TestExecutorShow(t *testing.T) {
 
 	query = "show vschema vindexes on user"
 	_, err = executor.Execute(ctx, nil, "TestExecute", session, query, nil)
-	wantErr := errNoKeyspace.Error()
+	wantErr := econtext.ErrNoKeyspace.Error()
 	assert.EqualError(t, err, wantErr, query)
 
 	query = "show vschema vindexes on TestExecutor.garbage"
@@ -1025,7 +1026,7 @@ func TestExecutorShow(t *testing.T) {
 	utils.MustMatch(t, wantqr, qr, fmt.Sprintf("%s, with a bad keyspace", query))
 
 	query = "show vschema tables"
-	session = NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded})
+	session = econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded})
 	qr, err = executor.Execute(ctx, nil, "TestExecute", session, query, nil)
 	require.NoError(t, err)
 	wantqr = &sqltypes.Result{
@@ -1051,9 +1052,9 @@ func TestExecutorShow(t *testing.T) {
 	utils.MustMatch(t, wantqr, qr, query)
 
 	query = "show vschema tables"
-	session = NewSafeSession(&vtgatepb.Session{})
+	session = econtext.NewSafeSession(&vtgatepb.Session{})
 	_, err = executor.Execute(ctx, nil, "TestExecute", session, query, nil)
-	want = errNoKeyspace.Error()
+	want = econtext.ErrNoKeyspace.Error()
 	assert.EqualError(t, err, want, query)
 
 	query = "show 10"
@@ -1062,7 +1063,7 @@ func TestExecutorShow(t *testing.T) {
 	assert.EqualError(t, err, want, query)
 
 	query = "show vschema tables"
-	session = NewSafeSession(&vtgatepb.Session{TargetString: "no_such_keyspace"})
+	session = econtext.NewSafeSession(&vtgatepb.Session{TargetString: "no_such_keyspace"})
 	_, err = executor.Execute(ctx, nil, "TestExecute", session, query, nil)
 	want = "VT05003: unknown database 'no_such_keyspace' in vschema"
 	assert.EqualError(t, err, want, query)
@@ -1081,7 +1082,7 @@ func TestExecutorShow(t *testing.T) {
 func TestExecutorShowTargeted(t *testing.T) {
 	executor, _, sbc2, _, ctx := createExecutorEnv(t)
 
-	session := NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor/40-60"})
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor/40-60"})
 
 	queries := []string{
 		"show databases",
@@ -1108,7 +1109,7 @@ func TestExecutorShowTargeted(t *testing.T) {
 func TestExecutorShowFromSystemSchema(t *testing.T) {
 	executor, _, _, _, ctx := createExecutorEnv(t)
 
-	session := NewSafeSession(&vtgatepb.Session{TargetString: "mysql"})
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "mysql"})
 
 	_, err := executor.Execute(ctx, nil, "TestExecutorShowFromSystemSchema", session, "show tables", nil)
 	require.NoError(t, err)
@@ -1117,7 +1118,7 @@ func TestExecutorShowFromSystemSchema(t *testing.T) {
 func TestExecutorUse(t *testing.T) {
 	executor, _, _, _, ctx := createExecutorEnv(t)
 
-	session := NewSafeSession(&vtgatepb.Session{Autocommit: true, TargetString: "@primary"})
+	session := econtext.NewSafeSession(&vtgatepb.Session{Autocommit: true, TargetString: "@primary"})
 
 	stmts := []string{
 		"use TestExecutor",
@@ -1136,13 +1137,13 @@ func TestExecutorUse(t *testing.T) {
 		utils.MustMatch(t, wantSession, session.Session, "session does not match")
 	}
 
-	_, err := executor.Execute(ctx, nil, "TestExecute", NewSafeSession(&vtgatepb.Session{}), "use 1", nil)
+	_, err := executor.Execute(ctx, nil, "TestExecute", econtext.NewSafeSession(&vtgatepb.Session{}), "use 1", nil)
 	wantErr := "syntax error at position 6 near '1'"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("got: %v, want %v", err, wantErr)
 	}
 
-	_, err = executor.Execute(ctx, nil, "TestExecute", NewSafeSession(&vtgatepb.Session{}), "use UnexistentKeyspace", nil)
+	_, err = executor.Execute(ctx, nil, "TestExecute", econtext.NewSafeSession(&vtgatepb.Session{}), "use UnexistentKeyspace", nil)
 	require.EqualError(t, err, "VT05003: unknown database 'UnexistentKeyspace' in vschema")
 }
 
@@ -1156,7 +1157,7 @@ func TestExecutorComment(t *testing.T) {
 	wantResult := &sqltypes.Result{}
 
 	for _, stmt := range stmts {
-		gotResult, err := executor.Execute(ctx, nil, "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded}), stmt, nil)
+		gotResult, err := executor.Execute(ctx, nil, "TestExecute", econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded}), stmt, nil)
 		if err != nil {
 			t.Error(err)
 		}
@@ -1241,9 +1242,9 @@ func TestExecutorDDL(t *testing.T) {
 			sbc2.ExecCount.Store(0)
 			sbclookup.ExecCount.Store(0)
 			stmtType := "DDL"
-			_, err := executor.Execute(ctx, nil, "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: tc.targetStr}), stmt, nil)
+			_, err := executor.Execute(ctx, nil, "TestExecute", econtext.NewSafeSession(&vtgatepb.Session{TargetString: tc.targetStr}), stmt, nil)
 			if tc.hasNoKeyspaceErr {
-				require.EqualError(t, err, errNoKeyspace.Error(), "expect query to fail: %q", stmt)
+				require.EqualError(t, err, econtext.ErrNoKeyspace.Error(), "expect query to fail: %q", stmt)
 				stmtType = "" // For error case, plan is not generated to query log will not contain any stmtType.
 			} else {
 				require.NoError(t, err, "did not expect error for query: %q", stmt)
@@ -1279,9 +1280,9 @@ func TestExecutorDDL(t *testing.T) {
 		sbc1.ExecCount.Store(0)
 		sbc2.ExecCount.Store(0)
 		sbclookup.ExecCount.Store(0)
-		_, err := executor.Execute(ctx, nil, "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: ""}), stmt.input, nil)
+		_, err := executor.Execute(ctx, nil, "TestExecute", econtext.NewSafeSession(&vtgatepb.Session{TargetString: ""}), stmt.input, nil)
 		if stmt.hasErr {
-			require.EqualError(t, err, errNoKeyspace.Error(), "expect query to fail")
+			require.EqualError(t, err, econtext.ErrNoKeyspace.Error(), "expect query to fail")
 			testQueryLog(t, executor, logChan, "TestExecute", "", stmt.input, 0)
 		} else {
 			require.NoError(t, err)
@@ -1298,13 +1299,13 @@ func TestExecutorDDLFk(t *testing.T) {
 	}
 
 	for _, stmt := range stmts {
-		for _, fkMode := range []string{"allow", "disallow"} {
-			t.Run(stmt+fkMode, func(t *testing.T) {
+		for _, mode := range []string{"allow", "disallow"} {
+			t.Run(stmt+mode, func(t *testing.T) {
 				executor, _, _, sbc, ctx := createExecutorEnv(t)
 				sbc.ExecCount.Store(0)
-				foreignKeyMode = fkMode
-				_, err := executor.Execute(ctx, nil, mName, NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded}), stmt, nil)
-				if fkMode == "allow" {
+				executor.vConfig.ForeignKeyMode = fkMode(mode)
+				_, err := executor.Execute(ctx, nil, mName, econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded}), stmt, nil)
+				if mode == "allow" {
 					require.NoError(t, err)
 					require.EqualValues(t, 1, sbc.ExecCount.Load())
 				} else {
@@ -1317,13 +1318,13 @@ func TestExecutorDDLFk(t *testing.T) {
 }
 
 func TestExecutorAlterVSchemaKeyspace(t *testing.T) {
-	vschemaacl.AuthorizedDDLUsers = "%"
+	vschemaacl.AuthorizedDDLUsers.Set(vschemaacl.NewAuthorizedDDLUsers("%"))
 	defer func() {
-		vschemaacl.AuthorizedDDLUsers = ""
+		vschemaacl.AuthorizedDDLUsers.Set(vschemaacl.NewAuthorizedDDLUsers(""))
 	}()
 
 	executor, _, _, _, ctx := createExecutorEnv(t)
-	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary", Autocommit: true})
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@primary", Autocommit: true})
 
 	vschemaUpdates := make(chan *vschemapb.SrvVSchema, 2)
 	executor.serv.WatchSrvVSchema(ctx, executor.cell, func(vschema *vschemapb.SrvVSchema, err error) bool {
@@ -1346,9 +1347,9 @@ func TestExecutorAlterVSchemaKeyspace(t *testing.T) {
 }
 
 func TestExecutorCreateVindexDDL(t *testing.T) {
-	vschemaacl.AuthorizedDDLUsers = "%"
+	vschemaacl.AuthorizedDDLUsers.Set(vschemaacl.NewAuthorizedDDLUsers("%"))
 	defer func() {
-		vschemaacl.AuthorizedDDLUsers = ""
+		vschemaacl.AuthorizedDDLUsers.Set(vschemaacl.NewAuthorizedDDLUsers(""))
 	}()
 	executor, sbc1, sbc2, sbclookup, ctx := createExecutorEnv(t)
 	ks := "TestExecutor"
@@ -1365,7 +1366,7 @@ func TestExecutorCreateVindexDDL(t *testing.T) {
 		t.Fatalf("test_vindex should not exist in original vschema")
 	}
 
-	session := NewSafeSession(&vtgatepb.Session{TargetString: ks})
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: ks})
 	stmt := "alter vschema create vindex test_vindex using hash"
 	_, err := executor.Execute(ctx, nil, "TestExecute", session, stmt, nil)
 	require.NoError(t, err)
@@ -1389,7 +1390,7 @@ func TestExecutorCreateVindexDDL(t *testing.T) {
 	// Create a new vschema keyspace implicitly by creating a vindex with a different
 	// target in the session
 	// ksNew := "test_new_keyspace"
-	session = NewSafeSession(&vtgatepb.Session{TargetString: ks})
+	session = econtext.NewSafeSession(&vtgatepb.Session{TargetString: ks})
 	stmt = "alter vschema create vindex test_vindex2 using hash"
 	_, err = executor.Execute(ctx, nil, "TestExecute", session, stmt, nil)
 	if err != nil {
@@ -1416,9 +1417,9 @@ func TestExecutorCreateVindexDDL(t *testing.T) {
 }
 
 func TestExecutorAddDropVschemaTableDDL(t *testing.T) {
-	vschemaacl.AuthorizedDDLUsers = "%"
+	vschemaacl.AuthorizedDDLUsers.Set(vschemaacl.NewAuthorizedDDLUsers("%"))
 	defer func() {
-		vschemaacl.AuthorizedDDLUsers = ""
+		vschemaacl.AuthorizedDDLUsers.Set(vschemaacl.NewAuthorizedDDLUsers(""))
 	}()
 	executor, sbc1, sbc2, sbclookup, ctx := createExecutorEnv(t)
 	ks := KsTestUnsharded
@@ -1440,7 +1441,7 @@ func TestExecutorAddDropVschemaTableDDL(t *testing.T) {
 		vschemaTables = append(vschemaTables, t)
 	}
 
-	session := NewSafeSession(&vtgatepb.Session{TargetString: ks})
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: ks})
 	stmt := "alter vschema add table test_table"
 	_, err := executor.Execute(ctx, nil, "TestExecute", session, stmt, nil)
 	require.NoError(t, err)
@@ -1452,7 +1453,7 @@ func TestExecutorAddDropVschemaTableDDL(t *testing.T) {
 	_ = waitForVschemaTables(t, ks, append([]string{"test_table", "test_table2"}, vschemaTables...), executor)
 
 	// Should fail adding a table on a sharded keyspace
-	session = NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
+	session = econtext.NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
 	stmt = "alter vschema add table test_table"
 	_, err = executor.Execute(ctx, nil, "TestExecute", session, stmt, nil)
 	require.EqualError(t, err, "add vschema table: unsupported on sharded keyspace TestExecutor")
@@ -1471,7 +1472,7 @@ func TestExecutorVindexDDLACL(t *testing.T) {
 	executor, _, _, _, ctx := createExecutorEnv(t)
 
 	ks := "TestExecutor"
-	session := NewSafeSession(&vtgatepb.Session{TargetString: ks})
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: ks})
 
 	ctxRedUser := callerid.NewContext(ctx, &vtrpcpb.CallerID{}, &querypb.VTGateCallerID{Username: "redUser"})
 	ctxBlueUser := callerid.NewContext(ctx, &vtrpcpb.CallerID{}, &querypb.VTGateCallerID{Username: "blueUser"})
@@ -1485,8 +1486,7 @@ func TestExecutorVindexDDLACL(t *testing.T) {
 	require.EqualError(t, err, `User 'blueUser' is not authorized to perform vschema operations`)
 
 	// test when all users are enabled
-	vschemaacl.AuthorizedDDLUsers = "%"
-	vschemaacl.Init()
+	vschemaacl.AuthorizedDDLUsers.Set(vschemaacl.NewAuthorizedDDLUsers("%"))
 	_, err = executor.Execute(ctxRedUser, nil, "TestExecute", session, stmt, nil)
 	if err != nil {
 		t.Errorf("unexpected error '%v'", err)
@@ -1498,8 +1498,7 @@ func TestExecutorVindexDDLACL(t *testing.T) {
 	}
 
 	// test when only one user is enabled
-	vschemaacl.AuthorizedDDLUsers = "orangeUser, blueUser, greenUser"
-	vschemaacl.Init()
+	vschemaacl.AuthorizedDDLUsers.Set(vschemaacl.NewAuthorizedDDLUsers("orangeUser, blueUser, greenUser"))
 	_, err = executor.Execute(ctxRedUser, nil, "TestExecute", session, stmt, nil)
 	require.EqualError(t, err, `User 'redUser' is not authorized to perform vschema operations`)
 
@@ -1510,14 +1509,28 @@ func TestExecutorVindexDDLACL(t *testing.T) {
 	}
 
 	// restore the disallowed state
-	vschemaacl.AuthorizedDDLUsers = ""
+	vschemaacl.AuthorizedDDLUsers.Set(vschemaacl.NewAuthorizedDDLUsers(""))
 }
 
 func TestExecutorUnrecognized(t *testing.T) {
 	executor, _, _, _, ctx := createExecutorEnv(t)
 
-	_, err := executor.Execute(ctx, nil, "TestExecute", NewSafeSession(&vtgatepb.Session{}), "invalid statement", nil)
+	_, err := executor.Execute(ctx, nil, "TestExecute", econtext.NewSafeSession(&vtgatepb.Session{}), "invalid statement", nil)
 	require.Error(t, err, "unrecognized statement: invalid statement'")
+}
+
+func TestExecutorDeniedErrorNoBuffer(t *testing.T) {
+	executor, sbc1, _, _, ctx := createExecutorEnv(t)
+	sbc1.EphemeralShardErr = errors.New("enforce denied tables")
+
+	vschemaWaitTimeout = 500 * time.Millisecond
+
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{TargetString: "@primary"})
+	startExec := time.Now()
+	_, err := executor.Execute(ctx, nil, "TestExecutorDeniedErrorNoBuffer", session, "select * from user", nil)
+	require.NoError(t, err, "enforce denied tables not buffered")
+	endExec := time.Now()
+	require.GreaterOrEqual(t, endExec.Sub(startExec).Milliseconds(), int64(500))
 }
 
 // TestVSchemaStats makes sure the building and displaying of the
@@ -1546,9 +1559,8 @@ var pv = querypb.ExecuteOptions_Gen4
 
 func TestGetPlanUnnormalized(t *testing.T) {
 	r, _, _, _, ctx := createExecutorEnv(t)
-
-	emptyvc, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
-	unshardedvc, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
+	emptyvc, _ := econtext.NewVCursorImpl(econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, nullResultsObserver{}, econtext.VCursorConfig{})
+	unshardedvc, _ := econtext.NewVCursorImpl(econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, nullResultsObserver{}, econtext.VCursorConfig{})
 
 	query1 := "select * from music_user_map where id = 1"
 	plan1, logStats1 := getPlanCached(t, ctx, r, emptyvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false)
@@ -1591,7 +1603,7 @@ func assertCacheSize(t *testing.T, c *PlanCache, expected int) {
 	}
 }
 
-func assertCacheContains(t *testing.T, e *Executor, vc *vcursorImpl, sql string) *engine.Plan {
+func assertCacheContains(t *testing.T, e *Executor, vc *econtext.VCursorImpl, sql string) *engine.Plan {
 	t.Helper()
 
 	var plan *engine.Plan
@@ -1610,9 +1622,9 @@ func assertCacheContains(t *testing.T, e *Executor, vc *vcursorImpl, sql string)
 	return plan
 }
 
-func getPlanCached(t *testing.T, ctx context.Context, e *Executor, vcursor *vcursorImpl, sql string, comments sqlparser.MarginComments, bindVars map[string]*querypb.BindVariable, skipQueryPlanCache bool) (*engine.Plan, *logstats.LogStats) {
+func getPlanCached(t *testing.T, ctx context.Context, e *Executor, vcursor *econtext.VCursorImpl, sql string, comments sqlparser.MarginComments, bindVars map[string]*querypb.BindVariable, skipQueryPlanCache bool) (*engine.Plan, *logstats.LogStats) {
 	logStats := logstats.NewLogStats(ctx, "Test", "", "", nil)
-	vcursor.safeSession = &SafeSession{
+	vcursor.SafeSession = &econtext.SafeSession{
 		Session: &vtgatepb.Session{
 			Options: &querypb.ExecuteOptions{SkipQueryPlanCache: skipQueryPlanCache}},
 	}
@@ -1631,7 +1643,7 @@ func TestGetPlanCacheUnnormalized(t *testing.T) {
 	t.Run("Cache", func(t *testing.T) {
 		r, _, _, _, ctx := createExecutorEnv(t)
 
-		emptyvc, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
+		emptyvc, _ := econtext.NewVCursorImpl(econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, nullResultsObserver{}, econtext.VCursorConfig{})
 		query1 := "select * from music_user_map where id = 1"
 
 		_, logStats1 := getPlanCached(t, ctx, r, emptyvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, true)
@@ -1655,7 +1667,7 @@ func TestGetPlanCacheUnnormalized(t *testing.T) {
 		// Skip cache using directive
 		r, _, _, _, ctx := createExecutorEnv(t)
 
-		unshardedvc, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
+		unshardedvc, _ := econtext.NewVCursorImpl(econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, nullResultsObserver{}, r.vConfig)
 
 		query1 := "insert /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ into user(id) values (1), (2)"
 		getPlanCached(t, ctx, r, unshardedvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false)
@@ -1666,12 +1678,12 @@ func TestGetPlanCacheUnnormalized(t *testing.T) {
 		assertCacheSize(t, r.plans, 1)
 
 		// the target string will be resolved and become part of the plan cache key, which adds a new entry
-		ksIDVc1, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "[deadbeef]"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
+		ksIDVc1, _ := econtext.NewVCursorImpl(econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "[deadbeef]"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, nullResultsObserver{}, r.vConfig)
 		getPlanCached(t, ctx, r, ksIDVc1, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false)
 		assertCacheSize(t, r.plans, 2)
 
 		// the target string will be resolved and become part of the plan cache key, as it's an unsharded ks, it will be the same entry as above
-		ksIDVc2, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "[beefdead]"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
+		ksIDVc2, _ := econtext.NewVCursorImpl(econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "[beefdead]"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, nullResultsObserver{}, r.vConfig)
 		getPlanCached(t, ctx, r, ksIDVc2, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false)
 		assertCacheSize(t, r.plans, 2)
 	})
@@ -1681,7 +1693,7 @@ func TestGetPlanCacheNormalized(t *testing.T) {
 	t.Run("Cache", func(t *testing.T) {
 		r, _, _, _, ctx := createExecutorEnv(t)
 		r.normalize = true
-		emptyvc, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
+		emptyvc, _ := econtext.NewVCursorImpl(econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, nullResultsObserver{}, r.vConfig)
 
 		query1 := "select * from music_user_map where id = 1"
 		_, logStats1 := getPlanCached(t, ctx, r, emptyvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, true /* skipQueryPlanCache */)
@@ -1698,7 +1710,7 @@ func TestGetPlanCacheNormalized(t *testing.T) {
 		// Skip cache using directive
 		r, _, _, _, ctx := createExecutorEnv(t)
 		r.normalize = true
-		unshardedvc, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
+		unshardedvc, _ := econtext.NewVCursorImpl(econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, nullResultsObserver{}, r.vConfig)
 
 		query1 := "insert /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ into user(id) values (1), (2)"
 		getPlanCached(t, ctx, r, unshardedvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false)
@@ -1709,12 +1721,12 @@ func TestGetPlanCacheNormalized(t *testing.T) {
 		assertCacheSize(t, r.plans, 1)
 
 		// the target string will be resolved and become part of the plan cache key, which adds a new entry
-		ksIDVc1, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "[deadbeef]"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
+		ksIDVc1, _ := econtext.NewVCursorImpl(econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "[deadbeef]"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, nullResultsObserver{}, r.vConfig)
 		getPlanCached(t, ctx, r, ksIDVc1, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false)
 		assertCacheSize(t, r.plans, 2)
 
 		// the target string will be resolved and become part of the plan cache key, as it's an unsharded ks, it will be the same entry as above
-		ksIDVc2, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "[beefdead]"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
+		ksIDVc2, _ := econtext.NewVCursorImpl(econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "[beefdead]"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, nullResultsObserver{}, r.vConfig)
 		getPlanCached(t, ctx, r, ksIDVc2, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false)
 		assertCacheSize(t, r.plans, 2)
 	})
@@ -1724,8 +1736,8 @@ func TestGetPlanNormalized(t *testing.T) {
 	r, _, _, _, ctx := createExecutorEnv(t)
 
 	r.normalize = true
-	emptyvc, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
-	unshardedvc, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
+	emptyvc, _ := econtext.NewVCursorImpl(econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, nullResultsObserver{}, econtext.VCursorConfig{})
+	unshardedvc, _ := econtext.NewVCursorImpl(econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, nullResultsObserver{}, econtext.VCursorConfig{})
 
 	query1 := "select * from music_user_map where id = 1"
 	query2 := "select * from music_user_map where id = 2"
@@ -1772,7 +1784,7 @@ func TestGetPlanPriority(t *testing.T) {
 		{name: "empty priority", sql: "select * from music_user_map", expectedPriority: "", expectedError: nil},
 	}
 
-	session := NewSafeSession(&vtgatepb.Session{TargetString: "@unknown", Options: &querypb.ExecuteOptions{}})
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@unknown", Options: &querypb.ExecuteOptions{}})
 
 	for _, aTestCase := range testCases {
 		testCase := aTestCase
@@ -1782,20 +1794,21 @@ func TestGetPlanPriority(t *testing.T) {
 
 			r.normalize = true
 			logStats := logstats.NewLogStats(ctx, "Test", "", "", nil)
-			vCursor, err := newVCursorImpl(session, makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
+			vCursor, err := econtext.NewVCursorImpl(session, makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, nullResultsObserver{}, econtext.VCursorConfig{})
 			assert.NoError(t, err)
 
 			stmt, err := sqlparser.NewTestParser().Parse(testCase.sql)
 			assert.NoError(t, err)
-			crticalityFromStatement, _ := sqlparser.GetPriorityFromStatement(stmt)
+			qh, _ := sqlparser.BuildQueryHints(stmt)
+			priorityFromStatement := qh.Priority
 
 			_, err = r.getPlan(context.Background(), vCursor, testCase.sql, stmt, makeComments("/* some comment */"), map[string]*querypb.BindVariable{}, nil, true, logStats)
 			if testCase.expectedError != nil {
 				assert.ErrorIs(t, err, testCase.expectedError)
 			} else {
 				assert.NoError(t, err)
-				assert.Equal(t, testCase.expectedPriority, crticalityFromStatement)
-				assert.Equal(t, testCase.expectedPriority, vCursor.safeSession.Options.Priority)
+				assert.Equal(t, testCase.expectedPriority, priorityFromStatement)
+				assert.Equal(t, testCase.expectedPriority, vCursor.SafeSession.Options.Priority)
 			}
 		})
 	}
@@ -1952,7 +1965,7 @@ func TestExecutorMaxPayloadSizeExceeded(t *testing.T) {
 
 	executor, _, _, _, _ := createExecutorEnv(t)
 
-	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
 	warningCount := warnings.Counts()["WarnPayloadSizeExceeded"]
 	testMaxPayloadSizeExceeded := []string{
 		"select * from main1",
@@ -2000,7 +2013,7 @@ func TestOlapSelectDatabase(t *testing.T) {
 		cbInvoked = true
 		return nil
 	}
-	err := executor.StreamExecute(context.Background(), nil, "TestExecute", NewSafeSession(session), sql, nil, cb)
+	err := executor.StreamExecute(context.Background(), nil, "TestExecute", econtext.NewSafeSession(session), sql, nil, cb)
 	assert.NoError(t, err)
 	assert.True(t, cbInvoked)
 }
@@ -2008,7 +2021,7 @@ func TestOlapSelectDatabase(t *testing.T) {
 func TestExecutorClearsWarnings(t *testing.T) {
 	executor, _, _, _, _ := createExecutorEnv(t)
 
-	session := NewSafeSession(&vtgatepb.Session{
+	session := econtext.NewSafeSession(&vtgatepb.Session{
 		Warnings: []*querypb.QueryWarning{{Code: 234, Message: "oh noes"}},
 	})
 	_, err := executor.Execute(context.Background(), nil, "TestExecute", session, "select 42", nil)
@@ -2025,7 +2038,6 @@ func TestServingKeyspaces(t *testing.T) {
 
 	executor, sbc1, _, sbclookup, ctx := createExecutorEnv(t)
 
-	executor.pv = querypb.ExecuteOptions_Gen4
 	gw, ok := executor.resolver.resolver.GetGateway().(*TabletGateway)
 	require.True(t, ok)
 	hc := gw.hc.(*discovery.FakeHealthCheck)
@@ -2044,7 +2056,7 @@ func TestServingKeyspaces(t *testing.T) {
 	})
 
 	require.ElementsMatch(t, []string{"TestExecutor", "TestUnsharded"}, gw.GetServingKeyspaces())
-	result, err := executor.Execute(ctx, nil, "TestServingKeyspaces", NewSafeSession(&vtgatepb.Session{}), "select keyspace_name from dual", nil)
+	result, err := executor.Execute(ctx, nil, "TestServingKeyspaces", econtext.NewSafeSession(&vtgatepb.Session{}), "select keyspace_name from dual", nil)
 	require.NoError(t, err)
 	require.Equal(t, `[[VARCHAR("TestExecutor")]]`, fmt.Sprintf("%v", result.Rows))
 
@@ -2060,7 +2072,7 @@ func TestServingKeyspaces(t *testing.T) {
 	// Clear plan cache, to force re-planning of the query.
 	executor.ClearPlans()
 	require.ElementsMatch(t, []string{"TestUnsharded"}, gw.GetServingKeyspaces())
-	result, err = executor.Execute(ctx, nil, "TestServingKeyspaces", NewSafeSession(&vtgatepb.Session{}), "select keyspace_name from dual", nil)
+	result, err = executor.Execute(ctx, nil, "TestServingKeyspaces", econtext.NewSafeSession(&vtgatepb.Session{}), "select keyspace_name from dual", nil)
 	require.NoError(t, err)
 	require.Equal(t, `[[VARCHAR("TestUnsharded")]]`, fmt.Sprintf("%v", result.Rows))
 }
@@ -2136,9 +2148,9 @@ func TestExecutorOther(t *testing.T) {
 				sbc2.ExecCount.Store(0)
 				sbclookup.ExecCount.Store(0)
 
-				_, err := executor.Execute(ctx, nil, "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: tc.targetStr}), stmt, nil)
+				_, err := executor.Execute(ctx, nil, "TestExecute", econtext.NewSafeSession(&vtgatepb.Session{TargetString: tc.targetStr}), stmt, nil)
 				if tc.hasNoKeyspaceErr {
-					assert.Error(t, err, errNoKeyspace)
+					assert.Error(t, err, econtext.ErrNoKeyspace.Error())
 				} else if tc.hasDestinationShardErr {
 					assert.Errorf(t, err, "Destination can only be a single shard for statement: %s", stmt)
 				} else {
@@ -2192,7 +2204,7 @@ func TestExecutorAnalyze(t *testing.T) {
 			sbc2.ExecCount.Store(0)
 			sbclookup.ExecCount.Store(0)
 
-			_, err := executor.Execute(context.Background(), nil, "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: tc.targetStr}), stmt, nil)
+			_, err := executor.Execute(context.Background(), nil, "TestExecute", econtext.NewSafeSession(&vtgatepb.Session{TargetString: tc.targetStr}), stmt, nil)
 			require.NoError(t, err)
 
 			utils.MustMatch(t, tc.wantCnts, cnts{
@@ -2256,7 +2268,7 @@ func TestExecutorExplainStmt(t *testing.T) {
 				sbc2.ExecCount.Store(0)
 				sbclookup.ExecCount.Store(0)
 
-				_, err := executor.Execute(ctx, nil, "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: tc.targetStr}), stmt, nil)
+				_, err := executor.Execute(ctx, nil, "TestExecute", econtext.NewSafeSession(&vtgatepb.Session{TargetString: tc.targetStr}), stmt, nil)
 				assert.NoError(t, err)
 
 				utils.MustMatch(t, tc.wantCnts, cnts{
@@ -2289,7 +2301,7 @@ func TestExecutorVExplain(t *testing.T) {
 
 	result, err = executorExec(ctx, executor, session, "vexplain plan select 42", bindVars)
 	require.NoError(t, err)
-	expected := `[[VARCHAR("{\n\t\"OperatorType\": \"Projection\",\n\t\"Expressions\": [\n\t\t\"42 as 42\"\n\t],\n\t\"Inputs\": [\n\t\t{\n\t\t\t\"OperatorType\": \"SingleRow\"\n\t\t}\n\t]\n}")]]`
+	expected := `[[VARCHAR("{\n\t\"OperatorType\": \"Projection\",\n\t\"Expressions\": [\n\t\t\":vtg1 as :vtg1 /* INT64 */\"\n\t],\n\t\"Inputs\": [\n\t\t{\n\t\t\t\"OperatorType\": \"SingleRow\"\n\t\t}\n\t]\n}")]]`
 	require.Equal(t, expected, fmt.Sprintf("%v", result.Rows))
 }
 
@@ -2346,9 +2358,9 @@ func TestExecutorOtherAdmin(t *testing.T) {
 			sbc2.ExecCount.Store(0)
 			sbclookup.ExecCount.Store(0)
 
-			_, err := executor.Execute(context.Background(), nil, "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: tc.targetStr}), stmt, nil)
+			_, err := executor.Execute(context.Background(), nil, "TestExecute", econtext.NewSafeSession(&vtgatepb.Session{TargetString: tc.targetStr}), stmt, nil)
 			if tc.hasNoKeyspaceErr {
-				assert.Error(t, err, errNoKeyspace)
+				assert.Error(t, err, econtext.ErrNoKeyspace.Error())
 			} else if tc.hasDestinationShardErr {
 				assert.Errorf(t, err, "Destination can only be a single shard for statement: %s, got: DestinationExactKeyRange(-)", stmt)
 			} else {
@@ -2373,7 +2385,7 @@ func TestExecutorSavepointInTx(t *testing.T) {
 	logChan := executor.queryLogger.Subscribe("TestExecutorSavepoint")
 	defer executor.queryLogger.Unsubscribe(logChan)
 
-	session := NewSafeSession(&vtgatepb.Session{Autocommit: false, TargetString: "@primary"})
+	session := econtext.NewSafeSession(&vtgatepb.Session{Autocommit: false, TargetString: "@primary"})
 	_, err := exec(executor, session, "savepoint a")
 	require.NoError(t, err)
 	_, err = exec(executor, session, "rollback to a")
@@ -2456,7 +2468,7 @@ func TestExecutorSavepointInTxWithReservedConn(t *testing.T) {
 	logChan := executor.queryLogger.Subscribe("TestExecutorSavepoint")
 	defer executor.queryLogger.Unsubscribe(logChan)
 
-	session := NewSafeSession(&vtgatepb.Session{Autocommit: true, TargetString: "TestExecutor", EnableSystemSettings: true})
+	session := econtext.NewSafeSession(&vtgatepb.Session{Autocommit: true, TargetString: "TestExecutor", EnableSystemSettings: true})
 	sbc1.SetResults([]*sqltypes.Result{
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"), "a|"),
 	})
@@ -2523,7 +2535,7 @@ func TestExecutorSavepointWithoutTx(t *testing.T) {
 	logChan := executor.queryLogger.Subscribe("TestExecutorSavepoint")
 	defer executor.queryLogger.Unsubscribe(logChan)
 
-	session := NewSafeSession(&vtgatepb.Session{Autocommit: true, TargetString: "@primary", InTransaction: false})
+	session := econtext.NewSafeSession(&vtgatepb.Session{Autocommit: true, TargetString: "@primary", InTransaction: false})
 	_, err := exec(executor, session, "savepoint a")
 	require.NoError(t, err)
 	_, err = exec(executor, session, "rollback to a")
@@ -2608,9 +2620,9 @@ func TestExecutorCallProc(t *testing.T) {
 			sbc2.ExecCount.Store(0)
 			sbcUnsharded.ExecCount.Store(0)
 
-			_, err := executor.Execute(context.Background(), nil, "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: tc.targetStr}), "CALL proc()", nil)
+			_, err := executor.Execute(context.Background(), nil, "TestExecute", econtext.NewSafeSession(&vtgatepb.Session{TargetString: tc.targetStr}), "CALL proc()", nil)
 			if tc.hasNoKeyspaceErr {
-				assert.EqualError(t, err, errNoKeyspace.Error())
+				assert.EqualError(t, err, econtext.ErrNoKeyspace.Error())
 			} else if tc.unshardedOnlyErr {
 				require.EqualError(t, err, "CALL is not supported for sharded keyspace")
 			} else {
@@ -2630,9 +2642,9 @@ func TestExecutorTempTable(t *testing.T) {
 	executor, _, _, sbcUnsharded, ctx := createExecutorEnv(t)
 
 	initialWarningsCount := warnings.Counts()["WarnUnshardedOnly"]
-	executor.warnShardedOnly = true
+	executor.vConfig.WarnShardedOnly = true
 	creatQuery := "create temporary table temp_t(id bigint primary key)"
-	session := NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded})
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded})
 	_, err := executor.Execute(ctx, nil, "TestExecutorTempTable", session, creatQuery, nil)
 	require.NoError(t, err)
 	assert.EqualValues(t, 1, sbcUnsharded.ExecCount.Load())
@@ -2651,7 +2663,7 @@ func TestExecutorShowVitessMigrations(t *testing.T) {
 	executor, sbc1, sbc2, _, ctx := createExecutorEnv(t)
 
 	showQuery := "show vitess_migrations"
-	session := NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
 	_, err := executor.Execute(ctx, nil, "", session, showQuery, nil)
 	require.NoError(t, err)
 	assert.Contains(t, sbc1.StringQueries(), "show vitess_migrations")
@@ -2662,7 +2674,7 @@ func TestExecutorDescHash(t *testing.T) {
 	executor, _, _, _, ctx := createExecutorEnv(t)
 
 	showQuery := "desc hash_index"
-	session := NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
 	_, err := executor.Execute(ctx, nil, "", session, showQuery, nil)
 	require.NoError(t, err)
 }
@@ -2670,7 +2682,7 @@ func TestExecutorDescHash(t *testing.T) {
 func TestExecutorVExplainQueries(t *testing.T) {
 	executor, _, _, sbclookup, ctx := createExecutorEnv(t)
 
-	session := NewAutocommitSession(&vtgatepb.Session{})
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{})
 
 	sbclookup.SetResults([]*sqltypes.Result{
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("name|user_id", "varchar|int64"), "apa|1", "apa|2"),
@@ -2683,7 +2695,7 @@ func TestExecutorVExplainQueries(t *testing.T) {
 
 	// Test the streaming side as well
 	var results []sqltypes.Row
-	session = NewAutocommitSession(&vtgatepb.Session{})
+	session = econtext.NewAutocommitSession(&vtgatepb.Session{})
 	err = executor.StreamExecute(ctx, nil, "TestExecutorVExplainQueries", session, "vexplain queries select * from user where name = 'apa'", nil, func(result *sqltypes.Result) error {
 		results = append(results, result.Rows...)
 		return nil
@@ -2696,7 +2708,7 @@ func TestExecutorVExplainQueries(t *testing.T) {
 func TestExecutorStartTxnStmt(t *testing.T) {
 	executor, _, _, _, ctx := createExecutorEnv(t)
 
-	session := NewAutocommitSession(&vtgatepb.Session{})
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{})
 
 	tcases := []struct {
 		beginSQL        string
@@ -2743,7 +2755,7 @@ func TestExecutorPrepareExecute(t *testing.T) {
 	executor, _, _, _, _ := createExecutorEnv(t)
 
 	executor.normalize = true
-	session := NewAutocommitSession(&vtgatepb.Session{})
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{})
 
 	// prepare statement.
 	_, err := executor.Execute(context.Background(), nil, "TestExecutorPrepareExecute", session, "prepare prep_user from 'select * from user where id = ?'", nil)
@@ -2779,6 +2791,77 @@ func TestExecutorPrepareExecute(t *testing.T) {
 	require.Error(t, err)
 }
 
+// TestExecutorSettingsInTwoPC tests that settings are supported for multi-shard atomic commit.
+func TestExecutorSettingsInTwoPC(t *testing.T) {
+	executor, sbc1, sbc2, _, ctx := createExecutorEnv(t)
+	tcases := []struct {
+		sqls            []string
+		testRes         []*sqltypes.Result
+		expectedQueries [][]string
+	}{
+		{
+			sqls: []string{
+				`set time_zone = "+08:00"`,
+				`insert into user_extra(user_id) values (1)`,
+				`insert into user_extra(user_id) values (2)`,
+				`insert into user_extra(user_id) values (3)`,
+			},
+			testRes: []*sqltypes.Result{
+				sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "varchar"),
+					"+08:00"),
+			},
+			expectedQueries: [][]string{
+				{
+					"select '+08:00' from dual where @@time_zone != '+08:00'",
+					"set @@time_zone = '+08:00'",
+					"set @@time_zone = '+08:00'",
+					"insert into user_extra(user_id) values (1)",
+					"insert into user_extra(user_id) values (2)",
+				},
+				{
+					"set @@time_zone = '+08:00'",
+					"insert into user_extra(user_id) values (3)",
+				},
+			},
+		},
+	}
+
+	for _, tcase := range tcases {
+		t.Run(fmt.Sprintf("%v", tcase.sqls), func(t *testing.T) {
+			sbc1.SetResults(tcase.testRes)
+			sbc2.SetResults(tcase.testRes)
+
+			// create a new session
+			session := econtext.NewSafeSession(&vtgatepb.Session{
+				TargetString:         KsTestSharded,
+				TransactionMode:      vtgatepb.TransactionMode_TWOPC,
+				EnableSystemSettings: true,
+			})
+
+			// start transaction
+			_, err := executor.Execute(ctx, nil, "TestExecutorSettingsInTwoPC", session, "begin", nil)
+			require.NoError(t, err)
+
+			// execute queries
+			for _, sql := range tcase.sqls {
+				_, err = executor.Execute(ctx, nil, "TestExecutorSettingsInTwoPC", session, sql, nil)
+				require.NoError(t, err)
+			}
+
+			// commit 2pc
+			_, err = executor.Execute(ctx, nil, "TestExecutorSettingsInTwoPC", session, "commit", nil)
+			require.NoError(t, err)
+
+			queriesRecvd, err := sbc1.GetFinalQueries()
+			require.NoError(t, err)
+			assert.EqualValues(t, tcase.expectedQueries[0], queriesRecvd)
+			queriesRecvd, err = sbc2.GetFinalQueries()
+			require.NoError(t, err)
+			assert.EqualValues(t, tcase.expectedQueries[1], queriesRecvd)
+		})
+	}
+}
+
 func TestExecutorTruncateErrors(t *testing.T) {
 	executor, _, _, _, ctx := createExecutorEnv(t)
 
@@ -2786,7 +2869,7 @@ func TestExecutorTruncateErrors(t *testing.T) {
 	truncateErrorLen = 32
 	defer func() { truncateErrorLen = save }()
 
-	session := NewSafeSession(&vtgatepb.Session{})
+	session := econtext.NewSafeSession(&vtgatepb.Session{})
 	fn := func(r *sqltypes.Result) error {
 		return nil
 	}
@@ -2846,7 +2929,7 @@ func TestExecutorFlushStmt(t *testing.T) {
 
 	for _, tc := range tcs {
 		t.Run(tc.query+tc.targetStr, func(t *testing.T) {
-			_, err := executor.Execute(context.Background(), nil, "TestExecutorFlushStmt", NewSafeSession(&vtgatepb.Session{TargetString: tc.targetStr}), tc.query, nil)
+			_, err := executor.Execute(context.Background(), nil, "TestExecutorFlushStmt", econtext.NewSafeSession(&vtgatepb.Session{TargetString: tc.targetStr}), tc.query, nil)
 			if tc.expectedErr == "" {
 				require.NoError(t, err)
 			} else {
@@ -2893,7 +2976,7 @@ func TestExecutorKillStmt(t *testing.T) {
 		allowKillStmt = !tc.disallow
 		t.Run("execute:"+tc.query+tc.errStr, func(t *testing.T) {
 			mysqlCtx := &fakeMysqlConnection{ErrMsg: tc.errStr}
-			_, err := executor.Execute(context.Background(), mysqlCtx, "TestExecutorKillStmt", NewAutocommitSession(&vtgatepb.Session{}), tc.query, nil)
+			_, err := executor.Execute(context.Background(), mysqlCtx, "TestExecutorKillStmt", econtext.NewAutocommitSession(&vtgatepb.Session{}), tc.query, nil)
 			if tc.errStr != "" {
 				require.ErrorContains(t, err, tc.errStr)
 			} else {
@@ -2903,7 +2986,7 @@ func TestExecutorKillStmt(t *testing.T) {
 		})
 		t.Run("stream:"+tc.query+tc.errStr, func(t *testing.T) {
 			mysqlCtx := &fakeMysqlConnection{ErrMsg: tc.errStr}
-			err := executor.StreamExecute(context.Background(), mysqlCtx, "TestExecutorKillStmt", NewAutocommitSession(&vtgatepb.Session{}), tc.query, nil, func(result *sqltypes.Result) error {
+			err := executor.StreamExecute(context.Background(), mysqlCtx, "TestExecutorKillStmt", econtext.NewAutocommitSession(&vtgatepb.Session{}), tc.query, nil, func(result *sqltypes.Result) error {
 				return nil
 			})
 			if tc.errStr != "" {
@@ -2939,7 +3022,7 @@ func (f *fakeMysqlConnection) KillConnection(ctx context.Context, connID uint32)
 
 var _ vtgateservice.MySQLConnection = (*fakeMysqlConnection)(nil)
 
-func exec(executor *Executor, session *SafeSession, sql string) (*sqltypes.Result, error) {
+func exec(executor *Executor, session *econtext.SafeSession, sql string) (*sqltypes.Result, error) {
 	return executor.Execute(context.Background(), nil, "TestExecute", session, sql, nil)
 }
 

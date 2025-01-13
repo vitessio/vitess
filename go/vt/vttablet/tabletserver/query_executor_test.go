@@ -87,7 +87,8 @@ func TestQueryExecutorPlans(t *testing.T) {
 		// If empty, then we should expect the same as logWant.
 		inTxWant string
 		// errorWant is the error we expect to get, if any, and should be nil if no error should be returned
-		errorWant error
+		errorWant   string
+		onlyInTxErr bool
 		// TxThrottler allows the test case to override the transaction throttler
 		txThrottler txthrottler.TxThrottler
 	}{{
@@ -196,9 +197,11 @@ func TestQueryExecutorPlans(t *testing.T) {
 			query:  "alter table test_table add column zipcode int",
 			result: dmlResult,
 		}},
-		resultWant: dmlResult,
-		planWant:   "DDL",
-		logWant:    "alter table test_table add column zipcode int",
+		resultWant:  dmlResult,
+		planWant:    "DDL",
+		logWant:     "alter table test_table add column zipcode int",
+		onlyInTxErr: true,
+		errorWant:   "DDL statement executed inside a transaction",
 	}, {
 		input: "savepoint a",
 		dbResponses: []dbResponse{{
@@ -215,20 +218,24 @@ func TestQueryExecutorPlans(t *testing.T) {
 			query:  "alter table `user` add key a (id)",
 			result: emptyResult,
 		}},
-		resultWant: emptyResult,
-		planWant:   "DDL",
-		logWant:    "alter table `user` add key a (id)",
-		inTxWant:   "alter table `user` add key a (id)",
+		resultWant:  emptyResult,
+		planWant:    "DDL",
+		logWant:     "alter table `user` add key a (id)",
+		inTxWant:    "alter table `user` add key a (id)",
+		onlyInTxErr: true,
+		errorWant:   "DDL statement executed inside a transaction",
 	}, {
 		input: "create index a on user(id1 + id2)",
 		dbResponses: []dbResponse{{
 			query:  "create index a on user(id1 + id2)",
 			result: emptyResult,
 		}},
-		resultWant: emptyResult,
-		planWant:   "DDL",
-		logWant:    "create index a on user(id1 + id2)",
-		inTxWant:   "create index a on user(id1 + id2)",
+		resultWant:  emptyResult,
+		planWant:    "DDL",
+		logWant:     "create index a on user(id1 + id2)",
+		inTxWant:    "create index a on user(id1 + id2)",
+		onlyInTxErr: true,
+		errorWant:   "DDL statement executed inside a transaction",
 	}, {
 		input: "ROLLBACK work to SAVEPOINT a",
 		dbResponses: []dbResponse{{
@@ -282,7 +289,7 @@ func TestQueryExecutorPlans(t *testing.T) {
 			query:  "update test_table set a = 1 limit 10001",
 			result: dmlResult,
 		}},
-		errorWant:   errTxThrottled,
+		errorWant:   "Transaction throttled",
 		txThrottler: &mockTxThrottler{true},
 	}, {
 		input:       "update test_table set a=1",
@@ -291,7 +298,7 @@ func TestQueryExecutorPlans(t *testing.T) {
 			query:  "update test_table set a = 1 limit 10001",
 			result: dmlResult,
 		}},
-		errorWant:   errTxThrottled,
+		errorWant:   "Transaction throttled",
 		txThrottler: &mockTxThrottler{true},
 	},
 	}
@@ -315,13 +322,13 @@ func TestQueryExecutorPlans(t *testing.T) {
 			// Test outside a transaction.
 			qre := newTestQueryExecutor(ctx, tsv, tcase.input, 0)
 			got, err := qre.Execute()
-			if tcase.errorWant == nil {
+			if tcase.errorWant != "" && !tcase.onlyInTxErr {
+				assert.EqualError(t, err, tcase.errorWant)
+			} else {
 				require.NoError(t, err, tcase.input)
 				assert.Equal(t, tcase.resultWant, got, tcase.input)
 				assert.Equal(t, tcase.planWant, qre.logStats.PlanType, tcase.input)
 				assert.Equal(t, tcase.logWant, qre.logStats.RewrittenSQL(), tcase.input)
-			} else {
-				assert.True(t, vterrors.Equals(err, tcase.errorWant))
 			}
 			// Wait for the existing query to be processed by the cache
 			time.Sleep(100 * time.Millisecond)
@@ -329,25 +336,29 @@ func TestQueryExecutorPlans(t *testing.T) {
 			// Test inside a transaction.
 			target := tsv.sm.Target()
 			state, err := tsv.Begin(ctx, target, nil)
-			if tcase.errorWant == nil {
-				require.NoError(t, err)
-				require.NotNil(t, state.TabletAlias, "alias should not be nil")
-				assert.Equal(t, tsv.alias, state.TabletAlias, "Wrong alias returned by Begin")
-				defer tsv.Commit(ctx, target, state.TransactionID)
-
-				qre = newTestQueryExecutor(ctx, tsv, tcase.input, state.TransactionID)
-				got, err = qre.Execute()
-				require.NoError(t, err, tcase.input)
-				assert.Equal(t, tcase.resultWant, got, "in tx: %v", tcase.input)
-				assert.Equal(t, tcase.planWant, qre.logStats.PlanType, "in tx: %v", tcase.input)
-				want := tcase.logWant
-				if tcase.inTxWant != "" {
-					want = tcase.inTxWant
-				}
-				assert.Equal(t, want, qre.logStats.RewrittenSQL(), "in tx: %v", tcase.input)
-			} else {
-				assert.True(t, vterrors.Equals(err, tcase.errorWant))
+			if tcase.errorWant != "" && !tcase.onlyInTxErr {
+				require.EqualError(t, err, tcase.errorWant)
+				return
 			}
+			require.NoError(t, err)
+			require.NotNil(t, state.TabletAlias, "alias should not be nil")
+			assert.Equal(t, tsv.alias, state.TabletAlias, "Wrong alias returned by Begin")
+			defer tsv.Commit(ctx, target, state.TransactionID)
+
+			qre = newTestQueryExecutor(ctx, tsv, tcase.input, state.TransactionID)
+			got, err = qre.Execute()
+			if tcase.onlyInTxErr {
+				require.EqualError(t, err, tcase.errorWant)
+				return
+			}
+			require.NoError(t, err, tcase.input)
+			assert.Equal(t, tcase.resultWant, got, "in tx: %v", tcase.input)
+			assert.Equal(t, tcase.planWant, qre.logStats.PlanType, "in tx: %v", tcase.input)
+			want := tcase.logWant
+			if tcase.inTxWant != "" {
+				want = tcase.inTxWant
+			}
+			assert.Equal(t, want, qre.logStats.RewrittenSQL(), "in tx: %v", tcase.input)
 		})
 	}
 }
@@ -1503,20 +1514,17 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 	} else {
 		cfg.StrictTableACL = false
 	}
-	if flags&noTwopc > 0 {
-		cfg.TwoPCEnable = false
-	} else {
-		cfg.TwoPCEnable = true
-	}
 	if flags&disableOnlineDDL > 0 {
 		cfg.EnableOnlineDDL = false
 	} else {
 		cfg.EnableOnlineDDL = true
 	}
-	if flags&shortTwopcAge > 0 {
-		cfg.TwoPCAbandonAge = 0.5
+	if flags&noTwopc > 0 {
+		cfg.TwoPCAbandonAge = 0
+	} else if flags&shortTwopcAge > 0 {
+		cfg.TwoPCAbandonAge = 500 * time.Millisecond
 	} else {
-		cfg.TwoPCAbandonAge = 10
+		cfg.TwoPCAbandonAge = 10 * time.Second
 	}
 	if flags&smallResultSize > 0 {
 		cfg.Oltp.MaxRows = 2

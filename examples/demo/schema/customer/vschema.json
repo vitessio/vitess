@@ -1,8 +1,8 @@
 {
   "sharded": true,
   "vindexes": {
-    "hash": {
-      "type": "hash"
+    "xxhash": {
+      "type": "xxhash"
     },
     "corder_keyspace_idx": {
       "type": "consistent_lookup_unique",
@@ -31,49 +31,63 @@
   },
   "tables": {
     "customer": {
-      "column_vindexes": [{
-        "column": "customer_id",
-        "name": "hash"
-      }],
+      "column_vindexes": [
+        {
+          "column": "customer_id",
+          "name": "xxhash"
+        }
+      ],
       "auto_increment": {
         "column": "customer_id",
         "sequence": "product.customer_seq"
       }
     },
     "corder": {
-      "column_vindexes": [{
-        "column": "customer_id",
-        "name": "hash"
-      }, {
-        "column": "corder_id",
-        "name": "corder_keyspace_idx"
-      }, {
-        "columns": ["oname", "corder_id"],
-        "name": "oname_keyspace_idx"
-      }],
+      "column_vindexes": [
+        {
+          "column": "customer_id",
+          "name": "xxhash"
+        },
+        {
+          "column": "corder_id",
+          "name": "corder_keyspace_idx"
+        },
+        {
+          "columns": [
+            "oname",
+            "corder_id"
+          ],
+          "name": "oname_keyspace_idx"
+        }
+      ],
       "auto_increment": {
         "column": "corder_id",
         "sequence": "product.corder_seq"
       }
     },
     "corder_event": {
-      "column_vindexes": [{
-        "column": "corder_id",
-        "name": "corder_keyspace_idx"
-      }, {
-        "column": "keyspace_id",
-        "name": "binary"
-      }],
+      "column_vindexes": [
+        {
+          "column": "corder_id",
+          "name": "corder_keyspace_idx"
+        },
+        {
+          "column": "keyspace_id",
+          "name": "binary"
+        }
+      ],
       "auto_increment": {
         "column": "corder_event_id",
         "sequence": "product.corder_event_seq"
       }
     },
     "oname_keyspace_idx": {
-      "column_vindexes": [{
-        "column": "oname",
-        "name": "unicode_loose_md5"
-      }]
+      "column_vindexes": [
+        {
+          "column": "oname",
+          "name": "unicode_loose_md5"
+        }
+      ]
     }
   }
 }

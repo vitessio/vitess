@@ -29,7 +29,6 @@ import (
 
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
 
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
@@ -44,7 +43,6 @@ var (
 
 // TabletCommands tests the basic tablet commands
 func TestTabletCommands(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 
 	conn, err := mysql.Connect(ctx, &primaryTabletParams)
@@ -75,6 +73,24 @@ func TestTabletCommands(t *testing.T) {
 		require.Nil(t, err)
 		assertExecuteMultiFetch(t, result)
 	})
+
+	t.Run("GetUnresolvedTransactions", func(t *testing.T) {
+		_, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("DistributedTransaction", "unresolved-list",
+			"--keyspace", keyspaceName)
+		require.NoError(t, err)
+	})
+	t.Run("GetUnresolvedTransactions with age threshold", func(t *testing.T) {
+		_, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("DistributedTransaction", "unresolved-list",
+			"--keyspace", keyspaceName,
+			"--abandon-age", "32")
+		require.NoError(t, err)
+	})
+	t.Run("ConcludeTransaction", func(t *testing.T) {
+		output, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("DistributedTransaction", "conclude", "--dtid", "ks:0:1234")
+		assert.NoError(t, err)
+		assert.Contains(t, output, "Successfully concluded the distributed transaction")
+	})
+
 	// check Ping / RefreshState / RefreshStateByShard
 	err = clusterInstance.VtctldClientProcess.ExecuteCommand("PingTablet", primaryTablet.Alias)
 	require.Nil(t, err, "error should be Nil")
@@ -167,7 +183,6 @@ func assertExecuteMultiFetch(t *testing.T, qr string) {
 
 func TestHook(t *testing.T) {
 	// test a regular program works
-	defer cluster.PanicHandler(t)
 	runHookAndAssert(t, []string{
 		"ExecuteHook", primaryTablet.Alias, "test.sh", "--", "--flag1", "--param1=hello"}, 0, false, "")
 
@@ -208,7 +223,6 @@ func runHookAndAssert(t *testing.T, params []string, expectedStatus int64, expec
 
 func TestShardReplicationFix(t *testing.T) {
 	// make sure the replica is in the replication graph, 2 nodes: 1 primary, 1 replica
-	defer cluster.PanicHandler(t)
 	result, err := clusterInstance.VtctldClientProcess.GetShardReplication(keyspaceName, shardName, cell)
 	require.Nil(t, err, "error should be Nil")
 	require.NotNil(t, result[cell], "result should not be Nil")
@@ -232,7 +246,6 @@ func TestShardReplicationFix(t *testing.T) {
 }
 
 func TestGetSchema(t *testing.T) {
-	defer cluster.PanicHandler(t)
 
 	res, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("GetSchema",
 		"--include-views", "--tables", "t1,v1",

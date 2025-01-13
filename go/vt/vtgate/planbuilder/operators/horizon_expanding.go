@@ -44,17 +44,11 @@ func expandUnionHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, unio
 	qp := horizon.getQP(ctx)
 
 	if len(qp.OrderExprs) > 0 {
-		op = &Ordering{
-			Source: op,
-			Order:  qp.OrderExprs,
-		}
+		op = newOrdering(op, qp.OrderExprs)
 	}
 
 	if union.Limit != nil {
-		op = &Limit{
-			Source: op,
-			AST:    union.Limit,
-		}
+		op = newLimit(op, union.Limit, false)
 	}
 
 	if horizon.TableId != nil {
@@ -84,6 +78,12 @@ func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel
 		for _, order := range horizon.Query.GetOrderBy() {
 			qp.addDerivedColumn(ctx, order.Expr)
 		}
+		sel, isSel := horizon.Query.(*sqlparser.Select)
+		if isSel && sel.Having != nil {
+			for _, pred := range sqlparser.SplitAndExpression(nil, sel.Having.Expr) {
+				qp.addDerivedColumn(ctx, pred)
+			}
+		}
 	}
 
 	op := createProjectionFromSelect(ctx, horizon)
@@ -94,11 +94,7 @@ func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel
 	}
 
 	if qp.NeedsDistinct() {
-		op = &Distinct{
-			Required: true,
-			Source:   op,
-			QP:       qp,
-		}
+		op = newDistinct(op, qp, true)
 		extracted = append(extracted, "Distinct")
 	}
 
@@ -113,11 +109,7 @@ func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel
 	}
 
 	if sel.Limit != nil {
-		op = &Limit{
-			Source: op,
-			AST:    sel.Limit,
-			Top:    true,
-		}
+		op = newLimit(op, sel.Limit, true)
 		extracted = append(extracted, "Limit")
 	}
 
@@ -144,10 +136,7 @@ func expandOrderBy(ctx *plancontext.PlanningContext, op Operator, qp *QueryProje
 		// If the operator is not a projection, we cannot handle subqueries with aggregation if we are unable to push everything into a single route.
 		if !ok {
 			ctx.SemTable.NotSingleRouteErr = vterrors.VT12001("subquery with aggregation in order by")
-			return &Ordering{
-				Source: op,
-				Order:  qp.OrderExprs,
-			}
+			return newOrdering(op, qp.OrderExprs)
 		} else {
 			// Add the new subquery expression to the projection
 			proj.addSubqueryExpr(ctx, aeWrap(newExpr), newExpr, subqs...)
@@ -169,10 +158,7 @@ func expandOrderBy(ctx *plancontext.PlanningContext, op Operator, qp *QueryProje
 	}
 
 	// Return the updated operator with the new order by expressions
-	return &Ordering{
-		Source: op,
-		Order:  newOrder,
-	}
+	return newOrdering(op, newOrder)
 }
 
 // exposeOrderingColumn will expose the ordering column to the outer query
@@ -220,13 +206,13 @@ func createProjectionWithAggr(ctx *plancontext.PlanningContext, qp *QueryProject
 	aggregations, complexAggr := qp.AggregationExpressions(ctx, true)
 	src := horizon.Source
 	aggrOp := &Aggregator{
-		Source:       src,
-		Original:     true,
-		QP:           qp,
-		Grouping:     qp.GetGrouping(),
-		WithRollup:   qp.WithRollup,
-		Aggregations: aggregations,
-		DT:           dt,
+		unaryOperator: newUnaryOp(src),
+		Original:      true,
+		QP:            qp,
+		Grouping:      qp.GetGrouping(),
+		WithRollup:    qp.WithRollup,
+		Aggregations:  aggregations,
+		DT:            dt,
 	}
 
 	// Go through all aggregations and check for any subquery.
@@ -372,7 +358,7 @@ func newStarProjection(src Operator, qp *QueryProjection) *Projection {
 	}
 
 	return &Projection{
-		Source:  src,
-		Columns: StarProjections(cols),
+		unaryOperator: newUnaryOp(src),
+		Columns:       StarProjections(cols),
 	}
 }

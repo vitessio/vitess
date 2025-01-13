@@ -417,6 +417,7 @@ type (
 
 	// AlterDatabase represents a ALTER database statement.
 	AlterDatabase struct {
+		Comments            *ParsedComments
 		DBName              IdentifierCS
 		UpdateDataDirectory bool
 		AlterOptions        []DatabaseOption
@@ -490,11 +491,12 @@ type (
 
 	// AlterMigration represents a ALTER VITESS_MIGRATION statement
 	AlterMigration struct {
-		Type   AlterMigrationType
-		UUID   string
-		Expire string
-		Ratio  *Literal
-		Shards string
+		Type      AlterMigrationType
+		UUID      string
+		Expire    string
+		Ratio     *Literal
+		Threshold string
+		Shards    string
 	}
 
 	// AlterTable represents a ALTER TABLE statement.

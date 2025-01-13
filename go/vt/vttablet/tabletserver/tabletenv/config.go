@@ -143,6 +143,9 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.DurationVar(&currentConfig.OltpReadPool.Timeout, "queryserver-config-query-pool-timeout", defaultConfig.OltpReadPool.Timeout, "query server query pool timeout, it is how long vttablet waits for a connection from the query pool. If set to 0 (default) then the overall query timeout is used instead.")
 	fs.DurationVar(&currentConfig.OlapReadPool.Timeout, "queryserver-config-stream-pool-timeout", defaultConfig.OlapReadPool.Timeout, "query server stream pool timeout, it is how long vttablet waits for a connection from the stream pool. If set to 0 (default) then there is no timeout.")
 	fs.DurationVar(&currentConfig.TxPool.Timeout, "queryserver-config-txpool-timeout", defaultConfig.TxPool.Timeout, "query server transaction pool timeout, it is how long vttablet waits if tx pool is full")
+	fs.IntVar(&currentConfig.OltpReadPool.MaxIdleCount, "queryserver-config-query-pool-max-idle-count", defaultConfig.OltpReadPool.MaxIdleCount, "query server query pool - maximum number of idle connections to retain in the pool. Use this to balance between faster response times during traffic bursts and resource efficiency during low-traffic periods.")
+	fs.IntVar(&currentConfig.OlapReadPool.MaxIdleCount, "queryserver-config-stream-pool-max-idle-count", defaultConfig.OlapReadPool.MaxIdleCount, "query server stream pool - maximum number of idle connections to retain in the pool. Use this to balance between faster response times during traffic bursts and resource efficiency during low-traffic periods.")
+	fs.IntVar(&currentConfig.TxPool.MaxIdleCount, "queryserver-config-txpool-max-idle-count", defaultConfig.TxPool.MaxIdleCount, "query server transaction pool - maximum number of idle connections to retain in the pool. Use this to balance between faster response times during traffic bursts and resource efficiency during low-traffic periods.")
 	fs.DurationVar(&currentConfig.OltpReadPool.IdleTimeout, "queryserver-config-idle-timeout", defaultConfig.OltpReadPool.IdleTimeout, "query server idle timeout, vttablet manages various mysql connection pools. This config means if a connection has not been used in given idle timeout, this connection will be removed from pool. This effectively manages number of connection objects and optimize the pool performance.")
 	fs.DurationVar(&currentConfig.OltpReadPool.MaxLifetime, "queryserver-config-pool-conn-max-lifetime", defaultConfig.OltpReadPool.MaxLifetime, "query server connection max lifetime, vttablet manages various mysql connection pools. This config means if a connection has lived at least this long, it connection will be removed from pool upon the next time it is returned to the pool.")
 
@@ -156,8 +159,12 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&currentConfig.WatchReplication, "watch_replication_stream", false, "When enabled, vttablet will stream the MySQL replication stream from the local server, and use it to update schema when it sees a DDL.")
 	fs.BoolVar(&currentConfig.TrackSchemaVersions, "track_schema_versions", false, "When enabled, vttablet will store versions of schemas at each position that a DDL is applied and allow retrieval of the schema corresponding to a position")
 	fs.Int64Var(&currentConfig.SchemaVersionMaxAgeSeconds, "schema-version-max-age-seconds", 0, "max age of schema version records to kept in memory by the vreplication historian")
-	fs.BoolVar(&currentConfig.TwoPCEnable, "twopc_enable", defaultConfig.TwoPCEnable, "if the flag is on, 2pc is enabled. Other 2pc flags must be supplied.")
-	SecondsVar(fs, &currentConfig.TwoPCAbandonAge, "twopc_abandon_age", defaultConfig.TwoPCAbandonAge, "time in seconds. Any unresolved transaction older than this time will be sent to the coordinator to be resolved.")
+
+	_ = fs.Bool("twopc_enable", true, "TwoPC is enabled")
+	_ = fs.MarkDeprecated("twopc_enable", "TwoPC is always enabled, the transaction abandon age can be configured")
+	flagutil.FloatDuration(fs, &currentConfig.TwoPCAbandonAge, "twopc_abandon_age", defaultConfig.TwoPCAbandonAge,
+		"Any unresolved transaction older than this time will be sent to the coordinator to be resolved. NOTE: Providing time as seconds (float64) is deprecated. Use time.Duration format (e.g., '1s', '2m', '1h').")
+
 	// Tx throttler config
 	flagutil.DualFormatBoolVar(fs, &currentConfig.EnableTxThrottler, "enable_tx_throttler", defaultConfig.EnableTxThrottler, "If true replication-lag-based throttling on transactions will be enabled.")
 	flagutil.DualFormatVar(fs, currentConfig.TxThrottlerConfig, "tx_throttler_config", "The configuration of the transaction throttler as a text-formatted throttlerdata.Configuration protocol buffer message.")
@@ -331,12 +338,11 @@ type TabletConfig struct {
 
 	ExternalConnections map[string]*dbconfigs.DBConfigs `json:"externalConnections,omitempty"`
 
-	SanitizeLogMessages  bool    `json:"-"`
-	StrictTableACL       bool    `json:"-"`
-	EnableTableACLDryRun bool    `json:"-"`
-	TableACLExemptACL    string  `json:"-"`
-	TwoPCEnable          bool    `json:"-"`
-	TwoPCAbandonAge      Seconds `json:"-"`
+	SanitizeLogMessages  bool          `json:"-"`
+	StrictTableACL       bool          `json:"-"`
+	EnableTableACLDryRun bool          `json:"-"`
+	TableACLExemptACL    string        `json:"-"`
+	TwoPCAbandonAge      time.Duration `json:"-"`
 
 	EnableTxThrottler              bool                          `json:"-"`
 	TxThrottlerConfig              *TxThrottlerConfigFlag        `json:"-"`
@@ -421,6 +427,7 @@ type ConnPoolConfig struct {
 	Size               int           `json:"size,omitempty"`
 	Timeout            time.Duration `json:"timeoutSeconds,omitempty"`
 	IdleTimeout        time.Duration `json:"idleTimeoutSeconds,omitempty"`
+	MaxIdleCount       int           `json:"maxIdleCount,omitempty"`
 	MaxLifetime        time.Duration `json:"maxLifetimeSeconds,omitempty"`
 	PrefillParallelism int           `json:"prefillParallelism,omitempty"`
 }
@@ -430,9 +437,10 @@ func (cfg *ConnPoolConfig) MarshalJSON() ([]byte, error) {
 
 	tmp := struct {
 		Proxy
-		Timeout     string `json:"timeoutSeconds,omitempty"`
-		IdleTimeout string `json:"idleTimeoutSeconds,omitempty"`
-		MaxLifetime string `json:"maxLifetimeSeconds,omitempty"`
+		Timeout      string `json:"timeoutSeconds,omitempty"`
+		IdleTimeout  string `json:"idleTimeoutSeconds,omitempty"`
+		MaxIdleCount int    `json:"maxIdleCount,omitempty"`
+		MaxLifetime  string `json:"maxLifetimeSeconds,omitempty"`
 	}{
 		Proxy: Proxy(*cfg),
 	}
@@ -457,6 +465,7 @@ func (cfg *ConnPoolConfig) UnmarshalJSON(data []byte) (err error) {
 		Size               int    `json:"size,omitempty"`
 		Timeout            string `json:"timeoutSeconds,omitempty"`
 		IdleTimeout        string `json:"idleTimeoutSeconds,omitempty"`
+		MaxIdleCount       int    `json:"maxIdleCount,omitempty"`
 		MaxLifetime        string `json:"maxLifetimeSeconds,omitempty"`
 		PrefillParallelism int    `json:"prefillParallelism,omitempty"`
 	}
@@ -487,6 +496,7 @@ func (cfg *ConnPoolConfig) UnmarshalJSON(data []byte) (err error) {
 	}
 
 	cfg.Size = tmp.Size
+	cfg.MaxIdleCount = tmp.MaxIdleCount
 	cfg.PrefillParallelism = tmp.PrefillParallelism
 
 	return nil
@@ -1054,6 +1064,8 @@ var defaultConfig = TabletConfig{
 	},
 
 	EnablePerWorkloadTableMetrics: false,
+
+	TwoPCAbandonAge: 15 * time.Minute,
 }
 
 // defaultTxThrottlerConfig returns the default TxThrottlerConfigFlag object based on

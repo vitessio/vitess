@@ -18,26 +18,67 @@ package vschemaacl
 
 import (
 	"strings"
-	"sync"
 
 	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
 
-	"vitess.io/vitess/go/vt/servenv"
-
+	"vitess.io/vitess/go/viperutil"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/servenv"
 )
+
+type authorizedDDLUsers struct {
+	allowAll bool
+	acl      map[string]struct{}
+	source   string
+}
+
+func NewAuthorizedDDLUsers(users string) *authorizedDDLUsers {
+	acl := make(map[string]struct{})
+	allowAll := false
+
+	switch users {
+	case "":
+	case "%":
+		allowAll = true
+	default:
+		for _, user := range strings.Split(users, ",") {
+			user = strings.TrimSpace(user)
+			acl[user] = struct{}{}
+		}
+	}
+
+	return &authorizedDDLUsers{
+		allowAll: allowAll,
+		acl:      acl,
+		source:   users,
+	}
+}
+
+func (a *authorizedDDLUsers) String() string {
+	return a.source
+}
 
 var (
 	// AuthorizedDDLUsers specifies the users that can perform ddl operations
-	AuthorizedDDLUsers string
-
-	// ddlAllowAll is true if the special value of "*" was specified
-	allowAll bool
-
-	// ddlACL contains a set of allowed usernames
-	acl map[string]struct{}
-
-	initMu sync.Mutex
+	AuthorizedDDLUsers = viperutil.Configure(
+		"vschema_ddl_authorized_users",
+		viperutil.Options[*authorizedDDLUsers]{
+			FlagName: "vschema_ddl_authorized_users",
+			Default:  &authorizedDDLUsers{},
+			Dynamic:  true,
+			GetFunc: func(v *viper.Viper) func(key string) *authorizedDDLUsers {
+				return func(key string) *authorizedDDLUsers {
+					newVal := v.GetString(key)
+					curVal, ok := v.Get(key).(*authorizedDDLUsers)
+					if ok && newVal == curVal.source {
+						return curVal
+					}
+					return NewAuthorizedDDLUsers(newVal)
+				}
+			},
+		},
+	)
 )
 
 // RegisterSchemaACLFlags installs log flags on the given FlagSet.
@@ -46,7 +87,8 @@ var (
 // calls this function, or call this function directly before parsing
 // command-line arguments.
 func RegisterSchemaACLFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&AuthorizedDDLUsers, "vschema_ddl_authorized_users", AuthorizedDDLUsers, "List of users authorized to execute vschema ddl operations, or '%' to allow all users.")
+	fs.String("vschema_ddl_authorized_users", "", "List of users authorized to execute vschema ddl operations, or '%' to allow all users.")
+	viperutil.BindFlags(fs, AuthorizedDDLUsers)
 }
 
 func init() {
@@ -55,33 +97,14 @@ func init() {
 	}
 }
 
-// Init parses the users option and sets allowAll / acl accordingly
-func Init() {
-	initMu.Lock()
-	defer initMu.Unlock()
-	acl = make(map[string]struct{})
-	allowAll = false
-
-	if AuthorizedDDLUsers == "%" {
-		allowAll = true
-		return
-	} else if AuthorizedDDLUsers == "" {
-		return
-	}
-
-	for _, user := range strings.Split(AuthorizedDDLUsers, ",") {
-		user = strings.TrimSpace(user)
-		acl[user] = struct{}{}
-	}
-}
-
 // Authorized returns true if the given caller is allowed to execute vschema operations
 func Authorized(caller *querypb.VTGateCallerID) bool {
-	if allowAll {
+	users := AuthorizedDDLUsers.Get()
+	if users.allowAll {
 		return true
 	}
 
 	user := caller.GetUsername()
-	_, ok := acl[user]
+	_, ok := users.acl[user]
 	return ok
 }

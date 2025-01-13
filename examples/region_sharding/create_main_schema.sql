@@ -1,7 +1,7 @@
 CREATE TABLE IF NOT EXISTS customer (
   id int NOT NULL,
-  fullname varbinary(256),
-  nationalid varbinary(256),
-  country varbinary(256),
+  fullname varchar(256),
+  nationalid varchar(256),
+  country varchar(256),
   primary key(id)
   );

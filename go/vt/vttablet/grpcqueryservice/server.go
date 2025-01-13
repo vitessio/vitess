@@ -183,11 +183,8 @@ func (q *query) StartCommit(ctx context.Context, request *querypb.StartCommitReq
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	if err := q.server.StartCommit(ctx, request.Target, request.TransactionId, request.Dtid); err != nil {
-		return nil, vterrors.ToGRPC(err)
-	}
-
-	return &querypb.StartCommitResponse{}, nil
+	state, err := q.server.StartCommit(ctx, request.Target, request.TransactionId, request.Dtid)
+	return &querypb.StartCommitResponse{State: state}, vterrors.ToGRPC(err)
 }
 
 // SetRollback is part of the queryservice.QueryServer interface
@@ -240,7 +237,7 @@ func (q *query) UnresolvedTransactions(ctx context.Context, request *querypb.Unr
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	transactions, err := q.server.UnresolvedTransactions(ctx, request.Target)
+	transactions, err := q.server.UnresolvedTransactions(ctx, request.Target, request.AbandonAge)
 	if err != nil {
 		return nil, vterrors.ToGRPC(err)
 	}

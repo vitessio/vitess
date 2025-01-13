@@ -40,7 +40,6 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	defer cluster.PanicHandler(nil)
 	flag.Parse()
 	os.Exit(m.Run())
 }
@@ -87,7 +86,6 @@ func start(t *testing.T, vtParams mysql.ConnParams) (*mysql.Conn, func()) {
 	return vtConn, func() {
 		deleteAll()
 		vtConn.Close()
-		cluster.PanicHandler(t)
 	}
 }
 

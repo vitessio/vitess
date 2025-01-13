@@ -181,6 +181,10 @@ func (dc *MockDBClient) Rollback() error {
 func (dc *MockDBClient) Close() {
 }
 
+func (dc *MockDBClient) IsClosed() bool {
+	return false
+}
+
 // ExecuteFetch is part of the DBClient interface
 func (dc *MockDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Result, err error) {
 	// Serialize ExecuteFetch to enforce a strict order on shared dbClients.
@@ -210,7 +214,7 @@ func (dc *MockDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Re
 	result := dc.expect[dc.currentResult]
 	if result.re == nil {
 		if query != result.query {
-			msg := "DBClientMock: query: %s, want %s"
+			msg := "DBClientMock: query: \n%s, want \n%s"
 			if dc.Tag != "" {
 				msg = fmt.Sprintf("[%s] %s", dc.Tag, msg)
 			}
@@ -260,6 +264,15 @@ func (dc *MockDBClient) RemoveInvariant(query string) {
 	dc.expectMu.Lock()
 	defer dc.expectMu.Unlock()
 	delete(dc.invariants, query)
+}
+
+// RemoveInvariant can be used to customize the behavior of the mock client.
+func (dc *MockDBClient) RemoveInvariants(queries ...string) {
+	dc.expectMu.Lock()
+	defer dc.expectMu.Unlock()
+	for _, query := range queries {
+		delete(dc.invariants, query)
+	}
 }
 
 func (dc *MockDBClient) SupportsCapability(capability capabilities.FlavorCapability) (bool, error) {

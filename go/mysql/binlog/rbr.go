@@ -26,9 +26,10 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/sqltypes"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // ZeroTimestamp is the special value 0 for a timestamp.
@@ -130,7 +131,7 @@ func CellLength(data []byte, pos int, typ byte, metadata uint16) (int, error) {
 				uint32(data[pos+2])<<16|
 				uint32(data[pos+3])<<24), nil
 		default:
-			return 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "unsupported blob/geometry metadata value %v (data: %v pos: %v)", metadata, data, pos)
+			return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported blob/geometry metadata value %v (data: %v pos: %v)", metadata, data, pos)
 		}
 	case TypeString:
 		// This may do String, Enum, and Set. The type is in
@@ -151,7 +152,7 @@ func CellLength(data []byte, pos int, typ byte, metadata uint16) (int, error) {
 		return l + 1, nil
 
 	default:
-		return 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "unsupported type %v (data: %v pos: %v)", typ, data, pos)
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported type %v (data: %v pos: %v)", typ, data, pos)
 	}
 }
 
@@ -176,7 +177,7 @@ func printTimestamp(v uint32) *bytes.Buffer {
 // byte to determine general shared aspects of types and the querypb.Field to
 // determine other info specifically about its underlying column (SQL column
 // type, column length, charset, etc)
-func CellValue(data []byte, pos int, typ byte, metadata uint16, field *querypb.Field) (sqltypes.Value, int, error) {
+func CellValue(data []byte, pos int, typ byte, metadata uint16, field *querypb.Field, partialJSON bool) (sqltypes.Value, int, error) {
 	switch typ {
 	case TypeTiny:
 		if sqltypes.IsSigned(field.Type) {
@@ -542,7 +543,7 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, field *querypb.F
 		}
 
 		// now the full digits, 32 bits each, 9 digits
-		for i := 0; i < intg0; i++ {
+		for range intg0 {
 			val = binary.BigEndian.Uint32(d[pos : pos+4])
 			fmt.Fprintf(txt, "%09d", val)
 			pos += 4
@@ -564,7 +565,7 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, field *querypb.F
 		txt.WriteByte('.')
 
 		// now the full fractional digits
-		for i := 0; i < frac0; i++ {
+		for range frac0 {
 			val = binary.BigEndian.Uint32(d[pos : pos+4])
 			fmt.Fprintf(txt, "%09d", val)
 			pos += 4
@@ -644,7 +645,7 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, field *querypb.F
 			return sqltypes.MakeTrusted(querypb.Type_ENUM,
 				strconv.AppendUint(nil, uint64(val), 10)), 2, nil
 		default:
-			return sqltypes.NULL, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected enum size: %v", metadata&0xff)
+			return sqltypes.NULL, 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected enum size: %v", metadata&0xff)
 		}
 
 	case TypeSet:
@@ -672,14 +673,20 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, field *querypb.F
 				uint32(data[pos+2])<<16 |
 				uint32(data[pos+3])<<24)
 		default:
-			return sqltypes.NULL, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "unsupported blob metadata value %v (data: %v pos: %v)", metadata, data, pos)
+			return sqltypes.NULL, 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported blob metadata value %v (data: %v pos: %v)", metadata, data, pos)
 		}
 		pos += int(metadata)
 
 		// For JSON, we parse the data, and emit SQL.
 		if typ == TypeJSON {
-			var err error
 			jsonData := data[pos : pos+l]
+			if partialJSON {
+				val, err := ParseBinaryJSONDiff(jsonData)
+				if err != nil {
+					panic(err)
+				}
+				return val, l + int(metadata), nil
+			}
 			jsonVal, err := ParseBinaryJSON(jsonData)
 			if err != nil {
 				panic(err)
@@ -710,7 +717,7 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, field *querypb.F
 				return sqltypes.MakeTrusted(querypb.Type_UINT16,
 					strconv.AppendUint(nil, uint64(val), 10)), 2, nil
 			default:
-				return sqltypes.NULL, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected enum size: %v", metadata&0xff)
+				return sqltypes.NULL, 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected enum size: %v", metadata&0xff)
 			}
 		}
 		if t == TypeSet {
@@ -718,7 +725,7 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, field *querypb.F
 			// numbers.
 			l := int(metadata & 0xff)
 			var val uint64
-			for i := 0; i < l; i++ {
+			for i := range l {
 				val += uint64(data[pos+i]) << (uint(i) * 8)
 			}
 			return sqltypes.MakeTrusted(querypb.Type_UINT64,
@@ -776,13 +783,13 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, field *querypb.F
 				uint32(data[pos+2])<<16 |
 				uint32(data[pos+3])<<24)
 		default:
-			return sqltypes.NULL, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "unsupported geometry metadata value %v (data: %v pos: %v)", metadata, data, pos)
+			return sqltypes.NULL, 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported geometry metadata value %v (data: %v pos: %v)", metadata, data, pos)
 		}
 		pos += int(metadata)
 		return sqltypes.MakeTrusted(querypb.Type_GEOMETRY,
 			data[pos:pos+l]), l + int(metadata), nil
 
 	default:
-		return sqltypes.NULL, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "unsupported type %v", typ)
+		return sqltypes.NULL, 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported type %v", typ)
 	}
 }

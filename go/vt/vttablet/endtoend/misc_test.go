@@ -35,19 +35,21 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/callerid"
+	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
 func TestSimpleRead(t *testing.T) {
 	vstart := framework.DebugVars()
 	_, err := framework.NewClient().Execute("select * from vitess_test where intval=1", nil)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	vend := framework.DebugVars()
 	compareIntDiff(t, vend, "Queries/TotalCount", vstart, 1)
 	compareIntDiff(t, vend, "Queries/Histograms/Select/Count", vstart, 1)
@@ -64,15 +66,9 @@ func TestBinary(t *testing.T) {
 			"(4, null, null, '\\0\\'\\\"\\b\\n\\r\\t\\Z\\\\\x00\x0f\xf0\xff')",
 		nil,
 	)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	qr, err := client.Execute("select binval from vitess_test where intval=4", nil)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	want := sqltypes.Result{
 		Fields: []*querypb.Field{
 			{
@@ -101,18 +97,10 @@ func TestBinary(t *testing.T) {
 		"insert into vitess_test values(5, null, null, :bindata)",
 		map[string]*querypb.BindVariable{"bindata": sqltypes.StringBindVariable(binaryData)},
 	)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	qr, err = client.Execute("select binval from vitess_test where intval=5", nil)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	if !qr.Equal(&want) {
-		t.Errorf("Execute: \n%#v, want \n%#v", prettyPrint(*qr), prettyPrint(want))
-	}
+	require.NoError(t, err)
+	assert.Truef(t, qr.Equal(&want), "Execute: \n%#v, want \n%#v", prettyPrint(*qr), prettyPrint(want))
 }
 
 func TestNocacheListArgs(t *testing.T) {
@@ -125,10 +113,7 @@ func TestNocacheListArgs(t *testing.T) {
 			"list": sqltypes.TestBindVariable([]any{2, 3, 4}),
 		},
 	)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	assert.Equal(t, 2, len(qr.Rows))
 
 	qr, err = client.Execute(
@@ -137,10 +122,7 @@ func TestNocacheListArgs(t *testing.T) {
 			"list": sqltypes.TestBindVariable([]any{3, 4}),
 		},
 	)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	assert.Equal(t, 1, len(qr.Rows))
 
 	qr, err = client.Execute(
@@ -149,10 +131,7 @@ func TestNocacheListArgs(t *testing.T) {
 			"list": sqltypes.TestBindVariable([]any{3}),
 		},
 	)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	assert.Equal(t, 1, len(qr.Rows))
 
 	// Error case
@@ -162,11 +141,7 @@ func TestNocacheListArgs(t *testing.T) {
 			"list": sqltypes.TestBindVariable([]any{}),
 		},
 	)
-	want := "empty list supplied for list (CallerID: dev)"
-	if err == nil || err.Error() != want {
-		t.Errorf("Error: %v, want %s", err, want)
-		return
-	}
+	assert.EqualError(t, err, "empty list supplied for list (CallerID: dev)")
 }
 
 func TestIntegrityError(t *testing.T) {
@@ -174,9 +149,7 @@ func TestIntegrityError(t *testing.T) {
 	client := framework.NewClient()
 	_, err := client.Execute("insert into vitess_test values(1, null, null, null)", nil)
 	want := "Duplicate entry '1'"
-	if err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("Error: %v, want prefix %s", err, want)
-	}
+	assert.ErrorContains(t, err, want)
 	compareIntDiff(t, framework.DebugVars(), "Errors/ALREADY_EXISTS", vstart, 1)
 }
 
@@ -192,10 +165,7 @@ func TestTrailingComment(t *testing.T) {
 		"select * from vitess_test where intval=:ival /* comment1 */ /* comment2 */",
 	} {
 		_, err := client.Execute(query, bindVars)
-		if err != nil {
-			t.Error(err)
-			return
-		}
+		require.NoError(t, err)
 		v2 := framework.Server.QueryPlanCacheLen()
 		if v2 != v1+1 {
 			t.Errorf("QueryEnginePlanCacheLength(%s): %d, want %d", query, v2, v1+1)
@@ -206,17 +176,11 @@ func TestTrailingComment(t *testing.T) {
 func TestSchemaReload(t *testing.T) {
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &connParams)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	defer conn.Close()
 
 	_, err = conn.ExecuteFetch("create table vitess_temp(intval int)", 10, false)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	defer conn.ExecuteFetch("drop table vitess_temp", 10, false)
 
 	framework.Server.ReloadSchema(context.Background())
@@ -241,10 +205,7 @@ func TestSchemaReload(t *testing.T) {
 func TestSidecarTables(t *testing.T) {
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &connParams)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	defer conn.Close()
 	for _, table := range []string{
 		"redo_state",
@@ -253,10 +214,7 @@ func TestSidecarTables(t *testing.T) {
 		"dt_participant",
 	} {
 		_, err = conn.ExecuteFetch(fmt.Sprintf("describe _vt.%s", table), 10, false)
-		if err != nil {
-			t.Error(err)
-			return
-		}
+		require.NoError(t, err)
 	}
 }
 
@@ -331,10 +289,7 @@ func TestBindInSelect(t *testing.T) {
 		"select :bv from dual",
 		map[string]*querypb.BindVariable{"bv": sqltypes.StringBindVariable("abcd")},
 	)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	want := &sqltypes.Result{
 		Fields: []*querypb.Field{{
 			Name:         "abcd",
@@ -360,10 +315,7 @@ func TestBindInSelect(t *testing.T) {
 		"select :bv from dual",
 		map[string]*querypb.BindVariable{"bv": sqltypes.StringBindVariable("\x00\xff")},
 	)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	want = &sqltypes.Result{
 		Fields: []*querypb.Field{{
 			Name:         "",
@@ -387,16 +339,10 @@ func TestBindInSelect(t *testing.T) {
 
 func TestHealth(t *testing.T) {
 	response, err := http.Get(fmt.Sprintf("%s/debug/health", framework.ServerAddress))
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	defer response.Body.Close()
 	result, err := io.ReadAll(response.Body)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	if string(result) != "ok" {
 		t.Errorf("Health check: %s, want ok", result)
 	}
@@ -562,27 +508,18 @@ func TestDBAStatements(t *testing.T) {
 	client := framework.NewClient()
 
 	qr, err := client.Execute("show variables like 'version'", nil)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	wantCol := sqltypes.NewVarChar("version")
 	if !reflect.DeepEqual(qr.Rows[0][0], wantCol) {
 		t.Errorf("Execute: \n%#v, want \n%#v", qr.Rows[0][0], wantCol)
 	}
 
 	qr, err = client.Execute("describe vitess_a", nil)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	assert.Equal(t, 4, len(qr.Rows))
 
 	qr, err = client.Execute("explain vitess_a", nil)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	assert.Equal(t, 4, len(qr.Rows))
 }
 
@@ -659,37 +596,36 @@ func TestClientFoundRows(t *testing.T) {
 func TestLastInsertId(t *testing.T) {
 	client := framework.NewClient()
 	_, err := client.Execute("insert ignore into vitess_autoinc_seq SET name = 'foo', sequence = 0", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer client.Execute("delete from vitess_autoinc_seq where name = 'foo'", nil)
-
-	if err := client.Begin(true); err != nil {
-		t.Fatal(err)
-	}
+	err = client.Begin(true)
+	require.NoError(t, err)
 	defer client.Rollback()
 
 	res, err := client.Execute("insert ignore into vitess_autoinc_seq SET name = 'foo', sequence = 0", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	qr, err := client.Execute("update vitess_autoinc_seq set sequence=last_insert_id(sequence + 1) where name='foo'", nil)
 	require.NoError(t, err)
 
 	insID := res.InsertID
-
-	if want, got := insID+1, qr.InsertID; want != got {
-		t.Errorf("insertId mismatch; got %v, want %v", got, want)
-	}
+	assert.Equal(t, insID+1, qr.InsertID, "insertID")
 
 	qr, err = client.Execute("select sequence from vitess_autoinc_seq where name = 'foo'", nil)
 	require.NoError(t, err)
 
 	wantCol := sqltypes.NewUint64(insID + uint64(1))
-	if !reflect.DeepEqual(qr.Rows[0][0], wantCol) {
-		t.Errorf("Execute: \n%#v, want \n%#v", qr.Rows[0][0], wantCol)
-	}
+	assert.Truef(t, qr.Rows[0][0].Equal(wantCol), "Execute: \n%#v, want \n%#v", qr.Rows[0][0], wantCol)
+}
+
+func TestSelectLastInsertId(t *testing.T) {
+	client := framework.NewClient()
+	rs, err := client.ExecuteWithOptions("select 1 from dual where last_insert_id(42) = 42", nil, &querypb.ExecuteOptions{
+		IncludedFields:    querypb.ExecuteOptions_ALL,
+		FetchLastInsertId: true,
+	})
+	require.NoError(t, err)
+	assert.EqualValues(t, 42, rs.InsertID)
 }
 
 func TestAppDebugRequest(t *testing.T) {
@@ -776,10 +712,7 @@ func TestSelectBooleanSystemVariables(t *testing.T) {
 			fmt.Sprintf("select :%s", tc.Variable),
 			map[string]*querypb.BindVariable{tc.Variable: sqltypes.BoolBindVariable(tc.Value)},
 		)
-		if err != nil {
-			t.Error(err)
-			return
-		}
+		require.NoError(t, err)
 		require.NotEmpty(t, qr.Fields, "fields should not be empty")
 		require.Equal(t, tc.Type, qr.Fields[0].Type, fmt.Sprintf("invalid type, wants: %+v, but got: %+v\n", tc.Type, qr.Fields[0].Type))
 	}
@@ -890,6 +823,11 @@ func TestShowTablesWithSizes(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
+	if query := conn.BaseShowTablesWithSizes(); query == "" {
+		// Happens in MySQL 8.0 where we use BaseShowInnodbTableSizes, instead.
+		t.Skip("BaseShowTablesWithSizes is empty in this version of MySQL")
+	}
+
 	setupQueries := []string{
 		`drop view if exists show_tables_with_sizes_v1`,
 		`drop table if exists show_tables_with_sizes_t1`,
@@ -897,12 +835,14 @@ func TestShowTablesWithSizes(t *testing.T) {
 		`create table show_tables_with_sizes_t1 (id int primary key)`,
 		`create view show_tables_with_sizes_v1 as select * from show_tables_with_sizes_t1`,
 		`CREATE TABLE show_tables_with_sizes_employees (id INT NOT NULL, store_id INT) PARTITION BY HASH(store_id) PARTITIONS 4`,
+		`create table show_tables_with_sizes_fts (id int primary key, name text, fulltext key name_fts (name))`,
 	}
 
 	defer func() {
 		_, _ = conn.ExecuteFetch(`drop view if exists show_tables_with_sizes_v1`, 1, false)
 		_, _ = conn.ExecuteFetch(`drop table if exists show_tables_with_sizes_t1`, 1, false)
 		_, _ = conn.ExecuteFetch(`drop table if exists show_tables_with_sizes_employees`, 1, false)
+		_, _ = conn.ExecuteFetch(`drop table if exists show_tables_with_sizes_fts`, 1, false)
 	}()
 	for _, query := range setupQueries {
 		_, err := conn.ExecuteFetch(query, 1, false)
@@ -913,6 +853,7 @@ func TestShowTablesWithSizes(t *testing.T) {
 		"show_tables_with_sizes_t1",
 		"show_tables_with_sizes_v1",
 		"show_tables_with_sizes_employees",
+		"show_tables_with_sizes_fts",
 	}
 	actualTables := []string{}
 
@@ -933,7 +874,7 @@ func TestShowTablesWithSizes(t *testing.T) {
 			assert.True(t, row[2].IsIntegral())
 			createTime, err := row[2].ToCastInt64()
 			assert.NoError(t, err)
-			assert.Greater(t, createTime, int64(0))
+			assert.Positive(t, createTime)
 
 			// TABLE_COMMENT
 			assert.Equal(t, "", row[3].ToString())
@@ -941,12 +882,12 @@ func TestShowTablesWithSizes(t *testing.T) {
 			assert.True(t, row[4].IsDecimal())
 			fileSize, err := row[4].ToCastInt64()
 			assert.NoError(t, err)
-			assert.Greater(t, fileSize, int64(0))
+			assert.Positive(t, fileSize)
 
 			assert.True(t, row[4].IsDecimal())
 			allocatedSize, err := row[5].ToCastInt64()
 			assert.NoError(t, err)
-			assert.Greater(t, allocatedSize, int64(0))
+			assert.Positive(t, allocatedSize)
 
 			actualTables = append(actualTables, tableName)
 		} else if tableName == "show_tables_with_sizes_v1" {
@@ -956,7 +897,7 @@ func TestShowTablesWithSizes(t *testing.T) {
 			assert.True(t, row[2].IsIntegral())
 			createTime, err := row[2].ToCastInt64()
 			assert.NoError(t, err)
-			assert.Greater(t, createTime, int64(0))
+			assert.Positive(t, createTime)
 
 			// TABLE_COMMENT
 			assert.Equal(t, "VIEW", row[3].ToString())
@@ -972,7 +913,7 @@ func TestShowTablesWithSizes(t *testing.T) {
 			assert.True(t, row[2].IsIntegral())
 			createTime, err := row[2].ToCastInt64()
 			assert.NoError(t, err)
-			assert.Greater(t, createTime, int64(0))
+			assert.Positive(t, createTime)
 
 			// TABLE_COMMENT
 			assert.Equal(t, "", row[3].ToString())
@@ -980,12 +921,35 @@ func TestShowTablesWithSizes(t *testing.T) {
 			assert.True(t, row[4].IsDecimal())
 			fileSize, err := row[4].ToCastInt64()
 			assert.NoError(t, err)
-			assert.Greater(t, fileSize, int64(0))
+			assert.Positive(t, fileSize)
 
 			assert.True(t, row[5].IsDecimal())
 			allocatedSize, err := row[5].ToCastInt64()
 			assert.NoError(t, err)
-			assert.Greater(t, allocatedSize, int64(0))
+			assert.Positive(t, allocatedSize)
+
+			actualTables = append(actualTables, tableName)
+		} else if tableName == "show_tables_with_sizes_fts" {
+			// TABLE_TYPE
+			assert.Equal(t, "BASE TABLE", row[1].ToString())
+
+			assert.True(t, row[2].IsIntegral())
+			createTime, err := row[2].ToCastInt64()
+			assert.NoError(t, err)
+			assert.Positive(t, createTime)
+
+			// TABLE_COMMENT
+			assert.Equal(t, "", row[3].ToString())
+
+			assert.True(t, row[4].IsDecimal())
+			fileSize, err := row[4].ToCastInt64()
+			assert.NoError(t, err)
+			assert.Positive(t, fileSize)
+
+			assert.True(t, row[5].IsDecimal())
+			allocatedSize, err := row[5].ToCastInt64()
+			assert.NoError(t, err)
+			assert.Positive(t, allocatedSize)
 
 			actualTables = append(actualTables, tableName)
 		}
@@ -993,6 +957,137 @@ func TestShowTablesWithSizes(t *testing.T) {
 
 	assert.Equal(t, len(expectedTables), len(actualTables))
 	assert.ElementsMatch(t, expectedTables, actualTables)
+}
+
+func newTestSchemaEngine(connParams *mysql.ConnParams) *schema.Engine {
+	cfg := tabletenv.NewDefaultConfig()
+	cfg.DB = dbconfigs.NewTestDBConfigs(*connParams, *connParams, connParams.DbName)
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "EngineTest")
+	se := schema.NewEngine(env)
+	se.InitDBConfig(dbconfigs.New(connParams))
+	return se
+}
+
+func TestEngineReload(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &connParams)
+	require.NoError(t, err)
+	defer conn.Close()
+	t.Run("validate innodb size query", func(t *testing.T) {
+		q := conn.BaseShowInnodbTableSizes()
+		require.NotEmpty(t, q)
+	})
+	t.Run("validate conn schema", func(t *testing.T) {
+		rs, err := conn.ExecuteFetch(`select database() as d`, 1, true)
+		require.NoError(t, err)
+		row := rs.Named().Row()
+		require.NotNil(t, row)
+		database := row.AsString("d", "")
+		require.Equal(t, connParams.DbName, database)
+	})
+
+	defer func() {
+		_, _ = conn.ExecuteFetch(`drop view if exists view_simple`, 1, false)
+		_, _ = conn.ExecuteFetch(`drop view if exists view_simple2`, 1, false)
+		_, _ = conn.ExecuteFetch(`drop view if exists view_simple3`, 1, false)
+		_, _ = conn.ExecuteFetch(`drop table if exists tbl_simple`, 1, false)
+		_, _ = conn.ExecuteFetch(`drop table if exists tbl_part`, 1, false)
+		_, _ = conn.ExecuteFetch(`drop table if exists tbl_fts`, 1, false)
+	}()
+
+	engine := newTestSchemaEngine(&connParams)
+	require.NotNil(t, engine)
+	err = engine.Open()
+	require.NoError(t, err)
+	defer engine.Close()
+
+	t.Run("schema", func(t *testing.T) {
+		setupQueries := []string{
+			`drop view if exists view_simple`,
+			`drop view if exists view_simple2`,
+			`drop table if exists tbl_simple`,
+			`drop table if exists tbl_part`,
+			`drop table if exists tbl_fts`,
+			`create table tbl_simple (id int primary key)`,
+			`create view view_simple as select * from tbl_simple`,
+			`create view view_simple2 as select * from tbl_simple`,
+			`create table tbl_part (id INT NOT NULL, store_id INT) PARTITION BY HASH(store_id) PARTITIONS 4`,
+			`create table tbl_fts (id int primary key, name text, fulltext key name_fts (name))`,
+		}
+
+		for _, query := range setupQueries {
+			_, err := conn.ExecuteFetch(query, 1, false)
+			require.NoError(t, err)
+		}
+
+		expectedTables := []string{
+			"tbl_simple",
+			"tbl_part",
+			"tbl_fts",
+			"view_simple",
+			"view_simple2",
+		}
+		err := engine.Reload(ctx)
+		require.NoError(t, err)
+
+		schema := engine.GetSchema()
+		require.NotEmpty(t, schema)
+		for _, expectTable := range expectedTables {
+			t.Run(expectTable, func(t *testing.T) {
+				tbl := engine.GetTable(sqlparser.NewIdentifierCS(expectTable))
+				require.NotNil(t, tbl)
+
+				switch expectTable {
+				case "view_simple", "view_simple2":
+					assert.Zero(t, tbl.FileSize)
+					assert.Zero(t, tbl.AllocatedSize)
+				default:
+					assert.NotZero(t, tbl.FileSize)
+					assert.NotZero(t, tbl.AllocatedSize)
+				}
+			})
+		}
+	})
+	t.Run("schema changes", func(t *testing.T) {
+		setupQueries := []string{
+			`alter view view_simple as select *, 2 from tbl_simple`,
+			`drop view view_simple2`,
+			`create view view_simple3 as select * from tbl_simple`,
+		}
+
+		for _, query := range setupQueries {
+			_, err := conn.ExecuteFetch(query, 1, false)
+			require.NoError(t, err)
+		}
+
+		expectedTables := []string{
+			"tbl_simple",
+			"tbl_part",
+			"tbl_fts",
+			"view_simple",
+			"view_simple3",
+		}
+		err := engine.Reload(ctx)
+		require.NoError(t, err)
+
+		schema := engine.GetSchema()
+		require.NotEmpty(t, schema)
+		for _, expectTable := range expectedTables {
+			t.Run(expectTable, func(t *testing.T) {
+				tbl := engine.GetTable(sqlparser.NewIdentifierCS(expectTable))
+				require.NotNil(t, tbl)
+
+				switch expectTable {
+				case "view_simple", "view_simple2", "view_simple3":
+					assert.Zero(t, tbl.FileSize)
+					assert.Zero(t, tbl.AllocatedSize)
+				default:
+					assert.NotZero(t, tbl.FileSize)
+					assert.NotZero(t, tbl.AllocatedSize)
+				}
+			})
+		}
+	})
 }
 
 // TestTuple tests that bind variables having tuple values work with vttablet.

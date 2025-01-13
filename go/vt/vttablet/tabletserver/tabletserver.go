@@ -176,7 +176,7 @@ func NewTabletServer(ctx context.Context, env *vtenv.Environment, name string, c
 	tsv.se = schema.NewEngine(tsv)
 	tsv.hs = newHealthStreamer(tsv, alias, tsv.se)
 	tsv.rt = repltracker.NewReplTracker(tsv, alias)
-	tsv.lagThrottler = throttle.NewThrottler(tsv, srvTopoServer, topoServer, alias.Cell, tsv.rt.HeartbeatWriter(), tabletTypeFunc)
+	tsv.lagThrottler = throttle.NewThrottler(tsv, srvTopoServer, topoServer, alias, tsv.rt.HeartbeatWriter(), tabletTypeFunc)
 	tsv.vstreamer = vstreamer.NewEngine(tsv, srvTopoServer, tsv.se, tsv.lagThrottler, alias.Cell)
 	tsv.tracker = schema.NewTracker(tsv, tsv.vstreamer, tsv.se)
 	tsv.watcher = NewBinlogWatcher(tsv, tsv.vstreamer, tsv.config)
@@ -186,7 +186,7 @@ func NewTabletServer(ctx context.Context, env *vtenv.Environment, name string, c
 	tsv.messager = messager.NewEngine(tsv, tsv.se, tsv.vstreamer)
 
 	tsv.tableGC = gc.NewTableGC(tsv, topoServer, tsv.lagThrottler)
-	tsv.onlineDDLExecutor = onlineddl.NewExecutor(tsv, alias, topoServer, tsv.lagThrottler, tabletTypeFunc, tsv.onlineDDLExecutorToggleTableBuffer, tsv.tableGC.RequestChecks, tsv.te.preparedPool.IsEmpty)
+	tsv.onlineDDLExecutor = onlineddl.NewExecutor(tsv, alias, topoServer, tsv.lagThrottler, tabletTypeFunc, tsv.onlineDDLExecutorToggleTableBuffer, tsv.tableGC.RequestChecks, tsv.te.preparedPool.IsEmptyForTable)
 
 	tsv.sm = &stateManager{
 		statelessql: tsv.statelessql,
@@ -217,7 +217,9 @@ func NewTabletServer(ctx context.Context, env *vtenv.Environment, name string, c
 	tsv.exporter.NewGaugesFuncWithMultiLabels("TabletServerState", "Tablet server state labeled by state name", []string{"name"}, func() map[string]int64 {
 		return map[string]int64{tsv.sm.IsServingString(): 1}
 	})
-	tsv.exporter.NewGaugeDurationFunc("QueryTimeout", "Tablet server query timeout", tsv.loadQueryTimeout)
+	tsv.exporter.NewGaugeDurationFunc("QueryTimeout", "Tablet server query timeout", func() time.Duration {
+		return time.Duration(tsv.QueryTimeout.Load())
+	})
 
 	tsv.registerHealthzHealthHandler()
 	tsv.registerDebugHealthHandler()
@@ -234,6 +236,28 @@ func NewTabletServer(ctx context.Context, env *vtenv.Environment, name string, c
 }
 
 func (tsv *TabletServer) loadQueryTimeout() time.Duration {
+	return time.Duration(tsv.QueryTimeout.Load())
+}
+
+func (tsv *TabletServer) loadQueryTimeoutWithTxAndOptions(txID int64, options *querypb.ExecuteOptions) time.Duration {
+	timeout := tsv.loadQueryTimeoutWithOptions(options)
+
+	if txID == 0 {
+		return timeout
+	}
+
+	// fetch the transaction timeout.
+	txTimeout := tsv.config.TxTimeoutForWorkload(querypb.ExecuteOptions_OLTP)
+
+	// Use the smaller of the two values (0 means infinity).
+	return smallerTimeout(timeout, txTimeout)
+}
+
+func (tsv *TabletServer) loadQueryTimeoutWithOptions(options *querypb.ExecuteOptions) time.Duration {
+	// returns the authoritative timeout if it is set.
+	if options != nil && options.Timeout != nil {
+		return time.Duration(options.GetAuthoritativeTimeout()) * time.Millisecond
+	}
 	return time.Duration(tsv.QueryTimeout.Load())
 }
 
@@ -486,10 +510,17 @@ func (tsv *TabletServer) Begin(ctx context.Context, target *querypb.Target, opti
 	return tsv.begin(ctx, target, nil, 0, nil, options)
 }
 
-func (tsv *TabletServer) begin(ctx context.Context, target *querypb.Target, savepointQueries []string, reservedID int64, settings []string, options *querypb.ExecuteOptions) (state queryservice.TransactionState, err error) {
+func (tsv *TabletServer) begin(
+	ctx context.Context,
+	target *querypb.Target,
+	postBeginQueries []string,
+	reservedID int64,
+	settings []string,
+	options *querypb.ExecuteOptions,
+) (state queryservice.TransactionState, err error) {
 	state.TabletAlias = tsv.alias
 	err = tsv.execRequest(
-		ctx, tsv.loadQueryTimeout(),
+		ctx, tsv.loadQueryTimeoutWithOptions(options),
 		"Begin", "begin", nil,
 		target, options, false, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
@@ -504,11 +535,42 @@ func (tsv *TabletServer) begin(ctx context.Context, target *querypb.Target, save
 					return err
 				}
 			}
-			transactionID, beginSQL, sessionStateChanges, err := tsv.te.Begin(ctx, savepointQueries, reservedID, connSetting, options)
+			transactionID, beginSQL, sessionStateChanges, err := tsv.te.Begin(ctx, reservedID, connSetting, options)
 			state.TransactionID = transactionID
 			state.SessionStateChanges = sessionStateChanges
 			logStats.TransactionID = transactionID
 			logStats.ReservedID = reservedID
+
+			if err != nil {
+				return err
+			}
+
+			targetType, err := tsv.resolveTargetType(ctx, target)
+			if err != nil {
+				return err
+			}
+			for _, query := range postBeginQueries {
+				plan, err := tsv.qe.GetPlan(ctx, logStats, query, true)
+				if err != nil {
+					return err
+				}
+
+				qre := &QueryExecutor{
+					ctx:              ctx,
+					query:            query,
+					connID:           transactionID,
+					options:          options,
+					plan:             plan,
+					logStats:         logStats,
+					tsv:              tsv,
+					targetTabletType: targetType,
+					setting:          connSetting,
+				}
+				_, err = qre.Execute()
+				if err != nil {
+					return err
+				}
+			}
 
 			// Record the actual statements that were executed in the logStats.
 			// If nothing was actually executed, don't count the operation in
@@ -528,7 +590,7 @@ func (tsv *TabletServer) begin(ctx context.Context, target *querypb.Target, save
 			return err
 		},
 	)
-	return state, err
+	return
 }
 
 func (tsv *TabletServer) getPriorityFromOptions(options *querypb.ExecuteOptions) int {
@@ -641,7 +703,7 @@ func (tsv *TabletServer) Prepare(ctx context.Context, target *querypb.Target, tr
 		"Prepare", "prepare", nil,
 		target, nil, true, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
-			txe := NewDTExecutor(ctx, tsv.te, tsv.qe, logStats)
+			txe := NewDTExecutor(ctx, logStats, tsv.te, tsv.qe, tsv.getShard)
 			return txe.Prepare(transactionID, dtid)
 		},
 	)
@@ -654,7 +716,7 @@ func (tsv *TabletServer) CommitPrepared(ctx context.Context, target *querypb.Tar
 		"CommitPrepared", "commit_prepared", nil,
 		target, nil, true, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
-			txe := NewDTExecutor(ctx, tsv.te, tsv.qe, logStats)
+			txe := NewDTExecutor(ctx, logStats, tsv.te, tsv.qe, tsv.getShard)
 			if DebugTwoPc {
 				commitPreparedDelayForTest(tsv)
 			}
@@ -670,10 +732,38 @@ func (tsv *TabletServer) RollbackPrepared(ctx context.Context, target *querypb.T
 		"RollbackPrepared", "rollback_prepared", nil,
 		target, nil, true, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
-			txe := NewDTExecutor(ctx, tsv.te, tsv.qe, logStats)
+			txe := NewDTExecutor(ctx, logStats, tsv.te, tsv.qe, tsv.getShard)
 			return txe.RollbackPrepared(dtid, originalID)
 		},
 	)
+}
+
+// WaitForPreparedTwoPCTransactions waits for all the prepared transactions to complete.
+func (tsv *TabletServer) WaitForPreparedTwoPCTransactions(ctx context.Context) error {
+	if tsv.te.preparedPool.IsEmpty() {
+		return nil
+	}
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			// Return an error if we run out of time.
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Prepared transactions have not been resolved yet")
+		case <-ticker.C:
+			if tsv.te.preparedPool.IsEmpty() {
+				return nil
+			}
+		}
+	}
+}
+
+// SetDemotePrimaryStalled marks that demote primary is stalled in the state manager.
+func (tsv *TabletServer) SetDemotePrimaryStalled() {
+	tsv.sm.mu.Lock()
+	tsv.sm.demotePrimaryStalled = true
+	tsv.sm.mu.Unlock()
+	tsv.BroadcastHealth()
 }
 
 // CreateTransaction creates the metadata for a 2PC transaction.
@@ -683,7 +773,7 @@ func (tsv *TabletServer) CreateTransaction(ctx context.Context, target *querypb.
 		"CreateTransaction", "create_transaction", nil,
 		target, nil, true, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
-			txe := NewDTExecutor(ctx, tsv.te, tsv.qe, logStats)
+			txe := NewDTExecutor(ctx, logStats, tsv.te, tsv.qe, tsv.getShard)
 			return txe.CreateTransaction(dtid, participants)
 		},
 	)
@@ -691,16 +781,18 @@ func (tsv *TabletServer) CreateTransaction(ctx context.Context, target *querypb.
 
 // StartCommit atomically commits the transaction along with the
 // decision to commit the associated 2pc transaction.
-func (tsv *TabletServer) StartCommit(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (err error) {
-	return tsv.execRequest(
+func (tsv *TabletServer) StartCommit(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (state querypb.StartCommitState, err error) {
+	err = tsv.execRequest(
 		ctx, tsv.loadQueryTimeout(),
 		"StartCommit", "start_commit", nil,
 		target, nil, true, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
-			txe := NewDTExecutor(ctx, tsv.te, tsv.qe, logStats)
-			return txe.StartCommit(transactionID, dtid)
+			txe := NewDTExecutor(ctx, logStats, tsv.te, tsv.qe, tsv.getShard)
+			state, err = txe.StartCommit(transactionID, dtid)
+			return err
 		},
 	)
+	return state, err
 }
 
 // SetRollback transitions the 2pc transaction to the Rollback state.
@@ -711,7 +803,7 @@ func (tsv *TabletServer) SetRollback(ctx context.Context, target *querypb.Target
 		"SetRollback", "set_rollback", nil,
 		target, nil, true, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
-			txe := NewDTExecutor(ctx, tsv.te, tsv.qe, logStats)
+			txe := NewDTExecutor(ctx, logStats, tsv.te, tsv.qe, tsv.getShard)
 			return txe.SetRollback(dtid, transactionID)
 		},
 	)
@@ -725,7 +817,7 @@ func (tsv *TabletServer) ConcludeTransaction(ctx context.Context, target *queryp
 		"ConcludeTransaction", "conclude_transaction", nil,
 		target, nil, true, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
-			txe := NewDTExecutor(ctx, tsv.te, tsv.qe, logStats)
+			txe := NewDTExecutor(ctx, logStats, tsv.te, tsv.qe, tsv.getShard)
 			return txe.ConcludeTransaction(dtid)
 		},
 	)
@@ -738,7 +830,7 @@ func (tsv *TabletServer) ReadTransaction(ctx context.Context, target *querypb.Ta
 		"ReadTransaction", "read_transaction", nil,
 		target, nil, true, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
-			txe := NewDTExecutor(ctx, tsv.te, tsv.qe, logStats)
+			txe := NewDTExecutor(ctx, logStats, tsv.te, tsv.qe, tsv.getShard)
 			metadata, err = txe.ReadTransaction(dtid)
 			return err
 		},
@@ -746,15 +838,30 @@ func (tsv *TabletServer) ReadTransaction(ctx context.Context, target *querypb.Ta
 	return metadata, err
 }
 
+// GetTransactionInfo returns the data for the specified dtid.
+func (tsv *TabletServer) GetTransactionInfo(ctx context.Context, target *querypb.Target, dtid string) (resp *tabletmanagerdatapb.GetTransactionInfoResponse, err error) {
+	err = tsv.execRequest(
+		ctx, tsv.loadQueryTimeout(),
+		"GetTransactionInfo", "get_transaction_info", nil,
+		target, nil, true, /* allowOnShutdown */
+		func(ctx context.Context, logStats *tabletenv.LogStats) error {
+			txe := NewDTExecutor(ctx, logStats, tsv.te, tsv.qe, tsv.getShard)
+			resp, err = txe.GetTransactionInfo(dtid)
+			return err
+		},
+	)
+	return resp, err
+}
+
 // UnresolvedTransactions returns the unresolved distributed transaction record.
-func (tsv *TabletServer) UnresolvedTransactions(ctx context.Context, target *querypb.Target) (transactions []*querypb.TransactionMetadata, err error) {
+func (tsv *TabletServer) UnresolvedTransactions(ctx context.Context, target *querypb.Target, abandonAgeSeconds int64) (transactions []*querypb.TransactionMetadata, err error) {
 	err = tsv.execRequest(
 		ctx, tsv.loadQueryTimeout(),
 		"UnresolvedTransactions", "unresolved_transaction", nil,
 		target, nil, false, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
-			txe := NewDTExecutor(ctx, tsv.te, tsv.qe, logStats)
-			transactions, err = txe.UnresolvedTransactions()
+			txe := NewDTExecutor(ctx, logStats, tsv.te, tsv.qe, tsv.getShard)
+			transactions, err = txe.UnresolvedTransactions(time.Duration(abandonAgeSeconds) * time.Second)
 			return err
 		},
 	)
@@ -775,17 +882,8 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 }
 
 func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, settings []string, options *querypb.ExecuteOptions) (result *sqltypes.Result, err error) {
-	allowOnShutdown := false
-	timeout := tsv.loadQueryTimeout()
-	if transactionID != 0 {
-		allowOnShutdown = true
-		// Execute calls happen for OLTP only, so we can directly fetch the
-		// OLTP TX timeout.
-		txTimeout := tsv.config.TxTimeoutForWorkload(querypb.ExecuteOptions_OLTP)
-		// Use the smaller of the two values (0 means infinity).
-		// TODO(sougou): Assign deadlines to each transaction and set query timeout accordingly.
-		timeout = smallerTimeout(timeout, txTimeout)
-	}
+	allowOnShutdown := transactionID != 0
+	timeout := tsv.loadQueryTimeoutWithTxAndOptions(transactionID, options)
 	err = tsv.execRequest(
 		ctx, timeout,
 		"Execute", sql, bindVariables,
@@ -943,7 +1041,7 @@ func (tsv *TabletServer) streamExecute(ctx context.Context, target *querypb.Targ
 }
 
 // BeginExecute combines Begin and Execute.
-func (tsv *TabletServer) BeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (queryservice.TransactionState, *sqltypes.Result, error) {
+func (tsv *TabletServer) BeginExecute(ctx context.Context, target *querypb.Target, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (queryservice.TransactionState, *sqltypes.Result, error) {
 
 	// Disable hot row protection in case of reserve connection.
 	if tsv.enableHotRowProtection && reservedID == 0 {
@@ -956,7 +1054,7 @@ func (tsv *TabletServer) BeginExecute(ctx context.Context, target *querypb.Targe
 		}
 	}
 
-	state, err := tsv.begin(ctx, target, preQueries, reservedID, nil, options)
+	state, err := tsv.begin(ctx, target, postBeginQueries, reservedID, nil, options)
 	if err != nil {
 		return state, nil, err
 	}
@@ -969,14 +1067,14 @@ func (tsv *TabletServer) BeginExecute(ctx context.Context, target *querypb.Targe
 func (tsv *TabletServer) BeginStreamExecute(
 	ctx context.Context,
 	target *querypb.Target,
-	preQueries []string,
+	postBeginQueries []string,
 	sql string,
 	bindVariables map[string]*querypb.BindVariable,
 	reservedID int64,
 	options *querypb.ExecuteOptions,
 	callback func(*sqltypes.Result) error,
 ) (queryservice.TransactionState, error) {
-	state, err := tsv.begin(ctx, target, preQueries, reservedID, nil, options)
+	state, err := tsv.begin(ctx, target, postBeginQueries, reservedID, nil, options)
 	if err != nil {
 		return state, err
 	}
@@ -1002,7 +1100,7 @@ func (tsv *TabletServer) beginWaitForSameRangeTransactions(ctx context.Context, 
 	err := tsv.execRequest(
 		// Use (potentially longer) -queryserver-config-query-timeout and not
 		// -queryserver-config-txpool-timeout (defaults to 1s) to limit the waiting.
-		ctx, tsv.loadQueryTimeout(),
+		ctx, tsv.loadQueryTimeoutWithOptions(options),
 		"", "waitForSameRangeTransactions", nil,
 		target, options, false, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
@@ -1182,7 +1280,7 @@ func (tsv *TabletServer) VStreamRows(ctx context.Context, request *binlogdatapb.
 		}
 		row = r.Rows[0]
 	}
-	return tsv.vstreamer.StreamRows(ctx, request.Query, row, send)
+	return tsv.vstreamer.StreamRows(ctx, request.Query, row, send, request.Options)
 }
 
 // VStreamTables streams all tables.
@@ -1190,7 +1288,7 @@ func (tsv *TabletServer) VStreamTables(ctx context.Context, request *binlogdatap
 	if err := tsv.sm.VerifyTarget(ctx, request.Target); err != nil {
 		return err
 	}
-	return tsv.vstreamer.StreamTables(ctx, send)
+	return tsv.vstreamer.StreamTables(ctx, send, request.Options)
 }
 
 // VStreamResults streams rows from the specified starting point.
@@ -1202,8 +1300,8 @@ func (tsv *TabletServer) VStreamResults(ctx context.Context, target *querypb.Tar
 }
 
 // ReserveBeginExecute implements the QueryService interface
-func (tsv *TabletServer) ReserveBeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (state queryservice.ReservedTransactionState, result *sqltypes.Result, err error) {
-	state, result, err = tsv.beginExecuteWithSettings(ctx, target, preQueries, postBeginQueries, sql, bindVariables, options)
+func (tsv *TabletServer) ReserveBeginExecute(ctx context.Context, target *querypb.Target, settings []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (state queryservice.ReservedTransactionState, result *sqltypes.Result, err error) {
+	state, result, err = tsv.beginExecuteWithSettings(ctx, target, settings, postBeginQueries, sql, bindVariables, options)
 	// If there is an error and the error message is about allowing query in reserved connection only,
 	// then we do not return an error from here and continue to use the reserved connection path.
 	// This is specially for get_lock function call from vtgate that needs a reserved connection.
@@ -1221,7 +1319,7 @@ func (tsv *TabletServer) ReserveBeginExecute(ctx context.Context, target *queryp
 	state.TabletAlias = tsv.alias
 
 	err = tsv.execRequest(
-		ctx, tsv.loadQueryTimeout(),
+		ctx, tsv.loadQueryTimeoutWithOptions(options),
 		"ReserveBegin", "begin", bindVariables,
 		target, options, false, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
@@ -1231,12 +1329,35 @@ func (tsv *TabletServer) ReserveBeginExecute(ctx context.Context, target *queryp
 				return err
 			}
 			defer tsv.stats.QueryTimingsByTabletType.Record(targetType.String(), time.Now())
-			connID, sessionStateChanges, err = tsv.te.ReserveBegin(ctx, options, preQueries, postBeginQueries)
+			connID, sessionStateChanges, err = tsv.te.ReserveBegin(ctx, options, settings)
+			logStats.TransactionID = connID
+			logStats.ReservedID = connID
 			if err != nil {
 				return err
 			}
-			logStats.TransactionID = connID
-			logStats.ReservedID = connID
+
+			for _, query := range postBeginQueries {
+				plan, err := tsv.qe.GetPlan(ctx, logStats, query, true)
+				if err != nil {
+					return err
+				}
+
+				qre := &QueryExecutor{
+					ctx:              ctx,
+					query:            query,
+					connID:           connID,
+					options:          options,
+					plan:             plan,
+					logStats:         logStats,
+					tsv:              tsv,
+					targetTabletType: targetType,
+				}
+				_, err = qre.Execute()
+				if err != nil {
+					return err
+				}
+			}
+
 			return nil
 		},
 	)
@@ -1257,13 +1378,13 @@ func (tsv *TabletServer) ReserveBeginStreamExecute(
 	ctx context.Context,
 	target *querypb.Target,
 	settings []string,
-	savepointQueries []string,
+	postBeginQueries []string,
 	sql string,
 	bindVariables map[string]*querypb.BindVariable,
 	options *querypb.ExecuteOptions,
 	callback func(*sqltypes.Result) error,
 ) (state queryservice.ReservedTransactionState, err error) {
-	txState, err := tsv.begin(ctx, target, savepointQueries, 0, settings, options)
+	txState, err := tsv.begin(ctx, target, postBeginQueries, 0, settings, options)
 	if err != nil {
 		return txToReserveState(txState), err
 	}
@@ -1273,9 +1394,9 @@ func (tsv *TabletServer) ReserveBeginStreamExecute(
 }
 
 // ReserveExecute implements the QueryService interface
-func (tsv *TabletServer) ReserveExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (state queryservice.ReservedState, result *sqltypes.Result, err error) {
+func (tsv *TabletServer) ReserveExecute(ctx context.Context, target *querypb.Target, settings []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (state queryservice.ReservedState, result *sqltypes.Result, err error) {
 
-	result, err = tsv.executeWithSettings(ctx, target, preQueries, sql, bindVariables, transactionID, options)
+	result, err = tsv.executeWithSettings(ctx, target, settings, sql, bindVariables, transactionID, options)
 	// If there is an error and the error message is about allowing query in reserved connection only,
 	// then we do not return an error from here and continue to use the reserved connection path.
 	// This is specially for get_lock function call from vtgate that needs a reserved connection.
@@ -1286,16 +1407,8 @@ func (tsv *TabletServer) ReserveExecute(ctx context.Context, target *querypb.Tar
 	// needs a reserved connection to execute the query.
 	state.TabletAlias = tsv.alias
 
-	allowOnShutdown := false
-	timeout := tsv.loadQueryTimeout()
-	if transactionID != 0 {
-		allowOnShutdown = true
-		// ReserveExecute is for OLTP only, so we can directly fetch the OLTP
-		// TX timeout.
-		txTimeout := tsv.config.TxTimeoutForWorkload(querypb.ExecuteOptions_OLTP)
-		// Use the smaller of the two values (0 means infinity).
-		timeout = smallerTimeout(timeout, txTimeout)
-	}
+	allowOnShutdown := transactionID != 0
+	timeout := tsv.loadQueryTimeoutWithTxAndOptions(transactionID, options)
 
 	err = tsv.execRequest(
 		ctx, timeout,
@@ -1308,7 +1421,7 @@ func (tsv *TabletServer) ReserveExecute(ctx context.Context, target *querypb.Tar
 				return err
 			}
 			defer tsv.stats.QueryTimingsByTabletType.Record(targetType.String(), time.Now())
-			state.ReservedID, err = tsv.te.Reserve(ctx, options, transactionID, preQueries)
+			state.ReservedID, err = tsv.te.Reserve(ctx, options, transactionID, settings)
 			if err != nil {
 				return err
 			}
@@ -1330,14 +1443,14 @@ func (tsv *TabletServer) ReserveExecute(ctx context.Context, target *querypb.Tar
 func (tsv *TabletServer) ReserveStreamExecute(
 	ctx context.Context,
 	target *querypb.Target,
-	preQueries []string,
+	settings []string,
 	sql string,
 	bindVariables map[string]*querypb.BindVariable,
 	transactionID int64,
 	options *querypb.ExecuteOptions,
 	callback func(*sqltypes.Result) error,
 ) (state queryservice.ReservedState, err error) {
-	return state, tsv.streamExecute(ctx, target, sql, bindVariables, transactionID, 0, preQueries, options, callback)
+	return state, tsv.streamExecute(ctx, target, sql, bindVariables, transactionID, 0, settings, options, callback)
 }
 
 // Release implements the QueryService interface
@@ -1377,8 +1490,8 @@ func (tsv *TabletServer) executeWithSettings(ctx context.Context, target *queryp
 	return tsv.execute(ctx, target, sql, bindVariables, transactionID, 0, settings, options)
 }
 
-func (tsv *TabletServer) beginExecuteWithSettings(ctx context.Context, target *querypb.Target, settings []string, savepointQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (queryservice.ReservedTransactionState, *sqltypes.Result, error) {
-	txState, err := tsv.begin(ctx, target, savepointQueries, 0, settings, options)
+func (tsv *TabletServer) beginExecuteWithSettings(ctx context.Context, target *querypb.Target, settings []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (queryservice.ReservedTransactionState, *sqltypes.Result, error) {
+	txState, err := tsv.begin(ctx, target, postBeginQueries, 0, settings, options)
 	if err != nil {
 		return txToReserveState(txState), nil, err
 	}
@@ -1593,7 +1706,7 @@ func convertErrorCode(err error) vtrpcpb.Code {
 		sqlerror.ERTooLongString, sqlerror.ERDelayedInsertTableLocked, sqlerror.ERDupUnique, sqlerror.ERRequiresPrimaryKey, sqlerror.ERCantDoThisDuringAnTransaction, sqlerror.ERReadOnlyTransaction,
 		sqlerror.ERCannotAddForeign, sqlerror.ERNoReferencedRow, sqlerror.ERRowIsReferenced, sqlerror.ERCantUpdateWithReadLock, sqlerror.ERNoDefault, sqlerror.EROperandColumns,
 		sqlerror.ERSubqueryNo1Row, sqlerror.ERNonUpdateableTable, sqlerror.ERFeatureDisabled, sqlerror.ERDuplicatedValueInType, sqlerror.ERRowIsReferenced2,
-		sqlerror.ErNoReferencedRow2, sqlerror.ERWarnDataOutOfRange:
+		sqlerror.ErNoReferencedRow2, sqlerror.ERWarnDataOutOfRange, sqlerror.ERInnodbIndexCorrupt:
 		errCode = vtrpcpb.Code_FAILED_PRECONDITION
 	case sqlerror.EROptionPreventsStatement:
 		errCode = vtrpcpb.Code_CLUSTER_EVENT
@@ -1618,7 +1731,7 @@ func convertErrorCode(err error) vtrpcpb.Code {
 		sqlerror.ERCantAggregate3Collations, sqlerror.ERCantAggregateNCollations, sqlerror.ERVariableIsNotStruct, sqlerror.ERUnknownCollation, sqlerror.ERWrongNameForIndex,
 		sqlerror.ERWrongNameForCatalog, sqlerror.ERBadFTColumn, sqlerror.ERTruncatedWrongValue, sqlerror.ERTooMuchAutoTimestampCols, sqlerror.ERInvalidOnUpdate, sqlerror.ERUnknownTimeZone,
 		sqlerror.ERInvalidCharacterString, sqlerror.ERIllegalReference, sqlerror.ERDerivedMustHaveAlias, sqlerror.ERTableNameNotAllowedHere, sqlerror.ERDataTooLong, sqlerror.ERDataOutOfRange,
-		sqlerror.ERTruncatedWrongValueForField, sqlerror.ERIllegalValueForType:
+		sqlerror.ERTruncatedWrongValueForField, sqlerror.ERIllegalValueForType, sqlerror.ERWrongValue, sqlerror.ERWrongParamcountToNativeFct:
 		errCode = vtrpcpb.Code_INVALID_ARGUMENT
 	case sqlerror.ERSpecifiedAccessDenied:
 		errCode = vtrpcpb.Code_PERMISSION_DENIED
@@ -1692,9 +1805,10 @@ func (tsv *TabletServer) RedoPreparedTransactions() {
 	tsv.te.RedoPreparedTransactions()
 }
 
-// SetTwoPCAllowed sets whether TwoPC is allowed or not.
-func (tsv *TabletServer) SetTwoPCAllowed(allowed bool) {
-	tsv.te.twopcAllowed = allowed
+// SetTwoPCAllowed sets whether TwoPC is allowed or not. It also takes the reason of why it is being set.
+// The reason should be an enum value defined in the tabletserver.
+func (tsv *TabletServer) SetTwoPCAllowed(reason int, allowed bool) {
+	tsv.te.twopcAllowed[reason] = allowed
 }
 
 // HandlePanic is part of the queryservice.QueryService interface
@@ -1776,7 +1890,7 @@ func (tsv *TabletServer) registerQueryListHandlers(queryLists []*QueryList) {
 func (tsv *TabletServer) registerTwopczHandler() {
 	tsv.exporter.HandleFunc("/twopcz", func(w http.ResponseWriter, r *http.Request) {
 		ctx := tabletenv.LocalContext()
-		txe := NewDTExecutor(ctx, tsv.te, tsv.qe, tabletenv.NewLogStats(ctx, "twopcz"))
+		txe := NewDTExecutor(ctx, tabletenv.NewLogStats(ctx, "twopcz"), tsv.te, tsv.qe, tsv.getShard)
 		twopczHandler(txe, w, r)
 	})
 }
@@ -1935,7 +2049,11 @@ func (tsv *TabletServer) StreamPoolSize() int {
 
 // SetTxPoolSize changes the tx pool size to the specified value.
 func (tsv *TabletServer) SetTxPoolSize(ctx context.Context, val int) error {
-	return tsv.te.txPool.scp.conns.SetCapacity(ctx, int64(val))
+	// TxPool manages two pools, one for normal connections and one for CLIENT_FOUND_ROWS capability enabled on the connections.
+	if err := tsv.te.txPool.scp.conns.SetCapacity(ctx, int64(val)); err != nil {
+		return err
+	}
+	return tsv.te.txPool.scp.foundRowsPool.SetCapacity(ctx, int64(val))
 }
 
 // TxPoolSize returns the tx pool size.
@@ -2064,4 +2182,8 @@ func skipQueryPlanCache(options *querypb.ExecuteOptions) bool {
 		return false
 	}
 	return options.SkipQueryPlanCache || options.HasCreatedTempTables
+}
+
+func (tsv *TabletServer) getShard() string {
+	return tsv.sm.Target().Shard
 }

@@ -177,6 +177,8 @@ func (cached *AlterDatabase) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(64)
 	}
+	// field Comments *vitess.io/vitess/go/vt/sqlparser.ParsedComments
+	size += cached.Comments.CachedSize(true)
 	// field DBName vitess.io/vitess/go/vt/sqlparser.IdentifierCS
 	size += cached.DBName.CachedSize(false)
 	// field AlterOptions []vitess.io/vitess/go/vt/sqlparser.DatabaseOption
@@ -206,7 +208,7 @@ func (cached *AlterMigration) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(64)
+		size += int64(80)
 	}
 	// field UUID string
 	size += hack.RuntimeAllocSize(int64(len(cached.UUID)))
@@ -214,6 +216,8 @@ func (cached *AlterMigration) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Expire)))
 	// field Ratio *vitess.io/vitess/go/vt/sqlparser.Literal
 	size += cached.Ratio.CachedSize(true)
+	// field Threshold string
+	size += hack.RuntimeAllocSize(int64(len(cached.Threshold)))
 	// field Shards string
 	size += hack.RuntimeAllocSize(int64(len(cached.Shards)))
 	return size

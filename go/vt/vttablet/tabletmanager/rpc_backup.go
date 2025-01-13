@@ -22,7 +22,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/topotools"
-	"vitess.io/vitess/go/vt/vtctl/reparentutil"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
@@ -53,7 +53,13 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 	if !req.AllowPrimary && currentTablet.Type == topodatapb.TabletType_PRIMARY {
 		return fmt.Errorf("type PRIMARY cannot take backup. if you really need to do this, rerun the backup command with --allow_primary")
 	}
-	engine, err := mysqlctl.GetBackupEngine()
+
+	backupEngine := ""
+	if req.BackupEngine != nil {
+		backupEngine = *req.BackupEngine
+	}
+
+	engine, err := mysqlctl.GetBackupEngine(backupEngine)
 	if err != nil {
 		return vterrors.Wrap(err, "failed to find backup engine")
 	}
@@ -130,12 +136,12 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 				l.Errorf("Failed to get durability policy, error: %v", err)
 				return
 			}
-			durability, err := reparentutil.GetDurabilityPolicy(durabilityName)
+			durability, err := policy.GetDurabilityPolicy(durabilityName)
 			if err != nil {
 				l.Errorf("Failed to get durability with name %v, error: %v", durabilityName, err)
 			}
 
-			isSemiSync := reparentutil.IsReplicaSemiSync(durability, shardPrimary.Tablet, tabletInfo.Tablet)
+			isSemiSync := policy.IsReplicaSemiSync(durability, shardPrimary.Tablet, tabletInfo.Tablet)
 			semiSyncAction, err := tm.convertBoolToSemiSyncAction(bgCtx, isSemiSync)
 			if err != nil {
 				l.Errorf("Failed to convert bool to semisync action, error: %v", err)
@@ -163,6 +169,7 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 		Stats:                backupstats.BackupStats(),
 		UpgradeSafe:          req.UpgradeSafe,
 		MysqlShutdownTimeout: mysqlShutdownTimeout,
+		BackupEngine:         backupEngine,
 	}
 
 	returnErr := mysqlctl.Backup(ctx, backupParams)
@@ -196,6 +203,10 @@ func (tm *TabletManager) RestoreFromBackup(ctx context.Context, logger logutil.L
 	tm.QueryServiceControl.BroadcastHealth()
 
 	return err
+}
+
+func (tm *TabletManager) IsBackupRunning() bool {
+	return tm._isBackupRunning
 }
 
 func (tm *TabletManager) beginBackup(backupMode string) error {

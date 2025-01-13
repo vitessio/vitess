@@ -25,7 +25,10 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 
 	"github.com/stretchr/testify/assert"
@@ -59,11 +62,11 @@ func TestTxEngineClose(t *testing.T) {
 
 	// Normal close with timeout wait.
 	te.AcceptReadWrite()
-	c, beginSQL, _, err := te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil, nil)
+	c, beginSQL, _, err := te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
 	require.NoError(t, err)
 	require.Equal(t, "begin", beginSQL)
 	c.Unlock()
-	c, beginSQL, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil, nil)
+	c, beginSQL, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
 	require.NoError(t, err)
 	require.Equal(t, "begin", beginSQL)
 	c.Unlock()
@@ -75,7 +78,7 @@ func TestTxEngineClose(t *testing.T) {
 
 	// Immediate close.
 	te.AcceptReadOnly()
-	c, _, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil, nil)
+	c, _, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +90,7 @@ func TestTxEngineClose(t *testing.T) {
 	// Normal close with short grace period.
 	te.shutdownGracePeriod = 25 * time.Millisecond
 	te.AcceptReadWrite()
-	c, _, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil, nil)
+	c, _, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
 	require.NoError(t, err)
 	c.Unlock()
 	start = time.Now()
@@ -98,7 +101,7 @@ func TestTxEngineClose(t *testing.T) {
 	// Normal close with short grace period, but pool gets empty early.
 	te.shutdownGracePeriod = 25 * time.Millisecond
 	te.AcceptReadWrite()
-	c, _, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil, nil)
+	c, _, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
 	require.NoError(t, err)
 	c.Unlock()
 	go func() {
@@ -114,7 +117,7 @@ func TestTxEngineClose(t *testing.T) {
 
 	// Immediate close, but connection is in use.
 	te.AcceptReadOnly()
-	c, _, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil, nil)
+	c, _, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
 	require.NoError(t, err)
 	go func() {
 		time.Sleep(100 * time.Millisecond)
@@ -135,7 +138,7 @@ func TestTxEngineClose(t *testing.T) {
 	te.AcceptReadWrite()
 	_, err = te.Reserve(ctx, &querypb.ExecuteOptions{}, 0, nil)
 	require.NoError(t, err)
-	_, _, err = te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, nil, nil)
+	_, _, err = te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, nil)
 	require.NoError(t, err)
 	start = time.Now()
 	te.Close()
@@ -156,11 +159,11 @@ func TestTxEngineBegin(t *testing.T) {
 
 	for _, exec := range []func() (int64, string, error){
 		func() (int64, string, error) {
-			tx, _, schemaStateChanges, err := te.Begin(ctx, nil, 0, nil, &querypb.ExecuteOptions{})
+			tx, _, schemaStateChanges, err := te.Begin(ctx, 0, nil, &querypb.ExecuteOptions{})
 			return tx, schemaStateChanges, err
 		},
 		func() (int64, string, error) {
-			return te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, nil, nil)
+			return te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, nil)
 		},
 	} {
 		te.AcceptReadOnly()
@@ -201,7 +204,7 @@ func TestTxEngineRenewFails(t *testing.T) {
 	te := NewTxEngine(tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TabletServerTest"), nil)
 	te.AcceptReadOnly()
 	options := &querypb.ExecuteOptions{}
-	connID, _, err := te.ReserveBegin(ctx, options, nil, nil)
+	connID, _, err := te.ReserveBegin(ctx, options, nil)
 	require.NoError(t, err)
 
 	conn, err := te.txPool.GetAndLock(connID, "for test")
@@ -556,7 +559,7 @@ func startTx(te *TxEngine, writeTransaction bool) error {
 	} else {
 		options.TransactionIsolation = querypb.ExecuteOptions_CONSISTENT_SNAPSHOT_READ_ONLY
 	}
-	_, _, _, err := te.Begin(context.Background(), nil, 0, nil, options)
+	_, _, _, err := te.Begin(context.Background(), 0, nil, options)
 	return err
 }
 
@@ -574,7 +577,7 @@ func TestTxEngineFailReserve(t *testing.T) {
 	_, err := te.Reserve(ctx, options, 0, nil)
 	assert.EqualError(t, err, "tx engine can't accept new connections in state NotServing")
 
-	_, _, err = te.ReserveBegin(ctx, options, nil, nil)
+	_, _, err = te.ReserveBegin(ctx, options, nil)
 	assert.EqualError(t, err, "tx engine can't accept new connections in state NotServing")
 
 	te.AcceptReadOnly()
@@ -583,14 +586,14 @@ func TestTxEngineFailReserve(t *testing.T) {
 	_, err = te.Reserve(ctx, options, 0, []string{"dummy_query"})
 	assert.EqualError(t, err, "unknown error: failed executing dummy_query (errno 1105) (sqlstate HY000) during query: dummy_query")
 
-	_, _, err = te.ReserveBegin(ctx, options, []string{"dummy_query"}, nil)
+	_, _, err = te.ReserveBegin(ctx, options, []string{"dummy_query"})
 	assert.EqualError(t, err, "unknown error: failed executing dummy_query (errno 1105) (sqlstate HY000) during query: dummy_query")
 
 	nonExistingID := int64(42)
 	_, err = te.Reserve(ctx, options, nonExistingID, nil)
 	assert.EqualError(t, err, "transaction 42: not found (potential transaction timeout)")
 
-	txID, _, _, err := te.Begin(ctx, nil, 0, nil, options)
+	txID, _, _, err := te.Begin(ctx, 0, nil, options)
 	require.NoError(t, err)
 	conn, err := te.txPool.GetAndLock(txID, "for test")
 	require.NoError(t, err)
@@ -602,4 +605,204 @@ func TestTxEngineFailReserve(t *testing.T) {
 	connID, _, err := te.Commit(ctx, txID)
 	require.Error(t, err)
 	assert.Zero(t, connID)
+}
+
+func TestCheckReceivedError(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+	cfg := tabletenv.NewDefaultConfig()
+	cfg.DB = newDBConfigs(db)
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TabletServerTest")
+	env.Config().TwoPCAbandonAge = 5 * time.Second
+	te := NewTxEngine(env, nil)
+	te.AcceptReadWrite()
+
+	tcases := []struct {
+		receivedErr error
+		retryable   bool
+		expQuery    string
+	}{{
+		receivedErr: vterrors.New(vtrpcpb.Code_DEADLINE_EXCEEDED, "deadline exceeded"),
+		retryable:   true,
+		expQuery:    `update _vt.redo_state set state = 1, message = 'deadline exceeded' where dtid = _binary'aa'`,
+	}, {
+		receivedErr: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "invalid argument"),
+		retryable:   false,
+		expQuery:    `update _vt.redo_state set state = 0, message = 'invalid argument' where dtid = _binary'aa'`,
+	}, {
+		receivedErr: sqlerror.NewSQLError(sqlerror.ERLockDeadlock, sqlerror.SSLockDeadlock, "Deadlock found when trying to get lock; try restarting transaction"),
+		retryable:   false,
+		expQuery:    `update _vt.redo_state set state = 0, message = 'Deadlock found when trying to get lock; try restarting transaction (errno 1213) (sqlstate 40001)' where dtid = _binary'aa'`,
+	}, {
+		receivedErr: context.DeadlineExceeded,
+		retryable:   true,
+		expQuery:    `update _vt.redo_state set state = 1, message = 'context deadline exceeded' where dtid = _binary'aa'`,
+	}, {
+		receivedErr: context.Canceled,
+		retryable:   true,
+		expQuery:    `update _vt.redo_state set state = 1, message = 'context canceled' where dtid = _binary'aa'`,
+	}, {
+		receivedErr: sqlerror.NewSQLError(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "Lost connection to MySQL server during query"),
+		retryable:   true,
+		expQuery:    `update _vt.redo_state set state = 1, message = 'Lost connection to MySQL server during query (errno 2013) (sqlstate HY000)' where dtid = _binary'aa'`,
+	}, {
+		receivedErr: sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "Malformed packet"),
+		retryable:   false,
+		expQuery:    `update _vt.redo_state set state = 0, message = 'Malformed packet (errno 2027) (sqlstate HY000)' where dtid = _binary'aa'`,
+	}, {
+		receivedErr: sqlerror.NewSQLError(sqlerror.CRServerGone, sqlerror.SSUnknownSQLState, "Server has gone away"),
+		retryable:   true,
+		expQuery:    `update _vt.redo_state set state = 1, message = 'Server has gone away (errno 2006) (sqlstate HY000)' where dtid = _binary'aa'`,
+	}, {
+		receivedErr: vterrors.New(vtrpcpb.Code_ABORTED, "Row count exceeded"),
+		retryable:   false,
+		expQuery:    `update _vt.redo_state set state = 0, message = 'Row count exceeded' where dtid = _binary'aa'`,
+	}, {
+		receivedErr: errors.New("(errno 2013) (sqlstate HY000) lost connection"),
+		retryable:   true,
+		expQuery:    `update _vt.redo_state set state = 1, message = '(errno 2013) (sqlstate HY000) lost connection' where dtid = _binary'aa'`,
+	}}
+
+	for _, tc := range tcases {
+		t.Run(tc.receivedErr.Error(), func(t *testing.T) {
+			if tc.expQuery != "" {
+				db.AddQuery(tc.expQuery, &sqltypes.Result{})
+			}
+			nonRetryable := te.checkErrorAndMarkFailed(context.Background(), "aa", tc.receivedErr, "")
+			require.NotEqual(t, tc.retryable, nonRetryable)
+			if !tc.retryable {
+				require.Equal(t, errPrepFailed, te.preparedPool.reserved["aa"])
+			}
+			delete(te.preparedPool.reserved, "aa")
+		})
+	}
+}
+
+func TestIsTwoPCAllowed(t *testing.T) {
+	testcases := []struct {
+		semiSyncAllowed        bool
+		tabletControllsAllowed bool
+		wantAllowed            bool
+	}{
+		{
+			semiSyncAllowed:        true,
+			tabletControllsAllowed: true,
+			wantAllowed:            true,
+		},
+		{
+			semiSyncAllowed:        false,
+			tabletControllsAllowed: true,
+			wantAllowed:            false,
+		},
+		{
+			semiSyncAllowed:        true,
+			tabletControllsAllowed: false,
+			wantAllowed:            false,
+		},
+		{
+			semiSyncAllowed:        false,
+			tabletControllsAllowed: false,
+			wantAllowed:            false,
+		},
+	}
+
+	for _, tt := range testcases {
+		t.Run(fmt.Sprintf("SemiSyncAllowed - %v, TabletControlsAllowed - %v", tt.semiSyncAllowed, tt.tabletControllsAllowed), func(t *testing.T) {
+			te := &TxEngine{
+				twopcAllowed: []bool{true, true},
+			}
+			tsv := TabletServer{
+				te: te,
+			}
+			tsv.SetTwoPCAllowed(TwoPCAllowed_SemiSync, tt.semiSyncAllowed)
+			tsv.SetTwoPCAllowed(TwoPCAllowed_TabletControls, tt.tabletControllsAllowed)
+			require.Equal(t, tt.wantAllowed, te.IsTwoPCAllowed())
+		})
+	}
+}
+
+// TestPrepareTx tests prepareTx function in transaction engine.
+func TestPrepareTx(t *testing.T) {
+	testcases := []struct {
+		name           string
+		preparedTx     *tx.PreparedTx
+		requireFailure bool
+		errWanted      string
+		queryLogWanted string
+	}{
+		{
+			name: "Success",
+			preparedTx: &tx.PreparedTx{
+				Queries: []string{
+					"insert into vitess_test (intval) values(40)",
+					"set @@time_zone='+10:30'",
+					"insert into vitess_test (intval) values(20)",
+				},
+			},
+			requireFailure: false,
+			errWanted:      "",
+			queryLogWanted: "use `fakesqldb`;begin;insert into vitess_test (intval) values(40);set @@time_zone='+10:30';insert into vitess_test (intval) values(20)",
+		},
+		{
+			name: "Unretryable failure during query",
+			preparedTx: &tx.PreparedTx{
+				Queries: []string{
+					"insert into vitess_test (intval) values(40)",
+					"failing query",
+					"insert into vitess_test (intval) values(20)",
+				},
+			},
+			requireFailure: true,
+			errWanted:      "(errno 1105) (sqlstate HY000)",
+		},
+		{
+			name: "Retryable failure during query",
+			preparedTx: &tx.PreparedTx{
+				Queries: []string{
+					"insert into vitess_test (intval) values(40)",
+					"retryable query",
+					"insert into vitess_test (intval) values(20)",
+				},
+			},
+			requireFailure: false,
+			errWanted:      "Retryable error (errno 2002) (sqlstate HY000)",
+		},
+		{
+			name: "Success - Settings query in the beginning",
+			preparedTx: &tx.PreparedTx{
+				Queries: []string{
+					"set @@time_zone='+10:30'",
+					"insert into vitess_test (intval) values(40)",
+					"insert into vitess_test (intval) values(20)",
+				},
+			},
+			requireFailure: false,
+			errWanted:      "",
+			queryLogWanted: "use `fakesqldb`;set @@time_zone='+10:30';begin;insert into vitess_test (intval) values(40);insert into vitess_test (intval) values(20)",
+		},
+	}
+	for _, tt := range testcases {
+		t.Run(tt.name, func(t *testing.T) {
+			db := setUpQueryExecutorTest(t)
+			defer db.Close()
+			db.AddQueryPattern(".*", &sqltypes.Result{})
+			db.AddRejectedQuery("failing query", assert.AnError)
+			db.AddRejectedQuery("retryable query", sqlerror.NewSQLError(sqlerror.CRConnectionError, "", "Retryable error"))
+			cfg := tabletenv.NewDefaultConfig()
+			cfg.DB = newDBConfigs(db)
+			cfg.TwoPCAbandonAge = 200 * time.Second
+			te := NewTxEngine(tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TabletServerTest"), nil)
+			te.AcceptReadWrite()
+			db.ResetQueryLog()
+			failed, err := te.prepareTx(context.Background(), tt.preparedTx)
+			require.EqualValues(t, tt.requireFailure, failed)
+			if tt.errWanted != "" {
+				require.ErrorContains(t, err, tt.errWanted)
+				return
+			}
+			require.NoError(t, err)
+			require.EqualValues(t, 1, len(te.preparedPool.conns))
+			require.EqualValues(t, tt.queryLogWanted, db.QueryLog())
+		})
+	}
 }

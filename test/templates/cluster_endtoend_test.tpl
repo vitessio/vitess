@@ -14,7 +14,7 @@ env:
 jobs:
   build:
     name: Run endtoend tests on {{.Name}}
-    runs-on: {{if .Cores16}}gh-hosted-runners-16cores-1{{else}}gh-hosted-runners-4cores-1{{end}}
+    runs-on: {{if .Cores16}}gh-hosted-runners-16cores-1-24.04{{else}}ubuntu-24.04{{end}}
 
     steps:
     - name: Skip CI
@@ -87,7 +87,7 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
       with:
-        go-version: 1.23.0
+        go-version-file: go.mod
 
     - name: Set up python
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -117,19 +117,28 @@ jobs:
         sudo apt-get -qq update
 
         # Install everything else we need, and configure
-        sudo apt-get -qq install -y percona-server-server percona-server-client make unzip g++ etcd git wget eatmydata xz-utils libncurses5
+        sudo apt-get -qq install -y percona-server-server percona-server-client make unzip g++ etcd-client etcd-server git wget eatmydata xz-utils libncurses6
 
         {{else}}
 
         # Get key to latest MySQL repo
         sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys A8D3785C
         # Setup MySQL 8.0
-        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.32-1_all.deb
+        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.33-1_all.deb
         echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
         sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
         sudo apt-get -qq update
+
+        # We have to install this old version of libaio1 in case we end up testing with MySQL 5.7. See also:
+        # https://bugs.launchpad.net/ubuntu/+source/libaio/+bug/2067501
+        curl -L -O http://mirrors.kernel.org/ubuntu/pool/main/liba/libaio/libaio1_0.3.112-13build1_amd64.deb
+        sudo dpkg -i libaio1_0.3.112-13build1_amd64.deb
+        # libtinfo5 is also needed for older MySQL 5.7 builds.
+        curl -L -O http://mirrors.kernel.org/ubuntu/pool/universe/n/ncurses/libtinfo5_6.3-2ubuntu0.1_amd64.deb
+        sudo dpkg -i libtinfo5_6.3-2ubuntu0.1_amd64.deb
+
         # Install everything else we need, and configure
-        sudo apt-get -qq install -y mysql-server mysql-client make unzip g++ etcd curl git wget eatmydata xz-utils libncurses5
+        sudo apt-get -qq install -y mysql-server mysql-shell mysql-client make unzip g++ etcd-client etcd-server curl git wget eatmydata xz-utils libncurses6
 
         {{end}}
 
@@ -147,6 +156,15 @@ jobs:
         sudo apt-get -qq install -y percona-xtrabackup-80 lz4
 
         {{end}}
+
+    {{if .NeedsMinio }}
+    - name: Install Minio
+      if: steps.skip-workflow.outputs.skip-workflow == 'false'
+      run: |
+        wget https://dl.min.io/server/minio/release/linux-amd64/minio
+        chmod +x minio
+        mv minio /usr/local/bin
+    {{end}}
 
     {{if .MakeTools}}
 
@@ -206,6 +224,12 @@ jobs:
         EOF
         {{end}}
 
+        {{if .EnablePartialJSON}}
+        cat <<-EOF>>./config/mycnf/mysql8026.cnf
+        binlog-row-value-options=PARTIAL_JSON
+        EOF
+        {{end}}
+
         # run the tests however you normally do, then produce a JUnit XML file
         eatmydata -- go run test.go -docker={{if .Docker}}true -flavor={{.Platform}}{{else}}false{{end}} -follow -shard {{.Shard}}{{if .PartialKeyspace}} -partial-keyspace=true {{end}}{{if .BuildTag}} -build-tag={{.BuildTag}} {{end}} | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 
@@ -225,4 +249,4 @@ jobs:
       uses: test-summary/action@31493c76ec9e7aa675f1585d3ed6f1da69269a86 # v2.4
       with:
         paths: "report.xml"
-        show: "fail, skip"
+        show: "fail"

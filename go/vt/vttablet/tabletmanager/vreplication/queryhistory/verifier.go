@@ -72,7 +72,7 @@ func (v *Verifier) AcceptQuery(query string) *Result {
 			break
 		}
 	}
-
+	result.Message += fmt.Sprintf(" (query: %q) (pending: %q)", query, v.Pending())
 	return result
 }
 

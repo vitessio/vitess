@@ -63,7 +63,6 @@ import (
 	"vitess.io/vitess/go/test/endtoend/throttler"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
-	"vitess.io/vitess/go/vt/vttablet"
 	throttlebase "vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 )
@@ -121,7 +120,6 @@ const (
 )
 
 func TestMain(m *testing.M) {
-	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	exitcode, err := func() (int, error) {
@@ -145,9 +143,6 @@ func TestMain(m *testing.M) {
 			"--heartbeat_on_demand_duration", "5s",
 			"--migration_check_interval", "2s",
 			"--watch_replication_stream",
-			// Test VPlayer batching mode.
-			fmt.Sprintf("--vreplication_experimental_flags=%d",
-				vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage|vttablet.VReplicationExperimentalFlagOptimizeInserts|vttablet.VReplicationExperimentalFlagVPlayerBatching),
 		}
 		clusterInstance.VtGateExtraArgs = []string{
 			"--ddl_strategy", "online",
@@ -200,8 +195,7 @@ func TestMain(m *testing.M) {
 
 }
 
-func TestSchemaChange(t *testing.T) {
-	defer cluster.PanicHandler(t)
+func TestOnlineDDLFlow(t *testing.T) {
 	ctx := context.Background()
 
 	require.NotNil(t, clusterInstance)
@@ -250,7 +244,7 @@ func TestSchemaChange(t *testing.T) {
 						select {
 						case <-ticker.C:
 						case <-workloadCtx.Done():
-							t.Logf("Terminating routine throttler check")
+							fmt.Println("Terminating routine throttler check")
 							return
 						}
 					}
@@ -264,8 +258,8 @@ func TestSchemaChange(t *testing.T) {
 				wg.Add(1)
 				go func() {
 					defer cancel()
-					defer t.Logf("Terminating workload")
 					defer wg.Done()
+					defer fmt.Println("Terminating workload")
 					runMultipleConnections(workloadCtx, t)
 				}()
 			})

@@ -15,19 +15,19 @@ jobs:
       pull-requests: write
     strategy:
       matrix:
-        branch: [ main, release-20.0, release-19.0, release-18.0 ]
+        branch: [ main, release-21.0, release-20.0, release-19.0 ]
     name: Update Golang Version
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - name: Set up Go
-        uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
-        with:
-          go-version: 1.23.0
-
       - name: Check out code
         uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
           ref: ${{ matrix.branch }}
+
+      - name: Set up Go
+        uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
+        with:
+          go-version-file: go.mod
 
       - name: Detect new version and update codebase
         env:
@@ -38,7 +38,9 @@ jobs:
           echo "old-go-version=${old_go_version}" >> $GITHUB_OUTPUT
 
           if [ ${{ matrix.branch }} == "main" ]; then
-            go run ./go/tools/go-upgrade/go-upgrade.go upgrade --workflow-update=false --main --allow-major-upgrade
+            go run ./go/tools/go-upgrade/go-upgrade.go upgrade --main --allow-major-upgrade
+          elif [ ${{ matrix.branch }} == "release-21.0" ]; then
+            go run ./go/tools/go-upgrade/go-upgrade.go upgrade
           else
             go run ./go/tools/go-upgrade/go-upgrade.go upgrade --workflow-update=false
           fi
@@ -81,8 +83,6 @@ jobs:
             There are a few manual steps remaining:
               - [ ] Make sure you update the Golang version used in the previous and next release branches for the Upgrade/Downgrade tests.
               - [ ] Build and Push the bootstrap images to Docker Hub, the bot cannot handle that.
-              - [ ] Update the `./.github/workflows/*.yml` files with the newer Golang version, the bot cannot handle that due to permissions.
-                - To accomplish this, run the following: `go run ./go/tools/go-upgrade/go-upgrade.go upgrade workflows --go-to=${{steps.detect-and-update.outputs.go-version}}`
             
             cc @vitessio/release
           base: ${{ matrix.branch }}

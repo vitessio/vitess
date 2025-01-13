@@ -286,9 +286,9 @@ func (f *FakeQueryService) CreateTransaction(ctx context.Context, target *queryp
 }
 
 // StartCommit is part of the queryservice.QueryService interface
-func (f *FakeQueryService) StartCommit(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (err error) {
+func (f *FakeQueryService) StartCommit(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (state querypb.StartCommitState, err error) {
 	if f.HasError {
-		return f.TabletError
+		return querypb.StartCommitState_Fail, f.TabletError
 	}
 	if f.Panics {
 		panic(fmt.Errorf("test-triggered panic"))
@@ -300,7 +300,7 @@ func (f *FakeQueryService) StartCommit(ctx context.Context, target *querypb.Targ
 	if dtid != Dtid {
 		f.t.Errorf("StartCommit: invalid dtid: got %s expected %s", dtid, Dtid)
 	}
-	return nil
+	return querypb.StartCommitState_Success, nil
 }
 
 // SetRollback is part of the queryservice.QueryService interface
@@ -360,7 +360,7 @@ func (f *FakeQueryService) ReadTransaction(ctx context.Context, target *querypb.
 }
 
 // UnresolvedTransactions is part of the queryservice.QueryService interface
-func (f *FakeQueryService) UnresolvedTransactions(ctx context.Context, target *querypb.Target) ([]*querypb.TransactionMetadata, error) {
+func (f *FakeQueryService) UnresolvedTransactions(ctx context.Context, target *querypb.Target, abandonAgeSeconds int64) ([]*querypb.TransactionMetadata, error) {
 	if f.HasError {
 		return nil, f.TabletError
 	}
@@ -702,7 +702,8 @@ func (f *FakeQueryService) StreamHealth(ctx context.Context, callback func(*quer
 
 // VStream is part of the queryservice.QueryService interface
 func (f *FakeQueryService) VStream(ctx context.Context, request *binlogdatapb.VStreamRequest, send func([]*binlogdatapb.VEvent) error) error {
-	panic("not implemented")
+	// This is called as part of vreplication unit tests, so we don't panic here.
+	return fmt.Errorf("VStream not implemented")
 }
 
 // VStreamRows is part of the QueryService interface.

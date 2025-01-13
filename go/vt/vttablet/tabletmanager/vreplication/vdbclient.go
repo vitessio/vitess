@@ -30,23 +30,27 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
+const beginStmtLen = int64(len("begin;"))
+
 // vdbClient is a wrapper on binlogplayer.DBClient.
 // It allows us to retry a failed transactions on lock errors.
 type vdbClient struct {
 	binlogplayer.DBClient
-	stats         *binlogplayer.Stats
-	InTransaction bool
-	startTime     time.Time
-	queries       []string
-	queriesPos    int64
-	batchSize     int64
-	maxBatchSize  int64
+	stats            *binlogplayer.Stats
+	InTransaction    bool
+	startTime        time.Time
+	queries          []string
+	queriesPos       int64
+	batchSize        int64
+	maxBatchSize     int64
+	relayLogMaxItems int
 }
 
-func newVDBClient(dbclient binlogplayer.DBClient, stats *binlogplayer.Stats) *vdbClient {
+func newVDBClient(dbclient binlogplayer.DBClient, stats *binlogplayer.Stats, relayLogMaxItems int) *vdbClient {
 	return &vdbClient{
-		DBClient: dbclient,
-		stats:    stats,
+		DBClient:         dbclient,
+		stats:            stats,
+		relayLogMaxItems: relayLogMaxItems,
 	}
 }
 
@@ -54,16 +58,19 @@ func (vc *vdbClient) Begin() error {
 	if vc.InTransaction {
 		return nil
 	}
-	if err := vc.DBClient.Begin(); err != nil {
-		return err
+	if vc.maxBatchSize > 0 {
+		// We are batching the contents of the transaction, which
+		// starts with the BEGIN and ends with the COMMIT, so we
+		// do not send a BEGIN down the wire ahead of time.
+		vc.queriesPos = int64(len(vc.queries))
+		vc.batchSize = beginStmtLen
+	} else {
+		// We're not batching so we start the transaction here
+		// by sending the BEGIN down the wire.
+		if err := vc.DBClient.Begin(); err != nil {
+			return err
+		}
 	}
-
-	// If we're batching, we only batch the contents of the
-	// transaction, which starts with the begin and ends with
-	// the commit.
-	vc.queriesPos = int64(len(vc.queries))
-	vc.batchSize = 6 // begin and semicolon
-
 	vc.queries = append(vc.queries, "begin")
 	vc.InTransaction = true
 	vc.startTime = time.Now()
@@ -163,13 +170,13 @@ func (vc *vdbClient) ExecuteTrxQueryBatch() ([]*sqltypes.Result, error) {
 // Execute is ExecuteFetch without the maxrows.
 func (vc *vdbClient) Execute(query string) (*sqltypes.Result, error) {
 	// Number of rows should never exceed relayLogMaxItems.
-	return vc.ExecuteFetch(query, relayLogMaxItems)
+	return vc.ExecuteFetch(query, vc.relayLogMaxItems)
 }
 
 func (vc *vdbClient) ExecuteWithRetry(ctx context.Context, query string) (*sqltypes.Result, error) {
 	qr, err := vc.Execute(query)
 	for err != nil {
-		if sqlErr, ok := err.(*sqlerror.SQLError); ok && sqlErr.Number() == sqlerror.ERLockDeadlock || sqlErr.Number() == sqlerror.ERLockWaitTimeout {
+		if sqlErr, ok := err.(*sqlerror.SQLError); ok && (sqlErr.Number() == sqlerror.ERLockDeadlock || sqlErr.Number() == sqlerror.ERLockWaitTimeout) {
 			log.Infof("retryable error: %v, waiting for %v and retrying", sqlErr, dbLockRetryDelay)
 			if err := vc.Rollback(); err != nil {
 				return nil, err
@@ -199,7 +206,7 @@ func (vc *vdbClient) Retry() (*sqltypes.Result, error) {
 			continue
 		}
 		// Number of rows should never exceed relayLogMaxItems.
-		result, err := vc.DBClient.ExecuteFetch(q, relayLogMaxItems)
+		result, err := vc.DBClient.ExecuteFetch(q, vc.relayLogMaxItems)
 		if err != nil {
 			return nil, err
 		}

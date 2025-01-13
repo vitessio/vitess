@@ -358,6 +358,17 @@ message ExecuteOptions {
   // priority specifies the priority of the query, between 0 and 100. This is leveraged by the transaction
   // throttler to determine whether, under resource contention, a query should or should not be throttled.
   string priority = 16;
+
+  // timeout specifies the query timeout in milliseconds. If not set, the default timeout is used.
+  oneof timeout {
+    int64 authoritative_timeout = 17;
+  }
+
+  // fetch_last_insert_id indicates that after executing a DML involving last_insert_id(x),
+  // a subsequent "SELECT last_insert_id()" should be performed to retrieve the updated value.
+  // This is to circumvent a bug where setting last_insert_id(x) to zero is not signaled by mysql
+  // https://bugs.mysql.com/bug.php?id=116939
+  bool fetch_last_insert_id = 18;
 }
 
 // Field describes a single column returned by a query
@@ -422,6 +433,7 @@ message QueryResult {
   repeated Row rows = 4;
   string info = 6;
   string session_state_changes = 7;
+  bool insert_id_changed=8;
 }
 
 // QueryWarning is used to convey out of band query execution warnings
@@ -604,8 +616,16 @@ message StartCommitRequest {
   string dtid = 5;
 }
 
+enum StartCommitState {
+  Unknown = 0;
+  Fail = 1;
+  Success = 2;
+}
+
 // StartCommitResponse is the returned value from StartCommit
-message StartCommitResponse {}
+message StartCommitResponse {
+  StartCommitState state = 1;
+}
 
 // SetRollbackRequest is the payload to SetRollback
 message SetRollbackRequest {
@@ -648,6 +668,7 @@ message UnresolvedTransactionsRequest {
   vtrpc.CallerID effective_caller_id = 1;
   VTGateCallerID immediate_caller_id = 2;
   Target target = 3;
+  int64 abandon_age = 4; // Unresolved Transactions older than this (in seconds).
 }
 
 // UnresolvedTransactionsResponse is the returned value from UnresolvedTransactions

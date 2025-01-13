@@ -19,11 +19,13 @@ import React, { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 
 import { useWorkflow, useWorkflowStatus, useWorkflows } from '../../../hooks/api';
-import { formatDateTime } from '../../../util/time';
+import { formatDateTimeShort } from '../../../util/time';
 import {
     TableCopyState,
     formatStreamKey,
     getReverseWorkflow,
+    getStreamSource,
+    getStreamTarget,
     getStreams,
     getTableCopyStates,
 } from '../../../util/workflows';
@@ -32,11 +34,16 @@ import { vtctldata } from '../../../proto/vtadmin';
 import { DataCell } from '../../dataTable/DataCell';
 import { StreamStatePip } from '../../pips/StreamStatePip';
 import { ThrottleThresholdSeconds } from '../Workflows';
+import { ShardLink } from '../../links/ShardLink';
+import { Tooltip } from '../../tooltip/Tooltip';
+import { TabletLink } from '../../links/TabletLink';
+import { formatAlias } from '../../../util/tablets';
 
 interface Props {
     clusterID: string;
     keyspace: string;
     name: string;
+    refetchInterval: number;
 }
 
 const SUMMARY_COLUMNS = ['Stream Status', 'Traffic Status', 'Max VReplication Lag', 'Reverse Workflow'];
@@ -45,18 +52,23 @@ const LOG_COLUMNS = ['Type', 'State', 'Updated At', 'Message', 'Count'];
 
 const TABLE_COPY_STATE_COLUMNS = ['Table Name', 'Total Bytes', 'Bytes Copied', 'Total Rows', 'Rows Copied'];
 
-const STREAM_COLUMNS = ['Stream', 'State', 'Message', 'Transaction Timestamp', 'Database Name'];
+const STREAM_COLUMNS = ['Stream', 'Source Shard', 'Target Shard', 'Message', 'Transaction Timestamp', 'Database Name'];
 
-export const WorkflowDetails = ({ clusterID, keyspace, name }: Props) => {
+export const WorkflowDetails = ({ clusterID, keyspace, name, refetchInterval }: Props) => {
     const { data: workflowData } = useWorkflow({ clusterID, keyspace, name });
 
-    const { data: workflowsData = [] } = useWorkflows();
+    const { data: workflowsData = [] } = useWorkflows({ refetchInterval });
 
-    const { data: workflowStatus } = useWorkflowStatus({
-        clusterID,
-        keyspace,
-        name,
-    });
+    const { data: workflowStatus } = useWorkflowStatus(
+        {
+            clusterID,
+            keyspace,
+            name,
+        },
+        {
+            refetchInterval,
+        }
+    );
 
     const reverseWorkflow = getReverseWorkflow(workflowsData, workflowData);
 
@@ -112,15 +124,20 @@ export const WorkflowDetails = ({ clusterID, keyspace, name }: Props) => {
     const renderSummaryRows = (rows: (typeof workflowSummary)[]) => {
         return rows.map((row) => {
             const reverseWorkflow = row.reverseWorkflow;
+            let maxVReplicationLag = '-';
+            if (row.workflowData && row.workflowData.workflow?.max_v_replication_lag) {
+                maxVReplicationLag = `${row.workflowData.workflow?.max_v_replication_lag}`;
+                if (maxVReplicationLag === '1') {
+                    maxVReplicationLag += ' second';
+                } else {
+                    maxVReplicationLag += ' seconds';
+                }
+            }
             return (
                 <tr key={reverseWorkflow?.workflow?.name}>
                     <DataCell>{row.streamSummary ? row.streamSummary : '-'}</DataCell>
                     <DataCell>{row.workflowStatus ? row.workflowStatus.traffic_state : '-'}</DataCell>
-                    <DataCell>
-                        {row.workflowData && row.workflowData.workflow?.max_v_replication_lag
-                            ? `${row.workflowData.workflow?.max_v_replication_lag}`
-                            : '-'}
-                    </DataCell>
+                    <DataCell>{maxVReplicationLag}</DataCell>
                     <DataCell>
                         {reverseWorkflow ? (
                             <Link
@@ -140,6 +157,8 @@ export const WorkflowDetails = ({ clusterID, keyspace, name }: Props) => {
 
     const renderStreamRows = (rows: typeof streams) => {
         return rows.map((row) => {
+            const source = getStreamSource(row);
+            const target = getStreamTarget(row, keyspace);
             const href =
                 row.tablet && row.id
                     ? `/workflow/${clusterID}/${keyspace}/${name}/stream/${row.tablet.cell}/${row.tablet.uid}/${row.id}`
@@ -151,12 +170,22 @@ export const WorkflowDetails = ({ clusterID, keyspace, name }: Props) => {
             return (
                 <tr key={row.key}>
                     <DataCell>
-                        <StreamStatePip state={rowState} />{' '}
+                        <Tooltip text={rowState!}>
+                            <span>
+                                <StreamStatePip state={rowState} />{' '}
+                            </span>
+                        </Tooltip>
                         <Link className="font-bold" to={href}>
                             {row.key}
                         </Link>
                         <div className="text-sm text-secondary">
-                            Updated {formatDateTime(row.time_updated?.seconds)}
+                            Tablet{' '}
+                            <TabletLink alias={formatAlias(row.tablet)} clusterID={clusterID}>
+                                {formatAlias(row.tablet)}
+                            </TabletLink>
+                        </div>
+                        <div className="text-sm text-secondary">
+                            Updated {formatDateTimeShort(row.time_updated?.seconds)}
                         </div>
                         {isThrottled ? (
                             <div className="text-sm text-secondary">
@@ -165,11 +194,32 @@ export const WorkflowDetails = ({ clusterID, keyspace, name }: Props) => {
                             </div>
                         ) : null}
                     </DataCell>
-                    <DataCell>{rowState}</DataCell>
+                    <DataCell>
+                        {source ? (
+                            <ShardLink
+                                clusterID={clusterID}
+                                keyspace={row.binlog_source?.keyspace}
+                                shard={row.binlog_source?.shard}
+                            >
+                                {source}
+                            </ShardLink>
+                        ) : (
+                            '-'
+                        )}
+                    </DataCell>
+                    <DataCell>
+                        {target ? (
+                            <ShardLink clusterID={clusterID} keyspace={keyspace} shard={row.shard}>
+                                {target}
+                            </ShardLink>
+                        ) : (
+                            '-'
+                        )}
+                    </DataCell>
                     <DataCell>{row.message ? row.message : '-'}</DataCell>
                     <DataCell>
                         {row.transaction_timestamp && row.transaction_timestamp.seconds
-                            ? formatDateTime(row.transaction_timestamp.seconds)
+                            ? `${formatDateTimeShort(row.transaction_timestamp.seconds)}`
                             : '-'}
                     </DataCell>
                     <DataCell>{row.db_name}</DataCell>
@@ -189,7 +239,7 @@ export const WorkflowDetails = ({ clusterID, keyspace, name }: Props) => {
                 <tr key={`${row.id}`}>
                     <DataCell>{`${row.type}`}</DataCell>
                     <DataCell>{`${row.state}`}</DataCell>
-                    <DataCell>{`${formatDateTime(parseInt(`${row.updated_at?.seconds}`, 10))}`}</DataCell>
+                    <DataCell>{`${formatDateTimeShort(parseInt(`${row.updated_at?.seconds}`, 10))}`}</DataCell>
                     <DataCell>{message}</DataCell>
                     <DataCell>{`${row.count}`}</DataCell>
                 </tr>
@@ -219,20 +269,23 @@ export const WorkflowDetails = ({ clusterID, keyspace, name }: Props) => {
     };
 
     return (
-        <div className="mt-12 mb-16">
+        <div className="mt-8 mb-16">
             <DataTable
                 columns={SUMMARY_COLUMNS}
                 data={[workflowSummary]}
                 renderRows={renderSummaryRows}
                 pageSize={1}
                 title="Summary"
+                pageKey="summary"
             />
+            <span id="workflowStreams"></span>
             <DataTable
                 columns={STREAM_COLUMNS}
                 data={streams}
                 renderRows={renderStreamRows}
                 pageSize={10}
                 title="Streams"
+                pageKey="streams"
             />
             {tableCopyStates && (
                 <DataTable
@@ -241,20 +294,26 @@ export const WorkflowDetails = ({ clusterID, keyspace, name }: Props) => {
                     renderRows={renderTableCopyStateRows}
                     pageSize={1000}
                     title="Table Copy State"
+                    pageKey="tableCopyState"
                 />
             )}
             <h3 className="mt-8 mb-4">Recent Logs</h3>
-            {streams.map((stream) => (
-                <div className="mt-2" key={stream.key}>
-                    <DataTable
-                        columns={LOG_COLUMNS}
-                        data={orderBy(stream.logs, 'id', 'desc')}
-                        renderRows={renderLogRows}
-                        pageSize={10}
-                        title={stream.key!}
-                    />
-                </div>
-            ))}
+            {streams.length <= 8 ? (
+                streams.map((stream) => (
+                    <div className="mt-2" key={stream.key}>
+                        <DataTable
+                            columns={LOG_COLUMNS}
+                            data={orderBy(stream.logs, 'id', 'desc')}
+                            renderRows={renderLogRows}
+                            pageSize={10}
+                            title={stream.key!}
+                            pageKey={`${formatAlias(stream.tablet)}${stream.id}`}
+                        />
+                    </div>
+                ))
+            ) : (
+                <span>Recent logs from streams are not displayed due to the large number of shards.</span>
+            )}
         </div>
     );
 };

@@ -86,8 +86,8 @@ func (u *Update) GetOrdering(*plancontext.PlanningContext) []OrderBy {
 	return nil
 }
 
-func (u *Update) TablesUsed() []string {
-	return SingleQualifiedIdentifier(u.Target.VTable.Keyspace, u.Target.VTable.Name)
+func (u *Update) TablesUsed(in []string) []string {
+	return append(in, QualifiedString(u.Target.VTable.Keyspace, u.Target.VTable.Name.String()))
 }
 
 func (u *Update) ShortDescription() string {
@@ -110,11 +110,7 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 	var targetTbl TargetTable
 	op, targetTbl, updClone = createUpdateOperator(ctx, updStmt)
 
-	op = &LockAndComment{
-		Source:   op,
-		Comments: updStmt.Comments,
-		Lock:     sqlparser.ShareModeLock,
-	}
+	op = newLockAndComment(op, updStmt.Comments, sqlparser.ShareModeLock)
 
 	parentFks = ctx.SemTable.GetParentForeignKeysForTableSet(targetTbl.ID)
 	childFks = ctx.SemTable.GetChildForeignKeysForTableSet(targetTbl.ID)
@@ -168,7 +164,7 @@ func createUpdateWithInputOp(ctx *plancontext.PlanningContext, upd *sqlparser.Up
 	ueMap := prepareUpdateExpressionList(ctx, upd)
 
 	var updOps []dmlOp
-	for _, target := range ctx.SemTable.Targets.Constituents() {
+	for _, target := range ctx.SemTable.DMLTargets.Constituents() {
 		op := createUpdateOpWithTarget(ctx, upd, target, ueMap[target])
 		updOps = append(updOps, op)
 	}
@@ -203,10 +199,7 @@ func createUpdateWithInputOp(ctx *plancontext.PlanningContext, upd *sqlparser.Up
 	}
 
 	if upd.Comments != nil {
-		op = &LockAndComment{
-			Source:   op,
-			Comments: upd.Comments,
-		}
+		op = newLockAndComment(op, upd.Comments, sqlparser.NoLock)
 	}
 	return op
 }
@@ -315,7 +308,7 @@ func errIfUpdateNotSupported(ctx *plancontext.PlanningContext, stmt *sqlparser.U
 		}
 	}
 
-	// Now we check if any of the foreign key columns that are being udpated have dependencies on other updated columns.
+	// Now we check if any of the foreign key columns that are being updated have dependencies on other updated columns.
 	// This is unsafe, and we currently don't support this in Vitess.
 	if err := ctx.SemTable.ErrIfFkDependentColumnUpdated(stmt.Exprs); err != nil {
 		panic(err)
@@ -399,10 +392,7 @@ func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.U
 	}
 
 	if updStmt.Limit != nil {
-		updOp.Source = &Limit{
-			Source: updOp.Source,
-			AST:    updStmt.Limit,
-		}
+		updOp.Source = newLimit(updOp.Source, updStmt.Limit, false)
 	}
 
 	return sqc.getRootOperator(updOp, nil), targetTbl, updClone

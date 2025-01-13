@@ -50,7 +50,7 @@ const InfoDropdown: React.FC<InfoDropdownProps> = ({ alias, clusterID }) => {
 
     return (
         <div className="w-min inline-block">
-            <Dropdown dropdownButton={Icons.info} position="bottom-right">
+            <Dropdown dropdownButton={Icons.info}>
                 <MenuItem onClick={() => openDialog('ping')}>Ping</MenuItem>
                 <MenuItem onClick={() => openDialog('refresh')}>Refresh state</MenuItem>
                 <MenuItem onClick={() => openDialog('healthcheck')}>Run health check</MenuItem>

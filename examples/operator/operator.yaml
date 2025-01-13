@@ -2,8 +2,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.11.3
-  creationTimestamp: null
+    controller-gen.kubebuilder.io/version: v0.16.1
   name: etcdlockservers.planetscale.com
 spec:
   group: planetscale.com
@@ -61,6 +60,7 @@ spec:
                       items:
                         type: string
                       type: array
+                      x-kubernetes-list-type: atomic
                     dataSource:
                       properties:
                         apiGroup:
@@ -90,18 +90,6 @@ spec:
                       type: object
                     resources:
                       properties:
-                        claims:
-                          items:
-                            properties:
-                              name:
-                                type: string
-                            required:
-                              - name
-                            type: object
-                          type: array
-                          x-kubernetes-list-map-keys:
-                            - name
-                          x-kubernetes-list-type: map
                         limits:
                           additionalProperties:
                             anyOf:
@@ -132,11 +120,13 @@ spec:
                                 items:
                                   type: string
                                 type: array
+                                x-kubernetes-list-type: atomic
                             required:
                               - key
                               - operator
                             type: object
                           type: array
+                          x-kubernetes-list-type: atomic
                         matchLabels:
                           additionalProperties:
                             type: string
@@ -144,6 +134,8 @@ spec:
                       type: object
                       x-kubernetes-map-type: atomic
                     storageClassName:
+                      type: string
+                    volumeAttributesClassName:
                       type: string
                     volumeMode:
                       type: string
@@ -164,6 +156,7 @@ spec:
                               key:
                                 type: string
                               name:
+                                default: ""
                                 type: string
                               optional:
                                 type: boolean
@@ -202,6 +195,7 @@ spec:
                               key:
                                 type: string
                               name:
+                                default: ""
                                 type: string
                               optional:
                                 type: boolean
@@ -233,6 +227,8 @@ spec:
                         type: string
                       readOnly:
                         type: boolean
+                      recursiveReadOnly:
+                        type: string
                       subPath:
                         type: string
                       subPathExpr:
@@ -252,6 +248,7 @@ spec:
                   items:
                     properties:
                       name:
+                        default: ""
                         type: string
                     type: object
                     x-kubernetes-map-type: atomic
@@ -278,6 +275,8 @@ spec:
                       items:
                         properties:
                           name:
+                            type: string
+                          request:
                             type: string
                         required:
                           - name
@@ -330,8 +329,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.11.3
-  creationTimestamp: null
+    controller-gen.kubebuilder.io/version: v0.16.1
   name: vitessbackups.planetscale.com
 spec:
   group: planetscale.com
@@ -383,8 +381,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.11.3
-  creationTimestamp: null
+    controller-gen.kubebuilder.io/version: v0.16.1
   name: vitessbackupschedules.planetscale.com
 spec:
   group: planetscale.com
@@ -448,6 +445,8 @@ spec:
                       items:
                         properties:
                           name:
+                            type: string
+                          request:
                             type: string
                         required:
                           - name
@@ -554,8 +553,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.11.3
-  creationTimestamp: null
+    controller-gen.kubebuilder.io/version: v0.16.1
   name: vitessbackupstorages.planetscale.com
 spec:
   group: planetscale.com
@@ -681,6 +679,9 @@ spec:
                           maxLength: 256
                           pattern: ^[^\r\n]*$
                           type: string
+                        minPartSize:
+                          format: int64
+                          type: integer
                         region:
                           minLength: 1
                           type: string
@@ -720,8 +721,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.11.3
-  creationTimestamp: null
+    controller-gen.kubebuilder.io/version: v0.16.1
   name: vitesscells.planetscale.com
 spec:
   group: planetscale.com
@@ -779,6 +779,341 @@ spec:
                               type: object
                           type: object
                       type: object
+                    autoscaler:
+                      properties:
+                        behavior:
+                          properties:
+                            scaleDown:
+                              properties:
+                                policies:
+                                  items:
+                                    properties:
+                                      periodSeconds:
+                                        format: int32
+                                        type: integer
+                                      type:
+                                        type: string
+                                      value:
+                                        format: int32
+                                        type: integer
+                                    required:
+                                      - periodSeconds
+                                      - type
+                                      - value
+                                    type: object
+                                  type: array
+                                  x-kubernetes-list-type: atomic
+                                selectPolicy:
+                                  type: string
+                                stabilizationWindowSeconds:
+                                  format: int32
+                                  type: integer
+                              type: object
+                            scaleUp:
+                              properties:
+                                policies:
+                                  items:
+                                    properties:
+                                      periodSeconds:
+                                        format: int32
+                                        type: integer
+                                      type:
+                                        type: string
+                                      value:
+                                        format: int32
+                                        type: integer
+                                    required:
+                                      - periodSeconds
+                                      - type
+                                      - value
+                                    type: object
+                                  type: array
+                                  x-kubernetes-list-type: atomic
+                                selectPolicy:
+                                  type: string
+                                stabilizationWindowSeconds:
+                                  format: int32
+                                  type: integer
+                              type: object
+                          type: object
+                        maxReplicas:
+                          format: int32
+                          minimum: 0
+                          type: integer
+                        metrics:
+                          items:
+                            properties:
+                              containerResource:
+                                properties:
+                                  container:
+                                    type: string
+                                  name:
+                                    type: string
+                                  target:
+                                    properties:
+                                      averageUtilization:
+                                        format: int32
+                                        type: integer
+                                      averageValue:
+                                        anyOf:
+                                          - type: integer
+                                          - type: string
+                                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                        x-kubernetes-int-or-string: true
+                                      type:
+                                        type: string
+                                      value:
+                                        anyOf:
+                                          - type: integer
+                                          - type: string
+                                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                        x-kubernetes-int-or-string: true
+                                    required:
+                                      - type
+                                    type: object
+                                required:
+                                  - container
+                                  - name
+                                  - target
+                                type: object
+                              external:
+                                properties:
+                                  metric:
+                                    properties:
+                                      name:
+                                        type: string
+                                      selector:
+                                        properties:
+                                          matchExpressions:
+                                            items:
+                                              properties:
+                                                key:
+                                                  type: string
+                                                operator:
+                                                  type: string
+                                                values:
+                                                  items:
+                                                    type: string
+                                                  type: array
+                                                  x-kubernetes-list-type: atomic
+                                              required:
+                                                - key
+                                                - operator
+                                              type: object
+                                            type: array
+                                            x-kubernetes-list-type: atomic
+                                          matchLabels:
+                                            additionalProperties:
+                                              type: string
+                                            type: object
+                                        type: object
+                                        x-kubernetes-map-type: atomic
+                                    required:
+                                      - name
+                                    type: object
+                                  target:
+                                    properties:
+                                      averageUtilization:
+                                        format: int32
+                                        type: integer
+                                      averageValue:
+                                        anyOf:
+                                          - type: integer
+                                          - type: string
+                                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                        x-kubernetes-int-or-string: true
+                                      type:
+                                        type: string
+                                      value:
+                                        anyOf:
+                                          - type: integer
+                                          - type: string
+                                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                        x-kubernetes-int-or-string: true
+                                    required:
+                                      - type
+                                    type: object
+                                required:
+                                  - metric
+                                  - target
+                                type: object
+                              object:
+                                properties:
+                                  describedObject:
+                                    properties:
+                                      apiVersion:
+                                        type: string
+                                      kind:
+                                        type: string
+                                      name:
+                                        type: string
+                                    required:
+                                      - kind
+                                      - name
+                                    type: object
+                                  metric:
+                                    properties:
+                                      name:
+                                        type: string
+                                      selector:
+                                        properties:
+                                          matchExpressions:
+                                            items:
+                                              properties:
+                                                key:
+                                                  type: string
+                                                operator:
+                                                  type: string
+                                                values:
+                                                  items:
+                                                    type: string
+                                                  type: array
+                                                  x-kubernetes-list-type: atomic
+                                              required:
+                                                - key
+                                                - operator
+                                              type: object
+                                            type: array
+                                            x-kubernetes-list-type: atomic
+                                          matchLabels:
+                                            additionalProperties:
+                                              type: string
+                                            type: object
+                                        type: object
+                                        x-kubernetes-map-type: atomic
+                                    required:
+                                      - name
+                                    type: object
+                                  target:
+                                    properties:
+                                      averageUtilization:
+                                        format: int32
+                                        type: integer
+                                      averageValue:
+                                        anyOf:
+                                          - type: integer
+                                          - type: string
+                                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                        x-kubernetes-int-or-string: true
+                                      type:
+                                        type: string
+                                      value:
+                                        anyOf:
+                                          - type: integer
+                                          - type: string
+                                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                        x-kubernetes-int-or-string: true
+                                    required:
+                                      - type
+                                    type: object
+                                required:
+                                  - describedObject
+                                  - metric
+                                  - target
+                                type: object
+                              pods:
+                                properties:
+                                  metric:
+                                    properties:
+                                      name:
+                                        type: string
+                                      selector:
+                                        properties:
+                                          matchExpressions:
+                                            items:
+                                              properties:
+                                                key:
+                                                  type: string
+                                                operator:
+                                                  type: string
+                                                values:
+                                                  items:
+                                                    type: string
+                                                  type: array
+                                                  x-kubernetes-list-type: atomic
+                                              required:
+                                                - key
+                                                - operator
+                                              type: object
+                                            type: array
+                                            x-kubernetes-list-type: atomic
+                                          matchLabels:
+                                            additionalProperties:
+                                              type: string
+                                            type: object
+                                        type: object
+                                        x-kubernetes-map-type: atomic
+                                    required:
+                                      - name
+                                    type: object
+                                  target:
+                                    properties:
+                                      averageUtilization:
+                                        format: int32
+                                        type: integer
+                                      averageValue:
+                                        anyOf:
+                                          - type: integer
+                                          - type: string
+                                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                        x-kubernetes-int-or-string: true
+                                      type:
+                                        type: string
+                                      value:
+                                        anyOf:
+                                          - type: integer
+                                          - type: string
+                                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                        x-kubernetes-int-or-string: true
+                                    required:
+                                      - type
+                                    type: object
+                                required:
+                                  - metric
+                                  - target
+                                type: object
+                              resource:
+                                properties:
+                                  name:
+                                    type: string
+                                  target:
+                                    properties:
+                                      averageUtilization:
+                                        format: int32
+                                        type: integer
+                                      averageValue:
+                                        anyOf:
+                                          - type: integer
+                                          - type: string
+                                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                        x-kubernetes-int-or-string: true
+                                      type:
+                                        type: string
+                                      value:
+                                        anyOf:
+                                          - type: integer
+                                          - type: string
+                                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                        x-kubernetes-int-or-string: true
+                                    required:
+                                      - type
+                                    type: object
+                                required:
+                                  - name
+                                  - target
+                                type: object
+                              type:
+                                type: string
+                            required:
+                              - type
+                            type: object
+                          type: array
+                          x-kubernetes-list-type: atomic
+                        minReplicas:
+                          format: int32
+                          minimum: 0
+                          type: integer
+                      type: object
                     extraEnv:
                       items:
                         properties:
@@ -793,6 +1128,7 @@ spec:
                                   key:
                                     type: string
                                   name:
+                                    default: ""
                                     type: string
                                   optional:
                                     type: boolean
@@ -831,6 +1167,7 @@ spec:
                                   key:
                                     type: string
                                   name:
+                                    default: ""
                                     type: string
                                   optional:
                                     type: boolean
@@ -862,6 +1199,8 @@ spec:
                             type: string
                           readOnly:
                             type: boolean
+                          recursiveReadOnly:
+                            type: string
                           subPath:
                             type: string
                           subPathExpr:
@@ -885,6 +1224,7 @@ spec:
                                   items:
                                     type: string
                                   type: array
+                                  x-kubernetes-list-type: atomic
                               type: object
                             httpGet:
                               properties:
@@ -902,6 +1242,7 @@ spec:
                                       - value
                                     type: object
                                   type: array
+                                  x-kubernetes-list-type: atomic
                                 path:
                                   type: string
                                 port:
@@ -913,6 +1254,14 @@ spec:
                                   type: string
                               required:
                                 - port
+                              type: object
+                            sleep:
+                              properties:
+                                seconds:
+                                  format: int64
+                                  type: integer
+                              required:
+                                - seconds
                               type: object
                             tcpSocket:
                               properties:
@@ -935,6 +1284,7 @@ spec:
                                   items:
                                     type: string
                                   type: array
+                                  x-kubernetes-list-type: atomic
                               type: object
                             httpGet:
                               properties:
@@ -952,6 +1302,7 @@ spec:
                                       - value
                                     type: object
                                   type: array
+                                  x-kubernetes-list-type: atomic
                                 path:
                                   type: string
                                 port:
@@ -963,6 +1314,14 @@ spec:
                                   type: string
                               required:
                                 - port
+                              type: object
+                            sleep:
+                              properties:
+                                seconds:
+                                  format: int64
+                                  type: integer
+                              required:
+                                - seconds
                               type: object
                             tcpSocket:
                               properties:
@@ -988,6 +1347,8 @@ spec:
                           items:
                             properties:
                               name:
+                                type: string
+                              request:
                                 type: string
                             required:
                               - name
@@ -1109,6 +1470,7 @@ spec:
                   items:
                     properties:
                       name:
+                        default: ""
                         type: string
                     type: object
                     x-kubernetes-map-type: atomic
@@ -1157,6 +1519,7 @@ spec:
                               items:
                                 type: string
                               type: array
+                              x-kubernetes-list-type: atomic
                             dataSource:
                               properties:
                                 apiGroup:
@@ -1186,18 +1549,6 @@ spec:
                               type: object
                             resources:
                               properties:
-                                claims:
-                                  items:
-                                    properties:
-                                      name:
-                                        type: string
-                                    required:
-                                      - name
-                                    type: object
-                                  type: array
-                                  x-kubernetes-list-map-keys:
-                                    - name
-                                  x-kubernetes-list-type: map
                                 limits:
                                   additionalProperties:
                                     anyOf:
@@ -1228,11 +1579,13 @@ spec:
                                         items:
                                           type: string
                                         type: array
+                                        x-kubernetes-list-type: atomic
                                     required:
                                       - key
                                       - operator
                                     type: object
                                   type: array
+                                  x-kubernetes-list-type: atomic
                                 matchLabels:
                                   additionalProperties:
                                     type: string
@@ -1240,6 +1593,8 @@ spec:
                               type: object
                               x-kubernetes-map-type: atomic
                             storageClassName:
+                              type: string
+                            volumeAttributesClassName:
                               type: string
                             volumeMode:
                               type: string
@@ -1260,6 +1615,7 @@ spec:
                                       key:
                                         type: string
                                       name:
+                                        default: ""
                                         type: string
                                       optional:
                                         type: boolean
@@ -1298,6 +1654,7 @@ spec:
                                       key:
                                         type: string
                                       name:
+                                        default: ""
                                         type: string
                                       optional:
                                         type: boolean
@@ -1329,6 +1686,8 @@ spec:
                                 type: string
                               readOnly:
                                 type: boolean
+                              recursiveReadOnly:
+                                type: string
                               subPath:
                                 type: string
                               subPathExpr:
@@ -1348,6 +1707,7 @@ spec:
                           items:
                             properties:
                               name:
+                                default: ""
                                 type: string
                             type: object
                             x-kubernetes-map-type: atomic
@@ -1374,6 +1734,8 @@ spec:
                               items:
                                 properties:
                                   name:
+                                    type: string
+                                  request:
                                     type: string
                                 required:
                                   - name
@@ -1455,6 +1817,12 @@ spec:
                   properties:
                     available:
                       type: string
+                    labelSelector:
+                      type: string
+                    replicas:
+                      format: int32
+                      minimum: 0
+                      type: integer
                     serviceName:
                       type: string
                   type: object
@@ -1485,14 +1853,17 @@ spec:
       served: true
       storage: true
       subresources:
+        scale:
+          labelSelectorPath: .status.gateway.labelSelector
+          specReplicasPath: .spec.gateway.replicas
+          statusReplicasPath: .status.gateway.replicas
         status: {}
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.11.3
-  creationTimestamp: null
+    controller-gen.kubebuilder.io/version: v0.16.1
   name: vitessclusters.planetscale.com
 spec:
   group: planetscale.com
@@ -1523,6 +1894,7 @@ spec:
                       enum:
                         - builtin
                         - xtrabackup
+                        - mysqlshell
                       type: string
                     locations:
                       items:
@@ -1626,6 +1998,9 @@ spec:
                                 maxLength: 256
                                 pattern: ^[^\r\n]*$
                                 type: string
+                              minPartSize:
+                                format: int64
+                                type: integer
                               region:
                                 minLength: 1
                                 type: string
@@ -1678,6 +2053,8 @@ spec:
                                 items:
                                   properties:
                                     name:
+                                      type: string
+                                    request:
                                       type: string
                                   required:
                                     - name
@@ -1784,6 +2161,341 @@ spec:
                                     type: object
                                 type: object
                             type: object
+                          autoscaler:
+                            properties:
+                              behavior:
+                                properties:
+                                  scaleDown:
+                                    properties:
+                                      policies:
+                                        items:
+                                          properties:
+                                            periodSeconds:
+                                              format: int32
+                                              type: integer
+                                            type:
+                                              type: string
+                                            value:
+                                              format: int32
+                                              type: integer
+                                          required:
+                                            - periodSeconds
+                                            - type
+                                            - value
+                                          type: object
+                                        type: array
+                                        x-kubernetes-list-type: atomic
+                                      selectPolicy:
+                                        type: string
+                                      stabilizationWindowSeconds:
+                                        format: int32
+                                        type: integer
+                                    type: object
+                                  scaleUp:
+                                    properties:
+                                      policies:
+                                        items:
+                                          properties:
+                                            periodSeconds:
+                                              format: int32
+                                              type: integer
+                                            type:
+                                              type: string
+                                            value:
+                                              format: int32
+                                              type: integer
+                                          required:
+                                            - periodSeconds
+                                            - type
+                                            - value
+                                          type: object
+                                        type: array
+                                        x-kubernetes-list-type: atomic
+                                      selectPolicy:
+                                        type: string
+                                      stabilizationWindowSeconds:
+                                        format: int32
+                                        type: integer
+                                    type: object
+                                type: object
+                              maxReplicas:
+                                format: int32
+                                minimum: 0
+                                type: integer
+                              metrics:
+                                items:
+                                  properties:
+                                    containerResource:
+                                      properties:
+                                        container:
+                                          type: string
+                                        name:
+                                          type: string
+                                        target:
+                                          properties:
+                                            averageUtilization:
+                                              format: int32
+                                              type: integer
+                                            averageValue:
+                                              anyOf:
+                                                - type: integer
+                                                - type: string
+                                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                              x-kubernetes-int-or-string: true
+                                            type:
+                                              type: string
+                                            value:
+                                              anyOf:
+                                                - type: integer
+                                                - type: string
+                                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                              x-kubernetes-int-or-string: true
+                                          required:
+                                            - type
+                                          type: object
+                                      required:
+                                        - container
+                                        - name
+                                        - target
+                                      type: object
+                                    external:
+                                      properties:
+                                        metric:
+                                          properties:
+                                            name:
+                                              type: string
+                                            selector:
+                                              properties:
+                                                matchExpressions:
+                                                  items:
+                                                    properties:
+                                                      key:
+                                                        type: string
+                                                      operator:
+                                                        type: string
+                                                      values:
+                                                        items:
+                                                          type: string
+                                                        type: array
+                                                        x-kubernetes-list-type: atomic
+                                                    required:
+                                                      - key
+                                                      - operator
+                                                    type: object
+                                                  type: array
+                                                  x-kubernetes-list-type: atomic
+                                                matchLabels:
+                                                  additionalProperties:
+                                                    type: string
+                                                  type: object
+                                              type: object
+                                              x-kubernetes-map-type: atomic
+                                          required:
+                                            - name
+                                          type: object
+                                        target:
+                                          properties:
+                                            averageUtilization:
+                                              format: int32
+                                              type: integer
+                                            averageValue:
+                                              anyOf:
+                                                - type: integer
+                                                - type: string
+                                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                              x-kubernetes-int-or-string: true
+                                            type:
+                                              type: string
+                                            value:
+                                              anyOf:
+                                                - type: integer
+                                                - type: string
+                                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                              x-kubernetes-int-or-string: true
+                                          required:
+                                            - type
+                                          type: object
+                                      required:
+                                        - metric
+                                        - target
+                                      type: object
+                                    object:
+                                      properties:
+                                        describedObject:
+                                          properties:
+                                            apiVersion:
+                                              type: string
+                                            kind:
+                                              type: string
+                                            name:
+                                              type: string
+                                          required:
+                                            - kind
+                                            - name
+                                          type: object
+                                        metric:
+                                          properties:
+                                            name:
+                                              type: string
+                                            selector:
+                                              properties:
+                                                matchExpressions:
+                                                  items:
+                                                    properties:
+                                                      key:
+                                                        type: string
+                                                      operator:
+                                                        type: string
+                                                      values:
+                                                        items:
+                                                          type: string
+                                                        type: array
+                                                        x-kubernetes-list-type: atomic
+                                                    required:
+                                                      - key
+                                                      - operator
+                                                    type: object
+                                                  type: array
+                                                  x-kubernetes-list-type: atomic
+                                                matchLabels:
+                                                  additionalProperties:
+                                                    type: string
+                                                  type: object
+                                              type: object
+                                              x-kubernetes-map-type: atomic
+                                          required:
+                                            - name
+                                          type: object
+                                        target:
+                                          properties:
+                                            averageUtilization:
+                                              format: int32
+                                              type: integer
+                                            averageValue:
+                                              anyOf:
+                                                - type: integer
+                                                - type: string
+                                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                              x-kubernetes-int-or-string: true
+                                            type:
+                                              type: string
+                                            value:
+                                              anyOf:
+                                                - type: integer
+                                                - type: string
+                                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                              x-kubernetes-int-or-string: true
+                                          required:
+                                            - type
+                                          type: object
+                                      required:
+                                        - describedObject
+                                        - metric
+                                        - target
+                                      type: object
+                                    pods:
+                                      properties:
+                                        metric:
+                                          properties:
+                                            name:
+                                              type: string
+                                            selector:
+                                              properties:
+                                                matchExpressions:
+                                                  items:
+                                                    properties:
+                                                      key:
+                                                        type: string
+                                                      operator:
+                                                        type: string
+                                                      values:
+                                                        items:
+                                                          type: string
+                                                        type: array
+                                                        x-kubernetes-list-type: atomic
+                                                    required:
+                                                      - key
+                                                      - operator
+                                                    type: object
+                                                  type: array
+                                                  x-kubernetes-list-type: atomic
+                                                matchLabels:
+                                                  additionalProperties:
+                                                    type: string
+                                                  type: object
+                                              type: object
+                                              x-kubernetes-map-type: atomic
+                                          required:
+                                            - name
+                                          type: object
+                                        target:
+                                          properties:
+                                            averageUtilization:
+                                              format: int32
+                                              type: integer
+                                            averageValue:
+                                              anyOf:
+                                                - type: integer
+                                                - type: string
+                                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                              x-kubernetes-int-or-string: true
+                                            type:
+                                              type: string
+                                            value:
+                                              anyOf:
+                                                - type: integer
+                                                - type: string
+                                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                              x-kubernetes-int-or-string: true
+                                          required:
+                                            - type
+                                          type: object
+                                      required:
+                                        - metric
+                                        - target
+                                      type: object
+                                    resource:
+                                      properties:
+                                        name:
+                                          type: string
+                                        target:
+                                          properties:
+                                            averageUtilization:
+                                              format: int32
+                                              type: integer
+                                            averageValue:
+                                              anyOf:
+                                                - type: integer
+                                                - type: string
+                                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                              x-kubernetes-int-or-string: true
+                                            type:
+                                              type: string
+                                            value:
+                                              anyOf:
+                                                - type: integer
+                                                - type: string
+                                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                              x-kubernetes-int-or-string: true
+                                          required:
+                                            - type
+                                          type: object
+                                      required:
+                                        - name
+                                        - target
+                                      type: object
+                                    type:
+                                      type: string
+                                  required:
+                                    - type
+                                  type: object
+                                type: array
+                                x-kubernetes-list-type: atomic
+                              minReplicas:
+                                format: int32
+                                minimum: 0
+                                type: integer
+                            type: object
                           extraEnv:
                             items:
                               properties:
@@ -1798,6 +2510,7 @@ spec:
                                         key:
                                           type: string
                                         name:
+                                          default: ""
                                           type: string
                                         optional:
                                           type: boolean
@@ -1836,6 +2549,7 @@ spec:
                                         key:
                                           type: string
                                         name:
+                                          default: ""
                                           type: string
                                         optional:
                                           type: boolean
@@ -1867,6 +2581,8 @@ spec:
                                   type: string
                                 readOnly:
                                   type: boolean
+                                recursiveReadOnly:
+                                  type: string
                                 subPath:
                                   type: string
                                 subPathExpr:
@@ -1890,6 +2606,7 @@ spec:
                                         items:
                                           type: string
                                         type: array
+                                        x-kubernetes-list-type: atomic
                                     type: object
                                   httpGet:
                                     properties:
@@ -1907,6 +2624,7 @@ spec:
                                             - value
                                           type: object
                                         type: array
+                                        x-kubernetes-list-type: atomic
                                       path:
                                         type: string
                                       port:
@@ -1918,6 +2636,14 @@ spec:
                                         type: string
                                     required:
                                       - port
+                                    type: object
+                                  sleep:
+                                    properties:
+                                      seconds:
+                                        format: int64
+                                        type: integer
+                                    required:
+                                      - seconds
                                     type: object
                                   tcpSocket:
                                     properties:
@@ -1940,6 +2666,7 @@ spec:
                                         items:
                                           type: string
                                         type: array
+                                        x-kubernetes-list-type: atomic
                                     type: object
                                   httpGet:
                                     properties:
@@ -1957,6 +2684,7 @@ spec:
                                             - value
                                           type: object
                                         type: array
+                                        x-kubernetes-list-type: atomic
                                       path:
                                         type: string
                                       port:
@@ -1968,6 +2696,14 @@ spec:
                                         type: string
                                     required:
                                       - port
+                                    type: object
+                                  sleep:
+                                    properties:
+                                      seconds:
+                                        format: int64
+                                        type: integer
+                                    required:
+                                      - seconds
                                     type: object
                                   tcpSocket:
                                     properties:
@@ -1993,6 +2729,8 @@ spec:
                                 items:
                                   properties:
                                     name:
+                                      type: string
+                                    request:
                                       type: string
                                   required:
                                     - name
@@ -2117,6 +2855,7 @@ spec:
                                     items:
                                       type: string
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                   dataSource:
                                     properties:
                                       apiGroup:
@@ -2146,18 +2885,6 @@ spec:
                                     type: object
                                   resources:
                                     properties:
-                                      claims:
-                                        items:
-                                          properties:
-                                            name:
-                                              type: string
-                                          required:
-                                            - name
-                                          type: object
-                                        type: array
-                                        x-kubernetes-list-map-keys:
-                                          - name
-                                        x-kubernetes-list-type: map
                                       limits:
                                         additionalProperties:
                                           anyOf:
@@ -2188,11 +2915,13 @@ spec:
                                               items:
                                                 type: string
                                               type: array
+                                              x-kubernetes-list-type: atomic
                                           required:
                                             - key
                                             - operator
                                           type: object
                                         type: array
+                                        x-kubernetes-list-type: atomic
                                       matchLabels:
                                         additionalProperties:
                                           type: string
@@ -2200,6 +2929,8 @@ spec:
                                     type: object
                                     x-kubernetes-map-type: atomic
                                   storageClassName:
+                                    type: string
+                                  volumeAttributesClassName:
                                     type: string
                                   volumeMode:
                                     type: string
@@ -2220,6 +2951,7 @@ spec:
                                             key:
                                               type: string
                                             name:
+                                              default: ""
                                               type: string
                                             optional:
                                               type: boolean
@@ -2258,6 +2990,7 @@ spec:
                                             key:
                                               type: string
                                             name:
+                                              default: ""
                                               type: string
                                             optional:
                                               type: boolean
@@ -2289,6 +3022,8 @@ spec:
                                       type: string
                                     readOnly:
                                       type: boolean
+                                    recursiveReadOnly:
+                                      type: string
                                     subPath:
                                       type: string
                                     subPathExpr:
@@ -2308,6 +3043,7 @@ spec:
                                 items:
                                   properties:
                                     name:
+                                      default: ""
                                       type: string
                                   type: object
                                   x-kubernetes-map-type: atomic
@@ -2334,6 +3070,8 @@ spec:
                                     items:
                                       properties:
                                         name:
+                                          type: string
+                                        request:
                                           type: string
                                       required:
                                         - name
@@ -2441,6 +3179,7 @@ spec:
                               items:
                                 type: string
                               type: array
+                              x-kubernetes-list-type: atomic
                             dataSource:
                               properties:
                                 apiGroup:
@@ -2470,18 +3209,6 @@ spec:
                               type: object
                             resources:
                               properties:
-                                claims:
-                                  items:
-                                    properties:
-                                      name:
-                                        type: string
-                                    required:
-                                      - name
-                                    type: object
-                                  type: array
-                                  x-kubernetes-list-map-keys:
-                                    - name
-                                  x-kubernetes-list-type: map
                                 limits:
                                   additionalProperties:
                                     anyOf:
@@ -2512,11 +3239,13 @@ spec:
                                         items:
                                           type: string
                                         type: array
+                                        x-kubernetes-list-type: atomic
                                     required:
                                       - key
                                       - operator
                                     type: object
                                   type: array
+                                  x-kubernetes-list-type: atomic
                                 matchLabels:
                                   additionalProperties:
                                     type: string
@@ -2524,6 +3253,8 @@ spec:
                               type: object
                               x-kubernetes-map-type: atomic
                             storageClassName:
+                              type: string
+                            volumeAttributesClassName:
                               type: string
                             volumeMode:
                               type: string
@@ -2544,6 +3275,7 @@ spec:
                                       key:
                                         type: string
                                       name:
+                                        default: ""
                                         type: string
                                       optional:
                                         type: boolean
@@ -2582,6 +3314,7 @@ spec:
                                       key:
                                         type: string
                                       name:
+                                        default: ""
                                         type: string
                                       optional:
                                         type: boolean
@@ -2613,6 +3346,8 @@ spec:
                                 type: string
                               readOnly:
                                 type: boolean
+                              recursiveReadOnly:
+                                type: string
                               subPath:
                                 type: string
                               subPathExpr:
@@ -2632,6 +3367,7 @@ spec:
                           items:
                             properties:
                               name:
+                                default: ""
                                 type: string
                             type: object
                             x-kubernetes-map-type: atomic
@@ -2658,6 +3394,8 @@ spec:
                               items:
                                 properties:
                                   name:
+                                    type: string
+                                  request:
                                     type: string
                                 required:
                                   - name
@@ -2725,6 +3463,7 @@ spec:
                   items:
                     properties:
                       name:
+                        default: ""
                         type: string
                     type: object
                     x-kubernetes-map-type: atomic
@@ -2777,6 +3516,14 @@ spec:
                               mysql80Compatible:
                                 type: string
                             type: object
+                          mysqldExporter:
+                            type: string
+                          vtbackup:
+                            type: string
+                          vtorc:
+                            type: string
+                          vttablet:
+                            type: string
                         type: object
                       name:
                         maxLength: 63
@@ -2846,6 +3593,7 @@ spec:
                                                   items:
                                                     type: string
                                                   type: array
+                                                  x-kubernetes-list-type: atomic
                                                 dataSource:
                                                   properties:
                                                     apiGroup:
@@ -2875,18 +3623,6 @@ spec:
                                                   type: object
                                                 resources:
                                                   properties:
-                                                    claims:
-                                                      items:
-                                                        properties:
-                                                          name:
-                                                            type: string
-                                                        required:
-                                                          - name
-                                                        type: object
-                                                      type: array
-                                                      x-kubernetes-list-map-keys:
-                                                        - name
-                                                      x-kubernetes-list-type: map
                                                     limits:
                                                       additionalProperties:
                                                         anyOf:
@@ -2917,11 +3653,13 @@ spec:
                                                             items:
                                                               type: string
                                                             type: array
+                                                            x-kubernetes-list-type: atomic
                                                         required:
                                                           - key
                                                           - operator
                                                         type: object
                                                       type: array
+                                                      x-kubernetes-list-type: atomic
                                                     matchLabels:
                                                       additionalProperties:
                                                         type: string
@@ -2929,6 +3667,8 @@ spec:
                                                   type: object
                                                   x-kubernetes-map-type: atomic
                                                 storageClassName:
+                                                  type: string
+                                                volumeAttributesClassName:
                                                   type: string
                                                 volumeMode:
                                                   type: string
@@ -2991,6 +3731,7 @@ spec:
                                                           key:
                                                             type: string
                                                           name:
+                                                            default: ""
                                                             type: string
                                                           optional:
                                                             type: boolean
@@ -3029,6 +3770,7 @@ spec:
                                                           key:
                                                             type: string
                                                           name:
+                                                            default: ""
                                                             type: string
                                                           optional:
                                                             type: boolean
@@ -3056,6 +3798,8 @@ spec:
                                                     type: string
                                                   readOnly:
                                                     type: boolean
+                                                  recursiveReadOnly:
+                                                    type: string
                                                   subPath:
                                                     type: string
                                                   subPathExpr:
@@ -3079,6 +3823,8 @@ spec:
                                                       items:
                                                         properties:
                                                           name:
+                                                            type: string
+                                                          request:
                                                             type: string
                                                         required:
                                                           - name
@@ -3115,6 +3861,8 @@ spec:
                                                       items:
                                                         properties:
                                                           name:
+                                                            type: string
+                                                          request:
                                                             type: string
                                                         required:
                                                           - name
@@ -3178,6 +3926,8 @@ spec:
                                                       items:
                                                         properties:
                                                           name:
+                                                            type: string
+                                                          request:
                                                             type: string
                                                         required:
                                                           - name
@@ -3284,6 +4034,7 @@ spec:
                                                 items:
                                                   type: string
                                                 type: array
+                                                x-kubernetes-list-type: atomic
                                               dataSource:
                                                 properties:
                                                   apiGroup:
@@ -3313,18 +4064,6 @@ spec:
                                                 type: object
                                               resources:
                                                 properties:
-                                                  claims:
-                                                    items:
-                                                      properties:
-                                                        name:
-                                                          type: string
-                                                      required:
-                                                        - name
-                                                      type: object
-                                                    type: array
-                                                    x-kubernetes-list-map-keys:
-                                                      - name
-                                                    x-kubernetes-list-type: map
                                                   limits:
                                                     additionalProperties:
                                                       anyOf:
@@ -3355,11 +4094,13 @@ spec:
                                                           items:
                                                             type: string
                                                           type: array
+                                                          x-kubernetes-list-type: atomic
                                                       required:
                                                         - key
                                                         - operator
                                                       type: object
                                                     type: array
+                                                    x-kubernetes-list-type: atomic
                                                   matchLabels:
                                                     additionalProperties:
                                                       type: string
@@ -3367,6 +4108,8 @@ spec:
                                                 type: object
                                                 x-kubernetes-map-type: atomic
                                               storageClassName:
+                                                type: string
+                                              volumeAttributesClassName:
                                                 type: string
                                               volumeMode:
                                                 type: string
@@ -3429,6 +4172,7 @@ spec:
                                                         key:
                                                           type: string
                                                         name:
+                                                          default: ""
                                                           type: string
                                                         optional:
                                                           type: boolean
@@ -3467,6 +4211,7 @@ spec:
                                                         key:
                                                           type: string
                                                         name:
+                                                          default: ""
                                                           type: string
                                                         optional:
                                                           type: boolean
@@ -3494,6 +4239,8 @@ spec:
                                                   type: string
                                                 readOnly:
                                                   type: boolean
+                                                recursiveReadOnly:
+                                                  type: string
                                                 subPath:
                                                   type: string
                                                 subPathExpr:
@@ -3517,6 +4264,8 @@ spec:
                                                     items:
                                                       properties:
                                                         name:
+                                                          type: string
+                                                        request:
                                                           type: string
                                                       required:
                                                         - name
@@ -3553,6 +4302,8 @@ spec:
                                                     items:
                                                       properties:
                                                         name:
+                                                          type: string
+                                                        request:
                                                           type: string
                                                       required:
                                                         - name
@@ -3616,6 +4367,8 @@ spec:
                                                     items:
                                                       properties:
                                                         name:
+                                                          type: string
+                                                        request:
                                                           type: string
                                                       required:
                                                         - name
@@ -3696,6 +4449,7 @@ spec:
                                         key:
                                           type: string
                                         name:
+                                          default: ""
                                           type: string
                                         optional:
                                           type: boolean
@@ -3734,6 +4488,7 @@ spec:
                                         key:
                                           type: string
                                         name:
+                                          default: ""
                                           type: string
                                         optional:
                                           type: boolean
@@ -3765,6 +4520,8 @@ spec:
                                   type: string
                                 readOnly:
                                   type: boolean
+                                recursiveReadOnly:
+                                  type: string
                                 subPath:
                                   type: string
                                 subPathExpr:
@@ -3784,6 +4541,8 @@ spec:
                                 items:
                                   properties:
                                     name:
+                                      type: string
+                                    request:
                                       type: string
                                   required:
                                     - name
@@ -3897,6 +4656,7 @@ spec:
                                   key:
                                     type: string
                                   name:
+                                    default: ""
                                     type: string
                                   optional:
                                     type: boolean
@@ -3935,6 +4695,7 @@ spec:
                                   key:
                                     type: string
                                   name:
+                                    default: ""
                                     type: string
                                   optional:
                                     type: boolean
@@ -3966,6 +4727,8 @@ spec:
                             type: string
                           readOnly:
                             type: boolean
+                          recursiveReadOnly:
+                            type: string
                           subPath:
                             type: string
                           subPathExpr:
@@ -3988,6 +4751,8 @@ spec:
                           items:
                             properties:
                               name:
+                                type: string
+                              request:
                                 type: string
                             required:
                               - name
@@ -4046,6 +4811,8 @@ spec:
                             properties:
                               name:
                                 type: string
+                              request:
+                                type: string
                             required:
                               - name
                             type: object
@@ -4088,6 +4855,7 @@ spec:
                                   key:
                                     type: string
                                   name:
+                                    default: ""
                                     type: string
                                   optional:
                                     type: boolean
@@ -4126,6 +4894,7 @@ spec:
                                   key:
                                     type: string
                                   name:
+                                    default: ""
                                     type: string
                                   optional:
                                     type: boolean
@@ -4157,6 +4926,8 @@ spec:
                             type: string
                           readOnly:
                             type: boolean
+                          recursiveReadOnly:
+                            type: string
                           subPath:
                             type: string
                           subPathExpr:
@@ -4205,6 +4976,8 @@ spec:
                           items:
                             properties:
                               name:
+                                type: string
+                              request:
                                 type: string
                             required:
                               - name
@@ -4349,8 +5122,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.11.3
-  creationTimestamp: null
+    controller-gen.kubebuilder.io/version: v0.16.1
   name: vitesskeyspaces.planetscale.com
 spec:
   group: planetscale.com
@@ -4483,6 +5255,9 @@ spec:
                             maxLength: 256
                             pattern: ^[^\r\n]*$
                             type: string
+                          minPartSize:
+                            format: int64
+                            type: integer
                           region:
                             minLength: 1
                             type: string
@@ -4540,6 +5315,7 @@ spec:
                   items:
                     properties:
                       name:
+                        default: ""
                         type: string
                     type: object
                     x-kubernetes-map-type: atomic
@@ -4634,6 +5410,7 @@ spec:
                                             items:
                                               type: string
                                             type: array
+                                            x-kubernetes-list-type: atomic
                                           dataSource:
                                             properties:
                                               apiGroup:
@@ -4663,18 +5440,6 @@ spec:
                                             type: object
                                           resources:
                                             properties:
-                                              claims:
-                                                items:
-                                                  properties:
-                                                    name:
-                                                      type: string
-                                                  required:
-                                                    - name
-                                                  type: object
-                                                type: array
-                                                x-kubernetes-list-map-keys:
-                                                  - name
-                                                x-kubernetes-list-type: map
                                               limits:
                                                 additionalProperties:
                                                   anyOf:
@@ -4705,11 +5470,13 @@ spec:
                                                       items:
                                                         type: string
                                                       type: array
+                                                      x-kubernetes-list-type: atomic
                                                   required:
                                                     - key
                                                     - operator
                                                   type: object
                                                 type: array
+                                                x-kubernetes-list-type: atomic
                                               matchLabels:
                                                 additionalProperties:
                                                   type: string
@@ -4717,6 +5484,8 @@ spec:
                                             type: object
                                             x-kubernetes-map-type: atomic
                                           storageClassName:
+                                            type: string
+                                          volumeAttributesClassName:
                                             type: string
                                           volumeMode:
                                             type: string
@@ -4779,6 +5548,7 @@ spec:
                                                     key:
                                                       type: string
                                                     name:
+                                                      default: ""
                                                       type: string
                                                     optional:
                                                       type: boolean
@@ -4817,6 +5587,7 @@ spec:
                                                     key:
                                                       type: string
                                                     name:
+                                                      default: ""
                                                       type: string
                                                     optional:
                                                       type: boolean
@@ -4844,6 +5615,8 @@ spec:
                                               type: string
                                             readOnly:
                                               type: boolean
+                                            recursiveReadOnly:
+                                              type: string
                                             subPath:
                                               type: string
                                             subPathExpr:
@@ -4867,6 +5640,8 @@ spec:
                                                 items:
                                                   properties:
                                                     name:
+                                                      type: string
+                                                    request:
                                                       type: string
                                                   required:
                                                     - name
@@ -4903,6 +5678,8 @@ spec:
                                                 items:
                                                   properties:
                                                     name:
+                                                      type: string
+                                                    request:
                                                       type: string
                                                   required:
                                                     - name
@@ -4966,6 +5743,8 @@ spec:
                                                 items:
                                                   properties:
                                                     name:
+                                                      type: string
+                                                    request:
                                                       type: string
                                                   required:
                                                     - name
@@ -5072,6 +5851,7 @@ spec:
                                           items:
                                             type: string
                                           type: array
+                                          x-kubernetes-list-type: atomic
                                         dataSource:
                                           properties:
                                             apiGroup:
@@ -5101,18 +5881,6 @@ spec:
                                           type: object
                                         resources:
                                           properties:
-                                            claims:
-                                              items:
-                                                properties:
-                                                  name:
-                                                    type: string
-                                                required:
-                                                  - name
-                                                type: object
-                                              type: array
-                                              x-kubernetes-list-map-keys:
-                                                - name
-                                              x-kubernetes-list-type: map
                                             limits:
                                               additionalProperties:
                                                 anyOf:
@@ -5143,11 +5911,13 @@ spec:
                                                     items:
                                                       type: string
                                                     type: array
+                                                    x-kubernetes-list-type: atomic
                                                 required:
                                                   - key
                                                   - operator
                                                 type: object
                                               type: array
+                                              x-kubernetes-list-type: atomic
                                             matchLabels:
                                               additionalProperties:
                                                 type: string
@@ -5155,6 +5925,8 @@ spec:
                                           type: object
                                           x-kubernetes-map-type: atomic
                                         storageClassName:
+                                          type: string
+                                        volumeAttributesClassName:
                                           type: string
                                         volumeMode:
                                           type: string
@@ -5217,6 +5989,7 @@ spec:
                                                   key:
                                                     type: string
                                                   name:
+                                                    default: ""
                                                     type: string
                                                   optional:
                                                     type: boolean
@@ -5255,6 +6028,7 @@ spec:
                                                   key:
                                                     type: string
                                                   name:
+                                                    default: ""
                                                     type: string
                                                   optional:
                                                     type: boolean
@@ -5282,6 +6056,8 @@ spec:
                                             type: string
                                           readOnly:
                                             type: boolean
+                                          recursiveReadOnly:
+                                            type: string
                                           subPath:
                                             type: string
                                           subPathExpr:
@@ -5305,6 +6081,8 @@ spec:
                                               items:
                                                 properties:
                                                   name:
+                                                    type: string
+                                                  request:
                                                     type: string
                                                 required:
                                                   - name
@@ -5341,6 +6119,8 @@ spec:
                                               items:
                                                 properties:
                                                   name:
+                                                    type: string
+                                                  request:
                                                     type: string
                                                 required:
                                                   - name
@@ -5404,6 +6184,8 @@ spec:
                                               items:
                                                 properties:
                                                   name:
+                                                    type: string
+                                                  request:
                                                     type: string
                                                 required:
                                                   - name
@@ -5518,6 +6300,7 @@ spec:
                                   key:
                                     type: string
                                   name:
+                                    default: ""
                                     type: string
                                   optional:
                                     type: boolean
@@ -5556,6 +6339,7 @@ spec:
                                   key:
                                     type: string
                                   name:
+                                    default: ""
                                     type: string
                                   optional:
                                     type: boolean
@@ -5587,6 +6371,8 @@ spec:
                             type: string
                           readOnly:
                             type: boolean
+                          recursiveReadOnly:
+                            type: string
                           subPath:
                             type: string
                           subPathExpr:
@@ -5606,6 +6392,8 @@ spec:
                           items:
                             properties:
                               name:
+                                type: string
+                              request:
                                 type: string
                             required:
                               - name
@@ -5784,8 +6572,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.11.3
-  creationTimestamp: null
+    controller-gen.kubebuilder.io/version: v0.16.1
   name: vitessshards.planetscale.com
 spec:
   group: planetscale.com
@@ -5918,6 +6705,9 @@ spec:
                             maxLength: 256
                             pattern: ^[^\r\n]*$
                             type: string
+                          minPartSize:
+                            format: int64
+                            type: integer
                           region:
                             minLength: 1
                             type: string
@@ -5984,6 +6774,7 @@ spec:
                   items:
                     properties:
                       name:
+                        default: ""
                         type: string
                     type: object
                     x-kubernetes-map-type: atomic
@@ -6052,6 +6843,7 @@ spec:
                             items:
                               type: string
                             type: array
+                            x-kubernetes-list-type: atomic
                           dataSource:
                             properties:
                               apiGroup:
@@ -6081,18 +6873,6 @@ spec:
                             type: object
                           resources:
                             properties:
-                              claims:
-                                items:
-                                  properties:
-                                    name:
-                                      type: string
-                                  required:
-                                    - name
-                                  type: object
-                                type: array
-                                x-kubernetes-list-map-keys:
-                                  - name
-                                x-kubernetes-list-type: map
                               limits:
                                 additionalProperties:
                                   anyOf:
@@ -6123,11 +6903,13 @@ spec:
                                       items:
                                         type: string
                                       type: array
+                                      x-kubernetes-list-type: atomic
                                   required:
                                     - key
                                     - operator
                                   type: object
                                 type: array
+                                x-kubernetes-list-type: atomic
                               matchLabels:
                                 additionalProperties:
                                   type: string
@@ -6135,6 +6917,8 @@ spec:
                             type: object
                             x-kubernetes-map-type: atomic
                           storageClassName:
+                            type: string
+                          volumeAttributesClassName:
                             type: string
                           volumeMode:
                             type: string
@@ -6197,6 +6981,7 @@ spec:
                                     key:
                                       type: string
                                     name:
+                                      default: ""
                                       type: string
                                     optional:
                                       type: boolean
@@ -6235,6 +7020,7 @@ spec:
                                     key:
                                       type: string
                                     name:
+                                      default: ""
                                       type: string
                                     optional:
                                       type: boolean
@@ -6262,6 +7048,8 @@ spec:
                               type: string
                             readOnly:
                               type: boolean
+                            recursiveReadOnly:
+                              type: string
                             subPath:
                               type: string
                             subPathExpr:
@@ -6285,6 +7073,8 @@ spec:
                                 items:
                                   properties:
                                     name:
+                                      type: string
+                                    request:
                                       type: string
                                   required:
                                     - name
@@ -6321,6 +7111,8 @@ spec:
                                 items:
                                   properties:
                                     name:
+                                      type: string
+                                    request:
                                       type: string
                                   required:
                                     - name
@@ -6384,6 +7176,8 @@ spec:
                                 items:
                                   properties:
                                     name:
+                                      type: string
+                                    request:
                                       type: string
                                   required:
                                     - name
@@ -6483,6 +7277,7 @@ spec:
                                   key:
                                     type: string
                                   name:
+                                    default: ""
                                     type: string
                                   optional:
                                     type: boolean
@@ -6521,6 +7316,7 @@ spec:
                                   key:
                                     type: string
                                   name:
+                                    default: ""
                                     type: string
                                   optional:
                                     type: boolean
@@ -6552,6 +7348,8 @@ spec:
                             type: string
                           readOnly:
                             type: boolean
+                          recursiveReadOnly:
+                            type: string
                           subPath:
                             type: string
                           subPathExpr:
@@ -6571,6 +7369,8 @@ spec:
                           items:
                             properties:
                               name:
+                                type: string
+                              request:
                                 type: string
                             required:
                               - name
@@ -6815,6 +7615,12 @@ rules:
       - batch
     resources:
       - jobs
+    verbs:
+      - '*'
+  - apiGroups:
+      - autoscaling
+    resources:
+      - horizontalpodautoscalers
     verbs:
       - '*'
 ---

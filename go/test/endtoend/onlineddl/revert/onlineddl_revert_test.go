@@ -137,7 +137,6 @@ type revertibleTestCase struct {
 }
 
 func TestMain(m *testing.M) {
-	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	exitcode, err := func() (int, error) {
@@ -203,8 +202,7 @@ func TestMain(m *testing.M) {
 
 }
 
-func TestSchemaChange(t *testing.T) {
-	defer cluster.PanicHandler(t)
+func TestRevertSchemaChanges(t *testing.T) {
 	shards = clusterInstance.Keyspaces[0].Shards
 	require.Equal(t, 1, len(shards))
 
@@ -260,6 +258,11 @@ func testRevertible(t *testing.T) {
 			fromSchema:            `id int primary key, i1 int default null, unique key i1_uidx(i1)`,
 			toSchema:              `id int primary key, i2 int default null`,
 			removedUniqueKeyNames: `i1_uidx`,
+		},
+		{
+			name:       "removed expression unique key, skipped",
+			fromSchema: `id int primary key, i1 int default null, unique key idx1 ((id + 1))`,
+			toSchema:   `id int primary key, i2 int default null`,
 		},
 		{
 			name:                  "expanding unique key removes unique constraint",

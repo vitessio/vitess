@@ -43,7 +43,6 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	exitCode := func() int {
@@ -81,7 +80,6 @@ func TestMain(m *testing.M) {
 }
 
 func TestDBDDLPlugin(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	vtParams := mysql.ConnParams{
 		Host: "localhost",

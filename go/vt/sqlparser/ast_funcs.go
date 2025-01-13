@@ -517,6 +517,70 @@ func (node *ComparisonExpr) IsImpossible() bool {
 	return false
 }
 
+func (op ComparisonExprOperator) Inverse() ComparisonExprOperator {
+	switch op {
+	case EqualOp:
+		return NotEqualOp
+	case LessThanOp:
+		return GreaterEqualOp
+	case GreaterThanOp:
+		return LessEqualOp
+	case LessEqualOp:
+		return GreaterThanOp
+	case GreaterEqualOp:
+		return LessThanOp
+	case NotEqualOp:
+		return EqualOp
+	case NullSafeEqualOp:
+		return NotEqualOp
+	case InOp:
+		return NotInOp
+	case NotInOp:
+		return InOp
+	case LikeOp:
+		return NotLikeOp
+	case NotLikeOp:
+		return LikeOp
+	case RegexpOp:
+		return NotRegexpOp
+	case NotRegexpOp:
+		return RegexpOp
+	}
+	panic("unreachable")
+}
+
+// SwitchSides returns the reversed comparison operator if applicable, along with a boolean indicating success.
+// For symmetric operators like '=', '!=', and '<=>', it returns the same operator and true.
+// For directional comparison operators ('<', '>', '<=', '>='), it returns the opposite operator and true.
+// For operators that imply directionality or cannot be logically reversed (such as 'IN', 'LIKE', 'REGEXP'),
+// it returns the original operator and false, indicating that switching sides is not valid.
+func (op ComparisonExprOperator) SwitchSides() (ComparisonExprOperator, bool) {
+	switch op {
+	case EqualOp, NotEqualOp, NullSafeEqualOp:
+		// These operators are symmetric, so switching sides has no effect
+		return op, true
+	case LessThanOp:
+		return GreaterThanOp, true
+	case GreaterThanOp:
+		return LessThanOp, true
+	case LessEqualOp:
+		return GreaterEqualOp, true
+	case GreaterEqualOp:
+		return LessEqualOp, true
+	default:
+		return op, false
+	}
+}
+
+func (op ComparisonExprOperator) IsCommutative() bool {
+	switch op {
+	case EqualOp, NotEqualOp, NullSafeEqualOp:
+		return true
+	default:
+		return false
+	}
+}
+
 // NewStrLiteral builds a new StrVal.
 func NewStrLiteral(in string) *Literal {
 	return &Literal{Type: StrVal, Val: in}
@@ -1498,6 +1562,65 @@ func (op ComparisonExprOperator) ToString() string {
 	}
 }
 
+func ComparisonExprOperatorFromJson(s string) (ComparisonExprOperator, error) {
+	switch s {
+	case EqualStr:
+		return EqualOp, nil
+	case JsonLessThanStr:
+		return LessThanOp, nil
+	case JsonGreaterThanStr:
+		return GreaterThanOp, nil
+	case JsonLessThanOrEqualStr:
+		return LessEqualOp, nil
+	case JsonGreaterThanOrEqualStr:
+		return GreaterEqualOp, nil
+	case NotEqualStr:
+		return NotEqualOp, nil
+	case NullSafeEqualStr:
+		return NullSafeEqualOp, nil
+	case InStr:
+		return InOp, nil
+	case NotInStr:
+		return NotInOp, nil
+	case LikeStr:
+		return LikeOp, nil
+	case NotLikeStr:
+		return NotLikeOp, nil
+	case RegexpStr:
+		return RegexpOp, nil
+	case NotRegexpStr:
+		return NotRegexpOp, nil
+	default:
+		return 0, fmt.Errorf("unknown ComparisonExpOperator: %s", s)
+	}
+}
+
+const (
+	JsonGreaterThanStr        = "gt"
+	JsonLessThanStr           = "lt"
+	JsonGreaterThanOrEqualStr = "ge"
+	JsonLessThanOrEqualStr    = "le"
+)
+
+// JSONString returns a string representation for this operator that does not need escaping in JSON
+func (op ComparisonExprOperator) JSONString() string {
+	switch op {
+	case EqualOp, NotEqualOp, NullSafeEqualOp, InOp, NotInOp, LikeOp, NotLikeOp, RegexpOp, NotRegexpOp:
+		// These operators are safe for JSON output, so we delegate to ToString
+		return op.ToString()
+	case LessThanOp:
+		return JsonLessThanStr
+	case GreaterThanOp:
+		return JsonGreaterThanStr
+	case LessEqualOp:
+		return JsonLessThanOrEqualStr
+	case GreaterEqualOp:
+		return JsonGreaterThanOrEqualStr
+	default:
+		panic("unreachable")
+	}
+}
+
 // ToString returns the operator as a string
 func (op IsExprOperator) ToString() string {
 	switch op {
@@ -1543,10 +1666,6 @@ func (op BinaryExprOperator) ToString() string {
 		return ShiftLeftStr
 	case ShiftRightOp:
 		return ShiftRightStr
-	case JSONExtractOp:
-		return JSONExtractOpStr
-	case JSONUnquoteExtractOp:
-		return JSONUnquoteExtractOpStr
 	default:
 		return "Unknown BinaryExprOperator"
 	}
@@ -1923,6 +2042,10 @@ func (ty VExplainType) ToString() string {
 		return QueriesStr
 	case AllVExplainType:
 		return AllVExplainStr
+	case TraceVExplainType:
+		return TraceStr
+	case KeysVExplainType:
+		return KeysStr
 	default:
 		return "Unknown VExplainType"
 	}
@@ -2309,6 +2432,25 @@ func RemoveKeyspace(in SQLNode) {
 			}
 		case TableName:
 			if expr.Qualifier.NotEmpty() {
+				expr.Qualifier = NewIdentifierCS("")
+				cursor.Replace(expr)
+			}
+		}
+		return true
+	})
+}
+
+// RemoveKeyspaceIgnoreSysSchema removes the Qualifier.Qualifier on all ColNames and Qualifier on all TableNames in the AST
+// except for the system schema.
+func RemoveKeyspaceIgnoreSysSchema(in SQLNode) {
+	Rewrite(in, nil, func(cursor *Cursor) bool {
+		switch expr := cursor.Node().(type) {
+		case *ColName:
+			if expr.Qualifier.Qualifier.NotEmpty() && !SystemSchema(expr.Qualifier.Qualifier.String()) {
+				expr.Qualifier.Qualifier = NewIdentifierCS("")
+			}
+		case TableName:
+			if expr.Qualifier.NotEmpty() && !SystemSchema(expr.Qualifier.String()) {
 				expr.Qualifier = NewIdentifierCS("")
 				cursor.Replace(expr)
 			}

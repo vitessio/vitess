@@ -399,7 +399,7 @@ func (c *Conn) readHeaderFrom(r io.Reader) (int, error) {
 		return 0, vterrors.Wrapf(err, "io.ReadFull(header size) failed")
 	}
 
-	sequence := uint8(c.header[3])
+	sequence := c.header[3]
 	if sequence != c.sequence {
 		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid sequence, expected %v got %v", c.sequence, sequence)
 	}
@@ -1249,7 +1249,7 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) (kontinue bool) {
 	}
 
 	bindVars := make(map[string]*querypb.BindVariable, paramsCount)
-	for i := uint16(0); i < paramsCount; i++ {
+	for i := range uint16(paramsCount) {
 		parameterID := fmt.Sprintf("v%d", i+1)
 		bindVars[parameterID] = &querypb.BindVariable{}
 	}

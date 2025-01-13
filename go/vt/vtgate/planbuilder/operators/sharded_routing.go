@@ -223,6 +223,9 @@ func (tr *ShardedRouting) resetRoutingLogic(ctx *plancontext.PlanningContext) Ro
 func (tr *ShardedRouting) searchForNewVindexes(ctx *plancontext.PlanningContext, predicate sqlparser.Expr) (Routing, bool) {
 	newVindexFound := false
 	switch node := predicate.(type) {
+	case *sqlparser.BetweenExpr:
+		return tr.planBetweenOp(ctx, node)
+
 	case *sqlparser.ComparisonExpr:
 		return tr.planComparison(ctx, node)
 
@@ -232,6 +235,35 @@ func (tr *ShardedRouting) searchForNewVindexes(ctx *plancontext.PlanningContext,
 	}
 
 	return nil, newVindexFound
+}
+
+func (tr *ShardedRouting) planBetweenOp(ctx *plancontext.PlanningContext, node *sqlparser.BetweenExpr) (routing Routing, foundNew bool) {
+	column, ok := node.Left.(*sqlparser.ColName)
+	if !ok {
+		return nil, false
+	}
+	var vdValue sqlparser.ValTuple = sqlparser.ValTuple([]sqlparser.Expr{node.From, node.To})
+
+	opcode := func(vindex *vindexes.ColumnVindex) engine.Opcode {
+		if _, ok := vindex.Vindex.(vindexes.Sequential); ok {
+			return engine.Between
+		}
+		return engine.Scatter
+	}
+
+	sequentialVdx := func(vindex *vindexes.ColumnVindex) vindexes.Vindex {
+		if _, ok := vindex.Vindex.(vindexes.Sequential); ok {
+			return vindex.Vindex
+		}
+		// if vindex is not of type Sequential, we can't use this vindex at all
+		return nil
+	}
+
+	val := makeEvalEngineExpr(ctx, vdValue)
+	if val == nil {
+		return nil, false
+	}
+	return nil, tr.haveMatchingVindex(ctx, node, vdValue, column, val, opcode, sequentialVdx)
 }
 
 func (tr *ShardedRouting) planComparison(ctx *plancontext.PlanningContext, cmp *sqlparser.ComparisonExpr) (routing Routing, foundNew bool) {
@@ -331,6 +363,8 @@ func (tr *ShardedRouting) Cost() int {
 	case engine.Equal, engine.SubShard:
 		return 5
 	case engine.IN:
+		return 10
+	case engine.Between:
 		return 10
 	case engine.MultiEqual:
 		return 10
@@ -438,6 +472,12 @@ func (tr *ShardedRouting) processMultiColumnVindex(
 	colLoweredName, indexOfCol := tr.getLoweredNameAndIndex(v.ColVindex, column)
 
 	if colLoweredName == "" {
+		return newVindexFound
+	}
+
+	routeOpcode := opcode(v.ColVindex)
+	vindex := vfunc(v.ColVindex)
+	if vindex == nil || routeOpcode == engine.Scatter {
 		return newVindexFound
 	}
 

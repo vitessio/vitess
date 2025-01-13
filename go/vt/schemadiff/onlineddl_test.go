@@ -24,8 +24,20 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
+
+func TestGetConstraintType(t *testing.T) {
+	{
+		typ := GetConstraintType(&sqlparser.CheckConstraintDefinition{})
+		assert.Equal(t, CheckConstraintType, typ)
+	}
+	{
+		typ := GetConstraintType(&sqlparser.ForeignKeyDefinition{})
+		assert.Equal(t, ForeignKeyConstraintType, typ)
+	}
+}
 
 func TestPrioritizedUniqueKeys(t *testing.T) {
 	table := `
@@ -920,6 +932,16 @@ func TestRevertible(t *testing.T) {
 			toSchema:            `id int primary key, e1 set('a', 'b'), e2 set('a'), e3 set('a', 'b', 'c'), e4 set('a', 'x'), e5 set('a', 'x', 'b'), e6 set('b'), e7 varchar(1), e8 tinyint`,
 			expandedColumnNames: `e3,e4,e5,e6,e7,e8`,
 		},
+		{
+			name:       "index with expression",
+			fromSchema: "id int, primary key (id), key idx1 ((id + 1))",
+			toSchema:   "id int, primary key (id), key idx2 ((id + 2))",
+		},
+		{
+			name:       "remove unique index with expression, add another, skip both",
+			fromSchema: "id int, i int, primary key (id), unique key idx1 ((id + 1))",
+			toSchema:   "id int, i int, primary key (id), unique key idx2 ((i  + 2))",
+		},
 	}
 
 	var (
@@ -955,6 +977,375 @@ func TestRevertible(t *testing.T) {
 			assert.Equal(t, toStringSlice(tcase.removedUniqueKeyNames), analysis.RemovedUniqueKeys.Names())
 			assert.Equal(t, toStringSlice(tcase.droppedNoDefaultColumnNames), analysis.DroppedNoDefaultColumns.Names())
 			assert.Equal(t, toStringSlice(tcase.expandedColumnNames), analysis.ExpandedColumns.Names())
+		})
+	}
+}
+
+func TestValidateAndEditCreateTableStatement(t *testing.T) {
+	tt := []struct {
+		name                string
+		query               string
+		allowForeignKeys    bool
+		expectError         string
+		countConstraints    int
+		expectConstraintMap map[string]string
+	}{
+		{
+			name: "table with FK, not allowed",
+			query: `
+				create table onlineddl_test (
+						id int auto_increment,
+						i int not null,
+						parent_id int not null,
+						primary key(id),
+						constraint test_ibfk foreign key (parent_id) references onlineddl_test_parent (id) on delete no action
+					)
+				`,
+			expectError: ErrForeignKeyFound.Error(),
+		},
+		{
+			name: "table with FK, allowed",
+			query: `
+				create table onlineddl_test (
+						id int auto_increment,
+						i int not null,
+						parent_id int not null,
+						primary key(id),
+						constraint test_ibfk foreign key (parent_id) references onlineddl_test_parent (id) on delete no action
+					)
+				`,
+			allowForeignKeys:    true,
+			countConstraints:    1,
+			expectConstraintMap: map[string]string{"test_ibfk": "test_ibfk_2wtivm6zk4lthpz14g9uoyaqk"},
+		},
+		{
+			name: "table with default FK name, strip table name",
+			query: `
+			create table onlineddl_test (
+					id int auto_increment,
+					i int not null,
+					parent_id int not null,
+					primary key(id),
+					constraint onlineddl_test_ibfk_1 foreign key (parent_id) references onlineddl_test_parent (id) on delete no action
+				)
+			`,
+			allowForeignKeys: true,
+			countConstraints: 1,
+			// we want 'onlineddl_test_' to be stripped out:
+			expectConstraintMap: map[string]string{"onlineddl_test_ibfk_1": "ibfk_1_2wtivm6zk4lthpz14g9uoyaqk"},
+		},
+		{
+			name: "table with anonymous FK, allowed",
+			query: `
+				create table onlineddl_test (
+						id int auto_increment,
+						i int not null,
+						parent_id int not null,
+						primary key(id),
+						foreign key (parent_id) references onlineddl_test_parent (id) on delete no action
+					)
+				`,
+			allowForeignKeys:    true,
+			countConstraints:    1,
+			expectConstraintMap: map[string]string{"": "fk_2wtivm6zk4lthpz14g9uoyaqk"},
+		},
+		{
+			name: "table with CHECK constraints",
+			query: `
+				create table onlineddl_test (
+						id int auto_increment,
+						i int not null,
+						primary key(id),
+						constraint check_1 CHECK ((i >= 0)),
+						constraint check_2 CHECK ((i <> 5)),
+						constraint check_3 CHECK ((i >= 0)),
+						constraint chk_1111033c1d2d5908bf1f956ba900b192_check_4 CHECK ((i >= 0))
+					)
+				`,
+			countConstraints: 4,
+			expectConstraintMap: map[string]string{
+				"check_1": "check_1_7dbssrkwdaxhdunwi5zj53q83",
+				"check_2": "check_2_ehg3rtk6ejvbxpucimeess30o",
+				"check_3": "check_3_0se0t8x98mf8v7lqmj2la8j9u",
+				"chk_1111033c1d2d5908bf1f956ba900b192_check_4": "chk_1111033c1d2d5908bf1f956ba900b192_c_0c2c3bxi9jp4evqrct44wg3xh",
+			},
+		},
+		{
+			name: "table with both FOREIGN and CHECK constraints",
+			query: `
+				create table onlineddl_test (
+						id int auto_increment,
+						i int not null,
+						primary key(id),
+						constraint check_1 CHECK ((i >= 0)),
+						constraint test_ibfk foreign key (parent_id) references onlineddl_test_parent (id) on delete no action,
+						constraint chk_1111033c1d2d5908bf1f956ba900b192_check_4 CHECK ((i >= 0))
+					)
+				`,
+			allowForeignKeys: true,
+			countConstraints: 3,
+			expectConstraintMap: map[string]string{
+				"check_1": "check_1_7dbssrkwdaxhdunwi5zj53q83",
+				"chk_1111033c1d2d5908bf1f956ba900b192_check_4": "chk_1111033c1d2d5908bf1f956ba900b192_c_0se0t8x98mf8v7lqmj2la8j9u",
+				"test_ibfk": "test_ibfk_2wtivm6zk4lthpz14g9uoyaqk",
+			},
+		},
+	}
+	env := NewTestEnv()
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			stmt, err := env.Parser().ParseStrictDDL(tc.query)
+			require.NoError(t, err)
+			createTable, ok := stmt.(*sqlparser.CreateTable)
+			require.True(t, ok)
+
+			table := "onlineddl_test"
+			baseUUID := "a5a563da_dc1a_11ec_a416_0a43f95f28a3"
+			constraintMap, err := ValidateAndEditCreateTableStatement(table, baseUUID, createTable, tc.allowForeignKeys)
+			if tc.expectError != "" {
+				assert.ErrorContains(t, err, tc.expectError)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, tc.expectConstraintMap, constraintMap)
+
+			uniqueConstraintNames := map[string]bool{}
+			err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+				switch node := node.(type) {
+				case *sqlparser.ConstraintDefinition:
+					uniqueConstraintNames[node.Name.String()] = true
+				}
+				return true, nil
+			}, createTable)
+			assert.NoError(t, err)
+			assert.Equal(t, tc.countConstraints, len(uniqueConstraintNames))
+			assert.Equalf(t, tc.countConstraints, len(constraintMap), "got contraints: %v", constraintMap)
+		})
+	}
+}
+
+func TestValidateAndEditAlterTableStatement(t *testing.T) {
+	capableOf := func(capability capabilities.FlavorCapability) (bool, error) {
+		switch capability {
+		case
+			capabilities.InstantDDLXtrabackupCapability,
+			capabilities.InstantDDLFlavorCapability,
+			capabilities.InstantAddLastColumnFlavorCapability,
+			capabilities.InstantAddDropVirtualColumnFlavorCapability,
+			capabilities.InstantAddDropColumnFlavorCapability,
+			capabilities.InstantChangeColumnDefaultFlavorCapability,
+			capabilities.InstantChangeColumnVisibilityCapability,
+			capabilities.InstantExpandEnumCapability:
+			return true, nil
+		}
+		return false, nil
+	}
+	incapableOf := func(capability capabilities.FlavorCapability) (bool, error) {
+		return false, nil
+	}
+
+	tt := []struct {
+		alter     string
+		capableOf capabilities.CapableOf
+		m         map[string]string
+		expect    []string
+	}{
+		{
+			alter:     "alter table t add column i int",
+			capableOf: incapableOf,
+			expect:    []string{"alter table t add column i int, algorithm = copy"},
+		},
+		{
+			alter:     "alter table t add column i int",
+			capableOf: capableOf,
+			expect:    []string{"alter table t add column i int"},
+		},
+		{
+			alter:  "alter table t add column i int, add fulltext key name1_ft (name1)",
+			expect: []string{"alter table t add column i int, add fulltext key name1_ft (name1)"},
+		},
+		{
+			alter:  "alter table t add column i int, add fulltext key name1_ft (name1), add fulltext key name2_ft (name2)",
+			expect: []string{"alter table t add column i int, add fulltext key name1_ft (name1)", "alter table t add fulltext key name2_ft (name2)"},
+		},
+		{
+			alter:  "alter table t add fulltext key name0_ft (name0), add column i int, add fulltext key name1_ft (name1), add fulltext key name2_ft (name2)",
+			expect: []string{"alter table t add fulltext key name0_ft (name0), add column i int", "alter table t add fulltext key name1_ft (name1)", "alter table t add fulltext key name2_ft (name2)"},
+		},
+		{
+			alter:  "alter table t add constraint check (id != 1)",
+			expect: []string{"alter table t add constraint chk_aulpn7bjeortljhguy86phdn9 check (id != 1)"},
+		},
+		{
+			alter:  "alter table t add constraint t_chk_1 check (id != 1)",
+			expect: []string{"alter table t add constraint chk_1_aulpn7bjeortljhguy86phdn9 check (id != 1)"},
+		},
+		{
+			alter:  "alter table t add constraint some_check check (id != 1)",
+			expect: []string{"alter table t add constraint some_check_aulpn7bjeortljhguy86phdn9 check (id != 1)"},
+		},
+		{
+			alter:  "alter table t add constraint some_check check (id != 1), add constraint another_check check (id != 2)",
+			expect: []string{"alter table t add constraint some_check_aulpn7bjeortljhguy86phdn9 check (id != 1), add constraint another_check_4fa197273p3w96267pzm3gfi3 check (id != 2)"},
+		},
+		{
+			alter:  "alter table t add foreign key (parent_id) references onlineddl_test_parent (id) on delete no action",
+			expect: []string{"alter table t add constraint fk_6fmhzdlya89128u5j3xapq34i foreign key (parent_id) references onlineddl_test_parent (id) on delete no action"},
+		},
+		{
+			alter:  "alter table t add constraint myfk foreign key (parent_id) references onlineddl_test_parent (id) on delete no action",
+			expect: []string{"alter table t add constraint myfk_6fmhzdlya89128u5j3xapq34i foreign key (parent_id) references onlineddl_test_parent (id) on delete no action"},
+		},
+		{
+			// strip out table name
+			alter:  "alter table t add constraint t_ibfk_1 foreign key (parent_id) references onlineddl_test_parent (id) on delete no action",
+			expect: []string{"alter table t add constraint ibfk_1_6fmhzdlya89128u5j3xapq34i foreign key (parent_id) references onlineddl_test_parent (id) on delete no action"},
+		},
+		{
+			// stript out table name
+			alter:  "alter table t add constraint t_ibfk_1 foreign key (parent_id) references onlineddl_test_parent (id) on delete no action",
+			expect: []string{"alter table t add constraint ibfk_1_6fmhzdlya89128u5j3xapq34i foreign key (parent_id) references onlineddl_test_parent (id) on delete no action"},
+		},
+		{
+			alter:  "alter table t add constraint t_ibfk_1 foreign key (parent_id) references onlineddl_test_parent (id) on delete no action, add constraint some_check check (id != 1)",
+			expect: []string{"alter table t add constraint ibfk_1_6fmhzdlya89128u5j3xapq34i foreign key (parent_id) references onlineddl_test_parent (id) on delete no action, add constraint some_check_aulpn7bjeortljhguy86phdn9 check (id != 1)"},
+		},
+		{
+			alter: "alter table t drop foreign key t_ibfk_1",
+			m: map[string]string{
+				"t_ibfk_1": "ibfk_1_aaaaaaaaaaaaaa",
+			},
+			expect: []string{"alter table t drop foreign key ibfk_1_aaaaaaaaaaaaaa"},
+		},
+	}
+
+	env := NewTestEnv()
+	for _, tc := range tt {
+		t.Run(tc.alter, func(t *testing.T) {
+			if tc.capableOf == nil {
+				tc.capableOf = capableOf
+			}
+			stmt, err := env.Parser().ParseStrictDDL(tc.alter)
+			require.NoError(t, err)
+			alterTable, ok := stmt.(*sqlparser.AlterTable)
+			require.True(t, ok)
+
+			m := map[string]string{}
+			for k, v := range tc.m {
+				m[k] = v
+			}
+			baseUUID := "a5a563da_dc1a_11ec_a416_0a43f95f28a3"
+			tableName := "t"
+			alters, err := ValidateAndEditAlterTableStatement(tableName, baseUUID, tc.capableOf, alterTable, m)
+			assert.NoError(t, err)
+			var altersStrings []string
+			for _, alter := range alters {
+				altersStrings = append(altersStrings, sqlparser.String(alter))
+			}
+			assert.Equal(t, tc.expect, altersStrings)
+		})
+	}
+}
+
+func TestAddInstantAlgorithm(t *testing.T) {
+	tt := []struct {
+		alter  string
+		expect string
+	}{
+		{
+			alter:  "alter table t add column i2 int not null",
+			expect: "ALTER TABLE `t` ADD COLUMN `i2` int NOT NULL, ALGORITHM = INSTANT",
+		},
+		{
+			alter:  "alter table t add column i2 int not null, lock=none",
+			expect: "ALTER TABLE `t` ADD COLUMN `i2` int NOT NULL, LOCK NONE, ALGORITHM = INSTANT",
+		},
+		{
+			alter:  "alter table t add column i2 int not null, algorithm=inplace",
+			expect: "ALTER TABLE `t` ADD COLUMN `i2` int NOT NULL, ALGORITHM = INSTANT",
+		},
+		{
+			alter:  "alter table t add column i2 int not null, algorithm=inplace, lock=none",
+			expect: "ALTER TABLE `t` ADD COLUMN `i2` int NOT NULL, ALGORITHM = INSTANT, LOCK NONE",
+		},
+	}
+	env := NewTestEnv()
+	for _, tc := range tt {
+		t.Run(tc.alter, func(t *testing.T) {
+			stmt, err := env.Parser().ParseStrictDDL(tc.alter)
+			require.NoError(t, err)
+			alterTable, ok := stmt.(*sqlparser.AlterTable)
+			require.True(t, ok)
+
+			AddInstantAlgorithm(alterTable)
+			alterInstant := sqlparser.CanonicalString(alterTable)
+
+			assert.Equal(t, tc.expect, alterInstant)
+
+			stmt, err = env.Parser().ParseStrictDDL(alterInstant)
+			require.NoError(t, err)
+			_, ok = stmt.(*sqlparser.AlterTable)
+			require.True(t, ok)
+		})
+	}
+}
+
+func TestDuplicateCreateTable(t *testing.T) {
+	baseUUID := "a5a563da_dc1a_11ec_a416_0a43f95f28a3"
+	allowForeignKeys := true
+
+	tcases := []struct {
+		sql           string
+		newName       string
+		expectSQL     string
+		expectMapSize int
+	}{
+		{
+			sql:       "create table t (id int primary key)",
+			newName:   "mytable",
+			expectSQL: "create table mytable (\n\tid int primary key\n)",
+		},
+		{
+			sql:           "create table t (id int primary key, i int, constraint f foreign key (i) references parent (id) on delete cascade)",
+			newName:       "mytable",
+			expectSQL:     "create table mytable (\n\tid int primary key,\n\ti int,\n\tconstraint f_ewl7lthyax2xxocpib3hyyvxx foreign key (i) references parent (id) on delete cascade\n)",
+			expectMapSize: 1,
+		},
+		{
+			sql:           "create table self (id int primary key, i int, constraint f foreign key (i) references self (id))",
+			newName:       "mytable",
+			expectSQL:     "create table mytable (\n\tid int primary key,\n\ti int,\n\tconstraint f_6tlv90d9gcf4h6roalfnkdhar foreign key (i) references mytable (id)\n)",
+			expectMapSize: 1,
+		},
+		{
+			sql:     "create table self (id int primary key, i1 int, i2 int, constraint f1 foreign key (i1) references self (id), constraint f1 foreign key (i2) references parent (id))",
+			newName: "mytable",
+			expectSQL: `create table mytable (
+	id int primary key,
+	i1 int,
+	i2 int,
+	constraint f1_95jpox7sx4w0cv7dpspzmjbxu foreign key (i1) references mytable (id),
+	constraint f1_1fg002b1cuqoavgti5zp8pu91 foreign key (i2) references parent (id)
+)`,
+			expectMapSize: 1,
+		},
+	}
+	env := NewTestEnv()
+	for _, tcase := range tcases {
+		t.Run(tcase.sql, func(t *testing.T) {
+			stmt, err := env.Parser().ParseStrictDDL(tcase.sql)
+			require.NoError(t, err)
+			originalCreateTable, ok := stmt.(*sqlparser.CreateTable)
+			require.True(t, ok)
+			require.NotNil(t, originalCreateTable)
+			newCreateTable, constraintMap, err := DuplicateCreateTable(originalCreateTable, baseUUID, tcase.newName, allowForeignKeys)
+			assert.NoError(t, err)
+			assert.NotNil(t, newCreateTable)
+			assert.NotNil(t, constraintMap)
+
+			newSQL := sqlparser.String(newCreateTable)
+			assert.Equal(t, tcase.expectSQL, newSQL)
+			assert.Equal(t, tcase.expectMapSize, len(constraintMap))
 		})
 	}
 }

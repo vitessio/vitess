@@ -60,12 +60,10 @@ public class VitessDriver implements Driver {
 
   /**
    * Checks whether a given url is in a valid format.
-   * <p/>
    * The current uri format is: jdbc:vitess://[host]:[port]
    *
    * @param url the URL of the database
    * @return true, if this driver understands the given URL; false, otherwise
-   *     <p/>
    *     TODO: Write a better regex
    */
   @Override

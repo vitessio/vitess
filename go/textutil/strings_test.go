@@ -23,6 +23,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/sqltypes"
+
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -120,6 +122,64 @@ func TestSingleWordCamel(t *testing.T) {
 	}
 }
 
+func TestPascalCase(t *testing.T) {
+	tt := []struct {
+		word   string
+		expect string
+	}{
+		{
+			word:   "",
+			expect: "",
+		},
+		{
+			word:   "_",
+			expect: "",
+		},
+		{
+			word:   "_a",
+			expect: "A",
+		},
+		{
+			word:   "A",
+			expect: "A",
+		},
+		{
+			word:   "mysql",
+			expect: "Mysql",
+		},
+		{
+			word:   "mySQL",
+			expect: "Mysql",
+		},
+		{
+			word:   "foo-bar",
+			expect: "FooBar",
+		},
+		{
+			word:   "mysql-server",
+			expect: "MysqlServer",
+		},
+		{
+			word:   "io_util",
+			expect: "IoUtil",
+		},
+		{
+			word:   "there and back again",
+			expect: "ThereAndBackAgain",
+		},
+		{
+			word:   "combine_all_OF the\tabove",
+			expect: "CombineAllOfTheAbove",
+		},
+	}
+	for _, tc := range tt {
+		t.Run(tc.word, func(t *testing.T) {
+			pascal := PascalCase(tc.word)
+			assert.Equal(t, tc.expect, pascal)
+		})
+	}
+}
+
 func TestValueIsSimulatedNull(t *testing.T) {
 	tt := []struct {
 		name   string
@@ -132,39 +192,24 @@ func TestValueIsSimulatedNull(t *testing.T) {
 			isNull: false,
 		},
 		{
-			name:   "case string true",
-			val:    SimulatedNullString,
-			isNull: true,
-		},
-		{
 			name:   "case []string true",
-			val:    []string{SimulatedNullString},
+			val:    []string{sqltypes.NULL.String()},
 			isNull: true,
 		},
 		{
 			name:   "case []string false",
-			val:    []string{SimulatedNullString, SimulatedNullString},
+			val:    []string{sqltypes.NULL.String(), sqltypes.NULL.String()},
 			isNull: false,
 		},
 		{
-			name:   "case binlogdatapb.OnDDLAction true",
-			val:    binlogdatapb.OnDDLAction(SimulatedNullInt),
-			isNull: true,
+			name:   "case binlogdatapb.OnDDLAction exec",
+			val:    binlogdatapb.OnDDLAction_EXEC,
+			isNull: false,
 		},
 		{
-			name:   "case int true",
-			val:    SimulatedNullInt,
-			isNull: true,
-		},
-		{
-			name:   "case int32 true",
-			val:    int32(SimulatedNullInt),
-			isNull: true,
-		},
-		{
-			name:   "case int64 true",
-			val:    int64(SimulatedNullInt),
-			isNull: true,
+			name:   "case int false",
+			val:    1,
+			isNull: false,
 		},
 		{
 			name:   "case []topodatapb.TabletType true",
@@ -172,12 +217,12 @@ func TestValueIsSimulatedNull(t *testing.T) {
 			isNull: true,
 		},
 		{
-			name:   "case binlogdatapb.VReplicationWorkflowState true",
-			val:    binlogdatapb.VReplicationWorkflowState(SimulatedNullInt),
-			isNull: true,
+			name:   "case binlogdatapb.VReplicationWorkflowState running",
+			val:    binlogdatapb.VReplicationWorkflowState_Running,
+			isNull: false,
 		},
 		{
-			name:   "case default",
+			name:   "case float false",
 			val:    float64(1),
 			isNull: false,
 		},

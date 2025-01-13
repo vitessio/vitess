@@ -25,6 +25,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
+
 	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
@@ -135,7 +137,6 @@ func TestUpdateEqual(t *testing.T) {
 func TestUpdateFromSubQuery(t *testing.T) {
 	executor, sbc1, sbc2, _, ctx := createExecutorEnv(t)
 
-	executor.pv = querypb.ExecuteOptions_Gen4
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
 
@@ -234,7 +235,7 @@ func TestUpdateInTransactionLookupDefaultReadLock(t *testing.T) {
 	)}
 	executor, sbc1, sbc2, sbcLookup, ctx := createCustomExecutorSetValues(t, executorVSchema, res)
 
-	safeSession := NewSafeSession(&vtgatepb.Session{InTransaction: true})
+	safeSession := econtext.NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	_, err := executorExecSession(ctx,
 		executor,
 		"update t2_lookup set lu_col = 5 where nv_lu_col = 2",
@@ -296,7 +297,7 @@ func TestUpdateInTransactionLookupExclusiveReadLock(t *testing.T) {
 	)}
 	executor, sbc1, sbc2, sbcLookup, ctx := createCustomExecutorSetValues(t, executorVSchema, res)
 
-	safeSession := NewSafeSession(&vtgatepb.Session{InTransaction: true})
+	safeSession := econtext.NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	_, err := executorExecSession(ctx,
 		executor,
 		"update t2_lookup set lu_col = 5 where erl_lu_col = 2",
@@ -358,7 +359,7 @@ func TestUpdateInTransactionLookupSharedReadLock(t *testing.T) {
 	)}
 	executor, sbc1, sbc2, sbcLookup, ctx := createCustomExecutorSetValues(t, executorVSchema, res)
 
-	safeSession := NewSafeSession(&vtgatepb.Session{InTransaction: true})
+	safeSession := econtext.NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	_, err := executorExecSession(ctx,
 		executor,
 		"update t2_lookup set lu_col = 5 where srl_lu_col = 2",
@@ -420,7 +421,7 @@ func TestUpdateInTransactionLookupNoReadLock(t *testing.T) {
 	)}
 	executor, sbc1, sbc2, sbcLookup, ctx := createCustomExecutorSetValues(t, executorVSchema, res)
 
-	safeSession := NewSafeSession(&vtgatepb.Session{InTransaction: true})
+	safeSession := econtext.NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	_, err := executorExecSession(ctx,
 		executor,
 		"update t2_lookup set lu_col = 5 where nrl_lu_col = 2",
@@ -1811,8 +1812,9 @@ func TestInsertGeneratorSharded(t *testing.T) {
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(1),
 		}},
-		RowsAffected: 1,
-		InsertID:     1,
+		RowsAffected:    1,
+		InsertIDChanged: true,
+		InsertID:        1,
 	}})
 	session := &vtgatepb.Session{
 		TargetString: "@primary",
@@ -1839,8 +1841,9 @@ func TestInsertGeneratorSharded(t *testing.T) {
 	}}
 	assertQueries(t, sbclookup, wantQueries)
 	wantResult := &sqltypes.Result{
-		InsertID:     1,
-		RowsAffected: 1,
+		InsertID:        1,
+		RowsAffected:    1,
+		InsertIDChanged: true,
 	}
 	utils.MustMatch(t, wantResult, result)
 }
@@ -1853,8 +1856,9 @@ func TestInsertAutoincSharded(t *testing.T) {
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(1),
 		}},
-		RowsAffected: 1,
-		InsertID:     2,
+		RowsAffected:    1,
+		InsertID:        2,
+		InsertIDChanged: true,
 	}
 	sbc.SetResults([]*sqltypes.Result{wantResult})
 	session := &vtgatepb.Session{
@@ -1893,8 +1897,9 @@ func TestInsertGeneratorUnsharded(t *testing.T) {
 	}}
 	assertQueries(t, sbclookup, wantQueries)
 	wantResult := &sqltypes.Result{
-		InsertID:     1,
-		RowsAffected: 1,
+		InsertID:        1,
+		InsertIDChanged: true,
+		RowsAffected:    1,
 	}
 	utils.MustMatch(t, wantResult, result)
 }
@@ -1911,8 +1916,9 @@ func TestInsertAutoincUnsharded(t *testing.T) {
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(1),
 		}},
-		RowsAffected: 1,
-		InsertID:     2,
+		RowsAffected:    1,
+		InsertID:        2,
+		InsertIDChanged: true,
 	}
 	sbclookup.SetResults([]*sqltypes.Result{wantResult})
 
@@ -1964,8 +1970,9 @@ func TestInsertLookupOwnedGenerator(t *testing.T) {
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(4),
 		}},
-		RowsAffected: 1,
-		InsertID:     1,
+		RowsAffected:    1,
+		InsertID:        1,
+		InsertIDChanged: true,
 	}})
 	session := &vtgatepb.Session{
 		TargetString: "@primary",
@@ -1992,8 +1999,9 @@ func TestInsertLookupOwnedGenerator(t *testing.T) {
 	}}
 	assertQueries(t, sbclookup, wantQueries)
 	wantResult := &sqltypes.Result{
-		InsertID:     4,
-		RowsAffected: 1,
+		InsertID:        4,
+		InsertIDChanged: true,
+		RowsAffected:    1,
 	}
 	utils.MustMatch(t, wantResult, result)
 }
@@ -2066,7 +2074,7 @@ func TestInsertPartialFail1(t *testing.T) {
 		context.Background(),
 		nil,
 		"TestExecute",
-		NewSafeSession(&vtgatepb.Session{InTransaction: true}),
+		econtext.NewSafeSession(&vtgatepb.Session{InTransaction: true}),
 		"insert into user(id, v, name) values (1, 2, 'myname')",
 		nil,
 	)
@@ -2082,7 +2090,7 @@ func TestInsertPartialFail2(t *testing.T) {
 	// Make the second DML fail, it should result in a rollback.
 	sbc1.MustFailExecute[sqlparser.StmtInsert] = 1
 
-	safeSession := NewSafeSession(&vtgatepb.Session{InTransaction: true})
+	safeSession := econtext.NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	_, err := executor.Execute(
 		context.Background(),
 		nil,
@@ -2225,8 +2233,9 @@ func TestMultiInsertGenerator(t *testing.T) {
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(1),
 		}},
-		RowsAffected: 1,
-		InsertID:     1,
+		RowsAffected:    1,
+		InsertIDChanged: true,
+		InsertID:        1,
 	}})
 	session := &vtgatepb.Session{
 		TargetString: "@primary",
@@ -2257,8 +2266,9 @@ func TestMultiInsertGenerator(t *testing.T) {
 	}}
 	assertQueries(t, sbclookup, wantQueries)
 	wantResult := &sqltypes.Result{
-		InsertID:     1,
-		RowsAffected: 1,
+		InsertIDChanged: true,
+		InsertID:        1,
+		RowsAffected:    1,
 	}
 	utils.MustMatch(t, wantResult, result)
 }
@@ -2270,8 +2280,9 @@ func TestMultiInsertGeneratorSparse(t *testing.T) {
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(1),
 		}},
-		RowsAffected: 1,
-		InsertID:     1,
+		RowsAffected:    1,
+		InsertIDChanged: true,
+		InsertID:        1,
 	}})
 	session := &vtgatepb.Session{
 		TargetString: "@primary",
@@ -2306,8 +2317,9 @@ func TestMultiInsertGeneratorSparse(t *testing.T) {
 	}}
 	assertQueries(t, sbclookup, wantQueries)
 	wantResult := &sqltypes.Result{
-		InsertID:     1,
-		RowsAffected: 1,
+		InsertIDChanged: true,
+		InsertID:        1,
+		RowsAffected:    1,
 	}
 	utils.MustMatch(t, wantResult, result)
 }
@@ -2656,7 +2668,7 @@ func TestReservedConnDML(t *testing.T) {
 	logChan := executor.queryLogger.Subscribe("TestReservedConnDML")
 	defer executor.queryLogger.Unsubscribe(logChan)
 
-	session := NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true})
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true})
 
 	_, err := executor.Execute(ctx, nil, "TestReservedConnDML", session, "use "+KsTestUnsharded, nil)
 	require.NoError(t, err)
@@ -2708,7 +2720,7 @@ func TestStreamingDML(t *testing.T) {
 	logChan := executor.queryLogger.Subscribe(method)
 	defer executor.queryLogger.Unsubscribe(logChan)
 
-	session := NewAutocommitSession(&vtgatepb.Session{})
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{})
 
 	tcases := []struct {
 		query  string
@@ -2792,7 +2804,7 @@ func TestPartialVindexInsertQueryFailure(t *testing.T) {
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
 
-	session := NewAutocommitSession(&vtgatepb.Session{})
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{})
 	require.True(t, session.GetAutocommit())
 	require.False(t, session.InTransaction())
 
@@ -2845,7 +2857,7 @@ func TestPartialVindexInsertQueryFailureAutoCommit(t *testing.T) {
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
 
-	session := NewAutocommitSession(&vtgatepb.Session{})
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{})
 	require.True(t, session.GetAutocommit())
 	require.False(t, session.InTransaction())
 
@@ -2886,7 +2898,7 @@ func TestPartialVindexInsertQueryFailureAutoCommit(t *testing.T) {
 func TestMultiInternalSavepoint(t *testing.T) {
 	executor, sbc1, sbc2, _, ctx := createExecutorEnv(t)
 
-	session := NewAutocommitSession(&vtgatepb.Session{})
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{})
 	_, err := executorExecSession(ctx, executor, "begin", nil, session.Session)
 	require.NoError(t, err)
 
@@ -2935,7 +2947,7 @@ func TestInsertSelectFromDual(t *testing.T) {
 	logChan := executor.queryLogger.Subscribe("TestInsertSelect")
 	defer executor.queryLogger.Unsubscribe(logChan)
 
-	session := NewAutocommitSession(&vtgatepb.Session{})
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{})
 
 	query := "insert into user(id, v, name) select 1, 2, 'myname' from dual"
 	wantQueries := []*querypb.BoundQuery{{
@@ -2990,7 +3002,7 @@ func TestInsertSelectFromTable(t *testing.T) {
 	logChan := executor.queryLogger.Subscribe("TestInsertSelect")
 	defer executor.queryLogger.Unsubscribe(logChan)
 
-	session := NewAutocommitSession(&vtgatepb.Session{})
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{})
 
 	query := "insert into user(id, name) select c1, c2 from music"
 	wantQueries := []*querypb.BoundQuery{{
@@ -3139,4 +3151,63 @@ func TestDeleteMultiTable(t *testing.T) {
 	// select Id, `name` from `user` where (`user`.id) in ::dml_vals for update - 1 shard
 	// delete from `user` where (`user`.id) in ::dml_vals - 1 shard
 	testQueryLog(t, executor, logChan, "TestExecute", "DELETE", "delete `user` from `user` join music on `user`.col = music.col where music.user_id = 1", 18)
+}
+
+// TestSessionRowsAffected test that rowsAffected is set correctly for each shard session.
+func TestSessionRowsAffected(t *testing.T) {
+	method := t.Name()
+	executor, _, sbc4060, _, ctx := createExecutorEnv(t)
+
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{})
+
+	// start the transaction
+	_, err := executor.Execute(ctx, nil, method, session, "begin", nil)
+	require.NoError(t, err)
+
+	// -20 - select query
+	_, err = executor.Execute(ctx, nil, method, session, "select * from user where id = 1", nil)
+	require.NoError(t, err)
+	require.Len(t, session.ShardSessions, 1)
+	require.False(t, session.ShardSessions[0].RowsAffected)
+
+	// -20 - update query (rows affected)
+	_, err = executor.Execute(ctx, nil, method, session, "update user set foo = 41 where id = 1", nil)
+	require.NoError(t, err)
+	require.True(t, session.ShardSessions[0].RowsAffected)
+
+	// e0- - select query
+	_, err = executor.Execute(ctx, nil, method, session, "select * from user where id = 7", nil)
+	require.NoError(t, err)
+	assert.Len(t, session.ShardSessions, 2)
+	require.False(t, session.ShardSessions[1].RowsAffected)
+
+	// c0-e0 - update query (rows affected)
+	_, err = executor.Execute(ctx, nil, method, session, "update user set foo = 42 where id = 5", nil)
+	require.NoError(t, err)
+	require.Len(t, session.ShardSessions, 3)
+	require.True(t, session.ShardSessions[2].RowsAffected)
+
+	// 40-60 - update query (no rows affected)
+	sbc4060.SetResults([]*sqltypes.Result{{RowsAffected: 0}})
+	_, err = executor.Execute(ctx, nil, method, session, "update user set foo = 42 where id = 3", nil)
+	require.NoError(t, err)
+	assert.Len(t, session.ShardSessions, 4)
+	require.False(t, session.ShardSessions[3].RowsAffected)
+
+	// 40-60 - select query
+	_, err = executor.Execute(ctx, nil, method, session, "select * from user where id = 3", nil)
+	require.NoError(t, err)
+	require.False(t, session.ShardSessions[3].RowsAffected)
+
+	// 40-60 - delete query (rows affected)
+	_, err = executor.Execute(ctx, nil, method, session, "delete from user where id = 3", nil)
+	require.NoError(t, err)
+	require.True(t, session.ShardSessions[0].RowsAffected)
+	require.False(t, session.ShardSessions[1].RowsAffected)
+	require.True(t, session.ShardSessions[2].RowsAffected)
+	require.True(t, session.ShardSessions[3].RowsAffected)
+
+	_, err = executor.Execute(ctx, nil, method, session, "commit", nil)
+	require.NoError(t, err)
+	require.Zero(t, session.ShardSessions)
 }

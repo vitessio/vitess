@@ -75,6 +75,7 @@ var (
 		"xb_backup",
 		"backup_pitr",
 		"backup_pitr_xtrabackup",
+		"backup_pitr_mysqlshell",
 		"21",
 		"mysql_server_vault",
 		"vstream",
@@ -102,6 +103,7 @@ var (
 		"vtgate_vindex_heavy",
 		"vtgate_vschema",
 		"vtgate_queries",
+		"vtgate_plantests",
 		"vtgate_schema_tracker",
 		"vtgate_foreignkey_stress",
 		"vtorc",
@@ -115,7 +117,8 @@ var (
 		"vreplication_v2",
 		"vreplication_partial_movetables_and_materialize",
 		"vreplication_foreign_key_stress",
-		"vreplication_migrate_vdiff2_convert_tz",
+		"vreplication_migrate",
+		"vreplication_vtctldclient_vdiff2_movetables_tz",
 		"vreplication_multi_tenant",
 		"schemadiff_vrepl",
 		"topo_connection_cache",
@@ -152,7 +155,11 @@ var (
 		"onlineddl_vrepl_stress_suite",
 		"onlineddl_vrepl_suite",
 		"vreplication_basic",
-		"vreplication_migrate_vdiff2_convert_tz",
+		"vreplication_migrate",
+		"vreplication_vtctldclient_vdiff2_movetables_tz",
+	}
+	clusterRequiringMinio = []string{
+		"21",
 	}
 )
 
@@ -169,8 +176,10 @@ type clusterTest struct {
 	Docker                             bool
 	LimitResourceUsage                 bool
 	EnableBinlogTransactionCompression bool
+	EnablePartialJSON                  bool
 	PartialKeyspace                    bool
 	Cores16                            bool
+	NeedsMinio                         bool
 }
 
 type vitessTesterTest struct {
@@ -283,6 +292,13 @@ func generateClusterWorkflows(list []string, tpl string) {
 					break
 				}
 			}
+			minioClusters := canonnizeList(clusterRequiringMinio)
+			for _, minioCluster := range minioClusters {
+				if minioCluster == cluster {
+					test.NeedsMinio = true
+					break
+				}
+			}
 			if mysqlVersion == mysql57 {
 				test.Platform = string(mysql57)
 			}
@@ -291,6 +307,7 @@ func generateClusterWorkflows(list []string, tpl string) {
 			}
 			if strings.Contains(cluster, "vrepl") {
 				test.EnableBinlogTransactionCompression = true
+				test.EnablePartialJSON = true
 			}
 			mysqlVersionIndicator := ""
 			if mysqlVersion != defaultMySQLVersion && len(clusterMySQLVersions()) > 1 {

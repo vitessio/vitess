@@ -73,7 +73,6 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	exitcode, err := func() (int, error) {
@@ -102,7 +101,6 @@ func TestMain(m *testing.M) {
 }
 
 func TestShardedKeyspace(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	shard1 := clusterInstance.Keyspaces[0].Shards[0]
 	shard2 := clusterInstance.Keyspaces[0].Shards[1]
 
@@ -155,8 +153,8 @@ func TestShardedKeyspace(t *testing.T) {
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ValidateSchemaShard", fmt.Sprintf("%s/%s", keyspaceName, shard1.Name))
 	require.Nil(t, err)
 
-	output, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ValidateSchemaKeyspace", keyspaceName)
-	require.Error(t, err)
+	output, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ValidateSchemaKeyspace", keyspaceName)
+	require.NoError(t, err)
 	// We should assert that there is a schema difference and that both the shard primaries are involved in it.
 	// However, we cannot assert in which order the two primaries will occur since the underlying function does not guarantee that
 	// We could have an output here like `schemas differ ... shard1Primary ... differs from: shard2Primary ...` or `schemas differ ... shard2Primary ... differs from: shard1Primary ...`

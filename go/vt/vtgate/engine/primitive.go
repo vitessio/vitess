@@ -70,9 +70,9 @@ type (
 		StreamExecutePrimitiveStandalone(ctx context.Context, primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(result *sqltypes.Result) error) error
 
 		// Shard-level functions.
-		ExecuteMultiShard(ctx context.Context, primitive Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, canAutocommit bool) (*sqltypes.Result, []error)
-		ExecuteStandalone(ctx context.Context, primitive Primitive, query string, bindVars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard) (*sqltypes.Result, error)
-		StreamExecuteMulti(ctx context.Context, primitive Primitive, query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, rollbackOnError bool, autocommit bool, callback func(reply *sqltypes.Result) error) []error
+		ExecuteMultiShard(ctx context.Context, primitive Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, canAutocommit, fetchLastInsertID bool) (*sqltypes.Result, []error)
+		ExecuteStandalone(ctx context.Context, primitive Primitive, query string, bindVars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard, fetchLastInsertID bool) (*sqltypes.Result, error)
+		StreamExecuteMulti(ctx context.Context, primitive Primitive, query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, rollbackOnError, autocommit, fetchLastInsertID bool, callback func(reply *sqltypes.Result) error) []error
 
 		// Keyspace ID level functions.
 		ExecuteKeyspaceID(ctx context.Context, keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError, autocommit bool) (*sqltypes.Result, error)
@@ -140,6 +140,15 @@ type (
 
 		// UnresolvedTransactions reads the state of all the unresolved atomic transactions in the given keyspace.
 		UnresolvedTransactions(ctx context.Context, keyspace string) ([]*querypb.TransactionMetadata, error)
+
+		// StartPrimitiveTrace starts a trace for the given primitive,
+		// and returns a function to get the trace logs after the primitive execution.
+		StartPrimitiveTrace() func() Stats
+
+		// RecordMirrorStats is used to record stats about a mirror query.
+		RecordMirrorStats(time.Duration, time.Duration, error)
+
+		SetLastInsertID(uint64)
 	}
 
 	// SessionActions gives primitives ability to interact with the session state
@@ -173,6 +182,7 @@ type (
 		SetConsolidator(querypb.ExecuteOptions_Consolidator)
 		SetWorkloadName(string)
 		SetPriority(string)
+		SetExecQueryTimeout(timeout *int)
 		SetFoundRows(uint64)
 
 		SetDDLStrategy(string)
@@ -214,9 +224,6 @@ type (
 		// SetCommitOrder sets the commit order for the shard session in respect of the type of vindex lookup.
 		// This is used to select the right shard session to perform the vindex lookup query.
 		SetCommitOrder(co vtgatepb.CommitOrder)
-
-		// GetQueryTimeout gets the query timeout and takes in the query timeout from comments
-		GetQueryTimeout(queryTimeoutFromComment int) int
 
 		// SetQueryTimeout sets the query timeout
 		SetQueryTimeout(queryTimeout int64)

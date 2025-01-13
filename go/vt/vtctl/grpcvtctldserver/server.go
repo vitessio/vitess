@@ -31,6 +31,7 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/semaphore"
 	"google.golang.org/grpc"
 
@@ -43,6 +44,7 @@ import (
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/concurrency"
+	"vitess.io/vitess/go/vt/dtids"
 	hk "vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
@@ -51,22 +53,6 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/mysqlctl/mysqlctlproto"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
-	"vitess.io/vitess/go/vt/schema"
-	"vitess.io/vitess/go/vt/schemamanager"
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/topo/topoproto"
-	"vitess.io/vitess/go/vt/topotools"
-	"vitess.io/vitess/go/vt/topotools/events"
-	"vitess.io/vitess/go/vt/vtctl/reparentutil"
-	"vitess.io/vitess/go/vt/vtctl/schematools"
-	"vitess.io/vitess/go/vt/vtctl/workflow"
-	"vitess.io/vitess/go/vt/vtenv"
-	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
-	"vitess.io/vitess/go/vt/vttablet/tmclient"
-
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -77,6 +63,22 @@ import (
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/schemamanager"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/topotools/events"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
+	"vitess.io/vitess/go/vt/vtctl/schematools"
+	"vitess.io/vitess/go/vt/vtctl/workflow"
+	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
 
 const (
@@ -302,7 +304,9 @@ func (s *VtctldServer) ApplySchema(ctx context.Context, req *vtctldatapb.ApplySc
 	}
 
 	for _, shard := range execResult.SuccessShards {
-		resp.RowsAffectedByShard[shard.Shard] = shard.Result.RowsAffected
+		for _, result := range shard.Results {
+			resp.RowsAffectedByShard[shard.Shard] += result.RowsAffected
+		}
 	}
 
 	return resp, err
@@ -437,6 +441,7 @@ func (s *VtctldServer) Backup(req *vtctldatapb.BackupRequest, stream vtctlservic
 	span.Annotate("allow_primary", req.AllowPrimary)
 	span.Annotate("concurrency", req.Concurrency)
 	span.Annotate("incremental_from_pos", req.IncrementalFromPos)
+	span.Annotate("backup_engine", req.BackupEngine)
 
 	ti, err := s.ts.GetTablet(ctx, req.TabletAlias)
 	if err != nil {
@@ -523,6 +528,7 @@ func (s *VtctldServer) backupTablet(ctx context.Context, tablet *topodatapb.Tabl
 		AllowPrimary:       req.AllowPrimary,
 		IncrementalFromPos: req.IncrementalFromPos,
 		UpgradeSafe:        req.UpgradeSafe,
+		BackupEngine:       req.BackupEngine,
 	}
 	logStream, err := s.tmc.Backup(ctx, tablet, r)
 	if err != nil {
@@ -583,6 +589,39 @@ func (s *VtctldServer) CancelSchemaMigration(ctx context.Context, req *vtctldata
 	return resp, nil
 }
 
+// ChangeTabletTags is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) ChangeTabletTags(ctx context.Context, req *vtctldatapb.ChangeTabletTagsRequest) (resp *vtctldatapb.ChangeTabletTagsResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ChangeTabletTags")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
+	span.Annotate("replace", req.Replace)
+
+	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer cancel()
+
+	tablet, err := s.ts.GetTablet(ctx, req.TabletAlias)
+	if err != nil {
+		return nil, err
+	}
+
+	span.Annotate("before_tablet_tags", tablet.Tags)
+
+	changeTagsResp, err := s.tmc.ChangeTags(ctx, tablet.Tablet, req.Tags, req.Replace)
+	if err != nil {
+		return nil, err
+	}
+
+	span.Annotate("after_tablet_tags", changeTagsResp.Tags)
+
+	return &vtctldatapb.ChangeTabletTagsResponse{
+		BeforeTags: tablet.Tags,
+		AfterTags:  changeTagsResp.Tags,
+	}, nil
+}
+
 // ChangeTabletType is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) ChangeTabletType(ctx context.Context, req *vtctldatapb.ChangeTabletTypeRequest) (resp *vtctldatapb.ChangeTabletTypeResponse, err error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.ChangeTabletType")
@@ -630,7 +669,7 @@ func (s *VtctldServer) ChangeTabletType(ctx context.Context, req *vtctldatapb.Ch
 		return nil, err
 	}
 	log.Infof("Getting a new durability policy for %v", durabilityName)
-	durability, err := reparentutil.GetDurabilityPolicy(durabilityName)
+	durability, err := policy.GetDurabilityPolicy(durabilityName)
 	if err != nil {
 		return nil, err
 	}
@@ -660,7 +699,7 @@ func (s *VtctldServer) ChangeTabletType(ctx context.Context, req *vtctldatapb.Ch
 	// Since we want to check the durability rules for the desired state and not before we make that change
 	expectedTablet := tablet.Tablet.CloneVT()
 	expectedTablet.Type = req.DbType
-	err = s.tmc.ChangeType(ctx, tablet.Tablet, req.DbType, reparentutil.IsReplicaSemiSync(durability, shardPrimary.Tablet, expectedTablet))
+	err = s.tmc.ChangeType(ctx, tablet.Tablet, req.DbType, policy.IsReplicaSemiSync(durability, shardPrimary.Tablet, expectedTablet))
 	if err != nil {
 		return nil, err
 	}
@@ -1233,6 +1272,7 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 			WaitReplicasTimeout:       waitReplicasTimeout,
 			WaitAllTablets:            req.WaitForAllTablets,
 			PreventCrossCellPromotion: req.PreventCrossCellPromotion,
+			ExpectedPrimaryAlias:      req.ExpectedPrimary,
 		},
 	)
 
@@ -2059,14 +2099,12 @@ func (s *VtctldServer) UpdateThrottlerConfig(ctx context.Context, req *vtctldata
 			throttlerConfig.CheckAsCheckSelf = false
 		}
 		if req.ThrottledApp != nil && req.ThrottledApp.Name != "" {
-			// TODO(shlomi) in v22: replace the following line with the commented out block
-			throttlerConfig.ThrottledApps[req.ThrottledApp.Name] = req.ThrottledApp
-			// 	timeNow := time.Now()
-			// if protoutil.TimeFromProto(req.ThrottledApp.ExpiresAt).After(timeNow) {
-			// 	throttlerConfig.ThrottledApps[req.ThrottledApp.Name] = req.ThrottledApp
-			// } else {
-			// 	delete(throttlerConfig.ThrottledApps, req.ThrottledApp.Name)
-			// }
+			timeNow := time.Now()
+			if protoutil.TimeFromProto(req.ThrottledApp.ExpiresAt).After(timeNow) {
+				throttlerConfig.ThrottledApps[req.ThrottledApp.Name] = req.ThrottledApp
+			} else {
+				delete(throttlerConfig.ThrottledApps, req.ThrottledApp.Name)
+			}
 		}
 		return throttlerConfig
 	}
@@ -2393,6 +2431,202 @@ func (s *VtctldServer) GetTopologyPath(ctx context.Context, req *vtctldatapb.Get
 	}, nil
 }
 
+// GetUnresolvedTransactions is part of the vtctlservicepb.VtctldServer interface.
+// It returns the unresolved distributed transactions list for the provided keyspace.
+func (s *VtctldServer) GetUnresolvedTransactions(ctx context.Context, req *vtctldatapb.GetUnresolvedTransactionsRequest) (*vtctldatapb.GetUnresolvedTransactionsResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetUnresolvedTransactions")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+
+	shards, err := s.ts.GetShardNames(ctx, req.Keyspace)
+	if err != nil {
+		return nil, err
+	}
+	var mu sync.Mutex
+	var transactions []*querypb.TransactionMetadata
+
+	eg, newCtx := errgroup.WithContext(ctx)
+	eg.SetLimit(10)
+	for _, shard := range shards {
+		eg.Go(func() error {
+			si, err := s.ts.GetShard(newCtx, req.Keyspace, shard)
+			if err != nil {
+				return err
+			}
+			primary, err := s.ts.GetTablet(newCtx, si.PrimaryAlias)
+			if err != nil {
+				return err
+			}
+			shardTrnxs, err := s.tmc.GetUnresolvedTransactions(newCtx, primary.Tablet, req.AbandonAge)
+			if err != nil {
+				return err
+			}
+			// The metadata manager is itself not part of the list of participants.
+			// We should it to the list before showing it to the users.
+			for _, trnx := range shardTrnxs {
+				trnx.Participants = append(trnx.Participants, &querypb.Target{
+					Keyspace:   req.Keyspace,
+					Shard:      shard,
+					TabletType: topodatapb.TabletType_PRIMARY,
+				})
+			}
+			mu.Lock()
+			defer mu.Unlock()
+			transactions = append(transactions, shardTrnxs...)
+			return nil
+		})
+	}
+	if err = eg.Wait(); err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.GetUnresolvedTransactionsResponse{
+		Transactions: transactions,
+	}, nil
+}
+
+// ConcludeTransaction is part of the vtctlservicepb.VtctldServer interface.
+// It concludes the unresolved distributed transaction.
+func (s *VtctldServer) ConcludeTransaction(ctx context.Context, req *vtctldatapb.ConcludeTransactionRequest) (resp *vtctldatapb.ConcludeTransactionResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ConcludeTransaction")
+	defer span.Finish()
+
+	span.Annotate("dtid", req.Dtid)
+	span.Annotate("participants", req.Participants)
+
+	ss, err := dtids.ShardSession(req.Dtid)
+	if err != nil {
+		return nil, err
+	}
+	primary, err := s.getPrimaryTablet(ctx, ss.Target)
+	if err != nil {
+		return nil, err
+	}
+
+	participants := req.Participants
+	if len(participants) == 0 {
+		// Read the transaction metadata if participating resource manager list is not provided in the request.
+		transaction, err := s.tmc.ReadTransaction(ctx, primary.Tablet, req.Dtid)
+		if transaction == nil || err != nil {
+			// no transaction record for the given ID. It is already concluded or does not exist.
+			return nil, err
+		}
+		participants = transaction.Participants
+	}
+
+	eg, newCtx := errgroup.WithContext(ctx)
+	eg.SetLimit(10)
+	for _, rm := range participants {
+		eg.Go(func() error {
+			primary, err := s.getPrimaryTablet(newCtx, rm)
+			if err != nil {
+				return err
+			}
+			return s.tmc.ConcludeTransaction(newCtx, primary.Tablet, req.Dtid, false)
+		})
+	}
+	if err = eg.Wait(); err != nil {
+		return nil, err
+	}
+
+	if err = s.tmc.ConcludeTransaction(ctx, primary.Tablet, req.Dtid, true); err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.ConcludeTransactionResponse{}, nil
+}
+
+// GetTransactionInfo is part of the vtctlservicepb.VtctldServer interface.
+// It reads the information about a distributed transaction.
+func (s *VtctldServer) GetTransactionInfo(ctx context.Context, req *vtctldatapb.GetTransactionInfoRequest) (resp *vtctldatapb.GetTransactionInfoResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetTransactionInfo")
+	defer span.Finish()
+
+	span.Annotate("dtid", req.Dtid)
+
+	// Read the shard where the transaction metadata is stored.
+	ss, err := dtids.ShardSession(req.Dtid)
+	if err != nil {
+		return nil, err
+	}
+	primary, err := s.getPrimaryTablet(ctx, ss.Target)
+	if err != nil {
+		return nil, err
+	}
+
+	// Read the transaction metadata to get the participating resource manager list.
+	transaction, err := s.tmc.ReadTransaction(ctx, primary.Tablet, req.Dtid)
+	if transaction == nil || err != nil {
+		// no transaction record for the given ID. It is already concluded or does not exist.
+		return nil, err
+	}
+	// Store the metadata in the resonse.
+	resp = &vtctldatapb.GetTransactionInfoResponse{
+		Metadata: transaction,
+	}
+	// Create a mutex we use to synchronize the following go routines to read the transaction state from all the shards.
+	mu := sync.Mutex{}
+
+	eg, newCtx := errgroup.WithContext(ctx)
+	eg.SetLimit(10)
+	for _, rm := range transaction.Participants {
+		eg.Go(func() error {
+			primary, err := s.getPrimaryTablet(newCtx, rm)
+			if err != nil {
+				return err
+			}
+			rts, err := s.tmc.GetTransactionInfo(newCtx, primary.Tablet, req.Dtid)
+			if err != nil {
+				return err
+			}
+			mu.Lock()
+			defer mu.Unlock()
+			resp.ShardStates = append(resp.ShardStates, &vtctldatapb.ShardTransactionState{
+				Shard:       rm.Shard,
+				State:       rts.State,
+				Message:     rts.Message,
+				TimeCreated: rts.TimeCreated,
+				Statements:  rts.Statements,
+			})
+			return nil
+		})
+	}
+	if err = eg.Wait(); err != nil {
+		return nil, err
+	}
+
+	rts, err := s.tmc.GetTransactionInfo(ctx, primary.Tablet, req.Dtid)
+	if err != nil {
+		return nil, err
+	}
+	resp.ShardStates = append(resp.ShardStates, &vtctldatapb.ShardTransactionState{
+		Shard:       ss.Target.Shard,
+		State:       rts.State,
+		Message:     rts.Message,
+		TimeCreated: rts.TimeCreated,
+		Statements:  rts.Statements,
+	})
+
+	// The metadata manager is itself not part of the list of participants.
+	// We should it to the list before showing it to the users.
+	transaction.Participants = append(transaction.Participants, ss.Target)
+
+	return resp, nil
+}
+
+func (s *VtctldServer) getPrimaryTablet(newCtx context.Context, rm *querypb.Target) (*topo.TabletInfo, error) {
+	si, err := s.ts.GetShard(newCtx, rm.Keyspace, rm.Shard)
+	if err != nil {
+		return nil, err
+	}
+	primary, err := s.ts.GetTablet(newCtx, si.PrimaryAlias)
+	if err != nil {
+		return nil, err
+	}
+	return primary, nil
+}
+
 // GetVersion returns the version of a tablet from its debug vars
 func (s *VtctldServer) GetVersion(ctx context.Context, req *vtctldatapb.GetVersionRequest) (resp *vtctldatapb.GetVersionResponse, err error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetVersion")
@@ -2543,7 +2777,7 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 		return err
 	}
 	log.Infof("Getting a new durability policy for %v", durabilityName)
-	durability, err := reparentutil.GetDurabilityPolicy(durabilityName)
+	durability, err := policy.GetDurabilityPolicy(durabilityName)
 	if err != nil {
 		return err
 	}
@@ -2627,7 +2861,7 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 	// position
 	logger.Infof("initializing primary on %v", topoproto.TabletAliasString(req.PrimaryElectTabletAlias))
 	event.DispatchUpdate(ev, "initializing primary")
-	rp, err := tmc.InitPrimary(ctx, primaryElectTabletInfo.Tablet, reparentutil.SemiSyncAckers(durability, primaryElectTabletInfo.Tablet) > 0)
+	rp, err := tmc.InitPrimary(ctx, primaryElectTabletInfo.Tablet, policy.SemiSyncAckers(durability, primaryElectTabletInfo.Tablet) > 0)
 	if err != nil {
 		return err
 	}
@@ -2668,7 +2902,7 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 			go func(alias string, tabletInfo *topo.TabletInfo) {
 				defer wgReplicas.Done()
 				logger.Infof("initializing replica %v", alias)
-				if err := tmc.InitReplica(replCtx, tabletInfo.Tablet, req.PrimaryElectTabletAlias, rp, now, reparentutil.IsReplicaSemiSync(durability, primaryElectTabletInfo.Tablet, tabletInfo.Tablet)); err != nil {
+				if err := tmc.InitReplica(replCtx, tabletInfo.Tablet, req.PrimaryElectTabletAlias, rp, now, policy.IsReplicaSemiSync(durability, primaryElectTabletInfo.Tablet, tabletInfo.Tablet)); err != nil {
 					rec.RecordError(fmt.Errorf("tablet %v InitReplica failed: %v", alias, err))
 				}
 			}(alias, tabletInfo)
@@ -2959,6 +3193,10 @@ func (s *VtctldServer) PlannedReparentShard(ctx context.Context, req *vtctldatap
 		span.Annotate("avoid_primary_alias", topoproto.TabletAliasString(req.AvoidPrimary))
 	}
 
+	if req.ExpectedPrimary != nil {
+		span.Annotate("expected_primary_alias", topoproto.TabletAliasString(req.ExpectedPrimary))
+	}
+
 	if req.NewPrimary != nil {
 		span.Annotate("new_primary_alias", topoproto.TabletAliasString(req.NewPrimary))
 	}
@@ -2978,6 +3216,7 @@ func (s *VtctldServer) PlannedReparentShard(ctx context.Context, req *vtctldatap
 		reparentutil.PlannedReparentOptions{
 			AvoidPrimaryAlias:       req.AvoidPrimary,
 			NewPrimaryAlias:         req.NewPrimary,
+			ExpectedPrimaryAlias:    req.ExpectedPrimary,
 			WaitReplicasTimeout:     waitReplicasTimeout,
 			TolerableReplLag:        tolerableReplLag,
 			AllowCrossCellPromotion: req.AllowCrossCellPromotion,
@@ -3360,12 +3599,12 @@ func (s *VtctldServer) ReparentTablet(ctx context.Context, req *vtctldatapb.Repa
 		return nil, err
 	}
 	log.Infof("Getting a new durability policy for %v", durabilityName)
-	durability, err := reparentutil.GetDurabilityPolicy(durabilityName)
+	durability, err := policy.GetDurabilityPolicy(durabilityName)
 	if err != nil {
 		return nil, err
 	}
 
-	if err = s.tmc.SetReplicationSource(ctx, tablet.Tablet, shard.PrimaryAlias, 0, "", false, reparentutil.IsReplicaSemiSync(durability, shardPrimary.Tablet, tablet.Tablet), 0); err != nil {
+	if err = s.tmc.SetReplicationSource(ctx, tablet.Tablet, shard.PrimaryAlias, 0, "", false, policy.IsReplicaSemiSync(durability, shardPrimary.Tablet, tablet.Tablet), 0); err != nil {
 		return nil, err
 	}
 
@@ -3416,10 +3655,11 @@ func (s *VtctldServer) RestoreFromBackup(req *vtctldatapb.RestoreFromBackupReque
 	span.Annotate("shard", ti.Shard)
 
 	r := &tabletmanagerdatapb.RestoreFromBackupRequest{
-		BackupTime:         req.BackupTime,
-		RestoreToPos:       req.RestoreToPos,
-		RestoreToTimestamp: req.RestoreToTimestamp,
-		DryRun:             req.DryRun,
+		BackupTime:           req.BackupTime,
+		RestoreToPos:         req.RestoreToPos,
+		RestoreToTimestamp:   req.RestoreToTimestamp,
+		DryRun:               req.DryRun,
+		AllowedBackupEngines: req.AllowedBackupEngines,
 	}
 	logStream, err := s.tmc.RestoreFromBackup(ctx, ti.Tablet, r)
 	if err != nil {
@@ -3548,7 +3788,7 @@ func (s *VtctldServer) SetKeyspaceDurabilityPolicy(ctx context.Context, req *vtc
 		return nil, err
 	}
 
-	policyValid := reparentutil.CheckDurabilityPolicyExists(req.DurabilityPolicy)
+	policyValid := policy.CheckDurabilityPolicyExists(req.DurabilityPolicy)
 	if !policyValid {
 		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "durability policy <%v> is not a valid policy. Please register it as a policy first", req.DurabilityPolicy)
 		return nil, err
@@ -4069,12 +4309,12 @@ func (s *VtctldServer) StartReplication(ctx context.Context, req *vtctldatapb.St
 		return nil, err
 	}
 	log.Infof("Getting a new durability policy for %v", durabilityName)
-	durability, err := reparentutil.GetDurabilityPolicy(durabilityName)
+	durability, err := policy.GetDurabilityPolicy(durabilityName)
 	if err != nil {
 		return nil, err
 	}
 
-	if err = s.tmc.StartReplication(ctx, tablet.Tablet, reparentutil.IsReplicaSemiSync(durability, shardPrimary.Tablet, tablet.Tablet)); err != nil {
+	if err = s.tmc.StartReplication(ctx, tablet.Tablet, policy.IsReplicaSemiSync(durability, shardPrimary.Tablet, tablet.Tablet)); err != nil {
 		log.Errorf("StartReplication: failed to start replication on %v: %v", alias, err)
 		return nil, err
 	}
@@ -4174,12 +4414,12 @@ func (s *VtctldServer) TabletExternallyReparented(ctx context.Context, req *vtct
 		return nil, err
 	}
 	log.Infof("Getting a new durability policy for %v", durabilityName)
-	durability, err := reparentutil.GetDurabilityPolicy(durabilityName)
+	durability, err := policy.GetDurabilityPolicy(durabilityName)
 	if err != nil {
 		return nil, err
 	}
 
-	if err = s.tmc.ChangeType(ctx, tablet.Tablet, topodatapb.TabletType_PRIMARY, reparentutil.SemiSyncAckers(durability, tablet.Tablet) > 0); err != nil {
+	if err = s.tmc.ChangeType(ctx, tablet.Tablet, topodatapb.TabletType_PRIMARY, policy.SemiSyncAckers(durability, tablet.Tablet) > 0); err != nil {
 		log.Warningf("ChangeType(%v, PRIMARY): %v", topoproto.TabletAliasString(req.Tablet), err)
 		return nil, err
 	}
@@ -5034,6 +5274,7 @@ func (s *VtctldServer) VDiffCreate(ctx context.Context, req *vtctldatapb.VDiffCr
 	span.Annotate("target_cells", req.TargetCells)
 	span.Annotate("tablet_types", req.TabletTypes)
 	span.Annotate("tables", req.Tables)
+	span.Annotate("auto_start", req.AutoStart)
 	span.Annotate("auto_retry", req.AutoRetry)
 	span.Annotate("max_diff_duration", req.MaxDiffDuration)
 
@@ -5066,6 +5307,7 @@ func (s *VtctldServer) VDiffResume(ctx context.Context, req *vtctldatapb.VDiffRe
 	span.Annotate("keyspace", req.TargetKeyspace)
 	span.Annotate("workflow", req.Workflow)
 	span.Annotate("uuid", req.Uuid)
+	span.Annotate("shards", req.TargetShards)
 
 	resp, err = s.ws.VDiffResume(ctx, req)
 	return resp, err
@@ -5096,6 +5338,7 @@ func (s *VtctldServer) VDiffStop(ctx context.Context, req *vtctldatapb.VDiffStop
 	span.Annotate("keyspace", req.TargetKeyspace)
 	span.Annotate("workflow", req.Workflow)
 	span.Annotate("uuid", req.Uuid)
+	span.Annotate("shards", req.TargetShards)
 
 	resp, err = s.ws.VDiffStop(ctx, req)
 	return resp, err
@@ -5110,6 +5353,9 @@ func (s *VtctldServer) WorkflowDelete(ctx context.Context, req *vtctldatapb.Work
 
 	span.Annotate("keyspace", req.Keyspace)
 	span.Annotate("workflow", req.Workflow)
+	span.Annotate("keep_data", req.KeepData)
+	span.Annotate("keep_routing_rules", req.KeepRoutingRules)
+	span.Annotate("shards", req.Shards)
 
 	resp, err = s.ws.WorkflowDelete(ctx, req)
 	return resp, err
@@ -5141,6 +5387,7 @@ func (s *VtctldServer) WorkflowSwitchTraffic(ctx context.Context, req *vtctldata
 	span.Annotate("tablet-types", req.TabletTypes)
 	span.Annotate("direction", req.Direction)
 	span.Annotate("enable-reverse-replication", req.EnableReverseReplication)
+	span.Annotate("force", req.Force)
 
 	resp, err = s.ws.WorkflowSwitchTraffic(ctx, req)
 	return resp, err

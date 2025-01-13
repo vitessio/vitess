@@ -24,16 +24,20 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/transaction/twopc/utils"
+	twopcutil "vitess.io/vitess/go/test/endtoend/transaction/twopc/utils"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -42,6 +46,7 @@ import (
 
 var (
 	clusterInstance   *cluster.LocalProcessCluster
+	mysqlParams       mysql.ConnParams
 	vtParams          mysql.ConnParams
 	vtgateGrpcAddress string
 	keyspaceName      = "ks"
@@ -57,7 +62,6 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	exitcode := func() int {
@@ -74,13 +78,13 @@ func TestMain(m *testing.M) {
 
 		// Set extra args for twopc
 		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
-			"--transaction_mode", "TWOPC",
 			"--grpc_use_effective_callerid",
 		)
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
-			"--twopc_enable",
 			"--twopc_abandon_age", "1",
 			"--queryserver-config-transaction-cap", "3",
+			"--queryserver-config-transaction-timeout", "400s",
+			"--queryserver-config-query-timeout", "9000s",
 		)
 
 		// Start keyspace
@@ -89,7 +93,7 @@ func TestMain(m *testing.M) {
 			SchemaSQL:        SchemaSQL,
 			VSchema:          VSchema,
 			SidecarDBName:    sidecarDBName,
-			DurabilityPolicy: "semi_sync",
+			DurabilityPolicy: policy.DurabilitySemiSync,
 		}
 		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-40", "40-80", "80-"}, 2, false); err != nil {
 			return 1
@@ -99,8 +103,29 @@ func TestMain(m *testing.M) {
 		if err := clusterInstance.StartVtgate(); err != nil {
 			return 1
 		}
+		clusterInstance.VtgateProcess.Config.TransactionMode = "TWOPC"
+		if err := clusterInstance.VtgateProcess.RewriteConfiguration(); err != nil {
+			return 1
+		}
+		if err := clusterInstance.VtgateProcess.WaitForConfig(`"transaction_mode":"TWOPC"`); err != nil {
+			return 1
+		}
 		vtParams = clusterInstance.GetVTParams(keyspaceName)
 		vtgateGrpcAddress = fmt.Sprintf("%s:%d", clusterInstance.Hostname, clusterInstance.VtgateGrpcPort)
+
+		clusterInstance.NewVTAdminProcess()
+		if err := clusterInstance.VtadminProcess.Setup(); err != nil {
+			return 1
+		}
+
+		// create mysql instance and connection parameters
+		conn, closer, err := utils.NewMySQL(clusterInstance, keyspaceName, SchemaSQL)
+		if err != nil {
+			fmt.Println(err)
+			return 1
+		}
+		defer closer()
+		mysqlParams = conn
 
 		return m.Run()
 	}()
@@ -120,9 +145,34 @@ func start(t *testing.T) (*mysql.Conn, func()) {
 }
 
 func cleanup(t *testing.T) {
-	cluster.PanicHandler(t)
-	utils.ClearOutTable(t, vtParams, "twopc_user")
-	utils.ClearOutTable(t, vtParams, "twopc_t1")
+	twopcutil.ClearOutTable(t, vtParams, "twopc_user")
+	twopcutil.ClearOutTable(t, vtParams, "twopc_t1")
+	twopcutil.ClearOutTable(t, vtParams, "twopc_lookup")
+	twopcutil.ClearOutTable(t, vtParams, "lookup_unique")
+	twopcutil.ClearOutTable(t, vtParams, "lookup")
+	twopcutil.ClearOutTable(t, vtParams, "twopc_consistent_lookup")
+	twopcutil.ClearOutTable(t, vtParams, "consistent_lookup_unique")
+	twopcutil.ClearOutTable(t, vtParams, "consistent_lookup")
+	sm.reset()
+}
+
+func startWithMySQL(t *testing.T) (utils.MySQLCompare, func()) {
+	mcmp, err := utils.NewMySQLCompare(t, vtParams, mysqlParams)
+	require.NoError(t, err)
+
+	deleteAll := func() {
+		tables := []string{"twopc_user"}
+		for _, table := range tables {
+			_, _ = mcmp.ExecAndIgnore("delete from " + table)
+		}
+	}
+
+	deleteAll()
+
+	return mcmp, func() {
+		deleteAll()
+		mcmp.Close()
+	}
 }
 
 type extractInterestingValues func(dtidMap map[string]string, vals []sqltypes.Value) []sqltypes.Value
@@ -147,7 +197,8 @@ var tables = map[string]extractInterestingValues{
 	},
 	"ks.redo_statement": func(dtidMap map[string]string, vals []sqltypes.Value) (out []sqltypes.Value) {
 		dtid := getDTID(dtidMap, vals[0].ToString())
-		out = append([]sqltypes.Value{sqltypes.NewVarChar(dtid)}, vals[1:]...)
+		stmt := getStatement(vals[2].ToString())
+		out = append([]sqltypes.Value{sqltypes.NewVarChar(dtid)}, vals[1], sqltypes.TestValue(sqltypes.Blob, stmt))
 		return
 	},
 	"ks.twopc_user": func(_ map[string]string, vals []sqltypes.Value) []sqltypes.Value { return vals },
@@ -167,24 +218,43 @@ func getDTID(dtidMap map[string]string, dtKey string) string {
 	return dtid
 }
 
-func runVStream(t *testing.T, ctx context.Context, ch chan *binlogdatapb.VEvent, vtgateConn *vtgateconn.VTGateConn) {
-	vgtid := &binlogdatapb.VGtid{
-		ShardGtids: []*binlogdatapb.ShardGtid{
-			{Keyspace: keyspaceName, Shard: "-40", Gtid: "current"},
-			{Keyspace: keyspaceName, Shard: "40-80", Gtid: "current"},
-			{Keyspace: keyspaceName, Shard: "80-", Gtid: "current"},
-		}}
-	filter := &binlogdatapb.Filter{
-		Rules: []*binlogdatapb.Rule{{
-			Match: "/.*/",
-		}},
+func getStatement(stmt string) string {
+	var sKey string
+	var prefix string
+	switch {
+	case strings.HasPrefix(stmt, "savepoint"):
+		prefix = "savepoint-"
+		sKey = stmt[9:]
+	case strings.HasPrefix(stmt, "rollback to"):
+		prefix = "rollback-"
+		sKey = stmt[11:]
+	default:
+		return stmt
 	}
+
+	sid, exists := sm.stmt[sKey]
+	if !exists {
+		sid = fmt.Sprintf("%d", len(sm.stmt)+1)
+		sm.stmt[sKey] = sid
+	}
+	return prefix + sid
+}
+
+func runVStream(t *testing.T, ctx context.Context, ch chan *binlogdatapb.VEvent, vtgateConn *vtgateconn.VTGateConn) {
+	shards := []string{"-40", "40-80", "80-"}
+	shardGtids := make([]*binlogdatapb.ShardGtid, 0, len(shards))
+	var seen = make(map[string]bool, len(shards))
+	var wg sync.WaitGroup
+	for _, shard := range shards {
+		shardGtids = append(shardGtids, &binlogdatapb.ShardGtid{Keyspace: keyspaceName, Shard: shard, Gtid: "current"})
+		seen[shard] = false
+		wg.Add(1)
+	}
+	vgtid := &binlogdatapb.VGtid{ShardGtids: shardGtids}
+	filter := &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{{Match: "/.*/"}}}
+
 	vReader, err := vtgateConn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, nil)
 	require.NoError(t, err)
-
-	// Use a channel to signal that the first VGTID event has been processed
-	firstEventProcessed := make(chan struct{})
-	var once sync.Once
 
 	go func() {
 		for {
@@ -195,9 +265,12 @@ func runVStream(t *testing.T, ctx context.Context, ch chan *binlogdatapb.VEvent,
 			require.NoError(t, err)
 
 			for _, ev := range evs {
-				// Signal the first event has been processed using sync.Once
+				// Mark VGTID event from each shard seen.
 				if ev.Type == binlogdatapb.VEventType_VGTID {
-					once.Do(func() { close(firstEventProcessed) })
+					if !seen[ev.Shard] {
+						seen[ev.Shard] = true
+						wg.Done()
+					}
 				}
 				if ev.Type == binlogdatapb.VEventType_ROW || ev.Type == binlogdatapb.VEventType_FIELD {
 					ch <- ev
@@ -206,8 +279,8 @@ func runVStream(t *testing.T, ctx context.Context, ch chan *binlogdatapb.VEvent,
 		}
 	}()
 
-	// Wait for the first event to be processed
-	<-firstEventProcessed
+	// Wait for VGTID event from all shards
+	wg.Wait()
 }
 
 func retrieveTransitions(t *testing.T, ch chan *binlogdatapb.VEvent, tableMap map[string][]*querypb.Field, dtMap map[string]string) map[string][]string {
@@ -271,4 +344,14 @@ func prettyPrint(v interface{}) string {
 		return fmt.Sprintf("got error marshalling: %v", err)
 	}
 	return string(b)
+}
+
+type stmtMapper struct {
+	stmt map[string]string
+}
+
+var sm = &stmtMapper{stmt: make(map[string]string)}
+
+func (sm *stmtMapper) reset() {
+	sm.stmt = make(map[string]string)
 }

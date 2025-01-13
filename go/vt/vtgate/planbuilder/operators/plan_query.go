@@ -43,11 +43,14 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 type (
 	// helper type that implements Inputs() returning nil
-	noInputs struct{}
+	nullaryOperator struct {
+		Operator
+	}
 
 	// helper type that implements AddColumn() returning an error
 	noColumns struct{}
@@ -71,13 +74,35 @@ func PlanQuery(ctx *plancontext.PlanningContext, stmt sqlparser.Statement) (resu
 	checkValid(op)
 	op = planQuery(ctx, op)
 
-	_, isRoute := op.(*Route)
-	if !isRoute && ctx.SemTable.NotSingleRouteErr != nil {
-		// If we got here, we don't have a single shard plan
-		return nil, ctx.SemTable.NotSingleRouteErr
+	if err := checkSingleRouteError(ctx, op); err != nil {
+		return nil, err
 	}
 
-	return op, err
+	return op, nil
+}
+
+// checkSingleRouteError checks if the query has a NotSingleRouteErr and more than one route, and returns an error if it does
+func checkSingleRouteError(ctx *plancontext.PlanningContext, op Operator) error {
+	if ctx.SemTable.NotSingleRouteErr == nil {
+		return nil
+	}
+	routes := 0
+	visitF := func(op Operator, _ semantics.TableSet, _ bool) (Operator, *ApplyResult) {
+		switch op.(type) {
+		case *Route:
+			routes++
+		}
+		return op, NoRewrite
+	}
+
+	// we'll walk the tree and count the number of routes
+	TopDown(op, TableID, visitF, stopAtRoute)
+
+	if routes <= 1 {
+		return nil
+	}
+
+	return ctx.SemTable.NotSingleRouteErr
 }
 
 func PanicHandler(err *error) {
@@ -94,14 +119,14 @@ func PanicHandler(err *error) {
 }
 
 // Inputs implements the Operator interface
-func (noInputs) Inputs() []Operator {
+func (nullaryOperator) Inputs() []Operator {
 	return nil
 }
 
 // SetInputs implements the Operator interface
-func (noInputs) SetInputs(ops []Operator) {
+func (nullaryOperator) SetInputs(ops []Operator) {
 	if len(ops) > 0 {
-		panic("the noInputs operator does not have inputs")
+		panic("the nullaryOperator operator does not have inputs")
 	}
 }
 

@@ -47,7 +47,7 @@ import (
 	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/vttablet"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/queryservice/fakes"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
@@ -140,7 +140,7 @@ func setup(ctx context.Context) (func(), int) {
 	globalDBQueries = make(chan string, 1000)
 	resetBinlogClient()
 
-	vttablet.VReplicationExperimentalFlags = 0
+	vttablet.InitVReplicationConfigDefaults()
 
 	// Engines cannot be initialized in testenv because it introduces circular dependencies.
 	streamerEngine = vstreamer.NewEngine(env.TabletEnv, env.SrvTopo, env.SchemaEngine, nil, env.Cells[0])
@@ -166,8 +166,12 @@ func setup(ctx context.Context) (func(), int) {
 	return cleanup, 0
 }
 
-// We run Tests twice, first with full binlog_row_image, then with noblob.
-var runNoBlobTest = false
+var (
+	// We run unit tests twice, first with binlog_row_image=FULL, then with NOBLOB.
+	runNoBlobTest = false
+	// When using MySQL 8.0 or later, we set binlog_row_value_options=PARTIAL_JSON.
+	runPartialJSONTest = false
+)
 
 // We use this tempDir for creating the external cnfs, since we create the test cluster afterwards.
 const tempDir = "/tmp"
@@ -178,10 +182,14 @@ func TestMain(m *testing.M) {
 	exitCode := func() int {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		if err := utils.SetBinlogRowImageMode("full", tempDir); err != nil {
+		// binlog-row-value-options=PARTIAL_JSON is only supported in MySQL 8.0 and later.
+		// We still run unit tests with MySQL 5.7, so we cannot add it to the cnf file
+		// when using 5.7 or mysqld will fail to start.
+		runPartialJSONTest = utils.CIDBPlatformIsMySQL8orLater()
+		if err := utils.SetBinlogRowImageOptions("full", runPartialJSONTest, tempDir); err != nil {
 			panic(err)
 		}
-		defer utils.SetBinlogRowImageMode("", tempDir)
+		defer utils.SetBinlogRowImageOptions("", false, tempDir)
 		cancel, ret := setup(ctx)
 		if ret > 0 {
 			return ret
@@ -193,10 +201,10 @@ func TestMain(m *testing.M) {
 		cancel()
 
 		runNoBlobTest = true
-		if err := utils.SetBinlogRowImageMode("noblob", tempDir); err != nil {
+		if err := utils.SetBinlogRowImageOptions("noblob", runPartialJSONTest, tempDir); err != nil {
 			panic(err)
 		}
-		defer utils.SetBinlogRowImageMode("", tempDir)
+		defer utils.SetBinlogRowImageOptions("", false, tempDir)
 		cancel, ret = setup(ctx)
 		if ret > 0 {
 			return ret
@@ -341,12 +349,15 @@ func (ftc *fakeTabletConn) VStreamRows(ctx context.Context, request *binlogdatap
 		}
 		row = r.Rows[0]
 	}
+	vstreamOptions := &binlogdatapb.VStreamOptions{
+		ConfigOverrides: vttablet.GetVReplicationConfigDefaults(false).Map(),
+	}
 	return streamerEngine.StreamRows(ctx, request.Query, row, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		if vstreamRowsSendHook != nil {
 			vstreamRowsSendHook(ctx)
 		}
 		return send(rows)
-	})
+	}, vstreamOptions)
 }
 
 // --------------------------------------
@@ -473,6 +484,10 @@ func (dbc *realDBClient) Rollback() error {
 
 func (dbc *realDBClient) Close() {
 	dbc.conn.Close()
+}
+
+func (dbc *realDBClient) IsClosed() bool {
+	return dbc.conn.IsClosed()
 }
 
 func (dbc *realDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, error) {
@@ -684,7 +699,7 @@ func expectNontxQueries(t *testing.T, expectations qh.ExpectationSequence, recvT
 			}
 
 			result := validator.AcceptQuery(got)
-
+			require.NotNil(t, result)
 			require.True(t, result.Accepted, fmt.Sprintf(
 				"query:%q\nmessage:%s\nexpectation:%s\nmatched:%t\nerror:%v\nhistory:%s",
 				got, result.Message, result.Expectation, result.Matched, result.Error, validator.History(),

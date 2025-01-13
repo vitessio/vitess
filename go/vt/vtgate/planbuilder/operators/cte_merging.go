@@ -22,7 +22,7 @@ import (
 )
 
 func tryMergeRecurse(ctx *plancontext.PlanningContext, in *RecurseCTE) (Operator, *ApplyResult) {
-	op := tryMergeCTE(ctx, in.Seed, in.Term, in)
+	op := tryMergeCTE(ctx, in.Seed(), in.Term(), in)
 	if op == nil {
 		return in, NoRewrite
 	}
@@ -31,7 +31,7 @@ func tryMergeRecurse(ctx *plancontext.PlanningContext, in *RecurseCTE) (Operator
 }
 
 func tryMergeCTE(ctx *plancontext.PlanningContext, seed, term Operator, in *RecurseCTE) *Route {
-	seedRoute, termRoute, routingA, routingB, a, b, sameKeyspace := prepareInputRoutes(seed, term)
+	seedRoute, termRoute, routingA, routingB, a, b, sameKeyspace := prepareInputRoutes(ctx, seed, term)
 	if seedRoute == nil {
 		return nil
 	}
@@ -79,17 +79,17 @@ func mergeCTE(ctx *plancontext.PlanningContext, seed, term *Route, r Routing, in
 	hz := in.Horizon
 	hz.Source = term.Source
 	newTerm, _ := expandHorizon(ctx, hz)
+	cte := &RecurseCTE{
+		binaryOperator: newBinaryOp(seed.Source, newTerm),
+		Predicates:     in.Predicates,
+		Def:            in.Def,
+		LeftID:         in.LeftID,
+		OuterID:        in.OuterID,
+		Distinct:       in.Distinct,
+	}
 	return &Route{
-		Routing: r,
-		Source: &RecurseCTE{
-			Predicates: in.Predicates,
-			Def:        in.Def,
-			Seed:       seed.Source,
-			Term:       newTerm,
-			LeftID:     in.LeftID,
-			OuterID:    in.OuterID,
-			Distinct:   in.Distinct,
-		},
-		MergedWith: []*Route{term},
+		Routing:       r,
+		unaryOperator: newUnaryOp(cte),
+		MergedWith:    []*Route{term},
 	}
 }

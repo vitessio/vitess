@@ -118,7 +118,7 @@ func TestGenerateQuery(t *testing.T) {
 					Columns: []IdentifierCI{NewIdentifierCI("pk")},
 					Rows: [][]sqltypes.Value{
 						{sqltypes.NewInt64(1)},
-						{sqltypes.NewVarBinary("aa")},
+						{sqltypes.NewVarChar("aa")},
 					},
 				},
 			},
@@ -132,11 +132,11 @@ func TestGenerateQuery(t *testing.T) {
 					Rows: [][]sqltypes.Value{
 						{
 							sqltypes.NewInt64(1),
-							sqltypes.NewVarBinary("aa"),
+							sqltypes.NewVarChar("aa"),
 						},
 						{
 							sqltypes.NewInt64(2),
-							sqltypes.NewVarBinary("bb"),
+							sqltypes.NewVarChar("bb"),
 						},
 					},
 				},

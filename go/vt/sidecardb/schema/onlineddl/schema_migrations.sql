@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS schema_migrations
     `message_timestamp`               timestamp(6)     NULL     DEFAULT NULL,
     `eta_seconds`                     bigint           NOT NULL DEFAULT '-1',
     `rows_copied`                     bigint unsigned  NOT NULL DEFAULT '0',
+    `vreplication_lag_seconds`        bigint unsigned  NOT NULL DEFAULT '0',
     `table_rows`                      bigint           NOT NULL DEFAULT '0',
     `added_unique_keys`               int unsigned     NOT NULL DEFAULT '0',
     `removed_unique_keys`             int unsigned     NOT NULL DEFAULT '0',
@@ -72,9 +73,11 @@ CREATE TABLE IF NOT EXISTS schema_migrations
     `is_immediate_operation`          tinyint unsigned NOT NULL DEFAULT '0',
     `reviewed_timestamp`              timestamp        NULL DEFAULT NULL,
     `ready_to_complete_timestamp`     timestamp        NULL DEFAULT NULL,
+    `shadow_analyzed_timestamp`        timestamp        NULL DEFAULT NULL,
     `removed_foreign_key_names`       text             NOT NULL,
     `last_cutover_attempt_timestamp`  timestamp        NULL DEFAULT NULL,
     `force_cutover`                   tinyint unsigned NOT NULL DEFAULT '0',
+    `cutover_threshold_seconds`       int unsigned     NOT NULL DEFAULT '0',
     PRIMARY KEY (`id`),
     UNIQUE KEY `uuid_idx` (`migration_uuid`),
     KEY `keyspace_shard_idx` (`keyspace`(64), `shard`(64)),
@@ -84,4 +87,4 @@ CREATE TABLE IF NOT EXISTS schema_migrations
     KEY `table_complete_idx` (`migration_status`, `keyspace`(64), `mysql_table`(64), `completed_timestamp`),
     KEY `migration_context_idx` (`migration_context`(64)),
     KEY `reverted_uuid_idx` (`reverted_uuid`)
-) ENGINE = InnoDB
+) ENGINE = InnoDB CHARSET = utf8mb4

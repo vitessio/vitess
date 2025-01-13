@@ -19,6 +19,7 @@ package logic
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -37,7 +38,6 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
 	"vitess.io/vitess/go/vt/vtorc/db"
 	"vitess.io/vitess/go/vt/vtorc/inst"
-	"vitess.io/vitess/go/vt/vtorc/process"
 )
 
 var (
@@ -101,6 +101,76 @@ var (
 		},
 	}
 )
+
+func TestUpdateShardsToWatch(t *testing.T) {
+	oldClustersToWatch := clustersToWatch
+	oldTs := ts
+	defer func() {
+		clustersToWatch = oldClustersToWatch
+		shardsToWatch = nil
+		ts = oldTs
+	}()
+
+	// Create a memory topo-server and create the keyspace and shard records
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ts = memorytopo.NewServer(ctx, cell1)
+	_, err := ts.GetOrCreateShard(context.Background(), keyspace, shard)
+	require.NoError(t, err)
+
+	testCases := []struct {
+		in       []string
+		expected map[string][]string
+	}{
+		{
+			in:       []string{},
+			expected: nil,
+		},
+		{
+			in:       []string{""},
+			expected: map[string][]string{},
+		},
+		{
+			in: []string{"test/-"},
+			expected: map[string][]string{
+				"test": {"-"},
+			},
+		},
+		{
+			in: []string{"test/-", "test2/-80", "test2/80-"},
+			expected: map[string][]string{
+				"test":  {"-"},
+				"test2": {"-80", "80-"},
+			},
+		},
+		{
+			// confirm shards fetch from topo
+			in: []string{keyspace},
+			expected: map[string][]string{
+				keyspace: {shard},
+			},
+		},
+		{
+			// confirm shards fetch from topo when keyspace has trailing-slash
+			in: []string{keyspace + "/"},
+			expected: map[string][]string{
+				keyspace: {shard},
+			},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(strings.Join(testCase.in, ","), func(t *testing.T) {
+			defer func() {
+				shardsToWatch = make(map[string][]string, 0)
+			}()
+			clustersToWatch = testCase.in
+			updateShardsToWatch()
+			require.Equal(t, testCase.expected, shardsToWatch)
+		})
+	}
+}
 
 func TestRefreshTabletsInKeyspaceShard(t *testing.T) {
 	// Store the old flags and restore on test completion
@@ -200,6 +270,8 @@ func TestRefreshTabletsInKeyspaceShard(t *testing.T) {
 				return nil
 			})
 			tab100.MysqlPort = 100
+			// We refresh once more to ensure we don't affect the next tests since we've made a change again.
+			refreshTabletsInKeyspaceShard(ctx, keyspace, shard, func(tabletAlias string) {}, false, nil)
 		}()
 		// Let's assume tab100 restarted on a different pod. This would change its tablet hostname and port
 		_, err = ts.UpdateTabletFields(context.Background(), tab100.Alias, func(tablet *topodatapb.Tablet) error {
@@ -210,6 +282,26 @@ func TestRefreshTabletsInKeyspaceShard(t *testing.T) {
 		tab100.MysqlPort = 39293
 		// We expect 1 tablet to be refreshed since that is the only one that has changed
 		// Also the old tablet should be forgotten
+		verifyRefreshTabletsInKeyspaceShard(t, false, 1, tablets, nil)
+	})
+
+	t.Run("Replica becomes a drained tablet", func(t *testing.T) {
+		defer func() {
+			_, err = ts.UpdateTabletFields(context.Background(), tab101.Alias, func(tablet *topodatapb.Tablet) error {
+				tablet.Type = topodatapb.TabletType_REPLICA
+				return nil
+			})
+			tab101.Type = topodatapb.TabletType_REPLICA
+			// We refresh once more to ensure we don't affect the next tests since we've made a change again.
+			refreshTabletsInKeyspaceShard(ctx, keyspace, shard, func(tabletAlias string) {}, false, nil)
+		}()
+		// A replica tablet can be converted to drained type if it has an errant GTID.
+		_, err = ts.UpdateTabletFields(context.Background(), tab101.Alias, func(tablet *topodatapb.Tablet) error {
+			tablet.Type = topodatapb.TabletType_DRAINED
+			return nil
+		})
+		tab101.Type = topodatapb.TabletType_DRAINED
+		// We expect 1 tablet to be refreshed since its type has been changed.
 		verifyRefreshTabletsInKeyspaceShard(t, false, 1, tablets, nil)
 	})
 }
@@ -345,25 +437,6 @@ func TestGetLockAction(t *testing.T) {
 			require.Equal(t, tt.want, getLockAction(tt.analysedInstance, tt.code))
 		})
 	}
-}
-
-// TestProcessHealth tests that the health of the process reflects that we have run the first discovery once correctly.
-func TestProcessHealth(t *testing.T) {
-	require.False(t, process.FirstDiscoveryCycleComplete.Load())
-	originalTs := ts
-	defer func() {
-		ts = originalTs
-		process.FirstDiscoveryCycleComplete.Store(false)
-	}()
-	// Verify in the beginning, we have the first DiscoveredOnce field false.
-	_, discoveredOnce := process.HealthTest()
-	require.False(t, discoveredOnce)
-	ts = memorytopo.NewServer(context.Background(), cell1)
-	populateAllInformation()
-	require.True(t, process.FirstDiscoveryCycleComplete.Load())
-	// Verify after we populate all information, we have the first DiscoveredOnce field true.
-	_, discoveredOnce = process.HealthTest()
-	require.True(t, discoveredOnce)
 }
 
 func TestSetReadOnly(t *testing.T) {

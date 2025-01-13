@@ -108,7 +108,7 @@ func mergeUnionInputs(
 	lhsExprs, rhsExprs sqlparser.SelectExprs,
 	distinct bool,
 ) (Operator, sqlparser.SelectExprs) {
-	lhsRoute, rhsRoute, routingA, routingB, a, b, sameKeyspace := prepareInputRoutes(lhs, rhs)
+	lhsRoute, rhsRoute, routingA, routingB, a, b, sameKeyspace := prepareInputRoutes(ctx, lhs, rhs)
 	if lhsRoute == nil {
 		return nil, nil
 	}
@@ -222,9 +222,9 @@ func createMergedUnion(
 	union := newUnion([]Operator{lhsRoute.Source, rhsRoute.Source}, []sqlparser.SelectExprs{lhsExprs, rhsExprs}, cols, distinct)
 	selectExprs := unionSelects(lhsExprs)
 	return &Route{
-		Source:     union,
-		MergedWith: []*Route{rhsRoute},
-		Routing:    routing,
+		unaryOperator: newUnaryOp(union),
+		MergedWith:    []*Route{rhsRoute},
+		Routing:       routing,
 	}, selectExprs
 }
 

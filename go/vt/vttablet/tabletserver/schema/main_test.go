@@ -34,11 +34,11 @@ func getTestSchemaEngine(t *testing.T, schemaMaxAgeSeconds int64) (*Engine, *fak
 		"int64"),
 		"1427325876",
 	))
-	db.AddQueryPattern(baseShowTablesWithSizesPattern, &sqltypes.Result{})
+	db.AddQueryPattern(baseInnoDBTableSizesPattern, &sqltypes.Result{})
 	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{})
 	db.AddQuery(mysql.BaseShowPrimary, &sqltypes.Result{})
 	AddFakeInnoDBReadRowsResult(db, 1)
-	se := newEngine(10*time.Second, 10*time.Second, schemaMaxAgeSeconds, db)
+	se := newEngine(10*time.Second, 10*time.Second, schemaMaxAgeSeconds, db, nil)
 	require.NoError(t, se.Open())
 	cancel := func() {
 		defer db.Close()

@@ -98,7 +98,7 @@ func GetThrottlerStatusRaw(vtctldProcess *cluster.VtctldClientProcess, tablet *c
 	return result, err
 }
 
-// UpdateThrottlerTopoConfig runs vtctlclient UpdateThrottlerConfig.
+// UpdateThrottlerTopoConfig runs vtctldclient UpdateThrottlerConfig.
 // This retries the command until it succeeds or times out as the
 // SrvKeyspace record may not yet exist for a newly created
 // Keyspace that is still initializing before it becomes serving.
@@ -218,7 +218,7 @@ func GetThrottlerStatus(vtctldProcess *cluster.VtctldClientProcess, tablet *clus
 	return resp.Status, err
 }
 
-// UpdateThrottlerTopoConfig runs vtctlclient UpdateThrottlerConfig.
+// UpdateThrottlerTopoConfig runs vtctldclient UpdateThrottlerConfig.
 // This retries the command until it succeeds or times out as the
 // SrvKeyspace record may not yet exist for a newly created
 // Keyspace that is still initializing before it becomes serving.
@@ -272,7 +272,7 @@ func WaitForSrvKeyspace(clusterInstance *cluster.LocalProcessCluster, cell, keys
 	}
 }
 
-// throttleAppRaw runs vtctlclient UpdateThrottlerConfig with --throttle-app flags
+// throttleAppRaw runs vtctldclient UpdateThrottlerConfig with --throttle-app flags
 // This retries the command until it succeeds or times out as the
 // SrvKeyspace record may not yet exist for a newly created
 // Keyspace that is still initializing before it becomes serving.
@@ -529,7 +529,7 @@ func WaitForValidData(t *testing.T, tablet *cluster.Vttablet, timeout time.Durat
 	selfCheckURL := fmt.Sprintf("http://localhost:%d/throttler/check-self", tablet.HTTPPort)
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	ticker := time.NewTicker(500 * time.Millisecond)
+	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 
 	for {
@@ -548,8 +548,10 @@ func WaitForValidData(t *testing.T, tablet *cluster.Vttablet, timeout time.Durat
 		}
 		select {
 		case <-ctx.Done():
-			t.Errorf("timed out waiting for %s tablet's throttler to return a valid result after %v; last seen value: %+v",
-				tablet.Alias, timeout, checkResp)
+			respByte, _ := io.ReadAll(checkResp.Body)
+			body := string(respByte)
+			require.Failf(t, "time out", "waiting for %s tablet's throttler to return a valid result after %v; last seen result: %+v",
+				tablet.Alias, timeout, body)
 			return
 		case <-ticker.C:
 		}

@@ -313,11 +313,12 @@ func (sc *StatefulConnection) getUsername() string {
 	return callerid.GetUsername(sc.reservedProps.ImmediateCaller)
 }
 
-func (sc *StatefulConnection) ApplySetting(ctx context.Context, setting *smartconnpool.Setting) error {
+// ApplySetting returns whether the settings where applied or not. It also returns an error, if encountered.
+func (sc *StatefulConnection) ApplySetting(ctx context.Context, setting *smartconnpool.Setting) (bool, error) {
 	if sc.dbConn.Conn.Setting() == setting {
-		return nil
+		return false, nil
 	}
-	return sc.dbConn.Conn.ApplySetting(ctx, setting)
+	return true, sc.dbConn.Conn.ApplySetting(ctx, setting)
 }
 
 func (sc *StatefulConnection) resetExpiryTime() {

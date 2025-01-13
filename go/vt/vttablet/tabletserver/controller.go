@@ -22,6 +22,7 @@ import (
 
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
@@ -94,10 +95,33 @@ type Controller interface {
 	CheckThrottler(ctx context.Context, appName string, flags *throttle.CheckFlags) *throttle.CheckResult
 	GetThrottlerStatus(ctx context.Context) *throttle.ThrottlerStatus
 
+	// RedoPreparedTransactions recreates the transactions with stored prepared transaction log.
 	RedoPreparedTransactions()
 
-	// SetTwoPCAllowed sets whether TwoPC is allowed or not.
-	SetTwoPCAllowed(bool)
+	// SetTwoPCAllowed sets whether TwoPC is allowed or not. It also takes the reason of why it is being set.
+	// The reason should be an enum value defined in the tabletserver.
+	SetTwoPCAllowed(int, bool)
+
+	// UnresolvedTransactions returns all unresolved transactions list
+	UnresolvedTransactions(ctx context.Context, target *querypb.Target, abandonAgeSeconds int64) ([]*querypb.TransactionMetadata, error)
+
+	// ReadTransaction returns all unresolved transactions list
+	ReadTransaction(ctx context.Context, target *querypb.Target, dtid string) (*querypb.TransactionMetadata, error)
+
+	// GetTransactionInfo returns data about a single transaction
+	GetTransactionInfo(ctx context.Context, target *querypb.Target, dtid string) (*tabletmanagerdata.GetTransactionInfoResponse, error)
+
+	// ConcludeTransaction deletes the distributed transaction metadata
+	ConcludeTransaction(ctx context.Context, target *querypb.Target, dtid string) error
+
+	// RollbackPrepared rolls back the prepared transaction and removes the transaction log.
+	RollbackPrepared(ctx context.Context, target *querypb.Target, dtid string, originalID int64) error
+
+	// WaitForPreparedTwoPCTransactions waits for all prepared transactions to be resolved.
+	WaitForPreparedTwoPCTransactions(ctx context.Context) error
+
+	// SetDemotePrimaryStalled marks that demote primary is stalled in the state manager.
+	SetDemotePrimaryStalled()
 }
 
 // Ensure TabletServer satisfies Controller interface.
