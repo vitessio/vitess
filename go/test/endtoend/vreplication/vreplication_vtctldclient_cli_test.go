@@ -180,7 +180,7 @@ func testMoveTablesFlags2(t *testing.T, mt *iMoveTables, sourceKeyspace, targetK
 	for _, tab := range targetTabs {
 		alias := fmt.Sprintf("zone1-%d", tab.TabletUID)
 		query := "update _vt.vreplication set source := replace(source, 'stop_after_copy:true', 'stop_after_copy:false') where db_name = 'vt_customer' and workflow = 'wf1'"
-		output, err := vc.VtctlClient.ExecuteCommandWithOutput("ExecuteFetchAsDba", alias, query)
+		output, err := vc.VtctldClient.ExecuteCommandWithOutput("ExecuteFetchAsDBA", alias, query)
 		require.NoError(t, err, output)
 	}
 	confirmNoRoutingRules(t)
@@ -263,7 +263,7 @@ func testMoveTablesFlags2(t *testing.T, mt *iMoveTables, sourceKeyspace, targetK
 	confirmStates(t, &wf, wrangler.WorkflowStateReadsSwitched, wrangler.WorkflowStateNotSwitched)
 
 	// Confirm that everything is still in sync after our switch fest.
-	vdiff(t, targetKeyspace, workflowName, "zone1", false, true, nil)
+	vdiff(t, targetKeyspace, workflowName, "zone1", nil)
 
 	(*mt).SwitchReadsAndWrites()
 	validateReadsRouteToTarget(t, "replica")
@@ -282,7 +282,7 @@ func testMoveTablesFlags2(t *testing.T, mt *iMoveTables, sourceKeyspace, targetK
 func testMoveTablesFlags3(t *testing.T, sourceKeyspace, targetKeyspace string, targetTabs map[string]*cluster.VttabletProcess) {
 	for _, tab := range targetTabs {
 		alias := fmt.Sprintf("zone1-%d", tab.TabletUID)
-		output, err := vc.VtctlClient.ExecuteCommandWithOutput("ExecuteFetchAsDba", alias, "drop table customer")
+		output, err := vc.VtctldClient.ExecuteCommandWithOutput("ExecuteFetchAsDBA", alias, "drop table customer")
 		require.NoError(t, err, output)
 	}
 	createFlags := []string{}
@@ -492,7 +492,7 @@ func splitShard(t *testing.T, keyspace, workflowName, sourceShards, targetShards
 	for _, tab := range targetTabs {
 		alias := fmt.Sprintf("zone1-%d", tab.TabletUID)
 		query := "update _vt.vreplication set source := replace(source, 'stop_after_copy:true', 'stop_after_copy:false') where db_name = 'vt_customer' and workflow = '" + workflowName + "'"
-		output, err := vc.VtctlClient.ExecuteCommandWithOutput("ExecuteFetchAsDba", alias, query)
+		output, err := vc.VtctldClient.ExecuteCommandWithOutput("ExecuteFetchAsDBA", alias, query)
 		require.NoError(t, err, output)
 	}
 	rs.Start()
@@ -504,7 +504,7 @@ func splitShard(t *testing.T, keyspace, workflowName, sourceShards, targetShards
 	for _, targetTab := range targetTabs {
 		catchup(t, targetTab, workflowName, "Reshard")
 	}
-	vdiff(t, keyspace, workflowName, "zone1", false, true, nil)
+	vdiff(t, keyspace, workflowName, "zone1", nil)
 
 	shardReadsRouteToSource := func() {
 		require.True(t, getShardRoute(t, keyspace, "-80", "replica"))
@@ -524,14 +524,14 @@ func splitShard(t *testing.T, keyspace, workflowName, sourceShards, targetShards
 
 	rs.SwitchReadsAndWrites()
 	waitForLowLag(t, keyspace, workflowName+"_reverse")
-	vdiff(t, keyspace, workflowName+"_reverse", "zone1", true, false, nil)
+	vdiff(t, keyspace, workflowName+"_reverse", "zone1", nil)
 	shardReadsRouteToTarget()
 	shardWritesRouteToTarget()
 	confirmStates(t, &wf, wrangler.WorkflowStateNotSwitched, wrangler.WorkflowStateAllSwitched)
 
 	rs.ReverseReadsAndWrites()
 	waitForLowLag(t, keyspace, workflowName)
-	vdiff(t, keyspace, workflowName, "zone1", false, true, nil)
+	vdiff(t, keyspace, workflowName, "zone1", nil)
 	shardReadsRouteToSource()
 	shardWritesRouteToSource()
 	confirmStates(t, &wf, wrangler.WorkflowStateAllSwitched, wrangler.WorkflowStateNotSwitched)
@@ -587,7 +587,7 @@ func splitShard(t *testing.T, keyspace, workflowName, sourceShards, targetShards
 	confirmStates(t, &wf, wrangler.WorkflowStateReadsSwitched, wrangler.WorkflowStateNotSwitched)
 
 	// Confirm that everything is still in sync after our switch fest.
-	vdiff(t, keyspace, workflowName, "zone1", false, true, nil)
+	vdiff(t, keyspace, workflowName, "zone1", nil)
 
 	rs.SwitchReadsAndWrites()
 	shardReadsRouteToTarget()

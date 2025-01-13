@@ -291,7 +291,6 @@ func ReadTopologyInstanceBufferable(tabletAlias string, latency *stopwatch.Named
 
 		instance.SQLDelay = fs.ReplicationStatus.SqlDelay
 		instance.UsingOracleGTID = fs.ReplicationStatus.AutoPosition
-		instance.UsingMariaDBGTID = fs.ReplicationStatus.UsingGtid
 		instance.SourceUUID = fs.ReplicationStatus.SourceUuid
 		instance.HasReplicationFilters = fs.ReplicationStatus.HasReplicationFilters
 
@@ -548,16 +547,15 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 	instance.GTIDMode = m.GetString("gtid_mode")
 	instance.GtidPurged = m.GetString("gtid_purged")
 	instance.GtidErrant = m.GetString("gtid_errant")
-	instance.UsingMariaDBGTID = m.GetBool("mariadb_gtid")
 	instance.SelfBinlogCoordinates.LogFile = m.GetString("binary_log_file")
-	instance.SelfBinlogCoordinates.LogPos = m.GetUint32("binary_log_pos")
+	instance.SelfBinlogCoordinates.LogPos = m.GetUint64("binary_log_pos")
 	instance.ReadBinlogCoordinates.LogFile = m.GetString("source_log_file")
-	instance.ReadBinlogCoordinates.LogPos = m.GetUint32("read_source_log_pos")
+	instance.ReadBinlogCoordinates.LogPos = m.GetUint64("read_source_log_pos")
 	instance.ExecBinlogCoordinates.LogFile = m.GetString("relay_source_log_file")
-	instance.ExecBinlogCoordinates.LogPos = m.GetUint32("exec_source_log_pos")
+	instance.ExecBinlogCoordinates.LogPos = m.GetUint64("exec_source_log_pos")
 	instance.IsDetached, _ = instance.ExecBinlogCoordinates.ExtractDetachedCoordinates()
 	instance.RelaylogCoordinates.LogFile = m.GetString("relay_log_file")
-	instance.RelaylogCoordinates.LogPos = m.GetUint32("relay_log_pos")
+	instance.RelaylogCoordinates.LogPos = m.GetUint64("relay_log_pos")
 	instance.RelaylogCoordinates.Type = RelayLog
 	instance.LastSQLError = m.GetString("last_sql_error")
 	instance.LastIOError = m.GetString("last_io_error")
@@ -849,8 +847,6 @@ func mkInsertForInstances(instances []*Instance, instanceWasActuallyFound bool, 
 		"gtid_mode",
 		"gtid_purged",
 		"gtid_errant",
-		"mariadb_gtid",
-		"pseudo_gtid",
 		"source_log_file",
 		"read_source_log_pos",
 		"relay_source_log_file",
@@ -930,8 +926,6 @@ func mkInsertForInstances(instances []*Instance, instanceWasActuallyFound bool, 
 		args = append(args, instance.GTIDMode)
 		args = append(args, instance.GtidPurged)
 		args = append(args, instance.GtidErrant)
-		args = append(args, instance.UsingMariaDBGTID)
-		args = append(args, instance.UsingPseudoGTID)
 		args = append(args, instance.ReadBinlogCoordinates.LogFile)
 		args = append(args, instance.ReadBinlogCoordinates.LogPos)
 		args = append(args, instance.ExecBinlogCoordinates.LogFile)

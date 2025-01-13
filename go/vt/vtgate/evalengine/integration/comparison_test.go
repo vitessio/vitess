@@ -209,6 +209,10 @@ type vcursor struct {
 	env *vtenv.Environment
 }
 
+func (vc *vcursor) SetLastInsertID(id uint64) {}
+
+var _ evalengine.VCursor = (*vcursor)(nil)
+
 func (vc *vcursor) GetKeyspace() string {
 	return "vttest"
 }

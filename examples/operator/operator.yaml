@@ -679,6 +679,9 @@ spec:
                           maxLength: 256
                           pattern: ^[^\r\n]*$
                           type: string
+                        minPartSize:
+                          format: int64
+                          type: integer
                         region:
                           minLength: 1
                           type: string
@@ -1995,6 +1998,9 @@ spec:
                                 maxLength: 256
                                 pattern: ^[^\r\n]*$
                                 type: string
+                              minPartSize:
+                                format: int64
+                                type: integer
                               region:
                                 minLength: 1
                                 type: string
@@ -3510,6 +3516,14 @@ spec:
                               mysql80Compatible:
                                 type: string
                             type: object
+                          mysqldExporter:
+                            type: string
+                          vtbackup:
+                            type: string
+                          vtorc:
+                            type: string
+                          vttablet:
+                            type: string
                         type: object
                       name:
                         maxLength: 63
@@ -5241,6 +5255,9 @@ spec:
                             maxLength: 256
                             pattern: ^[^\r\n]*$
                             type: string
+                          minPartSize:
+                            format: int64
+                            type: integer
                           region:
                             minLength: 1
                             type: string
@@ -6688,6 +6705,9 @@ spec:
                             maxLength: 256
                             pattern: ^[^\r\n]*$
                             type: string
+                          minPartSize:
+                            format: int64
+                            type: integer
                           region:
                             minLength: 1
                             type: string

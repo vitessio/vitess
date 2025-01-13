@@ -151,7 +151,7 @@ func (a *analyzer) newSemTable(
 			ExpandedColumns:           map[sqlparser.TableName][]*sqlparser.ColName{},
 			columns:                   map[*sqlparser.Union]sqlparser.SelectExprs{},
 			StatementIDs:              a.scoper.statementIDs,
-			QuerySignature:            QuerySignature{},
+			QuerySignature:            a.sig,
 			childForeignKeysInvolved:  map[TableSet][]vindexes.ChildFKInfo{},
 			parentForeignKeysInvolved: map[TableSet][]vindexes.ParentFKInfo{},
 			childFkToUpdExprs:         map[string]sqlparser.UpdateExprs{},
@@ -174,7 +174,7 @@ func (a *analyzer) newSemTable(
 		Direct:                    a.binder.direct,
 		ExprTypes:                 a.typer.m,
 		Tables:                    a.tables.Tables,
-		Targets:                   a.binder.targets,
+		DMLTargets:                a.binder.targets,
 		NotSingleRouteErr:         a.notSingleRouteErr,
 		NotUnshardedErr:           a.unshardedErr,
 		Warning:                   a.warning,
@@ -360,6 +360,10 @@ func (a *analyzer) analyze(statement sqlparser.Statement) error {
 	_ = sqlparser.Rewrite(statement, a.earlyTables.down, a.earlyTables.up)
 	if a.err != nil {
 		return a.err
+	}
+
+	if a.earlyTables.lastInsertIdWithArgument {
+		a.sig.LastInsertIDArg = true
 	}
 
 	if a.canShortCut(statement) {

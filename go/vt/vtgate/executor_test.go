@@ -2862,57 +2862,6 @@ func TestExecutorSettingsInTwoPC(t *testing.T) {
 	}
 }
 
-// TestExecutorRejectTwoPC test all the unsupported cases for multi-shard atomic commit.
-func TestExecutorRejectTwoPC(t *testing.T) {
-	executor, sbc1, sbc2, _, ctx := createExecutorEnv(t)
-	tcases := []struct {
-		sqls    []string
-		testRes []*sqltypes.Result
-
-		expErr string
-	}{
-		{
-			sqls: []string{
-				`update t1 set unq_col = 1 where id = 1`,
-				`update t1 set unq_col = 1 where id = 3`,
-			},
-			testRes: []*sqltypes.Result{
-				sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|unq_col|unchanged", "int64|int64|int64"),
-					"1|2|0"),
-			},
-			expErr: "VT12001: unsupported: atomic distributed transaction commit with consistent lookup vindex",
-		},
-	}
-
-	for _, tcase := range tcases {
-		t.Run(fmt.Sprintf("%v", tcase.sqls), func(t *testing.T) {
-			sbc1.SetResults(tcase.testRes)
-			sbc2.SetResults(tcase.testRes)
-
-			// create a new session
-			session := econtext.NewSafeSession(&vtgatepb.Session{
-				TargetString:         KsTestSharded,
-				TransactionMode:      vtgatepb.TransactionMode_TWOPC,
-				EnableSystemSettings: true,
-			})
-
-			// start transaction
-			_, err := executor.Execute(ctx, nil, "TestExecutorRejectTwoPC", session, "begin", nil)
-			require.NoError(t, err)
-
-			// execute queries
-			for _, sql := range tcase.sqls {
-				_, err = executor.Execute(ctx, nil, "TestExecutorRejectTwoPC", session, sql, nil)
-				require.NoError(t, err)
-			}
-
-			// commit 2pc
-			_, err = executor.Execute(ctx, nil, "TestExecutorRejectTwoPC", session, "commit", nil)
-			require.ErrorContains(t, err, tcase.expErr)
-		})
-	}
-}
-
 func TestExecutorTruncateErrors(t *testing.T) {
 	executor, _, _, _, ctx := createExecutorEnv(t)
 

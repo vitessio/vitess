@@ -41,140 +41,13 @@ func insertInitialDataIntoExternalCluster(t *testing.T, conn *mysql.Conn) {
 	})
 }
 
-// TestVtctlMigrate runs an e2e test for importing from an external cluster using the vtctl Mount and Migrate commands.
+// TestMigrate runs an e2e test for importing from an external cluster using the vtctldclient Mount and Migrate commands.
 // We have an anti-pattern in Vitess: vt executables look for an environment variable VTDATAROOT for certain cluster parameters
 // like the log directory when they are created. Until this test we just needed a single cluster for e2e tests.
 // However now we need to create an external Vitess cluster. For this we need a different VTDATAROOT and
 // hence the VTDATAROOT env variable gets overwritten.
 // Each time we need to create vt processes in the "other" cluster we need to set the appropriate VTDATAROOT
-func TestVtctlMigrate(t *testing.T) {
-	vc = NewVitessCluster(t, nil)
-
-	oldDefaultReplicas := defaultReplicas
-	oldDefaultRdonly := defaultRdonly
-	defaultReplicas = 0
-	defaultRdonly = 0
-	defer func() {
-		defaultReplicas = oldDefaultReplicas
-		defaultRdonly = oldDefaultRdonly
-	}()
-
-	defer vc.TearDown()
-
-	defaultCell := vc.Cells[vc.CellNames[0]]
-	_, err := vc.AddKeyspace(t, []*Cell{defaultCell}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, nil)
-	require.NoError(t, err, "failed to create product keyspace")
-	vtgate := defaultCell.Vtgates[0]
-	require.NotNil(t, vtgate, "failed to get vtgate")
-
-	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
-	defer vtgateConn.Close()
-	verifyClusterHealth(t, vc)
-	insertInitialData(t)
-	t.Run("VStreamFrom", func(t *testing.T) {
-		testVStreamFrom(t, vtgate, "product", 2)
-	})
-
-	// create external cluster
-	extCell := "extcell1"
-	extVc := NewVitessCluster(t, &clusterOptions{cells: []string{"extcell1"}, clusterConfig: externalClusterConfig})
-	defer extVc.TearDown()
-
-	extCell2 := extVc.Cells[extCell]
-	extVc.AddKeyspace(t, []*Cell{extCell2}, "rating", "0", initialExternalVSchema, initialExternalSchema, 0, 0, 1000, nil)
-	extVtgate := extCell2.Vtgates[0]
-	require.NotNil(t, extVtgate)
-
-	verifyClusterHealth(t, extVc)
-	extVtgateConn := getConnection(t, extVc.ClusterConfig.hostname, extVc.ClusterConfig.vtgateMySQLPort)
-	insertInitialDataIntoExternalCluster(t, extVtgateConn)
-
-	var output, expected string
-	ksWorkflow := "product.e1"
-
-	t.Run("mount external cluster", func(t *testing.T) {
-		if output, err = vc.VtctlClient.ExecuteCommandWithOutput("Mount", "--", "--type=vitess", "--topo_type=etcd2",
-			fmt.Sprintf("--topo_server=localhost:%d", extVc.ClusterConfig.topoPort), "--topo_root=/vitess/global", "ext1"); err != nil {
-			t.Fatalf("Mount command failed with %+v : %s\n", err, output)
-		}
-		if output, err = vc.VtctlClient.ExecuteCommandWithOutput("Mount", "--", "--type=vitess", "--list"); err != nil {
-			t.Fatalf("Mount command failed with %+v : %s\n", err, output)
-		}
-		expected = "ext1\n"
-		require.Equal(t, expected, output)
-		if output, err = vc.VtctlClient.ExecuteCommandWithOutput("Mount", "--", "--type=vitess", "--show", "ext1"); err != nil {
-			t.Fatalf("Mount command failed with %+v : %s\n", err, output)
-		}
-		expected = `{"ClusterName":"ext1","topo_config":{"topo_type":"etcd2","server":"localhost:12379","root":"/vitess/global"}}` + "\n"
-		require.Equal(t, expected, output)
-	})
-
-	t.Run("migrate from external cluster", func(t *testing.T) {
-		if output, err = vc.VtctlClient.ExecuteCommandWithOutput("Migrate", "--", "--all", "--cells=extcell1",
-			"--source=ext1.rating", "create", ksWorkflow); err != nil {
-			t.Fatalf("Migrate command failed with %+v : %s\n", err, output)
-		}
-		waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
-		expectNumberOfStreams(t, vtgateConn, "migrate", "e1", "product:0", 1)
-		waitForRowCount(t, vtgateConn, "product:0", "rating", 2)
-		waitForRowCount(t, vtgateConn, "product:0", "review", 3)
-		execVtgateQuery(t, extVtgateConn, "rating", "insert into review(rid, pid, review) values(4, 1, 'review4');")
-		execVtgateQuery(t, extVtgateConn, "rating", "insert into rating(gid, pid, rating) values(3, 1, 3);")
-		waitForRowCount(t, vtgateConn, "product:0", "rating", 3)
-		waitForRowCount(t, vtgateConn, "product:0", "review", 4)
-		vdiffSideBySide(t, ksWorkflow, "extcell1")
-
-		if output, err = vc.VtctlClient.ExecuteCommandWithOutput("Migrate", "complete", ksWorkflow); err != nil {
-			t.Fatalf("Migrate command failed with %+v : %s\n", err, output)
-		}
-
-		expectNumberOfStreams(t, vtgateConn, "migrate", "e1", "product:0", 0)
-	})
-	t.Run("cancel migrate workflow", func(t *testing.T) {
-		execVtgateQuery(t, vtgateConn, "product", "drop table review,rating")
-
-		if output, err = vc.VtctlClient.ExecuteCommandWithOutput("Migrate", "--", "--all", "--auto_start=false", "--cells=extcell1",
-			"--source=ext1.rating", "create", ksWorkflow); err != nil {
-			t.Fatalf("Migrate command failed with %+v : %s\n", err, output)
-		}
-		expectNumberOfStreams(t, vtgateConn, "migrate", "e1", "product:0", 1, binlogdatapb.VReplicationWorkflowState_Stopped.String())
-		waitForRowCount(t, vtgateConn, "product:0", "rating", 0)
-		waitForRowCount(t, vtgateConn, "product:0", "review", 0)
-		if output, err = vc.VtctlClient.ExecuteCommandWithOutput("Migrate", "cancel", ksWorkflow); err != nil {
-			t.Fatalf("Migrate command failed with %+v : %s\n", err, output)
-		}
-		expectNumberOfStreams(t, vtgateConn, "migrate", "e1", "product:0", 0)
-		var found bool
-		found, err = checkIfTableExists(t, vc, "zone1-100", "review")
-		require.NoError(t, err)
-		require.False(t, found)
-		found, err = checkIfTableExists(t, vc, "zone1-100", "rating")
-		require.NoError(t, err)
-		require.False(t, found)
-	})
-	t.Run("unmount external cluster", func(t *testing.T) {
-		if output, err = vc.VtctlClient.ExecuteCommandWithOutput("Mount", "--", "--type=vitess", "--unmount", "ext1"); err != nil {
-			t.Fatalf("Mount command failed with %+v : %s\n", err, output)
-		}
-
-		if output, err = vc.VtctlClient.ExecuteCommandWithOutput("Mount", "--", "--type=vitess", "--list"); err != nil {
-			t.Fatalf("Mount command failed with %+v : %s\n", err, output)
-		}
-		expected = "\n"
-		require.Equal(t, expected, output)
-
-		output, err = vc.VtctlClient.ExecuteCommandWithOutput("Mount", "--", "--type=vitess", "--show", "ext1")
-		require.Errorf(t, err, "there is no vitess cluster named ext1")
-	})
-}
-
-// TestVtctldMigrate runs an e2e test for importing from an external cluster using the vtctld Mount and Migrate commands.
-// We have an anti-pattern in Vitess: vt executables look for an environment variable VTDATAROOT for certain cluster parameters
-// like the log directory when they are created. Until this test we just needed a single cluster for e2e tests.
-// However now we need to create an external Vitess cluster. For this we need a different VTDATAROOT and
-// hence the VTDATAROOT env variable gets overwritten.
-// Each time we need to create vt processes in the "other" cluster we need to set the appropriate VTDATAROOT
-func TestVtctldMigrateUnsharded(t *testing.T) {
+func TestMigrateUnsharded(t *testing.T) {
 	vc = NewVitessCluster(t, nil)
 
 	oldDefaultReplicas := defaultReplicas
@@ -256,7 +129,7 @@ func TestVtctldMigrateUnsharded(t *testing.T) {
 		execVtgateQuery(t, extVtgateConn, "rating", "insert into rating(gid, pid, rating) values(3, 1, 3);")
 		waitForRowCountInTablet(t, targetPrimary, "product", "rating", 3)
 		waitForRowCountInTablet(t, targetPrimary, "product", "review", 4)
-		vdiffSideBySide(t, ksWorkflow, "extcell1")
+		doVDiff(t, ksWorkflow, "extcell1")
 
 		output, err = vc.VtctldClient.ExecuteCommandWithOutput("Migrate",
 			"--target-keyspace", "product", "--workflow", "e1", "show")

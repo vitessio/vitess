@@ -162,6 +162,11 @@ func PrioritizedUniqueKeys(createTableEntity *CreateTableEntity) *IndexDefinitio
 		if !key.IsUnique() {
 			continue
 		}
+		if key.HasExpression() {
+			// If the key has an expression this means it unreliably covers the columns,
+			// we cannot trust it.
+			continue
+		}
 		uniqueKeys = append(uniqueKeys, key)
 	}
 	sort.SliceStable(uniqueKeys, func(i, j int) bool {

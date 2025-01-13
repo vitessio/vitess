@@ -22,11 +22,13 @@ import (
 	"os"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder"
 )
@@ -85,7 +87,7 @@ func TestMain(m *testing.M) {
 		// TODO: (@GuptaManan100/@systay): Also run the tests with normalizer on.
 		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
 			"--normalize_queries=false",
-			"--schema_change_signal=false",
+			"--schema_change_signal=true",
 		)
 
 		// Start vtgate
@@ -128,6 +130,31 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 	}
 }
 
+// splitSQL statements - querySQL may be a multi-line sql blob
+func splitSQL(querySQL ...string) ([]string, error) {
+	parser := sqlparser.NewTestParser()
+	var sqls []string
+	for _, sql := range querySQL {
+		split, err := parser.SplitStatementToPieces(sql)
+		if err != nil {
+			return nil, err
+		}
+		sqls = append(sqls, split...)
+	}
+	return sqls, nil
+}
+
+func loadSampleData(t *testing.T, mcmp utils.MySQLCompare) {
+	sampleDataSQL := readFile("sampledata/user.sql")
+	insertSQL, err := splitSQL(sampleDataSQL)
+	if err != nil {
+		require.NoError(t, err)
+	}
+	for _, sql := range insertSQL {
+		mcmp.ExecNoCompare(sql)
+	}
+}
+
 func readJSONTests(filename string) []planbuilder.PlanTest {
 	var output []planbuilder.PlanTest
 	file, err := os.Open(locateFile(filename))
@@ -152,7 +179,7 @@ func verifyTestExpectations(t *testing.T, pd engine.PrimitiveDescription, test p
 	// 1. Verify that the Join primitive sees atleast 1 row on the left side.
 	engine.WalkPrimitiveDescription(pd, func(description engine.PrimitiveDescription) {
 		if description.OperatorType == "Join" {
-			require.NotZero(t, description.Inputs[0].RowsReceived[0])
+			assert.NotZero(t, description.Inputs[0].RowsReceived[0])
 		}
 	})
 

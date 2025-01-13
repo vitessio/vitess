@@ -37394,6 +37394,9 @@ export namespace binlogdata {
 
         /** RowChange data_columns */
         data_columns?: (binlogdata.RowChange.IBitmap|null);
+
+        /** RowChange json_partial_values */
+        json_partial_values?: (binlogdata.RowChange.IBitmap|null);
     }
 
     /** Represents a RowChange. */
@@ -37413,6 +37416,9 @@ export namespace binlogdata {
 
         /** RowChange data_columns. */
         public data_columns?: (binlogdata.RowChange.IBitmap|null);
+
+        /** RowChange json_partial_values. */
+        public json_partial_values?: (binlogdata.RowChange.IBitmap|null);
 
         /**
          * Creates a new RowChange instance using the specified properties.
@@ -40733,6 +40739,9 @@ export namespace query {
 
         /** ExecuteOptions authoritative_timeout */
         authoritative_timeout?: (number|Long|null);
+
+        /** ExecuteOptions fetch_last_insert_id */
+        fetch_last_insert_id?: (boolean|null);
     }
 
     /** Represents an ExecuteOptions. */
@@ -40782,6 +40791,9 @@ export namespace query {
 
         /** ExecuteOptions authoritative_timeout. */
         public authoritative_timeout?: (number|Long|null);
+
+        /** ExecuteOptions fetch_last_insert_id. */
+        public fetch_last_insert_id: boolean;
 
         /** ExecuteOptions timeout. */
         public timeout?: "authoritative_timeout";
@@ -41200,6 +41212,9 @@ export namespace query {
 
         /** QueryResult session_state_changes */
         session_state_changes?: (string|null);
+
+        /** QueryResult insert_id_changed */
+        insert_id_changed?: (boolean|null);
     }
 
     /** Represents a QueryResult. */
@@ -41228,6 +41243,9 @@ export namespace query {
 
         /** QueryResult session_state_changes. */
         public session_state_changes: string;
+
+        /** QueryResult insert_id_changed. */
+        public insert_id_changed: boolean;
 
         /**
          * Creates a new QueryResult instance using the specified properties.
