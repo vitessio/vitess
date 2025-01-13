@@ -40,6 +40,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 
 	// Register topo implementations.
 	_ "vitess.io/vitess/go/vt/topo/consultopo"
@@ -299,7 +300,7 @@ func SetupVttabletsAndVTOrcs(t *testing.T, clusterInfo *VTOrcClusterInfo, numRep
 	}
 
 	if durability == "" {
-		durability = "none"
+		durability = policy.DurabilityNone
 	}
 	out, err := clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, fmt.Sprintf("--durability-policy=%s", durability))
 	require.NoError(t, err, out)

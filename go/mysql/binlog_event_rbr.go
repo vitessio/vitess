@@ -283,10 +283,10 @@ func readColumnCollationIDs(data []byte, pos, count int) ([]collations.ID, error
 func (ev binlogEvent) Rows(f BinlogFormat, tm *TableMap) (Rows, error) {
 	typ := ev.Type()
 	data := ev.Bytes()[f.HeaderLength:]
-	hasIdentify := typ == eUpdateRowsEventV1 || typ == eUpdateRowsEventV2 ||
+	hasIdentify := typ == eUpdateRowsEventV1 || typ == eUpdateRowsEventV2 || typ == ePartialUpdateRowsEvent ||
 		typ == eDeleteRowsEventV1 || typ == eDeleteRowsEventV2
 	hasData := typ == eWriteRowsEventV1 || typ == eWriteRowsEventV2 ||
-		typ == eUpdateRowsEventV1 || typ == eUpdateRowsEventV2
+		typ == eUpdateRowsEventV1 || typ == ePartialUpdateRowsEvent || typ == eUpdateRowsEventV2
 
 	result := Rows{}
 	pos := 6
@@ -297,7 +297,7 @@ func (ev binlogEvent) Rows(f BinlogFormat, tm *TableMap) (Rows, error) {
 	pos += 2
 
 	// version=2 have extra data here.
-	if typ == eWriteRowsEventV2 || typ == eUpdateRowsEventV2 || typ == eDeleteRowsEventV2 {
+	if typ == eWriteRowsEventV2 || typ == eUpdateRowsEventV2 || typ == ePartialUpdateRowsEvent || typ == eDeleteRowsEventV2 {
 		// This extraDataLength contains the 2 bytes length.
 		extraDataLength := binary.LittleEndian.Uint16(data[pos : pos+2])
 		pos += int(extraDataLength)
@@ -311,6 +311,7 @@ func (ev binlogEvent) Rows(f BinlogFormat, tm *TableMap) (Rows, error) {
 
 	numIdentifyColumns := 0
 	numDataColumns := 0
+	numJSONColumns := 0
 
 	if hasIdentify {
 		// Bitmap of the columns used for identify.
@@ -322,6 +323,15 @@ func (ev binlogEvent) Rows(f BinlogFormat, tm *TableMap) (Rows, error) {
 		// Bitmap of columns that are present.
 		result.DataColumns, pos = newBitmap(data, pos, int(columnCount))
 		numDataColumns = result.DataColumns.BitCount()
+	}
+
+	// For PartialUpdateRowsEvents, we need to know how many JSON columns there are.
+	if ev.Type() == ePartialUpdateRowsEvent {
+		for c := 0; c < int(columnCount); c++ {
+			if tm.Types[c] == binlog.TypeJSON {
+				numJSONColumns++
+			}
+		}
 	}
 
 	// One row at a time.
@@ -356,6 +366,17 @@ func (ev binlogEvent) Rows(f BinlogFormat, tm *TableMap) (Rows, error) {
 				valueIndex++
 			}
 			row.Identify = data[startPos:pos]
+		}
+
+		if ev.Type() == ePartialUpdateRowsEvent {
+			// The first byte indicates whether or not any JSON values are partial.
+			// If it's not 1 then there's nothing special to do for the row as any
+			// columns use the full value.
+			partialJSON := uint8(data[pos])
+			pos++
+			if partialJSON == 1 {
+				row.JSONPartialValues, pos = newBitmap(data, pos, numJSONColumns)
+			}
 		}
 
 		if hasData {
@@ -402,6 +423,7 @@ func (rs *Rows) StringValuesForTests(tm *TableMap, rowIndex int) ([]string, erro
 	var result []string
 
 	valueIndex := 0
+	jsonIndex := 0
 	data := rs.Rows[rowIndex].Data
 	pos := 0
 	for c := 0; c < rs.DataColumns.Count(); c++ {
@@ -413,15 +435,24 @@ func (rs *Rows) StringValuesForTests(tm *TableMap, rowIndex int) ([]string, erro
 			// This column is represented, but its value is NULL.
 			result = append(result, "NULL")
 			valueIndex++
+			if tm.Types[c] == binlog.TypeJSON {
+				jsonIndex++
+			}
 			continue
 		}
 
-		// We have real data
-		value, l, err := binlog.CellValue(data, pos, tm.Types[c], tm.Metadata[c], &querypb.Field{Type: querypb.Type_UINT64})
+		partialJSON := false
+		if rs.Rows[rowIndex].JSONPartialValues.Count() > 0 && tm.Types[c] == binlog.TypeJSON {
+			partialJSON = rs.Rows[rowIndex].JSONPartialValues.Bit(jsonIndex)
+			jsonIndex++
+		}
+
+		// We have real data.
+		value, l, err := binlog.CellValue(data, pos, tm.Types[c], tm.Metadata[c], &querypb.Field{Type: querypb.Type_UINT64}, partialJSON)
 		if err != nil {
 			return nil, err
 		}
-		result = append(result, value.ToString())
+		result = append(result, value.RawStr())
 		pos += l
 		valueIndex++
 	}
@@ -452,7 +483,7 @@ func (rs *Rows) StringIdentifiesForTests(tm *TableMap, rowIndex int) ([]string, 
 		}
 
 		// We have real data
-		value, l, err := binlog.CellValue(data, pos, tm.Types[c], tm.Metadata[c], &querypb.Field{Type: querypb.Type_UINT64})
+		value, l, err := binlog.CellValue(data, pos, tm.Types[c], tm.Metadata[c], &querypb.Field{Type: querypb.Type_UINT64}, false)
 		if err != nil {
 			return nil, err
 		}

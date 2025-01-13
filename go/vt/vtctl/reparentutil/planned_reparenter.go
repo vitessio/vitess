@@ -36,6 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools/events"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
@@ -71,7 +72,7 @@ type PlannedReparentOptions struct {
 	// back out to the caller.
 
 	lockAction string
-	durability Durabler
+	durability policy.Durabler
 }
 
 // NewPlannedReparenter returns a new PlannedReparenter object, ready to perform
@@ -256,7 +257,7 @@ func (pr *PlannedReparenter) performGracefulPromotion(
 	setSourceCtx, setSourceCancel := context.WithTimeout(ctx, opts.WaitReplicasTimeout)
 	defer setSourceCancel()
 
-	if err := pr.tmc.SetReplicationSource(setSourceCtx, primaryElect, currentPrimary.Alias, 0, snapshotPos, true, IsReplicaSemiSync(opts.durability, currentPrimary.Tablet, primaryElect), 0); err != nil {
+	if err := pr.tmc.SetReplicationSource(setSourceCtx, primaryElect, currentPrimary.Alias, 0, snapshotPos, true, policy.IsReplicaSemiSync(opts.durability, currentPrimary.Tablet, primaryElect), 0); err != nil {
 		return vterrors.Wrapf(err, "replication on primary-elect %v did not catch up in time; replication must be healthy to perform PlannedReparent", primaryElectAliasStr)
 	}
 
@@ -304,7 +305,7 @@ func (pr *PlannedReparenter) performGracefulPromotion(
 		undoCtx, undoCancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
 		defer undoCancel()
 
-		if undoErr := pr.tmc.UndoDemotePrimary(undoCtx, currentPrimary.Tablet, SemiSyncAckers(opts.durability, currentPrimary.Tablet) > 0); undoErr != nil {
+		if undoErr := pr.tmc.UndoDemotePrimary(undoCtx, currentPrimary.Tablet, policy.SemiSyncAckers(opts.durability, currentPrimary.Tablet) > 0); undoErr != nil {
 			pr.logger.Warningf("encountered error while performing UndoDemotePrimary(%v): %v", currentPrimary.AliasString(), undoErr)
 			finalWaitErr = vterrors.Wrapf(finalWaitErr, "encountered error while performing UndoDemotePrimary(%v): %v", currentPrimary.AliasString(), undoErr)
 		}
@@ -332,7 +333,7 @@ func (pr *PlannedReparenter) performInitialPromotion(
 	// This is done to guarantee safety, in the sense that the semi-sync is on before we start accepting writes.
 	// However, during initialization, it is likely that the database would not be created in the MySQL instance.
 	// Therefore, we have to first set read-write mode, create the database and then fix semi-sync, otherwise we get blocked.
-	rp, err := pr.tmc.InitPrimary(promoteCtx, primaryElect, SemiSyncAckers(opts.durability, primaryElect) > 0)
+	rp, err := pr.tmc.InitPrimary(promoteCtx, primaryElect, policy.SemiSyncAckers(opts.durability, primaryElect) > 0)
 	if err != nil {
 		return "", vterrors.Wrapf(err, "primary-elect tablet %v failed to be promoted to primary; please try again", primaryElectAliasStr)
 	}
@@ -521,7 +522,7 @@ func (pr *PlannedReparenter) reparentShardLocked(
 	}
 
 	pr.logger.Infof("Getting a new durability policy for %v", keyspaceDurability)
-	opts.durability, err = GetDurabilityPolicy(keyspaceDurability)
+	opts.durability, err = policy.GetDurabilityPolicy(keyspaceDurability)
 	if err != nil {
 		return err
 	}
@@ -693,7 +694,7 @@ func (pr *PlannedReparenter) reparentTablets(
 			// that it needs to start replication after transitioning from
 			// PRIMARY => REPLICA.
 			forceStartReplication := false
-			if err := pr.tmc.SetReplicationSource(replCtx, tablet, ev.NewPrimary.Alias, reparentJournalTimestamp, "", forceStartReplication, IsReplicaSemiSync(opts.durability, ev.NewPrimary, tablet), 0); err != nil {
+			if err := pr.tmc.SetReplicationSource(replCtx, tablet, ev.NewPrimary.Alias, reparentJournalTimestamp, "", forceStartReplication, policy.IsReplicaSemiSync(opts.durability, ev.NewPrimary, tablet), 0); err != nil {
 				rec.RecordError(vterrors.Wrapf(err, "tablet %v failed to SetReplicationSource(%v): %v", alias, primaryElectAliasStr, err))
 			}
 		}(alias, tabletInfo.Tablet)
@@ -702,7 +703,7 @@ func (pr *PlannedReparenter) reparentTablets(
 	// If `PromoteReplica` call is required, we should call it and use the position that it returns.
 	if promoteReplicaRequired {
 		// Promote the candidate primary to type:PRIMARY.
-		primaryPosition, err := pr.tmc.PromoteReplica(replCtx, ev.NewPrimary, SemiSyncAckers(opts.durability, ev.NewPrimary) > 0)
+		primaryPosition, err := pr.tmc.PromoteReplica(replCtx, ev.NewPrimary, policy.SemiSyncAckers(opts.durability, ev.NewPrimary) > 0)
 		if err != nil {
 			pr.logger.Warningf("primary %v failed to PromoteReplica; cancelling replica reparent attempts", primaryElectAliasStr)
 			replCancel()

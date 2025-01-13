@@ -22,6 +22,7 @@ import (
 	"io"
 	"sort"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -95,8 +96,8 @@ type (
 	// vcursor_impl needs these facilities to be able to be able to execute queries for vindexes
 	iExecute interface {
 		Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, method string, session *SafeSession, s string, vars map[string]*querypb.BindVariable) (*sqltypes.Result, error)
-		ExecuteMultiShard(ctx context.Context, primitive engine.Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *SafeSession, autocommit bool, ignoreMaxMemoryRows bool, resultsObserver ResultsObserver) (qr *sqltypes.Result, errs []error)
-		StreamExecuteMulti(ctx context.Context, primitive engine.Primitive, query string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, session *SafeSession, autocommit bool, callback func(reply *sqltypes.Result) error, observer ResultsObserver) []error
+		ExecuteMultiShard(ctx context.Context, primitive engine.Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *SafeSession, autocommit bool, ignoreMaxMemoryRows bool, resultsObserver ResultsObserver, fetchLastInsertID bool) (qr *sqltypes.Result, errs []error)
+		StreamExecuteMulti(ctx context.Context, primitive engine.Primitive, query string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, session *SafeSession, autocommit bool, callback func(reply *sqltypes.Result) error, observer ResultsObserver, fetchLastInsertID bool) []error
 		ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, session *SafeSession, lockFuncType sqlparser.LockingFuncType) (*sqltypes.Result, error)
 		Commit(ctx context.Context, safeSession *SafeSession) error
 		ExecuteMessageStream(ctx context.Context, rss []*srvtopo.ResolvedShard, name string, callback func(*sqltypes.Result) error) error
@@ -154,6 +155,8 @@ type (
 
 		observer ResultsObserver
 
+		// this protects the interOpStats and shardsStats fields from concurrent writes
+		mu sync.Mutex
 		// this is a map of the number of rows that every primitive has returned
 		// if this field is nil, it means that we are not logging operator traffic
 		interOpStats map[engine.Primitive]engine.RowsReceived
@@ -642,21 +645,29 @@ func (vc *VCursorImpl) ExecutePrimitive(ctx context.Context, primitive engine.Pr
 }
 
 func (vc *VCursorImpl) logOpTraffic(primitive engine.Primitive, res *sqltypes.Result) {
-	if vc.interOpStats != nil {
-		rows := vc.interOpStats[primitive]
-		if res == nil {
-			rows = append(rows, 0)
-		} else {
-			rows = append(rows, len(res.Rows))
-		}
-		vc.interOpStats[primitive] = rows
+	if vc.interOpStats == nil {
+		return
 	}
+
+	vc.mu.Lock()
+	defer vc.mu.Unlock()
+
+	rows := vc.interOpStats[primitive]
+	if res == nil {
+		rows = append(rows, 0)
+	} else {
+		rows = append(rows, len(res.Rows))
+	}
+	vc.interOpStats[primitive] = rows
 }
 
 func (vc *VCursorImpl) logShardsQueried(primitive engine.Primitive, shardsNb int) {
-	if vc.shardsStats != nil {
-		vc.shardsStats[primitive] += engine.ShardsQueried(shardsNb)
+	if vc.shardsStats == nil {
+		return
 	}
+	vc.mu.Lock()
+	defer vc.mu.Unlock()
+	vc.shardsStats[primitive] += engine.ShardsQueried(shardsNb)
 }
 
 func (vc *VCursorImpl) ExecutePrimitiveStandalone(ctx context.Context, primitive engine.Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
@@ -675,12 +686,20 @@ func (vc *VCursorImpl) ExecutePrimitiveStandalone(ctx context.Context, primitive
 
 func (vc *VCursorImpl) wrapCallback(callback func(*sqltypes.Result) error, primitive engine.Primitive) func(*sqltypes.Result) error {
 	if vc.interOpStats == nil {
-		return callback
+		return func(r *sqltypes.Result) error {
+			if r.InsertIDUpdated() {
+				vc.SafeSession.LastInsertId = r.InsertID
+			}
+			return callback(r)
+		}
 	}
 
-	return func(result *sqltypes.Result) error {
-		vc.logOpTraffic(primitive, result)
-		return callback(result)
+	return func(r *sqltypes.Result) error {
+		if r.InsertIDUpdated() {
+			vc.SafeSession.LastInsertId = r.InsertID
+		}
+		vc.logOpTraffic(primitive, r)
+		return callback(r)
 	}
 }
 
@@ -753,7 +772,7 @@ func (vc *VCursorImpl) markSavepoint(ctx context.Context, needsRollbackOnParialE
 }
 
 // ExecuteMultiShard is part of the engine.VCursor interface.
-func (vc *VCursorImpl) ExecuteMultiShard(ctx context.Context, primitive engine.Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, canAutocommit bool) (*sqltypes.Result, []error) {
+func (vc *VCursorImpl) ExecuteMultiShard(ctx context.Context, primitive engine.Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, canAutocommit, fetchLastInsertID bool) (*sqltypes.Result, []error) {
 	noOfShards := len(rss)
 	atomic.AddUint64(&vc.logStats.ShardQueries, uint64(noOfShards))
 	err := vc.markSavepoint(ctx, rollbackOnError && (noOfShards > 1), map[string]*querypb.BindVariable{})
@@ -761,14 +780,17 @@ func (vc *VCursorImpl) ExecuteMultiShard(ctx context.Context, primitive engine.P
 		return nil, []error{err}
 	}
 
-	qr, errs := vc.executor.ExecuteMultiShard(ctx, primitive, rss, commentedShardQueries(queries, vc.marginComments), vc.SafeSession, canAutocommit, vc.ignoreMaxMemoryRows, vc.observer)
+	qr, errs := vc.executor.ExecuteMultiShard(ctx, primitive, rss, commentedShardQueries(queries, vc.marginComments), vc.SafeSession, canAutocommit, vc.ignoreMaxMemoryRows, vc.observer, fetchLastInsertID)
 	vc.setRollbackOnPartialExecIfRequired(len(errs) != len(rss), rollbackOnError)
 	vc.logShardsQueried(primitive, len(rss))
+	if qr != nil && qr.InsertIDUpdated() {
+		vc.SafeSession.LastInsertId = qr.InsertID
+	}
 	return qr, errs
 }
 
 // StreamExecuteMulti is the streaming version of ExecuteMultiShard.
-func (vc *VCursorImpl) StreamExecuteMulti(ctx context.Context, primitive engine.Primitive, query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, rollbackOnError bool, autocommit bool, callback func(reply *sqltypes.Result) error) []error {
+func (vc *VCursorImpl) StreamExecuteMulti(ctx context.Context, primitive engine.Primitive, query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, rollbackOnError, autocommit, fetchLastInsertID bool, callback func(reply *sqltypes.Result) error) []error {
 	callback = vc.wrapCallback(callback, primitive)
 
 	noOfShards := len(rss)
@@ -778,7 +800,7 @@ func (vc *VCursorImpl) StreamExecuteMulti(ctx context.Context, primitive engine.
 		return []error{err}
 	}
 
-	errs := vc.executor.StreamExecuteMulti(ctx, primitive, vc.marginComments.Leading+query+vc.marginComments.Trailing, rss, bindVars, vc.SafeSession, autocommit, callback, vc.observer)
+	errs := vc.executor.StreamExecuteMulti(ctx, primitive, vc.marginComments.Leading+query+vc.marginComments.Trailing, rss, bindVars, vc.SafeSession, autocommit, callback, vc.observer, fetchLastInsertID)
 	vc.setRollbackOnPartialExecIfRequired(len(errs) != len(rss), rollbackOnError)
 
 	return errs
@@ -791,7 +813,7 @@ func (vc *VCursorImpl) ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShar
 }
 
 // ExecuteStandalone is part of the engine.VCursor interface.
-func (vc *VCursorImpl) ExecuteStandalone(ctx context.Context, primitive engine.Primitive, query string, bindVars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard) (*sqltypes.Result, error) {
+func (vc *VCursorImpl) ExecuteStandalone(ctx context.Context, primitive engine.Primitive, query string, bindVars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard, fetchLastInsertID bool) (*sqltypes.Result, error) {
 	rss := []*srvtopo.ResolvedShard{rs}
 	bqs := []*querypb.BoundQuery{
 		{
@@ -801,8 +823,11 @@ func (vc *VCursorImpl) ExecuteStandalone(ctx context.Context, primitive engine.P
 	}
 	// The autocommit flag is always set to false because we currently don't
 	// execute DMLs through ExecuteStandalone.
-	qr, errs := vc.executor.ExecuteMultiShard(ctx, primitive, rss, bqs, NewAutocommitSession(vc.SafeSession.Session), false /* autocommit */, vc.ignoreMaxMemoryRows, vc.observer)
+	qr, errs := vc.executor.ExecuteMultiShard(ctx, primitive, rss, bqs, NewAutocommitSession(vc.SafeSession.Session), false /* autocommit */, vc.ignoreMaxMemoryRows, vc.observer, fetchLastInsertID)
 	vc.logShardsQueried(primitive, len(rss))
+	if qr.InsertIDUpdated() {
+		vc.SafeSession.LastInsertId = qr.InsertID
+	}
 	return qr, vterrors.Aggregate(errs)
 }
 
@@ -829,7 +854,7 @@ func (vc *VCursorImpl) ExecuteKeyspaceID(ctx context.Context, keyspace string, k
 			vc.SafeSession.SetQueryFromVindex(false)
 		}()
 	}
-	qr, errs := vc.ExecuteMultiShard(ctx, nil, rss, queries, rollbackOnError, autocommit)
+	qr, errs := vc.ExecuteMultiShard(ctx, nil, rss, queries, rollbackOnError, autocommit, false)
 	return qr, vterrors.Aggregate(errs)
 }
 
@@ -1568,4 +1593,10 @@ func (vc *VCursorImpl) GetContextWithTimeOut(ctx context.Context) (context.Conte
 
 func (vc *VCursorImpl) IgnoreMaxMemoryRows() bool {
 	return vc.ignoreMaxMemoryRows
+}
+
+func (vc *VCursorImpl) SetLastInsertID(id uint64) {
+	vc.SafeSession.mu.Lock()
+	defer vc.SafeSession.mu.Unlock()
+	vc.SafeSession.LastInsertId = id
 }

@@ -31,6 +31,7 @@ type Result struct {
 	Fields              []*querypb.Field `json:"fields"`
 	RowsAffected        uint64           `json:"rows_affected"`
 	InsertID            uint64           `json:"insert_id"`
+	InsertIDChanged     bool             `json:"insert_id_changed"`
 	Rows                []Row            `json:"rows"`
 	SessionStateChanges string           `json:"session_state_changes"`
 	StatusFlags         uint16           `json:"status_flags"`
@@ -92,6 +93,7 @@ func (result *Result) Copy() *Result {
 	out := &Result{
 		RowsAffected:        result.RowsAffected,
 		InsertID:            result.InsertID,
+		InsertIDChanged:     result.InsertIDChanged,
 		SessionStateChanges: result.SessionStateChanges,
 		StatusFlags:         result.StatusFlags,
 		Info:                result.Info,
@@ -116,6 +118,7 @@ func (result *Result) ShallowCopy() *Result {
 	return &Result{
 		Fields:              result.Fields,
 		InsertID:            result.InsertID,
+		InsertIDChanged:     result.InsertIDChanged,
 		RowsAffected:        result.RowsAffected,
 		Info:                result.Info,
 		SessionStateChanges: result.SessionStateChanges,
@@ -129,6 +132,7 @@ func (result *Result) Metadata() *Result {
 	return &Result{
 		Fields:              result.Fields,
 		InsertID:            result.InsertID,
+		InsertIDChanged:     result.InsertIDChanged,
 		RowsAffected:        result.RowsAffected,
 		Info:                result.Info,
 		SessionStateChanges: result.SessionStateChanges,
@@ -153,6 +157,7 @@ func (result *Result) Truncate(l int) *Result {
 
 	out := &Result{
 		InsertID:            result.InsertID,
+		InsertIDChanged:     result.InsertIDChanged,
 		RowsAffected:        result.RowsAffected,
 		Info:                result.Info,
 		SessionStateChanges: result.SessionStateChanges,
@@ -198,6 +203,7 @@ func (result *Result) Equal(other *Result) bool {
 	return FieldsEqual(result.Fields, other.Fields) &&
 		result.RowsAffected == other.RowsAffected &&
 		result.InsertID == other.InsertID &&
+		result.InsertIDChanged == other.InsertIDChanged &&
 		slices.EqualFunc(result.Rows, other.Rows, func(a, b Row) bool {
 			return RowEqual(a, b)
 		})
@@ -324,15 +330,13 @@ func (result *Result) StripMetadata(incl querypb.ExecuteOptions_IncludedFields) 
 // to another result.Note currently it doesn't handle cases like
 // if two results have different fields.We will enhance this function.
 func (result *Result) AppendResult(src *Result) {
-	if src.RowsAffected == 0 && len(src.Rows) == 0 && len(src.Fields) == 0 {
-		return
-	}
-	if result.Fields == nil {
-		result.Fields = src.Fields
-	}
 	result.RowsAffected += src.RowsAffected
-	if src.InsertID != 0 {
+	if src.InsertIDUpdated() {
 		result.InsertID = src.InsertID
+		result.InsertIDChanged = true
+	}
+	if len(result.Fields) == 0 {
+		result.Fields = src.Fields
 	}
 	result.Rows = append(result.Rows, src.Rows...)
 }
@@ -350,4 +354,8 @@ func (result *Result) IsMoreResultsExists() bool {
 // IsInTransaction returns true if the status flag has SERVER_STATUS_IN_TRANS set
 func (result *Result) IsInTransaction() bool {
 	return result.StatusFlags&ServerStatusInTrans == ServerStatusInTrans
+}
+
+func (result *Result) InsertIDUpdated() bool {
+	return result.InsertIDChanged || result.InsertID > 0
 }

@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/replication"
 )
 
@@ -246,5 +247,482 @@ func TestMysql56SemiSyncAck(t *testing.T) {
 
 		assert.True(t, e.IsSemiSyncAckRequested())
 		assert.True(t, e.IsQuery())
+	}
+}
+
+func TestMySQL56PartialUpdateRowsEvent(t *testing.T) {
+	format := BinlogFormat{
+		HeaderSizes: []byte{
+			0, 13, 0, 8, 0, 0, 0, 0, 4, 0, 4, 0, 0, 0, 98, 0, 4, 26, 8, 0, 0, 0, 8, 8, 8, 2, 0, 0, 0, 10, 10, 10, 42, 42, 0, 18, 52, 0, 10, 40, 0,
+		},
+		ServerVersion:     "8.0.40",
+		FormatVersion:     4,
+		HeaderLength:      19,
+		ChecksumAlgorithm: 1,
+	}
+	// This is from the following table structure:
+	// CREATE TABLE `customer` (
+	//   `customer_id` bigint NOT NULL AUTO_INCREMENT,
+	//   `email` varbinary(128) DEFAULT NULL,
+	//   `jd` json DEFAULT NULL,
+	//   PRIMARY KEY (`customer_id`)
+	// )
+	tm := &TableMap{
+		Flags:    1,
+		Database: "vt_commerce",
+		Name:     "customer",
+		Types:    []byte{8, 15, 245},
+		CanBeNull: Bitmap{
+			data:  []byte{6},
+			count: 3,
+		},
+		Metadata:           []uint16{0, 128, 4},
+		ColumnCollationIDs: []collations.ID{63},
+	}
+
+	testCases := []struct {
+		name     string
+		rawEvent []byte
+		numRows  int
+		want     string
+	}{
+		{
+			name: "INSERT",
+			// The mysqlbinlog -vvv --base64-output=decode-rows output for the following event:
+			// ### UPDATE `vt_commerce`.`customer`
+			// ### WHERE
+			// ###   @1=1 /* LONGINT meta=0 nullable=0 is_null=0 */
+			// ###   @2='alice@domain.com' /* VARSTRING(128) meta=128 nullable=1 is_null=0 */
+			// ###   @3='{"salary": 100}' /* JSON meta=4 nullable=1 is_null=0 */
+			// ### SET
+			// ###   @1=1 /* LONGINT meta=0 nullable=0 is_null=0 */
+			// ###   @2='alice@domain.com' /* VARSTRING(128) meta=128 nullable=1 is_null=0 */
+			// ###   @3=JSON_INSERT(@3, '$.role', 'manager') /* JSON meta=4 nullable=1 is_null=0 */
+			// ### UPDATE `vt_commerce`.`customer`
+			// ### WHERE
+			// ###   @1=2 /* LONGINT meta=0 nullable=0 is_null=0 */
+			// ###   @2='bob@domain.com' /* VARSTRING(128) meta=128 nullable=1 is_null=0 */
+			// ###   @3='{"salary": 99}' /* JSON meta=4 nullable=1 is_null=0 */
+			// ### SET
+			// ###   @1=2 /* LONGINT meta=0 nullable=0 is_null=0 */
+			// ###   @2='bob@domain.com' /* VARSTRING(128) meta=128 nullable=1 is_null=0 */
+			// ###   @3=JSON_INSERT(@3, '$.role', 'manager') /* JSON meta=4 nullable=1 is_null=0 */
+			// ### UPDATE `vt_commerce`.`customer`
+			// ### WHERE
+			// ###   @1=3 /* LONGINT meta=0 nullable=0 is_null=0 */
+			// ###   @2='charlie@domain.com' /* VARSTRING(128) meta=128 nullable=1 is_null=0 */
+			// ###   @3='{"salary": 99}' /* JSON meta=4 nullable=1 is_null=0 */
+			// ### SET
+			// ###   @1=3 /* LONGINT meta=0 nullable=0 is_null=0 */
+			// ###   @2='charlie@domain.com' /* VARSTRING(128) meta=128 nullable=1 is_null=0 */
+			// ###   @3=JSON_INSERT(@3, '$.role', 'manager') /* JSON meta=4 nullable=1 is_null=0 */
+			// ### UPDATE `vt_commerce`.`customer`
+			// ### WHERE
+			// ###   @1=4 /* LONGINT meta=0 nullable=0 is_null=0 */
+			// ###   @2='dan@domain.com' /* VARSTRING(128) meta=128 nullable=1 is_null=0 */
+			// ###   @3='{"salary": 99}' /* JSON meta=4 nullable=1 is_null=0 */
+			// ### SET
+			// ###   @1=4 /* LONGINT meta=0 nullable=0 is_null=0 */
+			// ###   @2='dan@domain.com' /* VARSTRING(128) meta=128 nullable=1 is_null=0 */
+			// ###   @3=JSON_INSERT(@3, '$.role', 'manager') /* JSON meta=4 nullable=1 is_null=0 */
+			// ### UPDATE `vt_commerce`.`customer`
+			// ### WHERE
+			// ###   @1=5 /* LONGINT meta=0 nullable=0 is_null=0 */
+			// ###   @2='eve@domain.com' /* VARSTRING(128) meta=128 nullable=1 is_null=0 */
+			// ###   @3='{"salary": 100}' /* JSON meta=4 nullable=1 is_null=0 */
+			// ### SET
+			// ###   @1=5 /* LONGINT meta=0 nullable=0 is_null=0 */
+			// ###   @2='eve@domain.com' /* VARSTRING(128) meta=128 nullable=1 is_null=0 */
+			// ###   @3=JSON_INSERT(@3, '$.role', 'manager') /* JSON meta=4 nullable=1 is_null=0 */
+			rawEvent: []byte{
+				196, 19, 87, 103, 39, 47, 142, 143, 12, 6, 2, 0, 0, 229, 104, 0, 0, 0, 0, 176, 0, 0, 0, 0, 0, 1, 0, 2, 0, 3, 255, 255, 0, 1, 0, 0, 0, 0, 0,
+				0, 0, 16, 97, 108, 105, 99, 101, 64, 100, 111, 109, 97, 105, 110, 46, 99, 111, 109, 18, 0, 0, 0, 0, 1, 0, 17, 0, 11, 0, 6, 0, 5, 100, 0, 115,
+				97, 108, 97, 114, 121, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 16, 97, 108, 105, 99, 101, 64, 100, 111, 109, 97, 105, 110, 46, 99, 111, 109, 18, 0,
+				0, 0, 1, 6, 36, 46, 114, 111, 108, 101, 9, 12, 7, 109, 97, 110, 97, 103, 101, 114, 0, 2, 0, 0, 0, 0, 0, 0, 0, 14, 98, 111, 98, 64, 100, 111,
+				109, 97, 105, 110, 46, 99, 111, 109, 18, 0, 0, 0, 0, 1, 0, 17, 0, 11, 0, 6, 0, 5, 99, 0, 115, 97, 108, 97, 114, 121, 1, 1, 0, 2, 0, 0, 0, 0,
+				0, 0, 0, 14, 98, 111, 98, 64, 100, 111, 109, 97, 105, 110, 46, 99, 111, 109, 18, 0, 0, 0, 1, 6, 36, 46, 114, 111, 108, 101, 9, 12, 7, 109, 97,
+				110, 97, 103, 101, 114, 0, 3, 0, 0, 0, 0, 0, 0, 0, 18, 99, 104, 97, 114, 108, 105, 101, 64, 100, 111, 109, 97, 105, 110, 46, 99, 111, 109, 18,
+				0, 0, 0, 0, 1, 0, 17, 0, 11, 0, 6, 0, 5, 99, 0, 115, 97, 108, 97, 114, 121, 1, 1, 0, 3, 0, 0, 0, 0, 0, 0, 0, 18, 99, 104, 97, 114, 108, 105,
+				101, 64, 100, 111, 109, 97, 105, 110, 46, 99, 111, 109, 18, 0, 0, 0, 1, 6, 36, 46, 114, 111, 108, 101, 9, 12, 7, 109, 97, 110, 97, 103, 101,
+				114, 0, 4, 0, 0, 0, 0, 0, 0, 0, 14, 100, 97, 110, 64, 100, 111, 109, 97, 105, 110, 46, 99, 111, 109, 18, 0, 0, 0, 0, 1, 0, 17, 0, 11, 0, 6, 0,
+				5, 99, 0, 115, 97, 108, 97, 114, 121, 1, 1, 0, 4, 0, 0, 0, 0, 0, 0, 0, 14, 100, 97, 110, 64, 100, 111, 109, 97, 105, 110, 46, 99, 111, 109, 18,
+				0, 0, 0, 1, 6, 36, 46, 114, 111, 108, 101, 9, 12, 7, 109, 97, 110, 97, 103, 101, 114, 0, 5, 0, 0, 0, 0, 0, 0, 0, 14, 101, 118, 101, 64, 100,
+				111, 109, 97, 105, 110, 46, 99, 111, 109, 18, 0, 0, 0, 0, 1, 0, 17, 0, 11, 0, 6, 0, 5, 100, 0, 115, 97, 108, 97, 114, 121, 1, 1, 0, 5, 0, 0, 0,
+				0, 0, 0, 0, 14, 101, 118, 101, 64, 100, 111, 109, 97, 105, 110, 46, 99, 111, 109, 18, 0, 0, 0, 1, 6, 36, 46, 114, 111, 108, 101, 9, 12, 7, 109,
+				97, 110, 97, 103, 101, 114,
+			},
+			numRows: 5,
+			want:    "JSON_INSERT(%s, _utf8mb4'$.role', CAST(JSON_QUOTE(_utf8mb4'manager') as JSON))",
+		},
+		{
+			// The mysqlbinlog -vvv --base64-output=decode-rows output for the following event:
+			// ### UPDATE `vt_commerce`.`customer`
+			// ### WHERE
+			// ###   @1=1 /* LONGINT meta=0 nullable=0 is_null=0 */
+			// ###   @2='alice@domain.com' /* VARSTRING(128) meta=128 nullable=1 is_null=0 */
+			// ###   @3='{"role": "manager", "salary": 100}' /* JSON meta=4 nullable=1 is_null=0 */
+			// ### SET
+			// ###   @1=1 /* LONGINT meta=0 nullable=0 is_null=0 */
+			// ###   @2='alice@domain.com' /* VARSTRING(128) meta=128 nullable=1 is_null=0 */
+			// ###   @3=JSON_REPLACE(@3, '$.role', 'IC') /* JSON meta=4 nullable=1 is_null=0 */
+			rawEvent: []byte{
+				155, 21, 87, 103, 39, 47, 142, 143, 12, 148, 0, 0, 0, 135, 106, 0, 0, 0, 0, 176, 0, 0, 0, 0, 0, 1, 0, 2, 0, 3, 255, 255, 0, 1, 0, 0, 0, 0, 0, 0,
+				0, 16, 97, 108, 105, 99, 101, 64, 100, 111, 109, 97, 105, 110, 46, 99, 111, 109, 37, 0, 0, 0, 0, 2, 0, 36, 0, 18, 0, 4, 0, 22, 0, 6, 0, 12, 28,
+				0, 5, 100, 0, 114, 111, 108, 101, 115, 97, 108, 97, 114, 121, 7, 109, 97, 110, 97, 103, 101, 114, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 16, 97, 108,
+				105, 99, 101, 64, 100, 111, 109, 97, 105, 110, 46, 99, 111, 109, 13, 0, 0, 0, 0, 6, 36, 46, 114, 111, 108, 101, 4, 12, 2, 73, 67,
+			},
+			name:    "REPLACE",
+			numRows: 1,
+			want:    "JSON_REPLACE(%s, _utf8mb4'$.role', CAST(JSON_QUOTE(_utf8mb4'IC') as JSON))",
+		},
+		{
+			name: "REMOVE",
+			// The mysqlbinlog -vvv --base64-output=decode-rows output for the following event:
+			// ### UPDATE `vt_commerce`.`customer`
+			// ### WHERE
+			// ###   @1=2 /* LONGINT meta=0 nullable=0 is_null=0 */
+			// ###   @2='bob@domain.com' /* VARSTRING(128) meta=128 nullable=1 is_null=0 */
+			// ###   @3='{"role": "manager", "salary": 99}' /* JSON meta=4 nullable=1 is_null=0 */
+			// ### SET
+			// ###   @1=2 /* LONGINT meta=0 nullable=0 is_null=0 */
+			// ###   @2='bob@domain.com' /* VARSTRING(128) meta=128 nullable=1 is_null=0 */
+			// ###   @3=JSON_REMOVE(@3, '$.salary') /* JSON meta=4 nullable=1 is_null=0 */
+			numRows: 1,
+			rawEvent: []byte{
+				176, 22, 87, 103, 39, 47, 142, 143, 12, 141, 0, 0, 0, 34, 108, 0, 0, 0, 0, 176, 0, 0, 0, 0, 0, 1, 0, 2, 0, 3, 255, 255, 0, 2, 0, 0, 0, 0, 0, 0, 0,
+				14, 98, 111, 98, 64, 100, 111, 109, 97, 105, 110, 46, 99, 111, 109, 37, 0, 0, 0, 0, 2, 0, 36, 0, 18, 0, 4, 0, 22, 0, 6, 0, 12, 28, 0, 5, 99, 0, 114,
+				111, 108, 101, 115, 97, 108, 97, 114, 121, 7, 109, 97, 110, 97, 103, 101, 114, 1, 1, 0, 2, 0, 0, 0, 0, 0, 0, 0, 14, 98, 111, 98, 64, 100, 111, 109,
+				97, 105, 110, 46, 99, 111, 109, 10, 0, 0, 0, 2, 8, 36, 46, 115, 97, 108, 97, 114, 121,
+			},
+			want: "JSON_REMOVE(%s, _utf8mb4'$.salary')",
+		},
+		{
+			name: "REMOVE and REPLACE",
+			// The mysqlbinlog -vvv --base64-output=decode-rows output for the following event:
+			// ### UPDATE `vt_commerce`.`customer`
+			// ### WHERE
+			// ###   @1=1 /* LONGINT meta=0 nullable=0 is_null=0 */
+			// ###   @2='alice@domain.com' /* VARSTRING(128) meta=128 nullable=1 is_null=0 */
+			// ###   @3='{"day": "friday", "role": "manager", "color": "red", "salary": 100, "favorite_color": "black"}' /* JSON meta=4 nullable=1 is_null=0 */
+			// ### SET
+			// ###   @1=1 /* LONGINT meta=0 nullable=0 is_null=0 */
+			// ###   @2='alice@domain.com' /* VARSTRING(128) meta=128 nullable=1 is_null=0 */
+			// ###   @3=JSON_REMOVE(
+			// ###      JSON_REPLACE(@3, '$.day', 'monday'),
+			// ###      '$.favorite_color') /* JSON meta=4 nullable=1 is_null=0 */
+			// ### UPDATE `vt_commerce`.`customer`
+			// ### WHERE
+			// ###   @1=2 /* LONGINT meta=0 nullable=0 is_null=0 */
+			// ###   @2='bob@domain.com' /* VARSTRING(128) meta=128 nullable=1 is_null=0 */
+			// ###   @3='{"day": "friday", "role": "manager", "color": "red", "salary": 99, "favorite_color": "black"}' /* JSON meta=4 nullable=1 is_null=0 */
+			// ### SET
+			// ###   @1=2 /* LONGINT meta=0 nullable=0 is_null=0 */
+			// ###   @2='bob@domain.com' /* VARSTRING(128) meta=128 nullable=1 is_null=0 */
+			// ###   @3=JSON_REMOVE(
+			// ###      JSON_REPLACE(@3, '$.day', 'monday'),
+			// ###      '$.favorite_color') /* JSON meta=4 nullable=1 is_null=0 */
+			// ### UPDATE `vt_commerce`.`customer`
+			// ### WHERE
+			// ###   @1=3 /* LONGINT meta=0 nullable=0 is_null=0 */
+			// ###   @2='charlie@domain.com' /* VARSTRING(128) meta=128 nullable=1 is_null=0 */
+			// ###   @3='{"day": "friday", "role": "manager", "color": "red", "salary": 99, "favorite_color": "black"}' /* JSON meta=4 nullable=1 is_null=0 */
+			// ### SET
+			// ###   @1=3 /* LONGINT meta=0 nullable=0 is_null=0 */
+			// ###   @2='charlie@domain.com' /* VARSTRING(128) meta=128 nullable=1 is_null=0 */
+			// ###   @3=JSON_REMOVE(
+			// ###      JSON_REPLACE(@3, '$.day', 'monday'),
+			// ###      '$.favorite_color') /* JSON meta=4 nullable=1 is_null=0 */
+			// ### UPDATE `vt_commerce`.`customer`
+			// ### WHERE
+			// ###   @1=4 /* LONGINT meta=0 nullable=0 is_null=0 */
+			// ###   @2='dan@domain.com' /* VARSTRING(128) meta=128 nullable=1 is_null=0 */
+			// ###   @3='{"day": "friday", "role": "manager", "color": "red", "salary": 99, "favorite_color": "black"}' /* JSON meta=4 nullable=1 is_null=0 */
+			// ### SET
+			// ###   @1=4 /* LONGINT meta=0 nullable=0 is_null=0 */
+			// ###   @2='dan@domain.com' /* VARSTRING(128) meta=128 nullable=1 is_null=0 */
+			// ###   @3=JSON_REMOVE(
+			// ###      JSON_REPLACE(@3, '$.day', 'monday'),
+			// ###      '$.favorite_color') /* JSON meta=4 nullable=1 is_null=0 */
+			// ### UPDATE `vt_commerce`.`customer`
+			// ### WHERE
+			// ###   @1=5 /* LONGINT meta=0 nullable=0 is_null=0 */
+			// ###   @2='eve@domain.com' /* VARSTRING(128) meta=128 nullable=1 is_null=0 */
+			// ###   @3='{"day": "friday", "role": "manager", "color": "red", "salary": 100, "favorite_color": "black"}' /* JSON meta=4 nullable=1 is_null=0 */
+			// ### SET
+			// ###   @1=5 /* LONGINT meta=0 nullable=0 is_null=0 */
+			// ###   @2='eve@domain.com' /* VARSTRING(128) meta=128 nullable=1 is_null=0 */
+			// ###   @3=JSON_REMOVE(
+			// ###      JSON_REPLACE(@3, '$.day', 'monday'),
+			// ###      '$.favorite_color') /* JSON meta=4 nullable=1 is_null=0 */
+			rawEvent: []byte{
+				227, 240, 86, 103, 39, 74, 58, 208, 33, 225, 3, 0, 0, 173, 122, 0, 0, 0, 0, 176, 0, 0, 0, 0, 0, 1, 0, 2, 0, 3, 255, 255, 0, 1, 0, 0, 0, 0,
+				0, 0, 0, 16, 97, 108, 105, 99, 101, 64, 100, 111, 109, 97, 105, 110, 46, 99, 111, 109, 97, 0, 0, 0, 0, 5, 0, 96, 0, 39, 0, 3, 0, 42, 0, 4,
+				0, 46, 0, 5, 0, 51, 0, 6, 0, 57, 0, 14, 0, 12, 71, 0, 12, 78, 0, 12, 86, 0, 5, 100, 0, 12, 90, 0, 100, 97, 121, 114, 111, 108, 101, 99, 111,
+				108, 111, 114, 115, 97, 108, 97, 114, 121, 102, 97, 118, 111, 114, 105, 116, 101, 95, 99, 111, 108, 111, 114, 6, 102, 114, 105, 100, 97, 121,
+				7, 109, 97, 110, 97, 103, 101, 114, 3, 114, 101, 100, 5, 98, 108, 97, 99, 107, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 16, 97, 108, 105, 99, 101,
+				64, 100, 111, 109, 97, 105, 110, 46, 99, 111, 109, 34, 0, 0, 0, 0, 5, 36, 46, 100, 97, 121, 8, 12, 6, 109, 111, 110, 100, 97, 121, 2, 16, 36,
+				46, 102, 97, 118, 111, 114, 105, 116, 101, 95, 99, 111, 108, 111, 114, 0, 2, 0, 0, 0, 0, 0, 0, 0, 14, 98, 111, 98, 64, 100, 111, 109, 97,
+				105, 110, 46, 99, 111, 109, 97, 0, 0, 0, 0, 5, 0, 96, 0, 39, 0, 3, 0, 42, 0, 4, 0, 46, 0, 5, 0, 51, 0, 6, 0, 57, 0, 14, 0, 12, 71, 0, 12, 78,
+				0, 12, 86, 0, 5, 99, 0, 12, 90, 0, 100, 97, 121, 114, 111, 108, 101, 99, 111, 108, 111, 114, 115, 97, 108, 97, 114, 121, 102, 97, 118, 111,
+				114, 105, 116, 101, 95, 99, 111, 108, 111, 114, 6, 102, 114, 105, 100, 97, 121, 7, 109, 97, 110, 97, 103, 101, 114, 3, 114, 101, 100, 5, 98,
+				108, 97, 99, 107, 1, 1, 0, 2, 0, 0, 0, 0, 0, 0, 0, 14, 98, 111, 98, 64, 100, 111, 109, 97, 105, 110, 46, 99, 111, 109, 34, 0, 0, 0, 0, 5, 36,
+				46, 100, 97, 121, 8, 12, 6, 109, 111, 110, 100, 97, 121, 2, 16, 36, 46, 102, 97, 118, 111, 114, 105, 116, 101, 95, 99, 111, 108, 111, 114, 0,
+				3, 0, 0, 0, 0, 0, 0, 0, 18, 99, 104, 97, 114, 108, 105, 101, 64, 100, 111, 109, 97, 105, 110, 46, 99, 111, 109, 97, 0, 0, 0, 0, 5, 0, 96, 0,
+				39, 0, 3, 0, 42, 0, 4, 0, 46, 0, 5, 0, 51, 0, 6, 0, 57, 0, 14, 0, 12, 71, 0, 12, 78, 0, 12, 86, 0, 5, 99, 0, 12, 90, 0, 100, 97, 121, 114,
+				111, 108, 101, 99, 111, 108, 111, 114, 115, 97, 108, 97, 114, 121, 102, 97, 118, 111, 114, 105, 116, 101, 95, 99, 111, 108, 111, 114, 6, 102,
+				114, 105, 100, 97, 121, 7, 109, 97, 110, 97, 103, 101, 114, 3, 114, 101, 100, 5, 98, 108, 97, 99, 107, 1, 1, 0, 3, 0, 0, 0, 0, 0, 0, 0, 18,
+				99, 104, 97, 114, 108, 105, 101, 64, 100, 111, 109, 97, 105, 110, 46, 99, 111, 109, 34, 0, 0, 0, 0, 5, 36, 46, 100, 97, 121, 8, 12, 6, 109,
+				111, 110, 100, 97, 121, 2, 16, 36, 46, 102, 97, 118, 111, 114, 105, 116, 101, 95, 99, 111, 108, 111, 114, 0, 4, 0, 0, 0, 0, 0, 0, 0, 14, 100,
+				97, 110, 64, 100, 111, 109, 97, 105, 110, 46, 99, 111, 109, 97, 0, 0, 0, 0, 5, 0, 96, 0, 39, 0, 3, 0, 42, 0, 4, 0, 46, 0, 5, 0, 51, 0, 6, 0,
+				57, 0, 14, 0, 12, 71, 0, 12, 78, 0, 12, 86, 0, 5, 99, 0, 12, 90, 0, 100, 97, 121, 114, 111, 108, 101, 99, 111, 108, 111, 114, 115, 97, 108,
+				97, 114, 121, 102, 97, 118, 111, 114, 105, 116, 101, 95, 99, 111, 108, 111, 114, 6, 102, 114, 105, 100, 97, 121, 7, 109, 97, 110, 97, 103,
+				101, 114, 3, 114, 101, 100, 5, 98, 108, 97, 99, 107, 1, 1, 0, 4, 0, 0, 0, 0, 0, 0, 0, 14, 100, 97, 110, 64, 100, 111, 109, 97, 105, 110, 46,
+				99, 111, 109, 34, 0, 0, 0, 0, 5, 36, 46, 100, 97, 121, 8, 12, 6, 109, 111, 110, 100, 97, 121, 2, 16, 36, 46, 102, 97, 118, 111, 114, 105, 116,
+				101, 95, 99, 111, 108, 111, 114, 0, 5, 0, 0, 0, 0, 0, 0, 0, 14, 101, 118, 101, 64, 100, 111, 109, 97, 105, 110, 46, 99, 111, 109, 97, 0, 0, 0,
+				0, 5, 0, 96, 0, 39, 0, 3, 0, 42, 0, 4, 0, 46, 0, 5, 0, 51, 0, 6, 0, 57, 0, 14, 0, 12, 71, 0, 12, 78, 0, 12, 86, 0, 5, 100, 0, 12, 90, 0, 100,
+				97, 121, 114, 111, 108, 101, 99, 111, 108, 111, 114, 115, 97, 108, 97, 114, 121, 102, 97, 118, 111, 114, 105, 116, 101, 95, 99, 111, 108, 111,
+				114, 6, 102, 114, 105, 100, 97, 121, 7, 109, 97, 110, 97, 103, 101, 114, 3, 114, 101, 100, 5, 98, 108, 97, 99, 107, 1, 1, 0, 5, 0, 0, 0, 0, 0,
+				0, 0, 14, 101, 118, 101, 64, 100, 111, 109, 97, 105, 110, 46, 99, 111, 109, 34, 0, 0, 0, 0, 5, 36, 46, 100, 97, 121, 8, 12, 6, 109, 111, 110,
+				100, 97, 121, 2, 16, 36, 46, 102, 97, 118, 111, 114, 105, 116, 101, 95, 99, 111, 108, 111, 114,
+			},
+			numRows: 5,
+			want:    "JSON_REMOVE(JSON_REPLACE(%s, _utf8mb4'$.day', CAST(JSON_QUOTE(_utf8mb4'monday') as JSON)), _utf8mb4'$.favorite_color')",
+		},
+		{
+			name: "INSERT and REMOVE and REPLACE",
+			// The mysqlbinlog -vvv --base64-output=decode-rows output for the following event:
+			// ### UPDATE `vt_commerce`.`customer`
+			// ### WHERE
+			// ###   @1=3 /* LONGINT meta=0 nullable=0 is_null=0 */
+			// ###   @2='charlie@domain.com' /* VARSTRING(128) meta=128 nullable=1 is_null=0 */
+			// ###   @3='{"day": "monday", "role": "manager", "salary": 99, "favorite_color": "red"}' /* JSON meta=4 nullable=1 is_null=0 */
+			// ### SET
+			// ###   @1=3 /* LONGINT meta=0 nullable=0 is_null=0 */
+			// ###   @2='charlie@domain.com' /* VARSTRING(128) meta=128 nullable=1 is_null=0 */
+			// ###   @3=JSON_INSERT(
+			// ###      JSON_REMOVE(
+			// ###      JSON_REPLACE(@3, '$.day', 'tuesday'),
+			// ###      '$.favorite_color'),
+			// ###      '$.hobby', 'skiing') /* JSON meta=4 nullable=1 is_null=0 */
+			rawEvent: []byte{
+				48, 25, 87, 103, 39, 47, 142, 143, 12, 234, 0, 0, 0, 0, 117, 0, 0, 0, 0, 176, 0, 0, 0, 0, 0, 1, 0, 2, 0, 3, 255, 255, 0, 3, 0, 0, 0, 0, 0, 0, 0,
+				18, 99, 104, 97, 114, 108, 105, 101, 64, 100, 111, 109, 97, 105, 110, 46, 99, 111, 109, 79, 0, 0, 0, 0, 4, 0, 78, 0, 32, 0, 3, 0, 35, 0, 4, 0,
+				39, 0, 6, 0, 45, 0, 14, 0, 12, 59, 0, 12, 66, 0, 5, 99, 0, 12, 74, 0, 100, 97, 121, 114, 111, 108, 101, 115, 97, 108, 97, 114, 121, 102, 97,
+				118, 111, 114, 105, 116, 101, 95, 99, 111, 108, 111, 114, 6, 109, 111, 110, 100, 97, 121, 7, 109, 97, 110, 97, 103, 101, 114, 3, 114, 101, 100,
+				1, 1, 0, 3, 0, 0, 0, 0, 0, 0, 0, 18, 99, 104, 97, 114, 108, 105, 101, 64, 100, 111, 109, 97, 105, 110, 46, 99, 111, 109, 53, 0, 0, 0, 0, 5, 36,
+				46, 100, 97, 121, 9, 12, 7, 116, 117, 101, 115, 100, 97, 121, 2, 16, 36, 46, 102, 97, 118, 111, 114, 105, 116, 101, 95, 99, 111, 108, 111, 114,
+				1, 7, 36, 46, 104, 111, 98, 98, 121, 8, 12, 6, 115, 107, 105, 105, 110, 103,
+			},
+			numRows: 1,
+			want:    "JSON_INSERT(JSON_REMOVE(JSON_REPLACE(%s, _utf8mb4'$.day', CAST(JSON_QUOTE(_utf8mb4'tuesday') as JSON)), _utf8mb4'$.favorite_color'), _utf8mb4'$.hobby', CAST(JSON_QUOTE(_utf8mb4'skiing') as JSON))",
+		},
+		{
+			name: "REPLACE with null",
+			// The mysqlbinlog -vvv --base64-output=decode-rows output for the following event:
+			// ### UPDATE `vt_commerce`.`customer`
+			// ### WHERE
+			// ###   @1=4 /* LONGINT meta=0 nullable=0 is_null=0 */
+			// ###   @2='dan@domain.com' /* VARSTRING(128) meta=128 nullable=1 is_null=0 */
+			// ###   @3='{"role": "manager", "salary": 99}' /* JSON meta=4 nullable=1 is_null=0 */
+			// ### SET
+			// ###   @1=4 /* LONGINT meta=0 nullable=0 is_null=0 */
+			// ###   @2='dan@domain.com' /* VARSTRING(128) meta=128 nullable=1 is_null=0 */
+			// ###   @3=JSON_REPLACE(@3, '$.salary', null) /* JSON meta=4 nullable=1 is_null=0 *
+			rawEvent: []byte{
+				148, 26, 87, 103, 39, 47, 142, 143, 12, 144, 0, 0, 0, 158, 118, 0, 0, 0, 0, 176, 0, 0, 0, 0, 0, 1, 0, 2, 0, 3, 255, 255, 0, 4, 0, 0, 0, 0, 0, 0, 0,
+				14, 100, 97, 110, 64, 100, 111, 109, 97, 105, 110, 46, 99, 111, 109, 37, 0, 0, 0, 0, 2, 0, 36, 0, 18, 0, 4, 0, 22, 0, 6, 0, 12, 28, 0, 5, 99, 0,
+				114, 111, 108, 101, 115, 97, 108, 97, 114, 121, 7, 109, 97, 110, 97, 103, 101, 114, 1, 1, 0, 4, 0, 0, 0, 0, 0, 0, 0, 14, 100, 97, 110, 64, 100, 111,
+				109, 97, 105, 110, 46, 99, 111, 109, 13, 0, 0, 0, 0, 8, 36, 46, 115, 97, 108, 97, 114, 121, 2, 4, 0,
+			},
+			numRows: 1,
+			want:    "JSON_REPLACE(%s, _utf8mb4'$.salary', CAST(_utf8mb4'null' as JSON))",
+		},
+		{
+			name: "REPLACE 2 paths",
+			// The mysqlbinlog -vvv --base64-output=decode-rows output for the following event:
+			// ### UPDATE `vt_commerce`.`customer`
+			// ### WHERE
+			// ###   @1=4 /* LONGINT meta=0 nullable=0 is_null=0 */
+			// ###   @2='dan@domain.com' /* VARSTRING(128) meta=128 nullable=1 is_null=0 */
+			// ###   @3='{"role": "manager", "salary": null}' /* JSON meta=4 nullable=1 is_null=0 */
+			// ### SET
+			// ###   @1=4 /* LONGINT meta=0 nullable=0 is_null=0 */
+			// ###   @2='dan@domain.com' /* VARSTRING(128) meta=128 nullable=1 is_null=0 */
+			// ###   @3=JSON_REPLACE(@3, '$.salary', 110,
+			// ###      '$.role', 'IC') /* JSON meta=4 nullable=1 is_null=0 */
+			rawEvent: []byte{
+				32, 32, 87, 103, 39, 26, 45, 78, 117, 158, 0, 0, 0, 145, 106, 0, 0, 0, 0, 176, 0, 0, 0, 0, 0, 1, 0, 2, 0, 3, 255, 255, 0, 4, 0, 0, 0, 0, 0, 0, 0, 14,
+				100, 97, 110, 64, 100, 111, 109, 97, 105, 110, 46, 99, 111, 109, 37, 0, 0, 0, 0, 2, 0, 36, 0, 18, 0, 4, 0, 22, 0, 6, 0, 12, 28, 0, 5, 99, 0, 114, 111,
+				108, 101, 115, 97, 108, 97, 114, 121, 7, 109, 97, 110, 97, 103, 101, 114, 1, 1, 0, 4, 0, 0, 0, 0, 0, 0, 0, 14, 100, 97, 110, 64, 100, 111, 109, 97,
+				105, 110, 46, 99, 111, 109, 27, 0, 0, 0, 0, 8, 36, 46, 115, 97, 108, 97, 114, 121, 3, 5, 110, 0, 0, 6, 36, 46, 114, 111, 108, 101, 4, 12, 2, 73, 67,
+			},
+			numRows: 1,
+			want:    "JSON_REPLACE(JSON_REPLACE(%s, _utf8mb4'$.salary', CAST(110 as JSON)), _utf8mb4'$.role', CAST(JSON_QUOTE(_utf8mb4'IC') as JSON))",
+		},
+		{
+			name: "JSON null",
+			// The mysqlbinlog -vvv --base64-output=decode-rows output for the following event:
+			// ### UPDATE `vt_commerce`.`customer`
+			// ### WHERE
+			// ###   @1=5 /* LONGINT meta=0 nullable=0 is_null=0 */
+			// ###   @2='neweve@domain.com' /* VARSTRING(128) meta=128 nullable=1 is_null=0 */
+			// ###   @3='{"day": "friday", "role": "manager", "color": "red", "salary": 100, "favorite_color": "black"}' /* JSON meta=4 nullable=1 is_null=0 */
+			// ### SET
+			// ###   @1=5 /* LONGINT meta=0 nullable=0 is_null=0 */
+			// ###   @2='neweve@domain.com' /* VARSTRING(128) meta=128 nullable=1 is_null=0 */
+			// ###   @3='null' /* JSON meta=4 nullable=1 is_null=0 */
+			rawEvent: []byte{
+				109, 200, 88, 103, 39, 57, 91, 186, 0, 194, 0, 0, 0, 0, 0, 0, 0, 0, 0, 178, 0, 0, 0, 0, 0, 1, 0, 2, 0, 3, 7, 7, 0, 5, 0, 0, 0, 0, 0, 0, 0, 17, 110,
+				101, 119, 101, 118, 101, 64, 100, 111, 109, 97, 105, 110, 46, 99, 111, 109, 97, 0, 0, 0, 0, 5, 0, 96, 0, 39, 0, 3, 0, 42, 0, 4, 0, 46, 0, 5, 0, 51,
+				0, 6, 0, 57, 0, 14, 0, 12, 71, 0, 12, 78, 0, 12, 86, 0, 5, 100, 0, 12, 90, 0, 100, 97, 121, 114, 111, 108, 101, 99, 111, 108, 111, 114, 115, 97,
+				108, 97, 114, 121, 102, 97, 118, 111, 114, 105, 116, 101, 95, 99, 111, 108, 111, 114, 6, 102, 114, 105, 100, 97, 121, 7, 109, 97, 110, 97, 103, 101,
+				114, 3, 114, 101, 100, 5, 98, 108, 97, 99, 107, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 17, 110, 101, 119, 101, 118, 101, 64, 100, 111, 109, 97, 105, 110, 46,
+				99, 111, 109, 2, 0, 0, 0, 4, 0,
+			},
+			numRows: 1,
+			want:    "null",
+		},
+		{
+			name: "null literal string",
+			// The mysqlbinlog -vvv --base64-output=decode-rows output for the following event:
+			// ### UPDATE `vt_commerce`.`customer`
+			// ### WHERE
+			// ###   @1=10 /* LONGINT meta=0 nullable=0 is_null=0 */
+			// ###   @2='mlord@planetscale.com' /* VARSTRING(128) meta=128 nullable=1 is_null=0 */
+			// ###   @3=NULL /* JSON meta=4 nullable=1 is_null=1 */
+			// ### SET
+			// ###   @1=10 /* LONGINT meta=0 nullable=0 is_null=0 */
+			// ###   @2='mlord@planetscale.com' /* VARSTRING(128) meta=128 nullable=1 is_null=0 */
+			// ###   @3='null' /* JSON meta=4 nullable=1 is_null=0 */
+			rawEvent: []byte{
+				178, 168, 89, 103, 39, 37, 191, 137, 18, 105, 0, 0, 0, 0, 0, 0, 0, 0, 0, 153, 0, 0, 0, 0, 0, 1, 0, 2, 0, 3, 7, 7, 4, 10, 0, 0, 0, 0, 0, 0, 0, 21,
+				109, 108, 111, 114, 100, 64, 112, 108, 97, 110, 101, 116, 115, 99, 97, 108, 101, 46, 99, 111, 109, 0, 0, 10, 0, 0, 0, 0, 0, 0, 0, 21, 109, 108, 111,
+				114, 100, 64, 112, 108, 97, 110, 101, 116, 115, 99, 97, 108, 101, 46, 99, 111, 109, 6, 0, 0, 0, 12, 4, 110, 117, 108, 108,
+			},
+			numRows: 1,
+			want:    "\"null\"",
+		},
+		{
+			name: "JSON object",
+			// The mysqlbinlog -vvv --base64-output=decode-rows output for the following event:
+			// ### UPDATE `vt_commerce`.`customer`
+			// ### WHERE
+			// ###   @1=1 /* LONGINT meta=0 nullable=0 is_null=0 */
+			// ###   @2='newalice@domain.com' /* VARSTRING(128) meta=128 nullable=1 is_null=0 */
+			// ###   @3='{"day": "wednesday", "role": "manager", "color": "red", "salary": 100}' /* JSON meta=4 nullable=1 is_null=0 */
+			// ### SET
+			// ###   @1=1 /* LONGINT meta=0 nullable=0 is_null=0 */
+			// ###   @2='newalice@domain.com' /* VARSTRING(128) meta=128 nullable=1 is_null=0 */
+			// ###   @3=JSON_INSERT(@3, '$.misc', '{"address":"1012 S Park", "town":"Hastings", "state":"MI"}') /* JSON meta=4 nullable=1 is_null=0 */
+			rawEvent: []byte{
+				208, 160, 89, 103, 39, 202, 59, 214, 68, 242, 0, 0, 0, 0, 0, 0, 0, 0, 0, 153, 0, 0, 0, 0, 0, 1, 0, 2, 0, 3, 7, 7, 0, 1, 0, 0, 0, 0, 0, 0, 0, 19, 110,
+				101, 119, 97, 108, 105, 99, 101, 64, 100, 111, 109, 97, 105, 110, 46, 99, 111, 109, 73, 0, 0, 0, 0, 4, 0, 72, 0, 32, 0, 3, 0, 35, 0, 4, 0, 39, 0, 5,
+				0, 44, 0, 6, 0, 12, 50, 0, 12, 60, 0, 12, 68, 0, 5, 100, 0, 100, 97, 121, 114, 111, 108, 101, 99, 111, 108, 111, 114, 115, 97, 108, 97, 114, 121, 9,
+				119, 101, 100, 110, 101, 115, 100, 97, 121, 7, 109, 97, 110, 97, 103, 101, 114, 3, 114, 101, 100, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 19, 110, 101, 119,
+				97, 108, 105, 99, 101, 64, 100, 111, 109, 97, 105, 110, 46, 99, 111, 109, 69, 0, 0, 0, 1, 6, 36, 46, 109, 105, 115, 99, 60, 12, 58, 123, 34, 97, 100,
+				100, 114, 101, 115, 115, 34, 58, 34, 49, 48, 49, 50, 32, 83, 32, 80, 97, 114, 107, 34, 44, 32, 34, 116, 111, 119, 110, 34, 58, 34, 72, 97, 115, 116,
+				105, 110, 103, 115, 34, 44, 32, 34, 115, 116, 97, 116, 101, 34, 58, 34, 77, 73, 34, 125,
+			},
+			numRows: 1,
+			want:    "JSON_INSERT(%s, _utf8mb4'$.misc', CAST(JSON_QUOTE(_utf8mb4'{\"address\":\"1012 S Park\", \"town\":\"Hastings\", \"state\":\"MI\"}') as JSON))",
+		},
+		{
+			name: "JSON field not updated",
+			// The mysqlbinlog -vvv --base64-output=decode-rows output for the following event:
+			// ### UPDATE `vt_commerce`.`customer`
+			// ### WHERE
+			// ###   @1=1 /* LONGINT meta=0 nullable=0 is_null=0 */
+			// ###   @2='newalice@domain.com' /* VARSTRING(128) meta=128 nullable=1 is_null=0 */
+			// ###   @3='{"day": "friday", "role": "manager", "color": "red", "salary": 100, "favorite_color": "black"}' /* JSON meta=4 nullable=1 is_null=0 */
+			// ### SET
+			// ###   @1=101 /* LONGINT meta=0 nullable=0 is_null=0 */
+			// ###   @2='newalice@domain.com' /* VARSTRING(128) meta=128 nullable=1 is_null=0 */
+			// ###   @3=@3 /* JSON meta=4 nullable=1 is_null=0 */
+			// ### UPDATE `vt_commerce`.`customer`
+			// ### WHERE
+			// ###   @1=2 /* LONGINT meta=0 nullable=0 is_null=0 */
+			// ###   @2='newbob@domain.com' /* VARSTRING(128) meta=128 nullable=1 is_null=0 */
+			// ###   @3='{"day": "friday", "role": "manager", "color": "red", "salary": 99, "favorite_color": "black"}' /* JSON meta=4 nullable=1 is_null=0 */
+			// ### SET
+			// ###   @1=102 /* LONGINT meta=0 nullable=0 is_null=0 */
+			// ###   @2='newbob@domain.com' /* VARSTRING(128) meta=128 nullable=1 is_null=0 */
+			// ###   @3=@3 /* JSON meta=4 nullable=1 is_null=0 */
+			// ### UPDATE `vt_commerce`.`customer`
+			// ### WHERE
+			// ###   @1=3 /* LONGINT meta=0 nullable=0 is_null=0 */
+			// ###   @2='newcharlie@domain.com' /* VARSTRING(128) meta=128 nullable=1 is_null=0 */
+			// ###   @3='{"day": "monday", "role": "manager", "color": "red", "hobby": "skiing", "salary": 99}' /* JSON meta=4 nullable=1 is_null=0 */
+			// ### SET
+			// ###   @1=103 /* LONGINT meta=0 nullable=0 is_null=0 */
+			// ###   @2='newcharlie@domain.com' /* VARSTRING(128) meta=128 nullable=1 is_null=0 */
+			// ###   @3=@3 /* JSON meta=4 nullable=1 is_null=0 */
+			// ### UPDATE `vt_commerce`.`customer`
+			// ### WHERE
+			// ###   @1=4 /* LONGINT meta=0 nullable=0 is_null=0 */
+			// ###   @2='newdan@domain.com' /* VARSTRING(128) meta=128 nullable=1 is_null=0 */
+			// ###   @3='{"day": "friday", "role": "manager", "color": "red", "salary": 99, "favorite_color": "black"}' /* JSON meta=4 nullable=1 is_null=0 */
+			// ### SET
+			// ###   @1=104 /* LONGINT meta=0 nullable=0 is_null=0 */
+			// ###   @2='newdan@domain.com' /* VARSTRING(128) meta=128 nullable=1 is_null=0 */
+			// ###   @3=@3 /* JSON meta=4 nullable=1 is_null=0 */
+			// ### UPDATE `vt_commerce`.`customer`
+			// ### WHERE
+			// ###   @1=5 /* LONGINT meta=0 nullable=0 is_null=0 */
+			// ###   @2='neweve@domain.com' /* VARSTRING(128) meta=128 nullable=1 is_null=0 */
+			// ###   @3='{"day": "friday", "role": "manager", "color": "red", "salary": 100, "favorite_color": "black"}' /* JSON meta=4 nullable=1 is_null=0 */
+			// ### SET
+			// ###   @1=105 /* LONGINT meta=0 nullable=0 is_null=0 */
+			// ###   @2='neweve@domain.com' /* VARSTRING(128) meta=128 nullable=1 is_null=0 */
+			// ###   @3=@3 /* JSON meta=4 nullable=1 is_null=0 */
+			rawEvent: []byte{
+				194, 74, 100, 103, 39, 46, 144, 133, 54, 77, 3, 0, 0, 77, 128, 0, 0, 0, 0, 153, 0, 0, 0, 0, 0, 1, 0, 2, 0, 3, 255, 255, 0, 1, 0, 0, 0, 0, 0, 0, 0,
+				19, 110, 101, 119, 97, 108, 105, 99, 101, 64, 100, 111, 109, 97, 105, 110, 46, 99, 111, 109, 97, 0, 0, 0, 0, 5, 0, 96, 0, 39, 0, 3, 0, 42, 0, 4, 0,
+				46, 0, 5, 0, 51, 0, 6, 0, 57, 0, 14, 0, 12, 71, 0, 12, 78, 0, 12, 86, 0, 5, 100, 0, 12, 90, 0, 100, 97, 121, 114, 111, 108, 101, 99, 111, 108, 111,
+				114, 115, 97, 108, 97, 114, 121, 102, 97, 118, 111, 114, 105, 116, 101, 95, 99, 111, 108, 111, 114, 6, 102, 114, 105, 100, 97, 121, 7, 109, 97,
+				110, 97, 103, 101, 114, 3, 114, 101, 100, 5, 98, 108, 97, 99, 107, 1, 1, 0, 101, 0, 0, 0, 0, 0, 0, 0, 19, 110, 101, 119, 97, 108, 105, 99, 101, 64,
+				100, 111, 109, 97, 105, 110, 46, 99, 111, 109, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 17, 110, 101, 119, 98, 111, 98, 64, 100, 111, 109, 97, 105,
+				110, 46, 99, 111, 109, 97, 0, 0, 0, 0, 5, 0, 96, 0, 39, 0, 3, 0, 42, 0, 4, 0, 46, 0, 5, 0, 51, 0, 6, 0, 57, 0, 14, 0, 12, 71, 0, 12, 78, 0, 12, 86,
+				0, 5, 99, 0, 12, 90, 0, 100, 97, 121, 114, 111, 108, 101, 99, 111, 108, 111, 114, 115, 97, 108, 97, 114, 121, 102, 97, 118, 111, 114, 105, 116, 101,
+				95, 99, 111, 108, 111, 114, 6, 102, 114, 105, 100, 97, 121, 7, 109, 97, 110, 97, 103, 101, 114, 3, 114, 101, 100, 5, 98, 108, 97, 99, 107, 1, 1, 0,
+				102, 0, 0, 0, 0, 0, 0, 0, 17, 110, 101, 119, 98, 111, 98, 64, 100, 111, 109, 97, 105, 110, 46, 99, 111, 109, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0,
+				21, 110, 101, 119, 99, 104, 97, 114, 108, 105, 101, 64, 100, 111, 109, 97, 105, 110, 46, 99, 111, 109, 89, 0, 0, 0, 0, 5, 0, 88, 0, 39, 0, 3, 0, 42,
+				0, 4, 0, 46, 0, 5, 0, 51, 0, 5, 0, 56, 0, 6, 0, 12, 62, 0, 12, 69, 0, 12, 77, 0, 12, 81, 0, 5, 99, 0, 100, 97, 121, 114, 111, 108, 101, 99, 111, 108,
+				111, 114, 104, 111, 98, 98, 121, 115, 97, 108, 97, 114, 121, 6, 109, 111, 110, 100, 97, 121, 7, 109, 97, 110, 97, 103, 101, 114, 3, 114, 101, 100, 6,
+				115, 107, 105, 105, 110, 103, 1, 1, 0, 103, 0, 0, 0, 0, 0, 0, 0, 21, 110, 101, 119, 99, 104, 97, 114, 108, 105, 101, 64, 100, 111, 109, 97, 105, 110,
+				46, 99, 111, 109, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 17, 110, 101, 119, 100, 97, 110, 64, 100, 111, 109, 97, 105, 110, 46, 99, 111, 109, 97, 0,
+				0, 0, 0, 5, 0, 96, 0, 39, 0, 3, 0, 42, 0, 4, 0, 46, 0, 5, 0, 51, 0, 6, 0, 57, 0, 14, 0, 12, 71, 0, 12, 78, 0, 12, 86, 0, 5, 99, 0, 12, 90, 0, 100,
+				97, 121, 114, 111, 108, 101, 99, 111, 108, 111, 114, 115, 97, 108, 97, 114, 121, 102, 97, 118, 111, 114, 105, 116, 101, 95, 99, 111, 108, 111, 114,
+				6, 102, 114, 105, 100, 97, 121, 7, 109, 97, 110, 97, 103, 101, 114, 3, 114, 101, 100, 5, 98, 108, 97, 99, 107, 1, 1, 0, 104, 0, 0, 0, 0, 0, 0, 0, 17,
+				110, 101, 119, 100, 97, 110, 64, 100, 111, 109, 97, 105, 110, 46, 99, 111, 109, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 17, 110, 101, 119, 101, 118,
+				101, 64, 100, 111, 109, 97, 105, 110, 46, 99, 111, 109, 97, 0, 0, 0, 0, 5, 0, 96, 0, 39, 0, 3, 0, 42, 0, 4, 0, 46, 0, 5, 0, 51, 0, 6, 0, 57, 0, 14,
+				0, 12, 71, 0, 12, 78, 0, 12, 86, 0, 5, 100, 0, 12, 90, 0, 100, 97, 121, 114, 111, 108, 101, 99, 111, 108, 111, 114, 115, 97, 108, 97, 114, 121, 102,
+				97, 118, 111, 114, 105, 116, 101, 95, 99, 111, 108, 111, 114, 6, 102, 114, 105, 100, 97, 121, 7, 109, 97, 110, 97, 103, 101, 114, 3, 114, 101, 100,
+				5, 98, 108, 97, 99, 107, 1, 1, 0, 105, 0, 0, 0, 0, 0, 0, 0, 17, 110, 101, 119, 101, 118, 101, 64, 100, 111, 109, 97, 105, 110, 46, 99, 111, 109, 0,
+				0, 0, 0,
+			},
+			numRows: 5,
+			want:    "",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mysql56PartialUpdateRowEvent := NewMysql56BinlogEvent(tc.rawEvent)
+			require.True(t, mysql56PartialUpdateRowEvent.IsPartialUpdateRows())
+
+			ev, err := mysql56PartialUpdateRowEvent.Rows(format, tm)
+			require.NoError(t, err)
+
+			assert.Equal(t, tc.numRows, len(ev.Rows))
+			require.NoError(t, err)
+
+			for i := range ev.Rows {
+				vals, err := ev.StringValuesForTests(tm, i)
+				require.NoError(t, err)
+				// The third column is the JSON column.
+				require.Equal(t, tc.want, vals[2])
+				t.Logf("Rows: %v", vals)
+			}
+		})
 	}
 }

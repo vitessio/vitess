@@ -411,7 +411,7 @@ type shardResult struct {
 	sendErr error
 }
 
-func (sr *shardResult) StreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (sr *shardResult) StreamExecute(_ context.Context, _ VCursor, _ map[string]*querypb.BindVariable, _ bool, _ bool, callback func(*sqltypes.Result) error) error {
 	for _, r := range sr.results {
 		if err := callback(r); err != nil {
 			return err

@@ -132,9 +132,9 @@ func getMySQLConnectionCount(ctx context.Context, session *vtgateconn.VTGateSess
 }
 
 func assertTabletsPresent(t *testing.T) {
-	tmpCmd := exec.Command("vtctlclient", "--vtctl_client_protocol", "grpc", "--server", grpcAddress, "--stderrthreshold", "0", "ListAllTablets", "--", "test")
+	tmpCmd := exec.Command("vtctldclient", "--server", grpcAddress, "GetTablets", "--cell", "test")
 
-	log.Infof("Running vtctlclient with command: %v", tmpCmd.Args)
+	log.Infof("Running vtctldclient with command: %v", tmpCmd.Args)
 
 	output, err := tmpCmd.CombinedOutput()
 	require.Nil(t, err)

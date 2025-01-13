@@ -25,6 +25,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -141,12 +142,12 @@ func (wr *Wrangler) shouldSendSemiSyncAck(ctx context.Context, tablet *topodatap
 	if err != nil {
 		return false, err
 	}
-	durability, err := reparentutil.GetDurabilityPolicy(durabilityName)
+	durability, err := policy.GetDurabilityPolicy(durabilityName)
 	if err != nil {
 		return false, err
 	}
 
-	return reparentutil.IsReplicaSemiSync(durability, shardPrimary.Tablet, tablet), nil
+	return policy.IsReplicaSemiSync(durability, shardPrimary.Tablet, tablet), nil
 }
 
 func (wr *Wrangler) getShardPrimaryForTablet(ctx context.Context, tablet *topodatapb.Tablet) (*topo.TabletInfo, error) {

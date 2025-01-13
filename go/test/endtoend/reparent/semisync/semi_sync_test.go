@@ -25,6 +25,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/reparent/utils"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 )
 
 func TestSemiSyncUpgradeDowngrade(t *testing.T) {
@@ -33,7 +34,7 @@ func TestSemiSyncUpgradeDowngrade(t *testing.T) {
 	if ver != 21 {
 		t.Skip("We only want to run this test for v21 release")
 	}
-	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
+	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
