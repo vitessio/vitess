@@ -80,6 +80,29 @@ var intervalSet = [...]intervalSetter{
 	intervalSetYear,
 }
 
+var namedIntervalTypes = map[string]IntervalType{
+	"year":               IntervalYear,
+	"quarter":            IntervalQuarter,
+	"month":              IntervalMonth,
+	"week":               IntervalWeek,
+	"day":                IntervalDay,
+	"hour":               IntervalHour,
+	"minute":             IntervalMinute,
+	"second":             IntervalSecond,
+	"microsecond":        IntervalMicrosecond,
+	"year_month":         IntervalYearMonth,
+	"day_hour":           IntervalDayHour,
+	"day_minute":         IntervalDayMinute,
+	"day_second":         IntervalDaySecond,
+	"hour_minute":        IntervalHourMinute,
+	"hour_second":        IntervalHourSecond,
+	"minute_second":      IntervalMinuteSecond,
+	"day_microsecond":    IntervalDayMicrosecond,
+	"hour_microsecond":   IntervalHourMicrosecond,
+	"minute_microsecond": IntervalMinuteMicrosecond,
+	"second_microsecond": IntervalSecondMicrosecond,
+}
+
 // setter returns the setter method for this interval's type.
 // If this is a unary interval, it'll return the setter for the interval's unary type.
 // If this is a compound interval, it'll return the setter for the smallest unary type
@@ -168,50 +191,11 @@ func (itv IntervalType) ToString() string {
 
 // IntervalTypeFromString parses a string into an IntervalType. This is the inverse function of IntervalType.ToString().
 func IntervalTypeFromString(s string) IntervalType {
-	switch strings.ToLower(s) {
-	case "year":
-		return IntervalYear
-	case "quarter":
-		return IntervalQuarter
-	case "month":
-		return IntervalMonth
-	case "week":
-		return IntervalWeek
-	case "day":
-		return IntervalDay
-	case "hour":
-		return IntervalHour
-	case "minute":
-		return IntervalMinute
-	case "second":
-		return IntervalSecond
-	case "microsecond":
-		return IntervalMicrosecond
-	case "year_month":
-		return IntervalYearMonth
-	case "day_hour":
-		return IntervalDayHour
-	case "day_minute":
-		return IntervalDayMinute
-	case "day_second":
-		return IntervalDaySecond
-	case "hour_minute":
-		return IntervalHourMinute
-	case "hour_second":
-		return IntervalHourSecond
-	case "minute_second":
-		return IntervalMinuteSecond
-	case "day_microsecond":
-		return IntervalDayMicrosecond
-	case "hour_microsecond":
-		return IntervalHourMicrosecond
-	case "minute_microsecond":
-		return IntervalMinuteMicrosecond
-	case "second_microsecond":
-		return IntervalSecondMicrosecond
-	default:
+	result, ok := namedIntervalTypes[strings.ToLower(s)]
+	if !ok {
 		return IntervalNone
 	}
+	return result
 }
 
 func intervalSetYear(tp *Interval, val int) {
