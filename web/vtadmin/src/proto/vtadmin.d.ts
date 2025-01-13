@@ -15406,8 +15406,8 @@ export namespace vtadmin {
     /** Properties of a VExplainRequest. */
     interface IVExplainRequest {
 
-        /** VExplainRequest cluster */
-        clusterID?: (string|null);
+        /** VExplainRequest cluster_id */
+        cluster_id?: (string|null);
 
         /** VExplainRequest keyspace */
         keyspace?: (string|null);
@@ -15514,6 +15514,7 @@ export namespace vtadmin {
 
     /** Properties of a VExplainResponse. */
     interface IVExplainResponse {
+
         /** VExplainResponse response */
         response?: (string|null);
     }

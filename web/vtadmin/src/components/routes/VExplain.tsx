@@ -42,7 +42,7 @@ export const VExplain = () => {
             : null;
 
     const { data, error, refetch } = useVExplain(
-        { clusterID: clusterID, keyspace: keyspaceName, sql },
+        { cluster_id: clusterID, keyspace: keyspaceName, sql },
         {
             // Never cache, never refetch.
             cacheTime: 0,
