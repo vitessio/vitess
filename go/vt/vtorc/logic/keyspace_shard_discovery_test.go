@@ -52,6 +52,25 @@ var (
 	}
 )
 
+func TestGetKeyspaceShardsStats(t *testing.T) {
+	db.ClearVTOrcDatabase()
+	defer func() {
+		db.ClearVTOrcDatabase()
+	}()
+
+	for _, shardName := range []string{"-80", "80-"} {
+		shardInfo := topo.NewShardInfo("ks1", shardName, &topodatapb.Shard{}, nil)
+		err := inst.SaveShard(shardInfo)
+		require.NoError(t, err)
+	}
+
+	// test using the metric var that calls getKeyspaceShardsStats()
+	require.Equal(t, map[string]int64{
+		"ks1.-80": 1,
+		"ks1.80-": 1,
+	}, statsKeyspaceShardsWatched.Counts())
+}
+
 func TestRefreshAllKeyspaces(t *testing.T) {
 	// Store the old flags and restore on test completion
 	oldTs := ts
@@ -120,6 +139,15 @@ func TestRefreshAllKeyspaces(t *testing.T) {
 	verifyKeyspaceInfo(t, "ks4", keyspaceDurabilityTest, "")
 	verifyPrimaryAlias(t, "ks4", "80-", "zone_ks4-0000000101", "")
 
+	// Confirm GetAllShardNames
+	keyspaceShardNames, err := inst.GetAllShardNames()
+	require.NoError(t, err)
+	require.Equal(t, map[string][]string{
+		"ks1": {"-80", "80-"},
+		"ks2": {"-80", "80-"},
+		"ks3": {"-80", "80-"},
+		"ks4": {"-80", "80-"},
+	}, keyspaceShardNames)
 }
 
 func TestRefreshKeyspace(t *testing.T) {

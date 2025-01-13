@@ -20,23 +20,49 @@ import (
 	"context"
 	"sort"
 	"strings"
-	"sync"
+	"time"
 
+	"golang.org/x/sync/errgroup"
+
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
-
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 )
 
+var lastAllKeyspaceShardsRefreshTime time.Time
+
+var statsKeyspaceShardsWatched = stats.NewGaugesFuncWithMultiLabels("KeyspaceShardsWatched",
+	"The keyspace/shards watched by VTOrc",
+	[]string{"Keyspace", "Shard"},
+	getKeyspaceShardsStats,
+)
+
+// getKeyspaceShardsStats returns the current keyspace/shards watched in stats format.
+func getKeyspaceShardsStats() map[string]int64 {
+	ksShardNames, err := inst.GetAllShardNames()
+	if err != nil {
+		log.Errorf("Failed to get shards from backend: %+v", err)
+		return nil
+	}
+	stats := make(map[string]int64, 0)
+	for keyspace, shards := range ksShardNames {
+		for _, shard := range shards {
+			stats[keyspace+"."+shard] = 1
+		}
+	}
+	return stats
+}
+
 // RefreshAllKeyspacesAndShards reloads the keyspace and shard information for the keyspaces that vtorc is concerned with.
 func RefreshAllKeyspacesAndShards(ctx context.Context) error {
+	var err error
 	var keyspaces []string
 	if len(clustersToWatch) == 0 { // all known keyspaces
-		ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
-		defer cancel()
-		var err error
+		getCtx, getCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+		defer getCancel()
 		// Get all the keyspaces
-		keyspaces, err = ts.GetKeyspaces(ctx)
+		keyspaces, err = ts.GetKeyspaces(getCtx)
 		if err != nil {
 			return err
 		}
@@ -61,9 +87,11 @@ func RefreshAllKeyspacesAndShards(ctx context.Context) error {
 	// Sort the list of keyspaces.
 	// The list can have duplicates because the input to clusters to watch may have multiple shards of the same keyspace
 	sort.Strings(keyspaces)
+
 	refreshCtx, refreshCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer refreshCancel()
-	var wg sync.WaitGroup
+
+	eg, refreshCtx := errgroup.WithContext(refreshCtx)
 	for idx, keyspace := range keyspaces {
 		// Check if the current keyspace name is the same as the last one.
 		// If it is, then we know we have already refreshed its information.
@@ -71,17 +99,27 @@ func RefreshAllKeyspacesAndShards(ctx context.Context) error {
 		if idx != 0 && keyspace == keyspaces[idx-1] {
 			continue
 		}
-		wg.Add(2)
-		go func(keyspace string) {
-			defer wg.Done()
-			_ = refreshKeyspaceHelper(refreshCtx, keyspace)
-		}(keyspace)
-		go func(keyspace string) {
-			defer wg.Done()
-			_ = refreshAllShards(refreshCtx, keyspace)
-		}(keyspace)
+		eg.Go(func() error {
+			return refreshKeyspaceHelper(refreshCtx, keyspace)
+		})
+		eg.Go(func() error {
+			return refreshAllShards(refreshCtx, keyspace)
+		})
 	}
-	wg.Wait()
+
+	if err = eg.Wait(); err == nil {
+		// delete stale records from the previous success or older
+		now := time.Now()
+		if staleTime := lastAllKeyspaceShardsRefreshTime; !staleTime.IsZero() && now.Unix() > staleTime.Unix() {
+			if err := inst.DeleteStaleShards(staleTime); err != nil {
+				return err
+			}
+			if err := inst.DeleteStaleKeyspaces(staleTime); err != nil {
+				return err
+			}
+		}
+		lastAllKeyspaceShardsRefreshTime = now
+	}
 
 	return nil
 }
@@ -116,7 +154,7 @@ func refreshKeyspaceHelper(ctx context.Context, keyspaceName string) error {
 		log.Error(err)
 		return err
 	}
-	err = inst.SaveKeyspace(keyspaceInfo)
+	err = inst.SaveKeyspace(keyspaceInfo, time.Now() /* updated_timestamp */)
 	if err != nil {
 		log.Error(err)
 	}
@@ -136,7 +174,7 @@ func refreshAllShards(ctx context.Context, keyspaceName string) error {
 		return err
 	}
 	for _, shardInfo := range shardInfos {
-		err = inst.SaveShard(shardInfo)
+		err = inst.SaveShard(shardInfo, time.Now() /* updated_timestamp */)
 		if err != nil {
 			log.Error(err)
 			return err
@@ -152,7 +190,7 @@ func refreshSingleShardHelper(ctx context.Context, keyspaceName string, shardNam
 		log.Error(err)
 		return err
 	}
-	err = inst.SaveShard(shardInfo)
+	err = inst.SaveShard(shardInfo, time.Now() /* updated_timestamp */)
 	if err != nil {
 		log.Error(err)
 	}

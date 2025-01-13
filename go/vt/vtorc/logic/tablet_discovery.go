@@ -113,13 +113,9 @@ func refreshTabletsUsing(ctx context.Context, loader func(tabletAlias string), f
 				input := strings.Split(ks, "/")
 				keyspaceShards = append(keyspaceShards, &topo.KeyspaceShard{Keyspace: input[0], Shard: input[1]})
 			} else {
-				// Assume this is a keyspace and find all shards in keyspace
-				ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
-				defer cancel()
-				shards, err := ts.GetShardNames(ctx, ks)
+				shards, err := inst.GetKeyspaceShardNames(ks)
 				if err != nil {
-					// Log the errr and continue
-					log.Errorf("Error fetching shards for keyspace: %v", ks)
+					log.Errorf("Failed to get shards for ks %s: %+v", ks, err)
 					continue
 				}
 				if len(shards) == 0 {

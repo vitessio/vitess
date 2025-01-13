@@ -61,8 +61,7 @@ func ReadTablet(tabletAlias string) (*topodatapb.Tablet, error) {
 	FROM
 		vitess_tablet
 	WHERE
-		alias = ?
-	`
+		alias = ?`
 	args := sqlutils.Args(tabletAlias)
 	tablet := &topodatapb.Tablet{}
 	opts := prototext.UnmarshalOptions{DiscardUnknown: true}
