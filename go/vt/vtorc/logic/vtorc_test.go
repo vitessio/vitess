@@ -1,11 +1,17 @@
 package logic
 
 import (
+	"context"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/vtorc/db"
+	"vitess.io/vitess/go/vt/vtorc/process"
 )
 
 func TestWaitForLocksRelease(t *testing.T) {
@@ -53,4 +59,50 @@ func waitForLocksReleaseAndGetTimeWaitedFor() time.Duration {
 	start := time.Now()
 	waitForLocksRelease()
 	return time.Since(start)
+}
+
+func TestRefreshAllInformation(t *testing.T) {
+	defer process.ResetLastHealthCheckCache()
+
+	// Store the old flags and restore on test completion
+	oldTs := ts
+	defer func() {
+		ts = oldTs
+	}()
+
+	// Clear the database after the test. The easiest way to do that is to run all the initialization commands again.
+	defer func() {
+		db.ClearVTOrcDatabase()
+	}()
+
+	// Verify in the beginning, we have the first DiscoveredOnce field false.
+	_, err := process.HealthTest()
+	require.NoError(t, err)
+
+	// Create a memory topo-server and create the keyspace and shard records
+	ts = memorytopo.NewServer(context.Background(), cell1)
+	_, err = ts.GetOrCreateShard(context.Background(), keyspace, shard)
+	require.NoError(t, err)
+
+	// Test error
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // cancel context to simulate timeout
+	require.Error(t, refreshAllInformation(ctx))
+	require.False(t, process.FirstDiscoveryCycleComplete.Load())
+	health, err := process.HealthTest()
+	require.NoError(t, err)
+	require.False(t, health.DiscoveredOnce)
+	require.False(t, health.Healthy)
+	process.ResetLastHealthCheckCache()
+
+	// Test success
+	ctx2, cancel2 := context.WithCancel(context.Background())
+	defer cancel2()
+	require.NoError(t, refreshAllInformation(ctx2))
+	require.True(t, process.FirstDiscoveryCycleComplete.Load())
+	health, err = process.HealthTest()
+	require.NoError(t, err)
+	require.True(t, health.DiscoveredOnce)
+	require.True(t, health.Healthy)
+	process.ResetLastHealthCheckCache()
 }
