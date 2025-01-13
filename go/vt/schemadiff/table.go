@@ -2824,7 +2824,7 @@ func (c *CreateTableEntity) validate() error {
 				return &InvalidColumnInPartitionError{Table: c.Name(), Column: colName.String()}
 			}
 			// Validate column type
-			// See https://dev.mysql.com/doc/refman/8.0/en/partitioning-columns.html
+			// See https://dev.mysql.com/doc/refman/en/partitioning-columns.html
 			if !IsIntegralType(col.Type()) {
 				switch strings.ToLower(col.Type()) {
 				case "date", "datetime":
