@@ -615,12 +615,12 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bo
 
 	// We're shutting down on purpose. We no longer want to be notified when
 	// mysqld terminates.
-	// mysqld.mutex.Lock()
-	// if mysqld.cancelWaitCmd != nil {
-	// 	close(mysqld.cancelWaitCmd)
-	// 	mysqld.cancelWaitCmd = nil
-	// }
-	// mysqld.mutex.Unlock()
+	mysqld.mutex.Lock()
+	if mysqld.cancelWaitCmd != nil {
+		close(mysqld.cancelWaitCmd)
+		mysqld.cancelWaitCmd = nil
+	}
+	mysqld.mutex.Unlock()
 
 	// possibly mysql is already shutdown, check for a few files first
 	_, socketPathErr := os.Stat(cnf.SocketFile)
