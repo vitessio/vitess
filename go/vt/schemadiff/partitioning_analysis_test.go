@@ -295,7 +295,7 @@ func TestAnalyzeTemporalRangePartitioning(t *testing.T) {
 			name:   "not partitioned",
 			create: "CREATE TABLE t (id int PRIMARY KEY)",
 			expect: &TemporalRangePartitioningAnalysis{
-				Reason: "Table does not use PARTITION BY RANGE",
+				Reason: "table does not use PARTITION BY RANGE",
 			},
 		},
 		{
@@ -757,7 +757,7 @@ func TestTemporalRangePartitioningNextRotation(t *testing.T) {
 			create:            "CREATE TABLE t (id int)",
 			interval:          datetime.IntervalHour,
 			prepareAheadCount: 7,
-			expectErr:         fmt.Errorf("Table does not use PARTITION BY RANGE"),
+			expectErr:         fmt.Errorf("table does not use PARTITION BY RANGE"),
 		},
 		{
 			name:              "interval too short: hour vs day",
@@ -1087,7 +1087,7 @@ func TestTemporalRangePartitioningRetention(t *testing.T) {
 			name:      "not partitioned",
 			create:    "CREATE TABLE t (id int)",
 			expire:    "2024-12-19 09:00:00",
-			expectErr: fmt.Errorf("Table does not use PARTITION BY RANGE"),
+			expectErr: fmt.Errorf("table does not use PARTITION BY RANGE"),
 		},
 		{
 			name:   "day interval, no impact",
