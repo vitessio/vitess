@@ -47,6 +47,56 @@ var (
 		) Engine=InnoDB;`
 )
 
+func TestFailingReplication(t *testing.T) {
+	defer cluster.PanicHandler(t)
+
+	prepareCluster(t)
+
+	// Run the entire backup test
+	firstBackupTest(t, false)
+
+	// Insert one more row, the primary will be ahead of the last backup
+	_, err := primary.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test_failure')", keyspaceName, true)
+	require.NoError(t, err)
+
+	// Disable replication from the primary by removing the grants to 'vt_repl'.
+	// Also make sure to reset the privileges to what they were before.
+	grant := func() {
+		_, err = primary.VttabletProcess.QueryTablet("GRANT REPLICATION SLAVE ON *.* TO 'vt_repl'@'%';", keyspaceName, true)
+		require.NoError(t, err)
+		_, err = primary.VttabletProcess.QueryTablet("FLUSH PRIVILEGES;", keyspaceName, true)
+		require.NoError(t, err)
+	}
+	t.Cleanup(grant)
+
+	_, err = primary.VttabletProcess.QueryTablet("REVOKE REPLICATION SLAVE ON *.* FROM 'vt_repl'@'%';", keyspaceName, true)
+	require.NoError(t, err)
+	_, err = primary.VttabletProcess.QueryTablet("FLUSH PRIVILEGES;", keyspaceName, true)
+	require.NoError(t, err)
+
+	// Take a backup with vtbackup: the process should fail entirely as it cannot replicate from the primary.
+	_, err = startVtBackup(t, false, false, false)
+	require.Error(t, err)
+
+	// keep in mind how many backups we have right now
+	backups, err := listBackups(shardKsName)
+	require.NoError(t, err)
+
+	// In 30 seconds, grant the replication permission again to 'vt_repl'.
+	// This will mean that vtbackup should fail to replicate for ~30 seconds, until we grant the permission again.
+	go func() {
+		<-time.After(30 * time.Second)
+		grant()
+	}()
+
+	// this will initially be stuck trying to replicate from the primary, and once we re-grant the permission in
+	// the goroutine above, the process will work and complete successfully.
+	_ = vtBackup(t, false, false, false)
+	verifyBackupCount(t, shardKsName, len(backups)+1)
+
+	tearDown(t, true)
+}
+
 func TestTabletInitialBackup(t *testing.T) {
 	// Test Initial Backup Flow
 	//    TestTabletInitialBackup will:
@@ -60,6 +110,15 @@ func TestTabletInitialBackup(t *testing.T) {
 	//    - list the backups, remove them
 	defer cluster.PanicHandler(t)
 
+	prepareCluster(t)
+
+	// Run the entire backup test
+	firstBackupTest(t, true)
+
+	tearDown(t, true)
+}
+
+func prepareCluster(t *testing.T) {
 	waitForReplicationToCatchup([]cluster.Vttablet{*replica1, *replica2})
 
 	dataPointReader := vtBackup(t, true, false, false)
@@ -85,11 +144,6 @@ func TestTabletInitialBackup(t *testing.T) {
 		"TabletExternallyReparented", primary.Alias)
 	require.NoError(t, err)
 	restore(t, replica1, "replica", "SERVING")
-
-	// Run the entire backup test
-	firstBackupTest(t, "replica")
-
-	tearDown(t, true)
 }
 
 func TestTabletBackupOnly(t *testing.T) {
@@ -109,12 +163,12 @@ func TestTabletBackupOnly(t *testing.T) {
 	replica1.VttabletProcess.ServingStatus = "NOT_SERVING"
 
 	initTablets(t, true, true)
-	firstBackupTest(t, "replica")
+	firstBackupTest(t, true)
 
 	tearDown(t, false)
 }
 
-func firstBackupTest(t *testing.T, tabletType string) {
+func firstBackupTest(t *testing.T, removeBackup bool) {
 	// Test First Backup flow.
 	//
 	//    firstBackupTest will:
@@ -170,11 +224,13 @@ func firstBackupTest(t *testing.T, tabletType string) {
 	// check the new replica has the data
 	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 2)
 
-	removeBackups(t)
-	verifyBackupCount(t, shardKsName, 0)
+	if removeBackup {
+		removeBackups(t)
+		verifyBackupCount(t, shardKsName, 0)
+	}
 }
 
-func vtBackup(t *testing.T, initialBackup bool, restartBeforeBackup, disableRedoLog bool) *opentsdb.DataPointReader {
+func startVtBackup(t *testing.T, initialBackup bool, restartBeforeBackup, disableRedoLog bool) (*os.File, error) {
 	mysqlSocket, err := os.CreateTemp("", "vtbackup_test_mysql.sock")
 	require.NoError(t, err)
 	defer os.Remove(mysqlSocket.Name())
@@ -209,9 +265,19 @@ func vtBackup(t *testing.T, initialBackup bool, restartBeforeBackup, disableRedo
 
 	log.Infof("starting backup tablet %s", time.Now())
 	err = localCluster.StartVtbackup(newInitDBFile, initialBackup, keyspaceName, shardName, cell, extraArgs...)
-	require.NoError(t, err)
+	if err != nil {
+		return nil, err
+	}
 
 	f, err := os.OpenFile(statsPath, os.O_RDONLY, 0)
+	if err != nil {
+		return nil, err
+	}
+	return f, nil
+}
+
+func vtBackup(t *testing.T, initialBackup bool, restartBeforeBackup, disableRedoLog bool) *opentsdb.DataPointReader {
+	f, err := startVtBackup(t, initialBackup, restartBeforeBackup, disableRedoLog)
 	require.NoError(t, err)
 	return opentsdb.NewDataPointReader(f)
 }
