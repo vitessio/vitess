@@ -534,6 +534,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteValues(n, parent)
 	case *ValuesFuncExpr:
 		return c.copyOnRewriteRefOfValuesFuncExpr(n, parent)
+	case *ValuesStatement:
+		return c.copyOnRewriteRefOfValuesStatement(n, parent)
 	case *VarPop:
 		return c.copyOnRewriteRefOfVarPop(n, parent)
 	case *VarSamp:
@@ -6409,6 +6411,36 @@ func (c *cow) copyOnRewriteRefOfValuesFuncExpr(n *ValuesFuncExpr, parent SQLNode
 	}
 	return
 }
+func (c *cow) copyOnRewriteRefOfValuesStatement(n *ValuesStatement, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_With, changedWith := c.copyOnRewriteRefOfWith(n.With, n)
+		_Rows, changedRows := c.copyOnRewriteValues(n.Rows, n)
+		_ListArg, changedListArg := c.copyOnRewriteListArg(n.ListArg, n)
+		_Order, changedOrder := c.copyOnRewriteOrderBy(n.Order, n)
+		_Limit, changedLimit := c.copyOnRewriteRefOfLimit(n.Limit, n)
+		if changedWith || changedRows || changedListArg || changedOrder || changedLimit {
+			res := *n
+			res.With, _ = _With.(*With)
+			res.Rows, _ = _Rows.(Values)
+			res.ListArg, _ = _ListArg.(ListArg)
+			res.Order, _ = _Order.(OrderBy)
+			res.Limit, _ = _Limit.(*Limit)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
 func (c *cow) copyOnRewriteRefOfVarPop(n *VarPop, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -7366,6 +7398,8 @@ func (c *cow) copyOnRewriteInsertRows(n InsertRows, parent SQLNode) (out SQLNode
 		return c.copyOnRewriteRefOfUnion(n, parent)
 	case Values:
 		return c.copyOnRewriteValues(n, parent)
+	case *ValuesStatement:
+		return c.copyOnRewriteRefOfValuesStatement(n, parent)
 	default:
 		// this should never happen
 		return nil, false
@@ -7396,6 +7430,8 @@ func (c *cow) copyOnRewriteSelectStatement(n SelectStatement, parent SQLNode) (o
 		return c.copyOnRewriteRefOfSelect(n, parent)
 	case *Union:
 		return c.copyOnRewriteRefOfUnion(n, parent)
+	case *ValuesStatement:
+		return c.copyOnRewriteRefOfValuesStatement(n, parent)
 	default:
 		// this should never happen
 		return nil, false
@@ -7536,6 +7572,8 @@ func (c *cow) copyOnRewriteStatement(n Statement, parent SQLNode) (out SQLNode, 
 		return c.copyOnRewriteRefOfVExplainStmt(n, parent)
 	case *VStream:
 		return c.copyOnRewriteRefOfVStream(n, parent)
+	case *ValuesStatement:
+		return c.copyOnRewriteRefOfValuesStatement(n, parent)
 	default:
 		// this should never happen
 		return nil, false

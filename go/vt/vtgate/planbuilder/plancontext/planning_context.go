@@ -71,6 +71,9 @@ type PlanningContext struct {
 	// to remember which is the CTE currently being assembled
 	CurrentCTE []*ContextCTE
 
+	// Columns contains the columns that are needed by ValuesJoin
+	Columns map[string][]string
+
 	// mirror contains a mirrored clone of this planning context.
 	mirror *PlanningContext
 
@@ -112,6 +115,7 @@ func CreatePlanningContext(stmt sqlparser.Statement,
 		PlannerVersion:    version,
 		ReservedArguments: map[sqlparser.Expr]string{},
 		Statement:         stmt,
+		Columns:           map[string][]string{},
 	}, nil
 }
 
@@ -136,6 +140,10 @@ func (ctx *PlanningContext) GetReservedArgumentFor(expr sqlparser.Expr) string {
 	ctx.ReservedArguments[expr] = bvName
 
 	return bvName
+}
+
+func (ctx *PlanningContext) GetReservedArgumentForString(s string) string {
+	return ctx.ReservedVars.ReserveVariable(s)
 }
 
 // ShouldSkip determines if a given expression should be ignored in the SQL output building.
@@ -456,6 +464,7 @@ func (ctx *PlanningContext) UseMirror() *PlanningContext {
 		OuterTables:       ctx.OuterTables,
 		CurrentCTE:        ctx.CurrentCTE,
 		emptyEnv:          ctx.emptyEnv,
+		Columns:           ctx.Columns,
 		isMirrored:        true,
 	}
 	return ctx.mirror

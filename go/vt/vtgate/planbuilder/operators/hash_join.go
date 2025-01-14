@@ -229,22 +229,6 @@ func (hj *HashJoin) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
 	return nil // hash joins will never promise an output order
 }
 
-func (hj *HashJoin) GetLHS() Operator {
-	return hj.LHS
-}
-
-func (hj *HashJoin) GetRHS() Operator {
-	return hj.RHS
-}
-
-func (hj *HashJoin) SetLHS(op Operator) {
-	hj.LHS = op
-}
-
-func (hj *HashJoin) SetRHS(op Operator) {
-	hj.RHS = op
-}
-
 func (hj *HashJoin) MakeInner() {
 	hj.LeftJoin = false
 }
