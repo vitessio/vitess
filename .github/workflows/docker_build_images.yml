@@ -40,7 +40,7 @@ jobs:
 
       - name: Build and push on main
         if: startsWith(github.ref, 'refs/tags/') == false
-        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5.4.0
+        uses: docker/build-push-action@b32b51a8eda65d6793cd0494a773d4f6bcef32dc # v6.11.0
         with:
           context: .
           file: ${{ env.DOCKERFILE }}
@@ -61,7 +61,7 @@ jobs:
 
       - name: Build and push on tags
         if: startsWith(github.ref, 'refs/tags/')
-        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5.4.0
+        uses: docker/build-push-action@b32b51a8eda65d6793cd0494a773d4f6bcef32dc # v6.11.0
         with:
           context: .
           file: ${{ env.DOCKERFILE }}
@@ -98,7 +98,7 @@ jobs:
 
       - name: Build and push on main
         if: startsWith(github.ref, 'refs/tags/') == false
-        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5.4.0
+        uses: docker/build-push-action@b32b51a8eda65d6793cd0494a773d4f6bcef32dc # v6.11.0
         with:
           context: .
           file: ${{ env.DOCKERFILE }}
@@ -123,7 +123,7 @@ jobs:
 
       - name: Build and push on tags
         if: startsWith(github.ref, 'refs/tags/')
-        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5.4.0
+        uses: docker/build-push-action@b32b51a8eda65d6793cd0494a773d4f6bcef32dc # v6.11.0
         with:
           context: .
           file: ${{ env.DOCKERFILE }}
@@ -159,7 +159,7 @@ jobs:
 
       - name: Build and push on main latest tag
         if: startsWith(github.ref, 'refs/tags/') == false && matrix.debian == 'bookworm'
-        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5.4.0
+        uses: docker/build-push-action@b32b51a8eda65d6793cd0494a773d4f6bcef32dc # v6.11.0
         with:
           context: ${{ env.DOCKER_CTX }}
           push: true
@@ -170,7 +170,7 @@ jobs:
 
       - name: Build and push on main debian specific tag
         if: startsWith(github.ref, 'refs/tags/') == false
-        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5.4.0
+        uses: docker/build-push-action@b32b51a8eda65d6793cd0494a773d4f6bcef32dc # v6.11.0
         with:
           context: ${{ env.DOCKER_CTX }}
           push: true
@@ -202,7 +202,7 @@ jobs:
       # Build and Push component image to DOCKER_TAG, applies to both debian version
       - name: Build and push on tags using Debian extension
         if: startsWith(github.ref, 'refs/tags/')
-        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5.4.0
+        uses: docker/build-push-action@b32b51a8eda65d6793cd0494a773d4f6bcef32dc # v6.11.0
         with:
           context: ${{ env.DOCKER_CTX }}
           push: true
@@ -215,7 +215,7 @@ jobs:
       # It is fine to build a second time here when "matrix.debian == 'bookworm'" as we have cached the first build already
       - name: Build and push on tags without Debian extension
         if: startsWith(github.ref, 'refs/tags/') && matrix.debian == 'bookworm'
-        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5.4.0
+        uses: docker/build-push-action@b32b51a8eda65d6793cd0494a773d4f6bcef32dc # v6.11.0
         with:
           context: ${{ env.DOCKER_CTX }}
           push: true
