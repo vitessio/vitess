@@ -13,6 +13,7 @@ env:
 
 jobs:
   build:
+    timeout-minutes: 60
     name: Run endtoend tests on {{.Name}}
     runs-on: {{if .Cores16}}gh-hosted-runners-16cores-1-24.04{{else}}ubuntu-24.04{{end}}
 
@@ -107,6 +108,7 @@ jobs:
 
     - name: Get dependencies
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      timeout-minutes: 10
       run: |
         {{if .InstallXtraBackup}}
 
