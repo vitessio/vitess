@@ -4233,7 +4233,7 @@ func TestSelectDateTypes(t *testing.T) {
 	executor.normalize = true
 	session := econtext.NewAutocommitSession(&vtgatepb.Session{})
 
-	qr, err := executor.Execute(context.Background(), nil, "TestSelectDateTypes", session, "select '2020-01-01' + interval month(convert_tz(date_sub(FROM_UNIXTIME(1234), interval 1 month), '+00:00', '+00:00')) - 1 month", nil)
+	qr, err := executor.Execute(context.Background(), nil, "TestSelectDateTypes", session, "select '2020-01-01' + interval month(date_sub(FROM_UNIXTIME(1234), interval 1 month))-1 month", nil)
 	require.NoError(t, err)
 	require.Equal(t, sqltypes.Char, qr.Fields[0].Type)
 	require.Equal(t, `[[CHAR("2020-12-01")]]`, fmt.Sprintf("%v", qr.Rows))
