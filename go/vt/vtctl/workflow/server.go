@@ -128,7 +128,7 @@ const (
 	// Time to wait between LOCK TABLES cycles on the sources during SwitchWrites.
 	lockTablesCycleDelay = time.Duration(100 * time.Millisecond)
 
-	SqlUnfreezeWorkflow = "update _vt.vreplication set state='Running', message='' where db_name=%s and workflow=%s"
+	SqlUnfreezeWorkflow = "update _vt.vreplication set state='Running', message='' where db_name=%a and workflow=%a"
 )
 
 var (
@@ -559,7 +559,7 @@ func (s *Server) getWorkflowState(ctx context.Context, targetKeyspace, workflowN
 // LookupVindexComplete checks if the lookup vindex has been externalized,
 // and if the vindex has an owner, it deletes the workflow.
 func (s *Server) LookupVindexComplete(ctx context.Context, req *vtctldatapb.LookupVindexCompleteRequest) (*vtctldatapb.LookupVindexCompleteResponse, error) {
-	span, ctx := trace.NewSpan(ctx, "workflow.Server.LookupVindexInternalize")
+	span, ctx := trace.NewSpan(ctx, "workflow.Server.LookupVindexComplete")
 	defer span.Finish()
 
 	span.Annotate("keyspace", req.Keyspace)
@@ -581,20 +581,18 @@ func (s *Server) LookupVindexComplete(ctx context.Context, req *vtctldatapb.Look
 		return nil, err
 	}
 
-	// Assuming that the lookup vindex was externalized, we don't need to
-	// delete the write_only parameter from the vindex.
+	// Now that we have checked that the vindex has been externalized,
+	// we don't need to delete the write_only parameter from the vindex.
 	resp := &vtctldatapb.LookupVindexCompleteResponse{}
-	if vindex.Owner != "" {
-		if _, derr := s.WorkflowDelete(ctx, &vtctldatapb.WorkflowDeleteRequest{
-			Keyspace:         req.TableKeyspace,
-			Workflow:         req.Name,
-			KeepData:         true,
-			KeepRoutingRules: true,
-		}); derr != nil {
-			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "failed to delete workflow %s: %v", req.Name, derr)
-		}
-		resp.WorkflowDeleted = true
+	if _, derr := s.WorkflowDelete(ctx, &vtctldatapb.WorkflowDeleteRequest{
+		Keyspace:         req.TableKeyspace,
+		Workflow:         req.Name,
+		KeepData:         true,
+		KeepRoutingRules: true,
+	}); derr != nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "failed to delete workflow %s: %v", req.Name, derr)
 	}
+	resp.WorkflowDeleted = true
 	return resp, nil
 }
 
@@ -681,7 +679,7 @@ func (s *Server) LookupVindexExternalize(ctx context.Context, req *vtctldatapb.L
 			return err
 		}
 		if res == nil || res.Workflow == "" {
-			return vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "workflow %s not found on %v", req.Name, targetPrimary.Alias)
+			return vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "workflow %s not found on %v", req.Name, topoproto.TabletAliasString(targetPrimary.Alias))
 		}
 		for _, stream := range res.Streams {
 			if stream.Bls.Filter == nil || len(stream.Bls.Filter.Rules) != 1 {
@@ -720,7 +718,7 @@ func (s *Server) LookupVindexExternalize(ctx context.Context, req *vtctldatapb.L
 				KeepData:         true, // Not relevant
 				KeepRoutingRules: true, // Not relevant
 			}); derr != nil {
-				return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "failed to delete workflow %s: %v", req.Name, derr)
+				return nil, vterrors.Wrapf(derr, "failed to delete workflow %s", req.Name)
 			}
 			resp.WorkflowDeleted = true
 		} else {
@@ -780,29 +778,33 @@ func (s *Server) LookupVindexInternalize(ctx context.Context, req *vtctldatapb.L
 		return nil, err
 	}
 
-	resp := &vtctldatapb.LookupVindexInternalizeResponse{}
-	if vindex.Owner != "" {
-		err := forAllShards(targetShards, func(si *topo.ShardInfo) error {
-			tabletInfo, err := s.ts.GetTablet(ctx, si.PrimaryAlias)
-			if err != nil {
-				return err
-			}
-			query := fmt.Sprintf(SqlUnfreezeWorkflow,
-				encodeString(tabletInfo.DbName()), encodeString(req.Name))
-			_, err = s.tmc.VReplicationExec(ctx, tabletInfo.Tablet, query)
-			return err
-		})
-		if err != nil {
-			return nil, err
-		}
-		resp.WorkflowStarted = true
-	}
-
 	// Make the vindex back to write_only and save the source vschema.
 	vindex.Params["write_only"] = "true"
 	if err := s.ts.SaveVSchema(ctx, req.Keyspace, sourceVSchema); err != nil {
 		return nil, err
 	}
+
+	resp := &vtctldatapb.LookupVindexInternalizeResponse{}
+	err = forAllShards(targetShards, func(si *topo.ShardInfo) error {
+		tabletInfo, err := s.ts.GetTablet(ctx, si.PrimaryAlias)
+		if err != nil {
+			return err
+		}
+		query, err := sqlparser.ParseAndBind(SqlUnfreezeWorkflow,
+			sqltypes.StringBindVariable(tabletInfo.DbName()),
+			sqltypes.StringBindVariable(req.Name),
+		)
+		if err != nil {
+			return err
+		}
+		_, err = s.tmc.VReplicationExec(ctx, tabletInfo.Tablet, query)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	resp.WorkflowStarted = true
+
 	return resp, s.ts.RebuildSrvVSchema(ctx, nil)
 }
 

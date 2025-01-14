@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/schematools"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -542,9 +543,25 @@ func generateColDef(lines []string, sourceVindexCol, vindexFromCol string) (stri
 	return "", fmt.Errorf("column %s not found in schema %v", sourceVindexCol, lines)
 }
 
+// validateExternalizedVindex checks if a given vindex is externalized.
+// A vindex is considered externalized if it has an owner and is not in write-only mode.
+func (lv *lookupVindex) validateExternalizedVindex(vindex *vschemapb.Vindex) error {
+	writeOnly, ok := vindex.Params["write_only"]
+	if ok && writeOnly == "true" {
+		return fmt.Errorf("vindex is in write-only mode")
+	}
+	if vindex.Owner == "" {
+		return fmt.Errorf("vindex has no owner")
+	}
+	return nil
+}
+
+// validateExternalized checks if the vindex has been externalized
+// and verifies the state of the VReplication workflow on the target shards.
+// It ensures that all streams in the workflow are frozen.
 func (lv *lookupVindex) validateExternalized(ctx context.Context, vindex *vschemapb.Vindex, name string, targetShards []*topo.ShardInfo) error {
-	if _, ok := vindex.Params["write_only"]; ok {
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "write_only param found in vindex %s", name)
+	if err := lv.validateExternalizedVindex(vindex); err != nil {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vindex %s has not been externalized yet: %v", name, err)
 	}
 
 	err := forAllShards(targetShards, func(targetShard *topo.ShardInfo) error {
@@ -559,19 +576,12 @@ func (lv *lookupVindex) validateExternalized(ctx context.Context, vindex *vschem
 			return err
 		}
 		if res == nil || res.Workflow == "" {
-			return vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "workflow %s not found on %v", name, targetPrimary.Alias)
+			return vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "workflow %s not found on %v", name, topoproto.TabletAliasString(targetPrimary.Alias))
 		}
 		for _, stream := range res.Streams {
-			if vindex.Owner == "" {
-				// If there's no owner, all streams need to be running.
-				if stream.State != binlogdatapb.VReplicationWorkflowState_Running {
-					return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "stream %d for %v.%v is not in Running state: %v", stream.Id, targetShard.Keyspace(), targetShard.ShardName(), stream.State)
-				}
-			} else {
-				// If there's an owner, all streams need to be frozen.
-				if stream.State != binlogdatapb.VReplicationWorkflowState_Stopped || stream.Message != Frozen {
-					return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "stream %d for %v.%v is not frozen: %v, %v", stream.Id, targetShard.Keyspace(), targetShard.ShardName(), stream.State, stream.Message)
-				}
+			// All streams need to be frozen.
+			if stream.State != binlogdatapb.VReplicationWorkflowState_Stopped || stream.Message != Frozen {
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "stream %d for %v.%v is not frozen: %v, %v", stream.Id, targetShard.Keyspace(), targetShard.ShardName(), stream.State, stream.Message)
 			}
 		}
 		return nil

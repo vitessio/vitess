@@ -568,7 +568,7 @@ func (tm *TabletManager) UpdateVReplicationWorkflow(ctx context.Context, req *ta
 		if !textutil.ValueIsSimulatedNull(req.TabletTypes) {
 			tabletTypes = req.TabletTypes
 		}
-		if req.Message != nil && *req.Message != sqltypes.Null.String() {
+		if req.Message != nil {
 			message = *req.Message
 		}
 		tabletTypesStr := topoproto.MakeStringTypeCSV(tabletTypes)
