@@ -20,6 +20,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
+          # We must explicitly checkout the base's SHA to avoid executing any code coming from
+          # the PR's SHA - Which would be executed in the base branch's context.
+          # This is really important to limit any sort of pwn requests.
           ref: ${{ github.base_ref }}
 
       - name: Assign Milestone
