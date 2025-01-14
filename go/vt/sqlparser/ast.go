@@ -62,8 +62,8 @@ type (
 		GetLimit() *Limit
 	}
 
-	TableSubquery interface {
-		iTableSubquery()
+	OutputsTable interface {
+		iOutputsTable()
 
 		InsertRows
 		Statement
@@ -184,7 +184,7 @@ type (
 	CommonTableExpr struct {
 		ID       IdentifierCS
 		Columns  Columns
-		Subquery TableSubquery
+		Subquery OutputsTable
 	}
 	// ChangeColumn is used to change the column definition, can also rename the column in alter table command
 	ChangeColumn struct {
@@ -326,8 +326,8 @@ type (
 	// Union represents a UNION statement.
 	Union struct {
 		With     *With
-		Left     TableSubquery
-		Right    TableSubquery
+		Left     OutputsTable
+		Right    OutputsTable
 		Distinct bool
 		OrderBy  OrderBy
 		Limit    *Limit
@@ -566,7 +566,7 @@ type (
 		Definer     *Definer
 		Security    string
 		Columns     Columns
-		Select      TableSubquery
+		Select      OutputsTable
 		CheckOption string
 		IsReplace   bool
 		Comments    *ParsedComments
@@ -579,7 +579,7 @@ type (
 		Definer     *Definer
 		Security    string
 		Columns     Columns
-		Select      TableSubquery
+		Select      OutputsTable
 		CheckOption string
 		Comments    *ParsedComments
 	}
@@ -775,10 +775,10 @@ func (*Analyze) iStatement()               {}
 func (*OtherAdmin) iStatement()            {}
 func (*CommentOnly) iStatement()           {}
 func (*Select) iSelectStatement()          {}
-func (*Select) iTableSubquery()            {}
+func (*Select) iOutputsTable()             {}
 func (*ValuesStatement) iSelectStatement() {}
 func (*Union) iSelectStatement()           {}
-func (*Union) iTableSubquery()             {}
+func (*Union) iOutputsTable()              {}
 func (*Load) iStatement()                  {}
 func (*CreateDatabase) iStatement()        {}
 func (*AlterDatabase) iStatement()         {}
@@ -2137,13 +2137,13 @@ type (
 
 	// Subquery represents a subquery used as an value expression.
 	Subquery struct {
-		Select TableSubquery
+		Select OutputsTable
 	}
 
 	// DerivedTable represents a subquery used as a table expression.
 	DerivedTable struct {
 		Lateral bool
-		Select  TableSubquery
+		Select  OutputsTable
 	}
 )
 

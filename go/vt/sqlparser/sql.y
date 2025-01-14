@@ -60,15 +60,15 @@ func markBindVariable(yylex yyLexer, bvar string) {
 }
 
 %union {
-  statement     Statement
-  selStmt       SelectStatement
-  tblSubquery   TableSubquery
-  tableExpr     TableExpr
-  expr          Expr
-  colTuple      ColTuple
-  optVal        Expr
-  constraintInfo ConstraintInfo
-  alterOption      AlterOption
+  statement       Statement
+  selStmt         SelectStatement
+  outputsTable    OutputsTable
+  tableExpr       TableExpr
+  expr            Expr
+  colTuple        ColTuple
+  optVal          Expr
+  constraintInfo  ConstraintInfo
+  alterOption     AlterOption
 
   ins           *Insert
   colName       *ColName
@@ -435,7 +435,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <statement> prepare_statement execute_statement deallocate_statement
 %type <statement> stream_statement vstream_statement insert_statement update_statement delete_statement set_statement set_transaction_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement flush_statement do_statement
-%type <tblSubquery> select_statement select_stmt_with_into query_expression_parens query_expression query_expression_body query_primary values_statement
+%type <outputsTable> select_statement select_stmt_with_into query_expression_parens query_expression query_expression_body query_primary values_statement
 %type <with> with_clause_opt with_clause
 %type <cte> common_table_expr
 %type <ctes> with_list

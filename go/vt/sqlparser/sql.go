@@ -8179,6 +8179,11 @@ func (st *yySymType) orderDirectionUnion() OrderDirection {
 	return v
 }
 
+func (st *yySymType) outputsTableUnion() OutputsTable {
+	v, _ := st.union.(OutputsTable)
+	return v
+}
+
 func (st *yySymType) overClauseUnion() *OverClause {
 	v, _ := st.union.(*OverClause)
 	return v
@@ -8371,11 +8376,6 @@ func (st *yySymType) tableOptionsUnion() TableOptions {
 
 func (st *yySymType) tableSpecUnion() *TableSpec {
 	v, _ := st.union.(*TableSpec)
-	return v
-}
-
-func (st *yySymType) tblSubqueryUnion() TableSubquery {
-	v, _ := st.union.(TableSubquery)
 	return v
 }
 
@@ -10306,7 +10306,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:650
 		{
-			yyLOCAL = yyDollar[1].tblSubqueryUnion()
+			yyLOCAL = yyDollar[1].outputsTableUnion()
 		}
 		yyVAL.union = yyLOCAL
 	case 40:
@@ -10418,99 +10418,99 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 54:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		var yyLOCAL TableSubquery
+		var yyLOCAL OutputsTable
 //line sql.y:764
 		{
-			yyLOCAL = yyDollar[2].tblSubqueryUnion()
+			yyLOCAL = yyDollar[2].outputsTableUnion()
 		}
 		yyVAL.union = yyLOCAL
 	case 55:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		var yyLOCAL TableSubquery
+		var yyLOCAL OutputsTable
 //line sql.y:768
 		{
-			yyLOCAL = yyDollar[2].tblSubqueryUnion()
+			yyLOCAL = yyDollar[2].outputsTableUnion()
 		}
 		yyVAL.union = yyLOCAL
 	case 56:
 		yyDollar = yyS[yypt-4 : yypt+1]
-		var yyLOCAL TableSubquery
+		var yyLOCAL OutputsTable
 //line sql.y:772
 		{
-			setLockIfPossible(yylex, yyDollar[2].tblSubqueryUnion(), yyDollar[3].lockUnion())
-			yyLOCAL = yyDollar[2].tblSubqueryUnion()
+			setLockIfPossible(yylex, yyDollar[2].outputsTableUnion(), yyDollar[3].lockUnion())
+			yyLOCAL = yyDollar[2].outputsTableUnion()
 		}
 		yyVAL.union = yyLOCAL
 	case 57:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		var yyLOCAL TableSubquery
+		var yyLOCAL OutputsTable
 //line sql.y:795
 		{
-			yyDollar[1].tblSubqueryUnion().SetOrderBy(yyDollar[2].orderByUnion())
-			yyDollar[1].tblSubqueryUnion().SetLimit(yyDollar[3].limitUnion())
-			yyLOCAL = yyDollar[1].tblSubqueryUnion()
+			yyDollar[1].outputsTableUnion().SetOrderBy(yyDollar[2].orderByUnion())
+			yyDollar[1].outputsTableUnion().SetLimit(yyDollar[3].limitUnion())
+			yyLOCAL = yyDollar[1].outputsTableUnion()
 		}
 		yyVAL.union = yyLOCAL
 	case 58:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		var yyLOCAL TableSubquery
+		var yyLOCAL OutputsTable
 //line sql.y:801
 		{
-			yyDollar[1].tblSubqueryUnion().SetLimit(yyDollar[2].limitUnion())
-			yyLOCAL = yyDollar[1].tblSubqueryUnion()
+			yyDollar[1].outputsTableUnion().SetLimit(yyDollar[2].limitUnion())
+			yyLOCAL = yyDollar[1].outputsTableUnion()
 		}
 		yyVAL.union = yyLOCAL
 	case 59:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		var yyLOCAL TableSubquery
+		var yyLOCAL OutputsTable
 //line sql.y:806
 		{
-			yyDollar[1].tblSubqueryUnion().SetOrderBy(yyDollar[2].orderByUnion())
-			yyDollar[1].tblSubqueryUnion().SetLimit(yyDollar[3].limitUnion())
-			yyLOCAL = yyDollar[1].tblSubqueryUnion()
+			yyDollar[1].outputsTableUnion().SetOrderBy(yyDollar[2].orderByUnion())
+			yyDollar[1].outputsTableUnion().SetLimit(yyDollar[3].limitUnion())
+			yyLOCAL = yyDollar[1].outputsTableUnion()
 		}
 		yyVAL.union = yyLOCAL
 	case 60:
 		yyDollar = yyS[yypt-4 : yypt+1]
-		var yyLOCAL TableSubquery
+		var yyLOCAL OutputsTable
 //line sql.y:812
 		{
-			yyDollar[2].tblSubqueryUnion().SetWith(yyDollar[1].withUnion())
-			yyDollar[2].tblSubqueryUnion().SetOrderBy(yyDollar[3].orderByUnion())
-			yyDollar[2].tblSubqueryUnion().SetLimit(yyDollar[4].limitUnion())
-			yyLOCAL = yyDollar[2].tblSubqueryUnion()
+			yyDollar[2].outputsTableUnion().SetWith(yyDollar[1].withUnion())
+			yyDollar[2].outputsTableUnion().SetOrderBy(yyDollar[3].orderByUnion())
+			yyDollar[2].outputsTableUnion().SetLimit(yyDollar[4].limitUnion())
+			yyLOCAL = yyDollar[2].outputsTableUnion()
 		}
 		yyVAL.union = yyLOCAL
 	case 61:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		var yyLOCAL TableSubquery
+		var yyLOCAL OutputsTable
 //line sql.y:819
 		{
-			yyDollar[2].tblSubqueryUnion().SetWith(yyDollar[1].withUnion())
-			yyDollar[2].tblSubqueryUnion().SetLimit(yyDollar[3].limitUnion())
-			yyLOCAL = yyDollar[2].tblSubqueryUnion()
+			yyDollar[2].outputsTableUnion().SetWith(yyDollar[1].withUnion())
+			yyDollar[2].outputsTableUnion().SetLimit(yyDollar[3].limitUnion())
+			yyLOCAL = yyDollar[2].outputsTableUnion()
 		}
 		yyVAL.union = yyLOCAL
 	case 62:
 		yyDollar = yyS[yypt-4 : yypt+1]
-		var yyLOCAL TableSubquery
+		var yyLOCAL OutputsTable
 //line sql.y:825
 		{
-			yyDollar[2].tblSubqueryUnion().SetWith(yyDollar[1].withUnion())
-			yyDollar[2].tblSubqueryUnion().SetOrderBy(yyDollar[3].orderByUnion())
-			yyDollar[2].tblSubqueryUnion().SetLimit(yyDollar[4].limitUnion())
-			yyLOCAL = yyDollar[2].tblSubqueryUnion()
+			yyDollar[2].outputsTableUnion().SetWith(yyDollar[1].withUnion())
+			yyDollar[2].outputsTableUnion().SetOrderBy(yyDollar[3].orderByUnion())
+			yyDollar[2].outputsTableUnion().SetLimit(yyDollar[4].limitUnion())
+			yyLOCAL = yyDollar[2].outputsTableUnion()
 		}
 		yyVAL.union = yyLOCAL
 	case 63:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:832
 		{
-			yyDollar[2].tblSubqueryUnion().SetWith(yyDollar[1].withUnion())
+			yyDollar[2].outputsTableUnion().SetWith(yyDollar[1].withUnion())
 		}
 	case 64:
 		yyDollar = yyS[yypt-7 : yypt+1]
-		var yyLOCAL TableSubquery
+		var yyLOCAL OutputsTable
 //line sql.y:836
 		{
 			yyLOCAL = NewSelect(Comments(yyDollar[2].strs), SelectExprs{&Nextval{Expr: yyDollar[5].exprUnion()}}, []string{yyDollar[3].str} /*options*/, nil, TableExprs{&AliasedTableExpr{Expr: yyDollar[7].tableName}}, nil /*where*/, nil /*groupBy*/, nil /*having*/, nil)
@@ -10518,126 +10518,126 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 65:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL TableSubquery
+		var yyLOCAL OutputsTable
 //line sql.y:842
 		{
-			yyLOCAL = yyDollar[1].tblSubqueryUnion()
+			yyLOCAL = yyDollar[1].outputsTableUnion()
 		}
 		yyVAL.union = yyLOCAL
 	case 66:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		var yyLOCAL TableSubquery
+		var yyLOCAL OutputsTable
 //line sql.y:846
 		{
-			yyLOCAL = &Union{Left: yyDollar[1].tblSubqueryUnion(), Distinct: yyDollar[2].booleanUnion(), Right: yyDollar[3].tblSubqueryUnion()}
+			yyLOCAL = &Union{Left: yyDollar[1].outputsTableUnion(), Distinct: yyDollar[2].booleanUnion(), Right: yyDollar[3].outputsTableUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 67:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		var yyLOCAL TableSubquery
+		var yyLOCAL OutputsTable
 //line sql.y:850
 		{
-			yyLOCAL = &Union{Left: yyDollar[1].tblSubqueryUnion(), Distinct: yyDollar[2].booleanUnion(), Right: yyDollar[3].tblSubqueryUnion()}
+			yyLOCAL = &Union{Left: yyDollar[1].outputsTableUnion(), Distinct: yyDollar[2].booleanUnion(), Right: yyDollar[3].outputsTableUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 68:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		var yyLOCAL TableSubquery
+		var yyLOCAL OutputsTable
 //line sql.y:854
 		{
-			yyLOCAL = &Union{Left: yyDollar[1].tblSubqueryUnion(), Distinct: yyDollar[2].booleanUnion(), Right: yyDollar[3].tblSubqueryUnion()}
+			yyLOCAL = &Union{Left: yyDollar[1].outputsTableUnion(), Distinct: yyDollar[2].booleanUnion(), Right: yyDollar[3].outputsTableUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 69:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		var yyLOCAL TableSubquery
+		var yyLOCAL OutputsTable
 //line sql.y:858
 		{
-			yyLOCAL = &Union{Left: yyDollar[1].tblSubqueryUnion(), Distinct: yyDollar[2].booleanUnion(), Right: yyDollar[3].tblSubqueryUnion()}
+			yyLOCAL = &Union{Left: yyDollar[1].outputsTableUnion(), Distinct: yyDollar[2].booleanUnion(), Right: yyDollar[3].outputsTableUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 70:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL TableSubquery
+		var yyLOCAL OutputsTable
 //line sql.y:864
 		{
-			yyLOCAL = yyDollar[1].tblSubqueryUnion()
+			yyLOCAL = yyDollar[1].outputsTableUnion()
 		}
 		yyVAL.union = yyLOCAL
 	case 71:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		var yyLOCAL TableSubquery
+		var yyLOCAL OutputsTable
 //line sql.y:868
 		{
-			setLockIfPossible(yylex, yyDollar[1].tblSubqueryUnion(), yyDollar[2].lockUnion())
-			yyLOCAL = yyDollar[1].tblSubqueryUnion()
+			setLockIfPossible(yylex, yyDollar[1].outputsTableUnion(), yyDollar[2].lockUnion())
+			yyLOCAL = yyDollar[1].outputsTableUnion()
 		}
 		yyVAL.union = yyLOCAL
 	case 72:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL TableSubquery
+		var yyLOCAL OutputsTable
 //line sql.y:873
 		{
-			yyLOCAL = yyDollar[1].tblSubqueryUnion()
+			yyLOCAL = yyDollar[1].outputsTableUnion()
 		}
 		yyVAL.union = yyLOCAL
 	case 73:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL TableSubquery
+		var yyLOCAL OutputsTable
 //line sql.y:877
 		{
-			yyLOCAL = yyDollar[1].tblSubqueryUnion()
+			yyLOCAL = yyDollar[1].outputsTableUnion()
 		}
 		yyVAL.union = yyLOCAL
 	case 74:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		var yyLOCAL TableSubquery
+		var yyLOCAL OutputsTable
 //line sql.y:883
 		{
-			yyLOCAL = yyDollar[2].tblSubqueryUnion()
+			yyLOCAL = yyDollar[2].outputsTableUnion()
 		}
 		yyVAL.union = yyLOCAL
 	case 75:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		var yyLOCAL TableSubquery
+		var yyLOCAL OutputsTable
 //line sql.y:887
 		{
-			setIntoIfPossible(yylex, yyDollar[1].tblSubqueryUnion(), yyDollar[2].selectIntoUnion())
-			yyLOCAL = yyDollar[1].tblSubqueryUnion()
+			setIntoIfPossible(yylex, yyDollar[1].outputsTableUnion(), yyDollar[2].selectIntoUnion())
+			yyLOCAL = yyDollar[1].outputsTableUnion()
 		}
 		yyVAL.union = yyLOCAL
 	case 76:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		var yyLOCAL TableSubquery
+		var yyLOCAL OutputsTable
 //line sql.y:892
 		{
-			setIntoIfPossible(yylex, yyDollar[1].tblSubqueryUnion(), yyDollar[2].selectIntoUnion())
-			setLockIfPossible(yylex, yyDollar[1].tblSubqueryUnion(), yyDollar[3].lockUnion())
-			yyLOCAL = yyDollar[1].tblSubqueryUnion()
+			setIntoIfPossible(yylex, yyDollar[1].outputsTableUnion(), yyDollar[2].selectIntoUnion())
+			setLockIfPossible(yylex, yyDollar[1].outputsTableUnion(), yyDollar[3].lockUnion())
+			yyLOCAL = yyDollar[1].outputsTableUnion()
 		}
 		yyVAL.union = yyLOCAL
 	case 77:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		var yyLOCAL TableSubquery
+		var yyLOCAL OutputsTable
 //line sql.y:898
 		{
-			setLockIfPossible(yylex, yyDollar[1].tblSubqueryUnion(), yyDollar[2].lockUnion())
-			setIntoIfPossible(yylex, yyDollar[1].tblSubqueryUnion(), yyDollar[3].selectIntoUnion())
-			yyLOCAL = yyDollar[1].tblSubqueryUnion()
+			setLockIfPossible(yylex, yyDollar[1].outputsTableUnion(), yyDollar[2].lockUnion())
+			setIntoIfPossible(yylex, yyDollar[1].outputsTableUnion(), yyDollar[3].selectIntoUnion())
+			yyLOCAL = yyDollar[1].outputsTableUnion()
 		}
 		yyVAL.union = yyLOCAL
 	case 78:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		var yyLOCAL TableSubquery
+		var yyLOCAL OutputsTable
 //line sql.y:904
 		{
-			setIntoIfPossible(yylex, yyDollar[1].tblSubqueryUnion(), yyDollar[2].selectIntoUnion())
-			yyLOCAL = yyDollar[1].tblSubqueryUnion()
+			setIntoIfPossible(yylex, yyDollar[1].outputsTableUnion(), yyDollar[2].selectIntoUnion())
+			yyLOCAL = yyDollar[1].outputsTableUnion()
 		}
 		yyVAL.union = yyLOCAL
 	case 79:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		var yyLOCAL TableSubquery
+		var yyLOCAL OutputsTable
 //line sql.y:911
 		{
 			yyLOCAL = &ValuesStatement{Comments: Comments(yyDollar[2].strs).Parsed(), ListArg: ListArg(yyDollar[3].str[2:])}
@@ -10645,7 +10645,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 80:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		var yyLOCAL TableSubquery
+		var yyLOCAL OutputsTable
 //line sql.y:915
 		{
 			yyLOCAL = &ValuesStatement{Comments: Comments(yyDollar[2].strs).Parsed(), Rows: yyDollar[3].valuesUnion()}
@@ -10669,7 +10669,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 83:
 		yyDollar = yyS[yypt-10 : yypt+1]
-		var yyLOCAL TableSubquery
+		var yyLOCAL OutputsTable
 //line sql.y:935
 		{
 			yyLOCAL = NewSelect(Comments(yyDollar[2].strs), yyDollar[4].selectExprsUnion() /*SelectExprs*/, yyDollar[3].strs /*options*/, yyDollar[5].selectIntoUnion() /*into*/, yyDollar[6].tableExprsUnion() /*from*/, NewWhere(WhereClause, yyDollar[7].exprUnion()), yyDollar[8].groupByUnion(), NewWhere(HavingClause, yyDollar[9].exprUnion()), yyDollar[10].namedWindowsUnion())
@@ -10677,7 +10677,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 84:
 		yyDollar = yyS[yypt-9 : yypt+1]
-		var yyLOCAL TableSubquery
+		var yyLOCAL OutputsTable
 //line sql.y:939
 		{
 			yyLOCAL = NewSelect(Comments(yyDollar[2].strs), yyDollar[4].selectExprsUnion() /*SelectExprs*/, yyDollar[3].strs /*options*/, nil, yyDollar[5].tableExprsUnion() /*from*/, NewWhere(WhereClause, yyDollar[6].exprUnion()), yyDollar[7].groupByUnion(), NewWhere(HavingClause, yyDollar[8].exprUnion()), yyDollar[9].namedWindowsUnion())
@@ -10685,10 +10685,10 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 85:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL TableSubquery
+		var yyLOCAL OutputsTable
 //line sql.y:943
 		{
-			yyLOCAL = yyDollar[1].tblSubqueryUnion()
+			yyLOCAL = yyDollar[1].outputsTableUnion()
 		}
 		yyVAL.union = yyLOCAL
 	case 86:
@@ -11069,7 +11069,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:1186
 		{
-			yyLOCAL = &CreateView{ViewName: yyDollar[8].tableName, Comments: Comments(yyDollar[2].strs).Parsed(), IsReplace: yyDollar[3].booleanUnion(), Algorithm: yyDollar[4].str, Definer: yyDollar[5].definerUnion(), Security: yyDollar[6].str, Columns: yyDollar[9].columnsUnion(), Select: yyDollar[11].tblSubqueryUnion(), CheckOption: yyDollar[12].str}
+			yyLOCAL = &CreateView{ViewName: yyDollar[8].tableName, Comments: Comments(yyDollar[2].strs).Parsed(), IsReplace: yyDollar[3].booleanUnion(), Algorithm: yyDollar[4].str, Definer: yyDollar[5].definerUnion(), Security: yyDollar[6].str, Columns: yyDollar[9].columnsUnion(), Select: yyDollar[11].outputsTableUnion(), CheckOption: yyDollar[12].str}
 		}
 		yyVAL.union = yyLOCAL
 	case 133:
@@ -14255,7 +14255,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:3213
 		{
-			yyLOCAL = &AlterView{ViewName: yyDollar[7].tableName, Comments: Comments(yyDollar[2].strs).Parsed(), Algorithm: yyDollar[3].str, Definer: yyDollar[4].definerUnion(), Security: yyDollar[5].str, Columns: yyDollar[8].columnsUnion(), Select: yyDollar[10].tblSubqueryUnion(), CheckOption: yyDollar[11].str}
+			yyLOCAL = &AlterView{ViewName: yyDollar[7].tableName, Comments: Comments(yyDollar[2].strs).Parsed(), Algorithm: yyDollar[3].str, Definer: yyDollar[4].definerUnion(), Security: yyDollar[5].str, Columns: yyDollar[8].columnsUnion(), Select: yyDollar[10].outputsTableUnion(), CheckOption: yyDollar[11].str}
 		}
 		yyVAL.union = yyLOCAL
 	case 583:
@@ -16457,7 +16457,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:4547
 		{
-			yyLOCAL = yyDollar[1].tblSubqueryUnion()
+			yyLOCAL = yyDollar[1].outputsTableUnion()
 		}
 		yyVAL.union = yyLOCAL
 	case 846:
@@ -17177,7 +17177,7 @@ yydefault:
 		var yyLOCAL *DerivedTable
 //line sql.y:5022
 		{
-			yyLOCAL = &DerivedTable{Lateral: false, Select: yyDollar[1].tblSubqueryUnion()}
+			yyLOCAL = &DerivedTable{Lateral: false, Select: yyDollar[1].outputsTableUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 950:
@@ -17185,7 +17185,7 @@ yydefault:
 		var yyLOCAL *DerivedTable
 //line sql.y:5026
 		{
-			yyLOCAL = &DerivedTable{Lateral: true, Select: yyDollar[2].tblSubqueryUnion()}
+			yyLOCAL = &DerivedTable{Lateral: true, Select: yyDollar[2].outputsTableUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 951:
@@ -18748,7 +18748,7 @@ yydefault:
 		var yyLOCAL *Subquery
 //line sql.y:5952
 		{
-			yyLOCAL = &Subquery{yyDollar[1].tblSubqueryUnion()}
+			yyLOCAL = &Subquery{yyDollar[1].outputsTableUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1156:
@@ -22111,7 +22111,7 @@ yydefault:
 		var yyLOCAL *Insert
 //line sql.y:7841
 		{
-			yyLOCAL = &Insert{Rows: yyDollar[1].tblSubqueryUnion()}
+			yyLOCAL = &Insert{Rows: yyDollar[1].outputsTableUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1593:
@@ -22135,7 +22135,7 @@ yydefault:
 		var yyLOCAL *Insert
 //line sql.y:7853
 		{
-			yyLOCAL = &Insert{Columns: yyDollar[2].columnsUnion(), Rows: yyDollar[4].tblSubqueryUnion()}
+			yyLOCAL = &Insert{Columns: yyDollar[2].columnsUnion(), Rows: yyDollar[4].outputsTableUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1596:

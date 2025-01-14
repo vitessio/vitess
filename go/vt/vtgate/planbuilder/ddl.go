@@ -196,7 +196,7 @@ func buildCreateViewCommon(
 	vschema plancontext.VSchema,
 	reservedVars *sqlparser.ReservedVars,
 	cfg dynamicconfig.DDL,
-	ddlSelect sqlparser.TableSubquery,
+	ddlSelect sqlparser.OutputsTable,
 	ddl sqlparser.DDLStatement,
 ) (key.Destination, *vindexes.Keyspace, error) {
 	// For Create View, we require that the keyspace exist and the select query can be satisfied within the keyspace itself

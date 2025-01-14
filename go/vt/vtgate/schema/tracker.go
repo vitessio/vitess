@@ -73,7 +73,7 @@ func NewTracker(ch chan *discovery.TabletHealth, enableViews, enableUDFs bool, p
 	}
 
 	if enableViews {
-		t.views = &viewMap{m: map[keyspaceStr]map[viewNameStr]sqlparser.TableSubquery{}, parser: parser}
+		t.views = &viewMap{m: map[keyspaceStr]map[viewNameStr]sqlparser.OutputsTable{}, parser: parser}
 	}
 	if enableUDFs {
 		t.udfs = map[keyspaceStr][]string{}
@@ -283,7 +283,7 @@ func (t *Tracker) Tables(ks string) map[string]*vindexes.TableInfo {
 }
 
 // Views returns all known views in the keyspace with their definition.
-func (t *Tracker) Views(ks string) map[string]sqlparser.TableSubquery {
+func (t *Tracker) Views(ks string) map[string]sqlparser.OutputsTable {
 	if t.views == nil {
 		return nil
 	}
@@ -525,14 +525,14 @@ func (t *Tracker) clearKeyspaceTables(ks string) {
 }
 
 type viewMap struct {
-	m      map[keyspaceStr]map[viewNameStr]sqlparser.TableSubquery
+	m      map[keyspaceStr]map[viewNameStr]sqlparser.OutputsTable
 	parser *sqlparser.Parser
 }
 
 func (vm *viewMap) set(ks, tbl, sql string) {
 	m := vm.m[ks]
 	if m == nil {
-		m = make(map[tableNameStr]sqlparser.TableSubquery)
+		m = make(map[tableNameStr]sqlparser.OutputsTable)
 		vm.m[ks] = m
 	}
 	stmt, err := vm.parser.Parse(sql)
@@ -548,7 +548,7 @@ func (vm *viewMap) set(ks, tbl, sql string) {
 	m[tbl] = cv.Select
 }
 
-func (vm *viewMap) get(ks, tbl string) sqlparser.TableSubquery {
+func (vm *viewMap) get(ks, tbl string) sqlparser.OutputsTable {
 	m := vm.m[ks]
 	if m == nil {
 		return nil
@@ -571,7 +571,7 @@ func (t *Tracker) clearKeyspaceViews(ks string) {
 }
 
 // GetViews returns the view statement for the given keyspace and view name.
-func (t *Tracker) GetViews(ks string, tbl string) sqlparser.TableSubquery {
+func (t *Tracker) GetViews(ks string, tbl string) sqlparser.OutputsTable {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 

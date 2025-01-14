@@ -985,8 +985,8 @@ func (a *application) rewriteRefOfAlterView(parent SQLNode, node *AlterView, rep
 	}) {
 		return false
 	}
-	if !a.rewriteTableSubquery(node, node.Select, func(newNode, parent SQLNode) {
-		parent.(*AlterView).Select = newNode.(TableSubquery)
+	if !a.rewriteOutputsTable(node, node.Select, func(newNode, parent SQLNode) {
+		parent.(*AlterView).Select = newNode.(OutputsTable)
 	}) {
 		return false
 	}
@@ -1971,8 +1971,8 @@ func (a *application) rewriteRefOfCommonTableExpr(parent SQLNode, node *CommonTa
 	}) {
 		return false
 	}
-	if !a.rewriteTableSubquery(node, node.Subquery, func(newNode, parent SQLNode) {
-		parent.(*CommonTableExpr).Subquery = newNode.(TableSubquery)
+	if !a.rewriteOutputsTable(node, node.Subquery, func(newNode, parent SQLNode) {
+		parent.(*CommonTableExpr).Subquery = newNode.(OutputsTable)
 	}) {
 		return false
 	}
@@ -2323,8 +2323,8 @@ func (a *application) rewriteRefOfCreateView(parent SQLNode, node *CreateView, r
 	}) {
 		return false
 	}
-	if !a.rewriteTableSubquery(node, node.Select, func(newNode, parent SQLNode) {
-		parent.(*CreateView).Select = newNode.(TableSubquery)
+	if !a.rewriteOutputsTable(node, node.Select, func(newNode, parent SQLNode) {
+		parent.(*CreateView).Select = newNode.(OutputsTable)
 	}) {
 		return false
 	}
@@ -2538,8 +2538,8 @@ func (a *application) rewriteRefOfDerivedTable(parent SQLNode, node *DerivedTabl
 			return true
 		}
 	}
-	if !a.rewriteTableSubquery(node, node.Select, func(newNode, parent SQLNode) {
-		parent.(*DerivedTable).Select = newNode.(TableSubquery)
+	if !a.rewriteOutputsTable(node, node.Select, func(newNode, parent SQLNode) {
+		parent.(*DerivedTable).Select = newNode.(OutputsTable)
 	}) {
 		return false
 	}
@@ -8339,8 +8339,8 @@ func (a *application) rewriteRefOfSubquery(parent SQLNode, node *Subquery, repla
 			return true
 		}
 	}
-	if !a.rewriteTableSubquery(node, node.Select, func(newNode, parent SQLNode) {
-		parent.(*Subquery).Select = newNode.(TableSubquery)
+	if !a.rewriteOutputsTable(node, node.Select, func(newNode, parent SQLNode) {
+		parent.(*Subquery).Select = newNode.(OutputsTable)
 	}) {
 		return false
 	}
@@ -8799,13 +8799,13 @@ func (a *application) rewriteRefOfUnion(parent SQLNode, node *Union, replacer re
 	}) {
 		return false
 	}
-	if !a.rewriteTableSubquery(node, node.Left, func(newNode, parent SQLNode) {
-		parent.(*Union).Left = newNode.(TableSubquery)
+	if !a.rewriteOutputsTable(node, node.Left, func(newNode, parent SQLNode) {
+		parent.(*Union).Left = newNode.(OutputsTable)
 	}) {
 		return false
 	}
-	if !a.rewriteTableSubquery(node, node.Right, func(newNode, parent SQLNode) {
-		parent.(*Union).Right = newNode.(TableSubquery)
+	if !a.rewriteOutputsTable(node, node.Right, func(newNode, parent SQLNode) {
+		parent.(*Union).Right = newNode.(OutputsTable)
 	}) {
 		return false
 	}
@@ -10419,6 +10419,22 @@ func (a *application) rewriteInsertRows(parent SQLNode, node InsertRows, replace
 		return true
 	}
 }
+func (a *application) rewriteOutputsTable(parent SQLNode, node OutputsTable, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	switch node := node.(type) {
+	case *Select:
+		return a.rewriteRefOfSelect(parent, node, replacer)
+	case *Union:
+		return a.rewriteRefOfUnion(parent, node, replacer)
+	case *ValuesStatement:
+		return a.rewriteRefOfValuesStatement(parent, node, replacer)
+	default:
+		// this should never happen
+		return true
+	}
+}
 func (a *application) rewriteSelectExpr(parent SQLNode, node SelectExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -10604,22 +10620,6 @@ func (a *application) rewriteTableExpr(parent SQLNode, node TableExpr, replacer 
 		return a.rewriteRefOfJoinTableExpr(parent, node, replacer)
 	case *ParenTableExpr:
 		return a.rewriteRefOfParenTableExpr(parent, node, replacer)
-	default:
-		// this should never happen
-		return true
-	}
-}
-func (a *application) rewriteTableSubquery(parent SQLNode, node TableSubquery, replacer replacerFunc) bool {
-	if node == nil {
-		return true
-	}
-	switch node := node.(type) {
-	case *Select:
-		return a.rewriteRefOfSelect(parent, node, replacer)
-	case *Union:
-		return a.rewriteRefOfUnion(parent, node, replacer)
-	case *ValuesStatement:
-		return a.rewriteRefOfValuesStatement(parent, node, replacer)
 	default:
 		// this should never happen
 		return true

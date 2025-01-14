@@ -394,7 +394,7 @@ func createInsertOperator(ctx *plancontext.PlanningContext, insStmt *sqlparser.I
 	case sqlparser.Values:
 		op = route
 		route.Source = insertRowsPlan(ctx, insOp, insStmt, rows)
-	case sqlparser.TableSubquery:
+	case sqlparser.OutputsTable:
 		op = insertSelectPlan(ctx, insOp, route, insStmt, rows)
 	}
 	if insStmt.Comments != nil {
@@ -408,7 +408,7 @@ func insertSelectPlan(
 	insOp *Insert,
 	routeOp *Route,
 	ins *sqlparser.Insert,
-	sel sqlparser.TableSubquery,
+	sel sqlparser.OutputsTable,
 ) *InsertSelection {
 	if columnMismatch(insOp.AutoIncrement, ins, sel) {
 		panic(vterrors.VT03006())
@@ -457,7 +457,7 @@ func insertSelectPlan(
 	return insertSelect
 }
 
-func columnMismatch(gen *Generate, ins *sqlparser.Insert, sel sqlparser.TableSubquery) bool {
+func columnMismatch(gen *Generate, ins *sqlparser.Insert, sel sqlparser.OutputsTable) bool {
 	origColCount := len(ins.Columns)
 	if gen != nil && gen.added {
 		// One column got added to the insert query ast for auto increment column.

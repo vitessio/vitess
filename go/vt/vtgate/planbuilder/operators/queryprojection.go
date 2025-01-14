@@ -714,7 +714,7 @@ func CompareRefInt(a *int, b *int) bool {
 	return *a < *b
 }
 
-func CreateQPFromSelectStatement(ctx *plancontext.PlanningContext, stmt sqlparser.TableSubquery) *QueryProjection {
+func CreateQPFromSelectStatement(ctx *plancontext.PlanningContext, stmt sqlparser.OutputsTable) *QueryProjection {
 	switch sel := stmt.(type) {
 	case *sqlparser.Select:
 		return createQPFromSelect(ctx, sel)

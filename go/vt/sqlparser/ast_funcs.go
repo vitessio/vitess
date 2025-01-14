@@ -640,7 +640,7 @@ func parseBindVariable(yylex yyLexer, bvar string) *Argument {
 	return NewArgument(bvar)
 }
 
-func setIntoIfPossible(lexer yyLexer, tblSubquery TableSubquery, into *SelectInto) {
+func setIntoIfPossible(lexer yyLexer, tblSubquery OutputsTable, into *SelectInto) {
 	selStmt, ok := tblSubquery.(SelectStatement)
 	if !ok {
 		lexer.Error("VALUES does not support INTO")
@@ -650,7 +650,7 @@ func setIntoIfPossible(lexer yyLexer, tblSubquery TableSubquery, into *SelectInt
 	selStmt.SetInto(into)
 }
 
-func setLockIfPossible(lexer yyLexer, tblSubquery TableSubquery, lock Lock) {
+func setLockIfPossible(lexer yyLexer, tblSubquery OutputsTable, lock Lock) {
 	selStmt, ok := tblSubquery.(SelectStatement)
 	if !ok {
 		lexer.Error("VALUES does not support LOCK")
@@ -775,12 +775,12 @@ func NewTableNameWithQualifier(name, qualifier string) TableName {
 }
 
 // NewSubquery makes a new Subquery
-func NewSubquery(selectStatement TableSubquery) *Subquery {
+func NewSubquery(selectStatement OutputsTable) *Subquery {
 	return &Subquery{Select: selectStatement}
 }
 
 // NewDerivedTable makes a new DerivedTable
-func NewDerivedTable(lateral bool, selectStatement TableSubquery) *DerivedTable {
+func NewDerivedTable(lateral bool, selectStatement OutputsTable) *DerivedTable {
 	return &DerivedTable{
 		Lateral: lateral,
 		Select:  selectStatement,
@@ -1411,7 +1411,7 @@ func (node *Union) GetParsedComments() *ParsedComments {
 	return node.Left.GetParsedComments()
 }
 
-func requiresParen(stmt TableSubquery) bool {
+func requiresParen(stmt OutputsTable) bool {
 	switch node := stmt.(type) {
 	case *Union:
 		return len(node.OrderBy) != 0 || node.Lock != 0 || node.Into != nil || node.Limit != nil
@@ -2361,7 +2361,7 @@ func setFuncArgs(aggr AggrFunc, exprs Exprs, name string) error {
 }
 
 // GetFirstSelect gets the first select statement
-func GetFirstSelect(selStmt TableSubquery) (*Select, error) {
+func GetFirstSelect(selStmt OutputsTable) (*Select, error) {
 	if selStmt == nil {
 		return nil, nil
 	}
@@ -2377,14 +2377,14 @@ func GetFirstSelect(selStmt TableSubquery) (*Select, error) {
 }
 
 // GetAllSelects gets all the select statement s
-func GetAllSelects(selStmt TableSubquery) []TableSubquery {
+func GetAllSelects(selStmt OutputsTable) []OutputsTable {
 	switch node := selStmt.(type) {
 	case *Select:
-		return []TableSubquery{node}
+		return []OutputsTable{node}
 	case *Union:
 		return append(GetAllSelects(node.Left), GetAllSelects(node.Right)...)
 	case *ValuesStatement:
-		return []TableSubquery{node}
+		return []OutputsTable{node}
 	}
 	panic("[BUG]: unknown type for SelectStatement")
 }
@@ -2792,7 +2792,7 @@ func MakeColumns(colNames ...string) Columns {
 	return cols
 }
 
-func VisitAllSelects(in TableSubquery, f func(p *Select, idx int) error) error {
+func VisitAllSelects(in OutputsTable, f func(p *Select, idx int) error) error {
 	v := visitor{}
 	return v.visitAllSelects(in, f)
 }
@@ -2801,7 +2801,7 @@ type visitor struct {
 	idx int
 }
 
-func (v *visitor) visitAllSelects(in TableSubquery, f func(p *Select, idx int) error) error {
+func (v *visitor) visitAllSelects(in OutputsTable, f func(p *Select, idx int) error) error {
 	switch sel := in.(type) {
 	case *Select:
 		err := f(sel, v.idx)
@@ -3026,9 +3026,9 @@ func ExtractAllTables(stmt Statement) []string {
 	return tables
 }
 
-var _ TableSubquery = (*ValuesStatement)(nil)
+var _ OutputsTable = (*ValuesStatement)(nil)
 
-func (node *ValuesStatement) iTableSubquery() {}
+func (node *ValuesStatement) iOutputsTable() {}
 
 func (node *ValuesStatement) SetWith(with *With) {
 	node.With = with

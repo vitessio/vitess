@@ -45,7 +45,7 @@ type Horizon struct {
 	// QP contains the QueryProjection for this op
 	QP *QueryProjection
 
-	Query sqlparser.TableSubquery
+	Query sqlparser.OutputsTable
 
 	// Columns needed to feed other plans
 	Columns       []*sqlparser.ColName
@@ -54,7 +54,7 @@ type Horizon struct {
 	Truncate bool
 }
 
-func newHorizon(src Operator, query sqlparser.TableSubquery) *Horizon {
+func newHorizon(src Operator, query sqlparser.OutputsTable) *Horizon {
 	return &Horizon{
 		unaryOperator: newUnaryOp(src),
 		Query:         query,
@@ -185,7 +185,7 @@ func (h *Horizon) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
 }
 
 // TODO: REMOVE
-func (h *Horizon) selectStatement() sqlparser.TableSubquery {
+func (h *Horizon) selectStatement() sqlparser.OutputsTable {
 	return h.Query
 }
 

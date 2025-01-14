@@ -37,8 +37,8 @@ type (
 	}
 )
 
-func (qb *queryBuilder) asSelectStatement() sqlparser.TableSubquery {
-	return qb.stmt.(sqlparser.TableSubquery)
+func (qb *queryBuilder) asSelectStatement() sqlparser.OutputsTable {
+	return qb.stmt.(sqlparser.OutputsTable)
 
 }
 func (qb *queryBuilder) asOrderAndLimit() sqlparser.OrderAndLimit {
@@ -210,7 +210,7 @@ func unionSelects(exprs sqlparser.SelectExprs) (selectExprs sqlparser.SelectExpr
 	return
 }
 
-func checkUnionColumnByName(column *sqlparser.ColName, sel sqlparser.TableSubquery) {
+func checkUnionColumnByName(column *sqlparser.ColName, sel sqlparser.OutputsTable) {
 	colName := column.Name.String()
 	firstSelect := getFirstSelect(sel)
 	exprs := firstSelect.SelectExprs
@@ -247,8 +247,8 @@ func (qb *queryBuilder) unionWith(other *queryBuilder, distinct bool) {
 
 func (qb *queryBuilder) recursiveCteWith(other *queryBuilder, name, alias string, distinct bool, columns sqlparser.Columns) {
 	cteUnion := &sqlparser.Union{
-		Left:     qb.stmt.(sqlparser.TableSubquery),
-		Right:    other.stmt.(sqlparser.TableSubquery),
+		Left:     qb.stmt.(sqlparser.OutputsTable),
+		Right:    other.stmt.(sqlparser.OutputsTable),
 		Distinct: distinct,
 	}
 
@@ -396,7 +396,7 @@ func removeKeyspaceFromSelectExpr(expr sqlparser.SelectExpr) {
 	}
 }
 
-func stripDownQuery(from, to sqlparser.TableSubquery) {
+func stripDownQuery(from, to sqlparser.OutputsTable) {
 	switch node := from.(type) {
 	case *sqlparser.Select:
 		toNode, ok := to.(*sqlparser.Select)

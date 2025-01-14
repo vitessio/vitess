@@ -125,7 +125,7 @@ func simplifyPredicates(ctx *plancontext.PlanningContext, in sqlparser.Expr) sql
 	return output
 }
 
-func getFirstSelect(selStmt sqlparser.TableSubquery) *sqlparser.Select {
+func getFirstSelect(selStmt sqlparser.OutputsTable) *sqlparser.Select {
 	firstSelect, err := sqlparser.GetFirstSelect(selStmt)
 	if err != nil {
 		panic(vterrors.VT12001(fmt.Sprintf("first UNION part not a SELECT: %v", err)))
