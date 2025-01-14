@@ -18,11 +18,11 @@ package vtgate
 
 import (
 	"context"
+	"errors"
 	"sync"
 
 	"vitess.io/vitess/go/vt/graph"
 	"vitess.io/vitess/go/vt/log"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
@@ -30,8 +30,13 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
+
+// The full SQL error that the user sees in their vtgate connection looks like this:
+// failed to update vschema as the session's version was stale; please try again (errno 1105) (sqlstate HY000) during query: ALTER VSCHEMA DROP TABLE t864
+var ErrStaleVSchema = errors.New("failed to update vschema as the session's version was stale; please try again")
 
 // VSchemaManager is used to watch for updates to the vschema and to implement
 // the DDL commands to add / remove vindexes
@@ -77,6 +82,10 @@ func (vm *VSchemaManager) UpdateVSchema(ctx context.Context, ks *topo.KeyspaceVS
 
 	err = topoServer.SaveVSchema(ctx, ks)
 	if err != nil {
+		if topo.IsErrType(err, topo.BadVersion) {
+			// Provide a more useful error message to the user.
+			return ErrStaleVSchema
+		}
 		return err
 	}
 

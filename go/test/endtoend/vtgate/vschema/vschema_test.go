@@ -23,11 +23,14 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/exp/rand"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -174,4 +177,63 @@ func TestVSchema(t *testing.T) {
 			assert.ErrorContains(t, err, "is not authorized to perform vschema operations")
 		}, 5*time.Second, 100*time.Millisecond)
 	}
+}
+
+// TestVSchemaSQLAPIConcurrency tests that we prevent lost writes when we have
+// concurrent vschema changes being made via the SQL API.
+func TestVSchemaSQLAPIConcurrency(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	utils.AssertMatches(t, conn, "SHOW VSCHEMA TABLES", `[]`)
+	baseTableName := "t"
+	numTables := 1000
+	mysqlConns := make([]*mysql.Conn, numTables)
+	for i := 0; i < numTables; i++ {
+		c, err := mysql.Connect(ctx, &vtParams)
+		require.NoError(t, err)
+		mysqlConns[i] = c
+		defer c.Close()
+	}
+
+	wg := sync.WaitGroup{}
+	preventedLostWrites := false
+	for i := 0; i < numTables; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			time.Sleep(time.Duration(rand.Intn(1000) * int(time.Nanosecond)))
+			tableName := fmt.Sprintf("%s%d", baseTableName, i)
+			_, err = mysqlConns[i].ExecuteFetch(fmt.Sprintf("ALTER VSCHEMA ADD TABLE %s", tableName), -1, false)
+			if err != nil {
+				// The error we get is an SQL error so we have to do string matching.
+				if err != nil && strings.Contains(err.Error(), "failed to update vschema as the session's version was stale") {
+					preventedLostWrites = true
+				}
+			} else {
+				require.NoError(t, err)
+				time.Sleep(time.Duration(rand.Intn(1000) * int(time.Nanosecond)))
+				_, err = mysqlConns[i].ExecuteFetch(fmt.Sprintf("ALTER VSCHEMA DROP TABLE %s", tableName), -1, false)
+				// The error we get is an SQL error so we have to do string matching.
+				if err != nil && strings.Contains(err.Error(), "failed to update vschema as the session's version was stale") {
+					preventedLostWrites = true
+				} else {
+					require.NoError(t, err)
+				}
+			}
+		}()
+	}
+	wg.Wait()
+	require.True(t, preventedLostWrites)
+
+	// Cleanup any tables that were not dropped because the DROP query
+	// failed due to a bad node version.
+	for i := 0; i < numTables; i++ {
+		tableName := fmt.Sprintf("%s%d", baseTableName, i)
+		_, _ = mysqlConns[i].ExecuteFetch(fmt.Sprintf("ALTER VSCHEMA DROP TABLE %s", tableName), -1, false)
+	}
+	utils.AssertMatches(t, conn, "SHOW VSCHEMA TABLES", `[]`)
 }

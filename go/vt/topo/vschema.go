@@ -50,8 +50,8 @@ func (k *KeyspaceVSchemaInfo) CloneVT() *KeyspaceVSchemaInfo {
 	return kc
 }
 
-// SaveVSchema saves a Vschema. A valid Vschema should be passed in. It does not verify its correctness.
-// If the VSchema is empty, just remove it.
+// SaveVSchema saves a Vschema. A valid Vschema should be passed in.
+// It does not verify its correctness beyond marshaling it.
 func (ts *Server) SaveVSchema(ctx context.Context, ksvs *KeyspaceVSchemaInfo) error {
 	if err := ctx.Err(); err != nil {
 		return err
