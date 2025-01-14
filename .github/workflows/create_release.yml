@@ -58,7 +58,7 @@ jobs:
           exit 1
         fi
 
-        sudo gem install fpm -v $FPM_VERSION --local
+        sudo gem install fpm-$FPM_VERSION.gem
 
     - name: Make Packages
       run: |
