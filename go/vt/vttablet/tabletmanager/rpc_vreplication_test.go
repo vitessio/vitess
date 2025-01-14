@@ -2519,12 +2519,6 @@ func TestCompleteLookupVindex(t *testing.T) {
 		ms.SourceKeyspace, ms.SourceKeyspace)
 	ownedRunning := sqltypes.MakeTestResult(fields, "1|Running|msg|"+ownedSourceKeepRunningAfterCopy+"|"+wftype+"|0|0|0|0|0|0|"+trxTS+"|5|{}")
 	ownedStopped := sqltypes.MakeTestResult(fields, "1|Stopped|"+workflow.Frozen+"|"+ownedSourceStopAfterCopy+"|"+wftype+"|0|0|0|0|0|0|"+trxTS+"|5|{}")
-	unownedSourceStopAfterCopy := fmt.Sprintf(`keyspace:"%s",shard:"0",filter:{rules:{match:"unowned_lookup" filter:"select * from t1 where in_keyrange(col1, '%s.xxhash', '-80')"}} stop_after_copy:true`,
-		ms.SourceKeyspace, ms.SourceKeyspace)
-	unownedSourceKeepRunningAfterCopy := fmt.Sprintf(`keyspace:"%s",shard:"0",filter:{rules:{match:"unowned_lookup" filter:"select * from t1 where in_keyrange(col1, '%s.xxhash', '-80')"}}`,
-		ms.SourceKeyspace, ms.SourceKeyspace)
-	unownedRunning := sqltypes.MakeTestResult(fields, "2|Running|msg|"+unownedSourceKeepRunningAfterCopy+"|"+wftype+"|0|0|0|0|0|0|"+trxTS+"|5|{}")
-	unownedStopped := sqltypes.MakeTestResult(fields, "2|Stopped|Stopped after copy|"+unownedSourceStopAfterCopy+"|"+wftype+"|0|0|0|0|0|0|"+trxTS+"|5|{}")
 
 	testcases := []struct {
 		request         *vtctldatapb.LookupVindexCompleteRequest
@@ -2561,7 +2555,6 @@ func TestCompleteLookupVindex(t *testing.T) {
 				Keyspace:      ms.SourceKeyspace,
 				TableKeyspace: ms.TargetKeyspace,
 			},
-			vrResponse: unownedStopped,
 			expectedVschema: &vschemapb.Keyspace{
 				Vindexes: map[string]*vschemapb.Vindex{
 					"unowned_lookup": {
@@ -2574,7 +2567,7 @@ func TestCompleteLookupVindex(t *testing.T) {
 					},
 				},
 			},
-			err: "is not in Running state",
+			err: "no owner",
 		},
 		{
 			request: &vtctldatapb.LookupVindexCompleteRequest{
@@ -2604,7 +2597,6 @@ func TestCompleteLookupVindex(t *testing.T) {
 				Keyspace:      ms.SourceKeyspace,
 				TableKeyspace: ms.TargetKeyspace,
 			},
-			vrResponse: unownedRunning,
 			expectedVschema: &vschemapb.Keyspace{
 				Vindexes: map[string]*vschemapb.Vindex{
 					"unowned_lookup": {
@@ -2617,6 +2609,7 @@ func TestCompleteLookupVindex(t *testing.T) {
 					},
 				},
 			},
+			err: "no owner",
 		},
 		{
 			request: &vtctldatapb.LookupVindexCompleteRequest{
@@ -2650,7 +2643,9 @@ func TestCompleteLookupVindex(t *testing.T) {
 			require.NotNil(t, tcase.request, "No request provided")
 
 			for _, targetTablet := range targetShards {
-				targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readWorkflow, tcase.request.Name, tenv.dbName), tcase.vrResponse, nil)
+				if tcase.vrResponse != nil {
+					targetTablet.vrdbClient.ExpectRequest(fmt.Sprintf(readWorkflow, tcase.request.Name, tenv.dbName), tcase.vrResponse, nil)
+				}
 				if tcase.err == "" {
 					// We query the workflow again to build the status output when
 					// it's successfully created.
