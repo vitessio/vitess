@@ -1406,7 +1406,8 @@ func (vc *VCursorImpl) ExecuteVSchema(ctx context.Context, keyspace string, vsch
 			return err
 		}
 	} else {
-		// Use the cached version.
+		// Use the cached version as we are in read-only mode
+		// and any writes would fail.
 		ksvs.Name = ksName
 		ksvs.Keyspace = srvVschema.Keyspaces[ksName]
 	}

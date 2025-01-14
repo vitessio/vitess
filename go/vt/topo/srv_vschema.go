@@ -175,12 +175,8 @@ func (ts *Server) RebuildSrvVSchema(ctx context.Context, cells []string) error {
 			if IsErrType(err, NoNode) {
 				err = nil
 				ksvs = &KeyspaceVSchemaInfo{
-					Name: keyspace,
-					Keyspace: &vschemapb.Keyspace{
-						Sharded:  false,
-						Vindexes: make(map[string]*vschemapb.Vindex),
-						Tables:   make(map[string]*vschemapb.Table),
-					},
+					Name:     keyspace,
+					Keyspace: &vschemapb.Keyspace{},
 				}
 			}
 

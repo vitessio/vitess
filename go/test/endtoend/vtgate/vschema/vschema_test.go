@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/vt/vtgate"
 )
 
 var (
@@ -210,7 +211,7 @@ func TestVSchemaSQLAPIConcurrency(t *testing.T) {
 			_, err = mysqlConns[i].ExecuteFetch(fmt.Sprintf("ALTER VSCHEMA ADD TABLE %s", tableName), -1, false)
 			if err != nil {
 				// The error we get is an SQL error so we have to do string matching.
-				if err != nil && strings.Contains(err.Error(), "failed to update vschema as the session's version was stale") {
+				if err != nil && strings.Contains(err.Error(), vtgate.ErrStaleVSchema.Error()) {
 					preventedLostWrites = true
 				}
 			} else {
@@ -218,7 +219,7 @@ func TestVSchemaSQLAPIConcurrency(t *testing.T) {
 				time.Sleep(time.Duration(rand.Intn(1000) * int(time.Nanosecond)))
 				_, err = mysqlConns[i].ExecuteFetch(fmt.Sprintf("ALTER VSCHEMA DROP TABLE %s", tableName), -1, false)
 				// The error we get is an SQL error so we have to do string matching.
-				if err != nil && strings.Contains(err.Error(), "failed to update vschema as the session's version was stale") {
+				if err != nil && strings.Contains(err.Error(), vtgate.ErrStaleVSchema.Error()) {
 					preventedLostWrites = true
 				} else {
 					require.NoError(t, err)
