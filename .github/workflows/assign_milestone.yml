@@ -24,6 +24,7 @@ jobs:
           # the PR's SHA - Which would be executed in the base branch's context.
           # This is really important to limit any sort of pwn requests.
           ref: ${{ github.base_ref }}
+          persist-credentials: 'false'
 
       - name: Assign Milestone
         run: |
