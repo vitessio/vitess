@@ -82,7 +82,7 @@ var (
 func init() {
 	srvTopoCounts = stats.NewCountersWithSingleLabel("ResilientSrvTopoServer", "Resilient srvtopo server operations", "type")
 	// Initalize any third party implementations for vitess
-	thirdparty.InitializeThirdParty()
+	thirdparty.InitializeThirdParty(Main)
 }
 
 // CheckCellFlags will check validation of cell and cells_to_watch flag
