@@ -49,6 +49,7 @@ jobs:
           # queries: security-extended,security-and-quality
 
       - name: Get base dependencies
+        timeout-minutes: 10
         run: |
           sudo DEBIAN_FRONTEND="noninteractive" apt-get update
           # Uninstall any previously installed MySQL first

@@ -89,6 +89,7 @@ jobs:
         sudo sysctl -w net.ipv4.ip_local_port_range="22768 65535"
 
     - name: Get base dependencies
+      timeout-minutes: 10
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
         sudo DEBIAN_FRONTEND="noninteractive" apt-get update

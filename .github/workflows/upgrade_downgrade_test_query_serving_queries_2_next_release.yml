@@ -15,6 +15,7 @@ permissions: read-all
 jobs:
 
   upgrade_downgrade_test:
+    timeout-minutes: 60
     name: Run Upgrade Downgrade Test - Query Serving (Queries - 2) Next Release
     runs-on: gh-hosted-runners-16cores-1-24.04
 
@@ -89,6 +90,7 @@ jobs:
         sudo sysctl -w net.ipv4.ip_local_port_range="22768 65535"
 
     - name: Get base dependencies
+      timeout-minutes: 10
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
         sudo DEBIAN_FRONTEND="noninteractive" apt-get update
