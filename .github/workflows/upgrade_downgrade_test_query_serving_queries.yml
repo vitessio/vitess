@@ -60,6 +60,7 @@ jobs:
         token: ''
         filters: |
           end_to_end:
+            - 'test/config.json'
             - 'go/**'
             - 'go/**/*.go'
             - 'test.go'
