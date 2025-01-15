@@ -154,8 +154,11 @@ func (tc *tableCollector) visitAliasedTableExpr(node *sqlparser.AliasedTableExpr
 }
 
 func (tc *tableCollector) visitUnion(union *sqlparser.Union) error {
-	firstSelect := sqlparser.GetFirstSelect(union)
-	expanded, selectExprs := getColumnNames(firstSelect.SelectExprs)
+	firstSelect, err := sqlparser.GetFirstSelect(union)
+	if err != nil {
+		return err
+	}
+	expanded, selectExprs := getColumnNames(firstSelect.GetColumns())
 	info := unionInfo{
 		isAuthoritative: expanded,
 		exprs:           selectExprs,
@@ -165,12 +168,12 @@ func (tc *tableCollector) visitUnion(union *sqlparser.Union) error {
 		return nil
 	}
 
-	size := len(firstSelect.SelectExprs)
+	size := firstSelect.GetColumnCount()
 	info.recursive = make([]TableSet, size)
 	typers := make([]evalengine.TypeAggregator, size)
 	collations := tc.org.collationEnv()
 
-	err := sqlparser.VisitAllSelects(union, func(s *sqlparser.Select, idx int) error {
+	err = sqlparser.VisitAllSelects(union, func(s *sqlparser.Select, idx int) error {
 		for i, expr := range s.SelectExprs {
 			ae, ok := expr.(*sqlparser.AliasedExpr)
 			if !ok {
@@ -413,7 +416,10 @@ func checkValidRecursiveCTE(cteDef *CTE) error {
 		return vterrors.VT09026(cteDef.Name)
 	}
 
-	firstSelect := sqlparser.GetFirstSelect(union.Right)
+	firstSelect, err := sqlparser.GetFirstSelect(union.Right)
+	if err != nil {
+		return err
+	}
 	if firstSelect.GroupBy != nil {
 		return vterrors.VT09027(cteDef.Name)
 	}
@@ -470,8 +476,16 @@ func (tc *tableCollector) addSelectDerivedTable(
 	return scope.addTable(tableInfo)
 }
 
-func (tc *tableCollector) addUnionDerivedTable(union *sqlparser.Union, node *sqlparser.AliasedTableExpr, columns sqlparser.Columns, alias sqlparser.IdentifierCS) error {
-	firstSelect := sqlparser.GetFirstSelect(union)
+func (tc *tableCollector) addUnionDerivedTable(
+	union *sqlparser.Union,
+	node *sqlparser.AliasedTableExpr,
+	columns sqlparser.Columns,
+	alias sqlparser.IdentifierCS,
+) error {
+	firstSelect, err := sqlparser.GetFirstSelect(union)
+	if err != nil {
+		return err
+	}
 	tables := tc.scoper.wScope[firstSelect]
 	info, found := tc.unionInfo[union]
 	if !found {

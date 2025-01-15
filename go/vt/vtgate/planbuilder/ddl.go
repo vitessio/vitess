@@ -196,7 +196,7 @@ func buildCreateViewCommon(
 	vschema plancontext.VSchema,
 	reservedVars *sqlparser.ReservedVars,
 	cfg dynamicconfig.DDL,
-	ddlSelect sqlparser.SelectStatement,
+	ddlSelect sqlparser.TableStatement,
 	ddl sqlparser.DDLStatement,
 ) (key.Destination, *vindexes.Keyspace, error) {
 	if vschema.IsViewsEnabled() {
@@ -242,7 +242,7 @@ func buildCreateViewCommon(
 	return destination, keyspace, nil
 }
 
-func createViewEnabled(vschema plancontext.VSchema, reservedVars *sqlparser.ReservedVars, ddlSelect sqlparser.SelectStatement, ddl sqlparser.DDLStatement) (key.Destination, *vindexes.Keyspace, error) {
+func createViewEnabled(vschema plancontext.VSchema, reservedVars *sqlparser.ReservedVars, ddlSelect sqlparser.TableStatement, ddl sqlparser.DDLStatement) (key.Destination, *vindexes.Keyspace, error) {
 	// For Create View, we require that the keyspace exist and the select query can be satisfied within the keyspace itself
 	// We should remove the keyspace name from the table name, as the database name in MySQL might be different than the keyspace name
 	destination, keyspace, err := findTableDestinationAndKeyspace(vschema, ddl)

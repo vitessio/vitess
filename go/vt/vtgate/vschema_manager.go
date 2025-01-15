@@ -49,7 +49,7 @@ type VSchemaManager struct {
 // SchemaInfo is an interface to schema tracker.
 type SchemaInfo interface {
 	Tables(ks string) map[string]*vindexes.TableInfo
-	Views(ks string) map[string]sqlparser.SelectStatement
+	Views(ks string) map[string]sqlparser.TableStatement
 	UDFs(ks string) []string
 }
 
@@ -215,7 +215,7 @@ func (vm *VSchemaManager) updateViewInfo(ks *vindexes.KeyspaceSchema, ksName str
 	if views == nil {
 		return
 	}
-	ks.Views = make(map[string]sqlparser.SelectStatement, len(views))
+	ks.Views = make(map[string]sqlparser.TableStatement, len(views))
 	for name, def := range views {
 		ks.Views[name] = sqlparser.Clone(def)
 		vTbl, ok := ks.Tables[name]

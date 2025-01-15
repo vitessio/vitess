@@ -968,7 +968,9 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 			defer preparationConnRestoreLockWaitTimeout()
 
 			if needsShadowTableAnalysis {
-				// Run `ANALYZE TABLE` on the vreplication table so that it has up-to-date statistics at cut-over
+				// Run `ANALYZE TABLE` on the vreplication table so that it has up-to-date statistics at cut-over.
+				// The statement will be replicated, so that in case there's a PRS/ERS shortly after cut-over, the
+				// promoted replica will have good statistics.
 				parsed := sqlparser.BuildParsedQuery(sqlAnalyzeTable, vreplTable)
 				if _, err := preparationsConn.Conn.Exec(ctx, parsed.Query, -1, false); err != nil {
 					// Best effort only. Do not fail the mgiration if this fails.
