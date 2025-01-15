@@ -265,7 +265,7 @@ func (vw *VSchemaWrapper) FindTable(tab sqlparser.TableName) (*vindexes.Table, s
 	return table, destKeyspace, destTabletType, destTarget, nil
 }
 
-func (vw *VSchemaWrapper) FindView(tab sqlparser.TableName) sqlparser.SelectStatement {
+func (vw *VSchemaWrapper) FindView(tab sqlparser.TableName) sqlparser.TableStatement {
 	destKeyspace, _, _, err := topoproto.ParseDestination(tab.Qualifier.String(), topodatapb.TabletType_PRIMARY)
 	if err != nil {
 		return nil

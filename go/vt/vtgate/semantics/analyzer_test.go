@@ -1003,8 +1003,10 @@ func TestUnionWithOrderBy(t *testing.T) {
 
 	stmt, semTable := parseAndAnalyze(t, query, "")
 	union, _ := stmt.(*sqlparser.Union)
-	sel1 := sqlparser.GetFirstSelect(union)
-	sel2 := sqlparser.GetFirstSelect(union.Right)
+	sel1, err := sqlparser.GetFirstSelect(union)
+	require.NoError(t, err)
+	sel2, err := sqlparser.GetFirstSelect(union.Right)
+	require.NoError(t, err)
 
 	t1 := sel1.From[0].(*sqlparser.AliasedTableExpr)
 	t2 := sel2.From[0].(*sqlparser.AliasedTableExpr)

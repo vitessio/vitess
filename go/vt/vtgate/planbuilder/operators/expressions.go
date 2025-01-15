@@ -121,3 +121,11 @@ func simplifyPredicates(ctx *plancontext.PlanningContext, in sqlparser.Expr) sql
 	}
 	return output
 }
+
+func getFirstSelect(selStmt sqlparser.TableStatement) *sqlparser.Select {
+	firstSelect, err := sqlparser.GetFirstSelect(selStmt)
+	if err != nil {
+		panic(err)
+	}
+	return firstSelect
+}

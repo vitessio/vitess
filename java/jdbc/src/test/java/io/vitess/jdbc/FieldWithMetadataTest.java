@@ -284,7 +284,8 @@ public class FieldWithMetadataTest extends BaseTest {
           Query.Type.HEXVAL,
           Query.Type.HEXNUM,
           Query.Type.BITNUM,
-          Query.Type.RAW
+          Query.Type.RAW,
+          Query.Type.ROW_TUPLE
   );
 
   @Test
