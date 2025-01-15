@@ -142,6 +142,10 @@ func TestMysqlGRSupportCapability(t *testing.T) {
 			version:    "8.0.20",
 			capability: capabilities.PerformanceSchemaDataLocksTableCapability,
 			isCapable:  true,
+		}, {
+			version:    "8.0.20",
+			capability: capabilities.PerformanceSchemaMetadataLocksTableCapability,
+			isCapable:  true,
 		},
 		{
 			// What happens if server version is unspecified

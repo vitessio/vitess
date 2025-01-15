@@ -31,25 +31,26 @@ var (
 type FlavorCapability int
 
 const (
-	NoneFlavorCapability                        FlavorCapability = iota // default placeholder
-	FastDropTableFlavorCapability                                       // supported in MySQL 8.0.23 and above: https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-23.html
-	TransactionalGtidExecutedFlavorCapability                           //
-	InstantDDLFlavorCapability                                          // ALGORITHM=INSTANT general support
-	InstantAddLastColumnFlavorCapability                                //
-	InstantAddDropVirtualColumnFlavorCapability                         //
-	InstantAddDropColumnFlavorCapability                                // Adding/dropping column in any position/ordinal.
-	InstantChangeColumnDefaultFlavorCapability                          //
-	InstantExpandEnumCapability                                         //
-	InstantChangeColumnVisibilityCapability                             //
-	MySQLUpgradeInServerFlavorCapability                                //
-	DynamicRedoLogCapacityFlavorCapability                              // supported in MySQL 8.0.30 and above: https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-30.html
-	DisableRedoLogFlavorCapability                                      // supported in MySQL 8.0.21 and above: https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-21.html
-	CheckConstraintsCapability                                          // supported in MySQL 8.0.16 and above: https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-16.html
-	PerformanceSchemaDataLocksTableCapability                           // supported in MySQL 8.0.1 and above: https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-1.html
-	InstantDDLXtrabackupCapability                                      // Supported in 8.0.32 and above, solving a MySQL-vs-Xtrabackup bug starting 8.0.29
-	ReplicaTerminologyCapability                                        // Supported in 8.0.26 and above, using SHOW REPLICA STATUS and all variations.
-	BinaryLogStatus                                                     // Supported in 8.2.0 and above, uses SHOW BINARY LOG STATUS
-	RestrictFKOnNonStandardKey                                          // Supported in 8.4.0 and above, restricts usage of non-standard indexes for foreign keys.
+	NoneFlavorCapability                          FlavorCapability = iota // default placeholder
+	FastDropTableFlavorCapability                                         // supported in MySQL 8.0.23 and above: https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-23.html
+	TransactionalGtidExecutedFlavorCapability                             //
+	InstantDDLFlavorCapability                                            // ALGORITHM=INSTANT general support
+	InstantAddLastColumnFlavorCapability                                  //
+	InstantAddDropVirtualColumnFlavorCapability                           //
+	InstantAddDropColumnFlavorCapability                                  // Adding/dropping column in any position/ordinal.
+	InstantChangeColumnDefaultFlavorCapability                            //
+	InstantExpandEnumCapability                                           //
+	InstantChangeColumnVisibilityCapability                               //
+	MySQLUpgradeInServerFlavorCapability                                  //
+	DynamicRedoLogCapacityFlavorCapability                                // supported in MySQL 8.0.30 and above: https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-30.html
+	DisableRedoLogFlavorCapability                                        // supported in MySQL 8.0.21 and above: https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-21.html
+	CheckConstraintsCapability                                            // supported in MySQL 8.0.16 and above: https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-16.html
+	PerformanceSchemaDataLocksTableCapability                             // supported in MySQL 8.0.1 and above: https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-1.html
+	PerformanceSchemaMetadataLocksTableCapability                         // supported in MySQL 8.0.2 and above: https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-2.html
+	InstantDDLXtrabackupCapability                                        // Supported in 8.0.32 and above, solving a MySQL-vs-Xtrabackup bug starting 8.0.29
+	ReplicaTerminologyCapability                                          // Supported in 8.0.26 and above, using SHOW REPLICA STATUS and all variations.
+	BinaryLogStatus                                                       // Supported in 8.2.0 and above, uses SHOW BINARY LOG STATUS
+	RestrictFKOnNonStandardKey                                            // Supported in 8.4.0 and above, restricts usage of non-standard indexes for foreign keys.
 )
 
 type CapableOf func(capability FlavorCapability) (bool, error)
@@ -97,6 +98,8 @@ func MySQLVersionHasCapability(serverVersion string, capability FlavorCapability
 		return atLeast(8, 0, 0)
 	case PerformanceSchemaDataLocksTableCapability:
 		return atLeast(8, 0, 1)
+	case PerformanceSchemaMetadataLocksTableCapability:
+		return atLeast(8, 0, 2)
 	case MySQLUpgradeInServerFlavorCapability:
 		return atLeast(8, 0, 16)
 	case CheckConstraintsCapability:
