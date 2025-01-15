@@ -68,4 +68,4 @@ jobs:
     - name: Run tests which require docker - 1
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
-        go run test.go -docker=true --follow -shard 10
+        go run test.go -docker=true --follow -shard java

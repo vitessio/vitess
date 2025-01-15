@@ -8,7 +8,7 @@
 				"java_test"
 			],
 			"Manual": false,
-			"Shard": "10",
+			"Shard": "java",
 			"RetryMax": 1,
 			"Tags": []
 		},
@@ -19,7 +19,7 @@
 				"test/client_test.sh"
 			],
 			"Manual": false,
-			"Shard": "25",
+			"Shard": "java",
 			"RetryMax": 1,
 			"Tags": []
 		},
@@ -483,7 +483,7 @@
 			],
 			"Command": [],
 			"Manual": false,
-			"Shard": "25",
+			"Shard": "docker_cluster",
 			"RetryMax": 1,
 			"Tags": [
 				"site_test"
@@ -989,7 +989,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/topotest/zk2", "--topo-flavor=zk2"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "25",
+			"Shard": "docker_cluster",
 			"RetryMax": 1,
 			"Tags": []
 		},
@@ -1061,7 +1061,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtcombo"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "25",
+			"Shard": "docker_cluster",
 			"RetryMax": 1,
 			"Tags": []
 		},
