@@ -569,12 +569,12 @@ const (
 	`
 	sqlProcessWithMetadataLocksOnTable = `
 		SELECT
-		  DISTINCT threads.processlist_id
+			DISTINCT threads.processlist_id
 		from
 			performance_schema.metadata_locks
 			join performance_schema.threads on (metadata_locks.OWNER_THREAD_ID=threads.THREAD_ID)
 		where
-			metadata_locks.OBJECT_SCHEMA=database()
+			metadata_locks.OBJECT_SCHEMA=database() AND metadata_locks.OBJECT_NAME=%a
 	`
 )
 
