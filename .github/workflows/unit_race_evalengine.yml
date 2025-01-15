@@ -53,6 +53,7 @@ jobs:
         token: ''
         filters: |
           unit_tests:
+            - 'test/config.json'
             - 'go/**'
             - 'test.go'
             - 'Makefile'

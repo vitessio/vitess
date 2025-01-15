@@ -1,10 +1,10 @@
-name: docker_test_cluster_25
+name: java_docker_test
 on: [push, pull_request]
 permissions: read-all
 jobs:
 
   build:
-    name: Docker Test Cluster 25
+    name: Java Docker Test
     runs-on: ubuntu-24.04
 
     steps:
@@ -22,7 +22,7 @@ jobs:
         if [[ "${{github.event.pull_request}}" ==  "" ]] && [[ "${{github.ref}}" != "refs/heads/main" ]] && [[ ! "${{github.ref}}" =~ ^refs/heads/release-[0-9]+\.[0-9]$ ]] && [[ ! "${{github.ref}}" =~ "refs/tags/.*" ]]; then
           skip='true'
         fi
-        echo Skip ${skip}
+        echo Skip $skip
         echo "skip-workflow=${skip}" >> $GITHUB_OUTPUT
 
     - name: Check out code
@@ -37,6 +37,7 @@ jobs:
         token: ''
         filters: |
           end_to_end:
+            - 'test/config.json'
             - 'go/**/*.go'
             - 'test.go'
             - 'Makefile'
@@ -48,7 +49,8 @@ jobs:
             - 'config/**'
             - 'bootstrap.sh'
             - 'docker/**'
-            - '.github/workflows/docker_test_cluster_25.yml'
+            - 'java/**'
+            - '.github/workflows/java_docker_test.yml'
 
     - name: Set up Go
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -59,9 +61,10 @@ jobs:
     - name: Tune the OS
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
+        echo "value: " ${{steps.skip-workflow.outputs.skip-workflow}}
         sudo sysctl -w net.ipv4.ip_local_port_range="22768 65535"
 
-    - name: Run tests which require docker - 2
+    - name: Run tests which require docker - 1
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
-        go run test.go -docker=true --follow -shard 25
+        go run test.go -docker=true --follow -shard java
