@@ -55,7 +55,7 @@ func buildVExplainPlan(
 
 func explainTabPlan(explain *sqlparser.ExplainTab, vschema plancontext.VSchema) (*planResult, error) {
 	var keyspace *vindexes.Keyspace
-	var destination key.Destination
+	var dest key.Destination
 
 	if sqlparser.SystemSchema(explain.Table.Qualifier.String()) {
 		var err error
@@ -64,30 +64,26 @@ func explainTabPlan(explain *sqlparser.ExplainTab, vschema plancontext.VSchema) 
 			return nil, err
 		}
 	} else {
+		var tbl *vindexes.Table
 		var err error
-		var ks string
-		_, _, ks, _, destination, err = vschema.FindTableOrVindex(explain.Table)
+		tbl, _, _, _, dest, err = vschema.FindTableOrVindex(explain.Table)
 		if err != nil {
 			return nil, err
 		}
-		explain.Table.Qualifier = sqlparser.NewIdentifierCS("")
-
-		keyspace, err = vschema.FindKeyspace(ks)
-		if err != nil {
-			return nil, err
+		if tbl == nil {
+			return nil, vterrors.VT05004(explain.Table.Name.String())
 		}
-		if keyspace == nil {
-			return nil, vterrors.VT14004(ks)
-		}
+		keyspace = tbl.Keyspace
+		explain.Table = sqlparser.NewTableName(tbl.Name.String())
 	}
 
-	if destination == nil {
-		destination = key.DestinationAnyShard{}
+	if dest == nil {
+		dest = key.DestinationAnyShard{}
 	}
 
 	return newPlanResult(&engine.Send{
 		Keyspace:          keyspace,
-		TargetDestination: destination,
+		TargetDestination: dest,
 		Query:             sqlparser.String(explain),
 		SingleShardOnly:   true,
 	}, singleTable(keyspace.Name, explain.Table.Name.String())), nil

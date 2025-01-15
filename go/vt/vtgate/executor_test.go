@@ -2672,10 +2672,12 @@ func TestExecutorShowVitessMigrations(t *testing.T) {
 
 func TestExecutorDescHash(t *testing.T) {
 	executor, _, _, _, ctx := createExecutorEnv(t)
-
-	showQuery := "desc hash_index"
 	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
-	_, err := executor.Execute(ctx, nil, "", session, showQuery, nil)
+
+	_, err := executor.Execute(ctx, nil, "", session, "desc hash_index", nil)
+	require.EqualError(t, err, "VT05004: table 'hash_index' does not exist")
+
+	_, err = executor.Execute(ctx, nil, "", session, "desc music", nil)
 	require.NoError(t, err)
 }
 
