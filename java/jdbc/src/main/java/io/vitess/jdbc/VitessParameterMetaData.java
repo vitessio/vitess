@@ -25,7 +25,7 @@ public class VitessParameterMetaData implements ParameterMetaData {
   private final int parameterCount;
 
   /**
-   * This implementation (and defaults below) is equivalent to mysql-connector-java's "simple"
+   * This implementation (and defaults below) is equivalent to mysql-connector-j's "simple"
    * (non-server) statement metadata
    */
   VitessParameterMetaData(int count) {
