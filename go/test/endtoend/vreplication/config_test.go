@@ -45,12 +45,18 @@ import (
 // default collation as it has to work across versions and the 8.0 default does not exist in 5.7.
 var (
 	// All standard user tables should have a primary key and at least one secondary key.
-	customerTypes        = []string{"'individual'", "'soho'", "'enterprise'"}
+	customerTypes         = []string{"'individual'", "'soho'", "'enterprise'"}
+	customerTableTemplate = `create table customer(cid int auto_increment, name varchar(128) collate utf8mb4_bin, meta json default null,
+  industryCategory varchar(100) generated always as (json_extract(meta, _utf8mb4'$.industry')) virtual, typ enum(%s),
+  sport set('football','cricket','baseball'), ts timestamp not null default current_timestamp, bits bit(2) default b'11', date1 datetime not null default '0000-00-00 00:00:00',
+	date2 datetime not null default '2021-00-01 00:00:00', dec80 decimal(8,0), blb blob, primary key(%s), key(name)) CHARSET=utf8mb4`
+	customerTable = fmt.Sprintf(customerTableTemplate, strings.Join(customerTypes, ","), "cid,typ" /* PK columns */)
+	// customerTableModifiedPK has a PK on (cid) vs (cid,typ).
+	customerTableModifiedPK = fmt.Sprintf(customerTableTemplate, strings.Join(customerTypes, ","), "cid" /* PK columns */)
+
 	initialProductSchema = fmt.Sprintf(`
 create table product(pid int, description varbinary(128), date1 datetime not null default '0000-00-00 00:00:00', date2 datetime not null default '2021-00-01 00:00:00', primary key(pid), key(date1,date2)) CHARSET=utf8mb4;
-create table customer(cid int auto_increment, name varchar(128) collate utf8mb4_bin, meta json default null, industryCategory varchar(100) generated always as (json_extract(meta, _utf8mb4'$.industry')) virtual,
-  typ enum(%s), sport set('football','cricket','baseball'), ts timestamp not null default current_timestamp, bits bit(2) default b'11', date1 datetime not null default '0000-00-00 00:00:00',
-	date2 datetime not null default '2021-00-01 00:00:00', dec80 decimal(8,0), blb blob, primary key(cid,typ), key(name)) CHARSET=utf8mb4;
+%s;
 create table customer_seq(id int, next_id bigint, cache bigint, primary key(id)) comment 'vitess_sequence';
 create table merchant(mname varchar(128), category varchar(128), primary key(mname), key(category)) CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 create table orders(oid int, cid int, pid int, mname varchar(128), price int, qty int, total int as (qty * price), total2 int as (qty * price) stored, primary key(oid), key(pid), key(cid)) CHARSET=utf8;
@@ -69,7 +75,8 @@ create table  `+"`blüb_tbl`"+` (id int, val1 varchar(20), `+"`blöb1`"+` blob, 
 create table reftable (id int, val1 varchar(20), primary key(id), key(val1));
 create table loadtest (id int, name varchar(256), primary key(id), key(name));
 create table nopk (name varchar(128), age int unsigned);
-`, strings.Join(customerTypes, ","))
+`, customerTable)
+
 	// These should always be ignored in vreplication
 	internalSchema = `
  create table _1e275eef_3b20_11eb_a38f_04ed332e05c2_20201210204529_gho(id int, val varbinary(128), primary key(id));
