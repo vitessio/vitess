@@ -195,6 +195,7 @@ func TestVSchemaSQLAPIConcurrency(t *testing.T) {
 	if !utils.BinaryIsAtLeastAtVersion(22, "vtgate") {
 		t.Skip("This test requires vtgate version 22 or higher")
 	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 	conn, err := mysql.Connect(ctx, &vtParams)
@@ -214,6 +215,7 @@ func TestVSchemaSQLAPIConcurrency(t *testing.T) {
 	}
 
 	isVersionMismatchErr := func(err error) bool {
+		// The error we get is an SQL error so we have to do string matching.
 		return err != nil && strings.Contains(err.Error(), vtgate.ErrStaleVSchema.Error())
 	}
 
@@ -226,14 +228,12 @@ func TestVSchemaSQLAPIConcurrency(t *testing.T) {
 			time.Sleep(time.Duration(rand.Intn(100) * int(time.Nanosecond)))
 			tableName := fmt.Sprintf("%s%d", baseTableName, i)
 			_, err = mysqlConns[i].ExecuteFetch(fmt.Sprintf("ALTER VSCHEMA ADD TABLE %s", tableName), -1, false)
-			// The error we get is an SQL error so we have to do string matching.
 			if isVersionMismatchErr(err) {
 				preventedLostWrites.Store(true)
 			} else {
 				require.NoError(t, err)
 				time.Sleep(time.Duration(rand.Intn(75) * int(time.Nanosecond)))
 				_, err = mysqlConns[i].ExecuteFetch(fmt.Sprintf("ALTER VSCHEMA DROP TABLE %s", tableName), -1, false)
-				// The error we get is an SQL error so we have to do string matching.
 				if isVersionMismatchErr(err) {
 					preventedLostWrites.Store(true)
 				} else {
