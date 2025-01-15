@@ -154,3 +154,7 @@ List of changes between bootstrap image versions.
 ## [39] - 2024-12-04
 ### Changes
 - Update build to golang 1.23.4
+
+## [40] - 2025-01-15
+### Changes
+- Update base image to bookworm
