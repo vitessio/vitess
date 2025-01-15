@@ -1090,6 +1090,30 @@ func TestEngineReload(t *testing.T) {
 	})
 }
 
+func TestUpdateTableIndexMetrics(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &connParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	if query := conn.BaseShowInnodbTableSizes(); query == "" {
+		t.Skip("additional table/index metrics not updated in this version of MySQL")
+	}
+	vars := framework.DebugVars()
+
+	require.NotNil(t, framework.FetchVal(vars, "TableRows/vitess_a"))
+	require.NotNil(t, framework.FetchVal(vars, "TableRows/vitess_part"))
+
+	require.NotNil(t, framework.FetchVal(vars, "TableClusteredIndexSize/vitess_a"))
+	require.NotNil(t, framework.FetchVal(vars, "TableClusteredIndexSize/vitess_part"))
+
+	require.NotNil(t, framework.FetchVal(vars, "IndexCardinality/vitess_a.PRIMARY"))
+	require.NotNil(t, framework.FetchVal(vars, "IndexCardinality/vitess_part.PRIMARY"))
+
+	require.NotNil(t, framework.FetchVal(vars, "IndexBytes/vitess_a.PRIMARY"))
+	require.NotNil(t, framework.FetchVal(vars, "IndexBytes/vitess_part.PRIMARY"))
+}
+
 // TestTuple tests that bind variables having tuple values work with vttablet.
 func TestTuple(t *testing.T) {
 	client := framework.NewClient()
