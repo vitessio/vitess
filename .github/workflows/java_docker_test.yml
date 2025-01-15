@@ -1,10 +1,10 @@
-name: docker_test_cluster_10
+name: java_docker_test
 on: [push, pull_request]
 permissions: read-all
 jobs:
 
   build:
-    name: Docker Test Cluster 10
+    name: Java Docker Test
     runs-on: ubuntu-24.04
 
     steps:
