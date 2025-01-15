@@ -57,6 +57,34 @@ type (
 	OrderAndLimit interface {
 		AddOrder(*Order)
 		SetLimit(*Limit)
+		GetOrderBy() OrderBy
+		SetOrderBy(OrderBy)
+		GetLimit() *Limit
+	}
+
+	TableStatement interface {
+		iTableStatement()
+
+		InsertRows
+		Statement
+		OrderAndLimit
+		Commented
+		ColumnResults
+		Withable
+	}
+
+	ColumnResults interface {
+		GetColumnCount() int
+		GetColumns() SelectExprs
+	}
+
+	Withable interface {
+		SetWith(with *With)
+	}
+
+	Distinctable interface {
+		MakeDistinct()
+		IsDistinct() bool
 	}
 
 	// SelectStatement any SELECT statement.
@@ -64,19 +92,14 @@ type (
 		Statement
 		InsertRows
 		OrderAndLimit
+		Commented
+		ColumnResults
+		Withable
+		Distinctable
 		iSelectStatement()
 		GetLock() Lock
 		SetLock(lock Lock)
 		SetInto(into *SelectInto)
-		SetWith(with *With)
-		MakeDistinct()
-		GetColumnCount() int
-		GetColumns() SelectExprs
-		Commented
-		IsDistinct() bool
-		GetOrderBy() OrderBy
-		SetOrderBy(OrderBy)
-		GetLimit() *Limit
 	}
 
 	// DDLStatement represents any DDL Statement
@@ -161,7 +184,7 @@ type (
 	CommonTableExpr struct {
 		ID       IdentifierCS
 		Columns  Columns
-		Subquery SelectStatement
+		Subquery TableStatement
 	}
 	// ChangeColumn is used to change the column definition, can also rename the column in alter table command
 	ChangeColumn struct {
@@ -303,8 +326,8 @@ type (
 	// Union represents a UNION statement.
 	Union struct {
 		With     *With
-		Left     SelectStatement
-		Right    SelectStatement
+		Left     TableStatement
+		Right    TableStatement
 		Distinct bool
 		OrderBy  OrderBy
 		Limit    *Limit
@@ -543,7 +566,7 @@ type (
 		Definer     *Definer
 		Security    string
 		Columns     Columns
-		Select      SelectStatement
+		Select      TableStatement
 		CheckOption string
 		IsReplace   bool
 		Comments    *ParsedComments
@@ -556,7 +579,7 @@ type (
 		Definer     *Definer
 		Security    string
 		Columns     Columns
-		Select      SelectStatement
+		Select      TableStatement
 		CheckOption string
 		Comments    *ParsedComments
 	}
@@ -727,58 +750,63 @@ type (
 var _ OrderAndLimit = (*Select)(nil)
 var _ OrderAndLimit = (*Update)(nil)
 var _ OrderAndLimit = (*Delete)(nil)
+var _ OrderAndLimit = (*ValuesStatement)(nil)
 
-func (*Union) iStatement()               {}
-func (*Select) iStatement()              {}
-func (*Stream) iStatement()              {}
-func (*VStream) iStatement()             {}
-func (*Insert) iStatement()              {}
-func (*Update) iStatement()              {}
-func (*Delete) iStatement()              {}
-func (*Set) iStatement()                 {}
-func (*DropDatabase) iStatement()        {}
-func (*Flush) iStatement()               {}
-func (*Show) iStatement()                {}
-func (*Use) iStatement()                 {}
-func (*Begin) iStatement()               {}
-func (*Commit) iStatement()              {}
-func (*Rollback) iStatement()            {}
-func (*SRollback) iStatement()           {}
-func (*Savepoint) iStatement()           {}
-func (*Release) iStatement()             {}
-func (*Analyze) iStatement()             {}
-func (*OtherAdmin) iStatement()          {}
-func (*CommentOnly) iStatement()         {}
-func (*Select) iSelectStatement()        {}
-func (*Union) iSelectStatement()         {}
-func (*Load) iStatement()                {}
-func (*CreateDatabase) iStatement()      {}
-func (*AlterDatabase) iStatement()       {}
-func (*CreateTable) iStatement()         {}
-func (*CreateView) iStatement()          {}
-func (*AlterView) iStatement()           {}
-func (*LockTables) iStatement()          {}
-func (*UnlockTables) iStatement()        {}
-func (*AlterTable) iStatement()          {}
-func (*AlterVschema) iStatement()        {}
-func (*AlterMigration) iStatement()      {}
-func (*RevertMigration) iStatement()     {}
-func (*ShowMigrationLogs) iStatement()   {}
-func (*ShowThrottledApps) iStatement()   {}
-func (*ShowThrottlerStatus) iStatement() {}
-func (*DropTable) iStatement()           {}
-func (*DropView) iStatement()            {}
-func (*TruncateTable) iStatement()       {}
-func (*RenameTable) iStatement()         {}
-func (*CallProc) iStatement()            {}
-func (*ExplainStmt) iStatement()         {}
-func (*VExplainStmt) iStatement()        {}
-func (*ExplainTab) iStatement()          {}
-func (*PrepareStmt) iStatement()         {}
-func (*ExecuteStmt) iStatement()         {}
-func (*DeallocateStmt) iStatement()      {}
-func (*PurgeBinaryLogs) iStatement()     {}
-func (*Kill) iStatement()                {}
+func (*Union) iStatement()                 {}
+func (*Select) iStatement()                {}
+func (*ValuesStatement) iStatement()       {}
+func (*Stream) iStatement()                {}
+func (*VStream) iStatement()               {}
+func (*Insert) iStatement()                {}
+func (*Update) iStatement()                {}
+func (*Delete) iStatement()                {}
+func (*Set) iStatement()                   {}
+func (*DropDatabase) iStatement()          {}
+func (*Flush) iStatement()                 {}
+func (*Show) iStatement()                  {}
+func (*Use) iStatement()                   {}
+func (*Begin) iStatement()                 {}
+func (*Commit) iStatement()                {}
+func (*Rollback) iStatement()              {}
+func (*SRollback) iStatement()             {}
+func (*Savepoint) iStatement()             {}
+func (*Release) iStatement()               {}
+func (*Analyze) iStatement()               {}
+func (*OtherAdmin) iStatement()            {}
+func (*CommentOnly) iStatement()           {}
+func (*Select) iSelectStatement()          {}
+func (*Select) iTableStatement()           {}
+func (*ValuesStatement) iSelectStatement() {}
+func (*Union) iSelectStatement()           {}
+func (*Union) iTableStatement()            {}
+func (*Load) iStatement()                  {}
+func (*CreateDatabase) iStatement()        {}
+func (*AlterDatabase) iStatement()         {}
+func (*CreateTable) iStatement()           {}
+func (*CreateView) iStatement()            {}
+func (*AlterView) iStatement()             {}
+func (*LockTables) iStatement()            {}
+func (*UnlockTables) iStatement()          {}
+func (*AlterTable) iStatement()            {}
+func (*AlterVschema) iStatement()          {}
+func (*AlterMigration) iStatement()        {}
+func (*RevertMigration) iStatement()       {}
+func (*ShowMigrationLogs) iStatement()     {}
+func (*ShowThrottledApps) iStatement()     {}
+func (*ShowThrottlerStatus) iStatement()   {}
+func (*DropTable) iStatement()             {}
+func (*DropView) iStatement()              {}
+func (*TruncateTable) iStatement()         {}
+func (*RenameTable) iStatement()           {}
+func (*CallProc) iStatement()              {}
+func (*ExplainStmt) iStatement()           {}
+func (*VExplainStmt) iStatement()          {}
+func (*ExplainTab) iStatement()            {}
+func (*PrepareStmt) iStatement()           {}
+func (*ExecuteStmt) iStatement()           {}
+func (*DeallocateStmt) iStatement()        {}
+func (*PurgeBinaryLogs) iStatement()       {}
+func (*Kill) iStatement()                  {}
 
 func (*CreateView) iDDLStatement()    {}
 func (*AlterView) iDDLStatement()     {}
@@ -1702,9 +1730,10 @@ type InsertRows interface {
 	SQLNode
 }
 
-func (*Select) iInsertRows() {}
-func (*Union) iInsertRows()  {}
-func (Values) iInsertRows()  {}
+func (*Select) iInsertRows()          {}
+func (*Union) iInsertRows()           {}
+func (Values) iInsertRows()           {}
+func (*ValuesStatement) iInsertRows() {}
 
 // OptLike works for create table xxx like xxx
 type OptLike struct {
@@ -2108,13 +2137,13 @@ type (
 
 	// Subquery represents a subquery used as an value expression.
 	Subquery struct {
-		Select SelectStatement
+		Select TableStatement
 	}
 
 	// DerivedTable represents a subquery used as a table expression.
 	DerivedTable struct {
 		Lateral bool
-		Select  SelectStatement
+		Select  TableStatement
 	}
 )
 
@@ -3574,6 +3603,18 @@ type Limit struct {
 
 // Values represents a VALUES clause.
 type Values []ValTuple
+
+// ValuesStatement represents a VALUES statement, as in VALUES ROW(1, 2), ROW(3, 4)
+type ValuesStatement struct {
+	With *With
+	// One but not both of these fields can be set.
+	Rows    Values
+	ListArg ListArg
+
+	Comments *ParsedComments
+	Order    OrderBy
+	Limit    *Limit
+}
 
 // UpdateExprs represents a list of update expressions.
 type UpdateExprs []*UpdateExpr

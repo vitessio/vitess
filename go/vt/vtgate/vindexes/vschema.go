@@ -263,7 +263,7 @@ type KeyspaceSchema struct {
 	ForeignKeyMode  vschemapb.Keyspace_ForeignKeyMode
 	Tables          map[string]*Table
 	Vindexes        map[string]Vindex
-	Views           map[string]sqlparser.SelectStatement
+	Views           map[string]sqlparser.TableStatement
 	Error           error
 	MultiTenantSpec *vschemapb.MultiTenantSpec
 
@@ -430,12 +430,12 @@ func (vschema *VSchema) AddView(ksname, viewName, query string, parser *sqlparse
 	if err != nil {
 		return err
 	}
-	selectStmt, ok := ast.(sqlparser.SelectStatement)
+	selectStmt, ok := ast.(sqlparser.TableStatement)
 	if !ok {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "expected SELECT or UNION query, got %T", ast)
 	}
 	if ks.Views == nil {
-		ks.Views = make(map[string]sqlparser.SelectStatement)
+		ks.Views = make(map[string]sqlparser.TableStatement)
 	}
 	ks.Views[viewName] = selectStmt
 	t := &Table{
@@ -1476,7 +1476,7 @@ func (vschema *VSchema) FindTableOrVindex(keyspace, name string, tabletType topo
 	return nil, nil, NotFoundError{TableName: name}
 }
 
-func (vschema *VSchema) FindView(keyspace, name string) sqlparser.SelectStatement {
+func (vschema *VSchema) FindView(keyspace, name string) sqlparser.TableStatement {
 	if keyspace == "" {
 		switch {
 		case len(vschema.Keyspaces) == 1:

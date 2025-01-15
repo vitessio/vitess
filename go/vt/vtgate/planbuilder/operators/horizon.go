@@ -45,7 +45,7 @@ type Horizon struct {
 	// QP contains the QueryProjection for this op
 	QP *QueryProjection
 
-	Query sqlparser.SelectStatement
+	Query sqlparser.TableStatement
 
 	// Columns needed to feed other plans
 	Columns       []*sqlparser.ColName
@@ -54,7 +54,7 @@ type Horizon struct {
 	Truncate bool
 }
 
-func newHorizon(src Operator, query sqlparser.SelectStatement) *Horizon {
+func newHorizon(src Operator, query sqlparser.TableStatement) *Horizon {
 	return &Horizon{
 		unaryOperator: newUnaryOp(src),
 		Query:         query,
@@ -148,7 +148,7 @@ func (h *Horizon) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr,
 		return -1
 	}
 
-	for idx, se := range sqlparser.GetFirstSelect(h.Query).SelectExprs {
+	for idx, se := range getFirstSelect(h.Query).SelectExprs {
 		ae, ok := se.(*sqlparser.AliasedExpr)
 		if !ok {
 			panic(vterrors.VT09015())
@@ -174,7 +174,7 @@ func (h *Horizon) GetColumns(ctx *plancontext.PlanningContext) (exprs []*sqlpars
 }
 
 func (h *Horizon) GetSelectExprs(*plancontext.PlanningContext) sqlparser.SelectExprs {
-	return sqlparser.GetFirstSelect(h.Query).SelectExprs
+	return getFirstSelect(h.Query).SelectExprs
 }
 
 func (h *Horizon) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
@@ -185,7 +185,7 @@ func (h *Horizon) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
 }
 
 // TODO: REMOVE
-func (h *Horizon) selectStatement() sqlparser.SelectStatement {
+func (h *Horizon) selectStatement() sqlparser.TableStatement {
 	return h.Query
 }
 

@@ -115,7 +115,7 @@ func createSubqueryOp(
 // inspectStatement goes through all the predicates contained in the AST
 // and extracts subqueries into operators
 func (sqb *SubQueryBuilder) inspectStatement(ctx *plancontext.PlanningContext,
-	stmt sqlparser.SelectStatement,
+	stmt sqlparser.TableStatement,
 ) (sqlparser.Exprs, []applyJoinColumn) {
 	switch stmt := stmt.(type) {
 	case *sqlparser.Select:

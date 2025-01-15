@@ -60,14 +60,15 @@ func markBindVariable(yylex yyLexer, bvar string) {
 }
 
 %union {
-  statement     Statement
-  selStmt       SelectStatement
-  tableExpr     TableExpr
-  expr          Expr
-  colTuple      ColTuple
-  optVal        Expr
-  constraintInfo ConstraintInfo
-  alterOption      AlterOption
+  statement       Statement
+  selStmt         SelectStatement
+  tableStmt    TableStatement
+  tableExpr       TableExpr
+  expr            Expr
+  colTuple        ColTuple
+  optVal          Expr
+  constraintInfo  ConstraintInfo
+  alterOption     AlterOption
 
   ins           *Insert
   colName       *ColName
@@ -434,7 +435,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <statement> prepare_statement execute_statement deallocate_statement
 %type <statement> stream_statement vstream_statement insert_statement update_statement delete_statement set_statement set_transaction_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement flush_statement do_statement
-%type <selStmt> select_statement select_stmt_with_into query_expression_parens query_expression query_expression_body query_primary
+%type <tableStmt> select_statement select_stmt_with_into query_expression_parens query_expression query_expression_body query_primary values_statement
 %type <with> with_clause_opt with_clause
 %type <cte> common_table_expr
 %type <ctes> with_list
@@ -517,8 +518,8 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <isExprOperator> is_suffix
 %type <colTuple> col_tuple
 %type <exprs> expression_list expression_list_opt window_partition_clause_opt
-%type <values> tuple_list
-%type <valTuple> row_tuple tuple_or_empty
+%type <values> row_tuple_list val_tuple_list
+%type <valTuple> val_tuple row_tuple val_tuple_or_empty row_tuple_or_empty val_or_row_tuple
 %type <subquery> subquery
 %type <derivedTable> derived_table
 %type <colName> column_name after_opt
@@ -769,7 +770,7 @@ query_expression_parens:
   }
 | openb query_expression locking_clause closeb
   {
-    setLockInSelect($2, $3)
+    setLockIfPossible(yylex, $2, $3)
     $$ = $2
   }
 
@@ -810,9 +811,9 @@ query_expression:
 | with_clause query_expression_body order_by_opt limit_opt
   {
     $2.SetWith($1)
-	      $2.SetOrderBy($3)
-	      $2.SetLimit($4)
-	      $$ = $2
+    $2.SetOrderBy($3)
+    $2.SetLimit($4)
+    $$ = $2
   }
 | with_clause query_expression_parens limit_clause
   {
@@ -865,7 +866,7 @@ query_expression
   }
 | query_expression locking_clause
   {
-	setLockInSelect($1, $2)
+    setLockIfPossible(yylex, $1, $2)
     $$ = $1
   }
 | query_expression_parens
@@ -884,25 +885,35 @@ select_stmt_with_into:
   }
 | query_expression into_clause
   {
-    $1.SetInto($2)
+    setIntoIfPossible(yylex, $1, $2)
     $$ = $1
   }
 | query_expression into_clause locking_clause
   {
-    $1.SetInto($2)
-    $1.SetLock($3)
+    setIntoIfPossible(yylex, $1, $2)
+    setLockIfPossible(yylex, $1, $3)
     $$ = $1
   }
 | query_expression locking_clause into_clause
   {
-    $1.SetInto($3)
-    $1.SetLock($2)
+    setLockIfPossible(yylex, $1, $2)
+    setIntoIfPossible(yylex, $1, $3)
     $$ = $1
   }
 | query_expression_parens into_clause
   {
-    $1.SetInto($2)
+    setIntoIfPossible(yylex, $1, $2)
     $$ = $1
+  }
+
+values_statement:
+  VALUES comment_opt LIST_ARG
+  {
+    $$ = &ValuesStatement{Comments: Comments($2).Parsed(), ListArg: ListArg($3[2:])}
+  }
+| VALUES comment_opt row_tuple_list
+  {
+    $$ = &ValuesStatement{Comments: Comments($2).Parsed(), Rows: $3}
   }
 
 stream_statement:
@@ -927,6 +938,10 @@ query_primary:
 | SELECT comment_opt select_options_opt select_expression_list from_opt where_expression_opt group_by_opt having_opt named_windows_list_opt
   {
     $$ = NewSelect(Comments($2), $4/*SelectExprs*/, $3/*options*/, nil, $5/*from*/, NewWhere(WhereClause, $6), $7, NewWhere(HavingClause, $8), $9)
+  }
+| values_statement
+  {
+    $$ = $1
   }
 
 insert_statement:
@@ -3871,7 +3886,7 @@ subpartition_definition_attribute_list_opt:
   }
 
 partition_value_range:
-  VALUES LESS THAN row_tuple
+  VALUES LESS THAN val_tuple
   {
     $$ = &PartitionValueRange{
     	Type: LessThanType,
@@ -3885,7 +3900,7 @@ partition_value_range:
     	Maxvalue: true,
     }
   }
-| VALUES IN row_tuple
+| VALUES IN val_tuple
   {
     $$ = &PartitionValueRange{
     	Type: InType,
@@ -5918,7 +5933,7 @@ any_all_compare:
   }
 
 col_tuple:
-  row_tuple
+  val_tuple
   {
     $$ = $1
   }
@@ -7818,7 +7833,7 @@ optionally_opt:
 // Because the rules are together, the parser can keep shifting
 // the tokens until it disambiguates a as sql_id and select as keyword.
 insert_data:
-  VALUES tuple_list row_alias_opt
+  VALUES val_tuple_list row_alias_opt
   {
     $$ = &Insert{Rows: $2, RowAlias: $3}
   }
@@ -7826,11 +7841,11 @@ insert_data:
   {
     $$ = &Insert{Rows: $1}
   }
-| openb ins_column_list closeb VALUES tuple_list row_alias_opt
+| openb ins_column_list closeb VALUES val_tuple_list row_alias_opt
   {
     $$ = &Insert{Columns: $2, Rows: $5, RowAlias: $6}
   }
-| openb closeb VALUES tuple_list row_alias_opt
+| openb closeb VALUES val_tuple_list row_alias_opt
   {
     $$ = &Insert{Columns: []IdentifierCI{}, Rows: $4, RowAlias: $5}
   }
@@ -7879,18 +7894,38 @@ on_dup_opt:
     $$ = $5
   }
 
-tuple_list:
-  tuple_or_empty
+row_tuple_list:
+  row_tuple_or_empty
   {
     $$ = Values{$1}
   }
-| tuple_list ',' tuple_or_empty
+| row_tuple_list ',' row_tuple_or_empty
   {
     $$ = append($1, $3)
   }
 
-tuple_or_empty:
+val_tuple_list:
+  val_tuple_or_empty
+  {
+    $$ = Values{$1}
+  }
+| val_tuple_list ',' val_tuple_or_empty
+  {
+    $$ = append($1, $3)
+  }
+
+row_tuple_or_empty:
   row_tuple
+  {
+    $$ = $1
+  }
+| ROW openb closeb
+  {
+    $$ = ValTuple{}
+  }
+
+val_tuple_or_empty:
+  val_tuple
   {
     $$ = $1
   }
@@ -7899,17 +7934,24 @@ tuple_or_empty:
     $$ = ValTuple{}
   }
 
-row_tuple:
+val_tuple:
   openb expression_list closeb
   {
     $$ = ValTuple($2)
   }
-| ROW openb expression_list closeb
+
+row_tuple:
+  ROW openb expression_list closeb
   {
     $$ = ValTuple($3)
   }
+
+val_or_row_tuple:
+  val_tuple
+| row_tuple
+
 tuple_expression:
- row_tuple
+ val_or_row_tuple
   {
     if len($1) == 1 {
     $$ = $1[0]

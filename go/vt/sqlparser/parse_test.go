@@ -3868,7 +3868,22 @@ var (
 	}, {
 		input: `select * from tbl where foo > any (select foo from tbl2)`,
 	}, {
-		input: `select * from tbl where foo > all (select foo from tbl2)`}}
+		input: `select * from tbl where foo > all (select foo from tbl2)`,
+	}, {
+		input: "insert into t1(a1) values row('a'), row('b')",
+	}, {
+		input: "insert into t1(a1) values ('a'), ('b')",
+	}, {
+		input: "values row('a'), row('b')",
+	}, {
+		input: "values /*my comment*/ row('a'), row('b')",
+	}, {
+		input:  `with x as (select * from t1 limit 1) values ROW('a1', (select x.a1 from x))`,
+		output: "with x as (select * from t1 limit 1) values row('a1', (select x.a1 from x))",
+	}, {
+		input:  "SELECT 1,2 UNION SELECT * from (VALUES ROW(10,15)) t",
+		output: "select 1, 2 from dual union select * from (values row(10, 15)) as t",
+	}}
 )
 
 func TestValid(t *testing.T) {
@@ -3944,6 +3959,12 @@ func TestInvalid(t *testing.T) {
 	}, {
 		input: "/*!*/",
 		err:   "Query was empty",
+	}, {
+		input: "values row(1) into outfile s3 'out_file_name'",
+		err:   "VALUES does not support INTO at position 46",
+	}, {
+		input: "values row(1) lock in share mode",
+		err:   "VALUES does not support LOCK at position 33",
 	}, {
 		input: "select /* union with limit on lhs */ 1 from t limit 1 union select 1 from t",
 		err:   "syntax error at position 60 near 'union'",
@@ -6204,6 +6225,12 @@ var (
 	}, {
 		input:  "create database test_db default encryption @a",
 		output: "syntax error at position 46 near 'a'",
+	}, {
+		input:  "select * from t1 where a1 in row('a')",
+		output: "syntax error at position 33 near 'row'",
+	}, {
+		input:  "insert into t1 (a1) values row('a'), ('b')",
+		output: "syntax error at position 39",
 	}}
 )
 

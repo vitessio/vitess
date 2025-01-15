@@ -427,6 +427,6 @@ func (c *CreateViewEntity) identicalOtherThanName(other *CreateViewEntity) bool 
 		c.IsReplace == other.IsReplace &&
 		sqlparser.Equals.RefOfDefiner(c.Definer, other.Definer) &&
 		sqlparser.Equals.Columns(c.Columns, other.Columns) &&
-		sqlparser.Equals.SelectStatement(c.Select, other.Select) &&
+		sqlparser.Equals.Statement(c.Select, other.Select) &&
 		sqlparser.Equals.RefOfParsedComments(c.Comments, other.Comments)
 }
