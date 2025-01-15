@@ -50,7 +50,7 @@ jobs:
             - 'config/**'
             - 'bootstrap.sh'
             - 'docker/**'
-            - '.github/workflows/docker_test_cluster_25.yml'
+            - '.github/workflows/docker_test_cluster.yml'
 
     - name: Set up Go
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
