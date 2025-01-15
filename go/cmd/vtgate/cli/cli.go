@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/thirdparty"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/srvtopo"
@@ -80,6 +81,8 @@ var (
 
 func init() {
 	srvTopoCounts = stats.NewCountersWithSingleLabel("ResilientSrvTopoServer", "Resilient srvtopo server operations", "type")
+	// Initalize any third party implementations for vitess
+	thirdparty.InitializeThirdParty()
 }
 
 // CheckCellFlags will check validation of cell and cells_to_watch flag
