@@ -59,7 +59,7 @@ func (p Phase) String() string {
 	case addAggrOrdering:
 		return "optimize aggregations with ORDER BY"
 	case cleanOutPerfDistinct:
-		return "optimize Distinctable operations"
+		return "optimize Distinct operations"
 	case subquerySettling:
 		return "settle subqueries"
 	case dmlWithInput:

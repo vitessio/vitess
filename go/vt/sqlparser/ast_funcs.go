@@ -2369,11 +2369,11 @@ func GetFirstSelect(selStmt TableStatement) (*Select, error) {
 	case *Select:
 		return node, nil
 	case *ValuesStatement:
-		return nil, fmt.Errorf("first table_reference is a VALUES")
+		return nil, vterrors.VT12001("first table_reference as VALUES")
 	case *Union:
 		return GetFirstSelect(node.Left)
 	}
-	panic("[BUG]: unknown type for SelectStatement")
+	return nil, vterrors.VT13001(fmt.Sprintf("unknown type for SelectStatement: %T", selStmt))
 }
 
 // GetAllSelects gets all the select statement s

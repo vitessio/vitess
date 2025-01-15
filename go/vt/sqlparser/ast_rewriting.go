@@ -532,7 +532,7 @@ func (er *astRewriter) existsRewrite(cursor *Cursor, node *ExistsExpr) {
 	sel.GroupBy = nil
 }
 
-// rewriteDistinctableAggr removed Distinctable from Max and Min Aggregations as it does not impact the result. But, makes the plan simpler.
+// rewriteDistinctableAggr removed Distinct from Max and Min Aggregations as it does not impact the result. But, makes the plan simpler.
 func (er *astRewriter) rewriteDistinctableAggr(cursor *Cursor, node DistinctableAggr) {
 	if !node.IsDistinct() {
 		return

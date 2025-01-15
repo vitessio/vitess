@@ -55,8 +55,7 @@ func yyParsePooled(yylex yyLexer) int {
 		*parser = zeroParser
 		parserPool.Put(parser)
 	}()
-	parse := parser.Parse(yylex)
-	return parse
+	return parser.Parse(yylex)
 }
 
 // Instructions for creating new types: If a type

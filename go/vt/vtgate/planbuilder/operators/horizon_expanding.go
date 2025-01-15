@@ -95,7 +95,7 @@ func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel
 
 	if qp.NeedsDistinct() {
 		op = newDistinct(op, qp, true)
-		extracted = append(extracted, "Distinctable")
+		extracted = append(extracted, "Distinct")
 	}
 
 	if sel.Having != nil {
