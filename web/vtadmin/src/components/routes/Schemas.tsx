@@ -38,7 +38,7 @@ const TABLE_COLUMNS: Array<ColumnProps> = [
     { display: 'Table', accessor: 'table' },
     {
         display: (
-            <div className="text-right">
+            <div className="text-left">
                 Approx. Size{' '}
                 <HelpTooltip
                     text={
@@ -54,7 +54,7 @@ const TABLE_COLUMNS: Array<ColumnProps> = [
     },
     {
         display: (
-            <div className="text-right">
+            <div className="text-left">
                 Approx. Rows{' '}
                 <HelpTooltip
                     text={
@@ -110,13 +110,13 @@ export const Schemas = () => {
                         </KeyspaceLink>
                     </DataCell>
                     <DataCell className="font-bold">{href ? <Link to={href}>{row.table}</Link> : row.table}</DataCell>
-                    <DataCell className="text-right">
+                    <DataCell className="text-left">
                         <div>{formatBytes(row._raw.tableSize?.data_length)}</div>
                         <div className="text-sm text-secondary">
                             {formatBytes(row._raw.tableSize?.data_length, 'B')}
                         </div>
                     </DataCell>
-                    <DataCell className="text-right">{(row._raw.tableSize?.row_count || 0).toLocaleString()}</DataCell>
+                    <DataCell className="text-left">{(row._raw.tableSize?.row_count || 0).toLocaleString()}</DataCell>
                 </tr>
             );
         });
