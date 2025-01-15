@@ -1,10 +1,10 @@
-name: docker_test_cluster_25
+name: docker_test_cluster
 on: [push, pull_request]
 permissions: read-all
 jobs:
 
   build:
-    name: Docker Test Cluster 25
+    name: Docker Test Cluster
     runs-on: ubuntu-24.04
 
     steps:
@@ -39,6 +39,7 @@ jobs:
         token: ''
         filters: |
           end_to_end:
+            - 'test/config.json'
             - 'go/**/*.go'
             - 'test.go'
             - 'Makefile'
@@ -50,7 +51,7 @@ jobs:
             - 'config/**'
             - 'bootstrap.sh'
             - 'docker/**'
-            - '.github/workflows/docker_test_cluster_25.yml'
+            - '.github/workflows/docker_test_cluster.yml'
 
     - name: Set up Go
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -66,4 +67,4 @@ jobs:
     - name: Run tests which require docker - 2
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
-        go run test.go -docker=true --follow -shard 25
+        go run test.go -docker=true --follow -shard docker_cluster

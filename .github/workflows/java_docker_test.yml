@@ -39,6 +39,7 @@ jobs:
         token: ''
         filters: |
           end_to_end:
+            - 'test/config.json'
             - 'go/**/*.go'
             - 'test.go'
             - 'Makefile'
@@ -51,7 +52,7 @@ jobs:
             - 'bootstrap.sh'
             - 'docker/**'
             - 'java/**'
-            - '.github/workflows/docker_test_cluster_10.yml'
+            - '.github/workflows/java_docker_test.yml'
 
     - name: Set up Go
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -68,4 +69,4 @@ jobs:
     - name: Run tests which require docker - 1
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
-        go run test.go -docker=true --follow -shard 10
+        go run test.go -docker=true --follow -shard java
