@@ -50,6 +50,7 @@ jobs:
             - 'config/**'
             - 'bootstrap.sh'
             - 'docker/**'
+            - 'java/**'
             - '.github/workflows/docker_test_cluster_10.yml'
 
     - name: Set up Go
