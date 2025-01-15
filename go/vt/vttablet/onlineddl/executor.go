@@ -838,7 +838,7 @@ func (e *Executor) killTableLockHoldersAndAccessors(ctx context.Context, tableNa
 		}
 	}
 	capableOf := mysql.ServerVersionCapableOf(conn.ServerVersion)
-	terminateTransactions := func(capability capabilities.FlavorCapability, query string, description string) error {
+	terminateTransactions := func(capability capabilities.FlavorCapability, query string, column string, description string) error {
 		capable, err := capableOf(capability)
 		if err != nil {
 			return err
@@ -856,7 +856,7 @@ func (e *Executor) killTableLockHoldersAndAccessors(ctx context.Context, tableNa
 		}
 		log.Infof("terminateTransactions: found %v transactions locking table `%s` %s", len(rs.Rows), tableName, description)
 		for _, row := range rs.Named().Rows {
-			threadId := row.AsInt64("processlist_id", 0)
+			threadId := row.AsInt64(column, 0)
 			log.Infof("terminateTransactions: killing connection %v with transaction locking table `%s` %s", threadId, tableName, description)
 			killConnection := fmt.Sprintf("KILL %d", threadId)
 			_, err = conn.Conn.ExecuteFetch(killConnection, 1, false)
@@ -866,10 +866,10 @@ func (e *Executor) killTableLockHoldersAndAccessors(ctx context.Context, tableNa
 		}
 		return nil
 	}
-	if err := terminateTransactions(capabilities.PerformanceSchemaDataLocksTableCapability, sqlProcessWithLocksOnTable, "data"); err != nil {
+	if err := terminateTransactions(capabilities.PerformanceSchemaDataLocksTableCapability, sqlProcessWithLocksOnTable, "trx_mysql_thread_id", "data"); err != nil {
 		return err
 	}
-	if err := terminateTransactions(capabilities.PerformanceSchemaMetadataLocksTableCapability, sqlProcessWithMetadataLocksOnTable, "metadata"); err != nil {
+	if err := terminateTransactions(capabilities.PerformanceSchemaMetadataLocksTableCapability, sqlProcessWithMetadataLocksOnTable, "processlist_id", "metadata"); err != nil {
 		return err
 	}
 
