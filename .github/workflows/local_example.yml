@@ -40,6 +40,7 @@ jobs:
         token: ''
         filters: |
           examples:
+            - 'test/config.json'
             - 'go/**/*.go'
             - 'test.go'
             - 'Makefile'
