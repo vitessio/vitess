@@ -19,13 +19,8 @@ require (
 	github.com/evanphx/json-patch v5.9.0+incompatible
 	github.com/fsnotify/fsnotify v1.7.0
 	github.com/go-sql-driver/mysql v1.7.1
-<<<<<<< HEAD
-	github.com/golang/glog v1.2.0
-	github.com/golang/protobuf v1.5.4
-=======
 	github.com/golang/glog v1.2.4
 	github.com/golang/protobuf v1.5.4 // indirect
->>>>>>> 72eb041781 (CVE Fix: Update glog to v1.2.4 (#17524))
 	github.com/golang/snappy v0.0.4
 	github.com/google/go-cmp v0.6.0
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
