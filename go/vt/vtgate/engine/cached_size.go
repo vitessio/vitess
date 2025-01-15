@@ -1475,15 +1475,13 @@ func (cached *VStream) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Position)))
 	return size
 }
-
-//go:nocheckptr
 func (cached *ValuesJoin) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(80)
+		size += int64(128)
 	}
 	// field Left vitess.io/vitess/go/vt/vtgate/engine.Primitive
 	if cc, ok := cached.Left.(cachedObject); ok {
@@ -1493,29 +1491,23 @@ func (cached *ValuesJoin) CachedSize(alloc bool) int64 {
 	if cc, ok := cached.Right.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
-	// field Vars map[string]int
-	if cached.Vars != nil {
-		size += int64(48)
-		hmap := reflect.ValueOf(cached.Vars)
-		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
-		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
-		size += hack.RuntimeAllocSize(int64(numOldBuckets * 208))
-		if len(cached.Vars) > 0 || numBuckets > 1 {
-			size += hack.RuntimeAllocSize(int64(numBuckets * 208))
-		}
-		for k := range cached.Vars {
-			size += hack.RuntimeAllocSize(int64(len(k)))
-		}
-	}
-	// field Columns []string
+	// field Vars []int
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Columns)) * int64(16))
-		for _, elem := range cached.Columns {
-			size += hack.RuntimeAllocSize(int64(len(elem)))
-		}
+		size += hack.RuntimeAllocSize(int64(cap(cached.Vars)) * int64(8))
 	}
 	// field RowConstructorArg string
 	size += hack.RuntimeAllocSize(int64(len(cached.RowConstructorArg)))
+	// field Cols []int
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Cols)) * int64(8))
+	}
+	// field ColNames []string
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.ColNames)) * int64(16))
+		for _, elem := range cached.ColNames {
+			size += hack.RuntimeAllocSize(int64(len(elem)))
+		}
+	}
 	return size
 }
 func (cached *Verify) CachedSize(alloc bool) int64 {

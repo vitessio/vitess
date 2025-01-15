@@ -21,6 +21,7 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 var _ Primitive = (*ValuesJoin)(nil)
@@ -33,9 +34,10 @@ type ValuesJoin struct {
 	// of the Join. They can be any primitive.
 	Left, Right Primitive
 
-	Vars              map[string]int
-	Columns           []string
+	Vars              []int
 	RowConstructorArg string
+	Cols              []int
+	ColNames          []string
 }
 
 // TryExecute performs a non-streaming exec.
@@ -62,11 +64,40 @@ func (jv *ValuesJoin) TryExecute(ctx context.Context, vcursor VCursor, bindVars 
 		return jv.Right.GetFields(ctx, vcursor, bindVars)
 	}
 
-	for _, row := range lresult.Rows {
-		bv.Values = append(bv.Values, sqltypes.TupleToProto(row))
+	for i, row := range lresult.Rows {
+		newRow := make(sqltypes.Row, 0, len(jv.Vars)+1)      // +1 since we always add the row ID
+		newRow = append(newRow, sqltypes.NewInt64(int64(i))) // Adding the LHS row ID
+
+		for _, loffset := range jv.Vars {
+			newRow = append(newRow, row[loffset])
+		}
+
+		bv.Values = append(bv.Values, sqltypes.TupleToProto(newRow))
 	}
+
 	bindVars[jv.RowConstructorArg] = bv
-	return vcursor.ExecutePrimitive(ctx, jv.Right, bindVars, wantfields)
+	rresult, err := vcursor.ExecutePrimitive(ctx, jv.Right, bindVars, wantfields)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &sqltypes.Result{}
+
+	result.Fields = joinFields(lresult.Fields, rresult.Fields, jv.Cols)
+	for i := range result.Fields {
+		result.Fields[i].Name = jv.ColNames[i]
+	}
+
+	for _, rrow := range rresult.Rows {
+		lhsRowID, err := rrow[len(rrow)-1].ToCastInt64()
+		if err != nil {
+			return nil, vterrors.VT13001("values joins cannot fetch lhs row ID: " + err.Error())
+		}
+
+		result.Rows = append(result.Rows, joinRows(lresult.Rows[lhsRowID], rrow, jv.Cols))
+	}
+
+	return result, nil
 }
 
 // TryStreamExecute performs a streaming exec.
