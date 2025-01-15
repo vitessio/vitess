@@ -272,7 +272,7 @@ func (cached *AlterView) CachedSize(alloc bool) int64 {
 			size += elem.CachedSize(false)
 		}
 	}
-	// field Select vitess.io/vitess/go/vt/sqlparser.OutputsTable
+	// field Select vitess.io/vitess/go/vt/sqlparser.TableStatement
 	if cc, ok := cached.Select.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
@@ -849,7 +849,7 @@ func (cached *CommonTableExpr) CachedSize(alloc bool) int64 {
 			size += elem.CachedSize(false)
 		}
 	}
-	// field Subquery vitess.io/vitess/go/vt/sqlparser.OutputsTable
+	// field Subquery vitess.io/vitess/go/vt/sqlparser.TableStatement
 	if cc, ok := cached.Subquery.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
@@ -1038,7 +1038,7 @@ func (cached *CreateView) CachedSize(alloc bool) int64 {
 			size += elem.CachedSize(false)
 		}
 	}
-	// field Select vitess.io/vitess/go/vt/sqlparser.OutputsTable
+	// field Select vitess.io/vitess/go/vt/sqlparser.TableStatement
 	if cc, ok := cached.Select.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
@@ -1168,7 +1168,7 @@ func (cached *DerivedTable) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(24)
 	}
-	// field Select vitess.io/vitess/go/vt/sqlparser.OutputsTable
+	// field Select vitess.io/vitess/go/vt/sqlparser.TableStatement
 	if cc, ok := cached.Select.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
@@ -4103,7 +4103,7 @@ func (cached *Subquery) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(16)
 	}
-	// field Select vitess.io/vitess/go/vt/sqlparser.OutputsTable
+	// field Select vitess.io/vitess/go/vt/sqlparser.TableStatement
 	if cc, ok := cached.Select.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
@@ -4320,11 +4320,11 @@ func (cached *Union) CachedSize(alloc bool) int64 {
 	}
 	// field With *vitess.io/vitess/go/vt/sqlparser.With
 	size += cached.With.CachedSize(true)
-	// field Left vitess.io/vitess/go/vt/sqlparser.OutputsTable
+	// field Left vitess.io/vitess/go/vt/sqlparser.TableStatement
 	if cc, ok := cached.Left.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
-	// field Right vitess.io/vitess/go/vt/sqlparser.OutputsTable
+	// field Right vitess.io/vitess/go/vt/sqlparser.TableStatement
 	if cc, ok := cached.Right.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}

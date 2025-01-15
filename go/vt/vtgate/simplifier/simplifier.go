@@ -25,17 +25,17 @@ import (
 // SimplifyStatement simplifies the AST of a query. It basically iteratively prunes leaves of the AST, as long as the pruning
 // continues to return true from the `test` function.
 func SimplifyStatement(
-	in sqlparser.OutputsTable,
+	in sqlparser.TableStatement,
 	currentDB string,
 	si semantics.SchemaInformation,
-	testF func(sqlparser.OutputsTable) bool,
-) sqlparser.OutputsTable {
+	testF func(sqlparser.TableStatement) bool,
+) sqlparser.TableStatement {
 	tables, err := getTables(in, currentDB, si)
 	if err != nil {
 		panic(err)
 	}
 
-	test := func(s sqlparser.OutputsTable) bool {
+	test := func(s sqlparser.TableStatement) bool {
 		// Since our semantic analysis changes the AST, we clone it first, so we have a pristine AST to play with
 		return testF(sqlparser.Clone(s))
 	}
@@ -68,7 +68,7 @@ func SimplifyStatement(
 	return in
 }
 
-func trySimplifyDistinct(in sqlparser.OutputsTable, test func(statement sqlparser.OutputsTable) bool) sqlparser.OutputsTable {
+func trySimplifyDistinct(in sqlparser.TableStatement, test func(statement sqlparser.TableStatement) bool) sqlparser.TableStatement {
 	simplified := false
 	alwaysVisitChildren := func(node, parent sqlparser.SQLNode) bool {
 		return true
@@ -100,7 +100,7 @@ func trySimplifyDistinct(in sqlparser.OutputsTable, test func(statement sqlparse
 	return nil
 }
 
-func trySimplifyExpressions(in sqlparser.OutputsTable, test func(sqlparser.OutputsTable) bool) sqlparser.OutputsTable {
+func trySimplifyExpressions(in sqlparser.TableStatement, test func(sqlparser.TableStatement) bool) sqlparser.TableStatement {
 	simplified := false
 	visit := func(cursor expressionCursor) bool {
 		// first - let's try to remove the expression
@@ -141,7 +141,7 @@ func trySimplifyExpressions(in sqlparser.OutputsTable, test func(sqlparser.Outpu
 	return nil
 }
 
-func trySimplifyUnions(in sqlparser.OutputsTable, test func(subquery sqlparser.OutputsTable) bool) (res sqlparser.OutputsTable) {
+func trySimplifyUnions(in sqlparser.TableStatement, test func(subquery sqlparser.TableStatement) bool) (res sqlparser.TableStatement) {
 	if union, ok := in.(*sqlparser.Union); ok {
 		// the root object is an UNION
 		if test(sqlparser.Clone(union.Left)) {
@@ -193,7 +193,7 @@ func trySimplifyUnions(in sqlparser.OutputsTable, test func(subquery sqlparser.O
 	return nil
 }
 
-func tryRemoveTable(tables []semantics.TableInfo, in sqlparser.OutputsTable, currentDB string, si semantics.SchemaInformation, test func(sqlparser.OutputsTable) bool) sqlparser.OutputsTable {
+func tryRemoveTable(tables []semantics.TableInfo, in sqlparser.TableStatement, currentDB string, si semantics.SchemaInformation, test func(sqlparser.TableStatement) bool) sqlparser.TableStatement {
 	// we start by removing one table at a time, and see if we still have an interesting plan
 	for idx, tbl := range tables {
 		clone := sqlparser.Clone(in)
@@ -209,7 +209,7 @@ func tryRemoveTable(tables []semantics.TableInfo, in sqlparser.OutputsTable, cur
 	return nil
 }
 
-func getTables(in sqlparser.OutputsTable, currentDB string, si semantics.SchemaInformation) ([]semantics.TableInfo, error) {
+func getTables(in sqlparser.TableStatement, currentDB string, si semantics.SchemaInformation) ([]semantics.TableInfo, error) {
 	// Since our semantic analysis changes the AST, we clone it first, so we have a pristine AST to play with
 	clone := sqlparser.Clone(in)
 	semTable, err := semantics.Analyze(clone, currentDB, si)
@@ -219,7 +219,7 @@ func getTables(in sqlparser.OutputsTable, currentDB string, si semantics.SchemaI
 	return semTable.Tables, nil
 }
 
-func simplifyStarExpr(in sqlparser.OutputsTable, test func(sqlparser.OutputsTable) bool) sqlparser.OutputsTable {
+func simplifyStarExpr(in sqlparser.TableStatement, test func(sqlparser.TableStatement) bool) sqlparser.TableStatement {
 	simplified := false
 	alwaysVisitChildren := func(node, parent sqlparser.SQLNode) bool {
 		return true
@@ -254,7 +254,7 @@ func simplifyStarExpr(in sqlparser.OutputsTable, test func(sqlparser.OutputsTabl
 
 // removeTable removes the table with the given index from the select statement, which includes the FROM clause
 // but also all expressions and predicates that depend on the table
-func removeTable(clone sqlparser.OutputsTable, searchedTS semantics.TableSet, db string, si semantics.SchemaInformation) bool {
+func removeTable(clone sqlparser.TableStatement, searchedTS semantics.TableSet, db string, si semantics.SchemaInformation) bool {
 	semTable, err := semantics.Analyze(clone, db, si)
 	if err != nil {
 		panic(err)
@@ -429,7 +429,7 @@ func newExprCursor(expr sqlparser.Expr, replace func(replaceWith sqlparser.Expr)
 // This cursor has a few extra capabilities that the normal sqlparser.SafeRewrite does not have,
 // such as visiting and being able to change individual expressions in a AND tree
 // if visit returns true, then traversal continues, otherwise traversal stops
-func visitAllExpressionsInAST(clone sqlparser.OutputsTable, visit func(expressionCursor) bool) {
+func visitAllExpressionsInAST(clone sqlparser.TableStatement, visit func(expressionCursor) bool) {
 	alwaysVisitChildren := func(node, parent sqlparser.SQLNode) bool {
 		return true
 	}

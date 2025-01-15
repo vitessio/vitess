@@ -385,7 +385,7 @@ func getIntLiteral(e sqlparser.Expr) *sqlparser.Literal {
 
 // handleOrderBy processes the ORDER BY clause.
 func (r *earlyRewriter) handleOrderBy(parent sqlparser.SQLNode, iter iterator) error {
-	stmt, ok := parent.(sqlparser.OutputsTable)
+	stmt, ok := parent.(sqlparser.TableStatement)
 	if !ok {
 		return nil
 	}

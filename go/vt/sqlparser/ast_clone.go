@@ -713,7 +713,7 @@ func CloneRefOfAlterView(n *AlterView) *AlterView {
 	out.ViewName = CloneTableName(n.ViewName)
 	out.Definer = CloneRefOfDefiner(n.Definer)
 	out.Columns = CloneColumns(n.Columns)
-	out.Select = CloneOutputsTable(n.Select)
+	out.Select = CloneTableStatement(n.Select)
 	out.Comments = CloneRefOfParsedComments(n.Comments)
 	return &out
 }
@@ -1025,7 +1025,7 @@ func CloneRefOfCommonTableExpr(n *CommonTableExpr) *CommonTableExpr {
 	out := *n
 	out.ID = CloneIdentifierCS(n.ID)
 	out.Columns = CloneColumns(n.Columns)
-	out.Subquery = CloneOutputsTable(n.Subquery)
+	out.Subquery = CloneTableStatement(n.Subquery)
 	return &out
 }
 
@@ -1140,7 +1140,7 @@ func CloneRefOfCreateView(n *CreateView) *CreateView {
 	out.ViewName = CloneTableName(n.ViewName)
 	out.Definer = CloneRefOfDefiner(n.Definer)
 	out.Columns = CloneColumns(n.Columns)
-	out.Select = CloneOutputsTable(n.Select)
+	out.Select = CloneTableStatement(n.Select)
 	out.Comments = CloneRefOfParsedComments(n.Comments)
 	return &out
 }
@@ -1207,7 +1207,7 @@ func CloneRefOfDerivedTable(n *DerivedTable) *DerivedTable {
 		return nil
 	}
 	out := *n
-	out.Select = CloneOutputsTable(n.Select)
+	out.Select = CloneTableStatement(n.Select)
 	return &out
 }
 
@@ -3044,7 +3044,7 @@ func CloneRefOfSubquery(n *Subquery) *Subquery {
 		return nil
 	}
 	out := *n
-	out.Select = CloneOutputsTable(n.Select)
+	out.Select = CloneTableStatement(n.Select)
 	return &out
 }
 
@@ -3184,8 +3184,8 @@ func CloneRefOfUnion(n *Union) *Union {
 	}
 	out := *n
 	out.With = CloneRefOfWith(n.With)
-	out.Left = CloneOutputsTable(n.Left)
-	out.Right = CloneOutputsTable(n.Right)
+	out.Left = CloneTableStatement(n.Left)
+	out.Right = CloneTableStatement(n.Right)
 	out.OrderBy = CloneOrderBy(n.OrderBy)
 	out.Limit = CloneRefOfLimit(n.Limit)
 	out.Into = CloneRefOfSelectInto(n.Into)
@@ -4131,24 +4131,6 @@ func CloneInsertRows(in InsertRows) InsertRows {
 	}
 }
 
-// CloneOutputsTable creates a deep clone of the input.
-func CloneOutputsTable(in OutputsTable) OutputsTable {
-	if in == nil {
-		return nil
-	}
-	switch in := in.(type) {
-	case *Select:
-		return CloneRefOfSelect(in)
-	case *Union:
-		return CloneRefOfUnion(in)
-	case *ValuesStatement:
-		return CloneRefOfValuesStatement(in)
-	default:
-		// this should never happen
-		return nil
-	}
-}
-
 // CloneSelectExpr creates a deep clone of the input.
 func CloneSelectExpr(in SelectExpr) SelectExpr {
 	if in == nil {
@@ -4345,6 +4327,24 @@ func CloneTableExpr(in TableExpr) TableExpr {
 		return CloneRefOfJoinTableExpr(in)
 	case *ParenTableExpr:
 		return CloneRefOfParenTableExpr(in)
+	default:
+		// this should never happen
+		return nil
+	}
+}
+
+// CloneTableStatement creates a deep clone of the input.
+func CloneTableStatement(in TableStatement) TableStatement {
+	if in == nil {
+		return nil
+	}
+	switch in := in.(type) {
+	case *Select:
+		return CloneRefOfSelect(in)
+	case *Union:
+		return CloneRefOfUnion(in)
+	case *ValuesStatement:
+		return CloneRefOfValuesStatement(in)
 	default:
 		// this should never happen
 		return nil

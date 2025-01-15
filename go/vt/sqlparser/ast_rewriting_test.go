@@ -388,7 +388,7 @@ func TestRewrites(in *testing.T) {
 
 type fakeViews struct{}
 
-func (*fakeViews) FindView(name TableName) OutputsTable {
+func (*fakeViews) FindView(name TableName) TableStatement {
 	if name.Name.String() != "user_details" {
 		return nil
 	}
@@ -397,7 +397,7 @@ func (*fakeViews) FindView(name TableName) OutputsTable {
 	if err != nil {
 		return nil
 	}
-	return statement.(OutputsTable)
+	return statement.(TableStatement)
 }
 
 func TestRewritesWithSetVarComment(in *testing.T) {

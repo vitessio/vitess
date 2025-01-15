@@ -766,7 +766,7 @@ func VisitRefOfAlterView(in *AlterView, f Visit) error {
 	if err := VisitColumns(in.Columns, f); err != nil {
 		return err
 	}
-	if err := VisitOutputsTable(in.Select, f); err != nil {
+	if err := VisitTableStatement(in.Select, f); err != nil {
 		return err
 	}
 	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
@@ -1177,7 +1177,7 @@ func VisitRefOfCommonTableExpr(in *CommonTableExpr, f Visit) error {
 	if err := VisitColumns(in.Columns, f); err != nil {
 		return err
 	}
-	if err := VisitOutputsTable(in.Subquery, f); err != nil {
+	if err := VisitTableStatement(in.Subquery, f); err != nil {
 		return err
 	}
 	return nil
@@ -1330,7 +1330,7 @@ func VisitRefOfCreateView(in *CreateView, f Visit) error {
 	if err := VisitColumns(in.Columns, f); err != nil {
 		return err
 	}
-	if err := VisitOutputsTable(in.Select, f); err != nil {
+	if err := VisitTableStatement(in.Select, f); err != nil {
 		return err
 	}
 	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
@@ -1425,7 +1425,7 @@ func VisitRefOfDerivedTable(in *DerivedTable, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitOutputsTable(in.Select, f); err != nil {
+	if err := VisitTableStatement(in.Select, f); err != nil {
 		return err
 	}
 	return nil
@@ -3892,7 +3892,7 @@ func VisitRefOfSubquery(in *Subquery, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitOutputsTable(in.Select, f); err != nil {
+	if err := VisitTableStatement(in.Select, f); err != nil {
 		return err
 	}
 	return nil
@@ -4077,10 +4077,10 @@ func VisitRefOfUnion(in *Union, f Visit) error {
 	if err := VisitRefOfWith(in.With, f); err != nil {
 		return err
 	}
-	if err := VisitOutputsTable(in.Left, f); err != nil {
+	if err := VisitTableStatement(in.Left, f); err != nil {
 		return err
 	}
-	if err := VisitOutputsTable(in.Right, f); err != nil {
+	if err := VisitTableStatement(in.Right, f); err != nil {
 		return err
 	}
 	if err := VisitOrderBy(in.OrderBy, f); err != nil {
@@ -5134,22 +5134,6 @@ func VisitInsertRows(in InsertRows, f Visit) error {
 		return nil
 	}
 }
-func VisitOutputsTable(in OutputsTable, f Visit) error {
-	if in == nil {
-		return nil
-	}
-	switch in := in.(type) {
-	case *Select:
-		return VisitRefOfSelect(in, f)
-	case *Union:
-		return VisitRefOfUnion(in, f)
-	case *ValuesStatement:
-		return VisitRefOfValuesStatement(in, f)
-	default:
-		// this should never happen
-		return nil
-	}
-}
 func VisitSelectExpr(in SelectExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -5335,6 +5319,22 @@ func VisitTableExpr(in TableExpr, f Visit) error {
 		return VisitRefOfJoinTableExpr(in, f)
 	case *ParenTableExpr:
 		return VisitRefOfParenTableExpr(in, f)
+	default:
+		// this should never happen
+		return nil
+	}
+}
+func VisitTableStatement(in TableStatement, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	switch in := in.(type) {
+	case *Select:
+		return VisitRefOfSelect(in, f)
+	case *Union:
+		return VisitRefOfUnion(in, f)
+	case *ValuesStatement:
+		return VisitRefOfValuesStatement(in, f)
 	default:
 		// this should never happen
 		return nil

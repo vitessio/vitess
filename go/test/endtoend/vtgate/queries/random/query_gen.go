@@ -46,7 +46,7 @@ type (
 
 	// queryGenerator generates queries, which can either be unions or select statements
 	queryGenerator struct {
-		stmt   sqlparser.OutputsTable
+		stmt   sqlparser.TableStatement
 		selGen *selectGenerator
 	}
 

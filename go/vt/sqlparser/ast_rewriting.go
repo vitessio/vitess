@@ -38,7 +38,7 @@ type RewriteASTResult struct {
 }
 
 type VSchemaViews interface {
-	FindView(name TableName) OutputsTable
+	FindView(name TableName) TableStatement
 }
 
 // PrepareAST will normalize the query
