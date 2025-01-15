@@ -162,3 +162,4 @@ List of changes between bootstrap image versions.
 ## [41] - 2025-01-15
 ### Changes
 - Update base image to bookworm
+- Add MySQL84 image
