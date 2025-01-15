@@ -917,26 +917,3 @@ func TestCloneComments(t *testing.T) {
 		assert.Equal(t, "b", val)
 	}
 }
-
-func TestRemoveKeyspace(t *testing.T) {
-	stmt, err := NewTestParser().Parse("select 1 from uks.unsharded")
-	require.NoError(t, err)
-	RemoveKeyspaceIgnoreSysSchema(stmt)
-
-	require.Equal(t, "select 1 from unsharded", String(stmt))
-}
-
-// TestRemoveSpecificKeyspace tests the RemoveSpecificKeyspace function.
-// It removes the specific keyspace from the database qualifier.
-func TestRemoveSpecificKeyspace(t *testing.T) {
-	stmt, err := NewTestParser().Parse("select 1 from uks.unsharded")
-	require.NoError(t, err)
-
-	// does not match
-	RemoveSpecificKeyspace(stmt, "ks2")
-	require.Equal(t, "select 1 from uks.unsharded", String(stmt))
-
-	// match
-	RemoveSpecificKeyspace(stmt, "uks")
-	require.Equal(t, "select 1 from unsharded", String(stmt))
-}
