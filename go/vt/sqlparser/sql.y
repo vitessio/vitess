@@ -468,7 +468,7 @@ func tryCastStatement(v interface{}) Statement {
 %type <val> equal_opt assignment_op
 %type <val> table_spec table_column_list
 %type <val> table_opt_value row_fmt_opt
-%type <val> partition_option_opt partition_option linear_partition_opt
+%type <val> partition_option_opt partition_option partition_option_part linear_partition_opt
 %type <val> subpartition_opt
 %type <val> linear_opt
 %type <val> range_or_list
@@ -5059,7 +5059,13 @@ partition_option_opt:
   {
     $$ = (*PartitionOption)(nil)
   }
-| PARTITION BY partition_option partition_num_opt subpartition_opt partition_definitions_opt
+| partition_option
+  {
+    $$ = $1.(*PartitionOption)
+  }
+
+partition_option:
+  PARTITION BY partition_option_part partition_num_opt subpartition_opt partition_definitions_opt
   {
     $3.(*PartitionOption).Partitions = $4.(*SQLVal)
     $3.(*PartitionOption).SubPartition = $5.(*SubPartition)
@@ -5067,7 +5073,7 @@ partition_option_opt:
     $$ = $3.(*PartitionOption)
   }
 
-partition_option:
+partition_option_part:
   linear_partition_opt
   {
     $$ = $1.(*PartitionOption)
@@ -5234,7 +5240,7 @@ alter_database_statement:
   }
 
 alter_table_statement:
-  ALTER ignore_opt TABLE table_name alter_table_statement_list partition_operation_list_opt
+  ALTER ignore_opt TABLE table_name alter_table_statement_list partition_operation_list_opt partition_option_opt
   {
     tableName := $4.(TableName)
     ddls := $5.([]*DDL)
@@ -5260,6 +5266,18 @@ alter_table_statement:
     $$ = &AlterTable{
       Table: tableName,
       PartitionSpecs: $5.([]*PartitionSpec),
+      Auth: AuthInformation{
+        AuthType: AuthType_ALTER,
+        TargetType: AuthTargetType_SingleTableIdentifier,
+        TargetNames: []string{tableName.DbQualifier.String(), tableName.Name.String()},
+      },
+    }
+  }
+| ALTER ignore_opt TABLE table_name partition_option
+  {
+    tableName := $4.(TableName)
+    $$ = &AlterTable{
+      Table: tableName,
       Auth: AuthInformation{
         AuthType: AuthType_ALTER,
         TargetType: AuthTargetType_SingleTableIdentifier,

@@ -4248,6 +4248,90 @@ var (
 				"\tcol varchar(20) not null\n" +
 				"),,",
 		},
+
+		// partition options
+		{
+			input: "alter table t partition by range (store_id) (\n" +
+				"partition p0 values less than (6),\n" +
+				"partition p1 values less than (11),\n" +
+				"partition p2 values less than (16),\n" +
+				"partition p3 values less than (21)\n" +
+				")",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t partition by hash ('values')",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t partition by hash (col)",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t partition by linear hash (col)",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t partition by KEY (col)",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t partition by KEY ALGORITHM = 7 (col)",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t partition by linear KEY ALGORITHM = 7 (col)",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t partition by RANGE (col)",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t partition by RANGE (i + j)",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t partition by RANGE (month(i))",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t partition by RANGE (concat(i))",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t partition by RANGE COLUMNS (c1, c2, c3)",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t partition by LIST (col)",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t partition by LIST (i + j)",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t partition by LIST (month(i))",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t partition by LIST (concat(i))",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t partition by LIST COLUMNS (c1, c2, c3)",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t partition by linear hash (a) partitions 20",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t partition by linear hash (a) partitions 10 subpartition by linear hash (b) subpartitions 20",
+			output: "alter table t",
+		},
+
 		{
 			input:  "table t",
 			output: "select * from t",
@@ -7404,6 +7488,7 @@ func TestCreateTable(t *testing.T) {
 				"\ti int\n" +
 				") partition by linear hash (a) partitions 10 subpartition by linear hash (b) subpartitions 20",
 		},
+
 		{
 			input: "create table t (\n" +
 				"\ti int\n)" +
