@@ -2429,48 +2429,38 @@ func RemoveKeyspaceInCol(in SQLNode) {
 	}, in)
 }
 
-// RemoveKeyspaceInTables removes the Qualifier on all TableNames in the AST
-func RemoveKeyspaceInTables(in SQLNode) {
-	// Walk will only return an error if we return an error from the inner func. safe to ignore here
-	Rewrite(in, nil, func(cursor *Cursor) bool {
-		if tbl, ok := cursor.Node().(TableName); ok && tbl.Qualifier.NotEmpty() {
-			tbl.Qualifier = NewIdentifierCS("")
-			cursor.Replace(tbl)
-		}
-
-		return true
-	})
-}
-
-// RemoveKeyspace removes the Qualifier.Qualifier on all ColNames and Qualifier on all TableNames in the AST
+// RemoveKeyspace removes the keyspace qualifier from all ColName and TableName
 func RemoveKeyspace(in SQLNode) {
-	Rewrite(in, nil, func(cursor *Cursor) bool {
-		switch expr := cursor.Node().(type) {
-		case *ColName:
-			if expr.Qualifier.Qualifier.NotEmpty() {
-				expr.Qualifier.Qualifier = NewIdentifierCS("")
-			}
-		case TableName:
-			if expr.Qualifier.NotEmpty() {
-				expr.Qualifier = NewIdentifierCS("")
-				cursor.Replace(expr)
-			}
-		}
-		return true
+	removeKeyspace(in, func(_ string) bool {
+		return true // Always remove
 	})
 }
 
-// RemoveKeyspaceIgnoreSysSchema removes the Qualifier.Qualifier on all ColNames and Qualifier on all TableNames in the AST
-// except for the system schema.
+// RemoveSpecificKeyspace removes the keyspace qualifier from all ColName and TableName
+// when it matches the keyspace provided
+func RemoveSpecificKeyspace(in SQLNode, keyspace string) {
+	removeKeyspace(in, func(qualifier string) bool {
+		return qualifier == keyspace // Remove only if it matches the provided keyspace
+	})
+}
+
+// RemoveKeyspaceIgnoreSysSchema removes the keyspace qualifier from all ColName and TableName
+// except for the system schema qualifier.
 func RemoveKeyspaceIgnoreSysSchema(in SQLNode) {
+	removeKeyspace(in, func(qualifier string) bool {
+		return qualifier != "" && !SystemSchema(qualifier) // Remove if it's not empty and not a system schema
+	})
+}
+
+func removeKeyspace(in SQLNode, shouldRemove func(qualifier string) bool) {
 	Rewrite(in, nil, func(cursor *Cursor) bool {
 		switch expr := cursor.Node().(type) {
 		case *ColName:
-			if expr.Qualifier.Qualifier.NotEmpty() && !SystemSchema(expr.Qualifier.Qualifier.String()) {
+			if shouldRemove(expr.Qualifier.Qualifier.String()) {
 				expr.Qualifier.Qualifier = NewIdentifierCS("")
 			}
 		case TableName:
-			if expr.Qualifier.NotEmpty() && !SystemSchema(expr.Qualifier.String()) {
+			if shouldRemove(expr.Qualifier.String()) {
 				expr.Qualifier = NewIdentifierCS("")
 				cursor.Replace(expr)
 			}
