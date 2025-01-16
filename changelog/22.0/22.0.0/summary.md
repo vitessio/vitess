@@ -12,6 +12,7 @@
   - **[Support for More Efficient JSON Replication](#efficient-json-replication)**
   - **[Support for LAST_INSERT_ID(x)](#last-insert-id)**
   - **[Support for Maximum Idle Connections in the Pool](#max-idle-connections)**
+  - **[Update default MySQL version to 8.0.40](#mysql-8-0-40)**
 - **[Minor Changes](#minor-changes)**
   - **[VTTablet Flags](#flags-vttablet)**
   - **[Topology read concurrency behaviour changes](#topo-read-concurrency-changes)**
@@ -99,6 +100,28 @@ You can control idle connection retention for the query server’s query pool, s
 •	--queryserver-config-txpool-max-idle-count: Defines the maximum number of idle connections retained in the transaction pool.
 
 This feature ensures that, during traffic spikes, idle connections are available for faster responses, while minimizing overhead in low-traffic periods by limiting the number of idle connections retained. It helps strike a balance between performance, efficiency, and cost.
+
+### <a id="mysql-8-0-40"/>Update default MySQL version to 8.0.40</a>
+
+The default major MySQL version used by our `vitess/lite:latest` image is going from `8.0.30` to `8.0.40`.
+This change was brought by [Pull Request #17552](https://github.com/vitessio/vitess/pull/17552).
+
+VTGate also advertises MySQL version `8.0.40` by default instead of `8.0.30` if no explicit version is set. The users can set the `mysql_server_version` flag to advertise the correct version.
+
+#### <a id="upgrading-to-this-release-with-vitess-operator"/>⚠️Upgrading to this release with vitess-operator
+
+If you are using the `vitess-operator` and want to remain on MySQL 5.7, **you are required** to use the `vitess/lite:v16.0.0-mysql57` Docker Image, otherwise the `vitess/lite:v16.0.0` image will be on MySQL 80.
+
+f you are using the `vitess-operator`, considering that we are bumping the patch version of MySQL 80 from `8.0.30` to `8.0.40`, you will have to manually upgrade:
+
+1. Add `innodb_fast_shutdown=0` to your extra cnf in your YAML file.
+2. Apply this file.
+3. Wait for all the pods to be healthy.
+4. Then change your YAML file to use the new Docker Images (`vitess/lite:v16.0.0`, defaults to mysql80).
+5. Remove `innodb_fast_shutdown=0` from your extra cnf in your YAML file.
+6. Apply this file.
+
+This is the last time this will be needed in the `8.0.x` series, as starting with MySQL `8.0.35` it is possible to upgrade and downgrade between `8.0.x` versions without needing to run `innodb_fast_shutdown=0`.
 
 ## <a id="minor-changes"/>Minor Changes</a>
 
