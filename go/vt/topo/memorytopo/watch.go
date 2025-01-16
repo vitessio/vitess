@@ -104,7 +104,7 @@ func (c *Conn) WatchRecursive(ctx context.Context, dirpath string) ([]*topo.Watc
 	var initialwd []*topo.WatchDataRecursive
 	n.recurseContents(func(n *node) {
 		initialwd = append(initialwd, &topo.WatchDataRecursive{
-			Path: n.name,
+			Path: n.getFullPath(),
 			WatchData: topo.WatchData{
 				Contents: n.contents,
 				Version:  NodeVersion(n.version),
