@@ -131,7 +131,7 @@ func (e *Executor) newExecute(
 		// the vtgate to clear the cached plans when processing the new serving vschema.
 		// When buffering ends, many queries might be getting planned at the same time and we then
 		// take full advatange of the cached plan.
-		plan, err = e.getPlan(ctx, vcursor, query, stmt, comments, bindVars, reservedVars, e.normalize, logStats)
+		plan, err = e.getPlan(ctx, vcursor, query, stmt, comments, bindVars, reservedVars, e.config.Normalize, logStats)
 		execStart := e.logPlanningFinished(logStats, plan)
 
 		if err != nil {

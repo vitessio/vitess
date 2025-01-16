@@ -107,40 +107,45 @@ func init() {
 
 // Executor is the engine that executes queries by utilizing
 // the abilities of the underlying vttablets.
-type Executor struct {
-	env         *vtenv.Environment
-	serv        srvtopo.Server
-	cell        string
-	resolver    *Resolver
-	scatterConn *ScatterConn
-	txConn      *TxConn
+type (
+	ExecutorConfig struct {
+		Normalize  bool
+		StreamSize int
+		// AllowScatter will fail planning if set to false and a plan contains any scatter queries
+		AllowScatter        bool
+		WarmingReadsPercent int
+		QueryLogToFile      string
+	}
 
-	mu           sync.Mutex
-	vschema      *vindexes.VSchema
-	streamSize   int
-	vschemaStats *VSchemaStats
+	Executor struct {
+		config ExecutorConfig
 
-	plans *PlanCache
-	epoch atomic.Uint32
+		env         *vtenv.Environment
+		serv        srvtopo.Server
+		cell        string
+		resolver    *Resolver
+		scatterConn *ScatterConn
+		txConn      *TxConn
 
-	normalize bool
+		mu           sync.Mutex
+		vschema      *vindexes.VSchema
+		vschemaStats *VSchemaStats
 
-	vm            *VSchemaManager
-	schemaTracker SchemaInfo
+		plans *PlanCache
+		epoch atomic.Uint32
 
-	// allowScatter will fail planning if set to false and a plan contains any scatter queries
-	allowScatter bool
+		vm            *VSchemaManager
+		schemaTracker SchemaInfo
 
-	// queryLogger is passed in for logging from this vtgate executor.
-	queryLogger *streamlog.StreamLogger[*logstats.LogStats]
+		// queryLogger is passed in for logging from this vtgate executor.
+		queryLogger *streamlog.StreamLogger[*logstats.LogStats]
 
-	warmingReadsPercent int
-	warmingReadsChannel chan bool
+		warmingReadsChannel chan bool
 
-	vConfig        econtext.VCursorConfig
-	ddlConfig      dynamicconfig.DDL
-	queryLogToFile string
-}
+		vConfig   econtext.VCursorConfig
+		ddlConfig dynamicconfig.DDL
+	}
+)
 
 var executorOnce sync.Once
 
@@ -164,32 +169,26 @@ func NewExecutor(
 	serv srvtopo.Server,
 	cell string,
 	resolver *Resolver,
-	normalize, warnOnShardedOnly bool,
-	streamSize int,
+	eConfig ExecutorConfig,
+	warnOnShardedOnly bool,
 	plans *PlanCache,
 	schemaTracker SchemaInfo,
-	noScatter bool,
 	pv plancontext.PlannerVersion,
-	warmingReadsPercent int,
 	ddlConfig dynamicconfig.DDL,
-	queryLogToFile string,
 ) *Executor {
 	e := &Executor{
-		env:                 env,
-		serv:                serv,
-		cell:                cell,
-		resolver:            resolver,
-		scatterConn:         resolver.scatterConn,
-		txConn:              resolver.scatterConn.txConn,
-		normalize:           normalize,
-		streamSize:          streamSize,
+		config:      eConfig,
+		env:         env,
+		serv:        serv,
+		cell:        cell,
+		resolver:    resolver,
+		scatterConn: resolver.scatterConn,
+		txConn:      resolver.scatterConn.txConn,
+
 		schemaTracker:       schemaTracker,
-		allowScatter:        !noScatter,
 		plans:               plans,
-		warmingReadsPercent: warmingReadsPercent,
 		warmingReadsChannel: make(chan bool, warmingReadsConcurrency),
 		ddlConfig:           ddlConfig,
-		queryLogToFile:      queryLogToFile,
 	}
 	// setting the vcursor config.
 	e.initVConfig(warnOnShardedOnly, pv)
@@ -330,7 +329,7 @@ func (e *Executor) StreamExecute(
 						byteCount += col.Len()
 					}
 
-					if byteCount >= e.streamSize {
+					if byteCount >= e.config.StreamSize {
 						err := callback(result)
 						seenResults.Store(true)
 						result = &sqltypes.Result{}
@@ -1422,7 +1421,7 @@ func (e *Executor) initVConfig(warnOnShardedOnly bool, pv plancontext.PlannerVer
 
 		DBDDLPlugin: dbDDLPlugin,
 
-		WarmingReadsPercent: e.warmingReadsPercent,
+		WarmingReadsPercent: e.config.WarmingReadsPercent,
 		WarmingReadsTimeout: warmingReadsQueryTimeout,
 		WarmingReadsChannel: e.warmingReadsChannel,
 	}
@@ -1542,7 +1541,7 @@ func (e *Executor) startVStream(ctx context.Context, rss []*srvtopo.ResolvedShar
 }
 
 func (e *Executor) checkThatPlanIsValid(stmt sqlparser.Statement, plan *engine.Plan) error {
-	if e.allowScatter || plan.Instructions == nil || sqlparser.AllowScatterDirective(stmt) {
+	if e.config.AllowScatter || plan.Instructions == nil || sqlparser.AllowScatterDirective(stmt) {
 		return nil
 	}
 	// we go over all the primitives in the plan, searching for a route that is of SelectScatter opcode
