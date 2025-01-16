@@ -439,9 +439,9 @@ func (ts *Server) GetShardNames(ctx context.Context, keyspace string) ([]string,
 	return DirEntriesToStringArray(children), err
 }
 
-// WatchAllKeyspacePrefixData wraps the data we receive on the watch recursive channel
-// The WatchKeyspacePrefix API guarantees exactly one of Value or Err will be set.
-type WatchAllKeyspacePrefixData struct {
+// WatchKeyspacePrefixData wraps the data we receive on the watch recursive channel
+// The WatchAllKeyspaceRecords API guarantees exactly one of Value or Err will be set.
+type WatchKeyspacePrefixData struct {
 	KeyspaceInfo *KeyspaceInfo
 	Err          error
 }
@@ -449,18 +449,20 @@ type WatchAllKeyspacePrefixData struct {
 // WatchAllKeyspaceRecords will set a watch on the Keyspace prefix.
 // It has the same contract as conn.WatchRecursive, but it also unpacks the
 // contents into a Keyspace object.
-func (ts *Server) WatchAllKeyspaceRecords(ctx context.Context) ([]*WatchAllKeyspacePrefixData, <-chan *WatchAllKeyspacePrefixData, error) {
+func (ts *Server) WatchAllKeyspaceRecords(ctx context.Context) ([]*WatchKeyspacePrefixData, <-chan *WatchKeyspacePrefixData, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, nil, err
 	}
 
 	ctx, cancel := context.WithCancel(ctx)
 
+	// Set up a recursive watch on the KeyspacesPath.
 	current, wdChannel, err := ts.globalCell.WatchRecursive(ctx, KeyspacesPath)
 	if err != nil {
 		cancel()
 		return nil, nil, err
 	}
+	// Unpack the initial data.
 	initialRes, err := checkAndUnpackKeyspaceRecord(current...)
 	if err != nil {
 		// Cancel the watch, drain channel.
@@ -470,7 +472,7 @@ func (ts *Server) WatchAllKeyspaceRecords(ctx context.Context) ([]*WatchAllKeysp
 		return nil, nil, vterrors.Wrapf(err, "error unpacking initial Keyspace objects")
 	}
 
-	changes := make(chan *WatchAllKeyspacePrefixData, 10)
+	changes := make(chan *WatchKeyspacePrefixData, 10)
 	// The background routine reads any event from the watch channel,
 	// translates it, and sends it to the caller.
 	// If cancel() is called, the underlying WatchRecursive() code will
@@ -485,7 +487,7 @@ func (ts *Server) WatchAllKeyspaceRecords(ctx context.Context) ([]*WatchAllKeysp
 				// Last error value, we're done.
 				// wdChannel will be closed right after
 				// this, no need to do anything.
-				changes <- &WatchAllKeyspacePrefixData{Err: wd.Err}
+				changes <- &WatchKeyspacePrefixData{Err: wd.Err}
 				return
 			}
 
@@ -494,10 +496,13 @@ func (ts *Server) WatchAllKeyspaceRecords(ctx context.Context) ([]*WatchAllKeysp
 				cancel()
 				for range wdChannel {
 				}
-				changes <- &WatchAllKeyspacePrefixData{Err: vterrors.Wrapf(err, "error unpacking object")}
+				changes <- &WatchKeyspacePrefixData{Err: vterrors.Wrapf(err, "error unpacking object")}
 				return
 			}
 
+			// Each update will only have a single object, if at all.
+			// We get updates for all objects in the prefix, but we only
+			// care about the keyspace objects.
 			if len(res) == 0 {
 				continue
 			}
@@ -508,17 +513,20 @@ func (ts *Server) WatchAllKeyspaceRecords(ctx context.Context) ([]*WatchAllKeysp
 	return initialRes, changes, nil
 }
 
-func checkAndUnpackKeyspaceRecord(wds ...*WatchDataRecursive) ([]*WatchAllKeyspacePrefixData, error) {
-	var res []*WatchAllKeyspacePrefixData
+// checkAndUnpackKeyspaceRecord checks for Keyspace objects and unpacks them.
+func checkAndUnpackKeyspaceRecord(wds ...*WatchDataRecursive) ([]*WatchKeyspacePrefixData, error) {
+	var res []*WatchKeyspacePrefixData
 	for _, wd := range wds {
-		ksDir, fileType := path.Split(wd.Path)
+		fileDir, fileType := path.Split(wd.Path)
+		// Check if the file is a keyspace record.
+		// If it is, then we unpack it.
 		if fileType == KeyspaceFile {
 			value := &topodatapb.Keyspace{}
 			if err := value.UnmarshalVT(wd.Contents); err != nil {
 				return nil, err
 			}
-			res = append(res, &WatchAllKeyspacePrefixData{
-				KeyspaceInfo: NewKeyspaceInfo(path.Base(ksDir), value),
+			res = append(res, &WatchKeyspacePrefixData{
+				KeyspaceInfo: NewKeyspaceInfo(path.Base(fileDir), value),
 			})
 		}
 	}
