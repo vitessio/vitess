@@ -30,11 +30,13 @@ jobs:
 
       - name: Check out code
         if: steps.skip-workflow.outputs.skip-workflow == 'false'
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: 'false'
 
       - name: Check for changes in relevant files
         if: steps.skip-workflow.outputs.skip-workflow == 'false'
-        uses: dorny/paths-filter@v3.0.1
+        uses: dorny/paths-filter@ebc4d7e9ebcb0b1eb21480bb8f43113e996ac77a # v3.0.1
         id: changes
         with:
           token: ''
