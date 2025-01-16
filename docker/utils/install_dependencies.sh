@@ -92,7 +92,7 @@ mysql57)
     ;;
 mysql80)
     if [ -z "$VERSION" ]; then
-        VERSION=8.0.30
+        VERSION=8.0.40
     fi
     do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-common_${VERSION}-1debian11_amd64.deb /tmp/mysql-common_${VERSION}-1debian11_amd64.deb
     do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/libmysqlclient21_${VERSION}-1debian11_amd64.deb /tmp/libmysqlclient21_${VERSION}-1debian11_amd64.deb
