@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/google/safehtml/testconversions"
+	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/streamlog"
@@ -252,4 +253,22 @@ func TestLogStatsCallInfo(t *testing.T) {
 	if user != username {
 		t.Fatalf("expected to get username: %s, but got: %s", username, user)
 	}
+}
+
+// TestLogStatsErrorsOnly tests that LogStats only logs errors when the query log mode is set to errors only for VTTablet.
+func TestLogStatsErrorsOnly(t *testing.T) {
+	origQLogMode := streamlog.GetQueryLogMode()
+	streamlog.SetQueryLogMode(streamlog.QueryLogModeError)
+	defer streamlog.SetQueryLogMode(origQLogMode)
+
+	logStats := NewLogStats(context.Background(), "test")
+
+	// no error, should not log
+	logOutput := testFormat(logStats, url.Values{})
+	assert.Empty(t, logOutput)
+
+	// error, should log
+	logStats.Error = errors.New("test error")
+	logOutput = testFormat(logStats, url.Values{})
+	assert.Contains(t, logOutput, "test error")
 }
