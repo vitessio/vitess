@@ -203,7 +203,7 @@ func (qp *QueryProjection) addSelectExpressions(ctx *plancontext.PlanningContext
 func createQPFromUnion(ctx *plancontext.PlanningContext, union *sqlparser.Union) *QueryProjection {
 	qp := &QueryProjection{}
 
-	sel := sqlparser.GetFirstSelect(union)
+	sel := getFirstSelect(union)
 	qp.addSelectExpressions(ctx, sel)
 	qp.addOrderBy(ctx, union.OrderBy)
 
@@ -714,7 +714,7 @@ func CompareRefInt(a *int, b *int) bool {
 	return *a < *b
 }
 
-func CreateQPFromSelectStatement(ctx *plancontext.PlanningContext, stmt sqlparser.SelectStatement) *QueryProjection {
+func CreateQPFromSelectStatement(ctx *plancontext.PlanningContext, stmt sqlparser.TableStatement) *QueryProjection {
 	switch sel := stmt.(type) {
 	case *sqlparser.Select:
 		return createQPFromSelect(ctx, sel)

@@ -406,7 +406,7 @@ func (vc *VCursorImpl) FindTable(name sqlparser.TableName) (*vindexes.Table, str
 	return table, destKeyspace, destTabletType, dest, err
 }
 
-func (vc *VCursorImpl) FindView(name sqlparser.TableName) sqlparser.SelectStatement {
+func (vc *VCursorImpl) FindView(name sqlparser.TableName) sqlparser.TableStatement {
 	ks, _, _, err := vc.ParseDestinationTarget(name.Qualifier.String())
 	if err != nil {
 		return nil

@@ -43,10 +43,6 @@ const (
 	Gen4Left2Right = querypb.ExecuteOptions_Gen4Left2Right
 )
 
-var (
-	plannerVersions = []plancontext.PlannerVersion{Gen4, Gen4GreedyOnly, Gen4Left2Right}
-)
-
 type (
 	planResult struct {
 		primitive engine.Primitive

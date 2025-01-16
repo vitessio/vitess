@@ -32,7 +32,7 @@ import (
 func planQuery(ctx *plancontext.PlanningContext, root Operator) Operator {
 	var selExpr sqlparser.SelectExprs
 	if horizon, isHorizon := root.(*Horizon); isHorizon {
-		sel := sqlparser.GetFirstSelect(horizon.Query)
+		sel := getFirstSelect(horizon.Query)
 		selExpr = sqlparser.Clone(sel.SelectExprs)
 	}
 
@@ -207,7 +207,7 @@ func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in *Horizon) (Operato
 		!hasHaving &&
 		!needsOrdering &&
 		!qp.NeedsAggregation() &&
-		!in.selectStatement().IsDistinct() &&
+		!isDistinctAST(in.selectStatement()) &&
 		in.selectStatement().GetLimit() == nil
 
 	if canPush {
@@ -784,12 +784,19 @@ func isDistinct(op Operator) bool {
 	case *Union:
 		return op.distinct
 	case *Horizon:
-		return op.Query.IsDistinct()
+		return isDistinctAST(op.Query)
 	case *Limit:
 		return isDistinct(op.Source)
 	default:
 		return false
 	}
+}
+
+func isDistinctAST(s sqlparser.Statement) bool {
+	if d, ok := s.(sqlparser.Distinctable); ok {
+		return d.IsDistinct()
+	}
+	return false
 }
 
 func tryPushUnion(ctx *plancontext.PlanningContext, op *Union) (Operator, *ApplyResult) {

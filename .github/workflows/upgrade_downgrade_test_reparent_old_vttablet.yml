@@ -15,6 +15,7 @@ permissions: read-all
 jobs:
 
   upgrade_downgrade_test:
+    timeout-minutes: 60
     name: Run Upgrade Downgrade Test - Reparent Old VTTablet
     runs-on: gh-hosted-runners-16cores-1-24.04
 
@@ -38,9 +39,10 @@ jobs:
 
     - name: Check out commit's code
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
-      uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       with:
         fetch-depth: 0
+        persist-credentials: 'false'
 
     - name: Set output with latest release branch
       id: output-previous-release-ref
@@ -58,6 +60,7 @@ jobs:
         token: ''
         filters: |
           end_to_end:
+            - 'test/config.json'
             - 'go/**'
             - 'go/**/*.go'
             - 'test.go'
@@ -87,6 +90,7 @@ jobs:
         sudo sysctl -w net.ipv4.ip_local_port_range="22768 65535"
 
     - name: Get base dependencies
+      timeout-minutes: 10
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
         sudo DEBIAN_FRONTEND="noninteractive" apt-get update
@@ -119,9 +123,10 @@ jobs:
     # Checkout to the last release of Vitess
     - name: Check out other version's code (${{ steps.output-previous-release-ref.outputs.previous_release_ref }})
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       with:
         ref: ${{ steps.output-previous-release-ref.outputs.previous_release_ref }}
+        persist-credentials: 'false'
 
     - name: Get dependencies for the last release
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -141,7 +146,9 @@ jobs:
     # Checkout to this build's commit
     - name: Check out commit's code
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      with:
+        persist-credentials: 'false'
 
     - name: Get dependencies for this commit
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
