@@ -23,6 +23,7 @@ import (
 	"os"
 	"os/signal"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -503,10 +504,15 @@ func initMySQLProtocol(vtgate *VTGate) *mysqlServer {
 	}
 
 	// Initialize registered AuthServer implementations (or other plugins)
-	for _, initFn := range pluginInitializers {
-		initFn()
+	// sort pluginInitializers by priority
+	sort.Slice(pluginInitializers, func(i, j int) bool {
+		return pluginInitializers[i].priority < pluginInitializers[j].priority
+	})
+	for _, pluginInitializer := range pluginInitializers {
+		pluginInitializer.initializer()
 	}
 	authServer := mysql.GetAuthServer(mysqlAuthServerImpl)
+	log.Infof("using mysql auth server implementation: %s", mysqlAuthServerImpl)
 
 	// Check mysql_default_workload
 	var ok bool
@@ -725,9 +731,18 @@ func init() {
 	servenv.OnParseFor("vtcombo", registerPluginFlags)
 }
 
-var pluginInitializers []func()
+type pluginInitializer struct {
+	priority    int
+	initializer func()
+}
+
+var pluginInitializers []pluginInitializer
 
 // RegisterPluginInitializer lets plugins register themselves to be init'ed at servenv.OnRun-time
 func RegisterPluginInitializer(initializer func()) {
-	pluginInitializers = append(pluginInitializers, initializer)
+	RegisterPluginInitializerWithPriority(0, initializer)
+}
+
+func RegisterPluginInitializerWithPriority(initPriority int, initializer func()) {
+	pluginInitializers = append(pluginInitializers, pluginInitializer{initPriority, initializer})
 }
