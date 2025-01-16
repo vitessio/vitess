@@ -73,25 +73,31 @@ func TestTimeZone(t *testing.T) {
 		want string
 	}{
 		{
-			tz:   "Europe/Amsterdam",
+			tz:   "",
+			want: time.Local.String(),
+		},
+		{
+			tz:   "'Europe/Amsterdam'",
 			want: "Europe/Amsterdam",
 		},
 		{
-			tz:   "+02:00",
+			tz:   "'+02:00'",
 			want: "UTC+02:00",
 		},
 		{
 			tz:   "foo",
-			want: (*time.Location)(nil).String(),
+			want: time.Local.String(),
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.tz, func(t *testing.T) {
+			sysvars := map[string]string{}
+			if tc.tz != "" {
+				sysvars["time_zone"] = tc.tz
+			}
 			session := NewSafeSession(&vtgatepb.Session{
-				SystemVariables: map[string]string{
-					"time_zone": tc.tz,
-				},
+				SystemVariables: sysvars,
 			})
 
 			assert.Equal(t, tc.want, session.TimeZone().String())

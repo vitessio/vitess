@@ -140,7 +140,7 @@ func (t *noopVCursor) Environment() *vtenv.Environment {
 }
 
 func (t *noopVCursor) TimeZone() *time.Location {
-	return nil
+	return time.Local
 }
 
 func (t *noopVCursor) SQLMode() string {
