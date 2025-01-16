@@ -23,6 +23,7 @@ import (
 	"context"
 	"errors"
 	"math/rand/v2"
+	"path"
 	"regexp"
 	"strings"
 	"sync"
@@ -216,6 +217,13 @@ type node struct {
 
 func (n *node) isDirectory() bool {
 	return n.children != nil
+}
+
+func (n *node) getFullPath() string {
+	if n.parent == nil {
+		return n.name
+	}
+	return path.Join(n.parent.getFullPath(), n.name)
 }
 
 func (n *node) recurseContents(callback func(n *node)) {
