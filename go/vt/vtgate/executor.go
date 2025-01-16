@@ -137,8 +137,9 @@ type Executor struct {
 	warmingReadsPercent int
 	warmingReadsChannel chan bool
 
-	vConfig   econtext.VCursorConfig
-	ddlConfig dynamicconfig.DDL
+	vConfig        econtext.VCursorConfig
+	ddlConfig      dynamicconfig.DDL
+	queryLogToFile string
 }
 
 var executorOnce sync.Once
@@ -171,6 +172,7 @@ func NewExecutor(
 	pv plancontext.PlannerVersion,
 	warmingReadsPercent int,
 	ddlConfig dynamicconfig.DDL,
+	queryLogToFile string,
 ) *Executor {
 	e := &Executor{
 		env:                 env,
@@ -187,6 +189,7 @@ func NewExecutor(
 		warmingReadsPercent: warmingReadsPercent,
 		warmingReadsChannel: make(chan bool, warmingReadsConcurrency),
 		ddlConfig:           ddlConfig,
+		queryLogToFile:      queryLogToFile,
 	}
 	// setting the vcursor config.
 	e.initVConfig(warnOnShardedOnly, pv)

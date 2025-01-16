@@ -49,8 +49,8 @@ func (e *Executor) defaultQueryLogger() error {
 		queryzHandler(e, w, r)
 	})
 
-	if queryLogToFile != "" {
-		_, err := queryLogger.LogToFile(queryLogToFile, streamlog.GetFormatter(queryLogger))
+	if e.queryLogToFile != "" {
+		_, err := queryLogger.LogToFile(e.queryLogToFile, streamlog.GetFormatter(queryLogger))
 		if err != nil {
 			return err
 		}

@@ -367,6 +367,7 @@ func Init(
 		pv,
 		warmingReadsPercent,
 		dynamicConfig,
+		queryLogToFile,
 	)
 
 	if err := executor.defaultQueryLogger(); err != nil {
