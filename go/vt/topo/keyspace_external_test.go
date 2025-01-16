@@ -255,18 +255,16 @@ func TestWatchAllKeyspaceRecords(t *testing.T) {
 			},
 			wantInitRecords: []*topo.WatchAllKeyspacePrefixData{
 				{
-					KeyspaceName: "ks",
-					Value:        ksDef,
+					KeyspaceInfo: topo.NewKeyspaceInfo("ks", ksDef),
 				},
 			},
 			wantChanRecords: []*topo.WatchAllKeyspacePrefixData{
 				{
-					KeyspaceName: "ks",
-					Value: &topodatapb.Keyspace{
+					KeyspaceInfo: topo.NewKeyspaceInfo("ks", &topodatapb.Keyspace{
 						KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
 						DurabilityPolicy: policy.DurabilityCrossCell,
 						SidecarDbName:    "_vt",
-					},
+					}),
 				},
 			},
 		},
@@ -288,18 +286,16 @@ func TestWatchAllKeyspaceRecords(t *testing.T) {
 			},
 			wantInitRecords: []*topo.WatchAllKeyspacePrefixData{
 				{
-					KeyspaceName: "ks",
-					Value:        ksDef,
+					KeyspaceInfo: topo.NewKeyspaceInfo("ks", ksDef),
 				},
 			},
 			wantChanRecords: []*topo.WatchAllKeyspacePrefixData{
 				{
-					KeyspaceName: "ks",
-					Value: &topodatapb.Keyspace{
+					KeyspaceInfo: topo.NewKeyspaceInfo("ks", &topodatapb.Keyspace{
 						KeyspaceType:     topodatapb.KeyspaceType_SNAPSHOT,
 						DurabilityPolicy: policy.DurabilitySemiSync,
 						SidecarDbName:    "_vt",
-					},
+					}),
 				},
 			},
 		},
@@ -344,30 +340,26 @@ func TestWatchAllKeyspaceRecords(t *testing.T) {
 			},
 			wantInitRecords: []*topo.WatchAllKeyspacePrefixData{
 				{
-					KeyspaceName: "ks",
-					Value:        ksDef,
+					KeyspaceInfo: topo.NewKeyspaceInfo("ks", ksDef),
 				},
 				{
-					KeyspaceName: "ks2",
-					Value:        ksDef,
+					KeyspaceInfo: topo.NewKeyspaceInfo("ks2", ksDef),
 				},
 			},
 			wantChanRecords: []*topo.WatchAllKeyspacePrefixData{
 				{
-					KeyspaceName: "ks",
-					Value: &topodatapb.Keyspace{
+					KeyspaceInfo: topo.NewKeyspaceInfo("ks", &topodatapb.Keyspace{
 						KeyspaceType:     topodatapb.KeyspaceType_SNAPSHOT,
 						DurabilityPolicy: policy.DurabilitySemiSync,
 						SidecarDbName:    "_vt",
-					},
+					}),
 				},
 				{
-					KeyspaceName: "ks2",
-					Value: &topodatapb.Keyspace{
+					KeyspaceInfo: topo.NewKeyspaceInfo("ks2", &topodatapb.Keyspace{
 						KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
 						DurabilityPolicy: policy.DurabilityCrossCell,
 						SidecarDbName:    "_vt",
-					},
+					}),
 				},
 			},
 		},
@@ -413,7 +405,7 @@ func TestWatchAllKeyspaceRecords(t *testing.T) {
 			// Update the records and verify the records received on the channel.
 			tt.updateFunc(t, ts)
 			if len(tt.wantChanRecords) == 0 {
-				// If there are no records to verify, we can stop the watch after a.
+				// If there are no records to verify, we can stop the watch.
 				watchCancel()
 			}
 			// Wait for the go routine to finish.
@@ -445,5 +437,24 @@ func elementsMatchFunc[T any](t *testing.T, expected, actual []T, equalFn func(a
 }
 
 func keyspacePrefixDataMatches(a, b *topo.WatchAllKeyspacePrefixData) bool {
-	return proto.Equal(a.Value, b.Value) && a.KeyspaceName == b.KeyspaceName && errors.Is(a.Err, b.Err)
+	if a == nil || b == nil {
+		return a == b
+	}
+	if !errors.Is(a.Err, b.Err) {
+		return false
+	}
+	if a.KeyspaceInfo == nil || b.KeyspaceInfo == nil {
+		if a.KeyspaceInfo != b.KeyspaceInfo {
+			return false
+		}
+	} else {
+		if !proto.Equal(a.KeyspaceInfo.Keyspace, b.KeyspaceInfo.Keyspace) {
+			return false
+		}
+		if a.KeyspaceInfo.KeyspaceName() != b.KeyspaceInfo.KeyspaceName() {
+			return false
+		}
+	}
+
+	return true
 }
