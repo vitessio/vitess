@@ -51,6 +51,14 @@ type KeyspaceInfo struct {
 	*topodatapb.Keyspace
 }
 
+// NewKeyspaceInfo creates a new KeyspaceInfo.
+func NewKeyspaceInfo(name string, keyspace *topodatapb.Keyspace) *KeyspaceInfo {
+	return &KeyspaceInfo{
+		keyspace: name,
+		Keyspace: keyspace,
+	}
+}
+
 // KeyspaceName returns the keyspace name
 func (ki *KeyspaceInfo) KeyspaceName() string {
 	return ki.keyspace
@@ -434,8 +442,7 @@ func (ts *Server) GetShardNames(ctx context.Context, keyspace string) ([]string,
 // WatchAllKeyspacePrefixData wraps the data we receive on the watch recursive channel
 // The WatchKeyspacePrefix API guarantees exactly one of Value or Err will be set.
 type WatchAllKeyspacePrefixData struct {
-	Value        *topodatapb.Keyspace
-	KeyspaceName string
+	KeyspaceInfo *KeyspaceInfo
 	Err          error
 }
 
@@ -511,8 +518,7 @@ func checkAndUnpackKeyspaceRecord(wds ...*WatchDataRecursive) ([]*WatchAllKeyspa
 				return nil, err
 			}
 			res = append(res, &WatchAllKeyspacePrefixData{
-				Value:        value,
-				KeyspaceName: path.Base(ksDir),
+				KeyspaceInfo: NewKeyspaceInfo(path.Base(ksDir), value),
 			})
 		}
 	}
