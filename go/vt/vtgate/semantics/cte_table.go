@@ -150,7 +150,7 @@ func (cte *CTETable) GetMirrorRule() *vindexes.MirrorRule {
 
 type CTE struct {
 	Name            string
-	Query           sqlparser.SelectStatement
+	Query           sqlparser.TableStatement
 	isAuthoritative bool
 	recursiveDeps   *TableSet
 	Columns         sqlparser.Columns

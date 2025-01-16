@@ -49,7 +49,7 @@ func TestSimplifyBuggyQuery(t *testing.T) {
 	reservedVars := sqlparser.NewReservedVars("vtg", reserved)
 
 	simplified := simplifier.SimplifyStatement(
-		stmt.(sqlparser.SelectStatement),
+		stmt.(sqlparser.TableStatement),
 		vw.CurrentDb(),
 		vw,
 		keepSameError(query, reservedVars, vw, rewritten.BindVarNeeds),
@@ -73,7 +73,7 @@ func TestSimplifyPanic(t *testing.T) {
 	reservedVars := sqlparser.NewReservedVars("vtg", reserved)
 
 	simplified := simplifier.SimplifyStatement(
-		stmt.(sqlparser.SelectStatement),
+		stmt.(sqlparser.TableStatement),
 		vw.CurrentDb(),
 		vw,
 		keepPanicking(query, reservedVars, vw, rewritten.BindVarNeeds),
@@ -95,7 +95,7 @@ func TestUnsupportedFile(t *testing.T) {
 			log.Errorf("unsupported_cases.txt - %s", tcase.Query)
 			stmt, reserved, err := sqlparser.NewTestParser().Parse2(tcase.Query)
 			require.NoError(t, err)
-			_, ok := stmt.(sqlparser.SelectStatement)
+			_, ok := stmt.(sqlparser.TableStatement)
 			if !ok {
 				t.Skip()
 				return
@@ -110,7 +110,7 @@ func TestUnsupportedFile(t *testing.T) {
 			origQuery := sqlparser.String(ast)
 			stmt, _, _ = sqlparser.NewTestParser().Parse2(tcase.Query)
 			simplified := simplifier.SimplifyStatement(
-				stmt.(sqlparser.SelectStatement),
+				stmt.(sqlparser.TableStatement),
 				vw.CurrentDb(),
 				vw,
 				keepSameError(tcase.Query, reservedVars, vw, rewritten.BindVarNeeds),
@@ -128,7 +128,7 @@ func TestUnsupportedFile(t *testing.T) {
 	}
 }
 
-func keepSameError(query string, reservedVars *sqlparser.ReservedVars, vschema *vschemawrapper.VSchemaWrapper, needs *sqlparser.BindVarNeeds) func(statement sqlparser.SelectStatement) bool {
+func keepSameError(query string, reservedVars *sqlparser.ReservedVars, vschema *vschemawrapper.VSchemaWrapper, needs *sqlparser.BindVarNeeds) func(statement sqlparser.TableStatement) bool {
 	stmt, _, err := sqlparser.NewTestParser().Parse2(query)
 	if err != nil {
 		panic(err)
@@ -139,7 +139,7 @@ func keepSameError(query string, reservedVars *sqlparser.ReservedVars, vschema *
 	if expected == nil {
 		panic("query does not fail to plan")
 	}
-	return func(statement sqlparser.SelectStatement) bool {
+	return func(statement sqlparser.TableStatement) bool {
 		_, myErr := BuildFromStmt(context.Background(), query, statement, reservedVars, vschema, needs, staticConfig{})
 		if myErr == nil {
 			return false
@@ -152,8 +152,8 @@ func keepSameError(query string, reservedVars *sqlparser.ReservedVars, vschema *
 	}
 }
 
-func keepPanicking(query string, reservedVars *sqlparser.ReservedVars, vschema *vschemawrapper.VSchemaWrapper, needs *sqlparser.BindVarNeeds) func(statement sqlparser.SelectStatement) bool {
-	cmp := func(statement sqlparser.SelectStatement) (res bool) {
+func keepPanicking(query string, reservedVars *sqlparser.ReservedVars, vschema *vschemawrapper.VSchemaWrapper, needs *sqlparser.BindVarNeeds) func(statement sqlparser.TableStatement) bool {
+	cmp := func(statement sqlparser.TableStatement) (res bool) {
 		defer func() {
 			r := recover()
 			if r != nil {
@@ -172,7 +172,7 @@ func keepPanicking(query string, reservedVars *sqlparser.ReservedVars, vschema *
 	if err != nil {
 		panic(err.Error())
 	}
-	if !cmp(stmt.(sqlparser.SelectStatement)) {
+	if !cmp(stmt.(sqlparser.TableStatement)) {
 		panic("query is not panicking")
 	}
 

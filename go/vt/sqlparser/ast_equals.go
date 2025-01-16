@@ -1562,6 +1562,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfValuesFuncExpr(a, b)
+	case *ValuesStatement:
+		b, ok := inB.(*ValuesStatement)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfValuesStatement(a, b)
 	case *VarPop:
 		b, ok := inB.(*VarPop)
 		if !ok {
@@ -1826,7 +1832,7 @@ func (cmp *Comparator) RefOfAlterView(a, b *AlterView) bool {
 		cmp.TableName(a.ViewName, b.ViewName) &&
 		cmp.RefOfDefiner(a.Definer, b.Definer) &&
 		cmp.Columns(a.Columns, b.Columns) &&
-		cmp.SelectStatement(a.Select, b.Select) &&
+		cmp.TableStatement(a.Select, b.Select) &&
 		cmp.RefOfParsedComments(a.Comments, b.Comments)
 }
 
@@ -2195,7 +2201,7 @@ func (cmp *Comparator) RefOfCommonTableExpr(a, b *CommonTableExpr) bool {
 	}
 	return cmp.IdentifierCS(a.ID, b.ID) &&
 		cmp.Columns(a.Columns, b.Columns) &&
-		cmp.SelectStatement(a.Subquery, b.Subquery)
+		cmp.TableStatement(a.Subquery, b.Subquery)
 }
 
 // RefOfComparisonExpr does deep equals between the two objects.
@@ -2334,7 +2340,7 @@ func (cmp *Comparator) RefOfCreateView(a, b *CreateView) bool {
 		cmp.TableName(a.ViewName, b.ViewName) &&
 		cmp.RefOfDefiner(a.Definer, b.Definer) &&
 		cmp.Columns(a.Columns, b.Columns) &&
-		cmp.SelectStatement(a.Select, b.Select) &&
+		cmp.TableStatement(a.Select, b.Select) &&
 		cmp.RefOfParsedComments(a.Comments, b.Comments)
 }
 
@@ -2413,7 +2419,7 @@ func (cmp *Comparator) RefOfDerivedTable(a, b *DerivedTable) bool {
 		return false
 	}
 	return a.Lateral == b.Lateral &&
-		cmp.SelectStatement(a.Select, b.Select)
+		cmp.TableStatement(a.Select, b.Select)
 }
 
 // RefOfDropColumn does deep equals between the two objects.
@@ -4525,7 +4531,7 @@ func (cmp *Comparator) RefOfSubquery(a, b *Subquery) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return cmp.SelectStatement(a.Select, b.Select)
+	return cmp.TableStatement(a.Select, b.Select)
 }
 
 // RefOfSubstrExpr does deep equals between the two objects.
@@ -4685,8 +4691,8 @@ func (cmp *Comparator) RefOfUnion(a, b *Union) bool {
 	}
 	return a.Distinct == b.Distinct &&
 		cmp.RefOfWith(a.With, b.With) &&
-		cmp.SelectStatement(a.Left, b.Left) &&
-		cmp.SelectStatement(a.Right, b.Right) &&
+		cmp.TableStatement(a.Left, b.Left) &&
+		cmp.TableStatement(a.Right, b.Right) &&
 		cmp.OrderBy(a.OrderBy, b.OrderBy) &&
 		cmp.RefOfLimit(a.Limit, b.Limit) &&
 		a.Lock == b.Lock &&
@@ -4845,6 +4851,22 @@ func (cmp *Comparator) RefOfValuesFuncExpr(a, b *ValuesFuncExpr) bool {
 		return false
 	}
 	return cmp.RefOfColName(a.Name, b.Name)
+}
+
+// RefOfValuesStatement does deep equals between the two objects.
+func (cmp *Comparator) RefOfValuesStatement(a, b *ValuesStatement) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return cmp.RefOfWith(a.With, b.With) &&
+		cmp.Values(a.Rows, b.Rows) &&
+		a.ListArg == b.ListArg &&
+		cmp.RefOfParsedComments(a.Comments, b.Comments) &&
+		cmp.OrderBy(a.Order, b.Order) &&
+		cmp.RefOfLimit(a.Limit, b.Limit)
 }
 
 // RefOfVarPop does deep equals between the two objects.
@@ -6705,6 +6727,12 @@ func (cmp *Comparator) InsertRows(inA, inB InsertRows) bool {
 			return false
 		}
 		return cmp.Values(a, b)
+	case *ValuesStatement:
+		b, ok := inB.(*ValuesStatement)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfValuesStatement(a, b)
 	default:
 		// this should never happen
 		return false
@@ -7140,6 +7168,12 @@ func (cmp *Comparator) Statement(inA, inB Statement) bool {
 			return false
 		}
 		return cmp.RefOfVStream(a, b)
+	case *ValuesStatement:
+		b, ok := inB.(*ValuesStatement)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfValuesStatement(a, b)
 	default:
 		// this should never happen
 		return false
@@ -7179,6 +7213,39 @@ func (cmp *Comparator) TableExpr(inA, inB TableExpr) bool {
 			return false
 		}
 		return cmp.RefOfParenTableExpr(a, b)
+	default:
+		// this should never happen
+		return false
+	}
+}
+
+// TableStatement does deep equals between the two objects.
+func (cmp *Comparator) TableStatement(inA, inB TableStatement) bool {
+	if inA == nil && inB == nil {
+		return true
+	}
+	if inA == nil || inB == nil {
+		return false
+	}
+	switch a := inA.(type) {
+	case *Select:
+		b, ok := inB.(*Select)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfSelect(a, b)
+	case *Union:
+		b, ok := inB.(*Union)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfUnion(a, b)
+	case *ValuesStatement:
+		b, ok := inB.(*ValuesStatement)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfValuesStatement(a, b)
 	default:
 		// this should never happen
 		return false

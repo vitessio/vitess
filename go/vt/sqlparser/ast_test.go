@@ -917,11 +917,3 @@ func TestCloneComments(t *testing.T) {
 		assert.Equal(t, "b", val)
 	}
 }
-
-func TestRemoveKeyspace(t *testing.T) {
-	stmt, err := NewTestParser().Parse("select 1 from uks.unsharded")
-	require.NoError(t, err)
-	RemoveKeyspaceIgnoreSysSchema(stmt)
-
-	require.Equal(t, "select 1 from unsharded", String(stmt))
-}

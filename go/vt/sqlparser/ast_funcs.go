@@ -640,6 +640,26 @@ func parseBindVariable(yylex yyLexer, bvar string) *Argument {
 	return NewArgument(bvar)
 }
 
+func setIntoIfPossible(lexer yyLexer, tblSubquery TableStatement, into *SelectInto) {
+	selStmt, ok := tblSubquery.(SelectStatement)
+	if !ok {
+		lexer.Error("VALUES does not support INTO")
+		return
+	}
+
+	selStmt.SetInto(into)
+}
+
+func setLockIfPossible(lexer yyLexer, tblSubquery TableStatement, lock Lock) {
+	selStmt, ok := tblSubquery.(SelectStatement)
+	if !ok {
+		lexer.Error("VALUES does not support LOCK")
+		return
+	}
+
+	selStmt.SetLock(lock)
+}
+
 func NewTypedArgument(in string, t sqltypes.Type) *Argument {
 	return &Argument{Name: in, Type: t}
 }
@@ -755,12 +775,12 @@ func NewTableNameWithQualifier(name, qualifier string) TableName {
 }
 
 // NewSubquery makes a new Subquery
-func NewSubquery(selectStatement SelectStatement) *Subquery {
+func NewSubquery(selectStatement TableStatement) *Subquery {
 	return &Subquery{Select: selectStatement}
 }
 
 // NewDerivedTable makes a new DerivedTable
-func NewDerivedTable(lateral bool, selectStatement SelectStatement) *DerivedTable {
+func NewDerivedTable(lateral bool, selectStatement TableStatement) *DerivedTable {
 	return &DerivedTable{
 		Lateral: lateral,
 		Select:  selectStatement,
@@ -1391,7 +1411,7 @@ func (node *Union) GetParsedComments() *ParsedComments {
 	return node.Left.GetParsedComments()
 }
 
-func requiresParen(stmt SelectStatement) bool {
+func requiresParen(stmt TableStatement) bool {
 	switch node := stmt.(type) {
 	case *Union:
 		return len(node.OrderBy) != 0 || node.Lock != 0 || node.Into != nil || node.Limit != nil
@@ -1400,10 +1420,6 @@ func requiresParen(stmt SelectStatement) bool {
 	}
 
 	return false
-}
-
-func setLockInSelect(stmt SelectStatement, lock Lock) {
-	stmt.SetLock(lock)
 }
 
 // ToString returns the string associated with the DDLAction Enum
@@ -2345,26 +2361,30 @@ func setFuncArgs(aggr AggrFunc, exprs Exprs, name string) error {
 }
 
 // GetFirstSelect gets the first select statement
-func GetFirstSelect(selStmt SelectStatement) *Select {
+func GetFirstSelect(selStmt TableStatement) (*Select, error) {
 	if selStmt == nil {
-		return nil
+		return nil, nil
 	}
 	switch node := selStmt.(type) {
 	case *Select:
-		return node
+		return node, nil
+	case *ValuesStatement:
+		return nil, vterrors.VT12001("first table_reference as VALUES")
 	case *Union:
 		return GetFirstSelect(node.Left)
 	}
-	panic("[BUG]: unknown type for SelectStatement")
+	return nil, vterrors.VT13001(fmt.Sprintf("unknown type for SelectStatement: %T", selStmt))
 }
 
 // GetAllSelects gets all the select statement s
-func GetAllSelects(selStmt SelectStatement) []*Select {
+func GetAllSelects(selStmt TableStatement) []TableStatement {
 	switch node := selStmt.(type) {
 	case *Select:
-		return []*Select{node}
+		return []TableStatement{node}
 	case *Union:
 		return append(GetAllSelects(node.Left), GetAllSelects(node.Right)...)
+	case *ValuesStatement:
+		return []TableStatement{node}
 	}
 	panic("[BUG]: unknown type for SelectStatement")
 }
@@ -2409,48 +2429,38 @@ func RemoveKeyspaceInCol(in SQLNode) {
 	}, in)
 }
 
-// RemoveKeyspaceInTables removes the Qualifier on all TableNames in the AST
-func RemoveKeyspaceInTables(in SQLNode) {
-	// Walk will only return an error if we return an error from the inner func. safe to ignore here
-	Rewrite(in, nil, func(cursor *Cursor) bool {
-		if tbl, ok := cursor.Node().(TableName); ok && tbl.Qualifier.NotEmpty() {
-			tbl.Qualifier = NewIdentifierCS("")
-			cursor.Replace(tbl)
-		}
-
-		return true
-	})
-}
-
-// RemoveKeyspace removes the Qualifier.Qualifier on all ColNames and Qualifier on all TableNames in the AST
+// RemoveKeyspace removes the keyspace qualifier from all ColName and TableName
 func RemoveKeyspace(in SQLNode) {
-	Rewrite(in, nil, func(cursor *Cursor) bool {
-		switch expr := cursor.Node().(type) {
-		case *ColName:
-			if expr.Qualifier.Qualifier.NotEmpty() {
-				expr.Qualifier.Qualifier = NewIdentifierCS("")
-			}
-		case TableName:
-			if expr.Qualifier.NotEmpty() {
-				expr.Qualifier = NewIdentifierCS("")
-				cursor.Replace(expr)
-			}
-		}
-		return true
+	removeKeyspace(in, func(_ string) bool {
+		return true // Always remove
 	})
 }
 
-// RemoveKeyspaceIgnoreSysSchema removes the Qualifier.Qualifier on all ColNames and Qualifier on all TableNames in the AST
-// except for the system schema.
+// RemoveSpecificKeyspace removes the keyspace qualifier from all ColName and TableName
+// when it matches the keyspace provided
+func RemoveSpecificKeyspace(in SQLNode, keyspace string) {
+	removeKeyspace(in, func(qualifier string) bool {
+		return qualifier == keyspace // Remove only if it matches the provided keyspace
+	})
+}
+
+// RemoveKeyspaceIgnoreSysSchema removes the keyspace qualifier from all ColName and TableName
+// except for the system schema qualifier.
 func RemoveKeyspaceIgnoreSysSchema(in SQLNode) {
+	removeKeyspace(in, func(qualifier string) bool {
+		return qualifier != "" && !SystemSchema(qualifier) // Remove if it's not empty and not a system schema
+	})
+}
+
+func removeKeyspace(in SQLNode, shouldRemove func(qualifier string) bool) {
 	Rewrite(in, nil, func(cursor *Cursor) bool {
 		switch expr := cursor.Node().(type) {
 		case *ColName:
-			if expr.Qualifier.Qualifier.NotEmpty() && !SystemSchema(expr.Qualifier.Qualifier.String()) {
+			if shouldRemove(expr.Qualifier.Qualifier.String()) {
 				expr.Qualifier.Qualifier = NewIdentifierCS("")
 			}
 		case TableName:
-			if expr.Qualifier.NotEmpty() && !SystemSchema(expr.Qualifier.String()) {
+			if shouldRemove(expr.Qualifier.String()) {
 				expr.Qualifier = NewIdentifierCS("")
 				cursor.Replace(expr)
 			}
@@ -2772,7 +2782,7 @@ func MakeColumns(colNames ...string) Columns {
 	return cols
 }
 
-func VisitAllSelects(in SelectStatement, f func(p *Select, idx int) error) error {
+func VisitAllSelects(in TableStatement, f func(p *Select, idx int) error) error {
 	v := visitor{}
 	return v.visitAllSelects(in, f)
 }
@@ -2781,7 +2791,7 @@ type visitor struct {
 	idx int
 }
 
-func (v *visitor) visitAllSelects(in SelectStatement, f func(p *Select, idx int) error) error {
+func (v *visitor) visitAllSelects(in TableStatement, f func(p *Select, idx int) error) error {
 	switch sel := in.(type) {
 	case *Select:
 		err := f(sel, v.idx)
@@ -2873,6 +2883,30 @@ func (node *Update) AddOrder(order *Order) {
 
 func (node *Update) SetLimit(limit *Limit) {
 	node.Limit = limit
+}
+
+func (node *Update) GetOrderBy() OrderBy {
+	return node.OrderBy
+}
+
+func (node *Update) SetOrderBy(by OrderBy) {
+	node.OrderBy = by
+}
+
+func (node *Update) GetLimit() *Limit {
+	return node.Limit
+}
+
+func (node *Delete) GetOrderBy() OrderBy {
+	return node.OrderBy
+}
+
+func (node *Delete) SetOrderBy(by OrderBy) {
+	node.OrderBy = by
+}
+
+func (node *Delete) GetLimit() *Limit {
+	return node.Limit
 }
 
 func (node *Delete) AddOrder(order *Order) {
@@ -2981,3 +3015,50 @@ func ExtractAllTables(stmt Statement) []string {
 	}, stmt)
 	return tables
 }
+
+var _ TableStatement = (*ValuesStatement)(nil)
+
+func (node *ValuesStatement) iTableStatement() {}
+
+func (node *ValuesStatement) SetWith(with *With) {
+	node.With = with
+}
+
+func (node *ValuesStatement) GetOrderBy() OrderBy {
+	return node.Order
+}
+
+func (node *ValuesStatement) SetOrderBy(by OrderBy) {
+	node.Order = by
+}
+
+func (node *ValuesStatement) GetLimit() *Limit {
+	return node.Limit
+}
+
+func (node *ValuesStatement) AddOrder(order *Order) {
+	node.Order = append(node.Order, order)
+}
+
+func (node *ValuesStatement) SetLimit(limit *Limit) {
+	node.Limit = limit
+}
+
+func (node *ValuesStatement) GetColumnCount() int {
+	if len(node.Rows) > 0 {
+		return len(node.Rows[0])
+	}
+	panic("no columns available") // TODO: we need a better solution than a panic
+}
+
+func (node *ValuesStatement) GetColumns() (result SelectExprs) {
+	columnCount := node.GetColumnCount()
+	for i := range columnCount {
+		result = append(result, &AliasedExpr{Expr: NewColName(fmt.Sprintf("column_%d", i))})
+	}
+	panic("no columns available") // TODO: we need a better solution than a panic
+}
+
+func (node *ValuesStatement) SetComments(comments Comments) {}
+
+func (node *ValuesStatement) GetParsedComments() *ParsedComments { return nil }

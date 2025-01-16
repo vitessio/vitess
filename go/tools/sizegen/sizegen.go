@@ -163,6 +163,8 @@ func (sizegen *sizegen) generateTyp(tt types.Type) {
 		sizegen.generateKnownType(tt)
 	case *types.Alias:
 		sizegen.generateTyp(types.Unalias(tt))
+	default:
+		panic(fmt.Sprintf("unhandled type: %v (%T)", tt, tt))
 	}
 }
 
@@ -490,9 +492,11 @@ func (sizegen *sizegen) sizeStmtForType(fieldName *jen.Statement, field types.Ty
 		// assume that function pointers do not allocate (although they might, if they're closures)
 		return nil, 0
 
+	case *types.Alias:
+		return sizegen.sizeStmtForType(fieldName, types.Unalias(node), alloc)
+
 	default:
-		log.Printf("unhandled type: %T", node)
-		return nil, 0
+		panic(fmt.Sprintf("unhandled type: %v (%T)", node, node))
 	}
 }
 

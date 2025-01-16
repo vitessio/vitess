@@ -34138,6 +34138,112 @@ export namespace tabletmanagerdata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** Properties of a VDiffTableLastPK. */
+    interface IVDiffTableLastPK {
+
+        /** VDiffTableLastPK target */
+        target?: (query.IQueryResult|null);
+
+        /** VDiffTableLastPK source */
+        source?: (query.IQueryResult|null);
+    }
+
+    /** Represents a VDiffTableLastPK. */
+    class VDiffTableLastPK implements IVDiffTableLastPK {
+
+        /**
+         * Constructs a new VDiffTableLastPK.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IVDiffTableLastPK);
+
+        /** VDiffTableLastPK target. */
+        public target?: (query.IQueryResult|null);
+
+        /** VDiffTableLastPK source. */
+        public source?: (query.IQueryResult|null);
+
+        /** VDiffTableLastPK _source. */
+        public _source?: "source";
+
+        /**
+         * Creates a new VDiffTableLastPK instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VDiffTableLastPK instance
+         */
+        public static create(properties?: tabletmanagerdata.IVDiffTableLastPK): tabletmanagerdata.VDiffTableLastPK;
+
+        /**
+         * Encodes the specified VDiffTableLastPK message. Does not implicitly {@link tabletmanagerdata.VDiffTableLastPK.verify|verify} messages.
+         * @param message VDiffTableLastPK message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IVDiffTableLastPK, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VDiffTableLastPK message, length delimited. Does not implicitly {@link tabletmanagerdata.VDiffTableLastPK.verify|verify} messages.
+         * @param message VDiffTableLastPK message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IVDiffTableLastPK, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VDiffTableLastPK message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VDiffTableLastPK
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.VDiffTableLastPK;
+
+        /**
+         * Decodes a VDiffTableLastPK message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VDiffTableLastPK
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.VDiffTableLastPK;
+
+        /**
+         * Verifies a VDiffTableLastPK message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VDiffTableLastPK message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VDiffTableLastPK
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.VDiffTableLastPK;
+
+        /**
+         * Creates a plain object from a VDiffTableLastPK message. Also converts values to other types if specified.
+         * @param message VDiffTableLastPK
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.VDiffTableLastPK, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VDiffTableLastPK to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VDiffTableLastPK
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
     /** Properties of an UpdateVReplicationWorkflowRequest. */
     interface IUpdateVReplicationWorkflowRequest {
 
@@ -40380,7 +40486,8 @@ export namespace query {
         HEXVAL = 4129,
         BITNUM = 4130,
         VECTOR = 2083,
-        RAW = 2084
+        RAW = 2084,
+        ROW_TUPLE = 2085
     }
 
     /** Properties of a Value. */
