@@ -102,9 +102,9 @@ You can control idle connection retention for the query server’s query pool, s
 This feature ensures that, during traffic spikes, idle connections are available for faster responses, while minimizing overhead in low-traffic periods by limiting the number of idle connections retained. It helps strike a balance between performance, efficiency, and cost.
 
 ### <a id="stall-disk-recovery"/>Stalled Disk Recovery in VTOrc</a>
-VTOrc has been augmented to be able to identify and recover from stalled disk errors. This is done by polling that the disk is writable by the vttablets and they send this information in the full status output to VTOrc. If the disk is not writable on the primary tablet, VTOrc will attempt to recover the cluster by reparenting to a different primary. This is useful in scenarios where the disk is stalled and the primary vttablet is unable to accept writes because of it.
+VTOrc can now identify and recover from stalled disk errors. VTTablets test whether the disk is writable and they send this information in the full status output to VTOrc. If the disk is not writable on the primary tablet, VTOrc will attempt to recover the cluster by promoting a new primary. This is useful in scenarios where the disk is stalled and the primary vttablet is unable to accept writes because of it.
 
-To opt into this feature, `--enable-stalled-disk-primary-recovery` flag has to be specified on VTOrc, and `--stalled-disk-write-dir` flag has to be specified on the vttablets. `--stalled-disk-write-interval` and `--stalled-disk-write-timeout` flags can be used to configure the polling interval and timeout respectively. 
+To opt into this feature, `--enable-primary-disk-stalled-recovery` flag has to be specified on VTOrc, and `--disk-write-dir` flag has to be specified on the vttablets. `--disk-write-interval` and `--disk-write-timeout` flags can be used to configure the polling interval and timeout respectively. 
 
 ## <a id="minor-changes"/>Minor Changes</a>
 

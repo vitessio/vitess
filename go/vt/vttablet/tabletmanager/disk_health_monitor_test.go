@@ -46,7 +46,7 @@ func TestDiskHealthMonitor_stallAndRecover(t *testing.T) {
 	}
 }
 
-func TestDiskHealthMonitor_errorIsStall(t *testing.T) {
+func TestDiskHealthMonitor_stallDetected(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	mockFileWriter := &sequencedMockWriter{defaultWriteFunction: delayedWriteFunction(10*time.Millisecond, errors.New("test error"))}

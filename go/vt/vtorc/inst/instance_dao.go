@@ -879,7 +879,7 @@ func mkInsertForInstances(instances []*Instance, instanceWasActuallyFound bool, 
 		"semi_sync_primary_clients",
 		"semi_sync_replica_status",
 		"last_discovery_latency",
-		"stalled_disk",
+		"is_disk_stalled",
 	}
 
 	values := make([]string, len(columns))
@@ -1011,7 +1011,7 @@ func UpdateInstanceLastChecked(tabletAlias string, partialSuccess bool, stalledD
 			SET
 				last_checked = DATETIME('now'),
 				last_check_partial_success = ?,
-				stalled_disk = ?
+				is_disk_stalled = ?
 			WHERE
 				alias = ?
 			`,

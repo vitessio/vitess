@@ -133,6 +133,9 @@ Flags:
       --dba_idle_timeout duration                                        Idle timeout for dba connections (default 1m0s)
       --dba_pool_size int                                                Size of the connection pool for dba connections (default 20)
       --degraded_threshold duration                                      replication lag after which a replica is considered degraded (default 30s)
+      --disk-write-dir string                                            if provided, tablet will attempt to write a file to this directory to check if the disk is stalled
+      --disk-write-interval duration                                     how often to write to the disk to check whether it is stalled (default 5s)
+      --disk-write-timeout duration                                      if writes exceed this duration, the disk is considered stalled (default 30s)
       --emit_stats                                                       If set, emit stats to push-based monitoring and stats backends
       --enable-consolidator                                              Synonym to -enable_consolidator (default true)
       --enable-consolidator-replicas                                     Synonym to -enable_consolidator_replicas
@@ -328,9 +331,6 @@ Flags:
       --srv_topo_cache_refresh duration                                  how frequently to refresh the topology for cached entries (default 1s)
       --srv_topo_cache_ttl duration                                      how long to use cached entries for topology (default 1s)
       --srv_topo_timeout duration                                        topo server timeout (default 5s)
-      --stalled-disk-write-dir string                                    if provided, tablet will attempt to write a file to this directory to check if the disk is stalled
-      --stalled-disk-write-interval duration                             how often to write to the disk to check whether it is stalled (default 5s)
-      --stalled-disk-write-timeout duration                              if writes exceed this duration, the disk is considered stalled (default 30s)
       --stats_backend string                                             The name of the registered push-based monitoring/stats backend to use
       --stats_combine_dimensions string                                  List of dimensions to be combined into a single "all" value in exported stats vars
       --stats_common_tags strings                                        Comma-separated list of common tags for the stats backend. It provides both label and values. Example: label1:value1,label2:value2

@@ -118,7 +118,7 @@ func TestGetReplicationAnalysisDecision(t *testing.T) {
 			}},
 			keyspaceWanted: "ks",
 			shardWanted:    "0",
-			codeWanted:     StalledDiskPrimary,
+			codeWanted:     PrimaryDiskStalled,
 		}, {
 			name: "DeadPrimary",
 			info: []*test.InfoForRecoveryAnalysis{{

@@ -45,7 +45,7 @@ func TestAnalysisEntriesHaveSameRecovery(t *testing.T) {
 		}, {
 			// DeadPrimary and StalledDiskPrimary have the same recovery
 			prevAnalysisCode: inst.DeadPrimary,
-			newAnalysisCode:  inst.StalledDiskPrimary,
+			newAnalysisCode:  inst.PrimaryDiskStalled,
 			shouldBeEqual:    true,
 		}, {
 			// DeadPrimary and PrimaryTabletDeleted are different recoveries.
@@ -223,12 +223,12 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 		}, {
 			name:                 "StalledDiskPrimary with ERS enabled",
 			ersEnabled:           true,
-			analysisCode:         inst.StalledDiskPrimary,
+			analysisCode:         inst.PrimaryDiskStalled,
 			wantRecoveryFunction: recoverDeadPrimaryFunc,
 		}, {
 			name:                 "StalledDiskPrimary with ERS disabled",
 			ersEnabled:           false,
-			analysisCode:         inst.StalledDiskPrimary,
+			analysisCode:         inst.PrimaryDiskStalled,
 			wantRecoveryFunction: noRecoveryFunc,
 		}, {
 			name:                 "PrimaryTabletDeleted with ERS enabled",
