@@ -224,6 +224,9 @@ func TestServerGetServingShards(t *testing.T) {
 	}
 }
 
+// TestWatchAllKeyspaceRecords tests the WatchAllKeyspaceRecords method.
+// We test out different updates and see if we receive the correct update
+// from the watch.
 func TestWatchAllKeyspaceRecords(t *testing.T) {
 	ksDef := &topodatapb.Keyspace{
 		KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
@@ -234,8 +237,8 @@ func TestWatchAllKeyspaceRecords(t *testing.T) {
 		name            string
 		setupFunc       func(t *testing.T, ts *topo.Server)
 		updateFunc      func(t *testing.T, ts *topo.Server)
-		wantInitRecords []*topo.WatchAllKeyspacePrefixData
-		wantChanRecords []*topo.WatchAllKeyspacePrefixData
+		wantInitRecords []*topo.WatchKeyspacePrefixData
+		wantChanRecords []*topo.WatchKeyspacePrefixData
 	}{
 		{
 			name: "Update Durability Policy in 1 Keyspace",
@@ -253,18 +256,33 @@ func TestWatchAllKeyspaceRecords(t *testing.T) {
 				err = ts.UpdateKeyspace(ctx, ki)
 				require.NoError(t, err)
 			},
-			wantInitRecords: []*topo.WatchAllKeyspacePrefixData{
+			wantInitRecords: []*topo.WatchKeyspacePrefixData{
 				{
 					KeyspaceInfo: topo.NewKeyspaceInfo("ks", ksDef),
 				},
 			},
-			wantChanRecords: []*topo.WatchAllKeyspacePrefixData{
+			wantChanRecords: []*topo.WatchKeyspacePrefixData{
 				{
 					KeyspaceInfo: topo.NewKeyspaceInfo("ks", &topodatapb.Keyspace{
 						KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
 						DurabilityPolicy: policy.DurabilityCrossCell,
 						SidecarDbName:    "_vt",
 					}),
+				},
+			},
+		},
+		{
+			name: "New Keyspace Created",
+			setupFunc: func(t *testing.T, ts *topo.Server) {
+			},
+			updateFunc: func(t *testing.T, ts *topo.Server) {
+				err := ts.CreateKeyspace(context.Background(), "ks", ksDef)
+				require.NoError(t, err)
+			},
+			wantInitRecords: []*topo.WatchKeyspacePrefixData{},
+			wantChanRecords: []*topo.WatchKeyspacePrefixData{
+				{
+					KeyspaceInfo: topo.NewKeyspaceInfo("ks", ksDef),
 				},
 			},
 		},
@@ -284,12 +302,12 @@ func TestWatchAllKeyspaceRecords(t *testing.T) {
 				err = ts.UpdateKeyspace(ctx, ki)
 				require.NoError(t, err)
 			},
-			wantInitRecords: []*topo.WatchAllKeyspacePrefixData{
+			wantInitRecords: []*topo.WatchKeyspacePrefixData{
 				{
 					KeyspaceInfo: topo.NewKeyspaceInfo("ks", ksDef),
 				},
 			},
-			wantChanRecords: []*topo.WatchAllKeyspacePrefixData{
+			wantChanRecords: []*topo.WatchKeyspacePrefixData{
 				{
 					KeyspaceInfo: topo.NewKeyspaceInfo("ks", &topodatapb.Keyspace{
 						KeyspaceType:     topodatapb.KeyspaceType_SNAPSHOT,
@@ -338,7 +356,7 @@ func TestWatchAllKeyspaceRecords(t *testing.T) {
 					require.NoError(t, err)
 				}()
 			},
-			wantInitRecords: []*topo.WatchAllKeyspacePrefixData{
+			wantInitRecords: []*topo.WatchKeyspacePrefixData{
 				{
 					KeyspaceInfo: topo.NewKeyspaceInfo("ks", ksDef),
 				},
@@ -346,7 +364,7 @@ func TestWatchAllKeyspaceRecords(t *testing.T) {
 					KeyspaceInfo: topo.NewKeyspaceInfo("ks2", ksDef),
 				},
 			},
-			wantChanRecords: []*topo.WatchAllKeyspacePrefixData{
+			wantChanRecords: []*topo.WatchKeyspacePrefixData{
 				{
 					KeyspaceInfo: topo.NewKeyspaceInfo("ks", &topodatapb.Keyspace{
 						KeyspaceType:     topodatapb.KeyspaceType_SNAPSHOT,
@@ -381,7 +399,7 @@ func TestWatchAllKeyspaceRecords(t *testing.T) {
 			defer watchCancel()
 			initRecords, ch, err := ts.WatchAllKeyspaceRecords(watchCtx)
 			require.NoError(t, err)
-			elementsMatchFunc(t, tt.wantInitRecords, initRecords, keyspacePrefixDataMatches)
+			elementsMatchFunc(t, tt.wantInitRecords, initRecords, watchKeyspacePrefixDataMatches)
 
 			// We start a go routine to collect all the records from the channel.
 			wg := sync.WaitGroup{}
@@ -393,7 +411,7 @@ func TestWatchAllKeyspaceRecords(t *testing.T) {
 					if topo.IsErrType(data.Err, topo.Interrupted) {
 						continue
 					}
-					require.True(t, keyspacePrefixDataMatches(tt.wantChanRecords[idx], data))
+					require.True(t, watchKeyspacePrefixDataMatches(tt.wantChanRecords[idx], data))
 					idx++
 					// Stop the watch after we have verified we have received all required updates.
 					if idx == len(tt.wantChanRecords) {
@@ -436,7 +454,8 @@ func elementsMatchFunc[T any](t *testing.T, expected, actual []T, equalFn func(a
 	}
 }
 
-func keyspacePrefixDataMatches(a, b *topo.WatchAllKeyspacePrefixData) bool {
+// watchKeyspacePrefixDataMatches is a helper function to check equality of two topo.WatchKeyspacePrefixData.
+func watchKeyspacePrefixDataMatches(a, b *topo.WatchKeyspacePrefixData) bool {
 	if a == nil || b == nil {
 		return a == b
 	}
