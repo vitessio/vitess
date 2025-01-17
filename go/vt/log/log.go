@@ -117,7 +117,7 @@ type PrefixedLogger struct {
 }
 
 func NewPrefixedLogger(prefix string) *PrefixedLogger {
-	return &PrefixedLogger{prefix: prefix}
+	return &PrefixedLogger{prefix: prefix + ": "}
 }
 
 func (pl *PrefixedLogger) V(level glog.Level) glog.Verbose {
@@ -135,7 +135,7 @@ func (pl *PrefixedLogger) Info(args ...any) {
 
 func (pl *PrefixedLogger) Infof(format string, args ...any) {
 	args = append([]interface{}{pl.prefix}, args...)
-	Infof("%s: "+format, args...)
+	Infof("%s"+format, args...)
 }
 
 func (pl *PrefixedLogger) InfoDepth(depth int, args ...any) {
@@ -150,7 +150,7 @@ func (pl *PrefixedLogger) Warning(args ...any) {
 
 func (pl *PrefixedLogger) Warningf(format string, args ...any) {
 	args = append([]interface{}{pl.prefix}, args...)
-	Warningf("%s: "+format, args...)
+	Warningf("%s"+format, args...)
 }
 
 func (pl *PrefixedLogger) WarningDepth(depth int, args ...any) {
@@ -165,7 +165,7 @@ func (pl *PrefixedLogger) Error(args ...any) {
 
 func (pl *PrefixedLogger) Errorf(format string, args ...any) {
 	args = append([]interface{}{pl.prefix}, args...)
-	Errorf("%s: "+format, args...)
+	Errorf("%s"+format, args...)
 }
 
 func (pl *PrefixedLogger) ErrorDepth(depth int, args ...any) {
@@ -180,7 +180,7 @@ func (pl *PrefixedLogger) Exit(args ...any) {
 
 func (pl *PrefixedLogger) Exitf(format string, args ...any) {
 	args = append([]interface{}{pl.prefix}, args...)
-	Exitf("%s: "+format, args...)
+	Exitf("%s"+format, args...)
 }
 
 func (pl *PrefixedLogger) ExitDepth(depth int, args ...any) {
@@ -195,7 +195,7 @@ func (pl *PrefixedLogger) Fatal(args ...any) {
 
 func (pl *PrefixedLogger) Fatalf(format string, args ...any) {
 	args = append([]interface{}{pl.prefix}, args...)
-	Fatalf("%s: "+format, args...)
+	Fatalf("%s"+format, args...)
 }
 
 func (pl *PrefixedLogger) FatalDepth(depth int, args ...any) {
