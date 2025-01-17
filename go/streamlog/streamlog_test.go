@@ -287,10 +287,12 @@ func TestShouldEmitLog(t *testing.T) {
 	origQueryLogFilterTag := queryLogFilterTag
 	origQueryLogRowThreshold := queryLogRowThreshold
 	origQueryLogSampleRate := queryLogSampleRate
+	origQueryLogMode := queryLogMode
 	defer func() {
 		SetQueryLogFilterTag(origQueryLogFilterTag)
 		SetQueryLogRowThreshold(origQueryLogRowThreshold)
 		SetQueryLogSampleRate(origQueryLogSampleRate)
+		SetQueryLogMode(origQueryLogMode)
 	}()
 
 	tests := []struct {
@@ -298,8 +300,10 @@ func TestShouldEmitLog(t *testing.T) {
 		qLogFilterTag    string
 		qLogRowThreshold uint64
 		qLogSampleRate   float64
+		qLogMode         string
 		rowsAffected     uint64
 		rowsReturned     uint64
+		errored          bool
 		ok               bool
 	}{
 		{
@@ -356,6 +360,18 @@ func TestShouldEmitLog(t *testing.T) {
 			rowsReturned:     17,
 			ok:               true,
 		},
+		{
+			sql:      "log only error - no error",
+			qLogMode: "error",
+			errored:  false,
+			ok:       false,
+		},
+		{
+			sql:      "log only error - errored",
+			qLogMode: "error",
+			errored:  true,
+			ok:       true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -363,8 +379,9 @@ func TestShouldEmitLog(t *testing.T) {
 			SetQueryLogFilterTag(tt.qLogFilterTag)
 			SetQueryLogRowThreshold(tt.qLogRowThreshold)
 			SetQueryLogSampleRate(tt.qLogSampleRate)
+			SetQueryLogMode(tt.qLogMode)
 
-			require.Equal(t, tt.ok, ShouldEmitLog(tt.sql, tt.rowsAffected, tt.rowsReturned))
+			require.Equal(t, tt.ok, ShouldEmitLog(tt.sql, tt.rowsAffected, tt.rowsReturned, tt.errored))
 		})
 	}
 }
@@ -373,7 +390,7 @@ func BenchmarkShouldEmitLog(b *testing.B) {
 	b.Run("default", func(b *testing.B) {
 		SetQueryLogSampleRate(0.0)
 		for i := 0; i < b.N; i++ {
-			ShouldEmitLog("select * from test where user='someone'", 0, 123)
+			ShouldEmitLog("select * from test where user='someone'", 0, 123, false)
 		}
 	})
 	b.Run("filter_tag", func(b *testing.B) {
@@ -381,14 +398,14 @@ func BenchmarkShouldEmitLog(b *testing.B) {
 		SetQueryLogFilterTag("LOG_QUERY")
 		defer SetQueryLogFilterTag("")
 		for i := 0; i < b.N; i++ {
-			ShouldEmitLog("select /* LOG_QUERY=1 */ * from test where user='someone'", 0, 123)
+			ShouldEmitLog("select /* LOG_QUERY=1 */ * from test where user='someone'", 0, 123, false)
 		}
 	})
 	b.Run("50%_sample_rate", func(b *testing.B) {
 		SetQueryLogSampleRate(0.5)
 		defer SetQueryLogSampleRate(0.0)
 		for i := 0; i < b.N; i++ {
-			ShouldEmitLog("select * from test where user='someone'", 0, 123)
+			ShouldEmitLog("select * from test where user='someone'", 0, 123, false)
 		}
 	})
 }

@@ -352,22 +352,15 @@ func Init(
 
 	plans := DefaultPlanCache()
 
-	executor := NewExecutor(
-		ctx,
-		env,
-		serv,
-		cell,
-		resolver,
-		normalizeQueries,
-		warnShardedOnly,
-		streamBufferSize,
-		plans,
-		si,
-		noScatter,
-		pv,
-		warmingReadsPercent,
-		dynamicConfig,
-	)
+	eConfig := ExecutorConfig{
+		Normalize:           normalizeQueries,
+		StreamSize:          streamBufferSize,
+		AllowScatter:        !noScatter,
+		WarmingReadsPercent: warmingReadsPercent,
+		QueryLogToFile:      queryLogToFile,
+	}
+
+	executor := NewExecutor(ctx, env, serv, cell, resolver, eConfig, warnShardedOnly, plans, si, pv, dynamicConfig)
 
 	if err := executor.defaultQueryLogger(); err != nil {
 		log.Fatalf("error initializing query logger: %v", err)

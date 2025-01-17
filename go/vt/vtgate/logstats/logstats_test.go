@@ -253,3 +253,21 @@ func TestLogStatsRemoteAddrUsername(t *testing.T) {
 		t.Fatalf("expected to get username: %s, but got: %s", username, user)
 	}
 }
+
+// TestLogStatsErrorsOnly tests that LogStats only logs errors when the query log mode is set to errors only for VTGate.
+func TestLogStatsErrorsOnly(t *testing.T) {
+	origQLogMode := streamlog.GetQueryLogMode()
+	streamlog.SetQueryLogMode(streamlog.QueryLogModeError)
+	defer streamlog.SetQueryLogMode(origQLogMode)
+
+	logStats := NewLogStats(context.Background(), "test", "sql1", "", map[string]*querypb.BindVariable{})
+
+	// no error, should not log
+	logOutput := testFormat(t, logStats, url.Values{})
+	assert.Empty(t, logOutput)
+
+	// error, should log
+	logStats.Error = errors.New("test error")
+	logOutput = testFormat(t, logStats, url.Values{})
+	assert.Contains(t, logOutput, "test error")
+}

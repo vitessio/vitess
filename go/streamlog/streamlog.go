@@ -47,12 +47,15 @@ var (
 		[]string{"Log", "Subscriber"})
 )
 
+const QueryLogModeError = "error"
+
 var (
 	redactDebugUIQueries bool
 	queryLogFilterTag    string
 	queryLogRowThreshold uint64
 	queryLogFormat       = "text"
 	queryLogSampleRate   float64
+	queryLogMode         string
 )
 
 func GetRedactDebugUIQueries() bool {
@@ -83,6 +86,14 @@ func SetQueryLogFormat(newQueryLogFormat string) {
 	queryLogFormat = newQueryLogFormat
 }
 
+func GetQueryLogMode() string {
+	return queryLogMode
+}
+
+func SetQueryLogMode(logMode string) {
+	queryLogMode = logMode
+}
+
 func init() {
 	servenv.OnParseFor("vtcombo", registerStreamLogFlags)
 	servenv.OnParseFor("vttablet", registerStreamLogFlags)
@@ -104,6 +115,9 @@ func registerStreamLogFlags(fs *pflag.FlagSet) {
 
 	// QueryLogSampleRate causes a sample of queries to be logged
 	fs.Float64Var(&queryLogSampleRate, "querylog-sample-rate", queryLogSampleRate, "Sample rate for logging queries. Value must be between 0.0 (no logging) and 1.0 (all queries)")
+
+	// QueryLogMode controls the mode for logging queries (all or error)
+	fs.StringVar(&queryLogMode, "querylog-mode", queryLogMode, `Mode for logging queries. 'error' will only log queries that return an error. Otherwise all queries will be logged.`)
 }
 
 const (
@@ -269,7 +283,7 @@ func shouldSampleQuery() bool {
 
 // ShouldEmitLog returns whether the log with the given SQL query
 // should be emitted or filtered
-func ShouldEmitLog(sql string, rowsAffected, rowsReturned uint64) bool {
+func ShouldEmitLog(sql string, rowsAffected, rowsReturned uint64, hasError bool) bool {
 	if shouldSampleQuery() {
 		return true
 	}
@@ -278,6 +292,9 @@ func ShouldEmitLog(sql string, rowsAffected, rowsReturned uint64) bool {
 	}
 	if queryLogFilterTag != "" {
 		return strings.Contains(sql, queryLogFilterTag)
+	}
+	if queryLogMode == QueryLogModeError {
+		return hasError
 	}
 	return true
 }
