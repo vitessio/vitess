@@ -91,13 +91,15 @@ func (b *binder) bindTableNames(cursor *sqlparser.Cursor, tables sqlparser.Table
 		return nil
 	}
 	current := b.scoper.currentScope()
+	var targets []TableSet
 	for _, target := range tables {
 		finalDep, err := b.findDependentTableSet(current, target)
 		if err != nil {
 			return err
 		}
-		b.targets = b.targets.Merge(finalDep.direct)
+		targets = append(targets, finalDep.direct)
 	}
+	b.targets = MergeTableSets(targets...)
 	return nil
 }
 
@@ -184,19 +186,21 @@ func (b *binder) findDependentTableSet(current *scope, target sqlparser.TableNam
 
 func (b *binder) bindCountStar(node *sqlparser.CountStar) error {
 	scope := b.scoper.currentScope()
-	var ts TableSet
+	var deps []TableSet
 	for _, tbl := range scope.tables {
 		switch tbl := tbl.(type) {
 		case *vTableInfo:
 			for _, col := range tbl.cols {
 				if sqlparser.Equals.Expr(node, col) {
-					ts = ts.Merge(b.recursive[col])
+					deps = append(deps, b.recursive[col])
 				}
 			}
 		default:
-			ts = ts.Merge(tbl.getTableSet(b.org))
+			deps = append(deps, tbl.getTableSet(b.org))
 		}
 	}
+
+	ts := MergeTableSets(deps...)
 	b.recursive[node] = ts
 	b.direct[node] = ts
 	return nil
@@ -246,17 +250,18 @@ func (b *binder) setSubQueryDependencies(subq *sqlparser.Subquery) error {
 	subqRecursiveDeps := b.recursive.dependencies(subq)
 	subqDirectDeps := b.direct.dependencies(subq)
 
-	tablesToKeep := EmptyTableSet()
+	var tablesToKeep []TableSet
 	sco := currScope
 	for sco != nil {
 		for _, table := range sco.tables {
-			tablesToKeep = tablesToKeep.Merge(table.getTableSet(b.org))
+			tablesToKeep = append(tablesToKeep, table.getTableSet(b.org))
 		}
 		sco = sco.parent
 	}
 
-	b.recursive[subq] = subqRecursiveDeps.KeepOnly(tablesToKeep)
-	b.direct[subq] = subqDirectDeps.KeepOnly(tablesToKeep)
+	keep := MergeTableSets(tablesToKeep...)
+	b.recursive[subq] = subqRecursiveDeps.KeepOnly(keep)
+	b.direct[subq] = subqDirectDeps.KeepOnly(keep)
 	return nil
 }
 

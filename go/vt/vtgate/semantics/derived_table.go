@@ -92,12 +92,15 @@ func handleAliasedExpr(vTbl *DerivedTable, expr *sqlparser.AliasedExpr, cols sql
 }
 
 func handleUnexpandedStarExpression(tables []TableInfo, vTbl *DerivedTable, org originable) {
+	var tableSets []TableSet
 	for _, table := range tables {
-		vTbl.tables = vTbl.tables.Merge(table.getTableSet(org))
+		ts := table.getTableSet(org)
+		tableSets = append(tableSets, ts)
 		if !table.authoritative() {
 			vTbl.isAuthoritative = false
 		}
 	}
+	vTbl.tables = MergeTableSets(tableSets...)
 }
 
 // dependencies implements the TableInfo interface

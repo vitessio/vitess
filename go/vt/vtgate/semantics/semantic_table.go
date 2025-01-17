@@ -697,11 +697,14 @@ func (d ExprDependencies) dependencies(expr sqlparser.Expr) (deps TableSet) {
 		if found {
 			return deps
 		}
+
+		// If we did not find the expression in the cache, we'll add it after calculating it
 		defer func() {
 			d[expr] = deps
 		}()
 	}
 
+	var tables []TableSet
 	// During the original semantic analysis, all ColNames were found and bound to the corresponding tables
 	// Here, we'll walk the expression tree and look to see if we can find any sub-expressions
 	// that have already set dependencies.
@@ -714,13 +717,17 @@ func (d ExprDependencies) dependencies(expr sqlparser.Expr) (deps TableSet) {
 		}
 
 		set, found := d[expr]
-		deps = deps.Merge(set)
+		if found {
+			tables = append(tables, set)
+		}
 
 		// if we found a cached value, there is no need to continue down to visit children
 		return !found, nil
 	}, expr)
 
-	return deps
+	deps = MergeTableSets(tables...)
+
+	return
 }
 
 // RewriteDerivedTableExpression rewrites all the ColName instances in the supplied expression with

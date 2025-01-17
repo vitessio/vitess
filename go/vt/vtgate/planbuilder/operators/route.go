@@ -806,9 +806,9 @@ func (r *Route) getTruncateColumnCount() int {
 }
 
 func (r *Route) introducesTableID() semantics.TableSet {
-	id := semantics.EmptyTableSet()
+	var ts []semantics.TableSet
 	for _, route := range r.MergedWith {
-		id = id.Merge(TableID(route))
+		ts = append(ts, TableID(route))
 	}
-	return id
+	return semantics.MergeTableSets(ts...)
 }

@@ -228,11 +228,11 @@ func tryPushSubQueryInJoin(
 	// we want to push the subquery as close to its needs
 	// as possible, so that we can potentially merge them together
 	// TODO: we need to check dependencies and break apart all expressions in the subquery, not just the merge predicates
-	deps := semantics.EmptyTableSet()
+	var ts []semantics.TableSet
 	for _, predicate := range inner.GetMergePredicates() {
-		deps = deps.Merge(ctx.SemTable.RecursiveDeps(predicate))
+		ts = append(ts, ctx.SemTable.RecursiveDeps(predicate))
 	}
-	deps = deps.Remove(innerID)
+	deps := semantics.MergeTableSets(ts...).Remove(innerID)
 
 	// in general, we don't want to push down uncorrelated subqueries into the RHS of a join,
 	// since this side is executed once per row from the LHS, so we would unnecessarily execute
