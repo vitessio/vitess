@@ -22,8 +22,8 @@ type Mutable struct {
 	data []byte
 }
 
-// NewMutableTableSet creates an initially empty MutableTableSet.
-func NewMutableTableSet() *Mutable {
+// NewMutable creates an initially empty mutable BitSet.
+func NewMutable() *Mutable {
 	return &Mutable{}
 }
 

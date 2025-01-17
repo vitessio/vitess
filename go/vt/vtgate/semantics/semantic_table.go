@@ -708,7 +708,7 @@ func (d ExprDependencies) dependencies(expr sqlparser.Expr) (deps TableSet) {
 		}()
 	}
 
-	depsCalc := bitset.NewMutableTableSet()
+	depsCalc := bitset.NewMutable()
 	// During the original semantic analysis, all ColNames were found and bound to the corresponding tables
 	// Here, we'll walk the expression tree and look to see if we can find any sub-expressions
 	// that have already set dependencies.
