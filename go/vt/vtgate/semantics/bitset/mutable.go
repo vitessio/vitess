@@ -22,11 +22,6 @@ type Mutable struct {
 	data []byte
 }
 
-// NewMutable creates an initially empty mutable BitSet.
-func NewMutable() *Mutable {
-	return &Mutable{}
-}
-
 // Or merges another TableSet into this Mutable, resizing if needed.
 func (m *Mutable) Or(ts Bitset) {
 	// If ts is longer than our current data, grow to accommodate it.
@@ -47,10 +42,5 @@ func (m *Mutable) AsImmutable() Bitset {
 	for trim > 0 && m.data[trim-1] == 0 {
 		trim--
 	}
-	if trim == 0 {
-		// Means all bits are zero -> empty
-		return ""
-	}
-
 	return toBitset(m.data[:trim])
 }

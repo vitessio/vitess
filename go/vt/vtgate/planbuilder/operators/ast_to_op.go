@@ -18,7 +18,6 @@ package operators
 
 import (
 	"fmt"
-	"vitess.io/vitess/go/vt/vtgate/semantics/bitset"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -122,17 +121,17 @@ func cloneASTAndSemState[T sqlparser.SQLNode](ctx *plancontext.PlanningContext, 
 
 // findTablesContained returns the TableSet of all the contained
 func findTablesContained(ctx *plancontext.PlanningContext, node sqlparser.SQLNode) semantics.TableSet {
-	bs := bitset.NewMutable()
+	var tables semantics.MutableTableSet
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
 		t, ok := node.(*sqlparser.AliasedTableExpr)
 		if !ok {
 			return true, nil
 		}
 		ts := ctx.SemTable.TableSetFor(t)
-		bs.Or(bitset.Bitset(ts))
+		tables.MergeInPlace(ts)
 		return true, nil
 	}, node)
-	return semantics.TableSet(bs.AsImmutable())
+	return tables.ToImmutable()
 }
 
 // joinPredicateCollector is used to inspect the predicates inside the subquery, looking for any

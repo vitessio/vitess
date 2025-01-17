@@ -31,7 +31,7 @@ import (
 type binder struct {
 	recursive ExprDependencies
 	direct    ExprDependencies
-	targets   TableSet
+	targets   MutableTableSet
 	scoper    *scoper
 	tc        *tableCollector
 	org       originable
@@ -81,7 +81,7 @@ func (b *binder) bindUpdateExpr(ue *sqlparser.UpdateExpr) error {
 	if !ok {
 		return nil
 	}
-	b.targets = b.targets.Merge(ts)
+	b.targets.MergeInPlace(ts)
 	return nil
 }
 
@@ -91,15 +91,15 @@ func (b *binder) bindTableNames(cursor *sqlparser.Cursor, tables sqlparser.Table
 		return nil
 	}
 	current := b.scoper.currentScope()
-	var targets []TableSet
+	var targets MutableTableSet
 	for _, target := range tables {
 		finalDep, err := b.findDependentTableSet(current, target)
 		if err != nil {
 			return err
 		}
-		targets = append(targets, finalDep.direct)
+		targets.MergeInPlace(finalDep.direct)
 	}
-	b.targets = MergeTableSets(targets...)
+	b.targets = targets
 	return nil
 }
 
@@ -186,21 +186,21 @@ func (b *binder) findDependentTableSet(current *scope, target sqlparser.TableNam
 
 func (b *binder) bindCountStar(node *sqlparser.CountStar) error {
 	scope := b.scoper.currentScope()
-	var deps []TableSet
+	var deps MutableTableSet
 	for _, tbl := range scope.tables {
 		switch tbl := tbl.(type) {
 		case *vTableInfo:
 			for _, col := range tbl.cols {
 				if sqlparser.Equals.Expr(node, col) {
-					deps = append(deps, b.recursive[col])
+					deps.MergeInPlace(b.recursive[col])
 				}
 			}
 		default:
-			deps = append(deps, tbl.getTableSet(b.org))
+			deps.MergeInPlace(tbl.getTableSet(b.org))
 		}
 	}
 
-	ts := MergeTableSets(deps...)
+	ts := deps.ToImmutable()
 	b.recursive[node] = ts
 	b.direct[node] = ts
 	return nil
@@ -250,16 +250,16 @@ func (b *binder) setSubQueryDependencies(subq *sqlparser.Subquery) error {
 	subqRecursiveDeps := b.recursive.dependencies(subq)
 	subqDirectDeps := b.direct.dependencies(subq)
 
-	var tablesToKeep []TableSet
+	var tablesToKeep MutableTableSet
 	sco := currScope
 	for sco != nil {
 		for _, table := range sco.tables {
-			tablesToKeep = append(tablesToKeep, table.getTableSet(b.org))
+			tablesToKeep.MergeInPlace(table.getTableSet(b.org))
 		}
 		sco = sco.parent
 	}
 
-	keep := MergeTableSets(tablesToKeep...)
+	keep := tablesToKeep.ToImmutable()
 	b.recursive[subq] = subqRecursiveDeps.KeepOnly(keep)
 	b.direct[subq] = subqDirectDeps.KeepOnly(keep)
 	return nil

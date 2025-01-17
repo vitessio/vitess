@@ -228,11 +228,11 @@ func (s *scoper) up(cursor *sqlparser.Cursor) error {
 			s.popScope()
 		}
 	case *sqlparser.Select, *sqlparser.GroupBy, *sqlparser.Update, *sqlparser.Insert, *sqlparser.Union, *sqlparser.Delete:
-		var tables []TableSet
+		var tables MutableTableSet
 		for _, tableInfo := range s.currentScope().tables {
-			tables = append(tables, tableInfo.getTableSet(s.org))
+			tables.MergeInPlace(tableInfo.getTableSet(s.org))
 		}
-		s.statementIDs[s.currentScope().stmt] = MergeTableSets(tables...)
+		s.statementIDs[s.currentScope().stmt] = tables.ToImmutable()
 		s.popScope()
 	case *sqlparser.Where:
 		if node.Type != sqlparser.HavingClause {

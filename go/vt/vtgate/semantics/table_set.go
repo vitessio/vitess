@@ -18,7 +18,6 @@ package semantics
 
 import (
 	"fmt"
-	"unsafe"
 
 	"vitess.io/vitess/go/vt/vtgate/semantics/bitset"
 )
@@ -115,18 +114,14 @@ func EmptyTableSet() TableSet {
 	return ""
 }
 
-// MergeTableSets merges all the given TableSet into a single one
-func MergeTableSets(tableSets ...TableSet) TableSet {
-	if len(tableSets) == 0 {
-		return ""
-	}
+type MutableTableSet struct {
+	bitset bitset.Mutable
+}
 
-	// Trick: re-interpret slice header of tableSets as []Bitset
-	// This is safe because the memory layout of []TableSet and []Bitset is the same
-	// The alternative would be to loop over all TableSets and convert them to Bitsets, but that would be slower
-	bs := *(*[]bitset.Bitset)(unsafe.Pointer(&tableSets))
+func (ts *MutableTableSet) MergeInPlace(other TableSet) {
+	ts.bitset.Or(bitset.Bitset(other))
+}
 
-	// Now pass it to MergeMany
-	merged := bitset.Merge(bs...)
-	return TableSet(merged)
+func (ts *MutableTableSet) ToImmutable() TableSet {
+	return TableSet(ts.bitset.AsImmutable())
 }

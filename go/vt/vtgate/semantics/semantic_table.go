@@ -19,8 +19,6 @@ package semantics
 import (
 	"fmt"
 
-	"vitess.io/vitess/go/vt/vtgate/semantics/bitset"
-
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -708,7 +706,7 @@ func (d ExprDependencies) dependencies(expr sqlparser.Expr) (deps TableSet) {
 		}()
 	}
 
-	depsCalc := bitset.NewMutable()
+	var depsCalc MutableTableSet
 	// During the original semantic analysis, all ColNames were found and bound to the corresponding tables
 	// Here, we'll walk the expression tree and look to see if we can find any sub-expressions
 	// that have already set dependencies.
@@ -722,15 +720,14 @@ func (d ExprDependencies) dependencies(expr sqlparser.Expr) (deps TableSet) {
 
 		set, found := d[expr]
 		if found {
-			depsCalc.Or(bitset.Bitset(set))
+			depsCalc.MergeInPlace(set)
 		}
 
 		// if we found a cached value, there is no need to continue down to visit children
 		return !found, nil
 	}, expr)
 
-	deps = TableSet(depsCalc.AsImmutable())
-
+	deps = depsCalc.ToImmutable()
 	return
 }
 
