@@ -51,6 +51,14 @@ type KeyspaceInfo struct {
 	*topodatapb.Keyspace
 }
 
+// NewKeyspaceInfo creates a new KeyspaceInfo.
+func NewKeyspaceInfo(name string, keyspace *topodatapb.Keyspace) *KeyspaceInfo {
+	return &KeyspaceInfo{
+		keyspace: name,
+		Keyspace: keyspace,
+	}
+}
+
 // KeyspaceName returns the keyspace name
 func (ki *KeyspaceInfo) KeyspaceName() string {
 	return ki.keyspace
@@ -429,4 +437,98 @@ func (ts *Server) GetShardNames(ctx context.Context, keyspace string) ([]string,
 		return nil, err
 	}
 	return DirEntriesToStringArray(children), err
+}
+
+// WatchKeyspacePrefixData wraps the data we receive on the watch recursive channel
+// The WatchAllKeyspaceRecords API guarantees exactly one of Value or Err will be set.
+type WatchKeyspacePrefixData struct {
+	KeyspaceInfo *KeyspaceInfo
+	Err          error
+}
+
+// WatchAllKeyspaceRecords will set a watch on the Keyspace prefix.
+// It has the same contract as conn.WatchRecursive, but it also unpacks the
+// contents into a Keyspace object.
+func (ts *Server) WatchAllKeyspaceRecords(ctx context.Context) ([]*WatchKeyspacePrefixData, <-chan *WatchKeyspacePrefixData, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, nil, err
+	}
+
+	ctx, cancel := context.WithCancel(ctx)
+
+	// Set up a recursive watch on the KeyspacesPath.
+	current, wdChannel, err := ts.globalCell.WatchRecursive(ctx, KeyspacesPath)
+	if err != nil {
+		cancel()
+		return nil, nil, err
+	}
+	// Unpack the initial data.
+	initialRes, err := checkAndUnpackKeyspaceRecord(current...)
+	if err != nil {
+		// Cancel the watch, drain channel.
+		cancel()
+		for range wdChannel {
+		}
+		return nil, nil, vterrors.Wrapf(err, "error unpacking initial Keyspace objects")
+	}
+
+	changes := make(chan *WatchKeyspacePrefixData, 10)
+	// The background routine reads any event from the watch channel,
+	// translates it, and sends it to the caller.
+	// If cancel() is called, the underlying WatchRecursive() code will
+	// send an ErrInterrupted and then close the channel. We'll
+	// just propagate that back to our caller.
+	go func() {
+		defer cancel()
+		defer close(changes)
+
+		for wd := range wdChannel {
+			if wd.Err != nil {
+				// Last error value, we're done.
+				// wdChannel will be closed right after
+				// this, no need to do anything.
+				changes <- &WatchKeyspacePrefixData{Err: wd.Err}
+				return
+			}
+
+			res, err := checkAndUnpackKeyspaceRecord(wd)
+			if err != nil {
+				cancel()
+				for range wdChannel {
+				}
+				changes <- &WatchKeyspacePrefixData{Err: vterrors.Wrapf(err, "error unpacking object")}
+				return
+			}
+
+			// Each update will only have a single object, if at all.
+			// We get updates for all objects in the prefix, but we only
+			// care about the keyspace objects.
+			if len(res) == 0 {
+				continue
+			}
+			changes <- res[0]
+		}
+	}()
+
+	return initialRes, changes, nil
+}
+
+// checkAndUnpackKeyspaceRecord checks for Keyspace objects and unpacks them.
+func checkAndUnpackKeyspaceRecord(wds ...*WatchDataRecursive) ([]*WatchKeyspacePrefixData, error) {
+	var res []*WatchKeyspacePrefixData
+	for _, wd := range wds {
+		fileDir, fileType := path.Split(wd.Path)
+		// Check if the file is a keyspace record.
+		// If it is, then we unpack it.
+		if fileType == KeyspaceFile {
+			value := &topodatapb.Keyspace{}
+			if err := value.UnmarshalVT(wd.Contents); err != nil {
+				return nil, err
+			}
+			res = append(res, &WatchKeyspacePrefixData{
+				KeyspaceInfo: NewKeyspaceInfo(path.Base(fileDir), value),
+			})
+		}
+	}
+	return res, nil
 }
