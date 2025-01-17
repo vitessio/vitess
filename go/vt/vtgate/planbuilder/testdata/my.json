@@ -1,0 +1,740 @@
+[
+  {
+    "comment": "Add your test case here for debugging and run go test -run=One.",
+    "query": "select col04, col03, col01, col02 from my_table where id in ((select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = '2XxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'9FFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'VXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'AFFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = '6XxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'6FFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'ZXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'5FFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'GXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'DFFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'JXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'DFFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = '8XxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'DFFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'FXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'0FFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'FXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'EFFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'RXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'7FFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'JXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'5FFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'YXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'2FFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'RXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'AFFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'YXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'9FFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = '1XxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'7FFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'RXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'CFFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'XXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'CFFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'WXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'AFFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = '2XxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'BFFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'RXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'4FFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'HXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'7FFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'QXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'0FFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'ZXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'EFFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'NXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'BFFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'XXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'BFFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'WXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'AFFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'PXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'3FFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'BXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'4FFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'XXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'5FFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'TXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'4FFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = '4XxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'DFFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'KXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'4FFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = '3XxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'FFFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = '0XxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'AFFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = '1XxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'7FFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'JXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'3FFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'SXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'7FFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = '5XxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'2FFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'KXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'5FFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'XXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'CFFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'RXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'7FFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'XXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'FFFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'HXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'2FFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = '5XxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'BFFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'CXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'DFFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'NXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'EFFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'TXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'CFFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'DXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'9FFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'GXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'4FFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'RXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'BFFF' order by col02 desc limit 0, 10000)) order by col01 desc, sdKey desc, col02 desc limit 0, 500000;",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select col04, col03, col01, col02 from my_table where id in ((select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = '2XxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'9FFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'VXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'AFFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = '6XxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'6FFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'ZXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'5FFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'GXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'DFFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'JXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'DFFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = '8XxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'DFFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'FXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'0FFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'FXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'EFFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'RXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'7FFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'JXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'5FFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'YXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'2FFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'RXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'AFFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'YXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'9FFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = '1XxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'7FFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'RXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'CFFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'XXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'CFFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'WXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'AFFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = '2XxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'BFFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'RXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'4FFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'HXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'7FFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'QXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'0FFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'ZXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'EFFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'NXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'BFFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'XXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'BFFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'WXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'AFFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'PXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'3FFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'BXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'4FFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'XXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'5FFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'TXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'4FFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = '4XxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'DFFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'KXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'4FFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = '3XxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'FFFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = '0XxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'AFFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = '1XxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'7FFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'JXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'3FFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'SXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'7FFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = '5XxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'2FFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'KXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'5FFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'XXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'CFFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'RXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'7FFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'XXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'FFFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'HXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'2FFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = '5XxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'BFFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'CXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'DFFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'NXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'EFFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'TXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'CFFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'DXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'9FFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'GXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'4FFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'RXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'BFFF' order by col02 desc limit 0, 10000)) order by col01 desc, sdKey desc, col02 desc limit 0, 500000;",
+      "Instructions": {
+        "OperatorType": "Limit",
+        "Count": "500000",
+        "Offset": "0",
+        "Inputs": [
+          {
+            "OperatorType": "UncorrelatedSubquery",
+            "Variant": "PulloutIn",
+            "PulloutVars": [
+              "__sq_has_values",
+              "__sq1"
+            ],
+            "Inputs": [
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Concatenate",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id from my_table force index (MY_INDEX) where 1 != 1",
+                    "Query": "select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = '2XxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'9FFF' order by col02 desc limit 0, 10000",
+                    "Table": "my_table",
+                    "Values": [
+                      "_binary'\ufffd\ufffd'"
+                    ],
+                    "Vindex": "binary_vdx"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id from my_table force index (MY_INDEX) where 1 != 1",
+                    "Query": "select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'VXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'AFFF' order by col02 desc limit 0, 10000",
+                    "Table": "my_table",
+                    "Values": [
+                      "_binary'\ufffd\ufffd'"
+                    ],
+                    "Vindex": "binary_vdx"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id from my_table force index (MY_INDEX) where 1 != 1",
+                    "Query": "select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = '6XxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'6FFF' order by col02 desc limit 0, 10000",
+                    "Table": "my_table",
+                    "Values": [
+                      "_binary'o\ufffd'"
+                    ],
+                    "Vindex": "binary_vdx"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id from my_table force index (MY_INDEX) where 1 != 1",
+                    "Query": "select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'ZXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'5FFF' order by col02 desc limit 0, 10000",
+                    "Table": "my_table",
+                    "Values": [
+                      "_binary'_\ufffd'"
+                    ],
+                    "Vindex": "binary_vdx"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "(select id from my_table force index (MY_INDEX) where 1 != 1) union all (select id from my_table force index (MY_INDEX) where 1 != 1) union all (select id from my_table force index (MY_INDEX) where 1 != 1)",
+                    "Query": "(select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'GXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'DFFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'JXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'DFFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = '8XxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'DFFF' order by col02 desc limit 0, 10000)",
+                    "Table": "my_table",
+                    "Values": [
+                      "_binary'\ufffd\ufffd'"
+                    ],
+                    "Vindex": "binary_vdx"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id from my_table force index (MY_INDEX) where 1 != 1",
+                    "Query": "select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'FXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'0FFF' order by col02 desc limit 0, 10000",
+                    "Table": "my_table",
+                    "Values": [
+                      "_binary'\u000f\ufffd'"
+                    ],
+                    "Vindex": "binary_vdx"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id from my_table force index (MY_INDEX) where 1 != 1",
+                    "Query": "select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'FXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'EFFF' order by col02 desc limit 0, 10000",
+                    "Table": "my_table",
+                    "Values": [
+                      "_binary'\ufffd\ufffd'"
+                    ],
+                    "Vindex": "binary_vdx"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id from my_table force index (MY_INDEX) where 1 != 1",
+                    "Query": "select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'RXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'7FFF' order by col02 desc limit 0, 10000",
+                    "Table": "my_table",
+                    "Values": [
+                      "_binary'\ufffd'"
+                    ],
+                    "Vindex": "binary_vdx"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id from my_table force index (MY_INDEX) where 1 != 1",
+                    "Query": "select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'JXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'5FFF' order by col02 desc limit 0, 10000",
+                    "Table": "my_table",
+                    "Values": [
+                      "_binary'_\ufffd'"
+                    ],
+                    "Vindex": "binary_vdx"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id from my_table force index (MY_INDEX) where 1 != 1",
+                    "Query": "select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'YXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'2FFF' order by col02 desc limit 0, 10000",
+                    "Table": "my_table",
+                    "Values": [
+                      "_binary'/\ufffd'"
+                    ],
+                    "Vindex": "binary_vdx"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id from my_table force index (MY_INDEX) where 1 != 1",
+                    "Query": "select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'RXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'AFFF' order by col02 desc limit 0, 10000",
+                    "Table": "my_table",
+                    "Values": [
+                      "_binary'\ufffd\ufffd'"
+                    ],
+                    "Vindex": "binary_vdx"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id from my_table force index (MY_INDEX) where 1 != 1",
+                    "Query": "select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'YXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'9FFF' order by col02 desc limit 0, 10000",
+                    "Table": "my_table",
+                    "Values": [
+                      "_binary'\ufffd\ufffd'"
+                    ],
+                    "Vindex": "binary_vdx"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id from my_table force index (MY_INDEX) where 1 != 1",
+                    "Query": "select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = '1XxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'7FFF' order by col02 desc limit 0, 10000",
+                    "Table": "my_table",
+                    "Values": [
+                      "_binary'\ufffd'"
+                    ],
+                    "Vindex": "binary_vdx"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "(select id from my_table force index (MY_INDEX) where 1 != 1) union all (select id from my_table force index (MY_INDEX) where 1 != 1)",
+                    "Query": "(select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'RXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'CFFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'XXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'CFFF' order by col02 desc limit 0, 10000)",
+                    "Table": "my_table",
+                    "Values": [
+                      "_binary'\ufffd\ufffd'"
+                    ],
+                    "Vindex": "binary_vdx"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id from my_table force index (MY_INDEX) where 1 != 1",
+                    "Query": "select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'WXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'AFFF' order by col02 desc limit 0, 10000",
+                    "Table": "my_table",
+                    "Values": [
+                      "_binary'\ufffd\ufffd'"
+                    ],
+                    "Vindex": "binary_vdx"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id from my_table force index (MY_INDEX) where 1 != 1",
+                    "Query": "select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = '2XxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'BFFF' order by col02 desc limit 0, 10000",
+                    "Table": "my_table",
+                    "Values": [
+                      "_binary'\ufffd\ufffd'"
+                    ],
+                    "Vindex": "binary_vdx"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id from my_table force index (MY_INDEX) where 1 != 1",
+                    "Query": "select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'RXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'4FFF' order by col02 desc limit 0, 10000",
+                    "Table": "my_table",
+                    "Values": [
+                      "_binary'O\ufffd'"
+                    ],
+                    "Vindex": "binary_vdx"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id from my_table force index (MY_INDEX) where 1 != 1",
+                    "Query": "select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'HXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'7FFF' order by col02 desc limit 0, 10000",
+                    "Table": "my_table",
+                    "Values": [
+                      "_binary'\ufffd'"
+                    ],
+                    "Vindex": "binary_vdx"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id from my_table force index (MY_INDEX) where 1 != 1",
+                    "Query": "select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'QXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'0FFF' order by col02 desc limit 0, 10000",
+                    "Table": "my_table",
+                    "Values": [
+                      "_binary'\u000f\ufffd'"
+                    ],
+                    "Vindex": "binary_vdx"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id from my_table force index (MY_INDEX) where 1 != 1",
+                    "Query": "select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'ZXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'EFFF' order by col02 desc limit 0, 10000",
+                    "Table": "my_table",
+                    "Values": [
+                      "_binary'\ufffd\ufffd'"
+                    ],
+                    "Vindex": "binary_vdx"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "(select id from my_table force index (MY_INDEX) where 1 != 1) union all (select id from my_table force index (MY_INDEX) where 1 != 1)",
+                    "Query": "(select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'NXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'BFFF' order by col02 desc limit 0, 10000) union all (select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'XXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'BFFF' order by col02 desc limit 0, 10000)",
+                    "Table": "my_table",
+                    "Values": [
+                      "_binary'\ufffd\ufffd'"
+                    ],
+                    "Vindex": "binary_vdx"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id from my_table force index (MY_INDEX) where 1 != 1",
+                    "Query": "select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'WXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'AFFF' order by col02 desc limit 0, 10000",
+                    "Table": "my_table",
+                    "Values": [
+                      "_binary'\ufffd\ufffd'"
+                    ],
+                    "Vindex": "binary_vdx"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id from my_table force index (MY_INDEX) where 1 != 1",
+                    "Query": "select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'PXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'3FFF' order by col02 desc limit 0, 10000",
+                    "Table": "my_table",
+                    "Values": [
+                      "_binary'?\ufffd'"
+                    ],
+                    "Vindex": "binary_vdx"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id from my_table force index (MY_INDEX) where 1 != 1",
+                    "Query": "select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'BXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'4FFF' order by col02 desc limit 0, 10000",
+                    "Table": "my_table",
+                    "Values": [
+                      "_binary'O\ufffd'"
+                    ],
+                    "Vindex": "binary_vdx"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id from my_table force index (MY_INDEX) where 1 != 1",
+                    "Query": "select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'XXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'5FFF' order by col02 desc limit 0, 10000",
+                    "Table": "my_table",
+                    "Values": [
+                      "_binary'_\ufffd'"
+                    ],
+                    "Vindex": "binary_vdx"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id from my_table force index (MY_INDEX) where 1 != 1",
+                    "Query": "select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'TXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'4FFF' order by col02 desc limit 0, 10000",
+                    "Table": "my_table",
+                    "Values": [
+                      "_binary'O\ufffd'"
+                    ],
+                    "Vindex": "binary_vdx"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id from my_table force index (MY_INDEX) where 1 != 1",
+                    "Query": "select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = '4XxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'DFFF' order by col02 desc limit 0, 10000",
+                    "Table": "my_table",
+                    "Values": [
+                      "_binary'\ufffd\ufffd'"
+                    ],
+                    "Vindex": "binary_vdx"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id from my_table force index (MY_INDEX) where 1 != 1",
+                    "Query": "select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'KXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'4FFF' order by col02 desc limit 0, 10000",
+                    "Table": "my_table",
+                    "Values": [
+                      "_binary'O\ufffd'"
+                    ],
+                    "Vindex": "binary_vdx"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id from my_table force index (MY_INDEX) where 1 != 1",
+                    "Query": "select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = '3XxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'FFFF' order by col02 desc limit 0, 10000",
+                    "Table": "my_table",
+                    "Values": [
+                      "_binary'\ufffd\ufffd'"
+                    ],
+                    "Vindex": "binary_vdx"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id from my_table force index (MY_INDEX) where 1 != 1",
+                    "Query": "select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = '0XxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'AFFF' order by col02 desc limit 0, 10000",
+                    "Table": "my_table",
+                    "Values": [
+                      "_binary'\ufffd\ufffd'"
+                    ],
+                    "Vindex": "binary_vdx"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id from my_table force index (MY_INDEX) where 1 != 1",
+                    "Query": "select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = '1XxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'7FFF' order by col02 desc limit 0, 10000",
+                    "Table": "my_table",
+                    "Values": [
+                      "_binary'\ufffd'"
+                    ],
+                    "Vindex": "binary_vdx"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id from my_table force index (MY_INDEX) where 1 != 1",
+                    "Query": "select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'JXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'3FFF' order by col02 desc limit 0, 10000",
+                    "Table": "my_table",
+                    "Values": [
+                      "_binary'?\ufffd'"
+                    ],
+                    "Vindex": "binary_vdx"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id from my_table force index (MY_INDEX) where 1 != 1",
+                    "Query": "select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'SXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'7FFF' order by col02 desc limit 0, 10000",
+                    "Table": "my_table",
+                    "Values": [
+                      "_binary'\ufffd'"
+                    ],
+                    "Vindex": "binary_vdx"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id from my_table force index (MY_INDEX) where 1 != 1",
+                    "Query": "select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = '5XxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'2FFF' order by col02 desc limit 0, 10000",
+                    "Table": "my_table",
+                    "Values": [
+                      "_binary'/\ufffd'"
+                    ],
+                    "Vindex": "binary_vdx"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id from my_table force index (MY_INDEX) where 1 != 1",
+                    "Query": "select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'KXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'5FFF' order by col02 desc limit 0, 10000",
+                    "Table": "my_table",
+                    "Values": [
+                      "_binary'_\ufffd'"
+                    ],
+                    "Vindex": "binary_vdx"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id from my_table force index (MY_INDEX) where 1 != 1",
+                    "Query": "select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'XXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'CFFF' order by col02 desc limit 0, 10000",
+                    "Table": "my_table",
+                    "Values": [
+                      "_binary'\ufffd\ufffd'"
+                    ],
+                    "Vindex": "binary_vdx"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id from my_table force index (MY_INDEX) where 1 != 1",
+                    "Query": "select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'RXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'7FFF' order by col02 desc limit 0, 10000",
+                    "Table": "my_table",
+                    "Values": [
+                      "_binary'\ufffd'"
+                    ],
+                    "Vindex": "binary_vdx"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id from my_table force index (MY_INDEX) where 1 != 1",
+                    "Query": "select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'XXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'FFFF' order by col02 desc limit 0, 10000",
+                    "Table": "my_table",
+                    "Values": [
+                      "_binary'\ufffd\ufffd'"
+                    ],
+                    "Vindex": "binary_vdx"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id from my_table force index (MY_INDEX) where 1 != 1",
+                    "Query": "select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'HXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'2FFF' order by col02 desc limit 0, 10000",
+                    "Table": "my_table",
+                    "Values": [
+                      "_binary'/\ufffd'"
+                    ],
+                    "Vindex": "binary_vdx"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id from my_table force index (MY_INDEX) where 1 != 1",
+                    "Query": "select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = '5XxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'BFFF' order by col02 desc limit 0, 10000",
+                    "Table": "my_table",
+                    "Values": [
+                      "_binary'\ufffd\ufffd'"
+                    ],
+                    "Vindex": "binary_vdx"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id from my_table force index (MY_INDEX) where 1 != 1",
+                    "Query": "select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'CXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'DFFF' order by col02 desc limit 0, 10000",
+                    "Table": "my_table",
+                    "Values": [
+                      "_binary'\ufffd\ufffd'"
+                    ],
+                    "Vindex": "binary_vdx"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id from my_table force index (MY_INDEX) where 1 != 1",
+                    "Query": "select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'NXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'EFFF' order by col02 desc limit 0, 10000",
+                    "Table": "my_table",
+                    "Values": [
+                      "_binary'\ufffd\ufffd'"
+                    ],
+                    "Vindex": "binary_vdx"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id from my_table force index (MY_INDEX) where 1 != 1",
+                    "Query": "select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'TXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'CFFF' order by col02 desc limit 0, 10000",
+                    "Table": "my_table",
+                    "Values": [
+                      "_binary'\ufffd\ufffd'"
+                    ],
+                    "Vindex": "binary_vdx"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id from my_table force index (MY_INDEX) where 1 != 1",
+                    "Query": "select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'DXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'9FFF' order by col02 desc limit 0, 10000",
+                    "Table": "my_table",
+                    "Values": [
+                      "_binary'\ufffd\ufffd'"
+                    ],
+                    "Vindex": "binary_vdx"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id from my_table force index (MY_INDEX) where 1 != 1",
+                    "Query": "select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'GXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'4FFF' order by col02 desc limit 0, 10000",
+                    "Table": "my_table",
+                    "Values": [
+                      "_binary'O\ufffd'"
+                    ],
+                    "Vindex": "binary_vdx"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id from my_table force index (MY_INDEX) where 1 != 1",
+                    "Query": "select id from my_table force index (MY_INDEX) where col02 <= 1234567890000 and col10 = 1234567890000000000 and col06 = 0 and col02 >= 1000000000000 and col01 = 'RXxXxXxXxXxXxXxXxXxXxXx' and sdKey = X'BFFF' order by col02 desc limit 0, 10000",
+                    "Table": "my_table",
+                    "Values": [
+                      "_binary'\ufffd\ufffd'"
+                    ],
+                    "Vindex": "binary_vdx"
+                  }
+                ]
+              },
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": true
+                },
+                "FieldQuery": "select col04, col03, col01, col02, sdKey from my_table where 1 != 1",
+                "OrderBy": "2 DESC COLLATE latin1_swedish_ci, 4 DESC, 3 DESC",
+                "Query": "select col04, col03, col01, col02, sdKey from my_table where :__sq_has_values and id in ::__sq1 order by my_table.col01 desc, sdKey desc, my_table.col02 desc",
+                "ResultColumns": 4,
+                "Table": "my_table"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.my_table"
+      ]
+    }
+  }
+]

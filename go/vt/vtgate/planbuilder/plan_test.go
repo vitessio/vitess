@@ -872,3 +872,41 @@ func benchmarkPlanner(b *testing.B, version plancontext.PlannerVersion, testCase
 		}
 	}
 }
+
+func (s *planTestSuite) TestMy() {
+	vschema, err := vschemawrapper.NewVschemaWrapper(
+		vtenv.NewTestEnv(),
+		loadSchema(s.T(), "vschemas/my_schema.json", true),
+		TestBuilder,
+	)
+	require.NoError(s.T(), err)
+	// vschema := &vschemawrapper.VSchemaWrapper{
+	// 	V:             loadSchema(s.T(), "vschemas/my_schema.json", true),
+	// 	SysVarEnabled: true,
+	// 	Version:       Gen4,
+	// 	Env:           vtenv.NewTestEnv(),
+	// }
+
+	s.testFile("my.json", vschema, false)
+}
+
+func BenchmarkMine(b *testing.B) {
+	vschema, err := vschemawrapper.NewVschemaWrapper(
+		vtenv.NewTestEnv(),
+		loadSchema(b, "vschemas/my_schema.json", true),
+		TestBuilder,
+	)
+	require.NoError(b, err)
+	testCases := readJSONTests("my.json")
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		for _, tcase := range testCases {
+			plan, _ := TestBuilder(tcase.Query, vschema, vschema.CurrentDb())
+			if plan == nil {
+				panic("")
+			}
+		}
+	}
+}

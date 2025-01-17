@@ -1,0 +1,110 @@
+{
+  "keyspaces": {
+    "unsharded_ns": {
+      "sharded": false,
+      "tables": {
+        "my_table_seq": {
+          "type": "sequence",
+          "columns": [
+            {
+              "name": "next_id",
+              "type": "UINT64"
+            },
+            {
+              "name": "cache",
+              "type": "UINT32"
+            },
+            {
+              "name": "id",
+              "type": "UINT64"
+            }
+          ],
+          "column_list_authoritative": true
+        }
+      }
+    },
+    "main": {
+      "sharded": true,
+      "vindexes": {
+        "binary_vdx": {
+          "type": "binary"
+        }
+      },
+      "tables": {
+        "my_table": {
+          "column_vindexes": [
+            {
+              "columns": [
+                "sdKey"
+              ],
+              "name": "binary_vdx"
+            }
+          ],
+          "auto_increment": {
+            "column": "id",
+            "sequence": "my_table_seq"
+          },
+          "columns": [
+            {
+              "name": "col01",
+              "type": "VARCHAR"
+            },
+            {
+              "name": "col02",
+              "type": "INT64"
+            },
+            {
+              "name": "col03",
+              "type": "BLOB"
+            },
+            {
+              "name": "col04",
+              "type": "VARCHAR"
+            },
+            {
+              "name": "col05",
+              "type": "VARBINARY"
+            },
+            {
+              "name": "col06",
+              "type": "INT8"
+            },
+            {
+              "name": "col07",
+              "type": "INT64"
+            },
+            {
+              "name": "col08",
+              "type": "VARBINARY"
+            },
+            {
+              "name": "sdKey",
+              "type": "VARBINARY"
+            },
+            {
+              "name": "col09",
+              "type": "INT64"
+            },
+            {
+              "name": "col10",
+              "type": "INT64"
+            },
+            {
+              "name": "col11",
+              "type": "INT64"
+            },
+            {
+              "name": "col12",
+              "type": "INT64"
+            },
+            {
+              "name": "id",
+              "type": "UINT64"
+            }
+          ],
+          "column_list_authoritative": true
+        }
+      }
+    }
+  }
+}
