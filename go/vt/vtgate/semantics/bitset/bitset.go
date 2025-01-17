@@ -245,3 +245,45 @@ func Single(bit int) Bitset {
 		return toBitset(words)
 	}
 }
+
+// Merge takes multiple Bitsets and returns a single Bitset that is the
+// bitwise-OR of all of them. It attempts to reduce allocations by creating
+// a single backing slice and merging all Bitsets into it.
+func Merge(bitsets ...Bitset) Bitset {
+	if len(bitsets) == 0 {
+		return ""
+	}
+	if len(bitsets) == 1 {
+		return bitsets[0]
+	}
+
+	// 1. Find the largest length among all input Bitsets.
+	maxLen := 0
+	for _, bs := range bitsets {
+		if len(bs) > maxLen {
+			maxLen = len(bs)
+		}
+	}
+
+	// 2. Allocate a single byte slice of size maxLen.
+	merged := make([]byte, maxLen)
+
+	// 3. Merge each Bitset into the merged buffer in-place.
+	for _, bs := range bitsets {
+		for i := 0; i < len(bs); i++ {
+			merged[i] |= bs[i]
+		}
+	}
+
+	// 4. Trim trailing zeros to avoid unnecessary storage.
+	trimmed := maxLen
+	for trimmed > 0 && merged[trimmed-1] == 0 {
+		trimmed--
+	}
+	if trimmed == 0 {
+		return "" // all bits are zero
+	}
+
+	merged = merged[:trimmed]
+	return toBitset(merged)
+}

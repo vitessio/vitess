@@ -17,6 +17,7 @@ limitations under the License.
 package bitset
 
 import (
+	"math/rand/v2"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -219,8 +220,10 @@ func TestOr(t *testing.T) {
 
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
-			got := tc.bs1.Or(tc.bs2)
-			assert.Equal(t, tc.result, got)
+			gotOR := tc.bs1.Or(tc.bs2)
+			assert.Equal(t, tc.result, gotOR)
+			gotMerge := Merge(tc.bs1, tc.bs2)
+			assert.Equal(t, tc.result, gotMerge)
 		})
 	}
 }
@@ -370,4 +373,50 @@ func TestOverlaps(t *testing.T) {
 			assert.Equal(t, tc.expected, got)
 		})
 	}
+}
+
+// Setup: create a slice of random bitsets that we can reuse in both benchmarks.
+var bitsets []Bitset
+
+func init() {
+	// For demonstration, generate 100 bitsets of random length up to 128 bytes
+	for i := 0; i < 100; i++ {
+		// random length up to 128
+		bs := generateRandomBitset(rand.IntN(128) + 1)
+		bitsets = append(bitsets, bs)
+	}
+}
+
+func BenchmarkMergeManyWithOr(b *testing.B) {
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		out := Bitset("")
+		for _, bs := range bitsets {
+			out = out.Or(bs)
+		}
+		_ = out
+	}
+}
+
+func BenchmarkMergeManyWithMerge(b *testing.B) {
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		out := Merge(bitsets...)
+		_ = out
+	}
+}
+
+// generateRandomBitset builds a random Bitset of length 'sizeInBytes'
+func generateRandomBitset(sizeInBytes int) Bitset {
+	buf := make([]byte, sizeInBytes)
+	for i := range buf {
+		buf[i] = byte(rand.IntN(256))
+	}
+	// Trim trailing zero if it exists, just to mimic typical usage
+	last := sizeInBytes - 1
+	for last > 0 && buf[last] == 0 {
+		last--
+	}
+	buf = buf[:last+1]
+	return toBitset(buf)
 }
