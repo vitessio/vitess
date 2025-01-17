@@ -1,5 +1,5 @@
 /*
-Copyright 2019 The Vitess Authors.
+Copyright 2025 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -26,7 +26,6 @@ import (
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
-	"vitess.io/vitess/go/vt/vtctl/workflow/testlib"
 	"vitess.io/vitess/go/vt/vtenv"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -52,8 +51,8 @@ func TestPermissions(t *testing.T) {
 	defer ts.Close()
 	vtctld := grpcvtctldserver.NewVtctldServer(vtenv.NewTestEnv(), ts)
 
-	primary := testlib.NewFakeTablet(t, ts, "cell1", 0, topodatapb.TabletType_PRIMARY, nil)
-	replica := testlib.NewFakeTablet(t, ts, "cell1", 1, topodatapb.TabletType_REPLICA, nil)
+	primary := NewFakeTablet(t, ts, "cell1", 0, topodatapb.TabletType_PRIMARY, nil)
+	replica := NewFakeTablet(t, ts, "cell1", 1, topodatapb.TabletType_REPLICA, nil)
 
 	// Mark the primary for the shard.
 	_, err := ts.UpdateShardFields(ctx, primary.Tablet.Keyspace, primary.Tablet.Shard, func(si *topo.ShardInfo) error {
