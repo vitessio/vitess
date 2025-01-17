@@ -79751,4 +79751,264 @@ export namespace vtctldata {
          */
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
+
+    /** Properties of a LookupVindexCreateParams. */
+    interface ILookupVindexCreateParams {
+
+        /** LookupVindexCreateParams keyspace */
+        keyspace?: (string|null);
+
+        /** LookupVindexCreateParams table_vindex_type */
+        table_vindex_type?: (string|null);
+
+        /** LookupVindexCreateParams vindexes */
+        vindexes?: (vtctldata.IVindexParams[]|null);
+
+        /** LookupVindexCreateParams cells */
+        cells?: (string[]|null);
+
+        /** LookupVindexCreateParams tablet_types */
+        tablet_types?: (topodata.TabletType[]|null);
+
+        /** LookupVindexCreateParams continue_after_copy_with_owner */
+        continue_after_copy_with_owner?: (boolean|null);
+
+        /** LookupVindexCreateParams tablet_types_in_preference_order */
+        tablet_types_in_preference_order?: (boolean|null);
+    }
+
+    /** Represents a LookupVindexCreateParams. */
+    class LookupVindexCreateParams implements ILookupVindexCreateParams {
+
+        /**
+         * Constructs a new LookupVindexCreateParams.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.ILookupVindexCreateParams);
+
+        /** LookupVindexCreateParams keyspace. */
+        public keyspace: string;
+
+        /** LookupVindexCreateParams table_vindex_type. */
+        public table_vindex_type: string;
+
+        /** LookupVindexCreateParams vindexes. */
+        public vindexes: vtctldata.IVindexParams[];
+
+        /** LookupVindexCreateParams cells. */
+        public cells: string[];
+
+        /** LookupVindexCreateParams tablet_types. */
+        public tablet_types: topodata.TabletType[];
+
+        /** LookupVindexCreateParams continue_after_copy_with_owner. */
+        public continue_after_copy_with_owner: boolean;
+
+        /** LookupVindexCreateParams tablet_types_in_preference_order. */
+        public tablet_types_in_preference_order: boolean;
+
+        /**
+         * Creates a new LookupVindexCreateParams instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns LookupVindexCreateParams instance
+         */
+        public static create(properties?: vtctldata.ILookupVindexCreateParams): vtctldata.LookupVindexCreateParams;
+
+        /**
+         * Encodes the specified LookupVindexCreateParams message. Does not implicitly {@link vtctldata.LookupVindexCreateParams.verify|verify} messages.
+         * @param message LookupVindexCreateParams message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.ILookupVindexCreateParams, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified LookupVindexCreateParams message, length delimited. Does not implicitly {@link vtctldata.LookupVindexCreateParams.verify|verify} messages.
+         * @param message LookupVindexCreateParams message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.ILookupVindexCreateParams, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a LookupVindexCreateParams message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns LookupVindexCreateParams
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.LookupVindexCreateParams;
+
+        /**
+         * Decodes a LookupVindexCreateParams message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns LookupVindexCreateParams
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.LookupVindexCreateParams;
+
+        /**
+         * Verifies a LookupVindexCreateParams message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a LookupVindexCreateParams message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns LookupVindexCreateParams
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.LookupVindexCreateParams;
+
+        /**
+         * Creates a plain object from a LookupVindexCreateParams message. Also converts values to other types if specified.
+         * @param message LookupVindexCreateParams
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.LookupVindexCreateParams, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this LookupVindexCreateParams to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for LookupVindexCreateParams
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a VindexParams. */
+    interface IVindexParams {
+
+        /** VindexParams name */
+        name?: (string|null);
+
+        /** VindexParams lookup_vindex_type */
+        lookup_vindex_type?: (string|null);
+
+        /** VindexParams table_owner */
+        table_owner?: (string|null);
+
+        /** VindexParams table_owner_columns */
+        table_owner_columns?: (string[]|null);
+
+        /** VindexParams table_name */
+        table_name?: (string|null);
+
+        /** VindexParams ignore_nulls */
+        ignore_nulls?: (boolean|null);
+    }
+
+    /** Represents a VindexParams. */
+    class VindexParams implements IVindexParams {
+
+        /**
+         * Constructs a new VindexParams.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IVindexParams);
+
+        /** VindexParams name. */
+        public name: string;
+
+        /** VindexParams lookup_vindex_type. */
+        public lookup_vindex_type: string;
+
+        /** VindexParams table_owner. */
+        public table_owner: string;
+
+        /** VindexParams table_owner_columns. */
+        public table_owner_columns: string[];
+
+        /** VindexParams table_name. */
+        public table_name: string;
+
+        /** VindexParams ignore_nulls. */
+        public ignore_nulls: boolean;
+
+        /**
+         * Creates a new VindexParams instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VindexParams instance
+         */
+        public static create(properties?: vtctldata.IVindexParams): vtctldata.VindexParams;
+
+        /**
+         * Encodes the specified VindexParams message. Does not implicitly {@link vtctldata.VindexParams.verify|verify} messages.
+         * @param message VindexParams message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IVindexParams, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VindexParams message, length delimited. Does not implicitly {@link vtctldata.VindexParams.verify|verify} messages.
+         * @param message VindexParams message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IVindexParams, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VindexParams message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VindexParams
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.VindexParams;
+
+        /**
+         * Decodes a VindexParams message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VindexParams
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.VindexParams;
+
+        /**
+         * Verifies a VindexParams message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VindexParams message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VindexParams
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.VindexParams;
+
+        /**
+         * Creates a plain object from a VindexParams message. Also converts values to other types if specified.
+         * @param message VindexParams
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.VindexParams, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VindexParams to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VindexParams
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
 }

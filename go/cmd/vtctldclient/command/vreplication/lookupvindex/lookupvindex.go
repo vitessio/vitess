@@ -18,12 +18,14 @@ package lookupvindex
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 	"vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/common"
+	"vitess.io/vitess/go/json2"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
@@ -68,6 +70,7 @@ var (
 		TabletTypesInPreferenceOrder bool
 		IgnoreNulls                  bool
 		ContinueAfterCopyWithOwner   bool
+		ParamsFile                   string
 	}{}
 
 	externalizeOptions = struct {
@@ -75,6 +78,30 @@ var (
 	}{}
 
 	parseAndValidateCreate = func(cmd *cobra.Command, args []string) error {
+		if createOptions.ParamsFile != "" {
+			paramsFile, err := os.ReadFile(createOptions.ParamsFile)
+			if err != nil {
+				return err
+			}
+			createParams := &vtctldatapb.LookupVindexCreateParams{}
+			err = json2.UnmarshalPB(paramsFile, createParams)
+			if err != nil {
+				return err
+			}
+			return parseCreateParams(createParams)
+		}
+		if createOptions.Keyspace == "" {
+			return fmt.Errorf("keyspace is a required flag.")
+		}
+		if createOptions.TableOwner == "" {
+			return fmt.Errorf("table-owner is a required flag.")
+		}
+		if len(createOptions.TableOwnerColumns) == 0 {
+			return fmt.Errorf("table-owner-columns is a required flag.")
+		}
+		if createOptions.Keyspace == "" {
+			return fmt.Errorf("keyspace is a required flag.")
+		}
 		if createOptions.TableName == "" { // Use vindex name
 			createOptions.TableName = baseOptions.Name
 		}
@@ -130,6 +157,87 @@ var (
 		return nil
 	}
 
+	parseCreateParams = func(params *vtctldatapb.LookupVindexCreateParams) error {
+		if params.Keyspace == "" {
+			return fmt.Errorf("keyspace cannot be empty")
+		}
+		createOptions.Keyspace = params.Keyspace
+
+		if len(params.Vindexes) == 0 {
+			return fmt.Errorf("atleast 1 vindex is required")
+		}
+
+		vindexes := map[string]*vschemapb.Vindex{}
+		tables := map[string]*vschemapb.Table{}
+		for _, vindex := range params.Vindexes {
+			if vindex.TableName == "" {
+				vindex.TableName = vindex.Name
+			}
+
+			if !strings.Contains(vindex.LookupVindexType, "lookup") {
+				return fmt.Errorf("%s is not a lookup vindex type.", vindex.LookupVindexType)
+			}
+
+			vindexes[vindex.Name] = &vschemapb.Vindex{
+				Type: vindex.LookupVindexType,
+				Params: map[string]string{
+					"table":        baseOptions.TableKeyspace + "." + vindex.TableName,
+					"from":         strings.Join(vindex.TableOwnerColumns, ","),
+					"to":           "keyspace_id",
+					"ignore_nulls": fmt.Sprintf("%t", vindex.IgnoreNulls),
+				},
+				Owner: vindex.TableOwner,
+			}
+
+			targetTableColumnVindex := &vschemapb.ColumnVindex{
+				// If the vindex name/type is empty then we'll fill this in
+				// later using the defult for the column types.
+				Name:    params.TableVindexType,
+				Columns: vindex.TableOwnerColumns,
+			}
+			sourceTableColumnVindex := &vschemapb.ColumnVindex{
+				Name:    vindex.Name,
+				Columns: vindex.TableOwnerColumns,
+			}
+
+			if table, ok := tables[vindex.TableName]; !ok {
+				tables[vindex.TableName] = &vschemapb.Table{
+					ColumnVindexes: []*vschemapb.ColumnVindex{targetTableColumnVindex},
+				}
+			} else {
+				table.ColumnVindexes = append(table.ColumnVindexes, targetTableColumnVindex)
+			}
+
+			if table, ok := tables[vindex.TableOwner]; !ok {
+				tables[vindex.TableOwner] = &vschemapb.Table{
+					ColumnVindexes: []*vschemapb.ColumnVindex{sourceTableColumnVindex},
+				}
+			} else {
+				table.ColumnVindexes = append(table.ColumnVindexes, sourceTableColumnVindex)
+			}
+		}
+
+		baseOptions.Vschema = &vschemapb.Keyspace{
+			Vindexes: vindexes,
+			Tables:   tables,
+		}
+
+		// VReplication specific flags.
+		if len(params.TabletTypes) == 0 {
+			createOptions.TabletTypes = tabletTypesDefault
+		} else {
+			createOptions.TabletTypes = params.TabletTypes
+		}
+
+		if len(params.Cells) != 0 {
+			for i, cell := range createOptions.Cells {
+				createOptions.Cells[i] = strings.TrimSpace(cell)
+			}
+		}
+
+		return nil
+	}
+
 	// cancel makes a WorkflowDelete call to a vtctld.
 	cancel = &cobra.Command{
 		Use:                   "cancel",
@@ -143,9 +251,10 @@ var (
 	}
 
 	// create makes a LookupVindexCreate call to a vtctld.
+	// TODO: Refactor description for multiple lookup vindexes.
 	create = &cobra.Command{
 		Use:                   "create",
-		Short:                 "Create the Lookup Vindex in the specified keyspace and backfill it with a VReplication workflow.",
+		Short:                 "Create the Lookup Vindex(es) in the specified keyspace and backfill them with a VReplication workflow.",
 		Example:               `vtctldclient --server localhost:15999 LookupVindex --name corder_lookup_vdx --table-keyspace customer create --keyspace customer --type consistent_lookup_unique --table-owner corder --table-owner-columns sku --table-name corder_lookup_tbl --table-vindex-type unicode_loose_xxhash`,
 		SilenceUsage:          true,
 		DisableFlagsInUseLine: true,
@@ -283,17 +392,14 @@ func registerCommands(root *cobra.Command) {
 	// This will create the lookup vindex in the specified keyspace
 	// and setup a VReplication workflow to backfill its lookup table.
 	create.Flags().StringVar(&createOptions.Keyspace, "keyspace", "", "The keyspace to create the Lookup Vindex in. This is also where the table-owner must exist.")
-	create.MarkFlagRequired("keyspace")
 	create.Flags().StringVar(&createOptions.Type, "type", "", "The type of Lookup Vindex to create.")
-	create.MarkFlagRequired("type")
 	create.Flags().StringVar(&createOptions.TableOwner, "table-owner", "", "The table holding the data which we should use to backfill the Lookup Vindex. This must exist in the same keyspace as the Lookup Vindex.")
-	create.MarkFlagRequired("table-owner")
 	create.Flags().StringSliceVar(&createOptions.TableOwnerColumns, "table-owner-columns", nil, "The columns to read from the owner table. These will be used to build the hash which gets stored as the keyspace_id value in the lookup table.")
-	create.MarkFlagRequired("table-owner-columns")
 	create.Flags().StringVar(&createOptions.TableName, "table-name", "", "The name of the lookup table. If not specified, then it will be created using the same name as the Lookup Vindex.")
 	create.Flags().StringVar(&createOptions.TableVindexType, "table-vindex-type", "", "The primary vindex name/type to use for the lookup table, if the table-keyspace is sharded. If no value is provided then the default type will be used based on the table-owner-columns types.")
 	create.Flags().BoolVar(&createOptions.IgnoreNulls, "ignore-nulls", false, "Do not add corresponding records in the lookup table if any of the owner table's 'from' fields are NULL.")
 	create.Flags().BoolVar(&createOptions.ContinueAfterCopyWithOwner, "continue-after-copy-with-owner", true, "Vindex will continue materialization after the backfill completes when an owner is provided.")
+	create.Flags().StringVar(&createOptions.ParamsFile, "params-file", "", "JSON file containing lookup vindex create options. Use this for creating multiple lookup vindexes.")
 	// VReplication specific flags.
 	create.Flags().StringSliceVar(&createOptions.Cells, "cells", nil, "Cells to look in for source tablets to replicate from.")
 	create.Flags().Var((*topoprotopb.TabletTypeListFlag)(&createOptions.TabletTypes), "tablet-types", "Source tablet types to replicate from.")
