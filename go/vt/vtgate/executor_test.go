@@ -1277,17 +1277,19 @@ func TestExecutorDDL(t *testing.T) {
 	}
 
 	for _, stmt := range stmts2 {
-		sbc1.ExecCount.Store(0)
-		sbc2.ExecCount.Store(0)
-		sbclookup.ExecCount.Store(0)
-		_, err := executor.Execute(ctx, nil, "TestExecute", econtext.NewSafeSession(&vtgatepb.Session{TargetString: ""}), stmt.input, nil)
-		if stmt.hasErr {
-			require.EqualError(t, err, econtext.ErrNoKeyspace.Error(), "expect query to fail")
-			testQueryLog(t, executor, logChan, "TestExecute", "", stmt.input, 0)
-		} else {
-			require.NoError(t, err)
-			testQueryLog(t, executor, logChan, "TestExecute", "DDL", stmt.input, 8)
-		}
+		t.Run(stmt.input, func(t *testing.T) {
+			sbc1.ExecCount.Store(0)
+			sbc2.ExecCount.Store(0)
+			sbclookup.ExecCount.Store(0)
+			_, err := executor.Execute(ctx, nil, "TestExecute", econtext.NewSafeSession(&vtgatepb.Session{TargetString: ""}), stmt.input, nil)
+			if stmt.hasErr {
+				assert.EqualError(t, err, econtext.ErrNoKeyspace.Error(), "expect query to fail")
+				testQueryLog(t, executor, logChan, "TestExecute", "", stmt.input, 0)
+			} else {
+				assert.NoError(t, err)
+				testQueryLog(t, executor, logChan, "TestExecute", "DDL", stmt.input, 8)
+			}
+		})
 	}
 }
 
