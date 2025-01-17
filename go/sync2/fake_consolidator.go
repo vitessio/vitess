@@ -112,3 +112,8 @@ func (fr *FakePendingResult) SetResult(result *sqltypes.Result) {
 func (fr *FakePendingResult) Wait() {
 	fr.WaitCalls++
 }
+
+// AddWaiterCounter is currently a no-op.
+func (fr *FakePendingResult) AddWaiterCounter(int64) *int64 {
+	return new(int64)
+}
