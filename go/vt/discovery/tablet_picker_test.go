@@ -62,6 +62,33 @@ func TestPickPrimary(t *testing.T) {
 	assert.True(t, proto.Equal(want, tablet), "Pick: %v, want %v", tablet, want)
 }
 
+// TestPickNoPrimary confirms that if the picker was setup only for primary tablets but
+// there is no primary setup for the shard we correctly return an error.
+func TestPickNoPrimary(t *testing.T) {
+	defer utils.EnsureNoLeaks(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+
+	te := newPickerTestEnv(t, ctx, []string{"cell", "otherCell"})
+	want := addTablet(ctx, te, 100, topodatapb.TabletType_PRIMARY, "cell", true, true)
+	defer deleteTablet(t, te, want)
+	ctx, cancel = context.WithTimeout(ctx, 200*time.Millisecond)
+	defer cancel()
+	_, err := te.topoServ.UpdateShardFields(ctx, te.keyspace, te.shard, func(si *topo.ShardInfo) error {
+		si.PrimaryAlias = nil // force a missing primary
+		return nil
+	})
+	require.NoError(t, err)
+
+	tp, err := NewTabletPicker(ctx, te.topoServ, []string{"otherCell"}, "cell", te.keyspace, te.shard, "primary", TabletPickerOptions{})
+	require.NoError(t, err)
+
+	ctx2, cancel2 := context.WithTimeout(ctx, 200*time.Millisecond)
+	defer cancel2()
+	_, err = tp.PickForStreaming(ctx2)
+	require.Errorf(t, err, "No healthy serving tablet")
+}
+
 func TestPickLocalPreferences(t *testing.T) {
 	defer utils.EnsureNoLeaks(t)
 	type tablet struct {
