@@ -98,5 +98,11 @@ mysql --table < ../common/select_customer80-_data.sql
 
 ./306_down_shard_0.sh
 
-./401_teardown.sh
+./401_backup.sh
+
+./402_list_backup.sh
+
+./403_restore_from_backup.sh
+
+./501_teardown.sh
 

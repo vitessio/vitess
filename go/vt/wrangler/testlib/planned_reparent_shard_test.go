@@ -24,6 +24,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtenv"
 
 	"github.com/stretchr/testify/assert"
@@ -60,7 +61,7 @@ func TestPlannedReparentShardNoPrimaryProvided(t *testing.T) {
 	oldPrimary := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_PRIMARY, nil)
 	newPrimary := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, nil)
 	goodReplica1 := NewFakeTablet(t, wr, "cell2", 2, topodatapb.TabletType_REPLICA, nil)
-	reparenttestutil.SetKeyspaceDurability(context.Background(), t, ts, "test_keyspace", "semi_sync")
+	reparenttestutil.SetKeyspaceDurability(context.Background(), t, ts, "test_keyspace", policy.DurabilitySemiSync)
 
 	// new primary
 	newPrimary.FakeMysqlDaemon.ReadOnly = true
@@ -177,7 +178,7 @@ func TestPlannedReparentShardNoError(t *testing.T) {
 	newPrimary := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, nil)
 	goodReplica1 := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, nil)
 	goodReplica2 := NewFakeTablet(t, wr, "cell2", 3, topodatapb.TabletType_REPLICA, nil)
-	reparenttestutil.SetKeyspaceDurability(context.Background(), t, ts, "test_keyspace", "semi_sync")
+	reparenttestutil.SetKeyspaceDurability(context.Background(), t, ts, "test_keyspace", policy.DurabilitySemiSync)
 
 	// new primary
 	newPrimary.FakeMysqlDaemon.ReadOnly = true
@@ -312,7 +313,7 @@ func TestPlannedReparentInitialization(t *testing.T) {
 	newPrimary := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, nil)
 	goodReplica1 := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, nil)
 	goodReplica2 := NewFakeTablet(t, wr, "cell2", 3, topodatapb.TabletType_REPLICA, nil)
-	reparenttestutil.SetKeyspaceDurability(context.Background(), t, ts, "test_keyspace", "semi_sync")
+	reparenttestutil.SetKeyspaceDurability(context.Background(), t, ts, "test_keyspace", policy.DurabilitySemiSync)
 
 	// new primary
 	newPrimary.FakeMysqlDaemon.ReadOnly = true
@@ -691,7 +692,7 @@ func TestPlannedReparentShardRelayLogErrorStartReplication(t *testing.T) {
 	// Create a primary, a couple good replicas
 	primary := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_PRIMARY, nil)
 	goodReplica1 := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, nil)
-	reparenttestutil.SetKeyspaceDurability(context.Background(), t, ts, "test_keyspace", "semi_sync")
+	reparenttestutil.SetKeyspaceDurability(context.Background(), t, ts, "test_keyspace", policy.DurabilitySemiSync)
 
 	// old primary
 	primary.FakeMysqlDaemon.ReadOnly = false

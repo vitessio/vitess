@@ -1,8 +1,8 @@
 {
   "sharded": true,
   "vindexes": {
-    "hash": {
-      "type": "hash"
+    "xxhash": {
+      "type": "xxhash"
     }
   },
   "tables": {
@@ -10,7 +10,7 @@
       "column_vindexes": [
         {
           "column": "page",
-          "name": "hash"
+          "name": "xxhash"
         }
       ]
     }

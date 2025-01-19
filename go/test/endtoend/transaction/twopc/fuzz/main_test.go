@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/transaction/twopc/utils"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 )
 
 var (
@@ -78,7 +79,7 @@ func TestMain(m *testing.M) {
 			Name:             keyspaceName,
 			SchemaSQL:        SchemaSQL,
 			VSchema:          VSchema,
-			DurabilityPolicy: "semi_sync",
+			DurabilityPolicy: policy.DurabilitySemiSync,
 		}
 		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-40", "40-80", "80-"}, 2, false); err != nil {
 			return 1
@@ -89,7 +90,7 @@ func TestMain(m *testing.M) {
 			Name:             unshardedKeyspaceName,
 			SchemaSQL:        "",
 			VSchema:          "{}",
-			DurabilityPolicy: "semi_sync",
+			DurabilityPolicy: policy.DurabilitySemiSync,
 		}
 		if err := clusterInstance.StartUnshardedKeyspace(*unshardedKeyspace, 2, false); err != nil {
 			return 1

@@ -18,6 +18,7 @@ package mysql
 
 import (
 	"fmt"
+	"math"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -32,9 +33,14 @@ const (
 // This file contains the methods related to replication.
 
 // WriteComBinlogDump writes a ComBinlogDump command.
-// See http://dev.mysql.com/doc/internals/en/com-binlog-dump.html for syntax.
 // Returns a SQLError.
-func (c *Conn) WriteComBinlogDump(serverID uint32, binlogFilename string, binlogPos uint32, flags uint16) error {
+// See: https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_com_binlog_dump.html
+func (c *Conn) WriteComBinlogDump(serverID uint32, binlogFilename string, binlogPos uint64, flags uint16) error {
+	// The binary log file position is a uint64, but the protocol command
+	// only uses 4 bytes for the file position.
+	if binlogPos > math.MaxUint32 {
+		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "binlog position %d is too large, it must fit into 32 bits", binlogPos)
+	}
 	c.sequence = 0
 	length := 1 + // ComBinlogDump
 		4 + // binlog-pos
@@ -43,7 +49,7 @@ func (c *Conn) WriteComBinlogDump(serverID uint32, binlogFilename string, binlog
 		len(binlogFilename) // binlog-filename
 	data, pos := c.startEphemeralPacketWithHeader(length)
 	pos = writeByte(data, pos, ComBinlogDump)
-	pos = writeUint32(data, pos, binlogPos)
+	pos = writeUint32(data, pos, uint32(binlogPos))
 	pos = writeUint16(data, pos, flags)
 	pos = writeUint32(data, pos, serverID)
 	_ = writeEOFString(data, pos, binlogFilename)

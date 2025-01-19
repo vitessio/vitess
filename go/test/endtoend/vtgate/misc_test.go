@@ -814,6 +814,81 @@ func TestDDLTargeted(t *testing.T) {
 	utils.AssertMatches(t, conn, `select id from ddl_targeted`, `[[INT64(1)]]`)
 }
 
+// TestDynamicConfig tests the dynamic configurations.
+func TestDynamicConfig(t *testing.T) {
+	t.Run("DiscoveryLowReplicationLag", func(t *testing.T) {
+		// Test initial config value
+		err := clusterInstance.VtgateProcess.WaitForConfig(`"discovery_low_replication_lag":30000000000`)
+		require.NoError(t, err)
+		defer func() {
+			// Restore default back.
+			clusterInstance.VtgateProcess.Config.DiscoveryLowReplicationLag = "30s"
+			err = clusterInstance.VtgateProcess.RewriteConfiguration()
+			require.NoError(t, err)
+		}()
+		clusterInstance.VtgateProcess.Config.DiscoveryLowReplicationLag = "15s"
+		err = clusterInstance.VtgateProcess.RewriteConfiguration()
+		require.NoError(t, err)
+		// Test final config value.
+		err = clusterInstance.VtgateProcess.WaitForConfig(`"discovery_low_replication_lag":"15s"`)
+		require.NoError(t, err)
+	})
+
+	t.Run("DiscoveryHighReplicationLag", func(t *testing.T) {
+		// Test initial config value
+		err := clusterInstance.VtgateProcess.WaitForConfig(`"discovery_high_replication_lag":7200000000000`)
+		require.NoError(t, err)
+		defer func() {
+			// Restore default back.
+			clusterInstance.VtgateProcess.Config.DiscoveryHighReplicationLag = "2h"
+			err = clusterInstance.VtgateProcess.RewriteConfiguration()
+			require.NoError(t, err)
+		}()
+		clusterInstance.VtgateProcess.Config.DiscoveryHighReplicationLag = "1h"
+		err = clusterInstance.VtgateProcess.RewriteConfiguration()
+		require.NoError(t, err)
+		// Test final config value.
+		err = clusterInstance.VtgateProcess.WaitForConfig(`"discovery_high_replication_lag":"1h"`)
+		require.NoError(t, err)
+	})
+
+	t.Run("DiscoveryMinServingVttablets", func(t *testing.T) {
+		// Test initial config value
+		err := clusterInstance.VtgateProcess.WaitForConfig(`"discovery_min_number_serving_vttablets":2`)
+		require.NoError(t, err)
+		defer func() {
+			// Restore default back.
+			clusterInstance.VtgateProcess.Config.DiscoveryMinServingVttablets = "2"
+			err = clusterInstance.VtgateProcess.RewriteConfiguration()
+			require.NoError(t, err)
+		}()
+		clusterInstance.VtgateProcess.Config.DiscoveryMinServingVttablets = "1"
+		err = clusterInstance.VtgateProcess.RewriteConfiguration()
+		require.NoError(t, err)
+		// Test final config value.
+		err = clusterInstance.VtgateProcess.WaitForConfig(`"discovery_min_number_serving_vttablets":"1"`)
+		require.NoError(t, err)
+	})
+
+	t.Run("DiscoveryLegacyReplicationLagAlgo", func(t *testing.T) {
+		// Test initial config value
+		err := clusterInstance.VtgateProcess.WaitForConfig(`"discovery_legacy_replication_lag_algorithm":""`)
+		require.NoError(t, err)
+		defer func() {
+			// Restore default back.
+			clusterInstance.VtgateProcess.Config.DiscoveryLegacyReplicationLagAlgo = "true"
+			err = clusterInstance.VtgateProcess.RewriteConfiguration()
+			require.NoError(t, err)
+		}()
+		clusterInstance.VtgateProcess.Config.DiscoveryLegacyReplicationLagAlgo = "false"
+		err = clusterInstance.VtgateProcess.RewriteConfiguration()
+		require.NoError(t, err)
+		// Test final config value.
+		err = clusterInstance.VtgateProcess.WaitForConfig(`"discovery_legacy_replication_lag_algorithm":"false"`)
+		require.NoError(t, err)
+	})
+}
+
 func TestLookupErrorMetric(t *testing.T) {
 	conn, closer := start(t)
 	defer closer()

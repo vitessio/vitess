@@ -5,7 +5,7 @@
 			"column_vindexes": [
 				{
 					"column": "id",
-					"name": "hash"
+					"name": "xxhash"
 				}
 			]
 		},
@@ -13,14 +13,14 @@
 			"column_vindexes": [
 				{
 					"column": "id",
-					"name": "hash"
+					"name": "xxhash"
 				}
 			]
 		}
 	},
 	"vindexes": {
-		"hash": {
-			"type": "hash"
+		"xxhash": {
+			"type": "xxhash"
 		}
 	}
 }

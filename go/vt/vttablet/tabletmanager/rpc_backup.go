@@ -22,7 +22,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/topotools"
-	"vitess.io/vitess/go/vt/vtctl/reparentutil"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
@@ -136,12 +136,12 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 				l.Errorf("Failed to get durability policy, error: %v", err)
 				return
 			}
-			durability, err := reparentutil.GetDurabilityPolicy(durabilityName)
+			durability, err := policy.GetDurabilityPolicy(durabilityName)
 			if err != nil {
 				l.Errorf("Failed to get durability with name %v, error: %v", durabilityName, err)
 			}
 
-			isSemiSync := reparentutil.IsReplicaSemiSync(durability, shardPrimary.Tablet, tabletInfo.Tablet)
+			isSemiSync := policy.IsReplicaSemiSync(durability, shardPrimary.Tablet, tabletInfo.Tablet)
 			semiSyncAction, err := tm.convertBoolToSemiSyncAction(bgCtx, isSemiSync)
 			if err != nil {
 				l.Errorf("Failed to convert bool to semisync action, error: %v", err)

@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package reparentutil
+package policy
 
 import (
 	"fmt"
@@ -37,32 +37,47 @@ var (
 	durabilityPolicies = make(map[string]NewDurabler)
 )
 
+const (
+	// DurabilityNone is the name of the durability policy that has no semi-sync setup.
+	DurabilityNone = "none"
+	// DurabilitySemiSync is the name of the durability policy that has 1 semi-sync setup.
+	DurabilitySemiSync = "semi_sync"
+	// DurabilityCrossCell is the name of the durability policy that has 1 semi-sync setup but only allows Primary and Replica type servers from a different cell to acknowledge semi sync.
+	DurabilityCrossCell = "cross_cell"
+	// DurabilitySemiSyncWithRdonlyAck is the name of the durability policy that has 1 semi-sync setup and allows the "rdonly" to send semi-sync acks as well.
+	DurabilitySemiSyncWithRdonlyAck = "semi_sync_with_rdonly_ack"
+	// DurabilityCrossCellWithRdonlyAck is the name of the durability policy that has 1 semi-sync setup but only allows Primary and Replica type servers from a different cell to acknowledge semi sync. It also allows the "rdonly" to send semi-sync acks.
+	DurabilityCrossCellWithRdonlyAck = "cross_cell_with_rdonly_ack"
+	// DurabilityTest is the name of the durability policy that has no semi-sync setup but overrides the type for a specific tablet to prefer. It is only meant to be used for testing purposes!
+	DurabilityTest = "test"
+)
+
 func init() {
 	// register all the durability rules with their functions to create them
-	RegisterDurability("none", func() Durabler {
+	RegisterDurability(DurabilityNone, func() Durabler {
 		return &durabilityNone{}
 	})
-	RegisterDurability("semi_sync", func() Durabler {
+	RegisterDurability(DurabilitySemiSync, func() Durabler {
 		return &durabilitySemiSync{
 			rdonlySemiSync: false,
 		}
 	})
-	RegisterDurability("cross_cell", func() Durabler {
+	RegisterDurability(DurabilityCrossCell, func() Durabler {
 		return &durabilityCrossCell{
 			rdonlySemiSync: false,
 		}
 	})
-	RegisterDurability("semi_sync_with_rdonly_ack", func() Durabler {
+	RegisterDurability(DurabilitySemiSyncWithRdonlyAck, func() Durabler {
 		return &durabilitySemiSync{
 			rdonlySemiSync: true,
 		}
 	})
-	RegisterDurability("cross_cell_with_rdonly_ack", func() Durabler {
+	RegisterDurability(DurabilityCrossCellWithRdonlyAck, func() Durabler {
 		return &durabilityCrossCell{
 			rdonlySemiSync: true,
 		}
 	})
-	RegisterDurability("test", func() Durabler {
+	RegisterDurability(DurabilityTest, func() Durabler {
 		return &durabilityTest{}
 	})
 }
