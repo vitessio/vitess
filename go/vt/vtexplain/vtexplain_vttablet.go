@@ -621,7 +621,10 @@ func (t *explainTablet) handleSelect(query string) (*sqltypes.Result, error) {
 	case *sqlparser.Select:
 		selStmt = stmt
 	case *sqlparser.Union:
-		selStmt = sqlparser.GetFirstSelect(stmt)
+		selStmt, err = sqlparser.GetFirstSelect(stmt)
+		if err != nil {
+			return nil, err
+		}
 	default:
 		return nil, fmt.Errorf("vtexplain: unsupported statement type +%v", reflect.TypeOf(stmt))
 	}

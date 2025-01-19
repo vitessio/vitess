@@ -18,6 +18,7 @@ package tabletmanager
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"runtime"
 	"strings"
@@ -60,6 +61,13 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return nil, err
 	}
+
+	// Return error if the disk is stalled or rejecting writes.
+	// Noop by default, must be enabled with the flag "disk-write-dir".
+	if tm.dhMonitor.IsDiskStalled() {
+		return nil, errors.New("stalled disk")
+	}
+
 	// Server ID - "select @@global.server_id"
 	serverID, err := tm.MysqlDaemon.GetServerID(ctx)
 	if err != nil {

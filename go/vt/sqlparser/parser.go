@@ -77,7 +77,7 @@ func yyParsePooled(yylex yyLexer) int {
 // error is ignored and the DDL is returned anyway.
 func (p *Parser) Parse2(sql string) (Statement, BindVars, error) {
 	tokenizer := p.NewStringTokenizer(sql)
-	if yyParsePooled(tokenizer) != 0 {
+	if yyParsePooled(tokenizer) != 0 || tokenizer.LastError != nil {
 		if tokenizer.partialDDL != nil {
 			if typ, val := tokenizer.Scan(); typ != 0 {
 				return nil, nil, fmt.Errorf("extra characters encountered after end of DDL: '%s'", val)

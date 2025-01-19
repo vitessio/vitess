@@ -218,7 +218,7 @@ public class VitessJDBCUrl {
           }
         }
 
-        // Per the mysql-connector-java docs, passed in Properties values should take precedence
+        // Per the mysql-connector-j docs, passed in Properties values should take precedence
         // over
         // those in the URL. See javadoc for NonRegisteringDriver#connect
         if ((null != value && value.length() > 0) && (parameter.length() > 0) && null == info

@@ -121,6 +121,26 @@ func (node *VStream) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
+func (node *ValuesStatement) Format(buf *TrackedBuffer) {
+	if node.With != nil {
+		buf.astPrintf(node, "%v", node.With)
+	}
+	buf.astPrintf(node, "values %v", node.Comments)
+	if node.ListArg != "" {
+		buf.astPrintf(node, "%v", node.ListArg)
+	} else {
+		for i, row := range node.Rows {
+			buf.astPrintf(node, "row%v", row)
+			if i < len(node.Rows)-1 {
+				buf.WriteString(", ")
+			}
+		}
+	}
+	buf.astPrintf(node, "%v%v",
+		node.Order, node.Limit)
+}
+
+// Format formats the node.
 func (node *Stream) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "stream %v%v from %v",
 		node.Comments, node.SelectExpr, node.Table)

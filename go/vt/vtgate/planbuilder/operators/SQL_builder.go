@@ -37,8 +37,9 @@ type (
 	}
 )
 
-func (qb *queryBuilder) asSelectStatement() sqlparser.SelectStatement {
-	return qb.stmt.(sqlparser.SelectStatement)
+func (qb *queryBuilder) asSelectStatement() sqlparser.TableStatement {
+	return qb.stmt.(sqlparser.TableStatement)
+
 }
 func (qb *queryBuilder) asOrderAndLimit() sqlparser.OrderAndLimit {
 	return qb.stmt.(sqlparser.OrderAndLimit)
@@ -191,7 +192,8 @@ func (qb *queryBuilder) pushUnionInsideDerived() {
 			As:   sqlparser.NewIdentifierCS("dt"),
 		}},
 	}
-	sel.SelectExprs = unionSelects(sqlparser.GetFirstSelect(selStmt).SelectExprs)
+	firstSelect := getFirstSelect(selStmt)
+	sel.SelectExprs = unionSelects(firstSelect.SelectExprs)
 	qb.stmt = sel
 }
 
@@ -208,9 +210,10 @@ func unionSelects(exprs sqlparser.SelectExprs) (selectExprs sqlparser.SelectExpr
 	return
 }
 
-func checkUnionColumnByName(column *sqlparser.ColName, sel sqlparser.SelectStatement) {
+func checkUnionColumnByName(column *sqlparser.ColName, sel sqlparser.TableStatement) {
 	colName := column.Name.String()
-	exprs := sqlparser.GetFirstSelect(sel).SelectExprs
+	firstSelect := getFirstSelect(sel)
+	exprs := firstSelect.SelectExprs
 	offset := slices.IndexFunc(exprs, func(expr sqlparser.SelectExpr) bool {
 		switch ae := expr.(type) {
 		case *sqlparser.StarExpr:
@@ -244,8 +247,8 @@ func (qb *queryBuilder) unionWith(other *queryBuilder, distinct bool) {
 
 func (qb *queryBuilder) recursiveCteWith(other *queryBuilder, name, alias string, distinct bool, columns sqlparser.Columns) {
 	cteUnion := &sqlparser.Union{
-		Left:     qb.stmt.(sqlparser.SelectStatement),
-		Right:    other.stmt.(sqlparser.SelectStatement),
+		Left:     qb.stmt.(sqlparser.TableStatement),
+		Right:    other.stmt.(sqlparser.TableStatement),
 		Distinct: distinct,
 	}
 
@@ -393,7 +396,7 @@ func removeKeyspaceFromSelectExpr(expr sqlparser.SelectExpr) {
 	}
 }
 
-func stripDownQuery(from, to sqlparser.SelectStatement) {
+func stripDownQuery(from, to sqlparser.TableStatement) {
 	switch node := from.(type) {
 	case *sqlparser.Select:
 		toNode, ok := to.(*sqlparser.Select)
@@ -450,7 +453,12 @@ func buildQuery(op Operator, qb *queryBuilder) {
 		buildUnion(op, qb)
 	case *Distinct:
 		buildQuery(op.Source, qb)
-		qb.asSelectStatement().MakeDistinct()
+		statement := qb.asSelectStatement()
+		d, ok := statement.(sqlparser.Distinctable)
+		if !ok {
+			panic(vterrors.VT13001("expected a select statement with distinct"))
+		}
+		d.MakeDistinct()
 	case *Update:
 		buildUpdate(op, qb)
 	case *Delete:
