@@ -159,7 +159,7 @@ mysql57)
     echo 'deb http://repo.mysql.com/apt/debian/ buster mysql-5.7' > /etc/apt/sources.list.d/mysql.list
     ;;
 mysql80)
-    echo 'deb http://repo.mysql.com/apt/debian/ bullseye mysql-8.0' > /etc/apt/sources.list.d/mysql.list
+    echo 'deb http://repo.mysql.com/apt/debian/ bookworm mysql-8.0' > /etc/apt/sources.list.d/mysql.list
     ;;
 esac
 
@@ -169,11 +169,11 @@ mysql57)
     echo 'deb http://repo.percona.com/apt buster main' > /etc/apt/sources.list.d/percona.list
     ;;
 mysql80|percona57)
-    echo 'deb http://repo.percona.com/apt bullseye main' > /etc/apt/sources.list.d/percona.list
+    echo 'deb http://repo.percona.com/apt bookworm main' > /etc/apt/sources.list.d/percona.list
     ;;
 percona80)
-    echo 'deb http://repo.percona.com/apt bullseye main' > /etc/apt/sources.list.d/percona.list
-    echo 'deb http://repo.percona.com/ps-80/apt bullseye main' > /etc/apt/sources.list.d/percona80.list
+    echo 'deb http://repo.percona.com/apt bookworm main' > /etc/apt/sources.list.d/percona.list
+    echo 'deb http://repo.percona.com/ps-80/apt bookworm main' > /etc/apt/sources.list.d/percona80.list
     ;;
 esac
 
