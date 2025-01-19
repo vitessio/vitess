@@ -387,8 +387,13 @@ func (tp *TabletPicker) GetMatchingTablets(ctx context.Context) []*topo.TabletIn
 			log.Errorf("Error getting shard %s/%s: %v", tp.keyspace, tp.shard, err)
 			return nil
 		}
-		if _, ignore := tp.ignoreTablets[si.PrimaryAlias.String()]; !ignore {
-			aliases = append(aliases, si.PrimaryAlias)
+
+		// It is possible that there is a cluster event (ERS/PRS, for example) due to which
+		// there is no primary elected for the shard at the moment.
+		if si.PrimaryAlias != nil {
+			if _, ignore := tp.ignoreTablets[si.PrimaryAlias.String()]; !ignore {
+				aliases = append(aliases, si.PrimaryAlias)
+			}
 		}
 	} else {
 		actualCells := make([]string, 0)
@@ -425,6 +430,9 @@ func (tp *TabletPicker) GetMatchingTablets(ctx context.Context) []*topo.TabletIn
 				continue
 			}
 			for _, node := range sri.Nodes {
+				if node.TabletAlias == nil {
+					continue
+				}
 				if _, ignore := tp.ignoreTablets[node.TabletAlias.String()]; !ignore {
 					aliases = append(aliases, node.TabletAlias)
 				}
