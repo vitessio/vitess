@@ -38,7 +38,6 @@ import (
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
@@ -50,7 +49,7 @@ type resharder struct {
 	sourcePrimaries map[string]*topo.TabletInfo
 	targetShards    []*topo.ShardInfo
 	targetPrimaries map[string]*topo.TabletInfo
-	vschema         *vschemapb.Keyspace
+	vschema         *topo.KeyspaceVSchemaInfo
 	refStreams      map[string]*refStream
 	// This can be single cell name or cell alias but it can
 	// also be a comma-separated list of cells.

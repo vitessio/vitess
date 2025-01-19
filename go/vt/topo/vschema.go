@@ -20,34 +20,58 @@ import (
 	"context"
 	"path"
 
-	"google.golang.org/protobuf/proto"
-
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
-// SaveVSchema saves a Vschema. A valid Vschema should be passed in. It does not verify its correctness.
-// If the VSchema is empty, just remove it.
-func (ts *Server) SaveVSchema(ctx context.Context, keyspace string, vschema *vschemapb.Keyspace) error {
+// KeyspaceVSchemaInfo wraps a vschemapb.Keyspace and is a meta
+// struct that contains metadata to give the data more context
+// and convenience. This is the main way we interact with a
+// keyspace's vschema.
+type KeyspaceVSchemaInfo struct {
+	Name string
+	*vschemapb.Keyspace
+	version Version
+}
+
+func (k *KeyspaceVSchemaInfo) CloneVT() *KeyspaceVSchemaInfo {
+	if k == nil {
+		return (*KeyspaceVSchemaInfo)(nil)
+	}
+	kc := &KeyspaceVSchemaInfo{
+		Name:    k.Name,
+		version: Version(k.version),
+	}
+	if k.Keyspace != nil {
+		kc.Keyspace = k.Keyspace.CloneVT()
+	}
+	return kc
+}
+
+// SaveVSchema saves a Vschema. A valid Vschema should be passed in.
+// It does not verify its correctness beyond marshaling it.
+func (ts *Server) SaveVSchema(ctx context.Context, ksvs *KeyspaceVSchemaInfo) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 
-	nodePath := path.Join(KeyspacesPath, keyspace, VSchemaFile)
-	data, err := vschema.MarshalVT()
+	nodePath := path.Join(KeyspacesPath, ksvs.Name, VSchemaFile)
+	data, err := ksvs.MarshalVT()
 	if err != nil {
 		return err
 	}
 
-	_, err = ts.globalCell.Update(ctx, nodePath, data, nil)
+	version, err := ts.globalCell.Update(ctx, nodePath, data, ksvs.version)
 	if err != nil {
-		log.Errorf("failed to update vschema for keyspace %s: %v", keyspace, err)
-	} else {
-		log.Infof("successfully updated vschema for keyspace %s: %+v", keyspace, vschema)
+		log.Errorf("failed to update vschema for keyspace %s: %v", ksvs.Name, err)
+		return err
 	}
-	return err
+	ksvs.version = version
+	log.Infof("successfully updated vschema for keyspace %s: %+v", ksvs.Name, ksvs.Keyspace)
+
+	return nil
 }
 
 // DeleteVSchema delete the keyspace if it exists
@@ -61,35 +85,43 @@ func (ts *Server) DeleteVSchema(ctx context.Context, keyspace string) error {
 }
 
 // GetVSchema fetches the vschema from the topo.
-func (ts *Server) GetVSchema(ctx context.Context, keyspace string) (*vschemapb.Keyspace, error) {
+func (ts *Server) GetVSchema(ctx context.Context, keyspace string) (*KeyspaceVSchemaInfo, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 
 	nodePath := path.Join(KeyspacesPath, keyspace, VSchemaFile)
-	data, _, err := ts.globalCell.Get(ctx, nodePath)
+	data, version, err := ts.globalCell.Get(ctx, nodePath)
 	if err != nil {
 		return nil, err
 	}
-	var vs vschemapb.Keyspace
-	err = proto.Unmarshal(data, &vs)
+
+	vs := &vschemapb.Keyspace{}
+	err = vs.UnmarshalVT(data)
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "bad vschema data: %q", data)
 	}
-	return &vs, nil
+	return &KeyspaceVSchemaInfo{
+		Name:     keyspace,
+		Keyspace: vs,
+		version:  version,
+	}, nil
 }
 
 // EnsureVSchema makes sure that a vschema is present for this keyspace or creates a blank one if it is missing
 func (ts *Server) EnsureVSchema(ctx context.Context, keyspace string) error {
-	vschema, err := ts.GetVSchema(ctx, keyspace)
+	ksvs, err := ts.GetVSchema(ctx, keyspace)
 	if err != nil && !IsErrType(err, NoNode) {
 		log.Infof("error in getting vschema for keyspace %s: %v", keyspace, err)
 	}
-	if vschema == nil || IsErrType(err, NoNode) {
-		err = ts.SaveVSchema(ctx, keyspace, &vschemapb.Keyspace{
-			Sharded:  false,
-			Vindexes: make(map[string]*vschemapb.Vindex),
-			Tables:   make(map[string]*vschemapb.Table),
+	if ksvs == nil || ksvs.Keyspace == nil || IsErrType(err, NoNode) {
+		err = ts.SaveVSchema(ctx, &KeyspaceVSchemaInfo{
+			Name: keyspace,
+			Keyspace: &vschemapb.Keyspace{
+				Sharded:  false,
+				Vindexes: make(map[string]*vschemapb.Vindex),
+				Tables:   make(map[string]*vschemapb.Table),
+			},
 		})
 		if err != nil {
 			log.Errorf("could not create blank vschema: %v", err)

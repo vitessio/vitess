@@ -336,31 +336,37 @@ func TestMoveTablesUnsharded(t *testing.T) {
 	globalTablet := tenv.addTablet(t, 500, globalKs, globalShard)
 	defer tenv.deleteTablet(globalTablet.tablet)
 
-	err := tenv.ts.SaveVSchema(ctx, globalKs, &vschemapb.Keyspace{
-		Sharded: false,
-		Tables: map[string]*vschemapb.Table{
-			"t1_seq": {
-				Type: vindexes.TypeSequence,
+	err := tenv.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+		Name: globalKs,
+		Keyspace: &vschemapb.Keyspace{
+			Sharded: false,
+			Tables: map[string]*vschemapb.Table{
+				"t1_seq": {
+					Type: vindexes.TypeSequence,
+				},
 			},
 		},
 	})
 	require.NoError(t, err)
-	err = tenv.ts.SaveVSchema(ctx, targetKs, &vschemapb.Keyspace{
-		Sharded: true,
-		Vindexes: map[string]*vschemapb.Vindex{
-			"hash": {
-				Type: "hash",
+	err = tenv.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+		Name: targetKs,
+		Keyspace: &vschemapb.Keyspace{
+			Sharded: true,
+			Vindexes: map[string]*vschemapb.Vindex{
+				"hash": {
+					Type: "hash",
+				},
 			},
-		},
-		Tables: map[string]*vschemapb.Table{
-			"t1": {
-				ColumnVindexes: []*vschemapb.ColumnVindex{{
-					Column: "id",
-					Name:   "hash",
-				}},
-				AutoIncrement: &vschemapb.AutoIncrement{
-					Column:   "id",
-					Sequence: "t1_seq",
+			Tables: map[string]*vschemapb.Table{
+				"t1": {
+					ColumnVindexes: []*vschemapb.ColumnVindex{{
+						Column: "id",
+						Name:   "hash",
+					}},
+					AutoIncrement: &vschemapb.AutoIncrement{
+						Column:   "id",
+						Sequence: "t1_seq",
+					},
 				},
 			},
 		},
@@ -599,31 +605,37 @@ func TestMoveTablesSharded(t *testing.T) {
 	globalTablet := tenv.addTablet(t, 500, globalKs, globalShard)
 	defer tenv.deleteTablet(globalTablet.tablet)
 
-	err := tenv.ts.SaveVSchema(ctx, globalKs, &vschemapb.Keyspace{
-		Sharded: false,
-		Tables: map[string]*vschemapb.Table{
-			"t1_seq": {
-				Type: vindexes.TypeSequence,
+	err := tenv.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+		Name: globalKs,
+		Keyspace: &vschemapb.Keyspace{
+			Sharded: false,
+			Tables: map[string]*vschemapb.Table{
+				"t1_seq": {
+					Type: vindexes.TypeSequence,
+				},
 			},
 		},
 	})
 	require.NoError(t, err)
-	err = tenv.ts.SaveVSchema(ctx, targetKs, &vschemapb.Keyspace{
-		Sharded: true,
-		Vindexes: map[string]*vschemapb.Vindex{
-			"hash": {
-				Type: "hash",
+	err = tenv.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+		Name: targetKs,
+		Keyspace: &vschemapb.Keyspace{
+			Sharded: true,
+			Vindexes: map[string]*vschemapb.Vindex{
+				"hash": {
+					Type: "hash",
+				},
 			},
-		},
-		Tables: map[string]*vschemapb.Table{
-			"t1": {
-				ColumnVindexes: []*vschemapb.ColumnVindex{{
-					Column: "id",
-					Name:   "hash",
-				}},
-				AutoIncrement: &vschemapb.AutoIncrement{
-					Column:   "id",
-					Sequence: "t1_seq",
+			Tables: map[string]*vschemapb.Table{
+				"t1": {
+					ColumnVindexes: []*vschemapb.ColumnVindex{{
+						Column: "id",
+						Name:   "hash",
+					}},
+					AutoIncrement: &vschemapb.AutoIncrement{
+						Column:   "id",
+						Sequence: "t1_seq",
+					},
 				},
 			},
 		},
@@ -1203,36 +1215,42 @@ func TestSourceShardSelection(t *testing.T) {
 
 	ws := workflow.NewServer(vtenv.NewTestEnv(), tenv.ts, tenv.tmc)
 
-	err := tenv.ts.SaveVSchema(ctx, sourceKs, &vschemapb.Keyspace{
-		Sharded: true,
-		Vindexes: map[string]*vschemapb.Vindex{
-			"hash": {
-				Type: "hash",
+	err := tenv.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+		Name: sourceKs,
+		Keyspace: &vschemapb.Keyspace{
+			Sharded: true,
+			Vindexes: map[string]*vschemapb.Vindex{
+				"hash": {
+					Type: "hash",
+				},
 			},
-		},
-		Tables: map[string]*vschemapb.Table{
-			"t1": {
-				ColumnVindexes: []*vschemapb.ColumnVindex{{
-					Column: "id",
-					Name:   "hash",
-				}},
+			Tables: map[string]*vschemapb.Table{
+				"t1": {
+					ColumnVindexes: []*vschemapb.ColumnVindex{{
+						Column: "id",
+						Name:   "hash",
+					}},
+				},
 			},
 		},
 	})
 	require.NoError(t, err)
-	err = tenv.ts.SaveVSchema(ctx, targetKs, &vschemapb.Keyspace{
-		Sharded: true,
-		Vindexes: map[string]*vschemapb.Vindex{
-			"hash": {
-				Type: "hash",
+	err = tenv.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+		Name: targetKs,
+		Keyspace: &vschemapb.Keyspace{
+			Sharded: true,
+			Vindexes: map[string]*vschemapb.Vindex{
+				"hash": {
+					Type: "hash",
+				},
 			},
-		},
-		Tables: map[string]*vschemapb.Table{
-			"t1": {
-				ColumnVindexes: []*vschemapb.ColumnVindex{{
-					Column: "id",
-					Name:   "hash",
-				}},
+			Tables: map[string]*vschemapb.Table{
+				"t1": {
+					ColumnVindexes: []*vschemapb.ColumnVindex{{
+						Column: "id",
+						Name:   "hash",
+					}},
+				},
 			},
 		},
 	})
@@ -1334,7 +1352,11 @@ func TestSourceShardSelection(t *testing.T) {
 			tenv.tmc.SetSchema(tt.schema)
 
 			if tt.vschema != nil {
-				err = tenv.ts.SaveVSchema(ctx, targetKs, tt.vschema)
+				ksvs := &topo.KeyspaceVSchemaInfo{
+					Name:     targetKs,
+					Keyspace: tt.vschema,
+				}
+				err = tenv.ts.SaveVSchema(ctx, ksvs)
 				require.NoError(t, err)
 			}
 
@@ -1522,7 +1544,7 @@ func TestFailedMoveTablesCreateCleanup(t *testing.T) {
 	// Check that our vschema changes were also rolled back.
 	vs2, err := tenv.ts.GetVSchema(ctx, targetKs)
 	require.NoError(t, err, "failed to get target vschema")
-	require.Equal(t, vs, vs2, "expected vschema to be unchanged")
+	require.Equal(t, vs.Keyspace, vs2.Keyspace, "expected vschema to be unchanged; expected: %+v, got: %+v", vs.Keyspace, vs2.Keyspace)
 }
 
 // TestHasVReplicationWorkflows tests the simple RPC to be sure
@@ -2035,7 +2057,11 @@ func TestExternalizeLookupVindex(t *testing.T) {
 	for _, tcase := range testcases {
 		t.Run(tcase.request.Name, func(t *testing.T) {
 			// Resave the source schema for every iteration.
-			err := tenv.ts.SaveVSchema(ctx, tcase.request.Keyspace, sourceVschema)
+			ksvs := &topo.KeyspaceVSchemaInfo{
+				Name:     tcase.request.Keyspace,
+				Keyspace: sourceVschema,
+			}
+			err := tenv.ts.SaveVSchema(ctx, ksvs)
 			require.NoError(t, err)
 			err = tenv.ts.RebuildSrvVSchema(ctx, []string{tenv.cells[0]})
 			require.NoError(t, err)
@@ -2276,19 +2302,22 @@ func TestMaterializerOneToMany(t *testing.T) {
 		}),
 	}
 
-	err := tenv.ts.SaveVSchema(ctx, targetKs, &vschemapb.Keyspace{
-		Sharded: true,
-		Vindexes: map[string]*vschemapb.Vindex{
-			"xxhash": {
-				Type: "xxhash",
+	err := tenv.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+		Name: targetKs,
+		Keyspace: &vschemapb.Keyspace{
+			Sharded: true,
+			Vindexes: map[string]*vschemapb.Vindex{
+				"xxhash": {
+					Type: "xxhash",
+				},
 			},
-		},
-		Tables: map[string]*vschemapb.Table{
-			"t1": {
-				ColumnVindexes: []*vschemapb.ColumnVindex{{
-					Column: "c1",
-					Name:   "xxhash",
-				}},
+			Tables: map[string]*vschemapb.Table{
+				"t1": {
+					ColumnVindexes: []*vschemapb.ColumnVindex{{
+						Column: "c1",
+						Name:   "xxhash",
+					}},
+				},
 			},
 		},
 	})
@@ -2385,19 +2414,22 @@ func TestMaterializerManyToMany(t *testing.T) {
 		}),
 	}
 
-	err := tenv.ts.SaveVSchema(ctx, targetKs, &vschemapb.Keyspace{
-		Sharded: true,
-		Vindexes: map[string]*vschemapb.Vindex{
-			"xxhash": {
-				Type: "xxhash",
+	err := tenv.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+		Name: targetKs,
+		Keyspace: &vschemapb.Keyspace{
+			Sharded: true,
+			Vindexes: map[string]*vschemapb.Vindex{
+				"xxhash": {
+					Type: "xxhash",
+				},
 			},
-		},
-		Tables: map[string]*vschemapb.Table{
-			"t1": {
-				ColumnVindexes: []*vschemapb.ColumnVindex{{
-					Column: "c1",
-					Name:   "xxhash",
-				}},
+			Tables: map[string]*vschemapb.Table{
+				"t1": {
+					ColumnVindexes: []*vschemapb.ColumnVindex{{
+						Column: "c1",
+						Name:   "xxhash",
+					}},
+				},
 			},
 		},
 	})
@@ -2495,22 +2527,25 @@ func TestMaterializerMulticolumnVindex(t *testing.T) {
 		}),
 	}
 
-	err := tenv.ts.SaveVSchema(ctx, targetKs, &vschemapb.Keyspace{
-		Sharded: true,
-		Vindexes: map[string]*vschemapb.Vindex{
-			"region": {
-				Type: "region_experimental",
-				Params: map[string]string{
-					"region_bytes": "1",
+	err := tenv.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+		Name: targetKs,
+		Keyspace: &vschemapb.Keyspace{
+			Sharded: true,
+			Vindexes: map[string]*vschemapb.Vindex{
+				"region": {
+					Type: "region_experimental",
+					Params: map[string]string{
+						"region_bytes": "1",
+					},
 				},
 			},
-		},
-		Tables: map[string]*vschemapb.Table{
-			"t1": {
-				ColumnVindexes: []*vschemapb.ColumnVindex{{
-					Columns: []string{"c1", "c2"},
-					Name:    "region",
-				}},
+			Tables: map[string]*vschemapb.Table{
+				"t1": {
+					ColumnVindexes: []*vschemapb.ColumnVindex{{
+						Columns: []string{"c1", "c2"},
+						Name:    "region",
+					}},
+				},
 			},
 		},
 	})
@@ -2749,22 +2784,25 @@ func TestMaterializerExplicitColumns(t *testing.T) {
 		}),
 	}
 
-	err := tenv.ts.SaveVSchema(ctx, targetKs, &vschemapb.Keyspace{
-		Sharded: true,
-		Vindexes: map[string]*vschemapb.Vindex{
-			"region": {
-				Type: "region_experimental",
-				Params: map[string]string{
-					"region_bytes": "1",
+	err := tenv.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+		Name: targetKs,
+		Keyspace: &vschemapb.Keyspace{
+			Sharded: true,
+			Vindexes: map[string]*vschemapb.Vindex{
+				"region": {
+					Type: "region_experimental",
+					Params: map[string]string{
+						"region_bytes": "1",
+					},
 				},
 			},
-		},
-		Tables: map[string]*vschemapb.Table{
-			"t1": {
-				ColumnVindexes: []*vschemapb.ColumnVindex{{
-					Columns: []string{"c1", "c2"},
-					Name:    "region",
-				}},
+			Tables: map[string]*vschemapb.Table{
+				"t1": {
+					ColumnVindexes: []*vschemapb.ColumnVindex{{
+						Columns: []string{"c1", "c2"},
+						Name:    "region",
+					}},
+				},
 			},
 		},
 	})
@@ -2859,22 +2897,25 @@ func TestMaterializerRenamedColumns(t *testing.T) {
 		}),
 	}
 
-	err := tenv.ts.SaveVSchema(ctx, targetKs, &vschemapb.Keyspace{
-		Sharded: true,
-		Vindexes: map[string]*vschemapb.Vindex{
-			"region": {
-				Type: "region_experimental",
-				Params: map[string]string{
-					"region_bytes": "1",
+	err := tenv.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+		Name: targetKs,
+		Keyspace: &vschemapb.Keyspace{
+			Sharded: true,
+			Vindexes: map[string]*vschemapb.Vindex{
+				"region": {
+					Type: "region_experimental",
+					Params: map[string]string{
+						"region_bytes": "1",
+					},
 				},
 			},
-		},
-		Tables: map[string]*vschemapb.Table{
-			"t1": {
-				ColumnVindexes: []*vschemapb.ColumnVindex{{
-					Columns: []string{"c1", "c2"},
-					Name:    "region",
-				}},
+			Tables: map[string]*vschemapb.Table{
+				"t1": {
+					ColumnVindexes: []*vschemapb.ColumnVindex{{
+						Columns: []string{"c1", "c2"},
+						Name:    "region",
+					}},
+				},
 			},
 		},
 	})
@@ -3025,8 +3066,11 @@ func TestMaterializerNoTargetVSchema(t *testing.T) {
 		}),
 	}
 
-	err := tenv.ts.SaveVSchema(ctx, targetKs, &vschemapb.Keyspace{
-		Sharded: true,
+	err := tenv.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+		Name: targetKs,
+		Keyspace: &vschemapb.Keyspace{
+			Sharded: true,
+		},
 	})
 	require.NoError(t, err)
 
@@ -3426,24 +3470,27 @@ func TestMaterializerNoGoodVindex(t *testing.T) {
 		}),
 	}
 
-	err := tenv.ts.SaveVSchema(ctx, targetKs, &vschemapb.Keyspace{
-		Sharded: true,
-		Vindexes: map[string]*vschemapb.Vindex{
-			"lookup_unique": {
-				Type: "lookup_unique",
-				Params: map[string]string{
-					"table": "t1",
-					"from":  "c1",
-					"to":    "c2",
+	err := tenv.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+		Name: targetKs,
+		Keyspace: &vschemapb.Keyspace{
+			Sharded: true,
+			Vindexes: map[string]*vschemapb.Vindex{
+				"lookup_unique": {
+					Type: "lookup_unique",
+					Params: map[string]string{
+						"table": "t1",
+						"from":  "c1",
+						"to":    "c2",
+					},
 				},
 			},
-		},
-		Tables: map[string]*vschemapb.Table{
-			"t1": {
-				ColumnVindexes: []*vschemapb.ColumnVindex{{
-					Column: "c1",
-					Name:   "lookup_unique",
-				}},
+			Tables: map[string]*vschemapb.Table{
+				"t1": {
+					ColumnVindexes: []*vschemapb.ColumnVindex{{
+						Column: "c1",
+						Name:   "lookup_unique",
+					}},
+				},
 			},
 		},
 	})
@@ -3509,19 +3556,22 @@ func TestMaterializerComplexVindexExpression(t *testing.T) {
 		}),
 	}
 
-	err := tenv.ts.SaveVSchema(ctx, targetKs, &vschemapb.Keyspace{
-		Sharded: true,
-		Vindexes: map[string]*vschemapb.Vindex{
-			"xxhash": {
-				Type: "xxhash",
+	err := tenv.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+		Name: targetKs,
+		Keyspace: &vschemapb.Keyspace{
+			Sharded: true,
+			Vindexes: map[string]*vschemapb.Vindex{
+				"xxhash": {
+					Type: "xxhash",
+				},
 			},
-		},
-		Tables: map[string]*vschemapb.Table{
-			"t1": {
-				ColumnVindexes: []*vschemapb.ColumnVindex{{
-					Column: "c1",
-					Name:   "xxhash",
-				}},
+			Tables: map[string]*vschemapb.Table{
+				"t1": {
+					ColumnVindexes: []*vschemapb.ColumnVindex{{
+						Column: "c1",
+						Name:   "xxhash",
+					}},
+				},
 			},
 		},
 	})
@@ -3587,19 +3637,22 @@ func TestMaterializerNoVindexInExpression(t *testing.T) {
 		}),
 	}
 
-	err := tenv.ts.SaveVSchema(ctx, targetKs, &vschemapb.Keyspace{
-		Sharded: true,
-		Vindexes: map[string]*vschemapb.Vindex{
-			"xxhash": {
-				Type: "xxhash",
+	err := tenv.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+		Name: targetKs,
+		Keyspace: &vschemapb.Keyspace{
+			Sharded: true,
+			Vindexes: map[string]*vschemapb.Vindex{
+				"xxhash": {
+					Type: "xxhash",
+				},
 			},
-		},
-		Tables: map[string]*vschemapb.Table{
-			"t1": {
-				ColumnVindexes: []*vschemapb.ColumnVindex{{
-					Column: "c1",
-					Name:   "xxhash",
-				}},
+			Tables: map[string]*vschemapb.Table{
+				"t1": {
+					ColumnVindexes: []*vschemapb.ColumnVindex{{
+						Column: "c1",
+						Name:   "xxhash",
+					}},
+				},
 			},
 		},
 	})

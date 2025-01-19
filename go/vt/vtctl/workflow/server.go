@@ -571,7 +571,7 @@ func (s *Server) LookupVindexCreate(ctx context.Context, req *vtctldatapb.Lookup
 		return nil, err
 	}
 
-	if err := s.ts.SaveVSchema(ctx, ms.TargetKeyspace, targetVSchema); err != nil {
+	if err := s.ts.SaveVSchema(ctx, targetVSchema); err != nil {
 		return nil, vterrors.Wrapf(err, "failed to save updated vschema '%v' in the %s keyspace",
 			targetVSchema, ms.TargetKeyspace)
 	}
@@ -587,7 +587,7 @@ func (s *Server) LookupVindexCreate(ctx context.Context, req *vtctldatapb.Lookup
 		return nil, err
 	}
 	if ms.SourceKeyspace != ms.TargetKeyspace {
-		if err := s.ts.SaveVSchema(ctx, ms.SourceKeyspace, sourceVSchema); err != nil {
+		if err := s.ts.SaveVSchema(ctx, sourceVSchema); err != nil {
 			return nil, vterrors.Wrapf(err, "failed to save updated vschema '%v' in the %s keyspace",
 				sourceVSchema, ms.SourceKeyspace)
 		}
@@ -682,7 +682,7 @@ func (s *Server) LookupVindexExternalize(ctx context.Context, req *vtctldatapb.L
 
 	// Remove the write_only param and save the source vschema.
 	delete(vindex.Params, "write_only")
-	if err := s.ts.SaveVSchema(ctx, req.Keyspace, sourceVschema); err != nil {
+	if err := s.ts.SaveVSchema(ctx, sourceVschema); err != nil {
 		return nil, err
 	}
 	return resp, s.ts.RebuildSrvVSchema(ctx, nil)
@@ -803,9 +803,10 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		s.Logger().Infof("Successfully opened external topo: %+v", externalTopo)
 	}
 
-	var vschema *vschemapb.Keyspace
-	var origVSchema *vschemapb.Keyspace // If we need to rollback a failed create
-	vschema, err = s.ts.GetVSchema(ctx, targetKeyspace)
+	origVSchema := &topo.KeyspaceVSchemaInfo{ // If we need to rollback a failed create
+		Name: targetKeyspace,
+	}
+	vschema, err := s.ts.GetVSchema(ctx, targetKeyspace)
 	if err != nil {
 		return nil, err
 	}
@@ -861,12 +862,14 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 
 	if !vschema.Sharded {
 		// Save the original in case we need to restore it for a late failure in
-		// the defer().
-		origVSchema = vschema.CloneVT()
-		if err := s.addTablesToVSchema(ctx, sourceKeyspace, vschema, tables, externalTopo == nil); err != nil {
+		// the defer(). We do NOT want to clone the version field as we will
+		// intentionally be going back in time. So we only clone the internal
+		// vschemapb.Keyspace field.
+		origVSchema.Keyspace = vschema.Keyspace.CloneVT()
+		if err := s.addTablesToVSchema(ctx, sourceKeyspace, vschema.Keyspace, tables, externalTopo == nil); err != nil {
 			return nil, err
 		}
-		if err := s.ts.SaveVSchema(ctx, targetKeyspace, vschema); err != nil {
+		if err := s.ts.SaveVSchema(ctx, vschema); err != nil {
 			return nil, err
 		}
 	}
@@ -967,7 +970,7 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 			if origVSchema == nil { // There's no previous version to restore
 				return
 			}
-			if cerr := s.ts.SaveVSchema(ctx, targetKeyspace, origVSchema); cerr != nil {
+			if cerr := s.ts.SaveVSchema(ctx, origVSchema); cerr != nil {
 				err = vterrors.Wrapf(err, "failed to restore original target vschema: %v", cerr)
 			}
 		}
@@ -2032,7 +2035,7 @@ func (s *Server) buildTrafficSwitcher(ctx context.Context, targetKeyspace, workf
 	if err != nil {
 		return nil, err
 	}
-	ts.sourceKSSchema, err = vindexes.BuildKeyspaceSchema(vs, ts.sourceKeyspace, s.env.Parser())
+	ts.sourceKSSchema, err = vindexes.BuildKeyspaceSchema(vs.Keyspace, ts.sourceKeyspace, s.env.Parser())
 	if err != nil {
 		return nil, err
 	}

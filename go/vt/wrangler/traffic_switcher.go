@@ -995,7 +995,7 @@ func (wr *Wrangler) buildTrafficSwitcher(ctx context.Context, targetKeyspace, wo
 	if err != nil {
 		return nil, err
 	}
-	ts.sourceKSSchema, err = vindexes.BuildKeyspaceSchema(vs, ts.sourceKeyspace, wr.env.Parser())
+	ts.sourceKSSchema, err = vindexes.BuildKeyspaceSchema(vs.Keyspace, ts.sourceKeyspace, wr.env.Parser())
 	if err != nil {
 		return nil, err
 	}
@@ -1833,7 +1833,7 @@ func (ts *trafficSwitcher) dropParticipatingTablesFromKeyspace(ctx context.Conte
 	for _, tableName := range ts.Tables() {
 		delete(vschema.Tables, tableName)
 	}
-	return ts.TopoServer().SaveVSchema(ctx, keyspace, vschema)
+	return ts.TopoServer().SaveVSchema(ctx, vschema)
 }
 
 // FIXME: even after dropSourceShards there are still entries in the topo, need to research and fix
@@ -1995,7 +1995,7 @@ func (ts *trafficSwitcher) addParticipatingTablesToKeyspace(ctx context.Context,
 			vschema.Tables[table] = &vschemapb.Table{}
 		}
 	}
-	return ts.TopoServer().SaveVSchema(ctx, keyspace, vschema)
+	return ts.TopoServer().SaveVSchema(ctx, vschema)
 }
 
 func (ts *trafficSwitcher) isSequenceParticipating(ctx context.Context) (bool, error) {
@@ -2034,7 +2034,7 @@ func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[s
 		return nil, nil
 	}
 
-	sequencesByBackingTable, backingTablesFound, err := ts.findSequenceUsageInKeyspace(vschema)
+	sequencesByBackingTable, backingTablesFound, err := ts.findSequenceUsageInKeyspace(vschema.Keyspace)
 	if err != nil {
 		return nil, err
 	}
