@@ -35,6 +35,11 @@ export const VExplain = () => {
     const [clusterID, updateCluster] = React.useState<string | null | undefined>(null);
     const [keyspaceName, updateKeyspace] = React.useState<string | null | undefined>(null);
     const [sql, updateSQL] = React.useState<string | null | undefined>(null);
+    const [vexplainOption, updateVExplainOption] = React.useState<string | null | undefined>('ALL');
+
+    const fetchVExplainRequestSql = function () {
+        return 'VEXPLAIN ' + vexplainOption + ' ' + sql;
+    };
 
     const selectedKeyspace =
         clusterID && keyspaceName
@@ -42,7 +47,7 @@ export const VExplain = () => {
             : null;
 
     const { data, error, refetch } = useVExplain(
-        { cluster_id: clusterID, keyspace: keyspaceName, sql },
+        { cluster_id: clusterID, keyspace: keyspaceName, sql: fetchVExplainRequestSql() },
         {
             // Never cache, never refetch.
             cacheTime: 0,
@@ -55,6 +60,7 @@ export const VExplain = () => {
     const onChangeKeyspace = (selectedKeyspace: pb.Keyspace | null | undefined) => {
         updateCluster(selectedKeyspace?.cluster?.id);
         updateKeyspace(selectedKeyspace?.keyspace?.name);
+        updateSQL(null);
     };
 
     const onChangeSQL: React.ChangeEventHandler<HTMLTextAreaElement> = (e) => {
@@ -63,8 +69,24 @@ export const VExplain = () => {
 
     const onSubmit: React.FormEventHandler<HTMLFormElement> = (e) => {
         e.preventDefault();
+        let alertMessage = '';
+        if (keyspaceName === '' || keyspaceName === null) {
+            alertMessage += 'Please choose keyspace.\n\n';
+        }
+        if (sql === '' || sql === null) {
+            alertMessage += 'Please enter SQL statement.\n\n';
+        }
+        if (vexplainOption === '' || vexplainOption === null) {
+            alertMessage += 'Please choose vexplain option.\n\n';
+        }
+        if (alertMessage.trim() !== '') {
+            alert(alertMessage);
+            return;
+        }
+
         refetch();
     };
+    const VEXPLAIN_OPTIONS = ['ALL', 'PLAN', 'QUERIES', 'TRACE', 'KEYS'];
 
     return (
         <div>
@@ -92,14 +114,25 @@ export const VExplain = () => {
                                     onChange={onChangeSQL}
                                     rows={10}
                                     value={sql || ''}
-                                    placeholder="vexplain [ALL|PLAN|QUERIES|TRACE|KEYS] <query>"
                                 />
                             </Label>
                         </div>
-                        <div className={style.buttons}>
-                            <button className="btn" type="submit">
-                                Run VExplain
-                            </button>
+                        <div className="flex flex-row gap-4 ">
+                            <Select
+                                items={VEXPLAIN_OPTIONS}
+                                label="Select VExplain Option"
+                                helpText={'VEXPLAIN [ALL|PLAN|QUERIES|TRACE|KEYS] <SQL> '}
+                                onChange={updateVExplainOption}
+                                placeholder="Select VExplain option"
+                                required={true}
+                                disableClearSelection={true}
+                                selectedItem={vexplainOption || null}
+                            />
+                            <div className={style.buttons}>
+                                <button className="btn align-bottom" type="submit">
+                                    Run VExplain {vexplainOption}
+                                </button>
+                            </div>
                         </div>
                     </form>
                 </section>
