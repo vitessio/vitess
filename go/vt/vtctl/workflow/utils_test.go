@@ -247,7 +247,6 @@ func startEtcd(t *testing.T) string {
 }
 
 func TestValidateSourceTablesExist(t *testing.T) {
-	ctx := context.Background()
 	ks := "source_keyspace"
 	ksTables := []string{"table1", "table2"}
 
@@ -272,7 +271,7 @@ func TestValidateSourceTablesExist(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := validateSourceTablesExist(ctx, ks, ksTables, tc.tables)
+			err := validateSourceTablesExist(ks, ksTables, tc.tables)
 			if tc.errContains != "" {
 				assert.ErrorContains(t, err, tc.errContains)
 			} else {

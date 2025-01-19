@@ -417,6 +417,14 @@ func testVreplicationWorkflows(t *testing.T, limited bool, binlogRowImage string
 		vdx = gjson.Get(customerVSchema, fmt.Sprintf("vindexes.%s", vindexName))
 		require.NotNil(t, vdx, "lookup vindex %s not found", vindexName)
 		require.NotEqual(t, "true", vdx.Get("params.write_only").String(), "did not expect write_only parameter to be true")
+
+		err = vc.VtctldClient.ExecuteCommand("LookupVindex", "--name", vindexName, "--table-keyspace=product", "internalize", "--keyspace=customer")
+		require.NoError(t, err, "error executing LookupVindex internalize: %v", err)
+		customerVSchema, err = vc.VtctldClient.ExecuteCommandWithOutput("GetVSchema", "customer")
+		require.NoError(t, err, "error executing GetVSchema: %v", err)
+		vdx = gjson.Get(customerVSchema, fmt.Sprintf("vindexes.%s", vindexName))
+		require.NotNil(t, vdx, "lookup vindex %s not found", vindexName)
+		require.Equal(t, "true", vdx.Get("params.write_only").String(), "expected write_only parameter to be true")
 	})
 }
 
