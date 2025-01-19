@@ -2661,33 +2661,12 @@ func (api *API) VExplain(ctx context.Context, req *vtadminpb.VExplainRequest) (*
 		return nil, vterrors.VT09017("Invalid VExplain statement")
 	}
 
-	var (
-		response *vtadminpb.VExplainResponse
-		wg       sync.WaitGroup
-		er       concurrency.AllErrorRecorder
-		m        sync.Mutex
-	)
+	response, err := c.GetVExplain(ctx, req, stmt.(*sqlparser.VExplainStmt))
 
-	wg.Add(1)
-
-	go func(c *cluster.Cluster) {
-		defer wg.Done()
-		resp, err := c.GetVExplain(ctx, req, stmt.(*sqlparser.VExplainStmt))
-
-		if err != nil {
-			er.RecordError(err)
-			return
-		}
-		m.Lock()
-		response = resp
-		m.Unlock()
-	}(c)
-
-	wg.Wait()
-
-	if er.HasErrors() {
-		return nil, er.Error()
+	if err != nil {
+		return nil, err
 	}
+
 	return response, nil
 }
 
