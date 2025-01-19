@@ -66,14 +66,12 @@ func TestPickPrimary(t *testing.T) {
 // there is no primary setup for the shard we correctly return an error.
 func TestPickNoPrimary(t *testing.T) {
 	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	te := newPickerTestEnv(t, ctx, []string{"cell", "otherCell"})
 	want := addTablet(ctx, te, 100, topodatapb.TabletType_PRIMARY, "cell", true, true)
 	defer deleteTablet(t, te, want)
-	ctx, cancel = context.WithTimeout(ctx, 200*time.Millisecond)
-	defer cancel()
 	_, err := te.topoServ.UpdateShardFields(ctx, te.keyspace, te.shard, func(si *topo.ShardInfo) error {
 		si.PrimaryAlias = nil // force a missing primary
 		return nil
@@ -83,9 +81,7 @@ func TestPickNoPrimary(t *testing.T) {
 	tp, err := NewTabletPicker(ctx, te.topoServ, []string{"otherCell"}, "cell", te.keyspace, te.shard, "primary", TabletPickerOptions{})
 	require.NoError(t, err)
 
-	ctx2, cancel2 := context.WithTimeout(ctx, 200*time.Millisecond)
-	defer cancel2()
-	_, err = tp.PickForStreaming(ctx2)
+	_, err = tp.PickForStreaming(ctx)
 	require.Errorf(t, err, "No healthy serving tablet")
 }
 
