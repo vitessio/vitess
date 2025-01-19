@@ -284,7 +284,7 @@ $(PROTO_GO_OUTS): minimaltools install_protoc-gen-go proto/*.proto
 # Please read docker/README.md to understand the different available images.
 
 # This rule builds the bootstrap images for all flavors.
-DOCKER_IMAGES_FOR_TEST = mysql80 percona80
+DOCKER_IMAGES_FOR_TEST = mysql80 mysql84 percona80
 DOCKER_IMAGES = common $(DOCKER_IMAGES_FOR_TEST)
 BOOTSTRAP_VERSION=39
 ensure_bootstrap_version:
@@ -322,7 +322,7 @@ define build_docker_image
 	fi
 endef
 
-DOCKER_LITE_SUFFIX = percona80
+DOCKER_LITE_SUFFIX = mysql84 percona80
 DOCKER_LITE_TARGETS = $(addprefix docker_lite_,$(DOCKER_LITE_SUFFIX))
 $(DOCKER_LITE_TARGETS): docker_lite_%:
 	${call build_docker_image,docker/lite/Dockerfile.$*,vitess/lite:$*}

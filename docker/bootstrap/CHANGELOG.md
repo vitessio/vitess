@@ -154,3 +154,4 @@ List of changes between bootstrap image versions.
 ## [39] - 2024-12-04
 ### Changes
 - Update build to golang 1.23.4
+- Add MySQL84 image

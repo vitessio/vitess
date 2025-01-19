@@ -1,0 +1,23 @@
+ARG bootstrap_version
+ARG image="vitess/bootstrap:${bootstrap_version}-common"
+
+FROM --platform=linux/amd64 "${image}"
+
+USER root
+
+# Install MySQL 8.4
+RUN for i in $(seq 1 10); do apt-key adv --no-tty --recv-keys --keyserver keyserver.ubuntu.com 8C718D3B5072E1F5 && break; done && \
+    for i in $(seq 1 10); do apt-key adv --no-tty --recv-keys --keyserver keyserver.ubuntu.com A8D3785C && break; done && \
+    add-apt-repository 'deb http://repo.mysql.com/apt/debian/ bullseye mysql-8.4-lts' && \
+    for i in $(seq 1 10); do apt-key adv --no-tty --keyserver keyserver.ubuntu.com --recv-keys 9334A25F8507EFA5 && break; done && \
+    echo 'deb http://repo.percona.com/pxb-84-lts/apt bullseye main' > /etc/apt/sources.list.d/percona.list && \
+    { \
+        echo debconf debconf/frontend select Noninteractive; \
+        echo percona-server-server-8.4 percona-server-server/root_password password 'unused'; \
+        echo percona-server-server-8.4 percona-server-server/root_password_again password 'unused'; \
+    } | debconf-set-selections && \
+    apt-get update -y && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y mysql-server libmysqlclient-dev libdbd-mysql-perl rsync libev4 libcurl4-openssl-dev percona-xtrabackup-84 && \
+    rm -rf /var/lib/apt/lists/*
+
+USER vitess
