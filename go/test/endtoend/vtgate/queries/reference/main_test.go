@@ -155,24 +155,14 @@ func TestMain(m *testing.M) {
 		}()
 
 		// Materialize zip_detail to sharded keyspace.
-		output, err := clusterInstance.VtctlProcess.ExecuteCommandWithOutput(
+		output, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(
 			"Materialize",
-			"--",
-			"--tablet_types",
-			"PRIMARY",
-			`{
-				"workflow": "copy_zip_detail",
-				"source_keyspace": "`+unshardedKeyspaceName+`",
-				"target_keyspace": "`+shardedKeyspaceName+`",
-				"tablet_types": "PRIMARY",
-				"table_settings": [
-					{
-						"target_table": "zip_detail",
-						"source_expression": "select * from zip_detail",
-						"create_ddl": "copy"
-					}
-				]
-			}`,
+			"--workflow", "copy_zip_detail",
+			"--target-keyspace", shardedKeyspaceName,
+			"create",
+			"--source-keyspace", unshardedKeyspaceName,
+			"--table-settings", `[{"target_table": "zip_detail", "source_expression": "select * from zip_detail", "create_ddl": "copy" }]`,
+			"--tablet-types", "PRIMARY",
 		)
 		fmt.Fprintf(os.Stderr, "Output from materialize: %s\n", output)
 		if err != nil {
@@ -214,11 +204,12 @@ func TestMain(m *testing.M) {
 		}
 
 		// Stop materialize zip_detail to sharded keyspace.
-		err = clusterInstance.VtctlProcess.ExecuteCommand(
+		err = clusterInstance.VtctldClientProcess.ExecuteCommand(
 			"Workflow",
-			"--",
-			shardedKeyspaceName+".copy_zip_detail",
+			"--keyspace", shardedKeyspaceName,
 			"delete",
+			"--workflow", "copy_zip_detail",
+			"--keep-data",
 		)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to stop materialization workflow: %v", err)

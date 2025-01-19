@@ -588,7 +588,7 @@ var commands = []commandGroup{
 				name:   "ValidateSchemaKeyspace",
 				method: commandValidateSchemaKeyspace,
 				params: "[--exclude_tables=''] [--include-views] [--skip-no-primary] [--include-vschema] <keyspace name>",
-				help:   "Validates that the schema on the primary tablet for shard 0 matches the schema on all of the other tablets in the keyspace.",
+				help:   "Validates that the schema on the primary tablet for the first shard matches the schema on all of the other tablets in the keyspace.",
 			},
 			{
 				name:   "ApplySchema",

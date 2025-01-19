@@ -101,9 +101,7 @@ type LocalProcessCluster struct {
 	VtctlMajorVersion    int
 
 	// standalone executable
-	VtctlclientProcess  VtctlClientProcess
 	VtctldClientProcess VtctldClientProcess
-	VtctlProcess        VtctlProcess
 	VtadminProcess      VtAdminProcess
 
 	// background executable processes
@@ -249,15 +247,6 @@ func (cluster *LocalProcessCluster) StartTopo() (err error) {
 		}
 	}
 
-	cluster.VtctlProcess = *VtctlProcessInstance(cluster.TopoProcess.Port, cluster.Hostname)
-	if !cluster.ReusingVTDATAROOT {
-		if err = cluster.VtctlProcess.AddCellInfo(cluster.Cell); err != nil {
-			log.Error(err)
-			return
-		}
-		cluster.VtctlProcess.LogDir = cluster.TmpDirectory
-	}
-
 	cluster.VtctldProcess = *VtctldProcessInstance(cluster.GetAndReservePort(), cluster.GetAndReservePort(),
 		cluster.TopoProcess.Port, cluster.Hostname, cluster.TmpDirectory)
 	log.Infof("Starting vtctld server on port: %d", cluster.VtctldProcess.Port)
@@ -267,8 +256,15 @@ func (cluster *LocalProcessCluster) StartTopo() (err error) {
 		return
 	}
 
-	cluster.VtctlclientProcess = *VtctlClientProcessInstance("localhost", cluster.VtctldProcess.GrpcPort, cluster.TmpDirectory)
-	cluster.VtctldClientProcess = *VtctldClientProcessInstance("localhost", cluster.VtctldProcess.GrpcPort, cluster.TmpDirectory)
+	cluster.VtctldClientProcess = *cluster.NewVtctldClientProcessInstance("localhost", cluster.VtctldProcess.GrpcPort, cluster.TmpDirectory)
+	if !cluster.ReusingVTDATAROOT {
+		if err = cluster.VtctldClientProcess.AddCellInfo(cluster.Cell); err != nil {
+			log.Error(err)
+			return
+		}
+		cluster.VtctldClientProcess.LogDir = cluster.TmpDirectory
+	}
+
 	return
 }
 
@@ -388,7 +384,7 @@ func (cluster *LocalProcessCluster) startKeyspace(keyspace Keyspace, shardNames 
 		keyspace.SidecarDBName = sidecar.DefaultName
 	}
 	// Create the keyspace if it doesn't already exist.
-	_ = cluster.VtctlProcess.CreateKeyspace(keyspace.Name, keyspace.SidecarDBName, keyspace.DurabilityPolicy)
+	_ = cluster.VtctldClientProcess.CreateKeyspace(keyspace.Name, keyspace.SidecarDBName, keyspace.DurabilityPolicy)
 	for _, shardName := range shardNames {
 		shard, err := cluster.AddShard(keyspace.Name, shardName, totalTabletsRequired, rdonly, customizers)
 		if err != nil {
@@ -560,7 +556,7 @@ func (cluster *LocalProcessCluster) StartKeyspaceLegacy(keyspace Keyspace, shard
 		keyspace.SidecarDBName = sidecar.DefaultName
 	}
 	// Create the keyspace if it doesn't already exist.
-	_ = cluster.VtctlProcess.CreateKeyspace(keyspace.Name, keyspace.SidecarDBName, keyspace.DurabilityPolicy)
+	_ = cluster.VtctldClientProcess.CreateKeyspace(keyspace.Name, keyspace.SidecarDBName, keyspace.DurabilityPolicy)
 	var mysqlctlProcessList []*exec.Cmd
 	for _, shardName := range shardNames {
 		shard := &Shard{
@@ -703,7 +699,7 @@ func (cluster *LocalProcessCluster) SetupCluster(keyspace *Keyspace, shards []Sh
 
 	if !cluster.ReusingVTDATAROOT {
 		// Create Keyspace
-		err = cluster.VtctlProcess.CreateKeyspace(keyspace.Name, keyspace.SidecarDBName, keyspace.DurabilityPolicy)
+		err = cluster.VtctldClientProcess.CreateKeyspace(keyspace.Name, keyspace.SidecarDBName, keyspace.DurabilityPolicy)
 		if err != nil {
 			log.Error(err)
 			return
@@ -1294,14 +1290,32 @@ func (cluster *LocalProcessCluster) NewVttabletInstance(tabletType string, UID i
 
 // NewVTOrcProcess creates a new VTOrcProcess object
 func (cluster *LocalProcessCluster) NewVTOrcProcess(config VTOrcConfiguration) *VTOrcProcess {
-	base := VtctlProcessInstance(cluster.TopoProcess.Port, cluster.Hostname)
-	base.Binary = "vtorc"
+	base := VtProcessInstance("vtorc", "vtorc", cluster.TopoProcess.Port, cluster.Hostname)
 	return &VTOrcProcess{
-		VtctlProcess: *base,
-		LogDir:       cluster.TmpDirectory,
-		Config:       config,
-		Port:         cluster.GetAndReservePort(),
+		VtProcess: base,
+		LogDir:    cluster.TmpDirectory,
+		Config:    config,
+		Port:      cluster.GetAndReservePort(),
 	}
+}
+
+// VtctldClientProcessInstance returns a VtctldProcess handle for a
+// vtctldclient process configured with the given Config.
+func (cluster *LocalProcessCluster) NewVtctldClientProcessInstance(hostname string, grpcPort int, tmpDirectory string) *VtctldClientProcess {
+	version, err := GetMajorVersion("vtctldclient")
+	if err != nil {
+		log.Warningf("failed to get major vtctldclient version; interop with CLI changes for VEP-4 may not work: %v", err)
+	}
+
+	base := VtProcessInstance("vtctldclient", "vtctldclient", cluster.TopoProcess.Port, cluster.Hostname)
+
+	vtctldclient := &VtctldClientProcess{
+		VtProcess:                base,
+		Server:                   fmt.Sprintf("%s:%d", hostname, grpcPort),
+		TempDirectory:            tmpDirectory,
+		VtctldClientMajorVersion: version,
+	}
+	return vtctldclient
 }
 
 // NewVTAdminProcess creates a new VTAdminProcess object

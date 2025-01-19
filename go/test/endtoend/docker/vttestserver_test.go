@@ -140,8 +140,8 @@ func TestVtctldCommands(t *testing.T) {
 			err = vtest.waitUntilDockerHealthy(10)
 			require.NoError(t, err)
 
-			vtctldClient := cluster.VtctldClientProcessInstance("localhost", vtest.basePort+1, os.TempDir())
-			res, err := vtctldClient.ExecuteCommandWithOutput("GetKeyspaces")
+			vtctldClient := cluster.VtctldClientProcessInstance(vtest.basePort+1, 0, "localhost", os.TempDir())
+			res, err := vtctldClient.ExecuteCommandWithOutput("--server", "internal", "GetKeyspaces")
 			require.NoError(t, err)
 			// We verify that the command succeeds, and the keyspace name is present in the output.
 			require.Contains(t, res, "long_ks_name")

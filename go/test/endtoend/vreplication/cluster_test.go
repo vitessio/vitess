@@ -109,8 +109,6 @@ type VitessCluster struct {
 	Cells         map[string]*Cell
 	Topo          *cluster.TopoProcess
 	Vtctld        *cluster.VtctldProcess
-	Vtctl         *cluster.VtctlProcess
-	VtctlClient   *cluster.VtctlClientProcess
 	VtctldClient  *cluster.VtctldClientProcess
 	VTOrcProcess  *cluster.VTOrcProcess
 }
@@ -166,13 +164,12 @@ func (vc *VitessCluster) StartVTOrc() error {
 	if vc.VTOrcProcess != nil {
 		return nil
 	}
-	base := cluster.VtctlProcessInstance(vc.ClusterConfig.topoPort, vc.ClusterConfig.hostname)
-	base.Binary = "vtorc"
+	base := cluster.VtProcessInstance("vtorc", "vtorc", vc.ClusterConfig.topoPort, vc.ClusterConfig.hostname)
 	vtorcProcess := &cluster.VTOrcProcess{
-		VtctlProcess: *base,
-		LogDir:       vc.ClusterConfig.tmpDir,
-		Config:       cluster.VTOrcConfiguration{},
-		Port:         vc.ClusterConfig.vtorcPort,
+		VtProcess: base,
+		LogDir:    vc.ClusterConfig.tmpDir,
+		Config:    cluster.VTOrcConfiguration{},
+		Port:      vc.ClusterConfig.vtorcPort,
 	}
 	err := vtorcProcess.Setup()
 	if err != nil {
@@ -385,8 +382,6 @@ func NewVitessCluster(t *testing.T, opts *clusterOptions) *VitessCluster {
 	}
 
 	vc.setupVtctld()
-	vc.setupVtctl()
-	vc.setupVtctlClient()
 	vc.setupVtctldClient()
 
 	return vc
@@ -400,25 +395,15 @@ func (vc *VitessCluster) setupVtctld() {
 	vc.Vtctld.Setup(vc.CellNames[0], extraVtctldArgs...)
 }
 
-func (vc *VitessCluster) setupVtctl() {
-	vc.Vtctl = cluster.VtctlProcessInstance(vc.ClusterConfig.topoPort, vc.ClusterConfig.hostname)
-	require.NotNil(vc.t, vc.Vtctl)
+func (vc *VitessCluster) setupVtctldClient() {
+	vc.VtctldClient = cluster.VtctldClientProcessInstance(vc.ClusterConfig.vtctldGrpcPort, vc.ClusterConfig.topoPort, vc.ClusterConfig.hostname, vc.ClusterConfig.tmpDir)
+	require.NotNil(vc.t, vc.VtctldClient)
 	for _, cellName := range vc.CellNames {
-		vc.Vtctl.AddCellInfo(cellName)
+		vc.VtctldClient.AddCellInfo(cellName)
 		cell, err := vc.AddCell(vc.t, cellName)
 		require.NoError(vc.t, err)
 		require.NotNil(vc.t, cell)
 	}
-}
-
-func (vc *VitessCluster) setupVtctlClient() {
-	vc.VtctlClient = cluster.VtctlClientProcessInstance(vc.ClusterConfig.hostname, vc.Vtctld.GrpcPort, vc.ClusterConfig.tmpDir)
-	require.NotNil(vc.t, vc.VtctlClient)
-}
-
-func (vc *VitessCluster) setupVtctldClient() {
-	vc.VtctldClient = cluster.VtctldClientProcessInstance(vc.ClusterConfig.hostname, vc.Vtctld.GrpcPort, vc.ClusterConfig.tmpDir)
-	require.NotNil(vc.t, vc.VtctldClient)
 }
 
 // CleanupDataroot deletes the vtdataroot directory. Since we run multiple tests sequentially in a single CI test shard,
@@ -461,7 +446,7 @@ func (vc *VitessCluster) AddKeyspace(t *testing.T, cells []*Cell, ksName string,
 		SidecarDBName: sidecarDBName,
 	}
 
-	err := vc.VtctldClient.CreateKeyspace(keyspace.Name, keyspace.SidecarDBName)
+	err := vc.VtctldClient.CreateKeyspace(keyspace.Name, keyspace.SidecarDBName, "")
 	require.NoError(t, err)
 
 	log.Infof("Applying throttler config for keyspace %s", keyspace.Name)
@@ -486,17 +471,17 @@ func (vc *VitessCluster) AddKeyspace(t *testing.T, cells []*Cell, ksName string,
 
 	require.NoError(t, vc.AddShards(t, cells, keyspace, shards, numReplicas, numRdonly, tabletIDBase, opts))
 	if schema != "" {
-		err := vc.VtctlClient.ApplySchema(ksName, schema)
+		err := vc.VtctldClient.ApplySchema(ksName, schema)
 		require.NoError(t, err)
 	}
 	keyspace.Schema = schema
 	if vschema != "" {
-		err := vc.VtctlClient.ApplyVSchema(ksName, vschema)
+		err := vc.VtctldClient.ApplyVSchema(ksName, vschema)
 		require.NoError(t, err)
 	}
 	keyspace.VSchema = vschema
 
-	err = vc.VtctlClient.ExecuteCommand("RebuildKeyspaceGraph", ksName)
+	err = vc.VtctldClient.ExecuteCommand("RebuildKeyspaceGraph", ksName)
 	require.NoError(t, err)
 	return keyspace, nil
 }
@@ -585,7 +570,7 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 			log.Infof("Shard %s already exists, not adding", shardName)
 		} else {
 			log.Infof("Adding Shard %s", shardName)
-			if err := vc.VtctlClient.ExecuteCommand("CreateShard", keyspace.Name+"/"+shardName); err != nil {
+			if err := vc.VtctldClient.ExecuteCommand("CreateShard", keyspace.Name+"/"+shardName); err != nil {
 				t.Fatalf("CreateShard command failed with %+v\n", err)
 			}
 			keyspace.Shards[shardName] = shard
@@ -684,7 +669,7 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 		}
 		require.NotEqual(t, 0, primaryTabletUID, "Should have created a primary tablet")
 		log.Infof("InitializeShard and make %d primary", primaryTabletUID)
-		require.NoError(t, vc.VtctlClient.InitializeShard(keyspace.Name, shardName, cells[0].Name, primaryTabletUID))
+		require.NoError(t, vc.VtctldClient.InitializeShard(keyspace.Name, shardName, cells[0].Name, primaryTabletUID))
 
 		log.Infof("Finished creating shard %s", shard.Name)
 	}
@@ -721,7 +706,7 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 		}
 	}
 
-	err := vc.VtctlClient.ExecuteCommand("RebuildKeyspaceGraph", keyspace.Name)
+	err := vc.VtctldClient.ExecuteCommand("RebuildKeyspaceGraph", keyspace.Name)
 	require.NoError(t, err)
 
 	log.Infof("Waiting for throttler config to be applied on all shards")
@@ -750,7 +735,7 @@ func (vc *VitessCluster) DeleteShard(t testing.TB, cellName string, ksName strin
 	}
 	log.Infof("Deleting Shard %s", shardName)
 	// TODO how can we avoid the use of even_if_serving?
-	if output, err := vc.VtctlClient.ExecuteCommandWithOutput("DeleteShard", "--", "--recursive", "--even_if_serving", ksName+"/"+shardName); err != nil {
+	if output, err := vc.VtctldClient.ExecuteCommandWithOutput("DeleteShard", "--recursive", "--even-if-serving", ksName+"/"+shardName); err != nil {
 		t.Fatalf("DeleteShard command failed with error %+v and output %s\n", err, output)
 	}
 

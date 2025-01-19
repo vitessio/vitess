@@ -299,22 +299,6 @@ func NewConnParams(port int, password, socketPath, keyspace string) mysql.ConnPa
 
 }
 
-func filterDoubleDashArgs(args []string, version int) (filtered []string) {
-	if version > 13 {
-		return args
-	}
-
-	for _, arg := range args {
-		if arg == "--" {
-			continue
-		}
-
-		filtered = append(filtered, arg)
-	}
-
-	return filtered
-}
-
 // WriteDbCredentialToTmp writes JSON formatted db credentials to the
 // specified tmp directory.
 func WriteDbCredentialToTmp(tmpDir string) string {

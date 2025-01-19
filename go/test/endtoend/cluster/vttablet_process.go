@@ -47,8 +47,7 @@ const vttabletStateTimeout = 60 * time.Second
 // VttabletProcess is a generic handle for a running vttablet .
 // It can be spawned manually
 type VttabletProcess struct {
-	Name                        string
-	Binary                      string
+	VtProcess
 	FileToLogQueries            string
 	TabletUID                   int
 	TabletPath                  string
@@ -56,7 +55,6 @@ type VttabletProcess struct {
 	Port                        int
 	GrpcPort                    int
 	Shard                       string
-	CommonArg                   VtctlProcess
 	LogDir                      string
 	ErrorLog                    string
 	TabletHostname              string
@@ -93,9 +91,9 @@ type VttabletProcess struct {
 func (vttablet *VttabletProcess) Setup() (err error) {
 	vttablet.proc = exec.Command(
 		vttablet.Binary,
-		"--topo_implementation", vttablet.CommonArg.TopoImplementation,
-		"--topo_global_server_address", vttablet.CommonArg.TopoGlobalAddress,
-		"--topo_global_root", vttablet.CommonArg.TopoGlobalRoot,
+		"--topo_implementation", vttablet.TopoImplementation,
+		"--topo_global_server_address", vttablet.TopoGlobalAddress,
+		"--topo_global_root", vttablet.TopoGlobalRoot,
 		"--log_queries_to_file", vttablet.FileToLogQueries,
 		"--tablet-path", vttablet.TabletPath,
 		"--port", fmt.Sprintf("%d", vttablet.Port),
@@ -717,10 +715,9 @@ func (vttablet *VttabletProcess) IsShutdown() bool {
 // configured with the given Config.
 // The process must be manually started by calling setup()
 func VttabletProcessInstance(port, grpcPort, tabletUID int, cell, shard, keyspace string, vtctldPort int, tabletType string, topoPort int, hostname, tmpDirectory string, extraArgs []string, charset string) *VttabletProcess {
-	vtctl := VtctlProcessInstance(topoPort, hostname)
+	base := VtProcessInstance("vttablet", "vttablet", topoPort, hostname)
 	vttablet := &VttabletProcess{
-		Name:                        "vttablet",
-		Binary:                      "vttablet",
+		VtProcess:                   base,
 		FileToLogQueries:            path.Join(tmpDirectory, fmt.Sprintf("/vt_%010d_querylog.txt", tabletUID)),
 		Directory:                   path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", tabletUID)),
 		Cell:                        cell,
@@ -731,7 +728,6 @@ func VttabletProcessInstance(port, grpcPort, tabletUID int, cell, shard, keyspac
 		TabletHostname:              hostname,
 		Keyspace:                    keyspace,
 		TabletType:                  "replica",
-		CommonArg:                   *vtctl,
 		HealthCheckInterval:         5,
 		Port:                        port,
 		GrpcPort:                    grpcPort,

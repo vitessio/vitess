@@ -122,7 +122,7 @@ func TestTopoDownServingQuery(t *testing.T) {
 // TestShardLocking tests that shard locking works as intended.
 func TestShardLocking(t *testing.T) {
 	// create topo server connection
-	ts, err := topo.OpenServer(*clusterInstance.TopoFlavorString(), clusterInstance.VtctlProcess.TopoGlobalAddress, clusterInstance.VtctlProcess.TopoGlobalRoot)
+	ts, err := topo.OpenServer(*clusterInstance.TopoFlavorString(), clusterInstance.VtctldClientProcess.TopoGlobalAddress, clusterInstance.VtctldClientProcess.TopoGlobalRoot)
 	require.NoError(t, err)
 
 	// Acquire a shard lock.
@@ -164,7 +164,7 @@ func TestShardLocking(t *testing.T) {
 // TestKeyspaceLocking tests that keyspace locking works as intended.
 func TestKeyspaceLocking(t *testing.T) {
 	// create topo server connection
-	ts, err := topo.OpenServer(*clusterInstance.TopoFlavorString(), clusterInstance.VtctlProcess.TopoGlobalAddress, clusterInstance.VtctlProcess.TopoGlobalRoot)
+	ts, err := topo.OpenServer(*clusterInstance.TopoFlavorString(), clusterInstance.VtctldClientProcess.TopoGlobalAddress, clusterInstance.VtctldClientProcess.TopoGlobalRoot)
 	require.NoError(t, err)
 
 	// Acquire a keyspace lock.
@@ -203,7 +203,7 @@ func TestKeyspaceLocking(t *testing.T) {
 // TestLockingWithTTL tests that locking with the TTL override works as intended.
 func TestLockingWithTTL(t *testing.T) {
 	// Create the topo server connection.
-	ts, err := topo.OpenServer(*clusterInstance.TopoFlavorString(), clusterInstance.VtctlProcess.TopoGlobalAddress, clusterInstance.VtctlProcess.TopoGlobalRoot)
+	ts, err := topo.OpenServer(*clusterInstance.TopoFlavorString(), clusterInstance.VtctldClientProcess.TopoGlobalAddress, clusterInstance.VtctldClientProcess.TopoGlobalRoot)
 	require.NoError(t, err)
 
 	ctx := context.Background()
@@ -224,7 +224,7 @@ func TestLockingWithTTL(t *testing.T) {
 // TestNamedLocking tests that named locking works as intended.
 func TestNamedLocking(t *testing.T) {
 	// Create topo server connection.
-	ts, err := topo.OpenServer(*clusterInstance.TopoFlavorString(), clusterInstance.VtctlProcess.TopoGlobalAddress, clusterInstance.VtctlProcess.TopoGlobalRoot)
+	ts, err := topo.OpenServer(*clusterInstance.TopoFlavorString(), clusterInstance.VtctldClientProcess.TopoGlobalAddress, clusterInstance.VtctldClientProcess.TopoGlobalRoot)
 	require.NoError(t, err)
 
 	ctx := context.Background()

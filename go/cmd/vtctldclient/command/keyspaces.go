@@ -110,19 +110,10 @@ SetKeyspaceDurabilityPolicy --durability-policy='semi_sync' customer`,
 		Args:                  cobra.ExactArgs(1),
 		RunE:                  commandSetKeyspaceDurabilityPolicy,
 	}
-	// ValidateSchemaKeyspace makes a ValidateSchemaKeyspace gRPC call to a vtctld.
-	ValidateSchemaKeyspace = &cobra.Command{
-		Use:                   "ValidateSchemaKeyspace [--exclude-tables=<exclude_tables>] [--include-views] [--skip-no-primary] [--include-vschema] <keyspace>",
-		Short:                 "Validates that the schema on the primary tablet for shard 0 matches the schema on all other tablets in the keyspace.",
-		DisableFlagsInUseLine: true,
-		Aliases:               []string{"validateschemakeyspace"},
-		Args:                  cobra.ExactArgs(1),
-		RunE:                  commandValidateSchemaKeyspace,
-	}
 	// ValidateVersionKeyspace makes a ValidateVersionKeyspace gRPC call to a vtctld.
 	ValidateVersionKeyspace = &cobra.Command{
 		Use:                   "ValidateVersionKeyspace <keyspace>",
-		Short:                 "Validates that the version on the primary tablet of shard 0 matches all of the other tablets in the keyspace.",
+		Short:                 "Validates that the version on the primary tablet of the first shard matches all of the other tablets in the keyspace.",
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"validateversionkeyspace"},
 		Args:                  cobra.ExactArgs(1),
@@ -351,38 +342,6 @@ func commandSetKeyspaceDurabilityPolicy(cmd *cobra.Command, args []string) error
 	return nil
 }
 
-var validateSchemaKeyspaceOptions = struct {
-	ExcludeTables  []string
-	IncludeViews   bool
-	SkipNoPrimary  bool
-	IncludeVSchema bool
-}{}
-
-func commandValidateSchemaKeyspace(cmd *cobra.Command, args []string) error {
-	cli.FinishedParsing(cmd)
-
-	ks := cmd.Flags().Arg(0)
-	resp, err := client.ValidateSchemaKeyspace(commandCtx, &vtctldatapb.ValidateSchemaKeyspaceRequest{
-		Keyspace:       ks,
-		ExcludeTables:  validateSchemaKeyspaceOptions.ExcludeTables,
-		IncludeVschema: validateSchemaKeyspaceOptions.IncludeVSchema,
-		SkipNoPrimary:  validateSchemaKeyspaceOptions.SkipNoPrimary,
-		IncludeViews:   validateSchemaKeyspaceOptions.IncludeViews,
-	})
-
-	if err != nil {
-		return err
-	}
-
-	data, err := cli.MarshalJSON(resp)
-	if err != nil {
-		return err
-	}
-
-	fmt.Printf("%s\n", data)
-	return nil
-}
-
 func commandValidateVersionKeyspace(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
@@ -428,12 +387,6 @@ func init() {
 
 	SetKeyspaceDurabilityPolicy.Flags().StringVar(&setKeyspaceDurabilityPolicyOptions.DurabilityPolicy, "durability-policy", policy.DurabilityNone, "Type of durability to enforce for this keyspace. Default is none. Other values include 'semi_sync' and others as dictated by registered plugins.")
 	Root.AddCommand(SetKeyspaceDurabilityPolicy)
-
-	ValidateSchemaKeyspace.Flags().BoolVar(&validateSchemaKeyspaceOptions.IncludeViews, "include-views", false, "Includes views in compared schemas.")
-	ValidateSchemaKeyspace.Flags().BoolVar(&validateSchemaKeyspaceOptions.IncludeVSchema, "include-vschema", false, "Includes VSchema validation in validation results.")
-	ValidateSchemaKeyspace.Flags().BoolVar(&validateSchemaKeyspaceOptions.SkipNoPrimary, "skip-no-primary", false, "Skips validation on whether or not a primary exists in shards.")
-	ValidateSchemaKeyspace.Flags().StringSliceVar(&validateSchemaKeyspaceOptions.ExcludeTables, "exclude-tables", []string{}, "Tables to exclude during schema comparison.")
-	Root.AddCommand(ValidateSchemaKeyspace)
 
 	Root.AddCommand(ValidateVersionKeyspace)
 }

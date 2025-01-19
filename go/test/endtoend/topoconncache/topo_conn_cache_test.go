@@ -116,9 +116,9 @@ func deleteTablet(t *testing.T, tablet *cluster.Vttablet) {
 
 func addCellback(t *testing.T) {
 	// creating new cell , with same name as previously deleted one but at a different root path.
-	clusterInstance.VtctlProcess.TopoRootPath = "/org1/obj1/"
+	clusterInstance.VtctldClientProcess.TopoRootPath = "/org1/obj1/"
 
-	err := clusterInstance.VtctlProcess.AddCellInfo(cell2)
+	err := clusterInstance.VtctldClientProcess.AddCellInfo(cell2)
 	require.NoError(t, err)
 
 	// create new vttablets

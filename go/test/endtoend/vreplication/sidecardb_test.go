@@ -51,7 +51,7 @@ func init() {
 }
 
 func prs(t *testing.T, keyspace, shard string) {
-	_, err := vc.VtctldClient.ExecuteCommandWithOutput("PlannedReparentShard", "--", fmt.Sprintf("%s/%s", keyspace, shard))
+	_, err := vc.VtctldClient.ExecuteCommandWithOutput("PlannedReparentShard", fmt.Sprintf("%s/%s", keyspace, shard))
 	require.NoError(t, err)
 }
 

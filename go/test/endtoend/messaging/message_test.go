@@ -84,7 +84,7 @@ func TestMessage(t *testing.T) {
 
 	utils.Exec(t, conn, fmt.Sprintf("use %s", lookupKeyspace))
 	utils.Exec(t, conn, createMessage)
-	clusterInstance.VtctlProcess.ExecuteCommand(fmt.Sprintf("ReloadSchemaKeyspace %s", lookupKeyspace))
+	clusterInstance.VtctldClientProcess.ExecuteCommand(fmt.Sprintf("ReloadSchemaKeyspace %s", lookupKeyspace))
 
 	defer utils.Exec(t, conn, "drop table vitess_message")
 

@@ -50,9 +50,9 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 
 	// Change the args such that they match how we would invoke VTOrc
 	os.Args = []string{"vtorc",
-		"--topo_global_server_address", clusterInfo.ClusterInstance.VtctlProcess.TopoGlobalAddress,
-		"--topo_implementation", clusterInfo.ClusterInstance.VtctlProcess.TopoImplementation,
-		"--topo_global_root", clusterInfo.ClusterInstance.VtctlProcess.TopoGlobalRoot,
+		"--topo_global_server_address", clusterInfo.ClusterInstance.VtctldClientProcess.TopoGlobalAddress,
+		"--topo_implementation", clusterInfo.ClusterInstance.VtctldClientProcess.TopoImplementation,
+		"--topo_global_root", clusterInfo.ClusterInstance.VtctldClientProcess.TopoGlobalRoot,
 	}
 	servenv.ParseFlags("vtorc")
 	config.SetInstancePollTime(1 * time.Second)

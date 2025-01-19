@@ -294,7 +294,7 @@ func testCopySchemaShards(t *testing.T, source string, shard int) {
 	checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[shard].Vttablets[1], 0)
 	// Run the command twice to make sure it's idempotent.
 	for i := 0; i < 2; i++ {
-		err := clusterInstance.VtctlclientProcess.ExecuteCommand("CopySchemaShard", source, fmt.Sprintf("%s/%d", keyspaceName, shard))
+		err := clusterInstance.VtctldClientProcess.ExecuteCommand("CopySchemaShard", source, fmt.Sprintf("%s/%d", keyspaceName, shard))
 		require.Nil(t, err)
 	}
 	// shard2 primary should look the same as the replica we copied from
@@ -329,7 +329,7 @@ func testCopySchemaShardWithDifferentDB(t *testing.T, shard int) {
 	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ExecuteFetchAsDBA", "--json", tabletAlias, "ALTER DATABASE vt_ks CHARACTER SET latin1")
 	require.Nil(t, err)
 
-	output, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("CopySchemaShard", source, fmt.Sprintf("%s/%d", keyspaceName, shard))
+	output, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("CopySchemaShard", source, fmt.Sprintf("%s/%d", keyspaceName, shard))
 	require.Error(t, err)
 	assert.True(t, strings.Contains(output, "schemas are different"))
 

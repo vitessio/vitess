@@ -63,7 +63,7 @@ var (
 	name        string
 )
 
-func registerFlags(fs *pflag.FlagSet) {
+func RegisterFlags(fs *pflag.FlagSet) {
 	fs.IntVar(&concurrency, "tablet_manager_grpc_concurrency", concurrency, "concurrency to use to talk to a vttablet server for performance-sensitive RPCs (like ExecuteFetchAs{Dba,App}, CheckThrottler and FullStatus)")
 	fs.StringVar(&cert, "tablet_manager_grpc_cert", cert, "the cert to use to connect")
 	fs.StringVar(&key, "tablet_manager_grpc_key", key, "the key to use to connect")
@@ -92,7 +92,7 @@ func init() {
 	})
 
 	for _, cmd := range _binaries {
-		servenv.OnParseFor(cmd, registerFlags)
+		servenv.OnParseFor(cmd, RegisterFlags)
 	}
 }
 
