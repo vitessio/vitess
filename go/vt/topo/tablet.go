@@ -542,6 +542,9 @@ func (ts *Server) GetTabletMap(ctx context.Context, tabletAliases []*topodatapb.
 	var sem = semaphore.NewWeighted(int64(concurrency))
 
 	for _, tabletAlias := range tabletAliases {
+		if tabletAlias == nil {
+			return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "nil tablet alias in list")
+		}
 		wg.Add(1)
 		go func(tabletAlias *topodatapb.TabletAlias) {
 			defer wg.Done()
