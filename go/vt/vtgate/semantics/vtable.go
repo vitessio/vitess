@@ -165,12 +165,14 @@ func selectExprsToInfos(
 				colNames = append(colNames, expr.As.String())
 			}
 		case *sqlparser.StarExpr:
+			var tableSets MutableTableSet
 			for _, table := range tables {
-				ts = ts.Merge(table.getTableSet(org))
+				tableSets.MergeInPlace(table.getTableSet(org))
 				if !table.authoritative() {
 					isAuthoritative = false
 				}
 			}
+			ts = tableSets.ToImmutable()
 		}
 	}
 	return

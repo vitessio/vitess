@@ -228,11 +228,11 @@ func tryPushSubQueryInJoin(
 	// we want to push the subquery as close to its needs
 	// as possible, so that we can potentially merge them together
 	// TODO: we need to check dependencies and break apart all expressions in the subquery, not just the merge predicates
-	deps := semantics.EmptyTableSet()
+	var ts semantics.MutableTableSet
 	for _, predicate := range inner.GetMergePredicates() {
-		deps = deps.Merge(ctx.SemTable.RecursiveDeps(predicate))
+		ts.MergeInPlace(ctx.SemTable.RecursiveDeps(predicate))
 	}
-	deps = deps.Remove(innerID)
+	deps := ts.ToImmutable().Remove(innerID)
 
 	// in general, we don't want to push down uncorrelated subqueries into the RHS of a join,
 	// since this side is executed once per row from the LHS, so we would unnecessarily execute
@@ -377,8 +377,8 @@ func rewriteOriginalPushedToRHS(ctx *plancontext.PlanningContext, expression sql
 // this is used when we push an operator from above the subquery into the outer side of the subquery
 func rewriteColNameToArgument(
 	ctx *plancontext.PlanningContext,
-	in sqlparser.Expr, // the expression to rewrite
-	se SubQueryExpression, // the subquery expression we are rewriting
+	in sqlparser.Expr,       // the expression to rewrite
+	se SubQueryExpression,   // the subquery expression we are rewriting
 	subqueries ...*SubQuery, // the inner subquery operators
 ) sqlparser.Expr {
 	// the visitor function that will rewrite the expression tree

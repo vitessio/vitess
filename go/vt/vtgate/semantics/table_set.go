@@ -114,16 +114,14 @@ func EmptyTableSet() TableSet {
 	return ""
 }
 
-// MergeTableSets merges all the given TableSet into a single one
-func MergeTableSets(tss ...TableSet) TableSet {
-	var result bitset.Bitset
-	for _, t := range tss {
-		result = result.Or(bitset.Bitset(t))
-	}
-	return TableSet(result)
+type MutableTableSet struct {
+	bitset bitset.Mutable
 }
 
-// TableSetFromIds returns TableSet for all the id passed in argument.
-func TableSetFromIds(tids ...int) (ts TableSet) {
-	return TableSet(bitset.Build(tids...))
+func (ts *MutableTableSet) MergeInPlace(other TableSet) {
+	ts.bitset.Or(bitset.Bitset(other))
+}
+
+func (ts *MutableTableSet) ToImmutable() TableSet {
+	return TableSet(ts.bitset.AsImmutable())
 }
