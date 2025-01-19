@@ -44,6 +44,9 @@ type vdbClient struct {
 	batchSize        int64
 	maxBatchSize     int64
 	relayLogMaxItems int
+
+	TemporaryDevTrackingCountCommits        int // TODO(shlomi): remove this variable
+	TemporaryDevTrackingCountBatchedCommits int // TODO(shlomi): remove this variable
 }
 
 func newVDBClient(dbclient binlogplayer.DBClient, stats *binlogplayer.Stats, relayLogMaxItems int) *vdbClient {
@@ -81,6 +84,7 @@ func (vc *vdbClient) Commit() error {
 	if err := vc.DBClient.Commit(); err != nil {
 		return err
 	}
+	vc.TemporaryDevTrackingCountCommits++
 	vc.InTransaction = false
 	vc.queries = nil
 	vc.batchSize = 0
@@ -98,6 +102,7 @@ func (vc *vdbClient) CommitTrxQueryBatch() error {
 	for _, err := vc.DBClient.ExecuteFetchMulti(queries, -1); err != nil; {
 		return err
 	}
+	vc.TemporaryDevTrackingCountBatchedCommits++
 	vc.InTransaction = false
 	vc.queries = nil
 	vc.queriesPos = 0

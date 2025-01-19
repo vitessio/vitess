@@ -94,9 +94,10 @@ const (
 
 // vreplicator provides the core logic to start vreplication streams
 type vreplicator struct {
-	vre      *Engine
-	id       int32
-	dbClient *vdbClient
+	vre         *Engine
+	id          int32
+	dbClient    *vdbClient
+	dbClientGen dbClientGenerator
 	// source
 	source          *binlogdatapb.BinlogSource
 	sourceVStreamer VStreamerClient
@@ -141,7 +142,7 @@ type vreplicator struct {
 //	More advanced constructs can be used. Please see the table plan builder
 //	documentation for more info.
 func newVReplicator(id int32, source *binlogdatapb.BinlogSource, sourceVStreamer VStreamerClient, stats *binlogplayer.Stats,
-	dbClient binlogplayer.DBClient, mysqld mysqlctl.MysqlDaemon, vre *Engine, workflowConfig *vttablet.VReplicationConfig) *vreplicator {
+	dbClient binlogplayer.DBClient, dbClientGen dbClientGenerator, mysqld mysqlctl.MysqlDaemon, vre *Engine, workflowConfig *vttablet.VReplicationConfig) *vreplicator {
 	if workflowConfig == nil {
 		workflowConfig = vttablet.DefaultVReplicationConfig
 	}
@@ -157,6 +158,7 @@ func newVReplicator(id int32, source *binlogdatapb.BinlogSource, sourceVStreamer
 		sourceVStreamer: sourceVStreamer,
 		stats:           stats,
 		dbClient:        newVDBClient(dbClient, stats, workflowConfig.RelayLogMaxItems),
+		dbClientGen:     dbClientGen,
 		mysqld:          mysqld,
 		workflowConfig:  workflowConfig,
 	}
@@ -332,9 +334,9 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 				return err
 			}
 			if vr.source.StopAfterCopy {
-				return vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, "Stopped after copy.")
+				return vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, nil, "Stopped after copy.")
 			}
-			if err := vr.setState(binlogdatapb.VReplicationWorkflowState_Running, ""); err != nil {
+			if err := vr.setState(binlogdatapb.VReplicationWorkflowState_Running, nil, ""); err != nil {
 				vr.stats.ErrorCounts.Add([]string{"Replicate"}, 1)
 				return err
 			}
@@ -500,28 +502,31 @@ func (vr *vreplicator) insertLog(typ, message string) {
 	insertLog(vr.dbClient, typ, vr.id, vr.state.String(), message)
 }
 
-func (vr *vreplicator) setState(state binlogdatapb.VReplicationWorkflowState, message string) error {
+func (vr *vreplicator) setState(state binlogdatapb.VReplicationWorkflowState, dbClient *vdbClient, message string) error {
 	if message != "" {
 		vr.stats.History.Add(&binlogplayer.StatsHistoryRecord{
 			Time:    time.Now(),
 			Message: message,
 		})
 	}
+	if dbClient == nil {
+		dbClient = vr.dbClient
+	}
 	vr.stats.State.Store(state.String())
 	query := fmt.Sprintf("update _vt.vreplication set state='%v', message=%v where id=%v", state, encodeString(binlogplayer.MessageTruncate(message)), vr.id)
 	// If we're batching a transaction, then include the state update
 	// in the current transaction batch.
-	if vr.dbClient.InTransaction && vr.dbClient.maxBatchSize > 0 {
-		vr.dbClient.AddQueryToTrxBatch(query)
+	if dbClient.InTransaction && dbClient.maxBatchSize > 0 {
+		dbClient.AddQueryToTrxBatch(query)
 	} else { // Otherwise, send it down the wire
-		if _, err := vr.dbClient.ExecuteFetch(query, 1); err != nil {
+		if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
 			return fmt.Errorf("could not set state: %v: %v", query, err)
 		}
 	}
 	if state == vr.state {
 		return nil
 	}
-	insertLog(vr.dbClient, LogStateChange, vr.id, state.String(), message)
+	insertLog(dbClient, LogStateChange, vr.id, state.String(), message)
 	vr.state = state
 
 	return nil

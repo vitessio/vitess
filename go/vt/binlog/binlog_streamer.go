@@ -19,6 +19,7 @@ package binlog
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -34,6 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -278,7 +280,7 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 				Position:  replication.EncodePosition(pos),
 			}
 			if err = bls.sendTransaction(eventToken, statements); err != nil {
-				if err == io.EOF {
+				if errors.Is(vterrors.UnwrapAll(err), io.EOF) {
 					return ErrClientEOF
 				}
 				return fmt.Errorf("send reply error: %v", err)
@@ -344,7 +346,7 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 
 		switch {
 		case ev.IsPseudo():
-			gtid, _, err = ev.GTID(format)
+			gtid, _, _, _, err = ev.GTID(format)
 			if err != nil {
 				return pos, fmt.Errorf("can't get GTID from binlog event: %v, event data: %#v", err, ev)
 			}
@@ -360,7 +362,7 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			}
 		case ev.IsGTID(): // GTID_EVENT: update current GTID, maybe BEGIN.
 			var hasBegin bool
-			gtid, hasBegin, err = ev.GTID(format)
+			gtid, hasBegin, _, _, err = ev.GTID(format)
 			if err != nil {
 				return pos, fmt.Errorf("can't get GTID from binlog event: %v, event data: %#v", err, ev)
 			}
