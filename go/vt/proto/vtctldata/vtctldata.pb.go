@@ -15803,6 +15803,198 @@ func (x *WorkflowMirrorTrafficResponse) GetCurrentState() string {
 	return ""
 }
 
+type LookupVindexCreateParams struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	// Keyspace to create the Lookup Vindex(es) in.
+	Keyspace string `protobuf:"bytes,1,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
+	// The primary vindex name/type to use for the lookup tables,
+	// if the table-keyspace is sharded.
+	TableVindexType string `protobuf:"bytes,2,opt,name=table_vindex_type,json=tableVindexType,proto3" json:"table_vindex_type,omitempty"`
+	// Vindex(es) configuration.
+	Vindexes []*VindexParams `protobuf:"bytes,3,rep,name=vindexes,proto3" json:"vindexes,omitempty"`
+	// VReplication specific options.
+	Cells                        []string              `protobuf:"bytes,4,rep,name=cells,proto3" json:"cells,omitempty"`
+	TabletTypes                  []topodata.TabletType `protobuf:"varint,5,rep,packed,name=tablet_types,json=tabletTypes,proto3,enum=topodata.TabletType" json:"tablet_types,omitempty"`
+	ContinueAfterCopyWithOwner   bool                  `protobuf:"varint,6,opt,name=continue_after_copy_with_owner,json=continueAfterCopyWithOwner,proto3" json:"continue_after_copy_with_owner,omitempty"`
+	TabletTypesInPreferenceOrder bool                  `protobuf:"varint,7,opt,name=tablet_types_in_preference_order,json=tabletTypesInPreferenceOrder,proto3" json:"tablet_types_in_preference_order,omitempty"`
+}
+
+func (x *LookupVindexCreateParams) Reset() {
+	*x = LookupVindexCreateParams{}
+	mi := &file_vtctldata_proto_msgTypes[258]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LookupVindexCreateParams) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LookupVindexCreateParams) ProtoMessage() {}
+
+func (x *LookupVindexCreateParams) ProtoReflect() protoreflect.Message {
+	mi := &file_vtctldata_proto_msgTypes[258]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LookupVindexCreateParams.ProtoReflect.Descriptor instead.
+func (*LookupVindexCreateParams) Descriptor() ([]byte, []int) {
+	return file_vtctldata_proto_rawDescGZIP(), []int{258}
+}
+
+func (x *LookupVindexCreateParams) GetKeyspace() string {
+	if x != nil {
+		return x.Keyspace
+	}
+	return ""
+}
+
+func (x *LookupVindexCreateParams) GetTableVindexType() string {
+	if x != nil {
+		return x.TableVindexType
+	}
+	return ""
+}
+
+func (x *LookupVindexCreateParams) GetVindexes() []*VindexParams {
+	if x != nil {
+		return x.Vindexes
+	}
+	return nil
+}
+
+func (x *LookupVindexCreateParams) GetCells() []string {
+	if x != nil {
+		return x.Cells
+	}
+	return nil
+}
+
+func (x *LookupVindexCreateParams) GetTabletTypes() []topodata.TabletType {
+	if x != nil {
+		return x.TabletTypes
+	}
+	return nil
+}
+
+func (x *LookupVindexCreateParams) GetContinueAfterCopyWithOwner() bool {
+	if x != nil {
+		return x.ContinueAfterCopyWithOwner
+	}
+	return false
+}
+
+func (x *LookupVindexCreateParams) GetTabletTypesInPreferenceOrder() bool {
+	if x != nil {
+		return x.TabletTypesInPreferenceOrder
+	}
+	return false
+}
+
+type VindexParams struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	// Name of the Lookup Vindex to create.
+	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	// Type of Lookup Vindex to create.
+	LookupVindexType string `protobuf:"bytes,2,opt,name=lookup_vindex_type,json=lookupVindexType,proto3" json:"lookup_vindex_type,omitempty"`
+	// Table holding the data which we should use to backfill the Lookup Vindex.
+	// This must exist in the same keyspace as the Lookup Vindex.
+	TableOwner string `protobuf:"bytes,3,opt,name=table_owner,json=tableOwner,proto3" json:"table_owner,omitempty"`
+	// Columns to read from the owner table.
+	TableOwnerColumns []string `protobuf:"bytes,4,rep,name=table_owner_columns,json=tableOwnerColumns,proto3" json:"table_owner_columns,omitempty"`
+	// Name of the lookup table. If not specified, then it will be created using
+	// the same name as the Lookup Vindex.
+	TableName string `protobuf:"bytes,5,opt,name=table_name,json=tableName,proto3" json:"table_name,omitempty"`
+	// Do not add corresponding records in the lookup table if any of the owner
+	// table's 'from' fields are NULL.
+	IgnoreNulls bool `protobuf:"varint,6,opt,name=ignore_nulls,json=ignoreNulls,proto3" json:"ignore_nulls,omitempty"`
+}
+
+func (x *VindexParams) Reset() {
+	*x = VindexParams{}
+	mi := &file_vtctldata_proto_msgTypes[259]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *VindexParams) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*VindexParams) ProtoMessage() {}
+
+func (x *VindexParams) ProtoReflect() protoreflect.Message {
+	mi := &file_vtctldata_proto_msgTypes[259]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use VindexParams.ProtoReflect.Descriptor instead.
+func (*VindexParams) Descriptor() ([]byte, []int) {
+	return file_vtctldata_proto_rawDescGZIP(), []int{259}
+}
+
+func (x *VindexParams) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *VindexParams) GetLookupVindexType() string {
+	if x != nil {
+		return x.LookupVindexType
+	}
+	return ""
+}
+
+func (x *VindexParams) GetTableOwner() string {
+	if x != nil {
+		return x.TableOwner
+	}
+	return ""
+}
+
+func (x *VindexParams) GetTableOwnerColumns() []string {
+	if x != nil {
+		return x.TableOwnerColumns
+	}
+	return nil
+}
+
+func (x *VindexParams) GetTableName() string {
+	if x != nil {
+		return x.TableName
+	}
+	return ""
+}
+
+func (x *VindexParams) GetIgnoreNulls() bool {
+	if x != nil {
+		return x.IgnoreNulls
+	}
+	return false
+}
+
 type Workflow_ReplicationLocation struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -15814,7 +16006,7 @@ type Workflow_ReplicationLocation struct {
 
 func (x *Workflow_ReplicationLocation) Reset() {
 	*x = Workflow_ReplicationLocation{}
-	mi := &file_vtctldata_proto_msgTypes[260]
+	mi := &file_vtctldata_proto_msgTypes[262]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15826,7 +16018,7 @@ func (x *Workflow_ReplicationLocation) String() string {
 func (*Workflow_ReplicationLocation) ProtoMessage() {}
 
 func (x *Workflow_ReplicationLocation) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[260]
+	mi := &file_vtctldata_proto_msgTypes[262]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15868,7 +16060,7 @@ type Workflow_ShardStream struct {
 
 func (x *Workflow_ShardStream) Reset() {
 	*x = Workflow_ShardStream{}
-	mi := &file_vtctldata_proto_msgTypes[261]
+	mi := &file_vtctldata_proto_msgTypes[263]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15880,7 +16072,7 @@ func (x *Workflow_ShardStream) String() string {
 func (*Workflow_ShardStream) ProtoMessage() {}
 
 func (x *Workflow_ShardStream) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[261]
+	mi := &file_vtctldata_proto_msgTypes[263]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15954,7 +16146,7 @@ type Workflow_Stream struct {
 
 func (x *Workflow_Stream) Reset() {
 	*x = Workflow_Stream{}
-	mi := &file_vtctldata_proto_msgTypes[262]
+	mi := &file_vtctldata_proto_msgTypes[264]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15966,7 +16158,7 @@ func (x *Workflow_Stream) String() string {
 func (*Workflow_Stream) ProtoMessage() {}
 
 func (x *Workflow_Stream) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[262]
+	mi := &file_vtctldata_proto_msgTypes[264]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16134,7 +16326,7 @@ type Workflow_Stream_CopyState struct {
 
 func (x *Workflow_Stream_CopyState) Reset() {
 	*x = Workflow_Stream_CopyState{}
-	mi := &file_vtctldata_proto_msgTypes[263]
+	mi := &file_vtctldata_proto_msgTypes[265]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16146,7 +16338,7 @@ func (x *Workflow_Stream_CopyState) String() string {
 func (*Workflow_Stream_CopyState) ProtoMessage() {}
 
 func (x *Workflow_Stream_CopyState) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[263]
+	mi := &file_vtctldata_proto_msgTypes[265]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16200,7 +16392,7 @@ type Workflow_Stream_Log struct {
 
 func (x *Workflow_Stream_Log) Reset() {
 	*x = Workflow_Stream_Log{}
-	mi := &file_vtctldata_proto_msgTypes[264]
+	mi := &file_vtctldata_proto_msgTypes[266]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16212,7 +16404,7 @@ func (x *Workflow_Stream_Log) String() string {
 func (*Workflow_Stream_Log) ProtoMessage() {}
 
 func (x *Workflow_Stream_Log) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[264]
+	mi := &file_vtctldata_proto_msgTypes[266]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16295,7 +16487,7 @@ type Workflow_Stream_ThrottlerStatus struct {
 
 func (x *Workflow_Stream_ThrottlerStatus) Reset() {
 	*x = Workflow_Stream_ThrottlerStatus{}
-	mi := &file_vtctldata_proto_msgTypes[265]
+	mi := &file_vtctldata_proto_msgTypes[267]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16307,7 +16499,7 @@ func (x *Workflow_Stream_ThrottlerStatus) String() string {
 func (*Workflow_Stream_ThrottlerStatus) ProtoMessage() {}
 
 func (x *Workflow_Stream_ThrottlerStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[265]
+	mi := &file_vtctldata_proto_msgTypes[267]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16347,7 +16539,7 @@ type ApplyVSchemaResponse_ParamList struct {
 
 func (x *ApplyVSchemaResponse_ParamList) Reset() {
 	*x = ApplyVSchemaResponse_ParamList{}
-	mi := &file_vtctldata_proto_msgTypes[268]
+	mi := &file_vtctldata_proto_msgTypes[270]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16359,7 +16551,7 @@ func (x *ApplyVSchemaResponse_ParamList) String() string {
 func (*ApplyVSchemaResponse_ParamList) ProtoMessage() {}
 
 func (x *ApplyVSchemaResponse_ParamList) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[268]
+	mi := &file_vtctldata_proto_msgTypes[270]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16392,7 +16584,7 @@ type GetSrvKeyspaceNamesResponse_NameList struct {
 
 func (x *GetSrvKeyspaceNamesResponse_NameList) Reset() {
 	*x = GetSrvKeyspaceNamesResponse_NameList{}
-	mi := &file_vtctldata_proto_msgTypes[280]
+	mi := &file_vtctldata_proto_msgTypes[282]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16404,7 +16596,7 @@ func (x *GetSrvKeyspaceNamesResponse_NameList) String() string {
 func (*GetSrvKeyspaceNamesResponse_NameList) ProtoMessage() {}
 
 func (x *GetSrvKeyspaceNamesResponse_NameList) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[280]
+	mi := &file_vtctldata_proto_msgTypes[282]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16439,7 +16631,7 @@ type MoveTablesCreateResponse_TabletInfo struct {
 
 func (x *MoveTablesCreateResponse_TabletInfo) Reset() {
 	*x = MoveTablesCreateResponse_TabletInfo{}
-	mi := &file_vtctldata_proto_msgTypes[284]
+	mi := &file_vtctldata_proto_msgTypes[286]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16451,7 +16643,7 @@ func (x *MoveTablesCreateResponse_TabletInfo) String() string {
 func (*MoveTablesCreateResponse_TabletInfo) ProtoMessage() {}
 
 func (x *MoveTablesCreateResponse_TabletInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[284]
+	mi := &file_vtctldata_proto_msgTypes[286]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16493,7 +16685,7 @@ type WorkflowDeleteResponse_TabletInfo struct {
 
 func (x *WorkflowDeleteResponse_TabletInfo) Reset() {
 	*x = WorkflowDeleteResponse_TabletInfo{}
-	mi := &file_vtctldata_proto_msgTypes[294]
+	mi := &file_vtctldata_proto_msgTypes[296]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16505,7 +16697,7 @@ func (x *WorkflowDeleteResponse_TabletInfo) String() string {
 func (*WorkflowDeleteResponse_TabletInfo) ProtoMessage() {}
 
 func (x *WorkflowDeleteResponse_TabletInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[294]
+	mi := &file_vtctldata_proto_msgTypes[296]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16550,7 +16742,7 @@ type WorkflowStatusResponse_TableCopyState struct {
 
 func (x *WorkflowStatusResponse_TableCopyState) Reset() {
 	*x = WorkflowStatusResponse_TableCopyState{}
-	mi := &file_vtctldata_proto_msgTypes[295]
+	mi := &file_vtctldata_proto_msgTypes[297]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16562,7 +16754,7 @@ func (x *WorkflowStatusResponse_TableCopyState) String() string {
 func (*WorkflowStatusResponse_TableCopyState) ProtoMessage() {}
 
 func (x *WorkflowStatusResponse_TableCopyState) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[295]
+	mi := &file_vtctldata_proto_msgTypes[297]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16635,7 +16827,7 @@ type WorkflowStatusResponse_ShardStreamState struct {
 
 func (x *WorkflowStatusResponse_ShardStreamState) Reset() {
 	*x = WorkflowStatusResponse_ShardStreamState{}
-	mi := &file_vtctldata_proto_msgTypes[296]
+	mi := &file_vtctldata_proto_msgTypes[298]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16647,7 +16839,7 @@ func (x *WorkflowStatusResponse_ShardStreamState) String() string {
 func (*WorkflowStatusResponse_ShardStreamState) ProtoMessage() {}
 
 func (x *WorkflowStatusResponse_ShardStreamState) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[296]
+	mi := &file_vtctldata_proto_msgTypes[298]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16715,7 +16907,7 @@ type WorkflowStatusResponse_ShardStreams struct {
 
 func (x *WorkflowStatusResponse_ShardStreams) Reset() {
 	*x = WorkflowStatusResponse_ShardStreams{}
-	mi := &file_vtctldata_proto_msgTypes[297]
+	mi := &file_vtctldata_proto_msgTypes[299]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16727,7 +16919,7 @@ func (x *WorkflowStatusResponse_ShardStreams) String() string {
 func (*WorkflowStatusResponse_ShardStreams) ProtoMessage() {}
 
 func (x *WorkflowStatusResponse_ShardStreams) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[297]
+	mi := &file_vtctldata_proto_msgTypes[299]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16763,7 +16955,7 @@ type WorkflowUpdateResponse_TabletInfo struct {
 
 func (x *WorkflowUpdateResponse_TabletInfo) Reset() {
 	*x = WorkflowUpdateResponse_TabletInfo{}
-	mi := &file_vtctldata_proto_msgTypes[300]
+	mi := &file_vtctldata_proto_msgTypes[302]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16775,7 +16967,7 @@ func (x *WorkflowUpdateResponse_TabletInfo) String() string {
 func (*WorkflowUpdateResponse_TabletInfo) ProtoMessage() {}
 
 func (x *WorkflowUpdateResponse_TabletInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[300]
+	mi := &file_vtctldata_proto_msgTypes[302]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -19369,22 +19561,60 @@ var file_vtctldata_proto_rawDesc = []byte{
 	0x0a, 0x73, 0x74, 0x61, 0x72, 0x74, 0x53, 0x74, 0x61, 0x74, 0x65, 0x12, 0x23, 0x0a, 0x0d, 0x63,
 	0x75, 0x72, 0x72, 0x65, 0x6e, 0x74, 0x5f, 0x73, 0x74, 0x61, 0x74, 0x65, 0x18, 0x03, 0x20, 0x01,
 	0x28, 0x09, 0x52, 0x0c, 0x63, 0x75, 0x72, 0x72, 0x65, 0x6e, 0x74, 0x53, 0x74, 0x61, 0x74, 0x65,
-	0x2a, 0x4a, 0x0a, 0x15, 0x4d, 0x61, 0x74, 0x65, 0x72, 0x69, 0x61, 0x6c, 0x69, 0x7a, 0x61, 0x74,
-	0x69, 0x6f, 0x6e, 0x49, 0x6e, 0x74, 0x65, 0x6e, 0x74, 0x12, 0x0a, 0x0a, 0x06, 0x43, 0x55, 0x53,
-	0x54, 0x4f, 0x4d, 0x10, 0x00, 0x12, 0x0e, 0x0a, 0x0a, 0x4d, 0x4f, 0x56, 0x45, 0x54, 0x41, 0x42,
-	0x4c, 0x45, 0x53, 0x10, 0x01, 0x12, 0x15, 0x0a, 0x11, 0x43, 0x52, 0x45, 0x41, 0x54, 0x45, 0x4c,
-	0x4f, 0x4f, 0x4b, 0x55, 0x50, 0x49, 0x4e, 0x44, 0x45, 0x58, 0x10, 0x02, 0x2a, 0x38, 0x0a, 0x0d,
-	0x51, 0x75, 0x65, 0x72, 0x79, 0x4f, 0x72, 0x64, 0x65, 0x72, 0x69, 0x6e, 0x67, 0x12, 0x08, 0x0a,
-	0x04, 0x4e, 0x4f, 0x4e, 0x45, 0x10, 0x00, 0x12, 0x0d, 0x0a, 0x09, 0x41, 0x53, 0x43, 0x45, 0x4e,
-	0x44, 0x49, 0x4e, 0x47, 0x10, 0x01, 0x12, 0x0e, 0x0a, 0x0a, 0x44, 0x45, 0x53, 0x43, 0x45, 0x4e,
-	0x44, 0x49, 0x4e, 0x47, 0x10, 0x02, 0x2a, 0x42, 0x0a, 0x1c, 0x53, 0x68, 0x61, 0x72, 0x64, 0x65,
-	0x64, 0x41, 0x75, 0x74, 0x6f, 0x49, 0x6e, 0x63, 0x72, 0x65, 0x6d, 0x65, 0x6e, 0x74, 0x48, 0x61,
-	0x6e, 0x64, 0x6c, 0x69, 0x6e, 0x67, 0x12, 0x09, 0x0a, 0x05, 0x4c, 0x45, 0x41, 0x56, 0x45, 0x10,
-	0x00, 0x12, 0x0a, 0x0a, 0x06, 0x52, 0x45, 0x4d, 0x4f, 0x56, 0x45, 0x10, 0x01, 0x12, 0x0b, 0x0a,
-	0x07, 0x52, 0x45, 0x50, 0x4c, 0x41, 0x43, 0x45, 0x10, 0x02, 0x42, 0x28, 0x5a, 0x26, 0x76, 0x69,
-	0x74, 0x65, 0x73, 0x73, 0x2e, 0x69, 0x6f, 0x2f, 0x76, 0x69, 0x74, 0x65, 0x73, 0x73, 0x2f, 0x67,
-	0x6f, 0x2f, 0x76, 0x74, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x76, 0x74, 0x63, 0x74, 0x6c,
-	0x64, 0x61, 0x74, 0x61, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x22, 0xf2, 0x02, 0x0a, 0x18, 0x4c, 0x6f, 0x6f, 0x6b, 0x75, 0x70, 0x56, 0x69, 0x6e, 0x64, 0x65,
+	0x78, 0x43, 0x72, 0x65, 0x61, 0x74, 0x65, 0x50, 0x61, 0x72, 0x61, 0x6d, 0x73, 0x12, 0x1a, 0x0a,
+	0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52,
+	0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x12, 0x2a, 0x0a, 0x11, 0x74, 0x61, 0x62,
+	0x6c, 0x65, 0x5f, 0x76, 0x69, 0x6e, 0x64, 0x65, 0x78, 0x5f, 0x74, 0x79, 0x70, 0x65, 0x18, 0x02,
+	0x20, 0x01, 0x28, 0x09, 0x52, 0x0f, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x56, 0x69, 0x6e, 0x64, 0x65,
+	0x78, 0x54, 0x79, 0x70, 0x65, 0x12, 0x33, 0x0a, 0x08, 0x76, 0x69, 0x6e, 0x64, 0x65, 0x78, 0x65,
+	0x73, 0x18, 0x03, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x17, 0x2e, 0x76, 0x74, 0x63, 0x74, 0x6c, 0x64,
+	0x61, 0x74, 0x61, 0x2e, 0x56, 0x69, 0x6e, 0x64, 0x65, 0x78, 0x50, 0x61, 0x72, 0x61, 0x6d, 0x73,
+	0x52, 0x08, 0x76, 0x69, 0x6e, 0x64, 0x65, 0x78, 0x65, 0x73, 0x12, 0x14, 0x0a, 0x05, 0x63, 0x65,
+	0x6c, 0x6c, 0x73, 0x18, 0x04, 0x20, 0x03, 0x28, 0x09, 0x52, 0x05, 0x63, 0x65, 0x6c, 0x6c, 0x73,
+	0x12, 0x37, 0x0a, 0x0c, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x5f, 0x74, 0x79, 0x70, 0x65, 0x73,
+	0x18, 0x05, 0x20, 0x03, 0x28, 0x0e, 0x32, 0x14, 0x2e, 0x74, 0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74,
+	0x61, 0x2e, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x54, 0x79, 0x70, 0x65, 0x52, 0x0b, 0x74, 0x61,
+	0x62, 0x6c, 0x65, 0x74, 0x54, 0x79, 0x70, 0x65, 0x73, 0x12, 0x42, 0x0a, 0x1e, 0x63, 0x6f, 0x6e,
+	0x74, 0x69, 0x6e, 0x75, 0x65, 0x5f, 0x61, 0x66, 0x74, 0x65, 0x72, 0x5f, 0x63, 0x6f, 0x70, 0x79,
+	0x5f, 0x77, 0x69, 0x74, 0x68, 0x5f, 0x6f, 0x77, 0x6e, 0x65, 0x72, 0x18, 0x06, 0x20, 0x01, 0x28,
+	0x08, 0x52, 0x1a, 0x63, 0x6f, 0x6e, 0x74, 0x69, 0x6e, 0x75, 0x65, 0x41, 0x66, 0x74, 0x65, 0x72,
+	0x43, 0x6f, 0x70, 0x79, 0x57, 0x69, 0x74, 0x68, 0x4f, 0x77, 0x6e, 0x65, 0x72, 0x12, 0x46, 0x0a,
+	0x20, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x5f, 0x74, 0x79, 0x70, 0x65, 0x73, 0x5f, 0x69, 0x6e,
+	0x5f, 0x70, 0x72, 0x65, 0x66, 0x65, 0x72, 0x65, 0x6e, 0x63, 0x65, 0x5f, 0x6f, 0x72, 0x64, 0x65,
+	0x72, 0x18, 0x07, 0x20, 0x01, 0x28, 0x08, 0x52, 0x1c, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x54,
+	0x79, 0x70, 0x65, 0x73, 0x49, 0x6e, 0x50, 0x72, 0x65, 0x66, 0x65, 0x72, 0x65, 0x6e, 0x63, 0x65,
+	0x4f, 0x72, 0x64, 0x65, 0x72, 0x22, 0xe3, 0x01, 0x0a, 0x0c, 0x56, 0x69, 0x6e, 0x64, 0x65, 0x78,
+	0x50, 0x61, 0x72, 0x61, 0x6d, 0x73, 0x12, 0x12, 0x0a, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x01,
+	0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x12, 0x2c, 0x0a, 0x12, 0x6c, 0x6f,
+	0x6f, 0x6b, 0x75, 0x70, 0x5f, 0x76, 0x69, 0x6e, 0x64, 0x65, 0x78, 0x5f, 0x74, 0x79, 0x70, 0x65,
+	0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x10, 0x6c, 0x6f, 0x6f, 0x6b, 0x75, 0x70, 0x56, 0x69,
+	0x6e, 0x64, 0x65, 0x78, 0x54, 0x79, 0x70, 0x65, 0x12, 0x1f, 0x0a, 0x0b, 0x74, 0x61, 0x62, 0x6c,
+	0x65, 0x5f, 0x6f, 0x77, 0x6e, 0x65, 0x72, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0a, 0x74,
+	0x61, 0x62, 0x6c, 0x65, 0x4f, 0x77, 0x6e, 0x65, 0x72, 0x12, 0x2e, 0x0a, 0x13, 0x74, 0x61, 0x62,
+	0x6c, 0x65, 0x5f, 0x6f, 0x77, 0x6e, 0x65, 0x72, 0x5f, 0x63, 0x6f, 0x6c, 0x75, 0x6d, 0x6e, 0x73,
+	0x18, 0x04, 0x20, 0x03, 0x28, 0x09, 0x52, 0x11, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x4f, 0x77, 0x6e,
+	0x65, 0x72, 0x43, 0x6f, 0x6c, 0x75, 0x6d, 0x6e, 0x73, 0x12, 0x1d, 0x0a, 0x0a, 0x74, 0x61, 0x62,
+	0x6c, 0x65, 0x5f, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x05, 0x20, 0x01, 0x28, 0x09, 0x52, 0x09, 0x74,
+	0x61, 0x62, 0x6c, 0x65, 0x4e, 0x61, 0x6d, 0x65, 0x12, 0x21, 0x0a, 0x0c, 0x69, 0x67, 0x6e, 0x6f,
+	0x72, 0x65, 0x5f, 0x6e, 0x75, 0x6c, 0x6c, 0x73, 0x18, 0x06, 0x20, 0x01, 0x28, 0x08, 0x52, 0x0b,
+	0x69, 0x67, 0x6e, 0x6f, 0x72, 0x65, 0x4e, 0x75, 0x6c, 0x6c, 0x73, 0x2a, 0x4a, 0x0a, 0x15, 0x4d,
+	0x61, 0x74, 0x65, 0x72, 0x69, 0x61, 0x6c, 0x69, 0x7a, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x49, 0x6e,
+	0x74, 0x65, 0x6e, 0x74, 0x12, 0x0a, 0x0a, 0x06, 0x43, 0x55, 0x53, 0x54, 0x4f, 0x4d, 0x10, 0x00,
+	0x12, 0x0e, 0x0a, 0x0a, 0x4d, 0x4f, 0x56, 0x45, 0x54, 0x41, 0x42, 0x4c, 0x45, 0x53, 0x10, 0x01,
+	0x12, 0x15, 0x0a, 0x11, 0x43, 0x52, 0x45, 0x41, 0x54, 0x45, 0x4c, 0x4f, 0x4f, 0x4b, 0x55, 0x50,
+	0x49, 0x4e, 0x44, 0x45, 0x58, 0x10, 0x02, 0x2a, 0x38, 0x0a, 0x0d, 0x51, 0x75, 0x65, 0x72, 0x79,
+	0x4f, 0x72, 0x64, 0x65, 0x72, 0x69, 0x6e, 0x67, 0x12, 0x08, 0x0a, 0x04, 0x4e, 0x4f, 0x4e, 0x45,
+	0x10, 0x00, 0x12, 0x0d, 0x0a, 0x09, 0x41, 0x53, 0x43, 0x45, 0x4e, 0x44, 0x49, 0x4e, 0x47, 0x10,
+	0x01, 0x12, 0x0e, 0x0a, 0x0a, 0x44, 0x45, 0x53, 0x43, 0x45, 0x4e, 0x44, 0x49, 0x4e, 0x47, 0x10,
+	0x02, 0x2a, 0x42, 0x0a, 0x1c, 0x53, 0x68, 0x61, 0x72, 0x64, 0x65, 0x64, 0x41, 0x75, 0x74, 0x6f,
+	0x49, 0x6e, 0x63, 0x72, 0x65, 0x6d, 0x65, 0x6e, 0x74, 0x48, 0x61, 0x6e, 0x64, 0x6c, 0x69, 0x6e,
+	0x67, 0x12, 0x09, 0x0a, 0x05, 0x4c, 0x45, 0x41, 0x56, 0x45, 0x10, 0x00, 0x12, 0x0a, 0x0a, 0x06,
+	0x52, 0x45, 0x4d, 0x4f, 0x56, 0x45, 0x10, 0x01, 0x12, 0x0b, 0x0a, 0x07, 0x52, 0x45, 0x50, 0x4c,
+	0x41, 0x43, 0x45, 0x10, 0x02, 0x42, 0x28, 0x5a, 0x26, 0x76, 0x69, 0x74, 0x65, 0x73, 0x73, 0x2e,
+	0x69, 0x6f, 0x2f, 0x76, 0x69, 0x74, 0x65, 0x73, 0x73, 0x2f, 0x67, 0x6f, 0x2f, 0x76, 0x74, 0x2f,
+	0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x76, 0x74, 0x63, 0x74, 0x6c, 0x64, 0x61, 0x74, 0x61, 0x62,
+	0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -19400,7 +19630,7 @@ func file_vtctldata_proto_rawDescGZIP() []byte {
 }
 
 var file_vtctldata_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
-var file_vtctldata_proto_msgTypes = make([]protoimpl.MessageInfo, 301)
+var file_vtctldata_proto_msgTypes = make([]protoimpl.MessageInfo, 303)
 var file_vtctldata_proto_goTypes = []any{
 	(MaterializationIntent)(0),                   // 0: vtctldata.MaterializationIntent
 	(QueryOrdering)(0),                           // 1: vtctldata.QueryOrdering
@@ -19665,337 +19895,341 @@ var file_vtctldata_proto_goTypes = []any{
 	(*GetMirrorRulesResponse)(nil),               // 260: vtctldata.GetMirrorRulesResponse
 	(*WorkflowMirrorTrafficRequest)(nil),         // 261: vtctldata.WorkflowMirrorTrafficRequest
 	(*WorkflowMirrorTrafficResponse)(nil),        // 262: vtctldata.WorkflowMirrorTrafficResponse
-	nil,                                          // 263: vtctldata.WorkflowOptions.ConfigEntry
-	nil,                                          // 264: vtctldata.Workflow.ShardStreamsEntry
-	(*Workflow_ReplicationLocation)(nil),         // 265: vtctldata.Workflow.ReplicationLocation
-	(*Workflow_ShardStream)(nil),                 // 266: vtctldata.Workflow.ShardStream
-	(*Workflow_Stream)(nil),                      // 267: vtctldata.Workflow.Stream
-	(*Workflow_Stream_CopyState)(nil),            // 268: vtctldata.Workflow.Stream.CopyState
-	(*Workflow_Stream_Log)(nil),                  // 269: vtctldata.Workflow.Stream.Log
-	(*Workflow_Stream_ThrottlerStatus)(nil),      // 270: vtctldata.Workflow.Stream.ThrottlerStatus
-	nil,                                          // 271: vtctldata.ApplySchemaResponse.RowsAffectedByShardEntry
-	nil,                                          // 272: vtctldata.ApplyVSchemaResponse.UnknownVindexParamsEntry
-	(*ApplyVSchemaResponse_ParamList)(nil),       // 273: vtctldata.ApplyVSchemaResponse.ParamList
-	nil,                                          // 274: vtctldata.CancelSchemaMigrationResponse.RowsAffectedByShardEntry
-	nil,                                          // 275: vtctldata.ChangeTabletTagsRequest.TagsEntry
-	nil,                                          // 276: vtctldata.ChangeTabletTagsResponse.BeforeTagsEntry
-	nil,                                          // 277: vtctldata.ChangeTabletTagsResponse.AfterTagsEntry
-	nil,                                          // 278: vtctldata.CleanupSchemaMigrationResponse.RowsAffectedByShardEntry
-	nil,                                          // 279: vtctldata.CompleteSchemaMigrationResponse.RowsAffectedByShardEntry
-	nil,                                          // 280: vtctldata.FindAllShardsInKeyspaceResponse.ShardsEntry
-	nil,                                          // 281: vtctldata.ForceCutOverSchemaMigrationResponse.RowsAffectedByShardEntry
-	nil,                                          // 282: vtctldata.GetCellsAliasesResponse.AliasesEntry
-	nil,                                          // 283: vtctldata.GetShardReplicationResponse.ShardReplicationByCellEntry
-	nil,                                          // 284: vtctldata.GetSrvKeyspaceNamesResponse.NamesEntry
-	(*GetSrvKeyspaceNamesResponse_NameList)(nil), // 285: vtctldata.GetSrvKeyspaceNamesResponse.NameList
-	nil, // 286: vtctldata.GetSrvKeyspacesResponse.SrvKeyspacesEntry
-	nil, // 287: vtctldata.GetSrvVSchemasResponse.SrvVSchemasEntry
-	nil, // 288: vtctldata.LaunchSchemaMigrationResponse.RowsAffectedByShardEntry
-	(*MoveTablesCreateResponse_TabletInfo)(nil), // 289: vtctldata.MoveTablesCreateResponse.TabletInfo
-	nil, // 290: vtctldata.RetrySchemaMigrationResponse.RowsAffectedByShardEntry
-	nil, // 291: vtctldata.ShardReplicationPositionsResponse.ReplicationStatusesEntry
-	nil, // 292: vtctldata.ShardReplicationPositionsResponse.TabletMapEntry
-	nil, // 293: vtctldata.ValidateResponse.ResultsByKeyspaceEntry
-	nil, // 294: vtctldata.ValidateKeyspaceResponse.ResultsByShardEntry
-	nil, // 295: vtctldata.ValidateSchemaKeyspaceResponse.ResultsByShardEntry
-	nil, // 296: vtctldata.ValidateVersionKeyspaceResponse.ResultsByShardEntry
-	nil, // 297: vtctldata.ValidateVSchemaResponse.ResultsByShardEntry
-	nil, // 298: vtctldata.VDiffShowResponse.TabletResponsesEntry
-	(*WorkflowDeleteResponse_TabletInfo)(nil),       // 299: vtctldata.WorkflowDeleteResponse.TabletInfo
-	(*WorkflowStatusResponse_TableCopyState)(nil),   // 300: vtctldata.WorkflowStatusResponse.TableCopyState
-	(*WorkflowStatusResponse_ShardStreamState)(nil), // 301: vtctldata.WorkflowStatusResponse.ShardStreamState
-	(*WorkflowStatusResponse_ShardStreams)(nil),     // 302: vtctldata.WorkflowStatusResponse.ShardStreams
-	nil, // 303: vtctldata.WorkflowStatusResponse.TableCopyStateEntry
-	nil, // 304: vtctldata.WorkflowStatusResponse.ShardStreamsEntry
-	(*WorkflowUpdateResponse_TabletInfo)(nil),                   // 305: vtctldata.WorkflowUpdateResponse.TabletInfo
-	(*logutil.Event)(nil),                                       // 306: logutil.Event
-	(tabletmanagerdata.TabletSelectionPreference)(0),            // 307: tabletmanagerdata.TabletSelectionPreference
-	(*topodata.Keyspace)(nil),                                   // 308: topodata.Keyspace
-	(*vttime.Time)(nil),                                         // 309: vttime.Time
-	(*topodata.TabletAlias)(nil),                                // 310: topodata.TabletAlias
-	(*vttime.Duration)(nil),                                     // 311: vttime.Duration
-	(*topodata.Shard)(nil),                                      // 312: topodata.Shard
-	(*topodata.CellInfo)(nil),                                   // 313: topodata.CellInfo
-	(*vschema.KeyspaceRoutingRules)(nil),                        // 314: vschema.KeyspaceRoutingRules
-	(*vschema.RoutingRules)(nil),                                // 315: vschema.RoutingRules
-	(*vschema.ShardRoutingRules)(nil),                           // 316: vschema.ShardRoutingRules
-	(*vtrpc.CallerID)(nil),                                      // 317: vtrpc.CallerID
-	(*vschema.Keyspace)(nil),                                    // 318: vschema.Keyspace
-	(topodata.TabletType)(0),                                    // 319: topodata.TabletType
-	(*topodata.Tablet)(nil),                                     // 320: topodata.Tablet
-	(*tabletmanagerdata.CheckThrottlerResponse)(nil),            // 321: tabletmanagerdata.CheckThrottlerResponse
-	(topodata.KeyspaceType)(0),                                  // 322: topodata.KeyspaceType
-	(*query.QueryResult)(nil),                                   // 323: query.QueryResult
-	(*tabletmanagerdata.ExecuteHookRequest)(nil),                // 324: tabletmanagerdata.ExecuteHookRequest
-	(*tabletmanagerdata.ExecuteHookResponse)(nil),               // 325: tabletmanagerdata.ExecuteHookResponse
-	(*mysqlctl.BackupInfo)(nil),                                 // 326: mysqlctl.BackupInfo
-	(*replicationdata.FullStatus)(nil),                          // 327: replicationdata.FullStatus
-	(*tabletmanagerdata.Permissions)(nil),                       // 328: tabletmanagerdata.Permissions
-	(*tabletmanagerdata.SchemaDefinition)(nil),                  // 329: tabletmanagerdata.SchemaDefinition
-	(*topodata.ThrottledAppRule)(nil),                           // 330: topodata.ThrottledAppRule
-	(*vschema.SrvVSchema)(nil),                                  // 331: vschema.SrvVSchema
-	(*tabletmanagerdata.GetThrottlerStatusResponse)(nil),        // 332: tabletmanagerdata.GetThrottlerStatusResponse
-	(*query.TransactionMetadata)(nil),                           // 333: query.TransactionMetadata
-	(*query.Target)(nil),                                        // 334: query.Target
-	(*topodata.ShardReplicationError)(nil),                      // 335: topodata.ShardReplicationError
-	(*topodata.KeyRange)(nil),                                   // 336: topodata.KeyRange
-	(*topodata.CellsAlias)(nil),                                 // 337: topodata.CellsAlias
-	(*tabletmanagerdata.UpdateVReplicationWorkflowRequest)(nil), // 338: tabletmanagerdata.UpdateVReplicationWorkflowRequest
-	(*vschema.MirrorRules)(nil),                                 // 339: vschema.MirrorRules
-	(*topodata.Shard_TabletControl)(nil),                        // 340: topodata.Shard.TabletControl
-	(*binlogdata.BinlogSource)(nil),                             // 341: binlogdata.BinlogSource
-	(*topodata.ShardReplication)(nil),                           // 342: topodata.ShardReplication
-	(*topodata.SrvKeyspace)(nil),                                // 343: topodata.SrvKeyspace
-	(*replicationdata.Status)(nil),                              // 344: replicationdata.Status
-	(*tabletmanagerdata.VDiffResponse)(nil),                     // 345: tabletmanagerdata.VDiffResponse
+	(*LookupVindexCreateParams)(nil),             // 263: vtctldata.LookupVindexCreateParams
+	(*VindexParams)(nil),                         // 264: vtctldata.VindexParams
+	nil,                                          // 265: vtctldata.WorkflowOptions.ConfigEntry
+	nil,                                          // 266: vtctldata.Workflow.ShardStreamsEntry
+	(*Workflow_ReplicationLocation)(nil),         // 267: vtctldata.Workflow.ReplicationLocation
+	(*Workflow_ShardStream)(nil),                 // 268: vtctldata.Workflow.ShardStream
+	(*Workflow_Stream)(nil),                      // 269: vtctldata.Workflow.Stream
+	(*Workflow_Stream_CopyState)(nil),            // 270: vtctldata.Workflow.Stream.CopyState
+	(*Workflow_Stream_Log)(nil),                  // 271: vtctldata.Workflow.Stream.Log
+	(*Workflow_Stream_ThrottlerStatus)(nil),      // 272: vtctldata.Workflow.Stream.ThrottlerStatus
+	nil,                                          // 273: vtctldata.ApplySchemaResponse.RowsAffectedByShardEntry
+	nil,                                          // 274: vtctldata.ApplyVSchemaResponse.UnknownVindexParamsEntry
+	(*ApplyVSchemaResponse_ParamList)(nil),       // 275: vtctldata.ApplyVSchemaResponse.ParamList
+	nil,                                          // 276: vtctldata.CancelSchemaMigrationResponse.RowsAffectedByShardEntry
+	nil,                                          // 277: vtctldata.ChangeTabletTagsRequest.TagsEntry
+	nil,                                          // 278: vtctldata.ChangeTabletTagsResponse.BeforeTagsEntry
+	nil,                                          // 279: vtctldata.ChangeTabletTagsResponse.AfterTagsEntry
+	nil,                                          // 280: vtctldata.CleanupSchemaMigrationResponse.RowsAffectedByShardEntry
+	nil,                                          // 281: vtctldata.CompleteSchemaMigrationResponse.RowsAffectedByShardEntry
+	nil,                                          // 282: vtctldata.FindAllShardsInKeyspaceResponse.ShardsEntry
+	nil,                                          // 283: vtctldata.ForceCutOverSchemaMigrationResponse.RowsAffectedByShardEntry
+	nil,                                          // 284: vtctldata.GetCellsAliasesResponse.AliasesEntry
+	nil,                                          // 285: vtctldata.GetShardReplicationResponse.ShardReplicationByCellEntry
+	nil,                                          // 286: vtctldata.GetSrvKeyspaceNamesResponse.NamesEntry
+	(*GetSrvKeyspaceNamesResponse_NameList)(nil), // 287: vtctldata.GetSrvKeyspaceNamesResponse.NameList
+	nil, // 288: vtctldata.GetSrvKeyspacesResponse.SrvKeyspacesEntry
+	nil, // 289: vtctldata.GetSrvVSchemasResponse.SrvVSchemasEntry
+	nil, // 290: vtctldata.LaunchSchemaMigrationResponse.RowsAffectedByShardEntry
+	(*MoveTablesCreateResponse_TabletInfo)(nil), // 291: vtctldata.MoveTablesCreateResponse.TabletInfo
+	nil, // 292: vtctldata.RetrySchemaMigrationResponse.RowsAffectedByShardEntry
+	nil, // 293: vtctldata.ShardReplicationPositionsResponse.ReplicationStatusesEntry
+	nil, // 294: vtctldata.ShardReplicationPositionsResponse.TabletMapEntry
+	nil, // 295: vtctldata.ValidateResponse.ResultsByKeyspaceEntry
+	nil, // 296: vtctldata.ValidateKeyspaceResponse.ResultsByShardEntry
+	nil, // 297: vtctldata.ValidateSchemaKeyspaceResponse.ResultsByShardEntry
+	nil, // 298: vtctldata.ValidateVersionKeyspaceResponse.ResultsByShardEntry
+	nil, // 299: vtctldata.ValidateVSchemaResponse.ResultsByShardEntry
+	nil, // 300: vtctldata.VDiffShowResponse.TabletResponsesEntry
+	(*WorkflowDeleteResponse_TabletInfo)(nil),       // 301: vtctldata.WorkflowDeleteResponse.TabletInfo
+	(*WorkflowStatusResponse_TableCopyState)(nil),   // 302: vtctldata.WorkflowStatusResponse.TableCopyState
+	(*WorkflowStatusResponse_ShardStreamState)(nil), // 303: vtctldata.WorkflowStatusResponse.ShardStreamState
+	(*WorkflowStatusResponse_ShardStreams)(nil),     // 304: vtctldata.WorkflowStatusResponse.ShardStreams
+	nil, // 305: vtctldata.WorkflowStatusResponse.TableCopyStateEntry
+	nil, // 306: vtctldata.WorkflowStatusResponse.ShardStreamsEntry
+	(*WorkflowUpdateResponse_TabletInfo)(nil),                   // 307: vtctldata.WorkflowUpdateResponse.TabletInfo
+	(*logutil.Event)(nil),                                       // 308: logutil.Event
+	(tabletmanagerdata.TabletSelectionPreference)(0),            // 309: tabletmanagerdata.TabletSelectionPreference
+	(*topodata.Keyspace)(nil),                                   // 310: topodata.Keyspace
+	(*vttime.Time)(nil),                                         // 311: vttime.Time
+	(*topodata.TabletAlias)(nil),                                // 312: topodata.TabletAlias
+	(*vttime.Duration)(nil),                                     // 313: vttime.Duration
+	(*topodata.Shard)(nil),                                      // 314: topodata.Shard
+	(*topodata.CellInfo)(nil),                                   // 315: topodata.CellInfo
+	(*vschema.KeyspaceRoutingRules)(nil),                        // 316: vschema.KeyspaceRoutingRules
+	(*vschema.RoutingRules)(nil),                                // 317: vschema.RoutingRules
+	(*vschema.ShardRoutingRules)(nil),                           // 318: vschema.ShardRoutingRules
+	(*vtrpc.CallerID)(nil),                                      // 319: vtrpc.CallerID
+	(*vschema.Keyspace)(nil),                                    // 320: vschema.Keyspace
+	(topodata.TabletType)(0),                                    // 321: topodata.TabletType
+	(*topodata.Tablet)(nil),                                     // 322: topodata.Tablet
+	(*tabletmanagerdata.CheckThrottlerResponse)(nil),            // 323: tabletmanagerdata.CheckThrottlerResponse
+	(topodata.KeyspaceType)(0),                                  // 324: topodata.KeyspaceType
+	(*query.QueryResult)(nil),                                   // 325: query.QueryResult
+	(*tabletmanagerdata.ExecuteHookRequest)(nil),                // 326: tabletmanagerdata.ExecuteHookRequest
+	(*tabletmanagerdata.ExecuteHookResponse)(nil),               // 327: tabletmanagerdata.ExecuteHookResponse
+	(*mysqlctl.BackupInfo)(nil),                                 // 328: mysqlctl.BackupInfo
+	(*replicationdata.FullStatus)(nil),                          // 329: replicationdata.FullStatus
+	(*tabletmanagerdata.Permissions)(nil),                       // 330: tabletmanagerdata.Permissions
+	(*tabletmanagerdata.SchemaDefinition)(nil),                  // 331: tabletmanagerdata.SchemaDefinition
+	(*topodata.ThrottledAppRule)(nil),                           // 332: topodata.ThrottledAppRule
+	(*vschema.SrvVSchema)(nil),                                  // 333: vschema.SrvVSchema
+	(*tabletmanagerdata.GetThrottlerStatusResponse)(nil),        // 334: tabletmanagerdata.GetThrottlerStatusResponse
+	(*query.TransactionMetadata)(nil),                           // 335: query.TransactionMetadata
+	(*query.Target)(nil),                                        // 336: query.Target
+	(*topodata.ShardReplicationError)(nil),                      // 337: topodata.ShardReplicationError
+	(*topodata.KeyRange)(nil),                                   // 338: topodata.KeyRange
+	(*topodata.CellsAlias)(nil),                                 // 339: topodata.CellsAlias
+	(*tabletmanagerdata.UpdateVReplicationWorkflowRequest)(nil), // 340: tabletmanagerdata.UpdateVReplicationWorkflowRequest
+	(*vschema.MirrorRules)(nil),                                 // 341: vschema.MirrorRules
+	(*topodata.Shard_TabletControl)(nil),                        // 342: topodata.Shard.TabletControl
+	(*binlogdata.BinlogSource)(nil),                             // 343: binlogdata.BinlogSource
+	(*topodata.ShardReplication)(nil),                           // 344: topodata.ShardReplication
+	(*topodata.SrvKeyspace)(nil),                                // 345: topodata.SrvKeyspace
+	(*replicationdata.Status)(nil),                              // 346: replicationdata.Status
+	(*tabletmanagerdata.VDiffResponse)(nil),                     // 347: tabletmanagerdata.VDiffResponse
 }
 var file_vtctldata_proto_depIdxs = []int32{
-	306, // 0: vtctldata.ExecuteVtctlCommandResponse.event:type_name -> logutil.Event
+	308, // 0: vtctldata.ExecuteVtctlCommandResponse.event:type_name -> logutil.Event
 	7,   // 1: vtctldata.MaterializeSettings.table_settings:type_name -> vtctldata.TableMaterializeSettings
 	0,   // 2: vtctldata.MaterializeSettings.materialization_intent:type_name -> vtctldata.MaterializationIntent
-	307, // 3: vtctldata.MaterializeSettings.tablet_selection_preference:type_name -> tabletmanagerdata.TabletSelectionPreference
+	309, // 3: vtctldata.MaterializeSettings.tablet_selection_preference:type_name -> tabletmanagerdata.TabletSelectionPreference
 	12,  // 4: vtctldata.MaterializeSettings.workflow_options:type_name -> vtctldata.WorkflowOptions
-	308, // 5: vtctldata.Keyspace.keyspace:type_name -> topodata.Keyspace
+	310, // 5: vtctldata.Keyspace.keyspace:type_name -> topodata.Keyspace
 	3,   // 6: vtctldata.SchemaMigration.strategy:type_name -> vtctldata.SchemaMigration.Strategy
-	309, // 7: vtctldata.SchemaMigration.added_at:type_name -> vttime.Time
-	309, // 8: vtctldata.SchemaMigration.requested_at:type_name -> vttime.Time
-	309, // 9: vtctldata.SchemaMigration.ready_at:type_name -> vttime.Time
-	309, // 10: vtctldata.SchemaMigration.started_at:type_name -> vttime.Time
-	309, // 11: vtctldata.SchemaMigration.liveness_timestamp:type_name -> vttime.Time
-	309, // 12: vtctldata.SchemaMigration.completed_at:type_name -> vttime.Time
-	309, // 13: vtctldata.SchemaMigration.cleaned_up_at:type_name -> vttime.Time
+	311, // 7: vtctldata.SchemaMigration.added_at:type_name -> vttime.Time
+	311, // 8: vtctldata.SchemaMigration.requested_at:type_name -> vttime.Time
+	311, // 9: vtctldata.SchemaMigration.ready_at:type_name -> vttime.Time
+	311, // 10: vtctldata.SchemaMigration.started_at:type_name -> vttime.Time
+	311, // 11: vtctldata.SchemaMigration.liveness_timestamp:type_name -> vttime.Time
+	311, // 12: vtctldata.SchemaMigration.completed_at:type_name -> vttime.Time
+	311, // 13: vtctldata.SchemaMigration.cleaned_up_at:type_name -> vttime.Time
 	4,   // 14: vtctldata.SchemaMigration.status:type_name -> vtctldata.SchemaMigration.Status
-	310, // 15: vtctldata.SchemaMigration.tablet:type_name -> topodata.TabletAlias
-	311, // 16: vtctldata.SchemaMigration.artifact_retention:type_name -> vttime.Duration
-	309, // 17: vtctldata.SchemaMigration.last_throttled_at:type_name -> vttime.Time
-	309, // 18: vtctldata.SchemaMigration.cancelled_at:type_name -> vttime.Time
-	309, // 19: vtctldata.SchemaMigration.reviewed_at:type_name -> vttime.Time
-	309, // 20: vtctldata.SchemaMigration.ready_to_complete_at:type_name -> vttime.Time
-	312, // 21: vtctldata.Shard.shard:type_name -> topodata.Shard
+	312, // 15: vtctldata.SchemaMigration.tablet:type_name -> topodata.TabletAlias
+	313, // 16: vtctldata.SchemaMigration.artifact_retention:type_name -> vttime.Duration
+	311, // 17: vtctldata.SchemaMigration.last_throttled_at:type_name -> vttime.Time
+	311, // 18: vtctldata.SchemaMigration.cancelled_at:type_name -> vttime.Time
+	311, // 19: vtctldata.SchemaMigration.reviewed_at:type_name -> vttime.Time
+	311, // 20: vtctldata.SchemaMigration.ready_to_complete_at:type_name -> vttime.Time
+	314, // 21: vtctldata.Shard.shard:type_name -> topodata.Shard
 	2,   // 22: vtctldata.WorkflowOptions.sharded_auto_increment_handling:type_name -> vtctldata.ShardedAutoIncrementHandling
-	263, // 23: vtctldata.WorkflowOptions.config:type_name -> vtctldata.WorkflowOptions.ConfigEntry
-	265, // 24: vtctldata.Workflow.source:type_name -> vtctldata.Workflow.ReplicationLocation
-	265, // 25: vtctldata.Workflow.target:type_name -> vtctldata.Workflow.ReplicationLocation
-	264, // 26: vtctldata.Workflow.shard_streams:type_name -> vtctldata.Workflow.ShardStreamsEntry
+	265, // 23: vtctldata.WorkflowOptions.config:type_name -> vtctldata.WorkflowOptions.ConfigEntry
+	267, // 24: vtctldata.Workflow.source:type_name -> vtctldata.Workflow.ReplicationLocation
+	267, // 25: vtctldata.Workflow.target:type_name -> vtctldata.Workflow.ReplicationLocation
+	266, // 26: vtctldata.Workflow.shard_streams:type_name -> vtctldata.Workflow.ShardStreamsEntry
 	12,  // 27: vtctldata.Workflow.options:type_name -> vtctldata.WorkflowOptions
-	313, // 28: vtctldata.AddCellInfoRequest.cell_info:type_name -> topodata.CellInfo
-	314, // 29: vtctldata.ApplyKeyspaceRoutingRulesRequest.keyspace_routing_rules:type_name -> vschema.KeyspaceRoutingRules
-	314, // 30: vtctldata.ApplyKeyspaceRoutingRulesResponse.keyspace_routing_rules:type_name -> vschema.KeyspaceRoutingRules
-	315, // 31: vtctldata.ApplyRoutingRulesRequest.routing_rules:type_name -> vschema.RoutingRules
-	316, // 32: vtctldata.ApplyShardRoutingRulesRequest.shard_routing_rules:type_name -> vschema.ShardRoutingRules
-	311, // 33: vtctldata.ApplySchemaRequest.wait_replicas_timeout:type_name -> vttime.Duration
-	317, // 34: vtctldata.ApplySchemaRequest.caller_id:type_name -> vtrpc.CallerID
-	271, // 35: vtctldata.ApplySchemaResponse.rows_affected_by_shard:type_name -> vtctldata.ApplySchemaResponse.RowsAffectedByShardEntry
-	318, // 36: vtctldata.ApplyVSchemaRequest.v_schema:type_name -> vschema.Keyspace
-	318, // 37: vtctldata.ApplyVSchemaResponse.v_schema:type_name -> vschema.Keyspace
-	272, // 38: vtctldata.ApplyVSchemaResponse.unknown_vindex_params:type_name -> vtctldata.ApplyVSchemaResponse.UnknownVindexParamsEntry
-	310, // 39: vtctldata.BackupRequest.tablet_alias:type_name -> topodata.TabletAlias
-	310, // 40: vtctldata.BackupResponse.tablet_alias:type_name -> topodata.TabletAlias
-	306, // 41: vtctldata.BackupResponse.event:type_name -> logutil.Event
-	274, // 42: vtctldata.CancelSchemaMigrationResponse.rows_affected_by_shard:type_name -> vtctldata.CancelSchemaMigrationResponse.RowsAffectedByShardEntry
-	310, // 43: vtctldata.ChangeTabletTagsRequest.tablet_alias:type_name -> topodata.TabletAlias
-	275, // 44: vtctldata.ChangeTabletTagsRequest.tags:type_name -> vtctldata.ChangeTabletTagsRequest.TagsEntry
-	276, // 45: vtctldata.ChangeTabletTagsResponse.before_tags:type_name -> vtctldata.ChangeTabletTagsResponse.BeforeTagsEntry
-	277, // 46: vtctldata.ChangeTabletTagsResponse.after_tags:type_name -> vtctldata.ChangeTabletTagsResponse.AfterTagsEntry
-	310, // 47: vtctldata.ChangeTabletTypeRequest.tablet_alias:type_name -> topodata.TabletAlias
-	319, // 48: vtctldata.ChangeTabletTypeRequest.db_type:type_name -> topodata.TabletType
-	320, // 49: vtctldata.ChangeTabletTypeResponse.before_tablet:type_name -> topodata.Tablet
-	320, // 50: vtctldata.ChangeTabletTypeResponse.after_tablet:type_name -> topodata.Tablet
-	310, // 51: vtctldata.CheckThrottlerRequest.tablet_alias:type_name -> topodata.TabletAlias
-	310, // 52: vtctldata.CheckThrottlerResponse.tablet_alias:type_name -> topodata.TabletAlias
-	321, // 53: vtctldata.CheckThrottlerResponse.Check:type_name -> tabletmanagerdata.CheckThrottlerResponse
-	278, // 54: vtctldata.CleanupSchemaMigrationResponse.rows_affected_by_shard:type_name -> vtctldata.CleanupSchemaMigrationResponse.RowsAffectedByShardEntry
-	279, // 55: vtctldata.CompleteSchemaMigrationResponse.rows_affected_by_shard:type_name -> vtctldata.CompleteSchemaMigrationResponse.RowsAffectedByShardEntry
-	322, // 56: vtctldata.CreateKeyspaceRequest.type:type_name -> topodata.KeyspaceType
-	309, // 57: vtctldata.CreateKeyspaceRequest.snapshot_time:type_name -> vttime.Time
+	315, // 28: vtctldata.AddCellInfoRequest.cell_info:type_name -> topodata.CellInfo
+	316, // 29: vtctldata.ApplyKeyspaceRoutingRulesRequest.keyspace_routing_rules:type_name -> vschema.KeyspaceRoutingRules
+	316, // 30: vtctldata.ApplyKeyspaceRoutingRulesResponse.keyspace_routing_rules:type_name -> vschema.KeyspaceRoutingRules
+	317, // 31: vtctldata.ApplyRoutingRulesRequest.routing_rules:type_name -> vschema.RoutingRules
+	318, // 32: vtctldata.ApplyShardRoutingRulesRequest.shard_routing_rules:type_name -> vschema.ShardRoutingRules
+	313, // 33: vtctldata.ApplySchemaRequest.wait_replicas_timeout:type_name -> vttime.Duration
+	319, // 34: vtctldata.ApplySchemaRequest.caller_id:type_name -> vtrpc.CallerID
+	273, // 35: vtctldata.ApplySchemaResponse.rows_affected_by_shard:type_name -> vtctldata.ApplySchemaResponse.RowsAffectedByShardEntry
+	320, // 36: vtctldata.ApplyVSchemaRequest.v_schema:type_name -> vschema.Keyspace
+	320, // 37: vtctldata.ApplyVSchemaResponse.v_schema:type_name -> vschema.Keyspace
+	274, // 38: vtctldata.ApplyVSchemaResponse.unknown_vindex_params:type_name -> vtctldata.ApplyVSchemaResponse.UnknownVindexParamsEntry
+	312, // 39: vtctldata.BackupRequest.tablet_alias:type_name -> topodata.TabletAlias
+	312, // 40: vtctldata.BackupResponse.tablet_alias:type_name -> topodata.TabletAlias
+	308, // 41: vtctldata.BackupResponse.event:type_name -> logutil.Event
+	276, // 42: vtctldata.CancelSchemaMigrationResponse.rows_affected_by_shard:type_name -> vtctldata.CancelSchemaMigrationResponse.RowsAffectedByShardEntry
+	312, // 43: vtctldata.ChangeTabletTagsRequest.tablet_alias:type_name -> topodata.TabletAlias
+	277, // 44: vtctldata.ChangeTabletTagsRequest.tags:type_name -> vtctldata.ChangeTabletTagsRequest.TagsEntry
+	278, // 45: vtctldata.ChangeTabletTagsResponse.before_tags:type_name -> vtctldata.ChangeTabletTagsResponse.BeforeTagsEntry
+	279, // 46: vtctldata.ChangeTabletTagsResponse.after_tags:type_name -> vtctldata.ChangeTabletTagsResponse.AfterTagsEntry
+	312, // 47: vtctldata.ChangeTabletTypeRequest.tablet_alias:type_name -> topodata.TabletAlias
+	321, // 48: vtctldata.ChangeTabletTypeRequest.db_type:type_name -> topodata.TabletType
+	322, // 49: vtctldata.ChangeTabletTypeResponse.before_tablet:type_name -> topodata.Tablet
+	322, // 50: vtctldata.ChangeTabletTypeResponse.after_tablet:type_name -> topodata.Tablet
+	312, // 51: vtctldata.CheckThrottlerRequest.tablet_alias:type_name -> topodata.TabletAlias
+	312, // 52: vtctldata.CheckThrottlerResponse.tablet_alias:type_name -> topodata.TabletAlias
+	323, // 53: vtctldata.CheckThrottlerResponse.Check:type_name -> tabletmanagerdata.CheckThrottlerResponse
+	280, // 54: vtctldata.CleanupSchemaMigrationResponse.rows_affected_by_shard:type_name -> vtctldata.CleanupSchemaMigrationResponse.RowsAffectedByShardEntry
+	281, // 55: vtctldata.CompleteSchemaMigrationResponse.rows_affected_by_shard:type_name -> vtctldata.CompleteSchemaMigrationResponse.RowsAffectedByShardEntry
+	324, // 56: vtctldata.CreateKeyspaceRequest.type:type_name -> topodata.KeyspaceType
+	311, // 57: vtctldata.CreateKeyspaceRequest.snapshot_time:type_name -> vttime.Time
 	9,   // 58: vtctldata.CreateKeyspaceResponse.keyspace:type_name -> vtctldata.Keyspace
 	9,   // 59: vtctldata.CreateShardResponse.keyspace:type_name -> vtctldata.Keyspace
 	11,  // 60: vtctldata.CreateShardResponse.shard:type_name -> vtctldata.Shard
 	11,  // 61: vtctldata.DeleteShardsRequest.shards:type_name -> vtctldata.Shard
-	310, // 62: vtctldata.DeleteTabletsRequest.tablet_aliases:type_name -> topodata.TabletAlias
-	310, // 63: vtctldata.EmergencyReparentShardRequest.new_primary:type_name -> topodata.TabletAlias
-	310, // 64: vtctldata.EmergencyReparentShardRequest.ignore_replicas:type_name -> topodata.TabletAlias
-	311, // 65: vtctldata.EmergencyReparentShardRequest.wait_replicas_timeout:type_name -> vttime.Duration
-	310, // 66: vtctldata.EmergencyReparentShardRequest.expected_primary:type_name -> topodata.TabletAlias
-	310, // 67: vtctldata.EmergencyReparentShardResponse.promoted_primary:type_name -> topodata.TabletAlias
-	306, // 68: vtctldata.EmergencyReparentShardResponse.events:type_name -> logutil.Event
-	310, // 69: vtctldata.ExecuteFetchAsAppRequest.tablet_alias:type_name -> topodata.TabletAlias
-	323, // 70: vtctldata.ExecuteFetchAsAppResponse.result:type_name -> query.QueryResult
-	310, // 71: vtctldata.ExecuteFetchAsDBARequest.tablet_alias:type_name -> topodata.TabletAlias
-	323, // 72: vtctldata.ExecuteFetchAsDBAResponse.result:type_name -> query.QueryResult
-	310, // 73: vtctldata.ExecuteHookRequest.tablet_alias:type_name -> topodata.TabletAlias
-	324, // 74: vtctldata.ExecuteHookRequest.tablet_hook_request:type_name -> tabletmanagerdata.ExecuteHookRequest
-	325, // 75: vtctldata.ExecuteHookResponse.hook_result:type_name -> tabletmanagerdata.ExecuteHookResponse
-	310, // 76: vtctldata.ExecuteMultiFetchAsDBARequest.tablet_alias:type_name -> topodata.TabletAlias
-	323, // 77: vtctldata.ExecuteMultiFetchAsDBAResponse.results:type_name -> query.QueryResult
-	280, // 78: vtctldata.FindAllShardsInKeyspaceResponse.shards:type_name -> vtctldata.FindAllShardsInKeyspaceResponse.ShardsEntry
-	281, // 79: vtctldata.ForceCutOverSchemaMigrationResponse.rows_affected_by_shard:type_name -> vtctldata.ForceCutOverSchemaMigrationResponse.RowsAffectedByShardEntry
-	326, // 80: vtctldata.GetBackupsResponse.backups:type_name -> mysqlctl.BackupInfo
-	313, // 81: vtctldata.GetCellInfoResponse.cell_info:type_name -> topodata.CellInfo
-	282, // 82: vtctldata.GetCellsAliasesResponse.aliases:type_name -> vtctldata.GetCellsAliasesResponse.AliasesEntry
-	310, // 83: vtctldata.GetFullStatusRequest.tablet_alias:type_name -> topodata.TabletAlias
-	327, // 84: vtctldata.GetFullStatusResponse.status:type_name -> replicationdata.FullStatus
+	312, // 62: vtctldata.DeleteTabletsRequest.tablet_aliases:type_name -> topodata.TabletAlias
+	312, // 63: vtctldata.EmergencyReparentShardRequest.new_primary:type_name -> topodata.TabletAlias
+	312, // 64: vtctldata.EmergencyReparentShardRequest.ignore_replicas:type_name -> topodata.TabletAlias
+	313, // 65: vtctldata.EmergencyReparentShardRequest.wait_replicas_timeout:type_name -> vttime.Duration
+	312, // 66: vtctldata.EmergencyReparentShardRequest.expected_primary:type_name -> topodata.TabletAlias
+	312, // 67: vtctldata.EmergencyReparentShardResponse.promoted_primary:type_name -> topodata.TabletAlias
+	308, // 68: vtctldata.EmergencyReparentShardResponse.events:type_name -> logutil.Event
+	312, // 69: vtctldata.ExecuteFetchAsAppRequest.tablet_alias:type_name -> topodata.TabletAlias
+	325, // 70: vtctldata.ExecuteFetchAsAppResponse.result:type_name -> query.QueryResult
+	312, // 71: vtctldata.ExecuteFetchAsDBARequest.tablet_alias:type_name -> topodata.TabletAlias
+	325, // 72: vtctldata.ExecuteFetchAsDBAResponse.result:type_name -> query.QueryResult
+	312, // 73: vtctldata.ExecuteHookRequest.tablet_alias:type_name -> topodata.TabletAlias
+	326, // 74: vtctldata.ExecuteHookRequest.tablet_hook_request:type_name -> tabletmanagerdata.ExecuteHookRequest
+	327, // 75: vtctldata.ExecuteHookResponse.hook_result:type_name -> tabletmanagerdata.ExecuteHookResponse
+	312, // 76: vtctldata.ExecuteMultiFetchAsDBARequest.tablet_alias:type_name -> topodata.TabletAlias
+	325, // 77: vtctldata.ExecuteMultiFetchAsDBAResponse.results:type_name -> query.QueryResult
+	282, // 78: vtctldata.FindAllShardsInKeyspaceResponse.shards:type_name -> vtctldata.FindAllShardsInKeyspaceResponse.ShardsEntry
+	283, // 79: vtctldata.ForceCutOverSchemaMigrationResponse.rows_affected_by_shard:type_name -> vtctldata.ForceCutOverSchemaMigrationResponse.RowsAffectedByShardEntry
+	328, // 80: vtctldata.GetBackupsResponse.backups:type_name -> mysqlctl.BackupInfo
+	315, // 81: vtctldata.GetCellInfoResponse.cell_info:type_name -> topodata.CellInfo
+	284, // 82: vtctldata.GetCellsAliasesResponse.aliases:type_name -> vtctldata.GetCellsAliasesResponse.AliasesEntry
+	312, // 83: vtctldata.GetFullStatusRequest.tablet_alias:type_name -> topodata.TabletAlias
+	329, // 84: vtctldata.GetFullStatusResponse.status:type_name -> replicationdata.FullStatus
 	9,   // 85: vtctldata.GetKeyspacesResponse.keyspaces:type_name -> vtctldata.Keyspace
 	9,   // 86: vtctldata.GetKeyspaceResponse.keyspace:type_name -> vtctldata.Keyspace
-	310, // 87: vtctldata.GetPermissionsRequest.tablet_alias:type_name -> topodata.TabletAlias
-	328, // 88: vtctldata.GetPermissionsResponse.permissions:type_name -> tabletmanagerdata.Permissions
-	314, // 89: vtctldata.GetKeyspaceRoutingRulesResponse.keyspace_routing_rules:type_name -> vschema.KeyspaceRoutingRules
-	315, // 90: vtctldata.GetRoutingRulesResponse.routing_rules:type_name -> vschema.RoutingRules
-	310, // 91: vtctldata.GetSchemaRequest.tablet_alias:type_name -> topodata.TabletAlias
-	329, // 92: vtctldata.GetSchemaResponse.schema:type_name -> tabletmanagerdata.SchemaDefinition
+	312, // 87: vtctldata.GetPermissionsRequest.tablet_alias:type_name -> topodata.TabletAlias
+	330, // 88: vtctldata.GetPermissionsResponse.permissions:type_name -> tabletmanagerdata.Permissions
+	316, // 89: vtctldata.GetKeyspaceRoutingRulesResponse.keyspace_routing_rules:type_name -> vschema.KeyspaceRoutingRules
+	317, // 90: vtctldata.GetRoutingRulesResponse.routing_rules:type_name -> vschema.RoutingRules
+	312, // 91: vtctldata.GetSchemaRequest.tablet_alias:type_name -> topodata.TabletAlias
+	331, // 92: vtctldata.GetSchemaResponse.schema:type_name -> tabletmanagerdata.SchemaDefinition
 	4,   // 93: vtctldata.GetSchemaMigrationsRequest.status:type_name -> vtctldata.SchemaMigration.Status
-	311, // 94: vtctldata.GetSchemaMigrationsRequest.recent:type_name -> vttime.Duration
+	313, // 94: vtctldata.GetSchemaMigrationsRequest.recent:type_name -> vttime.Duration
 	1,   // 95: vtctldata.GetSchemaMigrationsRequest.order:type_name -> vtctldata.QueryOrdering
 	10,  // 96: vtctldata.GetSchemaMigrationsResponse.migrations:type_name -> vtctldata.SchemaMigration
-	283, // 97: vtctldata.GetShardReplicationResponse.shard_replication_by_cell:type_name -> vtctldata.GetShardReplicationResponse.ShardReplicationByCellEntry
+	285, // 97: vtctldata.GetShardReplicationResponse.shard_replication_by_cell:type_name -> vtctldata.GetShardReplicationResponse.ShardReplicationByCellEntry
 	11,  // 98: vtctldata.GetShardResponse.shard:type_name -> vtctldata.Shard
-	316, // 99: vtctldata.GetShardRoutingRulesResponse.shard_routing_rules:type_name -> vschema.ShardRoutingRules
-	284, // 100: vtctldata.GetSrvKeyspaceNamesResponse.names:type_name -> vtctldata.GetSrvKeyspaceNamesResponse.NamesEntry
-	286, // 101: vtctldata.GetSrvKeyspacesResponse.srv_keyspaces:type_name -> vtctldata.GetSrvKeyspacesResponse.SrvKeyspacesEntry
-	330, // 102: vtctldata.UpdateThrottlerConfigRequest.throttled_app:type_name -> topodata.ThrottledAppRule
-	331, // 103: vtctldata.GetSrvVSchemaResponse.srv_v_schema:type_name -> vschema.SrvVSchema
-	287, // 104: vtctldata.GetSrvVSchemasResponse.srv_v_schemas:type_name -> vtctldata.GetSrvVSchemasResponse.SrvVSchemasEntry
-	310, // 105: vtctldata.GetTabletRequest.tablet_alias:type_name -> topodata.TabletAlias
-	320, // 106: vtctldata.GetTabletResponse.tablet:type_name -> topodata.Tablet
-	310, // 107: vtctldata.GetTabletsRequest.tablet_aliases:type_name -> topodata.TabletAlias
-	319, // 108: vtctldata.GetTabletsRequest.tablet_type:type_name -> topodata.TabletType
-	320, // 109: vtctldata.GetTabletsResponse.tablets:type_name -> topodata.Tablet
-	310, // 110: vtctldata.GetThrottlerStatusRequest.tablet_alias:type_name -> topodata.TabletAlias
-	332, // 111: vtctldata.GetThrottlerStatusResponse.status:type_name -> tabletmanagerdata.GetThrottlerStatusResponse
+	318, // 99: vtctldata.GetShardRoutingRulesResponse.shard_routing_rules:type_name -> vschema.ShardRoutingRules
+	286, // 100: vtctldata.GetSrvKeyspaceNamesResponse.names:type_name -> vtctldata.GetSrvKeyspaceNamesResponse.NamesEntry
+	288, // 101: vtctldata.GetSrvKeyspacesResponse.srv_keyspaces:type_name -> vtctldata.GetSrvKeyspacesResponse.SrvKeyspacesEntry
+	332, // 102: vtctldata.UpdateThrottlerConfigRequest.throttled_app:type_name -> topodata.ThrottledAppRule
+	333, // 103: vtctldata.GetSrvVSchemaResponse.srv_v_schema:type_name -> vschema.SrvVSchema
+	289, // 104: vtctldata.GetSrvVSchemasResponse.srv_v_schemas:type_name -> vtctldata.GetSrvVSchemasResponse.SrvVSchemasEntry
+	312, // 105: vtctldata.GetTabletRequest.tablet_alias:type_name -> topodata.TabletAlias
+	322, // 106: vtctldata.GetTabletResponse.tablet:type_name -> topodata.Tablet
+	312, // 107: vtctldata.GetTabletsRequest.tablet_aliases:type_name -> topodata.TabletAlias
+	321, // 108: vtctldata.GetTabletsRequest.tablet_type:type_name -> topodata.TabletType
+	322, // 109: vtctldata.GetTabletsResponse.tablets:type_name -> topodata.Tablet
+	312, // 110: vtctldata.GetThrottlerStatusRequest.tablet_alias:type_name -> topodata.TabletAlias
+	334, // 111: vtctldata.GetThrottlerStatusResponse.status:type_name -> tabletmanagerdata.GetThrottlerStatusResponse
 	121, // 112: vtctldata.GetTopologyPathResponse.cell:type_name -> vtctldata.TopologyCell
-	333, // 113: vtctldata.GetUnresolvedTransactionsResponse.transactions:type_name -> query.TransactionMetadata
-	333, // 114: vtctldata.GetTransactionInfoResponse.metadata:type_name -> query.TransactionMetadata
+	335, // 113: vtctldata.GetUnresolvedTransactionsResponse.transactions:type_name -> query.TransactionMetadata
+	335, // 114: vtctldata.GetTransactionInfoResponse.metadata:type_name -> query.TransactionMetadata
 	125, // 115: vtctldata.GetTransactionInfoResponse.shard_states:type_name -> vtctldata.ShardTransactionState
-	334, // 116: vtctldata.ConcludeTransactionRequest.participants:type_name -> query.Target
-	310, // 117: vtctldata.GetVersionRequest.tablet_alias:type_name -> topodata.TabletAlias
-	318, // 118: vtctldata.GetVSchemaResponse.v_schema:type_name -> vschema.Keyspace
+	336, // 116: vtctldata.ConcludeTransactionRequest.participants:type_name -> query.Target
+	312, // 117: vtctldata.GetVersionRequest.tablet_alias:type_name -> topodata.TabletAlias
+	320, // 118: vtctldata.GetVSchemaResponse.v_schema:type_name -> vschema.Keyspace
 	13,  // 119: vtctldata.GetWorkflowsResponse.workflows:type_name -> vtctldata.Workflow
-	310, // 120: vtctldata.InitShardPrimaryRequest.primary_elect_tablet_alias:type_name -> topodata.TabletAlias
-	311, // 121: vtctldata.InitShardPrimaryRequest.wait_replicas_timeout:type_name -> vttime.Duration
-	306, // 122: vtctldata.InitShardPrimaryResponse.events:type_name -> logutil.Event
-	288, // 123: vtctldata.LaunchSchemaMigrationResponse.rows_affected_by_shard:type_name -> vtctldata.LaunchSchemaMigrationResponse.RowsAffectedByShardEntry
-	318, // 124: vtctldata.LookupVindexCreateRequest.vindex:type_name -> vschema.Keyspace
-	319, // 125: vtctldata.LookupVindexCreateRequest.tablet_types:type_name -> topodata.TabletType
-	307, // 126: vtctldata.LookupVindexCreateRequest.tablet_selection_preference:type_name -> tabletmanagerdata.TabletSelectionPreference
+	312, // 120: vtctldata.InitShardPrimaryRequest.primary_elect_tablet_alias:type_name -> topodata.TabletAlias
+	313, // 121: vtctldata.InitShardPrimaryRequest.wait_replicas_timeout:type_name -> vttime.Duration
+	308, // 122: vtctldata.InitShardPrimaryResponse.events:type_name -> logutil.Event
+	290, // 123: vtctldata.LaunchSchemaMigrationResponse.rows_affected_by_shard:type_name -> vtctldata.LaunchSchemaMigrationResponse.RowsAffectedByShardEntry
+	320, // 124: vtctldata.LookupVindexCreateRequest.vindex:type_name -> vschema.Keyspace
+	321, // 125: vtctldata.LookupVindexCreateRequest.tablet_types:type_name -> topodata.TabletType
+	309, // 126: vtctldata.LookupVindexCreateRequest.tablet_selection_preference:type_name -> tabletmanagerdata.TabletSelectionPreference
 	8,   // 127: vtctldata.MaterializeCreateRequest.settings:type_name -> vtctldata.MaterializeSettings
-	319, // 128: vtctldata.MigrateCreateRequest.tablet_types:type_name -> topodata.TabletType
-	307, // 129: vtctldata.MigrateCreateRequest.tablet_selection_preference:type_name -> tabletmanagerdata.TabletSelectionPreference
-	319, // 130: vtctldata.MoveTablesCreateRequest.tablet_types:type_name -> topodata.TabletType
-	307, // 131: vtctldata.MoveTablesCreateRequest.tablet_selection_preference:type_name -> tabletmanagerdata.TabletSelectionPreference
+	321, // 128: vtctldata.MigrateCreateRequest.tablet_types:type_name -> topodata.TabletType
+	309, // 129: vtctldata.MigrateCreateRequest.tablet_selection_preference:type_name -> tabletmanagerdata.TabletSelectionPreference
+	321, // 130: vtctldata.MoveTablesCreateRequest.tablet_types:type_name -> topodata.TabletType
+	309, // 131: vtctldata.MoveTablesCreateRequest.tablet_selection_preference:type_name -> tabletmanagerdata.TabletSelectionPreference
 	12,  // 132: vtctldata.MoveTablesCreateRequest.workflow_options:type_name -> vtctldata.WorkflowOptions
-	289, // 133: vtctldata.MoveTablesCreateResponse.details:type_name -> vtctldata.MoveTablesCreateResponse.TabletInfo
-	310, // 134: vtctldata.PingTabletRequest.tablet_alias:type_name -> topodata.TabletAlias
-	310, // 135: vtctldata.PlannedReparentShardRequest.new_primary:type_name -> topodata.TabletAlias
-	310, // 136: vtctldata.PlannedReparentShardRequest.avoid_primary:type_name -> topodata.TabletAlias
-	311, // 137: vtctldata.PlannedReparentShardRequest.wait_replicas_timeout:type_name -> vttime.Duration
-	311, // 138: vtctldata.PlannedReparentShardRequest.tolerable_replication_lag:type_name -> vttime.Duration
-	310, // 139: vtctldata.PlannedReparentShardRequest.expected_primary:type_name -> topodata.TabletAlias
-	310, // 140: vtctldata.PlannedReparentShardResponse.promoted_primary:type_name -> topodata.TabletAlias
-	306, // 141: vtctldata.PlannedReparentShardResponse.events:type_name -> logutil.Event
-	310, // 142: vtctldata.RefreshStateRequest.tablet_alias:type_name -> topodata.TabletAlias
-	310, // 143: vtctldata.ReloadSchemaRequest.tablet_alias:type_name -> topodata.TabletAlias
-	306, // 144: vtctldata.ReloadSchemaKeyspaceResponse.events:type_name -> logutil.Event
-	306, // 145: vtctldata.ReloadSchemaShardResponse.events:type_name -> logutil.Event
-	310, // 146: vtctldata.ReparentTabletRequest.tablet:type_name -> topodata.TabletAlias
-	310, // 147: vtctldata.ReparentTabletResponse.primary:type_name -> topodata.TabletAlias
-	319, // 148: vtctldata.ReshardCreateRequest.tablet_types:type_name -> topodata.TabletType
-	307, // 149: vtctldata.ReshardCreateRequest.tablet_selection_preference:type_name -> tabletmanagerdata.TabletSelectionPreference
+	291, // 133: vtctldata.MoveTablesCreateResponse.details:type_name -> vtctldata.MoveTablesCreateResponse.TabletInfo
+	312, // 134: vtctldata.PingTabletRequest.tablet_alias:type_name -> topodata.TabletAlias
+	312, // 135: vtctldata.PlannedReparentShardRequest.new_primary:type_name -> topodata.TabletAlias
+	312, // 136: vtctldata.PlannedReparentShardRequest.avoid_primary:type_name -> topodata.TabletAlias
+	313, // 137: vtctldata.PlannedReparentShardRequest.wait_replicas_timeout:type_name -> vttime.Duration
+	313, // 138: vtctldata.PlannedReparentShardRequest.tolerable_replication_lag:type_name -> vttime.Duration
+	312, // 139: vtctldata.PlannedReparentShardRequest.expected_primary:type_name -> topodata.TabletAlias
+	312, // 140: vtctldata.PlannedReparentShardResponse.promoted_primary:type_name -> topodata.TabletAlias
+	308, // 141: vtctldata.PlannedReparentShardResponse.events:type_name -> logutil.Event
+	312, // 142: vtctldata.RefreshStateRequest.tablet_alias:type_name -> topodata.TabletAlias
+	312, // 143: vtctldata.ReloadSchemaRequest.tablet_alias:type_name -> topodata.TabletAlias
+	308, // 144: vtctldata.ReloadSchemaKeyspaceResponse.events:type_name -> logutil.Event
+	308, // 145: vtctldata.ReloadSchemaShardResponse.events:type_name -> logutil.Event
+	312, // 146: vtctldata.ReparentTabletRequest.tablet:type_name -> topodata.TabletAlias
+	312, // 147: vtctldata.ReparentTabletResponse.primary:type_name -> topodata.TabletAlias
+	321, // 148: vtctldata.ReshardCreateRequest.tablet_types:type_name -> topodata.TabletType
+	309, // 149: vtctldata.ReshardCreateRequest.tablet_selection_preference:type_name -> tabletmanagerdata.TabletSelectionPreference
 	12,  // 150: vtctldata.ReshardCreateRequest.workflow_options:type_name -> vtctldata.WorkflowOptions
-	310, // 151: vtctldata.RestoreFromBackupRequest.tablet_alias:type_name -> topodata.TabletAlias
-	309, // 152: vtctldata.RestoreFromBackupRequest.backup_time:type_name -> vttime.Time
-	309, // 153: vtctldata.RestoreFromBackupRequest.restore_to_timestamp:type_name -> vttime.Time
-	310, // 154: vtctldata.RestoreFromBackupResponse.tablet_alias:type_name -> topodata.TabletAlias
-	306, // 155: vtctldata.RestoreFromBackupResponse.event:type_name -> logutil.Event
-	290, // 156: vtctldata.RetrySchemaMigrationResponse.rows_affected_by_shard:type_name -> vtctldata.RetrySchemaMigrationResponse.RowsAffectedByShardEntry
-	310, // 157: vtctldata.RunHealthCheckRequest.tablet_alias:type_name -> topodata.TabletAlias
-	308, // 158: vtctldata.SetKeyspaceDurabilityPolicyResponse.keyspace:type_name -> topodata.Keyspace
-	308, // 159: vtctldata.SetKeyspaceShardingInfoResponse.keyspace:type_name -> topodata.Keyspace
-	312, // 160: vtctldata.SetShardIsPrimaryServingResponse.shard:type_name -> topodata.Shard
-	319, // 161: vtctldata.SetShardTabletControlRequest.tablet_type:type_name -> topodata.TabletType
-	312, // 162: vtctldata.SetShardTabletControlResponse.shard:type_name -> topodata.Shard
-	310, // 163: vtctldata.SetWritableRequest.tablet_alias:type_name -> topodata.TabletAlias
-	310, // 164: vtctldata.ShardReplicationAddRequest.tablet_alias:type_name -> topodata.TabletAlias
-	335, // 165: vtctldata.ShardReplicationFixResponse.error:type_name -> topodata.ShardReplicationError
-	291, // 166: vtctldata.ShardReplicationPositionsResponse.replication_statuses:type_name -> vtctldata.ShardReplicationPositionsResponse.ReplicationStatusesEntry
-	292, // 167: vtctldata.ShardReplicationPositionsResponse.tablet_map:type_name -> vtctldata.ShardReplicationPositionsResponse.TabletMapEntry
-	310, // 168: vtctldata.ShardReplicationRemoveRequest.tablet_alias:type_name -> topodata.TabletAlias
-	310, // 169: vtctldata.SleepTabletRequest.tablet_alias:type_name -> topodata.TabletAlias
-	311, // 170: vtctldata.SleepTabletRequest.duration:type_name -> vttime.Duration
-	336, // 171: vtctldata.SourceShardAddRequest.key_range:type_name -> topodata.KeyRange
-	312, // 172: vtctldata.SourceShardAddResponse.shard:type_name -> topodata.Shard
-	312, // 173: vtctldata.SourceShardDeleteResponse.shard:type_name -> topodata.Shard
-	310, // 174: vtctldata.StartReplicationRequest.tablet_alias:type_name -> topodata.TabletAlias
-	310, // 175: vtctldata.StopReplicationRequest.tablet_alias:type_name -> topodata.TabletAlias
-	310, // 176: vtctldata.TabletExternallyReparentedRequest.tablet:type_name -> topodata.TabletAlias
-	310, // 177: vtctldata.TabletExternallyReparentedResponse.new_primary:type_name -> topodata.TabletAlias
-	310, // 178: vtctldata.TabletExternallyReparentedResponse.old_primary:type_name -> topodata.TabletAlias
-	313, // 179: vtctldata.UpdateCellInfoRequest.cell_info:type_name -> topodata.CellInfo
-	313, // 180: vtctldata.UpdateCellInfoResponse.cell_info:type_name -> topodata.CellInfo
-	337, // 181: vtctldata.UpdateCellsAliasRequest.cells_alias:type_name -> topodata.CellsAlias
-	337, // 182: vtctldata.UpdateCellsAliasResponse.cells_alias:type_name -> topodata.CellsAlias
-	293, // 183: vtctldata.ValidateResponse.results_by_keyspace:type_name -> vtctldata.ValidateResponse.ResultsByKeyspaceEntry
-	294, // 184: vtctldata.ValidateKeyspaceResponse.results_by_shard:type_name -> vtctldata.ValidateKeyspaceResponse.ResultsByShardEntry
-	295, // 185: vtctldata.ValidateSchemaKeyspaceResponse.results_by_shard:type_name -> vtctldata.ValidateSchemaKeyspaceResponse.ResultsByShardEntry
-	296, // 186: vtctldata.ValidateVersionKeyspaceResponse.results_by_shard:type_name -> vtctldata.ValidateVersionKeyspaceResponse.ResultsByShardEntry
-	297, // 187: vtctldata.ValidateVSchemaResponse.results_by_shard:type_name -> vtctldata.ValidateVSchemaResponse.ResultsByShardEntry
-	319, // 188: vtctldata.VDiffCreateRequest.tablet_types:type_name -> topodata.TabletType
-	307, // 189: vtctldata.VDiffCreateRequest.tablet_selection_preference:type_name -> tabletmanagerdata.TabletSelectionPreference
-	311, // 190: vtctldata.VDiffCreateRequest.filtered_replication_wait_time:type_name -> vttime.Duration
-	311, // 191: vtctldata.VDiffCreateRequest.wait_update_interval:type_name -> vttime.Duration
-	311, // 192: vtctldata.VDiffCreateRequest.max_diff_duration:type_name -> vttime.Duration
-	298, // 193: vtctldata.VDiffShowResponse.tablet_responses:type_name -> vtctldata.VDiffShowResponse.TabletResponsesEntry
-	299, // 194: vtctldata.WorkflowDeleteResponse.details:type_name -> vtctldata.WorkflowDeleteResponse.TabletInfo
-	303, // 195: vtctldata.WorkflowStatusResponse.table_copy_state:type_name -> vtctldata.WorkflowStatusResponse.TableCopyStateEntry
-	304, // 196: vtctldata.WorkflowStatusResponse.shard_streams:type_name -> vtctldata.WorkflowStatusResponse.ShardStreamsEntry
-	319, // 197: vtctldata.WorkflowSwitchTrafficRequest.tablet_types:type_name -> topodata.TabletType
-	311, // 198: vtctldata.WorkflowSwitchTrafficRequest.max_replication_lag_allowed:type_name -> vttime.Duration
-	311, // 199: vtctldata.WorkflowSwitchTrafficRequest.timeout:type_name -> vttime.Duration
-	338, // 200: vtctldata.WorkflowUpdateRequest.tablet_request:type_name -> tabletmanagerdata.UpdateVReplicationWorkflowRequest
-	305, // 201: vtctldata.WorkflowUpdateResponse.details:type_name -> vtctldata.WorkflowUpdateResponse.TabletInfo
-	339, // 202: vtctldata.GetMirrorRulesResponse.mirror_rules:type_name -> vschema.MirrorRules
-	319, // 203: vtctldata.WorkflowMirrorTrafficRequest.tablet_types:type_name -> topodata.TabletType
-	266, // 204: vtctldata.Workflow.ShardStreamsEntry.value:type_name -> vtctldata.Workflow.ShardStream
-	267, // 205: vtctldata.Workflow.ShardStream.streams:type_name -> vtctldata.Workflow.Stream
-	340, // 206: vtctldata.Workflow.ShardStream.tablet_controls:type_name -> topodata.Shard.TabletControl
-	310, // 207: vtctldata.Workflow.Stream.tablet:type_name -> topodata.TabletAlias
-	341, // 208: vtctldata.Workflow.Stream.binlog_source:type_name -> binlogdata.BinlogSource
-	309, // 209: vtctldata.Workflow.Stream.transaction_timestamp:type_name -> vttime.Time
-	309, // 210: vtctldata.Workflow.Stream.time_updated:type_name -> vttime.Time
-	268, // 211: vtctldata.Workflow.Stream.copy_states:type_name -> vtctldata.Workflow.Stream.CopyState
-	269, // 212: vtctldata.Workflow.Stream.logs:type_name -> vtctldata.Workflow.Stream.Log
-	270, // 213: vtctldata.Workflow.Stream.throttler_status:type_name -> vtctldata.Workflow.Stream.ThrottlerStatus
-	319, // 214: vtctldata.Workflow.Stream.tablet_types:type_name -> topodata.TabletType
-	307, // 215: vtctldata.Workflow.Stream.tablet_selection_preference:type_name -> tabletmanagerdata.TabletSelectionPreference
-	309, // 216: vtctldata.Workflow.Stream.Log.created_at:type_name -> vttime.Time
-	309, // 217: vtctldata.Workflow.Stream.Log.updated_at:type_name -> vttime.Time
-	309, // 218: vtctldata.Workflow.Stream.ThrottlerStatus.time_throttled:type_name -> vttime.Time
-	273, // 219: vtctldata.ApplyVSchemaResponse.UnknownVindexParamsEntry.value:type_name -> vtctldata.ApplyVSchemaResponse.ParamList
-	11,  // 220: vtctldata.FindAllShardsInKeyspaceResponse.ShardsEntry.value:type_name -> vtctldata.Shard
-	337, // 221: vtctldata.GetCellsAliasesResponse.AliasesEntry.value:type_name -> topodata.CellsAlias
-	342, // 222: vtctldata.GetShardReplicationResponse.ShardReplicationByCellEntry.value:type_name -> topodata.ShardReplication
-	285, // 223: vtctldata.GetSrvKeyspaceNamesResponse.NamesEntry.value:type_name -> vtctldata.GetSrvKeyspaceNamesResponse.NameList
-	343, // 224: vtctldata.GetSrvKeyspacesResponse.SrvKeyspacesEntry.value:type_name -> topodata.SrvKeyspace
-	331, // 225: vtctldata.GetSrvVSchemasResponse.SrvVSchemasEntry.value:type_name -> vschema.SrvVSchema
-	310, // 226: vtctldata.MoveTablesCreateResponse.TabletInfo.tablet:type_name -> topodata.TabletAlias
-	344, // 227: vtctldata.ShardReplicationPositionsResponse.ReplicationStatusesEntry.value:type_name -> replicationdata.Status
-	320, // 228: vtctldata.ShardReplicationPositionsResponse.TabletMapEntry.value:type_name -> topodata.Tablet
-	230, // 229: vtctldata.ValidateResponse.ResultsByKeyspaceEntry.value:type_name -> vtctldata.ValidateKeyspaceResponse
-	234, // 230: vtctldata.ValidateKeyspaceResponse.ResultsByShardEntry.value:type_name -> vtctldata.ValidateShardResponse
-	234, // 231: vtctldata.ValidateSchemaKeyspaceResponse.ResultsByShardEntry.value:type_name -> vtctldata.ValidateShardResponse
-	234, // 232: vtctldata.ValidateVersionKeyspaceResponse.ResultsByShardEntry.value:type_name -> vtctldata.ValidateShardResponse
-	234, // 233: vtctldata.ValidateVSchemaResponse.ResultsByShardEntry.value:type_name -> vtctldata.ValidateShardResponse
-	345, // 234: vtctldata.VDiffShowResponse.TabletResponsesEntry.value:type_name -> tabletmanagerdata.VDiffResponse
-	310, // 235: vtctldata.WorkflowDeleteResponse.TabletInfo.tablet:type_name -> topodata.TabletAlias
-	310, // 236: vtctldata.WorkflowStatusResponse.ShardStreamState.tablet:type_name -> topodata.TabletAlias
-	301, // 237: vtctldata.WorkflowStatusResponse.ShardStreams.streams:type_name -> vtctldata.WorkflowStatusResponse.ShardStreamState
-	300, // 238: vtctldata.WorkflowStatusResponse.TableCopyStateEntry.value:type_name -> vtctldata.WorkflowStatusResponse.TableCopyState
-	302, // 239: vtctldata.WorkflowStatusResponse.ShardStreamsEntry.value:type_name -> vtctldata.WorkflowStatusResponse.ShardStreams
-	310, // 240: vtctldata.WorkflowUpdateResponse.TabletInfo.tablet:type_name -> topodata.TabletAlias
-	241, // [241:241] is the sub-list for method output_type
-	241, // [241:241] is the sub-list for method input_type
-	241, // [241:241] is the sub-list for extension type_name
-	241, // [241:241] is the sub-list for extension extendee
-	0,   // [0:241] is the sub-list for field type_name
+	312, // 151: vtctldata.RestoreFromBackupRequest.tablet_alias:type_name -> topodata.TabletAlias
+	311, // 152: vtctldata.RestoreFromBackupRequest.backup_time:type_name -> vttime.Time
+	311, // 153: vtctldata.RestoreFromBackupRequest.restore_to_timestamp:type_name -> vttime.Time
+	312, // 154: vtctldata.RestoreFromBackupResponse.tablet_alias:type_name -> topodata.TabletAlias
+	308, // 155: vtctldata.RestoreFromBackupResponse.event:type_name -> logutil.Event
+	292, // 156: vtctldata.RetrySchemaMigrationResponse.rows_affected_by_shard:type_name -> vtctldata.RetrySchemaMigrationResponse.RowsAffectedByShardEntry
+	312, // 157: vtctldata.RunHealthCheckRequest.tablet_alias:type_name -> topodata.TabletAlias
+	310, // 158: vtctldata.SetKeyspaceDurabilityPolicyResponse.keyspace:type_name -> topodata.Keyspace
+	310, // 159: vtctldata.SetKeyspaceShardingInfoResponse.keyspace:type_name -> topodata.Keyspace
+	314, // 160: vtctldata.SetShardIsPrimaryServingResponse.shard:type_name -> topodata.Shard
+	321, // 161: vtctldata.SetShardTabletControlRequest.tablet_type:type_name -> topodata.TabletType
+	314, // 162: vtctldata.SetShardTabletControlResponse.shard:type_name -> topodata.Shard
+	312, // 163: vtctldata.SetWritableRequest.tablet_alias:type_name -> topodata.TabletAlias
+	312, // 164: vtctldata.ShardReplicationAddRequest.tablet_alias:type_name -> topodata.TabletAlias
+	337, // 165: vtctldata.ShardReplicationFixResponse.error:type_name -> topodata.ShardReplicationError
+	293, // 166: vtctldata.ShardReplicationPositionsResponse.replication_statuses:type_name -> vtctldata.ShardReplicationPositionsResponse.ReplicationStatusesEntry
+	294, // 167: vtctldata.ShardReplicationPositionsResponse.tablet_map:type_name -> vtctldata.ShardReplicationPositionsResponse.TabletMapEntry
+	312, // 168: vtctldata.ShardReplicationRemoveRequest.tablet_alias:type_name -> topodata.TabletAlias
+	312, // 169: vtctldata.SleepTabletRequest.tablet_alias:type_name -> topodata.TabletAlias
+	313, // 170: vtctldata.SleepTabletRequest.duration:type_name -> vttime.Duration
+	338, // 171: vtctldata.SourceShardAddRequest.key_range:type_name -> topodata.KeyRange
+	314, // 172: vtctldata.SourceShardAddResponse.shard:type_name -> topodata.Shard
+	314, // 173: vtctldata.SourceShardDeleteResponse.shard:type_name -> topodata.Shard
+	312, // 174: vtctldata.StartReplicationRequest.tablet_alias:type_name -> topodata.TabletAlias
+	312, // 175: vtctldata.StopReplicationRequest.tablet_alias:type_name -> topodata.TabletAlias
+	312, // 176: vtctldata.TabletExternallyReparentedRequest.tablet:type_name -> topodata.TabletAlias
+	312, // 177: vtctldata.TabletExternallyReparentedResponse.new_primary:type_name -> topodata.TabletAlias
+	312, // 178: vtctldata.TabletExternallyReparentedResponse.old_primary:type_name -> topodata.TabletAlias
+	315, // 179: vtctldata.UpdateCellInfoRequest.cell_info:type_name -> topodata.CellInfo
+	315, // 180: vtctldata.UpdateCellInfoResponse.cell_info:type_name -> topodata.CellInfo
+	339, // 181: vtctldata.UpdateCellsAliasRequest.cells_alias:type_name -> topodata.CellsAlias
+	339, // 182: vtctldata.UpdateCellsAliasResponse.cells_alias:type_name -> topodata.CellsAlias
+	295, // 183: vtctldata.ValidateResponse.results_by_keyspace:type_name -> vtctldata.ValidateResponse.ResultsByKeyspaceEntry
+	296, // 184: vtctldata.ValidateKeyspaceResponse.results_by_shard:type_name -> vtctldata.ValidateKeyspaceResponse.ResultsByShardEntry
+	297, // 185: vtctldata.ValidateSchemaKeyspaceResponse.results_by_shard:type_name -> vtctldata.ValidateSchemaKeyspaceResponse.ResultsByShardEntry
+	298, // 186: vtctldata.ValidateVersionKeyspaceResponse.results_by_shard:type_name -> vtctldata.ValidateVersionKeyspaceResponse.ResultsByShardEntry
+	299, // 187: vtctldata.ValidateVSchemaResponse.results_by_shard:type_name -> vtctldata.ValidateVSchemaResponse.ResultsByShardEntry
+	321, // 188: vtctldata.VDiffCreateRequest.tablet_types:type_name -> topodata.TabletType
+	309, // 189: vtctldata.VDiffCreateRequest.tablet_selection_preference:type_name -> tabletmanagerdata.TabletSelectionPreference
+	313, // 190: vtctldata.VDiffCreateRequest.filtered_replication_wait_time:type_name -> vttime.Duration
+	313, // 191: vtctldata.VDiffCreateRequest.wait_update_interval:type_name -> vttime.Duration
+	313, // 192: vtctldata.VDiffCreateRequest.max_diff_duration:type_name -> vttime.Duration
+	300, // 193: vtctldata.VDiffShowResponse.tablet_responses:type_name -> vtctldata.VDiffShowResponse.TabletResponsesEntry
+	301, // 194: vtctldata.WorkflowDeleteResponse.details:type_name -> vtctldata.WorkflowDeleteResponse.TabletInfo
+	305, // 195: vtctldata.WorkflowStatusResponse.table_copy_state:type_name -> vtctldata.WorkflowStatusResponse.TableCopyStateEntry
+	306, // 196: vtctldata.WorkflowStatusResponse.shard_streams:type_name -> vtctldata.WorkflowStatusResponse.ShardStreamsEntry
+	321, // 197: vtctldata.WorkflowSwitchTrafficRequest.tablet_types:type_name -> topodata.TabletType
+	313, // 198: vtctldata.WorkflowSwitchTrafficRequest.max_replication_lag_allowed:type_name -> vttime.Duration
+	313, // 199: vtctldata.WorkflowSwitchTrafficRequest.timeout:type_name -> vttime.Duration
+	340, // 200: vtctldata.WorkflowUpdateRequest.tablet_request:type_name -> tabletmanagerdata.UpdateVReplicationWorkflowRequest
+	307, // 201: vtctldata.WorkflowUpdateResponse.details:type_name -> vtctldata.WorkflowUpdateResponse.TabletInfo
+	341, // 202: vtctldata.GetMirrorRulesResponse.mirror_rules:type_name -> vschema.MirrorRules
+	321, // 203: vtctldata.WorkflowMirrorTrafficRequest.tablet_types:type_name -> topodata.TabletType
+	264, // 204: vtctldata.LookupVindexCreateParams.vindexes:type_name -> vtctldata.VindexParams
+	321, // 205: vtctldata.LookupVindexCreateParams.tablet_types:type_name -> topodata.TabletType
+	268, // 206: vtctldata.Workflow.ShardStreamsEntry.value:type_name -> vtctldata.Workflow.ShardStream
+	269, // 207: vtctldata.Workflow.ShardStream.streams:type_name -> vtctldata.Workflow.Stream
+	342, // 208: vtctldata.Workflow.ShardStream.tablet_controls:type_name -> topodata.Shard.TabletControl
+	312, // 209: vtctldata.Workflow.Stream.tablet:type_name -> topodata.TabletAlias
+	343, // 210: vtctldata.Workflow.Stream.binlog_source:type_name -> binlogdata.BinlogSource
+	311, // 211: vtctldata.Workflow.Stream.transaction_timestamp:type_name -> vttime.Time
+	311, // 212: vtctldata.Workflow.Stream.time_updated:type_name -> vttime.Time
+	270, // 213: vtctldata.Workflow.Stream.copy_states:type_name -> vtctldata.Workflow.Stream.CopyState
+	271, // 214: vtctldata.Workflow.Stream.logs:type_name -> vtctldata.Workflow.Stream.Log
+	272, // 215: vtctldata.Workflow.Stream.throttler_status:type_name -> vtctldata.Workflow.Stream.ThrottlerStatus
+	321, // 216: vtctldata.Workflow.Stream.tablet_types:type_name -> topodata.TabletType
+	309, // 217: vtctldata.Workflow.Stream.tablet_selection_preference:type_name -> tabletmanagerdata.TabletSelectionPreference
+	311, // 218: vtctldata.Workflow.Stream.Log.created_at:type_name -> vttime.Time
+	311, // 219: vtctldata.Workflow.Stream.Log.updated_at:type_name -> vttime.Time
+	311, // 220: vtctldata.Workflow.Stream.ThrottlerStatus.time_throttled:type_name -> vttime.Time
+	275, // 221: vtctldata.ApplyVSchemaResponse.UnknownVindexParamsEntry.value:type_name -> vtctldata.ApplyVSchemaResponse.ParamList
+	11,  // 222: vtctldata.FindAllShardsInKeyspaceResponse.ShardsEntry.value:type_name -> vtctldata.Shard
+	339, // 223: vtctldata.GetCellsAliasesResponse.AliasesEntry.value:type_name -> topodata.CellsAlias
+	344, // 224: vtctldata.GetShardReplicationResponse.ShardReplicationByCellEntry.value:type_name -> topodata.ShardReplication
+	287, // 225: vtctldata.GetSrvKeyspaceNamesResponse.NamesEntry.value:type_name -> vtctldata.GetSrvKeyspaceNamesResponse.NameList
+	345, // 226: vtctldata.GetSrvKeyspacesResponse.SrvKeyspacesEntry.value:type_name -> topodata.SrvKeyspace
+	333, // 227: vtctldata.GetSrvVSchemasResponse.SrvVSchemasEntry.value:type_name -> vschema.SrvVSchema
+	312, // 228: vtctldata.MoveTablesCreateResponse.TabletInfo.tablet:type_name -> topodata.TabletAlias
+	346, // 229: vtctldata.ShardReplicationPositionsResponse.ReplicationStatusesEntry.value:type_name -> replicationdata.Status
+	322, // 230: vtctldata.ShardReplicationPositionsResponse.TabletMapEntry.value:type_name -> topodata.Tablet
+	230, // 231: vtctldata.ValidateResponse.ResultsByKeyspaceEntry.value:type_name -> vtctldata.ValidateKeyspaceResponse
+	234, // 232: vtctldata.ValidateKeyspaceResponse.ResultsByShardEntry.value:type_name -> vtctldata.ValidateShardResponse
+	234, // 233: vtctldata.ValidateSchemaKeyspaceResponse.ResultsByShardEntry.value:type_name -> vtctldata.ValidateShardResponse
+	234, // 234: vtctldata.ValidateVersionKeyspaceResponse.ResultsByShardEntry.value:type_name -> vtctldata.ValidateShardResponse
+	234, // 235: vtctldata.ValidateVSchemaResponse.ResultsByShardEntry.value:type_name -> vtctldata.ValidateShardResponse
+	347, // 236: vtctldata.VDiffShowResponse.TabletResponsesEntry.value:type_name -> tabletmanagerdata.VDiffResponse
+	312, // 237: vtctldata.WorkflowDeleteResponse.TabletInfo.tablet:type_name -> topodata.TabletAlias
+	312, // 238: vtctldata.WorkflowStatusResponse.ShardStreamState.tablet:type_name -> topodata.TabletAlias
+	303, // 239: vtctldata.WorkflowStatusResponse.ShardStreams.streams:type_name -> vtctldata.WorkflowStatusResponse.ShardStreamState
+	302, // 240: vtctldata.WorkflowStatusResponse.TableCopyStateEntry.value:type_name -> vtctldata.WorkflowStatusResponse.TableCopyState
+	304, // 241: vtctldata.WorkflowStatusResponse.ShardStreamsEntry.value:type_name -> vtctldata.WorkflowStatusResponse.ShardStreams
+	312, // 242: vtctldata.WorkflowUpdateResponse.TabletInfo.tablet:type_name -> topodata.TabletAlias
+	243, // [243:243] is the sub-list for method output_type
+	243, // [243:243] is the sub-list for method input_type
+	243, // [243:243] is the sub-list for extension type_name
+	243, // [243:243] is the sub-list for extension extendee
+	0,   // [0:243] is the sub-list for field type_name
 }
 
 func init() { file_vtctldata_proto_init() }
@@ -20011,7 +20245,7 @@ func file_vtctldata_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_vtctldata_proto_rawDesc,
 			NumEnums:      5,
-			NumMessages:   301,
+			NumMessages:   303,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

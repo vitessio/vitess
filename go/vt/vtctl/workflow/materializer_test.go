@@ -2542,20 +2542,6 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 		err                    string
 	}{
 		{
-			description: "dup vindex",
-			input: &vschemapb.Keyspace{
-				Vindexes: map[string]*vschemapb.Vindex{
-					"v1": {
-						Type: "xxhash",
-					},
-					"v2": {
-						Type: "xxhash",
-					},
-				},
-			},
-			err: "only one vindex must be specified",
-		},
-		{
 			description: "not a lookup",
 			input: &vschemapb.Keyspace{
 				Vindexes: map[string]*vschemapb.Vindex{
@@ -2633,7 +2619,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 			input: &vschemapb.Keyspace{
 				Vindexes: unique,
 			},
-			err: "one or two tables must be specified",
+			err: "atleast one table must be specified",
 		},
 		{
 			description: "too many tables",
