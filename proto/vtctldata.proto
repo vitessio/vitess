@@ -1227,8 +1227,6 @@ message LookupVindexCompleteRequest {
 }
 
 message LookupVindexCompleteResponse {
-  // Was the workflow deleted.
-  bool workflow_deleted = 1;
 }
 
 message LookupVindexCreateRequest {
@@ -1273,8 +1271,6 @@ message LookupVindexInternalizeRequest {
 }
 
 message LookupVindexInternalizeResponse {
-  // Was the workflow started.
-  bool workflow_started = 1;
 }
 
 message MaterializeCreateRequest {

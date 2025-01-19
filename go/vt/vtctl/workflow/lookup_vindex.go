@@ -581,7 +581,7 @@ func (lv *lookupVindex) validateExternalized(ctx context.Context, vindex *vschem
 		for _, stream := range res.Streams {
 			// All streams need to be frozen.
 			if stream.State != binlogdatapb.VReplicationWorkflowState_Stopped || stream.Message != Frozen {
-				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "stream %d for %v.%v is not frozen: %v, %v", stream.Id, targetShard.Keyspace(), targetShard.ShardName(), stream.State, stream.Message)
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "stream %d for %v/%v is not frozen: %v, %v", stream.Id, targetShard.Keyspace(), targetShard.ShardName(), stream.State, stream.Message)
 			}
 		}
 		return nil

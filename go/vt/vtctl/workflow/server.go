@@ -581,8 +581,6 @@ func (s *Server) LookupVindexComplete(ctx context.Context, req *vtctldatapb.Look
 		return nil, err
 	}
 
-	// Now that we have checked that the vindex has been externalized,
-	// we don't need to delete the write_only parameter from the vindex.
 	resp := &vtctldatapb.LookupVindexCompleteResponse{}
 	if _, derr := s.WorkflowDelete(ctx, &vtctldatapb.WorkflowDeleteRequest{
 		Keyspace:         req.TableKeyspace,
@@ -590,9 +588,8 @@ func (s *Server) LookupVindexComplete(ctx context.Context, req *vtctldatapb.Look
 		KeepData:         true,
 		KeepRoutingRules: true,
 	}); derr != nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "failed to delete workflow %s: %v", req.Name, derr)
+		return nil, vterrors.Wrapf(derr, "failed to delete workflow %s", req.Name)
 	}
-	resp.WorkflowDeleted = true
 	return resp, nil
 }
 
@@ -753,8 +750,7 @@ func (s *Server) LookupVindexExternalize(ctx context.Context, req *vtctldatapb.L
 	return resp, s.ts.RebuildSrvVSchema(ctx, nil)
 }
 
-// LookupVindexInternalize internalizes a lookup vindex. If the vindex has an
-// owner then the stopped workflow will also be started.
+// LookupVindexInternalize internalizes a lookup vindex.
 func (s *Server) LookupVindexInternalize(ctx context.Context, req *vtctldatapb.LookupVindexInternalizeRequest) (*vtctldatapb.LookupVindexInternalizeResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "workflow.Server.LookupVindexInternalize")
 	defer span.Finish()
@@ -803,7 +799,6 @@ func (s *Server) LookupVindexInternalize(ctx context.Context, req *vtctldatapb.L
 	if err != nil {
 		return nil, err
 	}
-	resp.WorkflowStarted = true
 
 	return resp, s.ts.RebuildSrvVSchema(ctx, nil)
 }

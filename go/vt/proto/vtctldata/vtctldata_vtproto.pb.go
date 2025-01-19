@@ -3076,7 +3076,6 @@ func (m *LookupVindexCompleteResponse) CloneVT() *LookupVindexCompleteResponse {
 		return (*LookupVindexCompleteResponse)(nil)
 	}
 	r := new(LookupVindexCompleteResponse)
-	r.WorkflowDeleted = m.WorkflowDeleted
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -3197,7 +3196,6 @@ func (m *LookupVindexInternalizeResponse) CloneVT() *LookupVindexInternalizeResp
 		return (*LookupVindexInternalizeResponse)(nil)
 	}
 	r := new(LookupVindexInternalizeResponse)
-	r.WorkflowStarted = m.WorkflowStarted
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -14275,16 +14273,6 @@ func (m *LookupVindexCompleteResponse) MarshalToSizedBufferVT(dAtA []byte) (int,
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if m.WorkflowDeleted {
-		i--
-		if m.WorkflowDeleted {
-			dAtA[i] = 1
-		} else {
-			dAtA[i] = 0
-		}
-		i--
-		dAtA[i] = 0x8
-	}
 	return len(dAtA) - i, nil
 }
 
@@ -14623,16 +14611,6 @@ func (m *LookupVindexInternalizeResponse) MarshalToSizedBufferVT(dAtA []byte) (i
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
-	}
-	if m.WorkflowStarted {
-		i--
-		if m.WorkflowStarted {
-			dAtA[i] = 1
-		} else {
-			dAtA[i] = 0
-		}
-		i--
-		dAtA[i] = 0x8
 	}
 	return len(dAtA) - i, nil
 }
@@ -25001,9 +24979,6 @@ func (m *LookupVindexCompleteResponse) SizeVT() (n int) {
 	}
 	var l int
 	_ = l
-	if m.WorkflowDeleted {
-		n += 2
-	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -25128,9 +25103,6 @@ func (m *LookupVindexInternalizeResponse) SizeVT() (n int) {
 	}
 	var l int
 	_ = l
-	if m.WorkflowStarted {
-		n += 2
-	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -48742,26 +48714,6 @@ func (m *LookupVindexCompleteResponse) UnmarshalVT(dAtA []byte) error {
 			return fmt.Errorf("proto: LookupVindexCompleteResponse: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
-		case 1:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field WorkflowDeleted", wireType)
-			}
-			var v int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return protohelpers.ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				v |= int(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			m.WorkflowDeleted = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
@@ -49560,26 +49512,6 @@ func (m *LookupVindexInternalizeResponse) UnmarshalVT(dAtA []byte) error {
 			return fmt.Errorf("proto: LookupVindexInternalizeResponse: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
-		case 1:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field WorkflowStarted", wireType)
-			}
-			var v int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return protohelpers.ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				v |= int(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			m.WorkflowStarted = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])

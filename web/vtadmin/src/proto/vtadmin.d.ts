@@ -65933,9 +65933,6 @@ export namespace vtctldata {
 
     /** Properties of a LookupVindexCompleteResponse. */
     interface ILookupVindexCompleteResponse {
-
-        /** LookupVindexCompleteResponse workflow_deleted */
-        workflow_deleted?: (boolean|null);
     }
 
     /** Represents a LookupVindexCompleteResponse. */
@@ -65946,9 +65943,6 @@ export namespace vtctldata {
          * @param [properties] Properties to set
          */
         constructor(properties?: vtctldata.ILookupVindexCompleteResponse);
-
-        /** LookupVindexCompleteResponse workflow_deleted. */
-        public workflow_deleted: boolean;
 
         /**
          * Creates a new LookupVindexCompleteResponse instance using the specified properties.
@@ -66581,9 +66575,6 @@ export namespace vtctldata {
 
     /** Properties of a LookupVindexInternalizeResponse. */
     interface ILookupVindexInternalizeResponse {
-
-        /** LookupVindexInternalizeResponse workflow_started */
-        workflow_started?: (boolean|null);
     }
 
     /** Represents a LookupVindexInternalizeResponse. */
@@ -66594,9 +66585,6 @@ export namespace vtctldata {
          * @param [properties] Properties to set
          */
         constructor(properties?: vtctldata.ILookupVindexInternalizeResponse);
-
-        /** LookupVindexInternalizeResponse workflow_started. */
-        public workflow_started: boolean;
 
         /**
          * Creates a new LookupVindexInternalizeResponse instance using the specified properties.

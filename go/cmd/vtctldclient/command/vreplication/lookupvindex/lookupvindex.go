@@ -154,7 +154,7 @@ var (
 	// complete makes a LookupVindexComplete call to a vtctld.
 	complete = &cobra.Command{
 		Use:                   "complete",
-		Short:                 "Complete the Lookup Vindex. If the Vindex has an owner the VReplication workflow will also be deleted.",
+		Short:                 "Complete the LookupVindex workflow. The Vindex must have been previously externalized. If you want to delete the workflow without externalizing the Vindex then use the cancel command instead.",
 		Example:               `vtctldclient --server localhost:15999 LookupVindex --name corder_lookup_vdx --table-keyspace customer complete`,
 		SilenceUsage:          true,
 		DisableFlagsInUseLine: true,
@@ -191,7 +191,7 @@ var (
 	// internalize makes a LookupVindexInternalize call to a vtctld.
 	internalize = &cobra.Command{
 		Use:                   "internalize",
-		Short:                 "Internalize the Lookup Vindex. If the Vindex has an owner the VReplication workflow will also be started.",
+		Short:                 "Internalize the Vindex again to continue the backfill, making it unusable for queries again.",
 		Example:               `vtctldclient --server localhost:15999 LookupVindex --name corder_lookup_vdx --table-keyspace customer internalize`,
 		SilenceUsage:          true,
 		DisableFlagsInUseLine: true,
@@ -238,7 +238,7 @@ func commandComplete(cmd *cobra.Command, args []string) error {
 	}
 	cli.FinishedParsing(cmd)
 
-	resp, err := common.GetClient().LookupVindexComplete(common.GetCommandCtx(), &vtctldatapb.LookupVindexCompleteRequest{
+	_, err := common.GetClient().LookupVindexComplete(common.GetCommandCtx(), &vtctldatapb.LookupVindexCompleteRequest{
 		Keyspace: completeOptions.Keyspace,
 		// The name of the workflow and lookup vindex.
 		Name: baseOptions.Name,
@@ -250,12 +250,7 @@ func commandComplete(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	output := fmt.Sprintf("LookupVindex %s has been completed", baseOptions.Name)
-	if resp.WorkflowDeleted {
-		output = output + " and the VReplication workflow has been deleted."
-	} else {
-		output = output + ". The VReplication workflow hasn't been stopped as the vindex is unowned."
-	}
+	output := fmt.Sprintf("LookupVindex %s has been completed and the VReplication workflow has been deleted.", baseOptions.Name)
 	fmt.Println(output)
 
 	return nil
@@ -323,7 +318,7 @@ func commandInternalize(cmd *cobra.Command, args []string) error {
 	}
 	cli.FinishedParsing(cmd)
 
-	resp, err := common.GetClient().LookupVindexInternalize(common.GetCommandCtx(), &vtctldatapb.LookupVindexInternalizeRequest{
+	_, err := common.GetClient().LookupVindexInternalize(common.GetCommandCtx(), &vtctldatapb.LookupVindexInternalizeRequest{
 		Keyspace: internalizeOptions.Keyspace,
 		// The name of the workflow and lookup vindex.
 		Name: baseOptions.Name,
@@ -335,10 +330,7 @@ func commandInternalize(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	output := fmt.Sprintf("LookupVindex %s has been internalized", baseOptions.Name)
-	if resp.WorkflowStarted {
-		output = output + " and the VReplication workflow has been started."
-	}
+	output := fmt.Sprintf("LookupVindex %s has been internalized and the VReplication workflow has been started.", baseOptions.Name)
 	fmt.Println(output)
 
 	return nil
@@ -401,7 +393,7 @@ func registerCommands(root *cobra.Command) {
 	// vindex has an owner as the lookup vindex will then be
 	// managed by VTGate.
 	externalize.Flags().StringVar(&externalizeOptions.Keyspace, "keyspace", "", "The keyspace containing the Lookup Vindex. If no value is specified then the table-keyspace will be used.")
-	externalize.Flags().BoolVar(&externalizeOptions.Delete, "delete", false, "Delete the VReplication workflow after externalizing LookupVindex, instead of stopping (default false).")
+	externalize.Flags().BoolVar(&externalizeOptions.Delete, "delete", false, "Delete the VReplication workflow after externalizing the Vindex, instead of stopping (default false).")
 	base.AddCommand(externalize)
 
 	internalize.Flags().StringVar(&internalizeOptions.Keyspace, "keyspace", "", "The keyspace containing the Lookup Vindex. If no value is specified then the table-keyspace will be used.")
