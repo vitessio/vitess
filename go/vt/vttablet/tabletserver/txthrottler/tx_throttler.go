@@ -71,6 +71,8 @@ type TxThrottler interface {
 	InitDBConfig(target *querypb.Target)
 	Open() (err error)
 	Close()
+	MakePrimary()
+	MakeNonPrimary()
 	Throttle(priority int, workload string) (result bool)
 }
 
@@ -135,6 +137,8 @@ type txThrottler struct {
 }
 
 type txThrottlerState interface {
+	makePrimary()
+	makeNonPrimary()
 	deallocateResources()
 	StatsUpdate(tabletStats *discovery.TabletHealth)
 	throttle() bool
@@ -143,6 +147,7 @@ type txThrottlerState interface {
 // txThrottlerStateImpl holds the state of an open TxThrottler object.
 type txThrottlerStateImpl struct {
 	config      *tabletenv.TabletConfig
+	target      *querypb.Target
 	txThrottler *txThrottler
 
 	// throttleMu serializes calls to throttler.Throttler.Throttle(threadId).
@@ -153,17 +158,16 @@ type txThrottlerStateImpl struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	healthCheck      discovery.HealthCheck
-	healthCheckChan  chan *discovery.TabletHealth
-	healthCheckCells []string
-	cellsFromTopo    bool
+	cellsFromTopo     bool
+	healthCheck       discovery.HealthCheck
+	healthCheckCancel context.CancelFunc
+	healthCheckCells  []string
+	healthCheckChan   chan *discovery.TabletHealth
+	maxLag            int64
+	wg                sync.WaitGroup
 
 	// tabletTypes stores the tablet types for throttling
 	tabletTypes map[topodatapb.TabletType]bool
-
-	maxLag             int64
-	done               chan bool
-	waitForTermination sync.WaitGroup
 }
 
 // NewTxThrottler tries to construct a txThrottler from the relevant
@@ -228,6 +232,22 @@ func (t *txThrottler) Close() {
 	log.Info("txThrottler: closed")
 }
 
+// MakePrimary performs a transition to a primary tablet. This will enable healthchecks to
+// watch the replication lag state of other tablets.
+func (t *txThrottler) MakePrimary() {
+	if t.state != nil {
+		t.state.makePrimary()
+	}
+}
+
+// MakePrimary performs a transition to a non-primary tablet. This disables healthchecks
+// for replication lag state if we were primary.
+func (t *txThrottler) MakeNonPrimary() {
+	if t.state != nil {
+		t.state.makeNonPrimary()
+	}
+}
+
 // Throttle should be called before a new transaction is started.
 // It returns true if the transaction should not proceed (the caller
 // should back off). Throttle requires that Open() was previously called
@@ -275,16 +295,27 @@ func newTxThrottlerState(txThrottler *txThrottler, config *tabletenv.TabletConfi
 		tabletTypes[tabletType] = true
 	}
 
+	// get cells from topo if none defined in tabletenv config
+	var cellsFromTopo bool
+	healthCheckCells := config.TxThrottlerHealthCheckCells
+	if len(healthCheckCells) == 0 {
+		ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
+		defer cancel()
+		healthCheckCells = fetchKnownCells(ctx, txThrottler.topoServer, target)
+		cellsFromTopo = true
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	state := &txThrottlerStateImpl{
 		ctx:              ctx,
 		cancel:           cancel,
 		config:           config,
-		healthCheckCells: config.TxThrottlerHealthCheckCells,
+		cellsFromTopo:    cellsFromTopo,
+		healthCheckCells: healthCheckCells,
 		tabletTypes:      tabletTypes,
+		target:           target,
 		throttler:        t,
 		txThrottler:      txThrottler,
-		done:             make(chan bool, 1),
 	}
 
 	// get cells from topo if none defined in tabletenv config
@@ -295,32 +326,32 @@ func newTxThrottlerState(txThrottler *txThrottler, config *tabletenv.TabletConfi
 		state.cellsFromTopo = true
 	}
 
-	if err := state.initHealthCheckStream(txThrottler.topoServer, target); err != nil {
-		return nil, err
-	}
-	state.healthCheck.RegisterStats()
-	go state.healthChecksProcessor(txThrottler.topoServer, target)
-	state.waitForTermination.Add(1)
-	go state.updateMaxLag()
-
 	return state, nil
 }
 
-func (ts *txThrottlerStateImpl) initHealthCheckStream(topoServer *topo.Server, target *querypb.Target) (err error) {
+func (ts *txThrottlerStateImpl) initHealthCheck(topoServer *topo.Server, target *querypb.Target) (err error) {
 	ts.healthCheck, err = healthCheckFactory(ts.ctx, topoServer, target.Cell, target.Keyspace, target.Shard, ts.healthCheckCells)
 	if err != nil {
+		ts.healthCheck = nil
+
 		return err
 	}
+
 	ts.healthCheckChan = ts.healthCheck.Subscribe()
+	ts.healthCheck.RegisterStats()
+
 	return nil
 }
 
-func (ts *txThrottlerStateImpl) closeHealthCheckStream() {
+func (ts *txThrottlerStateImpl) closeHealthCheck() {
 	if ts.healthCheck == nil {
 		return
 	}
+
 	ts.cancel()
 	ts.healthCheck.Close()
+	ts.healthCheck = nil
+	ts.maxLag = 0
 }
 
 func (ts *txThrottlerStateImpl) updateHealthCheckCells(topoServer *topo.Server, target *querypb.Target) error {
@@ -331,13 +362,15 @@ func (ts *txThrottlerStateImpl) updateHealthCheckCells(topoServer *topo.Server, 
 	if !slices.Equal(knownCells, ts.healthCheckCells) {
 		log.Info("txThrottler: restarting healthcheck stream due to topology cells update")
 		ts.healthCheckCells = knownCells
-		ts.closeHealthCheckStream()
-		return ts.initHealthCheckStream(topoServer, target)
+		ts.closeHealthCheck()
+		return ts.initHealthCheck(topoServer, target)
 	}
+
 	return nil
 }
 
 func (ts *txThrottlerStateImpl) healthChecksProcessor(topoServer *topo.Server, target *querypb.Target) {
+	defer ts.wg.Done()
 	var cellsUpdateTicks <-chan time.Time
 	if ts.cellsFromTopo {
 		ticker := time.NewTicker(ts.config.TxThrottlerTopoRefreshInterval)
@@ -358,11 +391,38 @@ func (ts *txThrottlerStateImpl) healthChecksProcessor(topoServer *topo.Server, t
 	}
 }
 
+func (ts *txThrottlerStateImpl) makePrimary() {
+	err := ts.initHealthCheck(ts.txThrottler.topoServer, ts.target)
+	if err != nil {
+		log.Errorf("txThrottler: failed to initialize health check while attempting to make primary: %v", err)
+
+		return
+	}
+
+	var ctx context.Context
+	ctx, ts.healthCheckCancel = context.WithCancel(context.Background())
+
+	ts.wg.Add(1)
+	go ts.healthChecksProcessor(ts.txThrottler.topoServer, ts.target)
+
+	ts.wg.Add(1)
+	go ts.updateMaxLag(ctx)
+}
+
+func (ts *txThrottlerStateImpl) makeNonPrimary() {
+	ts.closeHealthCheck()
+}
+
 func (ts *txThrottlerStateImpl) throttle() bool {
 	if ts.throttler == nil {
 		log.Error("txThrottler: throttle called after deallocateResources was called")
 		return false
 	}
+	// return false if we are not watching lag
+	if ts.healthCheck == nil {
+		return false
+	}
+
 	// Serialize calls to ts.throttle.Throttle()
 	ts.throttleMu.Lock()
 	defer ts.throttleMu.Unlock()
@@ -373,17 +433,17 @@ func (ts *txThrottlerStateImpl) throttle() bool {
 		ts.throttler.Throttle(0 /* threadId */) > 0
 }
 
-func (ts *txThrottlerStateImpl) updateMaxLag() {
-	defer ts.waitForTermination.Done()
+func (ts *txThrottlerStateImpl) updateMaxLag(ctx context.Context) {
+	defer ts.wg.Done()
 	// We use half of the target lag to ensure we have enough resolution to see changes in lag below that value
 	ticker := time.NewTicker(time.Duration(ts.config.TxThrottlerConfig.TargetReplicationLagSec/2) * time.Second)
 	defer ticker.Stop()
-outerloop:
 	for {
 		select {
+		case <-ctx.Done():
+			return
 		case <-ticker.C:
 			var maxLag uint32
-
 			for tabletType := range ts.tabletTypes {
 				maxLagPerTabletType := ts.throttler.MaxLag(tabletType)
 				if maxLagPerTabletType > maxLag {
@@ -391,28 +451,23 @@ outerloop:
 				}
 			}
 			atomic.StoreInt64(&ts.maxLag, int64(maxLag))
-		case <-ts.done:
-			break outerloop
 		}
 	}
 }
 
 func (ts *txThrottlerStateImpl) deallocateResources() {
-	// Close healthcheck and topo watchers
-	ts.closeHealthCheckStream()
-	ts.healthCheck = nil
+	// Close healthcheck and max lag updater
+	ts.closeHealthCheck()
 
-	ts.done <- true
-	ts.waitForTermination.Wait()
 	// After ts.healthCheck is closed txThrottlerStateImpl.StatsUpdate() is guaranteed not
 	// to be executing, so we can safely close the throttler.
 	ts.throttler.Close()
 	ts.throttler = nil
 }
 
-// StatsUpdate updates the health of a tablet with the given healthcheck.
+// StatsUpdate updates the health of a tablet with the given healthcheck, when primary.
 func (ts *txThrottlerStateImpl) StatsUpdate(tabletStats *discovery.TabletHealth) {
-	if len(ts.tabletTypes) == 0 {
+	if ts.healthCheck == nil || len(ts.tabletTypes) == 0 {
 		return
 	}
 

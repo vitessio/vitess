@@ -77,12 +77,11 @@ func TestStateManagerServePrimary(t *testing.T) {
 	assert.Equal(t, testNow, sm.ptsTimestamp)
 
 	verifySubcomponent(t, 1, sm.watcher, testStateClosed)
-
 	verifySubcomponent(t, 2, sm.se, testStateOpen)
 	verifySubcomponent(t, 3, sm.vstreamer, testStateOpen)
 	verifySubcomponent(t, 4, sm.qe, testStateOpen)
-	verifySubcomponent(t, 5, sm.txThrottler, testStateOpen)
-	verifySubcomponent(t, 6, sm.rt, testStatePrimary)
+	verifySubcomponent(t, 5, sm.rt, testStatePrimary)
+	verifySubcomponent(t, 6, sm.txThrottler, testStatePrimary)
 	verifySubcomponent(t, 7, sm.tracker, testStateOpen)
 	verifySubcomponent(t, 8, sm.te, testStatePrimary)
 	verifySubcomponent(t, 9, sm.messager, testStateOpen)
@@ -109,10 +108,10 @@ func TestStateManagerServeNonPrimary(t *testing.T) {
 	verifySubcomponent(t, 4, sm.tracker, testStateClosed)
 	assert.True(t, sm.se.(*testSchemaEngine).nonPrimary)
 
-	verifySubcomponent(t, 5, sm.se, testStateOpen)
-	verifySubcomponent(t, 6, sm.vstreamer, testStateOpen)
-	verifySubcomponent(t, 7, sm.qe, testStateOpen)
-	verifySubcomponent(t, 8, sm.txThrottler, testStateOpen)
+	verifySubcomponent(t, 5, sm.txThrottler, testStateNonPrimary)
+	verifySubcomponent(t, 6, sm.se, testStateOpen)
+	verifySubcomponent(t, 7, sm.vstreamer, testStateOpen)
+	verifySubcomponent(t, 8, sm.qe, testStateOpen)
 	verifySubcomponent(t, 9, sm.te, testStateNonPrimary)
 	verifySubcomponent(t, 10, sm.rt, testStateNonPrimary)
 	verifySubcomponent(t, 11, sm.watcher, testStateOpen)
@@ -139,9 +138,9 @@ func TestStateManagerUnservePrimary(t *testing.T) {
 	verifySubcomponent(t, 8, sm.se, testStateOpen)
 	verifySubcomponent(t, 9, sm.vstreamer, testStateOpen)
 	verifySubcomponent(t, 10, sm.qe, testStateOpen)
-	verifySubcomponent(t, 11, sm.txThrottler, testStateOpen)
 
-	verifySubcomponent(t, 12, sm.rt, testStatePrimary)
+	verifySubcomponent(t, 11, sm.rt, testStatePrimary)
+	verifySubcomponent(t, 12, sm.txThrottler, testStatePrimary)
 
 	assert.Equal(t, topodatapb.TabletType_PRIMARY, sm.target.TabletType)
 	assert.Equal(t, StateNotServing, sm.state)
@@ -162,10 +161,10 @@ func TestStateManagerUnserveNonPrimary(t *testing.T) {
 	verifySubcomponent(t, 6, sm.tracker, testStateClosed)
 	assert.True(t, sm.se.(*testSchemaEngine).nonPrimary)
 
-	verifySubcomponent(t, 7, sm.se, testStateOpen)
-	verifySubcomponent(t, 8, sm.vstreamer, testStateOpen)
-	verifySubcomponent(t, 9, sm.qe, testStateOpen)
-	verifySubcomponent(t, 10, sm.txThrottler, testStateOpen)
+	verifySubcomponent(t, 7, sm.txThrottler, testStateNonPrimary)
+	verifySubcomponent(t, 8, sm.se, testStateOpen)
+	verifySubcomponent(t, 9, sm.vstreamer, testStateOpen)
+	verifySubcomponent(t, 10, sm.qe, testStateOpen)
 
 	verifySubcomponent(t, 11, sm.rt, testStateNonPrimary)
 	verifySubcomponent(t, 12, sm.watcher, testStateOpen)
@@ -300,10 +299,10 @@ func TestStateManagerSetServingTypeNoChange(t *testing.T) {
 	verifySubcomponent(t, 4, sm.tracker, testStateClosed)
 	assert.True(t, sm.se.(*testSchemaEngine).nonPrimary)
 
-	verifySubcomponent(t, 5, sm.se, testStateOpen)
-	verifySubcomponent(t, 6, sm.vstreamer, testStateOpen)
-	verifySubcomponent(t, 7, sm.qe, testStateOpen)
-	verifySubcomponent(t, 8, sm.txThrottler, testStateOpen)
+	verifySubcomponent(t, 5, sm.txThrottler, testStateNonPrimary)
+	verifySubcomponent(t, 6, sm.se, testStateOpen)
+	verifySubcomponent(t, 7, sm.vstreamer, testStateOpen)
+	verifySubcomponent(t, 8, sm.qe, testStateOpen)
 	verifySubcomponent(t, 9, sm.te, testStateNonPrimary)
 	verifySubcomponent(t, 10, sm.rt, testStateNonPrimary)
 	verifySubcomponent(t, 11, sm.watcher, testStateOpen)
@@ -858,7 +857,7 @@ func (te *testSchemaEngine) EnsureConnectionAndDB(topodatapb.TabletType, bool) e
 }
 
 func (te *testSchemaEngine) Open() error {
-	te.order = order.Add(1)
+	te.order = addOrder()
 	te.state = testStateOpen
 	return nil
 }
@@ -872,7 +871,7 @@ func (te *testSchemaEngine) MakePrimary(serving bool) {
 }
 
 func (te *testSchemaEngine) Close() {
-	te.order = order.Add(1)
+	te.order = addOrder()
 	te.state = testStateClosed
 }
 
@@ -883,17 +882,17 @@ type testReplTracker struct {
 }
 
 func (te *testReplTracker) MakePrimary() {
-	te.order = order.Add(1)
+	te.order = addOrder()
 	te.state = testStatePrimary
 }
 
 func (te *testReplTracker) MakeNonPrimary() {
-	te.order = order.Add(1)
+	te.order = addOrder()
 	te.state = testStateNonPrimary
 }
 
 func (te *testReplTracker) Close() {
-	te.order = order.Add(1)
+	te.order = addOrder()
 	te.state = testStateClosed
 }
 
@@ -908,7 +907,7 @@ type testQueryEngine struct {
 }
 
 func (te *testQueryEngine) Open() error {
-	te.order = order.Add(1)
+	te.order = addOrder()
 	te.state = testStateOpen
 	return nil
 }
@@ -922,7 +921,7 @@ func (te *testQueryEngine) IsMySQLReachable() error {
 }
 
 func (te *testQueryEngine) Close() {
-	te.order = order.Add(1)
+	te.order = addOrder()
 	te.state = testStateClosed
 }
 
@@ -931,17 +930,17 @@ type testTxEngine struct {
 }
 
 func (te *testTxEngine) AcceptReadWrite() {
-	te.order = order.Add(1)
+	te.order = addOrder()
 	te.state = testStatePrimary
 }
 
 func (te *testTxEngine) AcceptReadOnly() {
-	te.order = order.Add(1)
+	te.order = addOrder()
 	te.state = testStateNonPrimary
 }
 
 func (te *testTxEngine) Close() {
-	te.order = order.Add(1)
+	te.order = addOrder()
 	te.state = testStateClosed
 }
 
@@ -952,12 +951,12 @@ type testSubcomponent struct {
 }
 
 func (te *testSubcomponent) Open() {
-	te.order = order.Add(1)
+	te.order = addOrder()
 	te.state = testStateOpen
 }
 
 func (te *testSubcomponent) Close() {
-	te.order = order.Add(1)
+	te.order = addOrder()
 	te.state = testStateClosed
 }
 
@@ -966,14 +965,30 @@ type testTxThrottler struct {
 }
 
 func (te *testTxThrottler) Open() error {
-	te.order = order.Add(1)
+	te.order = addOrder()
 	te.state = testStateOpen
 	return nil
 }
 
 func (te *testTxThrottler) Close() {
-	te.order = order.Add(1)
+	te.order = addOrder()
 	te.state = testStateClosed
+}
+
+func (te *testTxThrottler) MakePrimary() {
+	te.order = addOrder()
+	te.state = testStatePrimary
+}
+
+func (te *testTxThrottler) MakeNonPrimary() {
+	te.order = addOrder()
+	te.state = testStateNonPrimary
+}
+
+func addOrder() int64 {
+	newVal := order.Add(1)
+
+	return newVal
 }
 
 type testOnlineDDLExecutor struct {
@@ -981,13 +996,13 @@ type testOnlineDDLExecutor struct {
 }
 
 func (te *testOnlineDDLExecutor) Open() error {
-	te.order = order.Add(1)
+	te.order = addOrder()
 	te.state = testStateOpen
 	return nil
 }
 
 func (te *testOnlineDDLExecutor) Close() {
-	te.order = order.Add(1)
+	te.order = addOrder()
 	te.state = testStateClosed
 }
 
@@ -996,13 +1011,13 @@ type testLagThrottler struct {
 }
 
 func (te *testLagThrottler) Open() error {
-	te.order = order.Add(1)
+	te.order = addOrder()
 	te.state = testStateOpen
 	return nil
 }
 
 func (te *testLagThrottler) Close() {
-	te.order = order.Add(1)
+	te.order = addOrder()
 	te.state = testStateClosed
 }
 
@@ -1011,12 +1026,12 @@ type testTableGC struct {
 }
 
 func (te *testTableGC) Open() error {
-	te.order = order.Add(1)
+	te.order = addOrder()
 	te.state = testStateOpen
 	return nil
 }
 
 func (te *testTableGC) Close() {
-	te.order = order.Add(1)
+	te.order = addOrder()
 	te.state = testStateClosed
 }
