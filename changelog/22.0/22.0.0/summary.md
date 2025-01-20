@@ -12,6 +12,7 @@
   - **[Support for More Efficient JSON Replication](#efficient-json-replication)**
   - **[Support for LAST_INSERT_ID(x)](#last-insert-id)**
   - **[Support for Maximum Idle Connections in the Pool](#max-idle-connections)**
+  - **[Support for Filtering Query logs on Error](#query-logs)**
 - **[Minor Changes](#minor-changes)**
   - **[VTTablet Flags](#flags-vttablet)**
   - **[Topology read concurrency behaviour changes](#topo-read-concurrency-changes)**
@@ -99,6 +100,10 @@ You can control idle connection retention for the query server’s query pool, s
 •	--queryserver-config-txpool-max-idle-count: Defines the maximum number of idle connections retained in the transaction pool.
 
 This feature ensures that, during traffic spikes, idle connections are available for faster responses, while minimizing overhead in low-traffic periods by limiting the number of idle connections retained. It helps strike a balance between performance, efficiency, and cost.
+
+### <a id="query-logs"/>Support for Filtering Query logs on Error</a>
+
+The `querylog-mode` setting can be configured to `error` to log only queries that result in errors. This option is supported in both VTGate and VTTablet.
 
 ## <a id="minor-changes"/>Minor Changes</a>
 
