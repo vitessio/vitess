@@ -266,35 +266,20 @@ func TestFile(t *testing.T) {
 }
 
 func TestShouldSampleQuery(t *testing.T) {
-	queryLogSampleRate = -1
-	assert.False(t, shouldSampleQuery())
+	qlConfig := QueryLogConfig{sampleRate: -1}
+	assert.False(t, qlConfig.shouldSampleQuery())
 
-	queryLogSampleRate = 0
-	assert.False(t, shouldSampleQuery())
+	qlConfig.sampleRate = 0
+	assert.False(t, qlConfig.shouldSampleQuery())
 
-	// for test coverage, can't test a random result
-	queryLogSampleRate = 0.5
-	shouldSampleQuery()
+	qlConfig.sampleRate = 1.0
+	assert.True(t, qlConfig.shouldSampleQuery())
 
-	queryLogSampleRate = 1.0
-	assert.True(t, shouldSampleQuery())
-
-	queryLogSampleRate = 100.0
-	assert.True(t, shouldSampleQuery())
+	qlConfig.sampleRate = 100.0
+	assert.True(t, qlConfig.shouldSampleQuery())
 }
 
 func TestShouldEmitLog(t *testing.T) {
-	origQueryLogFilterTag := queryLogFilterTag
-	origQueryLogRowThreshold := queryLogRowThreshold
-	origQueryLogSampleRate := queryLogSampleRate
-	origQueryLogMode := queryLogMode
-	defer func() {
-		SetQueryLogFilterTag(origQueryLogFilterTag)
-		SetQueryLogRowThreshold(origQueryLogRowThreshold)
-		SetQueryLogSampleRate(origQueryLogSampleRate)
-		SetQueryLogMode(origQueryLogMode)
-	}()
-
 	tests := []struct {
 		sql              string
 		qLogFilterTag    string
@@ -376,38 +361,15 @@ func TestShouldEmitLog(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.sql, func(t *testing.T) {
-			SetQueryLogFilterTag(tt.qLogFilterTag)
-			SetQueryLogRowThreshold(tt.qLogRowThreshold)
-			SetQueryLogSampleRate(tt.qLogSampleRate)
-			SetQueryLogMode(tt.qLogMode)
-
-			require.Equal(t, tt.ok, ShouldEmitLog(tt.sql, tt.rowsAffected, tt.rowsReturned, tt.errored))
+			qlConfig := QueryLogConfig{
+				FilterTag:    tt.qLogFilterTag,
+				RowThreshold: tt.qLogRowThreshold,
+				sampleRate:   tt.qLogSampleRate,
+				Mode:         tt.qLogMode,
+			}
+			require.Equal(t, tt.ok, qlConfig.ShouldEmitLog(tt.sql, tt.rowsAffected, tt.rowsReturned, tt.errored))
 		})
 	}
-}
-
-func BenchmarkShouldEmitLog(b *testing.B) {
-	b.Run("default", func(b *testing.B) {
-		SetQueryLogSampleRate(0.0)
-		for i := 0; i < b.N; i++ {
-			ShouldEmitLog("select * from test where user='someone'", 0, 123, false)
-		}
-	})
-	b.Run("filter_tag", func(b *testing.B) {
-		SetQueryLogSampleRate(0.0)
-		SetQueryLogFilterTag("LOG_QUERY")
-		defer SetQueryLogFilterTag("")
-		for i := 0; i < b.N; i++ {
-			ShouldEmitLog("select /* LOG_QUERY=1 */ * from test where user='someone'", 0, 123, false)
-		}
-	})
-	b.Run("50%_sample_rate", func(b *testing.B) {
-		SetQueryLogSampleRate(0.5)
-		defer SetQueryLogSampleRate(0.0)
-		for i := 0; i < b.N; i++ {
-			ShouldEmitLog("select * from test where user='someone'", 0, 123, false)
-		}
-	})
 }
 
 func TestGetFormatter(t *testing.T) {

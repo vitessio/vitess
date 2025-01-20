@@ -36,6 +36,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/streamlog"
+
 	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -1621,7 +1623,7 @@ func assertCacheContains(t *testing.T, e *Executor, vc *econtext.VCursorImpl, sq
 }
 
 func getPlanCached(t *testing.T, ctx context.Context, e *Executor, vcursor *econtext.VCursorImpl, sql string, comments sqlparser.MarginComments, bindVars map[string]*querypb.BindVariable, skipQueryPlanCache bool) (*engine.Plan, *logstats.LogStats) {
-	logStats := logstats.NewLogStats(ctx, "Test", "", "", nil)
+	logStats := logstats.NewLogStats(ctx, "Test", "", "", nil, streamlog.NewQueryLogConfigForTest())
 	vcursor.SafeSession = &econtext.SafeSession{
 		Session: &vtgatepb.Session{
 			Options: &querypb.ExecuteOptions{SkipQueryPlanCache: skipQueryPlanCache}},
@@ -1787,7 +1789,7 @@ func TestGetPlanPriority(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			r, _, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 
-			logStats := logstats.NewLogStats(ctx, "Test", "", "", nil)
+			logStats := logstats.NewLogStats(ctx, "Test", "", "", nil, streamlog.NewQueryLogConfigForTest())
 			vCursor, err := econtext.NewVCursorImpl(session, makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, nullResultsObserver{}, econtext.VCursorConfig{})
 			assert.NoError(t, err)
 
