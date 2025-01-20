@@ -14,6 +14,7 @@
   - **[Support for Maximum Idle Connections in the Pool](#max-idle-connections)**
   - **[Stalled Disk Recovery in VTOrc](#stall-disk-recovery)**
   - **[Update default MySQL version to 8.0.40](#mysql-8-0-40)**
+  - **[Update lite images to Debian Bookworm](#debian-bookworm)**
 - **[Minor Changes](#minor-changes)**
   - **[VTTablet Flags](#flags-vttablet)**
   - **[Topology read concurrency behaviour changes](#topo-read-concurrency-changes)**
@@ -126,6 +127,10 @@ If you are using the `vitess-operator`, considering that we are bumping the patc
 6. Apply this file.
 
 This is the last time this will be needed in the `8.0.x` series, as starting with MySQL `8.0.35` it is possible to upgrade and downgrade between `8.0.x` versions without needing to run `innodb_fast_shutdown=0`.
+
+### <a id="debian-bookworm"/>Update lite images to Debian Bookworm</a>
+
+The base system now uses Debian Bookworm instead of Debian Bullseye for the `vitess/lite` images. This change was brought by [Pull Request #17552].
 
 ## <a id="minor-changes"/>Minor Changes</a>
 
