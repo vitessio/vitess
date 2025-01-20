@@ -100,10 +100,10 @@ func simplifyResultsMismatchedQuery(t *testing.T, query string) string {
 	require.NoError(t, err)
 
 	simplified := simplifier.SimplifyStatement(
-		stmt.(sqlparser.SelectStatement),
+		stmt.(sqlparser.TableStatement),
 		vSchemaWrapper.CurrentDb(),
 		vSchemaWrapper,
-		func(statement sqlparser.SelectStatement) bool {
+		func(statement sqlparser.TableStatement) bool {
 			q := sqlparser.String(statement)
 			_, newErr := mcmp.ExecAllowAndCompareError(q, utils.CompareOptions{})
 			if newErr == nil {

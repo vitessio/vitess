@@ -678,5 +678,15 @@ func (tvde *testVDiffEnv) createController(t *testing.T, id int) *controller {
 	tvde.dbClient.ExpectRequest(fmt.Sprintf("select * from _vt.vdiff where id = %d", id), noResults, nil)
 	ct, err := newController(context.Background(), controllerQR.Named().Row(), tvde.dbClientFactory, tstenv.TopoServ, tvde.vde, tvde.opts)
 	require.NoError(t, err)
+	ct.sources = map[string]*migrationSource{
+		tstenv.ShardName: {
+			vrID: 1,
+			shardStreamer: &shardStreamer{
+				tablet: tvde.vde.thisTablet,
+				shard:  tstenv.ShardName,
+			},
+		},
+	}
+	ct.sourceKeyspace = tstenv.KeyspaceName
 	return ct
 }

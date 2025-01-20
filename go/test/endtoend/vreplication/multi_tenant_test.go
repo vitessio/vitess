@@ -91,7 +91,15 @@ type multiTenantMigration struct {
 }
 
 const (
-	mtSchema  = "create table t1(id int, tenant_id int, primary key(id, tenant_id)) Engine=InnoDB"
+	// The source/mt schema does not have the tenant_id column in the PK as adding a
+	// column to a table can be done as an INSTANT operation whereas modifying a table's
+	// PK requires a full table rebuild. So as a practical matter in production the
+	// source schema will likely have the tenant_id column, but NOT have it be part of
+	// the PK.
+	mtSchema = "create table t1(id int, tenant_id int, primary key(id)) Engine=InnoDB"
+	// The target/st schema must have the tenant_id column in the PK and the primary
+	// vindex.
+	stSchema  = "create table t1(id int, tenant_id int, primary key(id, tenant_id)) Engine=InnoDB"
 	mtVSchema = `
 {
   "multi_tenant_spec": {
@@ -127,7 +135,6 @@ const (
   }
 }
 `
-	stSchema  = mtSchema
 	stVSchema = `
 {
   "tables": {
@@ -429,8 +436,11 @@ func (mtm *multiTenantMigration) insertSomeData(t *testing.T, tenantId int64, ke
 	defer closeConn()
 	idx := mtm.getLastID(tenantId)
 	for i := idx + 1; i <= idx+numRows; i++ {
+		// The source table has a PK on id only, so we have to make the id value
+		// unique rather than relying on the combination of (id, tenant_id) for
+		// our uniqueness.
 		execQueryWithRetry(t, vtgateConn,
-			fmt.Sprintf("insert into %s.t1(id, tenant_id) values(%d, %d)", keyspace, i, tenantId), queryTimeout)
+			fmt.Sprintf("insert into %s.t1(id, tenant_id) values(%d, %d)", keyspace, i+(tenantId*1e4), tenantId), queryTimeout)
 	}
 	mtm.setLastID(tenantId, idx+numRows)
 }
