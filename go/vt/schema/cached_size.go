@@ -19,6 +19,17 @@ package schema
 
 import hack "vitess.io/vitess/go/hack"
 
+func (cached *DDLStrategy) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += hack.RuntimeAllocSize(int64(16))
+	}
+	size += hack.RuntimeAllocSize(int64(len(*cached)))
+	return size
+}
 func (cached *DDLStrategySetting) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
