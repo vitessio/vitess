@@ -697,6 +697,7 @@ func (d ExprDependencies) dependencies(expr sqlparser.Expr) (deps TableSet) {
 		if found {
 			return deps
 		}
+		// If we did not find the expression in the cache, we'll add it after calculating it
 		defer func() {
 			d[expr] = deps
 		}()
@@ -705,6 +706,7 @@ func (d ExprDependencies) dependencies(expr sqlparser.Expr) (deps TableSet) {
 	// During the original semantic analysis, all ColNames were found and bound to the corresponding tables
 	// Here, we'll walk the expression tree and look to see if we can find any sub-expressions
 	// that have already set dependencies.
+	var depsCalc MutableTableSet
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		expr, ok := node.(sqlparser.Expr)
 		if !ok || !ValidAsMapKey(expr) {
@@ -714,11 +716,13 @@ func (d ExprDependencies) dependencies(expr sqlparser.Expr) (deps TableSet) {
 		}
 
 		set, found := d[expr]
-		deps = deps.Merge(set)
+		depsCalc.MergeInPlace(set)
 
 		// if we found a cached value, there is no need to continue down to visit children
 		return !found, nil
 	}, expr)
+
+	deps = depsCalc.ToImmutable()
 
 	return deps
 }

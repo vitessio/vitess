@@ -123,7 +123,14 @@ func MergeTableSets(tss ...TableSet) TableSet {
 	return TableSet(result)
 }
 
-// TableSetFromIds returns TableSet for all the id passed in argument.
-func TableSetFromIds(tids ...int) (ts TableSet) {
-	return TableSet(bitset.Build(tids...))
+type MutableTableSet struct {
+	bitset bitset.Mutable
+}
+
+func (ts *MutableTableSet) MergeInPlace(other TableSet) {
+	ts.bitset.Or(bitset.Bitset(other))
+}
+
+func (ts *MutableTableSet) ToImmutable() TableSet {
+	return TableSet(ts.bitset.AsImmutable())
 }

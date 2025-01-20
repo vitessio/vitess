@@ -120,17 +120,18 @@ func cloneASTAndSemState[T sqlparser.SQLNode](ctx *plancontext.PlanningContext, 
 }
 
 // findTablesContained returns the TableSet of all the contained
-func findTablesContained(ctx *plancontext.PlanningContext, node sqlparser.SQLNode) (result semantics.TableSet) {
+func findTablesContained(ctx *plancontext.PlanningContext, node sqlparser.SQLNode) semantics.TableSet {
+	var tables semantics.MutableTableSet
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
 		t, ok := node.(*sqlparser.AliasedTableExpr)
 		if !ok {
 			return true, nil
 		}
 		ts := ctx.SemTable.TableSetFor(t)
-		result = result.Merge(ts)
+		tables.MergeInPlace(ts)
 		return true, nil
 	}, node)
-	return
+	return tables.ToImmutable()
 }
 
 // joinPredicateCollector is used to inspect the predicates inside the subquery, looking for any

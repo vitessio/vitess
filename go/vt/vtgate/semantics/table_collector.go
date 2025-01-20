@@ -169,7 +169,7 @@ func (tc *tableCollector) visitUnion(union *sqlparser.Union) error {
 	}
 
 	size := firstSelect.GetColumnCount()
-	info.recursive = make([]TableSet, size)
+	recursiveDeps := make([]MutableTableSet, size)
 	typers := make([]evalengine.TypeAggregator, size)
 	collations := tc.org.collationEnv()
 
@@ -179,8 +179,8 @@ func (tc *tableCollector) visitUnion(union *sqlparser.Union) error {
 			if !ok {
 				continue
 			}
-			_, recursiveDeps, qt := tc.org.depsForExpr(ae.Expr)
-			info.recursive[i] = info.recursive[i].Merge(recursiveDeps)
+			_, deps, qt := tc.org.depsForExpr(ae.Expr)
+			recursiveDeps[i].MergeInPlace(deps)
 			if err := typers[i].Add(qt, collations); err != nil {
 				return err
 			}
@@ -191,8 +191,10 @@ func (tc *tableCollector) visitUnion(union *sqlparser.Union) error {
 		return err
 	}
 
-	for _, ts := range typers {
+	info.recursive = make([]TableSet, size)
+	for i, ts := range typers {
 		info.types = append(info.types, ts.Type())
+		info.recursive[i] = recursiveDeps[i].ToImmutable()
 	}
 	tc.unionInfo[union] = info
 	return nil

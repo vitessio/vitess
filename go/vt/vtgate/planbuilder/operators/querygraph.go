@@ -66,11 +66,11 @@ var _ Operator = (*QueryGraph)(nil)
 
 // Introduces implements the tableIDIntroducer interface
 func (qg *QueryGraph) introducesTableID() semantics.TableSet {
-	var ts semantics.TableSet
+	var ts semantics.MutableTableSet
 	for _, table := range qg.Tables {
-		ts = ts.Merge(table.ID)
+		ts.MergeInPlace(table.ID)
 	}
-	return ts
+	return ts.ToImmutable()
 }
 
 // GetPredicates returns the predicates that are applicable for the two given TableSets
