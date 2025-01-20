@@ -34265,6 +34265,9 @@ export namespace tabletmanagerdata {
         /** UpdateVReplicationWorkflowRequest state */
         state?: (binlogdata.VReplicationWorkflowState|null);
 
+        /** UpdateVReplicationWorkflowRequest shards */
+        shards?: (string[]|null);
+
         /** UpdateVReplicationWorkflowRequest config_overrides */
         config_overrides?: ({ [k: string]: string }|null);
 
@@ -34298,6 +34301,9 @@ export namespace tabletmanagerdata {
 
         /** UpdateVReplicationWorkflowRequest state. */
         public state?: (binlogdata.VReplicationWorkflowState|null);
+
+        /** UpdateVReplicationWorkflowRequest shards. */
+        public shards: string[];
 
         /** UpdateVReplicationWorkflowRequest config_overrides. */
         public config_overrides: { [k: string]: string };
