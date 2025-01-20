@@ -1,10 +1,10 @@
-name: docker_test_cluster_10
+name: docker_test_cluster
 on: [push, pull_request]
 permissions: read-all
 jobs:
 
   build:
-    name: Docker Test Cluster 10
+    name: Docker Test Cluster
     runs-on: ubuntu-24.04
 
     steps:
@@ -22,12 +22,14 @@ jobs:
         if [[ "${{github.event.pull_request}}" ==  "" ]] && [[ "${{github.ref}}" != "refs/heads/main" ]] && [[ ! "${{github.ref}}" =~ ^refs/heads/release-[0-9]+\.[0-9]$ ]] && [[ ! "${{github.ref}}" =~ "refs/tags/.*" ]]; then
           skip='true'
         fi
-        echo Skip $skip
+        echo Skip ${skip}
         echo "skip-workflow=${skip}" >> $GITHUB_OUTPUT
 
     - name: Check out code
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
-      uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      with:
+        persist-credentials: 'false'
 
     - name: Check for changes in relevant files
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
@@ -37,6 +39,7 @@ jobs:
         token: ''
         filters: |
           end_to_end:
+            - 'test/config.json'
             - 'go/**/*.go'
             - 'test.go'
             - 'Makefile'
@@ -48,7 +51,7 @@ jobs:
             - 'config/**'
             - 'bootstrap.sh'
             - 'docker/**'
-            - '.github/workflows/docker_test_cluster_10.yml'
+            - '.github/workflows/docker_test_cluster.yml'
 
     - name: Set up Go
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -59,10 +62,9 @@ jobs:
     - name: Tune the OS
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
-        echo "value: " ${{steps.skip-workflow.outputs.skip-workflow}}
         sudo sysctl -w net.ipv4.ip_local_port_range="22768 65535"
 
-    - name: Run tests which require docker - 1
+    - name: Run tests which require docker - 2
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
-        go run test.go -docker=true --follow -shard 10
+        go run test.go -docker=true --follow -shard docker_cluster
