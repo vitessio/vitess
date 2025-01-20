@@ -12,6 +12,7 @@
   - **[Support for More Efficient JSON Replication](#efficient-json-replication)**
   - **[Support for LAST_INSERT_ID(x)](#last-insert-id)**
   - **[Support for Maximum Idle Connections in the Pool](#max-idle-connections)**
+  - **[Stalled Disk Recovery in VTOrc](#stall-disk-recovery)**
   - **[Support for Filtering Query logs on Error](#query-logs)**
 - **[Minor Changes](#minor-changes)**
   - **[VTTablet Flags](#flags-vttablet)**
@@ -100,6 +101,11 @@ You can control idle connection retention for the query server’s query pool, s
 •	--queryserver-config-txpool-max-idle-count: Defines the maximum number of idle connections retained in the transaction pool.
 
 This feature ensures that, during traffic spikes, idle connections are available for faster responses, while minimizing overhead in low-traffic periods by limiting the number of idle connections retained. It helps strike a balance between performance, efficiency, and cost.
+
+### <a id="stall-disk-recovery"/>Stalled Disk Recovery in VTOrc</a>
+VTOrc can now identify and recover from stalled disk errors. VTTablets test whether the disk is writable and they send this information in the full status output to VTOrc. If the disk is not writable on the primary tablet, VTOrc will attempt to recover the cluster by promoting a new primary. This is useful in scenarios where the disk is stalled and the primary vttablet is unable to accept writes because of it.
+
+To opt into this feature, `--enable-primary-disk-stalled-recovery` flag has to be specified on VTOrc, and `--disk-write-dir` flag has to be specified on the vttablets. `--disk-write-interval` and `--disk-write-timeout` flags can be used to configure the polling interval and timeout respectively. 
 
 ### <a id="query-logs"/>Support for Filtering Query logs on Error</a>
 
