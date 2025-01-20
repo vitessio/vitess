@@ -571,16 +571,13 @@ func (lv *lookupVindex) prepareMultipleCreate(ctx context.Context, workflow, key
 		return nil, nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "no vindex provided")
 	}
 
-	// Validate input vindexes & get VindexInfos.
-	vInfos, err := lv.validateAndGetVindexInfoMultiple(specs)
-	if err != nil {
-		return nil, nil, nil, nil, err
-	}
-
 	targetVSchemaChanged := false
 
-	for _, vInfo := range vInfos {
-		vindex := specs.Vindexes[vInfo.name]
+	for vindexName, vindex := range specs.Vindexes {
+		vInfo, err := lv.validateAndGetVindexInfo(vindexName, vindex, specs.Tables)
+		if err != nil {
+			return nil, nil, nil, nil, err
+		}
 
 		// TODO: Current implementation expects only owned lookup vindexes.
 		var ok bool
@@ -748,19 +745,6 @@ func (lv *lookupVindex) prepareMultipleCreate(ctx context.Context, workflow, key
 	}
 
 	return ms, sourceVSchema, targetVSchema, cancelFunc, nil
-}
-
-// validateAndGetVindexInfoMultiple validates and extracts vindex configuration for multiple lookup vindexes
-func (lv *lookupVindex) validateAndGetVindexInfoMultiple(specs *vschemapb.Keyspace) ([]*vindexInfo, error) {
-	var vindexInfos []*vindexInfo
-	for vindexName, vindex := range specs.Vindexes {
-		vi, err := lv.validateAndGetVindexInfo(vindexName, vindex, specs.Tables)
-		if err != nil {
-			return nil, err
-		}
-		vindexInfos = append(vindexInfos, vi)
-	}
-	return vindexInfos, nil
 }
 
 func validateSourceTableAndGetVindexColumnsMultiple(vInfo *vindexInfo, vindex *vschemapb.Vindex) (colVindex *vschemapb.ColumnVindex, sourceVindexColumns []string, err error) {

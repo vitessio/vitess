@@ -192,7 +192,7 @@ var (
 			targetTableColumnVindex := &vschemapb.ColumnVindex{
 				// If the vindex name/type is empty then we'll fill this in
 				// later using the defult for the column types.
-				Name:    params.TableVindexType,
+				Name:    vindex.TableVindexType,
 				Columns: vindex.TableOwnerColumns,
 			}
 			sourceTableColumnVindex := &vschemapb.ColumnVindex{
@@ -235,6 +235,14 @@ var (
 			}
 		}
 
+		if params.ContinueAfterCopyWithOwner != nil {
+			createOptions.ContinueAfterCopyWithOwner = *params.ContinueAfterCopyWithOwner
+		}
+
+		if params.TabletTypesInPreferenceOrder != nil {
+			createOptions.ContinueAfterCopyWithOwner = *params.TabletTypesInPreferenceOrder
+		}
+
 		return nil
 	}
 
@@ -251,7 +259,6 @@ var (
 	}
 
 	// create makes a LookupVindexCreate call to a vtctld.
-	// TODO: Refactor description for multiple lookup vindexes.
 	create = &cobra.Command{
 		Use:                   "create",
 		Short:                 "Create the Lookup Vindex(es) in the specified keyspace and backfill them with a VReplication workflow.",
@@ -383,7 +390,7 @@ func commandShow(cmd *cobra.Command, args []string) error {
 }
 
 func registerCommands(root *cobra.Command) {
-	base.PersistentFlags().StringVar(&baseOptions.Name, "name", "", "The name of the Lookup Vindex to create. This will also be the name of the VReplication workflow created to backfill the Lookup Vindex.")
+	base.PersistentFlags().StringVar(&baseOptions.Name, "name", "", "The name of the Lookup Vindex to create. This will also be the name of the VReplication workflow created to backfill the Lookup Vindex. This will be used only for the workflow name if params-file is used.")
 	base.MarkPersistentFlagRequired("name")
 	base.PersistentFlags().StringVar(&baseOptions.TableKeyspace, "table-keyspace", "", "The keyspace to create the lookup table in. This is also where the VReplication workflow is created to backfill the Lookup Vindex.")
 	base.MarkPersistentFlagRequired("table-keyspace")

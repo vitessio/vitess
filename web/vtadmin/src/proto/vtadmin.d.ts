@@ -79758,9 +79758,6 @@ export namespace vtctldata {
         /** LookupVindexCreateParams keyspace */
         keyspace?: (string|null);
 
-        /** LookupVindexCreateParams table_vindex_type */
-        table_vindex_type?: (string|null);
-
         /** LookupVindexCreateParams vindexes */
         vindexes?: (vtctldata.IVindexParams[]|null);
 
@@ -79789,9 +79786,6 @@ export namespace vtctldata {
         /** LookupVindexCreateParams keyspace. */
         public keyspace: string;
 
-        /** LookupVindexCreateParams table_vindex_type. */
-        public table_vindex_type: string;
-
         /** LookupVindexCreateParams vindexes. */
         public vindexes: vtctldata.IVindexParams[];
 
@@ -79802,10 +79796,16 @@ export namespace vtctldata {
         public tablet_types: topodata.TabletType[];
 
         /** LookupVindexCreateParams continue_after_copy_with_owner. */
-        public continue_after_copy_with_owner: boolean;
+        public continue_after_copy_with_owner?: (boolean|null);
 
         /** LookupVindexCreateParams tablet_types_in_preference_order. */
-        public tablet_types_in_preference_order: boolean;
+        public tablet_types_in_preference_order?: (boolean|null);
+
+        /** LookupVindexCreateParams _continue_after_copy_with_owner. */
+        public _continue_after_copy_with_owner?: "continue_after_copy_with_owner";
+
+        /** LookupVindexCreateParams _tablet_types_in_preference_order. */
+        public _tablet_types_in_preference_order?: "tablet_types_in_preference_order";
 
         /**
          * Creates a new LookupVindexCreateParams instance using the specified properties.
@@ -79905,6 +79905,9 @@ export namespace vtctldata {
 
         /** VindexParams ignore_nulls */
         ignore_nulls?: (boolean|null);
+
+        /** VindexParams table_vindex_type */
+        table_vindex_type?: (string|null);
     }
 
     /** Represents a VindexParams. */
@@ -79933,6 +79936,9 @@ export namespace vtctldata {
 
         /** VindexParams ignore_nulls. */
         public ignore_nulls: boolean;
+
+        /** VindexParams table_vindex_type. */
+        public table_vindex_type: string;
 
         /**
          * Creates a new VindexParams instance using the specified properties.

@@ -2161,17 +2161,14 @@ message WorkflowMirrorTrafficResponse {
 message LookupVindexCreateParams {
   // Keyspace to create the Lookup Vindex(es) in.
   string keyspace = 1;
-  // The primary vindex name/type to use for the lookup tables,
-  // if the table-keyspace is sharded.
-  string table_vindex_type = 2;
   // Vindex(es) configuration.
-  repeated VindexParams vindexes = 3;
+  repeated VindexParams vindexes = 2;
 
   // VReplication specific options.
-  repeated string cells = 4;
-  repeated topodata.TabletType tablet_types = 5;
-  bool continue_after_copy_with_owner = 6;
-  bool tablet_types_in_preference_order = 7;
+  repeated string cells = 3;
+  repeated topodata.TabletType tablet_types = 4;
+  optional bool continue_after_copy_with_owner = 5;
+  optional bool tablet_types_in_preference_order = 6;
 }
 
 message VindexParams {
@@ -2190,4 +2187,7 @@ message VindexParams {
   // Do not add corresponding records in the lookup table if any of the owner
   // table's 'from' fields are NULL.
   bool ignore_nulls = 6;
+  // The primary vindex name/type to use for the lookup table,
+  // if the table-keyspace is sharded.
+  string table_vindex_type = 7;
 }

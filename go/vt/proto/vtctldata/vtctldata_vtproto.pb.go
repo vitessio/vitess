@@ -5794,9 +5794,6 @@ func (m *LookupVindexCreateParams) CloneVT() *LookupVindexCreateParams {
 	}
 	r := new(LookupVindexCreateParams)
 	r.Keyspace = m.Keyspace
-	r.TableVindexType = m.TableVindexType
-	r.ContinueAfterCopyWithOwner = m.ContinueAfterCopyWithOwner
-	r.TabletTypesInPreferenceOrder = m.TabletTypesInPreferenceOrder
 	if rhs := m.Vindexes; rhs != nil {
 		tmpContainer := make([]*VindexParams, len(rhs))
 		for k, v := range rhs {
@@ -5813,6 +5810,14 @@ func (m *LookupVindexCreateParams) CloneVT() *LookupVindexCreateParams {
 		tmpContainer := make([]topodata.TabletType, len(rhs))
 		copy(tmpContainer, rhs)
 		r.TabletTypes = tmpContainer
+	}
+	if rhs := m.ContinueAfterCopyWithOwner; rhs != nil {
+		tmpVal := *rhs
+		r.ContinueAfterCopyWithOwner = &tmpVal
+	}
+	if rhs := m.TabletTypesInPreferenceOrder; rhs != nil {
+		tmpVal := *rhs
+		r.TabletTypesInPreferenceOrder = &tmpVal
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -5835,6 +5840,7 @@ func (m *VindexParams) CloneVT() *VindexParams {
 	r.TableOwner = m.TableOwner
 	r.TableName = m.TableName
 	r.IgnoreNulls = m.IgnoreNulls
+	r.TableVindexType = m.TableVindexType
 	if rhs := m.TableOwnerColumns; rhs != nil {
 		tmpContainer := make([]string, len(rhs))
 		copy(tmpContainer, rhs)
@@ -21660,25 +21666,25 @@ func (m *LookupVindexCreateParams) MarshalToSizedBufferVT(dAtA []byte) (int, err
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if m.TabletTypesInPreferenceOrder {
+	if m.TabletTypesInPreferenceOrder != nil {
 		i--
-		if m.TabletTypesInPreferenceOrder {
-			dAtA[i] = 1
-		} else {
-			dAtA[i] = 0
-		}
-		i--
-		dAtA[i] = 0x38
-	}
-	if m.ContinueAfterCopyWithOwner {
-		i--
-		if m.ContinueAfterCopyWithOwner {
+		if *m.TabletTypesInPreferenceOrder {
 			dAtA[i] = 1
 		} else {
 			dAtA[i] = 0
 		}
 		i--
 		dAtA[i] = 0x30
+	}
+	if m.ContinueAfterCopyWithOwner != nil {
+		i--
+		if *m.ContinueAfterCopyWithOwner {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x28
 	}
 	if len(m.TabletTypes) > 0 {
 		var pksize2 int
@@ -21699,7 +21705,7 @@ func (m *LookupVindexCreateParams) MarshalToSizedBufferVT(dAtA []byte) (int, err
 		}
 		i = protohelpers.EncodeVarint(dAtA, i, uint64(pksize2))
 		i--
-		dAtA[i] = 0x2a
+		dAtA[i] = 0x22
 	}
 	if len(m.Cells) > 0 {
 		for iNdEx := len(m.Cells) - 1; iNdEx >= 0; iNdEx-- {
@@ -21707,7 +21713,7 @@ func (m *LookupVindexCreateParams) MarshalToSizedBufferVT(dAtA []byte) (int, err
 			copy(dAtA[i:], m.Cells[iNdEx])
 			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.Cells[iNdEx])))
 			i--
-			dAtA[i] = 0x22
+			dAtA[i] = 0x1a
 		}
 	}
 	if len(m.Vindexes) > 0 {
@@ -21719,15 +21725,8 @@ func (m *LookupVindexCreateParams) MarshalToSizedBufferVT(dAtA []byte) (int, err
 			i -= size
 			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 			i--
-			dAtA[i] = 0x1a
+			dAtA[i] = 0x12
 		}
-	}
-	if len(m.TableVindexType) > 0 {
-		i -= len(m.TableVindexType)
-		copy(dAtA[i:], m.TableVindexType)
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.TableVindexType)))
-		i--
-		dAtA[i] = 0x12
 	}
 	if len(m.Keyspace) > 0 {
 		i -= len(m.Keyspace)
@@ -21768,6 +21767,13 @@ func (m *VindexParams) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if len(m.TableVindexType) > 0 {
+		i -= len(m.TableVindexType)
+		copy(dAtA[i:], m.TableVindexType)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.TableVindexType)))
+		i--
+		dAtA[i] = 0x3a
 	}
 	if m.IgnoreNulls {
 		i--
@@ -27767,10 +27773,6 @@ func (m *LookupVindexCreateParams) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
-	l = len(m.TableVindexType)
-	if l > 0 {
-		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
-	}
 	if len(m.Vindexes) > 0 {
 		for _, e := range m.Vindexes {
 			l = e.SizeVT()
@@ -27790,10 +27792,10 @@ func (m *LookupVindexCreateParams) SizeVT() (n int) {
 		}
 		n += 1 + protohelpers.SizeOfVarint(uint64(l)) + l
 	}
-	if m.ContinueAfterCopyWithOwner {
+	if m.ContinueAfterCopyWithOwner != nil {
 		n += 2
 	}
-	if m.TabletTypesInPreferenceOrder {
+	if m.TabletTypesInPreferenceOrder != nil {
 		n += 2
 	}
 	n += len(m.unknownFields)
@@ -27830,6 +27832,10 @@ func (m *VindexParams) SizeVT() (n int) {
 	}
 	if m.IgnoreNulls {
 		n += 2
+	}
+	l = len(m.TableVindexType)
+	if l > 0 {
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -66818,38 +66824,6 @@ func (m *LookupVindexCreateParams) UnmarshalVT(dAtA []byte) error {
 			iNdEx = postIndex
 		case 2:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field TableVindexType", wireType)
-			}
-			var stringLen uint64
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return protohelpers.ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
-				return protohelpers.ErrInvalidLength
-			}
-			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return protohelpers.ErrInvalidLength
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.TableVindexType = string(dAtA[iNdEx:postIndex])
-			iNdEx = postIndex
-		case 3:
-			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Vindexes", wireType)
 			}
 			var msglen int
@@ -66882,7 +66856,7 @@ func (m *LookupVindexCreateParams) UnmarshalVT(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
-		case 4:
+		case 3:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Cells", wireType)
 			}
@@ -66914,7 +66888,7 @@ func (m *LookupVindexCreateParams) UnmarshalVT(dAtA []byte) error {
 			}
 			m.Cells = append(m.Cells, string(dAtA[iNdEx:postIndex]))
 			iNdEx = postIndex
-		case 5:
+		case 4:
 			if wireType == 0 {
 				var v topodata.TabletType
 				for shift := uint(0); ; shift += 7 {
@@ -66983,7 +66957,7 @@ func (m *LookupVindexCreateParams) UnmarshalVT(dAtA []byte) error {
 			} else {
 				return fmt.Errorf("proto: wrong wireType = %d for field TabletTypes", wireType)
 			}
-		case 6:
+		case 5:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field ContinueAfterCopyWithOwner", wireType)
 			}
@@ -67002,8 +66976,9 @@ func (m *LookupVindexCreateParams) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
-			m.ContinueAfterCopyWithOwner = bool(v != 0)
-		case 7:
+			b := bool(v != 0)
+			m.ContinueAfterCopyWithOwner = &b
+		case 6:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field TabletTypesInPreferenceOrder", wireType)
 			}
@@ -67022,7 +66997,8 @@ func (m *LookupVindexCreateParams) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
-			m.TabletTypesInPreferenceOrder = bool(v != 0)
+			b := bool(v != 0)
+			m.TabletTypesInPreferenceOrder = &b
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
@@ -67254,6 +67230,38 @@ func (m *VindexParams) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.IgnoreNulls = bool(v != 0)
+		case 7:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field TableVindexType", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.TableVindexType = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
