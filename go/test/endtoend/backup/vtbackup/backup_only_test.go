@@ -81,9 +81,13 @@ func TestFailingReplication(t *testing.T) {
 		require.NoError(t, err)
 	}()
 
+	startTime := time.Now()
 	// this will initially be stuck trying to replicate from the primary, and once we re-grant the permission in
 	// the goroutine above, the process will work and complete successfully.
 	_ = vtBackup(t, false, false, false)
+
+	require.GreaterOrEqual(t, time.Since(startTime).Seconds(), 30)
+
 	verifyBackupCount(t, shardKsName, len(backups)+1)
 
 	removeBackups(t)

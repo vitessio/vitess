@@ -345,7 +345,7 @@ func takeBackup(ctx, backgroundCtx context.Context, topoServer *topo.Server, bac
 		cancelBackgroundCtx()
 	}()
 	mysqld.OnTerm(func() {
-		log.Warning("Cancelling the vtbackup context as MySQL has terminated")
+		log.Warning("Cancelling vtbackup as MySQL has terminated")
 		cancelCtx()
 		cancelBackgroundCtx()
 	})
