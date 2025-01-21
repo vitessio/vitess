@@ -178,7 +178,7 @@ func createOperatorFromUnion(ctx *plancontext.PlanningContext, node *sqlparser.U
 	return newHorizon(union, node)
 }
 
-func translateQueryToOpForUnion(ctx *plancontext.PlanningContext, node sqlparser.SelectStatement) Operator {
+func translateQueryToOpForUnion(ctx *plancontext.PlanningContext, node sqlparser.TableStatement) Operator {
 	op := translateQueryToOp(ctx, node)
 	if hz, ok := op.(*Horizon); ok {
 		hz.Truncate = true

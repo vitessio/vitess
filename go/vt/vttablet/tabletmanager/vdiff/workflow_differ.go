@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
 	"time"
 
@@ -33,6 +34,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtctl/schematools"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -40,7 +42,6 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
@@ -344,7 +345,7 @@ func (wd *workflowDiffer) buildPlan(dbClient binlogplayer.DBClient, filter *binl
 
 	for _, table := range schm.TableDefinitions {
 		// if user specified tables explicitly only use those, otherwise diff all tables in workflow
-		if len(specifiedTables) != 0 && !stringListContains(specifiedTables, table.Name) {
+		if len(specifiedTables) != 0 && !slices.Contains(specifiedTables, table.Name) {
 			continue
 		}
 		if schema.IsInternalOperationTableName(table.Name) && !schema.IsOnlineDDLTableName(table.Name) {
@@ -370,14 +371,23 @@ func (wd *workflowDiffer) buildPlan(dbClient binlogplayer.DBClient, filter *binl
 		}
 
 		td := newTableDiffer(wd, table, sourceQuery)
-		lastpkpb, err := wd.getTableLastPK(dbClient, table.Name)
+		lastPK, err := wd.getTableLastPK(dbClient, table.Name)
 		if err != nil {
 			return err
 		}
-		td.lastPK = lastpkpb
+		if lastPK != nil {
+			td.lastSourcePK = lastPK.Source
+			td.lastTargetPK = lastPK.Target
+		}
 		wd.tableDiffers[table.Name] = td
 		if _, err := td.buildTablePlan(dbClient, wd.ct.vde.dbName, wd.collationEnv); err != nil {
 			return err
+		}
+		// We get the PK columns from the source schema as well as they can differ
+		// and they determine the proper position to use when saving our progress.
+		if err := td.getSourcePKCols(); err != nil {
+			return vterrors.Wrapf(err, "could not get the primary key columns from the %s source keyspace",
+				wd.ct.sourceKeyspace)
 		}
 	}
 	if len(wd.tableDiffers) == 0 {
@@ -388,7 +398,7 @@ func (wd *workflowDiffer) buildPlan(dbClient binlogplayer.DBClient, filter *binl
 }
 
 // getTableLastPK gets the lastPK protobuf message for a given vdiff table.
-func (wd *workflowDiffer) getTableLastPK(dbClient binlogplayer.DBClient, tableName string) (*querypb.QueryResult, error) {
+func (wd *workflowDiffer) getTableLastPK(dbClient binlogplayer.DBClient, tableName string) (*tabletmanagerdatapb.VDiffTableLastPK, error) {
 	query, err := sqlparser.ParseAndBind(sqlGetVDiffTable,
 		sqltypes.Int64BindVariable(wd.ct.id),
 		sqltypes.StringBindVariable(tableName),
@@ -406,11 +416,15 @@ func (wd *workflowDiffer) getTableLastPK(dbClient binlogplayer.DBClient, tableNa
 			return nil, err
 		}
 		if len(lastpk) != 0 {
-			var lastpkpb querypb.QueryResult
-			if err := prototext.Unmarshal(lastpk, &lastpkpb); err != nil {
-				return nil, err
+			lastPK := &tabletmanagerdatapb.VDiffTableLastPK{}
+			if err := prototext.Unmarshal(lastpk, lastPK); err != nil {
+				return nil, vterrors.Wrapf(err, "failed to unmarshal lastpk value of %s for the %s table",
+					string(lastpk), tableName)
 			}
-			return &lastpkpb, nil
+			if lastPK.Source == nil { // Then it's the same as the target
+				lastPK.Source = lastPK.Target
+			}
+			return lastPK, nil
 		}
 	}
 	return nil, nil
@@ -487,4 +501,15 @@ func (wd *workflowDiffer) initVDiffTables(dbClient binlogplayer.DBClient) error 
 		}
 	}
 	return nil
+}
+
+// getSourceTopoServer returns the source topo server as for Mount+Migrate the
+// source tablets will be in a different Vitess cluster with its own TopoServer.
+func (wd *workflowDiffer) getSourceTopoServer() (*topo.Server, error) {
+	if wd.ct.externalCluster == "" {
+		return wd.ct.ts, nil
+	}
+	ctx, cancel := context.WithTimeout(wd.ct.vde.ctx, topo.RemoteOperationTimeout)
+	defer cancel()
+	return wd.ct.ts.OpenExternalVitessClusterServer(ctx, wd.ct.externalCluster)
 }

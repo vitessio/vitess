@@ -577,10 +577,10 @@ func (s *planTestSuite) TestOtherPlanningFromFile() {
 	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
 	require.NoError(s.T(), err)
 
+	s.testFile("other_read_cases.json", vw, false)
+
 	vw.Vcursor.SetTarget("main")
 	vw.Keyspace = &vindexes.Keyspace{Name: "main"}
-
-	s.testFile("other_read_cases.json", vw, false)
 	s.testFile("other_admin_cases.json", vw, false)
 }
 

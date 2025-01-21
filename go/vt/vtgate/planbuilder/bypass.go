@@ -56,6 +56,8 @@ func buildPlanForBypass(stmt sqlparser.Statement, _ *sqlparser.ReservedVars, vsc
 		}
 	}
 
+	sqlparser.RemoveSpecificKeyspace(stmt, keyspace.Name)
+
 	send := &engine.Send{
 		Keyspace:             keyspace,
 		TargetDestination:    vschema.Destination(),

@@ -753,9 +753,9 @@ func TestDescribeVindex(t *testing.T) {
 	_, err := conn.ExecuteFetch("describe hash", 1000, false)
 	require.Error(t, err)
 	mysqlErr := err.(*sqlerror.SQLError)
-	assert.Equal(t, sqlerror.ERNoSuchTable, mysqlErr.Num)
+	assert.Equal(t, sqlerror.ERUnknownTable, mysqlErr.Num)
 	assert.Equal(t, "42S02", mysqlErr.State)
-	assert.ErrorContains(t, mysqlErr, "NotFound desc")
+	assert.ErrorContains(t, mysqlErr, "VT05004: table 'hash' does not exist")
 }
 
 func TestEmptyQuery(t *testing.T) {

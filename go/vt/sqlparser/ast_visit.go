@@ -534,6 +534,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitValues(in, f)
 	case *ValuesFuncExpr:
 		return VisitRefOfValuesFuncExpr(in, f)
+	case *ValuesStatement:
+		return VisitRefOfValuesStatement(in, f)
 	case *VarPop:
 		return VisitRefOfVarPop(in, f)
 	case *VarSamp:
@@ -764,7 +766,7 @@ func VisitRefOfAlterView(in *AlterView, f Visit) error {
 	if err := VisitColumns(in.Columns, f); err != nil {
 		return err
 	}
-	if err := VisitSelectStatement(in.Select, f); err != nil {
+	if err := VisitTableStatement(in.Select, f); err != nil {
 		return err
 	}
 	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
@@ -1175,7 +1177,7 @@ func VisitRefOfCommonTableExpr(in *CommonTableExpr, f Visit) error {
 	if err := VisitColumns(in.Columns, f); err != nil {
 		return err
 	}
-	if err := VisitSelectStatement(in.Subquery, f); err != nil {
+	if err := VisitTableStatement(in.Subquery, f); err != nil {
 		return err
 	}
 	return nil
@@ -1328,7 +1330,7 @@ func VisitRefOfCreateView(in *CreateView, f Visit) error {
 	if err := VisitColumns(in.Columns, f); err != nil {
 		return err
 	}
-	if err := VisitSelectStatement(in.Select, f); err != nil {
+	if err := VisitTableStatement(in.Select, f); err != nil {
 		return err
 	}
 	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
@@ -1423,7 +1425,7 @@ func VisitRefOfDerivedTable(in *DerivedTable, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitSelectStatement(in.Select, f); err != nil {
+	if err := VisitTableStatement(in.Select, f); err != nil {
 		return err
 	}
 	return nil
@@ -3890,7 +3892,7 @@ func VisitRefOfSubquery(in *Subquery, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitSelectStatement(in.Select, f); err != nil {
+	if err := VisitTableStatement(in.Select, f); err != nil {
 		return err
 	}
 	return nil
@@ -4075,10 +4077,10 @@ func VisitRefOfUnion(in *Union, f Visit) error {
 	if err := VisitRefOfWith(in.With, f); err != nil {
 		return err
 	}
-	if err := VisitSelectStatement(in.Left, f); err != nil {
+	if err := VisitTableStatement(in.Left, f); err != nil {
 		return err
 	}
-	if err := VisitSelectStatement(in.Right, f); err != nil {
+	if err := VisitTableStatement(in.Right, f); err != nil {
 		return err
 	}
 	if err := VisitOrderBy(in.OrderBy, f); err != nil {
@@ -4276,6 +4278,33 @@ func VisitRefOfValuesFuncExpr(in *ValuesFuncExpr, f Visit) error {
 		return err
 	}
 	if err := VisitRefOfColName(in.Name, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfValuesStatement(in *ValuesStatement, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitRefOfWith(in.With, f); err != nil {
+		return err
+	}
+	if err := VisitValues(in.Rows, f); err != nil {
+		return err
+	}
+	if err := VisitListArg(in.ListArg, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
+		return err
+	}
+	if err := VisitOrderBy(in.Order, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfLimit(in.Limit, f); err != nil {
 		return err
 	}
 	return nil
@@ -5098,6 +5127,8 @@ func VisitInsertRows(in InsertRows, f Visit) error {
 		return VisitRefOfUnion(in, f)
 	case Values:
 		return VisitValues(in, f)
+	case *ValuesStatement:
+		return VisitRefOfValuesStatement(in, f)
 	default:
 		// this should never happen
 		return nil
@@ -5268,6 +5299,8 @@ func VisitStatement(in Statement, f Visit) error {
 		return VisitRefOfVExplainStmt(in, f)
 	case *VStream:
 		return VisitRefOfVStream(in, f)
+	case *ValuesStatement:
+		return VisitRefOfValuesStatement(in, f)
 	default:
 		// this should never happen
 		return nil
@@ -5286,6 +5319,22 @@ func VisitTableExpr(in TableExpr, f Visit) error {
 		return VisitRefOfJoinTableExpr(in, f)
 	case *ParenTableExpr:
 		return VisitRefOfParenTableExpr(in, f)
+	default:
+		// this should never happen
+		return nil
+	}
+}
+func VisitTableStatement(in TableStatement, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	switch in := in.(type) {
+	case *Select:
+		return VisitRefOfSelect(in, f)
+	case *Union:
+		return VisitRefOfUnion(in, f)
+	case *ValuesStatement:
+		return VisitRefOfValuesStatement(in, f)
 	default:
 		// this should never happen
 		return nil

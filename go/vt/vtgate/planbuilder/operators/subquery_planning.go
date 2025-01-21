@@ -30,7 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-func isMergeable(ctx *plancontext.PlanningContext, query sqlparser.SelectStatement, op Operator) bool {
+func isMergeable(ctx *plancontext.PlanningContext, query sqlparser.TableStatement, op Operator) bool {
 	validVindex := func(expr sqlparser.Expr) bool {
 		sc := findColumnVindex(ctx, op, expr)
 		return sc != nil && sc.IsUnique()
@@ -672,7 +672,7 @@ func (s *subqueryRouteMerger) rewriteASTExpression(ctx *plancontext.PlanningCont
 	if err != nil {
 		panic(err)
 	}
-	subqStmt, ok := stmt.(sqlparser.SelectStatement)
+	subqStmt, ok := stmt.(sqlparser.TableStatement)
 	if !ok {
 		panic(vterrors.VT13001("subqueries should only be select statement"))
 	}
@@ -700,7 +700,7 @@ func (s *subqueryRouteMerger) rewriteASTExpression(ctx *plancontext.PlanningCont
 		if !deps.IsSolvedBy(subqID) {
 			cursor.Replace(exprFound)
 		}
-	}, nil).(sqlparser.SelectStatement)
+	}, nil).(sqlparser.TableStatement)
 	if err != nil {
 		panic(err)
 	}
