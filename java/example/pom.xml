@@ -5,7 +5,7 @@
   <parent>
     <groupId>io.vitess</groupId>
     <artifactId>vitess-parent</artifactId>
-    <version>21.0.2-SNAPSHOT</version>
+    <version>21.0.3-SNAPSHOT</version>
   </parent>
   <artifactId>vitess-example</artifactId>
 
@@ -30,9 +30,9 @@
     </dependency>
 
     <dependency>
-      <groupId>mysql</groupId>
-      <artifactId>mysql-connector-java</artifactId>
-      <version>8.0.33</version>
+      <groupId>com.mysql</groupId>
+      <artifactId>mysql-connector-j</artifactId>
+      <version>8.4.0</version>
       <optional>false</optional>
     </dependency>
 
