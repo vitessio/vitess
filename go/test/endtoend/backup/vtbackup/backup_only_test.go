@@ -86,6 +86,9 @@ func TestFailingReplication(t *testing.T) {
 	_ = vtBackup(t, false, false, false)
 	verifyBackupCount(t, shardKsName, len(backups)+1)
 
+	removeBackups(t)
+	verifyBackupCount(t, shardKsName, 0)
+
 	tearDown(t, true)
 }
 
