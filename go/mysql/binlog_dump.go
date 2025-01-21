@@ -72,9 +72,6 @@ func (c *Conn) parseComBinlogDumpGTID(data []byte) (logFile string, logPos uint6
 		return logFile, logPos, position, readPacketErr
 	}
 
-	if flags2&BinlogDumpNonBlock != 0 {
-		return logFile, logPos, position, io.EOF
-	}
 	dataSize, pos, ok := readUint32(data, pos)
 	if !ok {
 		return logFile, logPos, position, readPacketErr
@@ -84,6 +81,9 @@ func (c *Conn) parseComBinlogDumpGTID(data []byte) (logFile string, logPos uint6
 		if err != nil {
 			return logFile, logPos, position, err
 		}
+	}
+	if flags2&BinlogDumpNonBlock != 0 {
+		return logFile, logPos, position, io.EOF
 	}
 
 	return logFile, logPos, position, nil
