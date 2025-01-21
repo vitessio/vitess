@@ -1,4 +1,4 @@
-FROM --platform=linux/amd64 golang:1.23.5-bullseye
+FROM --platform=linux/amd64 golang:1.23.5-bookworm
 
 # Install Vitess build dependencies
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
@@ -8,12 +8,13 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
     chromium \
     curl \
     default-jdk \
-    etcd \
+    etcd-client \
+    etcd-server \
     g++ \
     git \
+    gnupg \
     make \
     maven \
-    software-properties-common \
     unzip \
     zip \
     xvfb \

@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM --platform=linux/amd64 golang:1.23.5-bullseye AS builder
+FROM --platform=linux/amd64 golang:1.23.5-bookworm AS builder
 
 # Allows docker builds to set the BUILD_NUMBER
 ARG BUILD_NUMBER
@@ -31,7 +31,7 @@ COPY --chown=vitess:vitess . /vt/src/vitess.io/vitess
 RUN make install PREFIX=/vt/install
 
 # Start over and build the final image.
-FROM --platform=linux/amd64 debian:bullseye-slim
+FROM --platform=linux/amd64 debian:bookworm-slim
 
 # Install locale required for mysqlsh
 RUN apt-get update && apt-get install -y locales \
