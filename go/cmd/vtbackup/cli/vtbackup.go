@@ -19,6 +19,7 @@ package cli
 import (
 	"context"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -66,10 +67,7 @@ const (
 	phaseStatusCatchupReplicationStalled = "Stalled"
 	phaseStatusCatchupReplicationStopped = "Stopped"
 
-	// We will allow maximum 60 errors in a row when waiting for replication status before taking the new backup.
-	// As we try every second, this is equivalent to minimum 1 minute of continuously erroring before failing.
-	// It allows us to ignore transient errors while avoiding repeated errors in a loop (for over 60 seconds).
-	maximumErrorCountWhenWaitingForReplicationStatus = 60
+	timeoutWaitingForReplicationStatus = 60 * time.Second
 )
 
 var (
@@ -536,12 +534,12 @@ func takeBackup(ctx, backgroundCtx context.Context, topoServer *topo.Server, bac
 		statusErr  error
 
 		waitStartTime = time.Now()
-
-		continuousErrorCount int
 	)
+
+	lastErr := vterrors.NewLastError("replication catch up", timeoutWaitingForReplicationStatus)
 	for {
-		if continuousErrorCount == maximumErrorCountWhenWaitingForReplicationStatus {
-			return fmt.Errorf("timeout waiting for replication status after %d errors", maximumErrorCountWhenWaitingForReplicationStatus)
+		if !lastErr.ShouldRetry() {
+			return fmt.Errorf("timeout waiting for replication status after %.0f seconds", timeoutWaitingForReplicationStatus.Seconds())
 		}
 
 		select {
@@ -553,8 +551,8 @@ func takeBackup(ctx, backgroundCtx context.Context, topoServer *topo.Server, bac
 		lastStatus = status
 		status, statusErr = mysqld.ReplicationStatus(ctx)
 		if statusErr != nil {
+			lastErr.Record(statusErr)
 			log.Warningf("Error getting replication status: %v", statusErr)
-			continuousErrorCount++
 			continue
 		}
 		if status.Position.AtLeast(primaryPos) {
@@ -572,16 +570,15 @@ func takeBackup(ctx, backgroundCtx context.Context, topoServer *topo.Server, bac
 			}
 		}
 		if !status.Healthy() {
-			log.Warning("Replication has stopped before backup could be taken. Trying to restart replication.")
+			errStr := "Replication has stopped before backup could be taken. Trying to restart replication."
+			log.Warning(errStr)
+			lastErr.Record(errors.New(strings.ToLower(errStr)))
+
 			phaseStatus.Set([]string{phaseNameCatchupReplication, phaseStatusCatchupReplicationStopped}, 1)
 			if err := startReplication(ctx, mysqld, topoServer); err != nil {
 				log.Warningf("Failed to restart replication: %v", err)
 			}
-			continuousErrorCount++
 		} else {
-			// Since replication is working if we got here, let's reset the error count to zero.
-			// This allows us to avoid failing if we only have transient errors from time to time.
-			continuousErrorCount = 0
 			phaseStatus.Set([]string{phaseNameCatchupReplication, phaseStatusCatchupReplicationStopped}, 0)
 		}
 	}
