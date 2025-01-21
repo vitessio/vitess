@@ -223,7 +223,7 @@ func TestKeyspaceLocking(t *testing.T) {
 	topoutils.WaitForBoolValue(t, &secondThreadLockAcquired, true)
 }
 
-// TestWatchAllKeyspaceRecords tests the WatchAllKeyspaceRecords method.
+// TestWatchAllKeyspaceRecords tests the WatchAllKeyspaceAndShardRecords method.
 // We test out different updates and see if we receive the correct update
 // from the watch.
 func TestWatchAllKeyspaceRecords(t *testing.T) {
@@ -233,13 +233,27 @@ func TestWatchAllKeyspaceRecords(t *testing.T) {
 
 	watchCtx, watchCancel := context.WithCancel(context.Background())
 	defer watchCancel()
-	initRecords, ch, err := ts.WatchAllKeyspaceRecords(watchCtx)
+	initRecords, ch, err := ts.WatchAllKeyspaceAndShardRecords(watchCtx)
 	require.NoError(t, err)
 
 	// Check that we have the initial records.
-	// The existing keyspace record should be seen.
-	require.Len(t, initRecords, 1)
-	require.EqualValues(t, KeyspaceName, initRecords[0].KeyspaceInfo.KeyspaceName())
+	// The existing keyspace and shard records should be seen.
+	require.Len(t, initRecords, 2)
+	var ksInfo *topo.KeyspaceInfo
+	var shardInfo *topo.ShardInfo
+	for _, record := range initRecords {
+		if record.KeyspaceInfo != nil {
+			ksInfo = record.KeyspaceInfo
+		}
+		if record.ShardInfo != nil {
+			shardInfo = record.ShardInfo
+		}
+	}
+	require.NotNil(t, ksInfo)
+	require.NotNil(t, shardInfo)
+	require.EqualValues(t, KeyspaceName, ksInfo.KeyspaceName())
+	require.EqualValues(t, KeyspaceName, shardInfo.Keyspace())
+	require.EqualValues(t, "0", shardInfo.ShardName())
 
 	// Create a new keyspace record and see that we receive an update.
 	newKeyspaceName := "ksTest"
@@ -257,6 +271,40 @@ func TestWatchAllKeyspaceRecords(t *testing.T) {
 	record := <-ch
 	require.EqualValues(t, newKeyspaceName, record.KeyspaceInfo.KeyspaceName())
 	require.EqualValues(t, policy.DurabilitySemiSync, record.KeyspaceInfo.Keyspace.DurabilityPolicy)
+
+	// Creating a shard should also trigger an update.
+	err = ts.CreateShard(context.Background(), newKeyspaceName, "-")
+	require.NoError(t, err)
+	// Wait to receive an update from the watch.
+	record = <-ch
+	require.EqualValues(t, newKeyspaceName, record.ShardInfo.Keyspace())
+	require.EqualValues(t, "-", record.ShardInfo.ShardName())
+	require.Nil(t, record.ShardInfo.Shard.PrimaryAlias)
+
+	primaryAlias := &topodatapb.TabletAlias{
+		Cell: cell,
+		Uid:  100,
+	}
+	// Updating a shard should also trigger an update.
+	_, err = ts.UpdateShardFields(context.Background(), newKeyspaceName, "-", func(si *topo.ShardInfo) error {
+		si.PrimaryAlias = primaryAlias
+		return nil
+	})
+	require.NoError(t, err)
+	// Wait to receive an update from the watch.
+	record = <-ch
+	require.EqualValues(t, newKeyspaceName, record.ShardInfo.Keyspace())
+	require.EqualValues(t, "-", record.ShardInfo.ShardName())
+	require.NotNil(t, record.ShardInfo.Shard.PrimaryAlias)
+
+	// Deleting a shard should also trigger an update.
+	err = ts.DeleteShard(context.Background(), newKeyspaceName, "-")
+	require.NoError(t, err)
+	// Wait to receive an update from the watch.
+	record = <-ch
+	require.EqualValues(t, newKeyspaceName, record.ShardInfo.Keyspace())
+	require.EqualValues(t, "-", record.ShardInfo.ShardName())
+	require.Error(t, record.Err)
 
 	// Update the keyspace record and see that we receive an update.
 	func() {

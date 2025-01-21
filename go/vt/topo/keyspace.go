@@ -52,10 +52,11 @@ type KeyspaceInfo struct {
 }
 
 // NewKeyspaceInfo creates a new KeyspaceInfo.
-func NewKeyspaceInfo(name string, keyspace *topodatapb.Keyspace) *KeyspaceInfo {
+func NewKeyspaceInfo(name string, keyspace *topodatapb.Keyspace, version Version) *KeyspaceInfo {
 	return &KeyspaceInfo{
 		keyspace: name,
 		Keyspace: keyspace,
+		version:  version,
 	}
 }
 
@@ -440,16 +441,17 @@ func (ts *Server) GetShardNames(ctx context.Context, keyspace string) ([]string,
 }
 
 // WatchKeyspacePrefixData wraps the data we receive on the watch recursive channel
-// The WatchAllKeyspaceRecords API guarantees exactly one of Value or Err will be set.
+// The WatchAllKeyspaceAndShardRecords API guarantees exactly one of Value or Err will be set.
 type WatchKeyspacePrefixData struct {
 	KeyspaceInfo *KeyspaceInfo
+	ShardInfo    *ShardInfo
 	Err          error
 }
 
-// WatchAllKeyspaceRecords will set a watch on the Keyspace prefix.
+// WatchAllKeyspaceAndShardRecords will set a watch on the Keyspace prefix.
 // It has the same contract as conn.WatchRecursive, but it also unpacks the
 // contents into a Keyspace object.
-func (ts *Server) WatchAllKeyspaceRecords(ctx context.Context) ([]*WatchKeyspacePrefixData, <-chan *WatchKeyspacePrefixData, error) {
+func (ts *Server) WatchAllKeyspaceAndShardRecords(ctx context.Context) ([]*WatchKeyspacePrefixData, <-chan *WatchKeyspacePrefixData, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, nil, err
 	}
@@ -463,7 +465,7 @@ func (ts *Server) WatchAllKeyspaceRecords(ctx context.Context) ([]*WatchKeyspace
 		return nil, nil, err
 	}
 	// Unpack the initial data.
-	initialRes, err := checkAndUnpackKeyspaceRecord(current...)
+	initialRes, err := checkAndUnpackKeyspacePrefixRecord(current...)
 	if err != nil {
 		// Cancel the watch, drain channel.
 		cancel()
@@ -484,14 +486,21 @@ func (ts *Server) WatchAllKeyspaceRecords(ctx context.Context) ([]*WatchKeyspace
 
 		for wd := range wdChannel {
 			if wd.Err != nil {
-				// Last error value, we're done.
-				// wdChannel will be closed right after
-				// this, no need to do anything.
-				changes <- &WatchKeyspacePrefixData{Err: wd.Err}
-				return
+				if IsErrType(wd.Err, NoNode) {
+					// One of the nodes was deleted.
+					// We have the path and it will be processed like normal.
+					// We make sure to copy the error from this to signal to the receiver
+					// that the node was deleted.
+				} else {
+					// Last error value, we're done.
+					// wdChannel will be closed right after
+					// this, no need to do anything.
+					changes <- &WatchKeyspacePrefixData{Err: wd.Err}
+					return
+				}
 			}
 
-			res, err := checkAndUnpackKeyspaceRecord(wd)
+			res, err := checkAndUnpackKeyspacePrefixRecord(wd)
 			if err != nil {
 				cancel()
 				for range wdChannel {
@@ -513,20 +522,36 @@ func (ts *Server) WatchAllKeyspaceRecords(ctx context.Context) ([]*WatchKeyspace
 	return initialRes, changes, nil
 }
 
-// checkAndUnpackKeyspaceRecord checks for Keyspace objects and unpacks them.
-func checkAndUnpackKeyspaceRecord(wds ...*WatchDataRecursive) ([]*WatchKeyspacePrefixData, error) {
+// checkAndUnpackKeyspacePrefixRecord checks for Keyspace objects and unpacks them.
+func checkAndUnpackKeyspacePrefixRecord(wds ...*WatchDataRecursive) ([]*WatchKeyspacePrefixData, error) {
 	var res []*WatchKeyspacePrefixData
 	for _, wd := range wds {
 		fileDir, fileType := path.Split(wd.Path)
-		// Check if the file is a keyspace record.
-		// If it is, then we unpack it.
-		if fileType == KeyspaceFile {
+		// Check the type of file.
+		//path.Join(KeyspacesPath, keyspace, ShardsPath, shard, ShardFile)
+		switch fileType {
+		case KeyspaceFile:
+			// Unpack a keyspace record.
+			ksName := path.Base(fileDir)
 			value := &topodatapb.Keyspace{}
 			if err := value.UnmarshalVT(wd.Contents); err != nil {
 				return nil, err
 			}
 			res = append(res, &WatchKeyspacePrefixData{
-				KeyspaceInfo: NewKeyspaceInfo(path.Base(fileDir), value),
+				Err:          wd.Err,
+				KeyspaceInfo: NewKeyspaceInfo(ksName, value, wd.Version),
+			})
+		case ShardFile:
+			shardName := path.Base(fileDir)
+			ksName := path.Base(path.Dir(path.Dir(path.Clean(fileDir))))
+			// Unpack a shard record.
+			value := &topodatapb.Shard{}
+			if err := value.UnmarshalVT(wd.Contents); err != nil {
+				return nil, err
+			}
+			res = append(res, &WatchKeyspacePrefixData{
+				Err:       wd.Err,
+				ShardInfo: NewShardInfo(ksName, shardName, value, wd.Version),
 			})
 		}
 	}

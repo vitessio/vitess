@@ -224,7 +224,7 @@ func TestServerGetServingShards(t *testing.T) {
 	}
 }
 
-// TestWatchAllKeyspaceRecords tests the WatchAllKeyspaceRecords method.
+// TestWatchAllKeyspaceRecords tests the WatchAllKeyspaceAndShardRecords method.
 // We test out different updates and see if we receive the correct update
 // from the watch.
 func TestWatchAllKeyspaceRecords(t *testing.T) {
@@ -258,7 +258,7 @@ func TestWatchAllKeyspaceRecords(t *testing.T) {
 			},
 			wantInitRecords: []*topo.WatchKeyspacePrefixData{
 				{
-					KeyspaceInfo: topo.NewKeyspaceInfo("ks", ksDef),
+					KeyspaceInfo: topo.NewKeyspaceInfo("ks", ksDef, nil),
 				},
 			},
 			wantChanRecords: []*topo.WatchKeyspacePrefixData{
@@ -267,7 +267,7 @@ func TestWatchAllKeyspaceRecords(t *testing.T) {
 						KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
 						DurabilityPolicy: policy.DurabilityCrossCell,
 						SidecarDbName:    "_vt",
-					}),
+					}, nil),
 				},
 			},
 		},
@@ -282,7 +282,53 @@ func TestWatchAllKeyspaceRecords(t *testing.T) {
 			wantInitRecords: []*topo.WatchKeyspacePrefixData{},
 			wantChanRecords: []*topo.WatchKeyspacePrefixData{
 				{
-					KeyspaceInfo: topo.NewKeyspaceInfo("ks", ksDef),
+					KeyspaceInfo: topo.NewKeyspaceInfo("ks", ksDef, nil),
+				},
+			},
+		},
+		{
+			name: "New Shard Created",
+			setupFunc: func(t *testing.T, ts *topo.Server) {
+				err := ts.CreateKeyspace(context.Background(), "ks", ksDef)
+				require.NoError(t, err)
+			},
+			updateFunc: func(t *testing.T, ts *topo.Server) {
+				err := ts.CreateShard(context.Background(), "ks", "-")
+				require.NoError(t, err)
+			},
+			wantInitRecords: []*topo.WatchKeyspacePrefixData{
+				{
+					KeyspaceInfo: topo.NewKeyspaceInfo("ks", ksDef, nil),
+				},
+			},
+			wantChanRecords: []*topo.WatchKeyspacePrefixData{
+				{
+					ShardInfo: topo.NewShardInfo("ks", "-", &topodatapb.Shard{
+						KeyRange:         &topodatapb.KeyRange{},
+						IsPrimaryServing: true,
+					}, nil),
+				},
+			},
+		},
+		{
+			name: "Keyspace Deleted",
+			setupFunc: func(t *testing.T, ts *topo.Server) {
+				err := ts.CreateKeyspace(context.Background(), "ks", ksDef)
+				require.NoError(t, err)
+			},
+			updateFunc: func(t *testing.T, ts *topo.Server) {
+				err := ts.DeleteKeyspace(context.Background(), "ks")
+				require.NoError(t, err)
+			},
+			wantInitRecords: []*topo.WatchKeyspacePrefixData{
+				{
+					KeyspaceInfo: topo.NewKeyspaceInfo("ks", ksDef, nil),
+				},
+			},
+			wantChanRecords: []*topo.WatchKeyspacePrefixData{
+				{
+					Err:          topo.NewError(topo.NoNode, "keyspaces/ks/Keyspace"),
+					KeyspaceInfo: topo.NewKeyspaceInfo("ks", &topodatapb.Keyspace{}, nil),
 				},
 			},
 		},
@@ -304,7 +350,7 @@ func TestWatchAllKeyspaceRecords(t *testing.T) {
 			},
 			wantInitRecords: []*topo.WatchKeyspacePrefixData{
 				{
-					KeyspaceInfo: topo.NewKeyspaceInfo("ks", ksDef),
+					KeyspaceInfo: topo.NewKeyspaceInfo("ks", ksDef, nil),
 				},
 			},
 			wantChanRecords: []*topo.WatchKeyspacePrefixData{
@@ -313,7 +359,7 @@ func TestWatchAllKeyspaceRecords(t *testing.T) {
 						KeyspaceType:     topodatapb.KeyspaceType_SNAPSHOT,
 						DurabilityPolicy: policy.DurabilitySemiSync,
 						SidecarDbName:    "_vt",
-					}),
+					}, nil),
 				},
 			},
 		},
@@ -350,7 +396,7 @@ func TestWatchAllKeyspaceRecords(t *testing.T) {
 				}()
 				func() {
 					_, err := ts.UpdateShardFields(context.Background(), "ks2", "-", func(info *topo.ShardInfo) error {
-						info.IsPrimaryServing = true
+						info.IsPrimaryServing = false
 						return nil
 					})
 					require.NoError(t, err)
@@ -358,10 +404,16 @@ func TestWatchAllKeyspaceRecords(t *testing.T) {
 			},
 			wantInitRecords: []*topo.WatchKeyspacePrefixData{
 				{
-					KeyspaceInfo: topo.NewKeyspaceInfo("ks", ksDef),
+					KeyspaceInfo: topo.NewKeyspaceInfo("ks", ksDef, nil),
 				},
 				{
-					KeyspaceInfo: topo.NewKeyspaceInfo("ks2", ksDef),
+					KeyspaceInfo: topo.NewKeyspaceInfo("ks2", ksDef, nil),
+				},
+				{
+					ShardInfo: topo.NewShardInfo("ks2", "-", &topodatapb.Shard{
+						KeyRange:         &topodatapb.KeyRange{},
+						IsPrimaryServing: true,
+					}, nil),
 				},
 			},
 			wantChanRecords: []*topo.WatchKeyspacePrefixData{
@@ -370,14 +422,20 @@ func TestWatchAllKeyspaceRecords(t *testing.T) {
 						KeyspaceType:     topodatapb.KeyspaceType_SNAPSHOT,
 						DurabilityPolicy: policy.DurabilitySemiSync,
 						SidecarDbName:    "_vt",
-					}),
+					}, nil),
 				},
 				{
 					KeyspaceInfo: topo.NewKeyspaceInfo("ks2", &topodatapb.Keyspace{
 						KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
 						DurabilityPolicy: policy.DurabilityCrossCell,
 						SidecarDbName:    "_vt",
-					}),
+					}, nil),
+				},
+				{
+					ShardInfo: topo.NewShardInfo("ks2", "-", &topodatapb.Shard{
+						KeyRange:         &topodatapb.KeyRange{},
+						IsPrimaryServing: false,
+					}, nil),
 				},
 			},
 		},
@@ -397,7 +455,7 @@ func TestWatchAllKeyspaceRecords(t *testing.T) {
 			// Start the watch and verify the initial records received.
 			watchCtx, watchCancel := context.WithCancel(ctx)
 			defer watchCancel()
-			initRecords, ch, err := ts.WatchAllKeyspaceRecords(watchCtx)
+			initRecords, ch, err := ts.WatchAllKeyspaceAndShardRecords(watchCtx)
 			require.NoError(t, err)
 			elementsMatchFunc(t, tt.wantInitRecords, initRecords, watchKeyspacePrefixDataMatches)
 
@@ -411,6 +469,7 @@ func TestWatchAllKeyspaceRecords(t *testing.T) {
 					if topo.IsErrType(data.Err, topo.Interrupted) {
 						continue
 					}
+					require.GreaterOrEqual(t, len(tt.wantChanRecords), idx+1)
 					require.True(t, watchKeyspacePrefixDataMatches(tt.wantChanRecords[idx], data))
 					idx++
 					// Stop the watch after we have verified we have received all required updates.
@@ -471,6 +530,22 @@ func watchKeyspacePrefixDataMatches(a, b *topo.WatchKeyspacePrefixData) bool {
 			return false
 		}
 		if a.KeyspaceInfo.KeyspaceName() != b.KeyspaceInfo.KeyspaceName() {
+			return false
+		}
+	}
+
+	if a.ShardInfo == nil || b.ShardInfo == nil {
+		if a.ShardInfo != b.ShardInfo {
+			return false
+		}
+	} else {
+		if !proto.Equal(a.ShardInfo.Shard, b.ShardInfo.Shard) {
+			return false
+		}
+		if a.ShardInfo.Keyspace() != b.ShardInfo.Keyspace() {
+			return false
+		}
+		if a.ShardInfo.ShardName() != b.ShardInfo.ShardName() {
 			return false
 		}
 	}
