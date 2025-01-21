@@ -341,11 +341,15 @@ func takeBackup(ctx, backgroundCtx context.Context, topoServer *topo.Server, bac
 		return fmt.Errorf("failed to initialize mysql config: %v", err)
 	}
 	ctx, cancelCtx := context.WithCancel(ctx)
-	backgroundCtx, cancelbackgroundCtx := context.WithCancel(backgroundCtx)
-	mysqld.OnFailure(func(err error) {
-		log.Warning("Cancelling the vtbackup context as MySQL has failed")
+	backgroundCtx, cancelBackgroundCtx := context.WithCancel(backgroundCtx)
+	defer func() {
 		cancelCtx()
-		cancelbackgroundCtx()
+		cancelBackgroundCtx()
+	}()
+	mysqld.OnTerm(func() {
+		log.Warning("Cancelling the vtbackup context as MySQL has terminated")
+		cancelCtx()
+		cancelBackgroundCtx()
 	})
 
 	initCtx, initCancel := context.WithTimeout(ctx, mysqlTimeout)

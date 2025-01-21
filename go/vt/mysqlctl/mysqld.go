@@ -118,10 +118,9 @@ type Mysqld struct {
 	capabilities capabilitySet
 
 	// mutex protects the fields below.
-	mutex          sync.Mutex
-	onTermFuncs    []func()
-	onFailureFuncs []func(error)
-	cancelWaitCmd  chan struct{}
+	mutex         sync.Mutex
+	onTermFuncs   []func()
+	cancelWaitCmd chan struct{}
 
 	semiSyncType mysql.SemiSyncType
 }
@@ -445,11 +444,6 @@ func (mysqld *Mysqld) startNoWait(cnf *Mycnf, mysqldArgs ...string) error {
 				mysqld.mutex.Lock()
 				for _, callback := range mysqld.onTermFuncs {
 					go callback()
-				}
-				if err != nil {
-					for _, failureFunc := range mysqld.onFailureFuncs {
-						go failureFunc(err)
-					}
 				}
 				mysqld.mutex.Unlock()
 			}
@@ -1251,12 +1245,6 @@ func (mysqld *Mysqld) OnTerm(f func()) {
 	mysqld.mutex.Lock()
 	defer mysqld.mutex.Unlock()
 	mysqld.onTermFuncs = append(mysqld.onTermFuncs, f)
-}
-
-func (mysqld *Mysqld) OnFailure(f func(error)) {
-	mysqld.mutex.Lock()
-	defer mysqld.mutex.Unlock()
-	mysqld.onFailureFuncs = append(mysqld.onFailureFuncs, f)
 }
 
 func buildLdPaths() ([]string, error) {
