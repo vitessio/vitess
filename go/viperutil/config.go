@@ -189,7 +189,7 @@ func LoadConfig() (context.CancelFunc, error) {
 
 // isConfigFileNotFoundError checks if the error is caused because the file wasn't found.
 func isConfigFileNotFoundError(err error) bool {
-	if _, ok := err.(viper.ConfigFileNotFoundError); ok {
+	if errors.As(err, &viper.ConfigFileNotFoundError{}) {
 		return true
 	}
 	return errors.Is(err, os.ErrNotExist)
