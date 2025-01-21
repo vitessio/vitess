@@ -86,7 +86,7 @@ func TestFailingReplication(t *testing.T) {
 	// the goroutine above, the process will work and complete successfully.
 	_ = vtBackup(t, false, false, false)
 
-	require.GreaterOrEqual(t, time.Since(startTime).Seconds(), 30)
+	require.GreaterOrEqual(t, time.Since(startTime).Seconds(), float64(30))
 
 	verifyBackupCount(t, shardKsName, len(backups)+1)
 
