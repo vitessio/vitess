@@ -255,10 +255,11 @@ func ContinuousDiscovery() {
 
 	go handleDiscoveryRequests()
 
+	OpenTabletDiscovery()
 	healthTick := time.Tick(config.HealthPollSeconds * time.Second)
 	caretakingTick := time.Tick(time.Minute)
 	recoveryTick := time.Tick(config.GetRecoveryPollDuration())
-	tabletTopoTick := OpenTabletDiscovery()
+	tabletTopoTick := time.Tick(config.GetTopoInformationRefreshDuration())
 	var recoveryEntrance int64
 	var snapshotTopologiesTick <-chan time.Time
 	if config.GetSnapshotTopologyInterval() > 0 {
@@ -308,7 +309,7 @@ func ContinuousDiscovery() {
 			}()
 		case <-tabletTopoTick:
 			ctx, cancel := context.WithTimeout(context.Background(), config.GetTopoInformationRefreshDuration())
-			if err := refreshAllInformation(ctx); err != nil {
+			if err := refreshTopoTick(ctx); err != nil {
 				log.Errorf("failed to refresh topo information: %+v", err)
 			}
 			cancel()
@@ -316,8 +317,8 @@ func ContinuousDiscovery() {
 	}
 }
 
-// refreshAllInformation refreshes both shard and tablet information. This is meant to be run on tablet topo ticks.
-func refreshAllInformation(ctx context.Context) error {
+// refreshTopoTick refreshes information from the topo server on a time tick.
+func refreshTopoTick(ctx context.Context) error {
 	// Create an errgroup
 	eg, ctx := errgroup.WithContext(ctx)
 

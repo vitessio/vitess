@@ -37,7 +37,6 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
-	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
@@ -129,7 +128,7 @@ func tabletPartOfWatch(tablet *topodatapb.Tablet) bool {
 
 // OpenTabletDiscovery opens the vitess topo if enables and returns a ticker
 // channel for polling.
-func OpenTabletDiscovery() <-chan time.Time {
+func OpenTabletDiscovery() {
 	ts = topo.Open()
 	tmc = inst.InitializeTMC()
 	// Clear existing cache and perform a new refresh.
@@ -142,10 +141,9 @@ func OpenTabletDiscovery() <-chan time.Time {
 	// it on a timer.
 	ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
 	defer cancel()
-	if err := refreshAllInformation(ctx); err != nil {
+	if err := refreshTopoTick(ctx); err != nil {
 		log.Errorf("failed to initialize topo information: %+v", err)
 	}
-	return time.Tick(config.GetTopoInformationRefreshDuration()) //nolint SA1015: using time.Tick leaks the underlying ticker
 }
 
 // getAllTablets gets all tablets from all cells using a goroutine per cell.
