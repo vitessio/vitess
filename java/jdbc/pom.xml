@@ -5,7 +5,7 @@
   <parent>
     <groupId>io.vitess</groupId>
     <artifactId>vitess-parent</artifactId>
-    <version>19.0.9</version>
+    <version>19.0.10-SNAPSHOT</version>
   </parent>
   <artifactId>vitess-jdbc</artifactId>
 
