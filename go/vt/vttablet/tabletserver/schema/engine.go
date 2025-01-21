@@ -712,12 +712,7 @@ func (se *Engine) updateTableIndexMetrics(ctx context.Context, conn *connpool.Co
 		partition string
 	}
 
-	partitionsQuery := `
-		select table_name, partition_name
-		from information_schema.partitions
-		where table_schema = database() and partition_name is not null
-	`
-	partitionsResults, err := conn.Exec(ctx, partitionsQuery, 8192*maxTableCount, false)
+	partitionsResults, err := conn.Exec(ctx, fetchPartitions, 8192*maxTableCount, false)
 	if err != nil {
 		return err
 	}
@@ -738,11 +733,7 @@ func (se *Engine) updateTableIndexMetrics(ctx context.Context, conn *connpool.Co
 		rowBytes int64
 	}
 	tables := make(map[string]table)
-	tableStatsQuery := `
-		select table_name, n_rows, clustered_index_size * @@innodb_page_size
-		from mysql.innodb_table_stats where database_name = database()
-    `
-	tableStatsResults, err := conn.Exec(ctx, tableStatsQuery, maxTableCount*maxPartitionsPerTable, false)
+	tableStatsResults, err := conn.Exec(ctx, fetchTableRowCountClusteredIndex, maxTableCount*maxPartitionsPerTable, false)
 	if err != nil {
 		return err
 	}
@@ -775,12 +766,7 @@ func (se *Engine) updateTableIndexMetrics(ctx context.Context, conn *connpool.Co
 	indexes := make(map[[2]string]index)
 
 	// Load the byte sizes of all indexes. Results contain one row for every index/partition combination.
-	bytesQuery := `
-		select table_name, index_name, stat_value * @@innodb_page_size
-		from mysql.innodb_index_stats
-		where database_name = database() and stat_name = 'size';
-	`
-	bytesResults, err := conn.Exec(ctx, bytesQuery, maxTableCount*maxIndexesPerTable, false)
+	bytesResults, err := conn.Exec(ctx, fetchIndexSizes, maxTableCount*maxIndexesPerTable, false)
 	if err != nil {
 		return err
 	}
@@ -808,13 +794,7 @@ func (se *Engine) updateTableIndexMetrics(ctx context.Context, conn *connpool.Co
 	}
 
 	// Load index cardinalities. Results contain one row for every index (pre-aggregated across partitions).
-	cardinalityQuery := `
-		select table_name, index_name, max(cardinality)
-		from information_schema.statistics s
-		where table_schema = database()
-		group by s.table_name, s.index_name
-	`
-	cardinalityResults, err := conn.Exec(ctx, cardinalityQuery, maxTableCount*maxPartitionsPerTable, false)
+	cardinalityResults, err := conn.Exec(ctx, fetchIndexCardinalities, maxTableCount*maxPartitionsPerTable, false)
 	if err != nil {
 		return err
 	}
