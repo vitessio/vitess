@@ -204,21 +204,34 @@ func (vm *VSchemaManager) buildAndEnhanceVSchema(v *vschemapb.SrvVSchema) *vinde
 
 func (vm *VSchemaManager) updateFromSchema(vschema *vindexes.VSchema) {
 	for ksName, ks := range vschema.Keyspaces {
-		vm.updateTableInfo(vschema, ks, ksName)
 		vm.updateViewInfo(ks, ksName)
+		vm.updateTableInfo(vschema, ks, ksName)
 		vm.updateUDFsInfo(ks, ksName)
 	}
 }
 
 func (vm *VSchemaManager) updateViewInfo(ks *vindexes.KeyspaceSchema, ksName string) {
 	views := vm.schema.Views(ksName)
-	if views != nil {
-		ks.Views = make(map[string]sqlparser.TableStatement, len(views))
-		for name, def := range views {
-			ks.Views[name] = sqlparser.Clone(def)
+	if views == nil {
+		return
+	}
+	ks.Views = make(map[string]sqlparser.TableStatement, len(views))
+	for name, def := range views {
+		ks.Views[name] = sqlparser.Clone(def)
+		vTbl, ok := ks.Tables[name]
+		if ok {
+			vTbl.Type = vindexes.TypeView
+		} else {
+			// Adding view to the VSchema as a table.
+			ks.Tables[name] = &vindexes.Table{
+				Type:     vindexes.TypeView,
+				Name:     sqlparser.NewIdentifierCS(name),
+				Keyspace: ks.Keyspace,
+			}
 		}
 	}
 }
+
 func (vm *VSchemaManager) updateTableInfo(vschema *vindexes.VSchema, ks *vindexes.KeyspaceSchema, ksName string) {
 	m := vm.schema.Tables(ksName)
 	// Before we add the foreign key definitions in the tables, we need to make sure that all the tables
