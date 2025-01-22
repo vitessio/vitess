@@ -34138,6 +34138,112 @@ export namespace tabletmanagerdata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** Properties of a VDiffTableLastPK. */
+    interface IVDiffTableLastPK {
+
+        /** VDiffTableLastPK target */
+        target?: (query.IQueryResult|null);
+
+        /** VDiffTableLastPK source */
+        source?: (query.IQueryResult|null);
+    }
+
+    /** Represents a VDiffTableLastPK. */
+    class VDiffTableLastPK implements IVDiffTableLastPK {
+
+        /**
+         * Constructs a new VDiffTableLastPK.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IVDiffTableLastPK);
+
+        /** VDiffTableLastPK target. */
+        public target?: (query.IQueryResult|null);
+
+        /** VDiffTableLastPK source. */
+        public source?: (query.IQueryResult|null);
+
+        /** VDiffTableLastPK _source. */
+        public _source?: "source";
+
+        /**
+         * Creates a new VDiffTableLastPK instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VDiffTableLastPK instance
+         */
+        public static create(properties?: tabletmanagerdata.IVDiffTableLastPK): tabletmanagerdata.VDiffTableLastPK;
+
+        /**
+         * Encodes the specified VDiffTableLastPK message. Does not implicitly {@link tabletmanagerdata.VDiffTableLastPK.verify|verify} messages.
+         * @param message VDiffTableLastPK message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IVDiffTableLastPK, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VDiffTableLastPK message, length delimited. Does not implicitly {@link tabletmanagerdata.VDiffTableLastPK.verify|verify} messages.
+         * @param message VDiffTableLastPK message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IVDiffTableLastPK, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VDiffTableLastPK message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VDiffTableLastPK
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.VDiffTableLastPK;
+
+        /**
+         * Decodes a VDiffTableLastPK message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VDiffTableLastPK
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.VDiffTableLastPK;
+
+        /**
+         * Verifies a VDiffTableLastPK message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VDiffTableLastPK message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VDiffTableLastPK
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.VDiffTableLastPK;
+
+        /**
+         * Creates a plain object from a VDiffTableLastPK message. Also converts values to other types if specified.
+         * @param message VDiffTableLastPK
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.VDiffTableLastPK, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VDiffTableLastPK to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VDiffTableLastPK
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
     /** Properties of an UpdateVReplicationWorkflowRequest. */
     interface IUpdateVReplicationWorkflowRequest {
 
@@ -55874,6 +55980,236 @@ export namespace vtctldata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** Properties of a CopySchemaShardRequest. */
+    interface ICopySchemaShardRequest {
+
+        /** CopySchemaShardRequest source_tablet_alias */
+        source_tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** CopySchemaShardRequest tables */
+        tables?: (string[]|null);
+
+        /** CopySchemaShardRequest exclude_tables */
+        exclude_tables?: (string[]|null);
+
+        /** CopySchemaShardRequest include_views */
+        include_views?: (boolean|null);
+
+        /** CopySchemaShardRequest skip_verify */
+        skip_verify?: (boolean|null);
+
+        /** CopySchemaShardRequest wait_replicas_timeout */
+        wait_replicas_timeout?: (vttime.IDuration|null);
+
+        /** CopySchemaShardRequest destination_keyspace */
+        destination_keyspace?: (string|null);
+
+        /** CopySchemaShardRequest destination_shard */
+        destination_shard?: (string|null);
+    }
+
+    /** Represents a CopySchemaShardRequest. */
+    class CopySchemaShardRequest implements ICopySchemaShardRequest {
+
+        /**
+         * Constructs a new CopySchemaShardRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.ICopySchemaShardRequest);
+
+        /** CopySchemaShardRequest source_tablet_alias. */
+        public source_tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** CopySchemaShardRequest tables. */
+        public tables: string[];
+
+        /** CopySchemaShardRequest exclude_tables. */
+        public exclude_tables: string[];
+
+        /** CopySchemaShardRequest include_views. */
+        public include_views: boolean;
+
+        /** CopySchemaShardRequest skip_verify. */
+        public skip_verify: boolean;
+
+        /** CopySchemaShardRequest wait_replicas_timeout. */
+        public wait_replicas_timeout?: (vttime.IDuration|null);
+
+        /** CopySchemaShardRequest destination_keyspace. */
+        public destination_keyspace: string;
+
+        /** CopySchemaShardRequest destination_shard. */
+        public destination_shard: string;
+
+        /**
+         * Creates a new CopySchemaShardRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns CopySchemaShardRequest instance
+         */
+        public static create(properties?: vtctldata.ICopySchemaShardRequest): vtctldata.CopySchemaShardRequest;
+
+        /**
+         * Encodes the specified CopySchemaShardRequest message. Does not implicitly {@link vtctldata.CopySchemaShardRequest.verify|verify} messages.
+         * @param message CopySchemaShardRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.ICopySchemaShardRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified CopySchemaShardRequest message, length delimited. Does not implicitly {@link vtctldata.CopySchemaShardRequest.verify|verify} messages.
+         * @param message CopySchemaShardRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.ICopySchemaShardRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a CopySchemaShardRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns CopySchemaShardRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.CopySchemaShardRequest;
+
+        /**
+         * Decodes a CopySchemaShardRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns CopySchemaShardRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.CopySchemaShardRequest;
+
+        /**
+         * Verifies a CopySchemaShardRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a CopySchemaShardRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns CopySchemaShardRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.CopySchemaShardRequest;
+
+        /**
+         * Creates a plain object from a CopySchemaShardRequest message. Also converts values to other types if specified.
+         * @param message CopySchemaShardRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.CopySchemaShardRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this CopySchemaShardRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for CopySchemaShardRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a CopySchemaShardResponse. */
+    interface ICopySchemaShardResponse {
+    }
+
+    /** Represents a CopySchemaShardResponse. */
+    class CopySchemaShardResponse implements ICopySchemaShardResponse {
+
+        /**
+         * Constructs a new CopySchemaShardResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.ICopySchemaShardResponse);
+
+        /**
+         * Creates a new CopySchemaShardResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns CopySchemaShardResponse instance
+         */
+        public static create(properties?: vtctldata.ICopySchemaShardResponse): vtctldata.CopySchemaShardResponse;
+
+        /**
+         * Encodes the specified CopySchemaShardResponse message. Does not implicitly {@link vtctldata.CopySchemaShardResponse.verify|verify} messages.
+         * @param message CopySchemaShardResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.ICopySchemaShardResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified CopySchemaShardResponse message, length delimited. Does not implicitly {@link vtctldata.CopySchemaShardResponse.verify|verify} messages.
+         * @param message CopySchemaShardResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.ICopySchemaShardResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a CopySchemaShardResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns CopySchemaShardResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.CopySchemaShardResponse;
+
+        /**
+         * Decodes a CopySchemaShardResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns CopySchemaShardResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.CopySchemaShardResponse;
+
+        /**
+         * Verifies a CopySchemaShardResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a CopySchemaShardResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns CopySchemaShardResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.CopySchemaShardResponse;
+
+        /**
+         * Creates a plain object from a CopySchemaShardResponse message. Also converts values to other types if specified.
+         * @param message CopySchemaShardResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.CopySchemaShardResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this CopySchemaShardResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for CopySchemaShardResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
     /** Properties of a CreateKeyspaceRequest. */
     interface ICreateKeyspaceRequest {
 
@@ -75654,6 +75990,200 @@ export namespace vtctldata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** Properties of a ValidatePermissionsKeyspaceRequest. */
+    interface IValidatePermissionsKeyspaceRequest {
+
+        /** ValidatePermissionsKeyspaceRequest keyspace */
+        keyspace?: (string|null);
+
+        /** ValidatePermissionsKeyspaceRequest shards */
+        shards?: (string[]|null);
+    }
+
+    /** Represents a ValidatePermissionsKeyspaceRequest. */
+    class ValidatePermissionsKeyspaceRequest implements IValidatePermissionsKeyspaceRequest {
+
+        /**
+         * Constructs a new ValidatePermissionsKeyspaceRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IValidatePermissionsKeyspaceRequest);
+
+        /** ValidatePermissionsKeyspaceRequest keyspace. */
+        public keyspace: string;
+
+        /** ValidatePermissionsKeyspaceRequest shards. */
+        public shards: string[];
+
+        /**
+         * Creates a new ValidatePermissionsKeyspaceRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ValidatePermissionsKeyspaceRequest instance
+         */
+        public static create(properties?: vtctldata.IValidatePermissionsKeyspaceRequest): vtctldata.ValidatePermissionsKeyspaceRequest;
+
+        /**
+         * Encodes the specified ValidatePermissionsKeyspaceRequest message. Does not implicitly {@link vtctldata.ValidatePermissionsKeyspaceRequest.verify|verify} messages.
+         * @param message ValidatePermissionsKeyspaceRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IValidatePermissionsKeyspaceRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ValidatePermissionsKeyspaceRequest message, length delimited. Does not implicitly {@link vtctldata.ValidatePermissionsKeyspaceRequest.verify|verify} messages.
+         * @param message ValidatePermissionsKeyspaceRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IValidatePermissionsKeyspaceRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ValidatePermissionsKeyspaceRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ValidatePermissionsKeyspaceRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ValidatePermissionsKeyspaceRequest;
+
+        /**
+         * Decodes a ValidatePermissionsKeyspaceRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ValidatePermissionsKeyspaceRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ValidatePermissionsKeyspaceRequest;
+
+        /**
+         * Verifies a ValidatePermissionsKeyspaceRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ValidatePermissionsKeyspaceRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ValidatePermissionsKeyspaceRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.ValidatePermissionsKeyspaceRequest;
+
+        /**
+         * Creates a plain object from a ValidatePermissionsKeyspaceRequest message. Also converts values to other types if specified.
+         * @param message ValidatePermissionsKeyspaceRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.ValidatePermissionsKeyspaceRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ValidatePermissionsKeyspaceRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ValidatePermissionsKeyspaceRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a ValidatePermissionsKeyspaceResponse. */
+    interface IValidatePermissionsKeyspaceResponse {
+    }
+
+    /** Represents a ValidatePermissionsKeyspaceResponse. */
+    class ValidatePermissionsKeyspaceResponse implements IValidatePermissionsKeyspaceResponse {
+
+        /**
+         * Constructs a new ValidatePermissionsKeyspaceResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IValidatePermissionsKeyspaceResponse);
+
+        /**
+         * Creates a new ValidatePermissionsKeyspaceResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ValidatePermissionsKeyspaceResponse instance
+         */
+        public static create(properties?: vtctldata.IValidatePermissionsKeyspaceResponse): vtctldata.ValidatePermissionsKeyspaceResponse;
+
+        /**
+         * Encodes the specified ValidatePermissionsKeyspaceResponse message. Does not implicitly {@link vtctldata.ValidatePermissionsKeyspaceResponse.verify|verify} messages.
+         * @param message ValidatePermissionsKeyspaceResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IValidatePermissionsKeyspaceResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ValidatePermissionsKeyspaceResponse message, length delimited. Does not implicitly {@link vtctldata.ValidatePermissionsKeyspaceResponse.verify|verify} messages.
+         * @param message ValidatePermissionsKeyspaceResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IValidatePermissionsKeyspaceResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ValidatePermissionsKeyspaceResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ValidatePermissionsKeyspaceResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ValidatePermissionsKeyspaceResponse;
+
+        /**
+         * Decodes a ValidatePermissionsKeyspaceResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ValidatePermissionsKeyspaceResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ValidatePermissionsKeyspaceResponse;
+
+        /**
+         * Verifies a ValidatePermissionsKeyspaceResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ValidatePermissionsKeyspaceResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ValidatePermissionsKeyspaceResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.ValidatePermissionsKeyspaceResponse;
+
+        /**
+         * Creates a plain object from a ValidatePermissionsKeyspaceResponse message. Also converts values to other types if specified.
+         * @param message ValidatePermissionsKeyspaceResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.ValidatePermissionsKeyspaceResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ValidatePermissionsKeyspaceResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ValidatePermissionsKeyspaceResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
     /** Properties of a ValidateSchemaKeyspaceRequest. */
     interface IValidateSchemaKeyspaceRequest {
 
@@ -75671,6 +76201,9 @@ export namespace vtctldata {
 
         /** ValidateSchemaKeyspaceRequest include_vschema */
         include_vschema?: (boolean|null);
+
+        /** ValidateSchemaKeyspaceRequest shards */
+        shards?: (string[]|null);
     }
 
     /** Represents a ValidateSchemaKeyspaceRequest. */
@@ -75696,6 +76229,9 @@ export namespace vtctldata {
 
         /** ValidateSchemaKeyspaceRequest include_vschema. */
         public include_vschema: boolean;
+
+        /** ValidateSchemaKeyspaceRequest shards. */
+        public shards: string[];
 
         /**
          * Creates a new ValidateSchemaKeyspaceRequest instance using the specified properties.

@@ -219,7 +219,14 @@ func (mysqlFlavor) sendBinlogDumpCommand(c *Conn, serverID uint32, binlogFilenam
 
 	// Build the command.
 	sidBlock := gtidSet.SIDBlock()
-	return c.WriteComBinlogDumpGTID(serverID, binlogFilename, 4, 0, sidBlock)
+	var flags2 uint16
+	if binlogFilename != "" {
+		flags2 |= BinlogThroughPosition
+	}
+	if len(sidBlock) > 0 {
+		flags2 |= BinlogThroughGTID
+	}
+	return c.WriteComBinlogDumpGTID(serverID, binlogFilename, 4, flags2, sidBlock)
 }
 
 // setReplicationPositionCommands is part of the Flavor interface.

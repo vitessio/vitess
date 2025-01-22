@@ -101,6 +101,14 @@ func EncodeValue(buf *strings.Builder, value *querypb.BindVariable) {
 			sqltypes.ProtoToValue(bv).EncodeSQLStringBuilder(buf)
 		}
 		buf.WriteByte(')')
+	case querypb.Type_ROW_TUPLE:
+		for i, bv := range value.Values {
+			if i != 0 {
+				buf.WriteString(", ")
+			}
+			buf.WriteString("row")
+			sqltypes.ProtoToValue(bv).EncodeSQLStringBuilder(buf)
+		}
 	case querypb.Type_RAW:
 		v, _ := sqltypes.BindVariableToValue(value)
 		buf.Write(v.Raw())
@@ -123,7 +131,9 @@ func FetchBindVar(name string, bindVariables map[string]*querypb.BindVariable) (
 	}
 
 	if isList {
-		if supplied.Type != querypb.Type_TUPLE {
+		switch supplied.Type {
+		case querypb.Type_TUPLE, querypb.Type_ROW_TUPLE:
+		default:
 			return nil, false, fmt.Errorf("unexpected list arg type (%v) for key %s", supplied.Type, name)
 		}
 		if len(supplied.Values) == 0 {

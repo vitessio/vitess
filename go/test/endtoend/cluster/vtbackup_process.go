@@ -31,12 +31,13 @@ import (
 // VtbackupProcess is a generic handle for a running Vtbackup.
 // It can be spawned manually
 type VtbackupProcess struct {
-	Name      string
-	Binary    string
-	CommonArg VtctlProcess
+	VtProcess
 	LogDir    string
 	MysqlPort int
 	Directory string
+
+	BackupStorageImplementation string
+	FileBackupStorageRoot       string
 
 	Cell        string
 	Keyspace    string
@@ -56,9 +57,9 @@ type VtbackupProcess struct {
 func (vtbackup *VtbackupProcess) Setup() (err error) {
 	vtbackup.proc = exec.Command(
 		vtbackup.Binary,
-		"--topo_implementation", vtbackup.CommonArg.TopoImplementation,
-		"--topo_global_server_address", vtbackup.CommonArg.TopoGlobalAddress,
-		"--topo_global_root", vtbackup.CommonArg.TopoGlobalRoot,
+		"--topo_implementation", vtbackup.TopoImplementation,
+		"--topo_global_server_address", vtbackup.TopoGlobalAddress,
+		"--topo_global_root", vtbackup.TopoGlobalRoot,
 		"--log_dir", vtbackup.LogDir,
 
 		//initDBfile is required to run vtbackup
@@ -68,8 +69,8 @@ func (vtbackup *VtbackupProcess) Setup() (err error) {
 		"--init_shard", vtbackup.Shard,
 
 		//Backup Arguments are not optional
-		"--backup_storage_implementation", "file",
-		"--file_backup_storage_root", path.Join(os.Getenv("VTDATAROOT"), "tmp", "backupstorage"),
+		"--backup_storage_implementation", vtbackup.BackupStorageImplementation,
+		"--file_backup_storage_root", vtbackup.FileBackupStorageRoot,
 	)
 
 	if vtbackup.initialBackup {
@@ -129,20 +130,20 @@ func (vtbackup *VtbackupProcess) TearDown() error {
 // The process must be manually started by calling Setup()
 func VtbackupProcessInstance(tabletUID int, mysqlPort int, newInitDBFile string, keyspace string, shard string,
 	cell string, hostname string, tmpDirectory string, topoPort int, initialBackup bool) *VtbackupProcess {
-	vtctl := VtctlProcessInstance(topoPort, hostname)
+	base := VtProcessInstance("vtbackup", "vtbackup", topoPort, hostname)
 	vtbackup := &VtbackupProcess{
-		Name:          "vtbackup",
-		Binary:        "vtbackup",
-		CommonArg:     *vtctl,
-		LogDir:        tmpDirectory,
-		Directory:     os.Getenv("VTDATAROOT"),
-		TabletAlias:   fmt.Sprintf("%s-%010d", cell, tabletUID),
-		initDBfile:    newInitDBFile,
-		Keyspace:      keyspace,
-		Shard:         shard,
-		Cell:          cell,
-		MysqlPort:     mysqlPort,
-		initialBackup: initialBackup,
+		VtProcess:                   base,
+		LogDir:                      tmpDirectory,
+		Directory:                   os.Getenv("VTDATAROOT"),
+		BackupStorageImplementation: "file",
+		FileBackupStorageRoot:       path.Join(os.Getenv("VTDATAROOT"), "/backups"),
+		TabletAlias:                 fmt.Sprintf("%s-%010d", cell, tabletUID),
+		initDBfile:                  newInitDBFile,
+		Keyspace:                    keyspace,
+		Shard:                       shard,
+		Cell:                        cell,
+		MysqlPort:                   mysqlPort,
+		initialBackup:               initialBackup,
 	}
 	return vtbackup
 }

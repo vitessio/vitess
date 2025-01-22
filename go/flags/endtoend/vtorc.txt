@@ -33,6 +33,7 @@ Flags:
       --config-type string                                          Config file type (omit to infer config type from file extension).
       --consul_auth_static_file string                              JSON File to read the topos/tokens from.
       --emit_stats                                                  If set, emit stats to push-based monitoring and stats backends
+      --enable-primary-disk-stalled-recovery                        Whether VTOrc should detect a stalled disk on the primary and failover
       --grpc-dial-concurrency-limit int                             Maximum concurrency of grpc dial operations. This should be less than the golang max thread limit of 10000. (default 1024)
       --grpc_auth_static_client_creds string                        When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.
       --grpc_compression string                                     Which protocol to use for compressing gRPC. Default: nothing. Supported: snappy

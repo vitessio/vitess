@@ -173,6 +173,15 @@ func (client *gRPCVtctldClient) ConcludeTransaction(ctx context.Context, in *vtc
 	return client.c.ConcludeTransaction(ctx, in, opts...)
 }
 
+// CopySchemaShard is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) CopySchemaShard(ctx context.Context, in *vtctldatapb.CopySchemaShardRequest, opts ...grpc.CallOption) (*vtctldatapb.CopySchemaShardResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.CopySchemaShard(ctx, in, opts...)
+}
+
 // CreateKeyspace is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) CreateKeyspace(ctx context.Context, in *vtctldatapb.CreateKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.CreateKeyspaceResponse, error) {
 	if client.c == nil {
@@ -1044,6 +1053,15 @@ func (client *gRPCVtctldClient) ValidateKeyspace(ctx context.Context, in *vtctld
 	}
 
 	return client.c.ValidateKeyspace(ctx, in, opts...)
+}
+
+// ValidatePermissionsKeyspace is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) ValidatePermissionsKeyspace(ctx context.Context, in *vtctldatapb.ValidatePermissionsKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.ValidatePermissionsKeyspaceResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.ValidatePermissionsKeyspace(ctx, in, opts...)
 }
 
 // ValidateSchemaKeyspace is part of the vtctlservicepb.VtctldClient interface.

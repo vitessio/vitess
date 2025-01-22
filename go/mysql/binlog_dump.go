@@ -72,20 +72,18 @@ func (c *Conn) parseComBinlogDumpGTID(data []byte) (logFile string, logPos uint6
 		return logFile, logPos, position, readPacketErr
 	}
 
+	dataSize, pos, ok := readUint32(data, pos)
+	if !ok {
+		return logFile, logPos, position, readPacketErr
+	}
+	if gtid := string(data[pos : pos+int(dataSize)]); gtid != "" {
+		position, err = replication.DecodePosition(gtid)
+		if err != nil {
+			return logFile, logPos, position, err
+		}
+	}
 	if flags2&BinlogDumpNonBlock != 0 {
 		return logFile, logPos, position, io.EOF
-	}
-	if flags2&BinlogThroughGTID != 0 {
-		dataSize, pos, ok := readUint32(data, pos)
-		if !ok {
-			return logFile, logPos, position, readPacketErr
-		}
-		if gtid := string(data[pos : pos+int(dataSize)]); gtid != "" {
-			position, err = replication.DecodePosition(gtid)
-			if err != nil {
-				return logFile, logPos, position, err
-			}
-		}
 	}
 
 	return logFile, logPos, position, nil

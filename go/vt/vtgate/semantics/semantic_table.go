@@ -493,7 +493,7 @@ func (st *SemTable) ForeignKeysPresent() bool {
 	return false
 }
 
-func (st *SemTable) SelectExprs(sel sqlparser.SelectStatement) sqlparser.SelectExprs {
+func (st *SemTable) SelectExprs(sel sqlparser.TableStatement) sqlparser.SelectExprs {
 	switch sel := sel.(type) {
 	case *sqlparser.Select:
 		return sel.SelectExprs

@@ -52,7 +52,7 @@ limit 123 offset 456
 `
 	ast, err := sqlparser.NewTestParser().Parse(query)
 	require.NoError(t, err)
-	visitAllExpressionsInAST(ast.(sqlparser.SelectStatement), func(cursor expressionCursor) bool {
+	visitAllExpressionsInAST(ast.(sqlparser.TableStatement), func(cursor expressionCursor) bool {
 		fmt.Printf(">> found expression: %s\n", sqlparser.String(cursor.expr))
 		cursor.remove()
 		fmt.Printf("remove: %s\n", sqlparser.String(ast))
@@ -70,7 +70,7 @@ func TestAbortExpressionCursor(t *testing.T) {
 	query := "select user.id, count(*), unsharded.name from user join unsharded on 13 = 14 where unsharded.id = 42 and name = 'foo' and user.id = unsharded.id"
 	ast, err := sqlparser.NewTestParser().Parse(query)
 	require.NoError(t, err)
-	visitAllExpressionsInAST(ast.(sqlparser.SelectStatement), func(cursor expressionCursor) bool {
+	visitAllExpressionsInAST(ast.(sqlparser.TableStatement), func(cursor expressionCursor) bool {
 		fmt.Println(sqlparser.String(cursor.expr))
 		cursor.replace(sqlparser.NewIntLiteral("1"))
 		fmt.Println(sqlparser.String(ast))

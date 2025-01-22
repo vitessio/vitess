@@ -286,14 +286,22 @@ func containsStar(s sqlparser.SelectExprs) bool {
 }
 
 func checkUnionColumns(union *sqlparser.Union) error {
-	firstProj := sqlparser.GetFirstSelect(union).SelectExprs
+	lft, err := sqlparser.GetFirstSelect(union)
+	if err != nil {
+		return err
+	}
+	firstProj := lft.GetColumns()
 	if containsStar(firstProj) {
 		// if we still have *, we can't figure out if the query is invalid or not
 		// we'll fail it at run time instead
 		return nil
 	}
 
-	secondProj := sqlparser.GetFirstSelect(union.Right).SelectExprs
+	rgt, err := sqlparser.GetFirstSelect(union.Right)
+	if err != nil {
+		return err
+	}
+	secondProj := rgt.GetColumns()
 	if containsStar(secondProj) {
 		return nil
 	}

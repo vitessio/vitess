@@ -139,7 +139,7 @@ func TestVDiff(t *testing.T) {
 		"lastpk|mismatch|report",
 		"varbinary|int64|json",
 	),
-		`fields:{name:"c1" type:INT64 table:"t1" org_table:"t1" database:"vt_customer" org_name:"c1" column_length:20 charset:63 flags:53251} rows:{lengths:1 values:"1"}|0|{}`,
+		`target:{fields:{name:"c1" type:INT64 table:"t1" org_table:"t1" database:"vt_customer" org_name:"c1" column_length:20 charset:63 flags:53251} rows:{lengths:1 values:"1"}}|0|{}`,
 	), nil)
 	vdenv.dbClient.ExpectRequest(fmt.Sprintf("select column_name as column_name, collation_name as collation_name from information_schema.columns where table_schema='%s' and table_name='t1' and column_name in ('c1')", vdiffDBName), sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"collation_name",
@@ -159,7 +159,7 @@ func TestVDiff(t *testing.T) {
 		"lastpk|mismatch|report",
 		"varbinary|int64|json",
 	),
-		`fields:{name:"c1" type:INT64 table:"t1" org_table:"t1" database:"vt_customer" org_name:"c1" column_length:20 charset:63 flags:53251} rows:{lengths:1 values:"1"}|0|{"TableName": "t1", "MatchingRows": 1, "ProcessedRows": 1, "MismatchedRows": 0, "ExtraRowsSource": 0, "ExtraRowsTarget": 0}`,
+		`target:{fields:{name:"c1" type:INT64 table:"t1" org_table:"t1" database:"vt_customer" org_name:"c1" column_length:20 charset:63 flags:53251} rows:{lengths:1 values:"1"}}|0|{}`,
 	), nil)
 
 	vdenv.dbClient.ExpectRequest("update _vt.vdiff_table set table_rows = 1 where vdiff_id = 1 and table_name = 't1'", singleRowAffected, nil)
@@ -169,7 +169,7 @@ func TestVDiff(t *testing.T) {
 		"lastpk|mismatch|report",
 		"varbinary|int64|json",
 	),
-		`fields:{name:"c1" type:INT64 table:"t1" org_table:"t1" database:"vt_customer" org_name:"c1" column_length:20 charset:63 flags:53251} rows:{lengths:1 values:"1"}|0|{"TableName": "t1", "MatchingRows": 1, "ProcessedRows": 1, "MismatchedRows": 0, "ExtraRowsSource": 0, "ExtraRowsTarget": 0}`,
+		`target:{fields:{name:"c1" type:INT64 table:"t1" org_table:"t1" database:"vt_customer" org_name:"c1" column_length:20 charset:63 flags:53251} rows:{lengths:1 values:"1"}}|0|{}`,
 	), nil)
 	vdenv.dbClient.ExpectRequest("update _vt.vdiff_table set state = 'started' where vdiff_id = 1 and table_name = 't1'", singleRowAffected, nil)
 	vdenv.dbClient.ExpectRequest(`insert into _vt.vdiff_log(vdiff_id, message) values (1, 'started: table \'t1\'')`, singleRowAffected, nil)
@@ -185,7 +185,7 @@ func TestVDiff(t *testing.T) {
 		"lastpk|mismatch|report",
 		"varbinary|int64|json",
 	),
-		`fields:{name:"c1" type:INT64 table:"t1" org_table:"t1" database:"vt_customer" org_name:"c1" column_length:20 charset:63 flags:53251} rows:{lengths:1 values:"1"}|0|{}`,
+		`target:{fields:{name:"c1" type:INT64 table:"t1" org_table:"t1" database:"vt_customer" org_name:"c1" column_length:20 charset:63 flags:53251} rows:{lengths:1 values:"1"}}|0|{}`,
 	), nil)
 	vdenv.dbClient.ExpectRequest(`update _vt.vdiff_table set rows_compared = 0, report = '{"TableName":"t1","ProcessedRows":0,"MatchingRows":0,"MismatchedRows":0,"ExtraRowsSource":0,"ExtraRowsTarget":0}' where vdiff_id = 1 and table_name = 't1'`, singleRowAffected, nil)
 	vdenv.dbClient.ExpectRequest(`update _vt.vdiff_table set state = 'completed', rows_compared = 0, report = '{"TableName":"t1","ProcessedRows":0,"MatchingRows":0,"MismatchedRows":0,"ExtraRowsSource":0,"ExtraRowsTarget":0}' where vdiff_id = 1 and table_name = 't1'`, singleRowAffected, nil)

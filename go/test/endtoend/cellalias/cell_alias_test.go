@@ -109,12 +109,12 @@ func TestMain(m *testing.M) {
 		if err != nil {
 			return 1, err
 		}
-		err = localCluster.VtctlProcess.AddCellInfo(cell2)
+		err = localCluster.VtctldClientProcess.AddCellInfo(cell2)
 		if err != nil {
 			return 1, err
 		}
 
-		vtctldClientProcess := cluster.VtctldClientProcessInstance("localhost", localCluster.VtctldProcess.GrpcPort, localCluster.TmpDirectory)
+		vtctldClientProcess := cluster.VtctldClientProcessInstance(localCluster.VtctldProcess.GrpcPort, localCluster.TopoPort, "localhost", localCluster.TmpDirectory)
 		_, err = vtctldClientProcess.ExecuteCommandWithOutput("CreateKeyspace", keyspaceName, "--durability-policy=semi_sync")
 		if err != nil {
 			return 1, err

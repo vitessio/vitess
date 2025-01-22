@@ -90,7 +90,9 @@ func TestComBinlogDumpGTID(t *testing.T) {
 
 	t.Run("WriteComBinlogDumpGTID", func(t *testing.T) {
 		// Write ComBinlogDumpGTID packet, read it, compare.
-		err := cConn.WriteComBinlogDumpGTID(0x01020304, "moofarm", 0x05060708090a0b0c, 0x0d0e, []byte{0xfa, 0xfb})
+		var flags uint16 = 0x0d0e
+		assert.Equal(t, flags, flags|BinlogThroughGTID)
+		err := cConn.WriteComBinlogDumpGTID(0x01020304, "moofarm", 0x05060708090a0b0c, flags, []byte{0xfa, 0xfb})
 		assert.NoError(t, err)
 		data, err := sConn.ReadPacket()
 		require.NoError(t, err, "sConn.ReadPacket - ComBinlogDumpGTID failed: %v", err)

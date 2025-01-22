@@ -20,10 +20,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"time"
 
+	"golang.org/x/exp/maps"
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -34,6 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -86,9 +89,10 @@ type tableDiffer struct {
 	targetPrimitive engine.Primitive
 
 	// sourceQuery is computed from the associated query for this table in the vreplication workflow's Rule Filter
-	sourceQuery string
-	table       *tabletmanagerdatapb.TableDefinition
-	lastPK      *querypb.QueryResult
+	sourceQuery  string
+	table        *tabletmanagerdatapb.TableDefinition
+	lastSourcePK *querypb.QueryResult
+	lastTargetPK *querypb.QueryResult
 
 	// wgShardStreamers is used, with a cancellable context, to wait for all shard streamers
 	// to finish after each diff is complete.
@@ -238,15 +242,9 @@ func (td *tableDiffer) selectTablets(ctx context.Context) error {
 	sourceCells := strings.Split(td.wd.opts.PickerOptions.SourceCell, ",")
 	targetCells := strings.Split(td.wd.opts.PickerOptions.TargetCell, ",")
 
-	// For Mount+Migrate, the source tablets will be in a different
-	// Vitess cluster with its own TopoServer.
-	sourceTopoServer := td.wd.ct.ts
-	if td.wd.ct.externalCluster != "" {
-		extTS, err := td.wd.ct.ts.OpenExternalVitessClusterServer(ctx, td.wd.ct.externalCluster)
-		if err != nil {
-			return err
-		}
-		sourceTopoServer = extTS
+	sourceTopoServer, err := td.wd.getSourceTopoServer()
+	if err != nil {
+		return vterrors.Wrap(err, "failed to get source topo server")
 	}
 	tabletPickerOptions := discovery.TabletPickerOptions{}
 	wg.Add(1)
@@ -349,7 +347,7 @@ func (td *tableDiffer) startTargetDataStream(ctx context.Context) error {
 	ct := td.wd.ct
 	gtidch := make(chan string, 1)
 	ct.targetShardStreamer.result = make(chan *sqltypes.Result, 1)
-	go td.streamOneShard(ctx, ct.targetShardStreamer, td.tablePlan.targetQuery, td.lastPK, gtidch)
+	go td.streamOneShard(ctx, ct.targetShardStreamer, td.tablePlan.targetQuery, td.lastTargetPK, gtidch)
 	gtid, ok := <-gtidch
 	if !ok {
 		log.Infof("streaming error: %v", ct.targetShardStreamer.err)
@@ -364,7 +362,7 @@ func (td *tableDiffer) startSourceDataStreams(ctx context.Context) error {
 	if err := td.forEachSource(func(source *migrationSource) error {
 		gtidch := make(chan string, 1)
 		source.result = make(chan *sqltypes.Result, 1)
-		go td.streamOneShard(ctx, source.shardStreamer, td.tablePlan.sourceQuery, td.lastPK, gtidch)
+		go td.streamOneShard(ctx, source.shardStreamer, td.tablePlan.sourceQuery, td.lastSourcePK, gtidch)
 
 		gtid, ok := <-gtidch
 		if !ok {
@@ -721,32 +719,17 @@ func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, dr *D
 	if dr == nil {
 		return fmt.Errorf("cannot update progress with a nil diff report")
 	}
-	var lastPK []byte
+
 	var err error
 	var query string
 	rpt, err := json.Marshal(dr)
 	if err != nil {
 		return err
 	}
-	if lastRow != nil {
-		lastPK, err = td.lastPKFromRow(lastRow)
-		if err != nil {
-			return err
-		}
 
-		if td.wd.opts.CoreOptions.MaxDiffSeconds > 0 {
-			// Update the in-memory lastPK as well so that we can restart the table
-			// diff if needed.
-			lastpkpb := &querypb.QueryResult{}
-			if err := prototext.Unmarshal(lastPK, lastpkpb); err != nil {
-				return err
-			}
-			td.lastPK = lastpkpb
-		}
-
-		query, err = sqlparser.ParseAndBind(sqlUpdateTableProgress,
+	if lastRow == nil {
+		query, err = sqlparser.ParseAndBind(sqlUpdateTableNoProgress,
 			sqltypes.Int64BindVariable(dr.ProcessedRows),
-			sqltypes.StringBindVariable(string(lastPK)),
 			sqltypes.StringBindVariable(string(rpt)),
 			sqltypes.Int64BindVariable(td.wd.ct.id),
 			sqltypes.StringBindVariable(td.table.Name),
@@ -755,8 +738,25 @@ func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, dr *D
 			return err
 		}
 	} else {
-		query, err = sqlparser.ParseAndBind(sqlUpdateTableNoProgress,
+		lastPK := td.lastPKFromRow(lastRow)
+		if td.wd.opts.CoreOptions.MaxDiffSeconds > 0 {
+			// Update the in-memory lastPK as well so that we can restart the table
+			// diff if needed.
+			td.lastTargetPK = lastPK.Target
+			if lastPK.Source == nil {
+				// If the source PK is nil, we use the target value for both.
+				td.lastSourcePK = lastPK.Target
+			} else {
+				td.lastSourcePK = lastPK.Source
+			}
+		}
+		lastPKTxt, err := prototext.Marshal(lastPK)
+		if err != nil {
+			return vterrors.Wrapf(err, "failed to marshal lastpk value %+v for table %s", lastPK, td.table.Name)
+		}
+		query, err = sqlparser.ParseAndBind(sqlUpdateTableProgress,
 			sqltypes.Int64BindVariable(dr.ProcessedRows),
+			sqltypes.StringBindVariable(string(lastPKTxt)),
 			sqltypes.StringBindVariable(string(rpt)),
 			sqltypes.Int64BindVariable(td.wd.ct.id),
 			sqltypes.StringBindVariable(td.table.Name),
@@ -768,6 +768,7 @@ func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, dr *D
 	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
 		return err
 	}
+
 	td.wd.ct.TableDiffRowCounts.Add(td.table.Name, dr.ProcessedRows)
 	return nil
 }
@@ -832,19 +833,30 @@ func updateTableMismatch(dbClient binlogplayer.DBClient, vdiffID int64, table st
 	return nil
 }
 
-func (td *tableDiffer) lastPKFromRow(row []sqltypes.Value) ([]byte, error) {
-	pkColCnt := len(td.tablePlan.pkCols)
-	pkFields := make([]*querypb.Field, pkColCnt)
-	pkVals := make([]sqltypes.Value, pkColCnt)
-	for i, colIndex := range td.tablePlan.pkCols {
-		pkFields[i] = td.tablePlan.table.Fields[colIndex]
-		pkVals[i] = row[colIndex]
+func (td *tableDiffer) lastPKFromRow(row []sqltypes.Value) *tabletmanagerdatapb.VDiffTableLastPK {
+	buildQR := func(pkCols []int) *querypb.QueryResult {
+		pkColCnt := len(pkCols)
+		pkFields := make([]*querypb.Field, pkColCnt)
+		pkVals := make([]sqltypes.Value, pkColCnt)
+		for i, colIndex := range pkCols {
+			pkFields[i] = td.tablePlan.table.Fields[colIndex]
+			pkVals[i] = row[colIndex]
+		}
+		return &querypb.QueryResult{
+			Fields: pkFields,
+			Rows:   []*querypb.Row{sqltypes.RowToProto3(pkVals)},
+		}
 	}
-	buf, err := prototext.Marshal(&querypb.QueryResult{
-		Fields: pkFields,
-		Rows:   []*querypb.Row{sqltypes.RowToProto3(pkVals)},
-	})
-	return buf, err
+	lastPK := &tabletmanagerdatapb.VDiffTableLastPK{
+		Target: buildQR(td.tablePlan.pkCols),
+	}
+	// If the source and target PKs are different, we need to save the source PK
+	// as well. Otherwise the source will be nil which means that the target value
+	// should also be used for the source.
+	if !slices.Equal(td.tablePlan.pkCols, td.tablePlan.sourcePkCols) {
+		lastPK.Source = buildQR(td.tablePlan.sourcePkCols)
+	}
+	return lastPK
 }
 
 // If SourceTimeZone is defined in the BinlogSource (_vt.vreplication.source), the
@@ -891,6 +903,83 @@ func (td *tableDiffer) adjustForSourceTimeZone(targetSelectExprs sqlparser.Selec
 		return newSelectExprs
 	}
 	return targetSelectExprs
+}
+
+// getSourcePKCols populates the sourcePkCols field in the tablePlan.
+// We need this information in order to save the lastpk value for the
+// source if the PK columns differ between the source and target.
+func (td *tableDiffer) getSourcePKCols() error {
+	ctx, cancel := context.WithTimeout(td.wd.ct.vde.ctx, topo.RemoteOperationTimeout*3)
+	defer cancel()
+
+	// We use the first sourceShard as all of them should have the same schema.
+	if len(td.wd.ct.sources) == 0 {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no source shards found in %s keyspace",
+			td.wd.ct.sourceKeyspace)
+	}
+	sourceShardName := maps.Keys(td.wd.ct.sources)[0]
+	sourceTS, err := td.wd.getSourceTopoServer()
+	if err != nil {
+		return vterrors.Wrap(err, "failed to get source topo server")
+	}
+	sourceShard, err := sourceTS.GetShard(ctx, td.wd.ct.sourceKeyspace, sourceShardName)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to get source shard %s", sourceShardName)
+	}
+	if sourceShard.PrimaryAlias == nil {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "source shard %s has no primary", sourceShardName)
+	}
+	sourceTablet, err := sourceTS.GetTablet(ctx, sourceShard.PrimaryAlias)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to get primary tablet in source shard %s/%s",
+			td.wd.ct.sourceKeyspace, sourceShardName)
+	}
+	sourceSchema, err := td.wd.ct.tmc.GetSchema(ctx, sourceTablet.Tablet, &tabletmanagerdatapb.GetSchemaRequest{
+		Tables: []string{td.table.Name},
+	})
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to get the schema for table %s from source tablet %s",
+			td.table.Name, topoproto.TabletAliasString(sourceTablet.Tablet.Alias))
+	}
+	sourceTable := sourceSchema.TableDefinitions[0]
+	if len(sourceTable.PrimaryKeyColumns) == 0 {
+		// We use the columns from a PKE if there is one.
+		executeFetch := func(query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
+			res, err := td.wd.ct.tmc.ExecuteFetchAsApp(ctx, sourceTablet.Tablet, false, &tabletmanagerdatapb.ExecuteFetchAsAppRequest{
+				Query:   []byte(query),
+				MaxRows: 1,
+			})
+			if err != nil {
+				return nil, vterrors.Wrapf(err, "failed to query the %s source tablet in order to get a primary key equivalent for the %s table",
+					topoproto.TabletAliasString(sourceTablet.Tablet.Alias), td.table.Name)
+			}
+			return sqltypes.Proto3ToResult(res), nil
+		}
+		pkeCols, _, err := mysqlctl.GetPrimaryKeyEquivalentColumns(ctx, executeFetch, sourceTablet.DbName(), td.table.Name)
+		if err != nil {
+			return vterrors.Wrapf(err, "failed to get a primary key equivalent for the %s table from source tablet %s",
+				td.table.Name, topoproto.TabletAliasString(sourceTablet.Tablet.Alias))
+		}
+		if len(pkeCols) > 0 {
+			sourceTable.PrimaryKeyColumns = pkeCols
+		} else {
+			// We use every column together as a substitute PK.
+			sourceTable.PrimaryKeyColumns = append(sourceTable.PrimaryKeyColumns, td.table.Columns...)
+		}
+	}
+
+	sourcePKColumns := make(map[string]struct{}, len(sourceTable.PrimaryKeyColumns))
+	td.tablePlan.sourcePkCols = make([]int, 0, len(sourceTable.PrimaryKeyColumns))
+	for _, pkc := range sourceTable.PrimaryKeyColumns {
+		sourcePKColumns[pkc] = struct{}{}
+	}
+	for i, pkc := range td.table.Columns {
+		if _, ok := sourcePKColumns[pkc]; ok {
+			td.tablePlan.sourcePkCols = append(td.tablePlan.sourcePkCols, i)
+		}
+	}
+
+	return nil
 }
 
 func getColumnNameForSelectExpr(selectExpression sqlparser.SelectExpr) (string, error) {
