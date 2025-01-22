@@ -26,7 +26,6 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -71,17 +70,13 @@ func TestTxSerializer_NoHotRow(t *testing.T) {
 }
 
 func TestTxSerializerRedactDebugUI(t *testing.T) {
-	streamlog.SetRedactDebugUIQueries(true)
-	defer func() {
-		streamlog.SetRedactDebugUIQueries(false)
-	}()
-
 	cfg := tabletenv.NewDefaultConfig()
 	cfg.HotRowProtection.MaxQueueSize = 1
 	cfg.HotRowProtection.MaxGlobalQueueSize = 1
 	cfg.HotRowProtection.MaxConcurrency = 5
 	txs := New(tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TxSerializerTest"))
 	resetVariables(txs)
+	txs.redactUIQuery = true
 
 	done, waited, err := txs.Wait(context.Background(), "t1 where1", "t1")
 	if err != nil {

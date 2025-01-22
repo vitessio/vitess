@@ -48,8 +48,8 @@ func TestTrivialERS(t *testing.T) {
 	}
 	// We should do the same for vtctl binary
 	for i := 1; i <= 4; i++ {
-		out, err := utils.ErsWithVtctl(clusterInstance)
-		log.Infof("ERS-vtctl loop %d.  EmergencyReparentShard Output: %v", i, out)
+		out, err := utils.ErsWithVtctldClient(clusterInstance)
+		log.Infof("ERS-vtctldclient loop %d.  EmergencyReparentShard Output: %v", i, out)
 		require.NoError(t, err)
 		time.Sleep(5 * time.Second)
 	}
@@ -396,7 +396,7 @@ func TestERSForInitialization(t *testing.T) {
 	err = clusterInstance.SetupCluster(keyspace, []cluster.Shard{*shard})
 	require.NoError(t, err)
 	if clusterInstance.VtctlMajorVersion >= 14 {
-		vtctldClientProcess := cluster.VtctldClientProcessInstance("localhost", clusterInstance.VtctldProcess.GrpcPort, clusterInstance.TmpDirectory)
+		vtctldClientProcess := cluster.VtctldClientProcessInstance(clusterInstance.VtctldProcess.GrpcPort, clusterInstance.TopoPort, "localhost", clusterInstance.TmpDirectory)
 		out, err := vtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspace.Name, "--durability-policy=semi_sync")
 		require.NoError(t, err, out)
 	}
