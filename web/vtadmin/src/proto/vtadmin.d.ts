@@ -31327,9 +31327,6 @@ export namespace tabletmanagerdata {
         /** BackupRequest backup_engine. */
         public backup_engine?: (string|null);
 
-        /** BackupRequest _backup_engine. */
-        public _backup_engine?: "backup_engine";
-
         /**
          * Creates a new BackupRequest instance using the specified properties.
          * @param [properties] Properties to set
@@ -33948,9 +33945,6 @@ export namespace tabletmanagerdata {
         /** VDiffCoreOptions auto_start. */
         public auto_start?: (boolean|null);
 
-        /** VDiffCoreOptions _auto_start. */
-        public _auto_start?: "auto_start";
-
         /**
          * Creates a new VDiffCoreOptions instance using the specified properties.
          * @param [properties] Properties to set
@@ -34163,9 +34157,6 @@ export namespace tabletmanagerdata {
         /** VDiffTableLastPK source. */
         public source?: (query.IQueryResult|null);
 
-        /** VDiffTableLastPK _source. */
-        public _source?: "source";
-
         /**
          * Creates a new VDiffTableLastPK instance using the specified properties.
          * @param [properties] Properties to set
@@ -34310,18 +34301,6 @@ export namespace tabletmanagerdata {
 
         /** UpdateVReplicationWorkflowRequest message. */
         public message?: (string|null);
-
-        /** UpdateVReplicationWorkflowRequest _tablet_selection_preference. */
-        public _tablet_selection_preference?: "tablet_selection_preference";
-
-        /** UpdateVReplicationWorkflowRequest _on_ddl. */
-        public _on_ddl?: "on_ddl";
-
-        /** UpdateVReplicationWorkflowRequest _state. */
-        public _state?: "state";
-
-        /** UpdateVReplicationWorkflowRequest _message. */
-        public _message?: "message";
 
         /**
          * Creates a new UpdateVReplicationWorkflowRequest instance using the specified properties.
@@ -34546,15 +34525,6 @@ export namespace tabletmanagerdata {
 
         /** UpdateVReplicationWorkflowsRequest stop_position. */
         public stop_position?: (string|null);
-
-        /** UpdateVReplicationWorkflowsRequest _state. */
-        public _state?: "state";
-
-        /** UpdateVReplicationWorkflowsRequest _message. */
-        public _message?: "message";
-
-        /** UpdateVReplicationWorkflowsRequest _stop_position. */
-        public _stop_position?: "stop_position";
 
         /**
          * Creates a new UpdateVReplicationWorkflowsRequest instance using the specified properties.
@@ -49746,9 +49716,6 @@ export namespace vschema {
         /** Column values. */
         public values: string[];
 
-        /** Column _nullable. */
-        public _nullable?: "nullable";
-
         /**
          * Creates a new Column instance using the specified properties.
          * @param [properties] Properties to set
@@ -54417,9 +54384,6 @@ export namespace vtctldata {
 
         /** BackupRequest backup_engine. */
         public backup_engine?: (string|null);
-
-        /** BackupRequest _backup_engine. */
-        public _backup_engine?: "backup_engine";
 
         /**
          * Creates a new BackupRequest instance using the specified properties.
@@ -77809,9 +77773,6 @@ export namespace vtctldata {
 
         /** VDiffCreateRequest auto_start. */
         public auto_start?: (boolean|null);
-
-        /** VDiffCreateRequest _auto_start. */
-        public _auto_start?: "auto_start";
 
         /**
          * Creates a new VDiffCreateRequest instance using the specified properties.
