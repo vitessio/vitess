@@ -46,6 +46,8 @@ type (
 		Lock     sqlparser.Lock
 
 		ResultColumns int
+
+		SeenValues semantics.TableSet
 	}
 
 	RouteOrdering struct {
@@ -101,13 +103,15 @@ type (
 		OpCode() engine.Opcode
 		Keyspace() *vindexes.Keyspace // note that all routings do not have a keyspace, so this method can return nil
 
+		AddValuesTableID(id semantics.TableSet)
+
 		// updateRoutingLogic updates the routing to take predicates into account. This can be used for routing
 		// using vindexes or for figuring out which keyspace an information_schema query should be sent to.
 		updateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Routing
 	}
 )
 
-// UpdateRoutingLogic first checks if we are dealing with a predicate that
+// UpdateRoutingLogic first checks if we are dealing with a predicate that can be evaluated to false or NULL.
 func UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr, r Routing) Routing {
 	ks := r.Keyspace()
 	if ks == nil {

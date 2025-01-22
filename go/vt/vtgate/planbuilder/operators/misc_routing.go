@@ -21,6 +21,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -77,6 +78,7 @@ func (tr *TargetedRouting) Clone() Routing {
 func (tr *TargetedRouting) updateRoutingLogic(_ *plancontext.PlanningContext, _ sqlparser.Expr) Routing {
 	return tr
 }
+func (tr *TargetedRouting) AddValuesTableID(semantics.TableSet) {}
 
 func (tr *TargetedRouting) Cost() int {
 	return 1
@@ -101,6 +103,8 @@ func (n *NoneRouting) Clone() Routing {
 func (n *NoneRouting) updateRoutingLogic(*plancontext.PlanningContext, sqlparser.Expr) Routing {
 	return n
 }
+
+func (*NoneRouting) AddValuesTableID(semantics.TableSet) {}
 
 func (n *NoneRouting) Cost() int {
 	return 0
@@ -128,6 +132,8 @@ func (rr *AnyShardRouting) Clone() Routing {
 func (rr *AnyShardRouting) updateRoutingLogic(*plancontext.PlanningContext, sqlparser.Expr) Routing {
 	return rr
 }
+
+func (tr *AnyShardRouting) AddValuesTableID(semantics.TableSet) {}
 
 func (rr *AnyShardRouting) Cost() int {
 	return 0
@@ -166,6 +172,8 @@ func (dr *DualRouting) updateRoutingLogic(*plancontext.PlanningContext, sqlparse
 	return dr
 }
 
+func (tr *DualRouting) AddValuesTableID(semantics.TableSet) {}
+
 func (dr *DualRouting) Cost() int {
 	return 0
 }
@@ -191,14 +199,16 @@ func (sr *SequenceRouting) updateRoutingLogic(*plancontext.PlanningContext, sqlp
 	return sr
 }
 
-func (sr *SequenceRouting) Cost() int {
+func (*SequenceRouting) AddValuesTableID(semantics.TableSet) {}
+
+func (*SequenceRouting) Cost() int {
 	return 0
 }
 
-func (sr *SequenceRouting) OpCode() engine.Opcode {
+func (*SequenceRouting) OpCode() engine.Opcode {
 	return engine.Next
 }
 
-func (sr *SequenceRouting) Keyspace() *vindexes.Keyspace {
+func (*SequenceRouting) Keyspace() *vindexes.Keyspace {
 	return nil
 }
