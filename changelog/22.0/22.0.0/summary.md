@@ -13,6 +13,7 @@
   - **[Support for LAST_INSERT_ID(x)](#last-insert-id)**
   - **[Support for Maximum Idle Connections in the Pool](#max-idle-connections)**
   - **[Stalled Disk Recovery in VTOrc](#stall-disk-recovery)**
+  - **[KeyRanges in `--clusters_to_watch` in VTOrc](#key-range-vtorc)**
 - **[Minor Changes](#minor-changes)**
   - **[VTTablet Flags](#flags-vttablet)**
   - **[Topology read concurrency behaviour changes](#topo-read-concurrency-changes)**
@@ -105,6 +106,11 @@ This feature ensures that, during traffic spikes, idle connections are available
 VTOrc can now identify and recover from stalled disk errors. VTTablets test whether the disk is writable and they send this information in the full status output to VTOrc. If the disk is not writable on the primary tablet, VTOrc will attempt to recover the cluster by promoting a new primary. This is useful in scenarios where the disk is stalled and the primary vttablet is unable to accept writes because of it.
 
 To opt into this feature, `--enable-primary-disk-stalled-recovery` flag has to be specified on VTOrc, and `--disk-write-dir` flag has to be specified on the vttablets. `--disk-write-interval` and `--disk-write-timeout` flags can be used to configure the polling interval and timeout respectively. 
+
+### <a id="key-range-vtorc"/>KeyRanges in `--clusters_to_watch` in VTOrc</a>
+VTOrc now supports specifying KeyRanges in the `--clusters_to_watch` flag. This is useful in scenarios where you don't need to restart a VTOrc instance if you run a reshard.
+For example, if a VTOrc is configured to watch `ks/-80`, then it would watch all the shards that fall under the KeyRange `-80`. If a reshard is run and, `-80` is split into new shards `-40`, and `40-80`, the VTOrc instance will automatically start watching the new shard without needing a restart.
+The users can still continue to specify exact key ranges too, and the new feature is backward compatible.
 
 ## <a id="minor-changes"/>Minor Changes</a>
 

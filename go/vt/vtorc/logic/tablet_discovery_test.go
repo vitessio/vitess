@@ -180,6 +180,14 @@ func TestTabletsPartOfWatch(t *testing.T) {
 			expectedPartOfWatch: false,
 		},
 		{
+			in: []string{"ks/50-70"},
+			tablet: &topodatapb.Tablet{
+				Keyspace: "ks",
+				KeyRange: key.NewKeyRange([]byte{0x50}, []byte{0x70}),
+			},
+			expectedPartOfWatch: true,
+		},
+		{
 			in: []string{"ks2/-70", "ks2/70-", "unknownKs/-", "ks/-80"},
 			tablet: &topodatapb.Tablet{
 				Keyspace: "ks",
