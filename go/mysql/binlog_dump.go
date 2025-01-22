@@ -77,7 +77,8 @@ func (c *Conn) parseComBinlogDumpGTID(data []byte) (logFile string, logPos uint6
 		return logFile, logPos, position, readPacketErr
 	}
 	if gtid := string(data[pos : pos+int(dataSize)]); gtid != "" {
-		position, err = replication.DecodePosition(gtid)
+		// ComBinlogDumpGTID is a MySQL specific protocol. The GTID flavor is necessarily MySQL 56
+		position, _, err = replication.DecodePositionMySQL56(gtid)
 		if err != nil {
 			return logFile, logPos, position, err
 		}
