@@ -143,7 +143,7 @@ var (
 
 	// schema tracking flags
 	enableSchemaChangeSignal = true
-	enableViews              bool
+	enableViews              = true
 	enableUdfs               bool
 
 	// vtgate views flags

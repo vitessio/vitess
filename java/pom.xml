@@ -252,7 +252,7 @@
               <failOnWarning>true</failOnWarning>
               <outputXML>true</outputXML>
               <ignoredUnusedDeclaredDependencies>
-                <dependency>mysql:mysql-connector-java</dependency>
+                <dependency>com.mysql:mysql-connector-j</dependency>
                 <dependency>io.grpc:grpc-context</dependency>
               </ignoredUnusedDeclaredDependencies>
             </configuration>

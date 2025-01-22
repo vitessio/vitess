@@ -80,17 +80,6 @@ func insertVDiffLog(ctx context.Context, dbClient binlogplayer.DBClient, vdiffID
 	}
 }
 
-func stringListContains(lst []string, item string) bool {
-	contains := false
-	for _, t := range lst {
-		if t == item {
-			contains = true
-			break
-		}
-	}
-	return contains
-}
-
 // copyNonKeyRangeExpressions copies all expressions from the input WHERE clause
 // to the output WHERE clause except for any in_keyrange() expressions.
 func copyNonKeyRangeExpressions(where *sqlparser.Where) *sqlparser.Where {

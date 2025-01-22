@@ -499,7 +499,8 @@ const (
 	sqlDropTable                           = "DROP TABLE `%a`"
 	sqlDropTableIfExists                   = "DROP TABLE IF EXISTS `%a`"
 	sqlShowTableStatus                     = "SHOW TABLE STATUS LIKE '%a'"
-	sqlAnalyzeTable                        = "ANALYZE NO_WRITE_TO_BINLOG TABLE `%a`"
+	sqlAnalyzeTableLocal                   = "ANALYZE NO_WRITE_TO_BINLOG TABLE `%a`"
+	sqlAnalyzeTable                        = "ANALYZE TABLE `%a`"
 	sqlShowCreateTable                     = "SHOW CREATE TABLE `%a`"
 	sqlShowVariablesLikePreserveForeignKey = "show global variables like 'rename_table_preserve_foreign_key'"
 	sqlShowVariablesLikeFastAnalyzeTable   = "show global variables like 'fast_analyze_table'"
@@ -565,6 +566,15 @@ const (
 			join information_schema.innodb_trx on (data_locks.ENGINE_TRANSACTION_ID=innodb_trx.trx_id)
 		where
 			data_locks.OBJECT_SCHEMA=database() AND data_locks.OBJECT_NAME=%a
+	`
+	sqlProcessWithMetadataLocksOnTable = `
+		SELECT
+			DISTINCT threads.processlist_id
+		from
+			performance_schema.metadata_locks
+			join performance_schema.threads on (metadata_locks.OWNER_THREAD_ID=threads.THREAD_ID)
+		where
+			metadata_locks.OBJECT_SCHEMA=database() AND metadata_locks.OBJECT_NAME=%a
 	`
 )
 

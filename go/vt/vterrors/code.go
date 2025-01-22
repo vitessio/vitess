@@ -243,8 +243,15 @@ func errorWithoutState(id string, code vtrpcpb.Code, short, long string) func(ar
 
 func errorWithState(id string, code vtrpcpb.Code, state State, short, long string) func(args ...any) *VitessError {
 	return func(args ...any) *VitessError {
+		var err error
+		if len(args) != 0 {
+			err = NewErrorf(code, state, id+": "+short, args...)
+		} else {
+			err = NewError(code, state, id+": "+short)
+		}
+
 		return &VitessError{
-			Err:         NewErrorf(code, state, id+": "+short, args...),
+			Err:         err,
 			Description: long,
 			ID:          id,
 			State:       state,

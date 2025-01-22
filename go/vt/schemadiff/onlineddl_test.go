@@ -937,6 +937,11 @@ func TestRevertible(t *testing.T) {
 			fromSchema: "id int, primary key (id), key idx1 ((id + 1))",
 			toSchema:   "id int, primary key (id), key idx2 ((id + 2))",
 		},
+		{
+			name:       "remove unique index with expression, add another, skip both",
+			fromSchema: "id int, i int, primary key (id), unique key idx1 ((id + 1))",
+			toSchema:   "id int, i int, primary key (id), unique key idx2 ((i  + 2))",
+		},
 	}
 
 	var (

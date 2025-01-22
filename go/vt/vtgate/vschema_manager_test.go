@@ -900,7 +900,7 @@ func (f *fakeSchema) Tables(string) map[string]*vindexes.TableInfo {
 	return f.t
 }
 
-func (f *fakeSchema) Views(string) map[string]sqlparser.SelectStatement {
+func (f *fakeSchema) Views(string) map[string]sqlparser.TableStatement {
 	return nil
 }
 func (f *fakeSchema) UDFs(string) []string { return f.udfs }
