@@ -122,8 +122,10 @@ func TestComBinlogDumpGTID(t *testing.T) {
 		assert.Equal(t, flags, flags|BinlogThroughGTID)
 		gtidSet, err := replication.ParseMysql56GTIDSet("16b1039f-22b6-11ed-b765-0a43f95f28a3:1-243")
 		require.NoError(t, err)
-		// dataSize := uint32(len(gtidSet.String()))
-		err = cConn.WriteComBinlogDumpGTID(0x01020304, "moofarm", 0x05060708090a0b0c, flags, []byte(gtidSet.String()))
+		sidBlock := gtidSet.SIDBlock()
+		assert.Len(t, sidBlock, 0x30) // 48 bytes
+
+		err = cConn.WriteComBinlogDumpGTID(0x01020304, "moofarm", 0x05060708090a0b0c, flags, sidBlock)
 		assert.NoError(t, err)
 		data, err := sConn.ReadPacket()
 		require.NoError(t, err, "sConn.ReadPacket - ComBinlogDumpGTID failed: %v", err)
@@ -137,9 +139,9 @@ func TestComBinlogDumpGTID(t *testing.T) {
 			0x07, 0x00, 0x00, 0x00, // binlog-filename-len
 			'm', 'o', 'o', 'f', 'a', 'r', 'm', // bilog-filename
 			0x0c, 0x0b, 0x0a, 0x09, 0x08, 0x07, 0x06, 0x05, // binlog-pos
-			0x02a, 0x00, 0x00, 0x00, // data-size
-			0x31, 0x36, 0x62, 0x31, 0x30, 0x33, 0x39, 0x66, 0x2d, 0x32, 0x32, 0x62, 0x36, 0x2d, 0x31, 0x31, 0x65, 0x64, 0x2d, 0x62, 0x37, 0x36, 0x35, 0x2d, 0x30, 0x61, 0x34, 0x33, 0x66, 0x39, 0x35, 0x66, 0x32, 0x38, 0x61, 0x33, 0x3a, 0x31, 0x2d, 0x32, 0x34, 0x33, // data
+			0x30, 0x00, 0x00, 0x00, // data-size
 		}
+		expectedData = append(expectedData, sidBlock...) // data
 		assert.Equal(t, expectedData, data)
 		logFile, logPos, pos, err := sConn.parseComBinlogDumpGTID(data)
 		require.NoError(t, err, "parseComBinlogDumpGTID failed: %v", err)
