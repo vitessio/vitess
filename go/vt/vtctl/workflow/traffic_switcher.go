@@ -1148,8 +1148,11 @@ func (ts *trafficSwitcher) cancelMigration(ctx context.Context, sm *StreamMigrat
 
 	// We create a new context while canceling the migration, so that we are independent of the original
 	// context being cancelled prior to or during the cancel operation.
+	// Create a child context that cannot be canceled by the parent, so that we maintain the locks.
+	cctx := context.WithoutCancel(ctx)
+	// Now create a child context from that which has a timeout.
 	cmTimeout := 60 * time.Second
-	cmCtx, cmCancel := context.WithTimeout(context.Background(), cmTimeout)
+	cmCtx, cmCancel := context.WithTimeout(cctx, cmTimeout)
 	defer cmCancel()
 
 	if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {

@@ -647,16 +647,6 @@ func getStreamState(stream *vtctldatapb.Workflow_Stream, rstream *tabletmanagerd
 	return rstream.State.String()
 }
 
-type GenericStream interface {
-	*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream | *vtctldatapb.Workflow_Stream
-}
-
-type Stream[T GenericStream] struct {
-	TransactionTimestamp *vttimepb.Time
-	TimeUpdated          *vttimepb.Time
-	State                binlogdatapb.VReplicationWorkflowState
-}
-
 // getVReplicationTrxLag estimates the actual statement processing lag between the
 // source and the target. If we are still processing source events it is the
 // difference between current time and the timestamp of the last event. If
