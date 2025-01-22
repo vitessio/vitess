@@ -160,7 +160,7 @@ func addCTEPredicate(
 }
 
 func breakCTEExpressionInLhsAndRhs(ctx *plancontext.PlanningContext, pred sqlparser.Expr, lhsID semantics.TableSet) *plancontext.RecurseExpression {
-	col := breakExpressionInLHSandRHS(ctx, pred, lhsID)
+	col := breakApplyJoinExpressionInLHSandRHS(ctx, pred, lhsID)
 
 	lhsExprs := slice.Map(col.LHSExprs, func(bve BindVarExpr) plancontext.BindVarExpr {
 		col, ok := bve.Expr.(*sqlparser.ColName)

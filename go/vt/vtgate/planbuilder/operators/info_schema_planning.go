@@ -21,6 +21,8 @@ import (
 	"slices"
 	"strings"
 
+	"vitess.io/vitess/go/vt/vtgate/semantics"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -115,6 +117,10 @@ func (isr *InfoSchemaRouting) resetRoutingLogic(ctx *plancontext.PlanningContext
 		routing = UpdateRoutingLogic(ctx, expr, routing)
 	}
 	return routing
+}
+
+func (isr *InfoSchemaRouting) AddValuesTableID(id semantics.TableSet) {
+	panic(vterrors.VT13001("think about values and info schema routing"))
 }
 
 func (isr *InfoSchemaRouting) Cost() int {

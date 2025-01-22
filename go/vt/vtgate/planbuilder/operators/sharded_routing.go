@@ -48,7 +48,8 @@ type ShardedRouting struct {
 
 	// SeenPredicates contains all the predicates that have had a chance to influence routing.
 	// If we need to replan routing, we'll use this list
-	SeenPredicates []sqlparser.Expr
+	SeenPredicates  []sqlparser.Expr
+	ValuesTablesIDs semantics.TableSet
 }
 
 var _ Routing = (*ShardedRouting)(nil)
@@ -191,6 +192,10 @@ func (tr *ShardedRouting) Clone() Routing {
 	}
 }
 
+func (sr *ShardedRouting) AddValuesTableID(id semantics.TableSet) {
+	sr.ValuesTablesIDs = sr.ValuesTablesIDs.Merge(id)
+}
+
 func (tr *ShardedRouting) updateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Routing {
 	tr.SeenPredicates = append(tr.SeenPredicates, expr)
 
@@ -208,6 +213,7 @@ func (tr *ShardedRouting) updateRoutingLogic(ctx *plancontext.PlanningContext, e
 	return tr
 }
 
+// resetRoutingLogic resets the routing logic to the initial state, and uses the predicates to recompute the routing
 func (tr *ShardedRouting) resetRoutingLogic(ctx *plancontext.PlanningContext) Routing {
 	tr.RouteOpCode = engine.Scatter
 	tr.Selected = nil
@@ -543,6 +549,20 @@ func (tr *ShardedRouting) planEqualOp(ctx *plancontext.PlanningContext, node *sq
 	}
 	val := makeEvalEngineExpr(ctx, vdValue)
 	if val == nil {
+		col, ok := vdValue.(*sqlparser.ColName)
+		if !ok {
+			return false
+		}
+		from := ctx.SemTable.RecursiveDeps(col)
+		if from.IsSolvedBy(tr.ValuesTablesIDs) {
+			multiEqual := func(vindex *vindexes.ColumnVindex) engine.Opcode {
+				// TODO @harshit - what else should we do here?
+				return engine.MultiEqual
+			}
+			arg := sqlparser.NewListArg("values") // TODO: HACK - we need to store these names?
+
+			return tr.haveMatchingVindex(ctx, node, arg, column, val, multiEqual, justTheVindex)
+		}
 		return false
 	}
 

@@ -297,7 +297,7 @@ func extractLHSExpr(
 	lhs semantics.TableSet,
 ) func(expr sqlparser.Expr) sqlparser.Expr {
 	return func(expr sqlparser.Expr) sqlparser.Expr {
-		col := breakExpressionInLHSandRHS(ctx, expr, lhs)
+		col := breakApplyJoinExpressionInLHSandRHS(ctx, expr, lhs)
 		if col.IsPureLeft() {
 			panic(vterrors.VT13001("did not expect to find any predicates that do not need data from the inner here"))
 		}
@@ -676,7 +676,7 @@ func (s *subqueryRouteMerger) merge(ctx *plancontext.PlanningContext, inner, out
 // We really need to figure out why this is not working as expected
 func (s *subqueryRouteMerger) rewriteASTExpression(ctx *plancontext.PlanningContext, inner *Route) Operator {
 	src := s.outer.Source
-	stmt, _, err := ToSQL(ctx, inner.Source)
+	stmt, _, err := ToAST(ctx, inner.Source)
 	if err != nil {
 		panic(err)
 	}

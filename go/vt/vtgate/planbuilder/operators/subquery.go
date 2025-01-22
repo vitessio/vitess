@@ -101,7 +101,7 @@ func (sq *SubQuery) GetJoinColumns(ctx *plancontext.PlanningContext, outer Opera
 	}
 	sq.outerID = outerID
 	mapper := func(in sqlparser.Expr) (applyJoinColumn, error) {
-		return breakExpressionInLHSandRHS(ctx, in, outerID), nil
+		return breakApplyJoinExpressionInLHSandRHS(ctx, in, outerID), nil
 	}
 	joinPredicates, err := slice.MapWithError(sq.Predicates, mapper)
 	if err != nil {

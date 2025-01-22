@@ -66,13 +66,18 @@ func runPhases(ctx *plancontext.PlanningContext, root Operator) Operator {
 		}
 
 		op = phase.act(ctx, op)
-		op = runRewriters(ctx, op)
+		op = runPushDownRewriters(ctx, op)
 	}
+
+	ctx.CurrentPhase = int(DONE)
+
+	op = runPushDownRewriters(ctx, op)
+	op = compact(ctx, op)
 
 	return addGroupByOnRHSOfJoin(op)
 }
 
-func runRewriters(ctx *plancontext.PlanningContext, root Operator) Operator {
+func runPushDownRewriters(ctx *plancontext.PlanningContext, root Operator) Operator {
 	visitor := func(in Operator, _ semantics.TableSet, isRoot bool) (Operator, *ApplyResult) {
 		switch in := in.(type) {
 		case *Horizon:
@@ -107,6 +112,8 @@ func runRewriters(ctx *plancontext.PlanningContext, root Operator) Operator {
 			return tryPushUpdate(in)
 		case *RecurseCTE:
 			return tryMergeRecurse(ctx, in)
+		case *Values:
+			return tryPushValues(ctx, in)
 		default:
 			return in, NoRewrite
 		}
@@ -114,8 +121,8 @@ func runRewriters(ctx *plancontext.PlanningContext, root Operator) Operator {
 
 	if pbm, ok := root.(*PercentBasedMirror); ok {
 		pbm.SetInputs([]Operator{
-			runRewriters(ctx, pbm.Operator()),
-			runRewriters(ctx.UseMirror(), pbm.Target()),
+			runPushDownRewriters(ctx, pbm.Operator()),
+			runPushDownRewriters(ctx.UseMirror(), pbm.Target()),
 		})
 	}
 
@@ -185,6 +192,20 @@ func tryMergeApplyJoin(in *ApplyJoin, ctx *plancontext.PlanningContext) (_ Opera
 	}
 
 	return r, Rewrote(success)
+}
+
+func tryPushValues(ctx *plancontext.PlanningContext, in *Values) (Operator, *ApplyResult) {
+	switch src := in.Source.(type) {
+	case *ValuesJoin:
+		src.LHS = in.Clone([]Operator{src.LHS})
+		return src, Rewrote("pushed values to the LHS of values join")
+	case *Filter:
+		return Swap(in, src, "pushed values under filter")
+	case *Route:
+		src.Routing.AddValuesTableID(in.TableID)
+		return Swap(in, src, "pushed values under route")
+	}
+	return in, NoRewrite
 }
 
 func tryPushDelete(in *Delete) (Operator, *ApplyResult) {
@@ -766,6 +787,11 @@ func tryPushFilter(ctx *plancontext.PlanningContext, in *Filter) (Operator, *App
 		}
 		src.Outer, in.Source = in, src.Outer
 		return src, Rewrote("push filter to outer query in subquery container")
+	case *ValuesJoin:
+		for _, pred := range in.Predicates {
+			src.AddPredicate(ctx, pred)
+		}
+		return src, Rewrote("pushed filter predicates through values join")
 	case *Filter:
 		if len(in.Predicates) == 0 {
 			return in.Source, Rewrote("filter with no predicates removed")

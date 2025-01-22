@@ -516,6 +516,56 @@
     }
   },
   {
+    "comment": "Query using VALUES JOIN",
+    "query": "select /*vt+ ALLOW_VALUES_JOIN */ user.foo, user_extra.user_id from user, user_extra where user.id = user_extra.toto and user.foo = 1 and user_extra.bar = 2",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select /*vt+ ALLOW_VALUES_JOIN */ user.foo, user_extra.user_id from user, user_extra where user.id = user_extra.toto and user.foo = 1 and user_extra.bar = 2",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Values",
+        "BindVarName": "values",
+        "CopyColumnsToRHS": [
+          0,
+          1
+        ],
+        "RowID": "false",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select user_extra.user_id, user_extra.toto from user_extra where 1 != 1",
+            "Query": "select /*vt+ ALLOW_VALUES_JOIN */ user_extra.user_id, user_extra.toto from user_extra where user_extra.bar = 2",
+            "Table": "user_extra"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.foo, user_extra.user_id from (values ::values) as `values`(user_id, toto), `user` where 1 != 1",
+            "Query": "select /*vt+ ALLOW_VALUES_JOIN */ `user`.foo, values.user_extra_user_id as user_id from (values ::values) as `values`(user_extra_user_id, user_extra_toto), `user` where `user`.foo = 1 and `user`.id = values.user_extra_toto",
+            "Table": "`user`",
+            "Values": [
+              ":user_extra_toto"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
     "comment": "Left join, multi-chunk",
     "query": "select u.col from user u left join unsharded m on u.a = m.b",
     "plan": {

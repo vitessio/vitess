@@ -18,6 +18,7 @@ package engine
 
 import (
 	"context"
+	"fmt"
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -34,10 +35,24 @@ type ValuesJoin struct {
 	// of the Join. They can be any primitive.
 	Left, Right Primitive
 
-	Vars              []int
-	RowConstructorArg string
-	Cols              []int
-	ColNames          []string
+	// The name for the bind var containing the tuple-of-tuples being sent to the RHS
+	BindVarName string
+
+	// LHSRowID is the offset of the row ID in the LHS, used to use columns from the LHS in the output
+	// If LHSRowID is false, the output will be the same as the RHS, so the following fields are ignored - Cols, ColNames.
+	// We copy everything from the LHS to the RHS in this case, and column names are taken from the RHS.
+	RowID bool
+
+	// CopyColumnsToRHS are the offsets of columns from LHS we are copying over to the RHS
+	// []int{0,2} means that the first column in the t-o-t is the first offset from the left and the second column is the third offset
+	CopyColumnsToRHS []int
+
+	// Cols tells use which side the output columns come from:
+	// negative numbers are offsets to the left, and positive to the right
+	Cols []int
+
+	// ColNames are the output column names
+	ColNames []string
 }
 
 // TryExecute performs a non-streaming exec.
@@ -47,7 +62,7 @@ func (jv *ValuesJoin) TryExecute(ctx context.Context, vcursor VCursor, bindVars 
 		return nil, err
 	}
 	bv := &querypb.BindVariable{
-		Type: querypb.Type_TUPLE,
+		Type: querypb.Type_ROW_TUPLE,
 	}
 	if len(lresult.Rows) == 0 && wantfields {
 		// If there are no rows, we still need to construct a single row
@@ -60,25 +75,41 @@ func (jv *ValuesJoin) TryExecute(ctx context.Context, vcursor VCursor, bindVars 
 		}
 		bv.Values = append(bv.Values, sqltypes.TupleToProto(vals))
 
-		bindVars[jv.RowConstructorArg] = bv
+		bindVars[jv.BindVarName] = bv
+		if jv.RowID {
+			panic("implement me")
+		}
 		return jv.Right.GetFields(ctx, vcursor, bindVars)
 	}
 
+	rowSize := len(jv.CopyColumnsToRHS)
+	if jv.RowID {
+		rowSize++ // +1 since we add the row ID
+	}
 	for i, row := range lresult.Rows {
-		newRow := make(sqltypes.Row, 0, len(jv.Vars)+1)      // +1 since we always add the row ID
-		newRow = append(newRow, sqltypes.NewInt64(int64(i))) // Adding the LHS row ID
+		newRow := make(sqltypes.Row, 0, rowSize)
 
-		for _, loffset := range jv.Vars {
-			newRow = append(newRow, row[loffset])
+		if jv.RowID {
+			for _, loffset := range jv.CopyColumnsToRHS {
+				newRow = append(newRow, row[loffset])
+			}
+			newRow = append(newRow, sqltypes.NewInt64(int64(i))) // Adding the LHS row ID
+		} else {
+			newRow = row
 		}
 
 		bv.Values = append(bv.Values, sqltypes.TupleToProto(newRow))
 	}
 
-	bindVars[jv.RowConstructorArg] = bv
+	bindVars[jv.BindVarName] = bv
 	rresult, err := vcursor.ExecutePrimitive(ctx, jv.Right, bindVars, wantfields)
 	if err != nil {
 		return nil, err
+	}
+
+	if !jv.RowID {
+		// if we are not using the row ID, we can just return the result from the RHS
+		return rresult, nil
 	}
 
 	result := &sqltypes.Result{}
@@ -143,8 +174,9 @@ func (jv *ValuesJoin) description() PrimitiveDescription {
 		OperatorType: "Join",
 		Variant:      "Values",
 		Other: map[string]any{
-			"ValuesArg": jv.RowConstructorArg,
-			"Vars":      jv.Vars,
+			"BindVarName":      jv.BindVarName,
+			"CopyColumnsToRHS": jv.CopyColumnsToRHS,
+			"RowID":            fmt.Sprintf("%t", jv.RowID),
 		},
 	}
 }

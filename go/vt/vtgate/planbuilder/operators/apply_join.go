@@ -156,7 +156,7 @@ func (aj *ApplyJoin) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sql
 	preds := sqlparser.SplitAndExpression(nil, expr)
 	for _, pred := range preds {
 		lhsID := TableID(aj.LHS)
-		col := breakExpressionInLHSandRHS(ctx, pred, lhsID)
+		col := breakApplyJoinExpressionInLHSandRHS(ctx, pred, lhsID)
 		if pushDown {
 			newPred := ctx.PredTracker.NewJoinPredicate(col.RHSExpr)
 			col.JoinPredicateID = &newPred.ID
@@ -212,7 +212,7 @@ func (aj *ApplyJoin) getJoinColumnFor(ctx *plancontext.PlanningContext, orig *sq
 	case deps.IsSolvedBy(rhs):
 		col.RHSExpr = e
 	case deps.IsSolvedBy(both):
-		col = breakExpressionInLHSandRHS(ctx, e, TableID(aj.LHS))
+		col = breakApplyJoinExpressionInLHSandRHS(ctx, e, TableID(aj.LHS))
 	default:
 		panic(vterrors.VT13001(fmt.Sprintf("expression depends on tables outside this join: %s", sqlparser.String(e))))
 	}
