@@ -116,6 +116,8 @@ func TestComBinlogDumpGTID(t *testing.T) {
 		assert.True(t, pos.IsZero())
 	})
 
+	sConn.sequence = 0
+
 	t.Run("WriteComBinlogDumpGTID", func(t *testing.T) {
 		// Write ComBinlogDumpGTID packet, read it, compare.
 		var flags uint16 = 0x0d0e
