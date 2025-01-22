@@ -21,6 +21,9 @@ import (
 	"encoding/json"
 	"strconv"
 
+	"golang.org/x/exp/maps"
+
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
@@ -74,6 +77,8 @@ const (
 	// Is used when the query explicitly sets a target destination:
 	// in the clause e.g: UPDATE `keyspace[-]`.x1 SET foo=1
 	ByDestination
+	// Values // TODO
+	Values
 )
 
 var opName = map[Opcode]string{
@@ -90,6 +95,7 @@ var opName = map[Opcode]string{
 	None:          "None",
 	ByDestination: "ByDestination",
 	SubShard:      "SubShard",
+	Values:        "Values",
 }
 
 // MarshalJSON serializes the Opcode as a JSON string.
@@ -175,6 +181,76 @@ func (rp *RoutingParameters) findRoute(ctx context.Context, vcursor VCursor, bin
 			return rp.multiEqualMultiCol(ctx, vcursor, bindVars)
 		default:
 			return rp.multiEqual(ctx, vcursor, bindVars)
+		}
+	case Values:
+		switch rp.Vindex.(type) {
+		case vindexes.MultiColumn:
+			return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported multi column vindex for values")
+		default:
+			if len(rp.Values) < 2 {
+				return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "values slice must at least be of length two for a values")
+			}
+			env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
+			value, err := env.Evaluate(rp.Values[0])
+			if err != nil {
+				return nil, nil, err
+			}
+
+			rval, ok := rp.Values[0].(*evalengine.BindVariable)
+			if !ok {
+				return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot transform evalengine expr to bind variable for values")
+			}
+
+			tuple := value.TupleValues()
+
+			type rssValue struct {
+				rss  *srvtopo.ResolvedShard
+				vals []sqltypes.Value
+			}
+			r := map[string]rssValue{}
+			for _, row := range tuple {
+				env.Row = nil
+				err = row.ForEachValue(func(bv sqltypes.Value) {
+					env.Row = append(env.Row, bv)
+				})
+				if err != nil {
+					return nil, nil, err
+				}
+				val, err := env.Evaluate(rp.Values[1])
+				if err != nil {
+					return nil, nil, err
+				}
+
+				rss, _, err := resolveShards(ctx, vcursor, rp.Vindex.(vindexes.SingleColumn), rp.Keyspace, []sqltypes.Value{val.Value(vcursor.ConnCollation())})
+				if err != nil {
+					return nil, nil, err
+				}
+				if len(rss) > 1 {
+					return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "andres is confused")
+				}
+				r[rss[0].Target.String()] = rssValue{
+					rss:  rss[0],
+					vals: append(r[rss[0].Target.String()].vals, val.Value(collations.Unknown)),
+				}
+			}
+			var resultRss []*srvtopo.ResolvedShard
+			var resultBvs []map[string]*querypb.BindVariable
+			for _, rssVals := range r {
+				resultRss = append(resultRss, rssVals.rss)
+
+				clonedBindVars := maps.Clone(bindVars)
+
+				newBv := &querypb.BindVariable{
+					Type: querypb.Type_TUPLE,
+				}
+				for _, s := range rssVals.vals {
+					newBv.Values = append(newBv.Values, sqltypes.ValueToProto(s))
+				}
+
+				clonedBindVars[rval.Key] = newBv
+				resultBvs = append(resultBvs, clonedBindVars)
+			}
+			return resultRss, resultBvs, nil
 		}
 	default:
 		// Unreachable.
@@ -480,7 +556,13 @@ func setReplaceSchemaName(bindVars map[string]*querypb.BindVariable) {
 	bindVars[sqltypes.BvReplaceSchemaName] = sqltypes.Int64BindVariable(1)
 }
 
-func resolveShards(ctx context.Context, vcursor VCursor, vindex vindexes.SingleColumn, keyspace *vindexes.Keyspace, vindexKeys []sqltypes.Value) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
+func resolveShards(
+	ctx context.Context,
+	vcursor VCursor,
+	vindex vindexes.SingleColumn,
+	keyspace *vindexes.Keyspace,
+	vindexKeys []sqltypes.Value,
+) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
 	// Convert vindexKeys to []*querypb.Value
 	ids := make([]*querypb.Value, len(vindexKeys))
 	for i, vik := range vindexKeys {

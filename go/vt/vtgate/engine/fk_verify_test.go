@@ -58,7 +58,7 @@ func TestFKVerifyUpdate(t *testing.T) {
 
 	t.Run("foreign key verification success", func(t *testing.T) {
 		fakeRes := sqltypes.MakeTestResult(sqltypes.MakeTestFields("1", "int64"))
-		vc := newDMLTestVCursor("0")
+		vc := newTestVCursor("0")
 		vc.results = []*sqltypes.Result{fakeRes}
 		_, err := fkc.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, true)
 		require.NoError(t, err)
@@ -83,7 +83,7 @@ func TestFKVerifyUpdate(t *testing.T) {
 	t.Run("parent foreign key verification failure", func(t *testing.T) {
 		// No results from select, should cause the foreign key verification to fail.
 		fakeRes := sqltypes.MakeTestResult(sqltypes.MakeTestFields("1", "int64"), "1", "1", "1")
-		vc := newDMLTestVCursor("0")
+		vc := newTestVCursor("0")
 		vc.results = []*sqltypes.Result{fakeRes}
 		_, err := fkc.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, true)
 		require.ErrorContains(t, err, "Cannot add or update a child row: a foreign key constraint fails")
@@ -105,7 +105,7 @@ func TestFKVerifyUpdate(t *testing.T) {
 	t.Run("child foreign key verification failure", func(t *testing.T) {
 		// No results from select, should cause the foreign key verification to fail.
 		fakeRes := sqltypes.MakeTestResult(sqltypes.MakeTestFields("1", "int64"), "1", "1", "1")
-		vc := newDMLTestVCursor("0")
+		vc := newTestVCursor("0")
 		vc.results = []*sqltypes.Result{fakeRes}
 		_, err := fkc.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, true)
 		require.ErrorContains(t, err, "Cannot delete or update a parent row: a foreign key constraint fails")

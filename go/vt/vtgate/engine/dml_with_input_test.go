@@ -51,7 +51,7 @@ func TestDeleteWithInputSingleOffset(t *testing.T) {
 		OutputCols: [][]int{{0}},
 	}
 
-	vc := newDMLTestVCursor("-20", "20-")
+	vc := newTestVCursor("-20", "20-")
 	_, err := del.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
@@ -95,7 +95,7 @@ func TestDeleteWithInputMultiOffset(t *testing.T) {
 		OutputCols: [][]int{{1, 0}},
 	}
 
-	vc := newDMLTestVCursor("-20", "20-")
+	vc := newTestVCursor("-20", "20-")
 	_, err := del.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
@@ -160,7 +160,7 @@ func TestDeleteWithMultiTarget(t *testing.T) {
 		OutputCols: [][]int{{0}, {1, 2}},
 	}
 
-	vc := newDMLTestVCursor("-20", "20-")
+	vc := newTestVCursor("-20", "20-")
 	_, err := del.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
@@ -210,7 +210,7 @@ func TestUpdateWithInputNonLiteral(t *testing.T) {
 		},
 	}
 
-	vc := newDMLTestVCursor("-20", "20-")
+	vc := newTestVCursor("-20", "20-")
 	vc.results = []*sqltypes.Result{
 		{RowsAffected: 1}, {RowsAffected: 1}, {RowsAffected: 1},
 	}
