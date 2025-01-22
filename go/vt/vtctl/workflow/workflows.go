@@ -446,35 +446,11 @@ func (wf *workflowFetcher) scanWorkflow(
 		workflow.WorkflowSubType = res.WorkflowSubType.String()
 		workflow.DeferSecondaryKeys = res.DeferSecondaryKeys
 
-		// MaxVReplicationTransactionLag estimates the actual statement processing lag
-		// between the source and the target. If we are still processing source events it
-		// is the difference b/w current time and the timestamp of the last event. If
-		// heartbeats are more recent than the last event, then the lag is the time since
-		// the last heartbeat as there can be an actual event immediately after the
-		// heartbeat, but which has not yet been processed on the target.
-		// We don't allow switching during the copy phase, so in that case we just return
-		// a large lag. All timestamps are in seconds since epoch.
-		if rstream.TransactionTimestamp == nil {
-			rstream.TransactionTimestamp = &vttimepb.Time{}
-		}
-		lastTransactionTime := rstream.TransactionTimestamp.Seconds
-		if rstream.TimeHeartbeat == nil {
-			rstream.TimeHeartbeat = &vttimepb.Time{}
-		}
-		lastHeartbeatTime := rstream.TimeHeartbeat.Seconds
-		if stream.State == binlogdatapb.VReplicationWorkflowState_Copying.String() {
-			meta.maxVReplicationTransactionLag = math.MaxInt64
-		} else {
-			if lastTransactionTime == 0 /* no new events after copy */ ||
-				lastHeartbeatTime > lastTransactionTime /* no recent transactions, so all caught up */ {
-
-				lastTransactionTime = lastHeartbeatTime
-			}
-			now := time.Now().Unix() /* seconds since epoch */
-			transactionReplicationLag := float64(now - lastTransactionTime)
-			if transactionReplicationLag > meta.maxVReplicationTransactionLag {
-				meta.maxVReplicationTransactionLag = transactionReplicationLag
-			}
+		// MaxVReplicationTransactionLag estimates the max statement processing lag
+		// between the source and the target across all of the workflow streams.
+		transactionReplicationLag := getVReplicationTrxLag(rstream.TransactionTimestamp, rstream.TimeUpdated, rstream.State)
+		if transactionReplicationLag > meta.maxVReplicationTransactionLag {
+			meta.maxVReplicationTransactionLag = transactionReplicationLag
 		}
 	}
 
@@ -669,4 +645,43 @@ func getStreamState(stream *vtctldatapb.Workflow_Stream, rstream *tabletmanagerd
 		return binlogdatapb.VReplicationWorkflowState_Lagging.String()
 	}
 	return rstream.State.String()
+}
+
+type GenericStream interface {
+	*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream | *vtctldatapb.Workflow_Stream
+}
+
+type Stream[T GenericStream] struct {
+	TransactionTimestamp *vttimepb.Time
+	TimeUpdated          *vttimepb.Time
+	State                binlogdatapb.VReplicationWorkflowState
+}
+
+// getVReplicationTrxLag estimates the actual statement processing lag between the
+// source and the target. If we are still processing source events it is the
+// difference between current time and the timestamp of the last event. If
+// heartbeats are more recent than the last event, then the lag is the time since
+// the last heartbeat as there can be an actual event immediately after the
+// heartbeat, but which has not yet been processed on the target. We don't allow
+// switching during the copy phase, so in that case we just return a large lag.
+// All timestamps are in seconds since epoch.
+func getVReplicationTrxLag(trxTs, updatedTs *vttimepb.Time, state binlogdatapb.VReplicationWorkflowState) float64 {
+	if trxTs == nil {
+		trxTs = &vttimepb.Time{}
+	}
+	lastTransactionTime := trxTs.Seconds
+	if updatedTs == nil {
+		updatedTs = &vttimepb.Time{}
+	}
+	lastUpdateTime := updatedTs.Seconds
+	if state == binlogdatapb.VReplicationWorkflowState_Copying {
+		return math.MaxInt64
+	}
+	if lastTransactionTime == 0 /* no new events after copy */ ||
+		lastUpdateTime > lastTransactionTime /* no recent transactions, so all caught up */ {
+
+		lastTransactionTime = lastUpdateTime
+	}
+	now := time.Now().Unix() /* seconds since epoch */
+	return float64(now - lastTransactionTime)
 }

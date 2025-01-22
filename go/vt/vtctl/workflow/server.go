@@ -3075,7 +3075,8 @@ func (s *Server) canSwitch(ctx context.Context, ts *trafficSwitcher, maxAllowedR
 				return cannotSwitchFrozen, nil
 			}
 			// If no new events have been replicated after the copy phase then it will be 0.
-			if vreplLag := time.Now().Unix() - st.TimeUpdated.Seconds; vreplLag > maxAllowedReplLagSecs {
+			vreplLag := int64(getVReplicationTrxLag(st.TransactionTimestamp, st.TimeUpdated, binlogdatapb.VReplicationWorkflowState(binlogdatapb.VReplicationWorkflowState_value[st.State])))
+			if vreplLag > maxAllowedReplLagSecs {
 				return fmt.Sprintf(cannotSwitchHighLag, vreplLag, maxAllowedReplLagSecs), nil
 			}
 			switch st.State {
