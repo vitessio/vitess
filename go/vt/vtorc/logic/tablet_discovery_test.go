@@ -30,6 +30,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
+	"vitess.io/vitess/go/vt/key"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/topo"
@@ -102,60 +103,178 @@ var (
 	}
 )
 
-func TestUpdateShardsToWatch(t *testing.T) {
+func TestTabletsPartOfWatch(t *testing.T) {
 	oldClustersToWatch := clustersToWatch
-	oldTs := ts
 	defer func() {
 		clustersToWatch = oldClustersToWatch
 		shardsToWatch = nil
-		ts = oldTs
 	}()
 
-	// Create a memory topo-server and create the keyspace and shard records
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	testCases := []struct {
+		in                  []string
+		tablet              *topodatapb.Tablet
+		expectedPartOfWatch bool
+	}{
+		{
+			in: []string{},
+			tablet: &topodatapb.Tablet{
+				Keyspace: keyspace,
+				Shard:    shard,
+			},
+			expectedPartOfWatch: true,
+		},
+		{
+			in: []string{keyspace},
+			tablet: &topodatapb.Tablet{
+				Keyspace: keyspace,
+				Shard:    shard,
+			},
+			expectedPartOfWatch: true,
+		},
+		{
+			in: []string{keyspace + "/-"},
+			tablet: &topodatapb.Tablet{
+				Keyspace: keyspace,
+				Shard:    shard,
+			},
+			expectedPartOfWatch: true,
+		},
+		{
+			in: []string{keyspace + "/" + shard},
+			tablet: &topodatapb.Tablet{
+				Keyspace: keyspace,
+				Shard:    shard,
+			},
+			expectedPartOfWatch: true,
+		},
+		{
+			in: []string{"ks/-70", "ks/70-"},
+			tablet: &topodatapb.Tablet{
+				Keyspace: "ks",
+				KeyRange: key.NewKeyRange([]byte{0x50}, []byte{0x70}),
+			},
+			expectedPartOfWatch: true,
+		},
+		{
+			in: []string{"ks/-70", "ks/70-"},
+			tablet: &topodatapb.Tablet{
+				Keyspace: "ks",
+				KeyRange: key.NewKeyRange([]byte{0x40}, []byte{0x50}),
+			},
+			expectedPartOfWatch: true,
+		},
+		{
+			in: []string{"ks/-70", "ks/70-"},
+			tablet: &topodatapb.Tablet{
+				Keyspace: "ks",
+				KeyRange: key.NewKeyRange([]byte{0x70}, []byte{0x90}),
+			},
+			expectedPartOfWatch: true,
+		},
+		{
+			in: []string{"ks/-70", "ks/70-"},
+			tablet: &topodatapb.Tablet{
+				Keyspace: "ks",
+				KeyRange: key.NewKeyRange([]byte{0x60}, []byte{0x90}),
+			},
+			expectedPartOfWatch: false,
+		},
+		{
+			in: []string{"ks2/-70", "ks2/70-", "unknownKs/-", "ks/-80"},
+			tablet: &topodatapb.Tablet{
+				Keyspace: "ks",
+				KeyRange: key.NewKeyRange([]byte{0x60}, []byte{0x80}),
+			},
+			expectedPartOfWatch: true,
+		},
+		{
+			in: []string{"ks2/-70", "ks2/70-", "unknownKs/-", "ks/-80"},
+			tablet: &topodatapb.Tablet{
+				Keyspace: "ks",
+				KeyRange: key.NewKeyRange([]byte{0x80}, []byte{0x90}),
+			},
+			expectedPartOfWatch: false,
+		},
+		{
+			in: []string{"ks2/-70", "ks2/70-", "unknownKs/-", "ks/-80"},
+			tablet: &topodatapb.Tablet{
+				Keyspace: "ks",
+				KeyRange: key.NewKeyRange([]byte{0x90}, []byte{0xa0}),
+			},
+			expectedPartOfWatch: false,
+		},
+	}
 
-	ts = memorytopo.NewServer(ctx, cell1)
-	_, err := ts.GetOrCreateShard(context.Background(), keyspace, shard)
-	require.NoError(t, err)
+	for _, tt := range testCases {
+		t.Run(fmt.Sprintf("%v-Tablet-%v-%v", strings.Join(tt.in, ","), tt.tablet.GetKeyspace(), tt.tablet.GetShard()), func(t *testing.T) {
+			clustersToWatch = tt.in
+			initializeShardsToWatch()
+			assert.Equal(t, tt.expectedPartOfWatch, tabletPartOfWatch(tt.tablet))
+		})
+	}
+}
+
+// TestInitializeShardsToWatch tests that we initialize the shardsToWatch map correctly
+// using the `--clusters_to_watch` flag.
+func TestInitializeShardsToWatch(t *testing.T) {
+	oldClustersToWatch := clustersToWatch
+	defer func() {
+		clustersToWatch = oldClustersToWatch
+		shardsToWatch = nil
+	}()
 
 	testCases := []struct {
 		in       []string
-		expected map[string][]string
+		expected map[string][]*topodatapb.KeyRange
 	}{
 		{
 			in:       []string{},
-			expected: nil,
+			expected: map[string][]*topodatapb.KeyRange{},
 		},
 		{
-			in:       []string{""},
-			expected: map[string][]string{},
+			in: []string{"unknownKs"},
+			expected: map[string][]*topodatapb.KeyRange{
+				"unknownKs": {
+					key.NewCompleteKeyRange(),
+				},
+			},
 		},
 		{
 			in: []string{"test/-"},
-			expected: map[string][]string{
-				"test": {"-"},
+			expected: map[string][]*topodatapb.KeyRange{
+				"test": {
+					key.NewCompleteKeyRange(),
+				},
 			},
 		},
 		{
 			in: []string{"test/-", "test2/-80", "test2/80-"},
-			expected: map[string][]string{
-				"test":  {"-"},
-				"test2": {"-80", "80-"},
+			expected: map[string][]*topodatapb.KeyRange{
+				"test": {
+					key.NewCompleteKeyRange(),
+				},
+				"test2": {
+					key.NewKeyRange([]byte{}, []byte{0x80}),
+					key.NewKeyRange([]byte{0x80}, []byte{}),
+				},
 			},
 		},
 		{
-			// confirm shards fetch from topo
+			// known keyspace
 			in: []string{keyspace},
-			expected: map[string][]string{
-				keyspace: {shard},
+			expected: map[string][]*topodatapb.KeyRange{
+				keyspace: {
+					key.NewCompleteKeyRange(),
+				},
 			},
 		},
 		{
-			// confirm shards fetch from topo when keyspace has trailing-slash
+			// keyspace with trailing-slash
 			in: []string{keyspace + "/"},
-			expected: map[string][]string{
-				keyspace: {shard},
+			expected: map[string][]*topodatapb.KeyRange{
+				keyspace: {
+					key.NewCompleteKeyRange(),
+				},
 			},
 		},
 	}
@@ -163,10 +282,10 @@ func TestUpdateShardsToWatch(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(strings.Join(testCase.in, ","), func(t *testing.T) {
 			defer func() {
-				shardsToWatch = make(map[string][]string, 0)
+				shardsToWatch = make(map[string][]*topodatapb.KeyRange, 0)
 			}()
 			clustersToWatch = testCase.in
-			updateShardsToWatch()
+			initializeShardsToWatch()
 			require.Equal(t, testCase.expected, shardsToWatch)
 		})
 	}
