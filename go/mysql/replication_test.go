@@ -125,7 +125,7 @@ func TestComBinlogDumpGTID(t *testing.T) {
 		gtidSet, err := replication.ParseMysql56GTIDSet("16b1039f-22b6-11ed-b765-0a43f95f28a3:1-243")
 		require.NoError(t, err)
 		sidBlock := gtidSet.SIDBlock()
-		assert.Len(t, sidBlock, 0x30) // 48 bytes
+		assert.Len(t, sidBlock, 48)
 
 		err = cConn.WriteComBinlogDumpGTID(0x01020304, "moofarm", 0x05060708090a0b0c, flags, sidBlock)
 		assert.NoError(t, err)
