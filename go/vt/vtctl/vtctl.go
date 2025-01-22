@@ -3380,23 +3380,10 @@ func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *p
 			return fmt.Errorf("error parsing vschema statement `%s`: not a ddl statement", *sql)
 		}
 
-		ksvs, err = wr.TopoServer().GetVSchema(ctx, keyspace)
-		if err != nil {
-			if topo.IsErrType(err, topo.NoNode) {
-				ksvs = &topo.KeyspaceVSchemaInfo{
-					Name:     keyspace,
-					Keyspace: &vschemapb.Keyspace{},
-				}
-			} else {
-				return err
-			}
-		}
-
-		ksvs, err = topotools.ApplyVSchemaDDL(keyspace, ksvs, ddl)
+		ksvs, err = topotools.ApplyVSchemaDDL(ctx, keyspace, wr.TopoServer(), ddl)
 		if err != nil {
 			return err
 		}
-
 	} else {
 		// json mode
 		var schema []byte

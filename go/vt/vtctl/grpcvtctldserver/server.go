@@ -358,13 +358,7 @@ func (s *VtctldServer) ApplyVSchema(ctx context.Context, req *vtctldatapb.ApplyV
 			return nil, err
 		}
 
-		ksvs, err = s.ts.GetVSchema(ctx, req.Keyspace)
-		if err != nil && !topo.IsErrType(err, topo.NoNode) {
-			err = vterrors.Wrapf(err, "GetVSchema(%s)", req.Keyspace)
-			return nil, err
-		} // otherwise, we keep the empty vschema object from above
-
-		ksvs, err = topotools.ApplyVSchemaDDL(req.Keyspace, ksvs, ddl)
+		ksvs, err = topotools.ApplyVSchemaDDL(ctx, req.Keyspace, s.ts, ddl)
 		if err != nil {
 			err = vterrors.Wrapf(err, "ApplyVSchemaDDL(%s,%v,%v)", req.Keyspace, ksvs, ddl)
 			return nil, err

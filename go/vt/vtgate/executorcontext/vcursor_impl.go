@@ -1415,20 +1415,7 @@ func (vc *VCursorImpl) ExecuteVSchema(ctx context.Context, keyspace string, vsch
 		return ErrNoKeyspace
 	}
 
-	ksvs := &topo.KeyspaceVSchemaInfo{}
-	if vc.topoServer != nil {
-		// Get the most recent version if we can.
-		ksvs, err = vc.topoServer.GetVSchema(ctx, ksName)
-		if err != nil {
-			return err
-		}
-	} else {
-		// Use the cached version as we are in read-only mode
-		// and any writes would fail.
-		ksvs.Name = ksName
-		ksvs.Keyspace = srvVschema.Keyspaces[ksName]
-	}
-	ksvs, err = topotools.ApplyVSchemaDDL(ksName, ksvs, vschemaDDL)
+	ksvs, err := topotools.ApplyVSchemaDDL(ctx, ksName, vc.topoServer, vschemaDDL)
 	if err != nil {
 		return err
 	}

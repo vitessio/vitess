@@ -17,6 +17,7 @@ limitations under the License.
 package topotools
 
 import (
+	"context"
 	"reflect"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -29,7 +30,23 @@ import (
 
 // ApplyVSchemaDDL applies the given DDL statement to the vschema
 // keyspace definition and returns the modified keyspace object.
-func ApplyVSchemaDDL(ksName string, ksvs *topo.KeyspaceVSchemaInfo, alterVschema *sqlparser.AlterVschema) (*topo.KeyspaceVSchemaInfo, error) {
+func ApplyVSchemaDDL(ctx context.Context, ksName string, topoServer *topo.Server, alterVschema *sqlparser.AlterVschema) (*topo.KeyspaceVSchemaInfo, error) {
+	if topoServer == nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot update VSchema as the topology server connection is read-only")
+	}
+	// Get the most recent version, which we'll then update.
+	ksvs, err := topoServer.GetVSchema(ctx, ksName)
+	if err != nil {
+		if topo.IsErrType(err, topo.NoNode) {
+			ksvs = &topo.KeyspaceVSchemaInfo{
+				Name:     ksName,
+				Keyspace: &vschemapb.Keyspace{},
+			}
+		} else {
+			return nil, vterrors.Wrapf(err, "failed to get the current VSchema for the %s keyspace", ksName)
+		}
+	}
+
 	if ksvs.Tables == nil {
 		ksvs.Tables = map[string]*vschemapb.Table{}
 	}
