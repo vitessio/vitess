@@ -47,7 +47,19 @@ var (
 		[]string{"Log", "Subscriber"})
 )
 
-const QueryLogModeError = "error"
+const (
+	// QueryLogFormatText is the format specifier for text querylog output
+	QueryLogFormatText = "text"
+
+	// QueryLogFormatJSON is the format specifier for json querylog output
+	QueryLogFormatJSON = "json"
+
+	// QueryLogModeAll is the mode specifier for logging all queries
+	QueryLogModeAll = "all"
+
+	// QueryLogModeError is the mode specifier for logging only queries that return an error
+	QueryLogModeError = "error"
+)
 
 type QueryLogConfig struct {
 	RedactDebugUIQueries bool
@@ -59,7 +71,8 @@ type QueryLogConfig struct {
 }
 
 var queryLogConfigInstance = QueryLogConfig{
-	Format: "text",
+	Format: QueryLogFormatText,
+	Mode:   QueryLogModeAll,
 }
 
 func GetQueryLogConfig() QueryLogConfig {
@@ -95,16 +108,8 @@ func registerStreamLogFlags(fs *pflag.FlagSet) {
 	fs.Float64Var(&queryLogConfigInstance.sampleRate, "querylog-sample-rate", queryLogConfigInstance.sampleRate, "Sample rate for logging queries. Value must be between 0.0 (no logging) and 1.0 (all queries)")
 
 	// QueryLogMode controls the mode for logging queries (all or error)
-	fs.StringVar(&queryLogConfigInstance.Mode, "querylog-mode", queryLogConfigInstance.Mode, `Mode for logging queries. 'error' will only log queries that return an error. Otherwise all queries will be logged.`)
+	fs.StringVar(&queryLogConfigInstance.Mode, "querylog-mode", queryLogConfigInstance.Mode, `Mode for logging queries. "error" will only log queries that return an error. Otherwise all queries will be logged.`)
 }
-
-const (
-	// QueryLogFormatText is the format specifier for text querylog output
-	QueryLogFormatText = "text"
-
-	// QueryLogFormatJSON is the format specifier for json querylog output
-	QueryLogFormatJSON = "json"
-)
 
 // StreamLogger is a non-blocking broadcaster of messages.
 // Subscribers can use channels or HTTP.
