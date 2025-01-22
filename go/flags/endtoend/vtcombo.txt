@@ -111,7 +111,7 @@ Flags:
       --enable-partial-keyspace-migration                                (Experimental) Follow shard routing rules: enable only while migrating a keyspace shard by shard. See documentation on Partial MoveTables for more. (default false)
       --enable-per-workload-table-metrics                                If true, query counts and query error metrics include a label that identifies the workload
       --enable-tx-throttler                                              Synonym to -enable_tx_throttler
-      --enable-views                                                     Enable views support in vtgate.
+      --enable-views                                                     Enable views support in vtgate. (default true)
       --enable_buffer                                                    Enable buffering (stalling) of primary traffic during failovers.
       --enable_buffer_dry_run                                            Detect and log failover events, but do not actually buffer requests.
       --enable_consolidator                                              This option enables the query consolidator. (default true)
@@ -245,7 +245,7 @@ Flags:
       --mysql_server_ssl_key string                                      Path to ssl key for mysql server plugin SSL
       --mysql_server_ssl_server_ca string                                path to server CA in PEM format, which will be combine with server cert, return full certificate chain to clients
       --mysql_server_tls_min_version string                              Configures the minimal TLS version negotiated when SSL is enabled. Defaults to TLSv1.2. Options: TLSv1.0, TLSv1.1, TLSv1.2, TLSv1.3.
-      --mysql_server_version string                                      MySQL server version to advertise. (default "8.0.30-Vitess")
+      --mysql_server_version string                                      MySQL server version to advertise. (default "8.0.40-Vitess")
       --mysql_server_write_timeout duration                              connection write timeout
       --mysql_slow_connect_warn_threshold duration                       Warn if it takes more than the given threshold for a mysql connection to establish
       --mysql_tcp_version string                                         Select tcp, tcp4, or tcp6 to control the socket type. (default "tcp")

@@ -7,6 +7,7 @@ The `vitess/bootstrap` image comes in different flavors:
 
 * `vitess/bootstrap:common`    - dependencies that are common to all flavors
 * `vitess/bootstrap:mysql80`   - bootstrap image for MySQL 8.0
+* `vitess/bootstrap:mysql84`   - bootstrap image for MySQL 8.4
 * `vitess/bootstrap:percona80` - bootstrap image for Percona Server 8.0
 
 **NOTE: Unlike the base image that builds Vitess itself, this bootstrap image
