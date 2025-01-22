@@ -1055,7 +1055,7 @@ func validateSourceTablesExist(sourceKeyspace string, ksTables, tables []string)
 
 // getVindexAndVSchema gets the vindex (from VSchema) and VSchema with the
 // provided vindex name and keyspace.
-func getVindexAndVSchema(ctx context.Context, ts *topo.Server, keyspace string, vindexName string) (*vschemapb.Vindex, *vschemapb.Keyspace, error) {
+func getVindexAndVSchema(ctx context.Context, ts *topo.Server, keyspace string, vindexName string) (*vschemapb.Vindex, *topo.KeyspaceVSchemaInfo, error) {
 	vschema, err := ts.GetVSchema(ctx, keyspace)
 	if err != nil {
 		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get vschema for the %s keyspace", keyspace)

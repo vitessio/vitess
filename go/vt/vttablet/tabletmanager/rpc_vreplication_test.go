@@ -27,8 +27,6 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
-
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/constants/sidecar"
@@ -47,6 +45,7 @@ import (
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -2420,7 +2419,11 @@ func TestInternalizeLookupVindex(t *testing.T) {
 	for _, tcase := range testcases {
 		t.Run(tcase.request.Name, func(t *testing.T) {
 			// Resave the source schema for every iteration.
-			err := tenv.ts.SaveVSchema(ctx, tcase.request.Keyspace, sourceVschema)
+			sourceKsVS := &topo.KeyspaceVSchemaInfo{
+				Name:     tcase.request.Keyspace,
+				Keyspace: sourceVschema,
+			}
+			err := tenv.ts.SaveVSchema(ctx, sourceKsVS)
 			require.NoError(t, err)
 			err = tenv.ts.RebuildSrvVSchema(ctx, []string{tenv.cells[0]})
 			require.NoError(t, err)
@@ -2671,7 +2674,11 @@ func TestCompleteLookupVindex(t *testing.T) {
 	for _, tcase := range testcases {
 		t.Run(tcase.request.Name, func(t *testing.T) {
 			// Resave the source schema for every iteration.
-			err := tenv.ts.SaveVSchema(ctx, tcase.request.Keyspace, sourceVschema)
+			sourceKsVS := &topo.KeyspaceVSchemaInfo{
+				Name:     tcase.request.Keyspace,
+				Keyspace: sourceVschema,
+			}
+			err := tenv.ts.SaveVSchema(ctx, sourceKsVS)
 			require.NoError(t, err)
 			err = tenv.ts.RebuildSrvVSchema(ctx, []string{tenv.cells[0]})
 			require.NoError(t, err)
