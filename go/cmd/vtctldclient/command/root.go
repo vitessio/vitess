@@ -37,7 +37,6 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/localvtctldclient"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
 	"vitess.io/vitess/go/vt/vtenv"
-	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	// These imports ensure init()s within them get called and they register their commands/subcommands.
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
@@ -97,8 +96,8 @@ var (
 	// Root is the main entrypoint to the vtctldclient CLI.
 	Root = &cobra.Command{
 		Use:   "vtctldclient",
-		Short: "Executes a cluster management command on the remote vtctld server.",
-		Long: fmt.Sprintf(`Executes a cluster management command on the remote vtctld server.
+		Short: "Executes a cluster management command on the remote vtctld server or alternatively as a standalone binary using --server=internal.",
+		Long: fmt.Sprintf(`Executes a cluster management command on the remote vtctld server or alternatively as a standalone binary using --server=internal.
 If there are no running vtctld servers -- for example when bootstrapping
 a new Vitess cluster -- you can specify a --server value of '%s'.
 When doing so, you would use the --topo* flags so that the client can
@@ -204,14 +203,6 @@ func getClientForCommand(cmd *cobra.Command) (vtctldclient.VtctldClient, error) 
 		}
 		onTerm = append(onTerm, ts.Close)
 
-		// Use internal vtctld server implementation.
-		// Register a nil grpc handler -- we will not use tmclient at all but
-		// a factory still needs to be registered.
-		once.Do(func() {
-			tmclient.RegisterTabletManagerClientFactory("grpc", func() tmclient.TabletManagerClient {
-				return nil
-			})
-		})
 		vtctld := grpcvtctldserver.NewVtctldServer(env, ts)
 		localvtctldclient.SetServer(vtctld)
 		VtctldClientProtocol = "local"
