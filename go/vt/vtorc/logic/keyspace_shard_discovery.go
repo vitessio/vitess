@@ -18,9 +18,7 @@ package logic
 
 import (
 	"context"
-	"sync"
-
-	"golang.org/x/exp/maps"
+	"time"
 
 	"vitess.io/vitess/go/vt/log"
 
@@ -28,46 +26,74 @@ import (
 	"vitess.io/vitess/go/vt/vtorc/inst"
 )
 
-// RefreshAllKeyspacesAndShards reloads the keyspace and shard information for the keyspaces that vtorc is concerned with.
-func RefreshAllKeyspacesAndShards(ctx context.Context) error {
-	var keyspaces []string
-	if len(shardsToWatch) == 0 { // all known keyspaces
-		ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
-		defer cancel()
-		var err error
-		// Get all the keyspaces
-		keyspaces, err = ts.GetKeyspaces(ctx)
-		if err != nil {
-			return err
-		}
-	} else {
-		// Get keyspaces to watch from the list of known keyspaces.
-		keyspaces = maps.Keys(shardsToWatch)
-	}
+// setupKeyspaceAndShardRecordsWatch sets up a watch on all keyspace and shard records.
+func setupKeyspaceAndShardRecordsWatch(ctx context.Context, ts *topo.Server) {
+	go func() {
+		for {
+			if ctx.Err() != nil {
+				return
+			}
+			initialRecs, updateChan, err := ts.WatchAllKeyspaceAndShardRecords(ctx)
+			if err != nil {
+				if ctx.Err() != nil {
+					return
+				}
+				// Back for a while and then try setting up the watch again.
+				time.Sleep(10 * time.Second)
+				continue
+			}
+			for _, rec := range initialRecs {
+				err = processKeyspacePrefixWatchUpdate(rec)
+				if err != nil {
+					log.Errorf("failed to process initial keyspace/shard record: %+v", err)
+					break
+				}
+			}
+			if err != nil {
+				continue
+			}
 
-	refreshCtx, refreshCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
-	defer refreshCancel()
-	var wg sync.WaitGroup
-	for idx, keyspace := range keyspaces {
-		// Check if the current keyspace name is the same as the last one.
-		// If it is, then we know we have already refreshed its information.
-		// We do not need to do it again.
-		if idx != 0 && keyspace == keyspaces[idx-1] {
-			continue
+			for data := range updateChan {
+				err = processKeyspacePrefixWatchUpdate(data)
+				if err != nil {
+					log.Errorf("failed to process keyspace/shard record update: %+v", err)
+					break
+				}
+			}
 		}
-		wg.Add(2)
-		go func(keyspace string) {
-			defer wg.Done()
-			_ = refreshKeyspaceHelper(refreshCtx, keyspace)
-		}(keyspace)
-		go func(keyspace string) {
-			defer wg.Done()
-			_ = refreshAllShards(refreshCtx, keyspace)
-		}(keyspace)
-	}
-	wg.Wait()
+	}()
+}
 
-	return nil
+// processKeyspacePrefixWatchUpdate processes a keyspace prefix watch update.
+func processKeyspacePrefixWatchUpdate(wd *topo.WatchKeyspacePrefixData) error {
+	// We ignore the error in the watch data.
+	// If there is an error that closes the watch, then
+	// we will open it again.
+	if wd.Err != nil {
+		return nil
+	}
+	if wd.KeyspaceInfo != nil {
+		return processKeyspaceUpdate(wd)
+	} else if wd.ShardInfo != nil {
+		return processShardUpdate(wd)
+	}
+	return wd.Err
+}
+
+// processShardUpdate processes a shard update.
+func processShardUpdate(wd *topo.WatchKeyspacePrefixData) error {
+	if !shardPartOfWatch(wd.ShardInfo.Keyspace(), wd.ShardInfo.GetKeyRange()) {
+		return nil
+	}
+	return inst.SaveShard(wd.ShardInfo)
+}
+
+// processKeyspaceUpdate processes a keyspace update.
+func processKeyspaceUpdate(wd *topo.WatchKeyspacePrefixData) error {
+	if !keyspacePartOfWatch(wd.KeyspaceInfo.KeyspaceName()) {
+		return nil
+	}
+	return inst.SaveKeyspace(wd.KeyspaceInfo)
 }
 
 // RefreshKeyspaceAndShard refreshes the keyspace record and shard record for the given keyspace and shard.
@@ -105,28 +131,6 @@ func refreshKeyspaceHelper(ctx context.Context, keyspaceName string) error {
 		log.Error(err)
 	}
 	return err
-}
-
-// refreshAllShards refreshes all the shard records in the given keyspace.
-func refreshAllShards(ctx context.Context, keyspaceName string) error {
-	shardInfos, err := ts.FindAllShardsInKeyspace(ctx, keyspaceName, &topo.FindAllShardsInKeyspaceOptions{
-		// Fetch shard records concurrently to speed up discovery. A typical
-		// Vitess cluster will have 1-3 vtorc instances deployed, so there is
-		// little risk of a thundering herd.
-		Concurrency: 8,
-	})
-	if err != nil {
-		log.Error(err)
-		return err
-	}
-	for _, shardInfo := range shardInfos {
-		err = inst.SaveShard(shardInfo)
-		if err != nil {
-			log.Error(err)
-			return err
-		}
-	}
-	return nil
 }
 
 // refreshSingleShardHelper is a helper function that refreshes the shard record of the given keyspace/shard.

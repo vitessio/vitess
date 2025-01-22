@@ -103,7 +103,7 @@ var (
 	}
 )
 
-func TestTabletsPartOfWatch(t *testing.T) {
+func TestPartOfWatch(t *testing.T) {
 	oldClustersToWatch := clustersToWatch
 	defer func() {
 		clustersToWatch = oldClustersToWatch
@@ -111,9 +111,10 @@ func TestTabletsPartOfWatch(t *testing.T) {
 	}()
 
 	testCases := []struct {
-		in                  []string
-		tablet              *topodatapb.Tablet
-		expectedPartOfWatch bool
+		in                       []string
+		tablet                   *topodatapb.Tablet
+		expectedShardPartOfWatch bool
+		expectedKsPartOfWatch    bool
 	}{
 		{
 			in: []string{},
@@ -121,7 +122,8 @@ func TestTabletsPartOfWatch(t *testing.T) {
 				Keyspace: keyspace,
 				Shard:    shard,
 			},
-			expectedPartOfWatch: true,
+			expectedShardPartOfWatch: true,
+			expectedKsPartOfWatch:    true,
 		},
 		{
 			in: []string{keyspace},
@@ -129,7 +131,8 @@ func TestTabletsPartOfWatch(t *testing.T) {
 				Keyspace: keyspace,
 				Shard:    shard,
 			},
-			expectedPartOfWatch: true,
+			expectedShardPartOfWatch: true,
+			expectedKsPartOfWatch:    true,
 		},
 		{
 			in: []string{keyspace + "/-"},
@@ -137,7 +140,8 @@ func TestTabletsPartOfWatch(t *testing.T) {
 				Keyspace: keyspace,
 				Shard:    shard,
 			},
-			expectedPartOfWatch: true,
+			expectedShardPartOfWatch: true,
+			expectedKsPartOfWatch:    true,
 		},
 		{
 			in: []string{keyspace + "/" + shard},
@@ -145,7 +149,8 @@ func TestTabletsPartOfWatch(t *testing.T) {
 				Keyspace: keyspace,
 				Shard:    shard,
 			},
-			expectedPartOfWatch: true,
+			expectedShardPartOfWatch: true,
+			expectedKsPartOfWatch:    true,
 		},
 		{
 			in: []string{"ks/-70", "ks/70-"},
@@ -153,7 +158,8 @@ func TestTabletsPartOfWatch(t *testing.T) {
 				Keyspace: "ks",
 				KeyRange: key.NewKeyRange([]byte{0x50}, []byte{0x70}),
 			},
-			expectedPartOfWatch: true,
+			expectedShardPartOfWatch: true,
+			expectedKsPartOfWatch:    true,
 		},
 		{
 			in: []string{"ks/-70", "ks/70-"},
@@ -161,7 +167,8 @@ func TestTabletsPartOfWatch(t *testing.T) {
 				Keyspace: "ks",
 				KeyRange: key.NewKeyRange([]byte{0x40}, []byte{0x50}),
 			},
-			expectedPartOfWatch: true,
+			expectedShardPartOfWatch: true,
+			expectedKsPartOfWatch:    true,
 		},
 		{
 			in: []string{"ks/-70", "ks/70-"},
@@ -169,7 +176,8 @@ func TestTabletsPartOfWatch(t *testing.T) {
 				Keyspace: "ks",
 				KeyRange: key.NewKeyRange([]byte{0x70}, []byte{0x90}),
 			},
-			expectedPartOfWatch: true,
+			expectedShardPartOfWatch: true,
+			expectedKsPartOfWatch:    true,
 		},
 		{
 			in: []string{"ks/-70", "ks/70-"},
@@ -177,7 +185,8 @@ func TestTabletsPartOfWatch(t *testing.T) {
 				Keyspace: "ks",
 				KeyRange: key.NewKeyRange([]byte{0x60}, []byte{0x90}),
 			},
-			expectedPartOfWatch: false,
+			expectedShardPartOfWatch: false,
+			expectedKsPartOfWatch:    true,
 		},
 		{
 			in: []string{"ks/50-70"},
@@ -185,7 +194,8 @@ func TestTabletsPartOfWatch(t *testing.T) {
 				Keyspace: "ks",
 				KeyRange: key.NewKeyRange([]byte{0x50}, []byte{0x70}),
 			},
-			expectedPartOfWatch: true,
+			expectedShardPartOfWatch: true,
+			expectedKsPartOfWatch:    true,
 		},
 		{
 			in: []string{"ks2/-70", "ks2/70-", "unknownKs/-", "ks/-80"},
@@ -193,7 +203,8 @@ func TestTabletsPartOfWatch(t *testing.T) {
 				Keyspace: "ks",
 				KeyRange: key.NewKeyRange([]byte{0x60}, []byte{0x80}),
 			},
-			expectedPartOfWatch: true,
+			expectedShardPartOfWatch: true,
+			expectedKsPartOfWatch:    true,
 		},
 		{
 			in: []string{"ks2/-70", "ks2/70-", "unknownKs/-", "ks/-80"},
@@ -201,7 +212,8 @@ func TestTabletsPartOfWatch(t *testing.T) {
 				Keyspace: "ks",
 				KeyRange: key.NewKeyRange([]byte{0x80}, []byte{0x90}),
 			},
-			expectedPartOfWatch: false,
+			expectedShardPartOfWatch: false,
+			expectedKsPartOfWatch:    true,
 		},
 		{
 			in: []string{"ks2/-70", "ks2/70-", "unknownKs/-", "ks/-80"},
@@ -209,7 +221,17 @@ func TestTabletsPartOfWatch(t *testing.T) {
 				Keyspace: "ks",
 				KeyRange: key.NewKeyRange([]byte{0x90}, []byte{0xa0}),
 			},
-			expectedPartOfWatch: false,
+			expectedShardPartOfWatch: false,
+			expectedKsPartOfWatch:    true,
+		},
+		{
+			in: []string{"ks2/-70", "ks2/70-", "ks/-80"},
+			tablet: &topodatapb.Tablet{
+				Keyspace: "unknownKs",
+				KeyRange: key.NewKeyRange([]byte{0x90}, []byte{0xa0}),
+			},
+			expectedShardPartOfWatch: false,
+			expectedKsPartOfWatch:    false,
 		},
 	}
 
@@ -217,7 +239,8 @@ func TestTabletsPartOfWatch(t *testing.T) {
 		t.Run(fmt.Sprintf("%v-Tablet-%v-%v", strings.Join(tt.in, ","), tt.tablet.GetKeyspace(), tt.tablet.GetShard()), func(t *testing.T) {
 			clustersToWatch = tt.in
 			initializeShardsToWatch()
-			assert.Equal(t, tt.expectedPartOfWatch, tabletPartOfWatch(tt.tablet))
+			assert.Equal(t, tt.expectedShardPartOfWatch, shardPartOfWatch(tt.tablet.GetKeyspace(), tt.tablet.GetKeyRange()))
+			assert.Equal(t, tt.expectedKsPartOfWatch, keyspacePartOfWatch(tt.tablet.GetKeyspace()))
 		})
 	}
 }

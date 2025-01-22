@@ -20,10 +20,12 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -52,7 +54,86 @@ var (
 	}
 )
 
-func TestRefreshAllKeyspaces(t *testing.T) {
+// TestSetupKeyspaceAndShardRecordsWatch tests that the watch is setup correctly for keyspace and shard records.
+func TestSetupKeyspaceAndShardRecordsWatch(t *testing.T) {
+	// Store the old flags and restore on test completion
+	oldTs := ts
+	oldClustersToWatch := clustersToWatch
+	defer func() {
+		ts = oldTs
+		clustersToWatch = oldClustersToWatch
+	}()
+
+	db.ClearVTOrcDatabase()
+	defer func() {
+		db.ClearVTOrcDatabase()
+	}()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts = memorytopo.NewServer(ctx, "zone1")
+
+	for _, ks := range []string{"ks1", "ks2"} {
+		err := ts.CreateKeyspace(ctx, ks, keyspaceDurabilityNone)
+		require.NoError(t, err)
+		for idx, sh := range []string{"-80", "80-"} {
+			err = ts.CreateShard(ctx, ks, sh)
+			require.NoError(t, err)
+			_, err = ts.UpdateShardFields(ctx, ks, sh, func(si *topo.ShardInfo) error {
+				si.PrimaryAlias = &topodatapb.TabletAlias{
+					Cell: fmt.Sprintf("zone_%v", ks),
+					Uid:  uint32(100 + idx),
+				}
+				return nil
+			})
+			require.NoError(t, err)
+		}
+	}
+
+	// Set up the keyspace and shard watch.
+	setupKeyspaceAndShardRecordsWatch(ctx, ts)
+	waitForKeyspaceCount(t, 2)
+	// Verify that we only have ks1 and ks2 in vtorc's db.
+	verifyKeyspaceInfo(t, "ks1", keyspaceDurabilityNone, "")
+	verifyPrimaryAlias(t, "ks1", "-80", "zone_ks1-0000000100", "")
+	verifyKeyspaceInfo(t, "ks2", keyspaceDurabilityNone, "")
+	verifyPrimaryAlias(t, "ks2", "80-", "zone_ks2-0000000101", "")
+	verifyKeyspaceInfo(t, "ks3", nil, "keyspace not found")
+	verifyPrimaryAlias(t, "ks3", "80-", "", "shard not found")
+	verifyKeyspaceInfo(t, "ks4", nil, "keyspace not found")
+
+	// Update primary on the shard.
+	_, err := ts.UpdateShardFields(ctx, "ks1", "-80", func(si *topo.ShardInfo) error {
+		si.PrimaryAlias.Cell = "updated_new_cell"
+		return nil
+	})
+	require.NoError(t, err)
+
+	// Delete a shard.
+	// We will verify that we don't delete a shard info in VTOrc.
+	// We ignore delete updates for now.
+	err = ts.DeleteShard(ctx, "ks2", "80-")
+	require.NoError(t, err)
+
+	// Create a new keyspace record.
+	err = ts.CreateKeyspace(ctx, "ks3", keyspaceDurabilitySemiSync)
+	require.NoError(t, err)
+
+	// Check that the watch sees these updates.
+	waitForKeyspaceCount(t, 3)
+	// Verify that we only have ks1 and ks2 in vtorc's db.
+	verifyKeyspaceInfo(t, "ks1", keyspaceDurabilityNone, "")
+	verifyPrimaryAlias(t, "ks1", "-80", "updated_new_cell-0000000100", "")
+	verifyKeyspaceInfo(t, "ks2", keyspaceDurabilityNone, "")
+	verifyPrimaryAlias(t, "ks2", "80-", "zone_ks2-0000000101", "")
+	verifyKeyspaceInfo(t, "ks3", keyspaceDurabilitySemiSync, "")
+	verifyPrimaryAlias(t, "ks3", "80-", "", "shard not found")
+	verifyKeyspaceInfo(t, "ks4", nil, "keyspace not found")
+}
+
+// TestInitialSetupOfWatch tests that the initial setup of the watch for shards
+// and keyspaces loads the latest information from the topo server.
+func TestInitialSetupOfWatch(t *testing.T) {
 	// Store the old flags and restore on test completion
 	oldTs := ts
 	oldClustersToWatch := clustersToWatch
@@ -94,7 +175,10 @@ func TestRefreshAllKeyspaces(t *testing.T) {
 	onlyKs1and3 := []string{"ks1/-80", "ks3/-80", "ks3/80-"}
 	clustersToWatch = onlyKs1and3
 	initializeShardsToWatch()
-	require.NoError(t, RefreshAllKeyspacesAndShards(context.Background()))
+	watchCtx, watchCancel := context.WithCancel(context.Background())
+	setupKeyspaceAndShardRecordsWatch(watchCtx, ts)
+	waitForKeyspaceCount(t, 2)
+	watchCancel()
 
 	// Verify that we only have ks1 and ks3 in vtorc's db.
 	verifyKeyspaceInfo(t, "ks1", keyspaceDurabilityNone, "")
@@ -110,7 +194,10 @@ func TestRefreshAllKeyspaces(t *testing.T) {
 	initializeShardsToWatch()
 	// Change the durability policy of ks1
 	reparenttestutil.SetKeyspaceDurability(ctx, t, ts, "ks1", policy.DurabilitySemiSync)
-	require.NoError(t, RefreshAllKeyspacesAndShards(context.Background()))
+	watchCtx, watchCancel = context.WithCancel(context.Background())
+	setupKeyspaceAndShardRecordsWatch(watchCtx, ts)
+	waitForKeyspaceCount(t, 4)
+	watchCancel()
 
 	// Verify that all the keyspaces are correctly reloaded
 	verifyKeyspaceInfo(t, "ks1", keyspaceDurabilitySemiSync, "")
@@ -121,6 +208,30 @@ func TestRefreshAllKeyspaces(t *testing.T) {
 	verifyPrimaryAlias(t, "ks3", "80-", "zone_ks3-0000000101", "")
 	verifyKeyspaceInfo(t, "ks4", keyspaceDurabilityTest, "")
 	verifyPrimaryAlias(t, "ks4", "80-", "zone_ks4-0000000101", "")
+}
+
+// waitForKeyspaceCount waits for the keyspace count to match the expected value.
+func waitForKeyspaceCount(t *testing.T, count int) {
+	t.Helper()
+	timeout := time.After(10 * time.Second)
+	for {
+		select {
+		case <-timeout:
+			t.Errorf("timed out waiting for keyspace count")
+			return
+		default:
+		}
+		var curCount = 0
+		err := db.QueryVTOrcRowsMap("select count(*) as c from vitess_keyspace", func(row sqlutils.RowMap) error {
+			curCount = row.GetInt("c")
+			return nil
+		})
+		require.NoError(t, err)
+		if curCount == count {
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
 }
 
 func TestRefreshKeyspace(t *testing.T) {

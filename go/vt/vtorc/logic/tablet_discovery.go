@@ -103,32 +103,41 @@ func initializeShardsToWatch() {
 	}
 }
 
-// tabletPartOfWatch checks if the given tablet is part of the watch list.
-func tabletPartOfWatch(tablet *topodatapb.Tablet) bool {
+// keyspacePartOfWatch checks if the given keyspace is part of the watch list.
+func keyspacePartOfWatch(keyspace string) bool {
+	// If we are watching all keyspaces, then we want to watch this keyspace too.
+	if len(shardsToWatch) == 0 {
+		return true
+	}
+	_, shouldWatch := shardsToWatch[keyspace]
+	return shouldWatch
+}
+
+// shardPartOfWatch checks if the given tablet is part of the watch list.
+func shardPartOfWatch(keyspace string, keyRange *topodatapb.KeyRange) bool {
 	// If we are watching all keyspaces, then we want to watch this tablet too.
 	if len(shardsToWatch) == 0 {
 		return true
 	}
-	shardRanges, ok := shardsToWatch[tablet.GetKeyspace()]
+	shardRanges, ok := shardsToWatch[keyspace]
 	// If we don't have the keyspace in our map, then this tablet
 	// doesn't need to be watched.
 	if !ok {
 		return false
 	}
-	// Get the tablet's key range, and check if
-	// it is part of the shard ranges we are watching.
-	kr := tablet.GetKeyRange()
+
+	// Check if the key range is part of the shard ranges we are watching.
 	for _, shardRange := range shardRanges {
-		if key.KeyRangeContainsKeyRange(shardRange, kr) {
+		if key.KeyRangeContainsKeyRange(shardRange, keyRange) {
 			return true
 		}
 	}
 	return false
 }
 
-// OpenTabletDiscovery opens the vitess topo if enables and returns a ticker
+// OpenDiscoveryFromTopo opens the vitess topo if enables and returns a ticker
 // channel for polling.
-func OpenTabletDiscovery() {
+func OpenDiscoveryFromTopo() {
 	ts = topo.Open()
 	tmc = inst.InitializeTMC()
 	// Clear existing cache and perform a new refresh.
@@ -137,6 +146,7 @@ func OpenTabletDiscovery() {
 	}
 	// Parse --clusters_to_watch into a filter.
 	initializeShardsToWatch()
+	setupKeyspaceAndShardRecordsWatch(context.Background(), ts)
 	// We refresh all information from the topo once before we start the ticks to do
 	// it on a timer.
 	ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
@@ -198,7 +208,7 @@ func refreshTabletsUsing(ctx context.Context, loader func(tabletAlias string), f
 	matchedTablets := make([]*topo.TabletInfo, 0, len(tablets))
 	func() {
 		for _, t := range tablets {
-			if tabletPartOfWatch(t.Tablet) {
+			if shardPartOfWatch(t.Tablet.GetKeyspace(), t.Tablet.GetKeyRange()) {
 				matchedTablets = append(matchedTablets, t)
 			}
 		}

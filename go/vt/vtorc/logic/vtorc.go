@@ -24,7 +24,6 @@ import (
 
 	"github.com/patrickmn/go-cache"
 	"github.com/sjmudd/stopwatch"
-	"golang.org/x/sync/errgroup"
 
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
@@ -255,7 +254,7 @@ func ContinuousDiscovery() {
 
 	go handleDiscoveryRequests()
 
-	OpenTabletDiscovery()
+	OpenDiscoveryFromTopo()
 	healthTick := time.Tick(config.HealthPollSeconds * time.Second)
 	caretakingTick := time.Tick(time.Minute)
 	recoveryTick := time.Tick(config.GetRecoveryPollDuration())
@@ -317,23 +316,9 @@ func ContinuousDiscovery() {
 	}
 }
 
-// refreshTopoTick refreshes information from the topo server on a time tick.
+// refreshTopoTick refreshes tablet information from the topo server on a time tick.
 func refreshTopoTick(ctx context.Context) error {
-	// Create an errgroup
-	eg, ctx := errgroup.WithContext(ctx)
-
-	// Refresh all keyspace information.
-	eg.Go(func() error {
-		return RefreshAllKeyspacesAndShards(ctx)
-	})
-
-	// Refresh all tablets.
-	eg.Go(func() error {
-		return refreshAllTablets(ctx)
-	})
-
-	// Wait for both the refreshes to complete
-	err := eg.Wait()
+	err := refreshAllTablets(ctx)
 	if err == nil {
 		process.FirstDiscoveryCycleComplete.Store(true)
 	}
