@@ -1277,17 +1277,19 @@ func TestExecutorDDL(t *testing.T) {
 	}
 
 	for _, stmt := range stmts2 {
-		sbc1.ExecCount.Store(0)
-		sbc2.ExecCount.Store(0)
-		sbclookup.ExecCount.Store(0)
-		_, err := executor.Execute(ctx, nil, "TestExecute", econtext.NewSafeSession(&vtgatepb.Session{TargetString: ""}), stmt.input, nil)
-		if stmt.hasErr {
-			require.EqualError(t, err, econtext.ErrNoKeyspace.Error(), "expect query to fail")
-			testQueryLog(t, executor, logChan, "TestExecute", "", stmt.input, 0)
-		} else {
-			require.NoError(t, err)
-			testQueryLog(t, executor, logChan, "TestExecute", "DDL", stmt.input, 8)
-		}
+		t.Run(stmt.input, func(t *testing.T) {
+			sbc1.ExecCount.Store(0)
+			sbc2.ExecCount.Store(0)
+			sbclookup.ExecCount.Store(0)
+			_, err := executor.Execute(ctx, nil, "TestExecute", econtext.NewSafeSession(&vtgatepb.Session{TargetString: ""}), stmt.input, nil)
+			if stmt.hasErr {
+				assert.EqualError(t, err, econtext.ErrNoKeyspace.Error(), "expect query to fail")
+				testQueryLog(t, executor, logChan, "TestExecute", "", stmt.input, 0)
+			} else {
+				assert.NoError(t, err)
+				testQueryLog(t, executor, logChan, "TestExecute", "DDL", stmt.input, 8)
+			}
+		})
 	}
 }
 
@@ -2672,10 +2674,12 @@ func TestExecutorShowVitessMigrations(t *testing.T) {
 
 func TestExecutorDescHash(t *testing.T) {
 	executor, _, _, _, ctx := createExecutorEnv(t)
-
-	showQuery := "desc hash_index"
 	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
-	_, err := executor.Execute(ctx, nil, "", session, showQuery, nil)
+
+	_, err := executor.Execute(ctx, nil, "", session, "desc hash_index", nil)
+	require.EqualError(t, err, "VT05004: table 'hash_index' does not exist")
+
+	_, err = executor.Execute(ctx, nil, "", session, "desc music", nil)
 	require.NoError(t, err)
 }
 

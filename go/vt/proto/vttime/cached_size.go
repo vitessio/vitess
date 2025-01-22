@@ -17,6 +17,8 @@ limitations under the License.
 
 package vttime
 
+import hack "vitess.io/vitess/go/hack"
+
 func (cached *Time) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -24,6 +26,10 @@ func (cached *Time) CachedSize(alloc bool) int64 {
 	size := int64(0)
 	if alloc {
 		size += int64(64)
+	}
+	// field unknownFields google.golang.org/protobuf/runtime/protoimpl.UnknownFields
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.unknownFields)))
 	}
 	return size
 }

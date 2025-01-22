@@ -61,6 +61,10 @@ var (
   }
 ]}
 `
+	unsharded2Ks = "uks2"
+
+	//go:embed unsharded2_schema.sql
+	unsharded2SchemaSQL string
 )
 
 func TestMain(m *testing.M) {
@@ -96,6 +100,17 @@ func TestMain(m *testing.M) {
 			VSchema:   unshardedVSchema,
 		}
 		err = clusterInstance.StartUnshardedKeyspace(*uKs, 0, false)
+		if err != nil {
+			return 1
+		}
+
+		// This keyspace is used to test automatic addition of tables to global routing rules when
+		// there are multiple unsharded keyspaces.
+		uKs2 := &cluster.Keyspace{
+			Name:      unsharded2Ks,
+			SchemaSQL: unsharded2SchemaSQL,
+		}
+		err = clusterInstance.StartUnshardedKeyspace(*uKs2, 0, false)
 		if err != nil {
 			return 1
 		}

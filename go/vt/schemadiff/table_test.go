@@ -891,6 +891,18 @@ func TestCreateTableDiff(t *testing.T) {
 				"+	KEY `i_idx` (`i`) INVISIBLE",
 			},
 		},
+		{
+			name:  "keys with expression",
+			from:  "create table t1 (id int, primary key (id), key idx1 ((id + 1)))",
+			to:    "create table t1 (id int, primary key (id), key idx2 ((id + 2)))",
+			diff:  "alter table t1 drop key idx1, add key idx2 ((id + 2))",
+			cdiff: "ALTER TABLE `t1` DROP KEY `idx1`, ADD KEY `idx2` ((`id` + 2))",
+			textdiffs: []string{
+				"-	KEY `idx1` ((`id` + 1))",
+				"+	KEY `idx2` ((`id` + 2))",
+			},
+		},
+
 		// FULLTEXT keys
 		{
 			name:  "add one fulltext key",
@@ -2563,6 +2575,30 @@ func TestValidate(t *testing.T) {
 			from:      "create table t (id int primary key, i1 int, i2 int, primary key (id))",
 			alter:     "alter table t engine=innodb",
 			expectErr: &DuplicateKeyNameError{Table: "t", Key: "PRIMARY"},
+		},
+		{
+			name:  "key with expression",
+			from:  "create table t (id int, primary key (id), key idx1 ((id + 1)))",
+			alter: "alter table t add key idx2 ((id + 2))",
+			to:    "create table t (id int, primary key (id), key idx1 ((id + 1)), key idx2 ((id + 2)))",
+		},
+		{
+			name:  "key with multicolumn expression",
+			from:  "create table t (id int, i int, primary key (id), key idx1 ((id + 1), (i + 2)))",
+			alter: "alter table t add key idx2 ((id + 2))",
+			to:    "create table t (id int, i int, primary key (id), key idx1 ((id + 1), (i + 2)), key idx2 ((id + 2)))",
+		},
+		{
+			name:      "key with expression and unknown columns",
+			from:      "create table t (id int, i int, primary key (id), key idx1 ((id + 1), (i + 2)))",
+			alter:     "alter table t add key idx2 ((i2 + 2))",
+			expectErr: &InvalidColumnInKeyError{Table: "t", Column: "i2", Key: "idx2"},
+		},
+		{
+			name:      "drop column used in expression",
+			from:      "create table t (id int, i int, primary key (id), key idx1 ((id + 1), (i + 2)))",
+			alter:     "alter table t drop column i",
+			expectErr: &InvalidColumnInKeyError{Table: "t", Column: "i", Key: "idx1"},
 		},
 		// partitions
 		{

@@ -164,7 +164,7 @@ func (t *noopVCursor) Environment() *vtenv.Environment {
 }
 
 func (t *noopVCursor) TimeZone() *time.Location {
-	return nil
+	return time.Local
 }
 
 func (t *noopVCursor) SQLMode() string {
@@ -398,6 +398,20 @@ func (t *noopVCursor) ResolveDestinationsMultiCol(ctx context.Context, keyspace 
 
 func (t *noopVCursor) GetDBDDLPluginName() string {
 	panic("unimplemented")
+}
+
+func (t *noopVCursor) SetLastInsertID(uint64) {}
+func (t *noopVCursor) VExplainLogging()       {}
+func (t *noopVCursor) DisableLogging()        {}
+func (t *noopVCursor) GetVExplainLogs() []ExecuteEntry {
+	return nil
+}
+func (t *noopVCursor) GetLogs() ([]ExecuteEntry, error) {
+	return nil, nil
+}
+
+// RecordMirrorStats implements VCursor.
+func (t *noopVCursor) RecordMirrorStats(sourceExecTime, targetExecTime time.Duration, targetErr error) {
 }
 
 var (
@@ -891,20 +905,6 @@ func (t *loggingVCursor) RecordMirrorStats(sourceExecTime, targetExecTime time.D
 	if t.onRecordMirrorStatsFn != nil {
 		t.onRecordMirrorStatsFn(sourceExecTime, targetExecTime, targetErr)
 	}
-}
-
-func (t *noopVCursor) VExplainLogging() {}
-func (t *noopVCursor) DisableLogging()  {}
-func (t *noopVCursor) GetVExplainLogs() []ExecuteEntry {
-	return nil
-}
-
-func (t *noopVCursor) GetLogs() ([]ExecuteEntry, error) {
-	return nil, nil
-}
-
-// RecordMirrorStats implements VCursor.
-func (t *noopVCursor) RecordMirrorStats(sourceExecTime, targetExecTime time.Duration, targetErr error) {
 }
 
 func expectResult(t *testing.T, result, want *sqltypes.Result) {

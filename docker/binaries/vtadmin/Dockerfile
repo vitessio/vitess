@@ -13,7 +13,7 @@
 # limitations under the License.
 
 ARG VT_BASE_VER=latest
-ARG DEBIAN_VER=bullseye-slim
+ARG DEBIAN_VER=bookworm-slim
 
 FROM vitess/lite:${VT_BASE_VER} AS lite
 

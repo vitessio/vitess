@@ -10,6 +10,11 @@
   - **[VTOrc Config File Changes](#vtorc-config-file-changes)**
   - **[VTGate Config File Changes](#vtgate-config-file-changes)**
   - **[Support for More Efficient JSON Replication](#efficient-json-replication)**
+  - **[Support for LAST_INSERT_ID(x)](#last-insert-id)**
+  - **[Support for Maximum Idle Connections in the Pool](#max-idle-connections)**
+  - **[Stalled Disk Recovery in VTOrc](#stall-disk-recovery)**
+  - **[Update default MySQL version to 8.0.40](#mysql-8-0-40)**
+  - **[Update lite images to Debian Bookworm](#debian-bookworm)**
 - **[Minor Changes](#minor-changes)**
   - **[VTTablet Flags](#flags-vttablet)**
   - **[Topology read concurrency behaviour changes](#topo-read-concurrency-changes)**
@@ -80,6 +85,52 @@ In [#7345](https://github.com/vitessio/vitess/pull/17345) we added support for [
 
 If you are using MySQL 8.0 or later and using JSON columns, you can now enable this MySQL feature across your Vitess cluster(s) to lower the disk space needed for binary logs and improve the CPU and memory usage in both `mysqld` (standard intrashard MySQL replication) and `vttablet` ([VReplication](https://vitess.io/docs/reference/vreplication/vreplication/)) without losing any capabilities or features.
 
+### <a id="last-insert-id"/>Support for `LAST_INSERT_ID(x)`</a>
+
+In [#17408](https://github.com/vitessio/vitess/pull/17408) and [#17409](https://github.com/vitessio/vitess/pull/17409), we added the ability to use `LAST_INSERT_ID(x)` in Vitess directly at vtgate. This improvement allows certain queries—like `SELECT last_insert_id(123);` or `SELECT last_insert_id(count(*)) ...`—to be handled without relying on MySQL for the final value.
+
+**Limitations**:
+- When using `LAST_INSERT_ID(x)` in ordered queries (e.g., `SELECT last_insert_id(col) FROM table ORDER BY foo`), MySQL sets the session’s last-insert-id value according to the *last row returned*. Vitess does not guarantee the same behavior.
+
+### <a id="max-idle-connections"/>Support for Maximum Idle Connections in the Pool</a>
+
+In [#17443](https://github.com/vitessio/vitess/pull/17443) we introduced a new configurable max-idle-count parameter for connection pools. This allows you to specify the maximum number of idle connections retained in each connection pool to optimize performance and resource efficiency.
+
+You can control idle connection retention for the query server’s query pool, stream pool, and transaction pool with the following flags:
+•	--queryserver-config-query-pool-max-idle-count: Defines the maximum number of idle connections retained in the query pool.
+•	--queryserver-config-stream-pool-max-idle-count: Defines the maximum number of idle connections retained in the stream pool.
+•	--queryserver-config-txpool-max-idle-count: Defines the maximum number of idle connections retained in the transaction pool.
+
+This feature ensures that, during traffic spikes, idle connections are available for faster responses, while minimizing overhead in low-traffic periods by limiting the number of idle connections retained. It helps strike a balance between performance, efficiency, and cost.
+
+### <a id="stall-disk-recovery"/>Stalled Disk Recovery in VTOrc</a>
+VTOrc can now identify and recover from stalled disk errors. VTTablets test whether the disk is writable and they send this information in the full status output to VTOrc. If the disk is not writable on the primary tablet, VTOrc will attempt to recover the cluster by promoting a new primary. This is useful in scenarios where the disk is stalled and the primary vttablet is unable to accept writes because of it.
+
+To opt into this feature, `--enable-primary-disk-stalled-recovery` flag has to be specified on VTOrc, and `--disk-write-dir` flag has to be specified on the vttablets. `--disk-write-interval` and `--disk-write-timeout` flags can be used to configure the polling interval and timeout respectively. 
+
+### <a id="mysql-8-0-40"/>Update default MySQL version to 8.0.40</a>
+
+The default major MySQL version used by our `vitess/lite:latest` image is going from `8.0.30` to `8.0.40`.
+This change was brought by [Pull Request #17552](https://github.com/vitessio/vitess/pull/17552).
+
+VTGate also advertises MySQL version `8.0.40` by default instead of `8.0.30` if no explicit version is set. The users can set the `mysql_server_version` flag to advertise the correct version.
+
+#### <a id="upgrading-to-this-release-with-vitess-operator"/>⚠️Upgrading to this release with vitess-operator
+
+If you are using the `vitess-operator`, considering that we are bumping the patch version of MySQL 80 from `8.0.30` to `8.0.40`, you will have to manually upgrade:
+
+1. Add `innodb_fast_shutdown=0` to your extra cnf in your YAML file.
+2. Apply this file.
+3. Wait for all the pods to be healthy.
+4. Then change your YAML file to use the new Docker Images (`vitess/lite:v22.0.0`).
+5. Remove `innodb_fast_shutdown=0` from your extra cnf in your YAML file.
+6. Apply this file.
+
+This is the last time this will be needed in the `8.0.x` series, as starting with MySQL `8.0.35` it is possible to upgrade and downgrade between `8.0.x` versions without needing to run `innodb_fast_shutdown=0`.
+
+### <a id="debian-bookworm"/>Update lite images to Debian Bookworm</a>
+
+The base system now uses Debian Bookworm instead of Debian Bullseye for the `vitess/lite` images. This change was brought by [Pull Request #17552].
 
 ## <a id="minor-changes"/>Minor Changes</a>
 
