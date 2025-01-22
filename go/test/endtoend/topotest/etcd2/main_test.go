@@ -275,7 +275,7 @@ func TestNamedLocking(t *testing.T) {
 // from the watch.
 func TestWatchAllKeyspaceRecords(t *testing.T) {
 	// Create the topo server connection.
-	ts, err := topo.OpenServer(*clusterInstance.TopoFlavorString(), clusterInstance.VtctlProcess.TopoGlobalAddress, clusterInstance.VtctlProcess.TopoGlobalRoot)
+	ts, err := topo.OpenServer(*clusterInstance.TopoFlavorString(), clusterInstance.VtctldProcess.TopoGlobalAddress, clusterInstance.VtctldProcess.TopoGlobalRoot)
 	require.NoError(t, err)
 
 	watchCtx, watchCancel := context.WithCancel(context.Background())
