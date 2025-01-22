@@ -143,7 +143,7 @@ func TestTopoRestart(t *testing.T) {
 // TestShardLocking tests that shard locking works as intended.
 func TestShardLocking(t *testing.T) {
 	// create topo server connection
-	ts, err := topo.OpenServer(*clusterInstance.TopoFlavorString(), clusterInstance.VtctlProcess.TopoGlobalAddress, clusterInstance.VtctlProcess.TopoGlobalRoot)
+	ts, err := topo.OpenServer(*clusterInstance.TopoFlavorString(), clusterInstance.VtctldClientProcess.TopoGlobalAddress, clusterInstance.VtctldClientProcess.TopoGlobalRoot)
 	require.NoError(t, err)
 
 	// Acquire a shard lock.
@@ -185,7 +185,7 @@ func TestShardLocking(t *testing.T) {
 // TestKeyspaceLocking tests that keyspace locking works as intended.
 func TestKeyspaceLocking(t *testing.T) {
 	// create topo server connection
-	ts, err := topo.OpenServer(*clusterInstance.TopoFlavorString(), clusterInstance.VtctlProcess.TopoGlobalAddress, clusterInstance.VtctlProcess.TopoGlobalRoot)
+	ts, err := topo.OpenServer(*clusterInstance.TopoFlavorString(), clusterInstance.VtctldClientProcess.TopoGlobalAddress, clusterInstance.VtctldClientProcess.TopoGlobalRoot)
 	require.NoError(t, err)
 
 	// Acquire a keyspace lock.

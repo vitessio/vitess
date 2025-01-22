@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/streamlog"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 
 	"github.com/stretchr/testify/require"
@@ -126,7 +127,7 @@ func (ct *consolidationTest) run(workers int, generateCallback func(int) (string
 			defer wg.Done()
 			exporter := servenv.NewExporter("ConsolidatorTest", "")
 			timings := exporter.NewTimings("ConsolidatorWaits", "", "StreamConsolidations")
-			logStats := tabletenv.NewLogStats(context.Background(), "StreamConsolidation")
+			logStats := tabletenv.NewLogStats(context.Background(), "StreamConsolidation", streamlog.NewQueryLogConfigForTest())
 			query, callback := generateCallback(worker)
 			start := time.Now()
 			err := ct.cc.Consolidate(timings, logStats, query, func(result *sqltypes.Result) error {

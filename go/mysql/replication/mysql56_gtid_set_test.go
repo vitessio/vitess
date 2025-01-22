@@ -854,3 +854,18 @@ func TestMysql56GTIDSet_RemoveUUID(t *testing.T) {
 		})
 	}
 }
+
+func TestSIDs(t *testing.T) {
+	var set Mysql56GTIDSet // nil
+	sids := set.SIDs()
+	assert.NotNil(t, sids)
+	assert.Empty(t, sids)
+
+	gtid := "8bc65cca-3fe4-11ed-bbfb-091034d48b3e:1:4-24"
+	gtidSet, err := ParseMysql56GTIDSet(gtid)
+	require.NoError(t, err)
+	sids = gtidSet.SIDs()
+	assert.NotNil(t, sids)
+	require.Len(t, sids, 1)
+	assert.Equal(t, "8bc65cca-3fe4-11ed-bbfb-091034d48b3e", sids[0].String())
+}

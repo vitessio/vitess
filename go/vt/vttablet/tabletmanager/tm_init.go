@@ -95,8 +95,11 @@ var (
 	skipBuildInfoTags  = "/.*/"
 	initTags           flagutil.StringMapValue
 
-	initTimeout          = 1 * time.Minute
-	mysqlShutdownTimeout = mysqlctl.DefaultShutdownTimeout
+	initTimeout              = 1 * time.Minute
+	mysqlShutdownTimeout     = mysqlctl.DefaultShutdownTimeout
+	stalledDiskWriteDir      = ""
+	stalledDiskWriteTimeout  = 30 * time.Second
+	stalledDiskWriteInterval = 5 * time.Second
 )
 
 func registerInitFlags(fs *pflag.FlagSet) {
@@ -109,6 +112,9 @@ func registerInitFlags(fs *pflag.FlagSet) {
 	fs.Var(&initTags, "init_tags", "(init parameter) comma separated list of key:value pairs used to tag the tablet")
 	fs.DurationVar(&initTimeout, "init_timeout", initTimeout, "(init parameter) timeout to use for the init phase.")
 	fs.DurationVar(&mysqlShutdownTimeout, "mysql-shutdown-timeout", mysqlShutdownTimeout, "timeout to use when MySQL is being shut down.")
+	fs.StringVar(&stalledDiskWriteDir, "disk-write-dir", stalledDiskWriteDir, "if provided, tablet will attempt to write a file to this directory to check if the disk is stalled")
+	fs.DurationVar(&stalledDiskWriteTimeout, "disk-write-timeout", stalledDiskWriteTimeout, "if writes exceed this duration, the disk is considered stalled")
+	fs.DurationVar(&stalledDiskWriteInterval, "disk-write-interval", stalledDiskWriteInterval, "how often to write to the disk to check whether it is stalled")
 }
 
 var (
@@ -164,6 +170,7 @@ type TabletManager struct {
 	VREngine            *vreplication.Engine
 	VDiffEngine         *vdiff.Engine
 	Env                 *vtenv.Environment
+	dhMonitor           DiskHealthMonitor
 
 	// tmc is used to run an RPC against other vttablets.
 	tmc tmclient.TabletManagerClient
@@ -372,6 +379,7 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 	tm.tmc = tmclient.NewTabletManagerClient()
 	tm.tmState = newTMState(tm, tablet)
 	tm.actionSema = semaphore.NewWeighted(1)
+	tm.dhMonitor = newDiskHealthMonitor(tm.BatchCtx)
 	tm._waitForGrantsComplete = make(chan struct{})
 
 	tm.baseTabletType = tablet.Type

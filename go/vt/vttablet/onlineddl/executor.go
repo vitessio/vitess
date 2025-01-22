@@ -838,34 +838,41 @@ func (e *Executor) killTableLockHoldersAndAccessors(ctx context.Context, tableNa
 		}
 	}
 	capableOf := mysql.ServerVersionCapableOf(conn.ServerVersion)
-	capable, err := capableOf(capabilities.PerformanceSchemaDataLocksTableCapability)
-	if err != nil {
-		return err
-	}
-	if capable {
-		{
-			// Kill connections that have open transactions locking the table. These potentially (probably?) are not
-			// actively running a query on our table. They're doing other things while holding locks on our table.
-			query, err := sqlparser.ParseAndBind(sqlProcessWithLocksOnTable, sqltypes.StringBindVariable(tableName))
+	terminateTransactions := func(capability capabilities.FlavorCapability, query string, column string, description string) error {
+		capable, err := capableOf(capability)
+		if err != nil {
+			return err
+		}
+		if !capable {
+			return nil
+		}
+		query, err = sqlparser.ParseAndBind(query, sqltypes.StringBindVariable(tableName))
+		if err != nil {
+			return err
+		}
+		rs, err := conn.Conn.ExecuteFetch(query, -1, true)
+		if err != nil {
+			return vterrors.Wrapf(err, "finding transactions locking table `%s` %s", tableName, description)
+		}
+		log.Infof("terminateTransactions: found %v transactions locking table `%s` %s", len(rs.Rows), tableName, description)
+		for _, row := range rs.Named().Rows {
+			threadId := row.AsInt64(column, 0)
+			log.Infof("terminateTransactions: killing connection %v with transaction locking table `%s` %s", threadId, tableName, description)
+			killConnection := fmt.Sprintf("KILL %d", threadId)
+			_, err = conn.Conn.ExecuteFetch(killConnection, 1, false)
 			if err != nil {
-				return err
-			}
-			rs, err := conn.Conn.ExecuteFetch(query, -1, true)
-			if err != nil {
-				return vterrors.Wrapf(err, "finding transactions locking table")
-			}
-			log.Infof("killTableLockHoldersAndAccessors: found %v locking transactions", len(rs.Rows))
-			for _, row := range rs.Named().Rows {
-				threadId := row.AsInt64("trx_mysql_thread_id", 0)
-				log.Infof("killTableLockHoldersAndAccessors: killing connection %v with transaction on table", threadId)
-				killConnection := fmt.Sprintf("KILL %d", threadId)
-				_, err = conn.Conn.ExecuteFetch(killConnection, 1, false)
-				if err != nil {
-					log.Errorf("Unable to kill the connection %d: %v", threadId, err)
-				}
+				log.Errorf("terminateTransactions: unable to kill the connection %d locking table `%s` %s: %v", threadId, tableName, description, err)
 			}
 		}
+		return nil
 	}
+	if err := terminateTransactions(capabilities.PerformanceSchemaDataLocksTableCapability, sqlProcessWithLocksOnTable, "trx_mysql_thread_id", "data"); err != nil {
+		return err
+	}
+	if err := terminateTransactions(capabilities.PerformanceSchemaMetadataLocksTableCapability, sqlProcessWithMetadataLocksOnTable, "processlist_id", "metadata"); err != nil {
+		return err
+	}
+
 	return nil
 }
 
