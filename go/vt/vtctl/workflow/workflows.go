@@ -667,11 +667,11 @@ func getVReplicationTrxLag(trxTs, updatedTs *vttimepb.Time, state binlogdatapb.V
 	if state == binlogdatapb.VReplicationWorkflowState_Copying {
 		return math.MaxInt64
 	}
-	if lastTransactionTime == 0 /* no new events after copy */ ||
-		lastUpdateTime > lastTransactionTime /* no recent transactions, so all caught up */ {
-
+	if state == binlogdatapb.VReplicationWorkflowState_Running && // We could be in the ERROR state
+		(lastTransactionTime == 0 /* No new events after copy */ ||
+			lastUpdateTime > lastTransactionTime /* No recent transactions, so all caught up */) {
 		lastTransactionTime = lastUpdateTime
 	}
-	now := time.Now().Unix() /* seconds since epoch */
+	now := time.Now().Unix() // Seconds since epoch
 	return float64(now - lastTransactionTime)
 }
