@@ -956,7 +956,8 @@ func (vs *vstream) getJournalEvent(ctx context.Context, sgtid *binlogdatapb.Shar
 						mode = matchAll
 						je.participants[inner] = false
 					case matchNone:
-						return nil, fmt.Errorf("not all journaling participants are in the stream: journal: %v, stream: %v", journal.Participants, vs.vgtid.ShardGtids)
+						return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "not all journaling participants are in the stream: journal: %v, stream: %v",
+							journal.Participants, vs.vgtid.ShardGtids)
 					}
 					continue nextParticipant
 				}
@@ -965,7 +966,8 @@ func (vs *vstream) getJournalEvent(ctx context.Context, sgtid *binlogdatapb.Shar
 			case undecided, matchNone:
 				mode = matchNone
 			case matchAll:
-				return nil, fmt.Errorf("not all journaling participants are in the stream: journal: %v, stream: %v", journal.Participants, vs.vgtid.ShardGtids)
+				return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "not all journaling participants are in the stream: journal: %v, stream: %v",
+					journal.Participants, vs.vgtid.ShardGtids)
 			}
 		}
 		if mode == matchNone {
@@ -1037,7 +1039,8 @@ func (vs *vstream) keyspaceHasBeenResharded(ctx context.Context, keyspace string
 	for _, s := range ksShardGTIDs {
 		shard := shards[s.GetShard()]
 		if shard == nil {
-			return false, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "shard provided in VGTID, %s, not found in the %s keyspace", s.GetShard(), keyspace)
+			return false, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "shard provided in VGTID, %s, not found in the %s keyspace",
+				s.GetShard(), keyspace)
 		}
 		if !shard.GetIsPrimaryServing() {
 			reshardPossible = true
