@@ -16,6 +16,7 @@
   - **[Update default MySQL version to 8.0.40](#mysql-8-0-40)**
   - **[Update lite images to Debian Bookworm](#debian-bookworm)**
   - **[KeyRanges in `--clusters_to_watch` in VTOrc](#key-range-vtorc)**
+  - **[Support for Filtering Query logs on Error](#query-logs)**
 - **[Minor Changes](#minor-changes)**
   - **[VTTablet Flags](#flags-vttablet)**
   - **[Topology read concurrency behaviour changes](#topo-read-concurrency-changes)**
@@ -26,7 +27,7 @@
 
 These are the RPC changes made in this release - 
 
-1. `GetTransactionInfo` RPC has been added to both `VtctldServer`, and `TabletManagerClient` interface. These RPCs are used to fecilitate the users in reading the state of an unresolved distributed transaction. This can be useful in debugging what went wrong and how to fix the problem.
+1. `GetTransactionInfo` RPC has been added to both `VtctldServer`, and `TabletManagerClient` interface. These RPCs are used to facilitate the users in reading the state of an unresolved distributed transaction. This can be useful in debugging what went wrong and how to fix the problem.
 
 ### <a id="deprecations-and-deletions"/>Deprecations and Deletions</a>
 
@@ -137,6 +138,10 @@ The base system now uses Debian Bookworm instead of Debian Bullseye for the `vit
 VTOrc now supports specifying KeyRanges in the `--clusters_to_watch` flag. This is useful in scenarios where you don't need to restart a VTOrc instance if you run a reshard.
 For example, if a VTOrc is configured to watch `ks/-80`, then it would watch all the shards that fall under the KeyRange `-80`. If a reshard is run and, `-80` is split into new shards `-40`, and `40-80`, the VTOrc instance will automatically start watching the new shard without needing a restart.
 The users can still continue to specify exact key ranges too, and the new feature is backward compatible.
+
+### <a id="query-logs"/>Support for Filtering Query logs on Error</a>
+
+The `querylog-mode` setting can be configured to `error` to log only queries that result in errors. This option is supported in both VTGate and VTTablet.
 
 ## <a id="minor-changes"/>Minor Changes</a>
 

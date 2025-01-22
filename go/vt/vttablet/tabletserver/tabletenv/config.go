@@ -278,11 +278,12 @@ func Init() {
 	currentConfig.Healthcheck.UnhealthyThreshold = unhealthyThreshold
 	currentConfig.GracePeriods.Transition = transitionGracePeriod
 
-	switch streamlog.GetQueryLogFormat() {
+	logFormat := streamlog.GetQueryLogConfig().Format
+	switch logFormat {
 	case streamlog.QueryLogFormatText:
 	case streamlog.QueryLogFormatJSON:
 	default:
-		log.Exitf("Invalid querylog-format value %v: must be either text or json", streamlog.GetQueryLogFormat())
+		log.Exitf("Invalid querylog-format value %v: must be either text or json", logFormat)
 	}
 
 	if queryLogHandler != "" {
