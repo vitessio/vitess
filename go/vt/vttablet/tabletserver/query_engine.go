@@ -196,6 +196,8 @@ type QueryEngine struct {
 
 	// Loggers
 	accessCheckerLogger *logutil.ThrottledLogger
+
+	redactUIQuery bool
 }
 
 // NewQueryEngine creates a new QueryEngine.
@@ -209,6 +211,7 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 		se:                            se,
 		queryRuleSources:              rules.NewMap(),
 		enablePerWorkloadTableMetrics: config.EnablePerWorkloadTableMetrics,
+		redactUIQuery:                 streamlog.NewQueryLogConfigForTest().RedactDebugUIQueries,
 	}
 
 	// Cache for query plans: user configured size with a doorkeeper by default to prevent one-off queries
@@ -737,7 +740,7 @@ func (qe *QueryEngine) handleHTTPConsolidations(response http.ResponseWriter, re
 	response.Write([]byte(fmt.Sprintf("Length: %d\n", len(items))))
 	for _, v := range items {
 		var query string
-		if streamlog.GetRedactDebugUIQueries() {
+		if qe.redactUIQuery {
 			query, _ = qe.env.Environment().Parser().RedactSQLQuery(v.Query)
 		} else {
 			query = v.Query

@@ -15,6 +15,7 @@
   - **[Stalled Disk Recovery in VTOrc](#stall-disk-recovery)**
   - **[Update default MySQL version to 8.0.40](#mysql-8-0-40)**
   - **[Update lite images to Debian Bookworm](#debian-bookworm)**
+  - **[Support for Filtering Query logs on Error](#query-logs)**
 - **[Minor Changes](#minor-changes)**
   - **[VTTablet Flags](#flags-vttablet)**
   - **[Topology read concurrency behaviour changes](#topo-read-concurrency-changes)**
@@ -25,7 +26,7 @@
 
 These are the RPC changes made in this release - 
 
-1. `GetTransactionInfo` RPC has been added to both `VtctldServer`, and `TabletManagerClient` interface. These RPCs are used to fecilitate the users in reading the state of an unresolved distributed transaction. This can be useful in debugging what went wrong and how to fix the problem.
+1. `GetTransactionInfo` RPC has been added to both `VtctldServer`, and `TabletManagerClient` interface. These RPCs are used to facilitate the users in reading the state of an unresolved distributed transaction. This can be useful in debugging what went wrong and how to fix the problem.
 
 ### <a id="deprecations-and-deletions"/>Deprecations and Deletions</a>
 
@@ -131,6 +132,10 @@ This is the last time this will be needed in the `8.0.x` series, as starting wit
 ### <a id="debian-bookworm"/>Update lite images to Debian Bookworm</a>
 
 The base system now uses Debian Bookworm instead of Debian Bullseye for the `vitess/lite` images. This change was brought by [Pull Request #17552].
+
+### <a id="query-logs"/>Support for Filtering Query logs on Error</a>
+
+The `querylog-mode` setting can be configured to `error` to log only queries that result in errors. This option is supported in both VTGate and VTTablet.
 
 ## <a id="minor-changes"/>Minor Changes</a>
 

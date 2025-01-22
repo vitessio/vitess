@@ -27,6 +27,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/streamlog"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -367,7 +369,7 @@ func TestSetExecQueryTimeout(t *testing.T) {
 
 func TestRecordMirrorStats(t *testing.T) {
 	safeSession := NewSafeSession(nil)
-	logStats := logstats.NewLogStats(context.Background(), t.Name(), "select 1", "", nil)
+	logStats := logstats.NewLogStats(context.Background(), t.Name(), "select 1", "", nil, streamlog.NewQueryLogConfigForTest())
 	vc, err := NewVCursorImpl(safeSession, sqlparser.MarginComments{}, nil, logStats, nil, &vindexes.VSchema{}, nil, nil, fakeObserver{}, VCursorConfig{})
 	require.NoError(t, err)
 
