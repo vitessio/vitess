@@ -783,6 +783,7 @@ message UpdateVReplicationWorkflowRequest {
   optional binlogdata.VReplicationWorkflowState state = 6;
   reserved 7; // unused, was: repeated string shards
   map<string, string> config_overrides = 8;
+  optional string message = 9;
 }
 
 message UpdateVReplicationWorkflowResponse {
