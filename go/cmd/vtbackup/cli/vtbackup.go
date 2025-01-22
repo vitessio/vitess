@@ -19,6 +19,7 @@ package cli
 import (
 	"context"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -65,6 +66,8 @@ const (
 	phaseNameTakeNewBackup               = "TakeNewBackup"
 	phaseStatusCatchupReplicationStalled = "Stalled"
 	phaseStatusCatchupReplicationStopped = "Stopped"
+
+	timeoutWaitingForReplicationStatus = 60 * time.Second
 )
 
 var (
@@ -335,6 +338,18 @@ func takeBackup(ctx, backgroundCtx context.Context, topoServer *topo.Server, bac
 	if err != nil {
 		return fmt.Errorf("failed to initialize mysql config: %v", err)
 	}
+	ctx, cancelCtx := context.WithCancel(ctx)
+	backgroundCtx, cancelBackgroundCtx := context.WithCancel(backgroundCtx)
+	defer func() {
+		cancelCtx()
+		cancelBackgroundCtx()
+	}()
+	mysqld.OnTerm(func() {
+		log.Warning("Cancelling vtbackup as MySQL has terminated")
+		cancelCtx()
+		cancelBackgroundCtx()
+	})
+
 	initCtx, initCancel := context.WithTimeout(ctx, mysqlTimeout)
 	defer initCancel()
 	initMysqldAt := time.Now()
@@ -520,7 +535,13 @@ func takeBackup(ctx, backgroundCtx context.Context, topoServer *topo.Server, bac
 
 		waitStartTime = time.Now()
 	)
+
+	lastErr := vterrors.NewLastError("replication catch up", timeoutWaitingForReplicationStatus)
 	for {
+		if !lastErr.ShouldRetry() {
+			return fmt.Errorf("timeout waiting for replication status after %.0f seconds", timeoutWaitingForReplicationStatus.Seconds())
+		}
+
 		select {
 		case <-ctx.Done():
 			return fmt.Errorf("error in replication catch up: %v", ctx.Err())
@@ -530,6 +551,7 @@ func takeBackup(ctx, backgroundCtx context.Context, topoServer *topo.Server, bac
 		lastStatus = status
 		status, statusErr = mysqld.ReplicationStatus(ctx)
 		if statusErr != nil {
+			lastErr.Record(statusErr)
 			log.Warningf("Error getting replication status: %v", statusErr)
 			continue
 		}
@@ -548,7 +570,10 @@ func takeBackup(ctx, backgroundCtx context.Context, topoServer *topo.Server, bac
 			}
 		}
 		if !status.Healthy() {
-			log.Warning("Replication has stopped before backup could be taken. Trying to restart replication.")
+			errStr := "Replication has stopped before backup could be taken. Trying to restart replication."
+			log.Warning(errStr)
+			lastErr.Record(errors.New(strings.ToLower(errStr)))
+
 			phaseStatus.Set([]string{phaseNameCatchupReplication, phaseStatusCatchupReplicationStopped}, 1)
 			if err := startReplication(ctx, mysqld, topoServer); err != nil {
 				log.Warningf("Failed to restart replication: %v", err)
