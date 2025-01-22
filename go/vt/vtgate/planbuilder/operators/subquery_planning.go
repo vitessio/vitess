@@ -211,7 +211,7 @@ We transform it to:
         └─────┘                                                 └─────┘
 We are rewriting all expressions in the subquery to use arguments any columns
 coming from the LHS. The join predicate is not affected, but we are adding
-any new columns needed by the inner subquery to the JoinVars that the join
+any new columns needed by the inner subquery to the JoinVars that the join1
 will handle.
 */
 func tryPushSubQueryInJoin(
@@ -228,11 +228,11 @@ func tryPushSubQueryInJoin(
 	// we want to push the subquery as close to its needs
 	// as possible, so that we can potentially merge them together
 	// TODO: we need to check dependencies and break apart all expressions in the subquery, not just the merge predicates
-	deps := semantics.EmptyTableSet()
+	var tables semantics.MutableTableSet
 	for _, predicate := range inner.GetMergePredicates() {
-		deps = deps.Merge(ctx.SemTable.RecursiveDeps(predicate))
+		tables.MergeInPlace(ctx.SemTable.RecursiveDeps(predicate))
 	}
-	deps = deps.Remove(innerID)
+	deps := tables.ToImmutable().Remove(innerID)
 
 	// in general, we don't want to push down uncorrelated subqueries into the RHS of a join,
 	// since this side is executed once per row from the LHS, so we would unnecessarily execute

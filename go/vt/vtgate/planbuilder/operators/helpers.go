@@ -71,14 +71,15 @@ type tableIDIntroducer interface {
 	introducesTableID() semantics.TableSet
 }
 
-func TableID(op Operator) (result semantics.TableSet) {
+func TableID(op Operator) semantics.TableSet {
+	var tables semantics.MutableTableSet
 	_ = Visit(op, func(this Operator) error {
 		if tbl, ok := this.(tableIDIntroducer); ok {
-			result = result.Merge(tbl.introducesTableID())
+			tables.MergeInPlace(tbl.introducesTableID())
 		}
 		return nil
 	})
-	return
+	return tables.ToImmutable()
 }
 
 // TableUser is used to signal that this operator directly interacts with one or more tables
