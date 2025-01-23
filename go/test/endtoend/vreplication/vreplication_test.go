@@ -842,7 +842,8 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			numTestRows := 100
 			addTestRows := func() {
 				for i := 0; i < numTestRows; i++ {
-					execQuery(t, productConn, fmt.Sprintf("insert into customer (cid, name) values (%d, 'laggingCustomer')", startingTestRowID+i))
+					execQuery(t, productConn, fmt.Sprintf("insert into customer (cid, name) values (%d, 'laggingCustomer')",
+						startingTestRowID+i))
 				}
 			}
 			deleteTestRows := func() {
@@ -885,9 +886,9 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 				waitForNoWorkflowLag(t, vc, targetKs, workflow)
 			}
 
-			// First let's test that the pre-checks work as expected.
-			// We ALTER the table on the customer (target) shard to
-			// add a unique index on the name field.
+			// First let's test that the pre-checks work as expected. We ALTER
+			// the table on the customer (target) shard to add a unique index on
+			// the name field.
 			addIndex()
 			// Then we insert some test rows across both shards in the product
 			// (source) keyspace.
@@ -907,11 +908,12 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			waitForTargetToCatchup()
 
 			// Now let's test that the cancel works by setting the command timeout
-			// to half the duration. Lock the customer table on the target tablets
-			// so that we cannot apply the INSERTs and catch up.
+			// to a fraction (6s) of the default max repl lag duration (30s). First
+			// we lock the customer table on the target tablets so that we cannot
+			// apply the INSERTs and catch up.
 			lockTargetTable()
 			addTestRows()
-			timeout := lagDuration * 2
+			timeout := lagDuration * 2 // 6s
 			// Use the default max-replication-lag-allowed value of 30s.
 			out, err = vc.VtctldClient.ExecuteCommandWithOutput(workflowType, "--workflow", workflow, "--target-keyspace", targetKs,
 				"SwitchTraffic", "--tablet-types=primary", "--timeout", timeout.String())
