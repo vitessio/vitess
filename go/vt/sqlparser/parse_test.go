@@ -3777,9 +3777,18 @@ var (
 		}, {
 			input:  "CREATE TABLE `dual` (id int)",
 			output: "create table `dual` (\n\tid int\n)",
-		}, {
+		},
+		{
 			input:  "DROP TABLE `dual`",
 			output: "drop table `dual`",
+		},
+		{
+			input:  "DROP TEMPORARY TABLE `dual`",
+			output: "drop temporary table `dual`",
+		},
+		{
+			input:  "DROP TEMPORARY TABLE IF EXISTS `dual`",
+			output: "drop temporary table if exists `dual`",
 		},
 		{
 			input:  "CREATE TABLE `t4` (`pk` int NOT NULL, `_tinytext` tinytext, `_text` text, `_longtext` longtext, `_mediumtext` mediumtext, PRIMARY KEY (`pk`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3;",

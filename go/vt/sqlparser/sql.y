@@ -3190,16 +3190,16 @@ statement_list_statement:
 create_table_prefix:
   CREATE temp_opt TABLE not_exists_opt table_name
   {
+    var temp bool
+    authType := AuthType_CREATE
+    if $2.(int) != 0 {
+      temp = true
+      authType = AuthType_CREATE_TEMP
+    }
+
     var ne bool
     if $4.(int) != 0 {
       ne = true
-    }
-
-    authType := AuthType_CREATE
-    var neTemp bool
-    if $2.(int) != 0 {
-      neTemp = true
-      authType = AuthType_CREATE_TEMP
     }
 
     tableName := $5.(TableName)
@@ -3207,7 +3207,7 @@ create_table_prefix:
       Action: CreateStr,
       Table: tableName,
       IfNotExists: ne,
-      Temporary: neTemp,
+      Temporary: temp,
       Auth: AuthInformation{
         AuthType: authType,
         TargetType: AuthTargetType_DatabaseIdentifiers,
@@ -3217,16 +3217,16 @@ create_table_prefix:
   }
 | CREATE temp_opt TABLE not_exists_opt FORMAT
   {
+    authType := AuthType_CREATE
+    var temp bool
+    if $2.(int) != 0 {
+      temp = true
+      authType = AuthType_CREATE_TEMP
+    }
+
     var ne bool
     if $4.(int) != 0 {
       ne = true
-    }
-
-    authType := AuthType_CREATE
-    var neTemp bool
-    if $2.(int) != 0 {
-      neTemp = true
-      authType = AuthType_CREATE_TEMP
     }
 
     $$ = &DDL{
@@ -3235,7 +3235,7 @@ create_table_prefix:
         Name: NewTableIdent(string($5)),
       },
       IfNotExists: ne,
-      Temporary: neTemp,
+      Temporary: temp,
       Auth: AuthInformation{
         AuthType: authType,
         TargetType: AuthTargetType_DatabaseIdentifiers,
@@ -6532,17 +6532,24 @@ rename_user_list:
   }
 
 drop_statement:
-  DROP TABLE exists_opt table_name_list drop_statement_action
+  DROP temp_opt TABLE exists_opt table_name_list drop_statement_action
   {
+    var temp bool
+    if $2.(int) != 0 {
+      temp = true
+    }
+
     var exists bool
-    if $3.(int) != 0 {
+    if $4.(int) != 0 {
       exists = true
     }
-    tableNames := $4.(TableNames)
+
+    tableNames := $5.(TableNames)
     $$ = &DDL{
       Action: DropStr,
       FromTables: tableNames,
       IfExists: exists,
+      Temporary: temp,
       Auth: AuthInformation{
         AuthType: AuthType_DROP,
         TargetType: AuthTargetType_MultipleTableIdentifiers,

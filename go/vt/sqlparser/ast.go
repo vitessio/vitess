@@ -2465,7 +2465,11 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 			}
 			buf.Myprintf(fmt.Sprintf("%s event%s %v", node.Action, exists, node.EventSpec.EventName))
 		} else {
-			buf.Myprintf("%s table%s %v", node.Action, exists, node.FromTables)
+			temporary := ""
+			if node.Temporary {
+				temporary = " " + TemporaryStr
+			}
+			buf.Myprintf("%s%s table%s %v", node.Action, temporary, exists, node.FromTables)
 		}
 	case RenameStr:
 		buf.Myprintf("%s table %v to %v", node.Action, node.FromTables[0], node.ToTables[0])
