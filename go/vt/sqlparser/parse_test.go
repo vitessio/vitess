@@ -1046,6 +1046,8 @@ var (
 	}, {
 		input: "select /* utc_timestamp with fsp */ utc_timestamp(1) from t",
 	}, {
+		input: "select /* utc_timestamp with fsp */ utc_timestamp(:val1) from t",
+	}, {
 		input: "select /* utc_time */ utc_time() from t",
 	}, {
 		input: "select /* utc_time as func */ utc_time() from t",
