@@ -71,6 +71,10 @@ func (nz *normalizer) walkStatementUp(cursor *Cursor) bool {
 	case *Select:
 		nz.inSelect--
 	case *Literal:
+		if nz.inSelect == 0 {
+			nz.convertLiteral(node, cursor)
+			return nz.err == nil
+		}
 		parent := cursor.Parent()
 		switch parent.(type) {
 		case *Order, *GroupBy:
@@ -78,11 +82,7 @@ func (nz *normalizer) walkStatementUp(cursor *Cursor) bool {
 		case *Limit:
 			nz.convertLiteral(node, cursor)
 		default:
-			if nz.inSelect == 0 {
-				nz.convertLiteral(node, cursor)
-			} else {
-				nz.convertLiteralDedup(node, cursor)
-			}
+			nz.convertLiteralDedup(node, cursor)
 		}
 	}
 	return nz.err == nil // only continue if we haven't found any errors
