@@ -828,7 +828,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		testSwitchTrafficPermissionChecks(t, workflowType, sourceKs, shardNames, targetKs, workflow)
 
 		// Confirm that switching writes works as expected in the face of
-		// vreplication lag (canSwitch() precheck) and when cancelling the
+		// vreplication lag (canSwitch() precheck) and when canceling the
 		// switch due to replication failing to catch up in time.
 		t.Run("validate switch writes error handling", func(t *testing.T) {
 			productConn, err := productTab.TabletConn("product", true)
@@ -875,23 +875,20 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 				deleteTestRows()
 			}
 			restartWorkflow := func() {
-				// We have to restart the workflow again as the duplicate key error
-				// is a permanent/terminal one.
 				err = vc.VtctldClient.ExecuteCommand("workflow", "--keyspace", targetKs, "start", "--workflow", workflow)
 				require.NoError(t, err, "failed to start workflow: %v", err)
 			}
 			waitForTargetToCatchup := func() {
-				restartWorkflow()
 				waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
 				waitForNoWorkflowLag(t, vc, targetKs, workflow)
 			}
 
 			// First let's test that the pre-checks work as expected. We ALTER
-			// the table on the customer (target) shard to add a unique index on
+			// the table on the customer (target) shards to add a unique index on
 			// the name field.
 			addIndex()
-			// Then we insert some test rows across both shards in the product
-			// (source) keyspace.
+			// Then we replicate some test rows across both customer shards by
+			// inserting them in the product (source) keyspace.
 			addTestRows()
 			// Now the workflow should go into the error state and the lag should
 			// start to climb. So we sleep for twice the max lag duration that we
@@ -908,6 +905,9 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			// Confirm that queries still work fine.
 			execVtgateQuery(t, vtgateConn, sourceKs, "select * from customer limit 1")
 			cleanupTestData()
+			// We have to restart the workflow again as the duplicate key error
+			// is a permanent/terminal one.
+			restartWorkflow()
 			waitForTargetToCatchup()
 
 			// Now let's test that the cancel works by setting the command timeout
@@ -920,7 +920,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			// Use the default max-replication-lag-allowed value of 30s.
 			// We run the command in a goroutine so that we can unblock things
 			// after the timeout is reached -- as the vplayer query is blocking
-			// on the table lock.
+			// on the table lock in the MySQL layer.
 			wg := sync.WaitGroup{}
 			wg.Add(1)
 			go func() {

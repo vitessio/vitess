@@ -672,7 +672,7 @@ func getVReplicationTrxLag(trxTs, updatedTs, heartbeatTs *vttimepb.Time, state b
 		return math.MaxInt64
 	}
 	// We do NOT update the heartbeat timestamp when we are regularly updating the
-	// position as we replication transactions (GTIDs).
+	// position as we replicate transactions (GTIDs).
 	// When we DO record a heartbeat, we set the updated time to the same value.
 	// When recording that we are throttled, we update the updated time but NOT
 	// the heartbeat time.

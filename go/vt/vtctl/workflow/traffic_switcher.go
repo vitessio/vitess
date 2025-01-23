@@ -1074,11 +1074,12 @@ func (ts *trafficSwitcher) stopSourceWrites(ctx context.Context) error {
 }
 
 // switchDeniedTables switches the denied tables rules for the traffic switch.
-// They are removed on the source side and added on the target side.
-// If backward is true, then we swap this logic, removing on the target side
-// and adding on the source side. You would want to do that e.g. when canceling
-// a failed (and currently partial) traffic switch as the source and target
-// have already been switched in the trafficSwitcher.
+// They are added on the source side and removed on the target side.
+// If backward is true, then we swap this logic, removing on the source side
+// and adding on the target side. You would want to do that e.g. when canceling
+// a failed (and currently partial) traffic switch as we may have already
+// switched the denied tables entries and in any event we need to go back to
+// the original state.
 func (ts *trafficSwitcher) switchDeniedTables(ctx context.Context, backward bool) error {
 	if ts.MigrationType() != binlogdatapb.MigrationType_TABLES {
 		return nil

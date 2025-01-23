@@ -210,7 +210,7 @@ func (sm *StreamMigrator) CancelStreamMigrations(ctx context.Context) error {
 	errs := &concurrency.AllErrorRecorder{}
 
 	if err := sm.deleteTargetStreams(ctx); err != nil {
-		errs.RecordError(err)
+		errs.RecordError(fmt.Errorf("could not delete target streams: %v", err))
 	}
 
 	// Restart the source streams, but leave the Reshard workflow's reverse
@@ -224,7 +224,7 @@ func (sm *StreamMigrator) CancelStreamMigrations(ctx context.Context) error {
 		return err
 	})
 	if err != nil {
-		errs.RecordError(err)
+		errs.RecordError(fmt.Errorf("could not restart source streams: %v", err))
 		sm.logger.Errorf("Cancel stream migrations failed: could not restart source streams: %v", err)
 	}
 	if errs.HasErrors() {
