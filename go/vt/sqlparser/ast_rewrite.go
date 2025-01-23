@@ -573,11 +573,14 @@ func (a *application) rewriteRefOfAddColumns(parent SQLNode, node *AddColumns, r
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -595,6 +598,9 @@ func (a *application) rewriteRefOfAddColumns(parent SQLNode, node *AddColumns, r
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -609,11 +615,14 @@ func (a *application) rewriteRefOfAddConstraintDefinition(parent SQLNode, node *
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -621,6 +630,9 @@ func (a *application) rewriteRefOfAddConstraintDefinition(parent SQLNode, node *
 		parent.(*AddConstraintDefinition).ConstraintDefinition = newNode.(*ConstraintDefinition)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -636,11 +648,14 @@ func (a *application) rewriteRefOfAddIndexDefinition(parent SQLNode, node *AddIn
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -648,6 +663,9 @@ func (a *application) rewriteRefOfAddIndexDefinition(parent SQLNode, node *AddIn
 		parent.(*AddIndexDefinition).IndexDefinition = newNode.(*IndexDefinition)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -663,11 +681,14 @@ func (a *application) rewriteRefOfAliasedExpr(parent SQLNode, node *AliasedExpr,
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -680,6 +701,9 @@ func (a *application) rewriteRefOfAliasedExpr(parent SQLNode, node *AliasedExpr,
 		parent.(*AliasedExpr).As = newNode.(IdentifierCI)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -695,11 +719,14 @@ func (a *application) rewriteRefOfAliasedTableExpr(parent SQLNode, node *Aliased
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -728,6 +755,9 @@ func (a *application) rewriteRefOfAliasedTableExpr(parent SQLNode, node *Aliased
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -742,13 +772,19 @@ func (a *application) rewriteRefOfAlterCharset(parent SQLNode, node *AlterCharse
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		if a.pre == nil {
@@ -766,11 +802,14 @@ func (a *application) rewriteRefOfAlterCheck(parent SQLNode, node *AlterCheck, r
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -778,6 +817,9 @@ func (a *application) rewriteRefOfAlterCheck(parent SQLNode, node *AlterCheck, r
 		parent.(*AlterCheck).Name = newNode.(IdentifierCI)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -793,11 +835,14 @@ func (a *application) rewriteRefOfAlterColumn(parent SQLNode, node *AlterColumn,
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -810,6 +855,9 @@ func (a *application) rewriteRefOfAlterColumn(parent SQLNode, node *AlterColumn,
 		parent.(*AlterColumn).DefaultVal = newNode.(Expr)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -825,11 +873,14 @@ func (a *application) rewriteRefOfAlterDatabase(parent SQLNode, node *AlterDatab
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -842,6 +893,9 @@ func (a *application) rewriteRefOfAlterDatabase(parent SQLNode, node *AlterDatab
 		parent.(*AlterDatabase).DBName = newNode.(IdentifierCS)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -857,11 +911,14 @@ func (a *application) rewriteRefOfAlterIndex(parent SQLNode, node *AlterIndex, r
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -869,6 +926,9 @@ func (a *application) rewriteRefOfAlterIndex(parent SQLNode, node *AlterIndex, r
 		parent.(*AlterIndex).Name = newNode.(IdentifierCI)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -884,11 +944,14 @@ func (a *application) rewriteRefOfAlterMigration(parent SQLNode, node *AlterMigr
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -896,6 +959,9 @@ func (a *application) rewriteRefOfAlterMigration(parent SQLNode, node *AlterMigr
 		parent.(*AlterMigration).Ratio = newNode.(*Literal)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -911,11 +977,14 @@ func (a *application) rewriteRefOfAlterTable(parent SQLNode, node *AlterTable, r
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -948,6 +1017,9 @@ func (a *application) rewriteRefOfAlterTable(parent SQLNode, node *AlterTable, r
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -962,11 +1034,14 @@ func (a *application) rewriteRefOfAlterView(parent SQLNode, node *AlterView, rep
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -995,6 +1070,9 @@ func (a *application) rewriteRefOfAlterView(parent SQLNode, node *AlterView, rep
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -1009,11 +1087,14 @@ func (a *application) rewriteRefOfAlterVschema(parent SQLNode, node *AlterVschem
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -1041,6 +1122,9 @@ func (a *application) rewriteRefOfAlterVschema(parent SQLNode, node *AlterVschem
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -1055,11 +1139,14 @@ func (a *application) rewriteRefOfAnalyze(parent SQLNode, node *Analyze, replace
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -1067,6 +1154,9 @@ func (a *application) rewriteRefOfAnalyze(parent SQLNode, node *Analyze, replace
 		parent.(*Analyze).Table = newNode.(TableName)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -1082,11 +1172,13 @@ func (a *application) rewriteRefOfAndExpr(parent SQLNode, node *AndExpr, replace
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -1105,6 +1197,9 @@ func (a *application) rewriteRefOfAndExpr(parent SQLNode, node *AndExpr, replace
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -1119,11 +1214,13 @@ func (a *application) rewriteRefOfAnyValue(parent SQLNode, node *AnyValue, repla
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -1136,6 +1233,9 @@ func (a *application) rewriteRefOfAnyValue(parent SQLNode, node *AnyValue, repla
 		parent.(*AnyValue).Arg = newNode.(Expr)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -1151,11 +1251,13 @@ func (a *application) rewriteRefOfArgument(parent SQLNode, node *Argument, repla
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -1163,6 +1265,9 @@ func (a *application) rewriteRefOfArgument(parent SQLNode, node *Argument, repla
 		if kontinue {
 			return true
 		}
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		if a.pre == nil {
@@ -1180,11 +1285,13 @@ func (a *application) rewriteRefOfArgumentLessWindowExpr(parent SQLNode, node *A
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -1197,6 +1304,9 @@ func (a *application) rewriteRefOfArgumentLessWindowExpr(parent SQLNode, node *A
 		parent.(*ArgumentLessWindowExpr).OverClause = newNode.(*OverClause)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -1212,11 +1322,13 @@ func (a *application) rewriteRefOfAssignmentExpr(parent SQLNode, node *Assignmen
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -1235,6 +1347,9 @@ func (a *application) rewriteRefOfAssignmentExpr(parent SQLNode, node *Assignmen
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -1249,11 +1364,14 @@ func (a *application) rewriteRefOfAutoIncSpec(parent SQLNode, node *AutoIncSpec,
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -1266,6 +1384,9 @@ func (a *application) rewriteRefOfAutoIncSpec(parent SQLNode, node *AutoIncSpec,
 		parent.(*AutoIncSpec).Sequence = newNode.(TableName)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -1281,11 +1402,13 @@ func (a *application) rewriteRefOfAvg(parent SQLNode, node *Avg, replacer replac
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -1304,6 +1427,9 @@ func (a *application) rewriteRefOfAvg(parent SQLNode, node *Avg, replacer replac
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -1318,13 +1444,19 @@ func (a *application) rewriteRefOfBegin(parent SQLNode, node *Begin, replacer re
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		if a.pre == nil {
@@ -1342,11 +1474,13 @@ func (a *application) rewriteRefOfBetweenExpr(parent SQLNode, node *BetweenExpr,
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -1370,6 +1504,9 @@ func (a *application) rewriteRefOfBetweenExpr(parent SQLNode, node *BetweenExpr,
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -1384,11 +1521,13 @@ func (a *application) rewriteRefOfBinaryExpr(parent SQLNode, node *BinaryExpr, r
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -1407,6 +1546,9 @@ func (a *application) rewriteRefOfBinaryExpr(parent SQLNode, node *BinaryExpr, r
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -1421,11 +1563,13 @@ func (a *application) rewriteRefOfBitAnd(parent SQLNode, node *BitAnd, replacer 
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -1444,6 +1588,9 @@ func (a *application) rewriteRefOfBitAnd(parent SQLNode, node *BitAnd, replacer 
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -1458,11 +1605,13 @@ func (a *application) rewriteRefOfBitOr(parent SQLNode, node *BitOr, replacer re
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -1481,6 +1630,9 @@ func (a *application) rewriteRefOfBitOr(parent SQLNode, node *BitOr, replacer re
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -1495,11 +1647,13 @@ func (a *application) rewriteRefOfBitXor(parent SQLNode, node *BitXor, replacer 
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -1518,6 +1672,9 @@ func (a *application) rewriteRefOfBitXor(parent SQLNode, node *BitXor, replacer 
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -1532,11 +1689,14 @@ func (a *application) rewriteRefOfCallProc(parent SQLNode, node *CallProc, repla
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -1549,6 +1709,9 @@ func (a *application) rewriteRefOfCallProc(parent SQLNode, node *CallProc, repla
 		parent.(*CallProc).Params = newNode.(Exprs)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -1564,11 +1727,13 @@ func (a *application) rewriteRefOfCaseExpr(parent SQLNode, node *CaseExpr, repla
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -1596,6 +1761,9 @@ func (a *application) rewriteRefOfCaseExpr(parent SQLNode, node *CaseExpr, repla
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -1610,11 +1778,13 @@ func (a *application) rewriteRefOfCastExpr(parent SQLNode, node *CastExpr, repla
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -1633,6 +1803,9 @@ func (a *application) rewriteRefOfCastExpr(parent SQLNode, node *CastExpr, repla
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -1647,11 +1820,14 @@ func (a *application) rewriteRefOfChangeColumn(parent SQLNode, node *ChangeColum
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -1670,6 +1846,9 @@ func (a *application) rewriteRefOfChangeColumn(parent SQLNode, node *ChangeColum
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -1684,11 +1863,13 @@ func (a *application) rewriteRefOfCharExpr(parent SQLNode, node *CharExpr, repla
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -1701,6 +1882,9 @@ func (a *application) rewriteRefOfCharExpr(parent SQLNode, node *CharExpr, repla
 		parent.(*CharExpr).Exprs = newNode.(Exprs)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -1716,11 +1900,14 @@ func (a *application) rewriteRefOfCheckConstraintDefinition(parent SQLNode, node
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -1728,6 +1915,9 @@ func (a *application) rewriteRefOfCheckConstraintDefinition(parent SQLNode, node
 		parent.(*CheckConstraintDefinition).Expr = newNode.(Expr)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -1743,11 +1933,13 @@ func (a *application) rewriteRefOfColName(parent SQLNode, node *ColName, replace
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -1766,6 +1958,9 @@ func (a *application) rewriteRefOfColName(parent SQLNode, node *ColName, replace
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -1780,11 +1975,13 @@ func (a *application) rewriteRefOfCollateExpr(parent SQLNode, node *CollateExpr,
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -1797,6 +1994,9 @@ func (a *application) rewriteRefOfCollateExpr(parent SQLNode, node *CollateExpr,
 		parent.(*CollateExpr).Expr = newNode.(Expr)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -1812,11 +2012,14 @@ func (a *application) rewriteRefOfColumnDefinition(parent SQLNode, node *ColumnD
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -1829,6 +2032,9 @@ func (a *application) rewriteRefOfColumnDefinition(parent SQLNode, node *ColumnD
 		parent.(*ColumnDefinition).Type = newNode.(*ColumnType)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -1844,13 +2050,19 @@ func (a *application) rewriteRefOfColumnType(parent SQLNode, node *ColumnType, r
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		if a.pre == nil {
@@ -1868,11 +2080,13 @@ func (a *application) rewriteColumns(parent SQLNode, node Columns, replacer repl
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			node = a.cur.node.(Columns)
 			a.cur.revisit = false
@@ -1891,6 +2105,9 @@ func (a *application) rewriteColumns(parent SQLNode, node Columns, replacer repl
 			return false
 		}
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -1905,13 +2122,19 @@ func (a *application) rewriteRefOfCommentOnly(parent SQLNode, node *CommentOnly,
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		if a.pre == nil {
@@ -1929,13 +2152,19 @@ func (a *application) rewriteRefOfCommit(parent SQLNode, node *Commit, replacer 
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		if a.pre == nil {
@@ -1953,11 +2182,14 @@ func (a *application) rewriteRefOfCommonTableExpr(parent SQLNode, node *CommonTa
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -1976,6 +2208,9 @@ func (a *application) rewriteRefOfCommonTableExpr(parent SQLNode, node *CommonTa
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -1990,11 +2225,13 @@ func (a *application) rewriteRefOfComparisonExpr(parent SQLNode, node *Compariso
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -2018,6 +2255,9 @@ func (a *application) rewriteRefOfComparisonExpr(parent SQLNode, node *Compariso
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -2032,11 +2272,14 @@ func (a *application) rewriteRefOfConstraintDefinition(parent SQLNode, node *Con
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -2049,6 +2292,9 @@ func (a *application) rewriteRefOfConstraintDefinition(parent SQLNode, node *Con
 		parent.(*ConstraintDefinition).Details = newNode.(ConstraintInfo)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -2064,11 +2310,13 @@ func (a *application) rewriteRefOfConvertExpr(parent SQLNode, node *ConvertExpr,
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -2087,6 +2335,9 @@ func (a *application) rewriteRefOfConvertExpr(parent SQLNode, node *ConvertExpr,
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -2101,13 +2352,19 @@ func (a *application) rewriteRefOfConvertType(parent SQLNode, node *ConvertType,
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		if a.pre == nil {
@@ -2125,11 +2382,13 @@ func (a *application) rewriteRefOfConvertUsingExpr(parent SQLNode, node *Convert
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -2142,6 +2401,9 @@ func (a *application) rewriteRefOfConvertUsingExpr(parent SQLNode, node *Convert
 		parent.(*ConvertUsingExpr).Expr = newNode.(Expr)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -2157,11 +2419,13 @@ func (a *application) rewriteRefOfCount(parent SQLNode, node *Count, replacer re
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -2180,6 +2444,9 @@ func (a *application) rewriteRefOfCount(parent SQLNode, node *Count, replacer re
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -2194,11 +2461,13 @@ func (a *application) rewriteRefOfCountStar(parent SQLNode, node *CountStar, rep
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -2211,6 +2480,9 @@ func (a *application) rewriteRefOfCountStar(parent SQLNode, node *CountStar, rep
 		parent.(*CountStar).OverClause = newNode.(*OverClause)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -2226,11 +2498,14 @@ func (a *application) rewriteRefOfCreateDatabase(parent SQLNode, node *CreateDat
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -2243,6 +2518,9 @@ func (a *application) rewriteRefOfCreateDatabase(parent SQLNode, node *CreateDat
 		parent.(*CreateDatabase).DBName = newNode.(IdentifierCS)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -2258,11 +2536,14 @@ func (a *application) rewriteRefOfCreateTable(parent SQLNode, node *CreateTable,
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -2286,6 +2567,9 @@ func (a *application) rewriteRefOfCreateTable(parent SQLNode, node *CreateTable,
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -2300,11 +2584,14 @@ func (a *application) rewriteRefOfCreateView(parent SQLNode, node *CreateView, r
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -2333,6 +2620,9 @@ func (a *application) rewriteRefOfCreateView(parent SQLNode, node *CreateView, r
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -2347,11 +2637,13 @@ func (a *application) rewriteRefOfCurTimeFuncExpr(parent SQLNode, node *CurTimeF
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -2364,6 +2656,9 @@ func (a *application) rewriteRefOfCurTimeFuncExpr(parent SQLNode, node *CurTimeF
 		parent.(*CurTimeFuncExpr).Name = newNode.(IdentifierCI)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -2379,11 +2674,14 @@ func (a *application) rewriteRefOfDeallocateStmt(parent SQLNode, node *Deallocat
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -2396,6 +2694,9 @@ func (a *application) rewriteRefOfDeallocateStmt(parent SQLNode, node *Deallocat
 		parent.(*DeallocateStmt).Name = newNode.(IdentifierCI)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -2411,11 +2712,13 @@ func (a *application) rewriteRefOfDefault(parent SQLNode, node *Default, replace
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -2423,6 +2726,9 @@ func (a *application) rewriteRefOfDefault(parent SQLNode, node *Default, replace
 		if kontinue {
 			return true
 		}
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		if a.pre == nil {
@@ -2440,13 +2746,19 @@ func (a *application) rewriteRefOfDefiner(parent SQLNode, node *Definer, replace
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		if a.pre == nil {
@@ -2464,11 +2776,14 @@ func (a *application) rewriteRefOfDelete(parent SQLNode, node *Delete, replacer 
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -2516,6 +2831,9 @@ func (a *application) rewriteRefOfDelete(parent SQLNode, node *Delete, replacer 
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -2530,11 +2848,14 @@ func (a *application) rewriteRefOfDerivedTable(parent SQLNode, node *DerivedTabl
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -2542,6 +2863,9 @@ func (a *application) rewriteRefOfDerivedTable(parent SQLNode, node *DerivedTabl
 		parent.(*DerivedTable).Select = newNode.(TableStatement)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -2557,11 +2881,14 @@ func (a *application) rewriteRefOfDropColumn(parent SQLNode, node *DropColumn, r
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -2569,6 +2896,9 @@ func (a *application) rewriteRefOfDropColumn(parent SQLNode, node *DropColumn, r
 		parent.(*DropColumn).Name = newNode.(*ColName)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -2584,11 +2914,14 @@ func (a *application) rewriteRefOfDropDatabase(parent SQLNode, node *DropDatabas
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -2601,6 +2934,9 @@ func (a *application) rewriteRefOfDropDatabase(parent SQLNode, node *DropDatabas
 		parent.(*DropDatabase).DBName = newNode.(IdentifierCS)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -2616,11 +2952,14 @@ func (a *application) rewriteRefOfDropKey(parent SQLNode, node *DropKey, replace
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -2628,6 +2967,9 @@ func (a *application) rewriteRefOfDropKey(parent SQLNode, node *DropKey, replace
 		parent.(*DropKey).Name = newNode.(IdentifierCI)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -2643,11 +2985,14 @@ func (a *application) rewriteRefOfDropTable(parent SQLNode, node *DropTable, rep
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -2660,6 +3005,9 @@ func (a *application) rewriteRefOfDropTable(parent SQLNode, node *DropTable, rep
 		parent.(*DropTable).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -2675,11 +3023,14 @@ func (a *application) rewriteRefOfDropView(parent SQLNode, node *DropView, repla
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -2692,6 +3043,9 @@ func (a *application) rewriteRefOfDropView(parent SQLNode, node *DropView, repla
 		parent.(*DropView).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -2707,11 +3061,14 @@ func (a *application) rewriteRefOfExecuteStmt(parent SQLNode, node *ExecuteStmt,
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -2734,6 +3091,9 @@ func (a *application) rewriteRefOfExecuteStmt(parent SQLNode, node *ExecuteStmt,
 			return false
 		}
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -2748,11 +3108,13 @@ func (a *application) rewriteRefOfExistsExpr(parent SQLNode, node *ExistsExpr, r
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -2765,6 +3127,9 @@ func (a *application) rewriteRefOfExistsExpr(parent SQLNode, node *ExistsExpr, r
 		parent.(*ExistsExpr).Subquery = newNode.(*Subquery)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -2780,11 +3145,14 @@ func (a *application) rewriteRefOfExplainStmt(parent SQLNode, node *ExplainStmt,
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -2797,6 +3165,9 @@ func (a *application) rewriteRefOfExplainStmt(parent SQLNode, node *ExplainStmt,
 		parent.(*ExplainStmt).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -2812,11 +3183,14 @@ func (a *application) rewriteRefOfExplainTab(parent SQLNode, node *ExplainTab, r
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -2824,6 +3198,9 @@ func (a *application) rewriteRefOfExplainTab(parent SQLNode, node *ExplainTab, r
 		parent.(*ExplainTab).Table = newNode.(TableName)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -2839,11 +3216,13 @@ func (a *application) rewriteExprs(parent SQLNode, node Exprs, replacer replacer
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			node = a.cur.node.(Exprs)
 			a.cur.revisit = false
@@ -2862,6 +3241,9 @@ func (a *application) rewriteExprs(parent SQLNode, node Exprs, replacer replacer
 			return false
 		}
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -2876,11 +3258,13 @@ func (a *application) rewriteRefOfExtractFuncExpr(parent SQLNode, node *ExtractF
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -2893,6 +3277,9 @@ func (a *application) rewriteRefOfExtractFuncExpr(parent SQLNode, node *ExtractF
 		parent.(*ExtractFuncExpr).Expr = newNode.(Expr)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -2908,11 +3295,13 @@ func (a *application) rewriteRefOfExtractValueExpr(parent SQLNode, node *Extract
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -2931,6 +3320,9 @@ func (a *application) rewriteRefOfExtractValueExpr(parent SQLNode, node *Extract
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -2945,11 +3337,13 @@ func (a *application) rewriteRefOfFirstOrLastValueExpr(parent SQLNode, node *Fir
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -2973,6 +3367,9 @@ func (a *application) rewriteRefOfFirstOrLastValueExpr(parent SQLNode, node *Fir
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -2987,11 +3384,14 @@ func (a *application) rewriteRefOfFlush(parent SQLNode, node *Flush, replacer re
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -2999,6 +3399,9 @@ func (a *application) rewriteRefOfFlush(parent SQLNode, node *Flush, replacer re
 		parent.(*Flush).TableNames = newNode.(TableNames)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -3014,13 +3417,19 @@ func (a *application) rewriteRefOfForce(parent SQLNode, node *Force, replacer re
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		if a.pre == nil {
@@ -3038,11 +3447,14 @@ func (a *application) rewriteRefOfForeignKeyDefinition(parent SQLNode, node *For
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -3061,6 +3473,9 @@ func (a *application) rewriteRefOfForeignKeyDefinition(parent SQLNode, node *For
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -3075,11 +3490,14 @@ func (a *application) rewriteRefOfFrameClause(parent SQLNode, node *FrameClause,
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -3092,6 +3510,9 @@ func (a *application) rewriteRefOfFrameClause(parent SQLNode, node *FrameClause,
 		parent.(*FrameClause).End = newNode.(*FramePoint)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -3107,11 +3528,14 @@ func (a *application) rewriteRefOfFramePoint(parent SQLNode, node *FramePoint, r
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -3119,6 +3543,9 @@ func (a *application) rewriteRefOfFramePoint(parent SQLNode, node *FramePoint, r
 		parent.(*FramePoint).Expr = newNode.(Expr)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -3134,13 +3561,19 @@ func (a *application) rewriteRefOfFromFirstLastClause(parent SQLNode, node *From
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		if a.pre == nil {
@@ -3158,11 +3591,13 @@ func (a *application) rewriteRefOfFuncExpr(parent SQLNode, node *FuncExpr, repla
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -3186,6 +3621,9 @@ func (a *application) rewriteRefOfFuncExpr(parent SQLNode, node *FuncExpr, repla
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -3200,11 +3638,13 @@ func (a *application) rewriteRefOfGTIDFuncExpr(parent SQLNode, node *GTIDFuncExp
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -3233,6 +3673,9 @@ func (a *application) rewriteRefOfGTIDFuncExpr(parent SQLNode, node *GTIDFuncExp
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -3247,11 +3690,13 @@ func (a *application) rewriteRefOfGeoHashFromLatLongExpr(parent SQLNode, node *G
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -3275,6 +3720,9 @@ func (a *application) rewriteRefOfGeoHashFromLatLongExpr(parent SQLNode, node *G
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -3289,11 +3737,13 @@ func (a *application) rewriteRefOfGeoHashFromPointExpr(parent SQLNode, node *Geo
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -3312,6 +3762,9 @@ func (a *application) rewriteRefOfGeoHashFromPointExpr(parent SQLNode, node *Geo
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -3326,11 +3779,13 @@ func (a *application) rewriteRefOfGeoJSONFromGeomExpr(parent SQLNode, node *GeoJ
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -3354,6 +3809,9 @@ func (a *application) rewriteRefOfGeoJSONFromGeomExpr(parent SQLNode, node *GeoJ
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -3368,11 +3826,13 @@ func (a *application) rewriteRefOfGeomCollPropertyFuncExpr(parent SQLNode, node 
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -3391,6 +3851,9 @@ func (a *application) rewriteRefOfGeomCollPropertyFuncExpr(parent SQLNode, node 
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -3405,11 +3868,13 @@ func (a *application) rewriteRefOfGeomFormatExpr(parent SQLNode, node *GeomForma
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -3428,6 +3893,9 @@ func (a *application) rewriteRefOfGeomFormatExpr(parent SQLNode, node *GeomForma
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -3442,11 +3910,13 @@ func (a *application) rewriteRefOfGeomFromGeoHashExpr(parent SQLNode, node *Geom
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -3465,6 +3935,9 @@ func (a *application) rewriteRefOfGeomFromGeoHashExpr(parent SQLNode, node *Geom
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -3479,11 +3952,13 @@ func (a *application) rewriteRefOfGeomFromGeoJSONExpr(parent SQLNode, node *Geom
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -3507,6 +3982,9 @@ func (a *application) rewriteRefOfGeomFromGeoJSONExpr(parent SQLNode, node *Geom
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -3521,11 +3999,13 @@ func (a *application) rewriteRefOfGeomFromTextExpr(parent SQLNode, node *GeomFro
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -3549,6 +4029,9 @@ func (a *application) rewriteRefOfGeomFromTextExpr(parent SQLNode, node *GeomFro
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -3563,11 +4046,13 @@ func (a *application) rewriteRefOfGeomFromWKBExpr(parent SQLNode, node *GeomFrom
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -3591,6 +4076,9 @@ func (a *application) rewriteRefOfGeomFromWKBExpr(parent SQLNode, node *GeomFrom
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -3605,11 +4093,13 @@ func (a *application) rewriteRefOfGeomPropertyFuncExpr(parent SQLNode, node *Geo
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -3622,6 +4112,9 @@ func (a *application) rewriteRefOfGeomPropertyFuncExpr(parent SQLNode, node *Geo
 		parent.(*GeomPropertyFuncExpr).Geom = newNode.(Expr)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -3637,11 +4130,14 @@ func (a *application) rewriteRefOfGroupBy(parent SQLNode, node *GroupBy, replace
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -3653,6 +4149,9 @@ func (a *application) rewriteRefOfGroupBy(parent SQLNode, node *GroupBy, replace
 		}(x)) {
 			return false
 		}
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -3668,11 +4167,13 @@ func (a *application) rewriteRefOfGroupConcatExpr(parent SQLNode, node *GroupCon
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -3696,6 +4197,9 @@ func (a *application) rewriteRefOfGroupConcatExpr(parent SQLNode, node *GroupCon
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -3707,13 +4211,19 @@ func (a *application) rewriteRefOfGroupConcatExpr(parent SQLNode, node *GroupCon
 	return true
 }
 func (a *application) rewriteIdentifierCI(parent SQLNode, node IdentifierCI, replacer replacerFunc) bool {
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		if a.pre == nil {
@@ -3728,13 +4238,19 @@ func (a *application) rewriteIdentifierCI(parent SQLNode, node IdentifierCI, rep
 	return true
 }
 func (a *application) rewriteIdentifierCS(parent SQLNode, node IdentifierCS, replacer replacerFunc) bool {
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		if a.pre == nil {
@@ -3752,11 +4268,14 @@ func (a *application) rewriteRefOfIndexDefinition(parent SQLNode, node *IndexDef
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -3764,6 +4283,9 @@ func (a *application) rewriteRefOfIndexDefinition(parent SQLNode, node *IndexDef
 		parent.(*IndexDefinition).Info = newNode.(*IndexInfo)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -3779,11 +4301,14 @@ func (a *application) rewriteRefOfIndexHint(parent SQLNode, node *IndexHint, rep
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -3795,6 +4320,9 @@ func (a *application) rewriteRefOfIndexHint(parent SQLNode, node *IndexHint, rep
 		}(x)) {
 			return false
 		}
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -3810,11 +4338,13 @@ func (a *application) rewriteIndexHints(parent SQLNode, node IndexHints, replace
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			node = a.cur.node.(IndexHints)
 			a.cur.revisit = false
@@ -3833,6 +4363,9 @@ func (a *application) rewriteIndexHints(parent SQLNode, node IndexHints, replace
 			return false
 		}
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -3847,11 +4380,14 @@ func (a *application) rewriteRefOfIndexInfo(parent SQLNode, node *IndexInfo, rep
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -3864,6 +4400,9 @@ func (a *application) rewriteRefOfIndexInfo(parent SQLNode, node *IndexInfo, rep
 		parent.(*IndexInfo).ConstraintName = newNode.(IdentifierCI)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -3879,11 +4418,14 @@ func (a *application) rewriteRefOfInsert(parent SQLNode, node *Insert, replacer 
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -3922,6 +4464,9 @@ func (a *application) rewriteRefOfInsert(parent SQLNode, node *Insert, replacer 
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -3936,11 +4481,13 @@ func (a *application) rewriteRefOfInsertExpr(parent SQLNode, node *InsertExpr, r
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -3969,6 +4516,9 @@ func (a *application) rewriteRefOfInsertExpr(parent SQLNode, node *InsertExpr, r
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -3983,11 +4533,13 @@ func (a *application) rewriteRefOfIntervalDateExpr(parent SQLNode, node *Interva
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -4006,6 +4558,9 @@ func (a *application) rewriteRefOfIntervalDateExpr(parent SQLNode, node *Interva
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -4020,11 +4575,13 @@ func (a *application) rewriteRefOfIntervalFuncExpr(parent SQLNode, node *Interva
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -4043,6 +4600,9 @@ func (a *application) rewriteRefOfIntervalFuncExpr(parent SQLNode, node *Interva
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -4057,11 +4617,13 @@ func (a *application) rewriteRefOfIntroducerExpr(parent SQLNode, node *Introduce
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -4074,6 +4636,9 @@ func (a *application) rewriteRefOfIntroducerExpr(parent SQLNode, node *Introduce
 		parent.(*IntroducerExpr).Expr = newNode.(Expr)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -4089,11 +4654,13 @@ func (a *application) rewriteRefOfIsExpr(parent SQLNode, node *IsExpr, replacer 
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -4106,6 +4673,9 @@ func (a *application) rewriteRefOfIsExpr(parent SQLNode, node *IsExpr, replacer 
 		parent.(*IsExpr).Left = newNode.(Expr)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -4121,11 +4691,13 @@ func (a *application) rewriteRefOfJSONArrayAgg(parent SQLNode, node *JSONArrayAg
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -4144,6 +4716,9 @@ func (a *application) rewriteRefOfJSONArrayAgg(parent SQLNode, node *JSONArrayAg
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -4158,11 +4733,13 @@ func (a *application) rewriteRefOfJSONArrayExpr(parent SQLNode, node *JSONArrayE
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -4175,6 +4752,9 @@ func (a *application) rewriteRefOfJSONArrayExpr(parent SQLNode, node *JSONArrayE
 		parent.(*JSONArrayExpr).Params = newNode.(Exprs)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -4190,11 +4770,13 @@ func (a *application) rewriteRefOfJSONAttributesExpr(parent SQLNode, node *JSONA
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -4213,6 +4795,9 @@ func (a *application) rewriteRefOfJSONAttributesExpr(parent SQLNode, node *JSONA
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -4227,11 +4812,13 @@ func (a *application) rewriteRefOfJSONContainsExpr(parent SQLNode, node *JSONCon
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -4259,6 +4846,9 @@ func (a *application) rewriteRefOfJSONContainsExpr(parent SQLNode, node *JSONCon
 			return false
 		}
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -4273,11 +4863,13 @@ func (a *application) rewriteRefOfJSONContainsPathExpr(parent SQLNode, node *JSO
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -4305,6 +4897,9 @@ func (a *application) rewriteRefOfJSONContainsPathExpr(parent SQLNode, node *JSO
 			return false
 		}
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -4319,11 +4914,13 @@ func (a *application) rewriteRefOfJSONExtractExpr(parent SQLNode, node *JSONExtr
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -4346,6 +4943,9 @@ func (a *application) rewriteRefOfJSONExtractExpr(parent SQLNode, node *JSONExtr
 			return false
 		}
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -4360,11 +4960,13 @@ func (a *application) rewriteRefOfJSONKeysExpr(parent SQLNode, node *JSONKeysExp
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -4383,6 +4985,9 @@ func (a *application) rewriteRefOfJSONKeysExpr(parent SQLNode, node *JSONKeysExp
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -4397,11 +5002,13 @@ func (a *application) rewriteRefOfJSONObjectAgg(parent SQLNode, node *JSONObject
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -4425,6 +5032,9 @@ func (a *application) rewriteRefOfJSONObjectAgg(parent SQLNode, node *JSONObject
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -4439,11 +5049,13 @@ func (a *application) rewriteRefOfJSONObjectExpr(parent SQLNode, node *JSONObjec
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -4461,6 +5073,9 @@ func (a *application) rewriteRefOfJSONObjectExpr(parent SQLNode, node *JSONObjec
 			return false
 		}
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -4475,11 +5090,14 @@ func (a *application) rewriteRefOfJSONObjectParam(parent SQLNode, node *JSONObje
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -4492,6 +5110,9 @@ func (a *application) rewriteRefOfJSONObjectParam(parent SQLNode, node *JSONObje
 		parent.(*JSONObjectParam).Value = newNode.(Expr)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -4507,11 +5128,13 @@ func (a *application) rewriteRefOfJSONOverlapsExpr(parent SQLNode, node *JSONOve
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -4530,6 +5153,9 @@ func (a *application) rewriteRefOfJSONOverlapsExpr(parent SQLNode, node *JSONOve
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -4544,11 +5170,13 @@ func (a *application) rewriteRefOfJSONPrettyExpr(parent SQLNode, node *JSONPrett
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -4561,6 +5189,9 @@ func (a *application) rewriteRefOfJSONPrettyExpr(parent SQLNode, node *JSONPrett
 		parent.(*JSONPrettyExpr).JSONVal = newNode.(Expr)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -4576,11 +5207,13 @@ func (a *application) rewriteRefOfJSONQuoteExpr(parent SQLNode, node *JSONQuoteE
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -4593,6 +5226,9 @@ func (a *application) rewriteRefOfJSONQuoteExpr(parent SQLNode, node *JSONQuoteE
 		parent.(*JSONQuoteExpr).StringArg = newNode.(Expr)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -4608,11 +5244,13 @@ func (a *application) rewriteRefOfJSONRemoveExpr(parent SQLNode, node *JSONRemov
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -4631,6 +5269,9 @@ func (a *application) rewriteRefOfJSONRemoveExpr(parent SQLNode, node *JSONRemov
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -4645,11 +5286,13 @@ func (a *application) rewriteRefOfJSONSchemaValidFuncExpr(parent SQLNode, node *
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -4668,6 +5311,9 @@ func (a *application) rewriteRefOfJSONSchemaValidFuncExpr(parent SQLNode, node *
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -4682,11 +5328,13 @@ func (a *application) rewriteRefOfJSONSchemaValidationReportFuncExpr(parent SQLN
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -4705,6 +5353,9 @@ func (a *application) rewriteRefOfJSONSchemaValidationReportFuncExpr(parent SQLN
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -4719,11 +5370,13 @@ func (a *application) rewriteRefOfJSONSearchExpr(parent SQLNode, node *JSONSearc
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -4761,6 +5414,9 @@ func (a *application) rewriteRefOfJSONSearchExpr(parent SQLNode, node *JSONSearc
 			return false
 		}
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -4775,11 +5431,13 @@ func (a *application) rewriteRefOfJSONStorageFreeExpr(parent SQLNode, node *JSON
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -4792,6 +5450,9 @@ func (a *application) rewriteRefOfJSONStorageFreeExpr(parent SQLNode, node *JSON
 		parent.(*JSONStorageFreeExpr).JSONVal = newNode.(Expr)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -4807,11 +5468,13 @@ func (a *application) rewriteRefOfJSONStorageSizeExpr(parent SQLNode, node *JSON
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -4824,6 +5487,9 @@ func (a *application) rewriteRefOfJSONStorageSizeExpr(parent SQLNode, node *JSON
 		parent.(*JSONStorageSizeExpr).JSONVal = newNode.(Expr)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -4839,11 +5505,14 @@ func (a *application) rewriteRefOfJSONTableExpr(parent SQLNode, node *JSONTableE
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -4871,6 +5540,9 @@ func (a *application) rewriteRefOfJSONTableExpr(parent SQLNode, node *JSONTableE
 			return false
 		}
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -4885,11 +5557,13 @@ func (a *application) rewriteRefOfJSONUnquoteExpr(parent SQLNode, node *JSONUnqu
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -4902,6 +5576,9 @@ func (a *application) rewriteRefOfJSONUnquoteExpr(parent SQLNode, node *JSONUnqu
 		parent.(*JSONUnquoteExpr).JSONValue = newNode.(Expr)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -4917,11 +5594,13 @@ func (a *application) rewriteRefOfJSONValueExpr(parent SQLNode, node *JSONValueE
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -4955,6 +5634,9 @@ func (a *application) rewriteRefOfJSONValueExpr(parent SQLNode, node *JSONValueE
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -4969,11 +5651,13 @@ func (a *application) rewriteRefOfJSONValueMergeExpr(parent SQLNode, node *JSONV
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -4992,6 +5676,9 @@ func (a *application) rewriteRefOfJSONValueMergeExpr(parent SQLNode, node *JSONV
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -5006,11 +5693,13 @@ func (a *application) rewriteRefOfJSONValueModifierExpr(parent SQLNode, node *JS
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -5033,6 +5722,9 @@ func (a *application) rewriteRefOfJSONValueModifierExpr(parent SQLNode, node *JS
 			return false
 		}
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -5047,11 +5739,14 @@ func (a *application) rewriteRefOfJoinCondition(parent SQLNode, node *JoinCondit
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -5064,6 +5759,9 @@ func (a *application) rewriteRefOfJoinCondition(parent SQLNode, node *JoinCondit
 		parent.(*JoinCondition).Using = newNode.(Columns)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -5079,11 +5777,14 @@ func (a *application) rewriteRefOfJoinTableExpr(parent SQLNode, node *JoinTableE
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -5102,6 +5803,9 @@ func (a *application) rewriteRefOfJoinTableExpr(parent SQLNode, node *JoinTableE
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -5116,13 +5820,19 @@ func (a *application) rewriteRefOfJtColumnDefinition(parent SQLNode, node *JtCol
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		if a.pre == nil {
@@ -5140,11 +5850,14 @@ func (a *application) rewriteRefOfJtOnResponse(parent SQLNode, node *JtOnRespons
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -5152,6 +5865,9 @@ func (a *application) rewriteRefOfJtOnResponse(parent SQLNode, node *JtOnRespons
 		parent.(*JtOnResponse).Expr = newNode.(Expr)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -5167,13 +5883,19 @@ func (a *application) rewriteRefOfKeyState(parent SQLNode, node *KeyState, repla
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		if a.pre == nil {
@@ -5191,13 +5913,19 @@ func (a *application) rewriteRefOfKill(parent SQLNode, node *Kill, replacer repl
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		if a.pre == nil {
@@ -5215,11 +5943,13 @@ func (a *application) rewriteRefOfLagLeadExpr(parent SQLNode, node *LagLeadExpr,
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -5253,6 +5983,9 @@ func (a *application) rewriteRefOfLagLeadExpr(parent SQLNode, node *LagLeadExpr,
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -5267,11 +6000,14 @@ func (a *application) rewriteRefOfLimit(parent SQLNode, node *Limit, replacer re
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -5284,6 +6020,9 @@ func (a *application) rewriteRefOfLimit(parent SQLNode, node *Limit, replacer re
 		parent.(*Limit).Rowcount = newNode.(Expr)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -5299,11 +6038,13 @@ func (a *application) rewriteRefOfLineStringExpr(parent SQLNode, node *LineStrin
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -5316,6 +6057,9 @@ func (a *application) rewriteRefOfLineStringExpr(parent SQLNode, node *LineStrin
 		parent.(*LineStringExpr).PointParams = newNode.(Exprs)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -5331,11 +6075,13 @@ func (a *application) rewriteRefOfLinestrPropertyFuncExpr(parent SQLNode, node *
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -5354,6 +6100,9 @@ func (a *application) rewriteRefOfLinestrPropertyFuncExpr(parent SQLNode, node *
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -5368,11 +6117,13 @@ func (a *application) rewriteRefOfLiteral(parent SQLNode, node *Literal, replace
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -5380,6 +6131,9 @@ func (a *application) rewriteRefOfLiteral(parent SQLNode, node *Literal, replace
 		if kontinue {
 			return true
 		}
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		if a.pre == nil {
@@ -5397,13 +6151,19 @@ func (a *application) rewriteRefOfLoad(parent SQLNode, node *Load, replacer repl
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		if a.pre == nil {
@@ -5421,11 +6181,13 @@ func (a *application) rewriteRefOfLocateExpr(parent SQLNode, node *LocateExpr, r
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -5449,6 +6211,9 @@ func (a *application) rewriteRefOfLocateExpr(parent SQLNode, node *LocateExpr, r
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -5463,13 +6228,19 @@ func (a *application) rewriteRefOfLockOption(parent SQLNode, node *LockOption, r
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		if a.pre == nil {
@@ -5487,13 +6258,19 @@ func (a *application) rewriteRefOfLockTables(parent SQLNode, node *LockTables, r
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		if a.pre == nil {
@@ -5511,11 +6288,13 @@ func (a *application) rewriteRefOfLockingFunc(parent SQLNode, node *LockingFunc,
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -5534,6 +6313,9 @@ func (a *application) rewriteRefOfLockingFunc(parent SQLNode, node *LockingFunc,
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -5548,11 +6330,13 @@ func (a *application) rewriteRefOfMatchExpr(parent SQLNode, node *MatchExpr, rep
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -5575,6 +6359,9 @@ func (a *application) rewriteRefOfMatchExpr(parent SQLNode, node *MatchExpr, rep
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -5589,11 +6376,13 @@ func (a *application) rewriteRefOfMax(parent SQLNode, node *Max, replacer replac
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -5612,6 +6401,9 @@ func (a *application) rewriteRefOfMax(parent SQLNode, node *Max, replacer replac
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -5626,11 +6418,13 @@ func (a *application) rewriteRefOfMemberOfExpr(parent SQLNode, node *MemberOfExp
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -5649,6 +6443,9 @@ func (a *application) rewriteRefOfMemberOfExpr(parent SQLNode, node *MemberOfExp
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -5663,11 +6460,13 @@ func (a *application) rewriteRefOfMin(parent SQLNode, node *Min, replacer replac
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -5686,6 +6485,9 @@ func (a *application) rewriteRefOfMin(parent SQLNode, node *Min, replacer replac
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -5700,11 +6502,14 @@ func (a *application) rewriteRefOfModifyColumn(parent SQLNode, node *ModifyColum
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -5717,6 +6522,9 @@ func (a *application) rewriteRefOfModifyColumn(parent SQLNode, node *ModifyColum
 		parent.(*ModifyColumn).After = newNode.(*ColName)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -5732,11 +6540,13 @@ func (a *application) rewriteRefOfMultiLinestringExpr(parent SQLNode, node *Mult
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -5749,6 +6559,9 @@ func (a *application) rewriteRefOfMultiLinestringExpr(parent SQLNode, node *Mult
 		parent.(*MultiLinestringExpr).LinestringParams = newNode.(Exprs)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -5764,11 +6577,13 @@ func (a *application) rewriteRefOfMultiPointExpr(parent SQLNode, node *MultiPoin
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -5781,6 +6596,9 @@ func (a *application) rewriteRefOfMultiPointExpr(parent SQLNode, node *MultiPoin
 		parent.(*MultiPointExpr).PointParams = newNode.(Exprs)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -5796,11 +6614,13 @@ func (a *application) rewriteRefOfMultiPolygonExpr(parent SQLNode, node *MultiPo
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -5813,6 +6633,9 @@ func (a *application) rewriteRefOfMultiPolygonExpr(parent SQLNode, node *MultiPo
 		parent.(*MultiPolygonExpr).PolygonParams = newNode.(Exprs)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -5828,11 +6651,13 @@ func (a *application) rewriteRefOfNTHValueExpr(parent SQLNode, node *NTHValueExp
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -5866,6 +6691,9 @@ func (a *application) rewriteRefOfNTHValueExpr(parent SQLNode, node *NTHValueExp
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -5880,11 +6708,13 @@ func (a *application) rewriteRefOfNamedWindow(parent SQLNode, node *NamedWindow,
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -5897,6 +6727,9 @@ func (a *application) rewriteRefOfNamedWindow(parent SQLNode, node *NamedWindow,
 		parent.(*NamedWindow).Windows = newNode.(WindowDefinitions)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -5912,11 +6745,13 @@ func (a *application) rewriteNamedWindows(parent SQLNode, node NamedWindows, rep
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			node = a.cur.node.(NamedWindows)
 			a.cur.revisit = false
@@ -5935,6 +6770,9 @@ func (a *application) rewriteNamedWindows(parent SQLNode, node NamedWindows, rep
 			return false
 		}
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -5949,11 +6787,14 @@ func (a *application) rewriteRefOfNextval(parent SQLNode, node *Nextval, replace
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -5961,6 +6802,9 @@ func (a *application) rewriteRefOfNextval(parent SQLNode, node *Nextval, replace
 		parent.(*Nextval).Expr = newNode.(Expr)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -5976,11 +6820,13 @@ func (a *application) rewriteRefOfNotExpr(parent SQLNode, node *NotExpr, replace
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -5993,6 +6839,9 @@ func (a *application) rewriteRefOfNotExpr(parent SQLNode, node *NotExpr, replace
 		parent.(*NotExpr).Expr = newNode.(Expr)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -6008,11 +6857,13 @@ func (a *application) rewriteRefOfNtileExpr(parent SQLNode, node *NtileExpr, rep
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -6031,6 +6882,9 @@ func (a *application) rewriteRefOfNtileExpr(parent SQLNode, node *NtileExpr, rep
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -6045,13 +6899,19 @@ func (a *application) rewriteRefOfNullTreatmentClause(parent SQLNode, node *Null
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		if a.pre == nil {
@@ -6069,11 +6929,13 @@ func (a *application) rewriteRefOfNullVal(parent SQLNode, node *NullVal, replace
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -6081,6 +6943,9 @@ func (a *application) rewriteRefOfNullVal(parent SQLNode, node *NullVal, replace
 		if kontinue {
 			return true
 		}
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		if a.pre == nil {
@@ -6098,11 +6963,13 @@ func (a *application) rewriteRefOfOffset(parent SQLNode, node *Offset, replacer 
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -6115,6 +6982,9 @@ func (a *application) rewriteRefOfOffset(parent SQLNode, node *Offset, replacer 
 		parent.(*Offset).Original = newNode.(Expr)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -6130,11 +7000,13 @@ func (a *application) rewriteOnDup(parent SQLNode, node OnDup, replacer replacer
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			node = a.cur.node.(OnDup)
 			a.cur.revisit = false
@@ -6153,6 +7025,9 @@ func (a *application) rewriteOnDup(parent SQLNode, node OnDup, replacer replacer
 			return false
 		}
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -6167,11 +7042,14 @@ func (a *application) rewriteRefOfOptLike(parent SQLNode, node *OptLike, replace
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -6179,6 +7057,9 @@ func (a *application) rewriteRefOfOptLike(parent SQLNode, node *OptLike, replace
 		parent.(*OptLike).LikeTable = newNode.(TableName)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -6194,11 +7075,13 @@ func (a *application) rewriteRefOfOrExpr(parent SQLNode, node *OrExpr, replacer 
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -6217,6 +7100,9 @@ func (a *application) rewriteRefOfOrExpr(parent SQLNode, node *OrExpr, replacer 
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -6231,11 +7117,14 @@ func (a *application) rewriteRefOfOrder(parent SQLNode, node *Order, replacer re
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -6243,6 +7132,9 @@ func (a *application) rewriteRefOfOrder(parent SQLNode, node *Order, replacer re
 		parent.(*Order).Expr = newNode.(Expr)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -6258,11 +7150,13 @@ func (a *application) rewriteOrderBy(parent SQLNode, node OrderBy, replacer repl
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			node = a.cur.node.(OrderBy)
 			a.cur.revisit = false
@@ -6281,6 +7175,9 @@ func (a *application) rewriteOrderBy(parent SQLNode, node OrderBy, replacer repl
 			return false
 		}
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -6295,11 +7192,14 @@ func (a *application) rewriteRefOfOrderByOption(parent SQLNode, node *OrderByOpt
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -6307,6 +7207,9 @@ func (a *application) rewriteRefOfOrderByOption(parent SQLNode, node *OrderByOpt
 		parent.(*OrderByOption).Cols = newNode.(Columns)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -6322,13 +7225,19 @@ func (a *application) rewriteRefOfOtherAdmin(parent SQLNode, node *OtherAdmin, r
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		if a.pre == nil {
@@ -6346,11 +7255,14 @@ func (a *application) rewriteRefOfOverClause(parent SQLNode, node *OverClause, r
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -6363,6 +7275,9 @@ func (a *application) rewriteRefOfOverClause(parent SQLNode, node *OverClause, r
 		parent.(*OverClause).WindowSpec = newNode.(*WindowSpecification)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -6378,11 +7293,14 @@ func (a *application) rewriteRefOfParenTableExpr(parent SQLNode, node *ParenTabl
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -6390,6 +7308,9 @@ func (a *application) rewriteRefOfParenTableExpr(parent SQLNode, node *ParenTabl
 		parent.(*ParenTableExpr).Exprs = newNode.(TableExprs)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -6405,13 +7326,19 @@ func (a *application) rewriteRefOfParsedComments(parent SQLNode, node *ParsedCom
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		if a.pre == nil {
@@ -6429,11 +7356,14 @@ func (a *application) rewriteRefOfPartitionDefinition(parent SQLNode, node *Part
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -6446,6 +7376,9 @@ func (a *application) rewriteRefOfPartitionDefinition(parent SQLNode, node *Part
 		parent.(*PartitionDefinition).Options = newNode.(*PartitionDefinitionOptions)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -6461,11 +7394,14 @@ func (a *application) rewriteRefOfPartitionDefinitionOptions(parent SQLNode, nod
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -6499,6 +7435,9 @@ func (a *application) rewriteRefOfPartitionDefinitionOptions(parent SQLNode, nod
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -6513,13 +7452,19 @@ func (a *application) rewriteRefOfPartitionEngine(parent SQLNode, node *Partitio
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		if a.pre == nil {
@@ -6537,11 +7482,14 @@ func (a *application) rewriteRefOfPartitionOption(parent SQLNode, node *Partitio
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -6569,6 +7517,9 @@ func (a *application) rewriteRefOfPartitionOption(parent SQLNode, node *Partitio
 			return false
 		}
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -6583,11 +7534,14 @@ func (a *application) rewriteRefOfPartitionSpec(parent SQLNode, node *PartitionS
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -6615,6 +7569,9 @@ func (a *application) rewriteRefOfPartitionSpec(parent SQLNode, node *PartitionS
 			return false
 		}
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -6629,11 +7586,14 @@ func (a *application) rewriteRefOfPartitionValueRange(parent SQLNode, node *Part
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -6641,6 +7601,9 @@ func (a *application) rewriteRefOfPartitionValueRange(parent SQLNode, node *Part
 		parent.(*PartitionValueRange).Range = newNode.(ValTuple)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -6656,11 +7619,13 @@ func (a *application) rewritePartitions(parent SQLNode, node Partitions, replace
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			node = a.cur.node.(Partitions)
 			a.cur.revisit = false
@@ -6679,6 +7644,9 @@ func (a *application) rewritePartitions(parent SQLNode, node Partitions, replace
 			return false
 		}
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -6693,11 +7661,13 @@ func (a *application) rewriteRefOfPerformanceSchemaFuncExpr(parent SQLNode, node
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -6710,6 +7680,9 @@ func (a *application) rewriteRefOfPerformanceSchemaFuncExpr(parent SQLNode, node
 		parent.(*PerformanceSchemaFuncExpr).Argument = newNode.(Expr)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -6725,11 +7698,13 @@ func (a *application) rewriteRefOfPointExpr(parent SQLNode, node *PointExpr, rep
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -6748,6 +7723,9 @@ func (a *application) rewriteRefOfPointExpr(parent SQLNode, node *PointExpr, rep
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -6762,11 +7740,13 @@ func (a *application) rewriteRefOfPointPropertyFuncExpr(parent SQLNode, node *Po
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -6785,6 +7765,9 @@ func (a *application) rewriteRefOfPointPropertyFuncExpr(parent SQLNode, node *Po
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -6799,11 +7782,13 @@ func (a *application) rewriteRefOfPolygonExpr(parent SQLNode, node *PolygonExpr,
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -6816,6 +7801,9 @@ func (a *application) rewriteRefOfPolygonExpr(parent SQLNode, node *PolygonExpr,
 		parent.(*PolygonExpr).LinestringParams = newNode.(Exprs)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -6831,11 +7819,13 @@ func (a *application) rewriteRefOfPolygonPropertyFuncExpr(parent SQLNode, node *
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -6854,6 +7844,9 @@ func (a *application) rewriteRefOfPolygonPropertyFuncExpr(parent SQLNode, node *
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -6868,11 +7861,14 @@ func (a *application) rewriteRefOfPrepareStmt(parent SQLNode, node *PrepareStmt,
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -6891,6 +7887,9 @@ func (a *application) rewriteRefOfPrepareStmt(parent SQLNode, node *PrepareStmt,
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -6905,13 +7904,19 @@ func (a *application) rewriteRefOfPurgeBinaryLogs(parent SQLNode, node *PurgeBin
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		if a.pre == nil {
@@ -6929,11 +7934,14 @@ func (a *application) rewriteRefOfReferenceDefinition(parent SQLNode, node *Refe
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -6962,6 +7970,9 @@ func (a *application) rewriteRefOfReferenceDefinition(parent SQLNode, node *Refe
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -6976,11 +7987,13 @@ func (a *application) rewriteRefOfRegexpInstrExpr(parent SQLNode, node *RegexpIn
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -7019,6 +8032,9 @@ func (a *application) rewriteRefOfRegexpInstrExpr(parent SQLNode, node *RegexpIn
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -7033,11 +8049,13 @@ func (a *application) rewriteRefOfRegexpLikeExpr(parent SQLNode, node *RegexpLik
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -7061,6 +8079,9 @@ func (a *application) rewriteRefOfRegexpLikeExpr(parent SQLNode, node *RegexpLik
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -7075,11 +8096,13 @@ func (a *application) rewriteRefOfRegexpReplaceExpr(parent SQLNode, node *Regexp
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -7118,6 +8141,9 @@ func (a *application) rewriteRefOfRegexpReplaceExpr(parent SQLNode, node *Regexp
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -7132,11 +8158,13 @@ func (a *application) rewriteRefOfRegexpSubstrExpr(parent SQLNode, node *RegexpS
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -7170,6 +8198,9 @@ func (a *application) rewriteRefOfRegexpSubstrExpr(parent SQLNode, node *RegexpS
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -7184,11 +8215,14 @@ func (a *application) rewriteRefOfRelease(parent SQLNode, node *Release, replace
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -7196,6 +8230,9 @@ func (a *application) rewriteRefOfRelease(parent SQLNode, node *Release, replace
 		parent.(*Release).Name = newNode.(IdentifierCI)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -7211,11 +8248,14 @@ func (a *application) rewriteRefOfRenameColumn(parent SQLNode, node *RenameColum
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -7228,6 +8268,9 @@ func (a *application) rewriteRefOfRenameColumn(parent SQLNode, node *RenameColum
 		parent.(*RenameColumn).NewName = newNode.(*ColName)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -7243,11 +8286,14 @@ func (a *application) rewriteRefOfRenameIndex(parent SQLNode, node *RenameIndex,
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -7260,6 +8306,9 @@ func (a *application) rewriteRefOfRenameIndex(parent SQLNode, node *RenameIndex,
 		parent.(*RenameIndex).NewName = newNode.(IdentifierCI)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -7275,13 +8324,19 @@ func (a *application) rewriteRefOfRenameTable(parent SQLNode, node *RenameTable,
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		if a.pre == nil {
@@ -7299,11 +8354,14 @@ func (a *application) rewriteRefOfRenameTableName(parent SQLNode, node *RenameTa
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -7311,6 +8369,9 @@ func (a *application) rewriteRefOfRenameTableName(parent SQLNode, node *RenameTa
 		parent.(*RenameTableName).Table = newNode.(TableName)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -7326,11 +8387,14 @@ func (a *application) rewriteRefOfRevertMigration(parent SQLNode, node *RevertMi
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -7338,6 +8402,9 @@ func (a *application) rewriteRefOfRevertMigration(parent SQLNode, node *RevertMi
 		parent.(*RevertMigration).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -7353,13 +8420,19 @@ func (a *application) rewriteRefOfRollback(parent SQLNode, node *Rollback, repla
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		if a.pre == nil {
@@ -7374,11 +8447,14 @@ func (a *application) rewriteRefOfRollback(parent SQLNode, node *Rollback, repla
 	return true
 }
 func (a *application) rewriteRootNode(parent SQLNode, node RootNode, replacer replacerFunc) bool {
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -7386,6 +8462,9 @@ func (a *application) rewriteRootNode(parent SQLNode, node RootNode, replacer re
 		panic("[BUG] tried to replace 'SQLNode' on 'RootNode'")
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -7401,11 +8480,14 @@ func (a *application) rewriteRefOfRowAlias(parent SQLNode, node *RowAlias, repla
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -7418,6 +8500,9 @@ func (a *application) rewriteRefOfRowAlias(parent SQLNode, node *RowAlias, repla
 		parent.(*RowAlias).Columns = newNode.(Columns)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -7433,11 +8518,14 @@ func (a *application) rewriteRefOfSRollback(parent SQLNode, node *SRollback, rep
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -7445,6 +8533,9 @@ func (a *application) rewriteRefOfSRollback(parent SQLNode, node *SRollback, rep
 		parent.(*SRollback).Name = newNode.(IdentifierCI)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -7460,11 +8551,14 @@ func (a *application) rewriteRefOfSavepoint(parent SQLNode, node *Savepoint, rep
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -7472,6 +8566,9 @@ func (a *application) rewriteRefOfSavepoint(parent SQLNode, node *Savepoint, rep
 		parent.(*Savepoint).Name = newNode.(IdentifierCI)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -7487,11 +8584,14 @@ func (a *application) rewriteRefOfSelect(parent SQLNode, node *Select, replacer 
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -7554,6 +8654,9 @@ func (a *application) rewriteRefOfSelect(parent SQLNode, node *Select, replacer 
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -7568,11 +8671,13 @@ func (a *application) rewriteSelectExprs(parent SQLNode, node SelectExprs, repla
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			node = a.cur.node.(SelectExprs)
 			a.cur.revisit = false
@@ -7591,6 +8696,9 @@ func (a *application) rewriteSelectExprs(parent SQLNode, node SelectExprs, repla
 			return false
 		}
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -7605,13 +8713,19 @@ func (a *application) rewriteRefOfSelectInto(parent SQLNode, node *SelectInto, r
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		if a.pre == nil {
@@ -7629,11 +8743,14 @@ func (a *application) rewriteRefOfSet(parent SQLNode, node *Set, replacer replac
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -7646,6 +8763,9 @@ func (a *application) rewriteRefOfSet(parent SQLNode, node *Set, replacer replac
 		parent.(*Set).Exprs = newNode.(SetExprs)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -7661,11 +8781,14 @@ func (a *application) rewriteRefOfSetExpr(parent SQLNode, node *SetExpr, replace
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -7678,6 +8801,9 @@ func (a *application) rewriteRefOfSetExpr(parent SQLNode, node *SetExpr, replace
 		parent.(*SetExpr).Expr = newNode.(Expr)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -7693,11 +8819,13 @@ func (a *application) rewriteSetExprs(parent SQLNode, node SetExprs, replacer re
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			node = a.cur.node.(SetExprs)
 			a.cur.revisit = false
@@ -7716,6 +8844,9 @@ func (a *application) rewriteSetExprs(parent SQLNode, node SetExprs, replacer re
 			return false
 		}
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -7730,11 +8861,14 @@ func (a *application) rewriteRefOfShow(parent SQLNode, node *Show, replacer repl
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -7742,6 +8876,9 @@ func (a *application) rewriteRefOfShow(parent SQLNode, node *Show, replacer repl
 		parent.(*Show).Internal = newNode.(ShowInternal)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -7757,11 +8894,14 @@ func (a *application) rewriteRefOfShowBasic(parent SQLNode, node *ShowBasic, rep
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -7780,6 +8920,9 @@ func (a *application) rewriteRefOfShowBasic(parent SQLNode, node *ShowBasic, rep
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -7794,11 +8937,14 @@ func (a *application) rewriteRefOfShowCreate(parent SQLNode, node *ShowCreate, r
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -7806,6 +8952,9 @@ func (a *application) rewriteRefOfShowCreate(parent SQLNode, node *ShowCreate, r
 		parent.(*ShowCreate).Op = newNode.(TableName)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -7821,11 +8970,14 @@ func (a *application) rewriteRefOfShowFilter(parent SQLNode, node *ShowFilter, r
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -7833,6 +8985,9 @@ func (a *application) rewriteRefOfShowFilter(parent SQLNode, node *ShowFilter, r
 		parent.(*ShowFilter).Filter = newNode.(Expr)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -7848,11 +9003,14 @@ func (a *application) rewriteRefOfShowMigrationLogs(parent SQLNode, node *ShowMi
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -7860,6 +9018,9 @@ func (a *application) rewriteRefOfShowMigrationLogs(parent SQLNode, node *ShowMi
 		parent.(*ShowMigrationLogs).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -7875,13 +9036,19 @@ func (a *application) rewriteRefOfShowOther(parent SQLNode, node *ShowOther, rep
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		if a.pre == nil {
@@ -7899,13 +9066,19 @@ func (a *application) rewriteRefOfShowThrottledApps(parent SQLNode, node *ShowTh
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		if a.pre == nil {
@@ -7923,13 +9096,19 @@ func (a *application) rewriteRefOfShowThrottlerStatus(parent SQLNode, node *Show
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		if a.pre == nil {
@@ -7947,13 +9126,19 @@ func (a *application) rewriteRefOfShowTransactionStatus(parent SQLNode, node *Sh
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		if a.pre == nil {
@@ -7971,11 +9156,14 @@ func (a *application) rewriteRefOfStarExpr(parent SQLNode, node *StarExpr, repla
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -7983,6 +9171,9 @@ func (a *application) rewriteRefOfStarExpr(parent SQLNode, node *StarExpr, repla
 		parent.(*StarExpr).TableName = newNode.(TableName)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -7998,11 +9189,13 @@ func (a *application) rewriteRefOfStd(parent SQLNode, node *Std, replacer replac
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -8021,6 +9214,9 @@ func (a *application) rewriteRefOfStd(parent SQLNode, node *Std, replacer replac
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -8035,11 +9231,13 @@ func (a *application) rewriteRefOfStdDev(parent SQLNode, node *StdDev, replacer 
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -8058,6 +9256,9 @@ func (a *application) rewriteRefOfStdDev(parent SQLNode, node *StdDev, replacer 
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -8072,11 +9273,13 @@ func (a *application) rewriteRefOfStdPop(parent SQLNode, node *StdPop, replacer 
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -8095,6 +9298,9 @@ func (a *application) rewriteRefOfStdPop(parent SQLNode, node *StdPop, replacer 
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -8109,11 +9315,13 @@ func (a *application) rewriteRefOfStdSamp(parent SQLNode, node *StdSamp, replace
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -8132,6 +9340,9 @@ func (a *application) rewriteRefOfStdSamp(parent SQLNode, node *StdSamp, replace
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -8146,11 +9357,14 @@ func (a *application) rewriteRefOfStream(parent SQLNode, node *Stream, replacer 
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -8169,6 +9383,9 @@ func (a *application) rewriteRefOfStream(parent SQLNode, node *Stream, replacer 
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -8183,11 +9400,14 @@ func (a *application) rewriteRefOfSubPartition(parent SQLNode, node *SubPartitio
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -8200,6 +9420,9 @@ func (a *application) rewriteRefOfSubPartition(parent SQLNode, node *SubPartitio
 		parent.(*SubPartition).Expr = newNode.(Expr)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -8215,11 +9438,14 @@ func (a *application) rewriteRefOfSubPartitionDefinition(parent SQLNode, node *S
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -8232,6 +9458,9 @@ func (a *application) rewriteRefOfSubPartitionDefinition(parent SQLNode, node *S
 		parent.(*SubPartitionDefinition).Options = newNode.(*SubPartitionDefinitionOptions)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -8247,11 +9476,14 @@ func (a *application) rewriteRefOfSubPartitionDefinitionOptions(parent SQLNode, 
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -8275,6 +9507,9 @@ func (a *application) rewriteRefOfSubPartitionDefinitionOptions(parent SQLNode, 
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -8289,11 +9524,13 @@ func (a *application) rewriteSubPartitionDefinitions(parent SQLNode, node SubPar
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			node = a.cur.node.(SubPartitionDefinitions)
 			a.cur.revisit = false
@@ -8312,6 +9549,9 @@ func (a *application) rewriteSubPartitionDefinitions(parent SQLNode, node SubPar
 			return false
 		}
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -8326,11 +9566,13 @@ func (a *application) rewriteRefOfSubquery(parent SQLNode, node *Subquery, repla
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -8343,6 +9585,9 @@ func (a *application) rewriteRefOfSubquery(parent SQLNode, node *Subquery, repla
 		parent.(*Subquery).Select = newNode.(TableStatement)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -8358,11 +9603,13 @@ func (a *application) rewriteRefOfSubstrExpr(parent SQLNode, node *SubstrExpr, r
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -8386,6 +9633,9 @@ func (a *application) rewriteRefOfSubstrExpr(parent SQLNode, node *SubstrExpr, r
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -8400,11 +9650,13 @@ func (a *application) rewriteRefOfSum(parent SQLNode, node *Sum, replacer replac
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -8423,6 +9675,9 @@ func (a *application) rewriteRefOfSum(parent SQLNode, node *Sum, replacer replac
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -8437,11 +9692,13 @@ func (a *application) rewriteTableExprs(parent SQLNode, node TableExprs, replace
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			node = a.cur.node.(TableExprs)
 			a.cur.revisit = false
@@ -8460,6 +9717,9 @@ func (a *application) rewriteTableExprs(parent SQLNode, node TableExprs, replace
 			return false
 		}
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -8471,11 +9731,14 @@ func (a *application) rewriteTableExprs(parent SQLNode, node TableExprs, replace
 	return true
 }
 func (a *application) rewriteTableName(parent SQLNode, node TableName, replacer replacerFunc) bool {
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -8488,6 +9751,9 @@ func (a *application) rewriteTableName(parent SQLNode, node TableName, replacer 
 		panic("[BUG] tried to replace 'Qualifier' on 'TableName'")
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -8503,11 +9769,13 @@ func (a *application) rewriteTableNames(parent SQLNode, node TableNames, replace
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			node = a.cur.node.(TableNames)
 			a.cur.revisit = false
@@ -8526,6 +9794,9 @@ func (a *application) rewriteTableNames(parent SQLNode, node TableNames, replace
 			return false
 		}
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -8540,11 +9811,13 @@ func (a *application) rewriteTableOptions(parent SQLNode, node TableOptions, rep
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			node = a.cur.node.(TableOptions)
 			a.cur.revisit = false
@@ -8553,6 +9826,9 @@ func (a *application) rewriteTableOptions(parent SQLNode, node TableOptions, rep
 		if kontinue {
 			return true
 		}
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		if a.pre == nil {
@@ -8570,11 +9846,14 @@ func (a *application) rewriteRefOfTableSpec(parent SQLNode, node *TableSpec, rep
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -8615,6 +9894,9 @@ func (a *application) rewriteRefOfTableSpec(parent SQLNode, node *TableSpec, rep
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -8629,13 +9911,19 @@ func (a *application) rewriteRefOfTablespaceOperation(parent SQLNode, node *Tabl
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		if a.pre == nil {
@@ -8653,11 +9941,13 @@ func (a *application) rewriteRefOfTimestampDiffExpr(parent SQLNode, node *Timest
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -8676,6 +9966,9 @@ func (a *application) rewriteRefOfTimestampDiffExpr(parent SQLNode, node *Timest
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -8690,11 +9983,13 @@ func (a *application) rewriteRefOfTrimFuncExpr(parent SQLNode, node *TrimFuncExp
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -8713,6 +10008,9 @@ func (a *application) rewriteRefOfTrimFuncExpr(parent SQLNode, node *TrimFuncExp
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -8727,11 +10025,14 @@ func (a *application) rewriteRefOfTruncateTable(parent SQLNode, node *TruncateTa
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -8739,6 +10040,9 @@ func (a *application) rewriteRefOfTruncateTable(parent SQLNode, node *TruncateTa
 		parent.(*TruncateTable).Table = newNode.(TableName)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -8754,11 +10058,13 @@ func (a *application) rewriteRefOfUnaryExpr(parent SQLNode, node *UnaryExpr, rep
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -8771,6 +10077,9 @@ func (a *application) rewriteRefOfUnaryExpr(parent SQLNode, node *UnaryExpr, rep
 		parent.(*UnaryExpr).Expr = newNode.(Expr)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -8786,11 +10095,14 @@ func (a *application) rewriteRefOfUnion(parent SQLNode, node *Union, replacer re
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -8824,6 +10136,9 @@ func (a *application) rewriteRefOfUnion(parent SQLNode, node *Union, replacer re
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -8838,13 +10153,19 @@ func (a *application) rewriteRefOfUnlockTables(parent SQLNode, node *UnlockTable
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		if a.pre == nil {
@@ -8862,11 +10183,14 @@ func (a *application) rewriteRefOfUpdate(parent SQLNode, node *Update, replacer 
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -8909,6 +10233,9 @@ func (a *application) rewriteRefOfUpdate(parent SQLNode, node *Update, replacer 
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -8923,11 +10250,14 @@ func (a *application) rewriteRefOfUpdateExpr(parent SQLNode, node *UpdateExpr, r
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -8940,6 +10270,9 @@ func (a *application) rewriteRefOfUpdateExpr(parent SQLNode, node *UpdateExpr, r
 		parent.(*UpdateExpr).Expr = newNode.(Expr)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -8955,11 +10288,13 @@ func (a *application) rewriteUpdateExprs(parent SQLNode, node UpdateExprs, repla
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			node = a.cur.node.(UpdateExprs)
 			a.cur.revisit = false
@@ -8978,6 +10313,9 @@ func (a *application) rewriteUpdateExprs(parent SQLNode, node UpdateExprs, repla
 			return false
 		}
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -8992,11 +10330,13 @@ func (a *application) rewriteRefOfUpdateXMLExpr(parent SQLNode, node *UpdateXMLE
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -9020,6 +10360,9 @@ func (a *application) rewriteRefOfUpdateXMLExpr(parent SQLNode, node *UpdateXMLE
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -9034,11 +10377,14 @@ func (a *application) rewriteRefOfUse(parent SQLNode, node *Use, replacer replac
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -9046,6 +10392,9 @@ func (a *application) rewriteRefOfUse(parent SQLNode, node *Use, replacer replac
 		parent.(*Use).DBName = newNode.(IdentifierCS)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -9061,11 +10410,14 @@ func (a *application) rewriteRefOfVExplainStmt(parent SQLNode, node *VExplainStm
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -9078,6 +10430,9 @@ func (a *application) rewriteRefOfVExplainStmt(parent SQLNode, node *VExplainStm
 		parent.(*VExplainStmt).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -9093,11 +10448,14 @@ func (a *application) rewriteRefOfVStream(parent SQLNode, node *VStream, replace
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -9126,6 +10484,9 @@ func (a *application) rewriteRefOfVStream(parent SQLNode, node *VStream, replace
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -9140,11 +10501,13 @@ func (a *application) rewriteValTuple(parent SQLNode, node ValTuple, replacer re
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			node = a.cur.node.(ValTuple)
 			a.cur.revisit = false
@@ -9163,6 +10526,9 @@ func (a *application) rewriteValTuple(parent SQLNode, node ValTuple, replacer re
 			return false
 		}
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -9177,13 +10543,19 @@ func (a *application) rewriteRefOfValidation(parent SQLNode, node *Validation, r
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		if a.pre == nil {
@@ -9201,11 +10573,13 @@ func (a *application) rewriteValues(parent SQLNode, node Values, replacer replac
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			node = a.cur.node.(Values)
 			a.cur.revisit = false
@@ -9224,6 +10598,9 @@ func (a *application) rewriteValues(parent SQLNode, node Values, replacer replac
 			return false
 		}
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -9238,11 +10615,13 @@ func (a *application) rewriteRefOfValuesFuncExpr(parent SQLNode, node *ValuesFun
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -9255,6 +10634,9 @@ func (a *application) rewriteRefOfValuesFuncExpr(parent SQLNode, node *ValuesFun
 		parent.(*ValuesFuncExpr).Name = newNode.(*ColName)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -9270,11 +10652,14 @@ func (a *application) rewriteRefOfValuesStatement(parent SQLNode, node *ValuesSt
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -9308,6 +10693,9 @@ func (a *application) rewriteRefOfValuesStatement(parent SQLNode, node *ValuesSt
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -9322,11 +10710,13 @@ func (a *application) rewriteRefOfVarPop(parent SQLNode, node *VarPop, replacer 
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -9345,6 +10735,9 @@ func (a *application) rewriteRefOfVarPop(parent SQLNode, node *VarPop, replacer 
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -9359,11 +10752,13 @@ func (a *application) rewriteRefOfVarSamp(parent SQLNode, node *VarSamp, replace
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -9382,6 +10777,9 @@ func (a *application) rewriteRefOfVarSamp(parent SQLNode, node *VarSamp, replace
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -9396,11 +10794,13 @@ func (a *application) rewriteRefOfVariable(parent SQLNode, node *Variable, repla
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -9413,6 +10813,9 @@ func (a *application) rewriteRefOfVariable(parent SQLNode, node *Variable, repla
 		parent.(*Variable).Name = newNode.(IdentifierCI)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -9428,11 +10831,13 @@ func (a *application) rewriteRefOfVariance(parent SQLNode, node *Variance, repla
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -9451,6 +10856,9 @@ func (a *application) rewriteRefOfVariance(parent SQLNode, node *Variance, repla
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -9462,11 +10870,14 @@ func (a *application) rewriteRefOfVariance(parent SQLNode, node *Variance, repla
 	return true
 }
 func (a *application) rewriteVindexParam(parent SQLNode, node VindexParam, replacer replacerFunc) bool {
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -9474,6 +10885,9 @@ func (a *application) rewriteVindexParam(parent SQLNode, node VindexParam, repla
 		panic("[BUG] tried to replace 'Key' on 'VindexParam'")
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -9489,11 +10903,14 @@ func (a *application) rewriteRefOfVindexSpec(parent SQLNode, node *VindexSpec, r
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -9516,6 +10933,9 @@ func (a *application) rewriteRefOfVindexSpec(parent SQLNode, node *VindexSpec, r
 			return false
 		}
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -9530,11 +10950,13 @@ func (a *application) rewriteRefOfWeightStringFuncExpr(parent SQLNode, node *Wei
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -9553,6 +10975,9 @@ func (a *application) rewriteRefOfWeightStringFuncExpr(parent SQLNode, node *Wei
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -9567,11 +10992,14 @@ func (a *application) rewriteRefOfWhen(parent SQLNode, node *When, replacer repl
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -9584,6 +11012,9 @@ func (a *application) rewriteRefOfWhen(parent SQLNode, node *When, replacer repl
 		parent.(*When).Val = newNode.(Expr)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -9599,11 +11030,14 @@ func (a *application) rewriteRefOfWhere(parent SQLNode, node *Where, replacer re
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -9611,6 +11045,9 @@ func (a *application) rewriteRefOfWhere(parent SQLNode, node *Where, replacer re
 		parent.(*Where).Expr = newNode.(Expr)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -9626,11 +11063,14 @@ func (a *application) rewriteRefOfWindowDefinition(parent SQLNode, node *WindowD
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -9643,6 +11083,9 @@ func (a *application) rewriteRefOfWindowDefinition(parent SQLNode, node *WindowD
 		parent.(*WindowDefinition).WindowSpec = newNode.(*WindowSpecification)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -9658,11 +11101,13 @@ func (a *application) rewriteWindowDefinitions(parent SQLNode, node WindowDefini
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			node = a.cur.node.(WindowDefinitions)
 			a.cur.revisit = false
@@ -9681,6 +11126,9 @@ func (a *application) rewriteWindowDefinitions(parent SQLNode, node WindowDefini
 			return false
 		}
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -9695,11 +11143,14 @@ func (a *application) rewriteRefOfWindowSpecification(parent SQLNode, node *Wind
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -9723,6 +11174,9 @@ func (a *application) rewriteRefOfWindowSpecification(parent SQLNode, node *Wind
 	}) {
 		return false
 	}
+	if onLeave != nil {
+		onLeave(node)
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -9737,11 +11191,14 @@ func (a *application) rewriteRefOfWith(parent SQLNode, node *With, replacer repl
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -9753,6 +11210,9 @@ func (a *application) rewriteRefOfWith(parent SQLNode, node *With, replacer repl
 		}(x)) {
 			return false
 		}
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -9768,11 +11228,13 @@ func (a *application) rewriteRefOfXorExpr(parent SQLNode, node *XorExpr, replace
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -9790,6 +11252,9 @@ func (a *application) rewriteRefOfXorExpr(parent SQLNode, node *XorExpr, replace
 		parent.(*XorExpr).Right = newNode.(Expr)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -10626,13 +12091,19 @@ func (a *application) rewriteTableStatement(parent SQLNode, node TableStatement,
 	}
 }
 func (a *application) rewriteAlgorithmValue(parent SQLNode, node AlgorithmValue, replacer replacerFunc) bool {
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		if a.pre == nil {
@@ -10647,11 +12118,13 @@ func (a *application) rewriteAlgorithmValue(parent SQLNode, node AlgorithmValue,
 	return true
 }
 func (a *application) rewriteBoolVal(parent SQLNode, node BoolVal, replacer replacerFunc) bool {
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -10659,6 +12132,9 @@ func (a *application) rewriteBoolVal(parent SQLNode, node BoolVal, replacer repl
 		if kontinue {
 			return true
 		}
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		if a.pre == nil {
@@ -10673,11 +12149,13 @@ func (a *application) rewriteBoolVal(parent SQLNode, node BoolVal, replacer repl
 	return true
 }
 func (a *application) rewriteListArg(parent SQLNode, node ListArg, replacer replacerFunc) bool {
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
 		if a.cur.revisit {
 			a.cur.revisit = false
 			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
@@ -10685,6 +12163,9 @@ func (a *application) rewriteListArg(parent SQLNode, node ListArg, replacer repl
 		if kontinue {
 			return true
 		}
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		if a.pre == nil {
@@ -10699,13 +12180,19 @@ func (a *application) rewriteListArg(parent SQLNode, node ListArg, replacer repl
 	return true
 }
 func (a *application) rewriteMatchAction(parent SQLNode, node MatchAction, replacer replacerFunc) bool {
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		if a.pre == nil {
@@ -10720,13 +12207,19 @@ func (a *application) rewriteMatchAction(parent SQLNode, node MatchAction, repla
 	return true
 }
 func (a *application) rewriteReferenceAction(parent SQLNode, node ReferenceAction, replacer replacerFunc) bool {
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		if a.pre == nil {
@@ -10744,13 +12237,19 @@ func (a *application) rewriteRefOfIdentifierCI(parent SQLNode, node *IdentifierC
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		if a.pre == nil {
@@ -10768,13 +12267,19 @@ func (a *application) rewriteRefOfIdentifierCS(parent SQLNode, node *IdentifierC
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		if a.pre == nil {
@@ -10792,11 +12297,14 @@ func (a *application) rewriteRefOfRootNode(parent SQLNode, node *RootNode, repla
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -10804,6 +12312,9 @@ func (a *application) rewriteRefOfRootNode(parent SQLNode, node *RootNode, repla
 		parent.(*RootNode).SQLNode = newNode.(SQLNode)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -10819,11 +12330,14 @@ func (a *application) rewriteRefOfTableName(parent SQLNode, node *TableName, rep
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -10836,6 +12350,9 @@ func (a *application) rewriteRefOfTableName(parent SQLNode, node *TableName, rep
 		parent.(*TableName).Qualifier = newNode.(IdentifierCS)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -10851,11 +12368,14 @@ func (a *application) rewriteRefOfVindexParam(parent SQLNode, node *VindexParam,
 	if node == nil {
 		return true
 	}
+	var onLeave func(SQLNode)
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		onLeave, a.cur.onLeave = a.cur.onLeave, nil
+		if kontinue {
 			return true
 		}
 	}
@@ -10863,6 +12383,9 @@ func (a *application) rewriteRefOfVindexParam(parent SQLNode, node *VindexParam,
 		parent.(*VindexParam).Key = newNode.(IdentifierCI)
 	}) {
 		return false
+	}
+	if onLeave != nil {
+		onLeave(node)
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer

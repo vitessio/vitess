@@ -94,6 +94,7 @@ type Cursor struct {
 	parent   SQLNode
 	replacer replacerFunc
 	node     SQLNode
+	onLeave  func(SQLNode)
 
 	// marks that the node has been replaced, and the new node should be visited
 	revisit bool
@@ -136,6 +137,11 @@ func (c *Cursor) ReplaceAndRevisit(newNode SQLNode) {
 	c.replacer(newNode, c.parent)
 	c.node = newNode
 	c.revisit = true
+}
+
+// OnLeave registers a function to be called when the cursor leaves the current node, but before the Post visitor is called.
+func (c *Cursor) OnLeave(onLeave func(SQLNode)) {
+	c.onLeave = onLeave
 }
 
 type replacerFunc func(newNode, parent SQLNode)
