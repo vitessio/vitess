@@ -71,6 +71,7 @@ import (
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/topotools/events"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtctl/schematools"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 	"vitess.io/vitess/go/vt/vtenv"
@@ -668,7 +669,7 @@ func (s *VtctldServer) ChangeTabletType(ctx context.Context, req *vtctldatapb.Ch
 		return nil, err
 	}
 	log.Infof("Getting a new durability policy for %v", durabilityName)
-	durability, err := reparentutil.GetDurabilityPolicy(durabilityName)
+	durability, err := policy.GetDurabilityPolicy(durabilityName)
 	if err != nil {
 		return nil, err
 	}
@@ -698,7 +699,7 @@ func (s *VtctldServer) ChangeTabletType(ctx context.Context, req *vtctldatapb.Ch
 	// Since we want to check the durability rules for the desired state and not before we make that change
 	expectedTablet := tablet.Tablet.CloneVT()
 	expectedTablet.Type = req.DbType
-	err = s.tmc.ChangeType(ctx, tablet.Tablet, req.DbType, reparentutil.IsReplicaSemiSync(durability, shardPrimary.Tablet, expectedTablet))
+	err = s.tmc.ChangeType(ctx, tablet.Tablet, req.DbType, policy.IsReplicaSemiSync(durability, shardPrimary.Tablet, expectedTablet))
 	if err != nil {
 		return nil, err
 	}
@@ -868,6 +869,28 @@ func (s *VtctldServer) CompleteSchemaMigration(ctx context.Context, req *vtctlda
 		RowsAffectedByShard: qr.RowsAffectedByShard,
 	}
 	return resp, nil
+}
+
+// CopySchemaShard is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) CopySchemaShard(ctx context.Context, req *vtctldatapb.CopySchemaShardRequest) (resp *vtctldatapb.CopySchemaShardResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.CompleteSchemaMigration")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("source_tablet_alias", req.SourceTabletAlias)
+	span.Annotate("destination_keyspace", req.DestinationKeyspace)
+	span.Annotate("destination_shard", req.DestinationShard)
+
+	waitReplicasTimeout, _, err := protoutil.DurationFromProto(req.WaitReplicasTimeout)
+	if err != nil {
+		return nil, err
+	}
+
+	err = s.ws.CopySchemaShard(ctx, req.SourceTabletAlias, req.Tables, req.ExcludeTables, req.IncludeViews,
+		req.DestinationKeyspace, req.DestinationShard, waitReplicasTimeout, req.SkipVerify)
+
+	return &vtctldatapb.CopySchemaShardResponse{}, err
 }
 
 // CreateKeyspace is part of the vtctlservicepb.VtctldServer interface.
@@ -2776,7 +2799,7 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 		return err
 	}
 	log.Infof("Getting a new durability policy for %v", durabilityName)
-	durability, err := reparentutil.GetDurabilityPolicy(durabilityName)
+	durability, err := policy.GetDurabilityPolicy(durabilityName)
 	if err != nil {
 		return err
 	}
@@ -2860,7 +2883,7 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 	// position
 	logger.Infof("initializing primary on %v", topoproto.TabletAliasString(req.PrimaryElectTabletAlias))
 	event.DispatchUpdate(ev, "initializing primary")
-	rp, err := tmc.InitPrimary(ctx, primaryElectTabletInfo.Tablet, reparentutil.SemiSyncAckers(durability, primaryElectTabletInfo.Tablet) > 0)
+	rp, err := tmc.InitPrimary(ctx, primaryElectTabletInfo.Tablet, policy.SemiSyncAckers(durability, primaryElectTabletInfo.Tablet) > 0)
 	if err != nil {
 		return err
 	}
@@ -2901,7 +2924,7 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 			go func(alias string, tabletInfo *topo.TabletInfo) {
 				defer wgReplicas.Done()
 				logger.Infof("initializing replica %v", alias)
-				if err := tmc.InitReplica(replCtx, tabletInfo.Tablet, req.PrimaryElectTabletAlias, rp, now, reparentutil.IsReplicaSemiSync(durability, primaryElectTabletInfo.Tablet, tabletInfo.Tablet)); err != nil {
+				if err := tmc.InitReplica(replCtx, tabletInfo.Tablet, req.PrimaryElectTabletAlias, rp, now, policy.IsReplicaSemiSync(durability, primaryElectTabletInfo.Tablet, tabletInfo.Tablet)); err != nil {
 					rec.RecordError(fmt.Errorf("tablet %v InitReplica failed: %v", alias, err))
 				}
 			}(alias, tabletInfo)
@@ -2990,6 +3013,21 @@ func (s *VtctldServer) LaunchSchemaMigration(ctx context.Context, req *vtctldata
 	return resp, nil
 }
 
+// LookupVindexComplete is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) LookupVindexComplete(ctx context.Context, req *vtctldatapb.LookupVindexCompleteRequest) (resp *vtctldatapb.LookupVindexCompleteResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.LookupVindexComplete")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("name", req.Name)
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("table_keyspace", req.TableKeyspace)
+
+	resp, err = s.ws.LookupVindexComplete(ctx, req)
+	return resp, err
+}
+
 // LookupVindexCreate is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) LookupVindexCreate(ctx context.Context, req *vtctldatapb.LookupVindexCreateRequest) (resp *vtctldatapb.LookupVindexCreateResponse, err error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.LookupVindexCreate")
@@ -3019,6 +3057,21 @@ func (s *VtctldServer) LookupVindexExternalize(ctx context.Context, req *vtctlda
 	span.Annotate("table_keyspace", req.TableKeyspace)
 
 	resp, err = s.ws.LookupVindexExternalize(ctx, req)
+	return resp, err
+}
+
+// LookupVindexInternalize is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) LookupVindexInternalize(ctx context.Context, req *vtctldatapb.LookupVindexInternalizeRequest) (resp *vtctldatapb.LookupVindexInternalizeResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.LookupVindexInternalize")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("name", req.Name)
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("table_keyspace", req.TableKeyspace)
+
+	resp, err = s.ws.LookupVindexInternalize(ctx, req)
 	return resp, err
 }
 
@@ -3598,12 +3651,12 @@ func (s *VtctldServer) ReparentTablet(ctx context.Context, req *vtctldatapb.Repa
 		return nil, err
 	}
 	log.Infof("Getting a new durability policy for %v", durabilityName)
-	durability, err := reparentutil.GetDurabilityPolicy(durabilityName)
+	durability, err := policy.GetDurabilityPolicy(durabilityName)
 	if err != nil {
 		return nil, err
 	}
 
-	if err = s.tmc.SetReplicationSource(ctx, tablet.Tablet, shard.PrimaryAlias, 0, "", false, reparentutil.IsReplicaSemiSync(durability, shardPrimary.Tablet, tablet.Tablet), 0); err != nil {
+	if err = s.tmc.SetReplicationSource(ctx, tablet.Tablet, shard.PrimaryAlias, 0, "", false, policy.IsReplicaSemiSync(durability, shardPrimary.Tablet, tablet.Tablet), 0); err != nil {
 		return nil, err
 	}
 
@@ -3787,7 +3840,7 @@ func (s *VtctldServer) SetKeyspaceDurabilityPolicy(ctx context.Context, req *vtc
 		return nil, err
 	}
 
-	policyValid := reparentutil.CheckDurabilityPolicyExists(req.DurabilityPolicy)
+	policyValid := policy.CheckDurabilityPolicyExists(req.DurabilityPolicy)
 	if !policyValid {
 		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "durability policy <%v> is not a valid policy. Please register it as a policy first", req.DurabilityPolicy)
 		return nil, err
@@ -4308,12 +4361,12 @@ func (s *VtctldServer) StartReplication(ctx context.Context, req *vtctldatapb.St
 		return nil, err
 	}
 	log.Infof("Getting a new durability policy for %v", durabilityName)
-	durability, err := reparentutil.GetDurabilityPolicy(durabilityName)
+	durability, err := policy.GetDurabilityPolicy(durabilityName)
 	if err != nil {
 		return nil, err
 	}
 
-	if err = s.tmc.StartReplication(ctx, tablet.Tablet, reparentutil.IsReplicaSemiSync(durability, shardPrimary.Tablet, tablet.Tablet)); err != nil {
+	if err = s.tmc.StartReplication(ctx, tablet.Tablet, policy.IsReplicaSemiSync(durability, shardPrimary.Tablet, tablet.Tablet)); err != nil {
 		log.Errorf("StartReplication: failed to start replication on %v: %v", alias, err)
 		return nil, err
 	}
@@ -4413,12 +4466,12 @@ func (s *VtctldServer) TabletExternallyReparented(ctx context.Context, req *vtct
 		return nil, err
 	}
 	log.Infof("Getting a new durability policy for %v", durabilityName)
-	durability, err := reparentutil.GetDurabilityPolicy(durabilityName)
+	durability, err := policy.GetDurabilityPolicy(durabilityName)
 	if err != nil {
 		return nil, err
 	}
 
-	if err = s.tmc.ChangeType(ctx, tablet.Tablet, topodatapb.TabletType_PRIMARY, reparentutil.SemiSyncAckers(durability, tablet.Tablet) > 0); err != nil {
+	if err = s.tmc.ChangeType(ctx, tablet.Tablet, topodatapb.TabletType_PRIMARY, policy.SemiSyncAckers(durability, tablet.Tablet) > 0); err != nil {
 		log.Warningf("ChangeType(%v, PRIMARY): %v", topoproto.TabletAliasString(req.Tablet), err)
 		return nil, err
 	}
@@ -4691,8 +4744,94 @@ func (s *VtctldServer) ValidateKeyspace(ctx context.Context, req *vtctldatapb.Va
 	return resp, err
 }
 
+// ValidatePermissionsKeyspace validates that all the permissions are the
+// same in a keyspace.
+func (s *VtctldServer) ValidatePermissionsKeyspace(ctx context.Context, req *vtctldatapb.ValidatePermissionsKeyspaceRequest) (resp *vtctldatapb.ValidatePermissionsKeyspaceResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ValidatePermissionsKeyspace")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("shards", req.Shards)
+
+	var shards []string
+	if len(req.Shards) != 0 {
+		// If the user has specified a list of specific shards, we'll use that.
+		shards = req.Shards
+	} else {
+		// Validate all of the shards.
+		shards, err = s.ts.GetShardNames(ctx, req.Keyspace)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if len(shards) == 0 {
+		return nil, fmt.Errorf("no shards found in keyspace %s", req.Keyspace)
+	}
+	sort.Strings(shards)
+
+	// Find the reference permissions using the first shard's primary.
+	si, err := s.ts.GetShard(ctx, req.Keyspace, shards[0])
+	if err != nil {
+		return nil, err
+	}
+	if !si.HasPrimary() {
+		return nil, fmt.Errorf("no primary tablet in shard %s/%s", req.Keyspace, shards[0])
+	}
+	referenceAlias := si.PrimaryAlias
+	log.Infof("Gathering permissions for reference primary %s", topoproto.TabletAliasString(referenceAlias))
+	pres, err := s.GetPermissions(ctx, &vtctldatapb.GetPermissionsRequest{
+		TabletAlias: si.PrimaryAlias,
+	})
+	if err != nil {
+		return nil, err
+	}
+	referencePermissions := pres.Permissions
+
+	// Then diff the first/reference tablet with all the others.
+	eg, egctx := errgroup.WithContext(ctx)
+	for _, shard := range shards {
+		eg.Go(func() error {
+			aliases, err := s.ts.FindAllTabletAliasesInShard(egctx, req.Keyspace, shard)
+			if err != nil {
+				return err
+			}
+			for _, alias := range aliases {
+				if topoproto.TabletAliasEqual(alias, si.PrimaryAlias) {
+					continue
+				}
+				log.Infof("Gathering permissions for %s", topoproto.TabletAliasString(alias))
+				presp, err := s.GetPermissions(ctx, &vtctldatapb.GetPermissionsRequest{
+					TabletAlias: alias,
+				})
+				if err != nil {
+					return err
+				}
+
+				log.Infof("Diffing permissions between %s and %s", topoproto.TabletAliasString(referenceAlias),
+					topoproto.TabletAliasString(alias))
+				er := &concurrency.AllErrorRecorder{}
+				tmutils.DiffPermissions(topoproto.TabletAliasString(referenceAlias), referencePermissions,
+					topoproto.TabletAliasString(alias), presp.Permissions, er)
+				if er.HasErrors() {
+					return er.Error()
+				}
+			}
+			return nil
+		})
+	}
+	if err := eg.Wait(); err != nil {
+		return nil, fmt.Errorf("permissions diffs: %v", err)
+	}
+
+	return &vtctldatapb.ValidatePermissionsKeyspaceResponse{}, nil
+}
+
 // ValidateSchemaKeyspace is a part of the vtctlservicepb.VtctldServer interface.
-// It will diff the schema from all the tablets in the keyspace.
+// It will diff the schema between the tablets in all shards -- or a subset if
+// any specific shards are specified -- within the keyspace.
 func (s *VtctldServer) ValidateSchemaKeyspace(ctx context.Context, req *vtctldatapb.ValidateSchemaKeyspaceRequest) (resp *vtctldatapb.ValidateSchemaKeyspaceResponse, err error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.ValidateSchemaKeyspace")
 	defer span.Finish()
@@ -4700,17 +4839,25 @@ func (s *VtctldServer) ValidateSchemaKeyspace(ctx context.Context, req *vtctldat
 	defer panicHandler(&err)
 
 	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("shards", req.Shards)
 	keyspace := req.Keyspace
 
 	resp = &vtctldatapb.ValidateSchemaKeyspaceResponse{
 		Results: []string{},
 	}
 
-	shards, err := s.ts.GetShardNames(ctx, keyspace)
-	if err != nil {
-		resp.Results = append(resp.Results, fmt.Sprintf("TopologyServer.GetShardNames(%v) failed: %v", req.Keyspace, err))
-		err = nil
-		return resp, err
+	var shards []string
+	if len(req.Shards) != 0 {
+		// If the user has specified a list of specific shards, we'll use that.
+		shards = req.Shards
+	} else {
+		// Otherwise we look at all the shards in the keyspace.
+		shards, err = s.ts.GetShardNames(ctx, keyspace)
+		if err != nil {
+			resp.Results = append(resp.Results, fmt.Sprintf("TopologyServer.GetShardNames(%s) failed: %v", req.Keyspace, err))
+			err = nil
+			return resp, err
+		}
 	}
 
 	resp.ResultsByShard = make(map[string]*vtctldatapb.ValidateShardResponse, len(shards))
@@ -4753,7 +4900,7 @@ func (s *VtctldServer) ValidateSchemaKeyspace(ctx context.Context, req *vtctldat
 	)
 
 	r := &tabletmanagerdatapb.GetSchemaRequest{ExcludeTables: req.ExcludeTables, IncludeViews: req.IncludeViews}
-	for _, shard := range shards[0:] {
+	for _, shard := range shards {
 		wg.Add(1)
 		go func(shard string) {
 			defer wg.Done()

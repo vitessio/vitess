@@ -22,6 +22,7 @@ import (
 	"io"
 	"sort"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -154,6 +155,8 @@ type (
 
 		observer ResultsObserver
 
+		// this protects the interOpStats and shardsStats fields from concurrent writes
+		mu sync.Mutex
 		// this is a map of the number of rows that every primitive has returned
 		// if this field is nil, it means that we are not logging operator traffic
 		interOpStats map[engine.Primitive]engine.RowsReceived
@@ -389,7 +392,7 @@ func (vc *VCursorImpl) StartPrimitiveTrace() func() engine.Stats {
 // FindTable finds the specified table. If the keyspace what specified in the input, it gets used as qualifier.
 // Otherwise, the keyspace from the request is used, if one was provided.
 func (vc *VCursorImpl) FindTable(name sqlparser.TableName) (*vindexes.Table, string, topodatapb.TabletType, key.Destination, error) {
-	destKeyspace, destTabletType, dest, err := vc.ParseDestinationTarget(name.Qualifier.String())
+	destKeyspace, destTabletType, dest, err := vc.parseDestinationTarget(name.Qualifier.String())
 	if err != nil {
 		return nil, "", destTabletType, nil, err
 	}
@@ -403,8 +406,8 @@ func (vc *VCursorImpl) FindTable(name sqlparser.TableName) (*vindexes.Table, str
 	return table, destKeyspace, destTabletType, dest, err
 }
 
-func (vc *VCursorImpl) FindView(name sqlparser.TableName) sqlparser.SelectStatement {
-	ks, _, _, err := vc.ParseDestinationTarget(name.Qualifier.String())
+func (vc *VCursorImpl) FindView(name sqlparser.TableName) sqlparser.TableStatement {
+	ks, _, _, err := vc.parseDestinationTarget(name.Qualifier.String())
 	if err != nil {
 		return nil
 	}
@@ -415,7 +418,7 @@ func (vc *VCursorImpl) FindView(name sqlparser.TableName) sqlparser.SelectStatem
 }
 
 func (vc *VCursorImpl) FindRoutedTable(name sqlparser.TableName) (*vindexes.Table, error) {
-	destKeyspace, destTabletType, _, err := vc.ParseDestinationTarget(name.Qualifier.String())
+	destKeyspace, destTabletType, _, err := vc.parseDestinationTarget(name.Qualifier.String())
 	if err != nil {
 		return nil, err
 	}
@@ -439,7 +442,7 @@ func (vc *VCursorImpl) FindTableOrVindex(name sqlparser.TableName) (*vindexes.Ta
 		return vc.getDualTable()
 	}
 
-	destKeyspace, destTabletType, dest, err := ParseDestinationTarget(name.Qualifier.String(), vc.tabletType, vc.vschema)
+	destKeyspace, destTabletType, dest, err := vc.parseDestinationTarget(name.Qualifier.String())
 	if err != nil {
 		return nil, nil, "", destTabletType, nil, err
 	}
@@ -453,7 +456,24 @@ func (vc *VCursorImpl) FindTableOrVindex(name sqlparser.TableName) (*vindexes.Ta
 	return table, vindex, destKeyspace, destTabletType, dest, nil
 }
 
-func (vc *VCursorImpl) ParseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.Destination, error) {
+// FindViewTarget finds the specified view's target keyspace.
+func (vc *VCursorImpl) FindViewTarget(name sqlparser.TableName) (*vindexes.Keyspace, error) {
+	destKeyspace, _, _, err := vc.parseDestinationTarget(name.Qualifier.String())
+	if err != nil {
+		return nil, err
+	}
+	if destKeyspace != "" {
+		return vc.FindKeyspace(destKeyspace)
+	}
+
+	tbl, err := vc.vschema.FindRoutedTable("", name.Name.String(), vc.tabletType)
+	if err != nil || tbl == nil {
+		return nil, err
+	}
+	return tbl.Keyspace, nil
+}
+
+func (vc *VCursorImpl) parseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.Destination, error) {
 	return ParseDestinationTarget(targetString, vc.tabletType, vc.vschema)
 }
 
@@ -642,21 +662,29 @@ func (vc *VCursorImpl) ExecutePrimitive(ctx context.Context, primitive engine.Pr
 }
 
 func (vc *VCursorImpl) logOpTraffic(primitive engine.Primitive, res *sqltypes.Result) {
-	if vc.interOpStats != nil {
-		rows := vc.interOpStats[primitive]
-		if res == nil {
-			rows = append(rows, 0)
-		} else {
-			rows = append(rows, len(res.Rows))
-		}
-		vc.interOpStats[primitive] = rows
+	if vc.interOpStats == nil {
+		return
 	}
+
+	vc.mu.Lock()
+	defer vc.mu.Unlock()
+
+	rows := vc.interOpStats[primitive]
+	if res == nil {
+		rows = append(rows, 0)
+	} else {
+		rows = append(rows, len(res.Rows))
+	}
+	vc.interOpStats[primitive] = rows
 }
 
 func (vc *VCursorImpl) logShardsQueried(primitive engine.Primitive, shardsNb int) {
-	if vc.shardsStats != nil {
-		vc.shardsStats[primitive] += engine.ShardsQueried(shardsNb)
+	if vc.shardsStats == nil {
+		return
 	}
+	vc.mu.Lock()
+	defer vc.mu.Unlock()
+	vc.shardsStats[primitive] += engine.ShardsQueried(shardsNb)
 }
 
 func (vc *VCursorImpl) ExecutePrimitiveStandalone(ctx context.Context, primitive engine.Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
@@ -1308,7 +1336,7 @@ func (vc *VCursorImpl) GetAggregateUDFs() []string {
 // FindMirrorRule finds the mirror rule for the requested table name and
 // VSchema tablet type.
 func (vc *VCursorImpl) FindMirrorRule(name sqlparser.TableName) (*vindexes.MirrorRule, error) {
-	destKeyspace, destTabletType, _, err := vc.ParseDestinationTarget(name.Qualifier.String())
+	destKeyspace, destTabletType, _, err := vc.parseDestinationTarget(name.Qualifier.String())
 	if err != nil {
 		return nil, err
 	}
@@ -1582,4 +1610,10 @@ func (vc *VCursorImpl) GetContextWithTimeOut(ctx context.Context) (context.Conte
 
 func (vc *VCursorImpl) IgnoreMaxMemoryRows() bool {
 	return vc.ignoreMaxMemoryRows
+}
+
+func (vc *VCursorImpl) SetLastInsertID(id uint64) {
+	vc.SafeSession.mu.Lock()
+	defer vc.SafeSession.mu.Unlock()
+	vc.SafeSession.LastInsertId = id
 }

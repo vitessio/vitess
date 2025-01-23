@@ -544,7 +544,7 @@ func splitAggrColumnsToLeftAndRight(
 
 	canPushDistinctAggr, distinctExprs := checkIfWeCanPush(ctx, aggregator)
 
-	// Distinct aggregation cannot be pushed down in the join.
+	// Distinctable aggregation cannot be pushed down in the join.
 	// We keep node of the distinct aggregation expression to be used later for ordering.
 	if !canPushDistinctAggr {
 		if len(distinctExprs) != 1 {

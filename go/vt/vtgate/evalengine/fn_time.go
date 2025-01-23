@@ -256,7 +256,7 @@ func (call *builtinNow) constant() bool {
 
 func (call *builtinSysdate) eval(env *ExpressionEnv) (eval, error) {
 	now := SystemTime()
-	if tz := env.currentTimezone(); tz != nil {
+	if tz := env.currentTimezone(); tz != time.Local {
 		now = now.In(tz)
 	}
 	return newEvalDateTime(datetime.NewDateTimeFromStd(now), int(call.prec), false), nil
@@ -701,7 +701,7 @@ func (b *builtinFromUnixtime) eval(env *ExpressionEnv) (eval, error) {
 	}
 
 	t := time.Unix(sec, frac)
-	if tz := env.currentTimezone(); tz != nil {
+	if tz := env.currentTimezone(); tz != time.Local {
 		t = t.In(tz)
 	}
 

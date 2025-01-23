@@ -32,6 +32,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 
 	"vitess.io/vitess/go/mysql"
@@ -71,7 +72,7 @@ func SetupReparentCluster(t *testing.T, durability string) *cluster.LocalProcess
 
 // SetupRangeBasedCluster sets up the range based cluster
 func SetupRangeBasedCluster(ctx context.Context, t *testing.T) *cluster.LocalProcessCluster {
-	return setupCluster(ctx, t, ShardName, []string{cell1}, []int{2}, "semi_sync")
+	return setupCluster(ctx, t, ShardName, []string{cell1}, []int{2}, policy.DurabilitySemiSync)
 }
 
 // SetupShardedReparentCluster is used to setup a sharded cluster for testing
@@ -154,7 +155,7 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 	require.NoError(t, err, "Error managing topo")
 	numCell := 1
 	for numCell < len(cells) {
-		err = clusterInstance.VtctlProcess.AddCellInfo(cells[numCell])
+		err = clusterInstance.VtctldClientProcess.AddCellInfo(cells[numCell])
 		require.NoError(t, err, "Error managing topo")
 		numCell++
 	}
@@ -208,7 +209,7 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 		}
 	}
 	if clusterInstance.VtctlMajorVersion >= 14 {
-		clusterInstance.VtctldClientProcess = *cluster.VtctldClientProcessInstance("localhost", clusterInstance.VtctldProcess.GrpcPort, clusterInstance.TmpDirectory)
+		clusterInstance.VtctldClientProcess = *cluster.VtctldClientProcessInstance(clusterInstance.VtctldProcess.GrpcPort, clusterInstance.TopoPort, "localhost", clusterInstance.TmpDirectory)
 		out, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", KeyspaceName, fmt.Sprintf("--durability-policy=%s", durability))
 		require.NoError(t, err, out)
 	}
@@ -406,10 +407,10 @@ func ErsIgnoreTablet(clusterInstance *cluster.LocalProcessCluster, tab *cluster.
 	return clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(args...)
 }
 
-// ErsWithVtctl runs ERS via vtctl binary
-func ErsWithVtctl(clusterInstance *cluster.LocalProcessCluster) (string, error) {
-	args := []string{"EmergencyReparentShard", "--", "--keyspace_shard", fmt.Sprintf("%s/%s", KeyspaceName, ShardName)}
-	return clusterInstance.VtctlProcess.ExecuteCommandWithOutput(args...)
+// ErsWithVtctldClient runs ERS via a vtctldclient binary.
+func ErsWithVtctldClient(clusterInstance *cluster.LocalProcessCluster) (string, error) {
+	args := []string{"EmergencyReparentShard", fmt.Sprintf("%s/%s", KeyspaceName, ShardName)}
+	return clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(args...)
 }
 
 // endregion

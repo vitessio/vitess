@@ -18,6 +18,7 @@ package preparestmt
 
 import (
 	"database/sql"
+	_ "embed"
 	"flag"
 	"fmt"
 	"os"
@@ -51,7 +52,7 @@ type DBInfo struct {
 }
 
 func init() {
-	dbInfo.KeyspaceName = keyspaceName
+	dbInfo.KeyspaceName = uks
 	dbInfo.Username = "testuser1"
 	dbInfo.Password = "testpassword1"
 	dbInfo.Params = []string{
@@ -65,9 +66,9 @@ var (
 	clusterInstance       *cluster.LocalProcessCluster
 	dbInfo                DBInfo
 	hostname              = "localhost"
-	keyspaceName          = "test_keyspace"
+	uks                   = "uks"
+	sks                   = "sks"
 	testingID             = 1
-	tableName             = "vt_prepare_stmt_test"
 	cell                  = "zone1"
 	mysqlAuthServerStatic = "mysql_auth_server_static.json"
 	jsonExample           = `{
@@ -108,57 +109,18 @@ var (
 			}
 		}
 	}`
-	sqlSchema = `create table ` + tableName + ` (
-		id bigint auto_increment,
-		msg varchar(64),
-		keyspace_id bigint(20) unsigned NOT NULL,
-		tinyint_unsigned TINYINT,
-		bool_signed BOOL,
-		smallint_unsigned SMALLINT,
-		mediumint_unsigned MEDIUMINT,
-		int_unsigned INT,
-		float_unsigned FLOAT(10,2),
-		double_unsigned DOUBLE(16,2),
-		decimal_unsigned DECIMAL,
-		t_date DATE,
-		t_datetime DATETIME,
-		t_datetime_micros DATETIME(6),
-		t_time TIME,
-		t_timestamp TIMESTAMP,
-		c8 bit(8) DEFAULT NULL,
-		c16 bit(16) DEFAULT NULL,
-		c24 bit(24) DEFAULT NULL,
-		c32 bit(32) DEFAULT NULL,
-		c40 bit(40) DEFAULT NULL,
-		c48 bit(48) DEFAULT NULL,
-		c56 bit(56) DEFAULT NULL,
-		c63 bit(63) DEFAULT NULL,
-		c64 bit(64) DEFAULT NULL,
-		json_col JSON,
-		text_col TEXT,
-		data longblob,
-		tinyint_min TINYINT,
-		tinyint_max TINYINT,
-		tinyint_pos TINYINT,
-		tinyint_neg TINYINT,
-		smallint_min SMALLINT,
-		smallint_max SMALLINT,
-		smallint_pos SMALLINT,
-		smallint_neg SMALLINT,
-		medint_min MEDIUMINT,
-		medint_max MEDIUMINT,
-		medint_pos MEDIUMINT,
-		medint_neg MEDIUMINT,
-		int_min INT,
-		int_max INT,
-		int_pos INT,
-		int_neg INT,
-		bigint_min BIGINT,
-		bigint_max BIGINT,
-		bigint_pos BIGINT,
-		bigint_neg BIGINT,
-		primary key (id)
-		) Engine=InnoDB`
+
+	//go:embed uSchema.sql
+	uSQLSchema string
+
+	//go:embed uVschema.json
+	uVschema string
+
+	//go:embed sSchema.sql
+	sSQLSchema string
+
+	//go:embed sVschema.json
+	sVschema string
 )
 
 func TestMain(m *testing.M) {
@@ -185,15 +147,13 @@ func TestMain(m *testing.M) {
 		}
 
 		// Start keyspace
-		keyspace := &cluster.Keyspace{
-			Name:      keyspaceName,
-			SchemaSQL: sqlSchema,
-		}
-		uks := &cluster.Keyspace{Name: "uks"}
-		if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false); err != nil {
+		ks := cluster.Keyspace{Name: uks, SchemaSQL: uSQLSchema, VSchema: uVschema}
+		if err := clusterInstance.StartUnshardedKeyspace(ks, 1, false); err != nil {
 			return 1, err
 		}
-		if err := clusterInstance.StartUnshardedKeyspace(*uks, 0, false); err != nil {
+
+		ks = cluster.Keyspace{Name: sks, SchemaSQL: sSQLSchema, VSchema: sVschema}
+		if err := clusterInstance.StartKeyspace(ks, []string{"-"}, 0, false); err != nil {
 			return 1, err
 		}
 
@@ -203,7 +163,8 @@ func TestMain(m *testing.M) {
 		vtgateInstance.ExtraArgs = []string{
 			"--mysql_server_query_timeout", "1s",
 			"--mysql_auth_server_static_file", clusterInstance.TmpDirectory + "/" + mysqlAuthServerStatic,
-			"--mysql_server_version", "8.0.16-7",
+			"--pprof-http",
+			"--schema_change_signal=false",
 		}
 
 		// Start vtgate
@@ -251,7 +212,7 @@ func createConfig(name, data string) error {
 }
 
 // Connect will connect the vtgate through mysql protocol.
-func Connect(t *testing.T, params ...string) *sql.DB {
+func Connect(t testing.TB, params ...string) *sql.DB {
 	dbo, err := sql.Open("mysql", dbInfo.ConnectionString(params...))
 	require.Nil(t, err)
 	return dbo
@@ -285,7 +246,7 @@ func execErr(dbo *sql.DB, stmt string, params ...any) *mysql.MySQLError {
 func selectWhere(t *testing.T, dbo *sql.DB, where string, params ...any) []tableData {
 	var out []tableData
 	// prepare query
-	qry := "SELECT msg, data, text_col, t_datetime, t_datetime_micros FROM " + tableName
+	qry := "SELECT msg, data, text_col, t_datetime, t_datetime_micros FROM vt_prepare_stmt_test"
 	if where != "" {
 		qry += " WHERE (" + where + ")"
 	}
@@ -307,7 +268,7 @@ func selectWhere(t *testing.T, dbo *sql.DB, where string, params ...any) []table
 func selectWhereWithTx(t *testing.T, tx *sql.Tx, where string, params ...any) []tableData {
 	var out []tableData
 	// prepare query
-	qry := "SELECT msg, data, text_col, t_datetime, t_datetime_micros FROM " + tableName
+	qry := "SELECT msg, data, text_col, t_datetime, t_datetime_micros FROM vt_prepare_stmt_test"
 	if where != "" {
 		qry += " WHERE (" + where + ")"
 	}

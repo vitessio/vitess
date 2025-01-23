@@ -33,6 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/reparenttestutil"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
@@ -60,7 +61,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 	newPrimary := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, nil)
 	goodReplica1 := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, nil)
 	goodReplica2 := NewFakeTablet(t, wr, "cell2", 3, topodatapb.TabletType_REPLICA, nil)
-	reparenttestutil.SetKeyspaceDurability(context.Background(), t, ts, "test_keyspace", "semi_sync")
+	reparenttestutil.SetKeyspaceDurability(context.Background(), t, ts, "test_keyspace", policy.DurabilitySemiSync)
 
 	oldPrimary.FakeMysqlDaemon.Replicating = false
 	oldPrimary.FakeMysqlDaemon.SetPrimaryPositionLocked(replication.Position{
@@ -132,7 +133,8 @@ func TestEmergencyReparentShard(t *testing.T) {
 			},
 		},
 	})
-	goodReplica1RelayLogPos, _ := replication.ParseFilePosGTIDSet("relay-bin.000004:455")
+	goodReplica1RelayLogPos, err := replication.ParseFilePosGTIDSet("relay-bin.003222:18321744073709551612") // Requires all 64 bits or uint64
+	require.NoError(t, err)
 	goodReplica1.FakeMysqlDaemon.CurrentSourceFilePosition = replication.Position{
 		GTIDSet: goodReplica1RelayLogPos,
 	}
@@ -181,7 +183,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 
 	// run EmergencyReparentShard
 	waitReplicaTimeout := time.Second * 2
-	err := vp.Run([]string{"EmergencyReparentShard", "--wait_replicas_timeout", waitReplicaTimeout.String(), newPrimary.Tablet.Keyspace + "/" + newPrimary.Tablet.Shard,
+	err = vp.Run([]string{"EmergencyReparentShard", "--wait_replicas_timeout", waitReplicaTimeout.String(), newPrimary.Tablet.Keyspace + "/" + newPrimary.Tablet.Shard,
 		topoproto.TabletAliasString(newPrimary.Tablet.Alias)})
 	require.NoError(t, err)
 	// check what was run
@@ -211,7 +213,7 @@ func TestEmergencyReparentShardPrimaryElectNotBest(t *testing.T) {
 	oldPrimary := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_PRIMARY, nil)
 	newPrimary := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, nil)
 	moreAdvancedReplica := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, nil)
-	reparenttestutil.SetKeyspaceDurability(context.Background(), t, ts, "test_keyspace", "semi_sync")
+	reparenttestutil.SetKeyspaceDurability(context.Background(), t, ts, "test_keyspace", policy.DurabilitySemiSync)
 
 	// new primary
 	newPrimary.FakeMysqlDaemon.Replicating = true

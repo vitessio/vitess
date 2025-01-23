@@ -60,14 +60,17 @@ func commandUpdateState(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
 	var state binlogdatapb.VReplicationWorkflowState
+	var shards []string
 	switch strings.ToLower(cmd.Name()) {
 	case "start":
 		if err := common.CanRestartWorkflow(baseOptions.Keyspace, baseOptions.Workflow); err != nil {
 			return err
 		}
 		state = binlogdatapb.VReplicationWorkflowState_Running
+		shards = baseOptions.Shards
 	case "stop":
 		state = binlogdatapb.VReplicationWorkflowState_Stopped
+		shards = baseOptions.Shards
 	default:
 		return fmt.Errorf("invalid workflow state: %s", args[0])
 	}
@@ -80,6 +83,7 @@ func commandUpdateState(cmd *cobra.Command, args []string) error {
 			Cells:       textutil.SimulatedNullStringSlice,
 			TabletTypes: textutil.SimulatedNullTabletTypeSlice,
 			State:       &state,
+			Shards:      shards,
 		},
 	}
 

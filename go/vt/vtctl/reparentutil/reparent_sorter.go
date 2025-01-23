@@ -20,6 +20,7 @@ import (
 	"sort"
 
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -32,11 +33,11 @@ type reparentSorter struct {
 	tablets          []*topodatapb.Tablet
 	positions        []replication.Position
 	innodbBufferPool []int
-	durability       Durabler
+	durability       policy.Durabler
 }
 
 // newReparentSorter creates a new reparentSorter
-func newReparentSorter(tablets []*topodatapb.Tablet, positions []replication.Position, innodbBufferPool []int, durability Durabler) *reparentSorter {
+func newReparentSorter(tablets []*topodatapb.Tablet, positions []replication.Position, innodbBufferPool []int, durability policy.Durabler) *reparentSorter {
 	return &reparentSorter{
 		tablets:          tablets,
 		positions:        positions,
@@ -82,8 +83,8 @@ func (rs *reparentSorter) Less(i, j int) bool {
 
 	// at this point, both have the same GTIDs
 	// so we check their promotion rules
-	jPromotionRule := PromotionRule(rs.durability, rs.tablets[j])
-	iPromotionRule := PromotionRule(rs.durability, rs.tablets[i])
+	jPromotionRule := policy.PromotionRule(rs.durability, rs.tablets[j])
+	iPromotionRule := policy.PromotionRule(rs.durability, rs.tablets[i])
 
 	// If the promotion rules are different then we want to sort by the promotion rules.
 	if len(rs.innodbBufferPool) != 0 && jPromotionRule == iPromotionRule {
@@ -100,7 +101,7 @@ func (rs *reparentSorter) Less(i, j int) bool {
 
 // sortTabletsForReparent sorts the tablets, given their positions for emergency reparent shard and planned reparent shard.
 // Tablets are sorted first by their replication positions, with ties broken by the promotion rules.
-func sortTabletsForReparent(tablets []*topodatapb.Tablet, positions []replication.Position, innodbBufferPool []int, durability Durabler) error {
+func sortTabletsForReparent(tablets []*topodatapb.Tablet, positions []replication.Position, innodbBufferPool []int, durability policy.Durabler) error {
 	// throw an error internal error in case of unequal number of tablets and positions
 	// fail-safe code prevents panic in sorting in case the lengths are unequal
 	if len(tablets) != len(positions) {

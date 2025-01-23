@@ -48,7 +48,8 @@ type normalizer struct {
 	reserved  *ReservedVars
 	vals      map[Literal]string
 	err       error
-	inDerived bool
+	inDerived int
+	inSelect  int
 }
 
 func newNormalizer(reserved *ReservedVars, bindVars map[string]*querypb.BindVariable) *normalizer {
@@ -64,30 +65,43 @@ func (nz *normalizer) walkStatementUp(cursor *Cursor) bool {
 	if nz.err != nil {
 		return false
 	}
-	node, isLiteral := cursor.Node().(*Literal)
-	if !isLiteral {
-		return true
+	switch node := cursor.node.(type) {
+	case *DerivedTable:
+		nz.inDerived--
+	case *Select:
+		nz.inSelect--
+	case *Literal:
+		if nz.inSelect == 0 {
+			nz.convertLiteral(node, cursor)
+			return nz.err == nil
+		}
+		parent := cursor.Parent()
+		switch parent.(type) {
+		case *Order, *GroupBy:
+			return true
+		case *Limit:
+			nz.convertLiteral(node, cursor)
+		default:
+			nz.convertLiteralDedup(node, cursor)
+		}
 	}
-	nz.convertLiteral(node, cursor)
 	return nz.err == nil // only continue if we haven't found any errors
 }
 
 // walkStatementDown is the top level walk function.
 // If it encounters a Select, it switches to a mode
 // where variables are deduped.
-func (nz *normalizer) walkStatementDown(node, parent SQLNode) bool {
+func (nz *normalizer) walkStatementDown(node, _ SQLNode) bool {
 	switch node := node.(type) {
 	// no need to normalize the statement types
 	case *Set, *Show, *Begin, *Commit, *Rollback, *Savepoint, DDLStatement, *SRollback, *Release, *OtherAdmin, *Analyze:
 		return false
+	case *DerivedTable:
+		nz.inDerived++
 	case *Select:
-		_, isDerived := parent.(*DerivedTable)
-		var tmp bool
-		tmp, nz.inDerived = nz.inDerived, isDerived
-		_ = SafeRewrite(node, nz.walkDownSelect, nz.walkUpSelect)
-		// Don't continue
-		nz.inDerived = tmp
-		return false
+		nz.inSelect++
+	case SelectExprs:
+		return nz.inDerived == 0
 	case *ComparisonExpr:
 		nz.convertComparison(node)
 	case *UpdateExpr:
@@ -98,62 +112,9 @@ func (nz *normalizer) walkStatementDown(node, parent SQLNode) bool {
 		return false
 	case *ConvertType: // we should not rewrite the type description
 		return false
-	}
-	return nz.err == nil // only continue if we haven't found any errors
-}
-
-// walkDownSelect normalizes the AST in Select mode.
-func (nz *normalizer) walkDownSelect(node, parent SQLNode) bool {
-	switch node := node.(type) {
-	case *Select:
-		_, isDerived := parent.(*DerivedTable)
-		if !isDerived {
-			return true
-		}
-		var tmp bool
-		tmp, nz.inDerived = nz.inDerived, isDerived
-		// initiating a new AST walk here means that we might change something while walking down on the tree,
-		// but since we are only changing literals, we can be safe that we are not changing the SELECT struct,
-		// only something much further down, and that should be safe
-		_ = SafeRewrite(node, nz.walkDownSelect, nz.walkUpSelect)
-		// Don't continue
-		nz.inDerived = tmp
-		return false
-	case SelectExprs:
-		return !nz.inDerived
-	case *ComparisonExpr:
-		nz.convertComparison(node)
 	case *FramePoint:
 		// do not make a bind var for rows and range
 		return false
-	case *ColName, TableName:
-		// Common node types that never contain Literals or ListArgs but create a lot of object
-		// allocations.
-		return false
-	case *ConvertType:
-		// we should not rewrite the type description
-		return false
-	}
-	return nz.err == nil // only continue if we haven't found any errors
-}
-
-// walkUpSelect normalizes the Literals in Select mode.
-func (nz *normalizer) walkUpSelect(cursor *Cursor) bool {
-	if nz.err != nil {
-		return false
-	}
-	node, isLiteral := cursor.Node().(*Literal)
-	if !isLiteral {
-		return true
-	}
-	parent := cursor.Parent()
-	switch parent.(type) {
-	case *Order, *GroupBy:
-		return true
-	case *Limit:
-		nz.convertLiteral(node, cursor)
-	default:
-		nz.convertLiteralDedup(node, cursor)
 	}
 	return nz.err == nil // only continue if we haven't found any errors
 }

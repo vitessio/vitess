@@ -28,6 +28,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/streamlog"
+
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtenv"
@@ -840,7 +842,7 @@ func TestQueryExecutorMessageStreamACL(t *testing.T) {
 		ctx:      ctx,
 		query:    "stream from msg",
 		plan:     plan,
-		logStats: tabletenv.NewLogStats(ctx, "TestQueryExecutor"),
+		logStats: tabletenv.NewLogStats(ctx, "TestQueryExecutor", streamlog.NewQueryLogConfigForTest()),
 		tsv:      tsv,
 	}
 
@@ -1556,7 +1558,7 @@ func newTransaction(tsv *TabletServer, options *querypb.ExecuteOptions) int64 {
 }
 
 func newTestQueryExecutor(ctx context.Context, tsv *TabletServer, sql string, txID int64) *QueryExecutor {
-	logStats := tabletenv.NewLogStats(ctx, "TestQueryExecutor")
+	logStats := tabletenv.NewLogStats(ctx, "TestQueryExecutor", streamlog.NewQueryLogConfigForTest())
 	plan, err := tsv.qe.GetPlan(ctx, logStats, sql, false)
 	if err != nil {
 		panic(err)
@@ -1573,7 +1575,7 @@ func newTestQueryExecutor(ctx context.Context, tsv *TabletServer, sql string, tx
 }
 
 func newTestQueryExecutorStreaming(ctx context.Context, tsv *TabletServer, sql string, txID int64) *QueryExecutor {
-	logStats := tabletenv.NewLogStats(ctx, "TestQueryExecutorStreaming")
+	logStats := tabletenv.NewLogStats(ctx, "TestQueryExecutorStreaming", streamlog.NewQueryLogConfigForTest())
 	plan, err := tsv.qe.GetStreamPlan(ctx, logStats, sql, false)
 	if err != nil {
 		panic(err)

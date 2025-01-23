@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	twopcutil "vitess.io/vitess/go/test/endtoend/transaction/twopc/utils"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 )
 
 var (
@@ -78,7 +79,7 @@ func TestMain(m *testing.M) {
 			SchemaSQL:        SchemaSQL,
 			VSchema:          VSchema,
 			SidecarDBName:    sidecarDBName,
-			DurabilityPolicy: "semi_sync",
+			DurabilityPolicy: policy.DurabilitySemiSync,
 		}
 		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-40", "40-80", "80-"}, 2, false); err != nil {
 			return 1

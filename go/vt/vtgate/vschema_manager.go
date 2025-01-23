@@ -49,7 +49,7 @@ type VSchemaManager struct {
 // SchemaInfo is an interface to schema tracker.
 type SchemaInfo interface {
 	Tables(ks string) map[string]*vindexes.TableInfo
-	Views(ks string) map[string]sqlparser.SelectStatement
+	Views(ks string) map[string]sqlparser.TableStatement
 	UDFs(ks string) []string
 }
 
@@ -194,27 +194,44 @@ func (vm *VSchemaManager) buildAndEnhanceVSchema(v *vschemapb.SrvVSchema) *vinde
 		// We mark the keyspaces that have foreign key management in Vitess and have cyclic foreign keys
 		// to have an error. This makes all queries against them to fail.
 		markErrorIfCyclesInFk(vschema)
+		// Add tables from schema tracking into globally routable tables, if they are not already present.
+		// We need to skip if already present, to handle the case where MoveTables has switched traffic
+		// and removed the source vschema but not from the source database because user asked to --keep-data
+		vindexes.AddAdditionalGlobalTables(v, vschema)
 	}
 	return vschema
 }
 
 func (vm *VSchemaManager) updateFromSchema(vschema *vindexes.VSchema) {
 	for ksName, ks := range vschema.Keyspaces {
-		vm.updateTableInfo(vschema, ks, ksName)
 		vm.updateViewInfo(ks, ksName)
+		vm.updateTableInfo(vschema, ks, ksName)
 		vm.updateUDFsInfo(ks, ksName)
 	}
 }
 
 func (vm *VSchemaManager) updateViewInfo(ks *vindexes.KeyspaceSchema, ksName string) {
 	views := vm.schema.Views(ksName)
-	if views != nil {
-		ks.Views = make(map[string]sqlparser.SelectStatement, len(views))
-		for name, def := range views {
-			ks.Views[name] = sqlparser.Clone(def)
+	if views == nil {
+		return
+	}
+	ks.Views = make(map[string]sqlparser.TableStatement, len(views))
+	for name, def := range views {
+		ks.Views[name] = sqlparser.Clone(def)
+		vTbl, ok := ks.Tables[name]
+		if ok {
+			vTbl.Type = vindexes.TypeView
+		} else {
+			// Adding view to the VSchema as a table.
+			ks.Tables[name] = &vindexes.Table{
+				Type:     vindexes.TypeView,
+				Name:     sqlparser.NewIdentifierCS(name),
+				Keyspace: ks.Keyspace,
+			}
 		}
 	}
 }
+
 func (vm *VSchemaManager) updateTableInfo(vschema *vindexes.VSchema, ks *vindexes.KeyspaceSchema, ksName string) {
 	m := vm.schema.Tables(ksName)
 	// Before we add the foreign key definitions in the tables, we need to make sure that all the tables

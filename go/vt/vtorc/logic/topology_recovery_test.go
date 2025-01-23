@@ -20,6 +20,8 @@ import (
 	"context"
 	"testing"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"github.com/stretchr/testify/require"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -41,6 +43,11 @@ func TestAnalysisEntriesHaveSameRecovery(t *testing.T) {
 			// DeadPrimary and DeadPrimaryAndSomeReplicas have the same recovery
 			prevAnalysisCode: inst.DeadPrimary,
 			newAnalysisCode:  inst.DeadPrimaryAndSomeReplicas,
+			shouldBeEqual:    true,
+		}, {
+			// DeadPrimary and StalledDiskPrimary have the same recovery
+			prevAnalysisCode: inst.DeadPrimary,
+			newAnalysisCode:  inst.PrimaryDiskStalled,
 			shouldBeEqual:    true,
 		}, {
 			// DeadPrimary and PrimaryTabletDeleted are different recoveries.
@@ -126,7 +133,7 @@ func TestElectNewPrimaryPanic(t *testing.T) {
 	defer cancel()
 
 	ts = memorytopo.NewServer(ctx, "zone1")
-	recoveryAttempted, _, err := electNewPrimary(context.Background(), analysisEntry)
+	recoveryAttempted, _, err := electNewPrimary(context.Background(), analysisEntry, log.NewPrefixedLogger("prefix"))
 	require.True(t, recoveryAttempted)
 	require.Error(t, err)
 }
@@ -214,6 +221,16 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 			name:                 "DeadPrimary with ERS disabled",
 			ersEnabled:           false,
 			analysisCode:         inst.DeadPrimary,
+			wantRecoveryFunction: noRecoveryFunc,
+		}, {
+			name:                 "StalledDiskPrimary with ERS enabled",
+			ersEnabled:           true,
+			analysisCode:         inst.PrimaryDiskStalled,
+			wantRecoveryFunction: recoverDeadPrimaryFunc,
+		}, {
+			name:                 "StalledDiskPrimary with ERS disabled",
+			ersEnabled:           false,
+			analysisCode:         inst.PrimaryDiskStalled,
 			wantRecoveryFunction: noRecoveryFunc,
 		}, {
 			name:                 "PrimaryTabletDeleted with ERS enabled",
