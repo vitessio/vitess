@@ -19,6 +19,8 @@
 - **[Minor Changes](#minor-changes)**
   - **[VTTablet Flags](#flags-vttablet)**
   - **[Topology read concurrency behaviour changes](#topo-read-concurrency-changes)**
+  - **[VTAdmin](#vtadmin)**
+    - [Updated to node v22.13.1](#updated-node)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -150,3 +152,10 @@ While the flag will continue to accept float values (interpreted as seconds) for
 The `--topo_read_concurrency` flag was added to all components that access the topology and the provided limit is now applied separately for each global or local cell _(default `32`)_.
 
 All topology read calls _(`Get`, `GetVersion`, `List` and `ListDir`)_ now respect this per-cell limit. Previous to this version a single limit was applied to all cell calls and it was not respected by many topology calls.
+
+### <a id="vtadmin"/>VTAdmin
+
+#### <a id="updated-node"/>vtadmin-web updated to node v22.13.1 (LTS)
+
+Building `vtadmin-web` now requires node >= v22.13.0 (LTS). Breaking changes from v20 to v22 can be found at https://nodejs.org/en/blog/release/v22.13.0 -- with no known issues that apply to VTAdmin.
+Full details on the node v20.12.2 release can be found at https://nodejs.org/en/blog/release/v22.13.1.
