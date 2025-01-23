@@ -3069,8 +3069,8 @@ func (s *Server) canSwitch(ctx context.Context, ts *trafficSwitcher, maxAllowedR
 	if err != nil {
 		return "", err
 	}
-	if wf.MaxVReplicationLag > maxAllowedReplLagSecs {
-		return fmt.Sprintf(cannotSwitchHighLag, wf.MaxVReplicationLag, maxAllowedReplLagSecs), nil
+	if wf.MaxVReplicationTransactionLag > maxAllowedReplLagSecs {
+		return fmt.Sprintf(cannotSwitchHighLag, wf.MaxVReplicationTransactionLag, maxAllowedReplLagSecs), nil
 	}
 	for _, stream := range wf.ShardStreams {
 		for _, st := range stream.GetStreams() {
