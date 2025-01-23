@@ -214,6 +214,7 @@ func TestHighNumberOfParams(t *testing.T) {
 }
 
 func TestPrepareStatements(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 17, "vtgate")
 	mcmp, closer := start(t)
 	defer closer()
 

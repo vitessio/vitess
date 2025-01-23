@@ -68,6 +68,10 @@ func (nz *normalizer) walkStatementUp(cursor *Cursor) bool {
 	if !isLiteral {
 		return true
 	}
+	_, isCurTimeFunc := cursor.Parent().(*CurTimeFuncExpr)
+	if isCurTimeFunc {
+		return true
+	}
 	nz.convertLiteral(node, cursor)
 	return nz.err == nil // only continue if we haven't found any errors
 }
@@ -132,6 +136,8 @@ func (nz *normalizer) walkDownSelect(node, parent SQLNode) bool {
 		return false
 	case *ConvertType:
 		// we should not rewrite the type description
+		return false
+	case *CurTimeFuncExpr:
 		return false
 	}
 	return nz.err == nil // only continue if we haven't found any errors
