@@ -918,8 +918,20 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			addTestRows()
 			timeout := lagDuration * 2 // 6s
 			// Use the default max-replication-lag-allowed value of 30s.
-			out, err = vc.VtctldClient.ExecuteCommandWithOutput(workflowType, "--workflow", workflow, "--target-keyspace", targetKs,
-				"SwitchTraffic", "--tablet-types=primary", "--timeout", timeout.String())
+			// We run the command in a goroutine so that we can unblock things
+			// after the timeout is reached -- as the vplayer query is blocking
+			// on the table lock.
+			wg := sync.WaitGroup{}
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				out, err = vc.VtctldClient.ExecuteCommandWithOutput(workflowType, "--workflow", workflow, "--target-keyspace", targetKs,
+					"SwitchTraffic", "--tablet-types=primary", "--timeout", timeout.String())
+			}()
+			time.Sleep(timeout)
+			// Now we can unblock things and let it continue.
+			unlockTargetTable()
+			wg.Wait()
 			// It should fail due to the command context timeout and we should
 			// successfully cancel.
 			require.Error(t, err)
@@ -927,7 +939,6 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			require.NotContains(t, out, "cancel migration failed")
 			// Confirm that queries still work fine.
 			execVtgateQuery(t, vtgateConn, sourceKs, "select * from customer limit 1")
-			unlockTargetTable()
 			deleteTestRows()
 			waitForTargetToCatchup()
 		})

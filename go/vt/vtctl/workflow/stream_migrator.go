@@ -203,12 +203,15 @@ func (sm *StreamMigrator) Templates() []*VReplicationStream {
 }
 
 // CancelStreamMigrations cancels the stream migrations.
-func (sm *StreamMigrator) CancelStreamMigrations(ctx context.Context) {
+func (sm *StreamMigrator) CancelStreamMigrations(ctx context.Context) error {
 	if sm.streams == nil {
-		return
+		return nil
 	}
+	errs := &concurrency.AllErrorRecorder{}
 
-	_ = sm.deleteTargetStreams(ctx)
+	if err := sm.deleteTargetStreams(ctx); err != nil {
+		errs.RecordError(err)
+	}
 
 	// Restart the source streams, but leave the Reshard workflow's reverse
 	// variant stopped.
@@ -221,8 +224,13 @@ func (sm *StreamMigrator) CancelStreamMigrations(ctx context.Context) {
 		return err
 	})
 	if err != nil {
+		errs.RecordError(err)
 		sm.logger.Errorf("Cancel stream migrations failed: could not restart source streams: %v", err)
 	}
+	if errs.HasErrors() {
+		return errs.AggrError(vterrors.Aggregate)
+	}
+	return nil
 }
 
 // MigrateStreams migrates N streams

@@ -754,7 +754,7 @@ func (ts *trafficSwitcher) changeShardsAccess(ctx context.Context, keyspace stri
 
 func (ts *trafficSwitcher) allowTargetWrites(ctx context.Context) error {
 	if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
-		return ts.switchDeniedTables(ctx)
+		return ts.switchDeniedTables(ctx, false)
 	}
 	return ts.changeShardsAccess(ctx, ts.TargetKeyspaceName(), ts.TargetShards(), allowWrites)
 }
@@ -1062,7 +1062,7 @@ func (ts *trafficSwitcher) waitForCatchup(ctx context.Context, filteredReplicati
 func (ts *trafficSwitcher) stopSourceWrites(ctx context.Context) error {
 	var err error
 	if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
-		err = ts.switchDeniedTables(ctx)
+		err = ts.switchDeniedTables(ctx, false)
 	} else {
 		err = ts.changeShardsAccess(ctx, ts.SourceKeyspaceName(), ts.SourceShards(), disallowWrites)
 	}
@@ -1075,16 +1075,25 @@ func (ts *trafficSwitcher) stopSourceWrites(ctx context.Context) error {
 
 // switchDeniedTables switches the denied tables rules for the traffic switch.
 // They are removed on the source side and added on the target side.
-func (ts *trafficSwitcher) switchDeniedTables(ctx context.Context) error {
+// If backward is true, then we swap this logic, removing on the target side
+// and adding on the source side. You would want to do that e.g. when canceling
+// a failed (and currently partial) traffic switch as the source and target
+// have already been switched in the trafficSwitcher.
+func (ts *trafficSwitcher) switchDeniedTables(ctx context.Context, backward bool) error {
 	if ts.MigrationType() != binlogdatapb.MigrationType_TABLES {
 		return nil
+	}
+
+	rmsource, rmtarget := false, true
+	if backward {
+		rmsource, rmtarget = true, false
 	}
 
 	egrp, ectx := errgroup.WithContext(ctx)
 	egrp.Go(func() error {
 		return ts.ForAllSources(func(source *MigrationSource) error {
 			if _, err := ts.TopoServer().UpdateShardFields(ctx, ts.SourceKeyspaceName(), source.GetShard().ShardName(), func(si *topo.ShardInfo) error {
-				return si.UpdateDeniedTables(ectx, topodatapb.TabletType_PRIMARY, nil, false, ts.Tables())
+				return si.UpdateDeniedTables(ectx, topodatapb.TabletType_PRIMARY, nil, rmsource, ts.Tables())
 			}); err != nil {
 				return err
 			}
@@ -1107,7 +1116,7 @@ func (ts *trafficSwitcher) switchDeniedTables(ctx context.Context) error {
 	egrp.Go(func() error {
 		return ts.ForAllTargets(func(target *MigrationTarget) error {
 			if _, err := ts.TopoServer().UpdateShardFields(ectx, ts.TargetKeyspaceName(), target.GetShard().ShardName(), func(si *topo.ShardInfo) error {
-				return si.UpdateDeniedTables(ctx, topodatapb.TabletType_PRIMARY, nil, true, ts.Tables())
+				return si.UpdateDeniedTables(ctx, topodatapb.TabletType_PRIMARY, nil, rmtarget, ts.Tables())
 			}); err != nil {
 				return err
 			}
@@ -1153,12 +1162,12 @@ func (ts *trafficSwitcher) cancelMigration(ctx context.Context, sm *StreamMigrat
 	// canceled by the parent context.
 	wcCtx := context.WithoutCancel(ctx)
 	// Now we create a child context from that which has a timeout.
-	cmTimeout := 60 * time.Second
+	cmTimeout := 2 * time.Minute
 	cmCtx, cmCancel := context.WithTimeout(wcCtx, cmTimeout)
 	defer cmCancel()
 
 	if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
-		err = ts.switchDeniedTables(cmCtx)
+		err = ts.switchDeniedTables(cmCtx, true /* revert */)
 	} else {
 		err = ts.changeShardsAccess(cmCtx, ts.SourceKeyspaceName(), ts.SourceShards(), allowWrites)
 	}
@@ -1167,7 +1176,10 @@ func (ts *trafficSwitcher) cancelMigration(ctx context.Context, sm *StreamMigrat
 		ts.Logger().Errorf("Cancel migration failed: could not revert denied tables / shard access: %v", err)
 	}
 
-	sm.CancelStreamMigrations(cmCtx)
+	if err := sm.CancelStreamMigrations(cmCtx); err != nil {
+		cancelErrs.RecordError(fmt.Errorf("could not cancel stream migrations: %v", err))
+		ts.Logger().Errorf("Cancel migration failed: could not cancel stream migrations: %v", err)
+	}
 
 	err = ts.ForAllTargets(func(target *MigrationTarget) error {
 		query := fmt.Sprintf("update _vt.vreplication set state='Running', message='' where db_name=%s and workflow=%s",
@@ -1180,8 +1192,7 @@ func (ts *trafficSwitcher) cancelMigration(ctx context.Context, sm *StreamMigrat
 		ts.Logger().Errorf("Cancel migration failed: could not restart vreplication: %v", err)
 	}
 
-	err = ts.deleteReverseVReplication(cmCtx)
-	if err != nil {
+	if err := ts.deleteReverseVReplication(cmCtx); err != nil {
 		cancelErrs.RecordError(fmt.Errorf("could not delete reverse vreplication streams: %v", err))
 		ts.Logger().Errorf("Cancel migration failed: could not delete reverse vreplication streams: %v", err)
 	}

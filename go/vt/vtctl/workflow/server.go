@@ -2951,7 +2951,7 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 				}
 			}
 			if cerr := sw.cancelMigration(ctx, sm); cerr != nil {
-				err = vterrors.Wrap(err, fmt.Sprintf("(%v)", cerr))
+				err = vterrors.Errorf(vtrpcpb.Code_CANCELED, "%v\n\n%v", err, cerr)
 			}
 			return handleError(fmt.Sprintf("failed to stop the workflow streams in the %s keyspace", ts.SourceKeyspaceName()), err)
 		}
@@ -2963,7 +2963,7 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 			for cnt := 1; cnt <= lockTablesCycles; cnt++ {
 				if err := ts.executeLockTablesOnSource(ctx); err != nil {
 					if cerr := sw.cancelMigration(ctx, sm); cerr != nil {
-						err = vterrors.Wrap(err, fmt.Sprintf("(%v)", cerr))
+						err = vterrors.Errorf(vtrpcpb.Code_CANCELED, "%v\n\n%v", err, cerr)
 					}
 					return handleError(fmt.Sprintf("failed to execute LOCK TABLES (attempt %d of %d) on sources", cnt, lockTablesCycles), err)
 				}
