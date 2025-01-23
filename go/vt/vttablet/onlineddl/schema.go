@@ -577,18 +577,3 @@ const (
 			metadata_locks.OBJECT_SCHEMA=database() AND metadata_locks.OBJECT_NAME=%a
 	`
 )
-
-var (
-	sqlCreateOnlineDDLUser = []string{
-		`CREATE USER IF NOT EXISTS %s IDENTIFIED BY '%s'`,
-		`ALTER USER %s IDENTIFIED BY '%s'`,
-	}
-	sqlGrantOnlineDDLSuper = []string{
-		`GRANT SUPER ON *.* TO %s`,
-	}
-	sqlGrantOnlineDDLUser = []string{
-		`GRANT PROCESS, REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO %s`,
-		`GRANT ALTER, CREATE, CREATE VIEW, SHOW VIEW, DELETE, DROP, INDEX, INSERT, LOCK TABLES, SELECT, TRIGGER, UPDATE ON *.* TO %s`,
-	}
-	sqlDropOnlineDDLUser = `DROP USER IF EXISTS %s`
-)
