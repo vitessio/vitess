@@ -36,30 +36,37 @@ func TestFindRouteValuesJoin(t *testing.T) {
 
 	bv := &querypb.BindVariable{
 		Type: querypb.Type_TUPLE,
+		Values: []*querypb.Value{
+			sqltypes.TupleToProto([]sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewVarBinary("hello")}),
+			sqltypes.TupleToProto([]sqltypes.Value{sqltypes.NewInt64(2), sqltypes.NewVarBinary("good morning")}),
+			sqltypes.TupleToProto([]sqltypes.Value{sqltypes.NewInt64(3), sqltypes.NewVarBinary("bonjour")}),
+			sqltypes.TupleToProto([]sqltypes.Value{sqltypes.NewInt64(4), sqltypes.NewVarBinary("bonjour")}),
+		},
 	}
-	bv.Values = append(
-		bv.Values,
-		sqltypes.TupleToProto([]sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewVarBinary("hello")}),
-	)
-	bv.Values = append(
-		bv.Values,
-		sqltypes.TupleToProto([]sqltypes.Value{sqltypes.NewInt64(2), sqltypes.NewVarBinary("good morning")}),
-	)
 
-	vc := newTestVCursor("0")
+	vc := newTestVCursor("-20", "20-")
+	vc.shardForKsid = []string{"-20", "-20", "20-", "20-"}
 	rss, bvs, err := rp.findRoute(context.Background(), vc, map[string]*querypb.BindVariable{
 		valueBvName: bv,
 	})
+
 	require.NoError(t, err)
-	require.Len(t, rss, 1)
-	require.Len(t, bvs, 1)
-	var s []int64
-	for _, value := range bvs[0][valueBvName].Values {
-		v := sqltypes.ProtoToValue(value)
-		require.Equal(t, sqltypes.Int64, v.Type())
-		i, err := v.ToInt64()
-		require.NoError(t, err)
-		s = append(s, i)
+	require.Len(t, rss, 2)
+	require.Len(t, bvs, 2)
+
+	expectedIdsPerShard := [][]int64{
+		{1, 2},
+		{3, 4},
 	}
-	require.Equal(t, []int64{1, 2}, s)
+	for i, ids := range expectedIdsPerShard {
+		var s []int64
+		for _, value := range bvs[i][valueBvName].Values {
+			v := sqltypes.ProtoToValue(value)
+			require.Equal(t, sqltypes.Int64, v.Type())
+			i, err := v.ToInt64()
+			require.NoError(t, err)
+			s = append(s, i)
+		}
+		require.Equal(t, ids, s)
+	}
 }
