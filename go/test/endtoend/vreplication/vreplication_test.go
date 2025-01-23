@@ -905,6 +905,8 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			require.Regexp(t, fmt.Sprintf(".*cannot switch traffic for workflow %s at this time: replication lag [0-9]+s is higher than allowed lag %s.*",
 				workflow, lagDuration.String()), out)
 			require.NotContains(t, out, "cancel migration failed")
+			// Confirm that queries still work fine.
+			execVtgateQuery(t, vtgateConn, sourceKs, "select * from customer limit 1")
 			cleanupTestData()
 			waitForTargetToCatchup()
 
@@ -923,6 +925,8 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			require.Error(t, err)
 			require.Contains(t, out, "failed to sync up replication between the source and target")
 			require.NotContains(t, out, "cancel migration failed")
+			// Confirm that queries still work fine.
+			execVtgateQuery(t, vtgateConn, sourceKs, "select * from customer limit 1")
 			unlockTargetTable()
 			deleteTestRows()
 			waitForTargetToCatchup()
