@@ -34,10 +34,12 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -2305,4 +2307,84 @@ func TestWorkflowStatus(t *testing.T) {
 	assert.Equal(t, int64(100), stateTable2.RowsCopied)
 	assert.Equal(t, float32(50), stateTable1.RowsPercentage)
 	assert.Equal(t, float32(50), stateTable2.RowsPercentage)
+}
+
+func TestDeleteShard(t *testing.T) {
+	ctx := context.Background()
+
+	sourceKeyspace := &testKeyspace{"source_keyspace", []string{"-"}}
+	targetKeyspace := &testKeyspace{"target_keyspace", []string{"-"}}
+
+	te := newTestEnv(t, ctx, defaultCellName, sourceKeyspace, targetKeyspace)
+	defer te.close()
+
+	// Verify that shard exists.
+	si, err := te.ts.GetShard(ctx, targetKeyspace.KeyspaceName, targetKeyspace.ShardNames[0])
+	require.NoError(t, err)
+	require.NotNil(t, si)
+
+	// Expect to fail if recursive is false.
+	err = te.ws.DeleteShard(ctx, targetKeyspace.KeyspaceName, targetKeyspace.ShardNames[0], false, true)
+	assert.ErrorContains(t, err, "shard target_keyspace/- still has 1 tablets in cell")
+
+	// Should not throw error if given keyspace or shard is invalid.
+	err = te.ws.DeleteShard(ctx, "invalid_keyspace", "-", false, true)
+	assert.NoError(t, err)
+
+	// Successful shard delete.
+	err = te.ws.DeleteShard(ctx, targetKeyspace.KeyspaceName, targetKeyspace.ShardNames[0], true, true)
+	assert.NoError(t, err)
+
+	// Check if the shard was deleted.
+	_, err = te.ts.GetShard(ctx, targetKeyspace.KeyspaceName, targetKeyspace.ShardNames[0])
+	assert.ErrorContains(t, err, "node doesn't exist")
+}
+
+func TestCopySchemaShard(t *testing.T) {
+	ctx := context.Background()
+
+	sourceKeyspace := &testKeyspace{"source_keyspace", []string{"-"}}
+	targetKeyspace := &testKeyspace{"target_keyspace", []string{"-"}}
+
+	te := newTestEnv(t, ctx, defaultCellName, sourceKeyspace, targetKeyspace)
+	defer te.close()
+
+	sqlSchema := `create table t1(id bigint(20) unsigned auto_increment, msg varchar(64), primary key (id)) Engine=InnoDB;`
+	te.tmc.schema[fmt.Sprintf("%s.t1", sourceKeyspace.KeyspaceName)] = &tabletmanagerdatapb.SchemaDefinition{
+		DatabaseSchema: "CREATE DATABASE {{.DatabaseName}}",
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+			{
+				Name:   "t1",
+				Schema: sqlSchema,
+				Columns: []string{
+					"id",
+					"msg",
+				},
+				Type: tmutils.TableBaseTable,
+			},
+		},
+	}
+
+	// Expect queries on target shards
+	te.tmc.expectApplySchemaRequest(200, &applySchemaRequestResponse{
+		change: &tmutils.SchemaChange{
+			SQL:              "CREATE DATABASE `vt_target_keyspace`",
+			Force:            false,
+			AllowReplication: true,
+			SQLMode:          vreplication.SQLMode,
+		},
+	})
+	te.tmc.expectApplySchemaRequest(200, &applySchemaRequestResponse{
+		change: &tmutils.SchemaChange{
+			SQL:              sqlSchema,
+			Force:            false,
+			AllowReplication: true,
+			SQLMode:          vreplication.SQLMode,
+		},
+	})
+
+	sourceTablet := te.tablets[sourceKeyspace.KeyspaceName][100]
+	err := te.ws.CopySchemaShard(ctx, sourceTablet.Alias, []string{"/.*/"}, nil, false, targetKeyspace.KeyspaceName, "-", 1*time.Second, true)
+	assert.NoError(t, err)
+	assert.Empty(t, te.tmc.applySchemaRequests[200])
 }
