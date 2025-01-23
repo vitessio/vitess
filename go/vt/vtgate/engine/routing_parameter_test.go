@@ -19,7 +19,7 @@ func TestFindRouteValuesJoin(t *testing.T) {
 
 	const valueBvName = "v"
 	rp := &RoutingParameters{
-		Opcode: Values,
+		Opcode: MultiEqual,
 
 		Keyspace: &vindexes.Keyspace{
 			Name:    "ks",
@@ -29,8 +29,7 @@ func TestFindRouteValuesJoin(t *testing.T) {
 		Vindex: vindex,
 
 		Values: []evalengine.Expr{
-			evalengine.NewBindVar(valueBvName, evalengine.NewType(sqltypes.Tuple, collations.Unknown)),
-			evalengine.NewColumn(0, evalengine.NewType(sqltypes.Int64, collations.Unknown), nil),
+			&evalengine.TupleBindVariable{Key: valueBvName, Index: 0, Collation: collations.Unknown},
 		},
 	}
 
