@@ -409,7 +409,7 @@ func (ts *trafficSwitcher) addParticipatingTablesToKeyspace(ctx context.Context,
 			vschema.Tables[table] = &vschemapb.Table{}
 		}
 	}
-	return ts.TopoServer().SaveVSchema(ctx, keyspace, vschema)
+	return ts.TopoServer().SaveVSchema(ctx, vschema)
 }
 
 func (ts *trafficSwitcher) deleteRoutingRules(ctx context.Context) error {
@@ -538,7 +538,7 @@ func (ts *trafficSwitcher) dropParticipatingTablesFromKeyspace(ctx context.Conte
 	for _, tableName := range ts.Tables() {
 		delete(vschema.Tables, tableName)
 	}
-	return ts.TopoServer().SaveVSchema(ctx, keyspace, vschema)
+	return ts.TopoServer().SaveVSchema(ctx, vschema)
 }
 
 func (ts *trafficSwitcher) removeSourceTables(ctx context.Context, removalType TableRemovalType) error {
@@ -1013,7 +1013,7 @@ func (ts *trafficSwitcher) buildTenantPredicate(ctx context.Context) (*sqlparser
 	if err != nil {
 		return nil, err
 	}
-	targetVSchema, err := vindexes.BuildKeyspaceSchema(vschema, ts.targetKeyspace, parser)
+	targetVSchema, err := vindexes.BuildKeyspaceSchema(vschema.Keyspace, ts.targetKeyspace, parser)
 	if err != nil {
 		return nil, err
 	}
@@ -1441,7 +1441,7 @@ func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[s
 		return nil, nil
 	}
 
-	sequencesByBackingTable, backingTablesFound, err := ts.findSequenceUsageInKeyspace(vschema)
+	sequencesByBackingTable, backingTablesFound, err := ts.findSequenceUsageInKeyspace(vschema.Keyspace)
 	if err != nil {
 		return nil, err
 	}
@@ -1609,7 +1609,7 @@ func (ts trafficSwitcher) createMissingSequenceTables(ctx context.Context, seque
 		}
 	}
 	if updatedGlobalVSchema {
-		err = ts.ws.ts.SaveVSchema(ctx, globalKeyspace, globalVSchema)
+		err = ts.ws.ts.SaveVSchema(ctx, globalVSchema)
 		if err != nil {
 			return vterrors.Wrapf(err, "failed to update vschema in the global-keyspace %s", globalKeyspace)
 		}

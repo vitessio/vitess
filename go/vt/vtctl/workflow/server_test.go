@@ -741,11 +741,14 @@ func TestWorkflowDelete(t *testing.T) {
 				},
 			},
 			preFunc: func(t *testing.T, env *testEnv) {
-				err := env.ts.SaveVSchema(ctx, targetKeyspaceName, &vschemapb.Keyspace{
-					Sharded: true,
-					MultiTenantSpec: &vschemapb.MultiTenantSpec{
-						TenantIdColumnName: "tenant_id",
-						TenantIdColumnType: sqltypes.Int64,
+				err := env.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+					Name: targetKeyspaceName,
+					Keyspace: &vschemapb.Keyspace{
+						Sharded: true,
+						MultiTenantSpec: &vschemapb.MultiTenantSpec{
+							TenantIdColumnName: "tenant_id",
+							TenantIdColumnType: sqltypes.Int64,
+						},
 					},
 				})
 				require.NoError(t, err)
@@ -851,11 +854,14 @@ func TestWorkflowDelete(t *testing.T) {
 				},
 			},
 			preFunc: func(t *testing.T, env *testEnv) {
-				err := env.ts.SaveVSchema(ctx, targetKeyspaceName, &vschemapb.Keyspace{
-					Sharded: true,
-					MultiTenantSpec: &vschemapb.MultiTenantSpec{
-						TenantIdColumnName: "tenant_id",
-						TenantIdColumnType: sqltypes.Int64,
+				err := env.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+					Name: targetKeyspaceName,
+					Keyspace: &vschemapb.Keyspace{
+						Sharded: true,
+						MultiTenantSpec: &vschemapb.MultiTenantSpec{
+							TenantIdColumnName: "tenant_id",
+							TenantIdColumnType: sqltypes.Int64,
+						},
 					},
 				})
 				require.NoError(t, err)
@@ -911,11 +917,14 @@ func TestWorkflowDelete(t *testing.T) {
 				},
 			},
 			preFunc: func(t *testing.T, env *testEnv) {
-				err := env.ts.SaveVSchema(ctx, targetKeyspaceName, &vschemapb.Keyspace{
-					Sharded: true,
-					MultiTenantSpec: &vschemapb.MultiTenantSpec{
-						TenantIdColumnName: "tenant_id",
-						TenantIdColumnType: sqltypes.Int64,
+				err := env.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+					Name: targetKeyspaceName,
+					Keyspace: &vschemapb.Keyspace{
+						Sharded: true,
+						MultiTenantSpec: &vschemapb.MultiTenantSpec{
+							TenantIdColumnName: "tenant_id",
+							TenantIdColumnType: sqltypes.Int64,
+						},
 					},
 				})
 				require.NoError(t, err)
