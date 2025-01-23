@@ -656,6 +656,9 @@ func getStreamState(stream *vtctldatapb.Workflow_Stream, rstream *tabletmanagerd
 // switching during the copy phase, so in that case we just return a large lag.
 // All timestamps are in seconds since epoch.
 func getVReplicationTrxLag(trxTs, updatedTs, heartbeatTs *vttimepb.Time, state binlogdatapb.VReplicationWorkflowState) float64 {
+	if state == binlogdatapb.VReplicationWorkflowState_Copying {
+		return math.MaxInt64
+	}
 	if trxTs == nil {
 		trxTs = &vttimepb.Time{}
 	}
@@ -668,9 +671,6 @@ func getVReplicationTrxLag(trxTs, updatedTs, heartbeatTs *vttimepb.Time, state b
 		heartbeatTs = &vttimepb.Time{}
 	}
 	lastHeartbeatTime := heartbeatTs.Seconds
-	if state == binlogdatapb.VReplicationWorkflowState_Copying {
-		return math.MaxInt64
-	}
 	// We do NOT update the heartbeat timestamp when we are regularly updating the
 	// position as we replicate transactions (GTIDs).
 	// When we DO record a heartbeat, we set the updated time to the same value.
