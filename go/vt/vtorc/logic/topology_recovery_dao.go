@@ -17,6 +17,7 @@
 package logic
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -184,7 +185,7 @@ func AttemptRecoveryRegistration(analysisEntry *inst.ReplicationAnalysis, failIf
 			_ = RegisterBlockedRecoveries(analysisEntry, recoveries)
 			errMsg := fmt.Sprintf("AttemptRecoveryRegistration: tablet %+v has recently been promoted (by failover of %+v) and is in active period. It will not be failed over. You may acknowledge the failure on %+v (-c ack-instance-recoveries) to remove this blockage", analysisEntry.AnalyzedInstanceAlias, recoveries[0].AnalysisEntry.AnalyzedInstanceAlias, recoveries[0].AnalysisEntry.AnalyzedInstanceAlias)
 			log.Errorf(errMsg)
-			return nil, fmt.Errorf(errMsg)
+			return nil, errors.New(errMsg)
 		}
 	}
 	if failIfClusterInActiveRecovery {
@@ -199,7 +200,7 @@ func AttemptRecoveryRegistration(analysisEntry *inst.ReplicationAnalysis, failIf
 			_ = RegisterBlockedRecoveries(analysisEntry, recoveries)
 			errMsg := fmt.Sprintf("AttemptRecoveryRegistration: keyspace %+v shard %+v has recently experienced a failover (of %+v) and is in active period. It will not be failed over again. You may acknowledge the failure on this cluster (-c ack-cluster-recoveries) or on %+v (-c ack-instance-recoveries) to remove this blockage", analysisEntry.ClusterDetails.Keyspace, analysisEntry.ClusterDetails.Shard, recoveries[0].AnalysisEntry.AnalyzedInstanceAlias, recoveries[0].AnalysisEntry.AnalyzedInstanceAlias)
 			log.Errorf(errMsg)
-			return nil, fmt.Errorf(errMsg)
+			return nil, errors.New(errMsg)
 		}
 	}
 	if !failIfFailedInstanceInActiveRecovery {
