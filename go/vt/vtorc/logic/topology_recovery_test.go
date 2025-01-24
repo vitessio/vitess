@@ -24,6 +24,7 @@ import (
 	"github.com/patrickmn/go-cache"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -129,7 +130,7 @@ func TestElectNewPrimaryPanic(t *testing.T) {
 	defer cancel()
 
 	ts = memorytopo.NewServer(ctx, "zone1")
-	recoveryAttempted, _, err := electNewPrimary(context.Background(), analysisEntry)
+	recoveryAttempted, _, err := electNewPrimary(context.Background(), analysisEntry, log.NewPrefixedLogger("prefix"))
 	require.True(t, recoveryAttempted)
 	require.Error(t, err)
 }

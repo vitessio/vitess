@@ -30,6 +30,7 @@ package logic
 // go to the database each time.
 
 import (
+	"errors"
 	"fmt"
 
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
@@ -55,7 +56,7 @@ func IsRecoveryDisabled() (disabled bool, err error) {
 	if err != nil {
 		errMsg := fmt.Sprintf("recovery.IsRecoveryDisabled(): %v", err)
 		log.Errorf(errMsg)
-		err = fmt.Errorf(errMsg)
+		err = errors.New(errMsg)
 	}
 	return disabled, err
 }
