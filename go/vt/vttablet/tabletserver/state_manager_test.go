@@ -41,7 +41,9 @@ import (
 var testNow = time.Now()
 
 func TestStateManagerStateByName(t *testing.T) {
-	sm := &stateManager{}
+	sm := &stateManager{
+		dhMonitor: newNoopDiskHealthMonitor(),
+	}
 
 	sm.replHealthy = true
 	sm.wantState = StateServing
@@ -145,6 +147,29 @@ func TestStateManagerUnservePrimary(t *testing.T) {
 
 	assert.Equal(t, topodatapb.TabletType_PRIMARY, sm.target.TabletType)
 	assert.Equal(t, StateNotServing, sm.state)
+}
+
+type testDiskMonitor struct {
+	isDiskStalled bool
+}
+
+func (t *testDiskMonitor) IsDiskStalled() bool {
+	return t.isDiskStalled
+}
+
+// TestIsServingLocked tests isServingLocked() functionality.
+func TestIsServingLocked(t *testing.T) {
+	sm := newTestStateManager()
+	defer sm.StopService()
+	tdm := &testDiskMonitor{isDiskStalled: false}
+	sm.dhMonitor = tdm
+
+	err := sm.SetServingType(topodatapb.TabletType_REPLICA, testNow, StateServing, "")
+	require.NoError(t, err)
+	require.True(t, sm.isServingLocked())
+
+	tdm.isDiskStalled = true
+	require.False(t, sm.isServingLocked())
 }
 
 func TestStateManagerUnserveNonPrimary(t *testing.T) {
@@ -792,6 +817,7 @@ func newTestStateManager() *stateManager {
 		te:          &testTxEngine{},
 		messager:    &testSubcomponent{},
 		ddle:        &testOnlineDDLExecutor{},
+		dhMonitor:   newNoopDiskHealthMonitor(),
 		throttler:   &testLagThrottler{},
 		tableGC:     &testTableGC{},
 		rw:          newRequestsWaiter(),

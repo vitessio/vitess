@@ -207,6 +207,7 @@ func NewTabletServer(ctx context.Context, env *vtenv.Environment, name string, c
 		throttler:   tsv.lagThrottler,
 		tableGC:     tsv.tableGC,
 		rw:          newRequestsWaiter(),
+		dhMonitor:   newDiskHealthMonitor(ctx),
 	}
 
 	tsv.exporter.NewGaugeFunc("TabletState", "Tablet server state", func() int64 { return int64(tsv.sm.State()) })
@@ -765,6 +766,11 @@ func (tsv *TabletServer) SetDemotePrimaryStalled() {
 	tsv.sm.demotePrimaryStalled = true
 	tsv.sm.mu.Unlock()
 	tsv.BroadcastHealth()
+}
+
+// IsDiskStalled returns if the disk is stalled or not.
+func (tsv *TabletServer) IsDiskStalled() bool {
+	return tsv.sm.dhMonitor.IsDiskStalled()
 }
 
 // CreateTransaction creates the metadata for a 2PC transaction.

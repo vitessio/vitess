@@ -64,7 +64,7 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 	// Return if the disk is stalled or rejecting writes.
 	// If the disk is stalled, we can't be sure if reads will go through
 	// or not, so we should not run any reads either.
-	if tm.dhMonitor.IsDiskStalled() {
+	if tm.QueryServiceControl.IsDiskStalled() {
 		return &replicationdatapb.FullStatus{
 			DiskStalled: true,
 		}, nil
