@@ -136,7 +136,7 @@ The base system now uses Debian Bookworm instead of Debian Bullseye for the `vit
 
 ### <a id="key-range-vtorc"/>KeyRanges in `--clusters_to_watch` in VTOrc</a>
 VTOrc now supports specifying KeyRanges in the `--clusters_to_watch` flag. This is useful in scenarios where you don't need to restart a VTOrc instance if you run a reshard.
-For example, if a VTOrc is configured to watch `ks/-80`, then it would watch all the shards that fall under the KeyRange `-80`. If a reshard is run and, `-80` is split into new shards `-40`, and `40-80`, the VTOrc instance will automatically start watching the new shard without needing a restart.
+For example, if a VTOrc is configured to watch `ks/-80`, then it would watch all the shards that fall under the KeyRange `-80`. If a reshard is run and, `-80` is split into new shards `-40`, and `40-80`, the VTOrc instance will automatically start watching the new shard without needing a restart. In the previous logic, watching a shard -80 would watch 1 (or 0) shard only. In the new system, since we interpret -80 as a key range, it can lead to a watch on multiple shards as described in the example.
 The users can still continue to specify exact key ranges too, and the new feature is backward compatible.
 
 ### <a id="query-logs"/>Support for Filtering Query logs on Error</a>
