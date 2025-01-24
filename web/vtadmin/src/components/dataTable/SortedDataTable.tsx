@@ -114,15 +114,15 @@ export const SortedDataTable = <T extends object>({
 
     return (
         <div>
-            <table>
+            <table className="table-fixed">
                 {title && <caption>{title}</caption>}
                 <thead>
                     <tr>
                         {columns.map((col, cdx) => (
                             <th key={cdx} onClick={() => handleSort(col.accessor)}>
-                                <div style={{ display: 'flex' }}>
+                                <div style={{ display: 'flex', cursor: 'pointer' }}>
                                     {col.display}
-                                    {sortColumn === col.accessor && <span>{sortOrder === 'asc' ? '▲' : '▼'}</span>}
+                                    {sortColumn === col.accessor && (sortOrder === 'asc' ? '▲' : '▼')}
                                 </div>
                             </th>
                         ))}
