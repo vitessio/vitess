@@ -66,10 +66,10 @@ func RegisterFlags(fs *pflag.FlagSet) {
 
 // initializeShardsToWatch parses the --clusters_to_watch flag-value
 // into a map of keyspace/shards.
-func initializeShardsToWatch() {
+func initializeShardsToWatch() error {
 	shardsToWatch = make(map[string][]*topodatapb.KeyRange)
 	if len(clustersToWatch) == 0 {
-		return
+		return nil
 	}
 
 	for _, ks := range clustersToWatch {
@@ -80,10 +80,13 @@ func initializeShardsToWatch() {
 				log.Errorf("Could not parse keyspace/shard %q: %+v", ks, err)
 				continue
 			}
+			if !key.IsValidKeyRange(s) {
+				return fmt.Errorf("Invalid key range %q while parsing clusters to watch", s)
+			}
 			// Parse the shard name into key range value.
 			_, keyRange, err := topo.ValidateShardName(s)
 			if err != nil {
-				log.Errorf("Could not parse shard name %q: %+v", s, err)
+				return fmt.Errorf("Could not parse shard name %q: %+v", s, err)
 			}
 			// If the key range is nil, then the user is not using RangeBased Sharding.
 			// So we want to watch all the shards of the keyspace.
@@ -102,6 +105,7 @@ func initializeShardsToWatch() {
 	if len(shardsToWatch) == 0 {
 		log.Error("No keyspace/shards to watch, watching all keyspaces")
 	}
+	return nil
 }
 
 // tabletPartOfWatch checks if the given tablet is part of the watch list.
@@ -137,7 +141,10 @@ func OpenTabletDiscovery() <-chan time.Time {
 		log.Error(err)
 	}
 	// Parse --clusters_to_watch into a filter.
-	initializeShardsToWatch()
+	err := initializeShardsToWatch()
+	if err != nil {
+		log.Fatalf("Error parsing clusters to watch: %v", err)
+	}
 	// We refresh all information from the topo once before we start the ticks to do
 	// it on a timer.
 	ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)

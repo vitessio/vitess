@@ -93,7 +93,8 @@ func TestRefreshAllKeyspaces(t *testing.T) {
 	// Set clusters to watch to only watch ks1 and ks3
 	onlyKs1and3 := []string{"ks1/-80", "ks3/-80", "ks3/80-"}
 	clustersToWatch = onlyKs1and3
-	initializeShardsToWatch()
+	err := initializeShardsToWatch()
+	require.NoError(t, err)
 	require.NoError(t, RefreshAllKeyspacesAndShards(context.Background()))
 
 	// Verify that we only have ks1 and ks3 in vtorc's db.
@@ -107,7 +108,8 @@ func TestRefreshAllKeyspaces(t *testing.T) {
 
 	// Set clusters to watch to watch all keyspaces
 	clustersToWatch = nil
-	initializeShardsToWatch()
+	err = initializeShardsToWatch()
+	require.NoError(t, err)
 	// Change the durability policy of ks1
 	reparenttestutil.SetKeyspaceDurability(ctx, t, ts, "ks1", policy.DurabilitySemiSync)
 	require.NoError(t, RefreshAllKeyspacesAndShards(context.Background()))

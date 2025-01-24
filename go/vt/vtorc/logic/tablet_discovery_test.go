@@ -216,7 +216,8 @@ func TestTabletsPartOfWatch(t *testing.T) {
 	for _, tt := range testCases {
 		t.Run(fmt.Sprintf("%v-Tablet-%v-%v", strings.Join(tt.in, ","), tt.tablet.GetKeyspace(), tt.tablet.GetShard()), func(t *testing.T) {
 			clustersToWatch = tt.in
-			initializeShardsToWatch()
+			err := initializeShardsToWatch()
+			require.NoError(t, err)
 			assert.Equal(t, tt.expectedPartOfWatch, tabletPartOfWatch(tt.tablet))
 		})
 	}
@@ -232,8 +233,9 @@ func TestInitializeShardsToWatch(t *testing.T) {
 	}()
 
 	testCases := []struct {
-		in       []string
-		expected map[string][]*topodatapb.KeyRange
+		in          []string
+		expected    map[string][]*topodatapb.KeyRange
+		expectedErr string
 	}{
 		{
 			in:       []string{},
@@ -249,6 +251,18 @@ func TestInitializeShardsToWatch(t *testing.T) {
 		},
 		{
 			in: []string{"test/-"},
+			expected: map[string][]*topodatapb.KeyRange{
+				"test": {
+					key.NewCompleteKeyRange(),
+				},
+			},
+		},
+		{
+			in:          []string{"test/324"},
+			expectedErr: `Invalid key range "324" while parsing clusters to watch`,
+		},
+		{
+			in: []string{"test/0"},
 			expected: map[string][]*topodatapb.KeyRange{
 				"test": {
 					key.NewCompleteKeyRange(),
@@ -293,7 +307,12 @@ func TestInitializeShardsToWatch(t *testing.T) {
 				shardsToWatch = make(map[string][]*topodatapb.KeyRange, 0)
 			}()
 			clustersToWatch = testCase.in
-			initializeShardsToWatch()
+			err := initializeShardsToWatch()
+			if testCase.expectedErr != "" {
+				require.EqualError(t, err, testCase.expectedErr)
+				return
+			}
+			require.NoError(t, err)
 			require.Equal(t, testCase.expected, shardsToWatch)
 		})
 	}
