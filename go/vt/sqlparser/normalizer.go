@@ -18,13 +18,14 @@ package sqlparser
 
 import (
 	"bytes"
+	"strconv"
 
 	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/sqltypes"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sysvars"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // BindVars is a set of reserved bind variables from a SQL statement
@@ -37,11 +38,6 @@ type BindVars map[string]struct{}
 // Within Select constructs, bind vars are deduped. This allows
 // us to identify vindex equality. Otherwise, every value is
 // treated as distinct.
-func Normalize(stmt Statement, reserved *ReservedVars, bindVars map[string]*querypb.BindVariable) error {
-	nz := newNormalizer(reserved, bindVars)
-	_ = SafeRewrite(stmt, nz.walkStatementDown, nz.walkStatementUp)
-	return nz.err
-}
 
 type normalizer struct {
 	bindVars  map[string]*querypb.BindVariable
@@ -50,56 +46,80 @@ type normalizer struct {
 	err       error
 	inDerived int
 	inSelect  int
+
+	// old astRewriter fielda
+	bindVarNeeds              *BindVarNeeds
+	shouldRewriteDatabaseFunc bool
+
+	// we need to know this to make a decision if we can safely rewrite JOIN USING => JOIN ON
+	hasStarInSelect bool
+
+	keyspace      string
+	selectLimit   int
+	setVarComment string
+	fkChecksState *bool
+	sysVars       map[string]string
+	views         VSchemaViews
+
+	onLeave            map[*AliasedExpr]func(*AliasedExpr)
+	shouldParameterize bool
 }
 
-func newNormalizer(reserved *ReservedVars, bindVars map[string]*querypb.BindVariable) *normalizer {
+func newNormalizer(
+	reserved *ReservedVars,
+	bindVars map[string]*querypb.BindVariable,
+	keyspace string,
+	selectLimit int,
+	setVarComment string,
+	sysVars map[string]string,
+	fkChecksState *bool,
+	views VSchemaViews,
+	parameterize bool,
+) *normalizer {
 	return &normalizer{
-		bindVars: bindVars,
-		reserved: reserved,
-		vals:     make(map[Literal]string),
+		bindVars:           bindVars,
+		reserved:           reserved,
+		vals:               make(map[Literal]string),
+		bindVarNeeds:       &BindVarNeeds{},
+		keyspace:           keyspace,
+		selectLimit:        selectLimit,
+		setVarComment:      setVarComment,
+		fkChecksState:      fkChecksState,
+		sysVars:            sysVars,
+		views:              views,
+		onLeave:            make(map[*AliasedExpr]func(*AliasedExpr)),
+		shouldParameterize: parameterize,
 	}
 }
 
-// walkStatementUp is one half of the top level walk function.
-func (nz *normalizer) walkStatementUp(cursor *Cursor) bool {
-	if nz.err != nil {
-		return false
-	}
-	switch node := cursor.node.(type) {
-	case *DerivedTable:
-		nz.inDerived--
-	case *Select:
-		nz.inSelect--
-	case *Literal:
-		if nz.inSelect == 0 {
-			nz.convertLiteral(node, cursor)
-			return nz.err == nil
-		}
-		parent := cursor.Parent()
-		switch parent.(type) {
-		case *Order, *GroupBy:
-			return true
-		case *Limit:
-			nz.convertLiteral(node, cursor)
-		default:
-			nz.convertLiteralDedup(node, cursor)
-		}
-	}
-	return nz.err == nil // only continue if we haven't found any errors
-}
-
-// walkStatementDown is the top level walk function.
+// walkDown is the top level walk function.
 // If it encounters a Select, it switches to a mode
 // where variables are deduped.
-func (nz *normalizer) walkStatementDown(node, _ SQLNode) bool {
+func (nz *normalizer) walkDown(node, _ SQLNode) bool {
 	switch node := node.(type) {
-	// no need to normalize the statement types
-	case *Set, *Show, *Begin, *Commit, *Rollback, *Savepoint, DDLStatement, *SRollback, *Release, *OtherAdmin, *Analyze:
-		return false
+	// no need to normalize the statement types TODO?
+	case *Begin, *Commit, *Rollback, *Savepoint, *SRollback, *Release, *OtherAdmin, *Analyze, *AssignmentExpr:
+		return false // TODO: we should normalize these statements
 	case *DerivedTable:
 		nz.inDerived++
 	case *Select:
 		nz.inSelect++
+		if nz.selectLimit > 0 && node.Limit == nil {
+			node.Limit = &Limit{Rowcount: NewIntLiteral(strconv.Itoa(nz.selectLimit))}
+		}
+	case *AliasedExpr:
+		// we store the expression string, so we can rewrite the alias if the expression changes
+		if node.As.NotEmpty() {
+			break
+		}
+		buf := NewTrackedBuffer(nil)
+		node.Expr.Format(buf)
+		rewrites := nz.bindVarNeeds.NumberOfRewrites()
+		nz.onLeave[node] = func(newAliasedExpr *AliasedExpr) {
+			if nz.bindVarNeeds.NumberOfRewrites() > rewrites {
+				newAliasedExpr.As = NewIdentifierCI(buf.String())
+			}
+		}
 	case SelectExprs:
 		return nz.inDerived == 0
 	case *ComparisonExpr:
@@ -115,6 +135,87 @@ func (nz *normalizer) walkStatementDown(node, _ SQLNode) bool {
 	case *FramePoint:
 		// do not make a bind var for rows and range
 		return false
+	case *StarExpr:
+		nz.hasStarInSelect = true
+	case *PrepareStmt, *ExecuteStmt: // TODO: is this OK to do for the normalizer?
+		return false // nothing to rewrite here.
+	case *ShowBasic:
+		if node.Command == VariableGlobal || node.Command == VariableSession {
+			varsToAdd := sysvars.GetInterestingVariables()
+			for _, sysVar := range varsToAdd {
+				nz.bindVarNeeds.AddSysVar(sysVar)
+			}
+		}
+	}
+	return nz.err == nil // only continue if we haven't found any errors
+}
+
+// walkUp is one half of the top level walk function.
+func (nz *normalizer) walkUp(cursor *Cursor) bool {
+
+	// Add SET_VAR comment to this node if it supports it and is needed
+	if supportOptimizerHint, supportsOptimizerHint := cursor.Node().(SupportOptimizerHint); supportsOptimizerHint {
+		if nz.setVarComment != "" {
+			newComments, err := supportOptimizerHint.GetParsedComments().AddQueryHint(nz.setVarComment)
+			if err != nil {
+				nz.err = err
+				return false
+			}
+			supportOptimizerHint.SetComments(newComments)
+		}
+		if nz.fkChecksState != nil {
+			newComments := supportOptimizerHint.GetParsedComments().SetMySQLSetVarValue(sysvars.ForeignKeyChecks, FkChecksStateString(nz.fkChecksState))
+			supportOptimizerHint.SetComments(newComments)
+		}
+	}
+
+	if nz.err != nil {
+		return false
+	}
+	switch node := cursor.node.(type) {
+	case *DerivedTable:
+		nz.inDerived--
+	case *Select:
+		nz.inSelect--
+	case *AliasedExpr:
+		if onLeave, ok := nz.onLeave[node]; ok {
+			onLeave(node)
+		}
+	case *Union:
+		nz.rewriteUnion(node)
+	case *FuncExpr:
+		nz.funcRewrite(cursor, node)
+	case *Variable:
+		nz.rewriteVariable(cursor, node)
+	case *Subquery:
+		nz.unnestSubQueries(cursor, node)
+	case *NotExpr:
+		nz.rewriteNotExpr(cursor, node)
+	case *AliasedTableExpr:
+		nz.rewriteAliasedTable(cursor, node)
+	case *ShowBasic:
+		nz.rewriteShowBasic(node)
+	case *ExistsExpr:
+		nz.existsRewrite(cursor, node)
+	case DistinctableAggr:
+		nz.rewriteDistinctableAggr(cursor, node)
+	case *Literal:
+		if !nz.shouldParameterize {
+			break
+		}
+		if nz.inSelect == 0 {
+			nz.convertLiteral(node, cursor)
+			return nz.err == nil
+		}
+		parent := cursor.Parent()
+		switch parent.(type) {
+		case *Order, *GroupBy:
+			return true
+		case *Limit:
+			nz.convertLiteral(node, cursor)
+		default:
+			nz.convertLiteralDedup(node, cursor)
+		}
 	}
 	return nz.err == nil // only continue if we haven't found any errors
 }
@@ -220,6 +321,9 @@ func (nz *normalizer) rewriteOtherComparisons(node *ComparisonExpr) {
 }
 
 func (nz *normalizer) parameterize(left, right Expr) Expr {
+	if !nz.shouldParameterize {
+		return nil
+	}
 	col, ok := left.(*ColName)
 	if !ok {
 		return nil
@@ -267,6 +371,9 @@ func (nz *normalizer) decideBindVarName(lit *Literal, col *ColName, bval *queryp
 }
 
 func (nz *normalizer) rewriteInComparisons(node *ComparisonExpr) {
+	if !nz.shouldParameterize {
+		return
+	}
 	tupleVals, ok := node.Right.(ValTuple)
 	if !ok {
 		return

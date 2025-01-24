@@ -54,41 +54,16 @@ func PrepareAST(
 	fkChecksState *bool,
 	views VSchemaViews,
 ) (*RewriteASTResult, error) {
-	if parameterize {
-		err := Normalize(in, reservedVars, bindVars)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return RewriteAST(in, keyspace, selectLimit, setVarComment, sysVars, fkChecksState, views)
-}
-
-// RewriteAST rewrites the whole AST, replacing function calls and adding column aliases to queries.
-// SET_VAR comments are also added to the AST if required.
-func RewriteAST(
-	in Statement,
-	keyspace string,
-	selectLimit int,
-	setVarComment string,
-	sysVars map[string]string,
-	fkChecksState *bool,
-	views VSchemaViews,
-) (*RewriteASTResult, error) {
-	er := newASTRewriter(keyspace, selectLimit, setVarComment, sysVars, fkChecksState, views)
-	er.shouldRewriteDatabaseFunc = shouldRewriteDatabaseFunc(in)
-	result := SafeRewrite(in, er.rewriteDown, er.rewriteUp)
-	if er.err != nil {
-		return nil, er.err
-	}
-
-	out, ok := result.(Statement)
-	if !ok {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "statement rewriting returned a non statement: %s", String(out))
+	nz := newNormalizer(reservedVars, bindVars, keyspace, selectLimit, setVarComment, sysVars, fkChecksState, views, parameterize)
+	nz.shouldRewriteDatabaseFunc = shouldRewriteDatabaseFunc(in)
+	out := SafeRewrite(in, nz.walkDown, nz.walkUp)
+	if nz.err != nil {
+		return nil, nz.err
 	}
 
 	r := &RewriteASTResult{
-		AST:          out,
-		BindVarNeeds: er.bindVars,
+		AST:          out.(Statement),
+		BindVarNeeds: nz.bindVarNeeds,
 	}
 	return r, nil
 }
@@ -112,34 +87,6 @@ func shouldRewriteDatabaseFunc(in Statement) bool {
 	return tableName.Name.String() == "dual"
 }
 
-type astRewriter struct {
-	bindVars                  *BindVarNeeds
-	shouldRewriteDatabaseFunc bool
-	err                       error
-
-	// we need to know this to make a decision if we can safely rewrite JOIN USING => JOIN ON
-	hasStarInSelect bool
-
-	keyspace      string
-	selectLimit   int
-	setVarComment string
-	fkChecksState *bool
-	sysVars       map[string]string
-	views         VSchemaViews
-}
-
-func newASTRewriter(keyspace string, selectLimit int, setVarComment string, sysVars map[string]string, fkChecksState *bool, views VSchemaViews) *astRewriter {
-	return &astRewriter{
-		bindVars:      &BindVarNeeds{},
-		keyspace:      keyspace,
-		selectLimit:   selectLimit,
-		setVarComment: setVarComment,
-		fkChecksState: fkChecksState,
-		sysVars:       sysVars,
-		views:         views,
-	}
-}
-
 const (
 	// LastInsertIDName is a reserved bind var name for last_insert_id()
 	LastInsertIDName = "__lastInsertId"
@@ -157,76 +104,84 @@ const (
 	UserDefinedVariableName = "__vtudv"
 )
 
-func (er *astRewriter) rewriteAliasedExpr(node *AliasedExpr) (*BindVarNeeds, error) {
-	inner := newASTRewriter(er.keyspace, er.selectLimit, er.setVarComment, er.sysVars, nil, er.views)
-	inner.shouldRewriteDatabaseFunc = er.shouldRewriteDatabaseFunc
-	tmp := SafeRewrite(node.Expr, inner.rewriteDown, inner.rewriteUp)
-	newExpr, ok := tmp.(Expr)
-	if !ok {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to rewrite AST. function expected to return Expr returned a %s", String(tmp))
-	}
-	node.Expr = newExpr
-	return inner.bindVars, nil
-}
-
-func (er *astRewriter) rewriteDown(node SQLNode, _ SQLNode) bool {
+func (nz *normalizer) rewriteDown(node SQLNode, _ SQLNode) bool {
 	switch node := node.(type) {
+	case *StarExpr:
+		nz.hasStarInSelect = true
+	case *AliasedExpr:
+		if node.As.NotEmpty() {
+			break
+		}
+		buf := NewTrackedBuffer(nil)
+		node.Expr.Format(buf)
+		rewrites := nz.bindVarNeeds.NumberOfRewrites()
+		nz.onLeave[node] = func(newAliasedExpr *AliasedExpr) {
+			if nz.bindVarNeeds.NumberOfRewrites() > rewrites {
+				newAliasedExpr.As = NewIdentifierCI(buf.String())
+			}
+		}
 	case *Select:
-		er.visitSelect(node)
+		if nz.selectLimit > 0 && node.Limit == nil {
+			node.Limit = &Limit{Rowcount: NewIntLiteral(strconv.Itoa(nz.selectLimit))}
+		}
 	case *PrepareStmt, *ExecuteStmt:
 		return false // nothing to rewrite here.
 	}
 	return true
 }
 
-func (er *astRewriter) rewriteUp(cursor *Cursor) bool {
+func (nz *normalizer) rewriteUp(cursor *Cursor) bool {
 	// Add SET_VAR comment to this node if it supports it and is needed
 	if supportOptimizerHint, supportsOptimizerHint := cursor.Node().(SupportOptimizerHint); supportsOptimizerHint {
-		if er.setVarComment != "" {
-			newComments, err := supportOptimizerHint.GetParsedComments().AddQueryHint(er.setVarComment)
+		if nz.setVarComment != "" {
+			newComments, err := supportOptimizerHint.GetParsedComments().AddQueryHint(nz.setVarComment)
 			if err != nil {
-				er.err = err
+				nz.err = err
 				return false
 			}
 			supportOptimizerHint.SetComments(newComments)
 		}
-		if er.fkChecksState != nil {
-			newComments := supportOptimizerHint.GetParsedComments().SetMySQLSetVarValue(sysvars.ForeignKeyChecks, FkChecksStateString(er.fkChecksState))
+		if nz.fkChecksState != nil {
+			newComments := supportOptimizerHint.GetParsedComments().SetMySQLSetVarValue(sysvars.ForeignKeyChecks, FkChecksStateString(nz.fkChecksState))
 			supportOptimizerHint.SetComments(newComments)
 		}
 	}
 
 	switch node := cursor.Node().(type) {
+	case *AliasedExpr:
+		if onLeave, ok := nz.onLeave[node]; ok {
+			onLeave(node)
+		}
 	case *Union:
-		er.rewriteUnion(node)
+		nz.rewriteUnion(node)
 	case *FuncExpr:
-		er.funcRewrite(cursor, node)
+		nz.funcRewrite(cursor, node)
 	case *Variable:
-		er.rewriteVariable(cursor, node)
+		nz.rewriteVariable(cursor, node)
 	case *Subquery:
-		er.unnestSubQueries(cursor, node)
+		nz.unnestSubQueries(cursor, node)
 	case *NotExpr:
-		er.rewriteNotExpr(cursor, node)
+		nz.rewriteNotExpr(cursor, node)
 	case *AliasedTableExpr:
-		er.rewriteAliasedTable(cursor, node)
+		nz.rewriteAliasedTable(cursor, node)
 	case *ShowBasic:
-		er.rewriteShowBasic(node)
+		nz.rewriteShowBasic(node)
 	case *ExistsExpr:
-		er.existsRewrite(cursor, node)
+		nz.existsRewrite(cursor, node)
 	case DistinctableAggr:
-		er.rewriteDistinctableAggr(cursor, node)
+		nz.rewriteDistinctableAggr(cursor, node)
 	}
 	return true
 }
 
-func (er *astRewriter) rewriteUnion(node *Union) {
+func (nz *normalizer) rewriteUnion(node *Union) {
 	// set select limit if explicitly not set when sql_select_limit is set on the connection.
-	if er.selectLimit > 0 && node.Limit == nil {
-		node.Limit = &Limit{Rowcount: NewIntLiteral(strconv.Itoa(er.selectLimit))}
+	if nz.selectLimit > 0 && node.Limit == nil {
+		node.Limit = &Limit{Rowcount: NewIntLiteral(strconv.Itoa(nz.selectLimit))}
 	}
 }
 
-func (er *astRewriter) rewriteAliasedTable(cursor *Cursor, node *AliasedTableExpr) {
+func (nz *normalizer) rewriteAliasedTable(cursor *Cursor, node *AliasedTableExpr) {
 	aliasTableName, ok := node.Expr.(TableName)
 	if !ok {
 		return
@@ -238,9 +193,9 @@ func (er *astRewriter) rewriteAliasedTable(cursor *Cursor, node *AliasedTableExp
 		return
 	}
 
-	if SystemSchema(er.keyspace) {
+	if SystemSchema(nz.keyspace) {
 		if aliasTableName.Qualifier.IsEmpty() {
-			aliasTableName.Qualifier = NewIdentifierCS(er.keyspace)
+			aliasTableName.Qualifier = NewIdentifierCS(nz.keyspace)
 			node.Expr = aliasTableName
 			cursor.Replace(node)
 		}
@@ -248,10 +203,10 @@ func (er *astRewriter) rewriteAliasedTable(cursor *Cursor, node *AliasedTableExp
 	}
 
 	// Could we be dealing with a view?
-	if er.views == nil {
+	if nz.views == nil {
 		return
 	}
-	view := er.views.FindView(aliasTableName)
+	view := nz.views.FindView(aliasTableName)
 	if view == nil {
 		return
 	}
@@ -263,16 +218,16 @@ func (er *astRewriter) rewriteAliasedTable(cursor *Cursor, node *AliasedTableExp
 	}
 }
 
-func (er *astRewriter) rewriteShowBasic(node *ShowBasic) {
+func (nz *normalizer) rewriteShowBasic(node *ShowBasic) {
 	if node.Command == VariableGlobal || node.Command == VariableSession {
 		varsToAdd := sysvars.GetInterestingVariables()
 		for _, sysVar := range varsToAdd {
-			er.bindVars.AddSysVar(sysVar)
+			nz.bindVarNeeds.AddSysVar(sysVar)
 		}
 	}
 }
 
-func (er *astRewriter) rewriteNotExpr(cursor *Cursor, node *NotExpr) {
+func (nz *normalizer) rewriteNotExpr(cursor *Cursor, node *NotExpr) {
 	switch inner := node.Expr.(type) {
 	case *ComparisonExpr:
 		// not col = 42 => col != 42
@@ -293,7 +248,7 @@ func (er *astRewriter) rewriteNotExpr(cursor *Cursor, node *NotExpr) {
 	}
 }
 
-func (er *astRewriter) rewriteVariable(cursor *Cursor, node *Variable) {
+func (nz *normalizer) rewriteVariable(cursor *Cursor, node *Variable) {
 	// Iff we are in SET, we want to change the scope of variables if a modifier has been set
 	// and only on the lhs of the assignment:
 	// set session sql_mode = @someElse
@@ -305,40 +260,9 @@ func (er *astRewriter) rewriteVariable(cursor *Cursor, node *Variable) {
 	// this should be returned from the underlying database.
 	switch node.Scope {
 	case VariableScope:
-		er.udvRewrite(cursor, node)
+		nz.udvRewrite(cursor, node)
 	case SessionScope, NextTxScope:
-		er.sysVarRewrite(cursor, node)
-	}
-}
-
-func (er *astRewriter) visitSelect(node *Select) {
-	for _, col := range node.SelectExprs {
-		if _, hasStar := col.(*StarExpr); hasStar {
-			er.hasStarInSelect = true
-			continue
-		}
-
-		aliasedExpr, ok := col.(*AliasedExpr)
-		if !ok || aliasedExpr.As.NotEmpty() {
-			continue
-		}
-		buf := NewTrackedBuffer(nil)
-		aliasedExpr.Expr.Format(buf)
-		// select last_insert_id() -> select :__lastInsertId as `last_insert_id()`
-		innerBindVarNeeds, err := er.rewriteAliasedExpr(aliasedExpr)
-		if err != nil {
-			er.err = err
-			return
-		}
-		if innerBindVarNeeds.HasRewrites() {
-			aliasedExpr.As = NewIdentifierCI(buf.String())
-		}
-		er.bindVars.MergeWith(innerBindVarNeeds)
-
-	}
-	// set select limit if explicitly not set when sql_select_limit is set on the connection.
-	if er.selectLimit > 0 && node.Limit == nil {
-		node.Limit = &Limit{Rowcount: NewIntLiteral(strconv.Itoa(er.selectLimit))}
+		nz.sysVarRewrite(cursor, node)
 	}
 }
 
@@ -373,12 +297,12 @@ func inverseOp(i ComparisonExprOperator) (bool, ComparisonExprOperator) {
 	return false, i
 }
 
-func (er *astRewriter) sysVarRewrite(cursor *Cursor, node *Variable) {
+func (nz *normalizer) sysVarRewrite(cursor *Cursor, node *Variable) {
 	lowered := node.Name.Lowered()
 
 	var found bool
-	if er.sysVars != nil {
-		_, found = er.sysVars[lowered]
+	if nz.sysVars != nil {
+		_, found = nz.sysVars[lowered]
 	}
 
 	switch lowered {
@@ -406,14 +330,14 @@ func (er *astRewriter) sysVarRewrite(cursor *Cursor, node *Variable) {
 
 	if found {
 		cursor.Replace(bindVarExpression("__vt" + lowered))
-		er.bindVars.AddSysVar(lowered)
+		nz.bindVarNeeds.AddSysVar(lowered)
 	}
 }
 
-func (er *astRewriter) udvRewrite(cursor *Cursor, node *Variable) {
+func (nz *normalizer) udvRewrite(cursor *Cursor, node *Variable) {
 	udv := strings.ToLower(node.Name.CompliantName())
 	cursor.Replace(bindVarExpression(UserDefinedVariableName + udv))
-	er.bindVars.AddUserDefVar(udv)
+	nz.bindVarNeeds.AddUserDefVar(udv)
 }
 
 var funcRewrites = map[string]string{
@@ -424,7 +348,7 @@ var funcRewrites = map[string]string{
 	"row_count":      RowCountName,
 }
 
-func (er *astRewriter) funcRewrite(cursor *Cursor, node *FuncExpr) {
+func (nz *normalizer) funcRewrite(cursor *Cursor, node *FuncExpr) {
 	lowered := node.Name.Lowered()
 	if lowered == "last_insert_id" && len(node.Exprs) > 0 {
 		// if we are dealing with is LAST_INSERT_ID() with an argument, we don't need to rewrite it.
@@ -433,18 +357,18 @@ func (er *astRewriter) funcRewrite(cursor *Cursor, node *FuncExpr) {
 		return
 	}
 	bindVar, found := funcRewrites[lowered]
-	if !found || (bindVar == DBVarName && !er.shouldRewriteDatabaseFunc) {
+	if !found || (bindVar == DBVarName && !nz.shouldRewriteDatabaseFunc) {
 		return
 	}
 	if len(node.Exprs) > 0 {
-		er.err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Argument to %s() not supported", lowered)
+		nz.err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Argument to %s() not supported", lowered)
 		return
 	}
 	cursor.Replace(bindVarExpression(bindVar))
-	er.bindVars.AddFuncResult(bindVar)
+	nz.bindVarNeeds.AddFuncResult(bindVar)
 }
 
-func (er *astRewriter) unnestSubQueries(cursor *Cursor, subquery *Subquery) {
+func (nz *normalizer) unnestSubQueries(cursor *Cursor, subquery *Subquery) {
 	if _, isExists := cursor.Parent().(*ExistsExpr); isExists {
 		return
 	}
@@ -483,10 +407,10 @@ func (er *astRewriter) unnestSubQueries(cursor *Cursor, subquery *Subquery) {
 		// is perfectly valid - any aliased columns to the left are available inside subquery scopes
 		return
 	}
-	er.bindVars.NoteRewrite()
+	nz.bindVarNeeds.NoteRewrite()
 	// we need to make sure that the inner expression also gets rewritten,
 	// so we fire off another rewriter traversal here
-	rewritten := SafeRewrite(expr.Expr, er.rewriteDown, er.rewriteUp)
+	rewritten := SafeRewrite(expr.Expr, nz.walkDown, nz.walkUp)
 
 	// Here we need to handle the subquery rewrite in case in occurs in an IN clause
 	// For example, SELECT id FROM user WHERE id IN (SELECT 1 FROM DUAL)
@@ -507,7 +431,7 @@ func (er *astRewriter) unnestSubQueries(cursor *Cursor, subquery *Subquery) {
 	cursor.Replace(rewritten)
 }
 
-func (er *astRewriter) existsRewrite(cursor *Cursor, node *ExistsExpr) {
+func (nz *normalizer) existsRewrite(cursor *Cursor, node *ExistsExpr) {
 	sel, ok := node.Subquery.Select.(*Select)
 	if !ok {
 		return
@@ -533,14 +457,14 @@ func (er *astRewriter) existsRewrite(cursor *Cursor, node *ExistsExpr) {
 }
 
 // rewriteDistinctableAggr removed Distinct from Max and Min Aggregations as it does not impact the result. But, makes the plan simpler.
-func (er *astRewriter) rewriteDistinctableAggr(cursor *Cursor, node DistinctableAggr) {
+func (nz *normalizer) rewriteDistinctableAggr(cursor *Cursor, node DistinctableAggr) {
 	if !node.IsDistinct() {
 		return
 	}
 	switch aggr := node.(type) {
 	case *Max, *Min:
 		aggr.SetDistinct(false)
-		er.bindVars.NoteRewrite()
+		nz.bindVarNeeds.NoteRewrite()
 	}
 }
 

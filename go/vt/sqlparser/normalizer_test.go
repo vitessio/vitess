@@ -26,7 +26,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -450,8 +449,9 @@ func TestNormalize(t *testing.T) {
 			require.NoError(t, err)
 			known := GetBindvars(stmt)
 			bv := make(map[string]*querypb.BindVariable)
-			require.NoError(t, Normalize(stmt, NewReservedVars(prefix, known), bv))
-			assert.Equal(t, tc.outstmt, String(stmt))
+			out, err := PrepareAST(stmt, NewReservedVars(prefix, known), bv, true, "ks", 0, "", map[string]string{}, nil, nil)
+			require.NoError(t, err)
+			assert.Equal(t, tc.outstmt, String(out.AST))
 			assert.Equal(t, tc.outbv, bv)
 		})
 	}
@@ -478,7 +478,8 @@ func TestNormalizeInvalidDates(t *testing.T) {
 			require.NoError(t, err)
 			known := GetBindvars(stmt)
 			bv := make(map[string]*querypb.BindVariable)
-			require.EqualError(t, Normalize(stmt, NewReservedVars("bv", known), bv), tc.err.Error())
+			_, err = PrepareAST(stmt, NewReservedVars("bv", known), bv, true, "ks", 0, "", map[string]string{}, nil, nil)
+			require.EqualError(t, err, tc.err.Error())
 		})
 	}
 }
@@ -498,9 +499,10 @@ func TestNormalizeValidSQL(t *testing.T) {
 			}
 			bv := make(map[string]*querypb.BindVariable)
 			known := make(BindVars)
-			err = Normalize(tree, NewReservedVars("vtg", known), bv)
+
+			out, err := PrepareAST(tree, NewReservedVars("vtg", known), bv, true, "ks", 0, "", map[string]string{}, nil, nil)
 			require.NoError(t, err)
-			normalizerOutput := String(tree)
+			normalizerOutput := String(out.AST)
 			if normalizerOutput == "otheradmin" || normalizerOutput == "otherread" {
 				return
 			}
@@ -529,9 +531,9 @@ func TestNormalizeOneCasae(t *testing.T) {
 	}
 	bv := make(map[string]*querypb.BindVariable)
 	known := make(BindVars)
-	err = Normalize(tree, NewReservedVars("vtg", known), bv)
+	out, err := PrepareAST(tree, NewReservedVars("vtg", known), bv, true, "ks", 0, "", map[string]string{}, nil, nil)
 	require.NoError(t, err)
-	normalizerOutput := String(tree)
+	normalizerOutput := String(out.AST)
 	require.EqualValues(t, testOne.output, normalizerOutput)
 	if normalizerOutput == "otheradmin" || normalizerOutput == "otherread" {
 		return
@@ -573,7 +575,8 @@ func BenchmarkNormalize(b *testing.B) {
 		b.Fatal(err)
 	}
 	for i := 0; i < b.N; i++ {
-		require.NoError(b, Normalize(ast, NewReservedVars("", reservedVars), map[string]*querypb.BindVariable{}))
+		_, err := PrepareAST(ast, NewReservedVars("", reservedVars), map[string]*querypb.BindVariable{}, true, "ks", 0, "", map[string]string{}, nil, nil)
+		require.NoError(b, err)
 	}
 }
 
@@ -602,7 +605,8 @@ func BenchmarkNormalizeTraces(b *testing.B) {
 
 			for i := 0; i < b.N; i++ {
 				for i, query := range parsed {
-					_ = Normalize(query, NewReservedVars("", reservedVars[i]), map[string]*querypb.BindVariable{})
+					_, err := PrepareAST(query, NewReservedVars("", reservedVars[i]), map[string]*querypb.BindVariable{}, true, "ks", 0, "", map[string]string{}, nil, nil)
+					require.NoError(b, err)
 				}
 			}
 		})

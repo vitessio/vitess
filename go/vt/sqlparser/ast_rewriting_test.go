@@ -21,10 +21,10 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-
-	"vitess.io/vitess/go/vt/sysvars"
-
 	"github.com/stretchr/testify/require"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/sysvars"
 )
 
 type testCaseSetVar struct {
@@ -339,15 +339,18 @@ func TestRewrites(in *testing.T) {
 	for _, tc := range tests {
 		in.Run(tc.in, func(t *testing.T) {
 			require := require.New(t)
-			stmt, err := parser.Parse(tc.in)
+			stmt, known, err := parser.Parse2(tc.in)
 			require.NoError(err)
-
-			result, err := RewriteAST(
+			vars := NewReservedVars("v", known)
+			result, err := PrepareAST(
 				stmt,
-				"ks", // passing `ks` just to test that no rewriting happens as it is not system schema
-				SQLSelectLimitUnset,
+				vars,
+				map[string]*querypb.BindVariable{},
+				false,
+				"ks",
+				0,
 				"",
-				nil,
+				map[string]string{},
 				nil,
 				&fakeViews{},
 			)
@@ -441,8 +444,20 @@ func TestRewritesWithSetVarComment(in *testing.T) {
 			require := require.New(t)
 			stmt, err := parser.Parse(tc.in)
 			require.NoError(err)
+			vars := NewReservedVars("v", nil)
+			result, err := PrepareAST(
+				stmt,
+				vars,
+				map[string]*querypb.BindVariable{},
+				false,
+				"ks",
+				0,
+				tc.setVarComment,
+				map[string]string{},
+				nil,
+				&fakeViews{},
+			)
 
-			result, err := RewriteAST(stmt, "ks", SQLSelectLimitUnset, tc.setVarComment, nil, nil, &fakeViews{})
 			require.NoError(err)
 
 			expected, err := parser.Parse(tc.expected)
@@ -490,8 +505,20 @@ func TestRewritesSysVar(in *testing.T) {
 			require := require.New(t)
 			stmt, err := parser.Parse(tc.in)
 			require.NoError(err)
+			vars := NewReservedVars("v", nil)
+			result, err := PrepareAST(
+				stmt,
+				vars,
+				map[string]*querypb.BindVariable{},
+				false,
+				"ks",
+				0,
+				"",
+				tc.sysVar,
+				nil,
+				&fakeViews{},
+			)
 
-			result, err := RewriteAST(stmt, "ks", SQLSelectLimitUnset, "", tc.sysVar, nil, &fakeViews{})
 			require.NoError(err)
 
 			expected, err := parser.Parse(tc.expected)
@@ -541,8 +568,20 @@ func TestRewritesWithDefaultKeyspace(in *testing.T) {
 			require := require.New(t)
 			stmt, err := parser.Parse(tc.in)
 			require.NoError(err)
+			vars := NewReservedVars("v", nil)
+			result, err := PrepareAST(
+				stmt,
+				vars,
+				map[string]*querypb.BindVariable{},
+				false,
+				"sys",
+				0,
+				"",
+				map[string]string{},
+				nil,
+				&fakeViews{},
+			)
 
-			result, err := RewriteAST(stmt, "sys", SQLSelectLimitUnset, "", nil, nil, &fakeViews{})
 			require.NoError(err)
 
 			expected, err := parser.Parse(tc.expected)
