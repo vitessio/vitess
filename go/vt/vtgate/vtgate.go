@@ -297,9 +297,12 @@ func Init(
 	gw.RegisterStats()
 
 	// Retry loop for potential time-outs waiting for all tablets.
+OuterLoop:
 	for {
 		err := gw.WaitForTablets(ctx, tabletTypesToWait)
 		switch {
+		case err == nil:
+			break OuterLoop
 		case errors.Is(err, context.DeadlineExceeded):
 			log.Warning("TabletGateway timed out waiting for tablets to become available - retrying.")
 
