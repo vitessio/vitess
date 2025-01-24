@@ -84,16 +84,11 @@ func initializeShardsToWatch() error {
 				return fmt.Errorf("Invalid key range %q while parsing clusters to watch", s)
 			}
 			// Parse the shard name into key range value.
-			_, keyRange, err := topo.ValidateShardName(s)
+			keyRanges, err := key.ParseShardingSpec(s)
 			if err != nil {
 				return fmt.Errorf("Could not parse shard name %q: %+v", s, err)
 			}
-			// If the key range is nil, then the user is not using RangeBased Sharding.
-			// So we want to watch all the shards of the keyspace.
-			if keyRange == nil {
-				keyRange = key.NewCompleteKeyRange()
-			}
-			shardsToWatch[k] = append(shardsToWatch[k], keyRange)
+			shardsToWatch[k] = append(shardsToWatch[k], keyRanges...)
 		} else {
 			// Remove trailing slash if exists.
 			ks = strings.TrimSuffix(ks, "/")

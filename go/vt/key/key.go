@@ -98,8 +98,8 @@ func NewKeyRange(start []byte, end []byte) *topodatapb.KeyRange {
 // NewCompleteKeyRange returns a complete key range.
 func NewCompleteKeyRange() *topodatapb.KeyRange {
 	return &topodatapb.KeyRange{
-		Start: []byte{},
-		End:   []byte{},
+		Start: nil,
+		End:   nil,
 	}
 }
 

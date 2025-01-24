@@ -276,8 +276,8 @@ func TestInitializeShardsToWatch(t *testing.T) {
 					key.NewCompleteKeyRange(),
 				},
 				"test2": {
-					key.NewKeyRange([]byte{}, []byte{0x80}),
-					key.NewKeyRange([]byte{0x80}, []byte{}),
+					key.NewKeyRange(nil, []byte{0x80}),
+					key.NewKeyRange([]byte{0x80}, nil),
 				},
 			},
 		},
