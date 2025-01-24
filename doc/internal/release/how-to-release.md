@@ -364,7 +364,8 @@ You will need administrator privileges on the vitess repository to be able to ma
 
     ```bash
     cd ./java/
-    mvn clean deploy -P release -DskipTests
+    # For <= v21.0, we must use -DskipTests in the mvn command below
+    mvn clean deploy -P release
     cd ..
     ```
 
