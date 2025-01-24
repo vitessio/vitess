@@ -18,7 +18,6 @@ package tabletmanager
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"runtime"
 	"strings"
@@ -62,10 +61,13 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 		return nil, err
 	}
 
-	// Return error if the disk is stalled or rejecting writes.
-	// Noop by default, must be enabled with the flag "disk-write-dir".
+	// Return if the disk is stalled or rejecting writes.
+	// If the disk is stalled, we can't be sure if reads will go through
+	// or not, so we should not run any reads either.
 	if tm.dhMonitor.IsDiskStalled() {
-		return nil, errors.New("stalled disk")
+		return &replicationdatapb.FullStatus{
+			DiskStalled: true,
+		}, nil
 	}
 
 	// Server ID - "select @@global.server_id"
