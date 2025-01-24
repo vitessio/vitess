@@ -287,11 +287,8 @@ func verifyBackupCount(t *testing.T, shardKsName string, expected int) []string 
 }
 
 func listBackups(shardKsName string) ([]string, error) {
-	backups, err := localCluster.VtctlProcess.ExecuteCommandWithOutput(
-		"--backup_storage_implementation", "file",
-		"--file_backup_storage_root",
-		path.Join(os.Getenv("VTDATAROOT"), "tmp", "backupstorage"),
-		"ListBackups", shardKsName,
+	backups, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput(
+		"GetBackups", shardKsName,
 	)
 	if err != nil {
 		return nil, err
@@ -311,10 +308,7 @@ func removeBackups(t *testing.T) {
 	backups, err := listBackups(shardKsName)
 	require.NoError(t, err)
 	for _, backup := range backups {
-		_, err := localCluster.VtctlProcess.ExecuteCommandWithOutput(
-			"--backup_storage_implementation", "file",
-			"--file_backup_storage_root",
-			path.Join(os.Getenv("VTDATAROOT"), "tmp", "backupstorage"),
+		_, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput(
 			"RemoveBackup", shardKsName, backup,
 		)
 		require.NoError(t, err)

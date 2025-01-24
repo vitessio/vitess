@@ -781,8 +781,9 @@ message UpdateVReplicationWorkflowRequest {
   optional TabletSelectionPreference tablet_selection_preference = 4;
   optional binlogdata.OnDDLAction on_ddl = 5;
   optional binlogdata.VReplicationWorkflowState state = 6;
-  reserved 7; // unused, was: repeated string shards
+  repeated string shards = 7;
   map<string, string> config_overrides = 8;
+  optional string message = 9;
 }
 
 message UpdateVReplicationWorkflowResponse {

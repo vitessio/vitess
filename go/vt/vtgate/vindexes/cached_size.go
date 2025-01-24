@@ -392,6 +392,24 @@ func (cached *Numeric) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *NumericLookupTable) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(8)
+	}
+	size += int64(48)
+	hmap := reflect.ValueOf(*cached)
+	numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
+	numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
+	size += hack.RuntimeAllocSize(int64(numOldBuckets * 144))
+	if len(*cached) > 0 || numBuckets > 1 {
+		size += hack.RuntimeAllocSize(int64(numBuckets * 144))
+	}
+	return size
+}
 
 //go:nocheckptr
 func (cached *NumericStaticMap) CachedSize(alloc bool) int64 {
@@ -479,6 +497,24 @@ func (cached *RegionJSON) CachedSize(alloc bool) int64 {
 		for _, elem := range cached.unknownParams {
 			size += hack.RuntimeAllocSize(int64(len(elem)))
 		}
+	}
+	return size
+}
+func (cached *RegionMap) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(8)
+	}
+	size += int64(48)
+	hmap := reflect.ValueOf(*cached)
+	numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
+	numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
+	size += hack.RuntimeAllocSize(int64(numOldBuckets * 208))
+	if len(*cached) > 0 || numBuckets > 1 {
+		size += hack.RuntimeAllocSize(int64(numBuckets * 208))
 	}
 	return size
 }

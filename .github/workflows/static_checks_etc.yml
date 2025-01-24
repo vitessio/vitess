@@ -230,7 +230,7 @@ jobs:
         uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b # v4.0.3
         with:
           # make proto requires newer node than the pre-installed one
-          node-version: '20.12.2'
+          node-version: '22.13.1'
 
       - name: check_make_proto
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.proto_changes == 'true'

@@ -41,7 +41,6 @@ func CopyKeyspaces(ctx context.Context, fromTS, toTS *topo.Server, parser *sqlpa
 	}
 
 	for _, keyspace := range keyspaces {
-
 		ki, err := fromTS.GetKeyspace(ctx, keyspace)
 		if err != nil {
 			return fmt.Errorf("GetKeyspace(%v): %w", keyspace, err)
@@ -55,15 +54,15 @@ func CopyKeyspaces(ctx context.Context, fromTS, toTS *topo.Server, parser *sqlpa
 			}
 		}
 
-		vs, err := fromTS.GetVSchema(ctx, keyspace)
+		ksvs, err := fromTS.GetVSchema(ctx, keyspace)
 		switch {
 		case err == nil:
-			_, err = vindexes.BuildKeyspace(vs, parser)
+			_, err = vindexes.BuildKeyspace(ksvs.Keyspace, parser)
 			if err != nil {
 				log.Errorf("BuildKeyspace(%v): %v", keyspace, err)
 				break
 			}
-			if err := toTS.SaveVSchema(ctx, keyspace, vs); err != nil {
+			if err := toTS.SaveVSchema(ctx, ksvs); err != nil {
 				log.Errorf("SaveVSchema(%v): %v", keyspace, err)
 			}
 		case topo.IsErrType(err, topo.NoNode):

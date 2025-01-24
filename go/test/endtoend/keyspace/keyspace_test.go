@@ -97,7 +97,7 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		if err := clusterForKSTest.VtctlProcess.AddCellInfo(cell2); err != nil {
+		if err := clusterForKSTest.VtctldClientProcess.AddCellInfo(cell2); err != nil {
 			return 1
 		}
 
@@ -139,7 +139,7 @@ func TestMain(m *testing.M) {
 // TestDurabilityPolicyField tests that the DurabilityPolicy field of a keyspace can be set during creation, read and updated later
 // from vtctld server and the vtctl binary
 func TestDurabilityPolicyField(t *testing.T) {
-	vtctldClientProcess := cluster.VtctldClientProcessInstance("localhost", clusterForKSTest.VtctldProcess.GrpcPort, clusterForKSTest.TmpDirectory)
+	vtctldClientProcess := clusterForKSTest.NewVtctldClientProcessInstance("localhost", clusterForKSTest.VtctldProcess.GrpcPort, clusterForKSTest.TmpDirectory)
 
 	out, err := vtctldClientProcess.ExecuteCommandWithOutput("CreateKeyspace", "ks_durability", "--durability-policy=semi_sync")
 	require.NoError(t, err, out)
@@ -218,7 +218,7 @@ func TestGetKeyspace(t *testing.T) {
 }
 
 func TestDeleteKeyspace(t *testing.T) {
-	_ = clusterForKSTest.VtctldClientProcess.CreateKeyspace("test_delete_keyspace", sidecar.DefaultName)
+	_ = clusterForKSTest.VtctldClientProcess.CreateKeyspace("test_delete_keyspace", sidecar.DefaultName, "")
 	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("CreateShard", "test_delete_keyspace/0")
 	_ = clusterForKSTest.InitTablet(&cluster.Vttablet{
 		Type:      "primary",
@@ -240,7 +240,7 @@ func TestDeleteKeyspace(t *testing.T) {
 	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("DeleteKeyspace", "test_delete_keyspace")
 
 	// Start over and this time use recursive DeleteKeyspace to do everything.
-	_ = clusterForKSTest.VtctldClientProcess.CreateKeyspace("test_delete_keyspace", sidecar.DefaultName)
+	_ = clusterForKSTest.VtctldClientProcess.CreateKeyspace("test_delete_keyspace", sidecar.DefaultName, "")
 	_ = clusterForKSTest.VtctldClientProcess.ExecuteCommand("CreateShard", "test_delete_keyspace/0")
 	_ = clusterForKSTest.InitTablet(&cluster.Vttablet{
 		Type:      "primary",

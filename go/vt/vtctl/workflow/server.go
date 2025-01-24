@@ -124,6 +124,8 @@ const (
 	lockTablesCycles = 2
 	// Time to wait between LOCK TABLES cycles on the sources during SwitchWrites.
 	lockTablesCycleDelay = time.Duration(100 * time.Millisecond)
+
+	SqlUnfreezeWorkflow = "update _vt.vreplication set state='Running', message='' where db_name=%a and workflow=%a"
 )
 
 var (
@@ -551,6 +553,43 @@ func (s *Server) getWorkflowState(ctx context.Context, targetKeyspace, workflowN
 	return ts, state, nil
 }
 
+// LookupVindexComplete checks if the lookup vindex has been externalized,
+// and if the vindex has an owner, it deletes the workflow.
+func (s *Server) LookupVindexComplete(ctx context.Context, req *vtctldatapb.LookupVindexCompleteRequest) (*vtctldatapb.LookupVindexCompleteResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "workflow.Server.LookupVindexComplete")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("name", req.Name)
+	span.Annotate("table_keyspace", req.TableKeyspace)
+
+	vindex, _, err := getVindexAndVSchema(ctx, s.ts, req.Keyspace, req.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	targetShards, err := s.ts.GetServingShards(ctx, req.TableKeyspace)
+	if err != nil {
+		return nil, err
+	}
+
+	lv := newLookupVindex(s)
+	if err = lv.validateExternalized(ctx, vindex, req.Name, targetShards); err != nil {
+		return nil, err
+	}
+
+	resp := &vtctldatapb.LookupVindexCompleteResponse{}
+	if _, derr := s.WorkflowDelete(ctx, &vtctldatapb.WorkflowDeleteRequest{
+		Keyspace:         req.TableKeyspace,
+		Workflow:         req.Name,
+		KeepData:         true,
+		KeepRoutingRules: true,
+	}); derr != nil {
+		return nil, vterrors.Wrapf(derr, "failed to delete workflow %s", req.Name)
+	}
+	return resp, nil
+}
+
 // LookupVindexCreate creates the lookup vindex in the specified
 // keyspace and creates a VReplication workflow to backfill that
 // vindex from the keyspace to the target/lookup table specified.
@@ -571,7 +610,7 @@ func (s *Server) LookupVindexCreate(ctx context.Context, req *vtctldatapb.Lookup
 		return nil, err
 	}
 
-	if err := s.ts.SaveVSchema(ctx, ms.TargetKeyspace, targetVSchema); err != nil {
+	if err := s.ts.SaveVSchema(ctx, targetVSchema); err != nil {
 		return nil, vterrors.Wrapf(err, "failed to save updated vschema '%v' in the %s keyspace",
 			targetVSchema, ms.TargetKeyspace)
 	}
@@ -587,7 +626,7 @@ func (s *Server) LookupVindexCreate(ctx context.Context, req *vtctldatapb.Lookup
 		return nil, err
 	}
 	if ms.SourceKeyspace != ms.TargetKeyspace {
-		if err := s.ts.SaveVSchema(ctx, ms.SourceKeyspace, sourceVSchema); err != nil {
+		if err := s.ts.SaveVSchema(ctx, sourceVSchema); err != nil {
 			return nil, vterrors.Wrapf(err, "failed to save updated vschema '%v' in the %s keyspace",
 				sourceVSchema, ms.SourceKeyspace)
 		}
@@ -602,7 +641,7 @@ func (s *Server) LookupVindexCreate(ctx context.Context, req *vtctldatapb.Lookup
 
 // LookupVindexExternalize externalizes a lookup vindex that's
 // finished backfilling or has caught up. If the vindex has an
-// owner then the workflow will also be deleted.
+// owner then the workflow will also be stopped.
 func (s *Server) LookupVindexExternalize(ctx context.Context, req *vtctldatapb.LookupVindexExternalizeRequest) (*vtctldatapb.LookupVindexExternalizeResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "workflow.Server.LookupVindexExternalize")
 	defer span.Finish()
@@ -610,15 +649,11 @@ func (s *Server) LookupVindexExternalize(ctx context.Context, req *vtctldatapb.L
 	span.Annotate("keyspace", req.Keyspace)
 	span.Annotate("name", req.Name)
 	span.Annotate("table_keyspace", req.TableKeyspace)
+	span.Annotate("delete_workflow", req.DeleteWorkflow)
 
-	// Find the lookup vindex by by name.
-	sourceVschema, err := s.ts.GetVSchema(ctx, req.Keyspace)
+	vindex, sourceKsVS, err := getVindexAndVSchema(ctx, s.ts, req.Keyspace, req.Name)
 	if err != nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get vschema for the %s keyspace", req.Keyspace)
-	}
-	vindex := sourceVschema.Vindexes[req.Name]
-	if vindex == nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vindex %s not found in the %s keyspace", req.Name, req.Keyspace)
+		return nil, err
 	}
 
 	targetShards, err := s.ts.GetServingShards(ctx, req.TableKeyspace)
@@ -637,8 +672,8 @@ func (s *Server) LookupVindexExternalize(ctx context.Context, req *vtctldatapb.L
 		if err != nil {
 			return err
 		}
-		if res == nil {
-			return vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "workflow %s not found on %v", req.Name, targetPrimary.Alias)
+		if res == nil || res.Workflow == "" {
+			return vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "workflow %s not found on %v", req.Name, topoproto.TabletAliasString(targetPrimary.Alias))
 		}
 		for _, stream := range res.Streams {
 			if stream.Bls.Filter == nil || len(stream.Bls.Filter.Rules) != 1 {
@@ -666,25 +701,102 @@ func (s *Server) LookupVindexExternalize(ctx context.Context, req *vtctldatapb.L
 	resp := &vtctldatapb.LookupVindexExternalizeResponse{}
 
 	if vindex.Owner != "" {
-		// If there is an owner, we have to delete the streams. Once we externalize it
-		// the VTGate will now be responsible for keeping the lookup table up to date
-		// with the owner table.
-		if _, derr := s.WorkflowDelete(ctx, &vtctldatapb.WorkflowDeleteRequest{
-			Keyspace:         req.TableKeyspace,
-			Workflow:         req.Name,
-			KeepData:         true, // Not relevant
-			KeepRoutingRules: true, // Not relevant
-		}); derr != nil {
-			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "failed to delete workflow %s: %v", req.Name, derr)
+		// If there is an owner, we have to stop/delete the streams. Once we
+		// externalize it the VTGate will now be responsible for keeping the
+		// lookup table up to date with the owner table.
+		if req.DeleteWorkflow {
+			// Delete the workflow.
+			if _, derr := s.WorkflowDelete(ctx, &vtctldatapb.WorkflowDeleteRequest{
+				Keyspace:         req.TableKeyspace,
+				Workflow:         req.Name,
+				KeepData:         true, // Not relevant
+				KeepRoutingRules: true, // Not relevant
+			}); derr != nil {
+				return nil, vterrors.Wrapf(derr, "failed to delete workflow %s", req.Name)
+			}
+			resp.WorkflowDeleted = true
+		} else {
+			// Freeze the workflow.
+			err = forAllShards(targetShards, func(si *topo.ShardInfo) error {
+				tabletInfo, err := s.ts.GetTablet(ctx, si.PrimaryAlias)
+				if err != nil {
+					return err
+				}
+				_, err = s.tmc.UpdateVReplicationWorkflow(ctx, tabletInfo.Tablet, &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
+					Workflow: req.Name,
+					State:    ptr.Of(binlogdatapb.VReplicationWorkflowState_Stopped),
+					Message:  ptr.Of(Frozen),
+				})
+				if err != nil {
+					return vterrors.Wrapf(err, "failed to stop workflow %s on shard %s/%s", req.Name, tabletInfo.Keyspace, tabletInfo.Shard)
+				}
+				return nil
+			})
+			if err != nil {
+				return nil, err
+			}
+			resp.WorkflowStopped = true
 		}
-		resp.WorkflowDeleted = true
 	}
 
 	// Remove the write_only param and save the source vschema.
 	delete(vindex.Params, "write_only")
-	if err := s.ts.SaveVSchema(ctx, req.Keyspace, sourceVschema); err != nil {
+	if err := s.ts.SaveVSchema(ctx, sourceKsVS); err != nil {
 		return nil, err
 	}
+	return resp, s.ts.RebuildSrvVSchema(ctx, nil)
+}
+
+// LookupVindexInternalize internalizes a lookup vindex.
+func (s *Server) LookupVindexInternalize(ctx context.Context, req *vtctldatapb.LookupVindexInternalizeRequest) (*vtctldatapb.LookupVindexInternalizeResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "workflow.Server.LookupVindexInternalize")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("name", req.Name)
+	span.Annotate("table_keyspace", req.TableKeyspace)
+
+	vindex, sourceKsVS, err := getVindexAndVSchema(ctx, s.ts, req.Keyspace, req.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	targetShards, err := s.ts.GetServingShards(ctx, req.TableKeyspace)
+	if err != nil {
+		return nil, err
+	}
+
+	lv := newLookupVindex(s)
+	if err = lv.validateExternalized(ctx, vindex, req.Name, targetShards); err != nil {
+		return nil, err
+	}
+
+	// Make the vindex back to write_only and save the source vschema.
+	vindex.Params["write_only"] = "true"
+	if err := s.ts.SaveVSchema(ctx, sourceKsVS); err != nil {
+		return nil, err
+	}
+
+	resp := &vtctldatapb.LookupVindexInternalizeResponse{}
+	err = forAllShards(targetShards, func(si *topo.ShardInfo) error {
+		tabletInfo, err := s.ts.GetTablet(ctx, si.PrimaryAlias)
+		if err != nil {
+			return err
+		}
+		query, err := sqlparser.ParseAndBind(SqlUnfreezeWorkflow,
+			sqltypes.StringBindVariable(tabletInfo.DbName()),
+			sqltypes.StringBindVariable(req.Name),
+		)
+		if err != nil {
+			return err
+		}
+		_, err = s.tmc.VReplicationExec(ctx, tabletInfo.Tablet, query)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+
 	return resp, s.ts.RebuildSrvVSchema(ctx, nil)
 }
 
@@ -803,9 +915,10 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		s.Logger().Infof("Successfully opened external topo: %+v", externalTopo)
 	}
 
-	var vschema *vschemapb.Keyspace
-	var origVSchema *vschemapb.Keyspace // If we need to rollback a failed create
-	vschema, err = s.ts.GetVSchema(ctx, targetKeyspace)
+	origVSchema := &topo.KeyspaceVSchemaInfo{ // If we need to rollback a failed create
+		Name: targetKeyspace,
+	}
+	vschema, err := s.ts.GetVSchema(ctx, targetKeyspace)
 	if err != nil {
 		return nil, err
 	}
@@ -830,7 +943,7 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		return nil, err
 	}
 	if len(tables) > 0 {
-		err = validateSourceTablesExist(ctx, sourceKeyspace, ksTables, tables)
+		err = validateSourceTablesExist(sourceKeyspace, ksTables, tables)
 		if err != nil {
 			return nil, err
 		}
@@ -842,7 +955,7 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		}
 	}
 	if len(req.ExcludeTables) > 0 {
-		err = validateSourceTablesExist(ctx, sourceKeyspace, ksTables, req.ExcludeTables)
+		err = validateSourceTablesExist(sourceKeyspace, ksTables, req.ExcludeTables)
 		if err != nil {
 			return nil, err
 		}
@@ -861,12 +974,14 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 
 	if !vschema.Sharded {
 		// Save the original in case we need to restore it for a late failure in
-		// the defer().
-		origVSchema = vschema.CloneVT()
-		if err := s.addTablesToVSchema(ctx, sourceKeyspace, vschema, tables, externalTopo == nil); err != nil {
+		// the defer(). We do NOT want to clone the version field as we will
+		// intentionally be going back in time. So we only clone the internal
+		// vschemapb.Keyspace field.
+		origVSchema.Keyspace = vschema.Keyspace.CloneVT()
+		if err := s.addTablesToVSchema(ctx, sourceKeyspace, vschema.Keyspace, tables, externalTopo == nil); err != nil {
 			return nil, err
 		}
-		if err := s.ts.SaveVSchema(ctx, targetKeyspace, vschema); err != nil {
+		if err := s.ts.SaveVSchema(ctx, vschema); err != nil {
 			return nil, err
 		}
 	}
@@ -967,7 +1082,7 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 			if origVSchema == nil { // There's no previous version to restore
 				return
 			}
-			if cerr := s.ts.SaveVSchema(ctx, targetKeyspace, origVSchema); cerr != nil {
+			if cerr := s.ts.SaveVSchema(ctx, origVSchema); cerr != nil {
 				err = vterrors.Wrapf(err, "failed to restore original target vschema: %v", cerr)
 			}
 		}
@@ -1607,8 +1722,10 @@ func (s *Server) WorkflowUpdate(ctx context.Context, req *vtctldatapb.WorkflowUp
 	span.Annotate("on_ddl", req.TabletRequest.OnDdl)
 	span.Annotate("state", req.TabletRequest.State)
 	span.Annotate("config_overrides", req.TabletRequest.ConfigOverrides)
+	span.Annotate("shards", req.TabletRequest.Shards)
 
 	vx := vexec.NewVExec(req.Keyspace, req.TabletRequest.Workflow, s.ts, s.tmc, s.env.Parser())
+	vx.SetShardSubset(req.TabletRequest.Shards)
 	callback := func(ctx context.Context, tablet *topo.TabletInfo) (*querypb.QueryResult, error) {
 		res, err := s.tmc.UpdateVReplicationWorkflow(ctx, tablet.Tablet, req.TabletRequest)
 		if err != nil {
@@ -2032,7 +2149,7 @@ func (s *Server) buildTrafficSwitcher(ctx context.Context, targetKeyspace, workf
 	if err != nil {
 		return nil, err
 	}
-	ts.sourceKSSchema, err = vindexes.BuildKeyspaceSchema(vs, ts.sourceKeyspace, s.env.Parser())
+	ts.sourceKSSchema, err = vindexes.BuildKeyspaceSchema(vs.Keyspace, ts.sourceKeyspace, s.env.Parser())
 	if err != nil {
 		return nil, err
 	}
@@ -3019,7 +3136,7 @@ func (s *Server) VReplicationExec(ctx context.Context, tabletAlias *topodatapb.T
 }
 
 // CopySchemaShard copies the schema from a source tablet to the
-// specified shard.  The schema is applied directly on the primary of
+// specified shard. The schema is applied directly on the primary of
 // the destination shard, and is propagated to the replicas through
 // binlogs.
 func (s *Server) CopySchemaShard(ctx context.Context, sourceTabletAlias *topodatapb.TabletAlias, tables, excludeTables []string, includeViews bool, destKeyspace, destShard string, waitReplicasTimeout time.Duration, skipVerify bool) error {
