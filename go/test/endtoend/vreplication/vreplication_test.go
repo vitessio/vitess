@@ -828,9 +828,9 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		testSwitchTrafficPermissionChecks(t, workflowType, sourceKs, shardNames, targetKs, workflow)
 
 		testSwitchWritesErrorHandling(t, []*cluster.VttabletProcess{productTab}, []*cluster.VttabletProcess{customerTab1, customerTab2},
-			sourceKs, targetKs, workflow, workflowType)
+			workflow, workflowType)
 
-		// Now let's confirm that it now works as expected.
+		// Now let's confirm that it works as expected with an error.
 		switchWrites(t, workflowType, ksWorkflow, false)
 
 		checkThatVDiffFails(t, targetKs, workflow)
@@ -1094,8 +1094,9 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 			reshardAction(t, "SwitchTraffic", workflow, ksName, "", "", callNames, "primary", "--dry-run")
 		}
 		if tableName == "customer" {
-			testSwitchWritesErrorHandling(t, sourceTablets, targetTablets, ksName, ksName, workflow, "reshard")
+			testSwitchWritesErrorHandling(t, sourceTablets, targetTablets, workflow, "reshard")
 		}
+		// Now let's confirm that it works as expected with an error.
 		reshardAction(t, "SwitchTraffic", workflow, ksName, "", "", callNames, "primary")
 		reshardAction(t, "Complete", workflow, ksName, "", "", "", "")
 		for tabletName, count := range counts {
@@ -1673,12 +1674,15 @@ func testSwitchTrafficPermissionChecks(t *testing.T, workflowType, sourceKeyspac
 // The workflow MUST be migrating the customer table from the source to the
 // target keyspace AND the workflow must currently have reads switched but not
 // writes.
-func testSwitchWritesErrorHandling(t *testing.T, sourceTablets, targetTablets []*cluster.VttabletProcess, sourceKs, targetKs, workflow, workflowType string) {
+func testSwitchWritesErrorHandling(t *testing.T, sourceTablets, targetTablets []*cluster.VttabletProcess, workflow, workflowType string) {
 	t.Run("validate switch writes error handling", func(t *testing.T) {
-		ksWorkflow := fmt.Sprintf("%s.%s", targetKs, workflow)
 		vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
-		require.NotZero(t, len(sourceTablets), "no source tablets provided for keyspace %s", sourceKs)
-		require.NotZero(t, len(targetTablets), "no target tablets provided for keyspace %s", targetKs)
+		defer vtgateConn.Close()
+		require.NotZero(t, len(sourceTablets), "no source tablets provided")
+		require.NotZero(t, len(targetTablets), "no target tablets provided")
+		sourceKs := sourceTablets[0].Keyspace
+		targetKs := targetTablets[0].Keyspace
+		ksWorkflow := fmt.Sprintf("%s.%s", targetKs, workflow)
 		var err error
 		sourceConns := make([]*mysql.Conn, len(sourceTablets))
 		for i, tablet := range sourceTablets {
