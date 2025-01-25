@@ -100,6 +100,9 @@ func (nz *normalizer) walkDown(node, _ SQLNode) bool {
 	// no need to normalize the statement types TODO?
 	case *Begin, *Commit, *Rollback, *Savepoint, *SRollback, *Release, *OtherAdmin, *Analyze, *AssignmentExpr:
 		return false // TODO: we should normalize these statements
+	case *Set:
+		// we want to change some things, but we don't want to parameterize here
+		nz.shouldParameterize = false
 	case *DerivedTable:
 		nz.inDerived++
 	case *Select:
