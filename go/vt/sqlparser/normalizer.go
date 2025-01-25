@@ -156,7 +156,6 @@ func newNormalizer(
 // walkDown processes nodes when traversing down the AST.
 // It handles normalization logic based on node types.
 func (nz *normalizer) walkDown(node, _ SQLNode) bool {
-	fmt.Printf("DOWN %T\n", node)
 	switch node := node.(type) {
 	case *Begin, *Commit, *Rollback, *Savepoint, *SRollback, *Release, *OtherAdmin, *Analyze, *AssignmentExpr,
 		*PrepareStmt, *ExecuteStmt, *FramePoint, *ColName, TableName, *ConvertType:
@@ -174,8 +173,6 @@ func (nz *normalizer) walkDown(node, _ SQLNode) bool {
 		}
 	case *AliasedExpr:
 		nz.noteAliasedExprName(node)
-	//case SelectExprs:
-	//	return nz.inDerived == 0
 	case *ComparisonExpr:
 		nz.convertComparison(node)
 	case *UpdateExpr:
@@ -218,7 +215,6 @@ func (nz *normalizer) noteAliasedExprName(node *AliasedExpr) {
 // walkUp processes nodes when traversing up the AST.
 // It finalizes normalization logic based on node types.
 func (nz *normalizer) walkUp(cursor *Cursor) bool {
-	fmt.Printf("UP %T\n", cursor.Node())
 	// Add SET_VAR comments if applicable.
 	if supportOptimizerHint, supports := cursor.Node().(SupportOptimizerHint); supports {
 		if nz.setVarComment != "" {
