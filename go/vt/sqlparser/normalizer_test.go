@@ -449,7 +449,7 @@ func TestNormalize(t *testing.T) {
 		t.Run(tc.in, func(t *testing.T) {
 			stmt, err := parser.Parse(tc.in)
 			require.NoError(t, err)
-			known := GetBindvars(stmt)
+			known := getBindvars(stmt)
 			bv := make(map[string]*querypb.BindVariable)
 			out, err := PrepareAST(stmt, NewReservedVars(prefix, known), bv, true, "ks", 0, "", map[string]string{}, nil, nil)
 			require.NoError(t, err)
@@ -478,7 +478,7 @@ func TestNormalizeInvalidDates(t *testing.T) {
 		t.Run(tc.in, func(t *testing.T) {
 			stmt, err := parser.Parse(tc.in)
 			require.NoError(t, err)
-			known := GetBindvars(stmt)
+			known := getBindvars(stmt)
 			bv := make(map[string]*querypb.BindVariable)
 			_, err = PrepareAST(stmt, NewReservedVars("bv", known), bv, true, "ks", 0, "", map[string]string{}, nil, nil)
 			require.EqualError(t, err, tc.err.Error())
@@ -550,7 +550,7 @@ func TestGetBindVars(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := GetBindvars(stmt)
+	got := getBindvars(stmt)
 	want := map[string]struct{}{
 		"v1": {},
 		"v2": {},

@@ -29,38 +29,100 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-// BindVars represents a set of reserved bind variables extracted from a SQL statement.
-type BindVars map[string]struct{}
+type (
+	// BindVars represents a set of reserved bind variables extracted from a SQL statement.
+	BindVars map[string]struct{}
+	// normalizer transforms SQL statements to support parameterization and streamline query planning.
+	//
+	// It serves two primary purposes:
+	//  1. **Parameterization:** Allows multiple invocations of the same query with different literals by converting literals
+	//     to bind variables. This enables efficient reuse of execution plans with varying parameters.
+	//  2. **Simplified Planning:** Reduces the complexity for the query planner by standardizing SQL patterns. For example,
+	//     it ensures that table columns are consistently placed on the left side of comparison expressions. This uniformity
+	//     minimizes the number of distinct patterns the planner must handle, enhancing planning efficiency.
+	normalizer struct {
+		bindVars  map[string]*querypb.BindVariable
+		reserved  *ReservedVars
+		vals      map[Literal]string
+		err       error
+		inDerived int
+		inSelect  int
 
-// normalizer transforms SQL statements to support parameterization and streamline query planning.
-//
-// It serves two primary purposes:
-//  1. **Parameterization:** Allows multiple invocations of the same query with different literals by converting literals
-//     to bind variables. This enables efficient reuse of execution plans with varying parameters.
-//  2. **Simplified Planning:** Reduces the complexity for the query planner by standardizing SQL patterns. For example,
-//     it ensures that table columns are consistently placed on the left side of comparison expressions. This uniformity
-//     minimizes the number of distinct patterns the planner must handle, enhancing planning efficiency.
-type normalizer struct {
-	bindVars  map[string]*querypb.BindVariable
-	reserved  *ReservedVars
-	vals      map[Literal]string
-	err       error
-	inDerived int
-	inSelect  int
+		bindVarNeeds              *BindVarNeeds
+		shouldRewriteDatabaseFunc bool
+		hasStarInSelect           bool
 
-	bindVarNeeds              *BindVarNeeds
-	shouldRewriteDatabaseFunc bool
-	hasStarInSelect           bool
+		keyspace      string
+		selectLimit   int
+		setVarComment string
+		fkChecksState *bool
+		sysVars       map[string]string
+		views         VSchemaViews
 
-	keyspace      string
-	selectLimit   int
-	setVarComment string
-	fkChecksState *bool
-	sysVars       map[string]string
-	views         VSchemaViews
+		onLeave            map[*AliasedExpr]func(*AliasedExpr)
+		shouldParameterize bool
+	}
+	// RewriteASTResult holds the result of rewriting the AST, including bind variable needs.
+	RewriteASTResult struct {
+		*BindVarNeeds
+		AST Statement // The rewritten AST
+	}
+	// VSchemaViews provides access to view definitions within the VSchema.
+	VSchemaViews interface {
+		FindView(name TableName) TableStatement
+	}
+)
 
-	onLeave            map[*AliasedExpr]func(*AliasedExpr)
-	shouldParameterize bool
+const (
+	// SQLSelectLimitUnset indicates that sql_select_limit is not set.
+	SQLSelectLimitUnset = -1
+	// LastInsertIDName is the bind variable name for LAST_INSERT_ID().
+	LastInsertIDName = "__lastInsertId"
+	// DBVarName is the bind variable name for DATABASE().
+	DBVarName = "__vtdbname"
+	// FoundRowsName is the bind variable name for FOUND_ROWS().
+	FoundRowsName = "__vtfrows"
+	// RowCountName is the bind variable name for ROW_COUNT().
+	RowCountName = "__vtrcount"
+	// UserDefinedVariableName is the prefix for user-defined variable bind names.
+	UserDefinedVariableName = "__vtudv"
+)
+
+// funcRewrites lists all functions that must be rewritten. we don't want these to make it down to mysql,
+// we need to handle these in the vtgate
+var funcRewrites = map[string]string{
+	"last_insert_id": LastInsertIDName,
+	"database":       DBVarName,
+	"schema":         DBVarName,
+	"found_rows":     FoundRowsName,
+	"row_count":      RowCountName,
+}
+
+// PrepareAST normalizes the input SQL statement and returns the rewritten AST along with bind variable information.
+func PrepareAST(
+	in Statement,
+	reservedVars *ReservedVars,
+	bindVars map[string]*querypb.BindVariable,
+	parameterize bool,
+	keyspace string,
+	selectLimit int,
+	setVarComment string,
+	sysVars map[string]string,
+	fkChecksState *bool,
+	views VSchemaViews,
+) (*RewriteASTResult, error) {
+	nz := newNormalizer(reservedVars, bindVars, keyspace, selectLimit, setVarComment, sysVars, fkChecksState, views, parameterize)
+	nz.shouldRewriteDatabaseFunc = shouldRewriteDatabaseFunc(in)
+	out := SafeRewrite(in, nz.walkDown, nz.walkUp)
+	if nz.err != nil {
+		return nil, nz.err
+	}
+
+	r := &RewriteASTResult{
+		AST:          out.(Statement),
+		BindVarNeeds: nz.bindVarNeeds,
+	}
+	return r, nil
 }
 
 func newNormalizer(
@@ -109,18 +171,7 @@ func (nz *normalizer) walkDown(node, _ SQLNode) bool {
 			node.Limit = &Limit{Rowcount: NewIntLiteral(strconv.Itoa(nz.selectLimit))}
 		}
 	case *AliasedExpr:
-		// Track expressions without aliases to potentially rewrite them.
-		if node.As.NotEmpty() {
-			break
-		}
-		buf := NewTrackedBuffer(nil)
-		node.Expr.Format(buf)
-		rewrites := nz.bindVarNeeds.NumberOfRewrites()
-		nz.onLeave[node] = func(newAliasedExpr *AliasedExpr) {
-			if nz.bindVarNeeds.NumberOfRewrites() > rewrites {
-				newAliasedExpr.As = NewIdentifierCI(buf.String())
-			}
-		}
+		nz.noteAliasedExprName(node)
 	case SelectExprs:
 		return nz.inDerived == 0
 	case *ComparisonExpr:
@@ -132,14 +183,30 @@ func (nz *normalizer) walkDown(node, _ SQLNode) bool {
 		// No rewriting needed for prepare or execute statements.
 		return false
 	case *ShowBasic:
-		if node.Command == VariableGlobal || node.Command == VariableSession {
-			varsToAdd := sysvars.GetInterestingVariables()
-			for _, sysVar := range varsToAdd {
-				nz.bindVarNeeds.AddSysVar(sysVar)
-			}
+		if node.Command != VariableGlobal && node.Command != VariableSession {
+			break
+		}
+		varsToAdd := sysvars.GetInterestingVariables()
+		for _, sysVar := range varsToAdd {
+			nz.bindVarNeeds.AddSysVar(sysVar)
 		}
 	}
 	return nz.err == nil
+}
+
+// noteAliasedExprName tracks expressions without aliases to add alias if expression is rewritten
+func (nz *normalizer) noteAliasedExprName(node *AliasedExpr) {
+	if node.As.NotEmpty() {
+		return
+	}
+	buf := NewTrackedBuffer(nil)
+	node.Expr.Format(buf)
+	rewrites := nz.bindVarNeeds.NumberOfRewrites()
+	nz.onLeave[node] = func(newAliasedExpr *AliasedExpr) {
+		if nz.bindVarNeeds.NumberOfRewrites() > rewrites {
+			newAliasedExpr.As = NewIdentifierCI(buf.String())
+		}
+	}
 }
 
 // walkUp processes nodes when traversing up the AST.
@@ -171,6 +238,7 @@ func (nz *normalizer) walkUp(cursor *Cursor) bool {
 	case *Select:
 		nz.inSelect--
 	case *AliasedExpr:
+		// if we are tracking this node for changes, this is the time to add the alias if needed
 		if onLeave, ok := nz.onLeave[node]; ok {
 			onLeave(node)
 		}
@@ -193,24 +261,27 @@ func (nz *normalizer) walkUp(cursor *Cursor) bool {
 	case DistinctableAggr:
 		nz.rewriteDistinctableAggr(node)
 	case *Literal:
-		if !nz.shouldParameterize {
-			break
-		}
-		if nz.inSelect == 0 {
-			nz.convertLiteral(node, cursor)
-			return nz.err == nil
-		}
-		parent := cursor.Parent()
-		switch parent.(type) {
-		case *Order, *GroupBy:
-			return true
-		case *Limit:
-			nz.convertLiteral(node, cursor)
-		default:
-			nz.convertLiteralDedup(node, cursor)
-		}
+		nz.visitLiteral(cursor, node)
 	}
 	return nz.err == nil
+}
+
+func (nz *normalizer) visitLiteral(cursor *Cursor, node *Literal) {
+	if !nz.shouldParameterize {
+		return
+	}
+	if nz.inSelect == 0 {
+		nz.convertLiteral(node, cursor)
+		return
+	}
+	switch cursor.Parent().(type) {
+	case *Order, *GroupBy:
+		return
+	case *Limit:
+		nz.convertLiteral(node, cursor)
+	default:
+		nz.convertLiteralDedup(node, cursor)
+	}
 }
 
 // validateLiteral ensures that a Literal node has a valid value based on its type.
@@ -245,7 +316,7 @@ func (nz *normalizer) convertLiteralDedup(node *Literal, cursor *Cursor) {
 		return
 	}
 
-	bval := SQLToBindvar(node)
+	bval := literalToBindvar(node)
 	if bval == nil {
 		return
 	}
@@ -272,7 +343,7 @@ func (nz *normalizer) convertLiteral(node *Literal, cursor *Cursor) {
 		return
 	}
 
-	bval := SQLToBindvar(node)
+	bval := literalToBindvar(node)
 	if bval == nil {
 		return
 	}
@@ -323,7 +394,7 @@ func (nz *normalizer) parameterize(left, right Expr) Expr {
 		return nil
 	}
 
-	bval := SQLToBindvar(lit)
+	bval := literalToBindvar(lit)
 	if bval == nil {
 		return nil
 	}
@@ -366,7 +437,7 @@ func (nz *normalizer) rewriteInComparisons(node *ComparisonExpr) {
 		Type: querypb.Type_TUPLE,
 	}
 	for _, val := range tupleVals {
-		bval := SQLToBindvar(val)
+		bval := literalToBindvar(val)
 		if bval == nil {
 			return
 		}
@@ -388,57 +459,58 @@ func (nz *normalizer) convertUpdateExpr(node *UpdateExpr) {
 	}
 }
 
-// SQLToBindvar converts a SQLNode to a BindVariable if possible.
-func SQLToBindvar(node SQLNode) *querypb.BindVariable {
-	if lit, ok := node.(*Literal); ok {
-		var v sqltypes.Value
-		var err error
-		switch lit.Type {
-		case StrVal:
-			v, err = sqltypes.NewValue(sqltypes.VarChar, lit.Bytes())
-		case IntVal:
-			v, err = sqltypes.NewValue(sqltypes.Int64, lit.Bytes())
-		case FloatVal:
-			v, err = sqltypes.NewValue(sqltypes.Float64, lit.Bytes())
-		case DecimalVal:
-			v, err = sqltypes.NewValue(sqltypes.Decimal, lit.Bytes())
-		case HexNum:
-			buf := make([]byte, 0, len(lit.Bytes()))
-			buf = append(buf, "0x"...)
-			buf = append(buf, bytes.ToUpper(lit.Bytes()[2:])...)
-			v, err = sqltypes.NewValue(sqltypes.HexNum, buf)
-		case HexVal:
-			// Re-encode hex string literals to original MySQL format.
-			buf := make([]byte, 0, len(lit.Bytes())+3)
-			buf = append(buf, 'x', '\'')
-			buf = append(buf, bytes.ToUpper(lit.Bytes())...)
-			buf = append(buf, '\'')
-			v, err = sqltypes.NewValue(sqltypes.HexVal, buf)
-		case BitNum:
-			out := make([]byte, 0, len(lit.Bytes())+2)
-			out = append(out, '0', 'b')
-			out = append(out, lit.Bytes()[2:]...)
-			v, err = sqltypes.NewValue(sqltypes.BitNum, out)
-		case DateVal:
-			v, err = sqltypes.NewValue(sqltypes.Date, lit.Bytes())
-		case TimeVal:
-			v, err = sqltypes.NewValue(sqltypes.Time, lit.Bytes())
-		case TimestampVal:
-			// Use DATETIME type for TIMESTAMP literals.
-			v, err = sqltypes.NewValue(sqltypes.Datetime, lit.Bytes())
-		default:
-			return nil
-		}
-		if err != nil {
-			return nil
-		}
-		return sqltypes.ValueBindVariable(v)
+// literalToBindvar converts a SQLNode to a BindVariable if possible.
+func literalToBindvar(node SQLNode) *querypb.BindVariable {
+	lit, ok := node.(*Literal)
+	if !ok {
+		return nil
 	}
-	return nil
+	var v sqltypes.Value
+	var err error
+	switch lit.Type {
+	case StrVal:
+		v, err = sqltypes.NewValue(sqltypes.VarChar, lit.Bytes())
+	case IntVal:
+		v, err = sqltypes.NewValue(sqltypes.Int64, lit.Bytes())
+	case FloatVal:
+		v, err = sqltypes.NewValue(sqltypes.Float64, lit.Bytes())
+	case DecimalVal:
+		v, err = sqltypes.NewValue(sqltypes.Decimal, lit.Bytes())
+	case HexNum:
+		buf := make([]byte, 0, len(lit.Bytes()))
+		buf = append(buf, "0x"...)
+		buf = append(buf, bytes.ToUpper(lit.Bytes()[2:])...)
+		v, err = sqltypes.NewValue(sqltypes.HexNum, buf)
+	case HexVal:
+		// Re-encode hex string literals to original MySQL format.
+		buf := make([]byte, 0, len(lit.Bytes())+3)
+		buf = append(buf, 'x', '\'')
+		buf = append(buf, bytes.ToUpper(lit.Bytes())...)
+		buf = append(buf, '\'')
+		v, err = sqltypes.NewValue(sqltypes.HexVal, buf)
+	case BitNum:
+		out := make([]byte, 0, len(lit.Bytes())+2)
+		out = append(out, '0', 'b')
+		out = append(out, lit.Bytes()[2:]...)
+		v, err = sqltypes.NewValue(sqltypes.BitNum, out)
+	case DateVal:
+		v, err = sqltypes.NewValue(sqltypes.Date, lit.Bytes())
+	case TimeVal:
+		v, err = sqltypes.NewValue(sqltypes.Time, lit.Bytes())
+	case TimestampVal:
+		// Use DATETIME type for TIMESTAMP literals.
+		v, err = sqltypes.NewValue(sqltypes.Datetime, lit.Bytes())
+	default:
+		return nil
+	}
+	if err != nil {
+		return nil
+	}
+	return sqltypes.ValueBindVariable(v)
 }
 
-// GetBindvars extracts bind variables from a SQL statement.
-func GetBindvars(stmt Statement) map[string]struct{} {
+// getBindvars extracts bind variables from a SQL statement.
+func getBindvars(stmt Statement) map[string]struct{} {
 	bindvars := make(map[string]struct{})
 	_ = Walk(func(node SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
@@ -456,47 +528,6 @@ func GetBindvars(stmt Statement) map[string]struct{} {
 }
 
 var HasValueSubQueryBaseName = []byte("__sq_has_values")
-
-// SQLSelectLimitUnset indicates that sql_select_limit is not set.
-const SQLSelectLimitUnset = -1
-
-// RewriteASTResult holds the result of rewriting the AST, including bind variable needs.
-type RewriteASTResult struct {
-	*BindVarNeeds
-	AST Statement // The rewritten AST
-}
-
-// VSchemaViews provides access to view definitions within the VSchema.
-type VSchemaViews interface {
-	FindView(name TableName) TableStatement
-}
-
-// PrepareAST normalizes the input SQL statement and returns the rewritten AST along with bind variable information.
-func PrepareAST(
-	in Statement,
-	reservedVars *ReservedVars,
-	bindVars map[string]*querypb.BindVariable,
-	parameterize bool,
-	keyspace string,
-	selectLimit int,
-	setVarComment string,
-	sysVars map[string]string,
-	fkChecksState *bool,
-	views VSchemaViews,
-) (*RewriteASTResult, error) {
-	nz := newNormalizer(reservedVars, bindVars, keyspace, selectLimit, setVarComment, sysVars, fkChecksState, views, parameterize)
-	nz.shouldRewriteDatabaseFunc = shouldRewriteDatabaseFunc(in)
-	out := SafeRewrite(in, nz.walkDown, nz.walkUp)
-	if nz.err != nil {
-		return nil, nz.err
-	}
-
-	r := &RewriteASTResult{
-		AST:          out.(Statement),
-		BindVarNeeds: nz.bindVarNeeds,
-	}
-	return r, nil
-}
 
 // shouldRewriteDatabaseFunc determines if the database function should be rewritten based on the statement.
 func shouldRewriteDatabaseFunc(in Statement) bool {
@@ -517,23 +548,6 @@ func shouldRewriteDatabaseFunc(in Statement) bool {
 	}
 	return tableName.Name.String() == "dual"
 }
-
-const (
-	// LastInsertIDName is the bind variable name for LAST_INSERT_ID().
-	LastInsertIDName = "__lastInsertId"
-
-	// DBVarName is the bind variable name for DATABASE().
-	DBVarName = "__vtdbname"
-
-	// FoundRowsName is the bind variable name for FOUND_ROWS().
-	FoundRowsName = "__vtfrows"
-
-	// RowCountName is the bind variable name for ROW_COUNT().
-	RowCountName = "__vtrcount"
-
-	// UserDefinedVariableName is the prefix for user-defined variable bind names.
-	UserDefinedVariableName = "__vtudv"
-)
 
 // rewriteUnion sets the SELECT limit for UNION statements if not already set.
 func (nz *normalizer) rewriteUnion(node *Union) {
@@ -696,14 +710,6 @@ func (nz *normalizer) udvRewrite(cursor *Cursor, node *Variable) {
 	udv := strings.ToLower(node.Name.CompliantName())
 	cursor.Replace(NewArgument(UserDefinedVariableName + udv))
 	nz.bindVarNeeds.AddUserDefVar(udv)
-}
-
-var funcRewrites = map[string]string{
-	"last_insert_id": LastInsertIDName,
-	"database":       DBVarName,
-	"schema":         DBVarName,
-	"found_rows":     FoundRowsName,
-	"row_count":      RowCountName,
 }
 
 // funcRewrite replaces certain function expressions with bind variables.
