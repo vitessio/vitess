@@ -718,6 +718,10 @@ func TestRewrites(in *testing.T) {
 		expected: "select :__lastInsertId as x from dual",
 		liid:     true,
 	}, {
+		in:       `select * from (select last_insert_id()) as t`,
+		expected: "select * from (select :__lastInsertId as `last_insert_id()` from dual) as t",
+		liid:     true,
+	}, {
 		in:          `select * from user where col = @@ddl_strategy`,
 		expected:    "select * from user where col = :__vtddl_strategy",
 		ddlStrategy: true,
