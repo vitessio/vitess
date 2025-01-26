@@ -522,6 +522,45 @@ func TestInvalidSchema(t *testing.T) {
 		{
 			schema: "create table post (id varchar(191) charset utf8mb4 not null, `title` text, primary key (`id`)); create table post_fks (id varchar(191) not null, `post_id` varchar(191) collate utf8mb4_0900_ai_ci, primary key (id), constraint post_fk foreign key (post_id) references post (id)) charset utf8mb4, collate utf8mb4_0900_as_ci;",
 		},
+		// constaint names
+		{
+			schema: `create table t1 (id int primary key, CONSTRAINT const_id CHECK (id > 0))`,
+		},
+		{
+			schema: `
+				create table t1 (id int primary key, CONSTRAINT const_id CHECK (id > 0), CONSTRAINT const_id CHECK (id < 10));
+			`,
+			expectErr: &DuplicateCheckConstraintNameError{Table: "t1", Constraint: "const_id"},
+		},
+		{
+			schema: `
+			create table t1 (id int primary key, CONSTRAINT const_id CHECK (id > 0));
+			create table t2 (id int primary key, CONSTRAINT const_id CHECK (id > 0));
+			`,
+			expectErr: &DuplicateCheckConstraintNameError{Table: "t2", Constraint: "const_id"},
+		},
+		{
+			// OK for foreign key constraint and check constraint to have same name
+			schema: `
+			create table t1 (id int primary key, CONSTRAINT const_id CHECK (id > 0));
+			create table t2 (id int primary key, CONSTRAINT const_id FOREIGN KEY (id) REFERENCES t1 (id) ON DELETE CASCADE);
+			`,
+		},
+		{
+			schema: `
+			create table t1 (id int primary key, CONSTRAINT const_id CHECK (id > 0));
+			create table t2 (id int primary key, CONSTRAINT const_id FOREIGN KEY (id) REFERENCES t1 (id) ON DELETE CASCADE);
+			create table t3 (id int primary key, CONSTRAINT const_id FOREIGN KEY (id) REFERENCES t1 (id) ON DELETE CASCADE);
+			`,
+			expectErr: &DuplicateForeignKeyConstraintNameError{Table: "t3", Constraint: "const_id"},
+		},
+		{
+			schema: `
+			create table t1 (id int primary key, CONSTRAINT const_id CHECK (id > 0));
+			create table t2 (id int primary key, CONSTRAINT const_id FOREIGN KEY (id) REFERENCES t1 (id) ON DELETE CASCADE, CONSTRAINT const_id FOREIGN KEY (id) REFERENCES t1 (id) ON DELETE CASCADE);
+			`,
+			expectErr: &DuplicateForeignKeyConstraintNameError{Table: "t2", Constraint: "const_id"},
+		},
 	}
 	for _, ts := range tt {
 		t.Run(ts.schema, func(t *testing.T) {

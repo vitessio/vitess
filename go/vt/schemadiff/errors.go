@@ -497,3 +497,21 @@ type NonDeterministicDefaultError struct {
 func (e *NonDeterministicDefaultError) Error() string {
 	return fmt.Sprintf("column %s.%s default value uses non-deterministic function: %s", sqlescape.EscapeID(e.Table), sqlescape.EscapeID(e.Column), e.Function)
 }
+
+type DuplicateCheckConstraintNameError struct {
+	Table      string
+	Constraint string
+}
+
+func (e *DuplicateCheckConstraintNameError) Error() string {
+	return fmt.Sprintf("duplicate check constraint name %s in table %s", sqlescape.EscapeID(e.Constraint), sqlescape.EscapeID(e.Table))
+}
+
+type DuplicateForeignKeyConstraintNameError struct {
+	Table      string
+	Constraint string
+}
+
+func (e *DuplicateForeignKeyConstraintNameError) Error() string {
+	return fmt.Sprintf("duplicate foreign key constraint name %s in table %s", sqlescape.EscapeID(e.Constraint), sqlescape.EscapeID(e.Table))
+}
