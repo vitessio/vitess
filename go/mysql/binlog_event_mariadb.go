@@ -60,17 +60,18 @@ func (ev mariadbBinlogEvent) IsGTID() bool {
 //	8         sequence number
 //	4         domain ID
 //	1         flags2
-func (ev mariadbBinlogEvent) GTID(f BinlogFormat) (replication.GTID, bool, error) {
+func (ev mariadbBinlogEvent) GTID(f BinlogFormat) (replication.GTID, bool, int64, int64, error) {
 	const FLStandalone = 1
 
 	data := ev.Bytes()[f.HeaderLength:]
 	flags2 := data[8+4]
 
-	return replication.MariadbGTID{
+	gtid := replication.MariadbGTID{
 		Sequence: binary.LittleEndian.Uint64(data[:8]),
 		Domain:   binary.LittleEndian.Uint32(data[8 : 8+4]),
 		Server:   ev.ServerID(),
-	}, flags2&FLStandalone == 0, nil
+	}
+	return gtid, flags2&FLStandalone == 0, 0, 0, nil
 }
 
 // PreviousGTIDs implements BinlogEvent.PreviousGTIDs().

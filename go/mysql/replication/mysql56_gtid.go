@@ -94,8 +94,7 @@ func ParseSID(s string) (sid SID, err error) {
 type Mysql56GTID struct {
 	// Server is the SID of the server that originally committed the transaction.
 	Server SID
-	// Sequence is the sequence number of the transaction within a given Server's
-	// scope.
+	// Sequence is the sequence number of the transaction within a given Server's scope.
 	Sequence int64
 }
 

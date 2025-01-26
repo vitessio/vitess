@@ -40,8 +40,8 @@ func newFilePosBinlogEvent(buf []byte) *filePosBinlogEvent {
 	return &filePosBinlogEvent{binlogEvent: binlogEvent(buf)}
 }
 
-func (*filePosBinlogEvent) GTID(BinlogFormat) (replication.GTID, bool, error) {
-	return nil, false, nil
+func (*filePosBinlogEvent) GTID(BinlogFormat) (replication.GTID, bool, int64, int64, error) {
+	return nil, false, 0, 0, nil
 }
 
 // IsSemiSyncAckRequested implements BinlogEvent.IsSemiSyncAckRequested().
@@ -224,8 +224,8 @@ func (ev filePosFakeEvent) Format() (BinlogFormat, error) {
 	return BinlogFormat{}, nil
 }
 
-func (ev filePosFakeEvent) GTID(BinlogFormat) (replication.GTID, bool, error) {
-	return nil, false, nil
+func (ev filePosFakeEvent) GTID(BinlogFormat) (replication.GTID, bool, int64, int64, error) {
+	return nil, false, 0, 0, nil
 }
 
 func (ev filePosFakeEvent) Query(BinlogFormat) (Query, error) {
@@ -304,6 +304,6 @@ func (ev filePosGTIDEvent) StripChecksum(f BinlogFormat) (BinlogEvent, []byte, e
 	return ev, nil, nil
 }
 
-func (ev filePosGTIDEvent) GTID(BinlogFormat) (replication.GTID, bool, error) {
-	return ev.gtid, false, nil
+func (ev filePosGTIDEvent) GTID(BinlogFormat) (replication.GTID, bool, int64, int64, error) {
+	return ev.gtid, false, 0, 0, nil
 }
