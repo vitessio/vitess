@@ -527,10 +527,19 @@ func TestInvalidSchema(t *testing.T) {
 			schema: `create table t1 (id int primary key, CONSTRAINT const_id CHECK (id > 0))`,
 		},
 		{
+			schema: `create table t1 (id int primary key, CONSTRAINT const_id1 CHECK (id > 0), CONSTRAINT const_id2 CHECK (id < 10));`,
+		},
+		{
 			schema: `
 				create table t1 (id int primary key, CONSTRAINT const_id CHECK (id > 0), CONSTRAINT const_id CHECK (id < 10));
 			`,
 			expectErr: &DuplicateCheckConstraintNameError{Table: "t1", Constraint: "const_id"},
+		},
+		{
+			schema: `
+			create table t1 (id int primary key, CONSTRAINT const_id1 CHECK (id > 0));
+			create table t2 (id int primary key, CONSTRAINT const_id2 CHECK (id > 0));
+			`,
 		},
 		{
 			schema: `
