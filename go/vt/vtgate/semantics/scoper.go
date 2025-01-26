@@ -297,11 +297,11 @@ func (s *scoper) createSpecialScopePostProjection(parent sqlparser.SQLNode) erro
 		for i, sel := range sqlparser.GetAllSelects(parent) {
 			if i == 0 {
 				nScope.stmt = sel
-				tableInfo = createVTableInfoForExpressions(sel.SelectExprs, nil /*needed for star expressions*/, s.org)
+				tableInfo = createVTableInfoForExpressions(sel.GetColumns(), nil /*needed for star expressions*/, s.org)
 				nScope.tables = append(nScope.tables, tableInfo)
 				continue
 			}
-			thisTableInfo := createVTableInfoForExpressions(sel.SelectExprs, nil /*needed for star expressions*/, s.org)
+			thisTableInfo := createVTableInfoForExpressions(sel.GetColumns(), nil /*needed for star expressions*/, s.org)
 			if len(tableInfo.cols) != len(thisTableInfo.cols) {
 				return vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.WrongNumberOfColumnsInSelect, "The used SELECT statements have a different number of columns")
 			}

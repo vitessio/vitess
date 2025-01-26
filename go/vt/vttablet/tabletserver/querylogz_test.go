@@ -35,7 +35,7 @@ import (
 
 func TestQuerylogzHandler(t *testing.T) {
 	req, _ := http.NewRequest("GET", "/querylogz?timeout=10&limit=1", nil)
-	logStats := tabletenv.NewLogStats(context.Background(), "Execute")
+	logStats := tabletenv.NewLogStats(context.Background(), "Execute", streamlog.NewQueryLogConfigForTest())
 	logStats.PlanType = planbuilder.PlanSelect.String()
 	logStats.OriginalSQL = "select name, 'inject <script>alert();</script>' from test_table limit 1000"
 	logStats.RowsAffected = 1000
@@ -144,8 +144,7 @@ func TestQuerylogzHandler(t *testing.T) {
 	checkQuerylogzHasStats(t, slowQueryPattern, logStats, body)
 
 	// ensure querylogz is not affected by the filter tag
-	streamlog.SetQueryLogFilterTag("XXX_SKIP_ME")
-	defer func() { streamlog.SetQueryLogFilterTag("") }()
+	logStats.Config.FilterTag = "XXX_SKIP_ME"
 	ch = make(chan *tabletenv.LogStats, 1)
 	ch <- logStats
 	querylogzHandler(ch, response, req, sqlparser.NewTestParser())

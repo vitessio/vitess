@@ -34,6 +34,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
@@ -345,9 +346,9 @@ func findCandidate(
 }
 
 // getTabletsWithPromotionRules gets the tablets with the given promotion rule from the list of tablets
-func getTabletsWithPromotionRules(durability Durabler, tablets []*topodatapb.Tablet, rule promotionrule.CandidatePromotionRule) (res []*topodatapb.Tablet) {
+func getTabletsWithPromotionRules(durability policy.Durabler, tablets []*topodatapb.Tablet, rule promotionrule.CandidatePromotionRule) (res []*topodatapb.Tablet) {
 	for _, candidate := range tablets {
-		promotionRule := PromotionRule(durability, candidate)
+		promotionRule := policy.PromotionRule(durability, candidate)
 		if promotionRule == rule {
 			res = append(res, candidate)
 		}

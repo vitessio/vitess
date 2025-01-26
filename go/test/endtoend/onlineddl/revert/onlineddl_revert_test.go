@@ -260,6 +260,11 @@ func testRevertible(t *testing.T) {
 			removedUniqueKeyNames: `i1_uidx`,
 		},
 		{
+			name:       "removed expression unique key, skipped",
+			fromSchema: `id int primary key, i1 int default null, unique key idx1 ((id + 1))`,
+			toSchema:   `id int primary key, i2 int default null`,
+		},
+		{
 			name:                  "expanding unique key removes unique constraint",
 			fromSchema:            `id int primary key, i1 int default null, unique key i1_uidx(i1)`,
 			toSchema:              `id int primary key, i1 int default null, unique key i1_uidx(i1, id)`,

@@ -534,9 +534,15 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			err := env.ts.SaveVSchema(ctx, sourceKeyspace.KeyspaceName, tc.sourceVSchema)
+			err := env.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+				Name:     sourceKeyspace.KeyspaceName,
+				Keyspace: tc.sourceVSchema,
+			})
 			require.NoError(t, err)
-			err = env.ts.SaveVSchema(ctx, targetKeyspace.KeyspaceName, tc.targetVSchema)
+			err = env.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+				Name:     targetKeyspace.KeyspaceName,
+				Keyspace: tc.targetVSchema,
+			})
 			require.NoError(t, err)
 			err = env.ts.RebuildSrvVSchema(ctx, nil)
 			require.NoError(t, err)
@@ -750,10 +756,13 @@ func TestAddTenantFilter(t *testing.T) {
 	defer env.close()
 	env.tmc.schema = schema
 
-	err := env.ts.SaveVSchema(ctx, targetKeyspaceName, &vschema.Keyspace{
-		MultiTenantSpec: &vschema.MultiTenantSpec{
-			TenantIdColumnName: "tenant_id",
-			TenantIdColumnType: sqltypes.Int64,
+	err := env.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+		Name: targetKeyspaceName,
+		Keyspace: &vschema.Keyspace{
+			MultiTenantSpec: &vschema.MultiTenantSpec{
+				TenantIdColumnName: "tenant_id",
+				TenantIdColumnType: sqltypes.Int64,
+			},
 		},
 	})
 	require.NoError(t, err)

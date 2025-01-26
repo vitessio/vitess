@@ -143,6 +143,9 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.DurationVar(&currentConfig.OltpReadPool.Timeout, "queryserver-config-query-pool-timeout", defaultConfig.OltpReadPool.Timeout, "query server query pool timeout, it is how long vttablet waits for a connection from the query pool. If set to 0 (default) then the overall query timeout is used instead.")
 	fs.DurationVar(&currentConfig.OlapReadPool.Timeout, "queryserver-config-stream-pool-timeout", defaultConfig.OlapReadPool.Timeout, "query server stream pool timeout, it is how long vttablet waits for a connection from the stream pool. If set to 0 (default) then there is no timeout.")
 	fs.DurationVar(&currentConfig.TxPool.Timeout, "queryserver-config-txpool-timeout", defaultConfig.TxPool.Timeout, "query server transaction pool timeout, it is how long vttablet waits if tx pool is full")
+	fs.IntVar(&currentConfig.OltpReadPool.MaxIdleCount, "queryserver-config-query-pool-max-idle-count", defaultConfig.OltpReadPool.MaxIdleCount, "query server query pool - maximum number of idle connections to retain in the pool. Use this to balance between faster response times during traffic bursts and resource efficiency during low-traffic periods.")
+	fs.IntVar(&currentConfig.OlapReadPool.MaxIdleCount, "queryserver-config-stream-pool-max-idle-count", defaultConfig.OlapReadPool.MaxIdleCount, "query server stream pool - maximum number of idle connections to retain in the pool. Use this to balance between faster response times during traffic bursts and resource efficiency during low-traffic periods.")
+	fs.IntVar(&currentConfig.TxPool.MaxIdleCount, "queryserver-config-txpool-max-idle-count", defaultConfig.TxPool.MaxIdleCount, "query server transaction pool - maximum number of idle connections to retain in the pool. Use this to balance between faster response times during traffic bursts and resource efficiency during low-traffic periods.")
 	fs.DurationVar(&currentConfig.OltpReadPool.IdleTimeout, "queryserver-config-idle-timeout", defaultConfig.OltpReadPool.IdleTimeout, "query server idle timeout, vttablet manages various mysql connection pools. This config means if a connection has not been used in given idle timeout, this connection will be removed from pool. This effectively manages number of connection objects and optimize the pool performance.")
 	fs.DurationVar(&currentConfig.OltpReadPool.MaxLifetime, "queryserver-config-pool-conn-max-lifetime", defaultConfig.OltpReadPool.MaxLifetime, "query server connection max lifetime, vttablet manages various mysql connection pools. This config means if a connection has lived at least this long, it connection will be removed from pool upon the next time it is returned to the pool.")
 
@@ -275,11 +278,12 @@ func Init() {
 	currentConfig.Healthcheck.UnhealthyThreshold = unhealthyThreshold
 	currentConfig.GracePeriods.Transition = transitionGracePeriod
 
-	switch streamlog.GetQueryLogFormat() {
+	logFormat := streamlog.GetQueryLogConfig().Format
+	switch logFormat {
 	case streamlog.QueryLogFormatText:
 	case streamlog.QueryLogFormatJSON:
 	default:
-		log.Exitf("Invalid querylog-format value %v: must be either text or json", streamlog.GetQueryLogFormat())
+		log.Exitf("Invalid querylog-format value %v: must be either text or json", logFormat)
 	}
 
 	if queryLogHandler != "" {
@@ -424,6 +428,7 @@ type ConnPoolConfig struct {
 	Size               int           `json:"size,omitempty"`
 	Timeout            time.Duration `json:"timeoutSeconds,omitempty"`
 	IdleTimeout        time.Duration `json:"idleTimeoutSeconds,omitempty"`
+	MaxIdleCount       int           `json:"maxIdleCount,omitempty"`
 	MaxLifetime        time.Duration `json:"maxLifetimeSeconds,omitempty"`
 	PrefillParallelism int           `json:"prefillParallelism,omitempty"`
 }
@@ -433,9 +438,10 @@ func (cfg *ConnPoolConfig) MarshalJSON() ([]byte, error) {
 
 	tmp := struct {
 		Proxy
-		Timeout     string `json:"timeoutSeconds,omitempty"`
-		IdleTimeout string `json:"idleTimeoutSeconds,omitempty"`
-		MaxLifetime string `json:"maxLifetimeSeconds,omitempty"`
+		Timeout      string `json:"timeoutSeconds,omitempty"`
+		IdleTimeout  string `json:"idleTimeoutSeconds,omitempty"`
+		MaxIdleCount int    `json:"maxIdleCount,omitempty"`
+		MaxLifetime  string `json:"maxLifetimeSeconds,omitempty"`
 	}{
 		Proxy: Proxy(*cfg),
 	}
@@ -460,6 +466,7 @@ func (cfg *ConnPoolConfig) UnmarshalJSON(data []byte) (err error) {
 		Size               int    `json:"size,omitempty"`
 		Timeout            string `json:"timeoutSeconds,omitempty"`
 		IdleTimeout        string `json:"idleTimeoutSeconds,omitempty"`
+		MaxIdleCount       int    `json:"maxIdleCount,omitempty"`
 		MaxLifetime        string `json:"maxLifetimeSeconds,omitempty"`
 		PrefillParallelism int    `json:"prefillParallelism,omitempty"`
 	}
@@ -490,6 +497,7 @@ func (cfg *ConnPoolConfig) UnmarshalJSON(data []byte) (err error) {
 	}
 
 	cfg.Size = tmp.Size
+	cfg.MaxIdleCount = tmp.MaxIdleCount
 	cfg.PrefillParallelism = tmp.PrefillParallelism
 
 	return nil

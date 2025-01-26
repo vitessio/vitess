@@ -120,7 +120,7 @@ func TestVSchemaChangesUnderLoad(t *testing.T) {
 		defer timer.Stop()
 		log.Infof("Started ApplyVSchema")
 		for {
-			if err := vc.VtctlClient.ExecuteCommand("ApplyVSchema", "--", "--vschema={}", "product"); err != nil {
+			if err := vc.VtctldClient.ExecuteCommand("ApplyVSchema", "--vschema={}", "product"); err != nil {
 				log.Errorf("ApplyVSchema command failed with %+v\n", err)
 				return
 			}
@@ -140,8 +140,8 @@ func TestVSchemaChangesUnderLoad(t *testing.T) {
 	}()
 
 	<-ch // wait for enough ApplyVSchema calls before doing a PRS
-	if err := vc.VtctlClient.ExecuteCommand("PlannedReparentShard", "--", "--keyspace_shard", "product/0",
-		"--new_primary", "zone1-101", "--wait_replicas_timeout", defaultTimeout.String()); err != nil {
+	if err := vc.VtctldClient.ExecuteCommand("PlannedReparentShard", "product/0",
+		"--new-primary", "zone1-101", "--wait-replicas-timeout", defaultTimeout.String()); err != nil {
 		require.NoError(t, err, "PlannedReparentShard command failed")
 	}
 }

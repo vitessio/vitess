@@ -715,8 +715,7 @@ func createVtgateEnv(t testing.TB) (*VTGate, *sandboxconn.SandboxConn, context.C
 	cell := "aa"
 	sb := createSandbox(KsTestSharded)
 	sb.ShardSpec = "-"
-	executor, _, _, sbc, ctx := createExecutorEnv(t)
-	executor.normalize = normalizeQueries
+	executor, _, _, sbc, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 
 	vsm := newVStreamManager(executor.resolver.resolver, executor.serv, cell)
 	vtg := newVTGate(executor, executor.resolver, vsm, nil, executor.scatterConn.gateway)

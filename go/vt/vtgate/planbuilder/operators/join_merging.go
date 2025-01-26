@@ -28,7 +28,7 @@ import (
 // If they can be merged, a new operator with the merged routing is returned
 // If they cannot be merged, nil is returned.
 func (jm *joinMerger) mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPredicates []sqlparser.Expr) *Route {
-	lhsRoute, rhsRoute, routingA, routingB, a, b, sameKeyspace := prepareInputRoutes(lhs, rhs)
+	lhsRoute, rhsRoute, routingA, routingB, a, b, sameKeyspace := prepareInputRoutes(ctx, lhs, rhs)
 	if lhsRoute == nil {
 		return nil
 	}
@@ -102,13 +102,13 @@ func mergeAnyShardRoutings(ctx *plancontext.PlanningContext, a, b *AnyShardRouti
 	}
 }
 
-func prepareInputRoutes(lhs Operator, rhs Operator) (*Route, *Route, Routing, Routing, routingType, routingType, bool) {
+func prepareInputRoutes(ctx *plancontext.PlanningContext, lhs Operator, rhs Operator) (*Route, *Route, Routing, Routing, routingType, routingType, bool) {
 	lhsRoute, rhsRoute := operatorsToRoutes(lhs, rhs)
 	if lhsRoute == nil || rhsRoute == nil {
 		return nil, nil, nil, nil, 0, 0, false
 	}
 
-	lhsRoute, rhsRoute, routingA, routingB, sameKeyspace := getRoutesOrAlternates(lhsRoute, rhsRoute)
+	lhsRoute, rhsRoute, routingA, routingB, sameKeyspace := getRoutesOrAlternates(ctx, lhsRoute, rhsRoute)
 
 	a, b := getRoutingType(routingA), getRoutingType(routingB)
 	return lhsRoute, rhsRoute, routingA, routingB, a, b, sameKeyspace
@@ -159,7 +159,7 @@ func (rt routingType) String() string {
 
 // getRoutesOrAlternates gets the Routings from each Route. If they are from different keyspaces,
 // we check if this is a table with alternates in other keyspaces that we can use
-func getRoutesOrAlternates(lhsRoute, rhsRoute *Route) (*Route, *Route, Routing, Routing, bool) {
+func getRoutesOrAlternates(ctx *plancontext.PlanningContext, lhsRoute, rhsRoute *Route) (*Route, *Route, Routing, Routing, bool) {
 	routingA := lhsRoute.Routing
 	routingB := rhsRoute.Routing
 	sameKeyspace := routingA.Keyspace() == routingB.Keyspace()
@@ -171,13 +171,17 @@ func getRoutesOrAlternates(lhsRoute, rhsRoute *Route) (*Route, *Route, Routing, 
 		return lhsRoute, rhsRoute, routingA, routingB, sameKeyspace
 	}
 
-	if refA, ok := routingA.(*AnyShardRouting); ok {
+	// If we have a reference route, we will try to find an alternate route in same keyspace as other routing keyspace.
+	// If the reference route is part of DML table update target, alternate keyspace route cannot be considered.
+	if refA, ok := routingA.(*AnyShardRouting); ok &&
+		!TableID(lhsRoute).IsOverlapping(ctx.SemTable.DMLTargets) {
 		if altARoute := refA.AlternateInKeyspace(routingB.Keyspace()); altARoute != nil {
 			return altARoute, rhsRoute, altARoute.Routing, routingB, true
 		}
 	}
 
-	if refB, ok := routingB.(*AnyShardRouting); ok {
+	if refB, ok := routingB.(*AnyShardRouting); ok &&
+		!TableID(rhsRoute).IsOverlapping(ctx.SemTable.DMLTargets) {
 		if altBRoute := refB.AlternateInKeyspace(routingA.Keyspace()); altBRoute != nil {
 			return lhsRoute, altBRoute, routingA, altBRoute.Routing, true
 		}

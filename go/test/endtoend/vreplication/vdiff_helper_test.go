@@ -45,55 +45,18 @@ var (
 	runVDiffsSideBySide = true
 )
 
-func vdiff(t *testing.T, keyspace, workflow, cells string, vtctlclient, vtctldclient bool, wantV2Result *expectedVDiff2Result) {
-	if vtctlclient {
-		doVtctlclientVDiff(t, keyspace, workflow, cells, wantV2Result)
-	}
-	if vtctldclient {
-		doVtctldclientVDiff(t, keyspace, workflow, cells, wantV2Result)
-	}
+func vdiff(t *testing.T, keyspace, workflow, cells string, wantV2Result *expectedVDiff2Result) {
+	doVtctldclientVDiff(t, keyspace, workflow, cells, wantV2Result)
 }
 
-// vdiffSideBySide will run the VDiff command using both vtctlclient
-// and vtctldclient.
-func vdiffSideBySide(t *testing.T, ksWorkflow, cells string) {
+func doVDiff(t *testing.T, ksWorkflow, cells string) {
 	arr := strings.Split(ksWorkflow, ".")
 	keyspace := arr[0]
 	workflowName := arr[1]
-	if !runVDiffsSideBySide {
-		doVtctlclientVDiff(t, keyspace, workflowName, cells, nil)
-		return
-	}
-	vdiff(t, keyspace, workflowName, cells, true, true, nil)
+	doVtctldclientVDiff(t, keyspace, workflowName, cells, nil)
 }
 
-func doVtctlclientVDiff(t *testing.T, keyspace, workflow, cells string, want *expectedVDiff2Result) {
-	ksWorkflow := fmt.Sprintf("%s.%s", keyspace, workflow)
-	t.Run(fmt.Sprintf("vtctlclient vdiff %s", ksWorkflow), func(t *testing.T) {
-		// update-table-stats is needed in order to test progress reports.
-		uuid, _ := performVDiff2Action(t, true, ksWorkflow, cells, "create", "", false, "--auto-retry",
-			"--update-table-stats", fmt.Sprintf("--filtered_replication_wait_time=%v", vdiffTimeout/2))
-		info := waitForVDiff2ToComplete(t, true, ksWorkflow, cells, uuid, time.Time{})
-		require.NotNil(t, info)
-		require.Equal(t, workflow, info.Workflow)
-		require.Equal(t, keyspace, info.Keyspace)
-		if want != nil {
-			require.Equal(t, want.state, info.State)
-			require.Equal(t, strings.Join(want.shards, ","), info.Shards)
-			require.Equal(t, want.hasMismatch, info.HasMismatch)
-		} else {
-			require.Equal(t, "completed", info.State, "vdiff results: %+v", info)
-			require.False(t, info.HasMismatch, "vdiff results: %+v", info)
-			require.NotZero(t, info.RowsCompared)
-		}
-		if strings.Contains(t.Name(), "AcrossDBVersions") {
-			log.Errorf("VDiff resume cannot be guaranteed between major MySQL versions due to implied collation differences, skipping resume test...")
-			return
-		}
-	})
-}
-
-func waitForVDiff2ToComplete(t *testing.T, useVtctlclient bool, ksWorkflow, cells, uuid string, completedAtMin time.Time) *vdiffInfo {
+func waitForVDiff2ToComplete(t *testing.T, ksWorkflow, cells, uuid string, completedAtMin time.Time) *vdiffInfo {
 	var info *vdiffInfo
 	var jsonStr string
 	first := true
@@ -102,7 +65,7 @@ func waitForVDiff2ToComplete(t *testing.T, useVtctlclient bool, ksWorkflow, cell
 	go func() {
 		for {
 			time.Sleep(vdiffStatusCheckInterval)
-			_, jsonStr = performVDiff2Action(t, useVtctlclient, ksWorkflow, cells, "show", uuid, false)
+			_, jsonStr = performVDiff2Action(t, ksWorkflow, cells, "show", uuid, false)
 			info = getVDiffInfo(jsonStr)
 			require.NotNil(t, info)
 			if info.State == "completed" {
@@ -169,8 +132,8 @@ func doVtctldclientVDiff(t *testing.T, keyspace, workflow, cells string, want *e
 		if len(extraFlags) > 0 {
 			flags = append(flags, extraFlags...)
 		}
-		uuid, _ := performVDiff2Action(t, false, ksWorkflow, cells, "create", "", false, flags...)
-		info := waitForVDiff2ToComplete(t, false, ksWorkflow, cells, uuid, time.Time{})
+		uuid, _ := performVDiff2Action(t, ksWorkflow, cells, "create", "", false, flags...)
+		info := waitForVDiff2ToComplete(t, ksWorkflow, cells, uuid, time.Time{})
 		require.NotNil(t, info)
 		require.Equal(t, workflow, info.Workflow)
 		require.Equal(t, keyspace, info.Keyspace)
@@ -191,56 +154,34 @@ func doVtctldclientVDiff(t *testing.T, keyspace, workflow, cells string, want *e
 	})
 }
 
-func performVDiff2Action(t *testing.T, useVtctlclient bool, ksWorkflow, cells, action, actionArg string, expectError bool, extraFlags ...string) (uuid string, output string) {
+func performVDiff2Action(t *testing.T, ksWorkflow, cells, action, actionArg string, expectError bool, extraFlags ...string) (uuid string, output string) {
 	var err error
 	targetKeyspace, workflowName, ok := strings.Cut(ksWorkflow, ".")
 	require.True(t, ok, "invalid keyspace.workflow value: %s", ksWorkflow)
 	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
-	if useVtctlclient {
+	args := []string{"VDiff", "--target-keyspace", targetKeyspace, "--workflow", workflowName, "--format=json", action}
+	if strings.ToLower(action) == string(vdiff2.CreateAction) {
 		// This will always result in us using a PRIMARY tablet, which is all
 		// we start in many e2e tests, but it avoids the tablet picker logic
 		// where when you ONLY specify the PRIMARY type it then picks the
 		// shard's primary and ignores any cell settings.
-		args := []string{"VDiff", "--", "--tablet_types=in_order:primary,replica", "--source_cell=" + cells, "--format=json"}
-		if len(extraFlags) > 0 {
-			args = append(args, extraFlags...)
-		}
-		args = append(args, ksWorkflow, action, actionArg)
-		output, err = execVDiffWithRetry(t, expectError, false, args)
-		log.Infof("vdiff output: %+v (err: %+v)", output, err)
-		if !expectError {
-			require.Nil(t, err)
-			uuid = gjson.Get(output, "UUID").String()
-			if action != "delete" && !(action == "show" && actionArg == "all") { // A UUID is not required
-				require.NoError(t, err)
-				require.NotEmpty(t, uuid)
-			}
-		}
-	} else {
-		args := []string{"VDiff", "--target-keyspace", targetKeyspace, "--workflow", workflowName, "--format=json", action}
-		if strings.ToLower(action) == string(vdiff2.CreateAction) {
-			// This will always result in us using a PRIMARY tablet, which is all
-			// we start in many e2e tests, but it avoids the tablet picker logic
-			// where when you ONLY specify the PRIMARY type it then picks the
-			// shard's primary and ignores any cell settings.
-			args = append(args, "--tablet-types=primary,replica", "--tablet-types-in-preference-order", "--source-cells="+cells)
-		}
-		if len(extraFlags) > 0 {
-			args = append(args, extraFlags...)
-		}
-		if actionArg != "" {
-			args = append(args, actionArg)
-		}
+		args = append(args, "--tablet-types=primary,replica", "--tablet-types-in-preference-order", "--source-cells="+cells)
+	}
+	if len(extraFlags) > 0 {
+		args = append(args, extraFlags...)
+	}
+	if actionArg != "" {
+		args = append(args, actionArg)
+	}
 
-		output, err = execVDiffWithRetry(t, expectError, true, args)
-		log.Infof("vdiff output: %+v (err: %+v)", output, err)
-		if !expectError {
-			require.NoError(t, err)
-			ouuid := gjson.Get(output, "UUID").String()
-			if action == "create" || (action == "show" && actionArg != "all") { // A UUID is returned
-				require.NotEmpty(t, ouuid)
-				uuid = ouuid
-			}
+	output, err = execVDiffWithRetry(t, expectError, args)
+	log.Infof("vdiff output: %+v (err: %+v)", output, err)
+	if !expectError {
+		require.NoError(t, err)
+		ouuid := gjson.Get(output, "UUID").String()
+		if action == "create" || (action == "show" && actionArg != "all") { // A UUID is returned
+			require.NotEmpty(t, ouuid)
+			uuid = ouuid
 		}
 	}
 
@@ -264,7 +205,7 @@ type vdiffResult struct {
 }
 
 // execVDiffWithRetry will ignore transient errors that can occur during workflow state changes.
-func execVDiffWithRetry(t *testing.T, expectError bool, useVtctldClient bool, args []string) (string, error) {
+func execVDiffWithRetry(t *testing.T, expectError bool, args []string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), vdiffRetryTimeout)
 	defer cancel()
 	vdiffResultCh := make(chan vdiffResult)
@@ -282,11 +223,7 @@ func execVDiffWithRetry(t *testing.T, expectError bool, useVtctldClient bool, ar
 				time.Sleep(vdiffRetryInterval)
 			}
 			retry = false
-			if useVtctldClient {
-				output, err = vc.VtctldClient.ExecuteCommandWithOutput(args...)
-			} else {
-				output, err = vc.VtctlClient.ExecuteCommandWithOutput(args...)
-			}
+			output, err = vc.VtctldClient.ExecuteCommandWithOutput(args...)
 			if err != nil {
 				if expectError {
 					result := vdiffResult{output: output, err: err}

@@ -25,10 +25,9 @@ import (
 	"strings"
 	"time"
 
-	"vitess.io/vitess/go/ptr"
-
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -58,6 +57,7 @@ const (
 	TypeTable     = ""
 	TypeSequence  = "sequence"
 	TypeReference = "reference"
+	TypeView      = "view"
 )
 
 // VSchema represents the denormalized version of SrvVSchema,
@@ -264,7 +264,7 @@ type KeyspaceSchema struct {
 	ForeignKeyMode  vschemapb.Keyspace_ForeignKeyMode
 	Tables          map[string]*Table
 	Vindexes        map[string]Vindex
-	Views           map[string]sqlparser.SelectStatement
+	Views           map[string]sqlparser.TableStatement
 	Error           error
 	MultiTenantSpec *vschemapb.MultiTenantSpec
 
@@ -431,16 +431,16 @@ func (vschema *VSchema) AddView(ksname, viewName, query string, parser *sqlparse
 	if err != nil {
 		return err
 	}
-	selectStmt, ok := ast.(sqlparser.SelectStatement)
+	selectStmt, ok := ast.(sqlparser.TableStatement)
 	if !ok {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "expected SELECT or UNION query, got %T", ast)
 	}
 	if ks.Views == nil {
-		ks.Views = make(map[string]sqlparser.SelectStatement)
+		ks.Views = make(map[string]sqlparser.TableStatement)
 	}
 	ks.Views[viewName] = selectStmt
 	t := &Table{
-		Type:                    "View",
+		Type:                    TypeView,
 		Name:                    sqlparser.NewIdentifierCS(viewName),
 		Keyspace:                ks.Keyspace,
 		ColumnListAuthoritative: true,
@@ -470,6 +470,40 @@ func buildGlobalTables(source *vschemapb.SrvVSchema, vschema *VSchema) {
 			continue
 		}
 		buildKeyspaceGlobalTables(vschema, ksvschema)
+	}
+}
+
+// AddAdditionalGlobalTables adds unique tables from unsharded keyspaces to the global tables.
+// It is expected to be called from the schema tracking code. Note that this is called after `BuildVSchema`
+// which means that the global tables are already populated with the tables from the sharded keyspaces and from
+// unsharded keyspaces which have tables specified in associated vschemas.
+func AddAdditionalGlobalTables(source *vschemapb.SrvVSchema, vschema *VSchema) {
+	newTables := make(map[string]*Table)
+
+	// Collect valid uniquely named tables from unsharded keyspaces.
+	for ksname, ks := range source.Keyspaces {
+		ksvschema := vschema.Keyspaces[ksname]
+		// Ignore sharded keyspaces and those flagged for explicit routing.
+		if ks.RequireExplicitRouting || ks.Sharded {
+			continue
+		}
+		for tname, table := range ksvschema.Tables {
+			// Ignore tables already global (i.e. if specified in the vschema of an unsharded keyspace) or ambiguous.
+			if _, found := vschema.globalTables[tname]; !found {
+				_, ok := newTables[tname]
+				if !ok {
+					table.Keyspace = ksvschema.Keyspace
+					newTables[tname] = table
+				} else {
+					newTables[tname] = nil
+				}
+			}
+		}
+	}
+
+	// Mark new tables found just once as globally routable, rest as ambiguous.
+	for k, v := range newTables {
+		vschema.globalTables[k] = v
 	}
 }
 
@@ -1443,7 +1477,7 @@ func (vschema *VSchema) FindTableOrVindex(keyspace, name string, tabletType topo
 	return nil, nil, NotFoundError{TableName: name}
 }
 
-func (vschema *VSchema) FindView(keyspace, name string) sqlparser.SelectStatement {
+func (vschema *VSchema) FindView(keyspace, name string) sqlparser.TableStatement {
 	if keyspace == "" {
 		switch {
 		case len(vschema.Keyspaces) == 1:

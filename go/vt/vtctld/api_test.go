@@ -28,7 +28,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/servenv/testutils"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/wrangler"
 
@@ -53,7 +55,7 @@ func TestAPI(t *testing.T) {
 	defer server.Close()
 
 	ks1 := &topodatapb.Keyspace{
-		DurabilityPolicy: "semi_sync",
+		DurabilityPolicy: policy.DurabilitySemiSync,
 		SidecarDbName:    "_vt_sidecar_ks1",
 	}
 
@@ -81,7 +83,10 @@ func TestAPI(t *testing.T) {
 			},
 		},
 	}
-	ts.SaveVSchema(ctx, "ks1", vs)
+	ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+		Name:     "ks1",
+		Keyspace: vs,
+	})
 
 	tablet1 := topodatapb.Tablet{
 		Alias:         &topodatapb.TabletAlias{Cell: "cell1", Uid: 100},

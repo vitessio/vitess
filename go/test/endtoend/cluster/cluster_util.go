@@ -299,22 +299,6 @@ func NewConnParams(port int, password, socketPath, keyspace string) mysql.ConnPa
 
 }
 
-func filterDoubleDashArgs(args []string, version int) (filtered []string) {
-	if version > 13 {
-		return args
-	}
-
-	for _, arg := range args {
-		if arg == "--" {
-			continue
-		}
-
-		filtered = append(filtered, arg)
-	}
-
-	return filtered
-}
-
 // WriteDbCredentialToTmp writes JSON formatted db credentials to the
 // specified tmp directory.
 func WriteDbCredentialToTmp(tmpDir string) string {
@@ -380,11 +364,11 @@ func ExecuteOnTablet(t *testing.T, query string, vttablet Vttablet, ks string, e
 	_, _ = vttablet.VttabletProcess.QueryTablet("commit", ks, true)
 }
 
-func WaitForTabletSetup(vtctlClientProcess *VtctlClientProcess, expectedTablets int, expectedStatus []string) error {
+func WaitForTabletSetup(vtctldClientProcess *VtctldClientProcess, expectedTablets int, expectedStatus []string) error {
 	// wait for both tablet to get into replica state in topo
 	waitUntil := time.Now().Add(10 * time.Second)
 	for time.Now().Before(waitUntil) {
-		result, err := vtctlClientProcess.ExecuteCommandWithOutput("ListAllTablets")
+		result, err := vtctldClientProcess.ExecuteCommandWithOutput("GetTablets")
 		if err != nil {
 			return err
 		}

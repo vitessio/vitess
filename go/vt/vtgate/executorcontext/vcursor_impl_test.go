@@ -27,9 +27,13 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/streamlog"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	"vitess.io/vitess/go/vt/proto/vschema"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
@@ -56,7 +60,7 @@ func (f fakeVSchemaOperator) GetCurrentSrvVschema() *vschemapb.SrvVSchema {
 	panic("implement me")
 }
 
-func (f fakeVSchemaOperator) UpdateVSchema(ctx context.Context, ksName string, vschema *vschemapb.SrvVSchema) error {
+func (f fakeVSchemaOperator) UpdateVSchema(ctx context.Context, ksvs *topo.KeyspaceVSchemaInfo, srvvs *vschema.SrvVSchema) error {
 	panic("implement me")
 }
 
@@ -367,7 +371,7 @@ func TestSetExecQueryTimeout(t *testing.T) {
 
 func TestRecordMirrorStats(t *testing.T) {
 	safeSession := NewSafeSession(nil)
-	logStats := logstats.NewLogStats(context.Background(), t.Name(), "select 1", "", nil)
+	logStats := logstats.NewLogStats(context.Background(), t.Name(), "select 1", "", nil, streamlog.NewQueryLogConfigForTest())
 	vc, err := NewVCursorImpl(safeSession, sqlparser.MarginComments{}, nil, logStats, nil, &vindexes.VSchema{}, nil, nil, fakeObserver{}, VCursorConfig{})
 	require.NoError(t, err)
 

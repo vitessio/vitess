@@ -8,7 +8,7 @@
 				"java_test"
 			],
 			"Manual": false,
-			"Shard": "10",
+			"Shard": "java",
 			"RetryMax": 1,
 			"Tags": []
 		},
@@ -19,7 +19,7 @@
 				"test/client_test.sh"
 			],
 			"Manual": false,
-			"Shard": "25",
+			"Shard": "java",
 			"RetryMax": 1,
 			"Tags": []
 		},
@@ -492,7 +492,7 @@
 			],
 			"Command": [],
 			"Manual": false,
-			"Shard": "25",
+			"Shard": "docker_cluster",
 			"RetryMax": 1,
 			"Tags": [
 				"site_test"
@@ -613,7 +613,7 @@
 			"Manual": false,
 			"Shard": "vtgate_queries",
 			"RetryMax": 2,
-			"Tags": ["upgrade_downgrade_query_serving_queries"]
+			"Tags": ["upgrade_downgrade_query_serving_queries_2"]
 		},
 		"vtgate_queries_subquery": {
 			"File": "unused.go",
@@ -622,7 +622,7 @@
 			"Manual": false,
 			"Shard": "vtgate_queries",
 			"RetryMax": 2,
-			"Tags": ["upgrade_downgrade_query_serving_queries"]
+			"Tags": ["upgrade_downgrade_query_serving_queries_2"]
 		},
 		"vtgate_queries_union": {
 			"File": "unused.go",
@@ -631,7 +631,7 @@
 			"Manual": false,
 			"Shard": "vtgate_queries",
 			"RetryMax": 2,
-			"Tags": ["upgrade_downgrade_query_serving_queries"]
+			"Tags": ["upgrade_downgrade_query_serving_queries_2"]
 		},
 		"vtgate_queries_insert": {
 			"File": "unused.go",
@@ -640,7 +640,7 @@
 			"Manual": false,
 			"Shard": "vtgate_queries",
 			"RetryMax": 2,
-			"Tags": ["upgrade_downgrade_query_serving_queries"]
+			"Tags": ["upgrade_downgrade_query_serving_queries_2"]
 		},
 		"vtgate_queries_vexplain": {
 			"File": "unused.go",
@@ -649,7 +649,7 @@
 			"Manual": false,
 			"Shard": "vtgate_queries",
 			"RetryMax": 2,
-			"Tags": ["upgrade_downgrade_query_serving_queries"]
+			"Tags": ["upgrade_downgrade_query_serving_queries_2"]
 		},
 		"vtgate_queries_reference": {
 			"File": "unused.go",
@@ -658,7 +658,7 @@
 			"Manual": false,
 			"Shard": "vtgate_queries",
 			"RetryMax": 1,
-			"Tags": ["upgrade_downgrade_query_serving_queries"]
+			"Tags": ["upgrade_downgrade_query_serving_queries_2"]
 		},
 		"vtgate_queries_random": {
 			"File": "unused.go",
@@ -667,7 +667,7 @@
 			"Manual": false,
 			"Shard": "vtgate_queries",
 			"RetryMax": 1,
-			"Tags": ["upgrade_downgrade_query_serving_queries"]
+			"Tags": ["upgrade_downgrade_query_serving_queries_2"]
 		},
 		"vtgate_kill": {
 			"File": "unused.go",
@@ -676,7 +676,7 @@
 			"Manual": false,
 			"Shard": "vtgate_queries",
 			"RetryMax": 1,
-			"Tags": ["upgrade_downgrade_query_serving_queries"]
+			"Tags": ["upgrade_downgrade_query_serving_queries_2"]
 		},
 		"vtgate_concurrentdml": {
 			"File": "unused.go",
@@ -998,7 +998,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/topotest/zk2", "--topo-flavor=zk2"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "25",
+			"Shard": "docker_cluster",
 			"RetryMax": 1,
 			"Tags": []
 		},
@@ -1070,7 +1070,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtcombo"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "25",
+			"Shard": "docker_cluster",
 			"RetryMax": 1,
 			"Tags": []
 		},
@@ -1319,6 +1319,15 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
+		"global_routing": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestGlobalRouting", "-timeout", "30m"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vreplication_v2",
+			"RetryMax": 1,
+			"Tags": []
+		},
 		"vreplication_fk": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestFKWorkflow"],
@@ -1355,18 +1364,9 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
-		"vreplication_vtctl_migrate": {
+		"vreplication_migrate": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVtctlMigrate", "-timeout", "30m"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "vreplication_migrate",
-			"RetryMax": 1,
-			"Tags": []
-		},
-		"vreplication_vtctld_migrate": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVtctldMigrate", "-timeout", "30m"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestMigrate", "-timeout", "30m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_migrate",

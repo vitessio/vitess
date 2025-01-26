@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package reparentutil
+package policy
 
 import (
 	"testing"
@@ -29,7 +29,7 @@ import (
 )
 
 func TestDurabilityNone(t *testing.T) {
-	durability, err := GetDurabilityPolicy("none")
+	durability, err := GetDurabilityPolicy(DurabilityNone)
 	require.NoError(t, err)
 
 	promoteRule := PromotionRule(durability, &topodatapb.Tablet{
@@ -78,10 +78,10 @@ func TestDurabilitySemiSync(t *testing.T) {
 		rdonlySemiSync   bool
 	}{
 		{
-			durabilityPolicy: "semi_sync",
+			durabilityPolicy: DurabilitySemiSync,
 			rdonlySemiSync:   false,
 		}, {
-			durabilityPolicy: "semi_sync_with_rdonly_ack",
+			durabilityPolicy: DurabilitySemiSyncWithRdonlyAck,
 			rdonlySemiSync:   true,
 		},
 	}
@@ -176,10 +176,10 @@ func TestDurabilityCrossCell(t *testing.T) {
 		rdonlySemiSync   bool
 	}{
 		{
-			durabilityPolicy: "cross_cell",
+			durabilityPolicy: DurabilityCrossCell,
 			rdonlySemiSync:   false,
 		}, {
-			durabilityPolicy: "cross_cell_with_rdonly_ack",
+			durabilityPolicy: DurabilityCrossCellWithRdonlyAck,
 			rdonlySemiSync:   true,
 		},
 	}
