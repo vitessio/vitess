@@ -202,6 +202,7 @@ func (vtgate *VTGateProxy) VExplain(ctx context.Context, query string, vexplainS
 		return nil, nil
 	}
 }
+
 func convertVExplainResultToString(rows *sql.Rows) (*vtadminpb.VExplainResponse, error) {
 	var queryPlan string
 	for rows.Next() {

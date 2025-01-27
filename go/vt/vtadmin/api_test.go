@@ -5309,7 +5309,6 @@ func TestVExplain(t *testing.T) {
 
 					// We don't particularly care to test the contents of the VExplain response,
 					// just that it exists.
-					print(resp.Response)
 					assert.NotEmpty(t, resp.Response)
 				}
 			})

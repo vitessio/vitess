@@ -2661,7 +2661,7 @@ func (api *API) VExplain(ctx context.Context, req *vtadminpb.VExplainRequest) (*
 		return nil, vterrors.VT09017("Invalid VExplain statement")
 	}
 
-	response, err := c.GetVExplain(ctx, req, stmt.(*sqlparser.VExplainStmt))
+	response, err := c.DB.VExplain(ctx, req.GetSql(), stmt.(*sqlparser.VExplainStmt))
 
 	if err != nil {
 		return nil, err

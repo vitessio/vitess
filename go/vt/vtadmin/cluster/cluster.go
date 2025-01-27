@@ -38,7 +38,6 @@ import (
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtadmin/cache"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery"
@@ -2504,25 +2503,6 @@ func (c *Cluster) ToggleTabletReplication(ctx context.Context, tablet *vtadminpb
 	}
 
 	return err
-}
-
-// GetVExplain returns the VExplain json message.
-func (c *Cluster) GetVExplain(ctx context.Context, req *vtadminpb.VExplainRequest, vexplainStmt *sqlparser.VExplainStmt) (*vtadminpb.VExplainResponse, error) {
-	span, ctx := trace.NewSpan(ctx, "Cluster.GetVExplain")
-	defer span.Finish()
-
-	AnnotateSpan(c, span)
-	span.Annotate("clusterId", req.ClusterId)
-	span.Annotate("keyspace", req.Keyspace)
-	span.Annotate("sql", req.Sql)
-
-	query := req.GetSql()
-
-	return c.getVExplain(ctx, query, vexplainStmt)
-}
-
-func (c *Cluster) getVExplain(ctx context.Context, query string, vexplainStmt *sqlparser.VExplainStmt) (*vtadminpb.VExplainResponse, error) {
-	return c.DB.VExplain(ctx, query, vexplainStmt)
 }
 
 // Debug returns a map of debug information for a cluster.
