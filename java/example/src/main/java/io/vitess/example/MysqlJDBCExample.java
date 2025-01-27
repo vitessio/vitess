@@ -109,7 +109,7 @@ public class MysqlJDBCExample {
   }
 
   private static void validateReplica(Connection conn) throws SQLException {
-    String sql = "show slave status";
+    String sql = "show replica status";
     try (Statement stmt = conn.createStatement(); ResultSet rs = stmt.executeQuery(sql)) {
       if (!rs.next()) {
         throw new RuntimeException("connected to wrong tablet");

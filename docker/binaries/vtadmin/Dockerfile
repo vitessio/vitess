@@ -17,7 +17,7 @@ ARG DEBIAN_VER=bookworm-slim
 
 FROM vitess/lite:${VT_BASE_VER} AS lite
 
-FROM node:20-${DEBIAN_VER} as node
+FROM node:22-${DEBIAN_VER} as node
 
 # Prepare directory structure.
 RUN mkdir -p /vt/web
