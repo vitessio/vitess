@@ -654,7 +654,9 @@ func (hc *HealthCheckImpl) Subscribe() chan *TabletHealth {
 			} else {
 				// Message queue closed, so we should close the channel too.
 				close(c)
+				hc.subMu.Lock()
 				delete(hc.subscribers, c)
+				hc.subMu.Unlock()
 				return
 			}
 		}
