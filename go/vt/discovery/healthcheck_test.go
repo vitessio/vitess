@@ -1491,10 +1491,7 @@ func TestConcurrentUpdates(t *testing.T) {
 	// Make the receiver keep track of the updates received.
 	ch := hc.Subscribe()
 	totalCount := 0
-	wg := sync.WaitGroup{}
-	wg.Add(1)
 	go func() {
-		defer wg.Done()
 		for range ch {
 			totalCount++
 			// Simulate a somewhat slow consumer.
@@ -1508,13 +1505,12 @@ func TestConcurrentUpdates(t *testing.T) {
 	for i := 0; i < totalUpdates; i++ {
 		hc.broadcast(&TabletHealth{})
 	}
-	// Close the channel to stop the goroutine
-	// and wait for it to finish.
-	close(ch)
-	wg.Wait()
-
-	// Verify we processed all the updates
-	require.EqualValues(t, totalUpdates, totalCount, "expected all updates to be processed")
+	// Unsubscribe from the healthcheck
+	// and verify we process all the updates eventually.
+	hc.Unsubscribe(ch)
+	require.Eventuallyf(t, func() bool {
+		return totalUpdates == totalCount
+	}, 5*time.Second, 100*time.Millisecond, "expected all updates to be processed")
 }
 
 func tabletDialer(ctx context.Context, tablet *topodatapb.Tablet, _ grpcclient.FailFast) (queryservice.QueryService, error) {
