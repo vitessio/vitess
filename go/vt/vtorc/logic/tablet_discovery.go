@@ -81,12 +81,12 @@ func initializeShardsToWatch() error {
 				continue
 			}
 			if !key.IsValidKeyRange(s) {
-				return fmt.Errorf("Invalid key range %q while parsing clusters to watch", s)
+				return fmt.Errorf("invalid key range %q while parsing clusters to watch", s)
 			}
 			// Parse the shard name into key range value.
 			keyRanges, err := key.ParseShardingSpec(s)
 			if err != nil {
-				return fmt.Errorf("Could not parse shard name %q: %+v", s, err)
+				return fmt.Errorf("could not parse shard name %q: %+v", s, err)
 			}
 			shardsToWatch[k] = append(shardsToWatch[k], keyRanges...)
 		} else {
@@ -138,7 +138,7 @@ func OpenTabletDiscovery() <-chan time.Time {
 	// Parse --clusters_to_watch into a filter.
 	err := initializeShardsToWatch()
 	if err != nil {
-		log.Fatalf("Error parsing clusters to watch: %v", err)
+		log.Fatalf("Error parsing --clusters-to-watch: %v", err)
 	}
 	// We refresh all information from the topo once before we start the ticks to do
 	// it on a timer.
