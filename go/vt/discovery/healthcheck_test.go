@@ -31,7 +31,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/utils"
-	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -1509,6 +1508,7 @@ func TestConcurrentUpdates(t *testing.T) {
 	// Unsubscribe from the healthcheck
 	// and verify we process all the updates eventually.
 	hc.Unsubscribe(ch)
+	defer close(ch)
 	require.Eventuallyf(t, func() bool {
 		return totalUpdates == totalCount
 	}, 5*time.Second, 100*time.Millisecond, "expected all updates to be processed")
@@ -1537,7 +1537,7 @@ func BenchmarkAccess_FastConsumer(b *testing.B) {
 			hc.broadcast(&TabletHealth{})
 		}
 		hc.Unsubscribe(ch)
-		waitForEmptyMessageQueue(hc.subscribers[ch])
+		waitForEmptyMessageQueue(ch)
 	}
 }
 
@@ -1565,13 +1565,13 @@ func BenchmarkAccess_SlowConsumer(b *testing.B) {
 			hc.broadcast(&TabletHealth{})
 		}
 		hc.Unsubscribe(ch)
-		waitForEmptyMessageQueue(hc.subscribers[ch])
+		waitForEmptyMessageQueue(ch)
 	}
 }
 
-func waitForEmptyMessageQueue(queue *concurrency.MessageQueue[*TabletHealth]) {
+func waitForEmptyMessageQueue(queue chan *TabletHealth) {
 	for {
-		if queue.Length() == 0 {
+		if len(queue) == 0 {
 			return
 		}
 		time.Sleep(100 * time.Millisecond)

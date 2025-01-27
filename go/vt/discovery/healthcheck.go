@@ -632,7 +632,7 @@ func (hc *HealthCheckImpl) recomputeHealthy(key KeyspaceShardTabletType) {
 func (hc *HealthCheckImpl) Subscribe() chan *TabletHealth {
 	hc.subMu.Lock()
 	defer hc.subMu.Unlock()
-	c := make(chan *TabletHealth, 2)
+	c := make(chan *TabletHealth, 1024)
 	hc.subscribers[c] = struct{}{}
 	return c
 }
