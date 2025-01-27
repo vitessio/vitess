@@ -73,6 +73,13 @@ func TestDiffTables(t *testing.T) {
 			action:   "alter",
 			fromName: "t",
 			toName:   "t",
+			annotated: []string{
+				" CREATE TABLE `t` (",
+				" 	`id` int,",
+				"+	`i` int,",
+				"+	`b` tinyint(1),",
+				" 	PRIMARY KEY (`id`)",
+				" )"},
 		},
 		{
 			name: "alter columns from tinyint(1) to boolean",
@@ -93,6 +100,14 @@ func TestDiffTables(t *testing.T) {
 			action:   "alter",
 			fromName: "t",
 			toName:   "t",
+			annotated: []string{
+				" CREATE TABLE `t` (",
+				" 	`id` int,",
+				"+	`i` int,",
+				"+	`b` tinyint(1) DEFAULT '1',",
+				" 	PRIMARY KEY (`id`)",
+				" )",
+			},
 		},
 		{
 			name:     "change of columns, boolean type, invalid default",
@@ -103,6 +118,14 @@ func TestDiffTables(t *testing.T) {
 			action:   "alter",
 			fromName: "t",
 			toName:   "t",
+			annotated: []string{
+				" CREATE TABLE `t` (",
+				" 	`id` int,",
+				"+	`i` int,",
+				"+	`b` tinyint(1),",
+				" 	PRIMARY KEY (`id`)",
+				" )",
+			},
 		},
 		{
 			name:   "create",
@@ -139,6 +162,14 @@ func TestDiffTables(t *testing.T) {
 			hints: &DiffHints{
 				TableQualifierHint: TableQualifierDeclared,
 			},
+			annotated: []string{
+				" CREATE TABLE `t1` (",
+				" 	`id` int,",
+				"-	`name` int,",
+				"+	`name` bigint,",
+				" 	PRIMARY KEY (`id`)",
+				" )",
+			},
 		},
 		{
 			name:   "TableQualifierDeclared hint, from has qualifier",
@@ -150,6 +181,14 @@ func TestDiffTables(t *testing.T) {
 			hints: &DiffHints{
 				TableQualifierHint: TableQualifierDeclared,
 			},
+			annotated: []string{
+				" CREATE TABLE `_vt`.`t1` (",
+				" 	`id` int,",
+				"-	`name` int,",
+				"+	`name` bigint,",
+				" 	PRIMARY KEY (`id`)",
+				" )",
+			},
 		},
 		{
 			name:   "TableQualifierDefault, from has qualifier",
@@ -158,6 +197,14 @@ func TestDiffTables(t *testing.T) {
 			diff:   "alter table _vt.t1 modify column `name` bigint",
 			cdiff:  "ALTER TABLE `_vt`.`t1` MODIFY COLUMN `name` bigint",
 			action: "alter",
+			annotated: []string{
+				" CREATE TABLE `_vt`.`t1` (",
+				" 	`id` int,",
+				"-	`name` int,",
+				"+	`name` bigint,",
+				" 	PRIMARY KEY (`id`)",
+				" )",
+			},
 		},
 		{
 			name:   "TableQualifierDefault, both have qualifiers",
@@ -166,6 +213,14 @@ func TestDiffTables(t *testing.T) {
 			diff:   "alter table _vt.t1 modify column `name` bigint",
 			cdiff:  "ALTER TABLE `_vt`.`t1` MODIFY COLUMN `name` bigint",
 			action: "alter",
+			annotated: []string{
+				" CREATE TABLE `_vt`.`t1` (",
+				" 	`id` int,",
+				"-	`name` int,",
+				"+	`name` bigint,",
+				" 	PRIMARY KEY (`id`)",
+				" )",
+			},
 		},
 		{
 			name:   "TableQualifierDefault, create",
@@ -174,6 +229,12 @@ func TestDiffTables(t *testing.T) {
 			cdiff:  "CREATE TABLE `_vt`.`t` (\n\t`id` int,\n\tPRIMARY KEY (`id`)\n)",
 			action: "create",
 			toName: "t",
+			annotated: []string{
+				"+CREATE TABLE `_vt`.`t` (",
+				"+	`id` int,",
+				"+	PRIMARY KEY (`id`)",
+				"+)",
+			},
 		},
 		{
 			name:   "TableQualifierDeclared, create",
@@ -185,6 +246,12 @@ func TestDiffTables(t *testing.T) {
 			hints: &DiffHints{
 				TableQualifierHint: TableQualifierDeclared,
 			},
+			annotated: []string{
+				"+CREATE TABLE `_vt`.`t` (",
+				"+	`id` int,",
+				"+	PRIMARY KEY (`id`)",
+				"+)",
+			},
 		},
 		{
 			name:     "TableQualifierDefault, drop",
@@ -193,6 +260,12 @@ func TestDiffTables(t *testing.T) {
 			cdiff:    "DROP TABLE `_vt`.`t`",
 			action:   "drop",
 			fromName: "t",
+			annotated: []string{
+				"-CREATE TABLE `_vt`.`t` (",
+				"-	`id` int,",
+				"-	PRIMARY KEY (`id`)",
+				"-)",
+			},
 		},
 		{
 			name:     "TableQualifierDeclared, drop",
@@ -203,6 +276,12 @@ func TestDiffTables(t *testing.T) {
 			fromName: "t",
 			hints: &DiffHints{
 				TableQualifierHint: TableQualifierDeclared,
+			},
+			annotated: []string{
+				"-CREATE TABLE `_vt`.`t` (",
+				"-	`id` int,",
+				"-	PRIMARY KEY (`id`)",
+				"-)",
 			},
 		},
 		{
@@ -254,6 +333,12 @@ func TestDiffTables(t *testing.T) {
 				AlterTableAlgorithmStrategy: AlterTableAlgorithmStrategyCopy,
 				TableCharsetCollateStrategy: TableCharsetCollateStrict,
 			},
+			annotated: []string{
+				" CREATE TABLE `t` (",
+				" 	`a` varchar(64) COLLATE latin1_bin",
+				"-) CHARSET latin1",
+				" )",
+			},
 		},
 		{
 			name:     "changing table level defaults with column specific settings, table already normalized",
@@ -267,6 +352,13 @@ func TestDiffTables(t *testing.T) {
 				AlterTableAlgorithmStrategy: AlterTableAlgorithmStrategyCopy,
 				TableCharsetCollateStrategy: TableCharsetCollateStrict,
 			},
+			annotated: []string{
+				" CREATE TABLE `t` (",
+				"-	`a` varchar(64)",
+				"-) CHARSET latin1",
+				"+	`a` varchar(64) CHARACTER SET latin1 COLLATE latin1_bin",
+				" )",
+			},
 		},
 		{
 			name:   "changing table level charset to default",
@@ -275,6 +367,12 @@ func TestDiffTables(t *testing.T) {
 			action: "alter",
 			diff:   "alter table t charset utf8mb4",
 			cdiff:  "ALTER TABLE `t` CHARSET utf8mb4",
+			annotated: []string{
+				" CREATE TABLE `t` (",
+				" 	`i` int",
+				"-) CHARSET latin1",
+				" )",
+			},
 		},
 		{
 			name: "no changes with normalization and utf8mb4",
@@ -406,11 +504,11 @@ func TestDiffTables(t *testing.T) {
 					require.NotNil(t, from)
 					require.NotNil(t, to)
 					require.NotNil(t, unified)
-					if ts.annotated != nil {
-						// Optional test for assorted scenarios.
-						unifiedExport := unified.Export()
-						assert.Equal(t, ts.annotated, strings.Split(unifiedExport, "\n"))
+					if ts.annotated == nil {
+						ts.annotated = []string{}
 					}
+					unifiedExport := unified.Export()
+					assert.Equal(t, ts.annotated, strings.Split(unifiedExport, "\n"))
 				})
 				// let's also check dq, and also validate that dq's statement is identical to d's
 				assert.NoError(t, dqerr)
