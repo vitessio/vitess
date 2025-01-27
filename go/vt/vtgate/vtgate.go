@@ -78,6 +78,8 @@ var (
 	noScatter          bool
 	enableShardRouting bool
 
+	defaultMultiShardAutocommit bool
+
 	// healthCheckRetryDelay is the time to wait before retrying healthcheck
 	healthCheckRetryDelay = 2 * time.Millisecond
 	// healthCheckTimeout is the timeout on the RPC call to tablets
@@ -199,6 +201,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.IntVar(&warmingReadsPercent, "warming-reads-percent", 0, "Percentage of reads on the primary to forward to replicas. Useful for keeping buffer pools warm")
 	fs.IntVar(&warmingReadsConcurrency, "warming-reads-concurrency", 500, "Number of concurrent warming reads allowed")
 	fs.DurationVar(&warmingReadsQueryTimeout, "warming-reads-query-timeout", 5*time.Second, "Timeout of warming read queries")
+	fs.BoolVar(&defaultMultiShardAutocommit, "default-multi-shard-autocommit", defaultMultiShardAutocommit, "By default execute multi-shard DML statements with autocommit, even without the MULTI_SHARD_AUTOCOMMIT directive")
 
 	viperutil.BindFlags(fs,
 		enableOnlineDDL,
@@ -358,6 +361,8 @@ func Init(
 		AllowScatter:        !noScatter,
 		WarmingReadsPercent: warmingReadsPercent,
 		QueryLogToFile:      queryLogToFile,
+
+		DefaultMultiShardAutocommit: defaultMultiShardAutocommit,
 	}
 
 	executor := NewExecutor(ctx, env, serv, cell, resolver, eConfig, warnShardedOnly, plans, si, pv, dynamicConfig)

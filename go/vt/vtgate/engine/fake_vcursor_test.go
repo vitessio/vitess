@@ -414,6 +414,10 @@ func (t *noopVCursor) GetLogs() ([]ExecuteEntry, error) {
 func (t *noopVCursor) RecordMirrorStats(sourceExecTime, targetExecTime time.Duration, targetErr error) {
 }
 
+func (t *noopVCursor) DefaultMultiShardAutocommit() bool {
+	return false
+}
+
 var (
 	_ VCursor        = (*loggingVCursor)(nil)
 	_ SessionActions = (*loggingVCursor)(nil)
@@ -843,6 +847,10 @@ func (f *loggingVCursor) SetPlannerVersion(querypb.ExecuteOptions_PlannerVersion
 
 func (f *loggingVCursor) SetPriority(string) {
 	panic("implement me")
+}
+
+func (f *loggingVCursor) DefaultMultiShardAutocommit() bool {
+	return false
 }
 
 func (f *loggingVCursor) FindRoutedTable(tbl sqlparser.TableName) (*vindexes.Table, error) {

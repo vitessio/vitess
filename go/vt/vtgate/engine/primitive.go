@@ -149,6 +149,9 @@ type (
 		RecordMirrorStats(time.Duration, time.Duration, error)
 
 		SetLastInsertID(uint64)
+
+		// DefaultMultiShardAutocommit returns true if multi shard autocommit semantics are enabled by default
+		DefaultMultiShardAutocommit() bool
 	}
 
 	// SessionActions gives primitives ability to interact with the session state

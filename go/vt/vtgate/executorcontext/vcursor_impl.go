@@ -91,6 +91,8 @@ type (
 		WarmingReadsPercent int
 		WarmingReadsTimeout time.Duration
 		WarmingReadsChannel chan bool
+
+		DefaultMultiShardAutocommit bool
 	}
 
 	// vcursor_impl needs these facilities to be able to be able to execute queries for vindexes
@@ -1618,4 +1620,8 @@ func (vc *VCursorImpl) SetLastInsertID(id uint64) {
 	vc.SafeSession.mu.Lock()
 	defer vc.SafeSession.mu.Unlock()
 	vc.SafeSession.LastInsertId = id
+}
+
+func (vc *VCursorImpl) DefaultMultiShardAutocommit() bool {
+	return vc.config.DefaultMultiShardAutocommit
 }
