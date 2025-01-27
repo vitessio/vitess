@@ -654,12 +654,13 @@ func TestDiffViews(t *testing.T) {
 					_, err = env.Parser().ParseStrictDDL(canonicalDiff)
 					assert.NoError(t, err)
 				}
-				if ts.annotated != nil {
-					// Optional test for assorted scenarios.
-					_, _, unified := d.Annotated()
-					unifiedExport := unified.Export()
-					assert.Equal(t, ts.annotated, strings.Split(unifiedExport, "\n"))
+				if ts.annotated == nil {
+					ts.annotated = []string{}
 				}
+				_, _, unified := d.Annotated()
+				unifiedExport := unified.Export()
+				assert.Equal(t, ts.annotated, strings.Split(unifiedExport, "\n"))
+
 				// let's also check dq, and also validate that dq's statement is identical to d's
 				assert.NoError(t, dqerr)
 				require.NotNil(t, dq)
@@ -1191,7 +1192,6 @@ func TestDiffSchemas(t *testing.T) {
 						assert.Equal(t, dTo.Name(), clonedTo.Name())
 					}
 				}
-
 				if ts.annotated != nil {
 					// Optional test for assorted scenarios.
 					if assert.Equalf(t, len(diffs), len(ts.annotated), "%+v", cstatements) {
