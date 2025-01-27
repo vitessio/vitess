@@ -134,34 +134,34 @@ func TestViewQueries(t *testing.T) {
 		name:      "unique unsharded view - qualified",
 		defaultKs: "@primary",
 		sql:       "select * from uks.uv1 order by id",
-		expRes:    "[[INT64(1) INT64(1010)] [INT64(2) INT64(1020)]]",
+		expRes:    "[[INT64(1) INT64(1010)] [INT64(2) INT64(4020)]]",
 	}, {
 		name:      "unique sharded view - qualified",
 		defaultKs: "@primary",
 		sql:       "select * from sks.sv1 order by id",
-		expRes:    "[[INT64(1) INT64(1100)] [INT64(2) INT64(1200)]]",
+		expRes:    "[[INT64(1) INT64(1100)] [INT64(2) INT64(4200)]]",
 	}, {
 		name:      "unique unsharded view - non qualified",
 		defaultKs: "@primary",
 		sql:       "select * from uv1 order by id",
-		expRes:    "[[INT64(1) INT64(1010)] [INT64(2) INT64(1020)]]",
+		expRes:    "[[INT64(1) INT64(1010)] [INT64(2) INT64(4020)]]",
 	}, {
 		name:      "unique sharded view - non qualified",
 		defaultKs: "@primary",
 		sql:       "select * from sv1 order by id",
-		expRes:    "[[INT64(1) INT64(1100)] [INT64(2) INT64(1200)]]",
+		expRes:    "[[INT64(1) INT64(1100)] [INT64(2) INT64(4200)]]",
 	}, {
 		name:      "unique unsharded view - non qualified - default unsharded keyspace",
 		defaultKs: "uks",
 		sql:       "select * from uv1 order by id",
-		expRes:    "[[INT64(1) INT64(1010)] [INT64(2) INT64(1020)]]",
+		expRes:    "[[INT64(1) INT64(1010)] [INT64(2) INT64(4020)]]",
 	}, {
-		name:      "unique sharded view - non qualified - default unsharded keyspace",
+		name:      "unique sharded view - non qualified - default unsharded keyspace- should error",
 		defaultKs: "uks",
 		sql:       "select * from sv1 order by id",
 		expErr:    "table sv1 not found",
 	}, {
-		name:      "unique unsharded view - non qualified- default sharded keyspace",
+		name:      "unique unsharded view - non qualified - default sharded keyspace - should error",
 		defaultKs: "sks",
 		sql:       "select * from uv1 order by id",
 		expErr:    "table uv1 not found",
@@ -169,24 +169,24 @@ func TestViewQueries(t *testing.T) {
 		name:      "unique sharded view - non qualified - default sharded keyspace",
 		defaultKs: "sks",
 		sql:       "select * from sv1 order by id",
-		expRes:    "[[INT64(1) INT64(1100)] [INT64(2) INT64(1200)]]",
+		expRes:    "[[INT64(1) INT64(1100)] [INT64(2) INT64(4200)]]",
 	}, {
 		name:      "unique sharded view - qualified - default sharded keyspace",
 		defaultKs: "sks",
 		sql:       "select * from sks.sv1 order by id",
-		expRes:    "[[INT64(1) INT64(1100)] [INT64(2) INT64(1200)]]",
+		expRes:    "[[INT64(1) INT64(1100)] [INT64(2) INT64(4200)]]",
 	}, {
 		name:      "vschema provided - unsharded view - non qualified",
 		defaultKs: "@primary",
 		sql:       "select * from cv1 order by id",
-		expRes:    "[[INT64(1) INT64(990)] [INT64(2) INT64(1980)]]",
+		expRes:    "[[INT64(1) INT64(990)] [INT64(2) INT64(3980)]]",
 	}, {
 		name:      "vschema provided - sharded view - non qualified",
 		defaultKs: "@primary",
 		sql:       "select * from cv2 order by id",
-		expRes:    "[[INT64(1) INT64(100000)] [INT64(2) INT64(200000)]]",
+		expRes:    "[[INT64(1) INT64(100000)] [INT64(2) INT64(800000)]]",
 	}, {
-		name:      "non unique view - non qualified",
+		name:      "non unique view - non qualified - should error",
 		defaultKs: "@primary",
 		sql:       "select * from cv3 order by id",
 		expErr:    "ambiguous table reference: cv3",
@@ -194,22 +194,22 @@ func TestViewQueries(t *testing.T) {
 		name:      "non unique view - unsharded qualified",
 		defaultKs: "@primary",
 		sql:       "select * from uks.cv3 order by id",
-		expRes:    "[[INT64(1) DECIMAL(100.0000)] [INT64(2) DECIMAL(50.0000)]]",
+		expRes:    "[[INT64(1) DECIMAL(100.0000)] [INT64(2) DECIMAL(200.0000)]]",
 	}, {
 		name:      "non unique view - sharded qualified",
 		defaultKs: "@primary",
 		sql:       "select * from sks.cv3 order by id",
-		expRes:    "[[INT64(1) DECIMAL(10.0000)] [INT64(2) DECIMAL(5.0000)]]",
+		expRes:    "[[INT64(1) DECIMAL(10.0000)] [INT64(2) DECIMAL(20.0000)]]",
 	}, {
 		name:      "non unique view - non qualified - default unsharded keyspace",
 		defaultKs: "uks",
 		sql:       "select * from cv3 order by id",
-		expRes:    "[[INT64(1) DECIMAL(100.0000)] [INT64(2) DECIMAL(50.0000)]]",
+		expRes:    "[[INT64(1) DECIMAL(100.0000)] [INT64(2) DECIMAL(200.0000)]]",
 	}, {
 		name:      "non unique view - non qualified - default sharded keyspace",
 		defaultKs: "sks",
 		sql:       "select * from cv3 order by id",
-		expRes:    "[[INT64(1) DECIMAL(10.0000)] [INT64(2) DECIMAL(5.0000)]]",
+		expRes:    "[[INT64(1) DECIMAL(10.0000)] [INT64(2) DECIMAL(20.0000)]]",
 	}}
 
 	for _, tc := range tcases {
@@ -230,13 +230,13 @@ func insertData(t *testing.T, conn *mysql.Conn) {
 
 	// unsharded
 	utils.Exec(t, conn, "insert into uks.t(id, col) values(1, 1000)")
-	utils.Exec(t, conn, "insert into uks.t(id, col) values(2, 1000)")
+	utils.Exec(t, conn, "insert into uks.t(id, col) values(2, 4000)")
 	utils.Exec(t, conn, "insert into u(id, col) values(1, 10)")
 	utils.Exec(t, conn, "insert into u(id, col) values(2, 20)")
 
 	// sharded
 	utils.Exec(t, conn, "insert into sks.t(id, col) values(1, 1000)")
-	utils.Exec(t, conn, "insert into sks.t(id, col) values(2, 1000)")
+	utils.Exec(t, conn, "insert into sks.t(id, col) values(2, 4000)")
 	utils.Exec(t, conn, "insert into s(id, col) values(1, 100)")
 	utils.Exec(t, conn, "insert into s(id, col) values(2, 200)")
 }
