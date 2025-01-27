@@ -15,9 +15,12 @@
   - **[Stalled Disk Recovery in VTOrc](#stall-disk-recovery)**
   - **[Update default MySQL version to 8.0.40](#mysql-8-0-40)**
   - **[Update lite images to Debian Bookworm](#debian-bookworm)**
+  - **[Support for Filtering Query logs on Error](#query-logs)**
 - **[Minor Changes](#minor-changes)**
   - **[VTTablet Flags](#flags-vttablet)**
   - **[Topology read concurrency behaviour changes](#topo-read-concurrency-changes)**
+  - **[VTAdmin](#vtadmin)**
+    - [Updated to node v22.13.1](#updated-node)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -25,7 +28,7 @@
 
 These are the RPC changes made in this release - 
 
-1. `GetTransactionInfo` RPC has been added to both `VtctldServer`, and `TabletManagerClient` interface. These RPCs are used to fecilitate the users in reading the state of an unresolved distributed transaction. This can be useful in debugging what went wrong and how to fix the problem.
+1. `GetTransactionInfo` RPC has been added to both `VtctldServer`, and `TabletManagerClient` interface. These RPCs are used to facilitate the users in reading the state of an unresolved distributed transaction. This can be useful in debugging what went wrong and how to fix the problem.
 
 ### <a id="deprecations-and-deletions"/>Deprecations and Deletions</a>
 
@@ -132,6 +135,10 @@ This is the last time this will be needed in the `8.0.x` series, as starting wit
 
 The base system now uses Debian Bookworm instead of Debian Bullseye for the `vitess/lite` images. This change was brought by [Pull Request #17552].
 
+### <a id="query-logs"/>Support for Filtering Query logs on Error</a>
+
+The `querylog-mode` setting can be configured to `error` to log only queries that result in errors. This option is supported in both VTGate and VTTablet.
+
 ## <a id="minor-changes"/>Minor Changes</a>
 
 #### <a id="flags-vttablet"/>VTTablet Flags</a>
@@ -145,3 +152,10 @@ While the flag will continue to accept float values (interpreted as seconds) for
 The `--topo_read_concurrency` flag was added to all components that access the topology and the provided limit is now applied separately for each global or local cell _(default `32`)_.
 
 All topology read calls _(`Get`, `GetVersion`, `List` and `ListDir`)_ now respect this per-cell limit. Previous to this version a single limit was applied to all cell calls and it was not respected by many topology calls.
+
+### <a id="vtadmin"/>VTAdmin
+
+#### <a id="updated-node"/>vtadmin-web updated to node v22.13.1 (LTS)
+
+Building `vtadmin-web` now requires node >= v22.13.0 (LTS). Breaking changes from v20 to v22 can be found at https://nodejs.org/en/blog/release/v22.13.0 -- with no known issues that apply to VTAdmin.
+Full details on the node v20.12.2 release can be found at https://nodejs.org/en/blog/release/v22.13.1.

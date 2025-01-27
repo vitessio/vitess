@@ -74,6 +74,8 @@ service Vtctld {
   rpc CompleteSchemaMigration(vtctldata.CompleteSchemaMigrationRequest) returns (vtctldata.CompleteSchemaMigrationResponse) {};
   // CompleteSchemaMigration completes one or all migrations executed with --postpone-completion.
   rpc ConcludeTransaction(vtctldata.ConcludeTransactionRequest) returns (vtctldata.ConcludeTransactionResponse) {};
+  // CopySchemaShard copies the schema from a source tablet to all tablets in a keyspace/shard.
+  rpc CopySchemaShard(vtctldata.CopySchemaShardRequest) returns (vtctldata.CopySchemaShardResponse) {};
   // CreateKeyspace creates the specified keyspace in the topology. For a
   // SNAPSHOT keyspace, the request must specify the name of a base keyspace,
   // as well as a snapshot time.
@@ -193,8 +195,10 @@ service Vtctld {
   // LaunchSchemaMigration launches one or all migrations executed with --postpone-launch.
   rpc LaunchSchemaMigration(vtctldata.LaunchSchemaMigrationRequest) returns (vtctldata.LaunchSchemaMigrationResponse) {};
 
+  rpc LookupVindexComplete(vtctldata.LookupVindexCompleteRequest) returns (vtctldata.LookupVindexCompleteResponse) {};
   rpc LookupVindexCreate(vtctldata.LookupVindexCreateRequest) returns (vtctldata.LookupVindexCreateResponse) {};
   rpc LookupVindexExternalize(vtctldata.LookupVindexExternalizeRequest) returns (vtctldata.LookupVindexExternalizeResponse) {};
+  rpc LookupVindexInternalize(vtctldata.LookupVindexInternalizeRequest) returns (vtctldata.LookupVindexInternalizeResponse) {};
 
   // MaterializeCreate creates a workflow to materialize one or more tables
   // from a source keyspace to a target keyspace using a provided expressions.
@@ -349,6 +353,8 @@ service Vtctld {
   // ValidateKeyspace validates that all nodes reachable from the specified
   // keyspace are consistent.
   rpc ValidateKeyspace(vtctldata.ValidateKeyspaceRequest) returns (vtctldata.ValidateKeyspaceResponse) {};
+  // ValidatePermissionsKeyspace validates that all the permissions are the same in a keyspace.
+  rpc ValidatePermissionsKeyspace(vtctldata.ValidatePermissionsKeyspaceRequest) returns (vtctldata.ValidatePermissionsKeyspaceResponse) {};
   // ValidateSchemaKeyspace validates that the schema on the primary tablet for shard 0 matches the schema on all of the other tablets in the keyspace.
   rpc ValidateSchemaKeyspace(vtctldata.ValidateSchemaKeyspaceRequest) returns (vtctldata.ValidateSchemaKeyspaceResponse) {};
   // ValidateShard validates that all nodes reachable from the specified shard

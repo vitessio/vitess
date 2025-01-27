@@ -415,6 +415,27 @@ func (s *Schema) normalize(hints *DiffHints) error {
 			}
 		}
 	}
+
+	// Validate uniqueness of check constraint and of foreign key constraint names
+	fkConstraintNames := map[string]bool{}
+	checkConstraintNames := map[string]bool{}
+	for _, t := range s.tables {
+		for _, cs := range t.TableSpec.Constraints {
+			if _, ok := cs.Details.(*sqlparser.ForeignKeyDefinition); ok {
+				if _, ok := fkConstraintNames[cs.Name.String()]; ok {
+					errs = errors.Join(errs, &DuplicateForeignKeyConstraintNameError{Table: t.Name(), Constraint: cs.Name.String()})
+				}
+				fkConstraintNames[cs.Name.String()] = true
+			}
+			if _, ok := cs.Details.(*sqlparser.CheckConstraintDefinition); ok {
+				if _, ok := checkConstraintNames[cs.Name.String()]; ok {
+					errs = errors.Join(errs, &DuplicateCheckConstraintNameError{Table: t.Name(), Constraint: cs.Name.String()})
+				}
+				checkConstraintNames[cs.Name.String()] = true
+			}
+		}
+	}
+
 	return errs
 }
 

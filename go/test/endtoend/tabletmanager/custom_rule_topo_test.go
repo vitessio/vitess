@@ -54,7 +54,7 @@ func TestTopoCustomRule(t *testing.T) {
 	require.NoError(t, err)
 
 	// Copy config file into topo.
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("TopoCp", "--", "--to_topo", topoCustomRuleFile, topoCustomRulePath)
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("--server", "internal", "WriteTopologyPath", topoCustomRuleFile, topoCustomRulePath)
 	require.Nil(t, err, "error should be Nil")
 
 	// Set extra tablet args for topo custom rule
@@ -100,7 +100,7 @@ func TestTopoCustomRule(t *testing.T) {
 	err = os.WriteFile(topoCustomRuleFile, data, 0777)
 	require.NoError(t, err)
 
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("TopoCp", "--", "--to_topo", topoCustomRuleFile, topoCustomRulePath)
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("--server", "internal", "WriteTopologyPath", topoCustomRuleFile, topoCustomRulePath)
 	require.Nil(t, err, "error should be Nil")
 
 	// And wait until the query fails with the right error.
