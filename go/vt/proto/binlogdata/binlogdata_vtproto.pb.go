@@ -514,6 +514,7 @@ func (m *VEvent) CloneVT() *VEvent {
 	r.ThrottledReason = m.ThrottledReason
 	r.LastCommitted = m.LastCommitted
 	r.SequenceNumber = m.SequenceNumber
+	r.EventGtid = m.EventGtid
 	r.MustSave = m.MustSave
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -2183,7 +2184,16 @@ func (m *VEvent) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i--
 		dAtA[i] = 0x1
 		i--
-		dAtA[i] = 0xe0
+		dAtA[i] = 0xe8
+	}
+	if len(m.EventGtid) > 0 {
+		i -= len(m.EventGtid)
+		copy(dAtA[i:], m.EventGtid)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.EventGtid)))
+		i--
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0xe2
 	}
 	if m.SequenceNumber != 0 {
 		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.SequenceNumber))
@@ -3925,6 +3935,10 @@ func (m *VEvent) SizeVT() (n int) {
 	}
 	if m.SequenceNumber != 0 {
 		n += 2 + protohelpers.SizeOfVarint(uint64(m.SequenceNumber))
+	}
+	l = len(m.EventGtid)
+	if l > 0 {
+		n += 2 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	if m.MustSave {
 		n += 3
@@ -8322,6 +8336,38 @@ func (m *VEvent) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 		case 28:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field EventGtid", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.EventGtid = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 29:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field MustSave", wireType)
 			}

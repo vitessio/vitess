@@ -452,7 +452,7 @@ message VEvent {
   // Timestamp is the binlog timestamp in seconds.
   // The value should be ignored if 0.
   int64 timestamp = 2;
-  // Gtid is set if the event type is GTID.
+  // Gtid is set if the event type is GTID. This is a combined GTIDs set of this event and previous events.
   string gtid = 3;
   // Statement is set if the event type is DDL, DML or SAVEPOINT.
   string statement = 4;
@@ -484,8 +484,10 @@ message VEvent {
   int64 last_committed = 26;
   // For GTID events, the sequence number of this transaction.
   int64 sequence_number = 27;
+  // EventGTID is decorated by VPlayer. It is the specific GTID (not the GTID set) for this event.
+  string event_gtid = 28;
   // MustSave is a decoration by VPlayer
-  bool must_save = 28;
+  bool must_save = 29;
 }
 
 message MinimalTable {
