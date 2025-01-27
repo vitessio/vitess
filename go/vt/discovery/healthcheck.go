@@ -51,6 +51,7 @@ import (
 	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/topodata"
@@ -293,7 +294,7 @@ type HealthCheckImpl struct {
 	// mutex to protect subscribers
 	subMu sync.Mutex
 	// subscribers
-	subscribers map[chan *TabletHealth]struct{}
+	subscribers map[chan *TabletHealth]*concurrency.MessageQueue[*TabletHealth]
 	// loadTablets trigger is used to immediately load a new primary tablet when the current one has been demoted
 	loadTabletsTrigger chan struct{}
 }
@@ -358,7 +359,7 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 		healthByAlias:      make(map[tabletAliasString]*tabletHealthCheck),
 		healthData:         make(map[KeyspaceShardTabletType]map[tabletAliasString]*TabletHealth),
 		healthy:            make(map[KeyspaceShardTabletType][]*TabletHealth),
-		subscribers:        make(map[chan *TabletHealth]struct{}),
+		subscribers:        make(map[chan *TabletHealth]*concurrency.MessageQueue[*TabletHealth]),
 		cellAliases:        make(map[string]string),
 		loadTabletsTrigger: make(chan struct{}, 1),
 	}
@@ -633,7 +634,31 @@ func (hc *HealthCheckImpl) Subscribe() chan *TabletHealth {
 	hc.subMu.Lock()
 	defer hc.subMu.Unlock()
 	c := make(chan *TabletHealth, 2)
-	hc.subscribers[c] = struct{}{}
+	// We create a message queue here because we want to
+	// be ensure that none of the updates from the health-check
+	// are missed by the consumers. Message queue has the semantics of an
+	// infinite capacity channel. We however, still want to return a channel
+	// to the consumers, because some of them rely on using a channel as part of a select statement.
+	// That is not something message queue can replicate.
+	// However, with this approach of a message queue that receives all the updates and then sends them
+	// on a channel in a goroutine gives us best of both worlds. The users still only see a channel, but internally
+	// the message queue is serving as an infinite buffer.
+	mq := concurrency.NewMessageQueue[*TabletHealth]()
+	hc.subscribers[c] = mq
+	go func() {
+		for {
+			// Keep receiving updates on the message queue.
+			th, validRes := mq.Receive()
+			if validRes {
+				c <- th
+			} else {
+				// Message queue closed, so we should close the channel too.
+				close(c)
+				delete(hc.subscribers, c)
+				return
+			}
+		}
+	}()
 	return c
 }
 
@@ -641,17 +666,18 @@ func (hc *HealthCheckImpl) Subscribe() chan *TabletHealth {
 func (hc *HealthCheckImpl) Unsubscribe(c chan *TabletHealth) {
 	hc.subMu.Lock()
 	defer hc.subMu.Unlock()
-	delete(hc.subscribers, c)
+	mq := hc.subscribers[c]
+	// Close the message queue to signal the goroutine started in Subscribe to stop.
+	mq.Close()
 }
 
 func (hc *HealthCheckImpl) broadcast(th *TabletHealth) {
 	hc.subMu.Lock()
 	defer hc.subMu.Unlock()
-	for c := range hc.subscribers {
-		select {
-		case c <- th:
-		default:
-		}
+	// We only need to send on the message queue.
+	// The corresponding channel receives the updates from the message queue.
+	for _, mq := range hc.subscribers {
+		mq.Send(th)
 	}
 }
 
@@ -731,8 +757,8 @@ func (hc *HealthCheckImpl) Close() error {
 	for _, tw := range hc.topoWatchers {
 		tw.Stop()
 	}
-	for s := range hc.subscribers {
-		close(s)
+	for _, mq := range hc.subscribers {
+		mq.Close()
 	}
 	hc.subscribers = nil
 	// Release the lock early or a pending checkHealthCheckTimeout
