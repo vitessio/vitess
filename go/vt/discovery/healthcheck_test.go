@@ -1557,11 +1557,11 @@ func BenchmarkAccess_SlowConsumer(b *testing.B) {
 		ch := hc.Subscribe()
 		go func() {
 			for range ch {
-				time.Sleep(100 * time.Second)
+				time.Sleep(50 * time.Millisecond)
 			}
 		}()
 
-		for id := 0; id < 1000; id++ {
+		for id := 0; id < 100; id++ {
 			hc.broadcast(&TabletHealth{})
 		}
 		hc.Unsubscribe(ch)
