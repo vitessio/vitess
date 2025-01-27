@@ -30,6 +30,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
@@ -94,6 +95,19 @@ func (v *VReplStream) hasError() (isTerminal bool, vreplError error) {
 		return false, errors.New(v.message)
 	}
 	return false, nil
+}
+
+// Lag returns the vreplication lag, as determined by the higher of the transaction timestamp and the time updated.
+func (s *VReplStream) Lag() time.Duration {
+	durationDiff := func(t1, t2 time.Time) time.Duration {
+		return t1.Sub(t2).Abs()
+	}
+	timeNow := time.Now()
+	timeUpdated := time.Unix(s.timeUpdated, 0)
+	// Let's look at transaction timestamp. This gets written by any ongoing
+	// writes on the server (whether on this table or any other table)
+	transactionTimestamp := time.Unix(s.transactionTimestamp, 0)
+	return max(durationDiff(timeNow, timeUpdated), durationDiff(timeNow, transactionTimestamp))
 }
 
 // VRepl is an online DDL helper for VReplication based migrations (ddl_strategy="online")
@@ -194,7 +208,7 @@ func (v *VRepl) executeAnalyzeTable(ctx context.Context, conn *dbconnpool.DBConn
 		defer conn.ExecuteFetch(sqlDisableFastAnalyzeTable, 1, false)
 	}
 
-	parsed := sqlparser.BuildParsedQuery(sqlAnalyzeTable, tableName)
+	parsed := sqlparser.BuildParsedQuery(sqlAnalyzeTableLocal, tableName)
 	if _, err := conn.ExecuteFetch(parsed.Query, 1, false); err != nil {
 		return err
 	}

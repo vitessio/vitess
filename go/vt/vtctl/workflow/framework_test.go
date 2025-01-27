@@ -271,6 +271,7 @@ type testTMClient struct {
 	vrQueries                          map[int][]*queryResult
 	createVReplicationWorkflowRequests map[uint32]*createVReplicationWorkflowRequestResponse
 	readVReplicationWorkflowRequests   map[uint32]*readVReplicationWorkflowRequestResponse
+	updateVReplicationWorklowsRequests map[uint32]*tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest
 	applySchemaRequests                map[uint32]*applySchemaRequestResponse
 	primaryPositions                   map[uint32]string
 	vdiffRequests                      map[uint32]*vdiffRequestResponse
@@ -294,6 +295,7 @@ func newTestTMClient(env *testEnv) *testTMClient {
 		vrQueries:                          make(map[int][]*queryResult),
 		createVReplicationWorkflowRequests: make(map[uint32]*createVReplicationWorkflowRequestResponse),
 		readVReplicationWorkflowRequests:   make(map[uint32]*readVReplicationWorkflowRequestResponse),
+		updateVReplicationWorklowsRequests: make(map[uint32]*tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest),
 		applySchemaRequests:                make(map[uint32]*applySchemaRequestResponse),
 		readVReplicationWorkflowsResponses: make(map[string][]*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse),
 		primaryPositions:                   make(map[uint32]string),
@@ -496,6 +498,11 @@ func (tmc *testTMClient) ExecuteFetchAsAllPrivs(ctx context.Context, tablet *top
 	return nil, nil
 }
 
+func (tmc *testTMClient) ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteFetchAsAppRequest) (*querypb.QueryResult, error) {
+	// Reuse VReplicationExec.
+	return tmc.VReplicationExec(ctx, tablet, string(req.Query))
+}
+
 func (tmc *testTMClient) expectApplySchemaRequest(tabletID uint32, req *applySchemaRequestResponse) {
 	tmc.mu.Lock()
 	defer tmc.mu.Unlock()
@@ -617,6 +624,10 @@ func (tmc *testTMClient) HasVReplicationWorkflows(ctx context.Context, tablet *t
 	}, nil
 }
 
+func (tmc *testTMClient) ResetSequences(ctx context.Context, tablet *topodatapb.Tablet, tables []string) error {
+	return nil
+}
+
 func (tmc *testTMClient) ReadVReplicationWorkflows(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ReadVReplicationWorkflowsRequest) (*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse, error) {
 	tmc.mu.Lock()
 	defer tmc.mu.Unlock()
@@ -677,6 +688,19 @@ func (tmc *testTMClient) UpdateVReplicationWorkflow(ctx context.Context, tablet 
 	}, nil
 }
 
+func (tmc *testTMClient) UpdateVReplicationWorkflows(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest) (*tabletmanagerdatapb.UpdateVReplicationWorkflowsResponse, error) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+	if expect := tmc.updateVReplicationWorklowsRequests[tablet.Alias.Uid]; expect != nil {
+		if !proto.Equal(expect, req) {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected ReadVReplicationWorkflow request on tablet %s: got %+v, want %+v",
+				topoproto.TabletAliasString(tablet.Alias), req, expect)
+		}
+	}
+	delete(tmc.updateVReplicationWorklowsRequests, tablet.Alias.Uid)
+	return nil, nil
+}
+
 func (tmc *testTMClient) ValidateVReplicationPermissions(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ValidateVReplicationPermissionsRequest) (*tabletmanagerdatapb.ValidateVReplicationPermissionsResponse, error) {
 	return &tabletmanagerdatapb.ValidateVReplicationPermissionsResponse{
 		User: "vt_filtered",
@@ -734,6 +758,12 @@ func (tmc *testTMClient) AddVReplicationWorkflowsResponse(key string, resp *tabl
 	tmc.mu.Lock()
 	defer tmc.mu.Unlock()
 	tmc.readVReplicationWorkflowsResponses[key] = append(tmc.readVReplicationWorkflowsResponses[key], resp)
+}
+
+func (tmc *testTMClient) AddUpdateVReplicationRequests(tabletUID uint32, req *tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+	tmc.updateVReplicationWorklowsRequests[tabletUID] = req
 }
 
 func (tmc *testTMClient) getVReplicationWorkflowsResponse(key string) *tabletmanagerdatapb.ReadVReplicationWorkflowsResponse {

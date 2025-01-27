@@ -838,34 +838,41 @@ func (e *Executor) killTableLockHoldersAndAccessors(ctx context.Context, tableNa
 		}
 	}
 	capableOf := mysql.ServerVersionCapableOf(conn.ServerVersion)
-	capable, err := capableOf(capabilities.PerformanceSchemaDataLocksTableCapability)
-	if err != nil {
-		return err
-	}
-	if capable {
-		{
-			// Kill connections that have open transactions locking the table. These potentially (probably?) are not
-			// actively running a query on our table. They're doing other things while holding locks on our table.
-			query, err := sqlparser.ParseAndBind(sqlProcessWithLocksOnTable, sqltypes.StringBindVariable(tableName))
+	terminateTransactions := func(capability capabilities.FlavorCapability, query string, column string, description string) error {
+		capable, err := capableOf(capability)
+		if err != nil {
+			return err
+		}
+		if !capable {
+			return nil
+		}
+		query, err = sqlparser.ParseAndBind(query, sqltypes.StringBindVariable(tableName))
+		if err != nil {
+			return err
+		}
+		rs, err := conn.Conn.ExecuteFetch(query, -1, true)
+		if err != nil {
+			return vterrors.Wrapf(err, "finding transactions locking table `%s` %s", tableName, description)
+		}
+		log.Infof("terminateTransactions: found %v transactions locking table `%s` %s", len(rs.Rows), tableName, description)
+		for _, row := range rs.Named().Rows {
+			threadId := row.AsInt64(column, 0)
+			log.Infof("terminateTransactions: killing connection %v with transaction locking table `%s` %s", threadId, tableName, description)
+			killConnection := fmt.Sprintf("KILL %d", threadId)
+			_, err = conn.Conn.ExecuteFetch(killConnection, 1, false)
 			if err != nil {
-				return err
-			}
-			rs, err := conn.Conn.ExecuteFetch(query, -1, true)
-			if err != nil {
-				return vterrors.Wrapf(err, "finding transactions locking table")
-			}
-			log.Infof("killTableLockHoldersAndAccessors: found %v locking transactions", len(rs.Rows))
-			for _, row := range rs.Named().Rows {
-				threadId := row.AsInt64("trx_mysql_thread_id", 0)
-				log.Infof("killTableLockHoldersAndAccessors: killing connection %v with transaction on table", threadId)
-				killConnection := fmt.Sprintf("KILL %d", threadId)
-				_, err = conn.Conn.ExecuteFetch(killConnection, 1, false)
-				if err != nil {
-					log.Errorf("Unable to kill the connection %d: %v", threadId, err)
-				}
+				log.Errorf("terminateTransactions: unable to kill the connection %d locking table `%s` %s: %v", threadId, tableName, description, err)
 			}
 		}
+		return nil
 	}
+	if err := terminateTransactions(capabilities.PerformanceSchemaDataLocksTableCapability, sqlProcessWithLocksOnTable, "trx_mysql_thread_id", "data"); err != nil {
+		return err
+	}
+	if err := terminateTransactions(capabilities.PerformanceSchemaMetadataLocksTableCapability, sqlProcessWithMetadataLocksOnTable, "processlist_id", "metadata"); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -968,7 +975,9 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 			defer preparationConnRestoreLockWaitTimeout()
 
 			if needsShadowTableAnalysis {
-				// Run `ANALYZE TABLE` on the vreplication table so that it has up-to-date statistics at cut-over
+				// Run `ANALYZE TABLE` on the vreplication table so that it has up-to-date statistics at cut-over.
+				// The statement will be replicated, so that in case there's a PRS/ERS shortly after cut-over, the
+				// promoted replica will have good statistics.
 				parsed := sqlparser.BuildParsedQuery(sqlAnalyzeTable, vreplTable)
 				if _, err := preparationsConn.Conn.Exec(ctx, parsed.Query, -1, false); err != nil {
 					// Best effort only. Do not fail the mgiration if this fails.
@@ -3583,53 +3592,36 @@ func (e *Executor) isPreserveForeignKeySupported(ctx context.Context) (isSupport
 // and is up to date with the binlogs.
 func (e *Executor) isVReplMigrationReadyToCutOver(ctx context.Context, onlineDDL *schema.OnlineDDL, s *VReplStream) (isReady bool, err error) {
 	// Check all the cases where migration is still running:
-	{
-		// when ready to cut-over, pos must have some value
-		if s.pos == "" {
-			return false, nil
-		}
+	// when ready to cut-over, pos must have some value
+	if s.pos == "" {
+		return false, nil
 	}
-	{
-		// Both time_updated and transaction_timestamp must be in close proximity to each
-		// other and to the time now, otherwise that means we're lagging and it's not a good time
-		// to cut-over
-		durationDiff := func(t1, t2 time.Time) time.Duration {
-			return t1.Sub(t2).Abs()
-		}
-		timeNow := time.Now()
-		timeUpdated := time.Unix(s.timeUpdated, 0)
-		if durationDiff(timeNow, timeUpdated) > onlineDDL.CutOverThreshold {
-			return false, nil
-		}
-		// Let's look at transaction timestamp. This gets written by any ongoing
-		// writes on the server (whether on this table or any other table)
-		transactionTimestamp := time.Unix(s.transactionTimestamp, 0)
-		if durationDiff(timeNow, transactionTimestamp) > onlineDDL.CutOverThreshold {
-			return false, nil
-		}
+	// Both time_updated and transaction_timestamp must be in close proximity to each
+	// other and to the time now, otherwise that means we're lagging and it's not a good time
+	// to cut-over
+	if s.Lag() > onlineDDL.CutOverThreshold {
+		return false, nil
 	}
-	{
-		// copy_state must have no entries for this vreplication id: if entries are
-		// present that means copy is still in progress
-		query, err := sqlparser.ParseAndBind(sqlReadCountCopyState,
-			sqltypes.Int32BindVariable(s.id),
-		)
-		if err != nil {
-			return false, err
-		}
-		r, err := e.execQuery(ctx, query)
-		if err != nil {
-			return false, err
-		}
-		csRow := r.Named().Row()
-		if csRow == nil {
-			return false, err
-		}
-		count := csRow.AsInt64("cnt", 0)
-		if count > 0 {
-			// Still copying
-			return false, nil
-		}
+	// copy_state must have no entries for this vreplication id: if entries are
+	// present that means copy is still in progress
+	query, err := sqlparser.ParseAndBind(sqlReadCountCopyState,
+		sqltypes.Int32BindVariable(s.id),
+	)
+	if err != nil {
+		return false, err
+	}
+	r, err := e.execQuery(ctx, query)
+	if err != nil {
+		return false, err
+	}
+	csRow := r.Named().Row()
+	if csRow == nil {
+		return false, err
+	}
+	count := csRow.AsInt64("cnt", 0)
+	if count > 0 {
+		// Still copying
+		return false, nil
 	}
 
 	return true, nil
@@ -3776,6 +3768,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 				}
 				_ = e.updateRowsCopied(ctx, uuid, s.rowsCopied)
 				_ = e.updateMigrationProgressByRowsCopied(ctx, uuid, s.rowsCopied)
+				_ = e.updateMigrationVreplicationLagSeconds(ctx, uuid, int64(s.Lag().Seconds()))
 				_ = e.updateMigrationETASecondsByProgress(ctx, uuid)
 				if s.timeThrottled != 0 {
 					// Avoid creating a 0000-00-00 00:00:00 timestamp
@@ -4525,6 +4518,18 @@ func (e *Executor) updateRowsCopied(ctx context.Context, uuid string, rowsCopied
 	}
 	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationRowsCopied,
 		sqltypes.Int64BindVariable(rowsCopied),
+		sqltypes.StringBindVariable(uuid),
+	)
+	if err != nil {
+		return err
+	}
+	_, err = e.execQuery(ctx, query)
+	return err
+}
+
+func (e *Executor) updateMigrationVreplicationLagSeconds(ctx context.Context, uuid string, vreplicationLagSeconds int64) error {
+	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationVreplicationLagSeconds,
+		sqltypes.Int64BindVariable(vreplicationLagSeconds),
 		sqltypes.StringBindVariable(uuid),
 	)
 	if err != nil {

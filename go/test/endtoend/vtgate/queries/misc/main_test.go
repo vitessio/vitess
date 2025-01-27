@@ -48,7 +48,6 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	exitCode := func() int {
@@ -96,7 +95,7 @@ func TestMain(m *testing.M) {
 		vtParams = clusterInstance.GetVTParams(keyspaceName)
 
 		// create mysql instance and connection parameters
-		conn, closer, err := utils.NewMySQL(clusterInstance, keyspaceName, schemaSQL)
+		conn, closer, err := utils.NewMySQL(clusterInstance, keyspaceName, schemaSQL, uschemaSQL)
 		if err != nil {
 			fmt.Println(err)
 			return 1

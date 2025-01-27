@@ -37,6 +37,7 @@ import (
 	"vitess.io/vitess/go/pools/smartconnpool"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
@@ -756,6 +757,14 @@ func (tsv *TabletServer) WaitForPreparedTwoPCTransactions(ctx context.Context) e
 			}
 		}
 	}
+}
+
+// SetDemotePrimaryStalled marks that demote primary is stalled in the state manager.
+func (tsv *TabletServer) SetDemotePrimaryStalled() {
+	tsv.sm.mu.Lock()
+	tsv.sm.demotePrimaryStalled = true
+	tsv.sm.mu.Unlock()
+	tsv.BroadcastHealth()
 }
 
 // CreateTransaction creates the metadata for a 2PC transaction.
@@ -1543,7 +1552,7 @@ func (tsv *TabletServer) execRequest(
 
 	defer span.Finish()
 
-	logStats := tabletenv.NewLogStats(ctx, requestName)
+	logStats := tabletenv.NewLogStats(ctx, requestName, streamlog.GetQueryLogConfig())
 	logStats.Target = target
 	logStats.OriginalSQL = sql
 	logStats.BindVariables = sqltypes.CopyBindVariables(bindVariables)
@@ -1867,7 +1876,9 @@ func (tsv *TabletServer) registerQuerylogzHandler() {
 }
 
 func (tsv *TabletServer) registerTxlogzHandler() {
-	tsv.exporter.HandleFunc("/txlogz", txlogzHandler)
+	tsv.exporter.HandleFunc("/txlogz", func(w http.ResponseWriter, r *http.Request) {
+		txlogzHandler(w, r, streamlog.GetQueryLogConfig().RedactDebugUIQueries)
+	})
 }
 
 func (tsv *TabletServer) registerQueryListHandlers(queryLists []*QueryList) {
@@ -1882,7 +1893,7 @@ func (tsv *TabletServer) registerQueryListHandlers(queryLists []*QueryList) {
 func (tsv *TabletServer) registerTwopczHandler() {
 	tsv.exporter.HandleFunc("/twopcz", func(w http.ResponseWriter, r *http.Request) {
 		ctx := tabletenv.LocalContext()
-		txe := NewDTExecutor(ctx, tabletenv.NewLogStats(ctx, "twopcz"), tsv.te, tsv.qe, tsv.getShard)
+		txe := NewDTExecutor(ctx, tabletenv.NewLogStats(ctx, "twopcz", streamlog.GetQueryLogConfig()), tsv.te, tsv.qe, tsv.getShard)
 		twopczHandler(txe, w, r)
 	})
 }

@@ -32,6 +32,9 @@ func TestGetACLPermissionLevelForAPI(t *testing.T) {
 			apiEndpoint: healthAPI,
 			want:        acl.MONITORING,
 		}, {
+			apiEndpoint: configAPI,
+			want:        acl.MONITORING,
+		}, {
 			apiEndpoint: "gibberish",
 			want:        acl.ADMIN,
 		},

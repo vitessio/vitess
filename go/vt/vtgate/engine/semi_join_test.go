@@ -18,6 +18,7 @@ package engine
 
 import (
 	"context"
+	"sync"
 	"testing"
 
 	"vitess.io/vitess/go/test/utils"
@@ -156,6 +157,84 @@ func TestSemiJoinStreamExecute(t *testing.T) {
 			"int64|varchar|varchar",
 		),
 		"2|b|bb",
+		"4|d|dd",
+	))
+}
+
+// TestSemiJoinStreamExecuteParallelExecution tests SemiJoin stream execution with parallel execution
+// to ensure we have no data races.
+func TestSemiJoinStreamExecuteParallelExecution(t *testing.T) {
+	leftPrim := &fakePrimitive{
+		results: []*sqltypes.Result{
+			sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields(
+					"col1|col2|col3",
+					"int64|varchar|varchar",
+				),
+				"1|a|aa",
+				"2|b|bb",
+			), sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields(
+					"col1|col2|col3",
+					"int64|varchar|varchar",
+				),
+				"3|c|cc",
+				"4|d|dd",
+			),
+		},
+		async: true,
+	}
+	rightFields := sqltypes.MakeTestFields(
+		"col4|col5|col6",
+		"int64|varchar|varchar",
+	)
+	rightPrim := &fakePrimitive{
+		// we'll return non-empty results for rows 2 and 4
+		results: sqltypes.MakeTestStreamingResults(rightFields,
+			"4|d|dd",
+			"---",
+			"---",
+			"5|e|ee",
+			"6|f|ff",
+			"7|g|gg",
+		),
+		async: true,
+		noLog: true,
+	}
+
+	jn := &SemiJoin{
+		Left:  leftPrim,
+		Right: rightPrim,
+		Vars: map[string]int{
+			"bv": 1,
+		},
+	}
+	var res *sqltypes.Result
+	var mu sync.Mutex
+	err := jn.TryStreamExecute(context.Background(), &noopVCursor{}, map[string]*querypb.BindVariable{}, true, func(result *sqltypes.Result) error {
+		mu.Lock()
+		defer mu.Unlock()
+		if res == nil {
+			res = result
+		} else {
+			res.Rows = append(res.Rows, result.Rows...)
+		}
+		return nil
+	})
+	require.NoError(t, err)
+	leftPrim.ExpectLog(t, []string{
+		`StreamExecute  true`,
+	})
+	// We'll get all the rows back in left primitive, since we're returning the same set of rows
+	// from the right primitive that makes them all qualify.
+	expectResultAnyOrder(t, res, sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"col1|col2|col3",
+			"int64|varchar|varchar",
+		),
+		"1|a|aa",
+		"2|b|bb",
+		"3|c|cc",
 		"4|d|dd",
 	))
 }

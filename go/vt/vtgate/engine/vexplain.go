@@ -207,7 +207,7 @@ func (v *VExplain) convertToVExplainAllResult(ctx context.Context, vcursor VCurs
 		res, err := vcursor.ExecuteStandalone(ctx, nil, explainQuery, nil, &srvtopo.ResolvedShard{
 			Target:  entry.Target,
 			Gateway: entry.Gateway,
-		})
+		}, false)
 		if err != nil {
 			return nil, err
 		}

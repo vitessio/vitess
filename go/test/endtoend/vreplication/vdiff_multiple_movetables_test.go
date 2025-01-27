@@ -102,7 +102,7 @@ func TestMultipleConcurrentVDiffs(t *testing.T) {
 
 	doVdiff := func(workflowName, table string) {
 		defer wg.Done()
-		vdiff(t, targetKeyspace, workflowName, cellName, true, false, nil)
+		vdiff(t, targetKeyspace, workflowName, cellName, nil)
 	}
 	go doVdiff("wf1", "customer")
 	go doVdiff("wf2", "customer2")

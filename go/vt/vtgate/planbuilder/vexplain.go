@@ -26,6 +26,7 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/dynamicconfig"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -37,15 +38,15 @@ func buildVExplainPlan(
 	vexplainStmt *sqlparser.VExplainStmt,
 	reservedVars *sqlparser.ReservedVars,
 	vschema plancontext.VSchema,
-	enableOnlineDDL, enableDirectDDL bool,
+	cfg dynamicconfig.DDL,
 ) (*planResult, error) {
 	switch vexplainStmt.Type {
 	case sqlparser.QueriesVExplainType, sqlparser.AllVExplainType:
-		return buildVExplainLoggingPlan(ctx, vexplainStmt, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+		return buildVExplainLoggingPlan(ctx, vexplainStmt, reservedVars, vschema, cfg)
 	case sqlparser.PlanVExplainType:
-		return buildVExplainVtgatePlan(ctx, vexplainStmt.Statement, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+		return buildVExplainVtgatePlan(ctx, vexplainStmt.Statement, reservedVars, vschema, cfg)
 	case sqlparser.TraceVExplainType:
-		return buildVExplainTracePlan(ctx, vexplainStmt.Statement, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+		return buildVExplainTracePlan(ctx, vexplainStmt.Statement, reservedVars, vschema, cfg)
 	case sqlparser.KeysVExplainType:
 		return buildVExplainKeysPlan(vexplainStmt.Statement, vschema)
 	}
@@ -54,7 +55,7 @@ func buildVExplainPlan(
 
 func explainTabPlan(explain *sqlparser.ExplainTab, vschema plancontext.VSchema) (*planResult, error) {
 	var keyspace *vindexes.Keyspace
-	var destination key.Destination
+	var dest key.Destination
 
 	if sqlparser.SystemSchema(explain.Table.Qualifier.String()) {
 		var err error
@@ -63,37 +64,33 @@ func explainTabPlan(explain *sqlparser.ExplainTab, vschema plancontext.VSchema) 
 			return nil, err
 		}
 	} else {
+		var tbl *vindexes.Table
 		var err error
-		var ks string
-		_, _, ks, _, destination, err = vschema.FindTableOrVindex(explain.Table)
+		tbl, _, _, _, dest, err = vschema.FindTableOrVindex(explain.Table)
 		if err != nil {
 			return nil, err
 		}
-		explain.Table.Qualifier = sqlparser.NewIdentifierCS("")
-
-		keyspace, err = vschema.FindKeyspace(ks)
-		if err != nil {
-			return nil, err
+		if tbl == nil {
+			return nil, vterrors.VT05004(explain.Table.Name.String())
 		}
-		if keyspace == nil {
-			return nil, vterrors.VT14004(ks)
-		}
+		keyspace = tbl.Keyspace
+		explain.Table = sqlparser.NewTableName(tbl.Name.String())
 	}
 
-	if destination == nil {
-		destination = key.DestinationAnyShard{}
+	if dest == nil {
+		dest = key.DestinationAnyShard{}
 	}
 
 	return newPlanResult(&engine.Send{
 		Keyspace:          keyspace,
-		TargetDestination: destination,
+		TargetDestination: dest,
 		Query:             sqlparser.String(explain),
 		SingleShardOnly:   true,
 	}, singleTable(keyspace.Name, explain.Table.Name.String())), nil
 }
 
-func buildVExplainVtgatePlan(ctx context.Context, explainStatement sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {
-	innerInstruction, err := createInstructionFor(ctx, sqlparser.String(explainStatement), explainStatement, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+func buildVExplainVtgatePlan(ctx context.Context, explainStatement sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, cfg dynamicconfig.DDL) (*planResult, error) {
+	innerInstruction, err := createInstructionFor(ctx, sqlparser.String(explainStatement), explainStatement, reservedVars, vschema, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -124,8 +121,8 @@ func buildVExplainKeysPlan(statement sqlparser.Statement, vschema plancontext.VS
 	return getJsonResultPlan(result, "ColumnUsage")
 }
 
-func buildVExplainLoggingPlan(ctx context.Context, explain *sqlparser.VExplainStmt, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {
-	input, err := createInstructionFor(ctx, sqlparser.String(explain.Statement), explain.Statement, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+func buildVExplainLoggingPlan(ctx context.Context, explain *sqlparser.VExplainStmt, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, cfg dynamicconfig.DDL) (*planResult, error) {
+	input, err := createInstructionFor(ctx, sqlparser.String(explain.Statement), explain.Statement, reservedVars, vschema, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -188,8 +185,8 @@ func explainPlan(explain *sqlparser.ExplainStmt, reservedVars *sqlparser.Reserve
 	}, tables...), nil
 }
 
-func buildVExplainTracePlan(ctx context.Context, explainStatement sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {
-	innerInstruction, err := createInstructionFor(ctx, sqlparser.String(explainStatement), explainStatement, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+func buildVExplainTracePlan(ctx context.Context, explainStatement sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, cfg dynamicconfig.DDL) (*planResult, error) {
+	innerInstruction, err := createInstructionFor(ctx, sqlparser.String(explainStatement), explainStatement, reservedVars, vschema, cfg)
 	if err != nil {
 		return nil, err
 	}

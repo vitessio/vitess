@@ -42,7 +42,6 @@ var (
 
 // This test makes sure that we can use SSL replication with Vitess
 func TestSecure(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	testReplicationBase(t, true)
 	testReplicationBase(t, false)
 }
@@ -131,7 +130,7 @@ func initializeCluster(t *testing.T) (int, error) {
 	for _, keyspaceStr := range []string{keyspace} {
 		KeyspacePtr := &cluster.Keyspace{Name: keyspaceStr}
 		keyspace := *KeyspacePtr
-		if err := clusterInstance.VtctlProcess.CreateKeyspace(keyspace.Name, sidecar.DefaultName, ""); err != nil {
+		if err := clusterInstance.VtctldClientProcess.CreateKeyspace(keyspace.Name, sidecar.DefaultName, ""); err != nil {
 			return 1, err
 		}
 		shard := &cluster.Shard{

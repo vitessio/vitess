@@ -56,6 +56,7 @@ const (
 	LockedSemiSyncPrimaryHypothesis        AnalysisCode = "LockedSemiSyncPrimaryHypothesis"
 	LockedSemiSyncPrimary                  AnalysisCode = "LockedSemiSyncPrimary"
 	ErrantGTIDDetected                     AnalysisCode = "ErrantGTIDDetected"
+	PrimaryDiskStalled                     AnalysisCode = "PrimaryDiskStalled"
 )
 
 type StructureAnalysisCode string
@@ -108,7 +109,6 @@ type ReplicationAnalysis struct {
 	Description                               string
 	StructureAnalysis                         []StructureAnalysisCode
 	OracleGTIDImmediateTopology               bool
-	MariaDBGTIDImmediateTopology              bool
 	BinlogServerImmediateTopology             bool
 	SemiSyncPrimaryEnabled                    bool
 	SemiSyncPrimaryStatus                     bool
@@ -130,6 +130,7 @@ type ReplicationAnalysis struct {
 	MaxReplicaGTIDMode                        string
 	MaxReplicaGTIDErrant                      string
 	IsReadOnly                                bool
+	IsDiskStalled                             bool
 }
 
 func (replicationAnalysis *ReplicationAnalysis) MarshalJSON() ([]byte, error) {
@@ -144,5 +145,5 @@ func (replicationAnalysis *ReplicationAnalysis) MarshalJSON() ([]byte, error) {
 // ValidSecondsFromSeenToLastAttemptedCheck returns the maximum allowed elapsed time
 // between last_attempted_check to last_checked before we consider the instance as invalid.
 func ValidSecondsFromSeenToLastAttemptedCheck() uint {
-	return config.Config.InstancePollSeconds + 1
+	return config.GetInstancePollSeconds()
 }

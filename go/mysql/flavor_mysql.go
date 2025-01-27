@@ -60,7 +60,7 @@ var _ flavor = (*mysqlFlavor82)(nil)
 
 // primaryGTIDSet is part of the Flavor interface.
 func (mysqlFlavor) primaryGTIDSet(c *Conn) (replication.GTIDSet, error) {
-	// keep @@global as lowercase, as some servers like the Ripple binlog server only honors a lowercase `global` value
+	// keep @@global as lowercase, as some servers like a binlog server only honors a lowercase `global` value
 	qr, err := c.ExecuteFetch("SELECT @@global.gtid_executed", 1, false)
 	if err != nil {
 		return nil, err
@@ -73,7 +73,7 @@ func (mysqlFlavor) primaryGTIDSet(c *Conn) (replication.GTIDSet, error) {
 
 // purgedGTIDSet is part of the Flavor interface.
 func (mysqlFlavor) purgedGTIDSet(c *Conn) (replication.GTIDSet, error) {
-	// keep @@global as lowercase, as some servers like the Ripple binlog server only honors a lowercase `global` value
+	// keep @@global as lowercase, as some servers like a binlog server only honors a lowercase `global` value
 	qr, err := c.ExecuteFetch("SELECT @@global.gtid_purged", 1, false)
 	if err != nil {
 		return nil, err
@@ -86,7 +86,7 @@ func (mysqlFlavor) purgedGTIDSet(c *Conn) (replication.GTIDSet, error) {
 
 // serverUUID is part of the Flavor interface.
 func (mysqlFlavor) serverUUID(c *Conn) (string, error) {
-	// keep @@global as lowercase, as some servers like the Ripple binlog server only honors a lowercase `global` value
+	// keep @@global as lowercase, as some servers like a binlog server only honors a lowercase `global` value
 	qr, err := c.ExecuteFetch("SELECT @@global.server_uuid", 1, false)
 	if err != nil {
 		return "", err
@@ -218,8 +218,18 @@ func (mysqlFlavor) sendBinlogDumpCommand(c *Conn, serverID uint32, binlogFilenam
 	}
 
 	// Build the command.
-	sidBlock := gtidSet.SIDBlock()
-	return c.WriteComBinlogDumpGTID(serverID, binlogFilename, 4, 0, sidBlock)
+	var sidBlock []byte
+	if gtidSet != nil {
+		sidBlock = gtidSet.SIDBlock()
+	}
+	var flags2 uint16
+	if binlogFilename != "" {
+		flags2 |= BinlogThroughPosition
+	}
+	if len(sidBlock) > 0 {
+		flags2 |= BinlogThroughGTID
+	}
+	return c.WriteComBinlogDumpGTID(serverID, binlogFilename, 4, flags2, sidBlock)
 }
 
 // setReplicationPositionCommands is part of the Flavor interface.

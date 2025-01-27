@@ -138,8 +138,8 @@ func TestLocalControllerSchemaChange(t *testing.T) {
 	result := &ExecuteResult{
 		Sqls: []string{"create table test_table (id int)"},
 		SuccessShards: []ShardResult{{
-			Shard:  "0",
-			Result: &querypb.QueryResult{},
+			Shard:   "0",
+			Results: []*querypb.QueryResult{{}},
 		}},
 	}
 	logPath := path.Join(controller.logDir, controller.sqlFilename)

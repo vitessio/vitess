@@ -40,15 +40,11 @@ import java.sql.Statement;
 import java.util.Properties;
 
 import org.junit.Test;
-import org.junit.runner.RunWith;
 import org.mockito.Mockito;
-import org.powermock.api.mockito.PowerMockito;
-import org.powermock.modules.junit4.PowerMockRunner;
 
 /**
  * Created by harshit.gangal on 19/01/16.
  */
-@RunWith(PowerMockRunner.class)
 public class VitessConnectionTest extends BaseTest {
 
   @Test
@@ -118,13 +114,13 @@ public class VitessConnectionTest extends BaseTest {
 
   @Test
   public void testCommit() throws Exception {
-    VTSession mockSession = PowerMockito.mock(VTSession.class);
+    VTSession mockSession = Mockito.mock(VTSession.class);
     VitessConnection vitessConnection = getVitessConnection();
     Field privateVTSessionField = VitessConnection.class.getDeclaredField("vtSession");
     privateVTSessionField.setAccessible(true);
     privateVTSessionField.set(vitessConnection, mockSession);
-    PowerMockito.when(mockSession.isInTransaction()).thenReturn(false);
-    PowerMockito.when(mockSession.isAutoCommit()).thenReturn(false);
+    Mockito.when(mockSession.isInTransaction()).thenReturn(false);
+    Mockito.when(mockSession.isAutoCommit()).thenReturn(false);
     vitessConnection.commit();
   }
 
@@ -159,13 +155,13 @@ public class VitessConnectionTest extends BaseTest {
 
   @Test(expected = SQLException.class)
   public void testClosedForException() throws Exception {
-    VTSession mockSession = PowerMockito.mock(VTSession.class);
+    VTSession mockSession = Mockito.mock(VTSession.class);
     VitessConnection vitessConnection = getVitessConnection();
     Field privateVTSessionField = VitessConnection.class.getDeclaredField("vtSession");
     privateVTSessionField.setAccessible(true);
     privateVTSessionField.set(vitessConnection, mockSession);
-    PowerMockito.when(mockSession.isInTransaction()).thenReturn(true);
-    PowerMockito.when(mockSession.isAutoCommit()).thenReturn(true);
+    Mockito.when(mockSession.isInTransaction()).thenReturn(true);
+    Mockito.when(mockSession.isAutoCommit()).thenReturn(true);
     vitessConnection.close();
   }
 

@@ -33,11 +33,11 @@ import (
 	"vitess.io/vitess/go/test/endtoend/reparent/utils"
 	"vitess.io/vitess/go/vt/log"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 )
 
 func TestPrimaryToSpareStateChangeImpossible(t *testing.T) {
-	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
+	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
@@ -48,8 +48,7 @@ func TestPrimaryToSpareStateChangeImpossible(t *testing.T) {
 }
 
 func TestReparentCrossCell(t *testing.T) {
-	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
+	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
@@ -62,8 +61,7 @@ func TestReparentCrossCell(t *testing.T) {
 }
 
 func TestReparentGraceful(t *testing.T) {
-	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
+	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
@@ -85,8 +83,7 @@ func TestReparentGraceful(t *testing.T) {
 
 // TestPRSWithDrainedLaggingTablet tests that PRS succeeds even if we have a lagging drained tablet
 func TestPRSWithDrainedLaggingTablet(t *testing.T) {
-	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
+	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
@@ -112,8 +109,7 @@ func TestPRSWithDrainedLaggingTablet(t *testing.T) {
 }
 
 func TestReparentReplicaOffline(t *testing.T) {
-	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
+	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
@@ -130,8 +126,7 @@ func TestReparentReplicaOffline(t *testing.T) {
 }
 
 func TestReparentAvoid(t *testing.T) {
-	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
+	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 	utils.DeleteTablet(t, clusterInstance, tablets[2])
@@ -178,15 +173,13 @@ func TestReparentAvoid(t *testing.T) {
 }
 
 func TestReparentFromOutside(t *testing.T) {
-	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
+	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
 	defer utils.TeardownCluster(clusterInstance)
 	reparentFromOutside(t, clusterInstance, false)
 }
 
 func TestReparentFromOutsideWithNoPrimary(t *testing.T) {
-	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
+	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
@@ -285,8 +278,7 @@ func reparentFromOutside(t *testing.T, clusterInstance *cluster.LocalProcessClus
 }
 
 func TestReparentWithDownReplica(t *testing.T) {
-	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
+	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
@@ -332,8 +324,7 @@ func TestReparentWithDownReplica(t *testing.T) {
 }
 
 func TestChangeTypeSemiSync(t *testing.T) {
-	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
+	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
@@ -399,8 +390,7 @@ func TestChangeTypeSemiSync(t *testing.T) {
 // 1. When PRS is run with the cross_cell durability policy setup, then the semi-sync settings on all the tablets are as expected
 // 2. Bringing up a new vttablet should have its replication and semi-sync setup correctly without any manual intervention
 func TestCrossCellDurability(t *testing.T) {
-	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentCluster(t, "cross_cell")
+	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilityCrossCell)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
@@ -439,8 +429,7 @@ func TestCrossCellDurability(t *testing.T) {
 
 // TestFullStatus tests that the RPC FullStatus works as intended.
 func TestFullStatus(t *testing.T) {
-	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
+	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})

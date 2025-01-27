@@ -215,6 +215,30 @@ func (mcmp *MySQLCompare) Exec(query string) *sqltypes.Result {
 	return vtQr
 }
 
+// ExecVitessAndMySQLDifferentQueries executes Vitess and MySQL with the queries provided.
+func (mcmp *MySQLCompare) ExecVitessAndMySQLDifferentQueries(vtQ, mQ string) *sqltypes.Result {
+	mcmp.t.Helper()
+	vtQr, err := mcmp.VtConn.ExecuteFetch(vtQ, 1000, true)
+	require.NoError(mcmp.t, err, "[Vitess Error] for query: "+vtQ)
+
+	mysqlQr, err := mcmp.MySQLConn.ExecuteFetch(mQ, 1000, true)
+	require.NoError(mcmp.t, err, "[MySQL Error] for query: "+mQ)
+	compareVitessAndMySQLResults(mcmp.t, vtQ, mcmp.VtConn, vtQr, mysqlQr, CompareOptions{})
+	return vtQr
+}
+
+// ExecAssert is the same as Exec, but it only does assertions, it won't FailNow
+func (mcmp *MySQLCompare) ExecAssert(query string) *sqltypes.Result {
+	mcmp.t.Helper()
+	vtQr, err := mcmp.VtConn.ExecuteFetch(query, 1000, true)
+	assert.NoError(mcmp.t, err, "[Vitess Error] for query: "+query)
+
+	mysqlQr, err := mcmp.MySQLConn.ExecuteFetch(query, 1000, true)
+	assert.NoError(mcmp.t, err, "[MySQL Error] for query: "+query)
+	compareVitessAndMySQLResults(mcmp.t, query, mcmp.VtConn, vtQr, mysqlQr, CompareOptions{})
+	return vtQr
+}
+
 // ExecNoCompare executes the query on vitess and mysql but does not compare the result with each other.
 func (mcmp *MySQLCompare) ExecNoCompare(query string) (*sqltypes.Result, *sqltypes.Result) {
 	mcmp.t.Helper()
@@ -300,4 +324,11 @@ func (mcmp *MySQLCompare) ExecAllowError(query string) (*sqltypes.Result, error)
 		vtErr = compareVitessAndMySQLResults(mcmp.t, query, mcmp.VtConn, vtQr, mysqlQr, CompareOptions{})
 	}
 	return vtQr, vtErr
+}
+
+func (mcmp *MySQLCompare) VExplain(query string) string {
+	mcmp.t.Helper()
+	vtQr, vtErr := mcmp.VtConn.ExecuteFetch("vexplain plan "+query, 1, true)
+	require.NoError(mcmp.t, vtErr, "[Vitess Error] for query: "+query)
+	return vtQr.Rows[0][0].ToString()
 }

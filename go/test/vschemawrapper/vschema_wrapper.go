@@ -18,7 +18,9 @@ package vschemawrapper
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"sort"
 	"strings"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -33,6 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -40,7 +43,10 @@ import (
 
 var _ plancontext.VSchema = (*VSchemaWrapper)(nil)
 
+// VSchemaWrapper is a wrapper around VSchema that implements the ContextVSchema interface.
+// It is used in tests to provide a VSchema implementation.
 type VSchemaWrapper struct {
+	Vcursor               *econtext.VCursorImpl
 	V                     *vindexes.VSchema
 	Keyspace              *vindexes.Keyspace
 	TabletType_           topodatapb.TabletType
@@ -51,6 +57,30 @@ type VSchemaWrapper struct {
 	EnableViews           bool
 	TestBuilder           func(query string, vschema plancontext.VSchema, keyspace string) (*engine.Plan, error)
 	Env                   *vtenv.Environment
+}
+
+func NewVschemaWrapper(
+	env *vtenv.Environment,
+	vschema *vindexes.VSchema,
+	builder func(string, plancontext.VSchema, string) (*engine.Plan, error),
+) (*VSchemaWrapper, error) {
+	ss := econtext.NewAutocommitSession(&vtgatepb.Session{})
+	vcursor, err := econtext.NewVCursorImpl(ss, sqlparser.MarginComments{}, nil, nil, nil, vschema, nil, nil, nil, econtext.VCursorConfig{
+		Collation:         env.CollationEnv().DefaultConnectionCharset(),
+		DefaultTabletType: topodatapb.TabletType_PRIMARY,
+		SetVarEnabled:     true,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &VSchemaWrapper{
+		Env:           env,
+		V:             vschema,
+		Vcursor:       vcursor,
+		TestBuilder:   builder,
+		TabletType_:   topodatapb.TabletType_PRIMARY,
+		SysVarEnabled: true,
+	}, nil
 }
 
 func (vw *VSchemaWrapper) GetPrepareData(stmtName string) *vtgatepb.PrepareData {
@@ -235,7 +265,7 @@ func (vw *VSchemaWrapper) FindTable(tab sqlparser.TableName) (*vindexes.Table, s
 	return table, destKeyspace, destTabletType, destTarget, nil
 }
 
-func (vw *VSchemaWrapper) FindView(tab sqlparser.TableName) sqlparser.SelectStatement {
+func (vw *VSchemaWrapper) FindView(tab sqlparser.TableName) sqlparser.TableStatement {
 	destKeyspace, _, _, err := topoproto.ParseDestination(tab.Qualifier.String(), topodatapb.TabletType_PRIMARY)
 	if err != nil {
 		return nil
@@ -243,46 +273,19 @@ func (vw *VSchemaWrapper) FindView(tab sqlparser.TableName) sqlparser.SelectStat
 	return vw.V.FindView(destKeyspace, tab.Name.String())
 }
 
-func (vw *VSchemaWrapper) FindTableOrVindex(tab sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error) {
-	if tab.Qualifier.IsEmpty() && tab.Name.String() == "dual" {
-		ksName := vw.getActualKeyspace()
-		var ks *vindexes.Keyspace
-		if ksName == "" {
-			ks = vw.getfirstKeyspace()
-			ksName = ks.Name
-		} else {
-			ks = vw.V.Keyspaces[ksName].Keyspace
-		}
-		tbl := &vindexes.Table{
-			Name:     sqlparser.NewIdentifierCS("dual"),
-			Keyspace: ks,
-			Type:     vindexes.TypeReference,
-		}
-		return tbl, nil, ksName, topodatapb.TabletType_PRIMARY, nil, nil
-	}
-	destKeyspace, destTabletType, destTarget, err := topoproto.ParseDestination(tab.Qualifier.String(), topodatapb.TabletType_PRIMARY)
+func (vw *VSchemaWrapper) FindViewTarget(name sqlparser.TableName) (*vindexes.Keyspace, error) {
+	destKeyspace, _, _, err := topoproto.ParseDestination(name.Qualifier.String(), topodatapb.TabletType_PRIMARY)
 	if err != nil {
-		return nil, nil, destKeyspace, destTabletType, destTarget, err
+		return nil, err
 	}
-	if destKeyspace == "" {
-		destKeyspace = vw.getActualKeyspace()
+	if ks, ok := vw.V.Keyspaces[destKeyspace]; ok {
+		return ks.Keyspace, nil
 	}
-	table, vindex, err := vw.V.FindTableOrVindex(destKeyspace, tab.Name.String(), topodatapb.TabletType_PRIMARY)
-	if err != nil {
-		return nil, nil, destKeyspace, destTabletType, destTarget, err
-	}
-	return table, vindex, destKeyspace, destTabletType, destTarget, nil
+	return nil, nil
 }
 
-func (vw *VSchemaWrapper) getfirstKeyspace() (ks *vindexes.Keyspace) {
-	var f string
-	for name, schema := range vw.V.Keyspaces {
-		if f == "" || f > name {
-			f = name
-			ks = schema.Keyspace
-		}
-	}
-	return
+func (vw *VSchemaWrapper) FindTableOrVindex(tab sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error) {
+	return vw.Vcursor.FindTableOrVindex(tab)
 }
 
 func (vw *VSchemaWrapper) getActualKeyspace() string {
@@ -299,16 +302,33 @@ func (vw *VSchemaWrapper) getActualKeyspace() string {
 	return ks.Name
 }
 
-func (vw *VSchemaWrapper) DefaultKeyspace() (*vindexes.Keyspace, error) {
-	return vw.V.Keyspaces["main"].Keyspace, nil
+func (vw *VSchemaWrapper) SelectedKeyspace() (*vindexes.Keyspace, error) {
+	return vw.AnyKeyspace()
 }
 
 func (vw *VSchemaWrapper) AnyKeyspace() (*vindexes.Keyspace, error) {
-	return vw.DefaultKeyspace()
+	ks, found := vw.V.Keyspaces["main"]
+	if found {
+		return ks.Keyspace, nil
+	}
+
+	size := len(vw.V.Keyspaces)
+	if size == 0 {
+		return nil, errors.New("no keyspace found in vschema")
+	}
+
+	// Find the first keyspace in the map alphabetically to get deterministic results
+	keys := make([]string, size)
+	for key := range vw.V.Keyspaces {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	return vw.V.Keyspaces[keys[0]].Keyspace, nil
 }
 
 func (vw *VSchemaWrapper) FirstSortedKeyspace() (*vindexes.Keyspace, error) {
-	return vw.V.Keyspaces["main"].Keyspace, nil
+	return vw.AnyKeyspace()
 }
 
 func (vw *VSchemaWrapper) TargetString() string {
@@ -343,12 +363,12 @@ func (vw *VSchemaWrapper) IsViewsEnabled() bool {
 
 // FindMirrorRule finds the mirror rule for the requested keyspace, table
 // name, and the tablet type in the VSchema.
-func (vs *VSchemaWrapper) FindMirrorRule(tab sqlparser.TableName) (*vindexes.MirrorRule, error) {
+func (vw *VSchemaWrapper) FindMirrorRule(tab sqlparser.TableName) (*vindexes.MirrorRule, error) {
 	destKeyspace, destTabletType, _, err := topoproto.ParseDestination(tab.Qualifier.String(), topodatapb.TabletType_PRIMARY)
 	if err != nil {
 		return nil, err
 	}
-	mirrorRule, err := vs.V.FindMirrorRule(destKeyspace, tab.Name.String(), destTabletType)
+	mirrorRule, err := vw.V.FindMirrorRule(destKeyspace, tab.Name.String(), destTabletType)
 	if err != nil {
 		return nil, err
 	}

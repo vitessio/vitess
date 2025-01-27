@@ -353,9 +353,7 @@ func TestLimitOffsetExecute(t *testing.T) {
 		t.Errorf("l.Execute:\n got %v, want\n%v", result, wantResult)
 	}
 }
-
 func TestLimitStreamExecute(t *testing.T) {
-	bindVars := make(map[string]*querypb.BindVariable)
 	fields := sqltypes.MakeTestFields(
 		"col1|col2",
 		"int64|varchar",
@@ -366,88 +364,88 @@ func TestLimitStreamExecute(t *testing.T) {
 		"b|2",
 		"c|3",
 	)
-	fp := &fakePrimitive{
-		results: []*sqltypes.Result{inputResult},
-	}
 
-	l := &Limit{
-		Count: evalengine.NewLiteralInt(2),
-		Input: fp,
-	}
+	tests := []struct {
+		name                 string
+		countExpr            evalengine.Expr
+		bindVars             map[string]*querypb.BindVariable
+		want                 []*sqltypes.Result
+		RequireCompleteInput bool
+	}{{
+		name:      "limit smaller than input (literal)",
+		countExpr: evalengine.NewLiteralInt(2),
+		want: sqltypes.MakeTestStreamingResults(
+			fields,
+			"a|1",
+			"b|2",
+		),
+	}, {
+		name:                 "limit smaller than input (literal) - require complete input",
+		countExpr:            evalengine.NewLiteralInt(2),
+		RequireCompleteInput: true,
+		want: sqltypes.MakeTestStreamingResults(
+			fields,
+			"a|1",
+			"b|2",
+			"---", // this extra result is required by RequireCompleteInput
+		),
+	}, {
+		name:      "limit smaller than input (bind var)",
+		countExpr: evalengine.NewBindVar("l", evalengine.NewType(sqltypes.Int64, collations.CollationBinaryID)),
+		bindVars:  map[string]*querypb.BindVariable{"l": sqltypes.Int64BindVariable(2)},
+		want: sqltypes.MakeTestStreamingResults(
+			fields,
+			"a|1",
+			"b|2",
+		),
+	}, {
+		name:      "limit equal to input",
+		countExpr: evalengine.NewLiteralInt(3),
+		want: sqltypes.MakeTestStreamingResults(
+			fields,
+			"a|1",
+			"b|2",
+			"---",
+			"c|3",
+		),
+	}, {
+		name:      "limit higher than input",
+		countExpr: evalengine.NewLiteralInt(4),
+		// same as limit=3
+		want: sqltypes.MakeTestStreamingResults(
+			fields,
+			"a|1",
+			"b|2",
+			"---",
+			"c|3",
+		),
+	}}
 
-	// Test with limit smaller than input.
-	var results []*sqltypes.Result
-	err := l.TryStreamExecute(context.Background(), &noopVCursor{}, bindVars, true, func(qr *sqltypes.Result) error {
-		results = append(results, qr)
-		return nil
-	})
-	require.NoError(t, err)
-	wantResults := sqltypes.MakeTestStreamingResults(
-		fields,
-		"a|1",
-		"b|2",
-	)
-	require.Len(t, results, len(wantResults))
-	for i, result := range results {
-		if !result.Equal(wantResults[i]) {
-			t.Errorf("l.StreamExecute:\n%s, want\n%s", sqltypes.PrintResults(results), sqltypes.PrintResults(wantResults))
-		}
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fp := &fakePrimitive{
+				results: []*sqltypes.Result{inputResult},
+			}
 
-	// Test with bind vars.
-	fp.rewind()
-	l.Count = evalengine.NewBindVar("l", evalengine.NewType(sqltypes.Int64, collations.CollationBinaryID))
-	results = nil
-	err = l.TryStreamExecute(context.Background(), &noopVCursor{}, map[string]*querypb.BindVariable{"l": sqltypes.Int64BindVariable(2)}, true, func(qr *sqltypes.Result) error {
-		results = append(results, qr)
-		return nil
-	})
-	require.NoError(t, err)
-	require.Len(t, results, len(wantResults))
-	for i, result := range results {
-		if !result.Equal(wantResults[i]) {
-			t.Errorf("l.StreamExecute:\n%s, want\n%s", sqltypes.PrintResults(results), sqltypes.PrintResults(wantResults))
-		}
-	}
+			l := &Limit{
+				Count:                tt.countExpr,
+				RequireCompleteInput: tt.RequireCompleteInput,
+				Input:                fp,
+			}
 
-	// Test with limit equal to input
-	fp.rewind()
-	l.Count = evalengine.NewLiteralInt(3)
-	results = nil
-	err = l.TryStreamExecute(context.Background(), &noopVCursor{}, bindVars, true, func(qr *sqltypes.Result) error {
-		results = append(results, qr)
-		return nil
-	})
-	require.NoError(t, err)
-	wantResults = sqltypes.MakeTestStreamingResults(
-		fields,
-		"a|1",
-		"b|2",
-		"---",
-		"c|3",
-	)
-	require.Len(t, results, len(wantResults))
-	for i, result := range results {
-		if !result.Equal(wantResults[i]) {
-			t.Errorf("l.StreamExecute:\n%s, want\n%s", sqltypes.PrintResults(results), sqltypes.PrintResults(wantResults))
-		}
-	}
-
-	// Test with limit higher than input.
-	fp.rewind()
-	l.Count = evalengine.NewLiteralInt(4)
-	results = nil
-	err = l.TryStreamExecute(context.Background(), &noopVCursor{}, bindVars, true, func(qr *sqltypes.Result) error {
-		results = append(results, qr)
-		return nil
-	})
-	require.NoError(t, err)
-	// wantResults is same as before.
-	require.Len(t, results, len(wantResults))
-	for i, result := range results {
-		if !result.Equal(wantResults[i]) {
-			t.Errorf("l.StreamExecute:\n%s, want\n%s", sqltypes.PrintResults(results), sqltypes.PrintResults(wantResults))
-		}
+			var results []*sqltypes.Result
+			err := l.TryStreamExecute(context.Background(), &noopVCursor{}, tt.bindVars, true, func(qr *sqltypes.Result) error {
+				results = append(results, qr)
+				return nil
+			})
+			require.NoError(t, err)
+			require.Len(t, results, len(tt.want))
+			for i, result := range results {
+				if !result.Equal(tt.want[i]) {
+					t.Errorf("l.StreamExecute:\n%s, want\n%s", sqltypes.PrintResults(results), sqltypes.PrintResults(tt.want))
+				}
+			}
+		})
 	}
 }
 

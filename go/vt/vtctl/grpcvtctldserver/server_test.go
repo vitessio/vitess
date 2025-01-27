@@ -28,8 +28,11 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
 	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -607,15 +610,18 @@ func TestApplyVSchema(t *testing.T) {
 				},
 			})
 
-			origVSchema := &vschemapb.Keyspace{
-				Sharded: true,
-				Vindexes: map[string]*vschemapb.Vindex{
-					"v1": {
-						Type: "hash",
+			origVSchema := &topo.KeyspaceVSchemaInfo{
+				Name: tt.req.Keyspace,
+				Keyspace: &vschemapb.Keyspace{
+					Sharded: true,
+					Vindexes: map[string]*vschemapb.Vindex{
+						"v1": {
+							Type: "hash",
+						},
 					},
 				},
 			}
-			err := ts.SaveVSchema(ctx, tt.req.Keyspace, origVSchema)
+			err := ts.SaveVSchema(ctx, origVSchema)
 			require.NoError(t, err)
 
 			origSrvVSchema := &vschemapb.SrvVSchema{
@@ -2576,12 +2582,12 @@ func TestCreateKeyspace(t *testing.T) {
 	tests := []struct {
 		name               string
 		topo               map[string]*topodatapb.Keyspace
-		vschemas           map[string]*vschemapb.Keyspace
+		vschemas           map[string]*topo.KeyspaceVSchemaInfo
 		req                *vtctldatapb.CreateKeyspaceRequest
 		expected           *vtctldatapb.CreateKeyspaceResponse
 		shouldErr          bool
 		vschemaShouldExist bool
-		expectedVSchema    *vschemapb.Keyspace
+		expectedVSchema    *topo.KeyspaceVSchemaInfo
 	}{
 		{
 			name: "normal keyspace",
@@ -2599,8 +2605,11 @@ func TestCreateKeyspace(t *testing.T) {
 				},
 			},
 			vschemaShouldExist: true,
-			expectedVSchema: &vschemapb.Keyspace{
-				Sharded: false,
+			expectedVSchema: &topo.KeyspaceVSchemaInfo{
+				Name: "testkeyspace",
+				Keyspace: &vschemapb.Keyspace{
+					Sharded: false,
+				},
 			},
 			shouldErr: false,
 		},
@@ -2611,12 +2620,15 @@ func TestCreateKeyspace(t *testing.T) {
 					KeyspaceType: topodatapb.KeyspaceType_NORMAL,
 				},
 			},
-			vschemas: map[string]*vschemapb.Keyspace{
+			vschemas: map[string]*topo.KeyspaceVSchemaInfo{
 				"testkeyspace": {
-					Sharded: true,
-					Vindexes: map[string]*vschemapb.Vindex{
-						"h1": {
-							Type: "hash",
+					Name: "testkeyspace",
+					Keyspace: &vschemapb.Keyspace{
+						Sharded: true,
+						Vindexes: map[string]*vschemapb.Vindex{
+							"h1": {
+								Type: "hash",
+							},
 						},
 					},
 				},
@@ -2642,14 +2654,17 @@ func TestCreateKeyspace(t *testing.T) {
 				},
 			},
 			vschemaShouldExist: true,
-			expectedVSchema: &vschemapb.Keyspace{
-				Sharded: true,
-				Vindexes: map[string]*vschemapb.Vindex{
-					"h1": {
-						Type: "hash",
+			expectedVSchema: &topo.KeyspaceVSchemaInfo{
+				Name: "testkeyspace",
+				Keyspace: &vschemapb.Keyspace{
+					Sharded: true,
+					Vindexes: map[string]*vschemapb.Vindex{
+						"h1": {
+							Type: "hash",
+						},
 					},
+					RequireExplicitRouting: true,
 				},
-				RequireExplicitRouting: true,
 			},
 			shouldErr: false,
 		},
@@ -2695,9 +2710,12 @@ func TestCreateKeyspace(t *testing.T) {
 				},
 			},
 			vschemaShouldExist: true,
-			expectedVSchema: &vschemapb.Keyspace{
-				Sharded:                false,
-				RequireExplicitRouting: true,
+			expectedVSchema: &topo.KeyspaceVSchemaInfo{
+				Name: "testsnapshot",
+				Keyspace: &vschemapb.Keyspace{
+					Sharded:                false,
+					RequireExplicitRouting: true,
+				},
 			},
 			shouldErr: false,
 		},
@@ -2747,8 +2765,11 @@ func TestCreateKeyspace(t *testing.T) {
 				},
 			},
 			vschemaShouldExist: true,
-			expectedVSchema: &vschemapb.Keyspace{
-				Sharded: false,
+			expectedVSchema: &topo.KeyspaceVSchemaInfo{
+				Name: "testkeyspace",
+				Keyspace: &vschemapb.Keyspace{
+					Sharded: false,
+				},
 			},
 			shouldErr: false,
 		},
@@ -2771,26 +2792,30 @@ func TestCreateKeyspace(t *testing.T) {
 			vschemaShouldExist: false,
 			expectedVSchema:    nil,
 			shouldErr:          false,
-		}, {
+		},
+		{
 			name: "keyspace with durability policy specified",
 			topo: nil,
 			req: &vtctldatapb.CreateKeyspaceRequest{
 				Name:             "testkeyspace",
 				Type:             topodatapb.KeyspaceType_NORMAL,
-				DurabilityPolicy: "semi_sync",
+				DurabilityPolicy: policy.DurabilitySemiSync,
 			},
 			expected: &vtctldatapb.CreateKeyspaceResponse{
 				Keyspace: &vtctldatapb.Keyspace{
 					Name: "testkeyspace",
 					Keyspace: &topodatapb.Keyspace{
 						KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
-						DurabilityPolicy: "semi_sync",
+						DurabilityPolicy: policy.DurabilitySemiSync,
 					},
 				},
 			},
 			vschemaShouldExist: true,
-			expectedVSchema: &vschemapb.Keyspace{
-				Sharded: false,
+			expectedVSchema: &topo.KeyspaceVSchemaInfo{
+				Name: "testkeyspace",
+				Keyspace: &vschemapb.Keyspace{
+					Sharded: false,
+				},
 			},
 			shouldErr: false,
 		},
@@ -2819,7 +2844,7 @@ func TestCreateKeyspace(t *testing.T) {
 			}
 
 			for name, vs := range tt.vschemas {
-				require.NoError(t, ts.SaveVSchema(ctx, name, vs), "error in SaveVSchema(%v, %+v)", name, vs)
+				require.NoError(t, ts.SaveVSchema(ctx, vs), "error in SaveVSchema(%v, %+v)", name, vs)
 			}
 
 			// Create the keyspace and make some assertions
@@ -2828,7 +2853,6 @@ func TestCreateKeyspace(t *testing.T) {
 				assert.Error(t, err)
 				return
 			}
-
 			assert.NoError(t, err)
 			testutil.AssertKeyspacesEqual(t, tt.expected.Keyspace, resp.Keyspace, "%+v\n%+v\n", tt.expected.Keyspace, resp.Keyspace)
 
@@ -2857,7 +2881,7 @@ func TestCreateKeyspace(t *testing.T) {
 				return
 			}
 			assert.NoError(t, err)
-			utils.MustMatch(t, tt.expectedVSchema, vs)
+			require.True(t, proto.Equal(tt.expectedVSchema, vs), "expected vschema for %s: %+v, got: %+v", tt.req.Name, tt.expectedVSchema, vs)
 		})
 	}
 }
@@ -8381,11 +8405,14 @@ func TestGetVSchema(t *testing.T) {
 	})
 
 	t.Run("found", func(t *testing.T) {
-		err := ts.SaveVSchema(ctx, "testkeyspace", &vschemapb.Keyspace{
-			Sharded: true,
-			Vindexes: map[string]*vschemapb.Vindex{
-				"v1": {
-					Type: "hash",
+		err := ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+			Name: "testkeyspace",
+			Keyspace: &vschemapb.Keyspace{
+				Sharded: true,
+				Vindexes: map[string]*vschemapb.Vindex{
+					"v1": {
+						Type: "hash",
+					},
 				},
 			},
 		})
@@ -11338,11 +11365,11 @@ func TestSetKeyspaceDurabilityPolicy(t *testing.T) {
 			},
 			req: &vtctldatapb.SetKeyspaceDurabilityPolicyRequest{
 				Keyspace:         "ks1",
-				DurabilityPolicy: "none",
+				DurabilityPolicy: policy.DurabilityNone,
 			},
 			expected: &vtctldatapb.SetKeyspaceDurabilityPolicyResponse{
 				Keyspace: &topodatapb.Keyspace{
-					DurabilityPolicy: "none",
+					DurabilityPolicy: policy.DurabilityNone,
 				},
 			},
 		},
@@ -13881,11 +13908,11 @@ func TestValidateSchemaKeyspace(t *testing.T) {
 	}
 
 	tests := []*struct {
-		name      string
-		req       *vtctldatapb.ValidateSchemaKeyspaceRequest
-		expected  *vtctldatapb.ValidateSchemaKeyspaceResponse
-		setup     func()
-		shouldErr bool
+		name     string
+		req      *vtctldatapb.ValidateSchemaKeyspaceRequest
+		expected *vtctldatapb.ValidateSchemaKeyspaceResponse
+		setup    func()
+		err      string
 	}{
 		{
 			name: "valid schemas",
@@ -13908,7 +13935,6 @@ func TestValidateSchemaKeyspace(t *testing.T) {
 					Uid:  101,
 				}, schema1)
 			},
-			shouldErr: false,
 		},
 		{
 			name: "different schemas",
@@ -13931,7 +13957,6 @@ func TestValidateSchemaKeyspace(t *testing.T) {
 					Uid:  101,
 				}, schema2)
 			},
-			shouldErr: false,
 		},
 		{
 			name: "skip-no-primary: no primary",
@@ -13956,7 +13981,6 @@ func TestValidateSchemaKeyspace(t *testing.T) {
 					Uid:  201,
 				}, schema1)
 			},
-			shouldErr: false,
 		},
 	}
 
@@ -13964,8 +13988,8 @@ func TestValidateSchemaKeyspace(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.setup()
 			resp, err := vtctld.ValidateSchemaKeyspace(ctx, tt.req)
-			if tt.shouldErr {
-				assert.Error(t, err)
+			if tt.err != "" {
+				assert.EqualError(t, err, tt.err)
 				return
 			}
 

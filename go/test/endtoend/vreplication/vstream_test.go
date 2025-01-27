@@ -28,7 +28,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/log"
-	_ "vitess.io/vitess/go/vt/vtctl/grpcvtctlclient"
 	_ "vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 
@@ -140,7 +139,7 @@ func testVStreamWithFailover(t *testing.T, failover bool) {
 		case 1:
 			if failover {
 				insertMu.Lock()
-				output, err := vc.VtctlClient.ExecuteCommandWithOutput("PlannedReparentShard", "--", "--keyspace_shard=product/0", "--new_primary=zone1-101")
+				output, err := vc.VtctldClient.ExecuteCommandWithOutput("PlannedReparentShard", "product/0", "--new-primary=zone1-101")
 				insertMu.Unlock()
 				log.Infof("output of first PRS is %s", output)
 				require.NoError(t, err)
@@ -148,7 +147,7 @@ func testVStreamWithFailover(t *testing.T, failover bool) {
 		case 2:
 			if failover {
 				insertMu.Lock()
-				output, err := vc.VtctlClient.ExecuteCommandWithOutput("PlannedReparentShard", "--", "--keyspace_shard=product/0", "--new_primary=zone1-100")
+				output, err := vc.VtctldClient.ExecuteCommandWithOutput("PlannedReparentShard", "product/0", "--new-primary=zone1-100")
 				insertMu.Unlock()
 				log.Infof("output of second PRS is %s", output)
 				require.NoError(t, err)
@@ -654,6 +653,8 @@ func TestMultiVStreamsKeyspaceReshard(t *testing.T) {
 
 	// Confirm that we have shard GTIDs for the global shard and the old/original shards.
 	require.Len(t, newVGTID.GetShardGtids(), 3)
+
+	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", ks, wf), binlogdatapb.VReplicationWorkflowState_Running.String())
 
 	// Switch the traffic to the new shards.
 	reshardAction(t, "SwitchTraffic", wf, ks, oldShards, newShards, defaultCellName, tabletType)

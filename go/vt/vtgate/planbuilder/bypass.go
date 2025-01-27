@@ -26,7 +26,7 @@ import (
 )
 
 func buildPlanForBypass(stmt sqlparser.Statement, _ *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
-	keyspace, err := vschema.DefaultKeyspace()
+	keyspace, err := vschema.SelectedKeyspace()
 	if err != nil {
 		return nil, err
 	}
@@ -55,6 +55,8 @@ func buildPlanForBypass(stmt sqlparser.Statement, _ *sqlparser.ReservedVars, vsc
 			hints = qh
 		}
 	}
+
+	sqlparser.RemoveSpecificKeyspace(stmt, keyspace.Name)
 
 	send := &engine.Send{
 		Keyspace:             keyspace,

@@ -95,6 +95,8 @@ import {
     showVDiff,
     ShowVDiffParams,
     createMaterialize,
+    fetchSchemaMigrations,
+    applySchema,
 } from '../api/http';
 import { vtadmin as pb, vtctldata } from '../proto/vtadmin';
 import { formatAlias } from '../util/tablets';
@@ -727,7 +729,7 @@ export const useTopologyPath = (
     params: GetTopologyPathParams,
     options?: UseQueryOptions<vtctldata.GetTopologyPathResponse, Error> | undefined
 ) => {
-    return useQuery(['topology-path', params], () => getTopologyPath(params));
+    return useQuery(['topology-path', params], () => getTopologyPath(params), options);
 };
 /**
  * useValidate is a mutate hook that validates that all nodes reachable from the global replication graph,
@@ -795,4 +797,26 @@ export const useShowVDiff = (
     options?: UseQueryOptions<pb.VDiffShowResponse, Error> | undefined
 ) => {
     return useQuery(['vdiff_show', params], () => showVDiff(params), { ...options });
+};
+
+/**
+ * useSchemaMigrations is a query hook that fetches schema migrations.
+ */
+export const useSchemaMigrations = (
+    request: pb.IGetSchemaMigrationsRequest,
+    options?: UseQueryOptions<pb.GetSchemaMigrationsResponse, Error> | undefined
+) => {
+    return useQuery(['migrations', request], () => fetchSchemaMigrations(request), { ...options });
+};
+
+/**
+ * useApplySchema is a mutation query hook that creates ApplySchema request.
+ */
+export const useApplySchema = (
+    params: Parameters<typeof applySchema>[0],
+    options: UseMutationOptions<Awaited<ReturnType<typeof applySchema>>, Error>
+) => {
+    return useMutation<Awaited<ReturnType<typeof applySchema>>, Error>(() => {
+        return applySchema(params);
+    }, options);
 };

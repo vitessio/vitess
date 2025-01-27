@@ -28,6 +28,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/streamlog"
+
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtenv"
@@ -840,7 +842,7 @@ func TestQueryExecutorMessageStreamACL(t *testing.T) {
 		ctx:      ctx,
 		query:    "stream from msg",
 		plan:     plan,
-		logStats: tabletenv.NewLogStats(ctx, "TestQueryExecutor"),
+		logStats: tabletenv.NewLogStats(ctx, "TestQueryExecutor", streamlog.NewQueryLogConfigForTest()),
 		tsv:      tsv,
 	}
 
@@ -1514,20 +1516,17 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 	} else {
 		cfg.StrictTableACL = false
 	}
-	if flags&noTwopc > 0 {
-		cfg.TwoPCEnable = false
-	} else {
-		cfg.TwoPCEnable = true
-	}
 	if flags&disableOnlineDDL > 0 {
 		cfg.EnableOnlineDDL = false
 	} else {
 		cfg.EnableOnlineDDL = true
 	}
-	if flags&shortTwopcAge > 0 {
-		cfg.TwoPCAbandonAge = 0.5
+	if flags&noTwopc > 0 {
+		cfg.TwoPCAbandonAge = 0
+	} else if flags&shortTwopcAge > 0 {
+		cfg.TwoPCAbandonAge = 500 * time.Millisecond
 	} else {
-		cfg.TwoPCAbandonAge = 10
+		cfg.TwoPCAbandonAge = 10 * time.Second
 	}
 	if flags&smallResultSize > 0 {
 		cfg.Oltp.MaxRows = 2
@@ -1559,7 +1558,7 @@ func newTransaction(tsv *TabletServer, options *querypb.ExecuteOptions) int64 {
 }
 
 func newTestQueryExecutor(ctx context.Context, tsv *TabletServer, sql string, txID int64) *QueryExecutor {
-	logStats := tabletenv.NewLogStats(ctx, "TestQueryExecutor")
+	logStats := tabletenv.NewLogStats(ctx, "TestQueryExecutor", streamlog.NewQueryLogConfigForTest())
 	plan, err := tsv.qe.GetPlan(ctx, logStats, sql, false)
 	if err != nil {
 		panic(err)
@@ -1576,7 +1575,7 @@ func newTestQueryExecutor(ctx context.Context, tsv *TabletServer, sql string, tx
 }
 
 func newTestQueryExecutorStreaming(ctx context.Context, tsv *TabletServer, sql string, txID int64) *QueryExecutor {
-	logStats := tabletenv.NewLogStats(ctx, "TestQueryExecutorStreaming")
+	logStats := tabletenv.NewLogStats(ctx, "TestQueryExecutorStreaming", streamlog.NewQueryLogConfigForTest())
 	plan, err := tsv.qe.GetStreamPlan(ctx, logStats, sql, false)
 	if err != nil {
 		panic(err)

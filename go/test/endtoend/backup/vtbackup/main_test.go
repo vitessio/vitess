@@ -52,7 +52,6 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	exitCode, err := func() (int, error) {
@@ -77,7 +76,7 @@ func TestMain(m *testing.M) {
 			},
 		}
 		shard := &localCluster.Keyspaces[0].Shards[0]
-		vtctldClientProcess := cluster.VtctldClientProcessInstance("localhost", localCluster.VtctldProcess.GrpcPort, localCluster.TmpDirectory)
+		vtctldClientProcess := cluster.VtctldClientProcessInstance(localCluster.VtctldProcess.GrpcPort, localCluster.TopoPort, "localhost", localCluster.TmpDirectory)
 		_, err = vtctldClientProcess.ExecuteCommandWithOutput("CreateKeyspace", keyspaceName, "--durability-policy=semi_sync")
 		if err != nil {
 			return 1, err

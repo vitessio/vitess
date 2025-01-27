@@ -6,7 +6,7 @@ permissions: read-all
 jobs:
   build:
     name: Check Make vtadmin_authz_testgen
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
     - name: Skip CI
       run: |
@@ -27,7 +27,9 @@ jobs:
 
     - name: Check out code
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
-      uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      with:
+        persist-credentials: 'false'
 
     - name: Check for changes in relevant files
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
@@ -61,7 +63,7 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.vtadmin_changes == 'true'
       run: |
         sudo apt-get update
-        sudo apt-get install -y make unzip g++ etcd curl git wget
+        sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget
         sudo service etcd stop
         go mod download
         go install golang.org/x/tools/cmd/goimports@latest

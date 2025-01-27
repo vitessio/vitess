@@ -9,7 +9,7 @@ permissions: read-all
 jobs:
   build:
     name: Static Code Checks Etc
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Skip CI
@@ -31,7 +31,9 @@ jobs:
 
       - name: Checkout code
         if: steps.skip-workflow.outputs.skip-workflow == 'false'
-        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: 'false'
 
       - name: Run FOSSA scan and upload build data
         uses: fossa-contrib/fossa-action@v3
@@ -152,7 +154,7 @@ jobs:
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && (steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.go_files == 'true')
         run: |
           sudo apt-get update
-          sudo apt-get install -y make unzip g++ etcd curl git wget
+          sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget
           sudo service etcd stop
           go mod download
 
@@ -228,7 +230,7 @@ jobs:
         uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b # v4.0.3
         with:
           # make proto requires newer node than the pre-installed one
-          node-version: '20.12.2'
+          node-version: '22.13.1'
 
       - name: check_make_proto
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.proto_changes == 'true'

@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/transaction/twopc/utils"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 )
 
 var (
@@ -48,7 +49,6 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	exitcode := func() int {
@@ -70,7 +70,6 @@ func TestMain(m *testing.M) {
 			"--tablet_refresh_interval", "2s",
 		)
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
-			"--twopc_enable",
 			"--twopc_abandon_age", "1",
 			"--migration_check_interval", "2s",
 		)
@@ -80,7 +79,7 @@ func TestMain(m *testing.M) {
 			Name:             keyspaceName,
 			SchemaSQL:        SchemaSQL,
 			VSchema:          VSchema,
-			DurabilityPolicy: "semi_sync",
+			DurabilityPolicy: policy.DurabilitySemiSync,
 		}
 		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-40", "40-80", "80-"}, 2, false); err != nil {
 			return 1
@@ -91,7 +90,7 @@ func TestMain(m *testing.M) {
 			Name:             unshardedKeyspaceName,
 			SchemaSQL:        "",
 			VSchema:          "{}",
-			DurabilityPolicy: "semi_sync",
+			DurabilityPolicy: policy.DurabilitySemiSync,
 		}
 		if err := clusterInstance.StartUnshardedKeyspace(*unshardedKeyspace, 2, false); err != nil {
 			return 1
@@ -122,9 +121,9 @@ func start(t *testing.T) (*mysql.Conn, func()) {
 }
 
 func cleanup(t *testing.T) {
-	cluster.PanicHandler(t)
 
 	utils.ClearOutTable(t, vtParams, "twopc_fuzzer_insert")
 	utils.ClearOutTable(t, vtParams, "twopc_fuzzer_update")
+	utils.ClearOutTable(t, vtParams, "twopc_fuzzer_multi")
 	utils.ClearOutTable(t, vtParams, "twopc_t1")
 }

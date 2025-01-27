@@ -26,6 +26,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/protoutil"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 	"vitess.io/vitess/go/constants/sidecar"
@@ -109,19 +110,10 @@ SetKeyspaceDurabilityPolicy --durability-policy='semi_sync' customer`,
 		Args:                  cobra.ExactArgs(1),
 		RunE:                  commandSetKeyspaceDurabilityPolicy,
 	}
-	// ValidateSchemaKeyspace makes a ValidateSchemaKeyspace gRPC call to a vtctld.
-	ValidateSchemaKeyspace = &cobra.Command{
-		Use:                   "ValidateSchemaKeyspace [--exclude-tables=<exclude_tables>] [--include-views] [--skip-no-primary] [--include-vschema] <keyspace>",
-		Short:                 "Validates that the schema on the primary tablet for shard 0 matches the schema on all other tablets in the keyspace.",
-		DisableFlagsInUseLine: true,
-		Aliases:               []string{"validateschemakeyspace"},
-		Args:                  cobra.ExactArgs(1),
-		RunE:                  commandValidateSchemaKeyspace,
-	}
 	// ValidateVersionKeyspace makes a ValidateVersionKeyspace gRPC call to a vtctld.
 	ValidateVersionKeyspace = &cobra.Command{
 		Use:                   "ValidateVersionKeyspace <keyspace>",
-		Short:                 "Validates that the version on the primary tablet of shard 0 matches all of the other tablets in the keyspace.",
+		Short:                 "Validates that the version on the primary tablet of the first shard matches all of the other tablets in the keyspace.",
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"validateversionkeyspace"},
 		Args:                  cobra.ExactArgs(1),
@@ -153,7 +145,7 @@ func commandCreateKeyspace(cmd *cobra.Command, args []string) error {
 
 	var snapshotTime *vttime.Time
 	if topodatapb.KeyspaceType(createKeyspaceOptions.KeyspaceType) == topodatapb.KeyspaceType_SNAPSHOT {
-		if createKeyspaceOptions.DurabilityPolicy != "none" {
+		if createKeyspaceOptions.DurabilityPolicy != policy.DurabilityNone {
 			return errors.New("--durability-policy cannot be specified while creating a snapshot keyspace")
 		}
 
@@ -350,38 +342,6 @@ func commandSetKeyspaceDurabilityPolicy(cmd *cobra.Command, args []string) error
 	return nil
 }
 
-var validateSchemaKeyspaceOptions = struct {
-	ExcludeTables  []string
-	IncludeViews   bool
-	SkipNoPrimary  bool
-	IncludeVSchema bool
-}{}
-
-func commandValidateSchemaKeyspace(cmd *cobra.Command, args []string) error {
-	cli.FinishedParsing(cmd)
-
-	ks := cmd.Flags().Arg(0)
-	resp, err := client.ValidateSchemaKeyspace(commandCtx, &vtctldatapb.ValidateSchemaKeyspaceRequest{
-		Keyspace:       ks,
-		ExcludeTables:  validateSchemaKeyspaceOptions.ExcludeTables,
-		IncludeVschema: validateSchemaKeyspaceOptions.IncludeVSchema,
-		SkipNoPrimary:  validateSchemaKeyspaceOptions.SkipNoPrimary,
-		IncludeViews:   validateSchemaKeyspaceOptions.IncludeViews,
-	})
-
-	if err != nil {
-		return err
-	}
-
-	data, err := cli.MarshalJSON(resp)
-	if err != nil {
-		return err
-	}
-
-	fmt.Printf("%s\n", data)
-	return nil
-}
-
 func commandValidateVersionKeyspace(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
@@ -409,7 +369,7 @@ func init() {
 	CreateKeyspace.Flags().Var(&createKeyspaceOptions.KeyspaceType, "type", "The type of the keyspace.")
 	CreateKeyspace.Flags().StringVar(&createKeyspaceOptions.BaseKeyspace, "base-keyspace", "", "The base keyspace for a snapshot keyspace.")
 	CreateKeyspace.Flags().StringVar(&createKeyspaceOptions.SnapshotTimestamp, "snapshot-timestamp", "", "The snapshot time for a snapshot keyspace, as a timestamp in RFC3339 format.")
-	CreateKeyspace.Flags().StringVar(&createKeyspaceOptions.DurabilityPolicy, "durability-policy", "none", "Type of durability to enforce for this keyspace. Default is none. Possible values include 'semi_sync' and others as dictated by registered plugins.")
+	CreateKeyspace.Flags().StringVar(&createKeyspaceOptions.DurabilityPolicy, "durability-policy", policy.DurabilityNone, "Type of durability to enforce for this keyspace. Default is none. Possible values include 'semi_sync' and others as dictated by registered plugins.")
 	CreateKeyspace.Flags().StringVar(&createKeyspaceOptions.SidecarDBName, "sidecar-db-name", sidecar.DefaultName, "(Experimental) Name of the Vitess sidecar database that tablets in this keyspace will use for internal metadata.")
 	Root.AddCommand(CreateKeyspace)
 
@@ -425,14 +385,8 @@ func init() {
 	RemoveKeyspaceCell.Flags().BoolVarP(&removeKeyspaceCellOptions.Recursive, "recursive", "r", false, "Also delete all tablets in that cell beloning to the specified keyspace.")
 	Root.AddCommand(RemoveKeyspaceCell)
 
-	SetKeyspaceDurabilityPolicy.Flags().StringVar(&setKeyspaceDurabilityPolicyOptions.DurabilityPolicy, "durability-policy", "none", "Type of durability to enforce for this keyspace. Default is none. Other values include 'semi_sync' and others as dictated by registered plugins.")
+	SetKeyspaceDurabilityPolicy.Flags().StringVar(&setKeyspaceDurabilityPolicyOptions.DurabilityPolicy, "durability-policy", policy.DurabilityNone, "Type of durability to enforce for this keyspace. Default is none. Other values include 'semi_sync' and others as dictated by registered plugins.")
 	Root.AddCommand(SetKeyspaceDurabilityPolicy)
-
-	ValidateSchemaKeyspace.Flags().BoolVar(&validateSchemaKeyspaceOptions.IncludeViews, "include-views", false, "Includes views in compared schemas.")
-	ValidateSchemaKeyspace.Flags().BoolVar(&validateSchemaKeyspaceOptions.IncludeVSchema, "include-vschema", false, "Includes VSchema validation in validation results.")
-	ValidateSchemaKeyspace.Flags().BoolVar(&validateSchemaKeyspaceOptions.SkipNoPrimary, "skip-no-primary", false, "Skips validation on whether or not a primary exists in shards.")
-	ValidateSchemaKeyspace.Flags().StringSliceVar(&validateSchemaKeyspaceOptions.ExcludeTables, "exclude-tables", []string{}, "Tables to exclude during schema comparison.")
-	Root.AddCommand(ValidateSchemaKeyspace)
 
 	Root.AddCommand(ValidateVersionKeyspace)
 }

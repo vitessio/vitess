@@ -21,14 +21,15 @@ import (
 	"testing"
 
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 
 	"github.com/stretchr/testify/require"
 )
 
 func TestDDLFlags(t *testing.T) {
 	defer func() {
-		enableOnlineDDL = true
-		enableDirectDDL = true
+		enableOnlineDDL.Set(true)
+		enableDirectDDL.Set(true)
 	}()
 	testcases := []struct {
 		enableDirectDDL bool
@@ -56,9 +57,9 @@ func TestDDLFlags(t *testing.T) {
 	for _, testcase := range testcases {
 		t.Run(fmt.Sprintf("%s-%v-%v", testcase.sql, testcase.enableDirectDDL, testcase.enableOnlineDDL), func(t *testing.T) {
 			executor, _, _, _, ctx := createExecutorEnv(t)
-			session := NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded})
-			enableDirectDDL = testcase.enableDirectDDL
-			enableOnlineDDL = testcase.enableOnlineDDL
+			session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded})
+			enableDirectDDL.Set(testcase.enableDirectDDL)
+			enableOnlineDDL.Set(testcase.enableOnlineDDL)
 			_, err := executor.Execute(ctx, nil, "TestDDLFlags", session, testcase.sql, nil)
 			if testcase.wantErr {
 				require.EqualError(t, err, testcase.err)

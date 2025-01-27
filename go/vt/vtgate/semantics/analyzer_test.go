@@ -625,6 +625,36 @@ func TestSubqueryOrderByBinding(t *testing.T) {
 	}
 }
 
+func TestQuerySignatureLastInsertID(t *testing.T) {
+	queries := []struct {
+		query    string
+		expected bool
+	}{{
+		query:    "select 12",
+		expected: false,
+	}, {
+		query:    "select last_insert_id()",
+		expected: false,
+	}, {
+		query:    "select last_insert_id(123)",
+		expected: true,
+	}, {
+		query:    "update user_extra set val = last_insert_id(123)",
+		expected: true,
+	}}
+
+	for _, tc := range queries {
+		t.Run(tc.query, func(t *testing.T) {
+			ast, err := sqlparser.NewTestParser().Parse(tc.query)
+			require.NoError(t, err)
+
+			st, err := AnalyzeStrict(ast, "dbName", fakeSchemaInfo())
+			require.NoError(t, err)
+			require.Equal(t, tc.expected, st.QuerySignature.LastInsertIDArg)
+		})
+	}
+}
+
 func TestOrderByBindingTable(t *testing.T) {
 	tcases := []struct {
 		sql  string
@@ -973,8 +1003,10 @@ func TestUnionWithOrderBy(t *testing.T) {
 
 	stmt, semTable := parseAndAnalyze(t, query, "")
 	union, _ := stmt.(*sqlparser.Union)
-	sel1 := sqlparser.GetFirstSelect(union)
-	sel2 := sqlparser.GetFirstSelect(union.Right)
+	sel1, err := sqlparser.GetFirstSelect(union)
+	require.NoError(t, err)
+	sel2, err := sqlparser.GetFirstSelect(union.Right)
+	require.NoError(t, err)
 
 	t1 := sel1.From[0].(*sqlparser.AliasedTableExpr)
 	t2 := sel2.From[0].(*sqlparser.AliasedTableExpr)

@@ -30,6 +30,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
+
 	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
@@ -59,7 +61,7 @@ func TestSelectNext(t *testing.T) {
 	}}
 
 	// Autocommit
-	session := NewAutocommitSession(&vtgatepb.Session{})
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{})
 	_, err := executor.Execute(context.Background(), nil, "TestSelectNext", session, query, bv)
 	require.NoError(t, err)
 
@@ -69,7 +71,7 @@ func TestSelectNext(t *testing.T) {
 	sbclookup.Queries = nil
 
 	// Txn
-	session = NewAutocommitSession(&vtgatepb.Session{})
+	session = econtext.NewAutocommitSession(&vtgatepb.Session{})
 	session.Session.InTransaction = true
 	_, err = executor.Execute(context.Background(), nil, "TestSelectNext", session, query, bv)
 	require.NoError(t, err)
@@ -80,7 +82,7 @@ func TestSelectNext(t *testing.T) {
 	sbclookup.Queries = nil
 
 	// Reserve
-	session = NewAutocommitSession(&vtgatepb.Session{})
+	session = econtext.NewAutocommitSession(&vtgatepb.Session{})
 	session.Session.InReservedConn = true
 	_, err = executor.Execute(context.Background(), nil, "TestSelectNext", session, query, bv)
 	require.NoError(t, err)
@@ -91,7 +93,7 @@ func TestSelectNext(t *testing.T) {
 	sbclookup.Queries = nil
 
 	// Reserve and Txn
-	session = NewAutocommitSession(&vtgatepb.Session{})
+	session = econtext.NewAutocommitSession(&vtgatepb.Session{})
 	session.Session.InReservedConn = true
 	session.Session.InTransaction = true
 	_, err = executor.Execute(context.Background(), nil, "TestSelectNext", session, query, bv)
@@ -107,7 +109,7 @@ func TestSelectDBA(t *testing.T) {
 
 	query := "select * from INFORMATION_SCHEMA.foo"
 	_, err := executor.Execute(context.Background(), nil, "TestSelectDBA",
-		NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"}),
+		econtext.NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"}),
 		query, map[string]*querypb.BindVariable{},
 	)
 	require.NoError(t, err)
@@ -117,7 +119,7 @@ func TestSelectDBA(t *testing.T) {
 	sbc1.Queries = nil
 	query = "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES ist WHERE ist.table_schema = 'performance_schema' AND ist.table_name = 'foo'"
 	_, err = executor.Execute(context.Background(), nil, "TestSelectDBA",
-		NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"}),
+		econtext.NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"}),
 		query, map[string]*querypb.BindVariable{},
 	)
 	require.NoError(t, err)
@@ -133,7 +135,7 @@ func TestSelectDBA(t *testing.T) {
 	sbc1.Queries = nil
 	query = "select 1 from information_schema.table_constraints where constraint_schema = 'vt_ks' and table_name = 'user'"
 	_, err = executor.Execute(context.Background(), nil, "TestSelectDBA",
-		NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"}),
+		econtext.NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"}),
 		query, map[string]*querypb.BindVariable{},
 	)
 	require.NoError(t, err)
@@ -149,7 +151,7 @@ func TestSelectDBA(t *testing.T) {
 	sbc1.Queries = nil
 	query = "select 1 from information_schema.table_constraints where constraint_schema = 'vt_ks'"
 	_, err = executor.Execute(context.Background(), nil, "TestSelectDBA",
-		NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"}),
+		econtext.NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"}),
 		query, map[string]*querypb.BindVariable{},
 	)
 	require.NoError(t, err)
@@ -164,10 +166,10 @@ func TestSelectDBA(t *testing.T) {
 
 func TestSystemVariablesMySQLBelow80(t *testing.T) {
 	executor, sbc1, _, _, _ := createCustomExecutor(t, "{}", "5.7.0")
-	executor.normalize = true
+	executor.config.Normalize = true
 	setVarEnabled = true
 
-	session := NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: "TestExecutor"})
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: "TestExecutor"})
 
 	sbc1.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
@@ -198,13 +200,9 @@ func TestSystemVariablesMySQLBelow80(t *testing.T) {
 
 func TestSystemVariablesWithSetVarDisabled(t *testing.T) {
 	executor, sbc1, _, _, _ := createCustomExecutor(t, "{}", "8.0.0")
-	executor.normalize = true
-
-	setVarEnabled = false
-	defer func() {
-		setVarEnabled = true
-	}()
-	session := NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: "TestExecutor"})
+	executor.config.Normalize = true
+	executor.vConfig.SetVarEnabled = false
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: "TestExecutor"})
 
 	sbc1.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
@@ -235,9 +233,9 @@ func TestSystemVariablesWithSetVarDisabled(t *testing.T) {
 
 func TestSetSystemVariablesTx(t *testing.T) {
 	executor, sbc1, _, _, _ := createCustomExecutor(t, "{}", "8.0.1")
-	executor.normalize = true
+	executor.config.Normalize = true
 
-	session := NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: "TestExecutor"})
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: "TestExecutor"})
 
 	_, err := executor.Execute(context.Background(), nil, "TestBegin", session, "begin", map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
@@ -280,10 +278,8 @@ func TestSetSystemVariablesTx(t *testing.T) {
 }
 
 func TestSetSystemVariables(t *testing.T) {
-	executor, _, _, lookup, _ := createExecutorEnv(t)
-	executor.normalize = true
-
-	session := NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded, SystemVariables: map[string]string{}})
+	executor, _, _, lookup, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded, SystemVariables: map[string]string{}})
 
 	// Set @@sql_mode and execute a select statement. We should have SET_VAR in the select statement
 
@@ -391,10 +387,9 @@ func TestSetSystemVariables(t *testing.T) {
 }
 
 func TestSetSystemVariablesWithReservedConnection(t *testing.T) {
-	executor, sbc1, _, _, _ := createExecutorEnv(t)
-	executor.normalize = true
+	executor, sbc1, _, _, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 
-	session := NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, SystemVariables: map[string]string{}})
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, SystemVariables: map[string]string{}})
 
 	sbc1.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
@@ -437,7 +432,7 @@ func TestSelectVindexFunc(t *testing.T) {
 	executor, _, _, _, _ := createExecutorEnv(t)
 
 	query := "select * from hash_index where id = 1"
-	session := NewAutocommitSession(&vtgatepb.Session{})
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{})
 	_, err := executor.Execute(context.Background(), nil, "TestSelectVindexFunc", session, query, nil)
 	require.ErrorContains(t, err, "VT09005: no database selected")
 
@@ -447,10 +442,9 @@ func TestSelectVindexFunc(t *testing.T) {
 }
 
 func TestCreateTableValidTimestamp(t *testing.T) {
-	executor, sbc1, _, _, _ := createExecutorEnv(t)
-	executor.normalize = true
+	executor, sbc1, _, _, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 
-	session := NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor", SystemVariables: map[string]string{"sql_mode": "ALLOW_INVALID_DATES"}})
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor", SystemVariables: map[string]string{"sql_mode": "ALLOW_INVALID_DATES"}})
 
 	query := "create table aa(t timestamp default 0)"
 	_, err := executor.Execute(context.Background(), nil, "TestSelect", session, query, map[string]*querypb.BindVariable{})
@@ -466,13 +460,11 @@ func TestCreateTableValidTimestamp(t *testing.T) {
 }
 
 func TestGen4SelectDBA(t *testing.T) {
-	executor, sbc1, _, _, _ := createExecutorEnv(t)
-	executor.normalize = true
-	executor.pv = querypb.ExecuteOptions_Gen4
+	executor, sbc1, _, _, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 
 	query := "select * from INFORMATION_SCHEMA.TABLE_CONSTRAINTS"
 	_, err := executor.Execute(context.Background(), nil, "TestSelectDBA",
-		NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"}),
+		econtext.NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"}),
 		query, map[string]*querypb.BindVariable{},
 	)
 	require.NoError(t, err)
@@ -483,7 +475,7 @@ func TestGen4SelectDBA(t *testing.T) {
 	sbc1.Queries = nil
 	query = "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES ist WHERE ist.table_schema = 'performance_schema' AND ist.table_name = 'foo'"
 	_, err = executor.Execute(context.Background(), nil, "TestSelectDBA",
-		NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"}),
+		econtext.NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"}),
 		query, map[string]*querypb.BindVariable{},
 	)
 	require.NoError(t, err)
@@ -501,7 +493,7 @@ func TestGen4SelectDBA(t *testing.T) {
 	sbc1.Queries = nil
 	query = "select 1 from information_schema.table_constraints where constraint_schema = 'vt_ks' and table_name = 'user'"
 	_, err = executor.Execute(context.Background(), nil, "TestSelectDBA",
-		NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"}),
+		econtext.NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"}),
 		query, map[string]*querypb.BindVariable{},
 	)
 	require.NoError(t, err)
@@ -519,7 +511,7 @@ func TestGen4SelectDBA(t *testing.T) {
 
 	sbc1.Queries = nil
 	query = "select 1 from information_schema.table_constraints where constraint_schema = 'vt_ks'"
-	_, err = executor.Execute(context.Background(), nil, "TestSelectDBA", NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"}), query, map[string]*querypb.BindVariable{})
+	_, err = executor.Execute(context.Background(), nil, "TestSelectDBA", econtext.NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"}), query, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
 		Sql: "select :vtg1 /* INT64 */ from information_schema.table_constraints where constraint_schema = :__vtschemaname /* VARCHAR */",
@@ -534,7 +526,7 @@ func TestGen4SelectDBA(t *testing.T) {
 	sbc1.Queries = nil
 	query = "select t.table_schema,t.table_name,c.column_name,c.column_type from tables t join columns c on c.table_schema = t.table_schema and c.table_name = t.table_name where t.table_schema = 'TestExecutor' and c.table_schema = 'TestExecutor' order by t.table_schema,t.table_name,c.column_name"
 	_, err = executor.Execute(context.Background(), nil, "TestSelectDBA",
-		NewSafeSession(&vtgatepb.Session{TargetString: "information_schema"}),
+		econtext.NewSafeSession(&vtgatepb.Session{TargetString: "information_schema"}),
 		query, map[string]*querypb.BindVariable{},
 	)
 	require.NoError(t, err)
@@ -651,7 +643,7 @@ func TestStreamBuffering(t *testing.T) {
 		context.Background(),
 		nil,
 		"TestStreamBuffering",
-		NewSafeSession(session),
+		econtext.NewSafeSession(session),
 		"select id from music_user_map where id = 1",
 		nil,
 		func(qr *sqltypes.Result) error {
@@ -702,18 +694,19 @@ func TestStreamLimitOffset(t *testing.T) {
 		}},
 	}
 
-	executor, _ := createExecutorEnvCallback(t, func(shard, ks string, tabletType topodatapb.TabletType, conn *sandboxconn.SandboxConn) {
-		if ks == KsTestSharded {
-			conn.SetResults([]*sqltypes.Result{{
-				Fields: []*querypb.Field{
-					{Name: "id", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
-					{Name: "textcol", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
-					{Name: "weight_string(id)", Type: sqltypes.VarBinary, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_BINARY_FLAG)},
-				},
-				Rows: returnRows[shard],
-			}})
-		}
-	})
+	executor, _ := createExecutorEnvCallback(t, createExecutorConfig(),
+		func(shard, ks string, tabletType topodatapb.TabletType, conn *sandboxconn.SandboxConn) {
+			if ks == KsTestSharded {
+				conn.SetResults([]*sqltypes.Result{{
+					Fields: []*querypb.Field{
+						{Name: "id", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
+						{Name: "textcol", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
+						{Name: "weight_string(id)", Type: sqltypes.VarBinary, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_BINARY_FLAG)},
+					},
+					Rows: returnRows[shard],
+				}})
+			}
+		})
 
 	results := make(chan *sqltypes.Result, 10)
 	session := &vtgatepb.Session{
@@ -723,7 +716,7 @@ func TestStreamLimitOffset(t *testing.T) {
 		context.Background(),
 		nil,
 		"TestStreamLimitOffset",
-		NewSafeSession(session),
+		econtext.NewSafeSession(session),
 		"select id, textcol from user order by id limit 2 offset 2",
 		nil,
 		func(qr *sqltypes.Result) error {
@@ -759,12 +752,11 @@ func TestStreamLimitOffset(t *testing.T) {
 }
 
 func TestSelectLastInsertId(t *testing.T) {
-	executor, _, _, _, ctx := createExecutorEnv(t)
+	executor, _, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 	session := &vtgatepb.Session{
 		TargetString: "@primary",
 		LastInsertId: 52,
 	}
-	executor.normalize = true
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
 
@@ -783,7 +775,7 @@ func TestSelectLastInsertId(t *testing.T) {
 }
 
 func TestSelectSystemVariables(t *testing.T) {
-	executor, _, _, _, ctx := createExecutorEnv(t)
+	executor, _, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 
 	session := &vtgatepb.Session{
 		TargetString: "@primary",
@@ -793,7 +785,6 @@ func TestSelectSystemVariables(t *testing.T) {
 			SessionTrackGtids:     true,
 		},
 	}
-	executor.normalize = true
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
 
@@ -843,8 +834,7 @@ func TestSelectSystemVariables(t *testing.T) {
 }
 
 func TestSelectInitializedVitessAwareVariable(t *testing.T) {
-	executor, _, _, _, ctx := createExecutorEnv(t)
-	executor.normalize = true
+	executor, _, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
 
@@ -875,8 +865,7 @@ func TestSelectInitializedVitessAwareVariable(t *testing.T) {
 }
 
 func TestSelectUserDefinedVariable(t *testing.T) {
-	executor, _, _, _, ctx := createExecutorEnv(t)
-	executor.normalize = true
+	executor, _, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
 
@@ -911,8 +900,7 @@ func TestSelectUserDefinedVariable(t *testing.T) {
 }
 
 func TestFoundRows(t *testing.T) {
-	executor, _, _, _, ctx := createExecutorEnv(t)
-	executor.normalize = true
+	executor, _, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
 
@@ -938,8 +926,7 @@ func TestFoundRows(t *testing.T) {
 }
 
 func TestRowCount(t *testing.T) {
-	executor, _, _, _, ctx := createExecutorEnv(t)
-	executor.normalize = true
+	executor, _, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
 
@@ -971,8 +958,7 @@ func testRowCount(t *testing.T, ctx context.Context, executor *Executor, session
 }
 
 func TestSelectLastInsertIdInUnion(t *testing.T) {
-	executor, sbc1, _, _, ctx := createExecutorEnv(t)
-	executor.normalize = true
+	executor, sbc1, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 
 	session := &vtgatepb.Session{
 		TargetString: "@primary",
@@ -1005,8 +991,7 @@ func TestSelectLastInsertIdInUnion(t *testing.T) {
 }
 
 func TestSelectLastInsertIdInWhere(t *testing.T) {
-	executor, _, _, lookup, ctx := createExecutorEnv(t)
-	executor.normalize = true
+	executor, _, _, lookup, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
 
@@ -1025,8 +1010,7 @@ func TestSelectLastInsertIdInWhere(t *testing.T) {
 }
 
 func TestLastInsertIDInVirtualTable(t *testing.T) {
-	executor, sbc1, _, _, ctx := createExecutorEnv(t)
-	executor.normalize = true
+	executor, sbc1, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 	result1 := []*sqltypes.Result{{
 		Fields: []*querypb.Field{
 			{Name: "id", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
@@ -1053,8 +1037,7 @@ func TestLastInsertIDInVirtualTable(t *testing.T) {
 }
 
 func TestLastInsertIDInSubQueryExpression(t *testing.T) {
-	executor, sbc1, sbc2, _, ctx := createExecutorEnv(t)
-	executor.normalize = true
+	executor, sbc1, sbc2, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 	session := &vtgatepb.Session{
 		TargetString: "@primary",
 		LastInsertId: 12345,
@@ -1077,13 +1060,12 @@ func TestLastInsertIDInSubQueryExpression(t *testing.T) {
 }
 
 func TestSelectDatabase(t *testing.T) {
-	executor, _, _, _, _ := createExecutorEnv(t)
-	executor.normalize = true
+	executor, _, _, _, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 	sql := "select database()"
 	newSession := &vtgatepb.Session{
 		TargetString: "@primary",
 	}
-	session := NewSafeSession(newSession)
+	session := econtext.NewSafeSession(newSession)
 	session.TargetString = "TestExecutor@primary"
 	result, err := executor.Execute(
 		context.Background(),
@@ -1283,7 +1265,6 @@ func TestSelectEqual(t *testing.T) {
 
 func TestSelectINFromOR(t *testing.T) {
 	executor, sbc1, _, _, ctx := createExecutorEnv(t)
-	executor.pv = querypb.ExecuteOptions_Gen4
 
 	session := &vtgatepb.Session{
 		TargetString: "@primary",
@@ -1338,8 +1319,7 @@ func TestSelectComments(t *testing.T) {
 }
 
 func TestSelectNormalize(t *testing.T) {
-	executor, sbc1, sbc2, _, ctx := createExecutorEnv(t)
-	executor.normalize = true
+	executor, sbc1, sbc2, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 
 	session := &vtgatepb.Session{
 		TargetString: "@primary",
@@ -1648,7 +1628,7 @@ func TestSelectListArg(t *testing.T) {
 func createExecutor(ctx context.Context, serv *sandboxTopo, cell string, resolver *Resolver) *Executor {
 	queryLogger := streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize)
 	plans := DefaultPlanCache()
-	ex := NewExecutor(ctx, vtenv.NewTestEnv(), serv, cell, resolver, false, false, testBufferSize, plans, nil, false, querypb.ExecuteOptions_Gen4, 0)
+	ex := NewExecutor(ctx, vtenv.NewTestEnv(), serv, cell, resolver, createExecutorConfig(), false, plans, nil, querypb.ExecuteOptions_Gen4, NewDynamicViperConfig())
 	ex.SetQueryLogger(queryLogger)
 	return ex
 }
@@ -2951,7 +2931,7 @@ func TestSubQueryAndQueryWithLimit(t *testing.T) {
 	sbc1.SetResults(result1)
 	sbc2.SetResults(result2)
 
-	exec(executor, NewSafeSession(&vtgatepb.Session{
+	exec(executor, econtext.NewSafeSession(&vtgatepb.Session{
 		TargetString: "@primary",
 	}), "select id1, id2 from t1 where id1 >= ( select id1 from t1 order by id1 asc limit 1) limit 100")
 	require.Equal(t, 2, len(sbc1.Queries))
@@ -3000,7 +2980,7 @@ func TestSelectUsingMultiEqualOnLookupColumn(t *testing.T) {
 		}},
 	}})
 
-	result, err := exec(executor, NewSafeSession(&vtgatepb.Session{
+	result, err := exec(executor, econtext.NewSafeSession(&vtgatepb.Session{
 		TargetString: KsTestSharded,
 	}), "select nv_lu_col, other from t2_lookup WHERE (nv_lu_col = 1 AND other = 'bar') OR (nv_lu_col = 2 AND other = 'baz') OR (nv_lu_col = 3 AND other = 'qux') OR (nv_lu_col = 4 AND other = 'brz') OR (nv_lu_col = 5 AND other = 'brz')")
 
@@ -3127,8 +3107,7 @@ func TestSelectBindvarswithPrepare(t *testing.T) {
 }
 
 func TestSelectDatabasePrepare(t *testing.T) {
-	executor, _, _, _, ctx := createExecutorEnv(t)
-	executor.normalize = true
+	executor, _, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
 
@@ -3141,8 +3120,7 @@ func TestSelectDatabasePrepare(t *testing.T) {
 }
 
 func TestSelectWithUnionAll(t *testing.T) {
-	executor, sbc1, sbc2, _, ctx := createExecutorEnv(t)
-	executor.normalize = true
+	executor, sbc1, sbc2, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 	sql := "select id from user where id in (1, 2, 3) union all select id from user where id in (1, 2, 3)"
 	bv, _ := sqltypes.BuildBindVariable([]int64{1, 2, 3})
 	bv1, _ := sqltypes.BuildBindVariable([]int64{1, 2})
@@ -3197,7 +3175,7 @@ func TestSelectWithUnionAll(t *testing.T) {
 
 func TestSelectLock(t *testing.T) {
 	executor, sbc1, _, _, _ := createExecutorEnv(t)
-	session := NewSafeSession(nil)
+	session := econtext.NewSafeSession(nil)
 	session.Session.InTransaction = true
 	session.ShardSessions = []*vtgatepb.Session_ShardSession{{
 		Target: &querypb.Target{
@@ -3265,7 +3243,7 @@ func TestLockReserve(t *testing.T) {
 		"select release_lock('lock name') from dual",
 	}
 
-	session := NewAutocommitSession(&vtgatepb.Session{})
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{})
 
 	for _, sql := range tcases {
 		t.Run(sql, func(t *testing.T) {
@@ -3283,7 +3261,7 @@ func TestLockReserve(t *testing.T) {
 
 func TestSelectFromInformationSchema(t *testing.T) {
 	executor, sbc1, _, _, _ := createExecutorEnv(t)
-	session := NewSafeSession(nil)
+	session := econtext.NewSafeSession(nil)
 
 	// check failure when trying to query two keyspaces
 	_, err := exec(executor, session, "SELECT B.TABLE_NAME FROM INFORMATION_SCHEMA.TABLES AS A, INFORMATION_SCHEMA.COLUMNS AS B WHERE A.TABLE_SCHEMA = 'TestExecutor' AND A.TABLE_SCHEMA = 'TestXBadSharding'")
@@ -3304,6 +3282,49 @@ func TestSelectFromInformationSchema(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []string{"select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = :__vtschemaname /* VARCHAR */"},
 		sbc1.StringQueries())
+}
+
+func TestStreamOrderByWithMultipleResults(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
+	// Special setup: Don't use createExecutorEnv.
+	cell := "aa"
+	hc := discovery.NewFakeHealthCheck(nil)
+	u := createSandbox(KsTestUnsharded)
+	s := createSandbox(KsTestSharded)
+	s.VSchema = executorVSchema
+	u.VSchema = unshardedVSchema
+	serv := newSandboxForCells(ctx, []string{cell})
+	resolver := newTestResolver(ctx, hc, serv, cell)
+	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
+	count := 1
+	for _, shard := range shards {
+		sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_PRIMARY, true, 1, nil)
+		sbc.SetResults([]*sqltypes.Result{
+			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col|weight_string(id)", "int32|int32|varchar"), fmt.Sprintf("%d|%d|NULL", count, count)),
+			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col|weight_string(id)", "int32|int32|varchar"), fmt.Sprintf("%d|%d|NULL", count+10, count)),
+		})
+		count++
+	}
+	queryLogger := streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize)
+	plans := DefaultPlanCache()
+	executor := NewExecutor(ctx, vtenv.NewTestEnv(), serv, cell, resolver, createExecutorConfigWithNormalizer(), false, plans, nil, querypb.ExecuteOptions_Gen4, NewDynamicViperConfig())
+	executor.SetQueryLogger(queryLogger)
+	defer executor.Close()
+	// some sleep for all goroutines to start
+	time.Sleep(100 * time.Millisecond)
+	before := runtime.NumGoroutine()
+
+	query := "select id, col from user order by id"
+	gotResult, err := executorStream(ctx, executor, query)
+	require.NoError(t, err)
+
+	wantResult := sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col", "int32|int32"),
+		"1|1", "2|2", "3|3", "4|4", "5|5", "6|6", "7|7", "8|8", "11|1", "12|2", "13|3", "14|4", "15|5", "16|6", "17|7", "18|8")
+	assert.Equal(t, fmt.Sprintf("%v", wantResult.Rows), fmt.Sprintf("%v", gotResult.Rows))
+	// some sleep to close all goroutines.
+	time.Sleep(100 * time.Millisecond)
+	assert.GreaterOrEqual(t, before, runtime.NumGoroutine(), "left open goroutines lingering")
 }
 
 func TestStreamOrderByLimitWithMultipleResults(t *testing.T) {
@@ -3330,7 +3351,7 @@ func TestStreamOrderByLimitWithMultipleResults(t *testing.T) {
 	}
 	queryLogger := streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize)
 	plans := DefaultPlanCache()
-	executor := NewExecutor(ctx, vtenv.NewTestEnv(), serv, cell, resolver, true, false, testBufferSize, plans, nil, false, querypb.ExecuteOptions_Gen4, 0)
+	executor := NewExecutor(ctx, vtenv.NewTestEnv(), serv, cell, resolver, createExecutorConfigWithNormalizer(), false, plans, nil, querypb.ExecuteOptions_Gen4, NewDynamicViperConfig())
 	executor.SetQueryLogger(queryLogger)
 	defer executor.Close()
 	// some sleep for all goroutines to start
@@ -3381,7 +3402,7 @@ func TestSelectScatterFails(t *testing.T) {
 
 	executor := createExecutor(ctx, serv, cell, resolver)
 	defer executor.Close()
-	executor.allowScatter = false
+	executor.config.AllowScatter = false
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
 
@@ -3408,10 +3429,9 @@ func TestSelectScatterFails(t *testing.T) {
 }
 
 func TestGen4SelectStraightJoin(t *testing.T) {
-	executor, sbc1, _, _, _ := createExecutorEnv(t)
-	executor.normalize = true
-	executor.pv = querypb.ExecuteOptions_Gen4
-	session := NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
+	executor, sbc1, _, _, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
 	query := "select u.id from user u straight_join user2 u2 on u.id = u2.id"
 	_, err := executor.Execute(context.Background(), nil,
 		"TestGen4SelectStraightJoin",
@@ -3430,11 +3450,9 @@ func TestGen4SelectStraightJoin(t *testing.T) {
 }
 
 func TestGen4MultiColumnVindexEqual(t *testing.T) {
-	executor, sbc1, sbc2, _, _ := createExecutorEnv(t)
-	executor.normalize = true
-	executor.pv = querypb.ExecuteOptions_Gen4
+	executor, sbc1, sbc2, _, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 
-	session := NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
 	query := "select * from user_region where cola = 1 and colb = 2"
 	_, err := executor.Execute(context.Background(), nil, "TestGen4MultiColumnVindex", session, query, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
@@ -3469,11 +3487,9 @@ func TestGen4MultiColumnVindexEqual(t *testing.T) {
 }
 
 func TestGen4MultiColumnVindexIn(t *testing.T) {
-	executor, sbc1, sbc2, _, _ := createExecutorEnv(t)
-	executor.normalize = true
-	executor.pv = querypb.ExecuteOptions_Gen4
+	executor, sbc1, sbc2, _, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 
-	session := NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
 	query := "select * from user_region where cola IN (1,17984) and colb IN (2,3,4)"
 	_, err := executor.Execute(context.Background(), nil, "TestGen4MultiColumnVindex", session, query, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
@@ -3508,11 +3524,9 @@ func TestGen4MultiColumnVindexIn(t *testing.T) {
 }
 
 func TestGen4MultiColMixedColComparision(t *testing.T) {
-	executor, sbc1, sbc2, _, _ := createExecutorEnv(t)
-	executor.normalize = true
-	executor.pv = querypb.ExecuteOptions_Gen4
+	executor, sbc1, sbc2, _, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 
-	session := NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
 	query := "select * from user_region where colb = 2 and cola IN (1,17984)"
 	_, err := executor.Execute(context.Background(), nil, "TestGen4MultiColMixedColComparision", session, query, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
@@ -3545,11 +3559,9 @@ func TestGen4MultiColMixedColComparision(t *testing.T) {
 }
 
 func TestGen4MultiColBestVindexSel(t *testing.T) {
-	executor, sbc1, sbc2, _, _ := createExecutorEnv(t)
-	executor.normalize = true
-	executor.pv = querypb.ExecuteOptions_Gen4
+	executor, sbc1, sbc2, _, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 
-	session := NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
 	query := "select * from user_region where colb = 2 and cola IN (1,17984) and cola = 1"
 	_, err := executor.Execute(context.Background(), nil, "TestGen4MultiColBestVindexSel", session, query, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
@@ -3591,11 +3603,9 @@ func TestGen4MultiColBestVindexSel(t *testing.T) {
 }
 
 func TestGen4MultiColMultiEqual(t *testing.T) {
-	executor, sbc1, sbc2, _, _ := createExecutorEnv(t)
-	executor.normalize = true
-	executor.pv = querypb.ExecuteOptions_Gen4
+	executor, sbc1, sbc2, _, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 
-	session := NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
 	query := "select * from user_region where (cola,colb) in ((17984,2),(17984,3))"
 	_, err := executor.Execute(context.Background(), nil, "TestGen4MultiColMultiEqual", session, query, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
@@ -3615,7 +3625,6 @@ func TestGen4MultiColMultiEqual(t *testing.T) {
 
 func TestGen4SelectUnqualifiedReferenceTable(t *testing.T) {
 	executor, sbc1, sbc2, sbclookup, ctx := createExecutorEnv(t)
-	executor.pv = querypb.ExecuteOptions_Gen4
 
 	query := "select * from zip_detail"
 	session := &vtgatepb.Session{
@@ -3636,7 +3645,6 @@ func TestGen4SelectUnqualifiedReferenceTable(t *testing.T) {
 
 func TestGen4SelectQualifiedReferenceTable(t *testing.T) {
 	executor, sbc1, sbc2, sbclookup, ctx := createExecutorEnv(t)
-	executor.pv = querypb.ExecuteOptions_Gen4
 
 	query := fmt.Sprintf("select * from %s.zip_detail", KsTestSharded)
 	session := &vtgatepb.Session{
@@ -3657,7 +3665,6 @@ func TestGen4SelectQualifiedReferenceTable(t *testing.T) {
 
 func TestGen4JoinUnqualifiedReferenceTable(t *testing.T) {
 	executor, sbc1, sbc2, sbclookup, ctx := createExecutorEnv(t)
-	executor.pv = querypb.ExecuteOptions_Gen4
 
 	query := "select * from user join zip_detail on user.zip_detail_id = zip_detail.id"
 	session := &vtgatepb.Session{
@@ -3694,7 +3701,6 @@ func TestGen4JoinUnqualifiedReferenceTable(t *testing.T) {
 
 func TestGen4CrossShardJoinQualifiedReferenceTable(t *testing.T) {
 	executor, sbc1, sbc2, sbclookup, ctx := createExecutorEnv(t)
-	executor.pv = querypb.ExecuteOptions_Gen4
 
 	query := "select user.id from user join TestUnsharded.zip_detail on user.zip_detail_id = TestUnsharded.zip_detail.id"
 	session := &vtgatepb.Session{
@@ -3751,7 +3757,6 @@ func TestRegionRange(t *testing.T) {
 	}
 	executor := createExecutor(ctx, serv, cell, resolver)
 	defer executor.Close()
-	executor.pv = querypb.ExecuteOptions_Gen4
 
 	tcases := []struct {
 		regionID          int
@@ -3769,7 +3774,7 @@ func TestRegionRange(t *testing.T) {
 	for _, tcase := range tcases {
 		t.Run(strconv.Itoa(tcase.regionID), func(t *testing.T) {
 			sql := fmt.Sprintf("select * from user_region where cola = %d", tcase.regionID)
-			_, err := executor.Execute(context.Background(), nil, "TestRegionRange", NewAutocommitSession(&vtgatepb.Session{}), sql, nil)
+			_, err := executor.Execute(context.Background(), nil, "TestRegionRange", econtext.NewAutocommitSession(&vtgatepb.Session{}), sql, nil)
 			require.NoError(t, err)
 			count := 0
 			for _, sbc := range conns {
@@ -3801,7 +3806,6 @@ func TestMultiCol(t *testing.T) {
 	}
 	executor := createExecutor(ctx, serv, cell, resolver)
 	defer executor.Close()
-	executor.pv = querypb.ExecuteOptions_Gen4
 
 	tcases := []struct {
 		cola, colb, colc int
@@ -3817,7 +3821,7 @@ func TestMultiCol(t *testing.T) {
 		shards: []string{"20a0-"},
 	}}
 
-	session := NewAutocommitSession(&vtgatepb.Session{})
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{})
 
 	for _, tcase := range tcases {
 		t.Run(fmt.Sprintf("%d_%d_%d", tcase.cola, tcase.colb, tcase.colc), func(t *testing.T) {
@@ -3882,7 +3886,6 @@ func TestMultiColPartial(t *testing.T) {
 	}
 	executor := createExecutor(ctx, serv, cell, resolver)
 	defer executor.Close()
-	executor.pv = querypb.ExecuteOptions_Gen4
 
 	tcases := []struct {
 		where  string
@@ -3907,7 +3910,7 @@ func TestMultiColPartial(t *testing.T) {
 		shards: []string{"20a0c0-"},
 	}}
 
-	session := NewAutocommitSession(&vtgatepb.Session{})
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{})
 
 	for _, tcase := range tcases {
 		t.Run(tcase.where, func(t *testing.T) {
@@ -3946,7 +3949,6 @@ func TestSelectAggregationNoData(t *testing.T) {
 	}
 	executor := createExecutor(ctx, serv, cell, resolver)
 	defer executor.Close()
-	executor.pv = querypb.ExecuteOptions_Gen4
 
 	tcases := []struct {
 		sql         string
@@ -4038,7 +4040,6 @@ func TestSelectAggregationData(t *testing.T) {
 	}
 	executor := createExecutor(ctx, serv, cell, resolver)
 	defer executor.Close()
-	executor.pv = querypb.ExecuteOptions_Gen4
 
 	tcases := []struct {
 		sql         string
@@ -4196,8 +4197,7 @@ func TestSelectAggregationRandom(t *testing.T) {
 
 	executor := createExecutor(ctx, serv, cell, resolver)
 	defer executor.Close()
-	executor.pv = querypb.ExecuteOptions_Gen4
-	session := NewAutocommitSession(&vtgatepb.Session{})
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{})
 
 	rs, err := executor.Execute(context.Background(), nil, "TestSelectCFC", session, "select /*vt+ PLANNER=gen4 */ A.a, A.b, (A.a / A.b) as c from (select sum(a) as a, sum(b) as b from user) A", nil)
 	require.NoError(t, err)
@@ -4205,9 +4205,8 @@ func TestSelectAggregationRandom(t *testing.T) {
 }
 
 func TestSelectDateTypes(t *testing.T) {
-	executor, _, _, _, _ := createExecutorEnv(t)
-	executor.normalize = true
-	session := NewAutocommitSession(&vtgatepb.Session{})
+	executor, _, _, _, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{})
 
 	qr, err := executor.Execute(context.Background(), nil, "TestSelectDateTypes", session, "select '2020-01-01' + interval month(date_sub(FROM_UNIXTIME(1234), interval 1 month))-1 month", nil)
 	require.NoError(t, err)
@@ -4216,9 +4215,8 @@ func TestSelectDateTypes(t *testing.T) {
 }
 
 func TestSelectHexAndBit(t *testing.T) {
-	executor, _, _, _, _ := createExecutorEnv(t)
-	executor.normalize = true
-	session := NewAutocommitSession(&vtgatepb.Session{})
+	executor, _, _, _, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{})
 
 	qr, err := executor.Execute(context.Background(), nil, "TestSelectHexAndBit", session, "select 0b1001, b'1001', 0x9, x'09'", nil)
 	require.NoError(t, err)
@@ -4232,9 +4230,8 @@ func TestSelectHexAndBit(t *testing.T) {
 // TestSelectCFC tests validates that cfc vindex plan gets cached and same plan is getting reused.
 // This also validates that cache_size is able to calculate the cfc vindex plan size.
 func TestSelectCFC(t *testing.T) {
-	executor, _, _, _, _ := createExecutorEnv(t)
-	executor.normalize = true
-	session := NewAutocommitSession(&vtgatepb.Session{})
+	executor, _, _, _, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{})
 
 	_, err := executor.Execute(context.Background(), nil, "TestSelectCFC", session, "select /*vt+ PLANNER=gen4 */ c2 from tbl_cfc where c1 like 'A%'", nil)
 	require.NoError(t, err)
@@ -4257,13 +4254,12 @@ func TestSelectCFC(t *testing.T) {
 }
 
 func TestSelectView(t *testing.T) {
-	executor, sbc, _, _, _ := createExecutorEnv(t)
+	executor, sbc, _, _, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 	// add the view to local vschema
 	err := executor.vschema.AddView(KsTestSharded, "user_details_view", "select user.id, user_extra.col from user join user_extra on user.id = user_extra.user_id", executor.vm.parser)
 	require.NoError(t, err)
 
-	executor.normalize = true
-	session := NewAutocommitSession(&vtgatepb.Session{})
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{})
 
 	_, err = executor.Execute(context.Background(), nil, "TestSelectView", session, "select * from user_details_view", nil)
 	require.NoError(t, err)
@@ -4303,8 +4299,8 @@ func TestWarmingReads(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
 	executor, primary, replica := createExecutorEnvWithPrimaryReplicaConn(t, ctx, 100)
 
-	executor.normalize = true
-	session := NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded})
+	executor.config.Normalize = true
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded})
 	// Since queries on the replica will run in a separate go-routine, we need synchronization for the Queries field in the sandboxconn.
 	replica.RequireQueriesLocking()
 
@@ -4368,6 +4364,7 @@ func TestWarmingReads(t *testing.T) {
 
 // waitUntilQueryCount waits until the number of queries run on the tablet reach the specified count.
 func waitUntilQueryCount(t *testing.T, tab *sandboxconn.SandboxConn, count int) {
+	t.Helper()
 	timeout := time.After(1 * time.Second)
 	for {
 		select {
@@ -4426,9 +4423,8 @@ func TestStreamJoinQuery(t *testing.T) {
 // It also tests that setting a global variable does not affect the session variable and vice versa.
 // Also, test what happens on running select @@global and select @@session for a system variable.
 func TestSysVarGlobalAndSession(t *testing.T) {
-	executor, sbc1, _, _, _ := createExecutorEnv(t)
-	executor.normalize = true
-	session := NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, SystemVariables: map[string]string{}})
+	executor, sbc1, _, _, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, SystemVariables: map[string]string{}})
 
 	sbc1.SetResults([]*sqltypes.Result{
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("innodb_lock_wait_timeout", "uint64"), "20"),

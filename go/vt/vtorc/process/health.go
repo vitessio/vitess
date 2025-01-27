@@ -35,12 +35,17 @@ var ThisNodeHealth = &NodeHealth{}
 
 // writeHealthToDatabase writes to the database and returns if it was successful.
 func writeHealthToDatabase() bool {
-	_, err := db.ExecVTOrc("delete from node_health")
+	_, err := db.ExecVTOrc("DELETE FROM node_health")
 	if err != nil {
 		log.Error(err)
 		return false
 	}
-	sqlResult, err := db.ExecVTOrc(`insert into node_health (last_seen_active) values (datetime('now'))`)
+	sqlResult, err := db.ExecVTOrc(`INSERT
+		INTO node_health (
+			last_seen_active
+		) VALUES (
+			DATETIME('now')
+		)`)
 	if err != nil {
 		log.Error(err)
 		return false
@@ -57,7 +62,7 @@ func writeHealthToDatabase() bool {
 func HealthTest() (health *NodeHealth, discoveredOnce bool) {
 	ThisNodeHealth.LastReported = time.Now()
 	discoveredOnce = FirstDiscoveryCycleComplete.Load()
-	ThisNodeHealth.Healthy = writeHealthToDatabase()
+	ThisNodeHealth.Healthy = discoveredOnce && writeHealthToDatabase()
 
 	return ThisNodeHealth, discoveredOnce
 }

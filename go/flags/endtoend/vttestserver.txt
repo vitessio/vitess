@@ -96,7 +96,7 @@ Flags:
       --mysql-shell-speedup-restore                                      speed up restore by disabling redo logging and double write buffer during the restore process
       --mysql_bind_host string                                           which host to bind vtgate mysql listener to (default "localhost")
       --mysql_only                                                       If this flag is set only mysql is initialized. The rest of the vitess components are not started. Also, the output specifies the mysql unix socket instead of the vtgate port.
-      --mysql_server_version string                                      MySQL server version to advertise. (default "8.0.30-Vitess")
+      --mysql_server_version string                                      MySQL server version to advertise. (default "8.0.40-Vitess")
       --mysqlctl_mycnf_template string                                   template file to use for generating the my.cnf file during server init
       --mysqlctl_socket string                                           socket file to use for remote mysqlctl actions (empty for local actions)
       --no_scatter                                                       when set to true, the planner will fail instead of producing a plan that includes scatter queries

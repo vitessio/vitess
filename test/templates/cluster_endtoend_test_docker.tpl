@@ -6,7 +6,7 @@ permissions: read-all
 jobs:
   build:
     name: Run endtoend tests on {{.Name}}
-    runs-on: {{if .Cores16}}gh-hosted-runners-16cores-1{{else}}ubuntu-latest{{end}}
+    runs-on: {{if .Cores16}}gh-hosted-runners-16cores-1-24.04{{else}}ubuntu-24.04{{end}}
 
     steps:
     - name: Skip CI
@@ -28,7 +28,9 @@ jobs:
 
     - name: Check out code
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
-      uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      with:
+        persist-credentials: 'false'
 
     - name: Check for changes in relevant files
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
@@ -38,6 +40,7 @@ jobs:
         token: ''
         filters: |
           end_to_end:
+            - 'test/config.json'
             - 'go/**/*.go'
             - 'go/vt/sidecardb/**/*.sql'
             - 'go/test/endtoend/onlineddl/vrepl_suite/**'

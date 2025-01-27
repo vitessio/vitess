@@ -426,7 +426,7 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
   }
 
   /**
-   * This function was ported from mysql-connector-java ParseInfo object and greatly simplified to
+   * This function was ported from mysql-connector-j ParseInfo object and greatly simplified to
    * just the parts for counting parameters
    */
   private int calculateParameterCount() throws SQLException {
