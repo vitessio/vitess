@@ -86,6 +86,7 @@ type vstreamer struct {
 	stopPos        string
 	lastCommitted  int64
 	sequenceNumber int64
+	eventGTID      replication.GTID
 
 	phase   string
 	vse     *Engine
@@ -434,6 +435,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 	if ev.IsFormatDescription() {
 		var err error
 		vs.format, err = ev.Format()
+		vs.eventGTID = nil
 		if err != nil {
 			return nil, fmt.Errorf("can't parse FORMAT_DESCRIPTION_EVENT: %v, event data: %#v", err, ev)
 		}
@@ -460,10 +462,13 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 
 	var vevents []*binlogdatapb.VEvent
 	switch {
+	case ev.IsRotate(), ev.IsStop():
+		vs.eventGTID = nil
 	case ev.IsPreviousGTIDs():
 		vevents = append(vevents, &binlogdatapb.VEvent{
 			Type: binlogdatapb.VEventType_PREVIOUS_GTIDS,
 		})
+		vs.eventGTID = nil
 	case ev.IsGTID():
 		gtid, hasBegin, lastCommitted, sequenceNumber, err := ev.GTID(vs.format)
 		if err != nil {
@@ -479,6 +484,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 		vs.pos = replication.AppendGTID(vs.pos, gtid)
 		vs.lastCommitted = lastCommitted
 		vs.sequenceNumber = sequenceNumber
+		vs.eventGTID = gtid
 	case ev.IsXID():
 		vevents = append(vevents, &binlogdatapb.VEvent{
 			Type: binlogdatapb.VEventType_GTID,
@@ -720,6 +726,9 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 		vevent.CurrentTime = time.Now().UnixNano()
 		vevent.SequenceNumber = vs.sequenceNumber
 		vevent.LastCommitted = vs.lastCommitted
+		if vs.eventGTID != nil {
+			vevent.EventGtid = vs.eventGTID.String()
+		}
 	}
 	return vevents, nil
 }
