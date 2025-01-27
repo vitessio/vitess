@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import React from 'react';
+import React, { useMemo } from 'react';
 import { orderBy } from 'lodash-es';
 
 import { vtadmin as pb } from '../../proto/vtadmin';
@@ -69,24 +69,21 @@ export const VExplain = () => {
 
     const onSubmit: React.FormEventHandler<HTMLFormElement> = (e) => {
         e.preventDefault();
-        let alertMessage = '';
-        if (keyspaceName === '' || keyspaceName === null) {
-            alertMessage += 'Please choose keyspace.\n\n';
-        }
-        if (sql === '' || sql === null) {
-            alertMessage += 'Please enter SQL statement.\n\n';
-        }
-        if (vexplainOption === '' || vexplainOption === null) {
-            alertMessage += 'Please choose vexplain option.\n\n';
-        }
-        if (alertMessage.trim() !== '') {
-            alert(alertMessage);
-            return;
-        }
-
         refetch();
     };
+
     const VEXPLAIN_OPTIONS = ['ALL', 'PLAN', 'QUERIES', 'TRACE', 'KEYS'];
+
+    const isReadyForSubmit = useMemo(() => {
+        return (
+            typeof keyspaceName !== 'undefined' &&
+            keyspaceName !== null &&
+            keyspaceName !== '' &&
+            typeof sql !== 'undefined' &&
+            sql !== null &&
+            sql !== ''
+        );
+    }, [keyspaceName, sql]);
 
     return (
         <div>
@@ -129,7 +126,7 @@ export const VExplain = () => {
                                 selectedItem={vexplainOption || null}
                             />
                             <div className={style.buttons}>
-                                <button className="btn align-bottom" type="submit">
+                                <button className="btn align-bottom" disabled={!isReadyForSubmit} type="submit">
                                     Run VExplain {vexplainOption}
                                 </button>
                             </div>
