@@ -23,6 +23,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/tableacl/acl"
@@ -77,16 +78,14 @@ func TestInitWithValidConfig(t *testing.T) {
 func TestInitWithEmptyConfig(t *testing.T) {
 	tacl := tableACL{factory: &simpleacl.Factory{}}
 	f, err := os.CreateTemp("", "tableacl")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+
 	defer os.Remove(f.Name())
-	if err := f.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if err := tacl.init(f.Name(), func() {}); err == nil {
-		t.Fatal("tableACL config file is empty")
-	}
+	err = f.Close()
+	require.NoError(t, err)
+
+	err = tacl.init(f.Name(), func() {})
+	require.Error(t, err)
 }
 
 func TestInitFromProto(t *testing.T) {
