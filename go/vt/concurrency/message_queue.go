@@ -50,6 +50,13 @@ func (mq *MessageQueue[T]) Send(value T) {
 	mq.cond.Signal() // Notify a waiting receiver.
 }
 
+// Length returns the length.
+func (mq *MessageQueue[T]) Length() int {
+	mq.mu.Lock()
+	defer mq.mu.Unlock()
+	return len(mq.queue)
+}
+
 // Receive fetches a message of type T from the queue.
 // Blocks if no messages are available or until the queue is closed.
 func (mq *MessageQueue[T]) Receive() (T, bool) {

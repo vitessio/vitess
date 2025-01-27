@@ -31,6 +31,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -1511,6 +1512,70 @@ func TestConcurrentUpdates(t *testing.T) {
 	require.Eventuallyf(t, func() bool {
 		return totalUpdates == totalCount
 	}, 5*time.Second, 100*time.Millisecond, "expected all updates to be processed")
+}
+
+// BenchmarkAccess_FastConsumer benchmarks the access time of the healthcheck for a fast consumer.
+func BenchmarkAccess_FastConsumer(b *testing.B) {
+	ctx := context.Background()
+	// reset error counters
+	hcErrorCounters.ResetAll()
+	ts := memorytopo.NewServer(ctx, "cell")
+	defer ts.Close()
+	hc := createTestHc(ctx, ts)
+	// close healthcheck
+	defer hc.Close()
+
+	for i := 0; i < b.N; i++ {
+		// Subscribe to the healthcheck with a fast consumer.
+		ch := hc.Subscribe()
+		go func() {
+			for range ch {
+			}
+		}()
+
+		for id := 0; id < 1000; id++ {
+			hc.broadcast(&TabletHealth{})
+		}
+		hc.Unsubscribe(ch)
+		waitForEmptyMessageQueue(hc.subscribers[ch])
+	}
+}
+
+// BenchmarkAccess_SlowConsumer benchmarks the access time of the healthcheck for a slow consumer.
+func BenchmarkAccess_SlowConsumer(b *testing.B) {
+	ctx := context.Background()
+	// reset error counters
+	hcErrorCounters.ResetAll()
+	ts := memorytopo.NewServer(ctx, "cell")
+	defer ts.Close()
+	hc := createTestHc(ctx, ts)
+	// close healthcheck
+	defer hc.Close()
+
+	for i := 0; i < b.N; i++ {
+		// Subscribe to the healthcheck with a slow consumer.
+		ch := hc.Subscribe()
+		go func() {
+			for range ch {
+				time.Sleep(100 * time.Second)
+			}
+		}()
+
+		for id := 0; id < 1000; id++ {
+			hc.broadcast(&TabletHealth{})
+		}
+		hc.Unsubscribe(ch)
+		waitForEmptyMessageQueue(hc.subscribers[ch])
+	}
+}
+
+func waitForEmptyMessageQueue(queue *concurrency.MessageQueue[*TabletHealth]) {
+	for {
+		if queue.Length() == 0 {
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
 }
 
 func tabletDialer(ctx context.Context, tablet *topodatapb.Tablet, _ grpcclient.FailFast) (queryservice.QueryService, error) {
