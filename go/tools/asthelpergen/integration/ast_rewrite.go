@@ -1,5 +1,5 @@
 /*
-Copyright 2023 The Vitess Authors.
+Copyright 2025 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -123,7 +123,14 @@ func (a *application) rewriteInterfaceSlice(parent AST, node InterfaceSlice, rep
 			return true
 		}
 	}
+	var path ASTPath
+	if a.collectPaths {
+		path = a.cur.current
+	}
 	for x, el := range node {
+		if a.collectPaths {
+			a.cur.current = AddStepWithSliceIndex(path, InterfaceSliceOffset8, x)
+		}
 		if !a.rewriteAST(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent AST) {
 				parent.(InterfaceSlice)[idx] = newNode.(AST)
@@ -131,6 +138,9 @@ func (a *application) rewriteInterfaceSlice(parent AST, node InterfaceSlice, rep
 		}(x)) {
 			return false
 		}
+	}
+	if a.collectPaths {
+		a.cur.current = path
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -188,7 +198,14 @@ func (a *application) rewriteLeafSlice(parent AST, node LeafSlice, replacer repl
 			return true
 		}
 	}
+	var path ASTPath
+	if a.collectPaths {
+		path = a.cur.current
+	}
 	for x, el := range node {
+		if a.collectPaths {
+			a.cur.current = AddStepWithSliceIndex(path, LeafSliceOffset8, x)
+		}
 		if !a.rewriteRefOfLeaf(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent AST) {
 				parent.(LeafSlice)[idx] = newNode.(*Leaf)
@@ -196,6 +213,9 @@ func (a *application) rewriteLeafSlice(parent AST, node LeafSlice, replacer repl
 		}(x)) {
 			return false
 		}
+	}
+	if a.collectPaths {
+		a.cur.current = path
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -253,15 +273,26 @@ func (a *application) rewriteRefOfRefContainer(parent AST, node *RefContainer, r
 			return true
 		}
 	}
+	var path ASTPath
+	if a.collectPaths {
+		path = a.cur.current
+		a.cur.current = AddStep(path, RefOfRefContainerASTType)
+	}
 	if !a.rewriteAST(node, node.ASTType, func(newNode, parent AST) {
 		parent.(*RefContainer).ASTType = newNode.(AST)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current = AddStep(path, RefOfRefContainerASTImplementationType)
+	}
 	if !a.rewriteRefOfLeaf(node, node.ASTImplementationType, func(newNode, parent AST) {
 		parent.(*RefContainer).ASTImplementationType = newNode.(*Leaf)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current = path
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -290,7 +321,14 @@ func (a *application) rewriteRefOfRefSliceContainer(parent AST, node *RefSliceCo
 			return true
 		}
 	}
+	var path ASTPath
+	if a.collectPaths {
+		path = a.cur.current
+	}
 	for x, el := range node.ASTElements {
+		if a.collectPaths {
+			a.cur.current = AddStepWithSliceIndex(path, RefOfRefSliceContainerASTElements8, x)
+		}
 		if !a.rewriteAST(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent AST) {
 				parent.(*RefSliceContainer).ASTElements[idx] = newNode.(AST)
@@ -300,6 +338,9 @@ func (a *application) rewriteRefOfRefSliceContainer(parent AST, node *RefSliceCo
 		}
 	}
 	for x, el := range node.ASTImplementationElements {
+		if a.collectPaths {
+			a.cur.current = AddStepWithSliceIndex(path, RefOfRefSliceContainerASTImplementationElements8, x)
+		}
 		if !a.rewriteRefOfLeaf(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent AST) {
 				parent.(*RefSliceContainer).ASTImplementationElements[idx] = newNode.(*Leaf)
@@ -307,6 +348,9 @@ func (a *application) rewriteRefOfRefSliceContainer(parent AST, node *RefSliceCo
 		}(x)) {
 			return false
 		}
+	}
+	if a.collectPaths {
+		a.cur.current = path
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -335,10 +379,18 @@ func (a *application) rewriteRefOfSubImpl(parent AST, node *SubImpl, replacer re
 			return true
 		}
 	}
+	var path ASTPath
+	if a.collectPaths {
+		path = a.cur.current
+		a.cur.current = AddStep(path, RefOfSubImplinner)
+	}
 	if !a.rewriteSubIface(node, node.inner, func(newNode, parent AST) {
 		parent.(*SubImpl).inner = newNode.(SubIface)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current = path
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -364,15 +416,26 @@ func (a *application) rewriteValueContainer(parent AST, node ValueContainer, rep
 			return true
 		}
 	}
+	var path ASTPath
+	if a.collectPaths {
+		path = a.cur.current
+		a.cur.current = AddStep(path, ValueContainerASTType)
+	}
 	if !a.rewriteAST(node, node.ASTType, func(newNode, parent AST) {
 		panic("[BUG] tried to replace 'ASTType' on 'ValueContainer'")
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current = AddStep(path, ValueContainerASTImplementationType)
+	}
 	if !a.rewriteRefOfLeaf(node, node.ASTImplementationType, func(newNode, parent AST) {
 		panic("[BUG] tried to replace 'ASTImplementationType' on 'ValueContainer'")
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current = path
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -398,19 +461,30 @@ func (a *application) rewriteValueSliceContainer(parent AST, node ValueSliceCont
 			return true
 		}
 	}
-	for _, el := range node.ASTElements {
+	var path ASTPath
+	if a.collectPaths {
+		path = a.cur.current
+	}
+	for x, el := range node.ASTElements {
+		if a.collectPaths {
+			a.cur.current = AddStepWithSliceIndex(path, ValueSliceContainerASTElements8, x)
+		}
 		if !a.rewriteAST(node, el, func(newNode, parent AST) {
 			panic("[BUG] tried to replace 'ASTElements' on 'ValueSliceContainer'")
 		}) {
 			return false
 		}
 	}
-	for _, el := range node.ASTImplementationElements {
-		if !a.rewriteRefOfLeaf(node, el, func(newNode, parent AST) {
-			panic("[BUG] tried to replace 'ASTImplementationElements' on 'ValueSliceContainer'")
-		}) {
-			return false
-		}
+	if a.collectPaths {
+		a.cur.current = AddStep(path, ValueSliceContainerASTImplementationElements)
+	}
+	if !a.rewriteLeafSlice(node, node.ASTImplementationElements, func(newNode, parent AST) {
+		panic("[BUG] tried to replace 'ASTImplementationElements' on 'ValueSliceContainer'")
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current = path
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -506,15 +580,26 @@ func (a *application) rewriteRefOfValueContainer(parent AST, node *ValueContaine
 			return true
 		}
 	}
+	var path ASTPath
+	if a.collectPaths {
+		path = a.cur.current
+		a.cur.current = AddStep(path, RefOfValueContainerASTType)
+	}
 	if !a.rewriteAST(node, node.ASTType, func(newNode, parent AST) {
 		parent.(*ValueContainer).ASTType = newNode.(AST)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current = AddStep(path, RefOfValueContainerASTImplementationType)
+	}
 	if !a.rewriteRefOfLeaf(node, node.ASTImplementationType, func(newNode, parent AST) {
 		parent.(*ValueContainer).ASTImplementationType = newNode.(*Leaf)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current = path
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -543,7 +628,14 @@ func (a *application) rewriteRefOfValueSliceContainer(parent AST, node *ValueSli
 			return true
 		}
 	}
+	var path ASTPath
+	if a.collectPaths {
+		path = a.cur.current
+	}
 	for x, el := range node.ASTElements {
+		if a.collectPaths {
+			a.cur.current = AddStepWithSliceIndex(path, RefOfValueSliceContainerASTElements8, x)
+		}
 		if !a.rewriteAST(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent AST) {
 				parent.(*ValueSliceContainer).ASTElements[idx] = newNode.(AST)
@@ -552,14 +644,16 @@ func (a *application) rewriteRefOfValueSliceContainer(parent AST, node *ValueSli
 			return false
 		}
 	}
-	for x, el := range node.ASTImplementationElements {
-		if !a.rewriteRefOfLeaf(node, el, func(idx int) replacerFunc {
-			return func(newNode, parent AST) {
-				parent.(*ValueSliceContainer).ASTImplementationElements[idx] = newNode.(*Leaf)
-			}
-		}(x)) {
-			return false
-		}
+	if a.collectPaths {
+		a.cur.current = AddStep(path, RefOfValueSliceContainerASTImplementationElements)
+	}
+	if !a.rewriteLeafSlice(node, node.ASTImplementationElements, func(newNode, parent AST) {
+		parent.(*ValueSliceContainer).ASTImplementationElements = newNode.(LeafSlice)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current = path
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer

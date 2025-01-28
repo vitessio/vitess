@@ -386,7 +386,7 @@ func (a *analyzer) analyze(statement sqlparser.Statement) error {
 }
 
 func (a *analyzer) lateAnalyze(statement sqlparser.SQLNode) error {
-	_ = sqlparser.Rewrite(statement, a.analyzeDown, a.analyzeUp)
+	_ = sqlparser.RewriteWithPath(statement, a.analyzeDown, a.analyzeUp)
 	return a.err
 }
 

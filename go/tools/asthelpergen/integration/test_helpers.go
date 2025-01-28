@@ -17,6 +17,8 @@ limitations under the License.
 package integration
 
 import (
+	"encoding/binary"
+	"fmt"
 	"strings"
 )
 
@@ -49,6 +51,7 @@ type Cursor struct {
 	node     AST
 	// marks that the node has been replaced, and the new node should be visited
 	revisit bool
+	current ASTPath
 }
 
 // Node returns the current Node.
@@ -91,6 +94,22 @@ func Rewrite(node AST, pre, post ApplyFunc) AST {
 	return outer.AST
 }
 
+func RewriteWithPaths(node AST, pre, post ApplyFunc) AST {
+	outer := &struct{ AST }{node}
+
+	a := &application{
+		pre:          pre,
+		post:         post,
+		collectPaths: true,
+	}
+
+	a.rewriteAST(outer, node, func(newNode, parent AST) {
+		outer.AST = newNode
+	})
+
+	return outer.AST
+}
+
 type (
 	cow struct {
 		pre    func(node, parent AST) bool
@@ -105,4 +124,59 @@ type (
 
 func (c *cow) postVisit(a, b AST, d bool) (AST, bool) {
 	return a, d
+}
+
+func (path ASTPath) DebugString() string {
+	var sb strings.Builder
+
+	remaining := []byte(path)
+	stepCount := 0
+
+	for len(remaining) >= 2 {
+		// Read the step code (2 bytes)
+		stepVal := binary.BigEndian.Uint16(remaining[:2])
+		remaining = remaining[2:]
+
+		step := ASTStep(stepVal)
+		stepStr := step.DebugString() // e.g. "CaseExprWhens8" or "CaseExprWhens32"
+
+		// If this isn't the very first step in the path, prepend a separator
+		if stepCount > 0 {
+			sb.WriteString("->")
+		}
+		stepCount++
+
+		// Write the step name
+		sb.WriteString(stepStr)
+
+		// Check suffix to see if we need to read an offset
+		switch {
+		// 1-byte offset if stepStr ends with "8"
+		case strings.HasSuffix(stepStr, "8"):
+			if len(remaining) < 1 {
+				sb.WriteString("(ERR-no-offset-byte)")
+				return sb.String()
+			}
+			offsetByte := remaining[0]
+			remaining = remaining[1:]
+			sb.WriteString(fmt.Sprintf("(%d)", offsetByte))
+
+		// 4-byte offset if stepStr ends with "32"
+		case strings.HasSuffix(stepStr, "32"):
+			if len(remaining) < 4 {
+				sb.WriteString("(ERR-no-offset-uint32)")
+				return sb.String()
+			}
+			offsetVal := binary.BigEndian.Uint32(remaining[:4])
+			remaining = remaining[4:]
+			sb.WriteString(fmt.Sprintf("(%d)", offsetVal))
+		}
+	}
+
+	// If there's leftover data that doesn't fit into 2 (or more) bytes, you could note it:
+	if len(remaining) != 0 {
+		sb.WriteString("->(ERR-unaligned-extra-bytes)")
+	}
+
+	return sb.String()
 }
