@@ -60,7 +60,7 @@ var (
 
 // RegisterFlags registers the flags required by VTOrc
 func RegisterFlags(fs *pflag.FlagSet) {
-	fs.StringSliceVar(&clustersToWatch, "clusters_to_watch", clustersToWatch, "Comma-separated list of keyspaces or keyspace/key-ranges that this instance will monitor and repair. Defaults to all clusters in the topology. Example: \"ks1,ks2/-80\"")
+	fs.StringSliceVar(&clustersToWatch, "clusters_to_watch", clustersToWatch, "Comma-separated list of keyspaces or keyspace/keyranges that this instance will monitor and repair. Defaults to all clusters in the topology. Example: \"ks1,ks2/-80\"")
 	fs.DurationVar(&shutdownWaitTime, "shutdown_wait_time", shutdownWaitTime, "Maximum time to wait for VTOrc to release all the locks that it is holding before shutting down on SIGTERM")
 }
 
@@ -103,8 +103,8 @@ func initializeShardsToWatch() error {
 	return nil
 }
 
-// tabletPartOfWatch checks if the given tablet is part of the watch list.
-func tabletPartOfWatch(tablet *topodatapb.Tablet) bool {
+// shouldWatchTablet checks if the given tablet is part of the watch list.
+func shouldWatchTablet(tablet *topodatapb.Tablet) bool {
 	// If we are watching all keyspaces, then we want to watch this tablet too.
 	if len(shardsToWatch) == 0 {
 		return true
@@ -202,7 +202,7 @@ func refreshTabletsUsing(ctx context.Context, loader func(tabletAlias string), f
 	matchedTablets := make([]*topo.TabletInfo, 0, len(tablets))
 	func() {
 		for _, t := range tablets {
-			if tabletPartOfWatch(t.Tablet) {
+			if shouldWatchTablet(t.Tablet) {
 				matchedTablets = append(matchedTablets, t)
 			}
 		}

@@ -103,7 +103,7 @@ var (
 	}
 )
 
-func TestTabletsPartOfWatch(t *testing.T) {
+func TestShouldWatchTablet(t *testing.T) {
 	oldClustersToWatch := clustersToWatch
 	defer func() {
 		clustersToWatch = oldClustersToWatch
@@ -113,7 +113,7 @@ func TestTabletsPartOfWatch(t *testing.T) {
 	testCases := []struct {
 		in                  []string
 		tablet              *topodatapb.Tablet
-		expectedPartOfWatch bool
+		expectedShouldWatch bool
 	}{
 		{
 			in: []string{},
@@ -121,7 +121,7 @@ func TestTabletsPartOfWatch(t *testing.T) {
 				Keyspace: keyspace,
 				Shard:    shard,
 			},
-			expectedPartOfWatch: true,
+			expectedShouldWatch: true,
 		},
 		{
 			in: []string{keyspace},
@@ -129,7 +129,7 @@ func TestTabletsPartOfWatch(t *testing.T) {
 				Keyspace: keyspace,
 				Shard:    shard,
 			},
-			expectedPartOfWatch: true,
+			expectedShouldWatch: true,
 		},
 		{
 			in: []string{keyspace + "/-"},
@@ -137,7 +137,7 @@ func TestTabletsPartOfWatch(t *testing.T) {
 				Keyspace: keyspace,
 				Shard:    shard,
 			},
-			expectedPartOfWatch: true,
+			expectedShouldWatch: true,
 		},
 		{
 			in: []string{keyspace + "/" + shard},
@@ -145,7 +145,7 @@ func TestTabletsPartOfWatch(t *testing.T) {
 				Keyspace: keyspace,
 				Shard:    shard,
 			},
-			expectedPartOfWatch: true,
+			expectedShouldWatch: true,
 		},
 		{
 			in: []string{"ks/-70", "ks/70-"},
@@ -153,7 +153,7 @@ func TestTabletsPartOfWatch(t *testing.T) {
 				Keyspace: "ks",
 				KeyRange: key.NewKeyRange([]byte{0x50}, []byte{0x70}),
 			},
-			expectedPartOfWatch: true,
+			expectedShouldWatch: true,
 		},
 		{
 			in: []string{"ks/-70", "ks/70-"},
@@ -161,7 +161,7 @@ func TestTabletsPartOfWatch(t *testing.T) {
 				Keyspace: "ks",
 				KeyRange: key.NewKeyRange([]byte{0x40}, []byte{0x50}),
 			},
-			expectedPartOfWatch: true,
+			expectedShouldWatch: true,
 		},
 		{
 			in: []string{"ks/-70", "ks/70-"},
@@ -169,7 +169,7 @@ func TestTabletsPartOfWatch(t *testing.T) {
 				Keyspace: "ks",
 				KeyRange: key.NewKeyRange([]byte{0x70}, []byte{0x90}),
 			},
-			expectedPartOfWatch: true,
+			expectedShouldWatch: true,
 		},
 		{
 			in: []string{"ks/-70", "ks/70-"},
@@ -177,7 +177,7 @@ func TestTabletsPartOfWatch(t *testing.T) {
 				Keyspace: "ks",
 				KeyRange: key.NewKeyRange([]byte{0x60}, []byte{0x90}),
 			},
-			expectedPartOfWatch: false,
+			expectedShouldWatch: false,
 		},
 		{
 			in: []string{"ks/50-70"},
@@ -185,7 +185,7 @@ func TestTabletsPartOfWatch(t *testing.T) {
 				Keyspace: "ks",
 				KeyRange: key.NewKeyRange([]byte{0x50}, []byte{0x70}),
 			},
-			expectedPartOfWatch: true,
+			expectedShouldWatch: true,
 		},
 		{
 			in: []string{"ks2/-70", "ks2/70-", "unknownKs/-", "ks/-80"},
@@ -193,7 +193,7 @@ func TestTabletsPartOfWatch(t *testing.T) {
 				Keyspace: "ks",
 				KeyRange: key.NewKeyRange([]byte{0x60}, []byte{0x80}),
 			},
-			expectedPartOfWatch: true,
+			expectedShouldWatch: true,
 		},
 		{
 			in: []string{"ks2/-70", "ks2/70-", "unknownKs/-", "ks/-80"},
@@ -201,7 +201,7 @@ func TestTabletsPartOfWatch(t *testing.T) {
 				Keyspace: "ks",
 				KeyRange: key.NewKeyRange([]byte{0x80}, []byte{0x90}),
 			},
-			expectedPartOfWatch: false,
+			expectedShouldWatch: false,
 		},
 		{
 			in: []string{"ks2/-70", "ks2/70-", "unknownKs/-", "ks/-80"},
@@ -209,7 +209,7 @@ func TestTabletsPartOfWatch(t *testing.T) {
 				Keyspace: "ks",
 				KeyRange: key.NewKeyRange([]byte{0x90}, []byte{0xa0}),
 			},
-			expectedPartOfWatch: false,
+			expectedShouldWatch: false,
 		},
 	}
 
@@ -218,7 +218,7 @@ func TestTabletsPartOfWatch(t *testing.T) {
 			clustersToWatch = tt.in
 			err := initializeShardsToWatch()
 			require.NoError(t, err)
-			assert.Equal(t, tt.expectedPartOfWatch, tabletPartOfWatch(tt.tablet))
+			assert.Equal(t, tt.expectedShouldWatch, shouldWatchTablet(tt.tablet))
 		})
 	}
 }
@@ -259,7 +259,7 @@ func TestInitializeShardsToWatch(t *testing.T) {
 		},
 		{
 			in:          []string{"test/324"},
-			expectedErr: `Invalid key range "324" while parsing clusters to watch`,
+			expectedErr: `invalid key range "324" while parsing clusters to watch`,
 		},
 		{
 			in: []string{"test/0"},
