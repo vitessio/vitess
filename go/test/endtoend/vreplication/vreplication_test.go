@@ -792,24 +792,17 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		switchReads(t, workflowType, cellNames, ksWorkflow, false)
 		assertQueryExecutesOnTablet(t, vtgateConn, productTab, "customer", query, query)
 
-		var commit func(t *testing.T)
-		if withOpenTx {
-			commit, _ = vc.startQuery(t, openTxQuery)
-		}
 		switchWritesDryRun(t, workflowType, ksWorkflow, dryRunResultsSwitchWritesCustomerShard)
-<<<<<<< HEAD
-=======
-		shardNames := make([]string, 0, len(vc.Cells[defaultCell.Name].Keyspaces[sourceKs].Shards))
-		for shardName := range maps.Keys(vc.Cells[defaultCell.Name].Keyspaces[sourceKs].Shards) {
-			shardNames = append(shardNames, shardName)
-		}
-		testSwitchTrafficPermissionChecks(t, workflowType, sourceKs, shardNames, targetKs, workflow)
 
 		testSwitchWritesErrorHandling(t, []*cluster.VttabletProcess{productTab}, []*cluster.VttabletProcess{customerTab1, customerTab2},
 			workflow, workflowType)
 
+		var commit func(t *testing.T)
+		if withOpenTx {
+			commit, _ = vc.startQuery(t, openTxQuery)
+		}
+
 		// Now let's confirm that it works as expected with an error.
->>>>>>> 39a0ddde8f (VReplication: Address SwitchTraffic bugs around replication lag and cancel on error (#17616))
 		switchWrites(t, workflowType, ksWorkflow, false)
 
 		checkThatVDiffFails(t, targetKs, workflow)
@@ -1625,62 +1618,6 @@ func switchWritesDryRun(t *testing.T, workflowType, ksWorkflow string, dryRunRes
 	validateDryRunResults(t, output, dryRunResults)
 }
 
-<<<<<<< HEAD
-=======
-// testSwitchTrafficPermissionsChecks confirms that for the SwitchTraffic command, the
-// necessary permissions are checked properly on the source keyspace's primary tablets.
-// This ensures that we can create and manage the reverse vreplication workflow.
-func testSwitchTrafficPermissionChecks(t *testing.T, workflowType, sourceKeyspace string, sourceShards []string, targetKeyspace, workflow string) {
-	applyPrivileges := func(query string) {
-		for _, shard := range sourceShards {
-			primary := vc.getPrimaryTablet(t, sourceKeyspace, shard)
-			_, err := primary.QueryTablet(query, primary.Keyspace, false)
-			require.NoError(t, err)
-		}
-	}
-	runDryRunCmd := func(expectErr bool) {
-		_, err := vc.VtctldClient.ExecuteCommandWithOutput(workflowType, "--workflow", workflow, "--target-keyspace", targetKeyspace,
-			"SwitchTraffic", "--tablet-types=primary", "--dry-run")
-		require.True(t, ((err != nil) == expectErr), "expected error: %t, got: %v", expectErr, err)
-	}
-
-	defer func() {
-		// Put the default global privs back in place.
-		applyPrivileges("grant select,insert,update,delete on *.* to vt_filtered@localhost")
-	}()
-
-	t.Run("test switch traffic permission checks", func(t *testing.T) {
-		t.Run("test without global privileges", func(t *testing.T) {
-			applyPrivileges("revoke select,insert,update,delete on *.* from vt_filtered@localhost")
-			runDryRunCmd(true)
-		})
-
-		t.Run("test with db level privileges", func(t *testing.T) {
-			applyPrivileges(fmt.Sprintf("grant select,insert,update,delete on %s.* to vt_filtered@localhost",
-				sidecarDBIdentifier))
-			runDryRunCmd(false)
-		})
-
-		t.Run("test without global or db level privileges", func(t *testing.T) {
-			applyPrivileges(fmt.Sprintf("revoke select,insert,update,delete on %s.* from vt_filtered@localhost",
-				sidecarDBIdentifier))
-			runDryRunCmd(true)
-		})
-
-		t.Run("test with table level privileges", func(t *testing.T) {
-			applyPrivileges(fmt.Sprintf("grant select,insert,update,delete on %s.vreplication to vt_filtered@localhost",
-				sidecarDBIdentifier))
-			runDryRunCmd(false)
-		})
-
-		t.Run("test without global, db, or table level privileges", func(t *testing.T) {
-			applyPrivileges(fmt.Sprintf("revoke select,insert,update,delete on %s.vreplication from vt_filtered@localhost",
-				sidecarDBIdentifier))
-			runDryRunCmd(true)
-		})
-	})
-}
-
 // testSwitchWritesErrorHandling confirms that switching writes works as expected
 // in the face of vreplication lag (canSwitch() precheck) and when canceling the
 // switch due to replication failing to catch up in time.
@@ -1815,7 +1752,6 @@ func testSwitchWritesErrorHandling(t *testing.T, sourceTablets, targetTablets []
 	})
 }
 
->>>>>>> 39a0ddde8f (VReplication: Address SwitchTraffic bugs around replication lag and cancel on error (#17616))
 // restartWorkflow confirms that a workflow can be successfully
 // stopped and started.
 func restartWorkflow(t *testing.T, ksWorkflow string) {

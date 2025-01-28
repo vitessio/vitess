@@ -24,13 +24,8 @@ import (
 )
 
 type iswitcher interface {
-<<<<<<< HEAD
 	lockKeyspace(ctx context.Context, keyspace, action string) (context.Context, func(*error), error)
-	cancelMigration(ctx context.Context, sm *StreamMigrator)
-=======
-	lockKeyspace(ctx context.Context, keyspace, action string, opts ...topo.LockOption) (context.Context, func(*error), error)
 	cancelMigration(ctx context.Context, sm *StreamMigrator) error
->>>>>>> 39a0ddde8f (VReplication: Address SwitchTraffic bugs around replication lag and cancel on error (#17616))
 	stopStreams(ctx context.Context, sm *StreamMigrator) ([]string, error)
 	stopSourceWrites(ctx context.Context) error
 	waitForCatchup(ctx context.Context, filteredReplicationWaitTime time.Duration) error
