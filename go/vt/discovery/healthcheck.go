@@ -91,6 +91,9 @@ var (
 	// How much to sleep between each check.
 	waitAvailableTabletInterval = 100 * time.Millisecond
 
+	// Size of channel buffer for each subscriber
+	broadcastChannelBufferSize = 2048
+
 	// HealthCheckCacheTemplate uses healthCheckTemplate with the `HealthCheck Tablet - Cache` title to create the
 	// HTML code required to render the cache of the HealthCheck.
 	HealthCheckCacheTemplate = fmt.Sprintf(healthCheckTemplate, "HealthCheck - Cache")
@@ -624,7 +627,7 @@ func (hc *HealthCheckImpl) recomputeHealthy(key KeyspaceShardTabletType) {
 func (hc *HealthCheckImpl) Subscribe() chan *TabletHealth {
 	hc.subMu.Lock()
 	defer hc.subMu.Unlock()
-	c := make(chan *TabletHealth, 2)
+	c := make(chan *TabletHealth, broadcastChannelBufferSize)
 	hc.subscribers[c] = struct{}{}
 	return c
 }
@@ -643,6 +646,8 @@ func (hc *HealthCheckImpl) broadcast(th *TabletHealth) {
 		select {
 		case c <- th:
 		default:
+			// If the channel is full, we drop the message.
+			log.Warningf("HealthCheck broadcast channel is full, dropping message for %s", topotools.TabletIdent(th.Tablet))
 		}
 	}
 }

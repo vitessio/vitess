@@ -1481,6 +1481,50 @@ func TestDebugURLFormatting(t *testing.T) {
 	require.Contains(t, wr.String(), expectedURL, "output missing formatted URL")
 }
 
+// TestConcurrentUpdates tests that concurrent updates from the HealthCheck implementation aren't dropped.
+// Added in response to https://github.com/vitessio/vitess/issues/17629.
+func TestConcurrentUpdates(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	var mu sync.Mutex
+	// reset error counters
+	hcErrorCounters.ResetAll()
+	ts := memorytopo.NewServer(ctx, "cell")
+	defer ts.Close()
+	hc := createTestHc(ctx, ts)
+	// close healthcheck
+	defer hc.Close()
+
+	// Subscribe to the healthcheck
+	// Make the receiver keep track of the updates received.
+	ch := hc.Subscribe()
+	totalCount := 0
+	go func() {
+		for range ch {
+			mu.Lock()
+			totalCount++
+			mu.Unlock()
+			// Simulate a somewhat slow consumer.
+			time.Sleep(100 * time.Millisecond)
+		}
+	}()
+
+	// Run multiple updates really quickly
+	// one after the other.
+	totalUpdates := 10
+	for i := 0; i < totalUpdates; i++ {
+		hc.broadcast(&TabletHealth{})
+	}
+	// Unsubscribe from the healthcheck
+	// and verify we process all the updates eventually.
+	hc.Unsubscribe(ch)
+	defer close(ch)
+	require.Eventuallyf(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return totalUpdates == totalCount
+	}, 5*time.Second, 100*time.Millisecond, "expected all updates to be processed")
+}
+
 func tabletDialer(tablet *topodatapb.Tablet, _ grpcclient.FailFast) (queryservice.QueryService, error) {
 	connMapMu.Lock()
 	defer connMapMu.Unlock()
