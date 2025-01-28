@@ -31,7 +31,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/utils"
-	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -1539,7 +1538,7 @@ func BenchmarkAccess_FastConsumer(b *testing.B) {
 			hc.broadcast(th)
 		}
 		hc.Unsubscribe(ch)
-		waitForEmptyMessageQueue(hc.subscribers[ch])
+		waitForEmptyMessageQueue(ch)
 	}
 }
 
@@ -1568,13 +1567,13 @@ func BenchmarkAccess_SlowConsumer(b *testing.B) {
 			hc.broadcast(th)
 		}
 		hc.Unsubscribe(ch)
-		waitForEmptyMessageQueue(hc.subscribers[ch])
+		waitForEmptyMessageQueue(ch)
 	}
 }
 
-func waitForEmptyMessageQueue(queue *concurrency.MessageQueue[*TabletHealth]) {
+func waitForEmptyMessageQueue(ch chan *TabletHealth) {
 	for {
-		if queue.Length() == 0 {
+		if len(ch) == 0 {
 			return
 		}
 		time.Sleep(100 * time.Millisecond)
