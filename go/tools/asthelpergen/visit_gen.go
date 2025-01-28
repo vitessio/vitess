@@ -205,8 +205,6 @@ func (v *visitGen) basicMethod(t types.Type, basic *types.Basic, spi generatorSP
 	return v.visitNoChildren(t, spi)
 }
 
-func (*visitGen) close(generatorSPI) error { return nil }
-
 func (v *visitGen) visitNoChildren(t types.Type, spi generatorSPI) error {
 	stmts := []jen.Code{
 		jen.Id("_, err := f(in)"),

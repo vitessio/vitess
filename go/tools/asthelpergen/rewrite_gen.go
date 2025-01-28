@@ -269,8 +269,6 @@ func (r *rewriteGen) basicMethod(t types.Type, _ *types.Basic, spi generatorSPI)
 	return nil
 }
 
-func (*rewriteGen) close(generatorSPI) error { return nil }
-
 func (r *rewriteGen) rewriteFunc(t types.Type, stmts []jen.Code) {
 
 	/*

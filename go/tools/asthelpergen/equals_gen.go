@@ -304,5 +304,3 @@ func (e *equalsGen) sliceMethod(t types.Type, slice *types.Slice, spi generatorS
 }
 
 func (*equalsGen) basicMethod(types.Type, *types.Basic, generatorSPI) error { return nil }
-
-func (*equalsGen) close(generatorSPI) error { return nil }

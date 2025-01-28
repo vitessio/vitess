@@ -1,8 +1,9 @@
 package asthelpergen
 
 import (
-	"github.com/dave/jennifer/jen"
 	"go/types"
+
+	"github.com/dave/jennifer/jen"
 )
 
 type (
@@ -11,8 +12,10 @@ type (
 		steps []step
 	}
 	step struct {
-		name string
-		typ  types.Type
+		container string     // the type of the container
+		name      string     // the name of the field
+		slice     bool       // whether the field is a slice
+		typ       types.Type // the type of the field
 	}
 )
 
@@ -29,43 +32,60 @@ func newPathGen(pkgname string) *pathGen {
 }
 
 func (p *pathGen) genFile() (string, *jen.File) {
+	p.close()
 	return "ast_path.go", p.file
 }
 
 func (p *pathGen) interfaceMethod(t types.Type, iface *types.Interface, spi generatorSPI) error {
-	// don't think we need to do anything here
 	return nil
 }
 
 func (p *pathGen) structMethod(t types.Type, strct *types.Struct, spi generatorSPI) error {
-	typeString := types.TypeString(t, noQualifier)
-	for i := range strct.NumFields() {
-		field := strct.Field(i)
-		if types.Implements(field.Type(), spi.iface()) {
-
-			continue
-		}
-		slice, isSlice := field.Type().(*types.Slice)
-		if isSlice && types.Implements(slice.Elem(), spi.iface()) {
-			spi.addType(slice.Elem())
-			output = append(output, jen.For(jen.Id("_, el := range in."+field.Name())).Block(
-				visitChild(slice.Elem(), jen.Id("el")),
-			))
-		}
-	}
-
+	p.addStructFields(t, strct, spi)
 	return nil
 }
 
 func (p *pathGen) ptrToStructMethod(t types.Type, strct *types.Struct, spi generatorSPI) error {
+	p.addStructFields(t, strct, spi)
 	return nil
+}
+
+func (p *pathGen) addStructFields(t types.Type, strct *types.Struct, spi generatorSPI) {
+	typeString := printableTypeName(t)
+	for i := range strct.NumFields() {
+		field := strct.Field(i)
+		if types.Implements(field.Type(), spi.iface()) {
+			p.steps = append(p.steps, step{
+				container: typeString,
+				name:      field.Name(),
+				typ:       field.Type(),
+			})
+			continue
+		}
+		slice, isSlice := field.Type().(*types.Slice)
+		if isSlice && types.Implements(slice.Elem(), spi.iface()) {
+			p.steps = append(p.steps, step{
+				container: typeString,
+				slice:     true,
+				name:      field.Name(),
+				typ:       slice.Elem(),
+			})
+		}
+	}
 }
 
 func (p *pathGen) ptrToBasicMethod(t types.Type, basic *types.Basic, spi generatorSPI) error {
 	return nil
 }
 
-func (p *pathGen) sliceMethod(t types.Type, slice *types.Slice, spi generatorSPI) error {
+func (p *pathGen) sliceMethod(t types.Type, _ *types.Slice, _ generatorSPI) error {
+	p.steps = append(p.steps, step{
+		container: printableTypeName(t),
+		name:      "Offset",
+		slice:     true,
+		typ:       t,
+	})
+
 	return nil
 }
 
@@ -73,4 +93,36 @@ func (p *pathGen) basicMethod(t types.Type, basic *types.Basic, spi generatorSPI
 	return nil
 }
 
-func (*pathGen) close(generatorSPI) error { return nil }
+func (p *pathGen) close() {
+	// Declare the ASTStep type with underlying type uint16
+	astStepType := jen.Type().Id("ASTStep").Uint16()
+
+	// Initialize a slice to hold the constant definitions
+	var constDefs []jen.Code
+	addStep := func(step string) {
+		if constDefs == nil {
+			// Use iota for the first constant
+			constDefs = append(constDefs, jen.Id(step).Id("ASTStep").Op("=").Id("iota"))
+			return
+		}
+
+		constDefs = append(constDefs, jen.Id(step))
+	}
+	for _, step := range p.steps {
+		stepName := step.container + step.name
+		if step.slice {
+			addStep(stepName + "8")
+			addStep(stepName + "64")
+			continue
+		}
+
+		addStep(stepName)
+	}
+
+	// Create the const block with all step constants
+	constBlock := jen.Const().Defs(constDefs...)
+
+	// Add the type declaration and const block as separate statements to the file
+	p.file.Add(astStepType)
+	p.file.Add(constBlock)
+}

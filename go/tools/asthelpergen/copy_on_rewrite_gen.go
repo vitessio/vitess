@@ -132,8 +132,6 @@ func (c *cowGen) basicMethod(t types.Type, basic *types.Basic, spi generatorSPI)
 	return nil
 }
 
-func (*cowGen) close(generatorSPI) error { return nil }
-
 func ifNotNil(id string, stmts ...jen.Code) *jen.Statement {
 	return jen.If(jen.Id(id).Op("!=").Nil()).Block(stmts...)
 }

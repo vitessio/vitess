@@ -61,7 +61,6 @@ type (
 		ptrToBasicMethod(t types.Type, basic *types.Basic, spi generatorSPI) error
 		sliceMethod(t types.Type, slice *types.Slice, spi generatorSPI) error
 		basicMethod(t types.Type, basic *types.Basic, spi generatorSPI) error
-		close(spi generatorSPI) error
 	}
 	// astHelperGen finds implementations of the given interface,
 	// and uses the supplied `generator`s to produce the output code
