@@ -1487,6 +1487,7 @@ func TestConcurrentUpdates(t *testing.T) {
 	hc := createTestHc(ctx, ts)
 	// close healthcheck
 	defer hc.Close()
+	th := &TabletHealth{}
 
 	// Subscribe to the healthcheck
 	// Make the receiver keep track of the updates received.
@@ -1504,7 +1505,7 @@ func TestConcurrentUpdates(t *testing.T) {
 	// one after the other.
 	totalUpdates := 10
 	for i := 0; i < totalUpdates; i++ {
-		hc.broadcast(&TabletHealth{})
+		hc.broadcast(th)
 	}
 	// Unsubscribe from the healthcheck
 	// and verify we process all the updates eventually.
@@ -1525,6 +1526,7 @@ func BenchmarkAccess_FastConsumer(b *testing.B) {
 	// close healthcheck
 	defer hc.Close()
 
+	th := &TabletHealth{}
 	for i := 0; i < b.N; i++ {
 		// Subscribe to the healthcheck with a fast consumer.
 		ch := hc.Subscribe()
@@ -1534,7 +1536,7 @@ func BenchmarkAccess_FastConsumer(b *testing.B) {
 		}()
 
 		for id := 0; id < 1000; id++ {
-			hc.broadcast(&TabletHealth{})
+			hc.broadcast(th)
 		}
 		hc.Unsubscribe(ch)
 		waitForEmptyMessageQueue(hc.subscribers[ch])
@@ -1552,6 +1554,7 @@ func BenchmarkAccess_SlowConsumer(b *testing.B) {
 	// close healthcheck
 	defer hc.Close()
 
+	th := &TabletHealth{}
 	for i := 0; i < b.N; i++ {
 		// Subscribe to the healthcheck with a slow consumer.
 		ch := hc.Subscribe()
@@ -1562,7 +1565,7 @@ func BenchmarkAccess_SlowConsumer(b *testing.B) {
 		}()
 
 		for id := 0; id < 100; id++ {
-			hc.broadcast(&TabletHealth{})
+			hc.broadcast(th)
 		}
 		hc.Unsubscribe(ch)
 		waitForEmptyMessageQueue(hc.subscribers[ch])
