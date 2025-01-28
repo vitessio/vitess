@@ -61,7 +61,7 @@ const smMaterializeSpec = `{"workflow": "wf1", "source_keyspace": "ks1", "target
 const initDataQuery = `insert into ks1.tx(id, typ, val) values (1, 1, 'abc'), (2, 1, 'def'), (3, 2, 'def'), (4, 2, 'abc'), (5, 3, 'def'), (6, 3, 'abc')`
 
 // testShardedMaterialize tests a materialize workflow for a sharded cluster (single shard) using comparison filters
-func testShardedMaterialize(t *testing.T, useVtctldClient bool) {
+func testShardedMaterialize(t *testing.T) {
 	var err error
 	vc = NewVitessCluster(t, nil)
 	ks1 := "ks1"
@@ -81,7 +81,7 @@ func testShardedMaterialize(t *testing.T, useVtctldClient bool) {
 	verifyClusterHealth(t, vc)
 	_, err = vtgateConn.ExecuteFetch(initDataQuery, 0, false)
 	require.NoError(t, err)
-	materialize(t, smMaterializeSpec, useVtctldClient)
+	materialize(t, smMaterializeSpec)
 	tab := vc.getPrimaryTablet(t, ks2, "0")
 	catchup(t, tab, "wf1", "Materialize")
 
@@ -169,7 +169,7 @@ DETERMINISTIC
 RETURN id * length(val);
 `
 
-func testMaterialize(t *testing.T, useVtctldClient bool) {
+func testMaterialize(t *testing.T) {
 	var err error
 	vc = NewVitessCluster(t, nil)
 	sourceKs := "source"
@@ -199,7 +199,7 @@ func testMaterialize(t *testing.T, useVtctldClient bool) {
 
 	testMaterializeWithNonExistentTable(t)
 
-	materialize(t, smMaterializeSpec2, useVtctldClient)
+	materialize(t, smMaterializeSpec2)
 	catchup(t, ks2Primary, "wf1", "Materialize")
 
 	// validate data after the copy phase
@@ -219,21 +219,10 @@ func testMaterialize(t *testing.T, useVtctldClient bool) {
 // TestMaterialize runs all the individual materialize tests defined above.
 func TestMaterialize(t *testing.T) {
 	t.Run("Materialize", func(t *testing.T) {
-		testMaterialize(t, false)
+		testMaterialize(t)
 	})
 	t.Run("ShardedMaterialize", func(t *testing.T) {
-		testShardedMaterialize(t, false)
-	})
-}
-
-// TestMaterializeVtctldClient runs all the individual materialize tests
-// defined above using vtctldclient instead of vtctlclient.
-func TestMaterializeVtctldClient(t *testing.T) {
-	t.Run("Materialize", func(t *testing.T) {
-		testMaterialize(t, true)
-	})
-	t.Run("ShardedMaterialize", func(t *testing.T) {
-		testShardedMaterialize(t, true)
+		testShardedMaterialize(t)
 	})
 }
 
@@ -315,7 +304,7 @@ func TestReferenceTableMaterialize(t *testing.T) {
 		waitForQueryResult(t, vtgateConn, "ks2:"+shard, "select id, id2 from ref2",
 			`[[INT64(1) INT64(1)] [INT64(2) INT64(2)] [INT64(3) INT64(3)]]`)
 	}
-	vdiff(t, "ks2", "wf1", defaultCellName, false, true, nil)
+	vdiff(t, "ks2", "wf1", defaultCellName, nil)
 
 	queries := []string{
 		"update ks1.ref1 set val='xyz'",
@@ -332,5 +321,5 @@ func TestReferenceTableMaterialize(t *testing.T) {
 		waitForRowCount(t, vtgateConn, "ks2:"+shard, "ref1", 4)
 		waitForRowCount(t, vtgateConn, "ks2:"+shard, "ref2", 4)
 	}
-	vdiff(t, "ks2", "wf1", defaultCellName, false, true, nil)
+	vdiff(t, "ks2", "wf1", defaultCellName, nil)
 }

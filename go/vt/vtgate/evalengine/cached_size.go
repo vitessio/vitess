@@ -175,6 +175,20 @@ func (cached *Column) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *Comparison) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	size += hack.RuntimeAllocSize(int64(cap(*cached)) * int64(56))
+	for _, elem := range *cached {
+		size += elem.CachedSize(false)
+	}
+	return size
+}
 func (cached *ComparisonExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -243,6 +257,20 @@ func (cached *ConvertUsingExpr) CachedSize(alloc bool) int64 {
 	size += cached.UnaryExpr.CachedSize(false)
 	// field CollationEnv *vitess.io/vitess/go/mysql/collations.Environment
 	size += cached.CollationEnv.CachedSize(true)
+	return size
+}
+func (cached *EnumSetValues) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	size += hack.RuntimeAllocSize(int64(cap(*cached)) * int64(16))
+	for _, elem := range *cached {
+		size += hack.RuntimeAllocSize(int64(len(elem)))
+	}
 	return size
 }
 func (cached *InExpr) CachedSize(alloc bool) int64 {
@@ -389,6 +417,22 @@ func (cached *TupleBindVariable) CachedSize(alloc bool) int64 {
 	}
 	// field Key string
 	size += hack.RuntimeAllocSize(int64(len(cached.Key)))
+	return size
+}
+func (cached *TupleExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	size += hack.RuntimeAllocSize(int64(cap(*cached)) * int64(16))
+	for _, elem := range *cached {
+		if cc, ok := elem.(cachedObject); ok {
+			size += cc.CachedSize(true)
+		}
+	}
 	return size
 }
 func (cached *Type) CachedSize(alloc bool) int64 {
@@ -1170,6 +1214,18 @@ func (cached *builtinJSONUnquote) CachedSize(alloc bool) int64 {
 	return size
 }
 func (cached *builtinLastDay) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field CallExpr vitess.io/vitess/go/vt/vtgate/evalengine.CallExpr
+	size += cached.CallExpr.CachedSize(false)
+	return size
+}
+func (cached *builtinLastInsertID) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}
@@ -2101,6 +2157,9 @@ func (cached *evalYear) CachedSize(alloc bool) int64 {
 		size += int64(16)
 	}
 	return size
+}
+func (cached *frame) CachedSize(alloc bool) int64 {
+	return int64(0)
 }
 func (cached *typedExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {

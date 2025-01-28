@@ -84,6 +84,7 @@ func (s *planTestSuite) TestPlan() {
 	s.addPKsProvided(vschema, "user", []string{"user_extra"}, []string{"id", "user_id"})
 	s.addPKsProvided(vschema, "ordering", []string{"order"}, []string{"oid", "region_id"})
 	s.addPKsProvided(vschema, "ordering", []string{"order_event"}, []string{"oid", "ename"})
+	s.addPKsProvided(vschema, "main", []string{"source_of_ref"}, []string{"id"})
 
 	// You will notice that some tests expect user.Id instead of user.id.
 	// This is because we now pre-create vindex columns in the symbol
@@ -305,6 +306,7 @@ func (s *planTestSuite) TestOne() {
 	s.addPKsProvided(vschema, "user", []string{"user_extra"}, []string{"id", "user_id"})
 	s.addPKsProvided(vschema, "ordering", []string{"order"}, []string{"oid", "region_id"})
 	s.addPKsProvided(vschema, "ordering", []string{"order_event"}, []string{"oid", "ename"})
+	s.addPKsProvided(vschema, "main", []string{"source_of_ref"}, []string{"id"})
 
 	s.testFile("onecase.json", vw, false)
 }
@@ -575,10 +577,10 @@ func (s *planTestSuite) TestOtherPlanningFromFile() {
 	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
 	require.NoError(s.T(), err)
 
+	s.testFile("other_read_cases.json", vw, false)
+
 	vw.Vcursor.SetTarget("main")
 	vw.Keyspace = &vindexes.Keyspace{Name: "main"}
-
-	s.testFile("other_read_cases.json", vw, false)
 	s.testFile("other_admin_cases.json", vw, false)
 }
 
@@ -649,21 +651,12 @@ func createFkDefinition(childCols []string, parentTableName string, parentCols [
 	}
 }
 
-type (
-	planTest struct {
-		Comment string          `json:"comment,omitempty"`
-		Query   string          `json:"query,omitempty"`
-		Plan    json.RawMessage `json:"plan,omitempty"`
-		Skip    bool            `json:"skip,omitempty"`
-	}
-)
-
 func (s *planTestSuite) testFile(filename string, vschema *vschemawrapper.VSchemaWrapper, render bool) {
 	opts := jsondiff.DefaultConsoleOptions()
 
 	s.T().Run(filename, func(t *testing.T) {
 		failed := false
-		var expected []planTest
+		var expected []PlanTest
 		for _, tcase := range readJSONTests(filename) {
 			testName := tcase.Comment
 			if testName == "" {
@@ -672,9 +665,10 @@ func (s *planTestSuite) testFile(filename string, vschema *vschemawrapper.VSchem
 			if tcase.Query == "" {
 				continue
 			}
-			current := planTest{
-				Comment: testName,
+			current := PlanTest{
+				Comment: tcase.Comment,
 				Query:   tcase.Query,
+				SkipE2E: tcase.SkipE2E,
 			}
 			vschema.Version = Gen4
 			out := getPlanOutput(tcase, vschema, render)
@@ -720,8 +714,8 @@ func (s *planTestSuite) testFile(filename string, vschema *vschemawrapper.VSchem
 	})
 }
 
-func readJSONTests(filename string) []planTest {
-	var output []planTest
+func readJSONTests(filename string) []PlanTest {
+	var output []PlanTest
 	file, err := os.Open(locateFile(filename))
 	if err != nil {
 		panic(err)
@@ -735,7 +729,7 @@ func readJSONTests(filename string) []planTest {
 	return output
 }
 
-func getPlanOutput(tcase planTest, vschema *vschemawrapper.VSchemaWrapper, render bool) (out string) {
+func getPlanOutput(tcase PlanTest, vschema *vschemawrapper.VSchemaWrapper, render bool) (out string) {
 	defer func() {
 		if r := recover(); r != nil {
 			out = fmt.Sprintf("panicked: %v\n%s", r, string(debug.Stack()))
@@ -867,7 +861,7 @@ func BenchmarkBaselineVsMirrored(b *testing.B) {
 	})
 }
 
-func benchmarkPlanner(b *testing.B, version plancontext.PlannerVersion, testCases []planTest, vschema *vschemawrapper.VSchemaWrapper) {
+func benchmarkPlanner(b *testing.B, version plancontext.PlannerVersion, testCases []PlanTest, vschema *vschemawrapper.VSchemaWrapper) {
 	b.ReportAllocs()
 	for n := 0; n < b.N; n++ {
 		for _, tcase := range testCases {

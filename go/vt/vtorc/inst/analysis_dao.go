@@ -30,7 +30,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
-	"vitess.io/vitess/go/vt/vtctl/reparentutil"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
 	"vitess.io/vitess/go/vt/vtorc/util"
@@ -54,7 +54,7 @@ type clusterAnalysis struct {
 	hasClusterwideAction bool
 	totalTablets         int
 	primaryAlias         string
-	durability           reparentutil.Durabler
+	durability           policy.Durabler
 }
 
 // GetReplicationAnalysis will check for replication problems (dead primary; unreachable primary; etc)
@@ -79,7 +79,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		vitess_keyspace.durability_policy AS durability_policy,
 		vitess_shard.primary_timestamp AS shard_primary_term_timestamp,
 		primary_instance.read_only AS read_only,
-		MIN(primary_instance.gtid_errant) AS gtid_errant, 
+		MIN(primary_instance.gtid_errant) AS gtid_errant,
 		MIN(primary_instance.alias) IS NULL AS is_invalid,
 		MIN(primary_instance.binary_log_file) AS binary_log_file,
 		MIN(primary_instance.binary_log_pos) AS binary_log_pos,
@@ -183,17 +183,6 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 			),
 			0
 		) AS count_valid_semi_sync_replicas,
-		MIN(
-			primary_instance.mariadb_gtid
-		) AS is_mariadb_gtid,
-		SUM(replica_instance.mariadb_gtid) AS count_mariadb_gtid_replicas,
-		IFNULL(
-			SUM(
-				replica_instance.last_checked <= replica_instance.last_seen
-				AND replica_instance.mariadb_gtid != 0
-			),
-			0
-		) AS count_valid_mariadb_gtid_replicas,
 		IFNULL(
 			SUM(
 				replica_instance.log_bin
@@ -244,7 +233,8 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		COUNT(
 			DISTINCT case when replica_instance.log_bin
 			AND replica_instance.log_replica_updates then replica_instance.major_version else NULL end
-		) AS count_distinct_logging_major_versions
+		) AS count_distinct_logging_major_versions,
+		primary_instance.is_disk_stalled != 0 AS is_disk_stalled
 	FROM
 		vitess_tablet
 		JOIN vitess_keyspace ON (
@@ -322,7 +312,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		a.AnalyzedInstancePrimaryAlias = topoproto.TabletAliasString(primaryTablet.Alias)
 		a.AnalyzedInstanceBinlogCoordinates = BinlogCoordinates{
 			LogFile: m.GetString("binary_log_file"),
-			LogPos:  m.GetUint32("binary_log_pos"),
+			LogPos:  m.GetUint64("binary_log_pos"),
 			Type:    BinaryLog,
 		}
 		isStaleBinlogCoordinates := m.GetBool("is_stale_binlog_coordinates")
@@ -339,8 +329,6 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 
 		countValidOracleGTIDReplicas := m.GetUint("count_valid_oracle_gtid_replicas")
 		a.OracleGTIDImmediateTopology = countValidOracleGTIDReplicas == a.CountValidReplicas && a.CountValidReplicas > 0
-		countValidMariaDBGTIDReplicas := m.GetUint("count_valid_mariadb_gtid_replicas")
-		a.MariaDBGTIDImmediateTopology = countValidMariaDBGTIDReplicas == a.CountValidReplicas && a.CountValidReplicas > 0
 		countValidBinlogServerReplicas := m.GetUint("count_valid_binlog_server_replicas")
 		a.BinlogServerImmediateTopology = countValidBinlogServerReplicas == a.CountValidReplicas && a.CountValidReplicas > 0
 		a.SemiSyncPrimaryEnabled = m.GetBool("semi_sync_primary_enabled")
@@ -367,6 +355,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		a.HeartbeatInterval = m.GetFloat64("heartbeat_interval")
 
 		a.IsReadOnly = m.GetUint("read_only") == 1
+		a.IsDiskStalled = m.GetBool("is_disk_stalled")
 
 		if !a.LastCheckValid {
 			analysisMessage := fmt.Sprintf("analysis: Alias: %+v, Keyspace: %+v, Shard: %+v, IsPrimary: %+v, LastCheckValid: %+v, LastCheckPartialSuccess: %+v, CountReplicas: %+v, CountValidReplicas: %+v, CountValidReplicatingReplicas: %+v, CountLaggingReplicas: %+v, CountDelayedReplicas: %+v",
@@ -388,7 +377,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 				log.Errorf("ignoring keyspace %v because no durability_policy is set. Please set it using SetKeyspaceDurabilityPolicy", a.AnalyzedKeyspace)
 				return nil
 			}
-			durability, err := reparentutil.GetDurabilityPolicy(durabilityPolicy)
+			durability, err := policy.GetDurabilityPolicy(durabilityPolicy)
 			if err != nil {
 				log.Errorf("can't get the durability policy %v - %v. Skipping keyspace - %v.", durabilityPolicy, err, a.AnalyzedKeyspace)
 				return nil
@@ -414,6 +403,10 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		} else if isInvalid {
 			a.Analysis = InvalidReplica
 			a.Description = "VTOrc hasn't been able to reach the replica even once since restart/shutdown"
+		} else if a.IsClusterPrimary && !a.LastCheckValid && a.IsDiskStalled {
+			a.Analysis = PrimaryDiskStalled
+			a.Description = "Primary has a stalled disk"
+			ca.hasClusterwideAction = true
 		} else if a.IsClusterPrimary && !a.LastCheckValid && a.CountReplicas == 0 {
 			a.Analysis = DeadPrimaryWithoutReplicas
 			a.Description = "Primary cannot be reached by vtorc and has no replica"
@@ -443,11 +436,11 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 			a.Analysis = PrimaryIsReadOnly
 			a.Description = "Primary is read-only"
 			//
-		} else if a.IsClusterPrimary && reparentutil.SemiSyncAckers(ca.durability, tablet) != 0 && !a.SemiSyncPrimaryEnabled {
+		} else if a.IsClusterPrimary && policy.SemiSyncAckers(ca.durability, tablet) != 0 && !a.SemiSyncPrimaryEnabled {
 			a.Analysis = PrimarySemiSyncMustBeSet
 			a.Description = "Primary semi-sync must be set"
 			//
-		} else if a.IsClusterPrimary && reparentutil.SemiSyncAckers(ca.durability, tablet) == 0 && a.SemiSyncPrimaryEnabled {
+		} else if a.IsClusterPrimary && policy.SemiSyncAckers(ca.durability, tablet) == 0 && a.SemiSyncPrimaryEnabled {
 			a.Analysis = PrimarySemiSyncMustNotBeSet
 			a.Description = "Primary semi-sync must not be set"
 			//
@@ -485,11 +478,11 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 			a.Analysis = ReplicationStopped
 			a.Description = "Replication is stopped"
 			//
-		} else if topo.IsReplicaType(a.TabletType) && !a.IsPrimary && reparentutil.IsReplicaSemiSync(ca.durability, primaryTablet, tablet) && !a.SemiSyncReplicaEnabled {
+		} else if topo.IsReplicaType(a.TabletType) && !a.IsPrimary && policy.IsReplicaSemiSync(ca.durability, primaryTablet, tablet) && !a.SemiSyncReplicaEnabled {
 			a.Analysis = ReplicaSemiSyncMustBeSet
 			a.Description = "Replica semi-sync must be set"
 			//
-		} else if topo.IsReplicaType(a.TabletType) && !a.IsPrimary && !reparentutil.IsReplicaSemiSync(ca.durability, primaryTablet, tablet) && a.SemiSyncReplicaEnabled {
+		} else if topo.IsReplicaType(a.TabletType) && !a.IsPrimary && !policy.IsReplicaSemiSync(ca.durability, primaryTablet, tablet) && a.SemiSyncReplicaEnabled {
 			a.Analysis = ReplicaSemiSyncMustNotBeSet
 			a.Description = "Replica semi-sync must not be set"
 			//
@@ -541,7 +534,6 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 			}
 			if a.IsPrimary && a.CountReplicas > 1 &&
 				!a.OracleGTIDImmediateTopology &&
-				!a.MariaDBGTIDImmediateTopology &&
 				!a.BinlogServerImmediateTopology {
 				a.StructureAnalysis = append(a.StructureAnalysis, NoFailoverSupportStructureWarning)
 			}

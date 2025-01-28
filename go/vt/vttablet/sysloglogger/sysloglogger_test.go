@@ -50,13 +50,14 @@ func (fw *fakeWriter) Info(msg string) error { return fw.write(syslog.LOG_INFO, 
 func (fw *fakeWriter) Close() error          { return nil }
 
 // mockLogStats generates a dummy tabletserver.LogStats message for testing.
-func mockLogStats(originalSQL string) *tabletenv.LogStats {
-	logstats := tabletenv.NewLogStats(context.Background(), "Execute")
+func mockLogStats(originalSQL string, redactUIQuery bool) *tabletenv.LogStats {
+	logstats := tabletenv.NewLogStats(context.Background(), "Execute", streamlog.NewQueryLogConfigForTest())
 	logstats.StartTime = time.Time{}
 	logstats.PlanType = "PASS_SELECT"
 	logstats.OriginalSQL = originalSQL
 	logstats.AddRewrittenSQL(originalSQL, time.Now())
 	logstats.MysqlResponseTime = 0
+	logstats.Config.RedactDebugUIQueries = redactUIQuery
 	return logstats
 }
 
@@ -112,11 +113,11 @@ func TestSyslog(t *testing.T) {
 	}()
 
 	// Send fake messages to the mock channel, and then close the channel to end the plugin loop
-	ch <- mockLogStats("select 1")
-	ch <- mockLogStats("select 2")
-	ch <- mockLogStats("select 3")
-	ch <- mockLogStats("select 4")
-	ch <- mockLogStats("select 5")
+	ch <- mockLogStats("select 1", false)
+	ch <- mockLogStats("select 2", false)
+	ch <- mockLogStats("select 3", false)
+	ch <- mockLogStats("select 4", false)
+	ch <- mockLogStats("select 5", false)
 	close(ch)
 	<-syncChannel
 
@@ -142,10 +143,6 @@ func TestSyslog(t *testing.T) {
 // when redaction is enabled.
 func TestSyslogRedacted(t *testing.T) {
 	// Overwrite the usual syslog writer and StatsLogger subscription channel with mocks
-	streamlog.SetRedactDebugUIQueries(true)
-	defer func() {
-		streamlog.SetRedactDebugUIQueries(false)
-	}()
 	mock := newFakeWriter()
 	writer = mock
 	ch = make(chan *tabletenv.LogStats, 10)
@@ -158,11 +155,11 @@ func TestSyslogRedacted(t *testing.T) {
 	}()
 
 	// Send fake messages to the mock channel, and then close the channel to end the plugin loop
-	ch <- mockLogStats("select 1")
-	ch <- mockLogStats("select 2")
-	ch <- mockLogStats("select 3")
-	ch <- mockLogStats("select 4")
-	ch <- mockLogStats("select 5")
+	ch <- mockLogStats("select 1", true)
+	ch <- mockLogStats("select 2", true)
+	ch <- mockLogStats("select 3", true)
+	ch <- mockLogStats("select 4", true)
+	ch <- mockLogStats("select 5", true)
 	close(ch)
 	<-syncChannel
 
@@ -198,10 +195,10 @@ func TestSyslogWithBadData(t *testing.T) {
 	}()
 
 	// Send 5 records for logging, one of which is bad
-	ch <- mockLogStats("select 1")
-	ch <- mockLogStats("select 2")
-	ch <- mockLogStats("select 3")
-	ch <- mockLogStats("select 5")
+	ch <- mockLogStats("select 1", false)
+	ch <- mockLogStats("select 2", false)
+	ch <- mockLogStats("select 3", false)
+	ch <- mockLogStats("select 5", false)
 	close(ch)
 	<-syncChannel
 
@@ -239,11 +236,11 @@ func TestSyslogWithInterruptedConnection(t *testing.T) {
 		close(syncChannel)
 	}()
 
-	ch <- mockLogStats("select 1")
-	ch <- mockLogStats("select 2")
-	ch <- mockLogStats("select 3")
-	ch <- mockLogStats("select 4") // This record will get dropped due to a syslog outage
-	ch <- mockLogStats("select 5")
+	ch <- mockLogStats("select 1", false)
+	ch <- mockLogStats("select 2", false)
+	ch <- mockLogStats("select 3", false)
+	ch <- mockLogStats("select 4", false) // This record will get dropped due to a syslog outage
+	ch <- mockLogStats("select 5", false)
 	close(ch)
 	<-syncChannel
 

@@ -254,7 +254,7 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 	if err := localCluster.InitTablet(replica2, keyspaceName, shard.Name); err != nil {
 		return 1, err
 	}
-	vtctldClientProcess := cluster.VtctldClientProcessInstance("localhost", localCluster.VtctldProcess.GrpcPort, localCluster.TmpDirectory)
+	vtctldClientProcess := cluster.VtctldClientProcessInstance(localCluster.VtctldProcess.GrpcPort, localCluster.TopoPort, "localhost", localCluster.TmpDirectory)
 	_, err = vtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=semi_sync")
 	if err != nil {
 		return 1, err
@@ -405,7 +405,6 @@ func TestBackup(t *testing.T, setupType int, streamMode string, stripes int, cDe
 		}, //
 	}
 
-	defer cluster.PanicHandler(t)
 	// setup cluster for the testing
 	code, err := LaunchCluster(setupType, streamMode, stripes, cDetails)
 	require.Nilf(t, err, "setup failed with status code %d", code)
@@ -1507,7 +1506,6 @@ func getLastBackup(t *testing.T) string {
 
 func TestBackupEngineSelector(t *testing.T) {
 	defer setDefaultCommonArgs()
-	defer cluster.PanicHandler(t)
 
 	// launch the custer with xtrabackup as the default engine
 	code, err := LaunchCluster(XtraBackup, "xbstream", 0, &CompressionDetails{CompressorEngineName: "pgzip"})
@@ -1548,7 +1546,6 @@ func TestBackupEngineSelector(t *testing.T) {
 
 func TestRestoreAllowedBackupEngines(t *testing.T) {
 	defer setDefaultCommonArgs()
-	defer cluster.PanicHandler(t)
 
 	backupMsg := "right after xtrabackup backup"
 

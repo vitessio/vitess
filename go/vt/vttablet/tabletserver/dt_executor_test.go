@@ -31,6 +31,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/streamlog"
+
 	"vitess.io/vitess/go/event/syslogger"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/mysql/sqlerror"
@@ -705,14 +707,16 @@ func TestNoTwopc(t *testing.T) {
 
 	want := "2pc is not enabled"
 	for _, tc := range testcases {
-		err := tc.fun()
-		require.EqualError(t, err, want)
+		t.Run(tc.desc, func(t *testing.T) {
+			err := tc.fun()
+			require.EqualError(t, err, want)
+		})
 	}
 }
 
 func newTestTxExecutor(t *testing.T, ctx context.Context) (txe *DTExecutor, tsv *TabletServer, db *fakesqldb.DB, closer func()) {
 	db = setUpQueryExecutorTest(t)
-	logStats := tabletenv.NewLogStats(ctx, "TestTxExecutor")
+	logStats := tabletenv.NewLogStats(ctx, "TestTxExecutor", streamlog.NewQueryLogConfigForTest())
 	tsv = newTestTabletServer(ctx, smallTxPool, db)
 	cfg := tabletenv.NewDefaultConfig()
 	cfg.DB = newDBConfigs(db)
@@ -739,7 +743,7 @@ func newTestTxExecutor(t *testing.T, ctx context.Context) (txe *DTExecutor, tsv 
 // newShortAgeExecutor is same as newTestTxExecutor, but shorter transaction abandon age.
 func newShortAgeExecutor(t *testing.T, ctx context.Context) (txe *DTExecutor, tsv *TabletServer, db *fakesqldb.DB) {
 	db = setUpQueryExecutorTest(t)
-	logStats := tabletenv.NewLogStats(ctx, "TestTxExecutor")
+	logStats := tabletenv.NewLogStats(ctx, "TestTxExecutor", streamlog.NewQueryLogConfigForTest())
 	tsv = newTestTabletServer(ctx, smallTxPool|shortTwopcAge, db)
 	db.AddQueryPattern("insert into _vt\\.redo_state\\(dtid, state, time_created\\) values \\(_binary'aa', 1,.*", &sqltypes.Result{})
 	db.AddQueryPattern("insert into _vt\\.redo_statement.*", &sqltypes.Result{})
@@ -756,7 +760,7 @@ func newShortAgeExecutor(t *testing.T, ctx context.Context) (txe *DTExecutor, ts
 // newNoTwopcExecutor is same as newTestTxExecutor, but 2pc disabled.
 func newNoTwopcExecutor(t *testing.T, ctx context.Context) (txe *DTExecutor, tsv *TabletServer, db *fakesqldb.DB) {
 	db = setUpQueryExecutorTest(t)
-	logStats := tabletenv.NewLogStats(ctx, "TestTxExecutor")
+	logStats := tabletenv.NewLogStats(ctx, "TestTxExecutor", streamlog.NewQueryLogConfigForTest())
 	tsv = newTestTabletServer(ctx, noTwopc, db)
 	return &DTExecutor{
 		ctx:      ctx,

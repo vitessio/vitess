@@ -608,9 +608,8 @@ func TestUpdateComments(t *testing.T) {
 }
 
 func TestUpdateNormalize(t *testing.T) {
-	executor, sbc1, sbc2, _, ctx := createExecutorEnv(t)
+	executor, sbc1, sbc2, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 
-	executor.normalize = true
 	session := &vtgatepb.Session{
 		TargetString: "@primary",
 	}
@@ -1337,7 +1336,7 @@ func TestInsertSharded(t *testing.T) {
 	testQueryLog(t, executor, logChan, "TestExecute", "INSERT", "insert into user2(id, `name`, lastname) values (2, 'myname', 'mylastname')", 1)
 
 	// insert with binary values
-	executor.normalize = true
+	executor.config.Normalize = true
 	sbc1.Queries = nil
 	sbc2.Queries = nil
 	sbclookup.Queries = nil
@@ -1368,8 +1367,7 @@ func TestInsertSharded(t *testing.T) {
 }
 
 func TestInsertNegativeValue(t *testing.T) {
-	executor, sbc1, sbc2, sbclookup, ctx := createExecutorEnv(t)
-	executor.normalize = true
+	executor, sbc1, sbc2, sbclookup, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
@@ -1812,8 +1810,9 @@ func TestInsertGeneratorSharded(t *testing.T) {
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(1),
 		}},
-		RowsAffected: 1,
-		InsertID:     1,
+		RowsAffected:    1,
+		InsertIDChanged: true,
+		InsertID:        1,
 	}})
 	session := &vtgatepb.Session{
 		TargetString: "@primary",
@@ -1840,8 +1839,9 @@ func TestInsertGeneratorSharded(t *testing.T) {
 	}}
 	assertQueries(t, sbclookup, wantQueries)
 	wantResult := &sqltypes.Result{
-		InsertID:     1,
-		RowsAffected: 1,
+		InsertID:        1,
+		RowsAffected:    1,
+		InsertIDChanged: true,
 	}
 	utils.MustMatch(t, wantResult, result)
 }
@@ -1854,8 +1854,9 @@ func TestInsertAutoincSharded(t *testing.T) {
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(1),
 		}},
-		RowsAffected: 1,
-		InsertID:     2,
+		RowsAffected:    1,
+		InsertID:        2,
+		InsertIDChanged: true,
 	}
 	sbc.SetResults([]*sqltypes.Result{wantResult})
 	session := &vtgatepb.Session{
@@ -1894,8 +1895,9 @@ func TestInsertGeneratorUnsharded(t *testing.T) {
 	}}
 	assertQueries(t, sbclookup, wantQueries)
 	wantResult := &sqltypes.Result{
-		InsertID:     1,
-		RowsAffected: 1,
+		InsertID:        1,
+		InsertIDChanged: true,
+		RowsAffected:    1,
 	}
 	utils.MustMatch(t, wantResult, result)
 }
@@ -1912,8 +1914,9 @@ func TestInsertAutoincUnsharded(t *testing.T) {
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(1),
 		}},
-		RowsAffected: 1,
-		InsertID:     2,
+		RowsAffected:    1,
+		InsertID:        2,
+		InsertIDChanged: true,
 	}
 	sbclookup.SetResults([]*sqltypes.Result{wantResult})
 
@@ -1965,8 +1968,9 @@ func TestInsertLookupOwnedGenerator(t *testing.T) {
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(4),
 		}},
-		RowsAffected: 1,
-		InsertID:     1,
+		RowsAffected:    1,
+		InsertID:        1,
+		InsertIDChanged: true,
 	}})
 	session := &vtgatepb.Session{
 		TargetString: "@primary",
@@ -1993,8 +1997,9 @@ func TestInsertLookupOwnedGenerator(t *testing.T) {
 	}}
 	assertQueries(t, sbclookup, wantQueries)
 	wantResult := &sqltypes.Result{
-		InsertID:     4,
-		RowsAffected: 1,
+		InsertID:        4,
+		InsertIDChanged: true,
+		RowsAffected:    1,
 	}
 	utils.MustMatch(t, wantResult, result)
 }
@@ -2226,8 +2231,9 @@ func TestMultiInsertGenerator(t *testing.T) {
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(1),
 		}},
-		RowsAffected: 1,
-		InsertID:     1,
+		RowsAffected:    1,
+		InsertIDChanged: true,
+		InsertID:        1,
 	}})
 	session := &vtgatepb.Session{
 		TargetString: "@primary",
@@ -2258,8 +2264,9 @@ func TestMultiInsertGenerator(t *testing.T) {
 	}}
 	assertQueries(t, sbclookup, wantQueries)
 	wantResult := &sqltypes.Result{
-		InsertID:     1,
-		RowsAffected: 1,
+		InsertIDChanged: true,
+		InsertID:        1,
+		RowsAffected:    1,
 	}
 	utils.MustMatch(t, wantResult, result)
 }
@@ -2271,8 +2278,9 @@ func TestMultiInsertGeneratorSparse(t *testing.T) {
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(1),
 		}},
-		RowsAffected: 1,
-		InsertID:     1,
+		RowsAffected:    1,
+		InsertIDChanged: true,
+		InsertID:        1,
 	}})
 	session := &vtgatepb.Session{
 		TargetString: "@primary",
@@ -2307,8 +2315,9 @@ func TestMultiInsertGeneratorSparse(t *testing.T) {
 	}}
 	assertQueries(t, sbclookup, wantQueries)
 	wantResult := &sqltypes.Result{
-		InsertID:     1,
-		RowsAffected: 1,
+		InsertIDChanged: true,
+		InsertID:        1,
+		RowsAffected:    1,
 	}
 	utils.MustMatch(t, wantResult, result)
 }
@@ -2517,9 +2526,7 @@ func TestDeleteEqualWithPrepare(t *testing.T) {
 }
 
 func TestUpdateLastInsertID(t *testing.T) {
-	executor, sbc1, _, _, ctx := createExecutorEnv(t)
-
-	executor.normalize = true
+	executor, sbc1, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 
 	sql := "update user set a = last_insert_id() where id = 1"
 	session := &vtgatepb.Session{

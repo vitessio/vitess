@@ -87,14 +87,13 @@ func TestMoveTablesTZ(t *testing.T) {
 
 	tables := "datze"
 
-	ksErrorWorkflow := fmt.Sprintf("%s.%s", targetKs, "tzerr")
-	output, err := vc.VtctlClient.ExecuteCommandWithOutput("MoveTables", "--", "--source", sourceKs, "--tables",
-		tables, "--source_time_zone", "US/Pacifik", "Create", ksErrorWorkflow)
+	output, err := vc.VtctldClient.ExecuteCommandWithOutput("MoveTables", "--workflow", workflow, "--target-keyspace", targetKs, "Create",
+		"--source-keyspace", sourceKs, "--tables", tables, "--source-time-zone", "US/Pacifik")
 	require.Error(t, err, output)
 	require.Contains(t, output, "time zone is invalid")
 
-	output, err = vc.VtctlClient.ExecuteCommandWithOutput("MoveTables", "--", "--source", sourceKs, "--tables",
-		tables, "--source_time_zone", "US/Pacific", "Create", ksWorkflow)
+	output, err = vc.VtctldClient.ExecuteCommandWithOutput("MoveTables", "--workflow", workflow, "--target-keyspace", targetKs, "Create",
+		"--source-keyspace", sourceKs, "--tables", tables, "--source-time-zone", "US/Pacific")
 	require.NoError(t, err, output)
 
 	catchup(t, customerTab, workflow, "MoveTables")
@@ -105,7 +104,7 @@ func TestMoveTablesTZ(t *testing.T) {
 	_, err = vtgateConn.ExecuteFetch("insert into datze(id, dt2) values (12, '2022-04-01 5:06:07')", 1, false) // dst
 	require.NoError(t, err)
 
-	vdiffSideBySide(t, ksWorkflow, "")
+	doVDiff(t, ksWorkflow, "")
 
 	// update to test date conversions in replication (vplayer) mode (update statements)
 	_, err = vtgateConn.ExecuteFetch("update datze set dt2 = '2022-04-01 5:06:07' where id = 11", 1, false) // dst
@@ -113,7 +112,7 @@ func TestMoveTablesTZ(t *testing.T) {
 	_, err = vtgateConn.ExecuteFetch("update datze set dt2 = '2022-01-01 10:20:30' where id = 12", 1, false) // standard time
 	require.NoError(t, err)
 
-	vdiffSideBySide(t, ksWorkflow, "")
+	doVDiff(t, ksWorkflow, "")
 
 	query := "select * from datze"
 	qrSourceUSPacific, err := productTab.QueryTablet(query, sourceKs, true)
@@ -175,7 +174,7 @@ func TestMoveTablesTZ(t *testing.T) {
 		require.Equal(t, row.AsString("dt2", ""), qrTargetUSPacific.Named().Rows[i].AsString("dt2", ""))
 		require.Equal(t, row.AsString("ts1", ""), qrTargetUSPacific.Named().Rows[i].AsString("ts1", ""))
 	}
-	output, err = vc.VtctlClient.ExecuteCommandWithOutput("MoveTables", "--", "SwitchTraffic", ksWorkflow)
+	output, err = vc.VtctldClient.ExecuteCommandWithOutput("MoveTables", "--target-keyspace", targetKs, "SwitchTraffic", "--workflow", workflow)
 	require.NoError(t, err, output)
 
 	qr, err := productTab.QueryTablet(sqlparser.BuildParsedQuery("select * from %s.vreplication where workflow='%s_reverse'",
@@ -192,5 +191,5 @@ func TestMoveTablesTZ(t *testing.T) {
 	// inserts to test date conversions in reverse replication
 	execVtgateQuery(t, vtgateConn, "customer", "insert into datze(id, dt2) values (13, '2022-01-01 18:20:30')")
 	execVtgateQuery(t, vtgateConn, "customer", "insert into datze(id, dt2) values (14, '2022-04-01 12:06:07')")
-	vdiffSideBySide(t, ksReverseWorkflow, "")
+	doVDiff(t, ksReverseWorkflow, "")
 }

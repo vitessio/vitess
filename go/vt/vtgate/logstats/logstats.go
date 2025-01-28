@@ -33,6 +33,8 @@ import (
 
 // LogStats records the stats for a single vtgate query
 type LogStats struct {
+	Config streamlog.QueryLogConfig
+
 	Ctx                     context.Context
 	Method                  string
 	TabletType              string
@@ -59,7 +61,7 @@ type LogStats struct {
 
 // NewLogStats constructs a new LogStats with supplied Method and ctx
 // field values, and the StartTime field set to the present time.
-func NewLogStats(ctx context.Context, methodName, sql, sessionUUID string, bindVars map[string]*querypb.BindVariable) *LogStats {
+func NewLogStats(ctx context.Context, methodName, sql, sessionUUID string, bindVars map[string]*querypb.BindVariable, config streamlog.QueryLogConfig) *LogStats {
 	return &LogStats{
 		Ctx:           ctx,
 		Method:        methodName,
@@ -67,6 +69,7 @@ func NewLogStats(ctx context.Context, methodName, sql, sessionUUID string, bindV
 		SessionUUID:   sessionUUID,
 		BindVariables: bindVars,
 		StartTime:     time.Now(),
+		Config:        config,
 	}
 }
 
@@ -130,16 +133,15 @@ func (stats *LogStats) MirrorTargetErrorStr() string {
 // Logf formats the log record to the given writer, either as
 // tab-separated list of logged fields or as JSON.
 func (stats *LogStats) Logf(w io.Writer, params url.Values) error {
-	if !streamlog.ShouldEmitLog(stats.SQL, stats.RowsAffected, stats.RowsReturned) {
+	if !stats.Config.ShouldEmitLog(stats.SQL, stats.RowsAffected, stats.RowsReturned, stats.Error != nil) {
 		return nil
 	}
 
-	redacted := streamlog.GetRedactDebugUIQueries()
 	_, fullBindParams := params["full"]
 	remoteAddr, username := stats.RemoteAddrUsername()
 
 	log := logstats.NewLogger()
-	log.Init(streamlog.GetQueryLogFormat() == streamlog.QueryLogFormatJSON)
+	log.Init(stats.Config.Format == streamlog.QueryLogFormatJSON)
 	log.Key("Method")
 	log.StringUnquoted(stats.Method)
 	log.Key("RemoteAddr")
@@ -167,7 +169,7 @@ func (stats *LogStats) Logf(w io.Writer, params url.Values) error {
 	log.Key("SQL")
 	log.String(stats.SQL)
 	log.Key("BindVars")
-	if redacted {
+	if stats.Config.RedactDebugUIQueries {
 		log.Redacted()
 	} else {
 		log.BindVariables(stats.BindVariables, fullBindParams)

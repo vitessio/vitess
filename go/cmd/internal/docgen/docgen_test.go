@@ -41,7 +41,7 @@ func TestGenerateMarkdownTree(t *testing.T) {
 			name:      "current dir",
 			dir:       "./",
 			cmd:       &cobra.Command{},
-			expectErr: false,
+			expectErr: true,
 		},
 		{
 			name:      "Permission denied",

@@ -26,7 +26,6 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 )
 
 // isBitSet returns true if the bit at index is set
@@ -36,14 +35,22 @@ func isBitSet(data []byte, index int) bool {
 	return data[byteIndex]&bitMask > 0
 }
 
-func (tp *TablePlan) isPartial(rowChange *binlogdatapb.RowChange) bool {
-	if (tp.WorkflowConfig.ExperimentalFlags /**/ & /**/ vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage) == 0 ||
-		rowChange.DataColumns == nil ||
-		rowChange.DataColumns.Count == 0 {
+func setBit(data []byte, index int, value bool) {
+	byteIndex := index / 8
+	bitMask := byte(1 << (uint(index) & 0x7))
+	if value {
+		data[byteIndex] |= bitMask
+	} else {
+		data[byteIndex] &= 0xff - bitMask
+	}
+}
 
+func (tp *TablePlan) isPartial(rowChange *binlogdatapb.RowChange) bool {
+	if rowChange == nil {
 		return false
 	}
-	return true
+	return (rowChange.DataColumns != nil && rowChange.DataColumns.Count > 0) ||
+		(rowChange.JsonPartialValues != nil && rowChange.JsonPartialValues.Count > 0)
 }
 
 func (tpb *tablePlanBuilder) generatePartialValuesPart(buf *sqlparser.TrackedBuffer, bvf *bindvarFormatter, dataColumns *binlogdatapb.RowChange_Bitmap) *sqlparser.ParsedQuery {

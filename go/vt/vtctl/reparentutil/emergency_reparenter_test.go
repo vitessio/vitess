@@ -28,6 +28,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/replication"
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	"vitess.io/vitess/go/mysql"
@@ -129,7 +130,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 	}{
 		{
 			name:                 "success",
-			durability:           "none",
+			durability:           policy.DurabilityNone,
 			emergencyReparentOps: EmergencyReparentOptions{},
 			tmc: &testutil.TabletManagerClient{
 				PopulateReparentJournalResults: map[string]error{
@@ -238,7 +239,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 		},
 		{
 			name:                 "success - 1 replica and 1 rdonly failure",
-			durability:           "semi_sync",
+			durability:           policy.DurabilitySemiSync,
 			emergencyReparentOps: EmergencyReparentOptions{},
 			tmc: &testutil.TabletManagerClient{
 				PopulateReparentJournalResults: map[string]error{
@@ -372,7 +373,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 			// Here, all our tablets are tied, so we're going to explicitly pick
 			// zone1-101.
 			name:       "success with requested primary-elect",
-			durability: "none",
+			durability: policy.DurabilityNone,
 			emergencyReparentOps: EmergencyReparentOptions{NewPrimaryAlias: &topodatapb.TabletAlias{
 				Cell: "zone1",
 				Uid:  101,
@@ -483,7 +484,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 		},
 		{
 			name:                 "success with existing primary",
-			durability:           "none",
+			durability:           policy.DurabilityNone,
 			emergencyReparentOps: EmergencyReparentOptions{},
 			tmc: &testutil.TabletManagerClient{
 				DemotePrimaryResults: map[string]struct {
@@ -594,7 +595,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 		},
 		{
 			name:                 "shard not found",
-			durability:           "none",
+			durability:           policy.DurabilityNone,
 			emergencyReparentOps: EmergencyReparentOptions{},
 			tmc:                  &testutil.TabletManagerClient{},
 			unlockTopo:           true, // we shouldn't try to lock the nonexistent shard
@@ -607,7 +608,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 		},
 		{
 			name:                 "cannot stop replication",
-			durability:           "none",
+			durability:           policy.DurabilityNone,
 			emergencyReparentOps: EmergencyReparentOptions{},
 			tmc: &testutil.TabletManagerClient{
 				StopReplicationAndGetStatusResults: map[string]struct {
@@ -666,7 +667,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 		},
 		{
 			name:                 "lost topo lock",
-			durability:           "none",
+			durability:           policy.DurabilityNone,
 			emergencyReparentOps: EmergencyReparentOptions{},
 			tmc: &testutil.TabletManagerClient{
 				StopReplicationAndGetStatusResults: map[string]struct {
@@ -725,7 +726,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 		},
 		{
 			name:                 "cannot get reparent candidates",
-			durability:           "none",
+			durability:           policy.DurabilityNone,
 			emergencyReparentOps: EmergencyReparentOptions{},
 			tmc: &testutil.TabletManagerClient{
 				StopReplicationAndGetStatusResults: map[string]struct {
@@ -799,7 +800,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 		},
 		{
 			name:                 "zero valid reparent candidates",
-			durability:           "none",
+			durability:           policy.DurabilityNone,
 			emergencyReparentOps: EmergencyReparentOptions{},
 			tmc:                  &testutil.TabletManagerClient{},
 			shards: []*vtctldatapb.Shard{
@@ -816,7 +817,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 		},
 		{
 			name:       "error waiting for relay logs to apply",
-			durability: "none",
+			durability: policy.DurabilityNone,
 			// one replica is going to take a minute to apply relay logs
 			emergencyReparentOps: EmergencyReparentOptions{
 				WaitReplicasTimeout: time.Millisecond * 50,
@@ -911,7 +912,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 		},
 		{
 			name:       "requested primary-elect is not in tablet map",
-			durability: "none",
+			durability: policy.DurabilityNone,
 			emergencyReparentOps: EmergencyReparentOptions{NewPrimaryAlias: &topodatapb.TabletAlias{
 				Cell: "zone1",
 				Uid:  200,
@@ -1001,7 +1002,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 		},
 		{
 			name:       "requested primary-elect is not winning primary-elect",
-			durability: "none",
+			durability: policy.DurabilityNone,
 			emergencyReparentOps: EmergencyReparentOptions{NewPrimaryAlias: &topodatapb.TabletAlias{ // we're requesting a tablet that's behind in replication
 				Cell: "zone1",
 				Uid:  102,
@@ -1124,7 +1125,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 		},
 		{
 			name:       "cannot promote new primary",
-			durability: "none",
+			durability: policy.DurabilityNone,
 			emergencyReparentOps: EmergencyReparentOptions{NewPrimaryAlias: &topodatapb.TabletAlias{
 				Cell: "zone1",
 				Uid:  102,
@@ -1237,7 +1238,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 		},
 		{
 			name:                 "promotion-rule - no valid candidates for emergency reparent",
-			durability:           "none",
+			durability:           policy.DurabilityNone,
 			emergencyReparentOps: EmergencyReparentOptions{},
 			tmc: &testutil.TabletManagerClient{
 				PopulateReparentJournalResults: map[string]error{
@@ -1344,7 +1345,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 		},
 		{
 			name:       "proposed primary - must not promotion rule",
-			durability: "none",
+			durability: policy.DurabilityNone,
 			emergencyReparentOps: EmergencyReparentOptions{
 				NewPrimaryAlias: &topodatapb.TabletAlias{
 					Cell: "zone1",
@@ -1456,7 +1457,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 		},
 		{
 			name:                 "cross cell - no valid candidates",
-			durability:           "none",
+			durability:           policy.DurabilityNone,
 			emergencyReparentOps: EmergencyReparentOptions{PreventCrossCellPromotion: true},
 			tmc: &testutil.TabletManagerClient{
 				PopulateReparentJournalResults: map[string]error{
@@ -1575,7 +1576,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 		},
 		{
 			name:       "proposed primary in a different cell",
-			durability: "none",
+			durability: policy.DurabilityNone,
 			emergencyReparentOps: EmergencyReparentOptions{
 				PreventCrossCellPromotion: true,
 				NewPrimaryAlias: &topodatapb.TabletAlias{
@@ -1700,7 +1701,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 		},
 		{
 			name:       "proposed primary cannot make progress",
-			durability: "cross_cell",
+			durability: policy.DurabilityCrossCell,
 			emergencyReparentOps: EmergencyReparentOptions{
 				NewPrimaryAlias: &topodatapb.TabletAlias{
 					Cell: "zone1",
@@ -1815,7 +1816,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 		},
 		{
 			name:       "expected primary mismatch",
-			durability: "none",
+			durability: policy.DurabilityNone,
 			emergencyReparentOps: EmergencyReparentOptions{
 				ExpectedPrimaryAlias: &topodatapb.TabletAlias{
 					Cell: "zone1",
@@ -2333,7 +2334,7 @@ func TestEmergencyReparenter_promotionOfNewPrimary(t *testing.T) {
 		},
 	}
 
-	durability, _ := GetDurabilityPolicy("none")
+	durability, _ := policy.GetDurabilityPolicy(policy.DurabilityNone)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
@@ -3021,7 +3022,7 @@ func TestEmergencyReparenter_findMostAdvanced(t *testing.T) {
 		},
 	}
 
-	durability, _ := GetDurabilityPolicy("none")
+	durability, _ := policy.GetDurabilityPolicy(policy.DurabilityNone)
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -3502,7 +3503,7 @@ func TestEmergencyReparenter_reparentReplicas(t *testing.T) {
 		},
 	}
 
-	durability, _ := GetDurabilityPolicy("none")
+	durability, _ := policy.GetDurabilityPolicy(policy.DurabilityNone)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.remoteOpTimeout != 0 {
@@ -4092,7 +4093,7 @@ func TestEmergencyReparenter_promoteIntermediateSource(t *testing.T) {
 		},
 	}
 
-	durability, _ := GetDurabilityPolicy("none")
+	durability, _ := policy.GetDurabilityPolicy(policy.DurabilityNone)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
@@ -4336,7 +4337,7 @@ func TestEmergencyReparenter_identifyPrimaryCandidate(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			durability, _ := GetDurabilityPolicy("none")
+			durability, _ := policy.GetDurabilityPolicy(policy.DurabilityNone)
 			test.emergencyReparentOps.durability = durability
 			logger := logutil.NewMemoryLogger()
 
@@ -4355,7 +4356,7 @@ func TestEmergencyReparenter_identifyPrimaryCandidate(t *testing.T) {
 // TestParentContextCancelled tests that even if the parent context of reparentReplicas cancels, we should not cancel the context of
 // SetReplicationSource since there could be tablets that are running it even after ERS completes.
 func TestParentContextCancelled(t *testing.T) {
-	durability, err := GetDurabilityPolicy("none")
+	durability, err := policy.GetDurabilityPolicy(policy.DurabilityNone)
 	require.NoError(t, err)
 	// Setup ERS options with a very high wait replicas timeout
 	emergencyReparentOps := EmergencyReparentOptions{IgnoreReplicas: sets.New[string]("zone1-0000000404"), WaitReplicasTimeout: time.Minute, durability: durability}
@@ -4486,28 +4487,28 @@ func TestEmergencyReparenter_filterValidCandidates(t *testing.T) {
 	}{
 		{
 			name:                "filter must not",
-			durability:          "none",
+			durability:          policy.DurabilityNone,
 			validTablets:        allTablets,
 			tabletsReachable:    allTablets,
 			tabletsTakingBackup: noTabletsTakingBackup,
 			filteredTablets:     []*topodatapb.Tablet{primaryTablet, replicaTablet, replicaCrossCellTablet},
 		}, {
 			name:                "host taking backup must not be on the list when there are other candidates",
-			durability:          "none",
+			durability:          policy.DurabilityNone,
 			validTablets:        allTablets,
 			tabletsReachable:    []*topodatapb.Tablet{replicaTablet, replicaCrossCellTablet, rdonlyTablet, rdonlyCrossCellTablet},
 			tabletsTakingBackup: replicaTakingBackup,
 			filteredTablets:     []*topodatapb.Tablet{replicaCrossCellTablet},
 		}, {
 			name:                "host taking backup must be the only one on the list when there are no other candidates",
-			durability:          "none",
+			durability:          policy.DurabilityNone,
 			validTablets:        allTablets,
 			tabletsReachable:    []*topodatapb.Tablet{replicaTablet, rdonlyTablet, rdonlyCrossCellTablet},
 			tabletsTakingBackup: replicaTakingBackup,
 			filteredTablets:     []*topodatapb.Tablet{replicaTablet},
 		}, {
 			name:                "filter cross cell",
-			durability:          "none",
+			durability:          policy.DurabilityNone,
 			validTablets:        allTablets,
 			tabletsReachable:    allTablets,
 			tabletsTakingBackup: noTabletsTakingBackup,
@@ -4523,14 +4524,14 @@ func TestEmergencyReparenter_filterValidCandidates(t *testing.T) {
 			filteredTablets: []*topodatapb.Tablet{primaryTablet, replicaTablet},
 		}, {
 			name:                "filter establish",
-			durability:          "cross_cell",
+			durability:          policy.DurabilityCrossCell,
 			validTablets:        []*topodatapb.Tablet{primaryTablet, replicaTablet},
 			tabletsReachable:    []*topodatapb.Tablet{primaryTablet, replicaTablet, rdonlyTablet, rdonlyCrossCellTablet},
 			tabletsTakingBackup: noTabletsTakingBackup,
 			filteredTablets:     nil,
 		}, {
 			name:       "filter mixed",
-			durability: "cross_cell",
+			durability: policy.DurabilityCrossCell,
 			prevPrimary: &topodatapb.Tablet{
 				Alias: &topodatapb.TabletAlias{
 					Cell: "zone-2",
@@ -4545,7 +4546,7 @@ func TestEmergencyReparenter_filterValidCandidates(t *testing.T) {
 			filteredTablets:     []*topodatapb.Tablet{replicaCrossCellTablet},
 		}, {
 			name:                "error - requested primary must not",
-			durability:          "none",
+			durability:          policy.DurabilityNone,
 			validTablets:        allTablets,
 			tabletsReachable:    allTablets,
 			tabletsTakingBackup: noTabletsTakingBackup,
@@ -4555,7 +4556,7 @@ func TestEmergencyReparenter_filterValidCandidates(t *testing.T) {
 			errShouldContain: "proposed primary zone-1-0000000003 has a must not promotion rule",
 		}, {
 			name:                "error - requested primary not in same cell",
-			durability:          "none",
+			durability:          policy.DurabilityNone,
 			validTablets:        allTablets,
 			tabletsReachable:    allTablets,
 			tabletsTakingBackup: noTabletsTakingBackup,
@@ -4567,7 +4568,7 @@ func TestEmergencyReparenter_filterValidCandidates(t *testing.T) {
 			errShouldContain: "proposed primary zone-2-0000000002 is is a different cell as the previous primary",
 		}, {
 			name:                "error - requested primary cannot establish",
-			durability:          "cross_cell",
+			durability:          policy.DurabilityCrossCell,
 			validTablets:        allTablets,
 			tabletsTakingBackup: noTabletsTakingBackup,
 			tabletsReachable:    []*topodatapb.Tablet{primaryTablet, replicaTablet, rdonlyTablet, rdonlyCrossCellTablet},
@@ -4579,7 +4580,7 @@ func TestEmergencyReparenter_filterValidCandidates(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			durability, err := GetDurabilityPolicy(tt.durability)
+			durability, err := policy.GetDurabilityPolicy(tt.durability)
 			require.NoError(t, err)
 			tt.opts.durability = durability
 			logger := logutil.NewMemoryLogger()
@@ -5525,7 +5526,7 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 			slices.Sort(keys)
 			require.ElementsMatch(t, tt.wantedCandidates, keys)
 
-			dp, err := GetDurabilityPolicy("semi_sync")
+			dp, err := policy.GetDurabilityPolicy(policy.DurabilitySemiSync)
 			require.NoError(t, err)
 			ers := EmergencyReparenter{logger: logutil.NewCallbackLogger(func(*logutilpb.Event) {})}
 			winningPrimary, _, err := ers.findMostAdvanced(candidates, tt.tabletMap, EmergencyReparentOptions{durability: dp})

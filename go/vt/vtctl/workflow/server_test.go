@@ -27,7 +27,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/prototext"
@@ -35,11 +34,12 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtenv"
-	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -187,257 +187,6 @@ func TestCheckReshardingJournalExistsOnTablet(t *testing.T) {
 
 			assert.Equal(t, tt.shouldExist, exists, existAssertionMsg)
 			utils.MustMatch(t, tt.journal, journal, "journal in resharding_journal did not match")
-		})
-	}
-}
-
-// TestVDiffCreate performs some basic tests of the VDiffCreate function
-// to ensure that it behaves as expected given a specific request.
-func TestVDiffCreate(t *testing.T) {
-	ctx := context.Background()
-	workflowName := "wf1"
-	sourceKeyspace := &testKeyspace{
-		KeyspaceName: "source",
-		ShardNames:   []string{"0"},
-	}
-	targetKeyspace := &testKeyspace{
-		KeyspaceName: "target",
-		ShardNames:   []string{"-80", "80-"},
-	}
-	env := newTestEnv(t, ctx, defaultCellName, sourceKeyspace, targetKeyspace)
-	defer env.close()
-
-	tests := []struct {
-		name    string
-		req     *vtctldatapb.VDiffCreateRequest
-		wantErr string
-	}{
-		{
-			name: "no values",
-			req:  &vtctldatapb.VDiffCreateRequest{},
-			// We did not provide any keyspace or shard.
-			wantErr: "FindAllShardsInKeyspace() invalid keyspace name: UnescapeID err: invalid input identifier ''",
-		},
-		{
-			name: "generated UUID",
-			req: &vtctldatapb.VDiffCreateRequest{
-				TargetKeyspace: targetKeyspace.KeyspaceName,
-				Workflow:       workflowName,
-			},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if tt.wantErr == "" {
-				env.tmc.expectVRQueryResultOnKeyspaceTablets(targetKeyspace.KeyspaceName, &queryResult{
-					query:  "select vrepl_id, table_name, lastpk from _vt.copy_state where vrepl_id in (1) and id in (select max(id) from _vt.copy_state where vrepl_id in (1) group by vrepl_id, table_name)",
-					result: &querypb.QueryResult{},
-				})
-			}
-			got, err := env.ws.VDiffCreate(ctx, tt.req)
-			if tt.wantErr != "" {
-				require.EqualError(t, err, tt.wantErr)
-				return
-			}
-			require.NoError(t, err)
-			require.NotNil(t, got)
-			// Ensure that we always use a valid UUID.
-			err = uuid.Validate(got.UUID)
-			require.NoError(t, err)
-		})
-	}
-}
-
-func TestVDiffResume(t *testing.T) {
-	ctx := context.Background()
-	sourceKeyspace := &testKeyspace{
-		KeyspaceName: "sourceks",
-		ShardNames:   []string{"0"},
-	}
-	targetKeyspace := &testKeyspace{
-		KeyspaceName: "targetks",
-		ShardNames:   []string{"-80", "80-"},
-	}
-	workflow := "testwf"
-	uuid := uuid.New().String()
-	env := newTestEnv(t, ctx, defaultCellName, sourceKeyspace, targetKeyspace)
-	defer env.close()
-
-	env.tmc.strict = true
-	action := string(vdiff.ResumeAction)
-
-	tests := []struct {
-		name                  string
-		req                   *vtctldatapb.VDiffResumeRequest              // vtctld requests
-		expectedVDiffRequests map[*topodatapb.Tablet]*vdiffRequestResponse // tablet requests
-		wantErr               string
-	}{
-		{
-			name: "basic resume", // Both target shards
-			req: &vtctldatapb.VDiffResumeRequest{
-				TargetKeyspace: targetKeyspace.KeyspaceName,
-				Workflow:       workflow,
-				Uuid:           uuid,
-			},
-			expectedVDiffRequests: map[*topodatapb.Tablet]*vdiffRequestResponse{
-				env.tablets[targetKeyspace.KeyspaceName][startingTargetTabletUID]: {
-					req: &tabletmanagerdatapb.VDiffRequest{
-						Keyspace:  targetKeyspace.KeyspaceName,
-						Workflow:  workflow,
-						Action:    action,
-						VdiffUuid: uuid,
-					},
-				},
-				env.tablets[targetKeyspace.KeyspaceName][startingTargetTabletUID+tabletUIDStep]: {
-					req: &tabletmanagerdatapb.VDiffRequest{
-						Keyspace:  targetKeyspace.KeyspaceName,
-						Workflow:  workflow,
-						Action:    action,
-						VdiffUuid: uuid,
-					},
-				},
-			},
-		},
-		{
-			name: "resume on first shard",
-			req: &vtctldatapb.VDiffResumeRequest{
-				TargetKeyspace: targetKeyspace.KeyspaceName,
-				TargetShards:   targetKeyspace.ShardNames[:1],
-				Workflow:       workflow,
-				Uuid:           uuid,
-			},
-			expectedVDiffRequests: map[*topodatapb.Tablet]*vdiffRequestResponse{
-				env.tablets[targetKeyspace.KeyspaceName][startingTargetTabletUID]: {
-					req: &tabletmanagerdatapb.VDiffRequest{
-						Keyspace:  targetKeyspace.KeyspaceName,
-						Workflow:  workflow,
-						Action:    action,
-						VdiffUuid: uuid,
-					},
-				},
-			},
-		},
-		{
-			name: "resume on invalid shard",
-			req: &vtctldatapb.VDiffResumeRequest{
-				TargetKeyspace: targetKeyspace.KeyspaceName,
-				TargetShards:   []string{"0"},
-				Workflow:       workflow,
-				Uuid:           uuid,
-			},
-			wantErr: fmt.Sprintf("specified target shard 0 not a valid target for workflow %s", workflow),
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			for tab, vdr := range tt.expectedVDiffRequests {
-				env.tmc.expectVDiffRequest(tab, vdr)
-			}
-			got, err := env.ws.VDiffResume(ctx, tt.req)
-			if tt.wantErr != "" {
-				require.EqualError(t, err, tt.wantErr)
-			} else {
-				require.NoError(t, err)
-				require.NotNil(t, got)
-			}
-			env.tmc.confirmVDiffRequests(t)
-		})
-	}
-}
-
-func TestVDiffStop(t *testing.T) {
-	ctx := context.Background()
-	sourceKeyspace := &testKeyspace{
-		KeyspaceName: "sourceks",
-		ShardNames:   []string{"0"},
-	}
-	targetKeyspace := &testKeyspace{
-		KeyspaceName: "targetks",
-		ShardNames:   []string{"-80", "80-"},
-	}
-	workflow := "testwf"
-	uuid := uuid.New().String()
-	env := newTestEnv(t, ctx, defaultCellName, sourceKeyspace, targetKeyspace)
-	defer env.close()
-
-	env.tmc.strict = true
-	action := string(vdiff.StopAction)
-
-	tests := []struct {
-		name                  string
-		req                   *vtctldatapb.VDiffStopRequest                // vtctld requests
-		expectedVDiffRequests map[*topodatapb.Tablet]*vdiffRequestResponse // tablet requests
-		wantErr               string
-	}{
-		{
-			name: "basic stop", // Both target shards
-			req: &vtctldatapb.VDiffStopRequest{
-				TargetKeyspace: targetKeyspace.KeyspaceName,
-				Workflow:       workflow,
-				Uuid:           uuid,
-			},
-			expectedVDiffRequests: map[*topodatapb.Tablet]*vdiffRequestResponse{
-				env.tablets[targetKeyspace.KeyspaceName][startingTargetTabletUID]: {
-					req: &tabletmanagerdatapb.VDiffRequest{
-						Keyspace:  targetKeyspace.KeyspaceName,
-						Workflow:  workflow,
-						Action:    action,
-						VdiffUuid: uuid,
-					},
-				},
-				env.tablets[targetKeyspace.KeyspaceName][startingTargetTabletUID+tabletUIDStep]: {
-					req: &tabletmanagerdatapb.VDiffRequest{
-						Keyspace:  targetKeyspace.KeyspaceName,
-						Workflow:  workflow,
-						Action:    action,
-						VdiffUuid: uuid,
-					},
-				},
-			},
-		},
-		{
-			name: "stop on first shard",
-			req: &vtctldatapb.VDiffStopRequest{
-				TargetKeyspace: targetKeyspace.KeyspaceName,
-				TargetShards:   targetKeyspace.ShardNames[:1],
-				Workflow:       workflow,
-				Uuid:           uuid,
-			},
-			expectedVDiffRequests: map[*topodatapb.Tablet]*vdiffRequestResponse{
-				env.tablets[targetKeyspace.KeyspaceName][startingTargetTabletUID]: {
-					req: &tabletmanagerdatapb.VDiffRequest{
-						Keyspace:  targetKeyspace.KeyspaceName,
-						Workflow:  workflow,
-						Action:    action,
-						VdiffUuid: uuid,
-					},
-				},
-			},
-		},
-		{
-			name: "stop on invalid shard",
-			req: &vtctldatapb.VDiffStopRequest{
-				TargetKeyspace: targetKeyspace.KeyspaceName,
-				TargetShards:   []string{"0"},
-				Workflow:       workflow,
-				Uuid:           uuid,
-			},
-			wantErr: fmt.Sprintf("specified target shard 0 not a valid target for workflow %s", workflow),
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			for tab, vdr := range tt.expectedVDiffRequests {
-				env.tmc.expectVDiffRequest(tab, vdr)
-			}
-			got, err := env.ws.VDiffStop(ctx, tt.req)
-			if tt.wantErr != "" {
-				require.EqualError(t, err, tt.wantErr)
-			} else {
-				require.NoError(t, err)
-				require.NotNil(t, got)
-			}
-			env.tmc.confirmVDiffRequests(t)
 		})
 	}
 }
@@ -994,11 +743,14 @@ func TestWorkflowDelete(t *testing.T) {
 				},
 			},
 			preFunc: func(t *testing.T, env *testEnv) {
-				err := env.ts.SaveVSchema(ctx, targetKeyspaceName, &vschemapb.Keyspace{
-					Sharded: true,
-					MultiTenantSpec: &vschemapb.MultiTenantSpec{
-						TenantIdColumnName: "tenant_id",
-						TenantIdColumnType: sqltypes.Int64,
+				err := env.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+					Name: targetKeyspaceName,
+					Keyspace: &vschemapb.Keyspace{
+						Sharded: true,
+						MultiTenantSpec: &vschemapb.MultiTenantSpec{
+							TenantIdColumnName: "tenant_id",
+							TenantIdColumnType: sqltypes.Int64,
+						},
 					},
 				})
 				require.NoError(t, err)
@@ -1104,11 +856,14 @@ func TestWorkflowDelete(t *testing.T) {
 				},
 			},
 			preFunc: func(t *testing.T, env *testEnv) {
-				err := env.ts.SaveVSchema(ctx, targetKeyspaceName, &vschemapb.Keyspace{
-					Sharded: true,
-					MultiTenantSpec: &vschemapb.MultiTenantSpec{
-						TenantIdColumnName: "tenant_id",
-						TenantIdColumnType: sqltypes.Int64,
+				err := env.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+					Name: targetKeyspaceName,
+					Keyspace: &vschemapb.Keyspace{
+						Sharded: true,
+						MultiTenantSpec: &vschemapb.MultiTenantSpec{
+							TenantIdColumnName: "tenant_id",
+							TenantIdColumnType: sqltypes.Int64,
+						},
 					},
 				})
 				require.NoError(t, err)
@@ -1164,11 +919,14 @@ func TestWorkflowDelete(t *testing.T) {
 				},
 			},
 			preFunc: func(t *testing.T, env *testEnv) {
-				err := env.ts.SaveVSchema(ctx, targetKeyspaceName, &vschemapb.Keyspace{
-					Sharded: true,
-					MultiTenantSpec: &vschemapb.MultiTenantSpec{
-						TenantIdColumnName: "tenant_id",
-						TenantIdColumnType: sqltypes.Int64,
+				err := env.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+					Name: targetKeyspaceName,
+					Keyspace: &vschemapb.Keyspace{
+						Sharded: true,
+						MultiTenantSpec: &vschemapb.MultiTenantSpec{
+							TenantIdColumnName: "tenant_id",
+							TenantIdColumnType: sqltypes.Int64,
+						},
 					},
 				})
 				require.NoError(t, err)
@@ -2558,4 +2316,84 @@ func TestWorkflowStatus(t *testing.T) {
 	assert.Equal(t, int64(100), stateTable2.RowsCopied)
 	assert.Equal(t, float32(50), stateTable1.RowsPercentage)
 	assert.Equal(t, float32(50), stateTable2.RowsPercentage)
+}
+
+func TestDeleteShard(t *testing.T) {
+	ctx := context.Background()
+
+	sourceKeyspace := &testKeyspace{"source_keyspace", []string{"-"}}
+	targetKeyspace := &testKeyspace{"target_keyspace", []string{"-"}}
+
+	te := newTestEnv(t, ctx, defaultCellName, sourceKeyspace, targetKeyspace)
+	defer te.close()
+
+	// Verify that shard exists.
+	si, err := te.ts.GetShard(ctx, targetKeyspace.KeyspaceName, targetKeyspace.ShardNames[0])
+	require.NoError(t, err)
+	require.NotNil(t, si)
+
+	// Expect to fail if recursive is false.
+	err = te.ws.DeleteShard(ctx, targetKeyspace.KeyspaceName, targetKeyspace.ShardNames[0], false, true)
+	assert.ErrorContains(t, err, "shard target_keyspace/- still has 1 tablets in cell")
+
+	// Should not throw error if given keyspace or shard is invalid.
+	err = te.ws.DeleteShard(ctx, "invalid_keyspace", "-", false, true)
+	assert.NoError(t, err)
+
+	// Successful shard delete.
+	err = te.ws.DeleteShard(ctx, targetKeyspace.KeyspaceName, targetKeyspace.ShardNames[0], true, true)
+	assert.NoError(t, err)
+
+	// Check if the shard was deleted.
+	_, err = te.ts.GetShard(ctx, targetKeyspace.KeyspaceName, targetKeyspace.ShardNames[0])
+	assert.ErrorContains(t, err, "node doesn't exist")
+}
+
+func TestCopySchemaShard(t *testing.T) {
+	ctx := context.Background()
+
+	sourceKeyspace := &testKeyspace{"source_keyspace", []string{"-"}}
+	targetKeyspace := &testKeyspace{"target_keyspace", []string{"-"}}
+
+	te := newTestEnv(t, ctx, defaultCellName, sourceKeyspace, targetKeyspace)
+	defer te.close()
+
+	sqlSchema := `create table t1(id bigint(20) unsigned auto_increment, msg varchar(64), primary key (id)) Engine=InnoDB;`
+	te.tmc.schema[fmt.Sprintf("%s.t1", sourceKeyspace.KeyspaceName)] = &tabletmanagerdatapb.SchemaDefinition{
+		DatabaseSchema: "CREATE DATABASE {{.DatabaseName}}",
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+			{
+				Name:   "t1",
+				Schema: sqlSchema,
+				Columns: []string{
+					"id",
+					"msg",
+				},
+				Type: tmutils.TableBaseTable,
+			},
+		},
+	}
+
+	// Expect queries on target shards
+	te.tmc.expectApplySchemaRequest(200, &applySchemaRequestResponse{
+		change: &tmutils.SchemaChange{
+			SQL:              "CREATE DATABASE `vt_target_keyspace`",
+			Force:            false,
+			AllowReplication: true,
+			SQLMode:          vreplication.SQLMode,
+		},
+	})
+	te.tmc.expectApplySchemaRequest(200, &applySchemaRequestResponse{
+		change: &tmutils.SchemaChange{
+			SQL:              sqlSchema,
+			Force:            false,
+			AllowReplication: true,
+			SQLMode:          vreplication.SQLMode,
+		},
+	})
+
+	sourceTablet := te.tablets[sourceKeyspace.KeyspaceName][100]
+	err := te.ws.CopySchemaShard(ctx, sourceTablet.Alias, []string{"/.*/"}, nil, false, targetKeyspace.KeyspaceName, "-", 1*time.Second, true)
+	assert.NoError(t, err)
+	assert.Empty(t, te.tmc.applySchemaRequests[200])
 }

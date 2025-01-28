@@ -103,6 +103,7 @@ var (
 		"vtgate_vindex_heavy",
 		"vtgate_vschema",
 		"vtgate_queries",
+		"vtgate_plantests",
 		"vtgate_schema_tracker",
 		"vtgate_foreignkey_stress",
 		"vtorc",
@@ -157,6 +158,9 @@ var (
 		"vreplication_migrate",
 		"vreplication_vtctldclient_vdiff2_movetables_tz",
 	}
+	clusterRequiringMinio = []string{
+		"21",
+	}
 )
 
 type unitTest struct {
@@ -172,8 +176,10 @@ type clusterTest struct {
 	Docker                             bool
 	LimitResourceUsage                 bool
 	EnableBinlogTransactionCompression bool
+	EnablePartialJSON                  bool
 	PartialKeyspace                    bool
 	Cores16                            bool
+	NeedsMinio                         bool
 }
 
 type vitessTesterTest struct {
@@ -286,6 +292,13 @@ func generateClusterWorkflows(list []string, tpl string) {
 					break
 				}
 			}
+			minioClusters := canonnizeList(clusterRequiringMinio)
+			for _, minioCluster := range minioClusters {
+				if minioCluster == cluster {
+					test.NeedsMinio = true
+					break
+				}
+			}
 			if mysqlVersion == mysql57 {
 				test.Platform = string(mysql57)
 			}
@@ -294,6 +307,7 @@ func generateClusterWorkflows(list []string, tpl string) {
 			}
 			if strings.Contains(cluster, "vrepl") {
 				test.EnableBinlogTransactionCompression = true
+				test.EnablePartialJSON = true
 			}
 			mysqlVersionIndicator := ""
 			if mysqlVersion != defaultMySQLVersion && len(clusterMySQLVersions()) > 1 {

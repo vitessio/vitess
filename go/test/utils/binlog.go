@@ -17,8 +17,10 @@ limitations under the License.
 package utils
 
 import (
+	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -27,9 +29,12 @@ const (
 	BinlogRowImageCnf = "binlog-row-image.cnf"
 )
 
-// SetBinlogRowImageMode  creates a temp cnf file to set binlog_row_image to noblob for vreplication unit tests.
-// It adds it to the EXTRA_MY_CNF environment variable which appends text from them into my.cnf.
-func SetBinlogRowImageMode(mode string, cnfDir string) error {
+// SetBinlogRowImageOptions creates a temp cnf file to set binlog_row_image=NOBLOB and
+// optionally binlog_row_value_options=PARTIAL_JSON (since it does not exist in 5.7)
+// for vreplication unit tests.
+// It adds it to the EXTRA_MY_CNF environment variable which appends text from them
+// into my.cnf.
+func SetBinlogRowImageOptions(mode string, partialJSON bool, cnfDir string) error {
 	var newCnfs []string
 
 	// remove any existing extra cnfs for binlog row image
@@ -55,6 +60,17 @@ func SetBinlogRowImageMode(mode string, cnfDir string) error {
 		if err != nil {
 			return err
 		}
+		if partialJSON {
+			if !CIDBPlatformIsMySQL8orLater() {
+				return errors.New("partial JSON values are only supported in MySQL 8.0 or later")
+			}
+			// We're testing partial binlog row images so let's also test partial
+			// JSON values in the images.
+			_, err = f.WriteString("\nbinlog_row_value_options=PARTIAL_JSON\n")
+			if err != nil {
+				return err
+			}
+		}
 		err = f.Close()
 		if err != nil {
 			return err
@@ -67,4 +83,31 @@ func SetBinlogRowImageMode(mode string, cnfDir string) error {
 		return err
 	}
 	return nil
+}
+
+// CIDBPlatformIsMySQL8orLater returns true if the CI_DB_PLATFORM environment
+// variable is empty -- meaning we're not running in the CI and we assume
+// MySQL8.0 or later is used, and you can understand the failures and make
+// adjustments as necessary -- or it's set to reflect usage of MySQL 8.0 or
+// later. This relies on the current standard values used such as mysql57,
+// mysql80, mysql84, etc. This can be used when the CI test behavior needs
+// to be altered based on the specific database platform we're testing against.
+func CIDBPlatformIsMySQL8orLater() bool {
+	dbPlatform := strings.ToLower(os.Getenv("CI_DB_PLATFORM"))
+	if dbPlatform == "" {
+		// This is for local testing where we don't set the env var via
+		// the CI.
+		return true
+	}
+	if strings.HasPrefix(dbPlatform, "mysql") {
+		_, v, ok := strings.Cut(dbPlatform, "mysql")
+		if ok {
+			// We only want the major version.
+			version, err := strconv.Atoi(string(v[0]))
+			if err == nil && version >= 8 {
+				return true
+			}
+		}
+	}
+	return false
 }

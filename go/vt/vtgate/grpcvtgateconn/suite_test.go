@@ -426,6 +426,7 @@ func testStreamExecute(t *testing.T, session *vtgateconn.VTGateSession) {
 	wantResult := *execCase.result
 	wantResult.RowsAffected = 0
 	wantResult.InsertID = 0
+	wantResult.InsertIDChanged = false
 	if !qr.Equal(&wantResult) {
 		t.Errorf("Unexpected result from StreamExecute: got %+v want %+v", qr, wantResult)
 	}
@@ -563,8 +564,9 @@ var result1 = sqltypes.Result{
 			Type: sqltypes.Int32,
 		},
 	},
-	RowsAffected: 123,
-	InsertID:     72,
+	RowsAffected:    123,
+	InsertID:        72,
+	InsertIDChanged: true,
 	Rows: [][]sqltypes.Value{
 		{
 			sqltypes.TestValue(sqltypes.Int16, "1"),

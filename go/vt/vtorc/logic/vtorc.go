@@ -17,12 +17,14 @@
 package logic
 
 import (
+	"context"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/patrickmn/go-cache"
 	"github.com/sjmudd/stopwatch"
+	"golang.org/x/sync/errgroup"
 
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
@@ -32,6 +34,7 @@ import (
 	"vitess.io/vitess/go/vt/vtorc/discovery"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 	ometrics "vitess.io/vitess/go/vt/vtorc/metrics"
+	"vitess.io/vitess/go/vt/vtorc/process"
 	"vitess.io/vitess/go/vt/vtorc/util"
 )
 
@@ -105,7 +108,7 @@ func waitForLocksRelease() {
 // handleDiscoveryRequests iterates the discoveryQueue channel and calls upon
 // instance discovery per entry.
 func handleDiscoveryRequests() {
-	discoveryQueue = discovery.CreateOrReturnQueue("DEFAULT")
+	discoveryQueue = discovery.CreateQueue("DEFAULT")
 	// create a pool of discovery workers
 	for i := uint(0); i < config.DiscoveryMaxConcurrency; i++ {
 		go func() {
@@ -304,30 +307,34 @@ func ContinuousDiscovery() {
 				go inst.SnapshotTopologies()
 			}()
 		case <-tabletTopoTick:
-			refreshAllInformation()
+			ctx, cancel := context.WithTimeout(context.Background(), config.GetTopoInformationRefreshDuration())
+			if err := refreshAllInformation(ctx); err != nil {
+				log.Errorf("failed to refresh topo information: %+v", err)
+			}
+			cancel()
 		}
 	}
 }
 
 // refreshAllInformation refreshes both shard and tablet information. This is meant to be run on tablet topo ticks.
-func refreshAllInformation() {
-	// Create a wait group
-	var wg sync.WaitGroup
+func refreshAllInformation(ctx context.Context) error {
+	// Create an errgroup
+	eg, ctx := errgroup.WithContext(ctx)
 
 	// Refresh all keyspace information.
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		RefreshAllKeyspacesAndShards()
-	}()
+	eg.Go(func() error {
+		return RefreshAllKeyspacesAndShards(ctx)
+	})
 
 	// Refresh all tablets.
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		refreshAllTablets()
-	}()
+	eg.Go(func() error {
+		return refreshAllTablets(ctx)
+	})
 
 	// Wait for both the refreshes to complete
-	wg.Wait()
+	err := eg.Wait()
+	if err == nil {
+		process.FirstDiscoveryCycleComplete.Store(true)
+	}
+	return err
 }

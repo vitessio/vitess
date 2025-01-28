@@ -274,6 +274,17 @@ func (tqsc *Controller) WaitForPreparedTwoPCTransactions(context.Context) error 
 	return nil
 }
 
+// SetDemotePrimaryStalled is part of the tabletserver.Controller interface
+func (tqsc *Controller) SetDemotePrimaryStalled() {
+	tqsc.MethodCalled["SetDemotePrimaryStalled"] = true
+}
+
+// IsDiskStalled is part of the tabletserver.Controller interface
+func (tqsc *Controller) IsDiskStalled() bool {
+	tqsc.MethodCalled["IsDiskStalled"] = true
+	return false
+}
+
 // EnterLameduck implements tabletserver.Controller.
 func (tqsc *Controller) EnterLameduck() {
 	tqsc.mu.Lock()

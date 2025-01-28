@@ -60,7 +60,7 @@ type Insert struct {
 	Alias string
 }
 
-// newQueryInsert creates an Insert with a query string.
+// newQueryInsert creates an Insert with a query string. Used in testing.
 func newQueryInsert(opcode InsertOpcode, keyspace *vindexes.Keyspace, query string) *Insert {
 	return &Insert{
 		InsertCommon: InsertCommon{
@@ -71,7 +71,7 @@ func newQueryInsert(opcode InsertOpcode, keyspace *vindexes.Keyspace, query stri
 	}
 }
 
-// newInsert creates a new Insert.
+// newInsert creates a new Insert. Used in testing.
 func newInsert(
 	opcode InsertOpcode,
 	ignore bool,
@@ -169,13 +169,14 @@ func (ins *Insert) executeInsertQueries(
 	if err != nil {
 		return nil, err
 	}
-	result, errs := vcursor.ExecuteMultiShard(ctx, ins, rss, queries, true /* rollbackOnError */, autocommit)
+	result, errs := vcursor.ExecuteMultiShard(ctx, ins, rss, queries, true /*rollbackOnError*/, autocommit, ins.FetchLastInsertID)
 	if errs != nil {
 		return nil, vterrors.Aggregate(errs)
 	}
 
 	if insertID != 0 {
 		result.InsertID = insertID
+		result.InsertIDChanged = true
 	}
 	return result, nil
 }
@@ -381,6 +382,10 @@ func (ins *Insert) description() PrimitiveDescription {
 		if shardedQuery != ins.Query {
 			other["ActualQuery"] = shardedQuery
 		}
+	}
+
+	if ins.FetchLastInsertID {
+		other["FetchLastInsertID"] = true
 	}
 
 	return PrimitiveDescription{

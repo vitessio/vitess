@@ -84,7 +84,7 @@ func TestMessage(t *testing.T) {
 
 	utils.Exec(t, conn, fmt.Sprintf("use %s", lookupKeyspace))
 	utils.Exec(t, conn, createMessage)
-	clusterInstance.VtctlProcess.ExecuteCommand(fmt.Sprintf("ReloadSchemaKeyspace %s", lookupKeyspace))
+	clusterInstance.VtctldClientProcess.ExecuteCommand(fmt.Sprintf("ReloadSchemaKeyspace %s", lookupKeyspace))
 
 	defer utils.Exec(t, conn, "drop table vitess_message")
 
@@ -375,7 +375,6 @@ func TestUnsharded(t *testing.T) {
 
 // TestReparenting checks the client connection count after reparenting.
 func TestReparenting(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	name := "sharded_message"
 
 	ctx := context.Background()
@@ -435,7 +434,6 @@ func TestReparenting(t *testing.T) {
 
 // TestConnection validate the connection count and message streaming.
 func TestConnection(t *testing.T) {
-	defer cluster.PanicHandler(t)
 
 	name := "sharded_message"
 
@@ -494,7 +492,6 @@ func TestConnection(t *testing.T) {
 }
 
 func testMessaging(t *testing.T, name, ks string) {
-	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	stream, err := VtgateGrpcConn(ctx, clusterInstance)
 	require.Nil(t, err)

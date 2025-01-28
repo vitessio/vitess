@@ -175,6 +175,7 @@ func ReadTopologyInstanceBufferable(tabletAlias string, latency *stopwatch.Named
 	var tablet *topodatapb.Tablet
 	var fs *replicationdatapb.FullStatus
 	readingStartTime := time.Now()
+	stalledDisk := false
 	instance := NewInstance()
 	instanceFound := false
 	partialSuccess := false
@@ -205,6 +206,10 @@ func ReadTopologyInstanceBufferable(tabletAlias string, latency *stopwatch.Named
 
 	fs, err = fullStatus(tabletAlias)
 	if err != nil {
+		goto Cleanup
+	}
+	if config.GetStalledDiskPrimaryRecovery() && fs.DiskStalled {
+		stalledDisk = true
 		goto Cleanup
 	}
 	partialSuccess = true // We at least managed to read something from the server.
@@ -291,7 +296,6 @@ func ReadTopologyInstanceBufferable(tabletAlias string, latency *stopwatch.Named
 
 		instance.SQLDelay = fs.ReplicationStatus.SqlDelay
 		instance.UsingOracleGTID = fs.ReplicationStatus.AutoPosition
-		instance.UsingMariaDBGTID = fs.ReplicationStatus.UsingGtid
 		instance.SourceUUID = fs.ReplicationStatus.SourceUuid
 		instance.HasReplicationFilters = fs.ReplicationStatus.HasReplicationFilters
 
@@ -382,9 +386,10 @@ Cleanup:
 
 	// Something is wrong, could be network-wise. Record that we
 	// tried to check the instance. last_attempted_check is also
-	// updated on success by writeInstance.
+	// updated on success by writeInstance. If the reason is a
+	// stalled disk, we can record that as well.
 	latency.Start("backend")
-	_ = UpdateInstanceLastChecked(tabletAlias, partialSuccess)
+	_ = UpdateInstanceLastChecked(tabletAlias, partialSuccess, stalledDisk)
 	latency.Stop("backend")
 	return nil, err
 }
@@ -548,16 +553,15 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 	instance.GTIDMode = m.GetString("gtid_mode")
 	instance.GtidPurged = m.GetString("gtid_purged")
 	instance.GtidErrant = m.GetString("gtid_errant")
-	instance.UsingMariaDBGTID = m.GetBool("mariadb_gtid")
 	instance.SelfBinlogCoordinates.LogFile = m.GetString("binary_log_file")
-	instance.SelfBinlogCoordinates.LogPos = m.GetUint32("binary_log_pos")
+	instance.SelfBinlogCoordinates.LogPos = m.GetUint64("binary_log_pos")
 	instance.ReadBinlogCoordinates.LogFile = m.GetString("source_log_file")
-	instance.ReadBinlogCoordinates.LogPos = m.GetUint32("read_source_log_pos")
+	instance.ReadBinlogCoordinates.LogPos = m.GetUint64("read_source_log_pos")
 	instance.ExecBinlogCoordinates.LogFile = m.GetString("relay_source_log_file")
-	instance.ExecBinlogCoordinates.LogPos = m.GetUint32("exec_source_log_pos")
+	instance.ExecBinlogCoordinates.LogPos = m.GetUint64("exec_source_log_pos")
 	instance.IsDetached, _ = instance.ExecBinlogCoordinates.ExtractDetachedCoordinates()
 	instance.RelaylogCoordinates.LogFile = m.GetString("relay_log_file")
-	instance.RelaylogCoordinates.LogPos = m.GetUint32("relay_log_pos")
+	instance.RelaylogCoordinates.LogPos = m.GetUint64("relay_log_pos")
 	instance.RelaylogCoordinates.Type = RelayLog
 	instance.LastSQLError = m.GetString("last_sql_error")
 	instance.LastIOError = m.GetString("last_io_error")
@@ -849,8 +853,6 @@ func mkInsertForInstances(instances []*Instance, instanceWasActuallyFound bool, 
 		"gtid_mode",
 		"gtid_purged",
 		"gtid_errant",
-		"mariadb_gtid",
-		"pseudo_gtid",
 		"source_log_file",
 		"read_source_log_pos",
 		"relay_source_log_file",
@@ -878,6 +880,7 @@ func mkInsertForInstances(instances []*Instance, instanceWasActuallyFound bool, 
 		"semi_sync_primary_clients",
 		"semi_sync_replica_status",
 		"last_discovery_latency",
+		"is_disk_stalled",
 	}
 
 	values := make([]string, len(columns))
@@ -930,8 +933,6 @@ func mkInsertForInstances(instances []*Instance, instanceWasActuallyFound bool, 
 		args = append(args, instance.GTIDMode)
 		args = append(args, instance.GtidPurged)
 		args = append(args, instance.GtidErrant)
-		args = append(args, instance.UsingMariaDBGTID)
-		args = append(args, instance.UsingPseudoGTID)
 		args = append(args, instance.ReadBinlogCoordinates.LogFile)
 		args = append(args, instance.ReadBinlogCoordinates.LogPos)
 		args = append(args, instance.ExecBinlogCoordinates.LogFile)
@@ -959,6 +960,7 @@ func mkInsertForInstances(instances []*Instance, instanceWasActuallyFound bool, 
 		args = append(args, instance.SemiSyncPrimaryClients)
 		args = append(args, instance.SemiSyncReplicaStatus)
 		args = append(args, instance.LastDiscoveryLatency.Nanoseconds())
+		args = append(args, instance.StalledDisk)
 	}
 
 	sql, err := mkInsert("database_instance", columns, values, len(instances), insertIgnore)
@@ -1004,16 +1006,18 @@ func WriteInstance(instance *Instance, instanceWasActuallyFound bool, lastError 
 
 // UpdateInstanceLastChecked updates the last_check timestamp in the vtorc backed database
 // for a given instance
-func UpdateInstanceLastChecked(tabletAlias string, partialSuccess bool) error {
+func UpdateInstanceLastChecked(tabletAlias string, partialSuccess bool, stalledDisk bool) error {
 	writeFunc := func() error {
 		_, err := db.ExecVTOrc(`UPDATE database_instance
 			SET
 				last_checked = DATETIME('now'),
-				last_check_partial_success = ?
+				last_check_partial_success = ?,
+				is_disk_stalled = ?
 			WHERE
 				alias = ?
 			`,
 			partialSuccess,
+			stalledDisk,
 			tabletAlias,
 		)
 		if err != nil {

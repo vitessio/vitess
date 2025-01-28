@@ -12,7 +12,7 @@ spec:
     vtorc: vitess/lite:latest
     mysqld:
       mysql80Compatible: vitess/lite:latest
-    mysqldExporter: prom/mysqld-exporter:v0.11.0
+    mysqldExporter: prom/mysqld-exporter:v0.14.0
   cells:
   - name: zone1
     gateway:

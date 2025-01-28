@@ -152,6 +152,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 	autocommit bool,
 	ignoreMaxMemoryRows bool,
 	resultsObserver econtext.ResultsObserver,
+	fetchLastInsertID bool,
 ) (qr *sqltypes.Result, errs []error) {
 
 	if len(rss) != len(queries) {
@@ -164,6 +165,10 @@ func (stc *ScatterConn) ExecuteMultiShard(
 
 	if session.InLockSession() && triggerLockHeartBeat(session) {
 		go stc.runLockQuery(ctx, session)
+	}
+
+	if session.Options != nil {
+		session.Options.FetchLastInsertId = fetchLastInsertID
 	}
 
 	allErrors := stc.multiGoTransaction(
@@ -185,6 +190,10 @@ func (stc *ScatterConn) ExecuteMultiShard(
 
 			if session != nil && session.Session != nil {
 				opts = session.Session.Options
+			}
+
+			if opts == nil && fetchLastInsertID {
+				opts = &querypb.ExecuteOptions{FetchLastInsertId: fetchLastInsertID}
 			}
 
 			if autocommit {
@@ -373,6 +382,7 @@ func (stc *ScatterConn) StreamExecuteMulti(
 	autocommit bool,
 	callback func(reply *sqltypes.Result) error,
 	resultsObserver econtext.ResultsObserver,
+	fetchLastInsertID bool,
 ) []error {
 	if session.InLockSession() && triggerLockHeartBeat(session) {
 		go stc.runLockQuery(ctx, session)
@@ -384,6 +394,11 @@ func (stc *ScatterConn) StreamExecuteMulti(
 		}
 		return callback(reply)
 	}
+
+	if session.Options != nil {
+		session.Options.FetchLastInsertId = fetchLastInsertID
+	}
+
 	allErrors := stc.multiGoTransaction(
 		ctx,
 		"StreamExecute",
@@ -402,6 +417,10 @@ func (stc *ScatterConn) StreamExecuteMulti(
 
 			if session != nil && session.Session != nil {
 				opts = session.Session.Options
+			}
+
+			if opts == nil && fetchLastInsertID {
+				opts = &querypb.ExecuteOptions{FetchLastInsertId: fetchLastInsertID}
 			}
 
 			if autocommit {
@@ -666,7 +685,7 @@ func (stc *ScatterConn) multiGoTransaction(
 		startTime, statsKey := stc.startAction(name, rs.Target)
 		defer stc.endAction(startTime, allErrors, statsKey, &err, session)
 
-		info, shardSession, err := actionInfo(ctx, rs.Target, session, autocommit, stc.txConn.mode)
+		info, shardSession, err := actionInfo(ctx, rs.Target, session, autocommit, stc.txConn.txMode.TransactionMode())
 		if err != nil {
 			return
 		}
@@ -683,7 +702,7 @@ func (stc *ScatterConn) multiGoTransaction(
 			shardSession.RowsAffected = info.rowsAffected
 		}
 		if info.actionNeeded != nothing && (info.transactionID != 0 || info.reservedID != 0) {
-			appendErr := session.AppendOrUpdate(rs.Target, info, shardSession, stc.txConn.mode)
+			appendErr := session.AppendOrUpdate(rs.Target, info, shardSession, stc.txConn.txMode.TransactionMode())
 			if appendErr != nil {
 				err = appendErr
 			}

@@ -33,7 +33,6 @@ import (
 
 // TestAPIEndpoints tests the various API endpoints that VTOrc offers.
 func TestAPIEndpoints(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, nil, cluster.VTOrcConfiguration{
 		PreventCrossCellFailover: true,
 	}, 1, "")
@@ -140,7 +139,7 @@ func TestAPIEndpoints(t *testing.T) {
 	})
 
 	t.Run("Replication Analysis API", func(t *testing.T) {
-		// use vtctlclient to stop replication
+		// use vtctldclient to stop replication
 		_, err := clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("StopReplication", replica.Alias)
 		require.NoError(t, err)
 

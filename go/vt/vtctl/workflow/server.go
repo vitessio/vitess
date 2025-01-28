@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"slices"
 	"sort"
 	"strings"
@@ -28,28 +27,22 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/google/uuid"
-	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/semaphore"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/prototext"
-	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/ptr"
-	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/concurrency"
-	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
-	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -131,6 +124,8 @@ const (
 	lockTablesCycles = 2
 	// Time to wait between LOCK TABLES cycles on the sources during SwitchWrites.
 	lockTablesCycleDelay = time.Duration(100 * time.Millisecond)
+
+	SqlUnfreezeWorkflow = "update _vt.vreplication set state='Running', message='' where db_name=%a and workflow=%a"
 )
 
 var (
@@ -558,6 +553,43 @@ func (s *Server) getWorkflowState(ctx context.Context, targetKeyspace, workflowN
 	return ts, state, nil
 }
 
+// LookupVindexComplete checks if the lookup vindex has been externalized,
+// and if the vindex has an owner, it deletes the workflow.
+func (s *Server) LookupVindexComplete(ctx context.Context, req *vtctldatapb.LookupVindexCompleteRequest) (*vtctldatapb.LookupVindexCompleteResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "workflow.Server.LookupVindexComplete")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("name", req.Name)
+	span.Annotate("table_keyspace", req.TableKeyspace)
+
+	vindex, _, err := getVindexAndVSchema(ctx, s.ts, req.Keyspace, req.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	targetShards, err := s.ts.GetServingShards(ctx, req.TableKeyspace)
+	if err != nil {
+		return nil, err
+	}
+
+	lv := newLookupVindex(s)
+	if err = lv.validateExternalized(ctx, vindex, req.Name, targetShards); err != nil {
+		return nil, err
+	}
+
+	resp := &vtctldatapb.LookupVindexCompleteResponse{}
+	if _, derr := s.WorkflowDelete(ctx, &vtctldatapb.WorkflowDeleteRequest{
+		Keyspace:         req.TableKeyspace,
+		Workflow:         req.Name,
+		KeepData:         true,
+		KeepRoutingRules: true,
+	}); derr != nil {
+		return nil, vterrors.Wrapf(derr, "failed to delete workflow %s", req.Name)
+	}
+	return resp, nil
+}
+
 // LookupVindexCreate creates the lookup vindex in the specified
 // keyspace and creates a VReplication workflow to backfill that
 // vindex from the keyspace to the target/lookup table specified.
@@ -571,12 +603,14 @@ func (s *Server) LookupVindexCreate(ctx context.Context, req *vtctldatapb.Lookup
 	span.Annotate("cells", req.Cells)
 	span.Annotate("tablet_types", req.TabletTypes)
 
-	ms, sourceVSchema, targetVSchema, cancelFunc, err := s.prepareCreateLookup(ctx, req.Workflow, req.Keyspace, req.Vindex, req.ContinueAfterCopyWithOwner)
+	lv := newLookupVindex(s)
+
+	ms, sourceVSchema, targetVSchema, cancelFunc, err := lv.prepareCreate(ctx, req.Workflow, req.Keyspace, req.Vindex, req.ContinueAfterCopyWithOwner)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := s.ts.SaveVSchema(ctx, ms.TargetKeyspace, targetVSchema); err != nil {
+	if err := s.ts.SaveVSchema(ctx, targetVSchema); err != nil {
 		return nil, vterrors.Wrapf(err, "failed to save updated vschema '%v' in the %s keyspace",
 			targetVSchema, ms.TargetKeyspace)
 	}
@@ -592,7 +626,7 @@ func (s *Server) LookupVindexCreate(ctx context.Context, req *vtctldatapb.Lookup
 		return nil, err
 	}
 	if ms.SourceKeyspace != ms.TargetKeyspace {
-		if err := s.ts.SaveVSchema(ctx, ms.SourceKeyspace, sourceVSchema); err != nil {
+		if err := s.ts.SaveVSchema(ctx, sourceVSchema); err != nil {
 			return nil, vterrors.Wrapf(err, "failed to save updated vschema '%v' in the %s keyspace",
 				sourceVSchema, ms.SourceKeyspace)
 		}
@@ -607,7 +641,7 @@ func (s *Server) LookupVindexCreate(ctx context.Context, req *vtctldatapb.Lookup
 
 // LookupVindexExternalize externalizes a lookup vindex that's
 // finished backfilling or has caught up. If the vindex has an
-// owner then the workflow will also be deleted.
+// owner then the workflow will also be stopped.
 func (s *Server) LookupVindexExternalize(ctx context.Context, req *vtctldatapb.LookupVindexExternalizeRequest) (*vtctldatapb.LookupVindexExternalizeResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "workflow.Server.LookupVindexExternalize")
 	defer span.Finish()
@@ -615,15 +649,11 @@ func (s *Server) LookupVindexExternalize(ctx context.Context, req *vtctldatapb.L
 	span.Annotate("keyspace", req.Keyspace)
 	span.Annotate("name", req.Name)
 	span.Annotate("table_keyspace", req.TableKeyspace)
+	span.Annotate("delete_workflow", req.DeleteWorkflow)
 
-	// Find the lookup vindex by by name.
-	sourceVschema, err := s.ts.GetVSchema(ctx, req.Keyspace)
+	vindex, sourceKsVS, err := getVindexAndVSchema(ctx, s.ts, req.Keyspace, req.Name)
 	if err != nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get vschema for the %s keyspace", req.Keyspace)
-	}
-	vindex := sourceVschema.Vindexes[req.Name]
-	if vindex == nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vindex %s not found in the %s keyspace", req.Name, req.Keyspace)
+		return nil, err
 	}
 
 	targetShards, err := s.ts.GetServingShards(ctx, req.TableKeyspace)
@@ -642,8 +672,8 @@ func (s *Server) LookupVindexExternalize(ctx context.Context, req *vtctldatapb.L
 		if err != nil {
 			return err
 		}
-		if res == nil {
-			return vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "workflow %s not found on %v", req.Name, targetPrimary.Alias)
+		if res == nil || res.Workflow == "" {
+			return vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "workflow %s not found on %v", req.Name, topoproto.TabletAliasString(targetPrimary.Alias))
 		}
 		for _, stream := range res.Streams {
 			if stream.Bls.Filter == nil || len(stream.Bls.Filter.Rules) != 1 {
@@ -671,25 +701,102 @@ func (s *Server) LookupVindexExternalize(ctx context.Context, req *vtctldatapb.L
 	resp := &vtctldatapb.LookupVindexExternalizeResponse{}
 
 	if vindex.Owner != "" {
-		// If there is an owner, we have to delete the streams. Once we externalize it
-		// the VTGate will now be responsible for keeping the lookup table up to date
-		// with the owner table.
-		if _, derr := s.WorkflowDelete(ctx, &vtctldatapb.WorkflowDeleteRequest{
-			Keyspace:         req.TableKeyspace,
-			Workflow:         req.Name,
-			KeepData:         true, // Not relevant
-			KeepRoutingRules: true, // Not relevant
-		}); derr != nil {
-			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "failed to delete workflow %s: %v", req.Name, derr)
+		// If there is an owner, we have to stop/delete the streams. Once we
+		// externalize it the VTGate will now be responsible for keeping the
+		// lookup table up to date with the owner table.
+		if req.DeleteWorkflow {
+			// Delete the workflow.
+			if _, derr := s.WorkflowDelete(ctx, &vtctldatapb.WorkflowDeleteRequest{
+				Keyspace:         req.TableKeyspace,
+				Workflow:         req.Name,
+				KeepData:         true, // Not relevant
+				KeepRoutingRules: true, // Not relevant
+			}); derr != nil {
+				return nil, vterrors.Wrapf(derr, "failed to delete workflow %s", req.Name)
+			}
+			resp.WorkflowDeleted = true
+		} else {
+			// Freeze the workflow.
+			err = forAllShards(targetShards, func(si *topo.ShardInfo) error {
+				tabletInfo, err := s.ts.GetTablet(ctx, si.PrimaryAlias)
+				if err != nil {
+					return err
+				}
+				_, err = s.tmc.UpdateVReplicationWorkflow(ctx, tabletInfo.Tablet, &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
+					Workflow: req.Name,
+					State:    ptr.Of(binlogdatapb.VReplicationWorkflowState_Stopped),
+					Message:  ptr.Of(Frozen),
+				})
+				if err != nil {
+					return vterrors.Wrapf(err, "failed to stop workflow %s on shard %s/%s", req.Name, tabletInfo.Keyspace, tabletInfo.Shard)
+				}
+				return nil
+			})
+			if err != nil {
+				return nil, err
+			}
+			resp.WorkflowStopped = true
 		}
-		resp.WorkflowDeleted = true
 	}
 
 	// Remove the write_only param and save the source vschema.
 	delete(vindex.Params, "write_only")
-	if err := s.ts.SaveVSchema(ctx, req.Keyspace, sourceVschema); err != nil {
+	if err := s.ts.SaveVSchema(ctx, sourceKsVS); err != nil {
 		return nil, err
 	}
+	return resp, s.ts.RebuildSrvVSchema(ctx, nil)
+}
+
+// LookupVindexInternalize internalizes a lookup vindex.
+func (s *Server) LookupVindexInternalize(ctx context.Context, req *vtctldatapb.LookupVindexInternalizeRequest) (*vtctldatapb.LookupVindexInternalizeResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "workflow.Server.LookupVindexInternalize")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("name", req.Name)
+	span.Annotate("table_keyspace", req.TableKeyspace)
+
+	vindex, sourceKsVS, err := getVindexAndVSchema(ctx, s.ts, req.Keyspace, req.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	targetShards, err := s.ts.GetServingShards(ctx, req.TableKeyspace)
+	if err != nil {
+		return nil, err
+	}
+
+	lv := newLookupVindex(s)
+	if err = lv.validateExternalized(ctx, vindex, req.Name, targetShards); err != nil {
+		return nil, err
+	}
+
+	// Make the vindex back to write_only and save the source vschema.
+	vindex.Params["write_only"] = "true"
+	if err := s.ts.SaveVSchema(ctx, sourceKsVS); err != nil {
+		return nil, err
+	}
+
+	resp := &vtctldatapb.LookupVindexInternalizeResponse{}
+	err = forAllShards(targetShards, func(si *topo.ShardInfo) error {
+		tabletInfo, err := s.ts.GetTablet(ctx, si.PrimaryAlias)
+		if err != nil {
+			return err
+		}
+		query, err := sqlparser.ParseAndBind(SqlUnfreezeWorkflow,
+			sqltypes.StringBindVariable(tabletInfo.DbName()),
+			sqltypes.StringBindVariable(req.Name),
+		)
+		if err != nil {
+			return err
+		}
+		_, err = s.tmc.VReplicationExec(ctx, tabletInfo.Tablet, query)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+
 	return resp, s.ts.RebuildSrvVSchema(ctx, nil)
 }
 
@@ -715,11 +822,8 @@ func (s *Server) Materialize(ctx context.Context, ms *vtctldatapb.MaterializeSet
 		cells[i] = strings.TrimSpace(cells[i])
 	}
 
-	switch {
-	case len(ms.ReferenceTables) == 0 && len(ms.TableSettings) == 0:
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "either --table-settings or --reference-tables must be specified")
-	case len(ms.ReferenceTables) > 0 && len(ms.TableSettings) > 0:
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot specify both --table-settings and --reference-tables")
+	if err := validateMaterializeSettings(ms); err != nil {
+		return err
 	}
 
 	for _, table := range ms.ReferenceTables {
@@ -744,6 +848,17 @@ func (s *Server) Materialize(ctx context.Context, ms *vtctldatapb.MaterializeSet
 		return err
 	}
 	return mz.startStreams(ctx)
+}
+
+func validateMaterializeSettings(ms *vtctldatapb.MaterializeSettings) error {
+	switch {
+	case len(ms.ReferenceTables) == 0 && len(ms.TableSettings) == 0:
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "either --table-settings or --reference-tables must be specified")
+	case len(ms.ReferenceTables) > 0 && len(ms.TableSettings) > 0:
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot specify both --table-settings and --reference-tables")
+	}
+
+	return nil
 }
 
 // MoveTablesCreate is part of the vtctlservicepb.VtctldServer interface.
@@ -800,9 +915,10 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		s.Logger().Infof("Successfully opened external topo: %+v", externalTopo)
 	}
 
-	var vschema *vschemapb.Keyspace
-	var origVSchema *vschemapb.Keyspace // If we need to rollback a failed create
-	vschema, err = s.ts.GetVSchema(ctx, targetKeyspace)
+	origVSchema := &topo.KeyspaceVSchemaInfo{ // If we need to rollback a failed create
+		Name: targetKeyspace,
+	}
+	vschema, err := s.ts.GetVSchema(ctx, targetKeyspace)
 	if err != nil {
 		return nil, err
 	}
@@ -827,7 +943,7 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		return nil, err
 	}
 	if len(tables) > 0 {
-		err = validateSourceTablesExist(ctx, sourceKeyspace, ksTables, tables)
+		err = validateSourceTablesExist(sourceKeyspace, ksTables, tables)
 		if err != nil {
 			return nil, err
 		}
@@ -839,7 +955,7 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		}
 	}
 	if len(req.ExcludeTables) > 0 {
-		err = validateSourceTablesExist(ctx, sourceKeyspace, ksTables, req.ExcludeTables)
+		err = validateSourceTablesExist(sourceKeyspace, ksTables, req.ExcludeTables)
 		if err != nil {
 			return nil, err
 		}
@@ -858,12 +974,14 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 
 	if !vschema.Sharded {
 		// Save the original in case we need to restore it for a late failure in
-		// the defer().
-		origVSchema = vschema.CloneVT()
-		if err := s.addTablesToVSchema(ctx, sourceKeyspace, vschema, tables, externalTopo == nil); err != nil {
+		// the defer(). We do NOT want to clone the version field as we will
+		// intentionally be going back in time. So we only clone the internal
+		// vschemapb.Keyspace field.
+		origVSchema.Keyspace = vschema.Keyspace.CloneVT()
+		if err := s.addTablesToVSchema(ctx, sourceKeyspace, vschema.Keyspace, tables, externalTopo == nil); err != nil {
 			return nil, err
 		}
-		if err := s.ts.SaveVSchema(ctx, targetKeyspace, vschema); err != nil {
+		if err := s.ts.SaveVSchema(ctx, vschema); err != nil {
 			return nil, err
 		}
 	}
@@ -964,7 +1082,7 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 			if origVSchema == nil { // There's no previous version to restore
 				return
 			}
-			if cerr := s.ts.SaveVSchema(ctx, targetKeyspace, origVSchema); cerr != nil {
+			if cerr := s.ts.SaveVSchema(ctx, origVSchema); cerr != nil {
 				err = vterrors.Wrapf(err, "failed to restore original target vschema: %v", cerr)
 			}
 		}
@@ -1241,287 +1359,6 @@ func (s *Server) ReshardCreate(ctx context.Context, req *vtctldatapb.ReshardCrea
 		Workflow: req.Workflow,
 		Shards:   req.TargetShards,
 	})
-}
-
-// VDiffCreate is part of the vtctlservicepb.VtctldServer interface.
-// It passes on the request to the target primary tablets that are
-// participating in the given workflow and VDiff.
-func (s *Server) VDiffCreate(ctx context.Context, req *vtctldatapb.VDiffCreateRequest) (*vtctldatapb.VDiffCreateResponse, error) {
-	span, ctx := trace.NewSpan(ctx, "workflow.Server.VDiffCreate")
-	defer span.Finish()
-
-	span.Annotate("keyspace", req.TargetKeyspace)
-	span.Annotate("workflow", req.Workflow)
-	span.Annotate("uuid", req.Uuid)
-	span.Annotate("source_cells", req.SourceCells)
-	span.Annotate("target_cells", req.TargetCells)
-	span.Annotate("tablet_types", req.TabletTypes)
-	span.Annotate("tables", req.Tables)
-	span.Annotate("auto_retry", req.AutoRetry)
-	span.Annotate("max_diff_duration", req.MaxDiffDuration)
-	if req.AutoStart != nil {
-		span.Annotate("auto_start", req.GetAutoStart())
-	}
-
-	var err error
-	req.Uuid = strings.TrimSpace(req.Uuid)
-	if req.Uuid == "" { // Generate a UUID
-		req.Uuid = uuid.New().String()
-	} else { // Validate UUID if provided
-		if err = uuid.Validate(req.Uuid); err != nil {
-			return nil, vterrors.Wrapf(err, "invalid UUID provided: %s", req.Uuid)
-		}
-	}
-
-	tabletTypesStr := discovery.BuildTabletTypesString(req.TabletTypes, req.TabletSelectionPreference)
-
-	if req.Limit == 0 { // This would produce no useful results
-		req.Limit = math.MaxInt64
-	}
-	// This is a pointer so there's no ZeroValue in the message
-	// and an older v18 client will not provide it.
-	if req.MaxDiffDuration == nil {
-		req.MaxDiffDuration = &vttimepb.Duration{}
-	}
-	// The other vttime.Duration vars should not be nil as the
-	// client should always provide them, but we check anyway to
-	// be safe.
-	if req.FilteredReplicationWaitTime == nil {
-		// A value of 0 is not valid as the vdiff will never succeed.
-		req.FilteredReplicationWaitTime = &vttimepb.Duration{
-			Seconds: int64(DefaultTimeout.Seconds()),
-		}
-	}
-	if req.WaitUpdateInterval == nil {
-		req.WaitUpdateInterval = &vttimepb.Duration{}
-	}
-
-	autoStart := true
-	if req.AutoStart != nil {
-		autoStart = req.GetAutoStart()
-	}
-
-	options := &tabletmanagerdatapb.VDiffOptions{
-		PickerOptions: &tabletmanagerdatapb.VDiffPickerOptions{
-			TabletTypes: tabletTypesStr,
-			SourceCell:  strings.Join(req.SourceCells, ","),
-			TargetCell:  strings.Join(req.TargetCells, ","),
-		},
-		CoreOptions: &tabletmanagerdatapb.VDiffCoreOptions{
-			Tables:                strings.Join(req.Tables, ","),
-			AutoRetry:             req.AutoRetry,
-			MaxRows:               req.Limit,
-			TimeoutSeconds:        req.FilteredReplicationWaitTime.Seconds,
-			MaxExtraRowsToCompare: req.MaxExtraRowsToCompare,
-			UpdateTableStats:      req.UpdateTableStats,
-			MaxDiffSeconds:        req.MaxDiffDuration.Seconds,
-			AutoStart:             &autoStart,
-		},
-		ReportOptions: &tabletmanagerdatapb.VDiffReportOptions{
-			OnlyPks:                 req.OnlyPKs,
-			DebugQuery:              req.DebugQuery,
-			MaxSampleRows:           req.MaxReportSampleRows,
-			RowDiffColumnTruncateAt: req.RowDiffColumnTruncateAt,
-		},
-	}
-
-	tabletreq := &tabletmanagerdatapb.VDiffRequest{
-		Keyspace:  req.TargetKeyspace,
-		Workflow:  req.Workflow,
-		Action:    string(vdiff.CreateAction),
-		Options:   options,
-		VdiffUuid: req.Uuid,
-	}
-
-	ts, err := s.buildTrafficSwitcher(ctx, req.TargetKeyspace, req.Workflow)
-	if err != nil {
-		return nil, err
-	}
-	if ts.frozen {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "invalid VDiff run: writes have been already been switched for workflow %s.%s",
-			req.TargetKeyspace, req.Workflow)
-	}
-
-	workflowStatus, err := s.getWorkflowStatus(ctx, req.TargetKeyspace, req.Workflow)
-	if err != nil {
-		return nil, err
-	}
-	if workflowStatus != binlogdatapb.VReplicationWorkflowState_Running {
-		s.Logger().Infof("Workflow %s.%s is not running, cannot start VDiff in state %s", req.TargetKeyspace, req.Workflow, workflowStatus)
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
-			"not all streams are running in workflow %s.%s", req.TargetKeyspace, req.Workflow)
-	}
-
-	err = ts.ForAllTargets(func(target *MigrationTarget) error {
-		_, err := s.tmc.VDiff(ctx, target.GetPrimary().Tablet, tabletreq)
-		return err
-	})
-	if err != nil {
-		s.Logger().Errorf("Error executing vdiff create action: %v", err)
-		return nil, err
-	}
-
-	return &vtctldatapb.VDiffCreateResponse{
-		UUID: req.Uuid,
-	}, nil
-}
-
-// VDiffDelete is part of the vtctlservicepb.VtctldServer interface.
-func (s *Server) VDiffDelete(ctx context.Context, req *vtctldatapb.VDiffDeleteRequest) (*vtctldatapb.VDiffDeleteResponse, error) {
-	span, ctx := trace.NewSpan(ctx, "workflow.Server.VDiffDelete")
-	defer span.Finish()
-
-	span.Annotate("keyspace", req.TargetKeyspace)
-	span.Annotate("workflow", req.Workflow)
-	span.Annotate("argument", req.Arg)
-
-	tabletreq := &tabletmanagerdatapb.VDiffRequest{
-		Keyspace:  req.TargetKeyspace,
-		Workflow:  req.Workflow,
-		Action:    string(vdiff.DeleteAction),
-		ActionArg: req.Arg,
-	}
-
-	ts, err := s.buildTrafficSwitcher(ctx, req.TargetKeyspace, req.Workflow)
-	if err != nil {
-		return nil, err
-	}
-
-	err = ts.ForAllTargets(func(target *MigrationTarget) error {
-		_, err := s.tmc.VDiff(ctx, target.GetPrimary().Tablet, tabletreq)
-		return err
-	})
-	if err != nil {
-		s.Logger().Errorf("Error executing vdiff delete action: %v", err)
-		return nil, err
-	}
-
-	return &vtctldatapb.VDiffDeleteResponse{}, nil
-}
-
-// VDiffResume is part of the vtctlservicepb.VtctldServer interface.
-func (s *Server) VDiffResume(ctx context.Context, req *vtctldatapb.VDiffResumeRequest) (*vtctldatapb.VDiffResumeResponse, error) {
-	span, ctx := trace.NewSpan(ctx, "workflow.Server.VDiffResume")
-	defer span.Finish()
-
-	targetShards := req.GetTargetShards()
-
-	span.Annotate("keyspace", req.TargetKeyspace)
-	span.Annotate("workflow", req.Workflow)
-	span.Annotate("uuid", req.Uuid)
-	span.Annotate("target_shards", targetShards)
-
-	tabletreq := &tabletmanagerdatapb.VDiffRequest{
-		Keyspace:  req.TargetKeyspace,
-		Workflow:  req.Workflow,
-		Action:    string(vdiff.ResumeAction),
-		VdiffUuid: req.Uuid,
-	}
-
-	ts, err := s.buildTrafficSwitcher(ctx, req.TargetKeyspace, req.Workflow)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(targetShards) > 0 {
-		if err := applyTargetShards(ts, targetShards); err != nil {
-			return nil, err
-		}
-	}
-
-	err = ts.ForAllTargets(func(target *MigrationTarget) error {
-		_, err := s.tmc.VDiff(ctx, target.GetPrimary().Tablet, tabletreq)
-		return err
-	})
-	if err != nil {
-		s.Logger().Errorf("Error executing vdiff resume action: %v", err)
-		return nil, err
-	}
-
-	return &vtctldatapb.VDiffResumeResponse{}, nil
-}
-
-// VDiffShow is part of the vtctlservicepb.VtctldServer interface.
-func (s *Server) VDiffShow(ctx context.Context, req *vtctldatapb.VDiffShowRequest) (*vtctldatapb.VDiffShowResponse, error) {
-	span, ctx := trace.NewSpan(ctx, "workflow.Server.VDiffShow")
-	defer span.Finish()
-
-	span.Annotate("keyspace", req.TargetKeyspace)
-	span.Annotate("workflow", req.Workflow)
-	span.Annotate("argument", req.Arg)
-
-	tabletreq := &tabletmanagerdatapb.VDiffRequest{
-		Keyspace:  req.TargetKeyspace,
-		Workflow:  req.Workflow,
-		Action:    string(vdiff.ShowAction),
-		ActionArg: req.Arg,
-	}
-
-	ts, err := s.buildTrafficSwitcher(ctx, req.TargetKeyspace, req.Workflow)
-	if err != nil {
-		return nil, err
-	}
-
-	output := &vdiffOutput{
-		responses: make(map[string]*tabletmanagerdatapb.VDiffResponse, len(ts.targets)),
-		err:       nil,
-	}
-	output.err = ts.ForAllTargets(func(target *MigrationTarget) error {
-		resp, err := s.tmc.VDiff(ctx, target.GetPrimary().Tablet, tabletreq)
-		output.mu.Lock()
-		defer output.mu.Unlock()
-		output.responses[target.GetShard().ShardName()] = resp
-		return err
-	})
-	if output.err != nil {
-		s.Logger().Errorf("Error executing vdiff show action: %v", output.err)
-		return nil, output.err
-	}
-	return &vtctldatapb.VDiffShowResponse{
-		TabletResponses: output.responses,
-	}, nil
-}
-
-// VDiffStop is part of the vtctlservicepb.VtctldServer interface.
-func (s *Server) VDiffStop(ctx context.Context, req *vtctldatapb.VDiffStopRequest) (*vtctldatapb.VDiffStopResponse, error) {
-	span, ctx := trace.NewSpan(ctx, "workflow.Server.VDiffStop")
-	defer span.Finish()
-
-	targetShards := req.GetTargetShards()
-
-	span.Annotate("keyspace", req.TargetKeyspace)
-	span.Annotate("workflow", req.Workflow)
-	span.Annotate("uuid", req.Uuid)
-	span.Annotate("target_shards", targetShards)
-
-	tabletreq := &tabletmanagerdatapb.VDiffRequest{
-		Keyspace:  req.TargetKeyspace,
-		Workflow:  req.Workflow,
-		Action:    string(vdiff.StopAction),
-		VdiffUuid: req.Uuid,
-	}
-
-	ts, err := s.buildTrafficSwitcher(ctx, req.TargetKeyspace, req.Workflow)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(targetShards) > 0 {
-		if err := applyTargetShards(ts, targetShards); err != nil {
-			return nil, err
-		}
-	}
-
-	err = ts.ForAllTargets(func(target *MigrationTarget) error {
-		_, err := s.tmc.VDiff(ctx, target.GetPrimary().Tablet, tabletreq)
-		return err
-	})
-	if err != nil {
-		s.Logger().Errorf("Error executing vdiff stop action: %v", err)
-		return nil, err
-	}
-
-	return &vtctldatapb.VDiffStopResponse{}, nil
 }
 
 // WorkflowDelete is part of the vtctlservicepb.VtctldServer interface.
@@ -1885,8 +1722,10 @@ func (s *Server) WorkflowUpdate(ctx context.Context, req *vtctldatapb.WorkflowUp
 	span.Annotate("on_ddl", req.TabletRequest.OnDdl)
 	span.Annotate("state", req.TabletRequest.State)
 	span.Annotate("config_overrides", req.TabletRequest.ConfigOverrides)
+	span.Annotate("shards", req.TabletRequest.Shards)
 
 	vx := vexec.NewVExec(req.Keyspace, req.TabletRequest.Workflow, s.ts, s.tmc, s.env.Parser())
+	vx.SetShardSubset(req.TabletRequest.Shards)
 	callback := func(ctx context.Context, tablet *topo.TabletInfo) (*querypb.QueryResult, error) {
 		res, err := s.tmc.UpdateVReplicationWorkflow(ctx, tablet.Tablet, req.TabletRequest)
 		if err != nil {
@@ -2310,7 +2149,7 @@ func (s *Server) buildTrafficSwitcher(ctx context.Context, targetKeyspace, workf
 	if err != nil {
 		return nil, err
 	}
-	ts.sourceKSSchema, err = vindexes.BuildKeyspaceSchema(vs, ts.sourceKeyspace, s.env.Parser())
+	ts.sourceKSSchema, err = vindexes.BuildKeyspaceSchema(vs.Keyspace, ts.sourceKeyspace, s.env.Parser())
 	if err != nil {
 		return nil, err
 	}
@@ -3297,7 +3136,7 @@ func (s *Server) VReplicationExec(ctx context.Context, tabletAlias *topodatapb.T
 }
 
 // CopySchemaShard copies the schema from a source tablet to the
-// specified shard.  The schema is applied directly on the primary of
+// specified shard. The schema is applied directly on the primary of
 // the destination shard, and is propagated to the replicas through
 // binlogs.
 func (s *Server) CopySchemaShard(ctx context.Context, sourceTabletAlias *topodatapb.TabletAlias, tables, excludeTables []string, includeViews bool, destKeyspace, destShard string, waitReplicasTimeout time.Duration, skipVerify bool) error {
@@ -3406,417 +3245,6 @@ func fillStringTemplate(tmpl string, vars any) (string, error) {
 		return "", err
 	}
 	return data.String(), nil
-}
-
-// prepareCreateLookup performs the preparatory steps for creating a
-// Lookup Vindex.
-func (s *Server) prepareCreateLookup(ctx context.Context, workflow, keyspace string, specs *vschemapb.Keyspace, continueAfterCopyWithOwner bool) (
-	ms *vtctldatapb.MaterializeSettings, sourceVSchema, targetVSchema *vschemapb.Keyspace, cancelFunc func() error, err error) {
-	// Important variables are pulled out here.
-	var (
-		vindexName        string
-		vindex            *vschemapb.Vindex
-		targetKeyspace    string
-		targetTableName   string
-		vindexFromCols    []string
-		vindexToCol       string
-		vindexIgnoreNulls bool
-
-		sourceTableName string
-		// sourceTable is the supplied table info.
-		sourceTable *vschemapb.Table
-		// sourceVSchemaTable is the table info present in the vschema.
-		sourceVSchemaTable *vschemapb.Table
-		// sourceVindexColumns are computed from the input sourceTable.
-		sourceVindexColumns []string
-
-		// Target table info.
-		createDDL        string
-		materializeQuery string
-	)
-
-	// Validate input vindex.
-	if specs == nil {
-		return nil, nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "no vindex provided")
-	}
-	if len(specs.Vindexes) != 1 {
-		return nil, nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "only one vindex must be specified")
-	}
-	vindexName = maps.Keys(specs.Vindexes)[0]
-	vindex = maps.Values(specs.Vindexes)[0]
-	if !strings.Contains(vindex.Type, "lookup") {
-		return nil, nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "vindex %s is not a lookup type", vindex.Type)
-	}
-	targetKeyspace, targetTableName, err = s.env.Parser().ParseTable(vindex.Params["table"])
-	if err != nil || targetKeyspace == "" {
-		return nil, nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "vindex table name (%s) must be in the form <keyspace>.<table>", vindex.Params["table"])
-	}
-	vindexFromCols = strings.Split(vindex.Params["from"], ",")
-	for i, col := range vindexFromCols {
-		vindexFromCols[i] = strings.TrimSpace(col)
-	}
-	if strings.Contains(vindex.Type, "unique") {
-		if len(vindexFromCols) != 1 {
-			return nil, nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unique vindex 'from' should have only one column")
-		}
-	} else {
-		if len(vindexFromCols) < 2 {
-			return nil, nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "non-unique vindex 'from' should have more than one column")
-		}
-	}
-	vindexToCol = vindex.Params["to"]
-	// Make the vindex write_only. If one exists already in the vschema,
-	// it will need to match this vindex exactly, including the write_only setting.
-	vindex.Params["write_only"] = "true"
-	// See if we can create the vindex without errors.
-	if _, err := vindexes.CreateVindex(vindex.Type, vindexName, vindex.Params); err != nil {
-		return nil, nil, nil, nil, err
-	}
-	if ignoreNullsStr, ok := vindex.Params["ignore_nulls"]; ok {
-		// This mirrors the behavior of vindexes.boolFromMap().
-		switch ignoreNullsStr {
-		case "true":
-			vindexIgnoreNulls = true
-		case "false":
-			vindexIgnoreNulls = false
-		default:
-			return nil, nil, nil, nil,
-				vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "ignore_nulls (%s) value must be 'true' or 'false'",
-					ignoreNullsStr)
-		}
-	}
-
-	// Validate input table.
-	if len(specs.Tables) < 1 || len(specs.Tables) > 2 {
-		return nil, nil, nil, nil, fmt.Errorf("one or two tables must be specified")
-	}
-	// Loop executes once or twice.
-	for tableName, table := range specs.Tables {
-		if len(table.ColumnVindexes) != 1 {
-			return nil, nil, nil, nil,
-				vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "exactly one ColumnVindex must be specified for the %s table",
-					tableName)
-		}
-		if tableName != targetTableName { // This is the source table.
-			sourceTableName = tableName
-			sourceTable = table
-			continue
-		}
-		// This is a primary vindex definition for the target table
-		// which allows you to override the vindex type used.
-		var vindexCols []string
-		if len(table.ColumnVindexes[0].Columns) != 0 {
-			vindexCols = table.ColumnVindexes[0].Columns
-		} else {
-			if table.ColumnVindexes[0].Column == "" {
-				return nil, nil, nil, nil,
-					vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "at least one column must be specified in ColumnVindexes for the %s table",
-						tableName)
-			}
-			vindexCols = []string{table.ColumnVindexes[0].Column}
-		}
-		if !slices.Equal(vindexCols, vindexFromCols) {
-			return nil, nil, nil, nil,
-				vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "columns in the lookup table %s primary vindex (%s) don't match the 'from' columns specified (%s)",
-					tableName, strings.Join(vindexCols, ","), strings.Join(vindexFromCols, ","))
-		}
-	}
-
-	// Validate input table and vindex consistency.
-	if sourceTable == nil || len(sourceTable.ColumnVindexes) != 1 {
-		return nil, nil, nil, nil,
-			vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "No ColumnVindex found for the owner table (%s) in the %s keyspace",
-				sourceTable, keyspace)
-	}
-	if sourceTable.ColumnVindexes[0].Name != vindexName {
-		return nil, nil, nil, nil,
-			vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "ColumnVindex name (%s) must match vindex name (%s)",
-				sourceTable.ColumnVindexes[0].Name, vindexName)
-	}
-	if vindex.Owner != "" && vindex.Owner != sourceTableName {
-		return nil, nil, nil, nil,
-			vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "vindex owner (%s) must match table name (%s)",
-				vindex.Owner, sourceTableName)
-	}
-	if len(sourceTable.ColumnVindexes[0].Columns) != 0 {
-		sourceVindexColumns = sourceTable.ColumnVindexes[0].Columns
-	} else {
-		if sourceTable.ColumnVindexes[0].Column == "" {
-			return nil, nil, nil, nil,
-				vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "at least one column must be specified in ColumnVindexes for the %s table",
-					sourceTableName)
-		}
-		sourceVindexColumns = []string{sourceTable.ColumnVindexes[0].Column}
-	}
-	if len(sourceVindexColumns) != len(vindexFromCols) {
-		return nil, nil, nil, nil,
-			vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "length of table columns (%d) differs from length of vindex columns (%d)",
-				len(sourceVindexColumns), len(vindexFromCols))
-	}
-
-	// Validate against source vschema.
-	sourceVSchema, err = s.ts.GetVSchema(ctx, keyspace)
-	if err != nil {
-		return nil, nil, nil, nil, err
-	}
-	if sourceVSchema.Vindexes == nil {
-		sourceVSchema.Vindexes = make(map[string]*vschemapb.Vindex)
-	}
-	// If source and target keyspaces are the same, make vschemas point
-	// to the same object.
-	if keyspace == targetKeyspace {
-		targetVSchema = sourceVSchema
-	} else {
-		targetVSchema, err = s.ts.GetVSchema(ctx, targetKeyspace)
-		if err != nil {
-			return nil, nil, nil, nil, err
-		}
-	}
-	if targetVSchema.Vindexes == nil {
-		targetVSchema.Vindexes = make(map[string]*vschemapb.Vindex)
-	}
-	if targetVSchema.Tables == nil {
-		targetVSchema.Tables = make(map[string]*vschemapb.Table)
-	}
-	if existing, ok := sourceVSchema.Vindexes[vindexName]; ok {
-		if !proto.Equal(existing, vindex) { // If the exact same vindex already exists then we can re-use it
-			return nil, nil, nil, nil,
-				vterrors.Errorf(vtrpcpb.Code_INTERNAL, "a conflicting vindex named %s already exists in the %s keyspace",
-					vindexName, keyspace)
-		}
-	}
-	sourceVSchemaTable = sourceVSchema.Tables[sourceTableName]
-	if sourceVSchemaTable == nil && !schema.IsInternalOperationTableName(sourceTableName) {
-		return nil, nil, nil, nil,
-			vterrors.Errorf(vtrpcpb.Code_INTERNAL, "table %s not found in the %s keyspace", sourceTableName, keyspace)
-	}
-	for _, colVindex := range sourceVSchemaTable.ColumnVindexes {
-		// For a conflict, the vindex name and column should match.
-		if colVindex.Name != vindexName {
-			continue
-		}
-		var colNames []string
-		if len(colVindex.Columns) == 0 {
-			colNames = []string{colVindex.Column}
-		} else {
-			colNames = colVindex.Columns
-		}
-		// If this is the exact same definition then we can use the existing one. If they
-		// are not the same then they are two distinct conflicting vindexes and we should
-		// not proceed.
-		if !slices.Equal(colNames, sourceVindexColumns) {
-			return nil, nil, nil, nil,
-				vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "a conflicting ColumnVindex on column(s) %s in table %s already exists in the %s keyspace",
-					strings.Join(colNames, ","), sourceTableName, keyspace)
-		}
-	}
-
-	// Validate against source schema.
-	sourceShards, err := s.ts.GetServingShards(ctx, keyspace)
-	if err != nil {
-		return nil, nil, nil, nil, err
-	}
-	onesource := sourceShards[0]
-	if onesource.PrimaryAlias == nil {
-		return nil, nil, nil, nil,
-			vterrors.Errorf(vtrpcpb.Code_INTERNAL, "source shard %s has no primary", onesource.ShardName())
-	}
-	req := &tabletmanagerdatapb.GetSchemaRequest{Tables: []string{sourceTableName}}
-	tableSchema, err := schematools.GetSchema(ctx, s.ts, s.tmc, onesource.PrimaryAlias, req)
-	if err != nil {
-		return nil, nil, nil, nil, err
-	}
-	if len(tableSchema.TableDefinitions) != 1 {
-		return nil, nil, nil, nil,
-			vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected number of tables (%d) returned from %s schema",
-				len(tableSchema.TableDefinitions), keyspace)
-	}
-
-	// Generate "create table" statement.
-	lines := strings.Split(tableSchema.TableDefinitions[0].Schema, "\n")
-	if len(lines) < 3 {
-		// Should never happen.
-		return nil, nil, nil, nil,
-			vterrors.Errorf(vtrpcpb.Code_INTERNAL, "schema looks incorrect: %s, expecting at least four lines",
-				tableSchema.TableDefinitions[0].Schema)
-	}
-	var modified []string
-	modified = append(modified, strings.Replace(lines[0], sourceTableName, targetTableName, 1))
-	for i := range sourceVindexColumns {
-		line, err := generateColDef(lines, sourceVindexColumns[i], vindexFromCols[i])
-		if err != nil {
-			return nil, nil, nil, nil, err
-		}
-		modified = append(modified, line)
-	}
-
-	if vindex.Params["data_type"] == "" || strings.EqualFold(vindex.Type, "consistent_lookup_unique") || strings.EqualFold(vindex.Type, "consistent_lookup") {
-		modified = append(modified, fmt.Sprintf("  %s varbinary(128),", sqlescape.EscapeID(vindexToCol)))
-	} else {
-		modified = append(modified, fmt.Sprintf("  %s %s,", sqlescape.EscapeID(vindexToCol), sqlescape.EscapeID(vindex.Params["data_type"])))
-	}
-	buf := sqlparser.NewTrackedBuffer(nil)
-	fmt.Fprintf(buf, "  PRIMARY KEY (")
-	prefix := ""
-	for _, col := range vindexFromCols {
-		fmt.Fprintf(buf, "%s%s", prefix, sqlescape.EscapeID(col))
-		prefix = ", "
-	}
-	fmt.Fprintf(buf, ")")
-	modified = append(modified, buf.String())
-	modified = append(modified, ")")
-	createDDL = strings.Join(modified, "\n")
-	// Confirm that our DDL is valid before we create anything.
-	if _, err = s.env.Parser().ParseStrictDDL(createDDL); err != nil {
-		return nil, nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "error: %v; invalid lookup table definition generated: %s",
-			err, createDDL)
-	}
-
-	// Generate vreplication query.
-	buf = sqlparser.NewTrackedBuffer(nil)
-	buf.Myprintf("select ")
-	for i := range vindexFromCols {
-		buf.Myprintf("%s as %s, ", sqlparser.String(sqlparser.NewIdentifierCI(sourceVindexColumns[i])), sqlparser.String(sqlparser.NewIdentifierCI(vindexFromCols[i])))
-	}
-	if strings.EqualFold(vindexToCol, "keyspace_id") || strings.EqualFold(vindex.Type, "consistent_lookup_unique") || strings.EqualFold(vindex.Type, "consistent_lookup") {
-		buf.Myprintf("keyspace_id() as %s ", sqlparser.String(sqlparser.NewIdentifierCI(vindexToCol)))
-	} else {
-		buf.Myprintf("%s as %s ", sqlparser.String(sqlparser.NewIdentifierCI(vindexToCol)), sqlparser.String(sqlparser.NewIdentifierCI(vindexToCol)))
-	}
-	buf.Myprintf("from %s", sqlparser.String(sqlparser.NewIdentifierCS(sourceTableName)))
-	if vindexIgnoreNulls {
-		buf.Myprintf(" where ")
-		lastValIdx := len(vindexFromCols) - 1
-		for i := range vindexFromCols {
-			buf.Myprintf("%s is not null", sqlparser.String(sqlparser.NewIdentifierCI(vindexFromCols[i])))
-			if i != lastValIdx {
-				buf.Myprintf(" and ")
-			}
-		}
-	}
-	if vindex.Owner != "" {
-		// Only backfill.
-		buf.Myprintf(" group by ")
-		for i := range vindexFromCols {
-			buf.Myprintf("%s, ", sqlparser.String(sqlparser.NewIdentifierCI(vindexFromCols[i])))
-		}
-		buf.Myprintf("%s", sqlparser.String(sqlparser.NewIdentifierCI(vindexToCol)))
-	}
-	materializeQuery = buf.String()
-
-	// Save a copy of the original vschema if we modify it and need to provide
-	// a cancelFunc.
-	ogTargetVSchema := targetVSchema.CloneVT()
-	targetChanged := false
-
-	// Update targetVSchema.
-	targetTable := specs.Tables[targetTableName]
-	if targetVSchema.Sharded {
-		// Choose a primary vindex type for the lookup table based on the source
-		// definition if one was not explicitly specified.
-		var targetVindexType string
-		var targetVindex *vschemapb.Vindex
-		for _, field := range tableSchema.TableDefinitions[0].Fields {
-			if sourceVindexColumns[0] == field.Name {
-				if targetTable != nil && len(targetTable.ColumnVindexes) > 0 {
-					targetVindexType = targetTable.ColumnVindexes[0].Name
-				}
-				if targetVindexType == "" {
-					targetVindexType, err = vindexes.ChooseVindexForType(field.Type)
-					if err != nil {
-						return nil, nil, nil, nil, err
-					}
-				}
-				targetVindex = &vschemapb.Vindex{
-					Type: targetVindexType,
-				}
-				break
-			}
-		}
-		if targetVindex == nil {
-			// Unreachable. We validated column names when generating the DDL.
-			return nil, nil, nil, nil,
-				vterrors.Errorf(vtrpcpb.Code_INTERNAL, "column %s not found in target schema %s",
-					sourceVindexColumns[0], tableSchema.TableDefinitions[0].Schema)
-		}
-		if existing, ok := targetVSchema.Vindexes[targetVindexType]; ok {
-			if !proto.Equal(existing, targetVindex) {
-				return nil, nil, nil, nil,
-					vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "a conflicting vindex named %v already exists in the %s keyspace",
-						targetVindexType, targetKeyspace)
-			}
-		} else {
-			targetVSchema.Vindexes[targetVindexType] = targetVindex
-			targetChanged = true
-		}
-
-		targetTable = &vschemapb.Table{
-			ColumnVindexes: []*vschemapb.ColumnVindex{{
-				Column: vindexFromCols[0],
-				Name:   targetVindexType,
-			}},
-		}
-	} else {
-		targetTable = &vschemapb.Table{}
-	}
-	if existing, ok := targetVSchema.Tables[targetTableName]; ok {
-		if !proto.Equal(existing, targetTable) {
-			return nil, nil, nil, nil,
-				vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "a conflicting table named %s already exists in the %s vschema",
-					targetTableName, targetKeyspace)
-		}
-	} else {
-		targetVSchema.Tables[targetTableName] = targetTable
-		targetChanged = true
-	}
-
-	if targetChanged {
-		cancelFunc = func() error {
-			// Restore the original target vschema.
-			return s.ts.SaveVSchema(ctx, targetKeyspace, ogTargetVSchema)
-		}
-	}
-
-	ms = &vtctldatapb.MaterializeSettings{
-		Workflow:              workflow,
-		MaterializationIntent: vtctldatapb.MaterializationIntent_CREATELOOKUPINDEX,
-		SourceKeyspace:        keyspace,
-		TargetKeyspace:        targetKeyspace,
-		StopAfterCopy:         vindex.Owner != "" && !continueAfterCopyWithOwner,
-		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
-			TargetTable:      targetTableName,
-			SourceExpression: materializeQuery,
-			CreateDdl:        createDDL,
-		}},
-	}
-
-	// Update sourceVSchema
-	sourceVSchema.Vindexes[vindexName] = vindex
-	sourceVSchemaTable.ColumnVindexes = append(sourceVSchemaTable.ColumnVindexes, sourceTable.ColumnVindexes[0])
-
-	return ms, sourceVSchema, targetVSchema, cancelFunc, nil
-}
-
-func generateColDef(lines []string, sourceVindexCol, vindexFromCol string) (string, error) {
-	source := sqlescape.EscapeID(sourceVindexCol)
-	target := sqlescape.EscapeID(vindexFromCol)
-
-	for _, line := range lines[1:] {
-		if strings.Contains(line, source) {
-			line = strings.Replace(line, source, target, 1)
-			line = strings.Replace(line, " AUTO_INCREMENT", "", 1)
-			line = strings.Replace(line, " DEFAULT NULL", "", 1)
-			// Ensure that the column definition ends with a comma as we will
-			// be appending the TO column and PRIMARY KEY definitions. If the
-			// souce column here was the last entity defined in the source
-			// table's definition then it will not already have the comma.
-			if !strings.HasSuffix(strings.TrimSpace(line), ",") {
-				line += ","
-			}
-			return line, nil
-		}
-	}
-	return "", fmt.Errorf("column %s not found in schema %v", sourceVindexCol, lines)
 }
 
 func (s *Server) MigrateCreate(ctx context.Context, req *vtctldatapb.MigrateCreateRequest) (*vtctldatapb.WorkflowStatusResponse, error) {

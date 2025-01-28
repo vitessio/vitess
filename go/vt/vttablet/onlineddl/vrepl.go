@@ -208,7 +208,7 @@ func (v *VRepl) executeAnalyzeTable(ctx context.Context, conn *dbconnpool.DBConn
 		defer conn.ExecuteFetch(sqlDisableFastAnalyzeTable, 1, false)
 	}
 
-	parsed := sqlparser.BuildParsedQuery(sqlAnalyzeTable, tableName)
+	parsed := sqlparser.BuildParsedQuery(sqlAnalyzeTableLocal, tableName)
 	if _, err := conn.ExecuteFetch(parsed.Query, 1, false); err != nil {
 		return err
 	}

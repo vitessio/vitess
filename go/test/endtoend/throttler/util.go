@@ -97,7 +97,7 @@ func GetThrottlerStatusRaw(vtctldProcess *cluster.VtctldClientProcess, tablet *c
 	return result, err
 }
 
-// UpdateThrottlerTopoConfig runs vtctlclient UpdateThrottlerConfig.
+// UpdateThrottlerTopoConfig runs vtctldclient UpdateThrottlerConfig.
 // This retries the command until it succeeds or times out as the
 // SrvKeyspace record may not yet exist for a newly created
 // Keyspace that is still initializing before it becomes serving.
@@ -212,7 +212,7 @@ func GetThrottlerStatus(vtctldProcess *cluster.VtctldClientProcess, tablet *clus
 	return resp.Status, err
 }
 
-// UpdateThrottlerTopoConfig runs vtctlclient UpdateThrottlerConfig.
+// UpdateThrottlerTopoConfig runs vtctldclient UpdateThrottlerConfig.
 // This retries the command until it succeeds or times out as the
 // SrvKeyspace record may not yet exist for a newly created
 // Keyspace that is still initializing before it becomes serving.
@@ -266,7 +266,7 @@ func WaitForSrvKeyspace(clusterInstance *cluster.LocalProcessCluster, cell, keys
 	}
 }
 
-// throttleAppRaw runs vtctlclient UpdateThrottlerConfig with --throttle-app flags
+// throttleAppRaw runs vtctldclient UpdateThrottlerConfig with --throttle-app flags
 // This retries the command until it succeeds or times out as the
 // SrvKeyspace record may not yet exist for a newly created
 // Keyspace that is still initializing before it becomes serving.

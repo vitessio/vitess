@@ -385,12 +385,16 @@ func getIntLiteral(e sqlparser.Expr) *sqlparser.Literal {
 
 // handleOrderBy processes the ORDER BY clause.
 func (r *earlyRewriter) handleOrderBy(parent sqlparser.SQLNode, iter iterator) error {
-	stmt, ok := parent.(sqlparser.SelectStatement)
+	stmt, ok := parent.(sqlparser.TableStatement)
 	if !ok {
 		return nil
 	}
 
-	sel := sqlparser.GetFirstSelect(stmt)
+	sel, err := sqlparser.GetFirstSelect(stmt)
+	if err != nil {
+		return err
+	}
+
 	for e := iter.next(); e != nil; e = iter.next() {
 		lit, err := r.replaceLiteralsInOrderBy(e, iter)
 		if err != nil {
@@ -419,12 +423,15 @@ func (r *earlyRewriter) handleOrderBy(parent sqlparser.SQLNode, iter iterator) e
 
 // handleGroupBy processes the GROUP BY clause.
 func (r *earlyRewriter) handleGroupBy(parent sqlparser.SQLNode, iter iterator) error {
-	stmt, ok := parent.(sqlparser.SelectStatement)
+	stmt, ok := parent.(*sqlparser.Select)
 	if !ok {
 		return nil
 	}
 
-	sel := sqlparser.GetFirstSelect(stmt)
+	sel, err := sqlparser.GetFirstSelect(stmt)
+	if err != nil {
+		return err
+	}
 	for e := iter.next(); e != nil; e = iter.next() {
 		expr, err := r.replaceLiteralsInGroupBy(e)
 		if err != nil {
@@ -435,7 +442,6 @@ func (r *earlyRewriter) handleGroupBy(parent sqlparser.SQLNode, iter iterator) e
 			if err != nil {
 				return err
 			}
-
 		}
 		err = iter.replace(expr)
 		if err != nil {
