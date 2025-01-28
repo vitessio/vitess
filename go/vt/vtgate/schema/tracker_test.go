@@ -258,29 +258,29 @@ func TestViewsTracking(t *testing.T) {
 	testcases := []testCases{{
 		testName: "initial view load",
 		expView: map[string]string{
-			"prior": "select 1 from tbl"},
+			"prior": "select 1 from ks.tbl"},
 	}, {
 		testName: "new view t1, V1",
 		updView:  []string{"t1", "V1"},
 		expView: map[string]string{
-			"t1":    "select 1 from tbl1",
-			"V1":    "select 1 from tbl2",
-			"prior": "select 1 from tbl"},
+			"t1":    "select 1 from ks.tbl1",
+			"V1":    "select 1 from ks.tbl2",
+			"prior": "select 1 from ks.tbl"},
 	}, {
 		testName: "delete prior, updated V1 and new t3",
 		updView:  []string{"prior", "V1", "t3"},
 		expView: map[string]string{
-			"t1": "select 1 from tbl1",
-			"V1": "select 1, 2 from tbl2",
-			"t3": "select 1 from tbl3"},
+			"t1": "select 1 from ks.tbl1",
+			"V1": "select 1, 2 from ks.tbl2",
+			"t3": "select 1 from ks.tbl3"},
 	}, {
 		testName: "new t4",
 		updView:  []string{"t4"},
 		expView: map[string]string{
-			"t1": "select 1 from tbl1",
-			"V1": "select 1, 2 from tbl2",
-			"t3": "select 1 from tbl3",
-			"t4": "select 1 from tbl4"},
+			"t1": "select 1 from ks.tbl1",
+			"V1": "select 1, 2 from ks.tbl2",
+			"t3": "select 1 from ks.tbl3",
+			"t4": "select 1 from ks.tbl4"},
 	}}
 
 	testTracker(t, false, schemaDefResult, testcases)
