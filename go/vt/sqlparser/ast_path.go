@@ -21,7 +21,7 @@ type ASTStep uint16
 
 const (
 	RefOfAddColumnsColumns8 ASTStep = iota
-	RefOfAddColumnsColumns64
+	RefOfAddColumnsColumns32
 	RefOfAddColumnsAfter
 	RefOfAddConstraintDefinitionConstraintDefinition
 	RefOfAddIndexDefinitionIndexDefinition
@@ -41,7 +41,7 @@ const (
 	RefOfAlterMigrationRatio
 	RefOfAlterTableTable
 	RefOfAlterTableAlterOptions8
-	RefOfAlterTableAlterOptions64
+	RefOfAlterTableAlterOptions32
 	RefOfAlterTablePartitionSpec
 	RefOfAlterTablePartitionOption
 	RefOfAlterTableComments
@@ -53,7 +53,7 @@ const (
 	RefOfAlterVschemaTable
 	RefOfAlterVschemaVindexSpec
 	RefOfAlterVschemaVindexCols8
-	RefOfAlterVschemaVindexCols64
+	RefOfAlterVschemaVindexCols32
 	RefOfAlterVschemaAutoIncSpec
 	RefOfAnalyzeTable
 	RefOfAndExprLeft
@@ -81,7 +81,7 @@ const (
 	RefOfCallProcParams
 	RefOfCaseExprExpr
 	RefOfCaseExprWhens8
-	RefOfCaseExprWhens64
+	RefOfCaseExprWhens32
 	RefOfCaseExprElse
 	RefOfCastExprExpr
 	RefOfCastExprType
@@ -96,7 +96,7 @@ const (
 	RefOfColumnDefinitionName
 	RefOfColumnDefinitionType
 	ColumnsOffset8
-	ColumnsOffset64
+	ColumnsOffset32
 	RefOfCommonTableExprID
 	RefOfCommonTableExprColumns
 	RefOfCommonTableExprSubquery
@@ -128,7 +128,7 @@ const (
 	RefOfDeleteWith
 	RefOfDeleteComments
 	RefOfDeleteTableExprs8
-	RefOfDeleteTableExprs64
+	RefOfDeleteTableExprs32
 	RefOfDeleteTargets
 	RefOfDeletePartitions
 	RefOfDeleteWhere
@@ -146,13 +146,13 @@ const (
 	RefOfExecuteStmtName
 	RefOfExecuteStmtComments
 	RefOfExecuteStmtArguments8
-	RefOfExecuteStmtArguments64
+	RefOfExecuteStmtArguments32
 	RefOfExistsExprSubquery
 	RefOfExplainStmtStatement
 	RefOfExplainStmtComments
 	RefOfExplainTabTable
 	ExprsOffset8
-	ExprsOffset64
+	ExprsOffset32
 	RefOfExtractFuncExprExpr
 	RefOfExtractValueExprFragment
 	RefOfExtractValueExprXPathExpr
@@ -198,15 +198,15 @@ const (
 	RefOfGeomFromWKBExprAxisOrderOpt
 	RefOfGeomPropertyFuncExprGeom
 	RefOfGroupByExprs8
-	RefOfGroupByExprs64
+	RefOfGroupByExprs32
 	RefOfGroupConcatExprExprs
 	RefOfGroupConcatExprOrderBy
 	RefOfGroupConcatExprLimit
 	RefOfIndexDefinitionInfo
 	RefOfIndexHintIndexes8
-	RefOfIndexHintIndexes64
+	RefOfIndexHintIndexes32
 	IndexHintsOffset8
-	IndexHintsOffset64
+	IndexHintsOffset32
 	RefOfIndexInfoName
 	RefOfIndexInfoConstraintName
 	RefOfInsertComments
@@ -234,21 +234,21 @@ const (
 	RefOfJSONContainsExprTarget
 	RefOfJSONContainsExprCandidate
 	RefOfJSONContainsExprPathList8
-	RefOfJSONContainsExprPathList64
+	RefOfJSONContainsExprPathList32
 	RefOfJSONContainsPathExprJSONDoc
 	RefOfJSONContainsPathExprOneOrAll
 	RefOfJSONContainsPathExprPathList8
-	RefOfJSONContainsPathExprPathList64
+	RefOfJSONContainsPathExprPathList32
 	RefOfJSONExtractExprJSONDoc
 	RefOfJSONExtractExprPathList8
-	RefOfJSONExtractExprPathList64
+	RefOfJSONExtractExprPathList32
 	RefOfJSONKeysExprJSONDoc
 	RefOfJSONKeysExprPath
 	RefOfJSONObjectAggKey
 	RefOfJSONObjectAggValue
 	RefOfJSONObjectAggOverClause
 	RefOfJSONObjectExprParams8
-	RefOfJSONObjectExprParams64
+	RefOfJSONObjectExprParams32
 	RefOfJSONObjectParamKey
 	RefOfJSONObjectParamValue
 	RefOfJSONOverlapsExprJSONDoc1
@@ -266,14 +266,14 @@ const (
 	RefOfJSONSearchExprSearchStr
 	RefOfJSONSearchExprEscapeChar
 	RefOfJSONSearchExprPathList8
-	RefOfJSONSearchExprPathList64
+	RefOfJSONSearchExprPathList32
 	RefOfJSONStorageFreeExprJSONVal
 	RefOfJSONStorageSizeExprJSONVal
 	RefOfJSONTableExprExpr
 	RefOfJSONTableExprAlias
 	RefOfJSONTableExprFilter
 	RefOfJSONTableExprColumns8
-	RefOfJSONTableExprColumns64
+	RefOfJSONTableExprColumns32
 	RefOfJSONUnquoteExprJSONValue
 	RefOfJSONValueExprJSONDoc
 	RefOfJSONValueExprPath
@@ -284,7 +284,7 @@ const (
 	RefOfJSONValueMergeExprJSONDocList
 	RefOfJSONValueModifierExprJSONDoc
 	RefOfJSONValueModifierExprParams8
-	RefOfJSONValueModifierExprParams64
+	RefOfJSONValueModifierExprParams32
 	RefOfJoinConditionOn
 	RefOfJoinConditionUsing
 	RefOfJoinTableExprLeftExpr
@@ -307,7 +307,7 @@ const (
 	RefOfLockingFuncName
 	RefOfLockingFuncTimeout
 	RefOfMatchExprColumns8
-	RefOfMatchExprColumns64
+	RefOfMatchExprColumns32
 	RefOfMatchExprExpr
 	RefOfMaxArg
 	RefOfMaxOverClause
@@ -327,20 +327,20 @@ const (
 	RefOfNTHValueExprNullTreatmentClause
 	RefOfNamedWindowWindows
 	NamedWindowsOffset8
-	NamedWindowsOffset64
+	NamedWindowsOffset32
 	RefOfNextvalExpr
 	RefOfNotExprExpr
 	RefOfNtileExprN
 	RefOfNtileExprOverClause
 	RefOfOffsetOriginal
 	OnDupOffset8
-	OnDupOffset64
+	OnDupOffset32
 	RefOfOptLikeLikeTable
 	RefOfOrExprLeft
 	RefOfOrExprRight
 	RefOfOrderExpr
 	OrderByOffset8
-	OrderByOffset64
+	OrderByOffset32
 	RefOfOrderByOptionCols
 	RefOfOverClauseWindowName
 	RefOfOverClauseWindowSpec
@@ -357,15 +357,15 @@ const (
 	RefOfPartitionOptionExpr
 	RefOfPartitionOptionSubPartition
 	RefOfPartitionOptionDefinitions8
-	RefOfPartitionOptionDefinitions64
+	RefOfPartitionOptionDefinitions32
 	RefOfPartitionSpecNames
 	RefOfPartitionSpecNumber
 	RefOfPartitionSpecTableName
 	RefOfPartitionSpecDefinitions8
-	RefOfPartitionSpecDefinitions64
+	RefOfPartitionSpecDefinitions32
 	RefOfPartitionValueRangeRange
 	PartitionsOffset8
-	PartitionsOffset64
+	PartitionsOffset32
 	RefOfPerformanceSchemaFuncExprArgument
 	RefOfPointExprXCordinate
 	RefOfPointExprYCordinate
@@ -416,7 +416,7 @@ const (
 	RefOfSavepointName
 	RefOfSelectWith
 	RefOfSelectFrom8
-	RefOfSelectFrom64
+	RefOfSelectFrom32
 	RefOfSelectComments
 	RefOfSelectSelectExprs
 	RefOfSelectWhere
@@ -427,13 +427,13 @@ const (
 	RefOfSelectLimit
 	RefOfSelectInto
 	SelectExprsOffset8
-	SelectExprsOffset64
+	SelectExprsOffset32
 	RefOfSetComments
 	RefOfSetExprs
 	RefOfSetExprVar
 	RefOfSetExprExpr
 	SetExprsOffset8
-	SetExprsOffset64
+	SetExprsOffset32
 	RefOfShowInternal
 	RefOfShowBasicTbl
 	RefOfShowBasicDbName
@@ -462,7 +462,7 @@ const (
 	RefOfSubPartitionDefinitionOptionsDataDirectory
 	RefOfSubPartitionDefinitionOptionsIndexDirectory
 	SubPartitionDefinitionsOffset8
-	SubPartitionDefinitionsOffset64
+	SubPartitionDefinitionsOffset32
 	RefOfSubquerySelect
 	RefOfSubstrExprName
 	RefOfSubstrExprFrom
@@ -470,19 +470,19 @@ const (
 	RefOfSumArg
 	RefOfSumOverClause
 	TableExprsOffset8
-	TableExprsOffset64
+	TableExprsOffset32
 	TableNameName
 	TableNameQualifier
 	TableNamesOffset8
-	TableNamesOffset64
+	TableNamesOffset32
 	TableOptionsOffset8
-	TableOptionsOffset64
+	TableOptionsOffset32
 	RefOfTableSpecColumns8
-	RefOfTableSpecColumns64
+	RefOfTableSpecColumns32
 	RefOfTableSpecIndexes8
-	RefOfTableSpecIndexes64
+	RefOfTableSpecIndexes32
 	RefOfTableSpecConstraints8
-	RefOfTableSpecConstraints64
+	RefOfTableSpecConstraints32
 	RefOfTableSpecOptions
 	RefOfTableSpecPartitionOption
 	RefOfTimestampDiffExprExpr1
@@ -500,7 +500,7 @@ const (
 	RefOfUpdateWith
 	RefOfUpdateComments
 	RefOfUpdateTableExprs8
-	RefOfUpdateTableExprs64
+	RefOfUpdateTableExprs32
 	RefOfUpdateExprs
 	RefOfUpdateWhere
 	RefOfUpdateOrderBy
@@ -508,7 +508,7 @@ const (
 	RefOfUpdateExprName
 	RefOfUpdateExprExpr
 	UpdateExprsOffset8
-	UpdateExprsOffset64
+	UpdateExprsOffset32
 	RefOfUpdateXMLExprTarget
 	RefOfUpdateXMLExprXPathExpr
 	RefOfUpdateXMLExprNewXML
@@ -521,9 +521,9 @@ const (
 	RefOfVStreamWhere
 	RefOfVStreamLimit
 	ValTupleOffset8
-	ValTupleOffset64
+	ValTupleOffset32
 	ValuesOffset8
-	ValuesOffset64
+	ValuesOffset32
 	RefOfValuesFuncExprName
 	RefOfValuesStatementWith
 	RefOfValuesStatementRows
@@ -542,7 +542,7 @@ const (
 	RefOfVindexSpecName
 	RefOfVindexSpecType
 	RefOfVindexSpecParams8
-	RefOfVindexSpecParams64
+	RefOfVindexSpecParams32
 	RefOfWeightStringFuncExprExpr
 	RefOfWeightStringFuncExprAs
 	RefOfWhenCond
@@ -551,27 +551,27 @@ const (
 	RefOfWindowDefinitionName
 	RefOfWindowDefinitionWindowSpec
 	WindowDefinitionsOffset8
-	WindowDefinitionsOffset64
+	WindowDefinitionsOffset32
 	RefOfWindowSpecificationName
 	RefOfWindowSpecificationPartitionClause
 	RefOfWindowSpecificationOrderClause
 	RefOfWindowSpecificationFrameClause
 	RefOfWithCTEs8
-	RefOfWithCTEs64
+	RefOfWithCTEs32
 	RefOfXorExprLeft
 	RefOfXorExprRight
 	SliceOfRefOfColumnDefinitionOffset8
-	SliceOfRefOfColumnDefinitionOffset64
+	SliceOfRefOfColumnDefinitionOffset32
 	SliceOfDatabaseOptionOffset8
-	SliceOfDatabaseOptionOffset64
+	SliceOfDatabaseOptionOffset32
 	SliceOfAlterOptionOffset8
-	SliceOfAlterOptionOffset64
+	SliceOfAlterOptionOffset32
 	SliceOfIdentifierCIOffset8
-	SliceOfIdentifierCIOffset64
+	SliceOfIdentifierCIOffset32
 	SliceOfTxAccessModeOffset8
-	SliceOfTxAccessModeOffset64
+	SliceOfTxAccessModeOffset32
 	SliceOfRefOfWhenOffset8
-	SliceOfRefOfWhenOffset64
+	SliceOfRefOfWhenOffset32
 	RefOfColumnTypeOptionsDefault
 	RefOfColumnTypeOptionsOnUpdate
 	RefOfColumnTypeOptionsAs
@@ -581,21 +581,21 @@ const (
 	RefOfColumnTypeOptionsSecondaryEngineAttribute
 	RefOfColumnTypeOptionsSRID
 	SliceOfStringOffset8
-	SliceOfStringOffset64
+	SliceOfStringOffset32
 	SliceOfTableExprOffset8
-	SliceOfTableExprOffset64
+	SliceOfTableExprOffset32
 	SliceOfRefOfVariableOffset8
-	SliceOfRefOfVariableOffset64
+	SliceOfRefOfVariableOffset32
 	SliceOfExprOffset8
-	SliceOfExprOffset64
+	SliceOfExprOffset32
 	SliceOfRefOfIndexColumnOffset8
-	SliceOfRefOfIndexColumnOffset64
+	SliceOfRefOfIndexColumnOffset32
 	SliceOfRefOfIndexOptionOffset8
-	SliceOfRefOfIndexOptionOffset64
+	SliceOfRefOfIndexOptionOffset32
 	SliceOfRefOfJSONObjectParamOffset8
-	SliceOfRefOfJSONObjectParamOffset64
+	SliceOfRefOfJSONObjectParamOffset32
 	SliceOfRefOfJtColumnDefinitionOffset8
-	SliceOfRefOfJtColumnDefinitionOffset64
+	SliceOfRefOfJtColumnDefinitionOffset32
 	RefOfJtOrdinalColDefName
 	RefOfJtPathColDefName
 	RefOfJtPathColDefType
@@ -604,31 +604,31 @@ const (
 	RefOfJtPathColDefErrorOnResponse
 	RefOfJtNestedPathColDefPath
 	RefOfJtNestedPathColDefColumns8
-	RefOfJtNestedPathColDefColumns64
+	RefOfJtNestedPathColDefColumns32
 	TableAndLockTypesOffset8
-	TableAndLockTypesOffset64
+	TableAndLockTypesOffset32
 	SliceOfRefOfColNameOffset8
-	SliceOfRefOfColNameOffset64
+	SliceOfRefOfColNameOffset32
 	CommentsOffset8
-	CommentsOffset64
+	CommentsOffset32
 	SliceOfRefOfPartitionDefinitionOffset8
-	SliceOfRefOfPartitionDefinitionOffset64
+	SliceOfRefOfPartitionDefinitionOffset32
 	SliceOfRefOfRenameTablePairOffset8
-	SliceOfRefOfRenameTablePairOffset64
+	SliceOfRefOfRenameTablePairOffset32
 	RefOfRootNodeSQLNode
 	RefOfTableNameName
 	RefOfTableNameQualifier
 	RefOfTableOptionValue
 	RefOfTableOptionTables
 	SliceOfRefOfIndexDefinitionOffset8
-	SliceOfRefOfIndexDefinitionOffset64
+	SliceOfRefOfIndexDefinitionOffset32
 	SliceOfRefOfConstraintDefinitionOffset8
-	SliceOfRefOfConstraintDefinitionOffset64
+	SliceOfRefOfConstraintDefinitionOffset32
 	RefOfVindexParamKey
 	SliceOfVindexParamOffset8
-	SliceOfVindexParamOffset64
+	SliceOfVindexParamOffset32
 	SliceOfRefOfCommonTableExprOffset8
-	SliceOfRefOfCommonTableExprOffset64
+	SliceOfRefOfCommonTableExprOffset32
 	RefOfIndexColumnColumn
 	RefOfIndexColumnExpression
 	RefOfIndexOptionValue
@@ -636,3 +636,1239 @@ const (
 	RefOfRenameTablePairFromTable
 	RefOfRenameTablePairToTable
 )
+
+func (s ASTStep) DebugString() string {
+	switch s {
+	case RefOfAddColumnsColumns8:
+		return "*AddColumns:Columns(*ColumnDefinition)8"
+	case RefOfAddColumnsColumns32:
+		return "*AddColumns:Columns(*ColumnDefinition)32"
+	case RefOfAddColumnsAfter:
+		return "*AddColumns:After(*ColName)"
+	case RefOfAddConstraintDefinitionConstraintDefinition:
+		return "*AddConstraintDefinition:ConstraintDefinition(*ConstraintDefinition)"
+	case RefOfAddIndexDefinitionIndexDefinition:
+		return "*AddIndexDefinition:IndexDefinition(*IndexDefinition)"
+	case RefOfAliasedExprExpr:
+		return "*AliasedExpr:Expr(Expr)"
+	case RefOfAliasedExprAs:
+		return "*AliasedExpr:As(IdentifierCI)"
+	case RefOfAliasedTableExprExpr:
+		return "*AliasedTableExpr:Expr(SimpleTableExpr)"
+	case RefOfAliasedTableExprPartitions:
+		return "*AliasedTableExpr:Partitions(Partitions)"
+	case RefOfAliasedTableExprAs:
+		return "*AliasedTableExpr:As(IdentifierCS)"
+	case RefOfAliasedTableExprHints:
+		return "*AliasedTableExpr:Hints(IndexHints)"
+	case RefOfAliasedTableExprColumns:
+		return "*AliasedTableExpr:Columns(Columns)"
+	case RefOfAlterCheckName:
+		return "*AlterCheck:Name(IdentifierCI)"
+	case RefOfAlterColumnColumn:
+		return "*AlterColumn:Column(*ColName)"
+	case RefOfAlterColumnDefaultVal:
+		return "*AlterColumn:DefaultVal(Expr)"
+	case RefOfAlterDatabaseComments:
+		return "*AlterDatabase:Comments(*ParsedComments)"
+	case RefOfAlterDatabaseDBName:
+		return "*AlterDatabase:DBName(IdentifierCS)"
+	case RefOfAlterIndexName:
+		return "*AlterIndex:Name(IdentifierCI)"
+	case RefOfAlterMigrationRatio:
+		return "*AlterMigration:Ratio(*Literal)"
+	case RefOfAlterTableTable:
+		return "*AlterTable:Table(TableName)"
+	case RefOfAlterTableAlterOptions8:
+		return "*AlterTable:AlterOptions(AlterOption)8"
+	case RefOfAlterTableAlterOptions32:
+		return "*AlterTable:AlterOptions(AlterOption)32"
+	case RefOfAlterTablePartitionSpec:
+		return "*AlterTable:PartitionSpec(*PartitionSpec)"
+	case RefOfAlterTablePartitionOption:
+		return "*AlterTable:PartitionOption(*PartitionOption)"
+	case RefOfAlterTableComments:
+		return "*AlterTable:Comments(*ParsedComments)"
+	case RefOfAlterViewViewName:
+		return "*AlterView:ViewName(TableName)"
+	case RefOfAlterViewDefiner:
+		return "*AlterView:Definer(*Definer)"
+	case RefOfAlterViewColumns:
+		return "*AlterView:Columns(Columns)"
+	case RefOfAlterViewSelect:
+		return "*AlterView:Select(TableStatement)"
+	case RefOfAlterViewComments:
+		return "*AlterView:Comments(*ParsedComments)"
+	case RefOfAlterVschemaTable:
+		return "*AlterVschema:Table(TableName)"
+	case RefOfAlterVschemaVindexSpec:
+		return "*AlterVschema:VindexSpec(*VindexSpec)"
+	case RefOfAlterVschemaVindexCols8:
+		return "*AlterVschema:VindexCols(IdentifierCI)8"
+	case RefOfAlterVschemaVindexCols32:
+		return "*AlterVschema:VindexCols(IdentifierCI)32"
+	case RefOfAlterVschemaAutoIncSpec:
+		return "*AlterVschema:AutoIncSpec(*AutoIncSpec)"
+	case RefOfAnalyzeTable:
+		return "*Analyze:Table(TableName)"
+	case RefOfAndExprLeft:
+		return "*AndExpr:Left(Expr)"
+	case RefOfAndExprRight:
+		return "*AndExpr:Right(Expr)"
+	case RefOfAnyValueArg:
+		return "*AnyValue:Arg(Expr)"
+	case RefOfArgumentLessWindowExprOverClause:
+		return "*ArgumentLessWindowExpr:OverClause(*OverClause)"
+	case RefOfAssignmentExprLeft:
+		return "*AssignmentExpr:Left(Expr)"
+	case RefOfAssignmentExprRight:
+		return "*AssignmentExpr:Right(Expr)"
+	case RefOfAutoIncSpecColumn:
+		return "*AutoIncSpec:Column(IdentifierCI)"
+	case RefOfAutoIncSpecSequence:
+		return "*AutoIncSpec:Sequence(TableName)"
+	case RefOfAvgArg:
+		return "*Avg:Arg(Expr)"
+	case RefOfAvgOverClause:
+		return "*Avg:OverClause(*OverClause)"
+	case RefOfBetweenExprLeft:
+		return "*BetweenExpr:Left(Expr)"
+	case RefOfBetweenExprFrom:
+		return "*BetweenExpr:From(Expr)"
+	case RefOfBetweenExprTo:
+		return "*BetweenExpr:To(Expr)"
+	case RefOfBinaryExprLeft:
+		return "*BinaryExpr:Left(Expr)"
+	case RefOfBinaryExprRight:
+		return "*BinaryExpr:Right(Expr)"
+	case RefOfBitAndArg:
+		return "*BitAnd:Arg(Expr)"
+	case RefOfBitAndOverClause:
+		return "*BitAnd:OverClause(*OverClause)"
+	case RefOfBitOrArg:
+		return "*BitOr:Arg(Expr)"
+	case RefOfBitOrOverClause:
+		return "*BitOr:OverClause(*OverClause)"
+	case RefOfBitXorArg:
+		return "*BitXor:Arg(Expr)"
+	case RefOfBitXorOverClause:
+		return "*BitXor:OverClause(*OverClause)"
+	case RefOfCallProcName:
+		return "*CallProc:Name(TableName)"
+	case RefOfCallProcParams:
+		return "*CallProc:Params(Exprs)"
+	case RefOfCaseExprExpr:
+		return "*CaseExpr:Expr(Expr)"
+	case RefOfCaseExprWhens8:
+		return "*CaseExpr:Whens(*When)8"
+	case RefOfCaseExprWhens32:
+		return "*CaseExpr:Whens(*When)32"
+	case RefOfCaseExprElse:
+		return "*CaseExpr:Else(Expr)"
+	case RefOfCastExprExpr:
+		return "*CastExpr:Expr(Expr)"
+	case RefOfCastExprType:
+		return "*CastExpr:Type(*ConvertType)"
+	case RefOfChangeColumnOldColumn:
+		return "*ChangeColumn:OldColumn(*ColName)"
+	case RefOfChangeColumnNewColDefinition:
+		return "*ChangeColumn:NewColDefinition(*ColumnDefinition)"
+	case RefOfChangeColumnAfter:
+		return "*ChangeColumn:After(*ColName)"
+	case RefOfCharExprExprs:
+		return "*CharExpr:Exprs(Exprs)"
+	case RefOfCheckConstraintDefinitionExpr:
+		return "*CheckConstraintDefinition:Expr(Expr)"
+	case RefOfColNameName:
+		return "*ColName:Name(IdentifierCI)"
+	case RefOfColNameQualifier:
+		return "*ColName:Qualifier(TableName)"
+	case RefOfCollateExprExpr:
+		return "*CollateExpr:Expr(Expr)"
+	case RefOfColumnDefinitionName:
+		return "*ColumnDefinition:Name(IdentifierCI)"
+	case RefOfColumnDefinitionType:
+		return "*ColumnDefinition:Type(*ColumnType)"
+	case ColumnsOffset8:
+		return "Columns:Offset(Columns)8"
+	case ColumnsOffset32:
+		return "Columns:Offset(Columns)32"
+	case RefOfCommonTableExprID:
+		return "*CommonTableExpr:ID(IdentifierCS)"
+	case RefOfCommonTableExprColumns:
+		return "*CommonTableExpr:Columns(Columns)"
+	case RefOfCommonTableExprSubquery:
+		return "*CommonTableExpr:Subquery(TableStatement)"
+	case RefOfComparisonExprLeft:
+		return "*ComparisonExpr:Left(Expr)"
+	case RefOfComparisonExprRight:
+		return "*ComparisonExpr:Right(Expr)"
+	case RefOfComparisonExprEscape:
+		return "*ComparisonExpr:Escape(Expr)"
+	case RefOfConstraintDefinitionName:
+		return "*ConstraintDefinition:Name(IdentifierCI)"
+	case RefOfConstraintDefinitionDetails:
+		return "*ConstraintDefinition:Details(ConstraintInfo)"
+	case RefOfConvertExprExpr:
+		return "*ConvertExpr:Expr(Expr)"
+	case RefOfConvertExprType:
+		return "*ConvertExpr:Type(*ConvertType)"
+	case RefOfConvertUsingExprExpr:
+		return "*ConvertUsingExpr:Expr(Expr)"
+	case RefOfCountArgs:
+		return "*Count:Args(Exprs)"
+	case RefOfCountOverClause:
+		return "*Count:OverClause(*OverClause)"
+	case RefOfCountStarOverClause:
+		return "*CountStar:OverClause(*OverClause)"
+	case RefOfCreateDatabaseComments:
+		return "*CreateDatabase:Comments(*ParsedComments)"
+	case RefOfCreateDatabaseDBName:
+		return "*CreateDatabase:DBName(IdentifierCS)"
+	case RefOfCreateTableTable:
+		return "*CreateTable:Table(TableName)"
+	case RefOfCreateTableTableSpec:
+		return "*CreateTable:TableSpec(*TableSpec)"
+	case RefOfCreateTableOptLike:
+		return "*CreateTable:OptLike(*OptLike)"
+	case RefOfCreateTableComments:
+		return "*CreateTable:Comments(*ParsedComments)"
+	case RefOfCreateViewViewName:
+		return "*CreateView:ViewName(TableName)"
+	case RefOfCreateViewDefiner:
+		return "*CreateView:Definer(*Definer)"
+	case RefOfCreateViewColumns:
+		return "*CreateView:Columns(Columns)"
+	case RefOfCreateViewSelect:
+		return "*CreateView:Select(TableStatement)"
+	case RefOfCreateViewComments:
+		return "*CreateView:Comments(*ParsedComments)"
+	case RefOfCurTimeFuncExprName:
+		return "*CurTimeFuncExpr:Name(IdentifierCI)"
+	case RefOfDeallocateStmtComments:
+		return "*DeallocateStmt:Comments(*ParsedComments)"
+	case RefOfDeallocateStmtName:
+		return "*DeallocateStmt:Name(IdentifierCI)"
+	case RefOfDeleteWith:
+		return "*Delete:With(*With)"
+	case RefOfDeleteComments:
+		return "*Delete:Comments(*ParsedComments)"
+	case RefOfDeleteTableExprs8:
+		return "*Delete:TableExprs(TableExpr)8"
+	case RefOfDeleteTableExprs32:
+		return "*Delete:TableExprs(TableExpr)32"
+	case RefOfDeleteTargets:
+		return "*Delete:Targets(TableNames)"
+	case RefOfDeletePartitions:
+		return "*Delete:Partitions(Partitions)"
+	case RefOfDeleteWhere:
+		return "*Delete:Where(*Where)"
+	case RefOfDeleteOrderBy:
+		return "*Delete:OrderBy(OrderBy)"
+	case RefOfDeleteLimit:
+		return "*Delete:Limit(*Limit)"
+	case RefOfDerivedTableSelect:
+		return "*DerivedTable:Select(TableStatement)"
+	case RefOfDropColumnName:
+		return "*DropColumn:Name(*ColName)"
+	case RefOfDropDatabaseComments:
+		return "*DropDatabase:Comments(*ParsedComments)"
+	case RefOfDropDatabaseDBName:
+		return "*DropDatabase:DBName(IdentifierCS)"
+	case RefOfDropKeyName:
+		return "*DropKey:Name(IdentifierCI)"
+	case RefOfDropTableFromTables:
+		return "*DropTable:FromTables(TableNames)"
+	case RefOfDropTableComments:
+		return "*DropTable:Comments(*ParsedComments)"
+	case RefOfDropViewFromTables:
+		return "*DropView:FromTables(TableNames)"
+	case RefOfDropViewComments:
+		return "*DropView:Comments(*ParsedComments)"
+	case RefOfExecuteStmtName:
+		return "*ExecuteStmt:Name(IdentifierCI)"
+	case RefOfExecuteStmtComments:
+		return "*ExecuteStmt:Comments(*ParsedComments)"
+	case RefOfExecuteStmtArguments8:
+		return "*ExecuteStmt:Arguments(*Variable)8"
+	case RefOfExecuteStmtArguments32:
+		return "*ExecuteStmt:Arguments(*Variable)32"
+	case RefOfExistsExprSubquery:
+		return "*ExistsExpr:Subquery(*Subquery)"
+	case RefOfExplainStmtStatement:
+		return "*ExplainStmt:Statement(Statement)"
+	case RefOfExplainStmtComments:
+		return "*ExplainStmt:Comments(*ParsedComments)"
+	case RefOfExplainTabTable:
+		return "*ExplainTab:Table(TableName)"
+	case ExprsOffset8:
+		return "Exprs:Offset(Exprs)8"
+	case ExprsOffset32:
+		return "Exprs:Offset(Exprs)32"
+	case RefOfExtractFuncExprExpr:
+		return "*ExtractFuncExpr:Expr(Expr)"
+	case RefOfExtractValueExprFragment:
+		return "*ExtractValueExpr:Fragment(Expr)"
+	case RefOfExtractValueExprXPathExpr:
+		return "*ExtractValueExpr:XPathExpr(Expr)"
+	case RefOfFirstOrLastValueExprExpr:
+		return "*FirstOrLastValueExpr:Expr(Expr)"
+	case RefOfFirstOrLastValueExprNullTreatmentClause:
+		return "*FirstOrLastValueExpr:NullTreatmentClause(*NullTreatmentClause)"
+	case RefOfFirstOrLastValueExprOverClause:
+		return "*FirstOrLastValueExpr:OverClause(*OverClause)"
+	case RefOfFlushTableNames:
+		return "*Flush:TableNames(TableNames)"
+	case RefOfForeignKeyDefinitionSource:
+		return "*ForeignKeyDefinition:Source(Columns)"
+	case RefOfForeignKeyDefinitionIndexName:
+		return "*ForeignKeyDefinition:IndexName(IdentifierCI)"
+	case RefOfForeignKeyDefinitionReferenceDefinition:
+		return "*ForeignKeyDefinition:ReferenceDefinition(*ReferenceDefinition)"
+	case RefOfFrameClauseStart:
+		return "*FrameClause:Start(*FramePoint)"
+	case RefOfFrameClauseEnd:
+		return "*FrameClause:End(*FramePoint)"
+	case RefOfFramePointExpr:
+		return "*FramePoint:Expr(Expr)"
+	case RefOfFuncExprQualifier:
+		return "*FuncExpr:Qualifier(IdentifierCS)"
+	case RefOfFuncExprName:
+		return "*FuncExpr:Name(IdentifierCI)"
+	case RefOfFuncExprExprs:
+		return "*FuncExpr:Exprs(Exprs)"
+	case RefOfGTIDFuncExprSet1:
+		return "*GTIDFuncExpr:Set1(Expr)"
+	case RefOfGTIDFuncExprSet2:
+		return "*GTIDFuncExpr:Set2(Expr)"
+	case RefOfGTIDFuncExprTimeout:
+		return "*GTIDFuncExpr:Timeout(Expr)"
+	case RefOfGTIDFuncExprChannel:
+		return "*GTIDFuncExpr:Channel(Expr)"
+	case RefOfGeoHashFromLatLongExprLatitude:
+		return "*GeoHashFromLatLongExpr:Latitude(Expr)"
+	case RefOfGeoHashFromLatLongExprLongitude:
+		return "*GeoHashFromLatLongExpr:Longitude(Expr)"
+	case RefOfGeoHashFromLatLongExprMaxLength:
+		return "*GeoHashFromLatLongExpr:MaxLength(Expr)"
+	case RefOfGeoHashFromPointExprPoint:
+		return "*GeoHashFromPointExpr:Point(Expr)"
+	case RefOfGeoHashFromPointExprMaxLength:
+		return "*GeoHashFromPointExpr:MaxLength(Expr)"
+	case RefOfGeoJSONFromGeomExprGeom:
+		return "*GeoJSONFromGeomExpr:Geom(Expr)"
+	case RefOfGeoJSONFromGeomExprMaxDecimalDigits:
+		return "*GeoJSONFromGeomExpr:MaxDecimalDigits(Expr)"
+	case RefOfGeoJSONFromGeomExprBitmask:
+		return "*GeoJSONFromGeomExpr:Bitmask(Expr)"
+	case RefOfGeomCollPropertyFuncExprGeomColl:
+		return "*GeomCollPropertyFuncExpr:GeomColl(Expr)"
+	case RefOfGeomCollPropertyFuncExprPropertyDefArg:
+		return "*GeomCollPropertyFuncExpr:PropertyDefArg(Expr)"
+	case RefOfGeomFormatExprGeom:
+		return "*GeomFormatExpr:Geom(Expr)"
+	case RefOfGeomFormatExprAxisOrderOpt:
+		return "*GeomFormatExpr:AxisOrderOpt(Expr)"
+	case RefOfGeomFromGeoHashExprGeoHash:
+		return "*GeomFromGeoHashExpr:GeoHash(Expr)"
+	case RefOfGeomFromGeoHashExprSridOpt:
+		return "*GeomFromGeoHashExpr:SridOpt(Expr)"
+	case RefOfGeomFromGeoJSONExprGeoJSON:
+		return "*GeomFromGeoJSONExpr:GeoJSON(Expr)"
+	case RefOfGeomFromGeoJSONExprHigherDimHandlerOpt:
+		return "*GeomFromGeoJSONExpr:HigherDimHandlerOpt(Expr)"
+	case RefOfGeomFromGeoJSONExprSrid:
+		return "*GeomFromGeoJSONExpr:Srid(Expr)"
+	case RefOfGeomFromTextExprWktText:
+		return "*GeomFromTextExpr:WktText(Expr)"
+	case RefOfGeomFromTextExprSrid:
+		return "*GeomFromTextExpr:Srid(Expr)"
+	case RefOfGeomFromTextExprAxisOrderOpt:
+		return "*GeomFromTextExpr:AxisOrderOpt(Expr)"
+	case RefOfGeomFromWKBExprWkbBlob:
+		return "*GeomFromWKBExpr:WkbBlob(Expr)"
+	case RefOfGeomFromWKBExprSrid:
+		return "*GeomFromWKBExpr:Srid(Expr)"
+	case RefOfGeomFromWKBExprAxisOrderOpt:
+		return "*GeomFromWKBExpr:AxisOrderOpt(Expr)"
+	case RefOfGeomPropertyFuncExprGeom:
+		return "*GeomPropertyFuncExpr:Geom(Expr)"
+	case RefOfGroupByExprs8:
+		return "*GroupBy:Exprs(Expr)8"
+	case RefOfGroupByExprs32:
+		return "*GroupBy:Exprs(Expr)32"
+	case RefOfGroupConcatExprExprs:
+		return "*GroupConcatExpr:Exprs(Exprs)"
+	case RefOfGroupConcatExprOrderBy:
+		return "*GroupConcatExpr:OrderBy(OrderBy)"
+	case RefOfGroupConcatExprLimit:
+		return "*GroupConcatExpr:Limit(*Limit)"
+	case RefOfIndexDefinitionInfo:
+		return "*IndexDefinition:Info(*IndexInfo)"
+	case RefOfIndexHintIndexes8:
+		return "*IndexHint:Indexes(IdentifierCI)8"
+	case RefOfIndexHintIndexes32:
+		return "*IndexHint:Indexes(IdentifierCI)32"
+	case IndexHintsOffset8:
+		return "IndexHints:Offset(IndexHints)8"
+	case IndexHintsOffset32:
+		return "IndexHints:Offset(IndexHints)32"
+	case RefOfIndexInfoName:
+		return "*IndexInfo:Name(IdentifierCI)"
+	case RefOfIndexInfoConstraintName:
+		return "*IndexInfo:ConstraintName(IdentifierCI)"
+	case RefOfInsertComments:
+		return "*Insert:Comments(*ParsedComments)"
+	case RefOfInsertTable:
+		return "*Insert:Table(*AliasedTableExpr)"
+	case RefOfInsertPartitions:
+		return "*Insert:Partitions(Partitions)"
+	case RefOfInsertColumns:
+		return "*Insert:Columns(Columns)"
+	case RefOfInsertRows:
+		return "*Insert:Rows(InsertRows)"
+	case RefOfInsertRowAlias:
+		return "*Insert:RowAlias(*RowAlias)"
+	case RefOfInsertOnDup:
+		return "*Insert:OnDup(OnDup)"
+	case RefOfInsertExprStr:
+		return "*InsertExpr:Str(Expr)"
+	case RefOfInsertExprPos:
+		return "*InsertExpr:Pos(Expr)"
+	case RefOfInsertExprLen:
+		return "*InsertExpr:Len(Expr)"
+	case RefOfInsertExprNewStr:
+		return "*InsertExpr:NewStr(Expr)"
+	case RefOfIntervalDateExprDate:
+		return "*IntervalDateExpr:Date(Expr)"
+	case RefOfIntervalDateExprInterval:
+		return "*IntervalDateExpr:Interval(Expr)"
+	case RefOfIntervalFuncExprExpr:
+		return "*IntervalFuncExpr:Expr(Expr)"
+	case RefOfIntervalFuncExprExprs:
+		return "*IntervalFuncExpr:Exprs(Exprs)"
+	case RefOfIntroducerExprExpr:
+		return "*IntroducerExpr:Expr(Expr)"
+	case RefOfIsExprLeft:
+		return "*IsExpr:Left(Expr)"
+	case RefOfJSONArrayAggExpr:
+		return "*JSONArrayAgg:Expr(Expr)"
+	case RefOfJSONArrayAggOverClause:
+		return "*JSONArrayAgg:OverClause(*OverClause)"
+	case RefOfJSONArrayExprParams:
+		return "*JSONArrayExpr:Params(Exprs)"
+	case RefOfJSONAttributesExprJSONDoc:
+		return "*JSONAttributesExpr:JSONDoc(Expr)"
+	case RefOfJSONAttributesExprPath:
+		return "*JSONAttributesExpr:Path(Expr)"
+	case RefOfJSONContainsExprTarget:
+		return "*JSONContainsExpr:Target(Expr)"
+	case RefOfJSONContainsExprCandidate:
+		return "*JSONContainsExpr:Candidate(Expr)"
+	case RefOfJSONContainsExprPathList8:
+		return "*JSONContainsExpr:PathList(Expr)8"
+	case RefOfJSONContainsExprPathList32:
+		return "*JSONContainsExpr:PathList(Expr)32"
+	case RefOfJSONContainsPathExprJSONDoc:
+		return "*JSONContainsPathExpr:JSONDoc(Expr)"
+	case RefOfJSONContainsPathExprOneOrAll:
+		return "*JSONContainsPathExpr:OneOrAll(Expr)"
+	case RefOfJSONContainsPathExprPathList8:
+		return "*JSONContainsPathExpr:PathList(Expr)8"
+	case RefOfJSONContainsPathExprPathList32:
+		return "*JSONContainsPathExpr:PathList(Expr)32"
+	case RefOfJSONExtractExprJSONDoc:
+		return "*JSONExtractExpr:JSONDoc(Expr)"
+	case RefOfJSONExtractExprPathList8:
+		return "*JSONExtractExpr:PathList(Expr)8"
+	case RefOfJSONExtractExprPathList32:
+		return "*JSONExtractExpr:PathList(Expr)32"
+	case RefOfJSONKeysExprJSONDoc:
+		return "*JSONKeysExpr:JSONDoc(Expr)"
+	case RefOfJSONKeysExprPath:
+		return "*JSONKeysExpr:Path(Expr)"
+	case RefOfJSONObjectAggKey:
+		return "*JSONObjectAgg:Key(Expr)"
+	case RefOfJSONObjectAggValue:
+		return "*JSONObjectAgg:Value(Expr)"
+	case RefOfJSONObjectAggOverClause:
+		return "*JSONObjectAgg:OverClause(*OverClause)"
+	case RefOfJSONObjectExprParams8:
+		return "*JSONObjectExpr:Params(*JSONObjectParam)8"
+	case RefOfJSONObjectExprParams32:
+		return "*JSONObjectExpr:Params(*JSONObjectParam)32"
+	case RefOfJSONObjectParamKey:
+		return "*JSONObjectParam:Key(Expr)"
+	case RefOfJSONObjectParamValue:
+		return "*JSONObjectParam:Value(Expr)"
+	case RefOfJSONOverlapsExprJSONDoc1:
+		return "*JSONOverlapsExpr:JSONDoc1(Expr)"
+	case RefOfJSONOverlapsExprJSONDoc2:
+		return "*JSONOverlapsExpr:JSONDoc2(Expr)"
+	case RefOfJSONPrettyExprJSONVal:
+		return "*JSONPrettyExpr:JSONVal(Expr)"
+	case RefOfJSONQuoteExprStringArg:
+		return "*JSONQuoteExpr:StringArg(Expr)"
+	case RefOfJSONRemoveExprJSONDoc:
+		return "*JSONRemoveExpr:JSONDoc(Expr)"
+	case RefOfJSONRemoveExprPathList:
+		return "*JSONRemoveExpr:PathList(Exprs)"
+	case RefOfJSONSchemaValidFuncExprSchema:
+		return "*JSONSchemaValidFuncExpr:Schema(Expr)"
+	case RefOfJSONSchemaValidFuncExprDocument:
+		return "*JSONSchemaValidFuncExpr:Document(Expr)"
+	case RefOfJSONSchemaValidationReportFuncExprSchema:
+		return "*JSONSchemaValidationReportFuncExpr:Schema(Expr)"
+	case RefOfJSONSchemaValidationReportFuncExprDocument:
+		return "*JSONSchemaValidationReportFuncExpr:Document(Expr)"
+	case RefOfJSONSearchExprJSONDoc:
+		return "*JSONSearchExpr:JSONDoc(Expr)"
+	case RefOfJSONSearchExprOneOrAll:
+		return "*JSONSearchExpr:OneOrAll(Expr)"
+	case RefOfJSONSearchExprSearchStr:
+		return "*JSONSearchExpr:SearchStr(Expr)"
+	case RefOfJSONSearchExprEscapeChar:
+		return "*JSONSearchExpr:EscapeChar(Expr)"
+	case RefOfJSONSearchExprPathList8:
+		return "*JSONSearchExpr:PathList(Expr)8"
+	case RefOfJSONSearchExprPathList32:
+		return "*JSONSearchExpr:PathList(Expr)32"
+	case RefOfJSONStorageFreeExprJSONVal:
+		return "*JSONStorageFreeExpr:JSONVal(Expr)"
+	case RefOfJSONStorageSizeExprJSONVal:
+		return "*JSONStorageSizeExpr:JSONVal(Expr)"
+	case RefOfJSONTableExprExpr:
+		return "*JSONTableExpr:Expr(Expr)"
+	case RefOfJSONTableExprAlias:
+		return "*JSONTableExpr:Alias(IdentifierCS)"
+	case RefOfJSONTableExprFilter:
+		return "*JSONTableExpr:Filter(Expr)"
+	case RefOfJSONTableExprColumns8:
+		return "*JSONTableExpr:Columns(*JtColumnDefinition)8"
+	case RefOfJSONTableExprColumns32:
+		return "*JSONTableExpr:Columns(*JtColumnDefinition)32"
+	case RefOfJSONUnquoteExprJSONValue:
+		return "*JSONUnquoteExpr:JSONValue(Expr)"
+	case RefOfJSONValueExprJSONDoc:
+		return "*JSONValueExpr:JSONDoc(Expr)"
+	case RefOfJSONValueExprPath:
+		return "*JSONValueExpr:Path(Expr)"
+	case RefOfJSONValueExprReturningType:
+		return "*JSONValueExpr:ReturningType(*ConvertType)"
+	case RefOfJSONValueExprEmptyOnResponse:
+		return "*JSONValueExpr:EmptyOnResponse(*JtOnResponse)"
+	case RefOfJSONValueExprErrorOnResponse:
+		return "*JSONValueExpr:ErrorOnResponse(*JtOnResponse)"
+	case RefOfJSONValueMergeExprJSONDoc:
+		return "*JSONValueMergeExpr:JSONDoc(Expr)"
+	case RefOfJSONValueMergeExprJSONDocList:
+		return "*JSONValueMergeExpr:JSONDocList(Exprs)"
+	case RefOfJSONValueModifierExprJSONDoc:
+		return "*JSONValueModifierExpr:JSONDoc(Expr)"
+	case RefOfJSONValueModifierExprParams8:
+		return "*JSONValueModifierExpr:Params(*JSONObjectParam)8"
+	case RefOfJSONValueModifierExprParams32:
+		return "*JSONValueModifierExpr:Params(*JSONObjectParam)32"
+	case RefOfJoinConditionOn:
+		return "*JoinCondition:On(Expr)"
+	case RefOfJoinConditionUsing:
+		return "*JoinCondition:Using(Columns)"
+	case RefOfJoinTableExprLeftExpr:
+		return "*JoinTableExpr:LeftExpr(TableExpr)"
+	case RefOfJoinTableExprRightExpr:
+		return "*JoinTableExpr:RightExpr(TableExpr)"
+	case RefOfJoinTableExprCondition:
+		return "*JoinTableExpr:Condition(*JoinCondition)"
+	case RefOfJtOnResponseExpr:
+		return "*JtOnResponse:Expr(Expr)"
+	case RefOfLagLeadExprExpr:
+		return "*LagLeadExpr:Expr(Expr)"
+	case RefOfLagLeadExprN:
+		return "*LagLeadExpr:N(Expr)"
+	case RefOfLagLeadExprDefault:
+		return "*LagLeadExpr:Default(Expr)"
+	case RefOfLagLeadExprOverClause:
+		return "*LagLeadExpr:OverClause(*OverClause)"
+	case RefOfLagLeadExprNullTreatmentClause:
+		return "*LagLeadExpr:NullTreatmentClause(*NullTreatmentClause)"
+	case RefOfLimitOffset:
+		return "*Limit:Offset(Expr)"
+	case RefOfLimitRowcount:
+		return "*Limit:Rowcount(Expr)"
+	case RefOfLineStringExprPointParams:
+		return "*LineStringExpr:PointParams(Exprs)"
+	case RefOfLinestrPropertyFuncExprLinestring:
+		return "*LinestrPropertyFuncExpr:Linestring(Expr)"
+	case RefOfLinestrPropertyFuncExprPropertyDefArg:
+		return "*LinestrPropertyFuncExpr:PropertyDefArg(Expr)"
+	case RefOfLocateExprSubStr:
+		return "*LocateExpr:SubStr(Expr)"
+	case RefOfLocateExprStr:
+		return "*LocateExpr:Str(Expr)"
+	case RefOfLocateExprPos:
+		return "*LocateExpr:Pos(Expr)"
+	case RefOfLockingFuncName:
+		return "*LockingFunc:Name(Expr)"
+	case RefOfLockingFuncTimeout:
+		return "*LockingFunc:Timeout(Expr)"
+	case RefOfMatchExprColumns8:
+		return "*MatchExpr:Columns(*ColName)8"
+	case RefOfMatchExprColumns32:
+		return "*MatchExpr:Columns(*ColName)32"
+	case RefOfMatchExprExpr:
+		return "*MatchExpr:Expr(Expr)"
+	case RefOfMaxArg:
+		return "*Max:Arg(Expr)"
+	case RefOfMaxOverClause:
+		return "*Max:OverClause(*OverClause)"
+	case RefOfMemberOfExprValue:
+		return "*MemberOfExpr:Value(Expr)"
+	case RefOfMemberOfExprJSONArr:
+		return "*MemberOfExpr:JSONArr(Expr)"
+	case RefOfMinArg:
+		return "*Min:Arg(Expr)"
+	case RefOfMinOverClause:
+		return "*Min:OverClause(*OverClause)"
+	case RefOfModifyColumnNewColDefinition:
+		return "*ModifyColumn:NewColDefinition(*ColumnDefinition)"
+	case RefOfModifyColumnAfter:
+		return "*ModifyColumn:After(*ColName)"
+	case RefOfMultiLinestringExprLinestringParams:
+		return "*MultiLinestringExpr:LinestringParams(Exprs)"
+	case RefOfMultiPointExprPointParams:
+		return "*MultiPointExpr:PointParams(Exprs)"
+	case RefOfMultiPolygonExprPolygonParams:
+		return "*MultiPolygonExpr:PolygonParams(Exprs)"
+	case RefOfNTHValueExprExpr:
+		return "*NTHValueExpr:Expr(Expr)"
+	case RefOfNTHValueExprN:
+		return "*NTHValueExpr:N(Expr)"
+	case RefOfNTHValueExprOverClause:
+		return "*NTHValueExpr:OverClause(*OverClause)"
+	case RefOfNTHValueExprFromFirstLastClause:
+		return "*NTHValueExpr:FromFirstLastClause(*FromFirstLastClause)"
+	case RefOfNTHValueExprNullTreatmentClause:
+		return "*NTHValueExpr:NullTreatmentClause(*NullTreatmentClause)"
+	case RefOfNamedWindowWindows:
+		return "*NamedWindow:Windows(WindowDefinitions)"
+	case NamedWindowsOffset8:
+		return "NamedWindows:Offset(NamedWindows)8"
+	case NamedWindowsOffset32:
+		return "NamedWindows:Offset(NamedWindows)32"
+	case RefOfNextvalExpr:
+		return "*Nextval:Expr(Expr)"
+	case RefOfNotExprExpr:
+		return "*NotExpr:Expr(Expr)"
+	case RefOfNtileExprN:
+		return "*NtileExpr:N(Expr)"
+	case RefOfNtileExprOverClause:
+		return "*NtileExpr:OverClause(*OverClause)"
+	case RefOfOffsetOriginal:
+		return "*Offset:Original(Expr)"
+	case OnDupOffset8:
+		return "OnDup:Offset(OnDup)8"
+	case OnDupOffset32:
+		return "OnDup:Offset(OnDup)32"
+	case RefOfOptLikeLikeTable:
+		return "*OptLike:LikeTable(TableName)"
+	case RefOfOrExprLeft:
+		return "*OrExpr:Left(Expr)"
+	case RefOfOrExprRight:
+		return "*OrExpr:Right(Expr)"
+	case RefOfOrderExpr:
+		return "*Order:Expr(Expr)"
+	case OrderByOffset8:
+		return "OrderBy:Offset(OrderBy)8"
+	case OrderByOffset32:
+		return "OrderBy:Offset(OrderBy)32"
+	case RefOfOrderByOptionCols:
+		return "*OrderByOption:Cols(Columns)"
+	case RefOfOverClauseWindowName:
+		return "*OverClause:WindowName(IdentifierCI)"
+	case RefOfOverClauseWindowSpec:
+		return "*OverClause:WindowSpec(*WindowSpecification)"
+	case RefOfParenTableExprExprs:
+		return "*ParenTableExpr:Exprs(TableExprs)"
+	case RefOfPartitionDefinitionName:
+		return "*PartitionDefinition:Name(IdentifierCI)"
+	case RefOfPartitionDefinitionOptions:
+		return "*PartitionDefinition:Options(*PartitionDefinitionOptions)"
+	case RefOfPartitionDefinitionOptionsValueRange:
+		return "*PartitionDefinitionOptions:ValueRange(*PartitionValueRange)"
+	case RefOfPartitionDefinitionOptionsComment:
+		return "*PartitionDefinitionOptions:Comment(*Literal)"
+	case RefOfPartitionDefinitionOptionsEngine:
+		return "*PartitionDefinitionOptions:Engine(*PartitionEngine)"
+	case RefOfPartitionDefinitionOptionsDataDirectory:
+		return "*PartitionDefinitionOptions:DataDirectory(*Literal)"
+	case RefOfPartitionDefinitionOptionsIndexDirectory:
+		return "*PartitionDefinitionOptions:IndexDirectory(*Literal)"
+	case RefOfPartitionDefinitionOptionsSubPartitionDefinitions:
+		return "*PartitionDefinitionOptions:SubPartitionDefinitions(SubPartitionDefinitions)"
+	case RefOfPartitionOptionColList:
+		return "*PartitionOption:ColList(Columns)"
+	case RefOfPartitionOptionExpr:
+		return "*PartitionOption:Expr(Expr)"
+	case RefOfPartitionOptionSubPartition:
+		return "*PartitionOption:SubPartition(*SubPartition)"
+	case RefOfPartitionOptionDefinitions8:
+		return "*PartitionOption:Definitions(*PartitionDefinition)8"
+	case RefOfPartitionOptionDefinitions32:
+		return "*PartitionOption:Definitions(*PartitionDefinition)32"
+	case RefOfPartitionSpecNames:
+		return "*PartitionSpec:Names(Partitions)"
+	case RefOfPartitionSpecNumber:
+		return "*PartitionSpec:Number(*Literal)"
+	case RefOfPartitionSpecTableName:
+		return "*PartitionSpec:TableName(TableName)"
+	case RefOfPartitionSpecDefinitions8:
+		return "*PartitionSpec:Definitions(*PartitionDefinition)8"
+	case RefOfPartitionSpecDefinitions32:
+		return "*PartitionSpec:Definitions(*PartitionDefinition)32"
+	case RefOfPartitionValueRangeRange:
+		return "*PartitionValueRange:Range(ValTuple)"
+	case PartitionsOffset8:
+		return "Partitions:Offset(Partitions)8"
+	case PartitionsOffset32:
+		return "Partitions:Offset(Partitions)32"
+	case RefOfPerformanceSchemaFuncExprArgument:
+		return "*PerformanceSchemaFuncExpr:Argument(Expr)"
+	case RefOfPointExprXCordinate:
+		return "*PointExpr:XCordinate(Expr)"
+	case RefOfPointExprYCordinate:
+		return "*PointExpr:YCordinate(Expr)"
+	case RefOfPointPropertyFuncExprPoint:
+		return "*PointPropertyFuncExpr:Point(Expr)"
+	case RefOfPointPropertyFuncExprValueToSet:
+		return "*PointPropertyFuncExpr:ValueToSet(Expr)"
+	case RefOfPolygonExprLinestringParams:
+		return "*PolygonExpr:LinestringParams(Exprs)"
+	case RefOfPolygonPropertyFuncExprPolygon:
+		return "*PolygonPropertyFuncExpr:Polygon(Expr)"
+	case RefOfPolygonPropertyFuncExprPropertyDefArg:
+		return "*PolygonPropertyFuncExpr:PropertyDefArg(Expr)"
+	case RefOfPrepareStmtName:
+		return "*PrepareStmt:Name(IdentifierCI)"
+	case RefOfPrepareStmtStatement:
+		return "*PrepareStmt:Statement(Expr)"
+	case RefOfPrepareStmtComments:
+		return "*PrepareStmt:Comments(*ParsedComments)"
+	case RefOfReferenceDefinitionReferencedTable:
+		return "*ReferenceDefinition:ReferencedTable(TableName)"
+	case RefOfReferenceDefinitionReferencedColumns:
+		return "*ReferenceDefinition:ReferencedColumns(Columns)"
+	case RefOfReferenceDefinitionMatch:
+		return "*ReferenceDefinition:Match(MatchAction)"
+	case RefOfReferenceDefinitionOnDelete:
+		return "*ReferenceDefinition:OnDelete(ReferenceAction)"
+	case RefOfReferenceDefinitionOnUpdate:
+		return "*ReferenceDefinition:OnUpdate(ReferenceAction)"
+	case RefOfRegexpInstrExprExpr:
+		return "*RegexpInstrExpr:Expr(Expr)"
+	case RefOfRegexpInstrExprPattern:
+		return "*RegexpInstrExpr:Pattern(Expr)"
+	case RefOfRegexpInstrExprPosition:
+		return "*RegexpInstrExpr:Position(Expr)"
+	case RefOfRegexpInstrExprOccurrence:
+		return "*RegexpInstrExpr:Occurrence(Expr)"
+	case RefOfRegexpInstrExprReturnOption:
+		return "*RegexpInstrExpr:ReturnOption(Expr)"
+	case RefOfRegexpInstrExprMatchType:
+		return "*RegexpInstrExpr:MatchType(Expr)"
+	case RefOfRegexpLikeExprExpr:
+		return "*RegexpLikeExpr:Expr(Expr)"
+	case RefOfRegexpLikeExprPattern:
+		return "*RegexpLikeExpr:Pattern(Expr)"
+	case RefOfRegexpLikeExprMatchType:
+		return "*RegexpLikeExpr:MatchType(Expr)"
+	case RefOfRegexpReplaceExprExpr:
+		return "*RegexpReplaceExpr:Expr(Expr)"
+	case RefOfRegexpReplaceExprPattern:
+		return "*RegexpReplaceExpr:Pattern(Expr)"
+	case RefOfRegexpReplaceExprRepl:
+		return "*RegexpReplaceExpr:Repl(Expr)"
+	case RefOfRegexpReplaceExprOccurrence:
+		return "*RegexpReplaceExpr:Occurrence(Expr)"
+	case RefOfRegexpReplaceExprPosition:
+		return "*RegexpReplaceExpr:Position(Expr)"
+	case RefOfRegexpReplaceExprMatchType:
+		return "*RegexpReplaceExpr:MatchType(Expr)"
+	case RefOfRegexpSubstrExprExpr:
+		return "*RegexpSubstrExpr:Expr(Expr)"
+	case RefOfRegexpSubstrExprPattern:
+		return "*RegexpSubstrExpr:Pattern(Expr)"
+	case RefOfRegexpSubstrExprOccurrence:
+		return "*RegexpSubstrExpr:Occurrence(Expr)"
+	case RefOfRegexpSubstrExprPosition:
+		return "*RegexpSubstrExpr:Position(Expr)"
+	case RefOfRegexpSubstrExprMatchType:
+		return "*RegexpSubstrExpr:MatchType(Expr)"
+	case RefOfReleaseName:
+		return "*Release:Name(IdentifierCI)"
+	case RefOfRenameColumnOldName:
+		return "*RenameColumn:OldName(*ColName)"
+	case RefOfRenameColumnNewName:
+		return "*RenameColumn:NewName(*ColName)"
+	case RefOfRenameIndexOldName:
+		return "*RenameIndex:OldName(IdentifierCI)"
+	case RefOfRenameIndexNewName:
+		return "*RenameIndex:NewName(IdentifierCI)"
+	case RefOfRenameTableNameTable:
+		return "*RenameTableName:Table(TableName)"
+	case RefOfRevertMigrationComments:
+		return "*RevertMigration:Comments(*ParsedComments)"
+	case RootNodeSQLNode:
+		return "RootNode:SQLNode(SQLNode)"
+	case RefOfRowAliasTableName:
+		return "*RowAlias:TableName(IdentifierCS)"
+	case RefOfRowAliasColumns:
+		return "*RowAlias:Columns(Columns)"
+	case RefOfSRollbackName:
+		return "*SRollback:Name(IdentifierCI)"
+	case RefOfSavepointName:
+		return "*Savepoint:Name(IdentifierCI)"
+	case RefOfSelectWith:
+		return "*Select:With(*With)"
+	case RefOfSelectFrom8:
+		return "*Select:From(TableExpr)8"
+	case RefOfSelectFrom32:
+		return "*Select:From(TableExpr)32"
+	case RefOfSelectComments:
+		return "*Select:Comments(*ParsedComments)"
+	case RefOfSelectSelectExprs:
+		return "*Select:SelectExprs(SelectExprs)"
+	case RefOfSelectWhere:
+		return "*Select:Where(*Where)"
+	case RefOfSelectGroupBy:
+		return "*Select:GroupBy(*GroupBy)"
+	case RefOfSelectHaving:
+		return "*Select:Having(*Where)"
+	case RefOfSelectWindows:
+		return "*Select:Windows(NamedWindows)"
+	case RefOfSelectOrderBy:
+		return "*Select:OrderBy(OrderBy)"
+	case RefOfSelectLimit:
+		return "*Select:Limit(*Limit)"
+	case RefOfSelectInto:
+		return "*Select:Into(*SelectInto)"
+	case SelectExprsOffset8:
+		return "SelectExprs:Offset(SelectExprs)8"
+	case SelectExprsOffset32:
+		return "SelectExprs:Offset(SelectExprs)32"
+	case RefOfSetComments:
+		return "*Set:Comments(*ParsedComments)"
+	case RefOfSetExprs:
+		return "*Set:Exprs(SetExprs)"
+	case RefOfSetExprVar:
+		return "*SetExpr:Var(*Variable)"
+	case RefOfSetExprExpr:
+		return "*SetExpr:Expr(Expr)"
+	case SetExprsOffset8:
+		return "SetExprs:Offset(SetExprs)8"
+	case SetExprsOffset32:
+		return "SetExprs:Offset(SetExprs)32"
+	case RefOfShowInternal:
+		return "*Show:Internal(ShowInternal)"
+	case RefOfShowBasicTbl:
+		return "*ShowBasic:Tbl(TableName)"
+	case RefOfShowBasicDbName:
+		return "*ShowBasic:DbName(IdentifierCS)"
+	case RefOfShowBasicFilter:
+		return "*ShowBasic:Filter(*ShowFilter)"
+	case RefOfShowCreateOp:
+		return "*ShowCreate:Op(TableName)"
+	case RefOfShowFilterFilter:
+		return "*ShowFilter:Filter(Expr)"
+	case RefOfShowMigrationLogsComments:
+		return "*ShowMigrationLogs:Comments(*ParsedComments)"
+	case RefOfStarExprTableName:
+		return "*StarExpr:TableName(TableName)"
+	case RefOfStdArg:
+		return "*Std:Arg(Expr)"
+	case RefOfStdOverClause:
+		return "*Std:OverClause(*OverClause)"
+	case RefOfStdDevArg:
+		return "*StdDev:Arg(Expr)"
+	case RefOfStdDevOverClause:
+		return "*StdDev:OverClause(*OverClause)"
+	case RefOfStdPopArg:
+		return "*StdPop:Arg(Expr)"
+	case RefOfStdPopOverClause:
+		return "*StdPop:OverClause(*OverClause)"
+	case RefOfStdSampArg:
+		return "*StdSamp:Arg(Expr)"
+	case RefOfStdSampOverClause:
+		return "*StdSamp:OverClause(*OverClause)"
+	case RefOfStreamComments:
+		return "*Stream:Comments(*ParsedComments)"
+	case RefOfStreamSelectExpr:
+		return "*Stream:SelectExpr(SelectExpr)"
+	case RefOfStreamTable:
+		return "*Stream:Table(TableName)"
+	case RefOfSubPartitionColList:
+		return "*SubPartition:ColList(Columns)"
+	case RefOfSubPartitionExpr:
+		return "*SubPartition:Expr(Expr)"
+	case RefOfSubPartitionDefinitionName:
+		return "*SubPartitionDefinition:Name(IdentifierCI)"
+	case RefOfSubPartitionDefinitionOptions:
+		return "*SubPartitionDefinition:Options(*SubPartitionDefinitionOptions)"
+	case RefOfSubPartitionDefinitionOptionsComment:
+		return "*SubPartitionDefinitionOptions:Comment(*Literal)"
+	case RefOfSubPartitionDefinitionOptionsEngine:
+		return "*SubPartitionDefinitionOptions:Engine(*PartitionEngine)"
+	case RefOfSubPartitionDefinitionOptionsDataDirectory:
+		return "*SubPartitionDefinitionOptions:DataDirectory(*Literal)"
+	case RefOfSubPartitionDefinitionOptionsIndexDirectory:
+		return "*SubPartitionDefinitionOptions:IndexDirectory(*Literal)"
+	case SubPartitionDefinitionsOffset8:
+		return "SubPartitionDefinitions:Offset(SubPartitionDefinitions)8"
+	case SubPartitionDefinitionsOffset32:
+		return "SubPartitionDefinitions:Offset(SubPartitionDefinitions)32"
+	case RefOfSubquerySelect:
+		return "*Subquery:Select(TableStatement)"
+	case RefOfSubstrExprName:
+		return "*SubstrExpr:Name(Expr)"
+	case RefOfSubstrExprFrom:
+		return "*SubstrExpr:From(Expr)"
+	case RefOfSubstrExprTo:
+		return "*SubstrExpr:To(Expr)"
+	case RefOfSumArg:
+		return "*Sum:Arg(Expr)"
+	case RefOfSumOverClause:
+		return "*Sum:OverClause(*OverClause)"
+	case TableExprsOffset8:
+		return "TableExprs:Offset(TableExprs)8"
+	case TableExprsOffset32:
+		return "TableExprs:Offset(TableExprs)32"
+	case TableNameName:
+		return "TableName:Name(IdentifierCS)"
+	case TableNameQualifier:
+		return "TableName:Qualifier(IdentifierCS)"
+	case TableNamesOffset8:
+		return "TableNames:Offset(TableNames)8"
+	case TableNamesOffset32:
+		return "TableNames:Offset(TableNames)32"
+	case TableOptionsOffset8:
+		return "TableOptions:Offset(TableOptions)8"
+	case TableOptionsOffset32:
+		return "TableOptions:Offset(TableOptions)32"
+	case RefOfTableSpecColumns8:
+		return "*TableSpec:Columns(*ColumnDefinition)8"
+	case RefOfTableSpecColumns32:
+		return "*TableSpec:Columns(*ColumnDefinition)32"
+	case RefOfTableSpecIndexes8:
+		return "*TableSpec:Indexes(*IndexDefinition)8"
+	case RefOfTableSpecIndexes32:
+		return "*TableSpec:Indexes(*IndexDefinition)32"
+	case RefOfTableSpecConstraints8:
+		return "*TableSpec:Constraints(*ConstraintDefinition)8"
+	case RefOfTableSpecConstraints32:
+		return "*TableSpec:Constraints(*ConstraintDefinition)32"
+	case RefOfTableSpecOptions:
+		return "*TableSpec:Options(TableOptions)"
+	case RefOfTableSpecPartitionOption:
+		return "*TableSpec:PartitionOption(*PartitionOption)"
+	case RefOfTimestampDiffExprExpr1:
+		return "*TimestampDiffExpr:Expr1(Expr)"
+	case RefOfTimestampDiffExprExpr2:
+		return "*TimestampDiffExpr:Expr2(Expr)"
+	case RefOfTrimFuncExprTrimArg:
+		return "*TrimFuncExpr:TrimArg(Expr)"
+	case RefOfTrimFuncExprStringArg:
+		return "*TrimFuncExpr:StringArg(Expr)"
+	case RefOfTruncateTableTable:
+		return "*TruncateTable:Table(TableName)"
+	case RefOfUnaryExprExpr:
+		return "*UnaryExpr:Expr(Expr)"
+	case RefOfUnionWith:
+		return "*Union:With(*With)"
+	case RefOfUnionLeft:
+		return "*Union:Left(TableStatement)"
+	case RefOfUnionRight:
+		return "*Union:Right(TableStatement)"
+	case RefOfUnionOrderBy:
+		return "*Union:OrderBy(OrderBy)"
+	case RefOfUnionLimit:
+		return "*Union:Limit(*Limit)"
+	case RefOfUnionInto:
+		return "*Union:Into(*SelectInto)"
+	case RefOfUpdateWith:
+		return "*Update:With(*With)"
+	case RefOfUpdateComments:
+		return "*Update:Comments(*ParsedComments)"
+	case RefOfUpdateTableExprs8:
+		return "*Update:TableExprs(TableExpr)8"
+	case RefOfUpdateTableExprs32:
+		return "*Update:TableExprs(TableExpr)32"
+	case RefOfUpdateExprs:
+		return "*Update:Exprs(UpdateExprs)"
+	case RefOfUpdateWhere:
+		return "*Update:Where(*Where)"
+	case RefOfUpdateOrderBy:
+		return "*Update:OrderBy(OrderBy)"
+	case RefOfUpdateLimit:
+		return "*Update:Limit(*Limit)"
+	case RefOfUpdateExprName:
+		return "*UpdateExpr:Name(*ColName)"
+	case RefOfUpdateExprExpr:
+		return "*UpdateExpr:Expr(Expr)"
+	case UpdateExprsOffset8:
+		return "UpdateExprs:Offset(UpdateExprs)8"
+	case UpdateExprsOffset32:
+		return "UpdateExprs:Offset(UpdateExprs)32"
+	case RefOfUpdateXMLExprTarget:
+		return "*UpdateXMLExpr:Target(Expr)"
+	case RefOfUpdateXMLExprXPathExpr:
+		return "*UpdateXMLExpr:XPathExpr(Expr)"
+	case RefOfUpdateXMLExprNewXML:
+		return "*UpdateXMLExpr:NewXML(Expr)"
+	case RefOfUseDBName:
+		return "*Use:DBName(IdentifierCS)"
+	case RefOfVExplainStmtStatement:
+		return "*VExplainStmt:Statement(Statement)"
+	case RefOfVExplainStmtComments:
+		return "*VExplainStmt:Comments(*ParsedComments)"
+	case RefOfVStreamComments:
+		return "*VStream:Comments(*ParsedComments)"
+	case RefOfVStreamSelectExpr:
+		return "*VStream:SelectExpr(SelectExpr)"
+	case RefOfVStreamTable:
+		return "*VStream:Table(TableName)"
+	case RefOfVStreamWhere:
+		return "*VStream:Where(*Where)"
+	case RefOfVStreamLimit:
+		return "*VStream:Limit(*Limit)"
+	case ValTupleOffset8:
+		return "ValTuple:Offset(ValTuple)8"
+	case ValTupleOffset32:
+		return "ValTuple:Offset(ValTuple)32"
+	case ValuesOffset8:
+		return "Values:Offset(Values)8"
+	case ValuesOffset32:
+		return "Values:Offset(Values)32"
+	case RefOfValuesFuncExprName:
+		return "*ValuesFuncExpr:Name(*ColName)"
+	case RefOfValuesStatementWith:
+		return "*ValuesStatement:With(*With)"
+	case RefOfValuesStatementRows:
+		return "*ValuesStatement:Rows(Values)"
+	case RefOfValuesStatementListArg:
+		return "*ValuesStatement:ListArg(ListArg)"
+	case RefOfValuesStatementComments:
+		return "*ValuesStatement:Comments(*ParsedComments)"
+	case RefOfValuesStatementOrder:
+		return "*ValuesStatement:Order(OrderBy)"
+	case RefOfValuesStatementLimit:
+		return "*ValuesStatement:Limit(*Limit)"
+	case RefOfVarPopArg:
+		return "*VarPop:Arg(Expr)"
+	case RefOfVarPopOverClause:
+		return "*VarPop:OverClause(*OverClause)"
+	case RefOfVarSampArg:
+		return "*VarSamp:Arg(Expr)"
+	case RefOfVarSampOverClause:
+		return "*VarSamp:OverClause(*OverClause)"
+	case RefOfVariableName:
+		return "*Variable:Name(IdentifierCI)"
+	case RefOfVarianceArg:
+		return "*Variance:Arg(Expr)"
+	case RefOfVarianceOverClause:
+		return "*Variance:OverClause(*OverClause)"
+	case VindexParamKey:
+		return "VindexParam:Key(IdentifierCI)"
+	case RefOfVindexSpecName:
+		return "*VindexSpec:Name(IdentifierCI)"
+	case RefOfVindexSpecType:
+		return "*VindexSpec:Type(IdentifierCI)"
+	case RefOfVindexSpecParams8:
+		return "*VindexSpec:Params(VindexParam)8"
+	case RefOfVindexSpecParams32:
+		return "*VindexSpec:Params(VindexParam)32"
+	case RefOfWeightStringFuncExprExpr:
+		return "*WeightStringFuncExpr:Expr(Expr)"
+	case RefOfWeightStringFuncExprAs:
+		return "*WeightStringFuncExpr:As(*ConvertType)"
+	case RefOfWhenCond:
+		return "*When:Cond(Expr)"
+	case RefOfWhenVal:
+		return "*When:Val(Expr)"
+	case RefOfWhereExpr:
+		return "*Where:Expr(Expr)"
+	case RefOfWindowDefinitionName:
+		return "*WindowDefinition:Name(IdentifierCI)"
+	case RefOfWindowDefinitionWindowSpec:
+		return "*WindowDefinition:WindowSpec(*WindowSpecification)"
+	case WindowDefinitionsOffset8:
+		return "WindowDefinitions:Offset(WindowDefinitions)8"
+	case WindowDefinitionsOffset32:
+		return "WindowDefinitions:Offset(WindowDefinitions)32"
+	case RefOfWindowSpecificationName:
+		return "*WindowSpecification:Name(IdentifierCI)"
+	case RefOfWindowSpecificationPartitionClause:
+		return "*WindowSpecification:PartitionClause(Exprs)"
+	case RefOfWindowSpecificationOrderClause:
+		return "*WindowSpecification:OrderClause(OrderBy)"
+	case RefOfWindowSpecificationFrameClause:
+		return "*WindowSpecification:FrameClause(*FrameClause)"
+	case RefOfWithCTEs8:
+		return "*With:CTEs(*CommonTableExpr)8"
+	case RefOfWithCTEs32:
+		return "*With:CTEs(*CommonTableExpr)32"
+	case RefOfXorExprLeft:
+		return "*XorExpr:Left(Expr)"
+	case RefOfXorExprRight:
+		return "*XorExpr:Right(Expr)"
+	case SliceOfRefOfColumnDefinitionOffset8:
+		return "[]*ColumnDefinition:Offset([]*ColumnDefinition)8"
+	case SliceOfRefOfColumnDefinitionOffset32:
+		return "[]*ColumnDefinition:Offset([]*ColumnDefinition)32"
+	case SliceOfDatabaseOptionOffset8:
+		return "[]DatabaseOption:Offset([]DatabaseOption)8"
+	case SliceOfDatabaseOptionOffset32:
+		return "[]DatabaseOption:Offset([]DatabaseOption)32"
+	case SliceOfAlterOptionOffset8:
+		return "[]AlterOption:Offset([]AlterOption)8"
+	case SliceOfAlterOptionOffset32:
+		return "[]AlterOption:Offset([]AlterOption)32"
+	case SliceOfIdentifierCIOffset8:
+		return "[]IdentifierCI:Offset([]IdentifierCI)8"
+	case SliceOfIdentifierCIOffset32:
+		return "[]IdentifierCI:Offset([]IdentifierCI)32"
+	case SliceOfTxAccessModeOffset8:
+		return "[]TxAccessMode:Offset([]TxAccessMode)8"
+	case SliceOfTxAccessModeOffset32:
+		return "[]TxAccessMode:Offset([]TxAccessMode)32"
+	case SliceOfRefOfWhenOffset8:
+		return "[]*When:Offset([]*When)8"
+	case SliceOfRefOfWhenOffset32:
+		return "[]*When:Offset([]*When)32"
+	case RefOfColumnTypeOptionsDefault:
+		return "*ColumnTypeOptions:Default(Expr)"
+	case RefOfColumnTypeOptionsOnUpdate:
+		return "*ColumnTypeOptions:OnUpdate(Expr)"
+	case RefOfColumnTypeOptionsAs:
+		return "*ColumnTypeOptions:As(Expr)"
+	case RefOfColumnTypeOptionsComment:
+		return "*ColumnTypeOptions:Comment(*Literal)"
+	case RefOfColumnTypeOptionsReference:
+		return "*ColumnTypeOptions:Reference(*ReferenceDefinition)"
+	case RefOfColumnTypeOptionsEngineAttribute:
+		return "*ColumnTypeOptions:EngineAttribute(*Literal)"
+	case RefOfColumnTypeOptionsSecondaryEngineAttribute:
+		return "*ColumnTypeOptions:SecondaryEngineAttribute(*Literal)"
+	case RefOfColumnTypeOptionsSRID:
+		return "*ColumnTypeOptions:SRID(*Literal)"
+	case SliceOfStringOffset8:
+		return "[]string:Offset([]string)8"
+	case SliceOfStringOffset32:
+		return "[]string:Offset([]string)32"
+	case SliceOfTableExprOffset8:
+		return "[]TableExpr:Offset([]TableExpr)8"
+	case SliceOfTableExprOffset32:
+		return "[]TableExpr:Offset([]TableExpr)32"
+	case SliceOfRefOfVariableOffset8:
+		return "[]*Variable:Offset([]*Variable)8"
+	case SliceOfRefOfVariableOffset32:
+		return "[]*Variable:Offset([]*Variable)32"
+	case SliceOfExprOffset8:
+		return "[]Expr:Offset([]Expr)8"
+	case SliceOfExprOffset32:
+		return "[]Expr:Offset([]Expr)32"
+	case SliceOfRefOfIndexColumnOffset8:
+		return "[]*IndexColumn:Offset([]*IndexColumn)8"
+	case SliceOfRefOfIndexColumnOffset32:
+		return "[]*IndexColumn:Offset([]*IndexColumn)32"
+	case SliceOfRefOfIndexOptionOffset8:
+		return "[]*IndexOption:Offset([]*IndexOption)8"
+	case SliceOfRefOfIndexOptionOffset32:
+		return "[]*IndexOption:Offset([]*IndexOption)32"
+	case SliceOfRefOfJSONObjectParamOffset8:
+		return "[]*JSONObjectParam:Offset([]*JSONObjectParam)8"
+	case SliceOfRefOfJSONObjectParamOffset32:
+		return "[]*JSONObjectParam:Offset([]*JSONObjectParam)32"
+	case SliceOfRefOfJtColumnDefinitionOffset8:
+		return "[]*JtColumnDefinition:Offset([]*JtColumnDefinition)8"
+	case SliceOfRefOfJtColumnDefinitionOffset32:
+		return "[]*JtColumnDefinition:Offset([]*JtColumnDefinition)32"
+	case RefOfJtOrdinalColDefName:
+		return "*JtOrdinalColDef:Name(IdentifierCI)"
+	case RefOfJtPathColDefName:
+		return "*JtPathColDef:Name(IdentifierCI)"
+	case RefOfJtPathColDefType:
+		return "*JtPathColDef:Type(*ColumnType)"
+	case RefOfJtPathColDefPath:
+		return "*JtPathColDef:Path(Expr)"
+	case RefOfJtPathColDefEmptyOnResponse:
+		return "*JtPathColDef:EmptyOnResponse(*JtOnResponse)"
+	case RefOfJtPathColDefErrorOnResponse:
+		return "*JtPathColDef:ErrorOnResponse(*JtOnResponse)"
+	case RefOfJtNestedPathColDefPath:
+		return "*JtNestedPathColDef:Path(Expr)"
+	case RefOfJtNestedPathColDefColumns8:
+		return "*JtNestedPathColDef:Columns(*JtColumnDefinition)8"
+	case RefOfJtNestedPathColDefColumns32:
+		return "*JtNestedPathColDef:Columns(*JtColumnDefinition)32"
+	case TableAndLockTypesOffset8:
+		return "TableAndLockTypes:Offset(TableAndLockTypes)8"
+	case TableAndLockTypesOffset32:
+		return "TableAndLockTypes:Offset(TableAndLockTypes)32"
+	case SliceOfRefOfColNameOffset8:
+		return "[]*ColName:Offset([]*ColName)8"
+	case SliceOfRefOfColNameOffset32:
+		return "[]*ColName:Offset([]*ColName)32"
+	case CommentsOffset8:
+		return "Comments:Offset(Comments)8"
+	case CommentsOffset32:
+		return "Comments:Offset(Comments)32"
+	case SliceOfRefOfPartitionDefinitionOffset8:
+		return "[]*PartitionDefinition:Offset([]*PartitionDefinition)8"
+	case SliceOfRefOfPartitionDefinitionOffset32:
+		return "[]*PartitionDefinition:Offset([]*PartitionDefinition)32"
+	case SliceOfRefOfRenameTablePairOffset8:
+		return "[]*RenameTablePair:Offset([]*RenameTablePair)8"
+	case SliceOfRefOfRenameTablePairOffset32:
+		return "[]*RenameTablePair:Offset([]*RenameTablePair)32"
+	case RefOfRootNodeSQLNode:
+		return "*RootNode:SQLNode(SQLNode)"
+	case RefOfTableNameName:
+		return "*TableName:Name(IdentifierCS)"
+	case RefOfTableNameQualifier:
+		return "*TableName:Qualifier(IdentifierCS)"
+	case RefOfTableOptionValue:
+		return "*TableOption:Value(*Literal)"
+	case RefOfTableOptionTables:
+		return "*TableOption:Tables(TableNames)"
+	case SliceOfRefOfIndexDefinitionOffset8:
+		return "[]*IndexDefinition:Offset([]*IndexDefinition)8"
+	case SliceOfRefOfIndexDefinitionOffset32:
+		return "[]*IndexDefinition:Offset([]*IndexDefinition)32"
+	case SliceOfRefOfConstraintDefinitionOffset8:
+		return "[]*ConstraintDefinition:Offset([]*ConstraintDefinition)8"
+	case SliceOfRefOfConstraintDefinitionOffset32:
+		return "[]*ConstraintDefinition:Offset([]*ConstraintDefinition)32"
+	case RefOfVindexParamKey:
+		return "*VindexParam:Key(IdentifierCI)"
+	case SliceOfVindexParamOffset8:
+		return "[]VindexParam:Offset([]VindexParam)8"
+	case SliceOfVindexParamOffset32:
+		return "[]VindexParam:Offset([]VindexParam)32"
+	case SliceOfRefOfCommonTableExprOffset8:
+		return "[]*CommonTableExpr:Offset([]*CommonTableExpr)8"
+	case SliceOfRefOfCommonTableExprOffset32:
+		return "[]*CommonTableExpr:Offset([]*CommonTableExpr)32"
+	case RefOfIndexColumnColumn:
+		return "*IndexColumn:Column(IdentifierCI)"
+	case RefOfIndexColumnExpression:
+		return "*IndexColumn:Expression(Expr)"
+	case RefOfIndexOptionValue:
+		return "*IndexOption:Value(*Literal)"
+	case RefOfTableAndLockTypeTable:
+		return "*TableAndLockType:Table(TableExpr)"
+	case RefOfRenameTablePairFromTable:
+		return "*RenameTablePair:FromTable(TableName)"
+	case RefOfRenameTablePairToTable:
+		return "*RenameTablePair:ToTable(TableName)"
+	}
+	panic("unknown ASTStep")
+}

@@ -1,6 +1,23 @@
+/*
+Copyright 2025 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package asthelpergen
 
 import (
+	"fmt"
 	"go/types"
 
 	"github.com/dave/jennifer/jen"
@@ -12,7 +29,7 @@ type (
 		steps []step
 	}
 	step struct {
-		container string     // the type of the container
+		container types.Type // the type of the container
 		name      string     // the name of the field
 		slice     bool       // whether the field is a slice
 		typ       types.Type // the type of the field
@@ -51,12 +68,11 @@ func (p *pathGen) ptrToStructMethod(t types.Type, strct *types.Struct, spi gener
 }
 
 func (p *pathGen) addStructFields(t types.Type, strct *types.Struct, spi generatorSPI) {
-	typeString := printableTypeName(t)
 	for i := range strct.NumFields() {
 		field := strct.Field(i)
 		if types.Implements(field.Type(), spi.iface()) {
 			p.steps = append(p.steps, step{
-				container: typeString,
+				container: t,
 				name:      field.Name(),
 				typ:       field.Type(),
 			})
@@ -65,7 +81,7 @@ func (p *pathGen) addStructFields(t types.Type, strct *types.Struct, spi generat
 		slice, isSlice := field.Type().(*types.Slice)
 		if isSlice && types.Implements(slice.Elem(), spi.iface()) {
 			p.steps = append(p.steps, step{
-				container: typeString,
+				container: t,
 				slice:     true,
 				name:      field.Name(),
 				typ:       slice.Elem(),
@@ -80,7 +96,7 @@ func (p *pathGen) ptrToBasicMethod(t types.Type, basic *types.Basic, spi generat
 
 func (p *pathGen) sliceMethod(t types.Type, _ *types.Slice, _ generatorSPI) error {
 	p.steps = append(p.steps, step{
-		container: printableTypeName(t),
+		container: t,
 		name:      "Offset",
 		slice:     true,
 		typ:       t,
@@ -94,10 +110,52 @@ func (p *pathGen) basicMethod(t types.Type, basic *types.Basic, spi generatorSPI
 }
 
 func (p *pathGen) close() {
-	// Declare the ASTStep type with underlying type uint16
-	astStepType := jen.Type().Id("ASTStep").Uint16()
+	p.file.ImportName("fmt", "fmt")
 
-	// Initialize a slice to hold the constant definitions
+	// Declare the ASTStep type with underlying type uint16
+	p.file.Add(jen.Type().Id("ASTStep").Uint16())
+
+	// Add the const block
+	p.file.Add(p.buildConstWithEnum())
+
+	// Add the DebugString() method to the file
+	p.file.Add(p.debugString())
+}
+
+func (p *pathGen) debugString() *jen.Statement {
+	var switchCases []jen.Code
+
+	for _, step := range p.steps {
+		stepName := printableTypeName(step.container) + step.name
+
+		// Generate the debug string using the helper function
+		debugStr := fmt.Sprintf("%s:%s(%s)", types.TypeString(step.container, noQualifier), step.name, types.TypeString(step.typ, noQualifier))
+
+		if !step.slice {
+			switchCases = append(switchCases, jen.Case(jen.Id(stepName)).Block(
+				jen.Return(jen.Lit(debugStr)),
+			))
+			continue
+		}
+
+		switchCases = append(switchCases, jen.Case(jen.Id(stepName+"8")).Block(
+			jen.Return(jen.Lit(debugStr+"8")),
+		))
+		switchCases = append(switchCases, jen.Case(jen.Id(stepName+"32")).Block(
+			jen.Return(jen.Lit(debugStr+"32")),
+		))
+
+	}
+
+	debugStringMethod := jen.Func().Params(jen.Id("s").Id("ASTStep")).Id("DebugString").Params().String().Block(
+		jen.Switch(jen.Id("s")).Block(switchCases...),
+		jen.Panic(jen.Lit("unknown ASTStep")),
+	)
+	return debugStringMethod
+}
+
+func (p *pathGen) buildConstWithEnum() *jen.Statement {
+	// Create the const block with all step constants
 	var constDefs []jen.Code
 	addStep := func(step string) {
 		if constDefs == nil {
@@ -109,20 +167,16 @@ func (p *pathGen) close() {
 		constDefs = append(constDefs, jen.Id(step))
 	}
 	for _, step := range p.steps {
-		stepName := step.container + step.name
+		stepName := printableTypeName(step.container) + step.name
 		if step.slice {
 			addStep(stepName + "8")
-			addStep(stepName + "64")
+			addStep(stepName + "32")
 			continue
 		}
 
 		addStep(stepName)
 	}
 
-	// Create the const block with all step constants
 	constBlock := jen.Const().Defs(constDefs...)
-
-	// Add the type declaration and const block as separate statements to the file
-	p.file.Add(astStepType)
-	p.file.Add(constBlock)
+	return constBlock
 }
