@@ -693,7 +693,7 @@ func (tvde *testVDiffEnv) createController(t *testing.T, id int) *controller {
 
 func (tvde *testVDiffEnv) newController(t *testing.T, controllerQR *sqltypes.Result) *controller {
 	ctx := context.Background()
-	ct, err := newController(ctx, controllerQR.Named().Row(), tvde.dbClientFactory, tstenv.TopoServ, tvde.vde, tvde.opts)
+	ct, err := newController(controllerQR.Named().Row(), tvde.dbClientFactory, tstenv.TopoServ, tvde.vde, tvde.opts)
 	require.NoError(t, err)
 	ctx2, cancel := context.WithCancel(ctx)
 	ct.cancel = cancel

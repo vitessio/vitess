@@ -212,7 +212,7 @@ func (vde *Engine) retry(ctx context.Context, err error) {
 // addController creates a new controller using the given vdiff record and adds it to the engine.
 // You must already have the main engine mutex (mu) locked before calling this.
 func (vde *Engine) addController(row sqltypes.RowNamedValues, options *tabletmanagerdata.VDiffOptions) error {
-	ct, err := newController(vde.ctx, row, vde.dbClientFactoryDba, vde.ts, vde, options)
+	ct, err := newController(row, vde.dbClientFactoryDba, vde.ts, vde, options)
 	if err != nil {
 		return fmt.Errorf("controller could not be initialized for stream %+v on tablet %v",
 			row, vde.thisTablet.Alias)
