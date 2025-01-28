@@ -84,7 +84,7 @@ type vstreamer struct {
 	format         mysql.BinlogFormat
 	pos            replication.Position
 	stopPos        string
-	lastCommitted  int64
+	commitParent   int64
 	sequenceNumber int64
 	eventGTID      replication.GTID
 
@@ -470,21 +470,22 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 		})
 		vs.eventGTID = nil
 	case ev.IsGTID():
-		gtid, hasBegin, lastCommitted, sequenceNumber, err := ev.GTID(vs.format)
+		gtid, hasBegin, commitParent, sequenceNumber, err := ev.GTID(vs.format)
 		if err != nil {
 			return nil, fmt.Errorf("can't get GTID from binlog event: %v, event data: %#v", err, ev)
 		}
 		if hasBegin {
 			vevents = append(vevents, &binlogdatapb.VEvent{
 				Type:           binlogdatapb.VEventType_BEGIN,
-				LastCommitted:  lastCommitted,
+				CommitParent:   commitParent,
 				SequenceNumber: sequenceNumber,
 			})
 		}
 		vs.pos = replication.AppendGTID(vs.pos, gtid)
-		vs.lastCommitted = lastCommitted
+		vs.commitParent = commitParent
 		vs.sequenceNumber = sequenceNumber
 		vs.eventGTID = gtid
+		log.Errorf("DEBUG: GTID: %v, seq_no: %d, commit_parent: %d", gtid, sequenceNumber, commitParent)
 	case ev.IsXID():
 		vevents = append(vevents, &binlogdatapb.VEvent{
 			Type: binlogdatapb.VEventType_GTID,
@@ -725,7 +726,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 		vevent.Timestamp = int64(ev.Timestamp())
 		vevent.CurrentTime = time.Now().UnixNano()
 		vevent.SequenceNumber = vs.sequenceNumber
-		vevent.LastCommitted = vs.lastCommitted
+		vevent.CommitParent = vs.commitParent
 		if vs.eventGTID != nil {
 			vevent.EventGtid = vs.eventGTID.String()
 		}

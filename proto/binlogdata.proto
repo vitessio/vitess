@@ -480,9 +480,9 @@ message VEvent {
   bool throttled = 24;
   // ThrottledReason is a human readable string that explains why the stream is throttled
   string throttled_reason = 25;
-  // For GTID events, the sequence number of the most recent transaction this event depends on / conflicts with.
-  int64 last_committed = 26;
-  // For GTID events, the sequence number of this transaction.
+  // For GTID events, the sequence number of the most recent transaction this event depends on.
+  int64 commit_parent = 26;
+  // For GTID events, the sequence number (logical clock) value of this transaction.
   int64 sequence_number = 27;
   // EventGTID is decorated by VPlayer. It is the specific GTID (not the GTID set) for this event.
   string event_gtid = 28;

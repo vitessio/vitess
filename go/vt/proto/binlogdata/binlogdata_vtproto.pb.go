@@ -512,7 +512,7 @@ func (m *VEvent) CloneVT() *VEvent {
 	r.Shard = m.Shard
 	r.Throttled = m.Throttled
 	r.ThrottledReason = m.ThrottledReason
-	r.LastCommitted = m.LastCommitted
+	r.CommitParent = m.CommitParent
 	r.SequenceNumber = m.SequenceNumber
 	r.EventGtid = m.EventGtid
 	r.MustSave = m.MustSave
@@ -2202,8 +2202,8 @@ func (m *VEvent) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i--
 		dAtA[i] = 0xd8
 	}
-	if m.LastCommitted != 0 {
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.LastCommitted))
+	if m.CommitParent != 0 {
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.CommitParent))
 		i--
 		dAtA[i] = 0x1
 		i--
@@ -3930,8 +3930,8 @@ func (m *VEvent) SizeVT() (n int) {
 	if l > 0 {
 		n += 2 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
-	if m.LastCommitted != 0 {
-		n += 2 + protohelpers.SizeOfVarint(uint64(m.LastCommitted))
+	if m.CommitParent != 0 {
+		n += 2 + protohelpers.SizeOfVarint(uint64(m.CommitParent))
 	}
 	if m.SequenceNumber != 0 {
 		n += 2 + protohelpers.SizeOfVarint(uint64(m.SequenceNumber))
@@ -8299,9 +8299,9 @@ func (m *VEvent) UnmarshalVT(dAtA []byte) error {
 			iNdEx = postIndex
 		case 26:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field LastCommitted", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field CommitParent", wireType)
 			}
-			m.LastCommitted = 0
+			m.CommitParent = 0
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return protohelpers.ErrIntOverflow
@@ -8311,7 +8311,7 @@ func (m *VEvent) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.LastCommitted |= int64(b&0x7F) << shift
+				m.CommitParent |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}

@@ -37471,7 +37471,8 @@ export namespace binlogdata {
         VERSION = 17,
         LASTPK = 18,
         SAVEPOINT = 19,
-        COPY_COMPLETED = 20
+        COPY_COMPLETED = 20,
+        PREVIOUS_GTIDS = 21
     }
 
     /** Properties of a RowChange. */
@@ -38450,6 +38451,18 @@ export namespace binlogdata {
 
         /** VEvent throttled_reason */
         throttled_reason?: (string|null);
+
+        /** VEvent commit_parent */
+        commit_parent?: (number|Long|null);
+
+        /** VEvent sequence_number */
+        sequence_number?: (number|Long|null);
+
+        /** VEvent event_gtid */
+        event_gtid?: (string|null);
+
+        /** VEvent must_save */
+        must_save?: (boolean|null);
     }
 
     /** Represents a VEvent. */
@@ -38505,6 +38518,18 @@ export namespace binlogdata {
 
         /** VEvent throttled_reason. */
         public throttled_reason: string;
+
+        /** VEvent commit_parent. */
+        public commit_parent: (number|Long);
+
+        /** VEvent sequence_number. */
+        public sequence_number: (number|Long);
+
+        /** VEvent event_gtid. */
+        public event_gtid: string;
+
+        /** VEvent must_save. */
+        public must_save: boolean;
 
         /**
          * Creates a new VEvent instance using the specified properties.
