@@ -42,7 +42,7 @@ var testNow = time.Now()
 
 func TestStateManagerStateByName(t *testing.T) {
 	sm := &stateManager{
-		dhMonitor: newNoopDiskHealthMonitor(),
+		diskHealthMonitor: newNoopDiskHealthMonitor(),
 	}
 
 	sm.replHealthy = true
@@ -162,7 +162,7 @@ func TestIsServingLocked(t *testing.T) {
 	sm := newTestStateManager()
 	defer sm.StopService()
 	tdm := &testDiskMonitor{isDiskStalled: false}
-	sm.dhMonitor = tdm
+	sm.diskHealthMonitor = tdm
 
 	err := sm.SetServingType(topodatapb.TabletType_REPLICA, testNow, StateServing, "")
 	require.NoError(t, err)
@@ -803,24 +803,24 @@ func newTestStateManager() *stateManager {
 	parser := sqlparser.NewTestParser()
 	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "StateManagerTest")
 	sm := &stateManager{
-		statelessql: NewQueryList("stateless", parser),
-		statefulql:  NewQueryList("stateful", parser),
-		olapql:      NewQueryList("olap", parser),
-		hs:          newHealthStreamer(env, &topodatapb.TabletAlias{}, schema.NewEngine(env)),
-		se:          &testSchemaEngine{},
-		rt:          &testReplTracker{lag: 1 * time.Second},
-		vstreamer:   &testSubcomponent{},
-		tracker:     &testSubcomponent{},
-		watcher:     &testSubcomponent{},
-		qe:          &testQueryEngine{},
-		txThrottler: &testTxThrottler{},
-		te:          &testTxEngine{},
-		messager:    &testSubcomponent{},
-		ddle:        &testOnlineDDLExecutor{},
-		dhMonitor:   newNoopDiskHealthMonitor(),
-		throttler:   &testLagThrottler{},
-		tableGC:     &testTableGC{},
-		rw:          newRequestsWaiter(),
+		statelessql:       NewQueryList("stateless", parser),
+		statefulql:        NewQueryList("stateful", parser),
+		olapql:            NewQueryList("olap", parser),
+		hs:                newHealthStreamer(env, &topodatapb.TabletAlias{}, schema.NewEngine(env)),
+		se:                &testSchemaEngine{},
+		rt:                &testReplTracker{lag: 1 * time.Second},
+		vstreamer:         &testSubcomponent{},
+		tracker:           &testSubcomponent{},
+		watcher:           &testSubcomponent{},
+		qe:                &testQueryEngine{},
+		txThrottler:       &testTxThrottler{},
+		te:                &testTxEngine{},
+		messager:          &testSubcomponent{},
+		ddle:              &testOnlineDDLExecutor{},
+		diskHealthMonitor: newNoopDiskHealthMonitor(),
+		throttler:         &testLagThrottler{},
+		tableGC:           &testTableGC{},
+		rw:                newRequestsWaiter(),
 	}
 	sm.Init(env, &querypb.Target{})
 	sm.hs.InitDBConfig(&querypb.Target{})
