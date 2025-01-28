@@ -48595,6 +48595,9 @@ export namespace replicationdata {
 
         /** FullStatus replication_configuration */
         replication_configuration?: (replicationdata.IConfiguration|null);
+
+        /** FullStatus disk_stalled */
+        disk_stalled?: (boolean|null);
     }
 
     /** Represents a FullStatus. */
@@ -48671,6 +48674,9 @@ export namespace replicationdata {
 
         /** FullStatus replication_configuration. */
         public replication_configuration?: (replicationdata.IConfiguration|null);
+
+        /** FullStatus disk_stalled. */
+        public disk_stalled: boolean;
 
         /**
          * Creates a new FullStatus instance using the specified properties.

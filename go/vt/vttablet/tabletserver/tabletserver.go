@@ -190,23 +190,24 @@ func NewTabletServer(ctx context.Context, env *vtenv.Environment, name string, c
 	tsv.onlineDDLExecutor = onlineddl.NewExecutor(tsv, alias, topoServer, tsv.lagThrottler, tabletTypeFunc, tsv.onlineDDLExecutorToggleTableBuffer, tsv.tableGC.RequestChecks, tsv.te.preparedPool.IsEmptyForTable)
 
 	tsv.sm = &stateManager{
-		statelessql: tsv.statelessql,
-		statefulql:  tsv.statefulql,
-		olapql:      tsv.olapql,
-		hs:          tsv.hs,
-		se:          tsv.se,
-		rt:          tsv.rt,
-		vstreamer:   tsv.vstreamer,
-		tracker:     tsv.tracker,
-		watcher:     tsv.watcher,
-		qe:          tsv.qe,
-		txThrottler: tsv.txThrottler,
-		te:          tsv.te,
-		messager:    tsv.messager,
-		ddle:        tsv.onlineDDLExecutor,
-		throttler:   tsv.lagThrottler,
-		tableGC:     tsv.tableGC,
-		rw:          newRequestsWaiter(),
+		statelessql:       tsv.statelessql,
+		statefulql:        tsv.statefulql,
+		olapql:            tsv.olapql,
+		hs:                tsv.hs,
+		se:                tsv.se,
+		rt:                tsv.rt,
+		vstreamer:         tsv.vstreamer,
+		tracker:           tsv.tracker,
+		watcher:           tsv.watcher,
+		qe:                tsv.qe,
+		txThrottler:       tsv.txThrottler,
+		te:                tsv.te,
+		messager:          tsv.messager,
+		ddle:              tsv.onlineDDLExecutor,
+		throttler:         tsv.lagThrottler,
+		tableGC:           tsv.tableGC,
+		rw:                newRequestsWaiter(),
+		diskHealthMonitor: newDiskHealthMonitor(ctx),
 	}
 
 	tsv.exporter.NewGaugeFunc("TabletState", "Tablet server state", func() int64 { return int64(tsv.sm.State()) })
@@ -765,6 +766,11 @@ func (tsv *TabletServer) SetDemotePrimaryStalled() {
 	tsv.sm.demotePrimaryStalled = true
 	tsv.sm.mu.Unlock()
 	tsv.BroadcastHealth()
+}
+
+// IsDiskStalled returns if the disk is stalled or not.
+func (tsv *TabletServer) IsDiskStalled() bool {
+	return tsv.sm.diskHealthMonitor.IsDiskStalled()
 }
 
 // CreateTransaction creates the metadata for a 2PC transaction.
