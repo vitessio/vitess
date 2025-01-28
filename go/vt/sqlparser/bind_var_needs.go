@@ -22,14 +22,7 @@ type BindVarNeeds struct {
 	NeedSystemVariable,
 	// NeedUserDefinedVariables keeps track of all user defined variables a query is using
 	NeedUserDefinedVariables []string
-	otherRewrites bool
-}
-
-// MergeWith adds bind vars needs coming from sub scopes
-func (bvn *BindVarNeeds) MergeWith(other *BindVarNeeds) {
-	bvn.NeedFunctionResult = append(bvn.NeedFunctionResult, other.NeedFunctionResult...)
-	bvn.NeedSystemVariable = append(bvn.NeedSystemVariable, other.NeedSystemVariable...)
-	bvn.NeedUserDefinedVariables = append(bvn.NeedUserDefinedVariables, other.NeedUserDefinedVariables...)
+	otherRewrites int
 }
 
 // AddFuncResult adds a function bindvar need
@@ -58,14 +51,11 @@ func (bvn *BindVarNeeds) NeedsSysVar(name string) bool {
 }
 
 func (bvn *BindVarNeeds) NoteRewrite() {
-	bvn.otherRewrites = true
+	bvn.otherRewrites++
 }
 
-func (bvn *BindVarNeeds) HasRewrites() bool {
-	return bvn.otherRewrites ||
-		len(bvn.NeedFunctionResult) > 0 ||
-		len(bvn.NeedUserDefinedVariables) > 0 ||
-		len(bvn.NeedSystemVariable) > 0
+func (bvn *BindVarNeeds) NumberOfRewrites() int {
+	return len(bvn.NeedFunctionResult) + len(bvn.NeedUserDefinedVariables) + len(bvn.NeedSystemVariable) + bvn.otherRewrites
 }
 
 func contains(strings []string, name string) bool {
