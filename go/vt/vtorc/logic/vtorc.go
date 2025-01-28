@@ -24,7 +24,6 @@ import (
 
 	"github.com/patrickmn/go-cache"
 	"github.com/sjmudd/stopwatch"
-	"golang.org/x/sync/errgroup"
 
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
@@ -255,10 +254,11 @@ func ContinuousDiscovery() {
 
 	go handleDiscoveryRequests()
 
+	OpenDiscoveryFromTopo()
 	healthTick := time.Tick(config.HealthPollSeconds * time.Second)
 	caretakingTick := time.Tick(time.Minute)
 	recoveryTick := time.Tick(config.GetRecoveryPollDuration())
-	tabletTopoTick := OpenTabletDiscovery()
+	tabletTopoTick := time.Tick(config.GetTopoInformationRefreshDuration())
 	var recoveryEntrance int64
 	var snapshotTopologiesTick <-chan time.Time
 	if config.GetSnapshotTopologyInterval() > 0 {
@@ -308,7 +308,7 @@ func ContinuousDiscovery() {
 			}()
 		case <-tabletTopoTick:
 			ctx, cancel := context.WithTimeout(context.Background(), config.GetTopoInformationRefreshDuration())
-			if err := refreshAllInformation(ctx); err != nil {
+			if err := refreshTopoTick(ctx); err != nil {
 				log.Errorf("failed to refresh topo information: %+v", err)
 			}
 			cancel()
@@ -316,29 +316,9 @@ func ContinuousDiscovery() {
 	}
 }
 
-// refreshAllInformation refreshes both shard and tablet information. This is meant to be run on tablet topo ticks.
-func refreshAllInformation(ctx context.Context) error {
-	// Create an errgroup
-	eg, ctx := errgroup.WithContext(ctx)
-
-	// Refresh all keyspace information.
-	eg.Go(func() error {
-		return RefreshAllKeyspacesAndShards(ctx)
-	})
-
-	// Refresh shards to watch.
-	eg.Go(func() error {
-		updateShardsToWatch()
-		return nil
-	})
-
-	// Refresh all tablets.
-	eg.Go(func() error {
-		return refreshAllTablets(ctx)
-	})
-
-	// Wait for both the refreshes to complete
-	err := eg.Wait()
+// refreshTopoTick refreshes tablet information from the topo server on a time tick.
+func refreshTopoTick(ctx context.Context) error {
+	err := refreshAllTablets(ctx)
 	if err == nil {
 		process.FirstDiscoveryCycleComplete.Store(true)
 	}

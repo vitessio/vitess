@@ -15,6 +15,7 @@
   - **[Stalled Disk Recovery in VTOrc](#stall-disk-recovery)**
   - **[Update default MySQL version to 8.0.40](#mysql-8-0-40)**
   - **[Update lite images to Debian Bookworm](#debian-bookworm)**
+  - **[KeyRanges in `--clusters_to_watch` in VTOrc](#key-range-vtorc)**
   - **[Support for Filtering Query logs on Error](#query-logs)**
 - **[Minor Changes](#minor-changes)**
   - **[VTTablet Flags](#flags-vttablet)**
@@ -134,6 +135,11 @@ This is the last time this will be needed in the `8.0.x` series, as starting wit
 ### <a id="debian-bookworm"/>Update lite images to Debian Bookworm</a>
 
 The base system now uses Debian Bookworm instead of Debian Bullseye for the `vitess/lite` images. This change was brought by [Pull Request #17552].
+
+### <a id="key-range-vtorc"/>KeyRanges in `--clusters_to_watch` in VTOrc</a>
+VTOrc now supports specifying KeyRanges in the `--clusters_to_watch` flag. This is useful in scenarios where you don't need to restart a VTOrc instance if you run a reshard.
+For example, if a VTOrc is configured to watch `ks/-80`, then it would watch all the shards that fall under the KeyRange `-80`. If a reshard is run and, `-80` is split into new shards `-40`, and `40-80`, the VTOrc instance will automatically start watching the new shard without needing a restart.
+The users can still continue to specify exact key ranges too, and the new feature is backward compatible.
 
 ### <a id="query-logs"/>Support for Filtering Query logs on Error</a>
 

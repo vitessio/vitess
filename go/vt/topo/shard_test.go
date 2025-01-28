@@ -324,6 +324,14 @@ func TestValidateShardName(t *testing.T) {
 			valid: true,
 		},
 		{
+			name: "-",
+			expectedRange: &topodatapb.KeyRange{
+				Start: []byte{},
+				End:   []byte{},
+			},
+			valid: true,
+		},
+		{
 			name: "40-80",
 			expectedRange: &topodatapb.KeyRange{
 				Start: []byte{0x40},

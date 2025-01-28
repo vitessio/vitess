@@ -32,11 +32,11 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
-	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
@@ -48,8 +48,10 @@ var (
 	clustersToWatch   []string
 	shutdownWaitTime  = 30 * time.Second
 	shardsLockCounter int32
-	shardsToWatch     map[string][]string
-	shardsToWatchMu   sync.Mutex
+	// shardsToWatch is a map storing the shards for a given keyspace that need to be watched.
+	// We store the key range for all the shards that we want to watch.
+	// This is populated by parsing `--clusters_to_watch` flag.
+	shardsToWatch map[string][]*topodatapb.KeyRange
 
 	// ErrNoPrimaryTablet is a fixed error message.
 	ErrNoPrimaryTablet = errors.New("no primary tablet found")
@@ -57,18 +59,18 @@ var (
 
 // RegisterFlags registers the flags required by VTOrc
 func RegisterFlags(fs *pflag.FlagSet) {
-	fs.StringSliceVar(&clustersToWatch, "clusters_to_watch", clustersToWatch, "Comma-separated list of keyspaces or keyspace/shards that this instance will monitor and repair. Defaults to all clusters in the topology. Example: \"ks1,ks2/-80\"")
+	fs.StringSliceVar(&clustersToWatch, "clusters_to_watch", clustersToWatch, "Comma-separated list of keyspaces or keyspace/key-ranges that this instance will monitor and repair. Defaults to all clusters in the topology. Example: \"ks1,ks2/-80\"")
 	fs.DurationVar(&shutdownWaitTime, "shutdown_wait_time", shutdownWaitTime, "Maximum time to wait for VTOrc to release all the locks that it is holding before shutting down on SIGTERM")
 }
 
-// updateShardsToWatch parses the --clusters_to_watch flag-value
+// initializeShardsToWatch parses the --clusters_to_watch flag-value
 // into a map of keyspace/shards.
-func updateShardsToWatch() {
+func initializeShardsToWatch() {
+	shardsToWatch = make(map[string][]*topodatapb.KeyRange)
 	if len(clustersToWatch) == 0 {
 		return
 	}
 
-	newShardsToWatch := make(map[string][]string, 0)
 	for _, ks := range clustersToWatch {
 		if strings.Contains(ks, "/") && !strings.HasSuffix(ks, "/") {
 			// Validate keyspace/shard parses.
@@ -77,39 +79,65 @@ func updateShardsToWatch() {
 				log.Errorf("Could not parse keyspace/shard %q: %+v", ks, err)
 				continue
 			}
-			newShardsToWatch[k] = append(newShardsToWatch[k], s)
+			// Parse the shard name into key range value.
+			_, keyRange, err := topo.ValidateShardName(s)
+			if err != nil {
+				log.Errorf("Could not parse shard name %q: %+v", s, err)
+			}
+			// If the key range is nil, then the user is not using RangeBased Sharding.
+			// So we want to watch all the shards of the keyspace.
+			if keyRange == nil {
+				keyRange = key.NewCompleteKeyRange()
+			}
+			shardsToWatch[k] = append(shardsToWatch[k], keyRange)
 		} else {
-			ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
-			defer cancel()
-			// Assume this is a keyspace and find all shards in keyspace.
 			// Remove trailing slash if exists.
 			ks = strings.TrimSuffix(ks, "/")
-			shards, err := ts.GetShardNames(ctx, ks)
-			if err != nil {
-				// Log the err and continue.
-				log.Errorf("Error fetching shards for keyspace: %v", ks)
-				continue
-			}
-			if len(shards) == 0 {
-				log.Errorf("Topo has no shards for ks: %v", ks)
-				continue
-			}
-			newShardsToWatch[ks] = shards
+			// We store the entire range of key range if nothing is specified.
+			shardsToWatch[ks] = []*topodatapb.KeyRange{key.NewCompleteKeyRange()}
 		}
 	}
-	if len(newShardsToWatch) == 0 {
-		log.Error("No keyspace/shards to watch")
-		return
-	}
 
-	shardsToWatchMu.Lock()
-	defer shardsToWatchMu.Unlock()
-	shardsToWatch = newShardsToWatch
+	if len(shardsToWatch) == 0 {
+		log.Error("No keyspace/shards to watch, watching all keyspaces")
+	}
 }
 
-// OpenTabletDiscovery opens the vitess topo if enables and returns a ticker
+// keyspacePartOfWatch checks if the given keyspace is part of the watch list.
+func keyspacePartOfWatch(keyspace string) bool {
+	// If we are watching all keyspaces, then we want to watch this keyspace too.
+	if len(shardsToWatch) == 0 {
+		return true
+	}
+	_, shouldWatch := shardsToWatch[keyspace]
+	return shouldWatch
+}
+
+// shardPartOfWatch checks if the given tablet is part of the watch list.
+func shardPartOfWatch(keyspace string, keyRange *topodatapb.KeyRange) bool {
+	// If we are watching all keyspaces, then we want to watch this tablet too.
+	if len(shardsToWatch) == 0 {
+		return true
+	}
+	shardRanges, ok := shardsToWatch[keyspace]
+	// If we don't have the keyspace in our map, then this tablet
+	// doesn't need to be watched.
+	if !ok {
+		return false
+	}
+
+	// Check if the key range is part of the shard ranges we are watching.
+	for _, shardRange := range shardRanges {
+		if key.KeyRangeContainsKeyRange(shardRange, keyRange) {
+			return true
+		}
+	}
+	return false
+}
+
+// OpenDiscoveryFromTopo opens the vitess topo if enables and returns a ticker
 // channel for polling.
-func OpenTabletDiscovery() <-chan time.Time {
+func OpenDiscoveryFromTopo() {
 	ts = topo.Open()
 	tmc = inst.InitializeTMC()
 	// Clear existing cache and perform a new refresh.
@@ -117,15 +145,15 @@ func OpenTabletDiscovery() <-chan time.Time {
 		log.Error(err)
 	}
 	// Parse --clusters_to_watch into a filter.
-	updateShardsToWatch()
+	initializeShardsToWatch()
+	setupKeyspaceAndShardRecordsWatch(context.Background(), ts)
 	// We refresh all information from the topo once before we start the ticks to do
 	// it on a timer.
 	ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
 	defer cancel()
-	if err := refreshAllInformation(ctx); err != nil {
+	if err := refreshTopoTick(ctx); err != nil {
 		log.Errorf("failed to initialize topo information: %+v", err)
 	}
-	return time.Tick(config.GetTopoInformationRefreshDuration()) //nolint SA1015: using time.Tick leaks the underlying ticker
 }
 
 // getAllTablets gets all tablets from all cells using a goroutine per cell.
@@ -179,16 +207,10 @@ func refreshTabletsUsing(ctx context.Context, loader func(tabletAlias string), f
 	// Filter tablets that should not be watched using shardsToWatch map.
 	matchedTablets := make([]*topo.TabletInfo, 0, len(tablets))
 	func() {
-		shardsToWatchMu.Lock()
-		defer shardsToWatchMu.Unlock()
 		for _, t := range tablets {
-			if len(shardsToWatch) > 0 {
-				_, ok := shardsToWatch[t.Tablet.Keyspace]
-				if !ok || !slices.Contains(shardsToWatch[t.Tablet.Keyspace], t.Tablet.Shard) {
-					continue // filter
-				}
+			if shardPartOfWatch(t.Tablet.GetKeyspace(), t.Tablet.GetKeyRange()) {
+				matchedTablets = append(matchedTablets, t)
 			}
-			matchedTablets = append(matchedTablets, t)
 		}
 	}()
 

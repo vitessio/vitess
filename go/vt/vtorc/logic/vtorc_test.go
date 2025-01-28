@@ -61,7 +61,7 @@ func waitForLocksReleaseAndGetTimeWaitedFor() time.Duration {
 	return time.Since(start)
 }
 
-func TestRefreshAllInformation(t *testing.T) {
+func TestRefreshTopoTick(t *testing.T) {
 	// Store the old flags and restore on test completion
 	oldTs := ts
 	defer func() {
@@ -85,7 +85,7 @@ func TestRefreshAllInformation(t *testing.T) {
 	// Test error
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // cancel context to simulate timeout
-	require.Error(t, refreshAllInformation(ctx))
+	require.Error(t, refreshTopoTick(ctx))
 	require.False(t, process.FirstDiscoveryCycleComplete.Load())
 	_, discoveredOnce = process.HealthTest()
 	require.False(t, discoveredOnce)
@@ -93,7 +93,7 @@ func TestRefreshAllInformation(t *testing.T) {
 	// Test success
 	ctx2, cancel2 := context.WithCancel(context.Background())
 	defer cancel2()
-	require.NoError(t, refreshAllInformation(ctx2))
+	require.NoError(t, refreshTopoTick(ctx2))
 	require.True(t, process.FirstDiscoveryCycleComplete.Load())
 	_, discoveredOnce = process.HealthTest()
 	require.True(t, discoveredOnce)

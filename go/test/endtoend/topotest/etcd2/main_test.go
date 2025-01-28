@@ -26,7 +26,9 @@ import (
 
 	topoutils "vitess.io/vitess/go/test/endtoend/topotest/utils"
 	"vitess.io/vitess/go/test/endtoend/utils"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 
 	"vitess.io/vitess/go/vt/log"
 
@@ -266,6 +268,107 @@ func TestNamedLocking(t *testing.T) {
 
 	// Wait to see that the second goroutine WAS now able to acquire the named lock.
 	topoutils.WaitForBoolValue(t, &secondCallerAcquired, true)
+}
+
+// TestWatchAllKeyspaceRecords tests the WatchAllKeyspaceAndShardRecords method.
+// We test out different updates and see if we receive the correct update
+// from the watch.
+func TestWatchAllKeyspaceRecords(t *testing.T) {
+	// Create the topo server connection.
+	ts, err := topo.OpenServer(*clusterInstance.TopoFlavorString(), clusterInstance.VtctldProcess.TopoGlobalAddress, clusterInstance.VtctldProcess.TopoGlobalRoot)
+	require.NoError(t, err)
+
+	watchCtx, watchCancel := context.WithCancel(context.Background())
+	defer watchCancel()
+	initRecords, ch, err := ts.WatchAllKeyspaceAndShardRecords(watchCtx)
+	require.NoError(t, err)
+
+	// Check that we have the initial records.
+	// The existing keyspace and shard records should be seen.
+	require.Len(t, initRecords, 2)
+	var ksInfo *topo.KeyspaceInfo
+	var shardInfo *topo.ShardInfo
+	for _, record := range initRecords {
+		if record.KeyspaceInfo != nil {
+			ksInfo = record.KeyspaceInfo
+		}
+		if record.ShardInfo != nil {
+			shardInfo = record.ShardInfo
+		}
+	}
+	require.NotNil(t, ksInfo)
+	require.NotNil(t, shardInfo)
+	require.EqualValues(t, KeyspaceName, ksInfo.KeyspaceName())
+	require.EqualValues(t, KeyspaceName, shardInfo.Keyspace())
+	require.EqualValues(t, "0", shardInfo.ShardName())
+
+	// Create a new keyspace record and see that we receive an update.
+	newKeyspaceName := "ksTest"
+	err = ts.CreateKeyspace(context.Background(), newKeyspaceName, &topodatapb.Keyspace{
+		KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
+		DurabilityPolicy: policy.DurabilitySemiSync,
+	})
+	require.NoError(t, err)
+	defer func() {
+		err = ts.DeleteKeyspace(context.Background(), newKeyspaceName)
+		require.NoError(t, err)
+	}()
+
+	// Wait to receive an update from the watch.
+	record := <-ch
+	require.EqualValues(t, newKeyspaceName, record.KeyspaceInfo.KeyspaceName())
+	require.EqualValues(t, policy.DurabilitySemiSync, record.KeyspaceInfo.Keyspace.DurabilityPolicy)
+
+	// Creating a shard should also trigger an update.
+	err = ts.CreateShard(context.Background(), newKeyspaceName, "-")
+	require.NoError(t, err)
+	// Wait to receive an update from the watch.
+	record = <-ch
+	require.EqualValues(t, newKeyspaceName, record.ShardInfo.Keyspace())
+	require.EqualValues(t, "-", record.ShardInfo.ShardName())
+	require.Nil(t, record.ShardInfo.Shard.PrimaryAlias)
+
+	primaryAlias := &topodatapb.TabletAlias{
+		Cell: cell,
+		Uid:  100,
+	}
+	// Updating a shard should also trigger an update.
+	_, err = ts.UpdateShardFields(context.Background(), newKeyspaceName, "-", func(si *topo.ShardInfo) error {
+		si.PrimaryAlias = primaryAlias
+		return nil
+	})
+	require.NoError(t, err)
+	// Wait to receive an update from the watch.
+	record = <-ch
+	require.EqualValues(t, newKeyspaceName, record.ShardInfo.Keyspace())
+	require.EqualValues(t, "-", record.ShardInfo.ShardName())
+	require.NotNil(t, record.ShardInfo.Shard.PrimaryAlias)
+
+	// Deleting a shard should also trigger an update.
+	err = ts.DeleteShard(context.Background(), newKeyspaceName, "-")
+	require.NoError(t, err)
+	// Wait to receive an update from the watch.
+	record = <-ch
+	require.EqualValues(t, newKeyspaceName, record.ShardInfo.Keyspace())
+	require.EqualValues(t, "-", record.ShardInfo.ShardName())
+	require.Error(t, record.Err)
+
+	// Update the keyspace record and see that we receive an update.
+	func() {
+		ki, err := ts.GetKeyspace(context.Background(), newKeyspaceName)
+		require.NoError(t, err)
+		ctx, unlock, err := ts.LockKeyspace(context.Background(), newKeyspaceName, "TestWatchAllKeyspaceRecords")
+		require.NoError(t, err)
+		defer unlock(&err)
+		ki.DurabilityPolicy = policy.DurabilityCrossCell
+		err = ts.UpdateKeyspace(ctx, ki)
+		require.NoError(t, err)
+	}()
+
+	// Wait to receive an update from the watch.
+	record = <-ch
+	require.EqualValues(t, newKeyspaceName, record.KeyspaceInfo.KeyspaceName())
+	require.EqualValues(t, policy.DurabilityCrossCell, record.KeyspaceInfo.Keyspace.DurabilityPolicy)
 }
 
 func execMulti(t *testing.T, conn *mysql.Conn, query string) []*sqltypes.Result {
