@@ -40,6 +40,7 @@ import {
     FetchVSchemaParams,
     fetchVtctlds,
     fetchVTExplain,
+    fetchVExplain,
     fetchWorkflow,
     fetchWorkflowStatus,
     fetchWorkflows,
@@ -458,6 +459,13 @@ export const useVTExplain = (
     options?: UseQueryOptions<pb.VTExplainResponse, Error> | undefined
 ) => {
     return useQuery(['vtexplain', params], () => fetchVTExplain(params), { ...options });
+};
+
+export const useVExplain = (
+    params: Parameters<typeof fetchVExplain>[0],
+    options?: UseQueryOptions<pb.VExplainResponse, Error> | undefined
+) => {
+    return useQuery(['vexplain', params], () => fetchVExplain(params), { ...options });
 };
 
 /**

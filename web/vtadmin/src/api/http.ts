@@ -636,6 +636,22 @@ export const fetchVTExplain = async <R extends pb.IVTExplainRequest>({ cluster, 
     return pb.VTExplainResponse.create(result);
 };
 
+export const fetchVExplain = async <R extends pb.IVExplainRequest>({ cluster_id, keyspace, sql }: R) => {
+    // As an easy enhancement for later, we can also validate the request parameters on the front-end
+    // instead of defaulting to '', to save a round trip.
+    const req = new URLSearchParams();
+    req.append('cluster_id', cluster_id || '');
+    req.append('keyspace', keyspace || '');
+    req.append('sql', sql || '');
+
+    const { result } = await vtfetch(`/api/vexplain?${req}`);
+
+    const err = pb.VExplainResponse.verify(result);
+    if (err) throw Error(err);
+
+    return pb.VExplainResponse.create(result);
+};
+
 export interface ValidateKeyspaceParams {
     clusterID: string;
     keyspace: string;

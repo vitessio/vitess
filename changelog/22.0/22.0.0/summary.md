@@ -15,6 +15,7 @@
   - **[Stalled Disk Recovery in VTOrc](#stall-disk-recovery)**
   - **[Update default MySQL version to 8.0.40](#mysql-8-0-40)**
   - **[Update lite images to Debian Bookworm](#debian-bookworm)**
+  - **[KeyRanges in `--clusters_to_watch` in VTOrc](#key-range-vtorc)**
   - **[Support for Filtering Query logs on Error](#query-logs)**
 - **[Minor Changes](#minor-changes)**
   - **[VTTablet Flags](#flags-vttablet)**
@@ -135,6 +136,11 @@ This is the last time this will be needed in the `8.0.x` series, as starting wit
 
 The base system now uses Debian Bookworm instead of Debian Bullseye for the `vitess/lite` images. This change was brought by [Pull Request #17552].
 
+### <a id="key-range-vtorc"/>KeyRanges in `--clusters_to_watch` in VTOrc</a>
+VTOrc now supports specifying keyranges in the `--clusters_to_watch` flag. This means that there is no need to restart a VTOrc instance with a different flag value when you reshard a keyspace.
+For example, if a VTOrc is configured to watch `ks/-80`, then it would watch all the shards that fall under the keyrange `-80`. If a reshard is performed and `-80` is split into new shards `-40` and `40-80`, the VTOrc instance will automatically start watching the new shards without needing a restart. In the previous logic, specifying `ks/-80` for the flag would mean that VTOrc would watch only 1 (or no) shard. In the new system, since we interpret `-80` as a key range, it can watch multiple shards as described in the example.
+Users can continue to specify exact keyranges. The new feature is backward compatible.
+
 ### <a id="query-logs"/>Support for Filtering Query logs on Error</a>
 
 The `querylog-mode` setting can be configured to `error` to log only queries that result in errors. This option is supported in both VTGate and VTTablet.
@@ -146,6 +152,8 @@ The `querylog-mode` setting can be configured to `error` to log only queries tha
 - `twopc_abandon_age` flag now supports values in the time.Duration format (e.g., 1s, 2m, 1h). 
 While the flag will continue to accept float values (interpreted as seconds) for backward compatibility, 
 **float inputs are deprecated** and will be removed in a future release.
+
+- `--consolidator-query-waiter-cap` flag to set the maximum number of clients allowed to wait on the consolidator. The default value is set to 0 for unlimited wait. Users can adjust  this value based on the performance of VTTablet to avoid excessive memory usage and the risk of being OOMKilled, particularly in Kubernetes deployments.
 
 ### <a id="topo-read-concurrency-changes"/>`--topo_read_concurrency` behaviour changes
 

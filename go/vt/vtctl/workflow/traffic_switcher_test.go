@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
+	"vitess.io/vitess/go/vt/proto/binlogdata"
 	"vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
@@ -911,4 +912,124 @@ func TestAddParticipatingTablesToKeyspace(t *testing.T) {
 	require.NotNil(t, vs.Tables["t2"])
 	assert.Len(t, vs.Tables["t1"].ColumnVindexes, 2)
 	assert.Len(t, vs.Tables["t2"].ColumnVindexes, 1)
+}
+
+func TestCancelMigration_TABLES(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	workflowName := "wf1"
+	tableName := "t1"
+
+	sourceKeyspace := &testKeyspace{
+		KeyspaceName: "sourceks",
+		ShardNames:   []string{"0"},
+	}
+	targetKeyspace := &testKeyspace{
+		KeyspaceName: "targetks",
+		ShardNames:   []string{"0"},
+	}
+
+	schema := map[string]*tabletmanagerdatapb.SchemaDefinition{
+		tableName: {
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+				{
+					Name:   tableName,
+					Schema: fmt.Sprintf("CREATE TABLE %s (id BIGINT, name VARCHAR(64), PRIMARY KEY (id))", tableName),
+				},
+			},
+		},
+	}
+
+	env := newTestEnv(t, ctx, defaultCellName, sourceKeyspace, targetKeyspace)
+	defer env.close()
+	env.tmc.schema = schema
+
+	ts, _, err := env.ws.getWorkflowState(ctx, targetKeyspace.KeyspaceName, workflowName)
+	require.NoError(t, err)
+
+	sm, err := BuildStreamMigrator(ctx, ts, false, sqlparser.NewTestParser())
+	require.NoError(t, err)
+
+	env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running', message='' where db_name='vt_targetks' and workflow='wf1'", &sqltypes.Result{})
+	env.tmc.expectVRQuery(100, "delete from _vt.vreplication where db_name = 'vt_sourceks' and workflow = 'wf1_reverse'", &sqltypes.Result{})
+
+	ctx, _, err = env.ts.LockKeyspace(ctx, targetKeyspace.KeyspaceName, "test")
+	require.NoError(t, err)
+
+	ctx, _, err = env.ts.LockKeyspace(ctx, sourceKeyspace.KeyspaceName, "test")
+	require.NoError(t, err)
+
+	err = topo.CheckKeyspaceLocked(ctx, ts.targetKeyspace)
+	require.NoError(t, err)
+
+	err = topo.CheckKeyspaceLocked(ctx, ts.sourceKeyspace)
+	require.NoError(t, err)
+
+	ts.cancelMigration(ctx, sm)
+
+	// Expect the queries to be cleared
+	assert.Empty(t, env.tmc.vrQueries[100])
+	assert.Empty(t, env.tmc.vrQueries[200])
+}
+
+func TestCancelMigration_SHARDS(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	workflowName := "wf1"
+	tableName := "t1"
+
+	sourceKeyspace := &testKeyspace{
+		KeyspaceName: "sourceks",
+		ShardNames:   []string{"0"},
+	}
+	targetKeyspace := &testKeyspace{
+		KeyspaceName: "targetks",
+		ShardNames:   []string{"0"},
+	}
+
+	schema := map[string]*tabletmanagerdatapb.SchemaDefinition{
+		tableName: {
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+				{
+					Name:   tableName,
+					Schema: fmt.Sprintf("CREATE TABLE %s (id BIGINT, name VARCHAR(64), PRIMARY KEY (id))", tableName),
+				},
+			},
+		},
+	}
+
+	env := newTestEnv(t, ctx, defaultCellName, sourceKeyspace, targetKeyspace)
+	defer env.close()
+	env.tmc.schema = schema
+
+	ts, _, err := env.ws.getWorkflowState(ctx, targetKeyspace.KeyspaceName, workflowName)
+	require.NoError(t, err)
+	ts.migrationType = binlogdata.MigrationType_SHARDS
+
+	sm, err := BuildStreamMigrator(ctx, ts, false, sqlparser.NewTestParser())
+	require.NoError(t, err)
+
+	env.tmc.expectVRQuery(100, "update /*vt+ ALLOW_UNSAFE_VREPLICATION_WRITE */ _vt.vreplication set state='Running', stop_pos=null, message='' where db_name='vt_sourceks' and workflow != 'wf1_reverse'", &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running', message='' where db_name='vt_targetks' and workflow='wf1'", &sqltypes.Result{})
+	env.tmc.expectVRQuery(100, "delete from _vt.vreplication where db_name = 'vt_sourceks' and workflow = 'wf1_reverse'", &sqltypes.Result{})
+
+	ctx, _, err = env.ts.LockKeyspace(ctx, targetKeyspace.KeyspaceName, "test")
+	require.NoError(t, err)
+
+	ctx, _, err = env.ts.LockKeyspace(ctx, sourceKeyspace.KeyspaceName, "test")
+	require.NoError(t, err)
+
+	err = topo.CheckKeyspaceLocked(ctx, ts.targetKeyspace)
+	require.NoError(t, err)
+
+	err = topo.CheckKeyspaceLocked(ctx, ts.sourceKeyspace)
+	require.NoError(t, err)
+
+	ts.cancelMigration(ctx, sm)
+
+	// Expect the queries to be cleared
+	assert.Empty(t, env.tmc.vrQueries[100])
+	assert.Empty(t, env.tmc.vrQueries[200])
 }

@@ -97,6 +97,7 @@ type stateManager struct {
 	replHealthy          bool
 	demotePrimaryStalled bool
 	lameduck             bool
+	diskHealthMonitor    DiskHealthMonitor
 	alsoAllow            []topodatapb.TabletType
 	reason               string
 	transitionErr        error
@@ -777,7 +778,7 @@ func (sm *stateManager) IsServing() bool {
 }
 
 func (sm *stateManager) isServingLocked() bool {
-	return sm.state == StateServing && sm.wantState == StateServing && sm.replHealthy && !sm.demotePrimaryStalled && !sm.lameduck
+	return sm.state == StateServing && sm.wantState == StateServing && sm.replHealthy && !sm.demotePrimaryStalled && !sm.lameduck && !sm.diskHealthMonitor.IsDiskStalled()
 }
 
 func (sm *stateManager) AppendDetails(details []*kv) []*kv {
