@@ -221,6 +221,11 @@ func (vde *Engine) addController(row sqltypes.RowNamedValues, options *tabletman
 	globalStats.mu.Lock()
 	defer globalStats.mu.Unlock()
 	globalStats.controllers[ct.id] = ct
+
+	// run() can start a vdiff in pending/started state, so we should init the stats first before starting it.
+	controllerCtx, cancel := context.WithCancel(vde.ctx)
+	ct.cancel = cancel
+	go ct.run(controllerCtx)
 	return nil
 }
 

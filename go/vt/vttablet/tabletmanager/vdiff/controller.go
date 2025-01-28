@@ -104,9 +104,6 @@ func newController(ctx context.Context, row sqltypes.RowNamedValues, dbClientFac
 		TableDiffRowCounts:    stats.NewCountersWithSingleLabel("", "", "Rows"),
 		TableDiffPhaseTimings: stats.NewTimings("", "", "", "TablePhase"),
 	}
-	ctx, ct.cancel = context.WithCancel(ctx)
-	go ct.run(ctx)
-
 	return ct, nil
 }
 
