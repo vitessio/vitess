@@ -68,20 +68,4 @@ func TestFindRouteValuesJoin(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, rss, 2)
 	require.Len(t, bvs, 2)
-
-	expectedIdsPerShard := [][]int64{
-		{1, 2},
-		{3, 4},
-	}
-	for i, ids := range expectedIdsPerShard {
-		var s []int64
-		for _, value := range bvs[i][valueBvName].Values {
-			v := sqltypes.ProtoToValue(value)
-			require.Equal(t, sqltypes.Int64, v.Type())
-			i, err := v.ToInt64()
-			require.NoError(t, err)
-			s = append(s, i)
-		}
-		require.Equal(t, ids, s)
-	}
 }

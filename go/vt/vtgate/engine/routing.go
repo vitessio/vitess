@@ -21,8 +21,6 @@ import (
 	"encoding/json"
 	"strconv"
 
-	"golang.org/x/exp/maps"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
@@ -429,37 +427,16 @@ func (rp *RoutingParameters) multiEqual(ctx context.Context, vcursor VCursor, bi
 	if err != nil {
 		return nil, nil, err
 	}
-	rss, bvs, err := resolveShards(ctx, vcursor, rp.Vindex.(vindexes.SingleColumn), rp.Keyspace, value.TupleValues())
+	rss, _, err := resolveShards(ctx, vcursor, rp.Vindex.(vindexes.SingleColumn), rp.Keyspace, value.TupleValues())
 	if err != nil {
 		return nil, nil, err
 	}
 
-	tbv, ok := rp.Values[0].(*evalengine.TupleBindVariable)
-	if !ok {
-		multiBindVars := make([]map[string]*querypb.BindVariable, len(rss))
-		for i := range multiBindVars {
-			multiBindVars[i] = bindVars
-		}
-		return rss, multiBindVars, nil
+	multiBindVars := make([]map[string]*querypb.BindVariable, len(rss))
+	for i := range multiBindVars {
+		multiBindVars[i] = bindVars
 	}
-
-	var resultRss []*srvtopo.ResolvedShard
-	var resultBvs []map[string]*querypb.BindVariable
-	for i, rssVals := range rss {
-		resultRss = append(resultRss, rssVals)
-
-		clonedBindVars := maps.Clone(bindVars)
-
-		newBv := &querypb.BindVariable{
-			Type:   querypb.Type_TUPLE,
-			Values: bvs[i],
-		}
-
-		clonedBindVars[tbv.Key] = newBv
-
-		resultBvs = append(resultBvs, clonedBindVars)
-	}
-	return resultRss, resultBvs, nil
+	return rss, multiBindVars, nil
 }
 
 func (rp *RoutingParameters) multiEqualMultiCol(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
