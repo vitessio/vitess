@@ -121,6 +121,16 @@ func TestViewQueries(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
+	viewExists := func(t *testing.T, ksMap map[string]any) bool {
+		// wait for the view definition to change
+		views := ksMap["views"]
+		viewsMap := views.(map[string]any)
+		_, ok := viewsMap["cv3"]
+		return ok
+	}
+
+	utils.WaitForVschemaCondition(t, clusterInstance.VtgateProcess, shardedKs, viewExists, "view cv3 not found")
+
 	// Insert some data
 	insertData(t, conn)
 

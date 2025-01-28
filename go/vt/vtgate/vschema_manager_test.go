@@ -27,30 +27,30 @@ func TestVSchemaUpdate(t *testing.T) {
 		Nullable: true,
 	}}
 	ks := &vindexes.Keyspace{Name: "ks"}
-	tblNoCol := &vindexes.Table{Name: sqlparser.NewIdentifierCS("tbl"), Keyspace: ks, ColumnListAuthoritative: true}
-	tblCol1 := &vindexes.Table{Name: sqlparser.NewIdentifierCS("tbl"), Keyspace: ks, Columns: cols1, ColumnListAuthoritative: true}
-	tblCol2 := &vindexes.Table{Name: sqlparser.NewIdentifierCS("tbl"), Keyspace: ks, Columns: cols2, ColumnListAuthoritative: true}
-	tblCol2NA := &vindexes.Table{Name: sqlparser.NewIdentifierCS("tbl"), Keyspace: ks, Columns: cols2}
+	tblNoCol := &vindexes.BaseTable{Name: sqlparser.NewIdentifierCS("tbl"), Keyspace: ks, ColumnListAuthoritative: true}
+	tblCol1 := &vindexes.BaseTable{Name: sqlparser.NewIdentifierCS("tbl"), Keyspace: ks, Columns: cols1, ColumnListAuthoritative: true}
+	tblCol2 := &vindexes.BaseTable{Name: sqlparser.NewIdentifierCS("tbl"), Keyspace: ks, Columns: cols2, ColumnListAuthoritative: true}
+	tblCol2NA := &vindexes.BaseTable{Name: sqlparser.NewIdentifierCS("tbl"), Keyspace: ks, Columns: cols2}
 
-	vindexTable_multicol_t1 := &vindexes.Table{
+	vindexTable_multicol_t1 := &vindexes.BaseTable{
 		Name:                    sqlparser.NewIdentifierCS("multicol_t1"),
 		Keyspace:                ks,
 		Columns:                 cols2,
 		ColumnListAuthoritative: true,
 	}
-	vindexTable_multicol_t2 := &vindexes.Table{
+	vindexTable_multicol_t2 := &vindexes.BaseTable{
 		Name:                    sqlparser.NewIdentifierCS("multicol_t2"),
 		Keyspace:                ks,
 		Columns:                 cols2,
 		ColumnListAuthoritative: true,
 	}
-	vindexTable_t1 := &vindexes.Table{
+	vindexTable_t1 := &vindexes.BaseTable{
 		Name:                    sqlparser.NewIdentifierCS("t1"),
 		Keyspace:                ks,
 		Columns:                 cols1,
 		ColumnListAuthoritative: true,
 	}
-	vindexTable_t2 := &vindexes.Table{
+	vindexTable_t2 := &vindexes.BaseTable{
 		Name:                    sqlparser.NewIdentifierCS("t2"),
 		Keyspace:                ks,
 		Columns:                 cols1,
@@ -84,7 +84,7 @@ func TestVSchemaUpdate(t *testing.T) {
 		ParentColumns: sqlparserCols1,
 	})
 
-	idxTbl1 := &vindexes.Table{
+	idxTbl1 := &vindexes.BaseTable{
 		Name:                    sqlparser.NewIdentifierCS("idxTbl1"),
 		Keyspace:                ks,
 		ColumnListAuthoritative: true,
@@ -94,7 +94,7 @@ func TestVSchemaUpdate(t *testing.T) {
 			{sqlparser.NewColName("c"), sqlparser.NewColName("d")},
 		},
 	}
-	idxTbl2 := &vindexes.Table{
+	idxTbl2 := &vindexes.BaseTable{
 		Name:                    sqlparser.NewIdentifierCS("idxTbl2"),
 		Keyspace:                ks,
 		ColumnListAuthoritative: true,
@@ -119,18 +119,18 @@ func TestVSchemaUpdate(t *testing.T) {
 				ColumnListAuthoritative: false,
 			},
 		}),
-		expected: makeTestVSchema("ks", false, map[string]*vindexes.Table{"tbl": tblCol2NA}),
+		expected: makeTestVSchema("ks", false, map[string]*vindexes.BaseTable{"tbl": tblCol2NA}),
 	}, {
 		name:       "1 Schematracking- 0 srvVSchema",
 		srvVschema: makeTestSrvVSchema("ks", false, nil),
 		schema:     map[string]*vindexes.TableInfo{"tbl": {Columns: cols1}},
-		expected:   makeTestVSchema("ks", false, map[string]*vindexes.Table{"tbl": tblCol1}),
+		expected:   makeTestVSchema("ks", false, map[string]*vindexes.BaseTable{"tbl": tblCol1}),
 	}, {
 		name:       "1 Schematracking - 1 srvVSchema (no columns) not authoritative",
 		srvVschema: makeTestSrvVSchema("ks", false, map[string]*vschemapb.Table{"tbl": {}}),
 		schema:     map[string]*vindexes.TableInfo{"tbl": {Columns: cols1}},
 		// schema will override what srvSchema has.
-		expected: makeTestVSchema("ks", false, map[string]*vindexes.Table{"tbl": tblCol1}),
+		expected: makeTestVSchema("ks", false, map[string]*vindexes.BaseTable{"tbl": tblCol1}),
 	}, {
 		name: "1 Schematracking - 1 srvVSchema (have columns) not authoritative",
 		srvVschema: makeTestSrvVSchema("ks", false, map[string]*vschemapb.Table{
@@ -141,7 +141,7 @@ func TestVSchemaUpdate(t *testing.T) {
 		}),
 		schema: map[string]*vindexes.TableInfo{"tbl": {Columns: cols1}},
 		// schema will override what srvSchema has.
-		expected: makeTestVSchema("ks", false, map[string]*vindexes.Table{"tbl": tblCol1}),
+		expected: makeTestVSchema("ks", false, map[string]*vindexes.BaseTable{"tbl": tblCol1}),
 	}, {
 		name: "1 Schematracking - 1 srvVSchema (no columns) authoritative",
 		srvVschema: makeTestSrvVSchema("ks", false, map[string]*vschemapb.Table{"tbl": {
@@ -149,7 +149,7 @@ func TestVSchemaUpdate(t *testing.T) {
 		}}),
 		schema: map[string]*vindexes.TableInfo{"tbl": {Columns: cols1}},
 		// schema will override what srvSchema has.
-		expected: makeTestVSchema("ks", false, map[string]*vindexes.Table{"tbl": tblNoCol}),
+		expected: makeTestVSchema("ks", false, map[string]*vindexes.BaseTable{"tbl": tblNoCol}),
 	}, {
 		name: "1 Schematracking - 1 srvVSchema (have columns) authoritative",
 		srvVschema: makeTestSrvVSchema("ks", false, map[string]*vschemapb.Table{
@@ -160,7 +160,7 @@ func TestVSchemaUpdate(t *testing.T) {
 		}),
 		schema: map[string]*vindexes.TableInfo{"tbl": {Columns: cols1}},
 		// schema tracker will be ignored for authoritative tables.
-		expected: makeTestVSchema("ks", false, map[string]*vindexes.Table{"tbl": tblCol2}),
+		expected: makeTestVSchema("ks", false, map[string]*vindexes.BaseTable{"tbl": tblCol2}),
 	}, {
 		name:     "srvVschema received as nil",
 		schema:   map[string]*vindexes.TableInfo{"tbl": {Columns: cols1}},
@@ -241,7 +241,7 @@ func TestVSchemaUpdate(t *testing.T) {
 					Keyspace:       ks,
 					ForeignKeyMode: vschemapb.Keyspace_managed,
 					Vindexes:       map[string]vindexes.Vindex{},
-					Tables: map[string]*vindexes.Table{
+					Tables: map[string]*vindexes.BaseTable{
 						"t1":          vindexTable_t1,
 						"t2":          vindexTable_t2,
 						"multicol_t1": vindexTable_multicol_t1,
@@ -281,7 +281,7 @@ func TestVSchemaUpdate(t *testing.T) {
 			},
 		},
 		srvVschema: makeTestSrvVSchema("ks", false, nil),
-		expected:   makeTestVSchema("ks", false, map[string]*vindexes.Table{"idxTbl1": idxTbl1}),
+		expected:   makeTestVSchema("ks", false, map[string]*vindexes.BaseTable{"idxTbl1": idxTbl1}),
 	}, {
 		name:           "indexes in schema using expressions",
 		currentVSchema: &vindexes.VSchema{},
@@ -312,7 +312,7 @@ func TestVSchemaUpdate(t *testing.T) {
 			},
 		},
 		srvVschema: makeTestSrvVSchema("ks", false, nil),
-		expected:   makeTestVSchema("ks", false, map[string]*vindexes.Table{"idxTbl2": idxTbl2}),
+		expected:   makeTestVSchema("ks", false, map[string]*vindexes.BaseTable{"idxTbl2": idxTbl2}),
 	}}
 
 	vm := &VSchemaManager{}
@@ -364,11 +364,11 @@ func TestKeyspaceRoutingRules(t *testing.T) {
 	vs := &vindexes.VSchema{
 		Keyspaces: map[string]*vindexes.KeyspaceSchema{
 			"ks": {
-				Tables:   map[string]*vindexes.Table{},
+				Tables:   map[string]*vindexes.BaseTable{},
 				Keyspace: &vindexes.Keyspace{Name: "ks", Sharded: true},
 			},
 			"ks2": {
-				Tables:   map[string]*vindexes.Table{},
+				Tables:   map[string]*vindexes.BaseTable{},
 				Keyspace: &vindexes.Keyspace{Name: "ks2", Sharded: true},
 			},
 		},
@@ -395,10 +395,10 @@ func TestRebuildVSchema(t *testing.T) {
 		Nullable: true,
 	}}
 	ks := &vindexes.Keyspace{Name: "ks"}
-	tblNoCol := &vindexes.Table{Name: sqlparser.NewIdentifierCS("tbl"), Keyspace: ks, ColumnListAuthoritative: true}
-	tblCol1 := &vindexes.Table{Name: sqlparser.NewIdentifierCS("tbl"), Keyspace: ks, Columns: cols1, ColumnListAuthoritative: true}
-	tblCol2 := &vindexes.Table{Name: sqlparser.NewIdentifierCS("tbl"), Keyspace: ks, Columns: cols2, ColumnListAuthoritative: true}
-	tblCol2NA := &vindexes.Table{Name: sqlparser.NewIdentifierCS("tbl"), Keyspace: ks, Columns: cols2}
+	tblNoCol := &vindexes.BaseTable{Name: sqlparser.NewIdentifierCS("tbl"), Keyspace: ks, ColumnListAuthoritative: true}
+	tblCol1 := &vindexes.BaseTable{Name: sqlparser.NewIdentifierCS("tbl"), Keyspace: ks, Columns: cols1, ColumnListAuthoritative: true}
+	tblCol2 := &vindexes.BaseTable{Name: sqlparser.NewIdentifierCS("tbl"), Keyspace: ks, Columns: cols2, ColumnListAuthoritative: true}
+	tblCol2NA := &vindexes.BaseTable{Name: sqlparser.NewIdentifierCS("tbl"), Keyspace: ks, Columns: cols2}
 
 	tcases := []struct {
 		name       string
@@ -413,18 +413,18 @@ func TestRebuildVSchema(t *testing.T) {
 				ColumnListAuthoritative: false,
 			},
 		}),
-		expected: makeTestVSchema("ks", false, map[string]*vindexes.Table{"tbl": tblCol2NA}),
+		expected: makeTestVSchema("ks", false, map[string]*vindexes.BaseTable{"tbl": tblCol2NA}),
 	}, {
 		name:       "1 Schematracking- 0 srvVSchema",
 		srvVschema: makeTestSrvVSchema("ks", false, nil),
 		schema:     map[string]*vindexes.TableInfo{"tbl": {Columns: cols1}},
-		expected:   makeTestVSchema("ks", false, map[string]*vindexes.Table{"tbl": tblCol1}),
+		expected:   makeTestVSchema("ks", false, map[string]*vindexes.BaseTable{"tbl": tblCol1}),
 	}, {
 		name:       "1 Schematracking - 1 srvVSchema (no columns) not authoritative",
 		srvVschema: makeTestSrvVSchema("ks", false, map[string]*vschemapb.Table{"tbl": {}}),
 		schema:     map[string]*vindexes.TableInfo{"tbl": {Columns: cols1}},
 		// schema will override what srvSchema has.
-		expected: makeTestVSchema("ks", false, map[string]*vindexes.Table{"tbl": tblCol1}),
+		expected: makeTestVSchema("ks", false, map[string]*vindexes.BaseTable{"tbl": tblCol1}),
 	}, {
 		name: "1 Schematracking - 1 srvVSchema (have columns) not authoritative",
 		srvVschema: makeTestSrvVSchema("ks", false, map[string]*vschemapb.Table{
@@ -435,7 +435,7 @@ func TestRebuildVSchema(t *testing.T) {
 		}),
 		schema: map[string]*vindexes.TableInfo{"tbl": {Columns: cols1}},
 		// schema will override what srvSchema has.
-		expected: makeTestVSchema("ks", false, map[string]*vindexes.Table{"tbl": tblCol1}),
+		expected: makeTestVSchema("ks", false, map[string]*vindexes.BaseTable{"tbl": tblCol1}),
 	}, {
 		name: "1 Schematracking - 1 srvVSchema (no columns) authoritative",
 		srvVschema: makeTestSrvVSchema("ks", false, map[string]*vschemapb.Table{"tbl": {
@@ -443,7 +443,7 @@ func TestRebuildVSchema(t *testing.T) {
 		}}),
 		schema: map[string]*vindexes.TableInfo{"tbl": {Columns: cols1}},
 		// schema will override what srvSchema has.
-		expected: makeTestVSchema("ks", false, map[string]*vindexes.Table{"tbl": tblNoCol}),
+		expected: makeTestVSchema("ks", false, map[string]*vindexes.BaseTable{"tbl": tblNoCol}),
 	}, {
 		name: "1 Schematracking - 1 srvVSchema (have columns) authoritative",
 		srvVschema: makeTestSrvVSchema("ks", false, map[string]*vschemapb.Table{
@@ -454,7 +454,7 @@ func TestRebuildVSchema(t *testing.T) {
 		}),
 		schema: map[string]*vindexes.TableInfo{"tbl": {Columns: cols1}},
 		// schema tracker will be ignored for authoritative tables.
-		expected: makeTestVSchema("ks", false, map[string]*vindexes.Table{"tbl": tblCol2}),
+		expected: makeTestVSchema("ks", false, map[string]*vindexes.BaseTable{"tbl": tblCol2}),
 	}, {
 		name:   "srvVschema received as nil",
 		schema: map[string]*vindexes.TableInfo{"tbl": {Columns: cols1}},
@@ -506,7 +506,7 @@ func TestVSchemaUDFsUpdate(t *testing.T) {
 			"ks": {
 				Keyspace:       ks,
 				ForeignKeyMode: vschemapb.Keyspace_unmanaged,
-				Tables:         map[string]*vindexes.Table{},
+				Tables:         map[string]*vindexes.BaseTable{},
 				Vindexes:       map[string]vindexes.Vindex{},
 				AggregateUDFs:  []string{"udf1", "udf2"},
 			},
@@ -532,7 +532,7 @@ func TestMarkErrorIfCyclesInFk(t *testing.T) {
 					Keyspaces: map[string]*vindexes.KeyspaceSchema{
 						ksName: {
 							ForeignKeyMode: vschemapb.Keyspace_managed,
-							Tables: map[string]*vindexes.Table{
+							Tables: map[string]*vindexes.BaseTable{
 								"t1": {
 									Name:     sqlparser.NewIdentifierCS("t1"),
 									Keyspace: keyspace,
@@ -563,7 +563,7 @@ func TestMarkErrorIfCyclesInFk(t *testing.T) {
 					Keyspaces: map[string]*vindexes.KeyspaceSchema{
 						ksName: {
 							ForeignKeyMode: vschemapb.Keyspace_managed,
-							Tables: map[string]*vindexes.Table{
+							Tables: map[string]*vindexes.BaseTable{
 								"t1": {
 									Name:     sqlparser.NewIdentifierCS("t1"),
 									Keyspace: keyspace,
@@ -594,7 +594,7 @@ func TestMarkErrorIfCyclesInFk(t *testing.T) {
 					Keyspaces: map[string]*vindexes.KeyspaceSchema{
 						ksName: {
 							ForeignKeyMode: vschemapb.Keyspace_managed,
-							Tables: map[string]*vindexes.Table{
+							Tables: map[string]*vindexes.BaseTable{
 								"t1": {
 									Name:     sqlparser.NewIdentifierCS("t1"),
 									Keyspace: keyspace,
@@ -623,7 +623,7 @@ func TestMarkErrorIfCyclesInFk(t *testing.T) {
 					Keyspaces: map[string]*vindexes.KeyspaceSchema{
 						ksName: {
 							ForeignKeyMode: vschemapb.Keyspace_managed,
-							Tables: map[string]*vindexes.Table{
+							Tables: map[string]*vindexes.BaseTable{
 								"t1": {
 									Name:     sqlparser.NewIdentifierCS("t1"),
 									Keyspace: keyspace,
@@ -651,7 +651,7 @@ func TestMarkErrorIfCyclesInFk(t *testing.T) {
 					Keyspaces: map[string]*vindexes.KeyspaceSchema{
 						ksName: {
 							ForeignKeyMode: vschemapb.Keyspace_managed,
-							Tables: map[string]*vindexes.Table{
+							Tables: map[string]*vindexes.BaseTable{
 								"t1": {
 									Name:     sqlparser.NewIdentifierCS("t1"),
 									Keyspace: keyspace,
@@ -679,7 +679,7 @@ func TestMarkErrorIfCyclesInFk(t *testing.T) {
 					Keyspaces: map[string]*vindexes.KeyspaceSchema{
 						ksName: {
 							ForeignKeyMode: vschemapb.Keyspace_managed,
-							Tables: map[string]*vindexes.Table{
+							Tables: map[string]*vindexes.BaseTable{
 								"t1": {
 									Name:     sqlparser.NewIdentifierCS("t1"),
 									Keyspace: keyspace,
@@ -726,7 +726,7 @@ func TestMarkErrorIfCyclesInFk(t *testing.T) {
 					Keyspaces: map[string]*vindexes.KeyspaceSchema{
 						ksName: {
 							ForeignKeyMode: vschemapb.Keyspace_managed,
-							Tables: map[string]*vindexes.Table{
+							Tables: map[string]*vindexes.BaseTable{
 								"t1": {
 									Name:     sqlparser.NewIdentifierCS("t1"),
 									Keyspace: keyspace,
@@ -768,13 +768,13 @@ func TestVSchemaUpdateWithFKReferenceToInternalTables(t *testing.T) {
 	}}
 	sqlparserCols1 := sqlparser.MakeColumns("id")
 
-	vindexTable_t1 := &vindexes.Table{
+	vindexTable_t1 := &vindexes.BaseTable{
 		Name:                    sqlparser.NewIdentifierCS("t1"),
 		Keyspace:                ks,
 		Columns:                 cols1,
 		ColumnListAuthoritative: true,
 	}
-	vindexTable_t2 := &vindexes.Table{
+	vindexTable_t2 := &vindexes.BaseTable{
 		Name:                    sqlparser.NewIdentifierCS("t2"),
 		Keyspace:                ks,
 		Columns:                 cols1,
@@ -830,7 +830,7 @@ func TestVSchemaUpdateWithFKReferenceToInternalTables(t *testing.T) {
 				Keyspace:       ks,
 				ForeignKeyMode: vschemapb.Keyspace_managed,
 				Vindexes:       map[string]vindexes.Vindex{},
-				Tables: map[string]*vindexes.Table{
+				Tables: map[string]*vindexes.BaseTable{
 					"t1": vindexTable_t1,
 					"t2": vindexTable_t2,
 				},
@@ -854,7 +854,7 @@ func createFkDefinition(childCols []string, parentTableName string, parentCols [
 	}
 }
 
-func makeTestVSchema(ks string, sharded bool, tbls map[string]*vindexes.Table) *vindexes.VSchema {
+func makeTestVSchema(ks string, sharded bool, tbls map[string]*vindexes.BaseTable) *vindexes.VSchema {
 	keyspaceSchema := &vindexes.KeyspaceSchema{
 		Keyspace: &vindexes.Keyspace{
 			Name:    ks,
