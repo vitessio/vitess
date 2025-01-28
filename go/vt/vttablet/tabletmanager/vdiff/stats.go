@@ -49,6 +49,7 @@ func (vds *vdiffStats) register() {
 	globalStats.ErrorCount = stats.NewCounter("", "")
 	globalStats.RestartedTableDiffs = stats.NewCountersWithSingleLabel("", "", "Table")
 	globalStats.RowsDiffedCount = stats.NewCounter("", "")
+	globalStats.controllers = make(map[int64]*controller)
 
 	stats.NewGaugeFunc("VDiffCount", "Number of current vdiffs", vds.numControllers)
 
