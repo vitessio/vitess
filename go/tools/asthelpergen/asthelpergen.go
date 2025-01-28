@@ -32,7 +32,7 @@ import (
 	"vitess.io/vitess/go/tools/codegen"
 )
 
-const licenseFileHeader = `Copyright 2023 The Vitess Authors.
+const licenseFileHeader = `Copyright 2025 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -51,7 +51,7 @@ type (
 		addType(t types.Type)
 		scope() *types.Scope
 		findImplementations(iff *types.Interface, impl func(types.Type) error) error
-		iface() *types.Interface
+		iface() *types.Interface // the root interface that all nodes are expected to implement
 	}
 	generator interface {
 		genFile() (string, *jen.File)
@@ -61,6 +61,7 @@ type (
 		ptrToBasicMethod(t types.Type, basic *types.Basic, spi generatorSPI) error
 		sliceMethod(t types.Type, slice *types.Slice, spi generatorSPI) error
 		basicMethod(t types.Type, basic *types.Basic, spi generatorSPI) error
+		close(spi generatorSPI) error
 	}
 	// astHelperGen finds implementations of the given interface,
 	// and uses the supplied `generator`s to produce the output code
@@ -218,6 +219,7 @@ func GenerateASTHelpers(options *Options) (map[string]*jen.File, error) {
 	generator := newGenerator(loaded[0].Module, loaded[0].TypesSizes, nt,
 		newEqualsGen(pName, &options.Equals),
 		newCloneGen(pName, &options.Clone),
+		newPathGen(pName),
 		newVisitGen(pName),
 		newRewriterGen(pName, types.TypeString(nt, noQualifier), exprInterface),
 		newCOWGen(pName, nt),

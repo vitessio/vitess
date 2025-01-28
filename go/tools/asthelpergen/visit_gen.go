@@ -205,6 +205,8 @@ func (v *visitGen) basicMethod(t types.Type, basic *types.Basic, spi generatorSP
 	return v.visitNoChildren(t, spi)
 }
 
+func (*visitGen) close(generatorSPI) error { return nil }
+
 func (v *visitGen) visitNoChildren(t types.Type, spi generatorSPI) error {
 	stmts := []jen.Code{
 		jen.Id("_, err := f(in)"),
@@ -220,7 +222,8 @@ func visitAllStructFields(strct *types.Struct, spi generatorSPI) []jen.Code {
 	output := []jen.Code{
 		visitIn(),
 	}
-	for i := 0; i < strct.NumFields(); i++ {
+
+	for i := range strct.NumFields() {
 		field := strct.Field(i)
 		if types.Implements(field.Type(), spi.iface()) {
 			spi.addType(field.Type())
