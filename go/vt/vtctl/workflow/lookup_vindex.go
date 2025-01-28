@@ -30,11 +30,13 @@ import (
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/schematools"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
@@ -63,7 +65,7 @@ func newLookupVindex(ws *Server) *lookupVindex {
 
 // prepareCreate performs the preparatory steps for creating a Lookup Vindex.
 func (lv *lookupVindex) prepareCreate(ctx context.Context, workflow, keyspace string, specs *vschemapb.Keyspace, continueAfterCopyWithOwner bool) (
-	ms *vtctldatapb.MaterializeSettings, sourceVSchema, targetVSchema *vschemapb.Keyspace, cancelFunc func() error, err error) {
+	ms *vtctldatapb.MaterializeSettings, sourceVSchema, targetVSchema *topo.KeyspaceVSchemaInfo, cancelFunc func() error, err error) {
 	var (
 		// sourceVSchemaTable is the table info present in the vschema.
 		sourceVSchemaTable *vschemapb.Table
@@ -158,8 +160,12 @@ func (lv *lookupVindex) prepareCreate(ctx context.Context, workflow, keyspace st
 	materializeQuery = generateMaterializeQuery(vInfo, vindex, sourceVindexColumns)
 
 	// Save a copy of the original vschema if we modify it and need to provide
-	// a cancelFunc.
-	ogTargetVSchema := targetVSchema.CloneVT()
+	// a cancelFunc. We do NOT want to clone the key version as we explicitly
+	// want to go back in time. So we only clone the internal vschema.Keyspace.
+	origTargetVSchema := &topo.KeyspaceVSchemaInfo{
+		Name:     vInfo.targetKeyspace,
+		Keyspace: targetVSchema.Keyspace.CloneVT(),
+	}
 	targetChanged := false
 
 	// Update targetVSchema.
@@ -205,7 +211,7 @@ func (lv *lookupVindex) prepareCreate(ctx context.Context, workflow, keyspace st
 	if targetChanged {
 		cancelFunc = func() error {
 			// Restore the original target vschema.
-			return lv.ts.SaveVSchema(ctx, vInfo.targetKeyspace, ogTargetVSchema)
+			return lv.ts.SaveVSchema(ctx, origTargetVSchema)
 		}
 	}
 
@@ -233,16 +239,16 @@ func (lv *lookupVindex) prepareCreate(ctx context.Context, workflow, keyspace st
 // So, it doesn't throw error if `specs` contains more than 1 vindex.
 // Unlike prepareCreate, it expects only owned lookup vindexes.
 func (lv *lookupVindex) prepareMultipleCreate(ctx context.Context, workflow, keyspace string, specs *vschemapb.Keyspace, continueAfterCopyWithOwner bool) (
-	ms *vtctldatapb.MaterializeSettings, sourceVSchema, targetVSchema *vschemapb.Keyspace, cancelFunc func() error, err error) {
+	ms *vtctldatapb.MaterializeSettings, sourceVSchema, targetVSchema *topo.KeyspaceVSchemaInfo, cancelFunc func() error, err error) {
 	var (
 		// sourceVSchemaTable is the table info present in the vschema.
 		sourceVSchemaTable *vschemapb.Table
 		// sourceVindexColumns are computed from the input sourceTable.
 		sourceVindexColumns []string
 
-		// ogTargetVSchema is the original target keyspace VSchema.
+		// origTargetVSchema is the original target keyspace VSchema.
 		// If any error occurs, we can revert back to the original VSchema.
-		ogTargetVSchema *vschemapb.Keyspace
+		origTargetVSchema *topo.KeyspaceVSchemaInfo
 
 		// Target table info.
 		createDDL        string
@@ -298,8 +304,12 @@ func (lv *lookupVindex) prepareMultipleCreate(ctx context.Context, workflow, key
 				return nil, nil, nil, nil, err
 			}
 			// Save a copy of the original vschema if we modify it and need to provide
-			// a cancelFunc.
-			ogTargetVSchema = targetVSchema.CloneVT()
+			// a cancelFunc. We do NOT want to clone the key version as we explicitly
+			// want to go back in time. So we only clone the internal vschema.Keyspace.
+			origTargetVSchema = &topo.KeyspaceVSchemaInfo{
+				Name:     vInfo.targetKeyspace,
+				Keyspace: targetVSchema.Keyspace.CloneVT(),
+			}
 		}
 
 		if existing, ok := sourceVSchema.Vindexes[vInfo.name]; ok {
@@ -403,7 +413,7 @@ func (lv *lookupVindex) prepareMultipleCreate(ctx context.Context, workflow, key
 	if targetVSchemaChanged {
 		cancelFunc = func() error {
 			// Restore the original target vschema.
-			return lv.ts.SaveVSchema(ctx, targetKeyspace, ogTargetVSchema)
+			return lv.ts.SaveVSchema(ctx, origTargetVSchema)
 		}
 	}
 
@@ -496,7 +506,7 @@ func (lv *lookupVindex) validateAndGetVindexInfo(vindexName string, vindex *vsch
 	}, nil
 }
 
-func (lv *lookupVindex) getTargetAndSourceVSchema(ctx context.Context, sourceKeyspace string, targetKeyspace string) (sourceVSchema *vschemapb.Keyspace, targetVSchema *vschemapb.Keyspace, err error) {
+func (lv *lookupVindex) getTargetAndSourceVSchema(ctx context.Context, sourceKeyspace, targetKeyspace string) (sourceVSchema, targetVSchema *topo.KeyspaceVSchemaInfo, err error) {
 	sourceVSchema, err = lv.ts.GetVSchema(ctx, sourceKeyspace)
 	if err != nil {
 		return nil, nil, err
@@ -750,4 +760,53 @@ func getTargetVindex(sourceTableDefinition *tabletmanagerdatapb.TableDefinition,
 		return
 	}
 	return
+}
+
+// validateExternalizedVindex checks if a given vindex is externalized.
+// A vindex is considered externalized if it has an owner and is not in write-only mode.
+func (lv *lookupVindex) validateExternalizedVindex(vindex *vschemapb.Vindex) error {
+	writeOnly, ok := vindex.Params["write_only"]
+	if ok && writeOnly == "true" {
+		return fmt.Errorf("vindex is in write-only mode")
+	}
+	if vindex.Owner == "" {
+		return fmt.Errorf("vindex has no owner")
+	}
+	return nil
+}
+
+// validateExternalized checks if the vindex has been externalized
+// and verifies the state of the VReplication workflow on the target shards.
+// It ensures that all streams in the workflow are frozen.
+func (lv *lookupVindex) validateExternalized(ctx context.Context, vindex *vschemapb.Vindex, name string, targetShards []*topo.ShardInfo) error {
+	if err := lv.validateExternalizedVindex(vindex); err != nil {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vindex %s has not been externalized yet: %v", name, err)
+	}
+
+	err := forAllShards(targetShards, func(targetShard *topo.ShardInfo) error {
+		targetPrimary, err := lv.ts.GetTablet(ctx, targetShard.PrimaryAlias)
+		if err != nil {
+			return err
+		}
+		res, err := lv.tmc.ReadVReplicationWorkflow(ctx, targetPrimary.Tablet, &tabletmanagerdatapb.ReadVReplicationWorkflowRequest{
+			Workflow: name,
+		})
+		if err != nil {
+			return err
+		}
+		if res == nil || res.Workflow == "" {
+			return vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "workflow %s not found on %v", name, topoproto.TabletAliasString(targetPrimary.Alias))
+		}
+		for _, stream := range res.Streams {
+			// All streams need to be frozen.
+			if stream.State != binlogdatapb.VReplicationWorkflowState_Stopped || stream.Message != Frozen {
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "stream %d for %v/%v is not frozen: %v, %v", stream.Id, targetShard.Keyspace(), targetShard.ShardName(), stream.State, stream.Message)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	return nil
 }

@@ -556,6 +556,20 @@ message CompleteSchemaMigrationResponse {
   map<string, uint64> rows_affected_by_shard = 1;
 }
 
+message CopySchemaShardRequest {
+  topodata.TabletAlias source_tablet_alias = 1;
+  repeated string tables = 2;
+  repeated string exclude_tables = 3;
+  bool include_views = 4;
+  bool skip_verify = 5;
+  vttime.Duration wait_replicas_timeout = 6;
+  string destination_keyspace = 7;
+  string destination_shard = 8;
+}
+
+message CopySchemaShardResponse {
+}
+
 message CreateKeyspaceRequest {
   // Name is the name of the keyspace.
   string name = 1;
@@ -1217,6 +1231,18 @@ message LaunchSchemaMigrationResponse {
   map<string, uint64> rows_affected_by_shard = 1;
 }
 
+message LookupVindexCompleteRequest {
+  // Where the lookup vindex lives.
+  string keyspace = 1;
+  // This is the name of the lookup vindex and the vreplication workflow.
+  string name = 2;
+  // Where the vreplication workflow lives.
+  string table_keyspace = 3;
+}
+
+message LookupVindexCompleteResponse {
+}
+
 message LookupVindexCreateRequest {
   string keyspace = 1;
   string workflow = 2;
@@ -1237,11 +1263,28 @@ message LookupVindexExternalizeRequest {
   string name = 2;
   // Where the vreplication workflow lives.
   string table_keyspace = 3;
+  // If this is set true, we directly delete the workflow instead of stopping.
+  // Also, complete command is not required to delete workflow in that case.
+  bool delete_workflow = 4;
 }
 
 message LookupVindexExternalizeResponse {
-  // Was the workflow also deleted.
-  bool workflow_deleted = 1;
+  // Was the workflow stopped.
+  bool workflow_stopped = 1;
+  // Was the workflow deleted.
+  bool workflow_deleted = 2;
+}
+
+message LookupVindexInternalizeRequest {
+  // Where the lookup vindex lives.
+  string keyspace = 1;
+  // This is the name of the lookup vindex and the vreplication workflow.
+  string name = 2;
+  // Where the vreplication workflow lives.
+  string table_keyspace = 3;
+}
+
+message LookupVindexInternalizeResponse {
 }
 
 message MaterializeCreateRequest {
@@ -1860,12 +1903,25 @@ message ValidateKeyspaceResponse {
   map<string, ValidateShardResponse> results_by_shard = 2;
 }
 
+message ValidatePermissionsKeyspaceRequest {
+  string keyspace = 1;
+  // If you only want to validate a subset of the shards in the
+  // keyspace, then specify a list of shard names.
+  repeated string shards = 2;
+}
+
+message ValidatePermissionsKeyspaceResponse {
+}
+
 message ValidateSchemaKeyspaceRequest {
   string keyspace = 1;
   repeated string exclude_tables = 2;
   bool include_views = 3;
   bool skip_no_primary = 4;
   bool include_vschema = 5;
+  // If you only want to validate a subset of the shards in the
+  // keyspace, then specify a list of shard names.
+  repeated string shards = 6;
 }
 
 message ValidateSchemaKeyspaceResponse {

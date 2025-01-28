@@ -760,6 +760,13 @@ message VDiffOptions {
   VDiffReportOptions report_options = 3;
 }
 
+message VDiffTableLastPK {
+  query.QueryResult target = 1;
+  // If the source value is nil then it's the same as the target
+  // and the target value should be used for both.
+  optional query.QueryResult source = 2;
+}
+
 
 // UpdateVReplicationWorkflowRequest is used to update an existing VReplication
 // workflow. Note that the following fields MUST have an explicit value provided
@@ -774,8 +781,9 @@ message UpdateVReplicationWorkflowRequest {
   optional TabletSelectionPreference tablet_selection_preference = 4;
   optional binlogdata.OnDDLAction on_ddl = 5;
   optional binlogdata.VReplicationWorkflowState state = 6;
-  reserved 7; // unused, was: repeated string shards
+  repeated string shards = 7;
   map<string, string> config_overrides = 8;
+  optional string message = 9;
 }
 
 message UpdateVReplicationWorkflowResponse {

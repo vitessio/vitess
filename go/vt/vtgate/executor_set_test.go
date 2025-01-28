@@ -514,7 +514,7 @@ func createMap(keys []string, values []any) map[string]*querypb.BindVariable {
 
 func TestSetVar(t *testing.T) {
 	executor, _, _, sbc, ctx := createCustomExecutor(t, "{}", "8.0.0")
-	executor.normalize = true
+	executor.config.Normalize = true
 
 	session := econtext.NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded})
 
@@ -553,7 +553,7 @@ func TestSetVar(t *testing.T) {
 
 func TestSetVarShowVariables(t *testing.T) {
 	executor, _, _, sbc, ctx := createCustomExecutor(t, "{}", "8.0.0")
-	executor.normalize = true
+	executor.config.Normalize = true
 
 	session := econtext.NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded})
 
@@ -576,8 +576,7 @@ func TestSetVarShowVariables(t *testing.T) {
 }
 
 func TestExecutorSetAndSelect(t *testing.T) {
-	e, _, _, sbc, ctx := createExecutorEnv(t)
-	e.normalize = true
+	e, _, _, sbc, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 
 	testcases := []struct {
 		sysVar string

@@ -60,6 +60,16 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return nil, err
 	}
+
+	// Return if the disk is stalled or rejecting writes.
+	// If the disk is stalled, we can't be sure if reads will go through
+	// or not, so we should not run any reads either.
+	if tm.QueryServiceControl.IsDiskStalled() {
+		return &replicationdatapb.FullStatus{
+			DiskStalled: true,
+		}, nil
+	}
+
 	// Server ID - "select @@global.server_id"
 	serverID, err := tm.MysqlDaemon.GetServerID(ctx)
 	if err != nil {

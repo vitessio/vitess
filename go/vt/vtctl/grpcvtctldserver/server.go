@@ -339,7 +339,9 @@ func (s *VtctldServer) ApplyVSchema(ctx context.Context, req *vtctldatapb.ApplyV
 		return nil, err
 	}
 
-	var vs *vschemapb.Keyspace
+	ksvs := &topo.KeyspaceVSchemaInfo{
+		Name: req.Keyspace,
+	}
 
 	if req.Sql != "" {
 		span.Annotate("sql_mode", true)
@@ -356,29 +358,23 @@ func (s *VtctldServer) ApplyVSchema(ctx context.Context, req *vtctldatapb.ApplyV
 			return nil, err
 		}
 
-		vs, err = s.ts.GetVSchema(ctx, req.Keyspace)
-		if err != nil && !topo.IsErrType(err, topo.NoNode) {
-			err = vterrors.Wrapf(err, "GetVSchema(%s)", req.Keyspace)
-			return nil, err
-		} // otherwise, we keep the empty vschema object from above
-
-		vs, err = topotools.ApplyVSchemaDDL(req.Keyspace, vs, ddl)
+		ksvs, err = topotools.ApplyVSchemaDDL(ctx, req.Keyspace, s.ts, ddl)
 		if err != nil {
-			err = vterrors.Wrapf(err, "ApplyVSchemaDDL(%s,%v,%v)", req.Keyspace, vs, ddl)
+			err = vterrors.Wrapf(err, "ApplyVSchemaDDL(%s,%v,%v)", req.Keyspace, ksvs, ddl)
 			return nil, err
 		}
 	} else { // "jsonMode"
 		span.Annotate("sql_mode", false)
-		vs = req.VSchema
+		ksvs.Keyspace = req.VSchema
 	}
 
-	ksVs, err := vindexes.BuildKeyspace(vs, s.ws.SQLParser())
+	ksVs, err := vindexes.BuildKeyspace(ksvs.Keyspace, s.ws.SQLParser())
 	if err != nil {
 		err = vterrors.Wrapf(err, "BuildKeyspace(%s)", req.Keyspace)
 		return nil, err
 	}
 	response := &vtctldatapb.ApplyVSchemaResponse{
-		VSchema:             vs,
+		VSchema:             ksvs.Keyspace,
 		UnknownVindexParams: make(map[string]*vtctldatapb.ApplyVSchemaResponse_ParamList),
 	}
 
@@ -410,7 +406,7 @@ func (s *VtctldServer) ApplyVSchema(ctx context.Context, req *vtctldatapb.ApplyV
 		return response, err
 	}
 
-	if err = s.ts.SaveVSchema(ctx, req.Keyspace, vs); err != nil {
+	if err = s.ts.SaveVSchema(ctx, ksvs); err != nil {
 		err = vterrors.Wrapf(err, "SaveVSchema(%s, %v)", req.Keyspace, req.VSchema)
 		return nil, err
 	}
@@ -426,7 +422,7 @@ func (s *VtctldServer) ApplyVSchema(ctx context.Context, req *vtctldatapb.ApplyV
 		err = vterrors.Wrapf(err, "GetVSchema(%s)", req.Keyspace)
 		return nil, err
 	}
-	response.VSchema = updatedVS
+	response.VSchema = updatedVS.Keyspace
 	return response, nil
 }
 
@@ -871,6 +867,28 @@ func (s *VtctldServer) CompleteSchemaMigration(ctx context.Context, req *vtctlda
 	return resp, nil
 }
 
+// CopySchemaShard is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) CopySchemaShard(ctx context.Context, req *vtctldatapb.CopySchemaShardRequest) (resp *vtctldatapb.CopySchemaShardResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.CompleteSchemaMigration")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("source_tablet_alias", req.SourceTabletAlias)
+	span.Annotate("destination_keyspace", req.DestinationKeyspace)
+	span.Annotate("destination_shard", req.DestinationShard)
+
+	waitReplicasTimeout, _, err := protoutil.DurationFromProto(req.WaitReplicasTimeout)
+	if err != nil {
+		return nil, err
+	}
+
+	err = s.ws.CopySchemaShard(ctx, req.SourceTabletAlias, req.Tables, req.ExcludeTables, req.IncludeViews,
+		req.DestinationKeyspace, req.DestinationShard, waitReplicasTimeout, req.SkipVerify)
+
+	return &vtctldatapb.CopySchemaShardResponse{}, err
+}
+
 // CreateKeyspace is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) CreateKeyspace(ctx context.Context, req *vtctldatapb.CreateKeyspaceRequest) (resp *vtctldatapb.CreateKeyspaceResponse, err error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.CreateKeyspace")
@@ -935,28 +953,37 @@ func (s *VtctldServer) CreateKeyspace(ctx context.Context, req *vtctldatapb.Crea
 	}
 
 	if req.Type == topodatapb.KeyspaceType_SNAPSHOT {
-		var vs *vschemapb.Keyspace
-		vs, err = s.ts.GetVSchema(ctx, req.BaseKeyspace)
+		bksvs, err := s.ts.GetVSchema(ctx, req.BaseKeyspace)
 		if err != nil {
 			log.Infof("error from GetVSchema(%v) = %v", req.BaseKeyspace, err)
 			if topo.IsErrType(err, topo.NoNode) {
 				log.Infof("base keyspace %v does not exist; continuing with bare, unsharded vschema", req.BaseKeyspace)
-				vs = &vschemapb.Keyspace{
-					Sharded:  false,
-					Tables:   map[string]*vschemapb.Table{},
-					Vindexes: map[string]*vschemapb.Vindex{},
+				bksvs = &topo.KeyspaceVSchemaInfo{
+					Name: req.Name,
+					Keyspace: &vschemapb.Keyspace{
+						Sharded:  false,
+						Tables:   map[string]*vschemapb.Table{},
+						Vindexes: map[string]*vschemapb.Vindex{},
+					},
 				}
 			} else {
 				return nil, err
 			}
 		}
 
+		// We don't want to clone the base keyspace's key version
+		// so we do NOT call bksvs.CloneVT() here. We instead only
+		// clone the vschemapb.Keyspace field for the new snapshot
+		// keyspace.
+		sksvs := &topo.KeyspaceVSchemaInfo{
+			Name:     req.Name,
+			Keyspace: bksvs.Keyspace.CloneVT(),
+		}
 		// SNAPSHOT keyspaces are excluded from global routing.
-		vs.RequireExplicitRouting = true
+		sksvs.RequireExplicitRouting = true
 
-		if err = s.ts.SaveVSchema(ctx, req.Name, vs); err != nil {
-			err = fmt.Errorf("SaveVSchema(%v) = %w", vs, err)
-			return nil, err
+		if err = s.ts.SaveVSchema(ctx, sksvs); err != nil {
+			return nil, fmt.Errorf("SaveVSchema(%v) = %w", sksvs, err)
 		}
 	}
 
@@ -2657,13 +2684,13 @@ func (s *VtctldServer) GetVSchema(ctx context.Context, req *vtctldatapb.GetVSche
 
 	span.Annotate("keyspace", req.Keyspace)
 
-	vschema, err := s.ts.GetVSchema(ctx, req.Keyspace)
+	ks, err := s.ts.GetVSchema(ctx, req.Keyspace)
 	if err != nil {
 		return nil, err
 	}
 
 	return &vtctldatapb.GetVSchemaResponse{
-		VSchema: vschema,
+		VSchema: ks.Keyspace,
 	}, nil
 }
 
@@ -2991,6 +3018,21 @@ func (s *VtctldServer) LaunchSchemaMigration(ctx context.Context, req *vtctldata
 	return resp, nil
 }
 
+// LookupVindexComplete is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) LookupVindexComplete(ctx context.Context, req *vtctldatapb.LookupVindexCompleteRequest) (resp *vtctldatapb.LookupVindexCompleteResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.LookupVindexComplete")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("name", req.Name)
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("table_keyspace", req.TableKeyspace)
+
+	resp, err = s.ws.LookupVindexComplete(ctx, req)
+	return resp, err
+}
+
 // LookupVindexCreate is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) LookupVindexCreate(ctx context.Context, req *vtctldatapb.LookupVindexCreateRequest) (resp *vtctldatapb.LookupVindexCreateResponse, err error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.LookupVindexCreate")
@@ -3020,6 +3062,21 @@ func (s *VtctldServer) LookupVindexExternalize(ctx context.Context, req *vtctlda
 	span.Annotate("table_keyspace", req.TableKeyspace)
 
 	resp, err = s.ws.LookupVindexExternalize(ctx, req)
+	return resp, err
+}
+
+// LookupVindexInternalize is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) LookupVindexInternalize(ctx context.Context, req *vtctldatapb.LookupVindexInternalizeRequest) (resp *vtctldatapb.LookupVindexInternalizeResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.LookupVindexInternalize")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("name", req.Name)
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("table_keyspace", req.TableKeyspace)
+
+	resp, err = s.ws.LookupVindexInternalize(ctx, req)
 	return resp, err
 }
 
@@ -4692,8 +4749,94 @@ func (s *VtctldServer) ValidateKeyspace(ctx context.Context, req *vtctldatapb.Va
 	return resp, err
 }
 
+// ValidatePermissionsKeyspace validates that all the permissions are the
+// same in a keyspace.
+func (s *VtctldServer) ValidatePermissionsKeyspace(ctx context.Context, req *vtctldatapb.ValidatePermissionsKeyspaceRequest) (resp *vtctldatapb.ValidatePermissionsKeyspaceResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ValidatePermissionsKeyspace")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("shards", req.Shards)
+
+	var shards []string
+	if len(req.Shards) != 0 {
+		// If the user has specified a list of specific shards, we'll use that.
+		shards = req.Shards
+	} else {
+		// Validate all of the shards.
+		shards, err = s.ts.GetShardNames(ctx, req.Keyspace)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if len(shards) == 0 {
+		return nil, fmt.Errorf("no shards found in keyspace %s", req.Keyspace)
+	}
+	sort.Strings(shards)
+
+	// Find the reference permissions using the first shard's primary.
+	si, err := s.ts.GetShard(ctx, req.Keyspace, shards[0])
+	if err != nil {
+		return nil, err
+	}
+	if !si.HasPrimary() {
+		return nil, fmt.Errorf("no primary tablet in shard %s/%s", req.Keyspace, shards[0])
+	}
+	referenceAlias := si.PrimaryAlias
+	log.Infof("Gathering permissions for reference primary %s", topoproto.TabletAliasString(referenceAlias))
+	pres, err := s.GetPermissions(ctx, &vtctldatapb.GetPermissionsRequest{
+		TabletAlias: si.PrimaryAlias,
+	})
+	if err != nil {
+		return nil, err
+	}
+	referencePermissions := pres.Permissions
+
+	// Then diff the first/reference tablet with all the others.
+	eg, egctx := errgroup.WithContext(ctx)
+	for _, shard := range shards {
+		eg.Go(func() error {
+			aliases, err := s.ts.FindAllTabletAliasesInShard(egctx, req.Keyspace, shard)
+			if err != nil {
+				return err
+			}
+			for _, alias := range aliases {
+				if topoproto.TabletAliasEqual(alias, si.PrimaryAlias) {
+					continue
+				}
+				log.Infof("Gathering permissions for %s", topoproto.TabletAliasString(alias))
+				presp, err := s.GetPermissions(ctx, &vtctldatapb.GetPermissionsRequest{
+					TabletAlias: alias,
+				})
+				if err != nil {
+					return err
+				}
+
+				log.Infof("Diffing permissions between %s and %s", topoproto.TabletAliasString(referenceAlias),
+					topoproto.TabletAliasString(alias))
+				er := &concurrency.AllErrorRecorder{}
+				tmutils.DiffPermissions(topoproto.TabletAliasString(referenceAlias), referencePermissions,
+					topoproto.TabletAliasString(alias), presp.Permissions, er)
+				if er.HasErrors() {
+					return er.Error()
+				}
+			}
+			return nil
+		})
+	}
+	if err := eg.Wait(); err != nil {
+		return nil, fmt.Errorf("permissions diffs: %v", err)
+	}
+
+	return &vtctldatapb.ValidatePermissionsKeyspaceResponse{}, nil
+}
+
 // ValidateSchemaKeyspace is a part of the vtctlservicepb.VtctldServer interface.
-// It will diff the schema from all the tablets in the keyspace.
+// It will diff the schema between the tablets in all shards -- or a subset if
+// any specific shards are specified -- within the keyspace.
 func (s *VtctldServer) ValidateSchemaKeyspace(ctx context.Context, req *vtctldatapb.ValidateSchemaKeyspaceRequest) (resp *vtctldatapb.ValidateSchemaKeyspaceResponse, err error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.ValidateSchemaKeyspace")
 	defer span.Finish()
@@ -4701,17 +4844,25 @@ func (s *VtctldServer) ValidateSchemaKeyspace(ctx context.Context, req *vtctldat
 	defer panicHandler(&err)
 
 	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("shards", req.Shards)
 	keyspace := req.Keyspace
 
 	resp = &vtctldatapb.ValidateSchemaKeyspaceResponse{
 		Results: []string{},
 	}
 
-	shards, err := s.ts.GetShardNames(ctx, keyspace)
-	if err != nil {
-		resp.Results = append(resp.Results, fmt.Sprintf("TopologyServer.GetShardNames(%v) failed: %v", req.Keyspace, err))
-		err = nil
-		return resp, err
+	var shards []string
+	if len(req.Shards) != 0 {
+		// If the user has specified a list of specific shards, we'll use that.
+		shards = req.Shards
+	} else {
+		// Otherwise we look at all the shards in the keyspace.
+		shards, err = s.ts.GetShardNames(ctx, keyspace)
+		if err != nil {
+			resp.Results = append(resp.Results, fmt.Sprintf("TopologyServer.GetShardNames(%s) failed: %v", req.Keyspace, err))
+			err = nil
+			return resp, err
+		}
 	}
 
 	resp.ResultsByShard = make(map[string]*vtctldatapb.ValidateShardResponse, len(shards))
@@ -4754,7 +4905,7 @@ func (s *VtctldServer) ValidateSchemaKeyspace(ctx context.Context, req *vtctldat
 	)
 
 	r := &tabletmanagerdatapb.GetSchemaRequest{ExcludeTables: req.ExcludeTables, IncludeViews: req.IncludeViews}
-	for _, shard := range shards[0:] {
+	for _, shard := range shards {
 		wg.Add(1)
 		go func(shard string) {
 			defer wg.Done()

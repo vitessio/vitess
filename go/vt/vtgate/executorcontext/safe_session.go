@@ -656,17 +656,18 @@ func (session *SafeSession) TimeZone() *time.Location {
 	session.mu.Unlock()
 
 	if !ok {
-		return nil
+		return time.Local
 	}
 
 	tz, err := sqltypes.DecodeStringSQL(zoneSQL)
 	if err != nil {
-		return nil
+		return time.Local
 	}
 
-	loc, _ := datetime.ParseTimeZone(tz)
-	// it's safe to ignore the error - if we get an error, loc will be nil,
-	// and this is exactly the behaviour we want anyway
+	loc, err := datetime.ParseTimeZone(tz)
+	if err != nil {
+		return time.Local
+	}
 	return loc
 }
 

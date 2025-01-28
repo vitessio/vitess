@@ -68,7 +68,7 @@ func MustMatchFn(ignoredFields ...string) func(t *testing.T, want, got any, errM
 		t.Helper()
 		diff := cmp.Diff(want, got, diffOpts...)
 		if diff != "" {
-			t.Fatalf("%v: (-want +got)\n%v", errMsg, diff)
+			require.FailNow(t, "%v: (-want +got)\n%v", errMsg, diff)
 		}
 	}
 }
