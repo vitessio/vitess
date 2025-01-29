@@ -110,8 +110,8 @@ func (r *switcher) stopStreams(ctx context.Context, sm *StreamMigrator) ([]strin
 	return sm.StopStreams(ctx)
 }
 
-func (r *switcher) cancelMigration(ctx context.Context, sm *StreamMigrator) {
-	r.ts.cancelMigration(ctx, sm)
+func (r *switcher) cancelMigration(ctx context.Context, sm *StreamMigrator) error {
+	return r.ts.cancelMigration(ctx, sm)
 }
 
 func (r *switcher) lockKeyspace(ctx context.Context, keyspace, action string) (context.Context, func(*error), error) {
