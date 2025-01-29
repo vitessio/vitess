@@ -57,7 +57,6 @@ const (
 	TypeTable     = ""
 	TypeSequence  = "sequence"
 	TypeReference = "reference"
-	TypeView      = "view"
 )
 
 // VSchema represents the denormalized version of SrvVSchema,
@@ -497,15 +496,16 @@ func AddAdditionalGlobalTables(source *vschemapb.SrvVSchema, vschema *VSchema) {
 		// for sharded keyspace as well
 		for tname, table := range ksvschema.Views {
 			// Ignore tables already global (i.e. if specified in the vschema of an unsharded keyspace) or ambiguous.
-			if _, found := vschema.globalTables[tname]; !found {
-				_, ok := newTables[tname]
-				if !ok {
-					table.Keyspace = ksvschema.Keyspace
-					newTables[tname] = table
-				} else {
-					newTables[tname] = nil
-				}
+			if _, found := vschema.globalTables[tname]; found {
+				continue
 			}
+			_, ok := newTables[tname]
+			if ok {
+				newTables[tname] = nil
+				continue
+			}
+			table.Keyspace = ksvschema.Keyspace
+			newTables[tname] = table
 		}
 		// Sharded tables needs vindex information, adding to global table will not help.
 		if ks.Sharded {
