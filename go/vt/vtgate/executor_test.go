@@ -1860,6 +1860,30 @@ func TestPassthroughDDL(t *testing.T) {
 	sbc2.Queries = nil
 }
 
+func TestShowStatus(t *testing.T) {
+	executor, sbc1, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+	session := &vtgatepb.Session{
+		TargetString: "TestExecutor",
+	}
+
+	sql1 := "show slave status"
+	_, err := executorExec(ctx, executor, session, sql1, nil)
+	require.NoError(t, err)
+
+	sql2 := "show replica status"
+	_, err = executorExec(ctx, executor, session, sql2, nil)
+	require.NoError(t, err)
+
+	wantQueries := []*querypb.BoundQuery{{
+		Sql:           sql1,
+		BindVariables: map[string]*querypb.BindVariable{},
+	}, {
+		Sql:           sql2,
+		BindVariables: map[string]*querypb.BindVariable{},
+	}}
+	assert.Equal(t, wantQueries, sbc1.Queries)
+}
+
 func TestParseEmptyTargetSingleKeyspace(t *testing.T) {
 	r, _, _, _, _ := createExecutorEnv(t)
 

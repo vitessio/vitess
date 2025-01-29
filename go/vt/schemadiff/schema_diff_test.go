@@ -1327,6 +1327,10 @@ func TestSchemaDiff(t *testing.T) {
 // TestDiffFiles diffs two schema files on the local file system. It requires the $TEST_SCHEMADIFF_DIFF_FILES
 // environment variable to be set to a comma-separated list of two file paths, e.g. "/tmp/from.sql,/tmp/to.sql".
 // If the variable is unspecified, the test is skipped. It is useful for ad-hoc testing of schema diffs.
+// The way to run this test is:
+// ```sh
+// $ TEST_SCHEMADIFF_DIFF_FILES=/tmp/1.sql,/tmp/2.sql go test -v -count=1 -run TestDiffFiles ./go/vt/schemadiff/
+// ```
 func TestDiffFiles(t *testing.T) {
 	ctx := context.Background()
 
