@@ -1510,7 +1510,7 @@ func (s *VtctldServer) GetBackups(ctx context.Context, req *vtctldatapb.GetBacku
 
 	totalBackups := len(bhs)
 	if req.Limit > 0 {
-		if req.Limit > math.MaxInt {
+		if int(req.Limit) < 0 {
 			return nil, fmt.Errorf("limit %v exceeds maximum allowed value %v", req.DetailedLimit, math.MaxInt)
 		}
 		totalBackups = int(req.Limit)
@@ -1518,7 +1518,7 @@ func (s *VtctldServer) GetBackups(ctx context.Context, req *vtctldatapb.GetBacku
 
 	totalDetailedBackups := len(bhs)
 	if req.DetailedLimit > 0 {
-		if req.DetailedLimit > math.MaxInt {
+		if int(req.DetailedLimit) < 0 {
 			return nil, fmt.Errorf("detailed_limit %v exceeds maximum allowed value %v", req.DetailedLimit, math.MaxInt)
 		}
 		totalDetailedBackups = int(req.DetailedLimit)
