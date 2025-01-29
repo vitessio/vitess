@@ -454,6 +454,15 @@ func (mysqld *Mysqld) startNoWait(cnf *Mycnf, mysqldArgs ...string) error {
 		return fmt.Errorf("mysqld_start hook failed: %v", hr.String())
 	}
 
+	// try the postflight mysqld start hook, if any
+	switch hr := hook.NewHook("postflight_mysqld_start", mysqldArgs).Execute(); hr.ExitStatus {
+	case hook.HOOK_SUCCESS, hook.HOOK_DOES_NOT_EXIST:
+		// hook exists and worked, or does not exist, we can keep going
+	default:
+		// hook failed, we report error
+		return fmt.Errorf("postflight_mysqld_start hook failed: %v", hr.String())
+	}
+
 	return nil
 }
 
