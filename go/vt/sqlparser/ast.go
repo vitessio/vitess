@@ -8133,6 +8133,7 @@ type InjectedExpr struct {
 
 var _ Expr = InjectedExpr{}
 var _ AuthNode = InjectedExpr{}
+var _ WalkableSQLNode = InjectedExpr{}
 
 // iExpr implements the Expr interface.
 func (d InjectedExpr) iExpr() {}
@@ -8174,6 +8175,17 @@ func (d InjectedExpr) SetAuthTargetNames(targetNames []string) {
 // SetExtra implements the AuthNode interface.
 func (d InjectedExpr) SetExtra(extra any) {
 	d.Auth.Extra = extra
+}
+
+func (d InjectedExpr) walkSubtree(visit Visit) error {
+	for _, child := range d.Children {
+		err := Walk(visit, child)
+		if err != nil {
+			return err
+		}
+	}
+	
+	return nil
 }
 
 // InjectedStatement allows bypassing AST analysis. This is used by projects that rely on Vitess, but may not implement
