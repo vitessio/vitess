@@ -43,7 +43,7 @@ func TestToSQLValues(t *testing.T) {
 		Arg:     "toto",
 	}
 
-	stmt, _, err := ToSQL(ctx, op)
+	stmt, _, err := ToAST(ctx, op)
 	require.NoError(t, err)
 	require.Equal(t, "select id from x, (values ::toto) as t(user_id)", sqlparser.String(stmt))
 
@@ -57,7 +57,7 @@ func TestToSQLValues(t *testing.T) {
 		userIdColName,
 	)
 
-	stmt, _, err = ToSQL(ctx, proj)
+	stmt, _, err = ToAST(ctx, proj)
 	require.NoError(t, err)
 	require.Equal(t, "select id, t.user_id from x, (values ::toto) as t(user_id)", sqlparser.String(stmt))
 }
@@ -112,7 +112,7 @@ func TestToSQLValuesJoin(t *testing.T) {
 		bindVarName:    argumentName,
 	}
 
-	stmt, _, err := ToSQL(ctx, vj)
+	stmt, _, err := ToAST(ctx, vj)
 	require.NoError(t, err)
 	require.Equal(t, "select id, tata from x, y where x.id = 42 and y.tata = 42 and y.tata = x.id", sqlparser.String(stmt))
 }

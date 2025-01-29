@@ -668,7 +668,7 @@ func (s *subqueryRouteMerger) merge(ctx *plancontext.PlanningContext, inner, out
 // We really need to figure out why this is not working as expected
 func (s *subqueryRouteMerger) rewriteASTExpression(ctx *plancontext.PlanningContext, inner *Route) Operator {
 	src := s.outer.Source
-	stmt, _, err := ToSQL(ctx, inner.Source)
+	stmt, _, err := ToAST(ctx, inner.Source)
 	if err != nil {
 		panic(err)
 	}

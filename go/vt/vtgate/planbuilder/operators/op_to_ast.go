@@ -25,11 +25,11 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
-func ToSQL(ctx *plancontext.PlanningContext, op Operator) (_ sqlparser.Statement, _ Operator, err error) {
+func ToAST(ctx *plancontext.PlanningContext, op Operator) (_ sqlparser.Statement, _ Operator, err error) {
 	defer PanicHandler(&err)
 
 	q := &queryBuilder{ctx: ctx}
-	buildQuery(op, q)
+	buildAST(op, q)
 	if ctx.SemTable != nil {
 		q.sortTables()
 	}
@@ -75,8 +75,8 @@ func stripDownQuery(from, to sqlparser.TableStatement) {
 	}
 }
 
-// buildQuery recursively builds the query into an AST, from an operator tree
-func buildQuery(op Operator, qb *queryBuilder) {
+// buildAST recursively builds the query into an AST, from an operator tree
+func buildAST(op Operator, qb *queryBuilder) {
 	switch op := op.(type) {
 	case *Table:
 		buildTable(op, qb)
@@ -120,7 +120,7 @@ func buildQuery(op Operator, qb *queryBuilder) {
 }
 
 func buildDistinct(op *Distinct, qb *queryBuilder) {
-	buildQuery(op.Source, qb)
+	buildAST(op.Source, qb)
 	statement := qb.asSelectStatement()
 	d, ok := statement.(sqlparser.Distinctable)
 	if !ok {
@@ -131,14 +131,14 @@ func buildDistinct(op *Distinct, qb *queryBuilder) {
 
 func buildValuesJoin(op *ValuesJoin, qb *queryBuilder) {
 	qb.ctx.SkipValuesArgument(op.bindVarName)
-	buildQuery(op.LHS, qb)
+	buildAST(op.LHS, qb)
 	qbR := &queryBuilder{ctx: qb.ctx}
-	buildQuery(op.RHS, qbR)
+	buildAST(op.RHS, qbR)
 	qb.joinWith(qbR, nil, sqlparser.NormalJoinType)
 }
 
 func buildValues(op *Values, qb *queryBuilder) {
-	buildQuery(op.Source, qb)
+	buildAST(op.Source, qb)
 	if qb.ctx.IsValuesArgumentSkipped(op.Arg) {
 		return
 	}
@@ -155,7 +155,7 @@ func buildDelete(op *Delete, qb *queryBuilder) {
 		Ignore:  op.Ignore,
 		Targets: sqlparser.TableNames{op.Target.Name},
 	}
-	buildQuery(op.Source, qb)
+	buildAST(op.Source, qb)
 
 	qb.dmlOperator = op
 }
@@ -168,7 +168,7 @@ func buildUpdate(op *Update, qb *queryBuilder) {
 	}
 	qb.stmt = upd
 	qb.dmlOperator = op
-	buildQuery(op.Source, qb)
+	buildAST(op.Source, qb)
 }
 
 func getUpdateExprs(op *Update) sqlparser.UpdateExprs {
@@ -193,7 +193,7 @@ func buildDML(op OpWithAST, qb *queryBuilder) {
 }
 
 func buildAggregation(op *Aggregator, qb *queryBuilder) {
-	buildQuery(op.Source, qb)
+	buildAST(op.Source, qb)
 
 	qb.clearProjections()
 
@@ -223,7 +223,7 @@ func buildAggregation(op *Aggregator, qb *queryBuilder) {
 }
 
 func buildOrdering(op *Ordering, qb *queryBuilder) {
-	buildQuery(op.Source, qb)
+	buildAST(op.Source, qb)
 
 	for _, order := range op.Order {
 		qb.asOrderAndLimit().AddOrder(order.Inner)
@@ -231,7 +231,7 @@ func buildOrdering(op *Ordering, qb *queryBuilder) {
 }
 
 func buildLimit(op *Limit, qb *queryBuilder) {
-	buildQuery(op.Source, qb)
+	buildAST(op.Source, qb)
 	qb.asOrderAndLimit().SetLimit(op.AST)
 }
 
@@ -255,7 +255,7 @@ func buildTable(op *Table, qb *queryBuilder) {
 }
 
 func buildProjection(op *Projection, qb *queryBuilder) {
-	buildQuery(op.Source, qb)
+	buildAST(op.Source, qb)
 
 	_, isSel := qb.stmt.(*sqlparser.Select)
 	if isSel {
@@ -295,10 +295,10 @@ func buildApplyJoin(op *ApplyJoin, qb *queryBuilder) {
 	})
 	pred := sqlparser.AndExpressions(predicates...)
 
-	buildQuery(op.LHS, qb)
+	buildAST(op.LHS, qb)
 
 	qbR := &queryBuilder{ctx: qb.ctx}
-	buildQuery(op.RHS, qbR)
+	buildAST(op.RHS, qbR)
 
 	switch {
 	// if we have a recursive cte, we might be missing a statement from one of the sides
@@ -313,7 +313,7 @@ func buildApplyJoin(op *ApplyJoin, qb *queryBuilder) {
 
 func buildUnion(op *Union, qb *queryBuilder) {
 	// the first input is built first
-	buildQuery(op.Sources[0], qb)
+	buildAST(op.Sources[0], qb)
 
 	for i, src := range op.Sources {
 		if i == 0 {
@@ -322,13 +322,13 @@ func buildUnion(op *Union, qb *queryBuilder) {
 
 		// now we can go over the remaining inputs and UNION them together
 		qbOther := &queryBuilder{ctx: qb.ctx}
-		buildQuery(src, qbOther)
+		buildAST(src, qbOther)
 		qb.unionWith(qbOther, op.distinct)
 	}
 }
 
 func buildFilter(op *Filter, qb *queryBuilder) {
-	buildQuery(op.Source, qb)
+	buildAST(op.Source, qb)
 
 	for _, pred := range op.Predicates {
 		qb.addPredicate(pred)
@@ -336,7 +336,7 @@ func buildFilter(op *Filter, qb *queryBuilder) {
 }
 
 func buildDerived(op *Horizon, qb *queryBuilder) {
-	buildQuery(op.Source, qb)
+	buildAST(op.Source, qb)
 
 	sqlparser.RemoveKeyspaceInCol(op.Query)
 
@@ -388,7 +388,7 @@ func buildDerivedSelect(op *Horizon, qb *queryBuilder, sel *sqlparser.Select) {
 }
 
 func buildHorizon(op *Horizon, qb *queryBuilder) {
-	buildQuery(op.Source, qb)
+	buildAST(op.Source, qb)
 	stripDownQuery(op.Query, qb.asSelectStatement())
 	sqlparser.RemoveKeyspaceInCol(qb.stmt)
 }
@@ -403,9 +403,9 @@ func buildRecursiveCTE(op *RecurseCTE, qb *queryBuilder) {
 		return jc.Original
 	})
 	pred := sqlparser.AndExpressions(predicates...)
-	buildQuery(op.Seed(), qb)
+	buildAST(op.Seed(), qb)
 	qbR := &queryBuilder{ctx: qb.ctx}
-	buildQuery(op.Term(), qbR)
+	buildAST(op.Term(), qbR)
 	qbR.addPredicate(pred)
 	infoFor, err := qb.ctx.SemTable.TableInfoFor(op.OuterID)
 	if err != nil {
