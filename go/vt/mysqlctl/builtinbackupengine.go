@@ -207,7 +207,7 @@ func (fe *FileEntry) open(cnf *Mycnf, readOnly bool) (*os.File, error) {
 		}
 	} else {
 		dir := path.Dir(name)
-		if err := os.MkdirAll(dir, os.ModePerm); err != nil {
+		if err := os.MkdirAll(dir, 0770); err != nil {
 			return nil, vterrors.Wrapf(err, "cannot create destination directory %v", dir)
 		}
 		if fd, err = os2.Create(name); err != nil {
