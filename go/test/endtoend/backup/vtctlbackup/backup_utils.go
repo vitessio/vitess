@@ -431,7 +431,7 @@ func TestBackup(t *testing.T, setupType int, streamMode string, stripes int, cDe
 		for _, ks := range localCluster.Keyspaces {
 			for _, shard := range ks.Shards {
 				for _, tablet := range shard.Vttablets {
-					cluster.ConfirmDataDirHasNoGlobalPerms(t, tablet)
+					tablet.VttabletProcess.ConfirmDataDirHasNoGlobalPerms(t)
 				}
 			}
 		}

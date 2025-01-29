@@ -35,6 +35,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -709,6 +711,22 @@ func (vttablet *VttabletProcess) BulkLoad(t testing.TB, db, table string, bulkIn
 // IsShutdown returns whether a vttablet is shutdown or not
 func (vttablet *VttabletProcess) IsShutdown() bool {
 	return vttablet.proc == nil
+}
+
+// ConfirmDataDirHasNoGlobalPerms confirms that no files in the tablet's data directory
+// have any global/world/other permissions enabled.
+func (vttablet *VttabletProcess) ConfirmDataDirHasNoGlobalPerms(t *testing.T) {
+	datadir := vttablet.Directory
+	if _, err := os.Stat(datadir); errors.Is(err, os.ErrNotExist) {
+		t.Logf("Data directory %s no longer exists, skipping permissions check", datadir)
+		return
+	}
+	// List any files which have any of the other bits set.
+	cmd := exec.Command("find", datadir, "-perm", "+00007")
+	out, err := cmd.CombinedOutput()
+	require.NoError(t, err, "Error running find command: %s", string(out))
+	so := string(out)
+	require.Empty(t, so, "Found files with global permissions: %s", so)
 }
 
 // VttabletProcessInstance returns a VttabletProcess handle for vttablet process
