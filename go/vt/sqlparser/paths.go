@@ -16,7 +16,11 @@ limitations under the License.
 
 package sqlparser
 
-import "encoding/binary"
+import (
+	"encoding/binary"
+	"fmt"
+	"strings"
+)
 
 // ASTPath is stored as a string.
 // Each 2 bytes => one step (big-endian).
@@ -47,5 +51,57 @@ func AddStepWithSliceIndex(path ASTPath, step ASTStep, idx int) ASTPath {
 	return path + ASTPath(b)
 }
 
-// func (p ASTPath) DebugString() string {
-// }
+func (path ASTPath) DebugString() string {
+	var sb strings.Builder
+
+	remaining := []byte(path)
+	stepCount := 0
+
+	for len(remaining) >= 2 {
+		// Read the step code (2 bytes)
+		stepVal := binary.BigEndian.Uint16(remaining[:2])
+		remaining = remaining[2:]
+
+		step := ASTStep(stepVal)
+		stepStr := step.DebugString() // e.g. "CaseExprWhens8" or "CaseExprWhens32"
+
+		// If this isn't the very first step in the path, prepend a separator
+		if stepCount > 0 {
+			sb.WriteString("->")
+		}
+		stepCount++
+
+		// Write the step name
+		sb.WriteString(stepStr)
+
+		// Check suffix to see if we need to read an offset
+		switch {
+		// 1-byte offset if stepStr ends with "8"
+		case strings.HasSuffix(stepStr, "8"):
+			if len(remaining) < 1 {
+				sb.WriteString("(ERR-no-offset-byte)")
+				return sb.String()
+			}
+			offsetByte := remaining[0]
+			remaining = remaining[1:]
+			sb.WriteString(fmt.Sprintf("(%d)", offsetByte))
+
+		// 4-byte offset if stepStr ends with "32"
+		case strings.HasSuffix(stepStr, "32"):
+			if len(remaining) < 4 {
+				sb.WriteString("(ERR-no-offset-uint32)")
+				return sb.String()
+			}
+			offsetVal := binary.BigEndian.Uint32(remaining[:4])
+			remaining = remaining[4:]
+			sb.WriteString(fmt.Sprintf("(%d)", offsetVal))
+		}
+	}
+
+	// If there's leftover data that doesn't fit into 2 (or more) bytes, you could note it:
+	if len(remaining) != 0 {
+		sb.WriteString("->(ERR-unaligned-extra-bytes)")
+	}
+
+	return sb.String()
+}

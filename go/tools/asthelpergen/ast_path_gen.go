@@ -125,7 +125,7 @@ func (p *pathGen) debugString() *jen.Statement {
 		stepName := printableTypeName(step.container) + step.name
 
 		// Generate the debug string using the helper function
-		debugStr := fmt.Sprintf("%s:%s(%s)", types.TypeString(step.container, noQualifier), step.name, types.TypeString(step.typ, noQualifier))
+		debugStr := fmt.Sprintf("(%s).%s", types.TypeString(step.container, noQualifier), step.name)
 
 		if !step.slice {
 			switchCases = append(switchCases, jen.Case(jen.Id(stepName)).Block(

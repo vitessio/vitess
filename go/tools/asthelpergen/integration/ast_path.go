@@ -54,63 +54,63 @@ const (
 func (s ASTStep) DebugString() string {
 	switch s {
 	case BytesOffset8:
-		return "Bytes:Offset(Bytes)8"
+		return "(Bytes).Offset8"
 	case BytesOffset32:
-		return "Bytes:Offset(Bytes)32"
+		return "(Bytes).Offset32"
 	case InterfaceSliceOffset8:
-		return "InterfaceSlice:Offset(InterfaceSlice)8"
+		return "(InterfaceSlice).Offset8"
 	case InterfaceSliceOffset32:
-		return "InterfaceSlice:Offset(InterfaceSlice)32"
+		return "(InterfaceSlice).Offset32"
 	case LeafSliceOffset8:
-		return "LeafSlice:Offset(LeafSlice)8"
+		return "(LeafSlice).Offset8"
 	case LeafSliceOffset32:
-		return "LeafSlice:Offset(LeafSlice)32"
+		return "(LeafSlice).Offset32"
 	case RefOfRefContainerASTType:
-		return "*RefContainer:ASTType(AST)"
+		return "(*RefContainer).ASTType"
 	case RefOfRefContainerASTImplementationType:
-		return "*RefContainer:ASTImplementationType(*Leaf)"
+		return "(*RefContainer).ASTImplementationType"
 	case RefOfRefSliceContainerASTElements8:
-		return "*RefSliceContainer:ASTElements(AST)8"
+		return "(*RefSliceContainer).ASTElements8"
 	case RefOfRefSliceContainerASTElements32:
-		return "*RefSliceContainer:ASTElements(AST)32"
+		return "(*RefSliceContainer).ASTElements32"
 	case RefOfRefSliceContainerASTImplementationElements8:
-		return "*RefSliceContainer:ASTImplementationElements(*Leaf)8"
+		return "(*RefSliceContainer).ASTImplementationElements8"
 	case RefOfRefSliceContainerASTImplementationElements32:
-		return "*RefSliceContainer:ASTImplementationElements(*Leaf)32"
+		return "(*RefSliceContainer).ASTImplementationElements32"
 	case RefOfSubImplinner:
-		return "*SubImpl:inner(SubIface)"
+		return "(*SubImpl).inner"
 	case ValueContainerASTType:
-		return "ValueContainer:ASTType(AST)"
+		return "(ValueContainer).ASTType"
 	case ValueContainerASTImplementationType:
-		return "ValueContainer:ASTImplementationType(*Leaf)"
+		return "(ValueContainer).ASTImplementationType"
 	case ValueSliceContainerASTElements8:
-		return "ValueSliceContainer:ASTElements(AST)8"
+		return "(ValueSliceContainer).ASTElements8"
 	case ValueSliceContainerASTElements32:
-		return "ValueSliceContainer:ASTElements(AST)32"
+		return "(ValueSliceContainer).ASTElements32"
 	case ValueSliceContainerASTImplementationElements:
-		return "ValueSliceContainer:ASTImplementationElements(LeafSlice)"
+		return "(ValueSliceContainer).ASTImplementationElements"
 	case SliceOfASTOffset8:
-		return "[]AST:Offset([]AST)8"
+		return "([]AST).Offset8"
 	case SliceOfASTOffset32:
-		return "[]AST:Offset([]AST)32"
+		return "([]AST).Offset32"
 	case SliceOfIntOffset8:
-		return "[]int:Offset([]int)8"
+		return "([]int).Offset8"
 	case SliceOfIntOffset32:
-		return "[]int:Offset([]int)32"
+		return "([]int).Offset32"
 	case SliceOfRefOfLeafOffset8:
-		return "[]*Leaf:Offset([]*Leaf)8"
+		return "([]*Leaf).Offset8"
 	case SliceOfRefOfLeafOffset32:
-		return "[]*Leaf:Offset([]*Leaf)32"
+		return "([]*Leaf).Offset32"
 	case RefOfValueContainerASTType:
-		return "*ValueContainer:ASTType(AST)"
+		return "(*ValueContainer).ASTType"
 	case RefOfValueContainerASTImplementationType:
-		return "*ValueContainer:ASTImplementationType(*Leaf)"
+		return "(*ValueContainer).ASTImplementationType"
 	case RefOfValueSliceContainerASTElements8:
-		return "*ValueSliceContainer:ASTElements(AST)8"
+		return "(*ValueSliceContainer).ASTElements8"
 	case RefOfValueSliceContainerASTElements32:
-		return "*ValueSliceContainer:ASTElements(AST)32"
+		return "(*ValueSliceContainer).ASTElements32"
 	case RefOfValueSliceContainerASTImplementationElements:
-		return "*ValueSliceContainer:ASTImplementationElements(LeafSlice)"
+		return "(*ValueSliceContainer).ASTImplementationElements"
 	}
 	panic("unknown ASTStep")
 }

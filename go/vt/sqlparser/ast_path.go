@@ -640,1235 +640,1235 @@ const (
 func (s ASTStep) DebugString() string {
 	switch s {
 	case RefOfAddColumnsColumns8:
-		return "*AddColumns:Columns(*ColumnDefinition)8"
+		return "(*AddColumns).Columns8"
 	case RefOfAddColumnsColumns32:
-		return "*AddColumns:Columns(*ColumnDefinition)32"
+		return "(*AddColumns).Columns32"
 	case RefOfAddColumnsAfter:
-		return "*AddColumns:After(*ColName)"
+		return "(*AddColumns).After"
 	case RefOfAddConstraintDefinitionConstraintDefinition:
-		return "*AddConstraintDefinition:ConstraintDefinition(*ConstraintDefinition)"
+		return "(*AddConstraintDefinition).ConstraintDefinition"
 	case RefOfAddIndexDefinitionIndexDefinition:
-		return "*AddIndexDefinition:IndexDefinition(*IndexDefinition)"
+		return "(*AddIndexDefinition).IndexDefinition"
 	case RefOfAliasedExprExpr:
-		return "*AliasedExpr:Expr(Expr)"
+		return "(*AliasedExpr).Expr"
 	case RefOfAliasedExprAs:
-		return "*AliasedExpr:As(IdentifierCI)"
+		return "(*AliasedExpr).As"
 	case RefOfAliasedTableExprExpr:
-		return "*AliasedTableExpr:Expr(SimpleTableExpr)"
+		return "(*AliasedTableExpr).Expr"
 	case RefOfAliasedTableExprPartitions:
-		return "*AliasedTableExpr:Partitions(Partitions)"
+		return "(*AliasedTableExpr).Partitions"
 	case RefOfAliasedTableExprAs:
-		return "*AliasedTableExpr:As(IdentifierCS)"
+		return "(*AliasedTableExpr).As"
 	case RefOfAliasedTableExprHints:
-		return "*AliasedTableExpr:Hints(IndexHints)"
+		return "(*AliasedTableExpr).Hints"
 	case RefOfAliasedTableExprColumns:
-		return "*AliasedTableExpr:Columns(Columns)"
+		return "(*AliasedTableExpr).Columns"
 	case RefOfAlterCheckName:
-		return "*AlterCheck:Name(IdentifierCI)"
+		return "(*AlterCheck).Name"
 	case RefOfAlterColumnColumn:
-		return "*AlterColumn:Column(*ColName)"
+		return "(*AlterColumn).Column"
 	case RefOfAlterColumnDefaultVal:
-		return "*AlterColumn:DefaultVal(Expr)"
+		return "(*AlterColumn).DefaultVal"
 	case RefOfAlterDatabaseComments:
-		return "*AlterDatabase:Comments(*ParsedComments)"
+		return "(*AlterDatabase).Comments"
 	case RefOfAlterDatabaseDBName:
-		return "*AlterDatabase:DBName(IdentifierCS)"
+		return "(*AlterDatabase).DBName"
 	case RefOfAlterIndexName:
-		return "*AlterIndex:Name(IdentifierCI)"
+		return "(*AlterIndex).Name"
 	case RefOfAlterMigrationRatio:
-		return "*AlterMigration:Ratio(*Literal)"
+		return "(*AlterMigration).Ratio"
 	case RefOfAlterTableTable:
-		return "*AlterTable:Table(TableName)"
+		return "(*AlterTable).Table"
 	case RefOfAlterTableAlterOptions8:
-		return "*AlterTable:AlterOptions(AlterOption)8"
+		return "(*AlterTable).AlterOptions8"
 	case RefOfAlterTableAlterOptions32:
-		return "*AlterTable:AlterOptions(AlterOption)32"
+		return "(*AlterTable).AlterOptions32"
 	case RefOfAlterTablePartitionSpec:
-		return "*AlterTable:PartitionSpec(*PartitionSpec)"
+		return "(*AlterTable).PartitionSpec"
 	case RefOfAlterTablePartitionOption:
-		return "*AlterTable:PartitionOption(*PartitionOption)"
+		return "(*AlterTable).PartitionOption"
 	case RefOfAlterTableComments:
-		return "*AlterTable:Comments(*ParsedComments)"
+		return "(*AlterTable).Comments"
 	case RefOfAlterViewViewName:
-		return "*AlterView:ViewName(TableName)"
+		return "(*AlterView).ViewName"
 	case RefOfAlterViewDefiner:
-		return "*AlterView:Definer(*Definer)"
+		return "(*AlterView).Definer"
 	case RefOfAlterViewColumns:
-		return "*AlterView:Columns(Columns)"
+		return "(*AlterView).Columns"
 	case RefOfAlterViewSelect:
-		return "*AlterView:Select(TableStatement)"
+		return "(*AlterView).Select"
 	case RefOfAlterViewComments:
-		return "*AlterView:Comments(*ParsedComments)"
+		return "(*AlterView).Comments"
 	case RefOfAlterVschemaTable:
-		return "*AlterVschema:Table(TableName)"
+		return "(*AlterVschema).Table"
 	case RefOfAlterVschemaVindexSpec:
-		return "*AlterVschema:VindexSpec(*VindexSpec)"
+		return "(*AlterVschema).VindexSpec"
 	case RefOfAlterVschemaVindexCols8:
-		return "*AlterVschema:VindexCols(IdentifierCI)8"
+		return "(*AlterVschema).VindexCols8"
 	case RefOfAlterVschemaVindexCols32:
-		return "*AlterVschema:VindexCols(IdentifierCI)32"
+		return "(*AlterVschema).VindexCols32"
 	case RefOfAlterVschemaAutoIncSpec:
-		return "*AlterVschema:AutoIncSpec(*AutoIncSpec)"
+		return "(*AlterVschema).AutoIncSpec"
 	case RefOfAnalyzeTable:
-		return "*Analyze:Table(TableName)"
+		return "(*Analyze).Table"
 	case RefOfAndExprLeft:
-		return "*AndExpr:Left(Expr)"
+		return "(*AndExpr).Left"
 	case RefOfAndExprRight:
-		return "*AndExpr:Right(Expr)"
+		return "(*AndExpr).Right"
 	case RefOfAnyValueArg:
-		return "*AnyValue:Arg(Expr)"
+		return "(*AnyValue).Arg"
 	case RefOfArgumentLessWindowExprOverClause:
-		return "*ArgumentLessWindowExpr:OverClause(*OverClause)"
+		return "(*ArgumentLessWindowExpr).OverClause"
 	case RefOfAssignmentExprLeft:
-		return "*AssignmentExpr:Left(Expr)"
+		return "(*AssignmentExpr).Left"
 	case RefOfAssignmentExprRight:
-		return "*AssignmentExpr:Right(Expr)"
+		return "(*AssignmentExpr).Right"
 	case RefOfAutoIncSpecColumn:
-		return "*AutoIncSpec:Column(IdentifierCI)"
+		return "(*AutoIncSpec).Column"
 	case RefOfAutoIncSpecSequence:
-		return "*AutoIncSpec:Sequence(TableName)"
+		return "(*AutoIncSpec).Sequence"
 	case RefOfAvgArg:
-		return "*Avg:Arg(Expr)"
+		return "(*Avg).Arg"
 	case RefOfAvgOverClause:
-		return "*Avg:OverClause(*OverClause)"
+		return "(*Avg).OverClause"
 	case RefOfBetweenExprLeft:
-		return "*BetweenExpr:Left(Expr)"
+		return "(*BetweenExpr).Left"
 	case RefOfBetweenExprFrom:
-		return "*BetweenExpr:From(Expr)"
+		return "(*BetweenExpr).From"
 	case RefOfBetweenExprTo:
-		return "*BetweenExpr:To(Expr)"
+		return "(*BetweenExpr).To"
 	case RefOfBinaryExprLeft:
-		return "*BinaryExpr:Left(Expr)"
+		return "(*BinaryExpr).Left"
 	case RefOfBinaryExprRight:
-		return "*BinaryExpr:Right(Expr)"
+		return "(*BinaryExpr).Right"
 	case RefOfBitAndArg:
-		return "*BitAnd:Arg(Expr)"
+		return "(*BitAnd).Arg"
 	case RefOfBitAndOverClause:
-		return "*BitAnd:OverClause(*OverClause)"
+		return "(*BitAnd).OverClause"
 	case RefOfBitOrArg:
-		return "*BitOr:Arg(Expr)"
+		return "(*BitOr).Arg"
 	case RefOfBitOrOverClause:
-		return "*BitOr:OverClause(*OverClause)"
+		return "(*BitOr).OverClause"
 	case RefOfBitXorArg:
-		return "*BitXor:Arg(Expr)"
+		return "(*BitXor).Arg"
 	case RefOfBitXorOverClause:
-		return "*BitXor:OverClause(*OverClause)"
+		return "(*BitXor).OverClause"
 	case RefOfCallProcName:
-		return "*CallProc:Name(TableName)"
+		return "(*CallProc).Name"
 	case RefOfCallProcParams:
-		return "*CallProc:Params(Exprs)"
+		return "(*CallProc).Params"
 	case RefOfCaseExprExpr:
-		return "*CaseExpr:Expr(Expr)"
+		return "(*CaseExpr).Expr"
 	case RefOfCaseExprWhens8:
-		return "*CaseExpr:Whens(*When)8"
+		return "(*CaseExpr).Whens8"
 	case RefOfCaseExprWhens32:
-		return "*CaseExpr:Whens(*When)32"
+		return "(*CaseExpr).Whens32"
 	case RefOfCaseExprElse:
-		return "*CaseExpr:Else(Expr)"
+		return "(*CaseExpr).Else"
 	case RefOfCastExprExpr:
-		return "*CastExpr:Expr(Expr)"
+		return "(*CastExpr).Expr"
 	case RefOfCastExprType:
-		return "*CastExpr:Type(*ConvertType)"
+		return "(*CastExpr).Type"
 	case RefOfChangeColumnOldColumn:
-		return "*ChangeColumn:OldColumn(*ColName)"
+		return "(*ChangeColumn).OldColumn"
 	case RefOfChangeColumnNewColDefinition:
-		return "*ChangeColumn:NewColDefinition(*ColumnDefinition)"
+		return "(*ChangeColumn).NewColDefinition"
 	case RefOfChangeColumnAfter:
-		return "*ChangeColumn:After(*ColName)"
+		return "(*ChangeColumn).After"
 	case RefOfCharExprExprs:
-		return "*CharExpr:Exprs(Exprs)"
+		return "(*CharExpr).Exprs"
 	case RefOfCheckConstraintDefinitionExpr:
-		return "*CheckConstraintDefinition:Expr(Expr)"
+		return "(*CheckConstraintDefinition).Expr"
 	case RefOfColNameName:
-		return "*ColName:Name(IdentifierCI)"
+		return "(*ColName).Name"
 	case RefOfColNameQualifier:
-		return "*ColName:Qualifier(TableName)"
+		return "(*ColName).Qualifier"
 	case RefOfCollateExprExpr:
-		return "*CollateExpr:Expr(Expr)"
+		return "(*CollateExpr).Expr"
 	case RefOfColumnDefinitionName:
-		return "*ColumnDefinition:Name(IdentifierCI)"
+		return "(*ColumnDefinition).Name"
 	case RefOfColumnDefinitionType:
-		return "*ColumnDefinition:Type(*ColumnType)"
+		return "(*ColumnDefinition).Type"
 	case ColumnsOffset8:
-		return "Columns:Offset(Columns)8"
+		return "(Columns).Offset8"
 	case ColumnsOffset32:
-		return "Columns:Offset(Columns)32"
+		return "(Columns).Offset32"
 	case RefOfCommonTableExprID:
-		return "*CommonTableExpr:ID(IdentifierCS)"
+		return "(*CommonTableExpr).ID"
 	case RefOfCommonTableExprColumns:
-		return "*CommonTableExpr:Columns(Columns)"
+		return "(*CommonTableExpr).Columns"
 	case RefOfCommonTableExprSubquery:
-		return "*CommonTableExpr:Subquery(TableStatement)"
+		return "(*CommonTableExpr).Subquery"
 	case RefOfComparisonExprLeft:
-		return "*ComparisonExpr:Left(Expr)"
+		return "(*ComparisonExpr).Left"
 	case RefOfComparisonExprRight:
-		return "*ComparisonExpr:Right(Expr)"
+		return "(*ComparisonExpr).Right"
 	case RefOfComparisonExprEscape:
-		return "*ComparisonExpr:Escape(Expr)"
+		return "(*ComparisonExpr).Escape"
 	case RefOfConstraintDefinitionName:
-		return "*ConstraintDefinition:Name(IdentifierCI)"
+		return "(*ConstraintDefinition).Name"
 	case RefOfConstraintDefinitionDetails:
-		return "*ConstraintDefinition:Details(ConstraintInfo)"
+		return "(*ConstraintDefinition).Details"
 	case RefOfConvertExprExpr:
-		return "*ConvertExpr:Expr(Expr)"
+		return "(*ConvertExpr).Expr"
 	case RefOfConvertExprType:
-		return "*ConvertExpr:Type(*ConvertType)"
+		return "(*ConvertExpr).Type"
 	case RefOfConvertUsingExprExpr:
-		return "*ConvertUsingExpr:Expr(Expr)"
+		return "(*ConvertUsingExpr).Expr"
 	case RefOfCountArgs:
-		return "*Count:Args(Exprs)"
+		return "(*Count).Args"
 	case RefOfCountOverClause:
-		return "*Count:OverClause(*OverClause)"
+		return "(*Count).OverClause"
 	case RefOfCountStarOverClause:
-		return "*CountStar:OverClause(*OverClause)"
+		return "(*CountStar).OverClause"
 	case RefOfCreateDatabaseComments:
-		return "*CreateDatabase:Comments(*ParsedComments)"
+		return "(*CreateDatabase).Comments"
 	case RefOfCreateDatabaseDBName:
-		return "*CreateDatabase:DBName(IdentifierCS)"
+		return "(*CreateDatabase).DBName"
 	case RefOfCreateTableTable:
-		return "*CreateTable:Table(TableName)"
+		return "(*CreateTable).Table"
 	case RefOfCreateTableTableSpec:
-		return "*CreateTable:TableSpec(*TableSpec)"
+		return "(*CreateTable).TableSpec"
 	case RefOfCreateTableOptLike:
-		return "*CreateTable:OptLike(*OptLike)"
+		return "(*CreateTable).OptLike"
 	case RefOfCreateTableComments:
-		return "*CreateTable:Comments(*ParsedComments)"
+		return "(*CreateTable).Comments"
 	case RefOfCreateViewViewName:
-		return "*CreateView:ViewName(TableName)"
+		return "(*CreateView).ViewName"
 	case RefOfCreateViewDefiner:
-		return "*CreateView:Definer(*Definer)"
+		return "(*CreateView).Definer"
 	case RefOfCreateViewColumns:
-		return "*CreateView:Columns(Columns)"
+		return "(*CreateView).Columns"
 	case RefOfCreateViewSelect:
-		return "*CreateView:Select(TableStatement)"
+		return "(*CreateView).Select"
 	case RefOfCreateViewComments:
-		return "*CreateView:Comments(*ParsedComments)"
+		return "(*CreateView).Comments"
 	case RefOfCurTimeFuncExprName:
-		return "*CurTimeFuncExpr:Name(IdentifierCI)"
+		return "(*CurTimeFuncExpr).Name"
 	case RefOfDeallocateStmtComments:
-		return "*DeallocateStmt:Comments(*ParsedComments)"
+		return "(*DeallocateStmt).Comments"
 	case RefOfDeallocateStmtName:
-		return "*DeallocateStmt:Name(IdentifierCI)"
+		return "(*DeallocateStmt).Name"
 	case RefOfDeleteWith:
-		return "*Delete:With(*With)"
+		return "(*Delete).With"
 	case RefOfDeleteComments:
-		return "*Delete:Comments(*ParsedComments)"
+		return "(*Delete).Comments"
 	case RefOfDeleteTableExprs8:
-		return "*Delete:TableExprs(TableExpr)8"
+		return "(*Delete).TableExprs8"
 	case RefOfDeleteTableExprs32:
-		return "*Delete:TableExprs(TableExpr)32"
+		return "(*Delete).TableExprs32"
 	case RefOfDeleteTargets:
-		return "*Delete:Targets(TableNames)"
+		return "(*Delete).Targets"
 	case RefOfDeletePartitions:
-		return "*Delete:Partitions(Partitions)"
+		return "(*Delete).Partitions"
 	case RefOfDeleteWhere:
-		return "*Delete:Where(*Where)"
+		return "(*Delete).Where"
 	case RefOfDeleteOrderBy:
-		return "*Delete:OrderBy(OrderBy)"
+		return "(*Delete).OrderBy"
 	case RefOfDeleteLimit:
-		return "*Delete:Limit(*Limit)"
+		return "(*Delete).Limit"
 	case RefOfDerivedTableSelect:
-		return "*DerivedTable:Select(TableStatement)"
+		return "(*DerivedTable).Select"
 	case RefOfDropColumnName:
-		return "*DropColumn:Name(*ColName)"
+		return "(*DropColumn).Name"
 	case RefOfDropDatabaseComments:
-		return "*DropDatabase:Comments(*ParsedComments)"
+		return "(*DropDatabase).Comments"
 	case RefOfDropDatabaseDBName:
-		return "*DropDatabase:DBName(IdentifierCS)"
+		return "(*DropDatabase).DBName"
 	case RefOfDropKeyName:
-		return "*DropKey:Name(IdentifierCI)"
+		return "(*DropKey).Name"
 	case RefOfDropTableFromTables:
-		return "*DropTable:FromTables(TableNames)"
+		return "(*DropTable).FromTables"
 	case RefOfDropTableComments:
-		return "*DropTable:Comments(*ParsedComments)"
+		return "(*DropTable).Comments"
 	case RefOfDropViewFromTables:
-		return "*DropView:FromTables(TableNames)"
+		return "(*DropView).FromTables"
 	case RefOfDropViewComments:
-		return "*DropView:Comments(*ParsedComments)"
+		return "(*DropView).Comments"
 	case RefOfExecuteStmtName:
-		return "*ExecuteStmt:Name(IdentifierCI)"
+		return "(*ExecuteStmt).Name"
 	case RefOfExecuteStmtComments:
-		return "*ExecuteStmt:Comments(*ParsedComments)"
+		return "(*ExecuteStmt).Comments"
 	case RefOfExecuteStmtArguments8:
-		return "*ExecuteStmt:Arguments(*Variable)8"
+		return "(*ExecuteStmt).Arguments8"
 	case RefOfExecuteStmtArguments32:
-		return "*ExecuteStmt:Arguments(*Variable)32"
+		return "(*ExecuteStmt).Arguments32"
 	case RefOfExistsExprSubquery:
-		return "*ExistsExpr:Subquery(*Subquery)"
+		return "(*ExistsExpr).Subquery"
 	case RefOfExplainStmtStatement:
-		return "*ExplainStmt:Statement(Statement)"
+		return "(*ExplainStmt).Statement"
 	case RefOfExplainStmtComments:
-		return "*ExplainStmt:Comments(*ParsedComments)"
+		return "(*ExplainStmt).Comments"
 	case RefOfExplainTabTable:
-		return "*ExplainTab:Table(TableName)"
+		return "(*ExplainTab).Table"
 	case ExprsOffset8:
-		return "Exprs:Offset(Exprs)8"
+		return "(Exprs).Offset8"
 	case ExprsOffset32:
-		return "Exprs:Offset(Exprs)32"
+		return "(Exprs).Offset32"
 	case RefOfExtractFuncExprExpr:
-		return "*ExtractFuncExpr:Expr(Expr)"
+		return "(*ExtractFuncExpr).Expr"
 	case RefOfExtractValueExprFragment:
-		return "*ExtractValueExpr:Fragment(Expr)"
+		return "(*ExtractValueExpr).Fragment"
 	case RefOfExtractValueExprXPathExpr:
-		return "*ExtractValueExpr:XPathExpr(Expr)"
+		return "(*ExtractValueExpr).XPathExpr"
 	case RefOfFirstOrLastValueExprExpr:
-		return "*FirstOrLastValueExpr:Expr(Expr)"
+		return "(*FirstOrLastValueExpr).Expr"
 	case RefOfFirstOrLastValueExprNullTreatmentClause:
-		return "*FirstOrLastValueExpr:NullTreatmentClause(*NullTreatmentClause)"
+		return "(*FirstOrLastValueExpr).NullTreatmentClause"
 	case RefOfFirstOrLastValueExprOverClause:
-		return "*FirstOrLastValueExpr:OverClause(*OverClause)"
+		return "(*FirstOrLastValueExpr).OverClause"
 	case RefOfFlushTableNames:
-		return "*Flush:TableNames(TableNames)"
+		return "(*Flush).TableNames"
 	case RefOfForeignKeyDefinitionSource:
-		return "*ForeignKeyDefinition:Source(Columns)"
+		return "(*ForeignKeyDefinition).Source"
 	case RefOfForeignKeyDefinitionIndexName:
-		return "*ForeignKeyDefinition:IndexName(IdentifierCI)"
+		return "(*ForeignKeyDefinition).IndexName"
 	case RefOfForeignKeyDefinitionReferenceDefinition:
-		return "*ForeignKeyDefinition:ReferenceDefinition(*ReferenceDefinition)"
+		return "(*ForeignKeyDefinition).ReferenceDefinition"
 	case RefOfFrameClauseStart:
-		return "*FrameClause:Start(*FramePoint)"
+		return "(*FrameClause).Start"
 	case RefOfFrameClauseEnd:
-		return "*FrameClause:End(*FramePoint)"
+		return "(*FrameClause).End"
 	case RefOfFramePointExpr:
-		return "*FramePoint:Expr(Expr)"
+		return "(*FramePoint).Expr"
 	case RefOfFuncExprQualifier:
-		return "*FuncExpr:Qualifier(IdentifierCS)"
+		return "(*FuncExpr).Qualifier"
 	case RefOfFuncExprName:
-		return "*FuncExpr:Name(IdentifierCI)"
+		return "(*FuncExpr).Name"
 	case RefOfFuncExprExprs:
-		return "*FuncExpr:Exprs(Exprs)"
+		return "(*FuncExpr).Exprs"
 	case RefOfGTIDFuncExprSet1:
-		return "*GTIDFuncExpr:Set1(Expr)"
+		return "(*GTIDFuncExpr).Set1"
 	case RefOfGTIDFuncExprSet2:
-		return "*GTIDFuncExpr:Set2(Expr)"
+		return "(*GTIDFuncExpr).Set2"
 	case RefOfGTIDFuncExprTimeout:
-		return "*GTIDFuncExpr:Timeout(Expr)"
+		return "(*GTIDFuncExpr).Timeout"
 	case RefOfGTIDFuncExprChannel:
-		return "*GTIDFuncExpr:Channel(Expr)"
+		return "(*GTIDFuncExpr).Channel"
 	case RefOfGeoHashFromLatLongExprLatitude:
-		return "*GeoHashFromLatLongExpr:Latitude(Expr)"
+		return "(*GeoHashFromLatLongExpr).Latitude"
 	case RefOfGeoHashFromLatLongExprLongitude:
-		return "*GeoHashFromLatLongExpr:Longitude(Expr)"
+		return "(*GeoHashFromLatLongExpr).Longitude"
 	case RefOfGeoHashFromLatLongExprMaxLength:
-		return "*GeoHashFromLatLongExpr:MaxLength(Expr)"
+		return "(*GeoHashFromLatLongExpr).MaxLength"
 	case RefOfGeoHashFromPointExprPoint:
-		return "*GeoHashFromPointExpr:Point(Expr)"
+		return "(*GeoHashFromPointExpr).Point"
 	case RefOfGeoHashFromPointExprMaxLength:
-		return "*GeoHashFromPointExpr:MaxLength(Expr)"
+		return "(*GeoHashFromPointExpr).MaxLength"
 	case RefOfGeoJSONFromGeomExprGeom:
-		return "*GeoJSONFromGeomExpr:Geom(Expr)"
+		return "(*GeoJSONFromGeomExpr).Geom"
 	case RefOfGeoJSONFromGeomExprMaxDecimalDigits:
-		return "*GeoJSONFromGeomExpr:MaxDecimalDigits(Expr)"
+		return "(*GeoJSONFromGeomExpr).MaxDecimalDigits"
 	case RefOfGeoJSONFromGeomExprBitmask:
-		return "*GeoJSONFromGeomExpr:Bitmask(Expr)"
+		return "(*GeoJSONFromGeomExpr).Bitmask"
 	case RefOfGeomCollPropertyFuncExprGeomColl:
-		return "*GeomCollPropertyFuncExpr:GeomColl(Expr)"
+		return "(*GeomCollPropertyFuncExpr).GeomColl"
 	case RefOfGeomCollPropertyFuncExprPropertyDefArg:
-		return "*GeomCollPropertyFuncExpr:PropertyDefArg(Expr)"
+		return "(*GeomCollPropertyFuncExpr).PropertyDefArg"
 	case RefOfGeomFormatExprGeom:
-		return "*GeomFormatExpr:Geom(Expr)"
+		return "(*GeomFormatExpr).Geom"
 	case RefOfGeomFormatExprAxisOrderOpt:
-		return "*GeomFormatExpr:AxisOrderOpt(Expr)"
+		return "(*GeomFormatExpr).AxisOrderOpt"
 	case RefOfGeomFromGeoHashExprGeoHash:
-		return "*GeomFromGeoHashExpr:GeoHash(Expr)"
+		return "(*GeomFromGeoHashExpr).GeoHash"
 	case RefOfGeomFromGeoHashExprSridOpt:
-		return "*GeomFromGeoHashExpr:SridOpt(Expr)"
+		return "(*GeomFromGeoHashExpr).SridOpt"
 	case RefOfGeomFromGeoJSONExprGeoJSON:
-		return "*GeomFromGeoJSONExpr:GeoJSON(Expr)"
+		return "(*GeomFromGeoJSONExpr).GeoJSON"
 	case RefOfGeomFromGeoJSONExprHigherDimHandlerOpt:
-		return "*GeomFromGeoJSONExpr:HigherDimHandlerOpt(Expr)"
+		return "(*GeomFromGeoJSONExpr).HigherDimHandlerOpt"
 	case RefOfGeomFromGeoJSONExprSrid:
-		return "*GeomFromGeoJSONExpr:Srid(Expr)"
+		return "(*GeomFromGeoJSONExpr).Srid"
 	case RefOfGeomFromTextExprWktText:
-		return "*GeomFromTextExpr:WktText(Expr)"
+		return "(*GeomFromTextExpr).WktText"
 	case RefOfGeomFromTextExprSrid:
-		return "*GeomFromTextExpr:Srid(Expr)"
+		return "(*GeomFromTextExpr).Srid"
 	case RefOfGeomFromTextExprAxisOrderOpt:
-		return "*GeomFromTextExpr:AxisOrderOpt(Expr)"
+		return "(*GeomFromTextExpr).AxisOrderOpt"
 	case RefOfGeomFromWKBExprWkbBlob:
-		return "*GeomFromWKBExpr:WkbBlob(Expr)"
+		return "(*GeomFromWKBExpr).WkbBlob"
 	case RefOfGeomFromWKBExprSrid:
-		return "*GeomFromWKBExpr:Srid(Expr)"
+		return "(*GeomFromWKBExpr).Srid"
 	case RefOfGeomFromWKBExprAxisOrderOpt:
-		return "*GeomFromWKBExpr:AxisOrderOpt(Expr)"
+		return "(*GeomFromWKBExpr).AxisOrderOpt"
 	case RefOfGeomPropertyFuncExprGeom:
-		return "*GeomPropertyFuncExpr:Geom(Expr)"
+		return "(*GeomPropertyFuncExpr).Geom"
 	case RefOfGroupByExprs8:
-		return "*GroupBy:Exprs(Expr)8"
+		return "(*GroupBy).Exprs8"
 	case RefOfGroupByExprs32:
-		return "*GroupBy:Exprs(Expr)32"
+		return "(*GroupBy).Exprs32"
 	case RefOfGroupConcatExprExprs:
-		return "*GroupConcatExpr:Exprs(Exprs)"
+		return "(*GroupConcatExpr).Exprs"
 	case RefOfGroupConcatExprOrderBy:
-		return "*GroupConcatExpr:OrderBy(OrderBy)"
+		return "(*GroupConcatExpr).OrderBy"
 	case RefOfGroupConcatExprLimit:
-		return "*GroupConcatExpr:Limit(*Limit)"
+		return "(*GroupConcatExpr).Limit"
 	case RefOfIndexDefinitionInfo:
-		return "*IndexDefinition:Info(*IndexInfo)"
+		return "(*IndexDefinition).Info"
 	case RefOfIndexHintIndexes8:
-		return "*IndexHint:Indexes(IdentifierCI)8"
+		return "(*IndexHint).Indexes8"
 	case RefOfIndexHintIndexes32:
-		return "*IndexHint:Indexes(IdentifierCI)32"
+		return "(*IndexHint).Indexes32"
 	case IndexHintsOffset8:
-		return "IndexHints:Offset(IndexHints)8"
+		return "(IndexHints).Offset8"
 	case IndexHintsOffset32:
-		return "IndexHints:Offset(IndexHints)32"
+		return "(IndexHints).Offset32"
 	case RefOfIndexInfoName:
-		return "*IndexInfo:Name(IdentifierCI)"
+		return "(*IndexInfo).Name"
 	case RefOfIndexInfoConstraintName:
-		return "*IndexInfo:ConstraintName(IdentifierCI)"
+		return "(*IndexInfo).ConstraintName"
 	case RefOfInsertComments:
-		return "*Insert:Comments(*ParsedComments)"
+		return "(*Insert).Comments"
 	case RefOfInsertTable:
-		return "*Insert:Table(*AliasedTableExpr)"
+		return "(*Insert).Table"
 	case RefOfInsertPartitions:
-		return "*Insert:Partitions(Partitions)"
+		return "(*Insert).Partitions"
 	case RefOfInsertColumns:
-		return "*Insert:Columns(Columns)"
+		return "(*Insert).Columns"
 	case RefOfInsertRows:
-		return "*Insert:Rows(InsertRows)"
+		return "(*Insert).Rows"
 	case RefOfInsertRowAlias:
-		return "*Insert:RowAlias(*RowAlias)"
+		return "(*Insert).RowAlias"
 	case RefOfInsertOnDup:
-		return "*Insert:OnDup(OnDup)"
+		return "(*Insert).OnDup"
 	case RefOfInsertExprStr:
-		return "*InsertExpr:Str(Expr)"
+		return "(*InsertExpr).Str"
 	case RefOfInsertExprPos:
-		return "*InsertExpr:Pos(Expr)"
+		return "(*InsertExpr).Pos"
 	case RefOfInsertExprLen:
-		return "*InsertExpr:Len(Expr)"
+		return "(*InsertExpr).Len"
 	case RefOfInsertExprNewStr:
-		return "*InsertExpr:NewStr(Expr)"
+		return "(*InsertExpr).NewStr"
 	case RefOfIntervalDateExprDate:
-		return "*IntervalDateExpr:Date(Expr)"
+		return "(*IntervalDateExpr).Date"
 	case RefOfIntervalDateExprInterval:
-		return "*IntervalDateExpr:Interval(Expr)"
+		return "(*IntervalDateExpr).Interval"
 	case RefOfIntervalFuncExprExpr:
-		return "*IntervalFuncExpr:Expr(Expr)"
+		return "(*IntervalFuncExpr).Expr"
 	case RefOfIntervalFuncExprExprs:
-		return "*IntervalFuncExpr:Exprs(Exprs)"
+		return "(*IntervalFuncExpr).Exprs"
 	case RefOfIntroducerExprExpr:
-		return "*IntroducerExpr:Expr(Expr)"
+		return "(*IntroducerExpr).Expr"
 	case RefOfIsExprLeft:
-		return "*IsExpr:Left(Expr)"
+		return "(*IsExpr).Left"
 	case RefOfJSONArrayAggExpr:
-		return "*JSONArrayAgg:Expr(Expr)"
+		return "(*JSONArrayAgg).Expr"
 	case RefOfJSONArrayAggOverClause:
-		return "*JSONArrayAgg:OverClause(*OverClause)"
+		return "(*JSONArrayAgg).OverClause"
 	case RefOfJSONArrayExprParams:
-		return "*JSONArrayExpr:Params(Exprs)"
+		return "(*JSONArrayExpr).Params"
 	case RefOfJSONAttributesExprJSONDoc:
-		return "*JSONAttributesExpr:JSONDoc(Expr)"
+		return "(*JSONAttributesExpr).JSONDoc"
 	case RefOfJSONAttributesExprPath:
-		return "*JSONAttributesExpr:Path(Expr)"
+		return "(*JSONAttributesExpr).Path"
 	case RefOfJSONContainsExprTarget:
-		return "*JSONContainsExpr:Target(Expr)"
+		return "(*JSONContainsExpr).Target"
 	case RefOfJSONContainsExprCandidate:
-		return "*JSONContainsExpr:Candidate(Expr)"
+		return "(*JSONContainsExpr).Candidate"
 	case RefOfJSONContainsExprPathList8:
-		return "*JSONContainsExpr:PathList(Expr)8"
+		return "(*JSONContainsExpr).PathList8"
 	case RefOfJSONContainsExprPathList32:
-		return "*JSONContainsExpr:PathList(Expr)32"
+		return "(*JSONContainsExpr).PathList32"
 	case RefOfJSONContainsPathExprJSONDoc:
-		return "*JSONContainsPathExpr:JSONDoc(Expr)"
+		return "(*JSONContainsPathExpr).JSONDoc"
 	case RefOfJSONContainsPathExprOneOrAll:
-		return "*JSONContainsPathExpr:OneOrAll(Expr)"
+		return "(*JSONContainsPathExpr).OneOrAll"
 	case RefOfJSONContainsPathExprPathList8:
-		return "*JSONContainsPathExpr:PathList(Expr)8"
+		return "(*JSONContainsPathExpr).PathList8"
 	case RefOfJSONContainsPathExprPathList32:
-		return "*JSONContainsPathExpr:PathList(Expr)32"
+		return "(*JSONContainsPathExpr).PathList32"
 	case RefOfJSONExtractExprJSONDoc:
-		return "*JSONExtractExpr:JSONDoc(Expr)"
+		return "(*JSONExtractExpr).JSONDoc"
 	case RefOfJSONExtractExprPathList8:
-		return "*JSONExtractExpr:PathList(Expr)8"
+		return "(*JSONExtractExpr).PathList8"
 	case RefOfJSONExtractExprPathList32:
-		return "*JSONExtractExpr:PathList(Expr)32"
+		return "(*JSONExtractExpr).PathList32"
 	case RefOfJSONKeysExprJSONDoc:
-		return "*JSONKeysExpr:JSONDoc(Expr)"
+		return "(*JSONKeysExpr).JSONDoc"
 	case RefOfJSONKeysExprPath:
-		return "*JSONKeysExpr:Path(Expr)"
+		return "(*JSONKeysExpr).Path"
 	case RefOfJSONObjectAggKey:
-		return "*JSONObjectAgg:Key(Expr)"
+		return "(*JSONObjectAgg).Key"
 	case RefOfJSONObjectAggValue:
-		return "*JSONObjectAgg:Value(Expr)"
+		return "(*JSONObjectAgg).Value"
 	case RefOfJSONObjectAggOverClause:
-		return "*JSONObjectAgg:OverClause(*OverClause)"
+		return "(*JSONObjectAgg).OverClause"
 	case RefOfJSONObjectExprParams8:
-		return "*JSONObjectExpr:Params(*JSONObjectParam)8"
+		return "(*JSONObjectExpr).Params8"
 	case RefOfJSONObjectExprParams32:
-		return "*JSONObjectExpr:Params(*JSONObjectParam)32"
+		return "(*JSONObjectExpr).Params32"
 	case RefOfJSONObjectParamKey:
-		return "*JSONObjectParam:Key(Expr)"
+		return "(*JSONObjectParam).Key"
 	case RefOfJSONObjectParamValue:
-		return "*JSONObjectParam:Value(Expr)"
+		return "(*JSONObjectParam).Value"
 	case RefOfJSONOverlapsExprJSONDoc1:
-		return "*JSONOverlapsExpr:JSONDoc1(Expr)"
+		return "(*JSONOverlapsExpr).JSONDoc1"
 	case RefOfJSONOverlapsExprJSONDoc2:
-		return "*JSONOverlapsExpr:JSONDoc2(Expr)"
+		return "(*JSONOverlapsExpr).JSONDoc2"
 	case RefOfJSONPrettyExprJSONVal:
-		return "*JSONPrettyExpr:JSONVal(Expr)"
+		return "(*JSONPrettyExpr).JSONVal"
 	case RefOfJSONQuoteExprStringArg:
-		return "*JSONQuoteExpr:StringArg(Expr)"
+		return "(*JSONQuoteExpr).StringArg"
 	case RefOfJSONRemoveExprJSONDoc:
-		return "*JSONRemoveExpr:JSONDoc(Expr)"
+		return "(*JSONRemoveExpr).JSONDoc"
 	case RefOfJSONRemoveExprPathList:
-		return "*JSONRemoveExpr:PathList(Exprs)"
+		return "(*JSONRemoveExpr).PathList"
 	case RefOfJSONSchemaValidFuncExprSchema:
-		return "*JSONSchemaValidFuncExpr:Schema(Expr)"
+		return "(*JSONSchemaValidFuncExpr).Schema"
 	case RefOfJSONSchemaValidFuncExprDocument:
-		return "*JSONSchemaValidFuncExpr:Document(Expr)"
+		return "(*JSONSchemaValidFuncExpr).Document"
 	case RefOfJSONSchemaValidationReportFuncExprSchema:
-		return "*JSONSchemaValidationReportFuncExpr:Schema(Expr)"
+		return "(*JSONSchemaValidationReportFuncExpr).Schema"
 	case RefOfJSONSchemaValidationReportFuncExprDocument:
-		return "*JSONSchemaValidationReportFuncExpr:Document(Expr)"
+		return "(*JSONSchemaValidationReportFuncExpr).Document"
 	case RefOfJSONSearchExprJSONDoc:
-		return "*JSONSearchExpr:JSONDoc(Expr)"
+		return "(*JSONSearchExpr).JSONDoc"
 	case RefOfJSONSearchExprOneOrAll:
-		return "*JSONSearchExpr:OneOrAll(Expr)"
+		return "(*JSONSearchExpr).OneOrAll"
 	case RefOfJSONSearchExprSearchStr:
-		return "*JSONSearchExpr:SearchStr(Expr)"
+		return "(*JSONSearchExpr).SearchStr"
 	case RefOfJSONSearchExprEscapeChar:
-		return "*JSONSearchExpr:EscapeChar(Expr)"
+		return "(*JSONSearchExpr).EscapeChar"
 	case RefOfJSONSearchExprPathList8:
-		return "*JSONSearchExpr:PathList(Expr)8"
+		return "(*JSONSearchExpr).PathList8"
 	case RefOfJSONSearchExprPathList32:
-		return "*JSONSearchExpr:PathList(Expr)32"
+		return "(*JSONSearchExpr).PathList32"
 	case RefOfJSONStorageFreeExprJSONVal:
-		return "*JSONStorageFreeExpr:JSONVal(Expr)"
+		return "(*JSONStorageFreeExpr).JSONVal"
 	case RefOfJSONStorageSizeExprJSONVal:
-		return "*JSONStorageSizeExpr:JSONVal(Expr)"
+		return "(*JSONStorageSizeExpr).JSONVal"
 	case RefOfJSONTableExprExpr:
-		return "*JSONTableExpr:Expr(Expr)"
+		return "(*JSONTableExpr).Expr"
 	case RefOfJSONTableExprAlias:
-		return "*JSONTableExpr:Alias(IdentifierCS)"
+		return "(*JSONTableExpr).Alias"
 	case RefOfJSONTableExprFilter:
-		return "*JSONTableExpr:Filter(Expr)"
+		return "(*JSONTableExpr).Filter"
 	case RefOfJSONTableExprColumns8:
-		return "*JSONTableExpr:Columns(*JtColumnDefinition)8"
+		return "(*JSONTableExpr).Columns8"
 	case RefOfJSONTableExprColumns32:
-		return "*JSONTableExpr:Columns(*JtColumnDefinition)32"
+		return "(*JSONTableExpr).Columns32"
 	case RefOfJSONUnquoteExprJSONValue:
-		return "*JSONUnquoteExpr:JSONValue(Expr)"
+		return "(*JSONUnquoteExpr).JSONValue"
 	case RefOfJSONValueExprJSONDoc:
-		return "*JSONValueExpr:JSONDoc(Expr)"
+		return "(*JSONValueExpr).JSONDoc"
 	case RefOfJSONValueExprPath:
-		return "*JSONValueExpr:Path(Expr)"
+		return "(*JSONValueExpr).Path"
 	case RefOfJSONValueExprReturningType:
-		return "*JSONValueExpr:ReturningType(*ConvertType)"
+		return "(*JSONValueExpr).ReturningType"
 	case RefOfJSONValueExprEmptyOnResponse:
-		return "*JSONValueExpr:EmptyOnResponse(*JtOnResponse)"
+		return "(*JSONValueExpr).EmptyOnResponse"
 	case RefOfJSONValueExprErrorOnResponse:
-		return "*JSONValueExpr:ErrorOnResponse(*JtOnResponse)"
+		return "(*JSONValueExpr).ErrorOnResponse"
 	case RefOfJSONValueMergeExprJSONDoc:
-		return "*JSONValueMergeExpr:JSONDoc(Expr)"
+		return "(*JSONValueMergeExpr).JSONDoc"
 	case RefOfJSONValueMergeExprJSONDocList:
-		return "*JSONValueMergeExpr:JSONDocList(Exprs)"
+		return "(*JSONValueMergeExpr).JSONDocList"
 	case RefOfJSONValueModifierExprJSONDoc:
-		return "*JSONValueModifierExpr:JSONDoc(Expr)"
+		return "(*JSONValueModifierExpr).JSONDoc"
 	case RefOfJSONValueModifierExprParams8:
-		return "*JSONValueModifierExpr:Params(*JSONObjectParam)8"
+		return "(*JSONValueModifierExpr).Params8"
 	case RefOfJSONValueModifierExprParams32:
-		return "*JSONValueModifierExpr:Params(*JSONObjectParam)32"
+		return "(*JSONValueModifierExpr).Params32"
 	case RefOfJoinConditionOn:
-		return "*JoinCondition:On(Expr)"
+		return "(*JoinCondition).On"
 	case RefOfJoinConditionUsing:
-		return "*JoinCondition:Using(Columns)"
+		return "(*JoinCondition).Using"
 	case RefOfJoinTableExprLeftExpr:
-		return "*JoinTableExpr:LeftExpr(TableExpr)"
+		return "(*JoinTableExpr).LeftExpr"
 	case RefOfJoinTableExprRightExpr:
-		return "*JoinTableExpr:RightExpr(TableExpr)"
+		return "(*JoinTableExpr).RightExpr"
 	case RefOfJoinTableExprCondition:
-		return "*JoinTableExpr:Condition(*JoinCondition)"
+		return "(*JoinTableExpr).Condition"
 	case RefOfJtOnResponseExpr:
-		return "*JtOnResponse:Expr(Expr)"
+		return "(*JtOnResponse).Expr"
 	case RefOfLagLeadExprExpr:
-		return "*LagLeadExpr:Expr(Expr)"
+		return "(*LagLeadExpr).Expr"
 	case RefOfLagLeadExprN:
-		return "*LagLeadExpr:N(Expr)"
+		return "(*LagLeadExpr).N"
 	case RefOfLagLeadExprDefault:
-		return "*LagLeadExpr:Default(Expr)"
+		return "(*LagLeadExpr).Default"
 	case RefOfLagLeadExprOverClause:
-		return "*LagLeadExpr:OverClause(*OverClause)"
+		return "(*LagLeadExpr).OverClause"
 	case RefOfLagLeadExprNullTreatmentClause:
-		return "*LagLeadExpr:NullTreatmentClause(*NullTreatmentClause)"
+		return "(*LagLeadExpr).NullTreatmentClause"
 	case RefOfLimitOffset:
-		return "*Limit:Offset(Expr)"
+		return "(*Limit).Offset"
 	case RefOfLimitRowcount:
-		return "*Limit:Rowcount(Expr)"
+		return "(*Limit).Rowcount"
 	case RefOfLineStringExprPointParams:
-		return "*LineStringExpr:PointParams(Exprs)"
+		return "(*LineStringExpr).PointParams"
 	case RefOfLinestrPropertyFuncExprLinestring:
-		return "*LinestrPropertyFuncExpr:Linestring(Expr)"
+		return "(*LinestrPropertyFuncExpr).Linestring"
 	case RefOfLinestrPropertyFuncExprPropertyDefArg:
-		return "*LinestrPropertyFuncExpr:PropertyDefArg(Expr)"
+		return "(*LinestrPropertyFuncExpr).PropertyDefArg"
 	case RefOfLocateExprSubStr:
-		return "*LocateExpr:SubStr(Expr)"
+		return "(*LocateExpr).SubStr"
 	case RefOfLocateExprStr:
-		return "*LocateExpr:Str(Expr)"
+		return "(*LocateExpr).Str"
 	case RefOfLocateExprPos:
-		return "*LocateExpr:Pos(Expr)"
+		return "(*LocateExpr).Pos"
 	case RefOfLockingFuncName:
-		return "*LockingFunc:Name(Expr)"
+		return "(*LockingFunc).Name"
 	case RefOfLockingFuncTimeout:
-		return "*LockingFunc:Timeout(Expr)"
+		return "(*LockingFunc).Timeout"
 	case RefOfMatchExprColumns8:
-		return "*MatchExpr:Columns(*ColName)8"
+		return "(*MatchExpr).Columns8"
 	case RefOfMatchExprColumns32:
-		return "*MatchExpr:Columns(*ColName)32"
+		return "(*MatchExpr).Columns32"
 	case RefOfMatchExprExpr:
-		return "*MatchExpr:Expr(Expr)"
+		return "(*MatchExpr).Expr"
 	case RefOfMaxArg:
-		return "*Max:Arg(Expr)"
+		return "(*Max).Arg"
 	case RefOfMaxOverClause:
-		return "*Max:OverClause(*OverClause)"
+		return "(*Max).OverClause"
 	case RefOfMemberOfExprValue:
-		return "*MemberOfExpr:Value(Expr)"
+		return "(*MemberOfExpr).Value"
 	case RefOfMemberOfExprJSONArr:
-		return "*MemberOfExpr:JSONArr(Expr)"
+		return "(*MemberOfExpr).JSONArr"
 	case RefOfMinArg:
-		return "*Min:Arg(Expr)"
+		return "(*Min).Arg"
 	case RefOfMinOverClause:
-		return "*Min:OverClause(*OverClause)"
+		return "(*Min).OverClause"
 	case RefOfModifyColumnNewColDefinition:
-		return "*ModifyColumn:NewColDefinition(*ColumnDefinition)"
+		return "(*ModifyColumn).NewColDefinition"
 	case RefOfModifyColumnAfter:
-		return "*ModifyColumn:After(*ColName)"
+		return "(*ModifyColumn).After"
 	case RefOfMultiLinestringExprLinestringParams:
-		return "*MultiLinestringExpr:LinestringParams(Exprs)"
+		return "(*MultiLinestringExpr).LinestringParams"
 	case RefOfMultiPointExprPointParams:
-		return "*MultiPointExpr:PointParams(Exprs)"
+		return "(*MultiPointExpr).PointParams"
 	case RefOfMultiPolygonExprPolygonParams:
-		return "*MultiPolygonExpr:PolygonParams(Exprs)"
+		return "(*MultiPolygonExpr).PolygonParams"
 	case RefOfNTHValueExprExpr:
-		return "*NTHValueExpr:Expr(Expr)"
+		return "(*NTHValueExpr).Expr"
 	case RefOfNTHValueExprN:
-		return "*NTHValueExpr:N(Expr)"
+		return "(*NTHValueExpr).N"
 	case RefOfNTHValueExprOverClause:
-		return "*NTHValueExpr:OverClause(*OverClause)"
+		return "(*NTHValueExpr).OverClause"
 	case RefOfNTHValueExprFromFirstLastClause:
-		return "*NTHValueExpr:FromFirstLastClause(*FromFirstLastClause)"
+		return "(*NTHValueExpr).FromFirstLastClause"
 	case RefOfNTHValueExprNullTreatmentClause:
-		return "*NTHValueExpr:NullTreatmentClause(*NullTreatmentClause)"
+		return "(*NTHValueExpr).NullTreatmentClause"
 	case RefOfNamedWindowWindows:
-		return "*NamedWindow:Windows(WindowDefinitions)"
+		return "(*NamedWindow).Windows"
 	case NamedWindowsOffset8:
-		return "NamedWindows:Offset(NamedWindows)8"
+		return "(NamedWindows).Offset8"
 	case NamedWindowsOffset32:
-		return "NamedWindows:Offset(NamedWindows)32"
+		return "(NamedWindows).Offset32"
 	case RefOfNextvalExpr:
-		return "*Nextval:Expr(Expr)"
+		return "(*Nextval).Expr"
 	case RefOfNotExprExpr:
-		return "*NotExpr:Expr(Expr)"
+		return "(*NotExpr).Expr"
 	case RefOfNtileExprN:
-		return "*NtileExpr:N(Expr)"
+		return "(*NtileExpr).N"
 	case RefOfNtileExprOverClause:
-		return "*NtileExpr:OverClause(*OverClause)"
+		return "(*NtileExpr).OverClause"
 	case RefOfOffsetOriginal:
-		return "*Offset:Original(Expr)"
+		return "(*Offset).Original"
 	case OnDupOffset8:
-		return "OnDup:Offset(OnDup)8"
+		return "(OnDup).Offset8"
 	case OnDupOffset32:
-		return "OnDup:Offset(OnDup)32"
+		return "(OnDup).Offset32"
 	case RefOfOptLikeLikeTable:
-		return "*OptLike:LikeTable(TableName)"
+		return "(*OptLike).LikeTable"
 	case RefOfOrExprLeft:
-		return "*OrExpr:Left(Expr)"
+		return "(*OrExpr).Left"
 	case RefOfOrExprRight:
-		return "*OrExpr:Right(Expr)"
+		return "(*OrExpr).Right"
 	case RefOfOrderExpr:
-		return "*Order:Expr(Expr)"
+		return "(*Order).Expr"
 	case OrderByOffset8:
-		return "OrderBy:Offset(OrderBy)8"
+		return "(OrderBy).Offset8"
 	case OrderByOffset32:
-		return "OrderBy:Offset(OrderBy)32"
+		return "(OrderBy).Offset32"
 	case RefOfOrderByOptionCols:
-		return "*OrderByOption:Cols(Columns)"
+		return "(*OrderByOption).Cols"
 	case RefOfOverClauseWindowName:
-		return "*OverClause:WindowName(IdentifierCI)"
+		return "(*OverClause).WindowName"
 	case RefOfOverClauseWindowSpec:
-		return "*OverClause:WindowSpec(*WindowSpecification)"
+		return "(*OverClause).WindowSpec"
 	case RefOfParenTableExprExprs:
-		return "*ParenTableExpr:Exprs(TableExprs)"
+		return "(*ParenTableExpr).Exprs"
 	case RefOfPartitionDefinitionName:
-		return "*PartitionDefinition:Name(IdentifierCI)"
+		return "(*PartitionDefinition).Name"
 	case RefOfPartitionDefinitionOptions:
-		return "*PartitionDefinition:Options(*PartitionDefinitionOptions)"
+		return "(*PartitionDefinition).Options"
 	case RefOfPartitionDefinitionOptionsValueRange:
-		return "*PartitionDefinitionOptions:ValueRange(*PartitionValueRange)"
+		return "(*PartitionDefinitionOptions).ValueRange"
 	case RefOfPartitionDefinitionOptionsComment:
-		return "*PartitionDefinitionOptions:Comment(*Literal)"
+		return "(*PartitionDefinitionOptions).Comment"
 	case RefOfPartitionDefinitionOptionsEngine:
-		return "*PartitionDefinitionOptions:Engine(*PartitionEngine)"
+		return "(*PartitionDefinitionOptions).Engine"
 	case RefOfPartitionDefinitionOptionsDataDirectory:
-		return "*PartitionDefinitionOptions:DataDirectory(*Literal)"
+		return "(*PartitionDefinitionOptions).DataDirectory"
 	case RefOfPartitionDefinitionOptionsIndexDirectory:
-		return "*PartitionDefinitionOptions:IndexDirectory(*Literal)"
+		return "(*PartitionDefinitionOptions).IndexDirectory"
 	case RefOfPartitionDefinitionOptionsSubPartitionDefinitions:
-		return "*PartitionDefinitionOptions:SubPartitionDefinitions(SubPartitionDefinitions)"
+		return "(*PartitionDefinitionOptions).SubPartitionDefinitions"
 	case RefOfPartitionOptionColList:
-		return "*PartitionOption:ColList(Columns)"
+		return "(*PartitionOption).ColList"
 	case RefOfPartitionOptionExpr:
-		return "*PartitionOption:Expr(Expr)"
+		return "(*PartitionOption).Expr"
 	case RefOfPartitionOptionSubPartition:
-		return "*PartitionOption:SubPartition(*SubPartition)"
+		return "(*PartitionOption).SubPartition"
 	case RefOfPartitionOptionDefinitions8:
-		return "*PartitionOption:Definitions(*PartitionDefinition)8"
+		return "(*PartitionOption).Definitions8"
 	case RefOfPartitionOptionDefinitions32:
-		return "*PartitionOption:Definitions(*PartitionDefinition)32"
+		return "(*PartitionOption).Definitions32"
 	case RefOfPartitionSpecNames:
-		return "*PartitionSpec:Names(Partitions)"
+		return "(*PartitionSpec).Names"
 	case RefOfPartitionSpecNumber:
-		return "*PartitionSpec:Number(*Literal)"
+		return "(*PartitionSpec).Number"
 	case RefOfPartitionSpecTableName:
-		return "*PartitionSpec:TableName(TableName)"
+		return "(*PartitionSpec).TableName"
 	case RefOfPartitionSpecDefinitions8:
-		return "*PartitionSpec:Definitions(*PartitionDefinition)8"
+		return "(*PartitionSpec).Definitions8"
 	case RefOfPartitionSpecDefinitions32:
-		return "*PartitionSpec:Definitions(*PartitionDefinition)32"
+		return "(*PartitionSpec).Definitions32"
 	case RefOfPartitionValueRangeRange:
-		return "*PartitionValueRange:Range(ValTuple)"
+		return "(*PartitionValueRange).Range"
 	case PartitionsOffset8:
-		return "Partitions:Offset(Partitions)8"
+		return "(Partitions).Offset8"
 	case PartitionsOffset32:
-		return "Partitions:Offset(Partitions)32"
+		return "(Partitions).Offset32"
 	case RefOfPerformanceSchemaFuncExprArgument:
-		return "*PerformanceSchemaFuncExpr:Argument(Expr)"
+		return "(*PerformanceSchemaFuncExpr).Argument"
 	case RefOfPointExprXCordinate:
-		return "*PointExpr:XCordinate(Expr)"
+		return "(*PointExpr).XCordinate"
 	case RefOfPointExprYCordinate:
-		return "*PointExpr:YCordinate(Expr)"
+		return "(*PointExpr).YCordinate"
 	case RefOfPointPropertyFuncExprPoint:
-		return "*PointPropertyFuncExpr:Point(Expr)"
+		return "(*PointPropertyFuncExpr).Point"
 	case RefOfPointPropertyFuncExprValueToSet:
-		return "*PointPropertyFuncExpr:ValueToSet(Expr)"
+		return "(*PointPropertyFuncExpr).ValueToSet"
 	case RefOfPolygonExprLinestringParams:
-		return "*PolygonExpr:LinestringParams(Exprs)"
+		return "(*PolygonExpr).LinestringParams"
 	case RefOfPolygonPropertyFuncExprPolygon:
-		return "*PolygonPropertyFuncExpr:Polygon(Expr)"
+		return "(*PolygonPropertyFuncExpr).Polygon"
 	case RefOfPolygonPropertyFuncExprPropertyDefArg:
-		return "*PolygonPropertyFuncExpr:PropertyDefArg(Expr)"
+		return "(*PolygonPropertyFuncExpr).PropertyDefArg"
 	case RefOfPrepareStmtName:
-		return "*PrepareStmt:Name(IdentifierCI)"
+		return "(*PrepareStmt).Name"
 	case RefOfPrepareStmtStatement:
-		return "*PrepareStmt:Statement(Expr)"
+		return "(*PrepareStmt).Statement"
 	case RefOfPrepareStmtComments:
-		return "*PrepareStmt:Comments(*ParsedComments)"
+		return "(*PrepareStmt).Comments"
 	case RefOfReferenceDefinitionReferencedTable:
-		return "*ReferenceDefinition:ReferencedTable(TableName)"
+		return "(*ReferenceDefinition).ReferencedTable"
 	case RefOfReferenceDefinitionReferencedColumns:
-		return "*ReferenceDefinition:ReferencedColumns(Columns)"
+		return "(*ReferenceDefinition).ReferencedColumns"
 	case RefOfReferenceDefinitionMatch:
-		return "*ReferenceDefinition:Match(MatchAction)"
+		return "(*ReferenceDefinition).Match"
 	case RefOfReferenceDefinitionOnDelete:
-		return "*ReferenceDefinition:OnDelete(ReferenceAction)"
+		return "(*ReferenceDefinition).OnDelete"
 	case RefOfReferenceDefinitionOnUpdate:
-		return "*ReferenceDefinition:OnUpdate(ReferenceAction)"
+		return "(*ReferenceDefinition).OnUpdate"
 	case RefOfRegexpInstrExprExpr:
-		return "*RegexpInstrExpr:Expr(Expr)"
+		return "(*RegexpInstrExpr).Expr"
 	case RefOfRegexpInstrExprPattern:
-		return "*RegexpInstrExpr:Pattern(Expr)"
+		return "(*RegexpInstrExpr).Pattern"
 	case RefOfRegexpInstrExprPosition:
-		return "*RegexpInstrExpr:Position(Expr)"
+		return "(*RegexpInstrExpr).Position"
 	case RefOfRegexpInstrExprOccurrence:
-		return "*RegexpInstrExpr:Occurrence(Expr)"
+		return "(*RegexpInstrExpr).Occurrence"
 	case RefOfRegexpInstrExprReturnOption:
-		return "*RegexpInstrExpr:ReturnOption(Expr)"
+		return "(*RegexpInstrExpr).ReturnOption"
 	case RefOfRegexpInstrExprMatchType:
-		return "*RegexpInstrExpr:MatchType(Expr)"
+		return "(*RegexpInstrExpr).MatchType"
 	case RefOfRegexpLikeExprExpr:
-		return "*RegexpLikeExpr:Expr(Expr)"
+		return "(*RegexpLikeExpr).Expr"
 	case RefOfRegexpLikeExprPattern:
-		return "*RegexpLikeExpr:Pattern(Expr)"
+		return "(*RegexpLikeExpr).Pattern"
 	case RefOfRegexpLikeExprMatchType:
-		return "*RegexpLikeExpr:MatchType(Expr)"
+		return "(*RegexpLikeExpr).MatchType"
 	case RefOfRegexpReplaceExprExpr:
-		return "*RegexpReplaceExpr:Expr(Expr)"
+		return "(*RegexpReplaceExpr).Expr"
 	case RefOfRegexpReplaceExprPattern:
-		return "*RegexpReplaceExpr:Pattern(Expr)"
+		return "(*RegexpReplaceExpr).Pattern"
 	case RefOfRegexpReplaceExprRepl:
-		return "*RegexpReplaceExpr:Repl(Expr)"
+		return "(*RegexpReplaceExpr).Repl"
 	case RefOfRegexpReplaceExprOccurrence:
-		return "*RegexpReplaceExpr:Occurrence(Expr)"
+		return "(*RegexpReplaceExpr).Occurrence"
 	case RefOfRegexpReplaceExprPosition:
-		return "*RegexpReplaceExpr:Position(Expr)"
+		return "(*RegexpReplaceExpr).Position"
 	case RefOfRegexpReplaceExprMatchType:
-		return "*RegexpReplaceExpr:MatchType(Expr)"
+		return "(*RegexpReplaceExpr).MatchType"
 	case RefOfRegexpSubstrExprExpr:
-		return "*RegexpSubstrExpr:Expr(Expr)"
+		return "(*RegexpSubstrExpr).Expr"
 	case RefOfRegexpSubstrExprPattern:
-		return "*RegexpSubstrExpr:Pattern(Expr)"
+		return "(*RegexpSubstrExpr).Pattern"
 	case RefOfRegexpSubstrExprOccurrence:
-		return "*RegexpSubstrExpr:Occurrence(Expr)"
+		return "(*RegexpSubstrExpr).Occurrence"
 	case RefOfRegexpSubstrExprPosition:
-		return "*RegexpSubstrExpr:Position(Expr)"
+		return "(*RegexpSubstrExpr).Position"
 	case RefOfRegexpSubstrExprMatchType:
-		return "*RegexpSubstrExpr:MatchType(Expr)"
+		return "(*RegexpSubstrExpr).MatchType"
 	case RefOfReleaseName:
-		return "*Release:Name(IdentifierCI)"
+		return "(*Release).Name"
 	case RefOfRenameColumnOldName:
-		return "*RenameColumn:OldName(*ColName)"
+		return "(*RenameColumn).OldName"
 	case RefOfRenameColumnNewName:
-		return "*RenameColumn:NewName(*ColName)"
+		return "(*RenameColumn).NewName"
 	case RefOfRenameIndexOldName:
-		return "*RenameIndex:OldName(IdentifierCI)"
+		return "(*RenameIndex).OldName"
 	case RefOfRenameIndexNewName:
-		return "*RenameIndex:NewName(IdentifierCI)"
+		return "(*RenameIndex).NewName"
 	case RefOfRenameTableNameTable:
-		return "*RenameTableName:Table(TableName)"
+		return "(*RenameTableName).Table"
 	case RefOfRevertMigrationComments:
-		return "*RevertMigration:Comments(*ParsedComments)"
+		return "(*RevertMigration).Comments"
 	case RootNodeSQLNode:
-		return "RootNode:SQLNode(SQLNode)"
+		return "(RootNode).SQLNode"
 	case RefOfRowAliasTableName:
-		return "*RowAlias:TableName(IdentifierCS)"
+		return "(*RowAlias).TableName"
 	case RefOfRowAliasColumns:
-		return "*RowAlias:Columns(Columns)"
+		return "(*RowAlias).Columns"
 	case RefOfSRollbackName:
-		return "*SRollback:Name(IdentifierCI)"
+		return "(*SRollback).Name"
 	case RefOfSavepointName:
-		return "*Savepoint:Name(IdentifierCI)"
+		return "(*Savepoint).Name"
 	case RefOfSelectWith:
-		return "*Select:With(*With)"
+		return "(*Select).With"
 	case RefOfSelectFrom8:
-		return "*Select:From(TableExpr)8"
+		return "(*Select).From8"
 	case RefOfSelectFrom32:
-		return "*Select:From(TableExpr)32"
+		return "(*Select).From32"
 	case RefOfSelectComments:
-		return "*Select:Comments(*ParsedComments)"
+		return "(*Select).Comments"
 	case RefOfSelectSelectExprs:
-		return "*Select:SelectExprs(SelectExprs)"
+		return "(*Select).SelectExprs"
 	case RefOfSelectWhere:
-		return "*Select:Where(*Where)"
+		return "(*Select).Where"
 	case RefOfSelectGroupBy:
-		return "*Select:GroupBy(*GroupBy)"
+		return "(*Select).GroupBy"
 	case RefOfSelectHaving:
-		return "*Select:Having(*Where)"
+		return "(*Select).Having"
 	case RefOfSelectWindows:
-		return "*Select:Windows(NamedWindows)"
+		return "(*Select).Windows"
 	case RefOfSelectOrderBy:
-		return "*Select:OrderBy(OrderBy)"
+		return "(*Select).OrderBy"
 	case RefOfSelectLimit:
-		return "*Select:Limit(*Limit)"
+		return "(*Select).Limit"
 	case RefOfSelectInto:
-		return "*Select:Into(*SelectInto)"
+		return "(*Select).Into"
 	case SelectExprsOffset8:
-		return "SelectExprs:Offset(SelectExprs)8"
+		return "(SelectExprs).Offset8"
 	case SelectExprsOffset32:
-		return "SelectExprs:Offset(SelectExprs)32"
+		return "(SelectExprs).Offset32"
 	case RefOfSetComments:
-		return "*Set:Comments(*ParsedComments)"
+		return "(*Set).Comments"
 	case RefOfSetExprs:
-		return "*Set:Exprs(SetExprs)"
+		return "(*Set).Exprs"
 	case RefOfSetExprVar:
-		return "*SetExpr:Var(*Variable)"
+		return "(*SetExpr).Var"
 	case RefOfSetExprExpr:
-		return "*SetExpr:Expr(Expr)"
+		return "(*SetExpr).Expr"
 	case SetExprsOffset8:
-		return "SetExprs:Offset(SetExprs)8"
+		return "(SetExprs).Offset8"
 	case SetExprsOffset32:
-		return "SetExprs:Offset(SetExprs)32"
+		return "(SetExprs).Offset32"
 	case RefOfShowInternal:
-		return "*Show:Internal(ShowInternal)"
+		return "(*Show).Internal"
 	case RefOfShowBasicTbl:
-		return "*ShowBasic:Tbl(TableName)"
+		return "(*ShowBasic).Tbl"
 	case RefOfShowBasicDbName:
-		return "*ShowBasic:DbName(IdentifierCS)"
+		return "(*ShowBasic).DbName"
 	case RefOfShowBasicFilter:
-		return "*ShowBasic:Filter(*ShowFilter)"
+		return "(*ShowBasic).Filter"
 	case RefOfShowCreateOp:
-		return "*ShowCreate:Op(TableName)"
+		return "(*ShowCreate).Op"
 	case RefOfShowFilterFilter:
-		return "*ShowFilter:Filter(Expr)"
+		return "(*ShowFilter).Filter"
 	case RefOfShowMigrationLogsComments:
-		return "*ShowMigrationLogs:Comments(*ParsedComments)"
+		return "(*ShowMigrationLogs).Comments"
 	case RefOfStarExprTableName:
-		return "*StarExpr:TableName(TableName)"
+		return "(*StarExpr).TableName"
 	case RefOfStdArg:
-		return "*Std:Arg(Expr)"
+		return "(*Std).Arg"
 	case RefOfStdOverClause:
-		return "*Std:OverClause(*OverClause)"
+		return "(*Std).OverClause"
 	case RefOfStdDevArg:
-		return "*StdDev:Arg(Expr)"
+		return "(*StdDev).Arg"
 	case RefOfStdDevOverClause:
-		return "*StdDev:OverClause(*OverClause)"
+		return "(*StdDev).OverClause"
 	case RefOfStdPopArg:
-		return "*StdPop:Arg(Expr)"
+		return "(*StdPop).Arg"
 	case RefOfStdPopOverClause:
-		return "*StdPop:OverClause(*OverClause)"
+		return "(*StdPop).OverClause"
 	case RefOfStdSampArg:
-		return "*StdSamp:Arg(Expr)"
+		return "(*StdSamp).Arg"
 	case RefOfStdSampOverClause:
-		return "*StdSamp:OverClause(*OverClause)"
+		return "(*StdSamp).OverClause"
 	case RefOfStreamComments:
-		return "*Stream:Comments(*ParsedComments)"
+		return "(*Stream).Comments"
 	case RefOfStreamSelectExpr:
-		return "*Stream:SelectExpr(SelectExpr)"
+		return "(*Stream).SelectExpr"
 	case RefOfStreamTable:
-		return "*Stream:Table(TableName)"
+		return "(*Stream).Table"
 	case RefOfSubPartitionColList:
-		return "*SubPartition:ColList(Columns)"
+		return "(*SubPartition).ColList"
 	case RefOfSubPartitionExpr:
-		return "*SubPartition:Expr(Expr)"
+		return "(*SubPartition).Expr"
 	case RefOfSubPartitionDefinitionName:
-		return "*SubPartitionDefinition:Name(IdentifierCI)"
+		return "(*SubPartitionDefinition).Name"
 	case RefOfSubPartitionDefinitionOptions:
-		return "*SubPartitionDefinition:Options(*SubPartitionDefinitionOptions)"
+		return "(*SubPartitionDefinition).Options"
 	case RefOfSubPartitionDefinitionOptionsComment:
-		return "*SubPartitionDefinitionOptions:Comment(*Literal)"
+		return "(*SubPartitionDefinitionOptions).Comment"
 	case RefOfSubPartitionDefinitionOptionsEngine:
-		return "*SubPartitionDefinitionOptions:Engine(*PartitionEngine)"
+		return "(*SubPartitionDefinitionOptions).Engine"
 	case RefOfSubPartitionDefinitionOptionsDataDirectory:
-		return "*SubPartitionDefinitionOptions:DataDirectory(*Literal)"
+		return "(*SubPartitionDefinitionOptions).DataDirectory"
 	case RefOfSubPartitionDefinitionOptionsIndexDirectory:
-		return "*SubPartitionDefinitionOptions:IndexDirectory(*Literal)"
+		return "(*SubPartitionDefinitionOptions).IndexDirectory"
 	case SubPartitionDefinitionsOffset8:
-		return "SubPartitionDefinitions:Offset(SubPartitionDefinitions)8"
+		return "(SubPartitionDefinitions).Offset8"
 	case SubPartitionDefinitionsOffset32:
-		return "SubPartitionDefinitions:Offset(SubPartitionDefinitions)32"
+		return "(SubPartitionDefinitions).Offset32"
 	case RefOfSubquerySelect:
-		return "*Subquery:Select(TableStatement)"
+		return "(*Subquery).Select"
 	case RefOfSubstrExprName:
-		return "*SubstrExpr:Name(Expr)"
+		return "(*SubstrExpr).Name"
 	case RefOfSubstrExprFrom:
-		return "*SubstrExpr:From(Expr)"
+		return "(*SubstrExpr).From"
 	case RefOfSubstrExprTo:
-		return "*SubstrExpr:To(Expr)"
+		return "(*SubstrExpr).To"
 	case RefOfSumArg:
-		return "*Sum:Arg(Expr)"
+		return "(*Sum).Arg"
 	case RefOfSumOverClause:
-		return "*Sum:OverClause(*OverClause)"
+		return "(*Sum).OverClause"
 	case TableExprsOffset8:
-		return "TableExprs:Offset(TableExprs)8"
+		return "(TableExprs).Offset8"
 	case TableExprsOffset32:
-		return "TableExprs:Offset(TableExprs)32"
+		return "(TableExprs).Offset32"
 	case TableNameName:
-		return "TableName:Name(IdentifierCS)"
+		return "(TableName).Name"
 	case TableNameQualifier:
-		return "TableName:Qualifier(IdentifierCS)"
+		return "(TableName).Qualifier"
 	case TableNamesOffset8:
-		return "TableNames:Offset(TableNames)8"
+		return "(TableNames).Offset8"
 	case TableNamesOffset32:
-		return "TableNames:Offset(TableNames)32"
+		return "(TableNames).Offset32"
 	case TableOptionsOffset8:
-		return "TableOptions:Offset(TableOptions)8"
+		return "(TableOptions).Offset8"
 	case TableOptionsOffset32:
-		return "TableOptions:Offset(TableOptions)32"
+		return "(TableOptions).Offset32"
 	case RefOfTableSpecColumns8:
-		return "*TableSpec:Columns(*ColumnDefinition)8"
+		return "(*TableSpec).Columns8"
 	case RefOfTableSpecColumns32:
-		return "*TableSpec:Columns(*ColumnDefinition)32"
+		return "(*TableSpec).Columns32"
 	case RefOfTableSpecIndexes8:
-		return "*TableSpec:Indexes(*IndexDefinition)8"
+		return "(*TableSpec).Indexes8"
 	case RefOfTableSpecIndexes32:
-		return "*TableSpec:Indexes(*IndexDefinition)32"
+		return "(*TableSpec).Indexes32"
 	case RefOfTableSpecConstraints8:
-		return "*TableSpec:Constraints(*ConstraintDefinition)8"
+		return "(*TableSpec).Constraints8"
 	case RefOfTableSpecConstraints32:
-		return "*TableSpec:Constraints(*ConstraintDefinition)32"
+		return "(*TableSpec).Constraints32"
 	case RefOfTableSpecOptions:
-		return "*TableSpec:Options(TableOptions)"
+		return "(*TableSpec).Options"
 	case RefOfTableSpecPartitionOption:
-		return "*TableSpec:PartitionOption(*PartitionOption)"
+		return "(*TableSpec).PartitionOption"
 	case RefOfTimestampDiffExprExpr1:
-		return "*TimestampDiffExpr:Expr1(Expr)"
+		return "(*TimestampDiffExpr).Expr1"
 	case RefOfTimestampDiffExprExpr2:
-		return "*TimestampDiffExpr:Expr2(Expr)"
+		return "(*TimestampDiffExpr).Expr2"
 	case RefOfTrimFuncExprTrimArg:
-		return "*TrimFuncExpr:TrimArg(Expr)"
+		return "(*TrimFuncExpr).TrimArg"
 	case RefOfTrimFuncExprStringArg:
-		return "*TrimFuncExpr:StringArg(Expr)"
+		return "(*TrimFuncExpr).StringArg"
 	case RefOfTruncateTableTable:
-		return "*TruncateTable:Table(TableName)"
+		return "(*TruncateTable).Table"
 	case RefOfUnaryExprExpr:
-		return "*UnaryExpr:Expr(Expr)"
+		return "(*UnaryExpr).Expr"
 	case RefOfUnionWith:
-		return "*Union:With(*With)"
+		return "(*Union).With"
 	case RefOfUnionLeft:
-		return "*Union:Left(TableStatement)"
+		return "(*Union).Left"
 	case RefOfUnionRight:
-		return "*Union:Right(TableStatement)"
+		return "(*Union).Right"
 	case RefOfUnionOrderBy:
-		return "*Union:OrderBy(OrderBy)"
+		return "(*Union).OrderBy"
 	case RefOfUnionLimit:
-		return "*Union:Limit(*Limit)"
+		return "(*Union).Limit"
 	case RefOfUnionInto:
-		return "*Union:Into(*SelectInto)"
+		return "(*Union).Into"
 	case RefOfUpdateWith:
-		return "*Update:With(*With)"
+		return "(*Update).With"
 	case RefOfUpdateComments:
-		return "*Update:Comments(*ParsedComments)"
+		return "(*Update).Comments"
 	case RefOfUpdateTableExprs8:
-		return "*Update:TableExprs(TableExpr)8"
+		return "(*Update).TableExprs8"
 	case RefOfUpdateTableExprs32:
-		return "*Update:TableExprs(TableExpr)32"
+		return "(*Update).TableExprs32"
 	case RefOfUpdateExprs:
-		return "*Update:Exprs(UpdateExprs)"
+		return "(*Update).Exprs"
 	case RefOfUpdateWhere:
-		return "*Update:Where(*Where)"
+		return "(*Update).Where"
 	case RefOfUpdateOrderBy:
-		return "*Update:OrderBy(OrderBy)"
+		return "(*Update).OrderBy"
 	case RefOfUpdateLimit:
-		return "*Update:Limit(*Limit)"
+		return "(*Update).Limit"
 	case RefOfUpdateExprName:
-		return "*UpdateExpr:Name(*ColName)"
+		return "(*UpdateExpr).Name"
 	case RefOfUpdateExprExpr:
-		return "*UpdateExpr:Expr(Expr)"
+		return "(*UpdateExpr).Expr"
 	case UpdateExprsOffset8:
-		return "UpdateExprs:Offset(UpdateExprs)8"
+		return "(UpdateExprs).Offset8"
 	case UpdateExprsOffset32:
-		return "UpdateExprs:Offset(UpdateExprs)32"
+		return "(UpdateExprs).Offset32"
 	case RefOfUpdateXMLExprTarget:
-		return "*UpdateXMLExpr:Target(Expr)"
+		return "(*UpdateXMLExpr).Target"
 	case RefOfUpdateXMLExprXPathExpr:
-		return "*UpdateXMLExpr:XPathExpr(Expr)"
+		return "(*UpdateXMLExpr).XPathExpr"
 	case RefOfUpdateXMLExprNewXML:
-		return "*UpdateXMLExpr:NewXML(Expr)"
+		return "(*UpdateXMLExpr).NewXML"
 	case RefOfUseDBName:
-		return "*Use:DBName(IdentifierCS)"
+		return "(*Use).DBName"
 	case RefOfVExplainStmtStatement:
-		return "*VExplainStmt:Statement(Statement)"
+		return "(*VExplainStmt).Statement"
 	case RefOfVExplainStmtComments:
-		return "*VExplainStmt:Comments(*ParsedComments)"
+		return "(*VExplainStmt).Comments"
 	case RefOfVStreamComments:
-		return "*VStream:Comments(*ParsedComments)"
+		return "(*VStream).Comments"
 	case RefOfVStreamSelectExpr:
-		return "*VStream:SelectExpr(SelectExpr)"
+		return "(*VStream).SelectExpr"
 	case RefOfVStreamTable:
-		return "*VStream:Table(TableName)"
+		return "(*VStream).Table"
 	case RefOfVStreamWhere:
-		return "*VStream:Where(*Where)"
+		return "(*VStream).Where"
 	case RefOfVStreamLimit:
-		return "*VStream:Limit(*Limit)"
+		return "(*VStream).Limit"
 	case ValTupleOffset8:
-		return "ValTuple:Offset(ValTuple)8"
+		return "(ValTuple).Offset8"
 	case ValTupleOffset32:
-		return "ValTuple:Offset(ValTuple)32"
+		return "(ValTuple).Offset32"
 	case ValuesOffset8:
-		return "Values:Offset(Values)8"
+		return "(Values).Offset8"
 	case ValuesOffset32:
-		return "Values:Offset(Values)32"
+		return "(Values).Offset32"
 	case RefOfValuesFuncExprName:
-		return "*ValuesFuncExpr:Name(*ColName)"
+		return "(*ValuesFuncExpr).Name"
 	case RefOfValuesStatementWith:
-		return "*ValuesStatement:With(*With)"
+		return "(*ValuesStatement).With"
 	case RefOfValuesStatementRows:
-		return "*ValuesStatement:Rows(Values)"
+		return "(*ValuesStatement).Rows"
 	case RefOfValuesStatementListArg:
-		return "*ValuesStatement:ListArg(ListArg)"
+		return "(*ValuesStatement).ListArg"
 	case RefOfValuesStatementComments:
-		return "*ValuesStatement:Comments(*ParsedComments)"
+		return "(*ValuesStatement).Comments"
 	case RefOfValuesStatementOrder:
-		return "*ValuesStatement:Order(OrderBy)"
+		return "(*ValuesStatement).Order"
 	case RefOfValuesStatementLimit:
-		return "*ValuesStatement:Limit(*Limit)"
+		return "(*ValuesStatement).Limit"
 	case RefOfVarPopArg:
-		return "*VarPop:Arg(Expr)"
+		return "(*VarPop).Arg"
 	case RefOfVarPopOverClause:
-		return "*VarPop:OverClause(*OverClause)"
+		return "(*VarPop).OverClause"
 	case RefOfVarSampArg:
-		return "*VarSamp:Arg(Expr)"
+		return "(*VarSamp).Arg"
 	case RefOfVarSampOverClause:
-		return "*VarSamp:OverClause(*OverClause)"
+		return "(*VarSamp).OverClause"
 	case RefOfVariableName:
-		return "*Variable:Name(IdentifierCI)"
+		return "(*Variable).Name"
 	case RefOfVarianceArg:
-		return "*Variance:Arg(Expr)"
+		return "(*Variance).Arg"
 	case RefOfVarianceOverClause:
-		return "*Variance:OverClause(*OverClause)"
+		return "(*Variance).OverClause"
 	case VindexParamKey:
-		return "VindexParam:Key(IdentifierCI)"
+		return "(VindexParam).Key"
 	case RefOfVindexSpecName:
-		return "*VindexSpec:Name(IdentifierCI)"
+		return "(*VindexSpec).Name"
 	case RefOfVindexSpecType:
-		return "*VindexSpec:Type(IdentifierCI)"
+		return "(*VindexSpec).Type"
 	case RefOfVindexSpecParams8:
-		return "*VindexSpec:Params(VindexParam)8"
+		return "(*VindexSpec).Params8"
 	case RefOfVindexSpecParams32:
-		return "*VindexSpec:Params(VindexParam)32"
+		return "(*VindexSpec).Params32"
 	case RefOfWeightStringFuncExprExpr:
-		return "*WeightStringFuncExpr:Expr(Expr)"
+		return "(*WeightStringFuncExpr).Expr"
 	case RefOfWeightStringFuncExprAs:
-		return "*WeightStringFuncExpr:As(*ConvertType)"
+		return "(*WeightStringFuncExpr).As"
 	case RefOfWhenCond:
-		return "*When:Cond(Expr)"
+		return "(*When).Cond"
 	case RefOfWhenVal:
-		return "*When:Val(Expr)"
+		return "(*When).Val"
 	case RefOfWhereExpr:
-		return "*Where:Expr(Expr)"
+		return "(*Where).Expr"
 	case RefOfWindowDefinitionName:
-		return "*WindowDefinition:Name(IdentifierCI)"
+		return "(*WindowDefinition).Name"
 	case RefOfWindowDefinitionWindowSpec:
-		return "*WindowDefinition:WindowSpec(*WindowSpecification)"
+		return "(*WindowDefinition).WindowSpec"
 	case WindowDefinitionsOffset8:
-		return "WindowDefinitions:Offset(WindowDefinitions)8"
+		return "(WindowDefinitions).Offset8"
 	case WindowDefinitionsOffset32:
-		return "WindowDefinitions:Offset(WindowDefinitions)32"
+		return "(WindowDefinitions).Offset32"
 	case RefOfWindowSpecificationName:
-		return "*WindowSpecification:Name(IdentifierCI)"
+		return "(*WindowSpecification).Name"
 	case RefOfWindowSpecificationPartitionClause:
-		return "*WindowSpecification:PartitionClause(Exprs)"
+		return "(*WindowSpecification).PartitionClause"
 	case RefOfWindowSpecificationOrderClause:
-		return "*WindowSpecification:OrderClause(OrderBy)"
+		return "(*WindowSpecification).OrderClause"
 	case RefOfWindowSpecificationFrameClause:
-		return "*WindowSpecification:FrameClause(*FrameClause)"
+		return "(*WindowSpecification).FrameClause"
 	case RefOfWithCTEs8:
-		return "*With:CTEs(*CommonTableExpr)8"
+		return "(*With).CTEs8"
 	case RefOfWithCTEs32:
-		return "*With:CTEs(*CommonTableExpr)32"
+		return "(*With).CTEs32"
 	case RefOfXorExprLeft:
-		return "*XorExpr:Left(Expr)"
+		return "(*XorExpr).Left"
 	case RefOfXorExprRight:
-		return "*XorExpr:Right(Expr)"
+		return "(*XorExpr).Right"
 	case SliceOfRefOfColumnDefinitionOffset8:
-		return "[]*ColumnDefinition:Offset([]*ColumnDefinition)8"
+		return "([]*ColumnDefinition).Offset8"
 	case SliceOfRefOfColumnDefinitionOffset32:
-		return "[]*ColumnDefinition:Offset([]*ColumnDefinition)32"
+		return "([]*ColumnDefinition).Offset32"
 	case SliceOfDatabaseOptionOffset8:
-		return "[]DatabaseOption:Offset([]DatabaseOption)8"
+		return "([]DatabaseOption).Offset8"
 	case SliceOfDatabaseOptionOffset32:
-		return "[]DatabaseOption:Offset([]DatabaseOption)32"
+		return "([]DatabaseOption).Offset32"
 	case SliceOfAlterOptionOffset8:
-		return "[]AlterOption:Offset([]AlterOption)8"
+		return "([]AlterOption).Offset8"
 	case SliceOfAlterOptionOffset32:
-		return "[]AlterOption:Offset([]AlterOption)32"
+		return "([]AlterOption).Offset32"
 	case SliceOfIdentifierCIOffset8:
-		return "[]IdentifierCI:Offset([]IdentifierCI)8"
+		return "([]IdentifierCI).Offset8"
 	case SliceOfIdentifierCIOffset32:
-		return "[]IdentifierCI:Offset([]IdentifierCI)32"
+		return "([]IdentifierCI).Offset32"
 	case SliceOfTxAccessModeOffset8:
-		return "[]TxAccessMode:Offset([]TxAccessMode)8"
+		return "([]TxAccessMode).Offset8"
 	case SliceOfTxAccessModeOffset32:
-		return "[]TxAccessMode:Offset([]TxAccessMode)32"
+		return "([]TxAccessMode).Offset32"
 	case SliceOfRefOfWhenOffset8:
-		return "[]*When:Offset([]*When)8"
+		return "([]*When).Offset8"
 	case SliceOfRefOfWhenOffset32:
-		return "[]*When:Offset([]*When)32"
+		return "([]*When).Offset32"
 	case RefOfColumnTypeOptionsDefault:
-		return "*ColumnTypeOptions:Default(Expr)"
+		return "(*ColumnTypeOptions).Default"
 	case RefOfColumnTypeOptionsOnUpdate:
-		return "*ColumnTypeOptions:OnUpdate(Expr)"
+		return "(*ColumnTypeOptions).OnUpdate"
 	case RefOfColumnTypeOptionsAs:
-		return "*ColumnTypeOptions:As(Expr)"
+		return "(*ColumnTypeOptions).As"
 	case RefOfColumnTypeOptionsComment:
-		return "*ColumnTypeOptions:Comment(*Literal)"
+		return "(*ColumnTypeOptions).Comment"
 	case RefOfColumnTypeOptionsReference:
-		return "*ColumnTypeOptions:Reference(*ReferenceDefinition)"
+		return "(*ColumnTypeOptions).Reference"
 	case RefOfColumnTypeOptionsEngineAttribute:
-		return "*ColumnTypeOptions:EngineAttribute(*Literal)"
+		return "(*ColumnTypeOptions).EngineAttribute"
 	case RefOfColumnTypeOptionsSecondaryEngineAttribute:
-		return "*ColumnTypeOptions:SecondaryEngineAttribute(*Literal)"
+		return "(*ColumnTypeOptions).SecondaryEngineAttribute"
 	case RefOfColumnTypeOptionsSRID:
-		return "*ColumnTypeOptions:SRID(*Literal)"
+		return "(*ColumnTypeOptions).SRID"
 	case SliceOfStringOffset8:
-		return "[]string:Offset([]string)8"
+		return "([]string).Offset8"
 	case SliceOfStringOffset32:
-		return "[]string:Offset([]string)32"
+		return "([]string).Offset32"
 	case SliceOfTableExprOffset8:
-		return "[]TableExpr:Offset([]TableExpr)8"
+		return "([]TableExpr).Offset8"
 	case SliceOfTableExprOffset32:
-		return "[]TableExpr:Offset([]TableExpr)32"
+		return "([]TableExpr).Offset32"
 	case SliceOfRefOfVariableOffset8:
-		return "[]*Variable:Offset([]*Variable)8"
+		return "([]*Variable).Offset8"
 	case SliceOfRefOfVariableOffset32:
-		return "[]*Variable:Offset([]*Variable)32"
+		return "([]*Variable).Offset32"
 	case SliceOfExprOffset8:
-		return "[]Expr:Offset([]Expr)8"
+		return "([]Expr).Offset8"
 	case SliceOfExprOffset32:
-		return "[]Expr:Offset([]Expr)32"
+		return "([]Expr).Offset32"
 	case SliceOfRefOfIndexColumnOffset8:
-		return "[]*IndexColumn:Offset([]*IndexColumn)8"
+		return "([]*IndexColumn).Offset8"
 	case SliceOfRefOfIndexColumnOffset32:
-		return "[]*IndexColumn:Offset([]*IndexColumn)32"
+		return "([]*IndexColumn).Offset32"
 	case SliceOfRefOfIndexOptionOffset8:
-		return "[]*IndexOption:Offset([]*IndexOption)8"
+		return "([]*IndexOption).Offset8"
 	case SliceOfRefOfIndexOptionOffset32:
-		return "[]*IndexOption:Offset([]*IndexOption)32"
+		return "([]*IndexOption).Offset32"
 	case SliceOfRefOfJSONObjectParamOffset8:
-		return "[]*JSONObjectParam:Offset([]*JSONObjectParam)8"
+		return "([]*JSONObjectParam).Offset8"
 	case SliceOfRefOfJSONObjectParamOffset32:
-		return "[]*JSONObjectParam:Offset([]*JSONObjectParam)32"
+		return "([]*JSONObjectParam).Offset32"
 	case SliceOfRefOfJtColumnDefinitionOffset8:
-		return "[]*JtColumnDefinition:Offset([]*JtColumnDefinition)8"
+		return "([]*JtColumnDefinition).Offset8"
 	case SliceOfRefOfJtColumnDefinitionOffset32:
-		return "[]*JtColumnDefinition:Offset([]*JtColumnDefinition)32"
+		return "([]*JtColumnDefinition).Offset32"
 	case RefOfJtOrdinalColDefName:
-		return "*JtOrdinalColDef:Name(IdentifierCI)"
+		return "(*JtOrdinalColDef).Name"
 	case RefOfJtPathColDefName:
-		return "*JtPathColDef:Name(IdentifierCI)"
+		return "(*JtPathColDef).Name"
 	case RefOfJtPathColDefType:
-		return "*JtPathColDef:Type(*ColumnType)"
+		return "(*JtPathColDef).Type"
 	case RefOfJtPathColDefPath:
-		return "*JtPathColDef:Path(Expr)"
+		return "(*JtPathColDef).Path"
 	case RefOfJtPathColDefEmptyOnResponse:
-		return "*JtPathColDef:EmptyOnResponse(*JtOnResponse)"
+		return "(*JtPathColDef).EmptyOnResponse"
 	case RefOfJtPathColDefErrorOnResponse:
-		return "*JtPathColDef:ErrorOnResponse(*JtOnResponse)"
+		return "(*JtPathColDef).ErrorOnResponse"
 	case RefOfJtNestedPathColDefPath:
-		return "*JtNestedPathColDef:Path(Expr)"
+		return "(*JtNestedPathColDef).Path"
 	case RefOfJtNestedPathColDefColumns8:
-		return "*JtNestedPathColDef:Columns(*JtColumnDefinition)8"
+		return "(*JtNestedPathColDef).Columns8"
 	case RefOfJtNestedPathColDefColumns32:
-		return "*JtNestedPathColDef:Columns(*JtColumnDefinition)32"
+		return "(*JtNestedPathColDef).Columns32"
 	case TableAndLockTypesOffset8:
-		return "TableAndLockTypes:Offset(TableAndLockTypes)8"
+		return "(TableAndLockTypes).Offset8"
 	case TableAndLockTypesOffset32:
-		return "TableAndLockTypes:Offset(TableAndLockTypes)32"
+		return "(TableAndLockTypes).Offset32"
 	case SliceOfRefOfColNameOffset8:
-		return "[]*ColName:Offset([]*ColName)8"
+		return "([]*ColName).Offset8"
 	case SliceOfRefOfColNameOffset32:
-		return "[]*ColName:Offset([]*ColName)32"
+		return "([]*ColName).Offset32"
 	case CommentsOffset8:
-		return "Comments:Offset(Comments)8"
+		return "(Comments).Offset8"
 	case CommentsOffset32:
-		return "Comments:Offset(Comments)32"
+		return "(Comments).Offset32"
 	case SliceOfRefOfPartitionDefinitionOffset8:
-		return "[]*PartitionDefinition:Offset([]*PartitionDefinition)8"
+		return "([]*PartitionDefinition).Offset8"
 	case SliceOfRefOfPartitionDefinitionOffset32:
-		return "[]*PartitionDefinition:Offset([]*PartitionDefinition)32"
+		return "([]*PartitionDefinition).Offset32"
 	case SliceOfRefOfRenameTablePairOffset8:
-		return "[]*RenameTablePair:Offset([]*RenameTablePair)8"
+		return "([]*RenameTablePair).Offset8"
 	case SliceOfRefOfRenameTablePairOffset32:
-		return "[]*RenameTablePair:Offset([]*RenameTablePair)32"
+		return "([]*RenameTablePair).Offset32"
 	case RefOfRootNodeSQLNode:
-		return "*RootNode:SQLNode(SQLNode)"
+		return "(*RootNode).SQLNode"
 	case RefOfTableNameName:
-		return "*TableName:Name(IdentifierCS)"
+		return "(*TableName).Name"
 	case RefOfTableNameQualifier:
-		return "*TableName:Qualifier(IdentifierCS)"
+		return "(*TableName).Qualifier"
 	case RefOfTableOptionValue:
-		return "*TableOption:Value(*Literal)"
+		return "(*TableOption).Value"
 	case RefOfTableOptionTables:
-		return "*TableOption:Tables(TableNames)"
+		return "(*TableOption).Tables"
 	case SliceOfRefOfIndexDefinitionOffset8:
-		return "[]*IndexDefinition:Offset([]*IndexDefinition)8"
+		return "([]*IndexDefinition).Offset8"
 	case SliceOfRefOfIndexDefinitionOffset32:
-		return "[]*IndexDefinition:Offset([]*IndexDefinition)32"
+		return "([]*IndexDefinition).Offset32"
 	case SliceOfRefOfConstraintDefinitionOffset8:
-		return "[]*ConstraintDefinition:Offset([]*ConstraintDefinition)8"
+		return "([]*ConstraintDefinition).Offset8"
 	case SliceOfRefOfConstraintDefinitionOffset32:
-		return "[]*ConstraintDefinition:Offset([]*ConstraintDefinition)32"
+		return "([]*ConstraintDefinition).Offset32"
 	case RefOfVindexParamKey:
-		return "*VindexParam:Key(IdentifierCI)"
+		return "(*VindexParam).Key"
 	case SliceOfVindexParamOffset8:
-		return "[]VindexParam:Offset([]VindexParam)8"
+		return "([]VindexParam).Offset8"
 	case SliceOfVindexParamOffset32:
-		return "[]VindexParam:Offset([]VindexParam)32"
+		return "([]VindexParam).Offset32"
 	case SliceOfRefOfCommonTableExprOffset8:
-		return "[]*CommonTableExpr:Offset([]*CommonTableExpr)8"
+		return "([]*CommonTableExpr).Offset8"
 	case SliceOfRefOfCommonTableExprOffset32:
-		return "[]*CommonTableExpr:Offset([]*CommonTableExpr)32"
+		return "([]*CommonTableExpr).Offset32"
 	case RefOfIndexColumnColumn:
-		return "*IndexColumn:Column(IdentifierCI)"
+		return "(*IndexColumn).Column"
 	case RefOfIndexColumnExpression:
-		return "*IndexColumn:Expression(Expr)"
+		return "(*IndexColumn).Expression"
 	case RefOfIndexOptionValue:
-		return "*IndexOption:Value(*Literal)"
+		return "(*IndexOption).Value"
 	case RefOfTableAndLockTypeTable:
-		return "*TableAndLockType:Table(TableExpr)"
+		return "(*TableAndLockType).Table"
 	case RefOfRenameTablePairFromTable:
-		return "*RenameTablePair:FromTable(TableName)"
+		return "(*RenameTablePair).FromTable"
 	case RefOfRenameTablePairToTable:
-		return "*RenameTablePair:ToTable(TableName)"
+		return "(*RenameTablePair).ToTable"
 	}
 	panic("unknown ASTStep")
 }
