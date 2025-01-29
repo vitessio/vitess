@@ -638,38 +638,14 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 			workflow.WorkflowSubType = res.WorkflowSubType.String()
 			workflow.DeferSecondaryKeys = res.DeferSecondaryKeys
 
-			// MaxVReplicationTransactionLag estimates the actual statement processing lag
-			// between the source and the target. If we are still processing source events it
-			// is the difference b/w current time and the timestamp of the last event. If
-			// heartbeats are more recent than the last event, then the lag is the time since
-			// the last heartbeat as there can be an actual event immediately after the
-			// heartbeat, but which has not yet been processed on the target.
-			// We don't allow switching during the copy phase, so in that case we just return
-			// a large lag. All timestamps are in seconds since epoch.
+			// MaxVReplicationTransactionLag estimates the max statement processing lag
+			// between the source and the target across all of the workflow streams.
 			if _, ok := maxVReplicationTransactionLagByWorkflow[workflow.Name]; !ok {
 				maxVReplicationTransactionLagByWorkflow[workflow.Name] = 0
 			}
-			if rstream.TransactionTimestamp == nil {
-				rstream.TransactionTimestamp = &vttimepb.Time{}
-			}
-			lastTransactionTime := rstream.TransactionTimestamp.Seconds
-			if rstream.TimeHeartbeat == nil {
-				rstream.TimeHeartbeat = &vttimepb.Time{}
-			}
-			lastHeartbeatTime := rstream.TimeHeartbeat.Seconds
-			if stream.State == binlogdatapb.VReplicationWorkflowState_Copying.String() {
-				maxVReplicationTransactionLagByWorkflow[workflow.Name] = math.MaxInt64
-			} else {
-				if lastTransactionTime == 0 /* no new events after copy */ ||
-					lastHeartbeatTime > lastTransactionTime /* no recent transactions, so all caught up */ {
-
-					lastTransactionTime = lastHeartbeatTime
-				}
-				now := time.Now().Unix() /* seconds since epoch */
-				transactionReplicationLag := float64(now - lastTransactionTime)
-				if transactionReplicationLag > maxVReplicationTransactionLagByWorkflow[workflow.Name] {
-					maxVReplicationTransactionLagByWorkflow[workflow.Name] = transactionReplicationLag
-				}
+			transactionReplicationLag := getVReplicationTrxLag(rstream.TransactionTimestamp, rstream.TimeUpdated, rstream.TimeHeartbeat, rstream.State)
+			if transactionReplicationLag > maxVReplicationTransactionLagByWorkflow[workflow.Name] {
+				maxVReplicationTransactionLagByWorkflow[workflow.Name] = transactionReplicationLag
 			}
 		}
 
@@ -3356,8 +3332,10 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 			return handleError("failed to migrate the workflow streams", err)
 		}
 		if cancel {
-			sw.cancelMigration(ctx, sm)
-			return 0, sw.logs(), nil
+			if cerr := sw.cancelMigration(ctx, sm); cerr != nil {
+				err = vterrors.Errorf(vtrpcpb.Code_CANCELED, "%v\n\n%v", err, cerr)
+			}
+			return 0, sw.logs(), err
 		}
 
 		// We stop writes on the source before stopping the source streams so that the catchup time
@@ -3369,7 +3347,9 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 		// we actually stop them.
 		ts.Logger().Infof("Stopping source writes")
 		if err := sw.stopSourceWrites(ctx); err != nil {
-			sw.cancelMigration(ctx, sm)
+			if cerr := sw.cancelMigration(ctx, sm); cerr != nil {
+				err = vterrors.Errorf(vtrpcpb.Code_CANCELED, "%v\n\n%v", err, cerr)
+			}
 			return handleError(fmt.Sprintf("failed to stop writes in the %s keyspace", ts.SourceKeyspaceName()), err)
 		}
 
@@ -3387,7 +3367,9 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 					ts.Logger().Errorf("stream in stopStreams: key %s shard %s stream %+v", key, stream.BinlogSource.Shard, stream.BinlogSource)
 				}
 			}
-			sw.cancelMigration(ctx, sm)
+			if cerr := sw.cancelMigration(ctx, sm); cerr != nil {
+				err = vterrors.Errorf(vtrpcpb.Code_CANCELED, "%v\n\n%v", err, cerr)
+			}
 			return handleError(fmt.Sprintf("failed to stop the workflow streams in the %s keyspace", ts.SourceKeyspaceName()), err)
 		}
 
@@ -3397,7 +3379,9 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 			// the tablet's deny list check and the first mysqld side table lock.
 			for cnt := 1; cnt <= lockTablesCycles; cnt++ {
 				if err := ts.executeLockTablesOnSource(ctx); err != nil {
-					sw.cancelMigration(ctx, sm)
+					if cerr := sw.cancelMigration(ctx, sm); cerr != nil {
+						err = vterrors.Errorf(vtrpcpb.Code_CANCELED, "%v\n\n%v", err, cerr)
+					}
 					return handleError(fmt.Sprintf("failed to execute LOCK TABLES (attempt %d of %d) on sources", cnt, lockTablesCycles), err)
 				}
 				// No need to UNLOCK the tables as the connection was closed once the locks were acquired
@@ -3408,25 +3392,33 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 
 		ts.Logger().Infof("Waiting for streams to catchup")
 		if err := sw.waitForCatchup(ctx, timeout); err != nil {
-			sw.cancelMigration(ctx, sm)
+			if cerr := sw.cancelMigration(ctx, sm); cerr != nil {
+				err = vterrors.Errorf(vtrpcpb.Code_CANCELED, "%v\n\n%v", err, cerr)
+			}
 			return handleError("failed to sync up replication between the source and target", err)
 		}
 
 		ts.Logger().Infof("Migrating streams")
 		if err := sw.migrateStreams(ctx, sm); err != nil {
-			sw.cancelMigration(ctx, sm)
+			if cerr := sw.cancelMigration(ctx, sm); cerr != nil {
+				err = vterrors.Errorf(vtrpcpb.Code_CANCELED, "%v\n\n%v", err, cerr)
+			}
 			return handleError("failed to migrate the workflow streams", err)
 		}
 
 		ts.Logger().Infof("Resetting sequences")
 		if err := sw.resetSequences(ctx); err != nil {
-			sw.cancelMigration(ctx, sm)
+			if cerr := sw.cancelMigration(ctx, sm); cerr != nil {
+				err = vterrors.Errorf(vtrpcpb.Code_CANCELED, "%v\n\n%v", err, cerr)
+			}
 			return handleError("failed to reset the sequences", err)
 		}
 
 		ts.Logger().Infof("Creating reverse streams")
 		if err := sw.createReverseVReplication(ctx); err != nil {
-			sw.cancelMigration(ctx, sm)
+			if cerr := sw.cancelMigration(ctx, sm); cerr != nil {
+				err = vterrors.Errorf(vtrpcpb.Code_CANCELED, "%v\n\n%v", err, cerr)
+			}
 			return handleError("failed to create the reverse vreplication streams", err)
 		}
 
@@ -3439,7 +3431,9 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 			initSeqCtx, cancel := context.WithTimeout(ctx, timeout/2)
 			defer cancel()
 			if err := sw.initializeTargetSequences(initSeqCtx, sequenceMetadata); err != nil {
-				sw.cancelMigration(ctx, sm)
+				if cerr := sw.cancelMigration(ctx, sm); cerr != nil {
+					err = vterrors.Errorf(vtrpcpb.Code_CANCELED, "%v\n\n%v", err, cerr)
+				}
 				return handleError(fmt.Sprintf("failed to initialize the sequences used in the %s keyspace", ts.TargetKeyspaceName()), err)
 			}
 		}
@@ -3492,14 +3486,13 @@ func (s *Server) canSwitch(ctx context.Context, ts *trafficSwitcher, state *Stat
 	if err != nil {
 		return "", err
 	}
+	if wf.MaxVReplicationTransactionLag > maxAllowedReplLagSecs {
+		return fmt.Sprintf(cannotSwitchHighLag, wf.MaxVReplicationTransactionLag, maxAllowedReplLagSecs), nil
+	}
 	for _, stream := range wf.ShardStreams {
 		for _, st := range stream.GetStreams() {
 			if st.Message == Frozen {
 				return cannotSwitchFrozen, nil
-			}
-			// If no new events have been replicated after the copy phase then it will be 0.
-			if vreplLag := time.Now().Unix() - st.TimeUpdated.Seconds; vreplLag > maxAllowedReplLagSecs {
-				return fmt.Sprintf(cannotSwitchHighLag, vreplLag, maxAllowedReplLagSecs), nil
 			}
 			switch st.State {
 			case binlogdatapb.VReplicationWorkflowState_Copying.String():
@@ -4049,4 +4042,42 @@ func (s *Server) getWorkflowStatus(ctx context.Context, keyspace string, workflo
 		}
 	}
 	return workflowStatus, nil
+}
+
+// getVReplicationTrxLag estimates the actual statement processing lag between the
+// source and the target. If we are still processing source events it is the
+// difference between current time and the timestamp of the last event. If
+// heartbeats are more recent than the last event, then the lag is the time since
+// the last heartbeat as there can be an actual event immediately after the
+// heartbeat, but which has not yet been processed on the target. We don't allow
+// switching during the copy phase, so in that case we just return a large lag.
+// All timestamps are in seconds since epoch.
+func getVReplicationTrxLag(trxTs, updatedTs, heartbeatTs *vttimepb.Time, state binlogdatapb.VReplicationWorkflowState) float64 {
+	if state == binlogdatapb.VReplicationWorkflowState_Copying {
+		return math.MaxInt64
+	}
+	if trxTs == nil {
+		trxTs = &vttimepb.Time{}
+	}
+	lastTransactionTime := trxTs.Seconds
+	if updatedTs == nil {
+		updatedTs = &vttimepb.Time{}
+	}
+	lastUpdatedTime := updatedTs.Seconds
+	if heartbeatTs == nil {
+		heartbeatTs = &vttimepb.Time{}
+	}
+	lastHeartbeatTime := heartbeatTs.Seconds
+	// We do NOT update the heartbeat timestamp when we are regularly updating the
+	// position as we replicate transactions (GTIDs).
+	// When we DO record a heartbeat, we set the updated time to the same value.
+	// When recording that we are throttled, we update the updated time but NOT
+	// the heartbeat time.
+	if lastTransactionTime == 0 /* No replicated events after copy */ ||
+		(lastUpdatedTime == lastHeartbeatTime && /* The last update was from a heartbeat */
+			lastUpdatedTime > lastTransactionTime /* No recent transactions, only heartbeats, so all caught up */) {
+		lastTransactionTime = lastUpdatedTime
+	}
+	now := time.Now().Unix() // Seconds since epoch
+	return float64(now - lastTransactionTime)
 }
