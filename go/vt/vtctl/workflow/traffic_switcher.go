@@ -941,8 +941,8 @@ func (ts *trafficSwitcher) createReverseVReplication(ctx context.Context) error 
 						// For non-reference tables we return an error if there's no primary
 						// vindex as it's not clear what to do.
 						if len(vtable.ColumnVindexes) > 0 && len(vtable.ColumnVindexes[0].Columns) > 0 {
-							inKeyrange = fmt.Sprintf(" where in_keyrange(%s, %s, %s)", sqlparser.String(vtable.ColumnVindexes[0].Columns[0]),
-								encodeString(sqlparser.String(sqlparser.NewTableNameWithQualifier(vtable.ColumnVindexes[0].Name, ts.SourceKeyspaceName()))), encodeString(key.KeyRangeString(source.GetShard().KeyRange)))
+							inKeyrange = fmt.Sprintf(" where in_keyrange(%s, '%s.%s', %s)", sqlparser.String(vtable.ColumnVindexes[0].Columns[0]),
+								ts.SourceKeyspaceName(), vtable.ColumnVindexes[0].Name, encodeString(key.KeyRangeString(source.GetShard().KeyRange)))
 						} else {
 							return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "no primary vindex found for the %s table in the %s keyspace",
 								vtable.Name.String(), ts.SourceKeyspaceName())
