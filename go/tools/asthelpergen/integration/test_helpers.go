@@ -49,6 +49,7 @@ type Cursor struct {
 	node     AST
 	// marks that the node has been replaced, and the new node should be visited
 	revisit bool
+	current ASTPath
 }
 
 // Node returns the current Node.

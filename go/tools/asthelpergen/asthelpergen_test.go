@@ -49,7 +49,7 @@ func TestFullGeneration(t *testing.T) {
 }
 
 func TestRecreateAllFiles(t *testing.T) {
-	t.Skip("This test recreates all files in the integration directory. It should only be run when the ASTHelperGen code has changed.")
+	// t.Skip("This test recreates all files in the integration directory. It should only be run when the ASTHelperGen code has changed.")
 	result, err := GenerateASTHelpers(&Options{
 		Packages:      []string{"./integration/..."},
 		RootInterface: "vitess.io/vitess/go/tools/asthelpergen/integration.AST",
