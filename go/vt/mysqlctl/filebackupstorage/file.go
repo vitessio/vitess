@@ -27,6 +27,7 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/os2"
 	"vitess.io/vitess/go/vt/mysqlctl/errors"
 
 	"vitess.io/vitess/go/ioutil"
@@ -96,7 +97,7 @@ func (fbh *FileBackupHandle) AddFile(ctx context.Context, filename string, files
 		return nil, fmt.Errorf("AddFile cannot be called on read-only backup")
 	}
 	p := path.Join(FileBackupStorageRoot, fbh.dir, fbh.name, filename)
-	f, err := os.Create(p)
+	f, err := os2.Create(p)
 	if err != nil {
 		return nil, err
 	}
