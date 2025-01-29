@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/bytes2"
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
@@ -230,10 +231,15 @@ func (tr *Tracker) saveCurrentSchemaToDb(ctx context.Context, gtid, ddl string, 
 	}
 	defer conn.Recycle()
 
+	// We serialize a blob here, encodeString is for strings only
+	// and should not be used for binary data.
+	blobVal := sqltypes.MakeTrusted(sqltypes.VarBinary, blob)
+	buf := bytes2.Buffer{}
+	blobVal.EncodeSQLBytes2(&buf)
 	query := sqlparser.BuildParsedQuery("insert into %s.schema_version "+
 		"(pos, ddl, schemax, time_updated) "+
 		"values (%s, %s, %s, %d)", sidecar.GetIdentifier(), encodeString(gtid),
-		encodeString(ddl), encodeString(string(blob)), timestamp).Query
+		encodeString(ddl), buf.String(), timestamp).Query
 	_, err = conn.Conn.Exec(ctx, query, 1, false)
 	if err != nil {
 		return err
