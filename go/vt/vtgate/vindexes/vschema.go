@@ -489,11 +489,13 @@ func AddAdditionalGlobalTables(source *vschemapb.SrvVSchema, vschema *VSchema) {
 	// Collect valid uniquely named tables from unsharded keyspaces.
 	for ksname, ks := range source.Keyspaces {
 		ksvschema := vschema.Keyspaces[ksname]
-		// Ignore sharded keyspaces and those flagged for explicit routing.
-		if ks.RequireExplicitRouting || ks.Sharded {
+		// Ignore keyspaces marked for explicit routing.
+		if ks.RequireExplicitRouting {
 			continue
 		}
-		for tname, table := range ksvschema.Tables {
+		// Views does not require routing, so this can be added to global tables
+		// for sharded keyspace as well
+		for tname, table := range ksvschema.Views {
 			// Ignore tables already global (i.e. if specified in the vschema of an unsharded keyspace) or ambiguous.
 			if _, found := vschema.globalTables[tname]; !found {
 				_, ok := newTables[tname]
@@ -505,7 +507,11 @@ func AddAdditionalGlobalTables(source *vschemapb.SrvVSchema, vschema *VSchema) {
 				}
 			}
 		}
-		for tname, table := range ksvschema.Views {
+		// Sharded tables needs vindex information, adding to global table will not help.
+		if ks.Sharded {
+			continue
+		}
+		for tname, table := range ksvschema.Tables {
 			// Ignore tables already global (i.e. if specified in the vschema of an unsharded keyspace) or ambiguous.
 			if _, found := vschema.globalTables[tname]; !found {
 				_, ok := newTables[tname]
@@ -1346,23 +1352,22 @@ func (vschema *VSchema) FindTable(keyspace, tablename string) (*BaseTable, error
 //
 //   - constructUnshardedIfNotFound is not requested, than no table is returned.
 //   - constructUnshardedIfNotFound is requested, and there is only one keyspace,
-//     and that keyspace is unsharded, then a *Table representing that table is
+//     and that keyspace is unsharded, then a BaseTable representing that table is
 //     returned.
 func (vschema *VSchema) findGlobalTable(
 	tablename string,
 	constructUnshardedIfNotFound bool,
 ) (Table, error) {
+	table, ok := vschema.globalTables[tablename]
+	if table != nil {
+		return table, nil
+	}
+
 	if len(vschema.Keyspaces) == 1 {
 		for _, ks := range vschema.Keyspaces {
 			table := ks.findTable(tablename, constructUnshardedIfNotFound)
 			return table, nil
 		}
-	}
-
-	table, ok := vschema.globalTables[tablename]
-
-	if table != nil {
-		return table, nil
 	}
 
 	if ok {

@@ -3,6 +3,7 @@ package vtgate
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/utils"
@@ -515,6 +516,40 @@ func TestVSchemaUDFsUpdate(t *testing.T) {
 	utils.MustMatch(t, vs, vm.currentVschema, "currentVschema does not match Vschema")
 }
 
+// TestVSchemaViewsUpdate tests that the views are updated in the VSchema.
+func TestVSchemaViewsUpdate(t *testing.T) {
+	vm := &VSchemaManager{}
+	var vs *vindexes.VSchema
+	vm.subscriber = func(vschema *vindexes.VSchema, _ *VSchemaStats) {
+		vs = vschema
+		vs.ResetCreated()
+	}
+	vm.schema = &fakeSchema{v: map[string]sqlparser.TableStatement{
+		"v1": &sqlparser.Select{
+			From:        sqlparser.TableExprs{sqlparser.NewAliasedTableExpr(sqlparser.NewTableName("t1"), "")},
+			SelectExprs: sqlparser.SelectExprs{sqlparser.NewAliasedExpr(sqlparser.NewIntLiteral("1"), "")},
+		},
+		"v2": &sqlparser.Select{
+			From:        sqlparser.TableExprs{sqlparser.NewAliasedTableExpr(sqlparser.NewTableName("t2"), "")},
+			SelectExprs: sqlparser.SelectExprs{sqlparser.NewAliasedExpr(sqlparser.NewIntLiteral("2"), "")},
+		},
+	}}
+	vm.VSchemaUpdate(&vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"ks": {Sharded: true},
+		},
+	}, nil)
+
+	// find in views map
+	assert.NotNil(t, vs.FindView("ks", "v1"))
+	assert.NotNil(t, vs.FindView("ks", "v2"))
+	// find in global table
+	assert.NotNil(t, vs.FindView("", "v1"))
+	assert.NotNil(t, vs.FindView("", "v2"))
+
+	utils.MustMatch(t, vs, vm.currentVschema, "currentVschema does not match Vschema")
+}
+
 func TestMarkErrorIfCyclesInFk(t *testing.T) {
 	ksName := "ks"
 	keyspace := &vindexes.Keyspace{
@@ -893,6 +928,7 @@ func makeTestSrvVSchema(ks string, sharded bool, tbls map[string]*vschemapb.Tabl
 
 type fakeSchema struct {
 	t    map[string]*vindexes.TableInfo
+	v    map[string]sqlparser.TableStatement
 	udfs []string
 }
 
@@ -901,7 +937,7 @@ func (f *fakeSchema) Tables(string) map[string]*vindexes.TableInfo {
 }
 
 func (f *fakeSchema) Views(string) map[string]sqlparser.TableStatement {
-	return nil
+	return f.v
 }
 func (f *fakeSchema) UDFs(string) []string { return f.udfs }
 
