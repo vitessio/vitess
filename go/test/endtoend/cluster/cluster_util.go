@@ -18,8 +18,10 @@ package cluster
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path"
 	"reflect"
 	"strings"
@@ -508,4 +510,20 @@ func PrintFiles(t *testing.T, dir string, files ...string) {
 			log.Errorf("%v", string(res))
 		}
 	}
+}
+
+// ConfirmDataDirHasNoGlobalPerms confirms that no files in the tablet's data directory
+// have any global/other permissions set.
+func ConfirmDataDirHasNoGlobalPerms(t *testing.T, tablet *Vttablet) {
+	datadir := tablet.VttabletProcess.Directory
+	if _, err := os.Stat(datadir); errors.Is(err, os.ErrNotExist) {
+		t.Logf("Data directory %s no longer exists, skipping permissions check", datadir)
+		return
+	}
+	// List any files which have any of the other bits set.
+	cmd := exec.Command("find", datadir, "-perm", "+00007")
+	out, err := cmd.CombinedOutput()
+	require.NoError(t, err, "Error running find command: %s", string(out))
+	so := string(out)
+	require.Empty(t, so, "Found files with global permissions: %s", so)
 }
