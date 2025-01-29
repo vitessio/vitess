@@ -318,6 +318,7 @@ func (kss *keyspaceState) ensureConsistentLocked() {
 	// watcher. this means the ongoing availability event has been resolved, so we can broadcast
 	// a resolution event to all listeners
 	kss.consistent = true
+	log.Infof("keyspace %s is now consistent", kss.keyspace)
 
 	kss.moveTablesState = nil
 
