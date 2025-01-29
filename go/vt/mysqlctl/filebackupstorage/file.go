@@ -173,13 +173,13 @@ func (fbs *FileBackupStorage) ListBackups(ctx context.Context, dir string) ([]ba
 func (fbs *FileBackupStorage) StartBackup(ctx context.Context, dir, name string) (backupstorage.BackupHandle, error) {
 	// Make sure the directory exists.
 	p := path.Join(FileBackupStorageRoot, dir)
-	if err := os.MkdirAll(p, 0770); err != nil {
+	if err := os2.MkdirAll(p); err != nil {
 		return nil, err
 	}
 
 	// Create the subdirectory for this named backup.
 	p = path.Join(p, name)
-	if err := os.Mkdir(p, 0770); err != nil {
+	if err := os2.Mkdir(p); err != nil {
 		return nil, err
 	}
 
