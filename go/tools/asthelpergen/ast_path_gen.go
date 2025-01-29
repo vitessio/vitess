@@ -49,7 +49,16 @@ func newPathGen(pkgname string) *pathGen {
 }
 
 func (p *pathGen) genFile() (string, *jen.File) {
-	p.close()
+	p.file.ImportName("fmt", "fmt")
+
+	// Declare the ASTStep type with underlying type uint16
+	p.file.Add(jen.Type().Id("ASTStep").Uint16())
+
+	// Add the const block
+	p.file.Add(p.buildConstWithEnum())
+
+	// Add the ASTStep#DebugString() method to the file
+	p.file.Add(p.debugString())
 	return "ast_path.go", p.file
 }
 
@@ -107,19 +116,6 @@ func (p *pathGen) sliceMethod(t types.Type, _ *types.Slice, _ generatorSPI) erro
 
 func (p *pathGen) basicMethod(t types.Type, basic *types.Basic, spi generatorSPI) error {
 	return nil
-}
-
-func (p *pathGen) close() {
-	p.file.ImportName("fmt", "fmt")
-
-	// Declare the ASTStep type with underlying type uint16
-	p.file.Add(jen.Type().Id("ASTStep").Uint16())
-
-	// Add the const block
-	p.file.Add(p.buildConstWithEnum())
-
-	// Add the DebugString() method to the file
-	p.file.Add(p.debugString())
 }
 
 func (p *pathGen) debugString() *jen.Statement {

@@ -1,5 +1,5 @@
 /*
-Copyright 2023 The Vitess Authors.
+Copyright 2025 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -368,12 +368,10 @@ func (a *application) rewriteValueSliceContainer(parent AST, node ValueSliceCont
 			return false
 		}
 	}
-	for _, el := range node.ASTImplementationElements {
-		if !a.rewriteRefOfLeaf(node, el, func(newNode, parent AST) {
-			panic("[BUG] tried to replace 'ASTImplementationElements' on 'ValueSliceContainer'")
-		}) {
-			return false
-		}
+	if !a.rewriteLeafSlice(node, node.ASTImplementationElements, func(newNode, parent AST) {
+		panic("[BUG] tried to replace 'ASTImplementationElements' on 'ValueSliceContainer'")
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -495,14 +493,10 @@ func (a *application) rewriteRefOfValueSliceContainer(parent AST, node *ValueSli
 			return false
 		}
 	}
-	for x, el := range node.ASTImplementationElements {
-		if !a.rewriteRefOfLeaf(node, el, func(idx int) replacerFunc {
-			return func(newNode, parent AST) {
-				parent.(*ValueSliceContainer).ASTImplementationElements[idx] = newNode.(*Leaf)
-			}
-		}(x)) {
-			return false
-		}
+	if !a.rewriteLeafSlice(node, node.ASTImplementationElements, func(newNode, parent AST) {
+		parent.(*ValueSliceContainer).ASTImplementationElements = newNode.(LeafSlice)
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
