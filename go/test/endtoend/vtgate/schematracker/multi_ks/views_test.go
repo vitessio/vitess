@@ -169,7 +169,7 @@ func TestViewQueries(t *testing.T) {
 		name:      "unique sharded view - non qualified - default unsharded keyspace- should error",
 		defaultKs: "uks",
 		sql:       "select * from sv1 order by id",
-		expErr:    "table sv1 not found",
+		expErr:    "(errno 1146) (sqlstate 42S02)",
 	}, {
 		name:      "unique unsharded view - non qualified - default sharded keyspace - should error",
 		defaultKs: "sks",
@@ -193,7 +193,7 @@ func TestViewQueries(t *testing.T) {
 	}, {
 		name:      "vschema provided - sharded view - non qualified",
 		defaultKs: "@primary",
-		sql:       "select * from cv2 order by id",
+		sql:       "select id, mcol from cv2 order by id",
 		expRes:    "[[INT64(1) INT64(100000)] [INT64(2) INT64(800000)]]",
 	}, {
 		name:      "non unique view - non qualified - should error",
@@ -224,6 +224,7 @@ func TestViewQueries(t *testing.T) {
 
 	for _, tc := range tcases {
 		t.Run(tc.name, func(t *testing.T) {
+			utils.Exec(t, conn, "use "+tc.defaultKs)
 			qr, err := utils.ExecAllowError(t, conn, tc.sql)
 			if tc.expErr != "" {
 				require.ErrorContains(t, err, tc.expErr)
