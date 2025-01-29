@@ -681,11 +681,7 @@ func (ts *trafficSwitcher) changeShardsAccess(ctx context.Context, keyspace stri
 
 func (ts *trafficSwitcher) allowTargetWrites(ctx context.Context) error {
 	if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
-<<<<<<< HEAD
 		return ts.allowTableTargetWrites(ctx)
-=======
-		return ts.switchDeniedTables(ctx, false)
->>>>>>> 39a0ddde8f (VReplication: Address SwitchTraffic bugs around replication lag and cancel on error (#17616))
 	}
 	return ts.changeShardsAccess(ctx, ts.TargetKeyspaceName(), ts.TargetShards(), allowWrites)
 }
@@ -952,11 +948,7 @@ func (ts *trafficSwitcher) waitForCatchup(ctx context.Context, filteredReplicati
 func (ts *trafficSwitcher) stopSourceWrites(ctx context.Context) error {
 	var err error
 	if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
-<<<<<<< HEAD
 		err = ts.changeTableSourceWrites(ctx, disallowWrites)
-=======
-		err = ts.switchDeniedTables(ctx, false)
->>>>>>> 39a0ddde8f (VReplication: Address SwitchTraffic bugs around replication lag and cancel on error (#17616))
 	} else {
 		err = ts.changeShardsAccess(ctx, ts.SourceKeyspaceName(), ts.SourceShards(), disallowWrites)
 	}
@@ -976,52 +968,11 @@ func (ts *trafficSwitcher) stopSourceWrites(ctx context.Context) error {
 	})
 }
 
-<<<<<<< HEAD
 func (ts *trafficSwitcher) changeTableSourceWrites(ctx context.Context, access accessType) error {
 	err := ts.ForAllSources(func(source *MigrationSource) error {
 		if _, err := ts.TopoServer().UpdateShardFields(ctx, ts.SourceKeyspaceName(), source.GetShard().ShardName(), func(si *topo.ShardInfo) error {
 			return si.UpdateDeniedTables(ctx, topodatapb.TabletType_PRIMARY, nil, access == allowWrites /* remove */, ts.Tables())
 		}); err != nil {
-=======
-// switchDeniedTables switches the denied tables rules for the traffic switch.
-// They are added on the source side and removed on the target side.
-// If backward is true, then we swap this logic, removing on the source side
-// and adding on the target side. You would want to do that e.g. when canceling
-// a failed (and currently partial) traffic switch as we may have already
-// switched the denied tables entries and in any event we need to go back to
-// the original state.
-func (ts *trafficSwitcher) switchDeniedTables(ctx context.Context, backward bool) error {
-	if ts.MigrationType() != binlogdatapb.MigrationType_TABLES {
-		return nil
-	}
-
-	rmsource, rmtarget := false, true
-	if backward {
-		rmsource, rmtarget = true, false
-	}
-
-	egrp, ectx := errgroup.WithContext(ctx)
-	egrp.Go(func() error {
-		return ts.ForAllSources(func(source *MigrationSource) error {
-			if _, err := ts.TopoServer().UpdateShardFields(ctx, ts.SourceKeyspaceName(), source.GetShard().ShardName(), func(si *topo.ShardInfo) error {
-				return si.UpdateDeniedTables(ectx, topodatapb.TabletType_PRIMARY, nil, rmsource, ts.Tables())
-			}); err != nil {
-				return err
-			}
-			rtbsCtx, cancel := context.WithTimeout(ectx, shardTabletRefreshTimeout)
-			defer cancel()
-			isPartial, partialDetails, err := topotools.RefreshTabletsByShard(rtbsCtx, ts.TopoServer(), ts.TabletManagerClient(), source.GetShard(), nil, ts.Logger())
-			if isPartial {
-				msg := fmt.Sprintf("failed to successfully refresh all tablets in the %s/%s source shard (%v):\n  %v",
-					source.GetShard().Keyspace(), source.GetShard().ShardName(), err, partialDetails)
-				if ts.force {
-					log.Warning(msg)
-					return nil
-				} else {
-					return errors.New(msg)
-				}
-			}
->>>>>>> 39a0ddde8f (VReplication: Address SwitchTraffic bugs around replication lag and cancel on error (#17616))
 			return err
 		}
 		rtbsCtx, cancel := context.WithTimeout(ctx, shardTabletRefreshTimeout)
@@ -1033,36 +984,8 @@ func (ts *trafficSwitcher) switchDeniedTables(ctx context.Context, backward bool
 		}
 		return err
 	})
-<<<<<<< HEAD
 	if err != nil {
 		log.Warningf("Error in changeTableSourceWrites: %s", err)
-=======
-	egrp.Go(func() error {
-		return ts.ForAllTargets(func(target *MigrationTarget) error {
-			if _, err := ts.TopoServer().UpdateShardFields(ectx, ts.TargetKeyspaceName(), target.GetShard().ShardName(), func(si *topo.ShardInfo) error {
-				return si.UpdateDeniedTables(ctx, topodatapb.TabletType_PRIMARY, nil, rmtarget, ts.Tables())
-			}); err != nil {
-				return err
-			}
-			rtbsCtx, cancel := context.WithTimeout(ectx, shardTabletRefreshTimeout)
-			defer cancel()
-			isPartial, partialDetails, err := topotools.RefreshTabletsByShard(rtbsCtx, ts.TopoServer(), ts.TabletManagerClient(), target.GetShard(), nil, ts.Logger())
-			if isPartial {
-				msg := fmt.Sprintf("failed to successfully refresh all tablets in the %s/%s target shard (%v):\n  %v",
-					target.GetShard().Keyspace(), target.GetShard().ShardName(), err, partialDetails)
-				if ts.force {
-					log.Warning(msg)
-					return nil
-				} else {
-					return errors.New(msg)
-				}
-			}
-			return err
-		})
-	})
-	if err := egrp.Wait(); err != nil {
-		ts.Logger().Warningf("Error in switchDeniedTables: %s", err)
->>>>>>> 39a0ddde8f (VReplication: Address SwitchTraffic bugs around replication lag and cancel on error (#17616))
 		return err
 	}
 	// Note that the denied tables, which are being updated in this method, are not part of the SrvVSchema in the topo.
@@ -1094,11 +1017,7 @@ func (ts *trafficSwitcher) cancelMigration(ctx context.Context, sm *StreamMigrat
 	defer cmCancel()
 
 	if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
-<<<<<<< HEAD
 		err = ts.changeTableSourceWrites(cmCtx, allowWrites)
-=======
-		err = ts.switchDeniedTables(cmCtx, true /* revert */)
->>>>>>> 39a0ddde8f (VReplication: Address SwitchTraffic bugs around replication lag and cancel on error (#17616))
 	} else {
 		err = ts.changeShardsAccess(cmCtx, ts.SourceKeyspaceName(), ts.SourceShards(), allowWrites)
 	}
@@ -1123,15 +1042,9 @@ func (ts *trafficSwitcher) cancelMigration(ctx context.Context, sm *StreamMigrat
 		ts.Logger().Errorf("Cancel migration failed: could not restart vreplication: %v", err)
 	}
 
-<<<<<<< HEAD
-	err = ts.deleteReverseVReplication(cmCtx)
-	if err != nil {
-		ts.Logger().Errorf("Cancel migration failed: could not delete revers vreplication entries: %v", err)
-=======
 	if err := ts.deleteReverseVReplication(cmCtx); err != nil {
 		cancelErrs.RecordError(fmt.Errorf("could not delete reverse vreplication streams: %v", err))
 		ts.Logger().Errorf("Cancel migration failed: could not delete reverse vreplication streams: %v", err)
->>>>>>> 39a0ddde8f (VReplication: Address SwitchTraffic bugs around replication lag and cancel on error (#17616))
 	}
 
 	if cancelErrs.HasErrors() {
