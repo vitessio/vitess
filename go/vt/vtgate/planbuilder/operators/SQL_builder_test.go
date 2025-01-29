@@ -26,11 +26,10 @@ import (
 )
 
 func TestToSQLValues(t *testing.T) {
-	ctx := plancontext.PlanningContext{}
+	ctx := plancontext.CreateEmptyPlanningContext()
 
 	tableName := sqlparser.NewTableName("x")
 	tableColumn := sqlparser.NewColName("id")
-	valuesColumn := sqlparser.NewIdentifierCI("user_id")
 	op := &Values{
 		unaryOperator: newUnaryOp(&Table{
 			QTable: &QueryTable{
@@ -39,20 +38,81 @@ func TestToSQLValues(t *testing.T) {
 			},
 			Columns: []*sqlparser.ColName{tableColumn},
 		}),
-		Columns: sqlparser.Columns{valuesColumn},
+		Columns: sqlparser.Columns{sqlparser.NewIdentifierCI("user_id")},
 		Name:    "t",
 		Arg:     "toto",
 	}
 
-	stmt, _, err := ToSQL(&ctx, op)
+	stmt, _, err := ToSQL(ctx, op)
 	require.NoError(t, err)
 	require.Equal(t, "select id from x, (values ::toto) as t(user_id)", sqlparser.String(stmt))
 
+	// Now do the same test but with a projection on top
 	proj := newAliasedProjection(op)
 	proj.addUnexploredExpr(sqlparser.NewAliasedExpr(tableColumn, ""), tableColumn)
-	proj.addUnexploredExpr(sqlparser.NewAliasedExpr(sqlparser.NewColNameWithQualifier("user_id", sqlparser.NewTableName("t")), ""), sqlparser.NewColNameWithQualifier("user_id", sqlparser.NewTableName("t")))
 
-	stmt, _, err = ToSQL(&ctx, proj)
+	userIdColName := sqlparser.NewColNameWithQualifier("user_id", sqlparser.NewTableName("t"))
+	proj.addUnexploredExpr(
+		sqlparser.NewAliasedExpr(userIdColName, ""),
+		userIdColName,
+	)
+
+	stmt, _, err = ToSQL(ctx, proj)
 	require.NoError(t, err)
 	require.Equal(t, "select id, t.user_id from x, (values ::toto) as t(user_id)", sqlparser.String(stmt))
+}
+
+func TestToSQLValuesJoin(t *testing.T) {
+	ctx := plancontext.CreateEmptyPlanningContext()
+	parser := sqlparser.NewTestParser()
+
+	lhsTableName := sqlparser.NewTableName("x")
+	lhsTableColumn := sqlparser.NewColName("id")
+	lhsFilterPred, err := parser.ParseExpr("x.id = 42")
+	require.NoError(t, err)
+
+	LHS := &Filter{
+		unaryOperator: newUnaryOp(&Table{
+			QTable: &QueryTable{
+				Table: lhsTableName,
+				Alias: sqlparser.NewAliasedTableExpr(lhsTableName, ""),
+			},
+			Columns: []*sqlparser.ColName{lhsTableColumn},
+		}),
+		Predicates: []sqlparser.Expr{lhsFilterPred},
+	}
+
+	const argumentName = "v"
+
+	rhsTableName := sqlparser.NewTableName("y")
+	rhsTableColumn := sqlparser.NewColName("tata")
+	rhsFilterPred, err := parser.ParseExpr("y.tata = 42")
+	require.NoError(t, err)
+	rhsJoinFilterPred, err := parser.ParseExpr("y.tata = x.id")
+	require.NoError(t, err)
+
+	RHS := &Filter{
+		unaryOperator: newUnaryOp(&Values{
+			unaryOperator: newUnaryOp(&Table{
+				QTable: &QueryTable{
+					Table: rhsTableName,
+					Alias: sqlparser.NewAliasedTableExpr(rhsTableName, ""),
+				},
+				Columns: []*sqlparser.ColName{rhsTableColumn},
+			}),
+			Columns: sqlparser.Columns{sqlparser.NewIdentifierCI("id")},
+			Name:    lhsTableName.Name.String(),
+			Arg:     argumentName,
+		}),
+		Predicates: []sqlparser.Expr{rhsFilterPred, rhsJoinFilterPred},
+	}
+
+	vj := &ValuesJoin{
+		binaryOperator: newBinaryOp(LHS, RHS),
+		bindVarName:    argumentName,
+	}
+
+	stmt, _, err := ToSQL(ctx, vj)
+	require.NoError(t, err)
+	require.Equal(t, "select id, tata from x, y where x.id = 42 and y.tata = 42 and y.tata = x.id", sqlparser.String(stmt))
 }

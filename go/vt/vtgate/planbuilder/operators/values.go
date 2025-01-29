@@ -31,6 +31,9 @@ type Values struct {
 	Columns sqlparser.Columns
 	Name    string
 	Arg     string
+
+	// TODO: let's see if we want to have noColumns or no
+	// noColumns
 }
 
 func (v *Values) Clone(inputs []Operator) Operator {

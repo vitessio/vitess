@@ -101,13 +101,7 @@ func buildQuery(op Operator, qb *queryBuilder) {
 	case *Union:
 		buildUnion(op, qb)
 	case *Distinct:
-		buildQuery(op.Source, qb)
-		statement := qb.asSelectStatement()
-		d, ok := statement.(sqlparser.Distinctable)
-		if !ok {
-			panic(vterrors.VT13001("expected a select statement with distinct"))
-		}
-		d.MakeDistinct()
+		buildDistinct(op, qb)
 	case *Update:
 		buildUpdate(op, qb)
 	case *Delete:
@@ -118,19 +112,42 @@ func buildQuery(op Operator, qb *queryBuilder) {
 		buildRecursiveCTE(op, qb)
 	case *Values:
 		buildValues(op, qb)
+	case *ValuesJoin:
+		buildValuesJoin(op, qb)
 	default:
 		panic(vterrors.VT13001(fmt.Sprintf("unknown operator to convert to SQL: %T", op)))
 	}
 }
 
+func buildDistinct(op *Distinct, qb *queryBuilder) {
+	buildQuery(op.Source, qb)
+	statement := qb.asSelectStatement()
+	d, ok := statement.(sqlparser.Distinctable)
+	if !ok {
+		panic(vterrors.VT13001("expected a select statement with distinct"))
+	}
+	d.MakeDistinct()
+}
+
+func buildValuesJoin(op *ValuesJoin, qb *queryBuilder) {
+	qb.ctx.SkipValuesArgument(op.bindVarName)
+	buildQuery(op.LHS, qb)
+	qbR := &queryBuilder{ctx: qb.ctx}
+	buildQuery(op.RHS, qbR)
+	qb.joinWith(qbR, nil, sqlparser.NormalJoinType)
+}
+
 func buildValues(op *Values, qb *queryBuilder) {
 	buildQuery(op.Source, qb)
+	if qb.ctx.IsValuesArgumentSkipped(op.Arg) {
+		return
+	}
+
 	qb.addTableExpr(op.Name, op.Name, TableID(op), &sqlparser.DerivedTable{
 		Select: &sqlparser.ValuesStatement{
 			ListArg: sqlparser.NewListArg(op.Arg),
 		},
 	}, nil, op.Columns)
-
 }
 
 func buildDelete(op *Delete, qb *queryBuilder) {
