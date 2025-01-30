@@ -319,6 +319,8 @@ enum VEventType {
   // If a client experiences some disruptions before receiving the event,
   // the client should restart the copy operation.
   COPY_COMPLETED = 20;
+  // Indicates rotation into a new binary log
+  PREVIOUS_GTIDS = 21;
 }
 
 
@@ -478,6 +480,12 @@ message VEvent {
   bool throttled = 24;
   // ThrottledReason is a human readable string that explains why the stream is throttled
   string throttled_reason = 25;
+  // For GTID events, the sequence number of the most recent transaction this event depends on / conflicts with.
+  int64 last_committed = 26;
+  // For GTID events, the sequence number of this transaction.
+  int64 sequence_number = 27;
+  // MustSave is a decoration by VPlayer
+  bool must_save = 28;
 }
 
 message MinimalTable {

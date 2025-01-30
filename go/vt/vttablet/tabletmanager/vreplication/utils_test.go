@@ -162,6 +162,11 @@ func TestIsUnrecoverableError(t *testing.T) {
 			err:      sqlerror.NewSQLError(sqlerror.ERErrorDuringCommit, "unknown", "ERROR HY000: Got error 149 - 'Lock deadlock; Retry transaction' during COMMIT"),
 			expected: false,
 		},
+		{
+			name:     "Duplicate key from textual error",
+			err:      errors.New("error applying event for table stress_test while processing position 1172a240-bba1-11ef-a3a6-5b208b5d2dca:1-9028: Duplicate entry '681' for key '_vt_vrp_17b345d8bba111ef9a43b27afeff3c84_20241216133004_.PRIMARY' (errno 1062) (sqlstate 23000) during query: insert into _vt_vrp_17b345d8bba111ef9a43b27afeff3c84_20241216133004_(id,rand_val,op_order,hint_col,created_timestamp,updates) values (681,'9b8f6ae6',6657,'','2024-12-16 11:30:09',0)"),
+			expected: true,
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {

@@ -103,6 +103,9 @@ func (rl *relayLog) Fetch() ([][]*binlogdatapb.VEvent, error) {
 	}
 	cancelTimer := rl.startFetchTimer()
 	defer cancelTimer()
+	// TODO(shlomi): should we use:
+	//   for len(rl.items) <= rl.maxItems/2 && !rl.timedout {
+	// so that we work on larger buffers of events?
 	for len(rl.items) == 0 && !rl.timedout {
 		rl.hasItems.Wait()
 		if err := rl.checkDone(); err != nil {
