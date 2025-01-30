@@ -27,13 +27,8 @@ import (
 
 	"github.com/spf13/pflag"
 
-<<<<<<< HEAD
-=======
-	"vitess.io/vitess/go/os2"
-	"vitess.io/vitess/go/vt/mysqlctl/errors"
-
->>>>>>> 770dcf0914 (Replace uses of os.Create with os2.Create within backup/restore workflows (#17648))
 	"vitess.io/vitess/go/ioutil"
+	"vitess.io/vitess/go/os2"
 	"vitess.io/vitess/go/vt/concurrency"
 	stats "vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"

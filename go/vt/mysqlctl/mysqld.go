@@ -46,11 +46,7 @@ import (
 	"vitess.io/vitess/config"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/sqlerror"
-<<<<<<< HEAD
-=======
 	"vitess.io/vitess/go/os2"
-	"vitess.io/vitess/go/osutil"
->>>>>>> 770dcf0914 (Replace uses of os.Create with os2.Create within backup/restore workflows (#17648))
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
