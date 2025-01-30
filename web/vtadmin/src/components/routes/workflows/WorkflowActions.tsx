@@ -12,8 +12,12 @@ import {
 } from '../../../hooks/api';
 import Toggle from '../../toggle/Toggle';
 import { success } from '../../Snackbar';
-import { vtadmin, vtctldata } from '../../../proto/vtadmin';
+import { vtadmin, vtctldata, vttime } from '../../../proto/vtadmin';
 import { getReverseWorkflow } from '../../../util/workflows';
+import { Label } from '../../inputs/Label';
+import { TextInput } from '../../TextInput';
+import { MultiSelect } from '../../inputs/MultiSelect';
+import { TABLET_TYPES } from '../../../util/tablets';
 
 interface WorkflowActionsProps {
     streamsByState: {
@@ -44,10 +48,30 @@ interface CancelWorkflowOptions {
     keepRoutingRoules: boolean;
 }
 
+interface SwitchTrafficOptions {
+    enableReverseReplication: boolean;
+    force: boolean;
+    initializeTargetSequences: boolean;
+    maxReplicationLagAllowed: number;
+    timeout: number;
+    tabletTypes: number[];
+}
+
+const DefaultSwitchTrafficOptions: SwitchTrafficOptions = {
+    enableReverseReplication: true,
+    force: false,
+    initializeTargetSequences: false,
+    maxReplicationLagAllowed: 30,
+    timeout: 30,
+    tabletTypes: [1, 2, 3],
+};
+
 const DefaultCancelWorkflowOptions: CancelWorkflowOptions = {
     keepData: false,
     keepRoutingRoules: false,
 };
+
+const TABLET_OPTIONS = [1, 2, 3];
 
 const WorkflowActions: React.FC<WorkflowActionsProps> = ({
     streamsByState,
@@ -60,12 +84,14 @@ const WorkflowActions: React.FC<WorkflowActionsProps> = ({
 }) => {
     const [currentDialog, setCurrentDialog] = useState<string>('');
 
-    const [completeMoveTablesOptions, SetCompleteMoveTablesOptions] = useState<CompleteMoveTablesOptions>(
+    const [completeMoveTablesOptions, setCompleteMoveTablesOptions] = useState<CompleteMoveTablesOptions>(
         DefaultCompleteMoveTablesOptions
     );
 
-    const [cancelWorkflowOptions, SetCancelWorkflowOptions] =
+    const [cancelWorkflowOptions, setCancelWorkflowOptions] =
         useState<CancelWorkflowOptions>(DefaultCancelWorkflowOptions);
+
+    const [switchTrafficOptions, setSwitchTrafficOptions] = useState<SwitchTrafficOptions>(DefaultSwitchTrafficOptions);
 
     const closeDialog = () => setCurrentDialog('');
 
@@ -79,6 +105,16 @@ const WorkflowActions: React.FC<WorkflowActionsProps> = ({
             keyspace: keyspace,
             workflow: name,
             direction: 0,
+            enable_reverse_replication: switchTrafficOptions.enableReverseReplication,
+            force: switchTrafficOptions.force,
+            max_replication_lag_allowed: {
+                seconds: switchTrafficOptions.maxReplicationLagAllowed,
+            },
+            timeout: {
+                seconds: switchTrafficOptions.timeout,
+            },
+            initialize_target_sequences: switchTrafficOptions.initializeTargetSequences,
+            tablet_types: switchTrafficOptions.tabletTypes,
         },
     });
 
@@ -88,6 +124,16 @@ const WorkflowActions: React.FC<WorkflowActionsProps> = ({
             keyspace: keyspace,
             workflow: name,
             direction: 1,
+            enable_reverse_replication: switchTrafficOptions.enableReverseReplication,
+            force: switchTrafficOptions.force,
+            max_replication_lag_allowed: {
+                seconds: switchTrafficOptions.maxReplicationLagAllowed,
+            },
+            timeout: {
+                seconds: switchTrafficOptions.timeout,
+            },
+            initialize_target_sequences: switchTrafficOptions.initializeTargetSequences,
+            tablet_types: switchTrafficOptions.tabletTypes,
         },
     });
 
@@ -126,7 +172,7 @@ const WorkflowActions: React.FC<WorkflowActionsProps> = ({
         }
     );
 
-    const isMoveTablesWorkflow = workflowType === 'MoveTables';
+    const supportsComplete = workflowType.toLowerCase() === 'movetables' || workflowType.toLowerCase() === 'reshard';
 
     const isRunning =
         !(streamsByState['Error'] && streamsByState['Error'].length) &&
@@ -148,12 +194,123 @@ const WorkflowActions: React.FC<WorkflowActionsProps> = ({
 
     const isReverseWorkflow = name.endsWith('_reverse');
 
+    const switchTrafficDialogBody = (initializeTargetSequences: boolean = true) => {
+        return (
+            <div className="flex flex-col gap-2">
+                <Label
+                    className="block w-full"
+                    label="Timeout"
+                    helpText={
+                        'Specifies the maximum time to wait, in seconds, for VReplication to catch up on primary tablets. The traffic switch will be cancelled on timeout.'
+                    }
+                >
+                    <TextInput
+                        onChange={(e) =>
+                            setSwitchTrafficOptions((prevOptions) => ({
+                                ...prevOptions,
+                                timeout: Number(e.target.value),
+                            }))
+                        }
+                        value={switchTrafficOptions.timeout || ''}
+                        type="number"
+                    />
+                </Label>
+                <Label
+                    className="block w-full"
+                    label="Max Replication Lag Allowed"
+                    helpText={'Allow traffic to be switched only if VReplication lag is below this.'}
+                >
+                    <TextInput
+                        onChange={(e) =>
+                            setSwitchTrafficOptions((prevOptions) => ({
+                                ...prevOptions,
+                                maxReplicationLagAllowed: Number(e.target.value),
+                            }))
+                        }
+                        value={switchTrafficOptions.maxReplicationLagAllowed || ''}
+                        type="number"
+                    />
+                </Label>
+                <MultiSelect
+                    className="block w-full"
+                    inputClassName="block w-full"
+                    items={TABLET_OPTIONS}
+                    itemToString={(tt) => TABLET_TYPES[tt]}
+                    selectedItems={switchTrafficOptions.tabletTypes}
+                    label="Tablet Types"
+                    helpText={'Tablet types to switch traffic for.'}
+                    onChange={(types) => {
+                        setSwitchTrafficOptions({ ...switchTrafficOptions, tabletTypes: types });
+                    }}
+                    placeholder="Select tablet types"
+                />
+                <div className="flex justify-between items-center w-full">
+                    <Label
+                        label="Enable Reverse Replication"
+                        helpText={
+                            'Setup replication going back to the original source keyspace to support rolling back the traffic cutover.'
+                        }
+                    />
+                    <Toggle
+                        className="mr-2"
+                        enabled={switchTrafficOptions.enableReverseReplication}
+                        onChange={() =>
+                            setSwitchTrafficOptions((prevOptions) => ({
+                                ...prevOptions,
+                                enableReverseReplication: !prevOptions.enableReverseReplication,
+                            }))
+                        }
+                    />
+                </div>
+                {initializeTargetSequences && (
+                    <div className="flex justify-between items-center w-full">
+                        <Label
+                            label="Initialize Target Sequences"
+                            helpText={
+                                'When moving tables from an unsharded keyspace to a sharded keyspace, initialize any sequences that are being used on the target when switching writes. If the sequence table is not found, and the sequence table reference was fully qualified, then we will attempt to create the sequence table in that keyspace.'
+                            }
+                        />
+                        <Toggle
+                            className="mr-2"
+                            enabled={switchTrafficOptions.initializeTargetSequences}
+                            onChange={() =>
+                                setSwitchTrafficOptions((prevOptions) => ({
+                                    ...prevOptions,
+                                    initializeTargetSequences: !prevOptions.initializeTargetSequences,
+                                }))
+                            }
+                        />
+                    </div>
+                )}
+                <div className="flex justify-between items-center w-full">
+                    <Label
+                        label="Force"
+                        helpText={`
+                        Force the traffic switch even if some potentially non-critical actions cannot be
+                        performed; for example the tablet refresh fails on some tablets in the keyspace.
+                        WARNING: this should be used with extreme caution and only in emergency situations!`}
+                    />
+                    <Toggle
+                        className="mr-2"
+                        enabled={switchTrafficOptions.force}
+                        onChange={() =>
+                            setSwitchTrafficOptions((prevOptions) => ({
+                                ...prevOptions,
+                                force: !prevOptions.force,
+                            }))
+                        }
+                    />
+                </div>
+            </div>
+        );
+    };
+
     return (
         <div className="w-min inline-block">
             <Dropdown dropdownButton={Icons.info}>
                 {!isReverseWorkflow && (
                     <>
-                        {isMoveTablesWorkflow && isSwitched && (
+                        {supportsComplete && isSwitched && (
                             <MenuItem onClick={() => setCurrentDialog('Complete MoveTables')}>Complete</MenuItem>
                         )}
                         {isRunning && (
@@ -219,10 +376,12 @@ const WorkflowActions: React.FC<WorkflowActionsProps> = ({
                 }
             />
             <WorkflowAction
+                className="sm:max-w-xl"
                 title="Switch Traffic"
                 confirmText="Switch"
                 loadingText="Switching"
                 mutation={switchTrafficMutation}
+                description={`Switch traffic for the ${name} workflow.`}
                 successText="Switched Traffic"
                 errorText={`Error occured while switching traffic for workflow ${name}`}
                 errorDescription={switchTrafficMutation.error ? switchTrafficMutation.error.message : ''}
@@ -236,17 +395,15 @@ const WorkflowActions: React.FC<WorkflowActionsProps> = ({
                         )}
                     </div>
                 }
-                body={
-                    <div className="text-sm mt-3">
-                        Switch traffic for the <span className="font-mono bg-gray-300">{name}</span> workflow.
-                    </div>
-                }
+                body={switchTrafficDialogBody(workflowType.toLowerCase() !== 'reshard')}
             />
             <WorkflowAction
+                className="sm:max-w-xl"
                 title="Reverse Traffic"
                 confirmText="Reverse"
                 loadingText="Reversing"
                 mutation={reverseTrafficMutation}
+                description={`Reverse traffic for the ${name} workflow.`}
                 successText="Reversed Traffic"
                 errorText={`Error occured while reversing traffic for workflow ${name}`}
                 errorDescription={reverseTrafficMutation.error ? reverseTrafficMutation.error.message : ''}
@@ -260,11 +417,7 @@ const WorkflowActions: React.FC<WorkflowActionsProps> = ({
                         )}
                     </div>
                 }
-                body={
-                    <div className="text-sm mt-3">
-                        Reverse traffic for the <span className="font-mono bg-gray-300">{name}</span> workflow.
-                    </div>
-                }
+                body={switchTrafficDialogBody(false)}
             />
             <WorkflowAction
                 className="sm:max-w-xl"
@@ -299,7 +452,7 @@ const WorkflowActions: React.FC<WorkflowActionsProps> = ({
                             <Toggle
                                 enabled={cancelWorkflowOptions.keepData}
                                 onChange={() =>
-                                    SetCancelWorkflowOptions((prevOptions) => ({
+                                    setCancelWorkflowOptions((prevOptions) => ({
                                         ...prevOptions,
                                         keepData: !prevOptions.keepData,
                                     }))
@@ -316,7 +469,7 @@ const WorkflowActions: React.FC<WorkflowActionsProps> = ({
                             <Toggle
                                 enabled={cancelWorkflowOptions.keepRoutingRoules}
                                 onChange={() =>
-                                    SetCancelWorkflowOptions((prevOptions) => ({
+                                    setCancelWorkflowOptions((prevOptions) => ({
                                         ...prevOptions,
                                         keepRoutingRoules: !prevOptions.keepRoutingRoules,
                                     }))
@@ -328,7 +481,7 @@ const WorkflowActions: React.FC<WorkflowActionsProps> = ({
             />
             <WorkflowAction
                 className="sm:max-w-xl"
-                title="Complete MoveTables"
+                title="Complete Workflow"
                 description={`Complete the ${name} workflow.`}
                 confirmText="Complete"
                 loadingText="Completing"
@@ -351,7 +504,7 @@ const WorkflowActions: React.FC<WorkflowActionsProps> = ({
                             <Toggle
                                 enabled={completeMoveTablesOptions.keepData}
                                 onChange={() =>
-                                    SetCompleteMoveTablesOptions((prevOptions) => ({
+                                    setCompleteMoveTablesOptions((prevOptions) => ({
                                         ...prevOptions,
                                         keepData: !prevOptions.keepData,
                                     }))
@@ -369,7 +522,7 @@ const WorkflowActions: React.FC<WorkflowActionsProps> = ({
                             <Toggle
                                 enabled={completeMoveTablesOptions.keepRoutingRoules}
                                 onChange={() =>
-                                    SetCompleteMoveTablesOptions((prevOptions) => ({
+                                    setCompleteMoveTablesOptions((prevOptions) => ({
                                         ...prevOptions,
                                         keepRoutingRoules: !prevOptions.keepRoutingRoules,
                                     }))
@@ -388,7 +541,7 @@ const WorkflowActions: React.FC<WorkflowActionsProps> = ({
                             <Toggle
                                 enabled={completeMoveTablesOptions.renameTables}
                                 onChange={() =>
-                                    SetCompleteMoveTablesOptions((prevOptions) => ({
+                                    setCompleteMoveTablesOptions((prevOptions) => ({
                                         ...prevOptions,
                                         renameTables: !prevOptions.renameTables,
                                     }))

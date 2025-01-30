@@ -72,7 +72,7 @@ export const Tooltip = ({ children, text }: TooltipProps) => {
     });
 
     return (
-        <Popover content={content} isOpen={isOpen}>
+        <Popover content={content} isOpen={isOpen} containerStyle={{ zIndex: '20' }}>
             {cloneChildren}
         </Popover>
     );
