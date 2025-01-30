@@ -191,7 +191,8 @@ func (cmp *Comparator) RefOfRefSliceContainer(a, b *RefSliceContainer) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return cmp.SliceOfAST(a.ASTElements, b.ASTElements) &&
+	return a.something == b.something &&
+		cmp.SliceOfAST(a.ASTElements, b.ASTElements) &&
 		cmp.SliceOfInt(a.NotASTElements, b.NotASTElements) &&
 		cmp.SliceOfRefOfLeaf(a.ASTImplementationElements, b.ASTImplementationElements)
 }

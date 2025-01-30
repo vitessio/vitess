@@ -120,6 +120,10 @@ func (a *application) rewriteInterfaceSlice(parent AST, node InterfaceSlice, rep
 			return true
 		}
 	}
+	var path ASTPath
+	if a.collectPaths {
+		path = a.cur.current
+	}
 	for x, el := range node {
 		if !a.rewriteAST(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent AST) {
@@ -128,6 +132,9 @@ func (a *application) rewriteInterfaceSlice(parent AST, node InterfaceSlice, rep
 		}(x)) {
 			return false
 		}
+	}
+	if a.collectPaths {
+		a.cur.current = path
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -181,6 +188,10 @@ func (a *application) rewriteLeafSlice(parent AST, node LeafSlice, replacer repl
 			return true
 		}
 	}
+	var path ASTPath
+	if a.collectPaths {
+		path = a.cur.current
+	}
 	for x, el := range node {
 		if !a.rewriteRefOfLeaf(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent AST) {
@@ -189,6 +200,9 @@ func (a *application) rewriteLeafSlice(parent AST, node LeafSlice, replacer repl
 		}(x)) {
 			return false
 		}
+	}
+	if a.collectPaths {
+		a.cur.current = path
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -280,6 +294,9 @@ func (a *application) rewriteRefOfRefSliceContainer(parent AST, node *RefSliceCo
 		}
 	}
 	var path ASTPath
+	if a.collectPaths {
+		path = a.cur.current
+	}
 	for x, el := range node.ASTElements {
 		if !a.rewriteAST(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent AST) {
@@ -396,6 +413,9 @@ func (a *application) rewriteValueSliceContainer(parent AST, node ValueSliceCont
 		}
 	}
 	var path ASTPath
+	if a.collectPaths {
+		path = a.cur.current
+	}
 	for _, el := range node.ASTElements {
 		if !a.rewriteAST(node, el, func(newNode, parent AST) {
 			panic("[BUG] tried to replace 'ASTElements' on 'ValueSliceContainer'")
@@ -537,6 +557,9 @@ func (a *application) rewriteRefOfValueSliceContainer(parent AST, node *ValueSli
 		}
 	}
 	var path ASTPath
+	if a.collectPaths {
+		path = a.cur.current
+	}
 	for x, el := range node.ASTElements {
 		if !a.rewriteAST(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent AST) {

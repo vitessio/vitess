@@ -41,6 +41,7 @@ type (
 	}
 	// Container implements the interface ByRef
 	RefSliceContainer struct {
+		something                 int // want a non-AST field first
 		ASTElements               []AST
 		NotASTElements            []int
 		ASTImplementationElements []*Leaf

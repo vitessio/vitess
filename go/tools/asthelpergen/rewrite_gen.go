@@ -197,23 +197,40 @@ func (r *rewriteGen) sliceMethod(t types.Type, slice *types.Slice, spi generator
 		jen.If(jen.Id("kontinue").Block(jen.Return(jen.True()))),
 	)
 
-	stmts = append(stmts, jen.If(jen.Id("a.pre!= nil").Block(preStmts...)))
+	stmts = append(stmts, jen.If(jen.Id("a.pre != nil").Block(preStmts...)))
 
 	haveChildren := false
 	if shouldAdd(slice.Elem(), spi.iface()) {
 		/*
+			var path ASTPath
+			if a.collectPaths {
+			  path = a.cur.current
+			}
 			for i, el := range node {
-						if err := rewriteRefOfLeaf(node, el, func(newNode, parent AST) {
-							parent.(LeafSlice)[i] = newNode.(*Leaf)
-						}, pre, post); err != nil {
-							return err
-						}
-					}
+				if err := rewriteRefOfLeaf(node, el, func(newNode, parent AST) {
+					parent.(LeafSlice)[i] = newNode.(*Leaf)
+				}, pre, post); err != nil {
+					return err
+				}
+			}
 		*/
 		haveChildren = true
+		forBlock := []jen.Code{
+			jen.Var().Id("path").Id("ASTPath"),
+			jen.If(jen.Id("a.collectPaths")).Block(
+				jen.Id("path").Op("=").Id("a.cur.current"),
+			),
+		}
+		stmts = append(stmts, forBlock...)
+		rewriteChild := r.rewriteChildSlice(t, slice.Elem(), "notUsed", jen.Id("el"), jen.Index(jen.Id("idx")), false, 0)
+
 		stmts = append(stmts,
 			jen.For(jen.Id("x, el").Op(":=").Id("range node")).
-				Block(r.rewriteChildSlice(t, slice.Elem(), "notUsed", jen.Id("el"), jen.Index(jen.Id("idx")), false)))
+				Block(rewriteChild...))
+
+		stmts = append(stmts, jen.If(jen.Id("a.collectPaths")).Block(
+			jen.Id("a.cur.current").Op("=").Id("path"),
+		))
 	}
 
 	stmts = append(stmts, executePost(haveChildren))
@@ -298,16 +315,26 @@ func (r *rewriteGen) rewriteAllStructFields(t types.Type, strct *types.Struct, s
 
 	*/
 	var output []jen.Code
+	fieldNumber := 0
 	for i := 0; i < strct.NumFields(); i++ {
 		field := strct.Field(i)
 		if types.Implements(field.Type(), spi.iface()) {
 			spi.addType(field.Type())
-			rewriteLines := r.rewriteChild(t, field.Type(), field.Name(), jen.Id("node").Dot(field.Name()), jen.Dot(field.Name()), fail, i)
+			rewriteLines := r.rewriteChild(t, field.Type(), field.Name(), jen.Id("node").Dot(field.Name()), jen.Dot(field.Name()), fail, fieldNumber)
+			fieldNumber++
 			output = append(output, rewriteLines...)
 			continue
 		}
 		slice, isSlice := field.Type().(*types.Slice)
 		if isSlice && types.Implements(slice.Elem(), spi.iface()) {
+			if fieldNumber == 0 {
+				// if this is the first field we are dealing with, we need to store the incoming
+				// path into the local variable first of all
+				// if a.collectPaths { path = a.cur.current }
+				output = append(output,
+					jen.If(jen.Id("a.collectPaths")).Block(jen.Id("path").Op("=").Id("a.cur.current")))
+			}
+
 			spi.addType(slice.Elem())
 			id := jen.Id("x")
 			if fail {
@@ -315,7 +342,8 @@ func (r *rewriteGen) rewriteAllStructFields(t types.Type, strct *types.Struct, s
 			}
 			output = append(output,
 				jen.For(jen.List(id, jen.Id("el")).Op(":=").Id("range node."+field.Name())).
-					Block(r.rewriteChildSlice(t, slice.Elem(), field.Name(), jen.Id("el"), jen.Dot(field.Name()).Index(jen.Id("idx")), fail)))
+					Block(r.rewriteChildSlice(t, slice.Elem(), field.Name(), jen.Id("el"), jen.Dot(field.Name()).Index(jen.Id("idx")), fail, fieldNumber)...))
+			fieldNumber++
 		}
 	}
 	return output
@@ -380,7 +408,7 @@ func (r *rewriteGen) rewriteChild(t, field types.Type, fieldName string, param j
 	}
 }
 
-func (r *rewriteGen) rewriteChildSlice(t, field types.Type, fieldName string, param jen.Code, replace jen.Code, fail bool) jen.Code {
+func (r *rewriteGen) rewriteChildSlice(t, field types.Type, fieldName string, param jen.Code, replace jen.Code, fail bool, fieldOffset int) []jen.Code {
 	/*
 				if errF := a.rewriteAST(node, el, func(idx int) replacerFunc {
 				return func(newNode, parent AST) {
@@ -416,7 +444,9 @@ func (r *rewriteGen) rewriteChildSlice(t, field types.Type, fieldName string, pa
 			param,
 			funcBlock).Block(returnFalse()))
 
-	return rewriteField
+	return []jen.Code{
+		rewriteField,
+	}
 }
 
 var noQualifier = func(p *types.Package) string {
