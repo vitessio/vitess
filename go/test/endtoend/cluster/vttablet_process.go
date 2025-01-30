@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"os/exec"
@@ -721,12 +722,42 @@ func (vttablet *VttabletProcess) ConfirmDataDirHasNoGlobalPerms(t *testing.T) {
 		t.Logf("Data directory %s no longer exists, skipping permissions check", datadir)
 		return
 	}
-	// List any files which have any of the other bits set.
-	cmd := exec.Command("find", datadir, "-perm", "+00007")
-	out, err := cmd.CombinedOutput()
-	require.NoError(t, err, "Error running find command: %s", string(out))
-	so := string(out)
-	require.Empty(t, so, "Found files with global permissions: %s", so)
+
+	var allowedFiles = []string{
+		path.Join("data", "ca.pem"),
+		path.Join("data", "client-cert.pem"),
+		path.Join("data", "public_key.pem"),
+		path.Join("data", "server-cert.pem"),
+	}
+
+	var matches []string
+	fsys := os.DirFS(datadir)
+	err := fs.WalkDir(fsys, ".", func(p string, d fs.DirEntry, _ error) error {
+		// first check if the file should be skipped
+		for _, name := range allowedFiles {
+			if strings.HasSuffix(p, name) {
+				return nil
+			}
+		}
+
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+
+		// check if any global bit is on the filemode
+		if info.Mode()&0007 != 0 {
+			matches = append(matches, fmt.Sprintf(
+				"%s (%s)",
+				path.Join(datadir, p),
+				info.Mode(),
+			))
+		}
+		return nil
+	})
+
+	require.NoError(t, err, "Error walking directory")
+	require.Empty(t, matches, "Found files with global permissions: %s\n", strings.Join(matches, "\n"))
 }
 
 // VttabletProcessInstance returns a VttabletProcess handle for vttablet process
