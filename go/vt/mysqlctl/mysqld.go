@@ -46,6 +46,7 @@ import (
 	"vitess.io/vitess/config"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/os2"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -898,7 +899,7 @@ func (mysqld *Mysqld) initConfig(cnf *Mycnf, outFile string) error {
 		return err
 	}
 
-	return os.WriteFile(outFile, []byte(configData), 0o664)
+	return os2.WriteFile(outFile, []byte(configData))
 }
 
 func (mysqld *Mysqld) getMycnfTemplate() string {
@@ -1048,7 +1049,7 @@ func (mysqld *Mysqld) ReinitConfig(ctx context.Context, cnf *Mycnf) error {
 func (mysqld *Mysqld) createDirs(cnf *Mycnf) error {
 	tabletDir := cnf.TabletDir()
 	log.Infof("creating directory %s", tabletDir)
-	if err := os.MkdirAll(tabletDir, os.ModePerm); err != nil {
+	if err := os2.MkdirAll(tabletDir); err != nil {
 		return err
 	}
 	for _, dir := range TopLevelDirs() {
@@ -1058,7 +1059,7 @@ func (mysqld *Mysqld) createDirs(cnf *Mycnf) error {
 	}
 	for _, dir := range cnf.directoryList() {
 		log.Infof("creating directory %s", dir)
-		if err := os.MkdirAll(dir, os.ModePerm); err != nil {
+		if err := os2.MkdirAll(dir); err != nil {
 			return err
 		}
 		// FIXME(msolomon) validate permissions?
@@ -1082,14 +1083,14 @@ func (mysqld *Mysqld) createTopDir(cnf *Mycnf, dir string) error {
 		if os.IsNotExist(err) {
 			topdir := path.Join(tabletDir, dir)
 			log.Infof("creating directory %s", topdir)
-			return os.MkdirAll(topdir, os.ModePerm)
+			return os2.MkdirAll(topdir)
 		}
 		return err
 	}
 	linkto := path.Join(target, vtname)
 	source := path.Join(tabletDir, dir)
 	log.Infof("creating directory %s", linkto)
-	err = os.MkdirAll(linkto, os.ModePerm)
+	err = os2.MkdirAll(linkto)
 	if err != nil {
 		return err
 	}
