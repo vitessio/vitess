@@ -723,6 +723,12 @@ func (vttablet *VttabletProcess) ConfirmDataDirHasNoGlobalPerms(t *testing.T) {
 		return
 	}
 
+	// These are intentionally created with the world/other read bit set by mysqld itself
+	// during the --initialize[-insecure] step.
+	// See: https://dev.mysql.com/doc/mysql-security-excerpt/en/creating-ssl-rsa-files-using-mysql.html
+	// "On Unix and Unix-like systems, the file access mode is 644 for certificate files
+	// (that is, world readable) and 600 for key files (that is, accessible only by the
+	// account that runs the server)."
 	var allowedFiles = []string{
 		path.Join("data", "ca.pem"),
 		path.Join("data", "client-cert.pem"),
