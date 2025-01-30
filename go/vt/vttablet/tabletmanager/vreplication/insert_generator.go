@@ -53,7 +53,7 @@ func NewInsertGenerator(state binlogdatapb.VReplicationWorkflowState, dbname str
 func (ig *InsertGenerator) AddRow(workflow string, bls *binlogdatapb.BinlogSource, pos, cell, tabletTypes string,
 	workflowType binlogdatapb.VReplicationWorkflowType, workflowSubType binlogdatapb.VReplicationWorkflowSubType, deferSecondaryKeys bool) {
 	protoutil.SortBinlogSourceTables(bls)
-	fmt.Fprintf(ig.buf, "%s(%v, %v, %v, %v, %v, %v, %v, %v, 0, '%v', %v, %d, %d, %v, %v)",
+	fmt.Fprintf(ig.buf, "%s(%v, %v, %v, %v, %v, %v, %v, %v, 0, %v, %v, %d, %d, %v, %v)",
 		ig.prefix,
 		encodeString(workflow),
 		encodeString(bls.String()),
@@ -63,7 +63,7 @@ func (ig *InsertGenerator) AddRow(workflow string, bls *binlogdatapb.BinlogSourc
 		encodeString(cell),
 		encodeString(tabletTypes),
 		ig.now,
-		ig.state,
+		encodeString(ig.state),
 		encodeString(ig.dbname),
 		workflowType,
 		workflowSubType,
