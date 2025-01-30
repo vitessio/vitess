@@ -454,6 +454,15 @@ func (mysqld *Mysqld) startNoWait(cnf *Mycnf, mysqldArgs ...string) error {
 		return fmt.Errorf("mysqld_start hook failed: %v", hr.String())
 	}
 
+	// try the postflight mysqld start hook, if any
+	switch hr := hook.NewHook("postflight_mysqld_start", mysqldArgs).Execute(); hr.ExitStatus {
+	case hook.HOOK_SUCCESS, hook.HOOK_DOES_NOT_EXIST:
+		// hook exists and worked, or does not exist, we can keep going
+	default:
+		// hook failed, we report error
+		return fmt.Errorf("postflight_mysqld_start hook failed: %v", hr.String())
+	}
+
 	return nil
 }
 
@@ -624,9 +633,20 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bo
 		return nil
 	}
 
-	// try the mysqld shutdown hook, if any
-	h := hook.NewSimpleHook("mysqld_shutdown")
+	// try the preflight mysqld shutdown hook, if any
+	h := hook.NewSimpleHook("preflight_mysqld_shutdown")
 	hr := h.ExecuteContext(ctx)
+	switch hr.ExitStatus {
+	case hook.HOOK_SUCCESS, hook.HOOK_DOES_NOT_EXIST:
+		// hook exists and worked, or else does not exist.
+	default:
+		// hook failed, we report error
+		return fmt.Errorf("preflight_mysqld_shutdown hook failed: %v", hr.String())
+	}
+
+	// try the mysqld shutdown hook, if any
+	h = hook.NewSimpleHook("mysqld_shutdown")
+	hr = h.ExecuteContext(ctx)
 	switch hr.ExitStatus {
 	case hook.HOOK_SUCCESS:
 		// hook exists and worked, we can keep going
