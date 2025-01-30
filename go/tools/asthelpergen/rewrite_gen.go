@@ -222,7 +222,7 @@ func (r *rewriteGen) sliceMethod(t types.Type, slice *types.Slice, spi generator
 			),
 		}
 		stmts = append(stmts, forBlock...)
-		rewriteChild := r.rewriteChildSlice(t, slice.Elem(), "notUsed", jen.Id("el"), jen.Index(jen.Id("idx")), false, 0)
+		rewriteChild := r.rewriteChildSlice(t, slice.Elem(), "notUsed", jen.Id("el"), jen.Index(jen.Id("idx")), false)
 
 		stmts = append(stmts,
 			jen.For(jen.Id("x, el").Op(":=").Id("range node")).
@@ -342,7 +342,7 @@ func (r *rewriteGen) rewriteAllStructFields(t types.Type, strct *types.Struct, s
 			}
 			output = append(output,
 				jen.For(jen.List(id, jen.Id("el")).Op(":=").Id("range node."+field.Name())).
-					Block(r.rewriteChildSlice(t, slice.Elem(), field.Name(), jen.Id("el"), jen.Dot(field.Name()).Index(jen.Id("idx")), fail, fieldNumber)...))
+					Block(r.rewriteChildSlice(t, slice.Elem(), field.Name(), jen.Id("el"), jen.Dot(field.Name()).Index(jen.Id("idx")), fail)...))
 			fieldNumber++
 		}
 	}
@@ -408,7 +408,7 @@ func (r *rewriteGen) rewriteChild(t, field types.Type, fieldName string, param j
 	}
 }
 
-func (r *rewriteGen) rewriteChildSlice(t, field types.Type, fieldName string, param jen.Code, replace jen.Code, fail bool, fieldOffset int) []jen.Code {
+func (r *rewriteGen) rewriteChildSlice(t, field types.Type, fieldName string, param jen.Code, replace jen.Code, fail bool) []jen.Code {
 	/*
 				if errF := a.rewriteAST(node, el, func(idx int) replacerFunc {
 				return func(newNode, parent AST) {
