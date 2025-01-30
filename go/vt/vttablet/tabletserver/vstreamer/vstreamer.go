@@ -17,7 +17,6 @@ limitations under the License.
 package vstreamer
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -856,9 +855,7 @@ type extColInfo struct {
 }
 
 func encodeString(in string) string {
-	buf := bytes.NewBuffer(nil)
-	sqltypes.NewVarChar(in).EncodeSQL(buf)
-	return buf.String()
+	return sqltypes.EncodeStringSQL(in)
 }
 
 func (vs *vstreamer) processJournalEvent(vevents []*binlogdatapb.VEvent, plan *streamerPlan, rows mysql.Rows) ([]*binlogdatapb.VEvent, error) {

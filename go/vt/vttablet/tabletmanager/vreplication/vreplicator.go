@@ -482,7 +482,7 @@ func (vr *vreplicator) setState(state binlogdatapb.VReplicationWorkflowState, me
 		})
 	}
 	vr.stats.State.Store(state.String())
-	query := fmt.Sprintf("update _vt.vreplication set state='%v', message=%v where id=%v", state, encodeString(binlogplayer.MessageTruncate(message)), vr.id)
+	query := fmt.Sprintf("update _vt.vreplication set state=%v, message=%v where id=%v", encodeString(state.String()), encodeString(binlogplayer.MessageTruncate(message)), vr.id)
 	if _, err := vr.dbClient.ExecuteFetch(query, 1); err != nil {
 		return fmt.Errorf("could not set state: %v: %v", query, err)
 	}
@@ -498,9 +498,7 @@ func (vr *vreplicator) setState(state binlogdatapb.VReplicationWorkflowState, me
 }
 
 func encodeString(in string) string {
-	var buf strings.Builder
-	sqltypes.NewVarChar(in).EncodeSQL(&buf)
-	return buf.String()
+	return sqltypes.EncodeStringSQL(in)
 }
 
 func (vr *vreplicator) getSettingFKCheck() error {
