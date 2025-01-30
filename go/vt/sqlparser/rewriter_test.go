@@ -71,13 +71,15 @@ func TestFindColNamesWithPaths(t *testing.T) {
 	q := "select l_returnflag, l_linestatus, sum(l_quantity) as sum_qty, sum(l_extendedprice) as sum_base_price, sum(l_extendedprice * (1 - l_discount)) as sum_disc_price, sum(l_extendedprice * (1 - l_discount) * (1 + l_tax)) as sum_charge, avg(l_quantity) as avg_qty, avg(l_extendedprice) as avg_price, avg(l_discount) as avg_disc, count(*) as count_order from lineitem where l_shipdate <= '1998-12-01' - interval '108' day group by l_returnflag, l_linestatus order by l_returnflag, l_linestatus"
 	ast, err := NewTestParser().Parse(q)
 	require.NoError(t, err)
-	RewriteWithPath(ast, nil, func(cursor *Cursor) bool {
-		if _, isColName := cursor.Node().(*ColName); isColName {
-			// TODO: actually assert something here
-			fmt.Println(cursor.CurrentPath().DebugString())
-		}
-		return true
-	})
+	RewriteWithPath(ast,
+		func(cursor *Cursor) bool {
+			fmt.Println("DOWN " + cursor.CurrentPath().DebugString())
+			return true
+		},
+		func(cursor *Cursor) bool {
+			fmt.Println("UP " + cursor.CurrentPath().DebugString())
+			return true
+		})
 }
 
 func TestReplaceAndRevisitWorksInLaterCalls(t *testing.T) {
