@@ -632,8 +632,34 @@ func (hc *HealthCheckImpl) recomputeHealthy(key KeyspaceShardTabletType) {
 func (hc *HealthCheckImpl) Subscribe() chan *TabletHealth {
 	hc.subMu.Lock()
 	defer hc.subMu.Unlock()
-	c := make(chan *TabletHealth, 2)
+	c := make(chan *TabletHealth, 2048)
+	// We create a message queue here because we want to
+	// be ensure that none of the updates from the health-check
+	// are missed by the consumers. Message queue has the semantics of an
+	// infinite capacity channel. We however, still want to return a channel
+	// to the consumers, because some of them rely on using a channel as part of a select statement.
+	// That is not something message queue can replicate.
+	// However, with this approach of a message queue that receives all the updates and then sends them
+	// on a channel in a goroutine gives us best of both worlds. The users still only see a channel, but internally
+	// the message queue is serving as an infinite buffer.
+	//mq := concurrency.NewMessageQueue[*TabletHealth]()
 	hc.subscribers[c] = struct{}{}
+	//go func() {
+	//	for {
+	//		// Keep receiving updates on the message queue.
+	//		th, validRes := mq.Receive()
+	//		if validRes {
+	//			c <- th
+	//		} else {
+	//			// Message queue closed, so we should close the channel too.
+	//			close(c)
+	//			hc.subMu.Lock()
+	//			delete(hc.subscribers, c)
+	//			hc.subMu.Unlock()
+	//			return
+	//		}
+	//	}
+	//}()
 	return c
 }
 
@@ -641,17 +667,23 @@ func (hc *HealthCheckImpl) Subscribe() chan *TabletHealth {
 func (hc *HealthCheckImpl) Unsubscribe(c chan *TabletHealth) {
 	hc.subMu.Lock()
 	defer hc.subMu.Unlock()
+	close(c)
 	delete(hc.subscribers, c)
+	// Close the message queue to signal the goroutine started in Subscribe to stop.
+	//mq.Close()
 }
 
 func (hc *HealthCheckImpl) broadcast(th *TabletHealth) {
 	hc.subMu.Lock()
 	defer hc.subMu.Unlock()
+	// We only need to send on the message queue.
+	// The corresponding channel receives the updates from the message queue.
 	for c := range hc.subscribers {
 		select {
 		case c <- th:
 		default:
 		}
+		//mq.Send(th)
 	}
 }
 
@@ -730,9 +762,6 @@ func (hc *HealthCheckImpl) Close() error {
 	hc.healthData = nil
 	for _, tw := range hc.topoWatchers {
 		tw.Stop()
-	}
-	for s := range hc.subscribers {
-		close(s)
 	}
 	hc.subscribers = nil
 	// Release the lock early or a pending checkHealthCheckTimeout
