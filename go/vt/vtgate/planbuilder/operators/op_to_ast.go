@@ -147,7 +147,7 @@ func buildValues(op *Values, qb *queryBuilder) {
 		Select: &sqlparser.ValuesStatement{
 			ListArg: sqlparser.NewListArg(op.Arg),
 		},
-	}, nil, op.Columns)
+	}, nil, op.getColsFromCtx(qb.ctx))
 }
 
 func buildDelete(op *Delete, qb *queryBuilder) {

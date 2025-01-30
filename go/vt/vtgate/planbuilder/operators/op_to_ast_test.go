@@ -27,6 +27,8 @@ import (
 
 func TestToSQLValues(t *testing.T) {
 	ctx := plancontext.CreateEmptyPlanningContext()
+	bindVarName := "toto"
+	ctx.ValuesJoinColumns[bindVarName] = sqlparser.Columns{sqlparser.NewIdentifierCI("user_id")}
 
 	tableName := sqlparser.NewTableName("x")
 	tableColumn := sqlparser.NewColName("id")
@@ -38,9 +40,8 @@ func TestToSQLValues(t *testing.T) {
 			},
 			Columns: []*sqlparser.ColName{tableColumn},
 		}),
-		Columns: sqlparser.Columns{sqlparser.NewIdentifierCI("user_id")},
-		Name:    "t",
-		Arg:     "toto",
+		Name: "t",
+		Arg:  bindVarName,
 	}
 
 	stmt, _, err := ToAST(ctx, op)
@@ -63,6 +64,7 @@ func TestToSQLValues(t *testing.T) {
 }
 
 func TestToSQLValuesJoin(t *testing.T) {
+	// Build a SQL AST from a values join that has been pushed under a route
 	ctx := plancontext.CreateEmptyPlanningContext()
 	parser := sqlparser.NewTestParser()
 
@@ -83,7 +85,7 @@ func TestToSQLValuesJoin(t *testing.T) {
 	}
 
 	const argumentName = "v"
-
+	ctx.ValuesJoinColumns[argumentName] = sqlparser.Columns{sqlparser.NewIdentifierCI("id")}
 	rhsTableName := sqlparser.NewTableName("y")
 	rhsTableColumn := sqlparser.NewColName("tata")
 	rhsFilterPred, err := parser.ParseExpr("y.tata = 42")
@@ -100,9 +102,8 @@ func TestToSQLValuesJoin(t *testing.T) {
 				},
 				Columns: []*sqlparser.ColName{rhsTableColumn},
 			}),
-			Columns: sqlparser.Columns{sqlparser.NewIdentifierCI("id")},
-			Name:    lhsTableName.Name.String(),
-			Arg:     argumentName,
+			Name: lhsTableName.Name.String(),
+			Arg:  argumentName,
 		}),
 		Predicates: []sqlparser.Expr{rhsFilterPred, rhsJoinFilterPred},
 	}

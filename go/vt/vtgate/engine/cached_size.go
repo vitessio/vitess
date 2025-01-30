@@ -1491,12 +1491,12 @@ func (cached *ValuesJoin) CachedSize(alloc bool) int64 {
 	if cc, ok := cached.Right.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
-	// field Vars []int
+	// field ColumnsFromLHS []int
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Vars)) * int64(8))
+		size += hack.RuntimeAllocSize(int64(cap(cached.ColumnsFromLHS)) * int64(8))
 	}
-	// field RowConstructorArg string
-	size += hack.RuntimeAllocSize(int64(len(cached.RowConstructorArg)))
+	// field BindVarName string
+	size += hack.RuntimeAllocSize(int64(len(cached.BindVarName)))
 	// field Cols []int
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.Cols)) * int64(8))

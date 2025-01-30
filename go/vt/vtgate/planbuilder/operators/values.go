@@ -17,9 +17,6 @@ limitations under the License.
 package operators
 
 import (
-	"fmt"
-	"slices"
-
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -28,17 +25,12 @@ import (
 type Values struct {
 	unaryOperator
 
-	Columns sqlparser.Columns
-	Name    string
-	Arg     string
-
-	// TODO: let's see if we want to have noColumns or no
-	// noColumns
+	Name string
+	Arg  string
 }
 
 func (v *Values) Clone(inputs []Operator) Operator {
 	clone := *v
-	clone.Columns = slices.Clone(v.Columns)
 	return &clone
 }
 
@@ -59,7 +51,7 @@ func (v *Values) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, 
 	if !ok {
 		return -1
 	}
-	for i, column := range v.Columns {
+	for i, column := range v.getColsFromCtx(ctx) {
 		if col.Name.Equal(column) {
 			return i
 		}
@@ -67,9 +59,17 @@ func (v *Values) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, 
 	return -1
 }
 
+func (v *Values) getColsFromCtx(ctx *plancontext.PlanningContext) sqlparser.Columns {
+	columns, found := ctx.ValuesJoinColumns[v.Arg]
+	if !found {
+		panic(vterrors.VT13001("columns not found"))
+	}
+	return columns
+}
+
 func (v *Values) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.AliasedExpr {
 	var cols []*sqlparser.AliasedExpr
-	for _, column := range v.Columns {
+	for _, column := range v.getColsFromCtx(ctx) {
 		cols = append(cols, sqlparser.NewAliasedExpr(sqlparser.NewColName(column.String()), ""))
 	}
 	return cols
@@ -85,7 +85,7 @@ func (v *Values) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.Sele
 }
 
 func (v *Values) ShortDescription() string {
-	return fmt.Sprintf("%s (%s)", v.Name, sqlparser.String(v.Columns))
+	return v.Name
 }
 
 func (v *Values) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {

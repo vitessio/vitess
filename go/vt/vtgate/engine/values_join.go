@@ -34,10 +34,19 @@ type ValuesJoin struct {
 	// of the Join. They can be any primitive.
 	Left, Right Primitive
 
-	Vars              []int
-	RowConstructorArg string
-	Cols              []int
-	ColNames          []string
+	// ColumnsFromLHS are the offsets of columns from LHS we are copying over to the RHS
+	// []int{0,2} means that the first column in the t-o-t is the first offset from the left and the second column is the third offset
+	ColumnsFromLHS []int
+
+	// The name for the bind var containing the tuple-of-tuples being sent to the RHS
+	BindVarName string
+
+	// Cols tells use which side the output columns come from:
+	// negative numbers are offsets to the left, and positive to the right
+	Cols []int
+
+	// ColNames are the output column names
+	ColNames []string
 }
 
 // TryExecute performs a non-streaming exec.
@@ -60,22 +69,22 @@ func (jv *ValuesJoin) TryExecute(ctx context.Context, vcursor VCursor, bindVars 
 		}
 		bv.Values = append(bv.Values, sqltypes.TupleToProto(vals))
 
-		bindVars[jv.RowConstructorArg] = bv
+		bindVars[jv.BindVarName] = bv
 		return jv.Right.GetFields(ctx, vcursor, bindVars)
 	}
 
 	for i, row := range lresult.Rows {
-		newRow := make(sqltypes.Row, 0, len(jv.Vars)+1)      // +1 since we always add the row ID
-		newRow = append(newRow, sqltypes.NewInt64(int64(i))) // Adding the LHS row ID
+		newRow := make(sqltypes.Row, 0, len(jv.ColumnsFromLHS)+1) // +1 since we always add the row ID
+		newRow = append(newRow, sqltypes.NewInt64(int64(i)))      // Adding the LHS row ID
 
-		for _, loffset := range jv.Vars {
+		for _, loffset := range jv.ColumnsFromLHS {
 			newRow = append(newRow, row[loffset])
 		}
 
 		bv.Values = append(bv.Values, sqltypes.TupleToProto(newRow))
 	}
 
-	bindVars[jv.RowConstructorArg] = bv
+	bindVars[jv.BindVarName] = bv
 	rresult, err := vcursor.ExecutePrimitive(ctx, jv.Right, bindVars, wantfields)
 	if err != nil {
 		return nil, err
@@ -143,8 +152,8 @@ func (jv *ValuesJoin) description() PrimitiveDescription {
 		OperatorType: "Join",
 		Variant:      "Values",
 		Other: map[string]any{
-			"ValuesArg": jv.RowConstructorArg,
-			"Vars":      jv.Vars,
+			"BindVarName":    jv.BindVarName,
+			"ColumnsFromLHS": jv.ColumnsFromLHS,
 		},
 	}
 }

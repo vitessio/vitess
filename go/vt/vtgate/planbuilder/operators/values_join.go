@@ -17,30 +17,86 @@ limitations under the License.
 package operators
 
 import (
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
-type ValuesJoin struct {
-	binaryOperator
+type (
+	ValuesJoin struct {
+		binaryOperator
 
-	bindVarName string
+		bindVarName string
 
-	noColumns
+		noColumns
+	}
+)
+
+var _ Operator = (*ValuesJoin)(nil)
+var _ JoinOp = (*ValuesJoin)(nil)
+
+func (vj *ValuesJoin) GetLHS() Operator {
+	return vj.LHS
 }
 
-func (v *ValuesJoin) Clone(inputs []Operator) Operator {
-	clone := *v
+func (vj *ValuesJoin) GetRHS() Operator {
+	return vj.RHS
+}
+
+func (vj *ValuesJoin) SetLHS(operator Operator) {
+	vj.LHS = operator
+}
+
+func (vj *ValuesJoin) SetRHS(operator Operator) {
+	vj.RHS = operator
+}
+
+func (vj *ValuesJoin) MakeInner() {
+	// no-op for values-join
+}
+
+func (vj *ValuesJoin) IsInner() bool {
+	return true
+}
+
+func (vj *ValuesJoin) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) {
+	if expr == nil {
+		return
+	}
+	lID := TableID(vj.LHS)
+	lhsCols := breakValuesJoinExpressionInLHS(ctx, expr, lID)
+	vj.RHS = vj.RHS.AddPredicate(ctx, expr)
+
+	columns := ctx.ValuesJoinColumns[vj.bindVarName]
+
+outer:
+	for _, lhsCol := range lhsCols {
+		for _, ci := range columns {
+			if ci.Equal(lhsCol.Name) {
+				// already there, no need to add it again
+				continue outer
+			}
+		}
+		columns = append(columns, lhsCol.Name)
+	}
+
+	ctx.ValuesJoinColumns[vj.bindVarName] = columns
+}
+
+func (vj *ValuesJoin) Clone(inputs []Operator) Operator {
+	clone := *vj
 	clone.LHS = inputs[0]
 	clone.RHS = inputs[1]
 	return &clone
 }
 
-func (v *ValuesJoin) ShortDescription() string {
+func (vj *ValuesJoin) ShortDescription() string {
 	return ""
 }
 
-func (v *ValuesJoin) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
-	return v.RHS.GetOrdering(ctx)
+func (vj *ValuesJoin) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
+	return vj.RHS.GetOrdering(ctx)
 }
 
-var _ Operator = (*ValuesJoin)(nil)
+func (vj *ValuesJoin) planOffsets(ctx *plancontext.PlanningContext) Operator {
+	panic("implement me")
+}

@@ -70,12 +70,12 @@ func TestJoinValuesExecute(t *testing.T) {
 	}
 
 	vjn := &ValuesJoin{
-		Left:              leftPrim,
-		Right:             rightPrim,
-		Vars:              []int{0},
-		RowConstructorArg: "v",
-		Cols:              []int{-1, -2, -3, -1, 1, 2},
-		ColNames:          []string{"col1", "col2", "col3", "col4", "col5", "col6"},
+		Left:           leftPrim,
+		Right:          rightPrim,
+		ColumnsFromLHS: []int{0},
+		BindVarName:    "v",
+		Cols:           []int{-1, -2, -3, -1, 1, 2},
+		ColNames:       []string{"col1", "col2", "col3", "col4", "col5", "col6"},
 	}
 
 	r, err := vjn.TryExecute(context.Background(), &noopVCursor{}, bv, true)

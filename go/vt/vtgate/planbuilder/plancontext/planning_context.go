@@ -83,6 +83,9 @@ type PlanningContext struct {
 	// isMirrored indicates that mirrored tables should be used.
 	isMirrored bool
 
+	// ValuesJoinColumns stores the columns we need for each values statement in the plan
+	ValuesJoinColumns map[string]sqlparser.Columns
+
 	emptyEnv    *evalengine.ExpressionEnv
 	constantCfg *evalengine.Config
 }
@@ -93,6 +96,7 @@ func CreateEmptyPlanningContext() *PlanningContext {
 		skipPredicates:     make(map[sqlparser.Expr]any),
 		skipValuesArgument: make(map[string]any),
 		ReservedArguments:  make(map[sqlparser.Expr]string),
+		ValuesJoinColumns:  make(map[string]sqlparser.Columns),
 	}
 }
 
@@ -127,6 +131,7 @@ func CreatePlanningContext(stmt sqlparser.Statement,
 		skipValuesArgument: map[string]any{},
 		PlannerVersion:     version,
 		ReservedArguments:  map[sqlparser.Expr]string{},
+		ValuesJoinColumns:  make(map[string]sqlparser.Columns),
 		Statement:          stmt,
 	}, nil
 }

@@ -22,9 +22,9 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-// breakExpressionInLHSandRHS takes an expression and
+// breakApplyJoinExpressionInLHSandRHS takes an expression and
 // extracts the parts that are coming from one of the sides into `ColName`s that are needed
-func breakExpressionInLHSandRHS(
+func breakApplyJoinExpressionInLHSandRHS(
 	ctx *plancontext.PlanningContext,
 	expr sqlparser.Expr,
 	lhs semantics.TableSet,
@@ -128,4 +128,21 @@ func getFirstSelect(selStmt sqlparser.TableStatement) *sqlparser.Select {
 		panic(err)
 	}
 	return firstSelect
+}
+
+func breakValuesJoinExpressionInLHS(ctx *plancontext.PlanningContext,
+	expr sqlparser.Expr,
+	lhs semantics.TableSet,
+) (results []*sqlparser.ColName) {
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		col, ok := node.(*sqlparser.ColName)
+		if !ok {
+			return true, nil
+		}
+		if ctx.SemTable.RecursiveDeps(col) == lhs {
+			results = append(results, col)
+		}
+		return true, nil
+	}, expr)
+	return
 }
