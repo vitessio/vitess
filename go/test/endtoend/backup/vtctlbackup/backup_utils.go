@@ -408,6 +408,18 @@ func TestBackup(t *testing.T, setupType int, streamMode string, stripes int, cDe
 			return vterrors.Errorf(vtrpc.Code_UNKNOWN, "test failure: %s", test.name)
 		}
 	}
+
+	t.Run("check for files created with global permissions", func(t *testing.T) {
+		t.Logf("Confirming that none of the MySQL data directories that we've created have files with global permissions")
+		for _, ks := range localCluster.Keyspaces {
+			for _, shard := range ks.Shards {
+				for _, tablet := range shard.Vttablets {
+					tablet.VttabletProcess.ConfirmDataDirHasNoGlobalPerms(t)
+				}
+			}
+		}
+	})
+
 	return nil
 }
 
