@@ -34,6 +34,10 @@ package sqlparser
 // Only fields that refer to AST nodes are considered children;
 // i.e., fields of basic types (strings, []byte, etc.) are ignored.
 func Rewrite(node SQLNode, pre, post ApplyFunc) (result SQLNode) {
+	return rewriteNode(node, pre, post, false)
+}
+
+func rewriteNode(node SQLNode, pre ApplyFunc, post ApplyFunc, collectPaths bool) SQLNode {
 	parent := &RootNode{node}
 
 	// this is the root-replacer, used when the user replaces the root of the ast
@@ -42,13 +46,18 @@ func Rewrite(node SQLNode, pre, post ApplyFunc) (result SQLNode) {
 	}
 
 	a := &application{
-		pre:  pre,
-		post: post,
+		pre:          pre,
+		post:         post,
+		collectPaths: collectPaths,
 	}
 
 	a.rewriteSQLNode(parent, node, replacer)
 
 	return parent.SQLNode
+}
+
+func RewriteWithPath(node SQLNode, pre, post ApplyFunc) (result SQLNode) {
+	return rewriteNode(node, pre, post, true)
 }
 
 // SafeRewrite does not allow replacing nodes on the down walk of the tree walking
@@ -137,6 +146,12 @@ func (c *Cursor) ReplaceAndRevisit(newNode SQLNode) {
 	c.replacer(newNode, c.parent)
 	c.node = newNode
 	c.revisit = true
+}
+
+// CurrentPath returns the current path that got us to the current location in the AST
+// Only works if the AST walk was configured to collect path as walking
+func (c *Cursor) CurrentPath() ASTPath {
+	return c.current
 }
 
 type replacerFunc func(newNode, parent SQLNode)
