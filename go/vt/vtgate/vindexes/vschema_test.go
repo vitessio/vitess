@@ -3415,6 +3415,94 @@ func TestGlobalTables(t *testing.T) {
 	assert.NotNil(t, tbl)
 }
 
+// TestAddingAdditionalTablesToGlobalRouting tests that views are added to the global routing which are unique.
+func TestAddingAdditionalTablesToGlobalRouting(t *testing.T) {
+	input := &vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"unsharded": {
+				Sharded: false,
+				Tables:  map[string]*vschemapb.Table{"t1": {}},
+			},
+			"sharded": {
+				Sharded: true,
+				Tables:  map[string]*vschemapb.Table{"t1": {Type: "reference"}},
+			},
+		},
+	}
+
+	v1Stmt, err := sqlparser.NewTestParser().Parse("select 1 from t1")
+	require.NoError(t, err)
+
+	v2Stmt, err := sqlparser.NewTestParser().Parse("select 1 from t2")
+	require.NoError(t, err)
+
+	v3Stmt, err := sqlparser.NewTestParser().Parse("select 1 from t3")
+	require.NoError(t, err)
+
+	vs := BuildVSchema(input, sqlparser.NewTestParser())
+	vs.Keyspaces["unsharded"].Views = map[string]*View{
+		"v1": {
+			Name:      "v1",
+			Keyspace:  vs.Keyspaces["unsharded"].Keyspace,
+			Statement: v1Stmt.(*sqlparser.Select),
+		},
+		"v2": {
+			Name:      "v2",
+			Keyspace:  vs.Keyspaces["unsharded"].Keyspace,
+			Statement: v2Stmt.(*sqlparser.Select),
+		},
+	}
+	vs.Keyspaces["sharded"].Views = map[string]*View{
+		"v2": {
+			Name:      "v2",
+			Keyspace:  vs.Keyspaces["sharded"].Keyspace,
+			Statement: v2Stmt.(*sqlparser.Select),
+		},
+		"v3": {
+			Name:      "v3",
+			Keyspace:  vs.Keyspaces["sharded"].Keyspace,
+			Statement: v3Stmt.(*sqlparser.Select),
+		},
+	}
+
+	// before adding to global tables, the views should not be found.
+	require.Nil(t,
+		vs.FindView("", "v1"))
+	require.Nil(t,
+		vs.FindView("", "v2"))
+	require.Nil(t,
+		vs.FindView("", "v3"))
+
+	AddAdditionalGlobalTables(input, vs)
+
+	// without keyspace will be checked on global table.
+	// v1 and v3 are unique so they should be discovered using the global tables.
+	require.NotNil(t,
+		vs.FindView("", "v1"))
+	require.Nil(t,
+		vs.FindView("", "v2"))
+	require.NotNil(t,
+		vs.FindView("", "v3"))
+
+	// providing the keyspace qualifier will check the keyspace specific views.
+
+	// unsharded check
+	require.NotNil(t,
+		vs.FindView("unsharded", "v1"))
+	require.NotNil(t,
+		vs.FindView("unsharded", "v2"))
+	require.Nil(t,
+		vs.FindView("unsharded", "v3"))
+
+	// sharded check
+	require.Nil(t,
+		vs.FindView("sharded", "v1"))
+	require.NotNil(t,
+		vs.FindView("sharded", "v2"))
+	require.NotNil(t,
+		vs.FindView("sharded", "v3"))
+}
+
 func vindexNames(vindexes []*ColumnVindex) (result []string) {
 	for _, vindex := range vindexes {
 		result = append(result, vindex.Name)
