@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -1123,5 +1124,72 @@ func TestApplySettingsFailure(t *testing.T) {
 	// put them back
 	for _, r = range resources {
 		p.put(r)
+	}
+}
+
+func TestGetSpike(t *testing.T) {
+	var state TestState
+
+	ctx := context.Background()
+	p := NewPool(&Config[*TestConn]{
+		Capacity:    5,
+		IdleTimeout: time.Second,
+		LogWait:     state.LogWait,
+	}).Open(newConnector(&state), nil)
+
+	var resources [10]*Pooled[*TestConn]
+	var r *Pooled[*TestConn]
+	var err error
+
+	// Ensure we have a pool with 5 available resources
+	for i := 0; i < 5; i++ {
+		r, err = p.Get(ctx, nil)
+
+		require.NoError(t, err)
+		resources[i] = r
+		assert.EqualValues(t, 5-i-1, p.Available())
+		assert.Zero(t, p.Metrics.WaitCount())
+		assert.Zero(t, len(state.waits))
+		assert.Zero(t, p.Metrics.WaitTime())
+		assert.EqualValues(t, i+1, state.lastID.Load())
+		assert.EqualValues(t, i+1, state.open.Load())
+	}
+
+	for i := 0; i < 5; i++ {
+		p.put(resources[i])
+	}
+
+	assert.EqualValues(t, 5, p.Available())
+	assert.EqualValues(t, 5, p.Active())
+	assert.EqualValues(t, 0, p.InUse())
+
+	for i := 0; i < 2000; i++ {
+		wg := sync.WaitGroup{}
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+
+		errs := make(chan error, 80)
+
+		for j := 0; j < 80; j++ {
+			wg.Add(1)
+
+			go func() {
+				defer wg.Done()
+				r, err = p.Get(ctx, nil)
+				defer p.put(r)
+
+				if err != nil {
+					errs <- err
+				}
+			}()
+		}
+		wg.Wait()
+
+		if len(errs) > 0 {
+			t.Errorf("Error getting connection: %v", <-errs)
+		}
+
+		close(errs)
 	}
 }
