@@ -734,6 +734,7 @@ func (vttablet *VttabletProcess) ConfirmDataDirHasNoGlobalPerms(t *testing.T) {
 		path.Join("data", "client-cert.pem"),
 		path.Join("data", "public_key.pem"),
 		path.Join("data", "server-cert.pem"),
+		"mysql.sock", // Must have global perms for anyone to use it
 	}
 
 	var matches []string
