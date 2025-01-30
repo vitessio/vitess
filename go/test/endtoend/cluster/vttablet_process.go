@@ -705,6 +705,10 @@ func (vttablet *VttabletProcess) ConfirmDataDirHasNoGlobalPerms(t *testing.T) {
 		// These files are created by xtrabackup.
 		path.Join("tmp", "xtrabackup_checkpoints"),
 		path.Join("tmp", "xtrabackup_info"),
+		// These are 5.7 specific xtrabackup files.
+		path.Join("data", "xtrabackup_binlog_pos_innodb"),
+		path.Join("data", "xtrabackup_master_key_id"),
+		path.Join("data", "mysql_upgrade_info"),
 	}
 
 	var matches []string
