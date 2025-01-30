@@ -17,7 +17,6 @@ limitations under the License.
 package workflow
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"hash/fnv"
@@ -578,9 +577,7 @@ func ReverseWorkflowName(workflow string) string {
 // this public, but it doesn't belong in package workflow. Maybe package sqltypes,
 // or maybe package sqlescape?
 func encodeString(in string) string {
-	buf := bytes.NewBuffer(nil)
-	sqltypes.NewVarChar(in).EncodeSQL(buf)
-	return buf.String()
+	return sqltypes.EncodeStringSQL(in)
 }
 
 func getRenameFileName(tableName string) string {
