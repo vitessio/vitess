@@ -1592,6 +1592,10 @@ column_format:
 {
     $$ = DefaultFormat
 }
+| COMPRESSED
+{
+    $$ = CompressedFormat
+}
 
 column_storage:
   VIRTUAL
