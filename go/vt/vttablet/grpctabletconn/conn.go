@@ -19,10 +19,14 @@ package grpctabletconn
 import (
 	"context"
 	"io"
+	"strings"
 	"sync"
 
 	"github.com/spf13/pflag"
 	"google.golang.org/grpc"
+
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/sqltypes"
@@ -132,7 +136,14 @@ func (conn *gRPCQueryClient) Execute(ctx context.Context, target *querypb.Target
 	}
 	er, err := conn.c.Execute(ctx, req)
 	if err != nil {
-		return nil, tabletconn.ErrorFromGRPC(err)
+		err = tabletconn.ErrorFromGRPC(err)
+		if err == nil {
+			return nil, nil
+		}
+		if vterrors.Code(err) == vtrpc.Code_UNAVAILABLE && strings.Contains(err.Error(), "connection refused") {
+			return nil, vterrors.VT15001(vtrpc.Code_UNAVAILABLE, err.Error())
+		}
+		return nil, err
 	}
 	return sqltypes.Proto3ToResult(er.Result), nil
 }

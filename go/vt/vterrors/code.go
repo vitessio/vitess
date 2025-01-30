@@ -120,6 +120,8 @@ var (
 	VT14004 = errorWithoutState("VT14004", vtrpcpb.Code_UNAVAILABLE, "cannot find keyspace for: %s", "The specified keyspace could not be found.")
 	VT14005 = errorWithoutState("VT14005", vtrpcpb.Code_UNAVAILABLE, "cannot lookup sidecar database for keyspace: %s", "Failed to read sidecar database identifier.")
 
+	VT15001 = errorWithNoCode("VT15001", "session invalidated: close/reopen connection if applicable: %s", "This error means that the opened transaction should be closed by the application and re-opened.")
+
 	// Errors is a list of errors that must match all the variables
 	// defined above to enable auto-documentation of error codes.
 	Errors = []func(args ...any) *VitessError{
@@ -207,6 +209,10 @@ var (
 		VT14004,
 		VT14005,
 	}
+
+	ErrorsWithNoCode = []func(code vtrpcpb.Code, args ...any) *VitessError{
+		VT15001,
+	}
 )
 
 type VitessError struct {
@@ -255,6 +261,21 @@ func errorWithState(id string, code vtrpcpb.Code, state State, short, long strin
 			Description: long,
 			ID:          id,
 			State:       state,
+		}
+	}
+}
+
+func errorWithNoCode(id string, short, long string) func(code vtrpcpb.Code, args ...any) *VitessError {
+	return func(code vtrpcpb.Code, args ...any) *VitessError {
+		s := short
+		if len(args) != 0 {
+			s = fmt.Sprintf(s, args...)
+		}
+
+		return &VitessError{
+			Err:         New(code, id+": "+s),
+			Description: long,
+			ID:          id,
 		}
 	}
 }
