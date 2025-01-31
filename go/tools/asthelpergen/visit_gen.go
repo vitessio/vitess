@@ -40,7 +40,7 @@ func newVisitGen(pkgname string) *visitGen {
 	}
 }
 
-func (v *visitGen) genFile() (string, *jen.File) {
+func (v *visitGen) genFile(generatorSPI) (string, *jen.File) {
 	return "ast_visit.go", v.file
 }
 

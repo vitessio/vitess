@@ -20,12 +20,12 @@ package integration
 type ASTStep uint16
 
 const (
-	BytesOffset8 ASTStep = iota
-	BytesOffset32
-	InterfaceSliceOffset8
-	InterfaceSliceOffset32
-	LeafSliceOffset8
-	LeafSliceOffset32
+	Bytes8 ASTStep = iota
+	Bytes32
+	InterfaceSlice8
+	InterfaceSlice32
+	LeafSlice8
+	LeafSlice32
 	RefOfRefContainerASTType
 	RefOfRefContainerASTImplementationType
 	RefOfRefSliceContainerASTElements8
@@ -38,12 +38,12 @@ const (
 	ValueSliceContainerASTElements8
 	ValueSliceContainerASTElements32
 	ValueSliceContainerASTImplementationElements
-	SliceOfASTOffset8
-	SliceOfASTOffset32
-	SliceOfIntOffset8
-	SliceOfIntOffset32
-	SliceOfRefOfLeafOffset8
-	SliceOfRefOfLeafOffset32
+	SliceOfAST8
+	SliceOfAST32
+	SliceOfInt8
+	SliceOfInt32
+	SliceOfRefOfLeaf8
+	SliceOfRefOfLeaf32
 	RefOfValueContainerASTType
 	RefOfValueContainerASTImplementationType
 	RefOfValueSliceContainerASTElements8
@@ -53,18 +53,18 @@ const (
 
 func (s ASTStep) DebugString() string {
 	switch s {
-	case BytesOffset8:
-		return "(Bytes).Offset8"
-	case BytesOffset32:
-		return "(Bytes).Offset32"
-	case InterfaceSliceOffset8:
-		return "(InterfaceSlice).Offset8"
-	case InterfaceSliceOffset32:
-		return "(InterfaceSlice).Offset32"
-	case LeafSliceOffset8:
-		return "(LeafSlice).Offset8"
-	case LeafSliceOffset32:
-		return "(LeafSlice).Offset32"
+	case Bytes8:
+		return "(Bytes)[]8"
+	case Bytes32:
+		return "(Bytes)[]32"
+	case InterfaceSlice8:
+		return "(InterfaceSlice)[]8"
+	case InterfaceSlice32:
+		return "(InterfaceSlice)[]32"
+	case LeafSlice8:
+		return "(LeafSlice)[]8"
+	case LeafSlice32:
+		return "(LeafSlice)[]32"
 	case RefOfRefContainerASTType:
 		return "(*RefContainer).ASTType"
 	case RefOfRefContainerASTImplementationType:
@@ -89,18 +89,18 @@ func (s ASTStep) DebugString() string {
 		return "(ValueSliceContainer).ASTElements32"
 	case ValueSliceContainerASTImplementationElements:
 		return "(ValueSliceContainer).ASTImplementationElements"
-	case SliceOfASTOffset8:
-		return "([]AST).Offset8"
-	case SliceOfASTOffset32:
-		return "([]AST).Offset32"
-	case SliceOfIntOffset8:
-		return "([]int).Offset8"
-	case SliceOfIntOffset32:
-		return "([]int).Offset32"
-	case SliceOfRefOfLeafOffset8:
-		return "([]*Leaf).Offset8"
-	case SliceOfRefOfLeafOffset32:
-		return "([]*Leaf).Offset32"
+	case SliceOfAST8:
+		return "([]AST)[]8"
+	case SliceOfAST32:
+		return "([]AST)[]32"
+	case SliceOfInt8:
+		return "([]int)[]8"
+	case SliceOfInt32:
+		return "([]int)[]32"
+	case SliceOfRefOfLeaf8:
+		return "([]*Leaf)[]8"
+	case SliceOfRefOfLeaf32:
+		return "([]*Leaf)[]32"
 	case RefOfValueContainerASTType:
 		return "(*ValueContainer).ASTType"
 	case RefOfValueContainerASTImplementationType:

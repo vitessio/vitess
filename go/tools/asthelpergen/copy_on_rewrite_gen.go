@@ -44,7 +44,7 @@ func (c *cowGen) addFunc(code *jen.Statement) {
 	c.file.Add(code)
 }
 
-func (c *cowGen) genFile() (string, *jen.File) {
+func (c *cowGen) genFile(generatorSPI) (string, *jen.File) {
 	return "ast_copy_on_rewrite.go", c.file
 }
 

@@ -48,7 +48,7 @@ func newRewriterGen(pkgname string, ifaceName string, exprInterface *types.Inter
 	}
 }
 
-func (r *rewriteGen) genFile() (string, *jen.File) {
+func (r *rewriteGen) genFile(generatorSPI) (string, *jen.File) {
 	return "ast_rewrite.go", r.file
 }
 

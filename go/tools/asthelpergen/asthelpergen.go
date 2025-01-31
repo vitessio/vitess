@@ -54,7 +54,7 @@ type (
 		iface() *types.Interface // the root interface that all nodes are expected to implement
 	}
 	generator interface {
-		genFile() (string, *jen.File)
+		genFile(generatorSPI) (string, *jen.File)
 		interfaceMethod(t types.Type, iface *types.Interface, spi generatorSPI) error
 		structMethod(t types.Type, strct *types.Struct, spi generatorSPI) error
 		ptrToStructMethod(t types.Type, strct *types.Struct, spi generatorSPI) error
@@ -215,12 +215,13 @@ func GenerateASTHelpers(options *Options) (map[string]*jen.File, error) {
 
 	nt := tt.Type().(*types.Named)
 	pName := nt.Obj().Pkg().Name()
+	ifaceName := types.TypeString(nt, noQualifier)
 	generator := newGenerator(loaded[0].Module, loaded[0].TypesSizes, nt,
 		newEqualsGen(pName, &options.Equals),
 		newCloneGen(pName, &options.Clone),
-		newPathGen(pName),
+		newPathGen(pName, ifaceName),
 		newVisitGen(pName),
-		newRewriterGen(pName, types.TypeString(nt, noQualifier), exprInterface),
+		newRewriterGen(pName, ifaceName, exprInterface),
 		newCOWGen(pName, nt),
 	)
 
@@ -308,7 +309,7 @@ func (gen *astHelperGen) createFiles() map[string]*jen.File {
 
 	result := map[string]*jen.File{}
 	for _, g := range gen.gens {
-		fName, jenFile := g.genFile()
+		fName, jenFile := g.genFile(gen)
 		result[fName] = jenFile
 	}
 	return result
