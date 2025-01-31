@@ -76,7 +76,7 @@ func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting) (*Pool
 
 // expire removes and wakes any expired waiter in the waitlist.
 // if force is true, it'll wake and remove all the waiters.
-func (wl *waitlist[C]) expire(force bool) {
+func (wl *waitlist[C]) expire(force bool) (maybeStarving int) {
 	if wl.list.Len() == 0 {
 		return
 	}
@@ -91,6 +91,9 @@ func (wl *waitlist[C]) expire(force bool) {
 			expired = append(expired, e)
 			continue
 		}
+		if e.Value.age == 0 {
+			maybeStarving++
+		}
 	}
 	// remove the expired waiters from the waitlist after traversing it
 	for _, e := range expired {
@@ -102,6 +105,7 @@ func (wl *waitlist[C]) expire(force bool) {
 	for _, e := range expired {
 		e.Value.sema.notify(false)
 	}
+	return
 }
 
 // tryReturnConn tries handing over a connection to one of the waiters in the pool.
