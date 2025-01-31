@@ -115,6 +115,9 @@ type (
 		AllowScatter        bool
 		WarmingReadsPercent int
 		QueryLogToFile      string
+
+		// DefaultMultiShardAutocommit will opt into autocommit semantics even for multi shard DMLs
+		DefaultMultiShardAutocommit bool
 	}
 
 	Executor struct {
@@ -1424,6 +1427,8 @@ func (e *Executor) initVConfig(warnOnShardedOnly bool, pv plancontext.PlannerVer
 		WarmingReadsPercent: e.config.WarmingReadsPercent,
 		WarmingReadsTimeout: warmingReadsQueryTimeout,
 		WarmingReadsChannel: e.warmingReadsChannel,
+
+		DefaultMultiShardAutocommit: e.config.DefaultMultiShardAutocommit,
 	}
 }
 
