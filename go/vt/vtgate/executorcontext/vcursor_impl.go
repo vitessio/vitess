@@ -794,6 +794,7 @@ func (vc *VCursorImpl) ExecuteMultiShard(ctx context.Context, primitive engine.P
 	atomic.AddUint64(&vc.logStats.ShardQueries, uint64(noOfShards))
 	err := vc.markSavepoint(ctx, rollbackOnError && (noOfShards > 1), map[string]*querypb.BindVariable{})
 	if err != nil {
+		vc.setRollbackOnPartialExecIfRequired(true, rollbackOnError)
 		return nil, []error{err}
 	}
 
