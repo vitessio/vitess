@@ -85,10 +85,15 @@ func (tm *TabletManager) shardSyncLoop(ctx context.Context, notifyChan <-chan st
 			// We don't use the watch event except to know that we should
 			// re-read the shard record, and to know if the watch dies.
 			log.Info("Change in shard record")
-			if event.Err != nil {
-				// The watch failed. Stop it so we start a new one if needed.
-				log.Errorf("Shard watch failed: %v", event.Err)
-				shardWatch.stop()
+
+			if event != nil {
+				if event.Err != nil {
+					// The watch failed. Stop it so we start a new one if needed.
+					log.Errorf("Shard watch failed: %v", event.Err)
+					shardWatch.stop()
+				}
+			} else {
+				log.Infof("Got a nil event from the shard watcher for %s. This should not happen.", tm.tabletAlias)
 			}
 		case <-ctx.Done():
 			// Our context was cancelled. Terminate the loop.
