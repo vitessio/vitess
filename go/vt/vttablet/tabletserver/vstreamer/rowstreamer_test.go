@@ -23,14 +23,13 @@ import (
 	"strconv"
 	"testing"
 
-	vttablet "vitess.io/vitess/go/vt/vttablet/common"
-
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
@@ -343,9 +342,9 @@ func TestStreamRowsFilterInt(t *testing.T) {
 
 	wantStream := []string{
 		`fields:{name:"id1" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id1" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val" type:VARBINARY table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:128 charset:63 column_type:"varbinary(128)"} pkfields:{name:"id1" type:INT32 charset:63}`,
-		`rows:{lengths:1 lengths:3 values:"1aaa"} rows:{lengths:1 lengths:3 values:"4ddd"} lastpk:{lengths:1 values:"5"}`,
+		`rows:{lengths:1 lengths:3 values:"1aaa"} rows:{lengths:1 lengths:3 values:"4ddd"} lastpk:{lengths:1 values:"4"}`,
 	}
-	wantQuery := "select /*+ MAX_EXECUTION_TIME(3600000) */ id1, id2, val from t1 force index (`PRIMARY`) order by id1"
+	wantQuery := "select /*+ MAX_EXECUTION_TIME(3600000) */ id1, id2, val from t1 where id2 = 100 order by id1"
 	checkStream(t, "select id1, val from t1 where id2 = 100", nil, wantQuery, wantStream)
 	require.Equal(t, int64(0), engine.rowStreamerNumPackets.Get())
 	require.Equal(t, int64(2), engine.rowStreamerNumRows.Get())
@@ -373,9 +372,36 @@ func TestStreamRowsFilterVarBinary(t *testing.T) {
 
 	wantStream := []string{
 		`fields:{name:"id1" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id1" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val" type:VARBINARY table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:128 charset:63 column_type:"varbinary(128)"} pkfields:{name:"id1" type:INT32 charset:63}`,
-		`rows:{lengths:1 lengths:6 values:"2newton"} rows:{lengths:1 lengths:6 values:"3newton"} rows:{lengths:1 lengths:6 values:"5newton"} lastpk:{lengths:1 values:"6"}`,
+		`rows:{lengths:1 lengths:6 values:"2newton"} rows:{lengths:1 lengths:6 values:"3newton"} rows:{lengths:1 lengths:6 values:"5newton"} lastpk:{lengths:1 values:"5"}`,
 	}
-	wantQuery := "select /*+ MAX_EXECUTION_TIME(3600000) */ id1, val from t1 force index (`PRIMARY`) order by id1"
+	wantQuery := "select /*+ MAX_EXECUTION_TIME(3600000) */ id1, val from t1 where val = 'newton' order by id1"
+	checkStream(t, "select id1, val from t1 where val = 'newton'", nil, wantQuery, wantStream)
+}
+
+func TestStreamRowsFilterVarChar(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	if err := env.SetVSchema(shardedVSchema); err != nil {
+		t.Fatal(err)
+	}
+	defer env.SetVSchema("{}")
+
+	execStatements(t, []string{
+		"create table t1(id1 int, val varchar(128), primary key(id1))",
+		"insert into t1 values (1,'kepler'), (2, 'newton'), (3, 'newton'), (4, 'kepler'), (5, 'newton'), (6, 'kepler')",
+	})
+
+	defer execStatements(t, []string{
+		"drop table t1",
+	})
+
+	wantStream := []string{
+		`fields:{name:"id1" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id1" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val" type:VARCHAR table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:512 charset:255 column_type:"varchar(128)"} pkfields:{name:"id1" type:INT32 charset:63}`,
+		`rows:{lengths:1 lengths:6 values:"2newton"} rows:{lengths:1 lengths:6 values:"3newton"} rows:{lengths:1 lengths:6 values:"5newton"} lastpk:{lengths:1 values:"5"}`,
+	}
+	wantQuery := "select /*+ MAX_EXECUTION_TIME(3600000) */ id1, val from t1 where val = 'newton' order by id1"
 	checkStream(t, "select id1, val from t1 where val = 'newton'", nil, wantQuery, wantStream)
 }
 
