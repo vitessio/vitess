@@ -58,8 +58,12 @@ type Plan struct {
 	// of the table.
 	Filters []Filter
 
-	// WHERE clauses in the Filter query that we can push down to
+	// Predicates in the Filter query that we can push down to
 	// MySQL to reduce the returned rows we need to filter.
+	// This will contain any valid expressions in the Filter's
+	// WHERE clause with the exception of the in_keyspace()
+	// function which is a filter that must be applied by the
+	// vstreamer (it's not a valid MySQL function).
 	whereExprsToPushDown []sqlparser.Expr
 
 	// Convert any integer values seen in the binlog events for ENUM or SET
@@ -606,10 +610,7 @@ func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) er
 			if !ok {
 				return fmt.Errorf("unexpected: %v", sqlparser.String(expr))
 			}
-			// Add it to the column expressions so that it's passed down to mysqld.
-			if plan.whereExprsToPushDown == nil {
-				plan.whereExprsToPushDown = make([]sqlparser.Expr, 0)
-			}
+			// Add it to the expressions that get pushed down to mysqld.
 			log.Errorf("DEBUG: adding to list of pushdown expressions: %v", sqlparser.String(expr))
 			plan.whereExprsToPushDown = append(plan.whereExprsToPushDown, expr)
 			// StrVal is varbinary, we do not support varchar since we would have to implement all collation types
@@ -659,7 +660,7 @@ func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) er
 				Opcode: IsNotNull,
 				ColNum: colnum,
 			})
-			// Add it to the column expressions so that it's passed down to mysqld.
+			// Add it to the expressions that get pushed down to mysqld.
 			plan.whereExprsToPushDown = append(plan.whereExprsToPushDown, expr)
 		default:
 			return fmt.Errorf("unsupported constraint: %v", sqlparser.String(expr))

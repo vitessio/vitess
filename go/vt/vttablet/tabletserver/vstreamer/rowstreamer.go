@@ -265,7 +265,6 @@ func (rs *rowStreamer) buildSelect(st *binlogdatapb.MinimalTable) (string, error
 	}
 
 	addPushdownExpressions := func() {
-		// First we add any predicates that should be pushed down.
 		for i, expr := range rs.plan.whereExprsToPushDown {
 			if i != 0 {
 				buf.Myprintf(" and ")

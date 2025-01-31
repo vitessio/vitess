@@ -27,7 +27,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtenv"
@@ -451,6 +450,54 @@ func TestPlanBuilder(t *testing.T) {
 				VindexColumns: nil,
 				KeyRange:      nil,
 			}},
+			whereExprsToPushDown: []sqlparser.Expr{
+				sqlparser.NewComparisonExpr(sqlparser.EqualOp, sqlparser.Expr(sqlparser.NewColName("id")), sqlparser.Expr(sqlparser.NewIntLiteral("1")), nil),
+			},
+			env: vtenv.NewTestEnv(),
+		},
+	}, {
+		inTable: t1,
+		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select val, id from t1 where id > 1 and id < 10"},
+		outPlan: &Plan{
+			ColExprs: []ColExpr{{
+				ColNum: 1,
+				Field: &querypb.Field{
+					Name:    "val",
+					Type:    sqltypes.VarBinary,
+					Charset: collations.CollationBinaryID,
+					Flags:   uint32(querypb.MySqlFlag_BINARY_FLAG),
+				},
+			}, {
+				ColNum: 0,
+				Field: &querypb.Field{
+					Name:    "id",
+					Type:    sqltypes.Int64,
+					Charset: collations.CollationBinaryID,
+					Flags:   uint32(querypb.MySqlFlag_NUM_FLAG),
+				},
+			}},
+			Filters: []Filter{
+				{
+					Opcode:        GreaterThan,
+					ColNum:        0,
+					Value:         sqltypes.NewInt64(1),
+					Vindex:        nil,
+					VindexColumns: nil,
+					KeyRange:      nil,
+				},
+				{
+					Opcode:        LessThan,
+					ColNum:        0,
+					Value:         sqltypes.NewInt64(10),
+					Vindex:        nil,
+					VindexColumns: nil,
+					KeyRange:      nil,
+				},
+			},
+			whereExprsToPushDown: []sqlparser.Expr{
+				sqlparser.NewComparisonExpr(sqlparser.GreaterThanOp, sqlparser.Expr(sqlparser.NewColName("id")), sqlparser.Expr(sqlparser.NewIntLiteral("1")), nil),
+				sqlparser.NewComparisonExpr(sqlparser.LessThanOp, sqlparser.Expr(sqlparser.NewColName("id")), sqlparser.Expr(sqlparser.NewIntLiteral("10")), nil),
+			},
 			env: vtenv.NewTestEnv(),
 		},
 	}, {
@@ -661,7 +708,7 @@ func TestPlanBuilder(t *testing.T) {
 				plan.Filters[ind].Vindex = nil
 				plan.Filters[ind].Vindex = nil
 			}
-			utils.MustMatch(t, tcase.outPlan, plan)
+			require.EqualValues(t, tcase.outPlan, plan)
 		})
 	}
 }
