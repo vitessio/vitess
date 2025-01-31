@@ -36,6 +36,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/streamlog"
+
 	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -196,9 +198,7 @@ func TestExecutorTransactionsNoAutoCommit(t *testing.T) {
 }
 
 func TestDirectTargetRewrites(t *testing.T) {
-	executor, _, _, sbclookup, ctx := createExecutorEnv(t)
-
-	executor.normalize = true
+	executor, _, _, sbclookup, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 
 	session := &vtgatepb.Session{
 		TargetString:    "TestUnsharded/0@primary",
@@ -1277,17 +1277,19 @@ func TestExecutorDDL(t *testing.T) {
 	}
 
 	for _, stmt := range stmts2 {
-		sbc1.ExecCount.Store(0)
-		sbc2.ExecCount.Store(0)
-		sbclookup.ExecCount.Store(0)
-		_, err := executor.Execute(ctx, nil, "TestExecute", econtext.NewSafeSession(&vtgatepb.Session{TargetString: ""}), stmt.input, nil)
-		if stmt.hasErr {
-			require.EqualError(t, err, econtext.ErrNoKeyspace.Error(), "expect query to fail")
-			testQueryLog(t, executor, logChan, "TestExecute", "", stmt.input, 0)
-		} else {
-			require.NoError(t, err)
-			testQueryLog(t, executor, logChan, "TestExecute", "DDL", stmt.input, 8)
-		}
+		t.Run(stmt.input, func(t *testing.T) {
+			sbc1.ExecCount.Store(0)
+			sbc2.ExecCount.Store(0)
+			sbclookup.ExecCount.Store(0)
+			_, err := executor.Execute(ctx, nil, "TestExecute", econtext.NewSafeSession(&vtgatepb.Session{TargetString: ""}), stmt.input, nil)
+			if stmt.hasErr {
+				assert.EqualError(t, err, econtext.ErrNoKeyspace.Error(), "expect query to fail")
+				testQueryLog(t, executor, logChan, "TestExecute", "", stmt.input, 0)
+			} else {
+				assert.NoError(t, err)
+				testQueryLog(t, executor, logChan, "TestExecute", "DDL", stmt.input, 8)
+			}
+		})
 	}
 }
 
@@ -1623,7 +1625,7 @@ func assertCacheContains(t *testing.T, e *Executor, vc *econtext.VCursorImpl, sq
 }
 
 func getPlanCached(t *testing.T, ctx context.Context, e *Executor, vcursor *econtext.VCursorImpl, sql string, comments sqlparser.MarginComments, bindVars map[string]*querypb.BindVariable, skipQueryPlanCache bool) (*engine.Plan, *logstats.LogStats) {
-	logStats := logstats.NewLogStats(ctx, "Test", "", "", nil)
+	logStats := logstats.NewLogStats(ctx, "Test", "", "", nil, streamlog.NewQueryLogConfigForTest())
 	vcursor.SafeSession = &econtext.SafeSession{
 		Session: &vtgatepb.Session{
 			Options: &querypb.ExecuteOptions{SkipQueryPlanCache: skipQueryPlanCache}},
@@ -1631,7 +1633,7 @@ func getPlanCached(t *testing.T, ctx context.Context, e *Executor, vcursor *econ
 
 	stmt, reservedVars, err := parseAndValidateQuery(sql, sqlparser.NewTestParser())
 	require.NoError(t, err)
-	plan, err := e.getPlan(context.Background(), vcursor, sql, stmt, comments, bindVars, reservedVars /* normalize */, e.normalize, logStats)
+	plan, err := e.getPlan(context.Background(), vcursor, sql, stmt, comments, bindVars, reservedVars /* normalize */, e.config.Normalize, logStats)
 	require.NoError(t, err)
 
 	// Wait for cache to settle
@@ -1691,8 +1693,7 @@ func TestGetPlanCacheUnnormalized(t *testing.T) {
 
 func TestGetPlanCacheNormalized(t *testing.T) {
 	t.Run("Cache", func(t *testing.T) {
-		r, _, _, _, ctx := createExecutorEnv(t)
-		r.normalize = true
+		r, _, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 		emptyvc, _ := econtext.NewVCursorImpl(econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, nullResultsObserver{}, r.vConfig)
 
 		query1 := "select * from music_user_map where id = 1"
@@ -1708,8 +1709,7 @@ func TestGetPlanCacheNormalized(t *testing.T) {
 
 	t.Run("Skip Cache", func(t *testing.T) {
 		// Skip cache using directive
-		r, _, _, _, ctx := createExecutorEnv(t)
-		r.normalize = true
+		r, _, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 		unshardedvc, _ := econtext.NewVCursorImpl(econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, nullResultsObserver{}, r.vConfig)
 
 		query1 := "insert /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ into user(id) values (1), (2)"
@@ -1733,9 +1733,8 @@ func TestGetPlanCacheNormalized(t *testing.T) {
 }
 
 func TestGetPlanNormalized(t *testing.T) {
-	r, _, _, _, ctx := createExecutorEnv(t)
+	r, _, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 
-	r.normalize = true
 	emptyvc, _ := econtext.NewVCursorImpl(econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, nullResultsObserver{}, econtext.VCursorConfig{})
 	unshardedvc, _ := econtext.NewVCursorImpl(econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, nullResultsObserver{}, econtext.VCursorConfig{})
 
@@ -1790,10 +1789,9 @@ func TestGetPlanPriority(t *testing.T) {
 		testCase := aTestCase
 
 		t.Run(testCase.name, func(t *testing.T) {
-			r, _, _, _, ctx := createExecutorEnv(t)
+			r, _, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 
-			r.normalize = true
-			logStats := logstats.NewLogStats(ctx, "Test", "", "", nil)
+			logStats := logstats.NewLogStats(ctx, "Test", "", "", nil, streamlog.NewQueryLogConfigForTest())
 			vCursor, err := econtext.NewVCursorImpl(session, makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, nullResultsObserver{}, econtext.VCursorConfig{})
 			assert.NoError(t, err)
 
@@ -1816,7 +1814,7 @@ func TestGetPlanPriority(t *testing.T) {
 }
 
 func TestPassthroughDDL(t *testing.T) {
-	executor, sbc1, sbc2, _, ctx := createExecutorEnv(t)
+	executor, sbc1, sbc2, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 	session := &vtgatepb.Session{
 		TargetString: "TestExecutor",
 	}
@@ -1839,7 +1837,6 @@ func TestPassthroughDDL(t *testing.T) {
 
 	// Force the query to go to only one shard. Normalization doesn't make any difference.
 	session.TargetString = "TestExecutor/40-60"
-	executor.normalize = true
 
 	_, err = executorExec(ctx, executor, session, alterDDL, nil)
 	require.NoError(t, err)
@@ -1851,7 +1848,6 @@ func TestPassthroughDDL(t *testing.T) {
 
 	// Use range query
 	session.TargetString = "TestExecutor[-]"
-	executor.normalize = true
 
 	_, err = executorExec(ctx, executor, session, alterDDL, nil)
 	require.NoError(t, err)
@@ -1862,6 +1858,30 @@ func TestPassthroughDDL(t *testing.T) {
 		t.Errorf("sbc2.Queries: %+v, want %+v\n", sbc2.Queries, wantQueries)
 	}
 	sbc2.Queries = nil
+}
+
+func TestShowStatus(t *testing.T) {
+	executor, sbc1, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+	session := &vtgatepb.Session{
+		TargetString: "TestExecutor",
+	}
+
+	sql1 := "show slave status"
+	_, err := executorExec(ctx, executor, session, sql1, nil)
+	require.NoError(t, err)
+
+	sql2 := "show replica status"
+	_, err = executorExec(ctx, executor, session, sql2, nil)
+	require.NoError(t, err)
+
+	wantQueries := []*querypb.BoundQuery{{
+		Sql:           sql1,
+		BindVariables: map[string]*querypb.BindVariable{},
+	}, {
+		Sql:           sql2,
+		BindVariables: map[string]*querypb.BindVariable{},
+	}}
+	assert.Equal(t, wantQueries, sbc1.Queries)
 }
 
 func TestParseEmptyTargetSingleKeyspace(t *testing.T) {
@@ -2001,10 +2021,7 @@ func TestExecutorMaxPayloadSizeExceeded(t *testing.T) {
 }
 
 func TestOlapSelectDatabase(t *testing.T) {
-	executor, _, _, _, _ := createExecutorEnv(t)
-
-	executor.normalize = true
-
+	executor, _, _, _, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 	session := &vtgatepb.Session{Autocommit: true}
 
 	sql := `select database()`
@@ -2282,9 +2299,7 @@ func TestExecutorExplainStmt(t *testing.T) {
 }
 
 func TestExecutorVExplain(t *testing.T) {
-	executor, _, _, _, ctx := createExecutorEnv(t)
-
-	executor.normalize = true
+	executor, _, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
 
@@ -2754,9 +2769,7 @@ func TestExecutorStartTxnStmt(t *testing.T) {
 }
 
 func TestExecutorPrepareExecute(t *testing.T) {
-	executor, _, _, _, _ := createExecutorEnv(t)
-
-	executor.normalize = true
+	executor, _, _, _, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 	session := econtext.NewAutocommitSession(&vtgatepb.Session{})
 
 	// prepare statement.

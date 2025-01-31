@@ -55,16 +55,16 @@ func RestoreTablet(t *testing.T, localCluster *cluster.LocalProcessCluster, tabl
 	tablet.ValidateTabletRestart(t)
 	replicaTabletArgs := commonTabletArg
 
-	_, err := localCluster.VtctlProcess.ExecuteCommandWithOutput("GetKeyspace", restoreKSName)
+	_, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput("GetKeyspace", restoreKSName)
 
 	if restoreTime.IsZero() {
 		restoreTime = time.Now().UTC()
 	}
 
 	if err != nil {
-		_, err := localCluster.VtctlProcess.ExecuteCommandWithOutput("CreateKeyspace", "--",
-			"--keyspace_type=SNAPSHOT", "--base_keyspace="+keyspaceName,
-			"--snapshot_time", restoreTime.Format(time.RFC3339), restoreKSName)
+		_, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput("CreateKeyspace", restoreKSName,
+			"--type=SNAPSHOT", "--base-keyspace="+keyspaceName,
+			"--snapshot-timestamp", restoreTime.Format(time.RFC3339))
 		require.Nil(t, err)
 	}
 

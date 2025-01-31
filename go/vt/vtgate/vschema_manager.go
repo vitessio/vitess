@@ -18,11 +18,11 @@ package vtgate
 
 import (
 	"context"
+	"errors"
 	"sync"
 
 	"vitess.io/vitess/go/vt/graph"
 	"vitess.io/vitess/go/vt/log"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
@@ -30,8 +30,13 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
+
+// The full SQL error that the user sees in their vtgate connection looks like this:
+// failed to update vschema as the session's version was stale; please try again (errno 1105) (sqlstate HY000) during query: ALTER VSCHEMA DROP TABLE t864
+var ErrStaleVSchema = errors.New("failed to update vschema as the session's version was stale; please try again")
 
 // VSchemaManager is used to watch for updates to the vschema and to implement
 // the DDL commands to add / remove vindexes
@@ -64,21 +69,23 @@ func (vm *VSchemaManager) GetCurrentSrvVschema() *vschemapb.SrvVSchema {
 // UpdateVSchema propagates the updated vschema to the topo. The entry for
 // the given keyspace is updated in the global topo, and the full SrvVSchema
 // is updated in all known cells.
-func (vm *VSchemaManager) UpdateVSchema(ctx context.Context, ksName string, vschema *vschemapb.SrvVSchema) error {
+func (vm *VSchemaManager) UpdateVSchema(ctx context.Context, ks *topo.KeyspaceVSchemaInfo, srv *vschemapb.SrvVSchema) error {
 	topoServer, err := vm.serv.GetTopoServer()
 	if err != nil {
 		return err
 	}
 
-	ks := vschema.Keyspaces[ksName]
-
-	_, err = vindexes.BuildKeyspace(ks, vm.parser)
+	_, err = vindexes.BuildKeyspace(ks.Keyspace, vm.parser)
 	if err != nil {
 		return err
 	}
 
-	err = topoServer.SaveVSchema(ctx, ksName, ks)
+	err = topoServer.SaveVSchema(ctx, ks)
 	if err != nil {
+		if topo.IsErrType(err, topo.BadVersion) {
+			// Provide a more useful error message to the user.
+			return ErrStaleVSchema
+		}
 		return err
 	}
 
@@ -89,7 +96,7 @@ func (vm *VSchemaManager) UpdateVSchema(ctx context.Context, ksName string, vsch
 
 	// even if one cell fails, continue to try the others
 	for _, cell := range cells {
-		cellErr := topoServer.UpdateSrvVSchema(ctx, cell, vschema)
+		cellErr := topoServer.UpdateSrvVSchema(ctx, cell, srv)
 		if cellErr != nil {
 			err = cellErr
 			log.Errorf("error updating vschema in cell %s: %v", cell, cellErr)
@@ -100,7 +107,7 @@ func (vm *VSchemaManager) UpdateVSchema(ctx context.Context, ksName string, vsch
 	}
 
 	// Update all the local copy of VSchema if the topo update is successful.
-	vm.VSchemaUpdate(vschema, err)
+	vm.VSchemaUpdate(srv, err)
 
 	return nil
 }
@@ -204,21 +211,34 @@ func (vm *VSchemaManager) buildAndEnhanceVSchema(v *vschemapb.SrvVSchema) *vinde
 
 func (vm *VSchemaManager) updateFromSchema(vschema *vindexes.VSchema) {
 	for ksName, ks := range vschema.Keyspaces {
-		vm.updateTableInfo(vschema, ks, ksName)
 		vm.updateViewInfo(ks, ksName)
+		vm.updateTableInfo(vschema, ks, ksName)
 		vm.updateUDFsInfo(ks, ksName)
 	}
 }
 
 func (vm *VSchemaManager) updateViewInfo(ks *vindexes.KeyspaceSchema, ksName string) {
 	views := vm.schema.Views(ksName)
-	if views != nil {
-		ks.Views = make(map[string]sqlparser.TableStatement, len(views))
-		for name, def := range views {
-			ks.Views[name] = sqlparser.Clone(def)
+	if views == nil {
+		return
+	}
+	ks.Views = make(map[string]sqlparser.TableStatement, len(views))
+	for name, def := range views {
+		ks.Views[name] = sqlparser.Clone(def)
+		vTbl, ok := ks.Tables[name]
+		if ok {
+			vTbl.Type = vindexes.TypeView
+		} else {
+			// Adding view to the VSchema as a table.
+			ks.Tables[name] = &vindexes.Table{
+				Type:     vindexes.TypeView,
+				Name:     sqlparser.NewIdentifierCS(name),
+				Keyspace: ks.Keyspace,
+			}
 		}
 	}
 }
+
 func (vm *VSchemaManager) updateTableInfo(vschema *vindexes.VSchema, ks *vindexes.KeyspaceSchema, ksName string) {
 	m := vm.schema.Tables(ksName)
 	// Before we add the foreign key definitions in the tables, we need to make sure that all the tables

@@ -1311,6 +1311,13 @@ func TestGetColumnCollations(t *testing.T) {
 				"size": {"'small'", "'medium'", "'large'"},
 			},
 		},
+		{
+			name: "invalid schema",
+			table: &tabletmanagerdatapb.TableDefinition{
+				Schema: "create table t1 (c1 varchar(10), size set('small', 'medium', 'large'), primary key(c1) with syntax error)",
+			},
+			wantErr: true,
+		},
 	}
 	env := vtenv.NewTestEnv()
 	for _, tt := range tests {

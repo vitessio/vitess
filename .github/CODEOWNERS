@@ -72,6 +72,7 @@ go.sum @ajm188 @deepthi @harshit-gangal @mattlord @rohit-nayak-ps @systay @froui
 /go/vt/vttablet/tabletmanager/rpc_throttler.go @shlomi-noach @mattlord @timvaillancourt
 /go/vt/vttablet/tabletserver/throttle @shlomi-noach @mattlord @timvaillancourt
 /go/vt/vttablet/tabletmanager/vreplication @rohit-nayak-ps @mattlord
+/go/vt/vttablet/tabletmanager/vdiff @rohit-nayak-ps @mattlord
 /go/vt/vttablet/tabletmanager/vstreamer @rohit-nayak-ps @mattlord
 /go/vt/vttablet/tabletserver* @harshit-gangal @systay @shlomi-noach @rohit-nayak-ps @timvaillancourt
 /go/vt/vttablet/tabletserver/messager @mattlord @rohit-nayak-ps @derekperkins

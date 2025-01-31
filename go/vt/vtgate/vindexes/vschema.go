@@ -57,6 +57,7 @@ const (
 	TypeTable     = ""
 	TypeSequence  = "sequence"
 	TypeReference = "reference"
+	TypeView      = "view"
 )
 
 // VSchema represents the denormalized version of SrvVSchema,
@@ -439,7 +440,7 @@ func (vschema *VSchema) AddView(ksname, viewName, query string, parser *sqlparse
 	}
 	ks.Views[viewName] = selectStmt
 	t := &Table{
-		Type:                    "View",
+		Type:                    TypeView,
 		Name:                    sqlparser.NewIdentifierCS(viewName),
 		Keyspace:                ks.Keyspace,
 		ColumnListAuthoritative: true,

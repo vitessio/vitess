@@ -107,39 +107,45 @@ func init() {
 
 // Executor is the engine that executes queries by utilizing
 // the abilities of the underlying vttablets.
-type Executor struct {
-	env         *vtenv.Environment
-	serv        srvtopo.Server
-	cell        string
-	resolver    *Resolver
-	scatterConn *ScatterConn
-	txConn      *TxConn
+type (
+	ExecutorConfig struct {
+		Normalize  bool
+		StreamSize int
+		// AllowScatter will fail planning if set to false and a plan contains any scatter queries
+		AllowScatter        bool
+		WarmingReadsPercent int
+		QueryLogToFile      string
+	}
 
-	mu           sync.Mutex
-	vschema      *vindexes.VSchema
-	streamSize   int
-	vschemaStats *VSchemaStats
+	Executor struct {
+		config ExecutorConfig
 
-	plans *PlanCache
-	epoch atomic.Uint32
+		env         *vtenv.Environment
+		serv        srvtopo.Server
+		cell        string
+		resolver    *Resolver
+		scatterConn *ScatterConn
+		txConn      *TxConn
 
-	normalize bool
+		mu           sync.Mutex
+		vschema      *vindexes.VSchema
+		vschemaStats *VSchemaStats
 
-	vm            *VSchemaManager
-	schemaTracker SchemaInfo
+		plans *PlanCache
+		epoch atomic.Uint32
 
-	// allowScatter will fail planning if set to false and a plan contains any scatter queries
-	allowScatter bool
+		vm            *VSchemaManager
+		schemaTracker SchemaInfo
 
-	// queryLogger is passed in for logging from this vtgate executor.
-	queryLogger *streamlog.StreamLogger[*logstats.LogStats]
+		// queryLogger is passed in for logging from this vtgate executor.
+		queryLogger *streamlog.StreamLogger[*logstats.LogStats]
 
-	warmingReadsPercent int
-	warmingReadsChannel chan bool
+		warmingReadsChannel chan bool
 
-	vConfig   econtext.VCursorConfig
-	ddlConfig dynamicconfig.DDL
-}
+		vConfig   econtext.VCursorConfig
+		ddlConfig dynamicconfig.DDL
+	}
+)
 
 var executorOnce sync.Once
 
@@ -163,28 +169,24 @@ func NewExecutor(
 	serv srvtopo.Server,
 	cell string,
 	resolver *Resolver,
-	normalize, warnOnShardedOnly bool,
-	streamSize int,
+	eConfig ExecutorConfig,
+	warnOnShardedOnly bool,
 	plans *PlanCache,
 	schemaTracker SchemaInfo,
-	noScatter bool,
 	pv plancontext.PlannerVersion,
-	warmingReadsPercent int,
 	ddlConfig dynamicconfig.DDL,
 ) *Executor {
 	e := &Executor{
-		env:                 env,
-		serv:                serv,
-		cell:                cell,
-		resolver:            resolver,
-		scatterConn:         resolver.scatterConn,
-		txConn:              resolver.scatterConn.txConn,
-		normalize:           normalize,
-		streamSize:          streamSize,
+		config:      eConfig,
+		env:         env,
+		serv:        serv,
+		cell:        cell,
+		resolver:    resolver,
+		scatterConn: resolver.scatterConn,
+		txConn:      resolver.scatterConn.txConn,
+
 		schemaTracker:       schemaTracker,
-		allowScatter:        !noScatter,
 		plans:               plans,
-		warmingReadsPercent: warmingReadsPercent,
 		warmingReadsChannel: make(chan bool, warmingReadsConcurrency),
 		ddlConfig:           ddlConfig,
 	}
@@ -234,7 +236,7 @@ func (e *Executor) Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConn
 	trace.AnnotateSQL(span, sqlparser.Preview(sql))
 	defer span.Finish()
 
-	logStats := logstats.NewLogStats(ctx, method, sql, safeSession.GetSessionUUID(), bindVars)
+	logStats := logstats.NewLogStats(ctx, method, sql, safeSession.GetSessionUUID(), bindVars, streamlog.GetQueryLogConfig())
 	stmtType, result, err := e.execute(ctx, mysqlCtx, safeSession, sql, bindVars, logStats)
 	logStats.Error = err
 	if result == nil {
@@ -297,7 +299,7 @@ func (e *Executor) StreamExecute(
 	trace.AnnotateSQL(span, sqlparser.Preview(sql))
 	defer span.Finish()
 
-	logStats := logstats.NewLogStats(ctx, method, sql, safeSession.GetSessionUUID(), bindVars)
+	logStats := logstats.NewLogStats(ctx, method, sql, safeSession.GetSessionUUID(), bindVars, streamlog.GetQueryLogConfig())
 	srr := &streaminResultReceiver{callback: callback}
 	var err error
 
@@ -327,7 +329,7 @@ func (e *Executor) StreamExecute(
 						byteCount += col.Len()
 					}
 
-					if byteCount >= e.streamSize {
+					if byteCount >= e.config.StreamSize {
 						err := callback(result)
 						seenResults.Store(true)
 						result = &sqltypes.Result{}
@@ -1340,7 +1342,7 @@ func isValidPayloadSize(query string) bool {
 
 // Prepare executes a prepare statements.
 func (e *Executor) Prepare(ctx context.Context, method string, safeSession *econtext.SafeSession, sql string, bindVars map[string]*querypb.BindVariable) (fld []*querypb.Field, err error) {
-	logStats := logstats.NewLogStats(ctx, method, sql, safeSession.GetSessionUUID(), bindVars)
+	logStats := logstats.NewLogStats(ctx, method, sql, safeSession.GetSessionUUID(), bindVars, streamlog.GetQueryLogConfig())
 	fld, err = e.prepare(ctx, safeSession, sql, bindVars, logStats)
 	logStats.Error = err
 
@@ -1419,7 +1421,7 @@ func (e *Executor) initVConfig(warnOnShardedOnly bool, pv plancontext.PlannerVer
 
 		DBDDLPlugin: dbDDLPlugin,
 
-		WarmingReadsPercent: e.warmingReadsPercent,
+		WarmingReadsPercent: e.config.WarmingReadsPercent,
 		WarmingReadsTimeout: warmingReadsQueryTimeout,
 		WarmingReadsChannel: e.warmingReadsChannel,
 	}
@@ -1539,7 +1541,7 @@ func (e *Executor) startVStream(ctx context.Context, rss []*srvtopo.ResolvedShar
 }
 
 func (e *Executor) checkThatPlanIsValid(stmt sqlparser.Statement, plan *engine.Plan) error {
-	if e.allowScatter || plan.Instructions == nil || sqlparser.AllowScatterDirective(stmt) {
+	if e.config.AllowScatter || plan.Instructions == nil || sqlparser.AllowScatterDirective(stmt) {
 		return nil
 	}
 	// we go over all the primitives in the plan, searching for a route that is of SelectScatter opcode
@@ -1610,7 +1612,7 @@ func (e *Executor) PlanPrepareStmt(ctx context.Context, vcursor *econtext.VCurso
 	}
 
 	// creating this log stats to not interfere with the original log stats.
-	lStats := logstats.NewLogStats(ctx, "prepare", query, vcursor.Session().GetSessionUUID(), nil)
+	lStats := logstats.NewLogStats(ctx, "prepare", query, vcursor.Session().GetSessionUUID(), nil, streamlog.GetQueryLogConfig())
 	plan, err := e.getPlan(
 		ctx,
 		vcursor,

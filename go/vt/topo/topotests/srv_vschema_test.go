@@ -21,6 +21,7 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -76,7 +77,10 @@ func TestRebuildVSchema(t *testing.T) {
 	keyspace1 := &vschemapb.Keyspace{
 		Sharded: true,
 	}
-	if err := ts.SaveVSchema(ctx, "ks1", keyspace1); err != nil {
+	if err := ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+		Name:     "ks1",
+		Keyspace: keyspace1,
+	}); err != nil {
 		t.Fatalf("SaveVSchema(ks1) failed: %v", err)
 	}
 	if err := ts.RebuildSrvVSchema(ctx, cells); err != nil {
@@ -118,7 +122,10 @@ func TestRebuildVSchema(t *testing.T) {
 			},
 		},
 	}
-	if err := ts.SaveVSchema(ctx, "ks2", keyspace2); err != nil {
+	if err := ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+		Name:     "ks2",
+		Keyspace: keyspace2,
+	}); err != nil {
 		t.Fatalf("SaveVSchema(ks1) failed: %v", err)
 	}
 	if err := ts.RebuildSrvVSchema(ctx, []string{"cell1"}); err != nil {
@@ -182,7 +189,10 @@ func TestRebuildVSchema(t *testing.T) {
 	wanted4.RoutingRules = rr
 
 	// Delete a keyspace, checks vschema entry in map goes away.
-	if err := ts.SaveVSchema(ctx, "ks2", &vschemapb.Keyspace{}); err != nil {
+	if err := ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+		Name:     "ks2",
+		Keyspace: &vschemapb.Keyspace{},
+	}); err != nil {
 		t.Fatalf("SaveVSchema(ks1) failed: %v", err)
 	}
 	if err := ts.DeleteKeyspace(ctx, "ks2"); err != nil {

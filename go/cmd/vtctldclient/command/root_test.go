@@ -67,15 +67,15 @@ func TestRootWithInternalVtctld(t *testing.T) {
 	cell := "zone1"
 	ts, factory := memorytopo.NewServerAndFactory(ctx, cell)
 	topo.RegisterFactory("test", factory)
+	origProtocol := command.VtctldClientProtocol
 	command.VtctldClientProtocol = "local"
 	baseArgs := []string{"vtctldclient", "--server", "internal", "--topo-implementation", "test"}
 
 	args := append([]string{}, os.Args...)
-	protocol := command.VtctldClientProtocol
 	t.Cleanup(func() {
 		ts.Close()
 		os.Args = append([]string{}, args...)
-		command.VtctldClientProtocol = protocol
+		command.VtctldClientProtocol = origProtocol
 	})
 
 	testCases := []struct {

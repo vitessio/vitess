@@ -171,10 +171,13 @@ func (ts *Server) RebuildSrvVSchema(ctx context.Context, cells []string) error {
 		go func(keyspace string) {
 			defer wg.Done()
 
-			k, err := ts.GetVSchema(ctx, keyspace)
+			ksvs, err := ts.GetVSchema(ctx, keyspace)
 			if IsErrType(err, NoNode) {
 				err = nil
-				k = &vschemapb.Keyspace{}
+				ksvs = &KeyspaceVSchemaInfo{
+					Name:     keyspace,
+					Keyspace: &vschemapb.Keyspace{},
+				}
 			}
 
 			mu.Lock()
@@ -184,7 +187,7 @@ func (ts *Server) RebuildSrvVSchema(ctx context.Context, cells []string) error {
 				finalErr = err
 				return
 			}
-			srvVSchema.Keyspaces[keyspace] = k
+			srvVSchema.Keyspaces[keyspace] = ksvs.Keyspace
 		}(keyspace)
 	}
 	wg.Wait()

@@ -108,7 +108,7 @@ func TestGetPlanPanicDuetoEmptyQuery(t *testing.T) {
 	defer qe.Close()
 
 	ctx := context.Background()
-	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
+	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats", streamlog.NewQueryLogConfigForTest())
 	_, err := qe.GetPlan(ctx, logStats, "", false)
 	require.EqualError(t, err, "Query was empty")
 }
@@ -195,7 +195,7 @@ func TestQueryPlanCache(t *testing.T) {
 	defer qe.Close()
 
 	ctx := context.Background()
-	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
+	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats", streamlog.NewQueryLogConfigForTest())
 
 	initialHits := qe.queryEnginePlanCacheHits.Get()
 	initialMisses := qe.queryEnginePlanCacheMisses.Get()
@@ -244,7 +244,7 @@ func TestNoQueryPlanCache(t *testing.T) {
 	defer qe.Close()
 
 	ctx := context.Background()
-	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
+	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats", streamlog.NewQueryLogConfigForTest())
 
 	firstPlan, err := qe.GetPlan(ctx, logStats, firstQuery, true)
 	if err != nil {
@@ -273,7 +273,7 @@ func TestNoQueryPlanCacheDirective(t *testing.T) {
 	defer qe.Close()
 
 	ctx := context.Background()
-	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
+	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats", streamlog.NewQueryLogConfigForTest())
 
 	firstPlan, err := qe.GetPlan(ctx, logStats, firstQuery, false)
 	if err != nil {
@@ -301,7 +301,7 @@ func TestStreamQueryPlanCache(t *testing.T) {
 	defer qe.Close()
 
 	ctx := context.Background()
-	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
+	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats", streamlog.NewQueryLogConfigForTest())
 
 	firstPlan, err := qe.GetStreamPlan(ctx, logStats, firstQuery, false)
 	require.NoError(t, err)
@@ -325,7 +325,7 @@ func TestNoStreamQueryPlanCache(t *testing.T) {
 	defer qe.Close()
 
 	ctx := context.Background()
-	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
+	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats", streamlog.NewQueryLogConfigForTest())
 	firstPlan, err := qe.GetStreamPlan(ctx, logStats, firstQuery, true)
 	require.NoError(t, err)
 	require.NotNil(t, firstPlan)
@@ -349,7 +349,7 @@ func TestNoStreamQueryPlanCacheDirective(t *testing.T) {
 	defer qe.Close()
 
 	ctx := context.Background()
-	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
+	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats", streamlog.NewQueryLogConfigForTest())
 	firstPlan, err := qe.GetStreamPlan(ctx, logStats, firstQuery, false)
 	require.NoError(t, err)
 	require.NotNil(t, firstPlan)
@@ -369,7 +369,7 @@ func TestStatsURL(t *testing.T) {
 	defer qe.Close()
 	// warm up cache
 	ctx := context.Background()
-	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
+	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats", streamlog.NewQueryLogConfigForTest())
 	qe.GetPlan(ctx, logStats, query, false)
 
 	request, _ := http.NewRequest("GET", "/debug/tablet_plans", nil)
@@ -425,18 +425,12 @@ func runConsolidatedQuery(t *testing.T, sql string) *QueryEngine {
 }
 
 func TestConsolidationsUIRedaction(t *testing.T) {
-	// Reset to default redaction state.
-	defer func() {
-		streamlog.SetRedactDebugUIQueries(false)
-	}()
-
 	request, _ := http.NewRequest("GET", "/debug/consolidations", nil)
 
 	sql := "select * from test_db_01 where col = 'secret'"
 	redactedSQL := "select * from test_db_01 where col = :col"
 
 	// First with the redaction off
-	streamlog.SetRedactDebugUIQueries(false)
 	unRedactedResponse := httptest.NewRecorder()
 	qe := runConsolidatedQuery(t, sql)
 
@@ -446,7 +440,7 @@ func TestConsolidationsUIRedaction(t *testing.T) {
 	}
 
 	// Now with the redaction on
-	streamlog.SetRedactDebugUIQueries(true)
+	qe.redactUIQuery = true
 	redactedResponse := httptest.NewRecorder()
 	qe.handleHTTPConsolidations(redactedResponse, request)
 
@@ -473,7 +467,7 @@ func BenchmarkPlanCacheThroughput(b *testing.B) {
 	defer qe.Close()
 
 	ctx := context.Background()
-	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
+	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats", streamlog.NewQueryLogConfigForTest())
 
 	for i := 0; i < b.N; i++ {
 		query := fmt.Sprintf("SELECT (a, b, c) FROM test_table_%d", rand.IntN(500))
@@ -503,7 +497,7 @@ func benchmarkPlanCache(b *testing.B, db *fakesqldb.DB, par int) {
 	b.SetParallelism(par)
 	b.RunParallel(func(pb *testing.PB) {
 		ctx := context.Background()
-		logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
+		logStats := tabletenv.NewLogStats(ctx, "GetPlanStats", streamlog.NewQueryLogConfigForTest())
 
 		for pb.Next() {
 			query := fmt.Sprintf("SELECT (a, b, c) FROM test_table_%d", rand.IntN(500))
@@ -618,7 +612,7 @@ func TestPlanCachePollution(t *testing.T) {
 	runner := func(totalQueries uint64, stats *Stats, sample func() string) {
 		for i := uint64(0); i < totalQueries; i++ {
 			ctx := context.Background()
-			logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
+			logStats := tabletenv.NewLogStats(ctx, "GetPlanStats", streamlog.NewQueryLogConfigForTest())
 			query := sample()
 
 			start := time.Now()

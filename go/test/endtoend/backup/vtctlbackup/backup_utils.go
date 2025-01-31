@@ -254,7 +254,7 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 	if err := localCluster.InitTablet(replica2, keyspaceName, shard.Name); err != nil {
 		return 1, err
 	}
-	vtctldClientProcess := cluster.VtctldClientProcessInstance("localhost", localCluster.VtctldProcess.GrpcPort, localCluster.TmpDirectory)
+	vtctldClientProcess := cluster.VtctldClientProcessInstance(localCluster.VtctldProcess.GrpcPort, localCluster.TopoPort, "localhost", localCluster.TmpDirectory)
 	_, err = vtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=semi_sync")
 	if err != nil {
 		return 1, err
@@ -425,6 +425,18 @@ func TestBackup(t *testing.T, setupType int, streamMode string, stripes int, cDe
 			return vterrors.Errorf(vtrpc.Code_UNKNOWN, "test failure: %s", test.name)
 		}
 	}
+
+	t.Run("check for files created with global permissions", func(t *testing.T) {
+		t.Logf("Confirming that none of the MySQL data directories that we've created have files with global permissions")
+		for _, ks := range localCluster.Keyspaces {
+			for _, shard := range ks.Shards {
+				for _, tablet := range shard.Vttablets {
+					tablet.VttabletProcess.ConfirmDataDirHasNoGlobalPerms(t)
+				}
+			}
+		}
+	})
+
 	return nil
 }
 

@@ -369,10 +369,13 @@ func TestReadRefStreams(t *testing.T) {
 					},
 				},
 				workflow: "wf",
-				vschema: &vschemapb.Keyspace{
-					Tables: map[string]*vschemapb.Table{
-						"t1": {
-							Type: vindexes.TypeReference,
+				vschema: &topo.KeyspaceVSchemaInfo{
+					Name: targetKeyspace.KeyspaceName,
+					Keyspace: &vschemapb.Keyspace{
+						Tables: map[string]*vschemapb.Table{
+							"t1": {
+								Type: vindexes.TypeReference,
+							},
 						},
 					},
 				},
@@ -485,8 +488,11 @@ func TestBlsIsReference(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			rs := &resharder{
-				vschema: &vschemapb.Keyspace{
-					Tables: tc.tables,
+				vschema: &topo.KeyspaceVSchemaInfo{
+					Name: "ks",
+					Keyspace: &vschemapb.Keyspace{
+						Tables: tc.tables,
+					},
 				},
 			}
 
