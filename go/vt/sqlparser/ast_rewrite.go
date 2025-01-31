@@ -577,7 +577,12 @@ func (a *application) rewriteRefOfAddColumns(parent SQLNode, node *AddColumns, r
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -613,7 +618,12 @@ func (a *application) rewriteRefOfAddConstraintDefinition(parent SQLNode, node *
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -640,7 +650,12 @@ func (a *application) rewriteRefOfAddIndexDefinition(parent SQLNode, node *AddIn
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -667,7 +682,12 @@ func (a *application) rewriteRefOfAliasedExpr(parent SQLNode, node *AliasedExpr,
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -699,7 +719,12 @@ func (a *application) rewriteRefOfAliasedTableExpr(parent SQLNode, node *Aliased
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -746,7 +771,12 @@ func (a *application) rewriteRefOfAlterCharset(parent SQLNode, node *AlterCharse
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -770,7 +800,12 @@ func (a *application) rewriteRefOfAlterCheck(parent SQLNode, node *AlterCheck, r
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -797,7 +832,12 @@ func (a *application) rewriteRefOfAlterColumn(parent SQLNode, node *AlterColumn,
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -829,7 +869,12 @@ func (a *application) rewriteRefOfAlterDatabase(parent SQLNode, node *AlterDatab
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -861,7 +906,12 @@ func (a *application) rewriteRefOfAlterIndex(parent SQLNode, node *AlterIndex, r
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -888,7 +938,12 @@ func (a *application) rewriteRefOfAlterMigration(parent SQLNode, node *AlterMigr
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -915,7 +970,12 @@ func (a *application) rewriteRefOfAlterTable(parent SQLNode, node *AlterTable, r
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -966,7 +1026,12 @@ func (a *application) rewriteRefOfAlterView(parent SQLNode, node *AlterView, rep
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -1013,7 +1078,12 @@ func (a *application) rewriteRefOfAlterVschema(parent SQLNode, node *AlterVschem
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -1059,7 +1129,12 @@ func (a *application) rewriteRefOfAnalyze(parent SQLNode, node *Analyze, replace
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -1089,7 +1164,7 @@ func (a *application) rewriteRefOfAndExpr(parent SQLNode, node *AndExpr, replace
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -1126,7 +1201,7 @@ func (a *application) rewriteRefOfAnyValue(parent SQLNode, node *AnyValue, repla
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -1158,7 +1233,7 @@ func (a *application) rewriteRefOfArgument(parent SQLNode, node *Argument, repla
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -1187,7 +1262,7 @@ func (a *application) rewriteRefOfArgumentLessWindowExpr(parent SQLNode, node *A
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -1219,7 +1294,7 @@ func (a *application) rewriteRefOfAssignmentExpr(parent SQLNode, node *Assignmen
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -1253,7 +1328,12 @@ func (a *application) rewriteRefOfAutoIncSpec(parent SQLNode, node *AutoIncSpec,
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -1288,7 +1368,7 @@ func (a *application) rewriteRefOfAvg(parent SQLNode, node *Avg, replacer replac
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -1322,7 +1402,12 @@ func (a *application) rewriteRefOfBegin(parent SQLNode, node *Begin, replacer re
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -1349,7 +1434,7 @@ func (a *application) rewriteRefOfBetweenExpr(parent SQLNode, node *BetweenExpr,
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -1391,7 +1476,7 @@ func (a *application) rewriteRefOfBinaryExpr(parent SQLNode, node *BinaryExpr, r
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -1428,7 +1513,7 @@ func (a *application) rewriteRefOfBitAnd(parent SQLNode, node *BitAnd, replacer 
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -1465,7 +1550,7 @@ func (a *application) rewriteRefOfBitOr(parent SQLNode, node *BitOr, replacer re
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -1502,7 +1587,7 @@ func (a *application) rewriteRefOfBitXor(parent SQLNode, node *BitXor, replacer 
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -1536,7 +1621,12 @@ func (a *application) rewriteRefOfCallProc(parent SQLNode, node *CallProc, repla
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -1571,7 +1661,7 @@ func (a *application) rewriteRefOfCaseExpr(parent SQLNode, node *CaseExpr, repla
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -1617,7 +1707,7 @@ func (a *application) rewriteRefOfCastExpr(parent SQLNode, node *CastExpr, repla
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -1651,7 +1741,12 @@ func (a *application) rewriteRefOfChangeColumn(parent SQLNode, node *ChangeColum
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -1691,7 +1786,7 @@ func (a *application) rewriteRefOfCharExpr(parent SQLNode, node *CharExpr, repla
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -1720,7 +1815,12 @@ func (a *application) rewriteRefOfCheckConstraintDefinition(parent SQLNode, node
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -1750,7 +1850,7 @@ func (a *application) rewriteRefOfColName(parent SQLNode, node *ColName, replace
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -1787,7 +1887,7 @@ func (a *application) rewriteRefOfCollateExpr(parent SQLNode, node *CollateExpr,
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -1816,7 +1916,12 @@ func (a *application) rewriteRefOfColumnDefinition(parent SQLNode, node *ColumnD
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -1848,7 +1953,12 @@ func (a *application) rewriteRefOfColumnType(parent SQLNode, node *ColumnType, r
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -1874,9 +1984,8 @@ func (a *application) rewriteColumns(parent SQLNode, node Columns, replacer repl
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
-			node = a.cur.node.(Columns)
 			a.cur.revisit = false
-			return a.rewriteColumns(parent, node, replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -1909,7 +2018,12 @@ func (a *application) rewriteRefOfCommentOnly(parent SQLNode, node *CommentOnly,
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -1933,7 +2047,12 @@ func (a *application) rewriteRefOfCommit(parent SQLNode, node *Commit, replacer 
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -1957,7 +2076,12 @@ func (a *application) rewriteRefOfCommonTableExpr(parent SQLNode, node *CommonTa
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -1997,7 +2121,7 @@ func (a *application) rewriteRefOfComparisonExpr(parent SQLNode, node *Compariso
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -2036,7 +2160,12 @@ func (a *application) rewriteRefOfConstraintDefinition(parent SQLNode, node *Con
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -2071,7 +2200,7 @@ func (a *application) rewriteRefOfConvertExpr(parent SQLNode, node *ConvertExpr,
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -2105,7 +2234,12 @@ func (a *application) rewriteRefOfConvertType(parent SQLNode, node *ConvertType,
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -2132,7 +2266,7 @@ func (a *application) rewriteRefOfConvertUsingExpr(parent SQLNode, node *Convert
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -2164,7 +2298,7 @@ func (a *application) rewriteRefOfCount(parent SQLNode, node *Count, replacer re
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -2201,7 +2335,7 @@ func (a *application) rewriteRefOfCountStar(parent SQLNode, node *CountStar, rep
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -2230,7 +2364,12 @@ func (a *application) rewriteRefOfCreateDatabase(parent SQLNode, node *CreateDat
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -2262,7 +2401,12 @@ func (a *application) rewriteRefOfCreateTable(parent SQLNode, node *CreateTable,
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -2304,7 +2448,12 @@ func (a *application) rewriteRefOfCreateView(parent SQLNode, node *CreateView, r
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -2354,7 +2503,7 @@ func (a *application) rewriteRefOfCurTimeFuncExpr(parent SQLNode, node *CurTimeF
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -2383,7 +2532,12 @@ func (a *application) rewriteRefOfDeallocateStmt(parent SQLNode, node *Deallocat
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -2418,7 +2572,7 @@ func (a *application) rewriteRefOfDefault(parent SQLNode, node *Default, replace
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -2444,7 +2598,12 @@ func (a *application) rewriteRefOfDefiner(parent SQLNode, node *Definer, replace
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -2468,7 +2627,12 @@ func (a *application) rewriteRefOfDelete(parent SQLNode, node *Delete, replacer 
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -2534,7 +2698,12 @@ func (a *application) rewriteRefOfDerivedTable(parent SQLNode, node *DerivedTabl
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -2561,7 +2730,12 @@ func (a *application) rewriteRefOfDropColumn(parent SQLNode, node *DropColumn, r
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -2588,7 +2762,12 @@ func (a *application) rewriteRefOfDropDatabase(parent SQLNode, node *DropDatabas
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -2620,7 +2799,12 @@ func (a *application) rewriteRefOfDropKey(parent SQLNode, node *DropKey, replace
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -2647,7 +2831,12 @@ func (a *application) rewriteRefOfDropTable(parent SQLNode, node *DropTable, rep
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -2679,7 +2868,12 @@ func (a *application) rewriteRefOfDropView(parent SQLNode, node *DropView, repla
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -2711,7 +2905,12 @@ func (a *application) rewriteRefOfExecuteStmt(parent SQLNode, node *ExecuteStmt,
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -2755,7 +2954,7 @@ func (a *application) rewriteRefOfExistsExpr(parent SQLNode, node *ExistsExpr, r
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -2784,7 +2983,12 @@ func (a *application) rewriteRefOfExplainStmt(parent SQLNode, node *ExplainStmt,
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -2816,7 +3020,12 @@ func (a *application) rewriteRefOfExplainTab(parent SQLNode, node *ExplainTab, r
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -2845,9 +3054,8 @@ func (a *application) rewriteExprs(parent SQLNode, node Exprs, replacer replacer
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
-			node = a.cur.node.(Exprs)
 			a.cur.revisit = false
-			return a.rewriteExprs(parent, node, replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -2883,7 +3091,7 @@ func (a *application) rewriteRefOfExtractFuncExpr(parent SQLNode, node *ExtractF
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -2915,7 +3123,7 @@ func (a *application) rewriteRefOfExtractValueExpr(parent SQLNode, node *Extract
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -2952,7 +3160,7 @@ func (a *application) rewriteRefOfFirstOrLastValueExpr(parent SQLNode, node *Fir
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -2991,7 +3199,12 @@ func (a *application) rewriteRefOfFlush(parent SQLNode, node *Flush, replacer re
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -3018,7 +3231,12 @@ func (a *application) rewriteRefOfForce(parent SQLNode, node *Force, replacer re
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -3042,7 +3260,12 @@ func (a *application) rewriteRefOfForeignKeyDefinition(parent SQLNode, node *For
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -3079,7 +3302,12 @@ func (a *application) rewriteRefOfFrameClause(parent SQLNode, node *FrameClause,
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -3111,7 +3339,12 @@ func (a *application) rewriteRefOfFramePoint(parent SQLNode, node *FramePoint, r
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -3138,7 +3371,12 @@ func (a *application) rewriteRefOfFromFirstLastClause(parent SQLNode, node *From
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -3165,7 +3403,7 @@ func (a *application) rewriteRefOfFuncExpr(parent SQLNode, node *FuncExpr, repla
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -3207,7 +3445,7 @@ func (a *application) rewriteRefOfGTIDFuncExpr(parent SQLNode, node *GTIDFuncExp
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -3254,7 +3492,7 @@ func (a *application) rewriteRefOfGeoHashFromLatLongExpr(parent SQLNode, node *G
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -3296,7 +3534,7 @@ func (a *application) rewriteRefOfGeoHashFromPointExpr(parent SQLNode, node *Geo
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -3333,7 +3571,7 @@ func (a *application) rewriteRefOfGeoJSONFromGeomExpr(parent SQLNode, node *GeoJ
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -3375,7 +3613,7 @@ func (a *application) rewriteRefOfGeomCollPropertyFuncExpr(parent SQLNode, node 
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -3412,7 +3650,7 @@ func (a *application) rewriteRefOfGeomFormatExpr(parent SQLNode, node *GeomForma
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -3449,7 +3687,7 @@ func (a *application) rewriteRefOfGeomFromGeoHashExpr(parent SQLNode, node *Geom
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -3486,7 +3724,7 @@ func (a *application) rewriteRefOfGeomFromGeoJSONExpr(parent SQLNode, node *Geom
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -3528,7 +3766,7 @@ func (a *application) rewriteRefOfGeomFromTextExpr(parent SQLNode, node *GeomFro
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -3570,7 +3808,7 @@ func (a *application) rewriteRefOfGeomFromWKBExpr(parent SQLNode, node *GeomFrom
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -3612,7 +3850,7 @@ func (a *application) rewriteRefOfGeomPropertyFuncExpr(parent SQLNode, node *Geo
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -3641,7 +3879,12 @@ func (a *application) rewriteRefOfGroupBy(parent SQLNode, node *GroupBy, replace
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -3675,7 +3918,7 @@ func (a *application) rewriteRefOfGroupConcatExpr(parent SQLNode, node *GroupCon
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -3711,7 +3954,12 @@ func (a *application) rewriteIdentifierCI(parent SQLNode, node IdentifierCI, rep
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -3732,7 +3980,12 @@ func (a *application) rewriteIdentifierCS(parent SQLNode, node IdentifierCS, rep
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -3756,7 +4009,12 @@ func (a *application) rewriteRefOfIndexDefinition(parent SQLNode, node *IndexDef
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -3783,7 +4041,12 @@ func (a *application) rewriteRefOfIndexHint(parent SQLNode, node *IndexHint, rep
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -3816,9 +4079,8 @@ func (a *application) rewriteIndexHints(parent SQLNode, node IndexHints, replace
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
-			node = a.cur.node.(IndexHints)
 			a.cur.revisit = false
-			return a.rewriteIndexHints(parent, node, replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -3851,7 +4113,12 @@ func (a *application) rewriteRefOfIndexInfo(parent SQLNode, node *IndexInfo, rep
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -3883,7 +4150,12 @@ func (a *application) rewriteRefOfInsert(parent SQLNode, node *Insert, replacer 
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -3943,7 +4215,7 @@ func (a *application) rewriteRefOfInsertExpr(parent SQLNode, node *InsertExpr, r
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -3990,7 +4262,7 @@ func (a *application) rewriteRefOfIntervalDateExpr(parent SQLNode, node *Interva
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -4027,7 +4299,7 @@ func (a *application) rewriteRefOfIntervalFuncExpr(parent SQLNode, node *Interva
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -4064,7 +4336,7 @@ func (a *application) rewriteRefOfIntroducerExpr(parent SQLNode, node *Introduce
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -4096,7 +4368,7 @@ func (a *application) rewriteRefOfIsExpr(parent SQLNode, node *IsExpr, replacer 
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -4128,7 +4400,7 @@ func (a *application) rewriteRefOfJSONArrayAgg(parent SQLNode, node *JSONArrayAg
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -4165,7 +4437,7 @@ func (a *application) rewriteRefOfJSONArrayExpr(parent SQLNode, node *JSONArrayE
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -4197,7 +4469,7 @@ func (a *application) rewriteRefOfJSONAttributesExpr(parent SQLNode, node *JSONA
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -4234,7 +4506,7 @@ func (a *application) rewriteRefOfJSONContainsExpr(parent SQLNode, node *JSONCon
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -4280,7 +4552,7 @@ func (a *application) rewriteRefOfJSONContainsPathExpr(parent SQLNode, node *JSO
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -4326,7 +4598,7 @@ func (a *application) rewriteRefOfJSONExtractExpr(parent SQLNode, node *JSONExtr
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -4367,7 +4639,7 @@ func (a *application) rewriteRefOfJSONKeysExpr(parent SQLNode, node *JSONKeysExp
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -4404,7 +4676,7 @@ func (a *application) rewriteRefOfJSONObjectAgg(parent SQLNode, node *JSONObject
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -4446,7 +4718,7 @@ func (a *application) rewriteRefOfJSONObjectExpr(parent SQLNode, node *JSONObjec
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -4479,7 +4751,12 @@ func (a *application) rewriteRefOfJSONObjectParam(parent SQLNode, node *JSONObje
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -4514,7 +4791,7 @@ func (a *application) rewriteRefOfJSONOverlapsExpr(parent SQLNode, node *JSONOve
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -4551,7 +4828,7 @@ func (a *application) rewriteRefOfJSONPrettyExpr(parent SQLNode, node *JSONPrett
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -4583,7 +4860,7 @@ func (a *application) rewriteRefOfJSONQuoteExpr(parent SQLNode, node *JSONQuoteE
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -4615,7 +4892,7 @@ func (a *application) rewriteRefOfJSONRemoveExpr(parent SQLNode, node *JSONRemov
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -4652,7 +4929,7 @@ func (a *application) rewriteRefOfJSONSchemaValidFuncExpr(parent SQLNode, node *
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -4689,7 +4966,7 @@ func (a *application) rewriteRefOfJSONSchemaValidationReportFuncExpr(parent SQLN
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -4726,7 +5003,7 @@ func (a *application) rewriteRefOfJSONSearchExpr(parent SQLNode, node *JSONSearc
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -4782,7 +5059,7 @@ func (a *application) rewriteRefOfJSONStorageFreeExpr(parent SQLNode, node *JSON
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -4814,7 +5091,7 @@ func (a *application) rewriteRefOfJSONStorageSizeExpr(parent SQLNode, node *JSON
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -4843,7 +5120,12 @@ func (a *application) rewriteRefOfJSONTableExpr(parent SQLNode, node *JSONTableE
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -4892,7 +5174,7 @@ func (a *application) rewriteRefOfJSONUnquoteExpr(parent SQLNode, node *JSONUnqu
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -4924,7 +5206,7 @@ func (a *application) rewriteRefOfJSONValueExpr(parent SQLNode, node *JSONValueE
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -4976,7 +5258,7 @@ func (a *application) rewriteRefOfJSONValueMergeExpr(parent SQLNode, node *JSONV
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -5013,7 +5295,7 @@ func (a *application) rewriteRefOfJSONValueModifierExpr(parent SQLNode, node *JS
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -5051,7 +5333,12 @@ func (a *application) rewriteRefOfJoinCondition(parent SQLNode, node *JoinCondit
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -5083,7 +5370,12 @@ func (a *application) rewriteRefOfJoinTableExpr(parent SQLNode, node *JoinTableE
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -5120,7 +5412,12 @@ func (a *application) rewriteRefOfJtColumnDefinition(parent SQLNode, node *JtCol
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -5144,7 +5441,12 @@ func (a *application) rewriteRefOfJtOnResponse(parent SQLNode, node *JtOnRespons
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -5171,7 +5473,12 @@ func (a *application) rewriteRefOfKeyState(parent SQLNode, node *KeyState, repla
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -5195,7 +5502,12 @@ func (a *application) rewriteRefOfKill(parent SQLNode, node *Kill, replacer repl
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -5222,7 +5534,7 @@ func (a *application) rewriteRefOfLagLeadExpr(parent SQLNode, node *LagLeadExpr,
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -5271,7 +5583,12 @@ func (a *application) rewriteRefOfLimit(parent SQLNode, node *Limit, replacer re
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -5306,7 +5623,7 @@ func (a *application) rewriteRefOfLineStringExpr(parent SQLNode, node *LineStrin
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -5338,7 +5655,7 @@ func (a *application) rewriteRefOfLinestrPropertyFuncExpr(parent SQLNode, node *
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -5375,7 +5692,7 @@ func (a *application) rewriteRefOfLiteral(parent SQLNode, node *Literal, replace
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -5401,7 +5718,12 @@ func (a *application) rewriteRefOfLoad(parent SQLNode, node *Load, replacer repl
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -5428,7 +5750,7 @@ func (a *application) rewriteRefOfLocateExpr(parent SQLNode, node *LocateExpr, r
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -5467,7 +5789,12 @@ func (a *application) rewriteRefOfLockOption(parent SQLNode, node *LockOption, r
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -5491,7 +5818,12 @@ func (a *application) rewriteRefOfLockTables(parent SQLNode, node *LockTables, r
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -5518,7 +5850,7 @@ func (a *application) rewriteRefOfLockingFunc(parent SQLNode, node *LockingFunc,
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -5555,7 +5887,7 @@ func (a *application) rewriteRefOfMatchExpr(parent SQLNode, node *MatchExpr, rep
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -5596,7 +5928,7 @@ func (a *application) rewriteRefOfMax(parent SQLNode, node *Max, replacer replac
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -5633,7 +5965,7 @@ func (a *application) rewriteRefOfMemberOfExpr(parent SQLNode, node *MemberOfExp
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -5670,7 +6002,7 @@ func (a *application) rewriteRefOfMin(parent SQLNode, node *Min, replacer replac
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -5704,7 +6036,12 @@ func (a *application) rewriteRefOfModifyColumn(parent SQLNode, node *ModifyColum
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -5739,7 +6076,7 @@ func (a *application) rewriteRefOfMultiLinestringExpr(parent SQLNode, node *Mult
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -5771,7 +6108,7 @@ func (a *application) rewriteRefOfMultiPointExpr(parent SQLNode, node *MultiPoin
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -5803,7 +6140,7 @@ func (a *application) rewriteRefOfMultiPolygonExpr(parent SQLNode, node *MultiPo
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -5835,7 +6172,7 @@ func (a *application) rewriteRefOfNTHValueExpr(parent SQLNode, node *NTHValueExp
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -5887,7 +6224,7 @@ func (a *application) rewriteRefOfNamedWindow(parent SQLNode, node *NamedWindow,
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -5918,9 +6255,8 @@ func (a *application) rewriteNamedWindows(parent SQLNode, node NamedWindows, rep
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
-			node = a.cur.node.(NamedWindows)
 			a.cur.revisit = false
-			return a.rewriteNamedWindows(parent, node, replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -5953,7 +6289,12 @@ func (a *application) rewriteRefOfNextval(parent SQLNode, node *Nextval, replace
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -5983,7 +6324,7 @@ func (a *application) rewriteRefOfNotExpr(parent SQLNode, node *NotExpr, replace
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -6015,7 +6356,7 @@ func (a *application) rewriteRefOfNtileExpr(parent SQLNode, node *NtileExpr, rep
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -6049,7 +6390,12 @@ func (a *application) rewriteRefOfNullTreatmentClause(parent SQLNode, node *Null
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -6076,7 +6422,7 @@ func (a *application) rewriteRefOfNullVal(parent SQLNode, node *NullVal, replace
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -6105,7 +6451,7 @@ func (a *application) rewriteRefOfOffset(parent SQLNode, node *Offset, replacer 
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -6136,9 +6482,8 @@ func (a *application) rewriteOnDup(parent SQLNode, node OnDup, replacer replacer
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
-			node = a.cur.node.(OnDup)
 			a.cur.revisit = false
-			return a.rewriteOnDup(parent, node, replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -6171,7 +6516,12 @@ func (a *application) rewriteRefOfOptLike(parent SQLNode, node *OptLike, replace
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -6201,7 +6551,7 @@ func (a *application) rewriteRefOfOrExpr(parent SQLNode, node *OrExpr, replacer 
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -6235,7 +6585,12 @@ func (a *application) rewriteRefOfOrder(parent SQLNode, node *Order, replacer re
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -6264,9 +6619,8 @@ func (a *application) rewriteOrderBy(parent SQLNode, node OrderBy, replacer repl
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
-			node = a.cur.node.(OrderBy)
 			a.cur.revisit = false
-			return a.rewriteOrderBy(parent, node, replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -6299,7 +6653,12 @@ func (a *application) rewriteRefOfOrderByOption(parent SQLNode, node *OrderByOpt
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -6326,7 +6685,12 @@ func (a *application) rewriteRefOfOtherAdmin(parent SQLNode, node *OtherAdmin, r
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -6350,7 +6714,12 @@ func (a *application) rewriteRefOfOverClause(parent SQLNode, node *OverClause, r
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -6382,7 +6751,12 @@ func (a *application) rewriteRefOfParenTableExpr(parent SQLNode, node *ParenTabl
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -6409,7 +6783,12 @@ func (a *application) rewriteRefOfParsedComments(parent SQLNode, node *ParsedCom
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -6433,7 +6812,12 @@ func (a *application) rewriteRefOfPartitionDefinition(parent SQLNode, node *Part
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -6465,7 +6849,12 @@ func (a *application) rewriteRefOfPartitionDefinitionOptions(parent SQLNode, nod
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -6517,7 +6906,12 @@ func (a *application) rewriteRefOfPartitionEngine(parent SQLNode, node *Partitio
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -6541,7 +6935,12 @@ func (a *application) rewriteRefOfPartitionOption(parent SQLNode, node *Partitio
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -6587,7 +6986,12 @@ func (a *application) rewriteRefOfPartitionSpec(parent SQLNode, node *PartitionS
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -6633,7 +7037,12 @@ func (a *application) rewriteRefOfPartitionValueRange(parent SQLNode, node *Part
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -6662,9 +7071,8 @@ func (a *application) rewritePartitions(parent SQLNode, node Partitions, replace
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
-			node = a.cur.node.(Partitions)
 			a.cur.revisit = false
-			return a.rewritePartitions(parent, node, replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -6700,7 +7108,7 @@ func (a *application) rewriteRefOfPerformanceSchemaFuncExpr(parent SQLNode, node
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -6732,7 +7140,7 @@ func (a *application) rewriteRefOfPointExpr(parent SQLNode, node *PointExpr, rep
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -6769,7 +7177,7 @@ func (a *application) rewriteRefOfPointPropertyFuncExpr(parent SQLNode, node *Po
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -6806,7 +7214,7 @@ func (a *application) rewriteRefOfPolygonExpr(parent SQLNode, node *PolygonExpr,
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -6838,7 +7246,7 @@ func (a *application) rewriteRefOfPolygonPropertyFuncExpr(parent SQLNode, node *
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -6872,7 +7280,12 @@ func (a *application) rewriteRefOfPrepareStmt(parent SQLNode, node *PrepareStmt,
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -6909,7 +7322,12 @@ func (a *application) rewriteRefOfPurgeBinaryLogs(parent SQLNode, node *PurgeBin
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -6933,7 +7351,12 @@ func (a *application) rewriteRefOfReferenceDefinition(parent SQLNode, node *Refe
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -6983,7 +7406,7 @@ func (a *application) rewriteRefOfRegexpInstrExpr(parent SQLNode, node *RegexpIn
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -7040,7 +7463,7 @@ func (a *application) rewriteRefOfRegexpLikeExpr(parent SQLNode, node *RegexpLik
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -7082,7 +7505,7 @@ func (a *application) rewriteRefOfRegexpReplaceExpr(parent SQLNode, node *Regexp
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -7139,7 +7562,7 @@ func (a *application) rewriteRefOfRegexpSubstrExpr(parent SQLNode, node *RegexpS
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -7188,7 +7611,12 @@ func (a *application) rewriteRefOfRelease(parent SQLNode, node *Release, replace
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -7215,7 +7643,12 @@ func (a *application) rewriteRefOfRenameColumn(parent SQLNode, node *RenameColum
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -7247,7 +7680,12 @@ func (a *application) rewriteRefOfRenameIndex(parent SQLNode, node *RenameIndex,
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -7279,7 +7717,12 @@ func (a *application) rewriteRefOfRenameTable(parent SQLNode, node *RenameTable,
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -7303,7 +7746,12 @@ func (a *application) rewriteRefOfRenameTableName(parent SQLNode, node *RenameTa
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -7330,7 +7778,12 @@ func (a *application) rewriteRefOfRevertMigration(parent SQLNode, node *RevertMi
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -7357,7 +7810,12 @@ func (a *application) rewriteRefOfRollback(parent SQLNode, node *Rollback, repla
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -7378,7 +7836,12 @@ func (a *application) rewriteRootNode(parent SQLNode, node RootNode, replacer re
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -7405,7 +7868,12 @@ func (a *application) rewriteRefOfRowAlias(parent SQLNode, node *RowAlias, repla
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -7437,7 +7905,12 @@ func (a *application) rewriteRefOfSRollback(parent SQLNode, node *SRollback, rep
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -7464,7 +7937,12 @@ func (a *application) rewriteRefOfSavepoint(parent SQLNode, node *Savepoint, rep
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -7491,7 +7969,12 @@ func (a *application) rewriteRefOfSelect(parent SQLNode, node *Select, replacer 
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -7574,9 +8057,8 @@ func (a *application) rewriteSelectExprs(parent SQLNode, node SelectExprs, repla
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
-			node = a.cur.node.(SelectExprs)
 			a.cur.revisit = false
-			return a.rewriteSelectExprs(parent, node, replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -7609,7 +8091,12 @@ func (a *application) rewriteRefOfSelectInto(parent SQLNode, node *SelectInto, r
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -7633,7 +8120,12 @@ func (a *application) rewriteRefOfSet(parent SQLNode, node *Set, replacer replac
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -7665,7 +8157,12 @@ func (a *application) rewriteRefOfSetExpr(parent SQLNode, node *SetExpr, replace
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -7699,9 +8196,8 @@ func (a *application) rewriteSetExprs(parent SQLNode, node SetExprs, replacer re
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
-			node = a.cur.node.(SetExprs)
 			a.cur.revisit = false
-			return a.rewriteSetExprs(parent, node, replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -7734,7 +8230,12 @@ func (a *application) rewriteRefOfShow(parent SQLNode, node *Show, replacer repl
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -7761,7 +8262,12 @@ func (a *application) rewriteRefOfShowBasic(parent SQLNode, node *ShowBasic, rep
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -7798,7 +8304,12 @@ func (a *application) rewriteRefOfShowCreate(parent SQLNode, node *ShowCreate, r
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -7825,7 +8336,12 @@ func (a *application) rewriteRefOfShowFilter(parent SQLNode, node *ShowFilter, r
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -7852,7 +8368,12 @@ func (a *application) rewriteRefOfShowMigrationLogs(parent SQLNode, node *ShowMi
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -7879,7 +8400,12 @@ func (a *application) rewriteRefOfShowOther(parent SQLNode, node *ShowOther, rep
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -7903,7 +8429,12 @@ func (a *application) rewriteRefOfShowThrottledApps(parent SQLNode, node *ShowTh
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -7927,7 +8458,12 @@ func (a *application) rewriteRefOfShowThrottlerStatus(parent SQLNode, node *Show
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -7951,7 +8487,12 @@ func (a *application) rewriteRefOfShowTransactionStatus(parent SQLNode, node *Sh
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -7975,7 +8516,12 @@ func (a *application) rewriteRefOfStarExpr(parent SQLNode, node *StarExpr, repla
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -8005,7 +8551,7 @@ func (a *application) rewriteRefOfStd(parent SQLNode, node *Std, replacer replac
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -8042,7 +8588,7 @@ func (a *application) rewriteRefOfStdDev(parent SQLNode, node *StdDev, replacer 
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -8079,7 +8625,7 @@ func (a *application) rewriteRefOfStdPop(parent SQLNode, node *StdPop, replacer 
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -8116,7 +8662,7 @@ func (a *application) rewriteRefOfStdSamp(parent SQLNode, node *StdSamp, replace
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -8150,7 +8696,12 @@ func (a *application) rewriteRefOfStream(parent SQLNode, node *Stream, replacer 
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -8187,7 +8738,12 @@ func (a *application) rewriteRefOfSubPartition(parent SQLNode, node *SubPartitio
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -8219,7 +8775,12 @@ func (a *application) rewriteRefOfSubPartitionDefinition(parent SQLNode, node *S
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -8251,7 +8812,12 @@ func (a *application) rewriteRefOfSubPartitionDefinitionOptions(parent SQLNode, 
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -8295,9 +8861,8 @@ func (a *application) rewriteSubPartitionDefinitions(parent SQLNode, node SubPar
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
-			node = a.cur.node.(SubPartitionDefinitions)
 			a.cur.revisit = false
-			return a.rewriteSubPartitionDefinitions(parent, node, replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -8333,7 +8898,7 @@ func (a *application) rewriteRefOfSubquery(parent SQLNode, node *Subquery, repla
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -8365,7 +8930,7 @@ func (a *application) rewriteRefOfSubstrExpr(parent SQLNode, node *SubstrExpr, r
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -8407,7 +8972,7 @@ func (a *application) rewriteRefOfSum(parent SQLNode, node *Sum, replacer replac
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -8443,9 +9008,8 @@ func (a *application) rewriteTableExprs(parent SQLNode, node TableExprs, replace
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
-			node = a.cur.node.(TableExprs)
 			a.cur.revisit = false
-			return a.rewriteTableExprs(parent, node, replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -8475,7 +9039,12 @@ func (a *application) rewriteTableName(parent SQLNode, node TableName, replacer 
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -8509,9 +9078,8 @@ func (a *application) rewriteTableNames(parent SQLNode, node TableNames, replace
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
-			node = a.cur.node.(TableNames)
 			a.cur.revisit = false
-			return a.rewriteTableNames(parent, node, replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -8546,9 +9114,8 @@ func (a *application) rewriteTableOptions(parent SQLNode, node TableOptions, rep
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
-			node = a.cur.node.(TableOptions)
 			a.cur.revisit = false
-			return a.rewriteTableOptions(parent, node, replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -8574,7 +9141,12 @@ func (a *application) rewriteRefOfTableSpec(parent SQLNode, node *TableSpec, rep
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -8633,7 +9205,12 @@ func (a *application) rewriteRefOfTablespaceOperation(parent SQLNode, node *Tabl
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -8660,7 +9237,7 @@ func (a *application) rewriteRefOfTimestampDiffExpr(parent SQLNode, node *Timest
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -8697,7 +9274,7 @@ func (a *application) rewriteRefOfTrimFuncExpr(parent SQLNode, node *TrimFuncExp
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -8731,7 +9308,12 @@ func (a *application) rewriteRefOfTruncateTable(parent SQLNode, node *TruncateTa
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -8761,7 +9343,7 @@ func (a *application) rewriteRefOfUnaryExpr(parent SQLNode, node *UnaryExpr, rep
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -8790,7 +9372,12 @@ func (a *application) rewriteRefOfUnion(parent SQLNode, node *Union, replacer re
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -8842,7 +9429,12 @@ func (a *application) rewriteRefOfUnlockTables(parent SQLNode, node *UnlockTable
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -8866,7 +9458,12 @@ func (a *application) rewriteRefOfUpdate(parent SQLNode, node *Update, replacer 
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -8927,7 +9524,12 @@ func (a *application) rewriteRefOfUpdateExpr(parent SQLNode, node *UpdateExpr, r
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -8961,9 +9563,8 @@ func (a *application) rewriteUpdateExprs(parent SQLNode, node UpdateExprs, repla
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
-			node = a.cur.node.(UpdateExprs)
 			a.cur.revisit = false
-			return a.rewriteUpdateExprs(parent, node, replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -8999,7 +9600,7 @@ func (a *application) rewriteRefOfUpdateXMLExpr(parent SQLNode, node *UpdateXMLE
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -9038,7 +9639,12 @@ func (a *application) rewriteRefOfUse(parent SQLNode, node *Use, replacer replac
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -9065,7 +9671,12 @@ func (a *application) rewriteRefOfVExplainStmt(parent SQLNode, node *VExplainStm
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -9097,7 +9708,12 @@ func (a *application) rewriteRefOfVStream(parent SQLNode, node *VStream, replace
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -9146,9 +9762,8 @@ func (a *application) rewriteValTuple(parent SQLNode, node ValTuple, replacer re
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
-			node = a.cur.node.(ValTuple)
 			a.cur.revisit = false
-			return a.rewriteValTuple(parent, node, replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -9181,7 +9796,12 @@ func (a *application) rewriteRefOfValidation(parent SQLNode, node *Validation, r
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -9207,9 +9827,8 @@ func (a *application) rewriteValues(parent SQLNode, node Values, replacer replac
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
-			node = a.cur.node.(Values)
 			a.cur.revisit = false
-			return a.rewriteValues(parent, node, replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -9245,7 +9864,7 @@ func (a *application) rewriteRefOfValuesFuncExpr(parent SQLNode, node *ValuesFun
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -9274,7 +9893,12 @@ func (a *application) rewriteRefOfValuesStatement(parent SQLNode, node *ValuesSt
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -9329,7 +9953,7 @@ func (a *application) rewriteRefOfVarPop(parent SQLNode, node *VarPop, replacer 
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -9366,7 +9990,7 @@ func (a *application) rewriteRefOfVarSamp(parent SQLNode, node *VarSamp, replace
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -9403,7 +10027,7 @@ func (a *application) rewriteRefOfVariable(parent SQLNode, node *Variable, repla
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -9435,7 +10059,7 @@ func (a *application) rewriteRefOfVariance(parent SQLNode, node *Variance, repla
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -9466,7 +10090,12 @@ func (a *application) rewriteVindexParam(parent SQLNode, node VindexParam, repla
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -9493,7 +10122,12 @@ func (a *application) rewriteRefOfVindexSpec(parent SQLNode, node *VindexSpec, r
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -9537,7 +10171,7 @@ func (a *application) rewriteRefOfWeightStringFuncExpr(parent SQLNode, node *Wei
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -9571,7 +10205,12 @@ func (a *application) rewriteRefOfWhen(parent SQLNode, node *When, replacer repl
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -9603,7 +10242,12 @@ func (a *application) rewriteRefOfWhere(parent SQLNode, node *Where, replacer re
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -9630,7 +10274,12 @@ func (a *application) rewriteRefOfWindowDefinition(parent SQLNode, node *WindowD
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -9664,9 +10313,8 @@ func (a *application) rewriteWindowDefinitions(parent SQLNode, node WindowDefini
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
-			node = a.cur.node.(WindowDefinitions)
 			a.cur.revisit = false
-			return a.rewriteWindowDefinitions(parent, node, replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -9699,7 +10347,12 @@ func (a *application) rewriteRefOfWindowSpecification(parent SQLNode, node *Wind
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -9741,7 +10394,12 @@ func (a *application) rewriteRefOfWith(parent SQLNode, node *With, replacer repl
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -9775,7 +10433,7 @@ func (a *application) rewriteRefOfXorExpr(parent SQLNode, node *XorExpr, replace
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -10630,7 +11288,12 @@ func (a *application) rewriteAlgorithmValue(parent SQLNode, node AlgorithmValue,
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -10654,7 +11317,7 @@ func (a *application) rewriteBoolVal(parent SQLNode, node BoolVal, replacer repl
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -10680,7 +11343,7 @@ func (a *application) rewriteListArg(parent SQLNode, node ListArg, replacer repl
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			a.cur.revisit = false
-			return a.rewriteExpr(parent, a.cur.node.(Expr), replacer)
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -10703,7 +11366,12 @@ func (a *application) rewriteMatchAction(parent SQLNode, node MatchAction, repla
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -10724,7 +11392,12 @@ func (a *application) rewriteReferenceAction(parent SQLNode, node ReferenceActio
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -10748,7 +11421,12 @@ func (a *application) rewriteRefOfIdentifierCI(parent SQLNode, node *IdentifierC
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -10772,7 +11450,12 @@ func (a *application) rewriteRefOfIdentifierCS(parent SQLNode, node *IdentifierC
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -10796,7 +11479,12 @@ func (a *application) rewriteRefOfRootNode(parent SQLNode, node *RootNode, repla
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -10823,7 +11511,12 @@ func (a *application) rewriteRefOfTableName(parent SQLNode, node *TableName, rep
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -10855,7 +11548,12 @@ func (a *application) rewriteRefOfVindexParam(parent SQLNode, node *VindexParam,
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}

@@ -77,9 +77,6 @@ type (
 	}
 )
 
-// exprInterfacePath is the path of the sqlparser.Expr interface.
-const exprInterfacePath = "vitess.io/vitess/go/vt/sqlparser.Expr"
-
 func (gen *astHelperGen) iface() *types.Interface {
 	return gen._iface
 }
@@ -207,19 +204,13 @@ func GenerateASTHelpers(options *Options) (map[string]*jen.File, error) {
 		return nil, err
 	}
 
-	exprType, _ := findTypeObject(exprInterfacePath, scopes)
-	var exprInterface *types.Interface
-	if exprType != nil {
-		exprInterface = exprType.Type().(*types.Named).Underlying().(*types.Interface)
-	}
-
 	nt := tt.Type().(*types.Named)
 	pName := nt.Obj().Pkg().Name()
 	generator := newGenerator(loaded[0].Module, loaded[0].TypesSizes, nt,
 		newEqualsGen(pName, &options.Equals),
 		newCloneGen(pName, &options.Clone),
 		newVisitGen(pName),
-		newRewriterGen(pName, types.TypeString(nt, noQualifier), exprInterface),
+		newRewriterGen(pName, types.TypeString(nt, noQualifier)),
 		newCOWGen(pName, nt),
 	)
 
