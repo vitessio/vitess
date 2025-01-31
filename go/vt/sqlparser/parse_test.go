@@ -6347,6 +6347,17 @@ func TestParseVersionedComments(t *testing.T) {
 partition by range (id)
 (partition x values less than (5) engine InnoDB,
  partition t values less than (20) engine InnoDB)`,
+		}, {
+			input:        "CREATE TABLE `TABLE_NAME` (\n  `col1` longblob /*!50633 COLUMN_FORMAT COMPRESSED */,\n  `id` bigint unsigned NOT NULL,\n  PRIMARY KEY (`id`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin ROW_FORMAT=COMPRESSED",
+			mysqlVersion: "8.0.1",
+			output: `create table TABLE_NAME (
+	col1 longblob column_format compressed,
+	id bigint unsigned not null,
+	primary key (id)
+) ENGINE InnoDB,
+  CHARSET utf8mb4,
+  COLLATE utf8mb4_bin,
+  ROW_FORMAT COMPRESSED`,
 		},
 	}
 
@@ -6354,7 +6365,7 @@ partition by range (id)
 		t.Run(testcase.input+":"+testcase.mysqlVersion, func(t *testing.T) {
 			parser, err := New(Options{MySQLServerVersion: testcase.mysqlVersion})
 			require.NoError(t, err)
-			tree, err := parser.Parse(testcase.input)
+			tree, err := parser.ParseStrictDDL(testcase.input)
 			require.NoError(t, err, testcase.input)
 			out := String(tree)
 			require.Equal(t, testcase.output, out)
