@@ -436,7 +436,7 @@ func (sm *stateManager) verifyTargetLocked(ctx context.Context, target *querypb.
 					return nil
 				}
 			}
-			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s: %v, want: %v or %v", vterrors.WrongTablet, target.TabletType, sm.target.TabletType, sm.alsoAllow)
+			return vterrors.VT15001(vtrpcpb.Code_FAILED_PRECONDITION, fmt.Sprintf("%s: %v, want: %v or %v", vterrors.WrongTablet, target.TabletType, sm.target.TabletType, sm.alsoAllow))
 		}
 	} else {
 		if !tabletenv.IsLocalContext(ctx) {
