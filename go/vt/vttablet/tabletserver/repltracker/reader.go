@@ -60,6 +60,7 @@ type heartbeatReader struct {
 
 	lagMu          sync.Mutex
 	lastKnownLag   time.Duration
+	lastKnownTime  time.Time
 	lastKnownError error
 }
 
@@ -103,6 +104,7 @@ func (r *heartbeatReader) Open() {
 	log.Info("Heartbeat Reader: opening")
 
 	r.pool.Open(r.env.Config().DB.AppWithDB(), r.env.Config().DB.DbaWithDB(), r.env.Config().DB.AppDebugWithDB())
+	r.lastKnownTime = r.now()
 	r.ticks.Start(func() { r.readHeartbeat() })
 	r.isOpen = true
 }
@@ -130,9 +132,16 @@ func (r *heartbeatReader) Close() {
 func (r *heartbeatReader) Status() (time.Duration, error) {
 	r.lagMu.Lock()
 	defer r.lagMu.Unlock()
+
 	if r.lastKnownError != nil {
 		return 0, r.lastKnownError
 	}
+
+	// Return an error if we didn't receive a heartbeat for more than two seconds
+	if !r.lastKnownTime.IsZero() && r.now().Sub(r.lastKnownTime) > 2*r.interval {
+		return 0, fmt.Errorf("no heartbeat received in over 2x the heartbeat interval")
+	}
+
 	return r.lastKnownLag, nil
 }
 
@@ -162,6 +171,7 @@ func (r *heartbeatReader) readHeartbeat() {
 	reads.Add(1)
 
 	r.lagMu.Lock()
+	r.lastKnownTime = r.now()
 	r.lastKnownLag = lag
 	r.lastKnownError = nil
 	r.lagMu.Unlock()
