@@ -966,7 +966,8 @@ func TestCancelMigration_TABLES(t *testing.T) {
 	err = topo.CheckKeyspaceLocked(ctx, ts.sourceKeyspace)
 	require.NoError(t, err)
 
-	ts.cancelMigration(ctx, sm)
+	err = ts.cancelMigration(ctx, sm)
+	require.NoError(t, err)
 
 	// Expect the queries to be cleared
 	assert.Empty(t, env.tmc.vrQueries[100])
@@ -1027,7 +1028,8 @@ func TestCancelMigration_SHARDS(t *testing.T) {
 	err = topo.CheckKeyspaceLocked(ctx, ts.sourceKeyspace)
 	require.NoError(t, err)
 
-	ts.cancelMigration(ctx, sm)
+	err = ts.cancelMigration(ctx, sm)
+	require.NoError(t, err)
 
 	// Expect the queries to be cleared
 	assert.Empty(t, env.tmc.vrQueries[100])
