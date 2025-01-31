@@ -610,17 +610,6 @@ func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) er
 			if !ok {
 				return fmt.Errorf("unexpected: %v", sqlparser.String(expr))
 			}
-			// Add it to the expressions that get pushed down to mysqld.
-			log.Errorf("DEBUG: adding to list of pushdown expressions: %v", sqlparser.String(expr))
-			plan.whereExprsToPushDown = append(plan.whereExprsToPushDown, expr)
-			if val.Type != sqlparser.IntVal && val.Type != sqlparser.StrVal {
-				// StrVal is varbinary, we do not support varchar filtering in
-				// vstreamer since we would have to do so using the correct
-				// collation. So we ONLY push it down to mysqld.
-				// TODO: now that we have MySQL compatible collation support
-				// we could add this support to vstreamer as well.
-				continue
-			}
 			pv, err := evalengine.Translate(val, &evalengine.Config{
 				Collation:   plan.env.CollationEnv().DefaultConnectionCharset(),
 				Environment: plan.env,
@@ -638,15 +627,17 @@ func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) er
 				ColNum: colnum,
 				Value:  resolved.Value(plan.env.CollationEnv().DefaultConnectionCharset()),
 			})
+			// Add it to the expressions that get pushed down to mysqld.
+			log.Errorf("DEBUG: adding to list of pushdown expressions: %v", sqlparser.String(expr))
+			plan.whereExprsToPushDown = append(plan.whereExprsToPushDown, expr)
 		case *sqlparser.FuncExpr:
-			if expr.Name.EqualString("in_keyrange") {
-				if err := plan.analyzeInKeyRange(vschema, expr.Exprs); err != nil {
-					return err
-				}
-			} else {
-				log.Errorf("DEBUG: adding to list of pushdown expressions: %v", sqlparser.String(expr))
-				// Add it to the expressions that get pushed down to mysqld.
-				plan.whereExprsToPushDown = append(plan.whereExprsToPushDown, expr)
+			// We cannot filter binlog events in vstreamer using MySQL functions so
+			// we only allow the in_keyrange() function, which is vstreamer specific.
+			if !expr.Name.EqualString("in_keyrange") {
+				return fmt.Errorf("unsupported constraint: %v", sqlparser.String(expr))
+			}
+			if err := plan.analyzeInKeyRange(vschema, expr.Exprs); err != nil {
+				return err
 			}
 		case *sqlparser.IsExpr: // Needed for CreateLookupVindex with ignore_nulls
 			if expr.Right != sqlparser.IsNotNullOp {
