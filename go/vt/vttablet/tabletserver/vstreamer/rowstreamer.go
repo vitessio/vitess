@@ -280,7 +280,9 @@ func (rs *rowStreamer) buildSelect(st *binlogdatapb.MinimalTable) (string, error
 	// do a FILESORT of all the results. This index should contain all
 	// of the PK columns which are used in the ORDER BY clause below.
 	var indexHint string
-	if st.PKIndexName != "" {
+	// If we're pushing down any expressions, we need to let the optimizer
+	// choose the best index to use.
+	if st.PKIndexName != "" && len(rs.plan.whereExprsToPushDown) == 0 {
 		escapedPKIndexName, err := sqlescape.EnsureEscaped(st.PKIndexName)
 		if err != nil {
 			return "", err
