@@ -1,5 +1,5 @@
 /*
-Copyright 2023 The Vitess Authors.
+Copyright 2025 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -191,7 +191,8 @@ func (cmp *Comparator) RefOfRefSliceContainer(a, b *RefSliceContainer) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return cmp.SliceOfAST(a.ASTElements, b.ASTElements) &&
+	return a.something == b.something &&
+		cmp.SliceOfAST(a.ASTElements, b.ASTElements) &&
 		cmp.SliceOfInt(a.NotASTElements, b.NotASTElements) &&
 		cmp.SliceOfRefOfLeaf(a.ASTImplementationElements, b.ASTImplementationElements)
 }
@@ -219,7 +220,7 @@ func (cmp *Comparator) ValueContainer(a, b ValueContainer) bool {
 func (cmp *Comparator) ValueSliceContainer(a, b ValueSliceContainer) bool {
 	return cmp.SliceOfAST(a.ASTElements, b.ASTElements) &&
 		cmp.SliceOfInt(a.NotASTElements, b.NotASTElements) &&
-		cmp.SliceOfRefOfLeaf(a.ASTImplementationElements, b.ASTImplementationElements)
+		cmp.LeafSlice(a.ASTImplementationElements, b.ASTImplementationElements)
 }
 
 // SubIface does deep equals between the two objects.
@@ -327,7 +328,7 @@ func (cmp *Comparator) RefOfValueSliceContainer(a, b *ValueSliceContainer) bool 
 	}
 	return cmp.SliceOfAST(a.ASTElements, b.ASTElements) &&
 		cmp.SliceOfInt(a.NotASTElements, b.NotASTElements) &&
-		cmp.SliceOfRefOfLeaf(a.ASTImplementationElements, b.ASTImplementationElements)
+		cmp.LeafSlice(a.ASTImplementationElements, b.ASTImplementationElements)
 }
 
 type Comparator struct{}

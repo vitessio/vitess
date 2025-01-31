@@ -1,5 +1,5 @@
 /*
-Copyright 2023 The Vitess Authors.
+Copyright 2025 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -262,19 +262,11 @@ func (c *cow) copyOnRewriteValueSliceContainer(n ValueSliceContainer, parent AST
 				changedASTElements = true
 			}
 		}
-		var changedASTImplementationElements bool
-		_ASTImplementationElements := make([]*Leaf, len(n.ASTImplementationElements))
-		for x, el := range n.ASTImplementationElements {
-			this, changed := c.copyOnRewriteRefOfLeaf(el, n)
-			_ASTImplementationElements[x] = this.(*Leaf)
-			if changed {
-				changedASTImplementationElements = true
-			}
-		}
+		_ASTImplementationElements, changedASTImplementationElements := c.copyOnRewriteLeafSlice(n.ASTImplementationElements, n)
 		if changedASTElements || changedASTImplementationElements {
 			res := n
 			res.ASTElements = _ASTElements
-			res.ASTImplementationElements = _ASTImplementationElements
+			res.ASTImplementationElements, _ = _ASTImplementationElements.(LeafSlice)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -364,19 +356,11 @@ func (c *cow) copyOnRewriteRefOfValueSliceContainer(n *ValueSliceContainer, pare
 				changedASTElements = true
 			}
 		}
-		var changedASTImplementationElements bool
-		_ASTImplementationElements := make([]*Leaf, len(n.ASTImplementationElements))
-		for x, el := range n.ASTImplementationElements {
-			this, changed := c.copyOnRewriteRefOfLeaf(el, n)
-			_ASTImplementationElements[x] = this.(*Leaf)
-			if changed {
-				changedASTImplementationElements = true
-			}
-		}
+		_ASTImplementationElements, changedASTImplementationElements := c.copyOnRewriteLeafSlice(n.ASTImplementationElements, n)
 		if changedASTElements || changedASTImplementationElements {
 			res := *n
 			res.ASTElements = _ASTElements
-			res.ASTImplementationElements = _ASTImplementationElements
+			res.ASTImplementationElements, _ = _ASTImplementationElements.(LeafSlice)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
