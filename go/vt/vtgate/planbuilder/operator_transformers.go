@@ -172,7 +172,7 @@ func transformInsertionSelection(ctx *plancontext.PlanningContext, op *operators
 		return nil, vterrors.VT13001(fmt.Sprintf("Incorrect type encountered: %T (transformInsertionSelection)", op.Insert))
 	}
 
-	stmt, dmlOp, err := operators.ToSQL(ctx, rb.Source)
+	stmt, dmlOp, err := operators.ToAST(ctx, rb.Source)
 	if err != nil {
 		return nil, err
 	}
@@ -579,7 +579,7 @@ func getHints(cmt *sqlparser.ParsedComments) *queryHints {
 }
 
 func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (engine.Primitive, error) {
-	stmt, dmlOp, err := operators.ToSQL(ctx, op.Source)
+	stmt, dmlOp, err := operators.ToAST(ctx, op.Source)
 	if err != nil {
 		return nil, err
 	}
