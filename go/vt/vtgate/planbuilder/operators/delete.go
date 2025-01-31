@@ -71,7 +71,7 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 	}
 
 	delClone := sqlparser.Clone(deleteStmt)
-	var vTbl *vindexes.Table
+	var vTbl *vindexes.BaseTable
 	op, vTbl = createDeleteOperator(ctx, deleteStmt)
 
 	if deleteStmt.Comments != nil {
@@ -154,7 +154,7 @@ func createDeleteWithInputOp(ctx *plancontext.PlanningContext, del *sqlparser.De
 }
 
 // getFirstVindex returns the first Vindex, if available
-func getFirstVindex(vTbl *vindexes.Table) vindexes.Vindex {
+func getFirstVindex(vTbl *vindexes.BaseTable) vindexes.Vindex {
 	if len(vTbl.ColumnVindexes) > 0 {
 		return vTbl.ColumnVindexes[0].Vindex
 	}
@@ -204,7 +204,7 @@ func createDeleteOpWithTarget(ctx *plancontext.PlanningContext, target semantics
 	}
 }
 
-func createDeleteOperator(ctx *plancontext.PlanningContext, del *sqlparser.Delete) (Operator, *vindexes.Table) {
+func createDeleteOperator(ctx *plancontext.PlanningContext, del *sqlparser.Delete) (Operator, *vindexes.BaseTable) {
 	op := crossJoin(ctx, del.TableExprs)
 
 	sqc := &SubQueryBuilder{}
@@ -310,7 +310,7 @@ func addOrdering(ctx *plancontext.PlanningContext, op Operator, orderBy sqlparse
 	return newOrdering(op, order)
 }
 
-func updateQueryGraphWithSource(ctx *plancontext.PlanningContext, input Operator, tblID semantics.TableSet, vTbl *vindexes.Table) *vindexes.Table {
+func updateQueryGraphWithSource(ctx *plancontext.PlanningContext, input Operator, tblID semantics.TableSet, vTbl *vindexes.BaseTable) *vindexes.BaseTable {
 	sourceTable, _, _, _, _, err := ctx.VSchema.FindTableOrVindex(vTbl.Source.TableName)
 	if err != nil {
 		panic(err)
@@ -339,7 +339,7 @@ func updateQueryGraphWithSource(ctx *plancontext.PlanningContext, input Operator
 	return vTbl
 }
 
-func createFkCascadeOpForDelete(ctx *plancontext.PlanningContext, parentOp Operator, delStmt *sqlparser.Delete, childFks []vindexes.ChildFKInfo, deletedTbl *vindexes.Table) Operator {
+func createFkCascadeOpForDelete(ctx *plancontext.PlanningContext, parentOp Operator, delStmt *sqlparser.Delete, childFks []vindexes.ChildFKInfo, deletedTbl *vindexes.BaseTable) Operator {
 	var fkChildren []*FkChild
 	var selectExprs []sqlparser.SelectExpr
 	tblName := delStmt.Targets[0]

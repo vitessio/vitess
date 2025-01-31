@@ -35,14 +35,14 @@ type DMLCommon struct {
 
 type TargetTable struct {
 	ID     semantics.TableSet
-	VTable *vindexes.Table
+	VTable *vindexes.BaseTable
 	Name   sqlparser.TableName
 }
 
 // dmlOp stores intermediary value for Update/Delete Operator with the vindexes. Table for ordering.
 type dmlOp struct {
 	op      Operator
-	vTbl    *vindexes.Table
+	vTbl    *vindexes.BaseTable
 	cols    []*sqlparser.ColName
 	updList updList
 }
@@ -87,7 +87,7 @@ func shortDesc(target TargetTable, ovq *sqlparser.Select) string {
 
 // getVindexInformation returns the vindex and VindexPlusPredicates for the DML,
 // If it cannot find a unique vindex match, it returns an error.
-func getVindexInformation(id semantics.TableSet, table *vindexes.Table) *vindexes.ColumnVindex {
+func getVindexInformation(id semantics.TableSet, table *vindexes.BaseTable) *vindexes.ColumnVindex {
 	// Check that we have a primary vindex which is valid
 	if len(table.ColumnVindexes) == 0 || !table.ColumnVindexes[0].IsUnique() {
 		panic(vterrors.VT09001(table.Name))

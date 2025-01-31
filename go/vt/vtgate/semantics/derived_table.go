@@ -150,7 +150,7 @@ func (dt *DerivedTable) canShortCut() shortCut {
 }
 
 // GetVindexTable implements the TableInfo interface
-func (dt *DerivedTable) GetVindexTable() *vindexes.Table {
+func (dt *DerivedTable) GetVindexTable() *vindexes.BaseTable {
 	return nil
 }
 

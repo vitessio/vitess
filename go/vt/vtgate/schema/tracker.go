@@ -545,6 +545,7 @@ func (vm *viewMap) set(ks, tbl, sql string) {
 		log.Warningf("ignoring view '%s', view definition is not a create view query: %T", tbl, stmt)
 		return
 	}
+	sqlparser.AddKeyspace(cv.Select, ks)
 	m[tbl] = cv.Select
 }
 

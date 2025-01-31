@@ -64,7 +64,7 @@ func explainTabPlan(explain *sqlparser.ExplainTab, vschema plancontext.VSchema) 
 			return nil, err
 		}
 	} else {
-		var tbl *vindexes.Table
+		var tbl *vindexes.BaseTable
 		var err error
 		tbl, _, _, _, dest, err = vschema.FindTableOrVindex(explain.Table)
 		if err != nil {

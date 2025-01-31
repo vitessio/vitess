@@ -51,7 +51,7 @@ type ShardedRouting struct {
 
 var _ Routing = (*ShardedRouting)(nil)
 
-func newShardedRouting(ctx *plancontext.PlanningContext, vtable *vindexes.Table, id semantics.TableSet) Routing {
+func newShardedRouting(ctx *plancontext.PlanningContext, vtable *vindexes.BaseTable, id semantics.TableSet) Routing {
 	routing := &ShardedRouting{
 		RouteOpCode: engine.Scatter,
 		keyspace:    vtable.Keyspace,

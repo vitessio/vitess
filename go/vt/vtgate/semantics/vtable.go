@@ -100,7 +100,7 @@ func (v *vTableInfo) canShortCut() shortCut {
 }
 
 // GetVindexTable implements the TableInfo interface
-func (v *vTableInfo) GetVindexTable() *vindexes.Table {
+func (v *vTableInfo) GetVindexTable() *vindexes.BaseTable {
 	return nil
 }
 

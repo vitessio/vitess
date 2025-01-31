@@ -125,7 +125,7 @@ func TestGetCastTypeForColumn(t *testing.T) {
 			updExpr := &sqlparser.UpdateExpr{
 				Name: sqlparser.NewColName("col"),
 			}
-			updatedTable := &vindexes.Table{
+			updatedTable := &vindexes.BaseTable{
 				Columns: []vindexes.Column{
 					{
 						Name: sqlparser.NewIdentifierCI("col"),

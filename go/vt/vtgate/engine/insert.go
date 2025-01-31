@@ -77,7 +77,7 @@ func newInsert(
 	ignore bool,
 	keyspace *vindexes.Keyspace,
 	vindexValues [][][]evalengine.Expr,
-	table *vindexes.Table,
+	table *vindexes.BaseTable,
 	prefix string,
 	mid sqlparser.Values,
 	suffix sqlparser.OnDup,
