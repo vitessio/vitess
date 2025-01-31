@@ -280,6 +280,16 @@ func (rs *rowStreamer) buildSelect(st *binlogdatapb.MinimalTable) (string, error
 				st.Name, rs.lastpk, rs.pkColumns)
 		}
 		buf.WriteString(" where ")
+		// First we add any predicates that should be pushed down.
+		for i, expr := range rs.plan.whereExprsToPushDown {
+			if i != 0 {
+				buf.Myprintf(" and ")
+			}
+			buf.Myprintf("%s", sqlparser.String(expr))
+		}
+		if len(rs.plan.whereExprsToPushDown) > 0 {
+			buf.Myprintf(" and ")
+		}
 		prefix := ""
 		// This loop handles the case for composite PKs. For example,
 		// if lastpk was (1,2), the where clause would be:

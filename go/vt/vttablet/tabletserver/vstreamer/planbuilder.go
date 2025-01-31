@@ -58,6 +58,10 @@ type Plan struct {
 	// of the table.
 	Filters []Filter
 
+	// WHERE clauses in the Filter query that we can push down to
+	// MySQL to reduce the returned rows we need to filter.
+	whereExprsToPushDown []sqlparser.Expr
+
 	// Convert any integer values seen in the binlog events for ENUM or SET
 	// columns to the string values. The map is keyed on the column number, with
 	// the value being the map of ordinal values to string values.
@@ -622,6 +626,8 @@ func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) er
 				ColNum: colnum,
 				Value:  resolved.Value(plan.env.CollationEnv().DefaultConnectionCharset()),
 			})
+			// Add it to the column expressions so that it's passed down to mysqld.
+			plan.whereExprsToPushDown = append(plan.whereExprsToPushDown, expr)
 		case *sqlparser.FuncExpr:
 			if !expr.Name.EqualString("in_keyrange") {
 				return fmt.Errorf("unsupported constraint: %v", sqlparser.String(expr))
@@ -648,6 +654,8 @@ func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) er
 				Opcode: IsNotNull,
 				ColNum: colnum,
 			})
+			// Add it to the column expressions so that it's passed down to mysqld.
+			plan.whereExprsToPushDown = append(plan.whereExprsToPushDown, expr)
 		default:
 			return fmt.Errorf("unsupported constraint: %v", sqlparser.String(expr))
 		}
