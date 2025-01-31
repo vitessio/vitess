@@ -737,7 +737,6 @@ func (s *VtctldServer) CheckThrottler(ctx context.Context, req *vtctldatapb.Chec
 		Scope:                 req.Scope,
 		SkipRequestHeartbeats: req.SkipRequestHeartbeats,
 		OkIfNotExists:         req.OkIfNotExists,
-		MultiMetricsEnabled:   true,
 	}
 	r, err := s.tmc.CheckThrottler(ctx, ti.Tablet, tmReq)
 	if err != nil {
@@ -2058,9 +2057,6 @@ func (s *VtctldServer) UpdateThrottlerConfig(ctx context.Context, req *vtctldata
 	if req.Enable && req.Disable {
 		return nil, fmt.Errorf("--enable and --disable are mutually exclusive")
 	}
-	if req.CheckAsCheckSelf && req.CheckAsCheckShard {
-		return nil, fmt.Errorf("--check-as-check-self and --check-as-check-shard are mutually exclusive")
-	}
 
 	if req.MetricName != "" && !base.KnownMetricNames.Contains(base.MetricName(req.MetricName)) {
 		return nil, fmt.Errorf("unknown metric name: %s", req.MetricName)
@@ -2125,12 +2121,6 @@ func (s *VtctldServer) UpdateThrottlerConfig(ctx context.Context, req *vtctldata
 		}
 		if req.Disable {
 			throttlerConfig.Enabled = false
-		}
-		if req.CheckAsCheckSelf {
-			throttlerConfig.CheckAsCheckSelf = true
-		}
-		if req.CheckAsCheckShard {
-			throttlerConfig.CheckAsCheckSelf = false
 		}
 		if req.ThrottledApp != nil && req.ThrottledApp.Name != "" {
 			timeNow := time.Now()
