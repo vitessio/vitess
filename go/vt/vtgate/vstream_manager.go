@@ -170,7 +170,7 @@ func (vsm *vstreamManager) VStream(ctx context.Context, tabletType topodatapb.Ta
 	}
 	if ts == nil {
 		log.Errorf("unable to get topo server in VStream()")
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "unable to get topoology server")
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unable to get topoology server")
 	}
 	vs := &vstream{
 		vgtid:                       vgtid,
@@ -956,7 +956,7 @@ func (vs *vstream) getJournalEvent(ctx context.Context, sgtid *binlogdatapb.Shar
 						mode = matchAll
 						je.participants[inner] = false
 					case matchNone:
-						return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "not all journaling participants are in the stream: journal: %v, stream: %v",
+						return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "not all journaling participants are in the stream: journal: %v, stream: %v",
 							journal.Participants, vs.vgtid.ShardGtids)
 					}
 					continue nextParticipant
@@ -966,7 +966,7 @@ func (vs *vstream) getJournalEvent(ctx context.Context, sgtid *binlogdatapb.Shar
 			case undecided, matchNone:
 				mode = matchNone
 			case matchAll:
-				return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "not all journaling participants are in the stream: journal: %v, stream: %v",
+				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "not all journaling participants are in the stream: journal: %v, stream: %v",
 					journal.Participants, vs.vgtid.ShardGtids)
 			}
 		}
