@@ -570,6 +570,7 @@ func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) er
 	}
 	exprs := splitAndExpression(nil, where.Expr)
 	for _, expr := range exprs {
+		log.Errorf("DEBUG: analyzing where expression of type %T: %v", expr, sqlparser.String(expr))
 		switch expr := expr.(type) {
 		case *sqlparser.ComparisonExpr:
 			opcode, err := getOpcode(expr)
@@ -605,6 +606,12 @@ func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) er
 			if !ok {
 				return fmt.Errorf("unexpected: %v", sqlparser.String(expr))
 			}
+			// Add it to the column expressions so that it's passed down to mysqld.
+			if plan.whereExprsToPushDown == nil {
+				plan.whereExprsToPushDown = make([]sqlparser.Expr, 0)
+			}
+			log.Errorf("DEBUG: adding to list of pushdown expressions: %v", sqlparser.String(expr))
+			plan.whereExprsToPushDown = append(plan.whereExprsToPushDown, expr)
 			// StrVal is varbinary, we do not support varchar since we would have to implement all collation types
 			if val.Type != sqlparser.IntVal && val.Type != sqlparser.StrVal {
 				return fmt.Errorf("unexpected: %v", sqlparser.String(expr))
@@ -626,8 +633,6 @@ func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) er
 				ColNum: colnum,
 				Value:  resolved.Value(plan.env.CollationEnv().DefaultConnectionCharset()),
 			})
-			// Add it to the column expressions so that it's passed down to mysqld.
-			plan.whereExprsToPushDown = append(plan.whereExprsToPushDown, expr)
 		case *sqlparser.FuncExpr:
 			if !expr.Name.EqualString("in_keyrange") {
 				return fmt.Errorf("unsupported constraint: %v", sqlparser.String(expr))

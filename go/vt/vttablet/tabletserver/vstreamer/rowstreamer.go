@@ -149,6 +149,7 @@ func (rs *rowStreamer) Stream() error {
 func (rs *rowStreamer) buildPlan() error {
 	// This pre-parsing is required to extract the table name
 	// and create its metadata.
+	log.Errorf("DEBUG: building rowstreamer plan from query: %s", rs.query)
 	sel, fromTable, err := analyzeSelect(rs.query, rs.se.Environment().Parser())
 	if err != nil {
 		return err
@@ -176,6 +177,7 @@ func (rs *rowStreamer) buildPlan() error {
 		log.Errorf("%s", err.Error())
 		return err
 	}
+	log.Errorf("DEBUG: rowstreamer plan: %+v", rs.plan)
 
 	directives := sel.Comments.Directives()
 	if s, found := directives.GetString("ukColumns", ""); found {
@@ -198,6 +200,7 @@ func (rs *rowStreamer) buildPlan() error {
 	if err != nil {
 		return err
 	}
+	log.Errorf("DEBUG: rowstreamer final query: %s", rs.sendQuery)
 	return err
 }
 
@@ -260,6 +263,17 @@ func (rs *rowStreamer) buildSelect(st *binlogdatapb.MinimalTable) (string, error
 		}
 		prefix = ", "
 	}
+
+	addPushdownExpressions := func() {
+		// First we add any predicates that should be pushed down.
+		for i, expr := range rs.plan.whereExprsToPushDown {
+			if i != 0 {
+				buf.Myprintf(" and ")
+			}
+			log.Errorf("DEBUG: adding pushdown expression to rowstreamer query: %s", sqlparser.String(expr))
+			buf.Myprintf("%s", sqlparser.String(expr))
+		}
+	}
 	// If we know the index name that we should be using then tell MySQL
 	// to use it if possible. This helps to ensure that we are able to
 	// leverage the ordering from the index itself and avoid having to
@@ -280,13 +294,8 @@ func (rs *rowStreamer) buildSelect(st *binlogdatapb.MinimalTable) (string, error
 				st.Name, rs.lastpk, rs.pkColumns)
 		}
 		buf.WriteString(" where ")
+		addPushdownExpressions()
 		// First we add any predicates that should be pushed down.
-		for i, expr := range rs.plan.whereExprsToPushDown {
-			if i != 0 {
-				buf.Myprintf(" and ")
-			}
-			buf.Myprintf("%s", sqlparser.String(expr))
-		}
 		if len(rs.plan.whereExprsToPushDown) > 0 {
 			buf.Myprintf(" and ")
 		}
@@ -308,6 +317,9 @@ func (rs *rowStreamer) buildSelect(st *binlogdatapb.MinimalTable) (string, error
 			rs.lastpk[lastcol].EncodeSQL(buf)
 			buf.Myprintf(")")
 		}
+	} else if len(rs.plan.whereExprsToPushDown) > 0 {
+		buf.Myprintf(" where ")
+		addPushdownExpressions()
 	}
 	buf.Myprintf(" order by ", sqlparser.NewIdentifierCS(rs.plan.Table.Name))
 	prefix = ""
