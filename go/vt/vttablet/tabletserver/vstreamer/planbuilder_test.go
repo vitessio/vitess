@@ -173,6 +173,7 @@ func TestMustSendDDL(t *testing.T) {
 }
 
 func TestPlanBuilder(t *testing.T) {
+	unicodeCollationID := collations.MySQL8().DefaultConnectionCharset()
 	t1 := &Table{
 		Name: "t1",
 		Fields: []*querypb.Field{{
@@ -182,9 +183,8 @@ func TestPlanBuilder(t *testing.T) {
 			Flags:   uint32(querypb.MySqlFlag_NUM_FLAG),
 		}, {
 			Name:    "val",
-			Type:    sqltypes.VarBinary,
-			Charset: collations.CollationBinaryID,
-			Flags:   uint32(querypb.MySqlFlag_BINARY_FLAG),
+			Type:    sqltypes.VarChar,
+			Charset: collations.CollationUtf8mb4ID,
 		}},
 	}
 	// t1alt has no id column
@@ -193,8 +193,7 @@ func TestPlanBuilder(t *testing.T) {
 		Fields: []*querypb.Field{{
 			Name:    "val",
 			Type:    sqltypes.VarBinary,
-			Charset: collations.CollationBinaryID,
-			Flags:   uint32(querypb.MySqlFlag_BINARY_FLAG),
+			Charset: uint32(unicodeCollationID),
 		}},
 	}
 	t2 := &Table{
@@ -252,9 +251,8 @@ func TestPlanBuilder(t *testing.T) {
 				ColNum: 1,
 				Field: &querypb.Field{
 					Name:    "val",
-					Type:    sqltypes.VarBinary,
-					Charset: collations.CollationBinaryID,
-					Flags:   uint32(querypb.MySqlFlag_BINARY_FLAG),
+					Type:    sqltypes.VarChar,
+					Charset: uint32(unicodeCollationID),
 				},
 			}},
 			env: vtenv.NewTestEnv(),
@@ -275,9 +273,8 @@ func TestPlanBuilder(t *testing.T) {
 				ColNum: 1,
 				Field: &querypb.Field{
 					Name:    "val",
-					Type:    sqltypes.VarBinary,
-					Charset: collations.CollationBinaryID,
-					Flags:   uint32(querypb.MySqlFlag_BINARY_FLAG),
+					Type:    sqltypes.VarChar,
+					Charset: uint32(unicodeCollationID),
 				},
 			}},
 			Filters: []Filter{{
@@ -306,9 +303,8 @@ func TestPlanBuilder(t *testing.T) {
 				ColNum: 1,
 				Field: &querypb.Field{
 					Name:    "val",
-					Type:    sqltypes.VarBinary,
-					Charset: collations.CollationBinaryID,
-					Flags:   uint32(querypb.MySqlFlag_BINARY_FLAG),
+					Type:    sqltypes.VarChar,
+					Charset: uint32(unicodeCollationID),
 				},
 			}},
 			env: vtenv.NewTestEnv(),
@@ -329,9 +325,8 @@ func TestPlanBuilder(t *testing.T) {
 				ColNum: 1,
 				Field: &querypb.Field{
 					Name:    "val",
-					Type:    sqltypes.VarBinary,
-					Charset: collations.CollationBinaryID,
-					Flags:   uint32(querypb.MySqlFlag_BINARY_FLAG),
+					Type:    sqltypes.VarChar,
+					Charset: uint32(unicodeCollationID),
 				},
 			}},
 			env: vtenv.NewTestEnv(),
@@ -344,9 +339,8 @@ func TestPlanBuilder(t *testing.T) {
 				ColNum: 1,
 				Field: &querypb.Field{
 					Name:    "val",
-					Type:    sqltypes.VarBinary,
-					Charset: collations.CollationBinaryID,
-					Flags:   uint32(querypb.MySqlFlag_BINARY_FLAG),
+					Type:    sqltypes.VarChar,
+					Charset: uint32(unicodeCollationID),
 				},
 			}, {
 				ColNum: 0,
@@ -367,9 +361,8 @@ func TestPlanBuilder(t *testing.T) {
 				ColNum: 1,
 				Field: &querypb.Field{
 					Name:    "val",
-					Type:    sqltypes.VarBinary,
-					Charset: collations.CollationBinaryID,
-					Flags:   uint32(querypb.MySqlFlag_BINARY_FLAG),
+					Type:    sqltypes.VarChar,
+					Charset: uint32(unicodeCollationID),
 				},
 			}, {
 				ColNum: 0,
@@ -398,9 +391,8 @@ func TestPlanBuilder(t *testing.T) {
 				ColNum: 1,
 				Field: &querypb.Field{
 					Name:    "val",
-					Type:    sqltypes.VarBinary,
-					Charset: collations.CollationBinaryID,
-					Flags:   uint32(querypb.MySqlFlag_BINARY_FLAG),
+					Type:    sqltypes.VarChar,
+					Charset: uint32(unicodeCollationID),
 				},
 			}, {
 				ColNum: 0,
@@ -429,9 +421,8 @@ func TestPlanBuilder(t *testing.T) {
 				ColNum: 1,
 				Field: &querypb.Field{
 					Name:    "val",
-					Type:    sqltypes.VarBinary,
-					Charset: collations.CollationBinaryID,
-					Flags:   uint32(querypb.MySqlFlag_BINARY_FLAG),
+					Type:    sqltypes.VarChar,
+					Charset: uint32(unicodeCollationID),
 				},
 			}, {
 				ColNum: 0,
@@ -457,15 +448,14 @@ func TestPlanBuilder(t *testing.T) {
 		},
 	}, {
 		inTable: t1,
-		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select val, id from t1 where id > 1 and id < 10"},
+		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select val, id from t1 where val > 'hey' and val < 'there'"},
 		outPlan: &Plan{
 			ColExprs: []ColExpr{{
 				ColNum: 1,
 				Field: &querypb.Field{
 					Name:    "val",
-					Type:    sqltypes.VarBinary,
-					Charset: collations.CollationBinaryID,
-					Flags:   uint32(querypb.MySqlFlag_BINARY_FLAG),
+					Type:    sqltypes.VarChar,
+					Charset: uint32(unicodeCollationID),
 				},
 			}, {
 				ColNum: 0,
@@ -479,26 +469,49 @@ func TestPlanBuilder(t *testing.T) {
 			Filters: []Filter{
 				{
 					Opcode:        GreaterThan,
-					ColNum:        0,
-					Value:         sqltypes.NewInt64(1),
+					ColNum:        1,
+					Value:         sqltypes.NewVarChar("hey"),
 					Vindex:        nil,
 					VindexColumns: nil,
 					KeyRange:      nil,
 				},
 				{
 					Opcode:        LessThan,
-					ColNum:        0,
-					Value:         sqltypes.NewInt64(10),
+					ColNum:        1,
+					Value:         sqltypes.NewVarChar("there"),
 					Vindex:        nil,
 					VindexColumns: nil,
 					KeyRange:      nil,
 				},
 			},
 			whereExprsToPushDown: []sqlparser.Expr{
-				sqlparser.NewComparisonExpr(sqlparser.GreaterThanOp, sqlparser.Expr(sqlparser.NewColName("id")), sqlparser.Expr(sqlparser.NewIntLiteral("1")), nil),
-				sqlparser.NewComparisonExpr(sqlparser.LessThanOp, sqlparser.Expr(sqlparser.NewColName("id")), sqlparser.Expr(sqlparser.NewIntLiteral("10")), nil),
+				sqlparser.NewComparisonExpr(sqlparser.GreaterThanOp, sqlparser.Expr(sqlparser.NewColName("val")), sqlparser.Expr(sqlparser.NewStrLiteral("hey")), nil),
+				sqlparser.NewComparisonExpr(sqlparser.LessThanOp, sqlparser.Expr(sqlparser.NewColName("val")), sqlparser.Expr(sqlparser.NewStrLiteral("there")), nil),
 			},
 			env: vtenv.NewTestEnv(),
+		},
+	}, {
+		inTable: t1,
+		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select convert(val using utf8mb4) as val2, id as id from t1"},
+		outPlan: &Plan{
+			ColExprs: []ColExpr{{
+				ColNum: 1,
+				Field: &querypb.Field{
+					Name:    "val",
+					Type:    sqltypes.VarChar,
+					Charset: uint32(unicodeCollationID),
+				},
+			}, {
+				ColNum: 0,
+				Field: &querypb.Field{
+					Name:    "id",
+					Type:    sqltypes.Int64,
+					Charset: collations.CollationBinaryID,
+					Flags:   uint32(querypb.MySqlFlag_NUM_FLAG),
+				},
+			}},
+			convertUsingUTF8Columns: map[string]bool{"val": true},
+			env:                     vtenv.NewTestEnv(),
 		},
 	}, {
 		inTable: t2,
@@ -533,30 +546,6 @@ func TestPlanBuilder(t *testing.T) {
 				KeyRange:      nil,
 			}},
 			env: vtenv.NewTestEnv(),
-		},
-	}, {
-		inTable: t1,
-		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select convert(val using utf8mb4) as val2, id as id from t1"},
-		outPlan: &Plan{
-			ColExprs: []ColExpr{{
-				ColNum: 1,
-				Field: &querypb.Field{
-					Name:    "val",
-					Type:    sqltypes.VarBinary,
-					Charset: collations.CollationBinaryID,
-					Flags:   uint32(querypb.MySqlFlag_BINARY_FLAG),
-				},
-			}, {
-				ColNum: 0,
-				Field: &querypb.Field{
-					Name:    "id",
-					Type:    sqltypes.Int64,
-					Charset: collations.CollationBinaryID,
-					Flags:   uint32(querypb.MySqlFlag_NUM_FLAG),
-				},
-			}},
-			convertUsingUTF8Columns: map[string]bool{"val": true},
-			env:                     vtenv.NewTestEnv(),
 		},
 	}, {
 		inTable: regional,
