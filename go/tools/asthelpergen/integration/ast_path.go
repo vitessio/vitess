@@ -20,9 +20,7 @@ package integration
 type ASTStep uint16
 
 const (
-	Bytes8 ASTStep = iota
-	Bytes32
-	InterfaceSlice8
+	InterfaceSlice8 ASTStep = iota
 	InterfaceSlice32
 	LeafSlice8
 	LeafSlice32
@@ -40,8 +38,6 @@ const (
 	ValueSliceContainerASTImplementationElements
 	SliceOfAST8
 	SliceOfAST32
-	SliceOfInt8
-	SliceOfInt32
 	SliceOfRefOfLeaf8
 	SliceOfRefOfLeaf32
 	RefOfValueContainerASTType
@@ -53,10 +49,6 @@ const (
 
 func (s ASTStep) DebugString() string {
 	switch s {
-	case Bytes8:
-		return "(Bytes)[]8"
-	case Bytes32:
-		return "(Bytes)[]32"
 	case InterfaceSlice8:
 		return "(InterfaceSlice)[]8"
 	case InterfaceSlice32:
@@ -93,10 +85,6 @@ func (s ASTStep) DebugString() string {
 		return "([]AST)[]8"
 	case SliceOfAST32:
 		return "([]AST)[]32"
-	case SliceOfInt8:
-		return "([]int)[]8"
-	case SliceOfInt32:
-		return "([]int)[]32"
 	case SliceOfRefOfLeaf8:
 		return "([]*Leaf)[]8"
 	case SliceOfRefOfLeaf32:

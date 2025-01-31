@@ -475,8 +475,6 @@ const (
 	TableNameQualifier
 	TableNames8
 	TableNames32
-	TableOptions8
-	TableOptions32
 	RefOfTableSpecColumns8
 	RefOfTableSpecColumns32
 	RefOfTableSpecIndexes8
@@ -562,14 +560,10 @@ const (
 	RefOfXorExprRight
 	SliceOfRefOfColumnDefinition8
 	SliceOfRefOfColumnDefinition32
-	SliceOfDatabaseOption8
-	SliceOfDatabaseOption32
 	SliceOfAlterOption8
 	SliceOfAlterOption32
 	SliceOfIdentifierCI8
 	SliceOfIdentifierCI32
-	SliceOfTxAccessMode8
-	SliceOfTxAccessMode32
 	SliceOfRefOfWhen8
 	SliceOfRefOfWhen32
 	RefOfColumnTypeOptionsDefault
@@ -580,18 +574,12 @@ const (
 	RefOfColumnTypeOptionsEngineAttribute
 	RefOfColumnTypeOptionsSecondaryEngineAttribute
 	RefOfColumnTypeOptionsSRID
-	SliceOfString8
-	SliceOfString32
 	SliceOfTableExpr8
 	SliceOfTableExpr32
 	SliceOfRefOfVariable8
 	SliceOfRefOfVariable32
 	SliceOfExpr8
 	SliceOfExpr32
-	SliceOfRefOfIndexColumn8
-	SliceOfRefOfIndexColumn32
-	SliceOfRefOfIndexOption8
-	SliceOfRefOfIndexOption32
 	SliceOfRefOfJSONObjectParam8
 	SliceOfRefOfJSONObjectParam32
 	SliceOfRefOfJtColumnDefinition8
@@ -605,16 +593,10 @@ const (
 	RefOfJtNestedPathColDefPath
 	RefOfJtNestedPathColDefColumns8
 	RefOfJtNestedPathColDefColumns32
-	TableAndLockTypes8
-	TableAndLockTypes32
 	SliceOfRefOfColName8
 	SliceOfRefOfColName32
-	Comments8
-	Comments32
 	SliceOfRefOfPartitionDefinition8
 	SliceOfRefOfPartitionDefinition32
-	SliceOfRefOfRenameTablePair8
-	SliceOfRefOfRenameTablePair32
 	RefOfRootNodeSQLNode
 	RefOfTableNameName
 	RefOfTableNameQualifier
@@ -1549,10 +1531,6 @@ func (s ASTStep) DebugString() string {
 		return "(TableNames)[]8"
 	case TableNames32:
 		return "(TableNames)[]32"
-	case TableOptions8:
-		return "(TableOptions)[]8"
-	case TableOptions32:
-		return "(TableOptions)[]32"
 	case RefOfTableSpecColumns8:
 		return "(*TableSpec).Columns8"
 	case RefOfTableSpecColumns32:
@@ -1723,10 +1701,6 @@ func (s ASTStep) DebugString() string {
 		return "([]*ColumnDefinition)[]8"
 	case SliceOfRefOfColumnDefinition32:
 		return "([]*ColumnDefinition)[]32"
-	case SliceOfDatabaseOption8:
-		return "([]DatabaseOption)[]8"
-	case SliceOfDatabaseOption32:
-		return "([]DatabaseOption)[]32"
 	case SliceOfAlterOption8:
 		return "([]AlterOption)[]8"
 	case SliceOfAlterOption32:
@@ -1735,10 +1709,6 @@ func (s ASTStep) DebugString() string {
 		return "([]IdentifierCI)[]8"
 	case SliceOfIdentifierCI32:
 		return "([]IdentifierCI)[]32"
-	case SliceOfTxAccessMode8:
-		return "([]TxAccessMode)[]8"
-	case SliceOfTxAccessMode32:
-		return "([]TxAccessMode)[]32"
 	case SliceOfRefOfWhen8:
 		return "([]*When)[]8"
 	case SliceOfRefOfWhen32:
@@ -1759,10 +1729,6 @@ func (s ASTStep) DebugString() string {
 		return "(*ColumnTypeOptions).SecondaryEngineAttribute"
 	case RefOfColumnTypeOptionsSRID:
 		return "(*ColumnTypeOptions).SRID"
-	case SliceOfString8:
-		return "([]string)[]8"
-	case SliceOfString32:
-		return "([]string)[]32"
 	case SliceOfTableExpr8:
 		return "([]TableExpr)[]8"
 	case SliceOfTableExpr32:
@@ -1775,14 +1741,6 @@ func (s ASTStep) DebugString() string {
 		return "([]Expr)[]8"
 	case SliceOfExpr32:
 		return "([]Expr)[]32"
-	case SliceOfRefOfIndexColumn8:
-		return "([]*IndexColumn)[]8"
-	case SliceOfRefOfIndexColumn32:
-		return "([]*IndexColumn)[]32"
-	case SliceOfRefOfIndexOption8:
-		return "([]*IndexOption)[]8"
-	case SliceOfRefOfIndexOption32:
-		return "([]*IndexOption)[]32"
 	case SliceOfRefOfJSONObjectParam8:
 		return "([]*JSONObjectParam)[]8"
 	case SliceOfRefOfJSONObjectParam32:
@@ -1809,26 +1767,14 @@ func (s ASTStep) DebugString() string {
 		return "(*JtNestedPathColDef).Columns8"
 	case RefOfJtNestedPathColDefColumns32:
 		return "(*JtNestedPathColDef).Columns32"
-	case TableAndLockTypes8:
-		return "(TableAndLockTypes)[]8"
-	case TableAndLockTypes32:
-		return "(TableAndLockTypes)[]32"
 	case SliceOfRefOfColName8:
 		return "([]*ColName)[]8"
 	case SliceOfRefOfColName32:
 		return "([]*ColName)[]32"
-	case Comments8:
-		return "(Comments)[]8"
-	case Comments32:
-		return "(Comments)[]32"
 	case SliceOfRefOfPartitionDefinition8:
 		return "([]*PartitionDefinition)[]8"
 	case SliceOfRefOfPartitionDefinition32:
 		return "([]*PartitionDefinition)[]32"
-	case SliceOfRefOfRenameTablePair8:
-		return "([]*RenameTablePair)[]8"
-	case SliceOfRefOfRenameTablePair32:
-		return "([]*RenameTablePair)[]32"
 	case RefOfRootNodeSQLNode:
 		return "(*RootNode).SQLNode"
 	case RefOfTableNameName:

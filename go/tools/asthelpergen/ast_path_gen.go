@@ -31,9 +31,9 @@ type (
 	}
 	step struct {
 		container types.Type // the type of the container
+		typ       types.Type // the type of the field
 		name      string     // the name of the field
 		slice     bool       // whether the field is a slice
-		typ       types.Type // the type of the field
 	}
 )
 
@@ -92,8 +92,9 @@ func (p *pathGen) ptrToStructMethod(t types.Type, strct *types.Struct, spi gener
 }
 
 func (p *pathGen) addStructFields(t types.Type, strct *types.Struct, spi generatorSPI) {
-	for i := range strct.NumFields() {
+	for i := 0; i < strct.NumFields(); i++ {
 		field := strct.Field(i)
+		// Check if the field type implements the interface
 		if types.Implements(field.Type(), spi.iface()) {
 			p.steps = append(p.steps, step{
 				container: t,
@@ -102,14 +103,26 @@ func (p *pathGen) addStructFields(t types.Type, strct *types.Struct, spi generat
 			})
 			continue
 		}
+		// Check if the field type is a slice
 		slice, isSlice := field.Type().(*types.Slice)
-		if isSlice && types.Implements(slice.Elem(), spi.iface()) {
-			p.steps = append(p.steps, step{
-				container: t,
-				slice:     true,
-				name:      field.Name(),
-				typ:       slice.Elem(),
-			})
+		if isSlice {
+			// Check if the slice type implements the interface
+			if types.Implements(slice, spi.iface()) {
+				p.steps = append(p.steps, step{
+					container: t,
+					slice:     true,
+					name:      field.Name(),
+					typ:       slice,
+				})
+			} else if types.Implements(slice.Elem(), spi.iface()) {
+				// Check if the element type of the slice implements the interface
+				p.steps = append(p.steps, step{
+					container: t,
+					slice:     true,
+					name:      field.Name(),
+					typ:       slice.Elem(),
+				})
+			}
 		}
 	}
 }
@@ -118,13 +131,16 @@ func (p *pathGen) ptrToBasicMethod(t types.Type, basic *types.Basic, spi generat
 	return nil
 }
 
-func (p *pathGen) sliceMethod(t types.Type, _ *types.Slice, _ generatorSPI) error {
-	p.steps = append(p.steps, step{
-		container: t,
-		name:      sliceMarker,
-		slice:     true,
-		typ:       t,
-	})
+func (p *pathGen) sliceMethod(t types.Type, slice *types.Slice, spi generatorSPI) error {
+	elemType := slice.Elem()
+	if types.Implements(elemType, spi.iface()) {
+		p.steps = append(p.steps, step{
+			container: t,
+			name:      sliceMarker,
+			slice:     true,
+			typ:       elemType,
+		})
+	}
 
 	return nil
 }
@@ -202,9 +218,6 @@ func (p *pathGen) generateWalkASTPath(spi generatorSPI) *jen.Statement {
 		jen.Id("node").Id(p.ifaceName),
 		jen.Id("path").Id("ASTPath"),
 	).Id(p.ifaceName).Block(
-		jen.If(jen.Len(jen.Id("path")).Op("<").Lit(2)).Block(
-			jen.Return(jen.Nil()),
-		),
 		jen.Id("step").Op(":=").Qual("encoding/binary", "BigEndian").Dot("Uint16").Call(jen.Index().Byte().Parens(jen.Id("path[:2]"))),
 		jen.Id("path").Op("=").Id("path[2:]"),
 
@@ -232,25 +245,24 @@ func (p *pathGen) generateWalkCases() []jen.Code {
 			continue
 		}
 
-		var el1 jen.Code
 		var assignNode jen.Code
+		t := types.TypeString(step.container, noQualifier)
 		if step.name == sliceMarker {
-			el1 = jen.Id("node")
-			assignNode = jen.Id("node").Op("=").Id("node").Index(jen.Id("idx"))
+			assignNode = jen.Id("node").Dot(fmt.Sprintf("(%s)", t)).Index(jen.Id("idx"))
 		} else {
-			el1 = jen.Id("node").Dot(step.name)
-			assignNode = jen.Id("node").Op("=").Id("node").Dot(step.name).Index(jen.Id("idx"))
+			assignNode = jen.Id("node").Dot(step.name).Index(jen.Id("idx"))
 		}
 
 		cases = append(cases, jen.Case(jen.Id(stepName+"8")).Block(
-			jen.If(jen.Len(jen.Id("path")).Op("<").Lit(2)).Block(jen.Return(jen.Nil())),
+			jen.Id("idx").Op(":=").Id("path[0]"),
+			jen.Id("path").Op("=").Id("path[1:]"),
+			jen.Return(jen.Id("WalkASTPath").Call(assignNode, jen.Id("path"))),
+		))
+
+		cases = append(cases, jen.Case(jen.Id(stepName+"32")).Block(
 			jen.Id("idx").Op(":=").Qual("encoding/binary", "BigEndian").Dot("Uint16").Call(jen.Index().Byte().Parens(jen.Id("path[:2]"))),
 			jen.Id("path").Op("=").Id("path[2:]"),
-			jen.If(jen.Id("int(idx)").Op("<").Lit(0).Op("||").Id("int(idx)").Op(">=").Len(el1)).Block(
-				jen.Return(jen.Nil()),
-			),
-			assignNode,
-			jen.Return(jen.Id("WalkASTPath").Call(jen.Id("node"), jen.Id("path"))),
+			jen.Return(jen.Id("WalkASTPath").Call(assignNode, jen.Id("path"))),
 		))
 	}
 
