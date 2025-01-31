@@ -17,14 +17,12 @@ limitations under the License.
 
 package integration
 
+import "encoding/binary"
+
 type ASTStep uint16
 
 const (
-	InterfaceSlice8 ASTStep = iota
-	InterfaceSlice32
-	LeafSlice8
-	LeafSlice32
-	RefOfRefContainerASTType
+	RefOfRefContainerASTType ASTStep = iota
 	RefOfRefContainerASTImplementationType
 	RefOfRefSliceContainerASTElements8
 	RefOfRefSliceContainerASTElements32
@@ -36,10 +34,6 @@ const (
 	ValueSliceContainerASTElements8
 	ValueSliceContainerASTElements32
 	ValueSliceContainerASTImplementationElements
-	SliceOfAST8
-	SliceOfAST32
-	SliceOfRefOfLeaf8
-	SliceOfRefOfLeaf32
 	RefOfValueContainerASTType
 	RefOfValueContainerASTImplementationType
 	RefOfValueSliceContainerASTElements8
@@ -49,14 +43,6 @@ const (
 
 func (s ASTStep) DebugString() string {
 	switch s {
-	case InterfaceSlice8:
-		return "(InterfaceSlice)[]8"
-	case InterfaceSlice32:
-		return "(InterfaceSlice)[]32"
-	case LeafSlice8:
-		return "(LeafSlice)[]8"
-	case LeafSlice32:
-		return "(LeafSlice)[]32"
 	case RefOfRefContainerASTType:
 		return "(*RefContainer).ASTType"
 	case RefOfRefContainerASTImplementationType:
@@ -81,14 +67,6 @@ func (s ASTStep) DebugString() string {
 		return "(ValueSliceContainer).ASTElements32"
 	case ValueSliceContainerASTImplementationElements:
 		return "(ValueSliceContainer).ASTImplementationElements"
-	case SliceOfAST8:
-		return "([]AST)[]8"
-	case SliceOfAST32:
-		return "([]AST)[]32"
-	case SliceOfRefOfLeaf8:
-		return "([]*Leaf)[]8"
-	case SliceOfRefOfLeaf32:
-		return "([]*Leaf)[]32"
 	case RefOfValueContainerASTType:
 		return "(*ValueContainer).ASTType"
 	case RefOfValueContainerASTImplementationType:
@@ -101,4 +79,64 @@ func (s ASTStep) DebugString() string {
 		return "(*ValueSliceContainer).ASTImplementationElements"
 	}
 	panic("unknown ASTStep")
+}
+func WalkASTPath(node AST, path ASTPath) AST {
+	if path == "" {
+		return node
+	}
+	step := binary.BigEndian.Uint16([]byte(path[:2]))
+	path = path[2:]
+	switch ASTStep(step) {
+	case RefOfRefContainerASTType:
+		return WalkASTPath(node.(*RefContainer).ASTType, path)
+	case RefOfRefContainerASTImplementationType:
+		return WalkASTPath(node.(*RefContainer).ASTImplementationType, path)
+	case RefOfRefSliceContainerASTElements8:
+		idx := path[0]
+		path = path[1:]
+		return WalkASTPath(node.(*RefSliceContainer).ASTElements[idx], path)
+	case RefOfRefSliceContainerASTElements32:
+		idx := binary.BigEndian.Uint32([]byte(path[:2]))
+		path = path[4:]
+		return WalkASTPath(node.(*RefSliceContainer).ASTElements[idx], path)
+	case RefOfRefSliceContainerASTImplementationElements8:
+		idx := path[0]
+		path = path[1:]
+		return WalkASTPath(node.(*RefSliceContainer).ASTImplementationElements[idx], path)
+	case RefOfRefSliceContainerASTImplementationElements32:
+		idx := binary.BigEndian.Uint32([]byte(path[:2]))
+		path = path[4:]
+		return WalkASTPath(node.(*RefSliceContainer).ASTImplementationElements[idx], path)
+	case RefOfSubImplinner:
+		return WalkASTPath(node.(*SubImpl).inner, path)
+	case ValueContainerASTType:
+		return WalkASTPath(node.(ValueContainer).ASTType, path)
+	case ValueContainerASTImplementationType:
+		return WalkASTPath(node.(ValueContainer).ASTImplementationType, path)
+	case ValueSliceContainerASTElements8:
+		idx := path[0]
+		path = path[1:]
+		return WalkASTPath(node.(ValueSliceContainer).ASTElements[idx], path)
+	case ValueSliceContainerASTElements32:
+		idx := binary.BigEndian.Uint32([]byte(path[:2]))
+		path = path[4:]
+		return WalkASTPath(node.(ValueSliceContainer).ASTElements[idx], path)
+	case ValueSliceContainerASTImplementationElements:
+		return WalkASTPath(node.(ValueSliceContainer).ASTImplementationElements, path)
+	case RefOfValueContainerASTType:
+		return WalkASTPath(node.(*ValueContainer).ASTType, path)
+	case RefOfValueContainerASTImplementationType:
+		return WalkASTPath(node.(*ValueContainer).ASTImplementationType, path)
+	case RefOfValueSliceContainerASTElements8:
+		idx := path[0]
+		path = path[1:]
+		return WalkASTPath(node.(*ValueSliceContainer).ASTElements[idx], path)
+	case RefOfValueSliceContainerASTElements32:
+		idx := binary.BigEndian.Uint32([]byte(path[:2]))
+		path = path[4:]
+		return WalkASTPath(node.(*ValueSliceContainer).ASTElements[idx], path)
+	case RefOfValueSliceContainerASTImplementationElements:
+		return WalkASTPath(node.(*ValueSliceContainer).ASTImplementationElements, path)
+	}
+	return nil
 }

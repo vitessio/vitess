@@ -72,7 +72,7 @@ func (p *pathGen) genFile(spi generatorSPI) (string, *jen.File) {
 	p.file.Add(p.debugString())
 
 	// Add the generated WalkASTPath method
-	p.file.Add(p.generateWalkASTPath(spi))
+	p.file.Add(p.generateWalkASTPath())
 
 	return "ast_path.go", p.file
 }
@@ -91,16 +91,30 @@ func (p *pathGen) ptrToStructMethod(t types.Type, strct *types.Struct, spi gener
 	return nil
 }
 
+func (p *pathGen) addStep(
+	container types.Type, // the name of the container type
+	typ types.Type, // the type of the field
+	name string, // the name of the field
+	slice bool, // whether the field is a slice
+) {
+	s := step{
+		container: container,
+		name:      name,
+		typ:       typ,
+		slice:     slice,
+	}
+	stepName := s.AsEnum()
+	fmt.Println("Adding step:", stepName)
+	p.steps = append(p.steps, s)
+
+}
+
 func (p *pathGen) addStructFields(t types.Type, strct *types.Struct, spi generatorSPI) {
 	for i := 0; i < strct.NumFields(); i++ {
 		field := strct.Field(i)
 		// Check if the field type implements the interface
 		if types.Implements(field.Type(), spi.iface()) {
-			p.steps = append(p.steps, step{
-				container: t,
-				name:      field.Name(),
-				typ:       field.Type(),
-			})
+			p.addStep(t, field.Type(), field.Name(), false)
 			continue
 		}
 		// Check if the field type is a slice
@@ -108,20 +122,10 @@ func (p *pathGen) addStructFields(t types.Type, strct *types.Struct, spi generat
 		if isSlice {
 			// Check if the slice type implements the interface
 			if types.Implements(slice, spi.iface()) {
-				p.steps = append(p.steps, step{
-					container: t,
-					slice:     true,
-					name:      field.Name(),
-					typ:       slice,
-				})
+				p.addStep(t, slice, field.Name(), true)
 			} else if types.Implements(slice.Elem(), spi.iface()) {
 				// Check if the element type of the slice implements the interface
-				p.steps = append(p.steps, step{
-					container: t,
-					slice:     true,
-					name:      field.Name(),
-					typ:       slice.Elem(),
-				})
+				p.addStep(t, slice.Elem(), field.Name(), true)
 			}
 		}
 	}
@@ -132,16 +136,11 @@ func (p *pathGen) ptrToBasicMethod(t types.Type, basic *types.Basic, spi generat
 }
 
 func (p *pathGen) sliceMethod(t types.Type, slice *types.Slice, spi generatorSPI) error {
-	elemType := slice.Elem()
-	if types.Implements(elemType, spi.iface()) {
-		p.steps = append(p.steps, step{
-			container: t,
-			name:      sliceMarker,
-			slice:     true,
-			typ:       elemType,
-		})
-	}
-
+	//elemType := slice.Elem()
+	//if types.Implements(elemType, spi.iface()) {
+	//	p.addStep(t, elemType, sliceMarker, true)
+	//}
+	//
 	return nil
 }
 
@@ -213,11 +212,13 @@ func (p *pathGen) buildConstWithEnum() *jen.Statement {
 	return constBlock
 }
 
-func (p *pathGen) generateWalkASTPath(spi generatorSPI) *jen.Statement {
+func (p *pathGen) generateWalkASTPath() *jen.Statement {
 	method := jen.Func().Id("WalkASTPath").Params(
 		jen.Id("node").Id(p.ifaceName),
 		jen.Id("path").Id("ASTPath"),
 	).Id(p.ifaceName).Block(
+		jen.If(jen.Id("path").Op("==").Id(`""`).Block(
+			jen.Return(jen.Id("node")))),
 		jen.Id("step").Op(":=").Qual("encoding/binary", "BigEndian").Dot("Uint16").Call(jen.Index().Byte().Parens(jen.Id("path[:2]"))),
 		jen.Id("path").Op("=").Id("path[2:]"),
 
@@ -235,7 +236,7 @@ func (p *pathGen) generateWalkCases() []jen.Code {
 
 		if !step.slice {
 			// return WalkASTPath(node.(*RefContainer).ASTType, path)
-			t := types.TypeString(step.typ, noQualifier)
+			t := types.TypeString(step.container, noQualifier)
 			n := jen.Id("node").Dot(fmt.Sprintf("(%s)", t)).Dot(step.name)
 
 			cases = append(cases, jen.Case(jen.Id(stepName)).Block(
@@ -250,7 +251,7 @@ func (p *pathGen) generateWalkCases() []jen.Code {
 		if step.name == sliceMarker {
 			assignNode = jen.Id("node").Dot(fmt.Sprintf("(%s)", t)).Index(jen.Id("idx"))
 		} else {
-			assignNode = jen.Id("node").Dot(step.name).Index(jen.Id("idx"))
+			assignNode = jen.Id("node").Dot(fmt.Sprintf("(%s)", t)).Dot(step.name).Index(jen.Id("idx"))
 		}
 
 		cases = append(cases, jen.Case(jen.Id(stepName+"8")).Block(
@@ -260,8 +261,8 @@ func (p *pathGen) generateWalkCases() []jen.Code {
 		))
 
 		cases = append(cases, jen.Case(jen.Id(stepName+"32")).Block(
-			jen.Id("idx").Op(":=").Qual("encoding/binary", "BigEndian").Dot("Uint16").Call(jen.Index().Byte().Parens(jen.Id("path[:2]"))),
-			jen.Id("path").Op("=").Id("path[2:]"),
+			jen.Id("idx").Op(":=").Qual("encoding/binary", "BigEndian").Dot("Uint32").Call(jen.Index().Byte().Parens(jen.Id("path[:2]"))),
+			jen.Id("path").Op("=").Id("path[4:]"),
 			jen.Return(jen.Id("WalkASTPath").Call(assignNode, jen.Id("path"))),
 		))
 	}
