@@ -390,7 +390,7 @@ func TestStreamRowsFilterVarChar(t *testing.T) {
 
 	execStatements(t, []string{
 		"create table t1(id1 int, val varchar(128), primary key(id1)) character set utf8mb4 collate utf8mb4_general_ci", // Use general_ci so that we have the same behavior across 5.7 and 8.0
-		"insert into t1 values (1,'kepler'), (2, 'newton'), (3, 'newton'), (4, 'kepler'), (5, 'newton'), (6, 'kepler')",
+		"insert into t1 values (1,'kepler'), (2, 'Ñewton'), (3, 'nEwton'), (4, 'kepler'), (5, 'neẅton'), (6, 'kepler')",
 	})
 
 	defer execStatements(t, []string{
@@ -399,7 +399,7 @@ func TestStreamRowsFilterVarChar(t *testing.T) {
 
 	wantStream := []string{
 		`fields:{name:"id1" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id1" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val" type:VARCHAR table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:512 charset:45 column_type:"varchar(128)"} pkfields:{name:"id1" type:INT32 charset:63}`,
-		`rows:{lengths:1 lengths:6 values:"2newton"} rows:{lengths:1 lengths:6 values:"3newton"} rows:{lengths:1 lengths:6 values:"5newton"} lastpk:{lengths:1 values:"5"}`,
+		`rows:{lengths:1 lengths:7 values:"2Ñewton"} rows:{lengths:1 lengths:6 values:"3nEwton"} rows:{lengths:1 lengths:8 values:"5neẅton"} lastpk:{lengths:1 values:"5"}`,
 	}
 	wantQuery := "select /*+ MAX_EXECUTION_TIME(3600000) */ id1, val from t1 where val = 'newton' order by id1"
 	checkStream(t, "select id1, val from t1 where val = 'newton'", nil, wantQuery, wantStream)
