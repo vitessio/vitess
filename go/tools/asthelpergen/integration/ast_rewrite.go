@@ -61,9 +61,8 @@ func (a *application) rewriteBytes(parent AST, node Bytes, replacer replacerFunc
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
-			node = a.cur.node.(Bytes)
 			a.cur.revisit = false
-			return a.rewriteBytes(parent, node, replacer)
+			return a.rewriteAST(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -86,7 +85,12 @@ func (a *application) rewriteInterfaceContainer(parent AST, node InterfaceContai
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteAST(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -112,9 +116,8 @@ func (a *application) rewriteInterfaceSlice(parent AST, node InterfaceSlice, rep
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
-			node = a.cur.node.(InterfaceSlice)
 			a.cur.revisit = false
-			return a.rewriteInterfaceSlice(parent, node, replacer)
+			return a.rewriteAST(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -147,7 +150,12 @@ func (a *application) rewriteRefOfLeaf(parent AST, node *Leaf, replacer replacer
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteAST(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -173,9 +181,8 @@ func (a *application) rewriteLeafSlice(parent AST, node LeafSlice, replacer repl
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
-			node = a.cur.node.(LeafSlice)
 			a.cur.revisit = false
-			return a.rewriteLeafSlice(parent, node, replacer)
+			return a.rewriteAST(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -208,7 +215,12 @@ func (a *application) rewriteRefOfNoCloneType(parent AST, node *NoCloneType, rep
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteAST(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -232,7 +244,12 @@ func (a *application) rewriteRefOfRefContainer(parent AST, node *RefContainer, r
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteAST(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -264,7 +281,12 @@ func (a *application) rewriteRefOfRefSliceContainer(parent AST, node *RefSliceCo
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteAST(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -304,7 +326,12 @@ func (a *application) rewriteRefOfSubImpl(parent AST, node *SubImpl, replacer re
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteAST(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -328,7 +355,12 @@ func (a *application) rewriteValueContainer(parent AST, node ValueContainer, rep
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteAST(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -357,7 +389,12 @@ func (a *application) rewriteValueSliceContainer(parent AST, node ValueSliceCont
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteAST(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -402,7 +439,12 @@ func (a *application) rewriteBasicType(parent AST, node BasicType, replacer repl
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteAST(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -426,7 +468,12 @@ func (a *application) rewriteRefOfInterfaceContainer(parent AST, node *Interface
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteAST(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -450,7 +497,12 @@ func (a *application) rewriteRefOfValueContainer(parent AST, node *ValueContaine
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteAST(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -482,7 +534,12 @@ func (a *application) rewriteRefOfValueSliceContainer(parent AST, node *ValueSli
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteAST(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
