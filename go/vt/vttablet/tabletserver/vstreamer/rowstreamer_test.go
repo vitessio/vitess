@@ -383,16 +383,14 @@ func TestStreamRowsFilterVarChar(t *testing.T) {
 		t.Skip()
 	}
 
-	if err := env.SetVSchema(shardedVSchema); err != nil {
-		t.Fatal(err)
-	}
+	err := env.SetVSchema(shardedVSchema)
+	require.NoError(t, err)
 	defer env.SetVSchema("{}")
 
 	execStatements(t, []string{
 		"create table t1(id1 int, val varchar(128), primary key(id1)) character set utf8mb4 collate utf8mb4_general_ci", // Use general_ci so that we have the same behavior across 5.7 and 8.0
 		"insert into t1 values (1,'kepler'), (2, 'Ñewton'), (3, 'nEwton'), (4, 'kepler'), (5, 'neẅton'), (6, 'kepler')",
 	})
-
 	defer execStatements(t, []string{
 		"drop table t1",
 	})

@@ -173,7 +173,7 @@ func TestMustSendDDL(t *testing.T) {
 }
 
 func TestPlanBuilder(t *testing.T) {
-	unicodeCollationID := collations.MySQL8().DefaultConnectionCharset()
+	unicodeCollationID := uint32(collations.MySQL8().DefaultConnectionCharset())
 	t1 := &Table{
 		Name: "t1",
 		Fields: []*querypb.Field{{
@@ -193,7 +193,7 @@ func TestPlanBuilder(t *testing.T) {
 		Fields: []*querypb.Field{{
 			Name:    "val",
 			Type:    sqltypes.VarBinary,
-			Charset: uint32(unicodeCollationID),
+			Charset: unicodeCollationID,
 		}},
 	}
 	t2 := &Table{
@@ -252,7 +252,7 @@ func TestPlanBuilder(t *testing.T) {
 				Field: &querypb.Field{
 					Name:    "val",
 					Type:    sqltypes.VarChar,
-					Charset: uint32(unicodeCollationID),
+					Charset: unicodeCollationID,
 				},
 			}},
 			env: vtenv.NewTestEnv(),
@@ -274,7 +274,7 @@ func TestPlanBuilder(t *testing.T) {
 				Field: &querypb.Field{
 					Name:    "val",
 					Type:    sqltypes.VarChar,
-					Charset: uint32(unicodeCollationID),
+					Charset: unicodeCollationID,
 				},
 			}},
 			Filters: []Filter{{
@@ -304,7 +304,7 @@ func TestPlanBuilder(t *testing.T) {
 				Field: &querypb.Field{
 					Name:    "val",
 					Type:    sqltypes.VarChar,
-					Charset: uint32(unicodeCollationID),
+					Charset: unicodeCollationID,
 				},
 			}},
 			env: vtenv.NewTestEnv(),
@@ -326,7 +326,7 @@ func TestPlanBuilder(t *testing.T) {
 				Field: &querypb.Field{
 					Name:    "val",
 					Type:    sqltypes.VarChar,
-					Charset: uint32(unicodeCollationID),
+					Charset: unicodeCollationID,
 				},
 			}},
 			env: vtenv.NewTestEnv(),
@@ -340,7 +340,7 @@ func TestPlanBuilder(t *testing.T) {
 				Field: &querypb.Field{
 					Name:    "val",
 					Type:    sqltypes.VarChar,
-					Charset: uint32(unicodeCollationID),
+					Charset: unicodeCollationID,
 				},
 			}, {
 				ColNum: 0,
@@ -362,7 +362,7 @@ func TestPlanBuilder(t *testing.T) {
 				Field: &querypb.Field{
 					Name:    "val",
 					Type:    sqltypes.VarChar,
-					Charset: uint32(unicodeCollationID),
+					Charset: unicodeCollationID,
 				},
 			}, {
 				ColNum: 0,
@@ -392,7 +392,7 @@ func TestPlanBuilder(t *testing.T) {
 				Field: &querypb.Field{
 					Name:    "val",
 					Type:    sqltypes.VarChar,
-					Charset: uint32(unicodeCollationID),
+					Charset: unicodeCollationID,
 				},
 			}, {
 				ColNum: 0,
@@ -422,7 +422,7 @@ func TestPlanBuilder(t *testing.T) {
 				Field: &querypb.Field{
 					Name:    "val",
 					Type:    sqltypes.VarChar,
-					Charset: uint32(unicodeCollationID),
+					Charset: unicodeCollationID,
 				},
 			}, {
 				ColNum: 0,
@@ -455,7 +455,7 @@ func TestPlanBuilder(t *testing.T) {
 				Field: &querypb.Field{
 					Name:    "val",
 					Type:    sqltypes.VarChar,
-					Charset: uint32(unicodeCollationID),
+					Charset: unicodeCollationID,
 				},
 			}, {
 				ColNum: 0,
@@ -499,7 +499,7 @@ func TestPlanBuilder(t *testing.T) {
 				Field: &querypb.Field{
 					Name:    "val",
 					Type:    sqltypes.VarChar,
-					Charset: uint32(unicodeCollationID),
+					Charset: unicodeCollationID,
 				},
 			}, {
 				ColNum: 0,

@@ -1107,8 +1107,8 @@ func TestVStreamPushdownFilters(t *testing.T) {
 	require.NotNil(t, vc)
 	ks := "product"
 	shard := "0"
-
 	defaultCell := vc.Cells[vc.CellNames[0]]
+
 	_, err := vc.AddKeyspace(t, []*Cell{defaultCell}, ks, shard, initialProductVSchema, initialProductSchema, 0, 0, 100, nil)
 	require.NoError(t, err)
 	verifyClusterHealth(t, vc)
@@ -1116,12 +1116,10 @@ func TestVStreamPushdownFilters(t *testing.T) {
 
 	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
-	verifyClusterHealth(t, vc)
 
 	// Make sure that we get at least one paul row event in the copy phase.
 	_, err = vtgateConn.ExecuteFetch(fmt.Sprintf("insert into %s.customer (name) values ('PAUĹ')", ks), 1, false)
 	require.NoError(t, err)
-
 	res, err := vtgateConn.ExecuteFetch(fmt.Sprintf("select count(*) from %s.customer where name = 'pauĺ'", ks), 1, false)
 	require.NoError(t, err)
 	require.Len(t, res.Rows, 1)
@@ -1171,7 +1169,6 @@ func TestVStreamPushdownFilters(t *testing.T) {
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
-			// Stream all tables.
 			Match:  "customer",
 			Filter: "select * from customer where name = 'påul'",
 		}},
@@ -1211,7 +1208,7 @@ func TestVStreamPushdownFilters(t *testing.T) {
 				require.FailNow(t, fmt.Sprintf("VStream returned unexpected error: %v", err))
 			}
 			select {
-			case <-streamCtx.Done():
+			case <-done:
 				return
 			default:
 			}

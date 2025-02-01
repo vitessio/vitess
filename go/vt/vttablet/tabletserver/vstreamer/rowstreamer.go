@@ -286,7 +286,7 @@ func (rs *rowStreamer) buildSelect(st *binlogdatapb.MinimalTable) (string, error
 		indexHint = fmt.Sprintf(" force index (%s)", escapedPKIndexName)
 	}
 	buf.Myprintf(" from %v%s", sqlparser.NewIdentifierCS(rs.plan.Table.Name), indexHint)
-	if len(rs.lastpk) != 0 { // We're in the copy phase and need to resume
+	if len(rs.lastpk) != 0 { // We're in Nth copy phase cycle and need to resume
 		if len(rs.lastpk) != len(rs.pkColumns) {
 			return "", fmt.Errorf("cannot build a row streamer plan for the %s table as a lastpk value was provided and the number of primary key values within it (%v) does not match the number of primary key columns in the table (%d)",
 				st.Name, rs.lastpk, rs.pkColumns)
@@ -310,14 +310,13 @@ func (rs *rowStreamer) buildSelect(st *binlogdatapb.MinimalTable) (string, error
 			for i, pk := range rs.pkColumns[:lastcol] {
 				buf.Myprintf("%v = ", sqlparser.NewIdentifierCI(rs.plan.Table.Fields[pk].Name))
 				rs.lastpk[i].EncodeSQL(buf)
-				// Only AND expressions are supported.
 				buf.Myprintf(" and ")
 			}
 			buf.Myprintf("%v > ", sqlparser.NewIdentifierCI(rs.plan.Table.Fields[rs.pkColumns[lastcol]].Name))
 			rs.lastpk[lastcol].EncodeSQL(buf)
 			buf.Myprintf(")")
 		}
-	} else if len(rs.plan.whereExprsToPushDown) > 0 { // We're in the running/replicating phase
+	} else if len(rs.plan.whereExprsToPushDown) > 0 { // We're in the first copy phase cycle
 		buf.Myprintf(" where ")
 		addPushdownExpressions()
 	}
