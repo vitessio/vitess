@@ -167,7 +167,6 @@ func (uvs *uvstreamer) buildTablePlan() error {
 		if rule == nil {
 			continue
 		}
-		log.Errorf("DEBUG: building table plan for table %s, with filter: %s", tableName, rule.Filter)
 		plan := &tablePlan{
 			tablePK: nil,
 			rule: &binlogdatapb.Rule{

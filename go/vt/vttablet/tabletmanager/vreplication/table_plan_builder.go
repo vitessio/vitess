@@ -27,7 +27,6 @@ import (
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -214,7 +213,6 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*Colum
 
 	filter := rule.Filter
 	query := filter
-	log.Errorf("DEBUG: building table plan for %s with filter: %s", tableName, filter)
 	// generate equivalent select statement if filter is empty or a keyrange.
 	switch {
 	case filter == "":

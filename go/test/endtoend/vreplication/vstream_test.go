@@ -1093,8 +1093,8 @@ func TestVStreamHeartbeats(t *testing.T) {
 
 // TestVStreamPushdownFilters confirms that pushdown filters are applied correctly
 // when they are specified in the VStream API via the rule.Filter.
-// It also confirms that we use the proper collations for the vstream filter when
-// using varchar fields.
+// It also confirms that we use the proper collation for the VStream filter when
+// using VARCHAR fields.
 func TestVStreamPushdownFilters(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
@@ -1118,7 +1118,7 @@ func TestVStreamPushdownFilters(t *testing.T) {
 	defer vtgateConn.Close()
 	verifyClusterHealth(t, vc)
 
-	// Make sure that we get at least one paul event in the copy phase.
+	// Make sure that we get at least one paul row event in the copy phase.
 	_, err = vtgateConn.ExecuteFetch(fmt.Sprintf("insert into %s.customer (name) values ('PAUĹ')", ks), 1, false)
 	require.NoError(t, err)
 

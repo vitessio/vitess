@@ -149,7 +149,6 @@ func (rs *rowStreamer) Stream() error {
 func (rs *rowStreamer) buildPlan() error {
 	// This pre-parsing is required to extract the table name
 	// and create its metadata.
-	log.Errorf("DEBUG: building rowstreamer plan from query: %s", rs.query)
 	sel, fromTable, err := analyzeSelect(rs.query, rs.se.Environment().Parser())
 	if err != nil {
 		return err
@@ -177,7 +176,6 @@ func (rs *rowStreamer) buildPlan() error {
 		log.Errorf("%s", err.Error())
 		return err
 	}
-	log.Errorf("DEBUG: rowstreamer plan: %+v", rs.plan)
 
 	directives := sel.Comments.Directives()
 	if s, found := directives.GetString("ukColumns", ""); found {
@@ -200,7 +198,6 @@ func (rs *rowStreamer) buildPlan() error {
 	if err != nil {
 		return err
 	}
-	log.Errorf("DEBUG: rowstreamer final query: %s", rs.sendQuery)
 	return err
 }
 
@@ -267,9 +264,9 @@ func (rs *rowStreamer) buildSelect(st *binlogdatapb.MinimalTable) (string, error
 	addPushdownExpressions := func() {
 		for i, expr := range rs.plan.whereExprsToPushDown {
 			if i != 0 {
+				// Only AND expressions are supported.
 				buf.Myprintf(" and ")
 			}
-			log.Errorf("DEBUG: adding pushdown expression to rowstreamer query: %s", sqlparser.String(expr))
 			buf.Myprintf("%s", sqlparser.String(expr))
 		}
 	}
@@ -289,15 +286,16 @@ func (rs *rowStreamer) buildSelect(st *binlogdatapb.MinimalTable) (string, error
 		indexHint = fmt.Sprintf(" force index (%s)", escapedPKIndexName)
 	}
 	buf.Myprintf(" from %v%s", sqlparser.NewIdentifierCS(rs.plan.Table.Name), indexHint)
-	if len(rs.lastpk) != 0 {
+	if len(rs.lastpk) != 0 { // We're in the copy phase and need to resume
 		if len(rs.lastpk) != len(rs.pkColumns) {
 			return "", fmt.Errorf("cannot build a row streamer plan for the %s table as a lastpk value was provided and the number of primary key values within it (%v) does not match the number of primary key columns in the table (%d)",
 				st.Name, rs.lastpk, rs.pkColumns)
 		}
 		buf.WriteString(" where ")
-		addPushdownExpressions()
 		// First we add any predicates that should be pushed down.
+		addPushdownExpressions()
 		if len(rs.plan.whereExprsToPushDown) > 0 {
+			// Only AND expressions are supported.
 			buf.Myprintf(" and ")
 		}
 		prefix := ""
@@ -312,13 +310,14 @@ func (rs *rowStreamer) buildSelect(st *binlogdatapb.MinimalTable) (string, error
 			for i, pk := range rs.pkColumns[:lastcol] {
 				buf.Myprintf("%v = ", sqlparser.NewIdentifierCI(rs.plan.Table.Fields[pk].Name))
 				rs.lastpk[i].EncodeSQL(buf)
+				// Only AND expressions are supported.
 				buf.Myprintf(" and ")
 			}
 			buf.Myprintf("%v > ", sqlparser.NewIdentifierCI(rs.plan.Table.Fields[rs.pkColumns[lastcol]].Name))
 			rs.lastpk[lastcol].EncodeSQL(buf)
 			buf.Myprintf(")")
 		}
-	} else if len(rs.plan.whereExprsToPushDown) > 0 {
+	} else if len(rs.plan.whereExprsToPushDown) > 0 { // We're in the running/replicating phase
 		buf.Myprintf(" where ")
 		addPushdownExpressions()
 	}
