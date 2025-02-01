@@ -149,6 +149,7 @@ func (rs *rowStreamer) Stream() error {
 func (rs *rowStreamer) buildPlan() error {
 	// This pre-parsing is required to extract the table name
 	// and create its metadata.
+	log.Errorf("DEBUG: building rowstreamer plan from query: %s", rs.query)
 	sel, fromTable, err := analyzeSelect(rs.query, rs.se.Environment().Parser())
 	if err != nil {
 		return err
@@ -176,6 +177,7 @@ func (rs *rowStreamer) buildPlan() error {
 		log.Errorf("%s", err.Error())
 		return err
 	}
+	log.Errorf("DEBUG: rowstreamer plan: %+v", rs.plan)
 
 	directives := sel.Comments.Directives()
 	if s, found := directives.GetString("ukColumns", ""); found {
@@ -198,6 +200,7 @@ func (rs *rowStreamer) buildPlan() error {
 	if err != nil {
 		return err
 	}
+	log.Errorf("DEBUG: rowstreamer final query: %s", rs.sendQuery)
 	return err
 }
 
@@ -260,13 +263,25 @@ func (rs *rowStreamer) buildSelect(st *binlogdatapb.MinimalTable) (string, error
 		}
 		prefix = ", "
 	}
+
+	addPushdownExpressions := func() {
+		for i, expr := range rs.plan.whereExprsToPushDown {
+			if i != 0 {
+				buf.Myprintf(" and ")
+			}
+			log.Errorf("DEBUG: adding pushdown expression to rowstreamer query: %s", sqlparser.String(expr))
+			buf.Myprintf("%s", sqlparser.String(expr))
+		}
+	}
 	// If we know the index name that we should be using then tell MySQL
 	// to use it if possible. This helps to ensure that we are able to
 	// leverage the ordering from the index itself and avoid having to
 	// do a FILESORT of all the results. This index should contain all
 	// of the PK columns which are used in the ORDER BY clause below.
 	var indexHint string
-	if st.PKIndexName != "" {
+	// If we're pushing down any expressions, we need to let the optimizer
+	// choose the best index to use.
+	if st.PKIndexName != "" && len(rs.plan.whereExprsToPushDown) == 0 {
 		escapedPKIndexName, err := sqlescape.EnsureEscaped(st.PKIndexName)
 		if err != nil {
 			return "", err
@@ -274,12 +289,17 @@ func (rs *rowStreamer) buildSelect(st *binlogdatapb.MinimalTable) (string, error
 		indexHint = fmt.Sprintf(" force index (%s)", escapedPKIndexName)
 	}
 	buf.Myprintf(" from %v%s", sqlparser.NewIdentifierCS(rs.plan.Table.Name), indexHint)
-	if len(rs.lastpk) != 0 {
+	if len(rs.lastpk) != 0 { // We're in the copy phase and need to resume
 		if len(rs.lastpk) != len(rs.pkColumns) {
 			return "", fmt.Errorf("cannot build a row streamer plan for the %s table as a lastpk value was provided and the number of primary key values within it (%v) does not match the number of primary key columns in the table (%d)",
 				st.Name, rs.lastpk, rs.pkColumns)
 		}
 		buf.WriteString(" where ")
+		// First we add any predicates that should be pushed down.
+		addPushdownExpressions()
+		if len(rs.plan.whereExprsToPushDown) > 0 {
+			buf.Myprintf(" and ")
+		}
 		prefix := ""
 		// This loop handles the case for composite PKs. For example,
 		// if lastpk was (1,2), the where clause would be:
@@ -298,6 +318,9 @@ func (rs *rowStreamer) buildSelect(st *binlogdatapb.MinimalTable) (string, error
 			rs.lastpk[lastcol].EncodeSQL(buf)
 			buf.Myprintf(")")
 		}
+	} else if len(rs.plan.whereExprsToPushDown) > 0 { // We're in the running/replicating phase
+		buf.Myprintf(" where ")
+		addPushdownExpressions()
 	}
 	buf.Myprintf(" order by ", sqlparser.NewIdentifierCS(rs.plan.Table.Name))
 	prefix = ""

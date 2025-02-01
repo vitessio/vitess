@@ -38,7 +38,7 @@ import (
 */
 func main() {
 	ctx := context.Background()
-	streamCustomer := true
+	streamCustomer := false
 	var vgtid *binlogdatapb.VGtid
 	if streamCustomer {
 		vgtid = &binlogdatapb.VGtid{
@@ -64,7 +64,7 @@ func main() {
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
 			Match:  "customer",
-			Filter: "select * from customer",
+			Filter: "select * from customer where customer_id > 5 and customer_id < 10",
 		}},
 	}
 	conn, err := vtgateconn.Dial(ctx, "localhost:15991")
