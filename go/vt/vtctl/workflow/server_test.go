@@ -2575,3 +2575,97 @@ func TestWorkflowUpdate(t *testing.T) {
 		})
 	}
 }
+
+func TestFinalizeMigrateWorkflow(t *testing.T) {
+	ctx := context.Background()
+
+	workflowName := "wf1"
+	tableName1 := "t1"
+	tableName2 := "t2"
+
+	sourceKeyspace := &testKeyspace{"source_keyspace", []string{"-"}}
+	targetKeyspace := &testKeyspace{"target_keyspace", []string{"-80", "80-"}}
+
+	schema := map[string]*tabletmanagerdatapb.SchemaDefinition{
+		tableName1: {
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+				{
+					Name:   tableName1,
+					Schema: fmt.Sprintf("CREATE TABLE %s (id BIGINT, name VARCHAR(64), PRIMARY KEY (id))", tableName1),
+				},
+			},
+		},
+		tableName2: {
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+				{
+					Name:   tableName2,
+					Schema: fmt.Sprintf("CREATE TABLE %s (id BIGINT, name VARCHAR(64), PRIMARY KEY (id))", tableName2),
+				},
+			},
+		},
+	}
+
+	testcases := []struct {
+		name          string
+		expectQueries []string
+		cancel        bool
+		keepData      bool
+	}{
+		{
+			name: "cancel false, keepData true",
+			expectQueries: []string{
+				"delete from _vt.vreplication where db_name = 'vt_target_keyspace' and workflow = 'wf1'",
+			},
+			cancel:   false,
+			keepData: true,
+		},
+		{
+			name: "cancel true, keepData false",
+			expectQueries: []string{
+				"delete from _vt.vreplication where db_name = 'vt_target_keyspace' and workflow = 'wf1'",
+				"drop table `vt_target_keyspace`.`t1`",
+				"drop table `vt_target_keyspace`.`t2`",
+			},
+			cancel:   true,
+			keepData: false,
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			te := newTestEnv(t, ctx, defaultCellName, sourceKeyspace, targetKeyspace)
+			defer te.close()
+			te.tmc.schema = schema
+
+			ts, _, err := te.ws.getWorkflowState(ctx, targetKeyspace.KeyspaceName, workflowName)
+			require.NoError(t, err)
+
+			for _, q := range tc.expectQueries {
+				te.tmc.expectVRQuery(200, q, nil)
+				te.tmc.expectVRQuery(210, q, nil)
+			}
+
+			_, err = te.ws.finalizeMigrateWorkflow(ctx, ts, "", tc.cancel, tc.keepData, false, false)
+			assert.NoError(t, err)
+
+			ks, err := te.ts.GetSrvVSchema(ctx, "cell")
+			require.NoError(t, err)
+			assert.NotNil(t, ks.Keyspaces[targetKeyspace.KeyspaceName])
+
+			// Expect tables to be present in the VSchema if cancel was false.
+			if !tc.cancel {
+				assert.Len(t, ks.Keyspaces[targetKeyspace.KeyspaceName].Tables, 2)
+				assert.NotNil(t, ks.Keyspaces[targetKeyspace.KeyspaceName].Tables[tableName1])
+				assert.NotNil(t, ks.Keyspaces[targetKeyspace.KeyspaceName].Tables[tableName2])
+			} else {
+				assert.Len(t, ks.Keyspaces[targetKeyspace.KeyspaceName].Tables, 0)
+				assert.Nil(t, ks.Keyspaces[targetKeyspace.KeyspaceName].Tables[tableName1])
+				assert.Nil(t, ks.Keyspaces[targetKeyspace.KeyspaceName].Tables[tableName2])
+			}
+
+			// Expect queries to be used.
+			assert.Empty(t, te.tmc.applySchemaRequests[200])
+			assert.Empty(t, te.tmc.applySchemaRequests[210])
+		})
+	}
+}
