@@ -537,7 +537,7 @@ func findPKs(env *vtenv.Environment, table *tabletmanagerdatapb.TableDefinition,
 // column in the table definition leveraging MySQL's collation inheritance
 // rules.
 func getColumnCollations(venv *vtenv.Environment, table *tabletmanagerdatapb.TableDefinition) (map[string]collations.ID, error) {
-	createstmt, err := venv.Parser().Parse(table.Schema)
+	createstmt, err := venv.Parser().ParseStrictDDL(table.Schema)
 	if err != nil {
 		return nil, err
 	}
