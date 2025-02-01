@@ -58,12 +58,14 @@ type Plan struct {
 	// of the table.
 	Filters []Filter
 
-	// Predicates in the Filter query that we can push down to
-	// MySQL to reduce the returned rows we need to filter.
-	// This will contain any valid expressions in the Filter's
-	// WHERE clause with the exception of the in_keyrange()
-	// function which is a filter that must be applied by the
-	// vstreamer (it's not a valid MySQL function).
+	// Predicates in the Filter query that we can push down to MySQL
+	// to reduce the returned rows we need to filter in the VStreamer
+	// during the copy phase. This will contain any valid expressions
+	// in the Filter's WHERE clause with the exception of the
+	// in_keyrange() function which is a filter that must be applied
+	// by the VStreamer (it's not a valid MySQL function). Note that
+	// the Filter cannot contain any MySQL functions because the
+	// VStreamer cannot filter binlog events using them.
 	whereExprsToPushDown []sqlparser.Expr
 
 	// Convert any integer values seen in the binlog events for ENUM or SET
@@ -631,8 +633,8 @@ func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) er
 			log.Errorf("DEBUG: adding to list of pushdown expressions: %v", sqlparser.String(expr))
 			plan.whereExprsToPushDown = append(plan.whereExprsToPushDown, expr)
 		case *sqlparser.FuncExpr:
-			// We cannot filter binlog events in vstreamer using MySQL functions so
-			// we only allow the in_keyrange() function, which is vstreamer specific.
+			// We cannot filter binlog events in VStreamer using MySQL functions so
+			// we only allow the in_keyrange() function, which is VStreamer specific.
 			if !expr.Name.EqualString("in_keyrange") {
 				return fmt.Errorf("unsupported constraint: %v", sqlparser.String(expr))
 			}
