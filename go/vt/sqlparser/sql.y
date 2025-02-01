@@ -1636,6 +1636,11 @@ generated_column_attribute_list_opt:
     $1.KeyOpt = $2
     $$ = $1
   }
+| generated_column_attribute_list_opt SRID INTEGRAL
+  {
+    $1.SRID = NewIntLiteral($3)
+    $$ = $1
+  }
 | generated_column_attribute_list_opt VISIBLE
   {
     $1.Invisible = ptr.Of(false)
