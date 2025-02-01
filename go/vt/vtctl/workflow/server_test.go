@@ -29,6 +29,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -2396,4 +2398,180 @@ func TestCopySchemaShard(t *testing.T) {
 	err := te.ws.CopySchemaShard(ctx, sourceTablet.Alias, []string{"/.*/"}, nil, false, targetKeyspace.KeyspaceName, "-", 1*time.Second, true)
 	assert.NoError(t, err)
 	assert.Empty(t, te.tmc.applySchemaRequests[200])
+}
+
+func TestValidateShardsHaveVReplicationPermissions(t *testing.T) {
+	ctx := context.Background()
+
+	sourceKeyspace := &testKeyspace{"source_keyspace", []string{"-"}}
+	targetKeyspace := &testKeyspace{"target_keyspace", []string{"-80", "80-"}}
+
+	te := newTestEnv(t, ctx, defaultCellName, sourceKeyspace, targetKeyspace)
+	defer te.close()
+
+	si1, err := te.ts.GetShard(ctx, targetKeyspace.KeyspaceName, targetKeyspace.ShardNames[0])
+	require.NoError(t, err)
+	si2, err := te.ts.GetShard(ctx, targetKeyspace.KeyspaceName, targetKeyspace.ShardNames[1])
+	require.NoError(t, err)
+
+	testcases := []struct {
+		name                string
+		response            *validateVReplicationPermissionsResponse
+		expectedErrContains string
+	}{
+		{
+			// Expect no error in this case.
+			name: "unimplemented error",
+			response: &validateVReplicationPermissionsResponse{
+				err: status.Error(codes.Unimplemented, "unimplemented test"),
+			},
+		},
+		{
+			name: "tmc error",
+			response: &validateVReplicationPermissionsResponse{
+				err: fmt.Errorf("tmc throws error"),
+			},
+			expectedErrContains: "tmc throws error",
+		},
+		{
+			name: "no permissions",
+			response: &validateVReplicationPermissionsResponse{
+				res: &tabletmanagerdatapb.ValidateVReplicationPermissionsResponse{
+					User: "vt_test_user",
+					Ok:   false,
+				},
+			},
+			expectedErrContains: "vt_test_user does not have the required set of permissions",
+		},
+		{
+			name: "success",
+			response: &validateVReplicationPermissionsResponse{
+				res: &tabletmanagerdatapb.ValidateVReplicationPermissionsResponse{
+					User: "vt_filtered",
+					Ok:   true,
+				},
+			},
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			te.tmc.expectValidateVReplicationPermissionsResponse(200, tc.response)
+			te.tmc.expectValidateVReplicationPermissionsResponse(210, tc.response)
+			err = te.ws.validateShardsHaveVReplicationPermissions(ctx, targetKeyspace.KeyspaceName, []*topo.ShardInfo{si1, si2})
+			if tc.expectedErrContains == "" {
+				assert.NoError(t, err)
+				return
+			}
+			assert.ErrorContains(t, err, tc.expectedErrContains)
+		})
+	}
+}
+
+func TestWorkflowUpdate(t *testing.T) {
+	ctx := context.Background()
+
+	sourceKeyspace := &testKeyspace{"source_keyspace", []string{"-"}}
+	targetKeyspace := &testKeyspace{"target_keyspace", []string{"-80", "80-"}}
+
+	te := newTestEnv(t, ctx, defaultCellName, sourceKeyspace, targetKeyspace)
+	defer te.close()
+
+	req := &vtctldatapb.WorkflowUpdateRequest{
+		Keyspace: targetKeyspace.KeyspaceName,
+		TabletRequest: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
+			Workflow: "wf1",
+			State:    binlogdatapb.VReplicationWorkflowState_Running.Enum(),
+		},
+	}
+
+	testcases := []struct {
+		name     string
+		response map[uint32]*tabletmanagerdatapb.UpdateVReplicationWorkflowResponse
+		err      map[uint32]error
+
+		// Match the tablet `changed` field from response.
+		expectedResponse    map[uint32]bool
+		expectedErrContains string
+	}{
+		{
+			name: "one tablet stream changed",
+			response: map[uint32]*tabletmanagerdatapb.UpdateVReplicationWorkflowResponse{
+				200: {
+					Result: &querypb.QueryResult{
+						RowsAffected: 1,
+					},
+				},
+				210: {
+					Result: &querypb.QueryResult{
+						RowsAffected: 0,
+					},
+				},
+			},
+			expectedResponse: map[uint32]bool{
+				200: true,
+				210: false,
+			},
+		},
+		{
+			name: "two tablet stream changed",
+			response: map[uint32]*tabletmanagerdatapb.UpdateVReplicationWorkflowResponse{
+				200: {
+					Result: &querypb.QueryResult{
+						RowsAffected: 1,
+					},
+				},
+				210: {
+					Result: &querypb.QueryResult{
+						RowsAffected: 2,
+					},
+				},
+			},
+			expectedResponse: map[uint32]bool{
+				200: true,
+				210: true,
+			},
+		},
+		{
+			name: "tablet throws error",
+			err: map[uint32]error{
+				200: fmt.Errorf("test error from 200"),
+			},
+			expectedErrContains: "test error from 200",
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Add responses
+			for tabletID, resp := range tc.response {
+				te.tmc.AddUpdateVReplicationWorkflowRequestResponse(tabletID, &updateVReplicationWorkflowRequestResponse{
+					req: req.TabletRequest,
+					res: resp,
+				})
+			}
+			// Add errors
+			for tabletID, err := range tc.err {
+				te.tmc.AddUpdateVReplicationWorkflowRequestResponse(tabletID, &updateVReplicationWorkflowRequestResponse{
+					req: req.TabletRequest,
+					err: err,
+				})
+			}
+
+			res, err := te.ws.WorkflowUpdate(ctx, req)
+			if tc.expectedErrContains != "" {
+				assert.ErrorContains(t, err, tc.expectedErrContains)
+				return
+			}
+
+			assert.NoError(t, err)
+			for tabletID, changed := range tc.expectedResponse {
+				i := slices.IndexFunc(res.Details, func(det *vtctldatapb.WorkflowUpdateResponse_TabletInfo) bool {
+					return det.Tablet.Uid == tabletID
+				})
+				assert.NotEqual(t, -1, i)
+				assert.Equal(t, changed, res.Details[i].Changed)
+			}
+		})
+	}
 }
