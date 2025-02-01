@@ -1806,6 +1806,9 @@ var (
 		input:  "alter table a add spatial key indexes (column1)",
 		output: "alter table a add spatial key `indexes` (column1)",
 	}, {
+		input:  "alter table locations add lat_long point as (point(geocode->>'$.geometry.location.lat', geocode->>'$.geometry.location.lng')) SRID 4326 after geocodes",
+		output: "alter table locations add column lat_long point as (point(json_unquote(json_extract(geocode, '$.geometry.location.lat')), json_unquote(json_extract(geocode, '$.geometry.location.lng')))) virtual srid 4326 after geocodes",
+	}, {
 		input:      "create table a",
 		partialDDL: true,
 	}, {
