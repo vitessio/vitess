@@ -21,6 +21,7 @@ import { useURLQuery } from '../../hooks/useURLQuery';
 import { stringify } from '../../util/queryString';
 import { PaginationNav } from './PaginationNav';
 import { useCallback, useMemo, useState } from 'react';
+import { Icon, Icons } from '../Icon';
 
 export interface ColumnProps {
     // Coulmn display name string | JSX.Element
@@ -44,6 +45,8 @@ interface Props<T> {
     // access page number from the URL.
     pageKey?: string;
 }
+
+type SortOrder = 'asc' | 'desc'
 
 // Generally, page sizes of ~100 rows are fine in terms of performance,
 // but anything over ~50 feels unwieldy in terms of UX.
@@ -76,8 +79,8 @@ export const SortedDataTable = <T extends object>({
         search: stringify({ ...urlQuery.query, [pageQueryKey]: p === 1 ? undefined : p }),
     });
 
-    const [sortColumn, setSortColumn] = useState(null);
-    const [sortOrder, setSortOrder] = useState('asc');
+    const [sortColumn, setSortColumn] = useState<null | string>(null);
+    const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
 
     const handleSort = useCallback(
         (column: any) => {
@@ -118,14 +121,7 @@ export const SortedDataTable = <T extends object>({
                 {title && <caption>{title}</caption>}
                 <thead>
                     <tr>
-                        {columns.map((col, cdx) => (
-                            <th key={cdx} onClick={() => handleSort(col.accessor)}>
-                                <div style={{ display: 'flex', cursor: 'pointer' }}>
-                                    {col.display}
-                                    {sortColumn === col.accessor && (sortOrder === 'asc' ? '▲' : '▼')}
-                                </div>
-                            </th>
-                        ))}
+                        {columns.map((col, cdx) => <SortTableHeader col={col} cdx={cdx} sortColumn={sortColumn} sortOrder={sortOrder} handleSort={handleSort}></SortTableHeader>)} 
                     </tr>
                 </thead>
                 <tbody>{renderRows(dataPage)}</tbody>
@@ -140,3 +136,27 @@ export const SortedDataTable = <T extends object>({
         </div>
     );
 };
+
+type SortTableHeaderProps = {
+    col: ColumnProps
+    cdx: number
+    sortOrder: SortOrder
+    sortColumn: null | string
+    handleSort: (column: any) => void
+}
+
+const SortTableHeader: React.FC<SortTableHeaderProps> = ({col, cdx, sortOrder, sortColumn, handleSort}) => {
+    const upFillColor = sortOrder === 'asc' && sortColumn === col.accessor ? "fill-current" : "fill-gray-300"
+    const downFillColor = sortOrder !== 'asc' && sortColumn === col.accessor ? "fill-current" : "fill-gray-300"
+    return (
+        <th key={cdx} onClick={() => handleSort(col.accessor)}>
+            <div className="flex cursor-pointer items-center">
+                <div className="mr-1">{col.display}</div>
+                <div>
+                    <Icon className={`${upFillColor} -mb-1`} icon={Icons.chevronUp} />
+                    <Icon className={`${downFillColor} -mt-1`} icon={Icons.chevronDown} />
+                </div>
+            </div>
+        </th>
+    )
+}
