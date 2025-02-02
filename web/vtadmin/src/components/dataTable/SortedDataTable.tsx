@@ -46,7 +46,7 @@ interface Props<T> {
     pageKey?: string;
 }
 
-type SortOrder = 'asc' | 'desc'
+type SortOrder = 'asc' | 'desc';
 
 // Generally, page sizes of ~100 rows are fine in terms of performance,
 // but anything over ~50 feels unwieldy in terms of UX.
@@ -121,7 +121,15 @@ export const SortedDataTable = <T extends object>({
                 {title && <caption>{title}</caption>}
                 <thead>
                     <tr>
-                        {columns.map((col, cdx) => <SortTableHeader col={col} cdx={cdx} sortColumn={sortColumn} sortOrder={sortOrder} handleSort={handleSort}></SortTableHeader>)} 
+                        {columns.map((col, cdx) => (
+                            <SortTableHeader
+                                col={col}
+                                cdx={cdx}
+                                sortColumn={sortColumn}
+                                sortOrder={sortOrder}
+                                handleSort={handleSort}
+                            ></SortTableHeader>
+                        ))}
                     </tr>
                 </thead>
                 <tbody>{renderRows(dataPage)}</tbody>
@@ -138,16 +146,16 @@ export const SortedDataTable = <T extends object>({
 };
 
 type SortTableHeaderProps = {
-    col: ColumnProps
-    cdx: number
-    sortOrder: SortOrder
-    sortColumn: null | string
-    handleSort: (column: any) => void
-}
+    col: ColumnProps;
+    cdx: number;
+    sortOrder: SortOrder;
+    sortColumn: null | string;
+    handleSort: (column: any) => void;
+};
 
-const SortTableHeader: React.FC<SortTableHeaderProps> = ({col, cdx, sortOrder, sortColumn, handleSort}) => {
-    const upFillColor = sortOrder === 'asc' && sortColumn === col.accessor ? "fill-current" : "fill-gray-300"
-    const downFillColor = sortOrder !== 'asc' && sortColumn === col.accessor ? "fill-current" : "fill-gray-300"
+const SortTableHeader: React.FC<SortTableHeaderProps> = ({ col, cdx, sortOrder, sortColumn, handleSort }) => {
+    const upFillColor = sortOrder === 'asc' && sortColumn === col.accessor ? 'fill-current' : 'fill-gray-300';
+    const downFillColor = sortOrder !== 'asc' && sortColumn === col.accessor ? 'fill-current' : 'fill-gray-300';
     return (
         <th key={cdx} onClick={() => handleSort(col.accessor)}>
             <div className="flex cursor-pointer items-center">
@@ -158,5 +166,5 @@ const SortTableHeader: React.FC<SortTableHeaderProps> = ({col, cdx, sortOrder, s
                 </div>
             </div>
         </th>
-    )
-}
+    );
+};
