@@ -33,11 +33,11 @@ type Union struct {
 	Selects  []*sqlparser.SelectExprs2
 	distinct bool
 
-	unionColumns              *sqlparser.SelectExprs2
+	unionColumns              []sqlparser.SelectExpr
 	unionColumnsAsAlisedExprs []*sqlparser.AliasedExpr
 }
 
-func newUnion(srcs []Operator, sourceSelects []*sqlparser.SelectExprs2, columns *sqlparser.SelectExprs2, distinct bool) *Union {
+func newUnion(srcs []Operator, sourceSelects []*sqlparser.SelectExprs2, columns []sqlparser.SelectExpr, distinct bool) *Union {
 	if columns == nil {
 		panic("rt")
 	}
@@ -247,7 +247,7 @@ func (u *Union) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, u
 func (u *Union) GetColumns(ctx *plancontext.PlanningContext) (result []*sqlparser.AliasedExpr) {
 	if u.unionColumnsAsAlisedExprs == nil {
 		allOk := true
-		u.unionColumnsAsAlisedExprs = slice.Map(u.unionColumns.Exprs, func(from sqlparser.SelectExpr) *sqlparser.AliasedExpr {
+		u.unionColumnsAsAlisedExprs = slice.Map(u.unionColumns, func(from sqlparser.SelectExpr) *sqlparser.AliasedExpr {
 			expr, ok := from.(*sqlparser.AliasedExpr)
 			allOk = allOk && ok
 			return expr
@@ -269,17 +269,17 @@ func (u *Union) GetColumns(ctx *plancontext.PlanningContext) (result []*sqlparse
 	return u.unionColumnsAsAlisedExprs
 }
 
-func (u *Union) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
+func (u *Union) GetSelectExprs(ctx *plancontext.PlanningContext) []sqlparser.SelectExpr {
 	// if any of the inputs has more columns that we expect, we want to show on top of UNION, so the results can
 	// be truncated to the expected result columns and nothing else
 	for _, src := range u.Sources {
 		columns := src.GetSelectExprs(ctx)
-		for len(columns) > len(u.unionColumns.Exprs) {
-			u.unionColumns.Exprs = append(u.unionColumns.Exprs, aeWrap(sqlparser.NewIntLiteral("0")))
+		for len(columns) > len(u.unionColumns) {
+			u.unionColumns = append(u.unionColumns, aeWrap(sqlparser.NewIntLiteral("0")))
 		}
 	}
 
-	return u.unionColumns.Exprs
+	return u.unionColumns
 }
 
 func (u *Union) NoLHSTableSet() {}

@@ -600,8 +600,7 @@ func buildProjection(op *Projection, qb *queryBuilder) {
 	}
 
 	if !isSel {
-		cols := op.GetSelectExprs(qb.ctx)
-		for _, column := range cols {
+		for _, column := range op.GetSelectExprs(qb.ctx) {
 			qb.addProjection(column)
 		}
 	}

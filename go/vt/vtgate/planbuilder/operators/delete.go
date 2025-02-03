@@ -136,7 +136,7 @@ func createDeleteWithInputOp(ctx *plancontext.PlanningContext, del *sqlparser.De
 	dmls := slice.Map(delOps, func(from dmlOp) Operator {
 		colsList = append(colsList, from.cols)
 		for _, col := range from.cols {
-			selectStmt.SelectExprs = append(selectStmt.SelectExprs, aeWrap(col))
+			selectStmt.SelectExprs.Exprs = append(selectStmt.SelectExprs.Exprs, aeWrap(col))
 		}
 		return from.op
 	})
@@ -264,15 +264,15 @@ func createDeleteOperator(ctx *plancontext.PlanningContext, del *sqlparser.Delet
 }
 
 func generateOwnedVindexQuery(del *sqlparser.Delete, table TargetTable, ksidCols []sqlparser.IdentifierCI) *sqlparser.Select {
-	var selExprs sqlparser.SelectExprs
+	selExprs := &sqlparser.SelectExprs2{}
 	for _, col := range ksidCols {
 		colName := makeColName(col, table, sqlparser.MultiTable(del.TableExprs))
-		selExprs = append(selExprs, aeWrap(colName))
+		selExprs.Exprs = append(selExprs.Exprs, aeWrap(colName))
 	}
 	for _, cv := range table.VTable.Owned {
 		for _, col := range cv.Columns {
 			colName := makeColName(col, table, sqlparser.MultiTable(del.TableExprs))
-			selExprs = append(selExprs, aeWrap(colName))
+			selExprs.Exprs = append(selExprs.Exprs, aeWrap(colName))
 		}
 	}
 	return &sqlparser.Select{

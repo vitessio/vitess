@@ -309,7 +309,7 @@ func (a *Aggregator) GetColumns(ctx *plancontext.PlanningContext) (res []*sqlpar
 	return truncate(a, a.Columns)
 }
 
-func (a *Aggregator) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
+func (a *Aggregator) GetSelectExprs(ctx *plancontext.PlanningContext) []sqlparser.SelectExpr {
 	return transformColumnsToSelectExprs(ctx, a)
 }
 

@@ -344,7 +344,7 @@ func createProjectionWithoutAggr(ctx *plancontext.PlanningContext, qp *QueryProj
 }
 
 func newStarProjection(src Operator, qp *QueryProjection) *Projection {
-	cols := sqlparser.SelectExprs{}
+	var cols []sqlparser.SelectExpr
 
 	for _, expr := range qp.SelectExprs {
 		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {

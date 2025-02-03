@@ -280,7 +280,7 @@ func createComparisonSubQuery(
 
 	// if we are comparing with a column from the inner subquery,
 	// we add this extra predicate to check if the two sides are mergable or not
-	if ae, ok := subq.Select.GetColumns()[0].(*sqlparser.AliasedExpr); ok {
+	if ae, ok := subq.Select.GetColumns().Exprs[0].(*sqlparser.AliasedExpr); ok {
 		subquery.OuterPredicate = &sqlparser.ComparisonExpr{
 			Operator: sqlparser.EqualOp,
 			Left:     outside,

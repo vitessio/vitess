@@ -186,7 +186,7 @@ func createUpdateWithInputOp(ctx *plancontext.PlanningContext, upd *sqlparser.Up
 		colsList = append(colsList, from.cols)
 		uList = append(uList, from.updList)
 		for _, col := range from.cols {
-			selectStmt.SelectExprs = append(selectStmt.SelectExprs, aeWrap(col))
+			selectStmt.SelectExprs.Exprs = append(selectStmt.SelectExprs.Exprs, aeWrap(col))
 		}
 		return from.op
 	})
@@ -889,7 +889,7 @@ func createFkVerifyOpForParentFKForUpdate(ctx *plancontext.PlanningContext, upda
 		whereCond = &sqlparser.AndExpr{Left: whereCond, Right: prefixColNames(ctx, childTbl, updStmt.Where.Expr)}
 	}
 	return createSelectionOp(ctx,
-		sqlparser.SelectExprs{sqlparser.NewAliasedExpr(sqlparser.NewIntLiteral("1"), "")},
+		[]sqlparser.SelectExpr{sqlparser.NewAliasedExpr(sqlparser.NewIntLiteral("1"), "")},
 		[]sqlparser.TableExpr{
 			sqlparser.NewJoinTableExpr(
 				childTblExpr,
@@ -973,7 +973,7 @@ func createFkVerifyOpForChildFKForUpdate(ctx *plancontext.PlanningContext, updat
 	}
 
 	return createSelectionOp(ctx,
-		sqlparser.SelectExprs{sqlparser.NewAliasedExpr(sqlparser.NewIntLiteral("1"), "")},
+		[]sqlparser.SelectExpr{sqlparser.NewAliasedExpr(sqlparser.NewIntLiteral("1"), "")},
 		[]sqlparser.TableExpr{
 			sqlparser.NewJoinTableExpr(
 				parentTblExpr,
@@ -1056,7 +1056,7 @@ func buildChangedVindexesValues(
 		}
 
 		// Checks done, let's actually add the expressions and the vindex map
-		selExprs = append(selExprs, aeWrap(sqlparser.AndExpressions(compExprs...)))
+		selExprs.Exprs = append(selExprs.Exprs, aeWrap(sqlparser.AndExpressions(compExprs...)))
 		changedVindexes[vindex.Name] = &engine.VindexValues{
 			EvalExprMap: vindexValueMap,
 			Offset:      offset,
@@ -1076,16 +1076,16 @@ func buildChangedVindexesValues(
 	return changedVindexes, ovq, subQueriesArgOnChangedVindex
 }
 
-func initialQuery(ksidCols []sqlparser.IdentifierCI, table *vindexes.Table) (sqlparser.SelectExprs, int) {
-	var selExprs sqlparser.SelectExprs
+func initialQuery(ksidCols []sqlparser.IdentifierCI, table *vindexes.Table) (*sqlparser.SelectExprs2, int) {
+	selExprs := new(sqlparser.SelectExprs2)
 	offset := 0
 	for _, col := range ksidCols {
-		selExprs = append(selExprs, aeWrap(sqlparser.NewColName(col.String())))
+		selExprs.Exprs = append(selExprs.Exprs, aeWrap(sqlparser.NewColName(col.String())))
 		offset++
 	}
 	for _, cv := range table.Owned {
 		for _, column := range cv.Columns {
-			selExprs = append(selExprs, aeWrap(sqlparser.NewColName(column.String())))
+			selExprs.Exprs = append(selExprs.Exprs, aeWrap(sqlparser.NewColName(column.String())))
 			offset++
 		}
 	}

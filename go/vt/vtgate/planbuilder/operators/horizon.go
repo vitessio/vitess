@@ -148,7 +148,7 @@ func (h *Horizon) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr,
 		return -1
 	}
 
-	for idx, se := range getFirstSelect(h.Query).SelectExprs {
+	for idx, se := range getFirstSelect(h.Query).SelectExprs.Exprs {
 		ae, ok := se.(*sqlparser.AliasedExpr)
 		if !ok {
 			panic(vterrors.VT09015())
@@ -162,7 +162,7 @@ func (h *Horizon) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr,
 }
 
 func (h *Horizon) GetColumns(ctx *plancontext.PlanningContext) (exprs []*sqlparser.AliasedExpr) {
-	for _, expr := range ctx.SemTable.SelectExprs(h.Query) {
+	for _, expr := range ctx.SemTable.SelectExprs(h.Query).Exprs {
 		ae, ok := expr.(*sqlparser.AliasedExpr)
 		if !ok {
 			panic(vterrors.VT09015())
@@ -173,8 +173,8 @@ func (h *Horizon) GetColumns(ctx *plancontext.PlanningContext) (exprs []*sqlpars
 	return exprs
 }
 
-func (h *Horizon) GetSelectExprs(*plancontext.PlanningContext) sqlparser.SelectExprs {
-	return getFirstSelect(h.Query).SelectExprs
+func (h *Horizon) GetSelectExprs(*plancontext.PlanningContext) []sqlparser.SelectExpr {
+	return getFirstSelect(h.Query).SelectExprs.Exprs
 }
 
 func (h *Horizon) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {

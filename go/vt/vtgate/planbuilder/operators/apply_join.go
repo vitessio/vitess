@@ -180,7 +180,7 @@ func (aj *ApplyJoin) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.A
 	return cols
 }
 
-func (aj *ApplyJoin) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
+func (aj *ApplyJoin) GetSelectExprs(ctx *plancontext.PlanningContext) []sqlparser.SelectExpr {
 	return transformColumnsToSelectExprs(ctx, aj)
 }
 

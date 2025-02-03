@@ -470,7 +470,7 @@ func columnMismatch(gen *Generate, ins *sqlparser.Insert, sel sqlparser.TableSta
 	if origColCount > sel.GetColumnCount() {
 		sel := getFirstSelect(sel)
 		var hasStarExpr bool
-		for _, sExpr := range sel.SelectExprs {
+		for _, sExpr := range sel.SelectExprs.Exprs {
 			if _, hasStarExpr = sExpr.(*sqlparser.StarExpr); hasStarExpr {
 				break
 			}

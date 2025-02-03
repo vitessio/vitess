@@ -415,7 +415,7 @@ func rewriteColNameToArgument(
 		default:
 			// for scalar value subqueries, the argument is typed based on the first expression in the subquery
 			// so here we make an attempt at figuring out the type of the argument
-			ae, isAe := sq2.originalSubquery.Select.GetColumns()[0].(*sqlparser.AliasedExpr)
+			ae, isAe := sq2.originalSubquery.Select.GetColumns().Exprs[0].(*sqlparser.AliasedExpr)
 			if !isAe {
 				return sqlparser.NewArgument(s)
 			}

@@ -174,7 +174,7 @@ func createOperatorFromUnion(ctx *plancontext.PlanningContext, node *sqlparser.U
 	rexprs := ctx.SemTable.SelectExprs(node.Right)
 
 	unionCols := ctx.SemTable.SelectExprs(node)
-	union := newUnion([]Operator{opLHS, opRHS}, []sqlparser.SelectExprs{lexprs, rexprs}, unionCols, node.Distinct)
+	union := newUnion([]Operator{opLHS, opRHS}, []*sqlparser.SelectExprs2{lexprs, rexprs}, unionCols.Exprs, node.Distinct)
 	return newHorizon(union, node)
 }
 
@@ -464,7 +464,7 @@ func createSelectionOp(
 	lock sqlparser.Lock,
 ) Operator {
 	selectionStmt := &sqlparser.Select{
-		SelectExprs: selectExprs,
+		SelectExprs: &sqlparser.SelectExprs2{Exprs: selectExprs},
 		From:        tableExprs,
 		Where:       where,
 		OrderBy:     orderBy,
