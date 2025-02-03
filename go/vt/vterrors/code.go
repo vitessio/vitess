@@ -291,5 +291,8 @@ func ErrorsHaveInvalidSession(errs []error) bool {
 }
 
 func IsInvalidSessionError(err error) bool {
+	if err == nil {
+		return false
+	}
 	return strings.Contains(err.Error(), VT15001(0).ID)
 }
