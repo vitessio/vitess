@@ -43,13 +43,14 @@ import (
 )
 
 var (
-	KeyspaceName = "ks"
-	dbName       = "vt_" + KeyspaceName
-	username     = "vt_dba"
-	Hostname     = "localhost"
-	insertVal    = 1
-	insertSQL    = "insert into vt_insert_test(id, msg) values (%d, 'test %d')"
-	sqlSchema    = `
+	KeyspaceName            = "ks"
+	dbName                  = "vt_" + KeyspaceName
+	username                = "vt_dba"
+	Hostname                = "localhost"
+	insertVal               = 1
+	insertSQL               = "insert into vt_insert_test(id, msg) values (%d, 'test %d')"
+	insertSQLMultipleValues = "insert into vt_insert_test(id, msg) values (%d, 'test %d'), (%d, 'test %d'), (%d, 'test %d'), (%d, 'test %d')"
+	sqlSchema               = `
 	create table vt_insert_test (
 	id bigint,
 	msg varchar(64),
@@ -100,10 +101,10 @@ func SetupShardedReparentCluster(t *testing.T, durability string) *cluster.Local
 	keyspace := &cluster.Keyspace{
 		Name:             KeyspaceName,
 		SchemaSQL:        sqlSchema,
-		VSchema:          `{"sharded": true, "vindexes": {"hash_index": {"type": "hash"}}, "tables": {"vt_insert_test": {"column_vindexes": [{"column": "id", "name": "hash_index"}]}}}`,
+		VSchema:          `{"sharded": true, "vindexes": {"hash_index": {"type": "reverse_bits"}}, "tables": {"vt_insert_test": {"column_vindexes": [{"column": "id", "name": "hash_index"}]}}}`,
 		DurabilityPolicy: durability,
 	}
-	err = clusterInstance.StartKeyspace(*keyspace, []string{"-40", "40-80", "80-"}, 2, false)
+	err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 2, false)
 	require.NoError(t, err)
 
 	// Start Vtgate
@@ -115,6 +116,11 @@ func SetupShardedReparentCluster(t *testing.T, durability string) *cluster.Local
 // GetInsertQuery returns a built insert query to insert a row.
 func GetInsertQuery(idx int) string {
 	return fmt.Sprintf(insertSQL, idx, idx)
+}
+
+// GetInsertMultipleValuesQuery returns a built insert query to insert multiple rows at once.
+func GetInsertMultipleValuesQuery(idx1, idx2, idx3, idx4 int) string {
+	return fmt.Sprintf(insertSQLMultipleValues, idx1, idx1, idx2, idx2, idx3, idx3, idx4, idx4)
 }
 
 // GetSelectionQuery returns a built selection query read the data.
