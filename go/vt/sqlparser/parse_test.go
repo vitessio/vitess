@@ -1806,6 +1806,9 @@ var (
 		input:  "alter table a add spatial key indexes (column1)",
 		output: "alter table a add spatial key `indexes` (column1)",
 	}, {
+		input:  "alter table locations add lat_long point as (point(geocode->>'$.geometry.location.lat', geocode->>'$.geometry.location.lng')) SRID 4326 after geocodes",
+		output: "alter table locations add column lat_long point as (point(json_unquote(json_extract(geocode, '$.geometry.location.lat')), json_unquote(json_extract(geocode, '$.geometry.location.lng')))) virtual srid 4326 after geocodes",
+	}, {
 		input:      "create table a",
 		partialDDL: true,
 	}, {
@@ -5974,6 +5977,10 @@ partition by range (YEAR(purchased)) subpartition by hash (TO_DAYS(purchased))
 		{
 			input:  "create table t (id int, vec VECTOR(4))",
 			output: "create table t (\n\tid int,\n\tvec VECTOR(4)\n)",
+		},
+		{
+			input:  "CREATE TABLE `locations` (`geocode` json DEFAULT NULL, `lat_long` point GENERATED ALWAYS AS (point(json_unquote(json_extract(`geocode`,_utf8mb4'$.geometry.location.lat')),json_unquote(json_extract(`geocode`,_utf8mb4'$.geometry.location.lng')))) VIRTUAL /*!80003 SRID 4326 */) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci",
+			output: "create table locations (\n\tgeocode json default null,\n\tlat_long point as (point(json_unquote(json_extract(geocode, _utf8mb4 '$.geometry.location.lat')), json_unquote(json_extract(geocode, _utf8mb4 '$.geometry.location.lng')))) virtual srid 4326\n) ENGINE InnoDB,\n  CHARSET utf8mb4,\n  COLLATE utf8mb4_0900_ai_ci",
 		},
 	}
 	parser := NewTestParser()
