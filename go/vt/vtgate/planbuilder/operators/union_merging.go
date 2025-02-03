@@ -172,29 +172,30 @@ func tryMergeUnionShardedRouting(
 func createMergedUnion(
 	ctx *plancontext.PlanningContext,
 	lhsRoute, rhsRoute *Route,
-	lhsExprs, rhsExprs sqlparser.SelectExprs,
+	lhsExprs, rhsExprs *sqlparser.SelectExprs2,
 	distinct bool,
-	routing Routing) (Operator, sqlparser.SelectExprs) {
+	routing Routing) (Operator, *sqlparser.SelectExprs2) {
 
 	// if there are `*` on either side, or a different number of SelectExpr items,
 	// we give up aligning the expressions and trust that we can push everything down
-	cols := make(sqlparser.SelectExprs, len(lhsExprs))
-	noDeps := len(lhsExprs) != len(rhsExprs)
-	for idx, col := range lhsExprs {
+	cols := new(sqlparser.SelectExprs2)
+	cols.Exprs = make(sqlparser.SelectExprs, len(lhsExprs.Exprs))
+	noDeps := len(lhsExprs.Exprs) != len(rhsExprs.Exprs)
+	for idx, col := range lhsExprs.Exprs {
 		lae, ok := col.(*sqlparser.AliasedExpr)
 		if !ok {
-			cols[idx] = col
+			cols.Exprs[idx] = col
 			noDeps = true
 			continue
 		}
 		col := sqlparser.NewColName(lae.ColumnName())
-		cols[idx] = aeWrap(col)
+		cols.Exprs[idx] = aeWrap(col)
 		if noDeps {
 			continue
 		}
 
 		deps := ctx.SemTable.RecursiveDeps(lae.Expr)
-		rae, ok := rhsExprs[idx].(*sqlparser.AliasedExpr)
+		rae, ok := rhsExprs.Exprs[idx].(*sqlparser.AliasedExpr)
 		if !ok {
 			noDeps = true
 			continue
@@ -219,7 +220,8 @@ func createMergedUnion(
 		ctx.SemTable.Recursive[col] = deps
 	}
 
-	union := newUnion([]Operator{lhsRoute.Source, rhsRoute.Source}, []sqlparser.SelectExprs{lhsExprs, rhsExprs}, cols, distinct)
+	exprs := []*sqlparser.SelectExprs2{lhsExprs, rhsExprs}
+	union := newUnion([]Operator{lhsRoute.Source, rhsRoute.Source}, exprs, cols, distinct)
 	selectExprs := unionSelects(lhsExprs)
 	return &Route{
 		unaryOperator: newUnaryOp(union),

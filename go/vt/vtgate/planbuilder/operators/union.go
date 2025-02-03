@@ -30,14 +30,14 @@ type Union struct {
 	Sources []Operator
 
 	// These are the select expressions coming from each source
-	Selects  []sqlparser.SelectExprs
+	Selects  []*sqlparser.SelectExprs2
 	distinct bool
 
-	unionColumns              sqlparser.SelectExprs
+	unionColumns              *sqlparser.SelectExprs2
 	unionColumnsAsAlisedExprs []*sqlparser.AliasedExpr
 }
 
-func newUnion(srcs []Operator, sourceSelects []sqlparser.SelectExprs, columns sqlparser.SelectExprs, distinct bool) *Union {
+func newUnion(srcs []Operator, sourceSelects []*sqlparser.SelectExprs2, columns *sqlparser.SelectExprs2, distinct bool) *Union {
 	if columns == nil {
 		panic("rt")
 	}
@@ -95,7 +95,7 @@ can be found on the same offset. The names of the RHS are discarded.
 func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
 	offsets := make(map[string]int)
 	sel := u.GetSelectFor(0)
-	for i, selectExpr := range sel.SelectExprs {
+	for i, selectExpr := range sel.SelectExprs.Exprs {
 		ae, ok := selectExpr.(*sqlparser.AliasedExpr)
 		if !ok {
 			panic(vterrors.VT12001("pushing predicates on UNION where the first SELECT contains * or NEXT"))
@@ -133,7 +133,7 @@ func (u *Union) predicatePerSource(expr sqlparser.Expr, offsets map[string]int) 
 			}
 
 			sel := u.GetSelectFor(i)
-			ae, ok := sel.SelectExprs[idx].(*sqlparser.AliasedExpr)
+			ae, ok := sel.SelectExprs.Exprs[idx].(*sqlparser.AliasedExpr)
 			if !ok {
 				panic(vterrors.VT09015())
 			}
@@ -247,7 +247,7 @@ func (u *Union) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, u
 func (u *Union) GetColumns(ctx *plancontext.PlanningContext) (result []*sqlparser.AliasedExpr) {
 	if u.unionColumnsAsAlisedExprs == nil {
 		allOk := true
-		u.unionColumnsAsAlisedExprs = slice.Map(u.unionColumns, func(from sqlparser.SelectExpr) *sqlparser.AliasedExpr {
+		u.unionColumnsAsAlisedExprs = slice.Map(u.unionColumns.Exprs, func(from sqlparser.SelectExpr) *sqlparser.AliasedExpr {
 			expr, ok := from.(*sqlparser.AliasedExpr)
 			allOk = allOk && ok
 			return expr
@@ -274,12 +274,12 @@ func (u *Union) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.Selec
 	// be truncated to the expected result columns and nothing else
 	for _, src := range u.Sources {
 		columns := src.GetSelectExprs(ctx)
-		for len(columns) > len(u.unionColumns) {
-			u.unionColumns = append(u.unionColumns, aeWrap(sqlparser.NewIntLiteral("0")))
+		for len(columns) > len(u.unionColumns.Exprs) {
+			u.unionColumns.Exprs = append(u.unionColumns.Exprs, aeWrap(sqlparser.NewIntLiteral("0")))
 		}
 	}
 
-	return u.unionColumns
+	return u.unionColumns.Exprs
 }
 
 func (u *Union) NoLHSTableSet() {}

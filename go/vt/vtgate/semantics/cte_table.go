@@ -47,7 +47,7 @@ func newCTETable(node *sqlparser.AliasedTableExpr, t sqlparser.TableName, cteDef
 	}
 
 	authoritative := true
-	for _, expr := range cteDef.Query.GetColumns() {
+	for _, expr := range cteDef.Query.GetColumns().Exprs {
 		_, isStar := expr.(*sqlparser.StarExpr)
 		if isStar {
 			authoritative = false
@@ -92,7 +92,7 @@ func (cte *CTETable) canShortCut() shortCut {
 }
 
 func (cte *CTETable) getColumns(bool) []ColumnInfo {
-	selExprs := cte.Query.GetColumns()
+	selExprs := cte.Query.GetColumns().Exprs
 	cols := make([]ColumnInfo, 0, len(selExprs))
 	for i, selExpr := range selExprs {
 		ae, isAe := selExpr.(*sqlparser.AliasedExpr)
@@ -127,7 +127,7 @@ func (cte *CTETable) dependencies(colName string, org originable) (dependencies,
 }
 
 func (cte *CTETable) getExprFor(s string) (sqlparser.Expr, error) {
-	for _, se := range cte.Query.GetColumns() {
+	for _, se := range cte.Query.GetColumns().Exprs {
 		ae, ok := se.(*sqlparser.AliasedExpr)
 		if !ok {
 			return nil, vterrors.VT09015()

@@ -437,6 +437,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfSelect(in)
 	case SelectExprs:
 		return CloneSelectExprs(in)
+	case *SelectExprs2:
+		return CloneRefOfSelectExprs2(in)
 	case *SelectInto:
 		return CloneRefOfSelectInto(in)
 	case *Set:
@@ -2764,7 +2766,7 @@ func CloneRefOfSelect(n *Select) *Select {
 	out.With = CloneRefOfWith(n.With)
 	out.From = CloneSliceOfTableExpr(n.From)
 	out.Comments = CloneRefOfParsedComments(n.Comments)
-	out.SelectExprs = CloneSelectExprs(n.SelectExprs)
+	out.SelectExprs = CloneRefOfSelectExprs2(n.SelectExprs)
 	out.Where = CloneRefOfWhere(n.Where)
 	out.GroupBy = CloneRefOfGroupBy(n.GroupBy)
 	out.Having = CloneRefOfWhere(n.Having)
@@ -2785,6 +2787,16 @@ func CloneSelectExprs(n SelectExprs) SelectExprs {
 		res[i] = CloneSelectExpr(x)
 	}
 	return res
+}
+
+// CloneRefOfSelectExprs2 creates a deep clone of the input.
+func CloneRefOfSelectExprs2(n *SelectExprs2) *SelectExprs2 {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Exprs = CloneSliceOfSelectExpr(n.Exprs)
+	return &out
 }
 
 // CloneRefOfSelectInto creates a deep clone of the input.
@@ -4676,6 +4688,18 @@ func CloneRefOfRootNode(n *RootNode) *RootNode {
 	out := *n
 	out.SQLNode = CloneSQLNode(n.SQLNode)
 	return &out
+}
+
+// CloneSliceOfSelectExpr creates a deep clone of the input.
+func CloneSliceOfSelectExpr(n []SelectExpr) []SelectExpr {
+	if n == nil {
+		return nil
+	}
+	res := make([]SelectExpr, len(n))
+	for i, x := range n {
+		res[i] = CloneSelectExpr(x)
+	}
+	return res
 }
 
 // CloneRefOfTableName creates a deep clone of the input.

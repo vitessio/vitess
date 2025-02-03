@@ -160,8 +160,8 @@ func markBindVariable(yylex yyLexer, bvar string) {
   orderBy       OrderBy
   updateExprs   UpdateExprs
   setExprs      SetExprs
-  selectExprs   SelectExprs
-  tableOptions     TableOptions
+  selectExprs   *SelectExprs2
+  tableOptions  TableOptions
   starExpr      StarExpr
   groupBy	*GroupBy
 
@@ -835,7 +835,7 @@ query_expression:
   }
 | SELECT comment_opt cache_opt NEXT num_val for_from table_name
   {
-    $$ = NewSelect(Comments($2), SelectExprs{&Nextval{Expr: $5}}, []string{$3}/*options*/, nil, TableExprs{&AliasedTableExpr{Expr: $7}}, nil/*where*/, nil/*groupBy*/, nil/*having*/, nil)
+    $$ = NewSelect(Comments($2), &SelectExprs2{Exprs: []SelectExpr{&Nextval{Expr: $5}}}, []string{$3}/*options*/, nil, TableExprs{&AliasedTableExpr{Expr: $7}}, nil/*where*/, nil/*groupBy*/, nil/*having*/, nil)
   }
 
 query_expression_body:
@@ -4935,11 +4935,12 @@ select_option:
 select_expression_list:
   select_expression
   {
-    $$ = SelectExprs{$1}
+    $$ = &SelectExprs2{Exprs: []SelectExpr{$1}}
   }
 | select_expression_list ',' select_expression
   {
-    $$ = append($$, $3)
+    $1.Exprs = append($1.Exprs, $3)
+    $$ = $$
   }
 
 select_expression:

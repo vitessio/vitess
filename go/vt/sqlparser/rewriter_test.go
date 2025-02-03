@@ -49,10 +49,10 @@ func TestReplaceWorksInLaterCalls(t *testing.T) {
 	Rewrite(stmt, func(cursor *Cursor) bool {
 		switch node := cursor.Node().(type) {
 		case *Select:
-			node.SelectExprs[0] = &AliasedExpr{
+			node.SelectExprs.Exprs[0] = &AliasedExpr{
 				Expr: NewStrLiteral("apa"),
 			}
-			node.SelectExprs = append(node.SelectExprs, &AliasedExpr{
+			node.SelectExprs.Exprs = append(node.SelectExprs.Exprs, &AliasedExpr{
 				Expr: NewStrLiteral("foobar"),
 			})
 		case *StarExpr:

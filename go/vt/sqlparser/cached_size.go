@@ -3829,12 +3829,6 @@ func (cached *Select) CachedSize(alloc bool) int64 {
 	size += cached.Comments.CachedSize(true)
 	// field SelectExprs vitess.io/vitess/go/vt/sqlparser.SelectExprs
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.SelectExprs)) * int64(16))
-		for _, elem := range cached.SelectExprs {
-			if cc, ok := elem.(cachedObject); ok {
-				size += cc.CachedSize(true)
-			}
-		}
 	}
 	// field Where *vitess.io/vitess/go/vt/sqlparser.Where
 	size += cached.Where.CachedSize(true)

@@ -436,6 +436,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfSelect(in, f)
 	case SelectExprs:
 		return VisitSelectExprs(in, f)
+	case *SelectExprs2:
+		return VisitRefOfSelectExprs2(in, f)
 	case *SelectInto:
 		return VisitRefOfSelectInto(in, f)
 	case *Set:
@@ -3563,7 +3565,7 @@ func VisitRefOfSelect(in *Select, f Visit) error {
 	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
 		return err
 	}
-	if err := VisitSelectExprs(in.SelectExprs, f); err != nil {
+	if err := VisitRefOfSelectExprs2(in.SelectExprs, f); err != nil {
 		return err
 	}
 	if err := VisitRefOfWhere(in.Where, f); err != nil {
@@ -3597,6 +3599,20 @@ func VisitSelectExprs(in SelectExprs, f Visit) error {
 		return err
 	}
 	for _, el := range in {
+		if err := VisitSelectExpr(el, f); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+func VisitRefOfSelectExprs2(in *SelectExprs2, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	for _, el := range in.Exprs {
 		if err := VisitSelectExpr(el, f); err != nil {
 			return err
 		}

@@ -140,7 +140,7 @@ type (
 		// The columns were added because of the use of `*` in the query
 		ExpandedColumns map[sqlparser.TableName][]*sqlparser.ColName
 
-		columns map[*sqlparser.Union]sqlparser.SelectExprs
+		columns map[*sqlparser.Union]*sqlparser.SelectExprs2
 
 		comparator *sqlparser.Comparator
 
@@ -493,7 +493,7 @@ func (st *SemTable) ForeignKeysPresent() bool {
 	return false
 }
 
-func (st *SemTable) SelectExprs(sel sqlparser.TableStatement) sqlparser.SelectExprs {
+func (st *SemTable) SelectExprs(sel sqlparser.TableStatement) *sqlparser.SelectExprs2 {
 	switch sel := sel.(type) {
 	case *sqlparser.Select:
 		return sel.SelectExprs
@@ -571,7 +571,7 @@ func EmptySemTable() *SemTable {
 		Recursive:        map[sqlparser.Expr]TableSet{},
 		Direct:           map[sqlparser.Expr]TableSet{},
 		ColumnEqualities: map[columnName][]sqlparser.Expr{},
-		columns:          map[*sqlparser.Union]sqlparser.SelectExprs{},
+		columns:          map[*sqlparser.Union]*sqlparser.SelectExprs2{},
 		ExprTypes:        make(map[sqlparser.Expr]evalengine.Type),
 	}
 }

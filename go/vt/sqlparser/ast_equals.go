@@ -1268,6 +1268,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.SelectExprs(a, b)
+	case *SelectExprs2:
+		b, ok := inB.(*SelectExprs2)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfSelectExprs2(a, b)
 	case *SelectInto:
 		b, ok := inB.(*SelectInto)
 		if !ok {
@@ -4206,7 +4212,7 @@ func (cmp *Comparator) RefOfSelect(a, b *Select) bool {
 		cmp.RefOfWith(a.With, b.With) &&
 		cmp.SliceOfTableExpr(a.From, b.From) &&
 		cmp.RefOfParsedComments(a.Comments, b.Comments) &&
-		cmp.SelectExprs(a.SelectExprs, b.SelectExprs) &&
+		cmp.RefOfSelectExprs2(a.SelectExprs, b.SelectExprs) &&
 		cmp.RefOfWhere(a.Where, b.Where) &&
 		cmp.RefOfGroupBy(a.GroupBy, b.GroupBy) &&
 		cmp.RefOfWhere(a.Having, b.Having) &&
@@ -4228,6 +4234,17 @@ func (cmp *Comparator) SelectExprs(a, b SelectExprs) bool {
 		}
 	}
 	return true
+}
+
+// RefOfSelectExprs2 does deep equals between the two objects.
+func (cmp *Comparator) RefOfSelectExprs2(a, b *SelectExprs2) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return cmp.SliceOfSelectExpr(a.Exprs, b.Exprs)
 }
 
 // RefOfSelectInto does deep equals between the two objects.
@@ -7622,6 +7639,19 @@ func (cmp *Comparator) RefOfRootNode(a, b *RootNode) bool {
 		return false
 	}
 	return cmp.SQLNode(a.SQLNode, b.SQLNode)
+}
+
+// SliceOfSelectExpr does deep equals between the two objects.
+func (cmp *Comparator) SliceOfSelectExpr(a, b []SelectExpr) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !cmp.SelectExpr(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 // RefOfTableName does deep equals between the two objects.

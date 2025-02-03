@@ -436,6 +436,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfSelect(n, parent)
 	case SelectExprs:
 		return c.copyOnRewriteSelectExprs(n, parent)
+	case *SelectExprs2:
+		return c.copyOnRewriteRefOfSelectExprs2(n, parent)
 	case *SelectInto:
 		return c.copyOnRewriteRefOfSelectInto(n, parent)
 	case *Set:
@@ -5361,7 +5363,7 @@ func (c *cow) copyOnRewriteRefOfSelect(n *Select, parent SQLNode) (out SQLNode, 
 			}
 		}
 		_Comments, changedComments := c.copyOnRewriteRefOfParsedComments(n.Comments, n)
-		_SelectExprs, changedSelectExprs := c.copyOnRewriteSelectExprs(n.SelectExprs, n)
+		_SelectExprs, changedSelectExprs := c.copyOnRewriteRefOfSelectExprs2(n.SelectExprs, n)
 		_Where, changedWhere := c.copyOnRewriteRefOfWhere(n.Where, n)
 		_GroupBy, changedGroupBy := c.copyOnRewriteRefOfGroupBy(n.GroupBy, n)
 		_Having, changedHaving := c.copyOnRewriteRefOfWhere(n.Having, n)
@@ -5374,7 +5376,7 @@ func (c *cow) copyOnRewriteRefOfSelect(n *Select, parent SQLNode) (out SQLNode, 
 			res.With, _ = _With.(*With)
 			res.From = _From
 			res.Comments, _ = _Comments.(*ParsedComments)
-			res.SelectExprs, _ = _SelectExprs.(SelectExprs)
+			res.SelectExprs, _ = _SelectExprs.(*SelectExprs2)
 			res.Where, _ = _Where.(*Where)
 			res.GroupBy, _ = _GroupBy.(*GroupBy)
 			res.Having, _ = _Having.(*Where)
@@ -5410,6 +5412,36 @@ func (c *cow) copyOnRewriteSelectExprs(n SelectExprs, parent SQLNode) (out SQLNo
 		}
 		if changed {
 			out = res
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+func (c *cow) copyOnRewriteRefOfSelectExprs2(n *SelectExprs2, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		var changedExprs bool
+		_Exprs := make([]SelectExpr, len(n.Exprs))
+		for x, el := range n.Exprs {
+			this, changed := c.copyOnRewriteSelectExpr(el, n)
+			_Exprs[x] = this.(SelectExpr)
+			if changed {
+				changedExprs = true
+			}
+		}
+		if changedExprs {
+			res := *n
+			res.Exprs = _Exprs
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
 		}
 	}
 	if c.post != nil {

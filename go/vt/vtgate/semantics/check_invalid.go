@@ -78,7 +78,7 @@ func (a *analyzer) checkSubqueryColumns(parent sqlparser.SQLNode, subq *sqlparse
 	if tuple, ok := otherSide.(sqlparser.ValTuple); ok {
 		cols = len(tuple)
 	}
-	columns := subq.Select.GetColumns()
+	columns := subq.Select.GetColumns().Exprs
 	for _, expr := range columns {
 		_, ok := expr.(*sqlparser.StarExpr)
 		if ok {
@@ -163,8 +163,8 @@ func (a *analyzer) checkSelect(cursor *sqlparser.Cursor, node *sqlparser.Select)
 	}
 	errMsg := "INTO"
 	nextVal := false
-	if len(node.SelectExprs) == 1 {
-		if _, isNextVal := node.SelectExprs[0].(*sqlparser.Nextval); isNextVal {
+	if len(node.SelectExprs.Exprs) == 1 {
+		if _, isNextVal := node.SelectExprs.Exprs[0].(*sqlparser.Nextval); isNextVal {
 			nextVal = true
 			errMsg = "NEXT"
 		}

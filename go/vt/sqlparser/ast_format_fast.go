@@ -1528,6 +1528,16 @@ func (node SelectExprs) FormatFast(buf *TrackedBuffer) {
 }
 
 // FormatFast formats the node.
+func (node *SelectExprs2) FormatFast(buf *TrackedBuffer) {
+	var prefix string
+	for _, n := range node.Exprs {
+		buf.WriteString(prefix)
+		n.FormatFast(buf)
+		prefix = ", "
+	}
+}
+
+// FormatFast formats the node.
 func (node *StarExpr) FormatFast(buf *TrackedBuffer) {
 	if !node.TableName.IsEmpty() {
 		node.TableName.FormatFast(buf)

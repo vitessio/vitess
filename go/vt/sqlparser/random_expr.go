@@ -568,7 +568,7 @@ func (g *Generator) existsExpr(genConfig ExprGeneratorConfig) Expr {
 	} else {
 		// if g.subqueryExpr doesn't return a valid subquery, replace with
 		// select 1
-		selectExprs := SelectExprs{NewAliasedExpr(NewIntLiteral("1"), "")}
+		selectExprs := &SelectExprs2{Exprs: []SelectExpr{NewAliasedExpr(NewIntLiteral("1"), "")}}
 		from := TableExprs{NewAliasedTableExpr(NewTableName("dual"), "")}
 		expr = NewExistsExpr(NewSubquery(NewSelect(nil, selectExprs, nil, nil, from, nil, nil, nil, nil)))
 	}

@@ -732,7 +732,7 @@ func (r *earlyRewriter) getAliasMap(sel *sqlparser.Select) (aliases map[string]e
 		return
 	}
 	aliases = map[string]exprContainer{}
-	for _, e := range sel.SelectExprs {
+	for _, e := range sel.SelectExprs.Exprs {
 		ae, ok := e.(*sqlparser.AliasedExpr)
 		if !ok {
 			continue
@@ -776,7 +776,7 @@ func (r *earlyRewriter) rewriteOrderByLiteral(node *sqlparser.Literal) (expr sql
 		return nil, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "error invalid statement type, expect Select, got: %T", scope.stmt)
 	}
 
-	if num < 1 || num > len(stmt.SelectExprs) {
+	if num < 1 || num > len(stmt.SelectExprs.Exprs) {
 		return nil, false, &ColumnNotFoundClauseError{
 			Column: fmt.Sprintf("%d", num),
 			Clause: r.clause,
@@ -785,13 +785,13 @@ func (r *earlyRewriter) rewriteOrderByLiteral(node *sqlparser.Literal) (expr sql
 
 	// We loop like this instead of directly accessing the offset, to make sure there are no unexpanded `*` before
 	for i := 0; i < num; i++ {
-		if _, ok := stmt.SelectExprs[i].(*sqlparser.AliasedExpr); !ok {
-			return nil, false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot use column offsets in %s when using `%s`", r.clause, sqlparser.String(stmt.SelectExprs[i]))
+		if _, ok := stmt.SelectExprs.Exprs[i].(*sqlparser.AliasedExpr); !ok {
+			return nil, false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot use column offsets in %s when using `%s`", r.clause, sqlparser.String(stmt.SelectExprs.Exprs[i]))
 		}
 	}
 
 	colOffset := num - 1
-	aliasedExpr, ok := stmt.SelectExprs[colOffset].(*sqlparser.AliasedExpr)
+	aliasedExpr, ok := stmt.SelectExprs.Exprs[colOffset].(*sqlparser.AliasedExpr)
 	if !ok {
 		return nil, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "don't know how to handle %s", sqlparser.String(node))
 	}
@@ -831,18 +831,18 @@ func (r *earlyRewriter) rewriteGroupByExpr(node *sqlparser.Literal) (sqlparser.E
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "error invalid statement type, expect Select, got: %T", scope.stmt)
 	}
 
-	if num < 1 || num > len(stmt.SelectExprs) {
+	if num < 1 || num > len(stmt.SelectExprs.Exprs) {
 		return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "Unknown column '%d' in '%s'", num, r.clause)
 	}
 
 	// We loop like this instead of directly accessing the offset, to make sure there are no unexpanded `*` before
 	for i := 0; i < num; i++ {
-		if _, ok := stmt.SelectExprs[i].(*sqlparser.AliasedExpr); !ok {
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot use column offsets in %s when using `%s`", r.clause, sqlparser.String(stmt.SelectExprs[i]))
+		if _, ok := stmt.SelectExprs.Exprs[i].(*sqlparser.AliasedExpr); !ok {
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot use column offsets in %s when using `%s`", r.clause, sqlparser.String(stmt.SelectExprs.Exprs[i]))
 		}
 	}
 
-	aliasedExpr, ok := stmt.SelectExprs[num-1].(*sqlparser.AliasedExpr)
+	aliasedExpr, ok := stmt.SelectExprs.Exprs[num-1].(*sqlparser.AliasedExpr)
 	if !ok {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "don't know how to handle %s", sqlparser.String(node))
 	}
@@ -876,14 +876,14 @@ func handleComparisonExpr(cursor *sqlparser.Cursor, node *sqlparser.ComparisonEx
 	return nil
 }
 
-func (r *earlyRewriter) expandStar(cursor *sqlparser.Cursor, node sqlparser.SelectExprs) error {
+func (r *earlyRewriter) expandStar(cursor *sqlparser.Cursor, node *sqlparser.SelectExprs2) error {
 	currentScope := r.scoper.currentScope()
-	var selExprs sqlparser.SelectExprs
+	selExprs := new(sqlparser.SelectExprs2)
 	changed := false
-	for _, selectExpr := range node {
+	for _, selectExpr := range node.Exprs {
 		starExpr, isStarExpr := selectExpr.(*sqlparser.StarExpr)
 		if !isStarExpr {
-			selExprs = append(selExprs, selectExpr)
+			selExprs.Exprs = append(selExprs.Exprs, selectExpr)
 			continue
 		}
 		starExpanded, colNames, err := r.expandTableColumns(starExpr, currentScope.tables, r.binder.usingJoinInfo, r.scoper.org)
@@ -891,10 +891,10 @@ func (r *earlyRewriter) expandStar(cursor *sqlparser.Cursor, node sqlparser.Sele
 			return err
 		}
 		if !starExpanded || colNames == nil {
-			selExprs = append(selExprs, selectExpr)
+			selExprs.Exprs = append(selExprs.Exprs, selectExpr)
 			continue
 		}
-		selExprs = append(selExprs, colNames...)
+		selExprs.Exprs = append(selExprs.Exprs, colNames...)
 		changed = true
 	}
 	if changed {
@@ -1065,11 +1065,11 @@ func (r *earlyRewriter) expandTableColumns(
 	tables []TableInfo,
 	joinUsing map[TableSet]map[string]TableSet,
 	org originable,
-) (bool, sqlparser.SelectExprs, error) {
+) (bool, *sqlparser.SelectExprs2, error) {
 	unknownTbl := true
 	starExpanded := true
 	state := &expanderState{
-		colNames:        []sqlparser.SelectExpr{},
+		colNames:        &sqlparser.SelectExprs2{},
 		needsQualifier:  len(tables) > 1,
 		joinUsing:       joinUsing,
 		org:             org,
@@ -1155,7 +1155,7 @@ outer:
 
 type expanderState struct {
 	needsQualifier  bool
-	colNames        sqlparser.SelectExprs
+	colNames        *sqlparser.SelectExprs2
 	joinUsing       map[TableSet]map[string]TableSet
 	org             originable
 	expandedColumns map[sqlparser.TableName][]*sqlparser.ColName
@@ -1171,7 +1171,7 @@ func (e *expanderState) addColumn(col ColumnInfo, tbl TableInfo, tblName sqlpars
 	} else {
 		colName = sqlparser.NewColName(col.Name)
 	}
-	e.colNames = append(e.colNames, &sqlparser.AliasedExpr{Expr: colName, As: alias})
+	e.colNames.Exprs = append(e.colNames.Exprs, &sqlparser.AliasedExpr{Expr: colName, As: alias})
 	e.storeExpandInfo(tbl, tblName, colName)
 }
 

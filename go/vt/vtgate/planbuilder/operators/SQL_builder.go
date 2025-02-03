@@ -163,7 +163,7 @@ func (qb *queryBuilder) setWithRollup() {
 func (qb *queryBuilder) addProjection(projection sqlparser.SelectExpr) {
 	switch stmt := qb.stmt.(type) {
 	case *sqlparser.Select:
-		stmt.SelectExprs = append(stmt.SelectExprs, projection)
+		stmt.SelectExprs.Exprs = append(stmt.SelectExprs.Exprs, projection)
 		return
 	case *sqlparser.Union:
 		if ae, ok := projection.(*sqlparser.AliasedExpr); ok {
@@ -197,24 +197,25 @@ func (qb *queryBuilder) pushUnionInsideDerived() {
 	qb.stmt = sel
 }
 
-func unionSelects(exprs sqlparser.SelectExprs) (selectExprs sqlparser.SelectExprs) {
-	for _, col := range exprs {
+func unionSelects(exprs *sqlparser.SelectExprs2) *sqlparser.SelectExprs2 {
+	selectExprs := &sqlparser.SelectExprs2{}
+	for _, col := range exprs.Exprs {
 		switch col := col.(type) {
 		case *sqlparser.AliasedExpr:
 			expr := sqlparser.NewColName(col.ColumnName())
-			selectExprs = append(selectExprs, &sqlparser.AliasedExpr{Expr: expr})
+			selectExprs.Exprs = append(selectExprs.Exprs, &sqlparser.AliasedExpr{Expr: expr})
 		default:
-			selectExprs = append(selectExprs, col)
+			selectExprs.Exprs = append(selectExprs.Exprs, col)
 		}
 	}
-	return
+	return selectExprs
 }
 
 func checkUnionColumnByName(column *sqlparser.ColName, sel sqlparser.TableStatement) {
 	colName := column.Name.String()
 	firstSelect := getFirstSelect(sel)
 	exprs := firstSelect.SelectExprs
-	offset := slices.IndexFunc(exprs, func(expr sqlparser.SelectExpr) bool {
+	offset := slices.IndexFunc(exprs.Exprs, func(expr sqlparser.SelectExpr) bool {
 		switch ae := expr.(type) {
 		case *sqlparser.StarExpr:
 			return true
@@ -283,7 +284,7 @@ func (qb *queryBuilder) joinWith(other *queryBuilder, onCondition sqlparser.Expr
 
 	if sel, isSel := stmt.(*sqlparser.Select); isSel {
 		otherSel := otherStmt.(*sqlparser.Select)
-		sel.SelectExprs = append(sel.SelectExprs, otherSel.SelectExprs...)
+		sel.SelectExprs.Exprs = append(sel.SelectExprs.Exprs, otherSel.SelectExprs.Exprs...)
 	}
 
 	qb.mergeWhereClauses(stmt, otherStmt)
@@ -410,7 +411,7 @@ func stripDownQuery(from, to sqlparser.TableStatement) {
 		toNode.Comments = node.Comments
 		toNode.Limit = node.Limit
 		toNode.SelectExprs = node.SelectExprs
-		for _, expr := range toNode.SelectExprs {
+		for _, expr := range toNode.SelectExprs.Exprs {
 			removeKeyspaceFromSelectExpr(expr)
 		}
 	case *sqlparser.Union:
