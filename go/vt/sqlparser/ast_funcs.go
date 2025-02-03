@@ -2261,6 +2261,8 @@ func (columnFormat ColumnFormat) ToString() string {
 		return keywordStrings[DYNAMIC]
 	case DefaultFormat:
 		return keywordStrings[DEFAULT]
+	case CompressedFormat:
+		return keywordStrings[COMPRESSED]
 	default:
 		return "Unknown column format type"
 	}
