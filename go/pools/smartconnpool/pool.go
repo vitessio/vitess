@@ -156,7 +156,6 @@ type ConnPool[C Connection] struct {
 // The pool must be ConnPool.Open before it can start giving out connections
 func NewPool[C Connection](config *Config[C]) *ConnPool[C] {
 	pool := &ConnPool[C]{}
-	pool.freshSettingsStack.Store(-1)
 	pool.config.maxCapacity = config.Capacity
 	pool.config.maxLifetime.Store(config.MaxLifetime.Nanoseconds())
 	pool.config.idleTimeout.Store(config.IdleTimeout.Nanoseconds())
@@ -195,8 +194,14 @@ func (pool *ConnPool[C]) open() {
 
 	// The expire worker takes care of removing from the waiter list any clients whose
 	// context has been cancelled.
-	pool.runWorker(pool.close, 1*time.Second, func(_ time.Time) bool {
-		pool.wait.expire(false)
+	pool.runWorker(pool.close, 100*time.Millisecond, func(_ time.Time) bool {
+		maybeStarving := pool.wait.expire(false)
+
+		// Do not allow connections to starve; if there's waiters in the queue
+		// and connections in the stack, it means we could be starving them.
+		// Try getting out a connection and handing it over directly
+		for n := 0; n < maybeStarving && pool.tryReturnAnyConn(); n++ {
+		}
 		return true
 	})
 
@@ -395,16 +400,34 @@ func (pool *ConnPool[C]) put(conn *Pooled[C]) {
 		}
 	}
 
-	if !pool.wait.tryReturnConn(conn) {
-		connSetting := conn.Conn.Setting()
-		if connSetting == nil {
-			pool.clean.Push(conn)
-		} else {
-			stack := connSetting.bucket & stackMask
-			pool.settings[stack].Push(conn)
-			pool.freshSettingsStack.Store(int64(stack))
+	pool.tryReturnConn(conn)
+}
+
+func (pool *ConnPool[C]) tryReturnConn(conn *Pooled[C]) bool {
+	if pool.wait.tryReturnConn(conn) {
+		return true
+	}
+	connSetting := conn.Conn.Setting()
+	if connSetting == nil {
+		pool.clean.Push(conn)
+	} else {
+		stack := connSetting.bucket & stackMask
+		pool.settings[stack].Push(conn)
+		pool.freshSettingsStack.Store(int64(stack))
+	}
+	return false
+}
+
+func (pool *ConnPool[C]) tryReturnAnyConn() bool {
+	if conn, ok := pool.clean.Pop(); ok {
+		return pool.tryReturnConn(conn)
+	}
+	for u := 0; u <= stackMask; u++ {
+		if conn, ok := pool.settings[u].Pop(); ok {
+			return pool.tryReturnConn(conn)
 		}
 	}
+	return false
 }
 
 func (pool *ConnPool[D]) extendedMaxLifetime() time.Duration {
@@ -443,14 +466,9 @@ func (pool *ConnPool[C]) connNew(ctx context.Context) (*Pooled[C], error) {
 }
 
 func (pool *ConnPool[C]) getFromSettingsStack(setting *Setting) *Pooled[C] {
-	fresh := pool.freshSettingsStack.Load()
-	if fresh < 0 {
-		return nil
-	}
-
 	var start uint32
 	if setting == nil {
-		start = uint32(fresh)
+		start = uint32(pool.freshSettingsStack.Load())
 	} else {
 		start = setting.bucket
 	}
