@@ -233,7 +233,7 @@ func (mz *materializer) generateBinlogSources(ctx context.Context, targetShard *
 					}
 					mappedCols = append(mappedCols, colName)
 				}
-				subExprs := make(sqlparser.Exprs, 0, len(mappedCols)+2)
+				subExprs := make([]sqlparser.Expr, 0, len(mappedCols)+2)
 				for _, mappedCol := range mappedCols {
 					subExprs = append(subExprs, mappedCol)
 				}
@@ -253,10 +253,7 @@ func (mz *materializer) generateBinlogSources(ctx context.Context, targetShard *
 
 				subExprs = append(subExprs, sqlparser.NewStrLiteral(vindexName))
 				subExprs = append(subExprs, sqlparser.NewStrLiteral(key.KeyRangeString(targetShard.KeyRange)))
-				inKeyRange := &sqlparser.FuncExpr{
-					Name:  sqlparser.NewIdentifierCI("in_keyrange"),
-					Exprs: subExprs,
-				}
+				inKeyRange := sqlparser.NewFuncExpr("in_keyrange", subExprs...)
 				addFilter(sel, inKeyRange)
 			}
 			if tenantClause != nil {

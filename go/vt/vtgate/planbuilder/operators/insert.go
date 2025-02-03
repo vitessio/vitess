@@ -266,7 +266,7 @@ func uniqKeyCompExpressions(vTbl *vindexes.Table, ins *sqlparser.Insert, rows sq
 
 	type uIdx struct {
 		Indexes [][]uComp
-		uniqKey sqlparser.Exprs
+		uniqKey []sqlparser.Expr
 	}
 
 	allIndexes := make([]uIdx, 0, noOfUniqKeys)

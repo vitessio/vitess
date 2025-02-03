@@ -414,7 +414,7 @@ func (aj *ApplyJoin) findOrAddColNameBindVarName(ctx *plancontext.PlanningContex
 	return bvName
 }
 
-func (aj *ApplyJoin) LHSColumnsNeeded(ctx *plancontext.PlanningContext) (needed sqlparser.Exprs) {
+func (aj *ApplyJoin) LHSColumnsNeeded(ctx *plancontext.PlanningContext) (needed []sqlparser.Expr) {
 	f := func(from BindVarExpr) sqlparser.Expr {
 		return from.Expr
 	}

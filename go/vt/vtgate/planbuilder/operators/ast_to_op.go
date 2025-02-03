@@ -137,8 +137,8 @@ func findTablesContained(ctx *plancontext.PlanningContext, node sqlparser.SQLNod
 // comparisons between the inner and the outer side.
 // They can be used for merging the two parts of the query together
 type joinPredicateCollector struct {
-	predicates          sqlparser.Exprs
-	remainingPredicates sqlparser.Exprs
+	predicates          []sqlparser.Expr
+	remainingPredicates []sqlparser.Expr
 	joinColumns         []applyJoinColumn
 
 	totalID,

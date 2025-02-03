@@ -3062,3 +3062,10 @@ func (node *ValuesStatement) GetColumns() (result SelectExprs) {
 func (node *ValuesStatement) SetComments(comments Comments) {}
 
 func (node *ValuesStatement) GetParsedComments() *ParsedComments { return nil }
+
+func NewFuncExpr(name string, exprs ...Expr) *FuncExpr {
+	return &FuncExpr{
+		Name:  NewIdentifierCI(name),
+		Exprs: exprs,
+	}
+}

@@ -1393,7 +1393,7 @@ func (mz *materializer) generateInserts(ctx context.Context, sourceShards []*top
 					}
 					mappedCols = append(mappedCols, colName)
 				}
-				subExprs := make(sqlparser.Exprs, 0, len(mappedCols)+2)
+				subExprs := make([]sqlparser.Expr, 0, len(mappedCols)+2)
 				for _, mappedCol := range mappedCols {
 					subExprs = append(subExprs, mappedCol)
 				}
@@ -1412,10 +1412,7 @@ func (mz *materializer) generateInserts(ctx context.Context, sourceShards []*top
 				}
 				subExprs = append(subExprs, sqlparser.NewStrLiteral(vindexName))
 				subExprs = append(subExprs, sqlparser.NewStrLiteral("{{.keyrange}}"))
-				inKeyRange := &sqlparser.FuncExpr{
-					Name:  sqlparser.NewIdentifierCI("in_keyrange"),
-					Exprs: subExprs,
-				}
+				inKeyRange := sqlparser.NewFuncExpr("in_keyrange", subExprs...)
 				if sel.Where != nil {
 					sel.Where = &sqlparser.Where{
 						Type: sqlparser.WhereClause,

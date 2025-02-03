@@ -162,7 +162,7 @@ func (vschema *VSchema) AddPrimaryKey(ksname, tblName string, cols []string) err
 }
 
 // AddUniqueKey is for testing only.
-func (vschema *VSchema) AddUniqueKey(ksname, tblName string, exprs sqlparser.Exprs) error {
+func (vschema *VSchema) AddUniqueKey(ksname, tblName string, exprs []sqlparser.Expr) error {
 	ks, ok := vschema.Keyspaces[ksname]
 	if !ok {
 		return fmt.Errorf("keyspace %s not found in vschema", ksname)

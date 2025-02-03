@@ -1098,10 +1098,10 @@ func TestVDiffFindPKs(t *testing.T) {
 			},
 			targetSelect: &sqlparser.Select{
 				SelectExprs: sqlparser.SelectExprs{
-					&sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: sqlparser.NewIdentifierCI("c1")}},
-					&sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: sqlparser.NewIdentifierCI("c2")}},
-					&sqlparser.AliasedExpr{Expr: &sqlparser.FuncExpr{Name: sqlparser.NewIdentifierCI("c3")}},
-					&sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: sqlparser.NewIdentifierCI("c4")}},
+					&sqlparser.AliasedExpr{Expr: sqlparser.NewColName("c1")},
+					&sqlparser.AliasedExpr{Expr: sqlparser.NewColName("c2")},
+					&sqlparser.AliasedExpr{Expr: sqlparser.NewFuncExpr("c3")},
+					&sqlparser.AliasedExpr{Expr: sqlparser.NewColName("c4")},
 				},
 			},
 			tdIn: &tableDiffer{
