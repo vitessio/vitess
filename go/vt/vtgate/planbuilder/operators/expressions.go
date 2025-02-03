@@ -17,9 +17,6 @@ limitations under the License.
 package operators
 
 import (
-	"strings"
-
-	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -131,11 +128,4 @@ func getFirstSelect(selStmt sqlparser.TableStatement) *sqlparser.Select {
 		panic(err)
 	}
 	return firstSelect
-}
-
-func exprsToString(valueExprs []sqlparser.Expr) string {
-	exprs := slice.Map(valueExprs, func(expr sqlparser.Expr) string {
-		return sqlparser.String(expr)
-	})
-	return strings.Join(exprs, ", ")
 }

@@ -8027,8 +8027,8 @@ func (st *yySymType) exprUnion() Expr {
 	return v
 }
 
-func (st *yySymType) exprsUnion() Exprs {
-	v, _ := st.union.(Exprs)
+func (st *yySymType) exprsUnion() []Expr {
+	v, _ := st.union.([]Expr)
 	return v
 }
 
@@ -18497,7 +18497,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 1110:
 		yyDollar = yyS[yypt-0 : yypt+1]
-		var yyLOCAL Exprs
+		var yyLOCAL []Expr
 //line sql.y:5738
 		{
 			yyLOCAL = nil
@@ -18505,7 +18505,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 1111:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		var yyLOCAL Exprs
+		var yyLOCAL []Expr
 //line sql.y:5742
 		{
 			yyLOCAL = yyDollar[3].exprsUnion()
@@ -18841,17 +18841,17 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 1156:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL Exprs
+		var yyLOCAL []Expr
 //line sql.y:5959
 		{
-			yyLOCAL = Exprs{yyDollar[1].exprUnion()}
+			yyLOCAL = []Expr{yyDollar[1].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1157:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:5963
 		{
-			yySLICE := (*Exprs)(yyIaddr(yyVAL.union))
+			yySLICE := (*[]Expr)(yyIaddr(yyVAL.union))
 			*yySLICE = append(*yySLICE, yyDollar[3].exprUnion())
 		}
 	case 1158:
@@ -22531,7 +22531,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 1642:
 		yyDollar = yyS[yypt-0 : yypt+1]
-		var yyLOCAL Exprs
+		var yyLOCAL []Expr
 //line sql.y:8043
 		{
 			yyLOCAL = nil
@@ -22539,7 +22539,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 1643:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL Exprs
+		var yyLOCAL []Expr
 //line sql.y:8047
 		{
 			yyLOCAL = yyDollar[1].exprsUnion()

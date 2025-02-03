@@ -1487,7 +1487,7 @@ func (node *CallProc) FormatFast(buf *TrackedBuffer) {
 	buf.WriteString("call ")
 	node.Name.FormatFast(buf)
 	buf.WriteByte('(')
-	node.Params.FormatFast(buf)
+	buf.formatExprs(node.Params)
 	buf.WriteByte(')')
 }
 
@@ -2223,7 +2223,7 @@ func (node *FuncExpr) FormatFast(buf *TrackedBuffer) {
 		buf.WriteString(funcName)
 	}
 	buf.WriteByte('(')
-	node.Exprs.FormatFast(buf)
+	buf.formatExprs(node.Exprs)
 	buf.WriteByte(')')
 }
 
@@ -2232,11 +2232,11 @@ func (node *GroupConcatExpr) FormatFast(buf *TrackedBuffer) {
 	if node.Distinct {
 		buf.WriteString("group_concat(")
 		buf.WriteString(DistinctStr)
-		node.Exprs.FormatFast(buf)
+		buf.formatExprs(node.Exprs)
 		node.OrderBy.FormatFast(buf)
 	} else {
 		buf.WriteString("group_concat(")
-		node.Exprs.FormatFast(buf)
+		buf.formatExprs(node.Exprs)
 		node.OrderBy.FormatFast(buf)
 	}
 	if node.Separator != "" {
@@ -2302,7 +2302,7 @@ func (node *WindowSpecification) FormatFast(buf *TrackedBuffer) {
 	}
 	if node.PartitionClause != nil {
 		buf.WriteString(" partition by ")
-		node.PartitionClause.FormatFast(buf)
+		buf.formatExprs(node.PartitionClause)
 	}
 	if node.OrderClause != nil {
 		node.OrderClause.FormatFast(buf)
@@ -2519,7 +2519,7 @@ func (node *IntervalFuncExpr) FormatFast(buf *TrackedBuffer) {
 	buf.WriteString("interval(")
 	buf.printExpr(node, node.Expr, true)
 	buf.WriteString(", ")
-	node.Exprs.FormatFast(buf)
+	buf.formatExprs(node.Exprs)
 	buf.WriteByte(')')
 }
 
@@ -2545,7 +2545,7 @@ func (node *LocateExpr) FormatFast(buf *TrackedBuffer) {
 // FormatFast formats the node.
 func (node *CharExpr) FormatFast(buf *TrackedBuffer) {
 	buf.WriteString("char(")
-	node.Exprs.FormatFast(buf)
+	buf.formatExprs(node.Exprs)
 	if node.Charset != "" {
 		buf.WriteString(" using ")
 		buf.WriteString(node.Charset)
@@ -3760,7 +3760,7 @@ func (node *Count) FormatFast(buf *TrackedBuffer) {
 	if node.Distinct {
 		buf.WriteString(DistinctStr)
 	}
-	node.Args.FormatFast(buf)
+	buf.formatExprs(node.Args)
 	buf.WriteByte(')')
 	if node.OverClause != nil {
 		buf.WriteByte(' ')
@@ -3984,14 +3984,14 @@ func (node *PointExpr) FormatFast(buf *TrackedBuffer) {
 // FormatFast formats the node.
 func (node *LineStringExpr) FormatFast(buf *TrackedBuffer) {
 	buf.WriteString("linestring(")
-	node.PointParams.FormatFast(buf)
+	buf.formatExprs(node.PointParams)
 	buf.WriteByte(')')
 }
 
 // FormatFast formats the node.
 func (node *PolygonExpr) FormatFast(buf *TrackedBuffer) {
 	buf.WriteString("polygon(")
-	node.LinestringParams.FormatFast(buf)
+	buf.formatExprs(node.LinestringParams)
 	buf.WriteByte(')')
 }
 
@@ -4011,21 +4011,21 @@ func (node *PurgeBinaryLogs) FormatFast(buf *TrackedBuffer) {
 
 func (node *MultiPolygonExpr) FormatFast(buf *TrackedBuffer) {
 	buf.WriteString("multipolygon(")
-	node.PolygonParams.FormatFast(buf)
+	buf.formatExprs(node.PolygonParams)
 	buf.WriteByte(')')
 }
 
 // FormatFast formats the node.
 func (node *MultiPointExpr) FormatFast(buf *TrackedBuffer) {
 	buf.WriteString("multipoint(")
-	node.PointParams.FormatFast(buf)
+	buf.formatExprs(node.PointParams)
 	buf.WriteByte(')')
 }
 
 // FormatFast formats the node.
 func (node *MultiLinestringExpr) FormatFast(buf *TrackedBuffer) {
 	buf.WriteString("multilinestring(")
-	node.LinestringParams.FormatFast(buf)
+	buf.formatExprs(node.LinestringParams)
 	buf.WriteByte(')')
 }
 

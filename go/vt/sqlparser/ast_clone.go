@@ -887,7 +887,7 @@ func CloneRefOfCallProc(n *CallProc) *CallProc {
 	}
 	out := *n
 	out.Name = CloneTableName(n.Name)
-	out.Params = CloneExprs(n.Params)
+	out.Params = CloneSliceOfExpr(n.Params)
 	return &out
 }
 
@@ -932,7 +932,7 @@ func CloneRefOfCharExpr(n *CharExpr) *CharExpr {
 		return nil
 	}
 	out := *n
-	out.Exprs = CloneExprs(n.Exprs)
+	out.Exprs = CloneSliceOfExpr(n.Exprs)
 	return &out
 }
 
@@ -1091,7 +1091,7 @@ func CloneRefOfCount(n *Count) *Count {
 		return nil
 	}
 	out := *n
-	out.Args = CloneExprs(n.Args)
+	out.Args = CloneSliceOfExpr(n.Args)
 	out.OverClause = CloneRefOfOverClause(n.OverClause)
 	return &out
 }
@@ -1422,7 +1422,7 @@ func CloneRefOfFuncExpr(n *FuncExpr) *FuncExpr {
 	out := *n
 	out.Qualifier = CloneIdentifierCS(n.Qualifier)
 	out.Name = CloneIdentifierCI(n.Name)
-	out.Exprs = CloneExprs(n.Exprs)
+	out.Exprs = CloneSliceOfExpr(n.Exprs)
 	return &out
 }
 
@@ -1569,7 +1569,7 @@ func CloneRefOfGroupConcatExpr(n *GroupConcatExpr) *GroupConcatExpr {
 		return nil
 	}
 	out := *n
-	out.Exprs = CloneExprs(n.Exprs)
+	out.Exprs = CloneSliceOfExpr(n.Exprs)
 	out.OrderBy = CloneOrderBy(n.OrderBy)
 	out.Limit = CloneRefOfLimit(n.Limit)
 	return &out
@@ -1677,7 +1677,7 @@ func CloneRefOfIntervalFuncExpr(n *IntervalFuncExpr) *IntervalFuncExpr {
 	}
 	out := *n
 	out.Expr = CloneExpr(n.Expr)
-	out.Exprs = CloneExprs(n.Exprs)
+	out.Exprs = CloneSliceOfExpr(n.Exprs)
 	return &out
 }
 
@@ -1718,7 +1718,7 @@ func CloneRefOfJSONArrayExpr(n *JSONArrayExpr) *JSONArrayExpr {
 		return nil
 	}
 	out := *n
-	out.Params = CloneExprs(n.Params)
+	out.Params = CloneSliceOfExpr(n.Params)
 	return &out
 }
 
@@ -1850,7 +1850,7 @@ func CloneRefOfJSONRemoveExpr(n *JSONRemoveExpr) *JSONRemoveExpr {
 	}
 	out := *n
 	out.JSONDoc = CloneExpr(n.JSONDoc)
-	out.PathList = CloneExprs(n.PathList)
+	out.PathList = CloneSliceOfExpr(n.PathList)
 	return &out
 }
 
@@ -1954,7 +1954,7 @@ func CloneRefOfJSONValueMergeExpr(n *JSONValueMergeExpr) *JSONValueMergeExpr {
 	}
 	out := *n
 	out.JSONDoc = CloneExpr(n.JSONDoc)
-	out.JSONDocList = CloneExprs(n.JSONDocList)
+	out.JSONDocList = CloneSliceOfExpr(n.JSONDocList)
 	return &out
 }
 
@@ -2063,7 +2063,7 @@ func CloneRefOfLineStringExpr(n *LineStringExpr) *LineStringExpr {
 		return nil
 	}
 	out := *n
-	out.PointParams = CloneExprs(n.PointParams)
+	out.PointParams = CloneSliceOfExpr(n.PointParams)
 	return &out
 }
 
@@ -2199,7 +2199,7 @@ func CloneRefOfMultiLinestringExpr(n *MultiLinestringExpr) *MultiLinestringExpr 
 		return nil
 	}
 	out := *n
-	out.LinestringParams = CloneExprs(n.LinestringParams)
+	out.LinestringParams = CloneSliceOfExpr(n.LinestringParams)
 	return &out
 }
 
@@ -2209,7 +2209,7 @@ func CloneRefOfMultiPointExpr(n *MultiPointExpr) *MultiPointExpr {
 		return nil
 	}
 	out := *n
-	out.PointParams = CloneExprs(n.PointParams)
+	out.PointParams = CloneSliceOfExpr(n.PointParams)
 	return &out
 }
 
@@ -2219,7 +2219,7 @@ func CloneRefOfMultiPolygonExpr(n *MultiPolygonExpr) *MultiPolygonExpr {
 		return nil
 	}
 	out := *n
-	out.PolygonParams = CloneExprs(n.PolygonParams)
+	out.PolygonParams = CloneSliceOfExpr(n.PolygonParams)
 	return &out
 }
 
@@ -2546,7 +2546,7 @@ func CloneRefOfPolygonExpr(n *PolygonExpr) *PolygonExpr {
 		return nil
 	}
 	out := *n
-	out.LinestringParams = CloneExprs(n.LinestringParams)
+	out.LinestringParams = CloneSliceOfExpr(n.LinestringParams)
 	return &out
 }
 
@@ -3466,7 +3466,7 @@ func CloneRefOfWindowSpecification(n *WindowSpecification) *WindowSpecification 
 	}
 	out := *n
 	out.Name = CloneIdentifierCI(n.Name)
-	out.PartitionClause = CloneExprs(n.PartitionClause)
+	out.PartitionClause = CloneSliceOfExpr(n.PartitionClause)
 	out.OrderClause = CloneOrderBy(n.OrderClause)
 	out.FrameClause = CloneRefOfFrameClause(n.FrameClause)
 	return &out
@@ -4418,6 +4418,18 @@ func CloneSliceOfTxAccessMode(n []TxAccessMode) []TxAccessMode {
 	return res
 }
 
+// CloneSliceOfExpr creates a deep clone of the input.
+func CloneSliceOfExpr(n []Expr) []Expr {
+	if n == nil {
+		return nil
+	}
+	res := make([]Expr, len(n))
+	for i, x := range n {
+		res[i] = CloneExpr(x)
+	}
+	return res
+}
+
 // CloneSliceOfRefOfWhen creates a deep clone of the input.
 func CloneSliceOfRefOfWhen(n []*When) []*When {
 	if n == nil {
@@ -4493,18 +4505,6 @@ func CloneSliceOfRefOfVariable(n []*Variable) []*Variable {
 	res := make([]*Variable, len(n))
 	for i, x := range n {
 		res[i] = CloneRefOfVariable(x)
-	}
-	return res
-}
-
-// CloneSliceOfExpr creates a deep clone of the input.
-func CloneSliceOfExpr(n []Expr) []Expr {
-	if n == nil {
-		return nil
-	}
-	res := make([]Expr, len(n))
-	for i, x := range n {
-		res[i] = CloneExpr(x)
 	}
 	return res
 }

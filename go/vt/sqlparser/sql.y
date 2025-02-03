@@ -154,7 +154,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
   partitions    Partitions
   tableExprs    TableExprs
   tableNames    TableNames
-  exprs         Exprs
+  exprs         []Expr
   values        Values
   valTuple      ValTuple
   orderBy       OrderBy
@@ -5957,7 +5957,7 @@ subquery:
 expression_list:
   expression
   {
-    $$ = Exprs{$1}
+    $$ = []Expr{$1}
   }
 | expression_list ',' expression
   {

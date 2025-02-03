@@ -403,7 +403,7 @@ func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) Operator {
 func (aggr Aggr) setPushColumn(exprs []sqlparser.Expr) {
 	if aggr.Func == nil {
 		if len(exprs) > 1 {
-			panic(vterrors.VT13001(fmt.Sprintf("unexpected number of expression in an random aggregation: %s", exprsToString(exprs))))
+			panic(vterrors.VT13001(fmt.Sprintf("unexpected number of expression in an random aggregation: %s", sqlparser.SliceString(exprs))))
 		}
 		aggr.Original.Expr = exprs[0]
 		return

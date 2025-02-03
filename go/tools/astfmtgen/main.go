@@ -207,8 +207,6 @@ func (r *Rewriter) rewriteAstPrintf(cursor *astutil.Cursor, expr *ast.CallExpr) 
 
 		token := format[i]
 		switch token {
-		case 'c':
-			cursor.InsertBefore(r.rewriteLiteral(callexpr.X, "WriteByte", expr.Args[2+fieldnum]))
 		case 's':
 			cursor.InsertBefore(r.rewriteLiteral(callexpr.X, "WriteString", expr.Args[2+fieldnum]))
 		case 'l', 'r', 'v':
@@ -249,6 +247,50 @@ func (r *Rewriter) rewriteAstPrintf(cursor *astutil.Cursor, expr *ast.CallExpr) 
 				Args: []ast.Expr{&ast.BasicLit{Value: `"%d"`, Kind: gotoken.STRING}, expr.Args[2+fieldnum]},
 			}
 			cursor.InsertBefore(r.rewriteLiteral(callexpr.X, "WriteString", call))
+		case 'n': // new directive for slices of AST nodes checked at code generation time
+			inputExpr := expr.Args[2+fieldnum]
+			inputType := r.pkg.TypesInfo.Types[inputExpr].Type
+			sliceType, ok := inputType.(*types.Slice)
+			if !ok {
+				panic("'%n' directive requires a slice")
+			}
+			if types.Implements(sliceType.Elem(), r.astExpr) {
+				// Fast path: input is []Expr
+				call := &ast.CallExpr{
+					Fun: &ast.SelectorExpr{
+						X:   callexpr.X,
+						Sel: &ast.Ident{Name: "formatExprs"},
+					},
+					Args: []ast.Expr{inputExpr},
+				}
+				cursor.InsertBefore(&ast.ExprStmt{X: call})
+				break
+			}
+			log.Printf("slow path for `n` directive with type %T", types.TypeString(inputType, noQualifier))
+			// Slow path: slice elements do not implement Expr
+			cursor.InsertBefore(&ast.ExprStmt{
+				X: &ast.CallExpr{
+					Fun: &ast.SelectorExpr{
+						X:   &ast.Ident{Name: "log"},
+						Sel: &ast.Ident{Name: "Printf"},
+					},
+					Args: []ast.Expr{
+						&ast.BasicLit{
+							Kind:  gotoken.STRING,
+							Value: strconv.Quote("slow path for %n with type %T"),
+						},
+						inputExpr,
+					},
+				},
+			})
+			call := &ast.CallExpr{
+				Fun: &ast.SelectorExpr{
+					X:   callexpr.X,
+					Sel: &ast.Ident{Name: "formatNodes"},
+				},
+				Args: []ast.Expr{inputExpr},
+			}
+			cursor.InsertBefore(&ast.ExprStmt{X: call})
 		default:
 			panic(fmt.Sprintf("unsupported escape %q", token))
 		}
@@ -258,4 +300,8 @@ func (r *Rewriter) rewriteAstPrintf(cursor *astutil.Cursor, expr *ast.CallExpr) 
 
 	cursor.Delete()
 	return true
+}
+
+var noQualifier = func(p *types.Package) string {
+	return ""
 }

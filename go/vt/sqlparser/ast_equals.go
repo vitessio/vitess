@@ -2032,7 +2032,7 @@ func (cmp *Comparator) RefOfCallProc(a, b *CallProc) bool {
 		return false
 	}
 	return cmp.TableName(a.Name, b.Name) &&
-		cmp.Exprs(a.Params, b.Params)
+		cmp.SliceOfExpr(a.Params, b.Params)
 }
 
 // RefOfCaseExpr does deep equals between the two objects.
@@ -2084,7 +2084,7 @@ func (cmp *Comparator) RefOfCharExpr(a, b *CharExpr) bool {
 		return false
 	}
 	return a.Charset == b.Charset &&
-		cmp.Exprs(a.Exprs, b.Exprs)
+		cmp.SliceOfExpr(a.Exprs, b.Exprs)
 }
 
 // RefOfCheckConstraintDefinition does deep equals between the two objects.
@@ -2278,7 +2278,7 @@ func (cmp *Comparator) RefOfCount(a, b *Count) bool {
 		return false
 	}
 	return a.Distinct == b.Distinct &&
-		cmp.Exprs(a.Args, b.Args) &&
+		cmp.SliceOfExpr(a.Args, b.Args) &&
 		cmp.RefOfOverClause(a.OverClause, b.OverClause)
 }
 
@@ -2671,7 +2671,7 @@ func (cmp *Comparator) RefOfFuncExpr(a, b *FuncExpr) bool {
 	}
 	return cmp.IdentifierCS(a.Qualifier, b.Qualifier) &&
 		cmp.IdentifierCI(a.Name, b.Name) &&
-		cmp.Exprs(a.Exprs, b.Exprs)
+		cmp.SliceOfExpr(a.Exprs, b.Exprs)
 }
 
 // RefOfGTIDFuncExpr does deep equals between the two objects.
@@ -2841,7 +2841,7 @@ func (cmp *Comparator) RefOfGroupConcatExpr(a, b *GroupConcatExpr) bool {
 	}
 	return a.Distinct == b.Distinct &&
 		a.Separator == b.Separator &&
-		cmp.Exprs(a.Exprs, b.Exprs) &&
+		cmp.SliceOfExpr(a.Exprs, b.Exprs) &&
 		cmp.OrderBy(a.OrderBy, b.OrderBy) &&
 		cmp.RefOfLimit(a.Limit, b.Limit)
 }
@@ -2965,7 +2965,7 @@ func (cmp *Comparator) RefOfIntervalFuncExpr(a, b *IntervalFuncExpr) bool {
 		return false
 	}
 	return cmp.Expr(a.Expr, b.Expr) &&
-		cmp.Exprs(a.Exprs, b.Exprs)
+		cmp.SliceOfExpr(a.Exprs, b.Exprs)
 }
 
 // RefOfIntroducerExpr does deep equals between the two objects.
@@ -3012,7 +3012,7 @@ func (cmp *Comparator) RefOfJSONArrayExpr(a, b *JSONArrayExpr) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return cmp.Exprs(a.Params, b.Params)
+	return cmp.SliceOfExpr(a.Params, b.Params)
 }
 
 // RefOfJSONAttributesExpr does deep equals between the two objects.
@@ -3157,7 +3157,7 @@ func (cmp *Comparator) RefOfJSONRemoveExpr(a, b *JSONRemoveExpr) bool {
 		return false
 	}
 	return cmp.Expr(a.JSONDoc, b.JSONDoc) &&
-		cmp.Exprs(a.PathList, b.PathList)
+		cmp.SliceOfExpr(a.PathList, b.PathList)
 }
 
 // RefOfJSONSchemaValidFuncExpr does deep equals between the two objects.
@@ -3271,7 +3271,7 @@ func (cmp *Comparator) RefOfJSONValueMergeExpr(a, b *JSONValueMergeExpr) bool {
 	}
 	return a.Type == b.Type &&
 		cmp.Expr(a.JSONDoc, b.JSONDoc) &&
-		cmp.Exprs(a.JSONDocList, b.JSONDocList)
+		cmp.SliceOfExpr(a.JSONDocList, b.JSONDocList)
 }
 
 // RefOfJSONValueModifierExpr does deep equals between the two objects.
@@ -3397,7 +3397,7 @@ func (cmp *Comparator) RefOfLineStringExpr(a, b *LineStringExpr) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return cmp.Exprs(a.PointParams, b.PointParams)
+	return cmp.SliceOfExpr(a.PointParams, b.PointParams)
 }
 
 // RefOfLinestrPropertyFuncExpr does deep equals between the two objects.
@@ -3556,7 +3556,7 @@ func (cmp *Comparator) RefOfMultiLinestringExpr(a, b *MultiLinestringExpr) bool 
 	if a == nil || b == nil {
 		return false
 	}
-	return cmp.Exprs(a.LinestringParams, b.LinestringParams)
+	return cmp.SliceOfExpr(a.LinestringParams, b.LinestringParams)
 }
 
 // RefOfMultiPointExpr does deep equals between the two objects.
@@ -3567,7 +3567,7 @@ func (cmp *Comparator) RefOfMultiPointExpr(a, b *MultiPointExpr) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return cmp.Exprs(a.PointParams, b.PointParams)
+	return cmp.SliceOfExpr(a.PointParams, b.PointParams)
 }
 
 // RefOfMultiPolygonExpr does deep equals between the two objects.
@@ -3578,7 +3578,7 @@ func (cmp *Comparator) RefOfMultiPolygonExpr(a, b *MultiPolygonExpr) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return cmp.Exprs(a.PolygonParams, b.PolygonParams)
+	return cmp.SliceOfExpr(a.PolygonParams, b.PolygonParams)
 }
 
 // RefOfNTHValueExpr does deep equals between the two objects.
@@ -3954,7 +3954,7 @@ func (cmp *Comparator) RefOfPolygonExpr(a, b *PolygonExpr) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return cmp.Exprs(a.LinestringParams, b.LinestringParams)
+	return cmp.SliceOfExpr(a.LinestringParams, b.LinestringParams)
 }
 
 // RefOfPolygonPropertyFuncExpr does deep equals between the two objects.
@@ -5006,7 +5006,7 @@ func (cmp *Comparator) RefOfWindowSpecification(a, b *WindowSpecification) bool 
 		return false
 	}
 	return cmp.IdentifierCI(a.Name, b.Name) &&
-		cmp.Exprs(a.PartitionClause, b.PartitionClause) &&
+		cmp.SliceOfExpr(a.PartitionClause, b.PartitionClause) &&
 		cmp.OrderBy(a.OrderClause, b.OrderClause) &&
 		cmp.RefOfFrameClause(a.FrameClause, b.FrameClause)
 }
@@ -7328,6 +7328,19 @@ func (cmp *Comparator) SliceOfTxAccessMode(a, b []TxAccessMode) bool {
 	return true
 }
 
+// SliceOfExpr does deep equals between the two objects.
+func (cmp *Comparator) SliceOfExpr(a, b []Expr) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !cmp.Expr(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
 // SliceOfRefOfWhen does deep equals between the two objects.
 func (cmp *Comparator) SliceOfRefOfWhen(a, b []*When) bool {
 	if len(a) != len(b) {
@@ -7417,19 +7430,6 @@ func (cmp *Comparator) SliceOfRefOfVariable(a, b []*Variable) bool {
 	}
 	for i := 0; i < len(a); i++ {
 		if !cmp.RefOfVariable(a[i], b[i]) {
-			return false
-		}
-	}
-	return true
-}
-
-// SliceOfExpr does deep equals between the two objects.
-func (cmp *Comparator) SliceOfExpr(a, b []Expr) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := 0; i < len(a); i++ {
-		if !cmp.Expr(a[i], b[i]) {
 			return false
 		}
 	}

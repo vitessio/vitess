@@ -669,7 +669,7 @@ func (tr *ShardedRouting) extraInfo() string {
 	return fmt.Sprintf(
 		"Vindex[%s] Values[%s] Seen:[%s]",
 		tr.Selected.FoundVindex.String(),
-		exprsToString(valueExprs),
+		sqlparser.SliceString(valueExprs),
 		sqlparser.String(sqlparser.AndExpressions(tr.SeenPredicates...)),
 	)
 }

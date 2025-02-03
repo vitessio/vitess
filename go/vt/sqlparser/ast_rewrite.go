@@ -1635,10 +1635,14 @@ func (a *application) rewriteRefOfCallProc(parent SQLNode, node *CallProc, repla
 	}) {
 		return false
 	}
-	if !a.rewriteExprs(node, node.Params, func(newNode, parent SQLNode) {
-		parent.(*CallProc).Params = newNode.(Exprs)
-	}) {
-		return false
+	for x, el := range node.Params {
+		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*CallProc).Params[idx] = newNode.(Expr)
+			}
+		}(x)) {
+			return false
+		}
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -1792,10 +1796,14 @@ func (a *application) rewriteRefOfCharExpr(parent SQLNode, node *CharExpr, repla
 			return true
 		}
 	}
-	if !a.rewriteExprs(node, node.Exprs, func(newNode, parent SQLNode) {
-		parent.(*CharExpr).Exprs = newNode.(Exprs)
-	}) {
-		return false
+	for x, el := range node.Exprs {
+		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*CharExpr).Exprs[idx] = newNode.(Expr)
+			}
+		}(x)) {
+			return false
+		}
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -2304,10 +2312,14 @@ func (a *application) rewriteRefOfCount(parent SQLNode, node *Count, replacer re
 			return true
 		}
 	}
-	if !a.rewriteExprs(node, node.Args, func(newNode, parent SQLNode) {
-		parent.(*Count).Args = newNode.(Exprs)
-	}) {
-		return false
+	for x, el := range node.Args {
+		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*Count).Args[idx] = newNode.(Expr)
+			}
+		}(x)) {
+			return false
+		}
 	}
 	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
 		parent.(*Count).OverClause = newNode.(*OverClause)
@@ -3419,10 +3431,14 @@ func (a *application) rewriteRefOfFuncExpr(parent SQLNode, node *FuncExpr, repla
 	}) {
 		return false
 	}
-	if !a.rewriteExprs(node, node.Exprs, func(newNode, parent SQLNode) {
-		parent.(*FuncExpr).Exprs = newNode.(Exprs)
-	}) {
-		return false
+	for x, el := range node.Exprs {
+		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*FuncExpr).Exprs[idx] = newNode.(Expr)
+			}
+		}(x)) {
+			return false
+		}
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -3924,10 +3940,14 @@ func (a *application) rewriteRefOfGroupConcatExpr(parent SQLNode, node *GroupCon
 			return true
 		}
 	}
-	if !a.rewriteExprs(node, node.Exprs, func(newNode, parent SQLNode) {
-		parent.(*GroupConcatExpr).Exprs = newNode.(Exprs)
-	}) {
-		return false
+	for x, el := range node.Exprs {
+		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*GroupConcatExpr).Exprs[idx] = newNode.(Expr)
+			}
+		}(x)) {
+			return false
+		}
 	}
 	if !a.rewriteOrderBy(node, node.OrderBy, func(newNode, parent SQLNode) {
 		parent.(*GroupConcatExpr).OrderBy = newNode.(OrderBy)
@@ -4310,10 +4330,14 @@ func (a *application) rewriteRefOfIntervalFuncExpr(parent SQLNode, node *Interva
 	}) {
 		return false
 	}
-	if !a.rewriteExprs(node, node.Exprs, func(newNode, parent SQLNode) {
-		parent.(*IntervalFuncExpr).Exprs = newNode.(Exprs)
-	}) {
-		return false
+	for x, el := range node.Exprs {
+		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*IntervalFuncExpr).Exprs[idx] = newNode.(Expr)
+			}
+		}(x)) {
+			return false
+		}
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -4443,10 +4467,14 @@ func (a *application) rewriteRefOfJSONArrayExpr(parent SQLNode, node *JSONArrayE
 			return true
 		}
 	}
-	if !a.rewriteExprs(node, node.Params, func(newNode, parent SQLNode) {
-		parent.(*JSONArrayExpr).Params = newNode.(Exprs)
-	}) {
-		return false
+	for x, el := range node.Params {
+		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*JSONArrayExpr).Params[idx] = newNode.(Expr)
+			}
+		}(x)) {
+			return false
+		}
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -4903,10 +4931,14 @@ func (a *application) rewriteRefOfJSONRemoveExpr(parent SQLNode, node *JSONRemov
 	}) {
 		return false
 	}
-	if !a.rewriteExprs(node, node.PathList, func(newNode, parent SQLNode) {
-		parent.(*JSONRemoveExpr).PathList = newNode.(Exprs)
-	}) {
-		return false
+	for x, el := range node.PathList {
+		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*JSONRemoveExpr).PathList[idx] = newNode.(Expr)
+			}
+		}(x)) {
+			return false
+		}
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -5269,10 +5301,14 @@ func (a *application) rewriteRefOfJSONValueMergeExpr(parent SQLNode, node *JSONV
 	}) {
 		return false
 	}
-	if !a.rewriteExprs(node, node.JSONDocList, func(newNode, parent SQLNode) {
-		parent.(*JSONValueMergeExpr).JSONDocList = newNode.(Exprs)
-	}) {
-		return false
+	for x, el := range node.JSONDocList {
+		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*JSONValueMergeExpr).JSONDocList[idx] = newNode.(Expr)
+			}
+		}(x)) {
+			return false
+		}
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -5629,10 +5665,14 @@ func (a *application) rewriteRefOfLineStringExpr(parent SQLNode, node *LineStrin
 			return true
 		}
 	}
-	if !a.rewriteExprs(node, node.PointParams, func(newNode, parent SQLNode) {
-		parent.(*LineStringExpr).PointParams = newNode.(Exprs)
-	}) {
-		return false
+	for x, el := range node.PointParams {
+		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*LineStringExpr).PointParams[idx] = newNode.(Expr)
+			}
+		}(x)) {
+			return false
+		}
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -6082,10 +6122,14 @@ func (a *application) rewriteRefOfMultiLinestringExpr(parent SQLNode, node *Mult
 			return true
 		}
 	}
-	if !a.rewriteExprs(node, node.LinestringParams, func(newNode, parent SQLNode) {
-		parent.(*MultiLinestringExpr).LinestringParams = newNode.(Exprs)
-	}) {
-		return false
+	for x, el := range node.LinestringParams {
+		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*MultiLinestringExpr).LinestringParams[idx] = newNode.(Expr)
+			}
+		}(x)) {
+			return false
+		}
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -6114,10 +6158,14 @@ func (a *application) rewriteRefOfMultiPointExpr(parent SQLNode, node *MultiPoin
 			return true
 		}
 	}
-	if !a.rewriteExprs(node, node.PointParams, func(newNode, parent SQLNode) {
-		parent.(*MultiPointExpr).PointParams = newNode.(Exprs)
-	}) {
-		return false
+	for x, el := range node.PointParams {
+		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*MultiPointExpr).PointParams[idx] = newNode.(Expr)
+			}
+		}(x)) {
+			return false
+		}
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -6146,10 +6194,14 @@ func (a *application) rewriteRefOfMultiPolygonExpr(parent SQLNode, node *MultiPo
 			return true
 		}
 	}
-	if !a.rewriteExprs(node, node.PolygonParams, func(newNode, parent SQLNode) {
-		parent.(*MultiPolygonExpr).PolygonParams = newNode.(Exprs)
-	}) {
-		return false
+	for x, el := range node.PolygonParams {
+		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*MultiPolygonExpr).PolygonParams[idx] = newNode.(Expr)
+			}
+		}(x)) {
+			return false
+		}
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -7220,10 +7272,14 @@ func (a *application) rewriteRefOfPolygonExpr(parent SQLNode, node *PolygonExpr,
 			return true
 		}
 	}
-	if !a.rewriteExprs(node, node.LinestringParams, func(newNode, parent SQLNode) {
-		parent.(*PolygonExpr).LinestringParams = newNode.(Exprs)
-	}) {
-		return false
+	for x, el := range node.LinestringParams {
+		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*PolygonExpr).LinestringParams[idx] = newNode.(Expr)
+			}
+		}(x)) {
+			return false
+		}
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -10361,10 +10417,14 @@ func (a *application) rewriteRefOfWindowSpecification(parent SQLNode, node *Wind
 	}) {
 		return false
 	}
-	if !a.rewriteExprs(node, node.PartitionClause, func(newNode, parent SQLNode) {
-		parent.(*WindowSpecification).PartitionClause = newNode.(Exprs)
-	}) {
-		return false
+	for x, el := range node.PartitionClause {
+		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*WindowSpecification).PartitionClause[idx] = newNode.(Expr)
+			}
+		}(x)) {
+			return false
+		}
 	}
 	if !a.rewriteOrderBy(node, node.OrderClause, func(newNode, parent SQLNode) {
 		parent.(*WindowSpecification).OrderClause = newNode.(OrderBy)
