@@ -18,6 +18,7 @@ package vterrors
 
 import (
 	"fmt"
+	"strings"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
@@ -278,4 +279,17 @@ func errorWithNoCode(id string, short, long string) func(code vtrpcpb.Code, args
 			ID:          id,
 		}
 	}
+}
+
+func ErrorsHaveInvalidSession(errs []error) bool {
+	for _, err := range errs {
+		if IsInvalidSessionError(err) {
+			return true
+		}
+	}
+	return false
+}
+
+func IsInvalidSessionError(err error) bool {
+	return strings.Contains(err.Error(), VT15001(0).ID)
 }
