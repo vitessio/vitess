@@ -621,8 +621,8 @@ func (df *vdiff) adjustForSourceTimeZone(targetSelectExprs sqlparser.SelectExprs
 				if fieldType == querypb.Type_DATETIME {
 					convertTZFuncExpr = sqlparser.NewFuncExpr("convert_tz",
 						colAs,
-						sqlparser.NewStrLiteral(df.sourceTimeZone),
-						sqlparser.NewStrLiteral(df.targetTimeZone))
+						sqlparser.NewStrLiteral(df.targetTimeZone),
+						sqlparser.NewStrLiteral(df.sourceTimeZone))
 					log.Infof("converting datetime column %s using convert_tz()", colName)
 					newSelectExprs = append(newSelectExprs, &sqlparser.AliasedExpr{Expr: convertTZFuncExpr, As: colAs.Name})
 					converted = true
