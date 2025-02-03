@@ -250,7 +250,7 @@ func (buf *TrackedBuffer) formatExprs(exprs []Expr) {
 	var prefix string
 	for _, expr := range exprs {
 		buf.WriteString(prefix)
-		expr.FormatFast(buf)
+		buf.formatter(expr)
 		prefix = ", "
 	}
 }
