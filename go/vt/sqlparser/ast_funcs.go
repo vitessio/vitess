@@ -1195,8 +1195,18 @@ func compliantName(in string) string {
 	return buf.String()
 }
 
-func (node *Select) AddSelectExprs(selectExprs SelectExprs2) {
+func (node *Select) AddSelectExprs(selectExprs *SelectExprs2) {
+	if node.SelectExprs == nil {
+		node.SelectExprs = &SelectExprs2{}
+	}
 	node.SelectExprs.Exprs = append(node.SelectExprs.Exprs, selectExprs.Exprs...)
+}
+
+func (node *Select) AddSelectExpr(expr SelectExpr) {
+	if node.SelectExprs == nil {
+		node.SelectExprs = &SelectExprs2{}
+	}
+	node.SelectExprs.Exprs = append(node.SelectExprs.Exprs, expr)
 }
 
 // AddOrder adds an order by element

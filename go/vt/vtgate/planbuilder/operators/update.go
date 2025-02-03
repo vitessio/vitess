@@ -186,7 +186,7 @@ func createUpdateWithInputOp(ctx *plancontext.PlanningContext, upd *sqlparser.Up
 		colsList = append(colsList, from.cols)
 		uList = append(uList, from.updList)
 		for _, col := range from.cols {
-			selectStmt.SelectExprs.Exprs = append(selectStmt.SelectExprs.Exprs, aeWrap(col))
+			selectStmt.AddSelectExpr(aeWrap(col))
 		}
 		return from.op
 	})

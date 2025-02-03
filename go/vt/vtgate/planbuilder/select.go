@@ -139,9 +139,9 @@ func buildSQLCalcFoundRowsPlan(
 	sel2.OrderBy = nil
 	sel2.Limit = nil
 
-	countStartExpr := []sqlparser.SelectExpr{&sqlparser.AliasedExpr{
-		Expr: &sqlparser.CountStar{},
-	}}
+	countStartExpr := &sqlparser.SelectExprs2{
+		Exprs: []sqlparser.SelectExpr{&sqlparser.AliasedExpr{Expr: &sqlparser.CountStar{}}},
+	}
 	if sel2.GroupBy == nil && sel2.Having == nil {
 		// if there is no grouping, we can use the same query and
 		// just replace the SELECT sub-clause to have a single count(*)
@@ -292,10 +292,10 @@ func handleDualSelects(sel *sqlparser.Select, vschema plancontext.VSchema) (engi
 		return nil, nil
 	}
 
-	exprs := make([]evalengine.Expr, len(sel.SelectExprs))
-	cols := make([]string, len(sel.SelectExprs))
+	exprs := make([]evalengine.Expr, len(sel.SelectExprs.Exprs))
+	cols := make([]string, len(sel.SelectExprs.Exprs))
 	var lockFunctions []*engine.LockFunc
-	for i, e := range sel.SelectExprs {
+	for i, e := range sel.SelectExprs.Exprs {
 		expr, ok := e.(*sqlparser.AliasedExpr)
 		if !ok {
 			return nil, nil

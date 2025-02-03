@@ -163,6 +163,9 @@ func (qb *queryBuilder) setWithRollup() {
 func (qb *queryBuilder) addProjection(projection sqlparser.SelectExpr) {
 	switch stmt := qb.stmt.(type) {
 	case *sqlparser.Select:
+		if stmt.SelectExprs == nil {
+			stmt.SelectExprs = &sqlparser.SelectExprs2{}
+		}
 		stmt.SelectExprs.Exprs = append(stmt.SelectExprs.Exprs, projection)
 		return
 	case *sqlparser.Union:
@@ -284,7 +287,12 @@ func (qb *queryBuilder) joinWith(other *queryBuilder, onCondition sqlparser.Expr
 
 	if sel, isSel := stmt.(*sqlparser.Select); isSel {
 		otherSel := otherStmt.(*sqlparser.Select)
-		sel.SelectExprs.Exprs = append(sel.SelectExprs.Exprs, otherSel.SelectExprs.Exprs...)
+		if sel.SelectExprs == nil {
+			sel.SelectExprs = &sqlparser.SelectExprs2{}
+		}
+		if otherSel.SelectExprs != nil {
+			sel.SelectExprs.Exprs = append(sel.SelectExprs.Exprs, otherSel.SelectExprs.Exprs...)
+		}
 	}
 
 	qb.mergeWhereClauses(stmt, otherStmt)

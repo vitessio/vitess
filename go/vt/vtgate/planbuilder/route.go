@@ -73,11 +73,9 @@ func prepareTheAST(sel sqlparser.SelectStatement) {
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
 		switch node := node.(type) {
 		case *sqlparser.Select:
-			if len(node.SelectExprs) == 0 {
-				node.SelectExprs = []sqlparser.SelectExpr{
-					&sqlparser.AliasedExpr{
-						Expr: sqlparser.NewIntLiteral("1"),
-					},
+			if node.SelectExprs == nil || len(node.SelectExprs.Exprs) == 0 {
+				node.SelectExprs = &sqlparser.SelectExprs2{
+					Exprs: []sqlparser.SelectExpr{&sqlparser.AliasedExpr{Expr: sqlparser.NewIntLiteral("1")}},
 				}
 			}
 		case *sqlparser.ComparisonExpr:

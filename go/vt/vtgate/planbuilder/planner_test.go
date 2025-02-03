@@ -85,5 +85,5 @@ func TestBindingSubquery(t *testing.T) {
 }
 
 func extractExpr(in *sqlparser.Select, idx int) sqlparser.Expr {
-	return in.SelectExprs[idx].(*sqlparser.AliasedExpr).Expr
+	return in.SelectExprs.Exprs[idx].(*sqlparser.AliasedExpr).Expr
 }

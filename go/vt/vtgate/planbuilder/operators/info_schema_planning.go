@@ -18,6 +18,7 @@ package operators
 
 import (
 	"maps"
+	"slices"
 	"strings"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -34,14 +35,14 @@ import (
 // They are special because we usually don't know at plan-time
 // what keyspace the query go to, because we don't see normalized literal values
 type InfoSchemaRouting struct {
-	SysTableTableSchema *sqlparser.Exprs
+	SysTableTableSchema []sqlparser.Expr
 	SysTableTableName   map[string]sqlparser.Expr
 	Table               *QueryTable
 }
 
 func (isr *InfoSchemaRouting) UpdateRoutingParams(ctx *plancontext.PlanningContext, rp *engine.RoutingParameters) {
 	rp.SysTableTableSchema = nil
-	for _, expr := range isr.SysTableTableSchema.Exprs {
+	for _, expr := range isr.SysTableTableSchema {
 		eexpr, err := evalengine.Translate(expr, &evalengine.Config{
 			Collation:     collations.SystemCollation.Collation,
 			ResolveColumn: NotImplementedSchemaInfoResolver,
@@ -70,7 +71,7 @@ func (isr *InfoSchemaRouting) UpdateRoutingParams(ctx *plancontext.PlanningConte
 
 func (isr *InfoSchemaRouting) Clone() Routing {
 	return &InfoSchemaRouting{
-		SysTableTableSchema: sqlparser.Clone(isr.SysTableTableSchema),
+		SysTableTableSchema: slices.Clone(isr.SysTableTableSchema),
 		SysTableTableName:   maps.Clone(isr.SysTableTableName),
 		Table:               isr.Table,
 	}
@@ -87,14 +88,14 @@ func (isr *InfoSchemaRouting) updateRoutingLogic(ctx *plancontext.PlanningContex
 	}
 
 	if isTableSchema {
-		for _, s := range isr.SysTableTableSchema.Exprs {
+		for _, s := range isr.SysTableTableSchema {
 			if sqlparser.Equals.Expr(out, s) {
 				// we already have this expression in the list
 				// stating it again does not add value
 				return isr
 			}
 		}
-		isr.SysTableTableSchema.Exprs = append(isr.SysTableTableSchema.Exprs, out)
+		isr.SysTableTableSchema = append(isr.SysTableTableSchema, out)
 	} else {
 		isr.SysTableTableName[bvName] = out
 	}
@@ -173,8 +174,8 @@ func tryMergeInfoSchemaRoutings(ctx *plancontext.PlanningContext, routingA, rout
 	// we have already checked type earlier, so this should always be safe
 	isrA := routingA.(*InfoSchemaRouting)
 	isrB := routingB.(*InfoSchemaRouting)
-	emptyA := len(isrA.SysTableTableName) == 0 && len(isrA.SysTableTableSchema.Exprs) == 0
-	emptyB := len(isrB.SysTableTableName) == 0 && len(isrB.SysTableTableSchema.Exprs) == 0
+	emptyA := len(isrA.SysTableTableName) == 0 && len(isrA.SysTableTableSchema) == 0
+	emptyB := len(isrB.SysTableTableName) == 0 && len(isrB.SysTableTableSchema) == 0
 
 	switch {
 	// if either side has no predicates to help us route, we can merge them
@@ -184,7 +185,7 @@ func tryMergeInfoSchemaRoutings(ctx *plancontext.PlanningContext, routingA, rout
 		return m.merge(ctx, lhsRoute, rhsRoute, isrA)
 
 	// if we have no schema predicates on either side, we can merge if the table info is the same
-	case len(isrA.SysTableTableSchema.Exprs) == 0 && len(isrB.SysTableTableSchema.Exprs) == 0:
+	case len(isrA.SysTableTableSchema) == 0 && len(isrB.SysTableTableSchema) == 0:
 		for k, expr := range isrB.SysTableTableName {
 			if e, found := isrA.SysTableTableName[k]; found && !sqlparser.Equals.Expr(expr, e) {
 				// schema names are the same, but we have contradicting table names, so we give up
@@ -195,7 +196,7 @@ func tryMergeInfoSchemaRoutings(ctx *plancontext.PlanningContext, routingA, rout
 		return m.merge(ctx, lhsRoute, rhsRoute, isrA)
 
 	// if both sides have the same schema predicate, we can safely merge them
-	case sqlparser.Equals.RefOfExprs(isrA.SysTableTableSchema, isrB.SysTableTableSchema):
+	case equalExprs(isrA.SysTableTableSchema, isrB.SysTableTableSchema):
 		for k, expr := range isrB.SysTableTableName {
 			isrA.SysTableTableName[k] = expr
 		}
@@ -205,6 +206,18 @@ func tryMergeInfoSchemaRoutings(ctx *plancontext.PlanningContext, routingA, rout
 	default:
 		return nil
 	}
+}
+
+func equalExprs(a, b []sqlparser.Expr) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if !sqlparser.Equals.Expr(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 var (

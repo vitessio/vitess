@@ -136,7 +136,7 @@ func createDeleteWithInputOp(ctx *plancontext.PlanningContext, del *sqlparser.De
 	dmls := slice.Map(delOps, func(from dmlOp) Operator {
 		colsList = append(colsList, from.cols)
 		for _, col := range from.cols {
-			selectStmt.SelectExprs.Exprs = append(selectStmt.SelectExprs.Exprs, aeWrap(col))
+			selectStmt.AddSelectExpr(aeWrap(col))
 		}
 		return from.op
 	})
