@@ -160,8 +160,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfExplainStmt(in, f)
 	case *ExplainTab:
 		return VisitRefOfExplainTab(in, f)
-	case Exprs:
-		return VisitExprs(in, f)
+	case *Exprs:
+		return VisitRefOfExprs(in, f)
 	case *ExtractFuncExpr:
 		return VisitRefOfExtractFuncExpr(in, f)
 	case *ExtractValueExpr:
@@ -1564,14 +1564,14 @@ func VisitRefOfExplainTab(in *ExplainTab, f Visit) error {
 	}
 	return nil
 }
-func VisitExprs(in Exprs, f Visit) error {
+func VisitRefOfExprs(in *Exprs, f Visit) error {
 	if in == nil {
 		return nil
 	}
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	for _, el := range in {
+	for _, el := range in.Exprs {
 		if err := VisitExpr(el, f); err != nil {
 			return err
 		}

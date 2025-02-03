@@ -3566,7 +3566,9 @@ func (*JSONObjectAgg) AggrName() string   { return "json_objectagg" }
 
 // Exprs represents a list of value expressions.
 // It's not a valid expression because it's not parenthesized.
-type Exprs []Expr
+type Exprs struct {
+	Exprs []Expr
+}
 
 func (ValTuple) iColTuple()  {}
 func (*Subquery) iColTuple() {}

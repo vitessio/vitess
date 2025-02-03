@@ -1312,9 +1312,9 @@ func (node *Where) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node Exprs) Format(buf *TrackedBuffer) {
+func (node *Exprs) Format(buf *TrackedBuffer) {
 	var prefix string
-	for _, n := range node {
+	for _, n := range node.Exprs {
 		buf.astPrintf(node, "%s%v", prefix, n)
 		prefix = ", "
 	}
@@ -1499,7 +1499,7 @@ func (node *ColName) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node ValTuple) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "(%v)", Exprs(node))
+	buf.astPrintf(node, "(%v)", NewExprs(node))
 }
 
 // Format formats the node.

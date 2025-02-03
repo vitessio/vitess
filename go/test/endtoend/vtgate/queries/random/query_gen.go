@@ -395,7 +395,7 @@ func (sg *selectGenerator) createJoin(tables []tableT) {
 
 // returns 1-3 random expressions based on the last two elements of tables
 // tables should have at least two elements
-func (sg *selectGenerator) createJoinPredicates(tables []tableT) sqlparser.Exprs {
+func (sg *selectGenerator) createJoinPredicates(tables []tableT) []sqlparser.Expr {
 	if len(tables) < 2 {
 		log.Fatalf("tables has %d elements, needs at least 2", len(tables))
 	}
@@ -527,7 +527,7 @@ func (sg *selectGenerator) createHavingPredicates(grouping []column) {
 }
 
 // returns between minExprs and maxExprs random expressions using generators
-func (sg *selectGenerator) createRandomExprs(minExprs, maxExprs int, generators ...sqlparser.ExprGenerator) (predicates sqlparser.Exprs) {
+func (sg *selectGenerator) createRandomExprs(minExprs, maxExprs int, generators ...sqlparser.ExprGenerator) (predicates []sqlparser.Expr) {
 	if minExprs > maxExprs {
 		log.Fatalf("minExprs is greater than maxExprs; minExprs: %d, maxExprs: %d\n", minExprs, maxExprs)
 	} else if maxExprs <= 0 {

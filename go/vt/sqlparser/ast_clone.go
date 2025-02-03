@@ -161,8 +161,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfExplainStmt(in)
 	case *ExplainTab:
 		return CloneRefOfExplainTab(in)
-	case Exprs:
-		return CloneExprs(in)
+	case *Exprs:
+		return CloneRefOfExprs(in)
 	case *ExtractFuncExpr:
 		return CloneRefOfExtractFuncExpr(in)
 	case *ExtractValueExpr:
@@ -1307,16 +1307,14 @@ func CloneRefOfExplainTab(n *ExplainTab) *ExplainTab {
 	return &out
 }
 
-// CloneExprs creates a deep clone of the input.
-func CloneExprs(n Exprs) Exprs {
+// CloneRefOfExprs creates a deep clone of the input.
+func CloneRefOfExprs(n *Exprs) *Exprs {
 	if n == nil {
 		return nil
 	}
-	res := make(Exprs, len(n))
-	for i, x := range n {
-		res[i] = CloneExpr(x)
-	}
-	return res
+	out := *n
+	out.Exprs = CloneSliceOfExpr(n.Exprs)
+	return &out
 }
 
 // CloneRefOfExtractFuncExpr creates a deep clone of the input.

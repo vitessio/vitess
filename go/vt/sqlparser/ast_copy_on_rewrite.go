@@ -160,8 +160,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfExplainStmt(n, parent)
 	case *ExplainTab:
 		return c.copyOnRewriteRefOfExplainTab(n, parent)
-	case Exprs:
-		return c.copyOnRewriteExprs(n, parent)
+	case *Exprs:
+		return c.copyOnRewriteRefOfExprs(n, parent)
 	case *ExtractFuncExpr:
 		return c.copyOnRewriteRefOfExtractFuncExpr(n, parent)
 	case *ExtractValueExpr:
@@ -2158,22 +2158,29 @@ func (c *cow) copyOnRewriteRefOfExplainTab(n *ExplainTab, parent SQLNode) (out S
 	}
 	return
 }
-func (c *cow) copyOnRewriteExprs(n Exprs, parent SQLNode) (out SQLNode, changed bool) {
+func (c *cow) copyOnRewriteRefOfExprs(n *Exprs, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
 	}
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
-		res := make(Exprs, len(n))
-		for x, el := range n {
-			this, change := c.copyOnRewriteExpr(el, n)
-			res[x] = this.(Expr)
-			if change {
-				changed = true
+		var changedExprs bool
+		_Exprs := make([]Expr, len(n.Exprs))
+		for x, el := range n.Exprs {
+			this, changed := c.copyOnRewriteExpr(el, n)
+			_Exprs[x] = this.(Expr)
+			if changed {
+				changedExprs = true
 			}
 		}
-		if changed {
-			out = res
+		if changedExprs {
+			res := *n
+			res.Exprs = _Exprs
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
 		}
 	}
 	if c.post != nil {

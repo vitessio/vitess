@@ -89,7 +89,7 @@ func TestVSchemaUpdate(t *testing.T) {
 		Keyspace:                ks,
 		ColumnListAuthoritative: true,
 		PrimaryKey:              sqlparser.Columns{sqlparser.NewIdentifierCI("a")},
-		UniqueKeys: []sqlparser.Exprs{
+		UniqueKeys: [][]sqlparser.Expr{
 			{sqlparser.NewColName("b")},
 			{sqlparser.NewColName("c"), sqlparser.NewColName("d")},
 		},
@@ -99,7 +99,7 @@ func TestVSchemaUpdate(t *testing.T) {
 		Keyspace:                ks,
 		ColumnListAuthoritative: true,
 		PrimaryKey:              sqlparser.Columns{sqlparser.NewIdentifierCI("a")},
-		UniqueKeys: []sqlparser.Exprs{
+		UniqueKeys: [][]sqlparser.Expr{
 			{&sqlparser.BinaryExpr{Operator: sqlparser.DivOp, Left: sqlparser.NewColName("b"), Right: sqlparser.NewIntLiteral("2")}},
 			{sqlparser.NewColName("c"), &sqlparser.BinaryExpr{Operator: sqlparser.PlusOp, Left: sqlparser.NewColName("d"), Right: sqlparser.NewColName("e")}},
 		},

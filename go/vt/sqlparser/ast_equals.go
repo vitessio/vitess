@@ -440,12 +440,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfExplainTab(a, b)
-	case Exprs:
-		b, ok := inB.(Exprs)
+	case *Exprs:
+		b, ok := inB.(*Exprs)
 		if !ok {
 			return false
 		}
-		return cmp.Exprs(a, b)
+		return cmp.RefOfExprs(a, b)
 	case *ExtractFuncExpr:
 		b, ok := inB.(*ExtractFuncExpr)
 		if !ok {
@@ -2534,17 +2534,15 @@ func (cmp *Comparator) RefOfExplainTab(a, b *ExplainTab) bool {
 		cmp.TableName(a.Table, b.Table)
 }
 
-// Exprs does deep equals between the two objects.
-func (cmp *Comparator) Exprs(a, b Exprs) bool {
-	if len(a) != len(b) {
+// RefOfExprs does deep equals between the two objects.
+func (cmp *Comparator) RefOfExprs(a, b *Exprs) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
 		return false
 	}
-	for i := 0; i < len(a); i++ {
-		if !cmp.Expr(a[i], b[i]) {
-			return false
-		}
-	}
-	return true
+	return cmp.SliceOfExpr(a.Exprs, b.Exprs)
 }
 
 // RefOfExtractFuncExpr does deep equals between the two objects.

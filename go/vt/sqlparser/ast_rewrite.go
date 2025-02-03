@@ -160,8 +160,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfExplainStmt(parent, node, replacer)
 	case *ExplainTab:
 		return a.rewriteRefOfExplainTab(parent, node, replacer)
-	case Exprs:
-		return a.rewriteExprs(parent, node, replacer)
+	case *Exprs:
+		return a.rewriteRefOfExprs(parent, node, replacer)
 	case *ExtractFuncExpr:
 		return a.rewriteRefOfExtractFuncExpr(parent, node, replacer)
 	case *ExtractValueExpr:
@@ -3056,7 +3056,7 @@ func (a *application) rewriteRefOfExplainTab(parent SQLNode, node *ExplainTab, r
 	}
 	return true
 }
-func (a *application) rewriteExprs(parent SQLNode, node Exprs, replacer replacerFunc) bool {
+func (a *application) rewriteRefOfExprs(parent SQLNode, node *Exprs, replacer replacerFunc) bool {
 	if node == nil {
 		return true
 	}
@@ -3073,10 +3073,10 @@ func (a *application) rewriteExprs(parent SQLNode, node Exprs, replacer replacer
 			return true
 		}
 	}
-	for x, el := range node {
+	for x, el := range node.Exprs {
 		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
-				parent.(Exprs)[idx] = newNode.(Expr)
+				parent.(*Exprs).Exprs[idx] = newNode.(Expr)
 			}
 		}(x)) {
 			return false

@@ -1704,9 +1704,9 @@ func (node *Where) FormatFast(buf *TrackedBuffer) {
 }
 
 // FormatFast formats the node.
-func (node Exprs) FormatFast(buf *TrackedBuffer) {
+func (node *Exprs) FormatFast(buf *TrackedBuffer) {
 	var prefix string
-	for _, n := range node {
+	for _, n := range node.Exprs {
 		buf.WriteString(prefix)
 		n.FormatFast(buf)
 		prefix = ", "
@@ -1937,7 +1937,7 @@ func (node *ColName) FormatFast(buf *TrackedBuffer) {
 // FormatFast formats the node.
 func (node ValTuple) FormatFast(buf *TrackedBuffer) {
 	buf.WriteByte('(')
-	Exprs(node).FormatFast(buf)
+	NewExprs(node).FormatFast(buf)
 	buf.WriteByte(')')
 }
 

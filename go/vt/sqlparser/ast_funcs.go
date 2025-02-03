@@ -2354,7 +2354,7 @@ func ContainsAggregation(e SQLNode) bool {
 }
 
 // setFuncArgs sets the arguments for the aggregation function, while checking that there is only one argument
-func setFuncArgs(aggr AggrFunc, exprs Exprs, name string) error {
+func setFuncArgs(aggr AggrFunc, exprs []Expr, name string) error {
 	if len(exprs) != 1 {
 		return vterrors.VT03001(name)
 	}
@@ -3070,4 +3070,8 @@ func NewFuncExpr(name string, exprs ...Expr) *FuncExpr {
 		Name:  NewIdentifierCI(name),
 		Exprs: exprs,
 	}
+}
+
+func NewExprs(exprs ...Expr) *Exprs {
+	return &Exprs{Exprs: exprs}
 }
