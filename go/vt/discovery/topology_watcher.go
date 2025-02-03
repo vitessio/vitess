@@ -163,6 +163,7 @@ func (tw *TopologyWatcher) loadTablets() {
 	defer tw.mu.Unlock()
 
 	for _, tInfo := range tabletInfos {
+		log.Infof("Got tabletInfo for %+v, isInServingGraph is %v", tInfo, tInfo.IsInServingGraph())
 		aliasStr := topoproto.TabletAliasString(tInfo.Alias)
 		tabletAliasStrs = append(tabletAliasStrs, aliasStr)
 
@@ -170,6 +171,7 @@ func (tw *TopologyWatcher) loadTablets() {
 			// We already have a tabletInfo for this and the flag tells us to not refresh.
 			if val, ok := tw.tablets[aliasStr]; ok {
 				newTablets[aliasStr] = val
+				log.Infof("Tablet Info already known and not refreshing for %+v", *tInfo)
 				continue
 			}
 		}
@@ -192,17 +194,21 @@ func (tw *TopologyWatcher) loadTablets() {
 		}
 	}
 
+	log.Infof("New tablets %+v", newTablets)
 	for alias, newVal := range newTablets {
 		if tw.tabletFilter != nil && !tw.tabletFilter.IsIncluded(newVal.tablet) {
+			log.Infof("Tablet %s filtered out", alias)
 			continue
 		}
 
 		// Trust the alias from topo and add it if it doesn't exist.
 		if val, ok := tw.tablets[alias]; ok {
+			log.Infof("Tablet %s already in tw.tablets", alias)
 			// check if the host and port have changed. If yes, replace tablet.
 			oldKey := TabletToMapKey(val.tablet)
 			newKey := TabletToMapKey(newVal.tablet)
 			if oldKey != newKey {
+				log.Infof("Tablet key mismatch: old %s new %s, replacing in healthcheck", oldKey, newKey)
 				// This is the case where the same tablet alias is now reporting
 				// a different address (host:port) key.
 				tw.healthcheck.ReplaceTablet(val.tablet, newVal.tablet)
@@ -210,6 +216,7 @@ func (tw *TopologyWatcher) loadTablets() {
 			}
 		} else {
 			// This is a new tablet record, let's add it to the HealthCheck.
+			log.Infof("Tablet %s not in tw.tablets, adding to healthcheck", alias)
 			tw.healthcheck.AddTablet(newVal.tablet)
 			topologyWatcherOperations.Add(topologyWatcherOpAddTablet, 1)
 		}

@@ -513,6 +513,8 @@ func (cluster *LocalProcessCluster) AddShard(keyspaceName string, shardName stri
 	for _, proc := range mysqlctlProcessList {
 		if err := proc.Wait(); err != nil {
 			log.Errorf("unable to start mysql process %v: %v", proc, err)
+			log.Errorf("Stdout: %s", proc.Stdout)
+			log.Errorf("Stderr: %s", proc.Stderr)
 			return nil, err
 		}
 	}
