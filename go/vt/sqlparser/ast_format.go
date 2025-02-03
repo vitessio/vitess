@@ -1508,7 +1508,13 @@ func (node *ColName) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node ValTuple) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "(%v)", NewExprs(node))
+	var prefix string
+	buf.WriteString("(")
+	for _, n := range node {
+		buf.astPrintf(node, "%s%v", prefix, n)
+		prefix = ", "
+	}
+	buf.WriteString(")")
 }
 
 // Format formats the node.

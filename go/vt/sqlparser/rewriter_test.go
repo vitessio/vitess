@@ -73,8 +73,8 @@ func TestReplaceAndRevisitWorksInLaterCalls(t *testing.T) {
 	count := 0
 	Rewrite(stmt, func(cursor *Cursor) bool {
 		switch node := cursor.Node().(type) {
-		case SelectExprs:
-			if len(node) != 1 {
+		case *SelectExprs2:
+			if len(node.Exprs) != 1 {
 				return true
 			}
 			expr1 := &AliasedExpr{
@@ -83,7 +83,7 @@ func TestReplaceAndRevisitWorksInLaterCalls(t *testing.T) {
 			expr2 := &AliasedExpr{
 				Expr: NewStrLiteral("foobar"),
 			}
-			cursor.ReplaceAndRevisit(SelectExprs{expr1, expr2})
+			cursor.ReplaceAndRevisit(&SelectExprs2{Exprs: []SelectExpr{expr1, expr2}})
 		case *StarExpr:
 			t.Errorf("should not have seen the star")
 		case *Literal:

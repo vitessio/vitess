@@ -320,14 +320,14 @@ errors that happen when we are evaluating SELECT expressions are saved until we 
 if we can merge everything into a single route or not
 */
 func (a *analyzer) enterProjection(cursor *sqlparser.Cursor) {
-	_, ok := cursor.Node().(sqlparser.SelectExprs)
+	_, ok := cursor.Node().(*sqlparser.SelectExprs2)
 	if ok && isParentSelect(cursor) {
 		a.inProjection++
 	}
 }
 
 func (a *analyzer) leaveProjection(cursor *sqlparser.Cursor) {
-	_, ok := cursor.Node().(sqlparser.SelectExprs)
+	_, ok := cursor.Node().(*sqlparser.SelectExprs2)
 	if ok && isParentSelect(cursor) {
 		a.inProjection--
 	}

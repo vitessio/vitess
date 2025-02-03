@@ -45,7 +45,7 @@ type earlyRewriter struct {
 
 func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 	switch node := cursor.Node().(type) {
-	case sqlparser.SelectExprs:
+	case *sqlparser.SelectExprs2:
 		return r.handleSelectExprs(cursor, node)
 	case *sqlparser.NotExpr:
 		rewriteNotExpr(cursor, node)
@@ -225,7 +225,7 @@ func (r *earlyRewriter) handleHavingClause(node *sqlparser.Where, parent sqlpars
 }
 
 // handleSelectExprs expands * in SELECT expressions.
-func (r *earlyRewriter) handleSelectExprs(cursor *sqlparser.Cursor, node sqlparser.SelectExprs) error {
+func (r *earlyRewriter) handleSelectExprs(cursor *sqlparser.Cursor, node *sqlparser.SelectExprs2) error {
 	_, isSel := cursor.Parent().(*sqlparser.Select)
 	if !isSel {
 		return nil
@@ -894,7 +894,7 @@ func (r *earlyRewriter) expandStar(cursor *sqlparser.Cursor, node *sqlparser.Sel
 			selExprs.Exprs = append(selExprs.Exprs, selectExpr)
 			continue
 		}
-		selExprs.Exprs = append(selExprs.Exprs, colNames...)
+		selExprs.Exprs = append(selExprs.Exprs, colNames.Exprs...)
 		changed = true
 	}
 	if changed {

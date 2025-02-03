@@ -1946,9 +1946,14 @@ func (node *ColName) FormatFast(buf *TrackedBuffer) {
 
 // FormatFast formats the node.
 func (node ValTuple) FormatFast(buf *TrackedBuffer) {
-	buf.WriteByte('(')
-	NewExprs(node).FormatFast(buf)
-	buf.WriteByte(')')
+	var prefix string
+	buf.WriteString("(")
+	for _, n := range node {
+		buf.WriteString(prefix)
+		buf.printExpr(node, n, true)
+		prefix = ", "
+	}
+	buf.WriteString(")")
 }
 
 // FormatFast formats the node.

@@ -174,7 +174,7 @@ func (tc *tableCollector) visitUnion(union *sqlparser.Union) error {
 	collations := tc.org.collationEnv()
 
 	err = sqlparser.VisitAllSelects(union, func(s *sqlparser.Select, idx int) error {
-		for i, expr := range s.SelectExprs {
+		for i, expr := range s.SelectExprs.Exprs {
 			ae, ok := expr.(*sqlparser.AliasedExpr)
 			if !ok {
 				continue
@@ -424,7 +424,7 @@ func checkValidRecursiveCTE(cteDef *CTE) error {
 		return vterrors.VT09027(cteDef.Name)
 	}
 
-	for _, expr := range firstSelect.GetColumns() {
+	for _, expr := range firstSelect.GetColumns().Exprs {
 		if sqlparser.ContainsAggregation(expr) {
 			return vterrors.VT09027(cteDef.Name)
 		}
@@ -450,11 +450,11 @@ func (tc *tableCollector) addSelectDerivedTable(
 	alias sqlparser.IdentifierCS,
 ) error {
 	tables := tc.scoper.wScope[sel]
-	size := len(sel.SelectExprs)
+	size := len(sel.SelectExprs.Exprs)
 	deps := make([]TableSet, size)
 	types := make([]evalengine.Type, size)
 	expanded := true
-	for i, expr := range sel.SelectExprs {
+	for i, expr := range sel.SelectExprs.Exprs {
 		ae, ok := expr.(*sqlparser.AliasedExpr)
 		if !ok {
 			expanded = false

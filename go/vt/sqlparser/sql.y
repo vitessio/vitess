@@ -4939,8 +4939,9 @@ select_expression_list:
   }
 | select_expression_list ',' select_expression
   {
-    $1.Exprs = append($1.Exprs, $3)
-    $$ = $$
+    res := $1
+    res.Exprs = append(res.Exprs, $3)
+    $$ = res
   }
 
 select_expression:

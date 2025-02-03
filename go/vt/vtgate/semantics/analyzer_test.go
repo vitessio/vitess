@@ -41,7 +41,7 @@ var (
 )
 
 func extract(in *sqlparser.Select, idx int) sqlparser.Expr {
-	return in.SelectExprs[idx].(*sqlparser.AliasedExpr).Expr
+	return in.SelectExprs.Exprs[idx].(*sqlparser.AliasedExpr).Expr
 }
 
 func TestBindingSingleTablePositive(t *testing.T) {
@@ -575,7 +575,7 @@ func TestScopeForSubqueries(t *testing.T) {
 			sel, _ := stmt.(*sqlparser.Select)
 
 			// extract the first expression from the subquery (which should be the second expression in the outer query)
-			sel2 := sel.SelectExprs[1].(*sqlparser.AliasedExpr).Expr.(*sqlparser.Subquery).Select.(*sqlparser.Select)
+			sel2 := extract(sel, 1).(*sqlparser.Subquery).Select.(*sqlparser.Select)
 			exp := extract(sel2, 0)
 			s1 := semTable.RecursiveDeps(exp)
 			require.NoError(t, semTable.NotSingleRouteErr)
@@ -1458,7 +1458,7 @@ func TestScopingSubQueryJoinClause(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, st.NotUnshardedErr)
 
-	tb := st.DirectDeps(parse.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr.(*sqlparser.Subquery).Select.(*sqlparser.Select).From[0].(*sqlparser.JoinTableExpr).Condition.On)
+	tb := st.DirectDeps(extract(parse.(*sqlparser.Select), 0).(*sqlparser.Subquery).Select.(*sqlparser.Select).From[0].(*sqlparser.JoinTableExpr).Condition.On)
 	require.Equal(t, 3, tb.NumberOfTables())
 
 }
