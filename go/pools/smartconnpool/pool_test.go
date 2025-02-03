@@ -37,6 +37,7 @@ var (
 type TestState struct {
 	lastID, open, close, reset atomic.Int64
 	waits                      []time.Time
+	mu                         sync.Mutex
 
 	chaos struct {
 		delayConnect time.Duration
@@ -46,6 +47,8 @@ type TestState struct {
 }
 
 func (ts *TestState) LogWait(start time.Time) {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
 	ts.waits = append(ts.waits, start)
 }
 
@@ -1138,12 +1141,10 @@ func TestGetSpike(t *testing.T) {
 	}).Open(newConnector(&state), nil)
 
 	var resources [10]*Pooled[*TestConn]
-	var r *Pooled[*TestConn]
-	var err error
 
 	// Ensure we have a pool with 5 available resources
 	for i := 0; i < 5; i++ {
-		r, err = p.Get(ctx, nil)
+		r, err := p.Get(ctx, nil)
 
 		require.NoError(t, err)
 		resources[i] = r
@@ -1176,7 +1177,7 @@ func TestGetSpike(t *testing.T) {
 
 			go func() {
 				defer wg.Done()
-				r, err = p.Get(ctx, nil)
+				r, err := p.Get(ctx, nil)
 				defer p.put(r)
 
 				if err != nil {
