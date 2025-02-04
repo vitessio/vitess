@@ -508,7 +508,7 @@ func (vr *vreplicator) setState(state binlogdatapb.VReplicationWorkflowState, me
 		})
 	}
 	vr.stats.State.Store(state.String())
-	query := fmt.Sprintf("update _vt.vreplication set state='%v', message=%v where id=%v", state, encodeString(binlogplayer.MessageTruncate(message)), vr.id)
+	query := fmt.Sprintf("update _vt.vreplication set state=%v, message=%v where id=%v", encodeString(state.String()), encodeString(binlogplayer.MessageTruncate(message)), vr.id)
 	// If we're batching a transaction, then include the state update
 	// in the current transaction batch.
 	if vr.dbClient.InTransaction && vr.dbClient.maxBatchSize > 0 {
@@ -528,9 +528,7 @@ func (vr *vreplicator) setState(state binlogdatapb.VReplicationWorkflowState, me
 }
 
 func encodeString(in string) string {
-	var buf strings.Builder
-	sqltypes.NewVarChar(in).EncodeSQL(&buf)
-	return buf.String()
+	return sqltypes.EncodeStringSQL(in)
 }
 
 func (vr *vreplicator) getSettingFKCheck() error {

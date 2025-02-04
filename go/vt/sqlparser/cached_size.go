@@ -788,6 +788,20 @@ func (cached *ColumnTypeOptions) CachedSize(alloc bool) int64 {
 	size += cached.SRID.CachedSize(true)
 	return size
 }
+func (cached *Columns) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	size += hack.RuntimeAllocSize(int64(cap(*cached)) * int64(32))
+	for _, elem := range *cached {
+		size += elem.CachedSize(false)
+	}
+	return size
+}
 
 //go:nocheckptr
 func (cached *CommentDirectives) CachedSize(alloc bool) int64 {
@@ -829,6 +843,20 @@ func (cached *CommentOnly) CachedSize(alloc bool) int64 {
 		for _, elem := range cached.Comments {
 			size += hack.RuntimeAllocSize(int64(len(elem)))
 		}
+	}
+	return size
+}
+func (cached *Comments) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	size += hack.RuntimeAllocSize(int64(cap(*cached)) * int64(16))
+	for _, elem := range *cached {
+		size += hack.RuntimeAllocSize(int64(len(elem)))
 	}
 	return size
 }
@@ -1311,6 +1339,22 @@ func (cached *ExplainTab) CachedSize(alloc bool) int64 {
 	size += cached.Table.CachedSize(false)
 	// field Wild string
 	size += hack.RuntimeAllocSize(int64(len(cached.Wild)))
+	return size
+}
+func (cached *Exprs) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	size += hack.RuntimeAllocSize(int64(cap(*cached)) * int64(16))
+	for _, elem := range *cached {
+		if cc, ok := elem.(cachedObject); ok {
+			size += cc.CachedSize(true)
+		}
+	}
 	return size
 }
 func (cached *ExtractFuncExpr) CachedSize(alloc bool) int64 {
@@ -1816,6 +1860,20 @@ func (cached *IndexHint) CachedSize(alloc bool) int64 {
 		for _, elem := range cached.Indexes {
 			size += elem.CachedSize(false)
 		}
+	}
+	return size
+}
+func (cached *IndexHints) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	size += hack.RuntimeAllocSize(int64(cap(*cached)) * int64(8))
+	for _, elem := range *cached {
+		size += elem.CachedSize(true)
 	}
 	return size
 }
@@ -2696,6 +2754,17 @@ func (cached *LinestrPropertyFuncExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *ListArg) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += hack.RuntimeAllocSize(int64(16))
+	}
+	size += hack.RuntimeAllocSize(int64(len(*cached)))
+	return size
+}
 func (cached *Literal) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2962,6 +3031,20 @@ func (cached *NamedWindow) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *NamedWindows) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	size += hack.RuntimeAllocSize(int64(cap(*cached)) * int64(8))
+	for _, elem := range *cached {
+		size += elem.CachedSize(true)
+	}
+	return size
+}
 func (cached *Nextval) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3020,6 +3103,20 @@ func (cached *Offset) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *OnDup) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	size += hack.RuntimeAllocSize(int64(cap(*cached)) * int64(8))
+	for _, elem := range *cached {
+		size += elem.CachedSize(true)
+	}
+	return size
+}
 func (cached *OptLike) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3061,6 +3158,20 @@ func (cached *Order) CachedSize(alloc bool) int64 {
 	// field Expr vitess.io/vitess/go/vt/sqlparser.Expr
 	if cc, ok := cached.Expr.(cachedObject); ok {
 		size += cc.CachedSize(true)
+	}
+	return size
+}
+func (cached *OrderBy) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	size += hack.RuntimeAllocSize(int64(cap(*cached)) * int64(8))
+	for _, elem := range *cached {
+		size += elem.CachedSize(true)
 	}
 	return size
 }
@@ -3294,6 +3405,20 @@ func (cached *PartitionValueRange) CachedSize(alloc bool) int64 {
 				size += cc.CachedSize(true)
 			}
 		}
+	}
+	return size
+}
+func (cached *Partitions) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	size += hack.RuntimeAllocSize(int64(cap(*cached)) * int64(32))
+	for _, elem := range *cached {
+		size += elem.CachedSize(false)
 	}
 	return size
 }
@@ -3753,6 +3878,22 @@ func (cached *Select) CachedSize(alloc bool) int64 {
 	size += cached.Into.CachedSize(true)
 	return size
 }
+func (cached *SelectExprs) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	size += hack.RuntimeAllocSize(int64(cap(*cached)) * int64(16))
+	for _, elem := range *cached {
+		if cc, ok := elem.(cachedObject); ok {
+			size += cc.CachedSize(true)
+		}
+	}
+	return size
+}
 func (cached *SelectInto) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3807,6 +3948,20 @@ func (cached *SetExpr) CachedSize(alloc bool) int64 {
 	// field Expr vitess.io/vitess/go/vt/sqlparser.Expr
 	if cc, ok := cached.Expr.(cachedObject); ok {
 		size += cc.CachedSize(true)
+	}
+	return size
+}
+func (cached *SetExprs) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	size += hack.RuntimeAllocSize(int64(cap(*cached)) * int64(8))
+	for _, elem := range *cached {
+		size += elem.CachedSize(true)
 	}
 	return size
 }
@@ -4095,6 +4250,20 @@ func (cached *SubPartitionDefinitionOptions) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.TableSpace)))
 	return size
 }
+func (cached *SubPartitionDefinitions) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	size += hack.RuntimeAllocSize(int64(cap(*cached)) * int64(8))
+	for _, elem := range *cached {
+		size += elem.CachedSize(true)
+	}
+	return size
+}
 func (cached *Subquery) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4161,6 +4330,36 @@ func (cached *TableAndLockType) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *TableAndLockTypes) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	size += hack.RuntimeAllocSize(int64(cap(*cached)) * int64(8))
+	for _, elem := range *cached {
+		size += elem.CachedSize(true)
+	}
+	return size
+}
+func (cached *TableExprs) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	size += hack.RuntimeAllocSize(int64(cap(*cached)) * int64(16))
+	for _, elem := range *cached {
+		if cc, ok := elem.(cachedObject); ok {
+			size += cc.CachedSize(true)
+		}
+	}
+	return size
+}
 func (cached *TableName) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4173,6 +4372,20 @@ func (cached *TableName) CachedSize(alloc bool) int64 {
 	size += cached.Name.CachedSize(false)
 	// field Qualifier vitess.io/vitess/go/vt/sqlparser.IdentifierCS
 	size += cached.Qualifier.CachedSize(false)
+	return size
+}
+func (cached *TableNames) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	size += hack.RuntimeAllocSize(int64(cap(*cached)) * int64(32))
+	for _, elem := range *cached {
+		size += elem.CachedSize(false)
+	}
 	return size
 }
 func (cached *TableOption) CachedSize(alloc bool) int64 {
@@ -4195,6 +4408,20 @@ func (cached *TableOption) CachedSize(alloc bool) int64 {
 		for _, elem := range cached.Tables {
 			size += elem.CachedSize(false)
 		}
+	}
+	return size
+}
+func (cached *TableOptions) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	size += hack.RuntimeAllocSize(int64(cap(*cached)) * int64(8))
+	for _, elem := range *cached {
+		size += elem.CachedSize(true)
 	}
 	return size
 }
@@ -4398,6 +4625,20 @@ func (cached *UpdateExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *UpdateExprs) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	size += hack.RuntimeAllocSize(int64(cap(*cached)) * int64(8))
+	for _, elem := range *cached {
+		size += elem.CachedSize(true)
+	}
+	return size
+}
 func (cached *UpdateXMLExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4470,6 +4711,22 @@ func (cached *VStream) CachedSize(alloc bool) int64 {
 	size += cached.Limit.CachedSize(true)
 	return size
 }
+func (cached *ValTuple) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	size += hack.RuntimeAllocSize(int64(cap(*cached)) * int64(16))
+	for _, elem := range *cached {
+		if cc, ok := elem.(cachedObject); ok {
+			size += cc.CachedSize(true)
+		}
+	}
+	return size
+}
 func (cached *Validation) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4477,6 +4734,27 @@ func (cached *Validation) CachedSize(alloc bool) int64 {
 	size := int64(0)
 	if alloc {
 		size += int64(8)
+	}
+	return size
+}
+func (cached *Values) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	size += hack.RuntimeAllocSize(int64(cap(*cached)) * int64(24))
+	for _, elem := range *cached {
+		{
+			size += hack.RuntimeAllocSize(int64(cap(elem)) * int64(16))
+			for _, elem := range elem {
+				if cc, ok := elem.(cachedObject); ok {
+					size += cc.CachedSize(true)
+				}
+			}
+		}
 	}
 	return size
 }
@@ -4686,6 +4964,20 @@ func (cached *WindowDefinition) CachedSize(alloc bool) int64 {
 	size += cached.Name.CachedSize(false)
 	// field WindowSpec *vitess.io/vitess/go/vt/sqlparser.WindowSpecification
 	size += cached.WindowSpec.CachedSize(true)
+	return size
+}
+func (cached *WindowDefinitions) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	size += hack.RuntimeAllocSize(int64(cap(*cached)) * int64(8))
+	for _, elem := range *cached {
+		size += elem.CachedSize(true)
+	}
 	return size
 }
 func (cached *WindowSpecification) CachedSize(alloc bool) int64 {

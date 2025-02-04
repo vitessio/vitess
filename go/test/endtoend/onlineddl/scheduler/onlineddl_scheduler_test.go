@@ -714,6 +714,89 @@ func testScheduler(t *testing.T) {
 				}
 			})
 		})
+		t.Run("force_cutover mdl", func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), extendedWaitTime*5)
+			defer cancel()
+
+			t1uuid = testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy+" --postpone-completion", "vtgate", "", "", true)) // skip wait
+
+			t.Run("wait for t1 running", func(t *testing.T) {
+				status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
+				fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+			})
+			t.Run("wait for t1 ready to complete", func(t *testing.T) {
+				// Waiting for 'running', above, is not enough. We want to let vreplication a chance to start running, or else
+				// we attempt the cut-over too early. Specifically in this test, we're going to lock rows FOR UPDATE, which,
+				// if vreplication does not get the chance to start, will prevent it from doing anything at all.
+				// ready_to_complete is a great signal for us that vreplication is healthy and up to date.
+				waitForReadyToComplete(t, t1uuid, true)
+			})
+
+			conn, err := primaryTablet.VttabletProcess.TabletConn(keyspaceName, true)
+			require.NoError(t, err)
+			defer conn.Close()
+
+			unlockTables := func() error {
+				_, err := conn.ExecuteFetch("unlock tables", 0, false)
+				return err
+			}
+			t.Run("locking table", func(t *testing.T) {
+				_, err := conn.ExecuteFetch("lock tables t1_test write", 0, false)
+				require.NoError(t, err)
+			})
+			defer unlockTables()
+			t.Run("injecting heartbeats asynchronously", func(t *testing.T) {
+				go func() {
+					ticker := time.NewTicker(time.Second)
+					defer ticker.Stop()
+					for {
+						throttler.CheckThrottler(clusterInstance, primaryTablet, throttlerapp.OnlineDDLName, nil)
+						select {
+						case <-ticker.C:
+						case <-ctx.Done():
+							return
+						}
+					}
+				}()
+			})
+			t.Run("check no force_cutover", func(t *testing.T) {
+				rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+				require.NotNil(t, rs)
+				for _, row := range rs.Named().Rows {
+					forceCutOver := row.AsInt64("force_cutover", 0)
+					assert.Equal(t, int64(0), forceCutOver) // disabled
+				}
+			})
+			t.Run("attempt to complete", func(t *testing.T) {
+				onlineddl.CheckCompleteMigration(t, &vtParams, shards, t1uuid, true)
+			})
+			t.Run("cut-over fail due to timeout", func(t *testing.T) {
+				waitForMessage(t, t1uuid, "(errno 3024) (sqlstate HY000): Query execution was interrupted, maximum statement execution time exceeded")
+				status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusRunning)
+				fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+				onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusRunning)
+			})
+			t.Run("force_cutover", func(t *testing.T) {
+				onlineddl.CheckForceMigrationCutOver(t, &vtParams, shards, t1uuid, true)
+			})
+			t.Run("check force_cutover", func(t *testing.T) {
+				rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+				require.NotNil(t, rs)
+				for _, row := range rs.Named().Rows {
+					forceCutOver := row.AsInt64("force_cutover", 0)
+					assert.Equal(t, int64(1), forceCutOver) // enabled
+				}
+			})
+			t.Run("expect completion", func(t *testing.T) {
+				status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+				fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+				onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
+			})
+			t.Run("expect unlock failure", func(t *testing.T) {
+				err := unlockTables()
+				assert.ErrorContains(t, err, "broken pipe")
+			})
+		})
 	}
 	t.Run("ALTER both tables non-concurrent", func(t *testing.T) {
 		t1uuid = testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy, "vtgate", "", "", true)) // skip wait

@@ -198,6 +198,7 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.Int64Var(&currentConfig.ConsolidatorStreamQuerySize, "consolidator-stream-query-size", defaultConfig.ConsolidatorStreamQuerySize, "Configure the stream consolidator query size in bytes. Setting to 0 disables the stream consolidator.")
 	fs.Int64Var(&currentConfig.ConsolidatorStreamTotalSize, "consolidator-stream-total-size", defaultConfig.ConsolidatorStreamTotalSize, "Configure the stream consolidator total size in bytes. Setting to 0 disables the stream consolidator.")
 
+	fs.Int64Var(&currentConfig.ConsolidatorQueryWaiterCap, "consolidator-query-waiter-cap", 0, "Configure the maximum number of clients allowed to wait on the consolidator.")
 	fs.DurationVar(&healthCheckInterval, "health_check_interval", defaultConfig.Healthcheck.Interval, "Interval between health checks")
 	fs.DurationVar(&degradedThreshold, "degraded_threshold", defaultConfig.Healthcheck.DegradedThreshold, "replication lag after which a replica is considered degraded")
 	fs.DurationVar(&unhealthyThreshold, "unhealthy_threshold", defaultConfig.Healthcheck.UnhealthyThreshold, "replication lag after which a replica is considered unhealthy")
@@ -278,11 +279,12 @@ func Init() {
 	currentConfig.Healthcheck.UnhealthyThreshold = unhealthyThreshold
 	currentConfig.GracePeriods.Transition = transitionGracePeriod
 
-	switch streamlog.GetQueryLogFormat() {
+	logFormat := streamlog.GetQueryLogConfig().Format
+	switch logFormat {
 	case streamlog.QueryLogFormatText:
 	case streamlog.QueryLogFormatJSON:
 	default:
-		log.Exitf("Invalid querylog-format value %v: must be either text or json", streamlog.GetQueryLogFormat())
+		log.Exitf("Invalid querylog-format value %v: must be either text or json", logFormat)
 	}
 
 	if queryLogHandler != "" {
@@ -323,6 +325,7 @@ type TabletConfig struct {
 	StreamBufferSize            int           `json:"streamBufferSize,omitempty"`
 	ConsolidatorStreamTotalSize int64         `json:"consolidatorStreamTotalSize,omitempty"`
 	ConsolidatorStreamQuerySize int64         `json:"consolidatorStreamQuerySize,omitempty"`
+	ConsolidatorQueryWaiterCap  int64         `json:"consolidatorMaxQueryWait,omitempty"`
 	QueryCacheMemory            int64         `json:"queryCacheMemory,omitempty"`
 	QueryCacheDoorkeeper        bool          `json:"queryCacheDoorkeeper,omitempty"`
 	SchemaReloadInterval        time.Duration `json:"schemaReloadIntervalSeconds,omitempty"`

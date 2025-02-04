@@ -12,9 +12,16 @@
   - **[Support for More Efficient JSON Replication](#efficient-json-replication)**
   - **[Support for LAST_INSERT_ID(x)](#last-insert-id)**
   - **[Support for Maximum Idle Connections in the Pool](#max-idle-connections)**
+  - **[Stalled Disk Recovery in VTOrc](#stall-disk-recovery)**
+  - **[Update default MySQL version to 8.0.40](#mysql-8-0-40)**
+  - **[Update lite images to Debian Bookworm](#debian-bookworm)**
+  - **[KeyRanges in `--clusters_to_watch` in VTOrc](#key-range-vtorc)**
+  - **[Support for Filtering Query logs on Error](#query-logs)**
 - **[Minor Changes](#minor-changes)**
   - **[VTTablet Flags](#flags-vttablet)**
   - **[Topology read concurrency behaviour changes](#topo-read-concurrency-changes)**
+  - **[VTAdmin](#vtadmin)**
+    - [Updated to node v22.13.1](#updated-node)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -22,7 +29,7 @@
 
 These are the RPC changes made in this release - 
 
-1. `GetTransactionInfo` RPC has been added to both `VtctldServer`, and `TabletManagerClient` interface. These RPCs are used to fecilitate the users in reading the state of an unresolved distributed transaction. This can be useful in debugging what went wrong and how to fix the problem.
+1. `GetTransactionInfo` RPC has been added to both `VtctldServer`, and `TabletManagerClient` interface. These RPCs are used to facilitate the users in reading the state of an unresolved distributed transaction. This can be useful in debugging what went wrong and how to fix the problem.
 
 ### <a id="deprecations-and-deletions"/>Deprecations and Deletions</a>
 
@@ -100,6 +107,44 @@ You can control idle connection retention for the query server’s query pool, s
 
 This feature ensures that, during traffic spikes, idle connections are available for faster responses, while minimizing overhead in low-traffic periods by limiting the number of idle connections retained. It helps strike a balance between performance, efficiency, and cost.
 
+### <a id="stall-disk-recovery"/>Stalled Disk Recovery in VTOrc</a>
+VTOrc can now identify and recover from stalled disk errors. VTTablets test whether the disk is writable and they send this information in the full status output to VTOrc. If the disk is not writable on the primary tablet, VTOrc will attempt to recover the cluster by promoting a new primary. This is useful in scenarios where the disk is stalled and the primary vttablet is unable to accept writes because of it.
+
+To opt into this feature, `--enable-primary-disk-stalled-recovery` flag has to be specified on VTOrc, and `--disk-write-dir` flag has to be specified on the vttablets. `--disk-write-interval` and `--disk-write-timeout` flags can be used to configure the polling interval and timeout respectively. 
+
+### <a id="mysql-8-0-40"/>Update default MySQL version to 8.0.40</a>
+
+The default major MySQL version used by our `vitess/lite:latest` image is going from `8.0.30` to `8.0.40`.
+This change was brought by [Pull Request #17552](https://github.com/vitessio/vitess/pull/17552).
+
+VTGate also advertises MySQL version `8.0.40` by default instead of `8.0.30` if no explicit version is set. The users can set the `mysql_server_version` flag to advertise the correct version.
+
+#### <a id="upgrading-to-this-release-with-vitess-operator"/>⚠️Upgrading to this release with vitess-operator
+
+If you are using the `vitess-operator`, considering that we are bumping the patch version of MySQL 80 from `8.0.30` to `8.0.40`, you will have to manually upgrade:
+
+1. Add `innodb_fast_shutdown=0` to your extra cnf in your YAML file.
+2. Apply this file.
+3. Wait for all the pods to be healthy.
+4. Then change your YAML file to use the new Docker Images (`vitess/lite:v22.0.0`).
+5. Remove `innodb_fast_shutdown=0` from your extra cnf in your YAML file.
+6. Apply this file.
+
+This is the last time this will be needed in the `8.0.x` series, as starting with MySQL `8.0.35` it is possible to upgrade and downgrade between `8.0.x` versions without needing to run `innodb_fast_shutdown=0`.
+
+### <a id="debian-bookworm"/>Update lite images to Debian Bookworm</a>
+
+The base system now uses Debian Bookworm instead of Debian Bullseye for the `vitess/lite` images. This change was brought by [Pull Request #17552].
+
+### <a id="key-range-vtorc"/>KeyRanges in `--clusters_to_watch` in VTOrc</a>
+VTOrc now supports specifying keyranges in the `--clusters_to_watch` flag. This means that there is no need to restart a VTOrc instance with a different flag value when you reshard a keyspace.
+For example, if a VTOrc is configured to watch `ks/-80`, then it would watch all the shards that fall under the keyrange `-80`. If a reshard is performed and `-80` is split into new shards `-40` and `40-80`, the VTOrc instance will automatically start watching the new shards without needing a restart. In the previous logic, specifying `ks/-80` for the flag would mean that VTOrc would watch only 1 (or no) shard. In the new system, since we interpret `-80` as a key range, it can watch multiple shards as described in the example.
+Users can continue to specify exact keyranges. The new feature is backward compatible.
+
+### <a id="query-logs"/>Support for Filtering Query logs on Error</a>
+
+The `querylog-mode` setting can be configured to `error` to log only queries that result in errors. This option is supported in both VTGate and VTTablet.
+
 ## <a id="minor-changes"/>Minor Changes</a>
 
 #### <a id="flags-vttablet"/>VTTablet Flags</a>
@@ -108,8 +153,17 @@ This feature ensures that, during traffic spikes, idle connections are available
 While the flag will continue to accept float values (interpreted as seconds) for backward compatibility, 
 **float inputs are deprecated** and will be removed in a future release.
 
+- `--consolidator-query-waiter-cap` flag to set the maximum number of clients allowed to wait on the consolidator. The default value is set to 0 for unlimited wait. Users can adjust  this value based on the performance of VTTablet to avoid excessive memory usage and the risk of being OOMKilled, particularly in Kubernetes deployments.
+
 ### <a id="topo-read-concurrency-changes"/>`--topo_read_concurrency` behaviour changes
 
 The `--topo_read_concurrency` flag was added to all components that access the topology and the provided limit is now applied separately for each global or local cell _(default `32`)_.
 
 All topology read calls _(`Get`, `GetVersion`, `List` and `ListDir`)_ now respect this per-cell limit. Previous to this version a single limit was applied to all cell calls and it was not respected by many topology calls.
+
+### <a id="vtadmin"/>VTAdmin
+
+#### <a id="updated-node"/>vtadmin-web updated to node v22.13.1 (LTS)
+
+Building `vtadmin-web` now requires node >= v22.13.0 (LTS). Breaking changes from v20 to v22 can be found at https://nodejs.org/en/blog/release/v22.13.0 -- with no known issues that apply to VTAdmin.
+Full details on the node v20.12.2 release can be found at https://nodejs.org/en/blog/release/v22.13.1.

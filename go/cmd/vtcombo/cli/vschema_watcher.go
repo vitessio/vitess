@@ -56,17 +56,20 @@ func loadKeyspacesFromDir(ctx context.Context, dir string, ts *topo.Server) {
 				log.Fatalf("Unable to read keyspace file %v: %v", ksFile, err)
 			}
 
-			keyspace := &vschemapb.Keyspace{}
-			err = json.Unmarshal(jsonData, keyspace)
+			ksvs := &topo.KeyspaceVSchemaInfo{
+				Name:     ks.Name,
+				Keyspace: &vschemapb.Keyspace{},
+			}
+			err = json.Unmarshal(jsonData, ksvs.Keyspace)
 			if err != nil {
 				log.Fatalf("Unable to parse keyspace file %v: %v", ksFile, err)
 			}
 
-			_, err = vindexes.BuildKeyspace(keyspace, env.Parser())
+			_, err = vindexes.BuildKeyspace(ksvs.Keyspace, env.Parser())
 			if err != nil {
 				log.Fatalf("Invalid keyspace definition: %v", err)
 			}
-			ts.SaveVSchema(ctx, ks.Name, keyspace)
+			ts.SaveVSchema(ctx, ksvs)
 			log.Infof("Loaded keyspace %v from %v\n", ks.Name, ksFile)
 		}
 	}

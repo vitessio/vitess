@@ -410,7 +410,11 @@ func CreateKs(
 			if err != nil {
 				return 0, fmt.Errorf("BuildKeyspace(%v) failed: %v", keyspace, err)
 			}
-			if err := ts.SaveVSchema(ctx, keyspace, formal); err != nil {
+			ksvs := &topo.KeyspaceVSchemaInfo{
+				Name:     keyspace,
+				Keyspace: formal,
+			}
+			if err := ts.SaveVSchema(ctx, ksvs); err != nil {
 				return 0, fmt.Errorf("SaveVSchema(%v) failed: %v", keyspace, err)
 			}
 		} else {
@@ -1001,7 +1005,7 @@ func (itmc *internalTabletManagerClient) PopulateReparentJournal(context.Context
 }
 
 // ReadReparentJournalInfo is part of the tmclient.TabletManagerClient interface.
-func (itmc *internalTabletManagerClient) ReadReparentJournalInfo(ctx context.Context, tablet *topodatapb.Tablet) (int, error) {
+func (itmc *internalTabletManagerClient) ReadReparentJournalInfo(ctx context.Context, tablet *topodatapb.Tablet) (int32, error) {
 	return 0, fmt.Errorf("not implemented in vtcombo")
 }
 

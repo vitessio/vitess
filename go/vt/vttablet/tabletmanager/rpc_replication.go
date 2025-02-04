@@ -60,6 +60,16 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return nil, err
 	}
+
+	// Return if the disk is stalled or rejecting writes.
+	// If the disk is stalled, we can't be sure if reads will go through
+	// or not, so we should not run any reads either.
+	if tm.QueryServiceControl.IsDiskStalled() {
+		return &replicationdatapb.FullStatus{
+			DiskStalled: true,
+		}, nil
+	}
+
 	// Server ID - "select @@global.server_id"
 	serverID, err := tm.MysqlDaemon.GetServerID(ctx)
 	if err != nil {
@@ -418,7 +428,7 @@ func (tm *TabletManager) PopulateReparentJournal(ctx context.Context, timeCreate
 }
 
 // ReadReparentJournalInfo reads the information from reparent journal.
-func (tm *TabletManager) ReadReparentJournalInfo(ctx context.Context) (int, error) {
+func (tm *TabletManager) ReadReparentJournalInfo(ctx context.Context) (int32, error) {
 	log.Infof("ReadReparentJournalInfo")
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return 0, err
@@ -432,7 +442,7 @@ func (tm *TabletManager) ReadReparentJournalInfo(ctx context.Context) (int, erro
 	if len(res.Rows) != 1 {
 		return 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected rows when reading reparent journal, got %v", len(res.Rows))
 	}
-	return res.Rows[0][0].ToInt()
+	return res.Rows[0][0].ToInt32()
 }
 
 // InitReplica sets replication primary and position, and waits for the

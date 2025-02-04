@@ -1592,6 +1592,10 @@ column_format:
 {
     $$ = DefaultFormat
 }
+| COMPRESSED
+{
+    $$ = CompressedFormat
+}
 
 column_storage:
   VIRTUAL
@@ -1630,6 +1634,11 @@ generated_column_attribute_list_opt:
 | generated_column_attribute_list_opt keys
   {
     $1.KeyOpt = $2
+    $$ = $1
+  }
+| generated_column_attribute_list_opt SRID INTEGRAL
+  {
+    $1.SRID = NewIntLiteral($3)
     $$ = $1
   }
 | generated_column_attribute_list_opt VISIBLE
