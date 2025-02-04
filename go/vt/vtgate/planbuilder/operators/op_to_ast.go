@@ -130,7 +130,7 @@ func buildDistinct(op *Distinct, qb *queryBuilder) {
 }
 
 func buildValuesJoin(op *ValuesJoin, qb *queryBuilder) {
-	qb.ctx.SkipValuesArgument(op.bindVarName)
+	qb.ctx.SkipValuesArgument(op.BindVarName)
 	buildAST(op.LHS, qb)
 	qbR := &queryBuilder{ctx: qb.ctx}
 	buildAST(op.RHS, qbR)

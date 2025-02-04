@@ -83,7 +83,7 @@ type PlanningContext struct {
 	// isMirrored indicates that mirrored tables should be used.
 	isMirrored bool
 
-	// ValuesJoinColumns stores the columns we need for each values statement in the plan
+	// ValuesJoinColumns stores the columns we need for each values statement in the plan.
 	ValuesJoinColumns map[string]sqlparser.Columns
 
 	emptyEnv    *evalengine.ExpressionEnv

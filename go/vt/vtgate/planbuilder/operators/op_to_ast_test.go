@@ -110,7 +110,7 @@ func TestToSQLValuesJoin(t *testing.T) {
 
 	vj := &ValuesJoin{
 		binaryOperator: newBinaryOp(LHS, RHS),
-		bindVarName:    argumentName,
+		BindVarName:    argumentName,
 	}
 
 	stmt, _, err := ToAST(ctx, vj)

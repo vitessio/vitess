@@ -34,9 +34,9 @@ type ValuesJoin struct {
 	// of the Join. They can be any primitive.
 	Left, Right Primitive
 
-	// ColumnsFromLHS are the offsets of columns from LHS we are copying over to the RHS
+	// CopyColumnsToRHS are the offsets of columns from LHS we are copying over to the RHS
 	// []int{0,2} means that the first column in the t-o-t is the first offset from the left and the second column is the third offset
-	ColumnsFromLHS []int
+	CopyColumnsToRHS []int
 
 	// The name for the bind var containing the tuple-of-tuples being sent to the RHS
 	BindVarName string
@@ -74,10 +74,10 @@ func (jv *ValuesJoin) TryExecute(ctx context.Context, vcursor VCursor, bindVars 
 	}
 
 	for i, row := range lresult.Rows {
-		newRow := make(sqltypes.Row, 0, len(jv.ColumnsFromLHS)+1) // +1 since we always add the row ID
-		newRow = append(newRow, sqltypes.NewInt64(int64(i)))      // Adding the LHS row ID
+		newRow := make(sqltypes.Row, 0, len(jv.CopyColumnsToRHS)+1) // +1 since we always add the row ID
+		newRow = append(newRow, sqltypes.NewInt64(int64(i)))        // Adding the LHS row ID
 
-		for _, loffset := range jv.ColumnsFromLHS {
+		for _, loffset := range jv.CopyColumnsToRHS {
 			newRow = append(newRow, row[loffset])
 		}
 
@@ -152,8 +152,8 @@ func (jv *ValuesJoin) description() PrimitiveDescription {
 		OperatorType: "Join",
 		Variant:      "Values",
 		Other: map[string]any{
-			"BindVarName":    jv.BindVarName,
-			"ColumnsFromLHS": jv.ColumnsFromLHS,
+			"BindVarName":      jv.BindVarName,
+			"CopyColumnsToRHS": jv.CopyColumnsToRHS,
 		},
 	}
 }

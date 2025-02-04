@@ -133,14 +133,18 @@ func getFirstSelect(selStmt sqlparser.TableStatement) *sqlparser.Select {
 func breakValuesJoinExpressionInLHS(ctx *plancontext.PlanningContext,
 	expr sqlparser.Expr,
 	lhs semantics.TableSet,
-) (results []*sqlparser.ColName) {
+) (result valuesJoinColumn) {
+	result.Original = expr
+	result.PureLHS = true
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		col, ok := node.(*sqlparser.ColName)
 		if !ok {
 			return true, nil
 		}
 		if ctx.SemTable.RecursiveDeps(col) == lhs {
-			results = append(results, col)
+			result.LHS = append(result.LHS, col)
+		} else {
+			result.PureLHS = false
 		}
 		return true, nil
 	}, expr)

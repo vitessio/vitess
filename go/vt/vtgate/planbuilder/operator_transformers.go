@@ -79,6 +79,24 @@ func transformToPrimitive(ctx *plancontext.PlanningContext, op operators.Operato
 		return transformRecurseCTE(ctx, op)
 	case *operators.PercentBasedMirror:
 		return transformPercentBasedMirror(ctx, op)
+	case *operators.ValuesJoin:
+		lhs, err := transformToPrimitive(ctx, op.LHS)
+		if err != nil {
+			return nil, err
+		}
+		rhs, err := transformToPrimitive(ctx, op.RHS)
+		if err != nil {
+			return nil, err
+		}
+
+		return &engine.ValuesJoin{
+			Left:             lhs,
+			Right:            rhs,
+			CopyColumnsToRHS: op.CopyColumnsToRHS,
+			BindVarName:      op.BindVarName,
+			Cols:             op.Columns,
+			ColNames:         op.ColumnName,
+		}, nil
 	}
 
 	return nil, vterrors.VT13001(fmt.Sprintf("unknown type encountered: %T (transformToPrimitive)", op))
