@@ -485,7 +485,6 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 		vs.commitParent = commitParent
 		vs.sequenceNumber = sequenceNumber
 		vs.eventGTID = gtid
-		log.Errorf("DEBUG: GTID: %v, seq_no: %d, commit_parent: %d", gtid, sequenceNumber, commitParent)
 	case ev.IsXID():
 		vevents = append(vevents, &binlogdatapb.VEvent{
 			Type: binlogdatapb.VEventType_GTID,
