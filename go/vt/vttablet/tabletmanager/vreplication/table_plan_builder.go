@@ -309,7 +309,7 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*Colum
 
 	// if there are no columns being selected the select expression can be empty, so we "select 1" so we have a valid
 	// select to get a row back
-	if len(tpb.sendSelect.SelectExprs.Exprs) == 0 {
+	if tpb.sendSelect.SelectExprs == nil || len(tpb.sendSelect.SelectExprs.Exprs) == 0 {
 		tpb.sendSelect.AddSelectExpr(&sqlparser.AliasedExpr{
 			Expr: sqlparser.NewIntLiteral("1"),
 		})
