@@ -328,42 +328,4 @@ func (ts *Server) SaveMirrorRules(ctx context.Context, mirrorRules *vschemapb.Mi
 	return err
 }
 
-type VSchemaInfo struct {
-	keyspace string
-	version  Version
-	*vschemapb.Keyspace
-}
-
-func (ts *Server) GetVSchema(ctx context.Context, keyspace string) (*VSchemaInfo, error) {
-	ksvs, err := ts.GetVSchema(ctx, keyspace)
-	if err != nil {
-		return nil, err
-	}
-	return &VSchemaInfo{
-		keyspace: ksvs.Name,
-		version:  ksvs.version,
-		Keyspace: ksvs.Keyspace,
-	}, nil
-}
-
-func (ts *Server) SaveVSchema(ctx context.Context, keyspace string, vschema *VSchemaInfo) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-
-	nodePath := path.Join(KeyspacesPath, keyspace, VSchemaFile)
-	data, err := vschema.MarshalVT()
-	if err != nil {
-		return err
-	}
-
-	version, err := ts.globalCell.Update(ctx, nodePath, data, vschema.version)
-	if err != nil {
-		log.Errorf("failed to update vschema for keyspace %s: %v", keyspace, err)
-		return err
-	}
-	vschema.version = version
-	log.Infof("successfully updated vschema for keyspace %s: %+v", keyspace, vschema.Keyspace)
-
-	return nil
-}
+	
