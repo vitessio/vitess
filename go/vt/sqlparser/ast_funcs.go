@@ -2420,16 +2420,6 @@ func (ae *AliasedExpr) ColumnName() string {
 }
 
 // AllAggregation returns true if all the expressions contain aggregation
-func (s SelectExprs) AllAggregation() bool {
-	for _, k := range s {
-		if !ContainsAggregation(k) {
-			return false
-		}
-	}
-	return true
-}
-
-// AllAggregation returns true if all the expressions contain aggregation
 func (s *SelectExprs2) AllAggregation() bool {
 	for _, k := range s.Exprs {
 		if !ContainsAggregation(k) {

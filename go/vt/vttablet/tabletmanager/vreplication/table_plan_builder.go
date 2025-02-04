@@ -411,7 +411,7 @@ func analyzeSelectFrom(query string, parser *sqlparser.Parser) (sel *sqlparser.S
 	return sel, fromTable.String(), nil
 }
 
-func (tpb *tablePlanBuilder) analyzeExprs(selExprs sqlparser.SelectExprs) error {
+func (tpb *tablePlanBuilder) analyzeExprs(selExprs []sqlparser.SelectExpr) error {
 	for _, selExpr := range selExprs {
 		cexpr, err := tpb.analyzeExpr(selExpr)
 		if err != nil {

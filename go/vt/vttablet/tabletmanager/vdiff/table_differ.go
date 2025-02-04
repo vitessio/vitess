@@ -868,7 +868,7 @@ func (td *tableDiffer) adjustForSourceTimeZone(targetSelectExprs []sqlparser.Sel
 		return targetSelectExprs
 	}
 	log.Infof("source time zone specified: %s", td.wd.ct.sourceTimeZone)
-	var newSelectExprs sqlparser.SelectExprs
+	var newSelectExprs []sqlparser.SelectExpr
 	var modified bool
 	for _, expr := range targetSelectExprs {
 		converted := false

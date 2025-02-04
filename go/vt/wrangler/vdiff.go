@@ -603,12 +603,12 @@ func getColumnCollations(venv *vtenv.Environment, table *tabletmanagerdatapb.Tab
 // If SourceTimeZone is defined in the BinlogSource, the VReplication workflow would have converted the datetime
 // columns expecting the source to have been in the SourceTimeZone and target in TargetTimeZone. We need to do the reverse
 // conversion in VDiff before comparing to the source
-func (df *vdiff) adjustForSourceTimeZone(targetSelectExprs sqlparser.SelectExprs, fields map[string]querypb.Type) sqlparser.SelectExprs {
+func (df *vdiff) adjustForSourceTimeZone(targetSelectExprs []sqlparser.SelectExpr, fields map[string]querypb.Type) []sqlparser.SelectExpr {
 	if df.sourceTimeZone == "" {
 		return targetSelectExprs
 	}
 	log.Infof("source time zone specified: %s", df.sourceTimeZone)
-	var newSelectExprs sqlparser.SelectExprs
+	var newSelectExprs []sqlparser.SelectExpr
 	var modified bool
 	for _, expr := range targetSelectExprs {
 		converted := false
