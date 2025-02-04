@@ -71,8 +71,8 @@ github.com/DataDog/go-tuf v1.1.0-0.5.2 h1:4CagiIekonLSfL8GMHRHcHudo1fQnxELS9g4ti
 github.com/DataDog/go-tuf v1.1.0-0.5.2/go.mod h1:zBcq6f654iVqmkk8n2Cx81E1JnNTMOAx1UEO/wZR+P0=
 github.com/DataDog/gostackparse v0.7.0 h1:i7dLkXHvYzHV308hnkvVGDL3BR4FWl7IsXNPz/IGQh4=
 github.com/DataDog/gostackparse v0.7.0/go.mod h1:lTfqcJKqS9KnXQGnyQMCugq3u1FP6UZMfWR0aitKFMM=
-github.com/DataDog/opentelemetry-mapping-go/pkg/otlp/attributes v0.25.0 h1:w3xjWrxSB91I1tVutVGwEK80AB+nwrT8pgWB+UL8aI0=
-github.com/DataDog/opentelemetry-mapping-go/pkg/otlp/attributes v0.25.0/go.mod h1:yZM7PFH3niM0ATH4SM1BBZd+6+k3cjZhxTIz6AvujCI=
+github.com/DataDog/opentelemetry-mapping-go/pkg/otlp/attributes v0.24.0 h1:Y65h9AvfQO7ONOBlqCetvvUhh2XO1wIzN7IfXVFjc84=
+github.com/DataDog/opentelemetry-mapping-go/pkg/otlp/attributes v0.24.0/go.mod h1:7aAFw4o5dZk/kqFniz7ljJwS8covz8DHouGl7BrsnLI=
 github.com/DataDog/sketches-go v1.4.6 h1:acd5fb+QdUzGrosfNLwrIhqyrbMORpvBy7mE+vHlT3I=
 github.com/DataDog/sketches-go v1.4.6/go.mod h1:7Y8GN8Jf66DLyDhc94zuWA3uHEt/7ttt8jHOBWWrSOg=
 github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.26.0 h1:f2Qw/Ehhimh5uO1fayV0QIW7DShEQqhtUfhYc+cBPlw=
@@ -618,8 +618,8 @@ go.opentelemetry.io/collector/component v0.119.0 h1:ZVp9myF1Bc4BLa1V4C15Jy/VpqKP
 go.opentelemetry.io/collector/component v0.119.0/go.mod h1:wtuWxFl+Ky9E/5+t2FwHoLyADDiBFFDdx8fN3fEs0n8=
 go.opentelemetry.io/collector/component/componentstatus v0.115.0 h1:pbpUIL+uKDfEiSgKK+S5nuSL6MDIIQYsp4b65ZGVb9M=
 go.opentelemetry.io/collector/component/componentstatus v0.115.0/go.mod h1:36A+9XSiOz0Cdhq+UwwPRlEr5CYuSkEnVO9om4BH7d0=
-go.opentelemetry.io/collector/component/componenttest v0.118.0 h1:knEHckoiL2fEWSIc0iehg39zP4IXzi9sHa45O+oxKo8=
-go.opentelemetry.io/collector/component/componenttest v0.118.0/go.mod h1:aHc7t7zVwCpbhrWIWY+GMuaMxMCUP8C8P7pJOt8r/vU=
+go.opentelemetry.io/collector/component/componenttest v0.117.0 h1:r3k0BsU/cJlqVQRtgFjxfduNEGaM2qCAU7JitIGkRds=
+go.opentelemetry.io/collector/component/componenttest v0.117.0/go.mod h1:MoBWSGb3KwGc5FAIO+htez/QWK2uqJ4fnbEnfHB384c=
 go.opentelemetry.io/collector/config/configtelemetry v0.119.0 h1:gAgMUEVXZKgpASxOrhS55DyA/aYatq0U6gitZI8MLXw=
 go.opentelemetry.io/collector/config/configtelemetry v0.119.0/go.mod h1:SlBEwQg0qly75rXZ6W1Ig8jN25KBVBkFIIAUI1GiAAE=
 go.opentelemetry.io/collector/consumer v1.21.0 h1:THKZ2Vbi6GkamjTBI2hFq5Dc4kINZTWGwQNa8d/Ty9g=
