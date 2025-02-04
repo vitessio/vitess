@@ -17,10 +17,13 @@ limitations under the License.
 package vtsql
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"sync"
+	"text/tabwriter"
 	"time"
 
 	"google.golang.org/grpc/credentials/insecure"
@@ -31,6 +34,7 @@ import (
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vitessdriver"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/resolver"
 	"vitess.io/vitess/go/vt/vtadmin/debug"
@@ -44,6 +48,9 @@ import (
 type DB interface {
 	// ShowTablets executes `SHOW vitess_tablets` and returns the result.
 	ShowTablets(ctx context.Context) (*sql.Rows, error)
+
+	// VExplain executes query - `vexplain [ALL|PLAN|QUERIES|TRACE|KEYS] query` and returns the results
+	VExplain(ctx context.Context, query string, vexplainStmt *sqlparser.VExplainStmt) (*vtadminpb.VExplainResponse, error)
 
 	// Ping behaves like (*sql.DB).Ping.
 	Ping() error
@@ -172,6 +179,73 @@ func (vtgate *VTGateProxy) ShowTablets(ctx context.Context) (*sql.Rows, error) {
 	vtadminproto.AnnotateClusterSpan(vtgate.cluster, span)
 
 	return vtgate.conn.QueryContext(vtgate.getQueryContext(ctx), "SHOW vitess_tablets")
+}
+
+// VExplain is part of the DB interface.
+func (vtgate *VTGateProxy) VExplain(ctx context.Context, query string, vexplainStmt *sqlparser.VExplainStmt) (*vtadminpb.VExplainResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VTGateProxy.VExplain")
+	defer span.Finish()
+
+	vtadminproto.AnnotateClusterSpan(vtgate.cluster, span)
+
+	rows, err := vtgate.conn.QueryContext(vtgate.getQueryContext(ctx), query)
+
+	if err != nil {
+		return nil, err
+	}
+	switch vexplainStmt.Type {
+	case sqlparser.QueriesVExplainType:
+		return convertVExplainQueriesResultToString(rows)
+	case sqlparser.AllVExplainType, sqlparser.TraceVExplainType, sqlparser.PlanVExplainType, sqlparser.KeysVExplainType:
+		return convertVExplainResultToString(rows)
+	default:
+		return nil, nil
+	}
+}
+
+func convertVExplainResultToString(rows *sql.Rows) (*vtadminpb.VExplainResponse, error) {
+	var queryPlan string
+	for rows.Next() {
+		if err := rows.Scan(&queryPlan); err != nil {
+			return nil, err
+		}
+	}
+	return &vtadminpb.VExplainResponse{
+		Response: queryPlan,
+	}, nil
+}
+
+func convertVExplainQueriesResultToString(rows *sql.Rows) (*vtadminpb.VExplainResponse, error) {
+	var buf bytes.Buffer
+	w := tabwriter.NewWriter(&buf, 0, 0, 0, ' ', tabwriter.AlignRight)
+
+	sep := []byte("|")
+	newLine := []byte("\n")
+	cols, _ := rows.Columns()
+
+	if _, err := w.Write([]byte(strings.Join(cols, string(sep)) + string(newLine))); err != nil {
+		return nil, err
+	}
+
+	row := make([][]byte, len(cols))
+	rowPtr := make([]any, len(cols))
+	for i := range row {
+		rowPtr[i] = &row[i]
+	}
+
+	for rows.Next() {
+		if err := rows.Scan(rowPtr...); err != nil {
+			return nil, err
+		}
+		if _, err := w.Write(append(bytes.Join(row, sep), newLine...)); err != nil {
+			return nil, err
+		}
+	}
+	w.Flush()
+
+	return &vtadminpb.VExplainResponse{
+		Response: buf.String(),
+	}, nil
 }
 
 // Ping is part of the DB interface.

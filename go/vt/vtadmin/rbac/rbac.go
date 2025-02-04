@@ -136,5 +136,7 @@ const (
 
 	VTExplainResource Resource = "VTExplain"
 
+	VExplainResource Resource = "VExplain"
+
 	TabletFullStatusResource Resource = "TabletFullStatus"
 )

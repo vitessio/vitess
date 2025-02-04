@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"path/filepath"
 	"runtime/debug"
@@ -1508,11 +1509,17 @@ func (s *VtctldServer) GetBackups(ctx context.Context, req *vtctldatapb.GetBacku
 
 	totalBackups := len(bhs)
 	if req.Limit > 0 {
+		if int(req.Limit) < 0 {
+			return nil, fmt.Errorf("limit %v exceeds maximum allowed value %v", req.DetailedLimit, math.MaxInt)
+		}
 		totalBackups = int(req.Limit)
 	}
 
 	totalDetailedBackups := len(bhs)
 	if req.DetailedLimit > 0 {
+		if int(req.DetailedLimit) < 0 {
+			return nil, fmt.Errorf("detailed_limit %v exceeds maximum allowed value %v", req.DetailedLimit, math.MaxInt)
+		}
 		totalDetailedBackups = int(req.DetailedLimit)
 	}
 

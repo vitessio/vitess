@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"os/exec"
@@ -34,6 +35,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql"
@@ -709,6 +712,63 @@ func (vttablet *VttabletProcess) BulkLoad(t testing.TB, db, table string, bulkIn
 // IsShutdown returns whether a vttablet is shutdown or not
 func (vttablet *VttabletProcess) IsShutdown() bool {
 	return vttablet.proc == nil
+}
+
+// ConfirmDataDirHasNoGlobalPerms confirms that no files in the tablet's data directory
+// have any global/world/other permissions enabled.
+func (vttablet *VttabletProcess) ConfirmDataDirHasNoGlobalPerms(t *testing.T) {
+	datadir := vttablet.Directory
+	if _, err := os.Stat(datadir); errors.Is(err, os.ErrNotExist) {
+		t.Logf("Data directory %s no longer exists, skipping permissions check", datadir)
+		return
+	}
+
+	var allowedFiles = []string{
+		// These are intentionally created with the world/other read bit set by mysqld itself
+		// during the --initialize[-insecure] step.
+		// See: https://dev.mysql.com/doc/mysql-security-excerpt/en/creating-ssl-rsa-files-using-mysql.html
+		// "On Unix and Unix-like systems, the file access mode is 644 for certificate files
+		// (that is, world readable) and 600 for key files (that is, accessible only by the
+		// account that runs the server)."
+		path.Join("data", "ca.pem"),
+		path.Join("data", "client-cert.pem"),
+		path.Join("data", "public_key.pem"),
+		path.Join("data", "server-cert.pem"),
+		// The domain socket must have global perms for anyone to use it.
+		"mysql.sock",
+		// These files are created by xtrabackup.
+		path.Join("tmp", "xtrabackup_checkpoints"),
+		path.Join("tmp", "xtrabackup_info"),
+	}
+
+	var matches []string
+	fsys := os.DirFS(datadir)
+	err := fs.WalkDir(fsys, ".", func(p string, d fs.DirEntry, _ error) error {
+		// first check if the file should be skipped
+		for _, name := range allowedFiles {
+			if strings.HasSuffix(p, name) {
+				return nil
+			}
+		}
+
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+
+		// check if any global bit is on the filemode
+		if info.Mode()&0007 != 0 {
+			matches = append(matches, fmt.Sprintf(
+				"%s (%s)",
+				path.Join(datadir, p),
+				info.Mode(),
+			))
+		}
+		return nil
+	})
+
+	require.NoError(t, err, "Error walking directory")
+	require.Empty(t, matches, "Found files with global permissions: %s\n", strings.Join(matches, "\n"))
 }
 
 // VttabletProcessInstance returns a VttabletProcess handle for vttablet process
