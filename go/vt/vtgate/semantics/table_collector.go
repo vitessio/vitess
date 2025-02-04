@@ -424,7 +424,7 @@ func checkValidRecursiveCTE(cteDef *CTE) error {
 		return vterrors.VT09027(cteDef.Name)
 	}
 
-	for _, expr := range firstSelect.GetColumns().Exprs {
+	for _, expr := range firstSelect.GetColumns() {
 		if sqlparser.ContainsAggregation(expr) {
 			return vterrors.VT09027(cteDef.Name)
 		}
@@ -463,7 +463,7 @@ func (tc *tableCollector) addSelectDerivedTable(
 		_, deps[i], types[i] = tc.org.depsForExpr(ae.Expr)
 	}
 
-	tableInfo := createDerivedTableForExpressions(sel.SelectExprs, columns, tables.tables, tc.org, expanded, deps, types)
+	tableInfo := createDerivedTableForExpressions(sel.GetColumns(), columns, tables.tables, tc.org, expanded, deps, types)
 	if err := tableInfo.checkForDuplicates(); err != nil {
 		return err
 	}

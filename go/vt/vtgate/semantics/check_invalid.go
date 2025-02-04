@@ -78,7 +78,7 @@ func (a *analyzer) checkSubqueryColumns(parent sqlparser.SQLNode, subq *sqlparse
 	if tuple, ok := otherSide.(sqlparser.ValTuple); ok {
 		cols = len(tuple)
 	}
-	columns := subq.Select.GetColumns().Exprs
+	columns := subq.Select.GetColumns()
 	for _, expr := range columns {
 		_, ok := expr.(*sqlparser.StarExpr)
 		if ok {

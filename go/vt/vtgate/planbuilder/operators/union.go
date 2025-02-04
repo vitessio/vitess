@@ -30,14 +30,14 @@ type Union struct {
 	Sources []Operator
 
 	// These are the select expressions coming from each source
-	Selects  []*sqlparser.SelectExprs
+	Selects  [][]sqlparser.SelectExpr
 	distinct bool
 
 	unionColumns              []sqlparser.SelectExpr
 	unionColumnsAsAlisedExprs []*sqlparser.AliasedExpr
 }
 
-func newUnion(srcs []Operator, sourceSelects []*sqlparser.SelectExprs, columns []sqlparser.SelectExpr, distinct bool) *Union {
+func newUnion(srcs []Operator, sourceSelects [][]sqlparser.SelectExpr, columns []sqlparser.SelectExpr, distinct bool) *Union {
 	if columns == nil {
 		panic("rt")
 	}
@@ -95,7 +95,7 @@ can be found on the same offset. The names of the RHS are discarded.
 func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
 	offsets := make(map[string]int)
 	sel := u.GetSelectFor(0)
-	for i, selectExpr := range sel.SelectExprs.Exprs {
+	for i, selectExpr := range sel.GetColumns() {
 		ae, ok := selectExpr.(*sqlparser.AliasedExpr)
 		if !ok {
 			panic(vterrors.VT12001("pushing predicates on UNION where the first SELECT contains * or NEXT"))
@@ -133,7 +133,7 @@ func (u *Union) predicatePerSource(expr sqlparser.Expr, offsets map[string]int) 
 			}
 
 			sel := u.GetSelectFor(i)
-			ae, ok := sel.SelectExprs.Exprs[idx].(*sqlparser.AliasedExpr)
+			ae, ok := sel.GetColumns()[idx].(*sqlparser.AliasedExpr)
 			if !ok {
 				panic(vterrors.VT09015())
 			}

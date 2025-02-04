@@ -75,7 +75,7 @@ type (
 
 	ColumnResults interface {
 		GetColumnCount() int
-		GetColumns() *SelectExprs
+		GetColumns() []SelectExpr
 	}
 
 	Withable interface {

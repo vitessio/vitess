@@ -149,7 +149,7 @@ func (a *analyzer) newSemTable(
 			Direct:                    ExprDependencies{},
 			ColumnEqualities:          map[columnName][]sqlparser.Expr{},
 			ExpandedColumns:           map[sqlparser.TableName][]*sqlparser.ColName{},
-			columns:                   map[*sqlparser.Union]*sqlparser.SelectExprs{},
+			columns:                   map[*sqlparser.Union][]sqlparser.SelectExpr{},
 			StatementIDs:              a.scoper.statementIDs,
 			QuerySignature:            a.sig,
 			childForeignKeysInvolved:  map[TableSet][]vindexes.ChildFKInfo{},
@@ -159,7 +159,7 @@ func (a *analyzer) newSemTable(
 		}, nil
 	}
 
-	columns := map[*sqlparser.Union]*sqlparser.SelectExprs{}
+	columns := map[*sqlparser.Union][]sqlparser.SelectExpr{}
 	for union, info := range a.tables.unionInfo {
 		columns[union] = info.exprs
 	}
@@ -275,8 +275,8 @@ func (a *analyzer) analyzeUp(cursor *sqlparser.Cursor) bool {
 	return a.shouldContinue()
 }
 
-func containsStar(s *sqlparser.SelectExprs) bool {
-	for _, expr := range s.Exprs {
+func containsStar(s []sqlparser.SelectExpr) bool {
+	for _, expr := range s {
 		_, isStar := expr.(*sqlparser.StarExpr)
 		if isStar {
 			return true
@@ -306,8 +306,8 @@ func checkUnionColumns(union *sqlparser.Union) error {
 		return nil
 	}
 
-	secondSize := len(secondProj.Exprs)
-	firstSize := len(firstProj.Exprs)
+	secondSize := len(secondProj)
+	firstSize := len(firstProj)
 	if secondSize != firstSize {
 		return &UnionColumnsDoNotMatchError{FirstProj: firstSize, SecondProj: secondSize}
 	}

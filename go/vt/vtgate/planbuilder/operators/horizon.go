@@ -162,7 +162,7 @@ func (h *Horizon) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr,
 }
 
 func (h *Horizon) GetColumns(ctx *plancontext.PlanningContext) (exprs []*sqlparser.AliasedExpr) {
-	for _, expr := range ctx.SemTable.SelectExprs(h.Query).Exprs {
+	for _, expr := range ctx.SemTable.SelectExprs(h.Query) {
 		ae, ok := expr.(*sqlparser.AliasedExpr)
 		if !ok {
 			panic(vterrors.VT09015())

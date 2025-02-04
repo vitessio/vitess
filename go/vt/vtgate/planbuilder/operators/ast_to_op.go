@@ -174,7 +174,7 @@ func createOperatorFromUnion(ctx *plancontext.PlanningContext, node *sqlparser.U
 	rexprs := ctx.SemTable.SelectExprs(node.Right)
 
 	unionCols := ctx.SemTable.SelectExprs(node)
-	union := newUnion([]Operator{opLHS, opRHS}, []*sqlparser.SelectExprs{lexprs, rexprs}, unionCols.Exprs, node.Distinct)
+	union := newUnion([]Operator{opLHS, opRHS}, [][]sqlparser.SelectExpr{lexprs, rexprs}, unionCols, node.Distinct)
 	return newHorizon(union, node)
 }
 

@@ -151,9 +151,9 @@ func (r *RealTable) authoritative() bool {
 	}
 }
 
-func extractSelectExprsFromCTE(selectExprs *sqlparser.SelectExprs) []ColumnInfo {
+func extractSelectExprsFromCTE(selectExprs []sqlparser.SelectExpr) []ColumnInfo {
 	var ci []ColumnInfo
-	for _, expr := range selectExprs.Exprs {
+	for _, expr := range selectExprs {
 		ae, ok := expr.(*sqlparser.AliasedExpr)
 		if !ok {
 			return nil
@@ -166,11 +166,11 @@ func extractSelectExprsFromCTE(selectExprs *sqlparser.SelectExprs) []ColumnInfo 
 	return ci
 }
 
-func extractColumnsFromCTE(columns sqlparser.Columns, selectExprs *sqlparser.SelectExprs) []ColumnInfo {
+func extractColumnsFromCTE(columns sqlparser.Columns, selectExprs []sqlparser.SelectExpr) []ColumnInfo {
 	if len(columns) == 0 {
 		return nil
 	}
-	if len(selectExprs.Exprs) != len(columns) {
+	if len(selectExprs) != len(columns) {
 		panic("mismatch of columns")
 	}
 	return slice.Map(columns, func(from sqlparser.IdentifierCI) ColumnInfo {
@@ -181,7 +181,7 @@ func extractColumnsFromCTE(columns sqlparser.Columns, selectExprs *sqlparser.Sel
 	})
 }
 
-// GetExpr implements the TableInfo interface
+// GetAliasedTableExpr implements the TableInfo interface
 func (r *RealTable) GetAliasedTableExpr() *sqlparser.AliasedTableExpr {
 	return r.ASTNode
 }

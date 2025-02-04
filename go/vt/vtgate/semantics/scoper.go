@@ -77,7 +77,7 @@ func (s *scoper) down(cursor *sqlparser.Cursor) error {
 	case sqlparser.TableExpr:
 		s.enterJoinScope(cursor)
 	case *sqlparser.SelectExprs:
-		s.copySelectExprs(cursor, node)
+		s.copySelectExprs(cursor, node.Exprs)
 	case sqlparser.OrderBy:
 		return s.addColumnInfoForOrderBy(cursor, node)
 	case *sqlparser.GroupBy:
@@ -152,7 +152,7 @@ func (s *scoper) addColumnInfoForOrderBy(cursor *sqlparser.Cursor, node sqlparse
 	return nil
 }
 
-func (s *scoper) copySelectExprs(cursor *sqlparser.Cursor, node *sqlparser.SelectExprs) {
+func (s *scoper) copySelectExprs(cursor *sqlparser.Cursor, node []sqlparser.SelectExpr) {
 	sel, parentIsSelect := cursor.Parent().(*sqlparser.Select)
 	if !parentIsSelect {
 		return

@@ -140,7 +140,7 @@ type (
 		// The columns were added because of the use of `*` in the query
 		ExpandedColumns map[sqlparser.TableName][]*sqlparser.ColName
 
-		columns map[*sqlparser.Union]*sqlparser.SelectExprs
+		columns map[*sqlparser.Union][]sqlparser.SelectExpr
 
 		comparator *sqlparser.Comparator
 
@@ -493,10 +493,10 @@ func (st *SemTable) ForeignKeysPresent() bool {
 	return false
 }
 
-func (st *SemTable) SelectExprs(sel sqlparser.TableStatement) *sqlparser.SelectExprs {
+func (st *SemTable) SelectExprs(sel sqlparser.TableStatement) []sqlparser.SelectExpr {
 	switch sel := sel.(type) {
 	case *sqlparser.Select:
-		return sel.SelectExprs
+		return sel.GetColumns()
 	case *sqlparser.Union:
 		exprs, found := st.columns[sel]
 		if found {
@@ -512,16 +512,16 @@ func (st *SemTable) SelectExprs(sel sqlparser.TableStatement) *sqlparser.SelectE
 	panic(fmt.Sprintf("BUG: unexpected select statement type %T", sel))
 }
 
-func getColumnNames(exprs *sqlparser.SelectExprs) (bool, *sqlparser.SelectExprs) {
-	selectExprs := &sqlparser.SelectExprs{}
+func getColumnNames(exprs []sqlparser.SelectExpr) (bool, []sqlparser.SelectExpr) {
+	var selectExprs []sqlparser.SelectExpr
 	expanded := true
-	for _, col := range exprs.Exprs {
+	for _, col := range exprs {
 		switch col := col.(type) {
 		case *sqlparser.AliasedExpr:
 			expr := sqlparser.NewColName(col.ColumnName())
-			selectExprs.Exprs = append(selectExprs.Exprs, &sqlparser.AliasedExpr{Expr: expr})
+			selectExprs = append(selectExprs, &sqlparser.AliasedExpr{Expr: expr})
 		default:
-			selectExprs.Exprs = append(selectExprs.Exprs, col)
+			selectExprs = append(selectExprs, col)
 			expanded = false
 		}
 	}
@@ -572,7 +572,7 @@ func EmptySemTable() *SemTable {
 		Recursive:        map[sqlparser.Expr]TableSet{},
 		Direct:           map[sqlparser.Expr]TableSet{},
 		ColumnEqualities: map[columnName][]sqlparser.Expr{},
-		columns:          map[*sqlparser.Union]*sqlparser.SelectExprs{},
+		columns:          map[*sqlparser.Union][]sqlparser.SelectExpr{},
 		ExprTypes:        make(map[sqlparser.Expr]evalengine.Type),
 	}
 }

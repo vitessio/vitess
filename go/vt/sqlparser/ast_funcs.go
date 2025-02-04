@@ -1209,6 +1209,13 @@ func (node *Select) AddSelectExpr(expr SelectExpr) {
 	node.SelectExprs.Exprs = append(node.SelectExprs.Exprs, expr)
 }
 
+func (node *Select) SetSelectExprs(exprs []SelectExpr) {
+	if node.SelectExprs == nil {
+		node.SelectExprs = &SelectExprs{Exprs: exprs}
+	}
+	node.SelectExprs.Exprs = exprs
+}
+
 // AddOrder adds an order by element
 func (node *Select) AddOrder(order *Order) {
 	node.OrderBy = append(node.OrderBy, order)
@@ -1270,8 +1277,11 @@ func (node *Select) GetColumnCount() int {
 }
 
 // GetColumns gets the columns
-func (node *Select) GetColumns() *SelectExprs {
-	return node.SelectExprs
+func (node *Select) GetColumns() []SelectExpr {
+	if node.SelectExprs == nil {
+		return nil
+	}
+	return node.SelectExprs.Exprs
 }
 
 // SetComments implements the Commented interface
@@ -1372,7 +1382,7 @@ func (node *Union) GetLimit() *Limit {
 }
 
 // GetColumns gets the columns
-func (node *Union) GetColumns() *SelectExprs {
+func (node *Union) GetColumns() []SelectExpr {
 	return node.Left.GetColumns()
 }
 
@@ -3063,12 +3073,13 @@ func (node *ValuesStatement) GetColumnCount() int {
 	panic("no columns available") // TODO: we need a better solution than a panic
 }
 
-func (node *ValuesStatement) GetColumns() *SelectExprs {
-	sel := new(SelectExprs)
+func (node *ValuesStatement) GetColumns() []SelectExpr {
+	var sel []SelectExpr
 	columnCount := node.GetColumnCount()
 	for i := range columnCount {
-		sel.Exprs = append(sel.Exprs, &AliasedExpr{Expr: NewColName(fmt.Sprintf("column_%d", i))})
+		sel = append(sel, &AliasedExpr{Expr: NewColName(fmt.Sprintf("column_%d", i))})
 	}
+	_ = sel
 	panic("no columns available") // TODO: we need a better solution than a panic
 }
 

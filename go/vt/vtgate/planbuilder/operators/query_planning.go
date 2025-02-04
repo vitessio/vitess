@@ -805,7 +805,7 @@ func tryPushUnion(ctx *plancontext.PlanningContext, op *Union) (Operator, *Apply
 	}
 
 	var sources []Operator
-	var selects []*sqlparser.SelectExprs
+	var selects [][]sqlparser.SelectExpr
 
 	if op.distinct {
 		sources, selects = mergeUnionInputInAnyOrder(ctx, op)

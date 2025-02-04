@@ -196,19 +196,19 @@ func (qb *queryBuilder) pushUnionInsideDerived() {
 		}},
 	}
 	firstSelect := getFirstSelect(selStmt)
-	sel.SelectExprs = unionSelects(firstSelect.SelectExprs)
+	sel.SetSelectExprs(unionSelects(firstSelect.GetColumns()))
 	qb.stmt = sel
 }
 
-func unionSelects(exprs *sqlparser.SelectExprs) *sqlparser.SelectExprs {
-	selectExprs := &sqlparser.SelectExprs{}
-	for _, col := range exprs.Exprs {
+func unionSelects(exprs []sqlparser.SelectExpr) []sqlparser.SelectExpr {
+	var selectExprs []sqlparser.SelectExpr
+	for _, col := range exprs {
 		switch col := col.(type) {
 		case *sqlparser.AliasedExpr:
 			expr := sqlparser.NewColName(col.ColumnName())
-			selectExprs.Exprs = append(selectExprs.Exprs, &sqlparser.AliasedExpr{Expr: expr})
+			selectExprs = append(selectExprs, &sqlparser.AliasedExpr{Expr: expr})
 		default:
-			selectExprs.Exprs = append(selectExprs.Exprs, col)
+			selectExprs = append(selectExprs, col)
 		}
 	}
 	return selectExprs
