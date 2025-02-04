@@ -1273,6 +1273,9 @@ func (node *Select) IsDistinct() bool {
 
 // GetColumnCount return SelectExprs count.
 func (node *Select) GetColumnCount() int {
+	if node.SelectExprs == nil {
+		return 0
+	}
 	return len(node.SelectExprs.Exprs)
 }
 
