@@ -1917,7 +1917,7 @@ type VEvent struct {
 	Throttled bool `protobuf:"varint,24,opt,name=throttled,proto3" json:"throttled,omitempty"`
 	// ThrottledReason is a human readable string that explains why the stream is throttled
 	ThrottledReason string `protobuf:"bytes,25,opt,name=throttled_reason,json=throttledReason,proto3" json:"throttled_reason,omitempty"`
-	// For GTID events, the sequence number of the most recent transaction this event depends on / conflicts with.
+	// For GTID events, the sequence number of the most recent transaction this event depends on.
 	CommitParent int64 `protobuf:"varint,26,opt,name=commit_parent,json=commitParent,proto3" json:"commit_parent,omitempty"`
 	// For GTID events, the sequence number (logical clock) value of this transaction.
 	SequenceNumber int64 `protobuf:"varint,27,opt,name=sequence_number,json=sequenceNumber,proto3" json:"sequence_number,omitempty"`
