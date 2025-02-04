@@ -999,8 +999,8 @@ var defaultConfig = TabletConfig{
 		TxTimeout: 30 * time.Second,
 	},
 	Oltp: OltpConfig{
-		QueryTimeout: 30 * time.Second,
-		TxTimeout:    30 * time.Second,
+		QueryTimeout: 30 * time.Minute,
+		TxTimeout:    30 * time.Minute,
 		MaxRows:      10000,
 	},
 	Healthcheck: HealthcheckConfig{

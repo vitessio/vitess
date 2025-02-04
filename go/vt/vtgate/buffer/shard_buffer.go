@@ -551,7 +551,8 @@ func (sb *shardBuffer) stopBufferingLocked(reason stopReason, details string) {
 		utilizationSum.Add(sb.statsKey, utilMax)
 	}
 
-	sb.logErrorIfStateNotLocked(stateBuffering)
+	sb.
+		sb.logErrorIfStateNotLocked(stateBuffering)
 	sb.state = stateDraining
 	q := sb.queue
 	// Clear the queue such that remove(), oldestEntry() and evictOldestEntry()
