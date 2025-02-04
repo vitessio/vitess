@@ -465,7 +465,7 @@ func buildTablePlan(env *vtenv.Environment, ti *Table, vschema *localVSchema, qu
 		log.Errorf("%s", err.Error())
 		return nil, err
 	}
-	if err := plan.analyzeExprs(vschema, sel.SelectExprs); err != nil {
+	if err := plan.analyzeExprs(vschema, sel.SelectExprs.Exprs); err != nil {
 		log.Errorf("%s", err.Error())
 		return nil, err
 	}
@@ -670,7 +670,7 @@ func splitAndExpression(filters []sqlparser.Expr, node sqlparser.Expr) []sqlpars
 	return append(filters, node)
 }
 
-func (plan *Plan) analyzeExprs(vschema *localVSchema, selExprs sqlparser.SelectExprs) error {
+func (plan *Plan) analyzeExprs(vschema *localVSchema, selExprs []sqlparser.SelectExpr) error {
 	if _, ok := selExprs[0].(*sqlparser.StarExpr); !ok {
 		for _, expr := range selExprs {
 			cExpr, err := plan.analyzeExpr(vschema, expr)
@@ -681,7 +681,7 @@ func (plan *Plan) analyzeExprs(vschema *localVSchema, selExprs sqlparser.SelectE
 		}
 	} else {
 		if len(selExprs) != 1 {
-			return fmt.Errorf("unsupported: %v", sqlparser.String(selExprs))
+			return fmt.Errorf("unsupported: %v", sqlparser.SliceString(selExprs))
 		}
 		plan.ColExprs = make([]ColExpr, len(plan.Table.Fields))
 		for i, col := range plan.Table.Fields {

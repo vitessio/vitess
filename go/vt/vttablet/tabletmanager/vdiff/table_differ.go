@@ -863,7 +863,7 @@ func (td *tableDiffer) lastPKFromRow(row []sqltypes.Value) *tabletmanagerdatapb.
 // VReplication workflow would have converted the datetime columns expecting the
 // source to have been in the SourceTimeZone and target in TargetTimeZone. We need
 // to do the reverse conversion in VDiff before the comparison.
-func (td *tableDiffer) adjustForSourceTimeZone(targetSelectExprs sqlparser.SelectExprs, fields map[string]querypb.Type) sqlparser.SelectExprs {
+func (td *tableDiffer) adjustForSourceTimeZone(targetSelectExprs []sqlparser.SelectExpr, fields map[string]querypb.Type) []sqlparser.SelectExpr {
 	if td.wd.ct.sourceTimeZone == "" {
 		return targetSelectExprs
 	}
