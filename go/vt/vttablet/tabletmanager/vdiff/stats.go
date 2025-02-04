@@ -44,11 +44,18 @@ type vdiffStats struct {
 	RowsDiffedCount     *stats.Counter
 }
 
+func (vds *vdiffStats) initControllerStats() {
+	vds.mu.Lock()
+	defer vds.mu.Unlock()
+	vds.controllers = make(map[int64]*controller)
+}
+
 func (vds *vdiffStats) register() {
 	globalStats.Count = stats.NewGauge("", "")
 	globalStats.ErrorCount = stats.NewCounter("", "")
 	globalStats.RestartedTableDiffs = stats.NewCountersWithSingleLabel("", "", "Table")
 	globalStats.RowsDiffedCount = stats.NewCounter("", "")
+	globalStats.initControllerStats()
 
 	stats.NewGaugeFunc("VDiffCount", "Number of current vdiffs", vds.numControllers)
 
