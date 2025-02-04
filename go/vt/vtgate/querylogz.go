@@ -45,12 +45,15 @@ var (
 				<th>Duration</th>
 				<th>Plan Time</th>
 				<th>Execute Time</th>
+				<th>Mirror Source Execute Time</th>
+				<th>Mirror Target Execute Time</th>
 				<th>Commit Time</th>
 				<th>Stmt Type</th>
 				<th>SQL</th>
 				<th>ShardQueries</th>
 				<th>RowsAffected</th>
 				<th>Error</th>
+				<th>Mirror Target Error</th>
 			</tr>
 		</thead>
 	`)
@@ -71,12 +74,15 @@ var (
 			<td>{{.TotalTime.Seconds}}</td>
 			<td>{{.PlanTime.Seconds}}</td>
 			<td>{{.ExecuteTime.Seconds}}</td>
+			<td>{{.MirrorSourceExecuteTime.Seconds}}</td>
+			<td>{{.MirrorTargetExecuteTime.Seconds}}</td>
 			<td>{{.CommitTime.Seconds}}</td>
 			<td>{{.StmtType}}</td>
 			<td>{{.SQL | .Parser.TruncateForUI | unquote | cssWrappable}}</td>
 			<td>{{.ShardQueries}}</td>
 			<td>{{.RowsAffected}}</td>
 			<td>{{.ErrorStr}}</td>
+			<td>{{.MirrorTargetErrorStr}}</td>
 		</tr>
 	`))
 )
