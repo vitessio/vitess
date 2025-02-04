@@ -146,6 +146,8 @@ func (vde *Engine) openLocked(ctx context.Context) error {
 		vde.resetControllers()
 	}
 
+	globalStats.initControllerStats()
+
 	// At this point the tablet has no controllers running. So
 	// we want to start any VDiffs that have not been explicitly
 	// stopped or otherwise finished.
@@ -222,7 +224,6 @@ func (vde *Engine) addController(row sqltypes.RowNamedValues, options *tabletman
 	defer globalStats.mu.Unlock()
 	globalStats.controllers[ct.id] = ct
 
-	// run() can start a vdiff in pending/started state, so we should init the stats first before starting it.
 	controllerCtx, cancel := context.WithCancel(vde.ctx)
 	ct.cancel = cancel
 	go ct.run(controllerCtx)
