@@ -30,14 +30,14 @@ type Union struct {
 	Sources []Operator
 
 	// These are the select expressions coming from each source
-	Selects  []*sqlparser.SelectExprs2
+	Selects  []*sqlparser.SelectExprs
 	distinct bool
 
 	unionColumns              []sqlparser.SelectExpr
 	unionColumnsAsAlisedExprs []*sqlparser.AliasedExpr
 }
 
-func newUnion(srcs []Operator, sourceSelects []*sqlparser.SelectExprs2, columns []sqlparser.SelectExpr, distinct bool) *Union {
+func newUnion(srcs []Operator, sourceSelects []*sqlparser.SelectExprs, columns []sqlparser.SelectExpr, distinct bool) *Union {
 	if columns == nil {
 		panic("rt")
 	}

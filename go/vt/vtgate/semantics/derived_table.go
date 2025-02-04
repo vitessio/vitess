@@ -43,13 +43,13 @@ type unionInfo struct {
 	isAuthoritative bool
 	recursive       []TableSet
 	types           []evalengine.Type
-	exprs           *sqlparser.SelectExprs2
+	exprs           *sqlparser.SelectExprs
 }
 
 var _ TableInfo = (*DerivedTable)(nil)
 
 func createDerivedTableForExpressions(
-	expressions *sqlparser.SelectExprs2,
+	expressions *sqlparser.SelectExprs,
 	cols sqlparser.Columns,
 	tables []TableInfo,
 	org originable,

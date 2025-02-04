@@ -164,7 +164,7 @@ func (qb *queryBuilder) addProjection(projection sqlparser.SelectExpr) {
 	switch stmt := qb.stmt.(type) {
 	case *sqlparser.Select:
 		if stmt.SelectExprs == nil {
-			stmt.SelectExprs = &sqlparser.SelectExprs2{}
+			stmt.SelectExprs = &sqlparser.SelectExprs{}
 		}
 		stmt.SelectExprs.Exprs = append(stmt.SelectExprs.Exprs, projection)
 		return
@@ -200,8 +200,8 @@ func (qb *queryBuilder) pushUnionInsideDerived() {
 	qb.stmt = sel
 }
 
-func unionSelects(exprs *sqlparser.SelectExprs2) *sqlparser.SelectExprs2 {
-	selectExprs := &sqlparser.SelectExprs2{}
+func unionSelects(exprs *sqlparser.SelectExprs) *sqlparser.SelectExprs {
+	selectExprs := &sqlparser.SelectExprs{}
 	for _, col := range exprs.Exprs {
 		switch col := col.(type) {
 		case *sqlparser.AliasedExpr:
@@ -288,7 +288,7 @@ func (qb *queryBuilder) joinWith(other *queryBuilder, onCondition sqlparser.Expr
 	if sel, isSel := stmt.(*sqlparser.Select); isSel {
 		otherSel := otherStmt.(*sqlparser.Select)
 		if sel.SelectExprs == nil {
-			sel.SelectExprs = &sqlparser.SelectExprs2{}
+			sel.SelectExprs = &sqlparser.SelectExprs{}
 		}
 		if otherSel.SelectExprs != nil {
 			sel.SelectExprs.Exprs = append(sel.SelectExprs.Exprs, otherSel.SelectExprs.Exprs...)

@@ -1518,17 +1518,7 @@ func (node *ParsedComments) FormatFast(buf *TrackedBuffer) {
 }
 
 // FormatFast formats the node.
-func (node SelectExprs) FormatFast(buf *TrackedBuffer) {
-	var prefix string
-	for _, n := range node {
-		buf.WriteString(prefix)
-		n.FormatFast(buf)
-		prefix = ", "
-	}
-}
-
-// FormatFast formats the node.
-func (node *SelectExprs2) FormatFast(buf *TrackedBuffer) {
+func (node *SelectExprs) FormatFast(buf *TrackedBuffer) {
 	var prefix string
 	for _, n := range node.Exprs {
 		buf.WriteString(prefix)

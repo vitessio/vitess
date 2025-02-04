@@ -151,7 +151,7 @@ func (r *RealTable) authoritative() bool {
 	}
 }
 
-func extractSelectExprsFromCTE(selectExprs *sqlparser.SelectExprs2) []ColumnInfo {
+func extractSelectExprsFromCTE(selectExprs *sqlparser.SelectExprs) []ColumnInfo {
 	var ci []ColumnInfo
 	for _, expr := range selectExprs.Exprs {
 		ae, ok := expr.(*sqlparser.AliasedExpr)
@@ -166,7 +166,7 @@ func extractSelectExprsFromCTE(selectExprs *sqlparser.SelectExprs2) []ColumnInfo
 	return ci
 }
 
-func extractColumnsFromCTE(columns sqlparser.Columns, selectExprs *sqlparser.SelectExprs2) []ColumnInfo {
+func extractColumnsFromCTE(columns sqlparser.Columns, selectExprs *sqlparser.SelectExprs) []ColumnInfo {
 	if len(columns) == 0 {
 		return nil
 	}

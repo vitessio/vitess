@@ -1155,16 +1155,7 @@ func (node *ParsedComments) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node SelectExprs) Format(buf *TrackedBuffer) {
-	var prefix string
-	for _, n := range node {
-		buf.astPrintf(node, "%s%v", prefix, n)
-		prefix = ", "
-	}
-}
-
-// Format formats the node.
-func (node *SelectExprs2) Format(buf *TrackedBuffer) {
+func (node *SelectExprs) Format(buf *TrackedBuffer) {
 	var prefix string
 	for _, n := range node.Exprs {
 		buf.astPrintf(node, "%s%v", prefix, n)

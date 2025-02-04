@@ -1076,8 +1076,8 @@ func buildChangedVindexesValues(
 	return changedVindexes, ovq, subQueriesArgOnChangedVindex
 }
 
-func initialQuery(ksidCols []sqlparser.IdentifierCI, table *vindexes.Table) (*sqlparser.SelectExprs2, int) {
-	selExprs := new(sqlparser.SelectExprs2)
+func initialQuery(ksidCols []sqlparser.IdentifierCI, table *vindexes.Table) (*sqlparser.SelectExprs, int) {
+	selExprs := new(sqlparser.SelectExprs)
 	offset := 0
 	for _, col := range ksidCols {
 		selExprs.Exprs = append(selExprs.Exprs, aeWrap(sqlparser.NewColName(col.String())))

@@ -1262,18 +1262,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfSelect(a, b)
-	case SelectExprs:
-		b, ok := inB.(SelectExprs)
+	case *SelectExprs:
+		b, ok := inB.(*SelectExprs)
 		if !ok {
 			return false
 		}
-		return cmp.SelectExprs(a, b)
-	case *SelectExprs2:
-		b, ok := inB.(*SelectExprs2)
-		if !ok {
-			return false
-		}
-		return cmp.RefOfSelectExprs2(a, b)
+		return cmp.RefOfSelectExprs(a, b)
 	case *SelectInto:
 		b, ok := inB.(*SelectInto)
 		if !ok {
@@ -4212,7 +4206,7 @@ func (cmp *Comparator) RefOfSelect(a, b *Select) bool {
 		cmp.RefOfWith(a.With, b.With) &&
 		cmp.SliceOfTableExpr(a.From, b.From) &&
 		cmp.RefOfParsedComments(a.Comments, b.Comments) &&
-		cmp.RefOfSelectExprs2(a.SelectExprs, b.SelectExprs) &&
+		cmp.RefOfSelectExprs(a.SelectExprs, b.SelectExprs) &&
 		cmp.RefOfWhere(a.Where, b.Where) &&
 		cmp.RefOfGroupBy(a.GroupBy, b.GroupBy) &&
 		cmp.RefOfWhere(a.Having, b.Having) &&
@@ -4223,21 +4217,8 @@ func (cmp *Comparator) RefOfSelect(a, b *Select) bool {
 		cmp.RefOfSelectInto(a.Into, b.Into)
 }
 
-// SelectExprs does deep equals between the two objects.
-func (cmp *Comparator) SelectExprs(a, b SelectExprs) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := 0; i < len(a); i++ {
-		if !cmp.SelectExpr(a[i], b[i]) {
-			return false
-		}
-	}
-	return true
-}
-
-// RefOfSelectExprs2 does deep equals between the two objects.
-func (cmp *Comparator) RefOfSelectExprs2(a, b *SelectExprs2) bool {
+// RefOfSelectExprs does deep equals between the two objects.
+func (cmp *Comparator) RefOfSelectExprs(a, b *SelectExprs) bool {
 	if a == b {
 		return true
 	}

@@ -3827,7 +3827,7 @@ func (cached *Select) CachedSize(alloc bool) int64 {
 	}
 	// field Comments *vitess.io/vitess/go/vt/sqlparser.ParsedComments
 	size += cached.Comments.CachedSize(true)
-	// field SelectExprs *vitess.io/vitess/go/vt/sqlparser.SelectExprs2
+	// field SelectExprs *vitess.io/vitess/go/vt/sqlparser.SelectExprs
 	size += cached.SelectExprs.CachedSize(true)
 	// field Where *vitess.io/vitess/go/vt/sqlparser.Where
 	size += cached.Where.CachedSize(true)
@@ -3855,7 +3855,7 @@ func (cached *Select) CachedSize(alloc bool) int64 {
 	size += cached.Into.CachedSize(true)
 	return size
 }
-func (cached *SelectExprs2) CachedSize(alloc bool) int64 {
+func (cached *SelectExprs) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}

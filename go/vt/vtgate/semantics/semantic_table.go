@@ -140,7 +140,7 @@ type (
 		// The columns were added because of the use of `*` in the query
 		ExpandedColumns map[sqlparser.TableName][]*sqlparser.ColName
 
-		columns map[*sqlparser.Union]*sqlparser.SelectExprs2
+		columns map[*sqlparser.Union]*sqlparser.SelectExprs
 
 		comparator *sqlparser.Comparator
 
@@ -493,7 +493,7 @@ func (st *SemTable) ForeignKeysPresent() bool {
 	return false
 }
 
-func (st *SemTable) SelectExprs(sel sqlparser.TableStatement) *sqlparser.SelectExprs2 {
+func (st *SemTable) SelectExprs(sel sqlparser.TableStatement) *sqlparser.SelectExprs {
 	switch sel := sel.(type) {
 	case *sqlparser.Select:
 		return sel.SelectExprs
@@ -512,8 +512,8 @@ func (st *SemTable) SelectExprs(sel sqlparser.TableStatement) *sqlparser.SelectE
 	panic(fmt.Sprintf("BUG: unexpected select statement type %T", sel))
 }
 
-func getColumnNames(exprs *sqlparser.SelectExprs2) (bool, *sqlparser.SelectExprs2) {
-	selectExprs := &sqlparser.SelectExprs2{}
+func getColumnNames(exprs *sqlparser.SelectExprs) (bool, *sqlparser.SelectExprs) {
+	selectExprs := &sqlparser.SelectExprs{}
 	expanded := true
 	for _, col := range exprs.Exprs {
 		switch col := col.(type) {
@@ -572,7 +572,7 @@ func EmptySemTable() *SemTable {
 		Recursive:        map[sqlparser.Expr]TableSet{},
 		Direct:           map[sqlparser.Expr]TableSet{},
 		ColumnEqualities: map[columnName][]sqlparser.Expr{},
-		columns:          map[*sqlparser.Union]*sqlparser.SelectExprs2{},
+		columns:          map[*sqlparser.Union]*sqlparser.SelectExprs{},
 		ExprTypes:        make(map[sqlparser.Expr]evalengine.Type),
 	}
 }
@@ -659,7 +659,7 @@ func (st *SemTable) TableInfoForExpr(expr sqlparser.Expr) (TableInfo, error) {
 }
 
 // AddExprs adds new select exprs to the SemTable.
-func (st *SemTable) AddExprs(tbl *sqlparser.AliasedTableExpr, cols *sqlparser.SelectExprs2) {
+func (st *SemTable) AddExprs(tbl *sqlparser.AliasedTableExpr, cols *sqlparser.SelectExprs) {
 	tableSet := st.TableSetFor(tbl)
 	for _, col := range cols.Exprs {
 		st.Recursive[col.(*sqlparser.AliasedExpr).Expr] = tableSet

@@ -133,7 +133,7 @@ func (v *vTableInfo) getExprFor(s string) (sqlparser.Expr, error) {
 	return nil, vterrors.VT03022(s, "field list")
 }
 
-func createVTableInfoForExpressions(expressions *sqlparser.SelectExprs2, tables []TableInfo, org originable) *vTableInfo {
+func createVTableInfoForExpressions(expressions *sqlparser.SelectExprs, tables []TableInfo, org originable) *vTableInfo {
 	cols, colNames, ts, isAuthoritative := selectExprsToInfos(expressions, tables, org)
 	return &vTableInfo{
 		columnNames:     colNames,
@@ -144,7 +144,7 @@ func createVTableInfoForExpressions(expressions *sqlparser.SelectExprs2, tables 
 }
 
 func selectExprsToInfos(
-	expressions *sqlparser.SelectExprs2,
+	expressions *sqlparser.SelectExprs,
 	tables []TableInfo,
 	org originable,
 ) (cols []sqlparser.Expr, colNames []string, ts TableSet, isAuthoritative bool) {

@@ -434,10 +434,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfSavepoint(n, parent)
 	case *Select:
 		return c.copyOnRewriteRefOfSelect(n, parent)
-	case SelectExprs:
-		return c.copyOnRewriteSelectExprs(n, parent)
-	case *SelectExprs2:
-		return c.copyOnRewriteRefOfSelectExprs2(n, parent)
+	case *SelectExprs:
+		return c.copyOnRewriteRefOfSelectExprs(n, parent)
 	case *SelectInto:
 		return c.copyOnRewriteRefOfSelectInto(n, parent)
 	case *Set:
@@ -5363,7 +5361,7 @@ func (c *cow) copyOnRewriteRefOfSelect(n *Select, parent SQLNode) (out SQLNode, 
 			}
 		}
 		_Comments, changedComments := c.copyOnRewriteRefOfParsedComments(n.Comments, n)
-		_SelectExprs, changedSelectExprs := c.copyOnRewriteRefOfSelectExprs2(n.SelectExprs, n)
+		_SelectExprs, changedSelectExprs := c.copyOnRewriteRefOfSelectExprs(n.SelectExprs, n)
 		_Where, changedWhere := c.copyOnRewriteRefOfWhere(n.Where, n)
 		_GroupBy, changedGroupBy := c.copyOnRewriteRefOfGroupBy(n.GroupBy, n)
 		_Having, changedHaving := c.copyOnRewriteRefOfWhere(n.Having, n)
@@ -5376,7 +5374,7 @@ func (c *cow) copyOnRewriteRefOfSelect(n *Select, parent SQLNode) (out SQLNode, 
 			res.With, _ = _With.(*With)
 			res.From = _From
 			res.Comments, _ = _Comments.(*ParsedComments)
-			res.SelectExprs, _ = _SelectExprs.(*SelectExprs2)
+			res.SelectExprs, _ = _SelectExprs.(*SelectExprs)
 			res.Where, _ = _Where.(*Where)
 			res.GroupBy, _ = _GroupBy.(*GroupBy)
 			res.Having, _ = _Having.(*Where)
@@ -5396,30 +5394,7 @@ func (c *cow) copyOnRewriteRefOfSelect(n *Select, parent SQLNode) (out SQLNode, 
 	}
 	return
 }
-func (c *cow) copyOnRewriteSelectExprs(n SelectExprs, parent SQLNode) (out SQLNode, changed bool) {
-	if n == nil || c.cursor.stop {
-		return n, false
-	}
-	out = n
-	if c.pre == nil || c.pre(n, parent) {
-		res := make(SelectExprs, len(n))
-		for x, el := range n {
-			this, change := c.copyOnRewriteSelectExpr(el, n)
-			res[x] = this.(SelectExpr)
-			if change {
-				changed = true
-			}
-		}
-		if changed {
-			out = res
-		}
-	}
-	if c.post != nil {
-		out, changed = c.postVisit(out, parent, changed)
-	}
-	return
-}
-func (c *cow) copyOnRewriteRefOfSelectExprs2(n *SelectExprs2, parent SQLNode) (out SQLNode, changed bool) {
+func (c *cow) copyOnRewriteRefOfSelectExprs(n *SelectExprs, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
 	}

@@ -434,10 +434,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfSavepoint(parent, node, replacer)
 	case *Select:
 		return a.rewriteRefOfSelect(parent, node, replacer)
-	case SelectExprs:
-		return a.rewriteSelectExprs(parent, node, replacer)
-	case *SelectExprs2:
-		return a.rewriteRefOfSelectExprs2(parent, node, replacer)
+	case *SelectExprs:
+		return a.rewriteRefOfSelectExprs(parent, node, replacer)
 	case *SelectInto:
 		return a.rewriteRefOfSelectInto(parent, node, replacer)
 	case *Set:
@@ -8055,8 +8053,8 @@ func (a *application) rewriteRefOfSelect(parent SQLNode, node *Select, replacer 
 	}) {
 		return false
 	}
-	if !a.rewriteRefOfSelectExprs2(node, node.SelectExprs, func(newNode, parent SQLNode) {
-		parent.(*Select).SelectExprs = newNode.(*SelectExprs2)
+	if !a.rewriteRefOfSelectExprs(node, node.SelectExprs, func(newNode, parent SQLNode) {
+		parent.(*Select).SelectExprs = newNode.(*SelectExprs)
 	}) {
 		return false
 	}
@@ -8105,43 +8103,7 @@ func (a *application) rewriteRefOfSelect(parent SQLNode, node *Select, replacer 
 	}
 	return true
 }
-func (a *application) rewriteSelectExprs(parent SQLNode, node SelectExprs, replacer replacerFunc) bool {
-	if node == nil {
-		return true
-	}
-	if a.pre != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		kontinue := !a.pre(&a.cur)
-		if a.cur.revisit {
-			a.cur.revisit = false
-			return a.rewriteSQLNode(parent, a.cur.node, replacer)
-		}
-		if kontinue {
-			return true
-		}
-	}
-	for x, el := range node {
-		if !a.rewriteSelectExpr(node, el, func(idx int) replacerFunc {
-			return func(newNode, parent SQLNode) {
-				parent.(SelectExprs)[idx] = newNode.(SelectExpr)
-			}
-		}(x)) {
-			return false
-		}
-	}
-	if a.post != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.post(&a.cur) {
-			return false
-		}
-	}
-	return true
-}
-func (a *application) rewriteRefOfSelectExprs2(parent SQLNode, node *SelectExprs2, replacer replacerFunc) bool {
+func (a *application) rewriteRefOfSelectExprs(parent SQLNode, node *SelectExprs, replacer replacerFunc) bool {
 	if node == nil {
 		return true
 	}
@@ -8161,7 +8123,7 @@ func (a *application) rewriteRefOfSelectExprs2(parent SQLNode, node *SelectExprs
 	for x, el := range node.Exprs {
 		if !a.rewriteSelectExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
-				parent.(*SelectExprs2).Exprs[idx] = newNode.(SelectExpr)
+				parent.(*SelectExprs).Exprs[idx] = newNode.(SelectExpr)
 			}
 		}(x)) {
 			return false

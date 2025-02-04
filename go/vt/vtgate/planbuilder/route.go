@@ -74,7 +74,7 @@ func prepareTheAST(sel sqlparser.SelectStatement) {
 		switch node := node.(type) {
 		case *sqlparser.Select:
 			if node.SelectExprs == nil || len(node.SelectExprs.Exprs) == 0 {
-				node.SelectExprs = &sqlparser.SelectExprs2{
+				node.SelectExprs = &sqlparser.SelectExprs{
 					Exprs: []sqlparser.SelectExpr{&sqlparser.AliasedExpr{Expr: sqlparser.NewIntLiteral("1")}},
 				}
 			}

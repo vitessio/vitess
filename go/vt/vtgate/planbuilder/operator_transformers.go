@@ -688,7 +688,7 @@ func autoIncGenerate(gen *operators.Generate) *engine.Generate {
 	if gen == nil {
 		return nil
 	}
-	exprs := &sqlparser.SelectExprs2{Exprs: []sqlparser.SelectExpr{&sqlparser.Nextval{Expr: &sqlparser.Argument{Name: "n", Type: sqltypes.Int64}}}}
+	exprs := &sqlparser.SelectExprs{Exprs: []sqlparser.SelectExpr{&sqlparser.Nextval{Expr: &sqlparser.Argument{Name: "n", Type: sqltypes.Int64}}}}
 	selNext := &sqlparser.Select{
 		From:        []sqlparser.TableExpr{&sqlparser.AliasedTableExpr{Expr: gen.TableName}},
 		SelectExprs: exprs,

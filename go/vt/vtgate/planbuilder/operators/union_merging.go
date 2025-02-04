@@ -25,7 +25,7 @@ import (
 
 // mergeUnionInputInAnyOrder merges sources the sources of the union in any order
 // can be used for UNION DISTINCT
-func mergeUnionInputInAnyOrder(ctx *plancontext.PlanningContext, op *Union) ([]Operator, []*sqlparser.SelectExprs2) {
+func mergeUnionInputInAnyOrder(ctx *plancontext.PlanningContext, op *Union) ([]Operator, []*sqlparser.SelectExprs) {
 	sources := op.Sources
 	selects := op.Selects
 
@@ -57,7 +57,7 @@ func mergeUnionInputInAnyOrder(ctx *plancontext.PlanningContext, op *Union) ([]O
 		}
 
 		var newSources []Operator
-		var newSelects []*sqlparser.SelectExprs2
+		var newSelects []*sqlparser.SelectExprs
 		for i, source := range sources {
 			if keep[i] || i <= idx {
 				newSources = append(newSources, source)
@@ -72,7 +72,7 @@ func mergeUnionInputInAnyOrder(ctx *plancontext.PlanningContext, op *Union) ([]O
 	return sources, selects
 }
 
-func mergeUnionInputsInOrder(ctx *plancontext.PlanningContext, op *Union) ([]Operator, []*sqlparser.SelectExprs2) {
+func mergeUnionInputsInOrder(ctx *plancontext.PlanningContext, op *Union) ([]Operator, []*sqlparser.SelectExprs) {
 	sources := op.Sources
 	selects := op.Selects
 	for {
@@ -105,9 +105,9 @@ func mergeUnionInputsInOrder(ctx *plancontext.PlanningContext, op *Union) ([]Ope
 func mergeUnionInputs(
 	ctx *plancontext.PlanningContext,
 	lhs, rhs Operator,
-	lhsExprs, rhsExprs *sqlparser.SelectExprs2,
+	lhsExprs, rhsExprs *sqlparser.SelectExprs,
 	distinct bool,
-) (Operator, *sqlparser.SelectExprs2) {
+) (Operator, *sqlparser.SelectExprs) {
 	lhsRoute, rhsRoute, routingA, routingB, a, b, sameKeyspace := prepareInputRoutes(ctx, lhs, rhs)
 	if lhsRoute == nil {
 		return nil, nil
@@ -138,9 +138,9 @@ func mergeUnionInputs(
 func tryMergeUnionShardedRouting(
 	ctx *plancontext.PlanningContext,
 	routeA, routeB *Route,
-	exprsA, exprsB *sqlparser.SelectExprs2,
+	exprsA, exprsB *sqlparser.SelectExprs,
 	distinct bool,
-) (Operator, *sqlparser.SelectExprs2) {
+) (Operator, *sqlparser.SelectExprs) {
 	tblA := routeA.Routing.(*ShardedRouting)
 	tblB := routeB.Routing.(*ShardedRouting)
 
@@ -172,9 +172,9 @@ func tryMergeUnionShardedRouting(
 func createMergedUnion(
 	ctx *plancontext.PlanningContext,
 	lhsRoute, rhsRoute *Route,
-	lhsExprs, rhsExprs *sqlparser.SelectExprs2,
+	lhsExprs, rhsExprs *sqlparser.SelectExprs,
 	distinct bool,
-	routing Routing) (Operator, *sqlparser.SelectExprs2) {
+	routing Routing) (Operator, *sqlparser.SelectExprs) {
 
 	// if there are `*` on either side, or a different number of SelectExpr items,
 	// we give up aligning the expressions and trust that we can push everything down
@@ -219,7 +219,7 @@ func createMergedUnion(
 		ctx.SemTable.Recursive[col] = deps
 	}
 
-	exprs := []*sqlparser.SelectExprs2{lhsExprs, rhsExprs}
+	exprs := []*sqlparser.SelectExprs{lhsExprs, rhsExprs}
 	union := newUnion([]Operator{lhsRoute.Source, rhsRoute.Source}, exprs, cols, distinct)
 	selectExprs := unionSelects(lhsExprs)
 	return &Route{
@@ -242,7 +242,7 @@ func compactUnion(u *Union) *ApplyResult {
 	}
 
 	var newSources []Operator
-	var newSelects []*sqlparser.SelectExprs2
+	var newSelects []*sqlparser.SelectExprs
 	merged := false
 
 	for idx, source := range u.Sources {

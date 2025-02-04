@@ -454,7 +454,7 @@ func (sg *selectGenerator) aliasGroupingColumns(grouping []column) []column {
 	return grouping
 }
 
-// returns the aggregation columns as three types: *sqlparser.SelectExprs2, []column
+// returns the aggregation columns as three types: *sqlparser.SelectExprs, []column
 func (sg *selectGenerator) createAggregations(tables []tableT) (aggregates []column) {
 	exprGenerators := slice.Map(tables, func(t tableT) sqlparser.ExprGenerator { return &t })
 	// add scalar subqueries

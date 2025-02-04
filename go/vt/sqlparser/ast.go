@@ -75,7 +75,7 @@ type (
 
 	ColumnResults interface {
 		GetColumnCount() int
-		GetColumns() *SelectExprs2
+		GetColumns() *SelectExprs
 	}
 
 	Withable interface {
@@ -295,7 +295,7 @@ type (
 		With        *With
 		From        []TableExpr
 		Comments    *ParsedComments
-		SelectExprs *SelectExprs2
+		SelectExprs *SelectExprs
 		Where       *Where
 		GroupBy     *GroupBy
 		Having      *Where
@@ -2039,10 +2039,7 @@ type ParsedComments struct {
 	_directives *CommentDirectives
 }
 
-// SelectExprs represents SELECT expressions.
-type SelectExprs []SelectExpr
-
-type SelectExprs2 struct {
+type SelectExprs struct {
 	Exprs []SelectExpr
 }
 

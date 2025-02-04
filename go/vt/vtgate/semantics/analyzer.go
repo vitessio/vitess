@@ -149,7 +149,7 @@ func (a *analyzer) newSemTable(
 			Direct:                    ExprDependencies{},
 			ColumnEqualities:          map[columnName][]sqlparser.Expr{},
 			ExpandedColumns:           map[sqlparser.TableName][]*sqlparser.ColName{},
-			columns:                   map[*sqlparser.Union]*sqlparser.SelectExprs2{},
+			columns:                   map[*sqlparser.Union]*sqlparser.SelectExprs{},
 			StatementIDs:              a.scoper.statementIDs,
 			QuerySignature:            a.sig,
 			childForeignKeysInvolved:  map[TableSet][]vindexes.ChildFKInfo{},
@@ -159,7 +159,7 @@ func (a *analyzer) newSemTable(
 		}, nil
 	}
 
-	columns := map[*sqlparser.Union]*sqlparser.SelectExprs2{}
+	columns := map[*sqlparser.Union]*sqlparser.SelectExprs{}
 	for union, info := range a.tables.unionInfo {
 		columns[union] = info.exprs
 	}
@@ -275,7 +275,7 @@ func (a *analyzer) analyzeUp(cursor *sqlparser.Cursor) bool {
 	return a.shouldContinue()
 }
 
-func containsStar(s *sqlparser.SelectExprs2) bool {
+func containsStar(s *sqlparser.SelectExprs) bool {
 	for _, expr := range s.Exprs {
 		_, isStar := expr.(*sqlparser.StarExpr)
 		if isStar {
@@ -320,14 +320,14 @@ errors that happen when we are evaluating SELECT expressions are saved until we 
 if we can merge everything into a single route or not
 */
 func (a *analyzer) enterProjection(cursor *sqlparser.Cursor) {
-	_, ok := cursor.Node().(*sqlparser.SelectExprs2)
+	_, ok := cursor.Node().(*sqlparser.SelectExprs)
 	if ok && isParentSelect(cursor) {
 		a.inProjection++
 	}
 }
 
 func (a *analyzer) leaveProjection(cursor *sqlparser.Cursor) {
-	_, ok := cursor.Node().(*sqlparser.SelectExprs2)
+	_, ok := cursor.Node().(*sqlparser.SelectExprs)
 	if ok && isParentSelect(cursor) {
 		a.inProjection--
 	}

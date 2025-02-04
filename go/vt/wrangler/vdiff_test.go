@@ -1071,7 +1071,7 @@ func TestVDiffFindPKs(t *testing.T) {
 				Schema:            "create table t1(c1 bigint, c2 bigint, primary key(c1))",
 			},
 			targetSelect: &sqlparser.Select{
-				SelectExprs: &sqlparser.SelectExprs2{
+				SelectExprs: &sqlparser.SelectExprs{
 					Exprs: []sqlparser.SelectExpr{
 						&sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: sqlparser.NewIdentifierCI("c1")}},
 						&sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: sqlparser.NewIdentifierCI("c2")}}}}},
@@ -1096,7 +1096,7 @@ func TestVDiffFindPKs(t *testing.T) {
 				Schema:            "create table t1(c1 bigint, c2 bigint, c3 varchar(50), c4 bigint, primary key(c1, c4))",
 			},
 			targetSelect: &sqlparser.Select{
-				SelectExprs: &sqlparser.SelectExprs2{
+				SelectExprs: &sqlparser.SelectExprs{
 					Exprs: []sqlparser.SelectExpr{
 						&sqlparser.AliasedExpr{Expr: sqlparser.NewColName("c1")},
 						&sqlparser.AliasedExpr{Expr: sqlparser.NewColName("c2")},

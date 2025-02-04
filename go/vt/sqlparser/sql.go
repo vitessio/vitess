@@ -8320,8 +8320,8 @@ func (st *yySymType) selectExprUnion() SelectExpr {
 	return v
 }
 
-func (st *yySymType) selectExprsUnion() *SelectExprs2 {
-	v, _ := st.union.(*SelectExprs2)
+func (st *yySymType) selectExprsUnion() *SelectExprs {
+	v, _ := st.union.(*SelectExprs)
 	return v
 }
 
@@ -10564,7 +10564,7 @@ yydefault:
 		var yyLOCAL TableStatement
 //line sql.y:837
 		{
-			yyLOCAL = NewSelect(Comments(yyDollar[2].strs), &SelectExprs2{Exprs: []SelectExpr{&Nextval{Expr: yyDollar[5].exprUnion()}}}, []string{yyDollar[3].str} /*options*/, nil, TableExprs{&AliasedTableExpr{Expr: yyDollar[7].tableName}}, nil /*where*/, nil /*groupBy*/, nil /*having*/, nil)
+			yyLOCAL = NewSelect(Comments(yyDollar[2].strs), &SelectExprs{Exprs: []SelectExpr{&Nextval{Expr: yyDollar[5].exprUnion()}}}, []string{yyDollar[3].str} /*options*/, nil, TableExprs{&AliasedTableExpr{Expr: yyDollar[7].tableName}}, nil /*where*/, nil /*groupBy*/, nil /*having*/, nil)
 		}
 		yyVAL.union = yyLOCAL
 	case 65:
@@ -17100,15 +17100,15 @@ yydefault:
 		}
 	case 929:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL *SelectExprs2
+		var yyLOCAL *SelectExprs
 //line sql.y:4937
 		{
-			yyLOCAL = &SelectExprs2{Exprs: []SelectExpr{yyDollar[1].selectExprUnion()}}
+			yyLOCAL = &SelectExprs{Exprs: []SelectExpr{yyDollar[1].selectExprUnion()}}
 		}
 		yyVAL.union = yyLOCAL
 	case 930:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		var yyLOCAL *SelectExprs2
+		var yyLOCAL *SelectExprs
 //line sql.y:4941
 		{
 			res := yyDollar[1].selectExprsUnion()

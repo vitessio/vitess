@@ -45,7 +45,7 @@ type earlyRewriter struct {
 
 func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 	switch node := cursor.Node().(type) {
-	case *sqlparser.SelectExprs2:
+	case *sqlparser.SelectExprs:
 		return r.handleSelectExprs(cursor, node)
 	case *sqlparser.NotExpr:
 		rewriteNotExpr(cursor, node)
@@ -225,7 +225,7 @@ func (r *earlyRewriter) handleHavingClause(node *sqlparser.Where, parent sqlpars
 }
 
 // handleSelectExprs expands * in SELECT expressions.
-func (r *earlyRewriter) handleSelectExprs(cursor *sqlparser.Cursor, node *sqlparser.SelectExprs2) error {
+func (r *earlyRewriter) handleSelectExprs(cursor *sqlparser.Cursor, node *sqlparser.SelectExprs) error {
 	_, isSel := cursor.Parent().(*sqlparser.Select)
 	if !isSel {
 		return nil
@@ -876,9 +876,9 @@ func handleComparisonExpr(cursor *sqlparser.Cursor, node *sqlparser.ComparisonEx
 	return nil
 }
 
-func (r *earlyRewriter) expandStar(cursor *sqlparser.Cursor, node *sqlparser.SelectExprs2) error {
+func (r *earlyRewriter) expandStar(cursor *sqlparser.Cursor, node *sqlparser.SelectExprs) error {
 	currentScope := r.scoper.currentScope()
-	selExprs := new(sqlparser.SelectExprs2)
+	selExprs := new(sqlparser.SelectExprs)
 	changed := false
 	for _, selectExpr := range node.Exprs {
 		starExpr, isStarExpr := selectExpr.(*sqlparser.StarExpr)
@@ -1065,11 +1065,11 @@ func (r *earlyRewriter) expandTableColumns(
 	tables []TableInfo,
 	joinUsing map[TableSet]map[string]TableSet,
 	org originable,
-) (bool, *sqlparser.SelectExprs2, error) {
+) (bool, *sqlparser.SelectExprs, error) {
 	unknownTbl := true
 	starExpanded := true
 	state := &expanderState{
-		colNames:        &sqlparser.SelectExprs2{},
+		colNames:        &sqlparser.SelectExprs{},
 		needsQualifier:  len(tables) > 1,
 		joinUsing:       joinUsing,
 		org:             org,
@@ -1155,7 +1155,7 @@ outer:
 
 type expanderState struct {
 	needsQualifier  bool
-	colNames        *sqlparser.SelectExprs2
+	colNames        *sqlparser.SelectExprs
 	joinUsing       map[TableSet]map[string]TableSet
 	org             originable
 	expandedColumns map[sqlparser.TableName][]*sqlparser.ColName

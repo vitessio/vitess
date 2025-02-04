@@ -281,7 +281,7 @@ func removeTable(clone sqlparser.TableStatement, searchedTS semantics.TableSet, 
 			simplified = removeTableinJoinTableExpr(node, searchedTS, semTable, cursor, simplified)
 		case *sqlparser.Where:
 			simplified = removeTableinWhere(node, shouldKeepExpr, simplified)
-		case *sqlparser.SelectExprs2:
+		case *sqlparser.SelectExprs:
 			simplified = removeTableinSelectExprs(node, cursor, shouldKeepExpr, simplified)
 		case *sqlparser.GroupBy:
 			simplified = removeTableInGroupBy(node, cursor, shouldKeepExpr, simplified)
@@ -352,7 +352,7 @@ func removeTableinWhere(node *sqlparser.Where, shouldKeepExpr func(sqlparser.Exp
 	return simplified
 }
 
-func removeTableinSelectExprs(node *sqlparser.SelectExprs2, cursor *sqlparser.Cursor, shouldKeepExpr func(sqlparser.Expr) bool, simplified bool) bool {
+func removeTableinSelectExprs(node *sqlparser.SelectExprs, cursor *sqlparser.Cursor, shouldKeepExpr func(sqlparser.Expr) bool, simplified bool) bool {
 	_, isSel := cursor.Parent().(*sqlparser.Select)
 	if !isSel {
 		return simplified
@@ -372,7 +372,7 @@ func removeTableinSelectExprs(node *sqlparser.SelectExprs2, cursor *sqlparser.Cu
 		}
 	}
 
-	cursor.Replace(&sqlparser.SelectExprs2{Exprs: newExprs})
+	cursor.Replace(&sqlparser.SelectExprs{Exprs: newExprs})
 
 	return simplified
 }
@@ -436,7 +436,7 @@ func visitAllExpressionsInAST(clone sqlparser.TableStatement, visit func(express
 	}
 	up := func(cursor *sqlparser.Cursor) bool {
 		switch node := cursor.Node().(type) {
-		case *sqlparser.SelectExprs2:
+		case *sqlparser.SelectExprs:
 			return visitSelectExprs(node, cursor, visit)
 		case *sqlparser.Where:
 			return visitWhere(node, visit)
@@ -456,7 +456,7 @@ func visitAllExpressionsInAST(clone sqlparser.TableStatement, visit func(express
 	sqlparser.SafeRewrite(clone, alwaysVisitChildren, up)
 }
 
-func visitSelectExprs(node *sqlparser.SelectExprs2, cursor *sqlparser.Cursor, visit func(expressionCursor) bool) bool {
+func visitSelectExprs(node *sqlparser.SelectExprs, cursor *sqlparser.Cursor, visit func(expressionCursor) bool) bool {
 	_, isSel := cursor.Parent().(*sqlparser.Select)
 	if !isSel {
 		return true

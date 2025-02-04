@@ -810,7 +810,7 @@ func (nz *normalizer) existsRewrite(cursor *Cursor, node *ExistsExpr) {
 
 	// Simplify the subquery by selecting a constant.
 	// WHERE EXISTS(SELECT 1 FROM ...)
-	sel.SelectExprs = &SelectExprs2{
+	sel.SelectExprs = &SelectExprs{
 		Exprs: []SelectExpr{&AliasedExpr{Expr: NewIntLiteral("1")}},
 	}
 	sel.GroupBy = nil

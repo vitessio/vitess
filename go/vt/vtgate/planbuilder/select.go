@@ -139,7 +139,7 @@ func buildSQLCalcFoundRowsPlan(
 	sel2.OrderBy = nil
 	sel2.Limit = nil
 
-	countStartExpr := &sqlparser.SelectExprs2{
+	countStartExpr := &sqlparser.SelectExprs{
 		Exprs: []sqlparser.SelectExpr{&sqlparser.AliasedExpr{Expr: &sqlparser.CountStar{}}},
 	}
 	if sel2.GroupBy == nil && sel2.Having == nil {

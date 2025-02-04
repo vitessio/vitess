@@ -296,7 +296,7 @@ func TestCastBindVars(t *testing.T) {
 			}
 
 			s := &Select{
-				SelectExprs: &SelectExprs2{
+				SelectExprs: &SelectExprs{
 					Exprs: []SelectExpr{NewAliasedExpr(argument, "")},
 				},
 			}

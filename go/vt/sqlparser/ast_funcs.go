@@ -890,7 +890,7 @@ func NewLimitWithoutOffset(rowCount int) *Limit {
 // NewSelect is used to create a select statement
 func NewSelect(
 	comments Comments,
-	exprs *SelectExprs2,
+	exprs *SelectExprs,
 	selectOptions []string,
 	into *SelectInto,
 	from TableExprs,
@@ -1195,16 +1195,16 @@ func compliantName(in string) string {
 	return buf.String()
 }
 
-func (node *Select) AddSelectExprs(selectExprs *SelectExprs2) {
+func (node *Select) AddSelectExprs(selectExprs *SelectExprs) {
 	if node.SelectExprs == nil {
-		node.SelectExprs = &SelectExprs2{}
+		node.SelectExprs = &SelectExprs{}
 	}
 	node.SelectExprs.Exprs = append(node.SelectExprs.Exprs, selectExprs.Exprs...)
 }
 
 func (node *Select) AddSelectExpr(expr SelectExpr) {
 	if node.SelectExprs == nil {
-		node.SelectExprs = &SelectExprs2{}
+		node.SelectExprs = &SelectExprs{}
 	}
 	node.SelectExprs.Exprs = append(node.SelectExprs.Exprs, expr)
 }
@@ -1270,7 +1270,7 @@ func (node *Select) GetColumnCount() int {
 }
 
 // GetColumns gets the columns
-func (node *Select) GetColumns() *SelectExprs2 {
+func (node *Select) GetColumns() *SelectExprs {
 	return node.SelectExprs
 }
 
@@ -1372,7 +1372,7 @@ func (node *Union) GetLimit() *Limit {
 }
 
 // GetColumns gets the columns
-func (node *Union) GetColumns() *SelectExprs2 {
+func (node *Union) GetColumns() *SelectExprs {
 	return node.Left.GetColumns()
 }
 
@@ -2420,7 +2420,7 @@ func (ae *AliasedExpr) ColumnName() string {
 }
 
 // AllAggregation returns true if all the expressions contain aggregation
-func (s *SelectExprs2) AllAggregation() bool {
+func (s *SelectExprs) AllAggregation() bool {
 	for _, k := range s.Exprs {
 		if !ContainsAggregation(k) {
 			return false
@@ -3063,8 +3063,8 @@ func (node *ValuesStatement) GetColumnCount() int {
 	panic("no columns available") // TODO: we need a better solution than a panic
 }
 
-func (node *ValuesStatement) GetColumns() *SelectExprs2 {
-	sel := new(SelectExprs2)
+func (node *ValuesStatement) GetColumns() *SelectExprs {
+	sel := new(SelectExprs)
 	columnCount := node.GetColumnCount()
 	for i := range columnCount {
 		sel.Exprs = append(sel.Exprs, &AliasedExpr{Expr: NewColName(fmt.Sprintf("column_%d", i))})

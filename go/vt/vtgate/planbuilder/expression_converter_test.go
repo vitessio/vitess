@@ -68,7 +68,7 @@ func TestConversion(t *testing.T) {
 	}
 }
 
-func extract(in *sqlparser.SelectExprs2) []sqlparser.Expr {
+func extract(in *sqlparser.SelectExprs) []sqlparser.Expr {
 	return slice.Map(in.Exprs, func(i sqlparser.SelectExpr) sqlparser.Expr {
 		return i.(*sqlparser.AliasedExpr).Expr
 	})
