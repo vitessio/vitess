@@ -1486,7 +1486,7 @@ func (mz *materializer) getWorkflowSubType() (binlogdatapb.VReplicationWorkflowS
 }
 
 func matchColInSelect(col sqlparser.IdentifierCI, sel *sqlparser.Select) (*sqlparser.ColName, error) {
-	for _, selExpr := range sel.SelectExprs.Exprs {
+	for _, selExpr := range sel.GetColumns() {
 		switch selExpr := selExpr.(type) {
 		case *sqlparser.StarExpr:
 			return &sqlparser.ColName{Name: col}, nil

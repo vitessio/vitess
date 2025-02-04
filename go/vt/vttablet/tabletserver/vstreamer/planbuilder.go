@@ -465,7 +465,7 @@ func buildTablePlan(env *vtenv.Environment, ti *Table, vschema *localVSchema, qu
 		log.Errorf("%s", err.Error())
 		return nil, err
 	}
-	if err := plan.analyzeExprs(vschema, sel.SelectExprs.Exprs); err != nil {
+	if err := plan.analyzeExprs(vschema, sel.GetColumns()); err != nil {
 		log.Errorf("%s", err.Error())
 		return nil, err
 	}

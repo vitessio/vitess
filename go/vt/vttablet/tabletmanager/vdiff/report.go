@@ -121,7 +121,7 @@ func (td *tableDiffer) genDebugQueryDiff(sel *sqlparser.Select, row []sqltypes.V
 
 	if onlyPks {
 		for i, pkI := range td.tablePlan.selectPks {
-			pk := sel.SelectExprs.Exprs[pkI]
+			pk := sel.GetColumns()[pkI]
 			pk.Format(buf)
 			if i != len(td.tablePlan.selectPks)-1 {
 				buf.Myprintf(", ")

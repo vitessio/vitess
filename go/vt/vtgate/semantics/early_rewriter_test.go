@@ -790,7 +790,7 @@ func TestSemTableDependenciesAfterExpandStar(t *testing.T) {
 			semTable, err := Analyze(selectStatement, "", schemaInfo)
 			require.NoError(t, err)
 			assert.Equal(t, tcase.expSQL, sqlparser.String(selectStatement))
-			exprs := selectStatement.SelectExprs.Exprs
+			exprs := selectStatement.GetColumns()
 			if tcase.otherTbl != -1 {
 				assert.NotEqual(t,
 					semTable.RecursiveDeps(exprs[tcase.otherTbl].(*sqlparser.AliasedExpr).Expr),

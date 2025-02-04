@@ -1209,7 +1209,7 @@ func (node *Select) AddSelectExpr(expr SelectExpr) {
 	node.SelectExprs.Exprs = append(node.SelectExprs.Exprs, expr)
 }
 
-func (node *Select) SetSelectExprs(exprs []SelectExpr) {
+func (node *Select) SetSelectExprs(exprs ...SelectExpr) {
 	if node.SelectExprs == nil {
 		node.SelectExprs = &SelectExprs{Exprs: exprs}
 	}

@@ -148,7 +148,7 @@ func (h *Horizon) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr,
 		return -1
 	}
 
-	for idx, se := range getFirstSelect(h.Query).SelectExprs.Exprs {
+	for idx, se := range getFirstSelect(h.Query).GetColumns() {
 		ae, ok := se.(*sqlparser.AliasedExpr)
 		if !ok {
 			panic(vterrors.VT09015())
@@ -174,7 +174,7 @@ func (h *Horizon) GetColumns(ctx *plancontext.PlanningContext) (exprs []*sqlpars
 }
 
 func (h *Horizon) GetSelectExprs(*plancontext.PlanningContext) []sqlparser.SelectExpr {
-	return getFirstSelect(h.Query).SelectExprs.Exprs
+	return getFirstSelect(h.Query).GetColumns()
 }
 
 func (h *Horizon) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {

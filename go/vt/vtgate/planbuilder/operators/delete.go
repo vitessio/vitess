@@ -264,23 +264,24 @@ func createDeleteOperator(ctx *plancontext.PlanningContext, del *sqlparser.Delet
 }
 
 func generateOwnedVindexQuery(del *sqlparser.Delete, table TargetTable, ksidCols []sqlparser.IdentifierCI) *sqlparser.Select {
-	selExprs := &sqlparser.SelectExprs{}
+	var selExprs []sqlparser.SelectExpr
 	for _, col := range ksidCols {
 		colName := makeColName(col, table, sqlparser.MultiTable(del.TableExprs))
-		selExprs.Exprs = append(selExprs.Exprs, aeWrap(colName))
+		selExprs = append(selExprs, aeWrap(colName))
 	}
 	for _, cv := range table.VTable.Owned {
 		for _, col := range cv.Columns {
 			colName := makeColName(col, table, sqlparser.MultiTable(del.TableExprs))
-			selExprs.Exprs = append(selExprs.Exprs, aeWrap(colName))
+			selExprs = append(selExprs, aeWrap(colName))
 		}
 	}
-	return &sqlparser.Select{
-		SelectExprs: selExprs,
-		OrderBy:     del.OrderBy,
-		Limit:       del.Limit,
-		Lock:        sqlparser.ForUpdateLock,
+	sel := &sqlparser.Select{
+		OrderBy: del.OrderBy,
+		Limit:   del.Limit,
+		Lock:    sqlparser.ForUpdateLock,
 	}
+	sel.SetSelectExprs(selExprs...)
+	return sel
 }
 
 func makeColName(col sqlparser.IdentifierCI, table TargetTable, isMultiTbl bool) *sqlparser.ColName {

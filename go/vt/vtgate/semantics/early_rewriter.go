@@ -732,7 +732,7 @@ func (r *earlyRewriter) getAliasMap(sel *sqlparser.Select) (aliases map[string]e
 		return
 	}
 	aliases = map[string]exprContainer{}
-	for _, e := range sel.SelectExprs.Exprs {
+	for _, e := range sel.GetColumns() {
 		ae, ok := e.(*sqlparser.AliasedExpr)
 		if !ok {
 			continue
@@ -776,7 +776,7 @@ func (r *earlyRewriter) rewriteOrderByLiteral(node *sqlparser.Literal) (expr sql
 		return nil, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "error invalid statement type, expect Select, got: %T", scope.stmt)
 	}
 
-	if num < 1 || num > len(stmt.SelectExprs.Exprs) {
+	if num < 1 || num > stmt.GetColumnCount() {
 		return nil, false, &ColumnNotFoundClauseError{
 			Column: fmt.Sprintf("%d", num),
 			Clause: r.clause,
@@ -785,13 +785,13 @@ func (r *earlyRewriter) rewriteOrderByLiteral(node *sqlparser.Literal) (expr sql
 
 	// We loop like this instead of directly accessing the offset, to make sure there are no unexpanded `*` before
 	for i := 0; i < num; i++ {
-		if _, ok := stmt.SelectExprs.Exprs[i].(*sqlparser.AliasedExpr); !ok {
-			return nil, false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot use column offsets in %s when using `%s`", r.clause, sqlparser.String(stmt.SelectExprs.Exprs[i]))
+		if _, ok := stmt.GetColumns()[i].(*sqlparser.AliasedExpr); !ok {
+			return nil, false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot use column offsets in %s when using `%s`", r.clause, sqlparser.String(stmt.GetColumns()[i]))
 		}
 	}
 
 	colOffset := num - 1
-	aliasedExpr, ok := stmt.SelectExprs.Exprs[colOffset].(*sqlparser.AliasedExpr)
+	aliasedExpr, ok := stmt.GetColumns()[colOffset].(*sqlparser.AliasedExpr)
 	if !ok {
 		return nil, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "don't know how to handle %s", sqlparser.String(node))
 	}
@@ -831,18 +831,18 @@ func (r *earlyRewriter) rewriteGroupByExpr(node *sqlparser.Literal) (sqlparser.E
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "error invalid statement type, expect Select, got: %T", scope.stmt)
 	}
 
-	if num < 1 || num > len(stmt.SelectExprs.Exprs) {
+	if num < 1 || num > stmt.GetColumnCount() {
 		return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "Unknown column '%d' in '%s'", num, r.clause)
 	}
 
 	// We loop like this instead of directly accessing the offset, to make sure there are no unexpanded `*` before
 	for i := 0; i < num; i++ {
-		if _, ok := stmt.SelectExprs.Exprs[i].(*sqlparser.AliasedExpr); !ok {
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot use column offsets in %s when using `%s`", r.clause, sqlparser.String(stmt.SelectExprs.Exprs[i]))
+		if _, ok := stmt.GetColumns()[i].(*sqlparser.AliasedExpr); !ok {
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot use column offsets in %s when using `%s`", r.clause, sqlparser.String(stmt.GetColumns()[i]))
 		}
 	}
 
-	aliasedExpr, ok := stmt.SelectExprs.Exprs[num-1].(*sqlparser.AliasedExpr)
+	aliasedExpr, ok := stmt.GetColumns()[num-1].(*sqlparser.AliasedExpr)
 	if !ok {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "don't know how to handle %s", sqlparser.String(node))
 	}

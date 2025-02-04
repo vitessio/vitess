@@ -87,7 +87,7 @@ func (td *tableDiffer) buildTablePlan(dbClient binlogplayer.DBClient, dbName str
 	targetSelect := &sqlparser.Select{}
 	// Aggregates is the list of Aggregate functions, if any.
 	var aggregates []*engine.AggregateParams
-	for _, selExpr := range sel.SelectExprs.Exprs {
+	for _, selExpr := range sel.GetColumns() {
 		switch selExpr := selExpr.(type) {
 		case *sqlparser.StarExpr:
 			// If it's a '*' expression, expand column list from the schema.
@@ -121,7 +121,7 @@ func (td *tableDiffer) buildTablePlan(dbClient binlogplayer.DBClient, dbName str
 					// but will need to be revisited when we add such support to vreplication
 					aggregates = append(aggregates, engine.NewAggregateParam(
 						/*opcode*/ opcode.AggregateSum,
-						/*offset*/ len(sourceSelect.SelectExprs.Exprs)-1,
+						/*offset*/ sourceSelect.GetColumnCount()-1,
 						/*alias*/ "", collationEnv),
 					)
 				}
@@ -135,12 +135,12 @@ func (td *tableDiffer) buildTablePlan(dbClient binlogplayer.DBClient, dbName str
 		fields[strings.ToLower(field.Name)] = field.Type
 	}
 
-	targetSelect.SelectExprs.Exprs = td.adjustForSourceTimeZone(targetSelect.SelectExprs.Exprs, fields)
+	targetSelect.SetSelectExprs(td.adjustForSourceTimeZone(targetSelect.GetColumns(), fields)...)
 	// Start with adding all columns for comparison.
-	tp.compareCols = make([]compareColInfo, len(sourceSelect.SelectExprs.Exprs))
+	tp.compareCols = make([]compareColInfo, sourceSelect.GetColumnCount())
 	for i := range tp.compareCols {
 		tp.compareCols[i].colIndex = i
-		colname, err := getColumnNameForSelectExpr(targetSelect.SelectExprs.Exprs[i])
+		colname, err := getColumnNameForSelectExpr(targetSelect.GetColumns()[i])
 		if err != nil {
 			return nil, err
 		}

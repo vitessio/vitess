@@ -163,10 +163,7 @@ func (qb *queryBuilder) setWithRollup() {
 func (qb *queryBuilder) addProjection(projection sqlparser.SelectExpr) {
 	switch stmt := qb.stmt.(type) {
 	case *sqlparser.Select:
-		if stmt.SelectExprs == nil {
-			stmt.SelectExprs = &sqlparser.SelectExprs{}
-		}
-		stmt.SelectExprs.Exprs = append(stmt.SelectExprs.Exprs, projection)
+		stmt.AddSelectExpr(projection)
 		return
 	case *sqlparser.Union:
 		if ae, ok := projection.(*sqlparser.AliasedExpr); ok {
@@ -196,7 +193,7 @@ func (qb *queryBuilder) pushUnionInsideDerived() {
 		}},
 	}
 	firstSelect := getFirstSelect(selStmt)
-	sel.SetSelectExprs(unionSelects(firstSelect.GetColumns()))
+	sel.SetSelectExprs(unionSelects(firstSelect.GetColumns())...)
 	qb.stmt = sel
 }
 
@@ -217,8 +214,8 @@ func unionSelects(exprs []sqlparser.SelectExpr) []sqlparser.SelectExpr {
 func checkUnionColumnByName(column *sqlparser.ColName, sel sqlparser.TableStatement) {
 	colName := column.Name.String()
 	firstSelect := getFirstSelect(sel)
-	exprs := firstSelect.SelectExprs
-	offset := slices.IndexFunc(exprs.Exprs, func(expr sqlparser.SelectExpr) bool {
+	exprs := firstSelect.GetColumns()
+	offset := slices.IndexFunc(exprs, func(expr sqlparser.SelectExpr) bool {
 		switch ae := expr.(type) {
 		case *sqlparser.StarExpr:
 			return true
@@ -287,11 +284,8 @@ func (qb *queryBuilder) joinWith(other *queryBuilder, onCondition sqlparser.Expr
 
 	if sel, isSel := stmt.(*sqlparser.Select); isSel {
 		otherSel := otherStmt.(*sqlparser.Select)
-		if sel.SelectExprs == nil {
-			sel.SelectExprs = &sqlparser.SelectExprs{}
-		}
-		if otherSel.SelectExprs != nil {
-			sel.SelectExprs.Exprs = append(sel.SelectExprs.Exprs, otherSel.SelectExprs.Exprs...)
+		for _, expr := range otherSel.GetColumns() {
+			sel.AddSelectExpr(expr)
 		}
 	}
 

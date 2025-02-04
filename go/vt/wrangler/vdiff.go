@@ -503,7 +503,7 @@ func findPKs(env *vtenv.Environment, table *tabletmanagerdatapb.TableDefinition,
 	var orderby sqlparser.OrderBy
 	for _, pk := range table.PrimaryKeyColumns {
 		found := false
-		for i, selExpr := range targetSelect.SelectExprs.Exprs {
+		for i, selExpr := range targetSelect.GetColumns() {
 			expr := selExpr.(*sqlparser.AliasedExpr).Expr
 			colname := ""
 			switch ct := expr.(type) {
@@ -675,7 +675,7 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 	targetSelect := &sqlparser.Select{}
 	// aggregates contains the list if Aggregate functions, if any.
 	var aggregates []*engine.AggregateParams
-	for _, selExpr := range sel.SelectExprs.Exprs {
+	for _, selExpr := range sel.GetColumns() {
 		switch selExpr := selExpr.(type) {
 		case *sqlparser.StarExpr:
 			// If it's a '*' expression, expand column list from the schema.
@@ -709,7 +709,7 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 					// but will need to be revisited when we add such support to vreplication
 					aggregates = append(aggregates, engine.NewAggregateParam(
 						/*opcode*/ opcode.AggregateSum,
-						/*offset*/ len(sourceSelect.SelectExprs.Exprs)-1,
+						/*offset*/ sourceSelect.GetColumnCount()-1,
 						/*alias*/ "", df.env.CollationEnv()))
 				}
 			}
@@ -725,10 +725,10 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 
 	targetSelect.SelectExprs.Exprs = df.adjustForSourceTimeZone(targetSelect.SelectExprs.Exprs, fields)
 	// Start with adding all columns for comparison.
-	td.compareCols = make([]compareColInfo, len(sourceSelect.SelectExprs.Exprs))
+	td.compareCols = make([]compareColInfo, sourceSelect.GetColumnCount())
 	for i := range td.compareCols {
 		td.compareCols[i].colIndex = i
-		colname, err := getColumnNameForSelectExpr(targetSelect.SelectExprs.Exprs[i])
+		colname, err := getColumnNameForSelectExpr(targetSelect.GetColumns()[i])
 		if err != nil {
 			return nil, err
 		}
@@ -1376,7 +1376,7 @@ func (td *tableDiffer) genDebugQueryDiff(sel *sqlparser.Select, row []sqltypes.V
 
 	if onlyPks {
 		for i, pkI := range td.selectPks {
-			pk := sel.SelectExprs.Exprs[pkI]
+			pk := sel.GetColumns()[pkI]
 			pk.Format(buf)
 			if i != len(td.selectPks)-1 {
 				buf.Myprintf(", ")

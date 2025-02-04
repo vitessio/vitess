@@ -50,7 +50,7 @@ func TestBindingAndExprEquality(t *testing.T) {
 			require.NoError(t, err)
 			st, err := Analyze(parse, "db", fakeSchemaInfoTest())
 			require.NoError(t, err)
-			exprs := parse.(*sqlparser.Select).SelectExprs.Exprs
+			exprs := parse.(*sqlparser.Select).GetColumns()
 			a := exprs[0].(*sqlparser.AliasedExpr).Expr
 			b := exprs[1].(*sqlparser.AliasedExpr).Expr
 			assert.Equal(t, st.EqualsExpr(a, b), test.equal)
