@@ -485,7 +485,7 @@ func EnableLagThrottlerAndWaitForStatus(t *testing.T, clusterInstance *cluster.L
 	}
 }
 
-func WaitForCheckThrottlerResult(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tablet *cluster.Vttablet, appName throttlerapp.Name, flags *throttle.CheckFlags, expect int32, timeout time.Duration) (*vtctldatapb.CheckThrottlerResponse, error) {
+func WaitForCheckThrottlerResult(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tablet *cluster.Vttablet, appName throttlerapp.Name, flags *throttle.CheckFlags, expect tabletmanagerdatapb.CheckThrottlerResponseCode, timeout time.Duration) (*vtctldatapb.CheckThrottlerResponse, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	ticker := time.NewTicker(time.Second)
@@ -493,7 +493,10 @@ func WaitForCheckThrottlerResult(t *testing.T, clusterInstance *cluster.LocalPro
 	for {
 		resp, err := CheckThrottler(clusterInstance, tablet, appName, flags)
 		require.NoError(t, err)
-		if resp.Check.StatusCode == expect {
+		if resp.Check.StatusCode == int32(expect) {
+			return resp, nil
+		}
+		if resp.Check.ResponseCode == expect {
 			return resp, nil
 		}
 		select {

@@ -74,7 +74,7 @@ func TestMariadbNotBeginGTID(t *testing.T) {
 
 	input := mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbStandaloneGTIDEvent)}
 	want := false
-	if _, got, err := input.GTID(f); got != want {
+	if _, got, _, _, err := input.GTID(f); got != want {
 		t.Errorf("%#v.GTID() = %v (%v), want %v", input, got, err, want)
 	}
 }
@@ -88,7 +88,7 @@ func TestMariadbIsBeginGTID(t *testing.T) {
 
 	input := mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbBeginGTIDEvent)}
 	want := true
-	if _, got, err := input.GTID(f); got != want {
+	if _, got, _, _, err := input.GTID(f); got != want {
 		t.Errorf("%#v.IsBeginGTID() = %v (%v), want %v", input, got, err, want)
 	}
 }
@@ -102,7 +102,7 @@ func TestMariadbStandaloneBinlogEventGTID(t *testing.T) {
 
 	input := mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbStandaloneGTIDEvent)}
 	want := replication.MariadbGTID{Domain: 0, Server: 62344, Sequence: 9}
-	got, hasBegin, err := input.GTID(f)
+	got, hasBegin, _, _, err := input.GTID(f)
 	assert.NoError(t, err, "unexpected error: %v", err)
 	assert.False(t, hasBegin, "unexpected hasBegin")
 	assert.True(t, reflect.DeepEqual(got, want), "%#v.GTID() = %#v, want %#v", input, got, want)
@@ -118,7 +118,7 @@ func TestMariadbBinlogEventGTID(t *testing.T) {
 
 	input := mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbBeginGTIDEvent)}
 	want := replication.MariadbGTID{Domain: 0, Server: 62344, Sequence: 10}
-	got, hasBegin, err := input.GTID(f)
+	got, hasBegin, _, _, err := input.GTID(f)
 	assert.NoError(t, err, "unexpected error: %v", err)
 	assert.True(t, hasBegin, "unexpected !hasBegin")
 	assert.True(t, reflect.DeepEqual(got, want), "%#v.GTID() = %#v, want %#v", input, got, want)

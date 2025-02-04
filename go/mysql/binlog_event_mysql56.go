@@ -60,12 +60,27 @@ func (ev mysql56BinlogEvent) IsGTID() bool {
 //	1         flags
 //	16        SID (server UUID)
 //	8         GNO (sequence number, signed int)
-func (ev mysql56BinlogEvent) GTID(f BinlogFormat) (replication.GTID, bool, error) {
+//	1         lt_type
+//	8         last_committed
+//	8         sequence_number
+func (ev mysql56BinlogEvent) GTID(f BinlogFormat) (gtid replication.GTID, hasBegin bool, lastCommitted int64, sequenceNumber int64, err error) {
 	data := ev.Bytes()[f.HeaderLength:]
 	var sid replication.SID
-	copy(sid[:], data[1:1+16])
-	gno := int64(binary.LittleEndian.Uint64(data[1+16 : 1+16+8]))
-	return replication.Mysql56GTID{Server: sid, Sequence: gno}, false /* hasBegin */, nil
+	pos := 1
+	copy(sid[:], data[pos:pos+16])
+	pos += 16 // end of SID
+	gno := int64(binary.LittleEndian.Uint64(data[pos : pos+8]))
+	pos += 8 // end of GNO
+	pos += 1 // end of lt_type
+	if len(data) >= pos+8 {
+		lastCommitted = int64(binary.LittleEndian.Uint64(data[pos : pos+8]))
+	}
+	pos += 8 // end of last_committed
+	if len(data) >= pos+8 {
+		sequenceNumber = int64(binary.LittleEndian.Uint64(data[pos : pos+8]))
+	}
+	// pos += 8 // end of sequence_number
+	return replication.Mysql56GTID{Server: sid, Sequence: gno}, false /* hasBegin */, lastCommitted, sequenceNumber, nil
 }
 
 // PreviousGTIDs implements BinlogEvent.PreviousGTIDs().
