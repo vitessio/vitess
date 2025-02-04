@@ -66,7 +66,8 @@ type vplayer struct {
 	commit func() error
 	// If the VPlayer is in batch mode, we accumulate each transaction's statements
 	// that are then sent as a single multi-statement protocol request to the database.
-	batchMode bool
+	batchMode    bool
+	parallelMode bool
 
 	pos replication.Position
 	// unsavedEvent is set any time we skip an event without
@@ -167,6 +168,10 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 		}
 		vr.dbClient.maxBatchSize = maxAllowedPacket
 	}
+	parallelMode := false
+	if len(copyState) == 0 && vr.workflowConfig.ExperimentalFlags&vttablet.VReplicationExperimentalFlagVPlayerParallel != 0 {
+		parallelMode = true
+	}
 
 	return &vplayer{
 		vr:               vr,
@@ -182,6 +187,7 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 		query:            queryFunc,
 		commit:           commitFunc,
 		batchMode:        batchMode,
+		parallelMode:     parallelMode,
 	}
 }
 
@@ -285,9 +291,21 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 	}()
 
 	applyErr := make(chan error, 1)
-	go func() {
-		applyErr <- vp.applyEvents(ctx, relay)
-	}()
+
+	log.Infof("====== QQQ vp.batchMode: %v, vp.parallelMode: %v", vp.batchMode, vp.parallelMode)
+	if vp.parallelMode {
+		producer, err := newParallelProducer(ctx, vp.vr.dbClientGen, vp)
+		if err != nil {
+			return err
+		}
+		go func() {
+			applyErr <- producer.applyEvents(ctx, relay)
+		}()
+	} else {
+		go func() {
+			applyErr <- vp.applyEvents(ctx, relay)
+		}()
+	}
 
 	select {
 	case err := <-applyErr:
