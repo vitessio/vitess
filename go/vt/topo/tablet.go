@@ -24,21 +24,17 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/sync/semaphore"
-
-	"vitess.io/vitess/go/protoutil"
-	"vitess.io/vitess/go/vt/key"
-
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/netutil"
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/trace"
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
-
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo/events"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // IsTrivialTypeChange returns if this db type be trivially reassigned
@@ -287,8 +283,6 @@ func (ts *Server) GetTabletAliasesByCell(ctx context.Context, cell string) ([]*t
 // GetTabletsByCellOptions controls the behavior of
 // Server.FindAllShardsInKeyspace.
 type GetTabletsByCellOptions struct {
-	// Concurrency controls the maximum number of concurrent calls to GetTablet.
-	Concurrency int
 	// KeyspaceShard is the optional keyspace/shard that tablets must match.
 	// An empty shard value will match all shards in the keyspace.
 	KeyspaceShard *KeyspaceShard
@@ -550,29 +544,11 @@ func (ts *Server) GetTabletMap(ctx context.Context, tabletAliases []*topodatapb.
 		returnErr error
 	)
 
-	concurrency := DefaultConcurrency
-	if opt != nil && opt.Concurrency > 0 {
-		concurrency = opt.Concurrency
-	}
-	var sem = semaphore.NewWeighted(int64(concurrency))
-
 	for _, tabletAlias := range tabletAliases {
 		wg.Add(1)
 		go func(tabletAlias *topodatapb.TabletAlias) {
 			defer wg.Done()
-			if err := sem.Acquire(ctx, 1); err != nil {
-				// Only happens if context is cancelled.
-				mu.Lock()
-				defer mu.Unlock()
-				log.Warningf("%v: %v", tabletAlias, err)
-				// We only need to set this on the first error.
-				if returnErr == nil {
-					returnErr = NewError(PartialResult, tabletAlias.GetCell())
-				}
-				return
-			}
 			tabletInfo, err := ts.GetTablet(ctx, tabletAlias)
-			sem.Release(1)
 			mu.Lock()
 			defer mu.Unlock()
 			if err != nil {

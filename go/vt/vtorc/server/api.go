@@ -45,6 +45,7 @@ const (
 	disableGlobalRecoveriesAPI    = "/api/disable-global-recoveries"
 	enableGlobalRecoveriesAPI     = "/api/enable-global-recoveries"
 	replicationAnalysisAPI        = "/api/replication-analysis"
+	databaseStateAPI              = "/api/database-state"
 	healthAPI                     = "/debug/health"
 	AggregatedDiscoveryMetricsAPI = "/api/aggregated-discovery-metrics"
 
@@ -60,6 +61,7 @@ var (
 		disableGlobalRecoveriesAPI,
 		enableGlobalRecoveriesAPI,
 		replicationAnalysisAPI,
+		databaseStateAPI,
 		healthAPI,
 		AggregatedDiscoveryMetricsAPI,
 	}
@@ -86,6 +88,8 @@ func (v *vtorcAPI) ServeHTTP(response http.ResponseWriter, request *http.Request
 		errantGTIDsAPIHandler(response, request)
 	case replicationAnalysisAPI:
 		replicationAnalysisAPIHandler(response, request)
+	case databaseStateAPI:
+		databaseStateAPIHandler(response)
 	case AggregatedDiscoveryMetricsAPI:
 		AggregatedDiscoveryMetricsAPIHandler(response, request)
 	default:
@@ -104,7 +108,7 @@ func getACLPermissionLevelForAPI(apiEndpoint string) string {
 		return acl.ADMIN
 	case replicationAnalysisAPI:
 		return acl.MONITORING
-	case healthAPI:
+	case healthAPI, databaseStateAPI:
 		return acl.MONITORING
 	}
 	return acl.ADMIN
@@ -164,6 +168,16 @@ func errantGTIDsAPIHandler(response http.ResponseWriter, request *http.Request) 
 		return
 	}
 	returnAsJSON(response, http.StatusOK, instances)
+}
+
+// databaseStateAPIHandler is the handler for the databaseStateAPI endpoint
+func databaseStateAPIHandler(response http.ResponseWriter) {
+	ds, err := inst.GetDatabaseState()
+	if err != nil {
+		http.Error(response, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writePlainTextResponse(response, ds, http.StatusOK)
 }
 
 // AggregatedDiscoveryMetricsAPIHandler is the handler for the discovery metrics endpoint

@@ -40,7 +40,7 @@ type RowMap map[string]CellData
 // CellData is the result of a single (atomic) column in a single row
 type CellData sql.NullString
 
-func (this *CellData) MarshalJSON() ([]byte, error) {
+func (this CellData) MarshalJSON() ([]byte, error) {
 	if this.Valid {
 		return json.Marshal(this.String)
 	} else {

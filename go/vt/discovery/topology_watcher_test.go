@@ -67,7 +67,7 @@ func TestStartAndCloseTopoWatcher(t *testing.T) {
 	fhc := NewFakeHealthCheck(nil)
 	defer fhc.Close()
 	topologyWatcherOperations.ZeroAll()
-	tw := NewTopologyWatcher(context.Background(), ts, fhc, nil, "aa", 100*time.Microsecond, true, 5)
+	tw := NewTopologyWatcher(context.Background(), ts, fhc, nil, "aa", 100*time.Microsecond, true)
 
 	done := make(chan bool, 3)
 	result := make(chan bool, 1)
@@ -127,7 +127,7 @@ func checkWatcher(t *testing.T, refreshKnownTablets bool) {
 	logger := logutil.NewMemoryLogger()
 	topologyWatcherOperations.ZeroAll()
 	counts := topologyWatcherOperations.Counts()
-	tw := NewTopologyWatcher(context.Background(), ts, fhc, filter, "aa", 10*time.Minute, refreshKnownTablets, 5)
+	tw := NewTopologyWatcher(context.Background(), ts, fhc, filter, "aa", 10*time.Minute, refreshKnownTablets)
 
 	counts = checkOpCounts(t, counts, map[string]int64{})
 	checkChecksum(t, tw, 0)
@@ -421,7 +421,7 @@ func TestFilterByKeyspace(t *testing.T) {
 	f := TabletFilters{NewFilterByKeyspace(testKeyspacesToWatch)}
 	ts := memorytopo.NewServer(ctx, testCell)
 	defer ts.Close()
-	tw := NewTopologyWatcher(context.Background(), ts, hc, f, testCell, 10*time.Minute, true, 5)
+	tw := NewTopologyWatcher(context.Background(), ts, hc, f, testCell, 10*time.Minute, true)
 
 	for _, test := range testFilterByKeyspace {
 		// Add a new tablet to the topology.
@@ -502,7 +502,7 @@ func TestFilterByKeyspaceSkipsIgnoredTablets(t *testing.T) {
 	topologyWatcherOperations.ZeroAll()
 	counts := topologyWatcherOperations.Counts()
 	f := TabletFilters{NewFilterByKeyspace(testKeyspacesToWatch)}
-	tw := NewTopologyWatcher(context.Background(), ts, fhc, f, "aa", 10*time.Minute, false /*refreshKnownTablets*/, 5)
+	tw := NewTopologyWatcher(context.Background(), ts, fhc, f, "aa", 10*time.Minute, false /*refreshKnownTablets*/)
 
 	counts = checkOpCounts(t, counts, map[string]int64{})
 	checkChecksum(t, tw, 0)
@@ -639,7 +639,7 @@ func TestGetTabletErrorDoesNotRemoveFromHealthcheck(t *testing.T) {
 	defer fhc.Close()
 	topologyWatcherOperations.ZeroAll()
 	counts := topologyWatcherOperations.Counts()
-	tw := NewTopologyWatcher(context.Background(), ts, fhc, nil, "aa", 10*time.Minute, true, 5)
+	tw := NewTopologyWatcher(context.Background(), ts, fhc, nil, "aa", 10*time.Minute, true)
 	defer tw.Stop()
 
 	// Force fallback to getting tablets individually.

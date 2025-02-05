@@ -17,6 +17,7 @@
 package logic
 
 import (
+	"context"
 	"os"
 	"os/signal"
 	"sync"
@@ -26,6 +27,7 @@ import (
 
 	"github.com/patrickmn/go-cache"
 	"github.com/sjmudd/stopwatch"
+	"golang.org/x/sync/errgroup"
 
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
@@ -407,27 +409,34 @@ func ContinuousDiscovery() {
 				}
 			}()
 		case <-tabletTopoTick:
-			// Create a wait group
-			var wg sync.WaitGroup
-
-			// Refresh all keyspace information.
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				RefreshAllKeyspacesAndShards()
-			}()
-
-			// Refresh all tablets.
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				refreshAllTablets()
-			}()
-
-			// Wait for both the refreshes to complete
-			wg.Wait()
-			// We have completed one discovery cycle in the entirety of it. We should update the process health.
-			process.FirstDiscoveryCycleComplete.Store(true)
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second*time.Duration(config.Config.TopoInformationRefreshSeconds))
+			if err := refreshAllInformation(ctx); err != nil {
+				log.Errorf("failed to refresh topo information: %+v", err)
+			}
+			cancel()
 		}
 	}
+}
+
+// refreshAllInformation refreshes both shard and tablet information. This is meant to be run on tablet topo ticks.
+func refreshAllInformation(ctx context.Context) error {
+	// Create an errgroup
+	eg, ctx := errgroup.WithContext(ctx)
+
+	// Refresh all keyspace information.
+	eg.Go(func() error {
+		return RefreshAllKeyspacesAndShards(ctx)
+	})
+
+	// Refresh all tablets.
+	eg.Go(func() error {
+		return refreshAllTablets(ctx)
+	})
+
+	// Wait for both the refreshes to complete
+	err := eg.Wait()
+	if err == nil {
+		process.FirstDiscoveryCycleComplete.Store(true)
+	}
+	return err
 }

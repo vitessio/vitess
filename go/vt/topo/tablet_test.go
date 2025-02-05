@@ -69,7 +69,6 @@ func TestServerGetTabletsByCell(t *testing.T) {
 				},
 			},
 			// Ensure this doesn't panic.
-			opt: &topo.GetTabletsByCellOptions{Concurrency: -1},
 		},
 		{
 			name: "single",
@@ -151,7 +150,6 @@ func TestServerGetTabletsByCell(t *testing.T) {
 					Shard:    shard,
 				},
 			},
-			opt: &topo.GetTabletsByCellOptions{Concurrency: 8},
 		},
 		{
 			name: "multiple with list error",
@@ -210,7 +208,6 @@ func TestServerGetTabletsByCell(t *testing.T) {
 					Shard:    shard,
 				},
 			},
-			opt:       &topo.GetTabletsByCellOptions{Concurrency: 8},
 			listError: topo.NewError(topo.ResourceExhausted, ""),
 		},
 		{
@@ -249,7 +246,6 @@ func TestServerGetTabletsByCell(t *testing.T) {
 				},
 			},
 			opt: &topo.GetTabletsByCellOptions{
-				Concurrency: 1,
 				KeyspaceShard: &topo.KeyspaceShard{
 					Keyspace: keyspace,
 					Shard:    shard,
@@ -317,7 +313,6 @@ func TestServerGetTabletsByCell(t *testing.T) {
 				},
 			},
 			opt: &topo.GetTabletsByCellOptions{
-				Concurrency: 1,
 				KeyspaceShard: &topo.KeyspaceShard{
 					Keyspace: keyspace,
 					Shard:    "",

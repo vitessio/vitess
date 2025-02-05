@@ -22,43 +22,25 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/spf13/pflag"
 	"golang.org/x/sync/errgroup"
 
 	"vitess.io/vitess/go/constants/sidecar"
+	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/vterrors"
-
-	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/topo/events"
-
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/topo/events"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // This file contains keyspace utility functions.
-
-// Default concurrency to use in order to avoid overhwelming the topo server.
-var DefaultConcurrency = 32
 
 // shardKeySuffix is the suffix of a shard key.
 // The full key looks like this:
 // /vitess/global/keyspaces/customer/shards/80-/Shard
 const shardKeySuffix = "Shard"
-
-func registerFlags(fs *pflag.FlagSet) {
-	fs.IntVar(&DefaultConcurrency, "topo_read_concurrency", DefaultConcurrency, "Concurrency of topo reads.")
-}
-
-func init() {
-	servenv.OnParseFor("vtcombo", registerFlags)
-	servenv.OnParseFor("vtctld", registerFlags)
-	servenv.OnParseFor("vtgate", registerFlags)
-	servenv.OnParseFor("vtorc", registerFlags)
-}
 
 // KeyspaceInfo is a meta struct that contains metadata to give the
 // data more context and convenience. This is the main way we interact
@@ -198,7 +180,7 @@ func (ts *Server) UpdateKeyspace(ctx context.Context, ki *KeyspaceInfo) error {
 type FindAllShardsInKeyspaceOptions struct {
 	// Concurrency controls the maximum number of concurrent calls to GetShard.
 	// If <= 0, Concurrency is set to 1.
-	Concurrency int
+	Concurrency int64
 }
 
 // FindAllShardsInKeyspace reads and returns all the existing shards in a
@@ -212,7 +194,7 @@ func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string, 
 		opt = &FindAllShardsInKeyspaceOptions{}
 	}
 	if opt.Concurrency <= 0 {
-		opt.Concurrency = DefaultConcurrency
+		opt.Concurrency = DefaultReadConcurrency
 	}
 
 	// Unescape the keyspace name as this can e.g. come from the VSchema where

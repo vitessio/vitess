@@ -18,9 +18,9 @@ package logic
 
 import (
 	"context"
-	"sort"
-	"strings"
 	"sync"
+
+	"golang.org/x/exp/maps"
 
 	"vitess.io/vitess/go/vt/log"
 
@@ -29,40 +29,23 @@ import (
 )
 
 // RefreshAllKeyspacesAndShards reloads the keyspace and shard information for the keyspaces that vtorc is concerned with.
-func RefreshAllKeyspacesAndShards() {
+func RefreshAllKeyspacesAndShards(ctx context.Context) error {
 	var keyspaces []string
-	if len(clustersToWatch) == 0 { // all known keyspaces
-		ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
+	if len(shardsToWatch) == 0 { // all known keyspaces
+		ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 		defer cancel()
 		var err error
 		// Get all the keyspaces
 		keyspaces, err = ts.GetKeyspaces(ctx)
 		if err != nil {
-			log.Error(err)
-			return
+			return err
 		}
 	} else {
-		// Parse input and build list of keyspaces
-		for _, ks := range clustersToWatch {
-			if strings.Contains(ks, "/") {
-				// This is a keyspace/shard specification
-				input := strings.Split(ks, "/")
-				keyspaces = append(keyspaces, input[0])
-			} else {
-				// Assume this is a keyspace
-				keyspaces = append(keyspaces, ks)
-			}
-		}
-		if len(keyspaces) == 0 {
-			log.Errorf("Found no keyspaces for input: %+v", clustersToWatch)
-			return
-		}
+		// Get keyspaces to watch from the list of known keyspaces.
+		keyspaces = maps.Keys(shardsToWatch)
 	}
 
-	// Sort the list of keyspaces.
-	// The list can have duplicates because the input to clusters to watch may have multiple shards of the same keyspace
-	sort.Strings(keyspaces)
-	refreshCtx, refreshCancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
+	refreshCtx, refreshCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer refreshCancel()
 	var wg sync.WaitGroup
 	for idx, keyspace := range keyspaces {
@@ -83,6 +66,8 @@ func RefreshAllKeyspacesAndShards() {
 		}(keyspace)
 	}
 	wg.Wait()
+
+	return nil
 }
 
 // RefreshKeyspaceAndShard refreshes the keyspace record and shard record for the given keyspace and shard.
