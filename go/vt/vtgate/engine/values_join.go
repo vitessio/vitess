@@ -47,6 +47,9 @@ type ValuesJoin struct {
 
 	// ColNames are the output column names
 	ColNames []string
+
+	// LHSRowID is the offset of the row ID in the LHS, used to use columns from the LHS in the output
+	RowID bool
 }
 
 // TryExecute performs a non-streaming exec.
@@ -73,9 +76,13 @@ func (jv *ValuesJoin) TryExecute(ctx context.Context, vcursor VCursor, bindVars 
 		return jv.Right.GetFields(ctx, vcursor, bindVars)
 	}
 
+	rowSize := len(jv.CopyColumnsToRHS)
+	if jv.RowID {
+		rowSize++ // +1 since we add the row ID
+	}
 	for i, row := range lresult.Rows {
-		newRow := make(sqltypes.Row, 0, len(jv.CopyColumnsToRHS)+1) // +1 since we always add the row ID
-		newRow = append(newRow, sqltypes.NewInt64(int64(i)))        // Adding the LHS row ID
+		newRow := make(sqltypes.Row, 0, rowSize)             // +1 since we always add the row ID
+		newRow = append(newRow, sqltypes.NewInt64(int64(i))) // Adding the LHS row ID
 
 		for _, loffset := range jv.CopyColumnsToRHS {
 			newRow = append(newRow, row[loffset])
