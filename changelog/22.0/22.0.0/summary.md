@@ -158,7 +158,7 @@ While the flag will continue to accept float values (interpreted as seconds) for
 
 #### <a id="reloading-vttablet-acl"/>VTTablet ACL enforcement and reloading</a>
 
-When a tablet is started with `--enforce-tableacl-config`, the enforcement by exiting is only done on start, not on reload when receiving a SIGHUP. When reloading an invalid ACL, it's logged as error and the active ACL remains unchanged.
+When a tablet is started with `--enforce-tableacl-config` it will exit with an error if the contents of the file are not valid. After the changes made in https://github.com/vitessio/vitess/pull/17485 the tablet will no longer exit when reloading the contents of the file after receiving a SIGHUP. When the file contents are invalid on reload the tablet will now log an error and the active in-memory ACLs remain in effect.
 
 ### <a id="topo-read-concurrency-changes"/>`--topo_read_concurrency` behaviour changes
 
