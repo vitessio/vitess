@@ -1085,6 +1085,11 @@ func (s *Schema) ValidateViewReferences() error {
 					View:   view.Name(),
 					Column: e.Column.Name.String(),
 				}
+			case *semantics.UnsupportedConstruct:
+				// These are error types from semantic analysis for executing queries. When we
+				// have a view, we don't have Vitess execute these queries but MySQL does, so
+				// we don't want to return errors for these.
+				return nil
 			}
 			return err
 		}
