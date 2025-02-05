@@ -48,6 +48,7 @@ import (
 	"sync"
 
 	"github.com/spf13/pflag"
+	"golang.org/x/sync/semaphore"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/topodata"
@@ -175,6 +176,9 @@ var (
 
 	FlagBinaries = []string{"vttablet", "vtctl", "vtctld", "vtcombo", "vtgate",
 		"vtorc", "vtbackup"}
+
+	// Default read concurrency to use in order to avoid overhwelming the topo server.
+	DefaultReadConcurrency int64 = 32
 )
 
 func init() {
@@ -187,6 +191,7 @@ func registerTopoFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&topoImplementation, "topo_implementation", topoImplementation, "the topology implementation to use")
 	fs.StringVar(&topoGlobalServerAddress, "topo_global_server_address", topoGlobalServerAddress, "the address of the global topology server")
 	fs.StringVar(&topoGlobalRoot, "topo_global_root", topoGlobalRoot, "the path of the global topology data in the global topology server")
+	fs.Int64Var(&DefaultReadConcurrency, "topo_read_concurrency", DefaultReadConcurrency, "Maximum concurrency of topo reads per global or local cell.")
 }
 
 // RegisterFactory registers a Factory for an implementation for a Server.
@@ -202,11 +207,12 @@ func RegisterFactory(name string, factory Factory) {
 // NewWithFactory creates a new Server based on the given Factory.
 // It also opens the global cell connection.
 func NewWithFactory(factory Factory, serverAddress, root string) (*Server, error) {
+	globalReadSem := semaphore.NewWeighted(DefaultReadConcurrency)
 	conn, err := factory.Create(GlobalCell, serverAddress, root)
 	if err != nil {
 		return nil, err
 	}
-	conn = NewStatsConn(GlobalCell, conn)
+	conn = NewStatsConn(GlobalCell, conn, globalReadSem)
 
 	var connReadOnly Conn
 	if factory.HasGlobalReadOnlyCell(serverAddress, root) {
@@ -214,7 +220,7 @@ func NewWithFactory(factory Factory, serverAddress, root string) (*Server, error
 		if err != nil {
 			return nil, err
 		}
-		connReadOnly = NewStatsConn(GlobalReadOnlyCell, connReadOnly)
+		connReadOnly = NewStatsConn(GlobalReadOnlyCell, connReadOnly, globalReadSem)
 	} else {
 		connReadOnly = conn
 	}
@@ -295,7 +301,8 @@ func (ts *Server) ConnForCell(ctx context.Context, cell string) (Conn, error) {
 	conn, err := ts.factory.Create(cell, ci.ServerAddress, ci.Root)
 	switch {
 	case err == nil:
-		conn = NewStatsConn(cell, conn)
+		cellReadSem := semaphore.NewWeighted(DefaultReadConcurrency)
+		conn = NewStatsConn(cell, conn, cellReadSem)
 		ts.cellConns[cell] = cellConn{ci, conn}
 		return conn, nil
 	case IsErrType(err, NoNode):

@@ -671,16 +671,8 @@ func (ts *Server) GetTabletsByShardCell(ctx context.Context, keyspace, shard str
 		}
 	}
 
-	// Divide the concurrency limit by the number of cells. If there are more
-	// cells than the limit, default to concurrency of 1.
-	cellConcurrency := 1
-	if len(cells) < DefaultConcurrency {
-		cellConcurrency = DefaultConcurrency / len(cells)
-	}
-
 	mu := sync.Mutex{}
 	eg, ctx := errgroup.WithContext(ctx)
-	eg.SetLimit(DefaultConcurrency)
 
 	tablets := make([]*TabletInfo, 0, len(cells))
 	var kss *KeyspaceShard
@@ -691,7 +683,6 @@ func (ts *Server) GetTabletsByShardCell(ctx context.Context, keyspace, shard str
 		}
 	}
 	options := &GetTabletsByCellOptions{
-		Concurrency:   cellConcurrency,
 		KeyspaceShard: kss,
 	}
 	for _, cell := range cells {

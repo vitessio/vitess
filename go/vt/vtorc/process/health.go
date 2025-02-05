@@ -36,6 +36,8 @@ var FirstDiscoveryCycleComplete atomic.Bool
 
 var lastHealthCheckCache = cache.New(config.HealthPollSeconds*time.Second, time.Second)
 
+func ResetLastHealthCheckCache() { lastHealthCheckCache.Flush() }
+
 type NodeHealth struct {
 	Hostname        string
 	Token           string
@@ -120,8 +122,8 @@ func HealthTest() (health *HealthStatus, err error) {
 		log.Error(err)
 		return health, err
 	}
-	health.Healthy = healthy
 	health.DiscoveredOnce = FirstDiscoveryCycleComplete.Load()
+	health.Healthy = healthy && health.DiscoveredOnce
 
 	if health.ActiveNode, health.IsActiveNode, err = ElectedNode(); err != nil {
 		health.Error = err

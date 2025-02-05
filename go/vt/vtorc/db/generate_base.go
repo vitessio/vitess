@@ -16,6 +16,28 @@
 
 package db
 
+var TableNames = []string{
+	"database_instance",
+	"audit",
+	"active_node",
+	"node_health",
+	"topology_recovery",
+	"database_instance_topology_history",
+	"candidate_database_instance",
+	"topology_failure_detection",
+	"blocked_topology_recovery",
+	"database_instance_last_analysis",
+	"database_instance_analysis_changelog",
+	"node_health_history",
+	"vtorc_db_deployments",
+	"global_recovery_disable",
+	"topology_recovery_steps",
+	"database_instance_stale_binlog_coordinates",
+	"vitess_tablet",
+	"vitess_keyspace",
+	"vitess_shard",
+}
+
 // vtorcBackend is a list of SQL statements required to build the vtorc backend
 var vtorcBackend = []string{
 	`
