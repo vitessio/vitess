@@ -40,6 +40,7 @@ import {
     FetchVSchemaParams,
     fetchVtctlds,
     fetchVTExplain,
+    fetchVExplain,
     fetchWorkflow,
     fetchWorkflowStatus,
     fetchWorkflows,
@@ -460,6 +461,13 @@ export const useVTExplain = (
     return useQuery(['vtexplain', params], () => fetchVTExplain(params), { ...options });
 };
 
+export const useVExplain = (
+    params: Parameters<typeof fetchVExplain>[0],
+    options?: UseQueryOptions<pb.VExplainResponse, Error> | undefined
+) => {
+    return useQuery(['vexplain', params], () => fetchVExplain(params), { ...options });
+};
+
 /**
  * useWorkflow is a query hook that fetches a single workflow for the given parameters.
  */
@@ -729,7 +737,7 @@ export const useTopologyPath = (
     params: GetTopologyPathParams,
     options?: UseQueryOptions<vtctldata.GetTopologyPathResponse, Error> | undefined
 ) => {
-    return useQuery(['topology-path', params], () => getTopologyPath(params));
+    return useQuery(['topology-path', params], () => getTopologyPath(params), options);
 };
 /**
  * useValidate is a mutate hook that validates that all nodes reachable from the global replication graph,

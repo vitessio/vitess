@@ -535,6 +535,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneValues(in)
 	case *ValuesFuncExpr:
 		return CloneRefOfValuesFuncExpr(in)
+	case *ValuesStatement:
+		return CloneRefOfValuesStatement(in)
 	case *VarPop:
 		return CloneRefOfVarPop(in)
 	case *VarSamp:
@@ -711,7 +713,7 @@ func CloneRefOfAlterView(n *AlterView) *AlterView {
 	out.ViewName = CloneTableName(n.ViewName)
 	out.Definer = CloneRefOfDefiner(n.Definer)
 	out.Columns = CloneColumns(n.Columns)
-	out.Select = CloneSelectStatement(n.Select)
+	out.Select = CloneTableStatement(n.Select)
 	out.Comments = CloneRefOfParsedComments(n.Comments)
 	return &out
 }
@@ -1023,7 +1025,7 @@ func CloneRefOfCommonTableExpr(n *CommonTableExpr) *CommonTableExpr {
 	out := *n
 	out.ID = CloneIdentifierCS(n.ID)
 	out.Columns = CloneColumns(n.Columns)
-	out.Subquery = CloneSelectStatement(n.Subquery)
+	out.Subquery = CloneTableStatement(n.Subquery)
 	return &out
 }
 
@@ -1138,7 +1140,7 @@ func CloneRefOfCreateView(n *CreateView) *CreateView {
 	out.ViewName = CloneTableName(n.ViewName)
 	out.Definer = CloneRefOfDefiner(n.Definer)
 	out.Columns = CloneColumns(n.Columns)
-	out.Select = CloneSelectStatement(n.Select)
+	out.Select = CloneTableStatement(n.Select)
 	out.Comments = CloneRefOfParsedComments(n.Comments)
 	return &out
 }
@@ -1205,7 +1207,7 @@ func CloneRefOfDerivedTable(n *DerivedTable) *DerivedTable {
 		return nil
 	}
 	out := *n
-	out.Select = CloneSelectStatement(n.Select)
+	out.Select = CloneTableStatement(n.Select)
 	return &out
 }
 
@@ -3042,7 +3044,7 @@ func CloneRefOfSubquery(n *Subquery) *Subquery {
 		return nil
 	}
 	out := *n
-	out.Select = CloneSelectStatement(n.Select)
+	out.Select = CloneTableStatement(n.Select)
 	return &out
 }
 
@@ -3182,8 +3184,8 @@ func CloneRefOfUnion(n *Union) *Union {
 	}
 	out := *n
 	out.With = CloneRefOfWith(n.With)
-	out.Left = CloneSelectStatement(n.Left)
-	out.Right = CloneSelectStatement(n.Right)
+	out.Left = CloneTableStatement(n.Left)
+	out.Right = CloneTableStatement(n.Right)
 	out.OrderBy = CloneOrderBy(n.OrderBy)
 	out.Limit = CloneRefOfLimit(n.Limit)
 	out.Into = CloneRefOfSelectInto(n.Into)
@@ -3325,6 +3327,20 @@ func CloneRefOfValuesFuncExpr(n *ValuesFuncExpr) *ValuesFuncExpr {
 	}
 	out := *n
 	out.Name = CloneRefOfColName(n.Name)
+	return &out
+}
+
+// CloneRefOfValuesStatement creates a deep clone of the input.
+func CloneRefOfValuesStatement(n *ValuesStatement) *ValuesStatement {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.With = CloneRefOfWith(n.With)
+	out.Rows = CloneValues(n.Rows)
+	out.Comments = CloneRefOfParsedComments(n.Comments)
+	out.Order = CloneOrderBy(n.Order)
+	out.Limit = CloneRefOfLimit(n.Limit)
 	return &out
 }
 
@@ -4107,6 +4123,8 @@ func CloneInsertRows(in InsertRows) InsertRows {
 		return CloneRefOfUnion(in)
 	case Values:
 		return CloneValues(in)
+	case *ValuesStatement:
+		return CloneRefOfValuesStatement(in)
 	default:
 		// this should never happen
 		return nil
@@ -4287,6 +4305,8 @@ func CloneStatement(in Statement) Statement {
 		return CloneRefOfVExplainStmt(in)
 	case *VStream:
 		return CloneRefOfVStream(in)
+	case *ValuesStatement:
+		return CloneRefOfValuesStatement(in)
 	default:
 		// this should never happen
 		return nil
@@ -4307,6 +4327,24 @@ func CloneTableExpr(in TableExpr) TableExpr {
 		return CloneRefOfJoinTableExpr(in)
 	case *ParenTableExpr:
 		return CloneRefOfParenTableExpr(in)
+	default:
+		// this should never happen
+		return nil
+	}
+}
+
+// CloneTableStatement creates a deep clone of the input.
+func CloneTableStatement(in TableStatement) TableStatement {
+	if in == nil {
+		return nil
+	}
+	switch in := in.(type) {
+	case *Select:
+		return CloneRefOfSelect(in)
+	case *Union:
+		return CloneRefOfUnion(in)
+	case *ValuesStatement:
+		return CloneRefOfValuesStatement(in)
 	default:
 		// this should never happen
 		return nil

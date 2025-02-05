@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/topotools/events"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
@@ -153,12 +154,12 @@ func SetReplicationSource(ctx context.Context, ts *topo.Server, tmc tmclient.Tab
 		return err
 	}
 	log.Infof("Getting a new durability policy for %v", durabilityName)
-	durability, err := GetDurabilityPolicy(durabilityName)
+	durability, err := policy.GetDurabilityPolicy(durabilityName)
 	if err != nil {
 		return err
 	}
 
-	isSemiSync := IsReplicaSemiSync(durability, shardPrimary.Tablet, tablet)
+	isSemiSync := policy.IsReplicaSemiSync(durability, shardPrimary.Tablet, tablet)
 	return tmc.SetReplicationSource(ctx, tablet, shardPrimary.Alias, 0, "", false, isSemiSync, 0)
 }
 
@@ -183,7 +184,7 @@ func stopReplicationAndBuildStatusMaps(
 	stopReplicationTimeout time.Duration,
 	ignoredTablets sets.Set[string],
 	tabletToWaitFor *topodatapb.TabletAlias,
-	durability Durabler,
+	durability policy.Durabler,
 	waitForAllTablets bool,
 	logger logutil.Logger,
 ) (*replicationSnapshot, error) {
@@ -216,9 +217,6 @@ func stopReplicationAndBuildStatusMaps(
 		logger.Infof("getting replication position from %v", alias)
 
 		stopReplicationStatus, err := tmc.StopReplicationAndGetStatus(groupCtx, tabletInfo.Tablet, replicationdatapb.StopReplicationMode_IOTHREADONLY)
-		m.Lock()
-		res.tabletsBackupState[alias] = stopReplicationStatus.GetBackupRunning()
-		m.Unlock()
 		if err != nil {
 			sqlErr, isSQLErr := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError)
 			if isSQLErr && sqlErr != nil && sqlErr.Number() == sqlerror.ERNotReplica {
@@ -242,6 +240,20 @@ func stopReplicationAndBuildStatusMaps(
 				err = vterrors.Wrapf(err, "error when getting replication status for alias %v: %v", alias, err)
 			}
 		} else {
+			isTakingBackup := false
+
+			// Prefer the most up-to-date information regarding whether the tablet is taking a backup from the After
+			// replication status, but fall back to the Before status if After is nil.
+			if stopReplicationStatus.After != nil {
+				isTakingBackup = stopReplicationStatus.After.BackupRunning
+			} else if stopReplicationStatus.Before != nil {
+				isTakingBackup = stopReplicationStatus.Before.BackupRunning
+			}
+
+			m.Lock()
+			res.tabletsBackupState[alias] = isTakingBackup
+			m.Unlock()
+
 			var sqlThreadRunning bool
 			// Check if the sql thread was running for the tablet
 			sqlThreadRunning, err = SQLThreadWasRunning(stopReplicationStatus)

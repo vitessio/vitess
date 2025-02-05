@@ -43,7 +43,9 @@ jobs:
 
     - name: Check out code
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
-      uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      with:
+        persist-credentials: 'false'
 
     - name: Check for changes in relevant files
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
@@ -53,6 +55,7 @@ jobs:
         token: ''
         filters: |
           unit_tests:
+            - 'test/config.json'
             - 'go/**'
             - 'test.go'
             - 'Makefile'
@@ -140,8 +143,8 @@ jobs:
         sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld || echo "could not remove mysqld profile"
 
         mkdir -p dist bin
-        curl -s -L https://github.com/coreos/etcd/releases/download/v3.3.10/etcd-v3.3.10-linux-amd64.tar.gz | tar -zxC dist
-        mv dist/etcd-v3.3.10-linux-amd64/{etcd,etcdctl} bin/
+        curl -s -L https://github.com/coreos/etcd/releases/download/v3.5.17/etcd-v3.5.17-linux-amd64.tar.gz | tar -zxC dist
+        mv dist/etcd-v3.5.17-linux-amd64/{etcd,etcdctl} bin/
 
         go mod download
         go install golang.org/x/tools/cmd/goimports@latest
@@ -177,6 +180,9 @@ jobs:
 
         export NOVTADMINBUILD=1
         export VTEVALENGINETEST="{{.Evalengine}}"
+        # We sometimes need to alter the behavior based on the platform we're
+        # testing, e.g. MySQL 5.7 vs 8.0.
+        export CI_DB_PLATFORM="{{.Platform}}"
         
         eatmydata -- make unit_test | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 

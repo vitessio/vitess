@@ -142,6 +142,30 @@ func (node *VStream) FormatFast(buf *TrackedBuffer) {
 }
 
 // FormatFast formats the node.
+func (node *ValuesStatement) FormatFast(buf *TrackedBuffer) {
+	if node.With != nil {
+		node.With.FormatFast(buf)
+	}
+	buf.WriteString("values ")
+	node.Comments.FormatFast(buf)
+	if node.ListArg != "" {
+		node.ListArg.FormatFast(buf)
+	} else {
+		for i, row := range node.Rows {
+			buf.WriteString("row")
+			row.FormatFast(buf)
+			if i < len(node.Rows)-1 {
+				buf.WriteString(", ")
+			}
+		}
+	}
+
+	node.Order.FormatFast(buf)
+	node.Limit.FormatFast(buf)
+
+}
+
+// FormatFast formats the node.
 func (node *Stream) FormatFast(buf *TrackedBuffer) {
 	buf.WriteString("stream ")
 	node.Comments.FormatFast(buf)

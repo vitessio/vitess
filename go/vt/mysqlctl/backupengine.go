@@ -31,6 +31,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/os2"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
@@ -272,7 +273,7 @@ func getBackupManifestInto(ctx context.Context, backup backupstorage.BackupHandl
 	if err := json.NewDecoder(file).Decode(outManifest); err != nil {
 		return vterrors.Wrap(err, "can't decode MANIFEST")
 	}
-	return nil
+	return backup.Error()
 }
 
 // IncrementalBackupDetails lists some incremental backup specific information
@@ -723,7 +724,7 @@ func createStateFile(cnf *Mycnf) error {
 	// rename func to openStateFile
 	// change to return a *File
 	fname := filepath.Join(cnf.TabletDir(), RestoreState)
-	fd, err := os.Create(fname)
+	fd, err := os2.Create(fname)
 	if err != nil {
 		return fmt.Errorf("unable to create file: %v", err)
 	}

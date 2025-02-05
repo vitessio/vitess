@@ -27,8 +27,10 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/os2"
+	"vitess.io/vitess/go/vt/mysqlctl/errors"
+
 	"vitess.io/vitess/go/ioutil"
-	"vitess.io/vitess/go/vt/concurrency"
 	stats "vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/servenv"
@@ -59,7 +61,7 @@ type FileBackupHandle struct {
 	dir      string
 	name     string
 	readOnly bool
-	errors   concurrency.AllErrorRecorder
+	errors.PerFileErrorRecorder
 }
 
 func NewBackupHandle(
@@ -79,21 +81,6 @@ func NewBackupHandle(
 	}
 }
 
-// RecordError is part of the concurrency.ErrorRecorder interface.
-func (fbh *FileBackupHandle) RecordError(err error) {
-	fbh.errors.RecordError(err)
-}
-
-// HasErrors is part of the concurrency.ErrorRecorder interface.
-func (fbh *FileBackupHandle) HasErrors() bool {
-	return fbh.errors.HasErrors()
-}
-
-// Error is part of the concurrency.ErrorRecorder interface.
-func (fbh *FileBackupHandle) Error() error {
-	return fbh.errors.Error()
-}
-
 // Directory is part of the BackupHandle interface
 func (fbh *FileBackupHandle) Directory() string {
 	return fbh.dir
@@ -110,7 +97,7 @@ func (fbh *FileBackupHandle) AddFile(ctx context.Context, filename string, files
 		return nil, fmt.Errorf("AddFile cannot be called on read-only backup")
 	}
 	p := path.Join(FileBackupStorageRoot, fbh.dir, fbh.name, filename)
-	f, err := os.Create(p)
+	f, err := os2.Create(p)
 	if err != nil {
 		return nil, err
 	}
@@ -186,13 +173,13 @@ func (fbs *FileBackupStorage) ListBackups(ctx context.Context, dir string) ([]ba
 func (fbs *FileBackupStorage) StartBackup(ctx context.Context, dir, name string) (backupstorage.BackupHandle, error) {
 	// Make sure the directory exists.
 	p := path.Join(FileBackupStorageRoot, dir)
-	if err := os.MkdirAll(p, os.ModePerm); err != nil {
+	if err := os2.MkdirAll(p); err != nil {
 		return nil, err
 	}
 
 	// Create the subdirectory for this named backup.
 	p = path.Join(p, name)
-	if err := os.Mkdir(p, os.ModePerm); err != nil {
+	if err := os2.Mkdir(p); err != nil {
 		return nil, err
 	}
 

@@ -18,6 +18,7 @@ package viperutil
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"reflect"
@@ -162,19 +163,19 @@ func LoadConfig() (context.CancelFunc, error) {
 	}
 
 	if err != nil {
-		if nferr, ok := err.(viper.ConfigFileNotFoundError); ok {
+		if isConfigFileNotFoundError(err) {
 			msg := "Failed to read in config %s: %s"
 			switch configFileNotFoundHandling.Get() {
 			case WarnOnConfigFileNotFound:
 				msg += ". This is optional, and can be ignored if you are not using config files. For a detailed explanation, see https://github.com/vitessio/vitess/blob/main/doc/viper/viper.md#config-files."
-				log.WARN(msg, registry.Static.ConfigFileUsed(), nferr.Error())
+				log.WARN(msg, registry.Static.ConfigFileUsed(), err.Error())
 				fallthrough // after warning, ignore the error
 			case IgnoreConfigFileNotFound:
-				err = nil
+				return func() {}, nil
 			case ErrorOnConfigFileNotFound:
-				log.ERROR(msg, registry.Static.ConfigFileUsed(), nferr.Error())
+				log.ERROR(msg, registry.Static.ConfigFileUsed(), err.Error())
 			case ExitOnConfigFileNotFound:
-				log.CRITICAL(msg, registry.Static.ConfigFileUsed(), nferr.Error())
+				log.CRITICAL(msg, registry.Static.ConfigFileUsed(), err.Error())
 			}
 		}
 	}
@@ -184,6 +185,14 @@ func LoadConfig() (context.CancelFunc, error) {
 	}
 
 	return registry.Dynamic.Watch(context.Background(), registry.Static, configPersistenceMinInterval.Get())
+}
+
+// isConfigFileNotFoundError checks if the error is caused because the file wasn't found.
+func isConfigFileNotFoundError(err error) bool {
+	if errors.As(err, &viper.ConfigFileNotFoundError{}) {
+		return true
+	}
+	return errors.Is(err, os.ErrNotExist)
 }
 
 // NotifyConfigReload adds a subscription that the dynamic registry will attempt

@@ -358,7 +358,7 @@ func (client *FakeTabletManagerClient) PopulateReparentJournal(ctx context.Conte
 }
 
 // ReadReparentJournalInfo is part of the tmclient.TabletManagerClient interface.
-func (client *FakeTabletManagerClient) ReadReparentJournalInfo(ctx context.Context, tablet *topodatapb.Tablet) (int, error) {
+func (client *FakeTabletManagerClient) ReadReparentJournalInfo(ctx context.Context, tablet *topodatapb.Tablet) (int32, error) {
 	return 10, nil
 }
 

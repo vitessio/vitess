@@ -41,7 +41,9 @@ import (
 var testNow = time.Now()
 
 func TestStateManagerStateByName(t *testing.T) {
-	sm := &stateManager{}
+	sm := &stateManager{
+		diskHealthMonitor: newNoopDiskHealthMonitor(),
+	}
 
 	sm.replHealthy = true
 	sm.wantState = StateServing
@@ -145,6 +147,29 @@ func TestStateManagerUnservePrimary(t *testing.T) {
 
 	assert.Equal(t, topodatapb.TabletType_PRIMARY, sm.target.TabletType)
 	assert.Equal(t, StateNotServing, sm.state)
+}
+
+type testDiskMonitor struct {
+	isDiskStalled bool
+}
+
+func (t *testDiskMonitor) IsDiskStalled() bool {
+	return t.isDiskStalled
+}
+
+// TestIsServingLocked tests isServingLocked() functionality.
+func TestIsServingLocked(t *testing.T) {
+	sm := newTestStateManager()
+	defer sm.StopService()
+	tdm := &testDiskMonitor{isDiskStalled: false}
+	sm.diskHealthMonitor = tdm
+
+	err := sm.SetServingType(topodatapb.TabletType_REPLICA, testNow, StateServing, "")
+	require.NoError(t, err)
+	require.True(t, sm.isServingLocked())
+
+	tdm.isDiskStalled = true
+	require.False(t, sm.isServingLocked())
 }
 
 func TestStateManagerUnserveNonPrimary(t *testing.T) {
@@ -669,6 +694,45 @@ func TestStateManagerNotify(t *testing.T) {
 	sm.StopService()
 }
 
+func TestDemotePrimaryStalled(t *testing.T) {
+	sm := newTestStateManager()
+	defer sm.StopService()
+	err := sm.SetServingType(topodatapb.TabletType_PRIMARY, testNow, StateServing, "")
+	require.NoError(t, err)
+	// Stopping the ticker so that we don't get unexpected health streams.
+	sm.hcticks.Stop()
+
+	ch := make(chan *querypb.StreamHealthResponse, 5)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		err := sm.hs.Stream(context.Background(), func(shr *querypb.StreamHealthResponse) error {
+			ch <- shr
+			return nil
+		})
+		assert.Contains(t, err.Error(), "tabletserver is shutdown")
+	}()
+	defer wg.Wait()
+
+	// Send a broadcast message and check we have no error there.
+	sm.Broadcast()
+	gotshr := <-ch
+	require.Empty(t, gotshr.RealtimeStats.HealthError)
+
+	// If demote primary is stalled, then we should get an error.
+	sm.demotePrimaryStalled = true
+	sm.Broadcast()
+	gotshr = <-ch
+	require.EqualValues(t, "VT09031: Primary demotion is stalled", gotshr.RealtimeStats.HealthError)
+	// Verify that we can't start a new request once we have a demote primary stalled.
+	err = sm.StartRequest(context.Background(), &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}, false)
+	require.ErrorContains(t, err, "operation not allowed in state NOT_SERVING")
+
+	// Stop the state manager.
+	sm.StopService()
+}
+
 func TestRefreshReplHealthLocked(t *testing.T) {
 	sm := newTestStateManager()
 	defer sm.StopService()
@@ -739,23 +803,24 @@ func newTestStateManager() *stateManager {
 	parser := sqlparser.NewTestParser()
 	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "StateManagerTest")
 	sm := &stateManager{
-		statelessql: NewQueryList("stateless", parser),
-		statefulql:  NewQueryList("stateful", parser),
-		olapql:      NewQueryList("olap", parser),
-		hs:          newHealthStreamer(env, &topodatapb.TabletAlias{}, schema.NewEngine(env)),
-		se:          &testSchemaEngine{},
-		rt:          &testReplTracker{lag: 1 * time.Second},
-		vstreamer:   &testSubcomponent{},
-		tracker:     &testSubcomponent{},
-		watcher:     &testSubcomponent{},
-		qe:          &testQueryEngine{},
-		txThrottler: &testTxThrottler{},
-		te:          &testTxEngine{},
-		messager:    &testSubcomponent{},
-		ddle:        &testOnlineDDLExecutor{},
-		throttler:   &testLagThrottler{},
-		tableGC:     &testTableGC{},
-		rw:          newRequestsWaiter(),
+		statelessql:       NewQueryList("stateless", parser),
+		statefulql:        NewQueryList("stateful", parser),
+		olapql:            NewQueryList("olap", parser),
+		hs:                newHealthStreamer(env, &topodatapb.TabletAlias{}, schema.NewEngine(env)),
+		se:                &testSchemaEngine{},
+		rt:                &testReplTracker{lag: 1 * time.Second},
+		vstreamer:         &testSubcomponent{},
+		tracker:           &testSubcomponent{},
+		watcher:           &testSubcomponent{},
+		qe:                &testQueryEngine{},
+		txThrottler:       &testTxThrottler{},
+		te:                &testTxEngine{},
+		messager:          &testSubcomponent{},
+		ddle:              &testOnlineDDLExecutor{},
+		diskHealthMonitor: newNoopDiskHealthMonitor(),
+		throttler:         &testLagThrottler{},
+		tableGC:           &testTableGC{},
+		rw:                newRequestsWaiter(),
 	}
 	sm.Init(env, &querypb.Target{})
 	sm.hs.InitDBConfig(&querypb.Target{})

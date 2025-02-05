@@ -46,6 +46,10 @@ type (
 
 		// cte is a map of CTE definitions that are used in the query
 		cte map[string]*CTE
+
+		// lastInsertIdWithArgument is used to signal to later stages that we
+		// need to do special handling of the engine primitive
+		lastInsertIdWithArgument bool
 	}
 )
 
@@ -59,18 +63,22 @@ func newEarlyTableCollector(si SchemaInformation, currentDb string) *earlyTableC
 }
 
 func (etc *earlyTableCollector) down(cursor *sqlparser.Cursor) bool {
-	with, ok := cursor.Node().(*sqlparser.With)
-	if !ok {
-		return true
-	}
-	for _, cte := range with.CTEs {
-		etc.cte[cte.ID.String()] = &CTE{
-			Name:      cte.ID.String(),
-			Query:     cte.Subquery,
-			Columns:   cte.Columns,
-			Recursive: with.Recursive,
+	switch node := cursor.Node().(type) {
+	case *sqlparser.With:
+		for _, cte := range node.CTEs {
+			etc.cte[cte.ID.String()] = &CTE{
+				Name:      cte.ID.String(),
+				Query:     cte.Subquery,
+				Columns:   cte.Columns,
+				Recursive: node.Recursive,
+			}
+		}
+	case *sqlparser.FuncExpr:
+		if node.Name.EqualString("last_insert_id") && len(node.Exprs) == 1 {
+			etc.lastInsertIdWithArgument = true
 		}
 	}
+
 	return true
 }
 
@@ -146,8 +154,11 @@ func (tc *tableCollector) visitAliasedTableExpr(node *sqlparser.AliasedTableExpr
 }
 
 func (tc *tableCollector) visitUnion(union *sqlparser.Union) error {
-	firstSelect := sqlparser.GetFirstSelect(union)
-	expanded, selectExprs := getColumnNames(firstSelect.SelectExprs)
+	firstSelect, err := sqlparser.GetFirstSelect(union)
+	if err != nil {
+		return err
+	}
+	expanded, selectExprs := getColumnNames(firstSelect.GetColumns())
 	info := unionInfo{
 		isAuthoritative: expanded,
 		exprs:           selectExprs,
@@ -157,12 +168,12 @@ func (tc *tableCollector) visitUnion(union *sqlparser.Union) error {
 		return nil
 	}
 
-	size := len(firstSelect.SelectExprs)
+	size := firstSelect.GetColumnCount()
 	info.recursive = make([]TableSet, size)
 	typers := make([]evalengine.TypeAggregator, size)
 	collations := tc.org.collationEnv()
 
-	err := sqlparser.VisitAllSelects(union, func(s *sqlparser.Select, idx int) error {
+	err = sqlparser.VisitAllSelects(union, func(s *sqlparser.Select, idx int) error {
 		for i, expr := range s.SelectExprs {
 			ae, ok := expr.(*sqlparser.AliasedExpr)
 			if !ok {
@@ -405,7 +416,10 @@ func checkValidRecursiveCTE(cteDef *CTE) error {
 		return vterrors.VT09026(cteDef.Name)
 	}
 
-	firstSelect := sqlparser.GetFirstSelect(union.Right)
+	firstSelect, err := sqlparser.GetFirstSelect(union.Right)
+	if err != nil {
+		return err
+	}
 	if firstSelect.GroupBy != nil {
 		return vterrors.VT09027(cteDef.Name)
 	}
@@ -462,8 +476,16 @@ func (tc *tableCollector) addSelectDerivedTable(
 	return scope.addTable(tableInfo)
 }
 
-func (tc *tableCollector) addUnionDerivedTable(union *sqlparser.Union, node *sqlparser.AliasedTableExpr, columns sqlparser.Columns, alias sqlparser.IdentifierCS) error {
-	firstSelect := sqlparser.GetFirstSelect(union)
+func (tc *tableCollector) addUnionDerivedTable(
+	union *sqlparser.Union,
+	node *sqlparser.AliasedTableExpr,
+	columns sqlparser.Columns,
+	alias sqlparser.IdentifierCS,
+) error {
+	firstSelect, err := sqlparser.GetFirstSelect(union)
+	if err != nil {
+		return err
+	}
 	tables := tc.scoper.wScope[firstSelect]
 	info, found := tc.unionInfo[union]
 	if !found {

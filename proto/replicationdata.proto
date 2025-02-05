@@ -66,7 +66,6 @@ message Configuration {
 message StopReplicationStatus {
   replicationdata.Status before = 1;
   replicationdata.Status after = 2;
-  bool backup_running = 3;
 }
 
 // StopReplicationMode is used to provide controls over how replication is stopped.
@@ -106,4 +105,5 @@ message FullStatus {
   uint32 semi_sync_wait_for_replica_count = 20;
   bool super_read_only = 21;
   replicationdata.Configuration replication_configuration = 22;
+  bool disk_stalled = 23;
 }

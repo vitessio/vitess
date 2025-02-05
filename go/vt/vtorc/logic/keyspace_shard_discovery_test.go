@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/reparenttestutil"
 	"vitess.io/vitess/go/vt/vtorc/db"
 	"vitess.io/vitess/go/vt/vtorc/inst"
@@ -36,15 +37,15 @@ import (
 var (
 	keyspaceDurabilityNone = &topodatapb.Keyspace{
 		KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
-		DurabilityPolicy: "none",
+		DurabilityPolicy: policy.DurabilityNone,
 	}
 	keyspaceDurabilitySemiSync = &topodatapb.Keyspace{
 		KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
-		DurabilityPolicy: "semi_sync",
+		DurabilityPolicy: policy.DurabilitySemiSync,
 	}
 	keyspaceDurabilityTest = &topodatapb.Keyspace{
 		KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
-		DurabilityPolicy: "test",
+		DurabilityPolicy: policy.DurabilityTest,
 	}
 	keyspaceSnapshot = &topodatapb.Keyspace{
 		KeyspaceType: topodatapb.KeyspaceType_SNAPSHOT,
@@ -92,7 +93,9 @@ func TestRefreshAllKeyspaces(t *testing.T) {
 	// Set clusters to watch to only watch ks1 and ks3
 	onlyKs1and3 := []string{"ks1/-80", "ks3/-80", "ks3/80-"}
 	clustersToWatch = onlyKs1and3
-	RefreshAllKeyspacesAndShards()
+	err := initializeShardsToWatch()
+	require.NoError(t, err)
+	require.NoError(t, RefreshAllKeyspacesAndShards(context.Background()))
 
 	// Verify that we only have ks1 and ks3 in vtorc's db.
 	verifyKeyspaceInfo(t, "ks1", keyspaceDurabilityNone, "")
@@ -105,9 +108,11 @@ func TestRefreshAllKeyspaces(t *testing.T) {
 
 	// Set clusters to watch to watch all keyspaces
 	clustersToWatch = nil
+	err = initializeShardsToWatch()
+	require.NoError(t, err)
 	// Change the durability policy of ks1
-	reparenttestutil.SetKeyspaceDurability(ctx, t, ts, "ks1", "semi_sync")
-	RefreshAllKeyspacesAndShards()
+	reparenttestutil.SetKeyspaceDurability(ctx, t, ts, "ks1", policy.DurabilitySemiSync)
+	require.NoError(t, RefreshAllKeyspacesAndShards(context.Background()))
 
 	// Verify that all the keyspaces are correctly reloaded
 	verifyKeyspaceInfo(t, "ks1", keyspaceDurabilitySemiSync, "")
@@ -118,7 +123,6 @@ func TestRefreshAllKeyspaces(t *testing.T) {
 	verifyPrimaryAlias(t, "ks3", "80-", "zone_ks3-0000000101", "")
 	verifyKeyspaceInfo(t, "ks4", keyspaceDurabilityTest, "")
 	verifyPrimaryAlias(t, "ks4", "80-", "zone_ks4-0000000101", "")
-
 }
 
 func TestRefreshKeyspace(t *testing.T) {
@@ -144,7 +148,7 @@ func TestRefreshKeyspace(t *testing.T) {
 			keyspaceName: "ks1",
 			keyspace: &topodatapb.Keyspace{
 				KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
-				DurabilityPolicy: "semi_sync",
+				DurabilityPolicy: policy.DurabilitySemiSync,
 			},
 			keyspaceWanted: nil,
 			err:            "",
@@ -169,12 +173,12 @@ func TestRefreshKeyspace(t *testing.T) {
 			keyspaceName: "ks4",
 			keyspace: &topodatapb.Keyspace{
 				KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
-				DurabilityPolicy: "none",
+				DurabilityPolicy: policy.DurabilityNone,
 				BaseKeyspace:     "baseKeyspace",
 			},
 			keyspaceWanted: &topodatapb.Keyspace{
 				KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
-				DurabilityPolicy: "none",
+				DurabilityPolicy: policy.DurabilityNone,
 			},
 			err: "",
 		}, {

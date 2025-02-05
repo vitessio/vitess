@@ -151,7 +151,7 @@ func (a *analyzer) newSemTable(
 			ExpandedColumns:           map[sqlparser.TableName][]*sqlparser.ColName{},
 			columns:                   map[*sqlparser.Union]sqlparser.SelectExprs{},
 			StatementIDs:              a.scoper.statementIDs,
-			QuerySignature:            QuerySignature{},
+			QuerySignature:            a.sig,
 			childForeignKeysInvolved:  map[TableSet][]vindexes.ChildFKInfo{},
 			parentForeignKeysInvolved: map[TableSet][]vindexes.ParentFKInfo{},
 			childFkToUpdExprs:         map[string]sqlparser.UpdateExprs{},
@@ -174,7 +174,7 @@ func (a *analyzer) newSemTable(
 		Direct:                    a.binder.direct,
 		ExprTypes:                 a.typer.m,
 		Tables:                    a.tables.Tables,
-		Targets:                   a.binder.targets,
+		DMLTargets:                a.binder.targets,
 		NotSingleRouteErr:         a.notSingleRouteErr,
 		NotUnshardedErr:           a.unshardedErr,
 		Warning:                   a.warning,
@@ -286,14 +286,22 @@ func containsStar(s sqlparser.SelectExprs) bool {
 }
 
 func checkUnionColumns(union *sqlparser.Union) error {
-	firstProj := sqlparser.GetFirstSelect(union).SelectExprs
+	lft, err := sqlparser.GetFirstSelect(union)
+	if err != nil {
+		return err
+	}
+	firstProj := lft.GetColumns()
 	if containsStar(firstProj) {
 		// if we still have *, we can't figure out if the query is invalid or not
 		// we'll fail it at run time instead
 		return nil
 	}
 
-	secondProj := sqlparser.GetFirstSelect(union.Right).SelectExprs
+	rgt, err := sqlparser.GetFirstSelect(union.Right)
+	if err != nil {
+		return err
+	}
+	secondProj := rgt.GetColumns()
 	if containsStar(secondProj) {
 		return nil
 	}
@@ -360,6 +368,10 @@ func (a *analyzer) analyze(statement sqlparser.Statement) error {
 	_ = sqlparser.Rewrite(statement, a.earlyTables.down, a.earlyTables.up)
 	if a.err != nil {
 		return a.err
+	}
+
+	if a.earlyTables.lastInsertIdWithArgument {
+		a.sig.LastInsertIDArg = true
 	}
 
 	if a.canShortCut(statement) {

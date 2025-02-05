@@ -35,6 +35,10 @@ func (cached *KeyRange) CachedSize(alloc bool) int64 {
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.End)))
 	}
+	// field unknownFields google.golang.org/protobuf/runtime/protoimpl.UnknownFields
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.unknownFields)))
+	}
 	return size
 }
 func (cached *ThrottledAppRule) CachedSize(alloc bool) int64 {
@@ -49,5 +53,9 @@ func (cached *ThrottledAppRule) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Name)))
 	// field ExpiresAt *vitess.io/vitess/go/vt/proto/vttime.Time
 	size += cached.ExpiresAt.CachedSize(true)
+	// field unknownFields google.golang.org/protobuf/runtime/protoimpl.UnknownFields
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.unknownFields)))
+	}
 	return size
 }

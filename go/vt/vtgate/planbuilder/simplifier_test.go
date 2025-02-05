@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"testing"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -45,11 +47,11 @@ func TestSimplifyBuggyQuery(t *testing.T) {
 
 	stmt, reserved, err := sqlparser.NewTestParser().Parse2(query)
 	require.NoError(t, err)
-	rewritten, _ := sqlparser.RewriteAST(sqlparser.Clone(stmt), vw.CurrentDb(), sqlparser.SQLSelectLimitUnset, "", nil, nil, nil)
 	reservedVars := sqlparser.NewReservedVars("vtg", reserved)
+	rewritten, _ := sqlparser.PrepareAST(sqlparser.Clone(stmt), reservedVars, map[string]*querypb.BindVariable{}, false, vw.CurrentDb(), sqlparser.SQLSelectLimitUnset, "", nil, nil, nil)
 
 	simplified := simplifier.SimplifyStatement(
-		stmt.(sqlparser.SelectStatement),
+		stmt.(sqlparser.TableStatement),
 		vw.CurrentDb(),
 		vw,
 		keepSameError(query, reservedVars, vw, rewritten.BindVarNeeds),
@@ -69,11 +71,11 @@ func TestSimplifyPanic(t *testing.T) {
 
 	stmt, reserved, err := sqlparser.NewTestParser().Parse2(query)
 	require.NoError(t, err)
-	rewritten, _ := sqlparser.RewriteAST(sqlparser.Clone(stmt), vw.CurrentDb(), sqlparser.SQLSelectLimitUnset, "", nil, nil, nil)
 	reservedVars := sqlparser.NewReservedVars("vtg", reserved)
+	rewritten, _ := sqlparser.PrepareAST(sqlparser.Clone(stmt), reservedVars, map[string]*querypb.BindVariable{}, false, vw.CurrentDb(), sqlparser.SQLSelectLimitUnset, "", nil, nil, nil)
 
 	simplified := simplifier.SimplifyStatement(
-		stmt.(sqlparser.SelectStatement),
+		stmt.(sqlparser.TableStatement),
 		vw.CurrentDb(),
 		vw,
 		keepPanicking(query, reservedVars, vw, rewritten.BindVarNeeds),
@@ -95,22 +97,22 @@ func TestUnsupportedFile(t *testing.T) {
 			log.Errorf("unsupported_cases.txt - %s", tcase.Query)
 			stmt, reserved, err := sqlparser.NewTestParser().Parse2(tcase.Query)
 			require.NoError(t, err)
-			_, ok := stmt.(sqlparser.SelectStatement)
+			_, ok := stmt.(sqlparser.TableStatement)
 			if !ok {
 				t.Skip()
 				return
 			}
-			rewritten, err := sqlparser.RewriteAST(stmt, vw.CurrentDb(), sqlparser.SQLSelectLimitUnset, "", nil, nil, nil)
+			reservedVars := sqlparser.NewReservedVars("vtg", reserved)
+			rewritten, err := sqlparser.PrepareAST(stmt, reservedVars, map[string]*querypb.BindVariable{}, false, vw.CurrentDb(), sqlparser.SQLSelectLimitUnset, "", nil, nil, nil)
 			if err != nil {
 				t.Skip()
 			}
 
-			reservedVars := sqlparser.NewReservedVars("vtg", reserved)
 			ast := rewritten.AST
 			origQuery := sqlparser.String(ast)
 			stmt, _, _ = sqlparser.NewTestParser().Parse2(tcase.Query)
 			simplified := simplifier.SimplifyStatement(
-				stmt.(sqlparser.SelectStatement),
+				stmt.(sqlparser.TableStatement),
 				vw.CurrentDb(),
 				vw,
 				keepSameError(tcase.Query, reservedVars, vw, rewritten.BindVarNeeds),
@@ -128,18 +130,18 @@ func TestUnsupportedFile(t *testing.T) {
 	}
 }
 
-func keepSameError(query string, reservedVars *sqlparser.ReservedVars, vschema *vschemawrapper.VSchemaWrapper, needs *sqlparser.BindVarNeeds) func(statement sqlparser.SelectStatement) bool {
+func keepSameError(query string, reservedVars *sqlparser.ReservedVars, vschema *vschemawrapper.VSchemaWrapper, needs *sqlparser.BindVarNeeds) func(statement sqlparser.TableStatement) bool {
 	stmt, _, err := sqlparser.NewTestParser().Parse2(query)
 	if err != nil {
 		panic(err)
 	}
-	rewritten, _ := sqlparser.RewriteAST(stmt, vschema.CurrentDb(), sqlparser.SQLSelectLimitUnset, "", nil, nil, nil)
+	rewritten, _ := sqlparser.PrepareAST(stmt, reservedVars, map[string]*querypb.BindVariable{}, false, vschema.CurrentDb(), sqlparser.SQLSelectLimitUnset, "", nil, nil, nil)
 	ast := rewritten.AST
 	_, expected := BuildFromStmt(context.Background(), query, ast, reservedVars, vschema, rewritten.BindVarNeeds, staticConfig{})
 	if expected == nil {
 		panic("query does not fail to plan")
 	}
-	return func(statement sqlparser.SelectStatement) bool {
+	return func(statement sqlparser.TableStatement) bool {
 		_, myErr := BuildFromStmt(context.Background(), query, statement, reservedVars, vschema, needs, staticConfig{})
 		if myErr == nil {
 			return false
@@ -152,8 +154,8 @@ func keepSameError(query string, reservedVars *sqlparser.ReservedVars, vschema *
 	}
 }
 
-func keepPanicking(query string, reservedVars *sqlparser.ReservedVars, vschema *vschemawrapper.VSchemaWrapper, needs *sqlparser.BindVarNeeds) func(statement sqlparser.SelectStatement) bool {
-	cmp := func(statement sqlparser.SelectStatement) (res bool) {
+func keepPanicking(query string, reservedVars *sqlparser.ReservedVars, vschema *vschemawrapper.VSchemaWrapper, needs *sqlparser.BindVarNeeds) func(statement sqlparser.TableStatement) bool {
+	cmp := func(statement sqlparser.TableStatement) (res bool) {
 		defer func() {
 			r := recover()
 			if r != nil {
@@ -172,7 +174,7 @@ func keepPanicking(query string, reservedVars *sqlparser.ReservedVars, vschema *
 	if err != nil {
 		panic(err.Error())
 	}
-	if !cmp(stmt.(sqlparser.SelectStatement)) {
+	if !cmp(stmt.(sqlparser.TableStatement)) {
 		panic("query is not panicking")
 	}
 

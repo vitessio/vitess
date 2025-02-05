@@ -75,11 +75,6 @@ func TestFileLog(t *testing.T) {
 
 // TestFileLog sends a stream of five query records to the plugin, and verifies that they are logged.
 func TestFileLogRedacted(t *testing.T) {
-	streamlog.SetRedactDebugUIQueries(true)
-	defer func() {
-		streamlog.SetRedactDebugUIQueries(false)
-	}()
-
 	dir := t.TempDir()
 
 	logPath := path.Join(dir, "test.log")
@@ -94,7 +89,9 @@ func TestFileLogRedacted(t *testing.T) {
 	log1 := &tabletenv.LogStats{
 		Ctx:         ctx,
 		OriginalSQL: "test 1",
+		Config:      streamlog.NewQueryLogConfigForTest(),
 	}
+	log1.Config.RedactDebugUIQueries = true
 	log1.AddRewrittenSQL("test 1 PII", time.Time{})
 	log1.MysqlResponseTime = 0
 	tabletenv.StatsLogger.Send(log1)
@@ -102,7 +99,9 @@ func TestFileLogRedacted(t *testing.T) {
 	log2 := &tabletenv.LogStats{
 		Ctx:         ctx,
 		OriginalSQL: "test 2",
+		Config:      streamlog.NewQueryLogConfigForTest(),
 	}
+	log2.Config.RedactDebugUIQueries = true
 	log2.AddRewrittenSQL("test 2 PII", time.Time{})
 	log2.MysqlResponseTime = 0
 	tabletenv.StatsLogger.Send(log2)

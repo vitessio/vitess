@@ -86,7 +86,7 @@ func (v *Viper) Set(key string, value any) {
 	v.m.Lock()
 	defer v.m.Unlock()
 
-	// We must not update v.disk here; explicit calls to Set will supercede all
+	// We must not update v.disk here; explicit calls to Set will supersede all
 	// future config reloads.
 	v.live.Set(key, value)
 

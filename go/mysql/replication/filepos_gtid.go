@@ -33,14 +33,14 @@ func parseFilePosGTID(s string) (GTID, error) {
 		return nil, fmt.Errorf("invalid FilePos GTID (%v): expecting file:pos", s)
 	}
 
-	pos, err := strconv.ParseUint(parts[1], 0, 32)
+	pos, err := strconv.ParseUint(parts[1], 0, 64)
 	if err != nil {
 		return nil, fmt.Errorf("invalid FilePos GTID (%v): expecting pos to be an integer", s)
 	}
 
 	return FilePosGTID{
 		File: parts[0],
-		Pos:  uint32(pos),
+		Pos:  pos,
 	}, nil
 }
 
@@ -56,7 +56,7 @@ func ParseFilePosGTIDSet(s string) (GTIDSet, error) {
 // FilePosGTID implements GTID.
 type FilePosGTID struct {
 	File string
-	Pos  uint32
+	Pos  uint64
 }
 
 // String implements GTID.String().

@@ -19,7 +19,6 @@ package vdiff
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -59,9 +58,7 @@ func newMergeSorter(participants map[string]*shardStreamer, comparePKs []compare
 // Utility functions
 
 func encodeString(in string) string {
-	var buf strings.Builder
-	sqltypes.NewVarChar(in).EncodeSQL(&buf)
-	return buf.String()
+	return sqltypes.EncodeStringSQL(in)
 }
 
 func pkColsToGroupByParams(pkCols []int, collationEnv *collations.Environment) []*engine.GroupByParams {
@@ -78,17 +75,6 @@ func insertVDiffLog(ctx context.Context, dbClient binlogplayer.DBClient, vdiffID
 	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
 		log.Error("Error inserting into _vt.vdiff_log: %v", err)
 	}
-}
-
-func stringListContains(lst []string, item string) bool {
-	contains := false
-	for _, t := range lst {
-		if t == item {
-			contains = true
-			break
-		}
-	}
-	return contains
 }
 
 // copyNonKeyRangeExpressions copies all expressions from the input WHERE clause

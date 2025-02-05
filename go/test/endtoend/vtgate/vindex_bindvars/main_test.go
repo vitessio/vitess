@@ -265,7 +265,6 @@ CREATE TABLE thex (
 )
 
 func TestMain(m *testing.M) {
-	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	exitCode := func() int {
@@ -304,7 +303,6 @@ func TestMain(m *testing.M) {
 }
 
 func TestVindexHexTypes(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
@@ -326,7 +324,6 @@ func TestVindexHexTypes(t *testing.T) {
 }
 
 func TestVindexBindVarOverlap(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)

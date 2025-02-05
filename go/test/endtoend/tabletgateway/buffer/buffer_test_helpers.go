@@ -272,7 +272,6 @@ type BufferingTest struct {
 }
 
 func (bt *BufferingTest) Test(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	clusterInstance, exitCode := bt.createCluster()
 	if exitCode != 0 {
 		t.Fatal("failed to start cluster")

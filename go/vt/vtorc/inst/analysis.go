@@ -56,6 +56,7 @@ const (
 	LockedSemiSyncPrimaryHypothesis        AnalysisCode = "LockedSemiSyncPrimaryHypothesis"
 	LockedSemiSyncPrimary                  AnalysisCode = "LockedSemiSyncPrimary"
 	ErrantGTIDDetected                     AnalysisCode = "ErrantGTIDDetected"
+	PrimaryDiskStalled                     AnalysisCode = "PrimaryDiskStalled"
 )
 
 type StructureAnalysisCode string
@@ -108,7 +109,6 @@ type ReplicationAnalysis struct {
 	Description                               string
 	StructureAnalysis                         []StructureAnalysisCode
 	OracleGTIDImmediateTopology               bool
-	MariaDBGTIDImmediateTopology              bool
 	BinlogServerImmediateTopology             bool
 	SemiSyncPrimaryEnabled                    bool
 	SemiSyncPrimaryStatus                     bool
@@ -130,6 +130,7 @@ type ReplicationAnalysis struct {
 	MaxReplicaGTIDMode                        string
 	MaxReplicaGTIDErrant                      string
 	IsReadOnly                                bool
+	IsDiskStalled                             bool
 }
 
 func (replicationAnalysis *ReplicationAnalysis) MarshalJSON() ([]byte, error) {

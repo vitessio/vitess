@@ -53,6 +53,11 @@ type tablePlan struct {
 	comparePKs []compareColInfo
 	// pkCols has the indices of PK cols in the select list
 	pkCols []int
+	// sourcePkCols has the indices of PK cols in the select
+	// list, but from the source keyspace. This is needed to
+	// properly store the lastpk for the source when the source
+	// and target have different PK columns.
+	sourcePkCols []int
 
 	// selectPks is the list of pk columns as they appear in the select clause for the diff.
 	selectPks      []int

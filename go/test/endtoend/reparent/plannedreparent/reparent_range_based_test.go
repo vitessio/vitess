@@ -28,7 +28,6 @@ import (
 )
 
 func TestReparentGracefulRangeBased(t *testing.T) {
-	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 
 	utils.ShardName = "0000000000000000-ffffffffffffffff"

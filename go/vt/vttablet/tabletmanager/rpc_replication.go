@@ -19,6 +19,7 @@ package tabletmanager
 import (
 	"context"
 	"fmt"
+	"runtime"
 	"strings"
 	"time"
 
@@ -29,6 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
@@ -46,7 +48,11 @@ func (tm *TabletManager) ReplicationStatus(ctx context.Context) (*replicationdat
 	if err != nil {
 		return nil, err
 	}
-	return replication.ReplicationStatusToProto(status), nil
+
+	protoStatus := replication.ReplicationStatusToProto(status)
+	protoStatus.BackupRunning = tm.IsBackupRunning()
+
+	return protoStatus, nil
 }
 
 // FullStatus returns the full status of MySQL including the replication information, semi-sync information, GTID information among others
@@ -54,6 +60,16 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return nil, err
 	}
+
+	// Return if the disk is stalled or rejecting writes.
+	// If the disk is stalled, we can't be sure if reads will go through
+	// or not, so we should not run any reads either.
+	if tm.QueryServiceControl.IsDiskStalled() {
+		return &replicationdatapb.FullStatus{
+			DiskStalled: true,
+		}, nil
+	}
+
 	// Server ID - "select @@global.server_id"
 	serverID, err := tm.MysqlDaemon.GetServerID(ctx)
 	if err != nil {
@@ -412,7 +428,7 @@ func (tm *TabletManager) PopulateReparentJournal(ctx context.Context, timeCreate
 }
 
 // ReadReparentJournalInfo reads the information from reparent journal.
-func (tm *TabletManager) ReadReparentJournalInfo(ctx context.Context) (int, error) {
+func (tm *TabletManager) ReadReparentJournalInfo(ctx context.Context) (int32, error) {
 	log.Infof("ReadReparentJournalInfo")
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return 0, err
@@ -426,7 +442,7 @@ func (tm *TabletManager) ReadReparentJournalInfo(ctx context.Context) (int, erro
 	if len(res.Rows) != 1 {
 		return 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected rows when reading reparent journal, got %v", len(res.Rows))
 	}
-	return res.Rows[0][0].ToInt()
+	return res.Rows[0][0].ToInt32()
 }
 
 // InitReplica sets replication primary and position, and waits for the
@@ -519,6 +535,23 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 		return nil, err
 	}
 	defer tm.unlock()
+
+	finishCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() {
+		select {
+		case <-finishCtx.Done():
+		// Finished running DemotePrimary. Nothing to do.
+		case <-time.After(10 * topo.RemoteOperationTimeout):
+			// We waited for over 10 times of remote operation timeout, but DemotePrimary is still not done.
+			// Collect more information and signal demote primary is indefinitely stalled.
+			log.Errorf("DemotePrimary seems to be stalled. Collecting more information.")
+			tm.QueryServiceControl.SetDemotePrimaryStalled()
+			buf := make([]byte, 1<<16) // 64 KB buffer size
+			stackSize := runtime.Stack(buf, true)
+			log.Errorf("Stack trace:\n%s", string(buf[:stackSize]))
+		}
+	}()
 
 	tablet := tm.Tablet()
 	wasPrimary := tablet.Type == topodatapb.TabletType_PRIMARY
@@ -893,6 +926,7 @@ func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopRe
 		return StopReplicationAndGetStatusResponse{}, vterrors.Wrap(err, "before status failed")
 	}
 	before := replication.ReplicationStatusToProto(rs)
+	before.BackupRunning = tm.IsBackupRunning()
 
 	if stopReplicationMode == replicationdatapb.StopReplicationMode_IOTHREADONLY {
 		if !rs.IOHealthy() {
@@ -939,6 +973,7 @@ func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopRe
 		}, vterrors.Wrap(err, "acquiring replication status failed")
 	}
 	after := replication.ReplicationStatusToProto(rsAfter)
+	after.BackupRunning = tm.IsBackupRunning()
 
 	rs.Position = rsAfter.Position
 	rs.RelayLogPosition = rsAfter.RelayLogPosition

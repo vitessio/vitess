@@ -43,6 +43,8 @@ const (
 
 // LogStats records the stats for a single query
 type LogStats struct {
+	Config streamlog.QueryLogConfig
+
 	Ctx                  context.Context
 	Method               string
 	Target               *querypb.Target
@@ -66,11 +68,12 @@ type LogStats struct {
 
 // NewLogStats constructs a new LogStats with supplied Method and ctx
 // field values, and the StartTime field set to the present time.
-func NewLogStats(ctx context.Context, methodName string) *LogStats {
+func NewLogStats(ctx context.Context, methodName string, config streamlog.QueryLogConfig) *LogStats {
 	return &LogStats{
 		Ctx:       ctx,
 		Method:    methodName,
 		StartTime: time.Now(),
+		Config:    config,
 	}
 }
 
@@ -177,17 +180,16 @@ func (stats *LogStats) CallInfo() (string, string) {
 // Logf formats the log record to the given writer, either as
 // tab-separated list of logged fields or as JSON.
 func (stats *LogStats) Logf(w io.Writer, params url.Values) error {
-	if !streamlog.ShouldEmitLog(stats.OriginalSQL, uint64(stats.RowsAffected), uint64(len(stats.Rows))) {
+	if !stats.Config.ShouldEmitLog(stats.OriginalSQL, uint64(stats.RowsAffected), uint64(len(stats.Rows)), stats.Error != nil) {
 		return nil
 	}
 
-	redacted := streamlog.GetRedactDebugUIQueries()
 	_, fullBindParams := params["full"]
 	// TODO: remove username here we fully enforce immediate caller id
 	callInfo, username := stats.CallInfo()
 
 	log := logstats.NewLogger()
-	log.Init(streamlog.GetQueryLogFormat() == streamlog.QueryLogFormatJSON)
+	log.Init(stats.Config.Format == streamlog.QueryLogFormatJSON)
 	log.Key("Method")
 	log.StringUnquoted(stats.Method)
 	log.Key("CallInfo")
@@ -209,7 +211,7 @@ func (stats *LogStats) Logf(w io.Writer, params url.Values) error {
 	log.Key("OriginalSQL")
 	log.String(stats.OriginalSQL)
 	log.Key("BindVars")
-	if redacted {
+	if stats.Config.RedactDebugUIQueries {
 		log.Redacted()
 	} else {
 		log.BindVariables(stats.BindVariables, fullBindParams)
@@ -217,7 +219,7 @@ func (stats *LogStats) Logf(w io.Writer, params url.Values) error {
 	log.Key("Queries")
 	log.Int(int64(stats.NumberOfQueries))
 	log.Key("RewrittenSQL")
-	if redacted {
+	if stats.Config.RedactDebugUIQueries {
 		log.Redacted()
 	} else {
 		log.String(stats.RewrittenSQL())

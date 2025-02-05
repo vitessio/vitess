@@ -255,7 +255,7 @@ func TestVreplicationCopyThrottling(t *testing.T) {
 	moveTablesActionWithTabletTypes(t, "Create", defaultCell.Name, workflow, sourceKs, targetKs, table, "primary", true)
 	// Wait for the copy phase to start
 	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKs, workflow), binlogdatapb.VReplicationWorkflowState_Copying.String())
-	// The initial copy phase should be blocking on the history list
+	// The initial copy phase should be blocking on the history list.
 	confirmWorkflowHasCopiedNoData(t, targetKs, workflow)
 	releaseInnoDBRowHistory(t, trxConn)
 	trxConn.Close()
@@ -292,8 +292,10 @@ func testVreplicationWorkflows(t *testing.T, limited bool, binlogRowImage string
 	defer func() { defaultReplicas = 1 }()
 
 	if binlogRowImage != "" {
-		require.NoError(t, utils.SetBinlogRowImageMode("noblob", vc.ClusterConfig.tmpDir))
-		defer utils.SetBinlogRowImageMode("", vc.ClusterConfig.tmpDir)
+		// Run the e2e test with binlog_row_image=NOBLOB and
+		// binlog_row_value_options=PARTIAL_JSON.
+		require.NoError(t, utils.SetBinlogRowImageOptions("noblob", true, vc.ClusterConfig.tmpDir))
+		defer utils.SetBinlogRowImageOptions("", false, vc.ClusterConfig.tmpDir)
 	}
 
 	defaultCell := vc.Cells[defaultCellName]
@@ -303,7 +305,7 @@ func testVreplicationWorkflows(t *testing.T, limited bool, binlogRowImage string
 	defer vtgateConn.Close()
 	verifyClusterHealth(t, vc)
 	insertInitialData(t)
-	materializeRollup(t, true)
+	materializeRollup(t)
 
 	shardCustomer(t, true, []*Cell{defaultCell}, defaultCellName, false)
 
@@ -318,11 +320,11 @@ func testVreplicationWorkflows(t *testing.T, limited bool, binlogRowImage string
 		return
 	}
 
-	materializeProduct(t, true)
+	materializeProduct(t)
 
-	materializeMerchantOrders(t, true)
-	materializeSales(t, true)
-	materializeMerchantSales(t, true)
+	materializeMerchantOrders(t)
+	materializeSales(t)
+	materializeMerchantSales(t)
 
 	reshardMerchant2to3SplitMerge(t)
 	reshardMerchant3to1Merge(t)
@@ -384,6 +386,14 @@ func testVreplicationWorkflows(t *testing.T, limited bool, binlogRowImage string
 		vdx = gjson.Get(customerVSchema, fmt.Sprintf("vindexes.%s", vindexName))
 		require.NotNil(t, vdx, "lookup vindex %s not found", vindexName)
 		require.NotEqual(t, "true", vdx.Get("params.write_only").String(), "did not expect write_only parameter to be true")
+
+		err = vc.VtctldClient.ExecuteCommand("LookupVindex", "--name", vindexName, "--table-keyspace=product", "internalize", "--keyspace=customer")
+		require.NoError(t, err, "error executing LookupVindex internalize: %v", err)
+		customerVSchema, err = vc.VtctldClient.ExecuteCommandWithOutput("GetVSchema", "customer")
+		require.NoError(t, err, "error executing GetVSchema: %v", err)
+		vdx = gjson.Get(customerVSchema, fmt.Sprintf("vindexes.%s", vindexName))
+		require.NotNil(t, vdx, "lookup vindex %s not found", vindexName)
+		require.Equal(t, "true", vdx.Get("params.write_only").String(), "expected write_only parameter to be true")
 	})
 }
 
@@ -466,13 +476,13 @@ func TestVStreamFlushBinlog(t *testing.T) {
 	// Now we should rotate the binary logs ONE time on the source, even
 	// though we're opening up multiple result streams (1 per table).
 	runVDiffsSideBySide = false
-	vdiff(t, targetKs, workflow, defaultCellName, true, false, nil)
+	vdiff(t, targetKs, workflow, defaultCellName, nil)
 	flushCount = int64(sourceTab.GetVars()["VStreamerFlushedBinlogs"].(float64))
 	require.Equal(t, flushCount, int64(1), "VStreamerFlushedBinlogs should now be 1")
 
 	// Now if we do another vdiff, we should NOT rotate the binlogs again
 	// as we haven't been generating a lot of new binlog events.
-	vdiff(t, targetKs, workflow, defaultCellName, true, false, nil)
+	vdiff(t, targetKs, workflow, defaultCellName, nil)
 	flushCount = int64(sourceTab.GetVars()["VStreamerFlushedBinlogs"].(float64))
 	require.Equal(t, flushCount, int64(1), "VStreamerFlushedBinlogs should still be 1")
 }
@@ -569,8 +579,10 @@ func TestCellAliasVreplicationWorkflow(t *testing.T) {
 	keyspace := "product"
 	shard := "0"
 
-	require.NoError(t, utils.SetBinlogRowImageMode("noblob", vc.ClusterConfig.tmpDir))
-	defer utils.SetBinlogRowImageMode("", vc.ClusterConfig.tmpDir)
+	// Run the e2e test with binlog_row_image=NOBLOB and
+	// binlog_row_value_options=PARTIAL_JSON.
+	require.NoError(t, utils.SetBinlogRowImageOptions("noblob", true, vc.ClusterConfig.tmpDir))
+	defer utils.SetBinlogRowImageOptions("", false, vc.ClusterConfig.tmpDir)
 
 	cell1 := vc.Cells["zone1"]
 	cell2 := vc.Cells["zone2"]
@@ -588,7 +600,7 @@ func TestCellAliasVreplicationWorkflow(t *testing.T) {
 		testVStreamFrom(t, vtgate, keyspace, 2)
 	})
 	shardCustomer(t, true, []*Cell{cell1, cell2}, "alias", false)
-	isTableInDenyList(t, vc, "product:0", "customer")
+	isTableInDenyList(t, vc, "product/0", "customer")
 	// we tag along this test so as not to create the overhead of creating another cluster
 	testVStreamCellFlag(t)
 }
@@ -690,8 +702,18 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		// Confirm that the 0 scale decimal field, dec80, is replicated correctly
 		execVtgateQuery(t, vtgateConn, sourceKs, "update customer set dec80 = 0")
 		execVtgateQuery(t, vtgateConn, sourceKs, "update customer set blb = \"new blob data\" where cid=3")
-		execVtgateQuery(t, vtgateConn, sourceKs, "update json_tbl set j1 = null, j2 = 'null', j3 = '\"null\"'")
+		execVtgateQuery(t, vtgateConn, sourceKs, "update json_tbl set j1 = null, j2 = 'null', j3 = '\"null\"' where id = 5")
 		execVtgateQuery(t, vtgateConn, sourceKs, "insert into json_tbl(id, j1, j2, j3) values (7, null, 'null', '\"null\"')")
+		// Test binlog-row-value-options=PARTIAL_JSON
+		execVtgateQuery(t, vtgateConn, sourceKs, "update json_tbl set j3 = JSON_SET(j3, '$.role', 'manager')")
+		execVtgateQuery(t, vtgateConn, sourceKs, "update json_tbl set j3 = JSON_SET(j3, '$.color', 'red')")
+		execVtgateQuery(t, vtgateConn, sourceKs, "update json_tbl set j3 = JSON_SET(j3, '$.day', 'wednesday')")
+		execVtgateQuery(t, vtgateConn, sourceKs, "update json_tbl set j3 = JSON_INSERT(JSON_REPLACE(j3, '$.day', 'friday'), '$.favorite_color', 'black')")
+		execVtgateQuery(t, vtgateConn, sourceKs, "update json_tbl set j3 = JSON_SET(JSON_REMOVE(JSON_REPLACE(j3, '$.day', 'monday'), '$.favorite_color'), '$.hobby', 'skiing') where id = 3")
+		execVtgateQuery(t, vtgateConn, sourceKs, "update json_tbl set j3 = JSON_SET(JSON_REMOVE(JSON_REPLACE(j3, '$.day', 'tuesday'), '$.favorite_color'), '$.hobby', 'skiing') where id = 4")
+		execVtgateQuery(t, vtgateConn, sourceKs, "update json_tbl set j3 = JSON_SET(JSON_SET(j3, '$.salary', 110), '$.role', 'IC') where id = 4")
+		execVtgateQuery(t, vtgateConn, sourceKs, "update json_tbl set j3 = JSON_SET(j3, '$.misc', '{\"address\":\"1012 S Park St\", \"town\":\"Hastings\", \"state\":\"MI\"}') where id = 1")
+		execVtgateQuery(t, vtgateConn, sourceKs, "update json_tbl set id=id+1000, j3=JSON_SET(j3, '$.day', 'friday')")
 		waitForNoWorkflowLag(t, vc, targetKs, workflow)
 		dec80Replicated := false
 		for _, tablet := range []*cluster.VttabletProcess{customerTab1, customerTab2} {
@@ -757,7 +779,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 				execVtgateQuery(t, vtgateConn, "product", fmt.Sprintf("update `%s` set name='xyz'", tbl))
 			}
 		}
-		vdiffSideBySide(t, ksWorkflow, "")
+		doVDiff(t, ksWorkflow, "")
 		cellNames := getCellNames(cells)
 		switchReadsDryRun(t, workflowType, cellNames, ksWorkflow, dryRunResultsReadCustomerShard)
 		switchReads(t, workflowType, cellNames, ksWorkflow, false)
@@ -773,6 +795,11 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			shardNames = append(shardNames, shardName)
 		}
 		testSwitchTrafficPermissionChecks(t, workflowType, sourceKs, shardNames, targetKs, workflow)
+
+		testSwitchWritesErrorHandling(t, []*cluster.VttabletProcess{productTab}, []*cluster.VttabletProcess{customerTab1, customerTab2},
+			workflow, workflowType)
+
+		// Now let's confirm that it works as expected with an error.
 		switchWrites(t, workflowType, ksWorkflow, false)
 
 		checkThatVDiffFails(t, targetKs, workflow)
@@ -789,7 +816,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 
 		catchup(t, productTab, workflow, "MoveTables")
 
-		vdiffSideBySide(t, "product.p2c_reverse", "")
+		doVDiff(t, "product.p2c_reverse", "")
 		if withOpenTx {
 			execVtgateQuery(t, vtgateConn, "", deleteOpenTxQuery)
 		}
@@ -833,13 +860,13 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			switchWrites(t, workflowType, ksWorkflow, false)
 
 			var exists bool
-			exists, err = isTableInDenyList(t, vc, "product:0", "customer")
+			exists, err = isTableInDenyList(t, vc, "product/0", "customer")
 			require.NoError(t, err, "Error getting denylist for customer:0")
 			require.True(t, exists)
 
 			moveTablesAction(t, "Complete", cellNames, workflow, sourceKs, targetKs, tables)
 
-			exists, err = isTableInDenyList(t, vc, "product:0", "customer")
+			exists, err = isTableInDenyList(t, vc, "product/0", "customer")
 			require.NoError(t, err, "Error getting denylist for customer:0")
 			require.False(t, exists)
 
@@ -1004,6 +1031,7 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 		require.NoError(t, vc.AddShards(t, cells, keyspace, targetShards, defaultReplicas, defaultRdonly, tabletIDBase, targetKsOpts))
 
 		tablets := vc.getVttabletsInKeyspace(t, defaultCell, ksName, "primary")
+		var sourceTablets, targetTablets []*cluster.VttabletProcess
 
 		// Test multi-primary setups, like a Galera cluster, which have auto increment steps > 1.
 		for _, tablet := range tablets {
@@ -1016,15 +1044,17 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 		targetShards = "," + targetShards + ","
 		for _, tab := range tablets {
 			if strings.Contains(targetShards, ","+tab.Shard+",") {
+				targetTablets = append(targetTablets, tab)
 				log.Infof("Waiting for vrepl to catch up on %s since it IS a target shard", tab.Shard)
 				catchup(t, tab, workflow, "Reshard")
 			} else {
+				sourceTablets = append(sourceTablets, tab)
 				log.Infof("Not waiting for vrepl to catch up on %s since it is NOT a target shard", tab.Shard)
 				continue
 			}
 		}
 		restartWorkflow(t, ksWorkflow)
-		vdiffSideBySide(t, ksWorkflow, "")
+		doVDiff(t, ksWorkflow, "")
 		if dryRunResultSwitchReads != nil {
 			reshardAction(t, "SwitchTraffic", workflow, ksName, "", "", callNames, "rdonly,replica", "--dry-run")
 		}
@@ -1032,6 +1062,10 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 		if dryRunResultSwitchWrites != nil {
 			reshardAction(t, "SwitchTraffic", workflow, ksName, "", "", callNames, "primary", "--dry-run")
 		}
+		if tableName == "customer" {
+			testSwitchWritesErrorHandling(t, sourceTablets, targetTablets, workflow, "reshard")
+		}
+		// Now let's confirm that it works as expected with an error.
 		reshardAction(t, "SwitchTraffic", workflow, ksName, "", "", callNames, "primary")
 		reshardAction(t, "Complete", workflow, ksName, "", "", "", "")
 		for tabletName, count := range counts {
@@ -1063,7 +1097,7 @@ func shardOrders(t *testing.T) {
 		workflowType := "MoveTables"
 		catchup(t, customerTab1, workflow, workflowType)
 		catchup(t, customerTab2, workflow, workflowType)
-		vdiffSideBySide(t, ksWorkflow, "")
+		doVDiff(t, ksWorkflow, "")
 		switchReads(t, workflowType, strings.Join(vc.CellNames, ","), ksWorkflow, false)
 		switchWrites(t, workflowType, ksWorkflow, false)
 		moveTablesAction(t, "Complete", cell, workflow, sourceKs, targetKs, tables)
@@ -1074,17 +1108,10 @@ func shardOrders(t *testing.T) {
 }
 
 func checkThatVDiffFails(t *testing.T, keyspace, workflow string) {
-	ksWorkflow := fmt.Sprintf("%s.%s", keyspace, workflow)
-	t.Run("check that vdiffSideBySide won't run", func(t2 *testing.T) {
-		output, err := vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "--", "--v1", ksWorkflow)
+	t.Run("check that vdiff won't run", func(t2 *testing.T) {
+		output, err := vc.VtctldClient.ExecuteCommandWithOutput("VDiff", "--workflow", workflow, "--target-keyspace", keyspace, "create")
 		require.Error(t, err)
 		require.Contains(t, output, "invalid VDiff run")
-	})
-	t.Run("check that vdiff2 won't run", func(t2 *testing.T) {
-		output, err := vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "--", ksWorkflow)
-		require.Error(t, err)
-		require.Contains(t, output, "invalid VDiff run")
-
 	})
 }
 
@@ -1110,7 +1137,7 @@ func shardMerchant(t *testing.T) {
 		catchup(t, merchantTab1, workflow, workflowType)
 		catchup(t, merchantTab2, workflow, workflowType)
 
-		vdiffSideBySide(t, fmt.Sprintf("%s.%s", merchantKeyspace, workflow), "")
+		doVDiff(t, fmt.Sprintf("%s.%s", merchantKeyspace, workflow), "")
 		switchReads(t, workflowType, strings.Join(vc.CellNames, ","), ksWorkflow, false)
 		switchWrites(t, workflowType, ksWorkflow, false)
 		printRoutingRules(t, vc, "After merchant movetables")
@@ -1129,34 +1156,25 @@ func shardMerchant(t *testing.T) {
 	})
 }
 
-func materialize(t *testing.T, spec string, useVtctldClient bool) {
-	if useVtctldClient {
-		t.Run("vtctldclient materialize", func(t *testing.T) {
-			// Split out the parameters from the JSON spec for
-			// use in the vtctldclient command flags.
-			// This allows us to test both clients with the same
-			// input.
-			sj := gjson.Parse(spec)
-			workflow := sj.Get("workflow").String()
-			require.NotEmpty(t, workflow, "workflow not found in spec: %s", spec)
-			sourceKeyspace := sj.Get("source_keyspace").String()
-			require.NotEmpty(t, sourceKeyspace, "source_keyspace not found in spec: %s", spec)
-			targetKeyspace := sj.Get("target_keyspace").String()
-			require.NotEmpty(t, targetKeyspace, "target_keyspace not found in spec: %s", spec)
-			tableSettings := sj.Get("table_settings").String()
-			require.NotEmpty(t, tableSettings, "table_settings not found in spec: %s", spec)
-			stopAfterCopy := sj.Get("stop-after-copy").Bool() // Optional
-			err := vc.VtctldClient.ExecuteCommand("materialize", "--workflow", workflow, "--target-keyspace", targetKeyspace,
-				"create", "--source-keyspace", sourceKeyspace, "--table-settings", tableSettings,
-				fmt.Sprintf("--stop-after-copy=%t", stopAfterCopy))
-			require.NoError(t, err, "Materialize")
-		})
-	} else {
-		t.Run("materialize", func(t *testing.T) {
-			err := vc.VtctlClient.ExecuteCommand("Materialize", spec)
-			require.NoError(t, err, "Materialize")
-		})
-	}
+func materialize(t *testing.T, spec string) {
+	t.Run("materialize", func(t *testing.T) {
+		// Split out the parameters from the JSON spec for
+		// use in the vtctldclient command flags.
+		sj := gjson.Parse(spec)
+		workflow := sj.Get("workflow").String()
+		require.NotEmpty(t, workflow, "workflow not found in spec: %s", spec)
+		sourceKeyspace := sj.Get("source_keyspace").String()
+		require.NotEmpty(t, sourceKeyspace, "source_keyspace not found in spec: %s", spec)
+		targetKeyspace := sj.Get("target_keyspace").String()
+		require.NotEmpty(t, targetKeyspace, "target_keyspace not found in spec: %s", spec)
+		tableSettings := sj.Get("table_settings").String()
+		require.NotEmpty(t, tableSettings, "table_settings not found in spec: %s", spec)
+		stopAfterCopy := sj.Get("stop-after-copy").Bool() // Optional
+		err := vc.VtctldClient.ExecuteCommand("materialize", "--workflow", workflow, "--target-keyspace", targetKeyspace,
+			"create", "--source-keyspace", sourceKeyspace, "--table-settings", tableSettings,
+			fmt.Sprintf("--stop-after-copy=%t", stopAfterCopy))
+		require.NoError(t, err, "Materialize")
+	})
 }
 
 func testMaterializeWithNonExistentTable(t *testing.T) {
@@ -1171,14 +1189,14 @@ func testMaterializeWithNonExistentTable(t *testing.T) {
 	})
 }
 
-func materializeProduct(t *testing.T, useVtctldClient bool) {
+func materializeProduct(t *testing.T) {
 	t.Run("materializeProduct", func(t *testing.T) {
 		// Materializing from "product" keyspace to "customer" keyspace.
 		workflow := "cproduct"
 		keyspace := "customer"
 		defaultCell := vc.Cells[vc.CellNames[0]]
 		applyVSchema(t, materializeProductVSchema, keyspace)
-		materialize(t, materializeProductSpec, useVtctldClient)
+		materialize(t, materializeProductSpec)
 		customerTablets := vc.getVttabletsInKeyspace(t, defaultCell, keyspace, "primary")
 		for _, tab := range customerTablets {
 			catchup(t, tab, workflow, "Materialize")
@@ -1284,7 +1302,7 @@ func materializeProduct(t *testing.T, useVtctldClient bool) {
 	})
 }
 
-func materializeRollup(t *testing.T, useVtctldClient bool) {
+func materializeRollup(t *testing.T) {
 	t.Run("materializeRollup", func(t *testing.T) {
 		vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 		defer vtgateConn.Close()
@@ -1293,7 +1311,7 @@ func materializeRollup(t *testing.T, useVtctldClient bool) {
 		applyVSchema(t, materializeSalesVSchema, keyspace)
 		defaultCell := vc.Cells[vc.CellNames[0]]
 		productTab := vc.Cells[defaultCell.Name].Keyspaces["product"].Shards["0"].Tablets["zone1-100"].Vttablet
-		materialize(t, materializeRollupSpec, useVtctldClient)
+		materialize(t, materializeRollupSpec)
 		catchup(t, productTab, workflow, "Materialize")
 		waitForRowCount(t, vtgateConn, "product", "rollup", 1)
 		waitForQueryResult(t, vtgateConn, "product:0", "select rollupname, kount from rollup",
@@ -1301,13 +1319,13 @@ func materializeRollup(t *testing.T, useVtctldClient bool) {
 	})
 }
 
-func materializeSales(t *testing.T, useVtctldClient bool) {
+func materializeSales(t *testing.T) {
 	t.Run("materializeSales", func(t *testing.T) {
 		vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 		defer vtgateConn.Close()
 		keyspace := "product"
 		applyVSchema(t, materializeSalesVSchema, keyspace)
-		materialize(t, materializeSalesSpec, useVtctldClient)
+		materialize(t, materializeSalesSpec)
 		defaultCell := vc.Cells[vc.CellNames[0]]
 		productTab := vc.Cells[defaultCell.Name].Keyspaces["product"].Shards["0"].Tablets["zone1-100"].Vttablet
 		catchup(t, productTab, "sales", "Materialize")
@@ -1317,12 +1335,12 @@ func materializeSales(t *testing.T, useVtctldClient bool) {
 	})
 }
 
-func materializeMerchantSales(t *testing.T, useVtctldClient bool) {
+func materializeMerchantSales(t *testing.T) {
 	t.Run("materializeMerchantSales", func(t *testing.T) {
 		vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 		defer vtgateConn.Close()
 		workflow := "msales"
-		materialize(t, materializeMerchantSalesSpec, useVtctldClient)
+		materialize(t, materializeMerchantSalesSpec)
 		defaultCell := vc.Cells[vc.CellNames[0]]
 		merchantTablets := vc.getVttabletsInKeyspace(t, defaultCell, merchantKeyspace, "primary")
 		for _, tab := range merchantTablets {
@@ -1334,14 +1352,14 @@ func materializeMerchantSales(t *testing.T, useVtctldClient bool) {
 	})
 }
 
-func materializeMerchantOrders(t *testing.T, useVtctldClient bool) {
+func materializeMerchantOrders(t *testing.T) {
 	t.Run("materializeMerchantOrders", func(t *testing.T) {
 		vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 		defer vtgateConn.Close()
 		workflow := "morders"
 		keyspace := merchantKeyspace
 		applyVSchema(t, merchantOrdersVSchema, keyspace)
-		materialize(t, materializeMerchantOrdersSpec, useVtctldClient)
+		materialize(t, materializeMerchantOrdersSpec)
 		defaultCell := vc.Cells[vc.CellNames[0]]
 		merchantTablets := vc.getVttabletsInKeyspace(t, defaultCell, merchantKeyspace, "primary")
 		for _, tab := range merchantTablets {
@@ -1645,6 +1663,140 @@ func testSwitchTrafficPermissionChecks(t *testing.T, workflowType, sourceKeyspac
 	})
 }
 
+// testSwitchWritesErrorHandling confirms that switching writes works as expected
+// in the face of vreplication lag (canSwitch() precheck) and when canceling the
+// switch due to replication failing to catch up in time.
+// The workflow MUST be migrating the customer table from the source to the
+// target keyspace AND the workflow must currently have reads switched but not
+// writes.
+func testSwitchWritesErrorHandling(t *testing.T, sourceTablets, targetTablets []*cluster.VttabletProcess, workflow, workflowType string) {
+	t.Run("validate switch writes error handling", func(t *testing.T) {
+		vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+		defer vtgateConn.Close()
+		require.NotZero(t, len(sourceTablets), "no source tablets provided")
+		require.NotZero(t, len(targetTablets), "no target tablets provided")
+		sourceKs := sourceTablets[0].Keyspace
+		targetKs := targetTablets[0].Keyspace
+		ksWorkflow := fmt.Sprintf("%s.%s", targetKs, workflow)
+		var err error
+		sourceConns := make([]*mysql.Conn, len(sourceTablets))
+		for i, tablet := range sourceTablets {
+			sourceConns[i], err = tablet.TabletConn(tablet.Keyspace, true)
+			require.NoError(t, err)
+			defer sourceConns[i].Close()
+		}
+		targetConns := make([]*mysql.Conn, len(targetTablets))
+		for i, tablet := range targetTablets {
+			targetConns[i], err = tablet.TabletConn(tablet.Keyspace, true)
+			require.NoError(t, err)
+			defer targetConns[i].Close()
+		}
+		startingTestRowID := 10000000
+		numTestRows := 100
+		addTestRows := func() {
+			for i := 0; i < numTestRows; i++ {
+				execVtgateQuery(t, vtgateConn, sourceTablets[0].Keyspace, fmt.Sprintf("insert into customer (cid, name) values (%d, 'laggingCustomer')",
+					startingTestRowID+i))
+			}
+		}
+		deleteTestRows := func() {
+			execVtgateQuery(t, vtgateConn, sourceTablets[0].Keyspace, fmt.Sprintf("delete from customer where cid >= %d", startingTestRowID))
+		}
+		addIndex := func() {
+			for _, targetConn := range targetConns {
+				execQuery(t, targetConn, "set session sql_mode=''")
+				execQuery(t, targetConn, "alter table customer add unique index name_idx (name)")
+			}
+		}
+		dropIndex := func() {
+			for _, targetConn := range targetConns {
+				execQuery(t, targetConn, "alter table customer drop index name_idx")
+			}
+		}
+		lockTargetTable := func() {
+			for _, targetConn := range targetConns {
+				execQuery(t, targetConn, "lock table customer read")
+			}
+		}
+		unlockTargetTable := func() {
+			for _, targetConn := range targetConns {
+				execQuery(t, targetConn, "unlock tables")
+			}
+		}
+		cleanupTestData := func() {
+			dropIndex()
+			deleteTestRows()
+		}
+		restartWorkflow := func() {
+			err = vc.VtctldClient.ExecuteCommand("workflow", "--keyspace", targetKs, "start", "--workflow", workflow)
+			require.NoError(t, err, "failed to start workflow: %v", err)
+		}
+		waitForTargetToCatchup := func() {
+			waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
+			waitForNoWorkflowLag(t, vc, targetKs, workflow)
+		}
+
+		// First let's test that the prechecks work as expected. We ALTER
+		// the table on the target shards to add a unique index on the name
+		// field.
+		addIndex()
+		// Then we replicate some test rows across the target shards by
+		// inserting them in the source keyspace.
+		addTestRows()
+		// Now the workflow should go into the error state and the lag should
+		// start to climb. So we sleep for twice the max lag duration that we
+		// will set for the SwitchTraffic call.
+		lagDuration := 3 * time.Second
+		time.Sleep(lagDuration * 3)
+		out, err := vc.VtctldClient.ExecuteCommandWithOutput(workflowType, "--workflow", workflow, "--target-keyspace", targetKs,
+			"SwitchTraffic", "--tablet-types=primary", "--timeout=30s", "--max-replication-lag-allowed", lagDuration.String())
+		// It should fail in the canSwitch() precheck.
+		require.Error(t, err)
+		require.Regexp(t, fmt.Sprintf(".*cannot switch traffic for workflow %s at this time: replication lag [0-9]+s is higher than allowed lag %s.*",
+			workflow, lagDuration.String()), out)
+		require.NotContains(t, out, "cancel migration failed")
+		// Confirm that queries still work fine.
+		execVtgateQuery(t, vtgateConn, sourceKs, "select * from customer limit 1")
+		cleanupTestData()
+		// We have to restart the workflow again as the duplicate key error
+		// is a permanent/terminal one.
+		restartWorkflow()
+		waitForTargetToCatchup()
+
+		// Now let's test that the cancel works by setting the command timeout
+		// to a fraction (6s) of the default max repl lag duration (30s). First
+		// we lock the customer table on the target tablets so that we cannot
+		// apply the INSERTs and catch up.
+		lockTargetTable()
+		addTestRows()
+		timeout := lagDuration * 2 // 6s
+		// Use the default max-replication-lag-allowed value of 30s.
+		// We run the command in a goroutine so that we can unblock things
+		// after the timeout is reached -- as the vplayer query is blocking
+		// on the table lock in the MySQL layer.
+		wg := sync.WaitGroup{}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			out, err = vc.VtctldClient.ExecuteCommandWithOutput(workflowType, "--workflow", workflow, "--target-keyspace", targetKs,
+				"SwitchTraffic", "--tablet-types=primary", "--timeout", timeout.String())
+		}()
+		time.Sleep(timeout)
+		// Now we can unblock things and let it continue.
+		unlockTargetTable()
+		wg.Wait()
+		// It should fail due to the command context timeout and we should
+		// successfully cancel.
+		require.Error(t, err)
+		require.Contains(t, out, "failed to sync up replication between the source and target")
+		require.NotContains(t, out, "cancel migration failed")
+		// Confirm that queries still work fine.
+		execVtgateQuery(t, vtgateConn, sourceKs, "select * from customer limit 1")
+		deleteTestRows()
+		waitForTargetToCatchup()
+	})
+}
+
 // restartWorkflow confirms that a workflow can be successfully
 // stopped and started.
 func restartWorkflow(t *testing.T, ksWorkflow string) {
@@ -1734,12 +1886,12 @@ func waitForInnoDBHistoryLength(t *testing.T, tablet *cluster.VttabletProcess, e
 		require.Equal(t, 1, len(res.Rows))
 		historyLen, err = res.Rows[0][0].ToInt64()
 		require.NoError(t, err)
-		if historyLen > expectedLength {
+		if historyLen >= expectedLength {
 			return
 		}
 		select {
 		case <-timer.C:
-			t.Fatalf("Did not reach the expected InnoDB history length of %d before the timeout of %s; last seen value: %d", expectedLength, defaultTimeout, historyLen)
+			require.FailNow(t, "Did not reach the minimum expected InnoDB history length of %d before the timeout of %s; last seen value: %d", expectedLength, defaultTimeout, historyLen)
 		default:
 			time.Sleep(defaultTick)
 		}

@@ -51,7 +51,7 @@ type (
 	}
 )
 
-// newInsertSelect creates a new InsertSelect.
+// newInsertSelect creates a new InsertSelect. Used in testing.
 func newInsertSelect(
 	ignore bool,
 	keyspace *vindexes.Keyspace,
@@ -207,7 +207,7 @@ func (ins *InsertSelect) executeInsertQueries(
 	if err != nil {
 		return nil, err
 	}
-	result, errs := vcursor.ExecuteMultiShard(ctx, ins, rss, queries, true /* rollbackOnError */, autocommit)
+	result, errs := vcursor.ExecuteMultiShard(ctx, ins, rss, queries, true, autocommit, false)
 	if errs != nil {
 		return nil, vterrors.Aggregate(errs)
 	}

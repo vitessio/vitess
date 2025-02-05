@@ -51,7 +51,7 @@ func gen4InsertStmtPlanner(version querypb.ExecuteOptions_PlannerVersion, insStm
 	}
 	if ks != nil {
 		if tables[0].AutoIncrement == nil && !ctx.SemTable.ForeignKeysPresent() {
-			plan := insertUnshardedShortcut(insStmt, ks, tables)
+			plan := insertUnshardedShortcut(ctx, insStmt, ks, tables)
 			setCommentDirectivesOnPlan(plan, insStmt)
 			return newPlanResult(plan, operators.QualifiedTables(ks, tables)...), nil
 		}
@@ -90,12 +90,13 @@ func errOutIfPlanCannotBeConstructed(ctx *plancontext.PlanningContext, vTbl *vin
 	return ctx.SemTable.NotUnshardedErr
 }
 
-func insertUnshardedShortcut(stmt *sqlparser.Insert, ks *vindexes.Keyspace, tables []*vindexes.Table) engine.Primitive {
+func insertUnshardedShortcut(ctx *plancontext.PlanningContext, stmt *sqlparser.Insert, ks *vindexes.Keyspace, tables []*vindexes.Table) engine.Primitive {
 	eIns := &engine.Insert{
 		InsertCommon: engine.InsertCommon{
-			Opcode:    engine.InsertUnsharded,
-			Keyspace:  ks,
-			TableName: tables[0].Name.String(),
+			Opcode:            engine.InsertUnsharded,
+			Keyspace:          ks,
+			TableName:         tables[0].Name.String(),
+			FetchLastInsertID: ctx.SemTable.ShouldFetchLastInsertID(),
 		},
 	}
 	eIns.Query = generateQuery(stmt)

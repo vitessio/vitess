@@ -69,6 +69,7 @@ func NewPool(env tabletenv.Env, name string, cfg tabletenv.ConnPoolConfig) *Pool
 	config := smartconnpool.Config[*Conn]{
 		Capacity:        int64(cfg.Size),
 		IdleTimeout:     cfg.IdleTimeout,
+		MaxIdleCount:    int64(cfg.MaxIdleCount),
 		MaxLifetime:     cfg.MaxLifetime,
 		RefreshInterval: mysqlctl.PoolDynamicHostnameResolution,
 	}

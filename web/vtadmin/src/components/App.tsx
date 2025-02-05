@@ -30,6 +30,7 @@ import { Stream } from './routes/stream/Stream';
 import { Workflows } from './routes/Workflows';
 import { Workflow } from './routes/workflow/Workflow';
 import { VTExplain } from './routes/VTExplain';
+import { VExplain } from './routes/VExplain';
 import { Keyspace } from './routes/keyspace/Keyspace';
 import { Tablet } from './routes/tablet/Tablet';
 import { Backups } from './routes/Backups';
@@ -45,6 +46,7 @@ import { Transactions } from './routes/Transactions';
 import { Transaction } from './routes/transaction/Transaction';
 import { CreateReshard } from './routes/createWorkflow/CreateReshard';
 import { CreateMaterialize } from './routes/createWorkflow/CreateMaterialize';
+import { TopologyTree } from './routes/topologyTree/TopologyTree';
 import { SchemaMigrations } from './routes/SchemaMigrations';
 import { CreateSchemaMigration } from './routes/createSchemaMigration/CreateSchemaMigration';
 
@@ -112,6 +114,10 @@ export const App = () => {
                             <VTExplain />
                         </Route>
 
+                        <Route path="/vexplain">
+                            <VExplain />
+                        </Route>
+
                         <Route exact path="/workflows">
                             <Workflows />
                         </Route>
@@ -162,6 +168,10 @@ export const App = () => {
 
                         <Route path="/topology/:clusterID">
                             <ClusterTopology />
+                        </Route>
+
+                        <Route path="/topologytree/:clusterID">
+                            <TopologyTree />
                         </Route>
 
                         <Route path="/topology">

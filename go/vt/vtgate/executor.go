@@ -31,6 +31,7 @@ import (
 	"github.com/spf13/pflag"
 
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	"vitess.io/vitess/go/vt/vtgate/dynamicconfig"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cache/theine"
@@ -106,38 +107,45 @@ func init() {
 
 // Executor is the engine that executes queries by utilizing
 // the abilities of the underlying vttablets.
-type Executor struct {
-	env         *vtenv.Environment
-	serv        srvtopo.Server
-	cell        string
-	resolver    *Resolver
-	scatterConn *ScatterConn
-	txConn      *TxConn
+type (
+	ExecutorConfig struct {
+		Normalize  bool
+		StreamSize int
+		// AllowScatter will fail planning if set to false and a plan contains any scatter queries
+		AllowScatter        bool
+		WarmingReadsPercent int
+		QueryLogToFile      string
+	}
 
-	mu           sync.Mutex
-	vschema      *vindexes.VSchema
-	streamSize   int
-	vschemaStats *VSchemaStats
+	Executor struct {
+		config ExecutorConfig
 
-	plans *PlanCache
-	epoch atomic.Uint32
+		env         *vtenv.Environment
+		serv        srvtopo.Server
+		cell        string
+		resolver    *Resolver
+		scatterConn *ScatterConn
+		txConn      *TxConn
 
-	normalize bool
+		mu           sync.Mutex
+		vschema      *vindexes.VSchema
+		vschemaStats *VSchemaStats
 
-	vm            *VSchemaManager
-	schemaTracker SchemaInfo
+		plans *PlanCache
+		epoch atomic.Uint32
 
-	// allowScatter will fail planning if set to false and a plan contains any scatter queries
-	allowScatter bool
+		vm            *VSchemaManager
+		schemaTracker SchemaInfo
 
-	// queryLogger is passed in for logging from this vtgate executor.
-	queryLogger *streamlog.StreamLogger[*logstats.LogStats]
+		// queryLogger is passed in for logging from this vtgate executor.
+		queryLogger *streamlog.StreamLogger[*logstats.LogStats]
 
-	warmingReadsPercent int
-	warmingReadsChannel chan bool
+		warmingReadsChannel chan bool
 
-	vConfig econtext.VCursorConfig
-}
+		vConfig   econtext.VCursorConfig
+		ddlConfig dynamicconfig.DDL
+	}
+)
 
 var executorOnce sync.Once
 
@@ -161,33 +169,30 @@ func NewExecutor(
 	serv srvtopo.Server,
 	cell string,
 	resolver *Resolver,
-	normalize, warnOnShardedOnly bool,
-	streamSize int,
+	eConfig ExecutorConfig,
+	warnOnShardedOnly bool,
 	plans *PlanCache,
 	schemaTracker SchemaInfo,
-	noScatter bool,
 	pv plancontext.PlannerVersion,
-	warmingReadsPercent int,
+	ddlConfig dynamicconfig.DDL,
 ) *Executor {
 	e := &Executor{
-		env:                 env,
-		serv:                serv,
-		cell:                cell,
-		resolver:            resolver,
-		scatterConn:         resolver.scatterConn,
-		txConn:              resolver.scatterConn.txConn,
-		normalize:           normalize,
-		streamSize:          streamSize,
+		config:      eConfig,
+		env:         env,
+		serv:        serv,
+		cell:        cell,
+		resolver:    resolver,
+		scatterConn: resolver.scatterConn,
+		txConn:      resolver.scatterConn.txConn,
+
 		schemaTracker:       schemaTracker,
-		allowScatter:        !noScatter,
 		plans:               plans,
-		warmingReadsPercent: warmingReadsPercent,
 		warmingReadsChannel: make(chan bool, warmingReadsConcurrency),
+		ddlConfig:           ddlConfig,
 	}
 	// setting the vcursor config.
 	e.initVConfig(warnOnShardedOnly, pv)
 
-	vschemaacl.Init()
 	// we subscribe to update from the VSchemaManager
 	e.vm = &VSchemaManager{
 		subscriber: e.SaveVSchema,
@@ -231,13 +236,13 @@ func (e *Executor) Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConn
 	trace.AnnotateSQL(span, sqlparser.Preview(sql))
 	defer span.Finish()
 
-	logStats := logstats.NewLogStats(ctx, method, sql, safeSession.GetSessionUUID(), bindVars)
+	logStats := logstats.NewLogStats(ctx, method, sql, safeSession.GetSessionUUID(), bindVars, streamlog.GetQueryLogConfig())
 	stmtType, result, err := e.execute(ctx, mysqlCtx, safeSession, sql, bindVars, logStats)
 	logStats.Error = err
 	if result == nil {
-		saveSessionStats(safeSession, stmtType, 0, 0, 0, err)
+		saveSessionStats(safeSession, stmtType, 0, 0, err)
 	} else {
-		saveSessionStats(safeSession, stmtType, result.RowsAffected, result.InsertID, len(result.Rows), err)
+		saveSessionStats(safeSession, stmtType, result.RowsAffected, len(result.Rows), err)
 	}
 	if result != nil && len(result.Rows) > warnMemoryRows {
 		warnings.Add("ResultsExceeded", 1)
@@ -267,7 +272,6 @@ type streaminResultReceiver struct {
 	stmtType     sqlparser.StatementType
 	rowsAffected uint64
 	rowsReturned int
-	insertID     uint64
 	callback     func(*sqltypes.Result) error
 }
 
@@ -276,9 +280,6 @@ func (s *streaminResultReceiver) storeResultStats(typ sqlparser.StatementType, q
 	defer s.mu.Unlock()
 	s.rowsAffected += qr.RowsAffected
 	s.rowsReturned += len(qr.Rows)
-	if qr.InsertID != 0 {
-		s.insertID = qr.InsertID
-	}
 	s.stmtType = typ
 	return s.callback(qr)
 }
@@ -298,7 +299,7 @@ func (e *Executor) StreamExecute(
 	trace.AnnotateSQL(span, sqlparser.Preview(sql))
 	defer span.Finish()
 
-	logStats := logstats.NewLogStats(ctx, method, sql, safeSession.GetSessionUUID(), bindVars)
+	logStats := logstats.NewLogStats(ctx, method, sql, safeSession.GetSessionUUID(), bindVars, streamlog.GetQueryLogConfig())
 	srr := &streaminResultReceiver{callback: callback}
 	var err error
 
@@ -328,7 +329,7 @@ func (e *Executor) StreamExecute(
 						byteCount += col.Len()
 					}
 
-					if byteCount >= e.streamSize {
+					if byteCount >= e.config.StreamSize {
 						err := callback(result)
 						seenResults.Store(true)
 						result = &sqltypes.Result{}
@@ -380,7 +381,7 @@ func (e *Executor) StreamExecute(
 	err = e.newExecute(ctx, mysqlCtx, safeSession, sql, bindVars, logStats, resultHandler, srr.storeResultStats)
 
 	logStats.Error = err
-	saveSessionStats(safeSession, srr.stmtType, srr.rowsAffected, srr.insertID, srr.rowsReturned, err)
+	saveSessionStats(safeSession, srr.stmtType, srr.rowsAffected, srr.rowsReturned, err)
 	if srr.rowsReturned > warnMemoryRows {
 		warnings.Add("ResultsExceeded", 1)
 		piiSafeSQL, err := e.env.Parser().RedactSQLQuery(sql)
@@ -413,16 +414,13 @@ func canReturnRows(stmtType sqlparser.StatementType) bool {
 	}
 }
 
-func saveSessionStats(safeSession *econtext.SafeSession, stmtType sqlparser.StatementType, rowsAffected, insertID uint64, rowsReturned int, err error) {
+func saveSessionStats(safeSession *econtext.SafeSession, stmtType sqlparser.StatementType, rowsAffected uint64, rowsReturned int, err error) {
 	safeSession.RowCount = -1
 	if err != nil {
 		return
 	}
 	if !safeSession.IsFoundRowsHandled() {
 		safeSession.FoundRows = uint64(rowsReturned)
-	}
-	if insertID > 0 {
-		safeSession.LastInsertId = insertID
 	}
 	switch stmtType {
 	case sqlparser.StmtInsert, sqlparser.StmtReplace, sqlparser.StmtUpdate, sqlparser.StmtDelete:
@@ -492,7 +490,7 @@ func (e *Executor) addNeededBindVars(vcursor *econtext.VCursorImpl, bindVarNeeds
 		case sysvars.TransactionMode.Name:
 			txMode := session.TransactionMode
 			if txMode == vtgatepb.TransactionMode_UNSPECIFIED {
-				txMode = getTxMode()
+				txMode = transactionMode.Get()
 			}
 			bindVars[key] = sqltypes.StringBindVariable(txMode.String())
 		case sysvars.Workload.Name:
@@ -679,7 +677,7 @@ func (e *Executor) executeSPInAllSessions(ctx context.Context, safeSession *econ
 			})
 			queries = append(queries, &querypb.BoundQuery{Sql: sql})
 		}
-		qr, errs = e.ExecuteMultiShard(ctx, nil, rss, queries, safeSession, false /*autocommit*/, ignoreMaxMemoryRows, nullResultsObserver{})
+		qr, errs = e.ExecuteMultiShard(ctx, nil, rss, queries, safeSession, false /*autocommit*/, ignoreMaxMemoryRows, nullResultsObserver{}, false)
 		err := vterrors.Aggregate(errs)
 		if err != nil {
 			return nil, err
@@ -1164,11 +1162,7 @@ func (e *Executor) buildStatement(
 	reservedVars *sqlparser.ReservedVars,
 	bindVarNeeds *sqlparser.BindVarNeeds,
 ) (*engine.Plan, error) {
-	cfg := &dynamicViperConfig{
-		onlineDDL: enableOnlineDDL,
-		directDDL: enableDirectDDL,
-	}
-	plan, err := planbuilder.BuildFromStmt(ctx, query, stmt, reservedVars, vcursor, bindVarNeeds, cfg)
+	plan, err := planbuilder.BuildFromStmt(ctx, query, stmt, reservedVars, vcursor, bindVarNeeds, e.ddlConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -1348,7 +1342,7 @@ func isValidPayloadSize(query string) bool {
 
 // Prepare executes a prepare statements.
 func (e *Executor) Prepare(ctx context.Context, method string, safeSession *econtext.SafeSession, sql string, bindVars map[string]*querypb.BindVariable) (fld []*querypb.Field, err error) {
-	logStats := logstats.NewLogStats(ctx, method, sql, safeSession.GetSessionUUID(), bindVars)
+	logStats := logstats.NewLogStats(ctx, method, sql, safeSession.GetSessionUUID(), bindVars, streamlog.GetQueryLogConfig())
 	fld, err = e.prepare(ctx, safeSession, sql, bindVars, logStats)
 	logStats.Error = err
 
@@ -1427,7 +1421,7 @@ func (e *Executor) initVConfig(warnOnShardedOnly bool, pv plancontext.PlannerVer
 
 		DBDDLPlugin: dbDDLPlugin,
 
-		WarmingReadsPercent: e.warmingReadsPercent,
+		WarmingReadsPercent: e.config.WarmingReadsPercent,
 		WarmingReadsTimeout: warmingReadsQueryTimeout,
 		WarmingReadsChannel: e.warmingReadsChannel,
 	}
@@ -1485,13 +1479,13 @@ func parseAndValidateQuery(query string, parser *sqlparser.Parser) (sqlparser.St
 }
 
 // ExecuteMultiShard implements the IExecutor interface
-func (e *Executor) ExecuteMultiShard(ctx context.Context, primitive engine.Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *econtext.SafeSession, autocommit bool, ignoreMaxMemoryRows bool, resultsObserver econtext.ResultsObserver) (qr *sqltypes.Result, errs []error) {
-	return e.scatterConn.ExecuteMultiShard(ctx, primitive, rss, queries, session, autocommit, ignoreMaxMemoryRows, resultsObserver)
+func (e *Executor) ExecuteMultiShard(ctx context.Context, primitive engine.Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *econtext.SafeSession, autocommit bool, ignoreMaxMemoryRows bool, resultsObserver econtext.ResultsObserver, fetchLastInsertID bool) (qr *sqltypes.Result, errs []error) {
+	return e.scatterConn.ExecuteMultiShard(ctx, primitive, rss, queries, session, autocommit, ignoreMaxMemoryRows, resultsObserver, fetchLastInsertID)
 }
 
 // StreamExecuteMulti implements the IExecutor interface
-func (e *Executor) StreamExecuteMulti(ctx context.Context, primitive engine.Primitive, query string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, session *econtext.SafeSession, autocommit bool, callback func(reply *sqltypes.Result) error, resultsObserver econtext.ResultsObserver) []error {
-	return e.scatterConn.StreamExecuteMulti(ctx, primitive, query, rss, vars, session, autocommit, callback, resultsObserver)
+func (e *Executor) StreamExecuteMulti(ctx context.Context, primitive engine.Primitive, query string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, session *econtext.SafeSession, autocommit bool, callback func(reply *sqltypes.Result) error, resultsObserver econtext.ResultsObserver, fetchLastInsertID bool) []error {
+	return e.scatterConn.StreamExecuteMulti(ctx, primitive, query, rss, vars, session, autocommit, callback, resultsObserver, fetchLastInsertID)
 }
 
 // ExecuteLock implements the IExecutor interface
@@ -1547,7 +1541,7 @@ func (e *Executor) startVStream(ctx context.Context, rss []*srvtopo.ResolvedShar
 }
 
 func (e *Executor) checkThatPlanIsValid(stmt sqlparser.Statement, plan *engine.Plan) error {
-	if e.allowScatter || plan.Instructions == nil || sqlparser.AllowScatterDirective(stmt) {
+	if e.config.AllowScatter || plan.Instructions == nil || sqlparser.AllowScatterDirective(stmt) {
 		return nil
 	}
 	// we go over all the primitives in the plan, searching for a route that is of SelectScatter opcode
@@ -1618,7 +1612,7 @@ func (e *Executor) PlanPrepareStmt(ctx context.Context, vcursor *econtext.VCurso
 	}
 
 	// creating this log stats to not interfere with the original log stats.
-	lStats := logstats.NewLogStats(ctx, "prepare", query, vcursor.Session().GetSessionUUID(), nil)
+	lStats := logstats.NewLogStats(ctx, "prepare", query, vcursor.Session().GetSessionUUID(), nil, streamlog.GetQueryLogConfig())
 	plan, err := e.getPlan(
 		ctx,
 		vcursor,

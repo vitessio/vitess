@@ -22,6 +22,7 @@ import (
 	"io"
 	"sort"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -95,8 +96,8 @@ type (
 	// vcursor_impl needs these facilities to be able to be able to execute queries for vindexes
 	iExecute interface {
 		Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, method string, session *SafeSession, s string, vars map[string]*querypb.BindVariable) (*sqltypes.Result, error)
-		ExecuteMultiShard(ctx context.Context, primitive engine.Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *SafeSession, autocommit bool, ignoreMaxMemoryRows bool, resultsObserver ResultsObserver) (qr *sqltypes.Result, errs []error)
-		StreamExecuteMulti(ctx context.Context, primitive engine.Primitive, query string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, session *SafeSession, autocommit bool, callback func(reply *sqltypes.Result) error, observer ResultsObserver) []error
+		ExecuteMultiShard(ctx context.Context, primitive engine.Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *SafeSession, autocommit bool, ignoreMaxMemoryRows bool, resultsObserver ResultsObserver, fetchLastInsertID bool) (qr *sqltypes.Result, errs []error)
+		StreamExecuteMulti(ctx context.Context, primitive engine.Primitive, query string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, session *SafeSession, autocommit bool, callback func(reply *sqltypes.Result) error, observer ResultsObserver, fetchLastInsertID bool) []error
 		ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, session *SafeSession, lockFuncType sqlparser.LockingFuncType) (*sqltypes.Result, error)
 		Commit(ctx context.Context, safeSession *SafeSession) error
 		ExecuteMessageStream(ctx context.Context, rss []*srvtopo.ResolvedShard, name string, callback func(*sqltypes.Result) error) error
@@ -122,7 +123,7 @@ type (
 	// VSchemaOperator is an interface to Vschema Operations
 	VSchemaOperator interface {
 		GetCurrentSrvVschema() *vschemapb.SrvVSchema
-		UpdateVSchema(ctx context.Context, ksName string, vschema *vschemapb.SrvVSchema) error
+		UpdateVSchema(ctx context.Context, ks *topo.KeyspaceVSchemaInfo, vschema *vschemapb.SrvVSchema) error
 	}
 
 	// VCursorImpl implements the VCursor functionality used by dependent
@@ -154,6 +155,8 @@ type (
 
 		observer ResultsObserver
 
+		// this protects the interOpStats and shardsStats fields from concurrent writes
+		mu sync.Mutex
 		// this is a map of the number of rows that every primitive has returned
 		// if this field is nil, it means that we are not logging operator traffic
 		interOpStats map[engine.Primitive]engine.RowsReceived
@@ -389,7 +392,7 @@ func (vc *VCursorImpl) StartPrimitiveTrace() func() engine.Stats {
 // FindTable finds the specified table. If the keyspace what specified in the input, it gets used as qualifier.
 // Otherwise, the keyspace from the request is used, if one was provided.
 func (vc *VCursorImpl) FindTable(name sqlparser.TableName) (*vindexes.Table, string, topodatapb.TabletType, key.Destination, error) {
-	destKeyspace, destTabletType, dest, err := vc.ParseDestinationTarget(name.Qualifier.String())
+	destKeyspace, destTabletType, dest, err := vc.parseDestinationTarget(name.Qualifier.String())
 	if err != nil {
 		return nil, "", destTabletType, nil, err
 	}
@@ -403,8 +406,8 @@ func (vc *VCursorImpl) FindTable(name sqlparser.TableName) (*vindexes.Table, str
 	return table, destKeyspace, destTabletType, dest, err
 }
 
-func (vc *VCursorImpl) FindView(name sqlparser.TableName) sqlparser.SelectStatement {
-	ks, _, _, err := vc.ParseDestinationTarget(name.Qualifier.String())
+func (vc *VCursorImpl) FindView(name sqlparser.TableName) sqlparser.TableStatement {
+	ks, _, _, err := vc.parseDestinationTarget(name.Qualifier.String())
 	if err != nil {
 		return nil
 	}
@@ -415,7 +418,7 @@ func (vc *VCursorImpl) FindView(name sqlparser.TableName) sqlparser.SelectStatem
 }
 
 func (vc *VCursorImpl) FindRoutedTable(name sqlparser.TableName) (*vindexes.Table, error) {
-	destKeyspace, destTabletType, _, err := vc.ParseDestinationTarget(name.Qualifier.String())
+	destKeyspace, destTabletType, _, err := vc.parseDestinationTarget(name.Qualifier.String())
 	if err != nil {
 		return nil, err
 	}
@@ -439,7 +442,7 @@ func (vc *VCursorImpl) FindTableOrVindex(name sqlparser.TableName) (*vindexes.Ta
 		return vc.getDualTable()
 	}
 
-	destKeyspace, destTabletType, dest, err := ParseDestinationTarget(name.Qualifier.String(), vc.tabletType, vc.vschema)
+	destKeyspace, destTabletType, dest, err := vc.parseDestinationTarget(name.Qualifier.String())
 	if err != nil {
 		return nil, nil, "", destTabletType, nil, err
 	}
@@ -453,7 +456,24 @@ func (vc *VCursorImpl) FindTableOrVindex(name sqlparser.TableName) (*vindexes.Ta
 	return table, vindex, destKeyspace, destTabletType, dest, nil
 }
 
-func (vc *VCursorImpl) ParseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.Destination, error) {
+// FindViewTarget finds the specified view's target keyspace.
+func (vc *VCursorImpl) FindViewTarget(name sqlparser.TableName) (*vindexes.Keyspace, error) {
+	destKeyspace, _, _, err := vc.parseDestinationTarget(name.Qualifier.String())
+	if err != nil {
+		return nil, err
+	}
+	if destKeyspace != "" {
+		return vc.FindKeyspace(destKeyspace)
+	}
+
+	tbl, err := vc.vschema.FindRoutedTable("", name.Name.String(), vc.tabletType)
+	if err != nil || tbl == nil {
+		return nil, err
+	}
+	return tbl.Keyspace, nil
+}
+
+func (vc *VCursorImpl) parseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.Destination, error) {
 	return ParseDestinationTarget(targetString, vc.tabletType, vc.vschema)
 }
 
@@ -642,21 +662,29 @@ func (vc *VCursorImpl) ExecutePrimitive(ctx context.Context, primitive engine.Pr
 }
 
 func (vc *VCursorImpl) logOpTraffic(primitive engine.Primitive, res *sqltypes.Result) {
-	if vc.interOpStats != nil {
-		rows := vc.interOpStats[primitive]
-		if res == nil {
-			rows = append(rows, 0)
-		} else {
-			rows = append(rows, len(res.Rows))
-		}
-		vc.interOpStats[primitive] = rows
+	if vc.interOpStats == nil {
+		return
 	}
+
+	vc.mu.Lock()
+	defer vc.mu.Unlock()
+
+	rows := vc.interOpStats[primitive]
+	if res == nil {
+		rows = append(rows, 0)
+	} else {
+		rows = append(rows, len(res.Rows))
+	}
+	vc.interOpStats[primitive] = rows
 }
 
 func (vc *VCursorImpl) logShardsQueried(primitive engine.Primitive, shardsNb int) {
-	if vc.shardsStats != nil {
-		vc.shardsStats[primitive] += engine.ShardsQueried(shardsNb)
+	if vc.shardsStats == nil {
+		return
 	}
+	vc.mu.Lock()
+	defer vc.mu.Unlock()
+	vc.shardsStats[primitive] += engine.ShardsQueried(shardsNb)
 }
 
 func (vc *VCursorImpl) ExecutePrimitiveStandalone(ctx context.Context, primitive engine.Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
@@ -675,12 +703,20 @@ func (vc *VCursorImpl) ExecutePrimitiveStandalone(ctx context.Context, primitive
 
 func (vc *VCursorImpl) wrapCallback(callback func(*sqltypes.Result) error, primitive engine.Primitive) func(*sqltypes.Result) error {
 	if vc.interOpStats == nil {
-		return callback
+		return func(r *sqltypes.Result) error {
+			if r.InsertIDUpdated() {
+				vc.SafeSession.LastInsertId = r.InsertID
+			}
+			return callback(r)
+		}
 	}
 
-	return func(result *sqltypes.Result) error {
-		vc.logOpTraffic(primitive, result)
-		return callback(result)
+	return func(r *sqltypes.Result) error {
+		if r.InsertIDUpdated() {
+			vc.SafeSession.LastInsertId = r.InsertID
+		}
+		vc.logOpTraffic(primitive, r)
+		return callback(r)
 	}
 }
 
@@ -753,7 +789,7 @@ func (vc *VCursorImpl) markSavepoint(ctx context.Context, needsRollbackOnParialE
 }
 
 // ExecuteMultiShard is part of the engine.VCursor interface.
-func (vc *VCursorImpl) ExecuteMultiShard(ctx context.Context, primitive engine.Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, canAutocommit bool) (*sqltypes.Result, []error) {
+func (vc *VCursorImpl) ExecuteMultiShard(ctx context.Context, primitive engine.Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, canAutocommit, fetchLastInsertID bool) (*sqltypes.Result, []error) {
 	noOfShards := len(rss)
 	atomic.AddUint64(&vc.logStats.ShardQueries, uint64(noOfShards))
 	err := vc.markSavepoint(ctx, rollbackOnError && (noOfShards > 1), map[string]*querypb.BindVariable{})
@@ -761,14 +797,17 @@ func (vc *VCursorImpl) ExecuteMultiShard(ctx context.Context, primitive engine.P
 		return nil, []error{err}
 	}
 
-	qr, errs := vc.executor.ExecuteMultiShard(ctx, primitive, rss, commentedShardQueries(queries, vc.marginComments), vc.SafeSession, canAutocommit, vc.ignoreMaxMemoryRows, vc.observer)
+	qr, errs := vc.executor.ExecuteMultiShard(ctx, primitive, rss, commentedShardQueries(queries, vc.marginComments), vc.SafeSession, canAutocommit, vc.ignoreMaxMemoryRows, vc.observer, fetchLastInsertID)
 	vc.setRollbackOnPartialExecIfRequired(len(errs) != len(rss), rollbackOnError)
 	vc.logShardsQueried(primitive, len(rss))
+	if qr != nil && qr.InsertIDUpdated() {
+		vc.SafeSession.LastInsertId = qr.InsertID
+	}
 	return qr, errs
 }
 
 // StreamExecuteMulti is the streaming version of ExecuteMultiShard.
-func (vc *VCursorImpl) StreamExecuteMulti(ctx context.Context, primitive engine.Primitive, query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, rollbackOnError bool, autocommit bool, callback func(reply *sqltypes.Result) error) []error {
+func (vc *VCursorImpl) StreamExecuteMulti(ctx context.Context, primitive engine.Primitive, query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, rollbackOnError, autocommit, fetchLastInsertID bool, callback func(reply *sqltypes.Result) error) []error {
 	callback = vc.wrapCallback(callback, primitive)
 
 	noOfShards := len(rss)
@@ -778,7 +817,7 @@ func (vc *VCursorImpl) StreamExecuteMulti(ctx context.Context, primitive engine.
 		return []error{err}
 	}
 
-	errs := vc.executor.StreamExecuteMulti(ctx, primitive, vc.marginComments.Leading+query+vc.marginComments.Trailing, rss, bindVars, vc.SafeSession, autocommit, callback, vc.observer)
+	errs := vc.executor.StreamExecuteMulti(ctx, primitive, vc.marginComments.Leading+query+vc.marginComments.Trailing, rss, bindVars, vc.SafeSession, autocommit, callback, vc.observer, fetchLastInsertID)
 	vc.setRollbackOnPartialExecIfRequired(len(errs) != len(rss), rollbackOnError)
 
 	return errs
@@ -791,7 +830,7 @@ func (vc *VCursorImpl) ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShar
 }
 
 // ExecuteStandalone is part of the engine.VCursor interface.
-func (vc *VCursorImpl) ExecuteStandalone(ctx context.Context, primitive engine.Primitive, query string, bindVars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard) (*sqltypes.Result, error) {
+func (vc *VCursorImpl) ExecuteStandalone(ctx context.Context, primitive engine.Primitive, query string, bindVars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard, fetchLastInsertID bool) (*sqltypes.Result, error) {
 	rss := []*srvtopo.ResolvedShard{rs}
 	bqs := []*querypb.BoundQuery{
 		{
@@ -801,8 +840,11 @@ func (vc *VCursorImpl) ExecuteStandalone(ctx context.Context, primitive engine.P
 	}
 	// The autocommit flag is always set to false because we currently don't
 	// execute DMLs through ExecuteStandalone.
-	qr, errs := vc.executor.ExecuteMultiShard(ctx, primitive, rss, bqs, NewAutocommitSession(vc.SafeSession.Session), false /* autocommit */, vc.ignoreMaxMemoryRows, vc.observer)
+	qr, errs := vc.executor.ExecuteMultiShard(ctx, primitive, rss, bqs, NewAutocommitSession(vc.SafeSession.Session), false /* autocommit */, vc.ignoreMaxMemoryRows, vc.observer, fetchLastInsertID)
 	vc.logShardsQueried(primitive, len(rss))
+	if qr.InsertIDUpdated() {
+		vc.SafeSession.LastInsertId = qr.InsertID
+	}
 	return qr, vterrors.Aggregate(errs)
 }
 
@@ -829,7 +871,7 @@ func (vc *VCursorImpl) ExecuteKeyspaceID(ctx context.Context, keyspace string, k
 			vc.SafeSession.SetQueryFromVindex(false)
 		}()
 	}
-	qr, errs := vc.ExecuteMultiShard(ctx, nil, rss, queries, rollbackOnError, autocommit)
+	qr, errs := vc.ExecuteMultiShard(ctx, nil, rss, queries, rollbackOnError, autocommit, false)
 	return qr, vterrors.Aggregate(errs)
 }
 
@@ -1294,7 +1336,7 @@ func (vc *VCursorImpl) GetAggregateUDFs() []string {
 // FindMirrorRule finds the mirror rule for the requested table name and
 // VSchema tablet type.
 func (vc *VCursorImpl) FindMirrorRule(name sqlparser.TableName) (*vindexes.MirrorRule, error) {
-	destKeyspace, destTabletType, _, err := vc.ParseDestinationTarget(name.Qualifier.String())
+	destKeyspace, destTabletType, _, err := vc.parseDestinationTarget(name.Qualifier.String())
 	if err != nil {
 		return nil, err
 	}
@@ -1359,7 +1401,10 @@ func (vc *VCursorImpl) ExecuteVSchema(ctx context.Context, keyspace string, vsch
 	}
 
 	// Resolve the keyspace either from the table qualifier or the target keyspace
-	var ksName string
+	var (
+		ksName string
+		err    error
+	)
 	if !vschemaDDL.Table.IsEmpty() {
 		ksName = vschemaDDL.Table.Qualifier.String()
 	}
@@ -1370,15 +1415,14 @@ func (vc *VCursorImpl) ExecuteVSchema(ctx context.Context, keyspace string, vsch
 		return ErrNoKeyspace
 	}
 
-	ks := srvVschema.Keyspaces[ksName]
-	ks, err := topotools.ApplyVSchemaDDL(ksName, ks, vschemaDDL)
+	ksvs, err := topotools.ApplyVSchemaDDL(ctx, ksName, vc.topoServer, vschemaDDL)
 	if err != nil {
 		return err
 	}
 
-	srvVschema.Keyspaces[ksName] = ks
+	srvVschema.Keyspaces[ksName] = ksvs.Keyspace
 
-	return vc.vm.UpdateVSchema(ctx, ksName, srvVschema)
+	return vc.vm.UpdateVSchema(ctx, ksvs, srvVschema)
 }
 
 func (vc *VCursorImpl) MessageStream(ctx context.Context, rss []*srvtopo.ResolvedShard, tableName string, callback func(*sqltypes.Result) error) error {
@@ -1568,4 +1612,10 @@ func (vc *VCursorImpl) GetContextWithTimeOut(ctx context.Context) (context.Conte
 
 func (vc *VCursorImpl) IgnoreMaxMemoryRows() bool {
 	return vc.ignoreMaxMemoryRows
+}
+
+func (vc *VCursorImpl) SetLastInsertID(id uint64) {
+	vc.SafeSession.mu.Lock()
+	defer vc.SafeSession.mu.Unlock()
+	vc.SafeSession.LastInsertId = id
 }

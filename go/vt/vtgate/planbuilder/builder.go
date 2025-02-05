@@ -43,10 +43,6 @@ const (
 	Gen4Left2Right = querypb.ExecuteOptions_Gen4Left2Right
 )
 
-var (
-	plannerVersions = []plancontext.PlannerVersion{Gen4, Gen4GreedyOnly, Gen4Left2Right}
-)
-
 type (
 	planResult struct {
 		primitive engine.Primitive
@@ -77,7 +73,7 @@ func (staticConfig) DirectEnabled() bool {
 // TestBuilder builds a plan for a query based on the specified vschema.
 // This method is only used from tests
 func TestBuilder(query string, vschema plancontext.VSchema, keyspace string) (*engine.Plan, error) {
-	stmt, reserved, err := vschema.Environment().Parser().Parse2(query)
+	stmt, known, err := vschema.Environment().Parser().Parse2(query)
 	if err != nil {
 		return nil, err
 	}
@@ -97,12 +93,12 @@ func TestBuilder(query string, vschema plancontext.VSchema, keyspace string) (*e
 			}()
 		}
 	}
-	result, err := sqlparser.RewriteAST(stmt, keyspace, sqlparser.SQLSelectLimitUnset, "", nil, vschema.GetForeignKeyChecksState(), vschema)
+	reservedVars := sqlparser.NewReservedVars("vtg", known)
+	result, err := sqlparser.PrepareAST(stmt, reservedVars, map[string]*querypb.BindVariable{}, false, keyspace, sqlparser.SQLSelectLimitUnset, "", nil, vschema.GetForeignKeyChecksState(), vschema)
 	if err != nil {
 		return nil, err
 	}
 
-	reservedVars := sqlparser.NewReservedVars("vtg", reserved)
 	return BuildFromStmt(context.Background(), query, result.AST, reservedVars, vschema, result.BindVarNeeds, staticConfig{})
 }
 

@@ -17,7 +17,7 @@
 package io.vitess.util.charset;
 
 /**
- * These classes were pulled from mysql-connector-java and simplified to just the parts supporting
+ * These classes were pulled from mysql-connector-j and simplified to just the parts supporting
  * the statically available charsets
  */
 class Collation {

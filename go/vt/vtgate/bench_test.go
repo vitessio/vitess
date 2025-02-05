@@ -80,7 +80,7 @@ func BenchmarkWithNormalizer(b *testing.B) {
 func BenchmarkWithoutNormalizer(b *testing.B) {
 	vtgateInst, _, ctx := createVtgateEnv(b)
 
-	vtgateInst.executor.normalize = false
+	vtgateInst.executor.config.Normalize = false
 
 	for i := 0; i < b.N; i++ {
 		_, _, err := vtgateInst.Execute(

@@ -1,5 +1,10 @@
 # This file is auto-included when MySQL 8.0 is detected.
 
+# all db instances should skip starting replication threads - that way we can do any
+# additional configuration (like enabling semi-sync) before we connect to
+# the source.
+skip_slave_start
+
 # MySQL 8.0 enables binlog by default with sync_binlog and TABLE info repositories
 # It does not enable GTIDs or enforced GTID consistency
 

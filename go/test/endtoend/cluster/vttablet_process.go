@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"os/exec"
@@ -34,6 +35,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql"
@@ -47,8 +50,7 @@ const vttabletStateTimeout = 60 * time.Second
 // VttabletProcess is a generic handle for a running vttablet .
 // It can be spawned manually
 type VttabletProcess struct {
-	Name                        string
-	Binary                      string
+	VtProcess
 	FileToLogQueries            string
 	TabletUID                   int
 	TabletPath                  string
@@ -56,7 +58,6 @@ type VttabletProcess struct {
 	Port                        int
 	GrpcPort                    int
 	Shard                       string
-	CommonArg                   VtctlProcess
 	LogDir                      string
 	ErrorLog                    string
 	TabletHostname              string
@@ -93,9 +94,9 @@ type VttabletProcess struct {
 func (vttablet *VttabletProcess) Setup() (err error) {
 	vttablet.proc = exec.Command(
 		vttablet.Binary,
-		"--topo_implementation", vttablet.CommonArg.TopoImplementation,
-		"--topo_global_server_address", vttablet.CommonArg.TopoGlobalAddress,
-		"--topo_global_root", vttablet.CommonArg.TopoGlobalRoot,
+		"--topo_implementation", vttablet.TopoImplementation,
+		"--topo_global_server_address", vttablet.TopoGlobalAddress,
+		"--topo_global_root", vttablet.TopoGlobalRoot,
 		"--log_queries_to_file", vttablet.FileToLogQueries,
 		"--tablet-path", vttablet.TabletPath,
 		"--port", fmt.Sprintf("%d", vttablet.Port),
@@ -713,14 +714,70 @@ func (vttablet *VttabletProcess) IsShutdown() bool {
 	return vttablet.proc == nil
 }
 
+// ConfirmDataDirHasNoGlobalPerms confirms that no files in the tablet's data directory
+// have any global/world/other permissions enabled.
+func (vttablet *VttabletProcess) ConfirmDataDirHasNoGlobalPerms(t *testing.T) {
+	datadir := vttablet.Directory
+	if _, err := os.Stat(datadir); errors.Is(err, os.ErrNotExist) {
+		t.Logf("Data directory %s no longer exists, skipping permissions check", datadir)
+		return
+	}
+
+	var allowedFiles = []string{
+		// These are intentionally created with the world/other read bit set by mysqld itself
+		// during the --initialize[-insecure] step.
+		// See: https://dev.mysql.com/doc/mysql-security-excerpt/en/creating-ssl-rsa-files-using-mysql.html
+		// "On Unix and Unix-like systems, the file access mode is 644 for certificate files
+		// (that is, world readable) and 600 for key files (that is, accessible only by the
+		// account that runs the server)."
+		path.Join("data", "ca.pem"),
+		path.Join("data", "client-cert.pem"),
+		path.Join("data", "public_key.pem"),
+		path.Join("data", "server-cert.pem"),
+		// The domain socket must have global perms for anyone to use it.
+		"mysql.sock",
+		// These files are created by xtrabackup.
+		path.Join("tmp", "xtrabackup_checkpoints"),
+		path.Join("tmp", "xtrabackup_info"),
+	}
+
+	var matches []string
+	fsys := os.DirFS(datadir)
+	err := fs.WalkDir(fsys, ".", func(p string, d fs.DirEntry, _ error) error {
+		// first check if the file should be skipped
+		for _, name := range allowedFiles {
+			if strings.HasSuffix(p, name) {
+				return nil
+			}
+		}
+
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+
+		// check if any global bit is on the filemode
+		if info.Mode()&0007 != 0 {
+			matches = append(matches, fmt.Sprintf(
+				"%s (%s)",
+				path.Join(datadir, p),
+				info.Mode(),
+			))
+		}
+		return nil
+	})
+
+	require.NoError(t, err, "Error walking directory")
+	require.Empty(t, matches, "Found files with global permissions: %s\n", strings.Join(matches, "\n"))
+}
+
 // VttabletProcessInstance returns a VttabletProcess handle for vttablet process
 // configured with the given Config.
 // The process must be manually started by calling setup()
 func VttabletProcessInstance(port, grpcPort, tabletUID int, cell, shard, keyspace string, vtctldPort int, tabletType string, topoPort int, hostname, tmpDirectory string, extraArgs []string, charset string) *VttabletProcess {
-	vtctl := VtctlProcessInstance(topoPort, hostname)
+	base := VtProcessInstance("vttablet", "vttablet", topoPort, hostname)
 	vttablet := &VttabletProcess{
-		Name:                        "vttablet",
-		Binary:                      "vttablet",
+		VtProcess:                   base,
 		FileToLogQueries:            path.Join(tmpDirectory, fmt.Sprintf("/vt_%010d_querylog.txt", tabletUID)),
 		Directory:                   path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", tabletUID)),
 		Cell:                        cell,
@@ -731,7 +788,6 @@ func VttabletProcessInstance(port, grpcPort, tabletUID int, cell, shard, keyspac
 		TabletHostname:              hostname,
 		Keyspace:                    keyspace,
 		TabletType:                  "replica",
-		CommonArg:                   *vtctl,
 		HealthCheckInterval:         5,
 		Port:                        port,
 		GrpcPort:                    grpcPort,

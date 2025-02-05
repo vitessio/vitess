@@ -32,9 +32,7 @@ import (
 // VtctldProcess is a generic handle for a running vtctld .
 // It can be spawned manually
 type VtctldProcess struct {
-	Name                        string
-	Binary                      string
-	CommonArg                   VtctlProcess
+	VtProcess
 	ServiceMap                  string
 	BackupStorageImplementation string
 	FileBackupStorageRoot       string
@@ -55,9 +53,9 @@ func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error)
 	_ = createDirectory(path.Join(vtctld.Directory, "backups"), 0700)
 	vtctld.proc = exec.Command(
 		vtctld.Binary,
-		"--topo_implementation", vtctld.CommonArg.TopoImplementation,
-		"--topo_global_server_address", vtctld.CommonArg.TopoGlobalAddress,
-		"--topo_global_root", vtctld.CommonArg.TopoGlobalRoot,
+		"--topo_implementation", vtctld.TopoImplementation,
+		"--topo_global_server_address", vtctld.TopoGlobalAddress,
+		"--topo_global_root", vtctld.TopoGlobalRoot,
 		"--cell", cell,
 		"--service_map", vtctld.ServiceMap,
 		"--backup_storage_implementation", vtctld.BackupStorageImplementation,
@@ -164,15 +162,13 @@ func (vtctld *VtctldProcess) TearDown() error {
 	}
 }
 
-// VtctldProcessInstance returns a VtctlProcess handle for vtctl process
+// VtctldProcessInstance returns a VtctldProcess handle
 // configured with the given Config.
 // The process must be manually started by calling setup()
 func VtctldProcessInstance(httpPort int, grpcPort int, topoPort int, hostname string, tmpDirectory string) *VtctldProcess {
-	vtctl := VtctlProcessInstance(topoPort, hostname)
+	base := VtProcessInstance("vtctld", "vtctld", topoPort, hostname)
 	vtctld := &VtctldProcess{
-		Name:                        "vtctld",
-		Binary:                      "vtctld",
-		CommonArg:                   *vtctl,
+		VtProcess:                   base,
 		ServiceMap:                  "grpc-vtctl,grpc-vtctld",
 		BackupStorageImplementation: "file",
 		FileBackupStorageRoot:       path.Join(os.Getenv("VTDATAROOT"), "/backups"),

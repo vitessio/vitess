@@ -287,11 +287,11 @@ func TestTableForeignKeyOrdering(t *testing.T) {
 		"create table t11 (id int primary key, i int, key ix (i), constraint f12 foreign key (i) references t12(id) on delete restrict, constraint f20 foreign key (i) references t20(id) on delete restrict)",
 		"create table t15(id int, primary key(id))",
 		"create view v09 as select * from v13, t17",
-		"create table t20 (id int primary key, i int, key ix (i), constraint f15 foreign key (i) references t15(id) on delete restrict)",
+		"create table t20 (id int primary key, i int, key ix (i), constraint f2015 foreign key (i) references t15(id) on delete restrict)",
 		"create view v13 as select * from t20",
-		"create table t12 (id int primary key, i int, key ix (i), constraint f15 foreign key (i) references t15(id) on delete restrict)",
-		"create table t17 (id int primary key, i int, key ix (i), constraint f11 foreign key (i) references t11(id) on delete restrict, constraint f15 foreign key (i) references t15(id) on delete restrict)",
-		"create table t16 (id int primary key, i int, key ix (i), constraint f11 foreign key (i) references t11(id) on delete restrict, constraint f15 foreign key (i) references t15(id) on delete restrict)",
+		"create table t12 (id int primary key, i int, key ix (i), constraint f1215 foreign key (i) references t15(id) on delete restrict)",
+		"create table t17 (id int primary key, i int, key ix (i), constraint f1711 foreign key (i) references t11(id) on delete restrict, constraint f1715 foreign key (i) references t15(id) on delete restrict)",
+		"create table t16 (id int primary key, i int, key ix (i), constraint f1611 foreign key (i) references t11(id) on delete restrict, constraint f1615 foreign key (i) references t15(id) on delete restrict)",
 		"create table t14 (id int primary key, i int, key ix (i), constraint f14 foreign key (i) references t14(id) on delete restrict)",
 	}
 	expectSortedTableNames := []string{
@@ -521,6 +521,54 @@ func TestInvalidSchema(t *testing.T) {
 		},
 		{
 			schema: "create table post (id varchar(191) charset utf8mb4 not null, `title` text, primary key (`id`)); create table post_fks (id varchar(191) not null, `post_id` varchar(191) collate utf8mb4_0900_ai_ci, primary key (id), constraint post_fk foreign key (post_id) references post (id)) charset utf8mb4, collate utf8mb4_0900_as_ci;",
+		},
+		// constaint names
+		{
+			schema: `create table t1 (id int primary key, CONSTRAINT const_id CHECK (id > 0))`,
+		},
+		{
+			schema: `create table t1 (id int primary key, CONSTRAINT const_id1 CHECK (id > 0), CONSTRAINT const_id2 CHECK (id < 10));`,
+		},
+		{
+			schema: `
+				create table t1 (id int primary key, CONSTRAINT const_id CHECK (id > 0), CONSTRAINT const_id CHECK (id < 10));
+			`,
+			expectErr: &DuplicateCheckConstraintNameError{Table: "t1", Constraint: "const_id"},
+		},
+		{
+			schema: `
+			create table t1 (id int primary key, CONSTRAINT const_id1 CHECK (id > 0));
+			create table t2 (id int primary key, CONSTRAINT const_id2 CHECK (id > 0));
+			`,
+		},
+		{
+			schema: `
+			create table t1 (id int primary key, CONSTRAINT const_id CHECK (id > 0));
+			create table t2 (id int primary key, CONSTRAINT const_id CHECK (id > 0));
+			`,
+			expectErr: &DuplicateCheckConstraintNameError{Table: "t2", Constraint: "const_id"},
+		},
+		{
+			// OK for foreign key constraint and check constraint to have same name
+			schema: `
+			create table t1 (id int primary key, CONSTRAINT const_id CHECK (id > 0));
+			create table t2 (id int primary key, CONSTRAINT const_id FOREIGN KEY (id) REFERENCES t1 (id) ON DELETE CASCADE);
+			`,
+		},
+		{
+			schema: `
+			create table t1 (id int primary key, CONSTRAINT const_id CHECK (id > 0));
+			create table t2 (id int primary key, CONSTRAINT const_id FOREIGN KEY (id) REFERENCES t1 (id) ON DELETE CASCADE);
+			create table t3 (id int primary key, CONSTRAINT const_id FOREIGN KEY (id) REFERENCES t1 (id) ON DELETE CASCADE);
+			`,
+			expectErr: &DuplicateForeignKeyConstraintNameError{Table: "t3", Constraint: "const_id"},
+		},
+		{
+			schema: `
+			create table t1 (id int primary key, CONSTRAINT const_id CHECK (id > 0));
+			create table t2 (id int primary key, CONSTRAINT const_id FOREIGN KEY (id) REFERENCES t1 (id) ON DELETE CASCADE, CONSTRAINT const_id FOREIGN KEY (id) REFERENCES t1 (id) ON DELETE CASCADE);
+			`,
+			expectErr: &DuplicateForeignKeyConstraintNameError{Table: "t2", Constraint: "const_id"},
 		},
 	}
 	for _, ts := range tt {

@@ -167,6 +167,8 @@ type shardStreamer struct {
 	err              error
 }
 
+var _ engine.StreamExecutor = (*shardStreamer)(nil)
+
 // VDiff reports differences between the sources and targets of a vreplication workflow.
 func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sourceCell, targetCell, tabletTypesStr string,
 	filteredReplicationWaitTime time.Duration, format string, maxRows int64, tables string, debug, onlyPks bool,
@@ -540,7 +542,7 @@ func findPKs(env *vtenv.Environment, table *tabletmanagerdatapb.TableDefinition,
 // column in the table definition leveraging MySQL's collation inheritance
 // rules.
 func getColumnCollations(venv *vtenv.Environment, table *tabletmanagerdatapb.TableDefinition) (map[string]collations.ID, map[string]*evalengine.EnumSetValues, error) {
-	createstmt, err := venv.Parser().Parse(table.Schema)
+	createstmt, err := venv.Parser().ParseStrictDDL(table.Schema)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1148,7 +1150,7 @@ func (pe *primitiveExecutor) drain(ctx context.Context) (int, error) {
 // -----------------------------------------------------------------
 // shardStreamer
 
-func (sm *shardStreamer) StreamExecute(ctx context.Context, vcursor engine.VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (sm *shardStreamer) StreamExecute(_ context.Context, _ engine.VCursor, _ map[string]*querypb.BindVariable, _, _ bool, callback func(*sqltypes.Result) error) error {
 	for result := range sm.result {
 		if err := callback(result); err != nil {
 			return err

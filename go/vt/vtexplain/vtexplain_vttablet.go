@@ -22,6 +22,7 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"time"
 
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/sidecardb"
@@ -113,8 +114,7 @@ func (vte *VTExplain) newTablet(ctx context.Context, env *vtenv.Environment, opt
 	config := tabletenv.NewCurrentConfig()
 	config.TrackSchemaVersions = false
 	if opts.ExecutionMode == ModeTwoPC {
-		config.TwoPCAbandonAge = 1.0
-		config.TwoPCEnable = true
+		config.TwoPCAbandonAge = 1 * time.Second
 	}
 	config.EnableOnlineDDL = false
 	config.EnableTableGC = false
@@ -621,7 +621,10 @@ func (t *explainTablet) handleSelect(query string) (*sqltypes.Result, error) {
 	case *sqlparser.Select:
 		selStmt = stmt
 	case *sqlparser.Union:
-		selStmt = sqlparser.GetFirstSelect(stmt)
+		selStmt, err = sqlparser.GetFirstSelect(stmt)
+		if err != nil {
+			return nil, err
+		}
 	default:
 		return nil, fmt.Errorf("vtexplain: unsupported statement type +%v", reflect.TypeOf(stmt))
 	}
