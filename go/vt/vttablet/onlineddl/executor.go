@@ -2855,41 +2855,6 @@ func (e *Executor) isPTOSCMigrationRunning(ctx context.Context, uuid string) (is
 	return true, pid, nil
 }
 
-// dropOnlineDDLUser drops the given ddl user account at the end of migration
-func (e *Executor) dropPTOSCMigrationTriggers(ctx context.Context, onlineDDL *schema.OnlineDDL) error {
-	conn, err := dbconnpool.NewDBConnection(ctx, e.env.Config().DB.DbaConnector())
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-
-	parsed := sqlparser.BuildParsedQuery(sqlSelectPTOSCMigrationTriggers, ":mysql_schema", ":mysql_table")
-	bindVars := map[string]*querypb.BindVariable{
-		"mysql_schema": sqltypes.StringBindVariable(onlineDDL.Schema),
-		"mysql_table":  sqltypes.StringBindVariable(onlineDDL.Table),
-	}
-	bound, err := parsed.GenerateQuery(bindVars, nil)
-	if err != nil {
-		return err
-	}
-	r, err := e.execQuery(ctx, bound)
-	if err != nil {
-		return err
-	}
-	for _, row := range r.Named().Rows {
-		// iterate pt-osc triggers and drop them
-		triggerSchema := row.AsString("trigger_schema", "")
-		triggerName := row.AsString("trigger_name", "")
-
-		dropParsed := sqlparser.BuildParsedQuery(sqlDropTrigger, triggerSchema, triggerName)
-		if _, err := conn.ExecuteFetch(dropParsed.Query, 0, false); err != nil {
-			return err
-		}
-	}
-
-	return err
-}
-
 // readVReplStream reads _vt.vreplication entries for given workflow
 func (e *Executor) readVReplStream(ctx context.Context, uuid string, okIfMissing bool) (*VReplStream, error) {
 	query, err := sqlparser.ParseAndBind(sqlReadVReplStream,

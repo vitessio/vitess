@@ -468,16 +468,6 @@ const (
 			migration_status='ready'
 		ORDER BY id
 	`
-	sqlSelectPTOSCMigrationTriggers = `SELECT
-			TRIGGER_SCHEMA as trigger_schema,
-			TRIGGER_NAME as trigger_name
-		FROM INFORMATION_SCHEMA.TRIGGERS
-		WHERE
-			EVENT_OBJECT_SCHEMA=%a
-			AND EVENT_OBJECT_TABLE=%a
-			AND ACTION_TIMING='AFTER'
-			AND LEFT(TRIGGER_NAME, 7)='pt_osc_'
-		`
 	selSelectCountFKParentConstraints = `
 		SELECT
 			COUNT(*) as num_fk_constraints
@@ -494,7 +484,6 @@ const (
 			TABLE_SCHEMA=%a AND TABLE_NAME=%a
 			AND REFERENCED_TABLE_NAME IS NOT NULL
 		`
-	sqlDropTrigger                         = "DROP TRIGGER IF EXISTS `%a`.`%a`"
 	sqlShowTablesLike                      = "SHOW TABLES LIKE '%a'"
 	sqlDropTable                           = "DROP TABLE `%a`"
 	sqlDropTableIfExists                   = "DROP TABLE IF EXISTS `%a`"
