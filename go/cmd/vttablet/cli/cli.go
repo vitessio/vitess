@@ -248,7 +248,10 @@ func createTabletServer(ctx context.Context, env *vtenv.Environment, config *tab
 		addStatusParts(qsc)
 	})
 	servenv.OnClose(qsc.StopService)
-	qsc.InitACL(tableACLConfig, enforceTableACLConfig, tableACLConfigReloadInterval)
+	err := qsc.InitACL(tableACLConfig, tableACLConfigReloadInterval)
+	if err != nil && enforceTableACLConfig {
+		return nil, fmt.Errorf("failed to initialize table acl: %w", err)
+	}
 	return qsc, nil
 }
 

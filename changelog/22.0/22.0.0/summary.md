@@ -19,6 +19,7 @@
   - **[Support for Filtering Query logs on Error](#query-logs)**
 - **[Minor Changes](#minor-changes)**
   - **[VTTablet Flags](#flags-vttablet)**
+  - **[VTTablet ACL enforcement and reloading](#reloading-vttablet-acl)**
   - **[Topology read concurrency behaviour changes](#topo-read-concurrency-changes)**
   - **[VTAdmin](#vtadmin)**
     - [Updated to node v22.13.1](#updated-node)
@@ -154,6 +155,10 @@ While the flag will continue to accept float values (interpreted as seconds) for
 **float inputs are deprecated** and will be removed in a future release.
 
 - `--consolidator-query-waiter-cap` flag to set the maximum number of clients allowed to wait on the consolidator. The default value is set to 0 for unlimited wait. Users can adjust  this value based on the performance of VTTablet to avoid excessive memory usage and the risk of being OOMKilled, particularly in Kubernetes deployments.
+
+#### <a id="reloading-vttablet-acl"/>VTTablet ACL enforcement and reloading</a>
+
+When a tablet is started with `--enforce-tableacl-config` it will exit with an error if the contents of the file are not valid. After the changes made in https://github.com/vitessio/vitess/pull/17485 the tablet will no longer exit when reloading the contents of the file after receiving a SIGHUP. When the file contents are invalid on reload the tablet will now log an error and the active in-memory ACLs remain in effect.
 
 ### <a id="topo-read-concurrency-changes"/>`--topo_read_concurrency` behaviour changes
 
