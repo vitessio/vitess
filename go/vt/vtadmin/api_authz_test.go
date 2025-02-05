@@ -3202,7 +3202,7 @@ func TestTabletExternallyPromoted(t *testing.T) {
 	})
 }
 
-func TestVTExplain(t *testing.T) {
+func TestVExplain(t *testing.T) {
 	t.Parallel()
 
 	opts := vtadmin.Options{
@@ -3214,7 +3214,7 @@ func TestVTExplain(t *testing.T) {
 				Clusters []string
 			}{
 				{
-					Resource: "VTExplain",
+					Resource: "VExplain",
 					Actions:  []string{"get"},
 					Subjects: []string{"user:allowed"},
 					Clusters: []string{"*"},
@@ -3239,12 +3239,12 @@ func TestVTExplain(t *testing.T) {
 		ctx := context.Background()
 		ctx = rbac.NewContext(ctx, actor)
 
-		resp, err := api.VTExplain(ctx, &vtadminpb.VTExplainRequest{
-			Cluster:  "test",
-			Keyspace: "test",
-			Sql:      "select id from t1;"})
+		resp, err := api.VExplain(ctx, &vtadminpb.VExplainRequest{
+			ClusterId: "test",
+			Keyspace:  "test",
+			Sql:       "vexplain all select * from customers;"})
 		require.NoError(t, err)
-		assert.Nil(t, resp, "actor %+v should not be permitted to VTExplain", actor)
+		assert.Nil(t, resp, "actor %+v should not be permitted to VExplain", actor)
 	})
 
 	t.Run("authorized actor", func(t *testing.T) {
@@ -3261,12 +3261,12 @@ func TestVTExplain(t *testing.T) {
 		ctx := context.Background()
 		ctx = rbac.NewContext(ctx, actor)
 
-		resp, err := api.VTExplain(ctx, &vtadminpb.VTExplainRequest{
-			Cluster:  "test",
-			Keyspace: "test",
-			Sql:      "select id from t1;"})
+		resp, err := api.VExplain(ctx, &vtadminpb.VExplainRequest{
+			ClusterId: "test",
+			Keyspace:  "test",
+			Sql:       "vexplain all select * from customers"})
 		require.NoError(t, err)
-		assert.NotNil(t, resp, "actor %+v should be permitted to VTExplain", actor)
+		assert.NotNil(t, resp, "actor %+v should be permitted to VExplain", actor)
 	})
 }
 

@@ -212,9 +212,6 @@ type VTAdminClient interface {
 	ValidateVersionShard(ctx context.Context, in *ValidateVersionShardRequest, opts ...grpc.CallOption) (*vtctldata.ValidateVersionShardResponse, error)
 	VDiffCreate(ctx context.Context, in *VDiffCreateRequest, opts ...grpc.CallOption) (*vtctldata.VDiffCreateResponse, error)
 	VDiffShow(ctx context.Context, in *VDiffShowRequest, opts ...grpc.CallOption) (*VDiffShowResponse, error)
-	// VTExplain provides information on how Vitess plans to execute a
-	// particular query.
-	VTExplain(ctx context.Context, in *VTExplainRequest, opts ...grpc.CallOption) (*VTExplainResponse, error)
 	// VExplain provides information on how Vitess plans to execute a
 	// particular query.
 	VExplain(ctx context.Context, in *VExplainRequest, opts ...grpc.CallOption) (*VExplainResponse, error)
@@ -853,15 +850,6 @@ func (c *vTAdminClient) VDiffShow(ctx context.Context, in *VDiffShowRequest, opt
 	return out, nil
 }
 
-func (c *vTAdminClient) VTExplain(ctx context.Context, in *VTExplainRequest, opts ...grpc.CallOption) (*VTExplainResponse, error) {
-	out := new(VTExplainResponse)
-	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/VTExplain", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *vTAdminClient) VExplain(ctx context.Context, in *VExplainRequest, opts ...grpc.CallOption) (*VExplainResponse, error) {
 	out := new(VExplainResponse)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/VExplain", in, out, opts...)
@@ -1082,9 +1070,6 @@ type VTAdminServer interface {
 	ValidateVersionShard(context.Context, *ValidateVersionShardRequest) (*vtctldata.ValidateVersionShardResponse, error)
 	VDiffCreate(context.Context, *VDiffCreateRequest) (*vtctldata.VDiffCreateResponse, error)
 	VDiffShow(context.Context, *VDiffShowRequest) (*VDiffShowResponse, error)
-	// VTExplain provides information on how Vitess plans to execute a
-	// particular query.
-	VTExplain(context.Context, *VTExplainRequest) (*VTExplainResponse, error)
 	// VExplain provides information on how Vitess plans to execute a
 	// particular query.
 	VExplain(context.Context, *VExplainRequest) (*VExplainResponse, error)
@@ -1305,9 +1290,6 @@ func (UnimplementedVTAdminServer) VDiffCreate(context.Context, *VDiffCreateReque
 }
 func (UnimplementedVTAdminServer) VDiffShow(context.Context, *VDiffShowRequest) (*VDiffShowResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method VDiffShow not implemented")
-}
-func (UnimplementedVTAdminServer) VTExplain(context.Context, *VTExplainRequest) (*VTExplainResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method VTExplain not implemented")
 }
 func (UnimplementedVTAdminServer) VExplain(context.Context, *VExplainRequest) (*VExplainResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method VExplain not implemented")
@@ -2573,24 +2555,6 @@ func _VTAdmin_VDiffShow_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
-func _VTAdmin_VTExplain_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(VTExplainRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(VTAdminServer).VTExplain(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/vtadmin.VTAdmin/VTExplain",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VTAdminServer).VTExplain(ctx, req.(*VTExplainRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _VTAdmin_VExplain_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(VExplainRequest)
 	if err := dec(in); err != nil {
@@ -2927,10 +2891,6 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "VDiffShow",
 			Handler:    _VTAdmin_VDiffShow_Handler,
-		},
-		{
-			MethodName: "VTExplain",
-			Handler:    _VTAdmin_VTExplain_Handler,
 		},
 		{
 			MethodName: "VExplain",

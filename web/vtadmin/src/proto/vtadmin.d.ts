@@ -990,20 +990,6 @@ export namespace vtadmin {
         public vDiffShow(request: vtadmin.IVDiffShowRequest): Promise<vtadmin.VDiffShowResponse>;
 
         /**
-         * Calls VTExplain.
-         * @param request VTExplainRequest message or plain object
-         * @param callback Node-style callback called with the error, if any, and VTExplainResponse
-         */
-        public vTExplain(request: vtadmin.IVTExplainRequest, callback: vtadmin.VTAdmin.VTExplainCallback): void;
-
-        /**
-         * Calls VTExplain.
-         * @param request VTExplainRequest message or plain object
-         * @returns Promise
-         */
-        public vTExplain(request: vtadmin.IVTExplainRequest): Promise<vtadmin.VTExplainResponse>;
-
-        /**
          * Calls VExplain.
          * @param request VExplainRequest message or plain object
          * @param callback Node-style callback called with the error, if any, and VExplainResponse
@@ -1530,13 +1516,6 @@ export namespace vtadmin {
          * @param [response] VDiffShowResponse
          */
         type VDiffShowCallback = (error: (Error|null), response?: vtadmin.VDiffShowResponse) => void;
-
-        /**
-         * Callback as used by {@link vtadmin.VTAdmin#vTExplain}.
-         * @param error Error, if any
-         * @param [response] VTExplainResponse
-         */
-        type VTExplainCallback = (error: (Error|null), response?: vtadmin.VTExplainResponse) => void;
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#vExplain}.
@@ -15191,212 +15170,6 @@ export namespace vtadmin {
 
         /**
          * Gets the default type url for VDiffShowResponse
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Properties of a VTExplainRequest. */
-    interface IVTExplainRequest {
-
-        /** VTExplainRequest cluster */
-        cluster?: (string|null);
-
-        /** VTExplainRequest keyspace */
-        keyspace?: (string|null);
-
-        /** VTExplainRequest sql */
-        sql?: (string|null);
-    }
-
-    /** Represents a VTExplainRequest. */
-    class VTExplainRequest implements IVTExplainRequest {
-
-        /**
-         * Constructs a new VTExplainRequest.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: vtadmin.IVTExplainRequest);
-
-        /** VTExplainRequest cluster. */
-        public cluster: string;
-
-        /** VTExplainRequest keyspace. */
-        public keyspace: string;
-
-        /** VTExplainRequest sql. */
-        public sql: string;
-
-        /**
-         * Creates a new VTExplainRequest instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns VTExplainRequest instance
-         */
-        public static create(properties?: vtadmin.IVTExplainRequest): vtadmin.VTExplainRequest;
-
-        /**
-         * Encodes the specified VTExplainRequest message. Does not implicitly {@link vtadmin.VTExplainRequest.verify|verify} messages.
-         * @param message VTExplainRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: vtadmin.IVTExplainRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified VTExplainRequest message, length delimited. Does not implicitly {@link vtadmin.VTExplainRequest.verify|verify} messages.
-         * @param message VTExplainRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: vtadmin.IVTExplainRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a VTExplainRequest message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns VTExplainRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.VTExplainRequest;
-
-        /**
-         * Decodes a VTExplainRequest message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns VTExplainRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.VTExplainRequest;
-
-        /**
-         * Verifies a VTExplainRequest message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a VTExplainRequest message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns VTExplainRequest
-         */
-        public static fromObject(object: { [k: string]: any }): vtadmin.VTExplainRequest;
-
-        /**
-         * Creates a plain object from a VTExplainRequest message. Also converts values to other types if specified.
-         * @param message VTExplainRequest
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: vtadmin.VTExplainRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this VTExplainRequest to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for VTExplainRequest
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Properties of a VTExplainResponse. */
-    interface IVTExplainResponse {
-
-        /** VTExplainResponse response */
-        response?: (string|null);
-    }
-
-    /** Represents a VTExplainResponse. */
-    class VTExplainResponse implements IVTExplainResponse {
-
-        /**
-         * Constructs a new VTExplainResponse.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: vtadmin.IVTExplainResponse);
-
-        /** VTExplainResponse response. */
-        public response: string;
-
-        /**
-         * Creates a new VTExplainResponse instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns VTExplainResponse instance
-         */
-        public static create(properties?: vtadmin.IVTExplainResponse): vtadmin.VTExplainResponse;
-
-        /**
-         * Encodes the specified VTExplainResponse message. Does not implicitly {@link vtadmin.VTExplainResponse.verify|verify} messages.
-         * @param message VTExplainResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: vtadmin.IVTExplainResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified VTExplainResponse message, length delimited. Does not implicitly {@link vtadmin.VTExplainResponse.verify|verify} messages.
-         * @param message VTExplainResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: vtadmin.IVTExplainResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a VTExplainResponse message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns VTExplainResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.VTExplainResponse;
-
-        /**
-         * Decodes a VTExplainResponse message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns VTExplainResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.VTExplainResponse;
-
-        /**
-         * Verifies a VTExplainResponse message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a VTExplainResponse message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns VTExplainResponse
-         */
-        public static fromObject(object: { [k: string]: any }): vtadmin.VTExplainResponse;
-
-        /**
-         * Creates a plain object from a VTExplainResponse message. Also converts values to other types if specified.
-         * @param message VTExplainResponse
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: vtadmin.VTExplainResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this VTExplainResponse to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for VTExplainResponse
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */
@@ -31554,6 +31327,9 @@ export namespace tabletmanagerdata {
         /** BackupRequest backup_engine. */
         public backup_engine?: (string|null);
 
+        /** BackupRequest _backup_engine. */
+        public _backup_engine?: "backup_engine";
+
         /**
          * Creates a new BackupRequest instance using the specified properties.
          * @param [properties] Properties to set
@@ -34172,6 +33948,9 @@ export namespace tabletmanagerdata {
         /** VDiffCoreOptions auto_start. */
         public auto_start?: (boolean|null);
 
+        /** VDiffCoreOptions _auto_start. */
+        public _auto_start?: "auto_start";
+
         /**
          * Creates a new VDiffCoreOptions instance using the specified properties.
          * @param [properties] Properties to set
@@ -34384,6 +34163,9 @@ export namespace tabletmanagerdata {
         /** VDiffTableLastPK source. */
         public source?: (query.IQueryResult|null);
 
+        /** VDiffTableLastPK _source. */
+        public _source?: "source";
+
         /**
          * Creates a new VDiffTableLastPK instance using the specified properties.
          * @param [properties] Properties to set
@@ -34528,6 +34310,18 @@ export namespace tabletmanagerdata {
 
         /** UpdateVReplicationWorkflowRequest message. */
         public message?: (string|null);
+
+        /** UpdateVReplicationWorkflowRequest _tablet_selection_preference. */
+        public _tablet_selection_preference?: "tablet_selection_preference";
+
+        /** UpdateVReplicationWorkflowRequest _on_ddl. */
+        public _on_ddl?: "on_ddl";
+
+        /** UpdateVReplicationWorkflowRequest _state. */
+        public _state?: "state";
+
+        /** UpdateVReplicationWorkflowRequest _message. */
+        public _message?: "message";
 
         /**
          * Creates a new UpdateVReplicationWorkflowRequest instance using the specified properties.
@@ -34752,6 +34546,15 @@ export namespace tabletmanagerdata {
 
         /** UpdateVReplicationWorkflowsRequest stop_position. */
         public stop_position?: (string|null);
+
+        /** UpdateVReplicationWorkflowsRequest _state. */
+        public _state?: "state";
+
+        /** UpdateVReplicationWorkflowsRequest _message. */
+        public _message?: "message";
+
+        /** UpdateVReplicationWorkflowsRequest _stop_position. */
+        public _stop_position?: "stop_position";
 
         /**
          * Creates a new UpdateVReplicationWorkflowsRequest instance using the specified properties.
@@ -49949,6 +49752,9 @@ export namespace vschema {
         /** Column values. */
         public values: string[];
 
+        /** Column _nullable. */
+        public _nullable?: "nullable";
+
         /**
          * Creates a new Column instance using the specified properties.
          * @param [properties] Properties to set
@@ -54617,6 +54423,9 @@ export namespace vtctldata {
 
         /** BackupRequest backup_engine. */
         public backup_engine?: (string|null);
+
+        /** BackupRequest _backup_engine. */
+        public _backup_engine?: "backup_engine";
 
         /**
          * Creates a new BackupRequest instance using the specified properties.
@@ -78006,6 +77815,9 @@ export namespace vtctldata {
 
         /** VDiffCreateRequest auto_start. */
         public auto_start?: (boolean|null);
+
+        /** VDiffCreateRequest _auto_start. */
+        public _auto_start?: "auto_start";
 
         /**
          * Creates a new VDiffCreateRequest instance using the specified properties.

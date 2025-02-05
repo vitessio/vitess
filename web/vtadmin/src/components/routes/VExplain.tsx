@@ -22,7 +22,7 @@ import { Select } from '../inputs/Select';
 import { ContentContainer } from '../layout/ContentContainer';
 import { WorkspaceHeader } from '../layout/WorkspaceHeader';
 import { WorkspaceTitle } from '../layout/WorkspaceTitle';
-import style from './VTExplain.module.scss';
+import style from './VExplain.module.scss';
 import { Code } from '../Code';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { Label } from '../inputs/Label';

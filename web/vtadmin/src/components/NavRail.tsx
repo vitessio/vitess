@@ -75,9 +75,6 @@ export const NavRail = () => {
                         <NavRailLink icon={Icons.download} text="Backups" to="/backups" />
                     </li>
                     <li>
-                        <NavRailLink icon={Icons.runQuery} text="VTExplain" to="/vtexplain" />
-                    </li>
-                    <li>
                         <NavRailLink icon={Icons.runQuery} text="VExplain" to="/vexplain" />
                     </li>
                     <li>
