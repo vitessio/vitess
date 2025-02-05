@@ -395,7 +395,6 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 func (hc *HealthCheckImpl) AddTablet(tablet *topodata.Tablet) {
 	// check whether grpc port is present on tablet, if not return
 	if tablet.PortMap["grpc"] == 0 {
-		log.Infof("grpc port missing for tablet, not adding: %v", tablet.PortMap)
 		return
 	}
 
@@ -832,7 +831,7 @@ func (hc *HealthCheckImpl) waitForTablets(ctx context.Context, targets []*query.
 			timer.Stop()
 			for _, target := range targets {
 				if target != nil {
-					log.Infof("couldn't find tablets for target: %v - Require serving is %+v", target, requireServing)
+					log.Infof("couldn't find tablets for target: %v", target)
 				}
 			}
 			return ctx.Err()
