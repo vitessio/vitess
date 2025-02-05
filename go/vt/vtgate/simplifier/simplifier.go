@@ -285,8 +285,8 @@ func removeTable(clone sqlparser.TableStatement, searchedTS semantics.TableSet, 
 			simplified = removeTableinSelectExprs(node, cursor, shouldKeepExpr, simplified)
 		case *sqlparser.GroupBy:
 			simplified = removeTableInGroupBy(node, cursor, shouldKeepExpr, simplified)
-		case sqlparser.OrderBy:
-			simplified = removeTableinOrderBy(node, cursor, shouldKeepExpr, simplified)
+		case *sqlparser.OrderBy:
+			simplified = removeTableinOrderBy(node, shouldKeepExpr, simplified)
 		}
 		return true
 	}
@@ -395,9 +395,9 @@ func removeTableInGroupBy(node *sqlparser.GroupBy, cursor *sqlparser.Cursor, sho
 	return simplified
 }
 
-func removeTableinOrderBy(node sqlparser.OrderBy, cursor *sqlparser.Cursor, shouldKeepExpr func(sqlparser.Expr) bool, simplified bool) bool {
-	var newExprs sqlparser.OrderBy
-	for _, expr := range node {
+func removeTableinOrderBy(node *sqlparser.OrderBy, shouldKeepExpr func(sqlparser.Expr) bool, simplified bool) bool {
+	var newExprs []*sqlparser.Order
+	for _, expr := range node.Ordering {
 		if shouldKeepExpr(expr.Expr) {
 			newExprs = append(newExprs, expr)
 		} else {
@@ -405,7 +405,7 @@ func removeTableinOrderBy(node sqlparser.OrderBy, cursor *sqlparser.Cursor, shou
 		}
 	}
 
-	cursor.Replace(newExprs)
+	node.Ordering = newExprs
 
 	return simplified
 }
@@ -446,7 +446,7 @@ func visitAllExpressionsInAST(clone sqlparser.TableStatement, visit func(express
 			if node.GroupBy != nil {
 				return visitGroupBy(node, visit)
 			}
-		case sqlparser.OrderBy:
+		case *sqlparser.OrderBy:
 			return visitOrderBy(node, cursor, visit)
 		case *sqlparser.Limit:
 			return visitLimit(node, cursor, visit)
@@ -556,9 +556,9 @@ func visitGroupBy(node *sqlparser.Select, visit func(expressionCursor) bool) boo
 	return visitExpressions(node.GroupBy.Exprs, set, visit, 0)
 }
 
-func visitOrderBy(node sqlparser.OrderBy, cursor *sqlparser.Cursor, visit func(expressionCursor) bool) bool {
-	for idx := 0; idx < len(node); idx++ {
-		order := node[idx]
+func visitOrderBy(node *sqlparser.OrderBy, cursor *sqlparser.Cursor, visit func(expressionCursor) bool) bool {
+	for idx := 0; idx < len(node.Ordering); idx++ { // we are going to modify the slice, so we need to use the index
+		order := node.Ordering[idx]
 		removed := false
 		original := sqlparser.Clone(order.Expr)
 		item := newExprCursor(
@@ -573,25 +573,23 @@ func visitOrderBy(node sqlparser.OrderBy, cursor *sqlparser.Cursor, visit func(e
 				if removed {
 					panic("can't remove twice, silly")
 				}
-				withoutElement := append(node[:idx], node[idx+1:]...)
+				withoutElement := append(node.Ordering[:idx], node.Ordering[idx+1:]...)
 				if len(withoutElement) == 0 {
-					var nilVal sqlparser.OrderBy // this is used to create a typed nil value
-					cursor.Replace(nilVal)
+					cursor.Replace(nil)
 				} else {
-					cursor.Replace(withoutElement)
+					node.Ordering = withoutElement
 				}
-				node = withoutElement
 				removed = true
 				return true
 			},
 			/*restore*/ func() {
 				if removed {
-					front := make(sqlparser.OrderBy, idx)
-					copy(front, node[:idx])
-					back := make(sqlparser.OrderBy, len(node)-idx)
-					copy(back, node[idx:])
+					front := make([]*sqlparser.Order, idx)
+					copy(front, node.Ordering[:idx])
+					back := make([]*sqlparser.Order, len(node.Ordering)-idx)
+					copy(back, node.Ordering[idx:])
 					frontWithRestoredExpr := append(front, order)
-					node = append(frontWithRestoredExpr, back...)
+					node.Ordering = append(frontWithRestoredExpr, back...)
 					cursor.Replace(node)
 					removed = false
 					return
