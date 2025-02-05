@@ -3242,7 +3242,7 @@ func TestVExplain(t *testing.T) {
 		resp, err := api.VExplain(ctx, &vtadminpb.VExplainRequest{
 			ClusterId: "test",
 			Keyspace:  "test",
-			Sql:       "vexplain all select * from customers;"})
+			Sql:       "vexplain all select * from customers"})
 		require.NoError(t, err)
 		assert.Nil(t, resp, "actor %+v should not be permitted to VExplain", actor)
 	})
@@ -3603,37 +3603,6 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 								TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
 									{Name: "t1", Schema: "create table t1 (id int(11) not null primary key);"},
 									{Name: "t2"},
-								},
-							},
-						},
-					},
-				},
-				GetSrvVSchemaResults: map[string]struct {
-					Response *vtctldatapb.GetSrvVSchemaResponse
-					Error    error
-				}{
-					"zone1": {
-						Response: &vtctldatapb.GetSrvVSchemaResponse{
-							SrvVSchema: &vschemapb.SrvVSchema{
-								Keyspaces: map[string]*vschemapb.Keyspace{
-									"test": {
-										Sharded: true,
-										Vindexes: map[string]*vschemapb.Vindex{
-											"id": {
-												Type: "hash",
-											},
-										},
-										Tables: map[string]*vschemapb.Table{
-											"t1": {
-												ColumnVindexes: []*vschemapb.ColumnVindex{
-													{
-														Name:   "id",
-														Column: "id",
-													},
-												},
-											},
-										},
-									},
 								},
 							},
 						},
