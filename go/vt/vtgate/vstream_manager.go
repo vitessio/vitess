@@ -625,8 +625,9 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 				return vterrors.Wrapf(ctx.Err(), "context ended while streaming from tablet %s in %s/%s",
 					tabletAliasString, sgtid.Keyspace, sgtid.Shard)
 			case streamErr := <-errCh:
-				return vterrors.Wrapf(streamErr, "error streaming from tablet %s in %s/%s",
-					tabletAliasString, sgtid.Keyspace, sgtid.Shard)
+				// You must return Code_UNAVAILABLE here to trigger a restart.
+				return vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "error streaming from tablet %s in %s/%s: %s",
+					tabletAliasString, sgtid.Keyspace, sgtid.Shard, streamErr.Error())
 			case <-journalDone:
 				// Unreachable.
 				// This can happen if a server misbehaves and does not end
