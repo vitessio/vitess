@@ -54,7 +54,7 @@ const (
 	analyzeTableFlag       = "analyze-table"
 )
 
-// DDLStrategy suggests how an ALTER TABLE should run (e.g. "direct", "online", "gh-ost" or "pt-osc")
+// DDLStrategy suggests how an ALTER TABLE should run (e.g. "direct", "online", "mysql")
 type DDLStrategy string
 
 const (

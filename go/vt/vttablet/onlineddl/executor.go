@@ -1709,7 +1709,7 @@ func (e *Executor) scheduleNextMigration(ctx context.Context) error {
 
 		if !(isImmediateOperation && postponeCompletion) {
 			// Any non-postponed migration can be scheduled
-			// postponed ALTER can be scheduled (because gh-ost or vreplication will postpone the cut-over)
+			// postponed ALTER can be scheduled (because vreplication will postpone the cut-over)
 			// We only schedule a single migration in the execution of this function
 			onlyScheduleOneMigration.Do(func() {
 				err = e.updateMigrationStatus(ctx, uuid, schema.OnlineDDLStatusReady)
@@ -1780,7 +1780,6 @@ func (e *Executor) reviewEmptyTableRevertMigrations(ctx context.Context, onlineD
 // - All VIEW operations
 // - An INSTANT DDL accompanied by relevant ddl strategy flags
 // Non immediate operations are:
-// - A gh-ost migration
 // - A vitess (vreplication) migration
 func (e *Executor) reviewImmediateOperations(
 	ctx context.Context,
