@@ -30,7 +30,6 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"time"
 
 	"github.com/spf13/pflag"
@@ -2822,37 +2821,6 @@ func (e *Executor) runNextMigration(ctx context.Context) error {
 	log.Infof("Executor.runNextMigration: migration %s is non conflicting and will be executed next", onlineDDL.UUID)
 	e.executeMigration(ctx, onlineDDL)
 	return nil
-}
-
-// isPTOSCMigrationRunning sees if pt-online-schema-change is running a specific migration,
-// by examining its PID file
-func (e *Executor) isPTOSCMigrationRunning(ctx context.Context, uuid string) (isRunning bool, pid int, err error) {
-	// Try and read its PID file:
-	content, err := os.ReadFile(e.ptPidFileName(uuid))
-	if err != nil {
-		// file probably does not exist (migration not running)
-		// or any other issue --> we can't confirm that the migration is actually running
-		return false, pid, err
-	}
-	contentString := strings.TrimSpace(string(content))
-	//
-	pid, err = strconv.Atoi(contentString)
-	if err != nil {
-		// can't get the PID right. Can't confirm migration is running.
-		return false, pid, err
-	}
-	p, err := os.FindProcess(pid)
-	if err != nil {
-		// can't find the process. Can't confirm migration is running.
-		return false, pid, err
-	}
-	err = p.Signal(syscall.Signal(0))
-	if err != nil {
-		// can't verify process is running. Can't confirm migration is running.
-		return false, pid, err
-	}
-	// AHA! We are able to confirm this pt-osc migration is actually running!
-	return true, pid, nil
 }
 
 // readVReplStream reads _vt.vreplication entries for given workflow
