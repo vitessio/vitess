@@ -30,7 +30,7 @@ import (
 type (
 	Table struct {
 		QTable  *QueryTable
-		VTable  *vindexes.Table
+		VTable  *vindexes.BaseTable
 		Columns []*sqlparser.ColName
 
 		nullaryOperator

@@ -138,7 +138,7 @@ func QualifiedTableNames(ks *vindexes.Keyspace, ts []sqlparser.TableName) []stri
 	return collect()
 }
 
-func QualifiedTables(ks *vindexes.Keyspace, vts []*vindexes.Table) []string {
+func QualifiedTables(ks *vindexes.Keyspace, vts []*vindexes.BaseTable) []string {
 	add, collect := collectSortedUniqueStrings()
 	for _, vt := range vts {
 		add(QualifiedIdentifier(ks, vt.Name))

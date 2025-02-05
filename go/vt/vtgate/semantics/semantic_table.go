@@ -39,7 +39,7 @@ type (
 		Name() (sqlparser.TableName, error)
 
 		// GetVindexTable returns the vschema version of this TableInfo
-		GetVindexTable() *vindexes.Table
+		GetVindexTable() *vindexes.BaseTable
 
 		// IsInfSchema returns true if this table is information_schema
 		IsInfSchema() bool
@@ -165,7 +165,7 @@ type (
 
 	// SchemaInformation is used to provide table information from Vschema.
 	SchemaInformation interface {
-		FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error)
+		FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.BaseTable, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error)
 		ConnCollation() collations.ID
 		Environment() *vtenv.Environment
 		// ForeignKeyMode returns the foreign_key flag value
@@ -436,7 +436,7 @@ func (st *SemTable) HasNonLiteralForeignKeyUpdate(updExprs sqlparser.UpdateExprs
 }
 
 // isShardScoped checks if the foreign key constraint is shard-scoped or not. It uses the vindex information to make this call.
-func isShardScoped(pTable *vindexes.Table, cTable *vindexes.Table, pCols sqlparser.Columns, cCols sqlparser.Columns) bool {
+func isShardScoped(pTable *vindexes.BaseTable, cTable *vindexes.BaseTable, pCols sqlparser.Columns, cCols sqlparser.Columns) bool {
 	if !pTable.Keyspace.Sharded {
 		return true
 	}
@@ -762,11 +762,11 @@ func (st *SemTable) ColumnLookup(col *sqlparser.ColName) (int, error) {
 }
 
 // SingleUnshardedKeyspace returns the single keyspace if all tables in the query are in the same, unsharded keyspace
-func (st *SemTable) SingleUnshardedKeyspace() (ks *vindexes.Keyspace, tables []*vindexes.Table) {
+func (st *SemTable) SingleUnshardedKeyspace() (ks *vindexes.Keyspace, tables []*vindexes.BaseTable) {
 	return singleUnshardedKeyspace(st.Tables)
 }
 
-func singleUnshardedKeyspace(tableInfos []TableInfo) (ks *vindexes.Keyspace, tables []*vindexes.Table) {
+func singleUnshardedKeyspace(tableInfos []TableInfo) (ks *vindexes.Keyspace, tables []*vindexes.BaseTable) {
 	validKS := func(this *vindexes.Keyspace) bool {
 		if this == nil || this.Sharded {
 			return false
@@ -783,7 +783,7 @@ func singleUnshardedKeyspace(tableInfos []TableInfo) (ks *vindexes.Keyspace, tab
 
 	for _, table := range tableInfos {
 		sc := table.canShortCut()
-		var vtbl *vindexes.Table
+		var vtbl *vindexes.BaseTable
 
 		switch sc {
 		case dependsOnKeyspace:

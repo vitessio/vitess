@@ -346,7 +346,7 @@ func (etc *earlyTableCollector) getCTE(t sqlparser.TableName) *CTE {
 }
 
 func (etc *earlyTableCollector) getTableInfo(node *sqlparser.AliasedTableExpr, t sqlparser.TableName, sc *scoper) (TableInfo, error) {
-	var tbl *vindexes.Table
+	var tbl *vindexes.BaseTable
 	var vindex vindexes.Vindex
 	if cteDef := etc.getCTE(t); cteDef != nil {
 		cte, err := etc.buildRecursiveCTE(node, t, sc, cteDef)
@@ -504,7 +504,7 @@ func (tc *tableCollector) addUnionDerivedTable(
 	return scope.addTable(tableInfo)
 }
 
-func newVindexTable(t sqlparser.IdentifierCS) *vindexes.Table {
+func newVindexTable(t sqlparser.IdentifierCS) *vindexes.BaseTable {
 	vindexCols := []vindexes.Column{
 		{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_VARBINARY},
 		{Name: sqlparser.NewIdentifierCI("keyspace_id"), Type: querypb.Type_VARBINARY},
@@ -514,7 +514,7 @@ func newVindexTable(t sqlparser.IdentifierCS) *vindexes.Table {
 		{Name: sqlparser.NewIdentifierCI("shard"), Type: querypb.Type_VARBINARY},
 	}
 
-	return &vindexes.Table{
+	return &vindexes.BaseTable{
 		Name:                    t,
 		Columns:                 vindexCols,
 		ColumnListAuthoritative: true,
@@ -544,7 +544,7 @@ func (tc *tableCollector) tableInfoFor(id TableSet) (TableInfo, error) {
 func (etc *earlyTableCollector) createTable(
 	t sqlparser.TableName,
 	alias *sqlparser.AliasedTableExpr,
-	tbl *vindexes.Table,
+	tbl *vindexes.BaseTable,
 	isInfSchema bool,
 	vindex vindexes.Vindex,
 ) (TableInfo, error) {
@@ -591,7 +591,7 @@ func (etc *earlyTableCollector) createTable(
 	return table, nil
 }
 
-func checkValidVindexHints(hint *sqlparser.IndexHint, tbl *vindexes.Table) error {
+func checkValidVindexHints(hint *sqlparser.IndexHint, tbl *vindexes.BaseTable) error {
 	if hint == nil {
 		return nil
 	}
