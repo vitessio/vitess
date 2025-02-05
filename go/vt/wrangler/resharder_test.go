@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -218,7 +219,10 @@ func TestResharderOneRefTable(t *testing.T) {
 			},
 		},
 	}
-	if err := env.wr.ts.SaveVSchema(context.Background(), env.keyspace, vs); err != nil {
+	if err := env.wr.ts.SaveVSchema(context.Background(), &topo.KeyspaceVSchemaInfo{
+		Name:     env.keyspace,
+		Keyspace: vs,
+	}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -272,7 +276,10 @@ func TestReshardStopFlags(t *testing.T) {
 			},
 		},
 	}
-	if err := env.wr.ts.SaveVSchema(context.Background(), env.keyspace, vs); err != nil {
+	if err := env.wr.ts.SaveVSchema(context.Background(), &topo.KeyspaceVSchemaInfo{
+		Name:     env.keyspace,
+		Keyspace: vs,
+	}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -325,7 +332,10 @@ func TestResharderOneRefStream(t *testing.T) {
 			},
 		},
 	}
-	if err := env.wr.ts.SaveVSchema(context.Background(), env.keyspace, vs); err != nil {
+	if err := env.wr.ts.SaveVSchema(context.Background(), &topo.KeyspaceVSchemaInfo{
+		Name:     env.keyspace,
+		Keyspace: vs,
+	}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -404,7 +414,10 @@ func TestResharderNoRefStream(t *testing.T) {
 			},
 		},
 	}
-	if err := env.wr.ts.SaveVSchema(context.Background(), env.keyspace, vs); err != nil {
+	if err := env.wr.ts.SaveVSchema(context.Background(), &topo.KeyspaceVSchemaInfo{
+		Name:     env.keyspace,
+		Keyspace: vs,
+	}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -627,7 +640,10 @@ func TestResharderUnnamedStream(t *testing.T) {
 			},
 		},
 	}
-	if err := env.wr.ts.SaveVSchema(context.Background(), env.keyspace, vs); err != nil {
+	if err := env.wr.ts.SaveVSchema(context.Background(), &topo.KeyspaceVSchemaInfo{
+		Name:     env.keyspace,
+		Keyspace: vs,
+	}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -677,7 +693,10 @@ func TestResharderMismatchedRefStreams(t *testing.T) {
 			},
 		},
 	}
-	if err := env.wr.ts.SaveVSchema(context.Background(), env.keyspace, vs); err != nil {
+	if err := env.wr.ts.SaveVSchema(context.Background(), &topo.KeyspaceVSchemaInfo{
+		Name:     env.keyspace,
+		Keyspace: vs,
+	}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -797,7 +816,10 @@ func TestResharderMixedTablesOrder1(t *testing.T) {
 			},
 		},
 	}
-	if err := env.wr.ts.SaveVSchema(context.Background(), env.keyspace, vs); err != nil {
+	if err := env.wr.ts.SaveVSchema(context.Background(), &topo.KeyspaceVSchemaInfo{
+		Name:     env.keyspace,
+		Keyspace: vs,
+	}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -866,7 +888,10 @@ func TestResharderMixedTablesOrder2(t *testing.T) {
 			},
 		},
 	}
-	if err := env.wr.ts.SaveVSchema(context.Background(), env.keyspace, vs); err != nil {
+	if err := env.wr.ts.SaveVSchema(context.Background(), &topo.KeyspaceVSchemaInfo{
+		Name:     env.keyspace,
+		Keyspace: vs,
+	}); err != nil {
 		t.Fatal(err)
 	}
 

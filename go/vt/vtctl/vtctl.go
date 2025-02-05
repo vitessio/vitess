@@ -1886,31 +1886,35 @@ func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	}
 
 	if ktype == topodatapb.KeyspaceType_SNAPSHOT {
-		// copy vschema from base keyspace
-		vs, err := wr.TopoServer().GetVSchema(ctx, *baseKeyspace)
+		// Copy vschema from the base keyspace.
+		bksvs, err := wr.TopoServer().GetVSchema(ctx, *baseKeyspace)
+		ksvs := &topo.KeyspaceVSchemaInfo{
+			Name: keyspace,
+		}
 		if err != nil {
 			wr.Logger().Infof("error from GetVSchema for base_keyspace: %v, %v", *baseKeyspace, err)
 			if topo.IsErrType(err, topo.NoNode) {
-				vs = &vschemapb.Keyspace{
-					Sharded:                false,
-					Tables:                 make(map[string]*vschemapb.Table),
-					Vindexes:               make(map[string]*vschemapb.Vindex),
-					RequireExplicitRouting: true,
+				// Create an empty vschema for the keyspace.
+				ksvs.Keyspace = &vschemapb.Keyspace{
+					Sharded:  false,
+					Tables:   make(map[string]*vschemapb.Table),
+					Vindexes: make(map[string]*vschemapb.Vindex),
 				}
 			} else {
 				return err
 			}
-		} else {
-			// SNAPSHOT keyspaces are excluded from global routing.
-			vs.RequireExplicitRouting = true
 		}
-		if err := wr.TopoServer().SaveVSchema(ctx, keyspace, vs); err != nil {
-			wr.Logger().Infof("error from SaveVSchema %v:%v", vs, err)
+		// Copy the vschema from the base keyspace to the new one.
+		ksvs.Keyspace = bksvs.Keyspace.CloneVT()
+		// SNAPSHOT keyspaces are excluded from global routing.
+		ksvs.RequireExplicitRouting = true
+		if err := wr.TopoServer().SaveVSchema(ctx, ksvs); err != nil {
+			wr.Logger().Infof("error from SaveVSchema %v:%v", ksvs, err)
 			return err
 		}
 	}
 
-	return wr.TopoServer().RebuildSrvVSchema(ctx, []string{} /* cells */)
+	return wr.TopoServer().RebuildSrvVSchema(ctx, nil /* cells */)
 }
 
 func commandDeleteKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
@@ -3344,7 +3348,7 @@ func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *p
 	}
 	keyspace := subFlags.Arg(0)
 
-	var vs *vschemapb.Keyspace
+	var ksvs *topo.KeyspaceVSchemaInfo
 	var err error
 
 	sqlMode := (*sql != "") != (*sqlFile != "")
@@ -3376,20 +3380,10 @@ func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *p
 			return fmt.Errorf("error parsing vschema statement `%s`: not a ddl statement", *sql)
 		}
 
-		vs, err = wr.TopoServer().GetVSchema(ctx, keyspace)
-		if err != nil {
-			if topo.IsErrType(err, topo.NoNode) {
-				vs = &vschemapb.Keyspace{}
-			} else {
-				return err
-			}
-		}
-
-		vs, err = topotools.ApplyVSchemaDDL(keyspace, vs, ddl)
+		ksvs, err = topotools.ApplyVSchemaDDL(ctx, keyspace, wr.TopoServer(), ddl)
 		if err != nil {
 			return err
 		}
-
 	} else {
 		// json mode
 		var schema []byte
@@ -3403,14 +3397,17 @@ func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *p
 			schema = []byte(*vschema)
 		}
 
-		vs = &vschemapb.Keyspace{}
-		err := json2.UnmarshalPB(schema, vs)
+		ksvs = &topo.KeyspaceVSchemaInfo{
+			Name:     keyspace,
+			Keyspace: &vschemapb.Keyspace{},
+		}
+		err := json2.UnmarshalPB(schema, ksvs.Keyspace)
 		if err != nil {
 			return err
 		}
 	}
 
-	b, err := json2.MarshalIndentPB(vs, "  ")
+	b, err := json2.MarshalIndentPB(ksvs.Keyspace, "  ")
 	if err != nil {
 		wr.Logger().Errorf2(err, "Failed to marshal VSchema for display")
 	} else {
@@ -3418,7 +3415,7 @@ func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *p
 	}
 
 	// Validate the VSchema.
-	ksVs, err := vindexes.BuildKeyspace(vs, wr.SQLParser())
+	ksVs, err := vindexes.BuildKeyspace(ksvs.Keyspace, wr.SQLParser())
 	if err != nil {
 		return err
 	}
@@ -3450,11 +3447,11 @@ func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *p
 		return err
 	}
 
-	if _, err := vindexes.BuildKeyspace(vs, wr.SQLParser()); err != nil {
+	if _, err := vindexes.BuildKeyspace(ksvs.Keyspace, wr.SQLParser()); err != nil {
 		return err
 	}
 
-	if err := wr.TopoServer().SaveVSchema(ctx, keyspace, vs); err != nil {
+	if err := wr.TopoServer().SaveVSchema(ctx, ksvs); err != nil {
 		return err
 	}
 

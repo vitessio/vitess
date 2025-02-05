@@ -65,7 +65,7 @@ func newLookupVindex(ws *Server) *lookupVindex {
 
 // prepareCreate performs the preparatory steps for creating a Lookup Vindex.
 func (lv *lookupVindex) prepareCreate(ctx context.Context, workflow, keyspace string, specs *vschemapb.Keyspace, continueAfterCopyWithOwner bool) (
-	ms *vtctldatapb.MaterializeSettings, sourceVSchema, targetVSchema *vschemapb.Keyspace, cancelFunc func() error, err error) {
+	ms *vtctldatapb.MaterializeSettings, sourceVSchema, targetVSchema *topo.KeyspaceVSchemaInfo, cancelFunc func() error, err error) {
 	var (
 		// sourceVSchemaTable is the table info present in the vschema.
 		sourceVSchemaTable *vschemapb.Table
@@ -146,8 +146,12 @@ func (lv *lookupVindex) prepareCreate(ctx context.Context, workflow, keyspace st
 	materializeQuery = generateMaterializeQuery(vInfo, vindex, sourceVindexColumns)
 
 	// Save a copy of the original vschema if we modify it and need to provide
-	// a cancelFunc.
-	ogTargetVSchema := targetVSchema.CloneVT()
+	// a cancelFunc. We do NOT want to clone the key version as we explicitly
+	// want to go back in time. So we only clone the internal vschema.Keyspace.
+	origTargetVSchema := &topo.KeyspaceVSchemaInfo{
+		Name:     vInfo.targetKeyspace,
+		Keyspace: targetVSchema.Keyspace.CloneVT(),
+	}
 	targetChanged := false
 
 	// Update targetVSchema.
@@ -215,7 +219,7 @@ func (lv *lookupVindex) prepareCreate(ctx context.Context, workflow, keyspace st
 	if targetChanged {
 		cancelFunc = func() error {
 			// Restore the original target vschema.
-			return lv.ts.SaveVSchema(ctx, vInfo.targetKeyspace, ogTargetVSchema)
+			return lv.ts.SaveVSchema(ctx, origTargetVSchema)
 		}
 	}
 
@@ -326,7 +330,7 @@ func (lv *lookupVindex) validateAndGetVindex(specs *vschemapb.Keyspace) (*vschem
 	}, nil
 }
 
-func (lv *lookupVindex) getTargetAndSourceVSchema(ctx context.Context, sourceKeyspace string, targetKeyspace string) (sourceVSchema *vschemapb.Keyspace, targetVSchema *vschemapb.Keyspace, err error) {
+func (lv *lookupVindex) getTargetAndSourceVSchema(ctx context.Context, sourceKeyspace, targetKeyspace string) (sourceVSchema, targetVSchema *topo.KeyspaceVSchemaInfo, err error) {
 	sourceVSchema, err = lv.ts.GetVSchema(ctx, sourceKeyspace)
 	if err != nil {
 		return nil, nil, err

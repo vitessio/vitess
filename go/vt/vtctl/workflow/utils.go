@@ -17,7 +17,6 @@ limitations under the License.
 package workflow
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -627,9 +626,7 @@ func ReverseWorkflowName(workflow string) string {
 // this public, but it doesn't belong in package workflow. Maybe package sqltypes,
 // or maybe package sqlescape?
 func encodeString(in string) string {
-	buf := bytes.NewBuffer(nil)
-	sqltypes.NewVarChar(in).EncodeSQL(buf)
-	return buf.String()
+	return sqltypes.EncodeStringSQL(in)
 }
 
 func getRenameFileName(tableName string) string {
@@ -1055,7 +1052,7 @@ func validateSourceTablesExist(sourceKeyspace string, ksTables, tables []string)
 
 // getVindexAndVSchema gets the vindex (from VSchema) and VSchema with the
 // provided vindex name and keyspace.
-func getVindexAndVSchema(ctx context.Context, ts *topo.Server, keyspace string, vindexName string) (*vschemapb.Vindex, *vschemapb.Keyspace, error) {
+func getVindexAndVSchema(ctx context.Context, ts *topo.Server, keyspace string, vindexName string) (*vschemapb.Vindex, *topo.KeyspaceVSchemaInfo, error) {
 	vschema, err := ts.GetVSchema(ctx, keyspace)
 	if err != nil {
 		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get vschema for the %s keyspace", keyspace)

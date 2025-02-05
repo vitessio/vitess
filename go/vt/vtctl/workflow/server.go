@@ -610,7 +610,7 @@ func (s *Server) LookupVindexCreate(ctx context.Context, req *vtctldatapb.Lookup
 		return nil, err
 	}
 
-	if err := s.ts.SaveVSchema(ctx, ms.TargetKeyspace, targetVSchema); err != nil {
+	if err := s.ts.SaveVSchema(ctx, targetVSchema); err != nil {
 		return nil, vterrors.Wrapf(err, "failed to save updated vschema '%v' in the %s keyspace",
 			targetVSchema, ms.TargetKeyspace)
 	}
@@ -626,7 +626,7 @@ func (s *Server) LookupVindexCreate(ctx context.Context, req *vtctldatapb.Lookup
 		return nil, err
 	}
 	if ms.SourceKeyspace != ms.TargetKeyspace {
-		if err := s.ts.SaveVSchema(ctx, ms.SourceKeyspace, sourceVSchema); err != nil {
+		if err := s.ts.SaveVSchema(ctx, sourceVSchema); err != nil {
 			return nil, vterrors.Wrapf(err, "failed to save updated vschema '%v' in the %s keyspace",
 				sourceVSchema, ms.SourceKeyspace)
 		}
@@ -651,7 +651,7 @@ func (s *Server) LookupVindexExternalize(ctx context.Context, req *vtctldatapb.L
 	span.Annotate("table_keyspace", req.TableKeyspace)
 	span.Annotate("delete_workflow", req.DeleteWorkflow)
 
-	vindex, sourceVSchema, err := getVindexAndVSchema(ctx, s.ts, req.Keyspace, req.Name)
+	vindex, sourceKsVS, err := getVindexAndVSchema(ctx, s.ts, req.Keyspace, req.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -741,7 +741,7 @@ func (s *Server) LookupVindexExternalize(ctx context.Context, req *vtctldatapb.L
 
 	// Remove the write_only param and save the source vschema.
 	delete(vindex.Params, "write_only")
-	if err := s.ts.SaveVSchema(ctx, req.Keyspace, sourceVSchema); err != nil {
+	if err := s.ts.SaveVSchema(ctx, sourceKsVS); err != nil {
 		return nil, err
 	}
 	return resp, s.ts.RebuildSrvVSchema(ctx, nil)
@@ -756,7 +756,7 @@ func (s *Server) LookupVindexInternalize(ctx context.Context, req *vtctldatapb.L
 	span.Annotate("name", req.Name)
 	span.Annotate("table_keyspace", req.TableKeyspace)
 
-	vindex, sourceVSchema, err := getVindexAndVSchema(ctx, s.ts, req.Keyspace, req.Name)
+	vindex, sourceKsVS, err := getVindexAndVSchema(ctx, s.ts, req.Keyspace, req.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -773,7 +773,7 @@ func (s *Server) LookupVindexInternalize(ctx context.Context, req *vtctldatapb.L
 
 	// Make the vindex back to write_only and save the source vschema.
 	vindex.Params["write_only"] = "true"
-	if err := s.ts.SaveVSchema(ctx, req.Keyspace, sourceVSchema); err != nil {
+	if err := s.ts.SaveVSchema(ctx, sourceKsVS); err != nil {
 		return nil, err
 	}
 
@@ -915,9 +915,10 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		s.Logger().Infof("Successfully opened external topo: %+v", externalTopo)
 	}
 
-	var vschema *vschemapb.Keyspace
-	var origVSchema *vschemapb.Keyspace // If we need to rollback a failed create
-	vschema, err = s.ts.GetVSchema(ctx, targetKeyspace)
+	origVSchema := &topo.KeyspaceVSchemaInfo{ // If we need to rollback a failed create
+		Name: targetKeyspace,
+	}
+	vschema, err := s.ts.GetVSchema(ctx, targetKeyspace)
 	if err != nil {
 		return nil, err
 	}
@@ -973,12 +974,14 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 
 	if !vschema.Sharded {
 		// Save the original in case we need to restore it for a late failure in
-		// the defer().
-		origVSchema = vschema.CloneVT()
-		if err := s.addTablesToVSchema(ctx, sourceKeyspace, vschema, tables, externalTopo == nil); err != nil {
+		// the defer(). We do NOT want to clone the version field as we will
+		// intentionally be going back in time. So we only clone the internal
+		// vschemapb.Keyspace field.
+		origVSchema.Keyspace = vschema.Keyspace.CloneVT()
+		if err := s.addTablesToVSchema(ctx, sourceKeyspace, vschema.Keyspace, tables, externalTopo == nil); err != nil {
 			return nil, err
 		}
-		if err := s.ts.SaveVSchema(ctx, targetKeyspace, vschema); err != nil {
+		if err := s.ts.SaveVSchema(ctx, vschema); err != nil {
 			return nil, err
 		}
 	}
@@ -1079,7 +1082,7 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 			if origVSchema == nil { // There's no previous version to restore
 				return
 			}
-			if cerr := s.ts.SaveVSchema(ctx, targetKeyspace, origVSchema); cerr != nil {
+			if cerr := s.ts.SaveVSchema(ctx, origVSchema); cerr != nil {
 				err = vterrors.Wrapf(err, "failed to restore original target vschema: %v", cerr)
 			}
 		}
@@ -2146,7 +2149,7 @@ func (s *Server) buildTrafficSwitcher(ctx context.Context, targetKeyspace, workf
 	if err != nil {
 		return nil, err
 	}
-	ts.sourceKSSchema, err = vindexes.BuildKeyspaceSchema(vs, ts.sourceKeyspace, s.env.Parser())
+	ts.sourceKSSchema, err = vindexes.BuildKeyspaceSchema(vs.Keyspace, ts.sourceKeyspace, s.env.Parser())
 	if err != nil {
 		return nil, err
 	}
@@ -2917,8 +2920,10 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 			return handleError("failed to migrate the workflow streams", err)
 		}
 		if cancel {
-			sw.cancelMigration(ctx, sm)
-			return 0, sw.logs(), nil
+			if cerr := sw.cancelMigration(ctx, sm); cerr != nil {
+				err = vterrors.Errorf(vtrpcpb.Code_CANCELED, "%v\n\n%v", err, cerr)
+			}
+			return 0, sw.logs(), err
 		}
 
 		// We stop writes on the source before stopping the source streams so that the catchup time
@@ -2930,7 +2935,9 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 		// we actually stop them.
 		ts.Logger().Infof("Stopping source writes")
 		if err := sw.stopSourceWrites(ctx); err != nil {
-			sw.cancelMigration(ctx, sm)
+			if cerr := sw.cancelMigration(ctx, sm); cerr != nil {
+				err = vterrors.Errorf(vtrpcpb.Code_CANCELED, "%v\n\n%v", err, cerr)
+			}
 			return handleError(fmt.Sprintf("failed to stop writes in the %s keyspace", ts.SourceKeyspaceName()), err)
 		}
 
@@ -2948,7 +2955,9 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 					ts.Logger().Errorf("stream in stopStreams: key %s shard %s stream %+v", key, stream.BinlogSource.Shard, stream.BinlogSource)
 				}
 			}
-			sw.cancelMigration(ctx, sm)
+			if cerr := sw.cancelMigration(ctx, sm); cerr != nil {
+				err = vterrors.Errorf(vtrpcpb.Code_CANCELED, "%v\n\n%v", err, cerr)
+			}
 			return handleError(fmt.Sprintf("failed to stop the workflow streams in the %s keyspace", ts.SourceKeyspaceName()), err)
 		}
 
@@ -2958,7 +2967,9 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 			// the tablet's deny list check and the first mysqld side table lock.
 			for cnt := 1; cnt <= lockTablesCycles; cnt++ {
 				if err := ts.executeLockTablesOnSource(ctx); err != nil {
-					sw.cancelMigration(ctx, sm)
+					if cerr := sw.cancelMigration(ctx, sm); cerr != nil {
+						err = vterrors.Errorf(vtrpcpb.Code_CANCELED, "%v\n\n%v", err, cerr)
+					}
 					return handleError(fmt.Sprintf("failed to execute LOCK TABLES (attempt %d of %d) on sources", cnt, lockTablesCycles), err)
 				}
 				// No need to UNLOCK the tables as the connection was closed once the locks were acquired
@@ -2979,7 +2990,9 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 		}
 		ts.Logger().Infof("Waiting for streams to catchup")
 		if err := sw.waitForCatchup(ctx, waitTimeout); err != nil {
-			sw.cancelMigration(ctx, sm)
+			if cerr := sw.cancelMigration(ctx, sm); cerr != nil {
+				err = vterrors.Errorf(vtrpcpb.Code_CANCELED, "%v\n\n%v", err, cerr)
+			}
 			return handleError("failed to sync up replication between the source and target", err)
 		}
 
@@ -2988,7 +3001,9 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 		}
 		ts.Logger().Infof("Migrating streams")
 		if err := sw.migrateStreams(ctx, sm); err != nil {
-			sw.cancelMigration(ctx, sm)
+			if cerr := sw.cancelMigration(ctx, sm); cerr != nil {
+				err = vterrors.Errorf(vtrpcpb.Code_CANCELED, "%v\n\n%v", err, cerr)
+			}
 			return handleError("failed to migrate the workflow streams", err)
 		}
 
@@ -2997,7 +3012,9 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 		}
 		ts.Logger().Infof("Resetting sequences")
 		if err := sw.resetSequences(ctx); err != nil {
-			sw.cancelMigration(ctx, sm)
+			if cerr := sw.cancelMigration(ctx, sm); cerr != nil {
+				err = vterrors.Errorf(vtrpcpb.Code_CANCELED, "%v\n\n%v", err, cerr)
+			}
 			return handleError("failed to reset the sequences", err)
 		}
 
@@ -3006,7 +3023,9 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 		}
 		ts.Logger().Infof("Creating reverse streams")
 		if err := sw.createReverseVReplication(ctx); err != nil {
-			sw.cancelMigration(ctx, sm)
+			if cerr := sw.cancelMigration(ctx, sm); cerr != nil {
+				err = vterrors.Errorf(vtrpcpb.Code_CANCELED, "%v\n\n%v", err, cerr)
+			}
 			return handleError("failed to create the reverse vreplication streams", err)
 		}
 
@@ -3021,7 +3040,9 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 			initSeqCtx, cancel := context.WithTimeout(ctx, waitTimeout/2)
 			defer cancel()
 			if err := sw.initializeTargetSequences(initSeqCtx, sequenceMetadata); err != nil {
-				sw.cancelMigration(ctx, sm)
+				if cerr := sw.cancelMigration(ctx, sm); cerr != nil {
+					err = vterrors.Errorf(vtrpcpb.Code_CANCELED, "%v\n\n%v", err, cerr)
+				}
 				return handleError(fmt.Sprintf("failed to initialize the sequences used in the %s keyspace", ts.TargetKeyspaceName()), err)
 			}
 		}
@@ -3071,14 +3092,13 @@ func (s *Server) canSwitch(ctx context.Context, ts *trafficSwitcher, maxAllowedR
 	if err != nil {
 		return "", err
 	}
+	if wf.MaxVReplicationTransactionLag > maxAllowedReplLagSecs {
+		return fmt.Sprintf(cannotSwitchHighLag, wf.MaxVReplicationTransactionLag, maxAllowedReplLagSecs), nil
+	}
 	for _, stream := range wf.ShardStreams {
 		for _, st := range stream.GetStreams() {
 			if st.Message == Frozen {
 				return cannotSwitchFrozen, nil
-			}
-			// If no new events have been replicated after the copy phase then it will be 0.
-			if vreplLag := time.Now().Unix() - st.TimeUpdated.Seconds; vreplLag > maxAllowedReplLagSecs {
-				return fmt.Sprintf(cannotSwitchHighLag, vreplLag, maxAllowedReplLagSecs), nil
 			}
 			switch st.State {
 			case binlogdatapb.VReplicationWorkflowState_Copying.String():
