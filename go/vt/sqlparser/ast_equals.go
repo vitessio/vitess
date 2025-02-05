@@ -1034,12 +1034,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfOrder(a, b)
-	case OrderBy:
-		b, ok := inB.(OrderBy)
+	case *OrderBy:
+		b, ok := inB.(*OrderBy)
 		if !ok {
 			return false
 		}
-		return cmp.OrderBy(a, b)
+		return cmp.RefOfOrderBy(a, b)
 	case *OrderByOption:
 		b, ok := inB.(*OrderByOption)
 		if !ok {
@@ -2406,7 +2406,7 @@ func (cmp *Comparator) RefOfDelete(a, b *Delete) bool {
 		cmp.TableNames(a.Targets, b.Targets) &&
 		cmp.Partitions(a.Partitions, b.Partitions) &&
 		cmp.RefOfWhere(a.Where, b.Where) &&
-		cmp.OrderBy(a.OrderBy, b.OrderBy) &&
+		cmp.RefOfOrderBy(a.OrderBy, b.OrderBy) &&
 		cmp.RefOfLimit(a.Limit, b.Limit)
 }
 
@@ -2840,7 +2840,7 @@ func (cmp *Comparator) RefOfGroupConcatExpr(a, b *GroupConcatExpr) bool {
 	return a.Distinct == b.Distinct &&
 		a.Separator == b.Separator &&
 		cmp.SliceOfExpr(a.Exprs, b.Exprs) &&
-		cmp.OrderBy(a.OrderBy, b.OrderBy) &&
+		cmp.RefOfOrderBy(a.OrderBy, b.OrderBy) &&
 		cmp.RefOfLimit(a.Limit, b.Limit)
 }
 
@@ -3734,17 +3734,15 @@ func (cmp *Comparator) RefOfOrder(a, b *Order) bool {
 		a.Direction == b.Direction
 }
 
-// OrderBy does deep equals between the two objects.
-func (cmp *Comparator) OrderBy(a, b OrderBy) bool {
-	if len(a) != len(b) {
+// RefOfOrderBy does deep equals between the two objects.
+func (cmp *Comparator) RefOfOrderBy(a, b *OrderBy) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
 		return false
 	}
-	for i := 0; i < len(a); i++ {
-		if !cmp.RefOfOrder(a[i], b[i]) {
-			return false
-		}
-	}
-	return true
+	return cmp.SliceOfRefOfOrder(a.Ordering, b.Ordering)
 }
 
 // RefOfOrderByOption does deep equals between the two objects.
@@ -4211,7 +4209,7 @@ func (cmp *Comparator) RefOfSelect(a, b *Select) bool {
 		cmp.RefOfGroupBy(a.GroupBy, b.GroupBy) &&
 		cmp.RefOfWhere(a.Having, b.Having) &&
 		cmp.NamedWindows(a.Windows, b.Windows) &&
-		cmp.OrderBy(a.OrderBy, b.OrderBy) &&
+		cmp.RefOfOrderBy(a.OrderBy, b.OrderBy) &&
 		cmp.RefOfLimit(a.Limit, b.Limit) &&
 		a.Lock == b.Lock &&
 		cmp.RefOfSelectInto(a.Into, b.Into)
@@ -4689,7 +4687,7 @@ func (cmp *Comparator) RefOfUnion(a, b *Union) bool {
 		cmp.RefOfWith(a.With, b.With) &&
 		cmp.TableStatement(a.Left, b.Left) &&
 		cmp.TableStatement(a.Right, b.Right) &&
-		cmp.OrderBy(a.OrderBy, b.OrderBy) &&
+		cmp.RefOfOrderBy(a.OrderBy, b.OrderBy) &&
 		cmp.RefOfLimit(a.Limit, b.Limit) &&
 		a.Lock == b.Lock &&
 		cmp.RefOfSelectInto(a.Into, b.Into)
@@ -4720,7 +4718,7 @@ func (cmp *Comparator) RefOfUpdate(a, b *Update) bool {
 		cmp.SliceOfTableExpr(a.TableExprs, b.TableExprs) &&
 		cmp.UpdateExprs(a.Exprs, b.Exprs) &&
 		cmp.RefOfWhere(a.Where, b.Where) &&
-		cmp.OrderBy(a.OrderBy, b.OrderBy) &&
+		cmp.RefOfOrderBy(a.OrderBy, b.OrderBy) &&
 		cmp.RefOfLimit(a.Limit, b.Limit)
 }
 
@@ -4861,7 +4859,7 @@ func (cmp *Comparator) RefOfValuesStatement(a, b *ValuesStatement) bool {
 		cmp.Values(a.Rows, b.Rows) &&
 		a.ListArg == b.ListArg &&
 		cmp.RefOfParsedComments(a.Comments, b.Comments) &&
-		cmp.OrderBy(a.Order, b.Order) &&
+		cmp.RefOfOrderBy(a.OrderBy, b.OrderBy) &&
 		cmp.RefOfLimit(a.Limit, b.Limit)
 }
 
@@ -5003,7 +5001,7 @@ func (cmp *Comparator) RefOfWindowSpecification(a, b *WindowSpecification) bool 
 	}
 	return cmp.IdentifierCI(a.Name, b.Name) &&
 		cmp.SliceOfExpr(a.PartitionClause, b.PartitionClause) &&
-		cmp.OrderBy(a.OrderClause, b.OrderClause) &&
+		cmp.RefOfOrderBy(a.OrderClause, b.OrderClause) &&
 		cmp.RefOfFrameClause(a.FrameClause, b.FrameClause)
 }
 
@@ -7566,6 +7564,19 @@ func (cmp *Comparator) SliceOfRefOfColName(a, b []*ColName) bool {
 	}
 	for i := 0; i < len(a); i++ {
 		if !cmp.RefOfColName(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// SliceOfRefOfOrder does deep equals between the two objects.
+func (cmp *Comparator) SliceOfRefOfOrder(a, b []*Order) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !cmp.RefOfOrder(a[i], b[i]) {
 			return false
 		}
 	}

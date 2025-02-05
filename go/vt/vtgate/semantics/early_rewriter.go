@@ -70,7 +70,7 @@ func (r *earlyRewriter) handleDerivedTable(dt *sqlparser.DerivedTable) error {
 	if !ok {
 		return nil
 	}
-	if len(sel.OrderBy) > 0 && sel.Limit == nil {
+	if len(sel.OrderBy.GetOrdering()) > 0 && sel.Limit == nil {
 		// inside derived tables, we can safely remove ORDER BY clauses if there is no LIMIT clause
 		sel.OrderBy = nil
 	}
@@ -92,7 +92,7 @@ func (r *earlyRewriter) up(cursor *sqlparser.Cursor) error {
 			idx:  -1,
 		}
 		return r.handleGroupBy(cursor.Parent(), iter)
-	case sqlparser.OrderBy:
+	case *sqlparser.OrderBy:
 		r.clause = "order clause"
 		iter := &orderByIterator{
 			node: node,
@@ -234,7 +234,7 @@ func (r *earlyRewriter) handleSelectExprs(cursor *sqlparser.Cursor, node *sqlpar
 }
 
 type orderByIterator struct {
-	node sqlparser.OrderBy
+	node *sqlparser.OrderBy
 	idx  int
 	r    *earlyRewriter
 }
@@ -242,18 +242,18 @@ type orderByIterator struct {
 func (it *orderByIterator) next() sqlparser.Expr {
 	it.idx++
 
-	if it.idx >= len(it.node) {
+	if it.idx >= len(it.node.Ordering) {
 		return nil
 	}
 
-	return it.node[it.idx].Expr
+	return it.node.Ordering[it.idx].Expr
 }
 
 func (it *orderByIterator) replace(e sqlparser.Expr) (err error) {
-	if it.idx >= len(it.node) {
+	if it.idx >= len(it.node.Ordering) {
 		return vterrors.VT13001("went past the last item")
 	}
-	it.node[it.idx].Expr = e
+	it.node.Ordering[it.idx].Expr = e
 	return nil
 }
 

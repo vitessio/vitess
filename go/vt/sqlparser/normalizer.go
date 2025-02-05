@@ -749,7 +749,7 @@ func (nz *normalizer) unnestSubQueries(cursor *Cursor, subquery *Subquery) {
 	}
 
 	if len(sel.SelectExprs.Exprs) != 1 ||
-		len(sel.OrderBy) != 0 ||
+		len(sel.OrderBy.GetOrdering()) != 0 ||
 		sel.GroupBy != nil ||
 		len(sel.From) != 1 ||
 		sel.Where != nil ||

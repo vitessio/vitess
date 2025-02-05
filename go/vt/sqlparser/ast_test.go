@@ -131,7 +131,7 @@ func TestAddOrder(t *testing.T) {
 	parser := NewTestParser()
 	src, err := parser.Parse("select foo, bar from baz order by foo")
 	require.NoError(t, err)
-	order := src.(*Select).OrderBy[0]
+	order := src.(*Select).OrderBy.GetOrdering()[0]
 	dst, err := parser.Parse("select * from t")
 	require.NoError(t, err)
 	dst.(*Select).AddOrder(order)

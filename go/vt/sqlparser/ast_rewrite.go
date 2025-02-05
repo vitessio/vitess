@@ -358,8 +358,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfOrExpr(parent, node, replacer)
 	case *Order:
 		return a.rewriteRefOfOrder(parent, node, replacer)
-	case OrderBy:
-		return a.rewriteOrderBy(parent, node, replacer)
+	case *OrderBy:
+		return a.rewriteRefOfOrderBy(parent, node, replacer)
 	case *OrderByOption:
 		return a.rewriteRefOfOrderByOption(parent, node, replacer)
 	case *OtherAdmin:
@@ -2682,8 +2682,8 @@ func (a *application) rewriteRefOfDelete(parent SQLNode, node *Delete, replacer 
 	}) {
 		return false
 	}
-	if !a.rewriteOrderBy(node, node.OrderBy, func(newNode, parent SQLNode) {
-		parent.(*Delete).OrderBy = newNode.(OrderBy)
+	if !a.rewriteRefOfOrderBy(node, node.OrderBy, func(newNode, parent SQLNode) {
+		parent.(*Delete).OrderBy = newNode.(*OrderBy)
 	}) {
 		return false
 	}
@@ -3949,8 +3949,8 @@ func (a *application) rewriteRefOfGroupConcatExpr(parent SQLNode, node *GroupCon
 			return false
 		}
 	}
-	if !a.rewriteOrderBy(node, node.OrderBy, func(newNode, parent SQLNode) {
-		parent.(*GroupConcatExpr).OrderBy = newNode.(OrderBy)
+	if !a.rewriteRefOfOrderBy(node, node.OrderBy, func(newNode, parent SQLNode) {
+		parent.(*GroupConcatExpr).OrderBy = newNode.(*OrderBy)
 	}) {
 		return false
 	}
@@ -6661,7 +6661,7 @@ func (a *application) rewriteRefOfOrder(parent SQLNode, node *Order, replacer re
 	}
 	return true
 }
-func (a *application) rewriteOrderBy(parent SQLNode, node OrderBy, replacer replacerFunc) bool {
+func (a *application) rewriteRefOfOrderBy(parent SQLNode, node *OrderBy, replacer replacerFunc) bool {
 	if node == nil {
 		return true
 	}
@@ -6678,10 +6678,10 @@ func (a *application) rewriteOrderBy(parent SQLNode, node OrderBy, replacer repl
 			return true
 		}
 	}
-	for x, el := range node {
+	for x, el := range node.Ordering {
 		if !a.rewriteRefOfOrder(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
-				parent.(OrderBy)[idx] = newNode.(*Order)
+				parent.(*OrderBy).Ordering[idx] = newNode.(*Order)
 			}
 		}(x)) {
 			return false
@@ -8078,8 +8078,8 @@ func (a *application) rewriteRefOfSelect(parent SQLNode, node *Select, replacer 
 	}) {
 		return false
 	}
-	if !a.rewriteOrderBy(node, node.OrderBy, func(newNode, parent SQLNode) {
-		parent.(*Select).OrderBy = newNode.(OrderBy)
+	if !a.rewriteRefOfOrderBy(node, node.OrderBy, func(newNode, parent SQLNode) {
+		parent.(*Select).OrderBy = newNode.(*OrderBy)
 	}) {
 		return false
 	}
@@ -9452,8 +9452,8 @@ func (a *application) rewriteRefOfUnion(parent SQLNode, node *Union, replacer re
 	}) {
 		return false
 	}
-	if !a.rewriteOrderBy(node, node.OrderBy, func(newNode, parent SQLNode) {
-		parent.(*Union).OrderBy = newNode.(OrderBy)
+	if !a.rewriteRefOfOrderBy(node, node.OrderBy, func(newNode, parent SQLNode) {
+		parent.(*Union).OrderBy = newNode.(*OrderBy)
 	}) {
 		return false
 	}
@@ -9552,8 +9552,8 @@ func (a *application) rewriteRefOfUpdate(parent SQLNode, node *Update, replacer 
 	}) {
 		return false
 	}
-	if !a.rewriteOrderBy(node, node.OrderBy, func(newNode, parent SQLNode) {
-		parent.(*Update).OrderBy = newNode.(OrderBy)
+	if !a.rewriteRefOfOrderBy(node, node.OrderBy, func(newNode, parent SQLNode) {
+		parent.(*Update).OrderBy = newNode.(*OrderBy)
 	}) {
 		return false
 	}
@@ -9978,8 +9978,8 @@ func (a *application) rewriteRefOfValuesStatement(parent SQLNode, node *ValuesSt
 	}) {
 		return false
 	}
-	if !a.rewriteOrderBy(node, node.Order, func(newNode, parent SQLNode) {
-		parent.(*ValuesStatement).Order = newNode.(OrderBy)
+	if !a.rewriteRefOfOrderBy(node, node.OrderBy, func(newNode, parent SQLNode) {
+		parent.(*ValuesStatement).OrderBy = newNode.(*OrderBy)
 	}) {
 		return false
 	}
@@ -10426,8 +10426,8 @@ func (a *application) rewriteRefOfWindowSpecification(parent SQLNode, node *Wind
 			return false
 		}
 	}
-	if !a.rewriteOrderBy(node, node.OrderClause, func(newNode, parent SQLNode) {
-		parent.(*WindowSpecification).OrderClause = newNode.(OrderBy)
+	if !a.rewriteRefOfOrderBy(node, node.OrderClause, func(newNode, parent SQLNode) {
+		parent.(*WindowSpecification).OrderClause = newNode.(*OrderBy)
 	}) {
 		return false
 	}

@@ -618,7 +618,7 @@ func TestSubqueryOrderByBinding(t *testing.T) {
 			st, err := Analyze(sel, "dbName", fakeSchemaInfo())
 			require.NoError(t, err)
 			exists := sel.Where.Expr.(*sqlparser.ExistsExpr)
-			expr := exists.Subquery.Select.(*sqlparser.Select).OrderBy[0].Expr
+			expr := exists.Subquery.Select.GetOrderBy()[0].Expr
 			require.Equal(t, tc.expected, st.DirectDeps(expr))
 			require.Equal(t, tc.expected, st.RecursiveDeps(expr))
 		})
@@ -718,9 +718,9 @@ func TestOrderByBindingTable(t *testing.T) {
 			var order sqlparser.Expr
 			switch stmt := stmt.(type) {
 			case *sqlparser.Select:
-				order = stmt.OrderBy[0].Expr
+				order = stmt.OrderBy.Ordering[0].Expr
 			case *sqlparser.Union:
-				order = stmt.OrderBy[0].Expr
+				order = stmt.OrderBy.Ordering[0].Expr
 			default:
 				t.Fail()
 			}

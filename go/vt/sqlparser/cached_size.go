@@ -1178,12 +1178,6 @@ func (cached *Delete) CachedSize(alloc bool) int64 {
 	// field Where *vitess.io/vitess/go/vt/sqlparser.Where
 	size += cached.Where.CachedSize(true)
 	// field OrderBy vitess.io/vitess/go/vt/sqlparser.OrderBy
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.OrderBy)) * int64(8))
-		for _, elem := range cached.OrderBy {
-			size += elem.CachedSize(true)
-		}
-	}
 	// field Limit *vitess.io/vitess/go/vt/sqlparser.Limit
 	size += cached.Limit.CachedSize(true)
 	return size
@@ -1748,12 +1742,7 @@ func (cached *GroupConcatExpr) CachedSize(alloc bool) int64 {
 		}
 	}
 	// field OrderBy vitess.io/vitess/go/vt/sqlparser.OrderBy
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.OrderBy)) * int64(8))
-		for _, elem := range cached.OrderBy {
-			size += elem.CachedSize(true)
-		}
-	}
+
 	// field Separator string
 	size += hack.RuntimeAllocSize(int64(len(cached.Separator)))
 	// field Limit *vitess.io/vitess/go/vt/sqlparser.Limit
@@ -3153,10 +3142,7 @@ func (cached *OrderBy) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(24)
 	}
-	size += hack.RuntimeAllocSize(int64(cap(*cached)) * int64(8))
-	for _, elem := range *cached {
-		size += elem.CachedSize(true)
-	}
+
 	return size
 }
 func (cached *OrderByOption) CachedSize(alloc bool) int64 {
@@ -3843,12 +3829,7 @@ func (cached *Select) CachedSize(alloc bool) int64 {
 		}
 	}
 	// field OrderBy vitess.io/vitess/go/vt/sqlparser.OrderBy
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.OrderBy)) * int64(8))
-		for _, elem := range cached.OrderBy {
-			size += elem.CachedSize(true)
-		}
-	}
+
 	// field Limit *vitess.io/vitess/go/vt/sqlparser.Limit
 	size += cached.Limit.CachedSize(true)
 	// field Into *vitess.io/vitess/go/vt/sqlparser.SelectInto
@@ -4536,12 +4517,6 @@ func (cached *Union) CachedSize(alloc bool) int64 {
 		size += cc.CachedSize(true)
 	}
 	// field OrderBy vitess.io/vitess/go/vt/sqlparser.OrderBy
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.OrderBy)) * int64(8))
-		for _, elem := range cached.OrderBy {
-			size += elem.CachedSize(true)
-		}
-	}
 	// field Limit *vitess.io/vitess/go/vt/sqlparser.Limit
 	size += cached.Limit.CachedSize(true)
 	// field Into *vitess.io/vitess/go/vt/sqlparser.SelectInto
@@ -4579,12 +4554,7 @@ func (cached *Update) CachedSize(alloc bool) int64 {
 	// field Where *vitess.io/vitess/go/vt/sqlparser.Where
 	size += cached.Where.CachedSize(true)
 	// field OrderBy vitess.io/vitess/go/vt/sqlparser.OrderBy
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.OrderBy)) * int64(8))
-		for _, elem := range cached.OrderBy {
-			size += elem.CachedSize(true)
-		}
-	}
+
 	// field Limit *vitess.io/vitess/go/vt/sqlparser.Limit
 	size += cached.Limit.CachedSize(true)
 	return size
@@ -4779,12 +4749,6 @@ func (cached *ValuesStatement) CachedSize(alloc bool) int64 {
 	// field Comments *vitess.io/vitess/go/vt/sqlparser.ParsedComments
 	size += cached.Comments.CachedSize(true)
 	// field Order vitess.io/vitess/go/vt/sqlparser.OrderBy
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Order)) * int64(8))
-		for _, elem := range cached.Order {
-			size += elem.CachedSize(true)
-		}
-	}
 	// field Limit *vitess.io/vitess/go/vt/sqlparser.Limit
 	size += cached.Limit.CachedSize(true)
 	return size
@@ -4980,12 +4944,7 @@ func (cached *WindowSpecification) CachedSize(alloc bool) int64 {
 		}
 	}
 	// field OrderClause vitess.io/vitess/go/vt/sqlparser.OrderBy
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.OrderClause)) * int64(8))
-		for _, elem := range cached.OrderClause {
-			size += elem.CachedSize(true)
-		}
-	}
+
 	// field FrameClause *vitess.io/vitess/go/vt/sqlparser.FrameClause
 	size += cached.FrameClause.CachedSize(true)
 	return size

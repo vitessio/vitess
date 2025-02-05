@@ -359,8 +359,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfOrExpr(in)
 	case *Order:
 		return CloneRefOfOrder(in)
-	case OrderBy:
-		return CloneOrderBy(in)
+	case *OrderBy:
+		return CloneRefOfOrderBy(in)
 	case *OrderByOption:
 		return CloneRefOfOrderByOption(in)
 	case *OtherAdmin:
@@ -1196,7 +1196,7 @@ func CloneRefOfDelete(n *Delete) *Delete {
 	out.Targets = CloneTableNames(n.Targets)
 	out.Partitions = ClonePartitions(n.Partitions)
 	out.Where = CloneRefOfWhere(n.Where)
-	out.OrderBy = CloneOrderBy(n.OrderBy)
+	out.OrderBy = CloneRefOfOrderBy(n.OrderBy)
 	out.Limit = CloneRefOfLimit(n.Limit)
 	return &out
 }
@@ -1568,7 +1568,7 @@ func CloneRefOfGroupConcatExpr(n *GroupConcatExpr) *GroupConcatExpr {
 	}
 	out := *n
 	out.Exprs = CloneSliceOfExpr(n.Exprs)
-	out.OrderBy = CloneOrderBy(n.OrderBy)
+	out.OrderBy = CloneRefOfOrderBy(n.OrderBy)
 	out.Limit = CloneRefOfLimit(n.Limit)
 	return &out
 }
@@ -2359,16 +2359,14 @@ func CloneRefOfOrder(n *Order) *Order {
 	return &out
 }
 
-// CloneOrderBy creates a deep clone of the input.
-func CloneOrderBy(n OrderBy) OrderBy {
+// CloneRefOfOrderBy creates a deep clone of the input.
+func CloneRefOfOrderBy(n *OrderBy) *OrderBy {
 	if n == nil {
 		return nil
 	}
-	res := make(OrderBy, len(n))
-	for i, x := range n {
-		res[i] = CloneRefOfOrder(x)
-	}
-	return res
+	out := *n
+	out.Ordering = CloneSliceOfRefOfOrder(n.Ordering)
+	return &out
 }
 
 // CloneRefOfOrderByOption creates a deep clone of the input.
@@ -2769,7 +2767,7 @@ func CloneRefOfSelect(n *Select) *Select {
 	out.GroupBy = CloneRefOfGroupBy(n.GroupBy)
 	out.Having = CloneRefOfWhere(n.Having)
 	out.Windows = CloneNamedWindows(n.Windows)
-	out.OrderBy = CloneOrderBy(n.OrderBy)
+	out.OrderBy = CloneRefOfOrderBy(n.OrderBy)
 	out.Limit = CloneRefOfLimit(n.Limit)
 	out.Into = CloneRefOfSelectInto(n.Into)
 	return &out
@@ -3182,7 +3180,7 @@ func CloneRefOfUnion(n *Union) *Union {
 	out.With = CloneRefOfWith(n.With)
 	out.Left = CloneTableStatement(n.Left)
 	out.Right = CloneTableStatement(n.Right)
-	out.OrderBy = CloneOrderBy(n.OrderBy)
+	out.OrderBy = CloneRefOfOrderBy(n.OrderBy)
 	out.Limit = CloneRefOfLimit(n.Limit)
 	out.Into = CloneRefOfSelectInto(n.Into)
 	return &out
@@ -3208,7 +3206,7 @@ func CloneRefOfUpdate(n *Update) *Update {
 	out.TableExprs = CloneSliceOfTableExpr(n.TableExprs)
 	out.Exprs = CloneUpdateExprs(n.Exprs)
 	out.Where = CloneRefOfWhere(n.Where)
-	out.OrderBy = CloneOrderBy(n.OrderBy)
+	out.OrderBy = CloneRefOfOrderBy(n.OrderBy)
 	out.Limit = CloneRefOfLimit(n.Limit)
 	return &out
 }
@@ -3335,7 +3333,7 @@ func CloneRefOfValuesStatement(n *ValuesStatement) *ValuesStatement {
 	out.With = CloneRefOfWith(n.With)
 	out.Rows = CloneValues(n.Rows)
 	out.Comments = CloneRefOfParsedComments(n.Comments)
-	out.Order = CloneOrderBy(n.Order)
+	out.OrderBy = CloneRefOfOrderBy(n.OrderBy)
 	out.Limit = CloneRefOfLimit(n.Limit)
 	return &out
 }
@@ -3463,7 +3461,7 @@ func CloneRefOfWindowSpecification(n *WindowSpecification) *WindowSpecification 
 	out := *n
 	out.Name = CloneIdentifierCI(n.Name)
 	out.PartitionClause = CloneSliceOfExpr(n.PartitionClause)
-	out.OrderClause = CloneOrderBy(n.OrderClause)
+	out.OrderClause = CloneRefOfOrderBy(n.OrderClause)
 	out.FrameClause = CloneRefOfFrameClause(n.FrameClause)
 	return &out
 }
@@ -4626,6 +4624,18 @@ func CloneSliceOfRefOfColName(n []*ColName) []*ColName {
 	res := make([]*ColName, len(n))
 	for i, x := range n {
 		res[i] = CloneRefOfColName(x)
+	}
+	return res
+}
+
+// CloneSliceOfRefOfOrder creates a deep clone of the input.
+func CloneSliceOfRefOfOrder(n []*Order) []*Order {
+	if n == nil {
+		return nil
+	}
+	res := make([]*Order, len(n))
+	for i, x := range n {
+		res[i] = CloneRefOfOrder(x)
 	}
 	return res
 }

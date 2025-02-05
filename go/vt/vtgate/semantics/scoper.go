@@ -78,7 +78,7 @@ func (s *scoper) down(cursor *sqlparser.Cursor) error {
 		s.enterJoinScope(cursor)
 	case *sqlparser.SelectExprs:
 		s.copySelectExprs(cursor, node.Exprs)
-	case sqlparser.OrderBy:
+	case *sqlparser.OrderBy:
 		return s.addColumnInfoForOrderBy(cursor, node)
 	case *sqlparser.GroupBy:
 		if node == nil {
@@ -136,13 +136,13 @@ func (s *scoper) addColumnInfoForGroupBy(cursor *sqlparser.Cursor, node *sqlpars
 	return nil
 }
 
-func (s *scoper) addColumnInfoForOrderBy(cursor *sqlparser.Cursor, node sqlparser.OrderBy) error {
+func (s *scoper) addColumnInfoForOrderBy(cursor *sqlparser.Cursor, node *sqlparser.OrderBy) error {
 	if isParentSelectStatement(cursor) {
 		err := s.createSpecialScopePostProjection(cursor.Parent())
 		if err != nil {
 			return err
 		}
-		for _, order := range node {
+		for _, order := range node.Ordering {
 			lit := keepIntLiteral(order.Expr)
 			if lit != nil {
 				s.specialExprScopes[lit] = s.currentScope()
@@ -223,7 +223,7 @@ func keepIntLiteral(e sqlparser.Expr) *sqlparser.Literal {
 func (s *scoper) up(cursor *sqlparser.Cursor) error {
 	node := cursor.Node()
 	switch node := node.(type) {
-	case sqlparser.OrderBy:
+	case *sqlparser.OrderBy:
 		if isParentSelectStatement(cursor) {
 			s.popScope()
 		}

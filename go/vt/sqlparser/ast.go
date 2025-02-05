@@ -57,8 +57,8 @@ type (
 	OrderAndLimit interface {
 		AddOrder(*Order)
 		SetLimit(*Limit)
-		GetOrderBy() OrderBy
-		SetOrderBy(OrderBy)
+		GetOrderBy() []*Order
+		SetOrderBy([]*Order)
 		GetLimit() *Limit
 	}
 
@@ -300,7 +300,7 @@ type (
 		GroupBy     *GroupBy
 		Having      *Where
 		Windows     NamedWindows
-		OrderBy     OrderBy
+		OrderBy     *OrderBy
 		Limit       *Limit
 		Lock        Lock
 		Into        *SelectInto
@@ -329,7 +329,7 @@ type (
 		Left     TableStatement
 		Right    TableStatement
 		Distinct bool
-		OrderBy  OrderBy
+		OrderBy  *OrderBy
 		Limit    *Limit
 		Lock     Lock
 		Into     *SelectInto
@@ -388,7 +388,7 @@ type (
 		TableExprs []TableExpr
 		Exprs      UpdateExprs
 		Where      *Where
-		OrderBy    OrderBy
+		OrderBy    *OrderBy
 		Limit      *Limit
 	}
 
@@ -402,7 +402,7 @@ type (
 		Targets    TableNames
 		Partitions Partitions
 		Where      *Where
-		OrderBy    OrderBy
+		OrderBy    *OrderBy
 		Limit      *Limit
 	}
 
@@ -2211,7 +2211,7 @@ type (
 	WindowSpecification struct {
 		Name            IdentifierCI
 		PartitionClause []Expr
-		OrderClause     OrderBy
+		OrderClause     *OrderBy
 		FrameClause     *FrameClause
 	}
 
@@ -3063,7 +3063,7 @@ type (
 	GroupConcatExpr struct {
 		Distinct  bool
 		Exprs     []Expr
-		OrderBy   OrderBy
+		OrderBy   *OrderBy
 		Separator string
 		Limit     *Limit
 	}
@@ -3590,7 +3590,9 @@ type GroupBy struct {
 }
 
 // OrderBy represents an ORDER By clause.
-type OrderBy []*Order
+type OrderBy struct {
+	Ordering []*Order
+}
 
 // Order represents an ordering expression.
 type Order struct {
@@ -3617,7 +3619,7 @@ type ValuesStatement struct {
 	ListArg ListArg
 
 	Comments *ParsedComments
-	Order    OrderBy
+	OrderBy  *OrderBy
 	Limit    *Limit
 }
 

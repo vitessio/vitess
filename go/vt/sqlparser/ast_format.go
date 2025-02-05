@@ -137,7 +137,7 @@ func (node *ValuesStatement) Format(buf *TrackedBuffer) {
 		}
 	}
 	buf.astPrintf(node, "%v%v",
-		node.Order, node.Limit)
+		node.OrderBy, node.Limit)
 }
 
 // Format formats the node.
@@ -2049,9 +2049,12 @@ func (node *GroupBy) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node OrderBy) Format(buf *TrackedBuffer) {
+func (node *OrderBy) Format(buf *TrackedBuffer) {
+	if node == nil || len(node.Ordering) == 0 {
+		return
+	}
 	prefix := " order by "
-	for _, n := range node {
+	for _, n := range node.Ordering {
 		buf.astPrintf(node, "%s%v", prefix, n)
 		prefix = ", "
 	}

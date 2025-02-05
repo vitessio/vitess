@@ -160,7 +160,7 @@ func (node *ValuesStatement) FormatFast(buf *TrackedBuffer) {
 		}
 	}
 
-	node.Order.FormatFast(buf)
+	node.OrderBy.FormatFast(buf)
 	node.Limit.FormatFast(buf)
 
 }
@@ -2716,9 +2716,12 @@ func (node *GroupBy) FormatFast(buf *TrackedBuffer) {
 }
 
 // FormatFast formats the node.
-func (node OrderBy) FormatFast(buf *TrackedBuffer) {
+func (node *OrderBy) FormatFast(buf *TrackedBuffer) {
+	if node == nil || len(node.Ordering) == 0 {
+		return
+	}
 	prefix := " order by "
-	for _, n := range node {
+	for _, n := range node.Ordering {
 		buf.WriteString(prefix)
 		n.FormatFast(buf)
 		prefix = ", "

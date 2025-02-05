@@ -358,8 +358,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfOrExpr(in, f)
 	case *Order:
 		return VisitRefOfOrder(in, f)
-	case OrderBy:
-		return VisitOrderBy(in, f)
+	case *OrderBy:
+		return VisitRefOfOrderBy(in, f)
 	case *OrderByOption:
 		return VisitRefOfOrderByOption(in, f)
 	case *OtherAdmin:
@@ -1416,7 +1416,7 @@ func VisitRefOfDelete(in *Delete, f Visit) error {
 	if err := VisitRefOfWhere(in.Where, f); err != nil {
 		return err
 	}
-	if err := VisitOrderBy(in.OrderBy, f); err != nil {
+	if err := VisitRefOfOrderBy(in.OrderBy, f); err != nil {
 		return err
 	}
 	if err := VisitRefOfLimit(in.Limit, f); err != nil {
@@ -1927,7 +1927,7 @@ func VisitRefOfGroupConcatExpr(in *GroupConcatExpr, f Visit) error {
 			return err
 		}
 	}
-	if err := VisitOrderBy(in.OrderBy, f); err != nil {
+	if err := VisitRefOfOrderBy(in.OrderBy, f); err != nil {
 		return err
 	}
 	if err := VisitRefOfLimit(in.Limit, f); err != nil {
@@ -3001,14 +3001,14 @@ func VisitRefOfOrder(in *Order, f Visit) error {
 	}
 	return nil
 }
-func VisitOrderBy(in OrderBy, f Visit) error {
+func VisitRefOfOrderBy(in *OrderBy, f Visit) error {
 	if in == nil {
 		return nil
 	}
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	for _, el := range in {
+	for _, el := range in.Ordering {
 		if err := VisitRefOfOrder(el, f); err != nil {
 			return err
 		}
@@ -3578,7 +3578,7 @@ func VisitRefOfSelect(in *Select, f Visit) error {
 	if err := VisitNamedWindows(in.Windows, f); err != nil {
 		return err
 	}
-	if err := VisitOrderBy(in.OrderBy, f); err != nil {
+	if err := VisitRefOfOrderBy(in.OrderBy, f); err != nil {
 		return err
 	}
 	if err := VisitRefOfLimit(in.Limit, f); err != nil {
@@ -4111,7 +4111,7 @@ func VisitRefOfUnion(in *Union, f Visit) error {
 	if err := VisitTableStatement(in.Right, f); err != nil {
 		return err
 	}
-	if err := VisitOrderBy(in.OrderBy, f); err != nil {
+	if err := VisitRefOfOrderBy(in.OrderBy, f); err != nil {
 		return err
 	}
 	if err := VisitRefOfLimit(in.Limit, f); err != nil {
@@ -4155,7 +4155,7 @@ func VisitRefOfUpdate(in *Update, f Visit) error {
 	if err := VisitRefOfWhere(in.Where, f); err != nil {
 		return err
 	}
-	if err := VisitOrderBy(in.OrderBy, f); err != nil {
+	if err := VisitRefOfOrderBy(in.OrderBy, f); err != nil {
 		return err
 	}
 	if err := VisitRefOfLimit(in.Limit, f); err != nil {
@@ -4329,7 +4329,7 @@ func VisitRefOfValuesStatement(in *ValuesStatement, f Visit) error {
 	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
 		return err
 	}
-	if err := VisitOrderBy(in.Order, f); err != nil {
+	if err := VisitRefOfOrderBy(in.OrderBy, f); err != nil {
 		return err
 	}
 	if err := VisitRefOfLimit(in.Limit, f); err != nil {
@@ -4509,7 +4509,7 @@ func VisitRefOfWindowSpecification(in *WindowSpecification, f Visit) error {
 			return err
 		}
 	}
-	if err := VisitOrderBy(in.OrderClause, f); err != nil {
+	if err := VisitRefOfOrderBy(in.OrderClause, f); err != nil {
 		return err
 	}
 	if err := VisitRefOfFrameClause(in.FrameClause, f); err != nil {

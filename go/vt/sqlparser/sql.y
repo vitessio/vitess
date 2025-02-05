@@ -157,7 +157,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
   exprs         []Expr
   values        Values
   valTuple      ValTuple
-  orderBy       OrderBy
+  orderBy       []*Order
   updateExprs   UpdateExprs
   setExprs      SetExprs
   selectExprs   *SelectExprs
@@ -982,13 +982,13 @@ insert_or_replace:
 update_statement:
   with_clause_opt UPDATE comment_opt ignore_opt table_references SET update_list where_expression_opt order_by_opt limit_opt
   {
-    $$ = &Update{With: $1, Comments: Comments($3).Parsed(), Ignore: $4, TableExprs: $5, Exprs: $7, Where: NewWhere(WhereClause, $8), OrderBy: $9, Limit: $10}
+    $$ = &Update{With: $1, Comments: Comments($3).Parsed(), Ignore: $4, TableExprs: $5, Exprs: $7, Where: NewWhere(WhereClause, $8), OrderBy: &OrderBy{$9}, Limit: $10}
   }
 
 delete_statement:
   with_clause_opt DELETE comment_opt ignore_opt FROM table_name as_opt_id opt_partition_clause where_expression_opt order_by_opt limit_opt
   {
-    $$ = &Delete{With: $1, Comments: Comments($3).Parsed(), Ignore: $4, TableExprs: TableExprs{&AliasedTableExpr{Expr:$6, As: $7}}, Partitions: $8, Where: NewWhere(WhereClause, $9), OrderBy: $10, Limit: $11}
+    $$ = &Delete{With: $1, Comments: Comments($3).Parsed(), Ignore: $4, TableExprs: TableExprs{&AliasedTableExpr{Expr:$6, As: $7}}, Partitions: $8, Where: NewWhere(WhereClause, $9), OrderBy: &OrderBy{$10}, Limit: $11}
   }
 | with_clause_opt DELETE comment_opt ignore_opt FROM table_name_list USING table_references where_expression_opt
   {
@@ -5766,7 +5766,7 @@ sql_id_opt:
 window_spec:
 sql_id_opt window_partition_clause_opt order_by_opt frame_clause_opt
   {
-    $$ = &WindowSpecification{ Name: $1, PartitionClause: $2, OrderClause: $3, FrameClause: $4}
+    $$ = &WindowSpecification{ Name: $1, PartitionClause: $2, OrderClause: &OrderBy{$3}, FrameClause: $4}
   }
 
 over_clause:
@@ -6143,7 +6143,7 @@ UTC_DATE func_paren_opt
      }
 | GROUP_CONCAT openb distinct_opt expression_list order_by_opt separator_opt limit_opt closeb
   {
-    $$ = &GroupConcatExpr{Distinct: $3, Exprs: $4, OrderBy: $5, Separator: $6, Limit: $7}
+    $$ = &GroupConcatExpr{Distinct: $3, Exprs: $4, OrderBy: &OrderBy{$5}, Separator: $6, Limit: $7}
   }
 | ANY_VALUE openb expression closeb
   {
@@ -7454,7 +7454,7 @@ ORDER BY order_list
 order_list:
   order
   {
-    $$ = OrderBy{$1}
+    $$ = []*Order{$1}
   }
 | order_list ',' order
   {

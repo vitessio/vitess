@@ -185,8 +185,8 @@ func TestDerivedTablesOrderClause(t *testing.T) {
 			require.NoError(t, err)
 
 			sel := parse.(*sqlparser.Select)
-			assert.Equal(t, query.recursiveExpectation, st.RecursiveDeps(sel.OrderBy[0].Expr), "RecursiveDeps")
-			assert.Equal(t, query.expectation, st.DirectDeps(sel.OrderBy[0].Expr), "DirectDeps")
+			assert.Equal(t, query.recursiveExpectation, st.RecursiveDeps(sel.GetOrderBy()[0].Expr), "RecursiveDeps")
+			assert.Equal(t, query.expectation, st.DirectDeps(sel.GetOrderBy()[0].Expr), "DirectDeps")
 
 		})
 	}

@@ -1218,17 +1218,21 @@ func (node *Select) SetSelectExprs(exprs ...SelectExpr) {
 
 // AddOrder adds an order by element
 func (node *Select) AddOrder(order *Order) {
-	node.OrderBy = append(node.OrderBy, order)
+	if node.OrderBy == nil {
+		node.OrderBy = &OrderBy{Ordering: []*Order{order}}
+		return
+	}
+	node.OrderBy.Ordering = append(node.OrderBy.Ordering, order)
 }
 
 // SetOrderBy sets the order by clause
-func (node *Select) SetOrderBy(orderBy OrderBy) {
-	node.OrderBy = orderBy
+func (node *Select) SetOrderBy(orderBy []*Order) {
+	node.OrderBy = &OrderBy{Ordering: orderBy}
 }
 
 // GetOrderBy gets the order by clause
-func (node *Select) GetOrderBy() OrderBy {
-	return node.OrderBy
+func (node *Select) GetOrderBy() []*Order {
+	return node.OrderBy.GetOrdering()
 }
 
 // SetLimit sets the limit clause
@@ -1361,17 +1365,21 @@ func (node *Delete) AddWhere(expr Expr) {
 
 // AddOrder adds an order by element
 func (node *Union) AddOrder(order *Order) {
-	node.OrderBy = append(node.OrderBy, order)
+	if node.OrderBy == nil {
+		node.OrderBy = &OrderBy{Ordering: []*Order{order}}
+		return
+	}
+	node.OrderBy.Ordering = append(node.OrderBy.Ordering, order)
 }
 
 // SetOrderBy sets the order by clause
-func (node *Union) SetOrderBy(orderBy OrderBy) {
-	node.OrderBy = orderBy
+func (node *Union) SetOrderBy(orderBy []*Order) {
+	node.OrderBy = &OrderBy{Ordering: orderBy}
 }
 
 // GetOrderBy gets the order by clause
-func (node *Union) GetOrderBy() OrderBy {
-	return node.OrderBy
+func (node *Union) GetOrderBy() []*Order {
+	return node.OrderBy.GetOrdering()
 }
 
 // SetLimit sets the limit clause
@@ -1437,9 +1445,9 @@ func (node *Union) GetParsedComments() *ParsedComments {
 func requiresParen(stmt TableStatement) bool {
 	switch node := stmt.(type) {
 	case *Union:
-		return len(node.OrderBy) != 0 || node.Lock != 0 || node.Into != nil || node.Limit != nil
+		return len(node.OrderBy.GetOrdering()) != 0 || node.Lock != 0 || node.Into != nil || node.Limit != nil
 	case *Select:
-		return len(node.OrderBy) != 0 || node.Lock != 0 || node.Into != nil || node.Limit != nil
+		return len(node.OrderBy.GetOrdering()) != 0 || node.Lock != 0 || node.Into != nil || node.Limit != nil
 	}
 
 	return false
@@ -2903,31 +2911,35 @@ func MultiTable(node []TableExpr) bool {
 }
 
 func (node *Update) AddOrder(order *Order) {
-	node.OrderBy = append(node.OrderBy, order)
+	if node.OrderBy == nil {
+		node.SetOrderBy([]*Order{order})
+		return
+	}
+	node.OrderBy.Ordering = append(node.OrderBy.Ordering, order)
 }
 
 func (node *Update) SetLimit(limit *Limit) {
 	node.Limit = limit
 }
 
-func (node *Update) GetOrderBy() OrderBy {
-	return node.OrderBy
+func (node *Update) GetOrderBy() []*Order {
+	return node.OrderBy.GetOrdering()
 }
 
-func (node *Update) SetOrderBy(by OrderBy) {
-	node.OrderBy = by
+func (node *Update) SetOrderBy(by []*Order) {
+	node.OrderBy = &OrderBy{Ordering: by}
 }
 
 func (node *Update) GetLimit() *Limit {
 	return node.Limit
 }
 
-func (node *Delete) GetOrderBy() OrderBy {
-	return node.OrderBy
+func (node *Delete) GetOrderBy() []*Order {
+	return node.OrderBy.GetOrdering()
 }
 
-func (node *Delete) SetOrderBy(by OrderBy) {
-	node.OrderBy = by
+func (node *Delete) SetOrderBy(by []*Order) {
+	node.OrderBy = &OrderBy{Ordering: by}
 }
 
 func (node *Delete) GetLimit() *Limit {
@@ -2935,7 +2947,11 @@ func (node *Delete) GetLimit() *Limit {
 }
 
 func (node *Delete) AddOrder(order *Order) {
-	node.OrderBy = append(node.OrderBy, order)
+	if node.OrderBy == nil {
+		node.SetOrderBy([]*Order{order})
+		return
+	}
+	node.OrderBy.Ordering = append(node.OrderBy.Ordering, order)
 }
 
 func (node *Delete) SetLimit(limit *Limit) {
@@ -3049,12 +3065,12 @@ func (node *ValuesStatement) SetWith(with *With) {
 	node.With = with
 }
 
-func (node *ValuesStatement) GetOrderBy() OrderBy {
-	return node.Order
+func (node *ValuesStatement) GetOrderBy() []*Order {
+	return node.OrderBy.GetOrdering()
 }
 
-func (node *ValuesStatement) SetOrderBy(by OrderBy) {
-	node.Order = by
+func (node *ValuesStatement) SetOrderBy(by []*Order) {
+	node.OrderBy = &OrderBy{Ordering: by}
 }
 
 func (node *ValuesStatement) GetLimit() *Limit {
@@ -3062,7 +3078,11 @@ func (node *ValuesStatement) GetLimit() *Limit {
 }
 
 func (node *ValuesStatement) AddOrder(order *Order) {
-	node.Order = append(node.Order, order)
+	if node.OrderBy == nil {
+		node.SetOrderBy([]*Order{order})
+		return
+	}
+	node.OrderBy.Ordering = append(node.OrderBy.Ordering, order)
 }
 
 func (node *ValuesStatement) SetLimit(limit *Limit) {
@@ -3099,4 +3119,11 @@ func NewFuncExpr(name string, exprs ...Expr) *FuncExpr {
 
 func NewExprs(exprs ...Expr) *Exprs {
 	return &Exprs{Exprs: exprs}
+}
+
+func (node *OrderBy) GetOrdering() []*Order {
+	if node == nil {
+		return nil
+	}
+	return node.Ordering
 }

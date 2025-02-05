@@ -358,8 +358,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfOrExpr(n, parent)
 	case *Order:
 		return c.copyOnRewriteRefOfOrder(n, parent)
-	case OrderBy:
-		return c.copyOnRewriteOrderBy(n, parent)
+	case *OrderBy:
+		return c.copyOnRewriteRefOfOrderBy(n, parent)
 	case *OrderByOption:
 		return c.copyOnRewriteRefOfOrderByOption(n, parent)
 	case *OtherAdmin:
@@ -1894,7 +1894,7 @@ func (c *cow) copyOnRewriteRefOfDelete(n *Delete, parent SQLNode) (out SQLNode, 
 		_Targets, changedTargets := c.copyOnRewriteTableNames(n.Targets, n)
 		_Partitions, changedPartitions := c.copyOnRewritePartitions(n.Partitions, n)
 		_Where, changedWhere := c.copyOnRewriteRefOfWhere(n.Where, n)
-		_OrderBy, changedOrderBy := c.copyOnRewriteOrderBy(n.OrderBy, n)
+		_OrderBy, changedOrderBy := c.copyOnRewriteRefOfOrderBy(n.OrderBy, n)
 		_Limit, changedLimit := c.copyOnRewriteRefOfLimit(n.Limit, n)
 		if changedWith || changedComments || changedTableExprs || changedTargets || changedPartitions || changedWhere || changedOrderBy || changedLimit {
 			res := *n
@@ -1904,7 +1904,7 @@ func (c *cow) copyOnRewriteRefOfDelete(n *Delete, parent SQLNode) (out SQLNode, 
 			res.Targets, _ = _Targets.(TableNames)
 			res.Partitions, _ = _Partitions.(Partitions)
 			res.Where, _ = _Where.(*Where)
-			res.OrderBy, _ = _OrderBy.(OrderBy)
+			res.OrderBy, _ = _OrderBy.(*OrderBy)
 			res.Limit, _ = _Limit.(*Limit)
 			out = &res
 			if c.cloned != nil {
@@ -2733,12 +2733,12 @@ func (c *cow) copyOnRewriteRefOfGroupConcatExpr(n *GroupConcatExpr, parent SQLNo
 				changedExprs = true
 			}
 		}
-		_OrderBy, changedOrderBy := c.copyOnRewriteOrderBy(n.OrderBy, n)
+		_OrderBy, changedOrderBy := c.copyOnRewriteRefOfOrderBy(n.OrderBy, n)
 		_Limit, changedLimit := c.copyOnRewriteRefOfLimit(n.Limit, n)
 		if changedExprs || changedOrderBy || changedLimit {
 			res := *n
 			res.Exprs = _Exprs
-			res.OrderBy, _ = _OrderBy.(OrderBy)
+			res.OrderBy, _ = _OrderBy.(*OrderBy)
 			res.Limit, _ = _Limit.(*Limit)
 			out = &res
 			if c.cloned != nil {
@@ -4507,22 +4507,29 @@ func (c *cow) copyOnRewriteRefOfOrder(n *Order, parent SQLNode) (out SQLNode, ch
 	}
 	return
 }
-func (c *cow) copyOnRewriteOrderBy(n OrderBy, parent SQLNode) (out SQLNode, changed bool) {
+func (c *cow) copyOnRewriteRefOfOrderBy(n *OrderBy, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
 	}
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
-		res := make(OrderBy, len(n))
-		for x, el := range n {
-			this, change := c.copyOnRewriteRefOfOrder(el, n)
-			res[x] = this.(*Order)
-			if change {
-				changed = true
+		var changedOrdering bool
+		_Ordering := make([]*Order, len(n.Ordering))
+		for x, el := range n.Ordering {
+			this, changed := c.copyOnRewriteRefOfOrder(el, n)
+			_Ordering[x] = this.(*Order)
+			if changed {
+				changedOrdering = true
 			}
 		}
-		if changed {
-			out = res
+		if changedOrdering {
+			res := *n
+			res.Ordering = _Ordering
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
 		}
 	}
 	if c.post != nil {
@@ -5366,7 +5373,7 @@ func (c *cow) copyOnRewriteRefOfSelect(n *Select, parent SQLNode) (out SQLNode, 
 		_GroupBy, changedGroupBy := c.copyOnRewriteRefOfGroupBy(n.GroupBy, n)
 		_Having, changedHaving := c.copyOnRewriteRefOfWhere(n.Having, n)
 		_Windows, changedWindows := c.copyOnRewriteNamedWindows(n.Windows, n)
-		_OrderBy, changedOrderBy := c.copyOnRewriteOrderBy(n.OrderBy, n)
+		_OrderBy, changedOrderBy := c.copyOnRewriteRefOfOrderBy(n.OrderBy, n)
 		_Limit, changedLimit := c.copyOnRewriteRefOfLimit(n.Limit, n)
 		_Into, changedInto := c.copyOnRewriteRefOfSelectInto(n.Into, n)
 		if changedWith || changedFrom || changedComments || changedSelectExprs || changedWhere || changedGroupBy || changedHaving || changedWindows || changedOrderBy || changedLimit || changedInto {
@@ -5379,7 +5386,7 @@ func (c *cow) copyOnRewriteRefOfSelect(n *Select, parent SQLNode) (out SQLNode, 
 			res.GroupBy, _ = _GroupBy.(*GroupBy)
 			res.Having, _ = _Having.(*Where)
 			res.Windows, _ = _Windows.(NamedWindows)
-			res.OrderBy, _ = _OrderBy.(OrderBy)
+			res.OrderBy, _ = _OrderBy.(*OrderBy)
 			res.Limit, _ = _Limit.(*Limit)
 			res.Into, _ = _Into.(*SelectInto)
 			out = &res
@@ -6231,7 +6238,7 @@ func (c *cow) copyOnRewriteRefOfUnion(n *Union, parent SQLNode) (out SQLNode, ch
 		_With, changedWith := c.copyOnRewriteRefOfWith(n.With, n)
 		_Left, changedLeft := c.copyOnRewriteTableStatement(n.Left, n)
 		_Right, changedRight := c.copyOnRewriteTableStatement(n.Right, n)
-		_OrderBy, changedOrderBy := c.copyOnRewriteOrderBy(n.OrderBy, n)
+		_OrderBy, changedOrderBy := c.copyOnRewriteRefOfOrderBy(n.OrderBy, n)
 		_Limit, changedLimit := c.copyOnRewriteRefOfLimit(n.Limit, n)
 		_Into, changedInto := c.copyOnRewriteRefOfSelectInto(n.Into, n)
 		if changedWith || changedLeft || changedRight || changedOrderBy || changedLimit || changedInto {
@@ -6239,7 +6246,7 @@ func (c *cow) copyOnRewriteRefOfUnion(n *Union, parent SQLNode) (out SQLNode, ch
 			res.With, _ = _With.(*With)
 			res.Left, _ = _Left.(TableStatement)
 			res.Right, _ = _Right.(TableStatement)
-			res.OrderBy, _ = _OrderBy.(OrderBy)
+			res.OrderBy, _ = _OrderBy.(*OrderBy)
 			res.Limit, _ = _Limit.(*Limit)
 			res.Into, _ = _Into.(*SelectInto)
 			out = &res
@@ -6285,7 +6292,7 @@ func (c *cow) copyOnRewriteRefOfUpdate(n *Update, parent SQLNode) (out SQLNode, 
 		}
 		_Exprs, changedExprs := c.copyOnRewriteUpdateExprs(n.Exprs, n)
 		_Where, changedWhere := c.copyOnRewriteRefOfWhere(n.Where, n)
-		_OrderBy, changedOrderBy := c.copyOnRewriteOrderBy(n.OrderBy, n)
+		_OrderBy, changedOrderBy := c.copyOnRewriteRefOfOrderBy(n.OrderBy, n)
 		_Limit, changedLimit := c.copyOnRewriteRefOfLimit(n.Limit, n)
 		if changedWith || changedComments || changedTableExprs || changedExprs || changedWhere || changedOrderBy || changedLimit {
 			res := *n
@@ -6294,7 +6301,7 @@ func (c *cow) copyOnRewriteRefOfUpdate(n *Update, parent SQLNode) (out SQLNode, 
 			res.TableExprs = _TableExprs
 			res.Exprs, _ = _Exprs.(UpdateExprs)
 			res.Where, _ = _Where.(*Where)
-			res.OrderBy, _ = _OrderBy.(OrderBy)
+			res.OrderBy, _ = _OrderBy.(*OrderBy)
 			res.Limit, _ = _Limit.(*Limit)
 			out = &res
 			if c.cloned != nil {
@@ -6547,15 +6554,15 @@ func (c *cow) copyOnRewriteRefOfValuesStatement(n *ValuesStatement, parent SQLNo
 		_Rows, changedRows := c.copyOnRewriteValues(n.Rows, n)
 		_ListArg, changedListArg := c.copyOnRewriteListArg(n.ListArg, n)
 		_Comments, changedComments := c.copyOnRewriteRefOfParsedComments(n.Comments, n)
-		_Order, changedOrder := c.copyOnRewriteOrderBy(n.Order, n)
+		_OrderBy, changedOrderBy := c.copyOnRewriteRefOfOrderBy(n.OrderBy, n)
 		_Limit, changedLimit := c.copyOnRewriteRefOfLimit(n.Limit, n)
-		if changedWith || changedRows || changedListArg || changedComments || changedOrder || changedLimit {
+		if changedWith || changedRows || changedListArg || changedComments || changedOrderBy || changedLimit {
 			res := *n
 			res.With, _ = _With.(*With)
 			res.Rows, _ = _Rows.(Values)
 			res.ListArg, _ = _ListArg.(ListArg)
 			res.Comments, _ = _Comments.(*ParsedComments)
-			res.Order, _ = _Order.(OrderBy)
+			res.OrderBy, _ = _OrderBy.(*OrderBy)
 			res.Limit, _ = _Limit.(*Limit)
 			out = &res
 			if c.cloned != nil {
@@ -6849,13 +6856,13 @@ func (c *cow) copyOnRewriteRefOfWindowSpecification(n *WindowSpecification, pare
 				changedPartitionClause = true
 			}
 		}
-		_OrderClause, changedOrderClause := c.copyOnRewriteOrderBy(n.OrderClause, n)
+		_OrderClause, changedOrderClause := c.copyOnRewriteRefOfOrderBy(n.OrderClause, n)
 		_FrameClause, changedFrameClause := c.copyOnRewriteRefOfFrameClause(n.FrameClause, n)
 		if changedName || changedPartitionClause || changedOrderClause || changedFrameClause {
 			res := *n
 			res.Name, _ = _Name.(IdentifierCI)
 			res.PartitionClause = _PartitionClause
-			res.OrderClause, _ = _OrderClause.(OrderBy)
+			res.OrderClause, _ = _OrderClause.(*OrderBy)
 			res.FrameClause, _ = _FrameClause.(*FrameClause)
 			out = &res
 			if c.cloned != nil {

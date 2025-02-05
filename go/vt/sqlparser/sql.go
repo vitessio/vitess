@@ -8215,8 +8215,8 @@ func (st *yySymType) orderUnion() *Order {
 	return v
 }
 
-func (st *yySymType) orderByUnion() OrderBy {
-	v, _ := st.union.(OrderBy)
+func (st *yySymType) orderByUnion() []*Order {
+	v, _ := st.union.([]*Order)
 	return v
 }
 
@@ -10793,7 +10793,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:984
 		{
-			yyLOCAL = &Update{With: yyDollar[1].withUnion(), Comments: Comments(yyDollar[3].strs).Parsed(), Ignore: yyDollar[4].ignoreUnion(), TableExprs: yyDollar[5].tableExprsUnion(), Exprs: yyDollar[7].updateExprsUnion(), Where: NewWhere(WhereClause, yyDollar[8].exprUnion()), OrderBy: yyDollar[9].orderByUnion(), Limit: yyDollar[10].limitUnion()}
+			yyLOCAL = &Update{With: yyDollar[1].withUnion(), Comments: Comments(yyDollar[3].strs).Parsed(), Ignore: yyDollar[4].ignoreUnion(), TableExprs: yyDollar[5].tableExprsUnion(), Exprs: yyDollar[7].updateExprsUnion(), Where: NewWhere(WhereClause, yyDollar[8].exprUnion()), OrderBy: &OrderBy{yyDollar[9].orderByUnion()}, Limit: yyDollar[10].limitUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 91:
@@ -10801,7 +10801,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:990
 		{
-			yyLOCAL = &Delete{With: yyDollar[1].withUnion(), Comments: Comments(yyDollar[3].strs).Parsed(), Ignore: yyDollar[4].ignoreUnion(), TableExprs: TableExprs{&AliasedTableExpr{Expr: yyDollar[6].tableName, As: yyDollar[7].identifierCS}}, Partitions: yyDollar[8].partitionsUnion(), Where: NewWhere(WhereClause, yyDollar[9].exprUnion()), OrderBy: yyDollar[10].orderByUnion(), Limit: yyDollar[11].limitUnion()}
+			yyLOCAL = &Delete{With: yyDollar[1].withUnion(), Comments: Comments(yyDollar[3].strs).Parsed(), Ignore: yyDollar[4].ignoreUnion(), TableExprs: TableExprs{&AliasedTableExpr{Expr: yyDollar[6].tableName, As: yyDollar[7].identifierCS}}, Partitions: yyDollar[8].partitionsUnion(), Where: NewWhere(WhereClause, yyDollar[9].exprUnion()), OrderBy: &OrderBy{yyDollar[10].orderByUnion()}, Limit: yyDollar[11].limitUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 92:
@@ -18511,7 +18511,7 @@ yydefault:
 		var yyLOCAL *WindowSpecification
 //line sql.y:5768
 		{
-			yyLOCAL = &WindowSpecification{Name: yyDollar[1].identifierCI, PartitionClause: yyDollar[2].exprsUnion(), OrderClause: yyDollar[3].orderByUnion(), FrameClause: yyDollar[4].frameClauseUnion()}
+			yyLOCAL = &WindowSpecification{Name: yyDollar[1].identifierCI, PartitionClause: yyDollar[2].exprsUnion(), OrderClause: &OrderBy{yyDollar[3].orderByUnion()}, FrameClause: yyDollar[4].frameClauseUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1117:
@@ -19130,7 +19130,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6145
 		{
-			yyLOCAL = &GroupConcatExpr{Distinct: yyDollar[3].booleanUnion(), Exprs: yyDollar[4].exprsUnion(), OrderBy: yyDollar[5].orderByUnion(), Separator: yyDollar[6].str, Limit: yyDollar[7].limitUnion()}
+			yyLOCAL = &GroupConcatExpr{Distinct: yyDollar[3].booleanUnion(), Exprs: yyDollar[4].exprsUnion(), OrderBy: &OrderBy{yyDollar[5].orderByUnion()}, Separator: yyDollar[6].str, Limit: yyDollar[7].limitUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1197:
@@ -21565,7 +21565,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 1507:
 		yyDollar = yyS[yypt-0 : yypt+1]
-		var yyLOCAL OrderBy
+		var yyLOCAL []*Order
 //line sql.y:7440
 		{
 			yyLOCAL = nil
@@ -21573,7 +21573,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 1508:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL OrderBy
+		var yyLOCAL []*Order
 //line sql.y:7444
 		{
 			yyLOCAL = yyDollar[1].orderByUnion()
@@ -21581,7 +21581,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 1509:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		var yyLOCAL OrderBy
+		var yyLOCAL []*Order
 //line sql.y:7450
 		{
 			yyLOCAL = yyDollar[3].orderByUnion()
@@ -21589,17 +21589,17 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 1510:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL OrderBy
+		var yyLOCAL []*Order
 //line sql.y:7456
 		{
-			yyLOCAL = OrderBy{yyDollar[1].orderUnion()}
+			yyLOCAL = []*Order{yyDollar[1].orderUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1511:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:7460
 		{
-			yySLICE := (*OrderBy)(yyIaddr(yyVAL.union))
+			yySLICE := (*[]*Order)(yyIaddr(yyVAL.union))
 			*yySLICE = append(*yySLICE, yyDollar[3].orderUnion())
 		}
 	case 1512:
