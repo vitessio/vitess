@@ -291,10 +291,13 @@ func makeColName(col sqlparser.IdentifierCI, table TargetTable, isMultiTbl bool)
 	return sqlparser.NewColName(col.String())
 }
 
-func addOrdering(ctx *plancontext.PlanningContext, op Operator, orderBy sqlparser.OrderBy) Operator {
+func addOrdering(ctx *plancontext.PlanningContext, op Operator, orderBy *sqlparser.OrderBy) Operator {
+	if orderBy == nil {
+		return op
+	}
 	es := &expressionSet{}
 	var order []OrderBy
-	for _, ord := range orderBy {
+	for _, ord := range orderBy.Ordering {
 		if sqlparser.IsNull(ord.Expr) || !es.add(ctx, ord.Expr) {
 			// ORDER BY null, or expression repeated can safely be ignored
 			continue

@@ -750,7 +750,7 @@ func buildUpdatePrimitive(
 		upd.OwnedVindexQuery.Where = stmt.Where
 		vQuery = sqlparser.String(upd.OwnedVindexQuery)
 		vindexes = upd.Target.VTable.ColumnVindexes
-		if upd.OwnedVindexQuery.Limit != nil && len(upd.OwnedVindexQuery.OrderBy) == 0 {
+		if upd.OwnedVindexQuery.Limit != nil && len(upd.OwnedVindexQuery.GetOrderBy()) == 0 {
 			return nil, vterrors.VT12001("Vindex update should have ORDER BY clause when using LIMIT")
 		}
 	}

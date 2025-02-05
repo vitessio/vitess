@@ -227,10 +227,13 @@ func (es *expressionSet) add(ctx *plancontext.PlanningContext, e sqlparser.Expr)
 	return true
 }
 
-func (qp *QueryProjection) addOrderBy(ctx *plancontext.PlanningContext, orderBy sqlparser.OrderBy) {
+func (qp *QueryProjection) addOrderBy(ctx *plancontext.PlanningContext, orderBy *sqlparser.OrderBy) {
+	if orderBy == nil {
+		return
+	}
 	canPushSorting := true
 	es := &expressionSet{}
-	for _, order := range orderBy {
+	for _, order := range orderBy.Ordering {
 		if canIgnoreOrdering(ctx, order.Expr) {
 			continue
 		}

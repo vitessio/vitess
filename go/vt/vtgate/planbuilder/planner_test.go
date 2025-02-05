@@ -38,7 +38,7 @@ func TestBindingSubquery(t *testing.T) {
 			query:            "select (select col from tabl limit 1) as a from foo join tabl order by a + 1",
 			requiredTableSet: semantics.EmptyTableSet(),
 			extractor: func(sel *sqlparser.Select) sqlparser.Expr {
-				return sel.OrderBy[0].Expr
+				return sel.GetOrderBy()[0].Expr
 			},
 			rewrite: true,
 		}, {

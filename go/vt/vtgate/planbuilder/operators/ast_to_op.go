@@ -459,7 +459,7 @@ func createSelectionOp(
 	selectExprs []sqlparser.SelectExpr,
 	tableExprs sqlparser.TableExprs,
 	where *sqlparser.Where,
-	orderBy sqlparser.OrderBy,
+	orderBy []*sqlparser.Order,
 	limit *sqlparser.Limit,
 	lock sqlparser.Lock,
 ) Operator {
@@ -467,10 +467,10 @@ func createSelectionOp(
 		SelectExprs: &sqlparser.SelectExprs{Exprs: selectExprs},
 		From:        tableExprs,
 		Where:       where,
-		OrderBy:     orderBy,
 		Limit:       limit,
 		Lock:        lock,
 	}
+	selectionStmt.SetOrderBy(orderBy)
 	// There are no foreign keys to check for a select query, so we can pass anything for verifyAllFKs and fkToIgnore.
 	return createOpFromStmt(ctx, selectionStmt, false /* verifyAllFKs */, "" /* fkToIgnore */)
 }

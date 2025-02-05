@@ -1227,6 +1227,10 @@ func (node *Select) AddOrder(order *Order) {
 
 // SetOrderBy sets the order by clause
 func (node *Select) SetOrderBy(orderBy []*Order) {
+	if len(orderBy) == 0 {
+		node.OrderBy = nil
+		return
+	}
 	node.OrderBy = &OrderBy{Ordering: orderBy}
 }
 

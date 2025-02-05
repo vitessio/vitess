@@ -242,7 +242,7 @@ func createSelectOperator(ctx *plancontext.PlanningContext, selStmt sqlparser.Se
 }
 
 func isOnlyDual(sel *sqlparser.Select) bool {
-	if sel.Where != nil || sel.GroupBy != nil || sel.Having != nil || sel.OrderBy != nil {
+	if sel.Where != nil || sel.GroupBy != nil || sel.Having != nil || len(sel.GetOrderBy()) > 0 {
 		// we can only deal with queries without any other subclauses - just SELECT and FROM, nothing else is allowed
 		return false
 	}

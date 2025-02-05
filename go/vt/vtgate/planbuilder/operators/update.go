@@ -385,7 +385,7 @@ func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.U
 		VerifyAll:                    ctx.VerifyAllFKs,
 	}
 
-	if len(updStmt.OrderBy) > 0 {
+	if len(updStmt.GetOrderBy()) > 0 {
 		updOp.Source = addOrdering(ctx, op, updStmt.OrderBy)
 	} else {
 		updOp.Source = op
@@ -497,7 +497,7 @@ func createFKCascadeOp(ctx *plancontext.PlanningContext, parentOp Operator, updS
 		fkChildren = append(fkChildren, fkChild)
 	}
 
-	selectionOp := createSelectionOp(ctx, selectExprs, updStmt.TableExprs, updStmt.Where, updStmt.OrderBy, nil, getUpdateLock(targetTbl.VTable))
+	selectionOp := createSelectionOp(ctx, selectExprs, updStmt.TableExprs, updStmt.Where, updStmt.GetOrderBy(), nil, getUpdateLock(targetTbl.VTable))
 
 	return &FkCascade{
 		Selection: selectionOp,

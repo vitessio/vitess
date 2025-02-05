@@ -74,7 +74,7 @@ func shortDesc(target TargetTable, ovq *sqlparser.Select) string {
 	if ovq != nil {
 		var cols, orderby, limit string
 		cols = fmt.Sprintf("COLUMNS: [%s]", sqlparser.String(ovq.SelectExprs))
-		if len(ovq.OrderBy) > 0 {
+		if len(ovq.GetOrderBy()) > 0 {
 			orderby = fmt.Sprintf(" ORDERBY: [%s]", sqlparser.String(ovq.OrderBy))
 		}
 		if ovq.Limit != nil {
