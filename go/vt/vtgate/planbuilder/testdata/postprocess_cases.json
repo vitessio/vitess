@@ -31,7 +31,7 @@
     "comment": "TODO: this should be 'Column 'col1' in having clause is ambiguous'\n# non-ambiguous symbol reference",
     "query": "select user.col1, user_extra.col1 from user join user_extra having user_extra.col1 = 2",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select user.col1, user_extra.col1 from user join user_extra having user_extra.col1 = 2",
       "Instructions": {
@@ -74,7 +74,7 @@
     "comment": "HAVING multi-route",
     "query": "select user.col1 as a, user.col2, user_extra.col3 from user join user_extra having 1 = 1 and a = 1 and a = user.col2 and user_extra.col3 = 1",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select user.col1 as a, user.col2, user_extra.col3 from user join user_extra having 1 = 1 and a = 1 and a = user.col2 and user_extra.col3 = 1",
       "Instructions": {
@@ -533,7 +533,7 @@
     "comment": "ORDER BY NULL for join",
     "query": "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by null",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by null",
       "Instructions": {
@@ -612,7 +612,7 @@
     "comment": "ORDER BY non-key column for join",
     "query": "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by a",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by a",
       "Instructions": {
@@ -691,7 +691,7 @@
     "comment": "ORDER BY non-key column for implicit join",
     "query": "select user.col1 as a, user.col2, music.col3 from user, music where user.id = music.id and user.id = 1 order by a",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select user.col1 as a, user.col2, music.col3 from user, music where user.id = music.id and user.id = 1 order by a",
       "Instructions": {
@@ -839,7 +839,7 @@
     "comment": "ORDER BY RAND() for join",
     "query": "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by RAND()",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by RAND()",
       "Instructions": {
@@ -1045,7 +1045,7 @@
     "comment": "Order by, '*' expression in a subquery",
     "query": "select u.id, e.id from user u join user_extra e where u.col = e.col and u.col in (select * from user where user.id = u.id order by col)",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select u.id, e.id from user u join user_extra e where u.col = e.col and u.col in (select * from user where user.id = u.id order by col)",
       "Instructions": {
@@ -1615,7 +1615,7 @@
     "comment": "ordering on the left side of the join",
     "query": "select name from user, music order by name",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select name from user, music order by name",
       "Instructions": {
@@ -1800,7 +1800,7 @@
     "comment": "join order by with ambiguous column reference ; valid in MySQL",
     "query": "select name, name from user, music order by name",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select name, name from user, music order by name",
       "Instructions": {

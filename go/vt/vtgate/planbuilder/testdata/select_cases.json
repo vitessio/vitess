@@ -592,7 +592,7 @@
     "comment": "Auto-resolve should work if unique vindex columns are referenced",
     "query": "select id, user_id from user join user_extra",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select id, user_id from user join user_extra",
       "Instructions": {
@@ -740,7 +740,7 @@
     "comment": "RHS route referenced",
     "query": "select user_extra.id from user join user_extra",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select user_extra.id from user join user_extra",
       "Instructions": {
@@ -784,7 +784,7 @@
     "comment": "Both routes referenced",
     "query": "select user.col, user_extra.id from user join user_extra",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select user.col, user_extra.id from user join user_extra",
       "Instructions": {
@@ -828,7 +828,7 @@
     "comment": "Expression with single-route reference",
     "query": "select user.col, user_extra.id + user_extra.col from user join user_extra",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select user.col, user_extra.id + user_extra.col from user join user_extra",
       "Instructions": {
@@ -901,7 +901,7 @@
     "comment": "Jumbled references",
     "query": "select user.col, user_extra.id, user.col2 from user join user_extra",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select user.col, user_extra.id, user.col2 from user join user_extra",
       "Instructions": {
@@ -945,7 +945,7 @@
     "comment": "Comments",
     "query": "select /* comment */ user.col from user join user_extra",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select /* comment */ user.col from user join user_extra",
       "Instructions": {
@@ -989,7 +989,7 @@
     "comment": "for update",
     "query": "select user.col from user join user_extra for update",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select user.col from user join user_extra for update",
       "Instructions": {
@@ -1033,7 +1033,7 @@
     "comment": "Field query should work for joins select bind vars",
     "query": "select user.id, (select user.id+outm.m+unsharded.m from unsharded) from user join unsharded outm",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select user.id, (select user.id+outm.m+unsharded.m from unsharded) from user join unsharded outm",
       "Instructions": {
@@ -1080,7 +1080,7 @@
     "comment": "Case preservation",
     "query": "select user.Col, user_extra.Id from user join user_extra",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select user.Col, user_extra.Id from user join user_extra",
       "Instructions": {
@@ -1181,7 +1181,7 @@
     "comment": "Selection but make the planner explicitly use a vindex",
     "query": "select intcol, id from user use vindex (name_user_map) where costly = 'aa' and name = 'bb' and id = 3",
     "plan": {
-      "Type": "Complex",
+      "Type": "Lookup",
       "QueryType": "SELECT",
       "Original": "select intcol, id from user use vindex (name_user_map) where costly = 'aa' and name = 'bb' and id = 3",
       "Instructions": {
@@ -1621,7 +1621,7 @@
     "comment": "select * from derived table expands specific columns",
     "query": "select * from (select user.id id1, user_extra.id id2 from user join user_extra) as t",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select * from (select user.id id1, user_extra.id id2 from user join user_extra) as t",
       "Instructions": {
@@ -2447,7 +2447,7 @@
     "comment": "left join with a dual table on left - non-merge-able",
     "query": "select t.title, user.col from (select 'hello' as title) as t left join user on user.id <= 4",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select t.title, user.col from (select 'hello' as title) as t left join user on user.id <= 4",
       "Instructions": {
@@ -2490,7 +2490,7 @@
     "comment": "left join with dual non-merge-able with predicate with cross dependencies",
     "query": "select t.title, user.col from (select 'hello' as title) as t left join user on user.id <= 4 and t.title = user.col",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select t.title, user.col from (select 'hello' as title) as t left join user on user.id <= 4 and t.title = user.col",
       "Instructions": {
@@ -2588,7 +2588,7 @@
     "comment": "right join with a dual table on right - non-merge-able",
     "query": "select t.title, user.col from user right join (select 'hello' as title) as t on user.id>=4",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select t.title, user.col from user right join (select 'hello' as title) as t on user.id>=4",
       "Instructions": {
@@ -2676,7 +2676,7 @@
     "comment": "Add two tables with the same column in a join",
     "query": "select t.id, s.id from user t join user_extra s on t.id = s.user_id join unsharded",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select t.id, s.id from user t join user_extra s on t.id = s.user_id join unsharded",
       "Instructions": {
@@ -2769,7 +2769,7 @@
     "comment": "subquery in select expression of derived table",
     "query": "select t.a from (select (select col from user limit 1) as a from user join user_extra) t",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select t.a from (select (select col from user limit 1) as a from user join user_extra) t",
       "Instructions": {
@@ -2841,7 +2841,7 @@
     "comment": "ORDER BY subquery",
     "query": "select (select col from user limit 1) as a from user join user_extra order by a",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select (select col from user limit 1) as a from user join user_extra order by a",
       "Instructions": {
@@ -2936,7 +2936,7 @@
     "comment": "select expression having dependencies on both sides of a join",
     "query": "select user.id * user_id as amount from user, user_extra",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select user.id * user_id as amount from user, user_extra",
       "Instructions": {
@@ -2983,7 +2983,7 @@
     "comment": "Straight Join ensures specific ordering of joins",
     "query": "select user.id, user_extra.user_id from user straight_join user_extra where user.id = user_extra.foo",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select user.id, user_extra.user_id from user straight_join user_extra where user.id = user_extra.foo",
       "Instructions": {
@@ -3253,7 +3253,7 @@
     "comment": "correlated subquery having dependencies on two tables",
     "query": "select 1 from user u1, user u2 where exists (select 1 from user_extra ue where ue.col = u1.col and ue.col = u2.col)",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select 1 from user u1, user u2 where exists (select 1 from user_extra ue where ue.col = u1.col and ue.col = u2.col)",
       "Instructions": {
@@ -3481,7 +3481,7 @@
     "comment": "use output column containing data from both sides of the join",
     "query": "select user_extra.col + user.col from user join user_extra on user.id = user_extra.id",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select user_extra.col + user.col from user join user_extra on user.id = user_extra.id",
       "Instructions": {
@@ -4090,7 +4090,7 @@
     "comment": "Predicate in apply join which is merged",
     "query": "select user.col, user_metadata.user_id from user join user_extra on user.col = user_extra.col join user_metadata on user_extra.user_id = user_metadata.user_id where user.textcol1 = 'alice@gmail.com'",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select user.col, user_metadata.user_id from user join user_extra on user.col = user_extra.col join user_metadata on user_extra.user_id = user_metadata.user_id where user.textcol1 = 'alice@gmail.com'",
       "Instructions": {
@@ -5454,7 +5454,7 @@
     "comment": "limit on the vtgate has to be executed on the LHS of a join",
     "query": "select id from user join (select user_id from user_extra limit 10) ue on user.id = ue.user_id",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select id from user join (select user_id from user_extra limit 10) ue on user.id = ue.user_id",
       "Instructions": {
@@ -5511,7 +5511,7 @@
     "comment": "select user.a, t.b from user join (select id, count(*) b, req from user_extra group by req, id) as t on user.id = t.id",
     "query": "select user.a, t.b from user join (select id, count(*) b, req from user_extra group by req, id) as t on user.id = t.id",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select user.a, t.b from user join (select id, count(*) b, req from user_extra group by req, id) as t on user.id = t.id",
       "Instructions": {
@@ -5860,7 +5860,7 @@
     "comment": "join query with lookup and join on different vindex column",
     "query": "select u.id from user u, user_metadata um where u.name = 'foo' and u.id = um.user_id",
     "plan": {
-      "Type": "Complex",
+      "Type": "Lookup",
       "QueryType": "SELECT",
       "Original": "select u.id from user u, user_metadata um where u.name = 'foo' and u.id = um.user_id",
       "Instructions": {
@@ -5914,7 +5914,7 @@
     "comment": "pick email as vindex lookup",
     "query": "select * from customer where email = 'a@mail.com'",
     "plan": {
-      "Type": "Complex",
+      "Type": "Lookup",
       "QueryType": "SELECT",
       "Original": "select * from customer where email = 'a@mail.com'",
       "Instructions": {
@@ -6013,7 +6013,7 @@
     "comment": "email vindex is costly than phone vindex - but phone vindex is backfiling hence ignored",
     "query": "select * from customer where email = 'a@mail.com' and phone = 123456",
     "plan": {
-      "Type": "Complex",
+      "Type": "Lookup",
       "QueryType": "SELECT",
       "Original": "select * from customer where email = 'a@mail.com' and phone = 123456",
       "Instructions": {
@@ -6065,7 +6065,7 @@
     "comment": "predicate order changed: email vindex is costly than phone vindex - but phone vindex is backfiling hence ignored",
     "query": "select * from customer where phone = 123456 and email = 'a@mail.com'",
     "plan": {
-      "Type": "Complex",
+      "Type": "Lookup",
       "QueryType": "SELECT",
       "Original": "select * from customer where phone = 123456 and email = 'a@mail.com'",
       "Instructions": {
@@ -6141,7 +6141,7 @@
     "comment": "column with qualifier is correctly used",
     "query": "select u.foo, ue.foo as apa from user u, user_extra ue order by foo ",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select u.foo, ue.foo as apa from user u, user_extra ue order by foo ",
       "Instructions": {
@@ -6186,7 +6186,7 @@
     "comment": "Derived tables going to a single shard still need to expand derived table columns",
     "query": "SELECT c.column_name FROM user c JOIN (SELECT table_name FROM unsharded LIMIT 1) AS tables ON tables.table_name = c.table_name",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "SELECT c.column_name FROM user c JOIN (SELECT table_name FROM unsharded LIMIT 1) AS tables ON tables.table_name = c.table_name",
       "Instructions": {

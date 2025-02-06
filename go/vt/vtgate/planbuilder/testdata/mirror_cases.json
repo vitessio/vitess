@@ -252,7 +252,7 @@
     "comment": "inserts are not mirrored",
     "query": "insert into unsharded_src1.t1 (id) values(1)",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Passthrough",
       "QueryType": "INSERT",
       "Original": "insert into unsharded_src1.t1 (id) values(1)",
       "Instructions": {

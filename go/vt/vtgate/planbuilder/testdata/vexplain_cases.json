@@ -3,7 +3,7 @@
     "comment": "vexplain json",
     "query": "vexplain plan select * from user",
     "plan": {
-      "Type": "Complex",
+      "Type": "Passthrough",
       "QueryType": "EXPLAIN",
       "Original": "vexplain plan select * from user",
       "Instructions": {
@@ -19,7 +19,7 @@
     "comment": "vexplain queries",
     "query": "vexplain QUERIES select * from user",
     "plan": {
-      "Type": "Complex",
+      "Type": "Scatter",
       "QueryType": "EXPLAIN",
       "Original": "vexplain QUERIES select * from user",
       "Instructions": {
@@ -48,7 +48,7 @@
     "comment": "vexplain table",
     "query": "vexplain ALL select * from user",
     "plan": {
-      "Type": "Complex",
+      "Type": "Scatter",
       "QueryType": "EXPLAIN",
       "Original": "vexplain ALL select * from user",
       "Instructions": {
@@ -77,7 +77,7 @@
     "comment": "vexplain keys",
     "query": "vexplain keys select * from user",
     "plan": {
-      "Type": "Complex",
+      "Type": "Passthrough",
       "QueryType": "EXPLAIN",
       "Original": "vexplain keys select * from user",
       "Instructions": {

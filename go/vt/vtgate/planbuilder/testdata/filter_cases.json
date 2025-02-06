@@ -153,7 +153,7 @@
     "comment": "Single table multiple non-unique vindex match",
     "query": "select id from user where costly = 'aa' and name = 'bb'",
     "plan": {
-      "Type": "Complex",
+      "Type": "Lookup",
       "QueryType": "SELECT",
       "Original": "select id from user where costly = 'aa' and name = 'bb'",
       "Instructions": {
@@ -205,7 +205,7 @@
     "comment": "Single table multiple non-unique vindex match for IN clause",
     "query": "select id from user where costly in ('aa', 'bb') and name in ('aa', 'bb')",
     "plan": {
-      "Type": "Complex",
+      "Type": "Lookup",
       "QueryType": "SELECT",
       "Original": "select id from user where costly in ('aa', 'bb') and name in ('aa', 'bb')",
       "Instructions": {
@@ -257,7 +257,7 @@
     "comment": "Composite IN clause",
     "query": "select id from user where (name, col) in (('aa', 'bb'), ('cc', 'dd'))",
     "plan": {
-      "Type": "Complex",
+      "Type": "Lookup",
       "QueryType": "SELECT",
       "Original": "select id from user where (name, col) in (('aa', 'bb'), ('cc', 'dd'))",
       "Instructions": {
@@ -309,7 +309,7 @@
     "comment": "Composite IN clause, swapped columns",
     "query": "select id from user where (col, name) in (('aa', 'bb'), ('cc', 'dd'))",
     "plan": {
-      "Type": "Complex",
+      "Type": "Lookup",
       "QueryType": "SELECT",
       "Original": "select id from user where (col, name) in (('aa', 'bb'), ('cc', 'dd'))",
       "Instructions": {
@@ -361,7 +361,7 @@
     "comment": "Composite IN clause, choose cost within tuple",
     "query": "select id from user where (costly, name) in (('aa', 'bb'), ('cc', 'dd'))",
     "plan": {
-      "Type": "Complex",
+      "Type": "Lookup",
       "QueryType": "SELECT",
       "Original": "select id from user where (costly, name) in (('aa', 'bb'), ('cc', 'dd'))",
       "Instructions": {
@@ -413,7 +413,7 @@
     "comment": "Composite IN clause, choose cost within tuple, swapped",
     "query": "select id from user where (name, costly) in (('aa', 'bb'), ('cc', 'dd'))",
     "plan": {
-      "Type": "Complex",
+      "Type": "Lookup",
       "QueryType": "SELECT",
       "Original": "select id from user where (name, costly) in (('aa', 'bb'), ('cc', 'dd'))",
       "Instructions": {
@@ -465,7 +465,7 @@
     "comment": "Composite IN clause, choose cost",
     "query": "select id from user where (col, costly) in (('aa', 'bb')) and (col, name) in (('cc', 'dd'))",
     "plan": {
-      "Type": "Complex",
+      "Type": "Lookup",
       "QueryType": "SELECT",
       "Original": "select id from user where (col, costly) in (('aa', 'bb')) and (col, name) in (('cc', 'dd'))",
       "Instructions": {
@@ -544,7 +544,7 @@
     "comment": "Composite IN: multiple vindex matches",
     "query": "select id from user where (costly, name) in (('aa', 'bb'), ('cc', 'dd'))",
     "plan": {
-      "Type": "Complex",
+      "Type": "Lookup",
       "QueryType": "SELECT",
       "Original": "select id from user where (costly, name) in (('aa', 'bb'), ('cc', 'dd'))",
       "Instructions": {
@@ -596,7 +596,7 @@
     "comment": "Composite IN: tuple inside tuple",
     "query": "select id from user where ((col1, name), col2) in ((('aa', 'bb'), 'cc'), (('dd', 'ee'), 'ff'))",
     "plan": {
-      "Type": "Complex",
+      "Type": "Lookup",
       "QueryType": "SELECT",
       "Original": "select id from user where ((col1, name), col2) in ((('aa', 'bb'), 'cc'), (('dd', 'ee'), 'ff'))",
       "Instructions": {
@@ -648,7 +648,7 @@
     "comment": "Composite IN: tuple inside tuple, but no match in tuple",
     "query": "select id from user where (name, (col1, col2)) in (('aa', ('bb', 'cc')), ('dd', ('ee', 'ff')))",
     "plan": {
-      "Type": "Complex",
+      "Type": "Lookup",
       "QueryType": "SELECT",
       "Original": "select id from user where (name, (col1, col2)) in (('aa', ('bb', 'cc')), ('dd', ('ee', 'ff')))",
       "Instructions": {
@@ -749,7 +749,7 @@
     "comment": "Composite IN: RHS has no simple values",
     "query": "select id from user where (col1, name) in (('aa', 1+1))",
     "plan": {
-      "Type": "Complex",
+      "Type": "Lookup",
       "QueryType": "SELECT",
       "Original": "select id from user where (col1, name) in (('aa', 1+1))",
       "Instructions": {
@@ -824,7 +824,7 @@
     "comment": "Disjunction of conjunctions with 4 or more disjunctions",
     "query": "select id from user where (col = 'aa' AND name = 'bb') OR (col = 'cc' AND name = 'dd') OR (col = 'ee' AND name = 'ff') OR (col = 'gg' AND name = 'hh')",
     "plan": {
-      "Type": "Complex",
+      "Type": "Lookup",
       "QueryType": "SELECT",
       "Original": "select id from user where (col = 'aa' AND name = 'bb') OR (col = 'cc' AND name = 'dd') OR (col = 'ee' AND name = 'ff') OR (col = 'gg' AND name = 'hh')",
       "Instructions": {
@@ -876,7 +876,7 @@
     "comment": "Disjunction of conjunctions with 3 or less disjunctions",
     "query": "select id from user where (col = 'aa' AND name = 'bb') OR (col = 'cc' AND name = 'dd') OR (col = 'ee' AND name = 'ff')",
     "plan": {
-      "Type": "Complex",
+      "Type": "Lookup",
       "QueryType": "SELECT",
       "Original": "select id from user where (col = 'aa' AND name = 'bb') OR (col = 'cc' AND name = 'dd') OR (col = 'ee' AND name = 'ff')",
       "Instructions": {
@@ -951,7 +951,7 @@
     "comment": "Single table equality route with val arg",
     "query": "select id from user where name = :a",
     "plan": {
-      "Type": "Complex",
+      "Type": "Lookup",
       "QueryType": "SELECT",
       "Original": "select id from user where name = :a",
       "Instructions": {
@@ -1028,7 +1028,7 @@
     "comment": "Single table equality route with unsigned value",
     "query": "select id from user where name = 18446744073709551615",
     "plan": {
-      "Type": "Complex",
+      "Type": "Lookup",
       "QueryType": "SELECT",
       "Original": "select id from user where name = 18446744073709551615",
       "Instructions": {
@@ -1080,7 +1080,7 @@
     "comment": "Single table in clause list arg",
     "query": "select id from user where name in ::list",
     "plan": {
-      "Type": "Complex",
+      "Type": "Lookup",
       "QueryType": "SELECT",
       "Original": "select id from user where name in ::list",
       "Instructions": {
@@ -1245,7 +1245,7 @@
     "comment": "Multi-route unique vindex constraint",
     "query": "select user_extra.id from user join user_extra on user.col = user_extra.col where user.id = 5",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select user_extra.id from user join user_extra on user.col = user_extra.col where user.id = 5",
       "Instructions": {
@@ -1325,7 +1325,7 @@
     "comment": "Multi-route with cross-route constraint",
     "query": "select user_extra.id from user join user_extra on user.col = user_extra.col where user_extra.user_id = user.col",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select user_extra.id from user join user_extra on user.col = user_extra.col where user_extra.user_id = user.col",
       "Instructions": {
@@ -1376,7 +1376,7 @@
     "comment": "Multi-route with non-route constraint, should use first route.",
     "query": "select user_extra.id from user join user_extra on user.col = user_extra.col where 1 = 1",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select user_extra.id from user join user_extra on user.col = user_extra.col where 1 = 1",
       "Instructions": {
@@ -1477,7 +1477,7 @@
     "comment": "Route with multiple route constraints and boolean, SelectEqual is the best constraint.",
     "query": "select (id or col) as val from user where user.col = 5 and user.id in (1, 2) and user.name = 'aa'",
     "plan": {
-      "Type": "Complex",
+      "Type": "Lookup",
       "QueryType": "SELECT",
       "Original": "select (id or col) as val from user where user.col = 5 and user.id in (1, 2) and user.name = 'aa'",
       "Instructions": {
@@ -1529,7 +1529,7 @@
     "comment": "Route with multiple route constraints, SelectEqual is the best constraint.",
     "query": "select id from user where user.col = false and user.id in (1, 2) and user.name = 'aa'",
     "plan": {
-      "Type": "Complex",
+      "Type": "Lookup",
       "QueryType": "SELECT",
       "Original": "select id from user where user.col = false and user.id in (1, 2) and user.name = 'aa'",
       "Instructions": {
@@ -1662,7 +1662,7 @@
     "comment": "Unsharded route",
     "query": "select unsharded.id from user join unsharded where unsharded.id = user.id",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select unsharded.id from user join unsharded where unsharded.id = user.id",
       "Instructions": {
@@ -1741,7 +1741,7 @@
     "comment": "subquery",
     "query": "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = u.id and user_extra.col = user.col) and u.id in (user_extra.col, 1)",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = u.id and user_extra.col = user.col) and u.id in (user_extra.col, 1)",
       "Instructions": {
@@ -1792,7 +1792,7 @@
     "comment": "correlated subquery merge-able into a route of a join tree",
     "query": "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = u.id) and u.id in (user_extra.col, 1)",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = u.id) and u.id in (user_extra.col, 1)",
       "Instructions": {
@@ -1843,7 +1843,7 @@
     "comment": "ensure subquery reordering gets us a better plan",
     "query": "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = 5) and u.id = 5",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = 5) and u.id = 5",
       "Instructions": {
@@ -1891,7 +1891,7 @@
     "comment": "nested subquery",
     "query": "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = u.id and user_extra.col = user.col and user.id in (select m3 from user_extra where user_extra.user_id = user.id)) and u.id in (user_extra.col, 1)",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = u.id and user_extra.col = user.col and user.id in (select m3 from user_extra where user_extra.user_id = user.id)) and u.id in (user_extra.col, 1)",
       "Instructions": {
@@ -3292,7 +3292,7 @@
     "comment": "not supported transitive closures with equality inside of an OR",
     "query": "select id from user, user_extra where user.id = user_extra.col and (user_extra.col = user_extra.user_id or user_extra.col2 = user_extra.name)",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select id from user, user_extra where user.id = user_extra.col and (user_extra.col = user_extra.user_id or user_extra.col2 = user_extra.name)",
       "Instructions": {
@@ -3367,7 +3367,7 @@
     "comment": "left join where clauses where we can optimize into an inner join",
     "query": "select user.id from user left join user_extra on user.col = user_extra.col where user_extra.foobar = 5",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select user.id from user left join user_extra on user.col = user_extra.col where user_extra.foobar = 5",
       "Instructions": {
@@ -3531,7 +3531,7 @@
     "comment": "should use colb_colc_map as first column of the vindex is present in predicate",
     "query": "select * from multicolvin where column_b = 1",
     "plan": {
-      "Type": "Complex",
+      "Type": "Lookup",
       "QueryType": "SELECT",
       "Original": "select * from multicolvin where column_b = 1",
       "Instructions": {
@@ -3583,7 +3583,7 @@
     "comment": "should only use first column of the vindex colb_colc_map",
     "query": "select * from multicolvin where column_b = 1 and column_c = 2",
     "plan": {
-      "Type": "Complex",
+      "Type": "Lookup",
       "QueryType": "SELECT",
       "Original": "select * from multicolvin where column_b = 1 and column_c = 2",
       "Instructions": {
@@ -3635,7 +3635,7 @@
     "comment": "uses vindex colb_colc_map",
     "query": "select * from multicolvin where column_b = 1 and column_c = 2 and column_a = 3",
     "plan": {
-      "Type": "Complex",
+      "Type": "Lookup",
       "QueryType": "SELECT",
       "Original": "select * from multicolvin where column_b = 1 and column_c = 2 and column_a = 3",
       "Instructions": {
@@ -3687,7 +3687,7 @@
     "comment": "colb_colc_map vindex for routing",
     "query": "select * from multicolvin where column_a = 3 and column_b = 1",
     "plan": {
-      "Type": "Complex",
+      "Type": "Lookup",
       "QueryType": "SELECT",
       "Original": "select * from multicolvin where column_a = 3 and column_b = 1",
       "Instructions": {
@@ -4640,7 +4640,7 @@
     "comment": "must merge subquery with the right side of the join",
     "query": "select 1 from unsharded join user u1 where exists (select 1 from unsharded u2 where u1.bar = u2.baz)",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select 1 from unsharded join user u1 where exists (select 1 from unsharded u2 where u1.bar = u2.baz)",
       "Instructions": {
@@ -5212,7 +5212,7 @@
     "comment": "Between clause on a binary vindex field with values from a different table",
     "query": "select s.oid,s.col1, se.colb from sales s join sales_extra se on s.col1 = se.cola where s.oid between se.start and se.end",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select s.oid,s.col1, se.colb from sales s join sales_extra se on s.col1 = se.cola where s.oid between se.start and se.end",
       "Instructions": {

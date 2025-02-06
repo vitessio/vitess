@@ -85,7 +85,7 @@
     "comment": "TPC-C insert into orders1",
     "query": "INSERT INTO orders1 (o_id, o_d_id, o_w_id, o_c_id,  o_entry_d, o_ol_cnt, o_all_local) VALUES (334983,59896,99,156,NOW(),781038,'hello')",
     "plan": {
-      "Type": "Unknown",
+      "Type": "MultiShard",
       "QueryType": "INSERT",
       "Original": "INSERT INTO orders1 (o_id, o_d_id, o_w_id, o_c_id,  o_entry_d, o_ol_cnt, o_all_local) VALUES (334983,59896,99,156,NOW(),781038,'hello')",
       "Instructions": {
@@ -111,7 +111,7 @@
     "comment": "TPC-C insert into new_orders1",
     "query": "INSERT INTO new_orders1 (no_o_id, no_d_id, no_w_id) VALUES (8,9,48)",
     "plan": {
-      "Type": "Unknown",
+      "Type": "MultiShard",
       "QueryType": "INSERT",
       "Original": "INSERT INTO new_orders1 (no_o_id, no_d_id, no_w_id) VALUES (8,9,48)",
       "Instructions": {
@@ -218,7 +218,7 @@
     "comment": "TPC-C insert into order_line1",
     "query": "INSERT INTO order_line1 (ol_o_id, ol_d_id, ol_w_id, ol_number, ol_i_id, ol_supply_w_id, ol_quantity, ol_amount, ol_dist_info) VALUES (648,36812,3201,4946378,3,7,89,1,'info')",
     "plan": {
-      "Type": "Unknown",
+      "Type": "MultiShard",
       "QueryType": "INSERT",
       "Original": "INSERT INTO order_line1 (ol_o_id, ol_d_id, ol_w_id, ol_number, ol_i_id, ol_supply_w_id, ol_quantity, ol_amount, ol_dist_info) VALUES (648,36812,3201,4946378,3,7,89,1,'info')",
       "Instructions": {
@@ -514,7 +514,7 @@
     "comment": "TPC-C insert into history1",
     "query": "INSERT INTO history1 (h_c_d_id, h_c_w_id, h_c_id, h_d_id,  h_w_id, h_date, h_amount, h_data) VALUES (6809887,38748,8746,210,8,NOW(),8907,'data')",
     "plan": {
-      "Type": "Unknown",
+      "Type": "MultiShard",
       "QueryType": "INSERT",
       "Original": "INSERT INTO history1 (h_c_d_id, h_c_w_id, h_c_id, h_d_id,  h_w_id, h_date, h_amount, h_data) VALUES (6809887,38748,8746,210,8,NOW(),8907,'data')",
       "Instructions": {

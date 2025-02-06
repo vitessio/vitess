@@ -1054,7 +1054,7 @@
     "comment": "derived table with union",
     "query": "select tbl2.id FROM ((select id from user order by id limit 5) union all (select id from user order by id desc limit 5)) as tbl1 INNER JOIN user as tbl2  ON tbl1.id = tbl2.id",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select tbl2.id FROM ((select id from user order by id limit 5) union all (select id from user order by id desc limit 5)) as tbl1 INNER JOIN user as tbl2  ON tbl1.id = tbl2.id",
       "Instructions": {
@@ -1651,7 +1651,7 @@
     "comment": "join between two derived tables containing UNION",
     "query": "select * from (select foo from user where bar = 12 union select foo from user where bar = 134) as t1 join (select bar from music where foo = 12 union select bar from music where foo = 1234) as t2 on t1.foo = t2.bar",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select * from (select foo from user where bar = 12 union select foo from user where bar = 134) as t1 join (select bar from music where foo = 12 union select bar from music where foo = 1234) as t2 on t1.foo = t2.bar",
       "Instructions": {

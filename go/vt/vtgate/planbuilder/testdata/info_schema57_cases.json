@@ -299,7 +299,7 @@
     "comment": "information_schema referential contraints",
     "query": "SELECT kcu.constraint_name constraint_name, kcu.column_name column_name, kcu.referenced_table_name referenced_table_name, kcu.referenced_column_name referenced_column_name, kcu.ordinal_position ordinal_position, kcu.table_name table_name, rc.delete_rule delete_rule, rc.update_rule update_rule FROM information_schema.key_column_usage AS kcu INNER JOIN information_schema.referential_constraints AS rc ON kcu.constraint_name = rc.constraint_name WHERE kcu.table_schema = ? AND rc.constraint_schema = ? AND kcu.referenced_column_name IS NOT NULL ORDER BY ordinal_position",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "SELECT kcu.constraint_name constraint_name, kcu.column_name column_name, kcu.referenced_table_name referenced_table_name, kcu.referenced_column_name referenced_column_name, kcu.ordinal_position ordinal_position, kcu.table_name table_name, rc.delete_rule delete_rule, rc.update_rule update_rule FROM information_schema.key_column_usage AS kcu INNER JOIN information_schema.referential_constraints AS rc ON kcu.constraint_name = rc.constraint_name WHERE kcu.table_schema = ? AND rc.constraint_schema = ? AND kcu.referenced_column_name IS NOT NULL ORDER BY ordinal_position",
       "Instructions": {
@@ -723,7 +723,7 @@
     "comment": "expand star with information schema in a derived table",
     "query": "select x.table_name from (select a.* from information_schema.key_column_usage a) x join user on x.`COLUMN_NAME` = user.id",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select x.table_name from (select a.* from information_schema.key_column_usage a) x join user on x.`COLUMN_NAME` = user.id",
       "Instructions": {
@@ -1192,7 +1192,7 @@
     "comment": "LIMIT 1 inside derived table on the RHS should not be a problem",
     "query": "SELECT c.column_name FROM information_schema.columns c JOIN ( SELECT table_name FROM information_schema.tables WHERE table_schema != 'information_schema' LIMIT 1 ) AS tables ON tables.table_name = c.table_name",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "SELECT c.column_name FROM information_schema.columns c JOIN ( SELECT table_name FROM information_schema.tables WHERE table_schema != 'information_schema' LIMIT 1 ) AS tables ON tables.table_name = c.table_name",
       "Instructions": {

@@ -42,7 +42,7 @@
     "comment": "Flush statement with flush options",
     "query": "flush no_write_to_binlog hosts, logs",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Scatter",
       "QueryType": "FLUSH",
       "Original": "flush no_write_to_binlog hosts, logs",
       "Instructions": {
@@ -101,7 +101,7 @@
     "comment": "Unknown tables in unsharded keyspaces are allowed",
     "query": "flush tables main.a with read lock",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Scatter",
       "QueryType": "FLUSH",
       "Original": "flush tables main.a with read lock",
       "Instructions": {

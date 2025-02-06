@@ -3,7 +3,7 @@
     "comment": "get_lock from dual",
     "query": "select get_lock('xyz', 10) from dual",
     "plan": {
-      "Type": "Complex",
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select get_lock('xyz', 10) from dual",
       "Instructions": {
@@ -27,7 +27,7 @@
     "comment": "is_free_lock from dual",
     "query": "select is_free_lock('xyz') from dual",
     "plan": {
-      "Type": "Complex",
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select is_free_lock('xyz') from dual",
       "Instructions": {
@@ -51,7 +51,7 @@
     "comment": "get_lock from dual prepare query",
     "query": "select get_lock(?, ?)",
     "plan": {
-      "Type": "Complex",
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select get_lock(?, ?)",
       "Instructions": {
@@ -75,7 +75,7 @@
     "comment": "lock tables read",
     "query": "lock tables t as x read local",
     "plan": {
-      "Type": "Complex",
+      "Type": "Passthrough",
       "QueryType": "LOCK_TABLES",
       "Original": "lock tables t as x read local",
       "Instructions": {
@@ -87,7 +87,7 @@
     "comment": "lock tables write",
     "query": "lock tables t low_priority write",
     "plan": {
-      "Type": "Complex",
+      "Type": "Passthrough",
       "QueryType": "LOCK_TABLES",
       "Original": "lock tables t low_priority write",
       "Instructions": {
@@ -111,7 +111,7 @@
     "comment": "multiple lock functions",
     "query": "select get_lock('xyz', 10), is_free_lock('abc') from dual",
     "plan": {
-      "Type": "Complex",
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select get_lock('xyz', 10), is_free_lock('abc') from dual",
       "Instructions": {
@@ -136,7 +136,7 @@
     "comment": "select nowait",
     "query": "select u.col, u.bar from user u join music m on u.foo = m.foo for update nowait",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select u.col, u.bar from user u join music m on u.foo = m.foo for update nowait",
       "Instructions": {
@@ -182,7 +182,7 @@
     "comment": "select skip locked",
     "query": "select u.col, u.bar from user u join music m on u.foo = m.foo for share skip locked",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select u.col, u.bar from user u join music m on u.foo = m.foo for share skip locked",
       "Instructions": {

@@ -219,7 +219,7 @@
     "comment": "OLTP insert",
     "query": "INSERT INTO sbtest16 (id, k, c, pad) VALUES (42, 1, 2, 50)",
     "plan": {
-      "Type": "Unknown",
+      "Type": "MultiShard",
       "QueryType": "INSERT",
       "Original": "INSERT INTO sbtest16 (id, k, c, pad) VALUES (42, 1, 2, 50)",
       "Instructions": {

@@ -903,7 +903,7 @@
     "comment": "with t as (select id from user where id = 5) select t.id from t join user_extra on t.id = user_extra.col",
     "query": "with t as (select id from user where id = 5) select t.id from t join user_extra on t.id = user_extra.col",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "with t as (select id from user where id = 5) select t.id from t join user_extra on t.id = user_extra.col",
       "Instructions": {
@@ -1086,7 +1086,7 @@
     "comment": "with t as (select user.id, user.col1 from user join user_extra) select t.col1 from t join unsharded on unsharded.col1 = t.col1 and unsharded.id = t.id",
     "query": "with t as (select user.id, user.col1 from user join user_extra) select t.col1 from t join unsharded on unsharded.col1 = t.col1 and unsharded.id = t.id",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "with t as (select user.id, user.col1 from user join user_extra) select t.col1 from t join unsharded on unsharded.col1 = t.col1 and unsharded.id = t.id",
       "Instructions": {
@@ -1153,7 +1153,7 @@
     "comment": "with t as (select user.id, user.col1 from user join user_extra on user_extra.col = user.col) select t.id from t",
     "query": "with t as (select user.id, user.col1 from user join user_extra on user_extra.col = user.col) select t.id from t",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "with t as (select user.id, user.col1 from user join user_extra on user_extra.col = user.col) select t.id from t",
       "Instructions": {
@@ -1199,7 +1199,7 @@
     "comment": "with t as (select user.id, user.col1 from user join user_extra) select t.col1 from unsharded_a ua join t",
     "query": "with t as (select user.id, user.col1 from user join user_extra) select t.col1 from unsharded_a ua join t",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "with t as (select user.id, user.col1 from user join user_extra) select t.col1 from unsharded_a ua join t",
       "Instructions": {
@@ -1262,7 +1262,7 @@
     "comment": "with t as (select user.id, user.col1 from user join user_extra) select t.col1 from unsharded_a ua join t on t.id = ua.id",
     "query": "with t as (select user.id, user.col1 from user join user_extra) select t.col1 from unsharded_a ua join t on t.id = ua.id",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "with t as (select user.id, user.col1 from user join user_extra) select t.col1 from unsharded_a ua join t on t.id = ua.id",
       "Instructions": {
@@ -1332,7 +1332,7 @@
     "comment": "with t as (select user.id from user join user_extra) select id, t.id from  t",
     "query": "with t as (select user.id from user join user_extra) select id, t.id from  t",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "with t as (select user.id from user join user_extra) select id, t.id from  t",
       "Instructions": {
@@ -1436,7 +1436,7 @@
     "comment": "with t as (select user.id, user.col from user join user_extra) select id from t where id=5",
     "query": "with t as (select user.id, user.col from user join user_extra) select id from t where id=5",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "with t as (select user.id, user.col from user join user_extra) select id from t where id=5",
       "Instructions": {
@@ -1483,7 +1483,7 @@
     "comment": "with t as (select user.id, user.col from user join user_extra) select id+1 from t",
     "query": "with t as (select user.id, user.col from user join user_extra) select id+1 from t",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "with t as (select user.id, user.col from user join user_extra) select id+1 from t",
       "Instructions": {
@@ -1526,7 +1526,7 @@
     "comment": "with u(a,n) as (select id as b, name from user) select u.a from u where u.n = 1",
     "query": "with u(a,n) as (select id as b, name from user) select u.a from u where u.n = 1",
     "plan": {
-      "Type": "Complex",
+      "Type": "Lookup",
       "QueryType": "SELECT",
       "Original": "with u(a,n) as (select id as b, name from user) select u.a from u where u.n = 1",
       "Instructions": {
@@ -1578,7 +1578,7 @@
     "comment": "with u(a, n) as (select id as b, name from user where b = 1) select u.a from u where u.n = 1",
     "query": "with u(a, n) as (select id as b, name from user where b = 1) select u.a from u where u.n = 1",
     "plan": {
-      "Type": "Complex",
+      "Type": "Lookup",
       "QueryType": "SELECT",
       "Original": "with u(a, n) as (select id as b, name from user where b = 1) select u.a from u where u.n = 1",
       "Instructions": {
@@ -1630,7 +1630,7 @@
     "comment": "with t(i) as (select user.id from user join user_extra) select i+1 from t",
     "query": "with t(i) as (select user.id from user join user_extra) select i+1 from t",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "with t(i) as (select user.id from user join user_extra) select i+1 from t",
       "Instructions": {
@@ -1673,7 +1673,7 @@
     "comment": "with t as (select `user`.col1 from `user` join unsharded) select 0 from t join unsharded on unsharded.col1 = t.col1 and unsharded.a = t.col1",
     "query": "with t as (select `user`.col1 from `user` join unsharded) select 0 from t join unsharded on unsharded.col1 = t.col1 and unsharded.a = t.col1",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "with t as (select `user`.col1 from `user` join unsharded) select 0 from t join unsharded on unsharded.col1 = t.col1 and unsharded.a = t.col1",
       "Instructions": {
@@ -2399,7 +2399,7 @@
     "comment": "Outer join with recursive CTE",
     "query": "WITH RECURSIVE literal_cte AS (SELECT 1 AS id, 100 AS value, 1 AS manager_id UNION ALL SELECT id + 1, value * 2, id FROM literal_cte WHERE id < 5) SELECT l.id, l.value, l.manager_id, e.name AS employee_name FROM literal_cte l LEFT JOIN user e ON l.id = e.id",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "WITH RECURSIVE literal_cte AS (SELECT 1 AS id, 100 AS value, 1 AS manager_id UNION ALL SELECT id + 1, value * 2, id FROM literal_cte WHERE id < 5) SELECT l.id, l.value, l.manager_id, e.name AS employee_name FROM literal_cte l LEFT JOIN user e ON l.id = e.id",
       "Instructions": {

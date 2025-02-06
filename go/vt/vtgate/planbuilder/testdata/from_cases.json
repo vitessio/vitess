@@ -143,7 +143,7 @@
     "comment": "Multi-table, multi-chunk",
     "query": "select music.col from user join music",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select music.col from user join music",
       "Instructions": {
@@ -334,7 +334,7 @@
     "comment": "select user.music.foo from user.music join user on user.music.id = user.id where user.music.col = 42",
     "query": "select user.music.foo from user.music join user on user.music.id = user.id where user.music.col = 42",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select user.music.foo from user.music join user on user.music.id = user.id where user.music.col = 42",
       "Instructions": {
@@ -384,7 +384,7 @@
     "comment": "',' join",
     "query": "select music.col from user, music",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select music.col from user, music",
       "Instructions": {
@@ -519,7 +519,7 @@
     "comment": "Left join, multi-chunk",
     "query": "select u.col from user u left join unsharded m on u.a = m.b",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select u.col from user u left join unsharded m on u.a = m.b",
       "Instructions": {
@@ -565,7 +565,7 @@
     "comment": "Three-way left join",
     "query": "select user.col, m2.foo from user left join unsharded as m1 on user.col = m1.col left join unsharded as m2 on m1.col = m2.col",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select user.col, m2.foo from user left join unsharded as m1 on user.col = m1.col left join unsharded as m2 on m1.col = m2.col",
       "Instructions": {
@@ -633,7 +633,7 @@
     "comment": "Three-way left join, right-associated",
     "query": "select user.col from user left join user_extra as e left join unsharded as m1 on m1.col = e.col on user.col = e.col",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select user.col from user left join user_extra as e left join unsharded as m1 on m1.col = e.col on user.col = e.col",
       "Instructions": {
@@ -882,7 +882,7 @@
     "comment": "Three-way join",
     "query": "select user.col from user join unsharded as m1 join unsharded as m2",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select user.col from user join unsharded as m1 join unsharded as m2",
       "Instructions": {
@@ -979,7 +979,7 @@
     "comment": "Parenthesized, single chunk",
     "query": "select user.col from user join (unsharded as m1 join unsharded as m2)",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select user.col from user join (unsharded as m1 join unsharded as m2)",
       "Instructions": {
@@ -1022,7 +1022,7 @@
     "comment": "Parenthesized, multi-chunk",
     "query": "select user.col from user join (user as u1 join unsharded)",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select user.col from user join (user as u1 join unsharded)",
       "Instructions": {
@@ -1254,7 +1254,7 @@
     "comment": "sharded join on unique vindex, inequality",
     "query": "select user.col from user join user_extra on user.id < user_extra.user_id",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select user.col from user join user_extra on user.id < user_extra.user_id",
       "Instructions": {
@@ -1300,7 +1300,7 @@
     "comment": "sharded join, non-col reference RHS",
     "query": "select user.col from user join user_extra on user.id = 5",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select user.col from user join user_extra on user.id = 5",
       "Instructions": {
@@ -1347,7 +1347,7 @@
     "comment": "sharded join, non-col reference LHS",
     "query": "select user.col from user join user_extra on 5 = user.id",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select user.col from user join user_extra on 5 = user.id",
       "Instructions": {
@@ -1394,7 +1394,7 @@
     "comment": "sharded join, non-vindex col",
     "query": "select user.col from user join user_extra on user.id = user_extra.col",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select user.col from user join user_extra on user.id = user_extra.col",
       "Instructions": {
@@ -1444,7 +1444,7 @@
     "comment": "sharded join, non-unique vindex",
     "query": "select user.col from user_extra join user on user_extra.user_id = user.name",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select user.col from user_extra join user on user_extra.user_id = user.name",
       "Instructions": {
@@ -1593,7 +1593,7 @@
     "comment": "routing rules for join, unsharded route wins if we can't find a merged route",
     "query": "select route2.col from route2 join user_extra",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select route2.col from route2 join user_extra",
       "Instructions": {
@@ -1752,7 +1752,7 @@
     "comment": "derived table in FROM with cross-shard join",
     "query": "select t.id from (select id from user where id = 5) as t join user_extra on t.id = user_extra.col",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select t.id from (select id from user where id = 5) as t join user_extra on t.id = user_extra.col",
       "Instructions": {
@@ -1967,7 +1967,7 @@
     "comment": "Unneeded ORDER BY inside derived table removed",
     "query": "select * from (select id from user order by foo) dt1, (select id from user order by baz) dt2",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select * from (select id from user order by foo) dt1, (select id from user order by baz) dt2",
       "Instructions": {
@@ -2009,7 +2009,7 @@
     "comment": "join of information_schema with normal table",
     "query": "select unsharded.foo from information_schema.CHARACTER_SETS join unsharded",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select unsharded.foo from information_schema.CHARACTER_SETS join unsharded",
       "Instructions": {
@@ -2076,7 +2076,7 @@
     "comment": "join of normal table with information_schema",
     "query": "select unsharded.foo from unsharded join information_schema.CHARACTER_SETS",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select unsharded.foo from unsharded join information_schema.CHARACTER_SETS",
       "Instructions": {
@@ -2118,7 +2118,7 @@
     "comment": "wire-up on join with cross-shard derived table",
     "query": "select t.col1 from (select user.id, user.col1 from user join user_extra) as t join unsharded on unsharded.col1 = t.col1 and unsharded.id = t.id",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select t.col1 from (select user.id, user.col1 from user join user_extra) as t join unsharded on unsharded.col1 = t.col1 and unsharded.id = t.id",
       "Instructions": {
@@ -2185,7 +2185,7 @@
     "comment": "wire-up on within cross-shard derived table",
     "query": "select t.id from (select user.id, user.col1 from user join user_extra on user_extra.col = user.col) as t",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select t.id from (select user.id, user.col1 from user join user_extra on user_extra.col = user.col) as t",
       "Instructions": {
@@ -2231,7 +2231,7 @@
     "comment": "Join with cross-shard derived table on rhs",
     "query": "select t.col1 from unsharded_a ua join (select user.id, user.col1 from user join user_extra) as t",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select t.col1 from unsharded_a ua join (select user.id, user.col1 from user join user_extra) as t",
       "Instructions": {
@@ -2294,7 +2294,7 @@
     "comment": "Join with cross-shard derived table on rhs - push down join predicate to derived table",
     "query": "select t.col1 from unsharded_a ua join (select user.id, user.col1 from user join user_extra) as t on t.id = ua.id",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select t.col1 from unsharded_a ua join (select user.id, user.col1 from user join user_extra) as t on t.id = ua.id",
       "Instructions": {
@@ -2579,7 +2579,7 @@
     "comment": "subquery in ON clause, with join primitives, and join on top\n# The subquery is not pulled all the way out.",
     "query": "select unsharded.col from unsharded join user on user.col in (select col from user) join unsharded_a",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select unsharded.col from unsharded join user on user.col in (select col from user) join unsharded_a",
       "Instructions": {
@@ -2671,7 +2671,7 @@
     "comment": "keyspace-qualified queries",
     "query": "select user.user.col1, main.unsharded.col1 from user.user join main.unsharded where main.unsharded.col2 = user.user.col2",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select user.user.col1, main.unsharded.col1 from user.user join main.unsharded where main.unsharded.col2 = user.user.col2",
       "Instructions": {
@@ -2764,7 +2764,7 @@
     "comment": "derived table with join primitive (FROM)",
     "query": "select id, t.id from (select user.id from user join user_extra) as t",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select id, t.id from (select user.id from user join user_extra) as t",
       "Instructions": {
@@ -2899,7 +2899,7 @@
     "comment": "join with bindvariables",
     "query": "SELECT `user`.`id` FROM `user` INNER JOIN `user_extra` ON `user`.`id` = `user_extra`.`assembly_id` WHERE `user_extra`.`user_id` = 2",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "SELECT `user`.`id` FROM `user` INNER JOIN `user_extra` ON `user`.`id` = `user_extra`.`assembly_id` WHERE `user_extra`.`user_id` = 2",
       "Instructions": {
@@ -3057,7 +3057,7 @@
     "comment": "optimise plan by merging user_extra and music first, and then querying for user info",
     "query": "select 1 from user u join user_extra ue on ue.id = u.id join music m on m.user_id = ue.user_id",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select 1 from user u join user_extra ue on ue.id = u.id join music m on m.user_id = ue.user_id",
       "Instructions": {
@@ -3108,7 +3108,7 @@
     "comment": "join column selected as alias",
     "query": "SELECT u.id as uid, ue.id as ueid FROM user u join user_extra ue where u.id = ue.id",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "SELECT u.id as uid, ue.id as ueid FROM user u join user_extra ue where u.id = ue.id",
       "Instructions": {
@@ -3276,7 +3276,7 @@
     "comment": "filtering on a cross-shard derived table",
     "query": "select id from (select user.id, user.col from user join user_extra) as t where id=5",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select id from (select user.id, user.col from user join user_extra) as t where id=5",
       "Instructions": {
@@ -3323,7 +3323,7 @@
     "comment": "expression on a cross-shard derived table",
     "query": "select id+1 from (select user.id, user.col from user join user_extra) as t",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select id+1 from (select user.id, user.col from user join user_extra) as t",
       "Instructions": {
@@ -3366,7 +3366,7 @@
     "comment": "derived table with aliased columns and outer predicate pushed in derived table",
     "query": "select u.a from (select id as b, name from user) u(a, n) where u.n = 1",
     "plan": {
-      "Type": "Complex",
+      "Type": "Lookup",
       "QueryType": "SELECT",
       "Original": "select u.a from (select id as b, name from user) u(a, n) where u.n = 1",
       "Instructions": {
@@ -3418,7 +3418,7 @@
     "comment": "derived table with aliased columns predicate in both the outer and inner",
     "query": "select u.a from (select id as b, name from user where b = 1) u(a, n) where u.n = 1",
     "plan": {
-      "Type": "Complex",
+      "Type": "Lookup",
       "QueryType": "SELECT",
       "Original": "select u.a from (select id as b, name from user where b = 1) u(a, n) where u.n = 1",
       "Instructions": {
@@ -3470,7 +3470,7 @@
     "comment": "derived table with aliased columns and a join that requires pushProjection",
     "query": "select i+1 from (select user.id from user join user_extra) t(i)",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select i+1 from (select user.id from user join user_extra) t(i)",
       "Instructions": {
@@ -3592,7 +3592,7 @@
     "comment": "join on int columns",
     "query": "select u.id from user as u join user as uu on u.intcol = uu.intcol",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select u.id from user as u join user as uu on u.intcol = uu.intcol",
       "Instructions": {
@@ -3637,7 +3637,7 @@
     "comment": "Duplicate output column from derived table having a join",
     "query": "select 0 from (select `user`.col1 from `user` join unsharded) as t join unsharded on unsharded.col1 = t.col1 and unsharded.a = t.col1",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select 0 from (select `user`.col1 from `user` join unsharded) as t join unsharded on unsharded.col1 = t.col1 and unsharded.a = t.col1",
       "Instructions": {
@@ -3755,7 +3755,7 @@
     "comment": "dont merge unsharded tables from different keyspaces",
     "query": "select 1 from main.unsharded join main_2.unsharded_tab",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select 1 from main.unsharded join main_2.unsharded_tab",
       "Instructions": {
@@ -3998,7 +3998,7 @@
     "comment": "left join with expressions, with three-way join (different code path)",
     "query": "select user.id, user_extra.col+1 from user left join user_extra on user.col = user_extra.col join user_extra e",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select user.id, user_extra.col+1 from user left join user_extra on user.col = user_extra.col join user_extra e",
       "Instructions": {
@@ -4159,7 +4159,7 @@
     "comment": "join with USING construct",
     "query": "select * from authoritative join unsharded_authoritative using(col1)",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select * from authoritative join unsharded_authoritative using(col1)",
       "Instructions": {
@@ -4362,7 +4362,7 @@
     "comment": "join predicate only depending on the RHS should not turn outer join into inner join",
     "query": "select t1.id1, t2.id1 from t1 left join t1 as t2 on t2.id1 = t2.id2",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select t1.id1, t2.id1 from t1 left join t1 as t2 on t2.id1 = t2.id2",
       "Instructions": {
@@ -4427,7 +4427,7 @@
     "comment": "join query using table with muticolumn vindex",
     "query": "select 1 from multicol_tbl m1 join multicol_tbl m2 on m1.cola = m2.cola",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select 1 from multicol_tbl m1 join multicol_tbl m2 on m1.cola = m2.cola",
       "Instructions": {
@@ -4777,7 +4777,7 @@
     "comment": "join table influencing vindex selection with ignore and use vindex syntax",
     "query": "select u.intcol, u.id from user u use vindex (name_user_map) join music m ignore vindex(user_index) on u.col = m.col where u.name = 'bb' and u.id = 3 and m.user_id = 5 and m.id = 20",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select u.intcol, u.id from user u use vindex (name_user_map) join music m ignore vindex(user_index) on u.col = m.col where u.name = 'bb' and u.id = 3 and m.user_id = 5 and m.id = 20",
       "Instructions": {
@@ -4881,7 +4881,7 @@
     "comment": "Cross keyspace join",
     "query": "select 1 from user join t1 on user.id = t1.id",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select 1 from user join t1 on user.id = t1.id",
       "Instructions": {
@@ -4931,7 +4931,7 @@
     "comment": "Select everything from a derived table having a cross-shard join",
     "query": "select * from (select u.foo * ue.bar from user u join user_extra ue) as dt",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select * from (select u.foo * ue.bar from user u join user_extra ue) as dt",
       "Instructions": {

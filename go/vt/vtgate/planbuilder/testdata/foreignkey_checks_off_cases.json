@@ -3,7 +3,7 @@
     "comment": "Insertion in a table with cross-shard foreign keys works with foreign_key_checks off",
     "query": "insert into tbl3 (col3, coly) values (1, 3)",
     "plan": {
-      "Type": "Unknown",
+      "Type": "MultiShard",
       "QueryType": "INSERT",
       "Original": "insert into tbl3 (col3, coly) values (1, 3)",
       "Instructions": {
@@ -29,7 +29,7 @@
     "comment": "Insertion in a table with shard-scoped multiple column foreign key is allowed",
     "query": "insert into multicol_tbl2 (cola, colb, colc) values (1, 2, 3)",
     "plan": {
-      "Type": "Unknown",
+      "Type": "MultiShard",
       "QueryType": "INSERT",
       "Original": "insert into multicol_tbl2 (cola, colb, colc) values (1, 2, 3)",
       "Instructions": {
@@ -101,7 +101,7 @@
     "comment": "Delete in a table with shard-scoped multiple column foreign key with cascade with foreign key checks on",
     "query": "delete /*+ SET_VAR(foreign_key_checks=1) */ from multicol_tbl1 where cola = 1 and  colb = 2 and colc = 3",
     "plan": {
-      "Type": "Complex",
+      "Type": "ForeignKey",
       "QueryType": "DELETE",
       "Original": "delete /*+ SET_VAR(foreign_key_checks=1) */ from multicol_tbl1 where cola = 1 and  colb = 2 and colc = 3",
       "Instructions": {
@@ -258,7 +258,7 @@
     "comment": "Update in a table with shard-scoped foreign keys with cascade",
     "query": "update /*+ SET_VAR(foreign_key_checks=On) */ tbl5 set t5col5 = 'foo'",
     "plan": {
-      "Type": "Complex",
+      "Type": "ForeignKey",
       "QueryType": "UPDATE",
       "Original": "update /*+ SET_VAR(foreign_key_checks=On) */ tbl5 set t5col5 = 'foo'",
       "Instructions": {
@@ -316,7 +316,7 @@
     "comment": "Insertion in a table with 2 foreign keys constraint with same table on different columns - both are not shard scoped - works with foreign_key_checks off",
     "query": "insert into tbl6 (col6, t6col6) values (100, 'foo')",
     "plan": {
-      "Type": "Unknown",
+      "Type": "MultiShard",
       "QueryType": "INSERT",
       "Original": "insert into tbl6 (col6, t6col6) values (100, 'foo')",
       "Instructions": {
@@ -369,7 +369,7 @@
     "comment": "Delete table with cross-shard foreign key with set null - should be eventually allowed",
     "query": "delete /*+ SET_VAR(foreign_key_checks=On) */ from tbl9 where col9 = 34",
     "plan": {
-      "Type": "Complex",
+      "Type": "ForeignKey",
       "QueryType": "DELETE",
       "Original": "delete /*+ SET_VAR(foreign_key_checks=On) */ from tbl9 where col9 = 34",
       "Instructions": {
@@ -487,7 +487,7 @@
     "comment": "Insert with cross shard foreign keys and foreign key checks off",
     "query": "insert /*+ SET_VAR(foreign_key_checks=0) */ into tbl3 (col3, coly) values (1, 3)",
     "plan": {
-      "Type": "Unknown",
+      "Type": "MultiShard",
       "QueryType": "INSERT",
       "Original": "insert /*+ SET_VAR(foreign_key_checks=0) */ into tbl3 (col3, coly) values (1, 3)",
       "Instructions": {

@@ -815,7 +815,7 @@
     "comment": "Aggregation with derived table",
     "query": "select u.id, u.name, t.num_segments from (select id, count(*) as num_segments from user group by 1 order by 2 desc limit 20) t join unsharded u on u.id = t.id",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select u.id, u.name, t.num_segments from (select id, count(*) as num_segments from user group by 1 order by 2 desc limit 20) t join unsharded u on u.id = t.id",
       "Instructions": {
@@ -6727,7 +6727,7 @@
     "comment": "GROUP BY inside derived table on the RHS should not be a problem",
     "query": "SELECT c.column_name FROM user c JOIN (SELECT table_name FROM user WHERE id = 143 GROUP BY 1) AS tables ON tables.table_name = c.table_name",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "SELECT c.column_name FROM user c JOIN (SELECT table_name FROM user WHERE id = 143 GROUP BY 1) AS tables ON tables.table_name = c.table_name",
       "Instructions": {

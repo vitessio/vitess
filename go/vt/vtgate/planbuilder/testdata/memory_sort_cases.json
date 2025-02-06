@@ -248,7 +248,7 @@
     "comment": "order by on a cross-shard derived table",
     "query": "select id from (select user.id, user.col from user join user_extra) as t order by id",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select id from (select user.id, user.col from user join user_extra) as t order by id",
       "Instructions": {
@@ -630,7 +630,7 @@
     "comment": "unary expression in join query",
     "query": "select u.a from user u join music m on u.a = m.a order by binary a desc",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select u.a from user u join music m on u.a = m.a order by binary a desc",
       "Instructions": {

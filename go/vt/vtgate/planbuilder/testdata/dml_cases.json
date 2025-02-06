@@ -893,7 +893,7 @@
     "comment": "simple insert, no values",
     "query": "insert into unsharded values()",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Passthrough",
       "QueryType": "INSERT",
       "Original": "insert into unsharded values()",
       "Instructions": {
@@ -917,7 +917,7 @@
     "comment": "simple insert unsharded",
     "query": "insert into unsharded values(1, 2)",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Passthrough",
       "QueryType": "INSERT",
       "Original": "insert into unsharded values(1, 2)",
       "Instructions": {
@@ -941,7 +941,7 @@
     "comment": "simple upsert unsharded",
     "query": "insert into unsharded values(1, 2) on duplicate key update x = 3",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Passthrough",
       "QueryType": "INSERT",
       "Original": "insert into unsharded values(1, 2) on duplicate key update x = 3",
       "Instructions": {
@@ -965,7 +965,7 @@
     "comment": "unsharded insert, no col list with auto-inc and authoritative column list",
     "query": "insert into unsharded_authoritative values(1,1)",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Passthrough",
       "QueryType": "INSERT",
       "Original": "insert into unsharded_authoritative values(1,1)",
       "Instructions": {
@@ -990,7 +990,7 @@
     "comment": "sharded upsert with sharding key set to vindex column",
     "query": "insert into music(user_id, id) values(1, 2) on duplicate key update user_id = values(user_id)",
     "plan": {
-      "Type": "Unknown",
+      "Type": "MultiShard",
       "QueryType": "INSERT",
       "Original": "insert into music(user_id, id) values(1, 2) on duplicate key update user_id = values(user_id)",
       "Instructions": {
@@ -1019,7 +1019,7 @@
     "comment": "sharded bulk upsert with sharding key set to vindex column",
     "query": "insert into music(user_id, id) values (1, 2), (3,4) on duplicate key update user_id = values(user_id)",
     "plan": {
-      "Type": "Unknown",
+      "Type": "MultiShard",
       "QueryType": "INSERT",
       "Original": "insert into music(user_id, id) values (1, 2), (3,4) on duplicate key update user_id = values(user_id)",
       "Instructions": {
@@ -1048,7 +1048,7 @@
     "comment": "insert unsharded with select",
     "query": "insert into unsharded select id from unsharded_auto",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Passthrough",
       "QueryType": "INSERT",
       "Original": "insert into unsharded select id from unsharded_auto",
       "Instructions": {
@@ -1073,7 +1073,7 @@
     "comment": "insert unsharded with select with join",
     "query": "insert into unsharded select id from unsharded join unsharded_auto",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Passthrough",
       "QueryType": "INSERT",
       "Original": "insert into unsharded select id from unsharded join unsharded_auto",
       "Instructions": {
@@ -1098,7 +1098,7 @@
     "comment": "insert unsharded, invalid value for auto-inc",
     "query": "insert into unsharded_auto(id, val) values(18446744073709551616, 'aa')",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Passthrough",
       "QueryType": "INSERT",
       "Original": "insert into unsharded_auto(id, val) values(18446744073709551616, 'aa')",
       "Instructions": {
@@ -1123,7 +1123,7 @@
     "comment": "insert unsharded, column present",
     "query": "insert into unsharded_auto(id, val) values(1, 'aa')",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Passthrough",
       "QueryType": "INSERT",
       "Original": "insert into unsharded_auto(id, val) values(1, 'aa')",
       "Instructions": {
@@ -1148,7 +1148,7 @@
     "comment": "insert unsharded, column absent",
     "query": "insert into unsharded_auto(val) values('aa')",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Passthrough",
       "QueryType": "INSERT",
       "Original": "insert into unsharded_auto(val) values('aa')",
       "Instructions": {
@@ -1173,7 +1173,7 @@
     "comment": "insert unsharded, column absent",
     "query": "insert into unsharded_auto(val) values(false)",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Passthrough",
       "QueryType": "INSERT",
       "Original": "insert into unsharded_auto(val) values(false)",
       "Instructions": {
@@ -1198,7 +1198,7 @@
     "comment": "insert unsharded, multi-val",
     "query": "insert into unsharded_auto(id, val) values(1, 'aa'), (null, 'bb')",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Passthrough",
       "QueryType": "INSERT",
       "Original": "insert into unsharded_auto(id, val) values(1, 'aa'), (null, 'bb')",
       "Instructions": {
@@ -1223,7 +1223,7 @@
     "comment": "unsharded insert subquery in insert value",
     "query": "insert into unsharded values((select 1 from dual), 1)",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Passthrough",
       "QueryType": "INSERT",
       "Original": "insert into unsharded values((select 1 from dual), 1)",
       "Instructions": {
@@ -1247,7 +1247,7 @@
     "comment": "sharded insert subquery in insert value",
     "query": "insert into user(id, val) values((select 1), 1)",
     "plan": {
-      "Type": "Unknown",
+      "Type": "MultiShard",
       "QueryType": "INSERT",
       "Original": "insert into user(id, val) values((select 1), 1)",
       "Instructions": {
@@ -1277,7 +1277,7 @@
     "comment": "insert into a routed table",
     "query": "insert into route1(id) values (1)",
     "plan": {
-      "Type": "Unknown",
+      "Type": "MultiShard",
       "QueryType": "INSERT",
       "Original": "insert into route1(id) values (1)",
       "Instructions": {
@@ -1313,7 +1313,7 @@
     "comment": "insert no column list for sharded authoritative table",
     "query": "insert into authoritative values(1, 2, 3)",
     "plan": {
-      "Type": "Unknown",
+      "Type": "MultiShard",
       "QueryType": "INSERT",
       "Original": "insert into authoritative values(1, 2, 3)",
       "Instructions": {
@@ -1340,7 +1340,7 @@
     "comment": "insert sharded, no values",
     "query": "insert into user values()",
     "plan": {
-      "Type": "Unknown",
+      "Type": "MultiShard",
       "QueryType": "INSERT",
       "Original": "insert into user values()",
       "Instructions": {
@@ -1370,7 +1370,7 @@
     "comment": "insert with one vindex",
     "query": "insert into user(id) values (1)",
     "plan": {
-      "Type": "Unknown",
+      "Type": "MultiShard",
       "QueryType": "INSERT",
       "Original": "insert into user(id) values (1)",
       "Instructions": {
@@ -1400,7 +1400,7 @@
     "comment": "insert ignore sharded",
     "query": "insert ignore into user(id) values (1)",
     "plan": {
-      "Type": "Unknown",
+      "Type": "MultiShard",
       "QueryType": "INSERT",
       "Original": "insert ignore into user(id) values (1)",
       "Instructions": {
@@ -1431,7 +1431,7 @@
     "comment": "insert on duplicate key",
     "query": "insert into user(id) values(1) on duplicate key update col = 2",
     "plan": {
-      "Type": "Unknown",
+      "Type": "MultiShard",
       "QueryType": "INSERT",
       "Original": "insert into user(id) values(1) on duplicate key update col = 2",
       "Instructions": {
@@ -1462,7 +1462,7 @@
     "comment": "insert with one vindex and bind var",
     "query": "insert into user(id) values (:aa)",
     "plan": {
-      "Type": "Unknown",
+      "Type": "MultiShard",
       "QueryType": "INSERT",
       "Original": "insert into user(id) values (:aa)",
       "Instructions": {
@@ -1492,7 +1492,7 @@
     "comment": "insert with non vindex",
     "query": "insert into user(nonid) values (2)",
     "plan": {
-      "Type": "Unknown",
+      "Type": "MultiShard",
       "QueryType": "INSERT",
       "Original": "insert into user(nonid) values (2)",
       "Instructions": {
@@ -1522,7 +1522,7 @@
     "comment": "insert with default seq",
     "query": "insert into user(id, nonid) values (default, 2)",
     "plan": {
-      "Type": "Unknown",
+      "Type": "MultiShard",
       "QueryType": "INSERT",
       "Original": "insert into user(id, nonid) values (default, 2)",
       "Instructions": {
@@ -1552,7 +1552,7 @@
     "comment": "insert with non vindex bool value",
     "query": "insert into user(nonid) values (true)",
     "plan": {
-      "Type": "Unknown",
+      "Type": "MultiShard",
       "QueryType": "INSERT",
       "Original": "insert into user(nonid) values (true)",
       "Instructions": {
@@ -1582,7 +1582,7 @@
     "comment": "insert with all vindexes supplied",
     "query": "insert into user(nonid, name, id) values (2, 'foo', 1)",
     "plan": {
-      "Type": "Unknown",
+      "Type": "MultiShard",
       "QueryType": "INSERT",
       "Original": "insert into user(nonid, name, id) values (2, 'foo', 1)",
       "Instructions": {
@@ -1612,7 +1612,7 @@
     "comment": "insert for non-vindex autoinc",
     "query": "insert into user_extra(nonid) values (2)",
     "plan": {
-      "Type": "Unknown",
+      "Type": "MultiShard",
       "QueryType": "INSERT",
       "Original": "insert into user_extra(nonid) values (2)",
       "Instructions": {
@@ -1640,7 +1640,7 @@
     "comment": "insert for non-compliant names",
     "query": "insert into `weird``name`(`a``b*c`, `b*c`) values(1, 2)",
     "plan": {
-      "Type": "Unknown",
+      "Type": "MultiShard",
       "QueryType": "INSERT",
       "Original": "insert into `weird``name`(`a``b*c`, `b*c`) values(1, 2)",
       "Instructions": {
@@ -1667,7 +1667,7 @@
     "comment": "unsharded insert from union",
     "query": "insert into unsharded select 1 from dual union select 1 from dual",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Passthrough",
       "QueryType": "INSERT",
       "Original": "insert into unsharded select 1 from dual union select 1 from dual",
       "Instructions": {
@@ -1692,7 +1692,7 @@
     "comment": "insert for non-vindex autoinc, invalid value",
     "query": "insert into user_extra(nonid, extra_id) values (2, 18446744073709551616)",
     "plan": {
-      "Type": "Unknown",
+      "Type": "MultiShard",
       "QueryType": "INSERT",
       "Original": "insert into user_extra(nonid, extra_id) values (2, 18446744073709551616)",
       "Instructions": {
@@ -1720,7 +1720,7 @@
     "comment": "insert invalid index value",
     "query": "insert into music_extra(music_id, user_id) values(1, 18446744073709551616)",
     "plan": {
-      "Type": "Unknown",
+      "Type": "MultiShard",
       "QueryType": "INSERT",
       "Original": "insert into music_extra(music_id, user_id) values(1, 18446744073709551616)",
       "Instructions": {
@@ -1760,7 +1760,7 @@
     "comment": "insert with multiple rows",
     "query": "insert into user(id) values (1), (2)",
     "plan": {
-      "Type": "Unknown",
+      "Type": "MultiShard",
       "QueryType": "INSERT",
       "Original": "insert into user(id) values (1), (2)",
       "Instructions": {
@@ -1790,7 +1790,7 @@
     "comment": "insert with query timeout",
     "query": "insert /*vt+ QUERY_TIMEOUT_MS=1 */ into user(id) values (1), (2)",
     "plan": {
-      "Type": "Unknown",
+      "Type": "MultiShard",
       "QueryType": "INSERT",
       "Original": "insert /*vt+ QUERY_TIMEOUT_MS=1 */ into user(id) values (1), (2)",
       "Instructions": {
@@ -1821,7 +1821,7 @@
     "comment": "insert with multiple rows - multi-shard autocommit",
     "query": "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user(id) values (1), (2)",
     "plan": {
-      "Type": "Unknown",
+      "Type": "MultiShard",
       "QueryType": "INSERT",
       "Original": "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user(id) values (1), (2)",
       "Instructions": {
@@ -1858,7 +1858,7 @@
     "comment": "simple replace unsharded",
     "query": "replace into unsharded values(1, 2)",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Passthrough",
       "QueryType": "INSERT",
       "Original": "replace into unsharded values(1, 2)",
       "Instructions": {
@@ -1882,7 +1882,7 @@
     "comment": "replace unsharded with select",
     "query": "replace into unsharded select id from unsharded_auto",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Passthrough",
       "QueryType": "INSERT",
       "Original": "replace into unsharded select id from unsharded_auto",
       "Instructions": {
@@ -1907,7 +1907,7 @@
     "comment": "replace unsharded, invalid value for auto-inc",
     "query": "replace into unsharded_auto(id, val) values(18446744073709551616, 'aa')",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Passthrough",
       "QueryType": "INSERT",
       "Original": "replace into unsharded_auto(id, val) values(18446744073709551616, 'aa')",
       "Instructions": {
@@ -1932,7 +1932,7 @@
     "comment": "replace unsharded, column present",
     "query": "replace into unsharded_auto(id, val) values(1, 'aa')",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Passthrough",
       "QueryType": "INSERT",
       "Original": "replace into unsharded_auto(id, val) values(1, 'aa')",
       "Instructions": {
@@ -1957,7 +1957,7 @@
     "comment": "replace unsharded, column absent",
     "query": "replace into unsharded_auto(val) values('aa')",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Passthrough",
       "QueryType": "INSERT",
       "Original": "replace into unsharded_auto(val) values('aa')",
       "Instructions": {
@@ -1982,7 +1982,7 @@
     "comment": "replace unsharded, multi-val",
     "query": "replace into unsharded_auto(id, val) values(1, 'aa'), (null, 'bb')",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Passthrough",
       "QueryType": "INSERT",
       "Original": "replace into unsharded_auto(id, val) values(1, 'aa'), (null, 'bb')",
       "Instructions": {
@@ -2013,7 +2013,7 @@
     "comment": "insert a row in a multi column vindex table",
     "query": "insert multicolvin (column_a, column_b, column_c, kid) VALUES (1,2,3,4)",
     "plan": {
-      "Type": "Unknown",
+      "Type": "MultiShard",
       "QueryType": "INSERT",
       "Original": "insert multicolvin (column_a, column_b, column_c, kid) VALUES (1,2,3,4)",
       "Instructions": {
@@ -2042,7 +2042,7 @@
     "comment": "insert for overlapped vindex columns",
     "query": "insert overlap_vindex (kid, column_a, column_b) VALUES (1,2,3)",
     "plan": {
-      "Type": "Unknown",
+      "Type": "MultiShard",
       "QueryType": "INSERT",
       "Original": "insert overlap_vindex (kid, column_a, column_b) VALUES (1,2,3)",
       "Instructions": {
@@ -2070,7 +2070,7 @@
     "comment": "insert multiple rows in a multi column vindex table",
     "query": "insert multicolvin (column_a, column_b, column_c, kid) VALUES (1,2,3,4), (5,6,7,8)",
     "plan": {
-      "Type": "Unknown",
+      "Type": "MultiShard",
       "QueryType": "INSERT",
       "Original": "insert multicolvin (column_a, column_b, column_c, kid) VALUES (1,2,3,4), (5,6,7,8)",
       "Instructions": {
@@ -2728,7 +2728,7 @@
     "comment": "insert using last_insert_id",
     "query": "insert into unsharded values(last_insert_id(), 2)",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Passthrough",
       "QueryType": "INSERT",
       "Original": "insert into unsharded values(last_insert_id(), 2)",
       "Instructions": {
@@ -2752,7 +2752,7 @@
     "comment": "insert using last_insert_id with argument (already an e2e test for this plan)",
     "query": "insert into unsharded values(last_insert_id(789), 2)",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Passthrough",
       "QueryType": "INSERT",
       "Original": "insert into unsharded values(last_insert_id(789), 2)",
       "Instructions": {
@@ -3263,7 +3263,7 @@
     "comment": "INSERT INTO main.user_privacy_consents (user_id, accepted_at)  SELECT user_id, accepted_at FROM (SELECT 1 as user_id, 1629194864 as accepted_at) AS tmp WHERE NOT EXISTS (SELECT user_id FROM main.user_privacy_consents WHERE user_id = 1)",
     "query": "INSERT INTO main.user_privacy_consents (user_id, accepted_at)  SELECT user_id, accepted_at FROM (SELECT 1 as user_id, 1629194864 as accepted_at) AS tmp WHERE NOT EXISTS (SELECT user_id FROM main.user_privacy_consents WHERE user_id = 1)",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Passthrough",
       "QueryType": "INSERT",
       "Original": "INSERT INTO main.user_privacy_consents (user_id, accepted_at)  SELECT user_id, accepted_at FROM (SELECT 1 as user_id, 1629194864 as accepted_at) AS tmp WHERE NOT EXISTS (SELECT user_id FROM main.user_privacy_consents WHERE user_id = 1)",
       "Instructions": {
@@ -4361,7 +4361,7 @@
     "comment": "unsharded same keyspace",
     "query": "insert into unsharded(col) select col from unsharded_auto",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Passthrough",
       "QueryType": "INSERT",
       "Original": "insert into unsharded(col) select col from unsharded_auto",
       "Instructions": {
@@ -4792,7 +4792,7 @@
     "comment": "all defaults empty column, empty values",
     "query": "insert into authoritative () values ()",
     "plan": {
-      "Type": "Unknown",
+      "Type": "MultiShard",
       "QueryType": "INSERT",
       "Original": "insert into authoritative () values ()",
       "Instructions": {
@@ -4825,7 +4825,7 @@
     "comment": "vexplain dml with actually_run_query directive",
     "query": "vexplain /*vt+ execute_dml_queries */ queries delete from user",
     "plan": {
-      "Type": "Complex",
+      "Type": "Scatter",
       "QueryType": "EXPLAIN",
       "Original": "vexplain /*vt+ execute_dml_queries */ queries delete from user",
       "Instructions": {
@@ -4858,7 +4858,7 @@
     "comment": "explain dml with actually_run_query directive - 2",
     "query": "vexplain /*vt+ eXECUTE_DML_QUERIES */ queries delete from user",
     "plan": {
-      "Type": "Complex",
+      "Type": "Scatter",
       "QueryType": "EXPLAIN",
       "Original": "vexplain /*vt+ eXECUTE_DML_QUERIES */ queries delete from user",
       "Instructions": {
@@ -4975,7 +4975,7 @@
     "comment": "insert into ref; TODO(maxeng) is this a bug?",
     "query": "insert into ref(col) values(1)",
     "plan": {
-      "Type": "Unknown",
+      "Type": "MultiShard",
       "QueryType": "INSERT",
       "Original": "insert into ref(col) values(1)",
       "Instructions": {
@@ -5048,7 +5048,7 @@
     "comment": "unsharded insert query with comment directive",
     "query": "insert /*vt+ QUERY_TIMEOUT_MS=1 */ into unsharded values ()",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Passthrough",
       "QueryType": "INSERT",
       "Original": "insert /*vt+ QUERY_TIMEOUT_MS=1 */ into unsharded values ()",
       "Instructions": {
@@ -5118,7 +5118,7 @@
     "comment": "insert + lookup vindex + auto increment on lookup column - not provided",
     "query": "insert into mixed_tbl(shard_key) values (1),(4),(9)",
     "plan": {
-      "Type": "Unknown",
+      "Type": "MultiShard",
       "QueryType": "INSERT",
       "Original": "insert into mixed_tbl(shard_key) values (1),(4),(9)",
       "Instructions": {
@@ -5147,7 +5147,7 @@
     "comment": "insert + lookup vindex + auto increment on lookup column - partially provided",
     "query": "insert into mixed_tbl(shard_key, lkp_key) values (1, 1),(4, null),(9, 27)",
     "plan": {
-      "Type": "Unknown",
+      "Type": "MultiShard",
       "QueryType": "INSERT",
       "Original": "insert into mixed_tbl(shard_key, lkp_key) values (1, 1),(4, null),(9, 27)",
       "Instructions": {
@@ -5347,7 +5347,7 @@
     "comment": "insert on duplicate key update with database qualifier",
     "query": "insert into user.music(id, user_id, col) values (1, 2, 3) on duplicate key update user.music.col = 5",
     "plan": {
-      "Type": "Unknown",
+      "Type": "MultiShard",
       "QueryType": "INSERT",
       "Original": "insert into user.music(id, user_id, col) values (1, 2, 3) on duplicate key update user.music.col = 5",
       "Instructions": {
@@ -6622,7 +6622,7 @@
     "comment": "Insert with routed table on music",
     "query": "insert into second_user.bar(id) values (2)",
     "plan": {
-      "Type": "Unknown",
+      "Type": "MultiShard",
       "QueryType": "INSERT",
       "Original": "insert into second_user.bar(id) values (2)",
       "Instructions": {
@@ -7525,7 +7525,7 @@
     "comment": "RowAlias in INSERT",
     "query": "INSERT INTO authoritative (user_id,col1,col2) VALUES (1,'2',3),(4,'5',6) AS new ON DUPLICATE KEY UPDATE col2 = new.user_id+new.col1",
     "plan": {
-      "Type": "Unknown",
+      "Type": "MultiShard",
       "QueryType": "INSERT",
       "Original": "INSERT INTO authoritative (user_id,col1,col2) VALUES (1,'2',3),(4,'5',6) AS new ON DUPLICATE KEY UPDATE col2 = new.user_id+new.col1",
       "Instructions": {
@@ -7553,7 +7553,7 @@
     "comment": "RowAlias with explicit columns in INSERT",
     "query": "INSERT INTO authoritative (user_id,col1,col2) VALUES (1,'2',3),(4,'5',6) AS new(a,b,c) ON DUPLICATE KEY UPDATE col1 = a+c",
     "plan": {
-      "Type": "Unknown",
+      "Type": "MultiShard",
       "QueryType": "INSERT",
       "Original": "INSERT INTO authoritative (user_id,col1,col2) VALUES (1,'2',3),(4,'5',6) AS new(a,b,c) ON DUPLICATE KEY UPDATE col1 = a+c",
       "Instructions": {
@@ -7581,7 +7581,7 @@
     "comment": "RowAlias in INSERT (no column list)",
     "query": "INSERT INTO authoritative VALUES (1,'2',3),(4,'5',6) AS new ON DUPLICATE KEY UPDATE col2 = new.user_id+new.col1",
     "plan": {
-      "Type": "Unknown",
+      "Type": "MultiShard",
       "QueryType": "INSERT",
       "Original": "INSERT INTO authoritative VALUES (1,'2',3),(4,'5',6) AS new ON DUPLICATE KEY UPDATE col2 = new.user_id+new.col1",
       "Instructions": {
@@ -7609,7 +7609,7 @@
     "comment": "RowAlias with explicit columns in INSERT (no column list)",
     "query": "INSERT INTO authoritative VALUES (1,'2',3),(4,'5',6) AS new(a,b,c) ON DUPLICATE KEY UPDATE col1 = a+c",
     "plan": {
-      "Type": "Unknown",
+      "Type": "MultiShard",
       "QueryType": "INSERT",
       "Original": "INSERT INTO authoritative VALUES (1,'2',3),(4,'5',6) AS new(a,b,c) ON DUPLICATE KEY UPDATE col1 = a+c",
       "Instructions": {

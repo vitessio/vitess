@@ -23,6 +23,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
@@ -61,6 +62,7 @@ const (
 	PlanScatter
 	PlanLookup
 	PlanJoinOp
+	PlanForeignKey
 	PlanComplex
 	PlanOnlineDDL
 	PlanDirectDDL
@@ -136,6 +138,8 @@ func (p PlanType) String() string {
 		return "Lookup"
 	case PlanJoinOp:
 		return "Join"
+	case PlanForeignKey:
+		return "ForeignKey"
 	case PlanComplex:
 		return "Complex"
 	case PlanOnlineDDL:
@@ -149,6 +153,20 @@ func (p PlanType) String() string {
 
 func getPlanType(p Primitive) PlanType {
 	switch prim := p.(type) {
+	case *SessionPrimitive, *SingleRow, *UpdateTarget, *VindexFunc:
+		return PlanLocal
+	case *Lock, *ReplaceVariables, *RevertMigration, *Rows, *ShowExec:
+		return PlanPassthrough
+	case *Send:
+		return getPlanTypeFromTarget(prim)
+	case *TransactionStatus:
+		return PlanMultiShard
+	case *VindexLookup:
+		return PlanLookup
+	case *Join:
+		return PlanJoinOp
+	case *FkCascade, *FkVerify:
+		return PlanForeignKey
 	case *Route:
 		return getPlanTypeFromRoutingParams(prim.RoutingParameters)
 	case *Update:
@@ -156,15 +174,35 @@ func getPlanType(p Primitive) PlanType {
 	case *Delete:
 		return getPlanTypeFromRoutingParams(prim.RoutingParameters)
 	case *Insert:
-
-	case *Send:
-	case *Join:
+		if prim.Opcode == InsertUnsharded {
+			return PlanPassthrough
+		}
+		return PlanMultiShard
+	case *Upsert:
+		return getPlanTypeForUpsert(prim)
 	case *DDL:
+		if prim.isOnlineSchemaDDL() {
+			return PlanOnlineDDL
+		}
+		return PlanDirectDDL
+	case *VExplain:
+		return getPlanType(prim.Input)
 	default:
 		return PlanComplex
-
 	}
-	return PlanUnknown
+}
+
+func getPlanTypeFromTarget(prim *Send) PlanType {
+	switch prim.TargetDestination.(type) {
+	case key.DestinationNone:
+		return PlanLocal
+	case key.DestinationAnyShard, key.DestinationShard, key.DestinationKeyspaceID:
+		return PlanPassthrough
+	case key.DestinationAllShards:
+		return PlanScatter
+	default:
+		return PlanMultiShard
+	}
 }
 
 func getPlanTypeFromRoutingParams(rp *RoutingParameters) PlanType {
@@ -182,6 +220,21 @@ func getPlanTypeFromRoutingParams(rp *RoutingParameters) PlanType {
 		return PlanLocal
 	}
 	panic(fmt.Sprintf("cannot determine plan type for the given opcode: %s", rp.Opcode.String()))
+}
+
+func getPlanTypeForUpsert(prim *Upsert) PlanType {
+	var finalPlanType PlanType
+	for _, u := range prim.Upserts {
+		pt := getPlanType(u.Update)
+		if pt > finalPlanType {
+			finalPlanType = pt
+		}
+		pt = getPlanType(u.Insert)
+		if pt > finalPlanType {
+			finalPlanType = pt
+		}
+	}
+	return finalPlanType
 }
 
 // AddStats updates the plan execution statistics

@@ -3,7 +3,7 @@
     "comment": "Flush statement",
     "query": "flush tables unsharded, music",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Scatter",
       "QueryType": "FLUSH",
       "Original": "flush tables unsharded, music",
       "Instructions": {
@@ -25,7 +25,7 @@
     "comment": "Flush statement with no tables",
     "query": "flush local tables with read lock",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Scatter",
       "QueryType": "FLUSH",
       "Original": "flush local tables with read lock",
       "Instructions": {
@@ -44,7 +44,7 @@
     "comment": "Flush statement with flush options",
     "query": "flush no_write_to_binlog hosts, logs",
     "plan": {
-      "Type": "Unknown",
+      "Type": "Scatter",
       "QueryType": "FLUSH",
       "Original": "flush no_write_to_binlog hosts, logs",
       "Instructions": {
