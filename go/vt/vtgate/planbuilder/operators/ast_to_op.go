@@ -137,8 +137,8 @@ func findTablesContained(ctx *plancontext.PlanningContext, node sqlparser.SQLNod
 // comparisons between the inner and the outer side.
 // They can be used for merging the two parts of the query together
 type joinPredicateCollector struct {
-	predicates          sqlparser.Exprs
-	remainingPredicates sqlparser.Exprs
+	predicates          []sqlparser.Expr
+	remainingPredicates []sqlparser.Expr
 	joinColumns         []applyJoinColumn
 
 	totalID,
@@ -174,7 +174,7 @@ func createOperatorFromUnion(ctx *plancontext.PlanningContext, node *sqlparser.U
 	rexprs := ctx.SemTable.SelectExprs(node.Right)
 
 	unionCols := ctx.SemTable.SelectExprs(node)
-	union := newUnion([]Operator{opLHS, opRHS}, []sqlparser.SelectExprs{lexprs, rexprs}, unionCols, node.Distinct)
+	union := newUnion([]Operator{opLHS, opRHS}, [][]sqlparser.SelectExpr{lexprs, rexprs}, unionCols, node.Distinct)
 	return newHorizon(union, node)
 }
 
@@ -464,7 +464,7 @@ func createSelectionOp(
 	lock sqlparser.Lock,
 ) Operator {
 	selectionStmt := &sqlparser.Select{
-		SelectExprs: selectExprs,
+		SelectExprs: &sqlparser.SelectExprs{Exprs: selectExprs},
 		From:        tableExprs,
 		Where:       where,
 		OrderBy:     orderBy,

@@ -65,8 +65,7 @@ func CheckThrottlerRaw(vtctldProcess *cluster.VtctldClientProcess, tablet *clust
 	args = append(args, "CheckThrottler")
 	if flags == nil {
 		flags = &throttle.CheckFlags{
-			Scope:               base.SelfScope,
-			MultiMetricsEnabled: true,
+			Scope: base.SelfScope,
 		}
 	}
 	if appName != "" {
@@ -123,11 +122,6 @@ func UpdateThrottlerTopoConfigRaw(
 		args = append(args, "--threshold", fmt.Sprintf("%f", opts.Threshold))
 	}
 	args = append(args, "--custom-query", opts.CustomQuery)
-	if opts.CustomQuery != "" {
-		args = append(args, "--check-as-check-self")
-	} else {
-		args = append(args, "--check-as-check-shard")
-	}
 	if appRule != nil {
 		args = append(args, "--throttle-app", appRule.Name)
 		args = append(args, "--throttle-app-duration", time.Until(protoutil.TimeFromProto(appRule.ExpiresAt).UTC()).String())
@@ -510,11 +504,11 @@ func WaitForValidData(t *testing.T, tablet *cluster.Vttablet, timeout time.Durat
 
 	for {
 		checkResp, checkErr := http.Get(checkURL)
-		if checkErr != nil {
+		if checkErr == nil {
 			defer checkResp.Body.Close()
 		}
 		selfCheckResp, selfCheckErr := http.Get(selfCheckURL)
-		if selfCheckErr != nil {
+		if selfCheckErr == nil {
 			defer selfCheckResp.Body.Close()
 		}
 		if checkErr == nil && selfCheckErr == nil &&

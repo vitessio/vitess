@@ -748,7 +748,7 @@ func (nz *normalizer) unnestSubQueries(cursor *Cursor, subquery *Subquery) {
 		return
 	}
 
-	if len(sel.SelectExprs) != 1 ||
+	if len(sel.SelectExprs.Exprs) != 1 ||
 		len(sel.OrderBy) != 0 ||
 		sel.GroupBy != nil ||
 		len(sel.From) != 1 ||
@@ -766,7 +766,7 @@ func (nz *normalizer) unnestSubQueries(cursor *Cursor, subquery *Subquery) {
 	if !ok || table.Name.String() != "dual" {
 		return
 	}
-	expr, ok := sel.SelectExprs[0].(*AliasedExpr)
+	expr, ok := sel.SelectExprs.Exprs[0].(*AliasedExpr)
 	if !ok {
 		return
 	}
@@ -810,8 +810,8 @@ func (nz *normalizer) existsRewrite(cursor *Cursor, node *ExistsExpr) {
 
 	// Simplify the subquery by selecting a constant.
 	// WHERE EXISTS(SELECT 1 FROM ...)
-	sel.SelectExprs = SelectExprs{
-		&AliasedExpr{Expr: NewIntLiteral("1")},
+	sel.SelectExprs = &SelectExprs{
+		Exprs: []SelectExpr{&AliasedExpr{Expr: NewIntLiteral("1")}},
 	}
 	sel.GroupBy = nil
 }

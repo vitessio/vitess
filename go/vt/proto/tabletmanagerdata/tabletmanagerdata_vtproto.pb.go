@@ -2771,7 +2771,6 @@ func (m *CheckThrottlerRequest) CloneVT() *CheckThrottlerRequest {
 	r.Scope = m.Scope
 	r.SkipRequestHeartbeats = m.SkipRequestHeartbeats
 	r.OkIfNotExists = m.OkIfNotExists
-	r.MultiMetricsEnabled = m.MultiMetricsEnabled
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -2789,7 +2788,6 @@ func (m *CheckThrottlerResponse_Metric) CloneVT() *CheckThrottlerResponse_Metric
 	}
 	r := new(CheckThrottlerResponse_Metric)
 	r.Name = m.Name
-	r.StatusCode = m.StatusCode
 	r.Value = m.Value
 	r.Threshold = m.Threshold
 	r.Error = m.Error
@@ -2812,7 +2810,6 @@ func (m *CheckThrottlerResponse) CloneVT() *CheckThrottlerResponse {
 		return (*CheckThrottlerResponse)(nil)
 	}
 	r := new(CheckThrottlerResponse)
-	r.StatusCode = m.StatusCode
 	r.Value = m.Value
 	r.Threshold = m.Threshold
 	r.Error = m.Error
@@ -2897,7 +2894,6 @@ func (m *GetThrottlerStatusResponse_RecentApp) CloneVT() *GetThrottlerStatusResp
 	}
 	r := new(GetThrottlerStatusResponse_RecentApp)
 	r.CheckedAt = m.CheckedAt.CloneVT()
-	r.StatusCode = m.StatusCode
 	r.ResponseCode = m.ResponseCode
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -9821,16 +9817,6 @@ func (m *CheckThrottlerRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error)
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if m.MultiMetricsEnabled {
-		i--
-		if m.MultiMetricsEnabled {
-			dAtA[i] = 1
-		} else {
-			dAtA[i] = 0
-		}
-		i--
-		dAtA[i] = 0x28
-	}
 	if m.OkIfNotExists {
 		i--
 		if m.OkIfNotExists {
@@ -9935,11 +9921,6 @@ func (m *CheckThrottlerResponse_Metric) MarshalToSizedBufferVT(dAtA []byte) (int
 		binary.LittleEndian.PutUint64(dAtA[i:], uint64(math.Float64bits(float64(m.Value))))
 		i--
 		dAtA[i] = 0x19
-	}
-	if m.StatusCode != 0 {
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.StatusCode))
-		i--
-		dAtA[i] = 0x10
 	}
 	if len(m.Name) > 0 {
 		i -= len(m.Name)
@@ -10057,11 +10038,6 @@ func (m *CheckThrottlerResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error
 		binary.LittleEndian.PutUint64(dAtA[i:], uint64(math.Float64bits(float64(m.Value))))
 		i--
 		dAtA[i] = 0x11
-	}
-	if m.StatusCode != 0 {
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.StatusCode))
-		i--
-		dAtA[i] = 0x8
 	}
 	return len(dAtA) - i, nil
 }
@@ -10227,11 +10203,6 @@ func (m *GetThrottlerStatusResponse_RecentApp) MarshalToSizedBufferVT(dAtA []byt
 		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.ResponseCode))
 		i--
 		dAtA[i] = 0x18
-	}
-	if m.StatusCode != 0 {
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.StatusCode))
-		i--
-		dAtA[i] = 0x10
 	}
 	if m.CheckedAt != nil {
 		size, err := m.CheckedAt.MarshalToSizedBufferVT(dAtA[:i])
@@ -13050,9 +13021,6 @@ func (m *CheckThrottlerRequest) SizeVT() (n int) {
 	if m.OkIfNotExists {
 		n += 2
 	}
-	if m.MultiMetricsEnabled {
-		n += 2
-	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -13066,9 +13034,6 @@ func (m *CheckThrottlerResponse_Metric) SizeVT() (n int) {
 	l = len(m.Name)
 	if l > 0 {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
-	}
-	if m.StatusCode != 0 {
-		n += 1 + protohelpers.SizeOfVarint(uint64(m.StatusCode))
 	}
 	if m.Value != 0 {
 		n += 9
@@ -13101,9 +13066,6 @@ func (m *CheckThrottlerResponse) SizeVT() (n int) {
 	}
 	var l int
 	_ = l
-	if m.StatusCode != 0 {
-		n += 1 + protohelpers.SizeOfVarint(uint64(m.StatusCode))
-	}
 	if m.Value != 0 {
 		n += 9
 	}
@@ -13202,9 +13164,6 @@ func (m *GetThrottlerStatusResponse_RecentApp) SizeVT() (n int) {
 	if m.CheckedAt != nil {
 		l = m.CheckedAt.SizeVT()
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
-	}
-	if m.StatusCode != 0 {
-		n += 1 + protohelpers.SizeOfVarint(uint64(m.StatusCode))
 	}
 	if m.ResponseCode != 0 {
 		n += 1 + protohelpers.SizeOfVarint(uint64(m.ResponseCode))
@@ -28606,26 +28565,6 @@ func (m *CheckThrottlerRequest) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.OkIfNotExists = bool(v != 0)
-		case 5:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field MultiMetricsEnabled", wireType)
-			}
-			var v int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return protohelpers.ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				v |= int(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			m.MultiMetricsEnabled = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
@@ -28709,25 +28648,6 @@ func (m *CheckThrottlerResponse_Metric) UnmarshalVT(dAtA []byte) error {
 			}
 			m.Name = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
-		case 2:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field StatusCode", wireType)
-			}
-			m.StatusCode = 0
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return protohelpers.ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				m.StatusCode |= int32(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
 		case 3:
 			if wireType != 1 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Value", wireType)
@@ -28916,25 +28836,6 @@ func (m *CheckThrottlerResponse) UnmarshalVT(dAtA []byte) error {
 			return fmt.Errorf("proto: CheckThrottlerResponse: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
-		case 1:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field StatusCode", wireType)
-			}
-			m.StatusCode = 0
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return protohelpers.ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				m.StatusCode |= int32(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
 		case 2:
 			if wireType != 1 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Value", wireType)
@@ -29591,25 +29492,6 @@ func (m *GetThrottlerStatusResponse_RecentApp) UnmarshalVT(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
-		case 2:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field StatusCode", wireType)
-			}
-			m.StatusCode = 0
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return protohelpers.ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				m.StatusCode |= int32(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
 		case 3:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field ResponseCode", wireType)

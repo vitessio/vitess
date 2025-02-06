@@ -50,7 +50,7 @@ func TestBindingAndExprEquality(t *testing.T) {
 			require.NoError(t, err)
 			st, err := Analyze(parse, "db", fakeSchemaInfoTest())
 			require.NoError(t, err)
-			exprs := parse.(*sqlparser.Select).SelectExprs
+			exprs := parse.(*sqlparser.Select).GetColumns()
 			a := exprs[0].(*sqlparser.AliasedExpr).Expr
 			b := exprs[1].(*sqlparser.AliasedExpr).Expr
 			assert.Equal(t, st.EqualsExpr(a, b), test.equal)
@@ -69,7 +69,7 @@ func fakeSchemaInfoTest() *FakeSI {
 	}}
 
 	si := &FakeSI{
-		Tables: map[string]*vindexes.Table{
+		Tables: map[string]*vindexes.BaseTable{
 			"t1": {Name: sqlparser.NewIdentifierCS("t1"), Columns: cols1, ColumnListAuthoritative: true, Keyspace: ks2},
 			"t2": {Name: sqlparser.NewIdentifierCS("t2"), Columns: cols2, ColumnListAuthoritative: true, Keyspace: ks3},
 		},
@@ -141,22 +141,22 @@ func TestIsShardScoped(t *testing.T) {
 
 	tests := []struct {
 		name              string
-		pTable            *vindexes.Table
-		cTable            *vindexes.Table
+		pTable            *vindexes.BaseTable
+		cTable            *vindexes.BaseTable
 		pCols             sqlparser.Columns
 		cCols             sqlparser.Columns
 		wantedShardScoped bool
 	}{
 		{
 			name: "unsharded keyspace",
-			pTable: &vindexes.Table{
+			pTable: &vindexes.BaseTable{
 				Keyspace: &vindexes.Keyspace{Name: "uks", Sharded: false},
 			},
 			wantedShardScoped: true,
 		},
 		{
 			name: "Primary vindexes don't match",
-			pTable: &vindexes.Table{
+			pTable: &vindexes.BaseTable{
 				Keyspace: &vindexes.Keyspace{Name: "ks", Sharded: true},
 				ColumnVindexes: []*vindexes.ColumnVindex{
 					{
@@ -164,7 +164,7 @@ func TestIsShardScoped(t *testing.T) {
 					},
 				},
 			},
-			cTable: &vindexes.Table{
+			cTable: &vindexes.BaseTable{
 				ColumnVindexes: []*vindexes.ColumnVindex{
 					{
 						Vindex: xxhashVindex,
@@ -175,7 +175,7 @@ func TestIsShardScoped(t *testing.T) {
 		},
 		{
 			name: "Child primary vindex not part of the foreign key",
-			pTable: &vindexes.Table{
+			pTable: &vindexes.BaseTable{
 				Keyspace: &vindexes.Keyspace{Name: "ks", Sharded: true},
 				ColumnVindexes: []*vindexes.ColumnVindex{
 					{
@@ -183,7 +183,7 @@ func TestIsShardScoped(t *testing.T) {
 					},
 				},
 			},
-			cTable: &vindexes.Table{
+			cTable: &vindexes.BaseTable{
 				ColumnVindexes: []*vindexes.ColumnVindex{
 					{
 						Vindex:  hashVindex,
@@ -196,7 +196,7 @@ func TestIsShardScoped(t *testing.T) {
 		},
 		{
 			name: "Parent primary vindex not part of the foreign key",
-			pTable: &vindexes.Table{
+			pTable: &vindexes.BaseTable{
 				Keyspace: &vindexes.Keyspace{Name: "ks", Sharded: true},
 				ColumnVindexes: []*vindexes.ColumnVindex{
 					{
@@ -205,7 +205,7 @@ func TestIsShardScoped(t *testing.T) {
 					},
 				},
 			},
-			cTable: &vindexes.Table{
+			cTable: &vindexes.BaseTable{
 				ColumnVindexes: []*vindexes.ColumnVindex{
 					{
 						Vindex:  hashVindex,
@@ -219,7 +219,7 @@ func TestIsShardScoped(t *testing.T) {
 		},
 		{
 			name: "Indexes order doesn't match",
-			pTable: &vindexes.Table{
+			pTable: &vindexes.BaseTable{
 				Keyspace: &vindexes.Keyspace{Name: "ks", Sharded: true},
 				ColumnVindexes: []*vindexes.ColumnVindex{
 					{
@@ -228,7 +228,7 @@ func TestIsShardScoped(t *testing.T) {
 					},
 				},
 			},
-			cTable: &vindexes.Table{
+			cTable: &vindexes.BaseTable{
 				ColumnVindexes: []*vindexes.ColumnVindex{
 					{
 						Vindex:  hashVindex,
@@ -242,7 +242,7 @@ func TestIsShardScoped(t *testing.T) {
 		},
 		{
 			name: "Is shard scoped",
-			pTable: &vindexes.Table{
+			pTable: &vindexes.BaseTable{
 				Keyspace: &vindexes.Keyspace{Name: "ks", Sharded: true},
 				ColumnVindexes: []*vindexes.ColumnVindex{
 					{
@@ -251,7 +251,7 @@ func TestIsShardScoped(t *testing.T) {
 					},
 				},
 			},
-			cTable: &vindexes.Table{
+			cTable: &vindexes.BaseTable{
 				ColumnVindexes: []*vindexes.ColumnVindex{
 					{
 						Vindex:  hashVindex,
@@ -379,15 +379,15 @@ func TestGetParentForeignKeysList(t *testing.T) {
 
 // TestRemoveParentForeignKey tests the functionality of RemoveParentForeignKey
 func TestRemoveParentForeignKey(t *testing.T) {
-	t1Table := &vindexes.Table{
+	t1Table := &vindexes.BaseTable{
 		Keyspace: &vindexes.Keyspace{Name: "ks"},
 		Name:     sqlparser.NewIdentifierCS("t1"),
 	}
-	t2Table := &vindexes.Table{
+	t2Table := &vindexes.BaseTable{
 		Keyspace: &vindexes.Keyspace{Name: "ks"},
 		Name:     sqlparser.NewIdentifierCS("t2"),
 	}
-	t3Table := &vindexes.Table{
+	t3Table := &vindexes.BaseTable{
 		Keyspace: &vindexes.Keyspace{Name: "ks"},
 		Name:     sqlparser.NewIdentifierCS("t3"),
 	}
@@ -483,7 +483,7 @@ func TestRemoveParentForeignKey(t *testing.T) {
 func TestRemoveNonRequiredForeignKeys(t *testing.T) {
 	hashVindex := &vindexes.Hash{}
 	xxhashVindex := &vindexes.XXHash{}
-	t1Table := &vindexes.Table{
+	t1Table := &vindexes.BaseTable{
 		Keyspace: &vindexes.Keyspace{Name: "ks", Sharded: true},
 		Name:     sqlparser.NewIdentifierCS("t1"),
 		ColumnVindexes: []*vindexes.ColumnVindex{
@@ -493,7 +493,7 @@ func TestRemoveNonRequiredForeignKeys(t *testing.T) {
 			},
 		},
 	}
-	t2Table := &vindexes.Table{
+	t2Table := &vindexes.BaseTable{
 		Keyspace: &vindexes.Keyspace{Name: "ks", Sharded: true},
 		Name:     sqlparser.NewIdentifierCS("t2"),
 		ColumnVindexes: []*vindexes.ColumnVindex{
@@ -503,7 +503,7 @@ func TestRemoveNonRequiredForeignKeys(t *testing.T) {
 			},
 		},
 	}
-	t4Table := &vindexes.Table{
+	t4Table := &vindexes.BaseTable{
 		Keyspace: &vindexes.Keyspace{Name: "ks", Sharded: true},
 		Name:     sqlparser.NewIdentifierCS("t4"),
 		ColumnVindexes: []*vindexes.ColumnVindex{
@@ -513,7 +513,7 @@ func TestRemoveNonRequiredForeignKeys(t *testing.T) {
 			},
 		},
 	}
-	t3Table := &vindexes.Table{
+	t3Table := &vindexes.BaseTable{
 		Keyspace: &vindexes.Keyspace{Name: "ks2"},
 		Name:     sqlparser.NewIdentifierCS("t3"),
 	}
@@ -752,7 +752,7 @@ func TestRemoveNonRequiredForeignKeys(t *testing.T) {
 
 func TestIsFkDependentColumnUpdated(t *testing.T) {
 	keyspaceName := "ks"
-	t3Table := &vindexes.Table{
+	t3Table := &vindexes.BaseTable{
 		Keyspace: &vindexes.Keyspace{Name: keyspaceName},
 		Name:     sqlparser.NewIdentifierCS("t3"),
 	}
@@ -769,7 +769,7 @@ func TestIsFkDependentColumnUpdated(t *testing.T) {
 				KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
 					keyspaceName: vschemapb.Keyspace_managed,
 				},
-				Tables: map[string]*vindexes.Table{
+				Tables: map[string]*vindexes.BaseTable{
 					"t1": {
 						Name:     sqlparser.NewIdentifierCS("t1"),
 						Keyspace: &vindexes.Keyspace{Name: keyspaceName},
@@ -787,7 +787,7 @@ func TestIsFkDependentColumnUpdated(t *testing.T) {
 				KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
 					keyspaceName: vschemapb.Keyspace_managed,
 				},
-				Tables: map[string]*vindexes.Table{
+				Tables: map[string]*vindexes.BaseTable{
 					"t1": {
 						Name:     sqlparser.NewIdentifierCS("t1"),
 						Keyspace: &vindexes.Keyspace{Name: keyspaceName},
@@ -805,7 +805,7 @@ func TestIsFkDependentColumnUpdated(t *testing.T) {
 				KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
 					keyspaceName: vschemapb.Keyspace_managed,
 				},
-				Tables: map[string]*vindexes.Table{
+				Tables: map[string]*vindexes.BaseTable{
 					"t1": {
 						Name:     sqlparser.NewIdentifierCS("t1"),
 						Keyspace: &vindexes.Keyspace{Name: keyspaceName},
@@ -823,7 +823,7 @@ func TestIsFkDependentColumnUpdated(t *testing.T) {
 				KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
 					keyspaceName: vschemapb.Keyspace_managed,
 				},
-				Tables: map[string]*vindexes.Table{
+				Tables: map[string]*vindexes.BaseTable{
 					"t1": {
 						Name:     sqlparser.NewIdentifierCS("t1"),
 						Keyspace: &vindexes.Keyspace{Name: keyspaceName},
@@ -841,7 +841,7 @@ func TestIsFkDependentColumnUpdated(t *testing.T) {
 				KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
 					keyspaceName: vschemapb.Keyspace_managed,
 				},
-				Tables: map[string]*vindexes.Table{
+				Tables: map[string]*vindexes.BaseTable{
 					"t1": {
 						Name:     sqlparser.NewIdentifierCS("t1"),
 						Keyspace: &vindexes.Keyspace{Name: keyspaceName, Sharded: true},
@@ -869,7 +869,7 @@ func TestIsFkDependentColumnUpdated(t *testing.T) {
 
 func TestHasNonLiteralForeignKeyUpdate(t *testing.T) {
 	keyspaceName := "ks"
-	t3Table := &vindexes.Table{
+	t3Table := &vindexes.BaseTable{
 		Keyspace: &vindexes.Keyspace{Name: keyspaceName},
 		Name:     sqlparser.NewIdentifierCS("t3"),
 	}
@@ -886,7 +886,7 @@ func TestHasNonLiteralForeignKeyUpdate(t *testing.T) {
 				KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
 					keyspaceName: vschemapb.Keyspace_managed,
 				},
-				Tables: map[string]*vindexes.Table{
+				Tables: map[string]*vindexes.BaseTable{
 					"t1": {
 						Name:     sqlparser.NewIdentifierCS("t1"),
 						Keyspace: &vindexes.Keyspace{Name: keyspaceName},
@@ -904,7 +904,7 @@ func TestHasNonLiteralForeignKeyUpdate(t *testing.T) {
 				KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
 					keyspaceName: vschemapb.Keyspace_managed,
 				},
-				Tables: map[string]*vindexes.Table{
+				Tables: map[string]*vindexes.BaseTable{
 					"t1": {
 						Name:     sqlparser.NewIdentifierCS("t1"),
 						Keyspace: &vindexes.Keyspace{Name: keyspaceName},
@@ -922,7 +922,7 @@ func TestHasNonLiteralForeignKeyUpdate(t *testing.T) {
 				KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
 					keyspaceName: vschemapb.Keyspace_managed,
 				},
-				Tables: map[string]*vindexes.Table{
+				Tables: map[string]*vindexes.BaseTable{
 					"t1": {
 						Name:     sqlparser.NewIdentifierCS("t1"),
 						Keyspace: &vindexes.Keyspace{Name: keyspaceName},
@@ -940,7 +940,7 @@ func TestHasNonLiteralForeignKeyUpdate(t *testing.T) {
 				KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
 					keyspaceName: vschemapb.Keyspace_managed,
 				},
-				Tables: map[string]*vindexes.Table{
+				Tables: map[string]*vindexes.BaseTable{
 					"t1": {
 						Name:     sqlparser.NewIdentifierCS("t1"),
 						Keyspace: &vindexes.Keyspace{Name: keyspaceName},
@@ -958,7 +958,7 @@ func TestHasNonLiteralForeignKeyUpdate(t *testing.T) {
 				KsForeignKeyMode: map[string]vschemapb.Keyspace_ForeignKeyMode{
 					keyspaceName: vschemapb.Keyspace_managed,
 				},
-				Tables: map[string]*vindexes.Table{
+				Tables: map[string]*vindexes.BaseTable{
 					"t1": {
 						Name:     sqlparser.NewIdentifierCS("t1"),
 						Keyspace: &vindexes.Keyspace{Name: keyspaceName},

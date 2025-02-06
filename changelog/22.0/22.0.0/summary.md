@@ -5,6 +5,7 @@
 - **[Major Changes](#major-changes)**
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
     - [Deprecated VTTablet Flags](#vttablet-flags)
+    - [Removing gh-ost and pt-osc Online DDL strategies](#ghost-ptosc)
   - **[RPC Changes](#rpc-changes)**
   - **[Prefer not promoting a replica that is currently taking a backup](#reparents-prefer-not-backing-up)**
   - **[VTOrc Config File Changes](#vtorc-config-file-changes)**
@@ -19,6 +20,7 @@
   - **[Support for Filtering Query logs on Error](#query-logs)**
 - **[Minor Changes](#minor-changes)**
   - **[VTTablet Flags](#flags-vttablet)**
+  - **[VTTablet ACL enforcement and reloading](#reloading-vttablet-acl)**
   - **[Topology read concurrency behaviour changes](#topo-read-concurrency-changes)**
   - **[VTAdmin](#vtadmin)**
     - [Updated to node v22.13.1](#updated-node)
@@ -36,6 +38,21 @@ These are the RPC changes made in this release -
 #### <a id="vttablet-flags"/>Deprecated VTTablet Flags</a>
 
 - `twopc_enable` flag is deprecated. Usage of TwoPC commit will be determined by the `transaction_mode` set on VTGate via flag or session variable.
+
+#### <a id="ghost-ptosc"/>Removing gh-ost and pt-osc Online DDL strategies</a>
+
+Vitess no longer recognizes the `gh-ost` and `pt-osc` (`pt-online-schema-change`) Online DDL strategies. The `vitess` strategy is the recommended way to make schema changes at scale. `mysql` and `direct` strategies continue to be supported.
+
+These `vttablet` flags have been removed:
+
+- `--gh-ost-path`
+- `--pt-osc-path`
+
+The use of `gh-ost` and `pt-osc` as strategies as follows, yields an error:
+```sh
+$ vtctldclient ApplySchema --ddl-strategy="gh-ost" ...
+$ vtctldclient ApplySchema --ddl-strategy="pt-osc" ...
+```
 
 ### <a id="reparents-prefer-not-backing-up"/>Prefer not promoting a replica that is currently taking a backup
 
@@ -154,6 +171,10 @@ While the flag will continue to accept float values (interpreted as seconds) for
 **float inputs are deprecated** and will be removed in a future release.
 
 - `--consolidator-query-waiter-cap` flag to set the maximum number of clients allowed to wait on the consolidator. The default value is set to 0 for unlimited wait. Users can adjust  this value based on the performance of VTTablet to avoid excessive memory usage and the risk of being OOMKilled, particularly in Kubernetes deployments.
+
+#### <a id="reloading-vttablet-acl"/>VTTablet ACL enforcement and reloading</a>
+
+When a tablet is started with `--enforce-tableacl-config` it will exit with an error if the contents of the file are not valid. After the changes made in https://github.com/vitessio/vitess/pull/17485 the tablet will no longer exit when reloading the contents of the file after receiving a SIGHUP. When the file contents are invalid on reload the tablet will now log an error and the active in-memory ACLs remain in effect.
 
 ### <a id="topo-read-concurrency-changes"/>`--topo_read_concurrency` behaviour changes
 

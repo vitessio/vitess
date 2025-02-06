@@ -63,7 +63,7 @@ func TestBindingSubquery(t *testing.T) {
 			require.NoError(t, err)
 			selStmt := parse.(*sqlparser.Select)
 			semTable, err := semantics.Analyze(selStmt, "d", &semantics.FakeSI{
-				Tables: map[string]*vindexes.Table{
+				Tables: map[string]*vindexes.BaseTable{
 					"tabl": {Name: sqlparser.NewIdentifierCS("tabl")},
 					"foo":  {Name: sqlparser.NewIdentifierCS("foo")},
 				},
@@ -85,5 +85,5 @@ func TestBindingSubquery(t *testing.T) {
 }
 
 func extractExpr(in *sqlparser.Select, idx int) sqlparser.Expr {
-	return in.SelectExprs[idx].(*sqlparser.AliasedExpr).Expr
+	return in.SelectExprs.Exprs[idx].(*sqlparser.AliasedExpr).Expr
 }

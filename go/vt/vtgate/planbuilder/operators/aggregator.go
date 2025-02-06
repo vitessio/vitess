@@ -309,7 +309,7 @@ func (a *Aggregator) GetColumns(ctx *plancontext.PlanningContext) (res []*sqlpar
 	return truncate(a, a.Columns)
 }
 
-func (a *Aggregator) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
+func (a *Aggregator) GetSelectExprs(ctx *plancontext.PlanningContext) []sqlparser.SelectExpr {
 	return transformColumnsToSelectExprs(ctx, a)
 }
 
@@ -400,10 +400,10 @@ func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) Operator {
 	return nil
 }
 
-func (aggr Aggr) setPushColumn(exprs sqlparser.Exprs) {
+func (aggr Aggr) setPushColumn(exprs []sqlparser.Expr) {
 	if aggr.Func == nil {
 		if len(exprs) > 1 {
-			panic(vterrors.VT13001(fmt.Sprintf("unexpected number of expression in an random aggregation: %s", sqlparser.String(exprs))))
+			panic(vterrors.VT13001(fmt.Sprintf("unexpected number of expression in an random aggregation: %s", sqlparser.SliceString(exprs))))
 		}
 		aggr.Original.Expr = exprs[0]
 		return
@@ -434,12 +434,12 @@ func (aggr Aggr) getPushColumn() sqlparser.Expr {
 	}
 }
 
-func (aggr Aggr) getPushColumnExprs() sqlparser.Exprs {
+func (aggr Aggr) getPushColumnExprs() []sqlparser.Expr {
 	switch aggr.OpCode {
 	case opcode.AggregateAnyValue:
-		return sqlparser.Exprs{aggr.Original.Expr}
+		return []sqlparser.Expr{aggr.Original.Expr}
 	case opcode.AggregateCountStar:
-		return sqlparser.Exprs{sqlparser.NewIntLiteral("1")}
+		return []sqlparser.Expr{sqlparser.NewIntLiteral("1")}
 	case opcode.AggregateUDF:
 		// AggregateUDFs can't be evaluated on the vtgate. So either we are able to push everything down, or we will have to fail the query.
 		return nil

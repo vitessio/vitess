@@ -689,9 +689,9 @@ func autoIncGenerate(gen *operators.Generate) *engine.Generate {
 		return nil
 	}
 	selNext := &sqlparser.Select{
-		From:        []sqlparser.TableExpr{&sqlparser.AliasedTableExpr{Expr: gen.TableName}},
-		SelectExprs: sqlparser.SelectExprs{&sqlparser.Nextval{Expr: &sqlparser.Argument{Name: "n", Type: sqltypes.Int64}}},
+		From: []sqlparser.TableExpr{&sqlparser.AliasedTableExpr{Expr: gen.TableName}},
 	}
+	selNext.AddSelectExpr(&sqlparser.Nextval{Expr: &sqlparser.Argument{Name: "n", Type: sqltypes.Int64}})
 	return &engine.Generate{
 		Keyspace: gen.Keyspace,
 		Query:    sqlparser.String(selNext),
@@ -783,7 +783,7 @@ func buildDeletePrimitive(ctx *plancontext.PlanningContext, rb *operators.Route,
 	return &engine.Delete{DML: edml}, nil
 }
 
-func createDMLPrimitive(ctx *plancontext.PlanningContext, rb *operators.Route, hints *queryHints, vTbl *vindexes.Table, query string, colVindexes []*vindexes.ColumnVindex, vindexQuery string) *engine.DML {
+func createDMLPrimitive(ctx *plancontext.PlanningContext, rb *operators.Route, hints *queryHints, vTbl *vindexes.BaseTable, query string, colVindexes []*vindexes.ColumnVindex, vindexQuery string) *engine.DML {
 	rp := newRoutingParams(ctx, rb.Routing.OpCode())
 	rb.Routing.UpdateRoutingParams(ctx, rp)
 	edml := &engine.DML{
