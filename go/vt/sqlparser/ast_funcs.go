@@ -1211,7 +1211,7 @@ func (node *Select) AddSelectExpr(expr SelectExpr) {
 
 func (node *Select) SetSelectExprs(exprs ...SelectExpr) {
 	if node.SelectExprs == nil {
-		node.SelectExprs = &SelectExprs{Exprs: exprs}
+		node.SelectExprs = &SelectExprs{}
 	}
 	node.SelectExprs.Exprs = exprs
 }
