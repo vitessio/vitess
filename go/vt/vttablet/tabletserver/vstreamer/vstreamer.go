@@ -607,7 +607,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 			vs.plans[id] = nil
 			return nil, nil
 		}
-		if vtschema.IsInternalOperationTableName(tm.Name) { // ignore tables created by onlineddl/gh-ost/pt-osc
+		if vtschema.IsInternalOperationTableName(tm.Name) { // ignore tables created by onlineddl/GC
 			vs.plans[id] = nil
 			return nil, nil
 		}

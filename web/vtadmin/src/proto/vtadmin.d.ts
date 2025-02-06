@@ -51810,8 +51810,6 @@ export namespace vtctldata {
         enum Strategy {
             VITESS = 0,
             ONLINE = 0,
-            GHOST = 1,
-            PTOSC = 2,
             DIRECT = 3,
             MYSQL = 4
         }

@@ -230,7 +230,6 @@ func NewTabletServer(ctx context.Context, env *vtenv.Environment, name string, c
 	tsv.registerTxlogzHandler()
 	tsv.registerQueryListHandlers([]*QueryList{tsv.statelessql, tsv.statefulql, tsv.olapql})
 	tsv.registerTwopczHandler()
-	tsv.registerMigrationStatusHandler()
 	tsv.registerThrottlerHandlers()
 	tsv.registerDebugEnvHandler()
 
@@ -1903,18 +1902,6 @@ func (tsv *TabletServer) registerTwopczHandler() {
 		ctx := tabletenv.LocalContext()
 		txe := NewDTExecutor(ctx, tabletenv.NewLogStats(ctx, "twopcz", streamlog.GetQueryLogConfig()), tsv.te, tsv.qe, tsv.getShard)
 		twopczHandler(txe, w, r)
-	})
-}
-
-func (tsv *TabletServer) registerMigrationStatusHandler() {
-	tsv.exporter.HandleFunc("/schema-migration/report-status", func(w http.ResponseWriter, r *http.Request) {
-		ctx := tabletenv.LocalContext()
-		query := r.URL.Query()
-		if err := tsv.onlineDDLExecutor.OnSchemaMigrationStatus(ctx, query.Get("uuid"), query.Get("status"), query.Get("dryrun"), query.Get("progress"), query.Get("eta"), query.Get("rowscopied"), query.Get("hint")); err != nil {
-			http.Error(w, fmt.Sprintf("not ok: %v", err), http.StatusInternalServerError)
-			return
-		}
-		w.Write([]byte("ok"))
 	})
 }
 
