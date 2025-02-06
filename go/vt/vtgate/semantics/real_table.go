@@ -32,7 +32,7 @@ import (
 type RealTable struct {
 	dbName, tableName string
 	ASTNode           *sqlparser.AliasedTableExpr
-	Table             *vindexes.Table
+	Table             *vindexes.BaseTable
 	CTE               *CTE
 	VindexHint        *sqlparser.IndexHint
 	MirrorRule        *vindexes.MirrorRule
@@ -207,7 +207,7 @@ func (r *RealTable) canShortCut() shortCut {
 }
 
 // GetVindexTable implements the TableInfo interface
-func (r *RealTable) GetVindexTable() *vindexes.Table {
+func (r *RealTable) GetVindexTable() *vindexes.BaseTable {
 	return r.Table
 }
 

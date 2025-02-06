@@ -98,7 +98,7 @@ type (
 
 		LookupRowLockShardSession() vtgatepb.CommitOrder
 
-		FindRoutedTable(tablename sqlparser.TableName) (*vindexes.Table, error)
+		FindRoutedTable(tablename sqlparser.TableName) (*vindexes.BaseTable, error)
 
 		// GetDBDDLPlugin gets the configured plugin for DROP/CREATE DATABASE
 		GetDBDDLPluginName() string

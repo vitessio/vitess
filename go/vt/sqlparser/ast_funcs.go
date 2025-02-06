@@ -2494,6 +2494,23 @@ func removeKeyspace(in SQLNode, shouldRemove func(qualifier string) bool) {
 	})
 }
 
+// AddKeyspace adds the keyspace qualifier to TableName if it's not already present
+func AddKeyspace(in SQLNode, ks string) {
+	Rewrite(in, func(cursor *Cursor) bool {
+		switch expr := cursor.Node().(type) {
+		case *ColName:
+			// ignore it
+			return false
+		case TableName:
+			if expr.Qualifier.IsEmpty() {
+				expr.Qualifier = NewIdentifierCS(ks)
+				cursor.Replace(expr)
+			}
+		}
+		return true
+	}, nil)
+}
+
 func convertStringToInt(integer string) int {
 	val, _ := strconv.Atoi(integer)
 	return val

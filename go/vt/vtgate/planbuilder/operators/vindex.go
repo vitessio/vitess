@@ -44,7 +44,7 @@ type (
 		Alias      *sqlparser.AliasedTableExpr
 		Table      sqlparser.TableName
 		Predicates []sqlparser.Expr
-		VTable     *vindexes.Table
+		VTable     *vindexes.BaseTable
 	}
 )
 
