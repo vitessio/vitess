@@ -1179,9 +1179,9 @@ func (fra *fakeRPCTM) PopulateReparentJournal(ctx context.Context, timeCreatedNS
 	return nil
 }
 
-var testReparentJournalLen = 10
+var testReparentJournalLen int32 = 10
 
-func (fra *fakeRPCTM) ReadReparentJournalInfo(context.Context) (int, error) {
+func (fra *fakeRPCTM) ReadReparentJournalInfo(context.Context) (int32, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}

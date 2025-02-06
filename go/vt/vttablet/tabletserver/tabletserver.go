@@ -37,6 +37,7 @@ import (
 	"vitess.io/vitess/go/pools/smartconnpool"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
@@ -189,23 +190,24 @@ func NewTabletServer(ctx context.Context, env *vtenv.Environment, name string, c
 	tsv.onlineDDLExecutor = onlineddl.NewExecutor(tsv, alias, topoServer, tsv.lagThrottler, tabletTypeFunc, tsv.onlineDDLExecutorToggleTableBuffer, tsv.tableGC.RequestChecks, tsv.te.preparedPool.IsEmptyForTable)
 
 	tsv.sm = &stateManager{
-		statelessql: tsv.statelessql,
-		statefulql:  tsv.statefulql,
-		olapql:      tsv.olapql,
-		hs:          tsv.hs,
-		se:          tsv.se,
-		rt:          tsv.rt,
-		vstreamer:   tsv.vstreamer,
-		tracker:     tsv.tracker,
-		watcher:     tsv.watcher,
-		qe:          tsv.qe,
-		txThrottler: tsv.txThrottler,
-		te:          tsv.te,
-		messager:    tsv.messager,
-		ddle:        tsv.onlineDDLExecutor,
-		throttler:   tsv.lagThrottler,
-		tableGC:     tsv.tableGC,
-		rw:          newRequestsWaiter(),
+		statelessql:       tsv.statelessql,
+		statefulql:        tsv.statefulql,
+		olapql:            tsv.olapql,
+		hs:                tsv.hs,
+		se:                tsv.se,
+		rt:                tsv.rt,
+		vstreamer:         tsv.vstreamer,
+		tracker:           tsv.tracker,
+		watcher:           tsv.watcher,
+		qe:                tsv.qe,
+		txThrottler:       tsv.txThrottler,
+		te:                tsv.te,
+		messager:          tsv.messager,
+		ddle:              tsv.onlineDDLExecutor,
+		throttler:         tsv.lagThrottler,
+		tableGC:           tsv.tableGC,
+		rw:                newRequestsWaiter(),
+		diskHealthMonitor: newDiskHealthMonitor(ctx),
 	}
 
 	tsv.exporter.NewGaugeFunc("TabletState", "Tablet server state", func() int64 { return int64(tsv.sm.State()) })
@@ -359,31 +361,32 @@ func (tsv *TabletServer) SetQueryRules(ruleSource string, qrs *rules.Rules) erro
 	return nil
 }
 
-func (tsv *TabletServer) initACL(tableACLConfigFile string, enforceTableACLConfig bool) {
+func (tsv *TabletServer) initACL(tableACLConfigFile string) error {
 	// tabletacl.Init loads ACL from file if *tableACLConfig is not empty
-	err := tableacl.Init(
+	return tableacl.Init(
 		tableACLConfigFile,
 		func() {
 			tsv.ClearQueryPlanCache()
 		},
 	)
-	if err != nil {
-		log.Errorf("Fail to initialize Table ACL: %v", err)
-		if enforceTableACLConfig {
-			log.Exit("Need a valid initial Table ACL when enforce-tableacl-config is set, exiting.")
-		}
-	}
 }
 
 // InitACL loads the table ACL and sets up a SIGHUP handler for reloading it.
-func (tsv *TabletServer) InitACL(tableACLConfigFile string, enforceTableACLConfig bool, reloadACLConfigFileInterval time.Duration) {
-	tsv.initACL(tableACLConfigFile, enforceTableACLConfig)
+func (tsv *TabletServer) InitACL(tableACLConfigFile string, reloadACLConfigFileInterval time.Duration) error {
+	if err := tsv.initACL(tableACLConfigFile); err != nil {
+		return err
+	}
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGHUP)
 	go func() {
 		for range sigChan {
-			tsv.initACL(tableACLConfigFile, enforceTableACLConfig)
+			err := tsv.initACL(tableACLConfigFile)
+			if err != nil {
+				log.Errorf("Error reloading ACL config file %s in SIGHUP handler: %v", tableACLConfigFile, err)
+			} else {
+				log.Info("Successfully reloaded ACL file %s in SIGHUP handler", tableACLConfigFile)
+			}
 		}
 	}()
 
@@ -395,6 +398,7 @@ func (tsv *TabletServer) InitACL(tableACLConfigFile string, enforceTableACLConfi
 			}
 		}()
 	}
+	return nil
 }
 
 // SetServingType changes the serving type of the tabletserver. It starts or
@@ -764,6 +768,11 @@ func (tsv *TabletServer) SetDemotePrimaryStalled() {
 	tsv.sm.demotePrimaryStalled = true
 	tsv.sm.mu.Unlock()
 	tsv.BroadcastHealth()
+}
+
+// IsDiskStalled returns if the disk is stalled or not.
+func (tsv *TabletServer) IsDiskStalled() bool {
+	return tsv.sm.diskHealthMonitor.IsDiskStalled()
 }
 
 // CreateTransaction creates the metadata for a 2PC transaction.
@@ -1551,7 +1560,7 @@ func (tsv *TabletServer) execRequest(
 
 	defer span.Finish()
 
-	logStats := tabletenv.NewLogStats(ctx, requestName)
+	logStats := tabletenv.NewLogStats(ctx, requestName, streamlog.GetQueryLogConfig())
 	logStats.Target = target
 	logStats.OriginalSQL = sql
 	logStats.BindVariables = sqltypes.CopyBindVariables(bindVariables)
@@ -1875,7 +1884,9 @@ func (tsv *TabletServer) registerQuerylogzHandler() {
 }
 
 func (tsv *TabletServer) registerTxlogzHandler() {
-	tsv.exporter.HandleFunc("/txlogz", txlogzHandler)
+	tsv.exporter.HandleFunc("/txlogz", func(w http.ResponseWriter, r *http.Request) {
+		txlogzHandler(w, r, streamlog.GetQueryLogConfig().RedactDebugUIQueries)
+	})
 }
 
 func (tsv *TabletServer) registerQueryListHandlers(queryLists []*QueryList) {
@@ -1890,7 +1901,7 @@ func (tsv *TabletServer) registerQueryListHandlers(queryLists []*QueryList) {
 func (tsv *TabletServer) registerTwopczHandler() {
 	tsv.exporter.HandleFunc("/twopcz", func(w http.ResponseWriter, r *http.Request) {
 		ctx := tabletenv.LocalContext()
-		txe := NewDTExecutor(ctx, tabletenv.NewLogStats(ctx, "twopcz"), tsv.te, tsv.qe, tsv.getShard)
+		txe := NewDTExecutor(ctx, tabletenv.NewLogStats(ctx, "twopcz", streamlog.GetQueryLogConfig()), tsv.te, tsv.qe, tsv.getShard)
 		twopczHandler(txe, w, r)
 	})
 }

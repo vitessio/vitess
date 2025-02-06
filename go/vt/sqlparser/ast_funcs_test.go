@@ -219,3 +219,38 @@ func TestExtractTables(t *testing.T) {
 		})
 	}
 }
+
+// TestRemoveKeyspace tests the RemoveKeyspaceIgnoreSysSchema function.
+// It removes all the keyspace except system schema.
+func TestRemoveKeyspaceIgnoreSysSchema(t *testing.T) {
+	stmt, err := NewTestParser().Parse("select 1 from uks.unsharded join information_schema.tables")
+	require.NoError(t, err)
+	RemoveKeyspaceIgnoreSysSchema(stmt)
+
+	require.Equal(t, "select 1 from unsharded join information_schema.`tables`", String(stmt))
+}
+
+// TestRemoveSpecificKeyspace tests the RemoveSpecificKeyspace function.
+// It removes the specific keyspace from the database qualifier.
+func TestRemoveSpecificKeyspace(t *testing.T) {
+	stmt, err := NewTestParser().Parse("select 1 from uks.unsharded")
+	require.NoError(t, err)
+
+	// does not match
+	RemoveSpecificKeyspace(stmt, "ks2")
+	require.Equal(t, "select 1 from uks.unsharded", String(stmt))
+
+	// match
+	RemoveSpecificKeyspace(stmt, "uks")
+	require.Equal(t, "select 1 from unsharded", String(stmt))
+}
+
+// TestAddKeyspace tests the AddKeyspace function which adds the keyspace to the non-qualified table.
+func TestKeyspaceToNonQualifiedTable(t *testing.T) {
+	stmt, err := NewTestParser().Parse("select col, col + (select 1 from t4) from ks.t join t2 join (select 1 from t3) as x where t.id = t2.id and x.id = t.id")
+	require.NoError(t, err)
+
+	// add keyspace to non qualified table
+	AddKeyspace(stmt, "ks2")
+	require.Equal(t, "select col, col + (select 1 from ks2.t4) from ks.t join ks2.t2 join (select 1 from ks2.t3) as x where t.id = t2.id and x.id = t.id", String(stmt))
+}

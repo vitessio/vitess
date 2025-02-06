@@ -1004,6 +1004,20 @@ export namespace vtadmin {
         public vTExplain(request: vtadmin.IVTExplainRequest): Promise<vtadmin.VTExplainResponse>;
 
         /**
+         * Calls VExplain.
+         * @param request VExplainRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and VExplainResponse
+         */
+        public vExplain(request: vtadmin.IVExplainRequest, callback: vtadmin.VTAdmin.VExplainCallback): void;
+
+        /**
+         * Calls VExplain.
+         * @param request VExplainRequest message or plain object
+         * @returns Promise
+         */
+        public vExplain(request: vtadmin.IVExplainRequest): Promise<vtadmin.VExplainResponse>;
+
+        /**
          * Calls WorkflowDelete.
          * @param request WorkflowDeleteRequest message or plain object
          * @param callback Node-style callback called with the error, if any, and WorkflowDeleteResponse
@@ -1523,6 +1537,13 @@ export namespace vtadmin {
          * @param [response] VTExplainResponse
          */
         type VTExplainCallback = (error: (Error|null), response?: vtadmin.VTExplainResponse) => void;
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#vExplain}.
+         * @param error Error, if any
+         * @param [response] VExplainResponse
+         */
+        type VExplainCallback = (error: (Error|null), response?: vtadmin.VExplainResponse) => void;
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#workflowDelete}.
@@ -15376,6 +15397,212 @@ export namespace vtadmin {
 
         /**
          * Gets the default type url for VTExplainResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a VExplainRequest. */
+    interface IVExplainRequest {
+
+        /** VExplainRequest cluster_id */
+        cluster_id?: (string|null);
+
+        /** VExplainRequest keyspace */
+        keyspace?: (string|null);
+
+        /** VExplainRequest sql */
+        sql?: (string|null);
+    }
+
+    /** Represents a VExplainRequest. */
+    class VExplainRequest implements IVExplainRequest {
+
+        /**
+         * Constructs a new VExplainRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IVExplainRequest);
+
+        /** VExplainRequest cluster_id. */
+        public cluster_id: string;
+
+        /** VExplainRequest keyspace. */
+        public keyspace: string;
+
+        /** VExplainRequest sql. */
+        public sql: string;
+
+        /**
+         * Creates a new VExplainRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VExplainRequest instance
+         */
+        public static create(properties?: vtadmin.IVExplainRequest): vtadmin.VExplainRequest;
+
+        /**
+         * Encodes the specified VExplainRequest message. Does not implicitly {@link vtadmin.VExplainRequest.verify|verify} messages.
+         * @param message VExplainRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IVExplainRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VExplainRequest message, length delimited. Does not implicitly {@link vtadmin.VExplainRequest.verify|verify} messages.
+         * @param message VExplainRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IVExplainRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VExplainRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VExplainRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.VExplainRequest;
+
+        /**
+         * Decodes a VExplainRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VExplainRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.VExplainRequest;
+
+        /**
+         * Verifies a VExplainRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VExplainRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VExplainRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.VExplainRequest;
+
+        /**
+         * Creates a plain object from a VExplainRequest message. Also converts values to other types if specified.
+         * @param message VExplainRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.VExplainRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VExplainRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VExplainRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a VExplainResponse. */
+    interface IVExplainResponse {
+
+        /** VExplainResponse response */
+        response?: (string|null);
+    }
+
+    /** Represents a VExplainResponse. */
+    class VExplainResponse implements IVExplainResponse {
+
+        /**
+         * Constructs a new VExplainResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IVExplainResponse);
+
+        /** VExplainResponse response. */
+        public response: string;
+
+        /**
+         * Creates a new VExplainResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VExplainResponse instance
+         */
+        public static create(properties?: vtadmin.IVExplainResponse): vtadmin.VExplainResponse;
+
+        /**
+         * Encodes the specified VExplainResponse message. Does not implicitly {@link vtadmin.VExplainResponse.verify|verify} messages.
+         * @param message VExplainResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IVExplainResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VExplainResponse message, length delimited. Does not implicitly {@link vtadmin.VExplainResponse.verify|verify} messages.
+         * @param message VExplainResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IVExplainResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VExplainResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VExplainResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.VExplainResponse;
+
+        /**
+         * Decodes a VExplainResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VExplainResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.VExplainResponse;
+
+        /**
+         * Verifies a VExplainResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VExplainResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VExplainResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.VExplainResponse;
+
+        /**
+         * Creates a plain object from a VExplainResponse message. Also converts values to other types if specified.
+         * @param message VExplainResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.VExplainResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VExplainResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VExplainResponse
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */
@@ -31327,9 +31554,6 @@ export namespace tabletmanagerdata {
         /** BackupRequest backup_engine. */
         public backup_engine?: (string|null);
 
-        /** BackupRequest _backup_engine. */
-        public _backup_engine?: "backup_engine";
-
         /**
          * Creates a new BackupRequest instance using the specified properties.
          * @param [properties] Properties to set
@@ -33948,9 +34172,6 @@ export namespace tabletmanagerdata {
         /** VDiffCoreOptions auto_start. */
         public auto_start?: (boolean|null);
 
-        /** VDiffCoreOptions _auto_start. */
-        public _auto_start?: "auto_start";
-
         /**
          * Creates a new VDiffCoreOptions instance using the specified properties.
          * @param [properties] Properties to set
@@ -34138,6 +34359,109 @@ export namespace tabletmanagerdata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** Properties of a VDiffTableLastPK. */
+    interface IVDiffTableLastPK {
+
+        /** VDiffTableLastPK target */
+        target?: (query.IQueryResult|null);
+
+        /** VDiffTableLastPK source */
+        source?: (query.IQueryResult|null);
+    }
+
+    /** Represents a VDiffTableLastPK. */
+    class VDiffTableLastPK implements IVDiffTableLastPK {
+
+        /**
+         * Constructs a new VDiffTableLastPK.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IVDiffTableLastPK);
+
+        /** VDiffTableLastPK target. */
+        public target?: (query.IQueryResult|null);
+
+        /** VDiffTableLastPK source. */
+        public source?: (query.IQueryResult|null);
+
+        /**
+         * Creates a new VDiffTableLastPK instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VDiffTableLastPK instance
+         */
+        public static create(properties?: tabletmanagerdata.IVDiffTableLastPK): tabletmanagerdata.VDiffTableLastPK;
+
+        /**
+         * Encodes the specified VDiffTableLastPK message. Does not implicitly {@link tabletmanagerdata.VDiffTableLastPK.verify|verify} messages.
+         * @param message VDiffTableLastPK message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IVDiffTableLastPK, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VDiffTableLastPK message, length delimited. Does not implicitly {@link tabletmanagerdata.VDiffTableLastPK.verify|verify} messages.
+         * @param message VDiffTableLastPK message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IVDiffTableLastPK, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VDiffTableLastPK message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VDiffTableLastPK
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.VDiffTableLastPK;
+
+        /**
+         * Decodes a VDiffTableLastPK message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VDiffTableLastPK
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.VDiffTableLastPK;
+
+        /**
+         * Verifies a VDiffTableLastPK message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VDiffTableLastPK message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VDiffTableLastPK
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.VDiffTableLastPK;
+
+        /**
+         * Creates a plain object from a VDiffTableLastPK message. Also converts values to other types if specified.
+         * @param message VDiffTableLastPK
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.VDiffTableLastPK, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VDiffTableLastPK to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VDiffTableLastPK
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
     /** Properties of an UpdateVReplicationWorkflowRequest. */
     interface IUpdateVReplicationWorkflowRequest {
 
@@ -34159,8 +34483,14 @@ export namespace tabletmanagerdata {
         /** UpdateVReplicationWorkflowRequest state */
         state?: (binlogdata.VReplicationWorkflowState|null);
 
+        /** UpdateVReplicationWorkflowRequest shards */
+        shards?: (string[]|null);
+
         /** UpdateVReplicationWorkflowRequest config_overrides */
         config_overrides?: ({ [k: string]: string }|null);
+
+        /** UpdateVReplicationWorkflowRequest message */
+        message?: (string|null);
     }
 
     /** Represents an UpdateVReplicationWorkflowRequest. */
@@ -34190,17 +34520,14 @@ export namespace tabletmanagerdata {
         /** UpdateVReplicationWorkflowRequest state. */
         public state?: (binlogdata.VReplicationWorkflowState|null);
 
+        /** UpdateVReplicationWorkflowRequest shards. */
+        public shards: string[];
+
         /** UpdateVReplicationWorkflowRequest config_overrides. */
         public config_overrides: { [k: string]: string };
 
-        /** UpdateVReplicationWorkflowRequest _tablet_selection_preference. */
-        public _tablet_selection_preference?: "tablet_selection_preference";
-
-        /** UpdateVReplicationWorkflowRequest _on_ddl. */
-        public _on_ddl?: "on_ddl";
-
-        /** UpdateVReplicationWorkflowRequest _state. */
-        public _state?: "state";
+        /** UpdateVReplicationWorkflowRequest message. */
+        public message?: (string|null);
 
         /**
          * Creates a new UpdateVReplicationWorkflowRequest instance using the specified properties.
@@ -34425,15 +34752,6 @@ export namespace tabletmanagerdata {
 
         /** UpdateVReplicationWorkflowsRequest stop_position. */
         public stop_position?: (string|null);
-
-        /** UpdateVReplicationWorkflowsRequest _state. */
-        public _state?: "state";
-
-        /** UpdateVReplicationWorkflowsRequest _message. */
-        public _message?: "message";
-
-        /** UpdateVReplicationWorkflowsRequest _stop_position. */
-        public _stop_position?: "stop_position";
 
         /**
          * Creates a new UpdateVReplicationWorkflowsRequest instance using the specified properties.
@@ -40380,7 +40698,8 @@ export namespace query {
         HEXVAL = 4129,
         BITNUM = 4130,
         VECTOR = 2083,
-        RAW = 2084
+        RAW = 2084,
+        ROW_TUPLE = 2085
     }
 
     /** Properties of a Value. */
@@ -48503,6 +48822,9 @@ export namespace replicationdata {
 
         /** FullStatus replication_configuration */
         replication_configuration?: (replicationdata.IConfiguration|null);
+
+        /** FullStatus disk_stalled */
+        disk_stalled?: (boolean|null);
     }
 
     /** Represents a FullStatus. */
@@ -48579,6 +48901,9 @@ export namespace replicationdata {
 
         /** FullStatus replication_configuration. */
         public replication_configuration?: (replicationdata.IConfiguration|null);
+
+        /** FullStatus disk_stalled. */
+        public disk_stalled: boolean;
 
         /**
          * Creates a new FullStatus instance using the specified properties.
@@ -49623,9 +49948,6 @@ export namespace vschema {
 
         /** Column values. */
         public values: string[];
-
-        /** Column _nullable. */
-        public _nullable?: "nullable";
 
         /**
          * Creates a new Column instance using the specified properties.
@@ -54296,9 +54618,6 @@ export namespace vtctldata {
         /** BackupRequest backup_engine. */
         public backup_engine?: (string|null);
 
-        /** BackupRequest _backup_engine. */
-        public _backup_engine?: "backup_engine";
-
         /**
          * Creates a new BackupRequest instance using the specified properties.
          * @param [properties] Properties to set
@@ -55867,6 +56186,236 @@ export namespace vtctldata {
 
         /**
          * Gets the default type url for CompleteSchemaMigrationResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a CopySchemaShardRequest. */
+    interface ICopySchemaShardRequest {
+
+        /** CopySchemaShardRequest source_tablet_alias */
+        source_tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** CopySchemaShardRequest tables */
+        tables?: (string[]|null);
+
+        /** CopySchemaShardRequest exclude_tables */
+        exclude_tables?: (string[]|null);
+
+        /** CopySchemaShardRequest include_views */
+        include_views?: (boolean|null);
+
+        /** CopySchemaShardRequest skip_verify */
+        skip_verify?: (boolean|null);
+
+        /** CopySchemaShardRequest wait_replicas_timeout */
+        wait_replicas_timeout?: (vttime.IDuration|null);
+
+        /** CopySchemaShardRequest destination_keyspace */
+        destination_keyspace?: (string|null);
+
+        /** CopySchemaShardRequest destination_shard */
+        destination_shard?: (string|null);
+    }
+
+    /** Represents a CopySchemaShardRequest. */
+    class CopySchemaShardRequest implements ICopySchemaShardRequest {
+
+        /**
+         * Constructs a new CopySchemaShardRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.ICopySchemaShardRequest);
+
+        /** CopySchemaShardRequest source_tablet_alias. */
+        public source_tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** CopySchemaShardRequest tables. */
+        public tables: string[];
+
+        /** CopySchemaShardRequest exclude_tables. */
+        public exclude_tables: string[];
+
+        /** CopySchemaShardRequest include_views. */
+        public include_views: boolean;
+
+        /** CopySchemaShardRequest skip_verify. */
+        public skip_verify: boolean;
+
+        /** CopySchemaShardRequest wait_replicas_timeout. */
+        public wait_replicas_timeout?: (vttime.IDuration|null);
+
+        /** CopySchemaShardRequest destination_keyspace. */
+        public destination_keyspace: string;
+
+        /** CopySchemaShardRequest destination_shard. */
+        public destination_shard: string;
+
+        /**
+         * Creates a new CopySchemaShardRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns CopySchemaShardRequest instance
+         */
+        public static create(properties?: vtctldata.ICopySchemaShardRequest): vtctldata.CopySchemaShardRequest;
+
+        /**
+         * Encodes the specified CopySchemaShardRequest message. Does not implicitly {@link vtctldata.CopySchemaShardRequest.verify|verify} messages.
+         * @param message CopySchemaShardRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.ICopySchemaShardRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified CopySchemaShardRequest message, length delimited. Does not implicitly {@link vtctldata.CopySchemaShardRequest.verify|verify} messages.
+         * @param message CopySchemaShardRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.ICopySchemaShardRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a CopySchemaShardRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns CopySchemaShardRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.CopySchemaShardRequest;
+
+        /**
+         * Decodes a CopySchemaShardRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns CopySchemaShardRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.CopySchemaShardRequest;
+
+        /**
+         * Verifies a CopySchemaShardRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a CopySchemaShardRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns CopySchemaShardRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.CopySchemaShardRequest;
+
+        /**
+         * Creates a plain object from a CopySchemaShardRequest message. Also converts values to other types if specified.
+         * @param message CopySchemaShardRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.CopySchemaShardRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this CopySchemaShardRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for CopySchemaShardRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a CopySchemaShardResponse. */
+    interface ICopySchemaShardResponse {
+    }
+
+    /** Represents a CopySchemaShardResponse. */
+    class CopySchemaShardResponse implements ICopySchemaShardResponse {
+
+        /**
+         * Constructs a new CopySchemaShardResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.ICopySchemaShardResponse);
+
+        /**
+         * Creates a new CopySchemaShardResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns CopySchemaShardResponse instance
+         */
+        public static create(properties?: vtctldata.ICopySchemaShardResponse): vtctldata.CopySchemaShardResponse;
+
+        /**
+         * Encodes the specified CopySchemaShardResponse message. Does not implicitly {@link vtctldata.CopySchemaShardResponse.verify|verify} messages.
+         * @param message CopySchemaShardResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.ICopySchemaShardResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified CopySchemaShardResponse message, length delimited. Does not implicitly {@link vtctldata.CopySchemaShardResponse.verify|verify} messages.
+         * @param message CopySchemaShardResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.ICopySchemaShardResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a CopySchemaShardResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns CopySchemaShardResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.CopySchemaShardResponse;
+
+        /**
+         * Decodes a CopySchemaShardResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns CopySchemaShardResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.CopySchemaShardResponse;
+
+        /**
+         * Verifies a CopySchemaShardResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a CopySchemaShardResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns CopySchemaShardResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.CopySchemaShardResponse;
+
+        /**
+         * Creates a plain object from a CopySchemaShardResponse message. Also converts values to other types if specified.
+         * @param message CopySchemaShardResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.CopySchemaShardResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this CopySchemaShardResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for CopySchemaShardResponse
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */
@@ -65813,6 +66362,206 @@ export namespace vtctldata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** Properties of a LookupVindexCompleteRequest. */
+    interface ILookupVindexCompleteRequest {
+
+        /** LookupVindexCompleteRequest keyspace */
+        keyspace?: (string|null);
+
+        /** LookupVindexCompleteRequest name */
+        name?: (string|null);
+
+        /** LookupVindexCompleteRequest table_keyspace */
+        table_keyspace?: (string|null);
+    }
+
+    /** Represents a LookupVindexCompleteRequest. */
+    class LookupVindexCompleteRequest implements ILookupVindexCompleteRequest {
+
+        /**
+         * Constructs a new LookupVindexCompleteRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.ILookupVindexCompleteRequest);
+
+        /** LookupVindexCompleteRequest keyspace. */
+        public keyspace: string;
+
+        /** LookupVindexCompleteRequest name. */
+        public name: string;
+
+        /** LookupVindexCompleteRequest table_keyspace. */
+        public table_keyspace: string;
+
+        /**
+         * Creates a new LookupVindexCompleteRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns LookupVindexCompleteRequest instance
+         */
+        public static create(properties?: vtctldata.ILookupVindexCompleteRequest): vtctldata.LookupVindexCompleteRequest;
+
+        /**
+         * Encodes the specified LookupVindexCompleteRequest message. Does not implicitly {@link vtctldata.LookupVindexCompleteRequest.verify|verify} messages.
+         * @param message LookupVindexCompleteRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.ILookupVindexCompleteRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified LookupVindexCompleteRequest message, length delimited. Does not implicitly {@link vtctldata.LookupVindexCompleteRequest.verify|verify} messages.
+         * @param message LookupVindexCompleteRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.ILookupVindexCompleteRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a LookupVindexCompleteRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns LookupVindexCompleteRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.LookupVindexCompleteRequest;
+
+        /**
+         * Decodes a LookupVindexCompleteRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns LookupVindexCompleteRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.LookupVindexCompleteRequest;
+
+        /**
+         * Verifies a LookupVindexCompleteRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a LookupVindexCompleteRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns LookupVindexCompleteRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.LookupVindexCompleteRequest;
+
+        /**
+         * Creates a plain object from a LookupVindexCompleteRequest message. Also converts values to other types if specified.
+         * @param message LookupVindexCompleteRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.LookupVindexCompleteRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this LookupVindexCompleteRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for LookupVindexCompleteRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a LookupVindexCompleteResponse. */
+    interface ILookupVindexCompleteResponse {
+    }
+
+    /** Represents a LookupVindexCompleteResponse. */
+    class LookupVindexCompleteResponse implements ILookupVindexCompleteResponse {
+
+        /**
+         * Constructs a new LookupVindexCompleteResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.ILookupVindexCompleteResponse);
+
+        /**
+         * Creates a new LookupVindexCompleteResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns LookupVindexCompleteResponse instance
+         */
+        public static create(properties?: vtctldata.ILookupVindexCompleteResponse): vtctldata.LookupVindexCompleteResponse;
+
+        /**
+         * Encodes the specified LookupVindexCompleteResponse message. Does not implicitly {@link vtctldata.LookupVindexCompleteResponse.verify|verify} messages.
+         * @param message LookupVindexCompleteResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.ILookupVindexCompleteResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified LookupVindexCompleteResponse message, length delimited. Does not implicitly {@link vtctldata.LookupVindexCompleteResponse.verify|verify} messages.
+         * @param message LookupVindexCompleteResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.ILookupVindexCompleteResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a LookupVindexCompleteResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns LookupVindexCompleteResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.LookupVindexCompleteResponse;
+
+        /**
+         * Decodes a LookupVindexCompleteResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns LookupVindexCompleteResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.LookupVindexCompleteResponse;
+
+        /**
+         * Verifies a LookupVindexCompleteResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a LookupVindexCompleteResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns LookupVindexCompleteResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.LookupVindexCompleteResponse;
+
+        /**
+         * Creates a plain object from a LookupVindexCompleteResponse message. Also converts values to other types if specified.
+         * @param message LookupVindexCompleteResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.LookupVindexCompleteResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this LookupVindexCompleteResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for LookupVindexCompleteResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
     /** Properties of a LookupVindexCreateRequest. */
     interface ILookupVindexCreateRequest {
 
@@ -66048,6 +66797,9 @@ export namespace vtctldata {
 
         /** LookupVindexExternalizeRequest table_keyspace */
         table_keyspace?: (string|null);
+
+        /** LookupVindexExternalizeRequest delete_workflow */
+        delete_workflow?: (boolean|null);
     }
 
     /** Represents a LookupVindexExternalizeRequest. */
@@ -66067,6 +66819,9 @@ export namespace vtctldata {
 
         /** LookupVindexExternalizeRequest table_keyspace. */
         public table_keyspace: string;
+
+        /** LookupVindexExternalizeRequest delete_workflow. */
+        public delete_workflow: boolean;
 
         /**
          * Creates a new LookupVindexExternalizeRequest instance using the specified properties.
@@ -66149,6 +66904,9 @@ export namespace vtctldata {
     /** Properties of a LookupVindexExternalizeResponse. */
     interface ILookupVindexExternalizeResponse {
 
+        /** LookupVindexExternalizeResponse workflow_stopped */
+        workflow_stopped?: (boolean|null);
+
         /** LookupVindexExternalizeResponse workflow_deleted */
         workflow_deleted?: (boolean|null);
     }
@@ -66161,6 +66919,9 @@ export namespace vtctldata {
          * @param [properties] Properties to set
          */
         constructor(properties?: vtctldata.ILookupVindexExternalizeResponse);
+
+        /** LookupVindexExternalizeResponse workflow_stopped. */
+        public workflow_stopped: boolean;
 
         /** LookupVindexExternalizeResponse workflow_deleted. */
         public workflow_deleted: boolean;
@@ -66237,6 +66998,206 @@ export namespace vtctldata {
 
         /**
          * Gets the default type url for LookupVindexExternalizeResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a LookupVindexInternalizeRequest. */
+    interface ILookupVindexInternalizeRequest {
+
+        /** LookupVindexInternalizeRequest keyspace */
+        keyspace?: (string|null);
+
+        /** LookupVindexInternalizeRequest name */
+        name?: (string|null);
+
+        /** LookupVindexInternalizeRequest table_keyspace */
+        table_keyspace?: (string|null);
+    }
+
+    /** Represents a LookupVindexInternalizeRequest. */
+    class LookupVindexInternalizeRequest implements ILookupVindexInternalizeRequest {
+
+        /**
+         * Constructs a new LookupVindexInternalizeRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.ILookupVindexInternalizeRequest);
+
+        /** LookupVindexInternalizeRequest keyspace. */
+        public keyspace: string;
+
+        /** LookupVindexInternalizeRequest name. */
+        public name: string;
+
+        /** LookupVindexInternalizeRequest table_keyspace. */
+        public table_keyspace: string;
+
+        /**
+         * Creates a new LookupVindexInternalizeRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns LookupVindexInternalizeRequest instance
+         */
+        public static create(properties?: vtctldata.ILookupVindexInternalizeRequest): vtctldata.LookupVindexInternalizeRequest;
+
+        /**
+         * Encodes the specified LookupVindexInternalizeRequest message. Does not implicitly {@link vtctldata.LookupVindexInternalizeRequest.verify|verify} messages.
+         * @param message LookupVindexInternalizeRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.ILookupVindexInternalizeRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified LookupVindexInternalizeRequest message, length delimited. Does not implicitly {@link vtctldata.LookupVindexInternalizeRequest.verify|verify} messages.
+         * @param message LookupVindexInternalizeRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.ILookupVindexInternalizeRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a LookupVindexInternalizeRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns LookupVindexInternalizeRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.LookupVindexInternalizeRequest;
+
+        /**
+         * Decodes a LookupVindexInternalizeRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns LookupVindexInternalizeRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.LookupVindexInternalizeRequest;
+
+        /**
+         * Verifies a LookupVindexInternalizeRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a LookupVindexInternalizeRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns LookupVindexInternalizeRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.LookupVindexInternalizeRequest;
+
+        /**
+         * Creates a plain object from a LookupVindexInternalizeRequest message. Also converts values to other types if specified.
+         * @param message LookupVindexInternalizeRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.LookupVindexInternalizeRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this LookupVindexInternalizeRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for LookupVindexInternalizeRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a LookupVindexInternalizeResponse. */
+    interface ILookupVindexInternalizeResponse {
+    }
+
+    /** Represents a LookupVindexInternalizeResponse. */
+    class LookupVindexInternalizeResponse implements ILookupVindexInternalizeResponse {
+
+        /**
+         * Constructs a new LookupVindexInternalizeResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.ILookupVindexInternalizeResponse);
+
+        /**
+         * Creates a new LookupVindexInternalizeResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns LookupVindexInternalizeResponse instance
+         */
+        public static create(properties?: vtctldata.ILookupVindexInternalizeResponse): vtctldata.LookupVindexInternalizeResponse;
+
+        /**
+         * Encodes the specified LookupVindexInternalizeResponse message. Does not implicitly {@link vtctldata.LookupVindexInternalizeResponse.verify|verify} messages.
+         * @param message LookupVindexInternalizeResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.ILookupVindexInternalizeResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified LookupVindexInternalizeResponse message, length delimited. Does not implicitly {@link vtctldata.LookupVindexInternalizeResponse.verify|verify} messages.
+         * @param message LookupVindexInternalizeResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.ILookupVindexInternalizeResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a LookupVindexInternalizeResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns LookupVindexInternalizeResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.LookupVindexInternalizeResponse;
+
+        /**
+         * Decodes a LookupVindexInternalizeResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns LookupVindexInternalizeResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.LookupVindexInternalizeResponse;
+
+        /**
+         * Verifies a LookupVindexInternalizeResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a LookupVindexInternalizeResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns LookupVindexInternalizeResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.LookupVindexInternalizeResponse;
+
+        /**
+         * Creates a plain object from a LookupVindexInternalizeResponse message. Also converts values to other types if specified.
+         * @param message LookupVindexInternalizeResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.LookupVindexInternalizeResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this LookupVindexInternalizeResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for LookupVindexInternalizeResponse
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */
@@ -75653,6 +76614,200 @@ export namespace vtctldata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** Properties of a ValidatePermissionsKeyspaceRequest. */
+    interface IValidatePermissionsKeyspaceRequest {
+
+        /** ValidatePermissionsKeyspaceRequest keyspace */
+        keyspace?: (string|null);
+
+        /** ValidatePermissionsKeyspaceRequest shards */
+        shards?: (string[]|null);
+    }
+
+    /** Represents a ValidatePermissionsKeyspaceRequest. */
+    class ValidatePermissionsKeyspaceRequest implements IValidatePermissionsKeyspaceRequest {
+
+        /**
+         * Constructs a new ValidatePermissionsKeyspaceRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IValidatePermissionsKeyspaceRequest);
+
+        /** ValidatePermissionsKeyspaceRequest keyspace. */
+        public keyspace: string;
+
+        /** ValidatePermissionsKeyspaceRequest shards. */
+        public shards: string[];
+
+        /**
+         * Creates a new ValidatePermissionsKeyspaceRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ValidatePermissionsKeyspaceRequest instance
+         */
+        public static create(properties?: vtctldata.IValidatePermissionsKeyspaceRequest): vtctldata.ValidatePermissionsKeyspaceRequest;
+
+        /**
+         * Encodes the specified ValidatePermissionsKeyspaceRequest message. Does not implicitly {@link vtctldata.ValidatePermissionsKeyspaceRequest.verify|verify} messages.
+         * @param message ValidatePermissionsKeyspaceRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IValidatePermissionsKeyspaceRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ValidatePermissionsKeyspaceRequest message, length delimited. Does not implicitly {@link vtctldata.ValidatePermissionsKeyspaceRequest.verify|verify} messages.
+         * @param message ValidatePermissionsKeyspaceRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IValidatePermissionsKeyspaceRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ValidatePermissionsKeyspaceRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ValidatePermissionsKeyspaceRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ValidatePermissionsKeyspaceRequest;
+
+        /**
+         * Decodes a ValidatePermissionsKeyspaceRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ValidatePermissionsKeyspaceRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ValidatePermissionsKeyspaceRequest;
+
+        /**
+         * Verifies a ValidatePermissionsKeyspaceRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ValidatePermissionsKeyspaceRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ValidatePermissionsKeyspaceRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.ValidatePermissionsKeyspaceRequest;
+
+        /**
+         * Creates a plain object from a ValidatePermissionsKeyspaceRequest message. Also converts values to other types if specified.
+         * @param message ValidatePermissionsKeyspaceRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.ValidatePermissionsKeyspaceRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ValidatePermissionsKeyspaceRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ValidatePermissionsKeyspaceRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a ValidatePermissionsKeyspaceResponse. */
+    interface IValidatePermissionsKeyspaceResponse {
+    }
+
+    /** Represents a ValidatePermissionsKeyspaceResponse. */
+    class ValidatePermissionsKeyspaceResponse implements IValidatePermissionsKeyspaceResponse {
+
+        /**
+         * Constructs a new ValidatePermissionsKeyspaceResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IValidatePermissionsKeyspaceResponse);
+
+        /**
+         * Creates a new ValidatePermissionsKeyspaceResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ValidatePermissionsKeyspaceResponse instance
+         */
+        public static create(properties?: vtctldata.IValidatePermissionsKeyspaceResponse): vtctldata.ValidatePermissionsKeyspaceResponse;
+
+        /**
+         * Encodes the specified ValidatePermissionsKeyspaceResponse message. Does not implicitly {@link vtctldata.ValidatePermissionsKeyspaceResponse.verify|verify} messages.
+         * @param message ValidatePermissionsKeyspaceResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IValidatePermissionsKeyspaceResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ValidatePermissionsKeyspaceResponse message, length delimited. Does not implicitly {@link vtctldata.ValidatePermissionsKeyspaceResponse.verify|verify} messages.
+         * @param message ValidatePermissionsKeyspaceResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IValidatePermissionsKeyspaceResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ValidatePermissionsKeyspaceResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ValidatePermissionsKeyspaceResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ValidatePermissionsKeyspaceResponse;
+
+        /**
+         * Decodes a ValidatePermissionsKeyspaceResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ValidatePermissionsKeyspaceResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ValidatePermissionsKeyspaceResponse;
+
+        /**
+         * Verifies a ValidatePermissionsKeyspaceResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ValidatePermissionsKeyspaceResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ValidatePermissionsKeyspaceResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.ValidatePermissionsKeyspaceResponse;
+
+        /**
+         * Creates a plain object from a ValidatePermissionsKeyspaceResponse message. Also converts values to other types if specified.
+         * @param message ValidatePermissionsKeyspaceResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.ValidatePermissionsKeyspaceResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ValidatePermissionsKeyspaceResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ValidatePermissionsKeyspaceResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
     /** Properties of a ValidateSchemaKeyspaceRequest. */
     interface IValidateSchemaKeyspaceRequest {
 
@@ -75670,6 +76825,9 @@ export namespace vtctldata {
 
         /** ValidateSchemaKeyspaceRequest include_vschema */
         include_vschema?: (boolean|null);
+
+        /** ValidateSchemaKeyspaceRequest shards */
+        shards?: (string[]|null);
     }
 
     /** Represents a ValidateSchemaKeyspaceRequest. */
@@ -75695,6 +76853,9 @@ export namespace vtctldata {
 
         /** ValidateSchemaKeyspaceRequest include_vschema. */
         public include_vschema: boolean;
+
+        /** ValidateSchemaKeyspaceRequest shards. */
+        public shards: string[];
 
         /**
          * Creates a new ValidateSchemaKeyspaceRequest instance using the specified properties.
@@ -76845,9 +78006,6 @@ export namespace vtctldata {
 
         /** VDiffCreateRequest auto_start. */
         public auto_start?: (boolean|null);
-
-        /** VDiffCreateRequest _auto_start. */
-        public _auto_start?: "auto_start";
 
         /**
          * Creates a new VDiffCreateRequest instance using the specified properties.

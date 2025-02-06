@@ -19,6 +19,7 @@ package logic
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -29,6 +30,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
+	"vitess.io/vitess/go/vt/key"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/topo"
@@ -100,6 +102,221 @@ var (
 		},
 	}
 )
+
+func TestShouldWatchTablet(t *testing.T) {
+	oldClustersToWatch := clustersToWatch
+	defer func() {
+		clustersToWatch = oldClustersToWatch
+		shardsToWatch = nil
+	}()
+
+	testCases := []struct {
+		in                  []string
+		tablet              *topodatapb.Tablet
+		expectedShouldWatch bool
+	}{
+		{
+			in: []string{},
+			tablet: &topodatapb.Tablet{
+				Keyspace: keyspace,
+				Shard:    shard,
+			},
+			expectedShouldWatch: true,
+		},
+		{
+			in: []string{keyspace},
+			tablet: &topodatapb.Tablet{
+				Keyspace: keyspace,
+				Shard:    shard,
+			},
+			expectedShouldWatch: true,
+		},
+		{
+			in: []string{keyspace + "/-"},
+			tablet: &topodatapb.Tablet{
+				Keyspace: keyspace,
+				Shard:    shard,
+			},
+			expectedShouldWatch: true,
+		},
+		{
+			in: []string{keyspace + "/" + shard},
+			tablet: &topodatapb.Tablet{
+				Keyspace: keyspace,
+				Shard:    shard,
+			},
+			expectedShouldWatch: true,
+		},
+		{
+			in: []string{"ks/-70", "ks/70-"},
+			tablet: &topodatapb.Tablet{
+				Keyspace: "ks",
+				KeyRange: key.NewKeyRange([]byte{0x50}, []byte{0x70}),
+			},
+			expectedShouldWatch: true,
+		},
+		{
+			in: []string{"ks/-70", "ks/70-"},
+			tablet: &topodatapb.Tablet{
+				Keyspace: "ks",
+				KeyRange: key.NewKeyRange([]byte{0x40}, []byte{0x50}),
+			},
+			expectedShouldWatch: true,
+		},
+		{
+			in: []string{"ks/-70", "ks/70-"},
+			tablet: &topodatapb.Tablet{
+				Keyspace: "ks",
+				KeyRange: key.NewKeyRange([]byte{0x70}, []byte{0x90}),
+			},
+			expectedShouldWatch: true,
+		},
+		{
+			in: []string{"ks/-70", "ks/70-"},
+			tablet: &topodatapb.Tablet{
+				Keyspace: "ks",
+				KeyRange: key.NewKeyRange([]byte{0x60}, []byte{0x90}),
+			},
+			expectedShouldWatch: false,
+		},
+		{
+			in: []string{"ks/50-70"},
+			tablet: &topodatapb.Tablet{
+				Keyspace: "ks",
+				KeyRange: key.NewKeyRange([]byte{0x50}, []byte{0x70}),
+			},
+			expectedShouldWatch: true,
+		},
+		{
+			in: []string{"ks2/-70", "ks2/70-", "unknownKs/-", "ks/-80"},
+			tablet: &topodatapb.Tablet{
+				Keyspace: "ks",
+				KeyRange: key.NewKeyRange([]byte{0x60}, []byte{0x80}),
+			},
+			expectedShouldWatch: true,
+		},
+		{
+			in: []string{"ks2/-70", "ks2/70-", "unknownKs/-", "ks/-80"},
+			tablet: &topodatapb.Tablet{
+				Keyspace: "ks",
+				KeyRange: key.NewKeyRange([]byte{0x80}, []byte{0x90}),
+			},
+			expectedShouldWatch: false,
+		},
+		{
+			in: []string{"ks2/-70", "ks2/70-", "unknownKs/-", "ks/-80"},
+			tablet: &topodatapb.Tablet{
+				Keyspace: "ks",
+				KeyRange: key.NewKeyRange([]byte{0x90}, []byte{0xa0}),
+			},
+			expectedShouldWatch: false,
+		},
+	}
+
+	for _, tt := range testCases {
+		t.Run(fmt.Sprintf("%v-Tablet-%v-%v", strings.Join(tt.in, ","), tt.tablet.GetKeyspace(), tt.tablet.GetShard()), func(t *testing.T) {
+			clustersToWatch = tt.in
+			err := initializeShardsToWatch()
+			require.NoError(t, err)
+			assert.Equal(t, tt.expectedShouldWatch, shouldWatchTablet(tt.tablet))
+		})
+	}
+}
+
+// TestInitializeShardsToWatch tests that we initialize the shardsToWatch map correctly
+// using the `--clusters_to_watch` flag.
+func TestInitializeShardsToWatch(t *testing.T) {
+	oldClustersToWatch := clustersToWatch
+	defer func() {
+		clustersToWatch = oldClustersToWatch
+		shardsToWatch = nil
+	}()
+
+	testCases := []struct {
+		in          []string
+		expected    map[string][]*topodatapb.KeyRange
+		expectedErr string
+	}{
+		{
+			in:       []string{},
+			expected: map[string][]*topodatapb.KeyRange{},
+		},
+		{
+			in: []string{"unknownKs"},
+			expected: map[string][]*topodatapb.KeyRange{
+				"unknownKs": {
+					key.NewCompleteKeyRange(),
+				},
+			},
+		},
+		{
+			in: []string{"test/-"},
+			expected: map[string][]*topodatapb.KeyRange{
+				"test": {
+					key.NewCompleteKeyRange(),
+				},
+			},
+		},
+		{
+			in:          []string{"test/324"},
+			expectedErr: `invalid key range "324" while parsing clusters to watch`,
+		},
+		{
+			in: []string{"test/0"},
+			expected: map[string][]*topodatapb.KeyRange{
+				"test": {
+					key.NewCompleteKeyRange(),
+				},
+			},
+		},
+		{
+			in: []string{"test/-", "test2/-80", "test2/80-"},
+			expected: map[string][]*topodatapb.KeyRange{
+				"test": {
+					key.NewCompleteKeyRange(),
+				},
+				"test2": {
+					key.NewKeyRange(nil, []byte{0x80}),
+					key.NewKeyRange([]byte{0x80}, nil),
+				},
+			},
+		},
+		{
+			// known keyspace
+			in: []string{keyspace},
+			expected: map[string][]*topodatapb.KeyRange{
+				keyspace: {
+					key.NewCompleteKeyRange(),
+				},
+			},
+		},
+		{
+			// keyspace with trailing-slash
+			in: []string{keyspace + "/"},
+			expected: map[string][]*topodatapb.KeyRange{
+				keyspace: {
+					key.NewCompleteKeyRange(),
+				},
+			},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(strings.Join(testCase.in, ","), func(t *testing.T) {
+			defer func() {
+				shardsToWatch = make(map[string][]*topodatapb.KeyRange, 0)
+			}()
+			clustersToWatch = testCase.in
+			err := initializeShardsToWatch()
+			if testCase.expectedErr != "" {
+				require.EqualError(t, err, testCase.expectedErr)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, testCase.expected, shardsToWatch)
+		})
+	}
+}
 
 func TestRefreshTabletsInKeyspaceShard(t *testing.T) {
 	// Store the old flags and restore on test completion

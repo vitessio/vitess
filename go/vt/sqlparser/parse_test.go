@@ -1806,6 +1806,9 @@ var (
 		input:  "alter table a add spatial key indexes (column1)",
 		output: "alter table a add spatial key `indexes` (column1)",
 	}, {
+		input:  "alter table locations add lat_long point as (point(geocode->>'$.geometry.location.lat', geocode->>'$.geometry.location.lng')) SRID 4326 after geocodes",
+		output: "alter table locations add column lat_long point as (point(json_unquote(json_extract(geocode, '$.geometry.location.lat')), json_unquote(json_extract(geocode, '$.geometry.location.lng')))) virtual srid 4326 after geocodes",
+	}, {
 		input:      "create table a",
 		partialDDL: true,
 	}, {
@@ -3868,7 +3871,22 @@ var (
 	}, {
 		input: `select * from tbl where foo > any (select foo from tbl2)`,
 	}, {
-		input: `select * from tbl where foo > all (select foo from tbl2)`}}
+		input: `select * from tbl where foo > all (select foo from tbl2)`,
+	}, {
+		input: "insert into t1(a1) values row('a'), row('b')",
+	}, {
+		input: "insert into t1(a1) values ('a'), ('b')",
+	}, {
+		input: "values row('a'), row('b')",
+	}, {
+		input: "values /*my comment*/ row('a'), row('b')",
+	}, {
+		input:  `with x as (select * from t1 limit 1) values ROW('a1', (select x.a1 from x))`,
+		output: "with x as (select * from t1 limit 1) values row('a1', (select x.a1 from x))",
+	}, {
+		input:  "SELECT 1,2 UNION SELECT * from (VALUES ROW(10,15)) t",
+		output: "select 1, 2 from dual union select * from (values row(10, 15)) as t",
+	}}
 )
 
 func TestValid(t *testing.T) {
@@ -3944,6 +3962,12 @@ func TestInvalid(t *testing.T) {
 	}, {
 		input: "/*!*/",
 		err:   "Query was empty",
+	}, {
+		input: "values row(1) into outfile s3 'out_file_name'",
+		err:   "VALUES does not support INTO at position 46",
+	}, {
+		input: "values row(1) lock in share mode",
+		err:   "VALUES does not support LOCK at position 33",
 	}, {
 		input: "select /* union with limit on lhs */ 1 from t limit 1 union select 1 from t",
 		err:   "syntax error at position 60 near 'union'",
@@ -5954,6 +5978,10 @@ partition by range (YEAR(purchased)) subpartition by hash (TO_DAYS(purchased))
 			input:  "create table t (id int, vec VECTOR(4))",
 			output: "create table t (\n\tid int,\n\tvec VECTOR(4)\n)",
 		},
+		{
+			input:  "CREATE TABLE `locations` (`geocode` json DEFAULT NULL, `lat_long` point GENERATED ALWAYS AS (point(json_unquote(json_extract(`geocode`,_utf8mb4'$.geometry.location.lat')),json_unquote(json_extract(`geocode`,_utf8mb4'$.geometry.location.lng')))) VIRTUAL /*!80003 SRID 4326 */) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci",
+			output: "create table locations (\n\tgeocode json default null,\n\tlat_long point as (point(json_unquote(json_extract(geocode, _utf8mb4 '$.geometry.location.lat')), json_unquote(json_extract(geocode, _utf8mb4 '$.geometry.location.lng')))) virtual srid 4326\n) ENGINE InnoDB,\n  CHARSET utf8mb4,\n  COLLATE utf8mb4_0900_ai_ci",
+		},
 	}
 	parser := NewTestParser()
 	for _, test := range createTableQueries {
@@ -6204,6 +6232,12 @@ var (
 	}, {
 		input:  "create database test_db default encryption @a",
 		output: "syntax error at position 46 near 'a'",
+	}, {
+		input:  "select * from t1 where a1 in row('a')",
+		output: "syntax error at position 33 near 'row'",
+	}, {
+		input:  "insert into t1 (a1) values row('a'), ('b')",
+		output: "syntax error at position 39",
 	}}
 )
 
@@ -6320,6 +6354,17 @@ func TestParseVersionedComments(t *testing.T) {
 partition by range (id)
 (partition x values less than (5) engine InnoDB,
  partition t values less than (20) engine InnoDB)`,
+		}, {
+			input:        "CREATE TABLE `TABLE_NAME` (\n  `col1` longblob /*!50633 COLUMN_FORMAT COMPRESSED */,\n  `id` bigint unsigned NOT NULL,\n  PRIMARY KEY (`id`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin ROW_FORMAT=COMPRESSED",
+			mysqlVersion: "8.0.1",
+			output: `create table TABLE_NAME (
+	col1 longblob column_format compressed,
+	id bigint unsigned not null,
+	primary key (id)
+) ENGINE InnoDB,
+  CHARSET utf8mb4,
+  COLLATE utf8mb4_bin,
+  ROW_FORMAT COMPRESSED`,
 		},
 	}
 
@@ -6327,7 +6372,7 @@ partition by range (id)
 		t.Run(testcase.input+":"+testcase.mysqlVersion, func(t *testing.T) {
 			parser, err := New(Options{MySQLServerVersion: testcase.mysqlVersion})
 			require.NoError(t, err)
-			tree, err := parser.Parse(testcase.input)
+			tree, err := parser.ParseStrictDDL(testcase.input)
 			require.NoError(t, err, testcase.input)
 			out := String(tree)
 			require.Equal(t, testcase.output, out)

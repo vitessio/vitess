@@ -1443,7 +1443,7 @@ func (c *Cluster) GetSchema(ctx context.Context, keyspace string, opts GetSchema
 		return nil, err
 	}
 
-	go schemacache.AddOrBackfill(c.schemaCache, []*vtadminpb.Schema{schema}, key, cache.DefaultExpiration, schemacache.LoadOptions{
+	go schemacache.AddOrBackfill(c.schemaCache, []*vtadminpb.Schema{schema}, key, c.cfg.SchemaCacheConfig.DefaultExpiration, schemacache.LoadOptions{
 		BaseRequest:    opts.BaseRequest,
 		AggregateSizes: opts.TableSizeOptions.AggregateSizes,
 	})
@@ -1604,7 +1604,7 @@ func (c *Cluster) GetSchemas(ctx context.Context, opts GetSchemaOptions) ([]*vta
 		return nil, rec.Error()
 	}
 
-	go schemacache.AddOrBackfill(c.schemaCache, schemas, key, cache.DefaultExpiration, schemacache.LoadOptions{
+	go schemacache.AddOrBackfill(c.schemaCache, schemas, key, c.cfg.SchemaCacheConfig.DefaultExpiration, schemacache.LoadOptions{
 		BaseRequest:    opts.BaseRequest,
 		AggregateSizes: opts.TableSizeOptions.AggregateSizes,
 	})

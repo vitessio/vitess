@@ -166,7 +166,7 @@ func checkFKError(vschema plancontext.VSchema, ddlStatement sqlparser.DDLStateme
 }
 
 func findTableDestinationAndKeyspace(vschema plancontext.VSchema, ddlStatement sqlparser.DDLStatement) (key.Destination, *vindexes.Keyspace, error) {
-	var table *vindexes.Table
+	var table *vindexes.BaseTable
 	var destination key.Destination
 	var keyspace *vindexes.Keyspace
 	var err error
@@ -196,9 +196,13 @@ func buildCreateViewCommon(
 	vschema plancontext.VSchema,
 	reservedVars *sqlparser.ReservedVars,
 	cfg dynamicconfig.DDL,
-	ddlSelect sqlparser.SelectStatement,
+	ddlSelect sqlparser.TableStatement,
 	ddl sqlparser.DDLStatement,
 ) (key.Destination, *vindexes.Keyspace, error) {
+	if vschema.IsViewsEnabled() {
+		return createViewEnabled(vschema, reservedVars, ddlSelect, ddl)
+	}
+
 	// For Create View, we require that the keyspace exist and the select query can be satisfied within the keyspace itself
 	// We should remove the keyspace name from the table name, as the database name in MySQL might be different than the keyspace name
 	destination, keyspace, err := findTableDestinationAndKeyspace(vschema, ddl)
@@ -228,9 +232,6 @@ func buildCreateViewCommon(
 
 	sqlparser.RemoveKeyspace(ddl)
 
-	if vschema.IsViewsEnabled() {
-		return destination, keyspace, nil
-	}
 	isRoutePlan, opCode := tryToGetRoutePlan(selectPlan.primitive)
 	if !isRoutePlan {
 		return nil, nil, vterrors.VT12001(ViewComplex)
@@ -241,6 +242,55 @@ func buildCreateViewCommon(
 	return destination, keyspace, nil
 }
 
+func createViewEnabled(vschema plancontext.VSchema, reservedVars *sqlparser.ReservedVars, ddlSelect sqlparser.TableStatement, ddl sqlparser.DDLStatement) (key.Destination, *vindexes.Keyspace, error) {
+	// For Create View, we require that the keyspace exist and the select query can be satisfied within the keyspace itself
+	// We should remove the keyspace name from the table name, as the database name in MySQL might be different than the keyspace name
+	destination, keyspace, err := findTableDestinationAndKeyspace(vschema, ddl)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// views definition with `select *` should not be expanded as schema tracker might not be up-to-date
+	// We copy the expressions and restore them after the planning context is created
+	var expressions []sqlparser.SelectExprs
+	_ = sqlparser.VisitAllSelects(ddlSelect, func(p *sqlparser.Select, idx int) error {
+		expressions = append(expressions, sqlparser.Clone(p.SelectExprs))
+		return nil
+	})
+
+	pCtx, err := plancontext.CreatePlanningContext(ddlSelect, reservedVars, vschema, Gen4)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var tblKs string
+	for _, tbl := range pCtx.SemTable.Tables {
+		vTbl := tbl.GetVindexTable()
+		if vTbl == nil {
+			continue
+		}
+		if tblKs == "" {
+			tblKs = vTbl.Keyspace.Name
+		}
+		if tblKs != vTbl.Keyspace.Name {
+			return nil, nil, vterrors.VT12001(ViewComplex)
+		}
+	}
+
+	if tblKs != keyspace.Name {
+		return nil, nil, vterrors.VT12001(ViewDifferentKeyspace)
+	}
+
+	_ = sqlparser.VisitAllSelects(ddlSelect, func(p *sqlparser.Select, idx int) error {
+		p.SelectExprs = expressions[idx]
+		return nil
+	})
+
+	sqlparser.RemoveKeyspace(ddl)
+
+	return destination, keyspace, nil
+}
+
 func buildDropView(vschema plancontext.VSchema, ddlStatement sqlparser.DDLStatement) (key.Destination, *vindexes.Keyspace, error) {
 	if !vschema.IsViewsEnabled() {
 		return buildDropTable(vschema, ddlStatement)
@@ -248,7 +298,7 @@ func buildDropView(vschema plancontext.VSchema, ddlStatement sqlparser.DDLStatem
 	var ks *vindexes.Keyspace
 	viewMap := make(map[string]any)
 	for _, tbl := range ddlStatement.GetFromTables() {
-		_, ksForView, _, err := vschema.TargetDestination(tbl.Qualifier.String())
+		ksForView, err := vschema.FindViewTarget(tbl)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -275,7 +325,7 @@ func buildDropTable(vschema plancontext.VSchema, ddlStatement sqlparser.DDLState
 	for i, tab := range ddlStatement.GetFromTables() {
 		var destinationTab key.Destination
 		var keyspaceTab *vindexes.Keyspace
-		var table *vindexes.Table
+		var table *vindexes.BaseTable
 		var err error
 		table, _, _, _, destinationTab, err = vschema.FindTableOrVindex(tab)
 
@@ -319,7 +369,7 @@ func buildRenameTable(vschema plancontext.VSchema, renameTable *sqlparser.Rename
 	for _, tabPair := range renameTable.TablePairs {
 		var destinationFrom key.Destination
 		var keyspaceFrom *vindexes.Keyspace
-		var table *vindexes.Table
+		var table *vindexes.BaseTable
 		var err error
 		table, _, _, _, destinationFrom, err = vschema.FindTableOrVindex(tabPair.FromTable)
 

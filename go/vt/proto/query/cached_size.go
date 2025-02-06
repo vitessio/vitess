@@ -38,6 +38,10 @@ func (cached *BindVariable) CachedSize(alloc bool) int64 {
 			size += elem.CachedSize(true)
 		}
 	}
+	// field unknownFields google.golang.org/protobuf/runtime/protoimpl.UnknownFields
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.unknownFields)))
+	}
 	return size
 }
 func (cached *Field) CachedSize(alloc bool) int64 {
@@ -60,6 +64,10 @@ func (cached *Field) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.OrgName)))
 	// field ColumnType string
 	size += hack.RuntimeAllocSize(int64(len(cached.ColumnType)))
+	// field unknownFields google.golang.org/protobuf/runtime/protoimpl.UnknownFields
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.unknownFields)))
+	}
 	return size
 }
 func (cached *QueryWarning) CachedSize(alloc bool) int64 {
@@ -72,6 +80,10 @@ func (cached *QueryWarning) CachedSize(alloc bool) int64 {
 	}
 	// field Message string
 	size += hack.RuntimeAllocSize(int64(len(cached.Message)))
+	// field unknownFields google.golang.org/protobuf/runtime/protoimpl.UnknownFields
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.unknownFields)))
+	}
 	return size
 }
 func (cached *Target) CachedSize(alloc bool) int64 {
@@ -88,6 +100,10 @@ func (cached *Target) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Shard)))
 	// field Cell string
 	size += hack.RuntimeAllocSize(int64(len(cached.Cell)))
+	// field unknownFields google.golang.org/protobuf/runtime/protoimpl.UnknownFields
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.unknownFields)))
+	}
 	return size
 }
 func (cached *Value) CachedSize(alloc bool) int64 {
@@ -101,6 +117,10 @@ func (cached *Value) CachedSize(alloc bool) int64 {
 	// field Value []byte
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.Value)))
+	}
+	// field unknownFields google.golang.org/protobuf/runtime/protoimpl.UnknownFields
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.unknownFields)))
 	}
 	return size
 }

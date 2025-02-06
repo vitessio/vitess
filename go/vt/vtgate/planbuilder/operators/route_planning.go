@@ -82,7 +82,7 @@ func buildVindexTableForDML(
 	table *QueryTable,
 	ins *sqlparser.Insert,
 	dmlType string,
-) (*vindexes.Table, Routing) {
+) (*vindexes.BaseTable, Routing) {
 	vindexTable := tableInfo.GetVindexTable()
 	if tableInfo.GetVindexTable().Type == vindexes.TypeReference && vindexTable.Source != nil {
 		sourceTable, _, _, _, _, err := ctx.VSchema.FindTableOrVindex(vindexTable.Source.TableName)
@@ -179,7 +179,7 @@ func createInfSchemaRoute(ctx *plancontext.PlanningContext, table *QueryTable) O
 	}
 	var src Operator = &Table{
 		QTable: table,
-		VTable: &vindexes.Table{
+		VTable: &vindexes.BaseTable{
 			Name:     table.Table.Name,
 			Keyspace: ks,
 		},

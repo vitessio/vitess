@@ -67,7 +67,7 @@ func (cte *CTETable) Name() (sqlparser.TableName, error) {
 	return sqlparser.NewTableName(cte.TableName), nil
 }
 
-func (cte *CTETable) GetVindexTable() *vindexes.Table {
+func (cte *CTETable) GetVindexTable() *vindexes.BaseTable {
 	return nil
 }
 
@@ -150,7 +150,7 @@ func (cte *CTETable) GetMirrorRule() *vindexes.MirrorRule {
 
 type CTE struct {
 	Name            string
-	Query           sqlparser.SelectStatement
+	Query           sqlparser.TableStatement
 	isAuthoritative bool
 	recursiveDeps   *TableSet
 	Columns         sqlparser.Columns

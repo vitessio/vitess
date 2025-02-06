@@ -164,7 +164,7 @@ func (t *noopVCursor) Environment() *vtenv.Environment {
 }
 
 func (t *noopVCursor) TimeZone() *time.Location {
-	return nil
+	return time.Local
 }
 
 func (t *noopVCursor) SQLMode() string {
@@ -267,7 +267,7 @@ func (t *noopVCursor) InTransactionAndIsDML() bool {
 	panic("implement me")
 }
 
-func (t *noopVCursor) FindRoutedTable(sqlparser.TableName) (*vindexes.Table, error) {
+func (t *noopVCursor) FindRoutedTable(sqlparser.TableName) (*vindexes.BaseTable, error) {
 	panic("implement me")
 }
 
@@ -480,7 +480,7 @@ func (f *loggingVCursor) GetUDV(key string) *querypb.BindVariable {
 }
 
 type tableRoutes struct {
-	tbl *vindexes.Table
+	tbl *vindexes.BaseTable
 }
 
 func (f *loggingVCursor) ExecutePrimitive(ctx context.Context, primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
@@ -845,7 +845,7 @@ func (f *loggingVCursor) SetPriority(string) {
 	panic("implement me")
 }
 
-func (f *loggingVCursor) FindRoutedTable(tbl sqlparser.TableName) (*vindexes.Table, error) {
+func (f *loggingVCursor) FindRoutedTable(tbl sqlparser.TableName) (*vindexes.BaseTable, error) {
 	f.log = append(f.log, fmt.Sprintf("FindTable(%s)", sqlparser.String(tbl)))
 	return f.tableRoutes.tbl, nil
 }

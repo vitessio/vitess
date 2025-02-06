@@ -65,7 +65,7 @@ func (lvs *localVSchema) FindOrCreateVindex(qualifiedName string) (vindexes.Vind
 	return vindexes.CreateVindex(name, name, map[string]string{})
 }
 
-func (lvs *localVSchema) findTable(tablename string) (*vindexes.Table, error) {
+func (lvs *localVSchema) findTable(tablename string) (*vindexes.BaseTable, error) {
 	ks, ok := lvs.vschema.Keyspaces[lvs.keyspace]
 	if !ok {
 		return nil, fmt.Errorf("keyspace %s not found in vschema", lvs.keyspace)

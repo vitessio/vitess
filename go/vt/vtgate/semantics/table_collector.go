@@ -154,8 +154,11 @@ func (tc *tableCollector) visitAliasedTableExpr(node *sqlparser.AliasedTableExpr
 }
 
 func (tc *tableCollector) visitUnion(union *sqlparser.Union) error {
-	firstSelect := sqlparser.GetFirstSelect(union)
-	expanded, selectExprs := getColumnNames(firstSelect.SelectExprs)
+	firstSelect, err := sqlparser.GetFirstSelect(union)
+	if err != nil {
+		return err
+	}
+	expanded, selectExprs := getColumnNames(firstSelect.GetColumns())
 	info := unionInfo{
 		isAuthoritative: expanded,
 		exprs:           selectExprs,
@@ -165,12 +168,12 @@ func (tc *tableCollector) visitUnion(union *sqlparser.Union) error {
 		return nil
 	}
 
-	size := len(firstSelect.SelectExprs)
+	size := firstSelect.GetColumnCount()
 	info.recursive = make([]TableSet, size)
 	typers := make([]evalengine.TypeAggregator, size)
 	collations := tc.org.collationEnv()
 
-	err := sqlparser.VisitAllSelects(union, func(s *sqlparser.Select, idx int) error {
+	err = sqlparser.VisitAllSelects(union, func(s *sqlparser.Select, idx int) error {
 		for i, expr := range s.SelectExprs {
 			ae, ok := expr.(*sqlparser.AliasedExpr)
 			if !ok {
@@ -343,7 +346,7 @@ func (etc *earlyTableCollector) getCTE(t sqlparser.TableName) *CTE {
 }
 
 func (etc *earlyTableCollector) getTableInfo(node *sqlparser.AliasedTableExpr, t sqlparser.TableName, sc *scoper) (TableInfo, error) {
-	var tbl *vindexes.Table
+	var tbl *vindexes.BaseTable
 	var vindex vindexes.Vindex
 	if cteDef := etc.getCTE(t); cteDef != nil {
 		cte, err := etc.buildRecursiveCTE(node, t, sc, cteDef)
@@ -413,7 +416,10 @@ func checkValidRecursiveCTE(cteDef *CTE) error {
 		return vterrors.VT09026(cteDef.Name)
 	}
 
-	firstSelect := sqlparser.GetFirstSelect(union.Right)
+	firstSelect, err := sqlparser.GetFirstSelect(union.Right)
+	if err != nil {
+		return err
+	}
 	if firstSelect.GroupBy != nil {
 		return vterrors.VT09027(cteDef.Name)
 	}
@@ -470,8 +476,16 @@ func (tc *tableCollector) addSelectDerivedTable(
 	return scope.addTable(tableInfo)
 }
 
-func (tc *tableCollector) addUnionDerivedTable(union *sqlparser.Union, node *sqlparser.AliasedTableExpr, columns sqlparser.Columns, alias sqlparser.IdentifierCS) error {
-	firstSelect := sqlparser.GetFirstSelect(union)
+func (tc *tableCollector) addUnionDerivedTable(
+	union *sqlparser.Union,
+	node *sqlparser.AliasedTableExpr,
+	columns sqlparser.Columns,
+	alias sqlparser.IdentifierCS,
+) error {
+	firstSelect, err := sqlparser.GetFirstSelect(union)
+	if err != nil {
+		return err
+	}
 	tables := tc.scoper.wScope[firstSelect]
 	info, found := tc.unionInfo[union]
 	if !found {
@@ -490,7 +504,7 @@ func (tc *tableCollector) addUnionDerivedTable(union *sqlparser.Union, node *sql
 	return scope.addTable(tableInfo)
 }
 
-func newVindexTable(t sqlparser.IdentifierCS) *vindexes.Table {
+func newVindexTable(t sqlparser.IdentifierCS) *vindexes.BaseTable {
 	vindexCols := []vindexes.Column{
 		{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_VARBINARY},
 		{Name: sqlparser.NewIdentifierCI("keyspace_id"), Type: querypb.Type_VARBINARY},
@@ -500,7 +514,7 @@ func newVindexTable(t sqlparser.IdentifierCS) *vindexes.Table {
 		{Name: sqlparser.NewIdentifierCI("shard"), Type: querypb.Type_VARBINARY},
 	}
 
-	return &vindexes.Table{
+	return &vindexes.BaseTable{
 		Name:                    t,
 		Columns:                 vindexCols,
 		ColumnListAuthoritative: true,
@@ -530,7 +544,7 @@ func (tc *tableCollector) tableInfoFor(id TableSet) (TableInfo, error) {
 func (etc *earlyTableCollector) createTable(
 	t sqlparser.TableName,
 	alias *sqlparser.AliasedTableExpr,
-	tbl *vindexes.Table,
+	tbl *vindexes.BaseTable,
 	isInfSchema bool,
 	vindex vindexes.Vindex,
 ) (TableInfo, error) {
@@ -577,7 +591,7 @@ func (etc *earlyTableCollector) createTable(
 	return table, nil
 }
 
-func checkValidVindexHints(hint *sqlparser.IndexHint, tbl *vindexes.Table) error {
+func checkValidVindexHints(hint *sqlparser.IndexHint, tbl *vindexes.BaseTable) error {
 	if hint == nil {
 		return nil
 	}

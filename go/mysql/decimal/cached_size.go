@@ -29,6 +29,7 @@ func (cached *Decimal) CachedSize(alloc bool) int64 {
 	}
 	// field value *math/big.Int
 	if cached.value != nil {
+		size += hack.RuntimeAllocSize(int64(cap(cached.value.Bits())) * 4)
 		size += hack.RuntimeAllocSize(int64(32))
 	}
 	return size

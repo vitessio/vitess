@@ -123,7 +123,7 @@ func rewriteSingleTbl(del *sqlparser.Delete) (*sqlparser.Delete, error) {
 	return del, nil
 }
 
-func deleteUnshardedShortcut(stmt *sqlparser.Delete, ks *vindexes.Keyspace, tables []*vindexes.Table) engine.Primitive {
+func deleteUnshardedShortcut(stmt *sqlparser.Delete, ks *vindexes.Keyspace, tables []*vindexes.BaseTable) engine.Primitive {
 	edml := engine.NewDML()
 	edml.Keyspace = ks
 	edml.Opcode = engine.Unsharded

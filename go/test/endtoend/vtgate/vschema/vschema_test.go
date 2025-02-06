@@ -23,15 +23,20 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/exp/rand"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/vt/vtgate"
 )
 
 var (
@@ -164,14 +169,88 @@ func TestVSchema(t *testing.T) {
 	utils.AssertMatches(t, conn, "delete from vt_user", `[]`)
 
 	if utils.BinaryIsAtLeastAtVersion(22, "vtgate") {
+		// Don't allow any users to modify the vschema via the SQL API
+		// in order to test that behavior.
 		writeConfig(configFile, map[string]string{
 			"vschema_ddl_authorized_users": "",
 		})
-
+		// Allow anyone to modify the vschema via the SQL API again when
+		// the test completes.
+		defer func() {
+			writeConfig(configFile, map[string]string{
+				"vschema_ddl_authorized_users": "%",
+			})
+		}()
 		require.EventuallyWithT(t, func(t *assert.CollectT) {
 			_, err = conn.ExecuteFetch("ALTER VSCHEMA DROP TABLE main", 1000, false)
 			assert.Error(t, err)
 			assert.ErrorContains(t, err, "is not authorized to perform vschema operations")
 		}, 5*time.Second, 100*time.Millisecond)
 	}
+}
+
+// TestVSchemaSQLAPIConcurrency tests that we prevent lost writes when we have
+// concurrent vschema changes being made via the SQL API.
+func TestVSchemaSQLAPIConcurrency(t *testing.T) {
+	if !utils.BinaryIsAtLeastAtVersion(22, "vtgate") {
+		t.Skip("This test requires vtgate version 22 or higher")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	initialVSchema, err := conn.ExecuteFetch("SHOW VSCHEMA TABLES", -1, false)
+	require.NoError(t, err)
+	baseTableName := "t"
+	numTables := 1000
+	mysqlConns := make([]*mysql.Conn, numTables)
+	for i := 0; i < numTables; i++ {
+		c, err := mysql.Connect(ctx, &vtParams)
+		require.NoError(t, err)
+		mysqlConns[i] = c
+		defer c.Close()
+	}
+
+	isVersionMismatchErr := func(err error) bool {
+		// The error we get is an SQL error so we have to do string matching.
+		return err != nil && strings.Contains(err.Error(), vtgate.ErrStaleVSchema.Error())
+	}
+
+	wg := sync.WaitGroup{}
+	preventedLostWrites := atomic.Bool{}
+	for i := 0; i < numTables; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			time.Sleep(time.Duration(rand.Intn(100) * int(time.Nanosecond)))
+			tableName := fmt.Sprintf("%s%d", baseTableName, i)
+			_, err = mysqlConns[i].ExecuteFetch(fmt.Sprintf("ALTER VSCHEMA ADD TABLE %s", tableName), -1, false)
+			if isVersionMismatchErr(err) {
+				preventedLostWrites.Store(true)
+			} else {
+				require.NoError(t, err)
+				time.Sleep(time.Duration(rand.Intn(75) * int(time.Nanosecond)))
+				_, err = mysqlConns[i].ExecuteFetch(fmt.Sprintf("ALTER VSCHEMA DROP TABLE %s", tableName), -1, false)
+				if isVersionMismatchErr(err) {
+					preventedLostWrites.Store(true)
+				} else {
+					require.NoError(t, err)
+				}
+			}
+		}()
+	}
+	wg.Wait()
+	require.True(t, preventedLostWrites.Load())
+
+	// Cleanup any tables that were not dropped because the DROP query
+	// failed due to a bad node version.
+	for i := 0; i < numTables; i++ {
+		tableName := fmt.Sprintf("%s%d", baseTableName, i)
+		_, _ = mysqlConns[i].ExecuteFetch(fmt.Sprintf("ALTER VSCHEMA DROP TABLE %s", tableName), -1, false)
+	}
+	// Confirm that we're back to the initial state.
+	utils.AssertMatches(t, conn, "SHOW VSCHEMA TABLES", fmt.Sprintf("%v", initialVSchema.Rows))
 }

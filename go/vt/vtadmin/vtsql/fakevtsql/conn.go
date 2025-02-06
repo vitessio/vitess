@@ -96,6 +96,17 @@ func (c *conn) QueryContext(ctx context.Context, query string, args []driver.Nam
 			pos:    0,
 			closed: false,
 		}, nil
+	case "vexplain all select * from customers":
+		columns := []string{"VExplain"}
+		vals := [][]any{}
+		vals = append(vals, []any{"{'Table' : 'customer, 'TestPlan' : 'TestPlan'}"})
+
+		return &rows{
+			cols:   columns,
+			vals:   vals,
+			pos:    0,
+			closed: false,
+		}, nil
 	}
 
 	return nil, fmt.Errorf("%w: %q %v", ErrUnrecognizedQuery, query, args)

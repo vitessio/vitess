@@ -805,7 +805,7 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 	}
 
 	// Find the maximum length of the reparent journal among all the candidates.
-	var maxLen int
+	var maxLen int32
 	for _, length := range reparentJournalLen {
 		maxLen = max(maxLen, length)
 	}
@@ -902,8 +902,8 @@ func (erp *EmergencyReparenter) gatherReparenJournalInfo(
 	validCandidates map[string]replication.Position,
 	tabletMap map[string]*topo.TabletInfo,
 	waitReplicasTimeout time.Duration,
-) (map[string]int, error) {
-	reparentJournalLen := make(map[string]int)
+) (map[string]int32, error) {
+	reparentJournalLen := make(map[string]int32)
 	var mu sync.Mutex
 	errCh := make(chan concurrency.Error)
 	defer close(errCh)
@@ -916,7 +916,7 @@ func (erp *EmergencyReparenter) gatherReparenJournalInfo(
 	for candidate := range validCandidates {
 		go func(alias string) {
 			var err error
-			var length int
+			var length int32
 			defer func() {
 				errCh <- concurrency.Error{
 					Err: err,

@@ -225,6 +225,9 @@ service VTAdmin {
     // VTExplain provides information on how Vitess plans to execute a
     // particular query.
     rpc VTExplain(VTExplainRequest) returns (VTExplainResponse) {};
+    // VExplain provides information on how Vitess plans to execute a
+    // particular query.
+    rpc VExplain(VExplainRequest) returns (VExplainResponse) {};
     // WorkflowDelete deletes a vreplication workflow.
     rpc WorkflowDelete(WorkflowDeleteRequest) returns (vtctldata.WorkflowDeleteResponse) {};
     // WorkflowSwitchTraffic switches traffic for a VReplication workflow.
@@ -1095,5 +1098,15 @@ message VTExplainRequest {
 }
 
 message VTExplainResponse {
+    string response = 1;
+}
+
+message VExplainRequest {
+    string cluster_id = 1;
+    string keyspace = 2;
+    string sql = 3;
+}
+
+message VExplainResponse {
     string response = 1;
 }

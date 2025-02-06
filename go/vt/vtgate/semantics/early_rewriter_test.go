@@ -35,7 +35,7 @@ func TestExpandStar(t *testing.T) {
 		Sharded: true,
 	}
 	schemaInfo := &FakeSI{
-		Tables: map[string]*vindexes.Table{
+		Tables: map[string]*vindexes.BaseTable{
 			"t1": {
 				Keyspace: ks,
 				Name:     sqlparser.NewIdentifierCS("t1"),
@@ -226,7 +226,7 @@ func assertExpandedColumns(t *testing.T, st *SemTable, expandedColumns string) {
 
 func TestRewriteJoinUsingColumns(t *testing.T) {
 	schemaInfo := &FakeSI{
-		Tables: map[string]*vindexes.Table{
+		Tables: map[string]*vindexes.BaseTable{
 			"t1": {
 				Name: sqlparser.NewIdentifierCS("t1"),
 				Columns: []vindexes.Column{{
@@ -309,7 +309,7 @@ func TestRewriteJoinUsingColumns(t *testing.T) {
 
 func TestGroupByColumnName(t *testing.T) {
 	schemaInfo := &FakeSI{
-		Tables: map[string]*vindexes.Table{
+		Tables: map[string]*vindexes.BaseTable{
 			"t1": {
 				Name: sqlparser.NewIdentifierCS("t1"),
 				Columns: []vindexes.Column{{
@@ -393,7 +393,7 @@ func TestGroupByColumnName(t *testing.T) {
 
 func TestGroupByLiteral(t *testing.T) {
 	schemaInfo := &FakeSI{
-		Tables: map[string]*vindexes.Table{},
+		Tables: map[string]*vindexes.BaseTable{},
 	}
 	cDB := "db"
 	tcases := []struct {
@@ -437,7 +437,7 @@ func TestGroupByLiteral(t *testing.T) {
 
 func TestOrderByLiteral(t *testing.T) {
 	schemaInfo := &FakeSI{
-		Tables: map[string]*vindexes.Table{},
+		Tables: map[string]*vindexes.BaseTable{},
 	}
 	cDB := "db"
 	tcases := []struct {
@@ -620,7 +620,7 @@ func TestHavingColumnName(t *testing.T) {
 
 func getSchemaWithKnownColumns() *FakeSI {
 	schemaInfo := &FakeSI{
-		Tables: map[string]*vindexes.Table{
+		Tables: map[string]*vindexes.BaseTable{
 			"t1": {
 				Keyspace: &vindexes.Keyspace{Name: "ks", Sharded: true},
 				Name:     sqlparser.NewIdentifierCS("t1"),
@@ -753,7 +753,7 @@ func TestOrderByColumnName(t *testing.T) {
 }
 
 func TestSemTableDependenciesAfterExpandStar(t *testing.T) {
-	schemaInfo := &FakeSI{Tables: map[string]*vindexes.Table{
+	schemaInfo := &FakeSI{Tables: map[string]*vindexes.BaseTable{
 		"t1": {
 			Name: sqlparser.NewIdentifierCS("t1"),
 			Columns: []vindexes.Column{{
@@ -812,7 +812,7 @@ func TestRewriteNot(t *testing.T) {
 		Sharded: true,
 	}
 	schemaInfo := &FakeSI{
-		Tables: map[string]*vindexes.Table{
+		Tables: map[string]*vindexes.BaseTable{
 			"t1": {
 				Keyspace: ks,
 				Name:     sqlparser.NewIdentifierCS("t1"),
@@ -866,7 +866,7 @@ func TestOrderByDerivedTable(t *testing.T) {
 		Sharded: true,
 	}
 	schemaInfo := &FakeSI{
-		Tables: map[string]*vindexes.Table{
+		Tables: map[string]*vindexes.BaseTable{
 			"t1": {
 				Keyspace: ks,
 				Name:     sqlparser.NewIdentifierCS("t1"),
