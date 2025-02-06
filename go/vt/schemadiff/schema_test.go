@@ -545,7 +545,7 @@ func TestInvalidSchema(t *testing.T) {
 			schema:    "CREATE TABLE t (id int, tm TIME, PRIMARY KEY (id, tm)) PARTITION BY RANGE COLUMNS (tm) (PARTITION p0 VALUES LESS THAN (1))",
 			expectErr: &UnsupportedRangeColumnsTypeError{Table: "t", Column: "tm", Type: "time"},
 		},
-		// constaint names
+		// constraint names
 		{
 			schema: `create table t1 (id int primary key, CONSTRAINT const_id CHECK (id > 0))`,
 		},
