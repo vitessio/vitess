@@ -139,7 +139,7 @@ func (e *Executor) newExecute(
 			return err
 		}
 
-		if plan.Type != sqlparser.StmtShow {
+		if plan.QueryType != sqlparser.StmtShow {
 			safeSession.ClearWarnings()
 		}
 
@@ -157,7 +157,7 @@ func (e *Executor) newExecute(
 			return err
 		}
 		if result != nil {
-			return recResult(plan.Type, result)
+			return recResult(plan.QueryType, result)
 		}
 
 		// 4: Prepare for execution.
@@ -234,7 +234,7 @@ func (e *Executor) handleTransactions(
 ) (*sqltypes.Result, error) {
 	// We need to explicitly handle errors, and begin/commit/rollback, since these control transactions. Everything else
 	// will fall through and be handled through planning
-	switch plan.Type {
+	switch plan.QueryType {
 	case sqlparser.StmtBegin:
 		qr, err := e.handleBegin(ctx, safeSession, logStats, stmt)
 		return qr, err
@@ -390,7 +390,7 @@ func (e *Executor) rollbackPartialExec(ctx context.Context, safeSession *econtex
 }
 
 func (e *Executor) setLogStats(logStats *logstats.LogStats, plan *engine.Plan, vcursor *econtext.VCursorImpl, execStart time.Time, err error, qr *sqltypes.Result) {
-	logStats.StmtType = plan.Type.String()
+	logStats.StmtType = plan.QueryType.String()
 	logStats.ActiveKeyspace = vcursor.GetKeyspace()
 	logStats.TablesUsed = plan.TablesUsed
 	logStats.TabletType = vcursor.TabletType().String()
@@ -417,7 +417,7 @@ func (e *Executor) logExecutionEnd(logStats *logstats.LogStats, execStart time.T
 func (e *Executor) logPlanningFinished(logStats *logstats.LogStats, plan *engine.Plan) time.Time {
 	execStart := time.Now()
 	if plan != nil {
-		logStats.StmtType = plan.Type.String()
+		logStats.StmtType = plan.QueryType.String()
 	}
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 	return execStart

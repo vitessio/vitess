@@ -19,6 +19,7 @@ package engine
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"sync/atomic"
 	"time"
 
@@ -31,20 +32,156 @@ import (
 // An instruction (aka Primitive) is typically a tree where
 // each node does its part by combining the results of the
 // sub-nodes.
-type Plan struct {
-	Type         sqlparser.StatementType // The type of query we have
-	Original     string                  // Original is the original query.
-	Instructions Primitive               // Instructions contains the instructions needed to fulfil the query.
-	BindVarNeeds *sqlparser.BindVarNeeds // Stores BindVars needed to be provided as part of expression rewriting
-	Warnings     []*query.QueryWarning   // Warnings that need to be yielded every time this query runs
-	TablesUsed   []string                // TablesUsed is the list of tables that this plan will query
+type (
+	PlanType int8
 
-	ExecCount    uint64 // Count of times this plan was executed
-	ExecTime     uint64 // Total execution time
-	ShardQueries uint64 // Total number of shard queries
-	RowsReturned uint64 // Total number of rows
-	RowsAffected uint64 // Total number of rows
-	Errors       uint64 // Total number of errors
+	Plan struct {
+		Type         PlanType                // Type of plan
+		QueryType    sqlparser.StatementType // Type of query
+		Original     string                  // Original is the original query.
+		Instructions Primitive               // Instructions contains the instructions needed to fulfil the query.
+		BindVarNeeds *sqlparser.BindVarNeeds // Stores BindVars needed to be provided as part of expression rewriting
+		Warnings     []*query.QueryWarning   // Warnings that need to be yielded every time this query runs
+		TablesUsed   []string                // TablesUsed is the list of tables that this plan will query
+
+		ExecCount    uint64 // Count of times this plan was executed
+		ExecTime     uint64 // Total execution time
+		ShardQueries uint64 // Total number of shard queries
+		RowsReturned uint64 // Total number of rows
+		RowsAffected uint64 // Total number of rows
+		Errors       uint64 // Total number of errors
+	}
+)
+
+const (
+	PlanUnknown PlanType = iota
+	PlanLocal
+	PlanPassthrough
+	PlanMultiShard
+	PlanScatter
+	PlanLookup
+	PlanJoinOp
+	PlanComplex
+	PlanOnlineDDL
+	PlanDirectDDL
+)
+
+func NewPlan(query string, stmt sqlparser.Statement, primitive Primitive, bindVarNeeds *sqlparser.BindVarNeeds, tablesUsed []string) *Plan {
+	return &Plan{
+		Type:         getPlanType(primitive),
+		QueryType:    sqlparser.ASTToStatementType(stmt),
+		Original:     query,
+		Instructions: primitive,
+		BindVarNeeds: bindVarNeeds,
+		TablesUsed:   tablesUsed,
+	}
+}
+
+// MarshalJSON serializes the plan into a JSON representation.
+func (p *Plan) MarshalJSON() ([]byte, error) {
+	var instructions *PrimitiveDescription
+	if p.Instructions != nil {
+		description := PrimitiveToPlanDescription(p.Instructions, nil)
+		instructions = &description
+	}
+
+	marshalPlan := struct {
+		Type         string
+		QueryType    string
+		Original     string                `json:",omitempty"`
+		Instructions *PrimitiveDescription `json:",omitempty"`
+		ExecCount    uint64                `json:",omitempty"`
+		ExecTime     time.Duration         `json:",omitempty"`
+		ShardQueries uint64                `json:",omitempty"`
+		RowsAffected uint64                `json:",omitempty"`
+		RowsReturned uint64                `json:",omitempty"`
+		Errors       uint64                `json:",omitempty"`
+		TablesUsed   []string              `json:",omitempty"`
+	}{
+		Type:         p.Type.String(),
+		QueryType:    p.QueryType.String(),
+		Original:     p.Original,
+		Instructions: instructions,
+		ExecCount:    atomic.LoadUint64(&p.ExecCount),
+		ExecTime:     time.Duration(atomic.LoadUint64(&p.ExecTime)),
+		ShardQueries: atomic.LoadUint64(&p.ShardQueries),
+		RowsAffected: atomic.LoadUint64(&p.RowsAffected),
+		RowsReturned: atomic.LoadUint64(&p.RowsReturned),
+		Errors:       atomic.LoadUint64(&p.Errors),
+		TablesUsed:   p.TablesUsed,
+	}
+
+	b := new(bytes.Buffer)
+	enc := json.NewEncoder(b)
+	enc.SetEscapeHTML(false)
+	err := enc.Encode(marshalPlan)
+	if err != nil {
+		return nil, err
+	}
+
+	return b.Bytes(), nil
+}
+
+func (p PlanType) String() string {
+	switch p {
+	case PlanLocal:
+		return "Local"
+	case PlanPassthrough:
+		return "Passthrough"
+	case PlanMultiShard:
+		return "MultiShard"
+	case PlanScatter:
+		return "Scatter"
+	case PlanLookup:
+		return "Lookup"
+	case PlanJoinOp:
+		return "Join"
+	case PlanComplex:
+		return "Complex"
+	case PlanOnlineDDL:
+		return "OnlineDDL"
+	case PlanDirectDDL:
+		return "DirectDDL"
+	default:
+		return "Unknown"
+	}
+}
+
+func getPlanType(p Primitive) PlanType {
+	switch prim := p.(type) {
+	case *Route:
+		return getPlanTypeFromRoutingParams(prim.RoutingParameters)
+	case *Update:
+		return getPlanTypeFromRoutingParams(prim.RoutingParameters)
+	case *Delete:
+		return getPlanTypeFromRoutingParams(prim.RoutingParameters)
+	case *Insert:
+
+	case *Send:
+	case *Join:
+	case *DDL:
+	default:
+		return PlanComplex
+
+	}
+	return PlanUnknown
+}
+
+func getPlanTypeFromRoutingParams(rp *RoutingParameters) PlanType {
+	if rp == nil {
+		panic("RoutingParameters is nil, cannot determine plan type")
+	}
+	switch rp.Opcode {
+	case Unsharded, EqualUnique, Next, DBA, Reference:
+		return PlanPassthrough
+	case Equal, IN, Between, MultiEqual, SubShard, ByDestination:
+		return PlanMultiShard
+	case Scatter:
+		return PlanScatter
+	case None:
+		return PlanLocal
+	}
+	panic(fmt.Sprintf("cannot determine plan type for the given opcode: %s", rp.Opcode.String()))
 }
 
 // AddStats updates the plan execution statistics
@@ -66,47 +203,4 @@ func (p *Plan) Stats() (execCount uint64, execTime time.Duration, shardQueries, 
 	rowsReturned = atomic.LoadUint64(&p.RowsReturned)
 	errors = atomic.LoadUint64(&p.Errors)
 	return
-}
-
-// MarshalJSON serializes the plan into a JSON representation.
-func (p *Plan) MarshalJSON() ([]byte, error) {
-	var instructions *PrimitiveDescription
-	if p.Instructions != nil {
-		description := PrimitiveToPlanDescription(p.Instructions, nil)
-		instructions = &description
-	}
-
-	marshalPlan := struct {
-		QueryType    string
-		Original     string                `json:",omitempty"`
-		Instructions *PrimitiveDescription `json:",omitempty"`
-		ExecCount    uint64                `json:",omitempty"`
-		ExecTime     time.Duration         `json:",omitempty"`
-		ShardQueries uint64                `json:",omitempty"`
-		RowsAffected uint64                `json:",omitempty"`
-		RowsReturned uint64                `json:",omitempty"`
-		Errors       uint64                `json:",omitempty"`
-		TablesUsed   []string              `json:",omitempty"`
-	}{
-		QueryType:    p.Type.String(),
-		Original:     p.Original,
-		Instructions: instructions,
-		ExecCount:    atomic.LoadUint64(&p.ExecCount),
-		ExecTime:     time.Duration(atomic.LoadUint64(&p.ExecTime)),
-		ShardQueries: atomic.LoadUint64(&p.ShardQueries),
-		RowsAffected: atomic.LoadUint64(&p.RowsAffected),
-		RowsReturned: atomic.LoadUint64(&p.RowsReturned),
-		Errors:       atomic.LoadUint64(&p.Errors),
-		TablesUsed:   p.TablesUsed,
-	}
-
-	b := new(bytes.Buffer)
-	enc := json.NewEncoder(b)
-	enc.SetEscapeHTML(false)
-	err := enc.Encode(marshalPlan)
-	if err != nil {
-		return nil, err
-	}
-
-	return b.Bytes(), nil
 }

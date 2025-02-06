@@ -307,7 +307,7 @@ func (e *Executor) StreamExecute(
 		var seenResults atomic.Bool
 		var resultMu sync.Mutex
 		result := &sqltypes.Result{}
-		if canReturnRows(plan.Type) {
+		if canReturnRows(plan.QueryType) {
 			srr.callback = func(qr *sqltypes.Result) error {
 				resultMu.Lock()
 				defer resultMu.Unlock()
@@ -345,18 +345,18 @@ func (e *Executor) StreamExecute(
 
 		// 4: Execute!
 		err := vc.StreamExecutePrimitive(ctx, plan.Instructions, bindVars, true, func(qr *sqltypes.Result) error {
-			return srr.storeResultStats(plan.Type, qr)
+			return srr.storeResultStats(plan.QueryType, qr)
 		})
 
 		// Check if there was partial DML execution. If so, rollback the effect of the partially executed query.
 		if err != nil {
-			if !canReturnRows(plan.Type) {
+			if !canReturnRows(plan.QueryType) {
 				return e.rollbackExecIfNeeded(ctx, safeSession, bindVars, logStats, err)
 			}
 			return err
 		}
 
-		if !canReturnRows(plan.Type) {
+		if !canReturnRows(plan.QueryType) {
 			return nil
 		}
 
@@ -435,7 +435,7 @@ func (e *Executor) execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConn
 	var qr *sqltypes.Result
 	var stmtType sqlparser.StatementType
 	err = e.newExecute(ctx, mysqlCtx, safeSession, sql, bindVars, logStats, func(ctx context.Context, plan *engine.Plan, vc *econtext.VCursorImpl, bindVars map[string]*querypb.BindVariable, time time.Time) error {
-		stmtType = plan.Type
+		stmtType = plan.QueryType
 		qr, err = e.executePlan(ctx, safeSession, plan, vc, bindVars, logStats, time)
 		return err
 	}, func(typ sqlparser.StatementType, result *sqltypes.Result) error {
