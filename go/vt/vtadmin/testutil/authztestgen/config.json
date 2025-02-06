@@ -80,7 +80,12 @@
                     "type": "map[string]struct{\nResponse *vtctldatapb.GetSchemaResponse\nError error}",
                     "value": "\"zone1-0000000100\": {\nResponse: &vtctldatapb.GetSchemaResponse{\nSchema: &tabletmanagerdatapb.SchemaDefinition{\nTableDefinitions: []*tabletmanagerdatapb.TableDefinition{\n{Name: \"t1\", Schema: \"create table t1 (id int(11) not null primary key);\",},\n{Name: \"t2\"},\n},\n},\n},\n},"
                 },
-
+                {
+                    "field": "GetSrvVSchemaResults",
+                    "type": "map[string]struct{\nResponse *vtctldatapb.GetSrvVSchemaResponse\nError error}",
+                    "value": "\"zone1\": {\nResponse: &vtctldatapb.GetSrvVSchemaResponse{\nSrvVSchema: &vschemapb.SrvVSchema{\nKeyspaces: map[string]*vschemapb.Keyspace{\n\"test\": {\nSharded: true,\nVindexes: map[string]*vschemapb.Vindex{\n\"id\": {\nType: \"hash\",\n},\n},\nTables: map[string]*vschemapb.Table{\n\"t1\": {\nColumnVindexes: []*vschemapb.ColumnVindex{\n{\nName: \"id\",\nColumn: \"id\",\n},\n},\n},\n},\n},\n},\n},\n},\n},",
+                    "comment": "this structure exists primarily to support the VExplain test cases; for GetSrvVSchema(s) itself, an empty but non-nil map is sufficient"
+                },         
                 {
                     "field": "GetVSchemaResults",
                     "type": "map[string]struct{\nResponse *vtctldatapb.GetVSchemaResponse\nError error}",

@@ -3608,6 +3608,37 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 						},
 					},
 				},
+				GetSrvVSchemaResults: map[string]struct {
+					Response *vtctldatapb.GetSrvVSchemaResponse
+					Error    error
+				}{
+					"zone1": {
+						Response: &vtctldatapb.GetSrvVSchemaResponse{
+							SrvVSchema: &vschemapb.SrvVSchema{
+								Keyspaces: map[string]*vschemapb.Keyspace{
+									"test": {
+										Sharded: true,
+										Vindexes: map[string]*vschemapb.Vindex{
+											"id": {
+												Type: "hash",
+											},
+										},
+										Tables: map[string]*vschemapb.Table{
+											"t1": {
+												ColumnVindexes: []*vschemapb.ColumnVindex{
+													{
+														Name:   "id",
+														Column: "id",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
 				GetVSchemaResults: map[string]struct {
 					Response *vtctldatapb.GetVSchemaResponse
 					Error    error
