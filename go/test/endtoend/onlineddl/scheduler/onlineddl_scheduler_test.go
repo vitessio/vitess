@@ -750,7 +750,7 @@ func testScheduler(t *testing.T) {
 					ticker := time.NewTicker(time.Second)
 					defer ticker.Stop()
 					for {
-						throttler.CheckThrottler(clusterInstance, primaryTablet, throttlerapp.OnlineDDLName, nil)
+						throttler.CheckThrottler(&clusterInstance.VtctldClientProcess, primaryTablet, throttlerapp.OnlineDDLName, nil)
 						select {
 						case <-ticker.C:
 						case <-ctx.Done():
