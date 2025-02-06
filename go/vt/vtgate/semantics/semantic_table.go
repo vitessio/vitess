@@ -140,7 +140,7 @@ type (
 		// The columns were added because of the use of `*` in the query
 		ExpandedColumns map[sqlparser.TableName][]*sqlparser.ColName
 
-		columns map[*sqlparser.Union]sqlparser.SelectExprs
+		columns map[*sqlparser.Union][]sqlparser.SelectExpr
 
 		comparator *sqlparser.Comparator
 
@@ -493,10 +493,10 @@ func (st *SemTable) ForeignKeysPresent() bool {
 	return false
 }
 
-func (st *SemTable) SelectExprs(sel sqlparser.TableStatement) sqlparser.SelectExprs {
+func (st *SemTable) SelectExprs(sel sqlparser.TableStatement) []sqlparser.SelectExpr {
 	switch sel := sel.(type) {
 	case *sqlparser.Select:
-		return sel.SelectExprs
+		return sel.GetColumns()
 	case *sqlparser.Union:
 		exprs, found := st.columns[sel]
 		if found {
@@ -512,8 +512,9 @@ func (st *SemTable) SelectExprs(sel sqlparser.TableStatement) sqlparser.SelectEx
 	panic(fmt.Sprintf("BUG: unexpected select statement type %T", sel))
 }
 
-func getColumnNames(exprs sqlparser.SelectExprs) (expanded bool, selectExprs sqlparser.SelectExprs) {
-	expanded = true
+func getColumnNames(exprs []sqlparser.SelectExpr) (bool, []sqlparser.SelectExpr) {
+	var selectExprs []sqlparser.SelectExpr
+	expanded := true
 	for _, col := range exprs {
 		switch col := col.(type) {
 		case *sqlparser.AliasedExpr:
@@ -524,7 +525,7 @@ func getColumnNames(exprs sqlparser.SelectExprs) (expanded bool, selectExprs sql
 			expanded = false
 		}
 	}
-	return
+	return expanded, selectExprs
 }
 
 // CopySemanticInfo copies all semantic information we have about this SQLNode so that it also applies to the `to` node
@@ -571,7 +572,7 @@ func EmptySemTable() *SemTable {
 		Recursive:        map[sqlparser.Expr]TableSet{},
 		Direct:           map[sqlparser.Expr]TableSet{},
 		ColumnEqualities: map[columnName][]sqlparser.Expr{},
-		columns:          map[*sqlparser.Union]sqlparser.SelectExprs{},
+		columns:          map[*sqlparser.Union][]sqlparser.SelectExpr{},
 		ExprTypes:        make(map[sqlparser.Expr]evalengine.Type),
 	}
 }
@@ -658,9 +659,9 @@ func (st *SemTable) TableInfoForExpr(expr sqlparser.Expr) (TableInfo, error) {
 }
 
 // AddExprs adds new select exprs to the SemTable.
-func (st *SemTable) AddExprs(tbl *sqlparser.AliasedTableExpr, cols sqlparser.SelectExprs) {
+func (st *SemTable) AddExprs(tbl *sqlparser.AliasedTableExpr, cols *sqlparser.SelectExprs) {
 	tableSet := st.TableSetFor(tbl)
-	for _, col := range cols {
+	for _, col := range cols.Exprs {
 		st.Recursive[col.(*sqlparser.AliasedExpr).Expr] = tableSet
 	}
 }
@@ -757,7 +758,7 @@ func (st *SemTable) CopyExprInfo(src, dest sqlparser.Expr) {
 var columnNotSupportedErr = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "column access not supported here")
 
 // ColumnLookup implements the TranslationLookup interface
-func (st *SemTable) ColumnLookup(col *sqlparser.ColName) (int, error) {
+func (st *SemTable) ColumnLookup(*sqlparser.ColName) (int, error) {
 	return 0, columnNotSupportedErr
 }
 

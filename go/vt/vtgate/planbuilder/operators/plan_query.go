@@ -147,7 +147,7 @@ func (noColumns) FindCol(*plancontext.PlanningContext, sqlparser.Expr, bool) int
 	panic(vterrors.VT13001("noColumns operators have no column"))
 }
 
-func (noColumns) GetSelectExprs(*plancontext.PlanningContext) sqlparser.SelectExprs {
+func (noColumns) GetSelectExprs(*plancontext.PlanningContext) []sqlparser.SelectExpr {
 	panic(vterrors.VT13001("noColumns operators have no column"))
 }
 
@@ -192,7 +192,7 @@ func tryTruncateColumnsAt(op Operator, truncateAt int) bool {
 	}
 }
 
-func transformColumnsToSelectExprs(ctx *plancontext.PlanningContext, op Operator) sqlparser.SelectExprs {
+func transformColumnsToSelectExprs(ctx *plancontext.PlanningContext, op Operator) []sqlparser.SelectExpr {
 	columns := op.GetColumns(ctx)
 	if trunc, ok := op.(columnTruncator); ok {
 		count := trunc.getTruncateColumnCount()
@@ -201,8 +201,7 @@ func transformColumnsToSelectExprs(ctx *plancontext.PlanningContext, op Operator
 		}
 	}
 
-	selExprs := slice.Map(columns, func(from *sqlparser.AliasedExpr) sqlparser.SelectExpr {
+	return slice.Map(columns, func(from *sqlparser.AliasedExpr) sqlparser.SelectExpr {
 		return from
 	})
-	return selExprs
 }

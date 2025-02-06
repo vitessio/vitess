@@ -270,7 +270,7 @@ func (vm *VSchemaManager) updateTableInfo(vschema *vindexes.VSchema, ks *vindexe
 					rTbl.PrimaryKey = append(rTbl.PrimaryKey, idxCol.Column)
 				}
 			case sqlparser.IndexTypeUnique:
-				var uniqueKey sqlparser.Exprs
+				var uniqueKey []sqlparser.Expr
 				for _, idxCol := range idxDef.Columns {
 					if idxCol.Expression == nil {
 						uniqueKey = append(uniqueKey, sqlparser.NewColName(idxCol.Column.String()))

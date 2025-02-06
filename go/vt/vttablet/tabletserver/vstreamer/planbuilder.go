@@ -465,7 +465,7 @@ func buildTablePlan(env *vtenv.Environment, ti *Table, vschema *localVSchema, qu
 		log.Errorf("%s", err.Error())
 		return nil, err
 	}
-	if err := plan.analyzeExprs(vschema, sel.SelectExprs); err != nil {
+	if err := plan.analyzeExprs(vschema, sel.GetColumns()); err != nil {
 		log.Errorf("%s", err.Error())
 		return nil, err
 	}
@@ -670,7 +670,7 @@ func splitAndExpression(filters []sqlparser.Expr, node sqlparser.Expr) []sqlpars
 	return append(filters, node)
 }
 
-func (plan *Plan) analyzeExprs(vschema *localVSchema, selExprs sqlparser.SelectExprs) error {
+func (plan *Plan) analyzeExprs(vschema *localVSchema, selExprs []sqlparser.SelectExpr) error {
 	if _, ok := selExprs[0].(*sqlparser.StarExpr); !ok {
 		for _, expr := range selExprs {
 			cExpr, err := plan.analyzeExpr(vschema, expr)
@@ -681,7 +681,7 @@ func (plan *Plan) analyzeExprs(vschema *localVSchema, selExprs sqlparser.SelectE
 		}
 	} else {
 		if len(selExprs) != 1 {
-			return fmt.Errorf("unsupported: %v", sqlparser.String(selExprs))
+			return fmt.Errorf("unsupported: %v", sqlparser.SliceString(selExprs))
 		}
 		plan.ColExprs = make([]ColExpr, len(plan.Table.Fields))
 		for i, col := range plan.Table.Fields {
@@ -838,7 +838,7 @@ func (plan *Plan) analyzeExpr(vschema *localVSchema, selExpr sqlparser.SelectExp
 // analyzeInKeyRange allows the following constructs: "in_keyrange('-80')",
 // "in_keyrange(col, 'hash', '-80')", "in_keyrange(col, 'local_vindex', '-80')", or
 // "in_keyrange(col, 'ks.external_vindex', '-80')".
-func (plan *Plan) analyzeInKeyRange(vschema *localVSchema, exprs sqlparser.Exprs) error {
+func (plan *Plan) analyzeInKeyRange(vschema *localVSchema, exprs []sqlparser.Expr) error {
 	var colnames []sqlparser.IdentifierCI
 	var krExpr sqlparser.Expr
 	whereFilter := Filter{
@@ -879,7 +879,7 @@ func (plan *Plan) analyzeInKeyRange(vschema *localVSchema, exprs sqlparser.Exprs
 
 		krExpr = exprs[len(exprs)-1]
 	default:
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected in_keyrange parameters: %v", sqlparser.String(exprs))
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected in_keyrange parameters: %v", sqlparser.SliceString(exprs))
 	}
 	var err error
 	whereFilter.VindexColumns, err = buildVindexColumns(plan.Table, colnames)
