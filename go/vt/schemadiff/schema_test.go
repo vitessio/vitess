@@ -133,6 +133,7 @@ func TestNewSchemaFromQueriesUnresolvedMulti(t *testing.T) {
 	schema, err := NewSchemaFromQueries(NewTestEnv(), queries)
 	assert.Error(t, err)
 	assert.EqualError(t, err, (&ViewDependencyUnresolvedError{View: "v7", MissingReferencedEntities: []string{"v8", "t20", "v21"}}).Error())
+	assert.Equal(t, "view `v7` has unresolved/loop dependencies: `v8`, `t20`, `v21`", err.Error())
 	v := schema.sorted[len(schema.sorted)-1]
 	assert.IsType(t, &CreateViewEntity{}, v)
 	assert.Equal(t, "CREATE VIEW `v7` AS SELECT * FROM `v8`, `t2`, `t20`, `v21`", v.Create().CanonicalStatementString())

@@ -394,11 +394,15 @@ type ViewDependencyUnresolvedError struct {
 }
 
 func (e *ViewDependencyUnresolvedError) Error() string {
-	s := make([]string, len(e.MissingReferencedEntities))
+	var b strings.Builder
+	b.WriteString(fmt.Sprintf("view %s has unresolved/loop dependencies: ", sqlescape.EscapeID(e.View)))
 	for i, entity := range e.MissingReferencedEntities {
-		s[i] = sqlescape.EscapeID(entity)
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		sqlescape.WriteEscapeID(&b, entity)
 	}
-	return fmt.Sprintf("view %s has unresolved/loop dependencies: %s", sqlescape.EscapeID(e.View), strings.Join(s, ", "))
+	return b.String()
 }
 
 type InvalidColumnReferencedInViewError struct {
