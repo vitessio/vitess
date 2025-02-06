@@ -119,10 +119,24 @@ func TestNewSchemaFromQueriesUnresolved(t *testing.T) {
 	)
 	schema, err := NewSchemaFromQueries(NewTestEnv(), queries)
 	assert.Error(t, err)
-	assert.EqualError(t, err, (&ViewDependencyUnresolvedError{View: "v7"}).Error())
+	assert.EqualError(t, err, (&ViewDependencyUnresolvedError{View: "v7", MissingReferencedEntities: []string{"v8"}}).Error())
 	v := schema.sorted[len(schema.sorted)-1]
 	assert.IsType(t, &CreateViewEntity{}, v)
 	assert.Equal(t, "CREATE VIEW `v7` AS SELECT * FROM `v8`, `t2`", v.Create().CanonicalStatementString())
+}
+
+func TestNewSchemaFromQueriesUnresolvedMulti(t *testing.T) {
+	// v8 does not exist
+	queries := append(schemaTestCreateQueries,
+		"create view v7 as select * from v8, t2, t20, v21",
+	)
+	schema, err := NewSchemaFromQueries(NewTestEnv(), queries)
+	assert.Error(t, err)
+	assert.EqualError(t, err, (&ViewDependencyUnresolvedError{View: "v7", MissingReferencedEntities: []string{"v8", "t20", "v21"}}).Error())
+	assert.Equal(t, "view `v7` has unresolved/loop dependencies: `v8`, `t20`, `v21`", err.Error())
+	v := schema.sorted[len(schema.sorted)-1]
+	assert.IsType(t, &CreateViewEntity{}, v)
+	assert.Equal(t, "CREATE VIEW `v7` AS SELECT * FROM `v8`, `t2`, `t20`, `v21`", v.Create().CanonicalStatementString())
 }
 
 func TestNewSchemaFromQueriesWithSQLKeyword(t *testing.T) {
@@ -141,7 +155,7 @@ func TestNewSchemaFromQueriesUnresolvedAlias(t *testing.T) {
 	)
 	_, err := NewSchemaFromQueries(NewTestEnv(), queries)
 	assert.Error(t, err)
-	assert.EqualError(t, err, (&ViewDependencyUnresolvedError{View: "v7"}).Error())
+	assert.EqualError(t, err, (&ViewDependencyUnresolvedError{View: "v7", MissingReferencedEntities: []string{"something_else"}}).Error())
 }
 
 func TestNewSchemaFromQueriesViewFromDual(t *testing.T) {
@@ -171,7 +185,7 @@ func TestNewSchemaFromQueriesLoop(t *testing.T) {
 	_, err := NewSchemaFromQueries(NewTestEnv(), queries)
 	require.Error(t, err)
 	err = vterrors.UnwrapFirst(err)
-	assert.EqualError(t, err, (&ViewDependencyUnresolvedError{View: "v7"}).Error())
+	assert.EqualError(t, err, (&ViewDependencyUnresolvedError{View: "v7", MissingReferencedEntities: []string{"v8"}}).Error())
 }
 
 func TestToSQL(t *testing.T) {
@@ -582,7 +596,7 @@ SELECT
     ) AS ranking
 FROM users AS u JOIN earnings AS e ON e.user_id = u.id;
 `,
-			expectErr: &ViewDependencyUnresolvedError{View: "user_earnings_ranking"},
+			expectErr: &ViewDependencyUnresolvedError{View: "user_earnings_ranking", MissingReferencedEntities: []string{"earnings"}},
 		},
 	}
 	for _, ts := range tt {
