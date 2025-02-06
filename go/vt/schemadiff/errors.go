@@ -395,7 +395,7 @@ type ViewDependencyUnresolvedError struct {
 
 func (e *ViewDependencyUnresolvedError) Error() string {
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("view %s has unresolved/loop dependencies: ", sqlescape.EscapeID(e.View)))
+	fmt.Fprintf(&b, "view %s has unresolved/loop dependencies: ", sqlescape.EscapeID(e.View))
 	for i, entity := range e.MissingReferencedEntities {
 		if i > 0 {
 			b.WriteString(", ")
