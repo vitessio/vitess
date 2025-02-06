@@ -341,7 +341,14 @@ func (s *Schema) normalize(hints *DiffHints) error {
 			if _, ok := dependencyLevels[v.Name()]; !ok {
 				// We _know_ that in this iteration, at least one view is found unassigned a dependency level.
 				// We gather all the errors.
-				errs = errors.Join(errs, &ViewDependencyUnresolvedError{View: v.ViewName.Name.String()})
+				dependentNames := getViewDependentTableNames(v.CreateView)
+				missingReferencedEntities := []string{}
+				for _, name := range dependentNames {
+					if _, ok := dependencyLevels[name]; !ok {
+						missingReferencedEntities = append(missingReferencedEntities, name)
+					}
+				}
+				errs = errors.Join(errs, &ViewDependencyUnresolvedError{View: v.ViewName.Name.String(), MissingReferencedEntities: missingReferencedEntities})
 				// We still add it so it shows up in the output if that is used for anything.
 				s.sorted = append(s.sorted, v)
 			}
