@@ -570,6 +570,20 @@ func TestInvalidSchema(t *testing.T) {
 			`,
 			expectErr: &DuplicateForeignKeyConstraintNameError{Table: "t2", Constraint: "const_id"},
 		},
+		{
+			schema: `
+CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(255));
+CREATE VIEW user_earnings_ranking AS
+SELECT
+    u.id AS user_id,
+    e.total_earnings AS total_earnings,
+    ROW_NUMBER() OVER (
+        ORDER BY e.total_earnings DESC, u.id ASC
+    ) AS ranking
+FROM users AS u JOIN earnings AS e ON e.user_id = u.id;
+`,
+			expectErr: &ViewDependencyUnresolvedError{View: "user_earnings_ranking"},
+		},
 	}
 	for _, ts := range tt {
 		t.Run(ts.schema, func(t *testing.T) {
