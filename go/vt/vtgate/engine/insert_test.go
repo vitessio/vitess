@@ -42,7 +42,7 @@ func TestInsertUnsharded(t *testing.T) {
 		"dummy_insert",
 	)
 
-	vc := newDMLTestVCursor("0")
+	vc := newTestVCursor("0")
 	vc.results = []*sqltypes.Result{{
 		InsertID: 4,
 	}}
@@ -91,7 +91,7 @@ func TestInsertUnshardedGenerate(t *testing.T) {
 		),
 	}
 
-	vc := newDMLTestVCursor("0")
+	vc := newTestVCursor("0")
 	vc.results = []*sqltypes.Result{
 		sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
@@ -144,7 +144,7 @@ func TestInsertUnshardedGenerate_Zeros(t *testing.T) {
 		),
 	}
 
-	vc := newDMLTestVCursor("0")
+	vc := newTestVCursor("0")
 	vc.results = []*sqltypes.Result{
 		sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
@@ -215,7 +215,7 @@ func TestInsertShardedSimple(t *testing.T) {
 		},
 		nil,
 	)
-	vc := newDMLTestVCursor("-20", "20-")
+	vc := newTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
 
 	_, err := ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
@@ -254,7 +254,7 @@ func TestInsertShardedSimple(t *testing.T) {
 		},
 		nil,
 	)
-	vc = newDMLTestVCursor("-20", "20-")
+	vc = newTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
 
 	_, err = ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
@@ -297,7 +297,7 @@ func TestInsertShardedSimple(t *testing.T) {
 	)
 	ins.MultiShardAutocommit = true
 
-	vc = newDMLTestVCursor("-20", "20-")
+	vc = newTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
 
 	_, err = ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
@@ -366,7 +366,7 @@ func TestInsertShardWithONDuplicateKey(t *testing.T) {
 				},
 			}}},
 	)
-	vc := newDMLTestVCursor("-20", "20-")
+	vc := newTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
 
 	_, err := ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{
@@ -412,7 +412,7 @@ func TestInsertShardWithONDuplicateKey(t *testing.T) {
 			&sqlparser.UpdateExpr{Name: sqlparser.NewColName("suffix"), Expr: &sqlparser.Argument{Name: "_id_0", Type: sqltypes.Int64}},
 		},
 	)
-	vc = newDMLTestVCursor("-20", "20-")
+	vc = newTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
 
 	_, err = ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
@@ -457,7 +457,7 @@ func TestInsertShardWithONDuplicateKey(t *testing.T) {
 	)
 	ins.MultiShardAutocommit = true
 
-	vc = newDMLTestVCursor("-20", "20-")
+	vc = newTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
 
 	_, err = ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
@@ -590,7 +590,7 @@ func TestInsertShardedGenerate(t *testing.T) {
 		),
 	}
 
-	vc := newDMLTestVCursor("-20", "20-")
+	vc := newTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
 	vc.results = []*sqltypes.Result{
 		sqltypes.MakeTestResult(
@@ -715,7 +715,7 @@ func TestInsertShardedOwned(t *testing.T) {
 		nil,
 	)
 
-	vc := newDMLTestVCursor("-20", "20-")
+	vc := newTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
 
 	_, err := ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
@@ -807,7 +807,7 @@ func TestInsertShardedOwnedWithNull(t *testing.T) {
 		nil,
 	)
 
-	vc := newDMLTestVCursor("-20", "20-")
+	vc := newTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
 
 	_, err := ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
@@ -893,7 +893,7 @@ func TestInsertShardedGeo(t *testing.T) {
 		nil,
 	)
 
-	vc := newDMLTestVCursor("-20", "20-")
+	vc := newTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20"}
 
 	_, err := ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
@@ -1029,7 +1029,7 @@ func TestInsertShardedIgnoreOwned(t *testing.T) {
 		"\x00",
 	)
 	noresult := &sqltypes.Result{}
-	vc := newDMLTestVCursor("-20", "20-")
+	vc := newTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20"}
 	vc.results = []*sqltypes.Result{
 		// primary vindex lookups: fail row 2.
@@ -1147,7 +1147,7 @@ func TestInsertShardedIgnoreOwnedWithNull(t *testing.T) {
 		),
 		"\x00",
 	)
-	vc := newDMLTestVCursor("-20", "20-")
+	vc := newTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"-20", "20-"}
 	vc.results = []*sqltypes.Result{
 		ksid0,
@@ -1267,7 +1267,7 @@ func TestInsertShardedUnownedVerify(t *testing.T) {
 		"1",
 	)
 
-	vc := newDMLTestVCursor("-20", "20-")
+	vc := newTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
 	vc.results = []*sqltypes.Result{
 		nonemptyResult,
@@ -1381,7 +1381,7 @@ func TestInsertShardedIgnoreUnownedVerify(t *testing.T) {
 		"1",
 	)
 
-	vc := newDMLTestVCursor("-20", "20-")
+	vc := newTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20"}
 	vc.results = []*sqltypes.Result{
 		nonemptyResult,
@@ -1472,7 +1472,7 @@ func TestInsertShardedIgnoreUnownedVerifyFail(t *testing.T) {
 		nil,
 	)
 
-	vc := newDMLTestVCursor("-20", "20-")
+	vc := newTestVCursor("-20", "20-")
 
 	_, err := ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.EqualError(t, err, `values [[INT64(2)]] for column [c3] does not map to keyspace ids`)
@@ -1578,7 +1578,7 @@ func TestInsertShardedUnownedReverseMap(t *testing.T) {
 		"1",
 	)
 
-	vc := newDMLTestVCursor("-20", "20-")
+	vc := newTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
 	vc.results = []*sqltypes.Result{
 		nonemptyResult,
@@ -1663,7 +1663,7 @@ func TestInsertShardedUnownedReverseMapSuccess(t *testing.T) {
 		nil,
 	)
 
-	vc := newDMLTestVCursor("-20", "20-")
+	vc := newTestVCursor("-20", "20-")
 
 	_, err := ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
@@ -1694,7 +1694,7 @@ func TestInsertSelectSimple(t *testing.T) {
 			Keyspace: ks.Keyspace}}
 	ins := newInsertSelect(false, ks.Keyspace, ks.Tables["t1"], "prefix ", nil, [][]int{{1}}, rb)
 
-	vc := newDMLTestVCursor("-20", "20-")
+	vc := newTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
 	vc.results = []*sqltypes.Result{
 		sqltypes.MakeTestResult(
@@ -1787,7 +1787,7 @@ func TestInsertSelectOwned(t *testing.T) {
 		rb,
 	)
 
-	vc := newDMLTestVCursor("-20", "20-")
+	vc := newTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
 	vc.results = []*sqltypes.Result{
 		sqltypes.MakeTestResult(
@@ -1894,7 +1894,7 @@ func TestInsertSelectGenerate(t *testing.T) {
 		Offset: 1,
 	}
 
-	vc := newDMLTestVCursor("-20", "20-")
+	vc := newTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
 	vc.results = []*sqltypes.Result{
 		// This is the result from the input SELECT
@@ -1987,7 +1987,7 @@ func TestStreamingInsertSelectGenerate(t *testing.T) {
 		Offset: 1,
 	}
 
-	vc := newDMLTestVCursor("-20", "20-")
+	vc := newTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
 	vc.results = []*sqltypes.Result{
 		// This is the result from the input SELECT
@@ -2082,7 +2082,7 @@ func TestInsertSelectGenerateNotProvided(t *testing.T) {
 		Offset: 2,
 	}
 
-	vc := newDMLTestVCursor("-20", "20-")
+	vc := newTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
 	vc.results = []*sqltypes.Result{
 		// This is the result from the input SELECT
@@ -2169,7 +2169,7 @@ func TestStreamingInsertSelectGenerateNotProvided(t *testing.T) {
 		Offset: 2,
 	}
 
-	vc := newDMLTestVCursor("-20", "20-")
+	vc := newTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
 	vc.results = []*sqltypes.Result{
 		// This is the result from the input SELECT
@@ -2258,7 +2258,7 @@ func TestInsertSelectUnowned(t *testing.T) {
 		rb,
 	)
 
-	vc := newDMLTestVCursor("-20", "20-")
+	vc := newTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
 	vc.results = []*sqltypes.Result{
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1", "3", "2"),

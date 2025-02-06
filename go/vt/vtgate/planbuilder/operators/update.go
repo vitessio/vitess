@@ -212,7 +212,7 @@ func prepareUpdateExpressionList(ctx *plancontext.PlanningContext, upd *sqlparse
 	for _, ue := range upd.Exprs {
 		target := ctx.SemTable.DirectDeps(ue.Name)
 		exprDeps := ctx.SemTable.RecursiveDeps(ue.Expr)
-		jc := breakExpressionInLHSandRHS(ctx, ue.Expr, exprDeps.Remove(target))
+		jc := breakApplyJoinExpressionInLHSandRHS(ctx, ue.Expr, exprDeps.Remove(target))
 		ueMap[target] = append(ueMap[target], updColumn{ue.Name, jc})
 	}
 
