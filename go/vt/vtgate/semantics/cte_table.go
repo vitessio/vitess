@@ -163,10 +163,11 @@ type CTE struct {
 	Merged bool
 }
 
-func (cte *CTE) recursive(org originable) (id TableSet) {
+func (cte *CTE) recursive(org originable) TableSet {
 	if cte.recursiveDeps != nil {
 		return *cte.recursiveDeps
 	}
+	var id MutableTableSet
 
 	// We need to find the recursive dependencies of the CTE
 	// We'll do this by walking the inner query and finding all the tables
@@ -175,8 +176,8 @@ func (cte *CTE) recursive(org originable) (id TableSet) {
 		if !ok {
 			return true, nil
 		}
-		id = id.Merge(org.tableSetFor(ate))
+		id.MergeInPlace(org.tableSetFor(ate))
 		return true, nil
 	}, cte.Query)
-	return
+	return id.ToImmutable()
 }

@@ -31,7 +31,7 @@ import (
 type binder struct {
 	recursive ExprDependencies
 	direct    ExprDependencies
-	targets   TableSet
+	targets   MutableTableSet
 	scoper    *scoper
 	tc        *tableCollector
 	org       originable
@@ -81,7 +81,7 @@ func (b *binder) bindUpdateExpr(ue *sqlparser.UpdateExpr) error {
 	if !ok {
 		return nil
 	}
-	b.targets = b.targets.Merge(ts)
+	b.targets.MergeInPlace(ts)
 	return nil
 }
 
@@ -96,7 +96,7 @@ func (b *binder) bindTableNames(cursor *sqlparser.Cursor, tables sqlparser.Table
 		if err != nil {
 			return err
 		}
-		b.targets = b.targets.Merge(finalDep.direct)
+		b.targets.MergeInPlace(finalDep.direct)
 	}
 	return nil
 }
@@ -184,19 +184,20 @@ func (b *binder) findDependentTableSet(current *scope, target sqlparser.TableNam
 
 func (b *binder) bindCountStar(node *sqlparser.CountStar) error {
 	scope := b.scoper.currentScope()
-	var ts TableSet
+	var tables MutableTableSet
 	for _, tbl := range scope.tables {
 		switch tbl := tbl.(type) {
 		case *vTableInfo:
 			for _, col := range tbl.cols {
 				if sqlparser.Equals.Expr(node, col) {
-					ts = ts.Merge(b.recursive[col])
+					tables.MergeInPlace(b.recursive[col])
 				}
 			}
 		default:
-			ts = ts.Merge(tbl.getTableSet(b.org))
+			tables.MergeInPlace(tbl.getTableSet(b.org))
 		}
 	}
+	ts := tables.ToImmutable()
 	b.recursive[node] = ts
 	b.direct[node] = ts
 	return nil
@@ -246,15 +247,16 @@ func (b *binder) setSubQueryDependencies(subq *sqlparser.Subquery) error {
 	subqRecursiveDeps := b.recursive.dependencies(subq)
 	subqDirectDeps := b.direct.dependencies(subq)
 
-	tablesToKeep := EmptyTableSet()
+	var tables MutableTableSet
 	sco := currScope
 	for sco != nil {
 		for _, table := range sco.tables {
-			tablesToKeep = tablesToKeep.Merge(table.getTableSet(b.org))
+			tables.MergeInPlace(table.getTableSet(b.org))
 		}
 		sco = sco.parent
 	}
 
+	tablesToKeep := tables.ToImmutable()
 	b.recursive[subq] = subqRecursiveDeps.KeepOnly(tablesToKeep)
 	b.direct[subq] = subqDirectDeps.KeepOnly(tablesToKeep)
 	return nil

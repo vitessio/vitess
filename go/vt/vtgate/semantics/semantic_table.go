@@ -190,13 +190,15 @@ var ErrNotSingleTable = vterrors.VT13001("should only be used for single tables"
 
 // CopyDependencies copies the dependencies from one expression into the other
 func (st *SemTable) CopyDependencies(from, to sqlparser.Expr) {
-	if ValidAsMapKey(to) {
-		st.Recursive[to] = st.RecursiveDeps(from)
-		st.Direct[to] = st.DirectDeps(from)
-		if ValidAsMapKey(from) {
-			if typ, found := st.ExprTypes[from]; found {
-				st.ExprTypes[to] = typ
-			}
+	if ValidAsMapKey(to) && ValidAsMapKey(from) {
+		if deps, found := st.Recursive[from]; found {
+			st.Recursive[to] = deps
+		}
+		if deps, found := st.Direct[from]; found {
+			st.Direct[to] = deps
+		}
+		if typ, found := st.ExprTypes[from]; found {
+			st.ExprTypes[to] = typ
 		}
 	}
 }
@@ -698,6 +700,7 @@ func (d ExprDependencies) dependencies(expr sqlparser.Expr) (deps TableSet) {
 		if found {
 			return deps
 		}
+		// If we did not find the expression in the cache, we'll add it after calculating it
 		defer func() {
 			d[expr] = deps
 		}()
@@ -706,6 +709,7 @@ func (d ExprDependencies) dependencies(expr sqlparser.Expr) (deps TableSet) {
 	// During the original semantic analysis, all ColNames were found and bound to the corresponding tables
 	// Here, we'll walk the expression tree and look to see if we can find any sub-expressions
 	// that have already set dependencies.
+	var depsCalc MutableTableSet
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		expr, ok := node.(sqlparser.Expr)
 		if !ok || !ValidAsMapKey(expr) {
@@ -715,11 +719,13 @@ func (d ExprDependencies) dependencies(expr sqlparser.Expr) (deps TableSet) {
 		}
 
 		set, found := d[expr]
-		deps = deps.Merge(set)
+		depsCalc.MergeInPlace(set)
 
 		// if we found a cached value, there is no need to continue down to visit children
 		return !found, nil
 	}, expr)
+
+	deps = depsCalc.ToImmutable()
 
 	return deps
 }
