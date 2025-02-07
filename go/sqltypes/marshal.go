@@ -182,7 +182,7 @@ func MarshalResult(v any) (*Result, error) {
 		fields = append(fields, sqlField)
 	}
 
-	for i := 0; i < val.Len(); i++ {
+	for i := range val.Len() {
 		// TODO: handle case where val is a slice of non-pointer objects.
 		v := val.Index(i).Elem()
 		row, err := marshalRow(v, fields, exportedStructFields)

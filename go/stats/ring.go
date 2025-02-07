@@ -38,7 +38,7 @@ func (ri *RingInt64) Add(val int64) {
 
 func (ri *RingInt64) Values() (values []int64) {
 	values = make([]int64, len(ri.values))
-	for i := 0; i < len(ri.values); i++ {
+	for i := range len(ri.values) {
 		values[i] = ri.values[(ri.position+i)%cap(ri.values)]
 	}
 	return values

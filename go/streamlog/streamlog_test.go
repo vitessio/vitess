@@ -186,7 +186,7 @@ func TestChannel(t *testing.T) {
 	if len(got) != len(want) {
 		t.Errorf("Bad results length: got %d, want %d", len(got), len(want))
 	} else {
-		for i := 0; i < len(want); i++ {
+		for i := range len(want) {
 			if want[i]+"\n" != got[i] {
 				t.Errorf("Unexpected result in log: got %q, want %q", got[i], want[i]+"\n")
 			}

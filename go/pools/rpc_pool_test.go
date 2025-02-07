@@ -76,7 +76,7 @@ func TestRPCPool(t *testing.T) {
 }
 
 func BenchmarkRPCPoolAllocs(b *testing.B) {
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		NewRPCPool(1000, 0, nil)
 		// p.Close()
 	}

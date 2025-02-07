@@ -425,7 +425,7 @@ func safeJoinLabels(labels []string, combinedLabels []bool) string {
 func appendSafeLabel(b *strings.Builder, label string) {
 	// first quickly check if there are any periods to be replaced
 	found := false
-	for i := 0; i < len(label); i++ {
+	for i := range len(label) {
 		if label[i] == '.' {
 			found = true
 			break
@@ -438,7 +438,7 @@ func appendSafeLabel(b *strings.Builder, label string) {
 		return
 	}
 
-	for i := 0; i < len(label); i++ {
+	for i := range len(label) {
 		if label[i] == '.' {
 			b.WriteByte('_')
 		} else {

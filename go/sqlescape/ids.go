@@ -35,7 +35,7 @@ func WriteEscapeID(buf *strings.Builder, in string) {
 	buf.Grow(4 + len(in))
 
 	buf.WriteByte('`')
-	for i := 0; i < len(in); i++ {
+	for i := range len(in) {
 		buf.WriteByte(in[i])
 		if in[i] == '`' {
 			buf.WriteByte('`')
@@ -93,7 +93,7 @@ func UnescapeID(in string) (string, error) {
 	var buf strings.Builder
 	buf.Grow(len(in))
 
-	for i := 0; i < len(in); i++ {
+	for i := range len(in) {
 		buf.WriteByte(in[i])
 
 		if i < len(in)-1 && in[i] == '`' {

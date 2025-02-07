@@ -225,7 +225,7 @@ func BenchmarkEscapeID(b *testing.B) {
 			name = "long"
 		}
 		b.Run(name, func(b *testing.B) {
-			for i := 0; i < b.N; i++ {
+			for range b.N {
 				scratch = EscapeID(tc)
 			}
 		})

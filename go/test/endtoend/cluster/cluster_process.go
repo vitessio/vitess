@@ -437,7 +437,7 @@ func (cluster *LocalProcessCluster) AddShard(keyspaceName string, shardName stri
 	}
 	log.Infof("Starting shard: %v", shardName)
 	var mysqlctlProcessList []*exec.Cmd
-	for i := 0; i < totalTabletsRequired; i++ {
+	for i := range totalTabletsRequired {
 		// instantiate vttablet object with reserved ports
 		tabletUID := cluster.GetAndReserveTabletUID()
 		tablet := &Vttablet{
@@ -564,7 +564,7 @@ func (cluster *LocalProcessCluster) StartKeyspaceLegacy(keyspace Keyspace, shard
 		}
 		log.Infof("Starting shard: %v", shardName)
 		mysqlctlProcessList = []*exec.Cmd{}
-		for i := 0; i < totalTabletsRequired; i++ {
+		for i := range totalTabletsRequired {
 			// instantiate vttablet object with reserved ports
 			tabletUID := cluster.GetAndReserveTabletUID()
 			tablet := &Vttablet{
