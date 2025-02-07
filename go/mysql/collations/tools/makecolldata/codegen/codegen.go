@@ -164,7 +164,7 @@ func (g *Generator) gatherPackages(tt reflect.Type) {
 	case reflect.Array, reflect.Chan, reflect.Map, reflect.Ptr, reflect.Slice:
 		g.gatherPackages(tt.Elem())
 	case reflect.Struct:
-		for i := 0; i < tt.NumField(); i++ {
+		for i := range tt.NumField() {
 			g.gatherPackages(tt.Field(i).Type)
 		}
 	}

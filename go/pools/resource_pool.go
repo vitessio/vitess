@@ -117,7 +117,7 @@ func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Dur
 	rp.idleTimeout.Store(idleTimeout.Nanoseconds())
 	rp.maxLifetime.Store(maxLifetime.Nanoseconds())
 
-	for i := 0; i < capacity; i++ {
+	for range capacity {
 		rp.resources <- resourceWrapper{}
 	}
 
@@ -153,7 +153,7 @@ func (rp *ResourcePool) closeIdleResources() {
 	available := int(rp.Available())
 	idleTimeout := rp.IdleTimeout()
 
-	for i := 0; i < available; i++ {
+	for range available {
 		var wrapper resourceWrapper
 		select {
 		case wrapper = <-rp.resources:
@@ -311,7 +311,7 @@ func (rp *ResourcePool) SetCapacity(capacity int) error {
 	// Otherwise, if the required capacity is more than the current capacity,
 	// then we just add empty resource to the channel.
 	if capacity < oldcap {
-		for i := 0; i < oldcap-capacity; i++ {
+		for range oldcap - capacity {
 			wrapper := <-rp.resources
 			if wrapper.resource != nil {
 				wrapper.resource.Close()
@@ -320,7 +320,7 @@ func (rp *ResourcePool) SetCapacity(capacity int) error {
 			rp.available.Add(-1)
 		}
 	} else {
-		for i := 0; i < capacity-oldcap; i++ {
+		for range capacity - oldcap {
 			rp.resources <- resourceWrapper{}
 			rp.available.Add(1)
 		}

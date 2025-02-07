@@ -1051,7 +1051,7 @@ func valuesForTests(t *testing.T, rs *mysql.Rows, tm *mysql.TableMap, rowIndex i
 	valueIndex := 0
 	data := rs.Rows[rowIndex].Data
 	pos := 0
-	for c := 0; c < rs.DataColumns.Count(); c++ {
+	for c := range rs.DataColumns.Count() {
 		if !rs.DataColumns.Bit(c) {
 			continue
 		}
