@@ -327,7 +327,7 @@ func (ev binlogEvent) Rows(f BinlogFormat, tm *TableMap) (Rows, error) {
 
 	// For PartialUpdateRowsEvents, we need to know how many JSON columns there are.
 	if ev.Type() == ePartialUpdateRowsEvent {
-		for c := 0; c < int(columnCount); c++ {
+		for c := range int(columnCount) {
 			if tm.Types[c] == binlog.TypeJSON {
 				numJSONColumns++
 			}
@@ -345,7 +345,7 @@ func (ev binlogEvent) Rows(f BinlogFormat, tm *TableMap) (Rows, error) {
 			// Get the identify values.
 			startPos := pos
 			valueIndex := 0
-			for c := 0; c < int(columnCount); c++ {
+			for c := range int(columnCount) {
 				if !result.IdentifyColumns.Bit(c) {
 					// This column is not represented.
 					continue
@@ -386,7 +386,7 @@ func (ev binlogEvent) Rows(f BinlogFormat, tm *TableMap) (Rows, error) {
 			// Get the values.
 			startPos := pos
 			valueIndex := 0
-			for c := 0; c < int(columnCount); c++ {
+			for c := range int(columnCount) {
 				if !result.DataColumns.Bit(c) {
 					// This column is not represented.
 					continue
@@ -426,7 +426,7 @@ func (rs *Rows) StringValuesForTests(tm *TableMap, rowIndex int) ([]string, erro
 	jsonIndex := 0
 	data := rs.Rows[rowIndex].Data
 	pos := 0
-	for c := 0; c < rs.DataColumns.Count(); c++ {
+	for c := range rs.DataColumns.Count() {
 		if !rs.DataColumns.Bit(c) {
 			continue
 		}
@@ -470,7 +470,7 @@ func (rs *Rows) StringIdentifiesForTests(tm *TableMap, rowIndex int) ([]string, 
 	valueIndex := 0
 	data := rs.Rows[rowIndex].Identify
 	pos := 0
-	for c := 0; c < rs.IdentifyColumns.Count(); c++ {
+	for c := range rs.IdentifyColumns.Count() {
 		if !rs.IdentifyColumns.Bit(c) {
 			continue
 		}

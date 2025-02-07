@@ -21,13 +21,12 @@ package fileutil
 // where we detect a bad pattern, we return 'true', and let the path.Match
 // function find it.
 func HasWildcard(path string) bool {
-	for i := 0; i < len(path); i++ {
+	for i := range len(path) {
 		switch path[i] {
 		case '\\':
 			if i+1 >= len(path) {
 				return true
 			}
-			i++
 		case '*', '?', '[':
 			return true
 		}

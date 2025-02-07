@@ -40,7 +40,7 @@ fails selects."
 
 The list of valid plan types that can be used follows:
 `)
-	for i := 0; i < int(planbuilder.NumPlans); i++ {
+	for i := range int(planbuilder.NumPlans) {
 		fmt.Printf("  - %v\n", planbuilder.PlanType(i).String())
 	}
 }
