@@ -17,39 +17,30 @@ limitations under the License.
 package pools
 
 import (
-	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func (pool *IDPool) want(want *IDPool, t *testing.T) {
-	if pool.maxUsed != want.maxUsed {
-		t.Errorf("pool.maxUsed = %#v, want %#v", pool.maxUsed, want.maxUsed)
-	}
-
-	if !reflect.DeepEqual(pool.used, want.used) {
-		t.Errorf("pool.used = %#v, want %#v", pool.used, want.used)
-	}
+	assert.Equal(t, want.maxUsed, pool.maxUsed, "pool.maxUsed = %#v, want %#v", pool.maxUsed, want.maxUsed)
+	assert.Equal(t, want.used, pool.used, "pool.used = %#v, want %#v", pool.used, want.used)
 }
 
 func TestIDPoolFirstGet(t *testing.T) {
 	pool := NewIDPool(0)
-
-	if got := pool.Get(); got != 1 {
-		t.Errorf("pool.Get() = %v, want 1", got)
-	}
-
+	got := pool.Get()
+	assert.Equal(t, uint32(1), got, "pool.Get() = %v, want 1", got)
 	pool.want(&IDPool{used: map[uint32]bool{}, maxUsed: 1}, t)
 }
 
 func TestIDPoolSecondGet(t *testing.T) {
 	pool := NewIDPool(0)
 	pool.Get()
-
-	if got := pool.Get(); got != 2 {
-		t.Errorf("pool.Get() = %v, want 2", got)
-	}
-
+	got := pool.Get()
+	assert.Equal(t, uint32(2), got, "pool.Get() = %v, want 2", got)
 	pool.want(&IDPool{used: map[uint32]bool{}, maxUsed: 2}, t)
 }
 
@@ -58,7 +49,6 @@ func TestIDPoolPutToUsedSet(t *testing.T) {
 	id1 := pool.Get()
 	pool.Get()
 	pool.Put(id1)
-
 	pool.want(&IDPool{used: map[uint32]bool{1: true}, maxUsed: 2}, t)
 }
 
@@ -66,7 +56,6 @@ func TestIDPoolPutMaxUsed1(t *testing.T) {
 	pool := NewIDPool(0)
 	id1 := pool.Get()
 	pool.Put(id1)
-
 	pool.want(&IDPool{used: map[uint32]bool{}, maxUsed: 0}, t)
 }
 
@@ -75,7 +64,6 @@ func TestIDPoolPutMaxUsed2(t *testing.T) {
 	pool.Get()
 	id2 := pool.Get()
 	pool.Put(id2)
-
 	pool.want(&IDPool{used: map[uint32]bool{}, maxUsed: 1}, t)
 }
 
@@ -84,23 +72,16 @@ func TestIDPoolGetFromUsedSet(t *testing.T) {
 	id1 := pool.Get()
 	pool.Get()
 	pool.Put(id1)
-
-	if got := pool.Get(); got != 1 {
-		t.Errorf("pool.Get() = %v, want 1", got)
-	}
-
+	got := pool.Get()
+	assert.Equal(t, uint32(1), got, "pool.Get() = %v, want 1", got)
 	pool.want(&IDPool{used: map[uint32]bool{}, maxUsed: 2}, t)
 }
 
 func wantError(want string, t *testing.T) {
 	rec := recover()
-	if rec == nil {
-		t.Errorf("expected panic, but there wasn't one")
-	}
+	require.NotNil(t, rec, "expected panic, but there wasn't one")
 	err, ok := rec.(error)
-	if !ok || !strings.Contains(err.Error(), want) {
-		t.Errorf("wrong error, got '%v', want '%v'", err, want)
-	}
+	require.True(t, ok && strings.Contains(err.Error(), want), "wrong error, got '%v', want '%v'", err, want)
 }
 
 func TestIDPoolPut0(t *testing.T) {

@@ -31,12 +31,9 @@ func TestHistory(t *testing.T) {
 	}
 	want := []int{1, 0}
 	records := q.Records()
-	if want, got := len(want), len(records); want != got {
-		t.Errorf("len(records): want %v, got %v. records: %+v", want, got, q)
-	}
+	assert.Equal(t, len(want), len(records), "len(records): want %v, got %v. records: %+v", len(want), len(records), q)
 	for i, record := range records {
 		assert.Equal(t, want[i], record)
-
 	}
 
 	for ; i < 6; i++ {
@@ -45,12 +42,9 @@ func TestHistory(t *testing.T) {
 
 	want = []int{5, 4, 3, 2}
 	records = q.Records()
-	if want, got := len(want), len(records); want != got {
-		t.Errorf("len(records): want %v, got %v. records: %+v", want, got, q)
-	}
+	assert.Equal(t, len(want), len(records), "len(records): want %v, got %v. records: %+v", len(want), len(records), q)
 	for i, record := range records {
 		assert.Equal(t, want[i], record)
-
 	}
 }
 
@@ -59,32 +53,20 @@ func TestLatest(t *testing.T) {
 
 	// Add first value.
 	h.Add(mod10(1))
-	if got, want := int(h.Records()[0].(mod10)), 1; got != want {
-		t.Errorf("h.Records()[0] = %v, want %v", got, want)
-	}
-	if got, want := int(h.Latest().(mod10)), 1; got != want {
-		t.Errorf("h.Latest() = %v, want %v", got, want)
-	}
+	assert.Equal(t, 1, int(h.Records()[0].(mod10)), "h.Records()[0] = %v, want %v", h.Records()[0], 1)
+	assert.Equal(t, 1, int(h.Latest().(mod10)), "h.Latest() = %v, want %v", h.Latest(), 1)
 
 	// Add value that isn't a "duplicate".
 	h.Add(mod10(2))
-	if got, want := int(h.Records()[0].(mod10)), 2; got != want {
-		t.Errorf("h.Records()[0] = %v, want %v", got, want)
-	}
-	if got, want := int(h.Latest().(mod10)), 2; got != want {
-		t.Errorf("h.Latest() = %v, want %v", got, want)
-	}
+	assert.Equal(t, 2, int(h.Records()[0].(mod10)), "h.Records()[0] = %v, want %v", h.Records()[0], 2)
+	assert.Equal(t, 2, int(h.Latest().(mod10)), "h.Latest() = %v, want %v", h.Latest(), 2)
 
 	// Add value that IS a "duplicate".
 	h.Add(mod10(12))
 	// Records()[0] doesn't change.
-	if got, want := int(h.Records()[0].(mod10)), 2; got != want {
-		t.Errorf("h.Records()[0] = %v, want %v", got, want)
-	}
+	assert.Equal(t, 2, int(h.Records()[0].(mod10)), "h.Records()[0] = %v, want %v", h.Records()[0], 2)
 	// Latest() does change.
-	if got, want := int(h.Latest().(mod10)), 12; got != want {
-		t.Errorf("h.Latest() = %v, want %v", got, want)
-	}
+	assert.Equal(t, 12, int(h.Latest().(mod10)), "h.Latest() = %v, want %v", h.Latest(), 12)
 }
 
 type duplic int
@@ -97,9 +79,7 @@ func TestIsEquivalent(t *testing.T) {
 	q := New(4)
 	q.Add(duplic(0))
 	q.Add(duplic(0))
-	if got, want := len(q.Records()), 1; got != want {
-		t.Errorf("len(q.Records())=%v, want %v", got, want)
-	}
+	assert.Equal(t, 1, len(q.Records()), "len(q.Records())=%v, want %v", len(q.Records()), 1)
 }
 
 type mod10 int

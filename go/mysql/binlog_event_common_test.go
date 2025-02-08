@@ -40,138 +40,87 @@ var (
 
 func TestBinlogEventEmptyBuf(t *testing.T) {
 	input := binlogEvent([]byte{})
-	want := false
-	if got := input.IsValid(); got != want {
-		t.Errorf("%#v.IsValid() = %v, want %v", input, got, want)
-	}
+	assert.False(t, input.IsValid(), "%#v.IsValid() = true, want false", input)
 }
 
 func TestBinlogEventGarbage(t *testing.T) {
 	input := binlogEvent(garbageEvent)
-	want := false
-	if got := input.IsValid(); got != want {
-		t.Errorf("%#v.IsValid() = %v, want %v", input, got, want)
-	}
+	assert.False(t, input.IsValid(), "%#v.IsValid() = true, want false", input)
 }
 
 func TestBinlogEventIsValid(t *testing.T) {
 	input := binlogEvent(googleRotateEvent)
-	want := true
-	if got := input.IsValid(); got != want {
-		t.Errorf("%#v.IsValid() = %v, want %v", input, got, want)
-	}
+	assert.True(t, input.IsValid(), "%#v.IsValid() = false, want true", input)
 }
 
 func TestBinlogEventTruncatedHeader(t *testing.T) {
 	input := binlogEvent(googleRotateEvent[:18])
-	want := false
-	if got := input.IsValid(); got != want {
-		t.Errorf("%#v.IsValid() = %v, want %v", input, got, want)
-	}
+	assert.False(t, input.IsValid(), "%#v.IsValid() = true, want false", input)
 }
 
 func TestBinlogEventTruncatedData(t *testing.T) {
 	input := binlogEvent(googleRotateEvent[:len(googleRotateEvent)-1])
-	want := false
-	if got := input.IsValid(); got != want {
-		t.Errorf("%#v.IsValid() = %v, want %v", input, got, want)
-	}
+	assert.False(t, input.IsValid(), "%#v.IsValid() = true, want false", input)
 }
 
 func TestBinlogEventType(t *testing.T) {
 	input := binlogEvent(googleRotateEvent)
-	want := byte(0x04)
-	if got := input.Type(); got != want {
-		t.Errorf("%#v.Type() = %v, want %v", input, got, want)
-	}
+	assert.Equal(t, byte(0x04), input.Type(), "%#v.Type() = %v, want %v", input, input.Type(), 0x04)
 }
 
 func TestBinlogEventFlags(t *testing.T) {
 	input := binlogEvent(googleRotateEvent)
-	want := uint16(0x20)
-	if got := input.Flags(); got != want {
-		t.Errorf("%#v.Flags() = %v, want %v", input, got, want)
-	}
+	assert.Equal(t, uint16(0x20), input.Flags(), "%#v.Flags() = %v, want %v", input, input.Flags(), 0x20)
 }
 
 func TestBinlogEventTimestamp(t *testing.T) {
 	input := binlogEvent(googleFormatEvent)
-	want := uint32(0x53e95252)
-	if got := input.Timestamp(); got != want {
-		t.Errorf("%#v.Timestamp() = %v, want %v", input, got, want)
-	}
+	assert.Equal(t, uint32(0x53e95252), input.Timestamp(), "%#v.Timestamp() = %v, want %v", input, input.Timestamp(), 0x53e95252)
 }
 
 func TestBinlogEventServerID(t *testing.T) {
 	input := binlogEvent(googleFormatEvent)
-	want := uint32(62344)
-	if got := input.ServerID(); got != want {
-		t.Errorf("%#v.ServerID() = %v, want %v", input, got, want)
-	}
+	assert.Equal(t, uint32(62344), input.ServerID(), "%#v.ServerID() = %v, want %v", input, input.ServerID(), 62344)
 }
 
 func TestBinlogEventIsFormatDescription(t *testing.T) {
 	input := binlogEvent(googleFormatEvent)
-	want := true
-	if got := input.IsFormatDescription(); got != want {
-		t.Errorf("%#v.IsFormatDescription() = %v, want %v", input, got, want)
-	}
+	assert.True(t, input.IsFormatDescription(), "%#v.IsFormatDescription() = false, want true", input)
 }
 
 func TestBinlogEventIsNotFormatDescription(t *testing.T) {
 	input := binlogEvent(googleRotateEvent)
-	want := false
-	if got := input.IsFormatDescription(); got != want {
-		t.Errorf("%#v.IsFormatDescription() = %v, want %v", input, got, want)
-	}
+	assert.False(t, input.IsFormatDescription(), "%#v.IsFormatDescription() = true, want false", input)
 }
 
 func TestBinlogEventIsQuery(t *testing.T) {
 	input := binlogEvent(googleQueryEvent)
-	want := true
-	if got := input.IsQuery(); got != want {
-		t.Errorf("%#v.IsQuery() = %v, want %v", input, got, want)
-	}
+	assert.True(t, input.IsQuery(), "%#v.IsQuery() = false, want true", input)
 }
 
 func TestBinlogEventIsNotQuery(t *testing.T) {
 	input := binlogEvent(googleFormatEvent)
-	want := false
-	if got := input.IsQuery(); got != want {
-		t.Errorf("%#v.IsQuery() = %v, want %v", input, got, want)
-	}
+	assert.False(t, input.IsQuery(), "%#v.IsQuery() = true, want false", input)
 }
 
 func TestBinlogEventIsIntVar(t *testing.T) {
 	input := binlogEvent(googleIntVarEvent1)
-	want := true
-	if got := input.IsIntVar(); got != want {
-		t.Errorf("%#v.IsIntVar() = %v, want %v", input, got, want)
-	}
+	assert.True(t, input.IsIntVar(), "%#v.IsIntVar() = false, want true", input)
 }
 
 func TestBinlogEventIsNotIntVar(t *testing.T) {
 	input := binlogEvent(googleFormatEvent)
-	want := false
-	if got := input.IsIntVar(); got != want {
-		t.Errorf("%#v.IsIntVar() = %v, want %v", input, got, want)
-	}
+	assert.False(t, input.IsIntVar(), "%#v.IsIntVar() = true, want false", input)
 }
 
 func TestBinlogEventIsRotate(t *testing.T) {
 	input := binlogEvent(googleRotateEvent)
-	want := true
-	if got := input.IsRotate(); got != want {
-		t.Errorf("%#v.IsRotate() = %v, want %v", input, got, want)
-	}
+	assert.True(t, input.IsRotate(), "%#v.IsRotate() = false, want true", input)
 }
 
 func TestBinlogEventIsNotRotate(t *testing.T) {
 	input := binlogEvent(googleFormatEvent)
-	want := false
-	if got := input.IsRotate(); got != want {
-		t.Errorf("%#v.IsRotate() = %v, want %v", input, got, want)
-	}
+	assert.False(t, input.IsRotate(), "%#v.IsRotate() = true, want false", input)
 }
 
 func TestBinlogEventIsNotHeartbeat(t *testing.T) {
@@ -181,18 +130,12 @@ func TestBinlogEventIsNotHeartbeat(t *testing.T) {
 
 func TestBinlogEventIsXID(t *testing.T) {
 	input := binlogEvent(googleXIDEvent)
-	want := true
-	if got := input.IsXID(); got != want {
-		t.Errorf("%#v.IsXID() = %v, want %v", input, got, want)
-	}
+	assert.True(t, input.IsXID(), "%#v.IsXID() = false, want true", input)
 }
 
 func TestBinlogEventIsNotXID(t *testing.T) {
 	input := binlogEvent(googleFormatEvent)
-	want := false
-	if got := input.IsXID(); got != want {
-		t.Errorf("%#v.IsXID() = %v, want %v", input, got, want)
-	}
+	assert.False(t, input.IsXID(), "%#v.IsXID() = true, want false", input)
 }
 
 func TestBinlogEventFormat(t *testing.T) {
@@ -207,7 +150,6 @@ func TestBinlogEventFormat(t *testing.T) {
 	assert.NoError(t, err, "unexpected error: %v", err)
 	assert.True(t, reflect.DeepEqual(got, want), "%#v.Format() = %v, want %v", input, got, want)
 	assert.False(t, input.IsHeartbeat())
-
 }
 
 func TestBinlogEventFormatWrongVersion(t *testing.T) {
@@ -218,12 +160,9 @@ func TestBinlogEventFormatWrongVersion(t *testing.T) {
 	input := binlogEvent(buf)
 	want := "format version = 5, we only support version 4"
 	_, err := input.Format()
-	if err == nil {
-		t.Errorf("expected error, got none")
-		return
-	}
-	if got := err.Error(); got != want {
-		t.Errorf("wrong error, got %#v, want %#v", got, want)
+	assert.Error(t, err, "expected error, got none")
+	if err != nil {
+		assert.Equal(t, want, err.Error(), "wrong error, got %#v, want %#v", err.Error(), want)
 	}
 }
 
@@ -235,21 +174,15 @@ func TestBinlogEventFormatBadHeaderLength(t *testing.T) {
 	input := binlogEvent(buf)
 	want := "header length = 12, should be >= 19"
 	_, err := input.Format()
-	if err == nil {
-		t.Errorf("expected error, got none")
-		return
-	}
-	if got := err.Error(); got != want {
-		t.Errorf("wrong error, got %#v, want %#v", got, want)
+	assert.Error(t, err, "expected error, got none")
+	if err != nil {
+		assert.Equal(t, want, err.Error(), "wrong error, got %#v, want %#v", err.Error(), want)
 	}
 }
 
 func TestBinlogEventQuery(t *testing.T) {
 	f, err := binlogEvent(googleFormatEvent).Format()
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-		return
-	}
+	assert.NoError(t, err, "unexpected error: %v", err)
 
 	input := binlogEvent(googleQueryEvent)
 	want := Query{
@@ -262,20 +195,13 @@ primary key(eid, id)
 ) Engine=InnoDB`,
 	}
 	got, err := input.Query(f)
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-		return
-	}
+	assert.NoError(t, err, "unexpected error: %v", err)
 	assert.True(t, reflect.DeepEqual(got, want), "%#v.Query() = %v, want %v", input, got, want)
-
 }
 
 func TestBinlogEventQueryBadLength(t *testing.T) {
 	f, err := binlogEvent(googleFormatEvent).Format()
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-		return
-	}
+	assert.NoError(t, err, "unexpected error: %v", err)
 
 	buf := make([]byte, len(googleQueryEvent))
 	copy(buf, googleQueryEvent)
@@ -284,61 +210,41 @@ func TestBinlogEventQueryBadLength(t *testing.T) {
 	input := binlogEvent(buf)
 	want := "SQL query position overflows buffer (240 > 146)"
 	_, err = input.Query(f)
-	if err == nil {
-		t.Errorf("expected error, got none")
-		return
-	}
-	if got := err.Error(); got != want {
-		t.Errorf("wrong error, got %#v, want %#v", got, want)
+	assert.Error(t, err, "expected error, got none")
+	if err != nil {
+		assert.Equal(t, want, err.Error(), "wrong error, got %#v, want %#v", err.Error(), want)
 	}
 }
 
 func TestBinlogEventIntVar1(t *testing.T) {
 	f, err := binlogEvent(googleFormatEvent).Format()
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-		return
-	}
+	assert.NoError(t, err, "unexpected error: %v", err)
 
 	input := binlogEvent(googleIntVarEvent1)
 	wantType := byte(IntVarLastInsertID)
 	wantValue := uint64(101)
 	gotType, gotValue, err := input.IntVar(f)
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-		return
-	}
-	if gotType != wantType || gotValue != wantValue {
-		t.Errorf("%#v.IntVar() = (%#v, %#v), want (%#v, %#v)", input, gotType, gotValue, wantType, wantValue)
-	}
+	assert.NoError(t, err, "unexpected error: %v", err)
+	assert.Equal(t, wantType, gotType)
+	assert.Equal(t, wantValue, gotValue)
 }
 
 func TestBinlogEventIntVar2(t *testing.T) {
 	f, err := binlogEvent(googleFormatEvent).Format()
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-		return
-	}
+	assert.NoError(t, err, "unexpected error: %v", err)
 
 	input := binlogEvent(googleIntVarEvent2)
 	wantType := byte(IntVarInsertID)
 	wantValue := uint64(101)
 	gotType, gotValue, err := input.IntVar(f)
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-		return
-	}
-	if gotType != wantType || gotValue != wantValue {
-		t.Errorf("%#v.IntVar() = (%#v, %#v), want (%#v, %#v)", input, gotType, gotValue, wantType, wantValue)
-	}
+	assert.NoError(t, err, "unexpected error: %v", err)
+	assert.Equal(t, wantType, gotType)
+	assert.Equal(t, wantValue, gotValue)
 }
 
 func TestBinlogEventIntVarBadID(t *testing.T) {
 	f, err := binlogEvent(googleFormatEvent).Format()
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-		return
-	}
+	assert.NoError(t, err, "unexpected error: %v", err)
 
 	buf := make([]byte, len(googleIntVarEvent2))
 	copy(buf, googleIntVarEvent2)
@@ -347,12 +253,9 @@ func TestBinlogEventIntVarBadID(t *testing.T) {
 	input := binlogEvent(buf)
 	want := "invalid IntVar ID: 3"
 	_, _, err = input.IntVar(f)
-	if err == nil {
-		t.Errorf("expected error, got none")
-		return
-	}
-	if got := err.Error(); got != want {
-		t.Errorf("wrong error, got %#v, want %#v", got, want)
+	assert.Error(t, err, "expected error, got none")
+	if err != nil {
+		assert.Equal(t, want, err.Error(), "wrong error, got %#v, want %#v", err.Error(), want)
 	}
 }
 
