@@ -47,11 +47,11 @@ func TestStatsdCounter(t *testing.T) {
 		if kv.Key == name {
 			sb.addExpVar(kv)
 			require.NoError(t, sb.statsdClient.Flush(), "Error flushing")
-			
+
 			bytes := make([]byte, 4096)
 			n, err := server.Read(bytes)
 			require.NoError(t, err)
-			
+
 			result := string(bytes[:n])
 			expected := "test.counter_name:1|c\n"
 			assert.Equal(t, expected, result)
@@ -72,11 +72,11 @@ func TestStatsdGauge(t *testing.T) {
 			found = true
 			sb.addExpVar(kv)
 			require.NoError(t, sb.statsdClient.Flush(), "Error flushing")
-			
+
 			bytes := make([]byte, 4096)
 			n, err := server.Read(bytes)
 			require.NoError(t, err)
-			
+
 			result := string(bytes[:n])
 			expected := "test.gauge_name:10|g\n"
 			assert.Equal(t, expected, result)
@@ -97,11 +97,11 @@ func TestStatsdGaugeFloat64(t *testing.T) {
 			found = true
 			sb.addExpVar(kv)
 			require.NoError(t, sb.statsdClient.Flush(), "Error flushing")
-			
+
 			bytes := make([]byte, 4096)
 			n, err := server.Read(bytes)
 			require.NoError(t, err)
-			
+
 			result := string(bytes[:n])
 			expected := "test.gauge_name_f64:3.14|g\n"
 			assert.Equal(t, expected, result)
@@ -123,11 +123,11 @@ func TestStatsdGaugeFunc(t *testing.T) {
 			found = true
 			sb.addExpVar(kv)
 			require.NoError(t, sb.statsdClient.Flush(), "Error flushing")
-			
+
 			bytes := make([]byte, 4096)
 			n, err := server.Read(bytes)
 			require.NoError(t, err)
-			
+
 			result := string(bytes[:n])
 			expected := "test.gauge_func_name:2|g\n"
 			assert.Equal(t, expected, result)
@@ -205,11 +205,11 @@ func TestStatsdCountersWithMultiLabels(t *testing.T) {
 			found = true
 			sb.addExpVar(kv)
 			require.NoError(t, sb.statsdClient.Flush(), "Error flushing")
-			
+
 			bytes := make([]byte, 4096)
 			n, err := server.Read(bytes)
 			require.NoError(t, err)
-			
+
 			result := string(bytes[:n])
 			expected := "test.counter_with_multiple_label_name:1|c|#label1:foo,label2:bar\n"
 			assert.Equal(t, expected, result)
@@ -404,11 +404,11 @@ func TestStatsdHistogram(t *testing.T) {
 			found = true
 			sb.addExpVar(kv)
 			require.NoError(t, sb.statsdClient.Flush(), "Error flushing")
-			
+
 			bytes := make([]byte, 4096)
 			n, err := server.Read(bytes)
 			require.NoError(t, err)
-			
+
 			result := string(bytes[:n])
 			expected := []string{
 				"test.histogram_name:2|h",

@@ -119,16 +119,16 @@ func TestCapacityIsObeyed(t *testing.T) {
 	// Check various other stats
 	l := cache.Len()
 	assert.Equal(t, size, int64(l), "cache.Len() returned bad length: %v", l)
-	
+
 	s := cache.UsedCapacity()
 	assert.Equal(t, size, s, "cache.UsedCapacity() returned bad size: %v", s)
-	
+
 	c := cache.MaxCapacity()
 	assert.Equal(t, size, c, "cache.UsedCapacity() returned bad length: %v", c)
-	
+
 	hits := cache.Hits()
 	assert.Zero(t, hits, "cache.Hits() returned hits when there should be none: %v", hits)
-	
+
 	misses := cache.Misses()
 	assert.Zero(t, misses, "cache.Misses() returned misses when there should be none: %v", misses)
 }

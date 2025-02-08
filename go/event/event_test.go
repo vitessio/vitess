@@ -56,8 +56,8 @@ func TestStaticListener(t *testing.T) {
 
 	triggered := false
 	AddListener(func(testEvent1) { triggered = true })
-	AddListener(func(testEvent2) { 
-		assert.Fail(t, "wrong listener type triggered") 
+	AddListener(func(testEvent2) {
+		assert.Fail(t, "wrong listener type triggered")
 	})
 	Dispatch(testEvent1{})
 	assert.True(t, triggered, "static listener failed to trigger")
@@ -68,8 +68,8 @@ func TestPointerListener(t *testing.T) {
 
 	testEvent := new(testEvent2)
 	AddListener(func(ev *testEvent2) { ev.triggered = true })
-	AddListener(func(testEvent2) { 
-		assert.Fail(t, "non-pointer listener triggered on pointer type") 
+	AddListener(func(testEvent2) {
+		assert.Fail(t, "non-pointer listener triggered on pointer type")
 	})
 	Dispatch(testEvent)
 	assert.True(t, testEvent.triggered, "pointer listener failed to trigger")
@@ -80,8 +80,8 @@ func TestInterfaceListener(t *testing.T) {
 
 	triggered := false
 	AddListener(func(testInterface1) { triggered = true })
-	AddListener(func(testInterface2) { 
-		assert.Fail(t, "interface listener triggered on non-matching type") 
+	AddListener(func(testInterface2) {
+		assert.Fail(t, "interface listener triggered on non-matching type")
 	})
 	Dispatch(testEvent1{})
 	assert.True(t, triggered, "interface listener failed to trigger")

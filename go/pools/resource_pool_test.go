@@ -534,7 +534,7 @@ func TestCreateFail(t *testing.T) {
 
 	_, err := p.Get(ctx)
 	assert.EqualError(t, err, "Failed", "Expecting Failed, received %v", err)
-	
+
 	stats := p.StatsJSON()
 	expected := `{"Capacity": 5, "Available": 5, "Active": 0, "InUse": 0, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0, "MaxLifetimeClosed": 0, "Exhausted": 0}`
 	assert.Equal(t, expected, stats)
