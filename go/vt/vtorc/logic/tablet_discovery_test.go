@@ -888,6 +888,7 @@ func TestGetAllTablets(t *testing.T) {
 	require.Equal(t, []string{"zone3", "zone4"}, failedCells)
 
 	for _, tablets := range tabletsByCell {
+		require.Len(t, tablets, 1)
 		for _, tablet := range tablets {
 			require.Equal(t, t.Name(), tablet.Tablet.GetHostname())
 		}
