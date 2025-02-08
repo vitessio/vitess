@@ -91,6 +91,8 @@ const (
 	IsNotNull
 	// In is used to filter a comparable column if equals any of the values from a specific tuple
 	In
+	// NotBetween is used to filter a comparable column if it doesn't lie within a specific range
+	NotBetween
 )
 
 // Filter contains opcodes for filtering.
@@ -262,6 +264,22 @@ func (plan *Plan) filter(values, result []sqltypes.Value, charsets []collations.
 			}
 			if !found {
 				return false, nil
+			}
+		case NotBetween:
+			if filter.Values == nil || len(filter.Values) != 2 {
+				return false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected 2 filter values when performing BETWEEN")
+			}
+			leftFilterValue, rightFilterValue := filter.Values[0], filter.Values[1]
+			isValueLessThanLeftFilter, err := compare(LessThan, values[filter.ColNum], leftFilterValue, plan.env.CollationEnv(), charsets[filter.ColNum])
+			if err != nil {
+				return false, err
+			}
+			if isValueLessThanLeftFilter {
+				return true, nil
+			}
+			isValueGreaterThanRightFilter, err := compare(GreaterThan, values[filter.ColNum], rightFilterValue, plan.env.CollationEnv(), charsets[filter.ColNum])
+			if err != nil || !isValueGreaterThanRightFilter {
+				return false, err
 			}
 		default:
 			match, err := compare(filter.Opcode, values[filter.ColNum], filter.Value, plan.env.CollationEnv(), charsets[filter.ColNum])
@@ -560,6 +578,46 @@ func (plan *Plan) appendTupleFilter(values sqlparser.ValTuple, opcode Opcode, co
 	return nil
 }
 
+func (plan *Plan) getFromAndToEvalResult(expr *sqlparser.BetweenExpr) (*evalengine.EvalResult, *evalengine.EvalResult, error) {
+	// From value.
+	fromVal, ok := expr.From.(*sqlparser.Literal)
+	if !ok {
+		return nil, nil, fmt.Errorf("unexpected: %v", sqlparser.String(expr))
+	}
+	pv, err := evalengine.Translate(fromVal, &evalengine.Config{
+		Collation:   plan.env.CollationEnv().DefaultConnectionCharset(),
+		Environment: plan.env,
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	env := evalengine.EmptyExpressionEnv(plan.env)
+	fromResolved, err := env.Evaluate(pv)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// To value.
+	toVal, ok := expr.To.(*sqlparser.Literal)
+	if !ok {
+		return nil, nil, fmt.Errorf("unexpected: %v", sqlparser.String(expr))
+	}
+	pv, err = evalengine.Translate(toVal, &evalengine.Config{
+		Collation:   plan.env.CollationEnv().DefaultConnectionCharset(),
+		Environment: plan.env,
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	env = evalengine.EmptyExpressionEnv(plan.env)
+	toResolved, err := env.Evaluate(pv)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return &fromResolved, &toResolved, nil
+}
+
 func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) error {
 	if where == nil {
 		return nil
@@ -647,6 +705,48 @@ func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) er
 			plan.Filters = append(plan.Filters, Filter{
 				Opcode: IsNotNull,
 				ColNum: colnum,
+			})
+		case *sqlparser.BetweenExpr:
+			qualifiedName, ok := expr.Left.(*sqlparser.ColName)
+			if !ok {
+				return fmt.Errorf("unexpected: %v", sqlparser.String(expr))
+			}
+			if !qualifiedName.Qualifier.IsEmpty() {
+				return fmt.Errorf("unsupported qualifier for column: %v", sqlparser.String(qualifiedName))
+			}
+			colnum, err := findColumn(plan.Table, qualifiedName.Name)
+			if err != nil {
+				return err
+			}
+			fromResolved, toResolved, err := plan.getFromAndToEvalResult(expr)
+			if err != nil {
+				return err
+			}
+
+			if !expr.IsBetween {
+				// x NOT BETWEEN a AND b => x < a OR x > b
+				// Also, since we do not have OR implemented yet,
+				// NOT BETWEEN needs to be handled separately.
+				plan.Filters = append(plan.Filters, Filter{
+					Opcode: NotBetween,
+					ColNum: colnum,
+					Values: []sqltypes.Value{
+						fromResolved.Value(plan.env.CollationEnv().DefaultConnectionCharset()),
+						toResolved.Value(plan.env.CollationEnv().DefaultConnectionCharset()),
+					},
+				})
+				continue
+			}
+
+			// x BETWEEN a AND b => x >= a AND x <= b
+			plan.Filters = append(plan.Filters, Filter{
+				Opcode: GreaterThanEqual,
+				ColNum: colnum,
+				Value:  fromResolved.Value(plan.env.CollationEnv().DefaultConnectionCharset()),
+			}, Filter{
+				Opcode: LessThanEqual,
+				ColNum: colnum,
+				Value:  toResolved.Value(plan.env.CollationEnv().DefaultConnectionCharset()),
 			})
 		default:
 			return fmt.Errorf("unsupported constraint: %v", sqlparser.String(expr))
