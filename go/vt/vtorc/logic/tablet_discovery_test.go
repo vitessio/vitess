@@ -843,35 +843,39 @@ func TestSetReplicationSource(t *testing.T) {
 }
 
 func TestGetAllTablets(t *testing.T) {
-	factory := faketopo.NewFakeTopoFactory()
-
 	tablet := &topodatapb.Tablet{
 		Hostname: t.Name(),
 	}
 	tabletProto, _ := tablet.MarshalVT()
 
+	factory := faketopo.NewFakeTopoFactory()
+
+	// zone1 (success)
 	goodCell1 := faketopo.NewFakeConnection()
 	goodCell1.AddListResult("tablets", []topo.KVInfo{
 		{
-			Key:   []byte("hello"),
+			Key:   []byte("zone1-00000001"),
 			Value: tabletProto,
 		},
 	})
 	factory.SetCell("zone1", goodCell1)
 
+	// zone2 (success)
 	goodCell2 := faketopo.NewFakeConnection()
 	goodCell2.AddListResult("tablets", []topo.KVInfo{
 		{
-			Key:   []byte("hello"),
+			Key:   []byte("zone2-00000002"),
 			Value: tabletProto,
 		},
 	})
 	factory.SetCell("zone2", goodCell2)
 
+	// zone3 (fail)
 	badCell1 := faketopo.NewFakeConnection()
 	badCell1.AddListError(true)
 	factory.SetCell("zone3", badCell1)
 
+	// zone4 (fail)
 	badCell2 := faketopo.NewFakeConnection()
 	badCell2.AddListError(true)
 	factory.SetCell("zone4", badCell2)
@@ -883,10 +887,10 @@ func TestGetAllTablets(t *testing.T) {
 	ctx := context.Background()
 	ts = faketopo.NewFakeTopoServer(ctx, factory)
 
+	// confirm zone1 + zone2 succeeded and zone3 + zone4 failed
 	tabletsByCell, failedCells := getAllTablets(ctx, []string{"zone1", "zone2", "zone3", "zone4"})
 	require.Len(t, tabletsByCell, 2)
 	require.Equal(t, []string{"zone3", "zone4"}, failedCells)
-
 	for _, tablets := range tabletsByCell {
 		require.Len(t, tablets, 1)
 		for _, tablet := range tablets {
