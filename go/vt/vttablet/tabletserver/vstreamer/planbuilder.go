@@ -275,7 +275,7 @@ func (plan *Plan) filter(values, result []sqltypes.Value, charsets []collations.
 				return false, err
 			}
 			if isValueLessThanLeftFilter {
-				return true, nil
+				continue
 			}
 			isValueGreaterThanRightFilter, err := compare(GreaterThan, values[filter.ColNum], rightFilterValue, plan.env.CollationEnv(), charsets[filter.ColNum])
 			if err != nil || !isValueGreaterThanRightFilter {

@@ -2115,3 +2115,66 @@ func TestFilteredInOperator(t *testing.T) {
 	}}
 	ts.Run()
 }
+
+func TestFilteredBetweenOperator(t *testing.T) {
+	ts := &TestSpec{
+		t: t,
+		ddls: []string{
+			"create table t1(id1 int, id2 int, val varbinary(128), primary key(id1))",
+		},
+		options: &TestSpecOptions{
+			filter: &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{{
+					Match:  "t1",
+					Filter: "select id1, val from t1 where val in ('eee', 'bbb', 'ddd', 'aaa') and id1 between 2 and 5",
+				}},
+			},
+		},
+	}
+	defer ts.Close()
+	ts.Init()
+	ts.fieldEvents["t1"].cols[1].skip = true
+	ts.tests = [][]*TestQuery{{
+		{"begin", nil},
+		{"insert into t1 values (1, 100, 'aaa')", noEvents},
+		{"insert into t1 values (2, 200, 'bbb')", nil},
+		{"insert into t1 values (3, 100, 'ccc')", noEvents},
+		{"insert into t1 values (4, 200, 'ddd')", nil},
+		{"insert into t1 values (5, 200, 'eee')", nil},
+		{"insert into t1 values (6, 200, 'fff')", noEvents},
+		{"commit", nil},
+	}}
+	ts.Run()
+}
+
+func TestFilteredNotBetweenOperator(t *testing.T) {
+	ts := &TestSpec{
+		t: t,
+		ddls: []string{
+			"create table t1(id1 int, id2 int, val varbinary(128), primary key(id1))",
+		},
+		options: &TestSpecOptions{
+			filter: &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{{
+					Match:  "t1",
+					Filter: "select id1, val from t1 where id1 not between 2 and 4 and val between 'b' and 'f'",
+				}},
+			},
+		},
+	}
+	defer ts.Close()
+	ts.Init()
+	ts.fieldEvents["t1"].cols[1].skip = true
+	ts.tests = [][]*TestQuery{{
+		{"begin", nil},
+		{"insert into t1 values (1, 100, 'a')", noEvents},
+		{"insert into t1 values (2, 200, 'b')", noEvents},
+		{"insert into t1 values (3, 100, 'c')", noEvents},
+		{"insert into t1 values (4, 200, 'd')", noEvents},
+		{"insert into t1 values (5, 200, 'e')", nil},
+		{"insert into t1 values (6, 200, 'f')", nil},
+		{"insert into t1 values (7, 100, 'g')", noEvents},
+		{"commit", nil},
+	}}
+	ts.Run()
+}
