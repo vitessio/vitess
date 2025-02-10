@@ -44,15 +44,24 @@ func NewFakeTopoFactory() *FakeFactory {
 		mu:    sync.Mutex{},
 		cells: map[string][]*FakeConn{},
 	}
-	factory.cells[topo.GlobalCell] = []*FakeConn{newFakeConnection()}
+	factory.cells[topo.GlobalCell] = []*FakeConn{NewFakeConnection()}
 	return factory
 }
 
 // AddCell is used to add a cell to the factory. It returns the fake connection created. This connection can then be used to set get and update errors
 func (f *FakeFactory) AddCell(cell string) *FakeConn {
-	conn := newFakeConnection()
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	conn := NewFakeConnection()
 	f.cells[cell] = []*FakeConn{conn}
 	return conn
+}
+
+// SetCell is used to set a cell in the factory.
+func (f *FakeFactory) SetCell(cell string, fakeConn *FakeConn) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.cells[cell] = []*FakeConn{fakeConn}
 }
 
 // HasGlobalReadOnlyCell implements the Factory interface
@@ -69,7 +78,7 @@ func (f *FakeFactory) Create(cell, serverAddr, root string) (topo.Conn, error) {
 	if !ok || len(connections) == 0 {
 		return nil, topo.NewError(topo.NoNode, cell)
 	}
-	// pick the first connection and remove it from the list
+	// pick the first connection and remove it from the list.
 	conn := connections[0]
 	f.cells[cell] = connections[1:]
 
@@ -83,15 +92,19 @@ type FakeConn struct {
 	cell       string
 	serverAddr string
 
-	// mutex to protect all the operations
+	// mutex to protect all the operations.
 	mu sync.Mutex
 
-	// getResultMap is a map storing the results for each filepath
+	// getResultMap is a map storing the results for each filepath.
 	getResultMap map[string]result
-	// updateErrors stores whether update function call should error or not
+	// listResultMap is a map storing the resuls for each filepath prefix.
+	listResultMap map[string][]topo.KVInfo
+	// updateErrors stores whether update function call should error or not.
 	updateErrors []updateError
-	// getErrors stores whether the get function call should error or not
+	// getErrors stores whether the get function call should error or not.
 	getErrors []bool
+	// listErrors stores whether the list function call should error or not.
+	listErrors []bool
 
 	// watches is a map of all watches for this connection to the cell keyed by the filepath.
 	watches map[string][]chan *topo.WatchData
@@ -104,13 +117,15 @@ type updateError struct {
 	writePersists bool
 }
 
-// newFakeConnection creates a new fake connection
-func newFakeConnection() *FakeConn {
+// NewFakeConnection creates a new fake connection
+func NewFakeConnection() *FakeConn {
 	return &FakeConn{
-		getResultMap: map[string]result{},
-		watches:      map[string][]chan *topo.WatchData{},
-		getErrors:    []bool{},
-		updateErrors: []updateError{},
+		getResultMap:  map[string]result{},
+		listResultMap: map[string][]topo.KVInfo{},
+		watches:       map[string][]chan *topo.WatchData{},
+		getErrors:     []bool{},
+		listErrors:    []bool{},
+		updateErrors:  []updateError{},
 	}
 }
 
@@ -119,6 +134,20 @@ func (f *FakeConn) AddGetError(shouldErr bool) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.getErrors = append(f.getErrors, shouldErr)
+}
+
+// AddListError is used to add a list error to the fake connection
+func (f *FakeConn) AddListError(shouldErr bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.listErrors = append(f.listErrors, shouldErr)
+}
+
+// AddListResult is used to add a list result to the fake connection
+func (f *FakeConn) AddListResult(filePathPrefix string, result []topo.KVInfo) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.listResultMap[filePathPrefix] = result
 }
 
 // AddUpdateError is used to add an update error to the fake connection
@@ -255,7 +284,20 @@ func (f *FakeConn) Get(ctx context.Context, filePath string) ([]byte, topo.Versi
 
 // List is part of the topo.Conn interface.
 func (f *FakeConn) List(ctx context.Context, filePathPrefix string) ([]topo.KVInfo, error) {
-	return nil, topo.NewError(topo.NoImplementation, "List not supported in fake topo")
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.listErrors) > 0 {
+		shouldErr := f.listErrors[0]
+		f.listErrors = f.listErrors[1:]
+		if shouldErr {
+			return nil, topo.NewError(topo.Timeout, filePathPrefix)
+		}
+	}
+	kvInfos, isPresent := f.listResultMap[filePathPrefix]
+	if !isPresent {
+		return nil, topo.NewError(topo.NoNode, filePathPrefix)
+	}
+	return kvInfos, nil
 }
 
 // Delete implements the Conn interface
