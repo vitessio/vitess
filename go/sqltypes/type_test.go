@@ -134,7 +134,7 @@ func TestTypeValues(t *testing.T) {
 		expected: 34 | flagIsText,
 	}}
 	for _, tcase := range testcases {
-		assert.Equal(t, tcase.expected, int(tcase.defined), "Type %s: %d, want: %d", tcase.defined, int(tcase.defined), tcase.expected)
+		assert.EqualValues(t, tcase.expected, int(tcase.defined), "Type %s: %d, want: %d", tcase.defined, int(tcase.defined), tcase.expected)
 	}
 }
 
@@ -225,11 +225,11 @@ func TestIsFunctions(t *testing.T) {
 
 func TestTypeToMySQL(t *testing.T) {
 	v, f := TypeToMySQL(Bit)
-	assert.Equal(t, 16, int(v), "Bit: %d, want 16", v)
-	assert.Equal(t, mysqlUnsigned, int(f), "Bit flag: %x, want %x", f, mysqlUnsigned)
+	assert.EqualValues(t, 16, int(v), "Bit: %d, want 16", v)
+	assert.EqualValues(t, mysqlUnsigned, int(f), "Bit flag: %x, want %x", f, mysqlUnsigned)
 	v, f = TypeToMySQL(Date)
-	assert.Equal(t, 10, int(v), "Bit: %d, want 10", v)
-	assert.Equal(t, mysqlBinary, int(f), "Bit flag: %x, want %x", f, mysqlBinary)
+	assert.EqualValues(t, 10, int(v), "Bit: %d, want 10", v)
+	assert.EqualValues(t, mysqlBinary, int(f), "Bit flag: %x, want %x", f, mysqlBinary)
 }
 
 func TestMySQLToType(t *testing.T) {

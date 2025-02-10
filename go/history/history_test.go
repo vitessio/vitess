@@ -31,7 +31,7 @@ func TestHistory(t *testing.T) {
 	}
 	want := []int{1, 0}
 	records := q.Records()
-	assert.Equal(t, len(want), len(records), "len(records): want %v, got %v. records: %+v", len(want), len(records), q)
+	assert.EqualValues(t, len(want), len(records), "len(records): want %v, got %v. records: %+v", len(want), len(records), q)
 	for i, record := range records {
 		assert.Equal(t, want[i], record)
 	}
@@ -42,7 +42,7 @@ func TestHistory(t *testing.T) {
 
 	want = []int{5, 4, 3, 2}
 	records = q.Records()
-	assert.Equal(t, len(want), len(records), "len(records): want %v, got %v. records: %+v", len(want), len(records), q)
+	assert.EqualValues(t, len(want), len(records), "len(records): want %v, got %v. records: %+v", len(want), len(records), q)
 	for i, record := range records {
 		assert.Equal(t, want[i], record)
 	}
@@ -53,20 +53,20 @@ func TestLatest(t *testing.T) {
 
 	// Add first value.
 	h.Add(mod10(1))
-	assert.Equal(t, 1, int(h.Records()[0].(mod10)), "h.Records()[0] = %v, want %v", h.Records()[0], 1)
-	assert.Equal(t, 1, int(h.Latest().(mod10)), "h.Latest() = %v, want %v", h.Latest(), 1)
+	assert.EqualValues(t, 1, int(h.Records()[0].(mod10)), "h.Records()[0] = %v, want %v", h.Records()[0], 1)
+	assert.EqualValues(t, 1, int(h.Latest().(mod10)), "h.Latest() = %v, want %v", h.Latest(), 1)
 
 	// Add value that isn't a "duplicate".
 	h.Add(mod10(2))
-	assert.Equal(t, 2, int(h.Records()[0].(mod10)), "h.Records()[0] = %v, want %v", h.Records()[0], 2)
-	assert.Equal(t, 2, int(h.Latest().(mod10)), "h.Latest() = %v, want %v", h.Latest(), 2)
+	assert.EqualValues(t, 2, int(h.Records()[0].(mod10)), "h.Records()[0] = %v, want %v", h.Records()[0], 2)
+	assert.EqualValues(t, 2, int(h.Latest().(mod10)), "h.Latest() = %v, want %v", h.Latest(), 2)
 
 	// Add value that IS a "duplicate".
 	h.Add(mod10(12))
 	// Records()[0] doesn't change.
-	assert.Equal(t, 2, int(h.Records()[0].(mod10)), "h.Records()[0] = %v, want %v", h.Records()[0], 2)
+	assert.EqualValues(t, 2, int(h.Records()[0].(mod10)), "h.Records()[0] = %v, want %v", h.Records()[0], 2)
 	// Latest() does change.
-	assert.Equal(t, 12, int(h.Latest().(mod10)), "h.Latest() = %v, want %v", h.Latest(), 12)
+	assert.EqualValues(t, 12, int(h.Latest().(mod10)), "h.Latest() = %v, want %v", h.Latest(), 12)
 }
 
 type duplic int
@@ -79,7 +79,7 @@ func TestIsEquivalent(t *testing.T) {
 	q := New(4)
 	q.Add(duplic(0))
 	q.Add(duplic(0))
-	assert.Equal(t, 1, len(q.Records()), "len(q.Records())=%v, want %v", len(q.Records()), 1)
+	assert.EqualValues(t, 1, len(q.Records()), "len(q.Records())=%v, want %v", len(q.Records()), 1)
 }
 
 type mod10 int
