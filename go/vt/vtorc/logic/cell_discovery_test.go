@@ -53,5 +53,5 @@ func TestRefreshCells(t *testing.T) {
 	require.NoError(t, RefreshCells(ctx))
 	cellsRead, err = inst.ReadCells()
 	require.NoError(t, err)
-	require.Equal(t, cells[:2], cellsRead)
+	require.Equal(t, []string{"zone1", "zone2"}, cellsRead)
 }
