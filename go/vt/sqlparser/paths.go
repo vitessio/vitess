@@ -34,21 +34,12 @@ func AddStep(path ASTPath, step ASTStep) ASTPath {
 	return path + ASTPath(b)
 }
 
-func AddStepWithSliceIndex(path ASTPath, step ASTStep, idx int) ASTPath {
-	if idx < 255 {
-		// 2 bytes for step code + 1 byte for index
-		b := make([]byte, 3)
-		binary.BigEndian.PutUint16(b[:2], uint16(step))
-		b[2] = byte(idx)
-		return path + ASTPath(b)
-	}
+func AddStepWithOffset(path ASTPath, step ASTStep, offset int) ASTPath {
+	var buf [10]byte
+	binary.BigEndian.PutUint16(buf[0:], uint16(step))
+	n := binary.PutVarint(buf[2:], int64(offset))
 
-	// 2 bytes for step code + 4 byte for index
-	b := make([]byte, 6)
-	longStep := step + 1
-	binary.BigEndian.PutUint16(b[:2], uint16(longStep))
-	binary.BigEndian.PutUint32(b[2:], uint32(idx))
-	return path + ASTPath(b)
+	return path + ASTPath(buf[:2+n])
 }
 
 func (path ASTPath) DebugString() string {

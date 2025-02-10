@@ -30,13 +30,14 @@ type ASTPathBuilder struct {
 
 const initialCap = 16
 
-// NewASTPathBuilder creates a new ASTPathBuilder with an optional initial capacity.
+// NewASTPathBuilder creates a new ASTPathBuilder
 func NewASTPathBuilder() *ASTPathBuilder {
 	return &ASTPathBuilder{
 		path: make([]byte, initialCap),
 	}
 }
 
+// TODO: Remove this. We should only use it for testing while building confidence.
 func (apb *ASTPathBuilder) sanityCheck() {
 	var total int
 	for _, size := range apb.sizes {
@@ -50,15 +51,15 @@ func (apb *ASTPathBuilder) sanityCheck() {
 // growIfNeeded expands the slice capacity if we don't have enough room for n more bytes.
 func (apb *ASTPathBuilder) growIfNeeded(n int) {
 	needed := apb.pathLen + n
-	i := cap(apb.path)
-	if needed <= i {
+	currentCap := cap(apb.path)
+	if needed <= currentCap {
 		return
 	}
-	newCap := cap(apb.path) * 2
+	newCap := currentCap * 2
 	for newCap < needed {
 		newCap *= 2
 	}
-	newPath := make([]byte, apb.pathLen, newCap)
+	newPath := make([]byte, newCap)
 	copy(newPath, apb.path[:apb.pathLen])
 	apb.path = newPath
 }
@@ -77,8 +78,8 @@ func (apb *ASTPathBuilder) AddStep(step uint16) {
 	apb.sanityCheck()
 }
 
-// AddStepWithOffset appends a single step (2 bytes) + varint offset.
-func (apb *ASTPathBuilder) AddStepWithOffset(step uint16, offset int) {
+// AddStepWithOffset appends a single step (2 bytes) + varint offset with value 0 to path.
+func (apb *ASTPathBuilder) AddStepWithOffset(step uint16) {
 	// Step
 	apb.growIfNeeded(2)
 	binary.BigEndian.PutUint16(apb.path[apb.pathLen:apb.pathLen+2], step)
@@ -86,7 +87,7 @@ func (apb *ASTPathBuilder) AddStepWithOffset(step uint16, offset int) {
 
 	// Offset
 	var buf [8]byte
-	bytesWritten := binary.PutVarint(buf[:], int64(offset))
+	bytesWritten := binary.PutVarint(buf[:], 0) // 0 offset
 	apb.growIfNeeded(bytesWritten)
 	copy(apb.path[apb.pathLen:apb.pathLen+bytesWritten], buf[:bytesWritten])
 	apb.pathLen += bytesWritten

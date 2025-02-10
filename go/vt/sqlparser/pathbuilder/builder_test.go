@@ -65,60 +65,24 @@ func TestASTPathBuilderAddStepOffset(t *testing.T) {
 		},
 		{
 			name:     "multiple steps",
-			steps:    []uint16{1, 0x24, 0x913},
-			offsets:  []int{0, -1, 2},
-			wantPath: "\x00\x01\x00\x00\x24\x09\x13\x04",
+			steps:    []uint16{1, 0x24, 0x913, 0x913},
+			offsets:  []int{0, -1, 0, 1}, // the 0 is overwritten by the last offset
+			wantPath: "\x00\x01\x00\x00\x24\x09\x13\x02",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			apb := NewASTPathBuilder()
 			for idx, step := range tt.steps {
-				if tt.offsets[idx] == -1 {
+				switch {
+				case tt.offsets[idx] == -1:
 					apb.AddStep(step)
-				} else {
-					apb.AddStepWithOffset(step, tt.offsets[idx])
+				case tt.offsets[idx] == 0:
+					apb.AddStepWithOffset(step)
+				default:
+					apb.ChangeOffset(tt.offsets[idx])
 				}
 			}
-			require.Equal(t, tt.wantPath, apb.ToPath())
-		})
-	}
-}
-
-func TestASTPathBuilderChangeOffset(t *testing.T) {
-	tests := []struct {
-		name              string
-		steps             []uint16
-		offsets           []int
-		changeOffsetValue int
-		wantPath          string
-	}{
-		{
-			name:              "single step",
-			steps:             []uint16{1},
-			offsets:           []int{0},
-			changeOffsetValue: 5,
-			wantPath:          "\x00\x01\x0a",
-		},
-		{
-			name:              "multiple steps",
-			steps:             []uint16{1, 0x24, 0x913},
-			offsets:           []int{0, -1, 2},
-			changeOffsetValue: 5,
-			wantPath:          "\x00\x01\x00\x00\x24\x09\x13\x0a",
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			apb := NewASTPathBuilder()
-			for idx, step := range tt.steps {
-				if tt.offsets[idx] == -1 {
-					apb.AddStep(step)
-				} else {
-					apb.AddStepWithOffset(step, tt.offsets[idx])
-				}
-			}
-			apb.ChangeOffset(tt.changeOffsetValue)
 			require.Equal(t, tt.wantPath, apb.ToPath())
 		})
 	}
@@ -140,7 +104,7 @@ func TestASTPathBuilderPop(t *testing.T) {
 		{
 			name:     "multiple steps - final step with offset",
 			steps:    []uint16{1, 0x24, 0x913},
-			offsets:  []int{0, -1, 2},
+			offsets:  []int{0, -1, 0, 1},
 			wantPath: "\x00\x01\x00\x00\x24",
 		},
 		{
@@ -154,10 +118,13 @@ func TestASTPathBuilderPop(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			apb := NewASTPathBuilder()
 			for idx, step := range tt.steps {
-				if tt.offsets[idx] == -1 {
+				switch {
+				case tt.offsets[idx] == -1:
 					apb.AddStep(step)
-				} else {
-					apb.AddStepWithOffset(step, tt.offsets[idx])
+				case tt.offsets[idx] == 0:
+					apb.AddStepWithOffset(step)
+				default:
+					apb.ChangeOffset(tt.offsets[idx])
 				}
 			}
 			apb.Pop()

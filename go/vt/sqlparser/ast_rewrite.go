@@ -592,7 +592,7 @@ func (a *application) rewriteRefOfAddColumns(parent SQLNode, node *AddColumns, r
 	for x, el := range node.Columns {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(RefOfAddColumnsColumnsOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(RefOfAddColumnsColumnsOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
@@ -1092,7 +1092,7 @@ func (a *application) rewriteRefOfAlterTable(parent SQLNode, node *AlterTable, r
 	for x, el := range node.AlterOptions {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(RefOfAlterTableAlterOptionsOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(RefOfAlterTableAlterOptionsOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
@@ -1259,7 +1259,7 @@ func (a *application) rewriteRefOfAlterVschema(parent SQLNode, node *AlterVschem
 	for x, el := range node.VindexCols {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(RefOfAlterVschemaVindexColsOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(RefOfAlterVschemaVindexColsOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
@@ -1929,7 +1929,7 @@ func (a *application) rewriteRefOfCallProc(parent SQLNode, node *CallProc, repla
 	for x, el := range node.Params {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(RefOfCallProcParamsOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(RefOfCallProcParamsOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
@@ -1986,7 +1986,7 @@ func (a *application) rewriteRefOfCaseExpr(parent SQLNode, node *CaseExpr, repla
 	for x, el := range node.Whens {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(RefOfCaseExprWhensOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(RefOfCaseExprWhensOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
@@ -2147,7 +2147,7 @@ func (a *application) rewriteRefOfCharExpr(parent SQLNode, node *CharExpr, repla
 	for x, el := range node.Exprs {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(RefOfCharExprExprsOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(RefOfCharExprExprsOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
@@ -2392,7 +2392,7 @@ func (a *application) rewriteColumns(parent SQLNode, node Columns, replacer repl
 	for x, el := range node {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(ColumnsOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(ColumnsOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
@@ -2772,7 +2772,7 @@ func (a *application) rewriteRefOfCount(parent SQLNode, node *Count, replacer re
 	for x, el := range node.Args {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(RefOfCountArgsOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(RefOfCountArgsOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
@@ -3214,7 +3214,7 @@ func (a *application) rewriteRefOfDelete(parent SQLNode, node *Delete, replacer 
 	for x, el := range node.TableExprs {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(RefOfDeleteTableExprsOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(RefOfDeleteTableExprsOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
@@ -3580,7 +3580,7 @@ func (a *application) rewriteRefOfExecuteStmt(parent SQLNode, node *ExecuteStmt,
 	for x, el := range node.Arguments {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(RefOfExecuteStmtArgumentsOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(RefOfExecuteStmtArgumentsOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
@@ -3752,7 +3752,7 @@ func (a *application) rewriteRefOfExprs(parent SQLNode, node *Exprs, replacer re
 	for x, el := range node.Exprs {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(RefOfExprsExprsOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(RefOfExprsExprsOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
@@ -4196,7 +4196,7 @@ func (a *application) rewriteRefOfFuncExpr(parent SQLNode, node *FuncExpr, repla
 	for x, el := range node.Exprs {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(RefOfFuncExprExprsOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(RefOfFuncExprExprsOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
@@ -4816,7 +4816,7 @@ func (a *application) rewriteRefOfGroupBy(parent SQLNode, node *GroupBy, replace
 	for x, el := range node.Exprs {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(RefOfGroupByExprsOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(RefOfGroupByExprsOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
@@ -4865,7 +4865,7 @@ func (a *application) rewriteRefOfGroupConcatExpr(parent SQLNode, node *GroupCon
 	for x, el := range node.Exprs {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(RefOfGroupConcatExprExprsOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(RefOfGroupConcatExprExprsOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
@@ -5022,7 +5022,7 @@ func (a *application) rewriteRefOfIndexHint(parent SQLNode, node *IndexHint, rep
 	for x, el := range node.Indexes {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(RefOfIndexHintIndexesOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(RefOfIndexHintIndexesOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
@@ -5068,7 +5068,7 @@ func (a *application) rewriteIndexHints(parent SQLNode, node IndexHints, replace
 	for x, el := range node {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(IndexHintsOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(IndexHintsOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
@@ -5376,7 +5376,7 @@ func (a *application) rewriteRefOfIntervalFuncExpr(parent SQLNode, node *Interva
 	for x, el := range node.Exprs {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(RefOfIntervalFuncExprExprsOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(RefOfIntervalFuncExprExprsOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
@@ -5548,7 +5548,7 @@ func (a *application) rewriteRefOfJSONArrayExpr(parent SQLNode, node *JSONArrayE
 	for x, el := range node.Params {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(RefOfJSONArrayExprParamsOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(RefOfJSONArrayExprParamsOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
@@ -5661,7 +5661,7 @@ func (a *application) rewriteRefOfJSONContainsExpr(parent SQLNode, node *JSONCon
 	for x, el := range node.PathList {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(RefOfJSONContainsExprPathListOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(RefOfJSONContainsExprPathListOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
@@ -5727,7 +5727,7 @@ func (a *application) rewriteRefOfJSONContainsPathExpr(parent SQLNode, node *JSO
 	for x, el := range node.PathList {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(RefOfJSONContainsPathExprPathListOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(RefOfJSONContainsPathExprPathListOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
@@ -5784,7 +5784,7 @@ func (a *application) rewriteRefOfJSONExtractExpr(parent SQLNode, node *JSONExtr
 	for x, el := range node.PathList {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(RefOfJSONExtractExprPathListOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(RefOfJSONExtractExprPathListOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
@@ -5936,7 +5936,7 @@ func (a *application) rewriteRefOfJSONObjectExpr(parent SQLNode, node *JSONObjec
 	for x, el := range node.Params {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(RefOfJSONObjectExprParamsOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(RefOfJSONObjectExprParamsOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
@@ -6163,7 +6163,7 @@ func (a *application) rewriteRefOfJSONRemoveExpr(parent SQLNode, node *JSONRemov
 	for x, el := range node.PathList {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(RefOfJSONRemoveExprPathListOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(RefOfJSONRemoveExprPathListOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
@@ -6341,7 +6341,7 @@ func (a *application) rewriteRefOfJSONSearchExpr(parent SQLNode, node *JSONSearc
 	for x, el := range node.PathList {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(RefOfJSONSearchExprPathListOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(RefOfJSONSearchExprPathListOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
@@ -6492,7 +6492,7 @@ func (a *application) rewriteRefOfJSONTableExpr(parent SQLNode, node *JSONTableE
 	for x, el := range node.Columns {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(RefOfJSONTableExprColumnsOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(RefOfJSONTableExprColumnsOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
@@ -6661,7 +6661,7 @@ func (a *application) rewriteRefOfJSONValueMergeExpr(parent SQLNode, node *JSONV
 	for x, el := range node.JSONDocList {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(RefOfJSONValueMergeExprJSONDocListOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(RefOfJSONValueMergeExprJSONDocListOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
@@ -6718,7 +6718,7 @@ func (a *application) rewriteRefOfJSONValueModifierExpr(parent SQLNode, node *JS
 	for x, el := range node.Params {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(RefOfJSONValueModifierExprParamsOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(RefOfJSONValueModifierExprParamsOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
@@ -7116,7 +7116,7 @@ func (a *application) rewriteRefOfLineStringExpr(parent SQLNode, node *LineStrin
 	for x, el := range node.PointParams {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(RefOfLineStringExprPointParamsOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(RefOfLineStringExprPointParamsOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
@@ -7431,7 +7431,7 @@ func (a *application) rewriteRefOfMatchExpr(parent SQLNode, node *MatchExpr, rep
 	for x, el := range node.Columns {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(RefOfMatchExprColumnsOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(RefOfMatchExprColumnsOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
@@ -7677,7 +7677,7 @@ func (a *application) rewriteRefOfMultiLinestringExpr(parent SQLNode, node *Mult
 	for x, el := range node.LinestringParams {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(RefOfMultiLinestringExprLinestringParamsOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(RefOfMultiLinestringExprLinestringParamsOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
@@ -7726,7 +7726,7 @@ func (a *application) rewriteRefOfMultiPointExpr(parent SQLNode, node *MultiPoin
 	for x, el := range node.PointParams {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(RefOfMultiPointExprPointParamsOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(RefOfMultiPointExprPointParamsOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
@@ -7775,7 +7775,7 @@ func (a *application) rewriteRefOfMultiPolygonExpr(parent SQLNode, node *MultiPo
 	for x, el := range node.PolygonParams {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(RefOfMultiPolygonExprPolygonParamsOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(RefOfMultiPolygonExprPolygonParamsOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
@@ -7933,7 +7933,7 @@ func (a *application) rewriteNamedWindows(parent SQLNode, node NamedWindows, rep
 	for x, el := range node {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(NamedWindowsOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(NamedWindowsOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
@@ -8198,7 +8198,7 @@ func (a *application) rewriteOnDup(parent SQLNode, node OnDup, replacer replacer
 	for x, el := range node {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(OnDupOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(OnDupOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
@@ -8367,7 +8367,7 @@ func (a *application) rewriteOrderBy(parent SQLNode, node OrderBy, replacer repl
 	for x, el := range node {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(OrderByOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(OrderByOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
@@ -8782,7 +8782,7 @@ func (a *application) rewriteRefOfPartitionOption(parent SQLNode, node *Partitio
 	for x, el := range node.Definitions {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(RefOfPartitionOptionDefinitionsOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(RefOfPartitionOptionDefinitionsOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
@@ -8857,7 +8857,7 @@ func (a *application) rewriteRefOfPartitionSpec(parent SQLNode, node *PartitionS
 	for x, el := range node.Definitions {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(RefOfPartitionSpecDefinitionsOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(RefOfPartitionSpecDefinitionsOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
@@ -8941,7 +8941,7 @@ func (a *application) rewritePartitions(parent SQLNode, node Partitions, replace
 	for x, el := range node {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(PartitionsOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(PartitionsOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
@@ -9122,7 +9122,7 @@ func (a *application) rewriteRefOfPolygonExpr(parent SQLNode, node *PolygonExpr,
 	for x, el := range node.LinestringParams {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(RefOfPolygonExprLinestringParamsOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(RefOfPolygonExprLinestringParamsOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
@@ -10105,7 +10105,7 @@ func (a *application) rewriteRefOfSelect(parent SQLNode, node *Select, replacer 
 	for x, el := range node.From {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(RefOfSelectFromOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(RefOfSelectFromOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
@@ -10235,7 +10235,7 @@ func (a *application) rewriteRefOfSelectExprs(parent SQLNode, node *SelectExprs,
 	for x, el := range node.Exprs {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(RefOfSelectExprsExprsOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(RefOfSelectExprsExprsOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
@@ -10404,7 +10404,7 @@ func (a *application) rewriteSetExprs(parent SQLNode, node SetExprs, replacer re
 	for x, el := range node {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(SetExprsOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(SetExprsOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
@@ -11215,7 +11215,7 @@ func (a *application) rewriteSubPartitionDefinitions(parent SQLNode, node SubPar
 	for x, el := range node {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(SubPartitionDefinitionsOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(SubPartitionDefinitionsOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
@@ -11402,7 +11402,7 @@ func (a *application) rewriteTableExprs(parent SQLNode, node TableExprs, replace
 	for x, el := range node {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(TableExprsOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(TableExprsOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
@@ -11492,7 +11492,7 @@ func (a *application) rewriteTableNames(parent SQLNode, node TableNames, replace
 	for x, el := range node {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(TableNamesOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(TableNamesOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
@@ -11570,7 +11570,7 @@ func (a *application) rewriteRefOfTableSpec(parent SQLNode, node *TableSpec, rep
 	for x, el := range node.Columns {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(RefOfTableSpecColumnsOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(RefOfTableSpecColumnsOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
@@ -11589,7 +11589,7 @@ func (a *application) rewriteRefOfTableSpec(parent SQLNode, node *TableSpec, rep
 	for x, el := range node.Indexes {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(RefOfTableSpecIndexesOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(RefOfTableSpecIndexesOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
@@ -11608,7 +11608,7 @@ func (a *application) rewriteRefOfTableSpec(parent SQLNode, node *TableSpec, rep
 	for x, el := range node.Constraints {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(RefOfTableSpecConstraintsOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(RefOfTableSpecConstraintsOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
@@ -12003,7 +12003,7 @@ func (a *application) rewriteRefOfUpdate(parent SQLNode, node *Update, replacer 
 	for x, el := range node.TableExprs {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(RefOfUpdateTableExprsOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(RefOfUpdateTableExprsOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
@@ -12132,7 +12132,7 @@ func (a *application) rewriteUpdateExprs(parent SQLNode, node UpdateExprs, repla
 	for x, el := range node {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(UpdateExprsOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(UpdateExprsOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
@@ -12393,7 +12393,7 @@ func (a *application) rewriteValTuple(parent SQLNode, node ValTuple, replacer re
 	for x, el := range node {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(ValTupleOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(ValTupleOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
@@ -12468,7 +12468,7 @@ func (a *application) rewriteValues(parent SQLNode, node Values, replacer replac
 	for x, el := range node {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(ValuesOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(ValuesOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
@@ -12869,7 +12869,7 @@ func (a *application) rewriteRefOfVindexSpec(parent SQLNode, node *VindexSpec, r
 	for x, el := range node.Params {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(RefOfVindexSpecParamsOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(RefOfVindexSpecParamsOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
@@ -13094,7 +13094,7 @@ func (a *application) rewriteWindowDefinitions(parent SQLNode, node WindowDefini
 	for x, el := range node {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(WindowDefinitionsOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(WindowDefinitionsOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
@@ -13151,7 +13151,7 @@ func (a *application) rewriteRefOfWindowSpecification(parent SQLNode, node *Wind
 	for x, el := range node.PartitionClause {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(RefOfWindowSpecificationPartitionClauseOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(RefOfWindowSpecificationPartitionClauseOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
@@ -13218,7 +13218,7 @@ func (a *application) rewriteRefOfWith(parent SQLNode, node *With, replacer repl
 	for x, el := range node.CTEs {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(RefOfWithCTEsOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(RefOfWithCTEsOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}

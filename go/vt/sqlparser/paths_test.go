@@ -29,7 +29,7 @@ func TestASTPathDebugString(t *testing.T) {
 	p = AddStep(p, RefOfSelectWhere)
 	p = AddStep(p, RefOfWhereExpr)
 	p = AddStep(p, RefOfBinaryExprLeft)
-	p = AddStepWithSliceIndex(p, RefOfFuncExprExprsOffset, 2)
+	p = AddStepWithOffset(p, RefOfFuncExprExprsOffset, 2)
 	expected := "(*Select).Where->(*Where).Expr->(*BinaryExpr).Left->(*FuncExpr).ExprsOffset(2)"
 	assert.Equal(t, expected, p.DebugString())
 }

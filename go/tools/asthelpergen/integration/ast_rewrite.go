@@ -126,7 +126,7 @@ func (a *application) rewriteInterfaceSlice(parent AST, node InterfaceSlice, rep
 	for x, el := range node {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(InterfaceSliceOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(InterfaceSliceOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
@@ -201,7 +201,7 @@ func (a *application) rewriteLeafSlice(parent AST, node LeafSlice, replacer repl
 	for x, el := range node {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(LeafSliceOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(LeafSliceOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
@@ -326,7 +326,7 @@ func (a *application) rewriteRefOfRefSliceContainer(parent AST, node *RefSliceCo
 	for x, el := range node.ASTElements {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(RefOfRefSliceContainerASTElementsOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(RefOfRefSliceContainerASTElementsOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
@@ -345,7 +345,7 @@ func (a *application) rewriteRefOfRefSliceContainer(parent AST, node *RefSliceCo
 	for x, el := range node.ASTImplementationElements {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(RefOfRefSliceContainerASTImplementationElementsOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(RefOfRefSliceContainerASTImplementationElementsOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
@@ -473,7 +473,7 @@ func (a *application) rewriteValueSliceContainer(parent AST, node ValueSliceCont
 	for x, el := range node.ASTElements {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(ValueSliceContainerASTElementsOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(ValueSliceContainerASTElementsOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
@@ -643,7 +643,7 @@ func (a *application) rewriteRefOfValueSliceContainer(parent AST, node *ValueSli
 	for x, el := range node.ASTElements {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(RefOfValueSliceContainerASTElementsOffset), x)
+				a.cur.current.AddStepWithOffset(uint16(RefOfValueSliceContainerASTElementsOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}

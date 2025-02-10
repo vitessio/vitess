@@ -17,7 +17,6 @@ limitations under the License.
 package sqlparser
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -68,27 +67,56 @@ func TestReplaceWorksInLaterCalls(t *testing.T) {
 
 func TestFindColNamesWithPaths(t *testing.T) {
 	// this is the tpch query #1
-	q := "select l_returnflag, l_linestatus from tbl where l_shipdate <= 12"
+	q := `
+select l_returnflag,
+       l_linestatus,
+       sum(l_quantity)                                       as sum_qty,
+       sum(l_extendedprice)                                  as sum_base_price,
+       sum(l_extendedprice * (1 - l_discount))               as sum_disc_price,
+       sum(l_extendedprice * (1 - l_discount) * (1 + l_tax)) as sum_charge,
+       avg(l_quantity)                                       as avg_qty,
+       avg(l_extendedprice)                                  as avg_price,
+       avg(l_discount)                                       as avg_disc,
+       count(*)                                              as count_order
+from lineitem
+where l_shipdate <= '1998-12-01' - interval '108' day
+group by l_returnflag, l_linestatus
+order by l_returnflag, l_linestatus`
 	ast, err := NewTestParser().Parse(q)
 	require.NoError(t, err)
 
-	check := func(in string) {
-		if in == "UP (*Select).With->(*Select).FromOffset(0)->(*AliasedTableExpr).Expr->(TableName).Name->(*AliasedTableExpr).Partitions->(*AliasedTableExpr).As->(*AliasedTableExpr).Hints->(*Select).Comments->(*Select).SelectExprs->(*SelectExprs).ExprsOffset(0)->(*AliasedExpr).Expr->(*ColName).Name->(*ColName).Qualifier" {
-			_ = in
-		}
-		assert.NotContains(t, in, "ERR-unaligned-extra-bytes")
-		fmt.Println(in)
-	}
-
+	var foundColNames []string
 	RewriteWithPath(ast,
 		func(cursor *Cursor) bool {
-			check("DOWN " + cursor.CurrentPath().DebugString())
+			_, ok := cursor.Node().(*ColName)
+			if ok {
+				foundColNames = append(foundColNames, cursor.CurrentPath().DebugString())
+			}
+
 			return true
-		},
-		func(cursor *Cursor) bool {
-			check("UP " + cursor.CurrentPath().DebugString())
-			return true
-		})
+		}, nil)
+
+	expected := []string{
+		"(*SelectExprs).ExprsOffset(0)->(*AliasedExpr).Expr",                                                       // l_returnflag
+		"(*SelectExprs).ExprsOffset(1)->(*AliasedExpr).Expr",                                                       // l_linestatus
+		"(*SelectExprs).ExprsOffset(2)->(*AliasedExpr).Expr->(*Sum).Arg",                                           // sum(l_quantity)
+		"(*SelectExprs).ExprsOffset(3)->(*AliasedExpr).Expr->(*Sum).Arg",                                           // sum(l_extendedprice)
+		"(*SelectExprs).ExprsOffset(4)->(*AliasedExpr).Expr->(*Sum).Arg->(*BinaryExpr).Left",                       // sum(->l_extendedprice<- * (1 - l_discount))
+		"(*SelectExprs).ExprsOffset(4)->(*AliasedExpr).Expr->(*Sum).Arg->(*BinaryExpr).Right->(*BinaryExpr).Right", // sum(l_extendedprice * (1 - ->l_discount<-))
+		"(*SelectExprs).ExprsOffset(5)->(*AliasedExpr).Expr->(*Sum).Arg->(*BinaryExpr).Left->(*BinaryExpr).Left",   // etc
+		"(*SelectExprs).ExprsOffset(5)->(*AliasedExpr).Expr->(*Sum).Arg->(*BinaryExpr).Left->(*BinaryExpr).Right->(*BinaryExpr).Right",
+		"(*SelectExprs).ExprsOffset(5)->(*AliasedExpr).Expr->(*Sum).Arg->(*BinaryExpr).Right->(*BinaryExpr).Right",
+		"(*SelectExprs).ExprsOffset(6)->(*AliasedExpr).Expr->(*Avg).Arg",
+		"(*SelectExprs).ExprsOffset(7)->(*AliasedExpr).Expr->(*Avg).Arg",
+		"(*SelectExprs).ExprsOffset(8)->(*AliasedExpr).Expr->(*Avg).Arg",
+		"(*Select).Where->(*Where).Expr->(*ComparisonExpr).Left",
+		"(*GroupBy).ExprsOffset(0)",
+		"(*GroupBy).ExprsOffset(1)",
+		"(*Select).OrderBy->(OrderBy)[]Offset(0)->(*Order).Expr",
+		"(*Select).OrderBy->(OrderBy)[]Offset(1)->(*Order).Expr",
+	}
+
+	assert.Equal(t, expected, foundColNames)
 }
 
 func TestReplaceAndRevisitWorksInLaterCalls(t *testing.T) {

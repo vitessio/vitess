@@ -415,14 +415,14 @@ func (r *rewriteGen) rewriteChildSlice(t, field types.Type, fieldName string, pa
 
 	// if a.collectPaths {
 	//   if x == 0 {
-	//        a.cur.current.AddStepWithSliceIndex(LeafSliceOffset, x)
+	//        a.cur.current.AddStepWithOffset(LeafSliceOffset)
 	//   } else {
 	//        a.cur.current.ChangeOffset(x)
 	//   }
 	// }
 	savePath := jen.If(jen.Id("a.collectPaths")).Block(
 		jen.If(jen.Id("x").Op("==").Lit(0)).Block(
-			jen.Id("a.cur.current.AddStepWithOffset").Params(jen.Id("uint16").Params(jen.Id(printableTypeName(t)+fieldName+"Offset")), jen.Id("x")),
+			jen.Id("a.cur.current.AddStepWithOffset").Params(jen.Id("uint16").Params(jen.Id(printableTypeName(t) + fieldName + "Offset"))),
 		).Else().Block(
 			jen.Id("a.cur.current.ChangeOffset").Params(jen.Id("x")),
 		),
