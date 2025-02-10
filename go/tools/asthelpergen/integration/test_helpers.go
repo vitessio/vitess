@@ -20,6 +20,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"strings"
+
+	"vitess.io/vitess/go/vt/sqlparser/pathbuilder"
 )
 
 // ast type helpers
@@ -51,7 +53,7 @@ type Cursor struct {
 	node     AST
 	// marks that the node has been replaced, and the new node should be visited
 	revisit bool
-	current ASTPath
+	current *pathbuilder.ASTPathBuilder
 }
 
 // Node returns the current Node.
@@ -102,6 +104,7 @@ func RewriteWithPaths(node AST, pre, post ApplyFunc) AST {
 		post:         post,
 		collectPaths: true,
 	}
+	a.cur.current = pathbuilder.NewASTPathBuilder()
 
 	a.rewriteAST(outer, node, func(newNode, parent AST) {
 		outer.AST = newNode
@@ -151,25 +154,14 @@ func (path ASTPath) DebugString() string {
 
 		// Check suffix to see if we need to read an offset
 		switch {
-		// 1-byte offset if stepStr ends with "8"
-		case strings.HasSuffix(stepStr, "8"):
+		case strings.HasSuffix(stepStr, "Offset"):
 			if len(remaining) < 1 {
 				sb.WriteString("(ERR-no-offset-byte)")
 				return sb.String()
 			}
-			offsetByte := remaining[0]
-			remaining = remaining[1:]
-			sb.WriteString(fmt.Sprintf("(%d)", offsetByte))
-
-		// 4-byte offset if stepStr ends with "32"
-		case strings.HasSuffix(stepStr, "32"):
-			if len(remaining) < 4 {
-				sb.WriteString("(ERR-no-offset-uint32)")
-				return sb.String()
-			}
-			offsetVal := binary.BigEndian.Uint32(remaining[:4])
-			remaining = remaining[4:]
-			sb.WriteString(fmt.Sprintf("(%d)", offsetVal))
+			offset, readBytes := binary.Varint(remaining)
+			remaining = remaining[readBytes:]
+			sb.WriteString(fmt.Sprintf("(%d)", offset))
 		}
 	}
 

@@ -68,16 +68,25 @@ func TestReplaceWorksInLaterCalls(t *testing.T) {
 
 func TestFindColNamesWithPaths(t *testing.T) {
 	// this is the tpch query #1
-	q := "select l_returnflag, l_linestatus, sum(l_quantity) as sum_qty, sum(l_extendedprice) as sum_base_price, sum(l_extendedprice * (1 - l_discount)) as sum_disc_price, sum(l_extendedprice * (1 - l_discount) * (1 + l_tax)) as sum_charge, avg(l_quantity) as avg_qty, avg(l_extendedprice) as avg_price, avg(l_discount) as avg_disc, count(*) as count_order from lineitem where l_shipdate <= '1998-12-01' - interval '108' day group by l_returnflag, l_linestatus order by l_returnflag, l_linestatus"
+	q := "select l_returnflag, l_linestatus from tbl where l_shipdate <= 12"
 	ast, err := NewTestParser().Parse(q)
 	require.NoError(t, err)
+
+	check := func(in string) {
+		if in == "UP (*Select).With->(*Select).FromOffset(0)->(*AliasedTableExpr).Expr->(TableName).Name->(*AliasedTableExpr).Partitions->(*AliasedTableExpr).As->(*AliasedTableExpr).Hints->(*Select).Comments->(*Select).SelectExprs->(*SelectExprs).ExprsOffset(0)->(*AliasedExpr).Expr->(*ColName).Name->(*ColName).Qualifier" {
+			_ = in
+		}
+		assert.NotContains(t, in, "ERR-unaligned-extra-bytes")
+		fmt.Println(in)
+	}
+
 	RewriteWithPath(ast,
 		func(cursor *Cursor) bool {
-			fmt.Println("DOWN " + cursor.CurrentPath().DebugString())
+			check("DOWN " + cursor.CurrentPath().DebugString())
 			return true
 		},
 		func(cursor *Cursor) bool {
-			fmt.Println("UP " + cursor.CurrentPath().DebugString())
+			check("UP " + cursor.CurrentPath().DebugString())
 			return true
 		})
 }

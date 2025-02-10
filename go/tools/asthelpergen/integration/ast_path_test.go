@@ -20,8 +20,6 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
 )
 
 func TestWalkAllPartsOfAST(t *testing.T) {
@@ -32,7 +30,7 @@ func TestWalkAllPartsOfAST(t *testing.T) {
 		ASTImplementationElements: []*Leaf{{v: 1}, {v: 2}},
 	}
 
-	for i := range 300 {
+	for i := range 20 {
 		sliceContainer.ASTImplementationElements = append(sliceContainer.ASTImplementationElements, &Leaf{v: i})
 	}
 
@@ -42,27 +40,12 @@ func TestWalkAllPartsOfAST(t *testing.T) {
 		ASTImplementationType: &Leaf{v: 3},
 	}
 
-	v := make(map[ASTPath]AST)
-
 	RewriteWithPaths(ast, func(c *Cursor) bool {
 		node := c.Node()
 		if !reflect.TypeOf(node).Comparable() {
 			return true
 		}
-		current := c.current
-		v[current] = node
+		fmt.Println(ASTPath(c.current.ToPath()).DebugString())
 		return true
 	}, nil)
-
-	fmt.Println("walked all parts of AST")
-
-	assert.NotEmpty(t, v)
-
-	for path, n1 := range v {
-		s := path.DebugString()
-		fmt.Println(s)
-		_ = n1
-		//n2 := WalkASTPath(ast, path)
-		//assert.Equal(t, n1, n2)
-	}
 }

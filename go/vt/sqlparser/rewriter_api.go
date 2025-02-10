@@ -16,7 +16,7 @@ limitations under the License.
 
 package sqlparser
 
-// The rewriter was heavily inspired by https://github.com/golang/tools/blob/master/go/ast/astutil/rewrite.go
+import "vitess.io/vitess/go/vt/sqlparser/pathbuilder"
 
 // Rewrite traverses a syntax tree recursively, starting with root,
 // and calling pre and post for each node as described below.
@@ -49,6 +49,10 @@ func rewriteNode(node SQLNode, pre ApplyFunc, post ApplyFunc, collectPaths bool)
 		pre:          pre,
 		post:         post,
 		collectPaths: collectPaths,
+	}
+
+	if collectPaths {
+		a.cur.current = pathbuilder.NewASTPathBuilder()
 	}
 
 	a.rewriteSQLNode(parent, node, replacer)
@@ -106,7 +110,7 @@ type Cursor struct {
 
 	// marks that the node has been replaced, and the new node should be visited
 	revisit bool
-	current ASTPath
+	current *pathbuilder.ASTPathBuilder
 }
 
 // Node returns the current Node.
@@ -143,7 +147,7 @@ func (c *Cursor) ReplaceAndRevisit(newNode SQLNode) {
 // CurrentPath returns the current path that got us to the current location in the AST
 // Only works if the AST walk was configured to collect path as walking
 func (c *Cursor) CurrentPath() ASTPath {
-	return c.current
+	return ASTPath(c.current.ToPath())
 }
 
 type replacerFunc func(newNode, parent SQLNode)

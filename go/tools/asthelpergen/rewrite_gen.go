@@ -102,15 +102,10 @@ func (r *rewriteGen) interfaceMethod(t types.Type, iface *types.Interface, spi g
 func (r *rewriteGen) visitStructFields(t types.Type, strct *types.Struct, spi generatorSPI, fail bool) (stmts []jen.Code) {
 	fields := r.rewriteAllStructFields(t, strct, spi, fail)
 	stmts = append(stmts, r.executePre())
-	hasFields := len(fields) > 0
-	if hasFields {
-		stmts = append(stmts, jen.Var().Id("path").Id("ASTPath"))
-	}
 	stmts = append(stmts, fields...)
-	if hasFields {
-		stmts = append(stmts, jen.If(jen.Id("a.collectPaths").Block(
-			jen.Id("a.cur.current").Op("=").Id("path"),
-		)))
+
+	if len(fields) > 0 {
+		stmts = append(stmts, jen.If(jen.Id("a.collectPaths")).Block(jen.Id("a.cur.current.Pop").Params()))
 	}
 	stmts = append(stmts, executePost(len(fields) > 0))
 	stmts = append(stmts, returnTrue())
@@ -147,9 +142,6 @@ func (r *rewriteGen) ptrToBasicMethod(t types.Type, _ *types.Basic, spi generato
 	if !shouldAdd(t, spi.iface()) {
 		return nil
 	}
-
-	/*
-	 */
 
 	stmts := []jen.Code{
 		jen.Comment("ptrToBasicMethod"),
@@ -191,7 +183,9 @@ func (r *rewriteGen) sliceMethod(t types.Type, slice *types.Slice, spi generator
 		jen.If(jen.Id("kontinue").Block(jen.Return(jen.True()))),
 	)
 
-	stmts = append(stmts, jen.If(jen.Id("a.pre != nil").Block(preStmts...)))
+	stmts = append(stmts,
+		jen.If(jen.Id("a.pre != nil").Block(preStmts...)),
+	)
 
 	haveChildren := false
 	if shouldAdd(slice.Elem(), spi.iface()) {
@@ -209,22 +203,15 @@ func (r *rewriteGen) sliceMethod(t types.Type, slice *types.Slice, spi generator
 			}
 		*/
 		haveChildren = true
-		forBlock := []jen.Code{
-			jen.Var().Id("path").Id("ASTPath"),
-			jen.If(jen.Id("a.collectPaths")).Block(
-				jen.Id("path").Op("=").Id("a.cur.current"),
-			),
-		}
-		stmts = append(stmts, forBlock...)
 		rewriteChild := r.rewriteChildSlice(t, slice.Elem(), "", jen.Id("el"), jen.Index(jen.Id("idx")), false)
 
 		stmts = append(stmts,
 			jen.For(jen.Id("x, el").Op(":=").Id("range node")).
 				Block(rewriteChild...))
+	}
 
-		stmts = append(stmts, jen.If(jen.Id("a.collectPaths")).Block(
-			jen.Id("a.cur.current").Op("=").Id("path"),
-		))
+	if haveChildren {
+		stmts = append(stmts, jen.If(jen.Id("a.collectPaths").Op("&&").Len(jen.Id("node")).Op(">").Lit(0)).Block(jen.Id("a.cur.current.Pop").Params()))
 	}
 
 	stmts = append(stmts, executePost(haveChildren))
@@ -252,7 +239,7 @@ func (r *rewriteGen) executePre() jen.Code {
 		)),
 		jen.If(jen.Id("kontinue").Block(jen.Return(jen.True()))),
 	)
-	return jen.If(jen.Id("a.pre!= nil").Block(curStmts...))
+	return jen.If(jen.Id("a.pre != nil").Block(curStmts...))
 }
 
 func executePost(seenChildren bool) jen.Code {
@@ -312,21 +299,17 @@ func (r *rewriteGen) rewriteAllStructFields(t types.Type, strct *types.Struct, s
 		field := strct.Field(i)
 		if types.Implements(field.Type(), spi.iface()) {
 			spi.addType(field.Type())
-			rewriteLines := r.rewriteChild(t, field.Type(), field.Name(), jen.Id("node").Dot(field.Name()), jen.Dot(field.Name()), fail, fieldNumber)
-			fieldNumber++
+			rewriteLines := r.rewriteChild(t, field.Type(), field.Name(), jen.Id("node").Dot(field.Name()), jen.Dot(field.Name()), fail, fieldNumber == 0)
 			output = append(output, rewriteLines...)
+			fieldNumber++
 			continue
 		}
 		slice, isSlice := field.Type().(*types.Slice)
 		if isSlice && types.Implements(slice.Elem(), spi.iface()) {
-			if fieldNumber == 0 {
-				// if this is the first field we are dealing with, we need to store the incoming
-				// path into the local variable first of all
-				// if a.collectPaths { path = a.cur.current }
-				output = append(output,
-					jen.If(jen.Id("a.collectPaths")).Block(jen.Id("path").Op("=").Id("a.cur.current")))
-			}
-
+			ifCollectPath := jen.If(jen.Id("a.collectPaths")).Block(
+				jen.Id("a.cur.current.Pop").Params(),
+			)
+			output = append(output, ifCollectPath)
 			spi.addType(slice.Elem())
 			output = append(output,
 				jen.For(jen.List(jen.Id("x"), jen.Id("el")).Op(":=").Id("range node."+field.Name())).
@@ -342,7 +325,7 @@ func failReplacer(t types.Type, f string) *jen.Statement {
 	return jen.Panic(jen.Lit(fmt.Sprintf("[BUG] tried to replace '%s' on '%s'", f, typeString)))
 }
 
-func (r *rewriteGen) rewriteChild(t, field types.Type, fieldName string, param jen.Code, replace jen.Code, fail bool, offset int) []jen.Code {
+func (r *rewriteGen) rewriteChild(t, field types.Type, fieldName string, param jen.Code, replace jen.Code, fail, firstChild bool) []jen.Code {
 	/*
 		if errF := rewriteAST(node, node.ASTType, func(newNode, parent AST) {
 			parent.(*RefContainer).ASTType = newNode.(AST)
@@ -378,17 +361,15 @@ func (r *rewriteGen) rewriteChild(t, field types.Type, fieldName string, param j
 			param,
 			funcBlock).Block(returnFalse()))
 
-	block := []jen.Code{
-		jen.Id("a.cur.current").Op("=").Id("AddStep").Call(jen.Id("path"), jen.Id(printableTypeName(t)+fieldName)),
+	collectPathBlock := []jen.Code{
+		jen.Id("a.cur.current.AddStep").Params(jen.Id("uint16").Params(jen.Id(printableTypeName(t) + fieldName))),
 	}
-
-	if offset == 0 {
-		// if we are on the first field, we'll save the path
-		savePath := jen.Id("path").Op("=").Id("a.cur.current")
-		block = append([]jen.Code{savePath}, block...)
+	if !firstChild {
+		collectPathBlock = append([]jen.Code{jen.Id("a.cur.current.Pop").Params()}, collectPathBlock...)
 	}
-
-	ifCollectPath := jen.If(jen.Id("a.collectPaths")).Block(block...)
+	ifCollectPath := jen.If(jen.Id("a.collectPaths")).Block(
+		collectPathBlock...,
+	)
 
 	return []jen.Code{
 		ifCollectPath,
@@ -432,11 +413,19 @@ func (r *rewriteGen) rewriteChildSlice(t, field types.Type, fieldName string, pa
 			param,
 			funcBlock).Block(returnFalse()))
 
+	// if a.collectPaths {
+	//   if x == 0 {
+	//        a.cur.current.AddStepWithSliceIndex(LeafSliceOffset, x)
+	//   } else {
+	//        a.cur.current.ChangeOffset(x)
+	//   }
+	// }
 	savePath := jen.If(jen.Id("a.collectPaths")).Block(
-		jen.Id("a.cur.current").Op("=").Id("AddStepWithSliceIndex").Call(
-			jen.Id("path"),
-			jen.Id(printableTypeName(t)+fieldName+"Offset"),
-			jen.Id("x")),
+		jen.If(jen.Id("x").Op("==").Lit(0)).Block(
+			jen.Id("a.cur.current.AddStepWithOffset").Params(jen.Id("uint16").Params(jen.Id(printableTypeName(t)+fieldName+"Offset")), jen.Id("x")),
+		).Else().Block(
+			jen.Id("a.cur.current.ChangeOffset").Params(jen.Id("x")),
+		),
 	)
 
 	return []jen.Code{
