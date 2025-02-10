@@ -134,7 +134,7 @@ func TestTypeValues(t *testing.T) {
 		expected: 34 | flagIsText,
 	}}
 	for _, tcase := range testcases {
-		assert.EqualValues(t, tcase.expected, int(tcase.defined), "Type %s: %d, want: %d", tcase.defined, int(tcase.defined), tcase.expected)
+		assert.EqualValues(t, tcase.expected, int(tcase.defined))
 	}
 }
 
@@ -225,11 +225,11 @@ func TestIsFunctions(t *testing.T) {
 
 func TestTypeToMySQL(t *testing.T) {
 	v, f := TypeToMySQL(Bit)
-	assert.EqualValues(t, 16, int(v), "Bit: %d, want 16", v)
-	assert.EqualValues(t, mysqlUnsigned, int(f), "Bit flag: %x, want %x", f, mysqlUnsigned)
+	assert.EqualValues(t, 16, int(v))
+	assert.EqualValues(t, mysqlUnsigned, int(f))
 	v, f = TypeToMySQL(Date)
-	assert.EqualValues(t, 10, int(v), "Bit: %d, want 10", v)
-	assert.EqualValues(t, mysqlBinary, int(f), "Bit flag: %x, want %x", f, mysqlBinary)
+	assert.EqualValues(t, 10, int(v))
+	assert.EqualValues(t, mysqlBinary, int(f))
 }
 
 func TestMySQLToType(t *testing.T) {
@@ -360,14 +360,14 @@ func TestMySQLToType(t *testing.T) {
 	for _, tcase := range testcases {
 		got, err := MySQLToType(tcase.intype, tcase.inflags)
 		require.NoError(t, err)
-		assert.Equal(t, tcase.outtype, got, "MySQLToType(%d, %x): %v, want %v", tcase.intype, tcase.inflags, got, tcase.outtype)
+		assert.Equal(t, tcase.outtype, got)
 	}
 }
 
 func TestTypeError(t *testing.T) {
 	_, err := MySQLToType(50, 0)
 	want := "unsupported type: 50"
-	assert.EqualError(t, err, want, "MySQLToType: %v, want %s", err, want)
+	assert.EqualError(t, err, want)
 }
 
 func TestTypeEquivalenceCheck(t *testing.T) {

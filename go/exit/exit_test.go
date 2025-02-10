@@ -31,7 +31,7 @@ func TestReturn(t *testing.T) {
 
 		switch code := err.(type) {
 		case exitCode:
-			assert.Equal(t, exitCode(152), code, "got %v, want %v", code, 152)
+			assert.Equal(t, exitCode(152), code)
 		default:
 			panic(err)
 		}
@@ -52,7 +52,7 @@ func TestRecover(t *testing.T) {
 		Return(8235)
 	}()
 
-	assert.EqualValues(t, 8235, code, "got %v, want %v", code, 8235)
+	assert.EqualValues(t, 8235, code)
 }
 
 func TestRecoverRepanic(t *testing.T) {

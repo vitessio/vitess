@@ -25,14 +25,14 @@ import (
 )
 
 func (pool *IDPool) want(want *IDPool, t *testing.T) {
-	assert.EqualValues(t, want.maxUsed, pool.maxUsed, "pool.maxUsed = %#v, want %#v", pool.maxUsed, want.maxUsed)
-	assert.EqualValues(t, want.used, pool.used, "pool.used = %#v, want %#v", pool.used, want.used)
+	assert.EqualValues(t, want.maxUsed, pool.maxUsed)
+	assert.EqualValues(t, want.used, pool.used)
 }
 
 func TestIDPoolFirstGet(t *testing.T) {
 	pool := NewIDPool(0)
 	got := pool.Get()
-	assert.EqualValues(t, uint32(1), got, "pool.Get() = %v, want 1", got)
+	assert.EqualValues(t, uint32(1), got)
 	pool.want(&IDPool{used: map[uint32]bool{}, maxUsed: 1}, t)
 }
 
@@ -40,7 +40,7 @@ func TestIDPoolSecondGet(t *testing.T) {
 	pool := NewIDPool(0)
 	pool.Get()
 	got := pool.Get()
-	assert.EqualValues(t, uint32(2), got, "pool.Get() = %v, want 2", got)
+	assert.EqualValues(t, uint32(2), got)
 	pool.want(&IDPool{used: map[uint32]bool{}, maxUsed: 2}, t)
 }
 
@@ -73,7 +73,7 @@ func TestIDPoolGetFromUsedSet(t *testing.T) {
 	pool.Get()
 	pool.Put(id1)
 	got := pool.Get()
-	assert.EqualValues(t, uint32(1), got, "pool.Get() = %v, want 1", got)
+	assert.EqualValues(t, uint32(1), got)
 	pool.want(&IDPool{used: map[uint32]bool{}, maxUsed: 2}, t)
 }
 

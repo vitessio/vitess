@@ -65,22 +65,22 @@ func TestBinlogEventTruncatedData(t *testing.T) {
 
 func TestBinlogEventType(t *testing.T) {
 	input := binlogEvent(googleRotateEvent)
-	assert.EqualValues(t, byte(0x04), input.Type(), "%#v.Type() = %v, want %v", input, input.Type(), 0x04)
+	assert.EqualValues(t, byte(0x04), input.Type())
 }
 
 func TestBinlogEventFlags(t *testing.T) {
 	input := binlogEvent(googleRotateEvent)
-	assert.Equal(t, uint16(0x20), input.Flags(), "%#v.Flags() = %v, want %v", input, input.Flags(), 0x20)
+	assert.Equal(t, uint16(0x20), input.Flags())
 }
 
 func TestBinlogEventTimestamp(t *testing.T) {
 	input := binlogEvent(googleFormatEvent)
-	assert.EqualValues(t, uint32(0x53e95252), input.Timestamp(), "%#v.Timestamp() = %v, want %v", input, input.Timestamp(), 0x53e95252)
+	assert.EqualValues(t, uint32(0x53e95252), input.Timestamp())
 }
 
 func TestBinlogEventServerID(t *testing.T) {
 	input := binlogEvent(googleFormatEvent)
-	assert.EqualValues(t, uint32(62344), input.ServerID(), "%#v.ServerID() = %v, want %v", input, input.ServerID(), 62344)
+	assert.EqualValues(t, uint32(62344), input.ServerID())
 }
 
 func TestBinlogEventIsFormatDescription(t *testing.T) {
@@ -162,7 +162,7 @@ func TestBinlogEventFormatWrongVersion(t *testing.T) {
 	_, err := input.Format()
 	assert.Error(t, err, "expected error, got none")
 	if err != nil {
-		assert.EqualValues(t, want, err.Error(), "wrong error, got %#v, want %#v", err.Error(), want)
+		assert.EqualValues(t, want, err.Error())
 	}
 }
 
@@ -176,7 +176,7 @@ func TestBinlogEventFormatBadHeaderLength(t *testing.T) {
 	_, err := input.Format()
 	assert.Error(t, err, "expected error, got none")
 	if err != nil {
-		assert.EqualValues(t, want, err.Error(), "wrong error, got %#v, want %#v", err.Error(), want)
+		assert.EqualValues(t, want, err.Error())
 	}
 }
 
@@ -212,7 +212,7 @@ func TestBinlogEventQueryBadLength(t *testing.T) {
 	_, err = input.Query(f)
 	assert.Error(t, err, "expected error, got none")
 	if err != nil {
-		assert.EqualValues(t, want, err.Error(), "wrong error, got %#v, want %#v", err.Error(), want)
+		assert.EqualValues(t, want, err.Error())
 	}
 }
 
@@ -255,7 +255,7 @@ func TestBinlogEventIntVarBadID(t *testing.T) {
 	_, _, err = input.IntVar(f)
 	assert.Error(t, err, "expected error, got none")
 	if err != nil {
-		assert.EqualValues(t, want, err.Error(), "wrong error, got %#v, want %#v", err.Error(), want)
+		assert.Equal(t, want, err.Error())
 	}
 }
 

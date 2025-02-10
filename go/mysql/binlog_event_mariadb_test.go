@@ -84,7 +84,7 @@ func TestMariadbStandaloneBinlogEventGTID(t *testing.T) {
 	got, hasBegin, err := input.GTID(f)
 	assert.NoError(t, err)
 	assert.False(t, hasBegin)
-	assert.EqualValues(t, want, got, "%#v.GTID() = %#v, want %#v", input, got, want)
+	assert.Equal(t, want, got)
 }
 
 func TestMariadbBinlogEventGTID(t *testing.T) {
@@ -96,7 +96,7 @@ func TestMariadbBinlogEventGTID(t *testing.T) {
 	got, hasBegin, err := input.GTID(f)
 	assert.NoError(t, err)
 	assert.True(t, hasBegin)
-	assert.EqualValues(t, want, got, "%#v.GTID() = %#v, want %#v", input, got, want)
+	assert.Equal(t, want, got)
 }
 
 func TestMariadbBinlogEventFormat(t *testing.T) {
@@ -110,7 +110,7 @@ func TestMariadbBinlogEventFormat(t *testing.T) {
 	}
 	got, err := input.Format()
 	assert.NoError(t, err)
-	assert.EqualValues(t, want, got, "%#v.Format() = %v, want %v", input, got, want)
+	assert.Equal(t, want, got)
 }
 
 func TestMariadbBinlogEventChecksumFormat(t *testing.T) {
@@ -124,7 +124,7 @@ func TestMariadbBinlogEventChecksumFormat(t *testing.T) {
 	}
 	got, err := input.Format()
 	assert.NoError(t, err)
-	assert.EqualValues(t, want, got, "%#v.Format() = %v, want %v", input, got, want)
+	assert.Equal(t, want, got)
 }
 
 func TestMariadbBinlogEventStripChecksum(t *testing.T) {
@@ -136,8 +136,8 @@ func TestMariadbBinlogEventStripChecksum(t *testing.T) {
 	wantChecksum := []byte{0xce, 0x49, 0x7a, 0x53}
 	gotEvent, gotChecksum, err := input.StripChecksum(f)
 	require.NoError(t, err)
-	assert.EqualValues(t, wantEvent, gotEvent)
-	assert.EqualValues(t, wantChecksum, gotChecksum)
+	assert.Equal(t, wantEvent, gotEvent)
+	assert.Equal(t, wantChecksum, gotChecksum)
 }
 
 func TestMariadbBinlogEventStripChecksumNone(t *testing.T) {
@@ -148,7 +148,7 @@ func TestMariadbBinlogEventStripChecksumNone(t *testing.T) {
 	want := input
 	gotEvent, gotChecksum, err := input.StripChecksum(f)
 	require.NoError(t, err)
-	assert.EqualValues(t, want, gotEvent)
+	assert.Equal(t, want, gotEvent)
 	assert.Nil(t, gotChecksum)
 }
 

@@ -124,7 +124,7 @@ func TestBadListenerWrongInputs(t *testing.T) {
 		}
 
 		want := "bad listener func: listener must take exactly one input argument"
-		assert.Equal(t, want, blErr.Error(), `BadListenerError.Error() = "%s", want "%s"`, blErr.Error(), want)
+		assert.Equal(t, want, blErr.Error())
 	}()
 
 	AddListener(func() {})
@@ -144,7 +144,7 @@ func TestBadListenerWrongType(t *testing.T) {
 		}
 
 		want := "bad listener func: listener must be a function"
-		assert.Equal(t, want, blErr.Error(), `BadListenerError.Error() = "%s", want "%s"`, blErr.Error(), want)
+		assert.Equal(t, want, blErr.Error())
 	}()
 
 	AddListener("this is not a function")
@@ -229,5 +229,5 @@ func TestDispatchUpdate(t *testing.T) {
 
 	want := "hello"
 	got := ev.update.(string)
-	assert.Equal(t, want, got, "ev.update = %#v, want %#v", got, want)
+	assert.Equal(t, want, got)
 }
