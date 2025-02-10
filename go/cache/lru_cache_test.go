@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type CacheValue struct {
@@ -44,10 +45,12 @@ func TestSetInsertsValue(t *testing.T) {
 	cache.Set(key, data)
 
 	v, ok := cache.Get(key)
-	assert.True(t, ok && v == data, "Cache has incorrect value: expected %v, got %v", data, v)
+	assert.True(t, ok)
+	assert.Equal(t, v, data, "Cache has incorrect value: expected %v, got %v", data, v)
 
 	values := cache.Items()
-	assert.True(t, len(values) == 1 && values[0].Key == key, "Cache.Values() returned incorrect values: %v", values)
+	require.NotEmpty(t, values)
+	assert.Equal(t, key, values[0].Key, "Cache.Values() returned incorrect values: %v", values)
 }
 
 func TestGetValueWithMultipleTypes(t *testing.T) {
@@ -57,10 +60,12 @@ func TestGetValueWithMultipleTypes(t *testing.T) {
 	cache.Set(key, data)
 
 	v, ok := cache.Get("key")
-	assert.True(t, ok && v == data, "Cache has incorrect value for \"key\": expected %v, got %v", data, v)
+	assert.True(t, ok)
+	assert.Equal(t, data, v, "Cache has incorrect value for \"key\": expected %v, got %v", data, v)
 
 	v, ok = cache.Get(string([]byte{'k', 'e', 'y'}))
-	assert.True(t, ok && v == data, "Cache has incorrect value for []byte {'k','e','y'}: expected %v, got %v", data, v)
+	assert.True(t, ok)
+	assert.Equal(t, data, v, "Cache has incorrect value for []byte {'k','e','y'}: expected %v, got %v", data, v)
 }
 
 func TestSetWithOldKeyUpdatesValue(t *testing.T) {
@@ -72,14 +77,15 @@ func TestSetWithOldKeyUpdatesValue(t *testing.T) {
 	cache.Set(key, someValue)
 
 	v, ok := cache.Get(key)
-	assert.True(t, ok && v == someValue, "Cache has incorrect value: expected %v, got %v", someValue, v)
+	assert.True(t, ok)
+	assert.Equal(t, someValue, v, "Cache has incorrect value: expected %v, got %v", someValue, v)
 }
 
 func TestGetNonExistent(t *testing.T) {
 	cache := NewLRUCache[*CacheValue](100)
 
-	_, ok := cache.Get("notthere")
-	assert.False(t, ok, "Cache returned a notthere value after no inserts.")
+	val, ok := cache.Get("notthere")
+	assert.False(t, ok, "Cache returned a notthere value after no inserts val=%v", val)
 }
 
 func TestDelete(t *testing.T) {
@@ -94,8 +100,8 @@ func TestDelete(t *testing.T) {
 	sz := cache.UsedCapacity()
 	assert.Zero(t, sz, "cache.UsedCapacity() = %v, expected 0", sz)
 
-	_, ok := cache.Get(key)
-	assert.False(t, ok, "Cache returned a value after deletion.")
+	val, ok := cache.Get("notthere")
+	assert.False(t, ok, "Cache returned a value after deletion: val=%v", val)
 }
 
 func TestCapacityIsObeyed(t *testing.T) {
@@ -118,13 +124,13 @@ func TestCapacityIsObeyed(t *testing.T) {
 
 	// Check various other stats
 	l := cache.Len()
-	assert.Equal(t, size, int64(l), "cache.Len() returned bad length: %v", l)
+	assert.EqualValues(t, size, l, "cache.Len() returned bad length: %v", l)
 
 	s := cache.UsedCapacity()
-	assert.Equal(t, size, s, "cache.UsedCapacity() returned bad size: %v", s)
+	assert.EqualValues(t, size, s, "cache.UsedCapacity() returned bad size: %v", s)
 
 	c := cache.MaxCapacity()
-	assert.Equal(t, size, c, "cache.UsedCapacity() returned bad length: %v", c)
+	assert.EqualValues(t, size, c, "cache.UsedCapacity() returned bad length: %v", c)
 
 	hits := cache.Hits()
 	assert.Zero(t, hits, "cache.Hits() returned hits when there should be none: %v", hits)
@@ -152,15 +158,15 @@ func TestLRUIsEvicted(t *testing.T) {
 	// lru: [key0, key1, key2]
 
 	// The least recently used one should have been evicted.
-	_, ok := cache.Get("key3")
-	assert.False(t, ok, "Least recently used element was not evicted.")
+	v, ok := cache.Get("key3")
+	assert.False(t, ok, "Least recently used element was not evicted: %v", v)
 
 	e := cache.Evictions()
-	assert.Equal(t, int64(1), e, "evictions: got %d, want: %d", e, 1)
+	assert.EqualValues(t, 1, e, "evictions: got %d, want: %d", e, 1)
 
 	h := cache.Hits()
-	assert.Equal(t, int64(3), h, "hits: got %d, want: %d", h, 3)
+	assert.EqualValues(t, 3, h, "hits: got %d, want: %d", h, 3)
 
 	m := cache.Misses()
-	assert.Equal(t, int64(1), m, "misses: got %d, want: %d", m, 1)
+	assert.EqualValues(t, 1, m, "misses: got %d, want: %d", m, 1)
 }

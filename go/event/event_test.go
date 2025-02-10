@@ -104,7 +104,8 @@ func TestMultipleListeners(t *testing.T) {
 	AddListener(func(testEvent1) { triggered2 = true })
 	Dispatch(testEvent1{})
 
-	assert.True(t, triggered1 && triggered2, "not all matching listeners triggered")
+	assert.True(t, triggered1, "listener 1 failed to trigger")
+	assert.True(t, triggered2, "listener 2 failed to trigger")
 }
 
 func TestBadListenerWrongInputs(t *testing.T) {

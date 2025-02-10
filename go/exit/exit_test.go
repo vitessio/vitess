@@ -52,7 +52,7 @@ func TestRecover(t *testing.T) {
 		Return(8235)
 	}()
 
-	assert.Equal(t, 8235, code, "got %v, want %v", code, 8235)
+	assert.EqualValues(t, 8235, code, "got %v, want %v", code, 8235)
 }
 
 func TestRecoverRepanic(t *testing.T) {
