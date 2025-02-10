@@ -670,6 +670,30 @@ func GenerateUpdatePos(uid int32, pos replication.Position, timeUpdated int64, t
 		"update _vt.vreplication set pos=%v, time_updated=%v, rows_copied=%v, message='' where id=%v", strGTID, timeUpdated, rowsCopied, uid)
 }
 
+// GenerateInitWorkerPos returns a statement to initialize a worker's entry in vreplication_worker_pos
+func GenerateInitWorkerPos(uid int32, worker int) string {
+	// Append GTID value to already existing value in `gtid` column
+	return fmt.Sprintf("insert into _vt.vreplication_worker_pos (id, worker, pos) values (%v, %v, '')", uid, worker)
+}
+
+// GenerateUpdateWorkerPos returns a statement to record the latest processed gtid of a worker in the _vt.vreplication_worker_pos table.
+// TODO:
+// - compress?
+// - txTimestamp?
+// - rowsCopied?
+// - timeUpdated?
+func GenerateUpdateWorkerPos(uid int32, worker int, pos replication.Position) string {
+	strGTID := ""
+	if pos.GTIDSet != nil {
+		strGTID = pos.GTIDSet.String()
+	}
+	strGTID = encodeString(strGTID)
+	// Append GTID value to already existing value in `gtid` column
+	return fmt.Sprintf(
+		"update _vt.vreplication_worker_pos set gtid=GTID_SUBTRACT(concat(gtid, ',', %v), '') where id=%v and worker=%v",
+		strGTID, uid, worker)
+}
+
 // GenerateUpdateRowsCopied returns a statement to update the rows_copied value in the _vt.vreplication table.
 func GenerateUpdateRowsCopied(uid int32, rowsCopied int64) string {
 	return fmt.Sprintf("update _vt.vreplication set rows_copied=%v where id=%v", rowsCopied, uid)
@@ -710,6 +734,11 @@ func DeleteVReplication(uid int32) string {
 	return fmt.Sprintf("delete from _vt.vreplication where id=%v", uid)
 }
 
+// DeleteVReplication returns a statement to delete the replication.
+func DeleteVReplicationWorkerPos(uid int32) string {
+	return fmt.Sprintf("delete from _vt.vreplication_worker_pos where id=%v", uid)
+}
+
 // MessageTruncate truncates the message string to a safe length.
 func MessageTruncate(msg string) string {
 	// message length is 1000 bytes.
@@ -726,6 +755,12 @@ func encodeString(in string) string {
 // given stream from the _vt.vreplication table.
 func ReadVReplicationPos(index int32) string {
 	return fmt.Sprintf("select pos from _vt.vreplication where id=%v", index)
+}
+
+// ReadVReplicationWorkersGTIDs returns a statement to query the gtid for a
+// given stream from the _vt.vreplication_worker_pos table.
+func ReadVReplicationWorkersGTIDs(index int32) string {
+	return fmt.Sprintf("select gtid from _vt.vreplication_worker_pos where id=%v", index)
 }
 
 // ReadVReplicationStatus returns a statement to query the status fields for a
@@ -777,6 +812,16 @@ func DecodePosition(gtid string) (replication.Position, error) {
 		gtid = string(b)
 	}
 	return replication.DecodePosition(gtid)
+}
+
+// DecodePosition attempts to uncompress the passed value first and if it fails tries to decode it as a valid GTID
+func DecodeMySQL56Position(gtid string) (replication.Position, error) {
+	b := MysqlUncompress(gtid)
+	if b != nil {
+		gtid = string(b)
+	}
+	pos, _, err := replication.DecodePositionMySQL56(gtid)
+	return pos, err
 }
 
 // StatsHistoryRecord is used to store a Message with timestamp
