@@ -158,6 +158,7 @@ func newVReplicator(id int32, source *binlogdatapb.BinlogSource, sourceVStreamer
 		sourceVStreamer: sourceVStreamer,
 		stats:           stats,
 		dbClient:        newVDBClient(dbClient, stats, workflowConfig.RelayLogMaxItems),
+		dbClientGen:     dbClientGen,
 		mysqld:          mysqld,
 		workflowConfig:  workflowConfig,
 	}
