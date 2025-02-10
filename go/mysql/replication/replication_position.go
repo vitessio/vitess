@@ -109,6 +109,15 @@ func AppendGTID(rp Position, gtid GTID) Position {
 	return Position{GTIDSet: rp.GTIDSet.AddGTID(gtid)}
 }
 
+// AppendGTIDSet returns a new Position that represents the position
+// after the given GTIDSet is replicated.
+func AppendGTIDSet(rp Position, gtidSet GTIDSet) Position {
+	if gtidSet == nil {
+		return rp
+	}
+	return Position{GTIDSet: gtidSet.Union(rp.GTIDSet)}
+}
+
 // MustParsePosition calls ParsePosition and panics
 // on error.
 func MustParsePosition(flavor, value string) Position {
