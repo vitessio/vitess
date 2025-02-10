@@ -389,11 +389,20 @@ func (e *IndexNeededByForeignKeyError) Error() string {
 }
 
 type ViewDependencyUnresolvedError struct {
-	View string
+	View                      string
+	MissingReferencedEntities []string
 }
 
 func (e *ViewDependencyUnresolvedError) Error() string {
-	return fmt.Sprintf("view %s has unresolved/loop dependencies", sqlescape.EscapeID(e.View))
+	var b strings.Builder
+	fmt.Fprintf(&b, "view %s has unresolved/loop dependencies: ", sqlescape.EscapeID(e.View))
+	for i, entity := range e.MissingReferencedEntities {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		sqlescape.WriteEscapeID(&b, entity)
+	}
+	return b.String()
 }
 
 type InvalidColumnReferencedInViewError struct {
