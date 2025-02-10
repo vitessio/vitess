@@ -344,8 +344,8 @@ func TestStreamRowsFilterInt(t *testing.T) {
 		`fields:{name:"id1" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id1" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val" type:VARBINARY table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:128 charset:63 column_type:"varbinary(128)"} pkfields:{name:"id1" type:INT32 charset:63}`,
 		`rows:{lengths:1 lengths:3 values:"1aaa"} rows:{lengths:1 lengths:3 values:"4ddd"} lastpk:{lengths:1 values:"4"}`,
 	}
-	wantQuery := "select /*+ MAX_EXECUTION_TIME(3600000) */ id1, id2, val from t1 where id2 = 100 order by id1"
-	checkStream(t, "select id1, val from t1 where id2 = 100", nil, wantQuery, wantStream)
+	wantQuery := "select /*+ MAX_EXECUTION_TIME(3600000) */ id1, id2, val from t1 where (id2 = 100) order by id1"
+	checkStream(t, "select id1, val from t1 where (id2 = 100)", nil, wantQuery, wantStream)
 	require.Equal(t, int64(0), engine.rowStreamerNumPackets.Get())
 	require.Equal(t, int64(2), engine.rowStreamerNumRows.Get())
 	require.Less(t, int64(0), engine.vstreamerPacketSize.Get())
@@ -374,8 +374,8 @@ func TestStreamRowsFilterVarBinary(t *testing.T) {
 		`fields:{name:"id1" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id1" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val" type:VARBINARY table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:128 charset:63 column_type:"varbinary(128)"} pkfields:{name:"id1" type:INT32 charset:63}`,
 		`rows:{lengths:1 lengths:6 values:"2newton"} rows:{lengths:1 lengths:6 values:"3newton"} rows:{lengths:1 lengths:6 values:"5newton"} lastpk:{lengths:1 values:"5"}`,
 	}
-	wantQuery := "select /*+ MAX_EXECUTION_TIME(3600000) */ id1, val from t1 where val = 'newton' order by id1"
-	checkStream(t, "select id1, val from t1 where val = 'newton'", nil, wantQuery, wantStream)
+	wantQuery := "select /*+ MAX_EXECUTION_TIME(3600000) */ id1, val from t1 where (val = 'newton') order by id1"
+	checkStream(t, "select id1, val from t1 where (val = 'newton')", nil, wantQuery, wantStream)
 }
 
 func TestStreamRowsFilterVarChar(t *testing.T) {
@@ -399,8 +399,8 @@ func TestStreamRowsFilterVarChar(t *testing.T) {
 		`fields:{name:"id1" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id1" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val" type:VARCHAR table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:512 charset:45 column_type:"varchar(128)"} pkfields:{name:"id1" type:INT32 charset:63}`,
 		`rows:{lengths:1 lengths:7 values:"2Ñewton"} rows:{lengths:1 lengths:6 values:"3nEwton"} rows:{lengths:1 lengths:8 values:"5neẅton"} lastpk:{lengths:1 values:"5"}`,
 	}
-	wantQuery := "select /*+ MAX_EXECUTION_TIME(3600000) */ id1, val from t1 where val = 'newton' order by id1"
-	checkStream(t, "select id1, val from t1 where val = 'newton'", nil, wantQuery, wantStream)
+	wantQuery := "select /*+ MAX_EXECUTION_TIME(3600000) */ id1, val from t1 where (val = 'newton') order by id1"
+	checkStream(t, "select id1, val from t1 where (val = 'newton')", nil, wantQuery, wantStream)
 }
 
 func TestStreamRowsMultiPacket(t *testing.T) {
