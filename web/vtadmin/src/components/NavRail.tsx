@@ -62,9 +62,6 @@ export const NavRail = () => {
                     <li>
                         <NavRailLink hotkey="W" text="Workflows" to="/workflows" count={workflows.length} />
                     </li>
-                </ul>
-
-                <ul className={style.navList}>
                     <li>
                         <NavRailLink icon={Icons.download} text="Backups" to="/backups" />
                     </li>
