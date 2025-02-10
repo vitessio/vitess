@@ -34,7 +34,7 @@ import (
 )
 
 const (
-	countWorkers = 8
+	countWorkers = 1
 )
 
 type parallelProducer struct {
@@ -208,7 +208,11 @@ func (p *parallelProducer) process(ctx context.Context, events chan *binlogdatap
 			workerIndex := p.assignTransactionToWorker(event.SequenceNumber, event.CommitParent)
 			worker := p.workers[workerIndex]
 			// We know the worker has enough capacity and thus the following will not block.
-			worker.events <- event
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case worker.events <- event:
+			}
 		}
 	}
 }
