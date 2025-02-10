@@ -321,6 +321,11 @@ func refreshAllInformation(ctx context.Context) error {
 	// Create an errgroup
 	eg, ctx := errgroup.WithContext(ctx)
 
+	// Refresh all cells.
+	eg.Go(func() error {
+		return RefreshCells(ctx)
+	})
+
 	// Refresh all keyspace information.
 	eg.Go(func() error {
 		return RefreshAllKeyspacesAndShards(ctx)

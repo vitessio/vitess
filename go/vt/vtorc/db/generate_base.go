@@ -29,9 +29,10 @@ var TableNames = []string{
 	"global_recovery_disable",
 	"topology_recovery_steps",
 	"database_instance_stale_binlog_coordinates",
-	"vitess_tablet",
+	"vitess_cell",
 	"vitess_keyspace",
 	"vitess_shard",
+	"vitess_tablet",
 }
 
 // vtorcBackend is a list of SQL statements required to build the vtorc backend
@@ -305,6 +306,14 @@ CREATE TABLE vitess_shard (
 	primary_alias varchar(512) NOT NULL,
 	primary_timestamp varchar(512) NOT NULL,
 	PRIMARY KEY (keyspace, shard)
+)`,
+	`
+DROP TABLE IF EXISTS vitess_cell
+`,
+	`
+CREATE TABLE vitess_cell (
+	cell varchar(128) NOT NULL,
+	PRIMARY KEY (cell)
 )`,
 	`
 CREATE INDEX source_host_port_idx_database_instance_database_instance on database_instance (source_host, source_port)
