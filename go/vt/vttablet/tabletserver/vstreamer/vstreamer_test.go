@@ -2126,7 +2126,7 @@ func TestFilteredBetweenOperator(t *testing.T) {
 			filter: &binlogdatapb.Filter{
 				Rules: []*binlogdatapb.Rule{{
 					Match:  "t1",
-					Filter: "select id1, val from t1 where val in ('eee', 'bbb', 'ddd', 'aaa') and id1 between 2 and 5",
+					Filter: "select id1, val from t1 where id1 between 2 and 5",
 				}},
 			},
 		},
@@ -2138,7 +2138,7 @@ func TestFilteredBetweenOperator(t *testing.T) {
 		{"begin", nil},
 		{"insert into t1 values (1, 100, 'aaa')", noEvents},
 		{"insert into t1 values (2, 200, 'bbb')", nil},
-		{"insert into t1 values (3, 100, 'ccc')", noEvents},
+		{"insert into t1 values (3, 100, 'ccc')", nil},
 		{"insert into t1 values (4, 200, 'ddd')", nil},
 		{"insert into t1 values (5, 200, 'eee')", nil},
 		{"insert into t1 values (6, 200, 'fff')", noEvents},

@@ -724,7 +724,7 @@ func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) er
 			}
 
 			if !expr.IsBetween {
-				// x NOT BETWEEN a AND b => x < a OR x > b
+				// `x NOT BETWEEN a AND b` means: `x < a OR x > b`
 				// Also, since we do not have OR implemented yet,
 				// NOT BETWEEN needs to be handled separately.
 				plan.Filters = append(plan.Filters, Filter{
@@ -738,7 +738,7 @@ func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) er
 				continue
 			}
 
-			// x BETWEEN a AND b => x >= a AND x <= b
+			// `x BETWEEN a AND b` means: `x >= a AND x <= b`
 			plan.Filters = append(plan.Filters, Filter{
 				Opcode: GreaterThanEqual,
 				ColNum: colnum,
