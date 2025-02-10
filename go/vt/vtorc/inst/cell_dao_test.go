@@ -24,7 +24,7 @@ import (
 	"vitess.io/vitess/go/vt/vtorc/db"
 )
 
-func TestSaveAndReadCells(t *testing.T) {
+func TestSaveReadAndDeleteCells(t *testing.T) {
 	// Clear the database after the test. The easiest way to do that is to run all the initialization commands again.
 	defer func() {
 		db.ClearVTOrcDatabase()
@@ -36,4 +36,9 @@ func TestSaveAndReadCells(t *testing.T) {
 	cellsRead, err := ReadCells()
 	require.NoError(t, err)
 	require.Equal(t, cells, cellsRead)
+
+	require.NoError(t, DeleteCell("zone3"))
+	cellsRead, err = ReadCells()
+	require.NoError(t, err)
+	require.Equal(t, []string{"zone1", "zone2"}, cellsRead)
 }
