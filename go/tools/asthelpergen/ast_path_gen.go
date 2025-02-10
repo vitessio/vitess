@@ -93,9 +93,9 @@ func (p *pathGen) ptrToStructMethod(t types.Type, strct *types.Struct, spi gener
 
 func (p *pathGen) addStep(
 	container types.Type, // the name of the container type
-	typ types.Type,       // the type of the field
-	name string,          // the name of the field
-	slice bool,           // whether the field is a slice
+	typ types.Type, // the type of the field
+	name string, // the name of the field
+	slice bool, // whether the field is a slice
 ) {
 	s := step{
 		container: container,
@@ -103,13 +103,13 @@ func (p *pathGen) addStep(
 		typ:       typ,
 		slice:     slice,
 	}
-	stepName := s.AsEnum()
-	fmt.Println("Adding step:", stepName)
 	p.steps = append(p.steps, s)
 
 }
 
 func (p *pathGen) addStructFields(t types.Type, strct *types.Struct, spi generatorSPI) {
+	val := types.TypeString(t, noQualifier)
+	_ = val
 	for i := 0; i < strct.NumFields(); i++ {
 		field := strct.Field(i)
 		// Check if the field type implements the interface
@@ -136,11 +136,11 @@ func (p *pathGen) ptrToBasicMethod(t types.Type, basic *types.Basic, spi generat
 }
 
 func (p *pathGen) sliceMethod(t types.Type, slice *types.Slice, spi generatorSPI) error {
-	// elemType := slice.Elem()
-	// if types.Implements(elemType, spi.iface()) {
-	//	p.addStep(t, elemType, sliceMarker, true)
-	// }
-	//
+	elemType := slice.Elem()
+	if types.Implements(elemType, spi.iface()) {
+		p.addStep(t, elemType, sliceMarker, true)
+	}
+
 	return nil
 }
 
@@ -169,11 +169,8 @@ func (p *pathGen) debugString() *jen.Statement {
 			continue
 		}
 
-		switchCases = append(switchCases, jen.Case(jen.Id(stepName+"8")).Block(
-			jen.Return(jen.Lit(debugStr+"8")),
-		))
-		switchCases = append(switchCases, jen.Case(jen.Id(stepName+"32")).Block(
-			jen.Return(jen.Lit(debugStr+"32")),
+		switchCases = append(switchCases, jen.Case(jen.Id(stepName+"Offset")).Block(
+			jen.Return(jen.Lit(debugStr+"Offset")),
 		))
 
 	}
@@ -200,8 +197,7 @@ func (p *pathGen) buildConstWithEnum() *jen.Statement {
 	for _, step := range p.steps {
 		stepName := step.AsEnum()
 		if step.slice {
-			addStep(stepName + "8")
-			addStep(stepName + "32")
+			addStep(stepName + "Offset")
 			continue
 		}
 
@@ -254,15 +250,9 @@ func (p *pathGen) generateWalkCases() []jen.Code {
 			assignNode = jen.Id("node").Dot(fmt.Sprintf("(%s)", t)).Dot(step.name).Index(jen.Id("idx"))
 		}
 
-		cases = append(cases, jen.Case(jen.Id(stepName+"8")).Block(
+		cases = append(cases, jen.Case(jen.Id(stepName+"Offset")).Block(
 			jen.Id("idx").Op(":=").Id("path[0]"),
 			jen.Id("path").Op("=").Id("path[1:]"),
-			jen.Return(jen.Id("WalkASTPath").Call(assignNode, jen.Id("path"))),
-		))
-
-		cases = append(cases, jen.Case(jen.Id(stepName+"32")).Block(
-			jen.Id("idx").Op(":=").Qual("encoding/binary", "BigEndian").Dot("Uint32").Call(jen.Index().Byte().Parens(jen.Id("path[:2]"))),
-			jen.Id("path").Op("=").Id("path[4:]"),
 			jen.Return(jen.Id("WalkASTPath").Call(assignNode, jen.Id("path"))),
 		))
 	}

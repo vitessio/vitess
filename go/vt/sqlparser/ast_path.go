@@ -20,8 +20,7 @@ package sqlparser
 type ASTStep uint16
 
 const (
-	RefOfAddColumnsColumns8 ASTStep = iota
-	RefOfAddColumnsColumns32
+	RefOfAddColumnsColumnsOffset ASTStep = iota
 	RefOfAddColumnsAfter
 	RefOfAddConstraintDefinitionConstraintDefinition
 	RefOfAddIndexDefinitionIndexDefinition
@@ -40,8 +39,7 @@ const (
 	RefOfAlterIndexName
 	RefOfAlterMigrationRatio
 	RefOfAlterTableTable
-	RefOfAlterTableAlterOptions8
-	RefOfAlterTableAlterOptions32
+	RefOfAlterTableAlterOptionsOffset
 	RefOfAlterTablePartitionSpec
 	RefOfAlterTablePartitionOption
 	RefOfAlterTableComments
@@ -52,8 +50,7 @@ const (
 	RefOfAlterViewComments
 	RefOfAlterVschemaTable
 	RefOfAlterVschemaVindexSpec
-	RefOfAlterVschemaVindexCols8
-	RefOfAlterVschemaVindexCols32
+	RefOfAlterVschemaVindexColsOffset
 	RefOfAlterVschemaAutoIncSpec
 	RefOfAnalyzeTable
 	RefOfAndExprLeft
@@ -78,25 +75,23 @@ const (
 	RefOfBitXorArg
 	RefOfBitXorOverClause
 	RefOfCallProcName
-	RefOfCallProcParams8
-	RefOfCallProcParams32
+	RefOfCallProcParamsOffset
 	RefOfCaseExprExpr
-	RefOfCaseExprWhens8
-	RefOfCaseExprWhens32
+	RefOfCaseExprWhensOffset
 	RefOfCaseExprElse
 	RefOfCastExprExpr
 	RefOfCastExprType
 	RefOfChangeColumnOldColumn
 	RefOfChangeColumnNewColDefinition
 	RefOfChangeColumnAfter
-	RefOfCharExprExprs8
-	RefOfCharExprExprs32
+	RefOfCharExprExprsOffset
 	RefOfCheckConstraintDefinitionExpr
 	RefOfColNameName
 	RefOfColNameQualifier
 	RefOfCollateExprExpr
 	RefOfColumnDefinitionName
 	RefOfColumnDefinitionType
+	ColumnsOffset
 	RefOfCommonTableExprID
 	RefOfCommonTableExprColumns
 	RefOfCommonTableExprSubquery
@@ -108,8 +103,7 @@ const (
 	RefOfConvertExprExpr
 	RefOfConvertExprType
 	RefOfConvertUsingExprExpr
-	RefOfCountArgs8
-	RefOfCountArgs32
+	RefOfCountArgsOffset
 	RefOfCountOverClause
 	RefOfCountStarOverClause
 	RefOfCreateDatabaseComments
@@ -128,8 +122,7 @@ const (
 	RefOfDeallocateStmtName
 	RefOfDeleteWith
 	RefOfDeleteComments
-	RefOfDeleteTableExprs8
-	RefOfDeleteTableExprs32
+	RefOfDeleteTableExprsOffset
 	RefOfDeleteTargets
 	RefOfDeletePartitions
 	RefOfDeleteWhere
@@ -146,14 +139,12 @@ const (
 	RefOfDropViewComments
 	RefOfExecuteStmtName
 	RefOfExecuteStmtComments
-	RefOfExecuteStmtArguments8
-	RefOfExecuteStmtArguments32
+	RefOfExecuteStmtArgumentsOffset
 	RefOfExistsExprSubquery
 	RefOfExplainStmtStatement
 	RefOfExplainStmtComments
 	RefOfExplainTabTable
-	RefOfExprsExprs8
-	RefOfExprsExprs32
+	RefOfExprsExprsOffset
 	RefOfExtractFuncExprExpr
 	RefOfExtractValueExprFragment
 	RefOfExtractValueExprXPathExpr
@@ -169,8 +160,7 @@ const (
 	RefOfFramePointExpr
 	RefOfFuncExprQualifier
 	RefOfFuncExprName
-	RefOfFuncExprExprs8
-	RefOfFuncExprExprs32
+	RefOfFuncExprExprsOffset
 	RefOfGTIDFuncExprSet1
 	RefOfGTIDFuncExprSet2
 	RefOfGTIDFuncExprTimeout
@@ -199,15 +189,13 @@ const (
 	RefOfGeomFromWKBExprSrid
 	RefOfGeomFromWKBExprAxisOrderOpt
 	RefOfGeomPropertyFuncExprGeom
-	RefOfGroupByExprs8
-	RefOfGroupByExprs32
-	RefOfGroupConcatExprExprs8
-	RefOfGroupConcatExprExprs32
+	RefOfGroupByExprsOffset
+	RefOfGroupConcatExprExprsOffset
 	RefOfGroupConcatExprOrderBy
 	RefOfGroupConcatExprLimit
 	RefOfIndexDefinitionInfo
-	RefOfIndexHintIndexes8
-	RefOfIndexHintIndexes32
+	RefOfIndexHintIndexesOffset
+	IndexHintsOffset
 	RefOfIndexInfoName
 	RefOfIndexInfoConstraintName
 	RefOfInsertComments
@@ -224,34 +212,28 @@ const (
 	RefOfIntervalDateExprDate
 	RefOfIntervalDateExprInterval
 	RefOfIntervalFuncExprExpr
-	RefOfIntervalFuncExprExprs8
-	RefOfIntervalFuncExprExprs32
+	RefOfIntervalFuncExprExprsOffset
 	RefOfIntroducerExprExpr
 	RefOfIsExprLeft
 	RefOfJSONArrayAggExpr
 	RefOfJSONArrayAggOverClause
-	RefOfJSONArrayExprParams8
-	RefOfJSONArrayExprParams32
+	RefOfJSONArrayExprParamsOffset
 	RefOfJSONAttributesExprJSONDoc
 	RefOfJSONAttributesExprPath
 	RefOfJSONContainsExprTarget
 	RefOfJSONContainsExprCandidate
-	RefOfJSONContainsExprPathList8
-	RefOfJSONContainsExprPathList32
+	RefOfJSONContainsExprPathListOffset
 	RefOfJSONContainsPathExprJSONDoc
 	RefOfJSONContainsPathExprOneOrAll
-	RefOfJSONContainsPathExprPathList8
-	RefOfJSONContainsPathExprPathList32
+	RefOfJSONContainsPathExprPathListOffset
 	RefOfJSONExtractExprJSONDoc
-	RefOfJSONExtractExprPathList8
-	RefOfJSONExtractExprPathList32
+	RefOfJSONExtractExprPathListOffset
 	RefOfJSONKeysExprJSONDoc
 	RefOfJSONKeysExprPath
 	RefOfJSONObjectAggKey
 	RefOfJSONObjectAggValue
 	RefOfJSONObjectAggOverClause
-	RefOfJSONObjectExprParams8
-	RefOfJSONObjectExprParams32
+	RefOfJSONObjectExprParamsOffset
 	RefOfJSONObjectParamKey
 	RefOfJSONObjectParamValue
 	RefOfJSONOverlapsExprJSONDoc1
@@ -259,8 +241,7 @@ const (
 	RefOfJSONPrettyExprJSONVal
 	RefOfJSONQuoteExprStringArg
 	RefOfJSONRemoveExprJSONDoc
-	RefOfJSONRemoveExprPathList8
-	RefOfJSONRemoveExprPathList32
+	RefOfJSONRemoveExprPathListOffset
 	RefOfJSONSchemaValidFuncExprSchema
 	RefOfJSONSchemaValidFuncExprDocument
 	RefOfJSONSchemaValidationReportFuncExprSchema
@@ -269,15 +250,13 @@ const (
 	RefOfJSONSearchExprOneOrAll
 	RefOfJSONSearchExprSearchStr
 	RefOfJSONSearchExprEscapeChar
-	RefOfJSONSearchExprPathList8
-	RefOfJSONSearchExprPathList32
+	RefOfJSONSearchExprPathListOffset
 	RefOfJSONStorageFreeExprJSONVal
 	RefOfJSONStorageSizeExprJSONVal
 	RefOfJSONTableExprExpr
 	RefOfJSONTableExprAlias
 	RefOfJSONTableExprFilter
-	RefOfJSONTableExprColumns8
-	RefOfJSONTableExprColumns32
+	RefOfJSONTableExprColumnsOffset
 	RefOfJSONUnquoteExprJSONValue
 	RefOfJSONValueExprJSONDoc
 	RefOfJSONValueExprPath
@@ -285,11 +264,9 @@ const (
 	RefOfJSONValueExprEmptyOnResponse
 	RefOfJSONValueExprErrorOnResponse
 	RefOfJSONValueMergeExprJSONDoc
-	RefOfJSONValueMergeExprJSONDocList8
-	RefOfJSONValueMergeExprJSONDocList32
+	RefOfJSONValueMergeExprJSONDocListOffset
 	RefOfJSONValueModifierExprJSONDoc
-	RefOfJSONValueModifierExprParams8
-	RefOfJSONValueModifierExprParams32
+	RefOfJSONValueModifierExprParamsOffset
 	RefOfJoinConditionOn
 	RefOfJoinConditionUsing
 	RefOfJoinTableExprLeftExpr
@@ -303,8 +280,7 @@ const (
 	RefOfLagLeadExprNullTreatmentClause
 	RefOfLimitOffset
 	RefOfLimitRowcount
-	RefOfLineStringExprPointParams8
-	RefOfLineStringExprPointParams32
+	RefOfLineStringExprPointParamsOffset
 	RefOfLinestrPropertyFuncExprLinestring
 	RefOfLinestrPropertyFuncExprPropertyDefArg
 	RefOfLocateExprSubStr
@@ -312,8 +288,7 @@ const (
 	RefOfLocateExprPos
 	RefOfLockingFuncName
 	RefOfLockingFuncTimeout
-	RefOfMatchExprColumns8
-	RefOfMatchExprColumns32
+	RefOfMatchExprColumnsOffset
 	RefOfMatchExprExpr
 	RefOfMaxArg
 	RefOfMaxOverClause
@@ -323,27 +298,27 @@ const (
 	RefOfMinOverClause
 	RefOfModifyColumnNewColDefinition
 	RefOfModifyColumnAfter
-	RefOfMultiLinestringExprLinestringParams8
-	RefOfMultiLinestringExprLinestringParams32
-	RefOfMultiPointExprPointParams8
-	RefOfMultiPointExprPointParams32
-	RefOfMultiPolygonExprPolygonParams8
-	RefOfMultiPolygonExprPolygonParams32
+	RefOfMultiLinestringExprLinestringParamsOffset
+	RefOfMultiPointExprPointParamsOffset
+	RefOfMultiPolygonExprPolygonParamsOffset
 	RefOfNTHValueExprExpr
 	RefOfNTHValueExprN
 	RefOfNTHValueExprOverClause
 	RefOfNTHValueExprFromFirstLastClause
 	RefOfNTHValueExprNullTreatmentClause
 	RefOfNamedWindowWindows
+	NamedWindowsOffset
 	RefOfNextvalExpr
 	RefOfNotExprExpr
 	RefOfNtileExprN
 	RefOfNtileExprOverClause
 	RefOfOffsetOriginal
+	OnDupOffset
 	RefOfOptLikeLikeTable
 	RefOfOrExprLeft
 	RefOfOrExprRight
 	RefOfOrderExpr
+	OrderByOffset
 	RefOfOrderByOptionCols
 	RefOfOverClauseWindowName
 	RefOfOverClauseWindowSpec
@@ -359,21 +334,19 @@ const (
 	RefOfPartitionOptionColList
 	RefOfPartitionOptionExpr
 	RefOfPartitionOptionSubPartition
-	RefOfPartitionOptionDefinitions8
-	RefOfPartitionOptionDefinitions32
+	RefOfPartitionOptionDefinitionsOffset
 	RefOfPartitionSpecNames
 	RefOfPartitionSpecNumber
 	RefOfPartitionSpecTableName
-	RefOfPartitionSpecDefinitions8
-	RefOfPartitionSpecDefinitions32
+	RefOfPartitionSpecDefinitionsOffset
 	RefOfPartitionValueRangeRange
+	PartitionsOffset
 	RefOfPerformanceSchemaFuncExprArgument
 	RefOfPointExprXCordinate
 	RefOfPointExprYCordinate
 	RefOfPointPropertyFuncExprPoint
 	RefOfPointPropertyFuncExprValueToSet
-	RefOfPolygonExprLinestringParams8
-	RefOfPolygonExprLinestringParams32
+	RefOfPolygonExprLinestringParamsOffset
 	RefOfPolygonPropertyFuncExprPolygon
 	RefOfPolygonPropertyFuncExprPropertyDefArg
 	RefOfPrepareStmtName
@@ -417,8 +390,7 @@ const (
 	RefOfSRollbackName
 	RefOfSavepointName
 	RefOfSelectWith
-	RefOfSelectFrom8
-	RefOfSelectFrom32
+	RefOfSelectFromOffset
 	RefOfSelectComments
 	RefOfSelectSelectExprs
 	RefOfSelectWhere
@@ -428,12 +400,12 @@ const (
 	RefOfSelectOrderBy
 	RefOfSelectLimit
 	RefOfSelectInto
-	RefOfSelectExprsExprs8
-	RefOfSelectExprsExprs32
+	RefOfSelectExprsExprsOffset
 	RefOfSetComments
 	RefOfSetExprs
 	RefOfSetExprVar
 	RefOfSetExprExpr
+	SetExprsOffset
 	RefOfShowInternal
 	RefOfShowBasicTbl
 	RefOfShowBasicDbName
@@ -461,20 +433,20 @@ const (
 	RefOfSubPartitionDefinitionOptionsEngine
 	RefOfSubPartitionDefinitionOptionsDataDirectory
 	RefOfSubPartitionDefinitionOptionsIndexDirectory
+	SubPartitionDefinitionsOffset
 	RefOfSubquerySelect
 	RefOfSubstrExprName
 	RefOfSubstrExprFrom
 	RefOfSubstrExprTo
 	RefOfSumArg
 	RefOfSumOverClause
+	TableExprsOffset
 	TableNameName
 	TableNameQualifier
-	RefOfTableSpecColumns8
-	RefOfTableSpecColumns32
-	RefOfTableSpecIndexes8
-	RefOfTableSpecIndexes32
-	RefOfTableSpecConstraints8
-	RefOfTableSpecConstraints32
+	TableNamesOffset
+	RefOfTableSpecColumnsOffset
+	RefOfTableSpecIndexesOffset
+	RefOfTableSpecConstraintsOffset
 	RefOfTableSpecOptions
 	RefOfTableSpecPartitionOption
 	RefOfTimestampDiffExprExpr1
@@ -491,14 +463,14 @@ const (
 	RefOfUnionInto
 	RefOfUpdateWith
 	RefOfUpdateComments
-	RefOfUpdateTableExprs8
-	RefOfUpdateTableExprs32
+	RefOfUpdateTableExprsOffset
 	RefOfUpdateExprs
 	RefOfUpdateWhere
 	RefOfUpdateOrderBy
 	RefOfUpdateLimit
 	RefOfUpdateExprName
 	RefOfUpdateExprExpr
+	UpdateExprsOffset
 	RefOfUpdateXMLExprTarget
 	RefOfUpdateXMLExprXPathExpr
 	RefOfUpdateXMLExprNewXML
@@ -510,6 +482,8 @@ const (
 	RefOfVStreamTable
 	RefOfVStreamWhere
 	RefOfVStreamLimit
+	ValTupleOffset
+	ValuesOffset
 	RefOfValuesFuncExprName
 	RefOfValuesStatementWith
 	RefOfValuesStatementRows
@@ -527,8 +501,7 @@ const (
 	VindexParamKey
 	RefOfVindexSpecName
 	RefOfVindexSpecType
-	RefOfVindexSpecParams8
-	RefOfVindexSpecParams32
+	RefOfVindexSpecParamsOffset
 	RefOfWeightStringFuncExprExpr
 	RefOfWeightStringFuncExprAs
 	RefOfWhenCond
@@ -536,15 +509,19 @@ const (
 	RefOfWhereExpr
 	RefOfWindowDefinitionName
 	RefOfWindowDefinitionWindowSpec
+	WindowDefinitionsOffset
 	RefOfWindowSpecificationName
-	RefOfWindowSpecificationPartitionClause8
-	RefOfWindowSpecificationPartitionClause32
+	RefOfWindowSpecificationPartitionClauseOffset
 	RefOfWindowSpecificationOrderClause
 	RefOfWindowSpecificationFrameClause
-	RefOfWithCTEs8
-	RefOfWithCTEs32
+	RefOfWithCTEsOffset
 	RefOfXorExprLeft
 	RefOfXorExprRight
+	SliceOfRefOfColumnDefinitionOffset
+	SliceOfAlterOptionOffset
+	SliceOfIdentifierCIOffset
+	SliceOfExprOffset
+	SliceOfRefOfWhenOffset
 	RefOfColumnTypeOptionsDefault
 	RefOfColumnTypeOptionsOnUpdate
 	RefOfColumnTypeOptionsAs
@@ -553,6 +530,10 @@ const (
 	RefOfColumnTypeOptionsEngineAttribute
 	RefOfColumnTypeOptionsSecondaryEngineAttribute
 	RefOfColumnTypeOptionsSRID
+	SliceOfTableExprOffset
+	SliceOfRefOfVariableOffset
+	SliceOfRefOfJSONObjectParamOffset
+	SliceOfRefOfJtColumnDefinitionOffset
 	RefOfJtOrdinalColDefName
 	RefOfJtPathColDefName
 	RefOfJtPathColDefType
@@ -560,14 +541,20 @@ const (
 	RefOfJtPathColDefEmptyOnResponse
 	RefOfJtPathColDefErrorOnResponse
 	RefOfJtNestedPathColDefPath
-	RefOfJtNestedPathColDefColumns8
-	RefOfJtNestedPathColDefColumns32
+	RefOfJtNestedPathColDefColumnsOffset
+	SliceOfRefOfColNameOffset
+	SliceOfRefOfPartitionDefinitionOffset
 	RefOfRootNodeSQLNode
+	SliceOfSelectExprOffset
 	RefOfTableNameName
 	RefOfTableNameQualifier
 	RefOfTableOptionValue
 	RefOfTableOptionTables
+	SliceOfRefOfIndexDefinitionOffset
+	SliceOfRefOfConstraintDefinitionOffset
 	RefOfVindexParamKey
+	SliceOfVindexParamOffset
+	SliceOfRefOfCommonTableExprOffset
 	RefOfIndexColumnColumn
 	RefOfIndexColumnExpression
 	RefOfIndexOptionValue
@@ -578,10 +565,8 @@ const (
 
 func (s ASTStep) DebugString() string {
 	switch s {
-	case RefOfAddColumnsColumns8:
-		return "(*AddColumns).Columns8"
-	case RefOfAddColumnsColumns32:
-		return "(*AddColumns).Columns32"
+	case RefOfAddColumnsColumnsOffset:
+		return "(*AddColumns).ColumnsOffset"
 	case RefOfAddColumnsAfter:
 		return "(*AddColumns).After"
 	case RefOfAddConstraintDefinitionConstraintDefinition:
@@ -618,10 +603,8 @@ func (s ASTStep) DebugString() string {
 		return "(*AlterMigration).Ratio"
 	case RefOfAlterTableTable:
 		return "(*AlterTable).Table"
-	case RefOfAlterTableAlterOptions8:
-		return "(*AlterTable).AlterOptions8"
-	case RefOfAlterTableAlterOptions32:
-		return "(*AlterTable).AlterOptions32"
+	case RefOfAlterTableAlterOptionsOffset:
+		return "(*AlterTable).AlterOptionsOffset"
 	case RefOfAlterTablePartitionSpec:
 		return "(*AlterTable).PartitionSpec"
 	case RefOfAlterTablePartitionOption:
@@ -642,10 +625,8 @@ func (s ASTStep) DebugString() string {
 		return "(*AlterVschema).Table"
 	case RefOfAlterVschemaVindexSpec:
 		return "(*AlterVschema).VindexSpec"
-	case RefOfAlterVschemaVindexCols8:
-		return "(*AlterVschema).VindexCols8"
-	case RefOfAlterVschemaVindexCols32:
-		return "(*AlterVschema).VindexCols32"
+	case RefOfAlterVschemaVindexColsOffset:
+		return "(*AlterVschema).VindexColsOffset"
 	case RefOfAlterVschemaAutoIncSpec:
 		return "(*AlterVschema).AutoIncSpec"
 	case RefOfAnalyzeTable:
@@ -694,16 +675,12 @@ func (s ASTStep) DebugString() string {
 		return "(*BitXor).OverClause"
 	case RefOfCallProcName:
 		return "(*CallProc).Name"
-	case RefOfCallProcParams8:
-		return "(*CallProc).Params8"
-	case RefOfCallProcParams32:
-		return "(*CallProc).Params32"
+	case RefOfCallProcParamsOffset:
+		return "(*CallProc).ParamsOffset"
 	case RefOfCaseExprExpr:
 		return "(*CaseExpr).Expr"
-	case RefOfCaseExprWhens8:
-		return "(*CaseExpr).Whens8"
-	case RefOfCaseExprWhens32:
-		return "(*CaseExpr).Whens32"
+	case RefOfCaseExprWhensOffset:
+		return "(*CaseExpr).WhensOffset"
 	case RefOfCaseExprElse:
 		return "(*CaseExpr).Else"
 	case RefOfCastExprExpr:
@@ -716,10 +693,8 @@ func (s ASTStep) DebugString() string {
 		return "(*ChangeColumn).NewColDefinition"
 	case RefOfChangeColumnAfter:
 		return "(*ChangeColumn).After"
-	case RefOfCharExprExprs8:
-		return "(*CharExpr).Exprs8"
-	case RefOfCharExprExprs32:
-		return "(*CharExpr).Exprs32"
+	case RefOfCharExprExprsOffset:
+		return "(*CharExpr).ExprsOffset"
 	case RefOfCheckConstraintDefinitionExpr:
 		return "(*CheckConstraintDefinition).Expr"
 	case RefOfColNameName:
@@ -732,6 +707,8 @@ func (s ASTStep) DebugString() string {
 		return "(*ColumnDefinition).Name"
 	case RefOfColumnDefinitionType:
 		return "(*ColumnDefinition).Type"
+	case ColumnsOffset:
+		return "(Columns)[]Offset"
 	case RefOfCommonTableExprID:
 		return "(*CommonTableExpr).ID"
 	case RefOfCommonTableExprColumns:
@@ -754,10 +731,8 @@ func (s ASTStep) DebugString() string {
 		return "(*ConvertExpr).Type"
 	case RefOfConvertUsingExprExpr:
 		return "(*ConvertUsingExpr).Expr"
-	case RefOfCountArgs8:
-		return "(*Count).Args8"
-	case RefOfCountArgs32:
-		return "(*Count).Args32"
+	case RefOfCountArgsOffset:
+		return "(*Count).ArgsOffset"
 	case RefOfCountOverClause:
 		return "(*Count).OverClause"
 	case RefOfCountStarOverClause:
@@ -794,10 +769,8 @@ func (s ASTStep) DebugString() string {
 		return "(*Delete).With"
 	case RefOfDeleteComments:
 		return "(*Delete).Comments"
-	case RefOfDeleteTableExprs8:
-		return "(*Delete).TableExprs8"
-	case RefOfDeleteTableExprs32:
-		return "(*Delete).TableExprs32"
+	case RefOfDeleteTableExprsOffset:
+		return "(*Delete).TableExprsOffset"
 	case RefOfDeleteTargets:
 		return "(*Delete).Targets"
 	case RefOfDeletePartitions:
@@ -830,10 +803,8 @@ func (s ASTStep) DebugString() string {
 		return "(*ExecuteStmt).Name"
 	case RefOfExecuteStmtComments:
 		return "(*ExecuteStmt).Comments"
-	case RefOfExecuteStmtArguments8:
-		return "(*ExecuteStmt).Arguments8"
-	case RefOfExecuteStmtArguments32:
-		return "(*ExecuteStmt).Arguments32"
+	case RefOfExecuteStmtArgumentsOffset:
+		return "(*ExecuteStmt).ArgumentsOffset"
 	case RefOfExistsExprSubquery:
 		return "(*ExistsExpr).Subquery"
 	case RefOfExplainStmtStatement:
@@ -842,10 +813,8 @@ func (s ASTStep) DebugString() string {
 		return "(*ExplainStmt).Comments"
 	case RefOfExplainTabTable:
 		return "(*ExplainTab).Table"
-	case RefOfExprsExprs8:
-		return "(*Exprs).Exprs8"
-	case RefOfExprsExprs32:
-		return "(*Exprs).Exprs32"
+	case RefOfExprsExprsOffset:
+		return "(*Exprs).ExprsOffset"
 	case RefOfExtractFuncExprExpr:
 		return "(*ExtractFuncExpr).Expr"
 	case RefOfExtractValueExprFragment:
@@ -876,10 +845,8 @@ func (s ASTStep) DebugString() string {
 		return "(*FuncExpr).Qualifier"
 	case RefOfFuncExprName:
 		return "(*FuncExpr).Name"
-	case RefOfFuncExprExprs8:
-		return "(*FuncExpr).Exprs8"
-	case RefOfFuncExprExprs32:
-		return "(*FuncExpr).Exprs32"
+	case RefOfFuncExprExprsOffset:
+		return "(*FuncExpr).ExprsOffset"
 	case RefOfGTIDFuncExprSet1:
 		return "(*GTIDFuncExpr).Set1"
 	case RefOfGTIDFuncExprSet2:
@@ -936,24 +903,20 @@ func (s ASTStep) DebugString() string {
 		return "(*GeomFromWKBExpr).AxisOrderOpt"
 	case RefOfGeomPropertyFuncExprGeom:
 		return "(*GeomPropertyFuncExpr).Geom"
-	case RefOfGroupByExprs8:
-		return "(*GroupBy).Exprs8"
-	case RefOfGroupByExprs32:
-		return "(*GroupBy).Exprs32"
-	case RefOfGroupConcatExprExprs8:
-		return "(*GroupConcatExpr).Exprs8"
-	case RefOfGroupConcatExprExprs32:
-		return "(*GroupConcatExpr).Exprs32"
+	case RefOfGroupByExprsOffset:
+		return "(*GroupBy).ExprsOffset"
+	case RefOfGroupConcatExprExprsOffset:
+		return "(*GroupConcatExpr).ExprsOffset"
 	case RefOfGroupConcatExprOrderBy:
 		return "(*GroupConcatExpr).OrderBy"
 	case RefOfGroupConcatExprLimit:
 		return "(*GroupConcatExpr).Limit"
 	case RefOfIndexDefinitionInfo:
 		return "(*IndexDefinition).Info"
-	case RefOfIndexHintIndexes8:
-		return "(*IndexHint).Indexes8"
-	case RefOfIndexHintIndexes32:
-		return "(*IndexHint).Indexes32"
+	case RefOfIndexHintIndexesOffset:
+		return "(*IndexHint).IndexesOffset"
+	case IndexHintsOffset:
+		return "(IndexHints)[]Offset"
 	case RefOfIndexInfoName:
 		return "(*IndexInfo).Name"
 	case RefOfIndexInfoConstraintName:
@@ -986,10 +949,8 @@ func (s ASTStep) DebugString() string {
 		return "(*IntervalDateExpr).Interval"
 	case RefOfIntervalFuncExprExpr:
 		return "(*IntervalFuncExpr).Expr"
-	case RefOfIntervalFuncExprExprs8:
-		return "(*IntervalFuncExpr).Exprs8"
-	case RefOfIntervalFuncExprExprs32:
-		return "(*IntervalFuncExpr).Exprs32"
+	case RefOfIntervalFuncExprExprsOffset:
+		return "(*IntervalFuncExpr).ExprsOffset"
 	case RefOfIntroducerExprExpr:
 		return "(*IntroducerExpr).Expr"
 	case RefOfIsExprLeft:
@@ -998,10 +959,8 @@ func (s ASTStep) DebugString() string {
 		return "(*JSONArrayAgg).Expr"
 	case RefOfJSONArrayAggOverClause:
 		return "(*JSONArrayAgg).OverClause"
-	case RefOfJSONArrayExprParams8:
-		return "(*JSONArrayExpr).Params8"
-	case RefOfJSONArrayExprParams32:
-		return "(*JSONArrayExpr).Params32"
+	case RefOfJSONArrayExprParamsOffset:
+		return "(*JSONArrayExpr).ParamsOffset"
 	case RefOfJSONAttributesExprJSONDoc:
 		return "(*JSONAttributesExpr).JSONDoc"
 	case RefOfJSONAttributesExprPath:
@@ -1010,24 +969,18 @@ func (s ASTStep) DebugString() string {
 		return "(*JSONContainsExpr).Target"
 	case RefOfJSONContainsExprCandidate:
 		return "(*JSONContainsExpr).Candidate"
-	case RefOfJSONContainsExprPathList8:
-		return "(*JSONContainsExpr).PathList8"
-	case RefOfJSONContainsExprPathList32:
-		return "(*JSONContainsExpr).PathList32"
+	case RefOfJSONContainsExprPathListOffset:
+		return "(*JSONContainsExpr).PathListOffset"
 	case RefOfJSONContainsPathExprJSONDoc:
 		return "(*JSONContainsPathExpr).JSONDoc"
 	case RefOfJSONContainsPathExprOneOrAll:
 		return "(*JSONContainsPathExpr).OneOrAll"
-	case RefOfJSONContainsPathExprPathList8:
-		return "(*JSONContainsPathExpr).PathList8"
-	case RefOfJSONContainsPathExprPathList32:
-		return "(*JSONContainsPathExpr).PathList32"
+	case RefOfJSONContainsPathExprPathListOffset:
+		return "(*JSONContainsPathExpr).PathListOffset"
 	case RefOfJSONExtractExprJSONDoc:
 		return "(*JSONExtractExpr).JSONDoc"
-	case RefOfJSONExtractExprPathList8:
-		return "(*JSONExtractExpr).PathList8"
-	case RefOfJSONExtractExprPathList32:
-		return "(*JSONExtractExpr).PathList32"
+	case RefOfJSONExtractExprPathListOffset:
+		return "(*JSONExtractExpr).PathListOffset"
 	case RefOfJSONKeysExprJSONDoc:
 		return "(*JSONKeysExpr).JSONDoc"
 	case RefOfJSONKeysExprPath:
@@ -1038,10 +991,8 @@ func (s ASTStep) DebugString() string {
 		return "(*JSONObjectAgg).Value"
 	case RefOfJSONObjectAggOverClause:
 		return "(*JSONObjectAgg).OverClause"
-	case RefOfJSONObjectExprParams8:
-		return "(*JSONObjectExpr).Params8"
-	case RefOfJSONObjectExprParams32:
-		return "(*JSONObjectExpr).Params32"
+	case RefOfJSONObjectExprParamsOffset:
+		return "(*JSONObjectExpr).ParamsOffset"
 	case RefOfJSONObjectParamKey:
 		return "(*JSONObjectParam).Key"
 	case RefOfJSONObjectParamValue:
@@ -1056,10 +1007,8 @@ func (s ASTStep) DebugString() string {
 		return "(*JSONQuoteExpr).StringArg"
 	case RefOfJSONRemoveExprJSONDoc:
 		return "(*JSONRemoveExpr).JSONDoc"
-	case RefOfJSONRemoveExprPathList8:
-		return "(*JSONRemoveExpr).PathList8"
-	case RefOfJSONRemoveExprPathList32:
-		return "(*JSONRemoveExpr).PathList32"
+	case RefOfJSONRemoveExprPathListOffset:
+		return "(*JSONRemoveExpr).PathListOffset"
 	case RefOfJSONSchemaValidFuncExprSchema:
 		return "(*JSONSchemaValidFuncExpr).Schema"
 	case RefOfJSONSchemaValidFuncExprDocument:
@@ -1076,10 +1025,8 @@ func (s ASTStep) DebugString() string {
 		return "(*JSONSearchExpr).SearchStr"
 	case RefOfJSONSearchExprEscapeChar:
 		return "(*JSONSearchExpr).EscapeChar"
-	case RefOfJSONSearchExprPathList8:
-		return "(*JSONSearchExpr).PathList8"
-	case RefOfJSONSearchExprPathList32:
-		return "(*JSONSearchExpr).PathList32"
+	case RefOfJSONSearchExprPathListOffset:
+		return "(*JSONSearchExpr).PathListOffset"
 	case RefOfJSONStorageFreeExprJSONVal:
 		return "(*JSONStorageFreeExpr).JSONVal"
 	case RefOfJSONStorageSizeExprJSONVal:
@@ -1090,10 +1037,8 @@ func (s ASTStep) DebugString() string {
 		return "(*JSONTableExpr).Alias"
 	case RefOfJSONTableExprFilter:
 		return "(*JSONTableExpr).Filter"
-	case RefOfJSONTableExprColumns8:
-		return "(*JSONTableExpr).Columns8"
-	case RefOfJSONTableExprColumns32:
-		return "(*JSONTableExpr).Columns32"
+	case RefOfJSONTableExprColumnsOffset:
+		return "(*JSONTableExpr).ColumnsOffset"
 	case RefOfJSONUnquoteExprJSONValue:
 		return "(*JSONUnquoteExpr).JSONValue"
 	case RefOfJSONValueExprJSONDoc:
@@ -1108,16 +1053,12 @@ func (s ASTStep) DebugString() string {
 		return "(*JSONValueExpr).ErrorOnResponse"
 	case RefOfJSONValueMergeExprJSONDoc:
 		return "(*JSONValueMergeExpr).JSONDoc"
-	case RefOfJSONValueMergeExprJSONDocList8:
-		return "(*JSONValueMergeExpr).JSONDocList8"
-	case RefOfJSONValueMergeExprJSONDocList32:
-		return "(*JSONValueMergeExpr).JSONDocList32"
+	case RefOfJSONValueMergeExprJSONDocListOffset:
+		return "(*JSONValueMergeExpr).JSONDocListOffset"
 	case RefOfJSONValueModifierExprJSONDoc:
 		return "(*JSONValueModifierExpr).JSONDoc"
-	case RefOfJSONValueModifierExprParams8:
-		return "(*JSONValueModifierExpr).Params8"
-	case RefOfJSONValueModifierExprParams32:
-		return "(*JSONValueModifierExpr).Params32"
+	case RefOfJSONValueModifierExprParamsOffset:
+		return "(*JSONValueModifierExpr).ParamsOffset"
 	case RefOfJoinConditionOn:
 		return "(*JoinCondition).On"
 	case RefOfJoinConditionUsing:
@@ -1144,10 +1085,8 @@ func (s ASTStep) DebugString() string {
 		return "(*Limit).Offset"
 	case RefOfLimitRowcount:
 		return "(*Limit).Rowcount"
-	case RefOfLineStringExprPointParams8:
-		return "(*LineStringExpr).PointParams8"
-	case RefOfLineStringExprPointParams32:
-		return "(*LineStringExpr).PointParams32"
+	case RefOfLineStringExprPointParamsOffset:
+		return "(*LineStringExpr).PointParamsOffset"
 	case RefOfLinestrPropertyFuncExprLinestring:
 		return "(*LinestrPropertyFuncExpr).Linestring"
 	case RefOfLinestrPropertyFuncExprPropertyDefArg:
@@ -1162,10 +1101,8 @@ func (s ASTStep) DebugString() string {
 		return "(*LockingFunc).Name"
 	case RefOfLockingFuncTimeout:
 		return "(*LockingFunc).Timeout"
-	case RefOfMatchExprColumns8:
-		return "(*MatchExpr).Columns8"
-	case RefOfMatchExprColumns32:
-		return "(*MatchExpr).Columns32"
+	case RefOfMatchExprColumnsOffset:
+		return "(*MatchExpr).ColumnsOffset"
 	case RefOfMatchExprExpr:
 		return "(*MatchExpr).Expr"
 	case RefOfMaxArg:
@@ -1184,18 +1121,12 @@ func (s ASTStep) DebugString() string {
 		return "(*ModifyColumn).NewColDefinition"
 	case RefOfModifyColumnAfter:
 		return "(*ModifyColumn).After"
-	case RefOfMultiLinestringExprLinestringParams8:
-		return "(*MultiLinestringExpr).LinestringParams8"
-	case RefOfMultiLinestringExprLinestringParams32:
-		return "(*MultiLinestringExpr).LinestringParams32"
-	case RefOfMultiPointExprPointParams8:
-		return "(*MultiPointExpr).PointParams8"
-	case RefOfMultiPointExprPointParams32:
-		return "(*MultiPointExpr).PointParams32"
-	case RefOfMultiPolygonExprPolygonParams8:
-		return "(*MultiPolygonExpr).PolygonParams8"
-	case RefOfMultiPolygonExprPolygonParams32:
-		return "(*MultiPolygonExpr).PolygonParams32"
+	case RefOfMultiLinestringExprLinestringParamsOffset:
+		return "(*MultiLinestringExpr).LinestringParamsOffset"
+	case RefOfMultiPointExprPointParamsOffset:
+		return "(*MultiPointExpr).PointParamsOffset"
+	case RefOfMultiPolygonExprPolygonParamsOffset:
+		return "(*MultiPolygonExpr).PolygonParamsOffset"
 	case RefOfNTHValueExprExpr:
 		return "(*NTHValueExpr).Expr"
 	case RefOfNTHValueExprN:
@@ -1208,6 +1139,8 @@ func (s ASTStep) DebugString() string {
 		return "(*NTHValueExpr).NullTreatmentClause"
 	case RefOfNamedWindowWindows:
 		return "(*NamedWindow).Windows"
+	case NamedWindowsOffset:
+		return "(NamedWindows)[]Offset"
 	case RefOfNextvalExpr:
 		return "(*Nextval).Expr"
 	case RefOfNotExprExpr:
@@ -1218,6 +1151,8 @@ func (s ASTStep) DebugString() string {
 		return "(*NtileExpr).OverClause"
 	case RefOfOffsetOriginal:
 		return "(*Offset).Original"
+	case OnDupOffset:
+		return "(OnDup)[]Offset"
 	case RefOfOptLikeLikeTable:
 		return "(*OptLike).LikeTable"
 	case RefOfOrExprLeft:
@@ -1226,6 +1161,8 @@ func (s ASTStep) DebugString() string {
 		return "(*OrExpr).Right"
 	case RefOfOrderExpr:
 		return "(*Order).Expr"
+	case OrderByOffset:
+		return "(OrderBy)[]Offset"
 	case RefOfOrderByOptionCols:
 		return "(*OrderByOption).Cols"
 	case RefOfOverClauseWindowName:
@@ -1256,22 +1193,20 @@ func (s ASTStep) DebugString() string {
 		return "(*PartitionOption).Expr"
 	case RefOfPartitionOptionSubPartition:
 		return "(*PartitionOption).SubPartition"
-	case RefOfPartitionOptionDefinitions8:
-		return "(*PartitionOption).Definitions8"
-	case RefOfPartitionOptionDefinitions32:
-		return "(*PartitionOption).Definitions32"
+	case RefOfPartitionOptionDefinitionsOffset:
+		return "(*PartitionOption).DefinitionsOffset"
 	case RefOfPartitionSpecNames:
 		return "(*PartitionSpec).Names"
 	case RefOfPartitionSpecNumber:
 		return "(*PartitionSpec).Number"
 	case RefOfPartitionSpecTableName:
 		return "(*PartitionSpec).TableName"
-	case RefOfPartitionSpecDefinitions8:
-		return "(*PartitionSpec).Definitions8"
-	case RefOfPartitionSpecDefinitions32:
-		return "(*PartitionSpec).Definitions32"
+	case RefOfPartitionSpecDefinitionsOffset:
+		return "(*PartitionSpec).DefinitionsOffset"
 	case RefOfPartitionValueRangeRange:
 		return "(*PartitionValueRange).Range"
+	case PartitionsOffset:
+		return "(Partitions)[]Offset"
 	case RefOfPerformanceSchemaFuncExprArgument:
 		return "(*PerformanceSchemaFuncExpr).Argument"
 	case RefOfPointExprXCordinate:
@@ -1282,10 +1217,8 @@ func (s ASTStep) DebugString() string {
 		return "(*PointPropertyFuncExpr).Point"
 	case RefOfPointPropertyFuncExprValueToSet:
 		return "(*PointPropertyFuncExpr).ValueToSet"
-	case RefOfPolygonExprLinestringParams8:
-		return "(*PolygonExpr).LinestringParams8"
-	case RefOfPolygonExprLinestringParams32:
-		return "(*PolygonExpr).LinestringParams32"
+	case RefOfPolygonExprLinestringParamsOffset:
+		return "(*PolygonExpr).LinestringParamsOffset"
 	case RefOfPolygonPropertyFuncExprPolygon:
 		return "(*PolygonPropertyFuncExpr).Polygon"
 	case RefOfPolygonPropertyFuncExprPropertyDefArg:
@@ -1372,10 +1305,8 @@ func (s ASTStep) DebugString() string {
 		return "(*Savepoint).Name"
 	case RefOfSelectWith:
 		return "(*Select).With"
-	case RefOfSelectFrom8:
-		return "(*Select).From8"
-	case RefOfSelectFrom32:
-		return "(*Select).From32"
+	case RefOfSelectFromOffset:
+		return "(*Select).FromOffset"
 	case RefOfSelectComments:
 		return "(*Select).Comments"
 	case RefOfSelectSelectExprs:
@@ -1394,10 +1325,8 @@ func (s ASTStep) DebugString() string {
 		return "(*Select).Limit"
 	case RefOfSelectInto:
 		return "(*Select).Into"
-	case RefOfSelectExprsExprs8:
-		return "(*SelectExprs).Exprs8"
-	case RefOfSelectExprsExprs32:
-		return "(*SelectExprs).Exprs32"
+	case RefOfSelectExprsExprsOffset:
+		return "(*SelectExprs).ExprsOffset"
 	case RefOfSetComments:
 		return "(*Set).Comments"
 	case RefOfSetExprs:
@@ -1406,6 +1335,8 @@ func (s ASTStep) DebugString() string {
 		return "(*SetExpr).Var"
 	case RefOfSetExprExpr:
 		return "(*SetExpr).Expr"
+	case SetExprsOffset:
+		return "(SetExprs)[]Offset"
 	case RefOfShowInternal:
 		return "(*Show).Internal"
 	case RefOfShowBasicTbl:
@@ -1460,6 +1391,8 @@ func (s ASTStep) DebugString() string {
 		return "(*SubPartitionDefinitionOptions).DataDirectory"
 	case RefOfSubPartitionDefinitionOptionsIndexDirectory:
 		return "(*SubPartitionDefinitionOptions).IndexDirectory"
+	case SubPartitionDefinitionsOffset:
+		return "(SubPartitionDefinitions)[]Offset"
 	case RefOfSubquerySelect:
 		return "(*Subquery).Select"
 	case RefOfSubstrExprName:
@@ -1472,22 +1405,20 @@ func (s ASTStep) DebugString() string {
 		return "(*Sum).Arg"
 	case RefOfSumOverClause:
 		return "(*Sum).OverClause"
+	case TableExprsOffset:
+		return "(TableExprs)[]Offset"
 	case TableNameName:
 		return "(TableName).Name"
 	case TableNameQualifier:
 		return "(TableName).Qualifier"
-	case RefOfTableSpecColumns8:
-		return "(*TableSpec).Columns8"
-	case RefOfTableSpecColumns32:
-		return "(*TableSpec).Columns32"
-	case RefOfTableSpecIndexes8:
-		return "(*TableSpec).Indexes8"
-	case RefOfTableSpecIndexes32:
-		return "(*TableSpec).Indexes32"
-	case RefOfTableSpecConstraints8:
-		return "(*TableSpec).Constraints8"
-	case RefOfTableSpecConstraints32:
-		return "(*TableSpec).Constraints32"
+	case TableNamesOffset:
+		return "(TableNames)[]Offset"
+	case RefOfTableSpecColumnsOffset:
+		return "(*TableSpec).ColumnsOffset"
+	case RefOfTableSpecIndexesOffset:
+		return "(*TableSpec).IndexesOffset"
+	case RefOfTableSpecConstraintsOffset:
+		return "(*TableSpec).ConstraintsOffset"
 	case RefOfTableSpecOptions:
 		return "(*TableSpec).Options"
 	case RefOfTableSpecPartitionOption:
@@ -1520,10 +1451,8 @@ func (s ASTStep) DebugString() string {
 		return "(*Update).With"
 	case RefOfUpdateComments:
 		return "(*Update).Comments"
-	case RefOfUpdateTableExprs8:
-		return "(*Update).TableExprs8"
-	case RefOfUpdateTableExprs32:
-		return "(*Update).TableExprs32"
+	case RefOfUpdateTableExprsOffset:
+		return "(*Update).TableExprsOffset"
 	case RefOfUpdateExprs:
 		return "(*Update).Exprs"
 	case RefOfUpdateWhere:
@@ -1536,6 +1465,8 @@ func (s ASTStep) DebugString() string {
 		return "(*UpdateExpr).Name"
 	case RefOfUpdateExprExpr:
 		return "(*UpdateExpr).Expr"
+	case UpdateExprsOffset:
+		return "(UpdateExprs)[]Offset"
 	case RefOfUpdateXMLExprTarget:
 		return "(*UpdateXMLExpr).Target"
 	case RefOfUpdateXMLExprXPathExpr:
@@ -1558,6 +1489,10 @@ func (s ASTStep) DebugString() string {
 		return "(*VStream).Where"
 	case RefOfVStreamLimit:
 		return "(*VStream).Limit"
+	case ValTupleOffset:
+		return "(ValTuple)[]Offset"
+	case ValuesOffset:
+		return "(Values)[]Offset"
 	case RefOfValuesFuncExprName:
 		return "(*ValuesFuncExpr).Name"
 	case RefOfValuesStatementWith:
@@ -1592,10 +1527,8 @@ func (s ASTStep) DebugString() string {
 		return "(*VindexSpec).Name"
 	case RefOfVindexSpecType:
 		return "(*VindexSpec).Type"
-	case RefOfVindexSpecParams8:
-		return "(*VindexSpec).Params8"
-	case RefOfVindexSpecParams32:
-		return "(*VindexSpec).Params32"
+	case RefOfVindexSpecParamsOffset:
+		return "(*VindexSpec).ParamsOffset"
 	case RefOfWeightStringFuncExprExpr:
 		return "(*WeightStringFuncExpr).Expr"
 	case RefOfWeightStringFuncExprAs:
@@ -1610,24 +1543,32 @@ func (s ASTStep) DebugString() string {
 		return "(*WindowDefinition).Name"
 	case RefOfWindowDefinitionWindowSpec:
 		return "(*WindowDefinition).WindowSpec"
+	case WindowDefinitionsOffset:
+		return "(WindowDefinitions)[]Offset"
 	case RefOfWindowSpecificationName:
 		return "(*WindowSpecification).Name"
-	case RefOfWindowSpecificationPartitionClause8:
-		return "(*WindowSpecification).PartitionClause8"
-	case RefOfWindowSpecificationPartitionClause32:
-		return "(*WindowSpecification).PartitionClause32"
+	case RefOfWindowSpecificationPartitionClauseOffset:
+		return "(*WindowSpecification).PartitionClauseOffset"
 	case RefOfWindowSpecificationOrderClause:
 		return "(*WindowSpecification).OrderClause"
 	case RefOfWindowSpecificationFrameClause:
 		return "(*WindowSpecification).FrameClause"
-	case RefOfWithCTEs8:
-		return "(*With).CTEs8"
-	case RefOfWithCTEs32:
-		return "(*With).CTEs32"
+	case RefOfWithCTEsOffset:
+		return "(*With).CTEsOffset"
 	case RefOfXorExprLeft:
 		return "(*XorExpr).Left"
 	case RefOfXorExprRight:
 		return "(*XorExpr).Right"
+	case SliceOfRefOfColumnDefinitionOffset:
+		return "([]*ColumnDefinition)[]Offset"
+	case SliceOfAlterOptionOffset:
+		return "([]AlterOption)[]Offset"
+	case SliceOfIdentifierCIOffset:
+		return "([]IdentifierCI)[]Offset"
+	case SliceOfExprOffset:
+		return "([]Expr)[]Offset"
+	case SliceOfRefOfWhenOffset:
+		return "([]*When)[]Offset"
 	case RefOfColumnTypeOptionsDefault:
 		return "(*ColumnTypeOptions).Default"
 	case RefOfColumnTypeOptionsOnUpdate:
@@ -1644,6 +1585,14 @@ func (s ASTStep) DebugString() string {
 		return "(*ColumnTypeOptions).SecondaryEngineAttribute"
 	case RefOfColumnTypeOptionsSRID:
 		return "(*ColumnTypeOptions).SRID"
+	case SliceOfTableExprOffset:
+		return "([]TableExpr)[]Offset"
+	case SliceOfRefOfVariableOffset:
+		return "([]*Variable)[]Offset"
+	case SliceOfRefOfJSONObjectParamOffset:
+		return "([]*JSONObjectParam)[]Offset"
+	case SliceOfRefOfJtColumnDefinitionOffset:
+		return "([]*JtColumnDefinition)[]Offset"
 	case RefOfJtOrdinalColDefName:
 		return "(*JtOrdinalColDef).Name"
 	case RefOfJtPathColDefName:
@@ -1658,12 +1607,16 @@ func (s ASTStep) DebugString() string {
 		return "(*JtPathColDef).ErrorOnResponse"
 	case RefOfJtNestedPathColDefPath:
 		return "(*JtNestedPathColDef).Path"
-	case RefOfJtNestedPathColDefColumns8:
-		return "(*JtNestedPathColDef).Columns8"
-	case RefOfJtNestedPathColDefColumns32:
-		return "(*JtNestedPathColDef).Columns32"
+	case RefOfJtNestedPathColDefColumnsOffset:
+		return "(*JtNestedPathColDef).ColumnsOffset"
+	case SliceOfRefOfColNameOffset:
+		return "([]*ColName)[]Offset"
+	case SliceOfRefOfPartitionDefinitionOffset:
+		return "([]*PartitionDefinition)[]Offset"
 	case RefOfRootNodeSQLNode:
 		return "(*RootNode).SQLNode"
+	case SliceOfSelectExprOffset:
+		return "([]SelectExpr)[]Offset"
 	case RefOfTableNameName:
 		return "(*TableName).Name"
 	case RefOfTableNameQualifier:
@@ -1672,8 +1625,16 @@ func (s ASTStep) DebugString() string {
 		return "(*TableOption).Value"
 	case RefOfTableOptionTables:
 		return "(*TableOption).Tables"
+	case SliceOfRefOfIndexDefinitionOffset:
+		return "([]*IndexDefinition)[]Offset"
+	case SliceOfRefOfConstraintDefinitionOffset:
+		return "([]*ConstraintDefinition)[]Offset"
 	case RefOfVindexParamKey:
 		return "(*VindexParam).Key"
+	case SliceOfVindexParamOffset:
+		return "([]VindexParam)[]Offset"
+	case SliceOfRefOfCommonTableExprOffset:
+		return "([]*CommonTableExpr)[]Offset"
 	case RefOfIndexColumnColumn:
 		return "(*IndexColumn).Column"
 	case RefOfIndexColumnExpression:

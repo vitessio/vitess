@@ -23,11 +23,13 @@ import (
 )
 
 func TestASTPathDebugString(t *testing.T) {
+	// select * from t where func(1,2,x) = 10
+	// path to X
 	p := ASTPath("")
 	p = AddStep(p, RefOfSelectWhere)
 	p = AddStep(p, RefOfWhereExpr)
 	p = AddStep(p, RefOfBinaryExprLeft)
-	p = AddStep(p, RefOfFuncExprExprs)
-	expected := "(*Select).Where->(*Where).Expr->(*BinaryExpr).Left->(*FuncExpr).Exprs->(Exprs).Offset8(10)"
+	p = AddStepWithSliceIndex(p, RefOfFuncExprExprsOffset, 2)
+	expected := "(*Select).Where->(*Where).Expr->(*BinaryExpr).Left->(*FuncExpr).ExprsOffset(2)"
 	assert.Equal(t, expected, p.DebugString())
 }

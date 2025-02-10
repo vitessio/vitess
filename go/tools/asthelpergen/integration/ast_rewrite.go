@@ -129,7 +129,7 @@ func (a *application) rewriteInterfaceSlice(parent AST, node InterfaceSlice, rep
 	}
 	for x, el := range node {
 		if a.collectPaths {
-			a.cur.current = AddStepWithSliceIndex(path, InterfaceSliceOffset8, x)
+			a.cur.current = AddStepWithSliceIndex(path, InterfaceSliceOffset, x)
 		}
 		if !a.rewriteAST(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent AST) {
@@ -204,7 +204,7 @@ func (a *application) rewriteLeafSlice(parent AST, node LeafSlice, replacer repl
 	}
 	for x, el := range node {
 		if a.collectPaths {
-			a.cur.current = AddStepWithSliceIndex(path, LeafSliceOffset8, x)
+			a.cur.current = AddStepWithSliceIndex(path, LeafSliceOffset, x)
 		}
 		if !a.rewriteRefOfLeaf(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent AST) {
@@ -327,7 +327,7 @@ func (a *application) rewriteRefOfRefSliceContainer(parent AST, node *RefSliceCo
 	}
 	for x, el := range node.ASTElements {
 		if a.collectPaths {
-			a.cur.current = AddStepWithSliceIndex(path, RefOfRefSliceContainerASTElements8, x)
+			a.cur.current = AddStepWithSliceIndex(path, RefOfRefSliceContainerASTElementsOffset, x)
 		}
 		if !a.rewriteAST(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent AST) {
@@ -339,7 +339,7 @@ func (a *application) rewriteRefOfRefSliceContainer(parent AST, node *RefSliceCo
 	}
 	for x, el := range node.ASTImplementationElements {
 		if a.collectPaths {
-			a.cur.current = AddStepWithSliceIndex(path, RefOfRefSliceContainerASTImplementationElements8, x)
+			a.cur.current = AddStepWithSliceIndex(path, RefOfRefSliceContainerASTImplementationElementsOffset, x)
 		}
 		if !a.rewriteRefOfLeaf(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent AST) {
@@ -467,7 +467,7 @@ func (a *application) rewriteValueSliceContainer(parent AST, node ValueSliceCont
 	}
 	for x, el := range node.ASTElements {
 		if a.collectPaths {
-			a.cur.current = AddStepWithSliceIndex(path, ValueSliceContainerASTElements8, x)
+			a.cur.current = AddStepWithSliceIndex(path, ValueSliceContainerASTElementsOffset, x)
 		}
 		if !a.rewriteAST(node, el, func(newNode, parent AST) {
 			panic("[BUG] tried to replace 'ASTElements' on 'ValueSliceContainer'")
@@ -634,7 +634,7 @@ func (a *application) rewriteRefOfValueSliceContainer(parent AST, node *ValueSli
 	}
 	for x, el := range node.ASTElements {
 		if a.collectPaths {
-			a.cur.current = AddStepWithSliceIndex(path, RefOfValueSliceContainerASTElements8, x)
+			a.cur.current = AddStepWithSliceIndex(path, RefOfValueSliceContainerASTElementsOffset, x)
 		}
 		if !a.rewriteAST(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent AST) {

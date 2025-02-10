@@ -216,7 +216,7 @@ func (r *rewriteGen) sliceMethod(t types.Type, slice *types.Slice, spi generator
 			),
 		}
 		stmts = append(stmts, forBlock...)
-		rewriteChild := r.rewriteChildSlice(t, slice.Elem(), "Offset", jen.Id("el"), jen.Index(jen.Id("idx")), false)
+		rewriteChild := r.rewriteChildSlice(t, slice.Elem(), "", jen.Id("el"), jen.Index(jen.Id("idx")), false)
 
 		stmts = append(stmts,
 			jen.For(jen.Id("x, el").Op(":=").Id("range node")).
@@ -435,7 +435,7 @@ func (r *rewriteGen) rewriteChildSlice(t, field types.Type, fieldName string, pa
 	savePath := jen.If(jen.Id("a.collectPaths")).Block(
 		jen.Id("a.cur.current").Op("=").Id("AddStepWithSliceIndex").Call(
 			jen.Id("path"),
-			jen.Id(printableTypeName(t)+fieldName+"8"),
+			jen.Id(printableTypeName(t)+fieldName+"Offset"),
 			jen.Id("x")),
 	)
 

@@ -77,7 +77,7 @@ func (path ASTPath) DebugString() string {
 		// Check suffix to see if we need to read an offset
 		switch {
 		// 1-byte offset if stepStr ends with "8"
-		case strings.HasSuffix(stepStr, "8"):
+		case strings.HasSuffix(stepStr, "Offset"):
 			if len(remaining) < 1 {
 				sb.WriteString("(ERR-no-offset-byte)")
 				return sb.String()
@@ -85,16 +85,6 @@ func (path ASTPath) DebugString() string {
 			offsetByte := remaining[0]
 			remaining = remaining[1:]
 			sb.WriteString(fmt.Sprintf("(%d)", offsetByte))
-
-		// 4-byte offset if stepStr ends with "32"
-		case strings.HasSuffix(stepStr, "32"):
-			if len(remaining) < 4 {
-				sb.WriteString("(ERR-no-offset-uint32)")
-				return sb.String()
-			}
-			offsetVal := binary.BigEndian.Uint32(remaining[:4])
-			remaining = remaining[4:]
-			sb.WriteString(fmt.Sprintf("(%d)", offsetVal))
 		}
 	}
 

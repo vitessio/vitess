@@ -592,7 +592,7 @@ func (a *application) rewriteRefOfAddColumns(parent SQLNode, node *AddColumns, r
 	}
 	for x, el := range node.Columns {
 		if a.collectPaths {
-			a.cur.current = AddStepWithSliceIndex(path, RefOfAddColumnsColumns8, x)
+			a.cur.current = AddStepWithSliceIndex(path, RefOfAddColumnsColumnsOffset, x)
 		}
 		if !a.rewriteRefOfColumnDefinition(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
@@ -1097,7 +1097,7 @@ func (a *application) rewriteRefOfAlterTable(parent SQLNode, node *AlterTable, r
 	}
 	for x, el := range node.AlterOptions {
 		if a.collectPaths {
-			a.cur.current = AddStepWithSliceIndex(path, RefOfAlterTableAlterOptions8, x)
+			a.cur.current = AddStepWithSliceIndex(path, RefOfAlterTableAlterOptionsOffset, x)
 		}
 		if !a.rewriteAlterOption(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
@@ -1253,7 +1253,7 @@ func (a *application) rewriteRefOfAlterVschema(parent SQLNode, node *AlterVschem
 	}
 	for x, el := range node.VindexCols {
 		if a.collectPaths {
-			a.cur.current = AddStepWithSliceIndex(path, RefOfAlterVschemaVindexCols8, x)
+			a.cur.current = AddStepWithSliceIndex(path, RefOfAlterVschemaVindexColsOffset, x)
 		}
 		if !a.rewriteIdentifierCI(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
@@ -1931,7 +1931,7 @@ func (a *application) rewriteRefOfCallProc(parent SQLNode, node *CallProc, repla
 	}
 	for x, el := range node.Params {
 		if a.collectPaths {
-			a.cur.current = AddStepWithSliceIndex(path, RefOfCallProcParams8, x)
+			a.cur.current = AddStepWithSliceIndex(path, RefOfCallProcParamsOffset, x)
 		}
 		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
@@ -1983,7 +1983,7 @@ func (a *application) rewriteRefOfCaseExpr(parent SQLNode, node *CaseExpr, repla
 	}
 	for x, el := range node.Whens {
 		if a.collectPaths {
-			a.cur.current = AddStepWithSliceIndex(path, RefOfCaseExprWhens8, x)
+			a.cur.current = AddStepWithSliceIndex(path, RefOfCaseExprWhensOffset, x)
 		}
 		if !a.rewriteRefOfWhen(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
@@ -2141,7 +2141,7 @@ func (a *application) rewriteRefOfCharExpr(parent SQLNode, node *CharExpr, repla
 	}
 	for x, el := range node.Exprs {
 		if a.collectPaths {
-			a.cur.current = AddStepWithSliceIndex(path, RefOfCharExprExprs8, x)
+			a.cur.current = AddStepWithSliceIndex(path, RefOfCharExprExprsOffset, x)
 		}
 		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
@@ -2391,6 +2391,9 @@ func (a *application) rewriteColumns(parent SQLNode, node Columns, replacer repl
 		path = a.cur.current
 	}
 	for x, el := range node {
+		if a.collectPaths {
+			a.cur.current = AddStepWithSliceIndex(path, ColumnsOffset, x)
+		}
 		if !a.rewriteIdentifierCI(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(Columns)[idx] = newNode.(IdentifierCI)
@@ -2770,7 +2773,7 @@ func (a *application) rewriteRefOfCount(parent SQLNode, node *Count, replacer re
 	}
 	for x, el := range node.Args {
 		if a.collectPaths {
-			a.cur.current = AddStepWithSliceIndex(path, RefOfCountArgs8, x)
+			a.cur.current = AddStepWithSliceIndex(path, RefOfCountArgsOffset, x)
 		}
 		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
@@ -3208,7 +3211,7 @@ func (a *application) rewriteRefOfDelete(parent SQLNode, node *Delete, replacer 
 	}
 	for x, el := range node.TableExprs {
 		if a.collectPaths {
-			a.cur.current = AddStepWithSliceIndex(path, RefOfDeleteTableExprs8, x)
+			a.cur.current = AddStepWithSliceIndex(path, RefOfDeleteTableExprsOffset, x)
 		}
 		if !a.rewriteTableExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
@@ -3572,7 +3575,7 @@ func (a *application) rewriteRefOfExecuteStmt(parent SQLNode, node *ExecuteStmt,
 	}
 	for x, el := range node.Arguments {
 		if a.collectPaths {
-			a.cur.current = AddStepWithSliceIndex(path, RefOfExecuteStmtArguments8, x)
+			a.cur.current = AddStepWithSliceIndex(path, RefOfExecuteStmtArgumentsOffset, x)
 		}
 		if !a.rewriteRefOfVariable(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
@@ -3746,7 +3749,7 @@ func (a *application) rewriteRefOfExprs(parent SQLNode, node *Exprs, replacer re
 	}
 	for x, el := range node.Exprs {
 		if a.collectPaths {
-			a.cur.current = AddStepWithSliceIndex(path, RefOfExprsExprs8, x)
+			a.cur.current = AddStepWithSliceIndex(path, RefOfExprsExprsOffset, x)
 		}
 		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
@@ -4192,7 +4195,7 @@ func (a *application) rewriteRefOfFuncExpr(parent SQLNode, node *FuncExpr, repla
 	}
 	for x, el := range node.Exprs {
 		if a.collectPaths {
-			a.cur.current = AddStepWithSliceIndex(path, RefOfFuncExprExprs8, x)
+			a.cur.current = AddStepWithSliceIndex(path, RefOfFuncExprExprsOffset, x)
 		}
 		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
@@ -4814,7 +4817,7 @@ func (a *application) rewriteRefOfGroupBy(parent SQLNode, node *GroupBy, replace
 	}
 	for x, el := range node.Exprs {
 		if a.collectPaths {
-			a.cur.current = AddStepWithSliceIndex(path, RefOfGroupByExprs8, x)
+			a.cur.current = AddStepWithSliceIndex(path, RefOfGroupByExprsOffset, x)
 		}
 		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
@@ -4860,7 +4863,7 @@ func (a *application) rewriteRefOfGroupConcatExpr(parent SQLNode, node *GroupCon
 	}
 	for x, el := range node.Exprs {
 		if a.collectPaths {
-			a.cur.current = AddStepWithSliceIndex(path, RefOfGroupConcatExprExprs8, x)
+			a.cur.current = AddStepWithSliceIndex(path, RefOfGroupConcatExprExprsOffset, x)
 		}
 		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
@@ -5014,7 +5017,7 @@ func (a *application) rewriteRefOfIndexHint(parent SQLNode, node *IndexHint, rep
 	}
 	for x, el := range node.Indexes {
 		if a.collectPaths {
-			a.cur.current = AddStepWithSliceIndex(path, RefOfIndexHintIndexes8, x)
+			a.cur.current = AddStepWithSliceIndex(path, RefOfIndexHintIndexesOffset, x)
 		}
 		if !a.rewriteIdentifierCI(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
@@ -5059,6 +5062,9 @@ func (a *application) rewriteIndexHints(parent SQLNode, node IndexHints, replace
 		path = a.cur.current
 	}
 	for x, el := range node {
+		if a.collectPaths {
+			a.cur.current = AddStepWithSliceIndex(path, IndexHintsOffset, x)
+		}
 		if !a.rewriteRefOfIndexHint(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(IndexHints)[idx] = newNode.(*IndexHint)
@@ -5357,7 +5363,7 @@ func (a *application) rewriteRefOfIntervalFuncExpr(parent SQLNode, node *Interva
 	}
 	for x, el := range node.Exprs {
 		if a.collectPaths {
-			a.cur.current = AddStepWithSliceIndex(path, RefOfIntervalFuncExprExprs8, x)
+			a.cur.current = AddStepWithSliceIndex(path, RefOfIntervalFuncExprExprsOffset, x)
 		}
 		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
@@ -5531,7 +5537,7 @@ func (a *application) rewriteRefOfJSONArrayExpr(parent SQLNode, node *JSONArrayE
 	}
 	for x, el := range node.Params {
 		if a.collectPaths {
-			a.cur.current = AddStepWithSliceIndex(path, RefOfJSONArrayExprParams8, x)
+			a.cur.current = AddStepWithSliceIndex(path, RefOfJSONArrayExprParamsOffset, x)
 		}
 		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
@@ -5639,7 +5645,7 @@ func (a *application) rewriteRefOfJSONContainsExpr(parent SQLNode, node *JSONCon
 	}
 	for x, el := range node.PathList {
 		if a.collectPaths {
-			a.cur.current = AddStepWithSliceIndex(path, RefOfJSONContainsExprPathList8, x)
+			a.cur.current = AddStepWithSliceIndex(path, RefOfJSONContainsExprPathListOffset, x)
 		}
 		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
@@ -5699,7 +5705,7 @@ func (a *application) rewriteRefOfJSONContainsPathExpr(parent SQLNode, node *JSO
 	}
 	for x, el := range node.PathList {
 		if a.collectPaths {
-			a.cur.current = AddStepWithSliceIndex(path, RefOfJSONContainsPathExprPathList8, x)
+			a.cur.current = AddStepWithSliceIndex(path, RefOfJSONContainsPathExprPathListOffset, x)
 		}
 		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
@@ -5751,7 +5757,7 @@ func (a *application) rewriteRefOfJSONExtractExpr(parent SQLNode, node *JSONExtr
 	}
 	for x, el := range node.PathList {
 		if a.collectPaths {
-			a.cur.current = AddStepWithSliceIndex(path, RefOfJSONExtractExprPathList8, x)
+			a.cur.current = AddStepWithSliceIndex(path, RefOfJSONExtractExprPathListOffset, x)
 		}
 		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
@@ -5901,7 +5907,7 @@ func (a *application) rewriteRefOfJSONObjectExpr(parent SQLNode, node *JSONObjec
 	}
 	for x, el := range node.Params {
 		if a.collectPaths {
-			a.cur.current = AddStepWithSliceIndex(path, RefOfJSONObjectExprParams8, x)
+			a.cur.current = AddStepWithSliceIndex(path, RefOfJSONObjectExprParamsOffset, x)
 		}
 		if !a.rewriteRefOfJSONObjectParam(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
@@ -6129,7 +6135,7 @@ func (a *application) rewriteRefOfJSONRemoveExpr(parent SQLNode, node *JSONRemov
 	}
 	for x, el := range node.PathList {
 		if a.collectPaths {
-			a.cur.current = AddStepWithSliceIndex(path, RefOfJSONRemoveExprPathList8, x)
+			a.cur.current = AddStepWithSliceIndex(path, RefOfJSONRemoveExprPathListOffset, x)
 		}
 		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
@@ -6301,7 +6307,7 @@ func (a *application) rewriteRefOfJSONSearchExpr(parent SQLNode, node *JSONSearc
 	}
 	for x, el := range node.PathList {
 		if a.collectPaths {
-			a.cur.current = AddStepWithSliceIndex(path, RefOfJSONSearchExprPathList8, x)
+			a.cur.current = AddStepWithSliceIndex(path, RefOfJSONSearchExprPathListOffset, x)
 		}
 		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
@@ -6449,7 +6455,7 @@ func (a *application) rewriteRefOfJSONTableExpr(parent SQLNode, node *JSONTableE
 	}
 	for x, el := range node.Columns {
 		if a.collectPaths {
-			a.cur.current = AddStepWithSliceIndex(path, RefOfJSONTableExprColumns8, x)
+			a.cur.current = AddStepWithSliceIndex(path, RefOfJSONTableExprColumnsOffset, x)
 		}
 		if !a.rewriteRefOfJtColumnDefinition(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
@@ -6613,7 +6619,7 @@ func (a *application) rewriteRefOfJSONValueMergeExpr(parent SQLNode, node *JSONV
 	}
 	for x, el := range node.JSONDocList {
 		if a.collectPaths {
-			a.cur.current = AddStepWithSliceIndex(path, RefOfJSONValueMergeExprJSONDocList8, x)
+			a.cur.current = AddStepWithSliceIndex(path, RefOfJSONValueMergeExprJSONDocListOffset, x)
 		}
 		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
@@ -6665,7 +6671,7 @@ func (a *application) rewriteRefOfJSONValueModifierExpr(parent SQLNode, node *JS
 	}
 	for x, el := range node.Params {
 		if a.collectPaths {
-			a.cur.current = AddStepWithSliceIndex(path, RefOfJSONValueModifierExprParams8, x)
+			a.cur.current = AddStepWithSliceIndex(path, RefOfJSONValueModifierExprParamsOffset, x)
 		}
 		if !a.rewriteRefOfJSONObjectParam(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
@@ -7062,7 +7068,7 @@ func (a *application) rewriteRefOfLineStringExpr(parent SQLNode, node *LineStrin
 	}
 	for x, el := range node.PointParams {
 		if a.collectPaths {
-			a.cur.current = AddStepWithSliceIndex(path, RefOfLineStringExprPointParams8, x)
+			a.cur.current = AddStepWithSliceIndex(path, RefOfLineStringExprPointParamsOffset, x)
 		}
 		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
@@ -7376,7 +7382,7 @@ func (a *application) rewriteRefOfMatchExpr(parent SQLNode, node *MatchExpr, rep
 	}
 	for x, el := range node.Columns {
 		if a.collectPaths {
-			a.cur.current = AddStepWithSliceIndex(path, RefOfMatchExprColumns8, x)
+			a.cur.current = AddStepWithSliceIndex(path, RefOfMatchExprColumnsOffset, x)
 		}
 		if !a.rewriteRefOfColName(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
@@ -7622,7 +7628,7 @@ func (a *application) rewriteRefOfMultiLinestringExpr(parent SQLNode, node *Mult
 	}
 	for x, el := range node.LinestringParams {
 		if a.collectPaths {
-			a.cur.current = AddStepWithSliceIndex(path, RefOfMultiLinestringExprLinestringParams8, x)
+			a.cur.current = AddStepWithSliceIndex(path, RefOfMultiLinestringExprLinestringParamsOffset, x)
 		}
 		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
@@ -7668,7 +7674,7 @@ func (a *application) rewriteRefOfMultiPointExpr(parent SQLNode, node *MultiPoin
 	}
 	for x, el := range node.PointParams {
 		if a.collectPaths {
-			a.cur.current = AddStepWithSliceIndex(path, RefOfMultiPointExprPointParams8, x)
+			a.cur.current = AddStepWithSliceIndex(path, RefOfMultiPointExprPointParamsOffset, x)
 		}
 		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
@@ -7714,7 +7720,7 @@ func (a *application) rewriteRefOfMultiPolygonExpr(parent SQLNode, node *MultiPo
 	}
 	for x, el := range node.PolygonParams {
 		if a.collectPaths {
-			a.cur.current = AddStepWithSliceIndex(path, RefOfMultiPolygonExprPolygonParams8, x)
+			a.cur.current = AddStepWithSliceIndex(path, RefOfMultiPolygonExprPolygonParamsOffset, x)
 		}
 		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
@@ -7871,6 +7877,9 @@ func (a *application) rewriteNamedWindows(parent SQLNode, node NamedWindows, rep
 		path = a.cur.current
 	}
 	for x, el := range node {
+		if a.collectPaths {
+			a.cur.current = AddStepWithSliceIndex(path, NamedWindowsOffset, x)
+		}
 		if !a.rewriteRefOfNamedWindow(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(NamedWindows)[idx] = newNode.(*NamedWindow)
@@ -8140,6 +8149,9 @@ func (a *application) rewriteOnDup(parent SQLNode, node OnDup, replacer replacer
 		path = a.cur.current
 	}
 	for x, el := range node {
+		if a.collectPaths {
+			a.cur.current = AddStepWithSliceIndex(path, OnDupOffset, x)
+		}
 		if !a.rewriteRefOfUpdateExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(OnDup)[idx] = newNode.(*UpdateExpr)
@@ -8311,6 +8323,9 @@ func (a *application) rewriteOrderBy(parent SQLNode, node OrderBy, replacer repl
 		path = a.cur.current
 	}
 	for x, el := range node {
+		if a.collectPaths {
+			a.cur.current = AddStepWithSliceIndex(path, OrderByOffset, x)
+		}
 		if !a.rewriteRefOfOrder(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(OrderBy)[idx] = newNode.(*Order)
@@ -8720,7 +8735,7 @@ func (a *application) rewriteRefOfPartitionOption(parent SQLNode, node *Partitio
 	}
 	for x, el := range node.Definitions {
 		if a.collectPaths {
-			a.cur.current = AddStepWithSliceIndex(path, RefOfPartitionOptionDefinitions8, x)
+			a.cur.current = AddStepWithSliceIndex(path, RefOfPartitionOptionDefinitionsOffset, x)
 		}
 		if !a.rewriteRefOfPartitionDefinition(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
@@ -8788,7 +8803,7 @@ func (a *application) rewriteRefOfPartitionSpec(parent SQLNode, node *PartitionS
 	}
 	for x, el := range node.Definitions {
 		if a.collectPaths {
-			a.cur.current = AddStepWithSliceIndex(path, RefOfPartitionSpecDefinitions8, x)
+			a.cur.current = AddStepWithSliceIndex(path, RefOfPartitionSpecDefinitionsOffset, x)
 		}
 		if !a.rewriteRefOfPartitionDefinition(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
@@ -8873,6 +8888,9 @@ func (a *application) rewritePartitions(parent SQLNode, node Partitions, replace
 		path = a.cur.current
 	}
 	for x, el := range node {
+		if a.collectPaths {
+			a.cur.current = AddStepWithSliceIndex(path, PartitionsOffset, x)
+		}
 		if !a.rewriteIdentifierCI(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(Partitions)[idx] = newNode.(IdentifierCI)
@@ -9053,7 +9071,7 @@ func (a *application) rewriteRefOfPolygonExpr(parent SQLNode, node *PolygonExpr,
 	}
 	for x, el := range node.LinestringParams {
 		if a.collectPaths {
-			a.cur.current = AddStepWithSliceIndex(path, RefOfPolygonExprLinestringParams8, x)
+			a.cur.current = AddStepWithSliceIndex(path, RefOfPolygonExprLinestringParamsOffset, x)
 		}
 		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
@@ -10037,7 +10055,7 @@ func (a *application) rewriteRefOfSelect(parent SQLNode, node *Select, replacer 
 	}
 	for x, el := range node.From {
 		if a.collectPaths {
-			a.cur.current = AddStepWithSliceIndex(path, RefOfSelectFrom8, x)
+			a.cur.current = AddStepWithSliceIndex(path, RefOfSelectFromOffset, x)
 		}
 		if !a.rewriteTableExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
@@ -10155,7 +10173,7 @@ func (a *application) rewriteRefOfSelectExprs(parent SQLNode, node *SelectExprs,
 	}
 	for x, el := range node.Exprs {
 		if a.collectPaths {
-			a.cur.current = AddStepWithSliceIndex(path, RefOfSelectExprsExprs8, x)
+			a.cur.current = AddStepWithSliceIndex(path, RefOfSelectExprsExprsOffset, x)
 		}
 		if !a.rewriteSelectExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
@@ -10325,6 +10343,9 @@ func (a *application) rewriteSetExprs(parent SQLNode, node SetExprs, replacer re
 		path = a.cur.current
 	}
 	for x, el := range node {
+		if a.collectPaths {
+			a.cur.current = AddStepWithSliceIndex(path, SetExprsOffset, x)
+		}
 		if !a.rewriteRefOfSetExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(SetExprs)[idx] = newNode.(*SetExpr)
@@ -11148,6 +11169,9 @@ func (a *application) rewriteSubPartitionDefinitions(parent SQLNode, node SubPar
 		path = a.cur.current
 	}
 	for x, el := range node {
+		if a.collectPaths {
+			a.cur.current = AddStepWithSliceIndex(path, SubPartitionDefinitionsOffset, x)
+		}
 		if !a.rewriteRefOfSubPartitionDefinition(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(SubPartitionDefinitions)[idx] = newNode.(*SubPartitionDefinition)
@@ -11335,6 +11359,9 @@ func (a *application) rewriteTableExprs(parent SQLNode, node TableExprs, replace
 		path = a.cur.current
 	}
 	for x, el := range node {
+		if a.collectPaths {
+			a.cur.current = AddStepWithSliceIndex(path, TableExprsOffset, x)
+		}
 		if !a.rewriteTableExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(TableExprs)[idx] = newNode.(TableExpr)
@@ -11423,6 +11450,9 @@ func (a *application) rewriteTableNames(parent SQLNode, node TableNames, replace
 		path = a.cur.current
 	}
 	for x, el := range node {
+		if a.collectPaths {
+			a.cur.current = AddStepWithSliceIndex(path, TableNamesOffset, x)
+		}
 		if !a.rewriteTableName(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(TableNames)[idx] = newNode.(TableName)
@@ -11496,7 +11526,7 @@ func (a *application) rewriteRefOfTableSpec(parent SQLNode, node *TableSpec, rep
 	}
 	for x, el := range node.Columns {
 		if a.collectPaths {
-			a.cur.current = AddStepWithSliceIndex(path, RefOfTableSpecColumns8, x)
+			a.cur.current = AddStepWithSliceIndex(path, RefOfTableSpecColumnsOffset, x)
 		}
 		if !a.rewriteRefOfColumnDefinition(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
@@ -11508,7 +11538,7 @@ func (a *application) rewriteRefOfTableSpec(parent SQLNode, node *TableSpec, rep
 	}
 	for x, el := range node.Indexes {
 		if a.collectPaths {
-			a.cur.current = AddStepWithSliceIndex(path, RefOfTableSpecIndexes8, x)
+			a.cur.current = AddStepWithSliceIndex(path, RefOfTableSpecIndexesOffset, x)
 		}
 		if !a.rewriteRefOfIndexDefinition(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
@@ -11520,7 +11550,7 @@ func (a *application) rewriteRefOfTableSpec(parent SQLNode, node *TableSpec, rep
 	}
 	for x, el := range node.Constraints {
 		if a.collectPaths {
-			a.cur.current = AddStepWithSliceIndex(path, RefOfTableSpecConstraints8, x)
+			a.cur.current = AddStepWithSliceIndex(path, RefOfTableSpecConstraintsOffset, x)
 		}
 		if !a.rewriteRefOfConstraintDefinition(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
@@ -11910,7 +11940,7 @@ func (a *application) rewriteRefOfUpdate(parent SQLNode, node *Update, replacer 
 	}
 	for x, el := range node.TableExprs {
 		if a.collectPaths {
-			a.cur.current = AddStepWithSliceIndex(path, RefOfUpdateTableExprs8, x)
+			a.cur.current = AddStepWithSliceIndex(path, RefOfUpdateTableExprsOffset, x)
 		}
 		if !a.rewriteTableExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
@@ -12035,6 +12065,9 @@ func (a *application) rewriteUpdateExprs(parent SQLNode, node UpdateExprs, repla
 		path = a.cur.current
 	}
 	for x, el := range node {
+		if a.collectPaths {
+			a.cur.current = AddStepWithSliceIndex(path, UpdateExprsOffset, x)
+		}
 		if !a.rewriteRefOfUpdateExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(UpdateExprs)[idx] = newNode.(*UpdateExpr)
@@ -12294,6 +12327,9 @@ func (a *application) rewriteValTuple(parent SQLNode, node ValTuple, replacer re
 		path = a.cur.current
 	}
 	for x, el := range node {
+		if a.collectPaths {
+			a.cur.current = AddStepWithSliceIndex(path, ValTupleOffset, x)
+		}
 		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(ValTuple)[idx] = newNode.(Expr)
@@ -12366,6 +12402,9 @@ func (a *application) rewriteValues(parent SQLNode, node Values, replacer replac
 		path = a.cur.current
 	}
 	for x, el := range node {
+		if a.collectPaths {
+			a.cur.current = AddStepWithSliceIndex(path, ValuesOffset, x)
+		}
 		if !a.rewriteValTuple(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(Values)[idx] = newNode.(ValTuple)
@@ -12765,7 +12804,7 @@ func (a *application) rewriteRefOfVindexSpec(parent SQLNode, node *VindexSpec, r
 	}
 	for x, el := range node.Params {
 		if a.collectPaths {
-			a.cur.current = AddStepWithSliceIndex(path, RefOfVindexSpecParams8, x)
+			a.cur.current = AddStepWithSliceIndex(path, RefOfVindexSpecParamsOffset, x)
 		}
 		if !a.rewriteVindexParam(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
@@ -12994,6 +13033,9 @@ func (a *application) rewriteWindowDefinitions(parent SQLNode, node WindowDefini
 		path = a.cur.current
 	}
 	for x, el := range node {
+		if a.collectPaths {
+			a.cur.current = AddStepWithSliceIndex(path, WindowDefinitionsOffset, x)
+		}
 		if !a.rewriteRefOfWindowDefinition(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(WindowDefinitions)[idx] = newNode.(*WindowDefinition)
@@ -13044,7 +13086,7 @@ func (a *application) rewriteRefOfWindowSpecification(parent SQLNode, node *Wind
 	}
 	for x, el := range node.PartitionClause {
 		if a.collectPaths {
-			a.cur.current = AddStepWithSliceIndex(path, RefOfWindowSpecificationPartitionClause8, x)
+			a.cur.current = AddStepWithSliceIndex(path, RefOfWindowSpecificationPartitionClauseOffset, x)
 		}
 		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
@@ -13106,7 +13148,7 @@ func (a *application) rewriteRefOfWith(parent SQLNode, node *With, replacer repl
 	}
 	for x, el := range node.CTEs {
 		if a.collectPaths {
-			a.cur.current = AddStepWithSliceIndex(path, RefOfWithCTEs8, x)
+			a.cur.current = AddStepWithSliceIndex(path, RefOfWithCTEsOffset, x)
 		}
 		if !a.rewriteRefOfCommonTableExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
