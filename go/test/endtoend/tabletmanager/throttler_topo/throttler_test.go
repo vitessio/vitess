@@ -416,7 +416,7 @@ func TestThrottlerAfterMetricsCollected(t *testing.T) {
 	})
 	t.Run("validating throttled apps", func(t *testing.T) {
 		status := throttleStatus(t, primaryTablet)
-		assert.Contains(t, status.ThrottledApps, throttlerapp.TestingAlwaysThrottlerName.String())
+		assert.Contains(t, status.ThrottledApps, throttlerapp.TestingAlwaysThrottledName.String())
 	})
 	t.Run("validating primary check self", func(t *testing.T) {
 		resp, err := throttleCheckSelf(primaryTablet)
