@@ -77,6 +77,8 @@ var (
 	queriesProcessed = stats.NewCountersWithSingleLabel("QueriesProcessed", "Queries processed at vtgate by plan type", "Plan")
 	queriesRouted    = stats.NewCountersWithSingleLabel("QueriesRouted", "Queries routed from vtgate to vttablet by plan type", "Plan")
 
+	queryProcessed = stats.NewCountersWithMultiLabels("QueryProcessed", "Query processed at vtgate by query, plan, and tablet type", []string{"Query", "Plan", "Tablet"})
+
 	queriesProcessedByTable = stats.NewCountersWithMultiLabels("QueriesProcessedByTable", "Queries processed at vtgate by plan type, keyspace and table", []string{"Plan", "Keyspace", "Table"})
 	queriesRoutedByTable    = stats.NewCountersWithMultiLabels("QueriesRoutedByTable", "Queries routed from vtgate to vttablet by plan type, keyspace and table", []string{"Plan", "Keyspace", "Table"})
 
@@ -374,6 +376,7 @@ func (e *Executor) StreamExecute(
 		logStats.ActiveKeyspace = vc.GetKeyspace()
 
 		e.updateQueryCounts(plan.Instructions.RouteType(), plan.Instructions.GetKeyspaceName(), plan.Instructions.GetTableName(), int64(logStats.ShardQueries))
+		e.updateQueryStats(plan.QueryType.String(), plan.Type.String(), vc.TabletType().String())
 
 		return err
 	}
@@ -586,24 +589,24 @@ func ifReadAfterWriteExist(session *econtext.SafeSession, f func(*vtgatepb.ReadA
 	}
 }
 
-func (e *Executor) handleBegin(ctx context.Context, safeSession *econtext.SafeSession, logStats *logstats.LogStats, stmt sqlparser.Statement) (*sqltypes.Result, error) {
+func (e *Executor) handleBegin(ctx context.Context, vcursor *econtext.VCursorImpl, safeSession *econtext.SafeSession, logStats *logstats.LogStats, stmt sqlparser.Statement) (*sqltypes.Result, error) {
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
+	e.updateQueryCounts("Begin", "", "", 0)
+	e.updateQueryStats("Begin", "Transaction", vcursor.TabletType().String())
 
 	begin := stmt.(*sqlparser.Begin)
 	err := e.txConn.Begin(ctx, safeSession, begin.TxAccessModes)
 	logStats.ExecuteTime = time.Since(execStart)
-
-	e.updateQueryCounts("Begin", "", "", 0)
-
 	return &sqltypes.Result{}, err
 }
 
-func (e *Executor) handleCommit(ctx context.Context, safeSession *econtext.SafeSession, logStats *logstats.LogStats) (*sqltypes.Result, error) {
+func (e *Executor) handleCommit(ctx context.Context, vcursor *econtext.VCursorImpl, safeSession *econtext.SafeSession, logStats *logstats.LogStats) (*sqltypes.Result, error) {
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 	logStats.ShardQueries = uint64(len(safeSession.ShardSessions))
 	e.updateQueryCounts("Commit", "", "", int64(logStats.ShardQueries))
+	e.updateQueryStats("Commit", "Transaction", vcursor.TabletType().String())
 
 	err := e.txConn.Commit(ctx, safeSession)
 	logStats.CommitTime = time.Since(execStart)
@@ -615,21 +618,25 @@ func (e *Executor) Commit(ctx context.Context, safeSession *econtext.SafeSession
 	return e.txConn.Commit(ctx, safeSession)
 }
 
-func (e *Executor) handleRollback(ctx context.Context, safeSession *econtext.SafeSession, logStats *logstats.LogStats) (*sqltypes.Result, error) {
+func (e *Executor) handleRollback(ctx context.Context, vcursor *econtext.VCursorImpl, safeSession *econtext.SafeSession, logStats *logstats.LogStats) (*sqltypes.Result, error) {
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 	logStats.ShardQueries = uint64(len(safeSession.ShardSessions))
 	e.updateQueryCounts("Rollback", "", "", int64(logStats.ShardQueries))
+	e.updateQueryStats("Rollback", "Transaction", vcursor.TabletType().String())
+
 	err := e.txConn.Rollback(ctx, safeSession)
 	logStats.CommitTime = time.Since(execStart)
 	return &sqltypes.Result{}, err
 }
 
-func (e *Executor) handleSavepoint(ctx context.Context, safeSession *econtext.SafeSession, sql string, planType string, logStats *logstats.LogStats, nonTxResponse func(query string) (*sqltypes.Result, error), ignoreMaxMemoryRows bool) (*sqltypes.Result, error) {
+func (e *Executor) handleSavepoint(ctx context.Context, vcursor *econtext.VCursorImpl, safeSession *econtext.SafeSession, sql string, queryType string, logStats *logstats.LogStats, nonTxResponse func(query string) (*sqltypes.Result, error), ignoreMaxMemoryRows bool) (*sqltypes.Result, error) {
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 	logStats.ShardQueries = uint64(len(safeSession.ShardSessions))
-	e.updateQueryCounts(planType, "", "", int64(logStats.ShardQueries))
+	e.updateQueryCounts(queryType, "", "", int64(logStats.ShardQueries))
+	e.updateQueryStats(queryType, "Transaction", vcursor.TabletType().String())
+
 	defer func() {
 		logStats.ExecuteTime = time.Since(execStart)
 	}()
@@ -687,10 +694,12 @@ func (e *Executor) executeSPInAllSessions(ctx context.Context, safeSession *econ
 }
 
 // handleKill executed the kill statement.
-func (e *Executor) handleKill(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, stmt sqlparser.Statement, logStats *logstats.LogStats) (result *sqltypes.Result, err error) {
+func (e *Executor) handleKill(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, vcursor *econtext.VCursorImpl, stmt sqlparser.Statement, logStats *logstats.LogStats) (result *sqltypes.Result, err error) {
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 	e.updateQueryCounts("Kill", "", "", 0)
+	e.updateQueryStats("Kill", engine.PlanLocal.String(), vcursor.TabletType().String())
+
 	defer func() {
 		logStats.ExecuteTime = time.Since(execStart)
 	}()
@@ -1290,6 +1299,10 @@ func (e *Executor) updateQueryCounts(planType, keyspace, tableName string, shard
 		queriesProcessedByTable.Add([]string{planType, keyspace, tableName}, 1)
 		queriesRoutedByTable.Add([]string{planType, keyspace, tableName}, shardQueries)
 	}
+}
+
+func (e *Executor) updateQueryStats(queryType, planType, tabletType string) {
+	queryProcessed.Add([]string{queryType, planType, tabletType}, 1)
 }
 
 // VSchemaStats returns the loaded vschema stats.
