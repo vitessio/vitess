@@ -24,6 +24,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"vitess.io/vitess/go/mysql/replication"
@@ -59,6 +60,7 @@ type vplayer struct {
 
 	replicatorPlan *ReplicatorPlan
 	tablePlans     map[string]*TablePlan
+	planMu         sync.RWMutex
 
 	// These are set when creating the VPlayer based on whether the VPlayer
 	// is in batch (stmt and trx) execution mode or not.
@@ -292,14 +294,30 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 
 	applyErr := make(chan error, 1)
 
-	log.Infof("====== QQQ vp.batchMode: %v, vp.parallelMode: %v", vp.batchMode, vp.parallelMode)
 	if vp.parallelMode {
 		producer, err := newParallelProducer(ctx, vp.vr.dbClientGen, vp)
 		if err != nil {
 			return err
 		}
 		go func() {
-			applyErr <- producer.applyEvents(ctx, relay)
+			err := func() error {
+				if err := producer.applyEvents(ctx, relay); err != nil {
+					return err
+				}
+				if err := producer.commitAll(ctx, nil); err != nil {
+					return err
+				}
+				if producer.posReached.Load() {
+					log.Infof("Stopped at position: %v", vp.stopPos)
+					if vp.saveStop {
+						if err := vp.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, fmt.Sprintf("Stopped at position %v", vp.stopPos)); err != nil {
+							return err
+						}
+					}
+				}
+				return nil
+			}()
+			applyErr <- err
 		}()
 	} else {
 		go func() {
