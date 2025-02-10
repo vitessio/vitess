@@ -45,8 +45,13 @@ func TestRefreshCells(t *testing.T) {
 	ts = memorytopo.NewServer(ctx, cells...)
 
 	require.NoError(t, RefreshCells(ctx))
-
 	cellsRead, err := inst.ReadCells()
 	require.NoError(t, err)
 	require.Equal(t, cells, cellsRead)
+
+	require.NoError(t, ts.DeleteCellInfo(context.Background(), "zone3", true))
+	require.NoError(t, RefreshCells(ctx))
+	cellsRead, err = inst.ReadCells()
+	require.NoError(t, err)
+	require.Equal(t, cells[:2], cellsRead)
 }
