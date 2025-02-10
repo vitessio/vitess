@@ -18,6 +18,6 @@ CREATE TABLE IF NOT EXISTS vreplication_worker_pos
 (
     `id`                    int              NOT NULL AUTO_INCREMENT,
     `worker`                int unsigned     NOT NULL,
-    `pos`                   varbinary(10000) NOT NULL,
+    `gtid`                  varbinary(10000) NOT NULL,
     PRIMARY KEY (`id`, `worker`)
 ) ENGINE = InnoDB CHARSET = utf8mb4
