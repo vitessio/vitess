@@ -890,6 +890,7 @@ func TestGetAllTablets(t *testing.T) {
 	// confirm zone1 + zone2 succeeded and zone3 + zone4 failed
 	tabletsByCell, failedCells := getAllTablets(ctx, []string{"zone1", "zone2", "zone3", "zone4"})
 	require.Len(t, tabletsByCell, 2)
+	slices.Sort(failedCells)
 	require.Equal(t, []string{"zone3", "zone4"}, failedCells)
 	for _, tablets := range tabletsByCell {
 		require.Len(t, tablets, 1)
