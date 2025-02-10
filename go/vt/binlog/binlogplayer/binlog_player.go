@@ -673,7 +673,7 @@ func GenerateUpdatePos(uid int32, pos replication.Position, timeUpdated int64, t
 // GenerateInitWorkerPos returns a statement to initialize a worker's entry in vreplication_worker_pos
 func GenerateInitWorkerPos(uid int32, worker int) string {
 	// Append GTID value to already existing value in `gtid` column
-	return fmt.Sprintf("insert into _vt.vreplication_worker_pos (id, worker, pos) values (%v, %v, '')", uid, worker)
+	return fmt.Sprintf("insert into _vt.vreplication_worker_pos (id, worker, gtid) values (%v, %v, '')", uid, worker)
 }
 
 // GenerateUpdateWorkerPos returns a statement to record the latest processed gtid of a worker in the _vt.vreplication_worker_pos table.
