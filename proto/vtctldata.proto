@@ -1424,6 +1424,7 @@ message MoveTablesCompleteRequest {
   bool rename_tables = 6;
   bool dry_run = 7;
   repeated string shards = 8;
+  bool ignore_source_keyspace = 9;
 }
 
 message MoveTablesCompleteResponse {

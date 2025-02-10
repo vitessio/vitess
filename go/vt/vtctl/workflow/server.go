@@ -1076,7 +1076,7 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 					err = vterrors.Wrapf(err, "failed to cleanup denied table entries: %v", cerr)
 				}
 			}
-			if cerr := s.dropArtifacts(ctx, false, &switcher{s: s, ts: ts}); cerr != nil {
+			if cerr := s.dropArtifacts(ctx, false, false, &switcher{s: s, ts: ts}); cerr != nil {
 				err = vterrors.Wrapf(err, "failed to cleanup workflow artifacts: %v", cerr)
 			}
 			if origVSchema == nil { // There's no previous version to restore
@@ -1289,14 +1289,24 @@ func (s *Server) MoveTablesComplete(ctx context.Context, req *vtctldatapb.MoveTa
 	if !state.WritesSwitched || len(state.ReplicaCellsNotSwitched) > 0 || len(state.RdonlyCellsNotSwitched) > 0 {
 		return nil, ErrWorkflowCompleteNotFullySwitched
 	}
-	var renameTable TableRemovalType
-	if req.RenameTables {
-		renameTable = RenameTable
+
+	if req.IgnoreSourceKeyspace {
+		if err := s.dropArtifacts(ctx, req.KeepRoutingRules, true, &switcher{s: s, ts: ts}); err != nil {
+			return nil, vterrors.Wrapf(err, "failed to cleanup workflow artifacts")
+		}
+		if err := ts.TopoServer().RebuildSrvVSchema(ctx, nil); err != nil {
+			return nil, err
+		}
 	} else {
-		renameTable = DropTable
-	}
-	if dryRunResults, err = s.dropSources(ctx, ts, renameTable, req.KeepData, req.KeepRoutingRules, false, req.DryRun); err != nil {
-		return nil, err
+		var renameTable TableRemovalType
+		if req.RenameTables {
+			renameTable = RenameTable
+		} else {
+			renameTable = DropTable
+		}
+		if dryRunResults, err = s.dropSources(ctx, ts, renameTable, req.KeepData, req.KeepRoutingRules, false, req.DryRun); err != nil {
+			return nil, err
+		}
 	}
 
 	resp := &vtctldatapb.MoveTablesCompleteResponse{
@@ -2240,7 +2250,7 @@ func (s *Server) dropSources(ctx context.Context, ts *trafficSwitcher, removalTy
 			}
 		}
 	}
-	if err := s.dropArtifacts(ctx, keepRoutingRules, sw); err != nil {
+	if err := s.dropArtifacts(ctx, keepRoutingRules, false, sw); err != nil {
 		return nil, err
 	}
 	if err := ts.TopoServer().RebuildSrvVSchema(ctx, nil); err != nil {
@@ -2250,9 +2260,11 @@ func (s *Server) dropSources(ctx context.Context, ts *trafficSwitcher, removalTy
 	return sw.logs(), nil
 }
 
-func (s *Server) dropArtifacts(ctx context.Context, keepRoutingRules bool, sw iswitcher) error {
-	if err := sw.dropSourceReverseVReplicationStreams(ctx); err != nil {
-		return err
+func (s *Server) dropArtifacts(ctx context.Context, keepRoutingRules, ignoreSourceKeyspace bool, sw iswitcher) error {
+	if !ignoreSourceKeyspace {
+		if err := sw.dropSourceReverseVReplicationStreams(ctx); err != nil {
+			return err
+		}
 	}
 	if err := sw.dropTargetVReplicationStreams(ctx); err != nil {
 		return err
@@ -2267,7 +2279,6 @@ func (s *Server) dropArtifacts(ctx context.Context, keepRoutingRules bool, sw is
 		if err := sw.deleteKeyspaceRoutingRules(ctx); err != nil {
 			return err
 		}
-
 	}
 
 	return nil
