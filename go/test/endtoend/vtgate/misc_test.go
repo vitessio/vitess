@@ -926,3 +926,73 @@ func getVar(t *testing.T, key string) interface{} {
 	}
 	return val
 }
+
+// TestQueryProcessedMetric tests that query processed metric is published.
+func TestQueryProcessedMetric(t *testing.T) {
+	conn, closer := start(t)
+	defer closer()
+
+	tcases := []struct {
+		sql    string
+		metric string
+	}{{
+		sql:    "select id1, id2 from t1",
+		metric: "SELECT.Scatter.PRIMARY",
+	}, {
+		sql:    "update t1 set id2 = 2 where id1 = 1",
+		metric: "UPDATE.Passthrough.PRIMARY",
+	}, {
+		sql:    "delete from t1 where id1 in (1, 2)",
+		metric: "DELETE.MultiShard.PRIMARY",
+	}, {
+		sql:    "show tables",
+		metric: "SHOW.Passthrough.PRIMARY",
+	}, {
+		sql:    "savepoint a",
+		metric: "SAVEPOINT.Transaction.PRIMARY",
+	}, {
+		sql:    "rollback",
+		metric: "ROLLBACK.Transaction.PRIMARY",
+	}}
+
+	initial := getQPMetric(t)
+	for _, tc := range tcases {
+		t.Run(tc.sql, func(t *testing.T) {
+			utils.Exec(t, conn, tc.sql)
+			updatedMetric := getQPMetric(t)
+			assert.EqualValues(t, 1, getValue(updatedMetric, tc.metric)-getValue(initial, tc.metric))
+		})
+	}
+}
+
+func getQPMetric(t *testing.T) map[string]any {
+	t.Helper()
+
+	vars := clusterInstance.VtgateProcess.GetVars()
+	require.NotNil(t, vars)
+
+	qpVars, exists := vars["QueryProcessed"]
+	if !exists {
+		return nil
+	}
+
+	qpMap, ok := qpVars.(map[string]any)
+	require.True(t, ok, "query processed vars is not a map")
+
+	return qpMap
+}
+
+func getValue(m map[string]any, key string) float64 {
+	if m == nil {
+		return 0
+	}
+	val, exists := m[key]
+	if !exists {
+		return 0
+	}
+	f, ok := val.(float64)
+	if !ok {
+		return 0
+	}
+	return f
+}

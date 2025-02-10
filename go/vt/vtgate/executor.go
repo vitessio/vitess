@@ -592,8 +592,8 @@ func ifReadAfterWriteExist(session *econtext.SafeSession, f func(*vtgatepb.ReadA
 func (e *Executor) handleBegin(ctx context.Context, vcursor *econtext.VCursorImpl, safeSession *econtext.SafeSession, logStats *logstats.LogStats, stmt sqlparser.Statement) (*sqltypes.Result, error) {
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
-	e.updateQueryCounts("Begin", "", "", 0)
-	e.updateQueryStats("Begin", "Transaction", vcursor.TabletType().String())
+	e.updateQueryCounts(sqlparser.StmtBegin.String(), "", "", 0)
+	e.updateQueryStats(sqlparser.StmtBegin.String(), engine.PlanTransaction.String(), vcursor.TabletType().String())
 
 	begin := stmt.(*sqlparser.Begin)
 	err := e.txConn.Begin(ctx, safeSession, begin.TxAccessModes)
@@ -605,8 +605,8 @@ func (e *Executor) handleCommit(ctx context.Context, vcursor *econtext.VCursorIm
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 	logStats.ShardQueries = uint64(len(safeSession.ShardSessions))
-	e.updateQueryCounts("Commit", "", "", int64(logStats.ShardQueries))
-	e.updateQueryStats("Commit", "Transaction", vcursor.TabletType().String())
+	e.updateQueryCounts(sqlparser.StmtCommit.String(), "", "", int64(logStats.ShardQueries))
+	e.updateQueryStats(sqlparser.StmtCommit.String(), engine.PlanTransaction.String(), vcursor.TabletType().String())
 
 	err := e.txConn.Commit(ctx, safeSession)
 	logStats.CommitTime = time.Since(execStart)
@@ -622,8 +622,8 @@ func (e *Executor) handleRollback(ctx context.Context, vcursor *econtext.VCursor
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 	logStats.ShardQueries = uint64(len(safeSession.ShardSessions))
-	e.updateQueryCounts("Rollback", "", "", int64(logStats.ShardQueries))
-	e.updateQueryStats("Rollback", "Transaction", vcursor.TabletType().String())
+	e.updateQueryCounts(sqlparser.StmtRollback.String(), "", "", int64(logStats.ShardQueries))
+	e.updateQueryStats(sqlparser.StmtRollback.String(), engine.PlanTransaction.String(), vcursor.TabletType().String())
 
 	err := e.txConn.Rollback(ctx, safeSession)
 	logStats.CommitTime = time.Since(execStart)
@@ -635,7 +635,7 @@ func (e *Executor) handleSavepoint(ctx context.Context, vcursor *econtext.VCurso
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 	logStats.ShardQueries = uint64(len(safeSession.ShardSessions))
 	e.updateQueryCounts(queryType, "", "", int64(logStats.ShardQueries))
-	e.updateQueryStats(queryType, "Transaction", vcursor.TabletType().String())
+	e.updateQueryStats(queryType, engine.PlanTransaction.String(), vcursor.TabletType().String())
 
 	defer func() {
 		logStats.ExecuteTime = time.Since(execStart)

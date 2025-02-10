@@ -245,19 +245,19 @@ func (e *Executor) handleTransactions(
 		qr, err := e.handleRollback(ctx, vcursor, safeSession, logStats)
 		return qr, err
 	case sqlparser.StmtSavepoint:
-		qr, err := e.handleSavepoint(ctx, vcursor, safeSession, plan.Original, "Savepoint", logStats, func(_ string) (*sqltypes.Result, error) {
+		qr, err := e.handleSavepoint(ctx, vcursor, safeSession, plan.Original, plan.QueryType.String(), logStats, func(_ string) (*sqltypes.Result, error) {
 			// Safely to ignore as there is no transaction.
 			return &sqltypes.Result{}, nil
 		}, vcursor.IgnoreMaxMemoryRows())
 		return qr, err
 	case sqlparser.StmtSRollback:
-		qr, err := e.handleSavepoint(ctx, vcursor, safeSession, plan.Original, "Rollback Savepoint", logStats, func(query string) (*sqltypes.Result, error) {
+		qr, err := e.handleSavepoint(ctx, vcursor, safeSession, plan.Original, plan.QueryType.String(), logStats, func(query string) (*sqltypes.Result, error) {
 			// Error as there is no transaction, so there is no savepoint that exists.
 			return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.SPDoesNotExist, "SAVEPOINT does not exist: %s", query)
 		}, vcursor.IgnoreMaxMemoryRows())
 		return qr, err
 	case sqlparser.StmtRelease:
-		qr, err := e.handleSavepoint(ctx, vcursor, safeSession, plan.Original, "Release Savepoint", logStats, func(query string) (*sqltypes.Result, error) {
+		qr, err := e.handleSavepoint(ctx, vcursor, safeSession, plan.Original, plan.QueryType.String(), logStats, func(query string) (*sqltypes.Result, error) {
 			// Error as there is no transaction, so there is no savepoint that exists.
 			return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.SPDoesNotExist, "SAVEPOINT does not exist: %s", query)
 		}, vcursor.IgnoreMaxMemoryRows())

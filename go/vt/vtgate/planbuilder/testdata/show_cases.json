@@ -462,7 +462,7 @@
     "comment": "show tables",
     "query": "show tables",
     "plan": {
-      "Type": "Complex",
+      "Type": "Passthrough",
       "QueryType": "SHOW",
       "Original": "show tables",
       "Instructions": {
@@ -492,7 +492,7 @@
     "comment": "show tables from db",
     "query": "show tables from user",
     "plan": {
-      "Type": "Complex",
+      "Type": "Passthrough",
       "QueryType": "SHOW",
       "Original": "show tables from user",
       "Instructions": {
@@ -522,7 +522,7 @@
     "comment": "show tables from system schema",
     "query": "show tables from performance_schema",
     "plan": {
-      "Type": "Complex",
+      "Type": "Passthrough",
       "QueryType": "SHOW",
       "Original": "show tables from performance_schema",
       "Instructions": {

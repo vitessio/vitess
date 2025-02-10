@@ -66,6 +66,7 @@ const (
 	PlanComplex
 	PlanOnlineDDL
 	PlanDirectDDL
+	PlanTransaction
 )
 
 func NewPlan(query string, stmt sqlparser.Statement, primitive Primitive, bindVarNeeds *sqlparser.BindVarNeeds, tablesUsed []string) *Plan {
@@ -146,6 +147,8 @@ func (p PlanType) String() string {
 		return "OnlineDDL"
 	case PlanDirectDDL:
 		return "DirectDDL"
+	case PlanTransaction:
+		return "Transaction"
 	default:
 		return "Unknown"
 	}
@@ -186,6 +189,8 @@ func getPlanType(p Primitive) PlanType {
 		}
 		return PlanDirectDDL
 	case *VExplain:
+		return getPlanType(prim.Input)
+	case *RenameFields:
 		return getPlanType(prim.Input)
 	default:
 		return PlanComplex
