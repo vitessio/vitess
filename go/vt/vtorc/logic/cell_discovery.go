@@ -49,7 +49,7 @@ func refreshCells(cells []string) (err error) {
 	for _, cell := range cells {
 		err = inst.SaveCell(cell)
 		if err != nil {
-			log.Error(err)
+			log.Errorf("Failed to save cell %q: %+v", cell, err)
 			return err
 		}
 		updated[cell] = true
@@ -59,6 +59,7 @@ func refreshCells(cells []string) (err error) {
 	// be changing because we are holding a lock.
 	cells, err = inst.ReadCells()
 	if err != nil {
+		log.Errorf("Failed to read cells: %+v", err)
 		return err
 	}
 
@@ -69,7 +70,7 @@ func refreshCells(cells []string) (err error) {
 		}
 		log.Infof("Forgetting stale cell %q", cell)
 		if err = inst.DeleteCell(cell); err != nil {
-			return err
+			log.Errorf("Failed to delete cell %q: %+v", cell, err)
 		}
 	}
 	return nil

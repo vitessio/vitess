@@ -27,7 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/vtorc/inst"
 )
 
-func TestRefreshAllCells(t *testing.T) {
+func TestRefreshCells(t *testing.T) {
 	// Store the old flags and restore on test completion
 	oldTs := ts
 	defer func() {
