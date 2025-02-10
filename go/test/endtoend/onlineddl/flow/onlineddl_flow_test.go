@@ -279,7 +279,7 @@ func TestOnlineDDLFlow(t *testing.T) {
 				onlineddl.CheckThrottledApps(t, &vtParams, throttlerapp.OnlineDDLName, false)
 				onlineddl.ThrottleAllMigrations(t, &vtParams)
 				onlineddl.CheckThrottledApps(t, &vtParams, throttlerapp.OnlineDDLName, true)
-				throttler.WaitForCheckThrottlerResult(t, &clusterInstance.VtctldClientProcess, primaryTablet, throttlerapp.OnlineDDLName, nil, tabletmanagerdatapb.CheckThrottlerResponseCode_THRESHOLD_EXCEEDED, migrationWaitTimeout)
+				throttler.WaitForCheckThrottlerResult(t, &clusterInstance.VtctldClientProcess, primaryTablet, throttlerapp.OnlineDDLName, nil, tabletmanagerdatapb.CheckThrottlerResponseCode_APP_DENIED, migrationWaitTimeout)
 			})
 			t.Run("unthrottle online-ddl", func(t *testing.T) {
 				onlineddl.UnthrottleAllMigrations(t, &vtParams)
