@@ -1689,6 +1689,7 @@ func (c *CreateTableEntity) diffKeys(alterTable *sqlparser.AlterTable,
 						NewName: t2Key.Info.Name,
 					}
 					alterTable.AlterOptions = append(alterTable.AlterOptions, renameIndex)
+					annotations.MarkAdded(sqlparser.CanonicalString(t2Key))
 					convertedToRename = true
 				}
 			}

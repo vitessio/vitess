@@ -90,7 +90,7 @@ func TestVSchemaUpdate(t *testing.T) {
 		Keyspace:                ks,
 		ColumnListAuthoritative: true,
 		PrimaryKey:              sqlparser.Columns{sqlparser.NewIdentifierCI("a")},
-		UniqueKeys: []sqlparser.Exprs{
+		UniqueKeys: [][]sqlparser.Expr{
 			{sqlparser.NewColName("b")},
 			{sqlparser.NewColName("c"), sqlparser.NewColName("d")},
 		},
@@ -100,7 +100,7 @@ func TestVSchemaUpdate(t *testing.T) {
 		Keyspace:                ks,
 		ColumnListAuthoritative: true,
 		PrimaryKey:              sqlparser.Columns{sqlparser.NewIdentifierCI("a")},
-		UniqueKeys: []sqlparser.Exprs{
+		UniqueKeys: [][]sqlparser.Expr{
 			{&sqlparser.BinaryExpr{Operator: sqlparser.DivOp, Left: sqlparser.NewColName("b"), Right: sqlparser.NewIntLiteral("2")}},
 			{sqlparser.NewColName("c"), &sqlparser.BinaryExpr{Operator: sqlparser.PlusOp, Left: sqlparser.NewColName("d"), Right: sqlparser.NewColName("e")}},
 		},
@@ -524,16 +524,20 @@ func TestVSchemaViewsUpdate(t *testing.T) {
 		vs = vschema
 		vs.ResetCreated()
 	}
+
+	s1 := &sqlparser.Select{
+		From: sqlparser.TableExprs{sqlparser.NewAliasedTableExpr(sqlparser.NewTableName("t1"), "")},
+	}
+	s2 := &sqlparser.Select{
+		From: sqlparser.TableExprs{sqlparser.NewAliasedTableExpr(sqlparser.NewTableName("t2"), "")},
+	}
+	s1.AddSelectExpr(sqlparser.NewAliasedExpr(sqlparser.NewIntLiteral("1"), ""))
+	s2.AddSelectExpr(sqlparser.NewAliasedExpr(sqlparser.NewIntLiteral("2"), ""))
 	vm.schema = &fakeSchema{v: map[string]sqlparser.TableStatement{
-		"v1": &sqlparser.Select{
-			From:        sqlparser.TableExprs{sqlparser.NewAliasedTableExpr(sqlparser.NewTableName("t1"), "")},
-			SelectExprs: sqlparser.SelectExprs{sqlparser.NewAliasedExpr(sqlparser.NewIntLiteral("1"), "")},
-		},
-		"v2": &sqlparser.Select{
-			From:        sqlparser.TableExprs{sqlparser.NewAliasedTableExpr(sqlparser.NewTableName("t2"), "")},
-			SelectExprs: sqlparser.SelectExprs{sqlparser.NewAliasedExpr(sqlparser.NewIntLiteral("2"), "")},
-		},
+		"v1": s1,
+		"v2": s2,
 	}}
+
 	vm.VSchemaUpdate(&vschemapb.SrvVSchema{
 		Keyspaces: map[string]*vschemapb.Keyspace{
 			"ks": {Sharded: true},

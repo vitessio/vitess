@@ -230,7 +230,6 @@ func NewTabletServer(ctx context.Context, env *vtenv.Environment, name string, c
 	tsv.registerTxlogzHandler()
 	tsv.registerQueryListHandlers([]*QueryList{tsv.statelessql, tsv.statefulql, tsv.olapql})
 	tsv.registerTwopczHandler()
-	tsv.registerMigrationStatusHandler()
 	tsv.registerThrottlerHandlers()
 	tsv.registerDebugEnvHandler()
 
@@ -1906,18 +1905,6 @@ func (tsv *TabletServer) registerTwopczHandler() {
 	})
 }
 
-func (tsv *TabletServer) registerMigrationStatusHandler() {
-	tsv.exporter.HandleFunc("/schema-migration/report-status", func(w http.ResponseWriter, r *http.Request) {
-		ctx := tabletenv.LocalContext()
-		query := r.URL.Query()
-		if err := tsv.onlineDDLExecutor.OnSchemaMigrationStatus(ctx, query.Get("uuid"), query.Get("status"), query.Get("dryrun"), query.Get("progress"), query.Get("eta"), query.Get("rowscopied"), query.Get("hint")); err != nil {
-			http.Error(w, fmt.Sprintf("not ok: %v", err), http.StatusInternalServerError)
-			return
-		}
-		w.Write([]byte("ok"))
-	})
-}
-
 // registerThrottlerCheckHandlers registers throttler "check" requests
 func (tsv *TabletServer) registerThrottlerCheckHandlers() {
 	handle := func(path string, scope base.Scope) {
@@ -1930,19 +1917,32 @@ func (tsv *TabletServer) registerThrottlerCheckHandlers() {
 			flags := &throttle.CheckFlags{
 				Scope:                 scope,
 				SkipRequestHeartbeats: (r.URL.Query().Get("s") == "true"),
-				MultiMetricsEnabled:   true,
 			}
 			metricNames := tsv.lagThrottler.MetricNames(r.URL.Query()["m"])
 			checkResult := tsv.lagThrottler.Check(ctx, appName, metricNames, flags)
 			if checkResult.ResponseCode == tabletmanagerdatapb.CheckThrottlerResponseCode_UNKNOWN_METRIC && flags.OKIfNotExists {
-				checkResult.StatusCode = http.StatusOK // 200
 				checkResult.ResponseCode = tabletmanagerdatapb.CheckThrottlerResponseCode_OK
 			}
 
 			if r.Method == http.MethodGet {
 				w.Header().Set("Content-Type", "application/json")
 			}
-			w.WriteHeader(checkResult.StatusCode)
+			var httpStatusCode int
+			switch checkResult.ResponseCode {
+			case tabletmanagerdatapb.CheckThrottlerResponseCode_OK:
+				httpStatusCode = http.StatusOK
+			case tabletmanagerdatapb.CheckThrottlerResponseCode_APP_DENIED:
+				httpStatusCode = http.StatusExpectationFailed
+			case tabletmanagerdatapb.CheckThrottlerResponseCode_THRESHOLD_EXCEEDED:
+				httpStatusCode = http.StatusTooManyRequests
+			case tabletmanagerdatapb.CheckThrottlerResponseCode_UNKNOWN_METRIC:
+				httpStatusCode = http.StatusNotFound
+			case tabletmanagerdatapb.CheckThrottlerResponseCode_INTERNAL_ERROR:
+				httpStatusCode = http.StatusInternalServerError
+			default:
+				httpStatusCode = http.StatusInternalServerError
+			}
+			w.WriteHeader(httpStatusCode)
 			if r.Method == http.MethodGet {
 				json.NewEncoder(w).Encode(checkResult)
 			}

@@ -44,7 +44,7 @@ func analyzeSelect(env *vtenv.Environment, sel *sqlparser.Select, tables map[str
 	}
 
 	// Check if it's a NEXT VALUE statement.
-	if nextVal, ok := sel.SelectExprs[0].(*sqlparser.Nextval); ok {
+	if nextVal, ok := sel.GetColumns()[0].(*sqlparser.Nextval); ok {
 		if plan.Table == nil || plan.Table.Type != schema.Sequence {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s is not a sequence", sqlparser.ToString(sel.From))
 		}

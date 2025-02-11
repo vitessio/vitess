@@ -76,7 +76,7 @@ func TestDialDedicatedPool(t *testing.T) {
 		ctx, cancel := context.WithTimeout(ctx, time.Second)
 		defer cancel()
 
-		req := &tabletmanagerdatapb.CheckThrottlerRequest{MultiMetricsEnabled: true}
+		req := &tabletmanagerdatapb.CheckThrottlerRequest{}
 		_, err := client.CheckThrottler(ctx, tablet, req)
 		assert.Error(t, err)
 	})
@@ -141,7 +141,7 @@ func TestDialPool(t *testing.T) {
 		ctx, cancel := context.WithTimeout(ctx, time.Second)
 		defer cancel()
 
-		req := &tabletmanagerdatapb.CheckThrottlerRequest{MultiMetricsEnabled: true}
+		req := &tabletmanagerdatapb.CheckThrottlerRequest{}
 		_, err := client.CheckThrottler(ctx, tablet, req)
 		assert.Error(t, err)
 	})

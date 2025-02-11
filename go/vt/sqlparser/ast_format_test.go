@@ -1,5 +1,5 @@
 /*
-Copyright 2019 The Vitess Authors.
+Copyright 2025 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package onlineddl
+package sqlparser
 
 import (
 	"testing"
@@ -22,11 +22,14 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestRandomHash(t *testing.T) {
-	h1 := RandomHash()
-	h2 := RandomHash()
+func TestColNamesInSlice(t *testing.T) {
+	c1 := NewColName("a1")
+	c2 := NewColName("a2")
+	exprs := []Expr{
+		c1,
+		c2,
+	}
 
-	assert.Equal(t, len(h1), 64)
-	assert.Equal(t, len(h2), 64)
-	assert.NotEqual(t, h1, h2)
+	result := SliceString(exprs)
+	assert.Equal(t, "a1, a2", result)
 }

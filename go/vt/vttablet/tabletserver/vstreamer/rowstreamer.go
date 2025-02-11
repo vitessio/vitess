@@ -260,13 +260,25 @@ func (rs *rowStreamer) buildSelect(st *binlogdatapb.MinimalTable) (string, error
 		}
 		prefix = ", "
 	}
+
+	addPushdownExpressions := func() {
+		for i, expr := range rs.plan.whereExprsToPushDown {
+			if i != 0 {
+				// Only AND expressions are supported.
+				buf.Myprintf(" and ")
+			}
+			buf.Myprintf("(%s)", sqlparser.String(expr))
+		}
+	}
 	// If we know the index name that we should be using then tell MySQL
 	// to use it if possible. This helps to ensure that we are able to
 	// leverage the ordering from the index itself and avoid having to
 	// do a FILESORT of all the results. This index should contain all
 	// of the PK columns which are used in the ORDER BY clause below.
 	var indexHint string
-	if st.PKIndexName != "" {
+	// If we're pushing down any expressions, we need to let the optimizer
+	// choose the best index to use.
+	if st.PKIndexName != "" && len(rs.plan.whereExprsToPushDown) == 0 {
 		escapedPKIndexName, err := sqlescape.EnsureEscaped(st.PKIndexName)
 		if err != nil {
 			return "", err
@@ -274,12 +286,18 @@ func (rs *rowStreamer) buildSelect(st *binlogdatapb.MinimalTable) (string, error
 		indexHint = fmt.Sprintf(" force index (%s)", escapedPKIndexName)
 	}
 	buf.Myprintf(" from %v%s", sqlparser.NewIdentifierCS(rs.plan.Table.Name), indexHint)
-	if len(rs.lastpk) != 0 {
+	if len(rs.lastpk) != 0 { // We're in the Nth copy phase cycle and need to resume
 		if len(rs.lastpk) != len(rs.pkColumns) {
 			return "", fmt.Errorf("cannot build a row streamer plan for the %s table as a lastpk value was provided and the number of primary key values within it (%v) does not match the number of primary key columns in the table (%d)",
 				st.Name, rs.lastpk, rs.pkColumns)
 		}
 		buf.WriteString(" where ")
+		// First we add any predicates that should be pushed down.
+		if len(rs.plan.whereExprsToPushDown) > 0 {
+			addPushdownExpressions()
+			// Only AND expressions are supported.
+			buf.Myprintf(" and ")
+		}
 		prefix := ""
 		// This loop handles the case for composite PKs. For example,
 		// if lastpk was (1,2), the where clause would be:
@@ -298,6 +316,9 @@ func (rs *rowStreamer) buildSelect(st *binlogdatapb.MinimalTable) (string, error
 			rs.lastpk[lastcol].EncodeSQL(buf)
 			buf.Myprintf(")")
 		}
+	} else if len(rs.plan.whereExprsToPushDown) > 0 { // We're in the first copy phase cycle
+		buf.Myprintf(" where ")
+		addPushdownExpressions()
 	}
 	buf.Myprintf(" order by ", sqlparser.NewIdentifierCS(rs.plan.Table.Name))
 	prefix = ""

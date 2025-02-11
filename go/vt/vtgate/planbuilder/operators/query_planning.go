@@ -30,10 +30,10 @@ import (
 )
 
 func planQuery(ctx *plancontext.PlanningContext, root Operator) Operator {
-	var selExpr sqlparser.SelectExprs
+	var selExpr []sqlparser.SelectExpr
 	if horizon, isHorizon := root.(*Horizon); isHorizon {
 		sel := getFirstSelect(horizon.Query)
-		selExpr = sqlparser.Clone(sel.SelectExprs)
+		selExpr = sqlparser.Clone(sel.SelectExprs).Exprs
 	}
 
 	output := runPhases(ctx, root)
@@ -805,7 +805,7 @@ func tryPushUnion(ctx *plancontext.PlanningContext, op *Union) (Operator, *Apply
 	}
 
 	var sources []Operator
-	var selects []sqlparser.SelectExprs
+	var selects [][]sqlparser.SelectExpr
 
 	if op.distinct {
 		sources, selects = mergeUnionInputInAnyOrder(ctx, op)
@@ -829,7 +829,7 @@ func tryPushUnion(ctx *plancontext.PlanningContext, op *Union) (Operator, *Apply
 }
 
 // addTruncationOrProjectionToReturnOutput uses the original Horizon to make sure that the output columns line up with what the user asked for
-func addTruncationOrProjectionToReturnOutput(ctx *plancontext.PlanningContext, selExprs sqlparser.SelectExprs, output Operator) Operator {
+func addTruncationOrProjectionToReturnOutput(ctx *plancontext.PlanningContext, selExprs []sqlparser.SelectExpr, output Operator) Operator {
 	if len(selExprs) == 0 {
 		return output
 	}
@@ -843,7 +843,7 @@ func addTruncationOrProjectionToReturnOutput(ctx *plancontext.PlanningContext, s
 	return createSimpleProjection(ctx, selExprs, output)
 }
 
-func colNamesAlign(expected, actual sqlparser.SelectExprs) bool {
+func colNamesAlign(expected, actual []sqlparser.SelectExpr) bool {
 	if len(expected) > len(actual) {
 		// if we expect more columns than we have, we can't align
 		return false

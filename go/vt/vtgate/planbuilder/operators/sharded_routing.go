@@ -665,10 +665,11 @@ func (tr *ShardedRouting) extraInfo() string {
 		)
 	}
 
+	valueExprs := tr.Selected.ValueExprs
 	return fmt.Sprintf(
 		"Vindex[%s] Values[%s] Seen:[%s]",
 		tr.Selected.FoundVindex.String(),
-		sqlparser.String(sqlparser.Exprs(tr.Selected.ValueExprs)),
+		sqlparser.SliceString(valueExprs),
 		sqlparser.String(sqlparser.AndExpressions(tr.SeenPredicates...)),
 	)
 }

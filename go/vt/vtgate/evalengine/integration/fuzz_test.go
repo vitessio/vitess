@@ -137,7 +137,7 @@ func evaluateLocalEvalengine(env *evalengine.ExpressionEnv, query string, fields
 		return evalengine.EvalResult{}, err
 	}
 
-	astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
+	astExpr := stmt.(*sqlparser.Select).SelectExprs.Exprs[0].(*sqlparser.AliasedExpr).Expr
 	local, err := func() (expr evalengine.Expr, err error) {
 		defer func() {
 			if r := recover(); r != nil {
@@ -239,7 +239,7 @@ func TestGenerateFuzzCases(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
+		astExpr := stmt.(*sqlparser.Select).SelectExprs.Exprs[0].(*sqlparser.AliasedExpr).Expr
 
 		if fail := compareWithMySQL(astExpr); fail != nil {
 			failures = append(failures, fail)

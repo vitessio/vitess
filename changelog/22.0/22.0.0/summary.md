@@ -5,6 +5,7 @@
 - **[Major Changes](#major-changes)**
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
     - [Deprecated VTTablet Flags](#vttablet-flags)
+    - [Removing gh-ost and pt-osc Online DDL strategies](#ghost-ptosc)
   - **[RPC Changes](#rpc-changes)**
   - **[Prefer not promoting a replica that is currently taking a backup](#reparents-prefer-not-backing-up)**
   - **[VTOrc Config File Changes](#vtorc-config-file-changes)**
@@ -37,6 +38,21 @@ These are the RPC changes made in this release -
 #### <a id="vttablet-flags"/>Deprecated VTTablet Flags</a>
 
 - `twopc_enable` flag is deprecated. Usage of TwoPC commit will be determined by the `transaction_mode` set on VTGate via flag or session variable.
+
+#### <a id="ghost-ptosc"/>Removing gh-ost and pt-osc Online DDL strategies</a>
+
+Vitess no longer recognizes the `gh-ost` and `pt-osc` (`pt-online-schema-change`) Online DDL strategies. The `vitess` strategy is the recommended way to make schema changes at scale. `mysql` and `direct` strategies continue to be supported.
+
+These `vttablet` flags have been removed:
+
+- `--gh-ost-path`
+- `--pt-osc-path`
+
+The use of `gh-ost` and `pt-osc` as strategies as follows, yields an error:
+```sh
+$ vtctldclient ApplySchema --ddl-strategy="gh-ost" ...
+$ vtctldclient ApplySchema --ddl-strategy="pt-osc" ...
+```
 
 ### <a id="reparents-prefer-not-backing-up"/>Prefer not promoting a replica that is currently taking a backup
 

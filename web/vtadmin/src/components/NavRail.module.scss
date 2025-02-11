@@ -70,7 +70,7 @@ a.navLink {
     font-size: 1.6rem;
     font-weight: 500;
     outline: none;
-    padding: 13px 24px;
+    padding: 10px 24px;
     text-decoration: none;
     transition: $navRailHoverTransition;
 
@@ -109,6 +109,7 @@ a.navLink:hover .badge {
     fill: var(--colorScaffoldingForeground);
     height: 2rem;
     transition: $navRailHoverTransition;
+    margin-right: 10px;
 }
 
 a.navLinkActive .icon,

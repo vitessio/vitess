@@ -174,7 +174,7 @@ func (tc *tableCollector) visitUnion(union *sqlparser.Union) error {
 	collations := tc.org.collationEnv()
 
 	err = sqlparser.VisitAllSelects(union, func(s *sqlparser.Select, idx int) error {
-		for i, expr := range s.SelectExprs {
+		for i, expr := range s.GetColumns() {
 			ae, ok := expr.(*sqlparser.AliasedExpr)
 			if !ok {
 				continue
@@ -450,11 +450,11 @@ func (tc *tableCollector) addSelectDerivedTable(
 	alias sqlparser.IdentifierCS,
 ) error {
 	tables := tc.scoper.wScope[sel]
-	size := len(sel.SelectExprs)
+	size := sel.GetColumnCount()
 	deps := make([]TableSet, size)
 	types := make([]evalengine.Type, size)
 	expanded := true
-	for i, expr := range sel.SelectExprs {
+	for i, expr := range sel.GetColumns() {
 		ae, ok := expr.(*sqlparser.AliasedExpr)
 		if !ok {
 			expanded = false
@@ -463,7 +463,7 @@ func (tc *tableCollector) addSelectDerivedTable(
 		_, deps[i], types[i] = tc.org.depsForExpr(ae.Expr)
 	}
 
-	tableInfo := createDerivedTableForExpressions(sel.SelectExprs, columns, tables.tables, tc.org, expanded, deps, types)
+	tableInfo := createDerivedTableForExpressions(sel.GetColumns(), columns, tables.tables, tc.org, expanded, deps, types)
 	if err := tableInfo.checkForDuplicates(); err != nil {
 		return err
 	}

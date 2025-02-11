@@ -50,7 +50,8 @@ func TestNormalizerAndSemanticAnalysisIntegration(t *testing.T) {
 
 			st, err := Analyze(out.AST, "d", fakeSchemaInfo())
 			require.NoError(t, err)
-			bv := out.AST.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr.(*sqlparser.Argument)
+
+			bv := extract(out.AST.(*sqlparser.Select), 0).(*sqlparser.Argument)
 			typ, found := st.ExprTypes[bv]
 			require.True(t, found, "bindvar was not typed")
 			require.Equal(t, test.typ, typ.Type().String())
