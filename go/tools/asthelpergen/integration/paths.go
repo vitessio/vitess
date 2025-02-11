@@ -16,32 +16,28 @@ limitations under the License.
 
 package integration
 
-import "encoding/binary"
-
 // This file is a copy of the file go/vt/sqlparser/paths.go
 // We need it here to be able to test the path accumulation of the rewriter
 
 type ASTPath string
 
-func AddStep(path ASTPath, step ASTStep) ASTPath {
-	b := make([]byte, 2)
-	binary.BigEndian.PutUint16(b, uint16(step))
-	return path + ASTPath(b)
+// nextPathOffset is an implementation of binary.Uvarint that works directly on
+// the ASTPath without having to cast and allocate a byte slice
+func (path ASTPath) nextPathOffset() (uint64, int) {
+	var x uint64
+	var s uint
+	for i := 0; i < len(path); i++ {
+		b := path[i]
+		if b < 0x80 {
+			return x | uint64(b)<<s, i + 1
+		}
+		x |= uint64(b&0x7f) << s
+		s += 7
+	}
+	return 0, 0
 }
 
-func AddStepWithSliceIndex(path ASTPath, step ASTStep, idx int) ASTPath {
-	if idx < 255 {
-		// 2 bytes for step code + 1 byte for index
-		b := make([]byte, 3)
-		binary.BigEndian.PutUint16(b[:2], uint16(step))
-		b[2] = byte(idx)
-		return path + ASTPath(b)
-	}
-
-	// 2 bytes for step code + 4 byte for index
-	b := make([]byte, 6)
-	longStep := step + 1
-	binary.BigEndian.PutUint16(b[:2], uint16(longStep))
-	binary.BigEndian.PutUint32(b[2:], uint32(idx))
-	return path + ASTPath(b)
+func (path ASTPath) nextPathStep() ASTStep {
+	_ = path[1] // bounds check hint to compiler; see golang.org/issue/14808
+	return ASTStep(uint16(path[1]) | uint16(path[0])<<8)
 }
