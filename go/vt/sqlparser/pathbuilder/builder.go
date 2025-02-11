@@ -18,7 +18,6 @@ package pathbuilder
 
 import (
 	"encoding/binary"
-	"unsafe"
 )
 
 // ASTPathBuilder is used to build
@@ -39,7 +38,7 @@ func NewASTPathBuilder() *ASTPathBuilder {
 
 // ToPath returns the current path as a string of the used bytes.
 func (apb *ASTPathBuilder) ToPath() string {
-	return unsafe.String(unsafe.SliceData(apb.path), len(apb.path))
+	return string(apb.path)
 }
 
 // AddStep appends a single step (2 bytes) to path.
