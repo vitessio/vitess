@@ -213,13 +213,12 @@ func (p *pathGen) generateGetNodeFromPath(spi generatorSPI) *jen.Statement {
 		jen.Id("node").Id(p.ifaceName),
 		jen.Id("path").Id("ASTPath"),
 	).Id(p.ifaceName).Block(
-		jen.If(jen.Id("path").Op("==").Id(`""`).Block(
-			jen.Return(jen.Id("node")))),
-		jen.Id("step").Op(":=").Id("path").Dot("nextPathStep").Call(),
-		jen.Id("path").Op("=").Id("path[2:]"),
-
-		jen.Switch(jen.Id("step")).Block(p.generateWalkCases(spi)...),
-		jen.Return(jen.Nil()), // Fallback return
+		jen.For(jen.Len(jen.Id("path")).Op(">=").Lit(2)).Block(
+			jen.Id("step").Op(":=").Id("path").Dot("nextPathStep").Call(),
+			jen.Id("path").Op("=").Id("path[2:]"),
+			jen.Switch(jen.Id("step")).Block(p.generateWalkCases(spi)...),
+		),
+		jen.Return(jen.Id("node")), // Fallback return
 	)
 	return method
 }
@@ -238,11 +237,9 @@ func (p *pathGen) generateWalkCases(spi generatorSPI) []jen.Code {
 		if !step.slice {
 			// return GetNodeFromPath(node.(*RefContainer).ASTType, path)
 			t := types.TypeString(step.container, noQualifier)
-			n := jen.Id("node").Dot(fmt.Sprintf("(%s)", t)).Dot(step.name)
 
 			cases = append(cases, jen.Case(jen.Id(stepName)).Block(
-				// jen.Id("node").Op("=").Id("node").Dot(step.name),
-				jen.Return(jen.Id("GetNodeFromPath").Call(n, jen.Id("path"))),
+				jen.Id("node").Op("=").Id("node").Dot(fmt.Sprintf("(%s)", t)).Dot(step.name),
 			))
 			continue
 		}
@@ -258,9 +255,13 @@ func (p *pathGen) generateWalkCases(spi generatorSPI) []jen.Code {
 		cases = append(cases, jen.Case(jen.Id(stepName+"Offset")).Block(
 			jen.Id("idx, bytesRead").Op(":=").Id("path").Dot("nextPathOffset").Call(),
 			jen.Id("path").Op("=").Id("path[bytesRead:]"),
-			jen.Return(jen.Id("GetNodeFromPath").Call(assignNode, jen.Id("path"))),
+			jen.Id("node").Op("=").Add(assignNode),
 		))
 	}
+
+	cases = append(cases, jen.Default().Block(
+		jen.Return(jen.Nil()),
+	))
 
 	return cases
 }
