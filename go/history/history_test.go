@@ -53,20 +53,20 @@ func TestLatest(t *testing.T) {
 
 	// Add first value.
 	h.Add(mod10(1))
-	assert.EqualValues(t, 1, int(h.Records()[0].(mod10)))
-	assert.EqualValues(t, 1, int(h.Latest().(mod10)))
+	assert.EqualValues(t, 1, h.Records()[0].(mod10))
+	assert.EqualValues(t, 1, h.Latest().(mod10))
 
 	// Add value that isn't a "duplicate".
 	h.Add(mod10(2))
-	assert.EqualValues(t, 2, int(h.Records()[0].(mod10)))
-	assert.EqualValues(t, 2, int(h.Latest().(mod10)))
+	assert.EqualValues(t, 2, h.Records()[0].(mod10))
+	assert.EqualValues(t, 2, h.Latest().(mod10))
 
 	// Add value that IS a "duplicate".
 	h.Add(mod10(12))
 	// Records()[0] doesn't change.
-	assert.EqualValues(t, 2, int(h.Records()[0].(mod10)))
+	assert.EqualValues(t, 2, h.Records()[0].(mod10))
 	// Latest() does change.
-	assert.EqualValues(t, 12, int(h.Latest().(mod10)))
+	assert.EqualValues(t, 12, h.Latest().(mod10))
 }
 
 type duplic int

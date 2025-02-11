@@ -42,17 +42,17 @@ var (
 
 func TestMariadbStandaloneGTIDEventIsGTID(t *testing.T) {
 	input := mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbStandaloneGTIDEvent)}
-	assert.True(t, input.IsGTID(), "%#v.IsGTID() = false, want true", input)
+	assert.True(t, input.IsGTID(), "%#v", input)
 }
 
 func TestMariadbBeginGTIDEventIsGTID(t *testing.T) {
 	input := mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbBeginGTIDEvent)}
-	assert.True(t, input.IsGTID(), "%#v.IsGTID() = false, want true", input)
+	assert.True(t, input.IsGTID(), "%#v", input)
 }
 
 func TestMariadbBinlogEventIsntGTID(t *testing.T) {
 	input := mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbInsertEvent)}
-	assert.False(t, input.IsGTID(), "%#v.IsGTID() = true, want false", input)
+	assert.False(t, input.IsGTID(), "%#v", input)
 }
 
 func TestMariadbNotBeginGTID(t *testing.T) {
@@ -62,7 +62,7 @@ func TestMariadbNotBeginGTID(t *testing.T) {
 	input := mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbStandaloneGTIDEvent)}
 	_, got, err := input.GTID(f)
 	require.NoError(t, err)
-	assert.False(t, got, "%#v.GTID() = true, want false", input)
+	assert.False(t, got, "%#v", input)
 }
 
 func TestMariadbIsBeginGTID(t *testing.T) {
@@ -72,7 +72,7 @@ func TestMariadbIsBeginGTID(t *testing.T) {
 	input := mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbBeginGTIDEvent)}
 	_, got, err := input.GTID(f)
 	require.NoError(t, err)
-	assert.True(t, got, "%#v.IsBeginGTID() = false, want true", input)
+	assert.True(t, got, "%#v", input)
 }
 
 func TestMariadbStandaloneBinlogEventGTID(t *testing.T) {
@@ -111,6 +111,7 @@ func TestMariadbBinlogEventFormat(t *testing.T) {
 	got, err := input.Format()
 	assert.NoError(t, err)
 	assert.Equal(t, want, got)
+
 }
 
 func TestMariadbBinlogEventChecksumFormat(t *testing.T) {

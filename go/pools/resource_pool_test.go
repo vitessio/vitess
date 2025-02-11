@@ -608,5 +608,5 @@ func TestExpired(t *testing.T) {
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-1*time.Second))
 	_, err := p.Get(ctx)
 	cancel()
-	assert.EqualError(t, err, "resource pool context already expired")
+	require.EqualError(t, err, "resource pool context already expired")
 }
