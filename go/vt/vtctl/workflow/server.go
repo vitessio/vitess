@@ -1985,9 +1985,6 @@ func (s *Server) dropTargets(ctx context.Context, ts *trafficSwitcher, keepData,
 					return nil, err
 				}
 			}
-			if err := sw.dropSourceDeniedTables(ctx); err != nil {
-				return nil, err
-			}
 			if err := sw.dropTargetDeniedTables(ctx); err != nil {
 				return nil, err
 			}
