@@ -396,7 +396,7 @@
     "comment": "update by primary keyspace id, changing one vindex column",
     "query": "update user_metadata set email = 'juan@vitess.io' where user_id = 1",
     "plan": {
-      "Type": "Passthrough",
+      "Type": "MultiShard",
       "QueryType": "UPDATE",
       "Original": "update user_metadata set email = 'juan@vitess.io' where user_id = 1",
       "Instructions": {
@@ -436,7 +436,7 @@
     "comment": "update by primary keyspace id, changing multiple vindex columns",
     "query": "update user_metadata set email = 'juan@vitess.io', address = '155 5th street' where user_id = 1",
     "plan": {
-      "Type": "Passthrough",
+      "Type": "MultiShard",
       "QueryType": "UPDATE",
       "Original": "update user_metadata set email = 'juan@vitess.io', address = '155 5th street' where user_id = 1",
       "Instructions": {
@@ -471,7 +471,7 @@
     "comment": "update by primary keyspace id, changing one vindex column, using order by and limit",
     "query": "update user_metadata set email = 'juan@vitess.io' where user_id = 1 order by user_id asc limit 10",
     "plan": {
-      "Type": "Passthrough",
+      "Type": "MultiShard",
       "QueryType": "UPDATE",
       "Original": "update user_metadata set email = 'juan@vitess.io' where user_id = 1 order by user_id asc limit 10",
       "Instructions": {
@@ -505,7 +505,7 @@
     "comment": "update changes non owned vindex column",
     "query": "update music_extra set music_id = 1 where user_id = 1",
     "plan": {
-      "Type": "Passthrough",
+      "Type": "MultiShard",
       "QueryType": "UPDATE",
       "Original": "update music_extra set music_id = 1 where user_id = 1",
       "Instructions": {
@@ -595,7 +595,7 @@
     "comment": "delete from by primary keyspace id",
     "query": "delete from user where id = 1",
     "plan": {
-      "Type": "Passthrough",
+      "Type": "MultiShard",
       "QueryType": "DELETE",
       "Original": "delete from user where id = 1",
       "Instructions": {
@@ -700,7 +700,7 @@
     "comment": "routing rules: deleted from a routed table",
     "query": "delete from route1 where id = 1",
     "plan": {
-      "Type": "Passthrough",
+      "Type": "MultiShard",
       "QueryType": "DELETE",
       "Original": "delete from route1 where id = 1",
       "Instructions": {
@@ -756,7 +756,7 @@
     "comment": "update by lookup",
     "query": "update music set val = 1 where id = 1",
     "plan": {
-      "Type": "Passthrough",
+      "Type": "Lookup",
       "QueryType": "UPDATE",
       "Original": "update music set val = 1 where id = 1",
       "Instructions": {
@@ -834,7 +834,7 @@
     "comment": "delete from by lookup",
     "query": "delete from music where id = 1",
     "plan": {
-      "Type": "Passthrough",
+      "Type": "Lookup",
       "QueryType": "DELETE",
       "Original": "delete from music where id = 1",
       "Instructions": {
@@ -2099,7 +2099,7 @@
     "comment": "delete row in a multi column vindex table",
     "query": "delete from multicolvin where kid=1",
     "plan": {
-      "Type": "Passthrough",
+      "Type": "MultiShard",
       "QueryType": "DELETE",
       "Original": "delete from multicolvin where kid=1",
       "Instructions": {
@@ -2130,7 +2130,7 @@
     "comment": "update columns of multi column vindex",
     "query": "update multicolvin set column_b = 1, column_c = 2 where kid = 1",
     "plan": {
-      "Type": "Passthrough",
+      "Type": "MultiShard",
       "QueryType": "UPDATE",
       "Original": "update multicolvin set column_b = 1, column_c = 2 where kid = 1",
       "Instructions": {
@@ -2164,7 +2164,7 @@
     "comment": "update multiple vindexes, with multi column vindex",
     "query": "update multicolvin set column_a = 0, column_b = 1, column_c = 2 where kid = 1",
     "plan": {
-      "Type": "Passthrough",
+      "Type": "MultiShard",
       "QueryType": "UPDATE",
       "Original": "update multicolvin set column_a = 0, column_b = 1, column_c = 2 where kid = 1",
       "Instructions": {
@@ -2694,7 +2694,7 @@
     "comment": "update vindex value to null",
     "query": "update user set name = null where id = 1",
     "plan": {
-      "Type": "Passthrough",
+      "Type": "MultiShard",
       "QueryType": "UPDATE",
       "Original": "update user set name = null where id = 1",
       "Instructions": {
@@ -2956,7 +2956,7 @@
     "comment": "delete with single table targets",
     "query": "delete music from music where id = 1",
     "plan": {
-      "Type": "Passthrough",
+      "Type": "Lookup",
       "QueryType": "DELETE",
       "Original": "delete music from music where id = 1",
       "Instructions": {
@@ -3038,7 +3038,7 @@
     "comment": "update multi column vindex, without values for all the vindex columns",
     "query": "update multicolvin set column_c = 2 where kid = 1",
     "plan": {
-      "Type": "Passthrough",
+      "Type": "MultiShard",
       "QueryType": "UPDATE",
       "Original": "update multicolvin set column_c = 2 where kid = 1",
       "Instructions": {
@@ -3072,7 +3072,7 @@
     "comment": "update with binary value",
     "query": "update user set name = _binary 'abc' where id = 1",
     "plan": {
-      "Type": "Passthrough",
+      "Type": "MultiShard",
       "QueryType": "UPDATE",
       "Original": "update user set name = _binary 'abc' where id = 1",
       "Instructions": {
@@ -3106,7 +3106,7 @@
     "comment": "delete with binary value",
     "query": "delete from user where name = _binary 'abc'",
     "plan": {
-      "Type": "MultiShard",
+      "Type": "Lookup",
       "QueryType": "DELETE",
       "Original": "delete from user where name = _binary 'abc'",
       "Instructions": {
@@ -3345,7 +3345,7 @@
     "comment": "Delete on backfilling and non-backfilling unique lookup vindexes should be a delete equal",
     "query": "delete from zlookup_unique.t1 where c2 = 10 and c3 = 20",
     "plan": {
-      "Type": "Passthrough",
+      "Type": "Lookup",
       "QueryType": "DELETE",
       "Original": "delete from zlookup_unique.t1 where c2 = 10 and c3 = 20",
       "Instructions": {
@@ -3376,7 +3376,7 @@
     "comment": "Update on backfilling and non-backfilling unique lookup vindexes should be an equal",
     "query": "update zlookup_unique.t1 set c2 = 1 where c2 = 10 and c3 = 20",
     "plan": {
-      "Type": "Passthrough",
+      "Type": "Lookup",
       "QueryType": "UPDATE",
       "Original": "update zlookup_unique.t1 set c2 = 1 where c2 = 10 and c3 = 20",
       "Instructions": {
@@ -3410,7 +3410,7 @@
     "comment": "Delete EQUAL and IN on backfilling and non-backfilling unique lookup vindexes should be a delete IN",
     "query": "delete from zlookup_unique.t1 where c2 = 10 and c3 in (20, 21)",
     "plan": {
-      "Type": "MultiShard",
+      "Type": "Lookup",
       "QueryType": "DELETE",
       "Original": "delete from zlookup_unique.t1 where c2 = 10 and c3 in (20, 21)",
       "Instructions": {
@@ -3441,7 +3441,7 @@
     "comment": "Update EQUAL and IN on backfilling and non-backfilling unique lookup vindexes should be an update IN",
     "query": "update zlookup_unique.t1 set c2 = 1 where c2 = 10 and c3 in (20, 21)",
     "plan": {
-      "Type": "MultiShard",
+      "Type": "Lookup",
       "QueryType": "UPDATE",
       "Original": "update zlookup_unique.t1 set c2 = 1 where c2 = 10 and c3 in (20, 21)",
       "Instructions": {
@@ -3648,7 +3648,7 @@
     "comment": "delete with a multicol vindex",
     "query": "delete from multicol_tbl where cola = 1 and colb = 2",
     "plan": {
-      "Type": "Passthrough",
+      "Type": "MultiShard",
       "QueryType": "DELETE",
       "Original": "delete from multicol_tbl where cola = 1 and colb = 2",
       "Instructions": {
@@ -3680,7 +3680,7 @@
     "comment": "delete with a multicol vindex - reverse order",
     "query": "delete from multicol_tbl where colb = 2 and cola = 1",
     "plan": {
-      "Type": "Passthrough",
+      "Type": "MultiShard",
       "QueryType": "DELETE",
       "Original": "delete from multicol_tbl where colb = 2 and cola = 1",
       "Instructions": {
@@ -3776,7 +3776,7 @@
     "comment": "update with multicol and an owned vindex which changes",
     "query": "update multicol_tbl set colc = 1 where cola = 1 and colb = 2",
     "plan": {
-      "Type": "Passthrough",
+      "Type": "MultiShard",
       "QueryType": "UPDATE",
       "Original": "update multicol_tbl set colc = 1 where cola = 1 and colb = 2",
       "Instructions": {
@@ -3811,7 +3811,7 @@
     "comment": "update with routing using non-unique lookup vindex",
     "query": "update multicol_tbl set x = 42 where name = 'foo'",
     "plan": {
-      "Type": "MultiShard",
+      "Type": "Lookup",
       "QueryType": "UPDATE",
       "Original": "update multicol_tbl set x = 42 where name = 'foo'",
       "Instructions": {
@@ -3935,7 +3935,7 @@
     "comment": "update with routing using subsharding column with in query as lower cost over lookup vindex",
     "query": "update multicol_tbl set x = 1 where name = 'foo' and cola = 2",
     "plan": {
-      "Type": "MultiShard",
+      "Type": "Lookup",
       "QueryType": "UPDATE",
       "Original": "update multicol_tbl set x = 1 where name = 'foo' and cola = 2",
       "Instructions": {
@@ -3963,7 +3963,7 @@
     "comment": "delete with routing using non-unique lookup vindex",
     "query": "delete from multicol_tbl where name = 'foo'",
     "plan": {
-      "Type": "MultiShard",
+      "Type": "Lookup",
       "QueryType": "DELETE",
       "Original": "delete from multicol_tbl where name = 'foo'",
       "Instructions": {
@@ -4056,7 +4056,7 @@
     "comment": "delete with routing using subsharding column with in query as lower cost over lookup vindex",
     "query": "delete from multicol_tbl where name = 'foo' and cola = 2",
     "plan": {
-      "Type": "MultiShard",
+      "Type": "Lookup",
       "QueryType": "DELETE",
       "Original": "delete from multicol_tbl where name = 'foo' and cola = 2",
       "Instructions": {
@@ -4916,7 +4916,7 @@
     "comment": "update with routing using multi column vindex",
     "query": "update user set col = 1 where (name, col) in (('aa', 'bb'), ('cc', 'dd'))",
     "plan": {
-      "Type": "MultiShard",
+      "Type": "Lookup",
       "QueryType": "UPDATE",
       "Original": "update user set col = 1 where (name, col) in (('aa', 'bb'), ('cc', 'dd'))",
       "Instructions": {
@@ -4944,7 +4944,7 @@
     "comment": "delete with routing using multi column vindex",
     "query": "delete from user where (name, col) in (('aa', 'bb'), ('cc', 'dd'))",
     "plan": {
-      "Type": "MultiShard",
+      "Type": "Lookup",
       "QueryType": "DELETE",
       "Original": "delete from user where (name, col) in (('aa', 'bb'), ('cc', 'dd'))",
       "Instructions": {

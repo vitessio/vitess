@@ -5832,7 +5832,7 @@
     "comment": "Query with non-plannable lookup vindex",
     "query": "SELECT * FROM user_metadata WHERE user_metadata.non_planable = 'foo'",
     "plan": {
-      "Type": "MultiShard",
+      "Type": "Lookup",
       "QueryType": "SELECT",
       "Original": "SELECT * FROM user_metadata WHERE user_metadata.non_planable = 'foo'",
       "Instructions": {

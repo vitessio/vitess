@@ -59,8 +59,8 @@ const (
 	PlanLocal
 	PlanPassthrough
 	PlanMultiShard
-	PlanScatter
 	PlanLookup
+	PlanScatter
 	PlanJoinOp
 	PlanForeignKey
 	PlanComplex
@@ -68,6 +68,13 @@ const (
 	PlanDirectDDL
 	PlanTransaction
 )
+
+func higher(a, b PlanType) PlanType {
+	if a > b {
+		return a
+	}
+	return b
+}
 
 func NewPlan(query string, stmt sqlparser.Statement, primitive Primitive, bindVarNeeds *sqlparser.BindVarNeeds, tablesUsed []string) *Plan {
 	return &Plan{
@@ -173,9 +180,17 @@ func getPlanType(p Primitive) PlanType {
 	case *Route:
 		return getPlanTypeFromRoutingParams(prim.RoutingParameters)
 	case *Update:
-		return getPlanTypeFromRoutingParams(prim.RoutingParameters)
+		pt := getPlanTypeFromRoutingParams(prim.RoutingParameters)
+		if prim.isVindexModified() {
+			return higher(pt, PlanMultiShard)
+		}
+		return pt
 	case *Delete:
-		return getPlanTypeFromRoutingParams(prim.RoutingParameters)
+		pt := getPlanTypeFromRoutingParams(prim.RoutingParameters)
+		if prim.isVindexModified() {
+			return higher(pt, PlanMultiShard)
+		}
+		return pt
 	case *Insert:
 		if prim.Opcode == InsertUnsharded {
 			return PlanPassthrough
@@ -215,9 +230,17 @@ func getPlanTypeFromRoutingParams(rp *RoutingParameters) PlanType {
 		panic("RoutingParameters is nil, cannot determine plan type")
 	}
 	switch rp.Opcode {
-	case Unsharded, EqualUnique, Next, DBA, Reference:
+	case Unsharded, Next, DBA, Reference:
+		return PlanPassthrough
+	case EqualUnique:
+		if rp.Vindex != nil && rp.Vindex.NeedsVCursor() {
+			return PlanLookup
+		}
 		return PlanPassthrough
 	case Equal, IN, Between, MultiEqual, SubShard, ByDestination:
+		if rp.Vindex != nil && rp.Vindex.NeedsVCursor() {
+			return PlanLookup
+		}
 		return PlanMultiShard
 	case Scatter:
 		return PlanScatter
@@ -230,14 +253,8 @@ func getPlanTypeFromRoutingParams(rp *RoutingParameters) PlanType {
 func getPlanTypeForUpsert(prim *Upsert) PlanType {
 	var finalPlanType PlanType
 	for _, u := range prim.Upserts {
-		pt := getPlanType(u.Update)
-		if pt > finalPlanType {
-			finalPlanType = pt
-		}
-		pt = getPlanType(u.Insert)
-		if pt > finalPlanType {
-			finalPlanType = pt
-		}
+		finalPlanType = higher(finalPlanType, getPlanType(u.Update))
+		finalPlanType = higher(finalPlanType, getPlanType(u.Insert))
 	}
 	return finalPlanType
 }
