@@ -54,3 +54,38 @@ func WithLogger(l logutil.Logger) ServerOption {
 		o.logger = l
 	})
 }
+
+// workflowOptions configure a workflow's optional behavior when
+// performing actions in the worfklow server.
+// workflowOptions are set by the WorkflowOption values passed
+// to the server functions.
+type workflowOptions struct {
+	ignoreSourceKeyspace bool
+}
+
+// WorkflowOption alters how we perform the certain workflow operations.
+type WorkflowOption interface {
+	apply(*workflowOptions)
+}
+
+// funcWorkflowOption wraps a function that modifies workflowOptions into
+// an implementation of the WorkflowOption interface.
+type funcWorkflowOption struct {
+	f func(*workflowOptions)
+}
+
+func (fwo *funcWorkflowOption) apply(wo *workflowOptions) {
+	fwo.f(wo)
+}
+
+func newFuncWorkflowOption(f func(*workflowOptions)) *funcWorkflowOption {
+	return &funcWorkflowOption{
+		f: f,
+	}
+}
+
+func IgnoreSourceKeyspace() WorkflowOption {
+	return newFuncWorkflowOption(func(o *workflowOptions) {
+		o.ignoreSourceKeyspace = true
+	})
+}

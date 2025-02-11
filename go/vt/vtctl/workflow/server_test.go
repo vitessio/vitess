@@ -387,6 +387,14 @@ func TestMoveTablesComplete(t *testing.T) {
 				Workflow:             workflowName,
 				IgnoreSourceKeyspace: true,
 			},
+			preFunc: func(t *testing.T, env *testEnv) {
+				err := env.ts.DeleteKeyspace(ctx, sourceKeyspaceName)
+				require.NoError(t, err)
+			},
+			postFunc: func(t *testing.T, env *testEnv) {
+				err := env.ts.CreateKeyspace(ctx, sourceKeyspaceName, &topodatapb.Keyspace{})
+				require.NoError(t, err)
+			},
 			expectedTargetQueries: []*queryResult{
 				{
 					query: fmt.Sprintf("delete from _vt.vreplication where db_name = 'vt_%s' and workflow = '%s'",
