@@ -17,7 +17,6 @@ limitations under the License.
 package mysql
 
 import (
-	"reflect"
 	"testing"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -66,22 +65,22 @@ func TestBinlogEventTruncatedData(t *testing.T) {
 
 func TestBinlogEventType(t *testing.T) {
 	input := binlogEvent(googleRotateEvent)
-	assert.EqualValues(t, byte(0x04), input.Type())
+	assert.EqualValues(t, 0x04, input.Type())
 }
 
 func TestBinlogEventFlags(t *testing.T) {
 	input := binlogEvent(googleRotateEvent)
-	assert.Equal(t, uint16(0x20), input.Flags())
+	assert.EqualValues(t, 0x20, input.Flags())
 }
 
 func TestBinlogEventTimestamp(t *testing.T) {
 	input := binlogEvent(googleFormatEvent)
-	assert.EqualValues(t, uint32(0x53e95252), input.Timestamp())
+	assert.EqualValues(t, 0x53e95252, input.Timestamp())
 }
 
 func TestBinlogEventServerID(t *testing.T) {
 	input := binlogEvent(googleFormatEvent)
-	assert.EqualValues(t, uint32(62344), input.ServerID())
+	assert.EqualValues(t, 62344, input.ServerID())
 }
 
 func TestBinlogEventIsFormatDescription(t *testing.T) {
@@ -149,7 +148,7 @@ func TestBinlogEventFormat(t *testing.T) {
 	}
 	got, err := input.Format()
 	assert.NoError(t, err)
-	assert.True(t, reflect.DeepEqual(got, want), "%#v", input)
+	assert.Equal(t, want, got)
 	assert.False(t, input.IsHeartbeat())
 }
 
@@ -193,12 +192,12 @@ primary key(eid, id)
 	}
 	got, err := input.Query(f)
 	require.NoError(t, err)
-	assert.True(t, reflect.DeepEqual(got, want), "%#v.Query() = %v, want %v", input, got, want)
+	assert.Equal(t, want, got)
 }
 
 func TestBinlogEventQueryBadLength(t *testing.T) {
 	f, err := binlogEvent(googleFormatEvent).Format()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	buf := make([]byte, len(googleQueryEvent))
 	copy(buf, googleQueryEvent)
