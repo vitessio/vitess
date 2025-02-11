@@ -25,10 +25,9 @@ import (
 )
 
 func TestSaveReadAndDeleteCells(t *testing.T) {
-	// Clear the database after the test. The easiest way to do that is to run all the initialization commands again.
-	defer func() {
-		db.ClearVTOrcDatabase()
-	}()
+	db.ClearVTOrcDatabase()
+	defer db.ClearVTOrcDatabase()
+
 	cells := []string{"zone1", "zone2", "zone3"}
 	for _, cell := range cells {
 		require.NoError(t, SaveCell(cell))

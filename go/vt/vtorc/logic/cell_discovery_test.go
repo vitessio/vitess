@@ -28,15 +28,11 @@ import (
 )
 
 func TestRefreshCells(t *testing.T) {
-	// Store the old flags and restore on test completion
+	db.ClearVTOrcDatabase()
 	oldTs := ts
 	defer func() {
-		ts = oldTs
-	}()
-
-	db.ClearVTOrcDatabase()
-	defer func() {
 		db.ClearVTOrcDatabase()
+		ts = oldTs
 	}()
 
 	cells := []string{"zone1", "zone2", "zone3"}
