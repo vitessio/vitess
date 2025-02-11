@@ -27,21 +27,6 @@ import (
 // Some steps (e.g., referencing a slice) consume *additional* bytes for an index
 type ASTPath string
 
-// AddStep appends a single step (2 bytes) to path.
-func AddStep(path ASTPath, step ASTStep) ASTPath {
-	b := make([]byte, 2)
-	binary.BigEndian.PutUint16(b, uint16(step))
-	return path + ASTPath(b)
-}
-
-func AddStepWithOffset(path ASTPath, step ASTStep, offset int) ASTPath {
-	var buf [10]byte
-	binary.BigEndian.PutUint16(buf[0:], uint16(step))
-	n := binary.PutVarint(buf[2:], int64(offset))
-
-	return path + ASTPath(buf[:2+n])
-}
-
 func (path ASTPath) DebugString() string {
 	var sb strings.Builder
 

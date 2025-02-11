@@ -18,14 +18,14 @@ package pathbuilder
 
 import (
 	"encoding/binary"
+	"unsafe"
 )
 
 // ASTPathBuilder is used to build
 // paths for an AST. The steps are uints.
 type ASTPathBuilder struct {
-	path    []byte
-	pathLen int
-	sizes   []int
+	path  []byte
+	sizes []int
 }
 
 const initialCap = 16
@@ -33,88 +33,32 @@ const initialCap = 16
 // NewASTPathBuilder creates a new ASTPathBuilder
 func NewASTPathBuilder() *ASTPathBuilder {
 	return &ASTPathBuilder{
-		path: make([]byte, initialCap),
+		path: make([]byte, 0, initialCap),
 	}
-}
-
-// TODO: Remove this. We should only use it for testing while building confidence.
-func (apb *ASTPathBuilder) sanityCheck() {
-	var total int
-	for _, size := range apb.sizes {
-		total += size
-	}
-	if total != apb.pathLen {
-		panic("path length mismatch")
-	}
-}
-
-// growIfNeeded expands the slice capacity if we don't have enough room for n more bytes.
-func (apb *ASTPathBuilder) growIfNeeded(n int) {
-	needed := apb.pathLen + n
-	currentCap := cap(apb.path)
-	if needed <= currentCap {
-		return
-	}
-	newCap := currentCap * 2
-	for newCap < needed {
-		newCap *= 2
-	}
-	newPath := make([]byte, newCap)
-	copy(newPath, apb.path[:apb.pathLen])
-	apb.path = newPath
 }
 
 // ToPath returns the current path as a string of the used bytes.
 func (apb *ASTPathBuilder) ToPath() string {
-	return string(apb.path[:apb.pathLen])
+	return unsafe.String(unsafe.SliceData(apb.path), len(apb.path))
 }
 
 // AddStep appends a single step (2 bytes) to path.
 func (apb *ASTPathBuilder) AddStep(step uint16) {
-	apb.growIfNeeded(2)
-	binary.BigEndian.PutUint16(apb.path[apb.pathLen:apb.pathLen+2], step)
-	apb.pathLen += 2
-	apb.sizes = append(apb.sizes, 2)
-	apb.sanityCheck()
+	apb.sizes = append(apb.sizes, len(apb.path))
+	apb.path = binary.BigEndian.AppendUint16(apb.path, step)
 }
 
 // AddStepWithOffset appends a single step (2 bytes) + varint offset with value 0 to path.
 func (apb *ASTPathBuilder) AddStepWithOffset(step uint16) {
-	// Step
-	apb.growIfNeeded(2)
-	binary.BigEndian.PutUint16(apb.path[apb.pathLen:apb.pathLen+2], step)
-	apb.pathLen += 2
-
-	// Offset
-	var buf [8]byte
-	bytesWritten := binary.PutVarint(buf[:], 0) // 0 offset
-	apb.growIfNeeded(bytesWritten)
-	copy(apb.path[apb.pathLen:apb.pathLen+bytesWritten], buf[:bytesWritten])
-	apb.pathLen += bytesWritten
-
-	apb.sizes = append(apb.sizes, 2+bytesWritten)
-	apb.sanityCheck()
+	apb.sizes = append(apb.sizes, len(apb.path))
+	apb.path = binary.BigEndian.AppendUint16(apb.path, step)
+	apb.path = binary.AppendVarint(apb.path, 0) // 0 offset
 }
 
 // ChangeOffset modifies the offset of the last step (which must have included an offset).
 func (apb *ASTPathBuilder) ChangeOffset(newOffset int) {
-	lastIndex := len(apb.sizes) - 1
-	oldSize := apb.sizes[lastIndex]
-	offsetSize := oldSize - 2 // remove the step portion
-
-	// Move pathLen back to overwrite the old offset
-	apb.pathLen -= offsetSize
-
-	// Encode new offset
-	var buf [8]byte
-	bytesWritten := binary.PutVarint(buf[:], int64(newOffset))
-	apb.growIfNeeded(bytesWritten)
-	copy(apb.path[apb.pathLen:apb.pathLen+bytesWritten], buf[:bytesWritten])
-	apb.pathLen += bytesWritten
-
-	// Update the size
-	apb.sizes[lastIndex] = 2 + bytesWritten
-	apb.sanityCheck()
+	pos := apb.sizes[len(apb.sizes)-1] + 2
+	apb.path = binary.AppendVarint(apb.path[:pos], int64(newOffset))
 }
 
 // Pop removes the last step (including offset, if any) from the path.
@@ -123,8 +67,6 @@ func (apb *ASTPathBuilder) Pop() {
 		return
 	}
 	n := len(apb.sizes) - 1
-	lastSize := apb.sizes[n]
-	apb.pathLen -= lastSize
+	apb.path = apb.path[:apb.sizes[n]]
 	apb.sizes = apb.sizes[:n]
-	apb.sanityCheck()
 }
