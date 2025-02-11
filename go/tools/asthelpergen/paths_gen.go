@@ -93,9 +93,9 @@ func (p *pathGen) ptrToStructMethod(t types.Type, strct *types.Struct, spi gener
 
 func (p *pathGen) addStep(
 	container types.Type, // the name of the container type
-	typ types.Type, // the type of the field
-	name string, // the name of the field
-	slice bool, // whether the field is a slice
+	typ types.Type,       // the type of the field
+	name string,          // the name of the field
+	slice bool,           // whether the field is a slice
 ) {
 	s := step{
 		container: container,
@@ -215,10 +215,10 @@ func (p *pathGen) generateGetNodeFromPath(spi generatorSPI) *jen.Statement {
 	).Id(p.ifaceName).Block(
 		jen.If(jen.Id("path").Op("==").Id(`""`).Block(
 			jen.Return(jen.Id("node")))),
-		jen.Id("step").Op(":=").Qual("encoding/binary", "BigEndian").Dot("Uint16").Call(jen.Index().Byte().Parens(jen.Id("path[:2]"))),
+		jen.Id("step").Op(":=").Id("path").Dot("nextPathStep").Call(),
 		jen.Id("path").Op("=").Id("path[2:]"),
 
-		jen.Switch(jen.Id("ASTStep").Parens(jen.Id("step"))).Block(p.generateWalkCases(spi)...),
+		jen.Switch(jen.Id("step")).Block(p.generateWalkCases(spi)...),
 		jen.Return(jen.Nil()), // Fallback return
 	)
 	return method
@@ -256,7 +256,7 @@ func (p *pathGen) generateWalkCases(spi generatorSPI) []jen.Code {
 		}
 
 		cases = append(cases, jen.Case(jen.Id(stepName+"Offset")).Block(
-			jen.Id("idx, bytesRead").Op(":=").Id("nextPathOffset").Call(jen.Id("path")),
+			jen.Id("idx, bytesRead").Op(":=").Id("path").Dot("nextPathOffset").Call(),
 			jen.Id("path").Op("=").Id("path[bytesRead:]"),
 			jen.Return(jen.Id("GetNodeFromPath").Call(assignNode, jen.Id("path"))),
 		))

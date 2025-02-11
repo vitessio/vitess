@@ -28,11 +28,11 @@ type ASTPath string
 
 // nextPathOffset is an implementation of binary.Uvarint that works directly on
 // the ASTPath without having to cast and allocate a byte slice
-func nextPathOffset(buf ASTPath) (uint64, int) {
+func (path ASTPath) nextPathOffset() (uint64, int) {
 	var x uint64
 	var s uint
-	for i := 0; i < len(buf); i++ {
-		b := buf[i]
+	for i := 0; i < len(path); i++ {
+		b := path[i]
 		if b < 0x80 {
 			return x | uint64(b)<<s, i + 1
 		}
@@ -42,9 +42,9 @@ func nextPathOffset(buf ASTPath) (uint64, int) {
 	return 0, 0
 }
 
-func nextPathStep(buf ASTPath) ASTStep {
-	_ = buf[1] // bounds check hint to compiler; see golang.org/issue/14808
-	return ASTStep(uint16(buf[1]) | uint16(buf[0])<<8)
+func (path ASTPath) nextPathStep() ASTStep {
+	_ = path[1] // bounds check hint to compiler; see golang.org/issue/14808
+	return ASTStep(uint16(path[1]) | uint16(path[0])<<8)
 }
 
 func (path ASTPath) DebugString() string {
@@ -59,7 +59,7 @@ func (path ASTPath) DebugString() string {
 		stepCount++
 
 		// Read the step code (2 bytes)
-		step := nextPathStep(path)
+		step := path.nextPathStep()
 		path = path[2:]
 
 		// Write the step name
@@ -73,7 +73,7 @@ func (path ASTPath) DebugString() string {
 				sb.WriteString("(ERR-no-offset-byte)")
 				return sb.String()
 			}
-			offset, readBytes := nextPathOffset(path)
+			offset, readBytes := path.nextPathOffset()
 			path = path[readBytes:]
 			sb.WriteString(fmt.Sprintf("(%d)", offset))
 		}

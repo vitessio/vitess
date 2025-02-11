@@ -17,8 +17,6 @@ limitations under the License.
 
 package sqlparser
 
-import "encoding/binary"
-
 type ASTStep uint16
 
 const (
@@ -1656,11 +1654,11 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 	if path == "" {
 		return node
 	}
-	step := binary.BigEndian.Uint16([]byte(path[:2]))
+	step := path.nextPathStep()
 	path = path[2:]
-	switch ASTStep(step) {
+	switch step {
 	case RefOfAddColumnsColumnsOffset:
-		idx, bytesRead := nextPathOffset(path)
+		idx, bytesRead := path.nextPathOffset()
 		path = path[bytesRead:]
 		return GetNodeFromPath(node.(*AddColumns).Columns[idx], path)
 	case RefOfAddColumnsAfter:
@@ -1700,7 +1698,7 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 	case RefOfAlterTableTable:
 		return GetNodeFromPath(node.(*AlterTable).Table, path)
 	case RefOfAlterTableAlterOptionsOffset:
-		idx, bytesRead := nextPathOffset(path)
+		idx, bytesRead := path.nextPathOffset()
 		path = path[bytesRead:]
 		return GetNodeFromPath(node.(*AlterTable).AlterOptions[idx], path)
 	case RefOfAlterTablePartitionSpec:
@@ -1724,7 +1722,7 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 	case RefOfAlterVschemaVindexSpec:
 		return GetNodeFromPath(node.(*AlterVschema).VindexSpec, path)
 	case RefOfAlterVschemaVindexColsOffset:
-		idx, bytesRead := nextPathOffset(path)
+		idx, bytesRead := path.nextPathOffset()
 		path = path[bytesRead:]
 		return GetNodeFromPath(node.(*AlterVschema).VindexCols[idx], path)
 	case RefOfAlterVschemaAutoIncSpec:
@@ -1776,13 +1774,13 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 	case RefOfCallProcName:
 		return GetNodeFromPath(node.(*CallProc).Name, path)
 	case RefOfCallProcParamsOffset:
-		idx, bytesRead := nextPathOffset(path)
+		idx, bytesRead := path.nextPathOffset()
 		path = path[bytesRead:]
 		return GetNodeFromPath(node.(*CallProc).Params[idx], path)
 	case RefOfCaseExprExpr:
 		return GetNodeFromPath(node.(*CaseExpr).Expr, path)
 	case RefOfCaseExprWhensOffset:
-		idx, bytesRead := nextPathOffset(path)
+		idx, bytesRead := path.nextPathOffset()
 		path = path[bytesRead:]
 		return GetNodeFromPath(node.(*CaseExpr).Whens[idx], path)
 	case RefOfCaseExprElse:
@@ -1798,7 +1796,7 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 	case RefOfChangeColumnAfter:
 		return GetNodeFromPath(node.(*ChangeColumn).After, path)
 	case RefOfCharExprExprsOffset:
-		idx, bytesRead := nextPathOffset(path)
+		idx, bytesRead := path.nextPathOffset()
 		path = path[bytesRead:]
 		return GetNodeFromPath(node.(*CharExpr).Exprs[idx], path)
 	case RefOfCheckConstraintDefinitionExpr:
@@ -1814,7 +1812,7 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 	case RefOfColumnDefinitionType:
 		return GetNodeFromPath(node.(*ColumnDefinition).Type, path)
 	case ColumnsOffset:
-		idx, bytesRead := nextPathOffset(path)
+		idx, bytesRead := path.nextPathOffset()
 		path = path[bytesRead:]
 		return GetNodeFromPath(node.(Columns)[idx], path)
 	case RefOfCommonTableExprID:
@@ -1840,7 +1838,7 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 	case RefOfConvertUsingExprExpr:
 		return GetNodeFromPath(node.(*ConvertUsingExpr).Expr, path)
 	case RefOfCountArgsOffset:
-		idx, bytesRead := nextPathOffset(path)
+		idx, bytesRead := path.nextPathOffset()
 		path = path[bytesRead:]
 		return GetNodeFromPath(node.(*Count).Args[idx], path)
 	case RefOfCountOverClause:
@@ -1880,7 +1878,7 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 	case RefOfDeleteComments:
 		return GetNodeFromPath(node.(*Delete).Comments, path)
 	case RefOfDeleteTableExprsOffset:
-		idx, bytesRead := nextPathOffset(path)
+		idx, bytesRead := path.nextPathOffset()
 		path = path[bytesRead:]
 		return GetNodeFromPath(node.(*Delete).TableExprs[idx], path)
 	case RefOfDeleteTargets:
@@ -1916,7 +1914,7 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 	case RefOfExecuteStmtComments:
 		return GetNodeFromPath(node.(*ExecuteStmt).Comments, path)
 	case RefOfExecuteStmtArgumentsOffset:
-		idx, bytesRead := nextPathOffset(path)
+		idx, bytesRead := path.nextPathOffset()
 		path = path[bytesRead:]
 		return GetNodeFromPath(node.(*ExecuteStmt).Arguments[idx], path)
 	case RefOfExistsExprSubquery:
@@ -1928,7 +1926,7 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 	case RefOfExplainTabTable:
 		return GetNodeFromPath(node.(*ExplainTab).Table, path)
 	case RefOfExprsExprsOffset:
-		idx, bytesRead := nextPathOffset(path)
+		idx, bytesRead := path.nextPathOffset()
 		path = path[bytesRead:]
 		return GetNodeFromPath(node.(*Exprs).Exprs[idx], path)
 	case RefOfExtractFuncExprExpr:
@@ -1962,7 +1960,7 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 	case RefOfFuncExprName:
 		return GetNodeFromPath(node.(*FuncExpr).Name, path)
 	case RefOfFuncExprExprsOffset:
-		idx, bytesRead := nextPathOffset(path)
+		idx, bytesRead := path.nextPathOffset()
 		path = path[bytesRead:]
 		return GetNodeFromPath(node.(*FuncExpr).Exprs[idx], path)
 	case RefOfGTIDFuncExprSet1:
@@ -2022,11 +2020,11 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 	case RefOfGeomPropertyFuncExprGeom:
 		return GetNodeFromPath(node.(*GeomPropertyFuncExpr).Geom, path)
 	case RefOfGroupByExprsOffset:
-		idx, bytesRead := nextPathOffset(path)
+		idx, bytesRead := path.nextPathOffset()
 		path = path[bytesRead:]
 		return GetNodeFromPath(node.(*GroupBy).Exprs[idx], path)
 	case RefOfGroupConcatExprExprsOffset:
-		idx, bytesRead := nextPathOffset(path)
+		idx, bytesRead := path.nextPathOffset()
 		path = path[bytesRead:]
 		return GetNodeFromPath(node.(*GroupConcatExpr).Exprs[idx], path)
 	case RefOfGroupConcatExprOrderBy:
@@ -2036,11 +2034,11 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 	case RefOfIndexDefinitionInfo:
 		return GetNodeFromPath(node.(*IndexDefinition).Info, path)
 	case RefOfIndexHintIndexesOffset:
-		idx, bytesRead := nextPathOffset(path)
+		idx, bytesRead := path.nextPathOffset()
 		path = path[bytesRead:]
 		return GetNodeFromPath(node.(*IndexHint).Indexes[idx], path)
 	case IndexHintsOffset:
-		idx, bytesRead := nextPathOffset(path)
+		idx, bytesRead := path.nextPathOffset()
 		path = path[bytesRead:]
 		return GetNodeFromPath(node.(IndexHints)[idx], path)
 	case RefOfIndexInfoName:
@@ -2076,7 +2074,7 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 	case RefOfIntervalFuncExprExpr:
 		return GetNodeFromPath(node.(*IntervalFuncExpr).Expr, path)
 	case RefOfIntervalFuncExprExprsOffset:
-		idx, bytesRead := nextPathOffset(path)
+		idx, bytesRead := path.nextPathOffset()
 		path = path[bytesRead:]
 		return GetNodeFromPath(node.(*IntervalFuncExpr).Exprs[idx], path)
 	case RefOfIntroducerExprExpr:
@@ -2088,7 +2086,7 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 	case RefOfJSONArrayAggOverClause:
 		return GetNodeFromPath(node.(*JSONArrayAgg).OverClause, path)
 	case RefOfJSONArrayExprParamsOffset:
-		idx, bytesRead := nextPathOffset(path)
+		idx, bytesRead := path.nextPathOffset()
 		path = path[bytesRead:]
 		return GetNodeFromPath(node.(*JSONArrayExpr).Params[idx], path)
 	case RefOfJSONAttributesExprJSONDoc:
@@ -2100,7 +2098,7 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 	case RefOfJSONContainsExprCandidate:
 		return GetNodeFromPath(node.(*JSONContainsExpr).Candidate, path)
 	case RefOfJSONContainsExprPathListOffset:
-		idx, bytesRead := nextPathOffset(path)
+		idx, bytesRead := path.nextPathOffset()
 		path = path[bytesRead:]
 		return GetNodeFromPath(node.(*JSONContainsExpr).PathList[idx], path)
 	case RefOfJSONContainsPathExprJSONDoc:
@@ -2108,13 +2106,13 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 	case RefOfJSONContainsPathExprOneOrAll:
 		return GetNodeFromPath(node.(*JSONContainsPathExpr).OneOrAll, path)
 	case RefOfJSONContainsPathExprPathListOffset:
-		idx, bytesRead := nextPathOffset(path)
+		idx, bytesRead := path.nextPathOffset()
 		path = path[bytesRead:]
 		return GetNodeFromPath(node.(*JSONContainsPathExpr).PathList[idx], path)
 	case RefOfJSONExtractExprJSONDoc:
 		return GetNodeFromPath(node.(*JSONExtractExpr).JSONDoc, path)
 	case RefOfJSONExtractExprPathListOffset:
-		idx, bytesRead := nextPathOffset(path)
+		idx, bytesRead := path.nextPathOffset()
 		path = path[bytesRead:]
 		return GetNodeFromPath(node.(*JSONExtractExpr).PathList[idx], path)
 	case RefOfJSONKeysExprJSONDoc:
@@ -2128,7 +2126,7 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 	case RefOfJSONObjectAggOverClause:
 		return GetNodeFromPath(node.(*JSONObjectAgg).OverClause, path)
 	case RefOfJSONObjectExprParamsOffset:
-		idx, bytesRead := nextPathOffset(path)
+		idx, bytesRead := path.nextPathOffset()
 		path = path[bytesRead:]
 		return GetNodeFromPath(node.(*JSONObjectExpr).Params[idx], path)
 	case RefOfJSONObjectParamKey:
@@ -2146,7 +2144,7 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 	case RefOfJSONRemoveExprJSONDoc:
 		return GetNodeFromPath(node.(*JSONRemoveExpr).JSONDoc, path)
 	case RefOfJSONRemoveExprPathListOffset:
-		idx, bytesRead := nextPathOffset(path)
+		idx, bytesRead := path.nextPathOffset()
 		path = path[bytesRead:]
 		return GetNodeFromPath(node.(*JSONRemoveExpr).PathList[idx], path)
 	case RefOfJSONSchemaValidFuncExprSchema:
@@ -2166,7 +2164,7 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 	case RefOfJSONSearchExprEscapeChar:
 		return GetNodeFromPath(node.(*JSONSearchExpr).EscapeChar, path)
 	case RefOfJSONSearchExprPathListOffset:
-		idx, bytesRead := nextPathOffset(path)
+		idx, bytesRead := path.nextPathOffset()
 		path = path[bytesRead:]
 		return GetNodeFromPath(node.(*JSONSearchExpr).PathList[idx], path)
 	case RefOfJSONStorageFreeExprJSONVal:
@@ -2180,7 +2178,7 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 	case RefOfJSONTableExprFilter:
 		return GetNodeFromPath(node.(*JSONTableExpr).Filter, path)
 	case RefOfJSONTableExprColumnsOffset:
-		idx, bytesRead := nextPathOffset(path)
+		idx, bytesRead := path.nextPathOffset()
 		path = path[bytesRead:]
 		return GetNodeFromPath(node.(*JSONTableExpr).Columns[idx], path)
 	case RefOfJSONUnquoteExprJSONValue:
@@ -2198,13 +2196,13 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 	case RefOfJSONValueMergeExprJSONDoc:
 		return GetNodeFromPath(node.(*JSONValueMergeExpr).JSONDoc, path)
 	case RefOfJSONValueMergeExprJSONDocListOffset:
-		idx, bytesRead := nextPathOffset(path)
+		idx, bytesRead := path.nextPathOffset()
 		path = path[bytesRead:]
 		return GetNodeFromPath(node.(*JSONValueMergeExpr).JSONDocList[idx], path)
 	case RefOfJSONValueModifierExprJSONDoc:
 		return GetNodeFromPath(node.(*JSONValueModifierExpr).JSONDoc, path)
 	case RefOfJSONValueModifierExprParamsOffset:
-		idx, bytesRead := nextPathOffset(path)
+		idx, bytesRead := path.nextPathOffset()
 		path = path[bytesRead:]
 		return GetNodeFromPath(node.(*JSONValueModifierExpr).Params[idx], path)
 	case RefOfJoinConditionOn:
@@ -2234,7 +2232,7 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 	case RefOfLimitRowcount:
 		return GetNodeFromPath(node.(*Limit).Rowcount, path)
 	case RefOfLineStringExprPointParamsOffset:
-		idx, bytesRead := nextPathOffset(path)
+		idx, bytesRead := path.nextPathOffset()
 		path = path[bytesRead:]
 		return GetNodeFromPath(node.(*LineStringExpr).PointParams[idx], path)
 	case RefOfLinestrPropertyFuncExprLinestring:
@@ -2252,7 +2250,7 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 	case RefOfLockingFuncTimeout:
 		return GetNodeFromPath(node.(*LockingFunc).Timeout, path)
 	case RefOfMatchExprColumnsOffset:
-		idx, bytesRead := nextPathOffset(path)
+		idx, bytesRead := path.nextPathOffset()
 		path = path[bytesRead:]
 		return GetNodeFromPath(node.(*MatchExpr).Columns[idx], path)
 	case RefOfMatchExprExpr:
@@ -2274,15 +2272,15 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 	case RefOfModifyColumnAfter:
 		return GetNodeFromPath(node.(*ModifyColumn).After, path)
 	case RefOfMultiLinestringExprLinestringParamsOffset:
-		idx, bytesRead := nextPathOffset(path)
+		idx, bytesRead := path.nextPathOffset()
 		path = path[bytesRead:]
 		return GetNodeFromPath(node.(*MultiLinestringExpr).LinestringParams[idx], path)
 	case RefOfMultiPointExprPointParamsOffset:
-		idx, bytesRead := nextPathOffset(path)
+		idx, bytesRead := path.nextPathOffset()
 		path = path[bytesRead:]
 		return GetNodeFromPath(node.(*MultiPointExpr).PointParams[idx], path)
 	case RefOfMultiPolygonExprPolygonParamsOffset:
-		idx, bytesRead := nextPathOffset(path)
+		idx, bytesRead := path.nextPathOffset()
 		path = path[bytesRead:]
 		return GetNodeFromPath(node.(*MultiPolygonExpr).PolygonParams[idx], path)
 	case RefOfNTHValueExprExpr:
@@ -2298,7 +2296,7 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 	case RefOfNamedWindowWindows:
 		return GetNodeFromPath(node.(*NamedWindow).Windows, path)
 	case NamedWindowsOffset:
-		idx, bytesRead := nextPathOffset(path)
+		idx, bytesRead := path.nextPathOffset()
 		path = path[bytesRead:]
 		return GetNodeFromPath(node.(NamedWindows)[idx], path)
 	case RefOfNextvalExpr:
@@ -2312,7 +2310,7 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 	case RefOfOffsetOriginal:
 		return GetNodeFromPath(node.(*Offset).Original, path)
 	case OnDupOffset:
-		idx, bytesRead := nextPathOffset(path)
+		idx, bytesRead := path.nextPathOffset()
 		path = path[bytesRead:]
 		return GetNodeFromPath(node.(OnDup)[idx], path)
 	case RefOfOptLikeLikeTable:
@@ -2324,7 +2322,7 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 	case RefOfOrderExpr:
 		return GetNodeFromPath(node.(*Order).Expr, path)
 	case OrderByOffset:
-		idx, bytesRead := nextPathOffset(path)
+		idx, bytesRead := path.nextPathOffset()
 		path = path[bytesRead:]
 		return GetNodeFromPath(node.(OrderBy)[idx], path)
 	case RefOfOrderByOptionCols:
@@ -2358,7 +2356,7 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 	case RefOfPartitionOptionSubPartition:
 		return GetNodeFromPath(node.(*PartitionOption).SubPartition, path)
 	case RefOfPartitionOptionDefinitionsOffset:
-		idx, bytesRead := nextPathOffset(path)
+		idx, bytesRead := path.nextPathOffset()
 		path = path[bytesRead:]
 		return GetNodeFromPath(node.(*PartitionOption).Definitions[idx], path)
 	case RefOfPartitionSpecNames:
@@ -2368,13 +2366,13 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 	case RefOfPartitionSpecTableName:
 		return GetNodeFromPath(node.(*PartitionSpec).TableName, path)
 	case RefOfPartitionSpecDefinitionsOffset:
-		idx, bytesRead := nextPathOffset(path)
+		idx, bytesRead := path.nextPathOffset()
 		path = path[bytesRead:]
 		return GetNodeFromPath(node.(*PartitionSpec).Definitions[idx], path)
 	case RefOfPartitionValueRangeRange:
 		return GetNodeFromPath(node.(*PartitionValueRange).Range, path)
 	case PartitionsOffset:
-		idx, bytesRead := nextPathOffset(path)
+		idx, bytesRead := path.nextPathOffset()
 		path = path[bytesRead:]
 		return GetNodeFromPath(node.(Partitions)[idx], path)
 	case RefOfPerformanceSchemaFuncExprArgument:
@@ -2388,7 +2386,7 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 	case RefOfPointPropertyFuncExprValueToSet:
 		return GetNodeFromPath(node.(*PointPropertyFuncExpr).ValueToSet, path)
 	case RefOfPolygonExprLinestringParamsOffset:
-		idx, bytesRead := nextPathOffset(path)
+		idx, bytesRead := path.nextPathOffset()
 		path = path[bytesRead:]
 		return GetNodeFromPath(node.(*PolygonExpr).LinestringParams[idx], path)
 	case RefOfPolygonPropertyFuncExprPolygon:
@@ -2478,7 +2476,7 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 	case RefOfSelectWith:
 		return GetNodeFromPath(node.(*Select).With, path)
 	case RefOfSelectFromOffset:
-		idx, bytesRead := nextPathOffset(path)
+		idx, bytesRead := path.nextPathOffset()
 		path = path[bytesRead:]
 		return GetNodeFromPath(node.(*Select).From[idx], path)
 	case RefOfSelectComments:
@@ -2500,7 +2498,7 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 	case RefOfSelectInto:
 		return GetNodeFromPath(node.(*Select).Into, path)
 	case RefOfSelectExprsExprsOffset:
-		idx, bytesRead := nextPathOffset(path)
+		idx, bytesRead := path.nextPathOffset()
 		path = path[bytesRead:]
 		return GetNodeFromPath(node.(*SelectExprs).Exprs[idx], path)
 	case RefOfSetComments:
@@ -2512,7 +2510,7 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 	case RefOfSetExprExpr:
 		return GetNodeFromPath(node.(*SetExpr).Expr, path)
 	case SetExprsOffset:
-		idx, bytesRead := nextPathOffset(path)
+		idx, bytesRead := path.nextPathOffset()
 		path = path[bytesRead:]
 		return GetNodeFromPath(node.(SetExprs)[idx], path)
 	case RefOfShowInternal:
@@ -2570,7 +2568,7 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 	case RefOfSubPartitionDefinitionOptionsIndexDirectory:
 		return GetNodeFromPath(node.(*SubPartitionDefinitionOptions).IndexDirectory, path)
 	case SubPartitionDefinitionsOffset:
-		idx, bytesRead := nextPathOffset(path)
+		idx, bytesRead := path.nextPathOffset()
 		path = path[bytesRead:]
 		return GetNodeFromPath(node.(SubPartitionDefinitions)[idx], path)
 	case RefOfSubquerySelect:
@@ -2586,7 +2584,7 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 	case RefOfSumOverClause:
 		return GetNodeFromPath(node.(*Sum).OverClause, path)
 	case TableExprsOffset:
-		idx, bytesRead := nextPathOffset(path)
+		idx, bytesRead := path.nextPathOffset()
 		path = path[bytesRead:]
 		return GetNodeFromPath(node.(TableExprs)[idx], path)
 	case TableNameName:
@@ -2594,19 +2592,19 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 	case TableNameQualifier:
 		return GetNodeFromPath(node.(TableName).Qualifier, path)
 	case TableNamesOffset:
-		idx, bytesRead := nextPathOffset(path)
+		idx, bytesRead := path.nextPathOffset()
 		path = path[bytesRead:]
 		return GetNodeFromPath(node.(TableNames)[idx], path)
 	case RefOfTableSpecColumnsOffset:
-		idx, bytesRead := nextPathOffset(path)
+		idx, bytesRead := path.nextPathOffset()
 		path = path[bytesRead:]
 		return GetNodeFromPath(node.(*TableSpec).Columns[idx], path)
 	case RefOfTableSpecIndexesOffset:
-		idx, bytesRead := nextPathOffset(path)
+		idx, bytesRead := path.nextPathOffset()
 		path = path[bytesRead:]
 		return GetNodeFromPath(node.(*TableSpec).Indexes[idx], path)
 	case RefOfTableSpecConstraintsOffset:
-		idx, bytesRead := nextPathOffset(path)
+		idx, bytesRead := path.nextPathOffset()
 		path = path[bytesRead:]
 		return GetNodeFromPath(node.(*TableSpec).Constraints[idx], path)
 	case RefOfTableSpecOptions:
@@ -2642,7 +2640,7 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 	case RefOfUpdateComments:
 		return GetNodeFromPath(node.(*Update).Comments, path)
 	case RefOfUpdateTableExprsOffset:
-		idx, bytesRead := nextPathOffset(path)
+		idx, bytesRead := path.nextPathOffset()
 		path = path[bytesRead:]
 		return GetNodeFromPath(node.(*Update).TableExprs[idx], path)
 	case RefOfUpdateExprs:
@@ -2658,7 +2656,7 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 	case RefOfUpdateExprExpr:
 		return GetNodeFromPath(node.(*UpdateExpr).Expr, path)
 	case UpdateExprsOffset:
-		idx, bytesRead := nextPathOffset(path)
+		idx, bytesRead := path.nextPathOffset()
 		path = path[bytesRead:]
 		return GetNodeFromPath(node.(UpdateExprs)[idx], path)
 	case RefOfUpdateXMLExprTarget:
@@ -2684,11 +2682,11 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 	case RefOfVStreamLimit:
 		return GetNodeFromPath(node.(*VStream).Limit, path)
 	case ValTupleOffset:
-		idx, bytesRead := nextPathOffset(path)
+		idx, bytesRead := path.nextPathOffset()
 		path = path[bytesRead:]
 		return GetNodeFromPath(node.(ValTuple)[idx], path)
 	case ValuesOffset:
-		idx, bytesRead := nextPathOffset(path)
+		idx, bytesRead := path.nextPathOffset()
 		path = path[bytesRead:]
 		return GetNodeFromPath(node.(Values)[idx], path)
 	case RefOfValuesFuncExprName:
@@ -2726,7 +2724,7 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 	case RefOfVindexSpecType:
 		return GetNodeFromPath(node.(*VindexSpec).Type, path)
 	case RefOfVindexSpecParamsOffset:
-		idx, bytesRead := nextPathOffset(path)
+		idx, bytesRead := path.nextPathOffset()
 		path = path[bytesRead:]
 		return GetNodeFromPath(node.(*VindexSpec).Params[idx], path)
 	case RefOfWeightStringFuncExprExpr:
@@ -2744,13 +2742,13 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 	case RefOfWindowDefinitionWindowSpec:
 		return GetNodeFromPath(node.(*WindowDefinition).WindowSpec, path)
 	case WindowDefinitionsOffset:
-		idx, bytesRead := nextPathOffset(path)
+		idx, bytesRead := path.nextPathOffset()
 		path = path[bytesRead:]
 		return GetNodeFromPath(node.(WindowDefinitions)[idx], path)
 	case RefOfWindowSpecificationName:
 		return GetNodeFromPath(node.(*WindowSpecification).Name, path)
 	case RefOfWindowSpecificationPartitionClauseOffset:
-		idx, bytesRead := nextPathOffset(path)
+		idx, bytesRead := path.nextPathOffset()
 		path = path[bytesRead:]
 		return GetNodeFromPath(node.(*WindowSpecification).PartitionClause[idx], path)
 	case RefOfWindowSpecificationOrderClause:
@@ -2758,7 +2756,7 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 	case RefOfWindowSpecificationFrameClause:
 		return GetNodeFromPath(node.(*WindowSpecification).FrameClause, path)
 	case RefOfWithCTEsOffset:
-		idx, bytesRead := nextPathOffset(path)
+		idx, bytesRead := path.nextPathOffset()
 		path = path[bytesRead:]
 		return GetNodeFromPath(node.(*With).CTEs[idx], path)
 	case RefOfXorExprLeft:
