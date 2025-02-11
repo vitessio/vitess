@@ -93,9 +93,9 @@ func (p *pathGen) ptrToStructMethod(t types.Type, strct *types.Struct, spi gener
 
 func (p *pathGen) addStep(
 	container types.Type, // the name of the container type
-	typ types.Type,       // the type of the field
-	name string,          // the name of the field
-	slice bool,           // whether the field is a slice
+	typ types.Type, // the type of the field
+	name string, // the name of the field
+	slice bool, // whether the field is a slice
 ) {
 	s := step{
 		container: container,
@@ -262,6 +262,5 @@ func (p *pathGen) generateWalkCases(spi generatorSPI) []jen.Code {
 	cases = append(cases, jen.Default().Block(
 		jen.Return(jen.Nil()),
 	))
-
 	return cases
 }
