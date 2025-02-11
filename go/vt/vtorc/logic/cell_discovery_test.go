@@ -45,7 +45,7 @@ func TestRefreshCells(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, cells, cellsRead)
 
-	require.NoError(t, ts.DeleteCellInfo(context.Background(), "zone3", true))
+	require.NoError(t, ts.DeleteCellInfo(ctx, "zone3", true))
 	require.NoError(t, RefreshCells(ctx))
 	cellsRead, err = inst.ReadCells()
 	require.NoError(t, err)
