@@ -33,7 +33,7 @@ func AddStep(path ASTPath, step ASTStep) ASTPath {
 func AddStepWithOffset(path ASTPath, step ASTStep, offset int) ASTPath {
 	var buf [10]byte
 	binary.BigEndian.PutUint16(buf[0:], uint16(step))
-	n := binary.PutVarint(buf[2:], int64(offset))
+	n := binary.PutUvarint(buf[2:], uint64(offset))
 
 	return path + ASTPath(buf[:2+n])
 }

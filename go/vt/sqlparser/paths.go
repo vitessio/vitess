@@ -17,7 +17,6 @@ limitations under the License.
 package sqlparser
 
 import (
-	"encoding/binary"
 	"fmt"
 	"strings"
 )
@@ -27,44 +26,61 @@ import (
 // Some steps (e.g., referencing a slice) consume *additional* bytes for an index
 type ASTPath string
 
+// nextPathOffset is an implementation of binary.Uvarint that works directly on
+// the ASTPath without having to cast and allocate a byte slice
+func nextPathOffset(buf ASTPath) (uint64, int) {
+	var x uint64
+	var s uint
+	for i := 0; i < len(buf); i++ {
+		b := buf[i]
+		if b < 0x80 {
+			return x | uint64(b)<<s, i + 1
+		}
+		x |= uint64(b&0x7f) << s
+		s += 7
+	}
+	return 0, 0
+}
+
+func nextPathStep(buf ASTPath) ASTStep {
+	_ = buf[1] // bounds check hint to compiler; see golang.org/issue/14808
+	return ASTStep(uint16(buf[1]) | uint16(buf[0])<<8)
+}
+
 func (path ASTPath) DebugString() string {
 	var sb strings.Builder
-
-	remaining := []byte(path)
 	stepCount := 0
 
-	for len(remaining) >= 2 {
-		// Read the step code (2 bytes)
-		stepVal := binary.BigEndian.Uint16(remaining[:2])
-		remaining = remaining[2:]
-
-		step := ASTStep(stepVal)
-		stepStr := step.DebugString() // e.g. "CaseExprWhens8" or "CaseExprWhens32"
-
+	for len(path) >= 2 {
 		// If this isn't the very first step in the path, prepend a separator
 		if stepCount > 0 {
 			sb.WriteString("->")
 		}
 		stepCount++
 
+		// Read the step code (2 bytes)
+		step := nextPathStep(path)
+		path = path[2:]
+
 		// Write the step name
+		stepStr := step.DebugString()
 		sb.WriteString(stepStr)
 
 		// Check suffix to see if we need to read an offset
 		switch {
 		case strings.HasSuffix(stepStr, "Offset"):
-			if len(remaining) < 1 {
+			if len(path) < 1 {
 				sb.WriteString("(ERR-no-offset-byte)")
 				return sb.String()
 			}
-			offset, readBytes := binary.Varint(remaining)
-			remaining = remaining[readBytes:]
+			offset, readBytes := nextPathOffset(path)
+			path = path[readBytes:]
 			sb.WriteString(fmt.Sprintf("(%d)", offset))
 		}
 	}
 
 	// If there's leftover data that doesn't fit into 2 (or more) bytes, you could note it:
-	if len(remaining) != 0 {
+	if len(path) != 0 {
 		sb.WriteString("->(ERR-unaligned-extra-bytes)")
 	}
 

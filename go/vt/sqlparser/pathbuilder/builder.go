@@ -52,13 +52,13 @@ func (apb *ASTPathBuilder) AddStep(step uint16) {
 func (apb *ASTPathBuilder) AddStepWithOffset(step uint16) {
 	apb.sizes = append(apb.sizes, len(apb.path))
 	apb.path = binary.BigEndian.AppendUint16(apb.path, step)
-	apb.path = binary.AppendVarint(apb.path, 0) // 0 offset
+	apb.path = binary.AppendUvarint(apb.path, 0) // 0 offset
 }
 
 // ChangeOffset modifies the offset of the last step (which must have included an offset).
 func (apb *ASTPathBuilder) ChangeOffset(newOffset int) {
 	pos := apb.sizes[len(apb.sizes)-1] + 2
-	apb.path = binary.AppendVarint(apb.path[:pos], int64(newOffset))
+	apb.path = binary.AppendUvarint(apb.path[:pos], uint64(newOffset))
 }
 
 // Pop removes the last step (including offset, if any) from the path.

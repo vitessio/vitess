@@ -256,7 +256,7 @@ func (p *pathGen) generateWalkCases(spi generatorSPI) []jen.Code {
 		}
 
 		cases = append(cases, jen.Case(jen.Id(stepName+"Offset")).Block(
-			jen.Id("idx, bytesRead").Op(":=").Qual("encoding/binary", "Varint").Call(jen.Index().Byte().Parens(jen.Id("path"))),
+			jen.Id("idx, bytesRead").Op(":=").Id("nextPathOffset").Call(jen.Id("path")),
 			jen.Id("path").Op("=").Id("path[bytesRead:]"),
 			jen.Return(jen.Id("GetNodeFromPath").Call(assignNode, jen.Id("path"))),
 		))
