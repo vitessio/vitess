@@ -18,7 +18,6 @@ package operators
 
 import (
 	"fmt"
-	"io"
 	"slices"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -722,18 +721,17 @@ func tryMergeShardedRouting(
 }
 
 // makeEvalEngineExpr transforms the given sqlparser.Expr into an evalengine expression
-func makeEvalEngineExpr(ctx *plancontext.PlanningContext, n sqlparser.Expr) (result evalengine.Expr) {
-	_ = ctx.SemTable.ForEachExprEquality(n, func(expr sqlparser.Expr) error {
-		result, _ = evalengine.Translate(expr, &evalengine.Config{
+func makeEvalEngineExpr(ctx *plancontext.PlanningContext, n sqlparser.Expr) evalengine.Expr {
+	for _, expr := range ctx.SemTable.GetExprAndEqualities(n) {
+		ee, _ := evalengine.Translate(expr, &evalengine.Config{
 			Collation:   ctx.SemTable.Collation,
 			ResolveType: ctx.TypeForExpr,
 			Environment: ctx.VSchema.Environment(),
 		})
-		if result != nil {
-			return io.EOF
+		if ee != nil {
+			return ee
 		}
-		return nil
-	})
+	}
 
-	return
+	return nil
 }
