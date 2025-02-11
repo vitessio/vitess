@@ -225,11 +225,11 @@ func TestIsFunctions(t *testing.T) {
 
 func TestTypeToMySQL(t *testing.T) {
 	v, f := TypeToMySQL(Bit)
-	assert.EqualValues(t, 16, int(v))
-	assert.EqualValues(t, mysqlUnsigned, int(f))
+	assert.EqualValues(t, 16, v)
+	assert.EqualValues(t, mysqlUnsigned, f)
 	v, f = TypeToMySQL(Date)
-	assert.EqualValues(t, 10, int(v))
-	assert.EqualValues(t, mysqlBinary, int(f))
+	assert.EqualValues(t, 10, v)
+	assert.EqualValues(t, mysqlBinary, f)
 }
 
 func TestMySQLToType(t *testing.T) {

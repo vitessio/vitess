@@ -17,7 +17,6 @@ limitations under the License.
 package pools
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -81,7 +80,8 @@ func wantError(want string, t *testing.T) {
 	rec := recover()
 	require.NotNil(t, rec, "expected panic, but there wasn't one")
 	err, ok := rec.(error)
-	require.True(t, ok && strings.Contains(err.Error(), want), "wrong error, got '%v', want '%v'", err, want)
+	assert.True(t, ok)
+	assert.Contains(t, err.Error(), want)
 }
 
 func TestIDPoolPut0(t *testing.T) {

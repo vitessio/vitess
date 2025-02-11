@@ -179,7 +179,7 @@ func TestBinlogEventFormatBadHeaderLength(t *testing.T) {
 
 func TestBinlogEventQuery(t *testing.T) {
 	f, err := binlogEvent(googleFormatEvent).Format()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	input := binlogEvent(googleQueryEvent)
 	want := Query{
