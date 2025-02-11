@@ -58,7 +58,7 @@ func TestLatest(t *testing.T) {
 
 	// Add value that isn't a "duplicate".
 	h.Add(mod10(2))
-	assert.EqualValues(t, 2, int(h.Records()[0].(mod10)),)
+	assert.EqualValues(t, 2, int(h.Records()[0].(mod10)))
 	assert.EqualValues(t, 2, int(h.Latest().(mod10)))
 
 	// Add value that IS a "duplicate".

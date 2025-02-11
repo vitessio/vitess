@@ -57,7 +57,7 @@ func TestMariadbBinlogEventIsntGTID(t *testing.T) {
 
 func TestMariadbNotBeginGTID(t *testing.T) {
 	f, err := binlogEvent(mariadbFormatEvent).Format()
-	require.NoError(t, err, "unexpected error: %v", err)
+	require.NoError(t, err)
 
 	input := mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbStandaloneGTIDEvent)}
 	_, got, err := input.GTID(f)
@@ -67,7 +67,7 @@ func TestMariadbNotBeginGTID(t *testing.T) {
 
 func TestMariadbIsBeginGTID(t *testing.T) {
 	f, err := binlogEvent(mariadbFormatEvent).Format()
-	require.NoError(t, err, "unexpected error: %v", err)
+	require.NoError(t, err)
 
 	input := mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbBeginGTIDEvent)}
 	_, got, err := input.GTID(f)
@@ -77,7 +77,7 @@ func TestMariadbIsBeginGTID(t *testing.T) {
 
 func TestMariadbStandaloneBinlogEventGTID(t *testing.T) {
 	f, err := binlogEvent(mariadbFormatEvent).Format()
-	require.NoError(t, err, "unexpected error: %v", err)
+	require.NoError(t, err)
 
 	input := mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbStandaloneGTIDEvent)}
 	want := replication.MariadbGTID{Domain: 0, Server: 62344, Sequence: 9}
@@ -89,7 +89,7 @@ func TestMariadbStandaloneBinlogEventGTID(t *testing.T) {
 
 func TestMariadbBinlogEventGTID(t *testing.T) {
 	f, err := binlogEvent(mariadbFormatEvent).Format()
-	require.NoError(t, err, "unexpected error: %v", err)
+	require.NoError(t, err)
 
 	input := mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbBeginGTIDEvent)}
 	want := replication.MariadbGTID{Domain: 0, Server: 62344, Sequence: 10}
