@@ -25,7 +25,7 @@ import (
 	"vitess.io/vitess/go/vt/vtorc/inst"
 )
 
-var refreshCellsMu sync.Mutex
+var saveAllCellsMu sync.Mutex
 
 // RefreshCells refreshes the list of cells.
 func RefreshCells(ctx context.Context) error {
@@ -35,20 +35,19 @@ func RefreshCells(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return refreshCells(cells)
+	return saveAllCells(cells)
 }
 
-// refreshCells saves a slice of cells and removes
-// stale cells that were not updated.
-func refreshCells(cells []string) (err error) {
-	refreshCellsMu.Lock()
-	defer refreshCellsMu.Unlock()
+// saveAllCells saves a slice representing all cells
+// and removes stale cells that were not updated.
+func saveAllCells(allCells []string) (err error) {
+	saveAllCellsMu.Lock()
+	defer saveAllCellsMu.Unlock()
 
 	// save cells.
-	updated := make(map[string]bool)
-	for _, cell := range cells {
-		err = inst.SaveCell(cell)
-		if err != nil {
+	updated := make(map[string]bool, len(allCells))
+	for _, cell := range allCells {
+		if err = inst.SaveCell(cell); err != nil {
 			log.Errorf("Failed to save cell %s: %+v", cell, err)
 			return err
 		}
@@ -58,7 +57,7 @@ func refreshCells(cells []string) (err error) {
 	// read all saved cells. the values should not be changing
 	// because we are holding a lock and updates originate
 	// from this func only.
-	cells, err = inst.ReadCells()
+	cells, err := inst.ReadCells()
 	if err != nil {
 		log.Errorf("Failed to read all cells: %+v", err)
 		return err
