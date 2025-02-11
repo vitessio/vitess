@@ -104,12 +104,18 @@ connect directly to the topo server(s).`, useInternalVtctld),
 		// We use PersistentPreRun to set up the tracer, grpc client, and
 		// command context for every command.
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) (err error) {
+			env, err = vtenv.New(vtenv.Options{
+				MySQLServerVersion: servenv.MySQLServerVersion(),
+				TruncateUILen:      servenv.TruncateUILen,
+				TruncateErrLen:     servenv.TruncateErrLen,
+			})
+			if err != nil {
+				return fmt.Errorf("failed to initialize vtenv: %w", err)
+			}
+
 			logutil.PurgeLogs()
 			traceCloser = trace.StartTracing("vtctldclient")
 			client, err = getClientForCommand(cmd)
-			if err != nil {
-				return err
-			}
 			ctx := cmd.Context()
 			if ctx == nil {
 				ctx = cmd.Context()
@@ -121,16 +127,7 @@ connect directly to the topo server(s).`, useInternalVtctld),
 			vreplcommon.SetClient(client)
 			vreplcommon.SetCommandCtx(commandCtx)
 
-			env, err = vtenv.New(vtenv.Options{
-				MySQLServerVersion: servenv.MySQLServerVersion(),
-				TruncateUILen:      servenv.TruncateUILen,
-				TruncateErrLen:     servenv.TruncateErrLen,
-			})
-			if err != nil {
-				return fmt.Errorf("failed to initialize vtenv: %w", err)
-			}
-
-			return nil
+			return err
 		},
 		// Similarly, PersistentPostRun cleans up the resources spawned by
 		// PersistentPreRun.
