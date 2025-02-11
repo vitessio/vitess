@@ -73,14 +73,14 @@ import (
 var (
 	defaultTabletType = topodatapb.TabletType_PRIMARY
 
-	// TODO: @rafael - These two counters should be deprecated in favor of the ByTable ones in v17+. They are kept for now for backwards compatibility.
-	queriesProcessed = stats.NewCountersWithSingleLabel("QueriesProcessed", "Queries processed at vtgate by plan type", "Plan")
-	queriesRouted    = stats.NewCountersWithSingleLabel("QueriesRouted", "Queries routed from vtgate to vttablet by plan type", "Plan")
+	// TODO: @harshit/@systay - Remove these deprecated stats once we have a replacement in a released version.
+	queriesProcessed        = stats.NewCountersWithSingleLabel("QueriesProcessed", "Deprecated: Queries processed at vtgate by plan type", "Plan")
+	queriesRouted           = stats.NewCountersWithSingleLabel("QueriesRouted", "Deprecated: Queries routed from vtgate to vttablet by plan type", "Plan")
+	queriesProcessedByTable = stats.NewCountersWithMultiLabels("QueriesProcessedByTable", "Deprecated: Queries processed at vtgate by plan type, keyspace and table", []string{"Plan", "Keyspace", "Table"})
+	queriesRoutedByTable    = stats.NewCountersWithMultiLabels("QueriesRoutedByTable", "Deprecated: Queries routed from vtgate to vttablet by plan type, keyspace and table", []string{"Plan", "Keyspace", "Table"})
 
 	queryProcessed = stats.NewCountersWithMultiLabels("QueryProcessed", "Query processed at vtgate by query, plan, and tablet type", []string{"Query", "Plan", "Tablet"})
-
-	queriesProcessedByTable = stats.NewCountersWithMultiLabels("QueriesProcessedByTable", "Queries processed at vtgate by plan type, keyspace and table", []string{"Plan", "Keyspace", "Table"})
-	queriesRoutedByTable    = stats.NewCountersWithMultiLabels("QueriesRoutedByTable", "Queries routed from vtgate to vttablet by plan type, keyspace and table", []string{"Plan", "Keyspace", "Table"})
+	queryRouted    = stats.NewCountersWithMultiLabels("QueryRouted", "Query routed from vtgate to vttablet by query, plan, and tablet type", []string{"Query", "Plan", "Tablet"})
 
 	// commitMode records the timing of the commit phase of a transaction.
 	// It also tracks between different transaction mode i.e. Single, Multi and TwoPC
@@ -376,7 +376,7 @@ func (e *Executor) StreamExecute(
 		logStats.ActiveKeyspace = vc.GetKeyspace()
 
 		e.updateQueryCounts(plan.Instructions.RouteType(), plan.Instructions.GetKeyspaceName(), plan.Instructions.GetTableName(), int64(logStats.ShardQueries))
-		e.updateQueryStats(plan.QueryType.String(), plan.Type.String(), vc.TabletType().String())
+		e.updateQueryStats(plan.QueryType.String(), plan.Type.String(), vc.TabletType().String(), int64(logStats.ShardQueries))
 
 		return err
 	}
@@ -593,7 +593,7 @@ func (e *Executor) handleBegin(ctx context.Context, vcursor *econtext.VCursorImp
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 	e.updateQueryCounts(sqlparser.StmtBegin.String(), "", "", 0)
-	e.updateQueryStats(sqlparser.StmtBegin.String(), engine.PlanTransaction.String(), vcursor.TabletType().String())
+	e.updateQueryStats(sqlparser.StmtBegin.String(), engine.PlanTransaction.String(), vcursor.TabletType().String(), 0)
 
 	begin := stmt.(*sqlparser.Begin)
 	err := e.txConn.Begin(ctx, safeSession, begin.TxAccessModes)
@@ -606,7 +606,7 @@ func (e *Executor) handleCommit(ctx context.Context, vcursor *econtext.VCursorIm
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 	logStats.ShardQueries = uint64(len(safeSession.ShardSessions))
 	e.updateQueryCounts(sqlparser.StmtCommit.String(), "", "", int64(logStats.ShardQueries))
-	e.updateQueryStats(sqlparser.StmtCommit.String(), engine.PlanTransaction.String(), vcursor.TabletType().String())
+	e.updateQueryStats(sqlparser.StmtCommit.String(), engine.PlanTransaction.String(), vcursor.TabletType().String(), int64(logStats.ShardQueries))
 
 	err := e.txConn.Commit(ctx, safeSession)
 	logStats.CommitTime = time.Since(execStart)
@@ -623,7 +623,7 @@ func (e *Executor) handleRollback(ctx context.Context, vcursor *econtext.VCursor
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 	logStats.ShardQueries = uint64(len(safeSession.ShardSessions))
 	e.updateQueryCounts(sqlparser.StmtRollback.String(), "", "", int64(logStats.ShardQueries))
-	e.updateQueryStats(sqlparser.StmtRollback.String(), engine.PlanTransaction.String(), vcursor.TabletType().String())
+	e.updateQueryStats(sqlparser.StmtRollback.String(), engine.PlanTransaction.String(), vcursor.TabletType().String(), int64(logStats.ShardQueries))
 
 	err := e.txConn.Rollback(ctx, safeSession)
 	logStats.CommitTime = time.Since(execStart)
@@ -635,7 +635,7 @@ func (e *Executor) handleSavepoint(ctx context.Context, vcursor *econtext.VCurso
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 	logStats.ShardQueries = uint64(len(safeSession.ShardSessions))
 	e.updateQueryCounts(queryType, "", "", int64(logStats.ShardQueries))
-	e.updateQueryStats(queryType, engine.PlanTransaction.String(), vcursor.TabletType().String())
+	e.updateQueryStats(queryType, engine.PlanTransaction.String(), vcursor.TabletType().String(), int64(logStats.ShardQueries))
 
 	defer func() {
 		logStats.ExecuteTime = time.Since(execStart)
@@ -698,7 +698,7 @@ func (e *Executor) handleKill(ctx context.Context, mysqlCtx vtgateservice.MySQLC
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 	e.updateQueryCounts("Kill", "", "", 0)
-	e.updateQueryStats("Kill", engine.PlanLocal.String(), vcursor.TabletType().String())
+	e.updateQueryStats("Kill", engine.PlanLocal.String(), vcursor.TabletType().String(), 0)
 
 	defer func() {
 		logStats.ExecuteTime = time.Since(execStart)
@@ -1301,8 +1301,9 @@ func (e *Executor) updateQueryCounts(planType, keyspace, tableName string, shard
 	}
 }
 
-func (e *Executor) updateQueryStats(queryType, planType, tabletType string) {
+func (e *Executor) updateQueryStats(queryType, planType, tabletType string, shards int64) {
 	queryProcessed.Add([]string{queryType, planType, tabletType}, 1)
+	queryRouted.Add([]string{queryType, planType, tabletType}, shards)
 }
 
 // VSchemaStats returns the loaded vschema stats.

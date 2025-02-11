@@ -935,49 +935,59 @@ func TestQueryProcessedMetric(t *testing.T) {
 	tcases := []struct {
 		sql    string
 		metric string
+		shards int
 	}{{
 		sql:    "select id1, id2 from t1",
 		metric: "SELECT.Scatter.PRIMARY",
+		shards: 2,
 	}, {
 		sql:    "update t1 set id2 = 2 where id1 = 1",
-		metric: "UPDATE.Passthrough.PRIMARY",
+		metric: "UPDATE.MultiShard.PRIMARY",
+		shards: 2,
 	}, {
-		sql:    "delete from t1 where id1 in (1, 2)",
+		sql:    "delete from t1 where id1 in (1)",
 		metric: "DELETE.MultiShard.PRIMARY",
+		shards: 2,
 	}, {
 		sql:    "show tables",
 		metric: "SHOW.Passthrough.PRIMARY",
+		shards: 1,
 	}, {
 		sql:    "savepoint a",
 		metric: "SAVEPOINT.Transaction.PRIMARY",
+		shards: 0,
 	}, {
 		sql:    "rollback",
 		metric: "ROLLBACK.Transaction.PRIMARY",
+		shards: 0,
 	}}
 
-	initial := getQPMetric(t)
+	initialQP := getQPMetric(t, "QueryProcessed")
+	initialQR := getQPMetric(t, "QueryRouted")
 	for _, tc := range tcases {
 		t.Run(tc.sql, func(t *testing.T) {
 			utils.Exec(t, conn, tc.sql)
-			updatedMetric := getQPMetric(t)
-			assert.EqualValues(t, 1, getValue(updatedMetric, tc.metric)-getValue(initial, tc.metric))
+			updatedQP := getQPMetric(t, "QueryProcessed")
+			updatedQR := getQPMetric(t, "QueryRouted")
+			assert.EqualValues(t, 1, getValue(updatedQP, tc.metric)-getValue(initialQP, tc.metric))
+			assert.EqualValues(t, tc.shards, getValue(updatedQR, tc.metric)-getValue(initialQR, tc.metric))
 		})
 	}
 }
 
-func getQPMetric(t *testing.T) map[string]any {
+func getQPMetric(t *testing.T, metric string) map[string]any {
 	t.Helper()
 
 	vars := clusterInstance.VtgateProcess.GetVars()
 	require.NotNil(t, vars)
 
-	qpVars, exists := vars["QueryProcessed"]
+	qpVars, exists := vars[metric]
 	if !exists {
 		return nil
 	}
 
 	qpMap, ok := qpVars.(map[string]any)
-	require.True(t, ok, "query processed vars is not a map")
+	require.True(t, ok, "query metric vars is not a map")
 
 	return qpMap
 }
