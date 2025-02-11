@@ -573,6 +573,89 @@ func TestPlanBuilder(t *testing.T) {
 		},
 	}, {
 		inTable: t1,
+		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select val, id from t1 where id between 2 and 5"},
+		outPlan: &Plan{
+			ColExprs: []ColExpr{{
+				ColNum: 1,
+				Field: &querypb.Field{
+					Name:    "val",
+					Type:    sqltypes.VarChar,
+					Charset: unicodeCollationID,
+				},
+			}, {
+				ColNum: 0,
+				Field: &querypb.Field{
+					Name:    "id",
+					Type:    sqltypes.Int64,
+					Charset: collations.CollationBinaryID,
+					Flags:   uint32(querypb.MySqlFlag_NUM_FLAG),
+				},
+			}},
+			Filters: []Filter{{
+				Opcode:        GreaterThanEqual,
+				ColNum:        0,
+				Value:         sqltypes.NewInt64(2),
+				Vindex:        nil,
+				VindexColumns: nil,
+				KeyRange:      nil,
+			}, {
+				Opcode:        LessThanEqual,
+				ColNum:        0,
+				Value:         sqltypes.NewInt64(5),
+				Vindex:        nil,
+				VindexColumns: nil,
+				KeyRange:      nil,
+			}},
+			whereExprsToPushDown: []sqlparser.Expr{
+				&sqlparser.BetweenExpr{
+					IsBetween: true,
+					Left:      sqlparser.NewColName("id"),
+					From:      sqlparser.NewIntLiteral("2"),
+					To:        sqlparser.NewIntLiteral("5"),
+				},
+			},
+			env: vtenv.NewTestEnv(),
+		},
+	}, {
+		inTable: t1,
+		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select val, id from t1 where id not between 2 and 5"},
+		outPlan: &Plan{
+			ColExprs: []ColExpr{{
+				ColNum: 1,
+				Field: &querypb.Field{
+					Name:    "val",
+					Type:    sqltypes.VarChar,
+					Charset: unicodeCollationID,
+				},
+			}, {
+				ColNum: 0,
+				Field: &querypb.Field{
+					Name:    "id",
+					Type:    sqltypes.Int64,
+					Charset: collations.CollationBinaryID,
+					Flags:   uint32(querypb.MySqlFlag_NUM_FLAG),
+				},
+			}},
+			Filters: []Filter{{
+				Opcode:        NotBetween,
+				ColNum:        0,
+				Values:        []sqltypes.Value{sqltypes.NewInt64(2), sqltypes.NewInt64(5)},
+				Vindex:        nil,
+				VindexColumns: nil,
+				KeyRange:      nil,
+			}},
+			whereExprsToPushDown: []sqlparser.Expr{
+				&sqlparser.BetweenExpr{
+					IsBetween: false,
+					Left:      sqlparser.NewColName("id"),
+					From:      sqlparser.NewIntLiteral("2"),
+					To:        sqlparser.NewIntLiteral("5"),
+				},
+			},
+			env: vtenv.NewTestEnv(),
+		},
+	}, {
+		inTable: t1,
 		inRule:  &binlogdatapb.Rule{Match: "/*/"},
 		outErr:  "error parsing regexp: missing argument to repetition operator: `*`",
 	}, {
