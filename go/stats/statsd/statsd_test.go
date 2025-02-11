@@ -376,7 +376,7 @@ func TestStatsdTimings(t *testing.T) {
 		if kv.Key == name {
 			found = true
 			sb.addExpVar(kv)
-			require.NoError(t, sb.statsdClient.Flush(), "Error flushing")
+			assert.NoError(t, sb.statsdClient.Flush(), "Error flushing")
 			bytes := make([]byte, 49152)
 			n, err := server.Read(bytes)
 			if err != nil {
