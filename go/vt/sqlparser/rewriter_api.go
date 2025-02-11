@@ -144,9 +144,9 @@ func (c *Cursor) ReplaceAndRevisit(newNode SQLNode) {
 	c.revisit = true
 }
 
-// CurrentPath returns the current path that got us to the current location in the AST
+// Path returns the current path that got us to the current location in the AST
 // Only works if the AST walk was configured to collect path as walking
-func (c *Cursor) CurrentPath() ASTPath {
+func (c *Cursor) Path() ASTPath {
 	return ASTPath(c.current.ToPath())
 }
 

@@ -17,6 +17,7 @@ limitations under the License.
 
 package sqlparser
 
+// Function Generation Source: InterfaceMethod
 func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -569,6 +570,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return true
 	}
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfAddColumns(parent SQLNode, node *AddColumns, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -586,9 +589,6 @@ func (a *application) rewriteRefOfAddColumns(parent SQLNode, node *AddColumns, r
 			return true
 		}
 	}
-	if a.collectPaths {
-		a.cur.current.Pop()
-	}
 	for x, el := range node.Columns {
 		if a.collectPaths {
 			if x == 0 {
@@ -605,7 +605,7 @@ func (a *application) rewriteRefOfAddColumns(parent SQLNode, node *AddColumns, r
 			return false
 		}
 	}
-	if a.collectPaths {
+	if a.collectPaths && len(node.Columns) > 0 {
 		a.cur.current.Pop()
 		a.cur.current.AddStep(uint16(RefOfAddColumnsAfter))
 	}
@@ -627,6 +627,8 @@ func (a *application) rewriteRefOfAddColumns(parent SQLNode, node *AddColumns, r
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfAddConstraintDefinition(parent SQLNode, node *AddConstraintDefinition, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -665,6 +667,8 @@ func (a *application) rewriteRefOfAddConstraintDefinition(parent SQLNode, node *
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfAddIndexDefinition(parent SQLNode, node *AddIndexDefinition, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -703,6 +707,8 @@ func (a *application) rewriteRefOfAddIndexDefinition(parent SQLNode, node *AddIn
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfAliasedExpr(parent SQLNode, node *AliasedExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -750,6 +756,8 @@ func (a *application) rewriteRefOfAliasedExpr(parent SQLNode, node *AliasedExpr,
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfAliasedTableExpr(parent SQLNode, node *AliasedTableExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -824,6 +832,8 @@ func (a *application) rewriteRefOfAliasedTableExpr(parent SQLNode, node *Aliased
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfAlterCharset(parent SQLNode, node *AlterCharset, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -853,6 +863,8 @@ func (a *application) rewriteRefOfAlterCharset(parent SQLNode, node *AlterCharse
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfAlterCheck(parent SQLNode, node *AlterCheck, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -891,6 +903,8 @@ func (a *application) rewriteRefOfAlterCheck(parent SQLNode, node *AlterCheck, r
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfAlterColumn(parent SQLNode, node *AlterColumn, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -938,6 +952,8 @@ func (a *application) rewriteRefOfAlterColumn(parent SQLNode, node *AlterColumn,
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfAlterDatabase(parent SQLNode, node *AlterDatabase, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -985,6 +1001,8 @@ func (a *application) rewriteRefOfAlterDatabase(parent SQLNode, node *AlterDatab
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfAlterIndex(parent SQLNode, node *AlterIndex, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -1023,6 +1041,8 @@ func (a *application) rewriteRefOfAlterIndex(parent SQLNode, node *AlterIndex, r
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfAlterMigration(parent SQLNode, node *AlterMigration, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -1061,6 +1081,8 @@ func (a *application) rewriteRefOfAlterMigration(parent SQLNode, node *AlterMigr
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfAlterTable(parent SQLNode, node *AlterTable, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -1105,7 +1127,7 @@ func (a *application) rewriteRefOfAlterTable(parent SQLNode, node *AlterTable, r
 			return false
 		}
 	}
-	if a.collectPaths {
+	if a.collectPaths && len(node.AlterOptions) > 0 {
 		a.cur.current.Pop()
 		a.cur.current.AddStep(uint16(RefOfAlterTablePartitionSpec))
 	}
@@ -1145,6 +1167,8 @@ func (a *application) rewriteRefOfAlterTable(parent SQLNode, node *AlterTable, r
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfAlterView(parent SQLNode, node *AlterView, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -1219,6 +1243,8 @@ func (a *application) rewriteRefOfAlterView(parent SQLNode, node *AlterView, rep
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfAlterVschema(parent SQLNode, node *AlterVschema, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -1272,7 +1298,7 @@ func (a *application) rewriteRefOfAlterVschema(parent SQLNode, node *AlterVschem
 			return false
 		}
 	}
-	if a.collectPaths {
+	if a.collectPaths && len(node.VindexCols) > 0 {
 		a.cur.current.Pop()
 		a.cur.current.AddStep(uint16(RefOfAlterVschemaAutoIncSpec))
 	}
@@ -1294,6 +1320,8 @@ func (a *application) rewriteRefOfAlterVschema(parent SQLNode, node *AlterVschem
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfAnalyze(parent SQLNode, node *Analyze, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -1332,6 +1360,8 @@ func (a *application) rewriteRefOfAnalyze(parent SQLNode, node *Analyze, replace
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfAndExpr(parent SQLNode, node *AndExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -1379,6 +1409,8 @@ func (a *application) rewriteRefOfAndExpr(parent SQLNode, node *AndExpr, replace
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfAnyValue(parent SQLNode, node *AnyValue, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -1417,6 +1449,8 @@ func (a *application) rewriteRefOfAnyValue(parent SQLNode, node *AnyValue, repla
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfArgument(parent SQLNode, node *Argument, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -1446,6 +1480,8 @@ func (a *application) rewriteRefOfArgument(parent SQLNode, node *Argument, repla
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfArgumentLessWindowExpr(parent SQLNode, node *ArgumentLessWindowExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -1484,6 +1520,8 @@ func (a *application) rewriteRefOfArgumentLessWindowExpr(parent SQLNode, node *A
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfAssignmentExpr(parent SQLNode, node *AssignmentExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -1531,6 +1569,8 @@ func (a *application) rewriteRefOfAssignmentExpr(parent SQLNode, node *Assignmen
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfAutoIncSpec(parent SQLNode, node *AutoIncSpec, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -1578,6 +1618,8 @@ func (a *application) rewriteRefOfAutoIncSpec(parent SQLNode, node *AutoIncSpec,
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfAvg(parent SQLNode, node *Avg, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -1625,6 +1667,8 @@ func (a *application) rewriteRefOfAvg(parent SQLNode, node *Avg, replacer replac
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfBegin(parent SQLNode, node *Begin, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -1654,6 +1698,8 @@ func (a *application) rewriteRefOfBegin(parent SQLNode, node *Begin, replacer re
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfBetweenExpr(parent SQLNode, node *BetweenExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -1710,6 +1756,8 @@ func (a *application) rewriteRefOfBetweenExpr(parent SQLNode, node *BetweenExpr,
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfBinaryExpr(parent SQLNode, node *BinaryExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -1757,6 +1805,8 @@ func (a *application) rewriteRefOfBinaryExpr(parent SQLNode, node *BinaryExpr, r
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfBitAnd(parent SQLNode, node *BitAnd, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -1804,6 +1854,8 @@ func (a *application) rewriteRefOfBitAnd(parent SQLNode, node *BitAnd, replacer 
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfBitOr(parent SQLNode, node *BitOr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -1851,6 +1903,8 @@ func (a *application) rewriteRefOfBitOr(parent SQLNode, node *BitOr, replacer re
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfBitXor(parent SQLNode, node *BitXor, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -1898,6 +1952,8 @@ func (a *application) rewriteRefOfBitXor(parent SQLNode, node *BitXor, replacer 
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfCallProc(parent SQLNode, node *CallProc, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -1955,6 +2011,8 @@ func (a *application) rewriteRefOfCallProc(parent SQLNode, node *CallProc, repla
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfCaseExpr(parent SQLNode, node *CaseExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -1999,7 +2057,7 @@ func (a *application) rewriteRefOfCaseExpr(parent SQLNode, node *CaseExpr, repla
 			return false
 		}
 	}
-	if a.collectPaths {
+	if a.collectPaths && len(node.Whens) > 0 {
 		a.cur.current.Pop()
 		a.cur.current.AddStep(uint16(RefOfCaseExprElse))
 	}
@@ -2021,6 +2079,8 @@ func (a *application) rewriteRefOfCaseExpr(parent SQLNode, node *CaseExpr, repla
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfCastExpr(parent SQLNode, node *CastExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -2068,6 +2128,8 @@ func (a *application) rewriteRefOfCastExpr(parent SQLNode, node *CastExpr, repla
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfChangeColumn(parent SQLNode, node *ChangeColumn, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -2124,6 +2186,8 @@ func (a *application) rewriteRefOfChangeColumn(parent SQLNode, node *ChangeColum
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfCharExpr(parent SQLNode, node *CharExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -2140,9 +2204,6 @@ func (a *application) rewriteRefOfCharExpr(parent SQLNode, node *CharExpr, repla
 		if kontinue {
 			return true
 		}
-	}
-	if a.collectPaths {
-		a.cur.current.Pop()
 	}
 	for x, el := range node.Exprs {
 		if a.collectPaths {
@@ -2173,6 +2234,8 @@ func (a *application) rewriteRefOfCharExpr(parent SQLNode, node *CharExpr, repla
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfCheckConstraintDefinition(parent SQLNode, node *CheckConstraintDefinition, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -2211,6 +2274,8 @@ func (a *application) rewriteRefOfCheckConstraintDefinition(parent SQLNode, node
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfColName(parent SQLNode, node *ColName, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -2258,6 +2323,8 @@ func (a *application) rewriteRefOfColName(parent SQLNode, node *ColName, replace
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfCollateExpr(parent SQLNode, node *CollateExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -2296,6 +2363,8 @@ func (a *application) rewriteRefOfCollateExpr(parent SQLNode, node *CollateExpr,
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfColumnDefinition(parent SQLNode, node *ColumnDefinition, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -2343,6 +2412,8 @@ func (a *application) rewriteRefOfColumnDefinition(parent SQLNode, node *ColumnD
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfColumnType(parent SQLNode, node *ColumnType, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -2372,6 +2443,8 @@ func (a *application) rewriteRefOfColumnType(parent SQLNode, node *ColumnType, r
 	}
 	return true
 }
+
+// Function Generation Source: SliceMethod
 func (a *application) rewriteColumns(parent SQLNode, node Columns, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -2418,6 +2491,8 @@ func (a *application) rewriteColumns(parent SQLNode, node Columns, replacer repl
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfCommentOnly(parent SQLNode, node *CommentOnly, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -2447,6 +2522,8 @@ func (a *application) rewriteRefOfCommentOnly(parent SQLNode, node *CommentOnly,
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfCommit(parent SQLNode, node *Commit, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -2476,6 +2553,8 @@ func (a *application) rewriteRefOfCommit(parent SQLNode, node *Commit, replacer 
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfCommonTableExpr(parent SQLNode, node *CommonTableExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -2532,6 +2611,8 @@ func (a *application) rewriteRefOfCommonTableExpr(parent SQLNode, node *CommonTa
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfComparisonExpr(parent SQLNode, node *ComparisonExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -2588,6 +2669,8 @@ func (a *application) rewriteRefOfComparisonExpr(parent SQLNode, node *Compariso
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfConstraintDefinition(parent SQLNode, node *ConstraintDefinition, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -2635,6 +2718,8 @@ func (a *application) rewriteRefOfConstraintDefinition(parent SQLNode, node *Con
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfConvertExpr(parent SQLNode, node *ConvertExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -2682,6 +2767,8 @@ func (a *application) rewriteRefOfConvertExpr(parent SQLNode, node *ConvertExpr,
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfConvertType(parent SQLNode, node *ConvertType, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -2711,6 +2798,8 @@ func (a *application) rewriteRefOfConvertType(parent SQLNode, node *ConvertType,
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfConvertUsingExpr(parent SQLNode, node *ConvertUsingExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -2749,6 +2838,8 @@ func (a *application) rewriteRefOfConvertUsingExpr(parent SQLNode, node *Convert
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfCount(parent SQLNode, node *Count, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -2766,9 +2857,6 @@ func (a *application) rewriteRefOfCount(parent SQLNode, node *Count, replacer re
 			return true
 		}
 	}
-	if a.collectPaths {
-		a.cur.current.Pop()
-	}
 	for x, el := range node.Args {
 		if a.collectPaths {
 			if x == 0 {
@@ -2785,7 +2873,7 @@ func (a *application) rewriteRefOfCount(parent SQLNode, node *Count, replacer re
 			return false
 		}
 	}
-	if a.collectPaths {
+	if a.collectPaths && len(node.Args) > 0 {
 		a.cur.current.Pop()
 		a.cur.current.AddStep(uint16(RefOfCountOverClause))
 	}
@@ -2807,6 +2895,8 @@ func (a *application) rewriteRefOfCount(parent SQLNode, node *Count, replacer re
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfCountStar(parent SQLNode, node *CountStar, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -2845,6 +2935,8 @@ func (a *application) rewriteRefOfCountStar(parent SQLNode, node *CountStar, rep
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfCreateDatabase(parent SQLNode, node *CreateDatabase, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -2892,6 +2984,8 @@ func (a *application) rewriteRefOfCreateDatabase(parent SQLNode, node *CreateDat
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfCreateTable(parent SQLNode, node *CreateTable, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -2957,6 +3051,8 @@ func (a *application) rewriteRefOfCreateTable(parent SQLNode, node *CreateTable,
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfCreateView(parent SQLNode, node *CreateView, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -3031,6 +3127,8 @@ func (a *application) rewriteRefOfCreateView(parent SQLNode, node *CreateView, r
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfCurTimeFuncExpr(parent SQLNode, node *CurTimeFuncExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -3069,6 +3167,8 @@ func (a *application) rewriteRefOfCurTimeFuncExpr(parent SQLNode, node *CurTimeF
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfDeallocateStmt(parent SQLNode, node *DeallocateStmt, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -3116,6 +3216,8 @@ func (a *application) rewriteRefOfDeallocateStmt(parent SQLNode, node *Deallocat
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfDefault(parent SQLNode, node *Default, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -3145,6 +3247,8 @@ func (a *application) rewriteRefOfDefault(parent SQLNode, node *Default, replace
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfDefiner(parent SQLNode, node *Definer, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -3174,6 +3278,8 @@ func (a *application) rewriteRefOfDefiner(parent SQLNode, node *Definer, replace
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfDelete(parent SQLNode, node *Delete, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -3227,7 +3333,7 @@ func (a *application) rewriteRefOfDelete(parent SQLNode, node *Delete, replacer 
 			return false
 		}
 	}
-	if a.collectPaths {
+	if a.collectPaths && len(node.TableExprs) > 0 {
 		a.cur.current.Pop()
 		a.cur.current.AddStep(uint16(RefOfDeleteTargets))
 	}
@@ -3285,6 +3391,8 @@ func (a *application) rewriteRefOfDelete(parent SQLNode, node *Delete, replacer 
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfDerivedTable(parent SQLNode, node *DerivedTable, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -3323,6 +3431,8 @@ func (a *application) rewriteRefOfDerivedTable(parent SQLNode, node *DerivedTabl
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfDropColumn(parent SQLNode, node *DropColumn, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -3361,6 +3471,8 @@ func (a *application) rewriteRefOfDropColumn(parent SQLNode, node *DropColumn, r
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfDropDatabase(parent SQLNode, node *DropDatabase, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -3408,6 +3520,8 @@ func (a *application) rewriteRefOfDropDatabase(parent SQLNode, node *DropDatabas
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfDropKey(parent SQLNode, node *DropKey, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -3446,6 +3560,8 @@ func (a *application) rewriteRefOfDropKey(parent SQLNode, node *DropKey, replace
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfDropTable(parent SQLNode, node *DropTable, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -3493,6 +3609,8 @@ func (a *application) rewriteRefOfDropTable(parent SQLNode, node *DropTable, rep
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfDropView(parent SQLNode, node *DropView, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -3540,6 +3658,8 @@ func (a *application) rewriteRefOfDropView(parent SQLNode, node *DropView, repla
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfExecuteStmt(parent SQLNode, node *ExecuteStmt, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -3606,6 +3726,8 @@ func (a *application) rewriteRefOfExecuteStmt(parent SQLNode, node *ExecuteStmt,
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfExistsExpr(parent SQLNode, node *ExistsExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -3644,6 +3766,8 @@ func (a *application) rewriteRefOfExistsExpr(parent SQLNode, node *ExistsExpr, r
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfExplainStmt(parent SQLNode, node *ExplainStmt, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -3691,6 +3815,8 @@ func (a *application) rewriteRefOfExplainStmt(parent SQLNode, node *ExplainStmt,
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfExplainTab(parent SQLNode, node *ExplainTab, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -3729,6 +3855,8 @@ func (a *application) rewriteRefOfExplainTab(parent SQLNode, node *ExplainTab, r
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfExprs(parent SQLNode, node *Exprs, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -3745,9 +3873,6 @@ func (a *application) rewriteRefOfExprs(parent SQLNode, node *Exprs, replacer re
 		if kontinue {
 			return true
 		}
-	}
-	if a.collectPaths {
-		a.cur.current.Pop()
 	}
 	for x, el := range node.Exprs {
 		if a.collectPaths {
@@ -3778,6 +3903,8 @@ func (a *application) rewriteRefOfExprs(parent SQLNode, node *Exprs, replacer re
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfExtractFuncExpr(parent SQLNode, node *ExtractFuncExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -3816,6 +3943,8 @@ func (a *application) rewriteRefOfExtractFuncExpr(parent SQLNode, node *ExtractF
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfExtractValueExpr(parent SQLNode, node *ExtractValueExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -3863,6 +3992,8 @@ func (a *application) rewriteRefOfExtractValueExpr(parent SQLNode, node *Extract
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfFirstOrLastValueExpr(parent SQLNode, node *FirstOrLastValueExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -3919,6 +4050,8 @@ func (a *application) rewriteRefOfFirstOrLastValueExpr(parent SQLNode, node *Fir
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfFlush(parent SQLNode, node *Flush, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -3957,6 +4090,8 @@ func (a *application) rewriteRefOfFlush(parent SQLNode, node *Flush, replacer re
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfForce(parent SQLNode, node *Force, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -3986,6 +4121,8 @@ func (a *application) rewriteRefOfForce(parent SQLNode, node *Force, replacer re
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfForeignKeyDefinition(parent SQLNode, node *ForeignKeyDefinition, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -4042,6 +4179,8 @@ func (a *application) rewriteRefOfForeignKeyDefinition(parent SQLNode, node *For
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfFrameClause(parent SQLNode, node *FrameClause, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -4089,6 +4228,8 @@ func (a *application) rewriteRefOfFrameClause(parent SQLNode, node *FrameClause,
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfFramePoint(parent SQLNode, node *FramePoint, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -4127,6 +4268,8 @@ func (a *application) rewriteRefOfFramePoint(parent SQLNode, node *FramePoint, r
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfFromFirstLastClause(parent SQLNode, node *FromFirstLastClause, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -4156,6 +4299,8 @@ func (a *application) rewriteRefOfFromFirstLastClause(parent SQLNode, node *From
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfFuncExpr(parent SQLNode, node *FuncExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -4222,6 +4367,8 @@ func (a *application) rewriteRefOfFuncExpr(parent SQLNode, node *FuncExpr, repla
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfGTIDFuncExpr(parent SQLNode, node *GTIDFuncExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -4287,6 +4434,8 @@ func (a *application) rewriteRefOfGTIDFuncExpr(parent SQLNode, node *GTIDFuncExp
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfGeoHashFromLatLongExpr(parent SQLNode, node *GeoHashFromLatLongExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -4343,6 +4492,8 @@ func (a *application) rewriteRefOfGeoHashFromLatLongExpr(parent SQLNode, node *G
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfGeoHashFromPointExpr(parent SQLNode, node *GeoHashFromPointExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -4390,6 +4541,8 @@ func (a *application) rewriteRefOfGeoHashFromPointExpr(parent SQLNode, node *Geo
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfGeoJSONFromGeomExpr(parent SQLNode, node *GeoJSONFromGeomExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -4446,6 +4599,8 @@ func (a *application) rewriteRefOfGeoJSONFromGeomExpr(parent SQLNode, node *GeoJ
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfGeomCollPropertyFuncExpr(parent SQLNode, node *GeomCollPropertyFuncExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -4493,6 +4648,8 @@ func (a *application) rewriteRefOfGeomCollPropertyFuncExpr(parent SQLNode, node 
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfGeomFormatExpr(parent SQLNode, node *GeomFormatExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -4540,6 +4697,8 @@ func (a *application) rewriteRefOfGeomFormatExpr(parent SQLNode, node *GeomForma
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfGeomFromGeoHashExpr(parent SQLNode, node *GeomFromGeoHashExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -4587,6 +4746,8 @@ func (a *application) rewriteRefOfGeomFromGeoHashExpr(parent SQLNode, node *Geom
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfGeomFromGeoJSONExpr(parent SQLNode, node *GeomFromGeoJSONExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -4643,6 +4804,8 @@ func (a *application) rewriteRefOfGeomFromGeoJSONExpr(parent SQLNode, node *Geom
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfGeomFromTextExpr(parent SQLNode, node *GeomFromTextExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -4699,6 +4862,8 @@ func (a *application) rewriteRefOfGeomFromTextExpr(parent SQLNode, node *GeomFro
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfGeomFromWKBExpr(parent SQLNode, node *GeomFromWKBExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -4755,6 +4920,8 @@ func (a *application) rewriteRefOfGeomFromWKBExpr(parent SQLNode, node *GeomFrom
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfGeomPropertyFuncExpr(parent SQLNode, node *GeomPropertyFuncExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -4793,6 +4960,8 @@ func (a *application) rewriteRefOfGeomPropertyFuncExpr(parent SQLNode, node *Geo
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfGroupBy(parent SQLNode, node *GroupBy, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -4809,9 +4978,6 @@ func (a *application) rewriteRefOfGroupBy(parent SQLNode, node *GroupBy, replace
 		if kontinue {
 			return true
 		}
-	}
-	if a.collectPaths {
-		a.cur.current.Pop()
 	}
 	for x, el := range node.Exprs {
 		if a.collectPaths {
@@ -4842,6 +5008,8 @@ func (a *application) rewriteRefOfGroupBy(parent SQLNode, node *GroupBy, replace
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfGroupConcatExpr(parent SQLNode, node *GroupConcatExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -4859,9 +5027,6 @@ func (a *application) rewriteRefOfGroupConcatExpr(parent SQLNode, node *GroupCon
 			return true
 		}
 	}
-	if a.collectPaths {
-		a.cur.current.Pop()
-	}
 	for x, el := range node.Exprs {
 		if a.collectPaths {
 			if x == 0 {
@@ -4878,7 +5043,7 @@ func (a *application) rewriteRefOfGroupConcatExpr(parent SQLNode, node *GroupCon
 			return false
 		}
 	}
-	if a.collectPaths {
+	if a.collectPaths && len(node.Exprs) > 0 {
 		a.cur.current.Pop()
 		a.cur.current.AddStep(uint16(RefOfGroupConcatExprOrderBy))
 	}
@@ -4909,6 +5074,8 @@ func (a *application) rewriteRefOfGroupConcatExpr(parent SQLNode, node *GroupCon
 	}
 	return true
 }
+
+// Function Generation Source: StructMethod
 func (a *application) rewriteIdentifierCI(parent SQLNode, node IdentifierCI, replacer replacerFunc) bool {
 	if a.pre != nil {
 		a.cur.replacer = replacer
@@ -4935,6 +5102,8 @@ func (a *application) rewriteIdentifierCI(parent SQLNode, node IdentifierCI, rep
 	}
 	return true
 }
+
+// Function Generation Source: StructMethod
 func (a *application) rewriteIdentifierCS(parent SQLNode, node IdentifierCS, replacer replacerFunc) bool {
 	if a.pre != nil {
 		a.cur.replacer = replacer
@@ -4961,6 +5130,8 @@ func (a *application) rewriteIdentifierCS(parent SQLNode, node IdentifierCS, rep
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfIndexDefinition(parent SQLNode, node *IndexDefinition, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -4999,6 +5170,8 @@ func (a *application) rewriteRefOfIndexDefinition(parent SQLNode, node *IndexDef
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfIndexHint(parent SQLNode, node *IndexHint, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -5015,9 +5188,6 @@ func (a *application) rewriteRefOfIndexHint(parent SQLNode, node *IndexHint, rep
 		if kontinue {
 			return true
 		}
-	}
-	if a.collectPaths {
-		a.cur.current.Pop()
 	}
 	for x, el := range node.Indexes {
 		if a.collectPaths {
@@ -5048,6 +5218,8 @@ func (a *application) rewriteRefOfIndexHint(parent SQLNode, node *IndexHint, rep
 	}
 	return true
 }
+
+// Function Generation Source: SliceMethod
 func (a *application) rewriteIndexHints(parent SQLNode, node IndexHints, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -5094,6 +5266,8 @@ func (a *application) rewriteIndexHints(parent SQLNode, node IndexHints, replace
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfIndexInfo(parent SQLNode, node *IndexInfo, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -5141,6 +5315,8 @@ func (a *application) rewriteRefOfIndexInfo(parent SQLNode, node *IndexInfo, rep
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfInsert(parent SQLNode, node *Insert, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -5233,6 +5409,8 @@ func (a *application) rewriteRefOfInsert(parent SQLNode, node *Insert, replacer 
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfInsertExpr(parent SQLNode, node *InsertExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -5298,6 +5476,8 @@ func (a *application) rewriteRefOfInsertExpr(parent SQLNode, node *InsertExpr, r
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfIntervalDateExpr(parent SQLNode, node *IntervalDateExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -5345,6 +5525,8 @@ func (a *application) rewriteRefOfIntervalDateExpr(parent SQLNode, node *Interva
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfIntervalFuncExpr(parent SQLNode, node *IntervalFuncExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -5402,6 +5584,8 @@ func (a *application) rewriteRefOfIntervalFuncExpr(parent SQLNode, node *Interva
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfIntroducerExpr(parent SQLNode, node *IntroducerExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -5440,6 +5624,8 @@ func (a *application) rewriteRefOfIntroducerExpr(parent SQLNode, node *Introduce
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfIsExpr(parent SQLNode, node *IsExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -5478,6 +5664,8 @@ func (a *application) rewriteRefOfIsExpr(parent SQLNode, node *IsExpr, replacer 
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfJSONArrayAgg(parent SQLNode, node *JSONArrayAgg, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -5525,6 +5713,8 @@ func (a *application) rewriteRefOfJSONArrayAgg(parent SQLNode, node *JSONArrayAg
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfJSONArrayExpr(parent SQLNode, node *JSONArrayExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -5541,9 +5731,6 @@ func (a *application) rewriteRefOfJSONArrayExpr(parent SQLNode, node *JSONArrayE
 		if kontinue {
 			return true
 		}
-	}
-	if a.collectPaths {
-		a.cur.current.Pop()
 	}
 	for x, el := range node.Params {
 		if a.collectPaths {
@@ -5574,6 +5761,8 @@ func (a *application) rewriteRefOfJSONArrayExpr(parent SQLNode, node *JSONArrayE
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfJSONAttributesExpr(parent SQLNode, node *JSONAttributesExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -5621,6 +5810,8 @@ func (a *application) rewriteRefOfJSONAttributesExpr(parent SQLNode, node *JSONA
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfJSONContainsExpr(parent SQLNode, node *JSONContainsExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -5687,6 +5878,8 @@ func (a *application) rewriteRefOfJSONContainsExpr(parent SQLNode, node *JSONCon
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfJSONContainsPathExpr(parent SQLNode, node *JSONContainsPathExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -5753,6 +5946,8 @@ func (a *application) rewriteRefOfJSONContainsPathExpr(parent SQLNode, node *JSO
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfJSONExtractExpr(parent SQLNode, node *JSONExtractExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -5810,6 +6005,8 @@ func (a *application) rewriteRefOfJSONExtractExpr(parent SQLNode, node *JSONExtr
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfJSONKeysExpr(parent SQLNode, node *JSONKeysExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -5857,6 +6054,8 @@ func (a *application) rewriteRefOfJSONKeysExpr(parent SQLNode, node *JSONKeysExp
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfJSONObjectAgg(parent SQLNode, node *JSONObjectAgg, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -5913,6 +6112,8 @@ func (a *application) rewriteRefOfJSONObjectAgg(parent SQLNode, node *JSONObject
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfJSONObjectExpr(parent SQLNode, node *JSONObjectExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -5929,9 +6130,6 @@ func (a *application) rewriteRefOfJSONObjectExpr(parent SQLNode, node *JSONObjec
 		if kontinue {
 			return true
 		}
-	}
-	if a.collectPaths {
-		a.cur.current.Pop()
 	}
 	for x, el := range node.Params {
 		if a.collectPaths {
@@ -5962,6 +6160,8 @@ func (a *application) rewriteRefOfJSONObjectExpr(parent SQLNode, node *JSONObjec
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfJSONObjectParam(parent SQLNode, node *JSONObjectParam, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6009,6 +6209,8 @@ func (a *application) rewriteRefOfJSONObjectParam(parent SQLNode, node *JSONObje
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfJSONOverlapsExpr(parent SQLNode, node *JSONOverlapsExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6056,6 +6258,8 @@ func (a *application) rewriteRefOfJSONOverlapsExpr(parent SQLNode, node *JSONOve
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfJSONPrettyExpr(parent SQLNode, node *JSONPrettyExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6094,6 +6298,8 @@ func (a *application) rewriteRefOfJSONPrettyExpr(parent SQLNode, node *JSONPrett
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfJSONQuoteExpr(parent SQLNode, node *JSONQuoteExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6132,6 +6338,8 @@ func (a *application) rewriteRefOfJSONQuoteExpr(parent SQLNode, node *JSONQuoteE
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfJSONRemoveExpr(parent SQLNode, node *JSONRemoveExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6189,6 +6397,8 @@ func (a *application) rewriteRefOfJSONRemoveExpr(parent SQLNode, node *JSONRemov
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfJSONSchemaValidFuncExpr(parent SQLNode, node *JSONSchemaValidFuncExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6236,6 +6446,8 @@ func (a *application) rewriteRefOfJSONSchemaValidFuncExpr(parent SQLNode, node *
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfJSONSchemaValidationReportFuncExpr(parent SQLNode, node *JSONSchemaValidationReportFuncExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6283,6 +6495,8 @@ func (a *application) rewriteRefOfJSONSchemaValidationReportFuncExpr(parent SQLN
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfJSONSearchExpr(parent SQLNode, node *JSONSearchExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6367,6 +6581,8 @@ func (a *application) rewriteRefOfJSONSearchExpr(parent SQLNode, node *JSONSearc
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfJSONStorageFreeExpr(parent SQLNode, node *JSONStorageFreeExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6405,6 +6621,8 @@ func (a *application) rewriteRefOfJSONStorageFreeExpr(parent SQLNode, node *JSON
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfJSONStorageSizeExpr(parent SQLNode, node *JSONStorageSizeExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6443,6 +6661,8 @@ func (a *application) rewriteRefOfJSONStorageSizeExpr(parent SQLNode, node *JSON
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfJSONTableExpr(parent SQLNode, node *JSONTableExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6518,6 +6738,8 @@ func (a *application) rewriteRefOfJSONTableExpr(parent SQLNode, node *JSONTableE
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfJSONUnquoteExpr(parent SQLNode, node *JSONUnquoteExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6556,6 +6778,8 @@ func (a *application) rewriteRefOfJSONUnquoteExpr(parent SQLNode, node *JSONUnqu
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfJSONValueExpr(parent SQLNode, node *JSONValueExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6630,6 +6854,8 @@ func (a *application) rewriteRefOfJSONValueExpr(parent SQLNode, node *JSONValueE
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfJSONValueMergeExpr(parent SQLNode, node *JSONValueMergeExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6687,6 +6913,8 @@ func (a *application) rewriteRefOfJSONValueMergeExpr(parent SQLNode, node *JSONV
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfJSONValueModifierExpr(parent SQLNode, node *JSONValueModifierExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6744,6 +6972,8 @@ func (a *application) rewriteRefOfJSONValueModifierExpr(parent SQLNode, node *JS
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfJoinCondition(parent SQLNode, node *JoinCondition, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6791,6 +7021,8 @@ func (a *application) rewriteRefOfJoinCondition(parent SQLNode, node *JoinCondit
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfJoinTableExpr(parent SQLNode, node *JoinTableExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6847,6 +7079,8 @@ func (a *application) rewriteRefOfJoinTableExpr(parent SQLNode, node *JoinTableE
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfJtColumnDefinition(parent SQLNode, node *JtColumnDefinition, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6876,6 +7110,8 @@ func (a *application) rewriteRefOfJtColumnDefinition(parent SQLNode, node *JtCol
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfJtOnResponse(parent SQLNode, node *JtOnResponse, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6914,6 +7150,8 @@ func (a *application) rewriteRefOfJtOnResponse(parent SQLNode, node *JtOnRespons
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfKeyState(parent SQLNode, node *KeyState, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6943,6 +7181,8 @@ func (a *application) rewriteRefOfKeyState(parent SQLNode, node *KeyState, repla
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfKill(parent SQLNode, node *Kill, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6972,6 +7212,8 @@ func (a *application) rewriteRefOfKill(parent SQLNode, node *Kill, replacer repl
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfLagLeadExpr(parent SQLNode, node *LagLeadExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -7046,6 +7288,8 @@ func (a *application) rewriteRefOfLagLeadExpr(parent SQLNode, node *LagLeadExpr,
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfLimit(parent SQLNode, node *Limit, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -7093,6 +7337,8 @@ func (a *application) rewriteRefOfLimit(parent SQLNode, node *Limit, replacer re
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfLineStringExpr(parent SQLNode, node *LineStringExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -7109,9 +7355,6 @@ func (a *application) rewriteRefOfLineStringExpr(parent SQLNode, node *LineStrin
 		if kontinue {
 			return true
 		}
-	}
-	if a.collectPaths {
-		a.cur.current.Pop()
 	}
 	for x, el := range node.PointParams {
 		if a.collectPaths {
@@ -7142,6 +7385,8 @@ func (a *application) rewriteRefOfLineStringExpr(parent SQLNode, node *LineStrin
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfLinestrPropertyFuncExpr(parent SQLNode, node *LinestrPropertyFuncExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -7189,6 +7434,8 @@ func (a *application) rewriteRefOfLinestrPropertyFuncExpr(parent SQLNode, node *
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfLiteral(parent SQLNode, node *Literal, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -7218,6 +7465,8 @@ func (a *application) rewriteRefOfLiteral(parent SQLNode, node *Literal, replace
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfLoad(parent SQLNode, node *Load, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -7247,6 +7496,8 @@ func (a *application) rewriteRefOfLoad(parent SQLNode, node *Load, replacer repl
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfLocateExpr(parent SQLNode, node *LocateExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -7303,6 +7554,8 @@ func (a *application) rewriteRefOfLocateExpr(parent SQLNode, node *LocateExpr, r
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfLockOption(parent SQLNode, node *LockOption, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -7332,6 +7585,8 @@ func (a *application) rewriteRefOfLockOption(parent SQLNode, node *LockOption, r
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfLockTables(parent SQLNode, node *LockTables, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -7361,6 +7616,8 @@ func (a *application) rewriteRefOfLockTables(parent SQLNode, node *LockTables, r
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfLockingFunc(parent SQLNode, node *LockingFunc, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -7408,6 +7665,8 @@ func (a *application) rewriteRefOfLockingFunc(parent SQLNode, node *LockingFunc,
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfMatchExpr(parent SQLNode, node *MatchExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -7425,9 +7684,6 @@ func (a *application) rewriteRefOfMatchExpr(parent SQLNode, node *MatchExpr, rep
 			return true
 		}
 	}
-	if a.collectPaths {
-		a.cur.current.Pop()
-	}
 	for x, el := range node.Columns {
 		if a.collectPaths {
 			if x == 0 {
@@ -7444,7 +7700,7 @@ func (a *application) rewriteRefOfMatchExpr(parent SQLNode, node *MatchExpr, rep
 			return false
 		}
 	}
-	if a.collectPaths {
+	if a.collectPaths && len(node.Columns) > 0 {
 		a.cur.current.Pop()
 		a.cur.current.AddStep(uint16(RefOfMatchExprExpr))
 	}
@@ -7466,6 +7722,8 @@ func (a *application) rewriteRefOfMatchExpr(parent SQLNode, node *MatchExpr, rep
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfMax(parent SQLNode, node *Max, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -7513,6 +7771,8 @@ func (a *application) rewriteRefOfMax(parent SQLNode, node *Max, replacer replac
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfMemberOfExpr(parent SQLNode, node *MemberOfExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -7560,6 +7820,8 @@ func (a *application) rewriteRefOfMemberOfExpr(parent SQLNode, node *MemberOfExp
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfMin(parent SQLNode, node *Min, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -7607,6 +7869,8 @@ func (a *application) rewriteRefOfMin(parent SQLNode, node *Min, replacer replac
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfModifyColumn(parent SQLNode, node *ModifyColumn, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -7654,6 +7918,8 @@ func (a *application) rewriteRefOfModifyColumn(parent SQLNode, node *ModifyColum
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfMultiLinestringExpr(parent SQLNode, node *MultiLinestringExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -7670,9 +7936,6 @@ func (a *application) rewriteRefOfMultiLinestringExpr(parent SQLNode, node *Mult
 		if kontinue {
 			return true
 		}
-	}
-	if a.collectPaths {
-		a.cur.current.Pop()
 	}
 	for x, el := range node.LinestringParams {
 		if a.collectPaths {
@@ -7703,6 +7966,8 @@ func (a *application) rewriteRefOfMultiLinestringExpr(parent SQLNode, node *Mult
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfMultiPointExpr(parent SQLNode, node *MultiPointExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -7719,9 +7984,6 @@ func (a *application) rewriteRefOfMultiPointExpr(parent SQLNode, node *MultiPoin
 		if kontinue {
 			return true
 		}
-	}
-	if a.collectPaths {
-		a.cur.current.Pop()
 	}
 	for x, el := range node.PointParams {
 		if a.collectPaths {
@@ -7752,6 +8014,8 @@ func (a *application) rewriteRefOfMultiPointExpr(parent SQLNode, node *MultiPoin
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfMultiPolygonExpr(parent SQLNode, node *MultiPolygonExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -7768,9 +8032,6 @@ func (a *application) rewriteRefOfMultiPolygonExpr(parent SQLNode, node *MultiPo
 		if kontinue {
 			return true
 		}
-	}
-	if a.collectPaths {
-		a.cur.current.Pop()
 	}
 	for x, el := range node.PolygonParams {
 		if a.collectPaths {
@@ -7801,6 +8062,8 @@ func (a *application) rewriteRefOfMultiPolygonExpr(parent SQLNode, node *MultiPo
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfNTHValueExpr(parent SQLNode, node *NTHValueExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -7875,6 +8138,8 @@ func (a *application) rewriteRefOfNTHValueExpr(parent SQLNode, node *NTHValueExp
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfNamedWindow(parent SQLNode, node *NamedWindow, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -7913,6 +8178,8 @@ func (a *application) rewriteRefOfNamedWindow(parent SQLNode, node *NamedWindow,
 	}
 	return true
 }
+
+// Function Generation Source: SliceMethod
 func (a *application) rewriteNamedWindows(parent SQLNode, node NamedWindows, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -7959,6 +8226,8 @@ func (a *application) rewriteNamedWindows(parent SQLNode, node NamedWindows, rep
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfNextval(parent SQLNode, node *Nextval, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -7997,6 +8266,8 @@ func (a *application) rewriteRefOfNextval(parent SQLNode, node *Nextval, replace
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfNotExpr(parent SQLNode, node *NotExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -8035,6 +8306,8 @@ func (a *application) rewriteRefOfNotExpr(parent SQLNode, node *NotExpr, replace
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfNtileExpr(parent SQLNode, node *NtileExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -8082,6 +8355,8 @@ func (a *application) rewriteRefOfNtileExpr(parent SQLNode, node *NtileExpr, rep
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfNullTreatmentClause(parent SQLNode, node *NullTreatmentClause, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -8111,6 +8386,8 @@ func (a *application) rewriteRefOfNullTreatmentClause(parent SQLNode, node *Null
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfNullVal(parent SQLNode, node *NullVal, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -8140,6 +8417,8 @@ func (a *application) rewriteRefOfNullVal(parent SQLNode, node *NullVal, replace
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfOffset(parent SQLNode, node *Offset, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -8178,6 +8457,8 @@ func (a *application) rewriteRefOfOffset(parent SQLNode, node *Offset, replacer 
 	}
 	return true
 }
+
+// Function Generation Source: SliceMethod
 func (a *application) rewriteOnDup(parent SQLNode, node OnDup, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -8224,6 +8505,8 @@ func (a *application) rewriteOnDup(parent SQLNode, node OnDup, replacer replacer
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfOptLike(parent SQLNode, node *OptLike, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -8262,6 +8545,8 @@ func (a *application) rewriteRefOfOptLike(parent SQLNode, node *OptLike, replace
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfOrExpr(parent SQLNode, node *OrExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -8309,6 +8594,8 @@ func (a *application) rewriteRefOfOrExpr(parent SQLNode, node *OrExpr, replacer 
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfOrder(parent SQLNode, node *Order, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -8347,6 +8634,8 @@ func (a *application) rewriteRefOfOrder(parent SQLNode, node *Order, replacer re
 	}
 	return true
 }
+
+// Function Generation Source: SliceMethod
 func (a *application) rewriteOrderBy(parent SQLNode, node OrderBy, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -8393,6 +8682,8 @@ func (a *application) rewriteOrderBy(parent SQLNode, node OrderBy, replacer repl
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfOrderByOption(parent SQLNode, node *OrderByOption, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -8431,6 +8722,8 @@ func (a *application) rewriteRefOfOrderByOption(parent SQLNode, node *OrderByOpt
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfOtherAdmin(parent SQLNode, node *OtherAdmin, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -8460,6 +8753,8 @@ func (a *application) rewriteRefOfOtherAdmin(parent SQLNode, node *OtherAdmin, r
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfOverClause(parent SQLNode, node *OverClause, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -8507,6 +8802,8 @@ func (a *application) rewriteRefOfOverClause(parent SQLNode, node *OverClause, r
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfParenTableExpr(parent SQLNode, node *ParenTableExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -8545,6 +8842,8 @@ func (a *application) rewriteRefOfParenTableExpr(parent SQLNode, node *ParenTabl
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfParsedComments(parent SQLNode, node *ParsedComments, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -8574,6 +8873,8 @@ func (a *application) rewriteRefOfParsedComments(parent SQLNode, node *ParsedCom
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfPartitionDefinition(parent SQLNode, node *PartitionDefinition, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -8621,6 +8922,8 @@ func (a *application) rewriteRefOfPartitionDefinition(parent SQLNode, node *Part
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfPartitionDefinitionOptions(parent SQLNode, node *PartitionDefinitionOptions, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -8704,6 +9007,8 @@ func (a *application) rewriteRefOfPartitionDefinitionOptions(parent SQLNode, nod
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfPartitionEngine(parent SQLNode, node *PartitionEngine, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -8733,6 +9038,8 @@ func (a *application) rewriteRefOfPartitionEngine(parent SQLNode, node *Partitio
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfPartitionOption(parent SQLNode, node *PartitionOption, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -8808,6 +9115,8 @@ func (a *application) rewriteRefOfPartitionOption(parent SQLNode, node *Partitio
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfPartitionSpec(parent SQLNode, node *PartitionSpec, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -8883,6 +9192,8 @@ func (a *application) rewriteRefOfPartitionSpec(parent SQLNode, node *PartitionS
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfPartitionValueRange(parent SQLNode, node *PartitionValueRange, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -8921,6 +9232,8 @@ func (a *application) rewriteRefOfPartitionValueRange(parent SQLNode, node *Part
 	}
 	return true
 }
+
+// Function Generation Source: SliceMethod
 func (a *application) rewritePartitions(parent SQLNode, node Partitions, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -8967,6 +9280,8 @@ func (a *application) rewritePartitions(parent SQLNode, node Partitions, replace
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfPerformanceSchemaFuncExpr(parent SQLNode, node *PerformanceSchemaFuncExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -9005,6 +9320,8 @@ func (a *application) rewriteRefOfPerformanceSchemaFuncExpr(parent SQLNode, node
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfPointExpr(parent SQLNode, node *PointExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -9052,6 +9369,8 @@ func (a *application) rewriteRefOfPointExpr(parent SQLNode, node *PointExpr, rep
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfPointPropertyFuncExpr(parent SQLNode, node *PointPropertyFuncExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -9099,6 +9418,8 @@ func (a *application) rewriteRefOfPointPropertyFuncExpr(parent SQLNode, node *Po
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfPolygonExpr(parent SQLNode, node *PolygonExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -9115,9 +9436,6 @@ func (a *application) rewriteRefOfPolygonExpr(parent SQLNode, node *PolygonExpr,
 		if kontinue {
 			return true
 		}
-	}
-	if a.collectPaths {
-		a.cur.current.Pop()
 	}
 	for x, el := range node.LinestringParams {
 		if a.collectPaths {
@@ -9148,6 +9466,8 @@ func (a *application) rewriteRefOfPolygonExpr(parent SQLNode, node *PolygonExpr,
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfPolygonPropertyFuncExpr(parent SQLNode, node *PolygonPropertyFuncExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -9195,6 +9515,8 @@ func (a *application) rewriteRefOfPolygonPropertyFuncExpr(parent SQLNode, node *
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfPrepareStmt(parent SQLNode, node *PrepareStmt, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -9251,6 +9573,8 @@ func (a *application) rewriteRefOfPrepareStmt(parent SQLNode, node *PrepareStmt,
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfPurgeBinaryLogs(parent SQLNode, node *PurgeBinaryLogs, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -9280,6 +9604,8 @@ func (a *application) rewriteRefOfPurgeBinaryLogs(parent SQLNode, node *PurgeBin
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfReferenceDefinition(parent SQLNode, node *ReferenceDefinition, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -9354,6 +9680,8 @@ func (a *application) rewriteRefOfReferenceDefinition(parent SQLNode, node *Refe
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfRegexpInstrExpr(parent SQLNode, node *RegexpInstrExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -9437,6 +9765,8 @@ func (a *application) rewriteRefOfRegexpInstrExpr(parent SQLNode, node *RegexpIn
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfRegexpLikeExpr(parent SQLNode, node *RegexpLikeExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -9493,6 +9823,8 @@ func (a *application) rewriteRefOfRegexpLikeExpr(parent SQLNode, node *RegexpLik
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfRegexpReplaceExpr(parent SQLNode, node *RegexpReplaceExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -9576,6 +9908,8 @@ func (a *application) rewriteRefOfRegexpReplaceExpr(parent SQLNode, node *Regexp
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfRegexpSubstrExpr(parent SQLNode, node *RegexpSubstrExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -9650,6 +9984,8 @@ func (a *application) rewriteRefOfRegexpSubstrExpr(parent SQLNode, node *RegexpS
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfRelease(parent SQLNode, node *Release, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -9688,6 +10024,8 @@ func (a *application) rewriteRefOfRelease(parent SQLNode, node *Release, replace
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfRenameColumn(parent SQLNode, node *RenameColumn, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -9735,6 +10073,8 @@ func (a *application) rewriteRefOfRenameColumn(parent SQLNode, node *RenameColum
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfRenameIndex(parent SQLNode, node *RenameIndex, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -9782,6 +10122,8 @@ func (a *application) rewriteRefOfRenameIndex(parent SQLNode, node *RenameIndex,
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfRenameTable(parent SQLNode, node *RenameTable, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -9811,6 +10153,8 @@ func (a *application) rewriteRefOfRenameTable(parent SQLNode, node *RenameTable,
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfRenameTableName(parent SQLNode, node *RenameTableName, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -9849,6 +10193,8 @@ func (a *application) rewriteRefOfRenameTableName(parent SQLNode, node *RenameTa
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfRevertMigration(parent SQLNode, node *RevertMigration, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -9887,6 +10233,8 @@ func (a *application) rewriteRefOfRevertMigration(parent SQLNode, node *RevertMi
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfRollback(parent SQLNode, node *Rollback, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -9916,6 +10264,8 @@ func (a *application) rewriteRefOfRollback(parent SQLNode, node *Rollback, repla
 	}
 	return true
 }
+
+// Function Generation Source: StructMethod
 func (a *application) rewriteRootNode(parent SQLNode, node RootNode, replacer replacerFunc) bool {
 	if a.pre != nil {
 		a.cur.replacer = replacer
@@ -9951,6 +10301,8 @@ func (a *application) rewriteRootNode(parent SQLNode, node RootNode, replacer re
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfRowAlias(parent SQLNode, node *RowAlias, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -9998,6 +10350,8 @@ func (a *application) rewriteRefOfRowAlias(parent SQLNode, node *RowAlias, repla
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfSRollback(parent SQLNode, node *SRollback, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -10036,6 +10390,8 @@ func (a *application) rewriteRefOfSRollback(parent SQLNode, node *SRollback, rep
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfSavepoint(parent SQLNode, node *Savepoint, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -10074,6 +10430,8 @@ func (a *application) rewriteRefOfSavepoint(parent SQLNode, node *Savepoint, rep
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfSelect(parent SQLNode, node *Select, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -10118,7 +10476,7 @@ func (a *application) rewriteRefOfSelect(parent SQLNode, node *Select, replacer 
 			return false
 		}
 	}
-	if a.collectPaths {
+	if a.collectPaths && len(node.From) > 0 {
 		a.cur.current.Pop()
 		a.cur.current.AddStep(uint16(RefOfSelectComments))
 	}
@@ -10212,6 +10570,8 @@ func (a *application) rewriteRefOfSelect(parent SQLNode, node *Select, replacer 
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfSelectExprs(parent SQLNode, node *SelectExprs, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -10228,9 +10588,6 @@ func (a *application) rewriteRefOfSelectExprs(parent SQLNode, node *SelectExprs,
 		if kontinue {
 			return true
 		}
-	}
-	if a.collectPaths {
-		a.cur.current.Pop()
 	}
 	for x, el := range node.Exprs {
 		if a.collectPaths {
@@ -10261,6 +10618,8 @@ func (a *application) rewriteRefOfSelectExprs(parent SQLNode, node *SelectExprs,
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfSelectInto(parent SQLNode, node *SelectInto, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -10290,6 +10649,8 @@ func (a *application) rewriteRefOfSelectInto(parent SQLNode, node *SelectInto, r
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfSet(parent SQLNode, node *Set, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -10337,6 +10698,8 @@ func (a *application) rewriteRefOfSet(parent SQLNode, node *Set, replacer replac
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfSetExpr(parent SQLNode, node *SetExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -10384,6 +10747,8 @@ func (a *application) rewriteRefOfSetExpr(parent SQLNode, node *SetExpr, replace
 	}
 	return true
 }
+
+// Function Generation Source: SliceMethod
 func (a *application) rewriteSetExprs(parent SQLNode, node SetExprs, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -10430,6 +10795,8 @@ func (a *application) rewriteSetExprs(parent SQLNode, node SetExprs, replacer re
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfShow(parent SQLNode, node *Show, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -10468,6 +10835,8 @@ func (a *application) rewriteRefOfShow(parent SQLNode, node *Show, replacer repl
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfShowBasic(parent SQLNode, node *ShowBasic, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -10524,6 +10893,8 @@ func (a *application) rewriteRefOfShowBasic(parent SQLNode, node *ShowBasic, rep
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfShowCreate(parent SQLNode, node *ShowCreate, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -10562,6 +10933,8 @@ func (a *application) rewriteRefOfShowCreate(parent SQLNode, node *ShowCreate, r
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfShowFilter(parent SQLNode, node *ShowFilter, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -10600,6 +10973,8 @@ func (a *application) rewriteRefOfShowFilter(parent SQLNode, node *ShowFilter, r
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfShowMigrationLogs(parent SQLNode, node *ShowMigrationLogs, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -10638,6 +11013,8 @@ func (a *application) rewriteRefOfShowMigrationLogs(parent SQLNode, node *ShowMi
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfShowOther(parent SQLNode, node *ShowOther, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -10667,6 +11044,8 @@ func (a *application) rewriteRefOfShowOther(parent SQLNode, node *ShowOther, rep
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfShowThrottledApps(parent SQLNode, node *ShowThrottledApps, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -10696,6 +11075,8 @@ func (a *application) rewriteRefOfShowThrottledApps(parent SQLNode, node *ShowTh
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfShowThrottlerStatus(parent SQLNode, node *ShowThrottlerStatus, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -10725,6 +11106,8 @@ func (a *application) rewriteRefOfShowThrottlerStatus(parent SQLNode, node *Show
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfShowTransactionStatus(parent SQLNode, node *ShowTransactionStatus, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -10754,6 +11137,8 @@ func (a *application) rewriteRefOfShowTransactionStatus(parent SQLNode, node *Sh
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfStarExpr(parent SQLNode, node *StarExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -10792,6 +11177,8 @@ func (a *application) rewriteRefOfStarExpr(parent SQLNode, node *StarExpr, repla
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfStd(parent SQLNode, node *Std, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -10839,6 +11226,8 @@ func (a *application) rewriteRefOfStd(parent SQLNode, node *Std, replacer replac
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfStdDev(parent SQLNode, node *StdDev, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -10886,6 +11275,8 @@ func (a *application) rewriteRefOfStdDev(parent SQLNode, node *StdDev, replacer 
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfStdPop(parent SQLNode, node *StdPop, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -10933,6 +11324,8 @@ func (a *application) rewriteRefOfStdPop(parent SQLNode, node *StdPop, replacer 
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfStdSamp(parent SQLNode, node *StdSamp, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -10980,6 +11373,8 @@ func (a *application) rewriteRefOfStdSamp(parent SQLNode, node *StdSamp, replace
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfStream(parent SQLNode, node *Stream, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -11036,6 +11431,8 @@ func (a *application) rewriteRefOfStream(parent SQLNode, node *Stream, replacer 
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfSubPartition(parent SQLNode, node *SubPartition, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -11083,6 +11480,8 @@ func (a *application) rewriteRefOfSubPartition(parent SQLNode, node *SubPartitio
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfSubPartitionDefinition(parent SQLNode, node *SubPartitionDefinition, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -11130,6 +11529,8 @@ func (a *application) rewriteRefOfSubPartitionDefinition(parent SQLNode, node *S
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfSubPartitionDefinitionOptions(parent SQLNode, node *SubPartitionDefinitionOptions, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -11195,6 +11596,8 @@ func (a *application) rewriteRefOfSubPartitionDefinitionOptions(parent SQLNode, 
 	}
 	return true
 }
+
+// Function Generation Source: SliceMethod
 func (a *application) rewriteSubPartitionDefinitions(parent SQLNode, node SubPartitionDefinitions, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -11241,6 +11644,8 @@ func (a *application) rewriteSubPartitionDefinitions(parent SQLNode, node SubPar
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfSubquery(parent SQLNode, node *Subquery, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -11279,6 +11684,8 @@ func (a *application) rewriteRefOfSubquery(parent SQLNode, node *Subquery, repla
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfSubstrExpr(parent SQLNode, node *SubstrExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -11335,6 +11742,8 @@ func (a *application) rewriteRefOfSubstrExpr(parent SQLNode, node *SubstrExpr, r
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfSum(parent SQLNode, node *Sum, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -11382,6 +11791,8 @@ func (a *application) rewriteRefOfSum(parent SQLNode, node *Sum, replacer replac
 	}
 	return true
 }
+
+// Function Generation Source: SliceMethod
 func (a *application) rewriteTableExprs(parent SQLNode, node TableExprs, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -11428,6 +11839,8 @@ func (a *application) rewriteTableExprs(parent SQLNode, node TableExprs, replace
 	}
 	return true
 }
+
+// Function Generation Source: StructMethod
 func (a *application) rewriteTableName(parent SQLNode, node TableName, replacer replacerFunc) bool {
 	if a.pre != nil {
 		a.cur.replacer = replacer
@@ -11472,6 +11885,8 @@ func (a *application) rewriteTableName(parent SQLNode, node TableName, replacer 
 	}
 	return true
 }
+
+// Function Generation Source: SliceMethod
 func (a *application) rewriteTableNames(parent SQLNode, node TableNames, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -11518,6 +11933,8 @@ func (a *application) rewriteTableNames(parent SQLNode, node TableNames, replace
 	}
 	return true
 }
+
+// Function Generation Source: SliceMethod
 func (a *application) rewriteTableOptions(parent SQLNode, node TableOptions, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -11547,6 +11964,8 @@ func (a *application) rewriteTableOptions(parent SQLNode, node TableOptions, rep
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfTableSpec(parent SQLNode, node *TableSpec, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -11564,9 +11983,6 @@ func (a *application) rewriteRefOfTableSpec(parent SQLNode, node *TableSpec, rep
 			return true
 		}
 	}
-	if a.collectPaths {
-		a.cur.current.Pop()
-	}
 	for x, el := range node.Columns {
 		if a.collectPaths {
 			if x == 0 {
@@ -11583,7 +11999,7 @@ func (a *application) rewriteRefOfTableSpec(parent SQLNode, node *TableSpec, rep
 			return false
 		}
 	}
-	if a.collectPaths {
+	if a.collectPaths && len(node.Columns) > 0 {
 		a.cur.current.Pop()
 	}
 	for x, el := range node.Indexes {
@@ -11602,7 +12018,7 @@ func (a *application) rewriteRefOfTableSpec(parent SQLNode, node *TableSpec, rep
 			return false
 		}
 	}
-	if a.collectPaths {
+	if a.collectPaths && len(node.Indexes) > 0 {
 		a.cur.current.Pop()
 	}
 	for x, el := range node.Constraints {
@@ -11621,7 +12037,7 @@ func (a *application) rewriteRefOfTableSpec(parent SQLNode, node *TableSpec, rep
 			return false
 		}
 	}
-	if a.collectPaths {
+	if a.collectPaths && len(node.Constraints) > 0 {
 		a.cur.current.Pop()
 		a.cur.current.AddStep(uint16(RefOfTableSpecOptions))
 	}
@@ -11652,6 +12068,8 @@ func (a *application) rewriteRefOfTableSpec(parent SQLNode, node *TableSpec, rep
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfTablespaceOperation(parent SQLNode, node *TablespaceOperation, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -11681,6 +12099,8 @@ func (a *application) rewriteRefOfTablespaceOperation(parent SQLNode, node *Tabl
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfTimestampDiffExpr(parent SQLNode, node *TimestampDiffExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -11728,6 +12148,8 @@ func (a *application) rewriteRefOfTimestampDiffExpr(parent SQLNode, node *Timest
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfTrimFuncExpr(parent SQLNode, node *TrimFuncExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -11775,6 +12197,8 @@ func (a *application) rewriteRefOfTrimFuncExpr(parent SQLNode, node *TrimFuncExp
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfTruncateTable(parent SQLNode, node *TruncateTable, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -11813,6 +12237,8 @@ func (a *application) rewriteRefOfTruncateTable(parent SQLNode, node *TruncateTa
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfUnaryExpr(parent SQLNode, node *UnaryExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -11851,6 +12277,8 @@ func (a *application) rewriteRefOfUnaryExpr(parent SQLNode, node *UnaryExpr, rep
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfUnion(parent SQLNode, node *Union, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -11934,6 +12362,8 @@ func (a *application) rewriteRefOfUnion(parent SQLNode, node *Union, replacer re
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfUnlockTables(parent SQLNode, node *UnlockTables, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -11963,6 +12393,8 @@ func (a *application) rewriteRefOfUnlockTables(parent SQLNode, node *UnlockTable
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfUpdate(parent SQLNode, node *Update, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -12016,7 +12448,7 @@ func (a *application) rewriteRefOfUpdate(parent SQLNode, node *Update, replacer 
 			return false
 		}
 	}
-	if a.collectPaths {
+	if a.collectPaths && len(node.TableExprs) > 0 {
 		a.cur.current.Pop()
 		a.cur.current.AddStep(uint16(RefOfUpdateExprs))
 	}
@@ -12065,6 +12497,8 @@ func (a *application) rewriteRefOfUpdate(parent SQLNode, node *Update, replacer 
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfUpdateExpr(parent SQLNode, node *UpdateExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -12112,6 +12546,8 @@ func (a *application) rewriteRefOfUpdateExpr(parent SQLNode, node *UpdateExpr, r
 	}
 	return true
 }
+
+// Function Generation Source: SliceMethod
 func (a *application) rewriteUpdateExprs(parent SQLNode, node UpdateExprs, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -12158,6 +12594,8 @@ func (a *application) rewriteUpdateExprs(parent SQLNode, node UpdateExprs, repla
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfUpdateXMLExpr(parent SQLNode, node *UpdateXMLExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -12214,6 +12652,8 @@ func (a *application) rewriteRefOfUpdateXMLExpr(parent SQLNode, node *UpdateXMLE
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfUse(parent SQLNode, node *Use, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -12252,6 +12692,8 @@ func (a *application) rewriteRefOfUse(parent SQLNode, node *Use, replacer replac
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfVExplainStmt(parent SQLNode, node *VExplainStmt, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -12299,6 +12741,8 @@ func (a *application) rewriteRefOfVExplainStmt(parent SQLNode, node *VExplainStm
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfVStream(parent SQLNode, node *VStream, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -12373,6 +12817,8 @@ func (a *application) rewriteRefOfVStream(parent SQLNode, node *VStream, replace
 	}
 	return true
 }
+
+// Function Generation Source: SliceMethod
 func (a *application) rewriteValTuple(parent SQLNode, node ValTuple, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -12419,6 +12865,8 @@ func (a *application) rewriteValTuple(parent SQLNode, node ValTuple, replacer re
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfValidation(parent SQLNode, node *Validation, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -12448,6 +12896,8 @@ func (a *application) rewriteRefOfValidation(parent SQLNode, node *Validation, r
 	}
 	return true
 }
+
+// Function Generation Source: SliceMethod
 func (a *application) rewriteValues(parent SQLNode, node Values, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -12494,6 +12944,8 @@ func (a *application) rewriteValues(parent SQLNode, node Values, replacer replac
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfValuesFuncExpr(parent SQLNode, node *ValuesFuncExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -12532,6 +12984,8 @@ func (a *application) rewriteRefOfValuesFuncExpr(parent SQLNode, node *ValuesFun
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfValuesStatement(parent SQLNode, node *ValuesStatement, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -12615,6 +13069,8 @@ func (a *application) rewriteRefOfValuesStatement(parent SQLNode, node *ValuesSt
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfVarPop(parent SQLNode, node *VarPop, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -12662,6 +13118,8 @@ func (a *application) rewriteRefOfVarPop(parent SQLNode, node *VarPop, replacer 
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfVarSamp(parent SQLNode, node *VarSamp, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -12709,6 +13167,8 @@ func (a *application) rewriteRefOfVarSamp(parent SQLNode, node *VarSamp, replace
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfVariable(parent SQLNode, node *Variable, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -12747,6 +13207,8 @@ func (a *application) rewriteRefOfVariable(parent SQLNode, node *Variable, repla
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfVariance(parent SQLNode, node *Variance, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -12794,6 +13256,8 @@ func (a *application) rewriteRefOfVariance(parent SQLNode, node *Variance, repla
 	}
 	return true
 }
+
+// Function Generation Source: StructMethod
 func (a *application) rewriteVindexParam(parent SQLNode, node VindexParam, replacer replacerFunc) bool {
 	if a.pre != nil {
 		a.cur.replacer = replacer
@@ -12829,6 +13293,8 @@ func (a *application) rewriteVindexParam(parent SQLNode, node VindexParam, repla
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfVindexSpec(parent SQLNode, node *VindexSpec, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -12895,6 +13361,8 @@ func (a *application) rewriteRefOfVindexSpec(parent SQLNode, node *VindexSpec, r
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfWeightStringFuncExpr(parent SQLNode, node *WeightStringFuncExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -12942,6 +13410,8 @@ func (a *application) rewriteRefOfWeightStringFuncExpr(parent SQLNode, node *Wei
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfWhen(parent SQLNode, node *When, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -12989,6 +13459,8 @@ func (a *application) rewriteRefOfWhen(parent SQLNode, node *When, replacer repl
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfWhere(parent SQLNode, node *Where, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -13027,6 +13499,8 @@ func (a *application) rewriteRefOfWhere(parent SQLNode, node *Where, replacer re
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfWindowDefinition(parent SQLNode, node *WindowDefinition, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -13074,6 +13548,8 @@ func (a *application) rewriteRefOfWindowDefinition(parent SQLNode, node *WindowD
 	}
 	return true
 }
+
+// Function Generation Source: SliceMethod
 func (a *application) rewriteWindowDefinitions(parent SQLNode, node WindowDefinitions, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -13120,6 +13596,8 @@ func (a *application) rewriteWindowDefinitions(parent SQLNode, node WindowDefini
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfWindowSpecification(parent SQLNode, node *WindowSpecification, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -13164,7 +13642,7 @@ func (a *application) rewriteRefOfWindowSpecification(parent SQLNode, node *Wind
 			return false
 		}
 	}
-	if a.collectPaths {
+	if a.collectPaths && len(node.PartitionClause) > 0 {
 		a.cur.current.Pop()
 		a.cur.current.AddStep(uint16(RefOfWindowSpecificationOrderClause))
 	}
@@ -13195,6 +13673,8 @@ func (a *application) rewriteRefOfWindowSpecification(parent SQLNode, node *Wind
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfWith(parent SQLNode, node *With, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -13211,9 +13691,6 @@ func (a *application) rewriteRefOfWith(parent SQLNode, node *With, replacer repl
 		if kontinue {
 			return true
 		}
-	}
-	if a.collectPaths {
-		a.cur.current.Pop()
 	}
 	for x, el := range node.CTEs {
 		if a.collectPaths {
@@ -13244,6 +13721,8 @@ func (a *application) rewriteRefOfWith(parent SQLNode, node *With, replacer repl
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfXorExpr(parent SQLNode, node *XorExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -13291,6 +13770,8 @@ func (a *application) rewriteRefOfXorExpr(parent SQLNode, node *XorExpr, replace
 	}
 	return true
 }
+
+// Function Generation Source: InterfaceMethod
 func (a *application) rewriteAggrFunc(parent SQLNode, node AggrFunc, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -13341,6 +13822,8 @@ func (a *application) rewriteAggrFunc(parent SQLNode, node AggrFunc, replacer re
 		return true
 	}
 }
+
+// Function Generation Source: InterfaceMethod
 func (a *application) rewriteAlterOption(parent SQLNode, node AlterOption, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -13395,6 +13878,8 @@ func (a *application) rewriteAlterOption(parent SQLNode, node AlterOption, repla
 		return true
 	}
 }
+
+// Function Generation Source: InterfaceMethod
 func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -13561,6 +14046,8 @@ func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer re
 		return true
 	}
 }
+
+// Function Generation Source: InterfaceMethod
 func (a *application) rewriteColTuple(parent SQLNode, node ColTuple, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -13577,6 +14064,8 @@ func (a *application) rewriteColTuple(parent SQLNode, node ColTuple, replacer re
 		return true
 	}
 }
+
+// Function Generation Source: InterfaceMethod
 func (a *application) rewriteConstraintInfo(parent SQLNode, node ConstraintInfo, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -13591,6 +14080,8 @@ func (a *application) rewriteConstraintInfo(parent SQLNode, node ConstraintInfo,
 		return true
 	}
 }
+
+// Function Generation Source: InterfaceMethod
 func (a *application) rewriteDBDDLStatement(parent SQLNode, node DBDDLStatement, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -13607,6 +14098,8 @@ func (a *application) rewriteDBDDLStatement(parent SQLNode, node DBDDLStatement,
 		return true
 	}
 }
+
+// Function Generation Source: InterfaceMethod
 func (a *application) rewriteDDLStatement(parent SQLNode, node DDLStatement, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -13633,6 +14126,8 @@ func (a *application) rewriteDDLStatement(parent SQLNode, node DDLStatement, rep
 		return true
 	}
 }
+
+// Function Generation Source: InterfaceMethod
 func (a *application) rewriteExplain(parent SQLNode, node Explain, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -13647,6 +14142,8 @@ func (a *application) rewriteExplain(parent SQLNode, node Explain, replacer repl
 		return true
 	}
 }
+
+// Function Generation Source: InterfaceMethod
 func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -13891,6 +14388,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return true
 	}
 }
+
+// Function Generation Source: InterfaceMethod
 func (a *application) rewriteInsertRows(parent SQLNode, node InsertRows, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -13909,6 +14408,8 @@ func (a *application) rewriteInsertRows(parent SQLNode, node InsertRows, replace
 		return true
 	}
 }
+
+// Function Generation Source: InterfaceMethod
 func (a *application) rewriteSelectExpr(parent SQLNode, node SelectExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -13925,6 +14426,8 @@ func (a *application) rewriteSelectExpr(parent SQLNode, node SelectExpr, replace
 		return true
 	}
 }
+
+// Function Generation Source: InterfaceMethod
 func (a *application) rewriteSelectStatement(parent SQLNode, node SelectStatement, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -13939,6 +14442,8 @@ func (a *application) rewriteSelectStatement(parent SQLNode, node SelectStatemen
 		return true
 	}
 }
+
+// Function Generation Source: InterfaceMethod
 func (a *application) rewriteShowInternal(parent SQLNode, node ShowInternal, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -13957,6 +14462,8 @@ func (a *application) rewriteShowInternal(parent SQLNode, node ShowInternal, rep
 		return true
 	}
 }
+
+// Function Generation Source: InterfaceMethod
 func (a *application) rewriteSimpleTableExpr(parent SQLNode, node SimpleTableExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -13971,6 +14478,8 @@ func (a *application) rewriteSimpleTableExpr(parent SQLNode, node SimpleTableExp
 		return true
 	}
 }
+
+// Function Generation Source: InterfaceMethod
 func (a *application) rewriteStatement(parent SQLNode, node Statement, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -14081,6 +14590,8 @@ func (a *application) rewriteStatement(parent SQLNode, node Statement, replacer 
 		return true
 	}
 }
+
+// Function Generation Source: InterfaceMethod
 func (a *application) rewriteTableExpr(parent SQLNode, node TableExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -14099,6 +14610,8 @@ func (a *application) rewriteTableExpr(parent SQLNode, node TableExpr, replacer 
 		return true
 	}
 }
+
+// Function Generation Source: InterfaceMethod
 func (a *application) rewriteTableStatement(parent SQLNode, node TableStatement, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -14115,6 +14628,8 @@ func (a *application) rewriteTableStatement(parent SQLNode, node TableStatement,
 		return true
 	}
 }
+
+// Function Generation Source: BasicMethod
 func (a *application) rewriteAlgorithmValue(parent SQLNode, node AlgorithmValue, replacer replacerFunc) bool {
 	if a.pre != nil {
 		a.cur.replacer = replacer
@@ -14141,6 +14656,8 @@ func (a *application) rewriteAlgorithmValue(parent SQLNode, node AlgorithmValue,
 	}
 	return true
 }
+
+// Function Generation Source: BasicMethod
 func (a *application) rewriteBoolVal(parent SQLNode, node BoolVal, replacer replacerFunc) bool {
 	if a.pre != nil {
 		a.cur.replacer = replacer
@@ -14167,6 +14684,8 @@ func (a *application) rewriteBoolVal(parent SQLNode, node BoolVal, replacer repl
 	}
 	return true
 }
+
+// Function Generation Source: BasicMethod
 func (a *application) rewriteListArg(parent SQLNode, node ListArg, replacer replacerFunc) bool {
 	if a.pre != nil {
 		a.cur.replacer = replacer
@@ -14193,6 +14712,8 @@ func (a *application) rewriteListArg(parent SQLNode, node ListArg, replacer repl
 	}
 	return true
 }
+
+// Function Generation Source: BasicMethod
 func (a *application) rewriteMatchAction(parent SQLNode, node MatchAction, replacer replacerFunc) bool {
 	if a.pre != nil {
 		a.cur.replacer = replacer
@@ -14219,6 +14740,8 @@ func (a *application) rewriteMatchAction(parent SQLNode, node MatchAction, repla
 	}
 	return true
 }
+
+// Function Generation Source: BasicMethod
 func (a *application) rewriteReferenceAction(parent SQLNode, node ReferenceAction, replacer replacerFunc) bool {
 	if a.pre != nil {
 		a.cur.replacer = replacer
@@ -14245,6 +14768,8 @@ func (a *application) rewriteReferenceAction(parent SQLNode, node ReferenceActio
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfIdentifierCI(parent SQLNode, node *IdentifierCI, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -14274,6 +14799,8 @@ func (a *application) rewriteRefOfIdentifierCI(parent SQLNode, node *IdentifierC
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfIdentifierCS(parent SQLNode, node *IdentifierCS, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -14303,6 +14830,8 @@ func (a *application) rewriteRefOfIdentifierCS(parent SQLNode, node *IdentifierC
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfRootNode(parent SQLNode, node *RootNode, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -14341,6 +14870,8 @@ func (a *application) rewriteRefOfRootNode(parent SQLNode, node *RootNode, repla
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfTableName(parent SQLNode, node *TableName, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -14388,6 +14919,8 @@ func (a *application) rewriteRefOfTableName(parent SQLNode, node *TableName, rep
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfVindexParam(parent SQLNode, node *VindexParam, replacer replacerFunc) bool {
 	if node == nil {
 		return true

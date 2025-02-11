@@ -33,10 +33,21 @@ type (
 	Leaf struct {
 		v int
 	}
+
+	// Options have been added to test the behaviour
+	// of a struct that doesn't implement the AST interface
+	// but includes a field that does.
+	Options struct {
+		a int
+		b string
+		l *Leaf
+	}
+
 	// Container implements the interface ByRef
 	RefContainer struct {
 		ASTType               AST
 		NotASTType            int
+		Opts                  []*Options
 		ASTImplementationType *Leaf
 	}
 	// Container implements the interface ByRef

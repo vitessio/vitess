@@ -59,6 +59,9 @@ type Cursor struct {
 // Node returns the current Node.
 func (c *Cursor) Node() AST { return c.node }
 
+// Path returns the current path of the Node.
+func (c *Cursor) Path() ASTPath { return ASTPath(c.current.ToPath()) }
+
 // Parent returns the parent of the current Node.
 func (c *Cursor) Parent() AST { return c.parent }
 

@@ -71,8 +71,8 @@ func (p *pathGen) genFile(spi generatorSPI) (string, *jen.File) {
 	// Add the ASTStep#DebugString() method to the file
 	p.file.Add(p.debugString())
 
-	// Add the generated WalkASTPath method
-	// p.file.Add(p.generateWalkASTPath())
+	// Add the generated GetNodeFromPath method
+	p.file.Add(p.generateGetNodeFromPath(spi))
 
 	return "ast_path.go", p.file
 }
@@ -208,8 +208,8 @@ func (p *pathGen) buildConstWithEnum() *jen.Statement {
 	return constBlock
 }
 
-func (p *pathGen) generateWalkASTPath() *jen.Statement {
-	method := jen.Func().Id("WalkASTPath").Params(
+func (p *pathGen) generateGetNodeFromPath(spi generatorSPI) *jen.Statement {
+	method := jen.Func().Id("GetNodeFromPath").Params(
 		jen.Id("node").Id(p.ifaceName),
 		jen.Id("path").Id("ASTPath"),
 	).Id(p.ifaceName).Block(
@@ -218,26 +218,31 @@ func (p *pathGen) generateWalkASTPath() *jen.Statement {
 		jen.Id("step").Op(":=").Qual("encoding/binary", "BigEndian").Dot("Uint16").Call(jen.Index().Byte().Parens(jen.Id("path[:2]"))),
 		jen.Id("path").Op("=").Id("path[2:]"),
 
-		jen.Switch(jen.Id("ASTStep").Parens(jen.Id("step"))).Block(p.generateWalkCases()...),
+		jen.Switch(jen.Id("ASTStep").Parens(jen.Id("step"))).Block(p.generateWalkCases(spi)...),
 		jen.Return(jen.Nil()), // Fallback return
 	)
 	return method
 }
 
-func (p *pathGen) generateWalkCases() []jen.Code {
+func (p *pathGen) generateWalkCases(spi generatorSPI) []jen.Code {
 	var cases []jen.Code
 
 	for _, step := range p.steps {
 		stepName := step.AsEnum()
 
+		// Check if the type implements the interface
+		if !types.Implements(step.container, spi.iface()) {
+			continue
+		}
+
 		if !step.slice {
-			// return WalkASTPath(node.(*RefContainer).ASTType, path)
+			// return GetNodeFromPath(node.(*RefContainer).ASTType, path)
 			t := types.TypeString(step.container, noQualifier)
 			n := jen.Id("node").Dot(fmt.Sprintf("(%s)", t)).Dot(step.name)
 
 			cases = append(cases, jen.Case(jen.Id(stepName)).Block(
 				// jen.Id("node").Op("=").Id("node").Dot(step.name),
-				jen.Return(jen.Id("WalkASTPath").Call(n, jen.Id("path"))),
+				jen.Return(jen.Id("GetNodeFromPath").Call(n, jen.Id("path"))),
 			))
 			continue
 		}
@@ -251,9 +256,9 @@ func (p *pathGen) generateWalkCases() []jen.Code {
 		}
 
 		cases = append(cases, jen.Case(jen.Id(stepName+"Offset")).Block(
-			jen.Id("idx").Op(":=").Id("path[0]"),
-			jen.Id("path").Op("=").Id("path[1:]"),
-			jen.Return(jen.Id("WalkASTPath").Call(assignNode, jen.Id("path"))),
+			jen.Id("idx, bytesRead").Op(":=").Qual("encoding/binary", "Varint").Call(jen.Index().Byte().Parens(jen.Id("path"))),
+			jen.Id("path").Op("=").Id("path[bytesRead:]"),
+			jen.Return(jen.Id("GetNodeFromPath").Call(assignNode, jen.Id("path"))),
 		))
 	}
 

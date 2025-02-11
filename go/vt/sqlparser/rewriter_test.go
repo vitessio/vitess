@@ -85,38 +85,23 @@ order by l_returnflag, l_linestatus`
 	ast, err := NewTestParser().Parse(q)
 	require.NoError(t, err)
 
-	var foundColNames []string
+	var foundColNamePaths []ASTPath
+	var foundColNames []*ColName
 	RewriteWithPath(ast,
 		func(cursor *Cursor) bool {
-			_, ok := cursor.Node().(*ColName)
+			colName, ok := cursor.Node().(*ColName)
 			if ok {
-				foundColNames = append(foundColNames, cursor.CurrentPath().DebugString())
+				foundColNames = append(foundColNames, colName)
+				foundColNamePaths = append(foundColNamePaths, cursor.Path())
 			}
 
 			return true
 		}, nil)
 
-	expected := []string{
-		"(*SelectExprs).ExprsOffset(0)->(*AliasedExpr).Expr",                                                       // l_returnflag
-		"(*SelectExprs).ExprsOffset(1)->(*AliasedExpr).Expr",                                                       // l_linestatus
-		"(*SelectExprs).ExprsOffset(2)->(*AliasedExpr).Expr->(*Sum).Arg",                                           // sum(l_quantity)
-		"(*SelectExprs).ExprsOffset(3)->(*AliasedExpr).Expr->(*Sum).Arg",                                           // sum(l_extendedprice)
-		"(*SelectExprs).ExprsOffset(4)->(*AliasedExpr).Expr->(*Sum).Arg->(*BinaryExpr).Left",                       // sum(->l_extendedprice<- * (1 - l_discount))
-		"(*SelectExprs).ExprsOffset(4)->(*AliasedExpr).Expr->(*Sum).Arg->(*BinaryExpr).Right->(*BinaryExpr).Right", // sum(l_extendedprice * (1 - ->l_discount<-))
-		"(*SelectExprs).ExprsOffset(5)->(*AliasedExpr).Expr->(*Sum).Arg->(*BinaryExpr).Left->(*BinaryExpr).Left",   // etc
-		"(*SelectExprs).ExprsOffset(5)->(*AliasedExpr).Expr->(*Sum).Arg->(*BinaryExpr).Left->(*BinaryExpr).Right->(*BinaryExpr).Right",
-		"(*SelectExprs).ExprsOffset(5)->(*AliasedExpr).Expr->(*Sum).Arg->(*BinaryExpr).Right->(*BinaryExpr).Right",
-		"(*SelectExprs).ExprsOffset(6)->(*AliasedExpr).Expr->(*Avg).Arg",
-		"(*SelectExprs).ExprsOffset(7)->(*AliasedExpr).Expr->(*Avg).Arg",
-		"(*SelectExprs).ExprsOffset(8)->(*AliasedExpr).Expr->(*Avg).Arg",
-		"(*Select).Where->(*Where).Expr->(*ComparisonExpr).Left",
-		"(*GroupBy).ExprsOffset(0)",
-		"(*GroupBy).ExprsOffset(1)",
-		"(*Select).OrderBy->(OrderBy)[]Offset(0)->(*Order).Expr",
-		"(*Select).OrderBy->(OrderBy)[]Offset(1)->(*Order).Expr",
+	for idx, path := range foundColNamePaths {
+		node := GetNodeFromPath(ast, path)
+		require.Same(t, foundColNames[idx], node)
 	}
-
-	assert.Equal(t, expected, foundColNames)
 }
 
 func TestReplaceAndRevisitWorksInLaterCalls(t *testing.T) {

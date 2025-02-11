@@ -17,6 +17,8 @@ limitations under the License.
 
 package integration
 
+import "encoding/binary"
+
 type ASTStep uint16
 
 const (
@@ -37,6 +39,7 @@ const (
 	RefOfValueContainerASTImplementationType
 	RefOfValueSliceContainerASTElementsOffset
 	RefOfValueSliceContainerASTImplementationElements
+	RefOfOptionsl
 )
 
 func (s ASTStep) DebugString() string {
@@ -75,6 +78,60 @@ func (s ASTStep) DebugString() string {
 		return "(*ValueSliceContainer).ASTElementsOffset"
 	case RefOfValueSliceContainerASTImplementationElements:
 		return "(*ValueSliceContainer).ASTImplementationElements"
+	case RefOfOptionsl:
+		return "(*Options).l"
 	}
 	panic("unknown ASTStep")
+}
+func GetNodeFromPath(node AST, path ASTPath) AST {
+	if path == "" {
+		return node
+	}
+	step := binary.BigEndian.Uint16([]byte(path[:2]))
+	path = path[2:]
+	switch ASTStep(step) {
+	case InterfaceSliceOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(InterfaceSlice)[idx], path)
+	case LeafSliceOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(LeafSlice)[idx], path)
+	case RefOfRefContainerASTType:
+		return GetNodeFromPath(node.(*RefContainer).ASTType, path)
+	case RefOfRefContainerASTImplementationType:
+		return GetNodeFromPath(node.(*RefContainer).ASTImplementationType, path)
+	case RefOfRefSliceContainerASTElementsOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(*RefSliceContainer).ASTElements[idx], path)
+	case RefOfRefSliceContainerASTImplementationElementsOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(*RefSliceContainer).ASTImplementationElements[idx], path)
+	case RefOfSubImplinner:
+		return GetNodeFromPath(node.(*SubImpl).inner, path)
+	case ValueContainerASTType:
+		return GetNodeFromPath(node.(ValueContainer).ASTType, path)
+	case ValueContainerASTImplementationType:
+		return GetNodeFromPath(node.(ValueContainer).ASTImplementationType, path)
+	case ValueSliceContainerASTElementsOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(ValueSliceContainer).ASTElements[idx], path)
+	case ValueSliceContainerASTImplementationElements:
+		return GetNodeFromPath(node.(ValueSliceContainer).ASTImplementationElements, path)
+	case RefOfValueContainerASTType:
+		return GetNodeFromPath(node.(*ValueContainer).ASTType, path)
+	case RefOfValueContainerASTImplementationType:
+		return GetNodeFromPath(node.(*ValueContainer).ASTImplementationType, path)
+	case RefOfValueSliceContainerASTElementsOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(*ValueSliceContainer).ASTElements[idx], path)
+	case RefOfValueSliceContainerASTImplementationElements:
+		return GetNodeFromPath(node.(*ValueSliceContainer).ASTImplementationElements, path)
+	}
+	return nil
 }

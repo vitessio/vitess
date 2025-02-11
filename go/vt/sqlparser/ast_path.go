@@ -17,6 +17,8 @@ limitations under the License.
 
 package sqlparser
 
+import "encoding/binary"
+
 type ASTStep uint16
 
 const (
@@ -1649,4 +1651,1128 @@ func (s ASTStep) DebugString() string {
 		return "(*RenameTablePair).ToTable"
 	}
 	panic("unknown ASTStep")
+}
+func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
+	if path == "" {
+		return node
+	}
+	step := binary.BigEndian.Uint16([]byte(path[:2]))
+	path = path[2:]
+	switch ASTStep(step) {
+	case RefOfAddColumnsColumnsOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(*AddColumns).Columns[idx], path)
+	case RefOfAddColumnsAfter:
+		return GetNodeFromPath(node.(*AddColumns).After, path)
+	case RefOfAddConstraintDefinitionConstraintDefinition:
+		return GetNodeFromPath(node.(*AddConstraintDefinition).ConstraintDefinition, path)
+	case RefOfAddIndexDefinitionIndexDefinition:
+		return GetNodeFromPath(node.(*AddIndexDefinition).IndexDefinition, path)
+	case RefOfAliasedExprExpr:
+		return GetNodeFromPath(node.(*AliasedExpr).Expr, path)
+	case RefOfAliasedExprAs:
+		return GetNodeFromPath(node.(*AliasedExpr).As, path)
+	case RefOfAliasedTableExprExpr:
+		return GetNodeFromPath(node.(*AliasedTableExpr).Expr, path)
+	case RefOfAliasedTableExprPartitions:
+		return GetNodeFromPath(node.(*AliasedTableExpr).Partitions, path)
+	case RefOfAliasedTableExprAs:
+		return GetNodeFromPath(node.(*AliasedTableExpr).As, path)
+	case RefOfAliasedTableExprHints:
+		return GetNodeFromPath(node.(*AliasedTableExpr).Hints, path)
+	case RefOfAliasedTableExprColumns:
+		return GetNodeFromPath(node.(*AliasedTableExpr).Columns, path)
+	case RefOfAlterCheckName:
+		return GetNodeFromPath(node.(*AlterCheck).Name, path)
+	case RefOfAlterColumnColumn:
+		return GetNodeFromPath(node.(*AlterColumn).Column, path)
+	case RefOfAlterColumnDefaultVal:
+		return GetNodeFromPath(node.(*AlterColumn).DefaultVal, path)
+	case RefOfAlterDatabaseComments:
+		return GetNodeFromPath(node.(*AlterDatabase).Comments, path)
+	case RefOfAlterDatabaseDBName:
+		return GetNodeFromPath(node.(*AlterDatabase).DBName, path)
+	case RefOfAlterIndexName:
+		return GetNodeFromPath(node.(*AlterIndex).Name, path)
+	case RefOfAlterMigrationRatio:
+		return GetNodeFromPath(node.(*AlterMigration).Ratio, path)
+	case RefOfAlterTableTable:
+		return GetNodeFromPath(node.(*AlterTable).Table, path)
+	case RefOfAlterTableAlterOptionsOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(*AlterTable).AlterOptions[idx], path)
+	case RefOfAlterTablePartitionSpec:
+		return GetNodeFromPath(node.(*AlterTable).PartitionSpec, path)
+	case RefOfAlterTablePartitionOption:
+		return GetNodeFromPath(node.(*AlterTable).PartitionOption, path)
+	case RefOfAlterTableComments:
+		return GetNodeFromPath(node.(*AlterTable).Comments, path)
+	case RefOfAlterViewViewName:
+		return GetNodeFromPath(node.(*AlterView).ViewName, path)
+	case RefOfAlterViewDefiner:
+		return GetNodeFromPath(node.(*AlterView).Definer, path)
+	case RefOfAlterViewColumns:
+		return GetNodeFromPath(node.(*AlterView).Columns, path)
+	case RefOfAlterViewSelect:
+		return GetNodeFromPath(node.(*AlterView).Select, path)
+	case RefOfAlterViewComments:
+		return GetNodeFromPath(node.(*AlterView).Comments, path)
+	case RefOfAlterVschemaTable:
+		return GetNodeFromPath(node.(*AlterVschema).Table, path)
+	case RefOfAlterVschemaVindexSpec:
+		return GetNodeFromPath(node.(*AlterVschema).VindexSpec, path)
+	case RefOfAlterVschemaVindexColsOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(*AlterVschema).VindexCols[idx], path)
+	case RefOfAlterVschemaAutoIncSpec:
+		return GetNodeFromPath(node.(*AlterVschema).AutoIncSpec, path)
+	case RefOfAnalyzeTable:
+		return GetNodeFromPath(node.(*Analyze).Table, path)
+	case RefOfAndExprLeft:
+		return GetNodeFromPath(node.(*AndExpr).Left, path)
+	case RefOfAndExprRight:
+		return GetNodeFromPath(node.(*AndExpr).Right, path)
+	case RefOfAnyValueArg:
+		return GetNodeFromPath(node.(*AnyValue).Arg, path)
+	case RefOfArgumentLessWindowExprOverClause:
+		return GetNodeFromPath(node.(*ArgumentLessWindowExpr).OverClause, path)
+	case RefOfAssignmentExprLeft:
+		return GetNodeFromPath(node.(*AssignmentExpr).Left, path)
+	case RefOfAssignmentExprRight:
+		return GetNodeFromPath(node.(*AssignmentExpr).Right, path)
+	case RefOfAutoIncSpecColumn:
+		return GetNodeFromPath(node.(*AutoIncSpec).Column, path)
+	case RefOfAutoIncSpecSequence:
+		return GetNodeFromPath(node.(*AutoIncSpec).Sequence, path)
+	case RefOfAvgArg:
+		return GetNodeFromPath(node.(*Avg).Arg, path)
+	case RefOfAvgOverClause:
+		return GetNodeFromPath(node.(*Avg).OverClause, path)
+	case RefOfBetweenExprLeft:
+		return GetNodeFromPath(node.(*BetweenExpr).Left, path)
+	case RefOfBetweenExprFrom:
+		return GetNodeFromPath(node.(*BetweenExpr).From, path)
+	case RefOfBetweenExprTo:
+		return GetNodeFromPath(node.(*BetweenExpr).To, path)
+	case RefOfBinaryExprLeft:
+		return GetNodeFromPath(node.(*BinaryExpr).Left, path)
+	case RefOfBinaryExprRight:
+		return GetNodeFromPath(node.(*BinaryExpr).Right, path)
+	case RefOfBitAndArg:
+		return GetNodeFromPath(node.(*BitAnd).Arg, path)
+	case RefOfBitAndOverClause:
+		return GetNodeFromPath(node.(*BitAnd).OverClause, path)
+	case RefOfBitOrArg:
+		return GetNodeFromPath(node.(*BitOr).Arg, path)
+	case RefOfBitOrOverClause:
+		return GetNodeFromPath(node.(*BitOr).OverClause, path)
+	case RefOfBitXorArg:
+		return GetNodeFromPath(node.(*BitXor).Arg, path)
+	case RefOfBitXorOverClause:
+		return GetNodeFromPath(node.(*BitXor).OverClause, path)
+	case RefOfCallProcName:
+		return GetNodeFromPath(node.(*CallProc).Name, path)
+	case RefOfCallProcParamsOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(*CallProc).Params[idx], path)
+	case RefOfCaseExprExpr:
+		return GetNodeFromPath(node.(*CaseExpr).Expr, path)
+	case RefOfCaseExprWhensOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(*CaseExpr).Whens[idx], path)
+	case RefOfCaseExprElse:
+		return GetNodeFromPath(node.(*CaseExpr).Else, path)
+	case RefOfCastExprExpr:
+		return GetNodeFromPath(node.(*CastExpr).Expr, path)
+	case RefOfCastExprType:
+		return GetNodeFromPath(node.(*CastExpr).Type, path)
+	case RefOfChangeColumnOldColumn:
+		return GetNodeFromPath(node.(*ChangeColumn).OldColumn, path)
+	case RefOfChangeColumnNewColDefinition:
+		return GetNodeFromPath(node.(*ChangeColumn).NewColDefinition, path)
+	case RefOfChangeColumnAfter:
+		return GetNodeFromPath(node.(*ChangeColumn).After, path)
+	case RefOfCharExprExprsOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(*CharExpr).Exprs[idx], path)
+	case RefOfCheckConstraintDefinitionExpr:
+		return GetNodeFromPath(node.(*CheckConstraintDefinition).Expr, path)
+	case RefOfColNameName:
+		return GetNodeFromPath(node.(*ColName).Name, path)
+	case RefOfColNameQualifier:
+		return GetNodeFromPath(node.(*ColName).Qualifier, path)
+	case RefOfCollateExprExpr:
+		return GetNodeFromPath(node.(*CollateExpr).Expr, path)
+	case RefOfColumnDefinitionName:
+		return GetNodeFromPath(node.(*ColumnDefinition).Name, path)
+	case RefOfColumnDefinitionType:
+		return GetNodeFromPath(node.(*ColumnDefinition).Type, path)
+	case ColumnsOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(Columns)[idx], path)
+	case RefOfCommonTableExprID:
+		return GetNodeFromPath(node.(*CommonTableExpr).ID, path)
+	case RefOfCommonTableExprColumns:
+		return GetNodeFromPath(node.(*CommonTableExpr).Columns, path)
+	case RefOfCommonTableExprSubquery:
+		return GetNodeFromPath(node.(*CommonTableExpr).Subquery, path)
+	case RefOfComparisonExprLeft:
+		return GetNodeFromPath(node.(*ComparisonExpr).Left, path)
+	case RefOfComparisonExprRight:
+		return GetNodeFromPath(node.(*ComparisonExpr).Right, path)
+	case RefOfComparisonExprEscape:
+		return GetNodeFromPath(node.(*ComparisonExpr).Escape, path)
+	case RefOfConstraintDefinitionName:
+		return GetNodeFromPath(node.(*ConstraintDefinition).Name, path)
+	case RefOfConstraintDefinitionDetails:
+		return GetNodeFromPath(node.(*ConstraintDefinition).Details, path)
+	case RefOfConvertExprExpr:
+		return GetNodeFromPath(node.(*ConvertExpr).Expr, path)
+	case RefOfConvertExprType:
+		return GetNodeFromPath(node.(*ConvertExpr).Type, path)
+	case RefOfConvertUsingExprExpr:
+		return GetNodeFromPath(node.(*ConvertUsingExpr).Expr, path)
+	case RefOfCountArgsOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(*Count).Args[idx], path)
+	case RefOfCountOverClause:
+		return GetNodeFromPath(node.(*Count).OverClause, path)
+	case RefOfCountStarOverClause:
+		return GetNodeFromPath(node.(*CountStar).OverClause, path)
+	case RefOfCreateDatabaseComments:
+		return GetNodeFromPath(node.(*CreateDatabase).Comments, path)
+	case RefOfCreateDatabaseDBName:
+		return GetNodeFromPath(node.(*CreateDatabase).DBName, path)
+	case RefOfCreateTableTable:
+		return GetNodeFromPath(node.(*CreateTable).Table, path)
+	case RefOfCreateTableTableSpec:
+		return GetNodeFromPath(node.(*CreateTable).TableSpec, path)
+	case RefOfCreateTableOptLike:
+		return GetNodeFromPath(node.(*CreateTable).OptLike, path)
+	case RefOfCreateTableComments:
+		return GetNodeFromPath(node.(*CreateTable).Comments, path)
+	case RefOfCreateViewViewName:
+		return GetNodeFromPath(node.(*CreateView).ViewName, path)
+	case RefOfCreateViewDefiner:
+		return GetNodeFromPath(node.(*CreateView).Definer, path)
+	case RefOfCreateViewColumns:
+		return GetNodeFromPath(node.(*CreateView).Columns, path)
+	case RefOfCreateViewSelect:
+		return GetNodeFromPath(node.(*CreateView).Select, path)
+	case RefOfCreateViewComments:
+		return GetNodeFromPath(node.(*CreateView).Comments, path)
+	case RefOfCurTimeFuncExprName:
+		return GetNodeFromPath(node.(*CurTimeFuncExpr).Name, path)
+	case RefOfDeallocateStmtComments:
+		return GetNodeFromPath(node.(*DeallocateStmt).Comments, path)
+	case RefOfDeallocateStmtName:
+		return GetNodeFromPath(node.(*DeallocateStmt).Name, path)
+	case RefOfDeleteWith:
+		return GetNodeFromPath(node.(*Delete).With, path)
+	case RefOfDeleteComments:
+		return GetNodeFromPath(node.(*Delete).Comments, path)
+	case RefOfDeleteTableExprsOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(*Delete).TableExprs[idx], path)
+	case RefOfDeleteTargets:
+		return GetNodeFromPath(node.(*Delete).Targets, path)
+	case RefOfDeletePartitions:
+		return GetNodeFromPath(node.(*Delete).Partitions, path)
+	case RefOfDeleteWhere:
+		return GetNodeFromPath(node.(*Delete).Where, path)
+	case RefOfDeleteOrderBy:
+		return GetNodeFromPath(node.(*Delete).OrderBy, path)
+	case RefOfDeleteLimit:
+		return GetNodeFromPath(node.(*Delete).Limit, path)
+	case RefOfDerivedTableSelect:
+		return GetNodeFromPath(node.(*DerivedTable).Select, path)
+	case RefOfDropColumnName:
+		return GetNodeFromPath(node.(*DropColumn).Name, path)
+	case RefOfDropDatabaseComments:
+		return GetNodeFromPath(node.(*DropDatabase).Comments, path)
+	case RefOfDropDatabaseDBName:
+		return GetNodeFromPath(node.(*DropDatabase).DBName, path)
+	case RefOfDropKeyName:
+		return GetNodeFromPath(node.(*DropKey).Name, path)
+	case RefOfDropTableFromTables:
+		return GetNodeFromPath(node.(*DropTable).FromTables, path)
+	case RefOfDropTableComments:
+		return GetNodeFromPath(node.(*DropTable).Comments, path)
+	case RefOfDropViewFromTables:
+		return GetNodeFromPath(node.(*DropView).FromTables, path)
+	case RefOfDropViewComments:
+		return GetNodeFromPath(node.(*DropView).Comments, path)
+	case RefOfExecuteStmtName:
+		return GetNodeFromPath(node.(*ExecuteStmt).Name, path)
+	case RefOfExecuteStmtComments:
+		return GetNodeFromPath(node.(*ExecuteStmt).Comments, path)
+	case RefOfExecuteStmtArgumentsOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(*ExecuteStmt).Arguments[idx], path)
+	case RefOfExistsExprSubquery:
+		return GetNodeFromPath(node.(*ExistsExpr).Subquery, path)
+	case RefOfExplainStmtStatement:
+		return GetNodeFromPath(node.(*ExplainStmt).Statement, path)
+	case RefOfExplainStmtComments:
+		return GetNodeFromPath(node.(*ExplainStmt).Comments, path)
+	case RefOfExplainTabTable:
+		return GetNodeFromPath(node.(*ExplainTab).Table, path)
+	case RefOfExprsExprsOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(*Exprs).Exprs[idx], path)
+	case RefOfExtractFuncExprExpr:
+		return GetNodeFromPath(node.(*ExtractFuncExpr).Expr, path)
+	case RefOfExtractValueExprFragment:
+		return GetNodeFromPath(node.(*ExtractValueExpr).Fragment, path)
+	case RefOfExtractValueExprXPathExpr:
+		return GetNodeFromPath(node.(*ExtractValueExpr).XPathExpr, path)
+	case RefOfFirstOrLastValueExprExpr:
+		return GetNodeFromPath(node.(*FirstOrLastValueExpr).Expr, path)
+	case RefOfFirstOrLastValueExprNullTreatmentClause:
+		return GetNodeFromPath(node.(*FirstOrLastValueExpr).NullTreatmentClause, path)
+	case RefOfFirstOrLastValueExprOverClause:
+		return GetNodeFromPath(node.(*FirstOrLastValueExpr).OverClause, path)
+	case RefOfFlushTableNames:
+		return GetNodeFromPath(node.(*Flush).TableNames, path)
+	case RefOfForeignKeyDefinitionSource:
+		return GetNodeFromPath(node.(*ForeignKeyDefinition).Source, path)
+	case RefOfForeignKeyDefinitionIndexName:
+		return GetNodeFromPath(node.(*ForeignKeyDefinition).IndexName, path)
+	case RefOfForeignKeyDefinitionReferenceDefinition:
+		return GetNodeFromPath(node.(*ForeignKeyDefinition).ReferenceDefinition, path)
+	case RefOfFrameClauseStart:
+		return GetNodeFromPath(node.(*FrameClause).Start, path)
+	case RefOfFrameClauseEnd:
+		return GetNodeFromPath(node.(*FrameClause).End, path)
+	case RefOfFramePointExpr:
+		return GetNodeFromPath(node.(*FramePoint).Expr, path)
+	case RefOfFuncExprQualifier:
+		return GetNodeFromPath(node.(*FuncExpr).Qualifier, path)
+	case RefOfFuncExprName:
+		return GetNodeFromPath(node.(*FuncExpr).Name, path)
+	case RefOfFuncExprExprsOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(*FuncExpr).Exprs[idx], path)
+	case RefOfGTIDFuncExprSet1:
+		return GetNodeFromPath(node.(*GTIDFuncExpr).Set1, path)
+	case RefOfGTIDFuncExprSet2:
+		return GetNodeFromPath(node.(*GTIDFuncExpr).Set2, path)
+	case RefOfGTIDFuncExprTimeout:
+		return GetNodeFromPath(node.(*GTIDFuncExpr).Timeout, path)
+	case RefOfGTIDFuncExprChannel:
+		return GetNodeFromPath(node.(*GTIDFuncExpr).Channel, path)
+	case RefOfGeoHashFromLatLongExprLatitude:
+		return GetNodeFromPath(node.(*GeoHashFromLatLongExpr).Latitude, path)
+	case RefOfGeoHashFromLatLongExprLongitude:
+		return GetNodeFromPath(node.(*GeoHashFromLatLongExpr).Longitude, path)
+	case RefOfGeoHashFromLatLongExprMaxLength:
+		return GetNodeFromPath(node.(*GeoHashFromLatLongExpr).MaxLength, path)
+	case RefOfGeoHashFromPointExprPoint:
+		return GetNodeFromPath(node.(*GeoHashFromPointExpr).Point, path)
+	case RefOfGeoHashFromPointExprMaxLength:
+		return GetNodeFromPath(node.(*GeoHashFromPointExpr).MaxLength, path)
+	case RefOfGeoJSONFromGeomExprGeom:
+		return GetNodeFromPath(node.(*GeoJSONFromGeomExpr).Geom, path)
+	case RefOfGeoJSONFromGeomExprMaxDecimalDigits:
+		return GetNodeFromPath(node.(*GeoJSONFromGeomExpr).MaxDecimalDigits, path)
+	case RefOfGeoJSONFromGeomExprBitmask:
+		return GetNodeFromPath(node.(*GeoJSONFromGeomExpr).Bitmask, path)
+	case RefOfGeomCollPropertyFuncExprGeomColl:
+		return GetNodeFromPath(node.(*GeomCollPropertyFuncExpr).GeomColl, path)
+	case RefOfGeomCollPropertyFuncExprPropertyDefArg:
+		return GetNodeFromPath(node.(*GeomCollPropertyFuncExpr).PropertyDefArg, path)
+	case RefOfGeomFormatExprGeom:
+		return GetNodeFromPath(node.(*GeomFormatExpr).Geom, path)
+	case RefOfGeomFormatExprAxisOrderOpt:
+		return GetNodeFromPath(node.(*GeomFormatExpr).AxisOrderOpt, path)
+	case RefOfGeomFromGeoHashExprGeoHash:
+		return GetNodeFromPath(node.(*GeomFromGeoHashExpr).GeoHash, path)
+	case RefOfGeomFromGeoHashExprSridOpt:
+		return GetNodeFromPath(node.(*GeomFromGeoHashExpr).SridOpt, path)
+	case RefOfGeomFromGeoJSONExprGeoJSON:
+		return GetNodeFromPath(node.(*GeomFromGeoJSONExpr).GeoJSON, path)
+	case RefOfGeomFromGeoJSONExprHigherDimHandlerOpt:
+		return GetNodeFromPath(node.(*GeomFromGeoJSONExpr).HigherDimHandlerOpt, path)
+	case RefOfGeomFromGeoJSONExprSrid:
+		return GetNodeFromPath(node.(*GeomFromGeoJSONExpr).Srid, path)
+	case RefOfGeomFromTextExprWktText:
+		return GetNodeFromPath(node.(*GeomFromTextExpr).WktText, path)
+	case RefOfGeomFromTextExprSrid:
+		return GetNodeFromPath(node.(*GeomFromTextExpr).Srid, path)
+	case RefOfGeomFromTextExprAxisOrderOpt:
+		return GetNodeFromPath(node.(*GeomFromTextExpr).AxisOrderOpt, path)
+	case RefOfGeomFromWKBExprWkbBlob:
+		return GetNodeFromPath(node.(*GeomFromWKBExpr).WkbBlob, path)
+	case RefOfGeomFromWKBExprSrid:
+		return GetNodeFromPath(node.(*GeomFromWKBExpr).Srid, path)
+	case RefOfGeomFromWKBExprAxisOrderOpt:
+		return GetNodeFromPath(node.(*GeomFromWKBExpr).AxisOrderOpt, path)
+	case RefOfGeomPropertyFuncExprGeom:
+		return GetNodeFromPath(node.(*GeomPropertyFuncExpr).Geom, path)
+	case RefOfGroupByExprsOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(*GroupBy).Exprs[idx], path)
+	case RefOfGroupConcatExprExprsOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(*GroupConcatExpr).Exprs[idx], path)
+	case RefOfGroupConcatExprOrderBy:
+		return GetNodeFromPath(node.(*GroupConcatExpr).OrderBy, path)
+	case RefOfGroupConcatExprLimit:
+		return GetNodeFromPath(node.(*GroupConcatExpr).Limit, path)
+	case RefOfIndexDefinitionInfo:
+		return GetNodeFromPath(node.(*IndexDefinition).Info, path)
+	case RefOfIndexHintIndexesOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(*IndexHint).Indexes[idx], path)
+	case IndexHintsOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(IndexHints)[idx], path)
+	case RefOfIndexInfoName:
+		return GetNodeFromPath(node.(*IndexInfo).Name, path)
+	case RefOfIndexInfoConstraintName:
+		return GetNodeFromPath(node.(*IndexInfo).ConstraintName, path)
+	case RefOfInsertComments:
+		return GetNodeFromPath(node.(*Insert).Comments, path)
+	case RefOfInsertTable:
+		return GetNodeFromPath(node.(*Insert).Table, path)
+	case RefOfInsertPartitions:
+		return GetNodeFromPath(node.(*Insert).Partitions, path)
+	case RefOfInsertColumns:
+		return GetNodeFromPath(node.(*Insert).Columns, path)
+	case RefOfInsertRows:
+		return GetNodeFromPath(node.(*Insert).Rows, path)
+	case RefOfInsertRowAlias:
+		return GetNodeFromPath(node.(*Insert).RowAlias, path)
+	case RefOfInsertOnDup:
+		return GetNodeFromPath(node.(*Insert).OnDup, path)
+	case RefOfInsertExprStr:
+		return GetNodeFromPath(node.(*InsertExpr).Str, path)
+	case RefOfInsertExprPos:
+		return GetNodeFromPath(node.(*InsertExpr).Pos, path)
+	case RefOfInsertExprLen:
+		return GetNodeFromPath(node.(*InsertExpr).Len, path)
+	case RefOfInsertExprNewStr:
+		return GetNodeFromPath(node.(*InsertExpr).NewStr, path)
+	case RefOfIntervalDateExprDate:
+		return GetNodeFromPath(node.(*IntervalDateExpr).Date, path)
+	case RefOfIntervalDateExprInterval:
+		return GetNodeFromPath(node.(*IntervalDateExpr).Interval, path)
+	case RefOfIntervalFuncExprExpr:
+		return GetNodeFromPath(node.(*IntervalFuncExpr).Expr, path)
+	case RefOfIntervalFuncExprExprsOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(*IntervalFuncExpr).Exprs[idx], path)
+	case RefOfIntroducerExprExpr:
+		return GetNodeFromPath(node.(*IntroducerExpr).Expr, path)
+	case RefOfIsExprLeft:
+		return GetNodeFromPath(node.(*IsExpr).Left, path)
+	case RefOfJSONArrayAggExpr:
+		return GetNodeFromPath(node.(*JSONArrayAgg).Expr, path)
+	case RefOfJSONArrayAggOverClause:
+		return GetNodeFromPath(node.(*JSONArrayAgg).OverClause, path)
+	case RefOfJSONArrayExprParamsOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(*JSONArrayExpr).Params[idx], path)
+	case RefOfJSONAttributesExprJSONDoc:
+		return GetNodeFromPath(node.(*JSONAttributesExpr).JSONDoc, path)
+	case RefOfJSONAttributesExprPath:
+		return GetNodeFromPath(node.(*JSONAttributesExpr).Path, path)
+	case RefOfJSONContainsExprTarget:
+		return GetNodeFromPath(node.(*JSONContainsExpr).Target, path)
+	case RefOfJSONContainsExprCandidate:
+		return GetNodeFromPath(node.(*JSONContainsExpr).Candidate, path)
+	case RefOfJSONContainsExprPathListOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(*JSONContainsExpr).PathList[idx], path)
+	case RefOfJSONContainsPathExprJSONDoc:
+		return GetNodeFromPath(node.(*JSONContainsPathExpr).JSONDoc, path)
+	case RefOfJSONContainsPathExprOneOrAll:
+		return GetNodeFromPath(node.(*JSONContainsPathExpr).OneOrAll, path)
+	case RefOfJSONContainsPathExprPathListOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(*JSONContainsPathExpr).PathList[idx], path)
+	case RefOfJSONExtractExprJSONDoc:
+		return GetNodeFromPath(node.(*JSONExtractExpr).JSONDoc, path)
+	case RefOfJSONExtractExprPathListOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(*JSONExtractExpr).PathList[idx], path)
+	case RefOfJSONKeysExprJSONDoc:
+		return GetNodeFromPath(node.(*JSONKeysExpr).JSONDoc, path)
+	case RefOfJSONKeysExprPath:
+		return GetNodeFromPath(node.(*JSONKeysExpr).Path, path)
+	case RefOfJSONObjectAggKey:
+		return GetNodeFromPath(node.(*JSONObjectAgg).Key, path)
+	case RefOfJSONObjectAggValue:
+		return GetNodeFromPath(node.(*JSONObjectAgg).Value, path)
+	case RefOfJSONObjectAggOverClause:
+		return GetNodeFromPath(node.(*JSONObjectAgg).OverClause, path)
+	case RefOfJSONObjectExprParamsOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(*JSONObjectExpr).Params[idx], path)
+	case RefOfJSONObjectParamKey:
+		return GetNodeFromPath(node.(*JSONObjectParam).Key, path)
+	case RefOfJSONObjectParamValue:
+		return GetNodeFromPath(node.(*JSONObjectParam).Value, path)
+	case RefOfJSONOverlapsExprJSONDoc1:
+		return GetNodeFromPath(node.(*JSONOverlapsExpr).JSONDoc1, path)
+	case RefOfJSONOverlapsExprJSONDoc2:
+		return GetNodeFromPath(node.(*JSONOverlapsExpr).JSONDoc2, path)
+	case RefOfJSONPrettyExprJSONVal:
+		return GetNodeFromPath(node.(*JSONPrettyExpr).JSONVal, path)
+	case RefOfJSONQuoteExprStringArg:
+		return GetNodeFromPath(node.(*JSONQuoteExpr).StringArg, path)
+	case RefOfJSONRemoveExprJSONDoc:
+		return GetNodeFromPath(node.(*JSONRemoveExpr).JSONDoc, path)
+	case RefOfJSONRemoveExprPathListOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(*JSONRemoveExpr).PathList[idx], path)
+	case RefOfJSONSchemaValidFuncExprSchema:
+		return GetNodeFromPath(node.(*JSONSchemaValidFuncExpr).Schema, path)
+	case RefOfJSONSchemaValidFuncExprDocument:
+		return GetNodeFromPath(node.(*JSONSchemaValidFuncExpr).Document, path)
+	case RefOfJSONSchemaValidationReportFuncExprSchema:
+		return GetNodeFromPath(node.(*JSONSchemaValidationReportFuncExpr).Schema, path)
+	case RefOfJSONSchemaValidationReportFuncExprDocument:
+		return GetNodeFromPath(node.(*JSONSchemaValidationReportFuncExpr).Document, path)
+	case RefOfJSONSearchExprJSONDoc:
+		return GetNodeFromPath(node.(*JSONSearchExpr).JSONDoc, path)
+	case RefOfJSONSearchExprOneOrAll:
+		return GetNodeFromPath(node.(*JSONSearchExpr).OneOrAll, path)
+	case RefOfJSONSearchExprSearchStr:
+		return GetNodeFromPath(node.(*JSONSearchExpr).SearchStr, path)
+	case RefOfJSONSearchExprEscapeChar:
+		return GetNodeFromPath(node.(*JSONSearchExpr).EscapeChar, path)
+	case RefOfJSONSearchExprPathListOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(*JSONSearchExpr).PathList[idx], path)
+	case RefOfJSONStorageFreeExprJSONVal:
+		return GetNodeFromPath(node.(*JSONStorageFreeExpr).JSONVal, path)
+	case RefOfJSONStorageSizeExprJSONVal:
+		return GetNodeFromPath(node.(*JSONStorageSizeExpr).JSONVal, path)
+	case RefOfJSONTableExprExpr:
+		return GetNodeFromPath(node.(*JSONTableExpr).Expr, path)
+	case RefOfJSONTableExprAlias:
+		return GetNodeFromPath(node.(*JSONTableExpr).Alias, path)
+	case RefOfJSONTableExprFilter:
+		return GetNodeFromPath(node.(*JSONTableExpr).Filter, path)
+	case RefOfJSONTableExprColumnsOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(*JSONTableExpr).Columns[idx], path)
+	case RefOfJSONUnquoteExprJSONValue:
+		return GetNodeFromPath(node.(*JSONUnquoteExpr).JSONValue, path)
+	case RefOfJSONValueExprJSONDoc:
+		return GetNodeFromPath(node.(*JSONValueExpr).JSONDoc, path)
+	case RefOfJSONValueExprPath:
+		return GetNodeFromPath(node.(*JSONValueExpr).Path, path)
+	case RefOfJSONValueExprReturningType:
+		return GetNodeFromPath(node.(*JSONValueExpr).ReturningType, path)
+	case RefOfJSONValueExprEmptyOnResponse:
+		return GetNodeFromPath(node.(*JSONValueExpr).EmptyOnResponse, path)
+	case RefOfJSONValueExprErrorOnResponse:
+		return GetNodeFromPath(node.(*JSONValueExpr).ErrorOnResponse, path)
+	case RefOfJSONValueMergeExprJSONDoc:
+		return GetNodeFromPath(node.(*JSONValueMergeExpr).JSONDoc, path)
+	case RefOfJSONValueMergeExprJSONDocListOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(*JSONValueMergeExpr).JSONDocList[idx], path)
+	case RefOfJSONValueModifierExprJSONDoc:
+		return GetNodeFromPath(node.(*JSONValueModifierExpr).JSONDoc, path)
+	case RefOfJSONValueModifierExprParamsOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(*JSONValueModifierExpr).Params[idx], path)
+	case RefOfJoinConditionOn:
+		return GetNodeFromPath(node.(*JoinCondition).On, path)
+	case RefOfJoinConditionUsing:
+		return GetNodeFromPath(node.(*JoinCondition).Using, path)
+	case RefOfJoinTableExprLeftExpr:
+		return GetNodeFromPath(node.(*JoinTableExpr).LeftExpr, path)
+	case RefOfJoinTableExprRightExpr:
+		return GetNodeFromPath(node.(*JoinTableExpr).RightExpr, path)
+	case RefOfJoinTableExprCondition:
+		return GetNodeFromPath(node.(*JoinTableExpr).Condition, path)
+	case RefOfJtOnResponseExpr:
+		return GetNodeFromPath(node.(*JtOnResponse).Expr, path)
+	case RefOfLagLeadExprExpr:
+		return GetNodeFromPath(node.(*LagLeadExpr).Expr, path)
+	case RefOfLagLeadExprN:
+		return GetNodeFromPath(node.(*LagLeadExpr).N, path)
+	case RefOfLagLeadExprDefault:
+		return GetNodeFromPath(node.(*LagLeadExpr).Default, path)
+	case RefOfLagLeadExprOverClause:
+		return GetNodeFromPath(node.(*LagLeadExpr).OverClause, path)
+	case RefOfLagLeadExprNullTreatmentClause:
+		return GetNodeFromPath(node.(*LagLeadExpr).NullTreatmentClause, path)
+	case RefOfLimitOffset:
+		return GetNodeFromPath(node.(*Limit).Offset, path)
+	case RefOfLimitRowcount:
+		return GetNodeFromPath(node.(*Limit).Rowcount, path)
+	case RefOfLineStringExprPointParamsOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(*LineStringExpr).PointParams[idx], path)
+	case RefOfLinestrPropertyFuncExprLinestring:
+		return GetNodeFromPath(node.(*LinestrPropertyFuncExpr).Linestring, path)
+	case RefOfLinestrPropertyFuncExprPropertyDefArg:
+		return GetNodeFromPath(node.(*LinestrPropertyFuncExpr).PropertyDefArg, path)
+	case RefOfLocateExprSubStr:
+		return GetNodeFromPath(node.(*LocateExpr).SubStr, path)
+	case RefOfLocateExprStr:
+		return GetNodeFromPath(node.(*LocateExpr).Str, path)
+	case RefOfLocateExprPos:
+		return GetNodeFromPath(node.(*LocateExpr).Pos, path)
+	case RefOfLockingFuncName:
+		return GetNodeFromPath(node.(*LockingFunc).Name, path)
+	case RefOfLockingFuncTimeout:
+		return GetNodeFromPath(node.(*LockingFunc).Timeout, path)
+	case RefOfMatchExprColumnsOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(*MatchExpr).Columns[idx], path)
+	case RefOfMatchExprExpr:
+		return GetNodeFromPath(node.(*MatchExpr).Expr, path)
+	case RefOfMaxArg:
+		return GetNodeFromPath(node.(*Max).Arg, path)
+	case RefOfMaxOverClause:
+		return GetNodeFromPath(node.(*Max).OverClause, path)
+	case RefOfMemberOfExprValue:
+		return GetNodeFromPath(node.(*MemberOfExpr).Value, path)
+	case RefOfMemberOfExprJSONArr:
+		return GetNodeFromPath(node.(*MemberOfExpr).JSONArr, path)
+	case RefOfMinArg:
+		return GetNodeFromPath(node.(*Min).Arg, path)
+	case RefOfMinOverClause:
+		return GetNodeFromPath(node.(*Min).OverClause, path)
+	case RefOfModifyColumnNewColDefinition:
+		return GetNodeFromPath(node.(*ModifyColumn).NewColDefinition, path)
+	case RefOfModifyColumnAfter:
+		return GetNodeFromPath(node.(*ModifyColumn).After, path)
+	case RefOfMultiLinestringExprLinestringParamsOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(*MultiLinestringExpr).LinestringParams[idx], path)
+	case RefOfMultiPointExprPointParamsOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(*MultiPointExpr).PointParams[idx], path)
+	case RefOfMultiPolygonExprPolygonParamsOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(*MultiPolygonExpr).PolygonParams[idx], path)
+	case RefOfNTHValueExprExpr:
+		return GetNodeFromPath(node.(*NTHValueExpr).Expr, path)
+	case RefOfNTHValueExprN:
+		return GetNodeFromPath(node.(*NTHValueExpr).N, path)
+	case RefOfNTHValueExprOverClause:
+		return GetNodeFromPath(node.(*NTHValueExpr).OverClause, path)
+	case RefOfNTHValueExprFromFirstLastClause:
+		return GetNodeFromPath(node.(*NTHValueExpr).FromFirstLastClause, path)
+	case RefOfNTHValueExprNullTreatmentClause:
+		return GetNodeFromPath(node.(*NTHValueExpr).NullTreatmentClause, path)
+	case RefOfNamedWindowWindows:
+		return GetNodeFromPath(node.(*NamedWindow).Windows, path)
+	case NamedWindowsOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(NamedWindows)[idx], path)
+	case RefOfNextvalExpr:
+		return GetNodeFromPath(node.(*Nextval).Expr, path)
+	case RefOfNotExprExpr:
+		return GetNodeFromPath(node.(*NotExpr).Expr, path)
+	case RefOfNtileExprN:
+		return GetNodeFromPath(node.(*NtileExpr).N, path)
+	case RefOfNtileExprOverClause:
+		return GetNodeFromPath(node.(*NtileExpr).OverClause, path)
+	case RefOfOffsetOriginal:
+		return GetNodeFromPath(node.(*Offset).Original, path)
+	case OnDupOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(OnDup)[idx], path)
+	case RefOfOptLikeLikeTable:
+		return GetNodeFromPath(node.(*OptLike).LikeTable, path)
+	case RefOfOrExprLeft:
+		return GetNodeFromPath(node.(*OrExpr).Left, path)
+	case RefOfOrExprRight:
+		return GetNodeFromPath(node.(*OrExpr).Right, path)
+	case RefOfOrderExpr:
+		return GetNodeFromPath(node.(*Order).Expr, path)
+	case OrderByOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(OrderBy)[idx], path)
+	case RefOfOrderByOptionCols:
+		return GetNodeFromPath(node.(*OrderByOption).Cols, path)
+	case RefOfOverClauseWindowName:
+		return GetNodeFromPath(node.(*OverClause).WindowName, path)
+	case RefOfOverClauseWindowSpec:
+		return GetNodeFromPath(node.(*OverClause).WindowSpec, path)
+	case RefOfParenTableExprExprs:
+		return GetNodeFromPath(node.(*ParenTableExpr).Exprs, path)
+	case RefOfPartitionDefinitionName:
+		return GetNodeFromPath(node.(*PartitionDefinition).Name, path)
+	case RefOfPartitionDefinitionOptions:
+		return GetNodeFromPath(node.(*PartitionDefinition).Options, path)
+	case RefOfPartitionDefinitionOptionsValueRange:
+		return GetNodeFromPath(node.(*PartitionDefinitionOptions).ValueRange, path)
+	case RefOfPartitionDefinitionOptionsComment:
+		return GetNodeFromPath(node.(*PartitionDefinitionOptions).Comment, path)
+	case RefOfPartitionDefinitionOptionsEngine:
+		return GetNodeFromPath(node.(*PartitionDefinitionOptions).Engine, path)
+	case RefOfPartitionDefinitionOptionsDataDirectory:
+		return GetNodeFromPath(node.(*PartitionDefinitionOptions).DataDirectory, path)
+	case RefOfPartitionDefinitionOptionsIndexDirectory:
+		return GetNodeFromPath(node.(*PartitionDefinitionOptions).IndexDirectory, path)
+	case RefOfPartitionDefinitionOptionsSubPartitionDefinitions:
+		return GetNodeFromPath(node.(*PartitionDefinitionOptions).SubPartitionDefinitions, path)
+	case RefOfPartitionOptionColList:
+		return GetNodeFromPath(node.(*PartitionOption).ColList, path)
+	case RefOfPartitionOptionExpr:
+		return GetNodeFromPath(node.(*PartitionOption).Expr, path)
+	case RefOfPartitionOptionSubPartition:
+		return GetNodeFromPath(node.(*PartitionOption).SubPartition, path)
+	case RefOfPartitionOptionDefinitionsOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(*PartitionOption).Definitions[idx], path)
+	case RefOfPartitionSpecNames:
+		return GetNodeFromPath(node.(*PartitionSpec).Names, path)
+	case RefOfPartitionSpecNumber:
+		return GetNodeFromPath(node.(*PartitionSpec).Number, path)
+	case RefOfPartitionSpecTableName:
+		return GetNodeFromPath(node.(*PartitionSpec).TableName, path)
+	case RefOfPartitionSpecDefinitionsOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(*PartitionSpec).Definitions[idx], path)
+	case RefOfPartitionValueRangeRange:
+		return GetNodeFromPath(node.(*PartitionValueRange).Range, path)
+	case PartitionsOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(Partitions)[idx], path)
+	case RefOfPerformanceSchemaFuncExprArgument:
+		return GetNodeFromPath(node.(*PerformanceSchemaFuncExpr).Argument, path)
+	case RefOfPointExprXCordinate:
+		return GetNodeFromPath(node.(*PointExpr).XCordinate, path)
+	case RefOfPointExprYCordinate:
+		return GetNodeFromPath(node.(*PointExpr).YCordinate, path)
+	case RefOfPointPropertyFuncExprPoint:
+		return GetNodeFromPath(node.(*PointPropertyFuncExpr).Point, path)
+	case RefOfPointPropertyFuncExprValueToSet:
+		return GetNodeFromPath(node.(*PointPropertyFuncExpr).ValueToSet, path)
+	case RefOfPolygonExprLinestringParamsOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(*PolygonExpr).LinestringParams[idx], path)
+	case RefOfPolygonPropertyFuncExprPolygon:
+		return GetNodeFromPath(node.(*PolygonPropertyFuncExpr).Polygon, path)
+	case RefOfPolygonPropertyFuncExprPropertyDefArg:
+		return GetNodeFromPath(node.(*PolygonPropertyFuncExpr).PropertyDefArg, path)
+	case RefOfPrepareStmtName:
+		return GetNodeFromPath(node.(*PrepareStmt).Name, path)
+	case RefOfPrepareStmtStatement:
+		return GetNodeFromPath(node.(*PrepareStmt).Statement, path)
+	case RefOfPrepareStmtComments:
+		return GetNodeFromPath(node.(*PrepareStmt).Comments, path)
+	case RefOfReferenceDefinitionReferencedTable:
+		return GetNodeFromPath(node.(*ReferenceDefinition).ReferencedTable, path)
+	case RefOfReferenceDefinitionReferencedColumns:
+		return GetNodeFromPath(node.(*ReferenceDefinition).ReferencedColumns, path)
+	case RefOfReferenceDefinitionMatch:
+		return GetNodeFromPath(node.(*ReferenceDefinition).Match, path)
+	case RefOfReferenceDefinitionOnDelete:
+		return GetNodeFromPath(node.(*ReferenceDefinition).OnDelete, path)
+	case RefOfReferenceDefinitionOnUpdate:
+		return GetNodeFromPath(node.(*ReferenceDefinition).OnUpdate, path)
+	case RefOfRegexpInstrExprExpr:
+		return GetNodeFromPath(node.(*RegexpInstrExpr).Expr, path)
+	case RefOfRegexpInstrExprPattern:
+		return GetNodeFromPath(node.(*RegexpInstrExpr).Pattern, path)
+	case RefOfRegexpInstrExprPosition:
+		return GetNodeFromPath(node.(*RegexpInstrExpr).Position, path)
+	case RefOfRegexpInstrExprOccurrence:
+		return GetNodeFromPath(node.(*RegexpInstrExpr).Occurrence, path)
+	case RefOfRegexpInstrExprReturnOption:
+		return GetNodeFromPath(node.(*RegexpInstrExpr).ReturnOption, path)
+	case RefOfRegexpInstrExprMatchType:
+		return GetNodeFromPath(node.(*RegexpInstrExpr).MatchType, path)
+	case RefOfRegexpLikeExprExpr:
+		return GetNodeFromPath(node.(*RegexpLikeExpr).Expr, path)
+	case RefOfRegexpLikeExprPattern:
+		return GetNodeFromPath(node.(*RegexpLikeExpr).Pattern, path)
+	case RefOfRegexpLikeExprMatchType:
+		return GetNodeFromPath(node.(*RegexpLikeExpr).MatchType, path)
+	case RefOfRegexpReplaceExprExpr:
+		return GetNodeFromPath(node.(*RegexpReplaceExpr).Expr, path)
+	case RefOfRegexpReplaceExprPattern:
+		return GetNodeFromPath(node.(*RegexpReplaceExpr).Pattern, path)
+	case RefOfRegexpReplaceExprRepl:
+		return GetNodeFromPath(node.(*RegexpReplaceExpr).Repl, path)
+	case RefOfRegexpReplaceExprOccurrence:
+		return GetNodeFromPath(node.(*RegexpReplaceExpr).Occurrence, path)
+	case RefOfRegexpReplaceExprPosition:
+		return GetNodeFromPath(node.(*RegexpReplaceExpr).Position, path)
+	case RefOfRegexpReplaceExprMatchType:
+		return GetNodeFromPath(node.(*RegexpReplaceExpr).MatchType, path)
+	case RefOfRegexpSubstrExprExpr:
+		return GetNodeFromPath(node.(*RegexpSubstrExpr).Expr, path)
+	case RefOfRegexpSubstrExprPattern:
+		return GetNodeFromPath(node.(*RegexpSubstrExpr).Pattern, path)
+	case RefOfRegexpSubstrExprOccurrence:
+		return GetNodeFromPath(node.(*RegexpSubstrExpr).Occurrence, path)
+	case RefOfRegexpSubstrExprPosition:
+		return GetNodeFromPath(node.(*RegexpSubstrExpr).Position, path)
+	case RefOfRegexpSubstrExprMatchType:
+		return GetNodeFromPath(node.(*RegexpSubstrExpr).MatchType, path)
+	case RefOfReleaseName:
+		return GetNodeFromPath(node.(*Release).Name, path)
+	case RefOfRenameColumnOldName:
+		return GetNodeFromPath(node.(*RenameColumn).OldName, path)
+	case RefOfRenameColumnNewName:
+		return GetNodeFromPath(node.(*RenameColumn).NewName, path)
+	case RefOfRenameIndexOldName:
+		return GetNodeFromPath(node.(*RenameIndex).OldName, path)
+	case RefOfRenameIndexNewName:
+		return GetNodeFromPath(node.(*RenameIndex).NewName, path)
+	case RefOfRenameTableNameTable:
+		return GetNodeFromPath(node.(*RenameTableName).Table, path)
+	case RefOfRevertMigrationComments:
+		return GetNodeFromPath(node.(*RevertMigration).Comments, path)
+	case RootNodeSQLNode:
+		return GetNodeFromPath(node.(RootNode).SQLNode, path)
+	case RefOfRowAliasTableName:
+		return GetNodeFromPath(node.(*RowAlias).TableName, path)
+	case RefOfRowAliasColumns:
+		return GetNodeFromPath(node.(*RowAlias).Columns, path)
+	case RefOfSRollbackName:
+		return GetNodeFromPath(node.(*SRollback).Name, path)
+	case RefOfSavepointName:
+		return GetNodeFromPath(node.(*Savepoint).Name, path)
+	case RefOfSelectWith:
+		return GetNodeFromPath(node.(*Select).With, path)
+	case RefOfSelectFromOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(*Select).From[idx], path)
+	case RefOfSelectComments:
+		return GetNodeFromPath(node.(*Select).Comments, path)
+	case RefOfSelectSelectExprs:
+		return GetNodeFromPath(node.(*Select).SelectExprs, path)
+	case RefOfSelectWhere:
+		return GetNodeFromPath(node.(*Select).Where, path)
+	case RefOfSelectGroupBy:
+		return GetNodeFromPath(node.(*Select).GroupBy, path)
+	case RefOfSelectHaving:
+		return GetNodeFromPath(node.(*Select).Having, path)
+	case RefOfSelectWindows:
+		return GetNodeFromPath(node.(*Select).Windows, path)
+	case RefOfSelectOrderBy:
+		return GetNodeFromPath(node.(*Select).OrderBy, path)
+	case RefOfSelectLimit:
+		return GetNodeFromPath(node.(*Select).Limit, path)
+	case RefOfSelectInto:
+		return GetNodeFromPath(node.(*Select).Into, path)
+	case RefOfSelectExprsExprsOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(*SelectExprs).Exprs[idx], path)
+	case RefOfSetComments:
+		return GetNodeFromPath(node.(*Set).Comments, path)
+	case RefOfSetExprs:
+		return GetNodeFromPath(node.(*Set).Exprs, path)
+	case RefOfSetExprVar:
+		return GetNodeFromPath(node.(*SetExpr).Var, path)
+	case RefOfSetExprExpr:
+		return GetNodeFromPath(node.(*SetExpr).Expr, path)
+	case SetExprsOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(SetExprs)[idx], path)
+	case RefOfShowInternal:
+		return GetNodeFromPath(node.(*Show).Internal, path)
+	case RefOfShowBasicTbl:
+		return GetNodeFromPath(node.(*ShowBasic).Tbl, path)
+	case RefOfShowBasicDbName:
+		return GetNodeFromPath(node.(*ShowBasic).DbName, path)
+	case RefOfShowBasicFilter:
+		return GetNodeFromPath(node.(*ShowBasic).Filter, path)
+	case RefOfShowCreateOp:
+		return GetNodeFromPath(node.(*ShowCreate).Op, path)
+	case RefOfShowFilterFilter:
+		return GetNodeFromPath(node.(*ShowFilter).Filter, path)
+	case RefOfShowMigrationLogsComments:
+		return GetNodeFromPath(node.(*ShowMigrationLogs).Comments, path)
+	case RefOfStarExprTableName:
+		return GetNodeFromPath(node.(*StarExpr).TableName, path)
+	case RefOfStdArg:
+		return GetNodeFromPath(node.(*Std).Arg, path)
+	case RefOfStdOverClause:
+		return GetNodeFromPath(node.(*Std).OverClause, path)
+	case RefOfStdDevArg:
+		return GetNodeFromPath(node.(*StdDev).Arg, path)
+	case RefOfStdDevOverClause:
+		return GetNodeFromPath(node.(*StdDev).OverClause, path)
+	case RefOfStdPopArg:
+		return GetNodeFromPath(node.(*StdPop).Arg, path)
+	case RefOfStdPopOverClause:
+		return GetNodeFromPath(node.(*StdPop).OverClause, path)
+	case RefOfStdSampArg:
+		return GetNodeFromPath(node.(*StdSamp).Arg, path)
+	case RefOfStdSampOverClause:
+		return GetNodeFromPath(node.(*StdSamp).OverClause, path)
+	case RefOfStreamComments:
+		return GetNodeFromPath(node.(*Stream).Comments, path)
+	case RefOfStreamSelectExpr:
+		return GetNodeFromPath(node.(*Stream).SelectExpr, path)
+	case RefOfStreamTable:
+		return GetNodeFromPath(node.(*Stream).Table, path)
+	case RefOfSubPartitionColList:
+		return GetNodeFromPath(node.(*SubPartition).ColList, path)
+	case RefOfSubPartitionExpr:
+		return GetNodeFromPath(node.(*SubPartition).Expr, path)
+	case RefOfSubPartitionDefinitionName:
+		return GetNodeFromPath(node.(*SubPartitionDefinition).Name, path)
+	case RefOfSubPartitionDefinitionOptions:
+		return GetNodeFromPath(node.(*SubPartitionDefinition).Options, path)
+	case RefOfSubPartitionDefinitionOptionsComment:
+		return GetNodeFromPath(node.(*SubPartitionDefinitionOptions).Comment, path)
+	case RefOfSubPartitionDefinitionOptionsEngine:
+		return GetNodeFromPath(node.(*SubPartitionDefinitionOptions).Engine, path)
+	case RefOfSubPartitionDefinitionOptionsDataDirectory:
+		return GetNodeFromPath(node.(*SubPartitionDefinitionOptions).DataDirectory, path)
+	case RefOfSubPartitionDefinitionOptionsIndexDirectory:
+		return GetNodeFromPath(node.(*SubPartitionDefinitionOptions).IndexDirectory, path)
+	case SubPartitionDefinitionsOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(SubPartitionDefinitions)[idx], path)
+	case RefOfSubquerySelect:
+		return GetNodeFromPath(node.(*Subquery).Select, path)
+	case RefOfSubstrExprName:
+		return GetNodeFromPath(node.(*SubstrExpr).Name, path)
+	case RefOfSubstrExprFrom:
+		return GetNodeFromPath(node.(*SubstrExpr).From, path)
+	case RefOfSubstrExprTo:
+		return GetNodeFromPath(node.(*SubstrExpr).To, path)
+	case RefOfSumArg:
+		return GetNodeFromPath(node.(*Sum).Arg, path)
+	case RefOfSumOverClause:
+		return GetNodeFromPath(node.(*Sum).OverClause, path)
+	case TableExprsOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(TableExprs)[idx], path)
+	case TableNameName:
+		return GetNodeFromPath(node.(TableName).Name, path)
+	case TableNameQualifier:
+		return GetNodeFromPath(node.(TableName).Qualifier, path)
+	case TableNamesOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(TableNames)[idx], path)
+	case RefOfTableSpecColumnsOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(*TableSpec).Columns[idx], path)
+	case RefOfTableSpecIndexesOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(*TableSpec).Indexes[idx], path)
+	case RefOfTableSpecConstraintsOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(*TableSpec).Constraints[idx], path)
+	case RefOfTableSpecOptions:
+		return GetNodeFromPath(node.(*TableSpec).Options, path)
+	case RefOfTableSpecPartitionOption:
+		return GetNodeFromPath(node.(*TableSpec).PartitionOption, path)
+	case RefOfTimestampDiffExprExpr1:
+		return GetNodeFromPath(node.(*TimestampDiffExpr).Expr1, path)
+	case RefOfTimestampDiffExprExpr2:
+		return GetNodeFromPath(node.(*TimestampDiffExpr).Expr2, path)
+	case RefOfTrimFuncExprTrimArg:
+		return GetNodeFromPath(node.(*TrimFuncExpr).TrimArg, path)
+	case RefOfTrimFuncExprStringArg:
+		return GetNodeFromPath(node.(*TrimFuncExpr).StringArg, path)
+	case RefOfTruncateTableTable:
+		return GetNodeFromPath(node.(*TruncateTable).Table, path)
+	case RefOfUnaryExprExpr:
+		return GetNodeFromPath(node.(*UnaryExpr).Expr, path)
+	case RefOfUnionWith:
+		return GetNodeFromPath(node.(*Union).With, path)
+	case RefOfUnionLeft:
+		return GetNodeFromPath(node.(*Union).Left, path)
+	case RefOfUnionRight:
+		return GetNodeFromPath(node.(*Union).Right, path)
+	case RefOfUnionOrderBy:
+		return GetNodeFromPath(node.(*Union).OrderBy, path)
+	case RefOfUnionLimit:
+		return GetNodeFromPath(node.(*Union).Limit, path)
+	case RefOfUnionInto:
+		return GetNodeFromPath(node.(*Union).Into, path)
+	case RefOfUpdateWith:
+		return GetNodeFromPath(node.(*Update).With, path)
+	case RefOfUpdateComments:
+		return GetNodeFromPath(node.(*Update).Comments, path)
+	case RefOfUpdateTableExprsOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(*Update).TableExprs[idx], path)
+	case RefOfUpdateExprs:
+		return GetNodeFromPath(node.(*Update).Exprs, path)
+	case RefOfUpdateWhere:
+		return GetNodeFromPath(node.(*Update).Where, path)
+	case RefOfUpdateOrderBy:
+		return GetNodeFromPath(node.(*Update).OrderBy, path)
+	case RefOfUpdateLimit:
+		return GetNodeFromPath(node.(*Update).Limit, path)
+	case RefOfUpdateExprName:
+		return GetNodeFromPath(node.(*UpdateExpr).Name, path)
+	case RefOfUpdateExprExpr:
+		return GetNodeFromPath(node.(*UpdateExpr).Expr, path)
+	case UpdateExprsOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(UpdateExprs)[idx], path)
+	case RefOfUpdateXMLExprTarget:
+		return GetNodeFromPath(node.(*UpdateXMLExpr).Target, path)
+	case RefOfUpdateXMLExprXPathExpr:
+		return GetNodeFromPath(node.(*UpdateXMLExpr).XPathExpr, path)
+	case RefOfUpdateXMLExprNewXML:
+		return GetNodeFromPath(node.(*UpdateXMLExpr).NewXML, path)
+	case RefOfUseDBName:
+		return GetNodeFromPath(node.(*Use).DBName, path)
+	case RefOfVExplainStmtStatement:
+		return GetNodeFromPath(node.(*VExplainStmt).Statement, path)
+	case RefOfVExplainStmtComments:
+		return GetNodeFromPath(node.(*VExplainStmt).Comments, path)
+	case RefOfVStreamComments:
+		return GetNodeFromPath(node.(*VStream).Comments, path)
+	case RefOfVStreamSelectExpr:
+		return GetNodeFromPath(node.(*VStream).SelectExpr, path)
+	case RefOfVStreamTable:
+		return GetNodeFromPath(node.(*VStream).Table, path)
+	case RefOfVStreamWhere:
+		return GetNodeFromPath(node.(*VStream).Where, path)
+	case RefOfVStreamLimit:
+		return GetNodeFromPath(node.(*VStream).Limit, path)
+	case ValTupleOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(ValTuple)[idx], path)
+	case ValuesOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(Values)[idx], path)
+	case RefOfValuesFuncExprName:
+		return GetNodeFromPath(node.(*ValuesFuncExpr).Name, path)
+	case RefOfValuesStatementWith:
+		return GetNodeFromPath(node.(*ValuesStatement).With, path)
+	case RefOfValuesStatementRows:
+		return GetNodeFromPath(node.(*ValuesStatement).Rows, path)
+	case RefOfValuesStatementListArg:
+		return GetNodeFromPath(node.(*ValuesStatement).ListArg, path)
+	case RefOfValuesStatementComments:
+		return GetNodeFromPath(node.(*ValuesStatement).Comments, path)
+	case RefOfValuesStatementOrder:
+		return GetNodeFromPath(node.(*ValuesStatement).Order, path)
+	case RefOfValuesStatementLimit:
+		return GetNodeFromPath(node.(*ValuesStatement).Limit, path)
+	case RefOfVarPopArg:
+		return GetNodeFromPath(node.(*VarPop).Arg, path)
+	case RefOfVarPopOverClause:
+		return GetNodeFromPath(node.(*VarPop).OverClause, path)
+	case RefOfVarSampArg:
+		return GetNodeFromPath(node.(*VarSamp).Arg, path)
+	case RefOfVarSampOverClause:
+		return GetNodeFromPath(node.(*VarSamp).OverClause, path)
+	case RefOfVariableName:
+		return GetNodeFromPath(node.(*Variable).Name, path)
+	case RefOfVarianceArg:
+		return GetNodeFromPath(node.(*Variance).Arg, path)
+	case RefOfVarianceOverClause:
+		return GetNodeFromPath(node.(*Variance).OverClause, path)
+	case VindexParamKey:
+		return GetNodeFromPath(node.(VindexParam).Key, path)
+	case RefOfVindexSpecName:
+		return GetNodeFromPath(node.(*VindexSpec).Name, path)
+	case RefOfVindexSpecType:
+		return GetNodeFromPath(node.(*VindexSpec).Type, path)
+	case RefOfVindexSpecParamsOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(*VindexSpec).Params[idx], path)
+	case RefOfWeightStringFuncExprExpr:
+		return GetNodeFromPath(node.(*WeightStringFuncExpr).Expr, path)
+	case RefOfWeightStringFuncExprAs:
+		return GetNodeFromPath(node.(*WeightStringFuncExpr).As, path)
+	case RefOfWhenCond:
+		return GetNodeFromPath(node.(*When).Cond, path)
+	case RefOfWhenVal:
+		return GetNodeFromPath(node.(*When).Val, path)
+	case RefOfWhereExpr:
+		return GetNodeFromPath(node.(*Where).Expr, path)
+	case RefOfWindowDefinitionName:
+		return GetNodeFromPath(node.(*WindowDefinition).Name, path)
+	case RefOfWindowDefinitionWindowSpec:
+		return GetNodeFromPath(node.(*WindowDefinition).WindowSpec, path)
+	case WindowDefinitionsOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(WindowDefinitions)[idx], path)
+	case RefOfWindowSpecificationName:
+		return GetNodeFromPath(node.(*WindowSpecification).Name, path)
+	case RefOfWindowSpecificationPartitionClauseOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(*WindowSpecification).PartitionClause[idx], path)
+	case RefOfWindowSpecificationOrderClause:
+		return GetNodeFromPath(node.(*WindowSpecification).OrderClause, path)
+	case RefOfWindowSpecificationFrameClause:
+		return GetNodeFromPath(node.(*WindowSpecification).FrameClause, path)
+	case RefOfWithCTEsOffset:
+		idx, bytesRead := binary.Varint([]byte(path))
+		path = path[bytesRead:]
+		return GetNodeFromPath(node.(*With).CTEs[idx], path)
+	case RefOfXorExprLeft:
+		return GetNodeFromPath(node.(*XorExpr).Left, path)
+	case RefOfXorExprRight:
+		return GetNodeFromPath(node.(*XorExpr).Right, path)
+	case RefOfRootNodeSQLNode:
+		return GetNodeFromPath(node.(*RootNode).SQLNode, path)
+	case RefOfTableNameName:
+		return GetNodeFromPath(node.(*TableName).Name, path)
+	case RefOfTableNameQualifier:
+		return GetNodeFromPath(node.(*TableName).Qualifier, path)
+	case RefOfVindexParamKey:
+		return GetNodeFromPath(node.(*VindexParam).Key, path)
+	}
+	return nil
 }

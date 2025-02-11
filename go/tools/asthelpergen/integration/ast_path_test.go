@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestWalkAllPartsOfAST(t *testing.T) {
@@ -31,21 +33,33 @@ func TestWalkAllPartsOfAST(t *testing.T) {
 	}
 
 	for i := range 20 {
-		sliceContainer.ASTImplementationElements = append(sliceContainer.ASTImplementationElements, &Leaf{v: i})
+		sliceContainer.ASTImplementationElements = append(sliceContainer.ASTImplementationElements, &Leaf{v: 3 + i})
 	}
 
 	ast := &RefContainer{
 		ASTType:               sliceContainer,
 		NotASTType:            2,
-		ASTImplementationType: &Leaf{v: 3},
+		ASTImplementationType: &Leaf{v: 23},
 	}
 
+	var leafPaths []ASTPath
 	RewriteWithPaths(ast, func(c *Cursor) bool {
 		node := c.Node()
 		if !reflect.TypeOf(node).Comparable() {
 			return true
 		}
-		fmt.Println(ASTPath(c.current.ToPath()).DebugString())
+		if _, isLeaf := node.(*Leaf); isLeaf {
+			leafPaths = append(leafPaths, c.Path())
+		}
+		fmt.Println(c.Path().DebugString())
 		return true
 	}, nil)
+
+	require.Len(t, leafPaths, 23)
+	for idx, path := range leafPaths {
+		fmt.Println("Walking: " + path.DebugString())
+		node := GetNodeFromPath(ast, path)
+		require.IsType(t, &Leaf{}, node)
+		require.EqualValues(t, idx+1, node.(*Leaf).v)
+	}
 }
