@@ -53,22 +53,23 @@ func (sqb *SubQueryBuilder) handleSubquery(
 	expr sqlparser.Expr,
 	outerID semantics.TableSet,
 ) *SubQuery {
-	subq, parentExpr := getSubQuery(expr)
+	subq, parentExpr, path := getSubQuery(expr)
 	if subq == nil {
 		return nil
 	}
 	argName := ctx.GetReservedArgumentFor(subq)
-	sqInner := createSubqueryOp(ctx, parentExpr, expr, subq, outerID, argName)
+	sqInner := createSubqueryOp(ctx, parentExpr, expr, subq, outerID, argName, path)
 	sqb.Inner = append(sqb.Inner, sqInner)
 
 	return sqInner
 }
 
-func getSubQuery(expr sqlparser.Expr) (subqueryExprExists *sqlparser.Subquery, parentExpr sqlparser.Expr) {
+func getSubQuery(expr sqlparser.Expr) (subqueryExprExists *sqlparser.Subquery, parentExpr sqlparser.Expr, path sqlparser.ASTPath) {
 	flipped := false
-	_ = sqlparser.Rewrite(expr, func(cursor *sqlparser.Cursor) bool {
+	_ = sqlparser.RewriteWithPath(expr, func(cursor *sqlparser.Cursor) bool {
 		if subq, ok := cursor.Node().(*sqlparser.Subquery); ok {
 			subqueryExprExists = subq
+			path = cursor.Path()
 			parentExpr = subq
 			if expr, ok := cursor.Parent().(sqlparser.Expr); ok {
 				parentExpr = expr
@@ -95,21 +96,22 @@ func createSubqueryOp(
 	subq *sqlparser.Subquery,
 	outerID semantics.TableSet,
 	name string,
+	path sqlparser.ASTPath,
 ) *SubQuery {
 	switch parent := parent.(type) {
 	case *sqlparser.NotExpr:
 		switch parent.Expr.(type) {
 		case *sqlparser.ExistsExpr:
-			return createSubquery(ctx, original, subq, outerID, parent, name, opcode.PulloutNotExists, false)
+			return createSubqueryFromPath(ctx, original, subq, path, outerID, parent, name, opcode.PulloutNotExists, false)
 		case *sqlparser.ComparisonExpr:
 			panic("should have been rewritten")
 		}
 	case *sqlparser.ExistsExpr:
-		return createSubquery(ctx, original, subq, outerID, parent, name, opcode.PulloutExists, false)
+		return createSubqueryFromPath(ctx, original, subq, path, outerID, parent, name, opcode.PulloutExists, false)
 	case *sqlparser.ComparisonExpr:
-		return createComparisonSubQuery(ctx, parent, original, subq, outerID, name)
+		return createComparisonSubQuery(ctx, parent, original, subq, path, outerID, name)
 	}
-	return createSubquery(ctx, original, subq, outerID, parent, name, opcode.PulloutValue, false)
+	return createSubqueryFromPath(ctx, original, subq, path, outerID, parent, name, opcode.PulloutValue, false)
 }
 
 // inspectStatement goes through all the predicates contained in the AST
@@ -165,6 +167,44 @@ func createSubquery(
 	original = cloneASTAndSemState(ctx, original)
 	originalSq := cloneASTAndSemState(ctx, subq)
 	subqID := findTablesContained(ctx, subq.Select)
+	totalID := subqID.Merge(outerID)
+	sqc := &SubQueryBuilder{totalID: totalID, subqID: subqID, outerID: outerID}
+
+	predicates, joinCols := sqc.inspectStatement(ctx, subq.Select)
+	correlated := !ctx.SemTable.RecursiveDeps(subq).IsEmpty()
+
+	opInner := translateQueryToOp(ctx, subq.Select)
+
+	opInner = sqc.getRootOperator(opInner, nil)
+	return &SubQuery{
+		FilterType:       filterType,
+		Subquery:         opInner,
+		Predicates:       predicates,
+		Original:         original,
+		ArgName:          argName,
+		originalSubquery: originalSq,
+		IsArgument:       isArg,
+		TopLevel:         topLevel,
+		JoinColumns:      joinCols,
+		correlated:       correlated,
+	}
+}
+
+func createSubqueryFromPath(
+	ctx *plancontext.PlanningContext,
+	original sqlparser.Expr,
+	subq *sqlparser.Subquery,
+	path sqlparser.ASTPath,
+	outerID semantics.TableSet,
+	parent sqlparser.Expr,
+	argName string,
+	filterType opcode.PulloutOpcode,
+	isArg bool,
+) *SubQuery {
+	topLevel := ctx.SemTable.EqualsExpr(original, parent)
+	original = cloneASTAndSemState(ctx, original)
+	originalSq := sqlparser.GetNodeFromPath(original, path).(*sqlparser.Subquery)
+	subqID := findTablesContained(ctx, originalSq.Select)
 	totalID := subqID.Merge(outerID)
 	sqc := &SubQueryBuilder{totalID: totalID, subqID: subqID, outerID: outerID}
 
@@ -260,6 +300,7 @@ func createComparisonSubQuery(
 	parent *sqlparser.ComparisonExpr,
 	original sqlparser.Expr,
 	subFromOutside *sqlparser.Subquery,
+	path sqlparser.ASTPath,
 	outerID semantics.TableSet,
 	name string,
 ) *SubQuery {
@@ -276,7 +317,7 @@ func createComparisonSubQuery(
 		filterType = opcode.PulloutNotIn
 	}
 
-	subquery := createSubquery(ctx, original, subq, outerID, parent, name, filterType, false)
+	subquery := createSubqueryFromPath(ctx, original, subq, path, outerID, parent, name, filterType, false)
 
 	// if we are comparing with a column from the inner subquery,
 	// we add this extra predicate to check if the two sides are mergable or not
