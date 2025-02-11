@@ -67,7 +67,7 @@ func TestASTPathBuilderAddStepOffset(t *testing.T) {
 			name:     "multiple steps",
 			steps:    []uint16{1, 0x24, 0x913, 0x913},
 			offsets:  []int{0, -1, 0, 1}, // the 0 is overwritten by the last offset
-			wantPath: "\x00\x01\x00\x00\x24\x09\x13\x02",
+			wantPath: "\x00\x01\x00\x00\x24\x09\x13\x01",
 		},
 	}
 	for _, tt := range tests {
