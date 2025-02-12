@@ -459,10 +459,12 @@ func (pool *ConnPool[C]) pop(stack *connStack[C]) *Pooled[C] {
 
 func (pool *ConnPool[C]) tryReturnAnyConn() bool {
 	if conn := pool.pop(&pool.clean); conn != nil {
+		conn.timeUsed.update()
 		return pool.tryReturnConn(conn)
 	}
 	for u := 0; u <= stackMask; u++ {
 		if conn := pool.pop(&pool.settings[u]); conn != nil {
+			conn.timeUsed.update()
 			return pool.tryReturnConn(conn)
 		}
 	}
