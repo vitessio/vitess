@@ -121,7 +121,7 @@ var (
 	VT14004 = errorWithoutState("VT14004", vtrpcpb.Code_UNAVAILABLE, "cannot find keyspace for: %s", "The specified keyspace could not be found.")
 	VT14005 = errorWithoutState("VT14005", vtrpcpb.Code_UNAVAILABLE, "cannot lookup sidecar database for keyspace: %s", "Failed to read sidecar database identifier.")
 
-	VT15001 = errorWithNoCode("VT15001", "session invalidated: close/reopen connection if applicable: %s", "This error means that the opened transaction should be closed by the application and re-opened.")
+	VT15001 = errorWithNoCode("VT15001", "transient error, please retry the transaction: %s", "The opened transaction should be closed by the application and re-tried.")
 
 	// Errors is a list of errors that must match all the variables
 	// defined above to enable auto-documentation of error codes.

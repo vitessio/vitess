@@ -99,14 +99,12 @@ func SetupShardedReparentCluster(t *testing.T, durability string) *cluster.Local
 
 	// Start keyspace
 	keyspace := &cluster.Keyspace{
-		Name:      KeyspaceName,
-		SchemaSQL: sqlSchema,
-		VSchema:   `{"sharded": true, "vindexes": {"hash_index": {"type": "hash"}}, "tables": {"vt_insert_test": {"column_vindexes": [{"column": "id", "name": "hash_index"}]}}}`,
-		// VSchema:          `{"sharded": true, "vindexes": {"hash_index": {"type": "reverse_bits"}}, "tables": {"vt_insert_test": {"column_vindexes": [{"column": "id", "name": "hash_index"}]}}}`,
+		Name:             KeyspaceName,
+		SchemaSQL:        sqlSchema,
+		VSchema:          `{"sharded": true, "vindexes": {"hash_index": {"type": "hash"}}, "tables": {"vt_insert_test": {"column_vindexes": [{"column": "id", "name": "hash_index"}]}}}`,
 		DurabilityPolicy: durability,
 	}
 	err = clusterInstance.StartKeyspace(*keyspace, []string{"-40", "40-80", "80-"}, 2, false)
-	// err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 2, false)
 	require.NoError(t, err)
 
 	// Start Vtgate

@@ -19,7 +19,6 @@ package newfeaturetest
 import (
 	"context"
 	"fmt"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -242,26 +241,18 @@ func TestBufferingErrorInTransaction(t *testing.T) {
 	clusterInstance := utils.SetupShardedReparentCluster(t, policy.DurabilitySemiSync)
 	defer utils.TeardownCluster(clusterInstance)
 
-	// err := clusterInstance.StartVtgate()
-	// require.NoError(t, err)
+	keyspace := clusterInstance.Keyspaces[0]
+	vtParams := clusterInstance.GetVTParams(keyspace.Name)
+	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
 	// Start by reparenting all the shards to the first tablet.
-	keyspace := clusterInstance.Keyspaces[0]
-	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 	// Confirm that the replication is setup correctly in the beginning.
 	// tablets[0] is the primary tablet in the beginning.
 	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2]})
 
-	// Start a transaction to the primary.
-	vtParams := clusterInstance.GetVTParams(keyspace.Name)
 	conn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)
-	_, err = conn.ExecuteFetch("begin", 0, false)
-	require.NoError(t, err)
 	idx := 20
-	// _, err = conn.ExecuteFetch(utils.GetInsertMultipleValuesQuery(idx, idx+1, idx+2, idx+3), 0, false)
-	_, err = conn.ExecuteFetch(utils.GetInsertQuery(idx), 0, false)
-	require.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -271,24 +262,45 @@ func TestBufferingErrorInTransaction(t *testing.T) {
 			case <-ctx.Done():
 				return
 			default:
-				idx += 1
-				// _, err = conn.ExecuteFetch(utils.GetInsertMultipleValuesQuery(idx, idx+1, idx+2, idx+3), 0, false)
-				_, err = conn.ExecuteFetch(utils.GetInsertQuery(idx), 0, false)
-				log.Errorf("Error received - %v", err)
+				_, err = conn.ExecuteFetch("begin", 0, false)
 				if err != nil {
-					if strings.Contains(err.Error(), "transaction rolled back to reverse changes") {
-						log.Errorf("We have rolled back - issuing a new begin")
-						_, err = conn.ExecuteFetch("begin", 0, false)
-						require.NoError(t, err)
+					log.Errorf("Begin error received - %v", err)
+					continue
+				}
+
+				for i := 0; i < 25; i++ {
+					idx += 5
+					_, err = conn.ExecuteFetch(utils.GetInsertMultipleValuesQuery(idx, idx+1, idx+2, idx+3), 0, false)
+					if err != nil {
+						log.Errorf("Insert error received - %v", err)
+					}
+					time.Sleep(10 * time.Millisecond)
+				}
+
+				time.Sleep(10 * time.Second)
+				var hasCommit bool
+				_, err = conn.ExecuteFetch("commit", 0, false)
+				if err != nil {
+					log.Errorf("Commit error received - %v", err)
+				} else {
+					log.Error("Commit successful")
+					hasCommit = true
+				}
+
+				if !hasCommit {
+					_, err = conn.ExecuteFetch("rollback", 0, false)
+					if err != nil {
+						log.Errorf("Rollback error received - %v", err)
 					}
 				}
+
 				time.Sleep(100 * time.Millisecond)
 			}
 		}
 	}()
 
 	// Reparent to the other replica
-	utils.ShardName = "-80"
+	utils.ShardName = "-40"
 	defer func() {
 		utils.ShardName = "0"
 	}()
@@ -296,12 +308,12 @@ func TestBufferingErrorInTransaction(t *testing.T) {
 	output, err := utils.Prs(t, clusterInstance, tablets[1])
 	require.NoError(t, err, "error in PlannedReparentShard output - %s", output)
 
-	time.Sleep(1 * time.Minute)
+	time.Sleep(5 * time.Second)
 
 	// We now restart the vttablet that became a replica.
 	utils.StopTablet(t, tablets[0], false)
 
-	time.Sleep(1 * time.Minute)
+	time.Sleep(10 * time.Second)
 
 	tablets[0].VttabletProcess.ServingStatus = "SERVING"
 	err = tablets[0].VttabletProcess.Setup()
