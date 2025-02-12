@@ -1315,6 +1315,60 @@
     "skip_e2e": true
   },
   {
+    "comment": "Subquery inside subquery #1",
+    "query": "select 1, (select 2, (select 3, foo from `user` where id = 1) from `user` where id = 1) from `user` where id = 1",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select 1, (select 2, (select 3, foo from `user` where id = 1) from `user` where id = 1) from `user` where id = 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1, (select 2, (select 3, foo from `user` where 1 != 1) from `user` where 1 != 1) from `user` where 1 != 1",
+        "Query": "select 1, (select 2, (select 3, foo from `user` where id = 1) from `user` where id = 1) from `user` where id = 1",
+        "Table": "`user`",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "Subquery inside subquery #2",
+    "query": "select 1 from `user` where id = 1 and foo = (select (select 3, foo from `user` where id = 1) from `user` where id = 1)",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select 1 from `user` where id = 1 and foo = (select (select 3, foo from `user` where id = 1) from `user` where id = 1)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from `user` where 1 != 1",
+        "Query": "select 1 from `user` where id = 1 and foo = (select (select 3, foo from `user` where id = 1) from `user` where id = 1)",
+        "Table": "`user`",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
     "comment": "Multiple parenthesized expressions",
     "query": "select * from user where (id = 4 and name ='abc') limit 5",
     "plan": {
