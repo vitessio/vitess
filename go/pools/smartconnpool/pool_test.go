@@ -619,16 +619,7 @@ func TestIdleTimeout(t *testing.T) {
 			p.put(conn)
 		}
 
-		// wait again; the connections will timeout inside the pool, but we'll only notice
-		// when trying to pop them again
 		time.Sleep(1 * time.Second)
-
-		for i := 0; i < 5; i++ {
-			r, err := p.Get(ctx, setting)
-			require.NoError(t, err)
-
-			p.put(r)
-		}
 
 		for _, closed := range closers {
 			select {

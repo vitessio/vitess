@@ -54,6 +54,11 @@ func (s *connStack[C]) Pop() (*Pooled[C], bool) {
 	}
 }
 
+func (s *connStack[C]) Peek() *Pooled[C] {
+	top, _ := s.top.Load()
+	return top
+}
+
 func (s *connStack[C]) PopAll(out []*Pooled[C]) []*Pooled[C] {
 	var oldHead *Pooled[C]
 
