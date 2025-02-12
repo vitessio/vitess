@@ -673,7 +673,7 @@ func GenerateUpdatePos(uid int32, pos replication.Position, timeUpdated int64, t
 // GenerateInitWorkerPos returns a statement to initialize a worker's entry in vreplication_worker_pos
 func GenerateInitWorkerPos(uid int32, worker int) string {
 	// Append GTID value to already existing value in `gtid` column
-	return fmt.Sprintf("insert into _vt.vreplication_worker_pos (id, worker, gtid) values (%v, %v, '')", uid, worker)
+	return fmt.Sprintf("replace into _vt.vreplication_worker_pos (id, worker, gtid, transaction_timestamp) values (%v, %v, '', 0)", uid, worker)
 }
 
 // GenerateUpdateWorkerPos returns a statement to record the latest processed gtid of a worker in the _vt.vreplication_worker_pos table.
@@ -682,16 +682,21 @@ func GenerateInitWorkerPos(uid int32, worker int) string {
 // - txTimestamp?
 // - rowsCopied?
 // - timeUpdated?
-func GenerateUpdateWorkerPos(uid int32, worker int, pos replication.Position) string {
+func GenerateUpdateWorkerPos(uid int32, worker int, pos replication.Position, transactionTimestamp int64) string {
 	strGTID := ""
 	if pos.GTIDSet != nil {
 		strGTID = pos.GTIDSet.String()
 	}
 	strGTID = encodeString(strGTID)
 	// Append GTID value to already existing value in `gtid` column
+	if transactionTimestamp == 0 {
+		return fmt.Sprintf(
+			"update _vt.vreplication_worker_pos set gtid=GTID_SUBTRACT(concat(gtid, ',', %v), '') where id=%v and worker=%v",
+			strGTID, uid, worker)
+	}
 	return fmt.Sprintf(
-		"update _vt.vreplication_worker_pos set gtid=GTID_SUBTRACT(concat(gtid, ',', %v), '') where id=%v and worker=%v",
-		strGTID, uid, worker)
+		"update _vt.vreplication_worker_pos set gtid=GTID_SUBTRACT(concat(gtid, ',', %v), ''), transaction_timestamp=%v where id=%v and worker=%v",
+		strGTID, transactionTimestamp, uid, worker)
 }
 
 // GenerateUpdateRowsCopied returns a statement to update the rows_copied value in the _vt.vreplication table.
@@ -760,7 +765,7 @@ func ReadVReplicationPos(index int32) string {
 // ReadVReplicationWorkersGTIDs returns a statement to query the gtid for a
 // given stream from the _vt.vreplication_worker_pos table.
 func ReadVReplicationWorkersGTIDs(index int32) string {
-	return fmt.Sprintf("select gtid from _vt.vreplication_worker_pos where id=%v", index)
+	return fmt.Sprintf("select gtid, transaction_timestamp from _vt.vreplication_worker_pos where id=%v", index)
 }
 
 // ReadVReplicationStatus returns a statement to query the status fields for a
