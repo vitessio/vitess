@@ -26,6 +26,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/google/uuid"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -651,8 +653,6 @@ func (tvde *testVDiffEnv) addTablet(id int, keyspace, shard string, tabletType t
 	tstenv.SchemaEngine.Reload(context.Background())
 	return tvde.tablets[id]
 }
-<<<<<<< HEAD
-=======
 
 func (tvde *testVDiffEnv) createController(t *testing.T, id int) *controller {
 	controllerQR := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
@@ -686,4 +686,3 @@ func (tvde *testVDiffEnv) newController(t *testing.T, controllerQR *sqltypes.Res
 	go ct.run(ctx2)
 	return ct
 }
->>>>>>> aebc4b82f9 (VDiff: fix race when a vdiff resumes on vttablet restart (#17638))
