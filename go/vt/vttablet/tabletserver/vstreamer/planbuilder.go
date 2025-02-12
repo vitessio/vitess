@@ -101,6 +101,8 @@ const (
 	IsNotNull
 	// In is used to filter a comparable column if equals any of the values from a specific tuple
 	In
+	// Note that we do not implement filtering for BETWEEN because
+	// in the plan we rewrite `x BETWEEN a AND b` to `x >= a AND x <= b`
 	// NotBetween is used to filter a comparable column if it doesn't lie within a specific range
 	NotBetween
 )
@@ -276,8 +278,12 @@ func (plan *Plan) filter(values, result []sqltypes.Value, charsets []collations.
 				return false, nil
 			}
 		case NotBetween:
+			// Note that we do not implement filtering for BETWEEN because
+			// in the plan we rewrite `x BETWEEN a AND b` to `x >= a AND x <= b`
+			// This is the filtering for NOT BETWEEN since we don't have support
+			// for OR yet.
 			if filter.Values == nil || len(filter.Values) != 2 {
-				return false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected 2 filter values when performing BETWEEN")
+				return false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected 2 filter values when performing NOT BETWEEN")
 			}
 			leftFilterValue, rightFilterValue := filter.Values[0], filter.Values[1]
 			isValueLessThanLeftFilter, err := compare(LessThan, values[filter.ColNum], leftFilterValue, plan.env.CollationEnv(), charsets[filter.ColNum])
