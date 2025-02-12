@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -133,9 +134,7 @@ func TestTypeValues(t *testing.T) {
 		expected: 34 | flagIsText,
 	}}
 	for _, tcase := range testcases {
-		if int(tcase.defined) != tcase.expected {
-			t.Errorf("Type %s: %d, want: %d", tcase.defined, int(tcase.defined), tcase.expected)
-		}
+		assert.EqualValues(t, tcase.expected, int(tcase.defined))
 	}
 }
 
@@ -181,108 +180,56 @@ func TestCategory(t *testing.T) {
 	for _, typ := range alltypes {
 		matched := false
 		if IsSigned(typ) {
-			if !IsIntegral(typ) {
-				t.Errorf("Signed type %v is not an integral", typ)
-			}
+			assert.True(t, IsIntegral(typ), "Signed type %v is not an integral", typ)
 			matched = true
 		}
 		if IsUnsigned(typ) {
-			if !IsIntegral(typ) {
-				t.Errorf("Unsigned type %v is not an integral", typ)
-			}
-			if matched {
-				t.Errorf("%v matched more than one category", typ)
-			}
+			assert.True(t, IsIntegral(typ), "Unsigned type %v is not an integral", typ)
+			assert.False(t, matched, "%v matched more than one category", typ)
 			matched = true
 		}
 		if IsFloat(typ) {
-			if matched {
-				t.Errorf("%v matched more than one category", typ)
-			}
+			assert.False(t, matched, "%v matched more than one category", typ)
 			matched = true
 		}
 		if IsQuoted(typ) {
-			if matched {
-				t.Errorf("%v matched more than one category", typ)
-			}
+			assert.False(t, matched, "%v matched more than one category", typ)
 			matched = true
 		}
 		if typ == Null || typ == Decimal || typ == Expression || typ == Bit ||
 			typ == HexNum || typ == HexVal || typ == BitNum {
-			if matched {
-				t.Errorf("%v matched more than one category", typ)
-			}
+			assert.False(t, matched, "%v matched more than one category", typ)
 			matched = true
 		}
-		if !matched {
-			t.Errorf("%v matched no category", typ)
-		}
+		assert.True(t, matched, "%v matched no category", typ)
 	}
 }
 
 func TestIsFunctions(t *testing.T) {
-	if IsIntegral(Null) {
-		t.Error("Null: IsIntegral, must be false")
-	}
-	if !IsIntegral(Int64) {
-		t.Error("Int64: !IsIntegral, must be true")
-	}
-	if IsSigned(Uint64) {
-		t.Error("Uint64: IsSigned, must be false")
-	}
-	if !IsSigned(Int64) {
-		t.Error("Int64: !IsSigned, must be true")
-	}
-	if IsUnsigned(Int64) {
-		t.Error("Int64: IsUnsigned, must be false")
-	}
-	if !IsUnsigned(Uint64) {
-		t.Error("Uint64: !IsUnsigned, must be true")
-	}
-	if IsFloat(Int64) {
-		t.Error("Int64: IsFloat, must be false")
-	}
-	if !IsFloat(Float64) {
-		t.Error("Uint64: !IsFloat, must be true")
-	}
-	if IsQuoted(Int64) {
-		t.Error("Int64: IsQuoted, must be false")
-	}
-	if !IsQuoted(Binary) {
-		t.Error("Binary: !IsQuoted, must be true")
-	}
-	if IsText(Int64) {
-		t.Error("Int64: IsText, must be false")
-	}
-	if !IsText(Char) {
-		t.Error("Char: !IsText, must be true")
-	}
-	if IsBinary(Int64) {
-		t.Error("Int64: IsBinary, must be false")
-	}
-	if !IsBinary(Binary) {
-		t.Error("Char: !IsBinary, must be true")
-	}
-	if !IsNumber(Int64) {
-		t.Error("Int64: !isNumber, must be true")
-	}
+	assert.False(t, IsIntegral(Null), "Null: IsIntegral, must be false")
+	assert.True(t, IsIntegral(Int64), "Int64: !IsIntegral, must be true")
+	assert.False(t, IsSigned(Uint64), "Uint64: IsSigned, must be false")
+	assert.True(t, IsSigned(Int64), "Int64: !IsSigned, must be true")
+	assert.False(t, IsUnsigned(Int64), "Int64: IsUnsigned, must be false")
+	assert.True(t, IsUnsigned(Uint64), "Uint64: !IsUnsigned, must be true")
+	assert.False(t, IsFloat(Int64), "Int64: IsFloat, must be false")
+	assert.True(t, IsFloat(Float64), "Uint64: !IsFloat, must be true")
+	assert.False(t, IsQuoted(Int64), "Int64: IsQuoted, must be false")
+	assert.True(t, IsQuoted(Binary), "Binary: !IsQuoted, must be true")
+	assert.False(t, IsText(Int64), "Int64: IsText, must be false")
+	assert.True(t, IsText(Char), "Char: !IsText, must be true")
+	assert.False(t, IsBinary(Int64), "Int64: IsBinary, must be false")
+	assert.True(t, IsBinary(Binary), "Char: !IsBinary, must be true")
+	assert.True(t, IsNumber(Int64), "Int64: !isNumber, must be true")
 }
 
 func TestTypeToMySQL(t *testing.T) {
 	v, f := TypeToMySQL(Bit)
-	if v != 16 {
-		t.Errorf("Bit: %d, want 16", v)
-	}
-	if f != mysqlUnsigned {
-		t.Errorf("Bit flag: %x, want %x", f, mysqlUnsigned)
-	}
+	assert.EqualValues(t, 16, v)
+	assert.EqualValues(t, mysqlUnsigned, f)
 	v, f = TypeToMySQL(Date)
-	if v != 10 {
-		t.Errorf("Bit: %d, want 10", v)
-	}
-	if f != mysqlBinary {
-		t.Errorf("Bit flag: %x, want %x", f, mysqlBinary)
-	}
+	assert.EqualValues(t, 10, v)
+	assert.EqualValues(t, mysqlBinary, f)
 }
 
 func TestMySQLToType(t *testing.T) {
@@ -412,42 +359,24 @@ func TestMySQLToType(t *testing.T) {
 	}}
 	for _, tcase := range testcases {
 		got, err := MySQLToType(tcase.intype, tcase.inflags)
-		if err != nil {
-			t.Error(err)
-		}
-		if got != tcase.outtype {
-			t.Errorf("MySQLToType(%d, %x): %v, want %v", tcase.intype, tcase.inflags, got, tcase.outtype)
-		}
+		require.NoError(t, err)
+		assert.Equal(t, tcase.outtype, got)
 	}
 }
 
 func TestTypeError(t *testing.T) {
 	_, err := MySQLToType(50, 0)
 	want := "unsupported type: 50"
-	if err == nil || err.Error() != want {
-		t.Errorf("MySQLToType: %v, want %s", err, want)
-	}
+	assert.EqualError(t, err, want)
 }
 
 func TestTypeEquivalenceCheck(t *testing.T) {
-	if !AreTypesEquivalent(Int16, Int16) {
-		t.Errorf("Int16 and Int16 are same types.")
-	}
-	if AreTypesEquivalent(Int16, Int24) {
-		t.Errorf("Int16 and Int24 are not same types.")
-	}
-	if !AreTypesEquivalent(VarChar, VarBinary) {
-		t.Errorf("VarChar in binlog and VarBinary in schema are equivalent types.")
-	}
-	if AreTypesEquivalent(VarBinary, VarChar) {
-		t.Errorf("VarBinary in binlog and VarChar in schema are not equivalent types.")
-	}
-	if !AreTypesEquivalent(Int16, Uint16) {
-		t.Errorf("Int16 in binlog and Uint16 in schema are equivalent types.")
-	}
-	if AreTypesEquivalent(Uint16, Int16) {
-		t.Errorf("Uint16 in binlog and Int16 in schema are not equivalent types.")
-	}
+	assert.True(t, AreTypesEquivalent(Int16, Int16), "Int16 and Int16 are same types.")
+	assert.False(t, AreTypesEquivalent(Int16, Int24), "Int16 and Int24 are not same types.")
+	assert.True(t, AreTypesEquivalent(VarChar, VarBinary), "VarChar in binlog and VarBinary in schema are equivalent types.")
+	assert.False(t, AreTypesEquivalent(VarBinary, VarChar), "VarBinary in binlog and VarChar in schema are not equivalent types.")
+	assert.True(t, AreTypesEquivalent(Int16, Uint16), "Int16 in binlog and Uint16 in schema are equivalent types.")
+	assert.False(t, AreTypesEquivalent(Uint16, Int16), "Uint16 in binlog and Int16 in schema are not equivalent types.")
 }
 
 func TestPrintTypeChecks(t *testing.T) {
