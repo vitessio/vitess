@@ -62,6 +62,7 @@ go.sum @deepthi @harshit-gangal @mattlord @rohit-nayak-ps @systay @frouioui
 /go/vt/vtgate/endtoend/*vstream* @rohit-nayak-ps @mattlord
 /go/vt/vtgate/planbuilder @harshit-gangal @systay @frouioui @GuptaManan100 @arthurschreiber
 /go/vt/vtgate/*vstream* @rohit-nayak-ps @mattlord
+/go/vt/vtgate/evalengine @dbussink @vmg @systay
 /go/vt/vtorc @deepthi @shlomi-noach @GuptaManan100 @timvaillancourt
 /go/vt/vttablet/*conn* @harshit-gangal @systay
 /go/vt/vttablet/endtoend @harshit-gangal @mattlord @rohit-nayak-ps @systay

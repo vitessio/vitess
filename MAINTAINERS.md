@@ -32,7 +32,7 @@ rohit-nayak-ps, deepthi, mattlord
 systay, harshit-gangal, vmg, GuptaManan100, dbussink
 
 ### Evaluation Engine
-vmg, dbussink
+vmg, dbussink, systay
 
 ### Planner
 systay, harshit-gangal, GuptaManan100, frouioui 
