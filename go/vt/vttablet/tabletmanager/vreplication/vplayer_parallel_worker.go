@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -34,20 +35,22 @@ import (
 
 var (
 	errRetryEvent = errors.New("retry event")
+	maxEvents     = 50
 )
 
 type parallelWorker struct {
-	index     int
-	dbClient  *vdbClient
-	queryFunc func(ctx context.Context, sql string) (*sqltypes.Result, error)
-	vp        *vplayer
-	lastPos   replication.Position
+	index             int
+	dbClient          *vdbClient
+	queryFunc         func(ctx context.Context, sql string) (*sqltypes.Result, error)
+	vp                *vplayer
+	lastPos           replication.Position
+	aggregatedPosChan chan replication.Position
 
 	producer *parallelProducer
 
 	events          chan *binlogdatapb.VEvent
 	stats           *VrLogStats
-	sequenceNumbers []int64
+	sequenceNumbers map[int64]bool
 
 	commitSubscribers   map[int64]chan error // subscribing to commit events
 	commitSubscribersMu sync.Mutex
@@ -61,13 +64,15 @@ type parallelWorker struct {
 }
 
 func newParallelWorker(index int, producer *parallelProducer, capacity int) *parallelWorker {
-	log.Infof("======= QQQ newParallelWorker index: %v", index)
+	log.Errorf("======= QQQ newParallelWorker index: %v", index)
 	return &parallelWorker{
 		index:             index,
 		producer:          producer,
 		events:            make(chan *binlogdatapb.VEvent, capacity),
-		sequenceNumbers:   make([]int64, 0, capacity),
+		aggregatedPosChan: make(chan replication.Position, 1),
+		sequenceNumbers:   make(map[int64]bool, maxEvents),
 		commitSubscribers: make(map[int64]chan error),
+		vp:                producer.vp,
 	}
 }
 
@@ -81,10 +86,23 @@ func (w *parallelWorker) subscribeCommitWorkerEvent(sequenceNumber int64) chan e
 }
 
 // updatePos should get called at a minimum of vreplicationMinimumHeartbeatUpdateInterval.
-func (w *parallelWorker) updatePos(ctx context.Context, pos replication.Position) (posReached bool, err error) {
-	update := binlogplayer.GenerateUpdateWorkerPos(w.vp.vr.id, w.index, pos)
+func (w *parallelWorker) updatePos(ctx context.Context, pos replication.Position, transactionTimestamp int64) (posReached bool, err error) {
+	update := binlogplayer.GenerateUpdateWorkerPos(w.vp.vr.id, w.index, pos, transactionTimestamp)
 	if _, err := w.queryFunc(ctx, update); err != nil {
-		return false, fmt.Errorf("error %v updating position", err)
+		// TODO(remove) this is just debug info
+		{
+			query := binlogplayer.ReadVReplicationWorkersGTIDs(w.vp.vr.id)
+			qr, err := w.dbClient.ExecuteFetch(query, -1)
+			if err != nil {
+				log.Errorf("Error fetching vreplication worker positions: %v", err)
+			} else {
+				for _, row := range qr.Rows {
+					log.Errorf("====== QQQ updatePos gtid= %v", row[0].ToString())
+				}
+			}
+		}
+		// end TODO
+		return false, fmt.Errorf("error updating position: %v", err)
 	}
 	// TODO (shlomi): handle these
 	// vp.numAccumulatedHeartbeats = 0
@@ -100,7 +118,21 @@ func (w *parallelWorker) updatePosByEvent(ctx context.Context, event *binlogdata
 	if err != nil {
 		return err
 	}
-	if _, err := w.updatePos(ctx, pos); err != nil {
+	if _, err := w.updatePos(ctx, pos, event.Timestamp); err != nil {
+		debug.PrintStack() // TODO(shlomi) remove
+		// TODO(remove) this is just debug info
+		{
+			query := binlogplayer.ReadVReplicationWorkersGTIDs(w.vp.vr.id)
+			qr, err := w.dbClient.ExecuteFetch(query, -1)
+			if err != nil {
+				log.Errorf("Error fetching vreplication worker positions: %v", err)
+			} else {
+				for _, row := range qr.Rows {
+					log.Errorf("====== QQQ updatePos gtid= %v", row[0].ToString())
+				}
+			}
+		}
+		// end TODO
 		return err
 	}
 	w.lastPos = replication.AppendGTIDSet(w.lastPos, pos.GTIDSet)
@@ -117,53 +149,63 @@ func (w *parallelWorker) commit() error {
 
 func (w *parallelWorker) commitEvents() chan error {
 	event := w.producer.commitWorkerEvent()
+	log.Errorf("========== QQQ commitEvents: %v", event)
 	c := w.subscribeCommitWorkerEvent(event.SequenceNumber)
+	log.Errorf("========== QQQ commitEvents: subscribed to %v in worker %v", event.SequenceNumber, w.index)
 	w.events <- event
+	log.Errorf("========== QQQ commitEvents: pushed event")
 	return c
 }
 
-func (w *parallelWorker) applyEvent(ctx context.Context, event *binlogdatapb.VEvent) error {
-	select {
-	case w.events <- event:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
-
 func (w *parallelWorker) applyQueuedEvents(ctx context.Context) (err error) {
+	log.Errorf("========== QQQ applyQueuedEvents")
+
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+
+	var lastTickerTime time.Time
+	var lastAppliedTickerTime time.Time
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
+		case lastTickerTime = <-ticker.C:
+		case pos := <-w.aggregatedPosChan:
+			log.Errorf("========== QQQ applyQueuedEvents worker %v got aggregated pos %v", w.index, pos)
+			if _, err := w.updatePos(ctx, pos, 0); err != nil {
+				debug.PrintStack() // TODO(shlomi) remove
+				return err
+			}
+			log.Errorf("========== QQQ applyQueuedEvents worker %v updated aggregated pos", w.index)
 		case event := <-w.events:
+			// log.Errorf("========== QQQ applyQueuedEvents, event=%v", event)
 			if event.SequenceNumber >= 0 {
-				w.sequenceNumbers = append(w.sequenceNumbers, event.SequenceNumber)
+				// Negative values are happen in commitWorkerEvent(). These are not real events.
+				w.sequenceNumbers[event.SequenceNumber] = true
+			}
+			skipApplyEvent := func() bool {
+				if event.Type != binlogdatapb.VEventType_COMMIT {
+					// We only skip commits, for performance reasons (aggregate more operations under same commit)
+					return false
+				}
+				if len(w.sequenceNumbers) >= maxEvents {
+					// Too many events in the queue, commit now
+					return false
+				}
+				if lastTickerTime != lastAppliedTickerTime {
+					// Too much time passed since last applied event. Meaning we're sitting idly doing nothing. Better to commit now
+					// and utilize some IO and make some progress.
+					return false
+				}
+				return true
+			}
+			if skipApplyEvent() {
+				continue
 			}
 			if err := w.applyQueuedEvent(ctx, event); err != nil {
 				return err
 			}
-			if event.Type == binlogdatapb.VEventType_UNKNOWN && event.SequenceNumber < 0 {
-				// This is a commit-hint event, produced by commitWorkerEvent()
-				err := w.commit()
-				func() {
-					w.commitSubscribersMu.Lock()
-					defer w.commitSubscribersMu.Unlock()
-					if subs, ok := w.commitSubscribers[event.SequenceNumber]; ok {
-						subs <- err
-						delete(w.commitSubscribers, event.SequenceNumber)
-					}
-				}()
-				if err != nil {
-					return err
-				}
-
-				w.producer.completedSequenceNumbers <- w.sequenceNumbers
-				w.sequenceNumbers = w.sequenceNumbers[0:0]
-				if w.producer.posReached.Load() {
-					return io.EOF
-				}
-			}
+			lastAppliedTickerTime = lastTickerTime
 		}
 	}
 }
@@ -189,12 +231,7 @@ func (w *parallelWorker) applyQueuedEvent(ctx context.Context, event *binlogdata
 }
 
 func (w *parallelWorker) applyApplicableQueuedEvent(ctx context.Context, event *binlogdatapb.VEvent) error {
-	switch event.Type {
-	case binlogdatapb.VEventType_UNKNOWN:
-		// An indication that there are no more events for this worker
-		return nil
-	}
-
+	// log.Errorf("========== QQQ applyApplicableQueuedEvent, event.Type=%v", event.Type)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -222,11 +259,8 @@ func (w *parallelWorker) applyApplicableQueuedEvent(ctx context.Context, event *
 		return nil
 	case binlogdatapb.VEventType_BEGIN:
 		// No-op: begin is called as needed.
-	case binlogdatapb.VEventType_COMMIT:
-		if err := <-w.commitEvents(); err != nil {
-			return err
-		}
-		w.producer.numCommits.Add(1)
+	case binlogdatapb.VEventType_COMMIT, binlogdatapb.VEventType_UNKNOWN:
+		return w.applyQueuedCommit(event)
 	case binlogdatapb.VEventType_FIELD:
 		if err := w.dbClient.Begin(); err != nil {
 			return err
@@ -485,6 +519,8 @@ func (w *parallelWorker) updateFKCheck(ctx context.Context, flags2 uint32) error
 }
 
 func (w *parallelWorker) applyQueuedRowEvent(ctx context.Context, vevent *binlogdatapb.VEvent) error {
+	log.Errorf("========== QQQ applyQueuedRowEvent worker %v", w.index)
+	defer log.Errorf("========== QQQ applyQueuedRowEvent worker %v DONE", w.index)
 	if err := w.updateFKCheck(ctx, vevent.RowEvent.Flags); err != nil {
 		return err
 	}
@@ -535,6 +571,49 @@ func (w *parallelWorker) applyQueuedRowEvent(ctx context.Context, vevent *binlog
 		if _, err := tplan.applyChange(change, applyFunc); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+func (w *parallelWorker) applyQueuedCommit(event *binlogdatapb.VEvent) error {
+	switch {
+	case event.Type == binlogdatapb.VEventType_COMMIT:
+	case event.Type == binlogdatapb.VEventType_UNKNOWN && event.SequenceNumber < 0:
+	default:
+		// Not a commit
+		return nil
+	}
+	shouldActuallyCommit := len(w.sequenceNumbers) > 0
+	var err error
+	if shouldActuallyCommit {
+		err = w.commit()
+	}
+	// log.Errorf("========== QQQ applyQueuedEvents, event is commit or commitWorkerEvent(), seq=%v", event.SequenceNumber)
+	// log.Errorf("========== QQQ applyQueuedEvents committed, err=%v", err)
+	func() {
+		// log.Errorf("========== QQQ applyQueuedEvents finding subscribers")
+		w.commitSubscribersMu.Lock()
+		defer w.commitSubscribersMu.Unlock()
+		if subs, ok := w.commitSubscribers[event.SequenceNumber]; ok {
+			// log.Errorf("========== QQQ applyQueuedEvents found subscriber")
+			subs <- err
+			// log.Errorf("========== QQQ applyQueuedEvents notified subscriber")
+			delete(w.commitSubscribers, event.SequenceNumber)
+		}
+	}()
+	if err != nil {
+		return err
+	}
+	// Commit successful
+	if shouldActuallyCommit {
+		w.producer.numCommits.Add(1)
+	}
+	// log.Errorf("========== QQQ applyQueuedEvents pushing seqs")
+	w.producer.completedSequenceNumbers <- w.sequenceNumbers
+	// log.Errorf("========== QQQ applyQueuedEvents pushed seqs")
+	w.sequenceNumbers = make(map[int64]bool, maxEvents)
+	if w.producer.posReached.Load() {
+		return io.EOF
 	}
 	return nil
 }
