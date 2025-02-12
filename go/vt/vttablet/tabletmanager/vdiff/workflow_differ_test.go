@@ -17,7 +17,6 @@ limitations under the License.
 package vdiff
 
 import (
-	"context"
 	"fmt"
 	"strings"
 	"testing"
@@ -49,8 +48,17 @@ func TestBuildPlanSuccess(t *testing.T) {
 	)
 
 	vdiffenv.dbClient.ExpectRequest("select * from _vt.vdiff where id = 1", noResults, nil)
-	ct, err := newController(context.Background(), controllerQR.Named().Row(), vdiffenv.dbClientFactory, tstenv.TopoServ, vdiffenv.vde, vdiffenv.opts)
-	require.NoError(t, err)
+	ct := vdenv.newController(t, controllerQR)
+	ct.sources = map[string]*migrationSource{
+		tstenv.ShardName: {
+			vrID: 1,
+			shardStreamer: &shardStreamer{
+				tablet: vdenv.vde.thisTablet,
+				shard:  tstenv.ShardName,
+			},
+		},
+	}
+	ct.sourceKeyspace = tstenv.KeyspaceName
 
 	testcases := []struct {
 		input          *binlogdatapb.Rule
@@ -667,9 +675,7 @@ func TestBuildPlanFailure(t *testing.T) {
 		fmt.Sprintf("1|%s|%s|%s|%s|%s|%s|%s|", UUID, vdiffenv.workflow, tstenv.KeyspaceName, tstenv.ShardName, vdiffDBName, PendingState, optionsJS),
 	)
 	vdiffenv.dbClient.ExpectRequest("select * from _vt.vdiff where id = 1", noResults, nil)
-	ct, err := newController(context.Background(), controllerQR.Named().Row(), vdiffenv.dbClientFactory, tstenv.TopoServ, vdiffenv.vde, vdiffenv.opts)
-	require.NoError(t, err)
-
+	ct := vdenv.newController(t, controllerQR)
 	testcases := []struct {
 		input *binlogdatapb.Rule
 		err   string
