@@ -56,14 +56,16 @@ func WithLogger(l logutil.Logger) ServerOption {
 }
 
 // workflowActionOptions configure a workflow's optional behavior when
-// performing actions in the worfklow server.
-// workflowActionOptions are set by the WorkflowActionOption values passed
-// to the server functions.
+// performing actions in the worfklow server. Note: these should be used
+// for options that are rarely used so that most callers do not need to
+// specify any values for them. workflowActionOptions are set by the
+// WorkflowActionOption values passed to the server functions.
 type workflowActionOptions struct {
 	ignoreSourceKeyspace bool
 }
 
-// WorkflowActionOption alters how we perform the certain workflow operations.
+// WorkflowActionOption alters how we perform the certain workflow operations
+// in the worfklow server.
 type WorkflowActionOption interface {
 	apply(*workflowActionOptions)
 }

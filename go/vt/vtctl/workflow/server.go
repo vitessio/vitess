@@ -1252,6 +1252,7 @@ func (s *Server) MoveTablesComplete(ctx context.Context, req *vtctldatapb.MoveTa
 	if req.IgnoreSourceKeyspace {
 		opts = append(opts, IgnoreSourceKeyspace())
 	}
+
 	ts, state, err := s.getWorkflowState(ctx, req.GetTargetKeyspace(), req.GetWorkflow(), opts...)
 	if err != nil {
 		return nil, err
@@ -1391,6 +1392,7 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 	if req.IgnoreSourceKeyspace {
 		opts = append(opts, IgnoreSourceKeyspace())
 	}
+
 	ts, state, err := s.getWorkflowState(ctx, req.GetKeyspace(), req.GetWorkflow(), opts...)
 	if err != nil {
 		s.Logger().Errorf("failed to get VReplication workflow state for %s.%s: %v", req.GetKeyspace(), req.GetWorkflow(), err)
@@ -2291,6 +2293,7 @@ func (s *Server) dropSources(ctx context.Context, ts *trafficSwitcher, removalTy
 
 func (s *Server) dropArtifacts(ctx context.Context, keepRoutingRules bool, sw iswitcher, opts ...WorkflowActionOption) error {
 	wopts := processWorkflowActionOptions(opts)
+
 	if !wopts.ignoreSourceKeyspace {
 		if err := sw.dropSourceReverseVReplicationStreams(ctx); err != nil {
 			return err
