@@ -757,7 +757,7 @@ func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *
 		warnings: warningCount,
 	}
 
-	for i := 0; i < count; i++ {
+	for i := range count {
 		kontinue := sConn.handleNextCommand(&handler)
 		require.True(t, kontinue, "error handling command: %d", i)
 

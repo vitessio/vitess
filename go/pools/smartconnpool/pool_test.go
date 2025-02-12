@@ -136,7 +136,7 @@ func TestOpen(t *testing.T) {
 	var err error
 
 	// Test Get
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		if i%2 == 0 {
 			r, err = p.Get(ctx, nil)
 		} else {
@@ -155,7 +155,7 @@ func TestOpen(t *testing.T) {
 	// Test that Get waits
 	done := make(chan struct{})
 	go func() {
-		for i := 0; i < 5; i++ {
+		for i := range 5 {
 			if i%2 == 0 {
 				r, err = p.Get(ctx, nil)
 			} else {
@@ -164,12 +164,12 @@ func TestOpen(t *testing.T) {
 			require.NoError(t, err)
 			resources[i] = r
 		}
-		for i := 0; i < 5; i++ {
+		for i := range 5 {
 			p.put(resources[i])
 		}
 		close(done)
 	}()
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		// block until we have a client wait for a connection, then offer it
 		for p.wait.waiting() == 0 {
 			time.Sleep(time.Millisecond)
@@ -196,7 +196,7 @@ func TestOpen(t *testing.T) {
 	assert.EqualValues(t, 5, state.open.Load())
 	assert.EqualValues(t, 6, state.lastID.Load())
 
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		if i%2 == 0 {
 			r, err = p.Get(ctx, nil)
 		} else {
@@ -205,7 +205,7 @@ func TestOpen(t *testing.T) {
 		require.NoError(t, err)
 		resources[i] = r
 	}
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		p.put(resources[i])
 	}
 	assert.EqualValues(t, 5, state.open.Load())
@@ -224,7 +224,7 @@ func TestOpen(t *testing.T) {
 	assert.EqualValues(t, 6, p.Capacity())
 	assert.EqualValues(t, 6, p.Available())
 
-	for i := 0; i < 6; i++ {
+	for i := range 6 {
 		if i%2 == 0 {
 			r, err = p.Get(ctx, nil)
 		} else {
@@ -233,7 +233,7 @@ func TestOpen(t *testing.T) {
 		require.NoError(t, err)
 		resources[i] = r
 	}
-	for i := 0; i < 6; i++ {
+	for i := range 6 {
 		p.put(resources[i])
 	}
 	assert.EqualValues(t, 6, state.open.Load())
@@ -258,7 +258,7 @@ func TestShrinking(t *testing.T) {
 
 	var resources [10]*Pooled[*TestConn]
 	// Leave one empty slot in the pool
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		var r *Pooled[*TestConn]
 		var err error
 		if i%2 == 0 {
@@ -287,7 +287,7 @@ func TestShrinking(t *testing.T) {
 		"IdleClosed":        0,
 		"MaxLifetimeClosed": 0,
 	}
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		time.Sleep(10 * time.Millisecond)
 		stats := p.StatsJSON()
 		if reflect.DeepEqual(expected, stats) {
@@ -302,7 +302,7 @@ func TestShrinking(t *testing.T) {
 	p.put(resources[3])
 	<-done
 	// Return the rest of the resources
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		p.put(resources[i])
 	}
 	stats := p.StatsJSON()
@@ -323,7 +323,7 @@ func TestShrinking(t *testing.T) {
 	// Ensure no deadlock if SetCapacity is called after we start
 	// waiting for a resource
 	var err error
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		var r *Pooled[*TestConn]
 		if i%2 == 0 {
 			r, err = p.Get(ctx, nil)
@@ -350,7 +350,7 @@ func TestShrinking(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	// This should not hang
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		p.put(resources[i])
 	}
 	<-done
@@ -364,7 +364,7 @@ func TestShrinking(t *testing.T) {
 	// Test race condition of SetCapacity with itself
 	err = p.SetCapacity(ctx, 3)
 	require.NoError(t, err)
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		var r *Pooled[*TestConn]
 		var err error
 		if i%2 == 0 {
@@ -397,7 +397,7 @@ func TestShrinking(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	// This should not hang
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		p.put(resources[i])
 	}
 	<-done
@@ -421,7 +421,7 @@ func TestClosing(t *testing.T) {
 	}).Open(newConnector(&state), nil)
 
 	var resources [10]*Pooled[*TestConn]
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		var r *Pooled[*TestConn]
 		var err error
 		if i%2 == 0 {
@@ -455,7 +455,7 @@ func TestClosing(t *testing.T) {
 	assert.Equal(t, expected, stats)
 
 	// Put is allowed when closing
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		p.put(resources[i])
 	}
 
@@ -495,7 +495,7 @@ func TestReopen(t *testing.T) {
 	})
 
 	var resources [10]*Pooled[*TestConn]
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		var r *Pooled[*TestConn]
 		var err error
 		if i%2 == 0 {
@@ -525,7 +525,7 @@ func TestReopen(t *testing.T) {
 	time.Sleep(1 * time.Second)
 	assert.Truef(t, refreshed.Load(), "did not refresh")
 
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		p.put(resources[i])
 	}
 	time.Sleep(50 * time.Millisecond)
@@ -557,7 +557,7 @@ func TestUserClosing(t *testing.T) {
 	}).Open(newConnector(&state), nil)
 
 	var resources [5]*Pooled[*TestConn]
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		var err error
 		resources[i], err = p.Get(ctx, nil)
 		require.NoError(t, err)
@@ -600,7 +600,7 @@ func TestIdleTimeout(t *testing.T) {
 		defer p.Close()
 
 		var conns []*Pooled[*TestConn]
-		for i := 0; i < 5; i++ {
+		for i := range 5 {
 			r, err := p.Get(ctx, setting)
 			require.NoError(t, err)
 			assert.EqualValues(t, i+1, state.open.Load())
@@ -742,7 +742,7 @@ func TestExtendedLifetimeTimeout(t *testing.T) {
 
 	// maxLifetime > 0
 	config.MaxLifetime = 10 * time.Millisecond
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		p = NewPool(config).Open(connector, nil)
 		assert.LessOrEqual(t, config.MaxLifetime, p.extendedMaxLifetime())
 		assert.Greater(t, 2*config.MaxLifetime, p.extendedMaxLifetime())
@@ -766,7 +766,7 @@ func TestMaxIdleCount(t *testing.T) {
 		defer p.Close()
 
 		var conns []*Pooled[*TestConn]
-		for i := 0; i < 5; i++ {
+		for i := range 5 {
 			r, err := p.Get(ctx, setting)
 			require.NoError(t, err)
 			assert.EqualValues(t, i+1, state.open.Load())
@@ -869,7 +869,7 @@ func TestSlowCreateFail(t *testing.T) {
 
 		state.chaos.failConnect = true
 
-		for i := 0; i < 3; i++ {
+		for range 3 {
 			go func() {
 				conn, _ := p.Get(ctx, setting)
 				ch <- conn
@@ -964,7 +964,7 @@ func TestMultiSettings(t *testing.T) {
 	settings := []*Setting{nil, sFoo, sBar, sBar, sFoo}
 
 	// Test Get
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		r, err = p.Get(ctx, settings[i])
 		require.NoError(t, err)
 		resources[i] = r
@@ -979,17 +979,17 @@ func TestMultiSettings(t *testing.T) {
 	// Test that Get waits
 	ch := make(chan bool)
 	go func() {
-		for i := 0; i < 5; i++ {
+		for i := range 5 {
 			r, err = p.Get(ctx, settings[i])
 			require.NoError(t, err)
 			resources[i] = r
 		}
-		for i := 0; i < 5; i++ {
+		for i := range 5 {
 			p.put(resources[i])
 		}
 		ch <- true
 	}()
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		// Sleep to ensure the goroutine waits
 		time.Sleep(10 * time.Millisecond)
 		p.put(resources[i])
@@ -1030,7 +1030,7 @@ func TestMultiSettingsWithReset(t *testing.T) {
 	settings := []*Setting{nil, sFoo, sBar, sBar, sFoo}
 
 	// Test Get
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		r, err = p.Get(ctx, settings[i])
 		require.NoError(t, err)
 		resources[i] = r
@@ -1040,12 +1040,12 @@ func TestMultiSettingsWithReset(t *testing.T) {
 	}
 
 	// Put all of them back
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		p.put(resources[i])
 	}
 
 	// Getting all with same setting.
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		r, err = p.Get(ctx, settings[1]) // {foo}
 		require.NoError(t, err)
 		assert.Truef(t, r.Conn.setting == settings[1], "setting was not properly applied")
@@ -1056,7 +1056,7 @@ func TestMultiSettingsWithReset(t *testing.T) {
 	assert.EqualValues(t, 5, state.lastID.Load())
 	assert.EqualValues(t, 5, state.open.Load())
 
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		p.put(resources[i])
 	}
 
@@ -1083,7 +1083,7 @@ func TestApplySettingsFailure(t *testing.T) {
 
 	settings := []*Setting{nil, sFoo, sBar, sBar, sFoo}
 	// get the resource and mark for failure
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		r, err = p.Get(ctx, settings[i])
 		require.NoError(t, err)
 		r.Conn.failApply = true
@@ -1102,7 +1102,7 @@ func TestApplySettingsFailure(t *testing.T) {
 	// Otherwise, will fail to get the resource.
 	var failCount int
 	resources = nil
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		r, err = p.Get(ctx, settings[1])
 		if err != nil {
 			failCount++
@@ -1119,7 +1119,7 @@ func TestApplySettingsFailure(t *testing.T) {
 
 	// should be able to get all the resource with no setting
 	resources = nil
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		r, err = p.Get(ctx, nil)
 		require.NoError(t, err)
 		resources = append(resources, r)
@@ -1143,7 +1143,7 @@ func TestGetSpike(t *testing.T) {
 	var resources [10]*Pooled[*TestConn]
 
 	// Ensure we have a pool with 5 available resources
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		r, err := p.Get(ctx, nil)
 
 		require.NoError(t, err)
@@ -1156,7 +1156,7 @@ func TestGetSpike(t *testing.T) {
 		assert.EqualValues(t, i+1, state.open.Load())
 	}
 
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		p.put(resources[i])
 	}
 
@@ -1164,7 +1164,7 @@ func TestGetSpike(t *testing.T) {
 	assert.EqualValues(t, 5, p.Active())
 	assert.EqualValues(t, 0, p.InUse())
 
-	for i := 0; i < 2000; i++ {
+	for range 2000 {
 		wg := sync.WaitGroup{}
 
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -1172,7 +1172,7 @@ func TestGetSpike(t *testing.T) {
 
 		errs := make(chan error, 80)
 
-		for j := 0; j < 80; j++ {
+		for range 80 {
 			wg.Add(1)
 
 			go func() {

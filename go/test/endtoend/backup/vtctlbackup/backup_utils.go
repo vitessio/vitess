@@ -1211,7 +1211,7 @@ func ReadRowsFromReplica(t *testing.T, replicaIndex int) (msgs []string) {
 func FlushBinaryLogsOnReplica(t *testing.T, replicaIndex int, count int) {
 	replica := getReplica(t, replicaIndex)
 	query := "flush binary logs"
-	for i := 0; i < count; i++ {
+	for range count {
 		_, err := replica.VttabletProcess.QueryTablet(query, keyspaceName, true)
 		require.NoError(t, err)
 	}

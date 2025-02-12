@@ -82,7 +82,7 @@ func parsetimeSeconds(tp *timeparts, in string) (string, TimeState) {
 func parsetimeAny(tp *timeparts, in string) (out string, state TimeState) {
 	orig := in
 	var ok bool
-	for i := 0; i < len(in); i++ {
+	for i := range len(in) {
 		switch r := in[i]; {
 		case isSpace(r):
 			tp.day, in, ok = getnum(in, false)

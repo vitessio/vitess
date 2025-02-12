@@ -373,7 +373,7 @@ func stepRoot(p *PathParser, in []byte) ([]byte, error) {
 }
 
 func trim(in []byte) ([]byte, int) {
-	for n := 0; n < len(in); n++ {
+	for n := range len(in) {
 		switch in[n] {
 		case ' ', '\t', '\n':
 		default:

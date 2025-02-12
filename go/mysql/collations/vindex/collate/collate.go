@@ -39,7 +39,7 @@ func (c *Hasher) Hash(str []byte) []byte {
 	var pos int
 
 	for c.iter.Next() {
-		for n := 0; n < c.iter.N; n++ {
+		for n := range c.iter.N {
 			if w := c.iter.Elems[n].Primary(); w > 0 {
 				if w <= 0x7FFF {
 					if len(scratch)-pos < 2 {
