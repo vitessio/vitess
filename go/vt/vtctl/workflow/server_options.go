@@ -55,37 +55,37 @@ func WithLogger(l logutil.Logger) ServerOption {
 	})
 }
 
-// workflowOptions configure a workflow's optional behavior when
+// workflowActionOptions configure a workflow's optional behavior when
 // performing actions in the worfklow server.
-// workflowOptions are set by the WorkflowOption values passed
+// workflowActionOptions are set by the WorkflowActionOption values passed
 // to the server functions.
-type workflowOptions struct {
+type workflowActionOptions struct {
 	ignoreSourceKeyspace bool
 }
 
-// WorkflowOption alters how we perform the certain workflow operations.
-type WorkflowOption interface {
-	apply(*workflowOptions)
+// WorkflowActionOption alters how we perform the certain workflow operations.
+type WorkflowActionOption interface {
+	apply(*workflowActionOptions)
 }
 
-// funcWorkflowOption wraps a function that modifies workflowOptions into
-// an implementation of the WorkflowOption interface.
-type funcWorkflowOption struct {
-	f func(*workflowOptions)
+// funcWorkflowActionOption wraps a function that modifies workflowActionOptions
+// into an implementation of the WorkflowActionOption interface.
+type funcWorkflowActionOption struct {
+	f func(*workflowActionOptions)
 }
 
-func (fwo *funcWorkflowOption) apply(wo *workflowOptions) {
+func (fwo *funcWorkflowActionOption) apply(wo *workflowActionOptions) {
 	fwo.f(wo)
 }
 
-func newFuncWorkflowOption(f func(*workflowOptions)) *funcWorkflowOption {
-	return &funcWorkflowOption{
+func newFuncWorkflowActionOption(f func(*workflowActionOptions)) *funcWorkflowActionOption {
+	return &funcWorkflowActionOption{
 		f: f,
 	}
 }
 
-func IgnoreSourceKeyspace() WorkflowOption {
-	return newFuncWorkflowOption(func(o *workflowOptions) {
+func IgnoreSourceKeyspace() WorkflowActionOption {
+	return newFuncWorkflowActionOption(func(o *workflowActionOptions) {
 		o.ignoreSourceKeyspace = true
 	})
 }
