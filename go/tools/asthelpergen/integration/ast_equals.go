@@ -1,5 +1,5 @@
 /*
-Copyright 2023 The Vitess Authors.
+Copyright 2025 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -180,6 +180,7 @@ func (cmp *Comparator) RefOfRefContainer(a, b *RefContainer) bool {
 	}
 	return a.NotASTType == b.NotASTType &&
 		cmp.AST(a.ASTType, b.ASTType) &&
+		cmp.SliceOfRefOfOptions(a.Opts, b.Opts) &&
 		cmp.RefOfLeaf(a.ASTImplementationType, b.ASTImplementationType)
 }
 
@@ -191,7 +192,8 @@ func (cmp *Comparator) RefOfRefSliceContainer(a, b *RefSliceContainer) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return cmp.SliceOfAST(a.ASTElements, b.ASTElements) &&
+	return a.something == b.something &&
+		cmp.SliceOfAST(a.ASTElements, b.ASTElements) &&
 		cmp.SliceOfInt(a.NotASTElements, b.NotASTElements) &&
 		cmp.SliceOfRefOfLeaf(a.ASTImplementationElements, b.ASTImplementationElements)
 }
@@ -219,7 +221,7 @@ func (cmp *Comparator) ValueContainer(a, b ValueContainer) bool {
 func (cmp *Comparator) ValueSliceContainer(a, b ValueSliceContainer) bool {
 	return cmp.SliceOfAST(a.ASTElements, b.ASTElements) &&
 		cmp.SliceOfInt(a.NotASTElements, b.NotASTElements) &&
-		cmp.SliceOfRefOfLeaf(a.ASTImplementationElements, b.ASTImplementationElements)
+		cmp.LeafSlice(a.ASTImplementationElements, b.ASTImplementationElements)
 }
 
 // SubIface does deep equals between the two objects.
@@ -250,6 +252,19 @@ func (cmp *Comparator) RefOfInterfaceContainer(a, b *InterfaceContainer) bool {
 	}
 	if a == nil || b == nil {
 		return false
+	}
+	return true
+}
+
+// SliceOfRefOfOptions does deep equals between the two objects.
+func (cmp *Comparator) SliceOfRefOfOptions(a, b []*Options) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !cmp.RefOfOptions(a[i], b[i]) {
+			return false
+		}
 	}
 	return true
 }
@@ -327,7 +342,20 @@ func (cmp *Comparator) RefOfValueSliceContainer(a, b *ValueSliceContainer) bool 
 	}
 	return cmp.SliceOfAST(a.ASTElements, b.ASTElements) &&
 		cmp.SliceOfInt(a.NotASTElements, b.NotASTElements) &&
-		cmp.SliceOfRefOfLeaf(a.ASTImplementationElements, b.ASTImplementationElements)
+		cmp.LeafSlice(a.ASTImplementationElements, b.ASTImplementationElements)
+}
+
+// RefOfOptions does deep equals between the two objects.
+func (cmp *Comparator) RefOfOptions(a, b *Options) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.a == b.a &&
+		a.b == b.b &&
+		cmp.RefOfLeaf(a.l, b.l)
 }
 
 type Comparator struct{}

@@ -1,5 +1,5 @@
 /*
-Copyright 2023 The Vitess Authors.
+Copyright 2025 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -174,10 +174,8 @@ func VisitValueSliceContainer(in ValueSliceContainer, f Visit) error {
 			return err
 		}
 	}
-	for _, el := range in.ASTImplementationElements {
-		if err := VisitRefOfLeaf(el, f); err != nil {
-			return err
-		}
+	if err := VisitLeafSlice(in.ASTImplementationElements, f); err != nil {
+		return err
 	}
 	return nil
 }
@@ -233,10 +231,8 @@ func VisitRefOfValueSliceContainer(in *ValueSliceContainer, f Visit) error {
 			return err
 		}
 	}
-	for _, el := range in.ASTImplementationElements {
-		if err := VisitRefOfLeaf(el, f); err != nil {
-			return err
-		}
+	if err := VisitLeafSlice(in.ASTImplementationElements, f); err != nil {
+		return err
 	}
 	return nil
 }

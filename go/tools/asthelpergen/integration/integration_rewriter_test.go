@@ -105,7 +105,8 @@ func TestRewriteVisitValueSliceContainer(t *testing.T) {
 	leaf2 := &Leaf{2}
 	leaf3 := &Leaf{3}
 	leaf4 := &Leaf{4}
-	container := ValueSliceContainer{ASTElements: []AST{leaf1, leaf2}, ASTImplementationElements: []*Leaf{leaf3, leaf4}}
+	ls := LeafSlice{leaf3, leaf4}
+	container := ValueSliceContainer{ASTElements: []AST{leaf1, leaf2}, ASTImplementationElements: ls}
 	containerContainer := ValueSliceContainer{ASTElements: []AST{container}}
 
 	tv := &rewriteTestVisitor{}
@@ -119,10 +120,12 @@ func TestRewriteVisitValueSliceContainer(t *testing.T) {
 		Post{leaf1},
 		Pre{leaf2},
 		Post{leaf2},
+		Pre{ls},
 		Pre{leaf3},
 		Post{leaf3},
 		Pre{leaf4},
 		Post{leaf4},
+		Post{ls},
 		Post{container},
 		Post{containerContainer},
 	})
@@ -402,6 +405,7 @@ func (tv *rewriteTestVisitor) assertEquals(t *testing.T, expected []step) {
 	expectedSize := len(expected)
 	for i, step := range tv.walk {
 		t.Run(fmt.Sprintf("step %d", i), func(t *testing.T) {
+			t.Helper()
 			if expectedSize <= i {
 				t.Fatalf("❌️ - Expected less elements %v", tv.walk[i:])
 			} else {
