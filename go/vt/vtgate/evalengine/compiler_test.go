@@ -119,7 +119,7 @@ func TestCompilerReference(t *testing.T) {
 			var supported, total int
 			env := evalengine.EmptyExpressionEnv(venv)
 
-			tc.Run(func(query string, row []sqltypes.Value) {
+			tc.Run(func(query string, row []sqltypes.Value, skipCollationCheck bool) {
 				env.Row = row
 				total++
 				testCompilerCase(t, query, venv, tc.Schema, env)
