@@ -43,7 +43,7 @@ func TestWalkAllPartsOfAST(t *testing.T) {
 	}
 
 	var leafPaths []ASTPath
-	RewriteWithPaths(ast, func(c *Cursor) bool {
+	Rewrite(ast, func(c *Cursor) bool {
 		node := c.Node()
 		if !reflect.TypeOf(node).Comparable() {
 			return true

@@ -3917,6 +3917,10 @@ func TestValid(t *testing.T) {
 			_ = Walk(func(node SQLNode) (bool, error) {
 				return true, nil
 			}, tree)
+
+			_ = RewriteWithPath(tree, func(cursor *Cursor) bool {
+				return true
+			}, nil)
 		})
 	}
 }

@@ -100,12 +100,17 @@ func (r *rewriteGen) interfaceMethod(t types.Type, iface *types.Interface, spi g
 }
 
 func (r *rewriteGen) visitStructFields(t types.Type, strct *types.Struct, spi generatorSPI, fail bool) (stmts []jen.Code) {
-	fields := r.rewriteAllStructFields(t, strct, spi, fail)
+	fields, prevSliceField := r.rewriteAllStructFields(t, strct, spi, fail)
 	stmts = append(stmts, r.executePre())
 	stmts = append(stmts, fields...)
 
 	if len(fields) > 0 {
-		stmts = append(stmts, jen.If(jen.Id("a.collectPaths")).Block(jen.Id("a.cur.current.Pop").Params()))
+		ifCondition := jen.Id("a.collectPaths")
+		if prevSliceField != "" {
+			ifCondition = ifCondition.Op("&&").Len(jen.Id("node." + prevSliceField)).Op(">").Lit(0)
+		}
+
+		stmts = append(stmts, jen.If(ifCondition).Block(jen.Id("a.cur.current.Pop").Params()))
 	}
 	stmts = append(stmts, executePost(len(fields) > 0))
 	stmts = append(stmts, returnTrue())
@@ -284,7 +289,7 @@ func (r *rewriteGen) rewriteFunc(t types.Type, stmts []jen.Code, source string) 
 	r.file.Add(code)
 }
 
-func (r *rewriteGen) rewriteAllStructFields(t types.Type, strct *types.Struct, spi generatorSPI, fail bool) []jen.Code {
+func (r *rewriteGen) rewriteAllStructFields(t types.Type, strct *types.Struct, spi generatorSPI, fail bool) ([]jen.Code, string) {
 	/*
 		if errF := rewriteAST(node, node.ASTType, func(newNode, parent AST) {
 			err = vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] tried to replace '%s' on '%s'")
@@ -326,7 +331,7 @@ func (r *rewriteGen) rewriteAllStructFields(t types.Type, strct *types.Struct, s
 			fieldNumber++
 		}
 	}
-	return output
+	return output, prevSliceField
 }
 
 func failReplacer(t types.Type, f string) *jen.Statement {

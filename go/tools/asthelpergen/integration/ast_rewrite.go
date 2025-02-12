@@ -372,7 +372,7 @@ func (a *application) rewriteRefOfRefSliceContainer(parent AST, node *RefSliceCo
 			return false
 		}
 	}
-	if a.collectPaths {
+	if a.collectPaths && len(node.ASTImplementationElements) > 0 {
 		a.cur.current.Pop()
 	}
 	if a.post != nil {
