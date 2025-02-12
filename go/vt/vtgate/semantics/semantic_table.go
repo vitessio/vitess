@@ -654,6 +654,21 @@ func (st *SemTable) GetExprAndEqualities(expr sqlparser.Expr) []sqlparser.Expr {
 	return result
 }
 
+// ForEachExprEquality returns a slice containing the given expression, and it's known equalities if any
+func (st *SemTable) ForEachExprEquality(in sqlparser.Expr, forEach func(sqlparser.Expr) error) error {
+	switch expr := in.(type) {
+	case *sqlparser.ColName:
+		table := st.DirectDeps(expr)
+		k := columnName{Table: table, ColumnName: expr.Name.String()}
+		for _, expr := range st.ColumnEqualities[k] {
+			if err := forEach(expr); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // TableInfoForExpr returns the table info of the table that this expression depends on.
 // Careful: this only works for expressions that have a single table dependency
 func (st *SemTable) TableInfoForExpr(expr sqlparser.Expr) (TableInfo, error) {
