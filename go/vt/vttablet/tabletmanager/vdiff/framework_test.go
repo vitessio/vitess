@@ -672,10 +672,6 @@ func (tvde *testVDiffEnv) createController(t *testing.T, id int) *controller {
 		fmt.Sprintf("%d|%s|%s|%s|%s|%s|%s|%s|", id, uuid.New(), tvde.workflow, tstenv.KeyspaceName, tstenv.ShardName, vdiffDBName, PendingState, optionsJS),
 	)
 	tvde.dbClient.ExpectRequest(fmt.Sprintf("select * from _vt.vdiff where id = %d", id), noResults, nil)
-<<<<<<< HEAD
-	ct, err := newController(context.Background(), controllerQR.Named().Row(), tvde.dbClientFactory, tstenv.TopoServ, tvde.vde, tvde.opts)
-	require.NoError(t, err)
-=======
 	ct := tvde.newController(t, controllerQR)
 	ct.sources = map[string]*migrationSource{
 		tstenv.ShardName: {
@@ -698,6 +694,5 @@ func (tvde *testVDiffEnv) newController(t *testing.T, controllerQR *sqltypes.Res
 	ctx2, cancel := context.WithCancel(ctx)
 	ct.cancel = cancel
 	go ct.run(ctx2)
->>>>>>> aebc4b82f9 (VDiff: fix race when a vdiff resumes on vttablet restart (#17638))
 	return ct
 }
