@@ -237,7 +237,12 @@ func refreshTabletInfoOfShard(ctx context.Context, keyspace, shard string) {
 }
 
 func refreshTabletsInKeyspaceShard(ctx context.Context, keyspace, shard string, loader func(tabletAlias string), forceRefresh bool, tabletsToIgnore []string) {
-	tablets, err := ts.GetTabletsByShard(ctx, keyspace, shard)
+	cells, err := inst.ReadCells()
+	if err != nil {
+		log.Errorf("Error fetching cells: %v", err)
+		return
+	}
+	tablets, err := ts.GetTabletsByShardCell(ctx, keyspace, shard, cells)
 	if err != nil {
 		log.Errorf("Error fetching tablets for keyspace/shard %v/%v: %v", keyspace, shard, err)
 		return
