@@ -619,8 +619,14 @@ func TestIdleTimeout(t *testing.T) {
 			p.put(conn)
 		}
 
+		time.Sleep(1 * time.Second)
+
 		for _, closed := range closers {
-			<-closed
+			select {
+			case <-closed:
+			default:
+				t.Fatalf("Connections remain open after 1 second")
+			}
 		}
 
 		// no need to assert anything: all the connections in the pool should are idle-closed
