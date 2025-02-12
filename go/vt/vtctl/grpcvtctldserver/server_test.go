@@ -8277,7 +8277,7 @@ func TestGetTablets(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			testutil.AssertSameTablets(t, tt.expected, resp.Tablets)
+			utils.MustMatch(t, tt.expected, resp.Tablets)
 		})
 	}
 }
