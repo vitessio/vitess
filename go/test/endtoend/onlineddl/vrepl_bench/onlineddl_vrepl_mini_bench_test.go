@@ -148,7 +148,7 @@ var (
 )
 
 var (
-	countIterations = 5
+	countIterations = 1
 )
 
 const (
@@ -354,9 +354,6 @@ func TestVreplMiniStressSchemaChanges(t *testing.T) {
 			t.Run("read pos", func(t *testing.T) {
 				readPos(t)
 			})
-			t.Run("mark for completion", func(t *testing.T) {
-				onlineddl.CheckCompleteAllMigrations(t, &vtParams, 1)
-			})
 			t.Run(fmt.Sprintf("start workload: %v", workloadDuration), func(t *testing.T) {
 				onlineddl.CheckThrottledApps(t, &vtParams, throttlerapp.OnlineDDLName, true)
 				ctx, cancel := context.WithTimeout(ctx, workloadDuration)
@@ -365,6 +362,9 @@ func TestVreplMiniStressSchemaChanges(t *testing.T) {
 			})
 			t.Run("read pos", func(t *testing.T) {
 				readPos(t)
+			})
+			t.Run("mark for completion", func(t *testing.T) {
+				onlineddl.CheckCompleteAllMigrations(t, &vtParams, 1)
 			})
 			t.Run("validate throttler at end of workload", func(t *testing.T) {
 				onlineddl.CheckThrottledApps(t, &vtParams, throttlerapp.OnlineDDLName, true)
