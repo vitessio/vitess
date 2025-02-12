@@ -22,6 +22,8 @@
   - **[Topology read concurrency behaviour changes](#topo-read-concurrency-changes)**
   - **[VTAdmin](#vtadmin)**
     - [Updated to node v22.13.1](#updated-node)
+  - **[VTGate Flags](#vtgate-flags)**
+    - [vtgate behavior for `--tablet_types_to_wait`](#vtgate-init-tabletgw-wait-tablet-type)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -167,3 +169,12 @@ All topology read calls _(`Get`, `GetVersion`, `List` and `ListDir`)_ now respec
 
 Building `vtadmin-web` now requires node >= v22.13.0 (LTS). Breaking changes from v20 to v22 can be found at https://nodejs.org/en/blog/release/v22.13.0 -- with no known issues that apply to VTAdmin.
 Full details on the node v20.12.2 release can be found at https://nodejs.org/en/blog/release/v22.13.1.
+
+## <a id="vtgate-flags"/>VTGate Flags
+
+### <a id="vtgate-init-tabletgw-wait-tablet-type"/> vtgate behavior for `--tablet_types_to_wait`
+Previously, if waiting for them took longer than the time specified in `--gateway_initial_tablet_timeout`, the `vtgate`
+would log a warning and  start serving. If queries were received by the `vtgate` for the tablet types that were not
+received on time, they would fail. Now, if waiting times out, a warning is logged, and the `vtgate` retries until it
+succeeds. This means it does not enter service until it has gotten health checks for all tablet types, preventing those
+errors - at the expense of potentially taking longer to start serving.
