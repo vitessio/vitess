@@ -4,9 +4,11 @@
 
 - **[Major Changes](#major-changes)**
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
+    - [Deprecated VTGate Metrics](#vtgate-metrics)
     - [Deprecated VTTablet Flags](#vttablet-flags)
     - [Removing gh-ost and pt-osc Online DDL strategies](#ghost-ptosc)
   - **[RPC Changes](#rpc-changes)**
+  - **[VTGate Metrics]**(#vtgate-metrics)
   - **[Prefer not promoting a replica that is currently taking a backup](#reparents-prefer-not-backing-up)**
   - **[VTOrc Config File Changes](#vtorc-config-file-changes)**
   - **[VTGate Config File Changes](#vtgate-config-file-changes)**
@@ -53,6 +55,16 @@ The use of `gh-ost` and `pt-osc` as strategies as follows, yields an error:
 $ vtctldclient ApplySchema --ddl-strategy="gh-ost" ...
 $ vtctldclient ApplySchema --ddl-strategy="pt-osc" ...
 ```
+
+### <a id="vtgate-metrics"/>VTGate Metrics
+
+Added two new metrics for queries with query type, plan type and tablet type as dimension.
+1. QueryProcessed - This counts the number of query executed.
+2. QueryRouted - This counts the number of shards the query was executed on.
+
+Deprecated:
+1. QueriesProcessed
+2. QueriesRouted
 
 ### <a id="reparents-prefer-not-backing-up"/>Prefer not promoting a replica that is currently taking a backup
 
