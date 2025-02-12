@@ -19,6 +19,7 @@ package logic
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -34,6 +35,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/faketopo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
@@ -838,5 +840,63 @@ func TestSetReplicationSource(t *testing.T) {
 			}
 			require.ErrorContains(t, err, tt.errShouldContain)
 		})
+	}
+}
+
+func TestGetAllTablets(t *testing.T) {
+	tablet := &topodatapb.Tablet{
+		Hostname: t.Name(),
+	}
+	tabletProto, _ := tablet.MarshalVT()
+
+	factory := faketopo.NewFakeTopoFactory()
+
+	// zone1 (success)
+	goodCell1 := faketopo.NewFakeConnection()
+	goodCell1.AddListResult("tablets", []topo.KVInfo{
+		{
+			Key:   []byte("zone1-00000001"),
+			Value: tabletProto,
+		},
+	})
+	factory.SetCell("zone1", goodCell1)
+
+	// zone2 (success)
+	goodCell2 := faketopo.NewFakeConnection()
+	goodCell2.AddListResult("tablets", []topo.KVInfo{
+		{
+			Key:   []byte("zone2-00000002"),
+			Value: tabletProto,
+		},
+	})
+	factory.SetCell("zone2", goodCell2)
+
+	// zone3 (fail)
+	badCell1 := faketopo.NewFakeConnection()
+	badCell1.AddListError(true)
+	factory.SetCell("zone3", badCell1)
+
+	// zone4 (fail)
+	badCell2 := faketopo.NewFakeConnection()
+	badCell2.AddListError(true)
+	factory.SetCell("zone4", badCell2)
+
+	oldTs := ts
+	defer func() {
+		ts = oldTs
+	}()
+	ctx := context.Background()
+	ts = faketopo.NewFakeTopoServer(ctx, factory)
+
+	// confirm zone1 + zone2 succeeded and zone3 + zone4 failed
+	tabletsByCell, failedCells := getAllTablets(ctx, []string{"zone1", "zone2", "zone3", "zone4"})
+	require.Len(t, tabletsByCell, 2)
+	slices.Sort(failedCells)
+	require.Equal(t, []string{"zone3", "zone4"}, failedCells)
+	for _, tablets := range tabletsByCell {
+		require.Len(t, tablets, 1)
+		for _, tablet := range tablets {
+			require.Equal(t, t.Name(), tablet.Tablet.GetHostname())
+		}
 	}
 }
