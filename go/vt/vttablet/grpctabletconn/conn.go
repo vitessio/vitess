@@ -19,14 +19,10 @@ package grpctabletconn
 import (
 	"context"
 	"io"
-	"strings"
 	"sync"
 
 	"github.com/spf13/pflag"
 	"google.golang.org/grpc"
-
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/sqltypes"
@@ -136,14 +132,7 @@ func (conn *gRPCQueryClient) Execute(ctx context.Context, target *querypb.Target
 	}
 	er, err := conn.c.Execute(ctx, req)
 	if err != nil {
-		err = tabletconn.ErrorFromGRPC(err)
-		if err == nil {
-			return nil, nil
-		}
-		if vterrors.Code(err) == vtrpc.Code_UNAVAILABLE && strings.Contains(err.Error(), "connection refused") {
-			return nil, vterrors.VT15001(vtrpc.Code_UNAVAILABLE, err.Error())
-		}
-		return nil, err
+		return nil, tabletconn.ErrorsFromGRPCWrapTransientTxError(err, transactionID != 0)
 	}
 	return sqltypes.Proto3ToResult(er.Result), nil
 }
@@ -182,7 +171,7 @@ func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, target *querypb.
 		}
 		stream, err := conn.c.StreamExecute(ctx, req)
 		if err != nil {
-			return nil, tabletconn.ErrorFromGRPC(err)
+			return nil, tabletconn.ErrorsFromGRPCWrapTransientTxError(err, transactionID != 0)
 		}
 		return stream, nil
 	}()
@@ -193,7 +182,7 @@ func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, target *querypb.
 	for {
 		ser, err := stream.Recv()
 		if err != nil {
-			return tabletconn.ErrorFromGRPC(err)
+			return tabletconn.ErrorsFromGRPCWrapTransientTxError(err, transactionID != 0)
 		}
 		if fields == nil {
 			fields = ser.Result.Fields
@@ -223,7 +212,7 @@ func (conn *gRPCQueryClient) Begin(ctx context.Context, target *querypb.Target, 
 	}
 	br, err := conn.c.Begin(ctx, req)
 	if err != nil {
-		return state, tabletconn.ErrorFromGRPC(err)
+		return state, tabletconn.ErrorsFromGRPCWrapTransientTxError(err, true)
 	}
 	state.TransactionID = br.TransactionId
 	state.TabletAlias = br.TabletAlias
@@ -247,7 +236,7 @@ func (conn *gRPCQueryClient) Commit(ctx context.Context, target *querypb.Target,
 	}
 	resp, err := conn.c.Commit(ctx, req)
 	if err != nil {
-		return 0, tabletconn.ErrorFromGRPC(err)
+		return 0, tabletconn.ErrorsFromGRPCWrapTransientTxError(err, transactionID != 0)
 	}
 	return resp.ReservedId, nil
 }
@@ -268,7 +257,7 @@ func (conn *gRPCQueryClient) Rollback(ctx context.Context, target *querypb.Targe
 	}
 	resp, err := conn.c.Rollback(ctx, req)
 	if err != nil {
-		return 0, tabletconn.ErrorFromGRPC(err)
+		return 0, tabletconn.ErrorsFromGRPCWrapTransientTxError(err, transactionID != 0)
 	}
 	return resp.ReservedId, nil
 }
@@ -290,7 +279,7 @@ func (conn *gRPCQueryClient) Prepare(ctx context.Context, target *querypb.Target
 	}
 	_, err := conn.c.Prepare(ctx, req)
 	if err != nil {
-		return tabletconn.ErrorFromGRPC(err)
+		return tabletconn.ErrorsFromGRPCWrapTransientTxError(err, transactionID != 0)
 	}
 	return nil
 }
@@ -311,7 +300,7 @@ func (conn *gRPCQueryClient) CommitPrepared(ctx context.Context, target *querypb
 	}
 	_, err := conn.c.CommitPrepared(ctx, req)
 	if err != nil {
-		return tabletconn.ErrorFromGRPC(err)
+		return tabletconn.ErrorsFromGRPCWrapTransientTxError(err, dtid != "")
 	}
 	return nil
 }
@@ -333,7 +322,7 @@ func (conn *gRPCQueryClient) RollbackPrepared(ctx context.Context, target *query
 	}
 	_, err := conn.c.RollbackPrepared(ctx, req)
 	if err != nil {
-		return tabletconn.ErrorFromGRPC(err)
+		return tabletconn.ErrorsFromGRPCWrapTransientTxError(err, dtid != "")
 	}
 	return nil
 }
@@ -355,7 +344,7 @@ func (conn *gRPCQueryClient) CreateTransaction(ctx context.Context, target *quer
 	}
 	_, err := conn.c.CreateTransaction(ctx, req)
 	if err != nil {
-		return tabletconn.ErrorFromGRPC(err)
+		return tabletconn.ErrorsFromGRPCWrapTransientTxError(err, dtid != "")
 	}
 	return nil
 }
@@ -378,7 +367,7 @@ func (conn *gRPCQueryClient) StartCommit(ctx context.Context, target *querypb.Ta
 		Dtid:              dtid,
 	}
 	resp, err := conn.c.StartCommit(ctx, req)
-	err = tabletconn.ErrorFromGRPC(err)
+	err = tabletconn.ErrorsFromGRPCWrapTransientTxError(err, transactionID != 0)
 	if resp != nil {
 		return resp.State, err
 	}
@@ -403,7 +392,7 @@ func (conn *gRPCQueryClient) SetRollback(ctx context.Context, target *querypb.Ta
 	}
 	_, err := conn.c.SetRollback(ctx, req)
 	if err != nil {
-		return tabletconn.ErrorFromGRPC(err)
+		return tabletconn.ErrorsFromGRPCWrapTransientTxError(err, transactionID != 0)
 	}
 	return nil
 }
@@ -425,7 +414,7 @@ func (conn *gRPCQueryClient) ConcludeTransaction(ctx context.Context, target *qu
 	}
 	_, err := conn.c.ConcludeTransaction(ctx, req)
 	if err != nil {
-		return tabletconn.ErrorFromGRPC(err)
+		return tabletconn.ErrorsFromGRPCWrapTransientTxError(err, dtid != "")
 	}
 	return nil
 }
@@ -446,7 +435,7 @@ func (conn *gRPCQueryClient) ReadTransaction(ctx context.Context, target *queryp
 	}
 	response, err := conn.c.ReadTransaction(ctx, req)
 	if err != nil {
-		return nil, tabletconn.ErrorFromGRPC(err)
+		return nil, tabletconn.ErrorsFromGRPCWrapTransientTxError(err, dtid != "")
 	}
 	return response.Metadata, nil
 }
@@ -494,13 +483,13 @@ func (conn *gRPCQueryClient) BeginExecute(ctx context.Context, target *querypb.T
 	}
 	reply, err := conn.c.BeginExecute(ctx, req)
 	if err != nil {
-		return state, nil, tabletconn.ErrorFromGRPC(err)
+		return state, nil, tabletconn.ErrorsFromGRPCWrapTransientTxError(err, true)
 	}
 	state.TransactionID = reply.TransactionId
 	state.TabletAlias = conn.tablet.Alias
 	state.SessionStateChanges = reply.SessionStateChanges
 	if reply.Error != nil {
-		return state, nil, tabletconn.ErrorFromVTRPC(reply.Error)
+		return state, nil, tabletconn.ErrorsFromVTRPCWrapTransientTxError(reply.Error, reply.TransactionId != 0)
 	}
 	return state, sqltypes.Proto3ToResult(reply.Result), nil
 }
@@ -538,7 +527,7 @@ func (conn *gRPCQueryClient) BeginStreamExecute(ctx context.Context, target *que
 		}
 		stream, err := conn.c.BeginStreamExecute(ctx, req)
 		if err != nil {
-			return nil, tabletconn.ErrorFromGRPC(err)
+			return nil, tabletconn.ErrorsFromGRPCWrapTransientTxError(err, true)
 		}
 		return stream, nil
 	}()
@@ -559,11 +548,11 @@ func (conn *gRPCQueryClient) BeginStreamExecute(ctx context.Context, target *que
 		}
 
 		if err != nil {
-			return state, tabletconn.ErrorFromGRPC(err)
+			return state, tabletconn.ErrorsFromGRPCWrapTransientTxError(err, state.TransactionID != 0)
 		}
 
 		if ser.Error != nil {
-			return state, tabletconn.ErrorFromVTRPC(ser.Error)
+			return state, tabletconn.ErrorsFromVTRPCWrapTransientTxError(ser.Error, state.TransactionID != 0)
 		}
 
 		// The last stream receive will not have a result, so callback will not be called for it.
