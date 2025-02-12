@@ -2878,16 +2878,6 @@ func (api *API) WorkflowSwitchTraffic(ctx context.Context, req *vtadminpb.Workfl
 		return nil, err
 	}
 
-	// Set the default options which are not supported in VTAdmin Web.
-	req.Request.TabletTypes = []topodatapb.TabletType{
-		topodatapb.TabletType_PRIMARY,
-		topodatapb.TabletType_REPLICA,
-		topodatapb.TabletType_RDONLY,
-	}
-	req.Request.Timeout = protoutil.DurationToProto(workflow.DefaultTimeout)
-	req.Request.MaxReplicationLagAllowed = protoutil.DurationToProto(vreplcommon.MaxReplicationLagDefault)
-	req.Request.EnableReverseReplication = true
-
 	return c.Vtctld.WorkflowSwitchTraffic(ctx, req.Request)
 }
 
