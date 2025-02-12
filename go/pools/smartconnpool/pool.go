@@ -442,16 +442,19 @@ func (pool *ConnPool[C]) tryReturnConn(conn *Pooled[C]) bool {
 }
 
 func (pool *ConnPool[C]) pop(stack *connStack[C]) *Pooled[C] {
-	var conn *Pooled[C]
-	var ok bool
-
-	for conn, ok = stack.Pop(); ok; conn, ok = stack.Pop() {
+	// retry-loop: pop a connection from the stack and atomically check whether
+	// its timeout has elapsed. If the timeout has elapsed, the borrow will fail,
+	// which means that a background worker has already marked this connection
+	// as stale and is in the process of shutting it down. If we successfully mark
+	// the timeout as borrowed, we know that background workers will not be able
+	// to expire this connection (even if it's still visible to them), so it's
+	// safe to return it
+	for conn, ok := stack.Pop(); ok; conn, ok = stack.Pop() {
 		if conn.timeUsed.borrow() {
-			break
+			return conn
 		}
 	}
-
-	return conn
+	return nil
 }
 
 func (pool *ConnPool[C]) tryReturnAnyConn() bool {
@@ -748,6 +751,13 @@ func (pool *ConnPool[C]) closeIdleResources(now time.Time) {
 	mono := monotonicFromTime(now)
 
 	closeInStack := func(s *connStack[C]) {
+		// Do a read-only best effort iteration of all the connection in this
+		// stack and atomically attempt to mark them as expired.
+		// Any connections that are marked as expired are _not_ removed from
+		// the stack; it's generally unsafe to remove nodes from the stack
+		// besides the head. When clients pop from the stack, they'll immediately
+		// notice the expired connection and ignore it.
+		// see: timestamp.expired
 		for conn := s.Peek(); conn != nil; conn = conn.next.Load() {
 			if conn.timeUsed.expired(mono, timeout) {
 				pool.Metrics.idleClosed.Add(1)
