@@ -378,6 +378,16 @@ func valueToEval(value sqltypes.Value, collation collations.TypedCollation, valu
 	}
 
 	switch tt := value.Type(); {
+	case tt == sqltypes.Tuple:
+		t := &evalTuple{}
+		err := value.ForEachValue(func(bv sqltypes.Value) {
+			e, err := valueToEval(bv, collation, values)
+			if err != nil {
+				return
+			}
+			t.t = append(t.t, e)
+		})
+		return t, wrap(err)
 	case sqltypes.IsSigned(tt):
 		ival, err := value.ToInt64()
 		return newEvalInt64(ival), wrap(err)
