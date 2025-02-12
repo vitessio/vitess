@@ -295,18 +295,35 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 	applyErr := make(chan error, 1)
 
 	if vp.parallelMode {
+		defer log.Errorf("========== QQQ DONE fetchAndApply")
+
 		producer, err := newParallelProducer(ctx, vp.vr.dbClientGen, vp)
 		if err != nil {
 			return err
 		}
 		go func() {
+			defer log.Errorf("========== QQQ DONE fetchAndApply/parallel goroutine")
+			ctx, cancel := context.WithCancel(ctx)
+			defer cancel()
+
 			err := func() error {
+				defer log.Errorf("========== QQQ DONE fetchAndApply/parallel inner")
+				log.Errorf("========== QQQ fetchAndApply applyEvents call")
 				if err := producer.applyEvents(ctx, relay); err != nil {
+					log.Errorf("========== QQQ fetchAndApply applyEvents err=%v", err)
 					return err
 				}
+				log.Errorf("========== QQQ fetchAndApply producer.commitAll call")
 				if err := producer.commitAll(ctx, nil); err != nil {
+					log.Errorf("========== QQQ producer.commitAll err=%v", err)
 					return err
 				}
+				if _, _, err := producer.aggregateWorkersPos(ctx); err != nil {
+					log.Errorf("========== QQQ producer.aggregateWorkersPos err=%v", err)
+					return err
+				}
+				log.Errorf("========== QQQ fetchAndApply good")
+				// TODO(shlomi): DeleteVReplicationWorkerPos
 				if producer.posReached.Load() {
 					log.Infof("Stopped at position: %v", vp.stopPos)
 					if vp.saveStop {
