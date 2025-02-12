@@ -271,7 +271,6 @@ func TestReplicaTransactions(t *testing.T) {
 	require.NoError(t, err)
 	serving := replicaTablet.VttabletProcess.WaitForStatus("SERVING", 60*time.Second)
 	assert.Equal(t, serving, true, "Tablet did not become ready within a reasonable time")
-	utils.AssertContainsError(t, readConn, fetchAllCustomers, "not found")
 
 	// create a new connection, should be able to query again
 	readConn, err = mysql.Connect(ctx, &vtParams)

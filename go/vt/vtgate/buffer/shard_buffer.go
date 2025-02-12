@@ -25,13 +25,14 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/discovery"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/logutil"
-	"vitess.io/vitess/go/vt/topo/topoproto"
-	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/vt/vtgate/errorsanitizer"
 
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // bufferState represents the different states a shardBuffer object can be in.
@@ -488,7 +489,7 @@ func (sb *shardBuffer) recordKeyspaceEvent(alias *topodatapb.TabletAlias, stillS
 	sb.mu.Lock()
 	defer sb.mu.Unlock()
 
-	log.V(2).Infof("disruption in shard %s/%s resolved (serving: %v), movetable state %#v",
+	log.Infof("disruption in shard %s/%s resolved (serving: %v), movetable state %#v",
 		sb.keyspace, sb.shard, stillServing, keyspaceEvent.MoveTablesState)
 
 	if !topoproto.TabletAliasEqual(alias, sb.currentPrimary) {
@@ -551,8 +552,7 @@ func (sb *shardBuffer) stopBufferingLocked(reason stopReason, details string) {
 		utilizationSum.Add(sb.statsKey, utilMax)
 	}
 
-	sb.
-		sb.logErrorIfStateNotLocked(stateBuffering)
+	sb.logErrorIfStateNotLocked(stateBuffering)
 	sb.state = stateDraining
 	q := sb.queue
 	// Clear the queue such that remove(), oldestEntry() and evictOldestEntry()
