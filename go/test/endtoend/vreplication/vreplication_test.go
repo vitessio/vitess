@@ -518,6 +518,59 @@ func TestVStreamFlushBinlog(t *testing.T) {
 	require.Equal(t, flushCount, int64(1), "VStreamerFlushedBinlogs should still be 1")
 }
 
+// TestMoveTablesCompleteIgnoreSourceKeyspace confirms that we are able to
+// complete a MoveTables operation even if the source keyspace is gone.
+func TestMoveTablesCompleteIgnoreSourceKeyspace(t *testing.T) {
+	defaultCellName := "zone1"
+	workflow := "mtcompnosource"
+	ksWorkflow := fmt.Sprintf("%s.%s", targetKs, workflow)
+	shard := "0"
+	targetShard := fmt.Sprintf("%s:%s", targetKs, shard)
+	vc = NewVitessCluster(t, nil)
+	require.NotNil(t, vc)
+	defer vc.TearDown()
+	defaultCell := vc.Cells[defaultCellName]
+
+	_, err := vc.AddKeyspace(t, []*Cell{defaultCell}, sourceKs, shard, initialProductVSchema, initialProductSchema, 0, 0, 100, nil)
+	require.NoError(t, err)
+	_, err = vc.AddKeyspace(t, []*Cell{defaultCell}, targetKs, shard, "", "", 0, 0, 200, nil)
+	require.NoError(t, err)
+	verifyClusterHealth(t, vc)
+
+	insertInitialData(t)
+
+	tables := []string{"product", "customer", "merchant", "orders"}
+	moveTablesAction(t, "Create", defaultCellName, workflow, sourceKs, targetKs, strings.Join(tables, ","))
+	// Wait until we get through the copy phase...
+	catchup(t, vc.getPrimaryTablet(t, targetKs, shard), workflow, "MoveTables")
+
+	switchReads(t, "MoveTables", defaultCellName, ksWorkflow, false)
+	switchWrites(t, "MoveTables", ksWorkflow, false)
+
+	// Decommission the source keyspace.
+	require.NotZero(t, len(vc.Cells[defaultCellName].Keyspaces))
+	require.NotNil(t, vc.Cells[defaultCellName].Keyspaces[sourceKs])
+	err = vc.TearDownKeyspace(vc.Cells[defaultCellName].Keyspaces[sourceKs])
+	require.NoError(t, err)
+	vc.DeleteKeyspace(t, sourceKs)
+
+	// The complete should now fail.
+	args := []string{"MoveTables", "--workflow=" + workflow, "--target-keyspace=" + targetKs, "complete"}
+	out, err := vc.VtctldClient.ExecuteCommandWithOutput(args...)
+	require.Error(t, err, out)
+
+	// But it should succeed if we ignore the source keyspace.
+	confirmRoutingRulesExist(t)
+	args = append(args, "--ignore-source-keyspace")
+	out, err = vc.VtctldClient.ExecuteCommandWithOutput(args...)
+	require.NoError(t, err, out)
+	confirmNoRoutingRules(t)
+	for _, table := range tables {
+		validateTableInDenyList(t, vc, targetShard, table, false)
+	}
+	confirmNoWorkflows(t, targetKs)
+}
+
 func testVStreamCellFlag(t *testing.T) {
 	vgtid := &binlogdatapb.VGtid{
 		ShardGtids: []*binlogdatapb.ShardGtid{{

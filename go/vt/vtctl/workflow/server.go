@@ -2159,8 +2159,7 @@ func (s *Server) buildTrafficSwitcher(ctx context.Context, targetKeyspace, workf
 			}
 		}
 	}
-	if ts.workflowType == binlogdatapb.VReplicationWorkflowType_MoveTables && wopts.ignoreSourceKeyspace {
-		log.Errorf("DEBUG: Ignoring source keyspace for MoveTables workflow with source Keyspace %s", ts.sourceKeyspace)
+	if wopts.ignoreSourceKeyspace {
 		return ts, nil
 	}
 	vs, err := sourceTopo.GetVSchema(ctx, ts.sourceKeyspace)
