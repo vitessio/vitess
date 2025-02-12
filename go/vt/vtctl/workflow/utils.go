@@ -1063,3 +1063,11 @@ func getVindexAndVSchema(ctx context.Context, ts *topo.Server, keyspace string, 
 	}
 	return vindex, vschema, nil
 }
+
+func processWorkflowActionOptions(opts []WorkflowActionOption) workflowActionOptions {
+	var options workflowActionOptions
+	for _, o := range opts {
+		o.apply(&options)
+	}
+	return options
+}
