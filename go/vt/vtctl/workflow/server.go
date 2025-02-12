@@ -1457,7 +1457,7 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 
 	// Cleanup related data and artifacts. There are none for a LookupVindex workflow.
 	if ts.workflowType != binlogdatapb.VReplicationWorkflowType_CreateLookupIndex {
-		if _, err := s.dropTargets(ctx, ts, req.GetKeepData(), req.GetKeepRoutingRules(), false); err != nil {
+		if _, err := s.dropTargets(ctx, ts, req.GetKeepData(), req.GetKeepRoutingRules(), false, opts...); err != nil {
 			if topo.IsErrType(err, topo.NoNode) {
 				return nil, vterrors.Wrapf(err, "%s keyspace does not exist", req.GetKeyspace())
 			}
@@ -1937,25 +1937,44 @@ func (s *Server) optimizeCopyStateTable(tablet *topodatapb.Tablet) {
 
 // dropTargets cleans up target tables, shards and denied tables if a MoveTables/Reshard
 // is canceled.
-func (s *Server) dropTargets(ctx context.Context, ts *trafficSwitcher, keepData, keepRoutingRules, dryRun bool) (*[]string, error) {
-	var err error
+func (s *Server) dropTargets(ctx context.Context, ts *trafficSwitcher, keepData, keepRoutingRules, dryRun bool, opts ...WorkflowActionOption) (*[]string, error) {
+	wopts := processWorkflowActionOptions(opts)
+	var (
+		err, lockErr               error
+		sw                         iswitcher
+		sourceUnlock, targetUnlock func(*error)
+	)
 	ts.keepRoutingRules = keepRoutingRules
-	var sw iswitcher
 	if dryRun {
 		sw = &switcherDryRun{ts: ts, drLog: NewLogRecorder()}
 	} else {
 		sw = &switcher{s: s, ts: ts}
 	}
 
-	// Lock the target keyspace.
-	if ts.TargetKeyspaceName() != ts.SourceKeyspaceName() {
-		lockCtx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "DropTargets")
+	if wopts.ignoreSourceKeyspace {
+		// Lock only the target keyspace.
+		ctx, targetUnlock, lockErr = sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "DropTargets")
 		if lockErr != nil {
 			return defaultErrorHandler(ts.Logger(), fmt.Sprintf("failed to lock the %s keyspace", ts.TargetKeyspaceName()),
 				lockErr)
 		}
 		defer targetUnlock(&err)
-		ctx = lockCtx
+	} else {
+		// Lock the source and target keyspaces.
+		ctx, sourceUnlock, lockErr = sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "DropTargets")
+		if lockErr != nil {
+			return defaultErrorHandler(ts.Logger(), fmt.Sprintf("failed to lock the %s keyspace", ts.SourceKeyspaceName()),
+				lockErr)
+		}
+		defer sourceUnlock(&err)
+		if ts.TargetKeyspaceName() != ts.SourceKeyspaceName() {
+			ctx, targetUnlock, lockErr = sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "DropTargets")
+			if lockErr != nil {
+				return defaultErrorHandler(ts.Logger(), fmt.Sprintf("failed to lock the %s keyspace", ts.TargetKeyspaceName()),
+					lockErr)
+			}
+			defer targetUnlock(&err)
+		}
 	}
 
 	// Stop the workflow before we delete the artifacts so that it doesn't try and
@@ -1983,6 +2002,11 @@ func (s *Server) dropTargets(ctx context.Context, ts *trafficSwitcher, keepData,
 		case binlogdatapb.MigrationType_TABLES:
 			if !ts.IsMultiTenantMigration() {
 				if err := sw.removeTargetTables(ctx); err != nil {
+					return nil, err
+				}
+			}
+			if !wopts.ignoreSourceKeyspace {
+				if err := sw.dropSourceDeniedTables(ctx); err != nil {
 					return nil, err
 				}
 			}
