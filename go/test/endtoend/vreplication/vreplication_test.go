@@ -518,57 +518,78 @@ func TestVStreamFlushBinlog(t *testing.T) {
 	require.Equal(t, flushCount, int64(1), "VStreamerFlushedBinlogs should still be 1")
 }
 
-// TestMoveTablesCompleteIgnoreSourceKeyspace confirms that we are able to
-// complete a MoveTables operation even if the source keyspace is gone.
-func TestMoveTablesCompleteIgnoreSourceKeyspace(t *testing.T) {
+// TestMoveTablesIgnoreSourceKeyspace confirms that we are able to
+// cancel/delete and complete a MoveTables workflow even if the source
+// keyspace is gone.
+func TestMoveTablesIgnoreSourceKeyspace(t *testing.T) {
 	defaultCellName := "zone1"
-	workflow := "mtcompnosource"
+	workflow := "mtnosource"
 	ksWorkflow := fmt.Sprintf("%s.%s", targetKs, workflow)
 	shard := "0"
 	targetShard := fmt.Sprintf("%s:%s", targetKs, shard)
-	vc = NewVitessCluster(t, nil)
-	require.NotNil(t, vc)
-	defer vc.TearDown()
-	defaultCell := vc.Cells[defaultCellName]
-
-	_, err := vc.AddKeyspace(t, []*Cell{defaultCell}, sourceKs, shard, initialProductVSchema, initialProductSchema, 0, 0, 100, nil)
-	require.NoError(t, err)
-	_, err = vc.AddKeyspace(t, []*Cell{defaultCell}, targetKs, shard, "", "", 0, 0, 200, nil)
-	require.NoError(t, err)
-	verifyClusterHealth(t, vc)
-
-	insertInitialData(t)
-
 	tables := []string{"product", "customer", "merchant", "orders"}
-	moveTablesAction(t, "Create", defaultCellName, workflow, sourceKs, targetKs, strings.Join(tables, ","))
-	// Wait until we get through the copy phase...
-	catchup(t, vc.getPrimaryTablet(t, targetKs, shard), workflow, "MoveTables")
+	var defaultCell *Cell
 
-	switchReads(t, "MoveTables", defaultCellName, ksWorkflow, false)
-	switchWrites(t, "MoveTables", ksWorkflow, false)
+	run := func(t *testing.T, switchTraffic bool, args []string) {
+		vc = NewVitessCluster(t, nil)
+		require.NotNil(t, vc)
+		defaultCell = vc.Cells[defaultCellName]
+		t.Cleanup(vc.TearDown)
 
-	// Decommission the source keyspace.
-	require.NotZero(t, len(vc.Cells[defaultCellName].Keyspaces))
-	require.NotNil(t, vc.Cells[defaultCellName].Keyspaces[sourceKs])
-	err = vc.TearDownKeyspace(vc.Cells[defaultCellName].Keyspaces[sourceKs])
-	require.NoError(t, err)
-	vc.DeleteKeyspace(t, sourceKs)
+		_, err := vc.AddKeyspace(t, []*Cell{defaultCell}, sourceKs, shard, initialProductVSchema, initialProductSchema, 0, 0, 100, nil)
+		require.NoError(t, err)
+		_, err = vc.AddKeyspace(t, []*Cell{defaultCell}, targetKs, shard, "", "", 0, 0, 200, nil)
+		require.NoError(t, err)
+		verifyClusterHealth(t, vc)
 
-	// The complete should now fail.
-	args := []string{"MoveTables", "--workflow=" + workflow, "--target-keyspace=" + targetKs, "complete"}
-	out, err := vc.VtctldClient.ExecuteCommandWithOutput(args...)
-	require.Error(t, err, out)
+		insertInitialData(t)
 
-	// But it should succeed if we ignore the source keyspace.
-	confirmRoutingRulesExist(t)
-	args = append(args, "--ignore-source-keyspace")
-	out, err = vc.VtctldClient.ExecuteCommandWithOutput(args...)
-	require.NoError(t, err, out)
-	confirmNoRoutingRules(t)
-	for _, table := range tables {
-		validateTableInDenyList(t, vc, targetShard, table, false)
+		moveTablesAction(t, "Create", defaultCellName, workflow, sourceKs, targetKs, strings.Join(tables, ","))
+		// Wait until we get through the copy phase...
+		catchup(t, vc.getPrimaryTablet(t, targetKs, shard), workflow, "MoveTables")
+
+		if switchTraffic {
+			switchReads(t, "MoveTables", defaultCellName, ksWorkflow, false)
+			switchWrites(t, "MoveTables", ksWorkflow, false)
+		}
+
+		// Decommission the source keyspace.
+		require.NotZero(t, len(vc.Cells[defaultCellName].Keyspaces))
+		require.NotNil(t, vc.Cells[defaultCellName].Keyspaces[sourceKs])
+		err = vc.TearDownKeyspace(vc.Cells[defaultCellName].Keyspaces[sourceKs])
+		require.NoError(t, err)
+		vc.DeleteKeyspace(t, sourceKs)
+
+		// The command should fail.
+		out, err := vc.VtctldClient.ExecuteCommandWithOutput(args...)
+		require.Error(t, err, out)
+
+		// But it should succeed if we ignore the source keyspace.
+		confirmRoutingRulesExist(t)
+		args = append(args, "--ignore-source-keyspace")
+		out, err = vc.VtctldClient.ExecuteCommandWithOutput(args...)
+		require.NoError(t, err, out)
+		confirmNoRoutingRules(t)
+		for _, table := range tables {
+			validateTableInDenyList(t, vc, targetShard, table, false)
+		}
+		confirmNoWorkflows(t, targetKs)
 	}
-	confirmNoWorkflows(t, targetKs)
+
+	t.Run("Workflow Delete", func(t *testing.T) {
+		args := []string{"Workflow", "--keyspace=" + targetKs, "delete", "--workflow=" + workflow}
+		run(t, false, args)
+	})
+
+	t.Run("MoveTables Cancel", func(t *testing.T) {
+		args := []string{"MoveTables", "--workflow=" + workflow, "--target-keyspace=" + targetKs, "cancel"}
+		run(t, false, args)
+	})
+
+	t.Run("MoveTables Complete", func(t *testing.T) {
+		args := []string{"MoveTables", "--workflow=" + workflow, "--target-keyspace=" + targetKs, "complete"}
+		run(t, true, args)
+	})
 }
 
 func testVStreamCellFlag(t *testing.T) {

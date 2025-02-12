@@ -1101,9 +1101,9 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
-		"vreplication_complete_no_source_keyspace": {
+		"vreplication_movetables_ignore_source_keyspace": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestMoveTablesCompleteIgnoreSourceKeyspace"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestMoveTablesIgnoreSourceKeyspace"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_cellalias",

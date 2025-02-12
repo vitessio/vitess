@@ -417,10 +417,7 @@ func (vc *VitessCluster) setupVtctldClient() {
 // CleanupDataroot deletes the vtdataroot directory. Since we run multiple tests sequentially in a single CI test shard,
 // we can run out of disk space due to all the leftover artifacts from previous tests.
 func (vc *VitessCluster) CleanupDataroot(t *testing.T, recreate bool) {
-	// This is always set to "true" on GitHub Actions runners:
-	// https://docs.github.com/en/actions/learn-github-actions/variables#default-environment-variables
-	ci, ok := os.LookupEnv("CI")
-	if !ok || strings.ToLower(ci) != "true" {
+	if debugMode {
 		// Leave the directory in place to support local debugging.
 		return
 	}
@@ -794,12 +791,9 @@ func (vc *VitessCluster) teardown() {
 		}
 	}
 
-	var wg sync.WaitGroup
-
 	for _, keyspace := range keyspaces {
 		_ = vc.TearDownKeyspace(keyspace)
 	}
-	wg.Wait()
 	if err := vc.Vtctld.TearDown(); err != nil {
 		log.Infof("Error stopping Vtctld:  %s", err.Error())
 	} else {
@@ -827,23 +821,24 @@ func (vc *VitessCluster) TearDownKeyspace(ks *Keyspace) error {
 	for _, shard := range ks.Shards {
 		for _, tablet := range shard.Tablets {
 			wg.Add(1)
-			go func(tablet2 *Tablet) {
+			go func() {
 				defer wg.Done()
-				if tablet2.DbServer != nil && tablet2.DbServer.TabletUID > 0 {
-					if err := tablet2.DbServer.Stop(); err != nil {
+				if tablet.DbServer != nil && tablet.DbServer.TabletUID > 0 {
+					if err := tablet.DbServer.Stop(); err != nil {
 						log.Infof("Error stopping mysql process: %s", err.Error())
 						errs.RecordError(err)
 					}
 				}
-				if err := tablet2.Vttablet.TearDown(); err != nil {
-					log.Infof("Error stopping vttablet %s %s", tablet2.Name, err.Error())
+				if err := tablet.Vttablet.TearDown(); err != nil {
+					log.Infof("Error stopping vttablet %s %s", tablet.Name, err.Error())
 					errs.RecordError(err)
 				} else {
-					log.Infof("Successfully stopped vttablet %s", tablet2.Name)
+					log.Infof("Successfully stopped vttablet %s", tablet.Name)
 				}
-			}(tablet)
+			}()
 		}
 	}
+	wg.Wait()
 	return errs.AggrError(vterrors.Aggregate)
 }
 

@@ -30,10 +30,11 @@ import (
 )
 
 var CancelOptions = struct {
-	KeepData         bool
-	KeepRoutingRules bool
-	Shards           []string
-	DeleteBatchSize  int64
+	KeepData             bool
+	KeepRoutingRules     bool
+	Shards               []string
+	DeleteBatchSize      int64
+	IgnoreSourceKeyspace bool
 }{}
 
 func GetCancelCommand(opts *SubCommandsOpts) *cobra.Command {
@@ -58,12 +59,13 @@ func commandCancel(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
 	req := &vtctldatapb.WorkflowDeleteRequest{
-		Keyspace:         BaseOptions.TargetKeyspace,
-		Workflow:         BaseOptions.Workflow,
-		KeepData:         CancelOptions.KeepData,
-		KeepRoutingRules: CancelOptions.KeepRoutingRules,
-		Shards:           CancelOptions.Shards,
-		DeleteBatchSize:  CancelOptions.DeleteBatchSize,
+		Keyspace:             BaseOptions.TargetKeyspace,
+		Workflow:             BaseOptions.Workflow,
+		KeepData:             CancelOptions.KeepData,
+		KeepRoutingRules:     CancelOptions.KeepRoutingRules,
+		Shards:               CancelOptions.Shards,
+		DeleteBatchSize:      CancelOptions.DeleteBatchSize,
+		IgnoreSourceKeyspace: CancelOptions.IgnoreSourceKeyspace,
 	}
 	resp, err := GetClient().WorkflowDelete(GetCommandCtx(), req)
 	if err != nil {

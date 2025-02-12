@@ -1387,7 +1387,11 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 	span.Annotate("keep_routing_rules", req.KeepRoutingRules)
 	span.Annotate("shards", req.Shards)
 
-	ts, state, err := s.getWorkflowState(ctx, req.GetKeyspace(), req.GetWorkflow())
+	opts := []WorkflowActionOption{}
+	if req.IgnoreSourceKeyspace {
+		opts = append(opts, IgnoreSourceKeyspace())
+	}
+	ts, state, err := s.getWorkflowState(ctx, req.GetKeyspace(), req.GetWorkflow(), opts...)
 	if err != nil {
 		s.Logger().Errorf("failed to get VReplication workflow state for %s.%s: %v", req.GetKeyspace(), req.GetWorkflow(), err)
 		return nil, err
@@ -1943,13 +1947,7 @@ func (s *Server) dropTargets(ctx context.Context, ts *trafficSwitcher, keepData,
 		sw = &switcher{s: s, ts: ts}
 	}
 
-	// Lock the source and target keyspaces.
-	ctx, sourceUnlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "DropTargets")
-	if lockErr != nil {
-		return defaultErrorHandler(ts.Logger(), fmt.Sprintf("failed to lock the %s keyspace", ts.SourceKeyspaceName()),
-			lockErr)
-	}
-	defer sourceUnlock(&err)
+	// Lock the target keyspace.
 	if ts.TargetKeyspaceName() != ts.SourceKeyspaceName() {
 		lockCtx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "DropTargets")
 		if lockErr != nil {
