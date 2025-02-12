@@ -69,7 +69,7 @@
     <grpc.version>1.67.1</grpc.version>
     <!-- NOTE Netty handler and boring SSL must be kept compatible with grpc
       https://github.com/grpc/grpc-java/blob/master/SECURITY.md#netty -->
-    <netty.handler.version>4.1.110.Final</netty.handler.version>
+    <netty.handler.version>4.1.118.Final</netty.handler.version>
     <tcnative.boring.ssl.version>2.0.65.Final</tcnative.boring.ssl.version>
 
     <protobuf.java.version>3.25.5</protobuf.java.version>
