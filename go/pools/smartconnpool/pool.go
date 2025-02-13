@@ -200,7 +200,7 @@ func (pool *ConnPool[C]) open() {
 
 	// The expire worker takes care of removing from the waiter list any clients whose
 	// context has been cancelled.
-	pool.runWorker(pool.close, 100*time.Millisecond, func(now time.Time) bool {
+	pool.runWorker(pool.close, 100*time.Millisecond, func(_ time.Time) bool {
 		maybeStarving := pool.wait.expire(false)
 
 		// Do not allow connections to starve; if there's waiters in the queue
