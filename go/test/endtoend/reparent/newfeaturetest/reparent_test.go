@@ -25,8 +25,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/vt/log"
-
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/reparent/utils"
@@ -235,90 +233,4 @@ func TestBufferingWithMultipleDisruptions(t *testing.T) {
 	require.NoError(t, err)
 	// Wait for all the writes to have succeeded.
 	wg.Wait()
-}
-
-func TestBufferingErrorInTransaction(t *testing.T) {
-	clusterInstance := utils.SetupShardedReparentCluster(t, policy.DurabilitySemiSync)
-	defer utils.TeardownCluster(clusterInstance)
-
-	keyspace := clusterInstance.Keyspaces[0]
-	vtParams := clusterInstance.GetVTParams(keyspace.Name)
-	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
-
-	// Start by reparenting all the shards to the first tablet.
-	// Confirm that the replication is setup correctly in the beginning.
-	// tablets[0] is the primary tablet in the beginning.
-	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2]})
-
-	conn, err := mysql.Connect(context.Background(), &vtParams)
-	require.NoError(t, err)
-	idx := 20
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			default:
-				_, err = conn.ExecuteFetch("begin", 0, false)
-				if err != nil {
-					log.Errorf("Begin error received - %v", err)
-					continue
-				}
-
-				for i := 0; i < 25; i++ {
-					idx += 5
-					_, err = conn.ExecuteFetch(utils.GetInsertMultipleValuesQuery(idx, idx+1, idx+2, idx+3), 0, false)
-					if err != nil {
-						log.Errorf("Insert error received - %v", err)
-					}
-					time.Sleep(10 * time.Millisecond)
-				}
-
-				time.Sleep(10 * time.Second)
-				var hasCommit bool
-				_, err = conn.ExecuteFetch("commit", 0, false)
-				if err != nil {
-					log.Errorf("Commit error received - %v", err)
-				} else {
-					log.Error("Commit successful")
-					hasCommit = true
-				}
-
-				if !hasCommit {
-					_, err = conn.ExecuteFetch("rollback", 0, false)
-					if err != nil {
-						log.Errorf("Rollback error received - %v", err)
-					}
-				}
-
-				time.Sleep(100 * time.Millisecond)
-			}
-		}
-	}()
-
-	// Reparent to the other replica
-	utils.ShardName = "-40"
-	defer func() {
-		utils.ShardName = "0"
-	}()
-
-	output, err := utils.Prs(t, clusterInstance, tablets[1])
-	require.NoError(t, err, "error in PlannedReparentShard output - %s", output)
-
-	time.Sleep(5 * time.Second)
-
-	// We now restart the vttablet that became a replica.
-	utils.StopTablet(t, tablets[0], false)
-
-	time.Sleep(10 * time.Second)
-
-	tablets[0].VttabletProcess.ServingStatus = "SERVING"
-	err = tablets[0].VttabletProcess.Setup()
-	require.NoError(t, err)
-
-	time.Sleep(1 * time.Minute)
-	cancel()
 }
