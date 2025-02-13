@@ -66,6 +66,22 @@ const tabletPickerContextTimeout = 90 * time.Second
 // ending the stream from the tablet.
 const stopOnReshardDelay = 500 * time.Millisecond
 
+const partialJournalingParticipantsMsg = "not all journaling participants are in the stream"
+
+type partialJournalingParticipantsError struct {
+	details string
+}
+
+func (p *partialJournalingParticipantsError) Error() string {
+	return fmt.Sprintf("%s: %s", partialJournalingParticipantsMsg, p.details)
+}
+
+func NewPartialJournalingParticipantsError(format string, args ...any) error {
+	return &partialJournalingParticipantsError{
+		details: fmt.Sprintf(format, args...),
+	}
+}
+
 // vstream contains the metadata for one VStream request.
 type vstream struct {
 	// mu protects parts of vgtid, the semantics of a send, and journaler.
@@ -784,15 +800,27 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 // A tablet should be ignored upon retry if it's likely another tablet will not
 // produce the same error.
 func (vs *vstream) shouldRetry(err error) (retry bool, ignoreTablet bool) {
-	errCode := vterrors.Code(err)
-
-	// If there is a GTIDSet Mismatch on the tablet, omit it from the candidate
-	// list in the TabletPicker on retry.
-	if errCode == vtrpcpb.Code_INVALID_ARGUMENT && strings.Contains(err.Error(), "GTIDSet Mismatch") {
-		return true, true
+	// Not having all journaling participants available is considered fatal and
+	// requires a new VStream.
+	if _, ok := vterrors.UnwrapAll(err).(*partialJournalingParticipantsError); ok {
+		return false, false
 	}
 
-	// If this is a recoverable/ephemeral error, then retry.
+	errCode := vterrors.Code(err)
+
+	// This typically indicates that the user provided invalid arguments for the
+	// VStream so we should not retry.
+	if errCode == vtrpcpb.Code_INVALID_ARGUMENT {
+		// But if there is a GTIDSet Mismatch on the tablet, omit that tablet from
+		// the candidate list in the TabletPicker and retry. The argument was invalid
+		// *for that specific *tablet* but it's not generally invalid.
+		if strings.Contains(err.Error(), "GTIDSet Mismatch") {
+			return true, true
+		}
+		return false, false
+	}
+
+	// For anything else, if this is a recoverable/ephemeral error then retry.
 	if !vreplication.IsUnrecoverableError(err) {
 		return true, false
 	}
@@ -938,7 +966,7 @@ func (vs *vstream) getJournalEvent(ctx context.Context, sgtid *binlogdatapb.Shar
 						mode = matchAll
 						je.participants[inner] = false
 					case matchNone:
-						return nil, fmt.Errorf("not all journaling participants are in the stream: journal: %v, stream: %v", journal.Participants, vs.vgtid.ShardGtids)
+						return nil, NewPartialJournalingParticipantsError("journal: %v, stream: %v", journal.Participants, vs.vgtid.ShardGtids)
 					}
 					continue nextParticipant
 				}
@@ -947,7 +975,7 @@ func (vs *vstream) getJournalEvent(ctx context.Context, sgtid *binlogdatapb.Shar
 			case undecided, matchNone:
 				mode = matchNone
 			case matchAll:
-				return nil, fmt.Errorf("not all journaling participants are in the stream: journal: %v, stream: %v", journal.Participants, vs.vgtid.ShardGtids)
+				return nil, NewPartialJournalingParticipantsError("journal: %v, stream: %v", journal.Participants, vs.vgtid.ShardGtids)
 			}
 		}
 		if mode == matchNone {

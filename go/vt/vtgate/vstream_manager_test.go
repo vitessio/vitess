@@ -402,7 +402,7 @@ func TestVStreamRetriableErrors(t *testing.T) {
 			name:         "failed precondition",
 			code:         vtrpcpb.Code_FAILED_PRECONDITION,
 			msg:          "",
-			shouldRetry:  true,
+			shouldRetry:  false,
 			ignoreTablet: false,
 		},
 		{
@@ -420,7 +420,7 @@ func TestVStreamRetriableErrors(t *testing.T) {
 			ignoreTablet: false,
 		},
 		{
-			name:         "should not retry",
+			name:         "invalid argument",
 			code:         vtrpcpb.Code_INVALID_ARGUMENT,
 			msg:          "final error",
 			shouldRetry:  false,
@@ -928,7 +928,7 @@ func TestVStreamJournalPartialMatch(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Variable names are maintained like in OneToMany, but order is different.1
+	// Variable names are maintained like in OneToMany, but order is different.
 	ks := "TestVStream"
 	cell := "aa"
 	_ = createSandbox(ks)
