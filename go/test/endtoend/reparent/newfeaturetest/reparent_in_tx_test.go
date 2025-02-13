@@ -112,12 +112,13 @@ func reparent(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tablet
 
 	time.Sleep(5 * time.Second)
 
+	// Wait for the action triggering the VT15001 to be done before moving on
+	<-actionDone
+
 	tablets[0].VttabletProcess.ServingStatus = "SERVING"
 	err = tablets[0].VttabletProcess.Setup()
 	require.NoError(t, err)
 
-	// Wait for the action triggering the VT15001 to be done before moving on
-	<-actionDone
 }
 
 func TestErrorsInTransaction(t *testing.T) {
