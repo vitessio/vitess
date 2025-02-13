@@ -19,7 +19,6 @@ package smartconnpool
 import (
 	"context"
 	"sync/atomic"
-	"time"
 )
 
 type Connection interface {
@@ -33,8 +32,8 @@ type Connection interface {
 
 type Pooled[C Connection] struct {
 	next        atomic.Pointer[Pooled[C]]
-	timeCreated time.Time
-	timeUsed    time.Time
+	timeCreated timestamp
+	timeUsed    timestamp
 	pool        *ConnPool[C]
 
 	Conn C
