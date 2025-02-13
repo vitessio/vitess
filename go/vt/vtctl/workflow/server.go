@@ -1933,8 +1933,8 @@ func (s *Server) optimizeCopyStateTable(tablet *topodatapb.Tablet) {
 func (s *Server) dropTargets(ctx context.Context, ts *trafficSwitcher, keepData, keepRoutingRules, dryRun bool, opts ...WorkflowActionOption) (*[]string, error) {
 	wopts := processWorkflowActionOptions(opts)
 	var (
-		err, lockErr               error
 		sw                         iswitcher
+		err, lockErr               error
 		sourceUnlock, targetUnlock func(*error)
 	)
 	ts.keepRoutingRules = keepRoutingRules
@@ -2261,20 +2261,21 @@ func (s *Server) dropSources(ctx context.Context, ts *trafficSwitcher, removalTy
 			return nil, err
 		}
 	}
-	if !keepData && !wopts.ignoreSourceKeyspace {
+	if !keepData {
 		switch ts.MigrationType() {
 		case binlogdatapb.MigrationType_TABLES:
-			s.Logger().Infof("Deleting tables")
-			if err := sw.removeSourceTables(ctx, removalType); err != nil {
-				return nil, err
-			}
-			if err := sw.dropSourceDeniedTables(ctx); err != nil {
-				return nil, err
+			if !wopts.ignoreSourceKeyspace {
+				s.Logger().Infof("Deleting tables")
+				if err := sw.removeSourceTables(ctx, removalType); err != nil {
+					return nil, err
+				}
+				if err := sw.dropSourceDeniedTables(ctx); err != nil {
+					return nil, err
+				}
 			}
 			if err := sw.dropTargetDeniedTables(ctx); err != nil {
 				return nil, err
 			}
-
 		case binlogdatapb.MigrationType_SHARDS:
 			s.Logger().Infof("Removing shards")
 			if err := sw.dropSourceShards(ctx); err != nil {
