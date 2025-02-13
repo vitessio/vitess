@@ -33,6 +33,7 @@ const (
 	mysql80 mysqlVersion = "mysql80"
 	mysql84 mysqlVersion = "mysql84"
 
+	cores16RunnerName   = "gh-hosted-runners-16cores-1-24.04"
 	defaultMySQLVersion = mysql80
 )
 
@@ -171,6 +172,7 @@ type clusterTest struct {
 	Name, Shard, Platform              string
 	FileName                           string
 	BuildTag                           string
+	Cores16RunnerName                  string
 	MemoryCheck                        bool
 	MakeTools, InstallXtraBackup       bool
 	Docker                             bool
@@ -268,6 +270,7 @@ func generateClusterWorkflows(list []string, tpl string) {
 			for _, cores16Cluster := range cores16Clusters {
 				if cores16Cluster == cluster {
 					test.Cores16 = true
+					test.Cores16RunnerName = cores16RunnerName
 					break
 				}
 			}
