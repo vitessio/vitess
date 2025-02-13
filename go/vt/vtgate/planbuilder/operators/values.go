@@ -70,7 +70,7 @@ func (v *Values) getColsFromCtx(ctx *plancontext.PlanningContext) sqlparser.Colu
 func (v *Values) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.AliasedExpr {
 	var cols []*sqlparser.AliasedExpr
 	for _, column := range v.getColsFromCtx(ctx) {
-		cols = append(cols, sqlparser.NewAliasedExpr(sqlparser.NewColName(column.String()), ""))
+		cols = append(cols, sqlparser.NewAliasedExpr(sqlparser.NewColNameWithQualifier(column.String(), sqlparser.NewTableName(v.Name)), ""))
 	}
 	return cols
 }
