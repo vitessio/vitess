@@ -77,6 +77,8 @@ func (nz *normalizer) walkStatementUp(cursor *Cursor) bool {
 // where variables are deduped.
 func (nz *normalizer) walkStatementDown(node, parent SQLNode) bool {
 	switch node := node.(type) {
+	case *AssignmentExpr:
+		nz.err = vterrors.VT12001("Assignment expression")
 	// no need to normalize the statement types
 	case *Set, *Show, *Begin, *Commit, *Rollback, *Savepoint, DDLStatement, *SRollback, *Release, *OtherAdmin, *Analyze:
 		return false

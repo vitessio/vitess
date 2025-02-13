@@ -1327,9 +1327,15 @@ var (
 		input: "update /* a.b */ a.b set b = 3",
 	}, {
 		input: "update a.b set d = @v := d + 7 where u = 42",
+		// Assignment expresions aren't supported, so we skip the normalizer test.
+		// We only support parsing these expressions.
+		ignoreNormalizerTest: true,
 	}, {
 		input:  "select @topic3_id:= 10103;",
 		output: "select @topic3_id := 10103 from dual",
+		// Assignment expresions aren't supported, so we skip the normalizer test.
+		// We only support parsing these expressions.
+		ignoreNormalizerTest: true,
 	}, {
 		input: "update /* list */ a set b = 3, c = 4",
 	}, {
