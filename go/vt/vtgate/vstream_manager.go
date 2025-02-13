@@ -36,6 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -782,17 +783,18 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 // An error should be retried if it is expected to be transient.
 // A tablet should be ignored upon retry if it's likely another tablet will not
 // produce the same error.
-func (vs *vstream) shouldRetry(err error) (bool, bool) {
+func (vs *vstream) shouldRetry(err error) (retry bool, ignoreTablet bool) {
 	errCode := vterrors.Code(err)
-
-	if errCode == vtrpcpb.Code_FAILED_PRECONDITION || errCode == vtrpcpb.Code_UNAVAILABLE {
-		return true, false
-	}
 
 	// If there is a GTIDSet Mismatch on the tablet, omit it from the candidate
 	// list in the TabletPicker on retry.
 	if errCode == vtrpcpb.Code_INVALID_ARGUMENT && strings.Contains(err.Error(), "GTIDSet Mismatch") {
 		return true, true
+	}
+
+	// If this is a recoverable/ephemeral error, then retry.
+	if !vreplication.IsUnrecoverableError(err) {
+		return true, false
 	}
 
 	return false, false
