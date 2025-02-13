@@ -318,8 +318,8 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 					log.Errorf("========== QQQ producer.commitAll err=%v", err)
 					return err
 				}
-				if _, _, err := producer.aggregateWorkersPos(ctx); err != nil {
-					log.Errorf("========== QQQ producer.aggregateWorkersPos err=%v", err)
+				if _, _, err := producer.aggregateWorkersPos(ctx, vp.vr.dbClient); err != nil {
+					log.Errorf("========== QQQ fetchAndApply producer.aggregateWorkersPos err=%v", err)
 					return err
 				}
 				log.Errorf("========== QQQ fetchAndApply good")

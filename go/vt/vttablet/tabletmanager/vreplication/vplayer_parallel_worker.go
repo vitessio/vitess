@@ -69,7 +69,7 @@ func newParallelWorker(index int, producer *parallelProducer, capacity int) *par
 		index:             index,
 		producer:          producer,
 		events:            make(chan *binlogdatapb.VEvent, capacity),
-		aggregatedPosChan: make(chan replication.Position, 1),
+		aggregatedPosChan: make(chan replication.Position),
 		sequenceNumbers:   make(map[int64]bool, maxEvents),
 		commitSubscribers: make(map[int64]chan error),
 		vp:                producer.vp,
@@ -159,6 +159,9 @@ func (w *parallelWorker) commitEvents() chan error {
 
 func (w *parallelWorker) applyQueuedEvents(ctx context.Context) (err error) {
 	log.Errorf("========== QQQ applyQueuedEvents")
+	defer func() {
+		log.Errorf("========== QQQ applyQueuedEvents *********** DONE %v *********** err=%v", w.index, err)
+	}()
 
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()

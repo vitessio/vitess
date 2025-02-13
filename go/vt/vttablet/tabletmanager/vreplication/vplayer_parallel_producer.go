@@ -42,14 +42,14 @@ type parallelProducer struct {
 
 	workers []*parallelWorker
 
-	dbClient *vdbClient
-
 	posReached                atomic.Bool
 	workerErrors              chan error
 	sequenceToWorkersMap      map[int64]int // sequence number => worker index
 	completedSequenceNumbers  chan map[int64]bool
 	commitWorkerEventSequence atomic.Int64
 	assignSequence            int64
+
+	newDBClient func() (*vdbClient, error)
 
 	numCommits         atomic.Int64 // temporary. TODO: remove
 	currentConcurrency atomic.Int64 // temporary. TODO: remove
@@ -59,29 +59,29 @@ type parallelProducer struct {
 func newParallelProducer(ctx context.Context, dbClientGen dbClientGenerator, vp *vplayer) (*parallelProducer, error) {
 	p := &parallelProducer{
 		vp:                       vp,
-		dbClient:                 vp.vr.dbClient,
 		workers:                  make([]*parallelWorker, countWorkers),
 		workerErrors:             make(chan error, countWorkers),
 		sequenceToWorkersMap:     make(map[int64]int),
 		completedSequenceNumbers: make(chan map[int64]bool, countWorkers),
 	}
-	{
-		// TODO(shlomi): just use the dbClient from vp.vr.
+
+	p.newDBClient = func() (*vdbClient, error) {
 		dbClient, err := dbClientGen()
 		if err != nil {
 			return nil, err
 		}
-		p.dbClient = newVDBClient(dbClient, vp.vr.stats, 0)
+		vdbClient := newVDBClient(dbClient, vp.vr.stats, 0)
+		_, err = vp.vr.setSQLMode(ctx, vdbClient)
+		if err != nil {
+			return nil, err
+		}
+		vdbClient.maxBatchSize = vp.vr.dbClient.maxBatchSize
+		return vdbClient, nil
 	}
 	for i := range p.workers {
 		w := newParallelWorker(i, p, vp.vr.workflowConfig.RelayLogMaxItems)
-		dbClient, err := dbClientGen()
-		if err != nil {
-			return nil, err
-		}
-		w.dbClient = newVDBClient(dbClient, vp.vr.stats, 0)
-		_, err = vp.vr.setSQLMode(ctx, w.dbClient)
-		if err != nil {
+		var err error
+		if w.dbClient, err = p.newDBClient(); err != nil {
 			return nil, err
 		}
 		w.queryFunc = func(ctx context.Context, sql string) (*sqltypes.Result, error) {
@@ -90,7 +90,6 @@ func newParallelProducer(ctx context.Context, dbClientGen dbClientGenerator, vp 
 			}
 			return nil, w.dbClient.AddQueryToTrxBatch(sql) // Should become part of the trx batch
 		}
-		w.dbClient.maxBatchSize = vp.vr.dbClient.maxBatchSize
 		// INSERT a row into _vt.vreplication_worker_pos with an empty position
 		if _, err := w.dbClient.ExecuteFetch(binlogplayer.GenerateInitWorkerPos(vp.vr.id, w.index), -1); err != nil {
 			return nil, err
@@ -150,12 +149,52 @@ func (p *parallelProducer) commitAll(ctx context.Context, except *parallelWorker
 	}
 	return eg.Wait()
 }
-func (p *parallelProducer) aggregateWorkersPos(ctx context.Context) (aggregatedWorkersPos replication.Position, combinedPos replication.Position, err error) {
+
+// updatePos should get called at a minimum of vreplicationMinimumHeartbeatUpdateInterval.
+func (p *parallelProducer) updatePos(ctx context.Context, pos replication.Position, ts int64, dbClient *vdbClient) (posReached bool, err error) {
+	update := binlogplayer.GenerateUpdatePos(p.vp.vr.id, pos, time.Now().Unix(), ts, p.vp.vr.stats.CopyRowCount.Get(), p.vp.vr.workflowConfig.StoreCompressedGTID)
+	if _, err := dbClient.ExecuteWithRetry(ctx, update); err != nil {
+		return false, fmt.Errorf("error %v updating position", err)
+	}
+	// p.vp.numAccumulatedHeartbeats = 0
+	// p.vp.unsavedEvent = nil
+	// p.vp.timeLastSaved = time.Now()
+	// p.vp.vr.stats.SetLastPosition(p.vp.pos)
+	return posReached, nil
+}
+
+// updateTimeThrottled updates the time_throttled field in the _vt.vreplication record
+// with a rate limit so that it's only saved in the database at most once per
+// throttleUpdatesRateLimiter.tickerTime.
+// It also increments the throttled count in the stats to keep track of how many
+// times a VReplication workflow, and the specific sub-component, is throttled by the
+// tablet throttler over time. It also increments the global throttled count to keep
+// track of how many times in total vreplication has been throttled across all workflows
+// (both ones that currently exist and ones that no longer do).
+func (p *parallelProducer) updateTimeThrottled(appThrottled throttlerapp.Name, reasonThrottled string, dbClient *vdbClient) error {
+	appName := appThrottled.String()
+	p.vp.vr.stats.ThrottledCounts.Add([]string{"tablet", appName}, 1)
+	globalStats.ThrottledCount.Add(1)
+	err := p.vp.vr.throttleUpdatesRateLimiter.Do(func() error {
+		tm := time.Now().Unix()
+		update, err := binlogplayer.GenerateUpdateTimeThrottled(p.vp.vr.id, tm, appName, reasonThrottled)
+		if err != nil {
+			return err
+		}
+		if _, err := dbClient.ExecuteFetch(update, maxRows); err != nil {
+			return fmt.Errorf("error %v updating time throttled", err)
+		}
+		return nil
+	})
+	return err
+}
+
+func (p *parallelProducer) aggregateWorkersPos(ctx context.Context, dbClient *vdbClient) (aggregatedWorkersPos replication.Position, combinedPos replication.Position, err error) {
 	// TODO(shlomi): this query can be computed once in the lifetime of the producer
 	query := binlogplayer.ReadVReplicationWorkersGTIDs(p.vp.vr.id)
-	qr, err := p.dbClient.ExecuteFetch(query, -1)
+	qr, err := dbClient.ExecuteFetch(query, -1)
 	if err != nil {
-		log.Errorf("Error fetching vreplication worker positions: %v. isclosed? %v", err, p.dbClient.IsClosed())
+		log.Errorf("Error fetching vreplication worker positions: %v. isclosed? %v", err, dbClient.IsClosed())
 		return aggregatedWorkersPos, combinedPos, err
 	}
 	var lastEventTimestamp int64
@@ -175,7 +214,7 @@ func (p *parallelProducer) aggregateWorkersPos(ctx context.Context) (aggregatedW
 	p.vp.pos = combinedPos // TODO(shlomi) potential for race condition
 
 	log.Errorf("========== QQQ aggregateWorkersPos updatePos ts=%v, pos=%v", lastEventTimestamp, combinedPos)
-	if _, err := p.vp.updatePos(ctx, lastEventTimestamp); err != nil {
+	if _, err := p.updatePos(ctx, combinedPos, lastEventTimestamp, dbClient); err != nil {
 		return aggregatedWorkersPos, combinedPos, err
 	}
 	if err := p.vp.commit(); err != nil {
@@ -185,6 +224,11 @@ func (p *parallelProducer) aggregateWorkersPos(ctx context.Context) (aggregatedW
 }
 
 func (p *parallelProducer) watchPos(ctx context.Context) error {
+	dbClient, err := p.newDBClient()
+	if err != nil {
+		return err
+	}
+	defer dbClient.Close()
 	// if p.vp.stopPos.IsZero() {
 	// 	return nil
 	// }
@@ -198,9 +242,9 @@ func (p *parallelProducer) watchPos(ctx context.Context) error {
 			return ctx.Err()
 		case <-ticker.C:
 			log.Errorf("========== QQQ watchPos ticker")
-			aggregatedWorkersPos, combinedPos, err := p.aggregateWorkersPos(ctx)
+			aggregatedWorkersPos, combinedPos, err := p.aggregateWorkersPos(ctx, dbClient)
 			if err != nil {
-				log.Errorf("Error aggregating vreplication worker positions: %v. isclosed? %v", err, p.dbClient.IsClosed())
+				log.Errorf("Error aggregating vreplication worker positions: %v. isclosed? %v", err, dbClient.IsClosed())
 				continue
 			}
 			log.Errorf("========== QQQ watchPos aggregatedWorkersPos: %v, combinedPos: %v, stop: %v", aggregatedWorkersPos, combinedPos, p.vp.stopPos)
@@ -278,11 +322,11 @@ func (p *parallelProducer) process(ctx context.Context, events chan *binlogdatap
 		// case t := <-ticker.C:
 		// 	lastGoodTime = t
 		case event := <-events:
-			log.Errorf("========== QQQ process event type: %v", event.Type)
+			// log.Errorf("========== QQQ process event type: %v", event.Type)
 			canApplyInParallel := false
 			switch event.Type {
 			case binlogdatapb.VEventType_BEGIN,
-				binlogdatapb.VEventType_FIELD,
+				// binlogdatapb.VEventType_FIELD,
 				binlogdatapb.VEventType_ROW,
 				binlogdatapb.VEventType_COMMIT,
 				binlogdatapb.VEventType_GTID:
@@ -320,7 +364,13 @@ func (p *parallelProducer) applyEvents(ctx context.Context, relay *relayLog) err
 	// ctx, cancel := context.WithCancel(ctx)
 	// defer cancel()
 
-	log.Errorf("========== QQQ applyEvents defer")
+	defer log.Errorf("========== QQQ applyEvents defer")
+
+	dbClient, err := p.newDBClient()
+	if err != nil {
+		return err
+	}
+	defer dbClient.Close()
 
 	go func() {
 		if err := p.watchPos(ctx); err != nil {
@@ -359,7 +409,7 @@ func (p *parallelProducer) applyEvents(ctx context.Context, relay *relayLog) err
 		// Check throttler.
 		if checkResult, ok := p.vp.vr.vre.throttlerClient.ThrottleCheckOKOrWaitAppName(ctx, throttlerapp.Name(p.vp.throttlerAppName)); !ok {
 			go func() {
-				_ = p.vp.vr.updateTimeThrottled(throttlerapp.VPlayerName, checkResult.Summary())
+				_ = p.updateTimeThrottled(throttlerapp.VPlayerName, checkResult.Summary(), dbClient)
 				estimateLag()
 			}()
 			continue
