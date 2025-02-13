@@ -143,12 +143,7 @@ func (vj *ValuesJoin) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
 
 func (vj *ValuesJoin) planOffsets(ctx *plancontext.PlanningContext) Operator {
 	valuesColumns := ctx.ValuesJoinColumns[vj.BindVarName]
-	for i, jc := range vj.JoinColumns {
-		if jc.PureLHS {
-			offset := vj.LHS.AddColumn(ctx, true, false, sqlparser.NewAliasedExpr(jc.Original, vj.ColumnName[i]))
-			vj.Columns = append(vj.Columns, ToLeftOffset(offset))
-			continue
-		}
+	for _, jc := range vj.JoinColumns {
 		vj.planOffsetsForValueJoinPredicate(ctx, jc.LHS, &valuesColumns)
 		ctx.ValuesJoinColumns[vj.BindVarName] = valuesColumns
 

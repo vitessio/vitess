@@ -18,6 +18,7 @@ package engine
 
 import (
 	"context"
+	"fmt"
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -61,7 +62,7 @@ func (jv *ValuesJoin) TryExecute(ctx context.Context, vcursor VCursor, bindVars 
 		return nil, err
 	}
 	bv := &querypb.BindVariable{
-		Type: querypb.Type_TUPLE,
+		Type: querypb.Type_ROW_TUPLE,
 	}
 	if len(lresult.Rows) == 0 && wantfields {
 		// If there are no rows, we still need to construct a single row
@@ -175,6 +176,7 @@ func (jv *ValuesJoin) description() PrimitiveDescription {
 		Other: map[string]any{
 			"BindVarName":      jv.BindVarName,
 			"CopyColumnsToRHS": jv.CopyColumnsToRHS,
+			"RowID":            fmt.Sprintf("%t", jv.RowID),
 		},
 	}
 }
