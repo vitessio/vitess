@@ -955,11 +955,23 @@ func TestQueryProcessedMetric(t *testing.T) {
 	}, {
 		sql:    "savepoint a",
 		metric: "SAVEPOINT.Transaction.PRIMARY",
-		shards: 0,
 	}, {
 		sql:    "rollback",
 		metric: "ROLLBACK.Transaction.PRIMARY",
-		shards: 0,
+	}, {
+		sql:    "set @x=3",
+		metric: "SET.Local.PRIMARY",
+	}, {
+		sql:    "set sql_mode=''",
+		metric: "SET.MultiShard.PRIMARY",
+		shards: 1,
+	}, {
+		sql:    "set @@vitess_metadata.k1='v1'",
+		metric: "SET.Topology.PRIMARY",
+	}, {
+		sql:    "select 1 from t1 a, t1 b",
+		metric: "SELECT.Join.PRIMARY",
+		shards: 3,
 	}}
 
 	initialQP := getQPMetric(t, "QueryProcessed")
@@ -971,6 +983,7 @@ func TestQueryProcessedMetric(t *testing.T) {
 			updatedQR := getQPMetric(t, "QueryRouted")
 			assert.EqualValues(t, 1, getValue(updatedQP, tc.metric)-getValue(initialQP, tc.metric))
 			assert.EqualValues(t, tc.shards, getValue(updatedQR, tc.metric)-getValue(initialQR, tc.metric))
+			initialQP, initialQR = updatedQP, updatedQR
 		})
 	}
 }

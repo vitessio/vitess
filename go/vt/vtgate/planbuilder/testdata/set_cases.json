@@ -3,7 +3,7 @@
     "comment": "set single user defined variable",
     "query": "set @foo = 42",
     "plan": {
-      "Type": "Complex",
+      "Type": "Local",
       "QueryType": "SET",
       "Original": "set @foo = 42",
       "Instructions": {
@@ -27,7 +27,7 @@
     "comment": "set multi user defined variable",
     "query": "set @foo = 42, @bar = @foo",
     "plan": {
-      "Type": "Complex",
+      "Type": "Local",
       "QueryType": "SET",
       "Original": "set @foo = 42, @bar = @foo",
       "Instructions": {
@@ -56,7 +56,7 @@
     "comment": "set multi user defined variable with complex expression",
     "query": "set @foo = 42, @bar = @foo + 1",
     "plan": {
-      "Type": "Complex",
+      "Type": "Local",
       "QueryType": "SET",
       "Original": "set @foo = 42, @bar = @foo + 1",
       "Instructions": {
@@ -85,7 +85,7 @@
     "comment": "set UDV to expression that can't be evaluated at vtgate",
     "query": "set @foo = SOUNDEX('Hello')",
     "plan": {
-      "Type": "Complex",
+      "Type": "Local",
       "QueryType": "SET",
       "Original": "set @foo = SOUNDEX('Hello')",
       "Instructions": {
@@ -116,7 +116,7 @@
     "comment": "single sysvar cases",
     "query": "SET sql_mode = 'STRICT_ALL_TABLES,NO_AUTO_VALUE_ON_ZERO'",
     "plan": {
-      "Type": "Complex",
+      "Type": "MultiShard",
       "QueryType": "SET",
       "Original": "SET sql_mode = 'STRICT_ALL_TABLES,NO_AUTO_VALUE_ON_ZERO'",
       "Instructions": {
@@ -145,7 +145,7 @@
     "comment": "multiple sysvar cases",
     "query": "SET @@SESSION.sql_mode = CONCAT(CONCAT(@@sql_mode, ',STRICT_ALL_TABLES'), ',NO_AUTO_VALUE_ON_ZERO'), @@SESSION.sql_safe_updates = 0",
     "plan": {
-      "Type": "Complex",
+      "Type": "MultiShard",
       "QueryType": "SET",
       "Original": "SET @@SESSION.sql_mode = CONCAT(CONCAT(@@sql_mode, ',STRICT_ALL_TABLES'), ',NO_AUTO_VALUE_ON_ZERO'), @@SESSION.sql_safe_updates = 0",
       "Instructions": {
@@ -184,7 +184,7 @@
     "comment": "autocommit case",
     "query": "SET autocommit = 1, autocommit = on, autocommit = 'on', autocommit = @myudv, autocommit = `on`, autocommit = `off`",
     "plan": {
-      "Type": "Complex",
+      "Type": "Local",
       "QueryType": "SET",
       "Original": "SET autocommit = 1, autocommit = on, autocommit = 'on', autocommit = @myudv, autocommit = `on`, autocommit = `off`",
       "Instructions": {
@@ -233,7 +233,7 @@
     "comment": "set ignore plan",
     "query": "set @@default_storage_engine = 'DONOTCHANGEME'",
     "plan": {
-      "Type": "Complex",
+      "Type": "Local",
       "QueryType": "SET",
       "Original": "set @@default_storage_engine = 'DONOTCHANGEME'",
       "Instructions": {
@@ -257,7 +257,7 @@
     "comment": "set check and ignore plan",
     "query": "set @@sql_mode = concat(@@sql_mode, ',NO_AUTO_CREATE_USER')",
     "plan": {
-      "Type": "Complex",
+      "Type": "MultiShard",
       "QueryType": "SET",
       "Original": "set @@sql_mode = concat(@@sql_mode, ',NO_AUTO_CREATE_USER')",
       "Instructions": {
@@ -286,7 +286,7 @@
     "comment": "set system settings",
     "query": "set @@sql_safe_updates = 1",
     "plan": {
-      "Type": "Complex",
+      "Type": "MultiShard",
       "QueryType": "SET",
       "Original": "set @@sql_safe_updates = 1",
       "Instructions": {
@@ -315,7 +315,7 @@
     "comment": "set plan building with ON/OFF enum",
     "query": "set @@innodb_strict_mode = OFF",
     "plan": {
-      "Type": "Complex",
+      "Type": "Local",
       "QueryType": "SET",
       "Original": "set @@innodb_strict_mode = OFF",
       "Instructions": {
@@ -339,7 +339,7 @@
     "comment": "set plan building with string literal",
     "query": "set @@innodb_strict_mode = 'OFF'",
     "plan": {
-      "Type": "Complex",
+      "Type": "Local",
       "QueryType": "SET",
       "Original": "set @@innodb_strict_mode = 'OFF'",
       "Instructions": {
@@ -363,7 +363,7 @@
     "comment": "set plan building with string literal",
     "query": "set @@innodb_tmpdir = 'OFF'",
     "plan": {
-      "Type": "Complex",
+      "Type": "Local",
       "QueryType": "SET",
       "Original": "set @@innodb_tmpdir = 'OFF'",
       "Instructions": {
@@ -392,7 +392,7 @@
     "comment": "set autocommit",
     "query": "set autocommit = 1",
     "plan": {
-      "Type": "Complex",
+      "Type": "Local",
       "QueryType": "SET",
       "Original": "set autocommit = 1",
       "Instructions": {
@@ -416,7 +416,7 @@
     "comment": "set autocommit false",
     "query": "set autocommit = 0",
     "plan": {
-      "Type": "Complex",
+      "Type": "Local",
       "QueryType": "SET",
       "Original": "set autocommit = 0",
       "Instructions": {
@@ -440,7 +440,7 @@
     "comment": "set autocommit with backticks",
     "query": "set @@session.`autocommit` = 0",
     "plan": {
-      "Type": "Complex",
+      "Type": "Local",
       "QueryType": "SET",
       "Original": "set @@session.`autocommit` = 0",
       "Instructions": {
@@ -464,7 +464,7 @@
     "comment": "more vitess aware settings",
     "query": "set client_found_rows = off, skip_query_plan_cache = ON, sql_select_limit=20",
     "plan": {
-      "Type": "Complex",
+      "Type": "Local",
       "QueryType": "SET",
       "Original": "set client_found_rows = off, skip_query_plan_cache = ON, sql_select_limit=20",
       "Instructions": {
@@ -498,7 +498,7 @@
     "comment": "set autocommit to default",
     "query": "set @@autocommit = default",
     "plan": {
-      "Type": "Complex",
+      "Type": "Local",
       "QueryType": "SET",
       "Original": "set @@autocommit = default",
       "Instructions": {
@@ -522,7 +522,7 @@
     "comment": "set global autocommit to default",
     "query": "set global autocommit = off",
     "plan": {
-      "Type": "Complex",
+      "Type": "Passthrough",
       "QueryType": "SET",
       "Original": "set global autocommit = off",
       "Instructions": {
@@ -556,7 +556,7 @@
     "comment": "set transaction read only",
     "query": "set session transaction read only",
     "plan": {
-      "Type": "Complex",
+      "Type": "Local",
       "QueryType": "SET",
       "Original": "set session transaction read only",
       "Instructions": {
@@ -580,7 +580,7 @@
     "comment": "set transaction isolation level",
     "query": "set transaction isolation level read committed",
     "plan": {
-      "Type": "Complex",
+      "Type": "MultiShard",
       "QueryType": "SET",
       "Original": "set transaction isolation level read committed",
       "Instructions": {
@@ -609,7 +609,7 @@
     "comment": "set vitess_metadata",
     "query": "set @@vitess_metadata.app_v1= '1'",
     "plan": {
-      "Type": "Complex",
+      "Type": "Topology",
       "QueryType": "SET",
       "Original": "set @@vitess_metadata.app_v1= '1'",
       "Instructions": {
@@ -632,7 +632,7 @@
     "comment": "set last_insert_id with agrument to user defined variable",
     "query": "set @foo = last_insert_id(1)",
     "plan": {
-      "Type": "Complex",
+      "Type": "Local",
       "QueryType": "SET",
       "Original": "set @foo = last_insert_id(1)",
       "Instructions": {

@@ -67,6 +67,7 @@ const (
 	PlanOnlineDDL
 	PlanDirectDDL
 	PlanTransaction
+	PlanTopoOp
 )
 
 func higher(a, b PlanType) PlanType {
@@ -156,6 +157,8 @@ func (p PlanType) String() string {
 		return "DirectDDL"
 	case PlanTransaction:
 		return "Transaction"
+	case PlanTopoOp:
+		return "Topology"
 	default:
 		return "Unknown"
 	}
@@ -165,7 +168,7 @@ func getPlanType(p Primitive) PlanType {
 	switch prim := p.(type) {
 	case *SessionPrimitive, *SingleRow, *UpdateTarget, *VindexFunc:
 		return PlanLocal
-	case *Lock, *ReplaceVariables, *RevertMigration, *Rows, *ShowExec:
+	case *Lock, *ReplaceVariables, *RevertMigration, *Rows:
 		return PlanPassthrough
 	case *Send:
 		return getPlanTypeFromTarget(prim)
@@ -203,12 +206,41 @@ func getPlanType(p Primitive) PlanType {
 			return PlanOnlineDDL
 		}
 		return PlanDirectDDL
+	case *ShowExec:
+		if prim.Command == sqlparser.VitessVariables {
+			return PlanTopoOp
+		}
+		return PlanLocal
+	case *Set:
+		return getPlanTypeForSet(prim)
 	case *VExplain:
 		return getPlanType(prim.Input)
 	case *RenameFields:
 		return getPlanType(prim.Input)
 	default:
 		return PlanComplex
+	}
+}
+
+func getPlanTypeForSet(prim *Set) (pt PlanType) {
+	for _, op := range prim.Ops {
+		pt = higher(pt, getPlanTypeForSetOp(op))
+	}
+	return pt
+}
+
+func getPlanTypeForSetOp(op SetOp) PlanType {
+	switch op.(type) {
+	case *UserDefinedVariable, *SysVarIgnore, *SysVarSetAware:
+		return PlanLocal
+	case *SysVarCheckAndIgnore:
+		return PlanPassthrough
+	case *SysVarReservedConn:
+		return PlanMultiShard
+	case *VitessMetadata:
+		return PlanTopoOp
+	default:
+		return PlanUnknown
 	}
 }
 
