@@ -34,7 +34,7 @@ import (
 	"vitess.io/vitess/go/test/endtoend/utils"
 )
 
-func start(t *testing.T) (utils.MySQLCompare, func()) {
+func start(t testing.TB) (utils.MySQLCompare, func()) {
 	mcmp, err := utils.NewMySQLCompare(t, vtParams, mysqlParams)
 	require.NoError(t, err)
 
@@ -51,6 +51,22 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 		deleteAll()
 		mcmp.Close()
 	}
+}
+
+func BenchmarkValuesJoin(b *testing.B) {
+	mcmp, closer := start(b)
+	defer closer()
+
+	for i := 0; i < 200; i++ {
+		mcmp.Exec(fmt.Sprintf("insert into t1(id1, id2) values (%d, %d)", i, i))
+		mcmp.Exec(fmt.Sprintf("insert into tbl(id, unq_col, nonunq_col) values (%d, %d, %d)", i, i, i))
+	}
+
+	b.Run("Simple Joins", func(b *testing.B) {
+		for range b.N {
+			mcmp.Exec("select t1.id1, tbl.id from t1, tbl where t1.id2 = tbl.nonunq_col")
+		}
+	})
 }
 
 func TestBitVals(t *testing.T) {
