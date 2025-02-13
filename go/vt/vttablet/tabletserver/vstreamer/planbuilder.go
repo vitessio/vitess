@@ -58,6 +58,16 @@ type Plan struct {
 	// of the table.
 	Filters []Filter
 
+	// Predicates in the Filter query that we can push down to MySQL
+	// to reduce the returned rows we need to filter in the VStreamer
+	// during the copy phase. This will contain any valid expressions
+	// in the Filter's WHERE clause with the exception of the
+	// in_keyrange() function which is a filter that must be applied
+	// by the VStreamer (it's not a valid MySQL function). Note that
+	// the Filter cannot contain any MySQL functions because the
+	// VStreamer cannot filter binlog events using them.
+	whereExprsToPushDown []sqlparser.Expr
+
 	// Convert any integer values seen in the binlog events for ENUM or SET
 	// columns to the string values. The map is keyed on the column number, with
 	// the value being the map of ordinal values to string values.
@@ -564,6 +574,7 @@ func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) er
 	if where == nil {
 		return nil
 	}
+	// Only a series of AND expressions are supported.
 	exprs := splitAndExpression(nil, where.Expr)
 	for _, expr := range exprs {
 		switch expr := expr.(type) {
@@ -601,10 +612,6 @@ func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) er
 			if !ok {
 				return fmt.Errorf("unexpected: %v", sqlparser.String(expr))
 			}
-			// StrVal is varbinary, we do not support varchar since we would have to implement all collation types
-			if val.Type != sqlparser.IntVal && val.Type != sqlparser.StrVal {
-				return fmt.Errorf("unexpected: %v", sqlparser.String(expr))
-			}
 			pv, err := evalengine.Translate(val, &evalengine.Config{
 				Collation:   plan.env.CollationEnv().DefaultConnectionCharset(),
 				Environment: plan.env,
@@ -622,7 +629,11 @@ func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) er
 				ColNum: colnum,
 				Value:  resolved.Value(plan.env.CollationEnv().DefaultConnectionCharset()),
 			})
+			// Add it to the expressions that get pushed down to mysqld.
+			plan.whereExprsToPushDown = append(plan.whereExprsToPushDown, expr)
 		case *sqlparser.FuncExpr:
+			// We cannot filter binlog events in VStreamer using MySQL functions so
+			// we only allow the in_keyrange() function, which is VStreamer specific.
 			if !expr.Name.EqualString("in_keyrange") {
 				return fmt.Errorf("unsupported constraint: %v", sqlparser.String(expr))
 			}
@@ -648,6 +659,8 @@ func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) er
 				Opcode: IsNotNull,
 				ColNum: colnum,
 			})
+			// Add it to the expressions that get pushed down to mysqld.
+			plan.whereExprsToPushDown = append(plan.whereExprsToPushDown, expr)
 		default:
 			return fmt.Errorf("unsupported constraint: %v", sqlparser.String(expr))
 		}

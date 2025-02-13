@@ -190,13 +190,15 @@ var ErrNotSingleTable = vterrors.VT13001("should only be used for single tables"
 
 // CopyDependencies copies the dependencies from one expression into the other
 func (st *SemTable) CopyDependencies(from, to sqlparser.Expr) {
-	if ValidAsMapKey(to) {
-		st.Recursive[to] = st.RecursiveDeps(from)
-		st.Direct[to] = st.DirectDeps(from)
-		if ValidAsMapKey(from) {
-			if typ, found := st.ExprTypes[from]; found {
-				st.ExprTypes[to] = typ
-			}
+	if ValidAsMapKey(to) && ValidAsMapKey(from) {
+		if ts, ok := st.Recursive[from]; ok {
+			st.Recursive[to] = ts
+		}
+		if ts, ok := st.Direct[from]; ok {
+			st.Direct[to] = ts
+		}
+		if typ, found := st.ExprTypes[from]; found {
+			st.ExprTypes[to] = typ
 		}
 	}
 }

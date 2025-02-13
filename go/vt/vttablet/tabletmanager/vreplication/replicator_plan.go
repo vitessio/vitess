@@ -724,6 +724,10 @@ func (tp *TablePlan) appendFromRow(buf *bytes2.Buffer, row *querypb.Row) error {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "wrong number of fields: got %d fields for %d bind locations",
 			len(tp.Fields), len(bindLocations))
 	}
+	if len(row.Lengths) < len(tp.Fields) {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "wrong number of lengths: got %d lengths for %d fields",
+			len(row.Lengths), len(tp.Fields))
+	}
 
 	// Bind field values to locations.
 	var (

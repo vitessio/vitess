@@ -1917,19 +1917,32 @@ func (tsv *TabletServer) registerThrottlerCheckHandlers() {
 			flags := &throttle.CheckFlags{
 				Scope:                 scope,
 				SkipRequestHeartbeats: (r.URL.Query().Get("s") == "true"),
-				MultiMetricsEnabled:   true,
 			}
 			metricNames := tsv.lagThrottler.MetricNames(r.URL.Query()["m"])
 			checkResult := tsv.lagThrottler.Check(ctx, appName, metricNames, flags)
 			if checkResult.ResponseCode == tabletmanagerdatapb.CheckThrottlerResponseCode_UNKNOWN_METRIC && flags.OKIfNotExists {
-				checkResult.StatusCode = http.StatusOK // 200
 				checkResult.ResponseCode = tabletmanagerdatapb.CheckThrottlerResponseCode_OK
 			}
 
 			if r.Method == http.MethodGet {
 				w.Header().Set("Content-Type", "application/json")
 			}
-			w.WriteHeader(checkResult.StatusCode)
+			var httpStatusCode int
+			switch checkResult.ResponseCode {
+			case tabletmanagerdatapb.CheckThrottlerResponseCode_OK:
+				httpStatusCode = http.StatusOK
+			case tabletmanagerdatapb.CheckThrottlerResponseCode_APP_DENIED:
+				httpStatusCode = http.StatusExpectationFailed
+			case tabletmanagerdatapb.CheckThrottlerResponseCode_THRESHOLD_EXCEEDED:
+				httpStatusCode = http.StatusTooManyRequests
+			case tabletmanagerdatapb.CheckThrottlerResponseCode_UNKNOWN_METRIC:
+				httpStatusCode = http.StatusNotFound
+			case tabletmanagerdatapb.CheckThrottlerResponseCode_INTERNAL_ERROR:
+				httpStatusCode = http.StatusInternalServerError
+			default:
+				httpStatusCode = http.StatusInternalServerError
+			}
+			w.WriteHeader(httpStatusCode)
 			if r.Method == http.MethodGet {
 				json.NewEncoder(w).Encode(checkResult)
 			}
