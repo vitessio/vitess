@@ -14,7 +14,7 @@ env:
 jobs:
   build:
     name: Run endtoend tests on {{.Name}}
-    runs-on: ubuntu-24.04
+    runs-on: {{.RunsOn}}
 
     steps:
     - name: Skip CI
