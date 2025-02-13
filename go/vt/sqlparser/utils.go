@@ -42,7 +42,7 @@ func (p *Parser) QueryMatchesTemplates(query string, queryTemplates []string) (m
 			return "", err
 		}
 
-		out, err := PrepareAST(stmt, NewReservedVars("", reservedVars), bv, true, "ks", 0, "", map[string]string{}, nil, nil)
+		out, err := Normalize(stmt, NewReservedVars("", reservedVars), bv, true, "ks", 0, "", map[string]string{}, nil, nil)
 		if err != nil {
 			return "", err
 		}

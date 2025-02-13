@@ -48,7 +48,7 @@ func TestSimplifyBuggyQuery(t *testing.T) {
 	stmt, reserved, err := sqlparser.NewTestParser().Parse2(query)
 	require.NoError(t, err)
 	reservedVars := sqlparser.NewReservedVars("vtg", reserved)
-	rewritten, _ := sqlparser.PrepareAST(sqlparser.Clone(stmt), reservedVars, map[string]*querypb.BindVariable{}, false, vw.CurrentDb(), sqlparser.SQLSelectLimitUnset, "", nil, nil, nil)
+	rewritten, _ := sqlparser.Normalize(sqlparser.Clone(stmt), reservedVars, map[string]*querypb.BindVariable{}, false, vw.CurrentDb(), sqlparser.SQLSelectLimitUnset, "", nil, nil, nil)
 
 	simplified := simplifier.SimplifyStatement(
 		stmt.(sqlparser.TableStatement),
@@ -72,7 +72,7 @@ func TestSimplifyPanic(t *testing.T) {
 	stmt, reserved, err := sqlparser.NewTestParser().Parse2(query)
 	require.NoError(t, err)
 	reservedVars := sqlparser.NewReservedVars("vtg", reserved)
-	rewritten, _ := sqlparser.PrepareAST(sqlparser.Clone(stmt), reservedVars, map[string]*querypb.BindVariable{}, false, vw.CurrentDb(), sqlparser.SQLSelectLimitUnset, "", nil, nil, nil)
+	rewritten, _ := sqlparser.Normalize(sqlparser.Clone(stmt), reservedVars, map[string]*querypb.BindVariable{}, false, vw.CurrentDb(), sqlparser.SQLSelectLimitUnset, "", nil, nil, nil)
 
 	simplified := simplifier.SimplifyStatement(
 		stmt.(sqlparser.TableStatement),
@@ -103,7 +103,7 @@ func TestUnsupportedFile(t *testing.T) {
 				return
 			}
 			reservedVars := sqlparser.NewReservedVars("vtg", reserved)
-			rewritten, err := sqlparser.PrepareAST(stmt, reservedVars, map[string]*querypb.BindVariable{}, false, vw.CurrentDb(), sqlparser.SQLSelectLimitUnset, "", nil, nil, nil)
+			rewritten, err := sqlparser.Normalize(stmt, reservedVars, map[string]*querypb.BindVariable{}, false, vw.CurrentDb(), sqlparser.SQLSelectLimitUnset, "", nil, nil, nil)
 			if err != nil {
 				t.Skip()
 			}
@@ -135,7 +135,7 @@ func keepSameError(query string, reservedVars *sqlparser.ReservedVars, vschema *
 	if err != nil {
 		panic(err)
 	}
-	rewritten, _ := sqlparser.PrepareAST(stmt, reservedVars, map[string]*querypb.BindVariable{}, false, vschema.CurrentDb(), sqlparser.SQLSelectLimitUnset, "", nil, nil, nil)
+	rewritten, _ := sqlparser.Normalize(stmt, reservedVars, map[string]*querypb.BindVariable{}, false, vschema.CurrentDb(), sqlparser.SQLSelectLimitUnset, "", nil, nil, nil)
 	ast := rewritten.AST
 	_, expected := BuildFromStmt(context.Background(), query, ast, reservedVars, vschema, rewritten.BindVarNeeds, staticConfig{})
 	if expected == nil {

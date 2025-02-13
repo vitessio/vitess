@@ -451,7 +451,7 @@ func TestNormalize(t *testing.T) {
 			require.NoError(t, err)
 			known := getBindvars(stmt)
 			bv := make(map[string]*querypb.BindVariable)
-			out, err := PrepareAST(stmt, NewReservedVars(prefix, known), bv, true, "ks", 0, "", map[string]string{}, nil, nil)
+			out, err := Normalize(stmt, NewReservedVars(prefix, known), bv, true, "ks", 0, "", map[string]string{}, nil, nil)
 			require.NoError(t, err)
 			assert.Equal(t, tc.outstmt, String(out.AST))
 			assert.Equal(t, tc.outbv, bv)
@@ -480,7 +480,7 @@ func TestNormalizeInvalidDates(t *testing.T) {
 			require.NoError(t, err)
 			known := getBindvars(stmt)
 			bv := make(map[string]*querypb.BindVariable)
-			_, err = PrepareAST(stmt, NewReservedVars("bv", known), bv, true, "ks", 0, "", map[string]string{}, nil, nil)
+			_, err = Normalize(stmt, NewReservedVars("bv", known), bv, true, "ks", 0, "", map[string]string{}, nil, nil)
 			require.EqualError(t, err, tc.err.Error())
 		})
 	}
@@ -502,7 +502,7 @@ func TestNormalizeValidSQL(t *testing.T) {
 			bv := make(map[string]*querypb.BindVariable)
 			known := make(BindVars)
 
-			out, err := PrepareAST(tree, NewReservedVars("vtg", known), bv, true, "ks", 0, "", map[string]string{}, nil, nil)
+			out, err := Normalize(tree, NewReservedVars("vtg", known), bv, true, "ks", 0, "", map[string]string{}, nil, nil)
 			require.NoError(t, err)
 			normalizerOutput := String(out.AST)
 			if normalizerOutput == "otheradmin" || normalizerOutput == "otherread" {
@@ -533,7 +533,7 @@ func TestNormalizeOneCasae(t *testing.T) {
 	}
 	bv := make(map[string]*querypb.BindVariable)
 	known := make(BindVars)
-	out, err := PrepareAST(tree, NewReservedVars("vtg", known), bv, true, "ks", 0, "", map[string]string{}, nil, nil)
+	out, err := Normalize(tree, NewReservedVars("vtg", known), bv, true, "ks", 0, "", map[string]string{}, nil, nil)
 	require.NoError(t, err)
 	normalizerOutput := String(out.AST)
 	require.EqualValues(t, testOne.output, normalizerOutput)
@@ -882,7 +882,7 @@ func TestRewrites(in *testing.T) {
 			stmt, known, err := parser.Parse2(tc.in)
 			require.NoError(err)
 			vars := NewReservedVars("v", known)
-			result, err := PrepareAST(
+			result, err := Normalize(
 				stmt,
 				vars,
 				map[string]*querypb.BindVariable{},
@@ -985,7 +985,7 @@ func TestRewritesWithSetVarComment(in *testing.T) {
 			stmt, err := parser.Parse(tc.in)
 			require.NoError(err)
 			vars := NewReservedVars("v", nil)
-			result, err := PrepareAST(
+			result, err := Normalize(
 				stmt,
 				vars,
 				map[string]*querypb.BindVariable{},
@@ -1046,7 +1046,7 @@ func TestRewritesSysVar(in *testing.T) {
 			stmt, err := parser.Parse(tc.in)
 			require.NoError(err)
 			vars := NewReservedVars("v", nil)
-			result, err := PrepareAST(
+			result, err := Normalize(
 				stmt,
 				vars,
 				map[string]*querypb.BindVariable{},
@@ -1109,7 +1109,7 @@ func TestRewritesWithDefaultKeyspace(in *testing.T) {
 			stmt, err := parser.Parse(tc.in)
 			require.NoError(err)
 			vars := NewReservedVars("v", nil)
-			result, err := PrepareAST(
+			result, err := Normalize(
 				stmt,
 				vars,
 				map[string]*querypb.BindVariable{},
@@ -1157,7 +1157,7 @@ func BenchmarkNormalize(b *testing.B) {
 		b.Fatal(err)
 	}
 	for i := 0; i < b.N; i++ {
-		_, err := PrepareAST(ast, NewReservedVars("", reservedVars), map[string]*querypb.BindVariable{}, true, "ks", 0, "", map[string]string{}, nil, nil)
+		_, err := Normalize(ast, NewReservedVars("", reservedVars), map[string]*querypb.BindVariable{}, true, "ks", 0, "", map[string]string{}, nil, nil)
 		require.NoError(b, err)
 	}
 }
@@ -1187,7 +1187,7 @@ func BenchmarkNormalizeTraces(b *testing.B) {
 
 			for i := 0; i < b.N; i++ {
 				for i, query := range parsed {
-					_, err := PrepareAST(query, NewReservedVars("", reservedVars[i]), map[string]*querypb.BindVariable{}, true, "ks", 0, "", map[string]string{}, nil, nil)
+					_, err := Normalize(query, NewReservedVars("", reservedVars[i]), map[string]*querypb.BindVariable{}, true, "ks", 0, "", map[string]string{}, nil, nil)
 					require.NoError(b, err)
 				}
 			}
@@ -1222,7 +1222,7 @@ func BenchmarkNormalizeVTGate(b *testing.B) {
 
 			// Normalize if possible and retry.
 			if CanNormalize(stmt) || MustRewriteAST(stmt, false) {
-				result, err := PrepareAST(
+				result, err := Normalize(
 					stmt,
 					NewReservedVars("vtg", reservedVars),
 					bindVars,
@@ -1514,7 +1514,7 @@ func benchmarkNormalization(b *testing.B, sqls []string) {
 			}
 
 			reservedVars := NewReservedVars("vtg", reserved)
-			_, err = PrepareAST(
+			_, err = Normalize(
 				stmt,
 				reservedVars,
 				make(map[string]*querypb.BindVariable),
