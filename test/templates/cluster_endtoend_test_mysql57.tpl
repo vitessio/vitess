@@ -19,7 +19,7 @@ env:
 jobs:
   build:
     name: Run endtoend tests on {{.Name}}
-    runs-on: {{if .Cores16}}{{ .Cores16RunnerName }}{{else}}ubuntu-24.04{{end}}
+    runs-on: {{if .RunnerName}}{{ .RunnerName }}{{else}}ubuntu-24.04{{end}}
 
     steps:
     - name: Skip CI
