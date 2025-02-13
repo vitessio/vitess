@@ -25,6 +25,9 @@ import (
 // connStack is a lock-free stack for Connection objects. It is safe to
 // use from several goroutines.
 type connStack[C Connection] struct {
+	// top is a pointer to the top node on the stack and to an increasing
+	// counter of pop operations, to prevent A-B-A races.
+	// See: https://en.wikipedia.org/wiki/ABA_problem
 	top atomic2.PointerAndUint64[Pooled[C]]
 }
 
@@ -54,24 +57,7 @@ func (s *connStack[C]) Pop() (*Pooled[C], bool) {
 	}
 }
 
-func (s *connStack[C]) PopAll(out []*Pooled[C]) []*Pooled[C] {
-	var oldHead *Pooled[C]
-
-	for {
-		var popCount uint64
-		oldHead, popCount = s.top.Load()
-		if oldHead == nil {
-			return out
-		}
-		if s.top.CompareAndSwap(oldHead, popCount, nil, popCount+1) {
-			break
-		}
-		runtime.Gosched()
-	}
-
-	for oldHead != nil {
-		out = append(out, oldHead)
-		oldHead = oldHead.next.Load()
-	}
-	return out
+func (s *connStack[C]) Peek() *Pooled[C] {
+	top, _ := s.top.Load()
+	return top
 }
