@@ -32,6 +32,8 @@ import (
 
 const (
 	semiSyncWaitSessionsRead = "SHOW STATUS LIKE 'Rpl_semi_sync_%_wait_sessions'"
+	semiSyncRecoverWrite     = "INSERT INTO semisync_recover (ts) VALUES (NOW())"
+	semiSyncRecoverClear     = "DELETE FROM semisync_recover"
 )
 
 // Watcher is a watcher that checks if the primary tablet
@@ -41,14 +43,27 @@ const (
 // blocking PRS. The watcher looks for this situation and manufactures a write
 // periodically to unblock the primary.
 type Watcher struct {
+	// env is used to get the connection parameters.
+	env tabletenv.Env
+	// ticks is the ticker on which we'll check
+	// if the primary is blocked on semi-sync ACKs or not.
 	ticks *timer.Timer
-	env   tabletenv.Env
+	// clearTicks is the ticker to clear the data in
+	// the semisync_recover table.
+	clearTicks *timer.Timer
 
-	mu        sync.Mutex
-	appPool   *dbconnpool.ConnectionPool
-	isOpen    bool
+	// mu protects the fields below.
+	mu      sync.Mutex
+	appPool *dbconnpool.ConnectionPool
+	isOpen  bool
+	// isWriting stores if the watcher is currently writing to the DB.
+	// We don't want two different threads initiating writes, so we use this
+	// for synchronization.
 	isWriting bool
+	// isBlocked stores if the primary is blocked on semi-sync ack.
 	isBlocked bool
+	// waiters stores the list of waiters that are waiting for the primary to be unblocked.
+	waiters []chan any
 }
 
 // NewWatcher creates a new Watcher.
@@ -56,9 +71,13 @@ func NewWatcher(env tabletenv.Env) *Watcher {
 	// TODO (@GuptaManan100): Parameterize the watch interval.
 	watchInterval := 30 * time.Second
 	return &Watcher{
-		env:     env,
-		ticks:   timer.NewTimer(watchInterval),
-		appPool: dbconnpool.NewConnectionPool("SemiSyncWatcherAppPool", env.Exporter(), 20, mysqlctl.DbaIdleTimeout, 0, mysqlctl.PoolDynamicHostnameResolution),
+		env:   env,
+		ticks: timer.NewTimer(watchInterval),
+		// We clear the data every day. We can make it configurable in the future,
+		// but this seams fine for now.
+		clearTicks: timer.NewTimer(24 * time.Hour),
+		appPool:    dbconnpool.NewConnectionPool("SemiSyncWatcherAppPool", env.Exporter(), 20, mysqlctl.DbaIdleTimeout, 0, mysqlctl.PoolDynamicHostnameResolution),
+		waiters:    make([]chan any, 0),
 	}
 }
 
@@ -72,8 +91,6 @@ func (w *Watcher) Open() {
 	}
 	// Set the watcher to be open.
 	w.isOpen = true
-	// We reset the state when the watcher starts.
-	w.isBlocked = false
 	log.Info("SemiSync Watcher: opening")
 
 	// This function could be running from within a unit test scope, in which case we use
@@ -81,6 +98,7 @@ func (w *Watcher) Open() {
 	if !w.appPool.IsOpen() {
 		w.appPool.Open(w.env.Config().DB.AppWithDB())
 	}
+	w.clearTicks.Start(w.clearAllData)
 	w.ticks.Start(w.checkAndFixSemiSyncBlocked)
 }
 
@@ -94,12 +112,14 @@ func (w *Watcher) Close() {
 	}
 	w.isOpen = false
 	log.Info("SemiSync Watcher: closing")
+	w.clearTicks.Stop()
 	w.ticks.Stop()
 	w.appPool.Close()
 }
 
 // checkAndFixSemiSyncBlocked checks if the primary is blocked on semi-sync ack
-// and manufactures a write to unblock the primary.
+// and manufactures a write to unblock the primary. This function is safe to
+// be called multiple times in parallel.
 func (w *Watcher) checkAndFixSemiSyncBlocked() {
 	// Check if semi-sync is blocked or not
 	isBlocked, err := w.isSemiSyncBlocked(context.Background())
@@ -149,13 +169,21 @@ func (w *Watcher) isSemiSyncBlocked(ctx context.Context) (bool, error) {
 // waitUntilSemiSyncUnblocked waits until the primary is not blocked
 // on semi-sync.
 func (w *Watcher) waitUntilSemiSyncUnblocked() {
+	// run one iteration of checking if semi-sync is blocked or not.
 	w.checkAndFixSemiSyncBlocked()
-	// TODO: Complete the function.
+	if !w.stillBlocked() {
+		// If we find that the primary isn't blocked, we're good,
+		// we don't need to wait for anything.
+		return
+	}
+	// The primary is blocked. We need to wait for it to be unblocked.
+	ch := w.addWaiter()
+	<-ch
 }
 
-// continueWrites returns true if the watcher should continue writing to the DB.
-// It checks if the watcher is still open and if the primary is still blocked.
-func (w *Watcher) continueWrites() bool {
+// stillBlocked returns true if the watcher should continue writing to the DB
+// because the watcher is still open, and the primary is still blocked.
+func (w *Watcher) stillBlocked() bool {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	return w.isOpen && w.isBlocked
@@ -194,7 +222,7 @@ func (w *Watcher) startWrites() {
 	backoff := 1 * time.Second
 	maxBackoff := 1 * time.Minute
 	// Check if we need to continue writing or not.
-	for !w.continueWrites() {
+	for w.stillBlocked() {
 		go w.write()
 		<-time.After(backoff)
 		backoff = time.Duration(math.Min(float64(backoff*2), float64(maxBackoff)))
@@ -209,8 +237,7 @@ func (w *Watcher) write() {
 		return
 	}
 	defer conn.Recycle()
-	// TODO: Fix the write in question.
-	_, _ = conn.Conn.ExecuteFetch("INSERT INTO heartbeat (timestamp) VALUES (NOW())", 1, false)
+	_, _ = conn.Conn.ExecuteFetch(semiSyncRecoverWrite, 0, false)
 }
 
 // setIsBlocked sets the isBlocked field.
@@ -218,4 +245,38 @@ func (w *Watcher) setIsBlocked(val bool) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.isBlocked = val
+	if !val {
+		// If we are unblocked, then we need to signal all the waiters.
+		for _, ch := range w.waiters {
+			close(ch)
+		}
+		// We also empty the list of current waiters.
+		w.waiters = nil
+	}
+}
+
+// clearAllData clears all the data in the table so that it never
+// consumes too much space on the MySQL instance.
+func (w *Watcher) clearAllData() {
+	// Get a connection from the pool
+	conn, err := w.appPool.Get(context.Background())
+	if err != nil {
+		log.Errorf("SemiSync Watcher: failed to clear semisync_recovery table: %v", err)
+		return
+	}
+	defer conn.Recycle()
+	_, err = conn.Conn.ExecuteFetch(semiSyncRecoverClear, 0, false)
+	if err != nil {
+		log.Errorf("SemiSync Watcher: failed to clear semisync_recovery table: %v", err)
+	}
+}
+
+// addWaiter adds a waiter to the list of waiters
+// that will be unblocked when the primary is no longer blocked.
+func (w *Watcher) addWaiter() chan any {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	ch := make(chan any, 1)
+	w.waiters = append(w.waiters, ch)
+	return ch
 }
