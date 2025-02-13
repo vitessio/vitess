@@ -2326,6 +2326,10 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 			tablets = append(tablets, ti.Tablet)
 		}
 
+		// Sort the list of tablets alphabetically by alias to improve readability of output.
+		sort.Slice(tablets, func(i, j int) bool {
+			return topoproto.TabletAliasString(tablets[i].Alias) < topoproto.TabletAliasString(tablets[j].Alias)
+		})
 		return &vtctldatapb.GetTabletsResponse{Tablets: tablets}, nil
 	}
 
@@ -2414,6 +2418,10 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 
 		adjustedTablets[i] = ti.Tablet
 	}
+	// Sort the list of tablets alphabetically by alias to improve readability of output.
+	sort.Slice(adjustedTablets, func(i, j int) bool {
+		return topoproto.TabletAliasString(adjustedTablets[i].Alias) < topoproto.TabletAliasString(adjustedTablets[j].Alias)
+	})
 
 	return &vtctldatapb.GetTabletsResponse{
 		Tablets: adjustedTablets,
