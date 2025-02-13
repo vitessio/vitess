@@ -235,6 +235,13 @@ type Configuration struct {
 	// SessionToken is a protobuf encoded vtgatepb.Session represented as base64, which
 	// can be used to distribute a transaction over the wire.
 	SessionToken string
+
+	// AllowDistributedTxCommitRollback controls if distributed transactions can be committed
+	// or rolled back. This is useful when you no longer have the original connection and could
+	// commit or rollback a transaction from another client.
+	//
+	// Default: false
+	AllowDistributedTxCommitRollback bool
 }
 
 // toJSON converts Configuration to the JSON string which is required by the
@@ -457,10 +464,10 @@ func (c *conn) BeginTx(_ context.Context, opts driver.TxOptions) (driver.Tx, err
 }
 
 func (c *conn) Commit() error {
-	// if we're loading from an existing session, disallow committing/rolling back the transaction
+	// if we're loading from an existing session, disallow committing/rolling back the transaction by default
 	// this isn't a technical limitation, but is enforced to prevent misuse, so that only
 	// the original creator of the transaction can commit/rollback
-	if c.cfg.SessionToken != "" {
+	if c.cfg.SessionToken != "" && !c.cfg.AllowDistributedTxCommitRollback {
 		return errors.New("calling Commit from a distributed tx is not allowed")
 	}
 
@@ -469,10 +476,10 @@ func (c *conn) Commit() error {
 }
 
 func (c *conn) Rollback() error {
-	// if we're loading from an existing session, disallow committing/rolling back the transaction
+	// if we're loading from an existing session, disallow committing/rolling back the transaction by default
 	// this isn't a technical limitation, but is enforced to prevent misuse, so that only
 	// the original creator of the transaction can commit/rollback
-	if c.cfg.SessionToken != "" {
+	if c.cfg.SessionToken != "" && !c.cfg.AllowDistributedTxCommitRollback {
 		return errors.New("calling Rollback from a distributed tx is not allowed")
 	}
 

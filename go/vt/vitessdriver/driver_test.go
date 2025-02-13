@@ -143,6 +143,7 @@ func TestOpen(t *testing.T) {
 		wantc := tc.conn
 		newc := *(c.(*conn))
 		newc.cfg.Address = ""
+		newc.cfg.AllowDistributedTxCommitRollback = false
 		newc.conn = nil
 		newc.session = nil
 		if !reflect.DeepEqual(&newc, wantc) {
@@ -222,7 +223,7 @@ func TestConfigurationToJSON(t *testing.T) {
 		Streaming:       true,
 		DefaultLocation: "Local",
 	}
-	want := `{"Protocol":"some-invalid-protocol","Address":"","Target":"ks2","Streaming":true,"DefaultLocation":"Local","SessionToken":""}`
+	want := `{"Protocol":"some-invalid-protocol","Address":"","Target":"ks2","Streaming":true,"DefaultLocation":"Local","SessionToken":"","AllowDistributedTxCommitRollback":false}`
 
 	json, err := config.toJSON()
 	if err != nil {
@@ -685,7 +686,8 @@ func TestSessionToken(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// enforce that Rollback can't be called on the distributed tx
+	// enforce that Rollback can't be called on the distributed tx when Configuration.AllowDistributedTxCommitRollback
+	// is default which is false.
 	noRollbackTx, noRollbackValidationFunc, err := DistributedTxFromSessionToken(ctx, distributedTxConfig)
 	if err != nil {
 		t.Fatal(err)
@@ -701,7 +703,8 @@ func TestSessionToken(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// enforce that Commit can't be called on the distributed tx
+	// enforce that Commit can't be called on the distributed tx when Configuration.AllowDistributedTxCommitRollback
+	// is default which is false.
 	noCommitTx, noCommitValidationFunc, err := DistributedTxFromSessionToken(ctx, distributedTxConfig)
 	if err != nil {
 		t.Fatal(err)
@@ -720,6 +723,166 @@ func TestSessionToken(t *testing.T) {
 	// finally commit the original tx
 	err = tx.Commit()
 	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSessionTokenAllowDistributedRollback(t *testing.T) {
+	c := Configuration{
+		Protocol: "grpc",
+		Address:  testAddress,
+		Target:   "@primary",
+	}
+
+	ctx := context.Background()
+
+	db, err := OpenWithConfiguration(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	tx, err := db.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	s, err := tx.Prepare("txRequest")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = s.Exec(int64(0))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sessionToken, err := SessionTokenFromTx(ctx, tx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	distributedTxConfig := Configuration{
+		Address:                          testAddress,
+		Target:                           "@primary",
+		SessionToken:                     sessionToken,
+		AllowDistributedTxCommitRollback: true,
+	}
+
+	sameTx, sameValidationFunc, err := DistributedTxFromSessionToken(ctx, distributedTxConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	newS, err := sameTx.Prepare("distributedTxRequest")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = newS.Exec(int64(1))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = sameValidationFunc()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Distributed Tx can be rollback when Configuration.AllowDistributedTxCommitRollback is default which is true.
+	noRollbackTx, noRollbackValidationFunc, err := DistributedTxFromSessionToken(ctx, distributedTxConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = noRollbackValidationFunc()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Rollback should succeed
+	err = noRollbackTx.Rollback()
+	if err != nil && err.Error() == "calling Rollback from a distributed tx is not allowed" {
+		t.Fatal(err)
+	}
+}
+
+func TestSessionTokenAllowDistributedCommit(t *testing.T) {
+	c := Configuration{
+		Protocol: "grpc",
+		Address:  testAddress,
+		Target:   "@primary",
+	}
+
+	ctx := context.Background()
+
+	db, err := OpenWithConfiguration(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	tx, err := db.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	s, err := tx.Prepare("txRequest")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = s.Exec(int64(0))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sessionToken, err := SessionTokenFromTx(ctx, tx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	distributedTxConfig := Configuration{
+		Address:                          testAddress,
+		Target:                           "@primary",
+		SessionToken:                     sessionToken,
+		AllowDistributedTxCommitRollback: true,
+	}
+
+	sameTx, sameValidationFunc, err := DistributedTxFromSessionToken(ctx, distributedTxConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	newS, err := sameTx.Prepare("distributedTxRequest")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = newS.Exec(int64(1))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = sameValidationFunc()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Distributed Tx can be committed when Configuration.AllowDistributedTxCommitRollback is default which is true.
+	noCommitTx, noCommitValidationFunc, err := DistributedTxFromSessionToken(ctx, distributedTxConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = noCommitValidationFunc()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Commit should succeed
+	err = noCommitTx.Commit()
+	if err != nil && err.Error() == "calling Commit from a distributed tx is not allowed" {
 		t.Fatal(err)
 	}
 }
