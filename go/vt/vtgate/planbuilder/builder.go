@@ -94,7 +94,7 @@ func TestBuilder(query string, vschema plancontext.VSchema, keyspace string) (*e
 		}
 	}
 	reservedVars := sqlparser.NewReservedVars("vtg", known)
-	result, err := sqlparser.PrepareAST(stmt, reservedVars, map[string]*querypb.BindVariable{}, false, keyspace, sqlparser.SQLSelectLimitUnset, "", nil, vschema.GetForeignKeyChecksState(), vschema)
+	result, err := sqlparser.Normalize(stmt, reservedVars, map[string]*querypb.BindVariable{}, false, keyspace, sqlparser.SQLSelectLimitUnset, "", nil, vschema.GetForeignKeyChecksState(), vschema)
 	if err != nil {
 		return nil, err
 	}

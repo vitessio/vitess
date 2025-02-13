@@ -1114,15 +1114,11 @@ func (e *Executor) getPlan(
 		return nil, err
 	}
 
-	// Normalize if possible
-	shouldNormalize := e.canNormalizeStatement(stmt, setVarComment)
-	parameterize := allowParameterization && shouldNormalize
-
-	rewriteASTResult, err := sqlparser.PrepareAST(
+	rewriteASTResult, err := sqlparser.Normalize(
 		stmt,
 		reservedVars,
 		bindVars,
-		parameterize,
+		allowParameterization,
 		vcursor.GetKeyspace(),
 		vcursor.SafeSession.GetSelectLimit(),
 		setVarComment,
@@ -1135,7 +1131,7 @@ func (e *Executor) getPlan(
 	}
 	stmt = rewriteASTResult.AST
 	bindVarNeeds := rewriteASTResult.BindVarNeeds
-	if shouldNormalize {
+	if rewriteASTResult.UpdateQueryFromAST {
 		query = sqlparser.String(stmt)
 	}
 
