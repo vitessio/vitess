@@ -172,7 +172,7 @@ type clusterTest struct {
 	Name, Shard, Platform              string
 	FileName                           string
 	BuildTag                           string
-	RunnerName                         string
+	RunsOn                             string
 	MemoryCheck                        bool
 	MakeTools, InstallXtraBackup       bool
 	Docker                             bool
@@ -268,7 +268,7 @@ func generateClusterWorkflows(list []string, tpl string) {
 			cores16Clusters := canonnizeList(clusterRequiring16CoresMachines)
 			for _, cores16Cluster := range cores16Clusters {
 				if cores16Cluster == cluster {
-					test.RunnerName = cores16RunnerName
+					test.RunsOn = cores16RunnerName
 					break
 				}
 			}

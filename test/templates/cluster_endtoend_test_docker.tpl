@@ -6,7 +6,7 @@ permissions: read-all
 jobs:
   build:
     name: Run endtoend tests on {{.Name}}
-    runs-on: {{if .RunnerName}}{{ .RunnerName }}{{else}}ubuntu-24.04{{end}}
+    runs-on: {{if .RunsOn}}{{ .RunsOn }}{{else}}ubuntu-24.04{{end}}
 
     steps:
     - name: Skip CI
