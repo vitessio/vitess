@@ -4605,7 +4605,7 @@ func TestDeleteTablets(t *testing.T) {
 
 				resp, err := vtctld.GetTablets(ctx, &vtctldatapb.GetTabletsRequest{})
 				assert.NoError(t, err, "cannot look up tablets from topo after issuing DeleteTablets request")
-				testutil.AssertSameTablets(t, tt.expectedRemainingTablets, resp.Tablets)
+				utils.MustMatch(t, tt.expectedRemainingTablets, resp.Tablets)
 			}
 
 			// Run the test
@@ -8277,7 +8277,7 @@ func TestGetTablets(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			testutil.AssertSameTablets(t, tt.expected, resp.Tablets)
+			utils.MustMatch(t, tt.expected, resp.Tablets)
 		})
 	}
 }
@@ -13338,7 +13338,7 @@ func TestTabletExternallyReparented(t *testing.T) {
 
 					resp, err := vtctld.GetTablets(ctx, &vtctldatapb.GetTabletsRequest{})
 					require.NoError(t, err, "cannot get all tablets in the topo")
-					testutil.AssertSameTablets(t, tt.expectedTopo, resp.Tablets)
+					utils.MustMatch(t, tt.expectedTopo, resp.Tablets)
 				}()
 			}
 

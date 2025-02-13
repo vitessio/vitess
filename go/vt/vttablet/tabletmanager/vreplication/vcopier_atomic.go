@@ -84,6 +84,11 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 	defer rowsCopiedTicker.Stop()
 
 	parallelism := int(math.Max(1, float64(vc.vr.workflowConfig.ParallelInsertWorkers)))
+	// For now do not support concurrent inserts for atomic copies.
+	if parallelism > 1 {
+		parallelism = 1
+		log.Infof("Disabling concurrent inserts for atomic copies")
+	}
 	copyWorkerFactory := vc.newCopyWorkerFactory(parallelism)
 	var copyWorkQueue *vcopierCopyWorkQueue
 
@@ -154,7 +159,7 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 
 			lastpk = nil
 			// pkfields are only used for logging, so that we can monitor progress.
-			pkfields = make([]*querypb.Field, len(resp.Pkfields))
+			pkfields = make([]*querypb.Field, 0, len(resp.Pkfields))
 			for _, f := range resp.Pkfields {
 				pkfields = append(pkfields, f.CloneVT())
 			}

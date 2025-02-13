@@ -402,7 +402,7 @@ func TestVStreamRetriableErrors(t *testing.T) {
 			name:         "failed precondition",
 			code:         vtrpcpb.Code_FAILED_PRECONDITION,
 			msg:          "",
-			shouldRetry:  false,
+			shouldRetry:  true,
 			ignoreTablet: false,
 		},
 		{
