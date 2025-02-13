@@ -34,6 +34,7 @@ const (
 	mysql84 mysqlVersion = "mysql84"
 
 	cores16RunnerName   = "gh-hosted-runners-16cores-1-24.04"
+	defaultRunnerName   = "ubuntu-24.04"
 	defaultMySQLVersion = mysql80
 )
 
@@ -264,6 +265,7 @@ func generateClusterWorkflows(list []string, tpl string) {
 				Name:     fmt.Sprintf("Cluster (%s)", cluster),
 				Shard:    cluster,
 				BuildTag: buildTag[cluster],
+				RunsOn:   defaultRunnerName,
 			}
 			cores16Clusters := canonnizeList(clusterRequiring16CoresMachines)
 			for _, cores16Cluster := range cores16Clusters {
