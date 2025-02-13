@@ -68,14 +68,6 @@ func (c *Cursor) Replace(newNode AST) {
 // When used, this will abort the visitation of the current node - no post or children visited,
 // and the new node visited.
 func (c *Cursor) ReplaceAndRevisit(newNode AST) {
-	switch newNode.(type) {
-	case InterfaceSlice:
-	default:
-		// We need to add support to the generated code for when to look at the revisit flag. At the moment it is only
-		// there for slices of AST implementations
-		panic("no support added for this type yet")
-	}
-
 	c.replacer(newNode, c.parent)
 	c.node = newNode
 	c.revisit = true

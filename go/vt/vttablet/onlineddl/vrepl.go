@@ -2,10 +2,6 @@
 	Original copyright by GitHub as follows. Additions by the Vitess authors as follows.
 */
 /*
-   Copyright 2016 GitHub Inc.
-	 See https://github.com/github/gh-ost/blob/master/LICENSE
-*/
-/*
 Copyright 2021 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");

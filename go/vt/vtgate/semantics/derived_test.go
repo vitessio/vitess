@@ -113,7 +113,7 @@ func TestScopingWDerivedTables(t *testing.T) {
 			parse, err := sqlparser.NewTestParser().Parse(query.query)
 			require.NoError(t, err)
 			st, err := Analyze(parse, "user", &FakeSI{
-				Tables: map[string]*vindexes.Table{
+				Tables: map[string]*vindexes.BaseTable{
 					"t": {Name: sqlparser.NewIdentifierCS("t"), Keyspace: ks2},
 				},
 			})
@@ -175,7 +175,7 @@ func TestDerivedTablesOrderClause(t *testing.T) {
 		recursiveExpectation: TS0,
 		expectation:          TS1,
 	}}
-	si := &FakeSI{Tables: map[string]*vindexes.Table{"t": {Name: sqlparser.NewIdentifierCS("t")}}}
+	si := &FakeSI{Tables: map[string]*vindexes.BaseTable{"t": {Name: sqlparser.NewIdentifierCS("t")}}}
 	for _, query := range queries {
 		t.Run(query.query, func(t *testing.T) {
 			parse, err := sqlparser.NewTestParser().Parse(query.query)
@@ -215,7 +215,7 @@ func TestScopingWComplexDerivedTables(t *testing.T) {
 			parse, err := sqlparser.NewTestParser().Parse(query.query)
 			require.NoError(t, err)
 			st, err := Analyze(parse, "user", &FakeSI{
-				Tables: map[string]*vindexes.Table{
+				Tables: map[string]*vindexes.BaseTable{
 					"t": {Name: sqlparser.NewIdentifierCS("t")},
 				},
 			})

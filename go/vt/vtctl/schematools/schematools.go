@@ -56,14 +56,6 @@ func ParseSchemaMigrationStrategy(name string) (vtctldatapb.SchemaMigration_Stra
 	}
 
 	upperName := strings.ToUpper(name)
-	switch upperName {
-	case "GH-OST", "PT-OSC":
-		// more compatibility since the protobuf message names don't
-		// have the dash.
-		upperName = strings.ReplaceAll(upperName, "-", "")
-	default:
-	}
-
 	strategy, ok := vtctldatapb.SchemaMigration_Strategy_value[upperName]
 	if !ok {
 		return 0, fmt.Errorf("unknown schema migration strategy: '%v'", name)
@@ -91,12 +83,6 @@ func SchemaMigrationStrategyName(strategy vtctldatapb.SchemaMigration_Strategy) 
 	if !ok {
 		return "unknown"
 	}
-
-	switch strategy {
-	case vtctldatapb.SchemaMigration_GHOST, vtctldatapb.SchemaMigration_PTOSC:
-		name = strings.Join([]string{name[:2], name[2:]}, "-")
-	}
-
 	return strings.ToLower(name)
 }
 

@@ -75,7 +75,7 @@ type (
 
 	ColumnResults interface {
 		GetColumnCount() int
-		GetColumns() SelectExprs
+		GetColumns() []SelectExpr
 	}
 
 	Withable interface {
@@ -295,7 +295,7 @@ type (
 		With        *With
 		From        []TableExpr
 		Comments    *ParsedComments
-		SelectExprs SelectExprs
+		SelectExprs *SelectExprs
 		Where       *Where
 		GroupBy     *GroupBy
 		Having      *Where
@@ -645,7 +645,7 @@ type (
 	// CallProc represents a CALL statement
 	CallProc struct {
 		Name   TableName
-		Params Exprs
+		Params []Expr
 	}
 
 	// LockType is an enum for Lock Types
@@ -2039,8 +2039,9 @@ type ParsedComments struct {
 	_directives *CommentDirectives
 }
 
-// SelectExprs represents SELECT expressions.
-type SelectExprs []SelectExpr
+type SelectExprs struct {
+	Exprs []SelectExpr
+}
 
 type (
 	// SelectExpr represents a SELECT expression.
@@ -2209,7 +2210,7 @@ type (
 	// More information available here: https://dev.mysql.com/doc/refman/8.0/en/window-functions-usage.html
 	WindowSpecification struct {
 		Name            IdentifierCI
-		PartitionClause Exprs
+		PartitionClause []Expr
 		OrderClause     OrderBy
 		FrameClause     *FrameClause
 	}
@@ -2400,7 +2401,7 @@ type (
 	ListArg string
 
 	// ValTuple represents a tuple of actual values.
-	ValTuple Exprs
+	ValTuple []Expr
 
 	// BinaryExpr represents a binary value expression.
 	BinaryExpr struct {
@@ -2455,7 +2456,7 @@ type (
 	FuncExpr struct {
 		Qualifier IdentifierCS
 		Name      IdentifierCI
-		Exprs     Exprs
+		Exprs     []Expr
 	}
 
 	// ValuesFuncExpr represents a function call.
@@ -2524,7 +2525,7 @@ type (
 	// IntervalFuncExpr represents an INTERVAL function expression
 	IntervalFuncExpr struct {
 		Expr  Expr
-		Exprs Exprs
+		Exprs []Expr
 	}
 
 	// LocateExpr represents a LOCATE function expression
@@ -2536,7 +2537,7 @@ type (
 
 	// CharExpr represents a CHAR function expression
 	CharExpr struct {
-		Exprs   Exprs
+		Exprs   []Expr
 		Charset string
 	}
 
@@ -2586,7 +2587,7 @@ type (
 	// JSONArrayExpr represents JSON_ARRAY()
 	// More information on https://dev.mysql.com/doc/refman/8.0/en/json-creation-functions.html#function_json-array
 	JSONArrayExpr struct {
-		Params Exprs
+		Params []Expr
 	}
 
 	// JSONObjectExpr represents JSON_OBJECT()
@@ -2776,7 +2777,7 @@ type (
 	JSONValueMergeExpr struct {
 		Type        JSONValueMergeType
 		JSONDoc     Expr
-		JSONDocList Exprs
+		JSONDocList []Expr
 	}
 
 	// JSONValueModifierType is an enum to get types of TrimFunc.
@@ -2787,7 +2788,7 @@ type (
 	// For more information, postVisit https://dev.mysql.com/doc/refman/8.0/en/json-modification-functions.html#function_json-remove
 	JSONRemoveExpr struct {
 		JSONDoc  Expr
-		PathList Exprs
+		PathList []Expr
 	}
 
 	// JSONRemoveExpr represents the JSON_UNQUOTE()
@@ -2804,27 +2805,27 @@ type (
 
 	// LineString represents LineString(POINT(x,y), POINT(x,y), ..) expression
 	LineStringExpr struct {
-		PointParams Exprs
+		PointParams []Expr
 	}
 
 	// PolygonExpr represents Polygon(LineString(POINT(x,y), POINT(x,y), ..)) expressions
 	PolygonExpr struct {
-		LinestringParams Exprs
+		LinestringParams []Expr
 	}
 
 	// MultiPoint represents a geometry collection for points
 	MultiPointExpr struct {
-		PointParams Exprs
+		PointParams []Expr
 	}
 
 	// MultiPoint represents a geometry collection for linestrings
 	MultiLinestringExpr struct {
-		LinestringParams Exprs
+		LinestringParams []Expr
 	}
 
 	// MultiPolygon represents a geometry collection for polygons
 	MultiPolygonExpr struct {
-		PolygonParams Exprs
+		PolygonParams []Expr
 	}
 
 	// GeomFromWktType is an enum to get the types of wkt functions with possible values: GeometryFromText GeometryCollectionFromText PointFromText LineStringFromText PolygonFromText MultiPointFromText MultiPolygonFromText MultiLinestringFromText
@@ -2935,9 +2936,9 @@ type (
 	AggrFunc interface {
 		Expr
 		GetArg() Expr
-		GetArgs() Exprs
+		GetArgs() []Expr
 		SetArg(expr Expr)
-		SetArgs(exprs Exprs) error
+		SetArgs(exprs []Expr) error
 		// AggrName returns the lower case string representing this aggregation function
 		AggrName() string
 	}
@@ -2948,7 +2949,7 @@ type (
 	}
 
 	Count struct {
-		Args       Exprs
+		Args       []Expr
 		Distinct   bool
 		OverClause *OverClause
 	}
@@ -3061,7 +3062,7 @@ type (
 	// GroupConcatExpr represents a call to GROUP_CONCAT
 	GroupConcatExpr struct {
 		Distinct  bool
-		Exprs     Exprs
+		Exprs     []Expr
 		OrderBy   OrderBy
 		Separator string
 		Limit     *Limit
@@ -3450,34 +3451,34 @@ func (av *AnyValue) GetArg() Expr               { return av.Arg }
 func (jaa *JSONArrayAgg) GetArg() Expr          { return jaa.Expr }
 func (joa *JSONObjectAgg) GetArg() Expr         { return joa.Key }
 
-func (sum *Sum) GetArgs() Exprs                   { return Exprs{sum.Arg} }
-func (min *Min) GetArgs() Exprs                   { return Exprs{min.Arg} }
-func (max *Max) GetArgs() Exprs                   { return Exprs{max.Arg} }
-func (avg *Avg) GetArgs() Exprs                   { return Exprs{avg.Arg} }
-func (*CountStar) GetArgs() Exprs                 { return nil }
-func (count *Count) GetArgs() Exprs               { return count.Args }
-func (grpConcat *GroupConcatExpr) GetArgs() Exprs { return grpConcat.Exprs }
-func (bAnd *BitAnd) GetArgs() Exprs               { return Exprs{bAnd.Arg} }
-func (bOr *BitOr) GetArgs() Exprs                 { return Exprs{bOr.Arg} }
-func (bXor *BitXor) GetArgs() Exprs               { return Exprs{bXor.Arg} }
-func (std *Std) GetArgs() Exprs                   { return Exprs{std.Arg} }
-func (stdD *StdDev) GetArgs() Exprs               { return Exprs{stdD.Arg} }
-func (stdP *StdPop) GetArgs() Exprs               { return Exprs{stdP.Arg} }
-func (stdS *StdSamp) GetArgs() Exprs              { return Exprs{stdS.Arg} }
-func (varP *VarPop) GetArgs() Exprs               { return Exprs{varP.Arg} }
-func (varS *VarSamp) GetArgs() Exprs              { return Exprs{varS.Arg} }
-func (variance *Variance) GetArgs() Exprs         { return Exprs{variance.Arg} }
-func (av *AnyValue) GetArgs() Exprs               { return Exprs{av.Arg} }
-func (jaa *JSONArrayAgg) GetArgs() Exprs          { return Exprs{jaa.Expr} }
-func (joa *JSONObjectAgg) GetArgs() Exprs         { return Exprs{joa.Key, joa.Value} }
+func (sum *Sum) GetArgs() []Expr                   { return []Expr{sum.Arg} }
+func (min *Min) GetArgs() []Expr                   { return []Expr{min.Arg} }
+func (max *Max) GetArgs() []Expr                   { return []Expr{max.Arg} }
+func (avg *Avg) GetArgs() []Expr                   { return []Expr{avg.Arg} }
+func (*CountStar) GetArgs() []Expr                 { return nil }
+func (count *Count) GetArgs() []Expr               { return count.Args }
+func (grpConcat *GroupConcatExpr) GetArgs() []Expr { return grpConcat.Exprs }
+func (bAnd *BitAnd) GetArgs() []Expr               { return []Expr{bAnd.Arg} }
+func (bOr *BitOr) GetArgs() []Expr                 { return []Expr{bOr.Arg} }
+func (bXor *BitXor) GetArgs() []Expr               { return []Expr{bXor.Arg} }
+func (std *Std) GetArgs() []Expr                   { return []Expr{std.Arg} }
+func (stdD *StdDev) GetArgs() []Expr               { return []Expr{stdD.Arg} }
+func (stdP *StdPop) GetArgs() []Expr               { return []Expr{stdP.Arg} }
+func (stdS *StdSamp) GetArgs() []Expr              { return []Expr{stdS.Arg} }
+func (varP *VarPop) GetArgs() []Expr               { return []Expr{varP.Arg} }
+func (varS *VarSamp) GetArgs() []Expr              { return []Expr{varS.Arg} }
+func (variance *Variance) GetArgs() []Expr         { return []Expr{variance.Arg} }
+func (av *AnyValue) GetArgs() []Expr               { return []Expr{av.Arg} }
+func (jaa *JSONArrayAgg) GetArgs() []Expr          { return []Expr{jaa.Expr} }
+func (joa *JSONObjectAgg) GetArgs() []Expr         { return []Expr{joa.Key, joa.Value} }
 
 func (min *Min) SetArg(expr Expr)                   { min.Arg = expr }
 func (sum *Sum) SetArg(expr Expr)                   { sum.Arg = expr }
 func (max *Max) SetArg(expr Expr)                   { max.Arg = expr }
 func (avg *Avg) SetArg(expr Expr)                   { avg.Arg = expr }
 func (*CountStar) SetArg(expr Expr)                 {}
-func (count *Count) SetArg(expr Expr)               { count.Args = Exprs{expr} }
-func (grpConcat *GroupConcatExpr) SetArg(expr Expr) { grpConcat.Exprs = Exprs{expr} }
+func (count *Count) SetArg(expr Expr)               { count.Args = []Expr{expr} }
+func (grpConcat *GroupConcatExpr) SetArg(expr Expr) { grpConcat.Exprs = []Expr{expr} }
 func (bAnd *BitAnd) SetArg(expr Expr)               { bAnd.Arg = expr }
 func (bOr *BitOr) SetArg(expr Expr)                 { bOr.Arg = expr }
 func (bXor *BitXor) SetArg(expr Expr)               { bXor.Arg = expr }
@@ -3492,24 +3493,26 @@ func (av *AnyValue) SetArg(expr Expr)               { av.Arg = expr }
 func (jaa *JSONArrayAgg) SetArg(expr Expr)          { jaa.Expr = expr }
 func (joa *JSONObjectAgg) SetArg(expr Expr)         { joa.Key = expr }
 
-func (min *Min) SetArgs(exprs Exprs) error           { return setFuncArgs(min, exprs, "MIN") }
-func (sum *Sum) SetArgs(exprs Exprs) error           { return setFuncArgs(sum, exprs, "SUM") }
-func (max *Max) SetArgs(exprs Exprs) error           { return setFuncArgs(max, exprs, "MAX") }
-func (avg *Avg) SetArgs(exprs Exprs) error           { return setFuncArgs(avg, exprs, "AVG") }
-func (*CountStar) SetArgs(Exprs) error               { return nil }
-func (bAnd *BitAnd) SetArgs(exprs Exprs) error       { return setFuncArgs(bAnd, exprs, "BIT_AND") }
-func (bOr *BitOr) SetArgs(exprs Exprs) error         { return setFuncArgs(bOr, exprs, "BIT_OR") }
-func (bXor *BitXor) SetArgs(exprs Exprs) error       { return setFuncArgs(bXor, exprs, "BIT_XOR") }
-func (std *Std) SetArgs(exprs Exprs) error           { return setFuncArgs(std, exprs, "STD") }
-func (stdD *StdDev) SetArgs(exprs Exprs) error       { return setFuncArgs(stdD, exprs, "STDDEV") }
-func (stdP *StdPop) SetArgs(exprs Exprs) error       { return setFuncArgs(stdP, exprs, "STDDEV_POP") }
-func (stdS *StdSamp) SetArgs(exprs Exprs) error      { return setFuncArgs(stdS, exprs, "STDDEV_SAMP") }
-func (varP *VarPop) SetArgs(exprs Exprs) error       { return setFuncArgs(varP, exprs, "VAR_POP") }
-func (varS *VarSamp) SetArgs(exprs Exprs) error      { return setFuncArgs(varS, exprs, "VAR_SAMP") }
-func (variance *Variance) SetArgs(exprs Exprs) error { return setFuncArgs(variance, exprs, "VARIANCE") }
-func (av *AnyValue) SetArgs(exprs Exprs) error       { return setFuncArgs(av, exprs, "ANY_VALUE") }
-func (jaa *JSONArrayAgg) SetArgs(exprs Exprs) error  { return setFuncArgs(jaa, exprs, "JSON_ARRAYARG") }
-func (joa *JSONObjectAgg) SetArgs(exprs Exprs) error {
+func (min *Min) SetArgs(exprs []Expr) error      { return setFuncArgs(min, exprs, "MIN") }
+func (sum *Sum) SetArgs(exprs []Expr) error      { return setFuncArgs(sum, exprs, "SUM") }
+func (max *Max) SetArgs(exprs []Expr) error      { return setFuncArgs(max, exprs, "MAX") }
+func (avg *Avg) SetArgs(exprs []Expr) error      { return setFuncArgs(avg, exprs, "AVG") }
+func (*CountStar) SetArgs([]Expr) error          { return nil }
+func (bAnd *BitAnd) SetArgs(exprs []Expr) error  { return setFuncArgs(bAnd, exprs, "BIT_AND") }
+func (bOr *BitOr) SetArgs(exprs []Expr) error    { return setFuncArgs(bOr, exprs, "BIT_OR") }
+func (bXor *BitXor) SetArgs(exprs []Expr) error  { return setFuncArgs(bXor, exprs, "BIT_XOR") }
+func (std *Std) SetArgs(exprs []Expr) error      { return setFuncArgs(std, exprs, "STD") }
+func (stdD *StdDev) SetArgs(exprs []Expr) error  { return setFuncArgs(stdD, exprs, "STDDEV") }
+func (stdP *StdPop) SetArgs(exprs []Expr) error  { return setFuncArgs(stdP, exprs, "STDDEV_POP") }
+func (stdS *StdSamp) SetArgs(exprs []Expr) error { return setFuncArgs(stdS, exprs, "STDDEV_SAMP") }
+func (varP *VarPop) SetArgs(exprs []Expr) error  { return setFuncArgs(varP, exprs, "VAR_POP") }
+func (varS *VarSamp) SetArgs(exprs []Expr) error { return setFuncArgs(varS, exprs, "VAR_SAMP") }
+func (variance *Variance) SetArgs(exprs []Expr) error {
+	return setFuncArgs(variance, exprs, "VARIANCE")
+}
+func (av *AnyValue) SetArgs(exprs []Expr) error      { return setFuncArgs(av, exprs, "ANY_VALUE") }
+func (jaa *JSONArrayAgg) SetArgs(exprs []Expr) error { return setFuncArgs(jaa, exprs, "JSON_ARRAYARG") }
+func (joa *JSONObjectAgg) SetArgs(exprs []Expr) error {
 	if len(exprs) != 2 {
 		return vterrors.VT13001("JSONObjectAgg takes in 2 expressions")
 	}
@@ -3518,11 +3521,11 @@ func (joa *JSONObjectAgg) SetArgs(exprs Exprs) error {
 	return nil
 }
 
-func (count *Count) SetArgs(exprs Exprs) error {
+func (count *Count) SetArgs(exprs []Expr) error {
 	count.Args = exprs
 	return nil
 }
-func (grpConcat *GroupConcatExpr) SetArgs(exprs Exprs) error {
+func (grpConcat *GroupConcatExpr) SetArgs(exprs []Expr) error {
 	grpConcat.Exprs = exprs
 	return nil
 }
@@ -3564,7 +3567,9 @@ func (*JSONObjectAgg) AggrName() string   { return "json_objectagg" }
 
 // Exprs represents a list of value expressions.
 // It's not a valid expression because it's not parenthesized.
-type Exprs []Expr
+type Exprs struct {
+	Exprs []Expr
+}
 
 func (ValTuple) iColTuple()  {}
 func (*Subquery) iColTuple() {}

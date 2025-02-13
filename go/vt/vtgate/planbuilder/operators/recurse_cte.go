@@ -147,7 +147,7 @@ func (r *RecurseCTE) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.A
 	return r.Seed().GetColumns(ctx)
 }
 
-func (r *RecurseCTE) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
+func (r *RecurseCTE) GetSelectExprs(ctx *plancontext.PlanningContext) []sqlparser.SelectExpr {
 	return r.Seed().GetSelectExprs(ctx)
 }
 

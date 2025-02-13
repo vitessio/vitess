@@ -107,6 +107,8 @@ func isPod(tt types.Type) bool {
 			return false
 		}
 		return true
+	case *types.Alias:
+		return isPod(types.Unalias(tt))
 	default:
 		return false
 	}
@@ -152,8 +154,37 @@ func (sizegen *sizegen) generateType(pkg *types.Package, file *codeFile, named *
 				sizegen.generateTyp(tt)
 			}
 		})
+
+	case *types.Slice:
+		impl, flag := sizegen.sizeImplForSlice(named.Obj(), tt)
+		file.impls = append(file.impls, codeImpl{
+			code:  impl,
+			name:  named.String(),
+			flags: flag,
+		})
+	case *types.Map:
+		impl, flag := sizegen.sizeImplForMap(named.Obj(), tt)
+		file.impls = append(file.impls, codeImpl{
+			code:  impl,
+			name:  named.String(),
+			flags: flag,
+		})
+	case *types.Basic:
+		impl, flag := sizegen.sizeImplForBasic(named.Obj(), tt)
+		file.impls = append(file.impls, codeImpl{
+			code:  impl,
+			name:  named.String(),
+			flags: flag,
+		})
+	case *types.Signature:
+		impl, flag := sizegen.sizeImplForSignature(named.Obj(), tt)
+		file.impls = append(file.impls, codeImpl{
+			code:  impl,
+			name:  named.String(),
+			flags: flag,
+		})
 	default:
-		// no-op
+		panic(fmt.Sprintf("unhandled type: %v (%T)", named, tt))
 	}
 }
 
@@ -284,6 +315,77 @@ func (sizegen *sizegen) sizeImplForStruct(name *types.TypeName, st *types.Struct
 		b.Add(jen.Return(jen.Id("size")))
 	})
 	return f, funcFlags
+}
+
+func (sizegen *sizegen) sizeImplForSlice(name *types.TypeName, st *types.Slice) (jen.Code, codeFlag) {
+	var stmt []jen.Code
+	var funcFlags codeFlag
+	stmt, funcFlags = sizegen.sizeStmtForArray(stmt, jen.Op("*").Add(jen.Id("cached")), st.Elem())
+
+	f := jen.Func()
+	f.Params(jen.Id("cached").Op("*").Id(name.Name()))
+	f.Id("CachedSize").Params(jen.Id("alloc").Id("bool")).Int64()
+	f.BlockFunc(func(b *jen.Group) {
+		b.Add(jen.If(jen.Id("cached").Op("==").Nil()).Block(jen.Return(jen.Lit(int64(0)))))
+		b.Add(jen.Id("size").Op(":=").Lit(int64(0)))
+		b.Add(jen.If(jen.Id("alloc")).Block(
+			jen.Id("size").Op("+=").Lit(hack.RuntimeAllocSize(sizegen.sizes.Sizeof(st))),
+		))
+		for _, s := range stmt {
+			b.Add(s)
+		}
+		b.Add(jen.Return(jen.Id("size")))
+	})
+	return f, funcFlags
+}
+
+func (sizegen *sizegen) sizeImplForMap(name *types.TypeName, st *types.Map) (jen.Code, codeFlag) {
+	stmt := sizegen.sizeStmtForMap(jen.Op("*").Add(jen.Id("cached")), st)
+
+	f := jen.Func()
+	f.Params(jen.Id("cached").Op("*").Id(name.Name()))
+	f.Id("CachedSize").Params(jen.Id("alloc").Id("bool")).Int64()
+	f.BlockFunc(func(b *jen.Group) {
+		b.Add(jen.If(jen.Id("cached").Op("==").Nil()).Block(jen.Return(jen.Lit(int64(0)))))
+		b.Add(jen.Id("size").Op(":=").Lit(int64(0)))
+		b.Add(jen.If(jen.Id("alloc")).Block(
+			jen.Id("size").Op("+=").Lit(hack.RuntimeAllocSize(sizegen.sizes.Sizeof(st))),
+		))
+		for _, s := range stmt {
+			b.Add(s)
+		}
+		b.Add(jen.Return(jen.Id("size")))
+	})
+	return f, 0
+}
+
+func (sizegen *sizegen) sizeImplForBasic(name *types.TypeName, st *types.Basic) (jen.Code, codeFlag) {
+	f := jen.Func()
+	f.Params(jen.Id("cached").Op("*").Id(name.Name()))
+	f.Id("CachedSize").Params(jen.Id("alloc").Id("bool")).Int64()
+	f.BlockFunc(func(b *jen.Group) {
+		b.Add(jen.If(jen.Id("cached").Op("==").Nil()).Block(jen.Return(jen.Lit(int64(0)))))
+		b.Add(jen.Id("size").Op(":=").Lit(int64(0)))
+		b.Add(jen.If(jen.Id("alloc")).Block(
+			jen.Id("size").Op("+=").Do(mallocsize(jen.Lit(sizegen.sizes.Sizeof(st)))),
+		))
+		if st.Info()&types.IsString != 0 {
+			b.Add(jen.Id("size").Op("+=").Do(mallocsize(jen.Int64().Call(jen.Len(jen.Op("*").Add(jen.Id("cached")))))))
+		}
+		b.Add(jen.Return(jen.Id("size")))
+	})
+	return f, 0
+}
+
+func (sizegen *sizegen) sizeImplForSignature(name *types.TypeName, _ *types.Signature) (jen.Code, codeFlag) {
+	f := jen.Func()
+	f.Params(jen.Id("cached").Op("*").Id(name.Name()))
+	f.Id("CachedSize").Params(jen.Id("alloc").Id("bool")).Int64()
+	f.BlockFunc(func(b *jen.Group) {
+		// assume that function pointers do not allocate (although they might, if they're closures)
+		b.Add(jen.Return(jen.Lit(int64(0))))
+	})
+	return f, 0
 }
 
 func (sizegen *sizegen) sizeStmtForMap(fieldName *jen.Statement, m *types.Map) []jen.Code {
@@ -447,12 +549,21 @@ func (sizegen *sizegen) sizeStmtForType(fieldName *jen.Statement, field types.Ty
 		ts := sizegen.getKnownType(node)
 		if ts.pod || !ts.local {
 			if alloc {
-				if !ts.local {
-					log.Printf("WARNING: size of external type %s cannot be fully calculated", node)
+				var stmts []jen.Code
+				if node.String() == "math/big.Int" {
+					// This type is not accessible, but with the given
+					// accessors we can compute a proper size.
+					stmts = append(stmts, jen.Id("size").
+						Op("+=").
+						Do(mallocsize(jen.Int64().Call(jen.Cap(fieldName.Clone().Dot("Bits").Call())).
+							Op("*").
+							Lit(4),
+						)))
+				} else if !ts.local {
+					stmts = append(stmts, jen.Commentf("WARNING: size of external type %s cannot be fully calculated", node))
 				}
-				return jen.If(fieldName.Clone().Op("!=").Nil()).Block(
-					jen.Id("size").Op("+=").Do(mallocsize(jen.Lit(sizegen.sizes.Sizeof(node.Underlying())))),
-				), 0
+				stmts = append(stmts, jen.Id("size").Op("+=").Do(mallocsize(jen.Lit(sizegen.sizes.Sizeof(node.Underlying())))))
+				return jen.If(fieldName.Clone().Op("!=").Nil()).Block(stmts...), 0
 			}
 			return nil, 0
 		}
@@ -502,7 +613,6 @@ func (sizegen *sizegen) sizeStmtForType(fieldName *jen.Statement, field types.Ty
 
 var defaultGenTypes = []string{
 	"vitess.io/vitess/go/pools/smartconnpool.Setting",
-	"vitess.io/vitess/go/vt/schema.DDLStrategySetting",
 	"vitess.io/vitess/go/vt/vtgate/engine.Plan",
 	"vitess.io/vitess/go/vt/vttablet/tabletserver.TabletPlan",
 	"vitess.io/vitess/go/sqltypes.Result",

@@ -91,17 +91,16 @@ func (a *TextualAnnotations) Removed() (r []*AnnotatedText) {
 func (a *TextualAnnotations) Export() string {
 	textLines := make([]string, 0, len(a.texts))
 	for _, annotatedText := range a.texts {
-		switch annotatedText.typ {
-		case AddedTextualAnnotationType:
+		switch {
+		case annotatedText.typ == AddedTextualAnnotationType:
 			annotatedText.text = "+" + annotatedText.text
-		case RemovedTextualAnnotationType:
+		case annotatedText.typ == RemovedTextualAnnotationType:
 			annotatedText.text = "-" + annotatedText.text
+		case a.hasAnyChanges:
+			// This text is unchanged, but indented to align with changes
+			annotatedText.text = " " + annotatedText.text
 		default:
-			// text unchanged
-			if a.hasAnyChanges {
-				// If there is absolutely no change, we don't add a space anywhere
-				annotatedText.text = " " + annotatedText.text
-			}
+			// If there is absolutely no change, we don't add a space anywhere
 		}
 		textLines = append(textLines, annotatedText.text)
 	}

@@ -596,6 +596,15 @@ func (client *gRPCVtctldClient) LaunchSchemaMigration(ctx context.Context, in *v
 	return client.c.LaunchSchemaMigration(ctx, in, opts...)
 }
 
+// LookupVindexComplete is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) LookupVindexComplete(ctx context.Context, in *vtctldatapb.LookupVindexCompleteRequest, opts ...grpc.CallOption) (*vtctldatapb.LookupVindexCompleteResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.LookupVindexComplete(ctx, in, opts...)
+}
+
 // LookupVindexCreate is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) LookupVindexCreate(ctx context.Context, in *vtctldatapb.LookupVindexCreateRequest, opts ...grpc.CallOption) (*vtctldatapb.LookupVindexCreateResponse, error) {
 	if client.c == nil {
@@ -612,6 +621,15 @@ func (client *gRPCVtctldClient) LookupVindexExternalize(ctx context.Context, in 
 	}
 
 	return client.c.LookupVindexExternalize(ctx, in, opts...)
+}
+
+// LookupVindexInternalize is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) LookupVindexInternalize(ctx context.Context, in *vtctldatapb.LookupVindexInternalizeRequest, opts ...grpc.CallOption) (*vtctldatapb.LookupVindexInternalizeResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.LookupVindexInternalize(ctx, in, opts...)
 }
 
 // MaterializeCreate is part of the vtctlservicepb.VtctldClient interface.

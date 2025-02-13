@@ -43,13 +43,13 @@ type unionInfo struct {
 	isAuthoritative bool
 	recursive       []TableSet
 	types           []evalengine.Type
-	exprs           sqlparser.SelectExprs
+	exprs           []sqlparser.SelectExpr
 }
 
 var _ TableInfo = (*DerivedTable)(nil)
 
 func createDerivedTableForExpressions(
-	expressions sqlparser.SelectExprs,
+	expressions []sqlparser.SelectExpr,
 	cols sqlparser.Columns,
 	tables []TableInfo,
 	org originable,
@@ -150,7 +150,7 @@ func (dt *DerivedTable) canShortCut() shortCut {
 }
 
 // GetVindexTable implements the TableInfo interface
-func (dt *DerivedTable) GetVindexTable() *vindexes.Table {
+func (dt *DerivedTable) GetVindexTable() *vindexes.BaseTable {
 	return nil
 }
 

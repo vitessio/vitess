@@ -55,8 +55,6 @@ const (
 
 	TableGCName   Name = "tablegc"
 	OnlineDDLName Name = "online-ddl"
-	GhostName     Name = "gh-ost"
-	PTOSCName     Name = "pt-osc"
 
 	VReplicationName      Name = "vreplication"
 	VStreamerName         Name = "vstreamer"

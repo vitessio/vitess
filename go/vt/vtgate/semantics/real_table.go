@@ -32,7 +32,7 @@ import (
 type RealTable struct {
 	dbName, tableName string
 	ASTNode           *sqlparser.AliasedTableExpr
-	Table             *vindexes.Table
+	Table             *vindexes.BaseTable
 	CTE               *CTE
 	VindexHint        *sqlparser.IndexHint
 	MirrorRule        *vindexes.MirrorRule
@@ -151,7 +151,7 @@ func (r *RealTable) authoritative() bool {
 	}
 }
 
-func extractSelectExprsFromCTE(selectExprs sqlparser.SelectExprs) []ColumnInfo {
+func extractSelectExprsFromCTE(selectExprs []sqlparser.SelectExpr) []ColumnInfo {
 	var ci []ColumnInfo
 	for _, expr := range selectExprs {
 		ae, ok := expr.(*sqlparser.AliasedExpr)
@@ -166,7 +166,7 @@ func extractSelectExprsFromCTE(selectExprs sqlparser.SelectExprs) []ColumnInfo {
 	return ci
 }
 
-func extractColumnsFromCTE(columns sqlparser.Columns, selectExprs sqlparser.SelectExprs) []ColumnInfo {
+func extractColumnsFromCTE(columns sqlparser.Columns, selectExprs []sqlparser.SelectExpr) []ColumnInfo {
 	if len(columns) == 0 {
 		return nil
 	}
@@ -181,7 +181,7 @@ func extractColumnsFromCTE(columns sqlparser.Columns, selectExprs sqlparser.Sele
 	})
 }
 
-// GetExpr implements the TableInfo interface
+// GetAliasedTableExpr implements the TableInfo interface
 func (r *RealTable) GetAliasedTableExpr() *sqlparser.AliasedTableExpr {
 	return r.ASTNode
 }
@@ -207,7 +207,7 @@ func (r *RealTable) canShortCut() shortCut {
 }
 
 // GetVindexTable implements the TableInfo interface
-func (r *RealTable) GetVindexTable() *vindexes.Table {
+func (r *RealTable) GetVindexTable() *vindexes.BaseTable {
 	return r.Table
 }
 

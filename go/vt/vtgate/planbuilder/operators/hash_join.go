@@ -196,7 +196,7 @@ func (hj *HashJoin) GetColumns(*plancontext.PlanningContext) []*sqlparser.Aliase
 	})
 }
 
-func (hj *HashJoin) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
+func (hj *HashJoin) GetSelectExprs(ctx *plancontext.PlanningContext) []sqlparser.SelectExpr {
 	return transformColumnsToSelectExprs(ctx, hj)
 }
 

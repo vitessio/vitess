@@ -47,7 +47,7 @@ func (v *VindexTable) getExprFor(_ string) (sqlparser.Expr, error) {
 }
 
 // GetVindexTable implements the TableInfo interface
-func (v *VindexTable) GetVindexTable() *vindexes.Table {
+func (v *VindexTable) GetVindexTable() *vindexes.BaseTable {
 	return v.Table.GetVindexTable()
 }
 

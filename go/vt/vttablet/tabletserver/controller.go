@@ -122,6 +122,9 @@ type Controller interface {
 
 	// SetDemotePrimaryStalled marks that demote primary is stalled in the state manager.
 	SetDemotePrimaryStalled()
+
+	// IsDiskStalled returns if the disk is stalled.
+	IsDiskStalled() bool
 }
 
 // Ensure TabletServer satisfies Controller interface.

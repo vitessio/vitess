@@ -206,9 +206,10 @@ func ReadTopologyInstanceBufferable(tabletAlias string, latency *stopwatch.Named
 
 	fs, err = fullStatus(tabletAlias)
 	if err != nil {
-		if config.GetStalledDiskPrimaryRecovery() && strings.Contains(err.Error(), "stalled disk") {
-			stalledDisk = true
-		}
+		goto Cleanup
+	}
+	if config.GetStalledDiskPrimaryRecovery() && fs.DiskStalled {
+		stalledDisk = true
 		goto Cleanup
 	}
 	partialSuccess = true // We at least managed to read something from the server.

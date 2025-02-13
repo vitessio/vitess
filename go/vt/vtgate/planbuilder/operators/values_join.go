@@ -84,7 +84,7 @@ func (vj *ValuesJoin) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.
 	return results
 }
 
-func (vj *ValuesJoin) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
+func (vj *ValuesJoin) GetSelectExprs(ctx *plancontext.PlanningContext) []sqlparser.SelectExpr {
 	return transformColumnsToSelectExprs(ctx, vj)
 }
 

@@ -148,8 +148,10 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 		log.Infof("Successfully opened external topo: %+v", externalTopo)
 	}
 
-	var vschema *vschemapb.Keyspace
-	var origVSchema *vschemapb.Keyspace // If we need to rollback a failed create
+	var (
+		vschema     *topo.KeyspaceVSchemaInfo
+		origVSchema *topo.KeyspaceVSchemaInfo // If we need to rollback a failed create
+	)
 	vschema, err = wr.ts.GetVSchema(ctx, targetKeyspace)
 	if err != nil {
 		return err
@@ -215,7 +217,7 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 			// Save the original in case we need to restore it for a late failure
 			// in the defer().
 			origVSchema = vschema.CloneVT()
-			if err := wr.addTablesToVSchema(ctx, sourceKeyspace, vschema, tables, externalTopo == nil); err != nil {
+			if err := wr.addTablesToVSchema(ctx, sourceKeyspace, vschema.Keyspace, tables, externalTopo == nil); err != nil {
 				return err
 			}
 		}
@@ -280,7 +282,7 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 			if origVSchema == nil { // There's no previous version to restore
 				return
 			}
-			if cerr := wr.ts.SaveVSchema(ctx, targetKeyspace, origVSchema); cerr != nil {
+			if cerr := wr.ts.SaveVSchema(ctx, origVSchema); cerr != nil {
 				err = vterrors.Wrapf(err, "failed to restore original target vschema: %v", cerr)
 			}
 		}
@@ -321,7 +323,7 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 		}
 
 		// We added to the vschema.
-		if err := wr.ts.SaveVSchema(ctx, targetKeyspace, vschema); err != nil {
+		if err := wr.ts.SaveVSchema(ctx, vschema); err != nil {
 			return err
 		}
 	}
@@ -477,7 +479,7 @@ func (wr *Wrangler) CreateLookupVindex(ctx context.Context, keyspace string, spe
 	if err != nil {
 		return err
 	}
-	if err := wr.ts.SaveVSchema(ctx, ms.TargetKeyspace, targetVSchema); err != nil {
+	if err := wr.ts.SaveVSchema(ctx, targetVSchema); err != nil {
 		return err
 	}
 	ms.Cell = cell
@@ -495,7 +497,7 @@ func (wr *Wrangler) CreateLookupVindex(ctx context.Context, keyspace string, spe
 	if err := wr.Materialize(ctx, ms); err != nil {
 		return err
 	}
-	if err := wr.ts.SaveVSchema(ctx, keyspace, sourceVSchema); err != nil {
+	if err := wr.ts.SaveVSchema(ctx, sourceVSchema); err != nil {
 		return err
 	}
 
@@ -503,7 +505,7 @@ func (wr *Wrangler) CreateLookupVindex(ctx context.Context, keyspace string, spe
 }
 
 // prepareCreateLookup performs the preparatory steps for creating a lookup vindex.
-func (wr *Wrangler) prepareCreateLookup(ctx context.Context, keyspace string, specs *vschemapb.Keyspace, continueAfterCopyWithOwner bool) (ms *vtctldatapb.MaterializeSettings, sourceVSchema, targetVSchema *vschemapb.Keyspace, err error) {
+func (wr *Wrangler) prepareCreateLookup(ctx context.Context, keyspace string, specs *vschemapb.Keyspace, continueAfterCopyWithOwner bool) (ms *vtctldatapb.MaterializeSettings, sourceVSchema, targetVSchema *topo.KeyspaceVSchemaInfo, err error) {
 	// Important variables are pulled out here.
 	var (
 		// lookup vindex info
@@ -928,7 +930,7 @@ func (wr *Wrangler) ExternalizeVindex(ctx context.Context, qualifiedVindexName s
 
 	// Remove the write_only param and save the source vschema.
 	delete(sourceVindex.Params, "write_only")
-	if err := wr.ts.SaveVSchema(ctx, sourceKeyspace, sourceVSchema); err != nil {
+	if err := wr.ts.SaveVSchema(ctx, sourceVSchema); err != nil {
 		return err
 	}
 	return wr.ts.RebuildSrvVSchema(ctx, nil)
@@ -1062,7 +1064,7 @@ func (wr *Wrangler) buildMaterializer(ctx context.Context, ms *vtctldatapb.Mater
 	if err != nil {
 		return nil, err
 	}
-	targetVSchema, err := vindexes.BuildKeyspaceSchema(vschema, ms.TargetKeyspace, wr.env.Parser())
+	targetVSchema, err := vindexes.BuildKeyspaceSchema(vschema.Keyspace, ms.TargetKeyspace, wr.env.Parser())
 	if err != nil {
 		return nil, err
 	}
@@ -1129,7 +1131,7 @@ func (wr *Wrangler) buildMaterializer(ctx context.Context, ms *vtctldatapb.Mater
 	if err != nil {
 		return nil, fmt.Errorf("failed to get source keyspace vschema: %v", err)
 	}
-	differentPVs = primaryVindexesDiffer(ms, sourceVSchema, vschema)
+	differentPVs = primaryVindexesDiffer(ms, sourceVSchema.Keyspace, vschema.Keyspace)
 
 	return &materializer{
 		wr:                    wr,
@@ -1391,7 +1393,7 @@ func (mz *materializer) generateInserts(ctx context.Context, sourceShards []*top
 					}
 					mappedCols = append(mappedCols, colName)
 				}
-				subExprs := make(sqlparser.Exprs, 0, len(mappedCols)+2)
+				subExprs := make([]sqlparser.Expr, 0, len(mappedCols)+2)
 				for _, mappedCol := range mappedCols {
 					subExprs = append(subExprs, mappedCol)
 				}
@@ -1410,10 +1412,7 @@ func (mz *materializer) generateInserts(ctx context.Context, sourceShards []*top
 				}
 				subExprs = append(subExprs, sqlparser.NewStrLiteral(vindexName))
 				subExprs = append(subExprs, sqlparser.NewStrLiteral("{{.keyrange}}"))
-				inKeyRange := &sqlparser.FuncExpr{
-					Name:  sqlparser.NewIdentifierCI("in_keyrange"),
-					Exprs: subExprs,
-				}
+				inKeyRange := sqlparser.NewFuncExpr("in_keyrange", subExprs...)
 				if sel.Where != nil {
 					sel.Where = &sqlparser.Where{
 						Type: sqlparser.WhereClause,
@@ -1487,7 +1486,7 @@ func (mz *materializer) getWorkflowSubType() (binlogdatapb.VReplicationWorkflowS
 }
 
 func matchColInSelect(col sqlparser.IdentifierCI, sel *sqlparser.Select) (*sqlparser.ColName, error) {
-	for _, selExpr := range sel.SelectExprs {
+	for _, selExpr := range sel.GetColumns() {
 		switch selExpr := selExpr.(type) {
 		case *sqlparser.StarExpr:
 			return &sqlparser.ColName{Name: col}, nil

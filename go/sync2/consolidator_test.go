@@ -18,10 +18,41 @@ package sync2
 
 import (
 	"reflect"
+	"sync"
 	"testing"
 
 	"vitess.io/vitess/go/sqltypes"
 )
+
+func TestAddWaiterCount(t *testing.T) {
+	con := NewConsolidator()
+	sql := "select * from SomeTable"
+	pr, _ := con.Create(sql)
+	var wgAdd sync.WaitGroup
+	var wgSub sync.WaitGroup
+
+	var concurrent = 1000
+
+	for i := 0; i < concurrent; i++ {
+		wgAdd.Add(1)
+		wgSub.Add(1)
+		go func() {
+			defer wgAdd.Done()
+			pr.AddWaiterCounter(1)
+		}()
+		go func() {
+			defer wgSub.Done()
+			pr.AddWaiterCounter(-1)
+		}()
+	}
+
+	wgAdd.Wait()
+	wgSub.Wait()
+
+	if *pr.AddWaiterCounter(0) != 0 {
+		t.Fatalf("Expect 0 totalWaiterCount but got: %v", *pr.AddWaiterCounter(0))
+	}
+}
 
 func TestConsolidator(t *testing.T) {
 	con := NewConsolidator()

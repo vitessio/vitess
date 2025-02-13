@@ -2170,8 +2170,11 @@ func TestNoOrphanedRoutingRulesOnFailedCreate(t *testing.T) {
 	// fail. Let's also be sure that the routing rules are empty.
 	err := topotools.SaveRoutingRules(ctx, tme.wr.ts, nil)
 	require.NoError(t, err, "failed to save routing rules")
-	err = tme.ts.SaveVSchema(ctx, "ks2", &vschemapb.Keyspace{
-		Sharded: true,
+	err = tme.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+		Name: "ks2",
+		Keyspace: &vschemapb.Keyspace{
+			Sharded: true,
+		},
 	})
 	require.NoError(t, err, "failed to save vschema")
 	err = tme.ts.RebuildSrvVSchema(ctx, nil)

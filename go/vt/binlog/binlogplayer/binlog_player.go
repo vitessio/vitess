@@ -549,7 +549,7 @@ func (blp *BinlogPlayer) setVReplicationState(state binlogdatapb.VReplicationWor
 		})
 	}
 	blp.blplStats.State.Store(state.String())
-	query := fmt.Sprintf("update _vt.vreplication set state='%v', message=%v where id=%v", state.String(), encodeString(MessageTruncate(message)), blp.uid)
+	query := fmt.Sprintf("update _vt.vreplication set state=%v, message=%v where id=%v", encodeString(state.String()), encodeString(MessageTruncate(message)), blp.uid)
 	if _, err := blp.dbClient.ExecuteFetch(query, 1); err != nil {
 		return fmt.Errorf("could not set state: %v: %v", query, err)
 	}
@@ -637,9 +637,9 @@ func CreateVReplication(workflow string, source *binlogdatapb.BinlogSource, posi
 	protoutil.SortBinlogSourceTables(source)
 	return fmt.Sprintf("insert into _vt.vreplication "+
 		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys, options) "+
-		"values (%v, %v, %v, %v, %v, %v, 0, '%v', %v, %d, %d, %v, %s)",
+		"values (%v, %v, %v, %v, %v, %v, 0, %v, %v, %d, %d, %v, %s)",
 		encodeString(workflow), encodeString(source.String()), encodeString(position), maxTPS, maxReplicationLag,
-		timeUpdated, binlogdatapb.VReplicationWorkflowState_Running.String(), encodeString(dbName), workflowType,
+		timeUpdated, encodeString(binlogdatapb.VReplicationWorkflowState_Running.String()), encodeString(dbName), workflowType,
 		workflowSubType, deferSecondaryKeys, encodeString("{}"))
 }
 
@@ -649,9 +649,9 @@ func CreateVReplicationState(workflow string, source *binlogdatapb.BinlogSource,
 	protoutil.SortBinlogSourceTables(source)
 	return fmt.Sprintf("insert into _vt.vreplication "+
 		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, options) "+
-		"values (%v, %v, %v, %v, %v, %v, 0, '%v', %v, %d, %d, %s)",
+		"values (%v, %v, %v, %v, %v, %v, 0, %v, %v, %d, %d, %s)",
 		encodeString(workflow), encodeString(source.String()), encodeString(position), throttler.MaxRateModuleDisabled,
-		throttler.ReplicationLagModuleDisabled, time.Now().Unix(), state.String(), encodeString(dbName),
+		throttler.ReplicationLagModuleDisabled, time.Now().Unix(), encodeString(state.String()), encodeString(dbName),
 		workflowType, workflowSubType, encodeString("{}"))
 }
 
@@ -694,15 +694,15 @@ func GenerateUpdateTimeThrottled(uid int32, timeThrottledUnix int64, componentTh
 // StartVReplicationUntil returns a statement to start the replication with a stop position.
 func StartVReplicationUntil(uid int32, pos string) string {
 	return fmt.Sprintf(
-		"update _vt.vreplication set state='%v', stop_pos=%v where id=%v",
-		binlogdatapb.VReplicationWorkflowState_Running.String(), encodeString(pos), uid)
+		"update _vt.vreplication set state=%v, stop_pos=%v where id=%v",
+		encodeString(binlogdatapb.VReplicationWorkflowState_Running.String()), encodeString(pos), uid)
 }
 
 // StopVReplication returns a statement to stop the replication.
 func StopVReplication(uid int32, message string) string {
 	return fmt.Sprintf(
-		"update _vt.vreplication set state='%v', message=%v where id=%v",
-		binlogdatapb.VReplicationWorkflowState_Stopped.String(), encodeString(MessageTruncate(message)), uid)
+		"update _vt.vreplication set state=%v, message=%v where id=%v",
+		encodeString(binlogdatapb.VReplicationWorkflowState_Stopped.String()), encodeString(MessageTruncate(message)), uid)
 }
 
 // DeleteVReplication returns a statement to delete the replication.
@@ -717,9 +717,7 @@ func MessageTruncate(msg string) string {
 }
 
 func encodeString(in string) string {
-	buf := bytes.NewBuffer(nil)
-	sqltypes.NewVarChar(in).EncodeSQL(buf)
-	return buf.String()
+	return sqltypes.EncodeStringSQL(in)
 }
 
 // ReadVReplicationPos returns a statement to query the gtid for a

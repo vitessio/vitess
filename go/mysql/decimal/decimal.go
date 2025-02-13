@@ -183,17 +183,6 @@ func NewFromFloat(value float64) Decimal {
 	return dec
 }
 
-func NewFromFloat32(value float32) Decimal {
-	if value == 0 {
-		return New(0, 0)
-	}
-	dec, err := NewFromString(strconv.FormatFloat(float64(value), 'f', -1, 32))
-	if err != nil {
-		panic(err)
-	}
-	return dec
-}
-
 func NewFromFloatMySQL(value float64) Decimal {
 	if value == 0 {
 		return New(0, 0)
@@ -366,12 +355,6 @@ func (d Decimal) Div(d2 Decimal, scaleIncr int32) Decimal {
 	return q
 }
 
-// div returns d / d2. If it doesn't divide exactly, the result will have
-// divisionPrecision digits after the decimal point.
-func (d Decimal) div(d2 Decimal) Decimal {
-	return d.divRound(d2, int32(divisionPrecision))
-}
-
 // QuoRem does division with remainder
 // d.QuoRem(d2,precision) returns quotient q and remainder r such that
 //
@@ -417,44 +400,6 @@ func (d Decimal) QuoRem(d2 Decimal, precision int32) (Decimal, Decimal) {
 	dq := Decimal{value: &q, exp: scale}
 	dr := Decimal{value: &r, exp: scalerest}
 	return dq, dr
-}
-
-// divRound divides and rounds to a given precision
-// i.e. to an integer multiple of 10^(-precision)
-//
-//	for a positive quotient digit 5 is rounded up, away from 0
-//	if the quotient is negative then digit 5 is rounded down, away from 0
-//
-// Note that precision<0 is allowed as input.
-func (d Decimal) divRound(d2 Decimal, precision int32) Decimal {
-	// quoRem already checks initialization
-	q, r := d.QuoRem(d2, precision)
-
-	// the actual rounding decision is based on comparing r*10^precision and d2/2
-	// instead compare 2 r 10 ^precision and d2
-	var rv2 big.Int
-	rv2.Abs(r.value)
-	rv2.Lsh(&rv2, 1)
-	// now rv2 = abs(r.value) * 2
-	r2 := Decimal{value: &rv2, exp: r.exp + precision}
-	// r2 is now 2 * r * 10 ^ precision
-	var c = r2.Cmp(d2.Abs())
-
-	if c < 0 {
-		return q
-	}
-
-	if d.value.Sign()*d2.value.Sign() < 0 {
-		return q.sub(New(1, -precision))
-	}
-
-	return q.Add(New(1, -precision))
-}
-
-// mod returns d % d2.
-func (d Decimal) mod(d2 Decimal) Decimal {
-	quo := d.divRound(d2, -d.exp+1).Truncate(0)
-	return d.sub(d2.mul(quo))
 }
 
 func (d Decimal) Ceil() Decimal {

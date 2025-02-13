@@ -29,7 +29,7 @@ type CheckF = func(sqlparser.Expr) bool
 
 func SimplifyExpr(in sqlparser.Expr, test CheckF) sqlparser.Expr {
 	// since we can't rewrite the top level, wrap the expr in an Exprs object
-	smallestKnown := sqlparser.Exprs{sqlparser.Clone(in)}
+	smallestKnown := sqlparser.NewExprs(sqlparser.Clone(in))
 
 	alwaysVisit := func(node, parent sqlparser.SQLNode) bool {
 		return true
@@ -42,7 +42,7 @@ func SimplifyExpr(in sqlparser.Expr, test CheckF) sqlparser.Expr {
 		for expr != nil {
 			cursor.Replace(expr)
 
-			valid := test(smallestKnown[0])
+			valid := test(smallestKnown.Exprs[0])
 			if valid {
 				break // we will still continue trying to simplify other expressions at this level
 			} else {
@@ -59,12 +59,13 @@ func SimplifyExpr(in sqlparser.Expr, test CheckF) sqlparser.Expr {
 	for {
 		prevSmallest := sqlparser.Clone(smallestKnown)
 		sqlparser.SafeRewrite(smallestKnown, alwaysVisit, up)
-		if sqlparser.Equals.Exprs(prevSmallest, smallestKnown) {
+		_ = prevSmallest
+		if sqlparser.Equals.RefOfExprs(prevSmallest, smallestKnown) {
 			break
 		}
 	}
 
-	return smallestKnown[0]
+	return smallestKnown.Exprs[0]
 }
 
 type shrinker struct {

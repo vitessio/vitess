@@ -365,7 +365,7 @@ func findVSchemaTableAndCreateRoute(
 	)
 }
 
-func createTargetedRouting(ctx *plancontext.PlanningContext, target key.Destination, tabletType topodatapb.TabletType, vschemaTable *vindexes.Table) Routing {
+func createTargetedRouting(ctx *plancontext.PlanningContext, target key.Destination, tabletType topodatapb.TabletType, vschemaTable *vindexes.BaseTable) Routing {
 	switch ctx.Statement.(type) {
 	case *sqlparser.Update:
 		if tabletType != topodatapb.TabletType_PRIMARY {
@@ -401,7 +401,7 @@ func createTargetedRouting(ctx *plancontext.PlanningContext, target key.Destinat
 func createRouteFromVSchemaTable(
 	ctx *plancontext.PlanningContext,
 	queryTable *QueryTable,
-	vschemaTable *vindexes.Table,
+	vschemaTable *vindexes.BaseTable,
 	planAlternates bool,
 	targeted Routing,
 ) *Route {
@@ -457,7 +457,7 @@ func createRouteFromVSchemaTable(
 	return plan
 }
 
-func createRoutingForVTable(ctx *plancontext.PlanningContext, vschemaTable *vindexes.Table, id semantics.TableSet) Routing {
+func createRoutingForVTable(ctx *plancontext.PlanningContext, vschemaTable *vindexes.BaseTable, id semantics.TableSet) Routing {
 	switch {
 	case vschemaTable.Type == vindexes.TypeSequence:
 		return &SequenceRouting{keyspace: vschemaTable.Keyspace}
@@ -473,7 +473,7 @@ func createRoutingForVTable(ctx *plancontext.PlanningContext, vschemaTable *vind
 func createAlternateRoutesFromVSchemaTable(
 	ctx *plancontext.PlanningContext,
 	queryTable *QueryTable,
-	vschemaTable *vindexes.Table,
+	vschemaTable *vindexes.BaseTable,
 ) map[*vindexes.Keyspace]*Route {
 	routes := make(map[*vindexes.Keyspace]*Route)
 
@@ -707,7 +707,7 @@ func (r *Route) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.Aliase
 	return truncate(r, r.Source.GetColumns(ctx))
 }
 
-func (r *Route) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
+func (r *Route) GetSelectExprs(ctx *plancontext.PlanningContext) []sqlparser.SelectExpr {
 	return truncate(r, r.Source.GetSelectExprs(ctx))
 }
 

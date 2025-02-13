@@ -353,7 +353,7 @@ func (t *Tracker) updatedTableSchema(th *discovery.TabletHealth) bool {
 
 func (t *Tracker) updateTables(keyspace string, res map[string]string) {
 	for tableName, tableDef := range res {
-		stmt, err := t.parser.Parse(tableDef)
+		stmt, err := t.parser.ParseStrictDDL(tableDef)
 		if err != nil {
 			log.Warningf("error parsing table definition for %s: %v", tableName, err)
 			continue
@@ -535,7 +535,7 @@ func (vm *viewMap) set(ks, tbl, sql string) {
 		m = make(map[tableNameStr]sqlparser.TableStatement)
 		vm.m[ks] = m
 	}
-	stmt, err := vm.parser.Parse(sql)
+	stmt, err := vm.parser.ParseStrictDDL(sql)
 	if err != nil {
 		log.Warningf("ignoring view '%s', parsing error in view definition: '%s'", tbl, sql)
 		return
@@ -545,6 +545,7 @@ func (vm *viewMap) set(ks, tbl, sql string) {
 		log.Warningf("ignoring view '%s', view definition is not a create view query: %T", tbl, stmt)
 		return
 	}
+	sqlparser.AddKeyspace(cv.Select, ks)
 	m[tbl] = cv.Select
 }
 

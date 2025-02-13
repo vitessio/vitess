@@ -45,8 +45,9 @@ import (
 // default collation as it has to work across versions and the 8.0 default does not exist in 5.7.
 var (
 	// All standard user tables should have a primary key and at least one secondary key.
-	customerTypes         = []string{"'individual'", "'soho'", "'enterprise'"}
-	customerTableTemplate = `create table customer(cid int auto_increment, name varchar(128) collate utf8mb4_bin, meta json default null,
+	customerTypes = []string{"'individual'", "'soho'", "'enterprise'"}
+	// We use utf8mb4_general_ci so that we can test with 5.7 and 8.0+.
+	customerTableTemplate = `create table customer(cid int auto_increment, name varchar(128) collate utf8mb4_general_ci, meta json default null,
   industryCategory varchar(100) generated always as (json_extract(meta, _utf8mb4'$.industry')) virtual, typ enum(%s),
   sport set('football','cricket','baseball'), ts timestamp not null default current_timestamp, bits bit(2) default b'11', date1 datetime not null default '0000-00-00 00:00:00',
 	date2 datetime not null default '2021-00-01 00:00:00', dec80 decimal(8,0), blb blob, primary key(%s), key(name)) CHARSET=utf8mb4`

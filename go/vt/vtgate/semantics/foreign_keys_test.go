@@ -27,7 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-var parentTbl = &vindexes.Table{
+var parentTbl = &vindexes.BaseTable{
 	Name: sqlparser.NewIdentifierCS("parentt"),
 	Keyspace: &vindexes.Keyspace{
 		Name: "ks",
@@ -36,7 +36,7 @@ var parentTbl = &vindexes.Table{
 
 var tbl = map[string]TableInfo{
 	"t0": &RealTable{
-		Table: &vindexes.Table{
+		Table: &vindexes.BaseTable{
 			Name:     sqlparser.NewIdentifierCS("t0"),
 			Keyspace: &vindexes.Keyspace{Name: "ks"},
 			ChildForeignKeys: []vindexes.ChildFKInfo{
@@ -50,7 +50,7 @@ var tbl = map[string]TableInfo{
 		},
 	},
 	"t1": &RealTable{
-		Table: &vindexes.Table{
+		Table: &vindexes.BaseTable{
 			Name:     sqlparser.NewIdentifierCS("t1"),
 			Keyspace: &vindexes.Keyspace{Name: "ks_unmanaged", Sharded: true},
 			ChildForeignKeys: []vindexes.ChildFKInfo{
@@ -60,19 +60,19 @@ var tbl = map[string]TableInfo{
 		},
 	},
 	"t2": &RealTable{
-		Table: &vindexes.Table{
+		Table: &vindexes.BaseTable{
 			Name:     sqlparser.NewIdentifierCS("t2"),
 			Keyspace: &vindexes.Keyspace{Name: "ks"},
 		},
 	},
 	"t3": &RealTable{
-		Table: &vindexes.Table{
+		Table: &vindexes.BaseTable{
 			Name:     sqlparser.NewIdentifierCS("t3"),
 			Keyspace: &vindexes.Keyspace{Name: "undefined_ks", Sharded: true},
 		},
 	},
 	"t4": &RealTable{
-		Table: &vindexes.Table{
+		Table: &vindexes.BaseTable{
 			Name:     sqlparser.NewIdentifierCS("t4"),
 			Keyspace: &vindexes.Keyspace{Name: "ks"},
 			ChildForeignKeys: []vindexes.ChildFKInfo{
@@ -92,7 +92,7 @@ var tbl = map[string]TableInfo{
 		},
 	},
 	"t5": &RealTable{
-		Table: &vindexes.Table{
+		Table: &vindexes.BaseTable{
 			Name:     sqlparser.NewIdentifierCS("t5"),
 			Keyspace: &vindexes.Keyspace{Name: "ks"},
 			ChildForeignKeys: []vindexes.ChildFKInfo{
@@ -110,7 +110,7 @@ var tbl = map[string]TableInfo{
 		},
 	},
 	"t6": &RealTable{
-		Table: &vindexes.Table{
+		Table: &vindexes.BaseTable{
 			Name:     sqlparser.NewIdentifierCS("t6"),
 			Keyspace: &vindexes.Keyspace{Name: "ks"},
 			ChildForeignKeys: []vindexes.ChildFKInfo{
@@ -552,7 +552,7 @@ func TestGetInvolvedForeignKeys(t *testing.T) {
 	}
 }
 
-func ckInfo(cTable *vindexes.Table, pCols []string, cCols []string, refAction sqlparser.ReferenceAction) vindexes.ChildFKInfo {
+func ckInfo(cTable *vindexes.BaseTable, pCols []string, cCols []string, refAction sqlparser.ReferenceAction) vindexes.ChildFKInfo {
 	return vindexes.ChildFKInfo{
 		Table:         cTable,
 		ParentColumns: sqlparser.MakeColumns(pCols...),
@@ -561,7 +561,7 @@ func ckInfo(cTable *vindexes.Table, pCols []string, cCols []string, refAction sq
 	}
 }
 
-func pkInfo(parentTable *vindexes.Table, pCols []string, cCols []string) vindexes.ParentFKInfo {
+func pkInfo(parentTable *vindexes.BaseTable, pCols []string, cCols []string) vindexes.ParentFKInfo {
 	return vindexes.ParentFKInfo{
 		Table:         parentTable,
 		ParentColumns: sqlparser.MakeColumns(pCols...),

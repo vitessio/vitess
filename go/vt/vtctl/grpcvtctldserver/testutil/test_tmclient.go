@@ -295,7 +295,7 @@ type TabletManagerClient struct {
 	// keyed by tablet alias
 	PopulateReparentJournalResults map[string]error
 	// keyed by tablet alias
-	ReadReparentJournalInfoResults map[string]int
+	ReadReparentJournalInfoResults map[string]int32
 	// keyed by tablet alias.
 	PromoteReplicaDelays map[string]time.Duration
 	// keyed by tablet alias. injects a sleep to the end of the function
@@ -974,7 +974,7 @@ func (fake *TabletManagerClient) PopulateReparentJournal(ctx context.Context, ta
 }
 
 // ReadReparentJournalInfo is part of the tmclient.TabletManagerClient interface.
-func (fake *TabletManagerClient) ReadReparentJournalInfo(ctx context.Context, tablet *topodatapb.Tablet) (int, error) {
+func (fake *TabletManagerClient) ReadReparentJournalInfo(ctx context.Context, tablet *topodatapb.Tablet) (int32, error) {
 	if fake.ReadReparentJournalInfoResults == nil {
 		return 1, nil
 	}

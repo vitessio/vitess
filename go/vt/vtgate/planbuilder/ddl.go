@@ -166,7 +166,7 @@ func checkFKError(vschema plancontext.VSchema, ddlStatement sqlparser.DDLStateme
 }
 
 func findTableDestinationAndKeyspace(vschema plancontext.VSchema, ddlStatement sqlparser.DDLStatement) (key.Destination, *vindexes.Keyspace, error) {
-	var table *vindexes.Table
+	var table *vindexes.BaseTable
 	var destination key.Destination
 	var keyspace *vindexes.Keyspace
 	var err error
@@ -211,7 +211,7 @@ func buildCreateViewCommon(
 	}
 
 	// because we don't trust the schema tracker to have up-to-date info, we don't want to expand any SELECT * here
-	var expressions []sqlparser.SelectExprs
+	var expressions []*sqlparser.SelectExprs
 	_ = sqlparser.VisitAllSelects(ddlSelect, func(p *sqlparser.Select, idx int) error {
 		expressions = append(expressions, sqlparser.Clone(p.SelectExprs))
 		return nil
@@ -252,7 +252,7 @@ func createViewEnabled(vschema plancontext.VSchema, reservedVars *sqlparser.Rese
 
 	// views definition with `select *` should not be expanded as schema tracker might not be up-to-date
 	// We copy the expressions and restore them after the planning context is created
-	var expressions []sqlparser.SelectExprs
+	var expressions []*sqlparser.SelectExprs
 	_ = sqlparser.VisitAllSelects(ddlSelect, func(p *sqlparser.Select, idx int) error {
 		expressions = append(expressions, sqlparser.Clone(p.SelectExprs))
 		return nil
@@ -325,7 +325,7 @@ func buildDropTable(vschema plancontext.VSchema, ddlStatement sqlparser.DDLState
 	for i, tab := range ddlStatement.GetFromTables() {
 		var destinationTab key.Destination
 		var keyspaceTab *vindexes.Keyspace
-		var table *vindexes.Table
+		var table *vindexes.BaseTable
 		var err error
 		table, _, _, _, destinationTab, err = vschema.FindTableOrVindex(tab)
 
@@ -369,7 +369,7 @@ func buildRenameTable(vschema plancontext.VSchema, renameTable *sqlparser.Rename
 	for _, tabPair := range renameTable.TablePairs {
 		var destinationFrom key.Destination
 		var keyspaceFrom *vindexes.Keyspace
-		var table *vindexes.Table
+		var table *vindexes.BaseTable
 		var err error
 		table, _, _, _, destinationFrom, err = vschema.FindTableOrVindex(tabPair.FromTable)
 

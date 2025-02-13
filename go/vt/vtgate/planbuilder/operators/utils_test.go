@@ -73,8 +73,7 @@ func (f *fakeOp) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.Alias
 	panic("implement me")
 }
 
-func (f *fakeOp) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
-	// TODO implement me
+func (f *fakeOp) GetSelectExprs(ctx *plancontext.PlanningContext) []sqlparser.SelectExpr {
 	panic("implement me")
 }
 

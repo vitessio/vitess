@@ -30,14 +30,14 @@ type Union struct {
 	Sources []Operator
 
 	// These are the select expressions coming from each source
-	Selects  []sqlparser.SelectExprs
+	Selects  [][]sqlparser.SelectExpr
 	distinct bool
 
-	unionColumns              sqlparser.SelectExprs
+	unionColumns              []sqlparser.SelectExpr
 	unionColumnsAsAlisedExprs []*sqlparser.AliasedExpr
 }
 
-func newUnion(srcs []Operator, sourceSelects []sqlparser.SelectExprs, columns sqlparser.SelectExprs, distinct bool) *Union {
+func newUnion(srcs []Operator, sourceSelects [][]sqlparser.SelectExpr, columns []sqlparser.SelectExpr, distinct bool) *Union {
 	if columns == nil {
 		panic("rt")
 	}
@@ -95,7 +95,7 @@ can be found on the same offset. The names of the RHS are discarded.
 func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
 	offsets := make(map[string]int)
 	sel := u.GetSelectFor(0)
-	for i, selectExpr := range sel.SelectExprs {
+	for i, selectExpr := range sel.GetColumns() {
 		ae, ok := selectExpr.(*sqlparser.AliasedExpr)
 		if !ok {
 			panic(vterrors.VT12001("pushing predicates on UNION where the first SELECT contains * or NEXT"))
@@ -133,7 +133,7 @@ func (u *Union) predicatePerSource(expr sqlparser.Expr, offsets map[string]int) 
 			}
 
 			sel := u.GetSelectFor(i)
-			ae, ok := sel.SelectExprs[idx].(*sqlparser.AliasedExpr)
+			ae, ok := sel.GetColumns()[idx].(*sqlparser.AliasedExpr)
 			if !ok {
 				panic(vterrors.VT09015())
 			}
@@ -269,7 +269,7 @@ func (u *Union) GetColumns(ctx *plancontext.PlanningContext) (result []*sqlparse
 	return u.unionColumnsAsAlisedExprs
 }
 
-func (u *Union) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
+func (u *Union) GetSelectExprs(ctx *plancontext.PlanningContext) []sqlparser.SelectExpr {
 	// if any of the inputs has more columns that we expect, we want to show on top of UNION, so the results can
 	// be truncated to the expected result columns and nothing else
 	for _, src := range u.Sources {

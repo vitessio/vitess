@@ -32,6 +32,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/bytes2"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
@@ -371,9 +372,15 @@ func TestVersion(t *testing.T) {
 	}
 	blob, _ := dbSchema.MarshalVT()
 	gtid := "MariaDB/0-41983-20"
+	// We serialize a blob here, encodeString is for strings only
+	// and should not be used for binary data.
+	blobVal := sqltypes.MakeTrusted(sqltypes.VarBinary, blob)
+	buf := bytes2.Buffer{}
+	blobVal.EncodeSQLBytes2(&buf)
+
 	testcases := []testcase{{
 		input: []string{
-			fmt.Sprintf("insert into _vt.schema_version values(1, '%s', 123, 'create table t1', %v)", gtid, encodeString(string(blob))),
+			fmt.Sprintf("insert into _vt.schema_version values(1, '%s', 123, 'create table t1', %v)", gtid, buf.String()),
 		},
 		// External table events don't get sent.
 		output: [][]string{{

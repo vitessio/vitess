@@ -433,6 +433,7 @@ func (api *API) Handler() http.Handler {
 	router.HandleFunc("/vdiff/{cluster_id}/show", httpAPI.Adapt(vtadminhttp.VDiffShow)).Name("API.VDiffShow")
 	router.HandleFunc("/vtctlds", httpAPI.Adapt(vtadminhttp.GetVtctlds)).Name("API.GetVtctlds")
 	router.HandleFunc("/vtexplain", httpAPI.Adapt(vtadminhttp.VTExplain)).Name("API.VTExplain")
+	router.HandleFunc("/vexplain", httpAPI.Adapt(vtadminhttp.VExplain)).Name("API.VExplain")
 	router.HandleFunc("/workflow/{cluster_id}/{keyspace}/{name}", httpAPI.Adapt(vtadminhttp.GetWorkflow)).Name("API.GetWorkflow")
 	router.HandleFunc("/workflows", httpAPI.Adapt(vtadminhttp.GetWorkflows)).Name("API.GetWorkflows")
 	router.HandleFunc("/workflow/{cluster_id}/{keyspace}/{name}/status", httpAPI.Adapt(vtadminhttp.GetWorkflowStatus)).Name("API.GetWorkflowStatus")
@@ -2614,6 +2615,59 @@ func (api *API) ValidateVersionShard(ctx context.Context, req *vtadminpb.Validat
 	}
 
 	return res, nil
+}
+
+// VExplain is part of the vtadminpb.VTAdminServer interface.
+func (api *API) VExplain(ctx context.Context, req *vtadminpb.VExplainRequest) (*vtadminpb.VExplainResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.VExplain")
+	defer span.Finish()
+
+	if req.ClusterId == "" {
+		return nil, fmt.Errorf("%w: clusterID is required", errors.ErrInvalidRequest)
+	}
+
+	if req.Keyspace == "" {
+		return nil, fmt.Errorf("%w: keyspace name is required", errors.ErrInvalidRequest)
+	}
+
+	if req.Sql == "" {
+		return nil, fmt.Errorf("%w: SQL query is required", errors.ErrInvalidRequest)
+	}
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.VExplainResource, rbac.GetAction) {
+		return nil, nil
+	}
+
+	// Parser with default options. New() itself initializes with default MySQL version.
+	parser, err := sqlparser.New(sqlparser.Options{
+		TruncateUILen:  512,
+		TruncateErrLen: 0,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	stmt, err := parser.Parse(req.GetSql())
+	if err != nil {
+		return nil, err
+	}
+
+	if _, ok := stmt.(*sqlparser.VExplainStmt); !ok {
+		return nil, vterrors.VT09017("Invalid VExplain statement")
+	}
+
+	response, err := c.DB.VExplain(ctx, req.GetSql(), stmt.(*sqlparser.VExplainStmt))
+
+	if err != nil {
+		return nil, err
+	}
+
+	return response, nil
 }
 
 // VTExplain is part of the vtadminpb.VTAdminServer interface.

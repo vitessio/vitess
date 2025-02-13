@@ -26,7 +26,7 @@ import (
 
 // ParentFKInfo contains the parent foreign key info for the table.
 type ParentFKInfo struct {
-	Table         *Table
+	Table         *BaseTable
 	ParentColumns sqlparser.Columns
 	ChildColumns  sqlparser.Columns
 }
@@ -44,7 +44,7 @@ func (fk *ParentFKInfo) MarshalJSON() ([]byte, error) {
 	})
 }
 
-func (fk *ParentFKInfo) String(childTable *Table) string {
+func (fk *ParentFKInfo) String(childTable *BaseTable) string {
 	var str strings.Builder
 	str.WriteString(sqlparser.String(childTable.GetTableName()))
 	for _, column := range fk.ChildColumns {
@@ -58,7 +58,7 @@ func (fk *ParentFKInfo) String(childTable *Table) string {
 }
 
 // NewParentFkInfo creates a new ParentFKInfo.
-func NewParentFkInfo(parentTbl *Table, fkDef *sqlparser.ForeignKeyDefinition) ParentFKInfo {
+func NewParentFkInfo(parentTbl *BaseTable, fkDef *sqlparser.ForeignKeyDefinition) ParentFKInfo {
 	return ParentFKInfo{
 		Table:         parentTbl,
 		ChildColumns:  fkDef.Source,
@@ -68,7 +68,7 @@ func NewParentFkInfo(parentTbl *Table, fkDef *sqlparser.ForeignKeyDefinition) Pa
 
 // ChildFKInfo contains the child foreign key info for the table.
 type ChildFKInfo struct {
-	Table         *Table
+	Table         *BaseTable
 	ChildColumns  sqlparser.Columns
 	ParentColumns sqlparser.Columns
 	Match         sqlparser.MatchAction
@@ -89,7 +89,7 @@ func (fk *ChildFKInfo) MarshalJSON() ([]byte, error) {
 	})
 }
 
-func (fk *ChildFKInfo) String(parentTable *Table) string {
+func (fk *ChildFKInfo) String(parentTable *BaseTable) string {
 	var str strings.Builder
 	str.WriteString(sqlparser.String(fk.Table.GetTableName()))
 	for _, column := range fk.ChildColumns {
@@ -103,7 +103,7 @@ func (fk *ChildFKInfo) String(parentTable *Table) string {
 }
 
 // NewChildFkInfo creates a new ChildFKInfo.
-func NewChildFkInfo(childTbl *Table, fkDef *sqlparser.ForeignKeyDefinition) ChildFKInfo {
+func NewChildFkInfo(childTbl *BaseTable, fkDef *sqlparser.ForeignKeyDefinition) ChildFKInfo {
 	return ChildFKInfo{
 		Table:         childTbl,
 		ChildColumns:  fkDef.Source,
@@ -162,7 +162,7 @@ func (vschema *VSchema) AddPrimaryKey(ksname, tblName string, cols []string) err
 }
 
 // AddUniqueKey is for testing only.
-func (vschema *VSchema) AddUniqueKey(ksname, tblName string, exprs sqlparser.Exprs) error {
+func (vschema *VSchema) AddUniqueKey(ksname, tblName string, exprs []sqlparser.Expr) error {
 	ks, ok := vschema.Keyspaces[ksname]
 	if !ok {
 		return fmt.Errorf("keyspace %s not found in vschema", ksname)

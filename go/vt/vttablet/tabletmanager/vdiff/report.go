@@ -81,7 +81,7 @@ func (td *tableDiffer) genRowDiff(queryStmt string, row []sqltypes.Value, opts *
 
 	addVal := func(index int, truncateAt int) {
 		buf := sqlparser.NewTrackedBuffer(nil)
-		sel.SelectExprs[index].Format(buf)
+		sel.SelectExprs.Exprs[index].Format(buf)
 		col := buf.String()
 		// Let's truncate if it's really worth it to avoid losing
 		// value for a few chars.
@@ -106,7 +106,7 @@ func (td *tableDiffer) genRowDiff(queryStmt string, row []sqltypes.Value, opts *
 	}
 
 	truncateAt := int(opts.GetRowDiffColumnTruncateAt())
-	for i := range sel.SelectExprs {
+	for i := range sel.SelectExprs.Exprs {
 		if _, pk := pks[i]; !pk {
 			addVal(i, truncateAt)
 		}
@@ -121,7 +121,7 @@ func (td *tableDiffer) genDebugQueryDiff(sel *sqlparser.Select, row []sqltypes.V
 
 	if onlyPks {
 		for i, pkI := range td.tablePlan.selectPks {
-			pk := sel.SelectExprs[pkI]
+			pk := sel.GetColumns()[pkI]
 			pk.Format(buf)
 			if i != len(td.tablePlan.selectPks)-1 {
 				buf.Myprintf(", ")
@@ -134,7 +134,7 @@ func (td *tableDiffer) genDebugQueryDiff(sel *sqlparser.Select, row []sqltypes.V
 	buf.Myprintf(sqlparser.ToString(sel.From))
 	buf.Myprintf(" where ")
 	for i, pkI := range td.tablePlan.selectPks {
-		sel.SelectExprs[pkI].Format(buf)
+		sel.SelectExprs.Exprs[pkI].Format(buf)
 		buf.Myprintf("=")
 		row[pkI].EncodeSQL(buf)
 		if i != len(td.tablePlan.selectPks)-1 {

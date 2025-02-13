@@ -5136,6 +5136,186 @@ func TestVTExplain(t *testing.T) {
 	}
 }
 
+func TestVExplain(t *testing.T) {
+	tests := []struct {
+		name          string
+		keyspaces     []*vtctldatapb.Keyspace
+		shards        []*vtctldatapb.Shard
+		srvVSchema    *vschemapb.SrvVSchema
+		tabletSchemas map[string]*tabletmanagerdatapb.SchemaDefinition
+		tablets       []*vtadminpb.Tablet
+		req           *vtadminpb.VExplainRequest
+		expectedError error
+	}{
+		{
+			name: "returns an error if cluster unspecified in request",
+			req: &vtadminpb.VExplainRequest{
+				Keyspace: "commerce",
+				Sql:      "vexplain all select * from customers",
+			},
+			expectedError: vtadminerrors.ErrInvalidRequest,
+		},
+		{
+			name: "returns an error if keyspace unspecified in request",
+			req: &vtadminpb.VExplainRequest{
+				ClusterId: "c0",
+				Sql:       "vexplain all select * from customers",
+			},
+			expectedError: vtadminerrors.ErrInvalidRequest,
+		},
+		{
+			name: "returns an error if SQL unspecified in request",
+			req: &vtadminpb.VExplainRequest{
+				ClusterId: "c0",
+				Keyspace:  "commerce",
+			},
+			expectedError: vtadminerrors.ErrInvalidRequest,
+		},
+		{
+			name: "runs VExplain given a valid request in a valid topology",
+			keyspaces: []*vtctldatapb.Keyspace{
+				{
+					Name:     "commerce",
+					Keyspace: &topodatapb.Keyspace{},
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{
+					Name:     "-",
+					Keyspace: "commerce",
+				},
+			},
+			srvVSchema: &vschemapb.SrvVSchema{
+				Keyspaces: map[string]*vschemapb.Keyspace{
+					"commerce": {
+						Sharded: false,
+						Tables: map[string]*vschemapb.Table{
+							"customers": {},
+						},
+					},
+				},
+				RoutingRules: &vschemapb.RoutingRules{
+					Rules: []*vschemapb.RoutingRule{},
+				},
+			},
+			tabletSchemas: map[string]*tabletmanagerdatapb.SchemaDefinition{
+				"c0_cell1-0000000100": {
+					DatabaseSchema: "CREATE DATABASE commerce",
+					TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+						{
+							Name:       "t1",
+							Schema:     `CREATE TABLE customers (id int(11) not null,PRIMARY KEY (id));`,
+							Type:       "BASE",
+							Columns:    []string{"id"},
+							DataLength: 100,
+							RowCount:   50,
+							Fields: []*querypb.Field{
+								{
+									Name: "id",
+									Type: querypb.Type_INT32,
+								},
+							},
+						},
+					},
+				},
+			},
+			tablets: []*vtadminpb.Tablet{
+				{
+					Cluster: &vtadminpb.Cluster{
+						Id:   "c0",
+						Name: "cluster0",
+					},
+					State: vtadminpb.Tablet_SERVING,
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Uid:  100,
+							Cell: "c0_cell1",
+						},
+						Hostname: "tablet-cell1-a",
+						Keyspace: "commerce",
+						Shard:    "-",
+						Type:     topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			req: &vtadminpb.VExplainRequest{
+				ClusterId: "c0",
+				Keyspace:  "commerce",
+				Sql:       "vexplain all select * from customers",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			toposerver := memorytopo.NewServer(ctx, "c0_cell1")
+
+			tmc := testutil.TabletManagerClient{
+				GetSchemaResults: map[string]struct {
+					Schema *tabletmanagerdatapb.SchemaDefinition
+					Error  error
+				}{},
+			}
+
+			vtctldserver := testutil.NewVtctldServerWithTabletManagerClient(t, toposerver, &tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return grpcvtctldserver.NewVtctldServer(vtenv.NewTestEnv(), ts)
+			})
+
+			testutil.WithTestServer(ctx, t, vtctldserver, func(t *testing.T, vtctldClient vtctldclient.VtctldClient) {
+				if tt.srvVSchema != nil {
+					err := toposerver.UpdateSrvVSchema(ctx, "c0_cell1", tt.srvVSchema)
+					require.NoError(t, err)
+				}
+				testutil.AddKeyspaces(ctx, t, toposerver, tt.keyspaces...)
+				testutil.AddShards(ctx, t, toposerver, tt.shards...)
+
+				for _, tablet := range tt.tablets {
+					testutil.AddTablet(ctx, t, toposerver, tablet.Tablet, nil)
+
+					// Adds each SchemaDefinition to the fake TabletManagerClient, or nil
+					// if there are no schemas for that tablet. (All tablet aliases must
+					// exist in the map. Otherwise, TabletManagerClient will return an error when
+					// looking up the schema with tablet alias that doesn't exist.)
+					alias := topoproto.TabletAliasString(tablet.Tablet.Alias)
+					tmc.GetSchemaResults[alias] = struct {
+						Schema *tabletmanagerdatapb.SchemaDefinition
+						Error  error
+					}{
+						Schema: tt.tabletSchemas[alias],
+						Error:  nil,
+					}
+				}
+
+				clusters := []*cluster.Cluster{
+					vtadmintestutil.BuildCluster(t, vtadmintestutil.TestClusterConfig{
+						Cluster: &vtadminpb.Cluster{
+							Id:   "c0",
+							Name: "cluster0",
+						},
+						VtctldClient: vtctldClient,
+						Tablets:      tt.tablets,
+					}),
+				}
+
+				api := NewAPI(vtenv.NewTestEnv(), clusters, Options{})
+				resp, err := api.VExplain(ctx, tt.req)
+
+				if tt.expectedError != nil {
+					assert.True(t, errors.Is(err, tt.expectedError), "expected error type %w does not match actual error type %w", err, tt.expectedError)
+				} else {
+					require.NoError(t, err)
+
+					// We don't particularly care to test the contents of the VExplain response,
+					// just that it exists.
+					assert.NotEmpty(t, resp.Response)
+				}
+			})
+		})
+	}
+}
+
 type ServeHTTPVtctldResponse struct {
 	Result ServeHTTPVtctldResult `json:"result"`
 	Ok     bool                  `json:"ok"`

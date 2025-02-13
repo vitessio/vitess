@@ -4637,7 +4637,7 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 		{
 			name: "Case 1a: No Errant GTIDs. This is the first reparent. A replica is the most advanced.",
 			tmc: &testutil.TabletManagerClient{
-				ReadReparentJournalInfoResults: map[string]int{
+				ReadReparentJournalInfoResults: map[string]int32{
 					"zone1-0000000102": 1,
 					"zone1-0000000103": 1,
 					"zone1-0000000104": 1,
@@ -4733,7 +4733,7 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 				},
 			},
 			tmc: &testutil.TabletManagerClient{
-				ReadReparentJournalInfoResults: map[string]int{
+				ReadReparentJournalInfoResults: map[string]int32{
 					"zone1-0000000102": 2,
 					"zone1-0000000103": 2,
 					"zone1-0000000104": 2,
@@ -4797,7 +4797,7 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 				},
 			},
 			tmc: &testutil.TabletManagerClient{
-				ReadReparentJournalInfoResults: map[string]int{
+				ReadReparentJournalInfoResults: map[string]int32{
 					"zone1-0000000102": 2,
 					"zone1-0000000103": 2,
 					"zone1-0000000104": 2,
@@ -4861,7 +4861,7 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 				},
 			},
 			tmc: &testutil.TabletManagerClient{
-				ReadReparentJournalInfoResults: map[string]int{
+				ReadReparentJournalInfoResults: map[string]int32{
 					"zone1-0000000102": 3,
 					"zone1-0000000103": 2,
 					"zone1-0000000104": 1,
@@ -4925,7 +4925,7 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 				},
 			},
 			tmc: &testutil.TabletManagerClient{
-				ReadReparentJournalInfoResults: map[string]int{
+				ReadReparentJournalInfoResults: map[string]int32{
 					"zone1-0000000102": 2,
 					"zone1-0000000103": 2,
 					"zone1-0000000104": 1,
@@ -4989,7 +4989,7 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 				},
 			},
 			tmc: &testutil.TabletManagerClient{
-				ReadReparentJournalInfoResults: map[string]int{
+				ReadReparentJournalInfoResults: map[string]int32{
 					"zone1-0000000102": 2,
 					"zone1-0000000103": 3,
 					"zone1-0000000104": 3,
@@ -5052,7 +5052,7 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 				},
 			},
 			tmc: &testutil.TabletManagerClient{
-				ReadReparentJournalInfoResults: map[string]int{
+				ReadReparentJournalInfoResults: map[string]int32{
 					"zone1-0000000102": 2,
 					"zone1-0000000103": 3,
 					"zone1-0000000104": 2,
@@ -5116,7 +5116,7 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 				},
 			},
 			tmc: &testutil.TabletManagerClient{
-				ReadReparentJournalInfoResults: map[string]int{
+				ReadReparentJournalInfoResults: map[string]int32{
 					"zone1-0000000102": 2,
 					"zone1-0000000103": 3,
 					"zone1-0000000104": 2,
@@ -5179,7 +5179,7 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 				},
 			},
 			tmc: &testutil.TabletManagerClient{
-				ReadReparentJournalInfoResults: map[string]int{
+				ReadReparentJournalInfoResults: map[string]int32{
 					"zone1-0000000102": 3,
 					"zone1-0000000103": 3,
 					"zone1-0000000104": 3,
@@ -5243,7 +5243,7 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 				},
 			},
 			tmc: &testutil.TabletManagerClient{
-				ReadReparentJournalInfoResults: map[string]int{
+				ReadReparentJournalInfoResults: map[string]int32{
 					"zone1-0000000102": 3,
 					"zone1-0000000103": 3,
 					"zone1-0000000104": 2,
@@ -5297,7 +5297,7 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 				},
 			},
 			tmc: &testutil.TabletManagerClient{
-				ReadReparentJournalInfoResults: map[string]int{
+				ReadReparentJournalInfoResults: map[string]int32{
 					"zone1-0000000102": 3,
 					"zone1-0000000103": 3,
 				},
@@ -5354,7 +5354,7 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 				},
 			},
 			tmc: &testutil.TabletManagerClient{
-				ReadReparentJournalInfoResults: map[string]int{
+				ReadReparentJournalInfoResults: map[string]int32{
 					"zone1-0000000102": 3,
 					"zone1-0000000103": 3,
 					"zone1-0000000104": 3,
@@ -5418,7 +5418,7 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 				},
 			},
 			tmc: &testutil.TabletManagerClient{
-				ReadReparentJournalInfoResults: map[string]int{
+				ReadReparentJournalInfoResults: map[string]int32{
 					"zone1-0000000102": 2,
 					"zone1-0000000103": 3,
 					"zone1-0000000104": 2,
@@ -5481,7 +5481,7 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 				},
 			},
 			tmc: &testutil.TabletManagerClient{
-				ReadReparentJournalInfoResults: map[string]int{},
+				ReadReparentJournalInfoResults: map[string]int32{},
 			},
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"zone1-0000000103": {

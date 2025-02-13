@@ -218,7 +218,10 @@ func (mysqlFlavor) sendBinlogDumpCommand(c *Conn, serverID uint32, binlogFilenam
 	}
 
 	// Build the command.
-	sidBlock := gtidSet.SIDBlock()
+	var sidBlock []byte
+	if gtidSet != nil {
+		sidBlock = gtidSet.SIDBlock()
+	}
 	var flags2 uint16
 	if binlogFilename != "" {
 		flags2 |= BinlogThroughPosition

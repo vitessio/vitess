@@ -17,7 +17,6 @@ limitations under the License.
 package wrangler
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -125,7 +124,5 @@ func (wr *Wrangler) updateShardRecords(ctx context.Context, keyspace string, sha
 }
 
 func encodeString(in string) string {
-	buf := bytes.NewBuffer(nil)
-	sqltypes.NewVarChar(in).EncodeSQL(buf)
-	return buf.String()
+	return sqltypes.EncodeStringSQL(in)
 }

@@ -863,12 +863,12 @@ func (td *tableDiffer) lastPKFromRow(row []sqltypes.Value) *tabletmanagerdatapb.
 // VReplication workflow would have converted the datetime columns expecting the
 // source to have been in the SourceTimeZone and target in TargetTimeZone. We need
 // to do the reverse conversion in VDiff before the comparison.
-func (td *tableDiffer) adjustForSourceTimeZone(targetSelectExprs sqlparser.SelectExprs, fields map[string]querypb.Type) sqlparser.SelectExprs {
+func (td *tableDiffer) adjustForSourceTimeZone(targetSelectExprs []sqlparser.SelectExpr, fields map[string]querypb.Type) []sqlparser.SelectExpr {
 	if td.wd.ct.sourceTimeZone == "" {
 		return targetSelectExprs
 	}
 	log.Infof("source time zone specified: %s", td.wd.ct.sourceTimeZone)
-	var newSelectExprs sqlparser.SelectExprs
+	var newSelectExprs []sqlparser.SelectExpr
 	var modified bool
 	for _, expr := range targetSelectExprs {
 		converted := false
@@ -879,14 +879,11 @@ func (td *tableDiffer) adjustForSourceTimeZone(targetSelectExprs sqlparser.Selec
 				colName := colAs.Name.Lowered()
 				fieldType := fields[colName]
 				if fieldType == querypb.Type_DATETIME {
-					convertTZFuncExpr = &sqlparser.FuncExpr{
-						Name: sqlparser.NewIdentifierCI("convert_tz"),
-						Exprs: sqlparser.Exprs{
-							selExpr.Expr,
-							sqlparser.NewStrLiteral(td.wd.ct.targetTimeZone),
-							sqlparser.NewStrLiteral(td.wd.ct.sourceTimeZone),
-						},
-					}
+					convertTZFuncExpr = sqlparser.NewFuncExpr("convert_tz",
+						selExpr.Expr,
+						sqlparser.NewStrLiteral(td.wd.ct.targetTimeZone),
+						sqlparser.NewStrLiteral(td.wd.ct.sourceTimeZone),
+					)
 					log.Infof("converting datetime column %s using convert_tz()", colName)
 					newSelectExprs = append(newSelectExprs, &sqlparser.AliasedExpr{Expr: convertTZFuncExpr, As: colAs.Name})
 					converted = true

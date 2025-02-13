@@ -233,7 +233,7 @@ func (mz *materializer) generateBinlogSources(ctx context.Context, targetShard *
 					}
 					mappedCols = append(mappedCols, colName)
 				}
-				subExprs := make(sqlparser.Exprs, 0, len(mappedCols)+2)
+				subExprs := make([]sqlparser.Expr, 0, len(mappedCols)+2)
 				for _, mappedCol := range mappedCols {
 					subExprs = append(subExprs, mappedCol)
 				}
@@ -253,10 +253,7 @@ func (mz *materializer) generateBinlogSources(ctx context.Context, targetShard *
 
 				subExprs = append(subExprs, sqlparser.NewStrLiteral(vindexName))
 				subExprs = append(subExprs, sqlparser.NewStrLiteral(key.KeyRangeString(targetShard.KeyRange)))
-				inKeyRange := &sqlparser.FuncExpr{
-					Name:  sqlparser.NewIdentifierCI("in_keyrange"),
-					Exprs: subExprs,
-				}
+				inKeyRange := sqlparser.NewFuncExpr("in_keyrange", subExprs...)
 				addFilter(sel, inKeyRange)
 			}
 			if tenantClause != nil {
@@ -283,7 +280,7 @@ func (mz *materializer) deploySchema() error {
 	// We do, however, allow the user to override this behavior and retain them.
 	removeAutoInc := false
 	updatedVSchema := false
-	var targetVSchema *vschemapb.Keyspace
+	var targetVSchema *topo.KeyspaceVSchemaInfo
 	if mz.workflowType == binlogdatapb.VReplicationWorkflowType_MoveTables &&
 		(mz.targetVSchema != nil && mz.targetVSchema.Keyspace != nil && mz.targetVSchema.Keyspace.Sharded) &&
 		(mz.ms.GetWorkflowOptions() != nil && mz.ms.GetWorkflowOptions().ShardedAutoIncrementHandling != vtctldatapb.ShardedAutoIncrementHandling_LEAVE) {
@@ -472,7 +469,7 @@ func (mz *materializer) deploySchema() error {
 	}
 
 	if updatedVSchema {
-		return mz.ts.SaveVSchema(mz.ctx, mz.ms.TargetKeyspace, targetVSchema)
+		return mz.ts.SaveVSchema(mz.ctx, targetVSchema)
 	}
 
 	return nil
@@ -485,7 +482,7 @@ func (mz *materializer) buildMaterializer() error {
 	if err != nil {
 		return err
 	}
-	targetVSchema, err := vindexes.BuildKeyspaceSchema(vschema, ms.TargetKeyspace, mz.env.Parser())
+	targetVSchema, err := vindexes.BuildKeyspaceSchema(vschema.Keyspace, ms.TargetKeyspace, mz.env.Parser())
 	if err != nil {
 		return err
 	}
@@ -563,7 +560,7 @@ func (mz *materializer) buildMaterializer() error {
 	if err != nil {
 		return fmt.Errorf("failed to get source keyspace vschema: %v", err)
 	}
-	differentPVs = primaryVindexesDiffer(ms, sourceVSchema, vschema)
+	differentPVs = primaryVindexesDiffer(ms, sourceVSchema.Keyspace, vschema.Keyspace)
 
 	mz.targetVSchema = targetVSchema
 	mz.sourceShards = sourceShards

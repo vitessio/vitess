@@ -83,7 +83,7 @@ type controller struct {
 	TableDiffPhaseTimings *stats.Timings
 }
 
-func newController(ctx context.Context, row sqltypes.RowNamedValues, dbClientFactory func() binlogplayer.DBClient,
+func newController(row sqltypes.RowNamedValues, dbClientFactory func() binlogplayer.DBClient,
 	ts *topo.Server, vde *Engine, options *tabletmanagerdata.VDiffOptions) (*controller, error) {
 
 	log.Infof("VDiff controller initializing for %+v", row)
@@ -104,9 +104,6 @@ func newController(ctx context.Context, row sqltypes.RowNamedValues, dbClientFac
 		TableDiffRowCounts:    stats.NewCountersWithSingleLabel("", "", "Rows"),
 		TableDiffPhaseTimings: stats.NewTimings("", "", "", "TablePhase"),
 	}
-	ctx, ct.cancel = context.WithCancel(ctx)
-	go ct.run(ctx)
-
 	return ct, nil
 }
 

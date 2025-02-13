@@ -789,7 +789,7 @@ func (t *explainTablet) analyzeWhere(selStmt *sqlparser.Select, tableColumnMap m
 func (t *explainTablet) analyzeExpressions(selStmt *sqlparser.Select, tableColumnMap map[sqlparser.IdentifierCS]map[string]querypb.Type) ([]string, []querypb.Type) {
 	colNames := make([]string, 0, 4)
 	colTypes := make([]querypb.Type, 0, 4)
-	for _, node := range selStmt.SelectExprs {
+	for _, node := range selStmt.GetColumns() {
 		switch node := node.(type) {
 		case *sqlparser.AliasedExpr:
 			colNames, colTypes = inferColTypeFromExpr(node.Expr, tableColumnMap, colNames, colTypes)

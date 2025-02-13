@@ -67,7 +67,7 @@ func (cte *CTETable) Name() (sqlparser.TableName, error) {
 	return sqlparser.NewTableName(cte.TableName), nil
 }
 
-func (cte *CTETable) GetVindexTable() *vindexes.Table {
+func (cte *CTETable) GetVindexTable() *vindexes.BaseTable {
 	return nil
 }
 

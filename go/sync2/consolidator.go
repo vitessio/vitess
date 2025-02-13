@@ -40,6 +40,7 @@ type PendingResult interface {
 	SetResult(*sqltypes.Result)
 	Result() *sqltypes.Result
 	Wait()
+	AddWaiterCounter(int64) *int64
 }
 
 type consolidator struct {
@@ -77,6 +78,7 @@ func (co *consolidator) Create(query string) (PendingResult, bool) {
 	defer co.mu.Unlock()
 	var r *pendingResult
 	if r, ok := co.queries[query]; ok {
+		r.AddWaiterCounter(1)
 		return r, false
 	}
 	r = &pendingResult{consolidator: co, query: query}
@@ -122,17 +124,23 @@ func (rs *pendingResult) Wait() {
 	rs.executing.RLock()
 }
 
+func (rs *pendingResult) AddWaiterCounter(c int64) *int64 {
+	atomic.AddInt64(rs.consolidator.totalWaiterCount, c)
+	return rs.consolidator.totalWaiterCount
+}
+
 // ConsolidatorCache is a thread-safe object used for counting how often recent
 // queries have been consolidated.
 // It is also used by the txserializer package to count how often transactions
 // have been queued and had to wait because they targeted the same row (range).
 type ConsolidatorCache struct {
 	*cache.LRUCache[*ccount]
+	totalWaiterCount *int64
 }
 
 // NewConsolidatorCache creates a new cache with the given capacity.
 func NewConsolidatorCache(capacity int64) *ConsolidatorCache {
-	return &ConsolidatorCache{cache.NewLRUCache[*ccount](capacity)}
+	return &ConsolidatorCache{cache.NewLRUCache[*ccount](capacity), new(int64)}
 }
 
 // Record increments the count for "query" by 1.

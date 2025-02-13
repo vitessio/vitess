@@ -19,7 +19,6 @@ package vdiff
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -59,9 +58,7 @@ func newMergeSorter(participants map[string]*shardStreamer, comparePKs []compare
 // Utility functions
 
 func encodeString(in string) string {
-	var buf strings.Builder
-	sqltypes.NewVarChar(in).EncodeSQL(&buf)
-	return buf.String()
+	return sqltypes.EncodeStringSQL(in)
 }
 
 func pkColsToGroupByParams(pkCols []int, collationEnv *collations.Environment) []*engine.GroupByParams {

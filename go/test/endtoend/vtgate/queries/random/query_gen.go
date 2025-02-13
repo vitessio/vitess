@@ -292,7 +292,7 @@ func (sg *selectGenerator) randomSelect() {
 	}
 
 	// make sure we have at least one select expression
-	for isRandomExpr || len(sg.sel.SelectExprs) == 0 {
+	for isRandomExpr || len(sg.sel.SelectExprs.Exprs) == 0 {
 		// TODO: if the random expression is an int literal,
 		// TODO: and if the query is (potentially) an aggregate query,
 		// TODO: then we must group by the random expression,
@@ -395,7 +395,7 @@ func (sg *selectGenerator) createJoin(tables []tableT) {
 
 // returns 1-3 random expressions based on the last two elements of tables
 // tables should have at least two elements
-func (sg *selectGenerator) createJoinPredicates(tables []tableT) sqlparser.Exprs {
+func (sg *selectGenerator) createJoinPredicates(tables []tableT) []sqlparser.Expr {
 	if len(tables) < 2 {
 		log.Fatalf("tables has %d elements, needs at least 2", len(tables))
 	}
@@ -427,7 +427,7 @@ func (sg *selectGenerator) createGroupBy(tables []tableT) (grouping []column) {
 
 		// add to select
 		if rand.IntN(2) < 1 {
-			sg.sel.SelectExprs = append(sg.sel.SelectExprs, newAliasedColumn(col, ""))
+			sg.sel.AddSelectExpr(newAliasedColumn(col, ""))
 			grouping = append(grouping, col)
 		}
 	}
@@ -437,13 +437,13 @@ func (sg *selectGenerator) createGroupBy(tables []tableT) (grouping []column) {
 
 // aliasGroupingColumns randomly aliases the grouping columns in the SelectExprs
 func (sg *selectGenerator) aliasGroupingColumns(grouping []column) []column {
-	if len(grouping) != len(sg.sel.SelectExprs) {
-		log.Fatalf("grouping (length: %d) and sg.sel.SelectExprs (length: %d) should have the same length at this point", len(grouping), len(sg.sel.SelectExprs))
+	if len(grouping) != len(sg.sel.SelectExprs.Exprs) {
+		log.Fatalf("grouping (length: %d) and sg.sel.SelectExprs (length: %d) should have the same length at this point", len(grouping), len(sg.sel.SelectExprs.Exprs))
 	}
 
 	for i := range grouping {
 		if rand.IntN(2) < 1 {
-			if aliasedExpr, ok := sg.sel.SelectExprs[i].(*sqlparser.AliasedExpr); ok {
+			if aliasedExpr, ok := sg.sel.SelectExprs.Exprs[i].(*sqlparser.AliasedExpr); ok {
 				alias := fmt.Sprintf("cgroup%d", i)
 				aliasedExpr.SetAlias(alias)
 				grouping[i].name = alias
@@ -454,7 +454,7 @@ func (sg *selectGenerator) aliasGroupingColumns(grouping []column) []column {
 	return grouping
 }
 
-// returns the aggregation columns as three types: sqlparser.SelectExprs, []column
+// returns the aggregation columns as three types: *sqlparser.SelectExprs, []column
 func (sg *selectGenerator) createAggregations(tables []tableT) (aggregates []column) {
 	exprGenerators := slice.Map(tables, func(t tableT) sqlparser.ExprGenerator { return &t })
 	// add scalar subqueries
@@ -485,7 +485,7 @@ func (sg *selectGenerator) createOrderBy() {
 	}
 
 	// randomly order on SelectExprs
-	for _, selExpr := range sg.sel.SelectExprs {
+	for _, selExpr := range sg.sel.SelectExprs.Exprs {
 		if aliasedExpr, ok := selExpr.(*sqlparser.AliasedExpr); ok && rand.IntN(2) < 1 {
 			literal, ok := aliasedExpr.Expr.(*sqlparser.Literal)
 			isIntLiteral := ok && literal.Type == sqlparser.IntVal
@@ -527,7 +527,7 @@ func (sg *selectGenerator) createHavingPredicates(grouping []column) {
 }
 
 // returns between minExprs and maxExprs random expressions using generators
-func (sg *selectGenerator) createRandomExprs(minExprs, maxExprs int, generators ...sqlparser.ExprGenerator) (predicates sqlparser.Exprs) {
+func (sg *selectGenerator) createRandomExprs(minExprs, maxExprs int, generators ...sqlparser.ExprGenerator) (predicates []sqlparser.Expr) {
 	if minExprs > maxExprs {
 		log.Fatalf("minExprs is greater than maxExprs; minExprs: %d, maxExprs: %d\n", minExprs, maxExprs)
 	} else if maxExprs <= 0 {
@@ -578,7 +578,7 @@ func (sg *selectGenerator) randomlyAlias(expr sqlparser.Expr, alias string) colu
 	} else {
 		col.name = alias
 	}
-	sg.sel.SelectExprs = append(sg.sel.SelectExprs, sqlparser.NewAliasedExpr(expr, alias))
+	sg.sel.AddSelectExpr(sqlparser.NewAliasedExpr(expr, alias))
 
 	return col
 }
@@ -586,20 +586,20 @@ func (sg *selectGenerator) randomlyAlias(expr sqlparser.Expr, alias string) colu
 // matchNumCols makes sure sg.sel.SelectExprs and newTable both have the same number of cols: sg.genConfig.NumCols
 func (sg *selectGenerator) matchNumCols(tables []tableT, newTable tableT, canAggregate bool) tableT {
 	// remove SelectExprs and newTable.cols randomly until there are sg.genConfig.NumCols amount
-	for len(sg.sel.SelectExprs) > sg.genConfig.NumCols && sg.genConfig.NumCols > 0 {
+	for len(sg.sel.SelectExprs.Exprs) > sg.genConfig.NumCols && sg.genConfig.NumCols > 0 {
 		// select a random index and remove it from SelectExprs and newTable
-		idx := rand.IntN(len(sg.sel.SelectExprs))
+		idx := rand.IntN(len(sg.sel.SelectExprs.Exprs))
 
-		sg.sel.SelectExprs[idx] = sg.sel.SelectExprs[len(sg.sel.SelectExprs)-1]
-		sg.sel.SelectExprs = sg.sel.SelectExprs[:len(sg.sel.SelectExprs)-1]
+		sg.sel.SelectExprs.Exprs[idx] = sg.sel.SelectExprs.Exprs[len(sg.sel.SelectExprs.Exprs)-1]
+		sg.sel.SelectExprs.Exprs = sg.sel.SelectExprs.Exprs[:len(sg.sel.SelectExprs.Exprs)-1]
 
 		newTable.cols[idx] = newTable.cols[len(newTable.cols)-1]
 		newTable.cols = newTable.cols[:len(newTable.cols)-1]
 	}
 
 	// alternatively, add random expressions until there are sg.genConfig.NumCols amount
-	if sg.genConfig.NumCols > len(sg.sel.SelectExprs) {
-		diff := sg.genConfig.NumCols - len(sg.sel.SelectExprs)
+	if sg.genConfig.NumCols > len(sg.sel.SelectExprs.Exprs) {
+		diff := sg.genConfig.NumCols - len(sg.sel.SelectExprs.Exprs)
 		exprs := sg.createRandomExprs(diff, diff,
 			slice.Map(tables, func(t tableT) sqlparser.ExprGenerator { return &t })...)
 

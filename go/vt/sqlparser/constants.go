@@ -930,6 +930,7 @@ const (
 	FixedFormat
 	DynamicFormat
 	DefaultFormat
+	CompressedFormat
 )
 
 // Transaction access mode

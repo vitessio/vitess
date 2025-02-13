@@ -75,9 +75,9 @@ func (v *Values) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.Alias
 	return cols
 }
 
-func (v *Values) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
+func (v *Values) GetSelectExprs(ctx *plancontext.PlanningContext) []sqlparser.SelectExpr {
 	r := v.GetColumns(ctx)
-	var selectExprs sqlparser.SelectExprs
+	var selectExprs []sqlparser.SelectExpr
 	for _, expr := range r {
 		selectExprs = append(selectExprs, expr)
 	}

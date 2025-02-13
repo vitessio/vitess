@@ -21,6 +21,8 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/tools/codegen"
+
 	"github.com/stretchr/testify/require"
 )
 
@@ -43,5 +45,22 @@ func TestFullGeneration(t *testing.T) {
 		applyIdx := strings.Index(contents, "func (a *application) apply(parent, node AST, replacer replacerFunc)")
 		cloneIdx := strings.Index(contents, "CloneAST(in AST) AST")
 		require.False(t, applyIdx == 0 && cloneIdx == 0, "file doesn't contain expected contents")
+	}
+}
+
+func TestRecreateAllFiles(t *testing.T) {
+	// t.Skip("This test recreates all files in the integration directory. It should only be run when the ASTHelperGen code has changed.")
+	result, err := GenerateASTHelpers(&Options{
+		Packages:      []string{"./integration/..."},
+		RootInterface: "vitess.io/vitess/go/tools/asthelpergen/integration.AST",
+		Clone: CloneOptions{
+			Exclude: []string{"*NoCloneType"},
+		},
+	})
+	require.NoError(t, err)
+
+	for fullPath, file := range result {
+		err := codegen.SaveJenFile(fullPath, file)
+		require.NoError(t, err)
 	}
 }

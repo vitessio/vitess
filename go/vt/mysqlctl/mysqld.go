@@ -47,6 +47,7 @@ import (
 	"vitess.io/vitess/config"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/os2"
 	"vitess.io/vitess/go/osutil"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
@@ -454,6 +455,15 @@ func (mysqld *Mysqld) startNoWait(cnf *Mycnf, mysqldArgs ...string) error {
 		return fmt.Errorf("mysqld_start hook failed: %v", hr.String())
 	}
 
+	// try the postflight mysqld start hook, if any
+	switch hr := hook.NewHook("postflight_mysqld_start", mysqldArgs).Execute(); hr.ExitStatus {
+	case hook.HOOK_SUCCESS, hook.HOOK_DOES_NOT_EXIST:
+		// hook exists and worked, or does not exist, we can keep going
+	default:
+		// hook failed, we report error
+		return fmt.Errorf("postflight_mysqld_start hook failed: %v", hr.String())
+	}
+
 	return nil
 }
 
@@ -624,9 +634,20 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bo
 		return nil
 	}
 
-	// try the mysqld shutdown hook, if any
-	h := hook.NewSimpleHook("mysqld_shutdown")
+	// try the preflight mysqld shutdown hook, if any
+	h := hook.NewSimpleHook("preflight_mysqld_shutdown")
 	hr := h.ExecuteContext(ctx)
+	switch hr.ExitStatus {
+	case hook.HOOK_SUCCESS, hook.HOOK_DOES_NOT_EXIST:
+		// hook exists and worked, or else does not exist.
+	default:
+		// hook failed, we report error
+		return fmt.Errorf("preflight_mysqld_shutdown hook failed: %v", hr.String())
+	}
+
+	// try the mysqld shutdown hook, if any
+	h = hook.NewSimpleHook("mysqld_shutdown")
+	hr = h.ExecuteContext(ctx)
 	switch hr.ExitStatus {
 	case hook.HOOK_SUCCESS:
 		// hook exists and worked, we can keep going
@@ -901,7 +922,7 @@ func (mysqld *Mysqld) initConfig(cnf *Mycnf, outFile string) error {
 		return err
 	}
 
-	return os.WriteFile(outFile, []byte(configData), 0o664)
+	return os2.WriteFile(outFile, []byte(configData))
 }
 
 func (mysqld *Mysqld) getMycnfTemplate() string {
@@ -1051,7 +1072,7 @@ func (mysqld *Mysqld) ReinitConfig(ctx context.Context, cnf *Mycnf) error {
 func (mysqld *Mysqld) createDirs(cnf *Mycnf) error {
 	tabletDir := cnf.TabletDir()
 	log.Infof("creating directory %s", tabletDir)
-	if err := os.MkdirAll(tabletDir, os.ModePerm); err != nil {
+	if err := os2.MkdirAll(tabletDir); err != nil {
 		return err
 	}
 	for _, dir := range TopLevelDirs() {
@@ -1061,7 +1082,7 @@ func (mysqld *Mysqld) createDirs(cnf *Mycnf) error {
 	}
 	for _, dir := range cnf.directoryList() {
 		log.Infof("creating directory %s", dir)
-		if err := os.MkdirAll(dir, os.ModePerm); err != nil {
+		if err := os2.MkdirAll(dir); err != nil {
 			return err
 		}
 		// FIXME(msolomon) validate permissions?
@@ -1085,14 +1106,14 @@ func (mysqld *Mysqld) createTopDir(cnf *Mycnf, dir string) error {
 		if os.IsNotExist(err) {
 			topdir := path.Join(tabletDir, dir)
 			log.Infof("creating directory %s", topdir)
-			return os.MkdirAll(topdir, os.ModePerm)
+			return os2.MkdirAll(topdir)
 		}
 		return err
 	}
 	linkto := path.Join(target, vtname)
 	source := path.Join(tabletDir, dir)
 	log.Infof("creating directory %s", linkto)
-	err = os.MkdirAll(linkto, os.ModePerm)
+	err = os2.MkdirAll(linkto)
 	if err != nil {
 		return err
 	}

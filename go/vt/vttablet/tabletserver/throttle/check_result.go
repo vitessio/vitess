@@ -43,38 +43,13 @@ package throttle
 
 import (
 	"fmt"
-	"net/http"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 )
 
-// ResponseCodeFromStatus returns a ResponseCode based on either given response code or HTTP status code.
-// It is used to handle the transition period from v20 to v21 where v20 only returns HTTP status code.
-// In v22 and beyond, the HTTP status code will be removed, and so will this function.
-func ResponseCodeFromStatus(responseCode tabletmanagerdatapb.CheckThrottlerResponseCode, statusCode int) tabletmanagerdatapb.CheckThrottlerResponseCode {
-	if responseCode != tabletmanagerdatapb.CheckThrottlerResponseCode_UNDEFINED {
-		return responseCode
-	}
-	switch statusCode {
-	case http.StatusOK:
-		return tabletmanagerdatapb.CheckThrottlerResponseCode_OK
-	case http.StatusExpectationFailed:
-		return tabletmanagerdatapb.CheckThrottlerResponseCode_APP_DENIED
-	case http.StatusTooManyRequests:
-		return tabletmanagerdatapb.CheckThrottlerResponseCode_THRESHOLD_EXCEEDED
-	case http.StatusNotFound:
-		return tabletmanagerdatapb.CheckThrottlerResponseCode_UNKNOWN_METRIC
-	case http.StatusInternalServerError:
-		return tabletmanagerdatapb.CheckThrottlerResponseCode_INTERNAL_ERROR
-	default:
-		return tabletmanagerdatapb.CheckThrottlerResponseCode_UNDEFINED
-	}
-}
-
 type MetricResult struct {
 	ResponseCode tabletmanagerdatapb.CheckThrottlerResponseCode `json:"ResponseCode"`
-	StatusCode   int                                            `json:"StatusCode"`
 	Scope        string                                         `json:"Scope"`
 	Value        float64                                        `json:"Value"`
 	Threshold    float64                                        `json:"Threshold"`
@@ -84,16 +59,12 @@ type MetricResult struct {
 }
 
 func (m *MetricResult) IsOK() bool {
-	if m.ResponseCode != tabletmanagerdatapb.CheckThrottlerResponseCode_UNDEFINED {
-		return m.ResponseCode == tabletmanagerdatapb.CheckThrottlerResponseCode_OK
-	}
-	return m.StatusCode == http.StatusOK
+	return m.ResponseCode == tabletmanagerdatapb.CheckThrottlerResponseCode_OK
 }
 
 // CheckResult is the result for an app inquiring on a metric. It also exports as JSON via the API
 type CheckResult struct {
 	ResponseCode    tabletmanagerdatapb.CheckThrottlerResponseCode `json:"ResponseCode"`
-	StatusCode      int                                            `json:"StatusCode"`
 	Value           float64                                        `json:"Value"`
 	Threshold       float64                                        `json:"Threshold"`
 	Error           error                                          `json:"-"`
@@ -106,10 +77,9 @@ type CheckResult struct {
 }
 
 // NewCheckResult returns a CheckResult
-func NewCheckResult(responseCode tabletmanagerdatapb.CheckThrottlerResponseCode, statusCode int, value float64, threshold float64, appName string, err error) *CheckResult {
+func NewCheckResult(responseCode tabletmanagerdatapb.CheckThrottlerResponseCode, value float64, threshold float64, appName string, err error) *CheckResult {
 	result := &CheckResult{
 		ResponseCode: responseCode,
-		StatusCode:   statusCode,
 		Value:        value,
 		Threshold:    threshold,
 		AppName:      appName,
@@ -122,15 +92,12 @@ func NewCheckResult(responseCode tabletmanagerdatapb.CheckThrottlerResponseCode,
 }
 
 func (c *CheckResult) IsOK() bool {
-	if c.ResponseCode != tabletmanagerdatapb.CheckThrottlerResponseCode_UNDEFINED {
-		return c.ResponseCode == tabletmanagerdatapb.CheckThrottlerResponseCode_OK
-	}
-	return c.StatusCode == http.StatusOK
+	return c.ResponseCode == tabletmanagerdatapb.CheckThrottlerResponseCode_OK
 }
 
 // Summary returns a human-readable summary of the check result
 func (c *CheckResult) Summary() string {
-	switch ResponseCodeFromStatus(c.ResponseCode, c.StatusCode) {
+	switch c.ResponseCode {
 	case tabletmanagerdatapb.CheckThrottlerResponseCode_OK:
 		return fmt.Sprintf("%s is granted access", c.AppName)
 	case tabletmanagerdatapb.CheckThrottlerResponseCode_APP_DENIED:
@@ -149,11 +116,11 @@ func (c *CheckResult) Summary() string {
 }
 
 // NewErrorCheckResult returns a check result that indicates an error
-func NewErrorCheckResult(responseCode tabletmanagerdatapb.CheckThrottlerResponseCode, statusCode int, err error) *CheckResult {
-	return NewCheckResult(responseCode, statusCode, 0, 0, "", err)
+func NewErrorCheckResult(responseCode tabletmanagerdatapb.CheckThrottlerResponseCode, err error) *CheckResult {
+	return NewCheckResult(responseCode, 0, 0, "", err)
 }
 
 // NoSuchMetricCheckResult is a result returns when a metric is unknown
-var NoSuchMetricCheckResult = NewErrorCheckResult(tabletmanagerdatapb.CheckThrottlerResponseCode_UNKNOWN_METRIC, http.StatusNotFound, base.ErrNoSuchMetric)
+var NoSuchMetricCheckResult = NewErrorCheckResult(tabletmanagerdatapb.CheckThrottlerResponseCode_UNKNOWN_METRIC, base.ErrNoSuchMetric)
 
-var okMetricCheckResult = NewCheckResult(tabletmanagerdatapb.CheckThrottlerResponseCode_OK, http.StatusOK, 0, 0, "", nil)
+var okMetricCheckResult = NewCheckResult(tabletmanagerdatapb.CheckThrottlerResponseCode_OK, 0, 0, "", nil)

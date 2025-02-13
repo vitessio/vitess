@@ -1,5 +1,5 @@
 /*
-Copyright 2019 The Vitess Authors.
+Copyright 2025 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,19 +14,21 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package onlineddl
+package http
 
 import (
-	"testing"
+	"context"
 
-	"github.com/stretchr/testify/assert"
+	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 )
 
-func TestRandomHash(t *testing.T) {
-	h1 := RandomHash()
-	h2 := RandomHash()
-
-	assert.Equal(t, len(h1), 64)
-	assert.Equal(t, len(h2), 64)
-	assert.NotEqual(t, h1, h2)
+// VExplain implements the http wrapper for /vexplain?cluster_id=&keyspace=&sql=
+func VExplain(ctx context.Context, r Request, api *API) *JSONResponse {
+	query := r.URL.Query()
+	res, err := api.server.VExplain(ctx, &vtadminpb.VExplainRequest{
+		ClusterId: query.Get("cluster_id"),
+		Keyspace:  query.Get("keyspace"),
+		Sql:       query.Get("sql"),
+	})
+	return NewJSONResponse(res, err)
 }

@@ -473,3 +473,18 @@ func TestFormatAndRound(t *testing.T) {
 		}
 	}
 }
+
+// RequireFromString returns a new Decimal from a string representation
+// or panics if NewFromString would have returned an error.
+//
+// Example:
+//
+//	d := RequireFromString("-123.45")
+//	d2 := RequireFromString(".0001")
+func RequireFromString(value string) Decimal {
+	dec, err := NewFromString(value)
+	if err != nil {
+		panic(err)
+	}
+	return dec
+}

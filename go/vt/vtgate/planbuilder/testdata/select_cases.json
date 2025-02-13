@@ -1315,6 +1315,58 @@
     "skip_e2e": true
   },
   {
+    "comment": "Subquery inside subquery #1",
+    "query": "select (select (select col from `user` where id = 1) from `user` where id = 1) from `user` where id = 1",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select (select (select col from `user` where id = 1) from `user` where id = 1) from `user` where id = 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select (select (select col from `user` where 1 != 1) from `user` where 1 != 1) from `user` where 1 != 1",
+        "Query": "select (select (select col from `user` where id = 1) from `user` where id = 1) from `user` where id = 1",
+        "Table": "`user`",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Subquery inside subquery #2",
+    "query": "select 1 from `user` where id = 1 and 1 = (select (select intcol from `user` where id = 1) from `user` where id = 1)",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select 1 from `user` where id = 1 and 1 = (select (select intcol from `user` where id = 1) from `user` where id = 1)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from `user` where 1 != 1",
+        "Query": "select 1 from `user` where id = 1 and 1 = (select (select intcol from `user` where id = 1) from `user` where id = 1)",
+        "Table": "`user`",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
     "comment": "Multiple parenthesized expressions",
     "query": "select * from user where (id = 4 and name ='abc') limit 5",
     "plan": {

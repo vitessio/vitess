@@ -301,8 +301,9 @@ func (dr *switcherDryRun) stopStreams(ctx context.Context, sm *StreamMigrator) (
 	return nil, nil
 }
 
-func (dr *switcherDryRun) cancelMigration(ctx context.Context, sm *StreamMigrator) {
+func (dr *switcherDryRun) cancelMigration(ctx context.Context, sm *StreamMigrator) error {
 	dr.drLog.Log("Cancel migration as requested")
+	return nil
 }
 
 func (dr *switcherDryRun) lockKeyspace(ctx context.Context, keyspace, _ string, _ ...topo.LockOption) (context.Context, func(*error), error) {

@@ -59,7 +59,7 @@ func stripDownQuery(from, to sqlparser.TableStatement) {
 		toNode.Comments = node.Comments
 		toNode.Limit = node.Limit
 		toNode.SelectExprs = node.SelectExprs
-		for _, expr := range toNode.SelectExprs {
+		for _, expr := range toNode.GetColumns() {
 			removeKeyspaceFromSelectExpr(expr)
 		}
 	case *sqlparser.Union:

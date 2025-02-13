@@ -54,7 +54,7 @@ const (
 	analyzeTableFlag       = "analyze-table"
 )
 
-// DDLStrategy suggests how an ALTER TABLE should run (e.g. "direct", "online", "gh-ost" or "pt-osc")
+// DDLStrategy suggests how an ALTER TABLE should run (e.g. "direct", "online", "mysql")
 type DDLStrategy string
 
 const (
@@ -64,10 +64,6 @@ const (
 	DDLStrategyVitess DDLStrategy = "vitess"
 	// DDLStrategyOnline requests vreplication to run the migration
 	DDLStrategyOnline DDLStrategy = "online"
-	// DDLStrategyGhost requests gh-ost to run the migration
-	DDLStrategyGhost DDLStrategy = "gh-ost"
-	// DDLStrategyPTOSC requests pt-online-schema-change to run the migration
-	DDLStrategyPTOSC DDLStrategy = "pt-osc"
 	// DDLStrategyMySQL is a managed migration (queued and executed by the scheduler) but runs through a MySQL `ALTER TABLE`
 	DDLStrategyMySQL DDLStrategy = "mysql"
 )
@@ -76,7 +72,7 @@ const (
 // A strategy is direct if it's not explciitly one of the online DDL strategies
 func (s DDLStrategy) IsDirect() bool {
 	switch s {
-	case DDLStrategyVitess, DDLStrategyOnline, DDLStrategyGhost, DDLStrategyPTOSC, DDLStrategyMySQL:
+	case DDLStrategyVitess, DDLStrategyOnline, DDLStrategyMySQL:
 		return false
 	}
 	return true
@@ -108,7 +104,7 @@ func ParseDDLStrategy(strategyVariable string) (*DDLStrategySetting, error) {
 	switch strategy := DDLStrategy(strategyName); strategy {
 	case "": // backward compatiblity and to handle unspecified values
 		setting.Strategy = DDLStrategyDirect
-	case DDLStrategyVitess, DDLStrategyOnline, DDLStrategyGhost, DDLStrategyPTOSC, DDLStrategyMySQL, DDLStrategyDirect:
+	case DDLStrategyVitess, DDLStrategyOnline, DDLStrategyMySQL, DDLStrategyDirect:
 		setting.Strategy = strategy
 	default:
 		return nil, fmt.Errorf("Unknown online DDL strategy: '%v'", strategy)

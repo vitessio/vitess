@@ -40,14 +40,6 @@ func TestSchemaMigrationStrategyName(t *testing.T) {
 			out: "vitess",
 		},
 		{
-			in:  vtctldatapb.SchemaMigration_GHOST,
-			out: "gh-ost",
-		},
-		{
-			in:  vtctldatapb.SchemaMigration_PTOSC,
-			out: "pt-osc",
-		},
-		{
 			in:  vtctldatapb.SchemaMigration_DIRECT,
 			out: "direct",
 		},

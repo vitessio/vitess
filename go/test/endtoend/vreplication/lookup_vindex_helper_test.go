@@ -66,11 +66,18 @@ func (lv *lookupVindex) create() {
 	err := vc.VtctldClient.ExecuteCommand(args...)
 	require.NoError(lv.t, err, "error executing LookupVindex create: %v", err)
 	waitForWorkflowState(lv.t, vc, fmt.Sprintf("%s.%s", lv.ownerTableKeyspace, lv.name), binlogdatapb.VReplicationWorkflowState_Running.String())
-	lv.expectWriteOnly(true)
+	lv.expectParamsAndOwner(true)
 }
 
 func (lv *lookupVindex) cancel() {
-	panic("not implemented")
+	args := []string{
+		"LookupVindex",
+		"--name", lv.name,
+		"--table-keyspace=" + lv.ownerTableKeyspace,
+		"cancel",
+	}
+	err := vc.VtctldClient.ExecuteCommand(args...)
+	require.NoError(lv.t, err, "error executing LookupVindex complete: %v", err)
 }
 
 func (lv *lookupVindex) externalize() {
@@ -83,20 +90,52 @@ func (lv *lookupVindex) externalize() {
 	}
 	err := vc.VtctldClient.ExecuteCommand(args...)
 	require.NoError(lv.t, err, "error executing LookupVindex externalize: %v", err)
-	lv.expectWriteOnly(false)
+	lv.expectParamsAndOwner(false)
+}
+
+func (lv *lookupVindex) internalize() {
+	args := []string{
+		"LookupVindex",
+		"--name", lv.name,
+		"--table-keyspace=" + lv.ownerTableKeyspace,
+		"internalize",
+		"--keyspace=" + lv.tableKeyspace,
+	}
+	err := vc.VtctldClient.ExecuteCommand(args...)
+	require.NoError(lv.t, err, "error executing LookupVindex internalize: %v", err)
+	lv.expectParamsAndOwner(true)
+}
+
+func (lv *lookupVindex) complete() {
+	args := []string{
+		"LookupVindex",
+		"--name", lv.name,
+		"--table-keyspace=" + lv.ownerTableKeyspace,
+		"complete",
+		"--keyspace=" + lv.tableKeyspace,
+	}
+	err := vc.VtctldClient.ExecuteCommand(args...)
+	require.NoError(lv.t, err, "error executing LookupVindex complete: %v", err)
+	lv.expectParamsAndOwner(false)
 }
 
 func (lv *lookupVindex) show() error {
 	return nil
 }
 
-func (lv *lookupVindex) expectWriteOnly(expected bool) {
+func (lv *lookupVindex) expectParamsAndOwner(expectedWriteOnlyParam bool) {
 	vschema, err := vc.VtctldClient.ExecuteCommandWithOutput("GetVSchema", lv.ownerTableKeyspace)
 	require.NoError(lv.t, err, "error executing GetVSchema: %v", err)
 	vdx := gjson.Get(vschema, fmt.Sprintf("vindexes.%s", lv.name))
 	require.NotNil(lv.t, vdx, "lookup vindex %s not found", lv.name)
+
+	expectedOwner, expectedFrom, expectedTo := lv.ownerTable, strings.Join(lv.columns, ","), "keyspace_id"
+	require.Equal(lv.t, expectedOwner, vdx.Get("owner").String(), "expected 'owner' parameter to be %s", expectedOwner)
+	require.Equal(lv.t, expectedFrom, vdx.Get("params.from").String(), "expected 'from' parameter to be %s", expectedFrom)
+	require.Equal(lv.t, expectedTo, vdx.Get("params.to").String(), "expected 'to' parameter to be %s", expectedTo)
+
 	want := ""
-	if expected {
+	if expectedWriteOnlyParam {
 		want = "true"
 	}
 	require.Equal(lv.t, want, vdx.Get("params.write_only").String(), "expected write_only parameter to be %s", want)
