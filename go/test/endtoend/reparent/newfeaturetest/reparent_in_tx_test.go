@@ -38,10 +38,10 @@ func testCommitError(t *testing.T, conn *mysql.Conn, clusterInstance *cluster.Lo
 	tabletStopped := make(chan bool)
 	commitDone := make(chan bool)
 	idx := 1
+	createTxAndInsertRows(conn, t, idx)
+
 	go func() {
-		createTxAndInsertRows(conn, t, idx)
 		<-tabletStopped
-		time.Sleep(1 * time.Second)
 		_, err := conn.ExecuteFetch("commit", 0, false)
 		require.ErrorContains(t, err, vterrors.VT15001(0).ID)
 		commitDone <- true
@@ -59,9 +59,9 @@ func testExecuteError(t *testing.T, conn *mysql.Conn, clusterInstance *cluster.L
 	tabletStopped := make(chan bool)
 	executeDone := make(chan bool)
 	idx := 1
-	go func() {
-		createTxAndInsertRows(conn, t, idx)
+	createTxAndInsertRows(conn, t, idx)
 
+	go func() {
 		idx += 5
 		<-tabletStopped
 		_, err := conn.ExecuteFetch(utils.GetInsertMultipleValuesQuery(idx, idx+1, idx+2, idx+3), 0, false)
@@ -103,14 +103,10 @@ func reparent(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tablet
 	output, err := utils.Prs(t, clusterInstance, tablets[prsTo])
 	require.NoError(t, err, "error in PlannedReparentShard output - %s", output)
 
-	time.Sleep(5 * time.Second)
-
 	// We now restart the vttablet that became a replica.
 	utils.StopTablet(t, tablets[primary], false)
 	tabletStopped <- true
 	primary = prsTo
-
-	time.Sleep(5 * time.Second)
 
 	// Wait for the action triggering the VT15001 to be done before moving on
 	<-actionDone
@@ -122,7 +118,11 @@ func reparent(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tablet
 }
 
 func TestErrorsInTransaction(t *testing.T) {
-	clusterInstance := utils.SetupShardedReparentCluster(t, policy.DurabilitySemiSync)
+	clusterInstance := utils.SetupShardedReparentCluster(t, policy.DurabilitySemiSync, map[string]string{
+		"--queryserver-config-transaction-timeout": "5m",
+		"--queryserver-config-query-timeout":       "5m",
+	})
+
 	defer utils.TeardownCluster(clusterInstance)
 
 	keyspace := clusterInstance.Keyspaces[0]

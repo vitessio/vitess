@@ -77,7 +77,7 @@ func SetupRangeBasedCluster(ctx context.Context, t *testing.T) *cluster.LocalPro
 }
 
 // SetupShardedReparentCluster is used to setup a sharded cluster for testing
-func SetupShardedReparentCluster(t *testing.T, durability string) *cluster.LocalProcessCluster {
+func SetupShardedReparentCluster(t *testing.T, durability string, extraVttabletFlags map[string]string) *cluster.LocalProcessCluster {
 	clusterInstance := cluster.NewCluster(cell1, Hostname)
 	// Start topo server
 	err := clusterInstance.StartTopo()
@@ -89,6 +89,10 @@ func SetupShardedReparentCluster(t *testing.T, durability string) *cluster.Local
 		"--health_check_interval", "1s",
 		"--track_schema_versions=true",
 		"--queryserver_enable_online_ddl=false")
+	for flag, val := range extraVttabletFlags {
+		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, flag, val)
+	}
+
 	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
 		"--enable_buffer",
 		// Long timeout in case failover is slow.
