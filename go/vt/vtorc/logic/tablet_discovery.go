@@ -181,12 +181,13 @@ func refreshAllTablets(ctx context.Context) error {
 
 // refreshTabletsUsing refreshes tablets using a provided loader.
 func refreshTabletsUsing(ctx context.Context, loader func(tabletAlias string), forceRefresh bool) error {
-	// Get all cells.
-	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
-	defer cancel()
-	cells, err := ts.GetKnownCells(ctx)
+	cells, err := inst.ReadCells()
 	if err != nil {
 		return err
+	}
+	if len(cells) == 0 {
+		log.Error("Found no cells")
+		return nil
 	}
 
 	// Get all tablets from all cells.
@@ -236,7 +237,12 @@ func refreshTabletInfoOfShard(ctx context.Context, keyspace, shard string) {
 }
 
 func refreshTabletsInKeyspaceShard(ctx context.Context, keyspace, shard string, loader func(tabletAlias string), forceRefresh bool, tabletsToIgnore []string) {
-	tablets, err := ts.GetTabletsByShard(ctx, keyspace, shard)
+	cells, err := inst.ReadCells()
+	if err != nil {
+		log.Errorf("Error fetching cells: %v", err)
+		return
+	}
+	tablets, err := ts.GetTabletsByShardCell(ctx, keyspace, shard, cells)
 	if err != nil {
 		log.Errorf("Error fetching tablets for keyspace/shard %v/%v: %v", keyspace, shard, err)
 		return
