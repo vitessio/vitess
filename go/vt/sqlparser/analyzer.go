@@ -57,8 +57,7 @@ const (
 	StmtUnlockTables
 	StmtFlush
 	StmtCallProc
-	StmtRevert
-	StmtShowMigrationLogs
+	StmtMigration
 	StmtCommentOnly
 	StmtPrepare
 	StmtExecute
@@ -83,10 +82,8 @@ func ASTToStatementType(stmt Statement) StatementType {
 		return StmtShow
 	case DDLStatement, DBDDLStatement, *AlterVschema:
 		return StmtDDL
-	case *RevertMigration:
-		return StmtRevert
-	case *ShowMigrationLogs:
-		return StmtShowMigrationLogs
+	case *AlterMigration, *RevertMigration, *ShowMigrationLogs:
+		return StmtMigration
 	case *Use:
 		return StmtUse
 	case *OtherAdmin, *Load:
@@ -195,7 +192,7 @@ func Preview(sql string) StatementType {
 	case "vstream":
 		return StmtVStream
 	case "revert":
-		return StmtRevert
+		return StmtMigration
 	case "insert":
 		return StmtInsert
 	case "replace":
@@ -262,8 +259,8 @@ func (s StatementType) String() string {
 		return "STREAM"
 	case StmtVStream:
 		return "VSTREAM"
-	case StmtRevert:
-		return "REVERT"
+	case StmtMigration:
+		return "MIGRATION"
 	case StmtInsert:
 		return "INSERT"
 	case StmtReplace:
@@ -315,7 +312,7 @@ func (s StatementType) String() string {
 	case StmtExecute:
 		return "EXECUTE"
 	case StmtDeallocate:
-		return "DEALLOCATE PREPARE"
+		return "DEALLOCATE_PREPARE"
 	case StmtKill:
 		return "KILL"
 	default:

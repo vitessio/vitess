@@ -3,6 +3,7 @@
     "comment": "select bypass",
     "query": "select count(*), col from unsharded",
     "plan": {
+      "Type": "MultiShard",
       "QueryType": "SELECT",
       "Original": "select count(*), col from unsharded",
       "Instructions": {
@@ -20,6 +21,7 @@
     "comment": "update bypass",
     "query": "update user set val = 1 where id = 18446744073709551616 and id = 1",
     "plan": {
+      "Type": "MultiShard",
       "QueryType": "UPDATE",
       "Original": "update user set val = 1 where id = 18446744073709551616 and id = 1",
       "Instructions": {
@@ -38,6 +40,7 @@
     "comment": "update bypass autocommit",
     "query": "update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ user set val = 1 where id = 18446744073709551616 and id = 1",
     "plan": {
+      "Type": "MultiShard",
       "QueryType": "UPDATE",
       "Original": "update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ user set val = 1 where id = 18446744073709551616 and id = 1",
       "Instructions": {
@@ -57,6 +60,7 @@
     "comment": "delete bypass",
     "query": "DELETE FROM USER WHERE ID = 42",
     "plan": {
+      "Type": "MultiShard",
       "QueryType": "DELETE",
       "Original": "DELETE FROM USER WHERE ID = 42",
       "Instructions": {
@@ -80,6 +84,7 @@
     "comment": "bypass query for into outfile s3",
     "query": "select count(*), col from unsharded into outfile S3 'x.txt'",
     "plan": {
+      "Type": "MultiShard",
       "QueryType": "SELECT",
       "Original": "select count(*), col from unsharded into outfile S3 'x.txt'",
       "Instructions": {
@@ -97,6 +102,7 @@
     "comment": "Select outfile",
     "query": "select * from user into outfile S3 'x.txt'",
     "plan": {
+      "Type": "MultiShard",
       "QueryType": "SELECT",
       "Original": "select * from user into outfile S3 'x.txt'",
       "Instructions": {
@@ -114,6 +120,7 @@
     "comment": "load data from s3 'x.txt' into table x",
     "query": "load data from s3 'x.txt' into table x",
     "plan": {
+      "Type": "MultiShard",
       "QueryType": "OTHER",
       "Original": "load data from s3 'x.txt' into table x",
       "Instructions": {
@@ -133,6 +140,7 @@
     "comment": "load data from s3 'x.txt'",
     "query": "load data from s3 'x.txt'",
     "plan": {
+      "Type": "MultiShard",
       "QueryType": "OTHER",
       "Original": "load data from s3 'x.txt'",
       "Instructions": {
@@ -152,6 +160,7 @@
     "comment": "create table",
     "query": "create /* test */ table t1(id bigint, primary key(id)) /* comments */",
     "plan": {
+      "Type": "MultiShard",
       "QueryType": "DDL",
       "Original": "create /* test */ table t1(id bigint, primary key(id)) /* comments */",
       "Instructions": {
@@ -169,6 +178,7 @@
     "comment": "remove the matching keyspace from shard targeted query",
     "query": "select count(*), col from `main`.unsharded join vt_main.t1 where exists (select 1 from main.t2 join information_schema.tables where table_name = 't3')",
     "plan": {
+      "Type": "MultiShard",
       "QueryType": "SELECT",
       "Original": "select count(*), col from `main`.unsharded join vt_main.t1 where exists (select 1 from main.t2 join information_schema.tables where table_name = 't3')",
       "Instructions": {
