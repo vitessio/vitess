@@ -171,6 +171,9 @@ func (er *astRewriter) rewriteAliasedExpr(node *AliasedExpr) (*BindVarNeeds, err
 
 func (er *astRewriter) rewriteDown(node SQLNode, _ SQLNode) bool {
 	switch node := node.(type) {
+	case *AssignmentExpr:
+		er.err = vterrors.VT12001("Assignment expression")
+		return false
 	case *Select:
 		er.visitSelect(node)
 	case *PrepareStmt, *ExecuteStmt:
