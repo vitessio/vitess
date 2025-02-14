@@ -1361,6 +1361,7 @@
     "comment": "Subquery inside subquery #1",
     "query": "select (select (select col from `user` where id = 1) from `user` where id = 1) from `user` where id = 1",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select (select (select col from `user` where id = 1) from `user` where id = 1) from `user` where id = 1",
       "Instructions": {
@@ -1387,6 +1388,7 @@
     "comment": "Subquery inside subquery #2",
     "query": "select 1 from `user` where id = 1 and 1 = (select (select intcol from `user` where id = 1) from `user` where id = 1)",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select 1 from `user` where id = 1 and 1 = (select (select intcol from `user` where id = 1) from `user` where id = 1)",
       "Instructions": {
