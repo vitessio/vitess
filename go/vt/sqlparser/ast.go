@@ -1688,9 +1688,12 @@ type Insert struct {
 	With       *With
 	Partitions Partitions
 	Columns    Columns
-	Rows       InsertRows
-	OnDup      OnDup
-	Auth       AuthInformation
+	// Returning is specific to PostgreSQL syntax, and allows Insert statements to return
+	// results via a set of select expressions that are evaluated on the inserted rows.
+	Returning SelectExprs
+	Rows      InsertRows
+	OnDup     OnDup
+	Auth      AuthInformation
 }
 
 var _ AuthNode = (*Insert)(nil)
@@ -4477,7 +4480,7 @@ type ReplicationOption struct {
 
 // StartReplica represents a "START REPLICA" statement.
 // https://dev.mysql.com/doc/refman/8.0/en/start-replica.html
-type StartReplica struct{
+type StartReplica struct {
 	Auth AuthInformation
 }
 
@@ -4517,7 +4520,7 @@ func (r *StartReplica) SetExtra(extra any) {
 
 // StopReplica represents a "STOP REPLICA" statement.
 // https://dev.mysql.com/doc/refman/8.0/en/stop-replica.html
-type StopReplica struct{
+type StopReplica struct {
 	Auth AuthInformation
 }
 
@@ -8184,7 +8187,7 @@ func (d InjectedExpr) walkSubtree(visit Visit) error {
 			return err
 		}
 	}
-	
+
 	return nil
 }
 
