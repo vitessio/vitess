@@ -317,12 +317,10 @@ func TestNormalize(t *testing.T) {
 			"bv1": sqltypes.TestBindVariable([]any{1, "2"}),
 		},
 	}, {
-		// EXPLAIN queries
-		in:      "explain select * from t where v1 in (1, '2')",
-		outstmt: "explain select * from t where v1 in ::bv1",
-		outbv: map[string]*querypb.BindVariable{
-			"bv1": sqltypes.TestBindVariable([]any{1, "2"}),
-		},
+		// EXPLAIN query will be normalized and not parameterized
+		in:      "explain select @x from t where v1 in (1, '2')",
+		outstmt: "explain select :__vtudvx as `@x` from t where v1 in (1, '2')",
+		outbv:   map[string]*querypb.BindVariable{},
 	}, {
 		// NOT IN clause
 		in:      "select * from t where v1 not in (1, '2')",
@@ -378,9 +376,9 @@ func TestNormalize(t *testing.T) {
 			"bv1": sqltypes.ValueBindVariable(sqltypes.MakeTrusted(sqltypes.Datetime, []byte("2022-08-06 17:05:12"))),
 		},
 	}, {
-		// TimestampVal should also be normalized
-		in:      `explain select comms_by_companies.* from comms_by_companies where comms_by_companies.id = 'rjve634shXzaavKHbAH16ql6OrxJ' limit 1,1`,
-		outstmt: `explain select comms_by_companies.* from comms_by_companies where comms_by_companies.id = :comms_by_companies_id /* VARCHAR */ limit :bv1 /* INT64 */, :bv2 /* INT64 */`,
+		// TimestampVal should also be parameterized
+		in:      `select comms_by_companies.* from comms_by_companies where comms_by_companies.id = 'rjve634shXzaavKHbAH16ql6OrxJ' limit 1,1`,
+		outstmt: `select comms_by_companies.* from comms_by_companies where comms_by_companies.id = :comms_by_companies_id /* VARCHAR */ limit :bv1 /* INT64 */, :bv2 /* INT64 */`,
 		outbv: map[string]*querypb.BindVariable{
 			"bv1":                   sqltypes.Int64BindVariable(1),
 			"bv2":                   sqltypes.Int64BindVariable(1),
