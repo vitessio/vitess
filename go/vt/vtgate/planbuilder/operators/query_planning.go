@@ -104,7 +104,8 @@ func runRewriters(ctx *plancontext.PlanningContext, root Operator) Operator {
 			return tryPushUpdate(in)
 		case *RecurseCTE:
 			return tryMergeRecurse(ctx, in)
-
+		case *Values:
+			return tryPushValues(in)
 		default:
 			return in, NoRewrite
 		}
@@ -118,6 +119,13 @@ func runRewriters(ctx *plancontext.PlanningContext, root Operator) Operator {
 	}
 
 	return FixedPointBottomUp(root, TableID, visitor, stopAtRoute)
+}
+
+func tryPushValues(in *Values) (Operator, *ApplyResult) {
+	if src, ok := in.Source.(*Route); ok {
+		return Swap(in, src, "pushed values under route")
+	}
+	return in, NoRewrite
 }
 
 func tryPushDelete(in *Delete) (Operator, *ApplyResult) {

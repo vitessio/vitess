@@ -30,7 +30,6 @@ type (
 		Key string
 
 		Index     int
-		Type      sqltypes.Type
 		Collation collations.ID
 	}
 )
