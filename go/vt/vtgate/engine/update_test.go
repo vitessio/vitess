@@ -50,7 +50,7 @@ func TestUpdateUnsharded(t *testing.T) {
 		},
 	}
 
-	vc := newDMLTestVCursor("0")
+	vc := newTestVCursor("0")
 	_, err := upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
@@ -85,7 +85,7 @@ func TestUpdateEqual(t *testing.T) {
 		},
 	}
 
-	vc := newDMLTestVCursor("-20", "20-")
+	vc := newTestVCursor("-20", "20-")
 	_, err := upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
@@ -116,7 +116,7 @@ func TestUpdateEqualMultiCol(t *testing.T) {
 		},
 	}
 
-	vc := newDMLTestVCursor("-20", "20-")
+	vc := newTestVCursor("-20", "20-")
 	_, err := upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
@@ -142,7 +142,7 @@ func TestUpdateScatter(t *testing.T) {
 		},
 	}
 
-	vc := newDMLTestVCursor("-20", "20-")
+	vc := newTestVCursor("-20", "20-")
 	_, err := upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 
@@ -168,7 +168,7 @@ func TestUpdateScatter(t *testing.T) {
 		},
 	}
 
-	vc = newDMLTestVCursor("-20", "20-")
+	vc = newTestVCursor("-20", "20-")
 	_, err = upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 
@@ -199,7 +199,7 @@ func TestUpdateEqualNoRoute(t *testing.T) {
 		},
 	}
 
-	vc := newDMLTestVCursor("0")
+	vc := newTestVCursor("0")
 	_, err := upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
@@ -250,7 +250,7 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 		),
 		"1|4|5|6|0|0",
 	)}
-	vc := newDMLTestVCursor("-20", "20-")
+	vc := newTestVCursor("-20", "20-")
 	vc.results = results
 
 	_, err := upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
@@ -272,7 +272,7 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 	})
 
 	// No rows changing
-	vc = newDMLTestVCursor("-20", "20-")
+	vc = newTestVCursor("-20", "20-")
 
 	_, err = upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
@@ -294,7 +294,7 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 		"1|4|5|6|0|0",
 		"1|7|8|9|0|0",
 	)}
-	vc = newDMLTestVCursor("-20", "20-")
+	vc = newTestVCursor("-20", "20-")
 	vc.results = results
 
 	_, err = upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
@@ -330,7 +330,7 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 		"1|4|5|6|0|1", // twocol changes
 		"1|7|8|9|1|0", // onecol changes
 	)}
-	vc = newDMLTestVCursor("-20", "20-")
+	vc = newTestVCursor("-20", "20-")
 	vc.results = results
 
 	_, err = upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
@@ -387,7 +387,7 @@ func TestUpdateEqualMultiColChangedVindex(t *testing.T) {
 		),
 		"1|2|4|0",
 	)}
-	vc := newDMLTestVCursor("-20", "20-")
+	vc := newTestVCursor("-20", "20-")
 	vc.results = results
 
 	_, err := upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
@@ -514,7 +514,7 @@ func TestUpdateScatterChangedVindex(t *testing.T) {
 		),
 		"1|4|5|6|0|0",
 	)}
-	vc := newDMLTestVCursor("-20", "20-")
+	vc := newTestVCursor("-20", "20-")
 	vc.results = results
 
 	_, err := upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
@@ -534,7 +534,7 @@ func TestUpdateScatterChangedVindex(t *testing.T) {
 	})
 
 	// No rows changing
-	vc = newDMLTestVCursor("-20", "20-")
+	vc = newTestVCursor("-20", "20-")
 
 	_, err = upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
@@ -558,7 +558,7 @@ func TestUpdateScatterChangedVindex(t *testing.T) {
 		"1|4|5|6|0|0",
 		"1|7|8|9|0|0",
 	)}
-	vc = newDMLTestVCursor("-20", "20-")
+	vc = newTestVCursor("-20", "20-")
 	vc.results = results
 
 	_, err = upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
@@ -604,7 +604,7 @@ func TestUpdateIn(t *testing.T) {
 		},
 	}
 
-	vc := newDMLTestVCursor("-20", "20-")
+	vc := newTestVCursor("-20", "20-")
 	_, err := upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
@@ -628,7 +628,7 @@ func TestUpdateInStreamExecute(t *testing.T) {
 		Query: "dummy_update",
 	}}
 
-	vc := newDMLTestVCursor("-20", "20-")
+	vc := newTestVCursor("-20", "20-")
 	err := upd.TryStreamExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false, func(result *sqltypes.Result) error {
 		return nil
 	})
@@ -655,7 +655,7 @@ func TestUpdateInMultiCol(t *testing.T) {
 		Query: "dummy_update",
 	}}
 
-	vc := newDMLTestVCursor("-20", "20-")
+	vc := newTestVCursor("-20", "20-")
 	_, err := upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
@@ -710,7 +710,7 @@ func TestUpdateInChangedVindex(t *testing.T) {
 		"1|4|5|6|0|0",
 		"2|21|22|23|0|0",
 	)}
-	vc := newDMLTestVCursor("-20", "20-")
+	vc := newTestVCursor("-20", "20-")
 	vc.results = results
 
 	_, err := upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
@@ -738,7 +738,7 @@ func TestUpdateInChangedVindex(t *testing.T) {
 	})
 
 	// No rows changing
-	vc = newDMLTestVCursor("-20", "20-")
+	vc = newTestVCursor("-20", "20-")
 
 	_, err = upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
@@ -761,7 +761,7 @@ func TestUpdateInChangedVindex(t *testing.T) {
 		"1|7|8|9|0|0",
 		"2|21|22|23|0|0",
 	)}
-	vc = newDMLTestVCursor("-20", "20-")
+	vc = newTestVCursor("-20", "20-")
 	vc.results = results
 
 	_, err = upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
@@ -835,7 +835,7 @@ func TestUpdateInChangedVindexMultiCol(t *testing.T) {
 		"1|3|6|0",
 		"2|3|7|0",
 	)}
-	vc := newDMLTestVCursor("-20", "20-")
+	vc := newTestVCursor("-20", "20-")
 	vc.results = results
 
 	_, err := upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
@@ -874,7 +874,7 @@ func TestUpdateEqualSubshard(t *testing.T) {
 		},
 	}
 
-	vc := newDMLTestVCursor("-20", "20-")
+	vc := newTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"-20", "20-"}
 	_, err := upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
@@ -911,7 +911,7 @@ func TestUpdateMultiEqual(t *testing.T) {
 		},
 	}
 
-	vc := newDMLTestVCursor("-20", "20-")
+	vc := newTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"-20", "20-"}
 	_, err := upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
@@ -944,7 +944,7 @@ func TestUpdateInUnique(t *testing.T) {
 		Type:   querypb.Type_TUPLE,
 		Values: append([]*querypb.Value{sqltypes.ValueToProto(sqltypes.NewInt64(1))}, sqltypes.ValueToProto(sqltypes.NewInt64(2)), sqltypes.ValueToProto(sqltypes.NewInt64(4))),
 	}
-	vc := newDMLTestVCursor("-20", "20-")
+	vc := newTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"-20", "20-"}
 	_, err := upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{"__vals": tupleBV}, false)
 	require.NoError(t, err)
@@ -1033,6 +1033,6 @@ func buildTestVSchema() *vindexes.VSchema {
 	return vs
 }
 
-func newDMLTestVCursor(shards ...string) *loggingVCursor {
+func newTestVCursor(shards ...string) *loggingVCursor {
 	return &loggingVCursor{shards: shards, resolvedTargetTabletType: topodatapb.TabletType_PRIMARY}
 }
