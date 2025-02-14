@@ -441,7 +441,7 @@ func (throttler *Throttler) applyThrottlerConfig(ctx context.Context, throttlerC
 			throttler.ThrottleApp(appRule.Name, protoutil.TimeFromProto(appRule.ExpiresAt).UTC(), appRule.Ratio, appRule.Exempt)
 		}
 		for app := range throttler.throttledAppsSnapshot() {
-			if app == throttlerapp.TestingAlwaysThrottlerName.String() {
+			if app == throttlerapp.TestingAlwaysThrottledName.String() {
 				// Never remove this app
 				continue
 			}
@@ -625,7 +625,7 @@ func (throttler *Throttler) Open() error {
 	throttler.initConfig()
 	throttler.pool.Open(throttler.env.Config().DB.AppWithDB(), throttler.env.Config().DB.DbaWithDB(), throttler.env.Config().DB.AppDebugWithDB())
 
-	throttler.ThrottleApp(throttlerapp.TestingAlwaysThrottlerName.String(), time.Now().Add(time.Hour*24*365*10), DefaultThrottleRatio, false)
+	throttler.ThrottleApp(throttlerapp.TestingAlwaysThrottledName.String(), time.Now().Add(time.Hour*24*365*10), DefaultThrottleRatio, false)
 
 	go throttler.retryReadAndApplyThrottlerConfig(ctx)
 
