@@ -74,7 +74,7 @@ func convert(t *testing.T, query string, simplify bool) (Expr, error) {
 		NoConstantFolding: !simplify,
 	}
 
-	astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
+	astExpr := stmt.(*sqlparser.Select).SelectExprs.Exprs[0].(*sqlparser.AliasedExpr).Expr
 	converted, err := Translate(astExpr, cfg)
 	if err == nil {
 		if knownBadQuery(converted) {

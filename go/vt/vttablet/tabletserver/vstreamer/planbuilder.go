@@ -58,6 +58,16 @@ type Plan struct {
 	// of the table.
 	Filters []Filter
 
+	// Predicates in the Filter query that we can push down to MySQL
+	// to reduce the returned rows we need to filter in the VStreamer
+	// during the copy phase. This will contain any valid expressions
+	// in the Filter's WHERE clause with the exception of the
+	// in_keyrange() function which is a filter that must be applied
+	// by the VStreamer (it's not a valid MySQL function). Note that
+	// the Filter cannot contain any MySQL functions because the
+	// VStreamer cannot filter binlog events using them.
+	whereExprsToPushDown []sqlparser.Expr
+
 	// Convert any integer values seen in the binlog events for ENUM or SET
 	// columns to the string values. The map is keyed on the column number, with
 	// the value being the map of ordinal values to string values.
@@ -465,7 +475,7 @@ func buildTablePlan(env *vtenv.Environment, ti *Table, vschema *localVSchema, qu
 		log.Errorf("%s", err.Error())
 		return nil, err
 	}
-	if err := plan.analyzeExprs(vschema, sel.SelectExprs); err != nil {
+	if err := plan.analyzeExprs(vschema, sel.GetColumns()); err != nil {
 		log.Errorf("%s", err.Error())
 		return nil, err
 	}
@@ -564,6 +574,7 @@ func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) er
 	if where == nil {
 		return nil
 	}
+	// Only a series of AND expressions are supported.
 	exprs := splitAndExpression(nil, where.Expr)
 	for _, expr := range exprs {
 		switch expr := expr.(type) {
@@ -601,10 +612,6 @@ func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) er
 			if !ok {
 				return fmt.Errorf("unexpected: %v", sqlparser.String(expr))
 			}
-			// StrVal is varbinary, we do not support varchar since we would have to implement all collation types
-			if val.Type != sqlparser.IntVal && val.Type != sqlparser.StrVal {
-				return fmt.Errorf("unexpected: %v", sqlparser.String(expr))
-			}
 			pv, err := evalengine.Translate(val, &evalengine.Config{
 				Collation:   plan.env.CollationEnv().DefaultConnectionCharset(),
 				Environment: plan.env,
@@ -622,7 +629,11 @@ func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) er
 				ColNum: colnum,
 				Value:  resolved.Value(plan.env.CollationEnv().DefaultConnectionCharset()),
 			})
+			// Add it to the expressions that get pushed down to mysqld.
+			plan.whereExprsToPushDown = append(plan.whereExprsToPushDown, expr)
 		case *sqlparser.FuncExpr:
+			// We cannot filter binlog events in VStreamer using MySQL functions so
+			// we only allow the in_keyrange() function, which is VStreamer specific.
 			if !expr.Name.EqualString("in_keyrange") {
 				return fmt.Errorf("unsupported constraint: %v", sqlparser.String(expr))
 			}
@@ -648,6 +659,8 @@ func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) er
 				Opcode: IsNotNull,
 				ColNum: colnum,
 			})
+			// Add it to the expressions that get pushed down to mysqld.
+			plan.whereExprsToPushDown = append(plan.whereExprsToPushDown, expr)
 		default:
 			return fmt.Errorf("unsupported constraint: %v", sqlparser.String(expr))
 		}
@@ -670,7 +683,7 @@ func splitAndExpression(filters []sqlparser.Expr, node sqlparser.Expr) []sqlpars
 	return append(filters, node)
 }
 
-func (plan *Plan) analyzeExprs(vschema *localVSchema, selExprs sqlparser.SelectExprs) error {
+func (plan *Plan) analyzeExprs(vschema *localVSchema, selExprs []sqlparser.SelectExpr) error {
 	if _, ok := selExprs[0].(*sqlparser.StarExpr); !ok {
 		for _, expr := range selExprs {
 			cExpr, err := plan.analyzeExpr(vschema, expr)
@@ -681,7 +694,7 @@ func (plan *Plan) analyzeExprs(vschema *localVSchema, selExprs sqlparser.SelectE
 		}
 	} else {
 		if len(selExprs) != 1 {
-			return fmt.Errorf("unsupported: %v", sqlparser.String(selExprs))
+			return fmt.Errorf("unsupported: %v", sqlparser.SliceString(selExprs))
 		}
 		plan.ColExprs = make([]ColExpr, len(plan.Table.Fields))
 		for i, col := range plan.Table.Fields {
@@ -838,7 +851,7 @@ func (plan *Plan) analyzeExpr(vschema *localVSchema, selExpr sqlparser.SelectExp
 // analyzeInKeyRange allows the following constructs: "in_keyrange('-80')",
 // "in_keyrange(col, 'hash', '-80')", "in_keyrange(col, 'local_vindex', '-80')", or
 // "in_keyrange(col, 'ks.external_vindex', '-80')".
-func (plan *Plan) analyzeInKeyRange(vschema *localVSchema, exprs sqlparser.Exprs) error {
+func (plan *Plan) analyzeInKeyRange(vschema *localVSchema, exprs []sqlparser.Expr) error {
 	var colnames []sqlparser.IdentifierCI
 	var krExpr sqlparser.Expr
 	whereFilter := Filter{
@@ -879,7 +892,7 @@ func (plan *Plan) analyzeInKeyRange(vschema *localVSchema, exprs sqlparser.Exprs
 
 		krExpr = exprs[len(exprs)-1]
 	default:
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected in_keyrange parameters: %v", sqlparser.String(exprs))
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected in_keyrange parameters: %v", sqlparser.SliceString(exprs))
 	}
 	var err error
 	whereFilter.VindexColumns, err = buildVindexColumns(plan.Table, colnames)

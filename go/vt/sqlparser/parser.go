@@ -144,7 +144,7 @@ func (p *Parser) ParseExpr(sql string) (Expr, error) {
 	if err != nil {
 		return nil, err
 	}
-	aliasedExpr := stmt.(*Select).SelectExprs[0].(*AliasedExpr)
+	aliasedExpr := stmt.(*Select).SelectExprs.Exprs[0].(*AliasedExpr)
 	return aliasedExpr.Expr, err
 }
 

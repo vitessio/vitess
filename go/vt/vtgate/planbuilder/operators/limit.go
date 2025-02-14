@@ -69,7 +69,7 @@ func (l *Limit) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.Aliase
 	return l.Source.GetColumns(ctx)
 }
 
-func (l *Limit) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
+func (l *Limit) GetSelectExprs(ctx *plancontext.PlanningContext) []sqlparser.SelectExpr {
 	return l.Source.GetSelectExprs(ctx)
 }
 

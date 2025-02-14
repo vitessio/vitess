@@ -234,10 +234,10 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*Colum
 		Match: fromTable,
 	}
 
-	if expr, ok := sel.SelectExprs[0].(*sqlparser.StarExpr); ok {
+	if expr, ok := sel.SelectExprs.Exprs[0].(*sqlparser.StarExpr); ok {
 		// If it's a "select *", we return a partial plan, and complete
 		// it when we get back field info from the stream.
-		if len(sel.SelectExprs) != 1 {
+		if len(sel.SelectExprs.Exprs) != 1 {
 			return nil, planError(fmt.Errorf("unsupported mix of '*' and columns"), sqlparser.String(sel))
 		}
 		if !expr.TableName.IsEmpty() {
@@ -272,7 +272,7 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*Colum
 		workflowConfig: workflowConfig,
 	}
 
-	if err := tpb.analyzeExprs(sel.SelectExprs); err != nil {
+	if err := tpb.analyzeExprs(sel.SelectExprs.Exprs); err != nil {
 		return nil, planError(err, sqlparser.String(sel))
 	}
 	// It's possible that the target table does not materialize all
@@ -309,11 +309,9 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*Colum
 
 	// if there are no columns being selected the select expression can be empty, so we "select 1" so we have a valid
 	// select to get a row back
-	if len(tpb.sendSelect.SelectExprs) == 0 {
-		tpb.sendSelect.SelectExprs = sqlparser.SelectExprs([]sqlparser.SelectExpr{
-			&sqlparser.AliasedExpr{
-				Expr: sqlparser.NewIntLiteral("1"),
-			},
+	if tpb.sendSelect.SelectExprs == nil || len(tpb.sendSelect.SelectExprs.Exprs) == 0 {
+		tpb.sendSelect.AddSelectExpr(&sqlparser.AliasedExpr{
+			Expr: sqlparser.NewIntLiteral("1"),
 		})
 	}
 	commentsList := []string{}
@@ -413,7 +411,7 @@ func analyzeSelectFrom(query string, parser *sqlparser.Parser) (sel *sqlparser.S
 	return sel, fromTable.String(), nil
 }
 
-func (tpb *tablePlanBuilder) analyzeExprs(selExprs sqlparser.SelectExprs) error {
+func (tpb *tablePlanBuilder) analyzeExprs(selExprs []sqlparser.SelectExpr) error {
 	for _, selExpr := range selExprs {
 		cexpr, err := tpb.analyzeExpr(selExpr)
 		if err != nil {
@@ -468,7 +466,7 @@ func (tpb *tablePlanBuilder) analyzeExpr(selExpr sqlparser.SelectExpr) (*colExpr
 		}
 		cexpr.expr = expr
 		cexpr.operation = opExpr
-		tpb.sendSelect.SelectExprs = append(tpb.sendSelect.SelectExprs, &sqlparser.AliasedExpr{Expr: selExpr, As: as})
+		tpb.sendSelect.AddSelectExpr(&sqlparser.AliasedExpr{Expr: selExpr, As: as})
 		cexpr.references[as.String()] = true
 		return cexpr, nil
 	}
@@ -478,7 +476,8 @@ func (tpb *tablePlanBuilder) analyzeExpr(selExpr sqlparser.SelectExpr) (*colExpr
 			if len(expr.Exprs) != 0 {
 				return nil, fmt.Errorf("unsupported multiple keyspace_id expressions: %v", sqlparser.String(expr))
 			}
-			tpb.sendSelect.SelectExprs = append(tpb.sendSelect.SelectExprs, &sqlparser.AliasedExpr{Expr: aliased.Expr})
+
+			tpb.sendSelect.AddSelectExpr(&sqlparser.AliasedExpr{Expr: aliased.Expr})
 			// The vstreamer responds with "keyspace_id" as the field name for this request.
 			cexpr.expr = &sqlparser.ColName{Name: sqlparser.NewIdentifierCI("keyspace_id")}
 			return cexpr, nil
@@ -538,7 +537,7 @@ func (tpb *tablePlanBuilder) analyzeExpr(selExpr sqlparser.SelectExpr) (*colExpr
 // addCol adds the specified column to the send query
 // if it's not already present.
 func (tpb *tablePlanBuilder) addCol(ident sqlparser.IdentifierCI) {
-	tpb.sendSelect.SelectExprs = append(tpb.sendSelect.SelectExprs, &sqlparser.AliasedExpr{
+	tpb.sendSelect.AddSelectExpr(&sqlparser.AliasedExpr{
 		Expr: &sqlparser.ColName{Name: ident},
 	})
 }

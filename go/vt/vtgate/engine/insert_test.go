@@ -340,6 +340,9 @@ func TestInsertShardWithONDuplicateKey(t *testing.T) {
 	ks := vs.Keyspaces["sharded"]
 
 	// A single row insert should be autocommitted
+	funcExpr := sqlparser.NewFuncExpr("if", sqlparser.NewComparisonExpr(sqlparser.InOp, &sqlparser.ValuesFuncExpr{Name: sqlparser.NewColName("col")}, sqlparser.ListArg("_id_1"), nil),
+		sqlparser.NewColName("col"),
+		&sqlparser.ValuesFuncExpr{Name: sqlparser.NewColName("col")})
 	ins := newInsert(
 		InsertSharded,
 		false,
@@ -356,15 +359,8 @@ func TestInsertShardWithONDuplicateKey(t *testing.T) {
 			{&sqlparser.Argument{Name: "_id_0", Type: sqltypes.Int64}},
 		},
 		sqlparser.OnDup{
-			&sqlparser.UpdateExpr{Name: sqlparser.NewColName("suffix1"), Expr: &sqlparser.Argument{Name: "_id_0", Type: sqltypes.Int64}},
-			&sqlparser.UpdateExpr{Name: sqlparser.NewColName("suffix2"), Expr: &sqlparser.FuncExpr{
-				Name: sqlparser.NewIdentifierCI("if"),
-				Exprs: sqlparser.Exprs{
-					sqlparser.NewComparisonExpr(sqlparser.InOp, &sqlparser.ValuesFuncExpr{Name: sqlparser.NewColName("col")}, sqlparser.ListArg("_id_1"), nil),
-					sqlparser.NewColName("col"),
-					&sqlparser.ValuesFuncExpr{Name: sqlparser.NewColName("col")},
-				},
-			}}},
+			&sqlparser.UpdateExpr{Name: sqlparser.NewColName("suffix1"), Expr: sqlparser.NewTypedArgument("_id_0", sqltypes.Int64)},
+			&sqlparser.UpdateExpr{Name: sqlparser.NewColName("suffix2"), Expr: funcExpr}},
 	)
 	vc := newDMLTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}

@@ -55,7 +55,7 @@ type (
 func newInsertSelect(
 	ignore bool,
 	keyspace *vindexes.Keyspace,
-	table *vindexes.Table,
+	table *vindexes.BaseTable,
 	prefix string,
 	suffix sqlparser.OnDup,
 	vv [][]int,

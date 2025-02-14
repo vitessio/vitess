@@ -404,7 +404,7 @@ func TestOnlineDDLFromCommentedStatement(t *testing.T) {
 		`alter view v as select * from t`,
 		`revert vitess_migration '4e5dcf80_354b_11eb_82cd_f875a4d24e90'`,
 	}
-	strategySetting := NewDDLStrategySetting(DDLStrategyGhost, `-singleton -declarative --max-load="Threads_running=5"`)
+	strategySetting := NewDDLStrategySetting(DDLStrategyVitess, `-singleton -declarative --max-load="Threads_running=5"`)
 	migrationContext := "354b-11eb-82cd-f875a4d24e90"
 	parser := sqlparser.NewTestParser()
 	for _, query := range queries {
