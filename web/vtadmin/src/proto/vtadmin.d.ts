@@ -65714,6 +65714,9 @@ export namespace vtctldata {
 
         /** GetWorkflowsRequest shards */
         shards?: (string[]|null);
+
+        /** GetWorkflowsRequest verbosity_level */
+        verbosity_level?: (number|null);
     }
 
     /** Represents a GetWorkflowsRequest. */
@@ -65742,6 +65745,9 @@ export namespace vtctldata {
 
         /** GetWorkflowsRequest shards. */
         public shards: string[];
+
+        /** GetWorkflowsRequest verbosity_level. */
+        public verbosity_level: number;
 
         /**
          * Creates a new GetWorkflowsRequest instance using the specified properties.

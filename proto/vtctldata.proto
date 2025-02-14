@@ -1204,6 +1204,7 @@ message GetWorkflowsRequest {
   string workflow = 4;
   bool include_logs = 5;
   repeated string shards = 6;
+  uint32 verbosity_level = 7;
 }
 
 message GetWorkflowsResponse {

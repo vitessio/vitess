@@ -1562,7 +1562,9 @@ func (s *Server) WorkflowStatus(ctx context.Context, req *vtctldatapb.WorkflowSt
 			}
 			ts.Id = int32(st.Id)
 			ts.Tablet = st.Tablet
-			ts.SourceShard = fmt.Sprintf("%s/%s", st.BinlogSource.Keyspace, st.BinlogSource.Shard)
+			if st.BinlogSource != nil {
+				ts.SourceShard = fmt.Sprintf("%s/%s", st.BinlogSource.Keyspace, st.BinlogSource.Shard)
+			}
 			ts.Position = st.Position
 			ts.Status = st.State
 			ts.Info = strings.Join(info, "; ")

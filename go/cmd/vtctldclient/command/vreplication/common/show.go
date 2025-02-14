@@ -27,8 +27,9 @@ import (
 )
 
 var ShowOptions = struct {
-	IncludeLogs bool
-	Shards      []string
+	IncludeLogs    bool
+	Shards         []string
+	VerbosityLevel uint32
 }{}
 
 func GetShowCommand(opts *SubCommandsOpts) *cobra.Command {
@@ -42,6 +43,7 @@ func GetShowCommand(opts *SubCommandsOpts) *cobra.Command {
 		RunE:                  commandShow,
 	}
 	cmd.Flags().BoolVar(&ShowOptions.IncludeLogs, "include-logs", true, "Include recent logs for the workflow.")
+	cmd.Flags().Uint32Var(&ShowOptions.VerbosityLevel, "verbosity-level", 0, "How much detail to include in the results.")
 	return cmd
 }
 
@@ -49,16 +51,24 @@ func commandShow(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
 	req := &vtctldatapb.GetWorkflowsRequest{
-		Keyspace:    BaseOptions.TargetKeyspace,
-		Workflow:    BaseOptions.Workflow,
-		IncludeLogs: ShowOptions.IncludeLogs,
-		Shards:      ShowOptions.Shards,
+		Keyspace:       BaseOptions.TargetKeyspace,
+		Workflow:       BaseOptions.Workflow,
+		IncludeLogs:    ShowOptions.IncludeLogs,
+		Shards:         ShowOptions.Shards,
+		VerbosityLevel: ShowOptions.VerbosityLevel,
 	}
 	resp, err := GetClient().GetWorkflows(GetCommandCtx(), req)
 	if err != nil {
 		return err
 	}
 
+	// We always use compact format with SHOW to reduce the overall
+	// size and noise.
+	cli.DefaultMarshalOptions.EmitUnpopulated = false
+	if len(resp.Workflows) == 0 {
+		return fmt.Errorf("workflow %s not found in the %s keyspace",
+			BaseOptions.Workflow, BaseOptions.TargetKeyspace)
+	}
 	data, err := cli.MarshalJSONPretty(resp)
 	if err != nil {
 		return err
