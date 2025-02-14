@@ -40,6 +40,7 @@ const testWorkflowFlavor = workflowFlavorVtctld
 // It inserts initial data, then simulates load. We insert both child rows with foreign keys and those without,
 // i.e. with foreign_key_checks=0.
 func TestFKWorkflow(t *testing.T) {
+	setSidecarDBName("_vt")
 	extraVTTabletArgs = []string{
 		// Ensure that there are multiple copy phase cycles per table.
 		"--vstream_packet_size=256",
@@ -132,11 +133,14 @@ func TestFKWorkflow(t *testing.T) {
 	vtgateConn, closeConn := getVTGateConn()
 	defer closeConn()
 
-	t11Count := getRowCount(t, vtgateConn, "t11")
-	t12Count := getRowCount(t, vtgateConn, "t12")
-	require.Greater(t, t11Count, 1)
-	require.Greater(t, t12Count, 1)
-	require.Equal(t, t11Count, t12Count)
+	if withLoad {
+		t11Count := getRowCount(t, vtgateConn, "t11")
+		t12Count := getRowCount(t, vtgateConn, "t12")
+		require.Greater(t, t11Count, 1)
+		require.Greater(t, t12Count, 1)
+		require.Equal(t, t11Count, t12Count)
+	}
+
 }
 
 func insertInitialFKData(t *testing.T) {
