@@ -382,7 +382,7 @@ func BenchmarkWildcardMatching(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		for n := 0; n < b.N; n++ {
+		for range b.N {
 			for _, bb := range patterns {
 				_ = bb.m1.Match(bb.input)
 			}
@@ -393,7 +393,7 @@ func BenchmarkWildcardMatching(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		for n := 0; n < b.N; n++ {
+		for range b.N {
 			for _, bb := range patterns {
 				_ = bb.m2.Match(bb.input)
 			}

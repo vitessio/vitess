@@ -262,7 +262,7 @@ func checkHandlerForMetricWithMultiLabels(t *testing.T, metric string, labels []
 	response := testMetricsHandler(t)
 
 	kvPairs := make([]string, 0)
-	for i := 0; i < len(labels); i++ {
+	for i := range len(labels) {
 		kvPairs = append(kvPairs, fmt.Sprintf("%s=\"%s\"", labels[i], labelValues[i]))
 	}
 

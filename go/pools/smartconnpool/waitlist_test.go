@@ -36,7 +36,7 @@ func TestWaitlistExpireWithMultipleWaiters(t *testing.T) {
 	waiterCount := 2
 	expireCount := atomic.Int32{}
 
-	for i := 0; i < waiterCount; i++ {
+	for range waiterCount {
 		go func() {
 			_, err := wait.waitForConn(ctx, nil)
 			if err != nil {

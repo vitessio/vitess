@@ -82,7 +82,7 @@ func (history *History) Records() []any {
 	records = append(records, history.records[:history.next]...)
 
 	// In place reverse.
-	for i := 0; i < history.length/2; i++ {
+	for i := range history.length / 2 {
 		records[i], records[history.length-i-1] = records[history.length-i-1], records[i]
 	}
 

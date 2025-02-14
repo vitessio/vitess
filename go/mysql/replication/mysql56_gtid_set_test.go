@@ -698,7 +698,7 @@ func BenchmarkMySQL56GTIDParsing(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 
-	for n := 0; n < b.N; n++ {
+	for range b.N {
 		for _, input := range Inputs {
 			_, _ = ParseMysql56GTIDSet(input)
 		}

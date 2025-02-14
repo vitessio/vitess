@@ -79,11 +79,11 @@ func TestStackRace(t *testing.T) {
 	var stack connStack[*StressConn]
 	var done atomic.Bool
 
-	for c := 0; c < Count; c++ {
+	for range Count {
 		stack.Push(&Pooled[*StressConn]{Conn: &StressConn{}})
 	}
 
-	for i := 0; i < Procs; i++ {
+	for i := range Procs {
 		wg.Add(1)
 		go func(tid int32) {
 			defer wg.Done()
@@ -108,7 +108,7 @@ func TestStackRace(t *testing.T) {
 	done.Store(true)
 	wg.Wait()
 
-	for c := 0; c < Count; c++ {
+	for range Count {
 		conn, ok := stack.Pop()
 		require.NotNil(t, conn)
 		require.True(t, ok)
@@ -130,7 +130,7 @@ func TestStress(t *testing.T) {
 	var wg errgroup.Group
 	var stop atomic.Bool
 
-	for p := 0; p < P; p++ {
+	for p := range P {
 		tid := int32(p + 1)
 		wg.Go(func() error {
 			ctx := context.Background()

@@ -55,7 +55,7 @@ func (c *Collation_multibyte) Collate(left, right []byte, isPrefix bool) int {
 	cmpLen := min(len(left), len(right))
 	cs := c.charset
 	sortOrder := c.sort
-	for i := 0; i < cmpLen; i++ {
+	for i := range cmpLen {
 		sortL, sortR := left[i], right[i]
 		if sortL > 127 {
 			if sortL != sortR {

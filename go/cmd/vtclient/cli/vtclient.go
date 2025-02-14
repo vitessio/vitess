@@ -220,7 +220,7 @@ func execMulti(ctx context.Context, db *sql.DB, sql string) (*results, error) {
 	isThrottled := qps > 0
 
 	start := time.Now()
-	for i := 0; i < parallel; i++ {
+	for range parallel {
 		wg.Add(1)
 
 		go func() {
@@ -232,7 +232,7 @@ func execMulti(ctx context.Context, db *sql.DB, sql string) (*results, error) {
 				ticker = time.NewTicker(tickDuration)
 			}
 
-			for j := 0; j < count; j++ {
+			for range count {
 				var qr *results
 				var err error
 				if isDML {

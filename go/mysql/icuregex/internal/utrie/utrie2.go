@@ -193,7 +193,7 @@ func (t *UTrie2) enumEitherTrie(start, limit rune, enumValue EnumValue, enumRang
 					}
 					c += dataBlockLength
 				} else {
-					for j := 0; j < dataBlockLength; j++ {
+					for j := range dataBlockLength {
 						var value uint32
 						if data32 != nil {
 							value = data32[block+j]

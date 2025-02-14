@@ -249,13 +249,13 @@ func BenchmarkSafeJoinLabels(b *testing.B) {
 	combined := [5]bool{true, true, true, true, true}
 	b.Run("no combined", func(b *testing.B) {
 		b.ReportAllocs()
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			_ = safeJoinLabels(labels[:], nil)
 		}
 	})
 	b.Run("combined", func(b *testing.B) {
 		b.ReportAllocs()
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			_ = safeJoinLabels(labels[:], combined[:])
 		}
 	})
