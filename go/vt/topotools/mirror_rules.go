@@ -55,7 +55,7 @@ func GetMirrorRules(ctx context.Context, ts *topo.Server) (map[string]map[string
 // SaveMirrorRules converts a mapping of fromTable=>[]toTables into a
 // vschemapb.MirrorRules protobuf message and saves it in the topology.
 func SaveMirrorRules(ctx context.Context, ts *topo.Server, rules map[string]map[string]float32) error {
-	log.Infof("Saving mirror rules %v\n", rules)
+	log.V(2).Infof("Saving mirror rules %v\n", rules)
 
 	rrs := &vschemapb.MirrorRules{Rules: make([]*vschemapb.MirrorRule, 0)}
 	for fromTable, mrs := range rules {

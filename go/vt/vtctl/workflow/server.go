@@ -3612,7 +3612,6 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 				time.Sleep(lockTablesCycleDelay)
 			}
 		}
-
 		// Get the source positions now that writes are stopped, the streams were stopped (e.g.
 		// intra-keyspace materializations that write on the source), and we know for certain
 		// that any in progress writes are done.
