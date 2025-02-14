@@ -16,6 +16,15 @@ limitations under the License.
 
 package schemadiff
 
+import "strings"
+
+const (
+	DateFormat                = "2006-01-02"
+	TimestampFormat           = "2006-01-02 15:04:05"
+	TimestampFormatPrecision3 = "2006-01-02 15:04:05.000"
+	TimestampFormatPrecision6 = "2006-01-02 15:04:05.000000"
+)
+
 var engineCasing = map[string]string{
 	"INNODB": "InnoDB",
 	"MYISAM": "MyISAM",
@@ -66,29 +75,29 @@ var blobStorageExponent = map[string]int{
 }
 
 func IsFloatingPointType(columnType string) bool {
-	_, ok := floatTypes[columnType]
+	_, ok := floatTypes[strings.ToLower(columnType)]
 	return ok
 }
 
 func FloatingPointTypeStorage(columnType string) int {
-	return floatTypes[columnType]
+	return floatTypes[strings.ToLower(columnType)]
 }
 
 func IsIntegralType(columnType string) bool {
-	_, ok := integralTypes[columnType]
+	_, ok := integralTypes[strings.ToLower(columnType)]
 	return ok
 }
 
 func IntegralTypeStorage(columnType string) int {
-	return integralTypes[columnType]
+	return integralTypes[strings.ToLower(columnType)]
 }
 
 func IsDecimalType(columnType string) bool {
-	return decimalTypes[columnType]
+	return decimalTypes[strings.ToLower(columnType)]
 }
 
 func BlobTypeStorage(columnType string) int {
-	return blobStorageExponent[columnType]
+	return blobStorageExponent[strings.ToLower(columnType)]
 }
 
 // expandedDataTypes maps some known and difficult-to-compute by INFORMATION_SCHEMA data types which expand other data types.
