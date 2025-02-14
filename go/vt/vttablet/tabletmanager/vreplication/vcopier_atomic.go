@@ -84,11 +84,7 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 	defer rowsCopiedTicker.Stop()
 
 	parallelism := int(math.Max(1, float64(vc.vr.workflowConfig.ParallelInsertWorkers)))
-	// For now do not support concurrent inserts for atomic copies.
-	if parallelism > 1 {
-		parallelism = 1
-		log.Infof("Disabling concurrent inserts for atomic copies")
-	}
+
 	copyWorkerFactory := vc.newCopyWorkerFactory(parallelism)
 	var copyWorkQueue *vcopierCopyWorkQueue
 
@@ -115,7 +111,6 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 			resp.TableName, len(resp.Fields), len(resp.Rows), resp.Gtid, resp.Lastpk)
 		tableName := resp.TableName
 		gtid = resp.Gtid
-
 		updateRowsCopied := func() error {
 			updateRowsQuery := binlogplayer.GenerateUpdateRowsCopied(vc.vr.id, vc.vr.stats.CopyRowCount.Get())
 			_, err := vc.vr.dbClient.Execute(updateRowsQuery)
@@ -205,6 +200,10 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 		log.Infof("copying table %s with lastpk %v", tableName, lastpkbv)
 		// Prepare a vcopierCopyTask for the current batch of work.
 		currCh := make(chan *vcopierCopyTaskResult, 1)
+
+		if parallelism > 1 {
+			resp = resp.CloneVT()
+		}
 		currT := newVCopierCopyTask(newVCopierCopyTaskArgs(resp.Rows, resp.Lastpk))
 
 		// Send result to the global resultCh and currCh. resultCh is used by
@@ -292,11 +291,11 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 		log.Infof("Copy of %v stopped", state.currentTableName)
 		return fmt.Errorf("CopyAll was interrupted due to context expiration")
 	default:
-		if err := vc.deleteCopyState(state.currentTableName); err != nil {
-			return err
-		}
 		if copyWorkQueue != nil {
 			copyWorkQueue.close()
+		}
+		if err := vc.deleteCopyState(state.currentTableName); err != nil {
+			return err
 		}
 		if err := vc.updatePos(ctx, gtid); err != nil {
 			return err
