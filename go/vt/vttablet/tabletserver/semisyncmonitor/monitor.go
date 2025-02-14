@@ -69,15 +69,16 @@ type Monitor struct {
 // NewMonitor creates a new Monitor.
 func NewMonitor(env tabletenv.Env) *Monitor {
 	// TODO (@GuptaManan100): Parameterize the watch interval.
-	watchInterval := 30 * time.Second
+	watchInterval := 10 * time.Second
 	return &Monitor{
 		env:   env,
 		ticks: timer.NewTimer(watchInterval),
 		// We clear the data every day. We can make it configurable in the future,
 		// but this seams fine for now.
 		clearTicks: timer.NewTimer(24 * time.Hour),
-		appPool:    dbconnpool.NewConnectionPool("SemiSyncMonitorAppPool", env.Exporter(), 20, mysqlctl.DbaIdleTimeout, 0, mysqlctl.PoolDynamicHostnameResolution),
-		waiters:    make([]chan any, 0),
+		// TODO: Add a metric on the number of writes that are blocked.
+		appPool: dbconnpool.NewConnectionPool("SemiSyncMonitorAppPool", env.Exporter(), 20, mysqlctl.DbaIdleTimeout, 0, mysqlctl.PoolDynamicHostnameResolution),
+		waiters: make([]chan any, 0),
 	}
 }
 
@@ -168,19 +169,25 @@ func (m *Monitor) isSemiSyncBlocked(ctx context.Context) (bool, error) {
 	return value != 0, err
 }
 
-// waitUntilSemiSyncUnblocked waits until the primary is not blocked
-// on semi-sync.
-func (m *Monitor) waitUntilSemiSyncUnblocked() {
+// WaitUntilSemiSyncUnblocked waits until the primary is not blocked
+// on semi-sync or until the context expires.
+func (m *Monitor) WaitUntilSemiSyncUnblocked(ctx context.Context) error {
 	// run one iteration of checking if semi-sync is blocked or not.
 	m.checkAndFixSemiSyncBlocked()
 	if !m.stillBlocked() {
 		// If we find that the primary isn't blocked, we're good,
 		// we don't need to wait for anything.
-		return
+		return nil
 	}
-	// The primary is blocked. We need to wait for it to be unblocked.
+	// The primary is blocked. We need to wait for it to be unblocked
+	// or the context to expire.
 	ch := m.addWaiter()
-	<-ch
+	select {
+	case <-ch:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // stillBlocked returns true if the monitor should continue writing to the DB

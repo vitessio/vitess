@@ -585,12 +585,16 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 		}()
 	}
 
-	// Now that we know no writes are in-flight and no new writes can occur,
-	// set MySQL to super_read_only mode. If we are already super_read_only because of a
+	// Now we know no writes are in-flight and no new writes can occur.
+	// We just need to wait for no write being blocked on semi-sync ACKs.
+	err = tm.QueryServiceControl.WaitUntilSemiSyncBeingUnblocked(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// We can now set MySQL to super_read_only mode. If we are already super_read_only because of a
 	// previous demotion, or because we are not primary anyway, this should be
 	// idempotent.
-
-	// TODO(@GuptaManan100): Reject PR if not done. Check we have no writes blocked on semi-sync.
 	if _, err := tm.MysqlDaemon.SetSuperReadOnly(ctx, true); err != nil {
 		if sqlErr, ok := err.(*sqlerror.SQLError); ok && sqlErr.Number() == sqlerror.ERUnknownSystemVariable {
 			log.Warningf("server does not know about super_read_only, continuing anyway...")
