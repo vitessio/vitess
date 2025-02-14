@@ -28,11 +28,6 @@ type Buffer struct {
 	bytes []byte
 }
 
-// NewBuffer is equivalent to bytes.NewBuffer.
-func NewBuffer(b []byte) *Buffer {
-	return &Buffer{bytes: b}
-}
-
 // Write is equivalent to bytes.Buffer.Write.
 func (buf *Buffer) Write(b []byte) (int, error) {
 	buf.bytes = append(buf.bytes, b...)

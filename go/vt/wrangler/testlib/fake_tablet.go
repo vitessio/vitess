@@ -102,14 +102,6 @@ func TabletKeyspaceShard(t *testing.T, keyspace, shard string) TabletOption {
 	}
 }
 
-// ForceInitTablet is the tablet option to set the 'force' flag during InitTablet
-func ForceInitTablet() TabletOption {
-	return func(tablet *topodatapb.Tablet) {
-		// set the force_init field into the portmap as a hack
-		tablet.PortMap["force_init"] = 1
-	}
-}
-
 // StartHTTPServer is the tablet option to start the HTTP server when
 // starting a tablet.
 func StartHTTPServer() TabletOption {

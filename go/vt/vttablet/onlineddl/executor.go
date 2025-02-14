@@ -25,7 +25,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path"
 	"strconv"
 	"strings"
 	"sync"
@@ -423,10 +422,6 @@ func (e *Executor) isAnyConflictingMigrationRunning(onlineDDL *schema.OnlineDDL)
 		return true // continue iteration
 	})
 	return (conflictingMigration != nil), conflictingMigration
-}
-
-func (e *Executor) ptPidFileName(uuid string) string {
-	return path.Join(os.TempDir(), fmt.Sprintf("pt-online-schema-change.%s.pid", uuid))
 }
 
 // tableExists checks if a given table exists.

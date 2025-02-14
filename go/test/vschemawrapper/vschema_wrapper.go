@@ -288,20 +288,6 @@ func (vw *VSchemaWrapper) FindTableOrVindex(tab sqlparser.TableName) (*vindexes.
 	return vw.Vcursor.FindTableOrVindex(tab)
 }
 
-func (vw *VSchemaWrapper) getActualKeyspace() string {
-	if vw.Keyspace == nil {
-		return ""
-	}
-	if !sqlparser.SystemSchema(vw.Keyspace.Name) {
-		return vw.Keyspace.Name
-	}
-	ks, err := vw.AnyKeyspace()
-	if err != nil {
-		return ""
-	}
-	return ks.Name
-}
-
 func (vw *VSchemaWrapper) SelectedKeyspace() (*vindexes.Keyspace, error) {
 	return vw.AnyKeyspace()
 }
