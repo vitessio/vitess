@@ -112,19 +112,20 @@ type stateManager struct {
 	// Open must be done in forward order.
 	// Close must be done in reverse order.
 	// All Close functions must be called before Open.
-	hs          *healthStreamer
-	se          schemaEngine
-	rt          replTracker
-	vstreamer   subComponent
-	tracker     subComponent
-	watcher     subComponent
-	qe          queryEngine
-	txThrottler txThrottler
-	te          txEngine
-	messager    subComponent
-	ddle        onlineDDLExecutor
-	throttler   lagThrottler
-	tableGC     tableGarbageCollector
+	hs              *healthStreamer
+	se              schemaEngine
+	rt              replTracker
+	vstreamer       subComponent
+	tracker         subComponent
+	watcher         subComponent
+	semiSyncMonitor subComponent
+	qe              queryEngine
+	txThrottler     txThrottler
+	te              txEngine
+	messager        subComponent
+	ddle            onlineDDLExecutor
+	throttler       lagThrottler
+	tableGC         tableGarbageCollector
 
 	// hcticks starts on initialization and runs forever.
 	hcticks *timer.Timer
@@ -469,6 +470,7 @@ func (sm *stateManager) servePrimary() error {
 	sm.throttler.Open()
 	sm.tableGC.Open()
 	sm.ddle.Open()
+	sm.semiSyncMonitor.Open()
 	sm.setState(topodatapb.TabletType_PRIMARY, StateServing)
 	return nil
 }
@@ -485,6 +487,7 @@ func (sm *stateManager) unservePrimary() error {
 	sm.se.MakePrimary(false)
 	sm.hs.MakePrimary(false)
 	sm.rt.MakePrimary()
+	sm.semiSyncMonitor.Open()
 	sm.setState(topodatapb.TabletType_PRIMARY, StateNotServing)
 	return nil
 }
@@ -495,6 +498,7 @@ func (sm *stateManager) serveNonPrimary(wantTabletType topodatapb.TabletType) er
 	cancel := sm.terminateAllQueries(nil)
 	defer cancel()
 
+	sm.semiSyncMonitor.Close()
 	sm.ddle.Close()
 	sm.tableGC.Close()
 	sm.messager.Close()
@@ -517,6 +521,7 @@ func (sm *stateManager) serveNonPrimary(wantTabletType topodatapb.TabletType) er
 func (sm *stateManager) unserveNonPrimary(wantTabletType topodatapb.TabletType) error {
 	sm.unserveCommon()
 
+	sm.semiSyncMonitor.Close()
 	sm.se.MakeNonPrimary()
 	sm.hs.MakeNonPrimary()
 
