@@ -636,7 +636,7 @@
     "comment": "using HAVING inside a derived table still produces viable plans",
     "query": "select id from (select id from user group by id having (count(user.id) = 2) limit 2 offset 0) subquery_for_limit",
     "plan": {
-      "Type": "Complex",
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select id from (select id from user group by id having (count(user.id) = 2) limit 2 offset 0) subquery_for_limit",
       "Instructions": {
@@ -1890,7 +1890,7 @@
     "comment": "order by inside and outside parenthesis select",
     "query": "(select id from user order by 1 desc) order by 1 asc limit 2",
     "plan": {
-      "Type": "Complex",
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "(select id from user order by 1 desc) order by 1 asc limit 2",
       "Instructions": {

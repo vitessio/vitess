@@ -562,7 +562,7 @@
     "comment": "wire-up with limit primitive",
     "query": "select u.id, e.id from user u join user_extra e where e.id = u.col limit 10",
     "plan": {
-      "Type": "Complex",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select u.id, e.id from user u join user_extra e where e.id = u.col limit 10",
       "Instructions": {
@@ -706,7 +706,7 @@
     "comment": "Wire-up in underlying primitive after pullout",
     "query": "select u.id, e.id, (select col from user) from user u join user_extra e where e.id = u.col limit 10",
     "plan": {
-      "Type": "Complex",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select u.id, e.id, (select col from user) from user u join user_extra e where e.id = u.col limit 10",
       "Instructions": {

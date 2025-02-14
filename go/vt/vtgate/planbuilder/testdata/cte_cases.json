@@ -1786,7 +1786,7 @@
     "comment": "with u as (select user.col from user join user_extra) select u.col from u join user_extra ue limit 1",
     "query": "with u as (select user.col from user join user_extra) select u.col from u join user_extra ue limit 1",
     "plan": {
-      "Type": "Complex",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "with u as (select user.col from user join user_extra) select u.col from u join user_extra ue limit 1",
       "Instructions": {

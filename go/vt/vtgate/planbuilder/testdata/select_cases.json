@@ -72,7 +72,7 @@
     "comment": "join on sharding column with limit - should be a simple scatter query and limit on top with non resolved columns",
     "query": "select * from user u join user_metadata um on u.id = um.user_id where foo=41 limit 20",
     "plan": {
-      "Type": "Complex",
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select * from user u join user_metadata um on u.id = um.user_id where foo=41 limit 20",
       "Instructions": {
@@ -158,7 +158,7 @@
     "comment": "select limit with timeout directive sets QueryTimeout in the route",
     "query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from user limit 10",
     "plan": {
-      "Type": "Complex",
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from user limit 10",
       "Instructions": {
@@ -299,7 +299,7 @@
     "comment": "select limit with partial scatter directive",
     "query": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ * from user limit 10",
     "plan": {
-      "Type": "Complex",
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ * from user limit 10",
       "Instructions": {
@@ -1240,7 +1240,7 @@
     "comment": "sharded limit offset",
     "query": "select user_id from music order by user_id limit 10, 20",
     "plan": {
-      "Type": "Complex",
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select user_id from music order by user_id limit 10, 20",
       "Instructions": {
@@ -1272,7 +1272,7 @@
     "comment": "sharded limit offset with arguments",
     "query": "select user_id from music order by user_id limit :limit, :offset",
     "plan": {
-      "Type": "Complex",
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select user_id from music order by user_id limit :limit, :offset",
       "Instructions": {
@@ -5159,7 +5159,7 @@
     "comment": "We are using last_insert_id with argument, so we need to fetch all results",
     "query": "select last_insert_id(5) from user limit 12",
     "plan": {
-      "Type": "Complex",
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select last_insert_id(5) from user limit 12",
       "Instructions": {

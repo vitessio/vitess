@@ -270,7 +270,7 @@
     "comment": "Test that LIMIT can be pushed to the route even in the presence of an outer join",
     "query": "SELECT user_extra.`id` FROM user LEFT JOIN user_extra ON user_extra.`b` = 2 AND user.`c` = user_extra.`c` WHERE user.`a` = 1 LIMIT 1",
     "plan": {
-      "Type": "Complex",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "SELECT user_extra.`id` FROM user LEFT JOIN user_extra ON user_extra.`b` = 2 AND user.`c` = user_extra.`c` WHERE user.`a` = 1 LIMIT 1",
       "Instructions": {
@@ -1319,7 +1319,7 @@
     "comment": "limit for joins. Can't push down the limit because result\n# counts get multiplied by join operations.",
     "query": "select user.col from user join user_extra limit 1",
     "plan": {
-      "Type": "Complex",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select user.col from user join user_extra limit 1",
       "Instructions": {
@@ -1374,7 +1374,7 @@
     "comment": "limit for scatter",
     "query": "select col from user limit 1",
     "plan": {
-      "Type": "Complex",
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select col from user limit 1",
       "Instructions": {
@@ -1403,7 +1403,7 @@
     "comment": "limit for scatter with bind var",
     "query": "select col from user limit :a",
     "plan": {
-      "Type": "Complex",
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select col from user limit :a",
       "Instructions": {
@@ -1432,7 +1432,7 @@
     "comment": "cross-shard expression in parenthesis with limit",
     "query": "select * from user where (id1 = 4 AND name1 ='abc') limit 5",
     "plan": {
-      "Type": "Complex",
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select * from user where (id1 = 4 AND name1 ='abc') limit 5",
       "Instructions": {
@@ -1536,7 +1536,7 @@
     "comment": "arithmetic limit",
     "query": "select id from user limit 1+1",
     "plan": {
-      "Type": "Complex",
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select id from user limit 1+1",
       "Instructions": {

@@ -174,6 +174,8 @@ func getPlanType(p Primitive) PlanType {
 		return getPlanTypeFromTarget(prim)
 	case *TransactionStatus:
 		return PlanMultiShard
+	case *Limit:
+		return getPlanType(prim.Input)
 	case *VindexLookup:
 		return PlanLookup
 	case *Join:
