@@ -103,7 +103,7 @@ func createLeftOuterJoin(ctx *plancontext.PlanningContext, join *sqlparser.JoinT
 
 	// for outer joins we have to be careful with the predicates we use
 	var op Operator
-	subq, _ := getSubQuery(join.Condition.On)
+	subq, _, _ := getSubQuery(join.Condition.On)
 	if subq != nil {
 		panic(vterrors.VT12001("subquery in outer join predicate"))
 	}
