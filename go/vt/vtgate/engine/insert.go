@@ -25,7 +25,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
@@ -389,11 +388,10 @@ func (ins *Insert) description() PrimitiveDescription {
 	}
 
 	return PrimitiveDescription{
-		OperatorType:     "Insert",
-		Keyspace:         ins.Keyspace,
-		Variant:          ins.Opcode.String(),
-		TargetTabletType: topodatapb.TabletType_PRIMARY,
-		Other:            other,
+		OperatorType: "Insert",
+		Keyspace:     ins.Keyspace,
+		Variant:      ins.Opcode.String(),
+		Other:        other,
 	}
 }
 

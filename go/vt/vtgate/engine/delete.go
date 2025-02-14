@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -136,11 +135,10 @@ func (del *Delete) description() PrimitiveDescription {
 	}
 
 	return PrimitiveDescription{
-		OperatorType:     "Delete",
-		Keyspace:         del.Keyspace,
-		Variant:          del.Opcode.String(),
-		TargetTabletType: topodatapb.TabletType_PRIMARY,
-		Other:            other,
+		OperatorType: "Delete",
+		Keyspace:     del.Keyspace,
+		Variant:      del.Opcode.String(),
+		Other:        other,
 	}
 }
 
