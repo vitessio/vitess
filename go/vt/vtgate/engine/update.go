@@ -23,8 +23,6 @@ import (
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -219,10 +217,9 @@ func (upd *Update) description() PrimitiveDescription {
 	}
 
 	return PrimitiveDescription{
-		OperatorType:     "Update",
-		Keyspace:         upd.Keyspace,
-		Variant:          upd.Opcode.String(),
-		TargetTabletType: topodatapb.TabletType_PRIMARY,
-		Other:            other,
+		OperatorType: "Update",
+		Keyspace:     upd.Keyspace,
+		Variant:      upd.Opcode.String(),
+		Other:        other,
 	}
 }
