@@ -163,3 +163,7 @@ List of changes between bootstrap image versions.
 ### Changes
 - Update base image to bookworm
 - Add MySQL84 image
+
+## [42] - 2025-02-05
+### Changes
+- Update build to golang 1.23.6
