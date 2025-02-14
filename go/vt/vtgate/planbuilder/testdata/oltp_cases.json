@@ -142,7 +142,6 @@
           "Name": "main",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update sbtest6 set k = k + 1 where id = 5",
         "Table": "sbtest6",
         "Values": [
@@ -168,7 +167,6 @@
           "Name": "main",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update sbtest9 set c = 7 where id = 8",
         "Table": "sbtest9",
         "Values": [
@@ -194,7 +192,6 @@
           "Name": "main",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "delete from sbtest15 where id = 7525",
         "Table": "sbtest15",
         "Values": [
@@ -220,7 +217,6 @@
           "Name": "main",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "insert into sbtest16(id, k, c, pad) values (:_id_0, 1, 2, 50)",
         "TableName": "sbtest16",
         "VindexValues": {

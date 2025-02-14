@@ -213,6 +213,38 @@ func NewVCursorImpl(
 	}, nil
 }
 
+func (vc *VCursorImpl) PrepareSetVarComment() string {
+	if vc.Session().InReservedConn() {
+		return ""
+	}
+
+	// TODO: handle foreign keys as it changes the plan.
+	// verify it, mostly nothing to do here.
+
+	// if !vc.Session().HasSystemVariables() {
+	// 	return "", nil
+	// }
+
+	// TODO: do this after getting a plan.
+	// switch stmt.(type) {
+	// // If the statement is a transaction statement or a set no reserved connection / SET_VAR is needed
+	// case *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback, *sqlparser.Savepoint,
+	// 	*sqlparser.SRollback, *sqlparser.Release, *sqlparser.Set, *sqlparser.Show:
+	// 	return "", nil
+	// case sqlparser.SupportOptimizerHint:
+	// 	break
+	// default:
+	// 	vc.NeedsReservedConn()
+	// 	return "", nil
+	// }
+
+	var res strings.Builder
+	vc.Session().GetSystemVariables(func(k, v string) {
+		res.WriteString(fmt.Sprintf("SET_VAR(%s = %s) ", k, v))
+	})
+	return strings.TrimSpace(res.String())
+}
+
 func (vc *VCursorImpl) CloneForMirroring(ctx context.Context) engine.VCursor {
 	callerId := callerid.EffectiveCallerIDFromContext(ctx)
 	immediateCallerId := callerid.ImmediateCallerIDFromContext(ctx)

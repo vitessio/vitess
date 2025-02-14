@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -185,8 +184,7 @@ func (dml *DMLWithInput) description() PrimitiveDescription {
 		other["BindVars"] = bvList
 	}
 	return PrimitiveDescription{
-		OperatorType:     "DMLWithInput",
-		TargetTabletType: topodatapb.TabletType_PRIMARY,
-		Other:            other,
+		OperatorType: "DMLWithInput",
+		Other:        other,
 	}
 }
