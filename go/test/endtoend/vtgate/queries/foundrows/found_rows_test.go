@@ -26,6 +26,7 @@ import (
 )
 
 func TestFoundRows(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 18, "vtgate")
 	defer cluster.PanicHandler(t)
 	mcmp, err := utils.NewMySQLCompare(t, vtParams, mysqlParams)
 	require.NoError(t, err)
