@@ -55,6 +55,35 @@ type VtctlClient interface {
 	Close()
 }
 
+
+// VSchemaOperations defines the interface for atomic VSchema modifications
+type VSchemaOperations interface {
+	// AddTable atomically adds a table to the VSchema
+	AddTable(ctx context.Context, keyspace, tableName string, tableSpec interface{}) error
+
+	// RemoveTable atomically removes a table from the VSchema
+	RemoveTable(ctx context.Context, keyspace, tableName string) error
+
+	// AddVindex atomically adds a vindex to the VSchema
+	AddVindex(ctx context.Context, keyspace, vindexName string, vindexSpec interface{}) error
+
+	// RemoveVindex atomically removes a vindex from the VSchema
+	RemoveVindex(ctx context.Context, keyspace, vindexName string) error
+}
+
+// VtctlClient defines the interface used to send remote vtctl commands
+type VtctlClient interface {
+	// ExecuteVtctlCommand will execute the command remotely
+	ExecuteVtctlCommand(ctx context.Context, args []string, actionTimeout time.Duration) (logutil.EventStream, error)
+
+	// VSchema returns the VSchema operations interface
+	VSchema() VSchemaOperations
+
+	// Close will terminate the connection. This object won't be
+	// used after this.
+	Close()
+}
+
 // Factory functions are registered by client implementations
 type Factory func(ctx context.Context, addr string) (VtctlClient, error)
 
