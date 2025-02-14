@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"slices"
 	"sort"
 	"strings"
@@ -362,10 +363,11 @@ func (s *Server) GetCellsWithTableReadsSwitched(
 
 func (s *Server) GetWorkflow(ctx context.Context, keyspace, workflow string, includeLogs bool, shards []string) (*vtctldatapb.Workflow, error) {
 	res, err := s.GetWorkflows(ctx, &vtctldatapb.GetWorkflowsRequest{
-		Keyspace:    keyspace,
-		Workflow:    workflow,
-		IncludeLogs: includeLogs,
-		Shards:      shards,
+		Keyspace:       keyspace,
+		Workflow:       workflow,
+		IncludeLogs:    includeLogs,
+		Shards:         shards,
+		VerbosityLevel: math.MaxUint32, // Get all info for generic callers
 	})
 	if err != nil {
 		return nil, err
