@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type CacheValue struct {
@@ -44,14 +45,12 @@ func TestSetInsertsValue(t *testing.T) {
 	cache.Set(key, data)
 
 	v, ok := cache.Get(key)
-	if !ok || v != data {
-		t.Errorf("Cache has incorrect value: %v != %v", data, v)
-	}
+	assert.True(t, ok)
+	assert.EqualValues(t, v, data)
 
 	values := cache.Items()
-	if len(values) != 1 || values[0].Key != key {
-		t.Errorf("Cache.Values() returned incorrect values: %v", values)
-	}
+	require.NotEmpty(t, values)
+	assert.Equal(t, key, values[0].Key)
 }
 
 func TestGetValueWithMultipleTypes(t *testing.T) {
@@ -61,14 +60,12 @@ func TestGetValueWithMultipleTypes(t *testing.T) {
 	cache.Set(key, data)
 
 	v, ok := cache.Get("key")
-	if !ok || v != data {
-		t.Errorf("Cache has incorrect value for \"key\": %v != %v", data, v)
-	}
+	assert.True(t, ok)
+	assert.Equal(t, data, v)
 
 	v, ok = cache.Get(string([]byte{'k', 'e', 'y'}))
-	if !ok || v != data {
-		t.Errorf("Cache has incorrect value for []byte {'k','e','y'}: %v != %v", data, v)
-	}
+	assert.True(t, ok)
+	assert.Equal(t, data, v)
 }
 
 func TestSetWithOldKeyUpdatesValue(t *testing.T) {
@@ -80,17 +77,15 @@ func TestSetWithOldKeyUpdatesValue(t *testing.T) {
 	cache.Set(key, someValue)
 
 	v, ok := cache.Get(key)
-	if !ok || v != someValue {
-		t.Errorf("Cache has incorrect value: %v != %v", someValue, v)
-	}
+	assert.True(t, ok)
+	assert.Equal(t, someValue, v)
 }
 
 func TestGetNonExistent(t *testing.T) {
 	cache := NewLRUCache[*CacheValue](100)
 
-	if _, ok := cache.Get("notthere"); ok {
-		t.Error("Cache returned a notthere value after no inserts.")
-	}
+	val, ok := cache.Get("notthere")
+	assert.False(t, ok, "Cache returned a notthere value after no inserts val=%v", val)
 }
 
 func TestDelete(t *testing.T) {
@@ -102,13 +97,11 @@ func TestDelete(t *testing.T) {
 	cache.Set(key, value)
 	cache.Delete(key)
 
-	if sz := cache.UsedCapacity(); sz != 0 {
-		t.Errorf("cache.UsedCapacity() = %v, expected 0", sz)
-	}
+	sz := cache.UsedCapacity()
+	assert.Zero(t, sz)
 
-	if _, ok := cache.Get(key); ok {
-		t.Error("Cache returned a value after deletion.")
-	}
+	val, ok := cache.Get("notthere")
+	assert.False(t, ok, "Cache returned a value after deletion: val=%v", val)
 }
 
 func TestCapacityIsObeyed(t *testing.T) {
@@ -121,9 +114,8 @@ func TestCapacityIsObeyed(t *testing.T) {
 	cache.Set("key1", value)
 	cache.Set("key2", value)
 	cache.Set("key3", value)
-	if sz := cache.UsedCapacity(); sz != size {
-		t.Errorf("cache.UsedCapacity() = %v, expected %v", sz, size)
-	}
+	sz := cache.UsedCapacity()
+	assert.EqualValues(t, size, sz)
 	// Insert one more; something should be evicted to make room.
 	cache.Set("key4", value)
 	sz, evictions := cache.UsedCapacity(), cache.Evictions()
@@ -131,21 +123,20 @@ func TestCapacityIsObeyed(t *testing.T) {
 	assert.EqualValues(t, 1, evictions)
 
 	// Check various other stats
-	if l := cache.Len(); int64(l) != size {
-		t.Errorf("cache.Len() returned bad length: %v", l)
-	}
-	if s := cache.UsedCapacity(); s != size {
-		t.Errorf("cache.UsedCapacity() returned bad size: %v", s)
-	}
-	if c := cache.MaxCapacity(); c != size {
-		t.Errorf("cache.UsedCapacity() returned bad length: %v", c)
-	}
-	if c := cache.Hits(); c != 0 {
-		t.Errorf("cache.Hits() returned hits when there should be none: %v", c)
-	}
-	if c := cache.Misses(); c != 0 {
-		t.Errorf("cache.Misses() returned misses when there should be none: %v", c)
-	}
+	l := cache.Len()
+	assert.EqualValues(t, size, l)
+
+	s := cache.UsedCapacity()
+	assert.EqualValues(t, size, s)
+
+	c := cache.MaxCapacity()
+	assert.EqualValues(t, size, c)
+
+	hits := cache.Hits()
+	assert.Zero(t, hits)
+
+	misses := cache.Misses()
+	assert.Zero(t, misses)
 }
 
 func TestLRUIsEvicted(t *testing.T) {
@@ -167,19 +158,15 @@ func TestLRUIsEvicted(t *testing.T) {
 	// lru: [key0, key1, key2]
 
 	// The least recently used one should have been evicted.
-	if _, ok := cache.Get("key3"); ok {
-		t.Error("Least recently used element was not evicted.")
-	}
+	v, ok := cache.Get("key3")
+	assert.False(t, ok, "Least recently used element was not evicted: %v", v)
 
-	if e, want := cache.Evictions(), int64(1); e != want {
-		t.Errorf("evictions: %d, want: %d", e, want)
-	}
+	e := cache.Evictions()
+	assert.EqualValues(t, 1, e)
 
-	if h, want := cache.Hits(), int64(3); h != want {
-		t.Errorf("hits: %d, want: %d", h, want)
-	}
+	h := cache.Hits()
+	assert.EqualValues(t, 3, h)
 
-	if m, want := cache.Misses(), int64(1); m != want {
-		t.Errorf("misses: %d, want: %d", m, want)
-	}
+	m := cache.Misses()
+	assert.EqualValues(t, 1, m)
 }
